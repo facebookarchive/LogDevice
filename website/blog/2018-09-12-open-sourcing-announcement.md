@@ -38,7 +38,7 @@ configuration management. Getting LogDevice to run on Kubernetes is a good
 starting point if you are interested in helping.
 
 To get started with LogDevice, dive into the [overview of the
-system](docs/Overview.html) to learn how it works, or check out [the code on
-GitHub](https://github.com/facebookincubator/LogDevice)
+system](https://logdevice.io/docs/Overview.html) to learn how it works, or check
+out [the code on GitHub](https://github.com/facebookincubator/LogDevice)
 
 *By Ahmed Soliman and Andrejs Krasilnikovs, LogDevice team.*
