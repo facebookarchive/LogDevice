@@ -267,6 +267,8 @@ class EventLogTest : public ::testing::TestWithParam<bool> {
     void onReceived(lsn_t lsn) {
       auto p = owner->genDeltaRecord(*delta, lsn, uuid);
       owner->evlog_->onDeltaRecord(p);
+      ASSERT_EQ(owner->evlog_->getState().getLastUpdate(),
+                owner->evlog_->getVersion());
     }
 
     void onConfirmTimeout() {
@@ -542,6 +544,40 @@ TEST_P(EventLogTest, SimpleWithSnapshotLogWithBacklog) {
   ASSERT_SHARD_STATUS(u.state, node_index_t{2}, uint32_t{0}, UNDERREPLICATION);
   ASSERT_NE(nullptr, u.delta);
   subscriber_->assertNoUpdate();
+}
+
+TEST_P(EventLogTest, VerifyVersionsInSync) {
+  delta_log_tail_lsn_ = lsn_t{42};
+  snapshot_log_tail_lsn_ = lsn_t{4};
+  settings_updater_->setFromCLI({{"event-log-snapshotting", "true"}});
+  init();
+  evlog_->start();
+
+  // Simulate a snapshot arriving where N2 is rebuilding.
+  EventLogRebuildingSet set;
+  UPDATE(set, lsn_t{33}, SHARD_NEEDS_REBUILD, node_index_t{2}, uint32_t{0});
+  SNAPSHOT(set, lsn_t{33}, lsn_t{4});
+
+  // Simulate a gap in the delta log up to lsn 41. The tail is lsn 42 so we
+  // should still not deliver anything to subscribers.
+  DELTA_GAP(BRIDGE, LSN_OLDEST, lsn_t{41});
+  subscriber_->assertNoUpdate();
+
+  // Simulate a delta arriving where N3 is added to the rebuilding set.
+  // We should now retrieve the initial state where both N2/N3 are rebuilding.
+  DELTA(lsn_t{42}, SHARD_NEEDS_REBUILD, node_index_t{1}, uint32_t{0});
+  auto u = subscriber_->retrieveNextUpdate();
+  ASSERT_EQ(lsn_t{42}, u.version);
+  ASSERT_SHARD_STATUS(u.state, node_index_t{1}, uint32_t{0}, UNAVAILABLE);
+  ASSERT_SHARD_STATUS(u.state, node_index_t{2}, uint32_t{0}, UNAVAILABLE);
+  ASSERT_EQ(nullptr, u.delta);
+  subscriber_->assertNoUpdate();
+  ASSERT_EQ(u.state.getLastUpdate(), evlog_->getVersion());
+
+  DELTA(lsn_t{43}, SHARD_IS_REBUILT, node_index_t{4}, uint32_t{3}, lsn_t{2});
+  // No update is delivered since the delta fails to apply
+  subscriber_->assertNoUpdate();
+  ASSERT_EQ(evlog_->getState().getLastUpdate(), evlog_->getVersion());
 }
 
 // simulate a scenario where the last snapshot contains all the deltas

@@ -35,22 +35,21 @@ int EventLogRebuildingSet::update(lsn_t lsn,
 
   if (type == EventType::SHARD_NEEDS_REBUILD) {
     rv = onShardNeedsRebuild(lsn, timestamp, record, cfg);
-    last_update_ = lsn;
   } else if (type == EventType::SHARD_ACK_REBUILT) {
     rv = onShardAckRebuilt(lsn, timestamp, record, cfg);
-    last_update_ = lsn;
   } else if (type == EventType::SHARD_IS_REBUILT) {
     rv = onShardIsRebuilt(lsn, timestamp, record, cfg);
-    last_update_ = lsn;
   } else if (type == EventType::SHARD_ABORT_REBUILD) {
     rv = onShardAbortRebuild(lsn, timestamp, record, cfg);
-    last_update_ = lsn;
   } else if (type == EventType::SHARD_UNDRAIN) {
     rv = onShardUndrain(lsn, timestamp, record);
   } else if (type == EventType::SHARD_DONOR_PROGRESS) {
     rv = onShardDonorProgress(lsn, timestamp, record);
   } else if (type == EventType::SHARD_UNRECOVERABLE) {
     rv = onShardUnrecoverable(lsn, timestamp, record, cfg);
+  }
+
+  if (rv == 0) {
     last_update_ = lsn;
   }
 
