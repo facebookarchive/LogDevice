@@ -67,3 +67,28 @@ cd LogDevice/_build/debug
 cmake -DCMAKE_BUILD_TYPE=Debug ../../logdevice
 make -j$(nproc)
 ```
+
+## Documentation
+
+This web site is created with [Docusaurus](https://docusaurus.io/).
+The simplest way to test documentation changes or changes to the structure
+of the site is to install Docusaurus locally as follows:
+
+* [install Node.js](https://nodejs.org/en/download/)
+* [install Yarn](https://yarnpkg.com/en/docs/install) (a package manager
+for Node)
+
+Docusarus requires Node.js >= 8.2 and Yarn >= 1.5.
+
+* `cd LogDevice/website` (where 'LogDevice' is the root of your local LogDevice
+source tree)
+* `yarn add docusaurus --dev` This will create LogDevice/website/node_modules
+directory with much Javascript. This may also update website/package.json with
+the then-current version number of Docusaurus.
+
+To start a Node.js server and load the doc site in a new browser tab
+`cd LogDevice/website` and run `yarn run start`. To stop the server,
+Ctrl+C the process.
+
+Most of LogDevice documentation lives in `LogDevice/docs`. The API reference
+in `LogDevice/website/static/api` is generated with Doxygen.
