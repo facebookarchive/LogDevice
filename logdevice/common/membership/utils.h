@@ -74,6 +74,8 @@ toString(StorageStateTransition transition) {
     GEN_STR(COMMIT_PROMOTION_METADATA_SHARD)
     GEN_STR(ABORT_PROMOTING_METADATA_SHARD)
     GEN_STR(MARK_SHARD_UNRECOVERABLE)
+    GEN_STR(PROVISION_SHARD)
+    GEN_STR(PROVISION_METADATA_SHARD)
 #undef GEN_STR
     case StorageStateTransition::Count:
       return "invalid";

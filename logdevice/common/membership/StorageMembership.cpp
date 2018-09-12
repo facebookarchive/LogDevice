@@ -19,9 +19,6 @@ namespace facebook { namespace logdevice { namespace membership {
 
 using facebook::logdevice::toString;
 
-bool ShardState::Update::isValid() const {
-  return transition < StorageStateTransition::Count;
-}
 
 std::string ShardState::Update::toString() const {
   return folly::sformat("[T:{}, C:{}, M:{}]",
@@ -30,10 +27,33 @@ std::string ShardState::Update::toString() const {
                         membership::toString(maintenance));
 }
 
+bool ShardState::Update::isValid() const {
+  if (transition >= StorageStateTransition::Count) {
+    RATELIMIT_ERROR(std::chrono::seconds(10),
+                    5,
+                    "Invalid transition %lu for update %s.",
+                    static_cast<size_t>(transition),
+                    toString().c_str());
+    return false;
+  }
+
+  if (isProvisionShard(transition) && maintenance != MAINTENANCE_PROVISION) {
+    RATELIMIT_ERROR(std::chrono::seconds(10),
+                    5,
+                    "Maintencance version must be MAINTENANCE_PROVISION "
+                    "for a provisioning update. Update: %s.",
+                    toString().c_str());
+    return false;
+  }
+
+  return true;
+}
+
 bool ShardState::isValid() const {
   if (storage_state == StorageState::INVALID ||
       metadata_state == MetaDataStorageState::INVALID ||
-      since_version == INVALID_VERSION) {
+      since_version == EMPTY_VERSION) {
+    // since_version should never be 0 (EMPTY)
     return false;
   }
 
@@ -71,9 +91,9 @@ int ShardState::transition(const ShardState& current_state,
     return -1;
   }
 
-  if (update.transition != StorageStateTransition::ADD_EMPTY_SHARD &&
-      update.transition != StorageStateTransition::ADD_EMPTY_METADATA_SHARD &&
-      !current_state.isValid()) {
+  if (!isAddingNewShard(update.transition) && !current_state.isValid()) {
+    // current source state must be valid except for the four transitions that
+    // add a new shard
     err = E::INVALID_PARAM;
     return -1;
   }
@@ -110,6 +130,34 @@ int ShardState::transition(const ShardState& current_state,
   StorageStateFlags::Type target_flags = current_state.flags;
   MetaDataStorageState target_metadata_state = current_state.metadata_state;
   switch (update.transition) {
+    case StorageStateTransition::PROVISION_SHARD:
+    case StorageStateTransition::PROVISION_METADATA_SHARD: {
+      // provisioning new shards for the newly created cluster
+
+      if (new_since_version != MIN_VERSION) {
+        // perform version check leveraging that new_since_version ==
+        // base_version + 1
+        RATELIMIT_ERROR(
+            std::chrono::seconds(10),
+            5,
+            "Cannnot apply a provisioning shard update with base version "
+            "other than EMPTY_VERSION %s. Update: %s, "
+            "New since version: %s.",
+            membership::toString(EMPTY_VERSION).c_str(),
+            update.toString().c_str(),
+            membership::toString(new_since_version).c_str());
+        err = E::VERSION_MISMATCH;
+        return -1;
+      }
+
+      ld_check(target_shard_state.storage_state == StorageState::READ_WRITE);
+      target_flags = StorageStateFlags::NONE;
+      target_metadata_state =
+          (update.transition == StorageStateTransition::PROVISION_METADATA_SHARD
+               ? MetaDataStorageState::METADATA
+               : MetaDataStorageState::NONE);
+    } break;
+
     case StorageStateTransition::ADD_EMPTY_SHARD:
     case StorageStateTransition::ADD_EMPTY_METADATA_SHARD: {
       ld_check(target_shard_state.storage_state == StorageState::NONE);
@@ -267,7 +315,7 @@ int ShardState::transition(const ShardState& current_state,
 }
 
 bool StorageMembership::Update::isValid() const {
-  return base_version != INVALID_VERSION && !shard_updates.empty() &&
+  return !shard_updates.empty() &&
       std::all_of(shard_updates.cbegin(),
                   shard_updates.cend(),
                   [](const auto& kv) { return kv.second.isValid(); });
@@ -369,11 +417,9 @@ int StorageMembership::applyUpdate(
     std::tie(shard_exist, current_shard_state) = getShardState(shard);
 
     if (!shard_exist) {
-      if (shard_update.transition != StorageStateTransition::ADD_EMPTY_SHARD &&
-          shard_update.transition !=
-              StorageStateTransition::ADD_EMPTY_METADATA_SHARD) {
+      if (!isAddingNewShard(shard_update.transition)) {
         // shard must exist in the current membership with the only exception of
-        // ADD_EMPTY_SHARD
+        // ADD_EMPTY_(METADATA_)SHARD or PROVISION_(METADATA_)SHARD
         RATELIMIT_ERROR(std::chrono::seconds(10),
                         5,
                         "Cannnot apply membership update for shard %s as it "
@@ -390,7 +436,22 @@ int StorageMembership::applyUpdate(
                              StorageStateFlags::NONE,
                              MetaDataStorageState::NONE,
                              MAINTENANCE_NONE,
-                             INVALID_VERSION};
+                             EMPTY_VERSION};
+    } else {
+      if (isAddingNewShard(shard_update.transition)) {
+        // shard exists but
+        RATELIMIT_ERROR(
+            std::chrono::seconds(10),
+            5,
+            "Cannnot apply membership update for shard %s as the shard "
+            "requested to add already exists in membership. current "
+            "version: %s, update: %s.",
+            membership::toString(shard).c_str(),
+            membership::toString(version_).c_str(),
+            update.toString().c_str());
+        err = E::EXISTS;
+        return -1;
+      }
     }
 
     ShardState target_shard_state;
@@ -431,11 +492,14 @@ int StorageMembership::applyUpdate(
 }
 
 bool StorageMembership::validate() const {
-  if (version_ == INVALID_VERSION) {
-    RATELIMIT_ERROR(std::chrono::seconds(10),
-                    5,
-                    "validation failed! invalid version: %s.",
-                    membership::toString(version_).c_str());
+  if (version_ == EMPTY_VERSION && !isEmpty()) {
+    RATELIMIT_ERROR(
+        std::chrono::seconds(10),
+        5,
+        "validation failed! Memership is not empty with empty version: %s. "
+        "Number of nodes: %lu.",
+        membership::toString(version_).c_str(),
+        numNodes());
     return false;
   }
 
@@ -516,7 +580,7 @@ bool StorageMembership::shouldReadMetaDataFromShard(ShardID shard) const {
                        : false);
 }
 
-StorageMembership::StorageMembership() : version_(MIN_VERSION) {
+StorageMembership::StorageMembership() : version_(EMPTY_VERSION) {
   dcheckConsistency();
 }
 

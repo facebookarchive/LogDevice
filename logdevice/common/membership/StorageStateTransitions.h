@@ -91,11 +91,42 @@ enum class StorageStateTransition : uint8_t {
   // doc block in StorageStateFlags::UNRECOVRABLE
   MARK_SHARD_UNRECOVERABLE,
 
+  // convenience transition for creating the cluster for the first time.
+  // Directly
+  // transform the shard to READ_WRITE state. Requires the base membership
+  // version
+  // to be EMPTY_VERSION
+  // transition: INVALID -> READ_WRITE
+  PROVISION_SHARD,
+
+  // same as above, except that the storage shard is a metadata shard. The
+  // metadata
+  // storage state is also directly transitioned into METADATA.
+  // transition: INVALID -> READ_WRITE
+  // metadata storage state: NONE -> METADATA
+  PROVISION_METADATA_SHARD,
+
   Count
 };
 
-static_assert(static_cast<size_t>(StorageStateTransition::Count) == 17,
-              "There are 17 state transitions in the design spec.");
+static_assert(static_cast<size_t>(StorageStateTransition::Count) == 19,
+              "There are 19 state transitions in the design spec.");
+
+/**
+ * return    true if the transition is adding a new shard which is not part of
+ *           the current membership
+ */
+constexpr bool isAddingNewShard(StorageStateTransition transition) {
+  return transition == StorageStateTransition::ADD_EMPTY_SHARD ||
+      transition == StorageStateTransition::ADD_EMPTY_METADATA_SHARD ||
+      transition == StorageStateTransition::PROVISION_SHARD ||
+      transition == StorageStateTransition::PROVISION_METADATA_SHARD;
+}
+
+constexpr bool isProvisionShard(StorageStateTransition transition) {
+  return transition == StorageStateTransition::PROVISION_SHARD ||
+      transition == StorageStateTransition::PROVISION_METADATA_SHARD;
+}
 
 using StateTransitionCondition = uint64_t;
 
@@ -278,12 +309,27 @@ static constexpr std::array<
            StorageState::INVALID,
            (Condition::SELF_AWARE_MISSING_DATA |
             Condition::CANNOT_ACCEPT_WRITES)),
+
+        // PROVISION_SHARD
+        _t(StorageState::INVALID,
+           StorageState::READ_WRITE,
+           (Condition::EMPTY_SHARD | Condition::LOCAL_STORE_READABLE |
+            Condition::NO_SELF_REPORT_MISSING_DATA |
+            Condition::LOCAL_STORE_WRITABLE)),
+
+        // PROVISION_METADATA_SHARD
+        _t(StorageState::INVALID,
+           StorageState::READ_WRITE,
+           (Condition::EMPTY_SHARD | Condition::LOCAL_STORE_READABLE |
+            Condition::NO_SELF_REPORT_MISSING_DATA |
+            Condition::LOCAL_STORE_WRITABLE)),
+
     }};
 
 #undef _t
 
-static_assert(TransitionTable.size() == 17,
-              "There are 17 state transitions in the design spec.");
+static_assert(TransitionTable.size() == 19,
+              "There are 19 state transitions in the design spec.");
 
 //// utility functions for accessing the transition table
 

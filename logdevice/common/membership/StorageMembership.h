@@ -33,13 +33,18 @@ namespace facebook { namespace logdevice { namespace membership {
 // Storage membership state is versioned and any changes will cause a version
 // bumps to the membership.
 LOGDEVICE_STRONG_TYPEDEF(uint64_t, StorageMembershipVersion);
-static constexpr StorageMembershipVersion INVALID_VERSION{0};
-// first valid membership version
+
+// initial state of the membership, which is an empty set. The state is still
+// considered as valid but will never get published to subscribers
+static constexpr StorageMembershipVersion EMPTY_VERSION{0};
+// first non-empty valid membership version
 static constexpr StorageMembershipVersion MIN_VERSION{1};
 
 // used by identifying the active maintenance happening on the shard
 LOGDEVICE_STRONG_TYPEDEF(uint64_t, MaintenanceID);
 static constexpr MaintenanceID MAINTENANCE_NONE{0};
+// the very first maintenance operation that creates the new cluster
+static constexpr MaintenanceID MAINTENANCE_PROVISION{1};
 
 // Describe the per-shard state of a storage membership
 struct ShardState {
@@ -103,6 +108,9 @@ struct ShardState {
    *                                    transition
    *             ALREADY                the shard has already been marked as
    *                                    UNRECOVERABLE
+   *             VERSION_MISMATCH       the given since version does not match
+   *                                    transition (e.g., provision transition
+   *                                    requires the min base version)
    */
   static int transition(const ShardState& current_state,
                         Update update,
@@ -139,7 +147,7 @@ class StorageMembership {
   };
 
   /**
-   * create an empty storage membership object with MIN_VERSION.
+   * create an empty storage membership object with EMPTY_VERSION.
    */
   explicit StorageMembership();
 
@@ -158,6 +166,8 @@ class StorageMembership {
    *                      NOTINCONFIG       (for transitions other than
    *                                        adding shard) the requested shard
    *                                        does not exist in the config
+   *                      EXISTS            requested to add shard which already
+   *                                        exists in the membership
    */
   int applyUpdate(Update update, StorageMembership* new_membership_out) const;
 
@@ -222,6 +232,10 @@ class StorageMembership {
   }
 
   std::string toString() const;
+
+  bool isEmpty() const {
+    return node_states_.empty();
+  }
 
  private:
   class NodeState {
