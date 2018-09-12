@@ -31,6 +31,7 @@ class NewConnectionRequest : public Request {
                        ResourceBudget::Token conn_token,
                        ResourceBudget::Token conn_backlog_token,
                        SocketType type,
+                       ConnectionType conntype,
                        WorkerType worker_type = WorkerType::GENERAL)
       : Request(RequestType::NEW_CONNECTION),
         fd_(fd),
@@ -38,10 +39,9 @@ class NewConnectionRequest : public Request {
         client_addr_(client_addr),
         conn_token_(std::move(conn_token)),
         conn_backlog_token_(std::move(conn_backlog_token)),
-        worker_type_(worker_type) {
-    ssl_ = (type == SocketType::SSL);
-    sock_type_ = type;
-  }
+        sock_type_(type),
+        conntype_(conntype),
+        worker_type_(worker_type) {}
 
   ~NewConnectionRequest() override {}
 
@@ -60,7 +60,7 @@ class NewConnectionRequest : public Request {
   ResourceBudget::Token conn_token_;
   ResourceBudget::Token conn_backlog_token_;
   SocketType sock_type_{SocketType::DATA};
-  bool ssl_;
+  ConnectionType conntype_;
   // New connections on this listener will be routed to this worker type
   WorkerType worker_type_{WorkerType::GENERAL};
 };

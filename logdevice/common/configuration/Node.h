@@ -198,7 +198,7 @@ struct Node {
   std::string locationStr() const;
 
   // return the corresponding sockaddr for the given socket type
-  const Sockaddr& getSockaddr(SocketType type) const;
+  const Sockaddr& getSockaddr(SocketType type, ConnectionType conntype) const;
 
   // storage capacity that would be used for a storage node if no value is
   // specified

@@ -16,19 +16,21 @@ namespace facebook { namespace logdevice { namespace configuration {
 constexpr double Node::DEFAULT_STORAGE_CAPACITY;
 constexpr StorageState Node::DEFAULT_STORAGE_STATE;
 
-const Sockaddr& Node::getSockaddr(SocketType type) const {
+const Sockaddr& Node::getSockaddr(SocketType type,
+                                  ConnectionType conntype) const {
   switch (type) {
     case SocketType::GOSSIP:
       return gossip_address;
 
-    case SocketType::SSL:
-      if (!ssl_address.hasValue()) {
-        return Sockaddr::INVALID;
-      }
-      return ssl_address.value();
-
     case SocketType::DATA:
-      return address;
+      if (conntype == ConnectionType::SSL) {
+        if (!ssl_address.hasValue()) {
+          return Sockaddr::INVALID;
+        }
+        return ssl_address.value();
+      } else {
+        return address;
+      }
 
     default:
       RATELIMIT_CRITICAL(

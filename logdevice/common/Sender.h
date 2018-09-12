@@ -639,7 +639,8 @@ class Sender : public SenderBase {
    * @param fd          TCP socket that we got from accept(2)
    * @param client_addr sockaddr we got from accept(2)
    * @param conn_token  an object used for accepted connection accounting
-   * @param type        type of socket connection(DATA/SSL/GOSSIP)
+   * @param type        type of socket connection (DATA/GOSSIP)
+   * @param conntype    type of connection (PLAIN/SSL)
    *
    * @return  0 on success, -1 if we failed to create a Socket, sets err to:
    *     EXISTS          a Socket for this ClientID already exists
@@ -651,7 +652,8 @@ class Sender : public SenderBase {
   int addClient(int fd,
                 const Sockaddr& client_addr,
                 ResourceBudget::Token conn_token,
-                SocketType type);
+                SocketType type,
+                ConnectionType conntype);
 
   /**
    * Called by a Socket managed by this Sender when bytes are appended
@@ -851,8 +853,8 @@ class Sender : public SenderBase {
    * Returns a Socket to a given node in the cluster config. If a socket doesn't
    * exist yet, it will be created.
    *
-   * If no socket is available and sock_type is not SSL, this will always
-   * initialize a plaintext socket. Otherwise, will rely on ssl_boundary
+   * If no socket is available and allow_unencrypted is false, this will always
+   * initialize a secure socket. Otherwise, will rely on ssl_boundary
    * setting and target/own location to determine whether to use SSL.
    *
    * @return a pointer to the valid Socket object; on failure returns nullptr
@@ -862,7 +864,9 @@ class Sender : public SenderBase {
    *                      configured for nid
    *         INTERNAL     internal error (debug builds assert)
    */
-  Socket* initServerSocket(NodeID nid, SocketType sock_type);
+  Socket* initServerSocket(NodeID nid,
+                           SocketType sock_type,
+                           bool allow_unencrypted);
 
   /**
    * This method gets the socket associated with a given ClientID. The

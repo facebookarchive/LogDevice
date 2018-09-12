@@ -73,7 +73,7 @@ struct SocketConnectRequest : public Request {
     }
 
     try {
-      Socket s(badNodeID, SocketType::DATA, flow_group);
+      Socket s(badNodeID, SocketType::DATA, ConnectionType::PLAIN, flow_group);
     } catch (const ConstructorFailed&) {
       constructor_failed = true;
     }
@@ -84,8 +84,8 @@ struct SocketConnectRequest : public Request {
     constructor_failed = false;
 
     try {
-      SocketConnectRequest::sock =
-          new Socket(firstNodeID, SocketType::DATA, flow_group);
+      SocketConnectRequest::sock = new Socket(
+          firstNodeID, SocketType::DATA, ConnectionType::PLAIN, flow_group);
     } catch (const ConstructorFailed&) {
       constructor_failed = true;
     }

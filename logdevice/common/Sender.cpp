@@ -235,7 +235,8 @@ bool Sender::onMyWorker() const {
 int Sender::addClient(int fd,
                       const Sockaddr& client_addr,
                       ResourceBudget::Token conn_token,
-                      SocketType type) {
+                      SocketType type,
+                      ConnectionType conntype) {
   Worker* w = Worker::onThisThread();
   ld_check(&w->sender() == this);
 
@@ -255,7 +256,7 @@ int Sender::addClient(int fd,
     // Until we have better information (e.g. in a future update to the
     // HELLO message), assume clients are within our region unless they
     // have connected via SSL.
-    NodeLocationScope flow_group_scope = type == SocketType::SSL
+    NodeLocationScope flow_group_scope = conntype == ConnectionType::SSL
         ? NodeLocationScope::ROOT
         : NodeLocationScope::REGION;
 
@@ -268,6 +269,7 @@ int Sender::addClient(int fd,
                               client_addr,
                               std::move(conn_token),
                               type,
+                              conntype,
                               flow_group));
     if (!res.second) {
       ld_critical("INTERNAL ERROR: attempt to add client %s (%s) that is "
@@ -876,8 +878,7 @@ int Sender::connect(NodeID nid, bool allow_unencrypted) {
     return -1;
   }
 
-  Socket* s = initServerSocket(
-      nid, allow_unencrypted ? SocketType::DATA : SocketType::SSL);
+  Socket* s = initServerSocket(nid, SocketType::DATA, allow_unencrypted);
   if (!s) {
     return -1;
   }
@@ -946,10 +947,10 @@ void Sender::onSocketsToCloseAvailable(void* arg, short) {
   self->processSocketsToClose();
 }
 
-Socket* Sender::initServerSocket(NodeID nid, SocketType sock_type) {
+Socket* Sender::initServerSocket(NodeID nid,
+                                 SocketType sock_type,
+                                 bool allow_unencrypted) {
   ld_check(!shutting_down_);
-
-  bool allow_unencrypted = (sock_type != SocketType::SSL);
 
   std::unique_ptr<Socket>* sock_slot = findSocketSlot(nid);
   if (sock_slot == nullptr) {
@@ -1012,11 +1013,16 @@ Socket* Sender::initServerSocket(NodeID nid, SocketType sock_type) {
       if (sock_type == SocketType::GOSSIP) {
         Worker* w = Worker::onThisThread();
         ld_check(w->worker_type_ == WorkerType::FAILURE_DETECTOR);
-      } else {
-        sock_type = use_ssl ? SocketType::SSL : SocketType::DATA;
+        if (w->settings().send_to_gossip_port) {
+          // disable ssl for connection to the gossip port
+          use_ssl = false;
+        }
       }
 
-      s.reset(new Socket(nid, sock_type, flow_group));
+      s.reset(new Socket(nid,
+                         sock_type,
+                         use_ssl ? ConnectionType::SSL : ConnectionType::PLAIN,
+                         flow_group));
 
       if (use_ssl && !cross_boundary) {
         // If the connection does not cross the ssl boundary, limit the ciphers
@@ -1098,10 +1104,10 @@ Socket* FOLLY_NULLABLE Sender::getSocket(const NodeID& nid,
     ld_check(Socket::allowedOnGossipConnection(msg.type_));
     sock_type = SocketType::GOSSIP;
   } else {
-    sock_type = msg.allowUnencrypted() ? SocketType::DATA : SocketType::SSL;
+    sock_type = SocketType::DATA;
   }
 
-  Socket* sock = initServerSocket(nid, sock_type);
+  Socket* sock = initServerSocket(nid, sock_type, msg.allowUnencrypted());
   if (!sock) {
     // err set by initServerSocket()
     return nullptr;
@@ -1493,8 +1499,10 @@ void Sender::noteConfigurationChanged() {
 
     auto it = nodes_cfg.find(i);
     if (it != nodes_cfg.end()) {
+      const Sockaddr& newaddr =
+          it->second.getSockaddr(s->getSockType(), s->getConnType());
       if (s->peer_name_.id_.node_.generation() == it->second.generation &&
-          s->peer_sockaddr_ == it->second.getSockaddr(s->getSockType())) {
+          s->peer_sockaddr_ == newaddr) {
         continue;
       } else {
         ld_info("Configuration change detected for node %s. New generation "
@@ -1502,7 +1510,7 @@ void Sender::noteConfigurationChanged() {
                 Sender::describeConnection(Address(s->peer_name_.id_.node_))
                     .c_str(),
                 it->second.generation,
-                it->second.getSockaddr(s->getSockType()).toString().c_str());
+                newaddr.toString().c_str());
       }
 
     } else {

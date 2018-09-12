@@ -102,9 +102,13 @@ class Socket {
    *     NOTINCONFIG     server_name does not appear in cluster config
    *     INTERNAL        failed to initialize a libevent timer (unlikely)
    */
-  explicit Socket(NodeID server_name, SocketType type, FlowGroup& flow_group)
+  explicit Socket(NodeID server_name,
+                  SocketType type,
+                  ConnectionType conntype,
+                  FlowGroup& flow_group)
       : Socket(server_name,
                type,
+               conntype,
                flow_group,
                std::make_unique<SocketDependencies>()) {}
 
@@ -113,6 +117,7 @@ class Socket {
    */
   Socket(NodeID server_name,
          SocketType type,
+         ConnectionType conntype,
          FlowGroup& flow_group,
          std::unique_ptr<SocketDependencies> deps);
 
@@ -145,12 +150,14 @@ class Socket {
          const Sockaddr& client_addr,
          ResourceBudget::Token conn_token,
          SocketType type,
+         ConnectionType conntype,
          FlowGroup& flow_group)
       : Socket(fd,
                client_name,
                client_addr,
                std::move(conn_token),
                type,
+               conntype,
                flow_group,
                std::make_unique<SocketDependencies>()) {}
 
@@ -162,6 +169,7 @@ class Socket {
          const Sockaddr& client_addr,
          ResourceBudget::Token conn_token,
          SocketType type,
+         ConnectionType conntype,
          FlowGroup& flow_group,
          std::unique_ptr<SocketDependencies> deps);
 
@@ -403,7 +411,7 @@ class Socket {
    * @return whether the socket is an SSL socket.
    */
   bool isSSL() const {
-    return ssl_;
+    return conntype_ == ConnectionType::SSL;
   }
 
   bool isHandshaken() const {
@@ -435,7 +443,7 @@ class Socket {
 
   /**
    * Sets the cipher the the socket will use. This should only be called
-   * if the socket is ssl enabled.
+   * if the socket is SSL enabled.
    */
   void limitCiphersToENULL();
 
@@ -449,8 +457,12 @@ class Socket {
    */
   void sendShutdown();
 
-  SocketType getSockType() {
+  SocketType getSockType() const {
     return type_;
+  }
+
+  ConnectionType getConnType() const {
+    return conntype_;
   }
 
   const Settings& getSettings();
@@ -493,7 +505,7 @@ class Socket {
  private:
   /**
    * This is strictly a delegating constructor. It sets all members
-   * other than peer_name_, peer_sockaddr_ and ssl_ to defaults.
+   * other than peer_name_, peer_sockaddr_ and conntype_ to defaults.
    *
    * @param deps          @see SocketDependencies.
    * @param peer_name     LD-level 4-byte id of the other endpoint
@@ -504,6 +516,7 @@ class Socket {
                   Address peer_name,
                   const Sockaddr& peer_sockaddr,
                   SocketType type,
+                  ConnectionType conntype,
                   FlowGroup& flow_group);
 
   /**
@@ -687,7 +700,7 @@ class Socket {
    *                            sfd was successfully obtained, the size is
    *                            returned through this parameter
    * @param   ssl_state BUFFEREVENT_SSL_ACCEPTING or BUFFEREVENT_SSL_CONNECTING
-   *                    Used only if (ssl_ == true)
+   *                    Used only if (conntype_ == SSL)
    * @return  a new bufferevent on success, nullptr on failure. err is set to
    *             SYSLIMIT        out of file descriptors
    *             NOMEM           out of kernel memory for sockets,
@@ -883,10 +896,10 @@ class Socket {
   // Used for debugging.
   size_t num_bytes_received_;
 
-  // Defines if this is an SSL socket
-  bool ssl_ = false;
+  // Indicates whether this is an SSL socket
+  ConnectionType conntype_{ConnectionType::PLAIN};
 
-  // Defines if the socket will be encrypted. Only used if ssl_ is true
+  // Defines if the socket will be encrypted. Only used if conntype_ is SSL
   bool null_ciphers_only_ = false;
 
   // The SSL context. We have to hold it alive as long as the SSL* object which
@@ -1046,7 +1059,9 @@ class SocketDependencies {
   getSSLContext(bufferevent_ssl_state, bool) const;
   virtual bool shuttingDown() const;
   virtual std::string dumpQueuedMessages(Address addr) const;
-  virtual const Sockaddr& getNodeSockaddr(NodeID nid, SocketType type);
+  virtual const Sockaddr& getNodeSockaddr(NodeID nid,
+                                          SocketType type,
+                                          ConnectionType conntype);
   virtual int eventAssign(struct event* ev,
                           void (*cb)(evutil_socket_t, short what, void* arg),
                           void* arg);

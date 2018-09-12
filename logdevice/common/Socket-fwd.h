@@ -9,7 +9,8 @@
 
 namespace facebook { namespace logdevice {
 
-enum class SocketType : uint8_t { DATA, SSL, GOSSIP };
+enum class SocketType : uint8_t { DATA, GOSSIP };
+enum class ConnectionType : uint8_t { PLAIN, SSL };
 
 class Socket;
 

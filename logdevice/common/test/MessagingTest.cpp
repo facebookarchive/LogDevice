@@ -411,7 +411,8 @@ class OnClientCloseTestRequest : public Request {
     int rv = w->sender().addClient(sock_,
                                    Sockaddr("127.0.0.1", port),
                                    ResourceBudget::Token(),
-                                   SocketType::DATA);
+                                   SocketType::DATA,
+                                   ConnectionType::PLAIN);
     EXPECT_EQ(0, rv);
 
     rv = w->sender().registerOnSocketClosed(Address(cid_), *(new OnClose()));
@@ -570,7 +571,8 @@ TEST(MessagingTest, ConnectionLimit) {
           fd_,
           Sockaddr("127.0.0.1", folly::to<std::string>(fd_).c_str()),
           std::move(token_),
-          SocketType::DATA);
+          SocketType::DATA,
+          ConnectionType::PLAIN);
       EXPECT_EQ(0, rv);
       sem_.post();
       return Execution::COMPLETE;

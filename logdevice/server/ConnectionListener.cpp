@@ -94,17 +94,18 @@ void ConnectionListener::acceptCallback(evutil_socket_t sock,
     sock_type = SocketType::GOSSIP;
     target_worker_type = WorkerType::FAILURE_DETECTOR;
   } else {
-    sock_type = isSSL() ? SocketType::SSL : SocketType::DATA;
+    sock_type = SocketType::DATA;
   }
 
-  std::unique_ptr<Request> request =
-      std::make_unique<NewConnectionRequest>(sock,
-                                             wid,
-                                             sockaddr,
-                                             std::move(token),
-                                             std::move(conn_backlog_token),
-                                             sock_type,
-                                             target_worker_type);
+  std::unique_ptr<Request> request = std::make_unique<NewConnectionRequest>(
+      sock,
+      wid,
+      sockaddr,
+      std::move(token),
+      std::move(conn_backlog_token),
+      sock_type,
+      isSSL() ? ConnectionType::SSL : ConnectionType::PLAIN,
+      target_worker_type);
 
   int rv;
   STAT_INCR(processor->stats_, num_backlog_connections);

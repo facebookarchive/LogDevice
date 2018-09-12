@@ -97,6 +97,7 @@ Socket::Socket(std::unique_ptr<SocketDependencies>& deps,
                Address peer_name,
                const Sockaddr& peer_sockaddr,
                SocketType type,
+               ConnectionType conntype,
                FlowGroup& flow_group)
     : peer_name_(peer_name),
       peer_sockaddr_(peer_sockaddr),
@@ -122,12 +123,16 @@ Socket::Socket(std::unique_ptr<SocketDependencies>& deps,
       num_messages_sent_(0),
       num_messages_received_(0),
       num_bytes_received_(0) {
-  ssl_ = (type == SocketType::SSL) ||
-      (forceSSLSockets() && type != SocketType::GOSSIP);
+  if ((conntype == ConnectionType::SSL) ||
+      (forceSSLSockets() && type != SocketType::GOSSIP)) {
+    conntype_ = ConnectionType::SSL;
+  } else {
+    conntype_ = ConnectionType::PLAIN;
+  }
 
   if (!peer_sockaddr.valid()) {
     ld_check(!peer_name.isClientAddress());
-    if (ssl_) {
+    if (conntype_ == ConnectionType::SSL) {
       err = E::NOSSLCONFIG;
       RATELIMIT_ERROR(std::chrono::seconds(10),
                       2,
@@ -200,12 +205,14 @@ Socket::Socket(std::unique_ptr<SocketDependencies>& deps,
 
 Socket::Socket(NodeID server_name,
                SocketType sock_type,
+               ConnectionType conntype,
                FlowGroup& flow_group,
                std::unique_ptr<SocketDependencies> deps)
     : Socket(deps,
              Address(server_name),
-             deps->getNodeSockaddr(server_name, sock_type),
+             deps->getNodeSockaddr(server_name, sock_type, conntype),
              sock_type,
+             conntype,
              flow_group) {}
 
 Socket::Socket(int fd,
@@ -213,9 +220,15 @@ Socket::Socket(int fd,
                const Sockaddr& client_addr,
                ResourceBudget::Token conn_token,
                SocketType type,
+               ConnectionType conntype,
                FlowGroup& flow_group,
                std::unique_ptr<SocketDependencies> deps)
-    : Socket(deps, Address(client_name), client_addr, type, flow_group) {
+    : Socket(deps,
+             Address(client_name),
+             client_addr,
+             type,
+             conntype,
+             flow_group) {
   ld_check(fd >= 0);
   ld_check(client_name.valid());
   ld_check(client_addr.valid());
@@ -227,7 +240,7 @@ Socket::Socket(int fd,
                         client_addr.family(),
                         &tcp_sndbuf_cache_.size,
                         &tcp_rcvbuf_size_,
-                        // This is only used if ssl_ == true, tells libevent
+                        // This is only used if conntype_ == SSL, tells libevent
                         // we are in a server context
                         BUFFEREVENT_SSL_ACCEPTING);
   if (!bev_) {
@@ -239,8 +252,7 @@ Socket::Socket(int fd,
   addHandshakeTimeoutEvent();
   expectProtocolHeader();
 
-  if (ssl_) {
-    ld_check(type == SocketType::SSL);
+  if (isSSL()) {
     expecting_ssl_handshake_ = true;
   }
   connected_ = true;
@@ -249,7 +261,7 @@ Socket::Socket(int fd,
 
   STAT_INCR(deps_->getStats(), num_connections);
   STAT_DECR(deps_->getStats(), num_backlog_connections);
-  if (ssl_) {
+  if (isSSL()) {
     STAT_INCR(deps_->getStats(), num_ssl_connections);
   }
 }
@@ -348,13 +360,13 @@ struct bufferevent* Socket::newBufferevent(int sfd,
   deps_->configureSocket(
       !peer_sockaddr_.isUnixAddress(), sfd, &tcp_sndbuf_size, &tcp_rcvbuf_size);
 
-  if (ssl_) {
+  if (isSSL()) {
     ld_check(!ssl_context_);
     ssl_context_ = deps_->getSSLContext(ssl_state, null_ciphers_only_);
   }
 
   struct bufferevent* bev = deps_->buffereventSocketNew(
-      sfd, BEV_OPT_CLOSE_ON_FREE, ssl_, ssl_state, ssl_context_.get());
+      sfd, BEV_OPT_CLOSE_ON_FREE, isSSL(), ssl_state, ssl_context_.get());
   if (!bev) { // unlikely
     ld_error("bufferevent_socket_new() failed. errno=%d (%s)",
              errno,
@@ -400,7 +412,7 @@ struct bufferevent* Socket::newBufferevent(int sfd,
                           BufferEventHandler<Socket::eventCallback>,
                           (void*)this);
 
-  if (ssl_) {
+  if (isSSL()) {
     // The buffer may already exist if we're making another attempt at a
     // connection
     if (!buffered_output_) {
@@ -457,7 +469,7 @@ int Socket::connect() {
   if (rv != 0) {
     return -1; // err set by doConnectAttempt
   }
-  if (ssl_) {
+  if (isSSL()) {
     ld_check(bev_);
     ld_assert(bufferevent_get_openssl_error(bev_) == 0);
   }
@@ -468,9 +480,16 @@ int Socket::connect() {
   sendHello(); // queue up HELLO, to be sent when we connect
 
   STAT_INCR(deps_->getStats(), num_connections);
-  if (ssl_) {
+  if (isSSL()) {
     STAT_INCR(deps_->getStats(), num_ssl_connections);
   }
+
+  RATELIMIT_DEBUG(std::chrono::seconds(1),
+                  10,
+                  "Connected %s socket via %s channel to %s",
+                  getSockType() == SocketType::DATA ? "DATA" : "GOSSIP",
+                  getConnType() == ConnectionType::SSL ? "SSL" : "PLAIN",
+                  peerSockaddr().toString().c_str());
 
   return 0;
 }
@@ -482,7 +501,7 @@ int Socket::doConnectAttempt() {
                         peer_sockaddr_.family(),
                         &tcp_sndbuf_cache_.size,
                         &tcp_rcvbuf_size_,
-                        // This is only used if ssl_ == true, tells libevent
+                        // This is only used if conntype_ == SSL, tells libevent
                         // we are in a client context
                         BUFFEREVENT_SSL_CONNECTING);
 
@@ -505,7 +524,7 @@ int Socket::doConnectAttempt() {
       bev_, reinterpret_cast<struct sockaddr*>(&ss), len);
 
   if (rv != 0) {
-    if (ssl_ && bev_) {
+    if (isSSL() && bev_) {
       unsigned long ssl_err = 0;
       char ssl_err_string[120];
       while ((ssl_err = bufferevent_get_openssl_error(bev_))) {
@@ -542,7 +561,7 @@ int Socket::doConnectAttempt() {
     }
     return -1;
   }
-  if (ssl_) {
+  if (isSSL()) {
     ld_assert(bufferevent_get_openssl_error(bev_) == 0);
   }
 
@@ -700,7 +719,7 @@ void Socket::eventCallback(struct bufferevent* bev, void* arg, short what) {
 
   SocketEvent e{what, errno};
 
-  if (self->ssl_ && !(e.what & BEV_EVENT_CONNECTED)) {
+  if (self->isSSL() && !(e.what & BEV_EVENT_CONNECTED)) {
     // libevent's SSL handlers will call this before calling the
     // bytesSentCallback(), which breaks assumptions in our code. To avoid
     // that, we place the callback on a queue instead of calling it
@@ -752,7 +771,7 @@ void Socket::onConnected() {
     ld_check(connected_);
     // we receive a BEV_EVENT_CONNECTED for an _incoming_ connection after the
     // handshake is done.
-    ld_check(ssl_);
+    ld_check(isSSL());
     ld_debug("SSL handshake with %s completed",
              deps_->describeConnection(peer_name_).c_str());
     expecting_ssl_handshake_ = false;
@@ -818,7 +837,7 @@ void Socket::onError(short direction, int socket_errno) {
     return;
   }
 
-  if (ssl_) {
+  if (isSSL()) {
     unsigned long ssl_err = 0;
     char ssl_err_string[120];
     while ((ssl_err = bufferevent_get_openssl_error(bev_))) {
@@ -857,7 +876,7 @@ void Socket::onError(short direction, int socket_errno) {
 void Socket::onPeerClosed() {
   ld_spew("Peer %s closed.", deps_->describeConnection(peer_name_).c_str());
   ld_check(bev_);
-  if (!ssl_) {
+  if (!isSSL()) {
     // an SSL socket can be in a state where the TCP connection is established,
     // but the SSL handshake hasn't finished, this isn't considered connected.
     ld_check(connected_);
@@ -1008,7 +1027,7 @@ void Socket::close(Status reason) {
     buffered_output_ = nullptr;
   }
 
-  if (ssl_) {
+  if (isSSL()) {
     deps_->buffereventShutDownSSL(bev_);
   }
 
@@ -1029,7 +1048,7 @@ void Socket::close(Status reason) {
   peer_config_version_ = config_version_t(0);
 
   STAT_DECR(deps_->getStats(), num_connections);
-  if (ssl_) {
+  if (isSSL()) {
     STAT_DECR(deps_->getStats(), num_ssl_connections);
   }
 
@@ -2179,7 +2198,7 @@ bool Socket::peerIsClient() const {
 }
 
 X509* Socket::getPeerCert() const {
-  ld_check(ssl_);
+  ld_check(isSSL());
 
   // This function should only be called when the socket is SSL enabled.
   // This means this should always return a valid ssl context.
@@ -2190,7 +2209,7 @@ X509* Socket::getPeerCert() const {
 }
 
 void Socket::limitCiphersToENULL() {
-  ld_check(ssl_);
+  ld_check(isSSL());
   null_ciphers_only_ = true;
 }
 
@@ -2246,41 +2265,16 @@ std::string SocketDependencies::dumpQueuedMessages(Address addr) const {
 }
 
 const Sockaddr& SocketDependencies::getNodeSockaddr(NodeID nid,
-                                                    SocketType type) {
+                                                    SocketType type,
+                                                    ConnectionType conntype) {
   std::shared_ptr<ServerConfig> cfg(Worker::getConfig()->serverConfig());
   const Configuration::Node* node_cfg = cfg->getNode(nid);
 
   if (node_cfg) {
-    switch (type) {
-      case SocketType::GOSSIP:
-        if (!Worker::settings().send_to_gossip_port ||
-            !node_cfg->gossip_address.valid()) {
-          RATELIMIT_WARNING(std::chrono::seconds(1),
-                            1,
-                            "Reverting to data port to send gossip messages.");
-          ld_check(node_cfg->address.valid());
-          return node_cfg->address;
-        }
-        return node_cfg->gossip_address;
-
-      case SocketType::SSL:
-        if (!node_cfg->ssl_address) {
-          return Sockaddr::INVALID;
-        }
-        ld_check(node_cfg->ssl_address->valid());
-        return *node_cfg->ssl_address;
-
-      case SocketType::DATA:
-        ld_check(node_cfg->address.valid());
-        return node_cfg->address;
-
-      default:
-        RATELIMIT_CRITICAL(std::chrono::seconds(1),
-                           2,
-                           "Unexpected Socket Type:%d, nid=%s",
-                           (int)type,
-                           nid.toString().c_str());
-        ld_check(false);
+    if (type == SocketType::GOSSIP && !Worker::settings().send_to_gossip_port) {
+      return node_cfg->getSockaddr(SocketType::DATA, conntype);
+    } else {
+      return node_cfg->getSockaddr(type, conntype);
     }
   }
 

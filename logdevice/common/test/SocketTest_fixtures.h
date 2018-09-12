@@ -54,7 +54,9 @@ class TestSocketDependencies : public SocketDependencies {
   getSSLContext(bufferevent_ssl_state, bool) const override;
   virtual bool shuttingDown() const override;
   virtual std::string dumpQueuedMessages(Address addr) const override;
-  virtual const Sockaddr& getNodeSockaddr(NodeID nid, SocketType type) override;
+  virtual const Sockaddr& getNodeSockaddr(NodeID nid,
+                                          SocketType type,
+                                          ConnectionType conntype) override;
   virtual int eventAssign(struct event* ev,
                           void (*cb)(evutil_socket_t, short what, void* arg),
                           void* arg) override;
@@ -142,6 +144,7 @@ class SocketTest : public ::testing::Test {
     socket_ = std::make_unique<Socket>(
         server_name_,
         SocketType::DATA,
+        ConnectionType::PLAIN,
         flow_group_,
         std::make_unique<TestSocketDependencies>(this));
     input_ = LD_EV(evbuffer_new)();
@@ -367,6 +370,7 @@ class ClientSocketTest : public SocketTest {
     socket_ = std::make_unique<Socket>(
         server_name_,
         SocketType::DATA,
+        ConnectionType::PLAIN,
         flow_group_,
         std::make_unique<TestSocketDependencies>(this));
     cluster_name_ = "Socket_test_cluster";
@@ -397,6 +401,7 @@ class ServerSocketTest : public SocketTest {
         Sockaddr(get_localhost_address_str(), 4440) /* client_addr */,
         ResourceBudget::Token() /* accounting token, not used */,
         SocketType::DATA /* socket type */,
+        ConnectionType::PLAIN,
         flow_group_,
         std::make_unique<TestSocketDependencies>(this));
     // A server socket is connected from the beginning.
