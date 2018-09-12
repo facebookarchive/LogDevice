@@ -23,7 +23,6 @@ const users = [
 const siteConfig = {
   title: 'LogDevice' /* title for your website */,
   tagline: 'Distributed storage for sequential data',
-  tagline: 'A scalable and fault tolerant distributed log system',
   url: 'https://logdevice.io' /* your website url */,
   baseUrl: BASEURL,
   cname: "logdevice.io",
