@@ -129,4 +129,13 @@ ERROR_CODE(SHADOW_BUSY              ,  404, "traffic shadowing was busy, try aga
 ERROR_CODE(SHADOW_LOADING           ,  405, "traffic shadow parameters are being loaded")
 ERROR_CODE(SHADOW_SKIP              ,  406, "skipping shadow due to configured ratio")
 
+// Storage membership errors
+ERROR_CODE(VERSION_MISMATCH, 500, "version mismatch")
+ERROR_CODE(SOURCE_STATE_MISMATCH,
+           501,
+           "source state doesn't match the transition rules")
+ERROR_CODE(CONDITION_MISMATCH,
+           502,
+           "provided conditions do not match the required conditions")
+
 #undef ERROR_CODE
