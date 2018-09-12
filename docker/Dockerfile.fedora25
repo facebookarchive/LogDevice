@@ -1,0 +1,28 @@
+FROM fedora:25
+
+MAINTAINER Ahmed Soliman <asoli@fb.com>
+
+ARG PARALLEL=4
+
+COPY logdevice logdevice
+
+RUN echo "/usr/local/lib" >> /etc/ld.so.conf && ldconfig
+
+RUN dnf install -y $(cat /logdevice/build_tools/fedora-25.deps) && \
+    dnf clean all && \
+    mkdir /tmp/build && cd /tmp/build && \
+    cmake /logdevice/ && \
+    make -j$PARALLEL && \
+    make install && \
+    cp /tmp/build/bin/ld* /usr/local/bin/ && \
+    cp /tmp/build/bin/ld-dev-cluster /usr/local/bin/
+
+RUN rm -rf /tmp/build /logdevice /folly /rocksdb /usr/local/lib/*.a
+
+RUN dnf remove -y cmake autoconf autoconf-archive automake wget file git gcc-c++
+
+ENV LOGDEVICE_TEST_BINARY=/usr/local/bin/logdeviced
+
+EXPOSE 4440 4441 4443 5440
+
+CMD /usr/local/bin/ld-dev-cluster

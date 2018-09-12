@@ -1,0 +1,64 @@
+/**
+ * Copyright (c) 2017-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+// Important: regenerate flatbuffer structure definitions if you change this:
+// flatc --cpp --scoped-enums <your-flatbuffer.fbs>
+
+namespace facebook.logdevice.event_log_rebuilding_set;
+
+table DonorComplete {
+  idx: ulong;
+  version: ulong;
+}
+
+table DonorProgress {
+  idx: ulong;
+  ts: ulong;
+}
+
+table RecordTimeRange {
+  lower: ulong;
+  upper: ulong;
+}
+
+table DataClassTimeRanges {
+  dc: ubyte;
+  time_ranges: [RecordTimeRange];
+}
+
+table NodeInfo {
+  idx: ulong;
+  version: ulong;
+  mode: int;
+  donors_complete: [DonorComplete];
+  donors_complete_authoritatively: [DonorComplete];
+  auth_status: int;
+  drain: int;
+  recoverable: bool;
+  acked: bool;
+  ack_lsn: ulong;
+  ack_version: ulong;
+  dc_dirty_ranges: [DataClassTimeRanges];
+  source:string;
+  details:string;
+  rebuilding_started_ts_millis: ulong;
+  rebuilding_completed_ts_millis: ulong;
+}
+
+table ShardInfo {
+  idx: ulong;
+  version: ulong;
+  nodes: [NodeInfo];
+  donor_progress: [DonorProgress];
+}
+
+table Set {
+  shards: [ShardInfo];
+}
+
+root_type Set;

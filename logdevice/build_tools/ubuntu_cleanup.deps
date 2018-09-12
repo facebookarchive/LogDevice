@@ -1,0 +1,11 @@
+cmake
+wget
+git
+g++
+make
+python
+autoconf
+autoconf-archive
+automake
+pkg-config
+libtool

@@ -1,0 +1,11 @@
+_build/
+*~
+.DS_Store
+website/translated_docs
+website/build/
+website/yarn.lock
+website/node_modules
+website/package-lock.json
+website/i18n/*
+!website/i18n/en.json
+website/yarn-error.log

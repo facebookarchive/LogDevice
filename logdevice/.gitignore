@@ -1,0 +1,13 @@
+*.o
+*.so
+*.la
+*.a
+*.so.*
+tags
+Makefile
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+**/__pycache__/
+**.pyc
+*.egg-info

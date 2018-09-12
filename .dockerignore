@@ -1,0 +1,5 @@
+.git/
+docker/
+logdevice/build/
+logdevice/external/folly/.git/
+logdevice/external/rocksdb/.git/

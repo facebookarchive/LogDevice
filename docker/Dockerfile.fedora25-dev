@@ -1,0 +1,26 @@
+FROM fedora:25
+
+MAINTAINER Ahmed Soliman <asoli@fb.com>
+
+ARG PARALLEL=4
+
+# Fedora doesn't have /usr/local/lib in ldconfig so libfolly won't be
+# picked up by logdeviced
+RUN echo "/usr/local/lib" >> /etc/ld.so.conf && ldconfig
+
+COPY logdevice/build_tools/fedora-25.deps /tmp/
+
+RUN dnf install -y $(cat /tmp/fedora-25.deps) && dnf clean all
+
+COPY logdevice logdevice
+
+RUN mkdir /build && cd /build && \
+    cmake /logdevice/ && \
+    make -j$PARALLEL && \
+    make install
+
+WORKDIR /build
+
+ENV LOGDEVICE_TEST_BINARY=/build/bin/logdeviced
+
+CMD /bin/bash

@@ -1,0 +1,222 @@
+/**
+ * Copyright (c) 2018-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+namespace facebook.logdevice.logsconfig.fbuffers;
+
+// Important: regenerate flatbuffer structure definitions if you change this:
+// flatc --cpp --scoped-enums <your-flatbuffer.fbs>
+
+/*
+ * A schema file for our LogsConfigTree representation in flatbuffers. The key
+ * objects are LogsConfig (which translates to LogsConfigTree) and LogAttrs
+ * (which translates to LogAttributes)
+ */
+
+// Basic Type that resembles Optional primitives
+// The reason we defined these is that we want a Nullable version of the
+// primitives that are defined in flatbuffers, because in our case if Bool =
+// nullptr this means that the Attribute is unset.
+table Bool {
+  value:bool;
+}
+
+table Int {
+  value:int;
+}
+
+table UInt8 {
+  value: ubyte;
+}
+
+table NoValueSet {
+}
+
+table Long {
+  value:long;
+}
+
+table ULong {
+  value:ulong;
+}
+
+table String {
+  value:string;
+}
+
+// Common Types
+enum ConflictResolutionMode:byte {
+  Strict = 0,
+  Auto = 1
+}
+
+table Permission {
+  principal:string (key);
+  actions:[ubyte];
+}
+
+table ExtraAttr {
+  key:string (key);
+  value:string;
+}
+
+table ScopeReplication {
+  scope:ubyte (key);
+  replication_factor:ubyte;
+}
+
+table Shadow {
+  // destination is a config url, like what is passed to Client::create
+  destination:string;
+  ratio:float;
+}
+
+struct Header {
+  base_lsn:ulong;
+  resolution_mode:ConflictResolutionMode = Strict;
+}
+
+table LogRange {
+  from:ulong;
+  to:ulong;
+}
+
+union Any {
+  NoValueSet,
+  UInt8,
+  Int,
+  Bool,
+  ULong,
+  Long,
+  String
+}
+
+table LogAttr {
+  name:string (key);
+  inherited:bool;
+  value:Any;
+}
+
+table LogAttrs {
+  attributes: [LogAttr];
+  permissions:[Permission];
+  extras:[ExtraAttr];
+  replicate_across:[ScopeReplication];
+  acls:[string];
+  acls_shadow:[string];
+  // Below fields are not defined in config files, only LogsConfig
+  shadow: Shadow;
+}
+
+//*
+//* Structures for LogsConfig
+//*
+
+table LogGroup {
+  name:string;
+  range:LogRange;
+  attrs:LogAttrs;
+}
+
+table Directory {
+  name:string;
+  attrs:LogAttrs;
+  log_groups:[LogGroup];
+  children: [Directory];
+}
+
+table LogsConfig {
+  version: ulong;
+  root_dir:Directory;
+}
+
+//* Following structure is only used for the Client / Messages
+table LogGroupInDirectory {
+  log_group:LogGroup;
+  parent_path:string;
+}
+
+
+//*
+//* Delta Log Entries
+//*
+union DeltaPayload {
+  MkDir_Msg,
+  Rm_Msg,
+  Rename_Msg,
+  SetAttrs_Msg,
+  SetLogRange_Msg,
+  MkLog_Msg,
+  BatchDelta,
+  SetTree_Msg
+}
+
+// Root Structure has a header and payload
+table Delta {
+  header: Header;
+  payload: DeltaPayload;
+}
+
+table MkDir_Msg {
+  name:string;
+  recursive:bool = false;
+  attrs:LogAttrs;
+}
+
+//*
+//* This is a special delta used to discard anything before
+//* it and sets the tree to the supplied one
+//*
+table SetTree_Msg {
+  tree: LogsConfig;
+}
+
+// Rm -- Remove a directory or a log
+table Rm_Msg {
+  name:string;
+  validate_is_dir:bool;
+  recursive:bool = false;
+}
+
+table Rename_Msg {
+  from_path:string;
+  to_path:string;
+}
+
+table SetAttrs_Msg {
+  name:string;
+  attrs:LogAttrs;
+}
+
+table SetLogRange_Msg {
+  name:string;
+  range:LogRange;
+}
+
+table MkLog_Msg {
+  name:string;
+  range:LogRange;
+  mk_intermediate_paths:bool;
+  attrs:LogAttrs;
+}
+
+// RESET -- Sets the full log to the serialized state regardless
+table RESET_Msg {
+  config:LogsConfig;
+}
+
+// Batch Delta
+table BatchDelta {
+  // All Headers of the deltas are IGNORED. Only the header from the root delta
+  // is respected.
+  operations: [Delta];
+}
+
+root_type LogsConfig;
+root_type Delta;
+root_type Directory;
+root_type LogGroup;
+root_type LogAttrs;

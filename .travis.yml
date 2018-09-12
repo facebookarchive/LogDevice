@@ -1,0 +1,20 @@
+sudo: required
+git:
+  submodules: false
+
+services:
+  - docker
+
+before_install:
+  - docker -v
+  - git submodule update --init --remote --recursive
+
+script:
+  - docker build -t logdevice-ubuntu -f docker/Dockerfile.ubuntu --build-arg PARALLEL=2 .
+
+notifications:
+  email:
+    recipients:
+      - cmarchent@fb.com
+      - asoli@fb.com
+    on_failure: change # default: always

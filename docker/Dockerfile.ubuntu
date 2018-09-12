@@ -1,0 +1,27 @@
+FROM ubuntu:bionic
+
+MAINTAINER Ahmed Soliman <asoli@fb.com>
+
+ARG PARALLEL=4
+
+COPY logdevice logdevice
+
+RUN echo "/usr/local/lib" >> /etc/ld.so.conf && ldconfig && \
+    apt-get update && \
+    apt-get install -y $(cat /logdevice/build_tools/ubuntu.deps) && \
+    rm -rf /var/lib/apt/lists/* && \
+    mkdir /build && cd /build && \
+    cmake /logdevice/ && \
+    make -j$PARALLEL && \
+    make install && \
+    cp /build/bin/ld* /usr/local/bin/ && \
+    cp /build/bin/ld-dev-cluster /usr/local/bin/ && \
+    apt-get remove -y $(cat /logdevice/build_tools/ubuntu_cleanup.deps) && \
+    apt-get autoremove -y && \
+    rm -rf /build /logdevice
+
+ENV LOGDEVICE_TEST_BINARY=/usr/local/bin/logdeviced
+
+EXPOSE 4440 4441 4443 5440
+
+CMD /usr/local/bin/ld-dev-cluster

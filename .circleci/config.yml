@@ -1,0 +1,38 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: ubuntu:bionic
+    resource_class: xlarge
+    steps:
+      - checkout
+      - run: apt-get update
+      - run: apt-get install -y ca-certificates xsltproc $(cat logdevice/build_tools/ubuntu.deps)
+      - run: git reset --hard HEAD
+      - run: git submodule sync
+      - run: git submodule update --init
+      - run:
+          name: Build LogDevice
+          command: |
+            mkdir -p _build
+            cd _build
+            cmake ../logdevice/
+            make -j 8
+      - run:
+          name: Unit Tests
+          working_directory: _build
+          command: |
+            mkdir -p ../gtest_results/unit_tests
+            make ARGS="-j 8 --output-on-failure --no-compress-output -T Test" test
+      - run:
+          name: Collect results
+          working_directory: _build
+          command: |
+            xsltproc ../.circleci/conv.xsl Testing/*/Test.xml > ../gtest_results/unit_tests/results.xml
+          when: always
+      - store_artifacts:
+          path: gtest_results
+          when: always
+      - store_test_results:
+          path: gtest_results
+          when: always

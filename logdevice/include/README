@@ -1,0 +1,52 @@
+The LogDevice client API uses the following conventions:
+
+1. errno-style error reporting.
+
+   None of the constructors and methods of the API classes throw any
+   exceptions. All exceptional conditions are reported by setting a
+   thread-local static enum facebook::logdevice::err (see Err.h) to
+   an appropriate error code and returning a special failure value out
+   of the method. The failure value is documented for every method in the
+   method's docblock. For methods returning pointers the failure value is
+   nullptr. For methods returning ints the failure value is generally -1.
+   For methods returning scalar or enum types defined with typedef the
+   failure value is a special constant of the type (usually 0).
+
+   Exceptions thrown by libraries, such as Folly, that LogDevice client uses
+   internally are expected to be caught as early as possible and
+   should not propagate to the level of API functions. If any such exception 
+   does reach the API level, it will be caught by the API function. Debug 
+   builds will std::terminate(). Release builds will report an internal 
+   error (E::INTERNAL). If an std::bad_alloc reaches the API level, debug
+   builds will std::terminate(), release builds will report E::NOMEM.
+
+2. Factory instantiation.
+
+   Most public classes (Client, Log, Reader) do not have
+   public constructors. These classes are instead instantiated by
+   calls to factory functions and methods. On success the factory
+   calls return a pointer to a fully constructed object. On failure
+   they return NULL and set err. This is done in order to have one
+   common error reporting mechanism for all calls in lieu of
+   exceptions, rather than two separate ways to report failures in
+   constructors and in methods.
+
+3. Constructors do not fail.
+
+   The few classes that have public constructors (Payload, DataRecord,
+   GapRecord) guarantee that those constructors will create objects in
+   a good, usable state that does not violate any invariants of the
+   class no matter what arguments were passed into the constructor.
+
+4. Private implementation.
+
+   Binary backwards compatibility is achieved for all classes by
+   hiding the implementation in an opaque subclass. Public API classes
+   have fixed vtables (the only entry is the destructor) and are
+   guaranteed to keep object sizes constant even as the implementation
+   evolves in future versions of the library. This enables
+   distributing new versions of LogDevice client as a (shared) library
+   that can be linked into existing binaries without recompiling them.
+   This will be important if we end up hosting the code in a private
+   Facebook repo on github and exporting to third-party periodically.
+   Will also be important for users of LogDevice outside of Facebook.

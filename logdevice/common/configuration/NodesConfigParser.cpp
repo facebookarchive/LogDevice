@@ -1,0 +1,754 @@
+/**
+ * Copyright (c) 2017-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+#include "NodesConfigParser.h"
+
+#include <folly/dynamic.h>
+#include "logdevice/common/ConstructorFailed.h"
+#include "logdevice/common/commandline_util_chrono.h"
+#include "logdevice/common/configuration/NodesConfig.h"
+#include "logdevice/common/configuration/ParsingHelpers.h"
+#include "logdevice/common/debug.h"
+#include "logdevice/common/util.h"
+#include "logdevice/include/Err.h"
+
+using namespace facebook::logdevice::configuration;
+
+namespace facebook { namespace logdevice { namespace configuration {
+namespace parser {
+
+//
+// Forward declarations of helpers
+//
+
+static bool parseOneNode(const folly::dynamic&,
+                         node_index_t&,
+                         Configuration::Node&);
+static bool parseNodeID(const folly::dynamic&, node_index_t&);
+static bool parseGeneration(const folly::dynamic&, Configuration::Node&);
+static bool parseNumShards(const folly::dynamic&, Configuration::Node&);
+static bool parseHostFields(const folly::dynamic&,
+                            Sockaddr&,                  /* host address */
+                            Sockaddr&,                  /* gossip address */
+                            folly::Optional<Sockaddr>&, /* ssl address */
+                            folly::Optional<Sockaddr>& /* admin address */);
+static bool parseRoles(const folly::dynamic&, Configuration::Node&);
+static bool parseStorageState(const folly::dynamic&, Configuration::Node&);
+static bool parseLocation(const folly::dynamic&, Configuration::Node&);
+static bool parseSequencer(const folly::dynamic&, Configuration::Node&);
+static bool parseRetention(const folly::dynamic&, Configuration::Node&);
+static bool parseCompactionSchedule(const folly::dynamic&,
+                                    Configuration::Node&);
+static bool parseProactiveCompaction(const folly::dynamic&,
+                                     Configuration::Node&);
+
+bool parseNodes(const folly::dynamic& clusterMap,
+                ServerConfig::NodesConfig& output) {
+  auto iter = clusterMap.find("nodes");
+  if (iter == clusterMap.items().end()) {
+    ld_error("missing \"nodes\" entry for cluster");
+    err = E::INVALID_CONFIG;
+    return false;
+  }
+
+  const folly::dynamic& nodesList = iter->second;
+  if (!nodesList.isArray()) {
+    ld_error("\"nodes\" entry for cluster must be array");
+    err = E::INVALID_CONFIG;
+    return false;
+  }
+
+  size_t ssl_enabled_nodes = 0;
+  size_t nodes_with_capacity_set = 0;
+  size_t writeable_storage_nodes = 0;
+
+  std::unordered_map<Sockaddr, node_index_t, Sockaddr::Hash> seen_addresses;
+
+  ld_check(output.getNodes().empty());
+  Nodes res;
+  for (const folly::dynamic& item : nodesList) {
+    node_index_t index;
+    Configuration::Node node;
+    if (!parseOneNode(item, index, node)) {
+      // NOTE: one invalid node fails the entire config
+      return false;
+    }
+
+    if (res.count(index)) {
+      ld_error("Duplicate node_id in nodes config: %d.", index);
+      err = E::INVALID_CONFIG;
+      return false;
+    }
+
+    if (node.ssl_address) {
+      ++ssl_enabled_nodes;
+    }
+
+    if (node.storage_state == StorageState::READ_WRITE) {
+      ++writeable_storage_nodes;
+      if (node.storage_capacity.hasValue()) {
+        ++nodes_with_capacity_set;
+      }
+    }
+
+    auto insert_result =
+        seen_addresses.insert(std::make_pair(node.address, index));
+    if (!insert_result.second) {
+      ld_error("Multiple nodes with the same 'host' entry %s "
+               "(indexes %hd and %hd)",
+               node.address.toString().c_str(),
+               insert_result.first->second,
+               index);
+      err = E::INVALID_CONFIG;
+      return false;
+    }
+    res[index] = std::move(node);
+  }
+
+  if (ssl_enabled_nodes != 0 && ssl_enabled_nodes != res.size()) {
+    ld_error("SSL has to be enabled for all nodes if it is enabled for at "
+             "least one node");
+    err = E::INVALID_CONFIG;
+    return false;
+  }
+
+  if (nodes_with_capacity_set != 0 &&
+      nodes_with_capacity_set != writeable_storage_nodes) {
+    ld_error("Storage capacity has to be set for all writable storage nodes "
+             "if it is set for at least one writable storage node");
+    err = E::INVALID_CONFIG;
+    return false;
+  }
+
+  if (res.empty()) {
+    ld_error("Node config is empty");
+    err = E::INVALID_CONFIG;
+    return false;
+  }
+
+  // TODO(T15517759): At this point we expect all production tiers to have the
+  // same number of shards on each storage node... because rebuilding has not
+  // been modified to support heterogeneous hardware. Until this gets
+  // implemented, we validate here that all storage nodes have the same number
+  // of shards.
+  folly::Optional<uint8_t> num_shards;
+  for (auto it : res) {
+    if (!it.second.isReadableStorageNode()) {
+      continue;
+    }
+    if (!num_shards.hasValue()) {
+      num_shards = it.second.num_shards;
+    } else if (num_shards.value() != it.second.num_shards) {
+      ld_error("Not all nodes are configured with the same value for "
+               "num_shards. LogDevice does not yet support running tiers "
+               "with heterogeneous number of shards.");
+      err = E::INVALID_CONFIG;
+      return false;
+    }
+  }
+
+  output.setNodes(std::move(res));
+
+  return true;
+}
+
+static bool parseOneNode(const folly::dynamic& nodeMap,
+                         node_index_t& out_node_index,
+                         Configuration::Node& output) {
+  if (!nodeMap.isObject()) {
+    ld_error("node config must be map");
+    err = E::INVALID_CONFIG;
+    return false;
+  }
+
+  if (!parseNodeID(nodeMap, out_node_index)) {
+    ld_error("\"node_id\" must be present in a node config");
+    err = E::INVALID_CONFIG;
+    return false;
+  }
+
+  if (out_node_index < 0) {
+    ld_error("\"node_id\" must be nonnegative, %d found", out_node_index);
+    err = E::INVALID_CONFIG;
+    return false;
+  }
+
+  // Every node entry must have a generation number
+  if (!parseGeneration(nodeMap, output)) {
+    ld_error("\"generation\" must be present in a node config");
+    err = E::INVALID_CONFIG;
+    return false;
+  }
+
+  return parseHostFields(nodeMap,
+                         output.address,
+                         output.gossip_address,
+                         output.ssl_address,
+                         output.admin_address) &&
+      parseRoles(nodeMap, output) && parseStorageState(nodeMap, output) &&
+      parseNumShards(nodeMap, output) && parseLocation(nodeMap, output) &&
+      parseSequencer(nodeMap, output) && parseRetention(nodeMap, output) &&
+      parseCompactionSchedule(nodeMap, output) &&
+      parseProactiveCompaction(nodeMap, output) &&
+      parseSettings(nodeMap, "settings", output.settings);
+}
+
+static bool parseNodeID(const folly::dynamic& nodeMap,
+                        node_index_t& out_node_index) {
+  return getIntFromMap<node_index_t>(nodeMap, "node_id", out_node_index);
+}
+
+static bool parseGeneration(const folly::dynamic& nodeMap,
+                            Configuration::Node& output) {
+  return getIntFromMap<int>(nodeMap, "generation", output.generation);
+}
+
+static bool parseNumShards(const folly::dynamic& nodeMap,
+                           Configuration::Node& output) {
+  bool ret =
+      getIntFromMap<shard_size_t>(nodeMap, "num_shards", output.num_shards);
+  if (!ret) {
+    // "num_shards" property not found.
+    if (output.isReadableStorageNode()) {
+      ld_error("\"num_shards\" must be present in a node config for all "
+               "storage nodes ");
+      err = E::INVALID_CONFIG;
+      return false;
+    } else {
+      output.num_shards = 0;
+      return true;
+    }
+  }
+
+  if (output.num_shards > MAX_SHARDS) {
+    ld_error("\"num_shards\" must be <= %lu", MAX_SHARDS);
+    err = E::INVALID_CONFIG;
+    return false;
+  }
+
+  if (output.num_shards < 0) {
+    ld_error("\"num_shards\" must be >= 0");
+    err = E::INVALID_CONFIG;
+    return false;
+  }
+
+  if (output.isReadableStorageNode() && output.num_shards == 0) {
+    ld_error("\"num_shards\" must be > 0 for storage nodes");
+    err = E::INVALID_CONFIG;
+    return false;
+  }
+
+  return true;
+}
+
+bool parseHostString(const std::string& hostStr,
+                     Sockaddr& addr_out,
+                     const std::string& fieldName) {
+  if (hostStr[0] == '/') {
+    // The host entry contains the path for a unix domain socket.
+    try {
+      addr_out = Sockaddr(hostStr.c_str());
+      return true;
+    } catch (const ConstructorFailed&) {
+      ld_error(
+          "invalid \"%s\" entry: \"%s\"", fieldName.c_str(), hostStr.c_str());
+      err = E::INVALID_CONFIG;
+      return false;
+    }
+  }
+
+  std::pair<std::string, std::string> ipPortPair = parseIpPort(hostStr);
+  if (ipPortPair.first.empty() || ipPortPair.second.empty()) {
+    ld_error(
+        "malformed \"%s\" entry: \"%s\"", fieldName.c_str(), hostStr.c_str());
+    err = E::INVALID_CONFIG;
+    return false;
+  }
+
+  try {
+    addr_out = Sockaddr(ipPortPair.first, ipPortPair.second);
+  } catch (const ConstructorFailed&) {
+    ld_error("invalid \"%s\" entry for node: \"%s\"",
+             fieldName.c_str(),
+             hostStr.c_str());
+    err = E::INVALID_CONFIG;
+    return false;
+  }
+
+  return true;
+}
+
+static bool parseHostFields(const folly::dynamic& nodeMap,
+                            Sockaddr& addr_out,
+                            Sockaddr& gossip_addr_out,
+                            folly::Optional<Sockaddr>& ssl_addr_out,
+                            folly::Optional<Sockaddr>& admin_addr_out) {
+  std::string hostStr;
+  std::string gossipAddressStr;
+  std::string adminStr;
+  std::string sslHostStr;
+  int sslPort, gossipPort, adminPort;
+
+  if (!getStringFromMap(nodeMap, "host", hostStr)) {
+    ld_error("missing \"host\" entry for node");
+    err = E::INVALID_CONFIG;
+    return false;
+  }
+  if (!parseHostString(hostStr, addr_out, "host")) {
+    ld_warning("parseHostString() failed for host:%s", hostStr.c_str());
+    // err set by parseHostString()
+    return false;
+  }
+  ld_check(hostStr.length() > 0);
+
+  if (getIntFromMap<int>(nodeMap, "gossip_port", gossipPort)) {
+    size_t posn = hostStr.find_last_of(":");
+    std::string host_prefix = hostStr.substr(0, posn + 1);
+    gossipAddressStr = host_prefix;
+    gossipAddressStr += folly::to<std::string>(gossipPort);
+  } else {
+    // Port not found, looking for unix domain socket address
+    if (!getStringFromMap(nodeMap, "gossip_address", gossipAddressStr)) {
+      // Fall back to data port
+      gossipAddressStr = hostStr;
+    }
+  }
+
+  if (!parseHostString(gossipAddressStr, gossip_addr_out, "gossip_address")) {
+    ld_warning("parseHostString() failed for gossip_address:%s",
+               gossipAddressStr.c_str());
+    // err set by parseHostString()
+    return false;
+  }
+
+  // TODO: consider allowing SSL-only node configuration. For internal
+  // communication we could potentially use SSL with no cipher, if openssl
+  // supports that?
+
+  // We expect primarily the "ssl_port" parameter to be used in production.
+  // However, for testing (where unix sockets are used), we need an "ssl_host"
+  // param as well, thus both params are supported.
+  if (!getIntFromMap<int>(nodeMap, "ssl_port", sslPort)) {
+    sslPort = 0;
+  }
+  if (getStringFromMap(nodeMap, "ssl_host", sslHostStr)) {
+    if (sslPort) {
+      ld_error("invalid \"ssl_host\" entry for node: \"%s\", contains both "
+               "ssl_port and ssl_host",
+               hostStr.c_str());
+      err = E::INVALID_CONFIG;
+      return false;
+    }
+    Sockaddr sslAddress;
+    if (!parseHostString(sslHostStr, sslAddress, "ssl_host")) {
+      // err set by parseHostString()
+      return false;
+    }
+    ssl_addr_out.assign(sslAddress);
+  } else if (sslPort) {
+    if (addr_out.isUnixAddress()) {
+      ld_error("invalid \"ssl_port\" entry for node: \"%s\", unix socket "
+               "specified as \"host\"",
+               hostStr.c_str());
+      return false;
+    }
+    ssl_addr_out.assign(addr_out.withPort(sslPort));
+  }
+
+  // Admin API address
+  if (!getIntFromMap<int>(nodeMap, "admin_port", adminPort)) {
+    adminPort = 0;
+  }
+  if (getStringFromMap(nodeMap, "admin_host", adminStr)) {
+    if (adminPort) {
+      ld_error("invalid \"admin_host\" entry for node: \"%s\", contains "
+               "both admin_host and admin_port",
+               hostStr.c_str());
+      err = E::INVALID_CONFIG;
+      return false;
+    }
+    Sockaddr adminAddress;
+    if (!parseHostString(adminStr, adminAddress, "admin_host")) {
+      // err set by parseHostString()
+      return false;
+    }
+    admin_addr_out.assign(adminAddress);
+  } else if (adminPort) {
+    if (addr_out.isUnixAddress()) {
+      ld_error("invalid \"admin_port\" entry for node: \"%s\", host address "
+               "is a unix socket which cannot be combined with a port",
+               hostStr.c_str());
+      return false;
+    }
+    admin_addr_out.assign(addr_out.withPort(adminPort));
+  }
+
+  return true;
+}
+static bool parseLocation(const folly::dynamic& nodeMap,
+                          Configuration::Node& output) {
+  std::string location_str;
+  bool success = getStringFromMap(nodeMap, "location", location_str);
+  if (!success && err != E::NOTFOUND) {
+    ld_error("Invalid value for \"location\" attribute of "
+             "node '%s'. Expected a string.",
+             output.address.toString().c_str());
+    err = E::INVALID_CONFIG;
+    return false;
+  }
+
+  if (success) {
+    /**
+     * T7915297 Temporary backward compatibility hack, will remove once
+     *          legacy deployments are upgraded
+     */
+    std::vector<std::string> tokens;
+    folly::split(
+        NodeLocation::DELIMITER, location_str, tokens, /* ignoreEmpty */ false);
+    if (tokens.size() == NodeLocation::NUM_SCOPES - 1) {
+      // possible old format, manually create the REGION label by
+      // right-stripping digits from DATA_CENTER label
+      std::string region_label(tokens[0]);
+      region_label.erase(std::find_if(region_label.rbegin(),
+                                      region_label.rend(),
+                                      [](char c) { return !std::isdigit(c); })
+                             .base(),
+                         region_label.end());
+      location_str = region_label + NodeLocation::DELIMITER + location_str;
+    }
+    /* end T7915297 */
+
+    NodeLocation location;
+    int rv = location.fromDomainString(location_str);
+    if (rv != 0) {
+      ld_error("Invalid \"location\" string '%s' for node '%s'",
+               location_str.c_str(),
+               output.address.toString().c_str());
+      err = E::INVALID_CONFIG;
+      return false;
+    }
+
+    ld_check(!location.isEmpty());
+    output.location.assign(std::move(location));
+  }
+
+  return true;
+}
+
+// node_cfg is expected to have .weight already set to its final value
+static bool parseSequencer(const folly::dynamic& nodeMap,
+                           Configuration::Node& output) {
+  if (getDoubleFromMap(nodeMap, "sequencer", output.sequencer_weight)) {
+    if (!output.hasRole(NodeRole::SEQUENCER)) {
+      ld_error("Invalid 'sequencer' attribute. 'sequencer' can only be set "
+               "on sequencer nodes");
+      err = E::INVALID_CONFIG;
+      return false;
+    }
+
+    if (output.sequencer_weight < 0) {
+      ld_error("Invalid value of 'sequencer' attribute. Expected a "
+               "non-negative number");
+      err = E::INVALID_CONFIG;
+      return false;
+    }
+
+    return true;
+  }
+
+  if (err == E::NOTFOUND) {
+    // key doesn't exist; defaults to zero
+    output.sequencer_weight = 0.0;
+    return true;
+  }
+
+  // "sequencer" exists, but is not a double, trying reading a bool instead
+  ld_check(err == E::INVALID_CONFIG);
+  bool seq_bool;
+  if (getBoolFromMap(nodeMap, "sequencer", seq_bool)) {
+    if (!output.hasRole(NodeRole::SEQUENCER)) {
+      ld_error("Invalid 'sequencer' attribute. 'sequencer' can only be set "
+               "on sequencer nodes");
+      err = E::INVALID_CONFIG;
+      return false;
+    }
+
+    // If set to 'true', treat it as having weight 1.
+    output.sequencer_weight = static_cast<double>(seq_bool);
+    return true;
+  }
+
+  ld_error("Invalid value of 'sequencer' attribute. Expected a floating "
+           "point number or a bool.");
+  err = E::INVALID_CONFIG;
+  return false;
+}
+
+static bool parseProactiveCompaction(const folly::dynamic& nodeMap,
+                                     Configuration::Node& output) {
+  auto iter = nodeMap.find("proactive_compaction_enabled");
+  if (iter == nodeMap.items().end()) {
+    return true;
+  }
+  RATELIMIT_INFO(
+      std::chrono::seconds(10),
+      1,
+      "The \"proactive_compaction_enabled\" entry in the node's config is "
+      "deprecated. Please use the \"rocksdb-proactive-compaction-enabled\" "
+      "setting instead.");
+  const folly::dynamic& val = iter->second;
+  return parseOneSetting(
+      "rocksdb-proactive-compaction-enabled", val, "settings", output.settings);
+}
+
+static bool parseRetention(const folly::dynamic& nodeMap,
+                           Configuration::Node& output) {
+  // parse the optional `retention` parameter
+  std::chrono::seconds retention;
+  if (parseChronoValue(nodeMap,
+                       "retention",
+                       "node: " + output.address.toString(),
+                       &retention)) {
+    if (retention.count() <= 0) {
+      ld_error("invalid value of \"retention\" attribute for node %s",
+               output.address.toString().c_str());
+      err = E::INVALID_CONFIG;
+      return false;
+    }
+
+    output.retention.assign(retention);
+  } else if (err != E::NOTFOUND) {
+    return false;
+  }
+
+  return true;
+}
+
+static bool parseCompactionSchedule(const folly::dynamic& nodeMap,
+                                    Configuration::Node& output) {
+  auto iter = nodeMap.find("compaction_schedule");
+  if (iter == nodeMap.items().end()) {
+    return true;
+  }
+  RATELIMIT_INFO(
+      std::chrono::seconds(10),
+      1,
+      "The \"compaction_schedule\" entry in the node's config is "
+      "deprecated. Please use the \"rocksdb-partition-compaction-schedule\" "
+      "setting instead.");
+  const folly::dynamic& val = iter->second;
+  return parseOneSetting("rocksdb-partition-compaction-schedule",
+                         val,
+                         "settings",
+                         output.settings);
+}
+
+static bool parseRoles(const folly::dynamic& nodeMap,
+                       Configuration::Node& output) {
+  auto iter = nodeMap.find("roles");
+  if (iter == nodeMap.items().end()) {
+    /* By default, nodes are both sequencers and storage nodes */
+    RATELIMIT_INFO(std::chrono::seconds(10),
+                   1,
+                   "no \"roles\" entry in config. setting node's roles "
+                   "to [\"sequencer\", \"storage\"].");
+    output.setRole(NodeRole::SEQUENCER);
+    output.setRole(NodeRole::STORAGE);
+    return true;
+  }
+
+  const folly::dynamic& rolesList = iter->second;
+  if (!rolesList.isArray()) {
+    /* The roles entry is not an array */
+    ld_error("\"roles\" entry for nodes must be an array");
+    err = E::INVALID_CONFIG;
+    return false;
+  }
+
+  /* Parse roles in config */
+  if (rolesList.empty()) {
+    ld_error("found empty \"roles\" entry. nodes must have at "
+             "last one role");
+    err = E::INVALID_CONFIG;
+    return false;
+  }
+
+  for (auto& role : rolesList) {
+    if (!role.isString()) {
+      ld_error("found invalid entry on \"roles\" array. expected one of "
+               "\"sequencer\" or \"storage\"");
+      err = E::INVALID_CONFIG;
+      return false;
+    }
+
+    NodeRole nodeRole;
+    std::string roleStr = role.asString();
+    if (nodeRoleFromString(roleStr, &nodeRole)) {
+      output.setRole(nodeRole);
+    } else {
+      ld_error("found unknown \"roles\" entry: %s", roleStr.c_str());
+      err = E::INVALID_CONFIG;
+      return false;
+    }
+  }
+
+  return true;
+}
+
+static bool parseStorageState(const folly::dynamic& nodeMap,
+                              Configuration::Node& output) {
+  folly::Optional<StorageState> legacy_storage_state;
+  folly::Optional<double> legacy_storage_capacity;
+  int legacy_weight = 1;
+
+  /* Legacy weight parsing */
+  if (getIntFromMap<int>(nodeMap, "weight", legacy_weight)) {
+    if (!output.hasRole(NodeRole::STORAGE)) {
+      ld_error("Invalid 'weight' attribute. 'weight' can only be set "
+               "on storage nodes");
+      err = E::INVALID_CONFIG;
+      return false;
+    }
+
+    if (legacy_weight < -1) {
+      ld_error("found invalid \"weight\" entry: %d", legacy_weight);
+      err = E::INVALID_CONFIG;
+      return false;
+    }
+    if (legacy_weight == -1) {
+      legacy_storage_state.assign(StorageState::NONE);
+    } else if (legacy_weight == 0) {
+      legacy_storage_state.assign(StorageState::READ_ONLY);
+    } else {
+      ld_check(legacy_weight > 0);
+      legacy_storage_state.assign(StorageState::READ_WRITE);
+      legacy_storage_capacity.assign(legacy_weight);
+    }
+  } else if (err != E::NOTFOUND && output.hasRole(NodeRole::STORAGE)) {
+    ld_error("Invalid \"weight\" entry for node. Expected an "
+             "integer >= -1");
+    return false;
+  }
+
+  ld_check(legacy_weight >= -1);
+
+  /* New storage_state + storage_capacity parsing */
+  folly::Optional<StorageState> storage_state;
+  folly::Optional<double> storage_capacity;
+
+  std::string storage_str;
+  if (getStringFromMap(nodeMap, "storage", storage_str)) {
+    if (!output.hasRole(NodeRole::STORAGE)) {
+      ld_error("Invalid 'storage' attribute. 'storage' can only be set "
+               "on storage nodes");
+      err = E::INVALID_CONFIG;
+      return false;
+    }
+
+    StorageState tmp;
+    if (storageStateFromString(storage_str, &tmp)) {
+      storage_state.assign(tmp);
+    } else {
+      ld_error("Invalid value for \"storage\" entry: \"%s\". Expected one of "
+               "\"read-write\", \"read-only\" or \"none\"",
+               storage_str.c_str());
+      err = E::INVALID_CONFIG;
+      return false;
+    }
+  } else if (err != E::NOTFOUND && output.hasRole(NodeRole::STORAGE)) {
+    ld_error("Invalid value for \"storage\" entry. Expected one of "
+             "\"read-write\", \"read-only\" or \"none\"");
+    return false;
+  }
+
+  double tmp;
+  if (getDoubleFromMap(nodeMap, "storage_capacity", tmp)) {
+    if (!output.hasRole(NodeRole::STORAGE)) {
+      ld_error("Invalid 'storage_capacity' attribute. 'storage_capacity' can "
+               "only be set on storage nodes");
+      err = E::INVALID_CONFIG;
+      return false;
+    }
+
+    storage_capacity.assign(tmp);
+  } else if (err != E::NOTFOUND && output.hasRole(NodeRole::STORAGE)) {
+    ld_error("Invalid \"storage_capacity\" entry for node. Expected a "
+             "non-negative integer.");
+    return false;
+  }
+
+  // Decide on final values based on presence of either old or new attributes
+  // and defaults
+  if (!storage_state.hasValue() && !legacy_storage_state.hasValue()) {
+    // no setting specified, set default
+    storage_state.assign(Node::DEFAULT_STORAGE_STATE);
+  } else if (storage_state.hasValue() && legacy_storage_state.hasValue()) {
+    // both settings specified, they should be identical
+    if (storage_state.value() != legacy_storage_state.value()) {
+      ld_error("Conflicting properties: \"storage\": \"%s\", weight: %d",
+               storage_str.c_str(),
+               legacy_weight);
+      err = E::INVALID_CONFIG;
+      return false;
+    }
+  } else if (legacy_storage_state.hasValue()) {
+    // Legacy value only, use it
+    storage_state = legacy_storage_state;
+  }
+  ld_check(storage_state.hasValue());
+
+  if (storage_capacity.hasValue() && legacy_storage_capacity.hasValue()) {
+    // both settings specified, they should be identical. However, weight was
+    // an int and storage_capacity is a float, so a rounding discrepancy is
+    // expected (and values in the range (0,1) all get rounded up to 1)
+    double weight_compatible_storage_capacity = storage_capacity.value() == 0.0
+        ? 0.0
+        : std::max(1.0, std::round(storage_capacity.value()));
+    if (weight_compatible_storage_capacity != legacy_storage_capacity.value()) {
+      ld_error("Conflicting properties: \"storage_capacity\": %f (rounded to "
+               "%f), weight: %d",
+               storage_capacity.value(),
+               weight_compatible_storage_capacity,
+               legacy_weight);
+      err = E::INVALID_CONFIG;
+      return false;
+    }
+  } else if (legacy_storage_capacity.hasValue()) {
+    // Legacy value only, use it
+    storage_capacity = legacy_storage_capacity;
+  }
+
+  // Making sure that we can't have a storage node enabled for writes with 0
+  // capacity
+  if (storage_state.value() == StorageState::READ_WRITE &&
+      storage_capacity.value_or(1) == 0) {
+    ld_error(
+        "Storage capacity cannot be zero for a node in \"read-write\" state");
+    err = E::INVALID_CONFIG;
+    return false;
+  }
+
+  output.storage_state = storage_state.value();
+  output.storage_capacity = storage_capacity;
+
+  // Transitionary setting until we move everything to auto log provisioning at
+  // which point read-only storage state will mean a node has to be excluded
+  // from the nodesets
+  if (!getBoolFromMap(
+          nodeMap, "exclude_from_nodesets", output.exclude_from_nodesets)) {
+    if (err != E::NOTFOUND) {
+      ld_error(
+          "Invalid value for \"exclude_from_nodesets\". Expecting true/false");
+      err = E::INVALID_CONFIG;
+      return false;
+    }
+    output.exclude_from_nodesets = false;
+  }
+  return true;
+}
+
+}}}} // namespace facebook::logdevice::configuration::parser
