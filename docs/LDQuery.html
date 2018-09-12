@@ -1,0 +1,773 @@
+<!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/><meta http-equiv="X-UA-Compatible" content="IE=edge"/><title>LDQuery · LogDevice</title><meta name="viewport" content="width=device-width"/><meta name="generator" content="Docusaurus"/><meta name="description" content="## append\_outliers"/><meta name="docsearch:language" content="en"/><meta property="og:title" content="LDQuery · LogDevice"/><meta property="og:type" content="website"/><meta property="og:url" content="https://logdevice.io/index.html"/><meta property="og:description" content="## append\_outliers"/><meta property="og:image" content="https://logdevice.io/img/logdevice_og.png"/><meta name="twitter:card" content="summary"/><meta name="twitter:image" content="https://logdevice.io/img/logdevice.png"/><link rel="shortcut icon" href="/img/favicon.png"/><link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/default.min.css"/><link rel="alternate" type="application/atom+xml" href="https://logdevice.io/blog/atom.xml" title="LogDevice Blog ATOM Feed"/><link rel="alternate" type="application/rss+xml" href="https://logdevice.io/blog/feed.xml" title="LogDevice Blog RSS Feed"/><script type="text/javascript" src="https://buttons.github.io/buttons.js"></script><link rel="stylesheet" href="/css/main.css"/></head><body class="sideNavVisible separateOnPageNav"><div class="fixedHeaderContainer"><div class="headerWrapper wrapper"><header><a href="/"><img class="logo" src="/img/facebook_logdevice_whitewordmark.png" alt="LogDevice"/></a><div class="navigationWrapper navigationSlider"><nav class="slidingNav"><ul class="nav-site nav-site-internal"><li class="siteNavGroupActive"><a href="/docs/Overview.html" target="_self">Docs</a></li><li class=""><a href="/api/annotated.html" target="_self">API</a></li><li class=""><a href="/en/help.html" target="_self">Support</a></li><li class=""><a href="/blog" target="_self">Blog</a></li></ul></nav></div></header></div></div><div class="navPusher"><div class="docMainWrapper wrapper"><div class="container docsNavContainer" id="docsNav"><nav class="toc"><div class="toggleNav"><section class="navWrapper wrapper"><div class="navBreadcrumb wrapper"><div class="navToggle" id="navToggler"><i></i></div><h2><i>›</i><span>Administration</span></h2><div class="tocToggler" id="tocToggler"><i class="icon-toc"></i></div></div><div class="navGroups"><div class="navGroup"><h3 class="navGroupCategoryTitle">Getting started</h3><ul><li class="navListItem"><a class="navItem" href="/docs/Overview.html">Overview</a></li><li class="navListItem"><a class="navItem" href="/docs/Installation.html">Installation</a></li><li class="navListItem"><a class="navItem" href="/docs/LocalCluster.html">Running a local cluster</a></li><li class="navListItem"><a class="navItem" href="/docs/Concepts.html">Concepts and architecture</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle">Configuration</h3><ul><li class="navListItem"><a class="navItem" href="/docs/FirstCluster.html">Creating your first cluster</a></li><li class="navListItem"><a class="navItem" href="/docs/Config.html">Cluster config</a></li><li class="navListItem"><a class="navItem" href="/docs/Settings.html">Settings</a></li><li class="navListItem"><a class="navItem" href="/docs/Logs.html">Logs</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle">Administration</h3><ul><li class="navListItem"><a class="navItem" href="/docs/LDShell.html">LogDevice Shell</a></li><li class="navListItem navListItemActive"><a class="navItem" href="/docs/LDQuery.html">LDQuery</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle">API</h3><ul><li class="navListItem"><a class="navItem" href="/docs/API_Intro.html">Introduction</a></li><li class="navListItem"><a class="navItem" href="/docs/API_Doxygen.html">Reference</a></li></ul></div></div></section></div><script>
+            document.addEventListener('DOMContentLoaded', function() {
+              createToggler('#navToggler', '#docsNav', 'docsSliderActive');
+              createToggler('#tocToggler', 'body', 'tocActive');
+
+              const headings = document.querySelector('.toc-headings');
+              headings && headings.addEventListener('click', function(event) {
+                if (event.target.tagName === 'A') {
+                  document.body.classList.remove('tocActive');
+                }
+              }, false);
+
+              function createToggler(togglerSelector, targetSelector, className) {
+                var toggler = document.querySelector(togglerSelector);
+                var target = document.querySelector(targetSelector);
+
+                if (!toggler) {
+                  return;
+                }
+
+                toggler.onclick = function(event) {
+                  event.preventDefault();
+
+                  target.classList.toggle(className);
+                };
+              }
+            });
+        </script></nav></div><div class="container mainContainer"><div class="wrapper"><div class="post"><header class="postHeader"><h1 class="postHeaderTitle">LDQuery</h1></header><article><div><span><h2><a class="anchor" aria-hidden="true" id="append-outliers"></a><a href="#append-outliers" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>append_outliers</h2>
+<p>Provides debugging information for the Sequencer Boycotting feature, which consists in boycotting sequencer nodes that are outliers when we compare their append success rate with the rest of the clusters.  This table contains the state of a few nodes in the cluster that are responsible for gathering stats from all other nodes, aggregate them and decide the list of outliers.</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>node_id</td><td style="text-align:center">int</td><td>Node ID this row is for.</td></tr>
+<tr><td>observed_node_id</td><td style="text-align:center">int</td><td>Node id for which we are measuring stats.</td></tr>
+<tr><td>appends_success</td><td style="text-align:center">long</td><td>Number of appends that this node completed successfully.</td></tr>
+<tr><td>appends_failed</td><td style="text-align:center">long</td><td>Number of appends that this node did not complete successfully.</td></tr>
+<tr><td>msec_since</td><td style="text-align:center">long</td><td>Time in milliseconds since the node has been considered an outlier.</td></tr>
+<tr><td>is_outlier</td><td style="text-align:center">bool</td><td>True if this node is considered an outlier.</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="append-throughput"></a><a href="#append-throughput" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>append_throughput</h2>
+<p>For each sequencer node, reports the estimated per-log-group append throughput over various time periods.  Because different logs in the same log group may have their sequencer on different nodes in the cluster, it is necessary to aggregate these rates across all nodes in the cluster to get an estimate of the global append throughput of a log group.  If Sequencer Batching is enabled, this table reports the rate of appends incoming, ie before batching and compression on the sequencer.</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>node_id</td><td style="text-align:center">int</td><td>Node ID this row is for.</td></tr>
+<tr><td>log_group_name</td><td style="text-align:center">string</td><td>The name of the log group.</td></tr>
+<tr><td>throughput_1min</td><td style="text-align:center">long</td><td>Throughput average in the past 1 minute.</td></tr>
+<tr><td>throughput_5min</td><td style="text-align:center">long</td><td>Throughput average in the past 5 minutes.</td></tr>
+<tr><td>throughput_10min</td><td style="text-align:center">long</td><td>Throughput average in the past 10 minutes.</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="catchup-queues"></a><a href="#catchup-queues" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>catchup_queues</h2>
+<p>CatchupQueue is a state machine that manages all the read streams of one client on one socket.  It contains a queue of read streams for which there are new records to be sent to the client (we say these read streams are not caught up).  Read streams from that queue are processed (or &quot;woken-up&quot;) in a round-robin fashion. The state machine is implemented in logdevice/common/CatchupQueue.h.</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>node_id</td><td style="text-align:center">int</td><td>Node ID this row is for.</td></tr>
+<tr><td>client</td><td style="text-align:center">string</td><td>Id of the client.</td></tr>
+<tr><td>queued_total</td><td style="text-align:center">long</td><td>Number of read streams queued in that CatchupQueue (ie read streams that are not caught up).</td></tr>
+<tr><td>queued_immediate</td><td style="text-align:center">long</td><td>Number of read streams that are not queued with a delay, see &quot;queue_delayed&quot;.</td></tr>
+<tr><td>queued_delayed</td><td style="text-align:center">long</td><td>(Number of read streams that are queued with a delay.  When these read streams are queued, CatchupQueue waits for a configured amount of time before dequeuing the stream for processing. This happens if the log is configured with the &quot;delivery_latency&quot;  option, which enables better batching of reads when tailing.  See &quot;deliveryLatency&quot; logdevice/common/configuration/Log.h.</td></tr>
+<tr><td>record_bytes_queued</td><td style="text-align:center">long</td><td>(CatchupQueue also does accounting of how many bytes are enqueued in the socket's output evbuffer. CatchupQueue wakes up several read streams until the buffer reaches the limit set by the option --output-max-records-kb (see logdevice/common/Settings.h).</td></tr>
+<tr><td>storage_task_in_flight</td><td style="text-align:center">int</td><td>Each read stream is processed one by one.  When a read stream is processed, it will first try to read some records from the worker thread if there are some records that can be read from RocksDB's block cache. When all records that could be read from the worker thread were read, and if there are more records that can be read, the read stream will issue a storage task to read such records in a slow storage thread.  This flag indicates whether or not there is such a storage task currently in flight.</td></tr>
+<tr><td>ping_timer_active</td><td style="text-align:center">int</td><td>Ping timer is a timer that is used to ensure we eventually try to schedule more reads under certain conditions.  This column indicates whether the timer is currently active.</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="client-read-streams"></a><a href="#client-read-streams" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>client_read_streams</h2>
+<p>ClientReadStream is the state machine responsible for reading records of a log on the client side.  The state machine connects to all storage nodes that may contain data for a log and request them to send new records as they are appended to the log.  For each ClientReadStream there is one ServerReadStream per storage node the ClientReadStream is talking to.  The &quot;readers&quot; table lists all existing ServerReadStreams.  Because LDQuery does not fetch any debugging information from clients connected to the cluster, the only ClientReadStreams that will be shown in this table are for internal read streams on the server.</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>node_id</td><td style="text-align:center">int</td><td>Node ID this row is for.</td></tr>
+<tr><td>log_id</td><td style="text-align:center">log_id</td><td>Id of the log being read.</td></tr>
+<tr><td>id</td><td style="text-align:center">long</td><td>Internal identifier for the read stream.</td></tr>
+<tr><td>next_lsn_to_deliver</td><td style="text-align:center">long</td><td>Next LSN that needs to be delivered to the client.</td></tr>
+<tr><td>window_high</td><td style="text-align:center">lsn</td><td>Current window.  This is used for flow control.  ClientReadStream instructs storage nodes to not send records with LSNs higher than this value.  ClientReadStream slides the window as it is able to make progress (see the --client-read-flow-control-threshold setting).</td></tr>
+<tr><td>until_lsn</td><td style="text-align:center">lsn</td><td>LSN up to which the ClientReadStream must read.</td></tr>
+<tr><td>read_set_size</td><td style="text-align:center">long</td><td>Number of storage nodes this ClientReadStream is reading from.  Usally equal to the size of the log's nodeset but may be smaller if some nodes from that nodeset are rebuilding.</td></tr>
+<tr><td>gap_end_outside_window</td><td style="text-align:center">lsn</td><td>Sometimes there are no more records to deliver that have a LSN smaller than &quot;window_high&quot;.  When a storage node reaches the end of the window, it sends a GAP message to inform of the next LSN it will be able to ship past the window.  This value is the smallest LSN greater than &quot;window_high&quot; reported by storage nodes and is used for determining the right endpoint of a gap interval in such a situation.</td></tr>
+<tr><td>trim_point</td><td style="text-align:center">lsn</td><td>When a storage node reaches a log's trim point, it informs ClientReadStream through a gap message.  This is ClientReadStream's current view of the log's trim point.</td></tr>
+<tr><td>gap_nodes_next_lsn</td><td style="text-align:center">string</td><td>Contains the list of nodes for which we know they don't have a record with LSN &quot;next_lsn_to_deliver&quot;.  Alongside the node id is the LSN of the next record or gap this storage node is expected to send us.</td></tr>
+<tr><td>unavailable_nodes</td><td style="text-align:center">string</td><td>List of nodes that ClientReadStream knows are unavailable and thus is not trying to read from.</td></tr>
+<tr><td>connection_health</td><td style="text-align:center">string</td><td>Summary of authoritative status of the read session. An AUTHORITATIVE session has a least an f-majority of nodes participating. Reported dataloss indicates all copies of a record were lost, or, much less likely, the only copies of the data are on the R-1 nodes that are currently unavailable, and the cluster failed to detect or remediate the failure that caused some copies to be lost. A NON_AUTHORITATIVE session has less than an f-majority of nodes participating, but those not participating have had detected failures, are not expected to participate, and are being rebuilt. Most readers will stall in this case. Readers that proceed can see dataloss gaps for records that are merely currently unavailable, but will become readable once failed nodes are repaired.  An UNHEALTHY session has too many storage nodes down but not marked as failed, to be able to read even non-authoritatively.</td></tr>
+<tr><td>redelivery_inprog</td><td style="text-align:center">bool</td><td>True if a retry of delivery to the application is outstanding.</td></tr>
+<tr><td>filter_version</td><td style="text-align:center">long</td><td>Read session version.  This is bumped every time parameters (start, until, SCD, etc.) are changed by the client.</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="cluster-state"></a><a href="#cluster-state" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>cluster_state</h2>
+<p>Fetches the state of the gossip-based failure detector from the nodes of the cluster.  When the status column is OK, the nodes_state column contains a string-representation of the cluster state as seen by the node, as comma-separated list of elements of the form &lt;node_id&gt;:{A|D}, where A means alive and D means dead. eg: N1:A,N2:A,N3:D,N4:A.  When the status is anything but OK, it means the request failed for this node, and it may be dead itself.</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>node_id</td><td style="text-align:center">long</td><td>Id of the node.</td></tr>
+<tr><td>status</td><td style="text-align:center">string</td><td>Status of the node.</td></tr>
+<tr><td>dead_nodes</td><td style="text-align:center">string</td><td>List of node IDs that this node believes to be dead.</td></tr>
+<tr><td>boycotted_nodes</td><td style="text-align:center">string</td><td>List of boycotted nodes.</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="epoch-store"></a><a href="#epoch-store" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>epoch_store</h2>
+<p>EpochStore is the data store that contains epoch-related metadata for all the logs provisioned on a cluster.   This table allows querying the metadata in epoch-store for a set of logs.</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>log_id</td><td style="text-align:center">log_id</td><td>Id of the log.</td></tr>
+<tr><td>status</td><td style="text-align:center">string</td><td>&quot;OK&quot; if the query to the epoch store succeeded for that log id.  If the log could not be found (which only happens if the user provided query constraints on the &quot;log_id&quot; column), set to NOTFOUND.  If we failed to contact the epoch store, set to one of NOTCONN, ACCESS, SYSLIMIT, FAILED.</td></tr>
+<tr><td>since</td><td style="text-align:center">long</td><td>Epoch since which the metadata (&quot;replication&quot;, &quot;storage_set&quot;, &quot;flags&quot;) are in effect.</td></tr>
+<tr><td>epoch</td><td style="text-align:center">long</td><td>Next epoch to be assigned to a sequencer.</td></tr>
+<tr><td>replication</td><td style="text-align:center">string</td><td>Current replication property of the log.</td></tr>
+<tr><td>storage_set</td><td style="text-align:center">string</td><td>Set of shards that may have data records for the log in epochs [&quot;since&quot;, &quot;epoch&quot; - 1].</td></tr>
+<tr><td>flags</td><td style="text-align:center">string</td><td>Internal flags.  See &quot;logdevice/common/EpochMetaData.h&quot; for the description of each flag.</td></tr>
+<tr><td>lce</td><td style="text-align:center">long</td><td>Last epoch considered clean for this log.  Under normal conditions, this is equal to &quot;epoch&quot; - 2.   If this value is smaller, this means that the current sequencer needs to run the Log Recovery procedure on epochs [&quot;lce&quot; + 1, &quot;epoch&quot; - 2] and readers will be unable to read data in these epochs until they are cleaned.</td></tr>
+<tr><td>meta_lce</td><td style="text-align:center">long</td><td>Same as &quot;lce&quot; but for the metadata log of this data log.</td></tr>
+<tr><td>written_by</td><td style="text-align:center">string</td><td>Id of the last node in the cluster that updated the epoch store for that log.</td></tr>
+<tr><td>tail_record</td><td style="text-align:center">string</td><td>Human readable string that describes tail record</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="event-log"></a><a href="#event-log" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>event_log</h2>
+<p>Dump debug information about the EventLogStateMachine objects running on nodes in the cluster.  The event log is the Replicated State Machine that coordinates rebuilding and contains the authoritative status of all shards in the cluster.  This table can be used to debug whether all nodes in the cluster are caught up to the same state.</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>node_id</td><td style="text-align:center">int</td><td>Node ID this row is for.</td></tr>
+<tr><td>delta_log_id</td><td style="text-align:center">log_id</td><td>Id of the delta log.</td></tr>
+<tr><td>snapshot_log_id</td><td style="text-align:center">log_id</td><td>Id of the snapshot log.</td></tr>
+<tr><td>version</td><td style="text-align:center">lsn</td><td>Version of the state.</td></tr>
+<tr><td>delta_read_ptr</td><td style="text-align:center">lsn</td><td>Read pointer in the delta log.</td></tr>
+<tr><td>delta_replay_tail</td><td style="text-align:center">lsn</td><td>On startup, the state machine reads the delta log up to that lsn before delivering the initial state to subscribers.</td></tr>
+<tr><td>snapshot_read_ptr</td><td style="text-align:center">lsn</td><td>Read pointer in the snapshot log.</td></tr>
+<tr><td>snapshot_replay_tail</td><td style="text-align:center">lsn</td><td>On startup, the state machine reads the snapshot log up to that lsn before delivering the initial state to subscribers.</td></tr>
+<tr><td>stalled_waiting_for_snapshot</td><td style="text-align:center">lsn</td><td>If not null, this means the state machine is stalled because it missed data in the delta log either because it saw a DATALOSS or TRIM gap.  The state machine will be stalled until it sees a snapshot with a version greather than this LSN.  Unless another node writes a snapshot with a bigger version, the operator may have to manually write a snapshot to recover the state machine.</td></tr>
+<tr><td>delta_appends_in_flight</td><td style="text-align:center">long</td><td>How many deltas are currently being appended to the delta log by this node.</td></tr>
+<tr><td>deltas_pending_confirmation</td><td style="text-align:center">long</td><td>How many deltas are currently pending confirmation on this node, ie these are deltas currently being written with the CONFIRM_APPLIED flag, and the node is waiting for the RSM to sync up to that delta's version to confirm whether or not it was applied.</td></tr>
+<tr><td>snapshot_in_flight</td><td style="text-align:center">long</td><td>Whether a snapshot is being appended by this node.  Only one node in the cluster is responsible for creating snapshots (typically the node with the smallest node id that's alive according to the failure detector).</td></tr>
+<tr><td>delta_log_bytes</td><td style="text-align:center">long</td><td>Number of bytes of delta records that are past the last snapshot.</td></tr>
+<tr><td>delta_log_records</td><td style="text-align:center">long</td><td>Number of delta records that are past the last snapshot.</td></tr>
+<tr><td>delta_log_healthy</td><td style="text-align:center">bool</td><td>Whether the ClientReadStream state machine used to read the delta log reports itself as healthy, ie it has enough healthy connections to the storage nodes in the delta log's storage set such that it should be able to not miss any delta.</td></tr>
+<tr><td>propagated_version</td><td style="text-align:center">lsn</td><td>Version of the last state that was fully propagated to all state machines (in particular, to RebuildingCoordinator).</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="historical-metadata"></a><a href="#historical-metadata" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>historical_metadata</h2>
+<p>This table contains information about historical epoch metadata for all logs.  While the &quot;epoch_store&quot; table provides information about the current epoch metadata of all logs, this table provides a history of that metadata for epoch ranges since the epoch of the first record that is not trimmed.</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>log_id</td><td style="text-align:center">log_id</td><td>Id of the log</td></tr>
+<tr><td>status</td><td style="text-align:center">string</td><td>&quot;OK&quot; if the query to retrieve historical metadata succeeded for that log id.  If the log is not in the config (which only happens if the user provided query constraints on the &quot;log_id&quot; column), set to INVALID_PARAM.  If we failed to read the log's historical metadata, set to one of TIMEDOUT, ACCESS, FAILED.</td></tr>
+<tr><td>since</td><td style="text-align:center">long</td><td>Epoch since which the metadata (&quot;replication&quot;, &quot;storage_set&quot;, &quot;flags&quot;) are in effect.</td></tr>
+<tr><td>epoch</td><td style="text-align:center">long</td><td>Epoch up to which the metadata is in effect.</td></tr>
+<tr><td>replication</td><td style="text-align:center">string</td><td>Replication property for records in epochs [&quot;since&quot;, &quot;epoch&quot;].</td></tr>
+<tr><td>storage_set</td><td style="text-align:center">string</td><td>Set of shards that may have data records for the log in epochs [&quot;since&quot;, &quot;epoch&quot;].</td></tr>
+<tr><td>flags</td><td style="text-align:center">string</td><td>Internal flags.  See &quot;logdevice/common/EpochMetaData.h&quot; for the description of each flag.</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="historical-metadata-legacy"></a><a href="#historical-metadata-legacy" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>historical_metadata_legacy</h2>
+<p>Same as &quot;historical_metadata&quot;, but retrieves the metadata less efficiently by reading the metadata logs directly instead of contacting the sequencer.  Provides two additional &quot;lsn&quot; and &quot;timestamp&quot; columns to identify the metadata log record that contains the metadata.</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>log_id</td><td style="text-align:center">log_id</td><td>Id of the log</td></tr>
+<tr><td>status</td><td style="text-align:center">string</td><td>&quot;OK&quot; if the query to retrieve historical metadata succeeded for that log id.  If the log is not in the config (which only happens if the user provided query constraints on the &quot;log_id&quot; column), set to INVALID_PARAM.  If we failed to read the log's historical metadata, set to one of TIMEDOUT, ACCESS, FAILED.</td></tr>
+<tr><td>since</td><td style="text-align:center">long</td><td>Epoch since which the metadata (&quot;replication&quot;, &quot;storage_set&quot;, &quot;flags&quot;) are in effect.</td></tr>
+<tr><td>epoch</td><td style="text-align:center">long</td><td>Epoch up to which the metadata is in effect.</td></tr>
+<tr><td>replication</td><td style="text-align:center">string</td><td>Replication property for records in epochs [&quot;since&quot;, &quot;epoch&quot;].</td></tr>
+<tr><td>storage_set</td><td style="text-align:center">string</td><td>Set of shards that may have data records for the log in epochs [&quot;since&quot;, &quot;epoch&quot;].</td></tr>
+<tr><td>flags</td><td style="text-align:center">string</td><td>Internal flags.  See &quot;logdevice/common/EpochMetaData.h&quot; for the description of each flag.</td></tr>
+<tr><td>lsn</td><td style="text-align:center">lsn</td><td>LSN of the metadata log record that contains this metadata</td></tr>
+<tr><td>timestamp</td><td style="text-align:center">long</td><td>Timestamp of the metadata log record that contains this metadata</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="info"></a><a href="#info" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>info</h2>
+<p>A general information table about the nodes in the cluster, like server start time, package version etc.</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>node_id</td><td style="text-align:center">int</td><td>Node ID this row is for.</td></tr>
+<tr><td>pid</td><td style="text-align:center">long</td><td>Process ID of logdeviced.</td></tr>
+<tr><td>version</td><td style="text-align:center">string</td><td>A string that holds the version and revision, built by who and when.</td></tr>
+<tr><td>package</td><td style="text-align:center">string</td><td>Package name and hash.</td></tr>
+<tr><td>build_user</td><td style="text-align:center">string</td><td>Unixname of user who built this package</td></tr>
+<tr><td>build_time</td><td style="text-align:center">string</td><td>Date and Time of the build.</td></tr>
+<tr><td>start_time</td><td style="text-align:center">string</td><td>Date and Time of when the daemon was started on that node.</td></tr>
+<tr><td>server_id</td><td style="text-align:center">string</td><td>Server Generated ID.</td></tr>
+<tr><td>shards_missing_data</td><td style="text-align:center">string</td><td>A list of the shards that are empty and waiting to be rebuilt.</td></tr>
+<tr><td>min_proto</td><td style="text-align:center">long</td><td>Minimum protocol version supported.</td></tr>
+<tr><td>max_proto</td><td style="text-align:center">long</td><td>Maximum protocol version supported.</td></tr>
+<tr><td>is_auth_enabled</td><td style="text-align:center">bool</td><td>Whether authentication is enabled for this node.</td></tr>
+<tr><td>auth_type</td><td style="text-align:center">string</td><td>Authentication Type.  Can be null or one of &quot;self_identification&quot; (insecure authentication method where the server trusts the client), &quot;ssl&quot; (the client can provide a TLS certificate by using the &quot;ssl-load-client-cert&quot; and &quot;ssl-cert-path&quot; settings).  See &quot;AuthenticationType&quot; in &quot;logdevice/common/SecurityInformation.h&quot; for more information.</td></tr>
+<tr><td>is_unauthenticated_allowed</td><td style="text-align:center">bool</td><td>Is anonymous access allowed to this server (set only if authentication is enabled, ie &quot;auth_type&quot; is not null).</td></tr>
+<tr><td>is_permission_checking_enabled</td><td style="text-align:center">bool</td><td>Do we check permissions?</td></tr>
+<tr><td>permission_checker_type</td><td style="text-align:center">string</td><td>Permission checker type.  Can be null or one of &quot;config&quot; (this method stores the permission data in the config file), &quot;permission_store&quot; (this method stores the ACLs in the config file while the permissions and users are stored in an external store).  See &quot;PermissionCheckerType&quot; in &quot;logdevice/common/SecurityInformation.h&quot; for more information.</td></tr>
+<tr><td>rocksdb_version</td><td style="text-align:center">string</td><td>Version of RocksDB.</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="info-config"></a><a href="#info-config" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>info_config</h2>
+<p>A table that dumps information about all the configurations loaded by each node in the cluster.   For each node, there will be one row for the node's configuration which is in the main config.  A second row will be present for each node if they load the log configuration from a separate config file (see &quot;include_log_config&quot; section in the main config).</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>node_id</td><td style="text-align:center">int</td><td>Node ID this row is for.</td></tr>
+<tr><td>uri</td><td style="text-align:center">string</td><td>URI of the config.</td></tr>
+<tr><td>source</td><td style="text-align:center">int</td><td>ID of the node this config originates from.  This may not necessarily be the same as &quot;node&quot; as nodes can synchronize configuration between each other.</td></tr>
+<tr><td>hash</td><td style="text-align:center">string</td><td>Hash of the config.</td></tr>
+<tr><td>last_modified</td><td style="text-align:center">time</td><td>Date and Time when the config was last modified.</td></tr>
+<tr><td>last_loaded</td><td style="text-align:center">time</td><td>Date and Time when the config was last loaded.</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="is-log-empty"></a><a href="#is-log-empty" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>is_log_empty</h2>
+<p>This table provides a way to check which logs are empty or not. It is implemented on top of the islogEmpty API (see &quot;logdevice/include/Client.h&quot;).</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>log_id</td><td style="text-align:center">log_id</td><td>ID of the log.</td></tr>
+<tr><td>status</td><td style="text-align:center">string</td><td>Response status of running isLogEmpty() on this log. Check the documentation of isLogEmpty() for the list of error codes.</td></tr>
+<tr><td>empty</td><td style="text-align:center">bool</td><td>Wether the log is empty, null if &quot;status&quot; != OK.</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="iterators"></a><a href="#iterators" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>iterators</h2>
+<p>This table allows fetching the list of RocksDB iterators on all storage nodes.</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>node_id</td><td style="text-align:center">int</td><td>Node ID this row is for.</td></tr>
+<tr><td>column_family</td><td style="text-align:center">string</td><td>Name of the column family that the iterator is open on.</td></tr>
+<tr><td>log_id</td><td style="text-align:center">log_id</td><td>ID of the log the iterator is reading.</td></tr>
+<tr><td>is_tailing</td><td style="text-align:center">long</td><td>1 if it is a tailing iterator, 0 otherwise.</td></tr>
+<tr><td>is_blocking</td><td style="text-align:center">long</td><td>1 if this is an iterator which is allowed to block when the blocks it reads are not in RocksDB's block cache, 0 otherwise.</td></tr>
+<tr><td>type</td><td style="text-align:center">string</td><td>Type of the iterator. See &quot;IteratorType&quot; in &quot;logdevice/server/locallogstore/IteratorTracker.h&quot; for the list of iterator types.</td></tr>
+<tr><td>rebuilding</td><td style="text-align:center">long</td><td>1 if this iterator is used for rebuilding, 0 if in other contexts.</td></tr>
+<tr><td>high_level_id</td><td style="text-align:center">long</td><td>A unique identifier that the high-level iterator was assigned to.  Used to tie higher-level iterators with lower-level iterators created by them.</td></tr>
+<tr><td>created_timestamp</td><td style="text-align:center">time</td><td>Timestamp when the iterator was created.</td></tr>
+<tr><td>more_context</td><td style="text-align:center">string</td><td>More information on where this iterator was created.</td></tr>
+<tr><td>last_seek_lsn</td><td style="text-align:center">lsn</td><td>Last LSN this iterator was seeked to.</td></tr>
+<tr><td>last_seek_timestamp</td><td style="text-align:center">time</td><td>When the iterator was last seeked.</td></tr>
+<tr><td>version</td><td style="text-align:center">long</td><td>RocksDB superversion that this iterator points to.</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="log-groups"></a><a href="#log-groups" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>log_groups</h2>
+<p>A table that lists the log groups configured in the cluster.  A log group is an interval of log ids that share common configuration property.</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>name</td><td style="text-align:center">string</td><td>Name of the log group.</td></tr>
+<tr><td>logid_lo</td><td style="text-align:center">log_id</td><td>Defines the lower bound (inclusive) of the range of log ids in this log group.</td></tr>
+<tr><td>logid_hi</td><td style="text-align:center">log_id</td><td>Defines the upper bound (inclusive) of the range of log ids in this log group.</td></tr>
+<tr><td>replication_property</td><td style="text-align:center">string</td><td>Replication property configured for this log group.</td></tr>
+<tr><td>synced_copies</td><td style="text-align:center">int</td><td>Number of copies that must be acknowledged by storage nodes are synced to disk before the record is acknowledged to the client as fully appended.</td></tr>
+<tr><td>max_writes_in_flight</td><td style="text-align:center">int</td><td>The largest number of records not released for delivery that the sequencer allows to be outstanding.</td></tr>
+<tr><td>backlog_duration_sec</td><td style="text-align:center">int</td><td>Time-based retention of records of logs in that log group.  If null or zero, this log group does not use time-based retention.</td></tr>
+<tr><td>storage_set_size</td><td style="text-align:center">int</td><td>Size of the storage set for logs in that log group.  The storage set is the set of shards that may hold data for a log.</td></tr>
+<tr><td>delivery_latency</td><td style="text-align:center">int</td><td>For logs in that log group, maximum amount of time that we can delay delivery of newly written records.  This option increases delivery latency but improves server and client performance.</td></tr>
+<tr><td>scd_enabled</td><td style="text-align:center">int</td><td>Indicates whether the Single Copy Delivery optimization is enabled for this log group.  This efficiency optimization allows only one copy of each record to be served to readers.</td></tr>
+<tr><td>custom_fields</td><td style="text-align:center">string</td><td>Custom text field provided by the user.</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="log-rebuildings"></a><a href="#log-rebuildings" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>log_rebuildings</h2>
+<p>This table dumps debugging information about the state of LogRebuilding state machines (see &quot;logdevice/server/LogRebuilding.h&quot;) which are state machines running on donor storage nodes and responsible for rebuilding records of that log.</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>node_id</td><td style="text-align:center">int</td><td>Node ID this row is for.</td></tr>
+<tr><td>log_id</td><td style="text-align:center">log_id</td><td>ID of the log.</td></tr>
+<tr><td>shard</td><td style="text-align:center">int</td><td>Index of the shard from which the LogRebuilding state machine is reading.</td></tr>
+<tr><td>started</td><td style="text-align:center">time</td><td>Date and Time of when that state machine was started.</td></tr>
+<tr><td>rebuilding_set</td><td style="text-align:center">string</td><td>Information provided to the LogRebuilding state machine which defines the list of shards that lost record copies which need to be re-replicated elsewhere. Expressed in the form &quot;&lt;shard-id&gt;<em>?[&lt;dirty-ranges&gt;],...&quot;. &quot;</em>&quot; indicates that the shard may be up but we want to drain its data by replicating it elsewhere.  If &lt;dirty-ranges&gt; is not empty, this means that the storage shard only lost data within the specified ranges.</td></tr>
+<tr><td>version</td><td style="text-align:center">lsn</td><td>Rebuilding version.  This version comes from the event log RSM that coordinates rebuilding.  See the &quot;event_log&quot; table.</td></tr>
+<tr><td>until_lsn</td><td style="text-align:center">lsn</td><td>LSN up to which the log must be rebuilt.  See &quot;logdevice/server/rebuilding/RebuildingPlanner.h&quot; for how this LSN is computed.</td></tr>
+<tr><td>max_timestamp</td><td style="text-align:center">time</td><td>Maximum timestamp that this LogRebuilding state machine is instructed to read through.</td></tr>
+<tr><td>rebuilt_up_to</td><td style="text-align:center">lsn</td><td>Next LSN to be considered by this state machine for rebuilding.</td></tr>
+<tr><td>num_replicated</td><td style="text-align:center">long</td><td>Number of records replicated by this state machine so far.</td></tr>
+<tr><td>bytes_replicated</td><td style="text-align:center">long</td><td>Number of bytes replicated by this state machine so far.</td></tr>
+<tr><td>rr_in_flight</td><td style="text-align:center">long</td><td>Number of stores currently in flight, ie pending acknowledgment from the recipient storage shard.</td></tr>
+<tr><td>nondurable_stores</td><td style="text-align:center">long</td><td>Number of stores for which we are pending acknowledgment that they are durable on disk.</td></tr>
+<tr><td>durable_stores</td><td style="text-align:center">long</td><td>Number of records that were durably replicated and now are pending an amend.</td></tr>
+<tr><td>rra_in_flight</td><td style="text-align:center">long</td><td>Number of amends that are in flight, ie pending acknowledgment from the recipient storage shard.</td></tr>
+<tr><td>nondurable_amends</td><td style="text-align:center">long</td><td>Number of amends for which we are pending acknowledgment that they are durable on disk.</td></tr>
+<tr><td>last_storage_task_status</td><td style="text-align:center">string</td><td>Status of the last batch of records we read from disk.</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="log-storage-state"></a><a href="#log-storage-state" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>log_storage_state</h2>
+<p>Tracks all in-memory metadata for logs on storage nodes (see &quot;info log_storage_state&quot; admin command).</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>node_id</td><td style="text-align:center">int</td><td>Node ID this row is for.</td></tr>
+<tr><td>log_id</td><td style="text-align:center">log_id</td><td>Log id for which the storage state is.</td></tr>
+<tr><td>shard</td><td style="text-align:center">int</td><td>Shard for which that log storage state is.</td></tr>
+<tr><td>last_released</td><td style="text-align:center">lsn</td><td>Last Released LSN as seen by the shard.  If this does not match the sequencer's last_released_lsn, (See &quot;sequencer&quot; table) this means the shard has not completed purging.</td></tr>
+<tr><td>last_released_src</td><td style="text-align:center">string</td><td>Where the last_released value was gotten from.  Either &quot;sequencer&quot; if the sequencer sent a release message, or &quot;local log store&quot; if the value was persisted on disk in the storage shard.</td></tr>
+<tr><td>trim_point</td><td style="text-align:center">lsn</td><td>Trim point for that log on this storage node.</td></tr>
+<tr><td>per_epoch_metadata_trim_point</td><td style="text-align:center">lsn</td><td>Trim point of per-epoch metadata.  PerEpochLogMetadata whose epoch is &lt;= than this value should be trimmed.</td></tr>
+<tr><td>seal</td><td style="text-align:center">long</td><td>Normal seal. The storage node will reject all stores with sequence numbers belonging to epochs that are &lt;= than this value.</td></tr>
+<tr><td>sealed_by</td><td style="text-align:center">string</td><td>Sequencer node that set the normal seal.</td></tr>
+<tr><td>soft_seal</td><td style="text-align:center">long</td><td>Similar to normal seal except that the sequencer did not explictly seal the storage node, the seal is implicit because a STORE message was sent by a sequencer for a new epoch.</td></tr>
+<tr><td>soft_sealed_by</td><td style="text-align:center">string</td><td>Sequencer node that set the soft seal.</td></tr>
+<tr><td>last_recovery_time</td><td style="text-align:center">long</td><td>Latest time (number of microseconds since steady_clock's epoch) when some storage node tried to recover the state.  To not be confused with Log recovery.</td></tr>
+<tr><td>log_removal_time</td><td style="text-align:center">long</td><td>See LogStorageState::log_removal_time_.</td></tr>
+<tr><td>lce</td><td style="text-align:center">long</td><td>Last clean epoch.  Updated when the sequencer notifies this storage node that it has performed recovery on an epoch.</td></tr>
+<tr><td>latest_epoch</td><td style="text-align:center">long</td><td>Latest seen epoch from the sequencer.</td></tr>
+<tr><td>latest_epoch_offset</td><td style="text-align:center">long</td><td>Byte offset within the latest epoch</td></tr>
+<tr><td>permanent_errors</td><td style="text-align:center">long</td><td>Set to true if a permanent error such as an IO error has been encountered.  When this is the case, expect readers to not be able to read this log on this storage shard.</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="logsconfig-rsm"></a><a href="#logsconfig-rsm" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>logsconfig_rsm</h2>
+<p>Dump debug information about the LogsConfigStateMachine objects running on nodes in the cluster.  The config log is the replicated state machine that stores the logs configuration of a cluster.</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>node_id</td><td style="text-align:center">int</td><td>Node ID this row is for.</td></tr>
+<tr><td>delta_log_id</td><td style="text-align:center">log_id</td><td>Id of the delta log.</td></tr>
+<tr><td>snapshot_log_id</td><td style="text-align:center">log_id</td><td>Id of the snapshot log.</td></tr>
+<tr><td>version</td><td style="text-align:center">lsn</td><td>Version of the state.</td></tr>
+<tr><td>delta_read_ptr</td><td style="text-align:center">lsn</td><td>Read pointer in the delta log.</td></tr>
+<tr><td>delta_replay_tail</td><td style="text-align:center">lsn</td><td>On startup, the state machine reads the delta log up to that lsn before delivering the initial state to subscribers.</td></tr>
+<tr><td>snapshot_read_ptr</td><td style="text-align:center">lsn</td><td>Read pointer in the snapshot log.</td></tr>
+<tr><td>snapshot_replay_tail</td><td style="text-align:center">lsn</td><td>On startup, the state machine reads the snapshot log up to that lsn before delivering the initial state to subscribers.</td></tr>
+<tr><td>stalled_waiting_for_snapshot</td><td style="text-align:center">lsn</td><td>If not null, this means the state machine is stalled because it missed data in the delta log either because it saw a DATALOSS or TRIM gap.  The state machine will be stalled until it sees a snapshot with a version greather than this LSN.  Unless another node writes a snapshot with a bigger version, the operator may have to manually write a snapshot to recover the state machine.</td></tr>
+<tr><td>delta_appends_in_flight</td><td style="text-align:center">long</td><td>How many deltas are currently being appended to the delta log by this node.</td></tr>
+<tr><td>deltas_pending_confirmation</td><td style="text-align:center">long</td><td>How many deltas are currently pending confirmation on this node, ie these are deltas currently being written with the CONFIRM_APPLIED flag, and the node is waiting for the RSM to sync up to that delta's version to confirm whether or not it was applied.</td></tr>
+<tr><td>snapshot_in_flight</td><td style="text-align:center">long</td><td>Whether a snapshot is being appended by this node.  Only one node in the cluster is responsible for creating snapshots (typically the node with the smallest node id that's alive according to the failure detector).</td></tr>
+<tr><td>delta_log_bytes</td><td style="text-align:center">long</td><td>Number of bytes of delta records that are past the last snapshot.</td></tr>
+<tr><td>delta_log_records</td><td style="text-align:center">long</td><td>Number of delta records that are past the last snapshot.</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="logsdb-directory"></a><a href="#logsdb-directory" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>logsdb_directory</h2>
+<p>Contains debugging information about the LogsDB directory on storage shards.</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>node_id</td><td style="text-align:center">int</td><td>Node ID this row is for.</td></tr>
+<tr><td>shard</td><td style="text-align:center">int</td><td>ID of the shard.</td></tr>
+<tr><td>log_id</td><td style="text-align:center">long</td><td>ID of the log.</td></tr>
+<tr><td>partition</td><td style="text-align:center">long</td><td>ID of the partition.</td></tr>
+<tr><td>first_lsn</td><td style="text-align:center">lsn</td><td>Lower bound of the LSN range for that log in this partition.</td></tr>
+<tr><td>max_lsn</td><td style="text-align:center">lsn</td><td>Upper bound of the LSN range for that log in this partition.</td></tr>
+<tr><td>flags</td><td style="text-align:center">string</td><td>Flags for this partition. &quot;UNDER_REPLICATED&quot; means that some writes for this partition were lost (for instance due to the server crashing) and these records have not yet been rebuilt.</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="logsdb-metadata"></a><a href="#logsdb-metadata" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>logsdb_metadata</h2>
+<p>List of auxiliary RocksDB column families used by LogsDB (partitioned local log store). &quot;metadata&quot; column family contains partition directory and various logdevice metadata, per-log and otherwise. &quot;unpartitioned&quot; column family contains records of metadata logs and event log.</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>node_id</td><td style="text-align:center">int</td><td>Node ID this row is for.</td></tr>
+<tr><td>shard</td><td style="text-align:center">long</td><td>Index of the local log store shard that this column family belongs to.</td></tr>
+<tr><td>column_family</td><td style="text-align:center">string</td><td>Name of the column family.</td></tr>
+<tr><td>approx_size</td><td style="text-align:center">long</td><td>Estimated size of the column family in bytes.</td></tr>
+<tr><td>l0_files</td><td style="text-align:center">long</td><td>Number of sst (immutable table) files belonging to this column family.</td></tr>
+<tr><td>immutable_memtables</td><td style="text-align:center">long</td><td>Number of inactive memtables that are still kept in memory.  See 'partitions' table for details.</td></tr>
+<tr><td>memtable_flush_pending</td><td style="text-align:center">long</td><td>Number of memtables that are in the process of being flushed to disk.</td></tr>
+<tr><td>active_memtable_size</td><td style="text-align:center">long</td><td>Size in bytes of the active memtable.</td></tr>
+<tr><td>all_memtables_size</td><td style="text-align:center">long</td><td>Size in bytes of all memtables. See 'partitions' table for details.</td></tr>
+<tr><td>est_num_keys</td><td style="text-align:center">long</td><td>Estimated number of keys stored in the column family.  The estimate tends to be poor because of merge operator.</td></tr>
+<tr><td>est_mem_by_readers</td><td style="text-align:center">long</td><td>Estimated memory used by rocksdb iterators in this column family, excluding block cache. See 'partitions' table for details.</td></tr>
+<tr><td>live_versions</td><td style="text-align:center">long</td><td>Number of live &quot;versions&quot; of this column family in RocksDB. See 'partitions' table for details.</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="nodes"></a><a href="#nodes" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>nodes</h2>
+<p>Lists the nodes in the cluster from the configuration.</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>node_id</td><td style="text-align:center">long</td><td>Id of the node.</td></tr>
+<tr><td>address</td><td style="text-align:center">string</td><td>Ip and port that should be used for communication with the node.</td></tr>
+<tr><td>ssl_address</td><td style="text-align:center">string</td><td>Same as &quot;address&quot; but with SSL</td></tr>
+<tr><td>generation</td><td style="text-align:center">long</td><td>Generation of the node.  This value is bumped each time the node is swapped, sent to repair, or has one of its drives sent to repair.</td></tr>
+<tr><td>location</td><td style="text-align:center">string</td><td>Location of the node: <region>.<cluster>.<row>.<rack>.</td></tr>
+<tr><td>sequencer</td><td style="text-align:center">int</td><td>1 if this node is a sequencer node, 0 otherwise.</td></tr>
+<tr><td>storage</td><td style="text-align:center">int</td><td>1 if this node is a storage node, 0 otherwise.</td></tr>
+<tr><td>sequencer_enabled</td><td style="text-align:center">int</td><td>1 if this node has sequencers enabled, 0 otherwise.</td></tr>
+<tr><td>sequencer_weight</td><td style="text-align:center">real</td><td>A non-negative value indicating how many logs this node should be a sequencer for relative to other nodes in the cluster.  A value of 0 means this node cannot run sequencers.</td></tr>
+<tr><td>weight</td><td style="text-align:center">long</td><td>A positive value indicating how much STORE traffic this storage node should receive relative to other storage nodes in the cluster.  A value of -1 means this node is not a storage node and should only run sequencers.</td></tr>
+<tr><td>storage_state</td><td style="text-align:center">string</td><td>Determines the current state of the storage node. One of &quot;read-write&quot;, &quot;read-only&quot; or &quot;none&quot;.</td></tr>
+<tr><td>storage_capacity</td><td style="text-align:center">long</td><td>A positive value indicating how much STORE traffic this storage node should receive relative to other storage nodes in the cluster.</td></tr>
+<tr><td>num_shards</td><td style="text-align:center">long</td><td>Number of shards on this node, 0 if this node is not a storage node.</td></tr>
+<tr><td>is_metadata_node</td><td style="text-align:center">int</td><td>Whether this node is in the metadata nodeset.</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="partitions"></a><a href="#partitions" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>partitions</h2>
+<p>List of LogsDB partitions that store records.  Each shard on each node has a sequence of partitions.  Each partition corresponds to a time range a few minutes or tens of minutes log.  Each partition is a RocksDB column family.</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>node_id</td><td style="text-align:center">int</td><td>Node ID this row is for.</td></tr>
+<tr><td>shard</td><td style="text-align:center">long</td><td>Index of the local log store shard that this partitions belongs to.</td></tr>
+<tr><td>id</td><td style="text-align:center">long</td><td>Sequence number of this partition. Partitions in each shard are numbered in chronological order without gaps.</td></tr>
+<tr><td>start_time</td><td style="text-align:center">time</td><td>The beginning of the time range that this partition corresponds to. For most partitions it's equal to the time when partition was created. The exception is partitions created retroactively to accommodate rebuilt data.</td></tr>
+<tr><td>min_time</td><td style="text-align:center">time</td><td>Approximate minimum timestamp of records stored in this partition.</td></tr>
+<tr><td>max_time</td><td style="text-align:center">time</td><td>Approximate maximum timestamp of records stored in this partition.</td></tr>
+<tr><td>min_durable_time</td><td style="text-align:center">time</td><td>Persisted (WAL sync has occurred since the value was written) version of 'min_time'.</td></tr>
+<tr><td>max_durable_time</td><td style="text-align:center">time</td><td>Persisted (WAL sync has occurred since the value was written) version of 'max_time'.</td></tr>
+<tr><td>last_compacted</td><td style="text-align:center">time</td><td>Last time when the partition was compacted.</td></tr>
+<tr><td>approx_size</td><td style="text-align:center">long</td><td>Estimated size of the partition in bytes.</td></tr>
+<tr><td>l0_files</td><td style="text-align:center">long</td><td>Number of sst (immutable table) files belonging to this partition.</td></tr>
+<tr><td>immutable_memtables</td><td style="text-align:center">long</td><td>Number of inactive memtables (im-memory write buffers) that are still kept in memory. The most common cases are memtables in the process of being flushed to disk (memtable_flush_pending) and memtables pinned by iterators.</td></tr>
+<tr><td>memtable_flush_pending</td><td style="text-align:center">long</td><td>Number of memtables (im-memory write buffers) that are in the process of being flushed to disk.</td></tr>
+<tr><td>active_memtable_size</td><td style="text-align:center">long</td><td>Size in bytes of the active memtable.</td></tr>
+<tr><td>all_not_flushed_memtables_size</td><td style="text-align:center">long</td><td>Size in bytes of all memtables that weren't flushed to disk yet. The difference all_memtables_size-all_not_flushed_memtables_size is usually equal to the total size of memtables pinned by iterators.</td></tr>
+<tr><td>all_memtables_size</td><td style="text-align:center">long</td><td>Size in bytes of all memtables. Usually these are: active memtable, memtables that are being flushed and memtables pinned by iterators.</td></tr>
+<tr><td>est_num_keys</td><td style="text-align:center">long</td><td>Estimated number of keys stored in the partition.  They're usually records and copyset index entries. The estimate tends to be poor when merge operator is used.</td></tr>
+<tr><td>est_mem_by_readers</td><td style="text-align:center">long</td><td>Estimated memory used by rocksdb iterators in this partition, excluding block cache. This pretty much only includes SST file indexes loaded in memory.</td></tr>
+<tr><td>live_versions</td><td style="text-align:center">long</td><td>Number of live &quot;versions&quot; of this column family in RocksDB.  One (current) version is always live. If this value is greater than one, it means that some iterators are pinning some memtables or sst files.</td></tr>
+<tr><td>current_version</td><td style="text-align:center">long</td><td>The current live version</td></tr>
+<tr><td>append_dirtied_by</td><td style="text-align:center">string</td><td>Nodes that have uncommitted append data in this partition.</td></tr>
+<tr><td>rebuild_dirtied_by</td><td style="text-align:center">string</td><td>Nodes that have uncommitted rebuild data in this partition.</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="purges"></a><a href="#purges" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>purges</h2>
+<p>List the PurgeUncleanEpochs state machines currently active in the cluster. The responsability of this state machine is to delete any records that were deleted during log recovery on nodes that did not participate in that recovery. See &quot;logdevice/server/storage/PungeUncleanEpochs.h&quot; for more information.</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>node_id</td><td style="text-align:center">int</td><td>Node ID this row is for.</td></tr>
+<tr><td>log_id</td><td style="text-align:center">log_id</td><td>Log ID the purge state machine is for.</td></tr>
+<tr><td>state</td><td style="text-align:center">string</td><td>State of the state machine.</td></tr>
+<tr><td>current_last_clean_epoch</td><td style="text-align:center">long</td><td>Last clean epoch considered by the state machine.</td></tr>
+<tr><td>purge_to</td><td style="text-align:center">long</td><td>Epoch up to which this state machine should purge. The state machine will purge epochs in range [&quot;current_last_clean_epoch&quot;, &quot;purge_to&quot;].</td></tr>
+<tr><td>new_last_clean_epoch</td><td style="text-align:center">long</td><td>New &quot;last clean epoch&quot; metadata entry to write into the local log store once purging completes.</td></tr>
+<tr><td>sequencer</td><td style="text-align:center">string</td><td>ID of the sequencer node that initiated purging.</td></tr>
+<tr><td>epoch_state</td><td style="text-align:center">string</td><td>Dump the state of purging for each epoch.  See &quot;logdevice/server/storage/PurgeSingleEpoch.h&quot;</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="readers"></a><a href="#readers" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>readers</h2>
+<p>Tracks all ServerReadStreams. A ServerReadStream is a stream of records sent by a storage node to a client running a ClientReadStream (see &quot;client_read_streams&quot; table).</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>node_id</td><td style="text-align:center">int</td><td>Node ID this row is for.</td></tr>
+<tr><td>shard</td><td style="text-align:center">int</td><td>Shard on which the stream is reading.</td></tr>
+<tr><td>client</td><td style="text-align:center">string</td><td>Name of the client (similar to so the &quot;client&quot; column of the &quot;sockets table&quot;).</td></tr>
+<tr><td>log_id</td><td style="text-align:center">log_id</td><td>Id of the log being read.</td></tr>
+<tr><td>start_lsn</td><td style="text-align:center">lsn</td><td>LSN from which the ClientReadStream started reading.</td></tr>
+<tr><td>until_lsn</td><td style="text-align:center">lsn</td><td>LSN up to which ClientReadStream is interested in reading.</td></tr>
+<tr><td>read_pointer</td><td style="text-align:center">lsn</td><td>LSN to the next record to be read by the storage node.</td></tr>
+<tr><td>last_delivered</td><td style="text-align:center">lsn</td><td>Last LSN sent to the ClientReadStream either through a data record or a gap.</td></tr>
+<tr><td>last_record</td><td style="text-align:center">lsn</td><td>LSN of the last record the storage node delivered to the ClientReadStream. This value is not necessarily equal to &quot;last_delivered&quot; as the storage node does not store all records of a log.</td></tr>
+<tr><td>window_high</td><td style="text-align:center">lsn</td><td>Current window used by the ClientReadStream. This instructs the storage node to not send records with LSNs higher than this value. When the read pointer reaches this value, the stream is caught up and the storage node will wake up the stream when the window is slid by ClientReadStream.</td></tr>
+<tr><td>last_released</td><td style="text-align:center">lsn</td><td>Last LSN released for delivery by the sequencer. If this value is stale, check if purging could be the reason using the &quot;purges&quot; table.</td></tr>
+<tr><td>catching_up</td><td style="text-align:center">int</td><td>Indicates whether or not the stream is catching up, ie there are records that can be delivered now to the client, and the stream is enqueued in a CatchupQueue (see the &quot;catchup_queues&quot; table).</td></tr>
+<tr><td>window_end</td><td style="text-align:center">int</td><td>Should be true if &quot;read_pointer&quot; is past &quot;window_high&quot;.</td></tr>
+<tr><td>known_down</td><td style="text-align:center">string</td><td>List of storage nodes that the ClientReadStream is not able to receive records from. This list is used so that other storage nodes can send the records that nodes in that list were supposed to send. If this columns shows &quot;ALL_SEND_ALL&quot;, this means that the ClientReadStream is not running in Single-Copy-Delivery mode, meaning it requires all storage nodes to send every record they have.  This can be either because SCD is not enabled for the log, or because data is not correctly replicated and ClientReadStream is not able to reconstitute a contiguous sequencer of records from what storage nodes are sending, or because the ClientReadStream is going through an epoch boundary.</td></tr>
+<tr><td>filter_version</td><td style="text-align:center">long</td><td>Each time ClientReadStream rewinds the read streams (and possibly changes the &quot;known_down&quot; list), this counter is updated. Rewinding a read stream means asking the storage node to rewind to a given LSN.</td></tr>
+<tr><td>last_batch_status</td><td style="text-align:center">string</td><td>Status code that was issued when the last batch of records was read for this read stream.  See LocalLogStoreReader::read() in logdevice/common/LocalLogStore.h.</td></tr>
+<tr><td>created</td><td style="text-align:center">time</td><td>Timestamp of when this ServerReadStream was created.</td></tr>
+<tr><td>last_enqueue_time</td><td style="text-align:center">time</td><td>Timestamp of when this ServerReadStream was last enqueued for processing.</td></tr>
+<tr><td>last_batch_started_time</td><td style="text-align:center">time</td><td>Timestamp of the last time we started reading a batch of records for this read stream.</td></tr>
+<tr><td>storage_task_in_flight</td><td style="text-align:center">int</td><td>True if there is currently a storage task running on a slow storage thread for reading a batch of records.</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="record"></a><a href="#record" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>record</h2>
+<p>This table allows fetching information about individual record copies in the cluster.  The user must provide query constraints on the &quot;log_id&quot; and &quot;lsn&quot; columns.  This table can be useful to introspect where copies of a record are stored and see their metadata.  Do not use it to serve production use cases as this query runs very inneficiently (it bypasses the normal read protocol and instead performs a point query on all storage nodes in the cluster).</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>node_id</td><td style="text-align:center">int</td><td>Node ID this row is for.</td></tr>
+<tr><td>log_id</td><td style="text-align:center">log_id</td><td>ID of the log this record is for.</td></tr>
+<tr><td>lsn</td><td style="text-align:center">lsn</td><td>Sequence number of the record.</td></tr>
+<tr><td>shard</td><td style="text-align:center">int</td><td>ID of the shard that holds this record copy.</td></tr>
+<tr><td>wave</td><td style="text-align:center">int</td><td>If &quot;is_written_by_recovery&quot; is 0, contains the wave of that record.</td></tr>
+<tr><td>recovery_epoch</td><td style="text-align:center">int</td><td>If &quot;is_written_by_recovery&quot; is 1, contains the &quot;sequencer epoch&quot; of the log recovery.</td></tr>
+<tr><td>timestamp</td><td style="text-align:center">string</td><td>Timestamp in milliseconds of the record.</td></tr>
+<tr><td>last_known_good</td><td style="text-align:center">int</td><td>Highest ESN in this record's epoch such that at the time this messagewas originally sent by a sequencer all records with this and lower ESNs in this epoch were known to the sequencer to be fully stored on R nodes.</td></tr>
+<tr><td>copyset</td><td style="text-align:center">string</td><td>Copyset of the record.</td></tr>
+<tr><td>flags</td><td style="text-align:center">string</td><td>Flags for that record.  See &quot;logdevice/common/LocalLogStoreRecordFormat.h&quot; to see the list of flags.</td></tr>
+<tr><td>offset_within_epoch</td><td style="text-align:center">long</td><td>Byte offset of that record within the epoch.</td></tr>
+<tr><td>optional_keys</td><td style="text-align:center">string</td><td>Optional keys provided by the user.  See &quot;AppendAttributes&quot; in &quot;logdevice/include/Record.h&quot;.</td></tr>
+<tr><td>is_written_by_recovery</td><td style="text-align:center">bool</td><td>Whether this record was replicated by the Log Recovery.</td></tr>
+<tr><td>payload</td><td style="text-align:center">string</td><td>Payload in hex format.</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="record-cache"></a><a href="#record-cache" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>record_cache</h2>
+<p>Dumps debugging information about the EpochRecordCache entries in each storage shard in the cluster.  EpochRecordCache caches records for a log and epoch that are not yet confirmed as fully stored by the sequencer (ie they are &quot;unclean&quot;).</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>node_id</td><td style="text-align:center">int</td><td>Node ID this row is for.</td></tr>
+<tr><td>log_id</td><td style="text-align:center">log_id</td><td>Log ID for this EpochRecordCache enrty.</td></tr>
+<tr><td>shard</td><td style="text-align:center">int</td><td>Shard ID for this EpochRecordCache entry.</td></tr>
+<tr><td>epoch</td><td style="text-align:center">long</td><td>The epoch of this EpochRecordCache entry.</td></tr>
+<tr><td>payload_bytes</td><td style="text-align:center">long</td><td>Total size of payloads of records above LNG held by this EpochRecordCache.</td></tr>
+<tr><td>num_records</td><td style="text-align:center">long</td><td>Number of records above LNG held by this EpochRecordCache.</td></tr>
+<tr><td>consistent</td><td style="text-align:center">bool</td><td>True if the cache is in consistent state and it is safe to consult it as the source of truth.</td></tr>
+<tr><td>disabled</td><td style="text-align:center">bool</td><td>Whether the cache is disabled.</td></tr>
+<tr><td>head_esn</td><td style="text-align:center">long</td><td>ESN of the head of the buffer.</td></tr>
+<tr><td>max_esn</td><td style="text-align:center">long</td><td>Largest ESN ever put in the cache.</td></tr>
+<tr><td>first_lng</td><td style="text-align:center">long</td><td>The first LNG the cache has ever seen since its creation.</td></tr>
+<tr><td>offset_within_epoch</td><td style="text-align:center">long</td><td>Most recent value of the amount of data written in the given epoch as seen by this shard.</td></tr>
+<tr><td>tail_record_lsn</td><td style="text-align:center">long</td><td>LSN of the tail record of this epoch.</td></tr>
+<tr><td>tail_record_ts</td><td style="text-align:center">long</td><td>Timestamp of the tail record of this epoch.</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="recoveries"></a><a href="#recoveries" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>recoveries</h2>
+<p>Dumps debugging information about currently running Log Recovery procedures.  See &quot;logdevice/common/LogRecoveryRequest.h&quot; and &quot;logdevice/common/EpochRecovery.h&quot;.</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>node_id</td><td style="text-align:center">int</td><td>Node ID this row is for.</td></tr>
+<tr><td>log_id</td><td style="text-align:center">log_id</td><td>Log being recovered.</td></tr>
+<tr><td>epoch</td><td style="text-align:center">long</td><td>Epoch being recovered.</td></tr>
+<tr><td>state</td><td style="text-align:center">string</td><td>State of the EpochRecovery state machine. Can be one of &quot;FETCHING_LCE&quot; (We are fetching LCE from the epoch store, an EpochRecovery state machine will be created for all epochs between  LCE+1 and &quot;epoch&quot;), &quot;READING_METADATA_LOG&quot; (We are reading metadata log in order to retrieve metadata necessary to start the EpochRecovery state machines), &quot;READING_SEQUENCER_METADATA&quot; (We are waiting for the epoch metadata of &quot;epoch&quot; to appear in the metadata log), &quot;ACTIVE&quot; (EpochRecovery is active), &quot;INACTIVE&quot; (EpochRecovery is scheduled for activation).</td></tr>
+<tr><td>lng</td><td style="text-align:center">long</td><td>EpochRecovery's estimate of LNG for this log.</td></tr>
+<tr><td>dig_sz</td><td style="text-align:center">long</td><td>Number of entries in the digest.</td></tr>
+<tr><td>dig_fmajority</td><td style="text-align:center">long</td><td>Whether or not an f-majority of shards in that epoch's storage set have completed the digest phase.</td></tr>
+<tr><td>dig_replic</td><td style="text-align:center">long</td><td>Whether or not the set of shards that have completed the digest meet the replication requirements.</td></tr>
+<tr><td>dig_author</td><td style="text-align:center">long</td><td>Whether the digest is authoritative.  If the  digest is not authoritative, this means too many shards in the storage set are under-replicated.  This is an emergency procedure in which recovery will not plug holes in order to ensure DATALOSS gaps are reported to readers. In this mode, some legitimate holes may be reported as false positive DATALOSS gaps to the reader.</td></tr>
+<tr><td>holes_plugged</td><td style="text-align:center">long</td><td>Number of holes plugged by this EpochRecovery.</td></tr>
+<tr><td>holes_replicate</td><td style="text-align:center">long</td><td>Number of holes re-replicated by this EpochRecovery.</td></tr>
+<tr><td>holes_conflict</td><td style="text-align:center">long</td><td>Number of hole/record conflicts found by this EpochRecovery.</td></tr>
+<tr><td>records_replicate</td><td style="text-align:center">long</td><td>Number of records re-replicated by this EpochRecovery.</td></tr>
+<tr><td>n_mutators</td><td style="text-align:center">long</td><td>Number of active Mutators.  A mutator is responsible for replicating a hole or record.  See &quot;logdevice/common/Mutator.h&quot;.</td></tr>
+<tr><td>recovery_state</td><td style="text-align:center">string</td><td>State of each shard in the recovery set.  Possible states: &quot;s&quot; means that the shard still has not sent a SEALED reply, &quot;S&quot; means that the shard has sent a SEALED reply, &quot;d&quot; means that this shard is sending a digest, &quot;D&quot; means that this shard completed the digest, &quot;m&quot; means that this shard has completed the digest and is eligible to participate in the mutation phase, &quot;c&quot; means that the shard has been sent a CLEAN request, &quot;C&quot; means that the shard has successfully processed the CLEANED request.  Recovery will stall if too many nodes are in the &quot;s&quot;, &quot;d&quot; or &quot;c&quot; phases.  Suffix &quot;(UR) indicates that the shard is under-replicated.  Suffix &quot;(AE)&quot; indicates that the shard is empty.</td></tr>
+<tr><td>created</td><td style="text-align:center">time</td><td>Date and Time of when this EpochRecovery was created.</td></tr>
+<tr><td>restarted</td><td style="text-align:center">time</td><td>Date and Time of when this EpochRecovery was last restarted.</td></tr>
+<tr><td>n_restarts</td><td style="text-align:center">long</td><td>Number of times this EpochRecovery was restarted.</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="sequencers"></a><a href="#sequencers" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>sequencers</h2>
+<p>This table dumps information about all the Sequencer objects in the cluster.  See &quot;logdevice/common/Sequencer.h&quot;.</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>node_id</td><td style="text-align:center">int</td><td>Node ID this row is for.</td></tr>
+<tr><td>log_id</td><td style="text-align:center">log_id</td><td>Log ID this sequencer is for.</td></tr>
+<tr><td>metadata_log_id</td><td style="text-align:center">log_id</td><td>ID of the corresponding metadata log.</td></tr>
+<tr><td>state</td><td style="text-align:center">string</td><td>State of the sequencer.  Can be one of: &quot;UNAVAILABLE&quot; (Sequencer has not yet gotten a valid epoch metadata with an epoch number), &quot;ACTIVATING&quot; (Sequencer is in the process of getting an epoch number and retrieving metadata from the epoch store), &quot;ACTIVE&quot; (Sequencer is able to replicate), &quot;PREEMPTED&quot; (Sequencer has been preempted by another sequencer &quot;preempted_by&quot;, appends to this node will be redirected to it), &quot;PERMANENT_ERROR&quot; (Permanent process-wide error such as running out of ephemera ports).</td></tr>
+<tr><td>epoch</td><td style="text-align:center">long</td><td>Epoch of the sequencer.</td></tr>
+<tr><td>next_lsn</td><td style="text-align:center">lsn</td><td>Next LSN to be issued to a record by this sequencer.</td></tr>
+<tr><td>meta_last_released</td><td style="text-align:center">lsn</td><td>Last released LSN of the metadata log.</td></tr>
+<tr><td>last_released</td><td style="text-align:center">lsn</td><td>Last released LSN for the data log.</td></tr>
+<tr><td>last_known_good</td><td style="text-align:center">lsn</td><td>Last known good LSN for this data log.  This is the highest ESN such that all records up to that ESN are known to be fully replicated.</td></tr>
+<tr><td>in_flight</td><td style="text-align:center">long</td><td>Number of appends currently in flight.</td></tr>
+<tr><td>last_used_ms</td><td style="text-align:center">long</td><td>Timestamp of the last record appended by this sequencer.</td></tr>
+<tr><td>state_duration_ms</td><td style="text-align:center">long</td><td>Amount of time in milliseconds the sequencer has been in the current &quot;state&quot;.</td></tr>
+<tr><td>nodeset_state</td><td style="text-align:center">string</td><td>Contains debugging information about shards in that epoch's storage set.  &quot;H&quot; means that the shard is healthy.  &quot;L&quot; means that the shard reached the low watermark for space usage.  &quot;O&quot; means that the shard reported being overloaded.  &quot;S&quot; means that the shard is out of space.  &quot;U&quot; means that the sequencer cannot establish a connection to the shard.  &quot;D&quot; means that the shard's local log store is not accepting writes.  &quot;G&quot; means that the shard is greylisting for copyset selection because it is too slow.  &quot;P&quot; means that the sequencer is currently probling the health of this shard.</td></tr>
+<tr><td>preempted_epoch</td><td style="text-align:center">long</td><td>Epoch of the sequencer that preempted this sequencer (if any).</td></tr>
+<tr><td>preempted_by</td><td style="text-align:center">long</td><td>ID of the sequencer that preempted this sequencer (if any).</td></tr>
+<tr><td>draining</td><td style="text-align:center">long</td><td>Epoch that is draining (if any).  Draining means that the sequencer stopped accepting new writes but is completing appends curretnly in flight.</td></tr>
+<tr><td>metadata_log_written</td><td style="text-align:center">long</td><td>Whether the epoch metadata used by this sequencer has been written to the metadata log.</td></tr>
+<tr><td>last_byte_offset</td><td style="text-align:center">string</td><td>Byte offset of the tail record.</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="settings"></a><a href="#settings" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>settings</h2>
+<p>Dumps the state of all settings for all nodes in the cluster.</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>node_id</td><td style="text-align:center">int</td><td>Node ID this row is for.</td></tr>
+<tr><td>bundle_name</td><td style="text-align:center">string</td><td>Name of the bundle this setting is for.</td></tr>
+<tr><td>name</td><td style="text-align:center">string</td><td>Name of the setting.</td></tr>
+<tr><td>current_value</td><td style="text-align:center">string</td><td>Current value of the setting.</td></tr>
+<tr><td>default_value</td><td style="text-align:center">string</td><td>Default value of the setting.</td></tr>
+<tr><td>from_cli</td><td style="text-align:center">string</td><td>Value provided by the CLI, or null.</td></tr>
+<tr><td>from_config</td><td style="text-align:center">string</td><td>Value provided by the config or null.</td></tr>
+<tr><td>from_admin_cmd</td><td style="text-align:center">string</td><td>Value provided by the &quot;set&quot; admin command or null.</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="shard-authoritative-status"></a><a href="#shard-authoritative-status" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>shard_authoritative_status</h2>
+<p>Show the current state in the event log.  This contains each shard's authoritative status (see &quot;logdevice/common/AuthoritativeStatus.h&quot;), as well as additional information related to rebuilding.</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>node_id</td><td style="text-align:center">long</td><td>Id of the node.</td></tr>
+<tr><td>shard</td><td style="text-align:center">long</td><td>Id of the shard.</td></tr>
+<tr><td>rebuilding_version</td><td style="text-align:center">string</td><td>Rebuilding version: the LSN of the last SHARD_NEEDS_REBUILD delta from the event log.</td></tr>
+<tr><td>authoritative_status</td><td style="text-align:center">string</td><td>Authoritative status of the shard.</td></tr>
+<tr><td>donors_remaining</td><td style="text-align:center">string</td><td>If authoritative status is UNDERREPLICATION, list of donors that have not finished rebuilding the under-replicated data.</td></tr>
+<tr><td>drain</td><td style="text-align:center">int</td><td>Whether the shard is being drained or has been drained.</td></tr>
+<tr><td>dirty_ranges</td><td style="text-align:center">string</td><td>Time ranges where this shard may be missing data.  This happens if the LogDevice process on this storage node crashed before committing data to disk.</td></tr>
+<tr><td>rebuilding_is_authoritative</td><td style="text-align:center">int</td><td>Whether rebuilding is authoritative.  A non authoritative rebuilding means that too many shards lost data such that all copies of some records may be unavailable.  Some readers may stall when this happens and there are some shards that are still marked as recoverable.</td></tr>
+<tr><td>data_is_recoverable</td><td style="text-align:center">int</td><td>Indicates whether the shard's data has been marked as unrecoverable using <code>ldshell mark-unrecoverable</code>. If all shards in the rebuilding set are marked unrecoverable, shards for which rebuilding completed will transition to AUTHORITATIVE_EMPTY status even if that rebuilding is non authoritative. Note that if logdeviced is started on a shard whose corresponding disk has been wiped by a remediation, the shard's data will automatically be considered unrecoverable.</td></tr>
+<tr><td>source</td><td style="text-align:center">string</td><td>Entity that triggered rebuilding for this shard.</td></tr>
+<tr><td>details</td><td style="text-align:center">string</td><td>Reason for rebuilding this shard.</td></tr>
+<tr><td>rebuilding_started_ts</td><td style="text-align:center">string</td><td>When rebuilding was started.</td></tr>
+<tr><td>rebuilding_completed_ts</td><td style="text-align:center">string</td><td>When the shard transitioned to AUTHORITATIVE_EMPTY.</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="shard-rebuildings"></a><a href="#shard-rebuildings" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>shard_rebuildings</h2>
+<p>Show debugging information about the ShardRebuilding state machines (see &quot;logdevice/server/rebuilding/ShardRebuildingV1.h&quot;).  This state machine is responsible for running all LogRebuilding state machines (see &quot;logs_rebuilding&quot; table) for all logs in a donor shard.</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>node_id</td><td style="text-align:center">int</td><td>Node ID this row is for.</td></tr>
+<tr><td>shard_id</td><td style="text-align:center">long</td><td>Donor shard.</td></tr>
+<tr><td>rebuilding_set</td><td style="text-align:center">string</td><td>Rebuilding set considered.  See &quot;rebuilding_set&quot; column of the &quot;log_rebuilding&quot; table.</td></tr>
+<tr><td>version</td><td style="text-align:center">lsn</td><td>Rebuilding version.  This version comes from the event log RSM that coordinates rebuilding.  See the &quot;event_log&quot; table.</td></tr>
+<tr><td>global_window_end</td><td style="text-align:center">time</td><td>End of the global window (if enabled with --rebuilding-global-window).  This is a time window used to synchronize all ShardRebuilding state machines across all donor shards.</td></tr>
+<tr><td>local_window_end</td><td style="text-align:center">time</td><td>ShardRebuilding schedules reads for all logs within a time window called the local window.  This shows the end of the current window.</td></tr>
+<tr><td>num_logs_waiting_for_plan</td><td style="text-align:center">long</td><td>Number of logs that are waiting for a plan.  See &quot;logdevice/include/RebuildingPlanner.h&quot;.</td></tr>
+<tr><td>num_logs_catching_up</td><td style="text-align:center">long</td><td>Number of LogRebuilding state machines currently active.</td></tr>
+<tr><td>num_logs_queued_for_catch_up</td><td style="text-align:center">long</td><td>Number of LogRebuilding state machines that are inside the local window and queued for catch up.</td></tr>
+<tr><td>num_logs_in_restart_queue</td><td style="text-align:center">long</td><td>Number of LogRebuilding state machines that are ready to be restarted as soon as a slot is available.  Logs are scheduled for a restart if we waited too long for writes done by the state machine to be acknowledged as durable.</td></tr>
+<tr><td>total_memory_used</td><td style="text-align:center">long</td><td>Total amount of memory used by all LogRebuilding state machines.</td></tr>
+<tr><td>stall_timer_active</td><td style="text-align:center">int</td><td>If true, all LogRebuilding state machines are stalled until memory usage decreased.</td></tr>
+<tr><td>num_restart_timers_active</td><td style="text-align:center">long</td><td>Number of logs that have completed but for which we are still waiting for acknowlegments that writes were durable.</td></tr>
+<tr><td>num_active_logs</td><td style="text-align:center">long</td><td>Set of logs being rebuilt for this shard.  The shard completes rebuilding when this number reaches zero.</td></tr>
+<tr><td>participating</td><td style="text-align:center">int</td><td>true if this shard is a donor for this rebuilding and hasn't finished rebuilding yet.</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="shards"></a><a href="#shards" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>shards</h2>
+<p>Show information about all shards in a cluster.</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>node_id</td><td style="text-align:center">int</td><td>Node ID this row is for.</td></tr>
+<tr><td>shard</td><td style="text-align:center">long</td><td>Shard the information is for.</td></tr>
+<tr><td>is_failing</td><td style="text-align:center">long</td><td>If true, the server could not open the DB for this shard on startup.  This can happen if the disk on which this shard resides is broken for instance.</td></tr>
+<tr><td>accepting_writes</td><td style="text-align:center">string</td><td>Status indicating if this shard is accepting writes.  Can be one of: &quot;OK&quot; (the shard is accepting writes), &quot;LOW_ON_SPC&quot; (the shard is accepting writes but is low on free space), &quot;NOSPC&quot; (the shard is not accepting writes because it is low on space), &quot;DISABLED&quot; (The shard will never accept writes. This can happen if the shard entered fail-safe mode).</td></tr>
+<tr><td>rebuilding_state</td><td style="text-align:center">string</td><td>&quot;NONE&quot;: the shard is not rebuilding.  &quot;WAITING_FOR_REBUILDING&quot;: the shard is missing data and is waiting for rebuilding to start.  &quot;REBUILDING&quot;: the shard is missing data and rebuilding was started.</td></tr>
+<tr><td>default_cf_version</td><td style="text-align:center">long</td><td>Returns current version of the data.  if LogsDB is  enabled, this will return the version of the default column familiy.</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="sockets"></a><a href="#sockets" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>sockets</h2>
+<p>Tracks all sockets on all nodes in the cluster.</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>node_id</td><td style="text-align:center">int</td><td>Node ID this row is for.</td></tr>
+<tr><td>state</td><td style="text-align:center">string</td><td>State of the socket.   I: The socket is Inactive;   C: The socket is connecting;   H: The socket is doing the handshake at the LD protocol level;   A: The socket is active.</td></tr>
+<tr><td>name</td><td style="text-align:center">string</td><td>Name of the socket. If the other end is a client, the format is similar to the column &quot;client&quot; of the table &quot;catchup_queues&quot; and the column &quot;client&quot; of the table &quot;readers&quot;. If the other end is another node in the cluster, describes that's node's id and ip.</td></tr>
+<tr><td>pending_kb</td><td style="text-align:center">real</td><td>Number of bytes that are available for writting on the socket's output evbuffer. If this value is high this usually means that the other end is not able to read messages as fast as we are writting them.</td></tr>
+<tr><td>available_kb</td><td style="text-align:center">real</td><td>Number of bytes that are available for reading on the socket's input evbuffer.  If this value is high this usually means that the other end is writting faster than this node is able to read.</td></tr>
+<tr><td>read_mb</td><td style="text-align:center">real</td><td>Number of bytes that were read from the socket.</td></tr>
+<tr><td>write_mb</td><td style="text-align:center">real</td><td>Number of bytes that were written to the socket.</td></tr>
+<tr><td>read_cnt</td><td style="text-align:center">int</td><td>Number of messages that were read from the socket.</td></tr>
+<tr><td>write_cnt</td><td style="text-align:center">int</td><td>Number of messages that were written to the socket.</td></tr>
+<tr><td>proto</td><td style="text-align:center">int</td><td>Protocol that was handshaken. Do not trust this value if the socket's state is not active.</td></tr>
+<tr><td>sendbuf</td><td style="text-align:center">int</td><td>Size of the send buffer of the underlying TCP socket.</td></tr>
+<tr><td>peer_config_version</td><td style="text-align:center">int</td><td>Last config version that the peer advertised</td></tr>
+<tr><td>is_ssl</td><td style="text-align:center">int</td><td>Set to true if this socket uses SSL.</td></tr>
+<tr><td>fd</td><td style="text-align:center">int</td><td>The file descriptor of the underlying os socket.</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="stats"></a><a href="#stats" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>stats</h2>
+<p>Return statistics for all nodes in the cluster.  See &quot;logdevice/common/stats/&quot;.  See &quot;stats_rocksdb&quot; for statitistics related to RocksDB.</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>node_id</td><td style="text-align:center">int</td><td>Node ID this row is for.</td></tr>
+<tr><td>name</td><td style="text-align:center">string</td><td>Name of the stat counter.</td></tr>
+<tr><td>value</td><td style="text-align:center">long</td><td>Value of the stat counter.</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="stats-rocksdb"></a><a href="#stats-rocksdb" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>stats_rocksdb</h2>
+<p>Return RocksDB statistics for all nodes in the cluster.</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>node_id</td><td style="text-align:center">int</td><td>Node ID this row is for.</td></tr>
+<tr><td>name</td><td style="text-align:center">string</td><td>Name of the stat counter.</td></tr>
+<tr><td>value</td><td style="text-align:center">long</td><td>Value of the stat counter.</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="storage-tasks"></a><a href="#storage-tasks" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>storage_tasks</h2>
+<p>List of storage tasks currently pending on the storage thread queues. Note that this does not include the task that is currently executing, nor the tasks that are queueing on the per-worker storage task queues.  Querying this table prevents the storage tasks from being popped off the queue while it's executing, so be careful with it.</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>node_id</td><td style="text-align:center">int</td><td>Node ID this row is for.</td></tr>
+<tr><td>shard</td><td style="text-align:center">long</td><td>Index of the local log store shard to query storage tasks on.</td></tr>
+<tr><td>priority</td><td style="text-align:center">string</td><td>Priority of the storage task. The tasks with a higher priority get executed before tasks with a lower priority.</td></tr>
+<tr><td>is_write_queue</td><td style="text-align:center">bool</td><td>True if this is a task from the write_queue, otherwise this is a task from the ordinary storage task queue for the thread.</td></tr>
+<tr><td>sequence_no</td><td style="text-align:center">long</td><td>Sequence No. of the task. For task that are on the same queue with the same priority, tasks with lower sequence No. will execute first.</td></tr>
+<tr><td>thread_type</td><td style="text-align:center">string</td><td>The type of the thread the task is queueing for.</td></tr>
+<tr><td>task_type</td><td style="text-align:center">string</td><td>Type of the task, if specified.</td></tr>
+<tr><td>enqueue_time</td><td style="text-align:center">time</td><td>Time when the storage task has been inserted into the queue.</td></tr>
+<tr><td>durability</td><td style="text-align:center">string</td><td>The durability requirement for this storage task (applies to writes).</td></tr>
+<tr><td>log_id</td><td style="text-align:center">log_id</td><td>Log ID that the storage task will perform writes/reads on.</td></tr>
+<tr><td>lsn</td><td style="text-align:center">lsn</td><td>LSN that the storage task will act on. The specific meaning of this field varies depending on the task type.</td></tr>
+<tr><td>client_id</td><td style="text-align:center">string</td><td>ClientID of the client that initiated the storage task.</td></tr>
+<tr><td>client_address</td><td style="text-align:center">string</td><td>Address of the client that initiated the storage task.</td></tr>
+<tr><td>extra_info</td><td style="text-align:center">string</td><td>Other information specific to particular task type.</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="stored-logs"></a><a href="#stored-logs" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>stored_logs</h2>
+<p>List of logs that have at least one record currently present in LogsDB, per shard. Doesn't include internal logs (metadata logs, event log, config log).  Note that it is possible that all the existing records are behind the trim point but haven't been removed from the DB yet (by dropping or compacting partitions); see also the &quot;rocksdb-partition-compaction-schedule&quot; setting.</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>node_id</td><td style="text-align:center">int</td><td>Node ID this row is for.</td></tr>
+<tr><td>log_id</td><td style="text-align:center">log_id</td><td>Log ID present in this shard.</td></tr>
+<tr><td>shard</td><td style="text-align:center">long</td><td>Shard that contains this log.</td></tr>
+<tr><td>highest_lsn</td><td style="text-align:center">lsn</td><td>Highest LSN that this shard has ever seen for this log.</td></tr>
+<tr><td>highest_partition</td><td style="text-align:center">long</td><td>ID of the highest LogsDB partition that contains at least one record for this log. You can use the &quot;partitions&quot; table to inspect LogsDB partitions.</td></tr>
+<tr><td>highest_timestamp_approx</td><td style="text-align:center">time</td><td>Approximate value of the highest timestamp of records for this log on this shard. This is an upper bound, as long as timestamps are non-decreasing with LSN in this log.  Can be overestimated by up to &quot;rocksdb-partition-duration&quot; setting.</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="sync-sequencer-requests"></a><a href="#sync-sequencer-requests" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>sync_sequencer_requests</h2>
+<p>List the currently running SyncSequencerRequests on that cluster.  See &quot;logdevice/common/SyncSequencerRequest.h&quot;.</p>
+<table>
+<thead>
+<tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>node_id</td><td style="text-align:center">int</td><td>Node ID this row is for.</td></tr>
+<tr><td>log_id</td><td style="text-align:center">log_id</td><td>Log ID the SyncSequencerRequest is for.</td></tr>
+<tr><td>until_lsn</td><td style="text-align:center">lsn</td><td>Next LSN retrieved from the sequencer.</td></tr>
+<tr><td>last_released_lsn</td><td style="text-align:center">lsn</td><td>Last released LSN retrieved from the sequencer.</td></tr>
+<tr><td>last_status</td><td style="text-align:center">string</td><td>Status of the last GetSeqStateRequest performed by SyncSequencerRequest.</td></tr>
+</tbody>
+</table>
+</span></div></article></div><div class="docs-prevnext"><a class="docs-prev button" href="/docs/LDShell.html">← LogDevice Shell (LDShell)</a><a class="docs-next button" href="/docs/API_Intro.html">LogDevice API →</a></div></div></div><nav class="onPageNav"><ul class="toc-headings"><li><a href="#append-outliers">append_outliers</a></li><li><a href="#append-throughput">append_throughput</a></li><li><a href="#catchup-queues">catchup_queues</a></li><li><a href="#client-read-streams">client_read_streams</a></li><li><a href="#cluster-state">cluster_state</a></li><li><a href="#epoch-store">epoch_store</a></li><li><a href="#event-log">event_log</a></li><li><a href="#historical-metadata">historical_metadata</a></li><li><a href="#historical-metadata-legacy">historical_metadata_legacy</a></li><li><a href="#info">info</a></li><li><a href="#info-config">info_config</a></li><li><a href="#is-log-empty">is_log_empty</a></li><li><a href="#iterators">iterators</a></li><li><a href="#log-groups">log_groups</a></li><li><a href="#log-rebuildings">log_rebuildings</a></li><li><a href="#log-storage-state">log_storage_state</a></li><li><a href="#logsconfig-rsm">logsconfig_rsm</a></li><li><a href="#logsdb-directory">logsdb_directory</a></li><li><a href="#logsdb-metadata">logsdb_metadata</a></li><li><a href="#nodes">nodes</a></li><li><a href="#partitions">partitions</a></li><li><a href="#purges">purges</a></li><li><a href="#readers">readers</a></li><li><a href="#record">record</a></li><li><a href="#record-cache">record_cache</a></li><li><a href="#recoveries">recoveries</a></li><li><a href="#sequencers">sequencers</a></li><li><a href="#settings">settings</a></li><li><a href="#shard-authoritative-status">shard_authoritative_status</a></li><li><a href="#shard-rebuildings">shard_rebuildings</a></li><li><a href="#shards">shards</a></li><li><a href="#sockets">sockets</a></li><li><a href="#stats">stats</a></li><li><a href="#stats-rocksdb">stats_rocksdb</a></li><li><a href="#storage-tasks">storage_tasks</a></li><li><a href="#stored-logs">stored_logs</a></li><li><a href="#sync-sequencer-requests">sync_sequencer_requests</a></li></ul></nav></div><footer class="nav-footer" id="footer"><section class="sitemap"><a href="/" class="nav-home"><img src="/img/logdevice.svg" alt="LogDevice" width="66" height="58"/></a><div><h5>Docs</h5><a href="/docs/en/Overview.html">Getting Started</a><a href="/docs/en/FirstCluster.html">Creating your first cluster</a><a href="/api/annotated.html">C++ API Reference</a></div><div><h5>Community</h5><a href="https://facebook.com/groups/logdevice.oss/">LogDevice Users Group</a><a href="http://stackoverflow.com/questions/tagged/logdevice" target="_blank" rel="noreferrer noopener">Stack Overflow</a></div><div><h5>More</h5><a href="/blog">Blog</a><a href="https://github.com/facebookincubator/LogDevice">GitHub</a></div></section><a href="https://code.facebook.com/projects/" target="_blank" rel="noreferrer noopener" class="fbOpenSource"><img src="/img/oss_logo.png" alt="Facebook Open Source" width="170" height="45"/></a><section class="copyright">Copyright © 2018 Facebook</section></footer></div></body></html>

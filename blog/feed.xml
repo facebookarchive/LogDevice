@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0">
+    <channel>
+        <title>LogDevice Blog</title>
+        <link>https://logdevice.io/blog</link>
+        <description>The best place to stay up-to-date with the latest LogDevice news and events.</description>
+        <lastBuildDate>Wed, 12 Sep 2018 06:00:00 GMT</lastBuildDate>
+        <docs>http://blogs.law.harvard.edu/tech/rss</docs>
+        <generator>Feed for Node.js</generator>
+        <image>
+            <title>LogDevice Blog</title>
+            <url>https://logdevice.io/img/facebook_logdevice_whitewordmark.png</url>
+            <link>https://logdevice.io/blog</link>
+        </image>
+        <copyright>Copyright © 2018 Facebook</copyright>
+        <item>
+            <title><![CDATA[Open-sourcing LogDevice, a distributed data store for sequential data]]></title>
+            <link>https://logdevice.io/blog/2018/09/12/open-sourcing-announcement.html</link>
+            <guid>https://logdevice.io/blog/2018/09/12/open-sourcing-announcement.html</guid>
+            <pubDate>Wed, 12 Sep 2018 06:00:00 GMT</pubDate>
+            <description><![CDATA[<p>We are excited to announce that today we are open-sourcing LogDevice! The code is now <a href="https://github.com/facebookincubator/LogDevice">available on GitHub</a> under the permissive 3-clause BSD license.</p> <p>LogDevice is a distributed data store for sequential data originally developed within Facebook. <a href="https://code.fb.com/core-data/logdevice-a-distributed-data-store-for-logs/">This ...</a></p>]]></description>
+        </item>
+    </channel>
+</rss>

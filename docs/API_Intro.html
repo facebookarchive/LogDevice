@@ -1,0 +1,292 @@
+<!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/><meta http-equiv="X-UA-Compatible" content="IE=edge"/><title>LogDevice API · LogDevice</title><meta name="viewport" content="width=device-width"/><meta name="generator" content="Docusaurus"/><meta name="description" content="## API basics"/><meta name="docsearch:language" content="en"/><meta property="og:title" content="LogDevice API · LogDevice"/><meta property="og:type" content="website"/><meta property="og:url" content="https://logdevice.io/index.html"/><meta property="og:description" content="## API basics"/><meta property="og:image" content="https://logdevice.io/img/logdevice_og.png"/><meta name="twitter:card" content="summary"/><meta name="twitter:image" content="https://logdevice.io/img/logdevice.png"/><link rel="shortcut icon" href="/img/favicon.png"/><link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/default.min.css"/><link rel="alternate" type="application/atom+xml" href="https://logdevice.io/blog/atom.xml" title="LogDevice Blog ATOM Feed"/><link rel="alternate" type="application/rss+xml" href="https://logdevice.io/blog/feed.xml" title="LogDevice Blog RSS Feed"/><script type="text/javascript" src="https://buttons.github.io/buttons.js"></script><link rel="stylesheet" href="/css/main.css"/></head><body class="sideNavVisible separateOnPageNav"><div class="fixedHeaderContainer"><div class="headerWrapper wrapper"><header><a href="/"><img class="logo" src="/img/facebook_logdevice_whitewordmark.png" alt="LogDevice"/></a><div class="navigationWrapper navigationSlider"><nav class="slidingNav"><ul class="nav-site nav-site-internal"><li class="siteNavGroupActive"><a href="/docs/Overview.html" target="_self">Docs</a></li><li class=""><a href="/api/annotated.html" target="_self">API</a></li><li class=""><a href="/en/help.html" target="_self">Support</a></li><li class=""><a href="/blog" target="_self">Blog</a></li></ul></nav></div></header></div></div><div class="navPusher"><div class="docMainWrapper wrapper"><div class="container docsNavContainer" id="docsNav"><nav class="toc"><div class="toggleNav"><section class="navWrapper wrapper"><div class="navBreadcrumb wrapper"><div class="navToggle" id="navToggler"><i></i></div><h2><i>›</i><span>API</span></h2><div class="tocToggler" id="tocToggler"><i class="icon-toc"></i></div></div><div class="navGroups"><div class="navGroup"><h3 class="navGroupCategoryTitle">Getting started</h3><ul><li class="navListItem"><a class="navItem" href="/docs/Overview.html">Overview</a></li><li class="navListItem"><a class="navItem" href="/docs/Installation.html">Installation</a></li><li class="navListItem"><a class="navItem" href="/docs/LocalCluster.html">Running a local cluster</a></li><li class="navListItem"><a class="navItem" href="/docs/Concepts.html">Concepts and architecture</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle">Configuration</h3><ul><li class="navListItem"><a class="navItem" href="/docs/FirstCluster.html">Creating your first cluster</a></li><li class="navListItem"><a class="navItem" href="/docs/Config.html">Cluster config</a></li><li class="navListItem"><a class="navItem" href="/docs/Settings.html">Settings</a></li><li class="navListItem"><a class="navItem" href="/docs/Logs.html">Logs</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle">Administration</h3><ul><li class="navListItem"><a class="navItem" href="/docs/LDShell.html">LogDevice Shell</a></li><li class="navListItem"><a class="navItem" href="/docs/LDQuery.html">LDQuery</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle">API</h3><ul><li class="navListItem navListItemActive"><a class="navItem" href="/docs/API_Intro.html">Introduction</a></li><li class="navListItem"><a class="navItem" href="/docs/API_Doxygen.html">Reference</a></li></ul></div></div></section></div><script>
+            document.addEventListener('DOMContentLoaded', function() {
+              createToggler('#navToggler', '#docsNav', 'docsSliderActive');
+              createToggler('#tocToggler', 'body', 'tocActive');
+
+              const headings = document.querySelector('.toc-headings');
+              headings && headings.addEventListener('click', function(event) {
+                if (event.target.tagName === 'A') {
+                  document.body.classList.remove('tocActive');
+                }
+              }, false);
+
+              function createToggler(togglerSelector, targetSelector, className) {
+                var toggler = document.querySelector(togglerSelector);
+                var target = document.querySelector(targetSelector);
+
+                if (!toggler) {
+                  return;
+                }
+
+                toggler.onclick = function(event) {
+                  event.preventDefault();
+
+                  target.classList.toggle(className);
+                };
+              }
+            });
+        </script></nav></div><div class="container mainContainer"><div class="wrapper"><div class="post"><header class="postHeader"><h1 class="postHeaderTitle">LogDevice API</h1></header><article><div><span><h2><a class="anchor" aria-hidden="true" id="api-basics"></a><a href="#api-basics" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>API basics</h2>
+<p>Clients communicate with a LogDevice cluster through a C++ API.</p>
+<h3><a class="anchor" aria-hidden="true" id="client-class"></a><a href="#client-class" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a><code>Client</code> class</h3>
+<p>The core of the LogDevice client API is very simple. In order to interact with a
+LogDevice cluster, you need an instance of the <code>logdevice::Client</code> class. A
+<code>logdevice::Client</code> object represents a connection to a specific LogDevice
+cluster. It provides facilities for:</p>
+<ul>
+<li>appending records to logs,</li>
+<li>trimming logs all the way to a specified LSN,</li>
+<li>mapping timestamps (which are required record attributes) to the LSN of the
+closest record in the log,</li>
+<li>creating <code>logdevice::Reader</code> objects that are used to read records from logs,</li>
+<li>other API calls.</li>
+</ul>
+<p>You only need one instance of the class in order to interact with the cluster
+(it will spawn several worker threads to enable it to scale), and all methods on
+it are thread-safe.</p>
+<p><code>Client</code>s are created by a call to the <code>Client::create()</code> static method. A
+typical instantiation of the <code>Client</code> would look like this:</p>
+<pre><code class="hljs css language-c++"><span class="hljs-meta">#<span class="hljs-meta-keyword">include</span> <span class="hljs-meta-string">&lt;logdevice/include/Client.h&gt;</span></span>
+
+<span class="hljs-comment">// ...</span>
+
+<span class="hljs-built_in">std</span>::<span class="hljs-built_in">shared_ptr</span>&lt;facebook::logdevice::Client&gt; client =
+    facebook::logdevice::Client::create(
+      <span class="hljs-comment">// cluster name, only used for logging</span>
+      <span class="hljs-string">"test_cluster"</span>, 
+      <span class="hljs-comment">// path to the config file</span>
+      <span class="hljs-string">"zk:10.0.0.1:2181,10.0.0.2:2181,10.0.0.3:2181/logdevice_test.conf"</span>,
+      <span class="hljs-comment">// credentials</span>
+      <span class="hljs-string">""</span>,
+      <span class="hljs-comment">// timeout</span>
+      <span class="hljs-built_in">std</span>::chrono::seconds(<span class="hljs-number">60</span>),
+      <span class="hljs-comment">// settings</span>
+      <span class="hljs-literal">nullptr</span>);
+</code></pre>
+<h3><a class="anchor" aria-hidden="true" id="synchronous-vs-asynchronous-api"></a><a href="#synchronous-vs-asynchronous-api" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Synchronous vs. asynchronous API</h3>
+<p>Most API methods are available in synchronous or asynchronous flavours.
+Generally using the asynchronous APIs scales better, as you can schedule many
+outstanding requests to LogDevice without blocking your threads of execution.
+However, note that if you use asynchronous methods:</p>
+<ol>
+<li>the given callback functions will be called on an unspecified LogDevice
+client worker thread, and</li>
+<li>the callback function has to complete quickly. If it takes a long time to
+complete, it will block the LogDevice client worker thread, which may delay the
+execution of any other pending requests.</li>
+</ol>
+<h2><a class="anchor" aria-hidden="true" id="writing-to-logdevice"></a><a href="#writing-to-logdevice" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Writing to LogDevice</h2>
+<h3><a class="anchor" aria-hidden="true" id="vanilla-low-latency-writes"></a><a href="#vanilla-low-latency-writes" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Vanilla low-latency writes</h3>
+<p>In order to write data to LogDevice, use the <code>append()</code> call on the <code>Client</code>
+instance, like so:</p>
+<pre><code class="hljs css language-c++">
+<span class="hljs-function"><span class="hljs-keyword">void</span> <span class="hljs-title">append_callback</span><span class="hljs-params">(facebook::logdevice::Status st,
+             <span class="hljs-keyword">const</span> facebook::logdevice::DataRecord&amp; r)</span> </span>{
+  <span class="hljs-built_in">std</span>::<span class="hljs-built_in">cout</span> &lt;&lt; <span class="hljs-string">"Append result: "</span>;
+  <span class="hljs-keyword">if</span> (st == facebook::logdevice::E::OK){
+    <span class="hljs-built_in">std</span>::<span class="hljs-built_in">cout</span> &lt;&lt; <span class="hljs-string">"succeeded, record appended to log "</span> &lt;&lt; r.logid.val()
+              &lt;&lt; <span class="hljs-string">", LSN "</span> &lt;&lt; facebook::logdevice::lsn_to_string(r.attrs.lsn);
+  } <span class="hljs-keyword">else</span> {
+    <span class="hljs-built_in">std</span>::<span class="hljs-built_in">cout</span> &lt;&lt; <span class="hljs-string">"failed with error: "</span>
+              &lt;&lt; facebook::logdevice::error_description(st);
+  }
+  <span class="hljs-built_in">std</span>::<span class="hljs-built_in">cout</span> &lt;&lt; <span class="hljs-built_in">std</span>::<span class="hljs-built_in">endl</span>;
+}
+
+<span class="hljs-comment">// ...</span>
+
+facebook::logdevice::<span class="hljs-keyword">logid_t</span> logid(<span class="hljs-number">1</span>);
+<span class="hljs-built_in">std</span>::<span class="hljs-function"><span class="hljs-built_in">string</span> <span class="hljs-title">payload</span><span class="hljs-params">(<span class="hljs-string">"data"</span>)</span></span>;
+
+<span class="hljs-keyword">int</span> rv = client-&gt;append(logid, payload, &amp;append_callback);
+<span class="hljs-keyword">if</span> (rv != <span class="hljs-number">0</span>) {
+  <span class="hljs-built_in">std</span>::<span class="hljs-built_in">cout</span> &lt;&lt; <span class="hljs-string">"Failed to enqueue append to log "</span> &lt;&lt; logid.val() &lt;&lt; <span class="hljs-string">": "</span>
+      &lt;&lt; facebook::logdevice::error_description(facebook::logdevice::err);
+}
+</code></pre>
+<p>Each record in this writing flow will get a different LSN.</p>
+<h3><a class="anchor" aria-hidden="true" id="buffered-writes"></a><a href="#buffered-writes" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Buffered writes</h3>
+<p>The writing flow via the <code>append()</code> calls, as described above, is optimized for
+lowest latency - whenever you call <code>append()</code>, your write will be sent to the
+cluster as soon as possible. If instead you want to optimize for throughput, you
+may want to buffer writes on the client. Take a look at
+<code>logdevice/include/BufferedWriter.h</code> in the main source tree if you want to use
+the buffered write API.</p>
+<h2><a class="anchor" aria-hidden="true" id="reading-from-logdevice"></a><a href="#reading-from-logdevice" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Reading from LogDevice</h2>
+<p>The read API implemented by class <code>logdevice::Reader</code> follows the non-durable
+subscription model. A single <code>Reader</code> object can be used to create and manage
+multiple read streams. Those are roughly equivalent to POSIX file descriptors —
+read points in a specific file. The difference between the <code>logdevice::Reader</code>
+and POSIX read models is that the <code>Reader::read()</code> method returns records for
+all active read streams on that <code>Reader</code> object, which often may belong to many
+different logs. The records are passed to the application as they arrive from
+the LogDevice cluster and become available. In contrast, the POSIX <code>read()</code>
+call on a file descriptor may return data from that one file only.</p>
+<p>In addition to records the <code>Reader::read()</code> method may also report a number of
+gaps. A gap describes a range of LSNs with some sort of an exceptional
+condition. Common gap types include TRIM (records in the range are older than
+the trim point), DATALOSS (records in the range appear to be permanently lost),
+and ACCESS (the reader does not have permissions to read the log). The
+<code>Reader::stopReading()</code> method may be used to indicate that the client is no
+longer interested in receiving records for the specified log.</p>
+<p>If instead of pulling records you prefer them to be streamed to you and a
+callback to be called for each record/gap received, you can use the
+<code>AsyncReader</code> class instead.</p>
+<p>It is worth noting that LogDevice does not offer durable read pointers. Log
+readers that want to persist their position in the log so that they can resume
+reading after a crash or restart should periodically save the LSN of the last
+record they read in a persistent key-value store.</p>
+<h3><a class="anchor" aria-hidden="true" id="reading-using-the-reader-class"></a><a href="#reading-using-the-reader-class" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Reading using the <code>Reader</code> class</h3>
+<p>To read from LogDevice using the <code>Reader</code> class, you:</p>
+<ol>
+<li>create a <code>Reader</code> instance by calling the <code>createReader()</code> method on the
+<code>Client</code> instance,</li>
+<li>call <code>startReading()</code> on it for each log, and</li>
+<li>call the <code>read()</code> method on the reader whenever your application is ready to
+consume records</li>
+</ol>
+<p>Check out <code>examples/tail.cpp</code> and <code>examples/cat.cpp</code> in the source tree to see
+how that works.</p>
+<h3><a class="anchor" aria-hidden="true" id="reading-using-the-asyncreader-class"></a><a href="#reading-using-the-asyncreader-class" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Reading using the <code>AsyncReader</code> class</h3>
+<p><code>AsyncReader</code> allows you to register callbacks for each record/gap received, as
+well as a callback for when the <code>until_lsn</code> has been reached.</p>
+<p>Example:</p>
+<pre><code class="hljs css language-c++"><span class="hljs-meta">#<span class="hljs-meta-keyword">include</span> <span class="hljs-meta-string">&lt;logdevice/include/AsyncReader.h&gt;</span></span>
+
+<span class="hljs-comment">// ...</span>
+
+<span class="hljs-function"><span class="hljs-keyword">bool</span> <span class="hljs-title">recordCallback</span><span class="hljs-params">(<span class="hljs-built_in">std</span>::<span class="hljs-built_in">unique_ptr</span>&lt;facebook::logdevice::DataRecord&gt;&amp; record)</span> </span>{
+  <span class="hljs-built_in">std</span>::<span class="hljs-built_in">cout</span> &lt;&lt; <span class="hljs-string">"Received record for log "</span> &lt;&lt; record-&gt;logid.val() &lt;&lt; <span class="hljs-string">": LSN "</span>
+      &lt;&lt; facebook::logdevice::lsn_to_string(record-&gt;attrs.lsn)
+      &lt;&lt; <span class="hljs-string">", payload \""</span> &lt;&lt; record-&gt;payload.toString() &lt;&lt; <span class="hljs-string">"\""</span> &lt;&lt; <span class="hljs-built_in">std</span>::<span class="hljs-built_in">endl</span>;
+}
+
+<span class="hljs-function"><span class="hljs-keyword">bool</span> <span class="hljs-title">gapCallback</span><span class="hljs-params">(<span class="hljs-keyword">const</span> facebook::logdevice::GapRecord&amp; gap)</span> </span>{
+  <span class="hljs-keyword">using</span> facebook::logdevice::GapType;
+  <span class="hljs-keyword">switch</span> (gap.type) {
+    <span class="hljs-keyword">case</span> GapType::BRIDGE:
+    <span class="hljs-keyword">case</span> GapType::HOLE:
+    <span class="hljs-keyword">case</span> GapType::TRIM:
+    <span class="hljs-keyword">case</span> GapType::FILTERED_OUT:
+      <span class="hljs-comment">// benign gaps in LSN numbering sequence</span>
+      <span class="hljs-keyword">break</span>;
+    <span class="hljs-keyword">case</span> GapType::DATALOSS:
+      <span class="hljs-built_in">std</span>::<span class="hljs-built_in">cout</span> &lt;&lt; <span class="hljs-string">"Error! Data has been lost for log "</span> &lt;&lt; gap.logid.val()
+          &lt;&lt; <span class="hljs-string">" from LSN "</span> &lt;&lt; facebook::logdevice::lsn_to_string(gap.lo)
+          &lt;&lt; <span class="hljs-string">" to LSN "</span> &lt;&lt; facebook::logdevice::lsn_to_string(gap.hi)
+          &lt;&lt; <span class="hljs-built_in">std</span>::<span class="hljs-built_in">endl</span>;
+      <span class="hljs-keyword">break</span>;
+    <span class="hljs-keyword">case</span> GapType::ACCESS:
+      <span class="hljs-built_in">std</span>::<span class="hljs-built_in">cout</span> &lt;&lt; <span class="hljs-string">"Error! Access denied to log "</span> &lt;&lt; gap.logid.val()
+          &lt;&lt; <span class="hljs-built_in">std</span>::<span class="hljs-built_in">endl</span>;
+      <span class="hljs-keyword">break</span>;
+    <span class="hljs-keyword">case</span> GapType::NOTINCONFIG:
+      <span class="hljs-built_in">std</span>::<span class="hljs-built_in">cout</span> &lt;&lt; <span class="hljs-string">"Error! Log "</span> &lt;&lt; gap.logid.val() &lt;&lt; <span class="hljs-string">" not found!"</span>
+          &lt;&lt; <span class="hljs-built_in">std</span>::<span class="hljs-built_in">endl</span>;
+      <span class="hljs-keyword">break</span>;
+    <span class="hljs-keyword">default</span>:
+      <span class="hljs-built_in">std</span>::<span class="hljs-built_in">cout</span> &lt;&lt; <span class="hljs-string">"Unrecognized gap of type "</span>
+          &lt;&lt; facebook::logdevice::gapTypeToString(gap.type) &lt;&lt; <span class="hljs-string">" for log "</span>
+          &lt;&lt; gap.logid.val() &lt;&lt; <span class="hljs-string">" from LSN "</span>
+          &lt;&lt; facebook::logdevice::lsn_to_string(gap.lo) &lt;&lt; <span class="hljs-string">" to LSN "</span>
+          &lt;&lt; facebook::logdevice::lsn_to_string(gap.hi) &lt;&lt; <span class="hljs-built_in">std</span>::<span class="hljs-built_in">endl</span>;
+      <span class="hljs-keyword">break</span>;
+  }
+}
+
+<span class="hljs-function"><span class="hljs-keyword">void</span> <span class="hljs-title">doneCallback</span><span class="hljs-params">(facebook::logdevice::<span class="hljs-keyword">logid_t</span> log_id)</span> </span>{
+  <span class="hljs-built_in">std</span>::<span class="hljs-built_in">cout</span> &lt;&lt; <span class="hljs-string">"Finished reading log_id "</span> &lt;&lt; log_id.val() &lt;&lt; <span class="hljs-built_in">std</span>::<span class="hljs-built_in">endl</span>;
+}
+
+<span class="hljs-built_in">std</span>::<span class="hljs-built_in">unique_ptr</span>&lt;facebook::logdevice::AsyncReader&gt; reader =
+    client-&gt;createAsyncReader();
+reader-&gt;setRecordCallback(recordCallback);
+reader-&gt;setGapCallback(gapCallback);
+reader-&gt;setDoneCallback(doneCallback);
+
+facebook::logdevice::<span class="hljs-keyword">logid_t</span> logid(<span class="hljs-number">1</span>);
+facebook::logdevice::<span class="hljs-keyword">lsn_t</span> from_lsn = facebook::logdevice::LSN_OLDEST;
+
+<span class="hljs-keyword">int</span> rv = reader-&gt;startReading(logid, from_lsn);
+<span class="hljs-keyword">if</span> (rv != <span class="hljs-number">0</span>) {
+  <span class="hljs-built_in">std</span>::<span class="hljs-built_in">cout</span> &lt;&lt; <span class="hljs-string">"Error! Couldn't start reading: "</span>
+      &lt;&lt; facebook::logdevice::error_description(facebook::logdevice::err)
+      &lt;&lt; <span class="hljs-built_in">std</span>::<span class="hljs-built_in">endl</span>;
+}
+</code></pre>
+<h2><a class="anchor" aria-hidden="true" id="discovering-positions-to-read-from-to"></a><a href="#discovering-positions-to-read-from-to" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Discovering positions to read from/to</h2>
+<p>As LogDevice doesn't store read pointers for clients, the clients have to
+specify explicit <code>start</code>/<code>until</code> LSNs when reading. There are several common
+ways how these are discovered.</p>
+<h3><a class="anchor" aria-hidden="true" id="max-bound-values"></a><a href="#max-bound-values" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Max bound values</h3>
+<p>Specifying <code>facebook::logdevice::LSN_OLDEST</code> as the <code>start_lsn</code> will cause
+reading to start from the first possible LSN.</p>
+<p>Specifying <code>facebook::logdevice::LSN_MAX</code> as the <code>until_lsn</code> will cause reading
+to continue indefinitely (new records will be read as they are appended to the
+tail and released).</p>
+<p>Specifying both of these values covers the entire possible LSN space for a log.</p>
+<h3><a class="anchor" aria-hidden="true" id="checkpointed-values"></a><a href="#checkpointed-values" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Checkpointed values</h3>
+<p>If your reader saves checkpoints (LSNs) somewhere based on records it has
+already seen, these checkpoints can be used to restart reading from the same
+point.</p>
+<h3><a class="anchor" aria-hidden="true" id="discover-lsn-based-on-append-timestamp"></a><a href="#discover-lsn-based-on-append-timestamp" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Discover LSN based on append timestamp</h3>
+<p>A typical way to use LogDevice is to start reading from a certain timestamp. In
+order to discover which LSN maps to that timestamp, the <code>findTime()</code> API call
+can be used:</p>
+<pre><code class="hljs css language-c++">void findTimeCallback(facebook::logdevice::Status st,
+                   facebook::logdevice::lsn_t result) {
+  if (st == facebook::logdevice::Status::OK) {
+    std::cout &lt;&lt; "Received findtime result: "
+              &lt;&lt; facebook::logdevice::lsn_to_string(result) &lt;&lt; std::endl;
+  } else {
+    std::cout &lt;&lt; "Error returned by findtime: "
+              &lt;&lt; facebook::logdevice::error_description(st) &lt;&lt; std::endl;
+  }
+}
+
+facebook::logdevice::logid_t logid(1);
+// Find LSN for records written 30 seconds ago
+std::chrono::milliseconds timestamp(
+ std::chrono::duration_cast&lt;std::chrono::milliseconds&gt;(
+   std::chrono::system_clock::now().time_since_epoch() -
+       std::chrono::seconds(30)));
+int rv = client-&gt;findTime(logid, timestamp, findTimeCallback);
+if (rv != 0) {
+  std::cout &lt;&lt; "Couldn't run findtime: "
+      &lt;&lt; facebook::logdevice::error_description(facebook::logdevice::err)
+      &lt;&lt; std::endl;
+}
+
+</code></pre>
+<p><strong>Note:</strong> this feature assumes that clocks between all sequencer nodes in a
+LogDevice cluster are in sync. If the clocks on machines in your cluster diverge
+by a lot, the results of <code>findTime()</code> calls may be inconsistent.</p>
+<h3><a class="anchor" aria-hidden="true" id="get-the-current-tail-lsn"></a><a href="#get-the-current-tail-lsn" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Get the current tail LSN</h3>
+<p>Another common position to start/stop reading at is the tail of the log:</p>
+<pre><code class="hljs css language-c++"><span class="hljs-function"><span class="hljs-keyword">void</span> <span class="hljs-title">tailLSNCallback</span><span class="hljs-params">(facebook::logdevice::Status st,
+                  facebook::logdevice::<span class="hljs-keyword">lsn_t</span> result)</span> </span>{
+  <span class="hljs-keyword">if</span> (st == facebook::logdevice::Status::OK) {
+    <span class="hljs-built_in">std</span>::<span class="hljs-built_in">cout</span> &lt;&lt; <span class="hljs-string">"Received tail LSN: "</span>
+              &lt;&lt; facebook::logdevice::lsn_to_string(result) &lt;&lt; <span class="hljs-built_in">std</span>::<span class="hljs-built_in">endl</span>;
+  } <span class="hljs-keyword">else</span> {
+    <span class="hljs-built_in">std</span>::<span class="hljs-built_in">cout</span> &lt;&lt; <span class="hljs-string">"Error fetching tail LSN: "</span>
+              &lt;&lt; facebook::logdevice::error_description(st) &lt;&lt; <span class="hljs-built_in">std</span>::<span class="hljs-built_in">endl</span>;
+  }
+}
+
+facebook::logdevice::<span class="hljs-keyword">logid_t</span> logid(<span class="hljs-number">1</span>);
+<span class="hljs-keyword">int</span> rv = client-&gt;getTailLSN(logid, tailLSNCallback);
+<span class="hljs-keyword">if</span> (rv != <span class="hljs-number">0</span>) {
+  <span class="hljs-built_in">std</span>::<span class="hljs-built_in">cout</span> &lt;&lt; <span class="hljs-string">"Couldn't run getTailLSN(): "</span>
+            &lt;&lt; facebook::logdevice::error_description(facebook::logdevice::err)
+            &lt;&lt; <span class="hljs-built_in">std</span>::<span class="hljs-built_in">endl</span>;
+}
+
+</code></pre>
+<h2><a class="anchor" aria-hidden="true" id="trimming-data-in-logdevice"></a><a href="#trimming-data-in-logdevice" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Trimming data in LogDevice</h2>
+<p>There are several ways to configure LogDevice to trim data automatically: based
+on time (see <code>backlog</code> attribute in <a href="/docs/Logs.html">log configuration</a>)
+or available storage space (see <code>rocksdb-free-disk-space-threshold-low</code> and
+<code>sbr-node-threshold</code> in <a href="/docs/Settings.html">settings</a>). Another way to trim data in a
+log is for a client to do this explicitly. See <code>trim()/trimSync()</code> methods in
+the <code>Client</code> class.</p>
+</span></div></article></div><div class="docs-prevnext"><a class="docs-prev button" href="/docs/LDQuery.html">← LDQuery</a><a class="docs-next button" href="/docs/API_Doxygen.html">Reference →</a></div></div></div><nav class="onPageNav"><ul class="toc-headings"><li><a href="#api-basics">API basics</a><ul class="toc-headings"><li><a href="#client-class"><code>Client</code> class</a></li><li><a href="#synchronous-vs-asynchronous-api">Synchronous vs. asynchronous API</a></li></ul></li><li><a href="#writing-to-logdevice">Writing to LogDevice</a><ul class="toc-headings"><li><a href="#vanilla-low-latency-writes">Vanilla low-latency writes</a></li><li><a href="#buffered-writes">Buffered writes</a></li></ul></li><li><a href="#reading-from-logdevice">Reading from LogDevice</a><ul class="toc-headings"><li><a href="#reading-using-the-reader-class">Reading using the <code>Reader</code> class</a></li><li><a href="#reading-using-the-asyncreader-class">Reading using the <code>AsyncReader</code> class</a></li></ul></li><li><a href="#discovering-positions-to-read-from-to">Discovering positions to read from/to</a><ul class="toc-headings"><li><a href="#max-bound-values">Max bound values</a></li><li><a href="#checkpointed-values">Checkpointed values</a></li><li><a href="#discover-lsn-based-on-append-timestamp">Discover LSN based on append timestamp</a></li><li><a href="#get-the-current-tail-lsn">Get the current tail LSN</a></li></ul></li><li><a href="#trimming-data-in-logdevice">Trimming data in LogDevice</a></li></ul></nav></div><footer class="nav-footer" id="footer"><section class="sitemap"><a href="/" class="nav-home"><img src="/img/logdevice.svg" alt="LogDevice" width="66" height="58"/></a><div><h5>Docs</h5><a href="/docs/en/Overview.html">Getting Started</a><a href="/docs/en/FirstCluster.html">Creating your first cluster</a><a href="/api/annotated.html">C++ API Reference</a></div><div><h5>Community</h5><a href="https://facebook.com/groups/logdevice.oss/">LogDevice Users Group</a><a href="http://stackoverflow.com/questions/tagged/logdevice" target="_blank" rel="noreferrer noopener">Stack Overflow</a></div><div><h5>More</h5><a href="/blog">Blog</a><a href="https://github.com/facebookincubator/LogDevice">GitHub</a></div></section><a href="https://code.facebook.com/projects/" target="_blank" rel="noreferrer noopener" class="fbOpenSource"><img src="/img/oss_logo.png" alt="Facebook Open Source" width="170" height="45"/></a><section class="copyright">Copyright © 2018 Facebook</section></footer></div></body></html>
