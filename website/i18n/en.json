@@ -3,7 +3,7 @@
   "localized-strings": {
     "next": "Next",
     "previous": "Previous",
-    "tagline": "Distributed storage for sequential data",
+    "tagline": "A scalable and fault tolerant distributed log system",
     "API_Intro": "LogDevice API",
     "Introduction": "Introduction",
     "Concepts": "LogDevice Concepts and architecture",
