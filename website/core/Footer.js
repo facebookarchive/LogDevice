@@ -35,10 +35,10 @@ class Footer extends React.Component {
           </a>
           <div>
             <h5>Docs</h5>
-            <a href={this.docUrl('Overview.html', this.props.language)}>
+            <a href={this.docUrl('Overview.html')}>
               Getting Started
             </a>
-            <a href={this.docUrl('FirstCluster.html', this.props.language)}>
+            <a href={this.docUrl('FirstCluster.html')}>
               Creating your first cluster
             </a>
             <a href={this.props.config.baseUrl + 'api/annotated.html'}>
