@@ -1,3 +1,8 @@
+aliases:
+  - &filter-only-master
+    branches:
+      only: master
+
 version: 2
 jobs:
   build:
@@ -36,3 +41,26 @@ jobs:
       - store_test_results:
           path: gtest_results
           when: always
+  deploy-website:
+    docker:
+      - image: circleci/node:8.12.0  # Use LTS version of Node.js
+    resource_class: large
+    steps:
+      - checkout
+      - run:
+          name: Deploy LogDevice website
+          command: |
+            # Configure Docusaurus Bot
+            git config --global user.email "docusaurus-bot@users.noreply.github.com"
+            git config --global user.name "Docusaurus Bot"
+            echo "machine github.com login docusaurus-bot password $GITHUB_TOKEN" > ~/.netrc
+            # Install Docusaurus and publish the website
+            cd website && yarn install && GIT_USER=docusaurus-bot yarn publish-gh-pages
+
+workflows:
+  version: 2
+  build_and_deploy:
+    jobs:
+      - build
+      - deploy-website:
+          filters: *filter-only-master
