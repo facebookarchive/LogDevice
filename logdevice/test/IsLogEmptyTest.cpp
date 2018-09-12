@@ -24,70 +24,17 @@ using namespace facebook::logdevice;
 
 namespace {
 
-int NUM_NODES = 8; // must be > 1
-int NUM_LOGS = 4;
-
 struct IsLogEmptyResult {
   uint64_t log_id;
   Status status;
   bool empty;
 };
 
-static NodeSetIndices getFullNodeSet() {
-  NodeSetIndices full_node_set(NUM_NODES);
-  if (NUM_NODES > 1) {
-    std::iota(++full_node_set.begin(), full_node_set.end(), 1);
-  }
-  return full_node_set;
-}
-
-static void commonSetup(IntegrationTestUtils::ClusterFactory& cluster) {
-  Configuration::Log log_config;
-  log_config.replicationFactor = std::min(3, NUM_NODES - 1);
-  log_config.rangeName = "my-test-log";
-  log_config.extraCopies = 0;
-  log_config.syncedCopies = 0;
-  log_config.maxWritesInFlight = 250;
-
-  Configuration::Log event_log = log_config;
-  event_log.replicationFactor = std::min(4, NUM_NODES - 1);
-  event_log.rangeName = "my-event-log";
-  event_log.extraCopies = 0;
-  event_log.syncedCopies = 0;
-  event_log.maxWritesInFlight = 250;
-
-  Configuration::MetaDataLogsConfig meta_config;
-  {
-    const size_t nodeset_size = std::min(6, NUM_NODES - 1);
-    std::vector<node_index_t> nodeset(nodeset_size);
-    std::iota(nodeset.begin(), nodeset.end(), 1);
-    meta_config = createMetaDataLogsConfig(
-        nodeset, std::min(4ul, nodeset_size), NodeLocationScope::NODE);
-  }
-  meta_config.sequencers_write_metadata_logs = true;
-  meta_config.sequencers_provision_epoch_store = true;
-
-  cluster.setRocksDBType(IntegrationTestUtils::RocksDBType::PARTITIONED)
-      .setParam("--rocksdb-partition-duration", "900s")
-      .setParam("--rocksdb-partition-timestamp-granularity", "0ms")
-      // Use bridge records, which previously tricked isLogEmpty
-      .setParam("--bridge-record-in-empty-epoch", "true")
-      .setParam("--rocksdb-new-partition-timestamp-margin", "0ms")
-      // Make sure memtables are lost on crash
-      .setParam("--append-store-durability", "memory")
-      .setParam("--disable-rebuilding", "false")
-      .setParam("--rocksdb-min-manual-flush-interval", "0")
-      // Disable sticky copysets to make records more randomly distributed
-      .setParam("--write-sticky-copysets", "false")
-      .setNumDBShards(1)
-      .setLogConfig(log_config)
-      .setEventLogConfig(event_log)
-      .setMetaDataLogsConfig(meta_config)
-      .setNumLogs(NUM_LOGS);
-}
-
 class IsLogEmptyTest : public IntegrationTestBase {
  public:
+  NodeSetIndices getFullNodeSet();
+  void commonSetup(IntegrationTestUtils::ClusterFactory& cluster);
+
   // Initializes a Cluster object with the desired log config
   void init();
 
@@ -123,13 +70,72 @@ class IsLogEmptyTest : public IntegrationTestBase {
   std::shared_ptr<Client> client_no_grace_period_;
   std::shared_ptr<Client> client_with_grace_period_;
   partition_id_t latest_partition_ = PARTITION_INVALID;
+
+  int num_nodes = 8; // must be > 1
+  int num_logs = 4;
 };
 
+NodeSetIndices IsLogEmptyTest::getFullNodeSet() {
+  NodeSetIndices full_node_set(num_nodes);
+  if (num_nodes > 1) {
+    std::iota(++full_node_set.begin(), full_node_set.end(), 1);
+  }
+  return full_node_set;
+}
+
+void IsLogEmptyTest::commonSetup(
+    IntegrationTestUtils::ClusterFactory& cluster) {
+  Configuration::Log log_config;
+  log_config.replicationFactor = std::min(3, num_nodes - 1);
+  log_config.rangeName = "my-test-log";
+  log_config.extraCopies = 0;
+  log_config.syncedCopies = 0;
+  log_config.maxWritesInFlight = 250;
+
+  Configuration::Log event_log = log_config;
+  event_log.replicationFactor = std::min(4, num_nodes - 1);
+  event_log.rangeName = "my-event-log";
+  event_log.extraCopies = 0;
+  event_log.syncedCopies = 0;
+  event_log.maxWritesInFlight = 250;
+
+  Configuration::MetaDataLogsConfig meta_config;
+  {
+    const size_t nodeset_size = std::min(6, num_nodes - 1);
+    std::vector<node_index_t> nodeset(nodeset_size);
+    std::iota(nodeset.begin(), nodeset.end(), 1);
+    meta_config = createMetaDataLogsConfig(
+        nodeset, std::min(4ul, nodeset_size), NodeLocationScope::NODE);
+  }
+  meta_config.sequencers_write_metadata_logs = true;
+  meta_config.sequencers_provision_epoch_store = true;
+
+  cluster.setRocksDBType(IntegrationTestUtils::RocksDBType::PARTITIONED)
+      .setParam("--rocksdb-partition-duration", "900s")
+      .setParam("--rocksdb-partition-timestamp-granularity", "0ms")
+      // Use bridge records, which previously tricked isLogEmpty
+      .setParam("--bridge-record-in-empty-epoch", "true")
+      .setParam("--rocksdb-new-partition-timestamp-margin", "0ms")
+      // Make sure memtables are lost on crash
+      .setParam("--append-store-durability", "memory")
+      .setParam("--disable-rebuilding", "false")
+      .setParam("--rocksdb-min-manual-flush-interval", "0")
+      // Disable sticky copysets to make records more randomly distributed
+      .setParam("--write-sticky-copysets", "false")
+      .setNumDBShards(1)
+      .setLogConfig(log_config)
+      .setEventLogConfig(event_log)
+      .setMetaDataLogsConfig(meta_config)
+      .setNumLogs(num_logs);
+}
+
 void IsLogEmptyTest::init() {
-  ld_check_gt(NUM_NODES, 1);
+  ld_check_gt(num_nodes, 1);
   cluster_ = IntegrationTestUtils::ClusterFactory()
-                 .apply(commonSetup)
-                 .create(NUM_NODES);
+                 .apply([this](IntegrationTestUtils::ClusterFactory& cluster) {
+                   commonSetup(cluster);
+                 })
+                 .create(num_nodes);
 
   latest_partition_ = PartitionedRocksDBStore::INITIAL_PARTITION_ID;
 
@@ -380,7 +386,9 @@ TEST_F(IsLogEmptyTest, Startup) {
 // logsdb directory entries to signify that all records in that partition for
 // that log are pseudorecords, such as bridge records.
 TEST_F(IsLogEmptyTest, RestartNode) {
-  NUM_NODES = 2; // 1 sequencer node, 1 storage node which we'll be restarting.
+  // Override node count, so that we have 1 sequencer node and 1 storage node
+  // which we'll be restarting.
+  num_nodes = 2;
   init();
 
   // Wait for recoveries to finish, which'll write bridge records for all the
