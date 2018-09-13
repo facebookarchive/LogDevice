@@ -254,8 +254,15 @@ class NodeStatsControllerIntegrationTest
     return client;
   }
 
-  void updateSettings(ServerConfig::SettingsConfig settings) {
+  void updateSettings(ServerConfig::SettingsConfig changed_settings) {
     auto other = cluster->getConfig()->getServerConfig();
+
+    ServerConfig::SettingsConfig new_settings =
+        other->getServerSettingsConfig();
+
+    for (const auto& kv : changed_settings) {
+      new_settings[kv.first] = kv.second;
+    }
 
     std::shared_ptr<ServerConfig> new_config =
         ServerConfig::fromData(other->getClusterName(),
@@ -266,7 +273,8 @@ class NodeStatsControllerIntegrationTest
                                ServerConfig::TraceLoggerConfig(),
                                ServerConfig::TrafficShapingConfig(),
                                ServerConfig::ZookeeperConfig(),
-                               settings);
+                               new_settings,
+                               other->getClientSettingsConfig());
 
     ASSERT_TRUE(new_config != nullptr) << "Invalid setting given";
 
