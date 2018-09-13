@@ -45,6 +45,9 @@ add_test(
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 endif()
 
+set_property(DIRECTORY APPEND PROPERTY TEST_INCLUDE_FILES
+  ${LOGDEVICE_TEST_DIR}/flakey_tests.cmake)
+
 target_link_libraries(integration_test
   common
   common_test_util
