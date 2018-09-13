@@ -671,6 +671,9 @@ TEST_F(ConfigIntegrationTest, ExpandWithVersionUpdate) {
   // To ensure there's only one connection to the target node to have
   // deterministic stat values
   ASSERT_EQ(0, client_settings->set("num-workers", "1"));
+  // Creating a client through instantiating an instance of ClientImpl directly
+  // makes it ignore the settings in the config, so we have to set this here
+  ASSERT_EQ(0, client_settings->set("enable-logsconfig-manager", "false"));
   std::shared_ptr<Client> client = std::make_shared<ClientImpl>(
       client_config->get()->serverConfig()->getClusterName(),
       client_config,
