@@ -18,6 +18,12 @@ const users = [
     infoLink: 'https://www.facebook.com',
     pinned: true,
   },
+   {
+    caption: 'AiHello',
+    image: 'https://i.imgur.com/Pv2FBDG.png',
+    infoLink: 'https://www.aihello.com',
+    pinned: true,
+  },
 ];
 
 const siteConfig = {
