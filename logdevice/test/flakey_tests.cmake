@@ -16,5 +16,4 @@ set_tests_properties(
   "ReadingIntegrationTest/ReadingIntegrationTest.StatisticsCallback/false"
   "SequencerIntegrationTest.LogRemovalStressTest"
   "SequencerIntegrationTest.MetaDataWritePreempted"
-  "SequencerIntegrationTest.SequencerIsolation"
   PROPERTIES DISABLED TRUE)

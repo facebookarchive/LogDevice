@@ -130,11 +130,32 @@ TEST_F(SequencerIntegrationTest, SequencerReactivationTest) {
 }
 
 TEST_F(SequencerIntegrationTest, SequencerIsolation) {
-  const int NNODES = 4;
+  const int NNODES = 5;
+
+  // figure out which node is running a sequencer for log 1 and partition it on
+  // the minority side later
+  auto node_idx = hashing::weighted_ch(1, {1.0, 1.0, 1.0, 1.0});
+  std::set<int> partition1;
+  std::set<int> partition2;
+  partition1.insert(node_idx);
+  for (int i = 0; i < NNODES; ++i) {
+    if (i == node_idx) {
+      continue;
+    }
+    if (partition1.size() < 2) {
+      partition1.insert(i);
+    } else {
+      partition2.insert(i);
+    }
+  }
   Configuration::Nodes nodes;
   for (node_index_t i = 0; i < NNODES; ++i) {
     NodeLocation location;
-    location.fromDomainString("region1.dc1.cl1.ro1.rk1");
+    if (partition1.find(i) != partition1.end()) {
+      location.fromDomainString("region1.dc1.cl1.ro1.rk1");
+    } else {
+      location.fromDomainString("region1.dc1.cl1.ro1.rk2");
+    }
     nodes[i].location = location;
     nodes[i].generation = 1;
     nodes[i].sequencer_weight = 1.0;
@@ -162,20 +183,9 @@ TEST_F(SequencerIntegrationTest, SequencerIsolation) {
   lsn_t lsn1 = client->appendSync(logid_t(1), "foo");
   ASSERT_NE(LSN_INVALID, lsn1);
 
-  // figure out which node is running a sequencer for log 1 and partition it
-  auto node_idx = hashing::weighted_ch(1, {1.0, 1.0, 1.0, 1.0});
   ASSERT_EQ(
       "ACTIVE", cluster->getNode(node_idx).sequencerInfo(logid_t(1))["State"]);
 
-  std::set<int> partition1;
-  std::set<int> partition2;
-  for (int i = 0; i < NNODES; ++i) {
-    if (i != node_idx) {
-      partition2.insert(i);
-    } else {
-      partition1.insert(i);
-    }
-  }
 
   cluster->partition({partition1, partition2});
   wait_until("node isolated. waiting for sequencers to be disabled.", [&]() {
