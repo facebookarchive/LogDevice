@@ -28,6 +28,8 @@
 
 namespace facebook { namespace logdevice {
 
+class TextConfigUpdater;
+
 /**
  * @file Orchestrates config fetching and parsing, allowing config contents to
  * be fetched from various sources.
@@ -41,34 +43,31 @@ class TextConfigUpdaterImpl : public ConfigSource::AsyncCallback,
    */
   explicit TextConfigUpdaterImpl(
       Semaphore& initial_config_sem,
+      std::vector<std::unique_ptr<ConfigSource>>& sources_,
       std::shared_ptr<UpdateableServerConfig> target_server_config,
       std::shared_ptr<UpdateableLogsConfig> target_logs_config,
       UpdateableSettings<Settings> updateable_settings,
       StatsHolder* stats = nullptr)
       : target_server_config_(target_server_config),
         target_logs_config_(target_logs_config),
+        sources_(sources_),
         updateable_settings_(std::move(updateable_settings)),
         stats_(stats),
         initial_config_sem_(initial_config_sem) {}
 
   explicit TextConfigUpdaterImpl(
       Semaphore& initial_config_sem,
+      std::vector<std::unique_ptr<ConfigSource>>& sources_,
       std::shared_ptr<UpdateableConfig> updateable_config,
       UpdateableSettings<Settings> updateable_settings =
           UpdateableSettings<Settings>(),
       StatsHolder* stats = nullptr)
       : TextConfigUpdaterImpl(initial_config_sem,
+                              sources_,
                               updateable_config->updateableServerConfig(),
                               updateable_config->updateableLogsConfig(),
                               std::move(updateable_settings),
                               stats) {}
-
-  /**
-   * Registers a `ConfigSource'.  This should be called shortly after
-   * construction to enable various config backends to be used.
-   */
-  void registerSource(std::unique_ptr<ConfigSource>);
-
   /**
    * Requests a config to be loaded and tracked.  The location should be
    * formatted as "scheme:path" where the scheme is recognized by one of the
@@ -99,6 +98,10 @@ class TextConfigUpdaterImpl : public ConfigSource::AsyncCallback,
    */
   int waitForInitialLoad(std::chrono::milliseconds timeout);
 
+  // Set to true before calling destructor. Prevents onAsyncGet() from
+  // accessing ConfigSource that may be deleted.
+  bool destroying_ = false;
+
   /**
    * Invoked by `ConfigSource' instances when an asynchronous get finished (or
    * an update was pushed) and config contents are available.
@@ -127,13 +130,12 @@ class TextConfigUpdaterImpl : public ConfigSource::AsyncCallback,
 
   // Returns true if the latest load config is valid
   bool hasValidConfig();
-  ~TextConfigUpdaterImpl() override;
 
  private:
   std::weak_ptr<UpdateableServerConfig> target_server_config_;
   std::weak_ptr<UpdateableLogsConfig> target_logs_config_;
 
-  std::vector<std::unique_ptr<ConfigSource>> sources_;
+  std::vector<std::unique_ptr<ConfigSource>>& sources_;
   std::unique_ptr<LogsConfig> alternative_logs_config_;
   ConfigParserOptions config_parser_options_;
   UpdateableSettings<Settings> updateable_settings_;
@@ -156,10 +158,6 @@ class TextConfigUpdaterImpl : public ConfigSource::AsyncCallback,
     std::chrono::milliseconds last_loaded_time;
     folly::Optional<ConfigSource::Output> output;
   } main_config_state_, included_config_state_;
-
-  // Set to true at the beginning of destructor. Prevents onAsyncGet() from
-  // accessing ConfigSource that may be deleted.
-  bool destroying_ = false;
 
   // Helper method called by load() and onAsyncGet() when a source provides
   // contents of a config, synchronously or asynchronously.  Logs and
@@ -210,11 +208,15 @@ class TextConfigUpdater : public ConfigSource::AsyncCallback,
   TextConfigUpdater(Args&&... args)
       : impl_(folly::in_place,
               initial_config_sem_,
+              sources_,
               std::forward<Args>(args)...) {}
-  template <typename... Args>
-  void registerSource(Args&&... args) {
-    impl_->registerSource(std::forward<Args>(args)...);
+
+  void registerSource(std::unique_ptr<ConfigSource> src) {
+    auto lock = impl_.wlock();
+    src->setAsyncCallback(this);
+    sources_.push_back(std::move(src));
   }
+
   template <typename... Args>
   int load(Args&&... args) {
     return impl_->load(std::forward<Args>(args)...);
@@ -233,10 +235,25 @@ class TextConfigUpdater : public ConfigSource::AsyncCallback,
   }
   int waitForInitialLoad(std::chrono::milliseconds timeout);
 
+  ~TextConfigUpdater() override {
+    // Tell the possible future callbacks that it's unsafe to use ConfigSources.
+    {
+      auto lock = impl_.wlock();
+      lock->destroying_ = true;
+    }
+
+    // Make sure all the registered sources (which have a backpointer to us as
+    // the parent and can call back during destruction) are destructed before we
+    // start tearing down our members.
+    sources_.clear();
+  }
+
  private:
   // Wakes waitForInitialLoad() after the first config is fetched
   // (successfully or not).
   Semaphore initial_config_sem_;
+
+  std::vector<std::unique_ptr<ConfigSource>> sources_;
 
   folly::Synchronized<TextConfigUpdaterImpl> impl_;
   // NOTE: do not add anything here!

@@ -31,21 +31,6 @@ static std::string hash_contents(const std::string& str);
 static bool hashes_equal(const ServerConfig::ConfigMetadata& a,
                          const ServerConfig::ConfigMetadata& b);
 
-TextConfigUpdaterImpl::~TextConfigUpdaterImpl() {
-  // Tell the possible future callbacks that it's unsafe to use ConfigSources.
-  destroying_ = true;
-
-  // Make sure all the registered sources (which have a backpointer to us as
-  // the parent and can call back during destruction) are destructed before we
-  // start tearing down our members.
-  sources_.clear();
-}
-
-void TextConfigUpdaterImpl::registerSource(std::unique_ptr<ConfigSource> src) {
-  src->setAsyncCallback(this);
-  sources_.push_back(std::move(src));
-}
-
 int TextConfigUpdaterImpl::load(
     const std::string& location,
     std::unique_ptr<LogsConfig> alternative_logs_config,
