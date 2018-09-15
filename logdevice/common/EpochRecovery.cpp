@@ -108,14 +108,16 @@ bool EpochRecovery::onSealed(ShardID from,
     epoch_size_ = std::max(epoch_size_, epoch_size);
   }
 
+  uint64_t last_timestamp = 0;
+
   if (tail.hasValue() &&
       (!tail_record_from_sealed_.isValid() ||
        tail_record_from_sealed_.header.lsn < tail.value().header.lsn)) {
     ld_check(tail.value().containOffsetWithinEpoch());
+    last_timestamp = tail.value().header.timestamp;
     tail_record_from_sealed_ = std::move(tail.value());
   }
 
-  uint64_t last_timestamp = tail.hasValue() ? tail.value().header.timestamp : 0;
   last_timestamp_ = std::max(last_timestamp_, last_timestamp);
 
   last_timestamp_from_seals_ =
