@@ -42,17 +42,24 @@ static BufferedWriter::LogOptions get_log_options(logid_t log_id) {
   // checkShard() will fail and no appends will go through.
   opts.destroy_payloads = true;
 
-  auto* worker = Worker::onThisThread();
+  auto config = Worker::getConfig();
+  const auto& settings = Worker::settings();
 
-  const LogsConfig::LogGroupNode* group =
-      worker->getConfiguration()->getLogGroupByIDRaw(log_id);
+  const LogsConfig::LogGroupNode* group = config->getLogGroupByIDRaw(log_id);
+
+  if (!group) {
+    opts.time_trigger = settings.sequencer_batching_time_trigger;
+    opts.size_trigger = settings.sequencer_batching_size_trigger;
+    opts.compression = settings.sequencer_batching_compression;
+    return opts;
+  }
 
   opts.time_trigger = group->attrs().sequencerBatchingTimeTrigger().getValue(
-      worker->processor_->settings()->sequencer_batching_time_trigger);
+      settings.sequencer_batching_time_trigger);
   opts.size_trigger = group->attrs().sequencerBatchingSizeTrigger().getValue(
-      worker->processor_->settings()->sequencer_batching_size_trigger);
+      settings.sequencer_batching_size_trigger);
   opts.compression = group->attrs().sequencerBatchingCompression().getValue(
-      worker->processor_->settings()->sequencer_batching_compression);
+      settings.sequencer_batching_compression);
 
   return opts;
 }
@@ -141,11 +148,13 @@ static int prepare_batch(logid_t log_id,
 
 bool SequencerBatching::buffer(logid_t log_id,
                                std::unique_ptr<Appender>& appender_in) {
-  const LogsConfig::LogGroupNode* group =
-      Worker::getConfig()->getLogGroupByIDRaw(log_id);
+  auto config = Worker::getConfig();
+  const LogsConfig::LogGroupNode* group = config->getLogGroupByIDRaw(log_id);
 
-  bool enable_batching = group->attrs().sequencerBatching().getValue(
-      processor_->settings()->sequencer_batching);
+  const bool enable_batching = group
+      ? group->attrs().sequencerBatching().getValue(
+            processor_->settings()->sequencer_batching)
+      : processor_->settings()->sequencer_batching;
 
   if (shutting_down_.load() || !enable_batching ||
       MetaDataLog::isMetaDataLog(log_id)) {
@@ -221,19 +230,23 @@ bool SequencerBatching::buffer(logid_t log_id,
 }
 
 bool SequencerBatching::shouldPassthru(const Appender& appender) const {
+  auto config = Worker::getConfig();
   const LogsConfig::LogGroupNode* group =
-      Worker::getConfig()->getLogGroupByIDRaw(appender.getLogID());
+      config->getLogGroupByIDRaw(appender.getLogID());
 
-  const auto passthru_threshold =
-      group->attrs().sequencerBatchingPassthruThreshold().getValue(
-          processor_->settings()->sequencer_batching_passthru_threshold);
+  const auto passthru_threshold = group
+      ? group->attrs().sequencerBatchingPassthruThreshold().getValue(
+            processor_->settings()->sequencer_batching_passthru_threshold)
+      : processor_->settings()->sequencer_batching_passthru_threshold;
 
   if (passthru_threshold < 0) {
     return false;
   }
 
-  auto compression = group->attrs().sequencerBatchingCompression().getValue(
-      processor_->settings()->sequencer_batching_compression);
+  const auto compression = group
+      ? group->attrs().sequencerBatchingCompression().getValue(
+            processor_->settings()->sequencer_batching_compression)
+      : processor_->settings()->sequencer_batching_compression;
 
   bool compressing = compression != Compression::NONE;
 

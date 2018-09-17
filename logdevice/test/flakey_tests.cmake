@@ -14,6 +14,5 @@ set_tests_properties(
   "NodeSetTest.DeferReleasesUntilMetaDataRead"
   "Parametric/ReadPastGlobalLastReleasedTest.RecoveryStuck/(true,false,1-byteobject<01>)"
   "ReadingIntegrationTest/ReadingIntegrationTest.StatisticsCallback/false"
-  "SequencerIntegrationTest.LogRemovalStressTest"
   "SequencerIntegrationTest.MetaDataWritePreempted"
   PROPERTIES DISABLED TRUE)
