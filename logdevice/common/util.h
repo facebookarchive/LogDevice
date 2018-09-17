@@ -446,6 +446,11 @@ ToPtr checked_downcast(From* ptr) {
   return static_cast<ToPtr>(ptr);
 }
 
+template <typename ToPtr, typename From>
+ToPtr checked_downcast_or_null(From* ptr) {
+  return ptr == nullptr ? nullptr : checked_downcast<ToPtr>(ptr);
+}
+
 template <typename ToRef, typename From>
 ToRef checked_downcast(From& ref) {
   return *checked_downcast<typename std::add_pointer<ToRef>::type>(&ref);

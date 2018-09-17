@@ -15,6 +15,8 @@
 
 using namespace facebook::logdevice;
 using namespace facebook::logdevice::membership;
+using namespace facebook::logdevice::membership::MembershipVersion;
+using namespace facebook::logdevice::membership::MaintenanceID;
 
 namespace {
 
@@ -30,7 +32,7 @@ namespace {
 #define N9 ShardID(9, 1)
 #define N10 ShardID(10, 1)
 
-constexpr MaintenanceID DUMMY_MAINTENANCE{2333};
+constexpr MaintenanceID::Type DUMMY_MAINTENANCE{2333};
 
 class StorageMembershipTest : public ::testing::Test {
  public:
@@ -39,8 +41,8 @@ class StorageMembershipTest : public ::testing::Test {
                     uint64_t base_ver,
                     StorageStateTransition transition,
                     StateTransitionCondition conditions) {
-    StorageMembership::Update res{StorageMembershipVersion(base_ver)};
-    MaintenanceID maintenance =
+    StorageMembership::Update res{MembershipVersion::Type(base_ver)};
+    MaintenanceID::Type maintenance =
         (isProvisionShard(transition) ? MAINTENANCE_PROVISION
                                       : DUMMY_MAINTENANCE);
     int rv = res.addShard(shard, {transition, conditions, maintenance});
@@ -54,7 +56,7 @@ class StorageMembershipTest : public ::testing::Test {
                         StorageStateTransition transition,
                         StateTransitionCondition conditions) {
     ld_check(update != nullptr);
-    MaintenanceID maintenance =
+    MaintenanceID::Type maintenance =
         (isProvisionShard(transition) ? MAINTENANCE_PROVISION
                                       : DUMMY_MAINTENANCE);
     for (auto shard : shards) {
@@ -68,7 +70,7 @@ class StorageMembershipTest : public ::testing::Test {
                   uint64_t base_ver,
                   StorageStateTransition transition,
                   StateTransitionCondition conditions) {
-    StorageMembership::Update res{StorageMembershipVersion(base_ver)};
+    StorageMembership::Update res{MembershipVersion::Type(base_ver)};
     addShards(&res, shards, transition, conditions);
     return res;
   }
@@ -383,7 +385,7 @@ TEST_F(StorageMembershipTest, InvalidTransitions) {
 
   // try to apply an update with wrong base version
   auto wrong_base = enable_read;
-  wrong_base.base_version = StorageMembershipVersion{2};
+  wrong_base.base_version = MembershipVersion::Type{2};
   rv = m.applyUpdate(wrong_base, &m);
   ASSERT_EQ(-1, rv);
   ASSERT_EQ(E::VERSION_MISMATCH, err);
@@ -757,7 +759,7 @@ TEST_F(StorageMembershipTest, InvalidProvisionUpdate) {
   ASSERT_FALSE(invalid1.isValid());
   ShardState::Update invalid2{StorageStateTransition::PROVISION_METADATA_SHARD,
                               Condition::NONE,
-                              MaintenanceID(50)};
+                              MaintenanceID::Type(50)};
   ASSERT_FALSE(invalid2.isValid());
 
   StorageMembership m;

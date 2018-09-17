@@ -13,6 +13,7 @@
 #include "logdevice/common/debug.h"
 #include "logdevice/common/membership/StorageState.h"
 #include "logdevice/common/membership/StorageStateTransitions.h"
+#include "logdevice/common/membership/SequencerMembership.h"
 
 namespace facebook { namespace logdevice { namespace membership {
 
@@ -78,6 +79,23 @@ toString(StorageStateTransition transition) {
     GEN_STR(PROVISION_METADATA_SHARD)
 #undef GEN_STR
     case StorageStateTransition::Count:
+      return "invalid";
+  }
+  return "internal error";
+}
+
+inline constexpr folly::StringPiece
+toString(SequencerMembershipTransition transition) {
+  switch (transition) {
+#define GEN_STR(_s)                       \
+  case SequencerMembershipTransition::_s: \
+    return #_s;
+
+    GEN_STR(ADD_NODE)
+    GEN_STR(REMOVE_NODE)
+    GEN_STR(SET_WEIGHT)
+#undef GEN_STR
+    case SequencerMembershipTransition::Count:
       return "invalid";
   }
   return "internal error";

@@ -14,9 +14,9 @@
 #include <utility>
 
 #include "logdevice/common/ShardID.h"
+#include "logdevice/common/membership/Membership.h"
 #include "logdevice/common/membership/StorageState.h"
 #include "logdevice/common/membership/StorageStateTransitions.h"
-#include "logdevice/include/types.h"
 
 namespace facebook { namespace logdevice { namespace membership {
 
@@ -30,22 +30,6 @@ namespace facebook { namespace logdevice { namespace membership {
  * propagate them to all execution contexts.
  */
 
-// Storage membership state is versioned and any changes will cause a version
-// bumps to the membership.
-LOGDEVICE_STRONG_TYPEDEF(uint64_t, StorageMembershipVersion);
-
-// initial state of the membership, which is an empty set. The state is still
-// considered as valid but will never get published to subscribers
-static constexpr StorageMembershipVersion EMPTY_VERSION{0};
-// first non-empty valid membership version
-static constexpr StorageMembershipVersion MIN_VERSION{1};
-
-// used by identifying the active maintenance happening on the shard
-LOGDEVICE_STRONG_TYPEDEF(uint64_t, MaintenanceID);
-static constexpr MaintenanceID MAINTENANCE_NONE{0};
-// the very first maintenance operation that creates the new cluster
-static constexpr MaintenanceID MAINTENANCE_PROVISION{1};
-
 // Describe the per-shard state of a storage membership
 struct ShardState {
   StorageState storage_state;
@@ -56,11 +40,11 @@ struct ShardState {
 
   // identifier for the maintenance event that correspond to the
   // current shard state. Used by the maintenance state machine
-  MaintenanceID active_maintenance;
+  MaintenanceID::Type active_maintenance;
 
   // storage membership version since which the ShardState is
   // effective for the shard
-  StorageMembershipVersion since_version;
+  MembershipVersion::Type since_version;
 
   // Describe the update that can apply to the ShardState
   struct Update {
@@ -71,7 +55,7 @@ struct ShardState {
     StateTransitionCondition conditions;
 
     // identifier for the new maintenance requesting the state transition
-    MaintenanceID maintenance;
+    MaintenanceID::Type maintenance;
 
     bool isValid() const;
     std::string toString() const;
@@ -114,26 +98,26 @@ struct ShardState {
    */
   static int transition(const ShardState& current_state,
                         Update update,
-                        StorageMembershipVersion new_since_version,
+                        MembershipVersion::Type new_since_version,
                         ShardState* state_out);
 };
 
-class StorageMembership {
+class StorageMembership : public Membership {
  public:
-  class Update {
+  class Update : public Membership::Update {
    public:
     using ShardMap = std::map<ShardID, ShardState::Update>;
 
     // each storage membership update is strictly conditioned on a base
     // membership version of which the update can only be applied
-    StorageMembershipVersion base_version;
+    MembershipVersion::Type base_version;
 
     // a batch of per-shard updates
     ShardMap shard_updates;
 
-    explicit Update(StorageMembershipVersion base) : base_version(base) {}
+    explicit Update(MembershipVersion::Type base) : base_version(base) {}
 
-    Update(StorageMembershipVersion base,
+    Update(MembershipVersion::Type base,
            std::map<ShardID, ShardState::Update> updates)
         : base_version(base), shard_updates(std::move(updates)) {}
 
@@ -142,8 +126,12 @@ class StorageMembership {
       return res.second ? 0 : -1;
     }
 
-    bool isValid() const;
-    std::string toString() const;
+    bool isValid() const override;
+    MembershipType getType() const override {
+      return MembershipType::STORAGE;
+    }
+
+    std::string toString() const override;
   };
 
   /**
@@ -151,12 +139,12 @@ class StorageMembership {
    */
   explicit StorageMembership();
 
+  MembershipType getType() const override {
+    return MembershipType::STORAGE;
+  }
+
   /**
-   * Apply a StorageMembership::Update to the membership and output the new
-   * storage membership.
-   *
-   * @param update          update to apply, must be valid
-   * @new_membership_out    output parameter for the new storage membership
+   * See Membership::applyUpdate().
    *
    * @return           0 for success, and write the new storage membership to
    *                   *new_membership_out. -1 for failure, with err set to:
@@ -169,16 +157,16 @@ class StorageMembership {
    *                      EXISTS            requested to add shard which already
    *                                        exists in the membership
    */
-  int applyUpdate(Update update, StorageMembership* new_membership_out) const;
+  int applyUpdate(const Membership::Update& membership_update,
+                  Membership* new_membership_out) const override;
 
   /**
-   * Perform validation of the storage membership and return true if the
-   * membership is valid.
+   * See Membership::validate().
    *
    * Note: the function has a cost of O(n) where n is the number of shards
    * in the membership.
    */
-  bool validate() const;
+  bool validate() const override;
 
   /**
    * Get the shard state of a given storage shard.
@@ -219,10 +207,6 @@ class StorageMembership {
    */
   StorageSet getMetaDataStorageSet() const;
 
-  StorageMembershipVersion getVersion() const {
-    return version_;
-  }
-
   std::set<ShardID> getMetaDataShards() const {
     return metadata_shards_;
   }
@@ -246,7 +230,6 @@ class StorageMembership {
     }
   };
 
-  StorageMembershipVersion version_;
   std::unordered_map<node_index_t, NodeState> node_states_;
 
   // a separated index of storage shards whose MetaDataStorageState is not NONE
@@ -261,9 +244,6 @@ class StorageMembership {
   // remove the given _shard_ from the storage membership if the shard exists;
   // also update the metadata_shards_ index as needed.
   void eraseShardState(ShardID shard);
-
-  // run internal validate() checks in DEBUG mode
-  void dcheckConsistency() const;
 };
 
 }}} // namespace facebook::logdevice::membership

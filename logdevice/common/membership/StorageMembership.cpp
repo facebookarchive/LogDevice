@@ -1,10 +1,9 @@
 /**
- * Copyright (c) 2017-present, Facebook, Inc.
+ * Copyright (c) 2018-present, Facebook, Inc.
  * All rights reserved.
  *
  * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * LICENSE file in the root directory of this source tree.
  */
 #include "StorageMembership.h"
 
@@ -13,12 +12,14 @@
 
 #include "logdevice/common/debug.h"
 #include "logdevice/common/membership/utils.h"
+#include "logdevice/common/util.h"
 #include "logdevice/include/Err.h"
 
 namespace facebook { namespace logdevice { namespace membership {
 
 using facebook::logdevice::toString;
-
+using namespace MembershipVersion;
+using namespace MaintenanceID;
 
 std::string ShardState::Update::toString() const {
   return folly::sformat("[T:{}, C:{}, M:{}]",
@@ -84,7 +85,7 @@ std::string ShardState::toString() const {
 /* static */
 int ShardState::transition(const ShardState& current_state,
                            Update update,
-                           StorageMembershipVersion new_since_version,
+                           MembershipVersion::Type new_since_version,
                            ShardState* state_out) {
   if (!update.isValid()) {
     err = E::INVALID_PARAM;
@@ -379,9 +380,24 @@ void StorageMembership::eraseShardState(ShardID shard) {
   metadata_shards_.erase(shard);
 }
 
-int StorageMembership::applyUpdate(
-    Update update,
-    StorageMembership* new_membership_out) const {
+int StorageMembership::applyUpdate(const Membership::Update& membership_update,
+                                   Membership* new_membership_out) const {
+  if (membership_update.getType() != MembershipType::STORAGE ||
+      (new_membership_out != nullptr &&
+       new_membership_out->getType() != MembershipType::STORAGE)) {
+    RATELIMIT_ERROR(
+        std::chrono::seconds(10),
+        5,
+        "Expect update and/or out params of storage membership type!");
+    err = E::INVALID_PARAM;
+    return -1;
+  }
+
+  const StorageMembership::Update& update =
+      checked_downcast<const StorageMembership::Update&>(membership_update);
+  StorageMembership* new_storage_membership_out =
+      checked_downcast_or_null<StorageMembership*>(new_membership_out);
+
   if (!update.isValid()) {
     RATELIMIT_ERROR(std::chrono::seconds(10),
                     5,
@@ -405,7 +421,7 @@ int StorageMembership::applyUpdate(
   StorageMembership target_membership_state(*this);
   // bump the version in the target state
   target_membership_state.version_ =
-      StorageMembershipVersion(version_.val() + 1);
+      MembershipVersion::Type(version_.val() + 1);
 
   for (const auto& kv : update.shard_updates) {
     const ShardID shard = kv.first;
@@ -439,7 +455,6 @@ int StorageMembership::applyUpdate(
                              EMPTY_VERSION};
     } else {
       if (isAddingNewShard(shard_update.transition)) {
-        // shard exists but
         RATELIMIT_ERROR(
             std::chrono::seconds(10),
             5,
@@ -483,8 +498,8 @@ int StorageMembership::applyUpdate(
     }
   }
 
-  if (new_membership_out != nullptr) {
-    *new_membership_out = target_membership_state;
+  if (new_storage_membership_out != nullptr) {
+    *new_storage_membership_out = target_membership_state;
   }
 
   dcheckConsistency();
@@ -550,12 +565,6 @@ bool StorageMembership::validate() const {
   return true;
 }
 
-void StorageMembership::dcheckConsistency() const {
-#ifndef NDEBUG
-  ld_check(validate());
-#endif
-}
-
 bool StorageMembership::canWriteToShard(ShardID shard) const {
   auto result = getShardState(shard);
   return result.first ? canWriteTo(result.second.storage_state) : false;
@@ -580,7 +589,7 @@ bool StorageMembership::shouldReadMetaDataFromShard(ShardID shard) const {
                        : false);
 }
 
-StorageMembership::StorageMembership() : version_(EMPTY_VERSION) {
+StorageMembership::StorageMembership() : Membership(EMPTY_VERSION) {
   dcheckConsistency();
 }
 
