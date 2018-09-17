@@ -49,6 +49,13 @@ void ClientReadersFlowTracer::traceReaderFlow(size_t num_bytes_read,
        async_data = last_async_records_]() -> std::unique_ptr<TraceSample> {
     auto sample = std::make_unique<TraceSample>();
     sample->addNormalValue("log_id", std::to_string(owner_->log_id_.val()));
+
+    auto config = logger_->getConfiguration();
+    ld_check(config->logsConfig()->isLocal());
+    std::string log_group_name =
+        config->getLogGroupPath(owner_->log_id_).value_or("<UNKNOWN>");
+    sample->addNormalValue("log_group_name", log_group_name);
+
     sample->addNormalValue(
         "read_stream_id",
         std::to_string(owner_->deps_->getReadStreamID().val()));
