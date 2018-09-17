@@ -61,7 +61,7 @@ LogDevice cluster [locally](localcluster.md) on a single machine.
 
 This release contains minimal support for LogDevice cluster
 administration. You can use the supplied ldshell utility to [create
-and configure logs](logs.md). [LDQuery](ldquery.md) provides a
+and configure logs](log_configuration.md). [LDQuery](ldquery.md) provides a
 powerful SQL-based mechanism for querying the state of a LogDevice
 cluster and its various components, as well as several types of log
 metadata.
