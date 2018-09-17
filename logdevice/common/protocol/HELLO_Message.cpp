@@ -286,7 +286,8 @@ sendReply(ACK_Header& ackhdr,
                   E::PROTONOSUPPORT,
                   E::ACCESS,
                   E::INVALID_CLUSTER,
-                  E::INTERNAL}));
+                  E::INTERNAL,
+                  E::DESTINATION_MISMATCH}));
     err = ackhdr.status;
     return Message::Disposition::ERROR;
   }

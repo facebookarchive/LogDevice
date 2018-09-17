@@ -38,15 +38,17 @@ struct ACK_Header {
   // Set to 0 if status is E::PROTONOSUPPORT.
   uint16_t proto;
 
-  // OK if connection succeeded
-  // BADMSG          if HELLO message had an invalid format
-  // PROTONOSUPPORT  if this LogDevice server does not support protocol
-  //                 version number in HELLO
-  // ACCESS          if credentials presented in HELLO were rejected
-  // INVALID_CLUSTER if this LogDevice cluster name does not match the clients
-  //                 cluster name.
-  // INTERNAL        if some internal error in the recipient is preventing it
-  //                 from accepting the connection.
+  // OK                   If connection succeeded.
+  // BADMSG               If HELLO message had an invalid format.
+  // PROTONOSUPPORT       If this LogDevice server does not support the protocol
+  //                      version number specified in the HELLO mesage.
+  // ACCESS               If credentials presented in HELLO were rejected.
+  // INVALID_CLUSTER      If this LogDevice cluster name does not match the
+  //                      cluster name as specified by the client.
+  // DESTINATION_MISMATCH If the NodeID of this node does not match the NodeID
+  //                      specified by the client.
+  // INTERNAL             If some internal error in the recipient is preventing
+  //                      it from accepting the connection.
   Status status;
 } __attribute__((__packed__));
 
