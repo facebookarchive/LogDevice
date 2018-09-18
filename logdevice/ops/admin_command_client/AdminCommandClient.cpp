@@ -35,15 +35,15 @@ class AdminClientConnection
   AdminClientConnection(EventBase* evb,
                         AdminCommandClient::RequestResponse& rr,
                         std::function<void()> done_callback,
-                        std::chrono::milliseconds timeout)
+                        std::chrono::milliseconds timeout,
+                        std::shared_ptr<folly::SSLContext> context)
       : socket_(),
         request_response_(rr),
         done_callback_(done_callback),
         timeout_(timeout) {
     if (request_response_.conntype_ ==
         AdminCommandClient::ConnectionType::ENCRYPTED) {
-      auto sslContext = std::make_shared<SSLContext>();
-      socket_ = AsyncSSLSocket::newSocket(sslContext, evb);
+      socket_ = AsyncSSLSocket::newSocket(context, evb);
     } else {
       socket_ = AsyncSocket::newSocket(evb);
     }
@@ -181,6 +181,8 @@ class AdminClientConnection
             response.size(),
             d1,
             d2);
+
+    result_.clear();
   }
 
   ~AdminClientConnection() override {
@@ -223,7 +225,7 @@ AdminCommandClient::semifuture_send(
       auto timeout =
           AsyncTimeout::make(event_base, [&]() noexcept { timed_out = true; });
       timeout->scheduleTimeout(command_timeout);
-
+      auto context = std::make_shared<folly::SSLContext>();
       for (size_t i = 0; i < rr.size(); ++i) {
         auto connection = std::make_unique<AdminClientConnection>(
             &event_base,
@@ -232,7 +234,8 @@ AdminCommandClient::semifuture_send(
               ++connections_done;
               promises[i].setValue(&rr[i]);
             },
-            command_timeout);
+            command_timeout,
+            context);
         connection->connect();
         connections.push_back(std::move(connection));
       }
