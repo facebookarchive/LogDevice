@@ -96,6 +96,14 @@ class AdminClientConnection
   void readDataAvailable(size_t length) noexcept override {
     result_.back().resize(length);
 
+    if (result_.size() >= 8) {
+      // fold all buffers together to reclaim some memory
+      for (int i = 1; i < result_.size(); i++) {
+        result_[0] += result_[i];
+      }
+      result_.resize(1);
+    }
+
     // Concatenating the end of the buffer if the last chunk is less than
     // the end marker
     std::string eof("END\r\n");
