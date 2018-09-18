@@ -46,22 +46,22 @@ space. Here are some examples of workloads supported by LogDevice:
 ## Getting started
 
 To learn more about LogDevice start with an explanation of its
-[concepts and architecture](Concepts.html) and an overview of its
-[API](API_Intro.html).
+[concepts and architecture](concepts.md) and an overview of its
+[API](api.md).
 
-The [installation guide](Installation.html) explains how to obtain the
+The [installation guide](installation.md) explains how to obtain the
 source code and build LogDevice components including the logdeviced
 server, the client library, and the administrative shell utility called
 `ldshell`.
 
 Once you have built LogDevice you can try it out by running a
-LogDevice cluster [locally](LocalCluster.html) on a single machine. 
+LogDevice cluster [locally](localcluster.md) on a single machine. 
 
 ## Administration
 
 This release contains minimal support for LogDevice cluster
 administration. You can use the supplied ldshell utility to [create
-and configure logs](Logs.html). [LDQuery](LDQuery.html) provides a
+and configure logs](log_configuration.md). [LDQuery](ldquery.md) provides a
 powerful SQL-based mechanism for querying the state of a LogDevice
 cluster and its various components, as well as several types of log
 metadata.
