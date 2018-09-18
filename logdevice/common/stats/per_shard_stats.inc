@@ -63,6 +63,10 @@ STAT_DEFINE(write_stall_microsec, SUM)
 STAT_DEFINE(num_memtable_flush_completed, SUM)
 // Total number of metadata memtable flushes for a shard.
 STAT_DEFINE(num_metadata_memtable_flush_completed, SUM)
+// Total number of memtables created on a shard.
+STAT_DEFINE(num_memtables, SUM)
+// Cumulative sum of age for all memtables created.
+STAT_DEFINE(cumulative_memtable_age_ms, SUM)
 
 /*
  * The following stats will not be reset by Stats::reset() and the 'reset'

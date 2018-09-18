@@ -34,6 +34,7 @@ struct PerShardHistograms : public PerShardHistogramBundle {
         {"store_latency_rebuilding", &store_latency_rebuilding},
         {"rocks_wal", &rocks_wal},
         {"rocks_memtable", &rocks_memtable},
+        {"rocks_memtable_age", &rocks_memtable_age},
         {"rocks_delay", &rocks_delay},
         {"rocks_scheduling", &rocks_scheduling},
         {"rocks_pre_and_post", &rocks_pre_and_post},
@@ -91,6 +92,9 @@ struct PerShardHistograms : public PerShardHistogramBundle {
 
   // Time spent by RocksDB inserting into memtables.
   latency_histogram_t rocks_memtable;
+
+  // Age of rocksDB memtables.
+  no_unit_histogram_t rocks_memtable_age;
 
   // Time spent by RocksDB delaying writes.
   latency_histogram_t rocks_delay;

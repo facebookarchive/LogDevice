@@ -920,6 +920,10 @@ void LogRebuilding::onAllStoresReceived(
   rds->status = RecordDurabilityState::Status::STORES_NON_DURABLE;
   // Destroys RecordRebuildingStore state machine
   rds->rr.reset();
+  SteadyTimestamp time_to_store(SteadyTimestamp::now() - rds->start_time_);
+  STAT_ADD(getStats(),
+           rebuilding_donor_stored_ms,
+           time_to_store.toMilliseconds().count());
 
   const size_t sz = recordDurabilityState_[lsn]->size;
   cur_batch_total_size_ += sz;
@@ -1035,6 +1039,11 @@ void LogRebuilding::startRecordRebuildingAmends() {
     rds->rras.reset();
     ld_check(rds->rra);
     rds->status = RecordDurabilityState::Status::AMENDS_NON_DURABLE;
+    SteadyTimestamp time_to_amend(SteadyTimestamp::now() - rds->start_time_);
+    STAT_ADD(getStats(),
+             rebuilding_donor_amended_ms,
+             time_to_amend.toMilliseconds().count());
+
     ld_check(numRecordRebuildingPendingAmend_ > 0);
     numRecordRebuildingPendingAmend_--;
     numRecordRebuildingAmendsInFlight_++;
@@ -1111,11 +1120,18 @@ void LogRebuilding::updateFlushStatus(RecordDurabilityState* rds) {
   ld_check(rds != nullptr);
   ld_check(rds->flushTokenMap);
   if (rds->flushTokenMap->empty()) {
+    SteadyTimestamp time_to_persist(SteadyTimestamp::now() - rds->start_time_);
     switch (rds->status) {
       case RecordDurabilityState::Status::STORES_NON_DURABLE:
+        STAT_ADD(getStats(),
+                 rebuilding_donor_store_persisted_ms,
+                 time_to_persist.toMilliseconds().count());
         rds->status = RecordDurabilityState::Status::STORES_DURABLE;
         break;
       case RecordDurabilityState::Status::AMENDS_NON_DURABLE:
+        STAT_ADD(getStats(),
+                 rebuilding_donor_amend_persisted_ms,
+                 time_to_persist.toMilliseconds().count());
         rds->status = RecordDurabilityState::Status::AMENDS_DURABLE;
         break;
       default:

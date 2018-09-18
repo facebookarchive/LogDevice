@@ -130,7 +130,8 @@ namespace facebook { namespace logdevice {
 // machine only when we are ready to send amends.
 struct RecordDurabilityState {
  public:
-  explicit RecordDurabilityState(lsn_t l) : lsn(l) {}
+  explicit RecordDurabilityState(lsn_t l)
+      : lsn(l), start_time_(SteadyTimestamp::now()) {}
 
   // Status defines the durability status of the stores/amends sent out
   // for a single record.
@@ -166,6 +167,8 @@ struct RecordDurabilityState {
   std::unique_ptr<FlushTokenMap> flushTokenMap;
   folly::IntrusiveListHook hook;
   Status status{Status::UNKNOWN};
+  // Used to track how long each stage record rebuilding took.
+  SteadyTimestamp start_time_;
 };
 
 class LogRebuilding : public LogRebuildingInterface,

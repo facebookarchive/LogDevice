@@ -7,6 +7,8 @@
  */
 #include "logdevice/server/locallogstore/RocksDBMemTableRep.h"
 
+#include "logdevice/common/stats/PerShardHistograms.h"
+
 namespace facebook { namespace logdevice {
 
 RocksDBMemTableRep::RocksDBMemTableRep(RocksDBMemTableRepFactory& factory,
@@ -54,6 +56,8 @@ void RocksDBMemTableRepFactory::registerMemTableRep(RocksDBMemTableRep& mtr) {
       active_memtables_.push_back(mtr);
       oldest_dirtied_time_.storeMin(mtr.first_dirtied_time_);
       mtr.dirty_.store(true, std::memory_order_release);
+      PER_SHARD_STAT_INCR(
+          store_->getStatsHolder(), num_memtables, store_->getShardIdx());
       ld_debug("Registering MemTableRep(%p). ID:%ju",
                &mtr,
                (uintmax_t)mtr.flush_token_);
@@ -79,6 +83,16 @@ void RocksDBMemTableRepFactory::unregisterMemTableRep(RocksDBMemTableRep& mtr) {
   bool window_slid = &active_memtables_.front() == &mtr;
   mtr.links_.unlink();
 
+  ld_check(mtr.first_dirtied_time_ != SteadyTimestamp::max());
+  SteadyTimestamp age(SteadyTimestamp::now() - mtr.first_dirtied_time_);
+  PER_SHARD_STAT_ADD(store_->getStatsHolder(),
+                     cumulative_memtable_age_ms,
+                     store_->getShardIdx(),
+                     age.toMilliseconds().count());
+  PER_SHARD_HISTOGRAM_ADD(store_->getStatsHolder(),
+                          rocks_memtable_age,
+                          store_->getShardIdx(),
+                          age.toMilliseconds().count());
   if (window_slid) {
     FlushToken now_flushed_up_through;
 
