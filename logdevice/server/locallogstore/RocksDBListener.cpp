@@ -26,7 +26,10 @@ static const char* BYTES_WITH_RETENTION_PREFIX = "ld.bytes_with_retention.";
 void RocksDBListener::OnFlushCompleted(
     rocksdb::DB* /*db*/,
     const rocksdb::FlushJobInfo& flush_job_info) {
+  ld_check(stats_);
+  PER_SHARD_STAT_INCR(stats_, num_memtable_flush_completed, shard_);
   if (!isDataCF(flush_job_info.cf_name)) {
+    PER_SHARD_STAT_INCR(stats_, num_metadata_memtable_flush_completed, shard_);
     return;
   }
   ld_check(stats_);

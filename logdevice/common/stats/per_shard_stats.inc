@@ -59,6 +59,10 @@ STAT_DEFINE(active_memtables_window_move, SUM)
 
 // For how long this shard was stalling low-pri writes.
 STAT_DEFINE(write_stall_microsec, SUM)
+// Total number of flushes per shard.
+STAT_DEFINE(num_memtable_flush_completed, SUM)
+// Total number of metadata memtable flushes for a shard.
+STAT_DEFINE(num_metadata_memtable_flush_completed, SUM)
 
 /*
  * The following stats will not be reset by Stats::reset() and the 'reset'
