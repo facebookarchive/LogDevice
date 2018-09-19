@@ -29,6 +29,28 @@ ClientReadersFlowTracer::ClientReadersFlowTracer(
       owner_(owner) {
   timer_ = std::make_unique<LibeventTimer>(
       Worker::onThisThread()->getEventBase(), [this] { onTimerTriggered(); });
+
+  // obtain log group name
+  log_group_name_ = "<WAITING LOGSCONFIG>";
+
+  auto config = logger_->getConfiguration();
+  auto get_stream_by_id = owner_->deps_->getStreamByIDCallback();
+  auto rsid = owner_->getID();
+  logger_->getConfiguration()->getLogGroupByIDAsync(
+      owner_->log_id_,
+      [rsid,
+       get_stream_by_id](std::shared_ptr<LogsConfig::LogGroupNode> log_config) {
+        auto ptr = get_stream_by_id(rsid);
+        if (ptr && ptr->readers_flow_tracer_) {
+          if (log_config) {
+            ptr->readers_flow_tracer_->log_group_name_ = log_config->name();
+          } else {
+            ptr->readers_flow_tracer_->log_group_name_ = "<NO CONFIG>";
+          }
+        }
+      });
+
+  // update settings
   onSettingsUpdated();
 }
 
@@ -50,11 +72,7 @@ void ClientReadersFlowTracer::traceReaderFlow(size_t num_bytes_read,
     auto sample = std::make_unique<TraceSample>();
     sample->addNormalValue("log_id", std::to_string(owner_->log_id_.val()));
 
-    auto config = logger_->getConfiguration();
-    ld_check(config->logsConfig()->isLocal());
-    std::string log_group_name =
-        config->getLogGroupPath(owner_->log_id_).value_or("<UNKNOWN>");
-    sample->addNormalValue("log_group_name", log_group_name);
+    sample->addNormalValue("log_group_name", log_group_name_);
 
     sample->addNormalValue(
         "read_stream_id",

@@ -64,6 +64,7 @@ class ClientReadersFlowTracer
                           lsn_t tail_lsn_approx,
                           LogTailAttributes* attrs);
 
+  std::string log_group_name_;
   UpdateableSettings<Settings> settings_;
   std::chrono::milliseconds tracer_period_;
 
