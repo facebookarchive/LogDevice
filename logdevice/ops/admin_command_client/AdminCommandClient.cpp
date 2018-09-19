@@ -216,7 +216,8 @@ class AdminClientConnection
 std::vector<folly::SemiFuture<AdminCommandClient::RequestResponse*>>
 AdminCommandClient::semifuture_send(
     std::vector<AdminCommandClient::RequestResponse>& rr,
-    std::chrono::milliseconds command_timeout) {
+    std::chrono::milliseconds command_timeout,
+    std::chrono::milliseconds connect_timeout) {
   std::vector<folly::Promise<AdminCommandClient::RequestResponse*>> proms(
       rr.size());
   std::vector<folly::SemiFuture<AdminCommandClient::RequestResponse*>> futures;
@@ -225,7 +226,10 @@ AdminCommandClient::semifuture_send(
     futures.emplace_back(p.getSemiFuture());
   }
   executor_ = std::make_unique<folly::CPUThreadPoolExecutor>(1);
-  executor_->add([promises = std::move(proms), command_timeout, &rr]() mutable {
+  executor_->add([promises = std::move(proms),
+                  command_timeout,
+                  connect_timeout,
+                  &rr]() mutable {
     bool timed_out = false;
     size_t connections_done = 0;
     size_t connections_size;
@@ -247,7 +251,7 @@ AdminCommandClient::semifuture_send(
               ++connections_done;
               promises[i].setValue(&rr[i]);
             },
-            command_timeout,
+            connect_timeout,
             context);
         connection->connect();
         connections.push_back(std::move(connection));
@@ -281,8 +285,10 @@ AdminCommandClient::semifuture_send(
 
 void AdminCommandClient::send(
     std::vector<AdminCommandClient::RequestResponse>& rr,
-    std::chrono::milliseconds command_timeout) {
-  collectAllSemiFuture(semifuture_send(rr, command_timeout)).wait();
+    std::chrono::milliseconds command_timeout,
+    std::chrono::milliseconds connect_timeout) {
+  collectAllSemiFuture(semifuture_send(rr, command_timeout, connect_timeout))
+      .wait();
   terminate();
 }
 

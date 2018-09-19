@@ -44,11 +44,16 @@ class AdminCommandClient {
 
   typedef std::vector<AdminCommandClient::RequestResponse> RequestResponses;
 
-  void send(RequestResponses& rr, std::chrono::milliseconds command_timeout);
+  void send(RequestResponses& rr,
+            std::chrono::milliseconds command_timeout,
+            std::chrono::milliseconds connect_timeout =
+                std::chrono::milliseconds(5000));
 
   std::vector<folly::SemiFuture<RequestResponse*>>
   semifuture_send(std::vector<RequestResponse>& rr,
-                  std::chrono::milliseconds command_timeout);
+                  std::chrono::milliseconds command_timeout,
+                  std::chrono::milliseconds connect_timeout =
+                      std::chrono::milliseconds(5000));
 
   void terminate() {
     executor_.reset();
