@@ -40,6 +40,9 @@ using LocalLogStoreReader::ReadPointer;
 #define N4 ShardID(4, 0)
 #define N5 ShardID(5, 0)
 
+#define CONFIG_PATH \
+  verifyFileExists("logdevice/server/test/configs/local_scd_test.conf")
+
 namespace {
 
 struct RecordDescriptor {
@@ -1276,8 +1279,7 @@ TEST_P(LocalLogStoreReaderTest, LocalScdSimple) {
                             {5, 1, {N5, N0, N4, N2, N3}, 0},
                             {6, 1, {N0, N3, N2, N4, N1}, 0}});
 
-  auto config = Configuration::fromJsonFile(
-      "logdevice/server/test/configs/local_scd_test.conf");
+  auto config = Configuration::fromJsonFile(CONFIG_PATH);
 
   auto filter =
       std::make_shared<MockLocalLogStoreReadFilter>(config->serverConfig());
@@ -1311,8 +1313,7 @@ TEST_P(LocalLogStoreReaderTest, LocalScdNotLocalNode) {
                             {5, 1, {N5, N0, N4, N2, N3}, 0},
                             {6, 1, {N0, N3, N2, N4, N1}, 0}});
 
-  auto config = Configuration::fromJsonFile(
-      "logdevice/server/test/configs/local_scd_test.conf");
+  auto config = Configuration::fromJsonFile(CONFIG_PATH);
 
   auto filter =
       std::make_shared<MockLocalLogStoreReadFilter>(config->serverConfig());
@@ -1345,8 +1346,7 @@ TEST_P(LocalLogStoreReaderTest, LocalScdSimpleOneKnownDown) {
                             {5, 1, {N5, N0, N4, N2, N3}, 0},
                             {6, 1, {N0, N3, N2, N4, N1}, 0}});
 
-  auto config = Configuration::fromJsonFile(
-      "logdevice/server/test/configs/local_scd_test.conf");
+  auto config = Configuration::fromJsonFile(CONFIG_PATH);
 
   auto filter =
       std::make_shared<MockLocalLogStoreReadFilter>(config->serverConfig());
@@ -1383,8 +1383,7 @@ TEST_P(LocalLogStoreReaderTest, LocalScdOurselvesInKnownDown) {
                             {5, 1, {N5, N0, N4, N2, N3}, 0},
                             {6, 1, {N0, N3, N2, N4, N1}, 0}});
 
-  auto config = Configuration::fromJsonFile(
-      "logdevice/server/test/configs/local_scd_test.conf");
+  auto config = Configuration::fromJsonFile(CONFIG_PATH);
 
   auto filter =
       std::make_shared<MockLocalLogStoreReadFilter>(config->serverConfig());
@@ -1421,8 +1420,7 @@ TEST_P(LocalLogStoreReaderTest, LocalScdNoLocalNodes) {
                             {5, 1, {N5, N0, N4, N2, N3}, 0},
                             {6, 1, {N0, N3, N2, N4, N1}, 0}});
 
-  auto config = Configuration::fromJsonFile(
-      "logdevice/server/test/configs/local_scd_test.conf");
+  auto config = Configuration::fromJsonFile(CONFIG_PATH);
 
   auto filter =
       std::make_shared<MockLocalLogStoreReadFilter>(config->serverConfig());
@@ -1456,8 +1454,7 @@ TEST_P(LocalLogStoreReaderTest, LocalScdLocalNodesAreDown) {
                             {5, 1, {N5, N0, N4, N2, N3}, 0},
                             {6, 1, {N0, N3, N2, N4, N1}, 0}});
 
-  auto config = Configuration::fromJsonFile(
-      "logdevice/server/test/configs/local_scd_test.conf");
+  auto config = Configuration::fromJsonFile(CONFIG_PATH);
 
   auto filter =
       std::make_shared<MockLocalLogStoreReadFilter>(config->serverConfig());
@@ -1493,8 +1490,7 @@ TEST_P(LocalLogStoreReaderTest, DrainedRecords) {
        {5, 1, {N5, N1, N4, N2, N3}, LocalLogStoreRecordFormat::FLAG_DRAINED},
        {6, 1, {N5, N3, N2, N4, N1}, LocalLogStoreRecordFormat::FLAG_DRAINED}});
 
-  auto config = Configuration::fromJsonFile(
-      "logdevice/server/test/configs/local_scd_test.conf");
+  auto config = Configuration::fromJsonFile(CONFIG_PATH);
 
   auto filter =
       std::make_shared<MockLocalLogStoreReadFilter>(config->serverConfig());
@@ -1624,8 +1620,7 @@ TEST_P(LocalLogStoreReaderTest, ReadLimitAtEndOfWindow) {
                    //  -----  window end  -----
                    {5, 1, {N2, N1}, 0, 10000}});
 
-  auto config = Configuration::fromJsonFile(
-      "logdevice/server/test/configs/local_scd_test.conf");
+  auto config = Configuration::fromJsonFile(CONFIG_PATH);
   auto filter =
       std::make_shared<MockLocalLogStoreReadFilter>(config->serverConfig());
   filter->scd_my_shard_id_ = N1;

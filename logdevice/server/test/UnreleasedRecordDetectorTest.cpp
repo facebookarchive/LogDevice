@@ -62,8 +62,9 @@ static constexpr int STORAGE_TASK_QUEUE_SIZE = 128;
 static constexpr int NUM_WORKERS = 8;
 static constexpr int NUM_INFLIGHT_STORAGE_TASKS = 16;
 
-static constexpr const char* CONFIG_PATH =
-    "logdevice/server/test/configs/unreleased_record_detector_test.conf";
+#define CONFIG_PATH \
+  verifyFileExists( \
+      "logdevice/server/test/configs/unreleased_record_detector_test.conf")
 static constexpr const char* TEMP_DIR_PREFIX = "UnreleasedRecordDetectorTest";
 
 class TemporaryRocksDBStoreExt final : public TemporaryRocksDBStore {
