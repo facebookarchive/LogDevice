@@ -386,17 +386,23 @@ void CommandListener::processCommand(struct bufferevent* bev,
     return;
   }
 
+  struct evbuffer* tmp = LD_EV(evbuffer_new());
+  command->setOutput(tmp);
   command->run();
 
-  LD_EV(evbuffer_add_printf)(output, "END\r\n");
+  LD_EV(evbuffer_add_printf)(tmp, "END\r\n");
+  size_t output_size = LD_EV(evbuffer_get_length)(tmp);
+  LD_EV(evbuffer_add_buffer(output, tmp));
+  LD_EV(evbuffer_free(tmp));
 
   auto duration = std::chrono::steady_clock::now() - start_time;
   ld_log(duration > std::chrono::milliseconds(50) ? dbg::Level::INFO
                                                   : dbg::Level::DEBUG,
-         "Admin command from %s took %.3f seconds: %s",
+         "Admin command from %s took %.3f seconds to output %lu bytes: %s",
          state->address_.toString().c_str(),
          std::chrono::duration_cast<std::chrono::duration<double>>(duration)
              .count(),
+         output_size,
          sanitize_string(command_line).c_str());
 }
 
