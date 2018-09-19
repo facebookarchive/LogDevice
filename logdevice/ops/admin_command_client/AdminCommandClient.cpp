@@ -94,6 +94,7 @@ class AdminClientConnection
   }
 
   void readDataAvailable(size_t length) noexcept override {
+    ld_check(length > 0);
     result_.back().resize(length);
 
     if (result_.size() >= 8) {
@@ -166,13 +167,14 @@ class AdminClientConnection
     }
 
     size_t size = 0;
-    for (auto& s : result_) {
+    for (auto const& s : result_) {
       size += s.size();
     }
     response.reserve(size);
-    for (auto& s : result_) {
+    for (auto const& s : result_) {
       response += s;
     }
+
     socket_->setReadCB(nullptr);
     done_callback_();
     steady_clock::time_point tend = steady_clock::now();
@@ -186,7 +188,7 @@ class AdminClientConnection
             "fetching data took %.1fs, preparing response took %.1fs",
             request_response_.sockaddr.describe().c_str(),
             result_.size(),
-            response.size(),
+            size,
             d1,
             d2);
 
@@ -194,6 +196,9 @@ class AdminClientConnection
   }
 
   ~AdminClientConnection() override {
+    // Deregister socket callback to avoid readEOF to be invoked
+    // when we close the socket.
+    socket_->setReadCB(nullptr);
     socket_->close();
   }
 
