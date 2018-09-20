@@ -2495,9 +2495,11 @@ static lsn_t writeToEventlog(Client& client, EventLogRecord& event) {
   Payload payload(buf, size);
 
   lsn_t lsn = LSN_INVALID;
+  auto clientImpl = dynamic_cast<ClientImpl*>(&client);
+  clientImpl->allowWriteInternalLog();
   rv = wait_until("writes to the event log succeed",
                   [&]() {
-                    lsn = client.appendSync(event_log_id, payload);
+                    lsn = clientImpl->appendSync(event_log_id, payload);
                     return lsn != LSN_INVALID;
                   },
                   deadline);

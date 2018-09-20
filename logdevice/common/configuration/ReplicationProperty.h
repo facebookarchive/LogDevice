@@ -223,7 +223,11 @@ class ReplicationProperty {
   // E.g. {{RACK, 2}, {NODE, 3}} => RACK,
   //      {{NODE, 1}} => NODE
   NodeLocationScope getBiggestReplicationScope() const {
-    return getDistinctReplicationFactors()[0].first;
+    auto replicationFactors = getDistinctReplicationFactors();
+    if (replicationFactors.size() == 0) {
+      return NodeLocationScope::NODE;
+    }
+    return replicationFactors[0].first;
   }
 
   // Returns the "minimum" of the two replication properties. More precisely,

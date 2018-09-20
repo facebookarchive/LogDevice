@@ -389,6 +389,11 @@ class ClientImpl : public Client,
   // prevent them from accidentally writing to metadata logs.
   void allowWriteMetaDataLog();
 
+  // Once called, the ClientImpl object can write to internal log. Noted
+  // that this function is not exposed to logdevice users in (Client.h) to
+  // prevent them from accidentally writing to internal logs.
+  void allowWriteInternalLog();
+
   size_t getMaxPayloadSize() noexcept override;
 
   // return a raw pointer to the epoch metadata cache
@@ -492,6 +497,9 @@ class ClientImpl : public Client,
 
   // see allowWriteMetaDataLog() above
   bool allow_write_metadata_log_{false};
+
+  // see allowWriteInternalLog() above
+  bool allow_write_internal_log_{false};
 
   std::list<UpdateableServerConfig::HookHandle> server_config_hook_handles_;
 

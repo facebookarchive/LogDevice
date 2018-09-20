@@ -2147,9 +2147,11 @@ bool ClientImpl::checkAppend(logid_t logid,
     return false;
   }
 
-  // disallow writing to metadata log unless allow_write_metadata_log_ is
-  // explicitly set
-  if (!allow_write_metadata_log_ && MetaDataLog::isMetaDataLog(logid)) {
+  // disallow writing to metadata or internal log unless the appropriate
+  // flag is set
+  if ((!allow_write_metadata_log_ && MetaDataLog::isMetaDataLog(logid)) ||
+      (!allow_write_internal_log_ &&
+       configuration::InternalLogs::isInternal(logid))) {
     err = E::INVALID_PARAM;
     return false;
   }
@@ -2164,6 +2166,10 @@ bool ClientImpl::checkAppend(logid_t logid,
 
 void ClientImpl::allowWriteMetaDataLog() {
   allow_write_metadata_log_ = true;
+}
+
+void ClientImpl::allowWriteInternalLog() {
+  allow_write_internal_log_ = true;
 }
 
 ClientSettings& ClientImpl::settings() {
