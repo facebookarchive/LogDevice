@@ -767,6 +767,9 @@ TEST_F(ConfigIntegrationTest, ConfigSyncAfterReconnect) {
   // To make sure only 1 connection is maintained to a node, which ensures
   // only 1 CONFIG_CHANGED message is received
   ASSERT_EQ(0, client_settings->set("num-workers", "1"));
+  // Creating a client through instantiating an instance of ClientImpl directly
+  // makes it ignore the settings in the config, so we have to set this here
+  ASSERT_EQ(0, client_settings->set("enable-logsconfig-manager", "false"));
   std::shared_ptr<Client> client = std::make_shared<ClientImpl>(
       client_config->get()->serverConfig()->getClusterName(),
       client_config,
@@ -863,6 +866,9 @@ TEST_F(ConfigIntegrationTest, ExpandWithoutVersionUpdate) {
 
   std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
   ASSERT_EQ(0, client_settings->set("enable-config-synchronization", true));
+  // Creating a client through instantiating an instance of ClientImpl directly
+  // makes it ignore the settings in the config, so we have to set this here
+  ASSERT_EQ(0, client_settings->set("enable-logsconfig-manager", "false"));
   std::shared_ptr<Client> client = std::make_shared<ClientImpl>(
       client_config->get()->serverConfig()->getClusterName(),
       client_config,
@@ -919,13 +925,17 @@ TEST_F(ConfigIntegrationTest, MetaDataLog) {
   client_config->updateableServerConfig()->update(
       cluster_config->serverConfig());
   client_config->updateableLogsConfig()->update(logs_config);
+  // Creating a client through instantiating an instance of ClientImpl directly
+  // makes it ignore the settings in the config, so we have to set this here
+  std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
+  ASSERT_EQ(0, client_settings->set("enable-logsconfig-manager", "false"));
   std::shared_ptr<Client> client = std::make_shared<ClientImpl>(
       client_config->get()->serverConfig()->getClusterName(),
       client_config,
       "",
       "",
       this->testTimeout(),
-      std::unique_ptr<ClientSettings>(),
+      std::move(client_settings),
       load_client_plugin());
   ASSERT_TRUE((bool)client);
   auto client_impl = static_cast<ClientImpl*>(client.get());
