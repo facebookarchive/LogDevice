@@ -7,17 +7,18 @@
  */
 #include "logdevice/common/ClientReadersFlowTracer.h"
 
+#include "logdevice/common/client_read_stream/ClientReadStream.h"
+#include "logdevice/common/client_read_stream/ClientReadStreamScd.h"
 #include "logdevice/common/DataRecordOwnsPayload.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/GetSeqStateRequest.h"
 #include "logdevice/common/LibeventTimer.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Request.h"
+#include "logdevice/common/ShardAuthoritativeStatusMap.h"
+#include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/SyncSequencerRequest.h"
 #include "logdevice/common/Worker.h"
-#include "logdevice/common/client_read_stream/ClientReadStream.h"
-#include "logdevice/common/client_read_stream/ClientReadStreamScd.h"
-#include "logdevice/common/debug.h"
-#include "logdevice/common/stats/Stats.h"
 
 namespace facebook { namespace logdevice {
 
@@ -63,6 +64,7 @@ void ClientReadersFlowTracer::traceReaderFlow(size_t num_bytes_read,
                                               size_t num_records_read) {
   auto time_stuck = std::max(msec_since(last_time_stuck_), 0l);
   auto time_lagging = std::max(msec_since(last_time_lagging_), 0l);
+  auto shard_status_version = owner_->deps_->getShardStatus().getVersion();
 
   auto sample_builder =
       [=,
@@ -116,6 +118,9 @@ void ClientReadersFlowTracer::traceReaderFlow(size_t num_bytes_read,
     sample->addIntValue("time_lagging", time_lagging);
     sample->addIntValue("reading_speed_bytes", reading_speed_bytes);
     sample->addIntValue("reading_speed_records", reading_speed_records);
+    sample->addNormalValue("sender_state", owner_->senderStatePretty());
+    sample->addNormalValue("grace_counters", owner_->graceCountersPretty());
+    sample->addIntValue("shard_status_version", shard_status_version);
     return sample;
   };
   last_num_bytes_read_ = num_bytes_read;

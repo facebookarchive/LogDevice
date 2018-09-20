@@ -742,6 +742,13 @@ class ClientReadStream : boost::noncopyable {
   std::string unavailableShardsPretty() const;
 
   /**
+   * @return Concise description of grace counters. Mostly used to detect
+   * whether we have shards that appear to be healthy but failed to send records
+   * and/or gaps for `grace_counter` number of grace periods.
+   */
+  std::string graceCountersPretty() const;
+
+  /**
    * @return A string representation of healthy_node_set_ if
    * last_epoch_with_metadata_ is valid.
    */

@@ -208,6 +208,20 @@ std::string ClientReadStream::unavailableShardsPretty() const {
   return folly::join(',', unavailable_shards);
 }
 
+std::string ClientReadStream::graceCountersPretty() const {
+  std::vector<std::string> output;
+  for (const auto& kv : storage_set_states_) {
+    auto& sender = kv.second;
+    auto shard = kv.first;
+    if (sender.getGapState() == GapState::NONE &&
+        sender.isFullyAuthoritative() && sender.grace_counter > 0) {
+      output.push_back(shard.toString() + "=" +
+                       std::to_string(sender.grace_counter));
+    }
+  }
+  return folly::join(',', output);
+}
+
 std::string ClientReadStream::getStorageSetHealthStatusPretty() const {
   if (!healthy_node_set_ ||
       last_epoch_with_metadata_ < epoch_metadata_requested_.value()) {
