@@ -216,4 +216,18 @@ std::unique_ptr<ZookeeperClientBase> zkFactoryProd(const ServerConfig& config) {
   }
 }
 
+int ZookeeperClient::getData(std::string, data_callback_t) {
+  throw std::runtime_error("unimplemented");
+}
+int ZookeeperClient::setData(std::string,
+                             std::string,
+                             stat_callback_t,
+                             zk::version_t) {
+  throw std::runtime_error("unimplemented");
+}
+
+int ZookeeperClient::multiOp(std::vector<zk::Op>, multi_op_callback_t) {
+  throw std::runtime_error("unimplemented");
+}
+
 }} // namespace facebook::logdevice

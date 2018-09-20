@@ -119,6 +119,16 @@ class ZookeeperClient : public ZookeeperClientBase {
                              int state,
                              const char* path,
                              void* watcherCtx);
+
+  //////// New API ////////
+ public:
+  int getData(std::string path, data_callback_t cb) override;
+  int setData(std::string path,
+              std::string data,
+              stat_callback_t cb,
+              zk::version_t base_version) override;
+
+  int multiOp(std::vector<zk::Op> ops, multi_op_callback_t cb) override;
 };
 
 }} // namespace facebook::logdevice

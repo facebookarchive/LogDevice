@@ -13,16 +13,117 @@
 #include <mutex>
 #include <unordered_map>
 #include <unordered_set>
+
+#include <folly/Function.h>
 #include <zookeeper/zookeeper.h>
+
 #include "logdevice/common/debug.h"
 #include "logdevice/common/configuration/ServerConfig.h"
 #include "logdevice/common/UpdateableSharedPtr.h"
 
 namespace facebook { namespace logdevice {
 
+namespace zk {
+using version_t = int32_t;
+
+struct Stat {
+  version_t version_ = -1;
+};
+
+struct Id {
+  std::string scheme_;
+  std::string id_;
+};
+
+struct ACL {
+  int32_t perms_;
+  Id id_;
+};
+
+inline std::vector<ACL> openACL_UNSAFE() {
+  std::vector<ACL> rval(1);
+  rval.at(0).perms_ = ZOO_PERM_ALL;
+  rval.at(0).id_.scheme_ = "world";
+  rval.at(0).id_.id_ = "anyone";
+  return rval;
+}
+
+class CreateOp {
+ public:
+  explicit CreateOp(std::string path,
+                    std::string data,
+                    int32_t flags = 0,
+                    std::vector<ACL> acl = openACL_UNSAFE())
+      : path_(std::move(path)),
+        data_(std::move(data)),
+        acl_(std::move(acl)),
+        flags_(flags) {}
+
+ protected:
+  std::string path_;
+  std::string data_;
+  std::vector<ACL> acl_;
+  int32_t flags_;
+};
+
+class DeleteOp {
+ public:
+  explicit DeleteOp(std::string path, version_t version = -1)
+      : path_(std::string(path)), version_(version) {}
+
+ protected:
+  std::string path_;
+  version_t version_;
+};
+
+class SetOp {
+ public:
+  explicit SetOp(std::string path, std::string data, version_t version = -1)
+      : path_(path), data_(data), version_(version) {}
+
+ protected:
+  std::string path_;
+  std::string data_;
+  version_t version_;
+};
+
+class CheckOp {
+ public:
+  explicit CheckOp(std::string path, version_t version = -1)
+      : path_(path), version_(version) {}
+
+ protected:
+  std::string path_;
+  version_t version_;
+};
+
+enum class OpType {
+  CREATE,
+  DELETE,
+  SET,
+  CHECK,
+};
+
+struct Op {
+  OpType type_;
+  union {
+    CreateOp create_;
+    DeleteOp delete_;
+    SetOp set_;
+    CheckOp check_;
+  };
+};
+
+struct OpResponse {
+  int rc_;
+  std::string value_;
+  Stat stat_;
+};
+
+} // namespace zk
+
 /**
- * @file Facade Interface which abstracts zookeeper API.
- *       Used for mocking zookeeper in tests.
+ * @file Facade Interface which abstracts Zookeeper API.
  */
 class ZookeeperClientBase : boost::noncopyable {
  public:
@@ -60,6 +161,26 @@ class ZookeeperClientBase : boost::noncopyable {
 
  private:
   virtual int reconnect(zhandle_t* prev) = 0;
+
+  //////// New API ////////
+ public:
+  // callbacks will only be called when the return code (first param of the
+  // callback) matches the Zookeeper C API specification.
+  using data_callback_t = folly::Function<void(int, std::string, zk::Stat)>;
+  using stat_callback_t = folly::Function<void(int, zk::Stat)>;
+  using create_callback_t = folly::Function<void(int, std::string)>;
+  using multi_op_callback_t =
+      folly::Function<void(int, std::vector<zk::OpResponse>)>;
+
+  explicit ZookeeperClientBase() : quorum_() {}
+
+  virtual int getData(std::string path, data_callback_t cb) = 0;
+  virtual int setData(std::string path,
+                      std::string data,
+                      stat_callback_t cb,
+                      zk::version_t base_version = -1) = 0;
+
+  virtual int multiOp(std::vector<zk::Op> ops, multi_op_callback_t cb) = 0;
 };
 
 // Factory type used to create ZookeeperClient instances utilizing ServerConfig

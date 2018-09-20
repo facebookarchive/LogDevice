@@ -71,27 +71,29 @@ class ZookeeperEpochStoreTest : public ::testing::Test {
     dbg::assertOnData = true;
   }
 
-  virtual std::map<std::string, std::string> getPrefillZnodes() {
-    std::map<std::string, std::string> map;
-    map["/logdevice/epochstore_test/logs/1/lce"] =
-        "3559930028@18446744073709551615@0@0";
-    map["/logdevice/epochstore_test/logs/1/metadatalog_lce"] =
-        "3522255020@18446744073709551615@0@0";
-    map["/logdevice/epochstore_test/logs/1/sequencer"] =
+  virtual ZookeeperClientInMemory::state_map_t getPrefillZnodes() {
+    ZookeeperClientInMemory::state_map_t map;
+    map["/logdevice/epochstore_test/logs/1/lce"] = {
+        "3559930028@18446744073709551615@0@0", {}};
+    map["/logdevice/epochstore_test/logs/1/metadatalog_lce"] = {
+        "3522255020@18446744073709551615@0@0", {}};
+    map["/logdevice/epochstore_test/logs/1/sequencer"] = {
         std::string("\x31\x35\x35\x31\x39\x35\x40\x4e\x30\x3a\x31\x23"
                     "\x02\x00\x00\x00\x3b\x5e\x02\x00\x3a\x5e\x02\x00"
                     "\x01\x00\x01\x00\x00\x00\x00\x00\x01\x00",
-                    34);
+                    34),
+        {}};
 
-    map["/logdevice/epochstore_test/logs/2/lce"] =
-        "3502237871@18446744073709551615@0@0";
-    map["/logdevice/epochstore_test/logs/2/metadatalog_lce"] =
-        "4244623534@18446744073709551615@0@0";
-    map["/logdevice/epochstore_test/logs/2/sequencer"] =
+    map["/logdevice/epochstore_test/logs/2/lce"] = {
+        "3502237871@18446744073709551615@0@0", {}};
+    map["/logdevice/epochstore_test/logs/2/metadatalog_lce"] = {
+        "4244623534@18446744073709551615@0@0", {}};
+    map["/logdevice/epochstore_test/logs/2/sequencer"] = {
         std::string("\x31\x35\x35\x32\x31\x33\x40\x4e\x30\x3a\x31\x23"
                     "\x02\x00\x00\x00\x4d\x5e\x02\x00\x4c\x5e\x02\x00"
                     "\x01\x00\x01\x00\x00\x00\x00\x00\x00\x00",
-                    34);
+                    34),
+        {}};
     return map;
   }
 
@@ -105,7 +107,7 @@ class ZookeeperEpochStoreTest : public ::testing::Test {
 
 class ZookeeperEpochStoreTestEmpty : public ZookeeperEpochStoreTest {
  public:
-  virtual std::map<std::string, std::string> getPrefillZnodes() override {
+  virtual ZookeeperClientInMemory::state_map_t getPrefillZnodes() override {
     return {};
   }
 };

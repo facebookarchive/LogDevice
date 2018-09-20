@@ -17,16 +17,21 @@ namespace facebook { namespace logdevice {
 
 class ZookeeperClientInMemory : public ZookeeperClientBase {
  public:
+  /*
+   * The (simplified) in-memory representation of the data in Zookeeper
+   *   key - full path of node
+   *   value - pair of value stored in the node and the stat of the node
+   */
+  using state_map_t =
+      std::unordered_map<std::string, std::pair<std::string, zk::Stat>>;
+
   /**
    * ZookeeperClientInMemory emulates zookeeper using in-memory map
    * @param quorum           zookeeper quorum.
    *                         for testing any not null value could be used.
    * @param map              initial state of zookeeper.
-   *                         key - full path of node
-   *                         value - value stored in the node
    */
-  ZookeeperClientInMemory(std::string quorum,
-                          std::map<std::string, std::string> map);
+  ZookeeperClientInMemory(std::string quorum, state_map_t map);
 
   int state() override;
 
@@ -57,8 +62,18 @@ class ZookeeperClientInMemory : public ZookeeperClientBase {
   std::shared_ptr<std::atomic<bool>> alive_;
   // Mutex protects `map_' and `callbacksGetData_'
   std::mutex mutex_;
-  std::map<std::string, std::string> map_;
+  state_map_t map_;
   std::vector<std::thread> callbacksGetData_;
+
+  //////// New API ////////
+ public:
+  int getData(std::string path, data_callback_t cb) override;
+  int setData(std::string path,
+              std::string data,
+              stat_callback_t cb,
+              zk::version_t base_version = -1) override;
+
+  int multiOp(std::vector<zk::Op> ops, multi_op_callback_t cb) override;
 };
 
 }} // namespace facebook::logdevice
