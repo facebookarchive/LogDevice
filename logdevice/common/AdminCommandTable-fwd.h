@@ -414,7 +414,8 @@ typedef AdminCommandTable<uint32_t,                 /* shard */
                           uint64_t,                 /* partition */
                           admin_command_table::LSN, /* first lsn */
                           admin_command_table::LSN, /* max lsn */
-                          std::string               /* flags */
+                          std::string,              /* flags */
+                          uint64_t                  /* approximate_size_bytes */
                           >
     PrintLogsDBDirectoriesTable;
 

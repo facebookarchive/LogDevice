@@ -107,7 +107,8 @@ class PrintLogsDBDirectories : public AdminCommand {
                                       "partition",
                                       "first_lsn",
                                       "max_lsn",
-                                      "flags");
+                                      "flags",
+                                      "approximate_size_bytes");
 
     for (shard_index_t shard = shard_ == -1 ? 0 : shard_;
          shard < (shard_ == -1 ? sharded_store->numShards() : (shard_ + 1));
@@ -147,7 +148,8 @@ class PrintLogsDBDirectories : public AdminCommand {
             .set<2>(de.id)
             .set<3>(de.first_lsn)
             .set<4>(de.max_lsn)
-            .set<5>(de.flagsToString());
+            .set<5>(de.flagsToString())
+            .set<6>(de.approximate_size_bytes);
       }
     }
     if (json_) {

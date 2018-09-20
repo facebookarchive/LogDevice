@@ -45,6 +45,9 @@ class LogsDBDirectory : public AdminCommandTable {
          "Flags for this partition. \"UNDER_REPLICATED\" means that some "
          "writes for this partition were lost (for instance due to the server "
          "crashing) and these records have not yet been rebuilt."},
+        {"approximate_size_bytes",
+         DataType::BIGINT,
+         "Approximate data size in this partition for the given log."},
     };
   }
   std::string getCommandToSend(QueryContext& ctx) const override {
