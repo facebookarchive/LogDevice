@@ -14,17 +14,11 @@ REMOVE_MATCHES_FROM_LISTS(files hfiles
 )
 
 add_library(logdevice_python SHARED ${hfiles} ${files})
-add_library(logdevice_python_static STATIC ${hfiles} ${files})
 include_directories(${PYTHON_INCLUDE_DIRS})
 
 message(STATUS "Linking Python bindings with ${PYTHON_LIBRARIES}")
 target_link_libraries(logdevice_python
   ldclient
-  ${Boost_LIBRARIES}
-  ${PYTHON_LIBRARIES})
-
-target_link_libraries(logdevice_python_static
-  ldclient_static
   ${Boost_LIBRARIES}
   ${PYTHON_LIBRARIES})
 
@@ -34,11 +28,6 @@ target_link_libraries(logdevice_python_static
 # we split our 'logdevice' namespace into multiple .so binaries (e.g. test)
 set_target_properties(logdevice_python PROPERTIES PREFIX "")
 set_target_properties(logdevice_python PROPERTIES OUTPUT_NAME "client")
-
-set_target_properties(logdevice_python_static PROPERTIES PREFIX "")
-set_target_properties(logdevice_python_static PROPERTIES OUTPUT_NAME "client_static")
-set_target_properties(logdevice_python_static
-  PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 message(STATUS "Python library will be installed to ${_python_dist_path}")
 
