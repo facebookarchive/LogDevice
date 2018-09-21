@@ -779,8 +779,6 @@ TEST_P(ReadingIntegrationTest, StatisticsCallback) {
   };
   write_records();
 
-  bool statsUpdated = false;
-
   // Use stats semaphore to block till the callback triggers.
   Semaphore stats_sem;
   auto statistics_cb = [&](size_t bufferSize) {
@@ -788,7 +786,6 @@ TEST_P(ReadingIntegrationTest, StatisticsCallback) {
     // It's likely that at the time of the callback,
     // records have been handled (and their contribution removed).
     stats_sem.post();
-    statsUpdated = true;
     return;
   };
 
@@ -809,8 +806,6 @@ TEST_P(ReadingIntegrationTest, StatisticsCallback) {
   // Ensure that the callback executes
   ld_info("Waiting for stats request to complete");
   stats_sem.wait();
-
-  EXPECT_TRUE(statsUpdated);
 }
 
 // Get the same kind of hash as reader with PAYLOAD_HASH_ONLY flag.

@@ -12,6 +12,5 @@ set_tests_properties(
   "IsLogEmptyTest.PartialResult"
   "IsLogEmptyTest.RestartNode"
   "Parametric/ReadPastGlobalLastReleasedTest.RecoveryStuck/(true,false,1-byteobject<01>)"
-  "ReadingIntegrationTest/ReadingIntegrationTest.StatisticsCallback/false"
   "SequencerIntegrationTest.MetaDataWritePreempted"
   PROPERTIES DISABLED TRUE)
