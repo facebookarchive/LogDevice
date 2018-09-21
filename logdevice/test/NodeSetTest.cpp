@@ -707,6 +707,14 @@ TEST_F(NodeSetTest, DeferReleasesUntilMetaDataRead) {
   std::map<lsn_t, std::string> lsn_map;
   lsn_t first_lsn = write_test_records(client, LOG_ID, 10, lsn_map);
 
+  // Wait until these records are readable
+  auto reader = client->createReader(1);
+  int rv = reader->startReading(LOG_ID, first_lsn);
+  ASSERT_EQ(0, rv);
+  // reader should be able to read epoch of first_lsn
+  read_records_no_gaps(*reader, 10);
+  reader->stopReading(LOG_ID);
+
   // choose a new nodeset which includes the old one
   storage_set_ = StorageSet{N1, N2, N3};
   // write the new epoch metadata only to epochstore but not metadata log
@@ -727,8 +735,7 @@ TEST_F(NodeSetTest, DeferReleasesUntilMetaDataRead) {
   /* sleep override */
   std::this_thread::sleep_for(std::chrono::milliseconds(800));
 
-  auto reader = client->createReader(1);
-  int rv = reader->startReading(LOG_ID, first_lsn);
+  rv = reader->startReading(LOG_ID, first_lsn);
   ASSERT_EQ(0, rv);
   // reader should be able to read epoch of first_lsn
   read_records_no_gaps(*reader, 10);
