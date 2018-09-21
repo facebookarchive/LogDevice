@@ -98,6 +98,9 @@ enum ProtocolVersion : uint16_t {
   // When e2e tracing is on, store message should also have tracing context
   STORE_E2E_TRACING_SUPPORT, // = 83
 
+  // Support OffsetMap instead of a uint64_t for byte offset
+  OFFSET_MAP_SUPPORT, // = 84
+
   // NOTE: insert new protocol versions here
 
   // Maximum version number of the protocol this version of LogDevice
@@ -138,6 +141,7 @@ static_assert(APPEND_E2E_TRACING_SUPPORT == 80, "");
 static_assert(CHECKSUM_SUPPORT == 81, "");
 static_assert(TAIL_RECORD_IN_GSS_REPLY == 82, "");
 static_assert(STORE_E2E_TRACING_SUPPORT == 83, "");
+static_assert(OFFSET_MAP_SUPPORT == 84, "");
 
 constexpr uint16_t MIN_PROTOCOL_SUPPORTED = PROTOCOL_VERSION_LOWER_BOUND + 1;
 constexpr uint16_t MAX_PROTOCOL_SUPPORTED = PROTOCOL_VERSION_UPPER_BOUND - 1;

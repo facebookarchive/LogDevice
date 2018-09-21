@@ -24,6 +24,7 @@
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/APPEND_Message.h"
 #include "logdevice/common/util.h"
+#include "logdevice/common/OffsetMap.h"
 
 namespace facebook { namespace logdevice {
 
@@ -92,8 +93,9 @@ void EpochSequencer::processNextBytes(Appender* appender) {
   uint64_t payload_size =
       appender->getPayload()->size() - in_payload_checksum_bytes;
   uint64_t offset = offset_within_epoch_.fetch_add(payload_size) + payload_size;
-
-  appender->setLogByteOffset(offset);
+  OffsetMap offsets_within_epoch;
+  offsets_within_epoch.setCounter(CounterType::BYTE_OFFSET, offset);
+  appender->setLogOffset(std::move(offsets_within_epoch));
 }
 
 void EpochSequencer::transitionTo(State next) {

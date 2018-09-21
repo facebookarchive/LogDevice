@@ -29,6 +29,7 @@
 #include "logdevice/common/Request.h"
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/WeakRefHolder.h"
+#include "logdevice/common/OffsetMap.h"
 
 #include "logdevice/common/protocol/STORED_Message.h"
 
@@ -462,13 +463,14 @@ class Appender : public IntrusiveUnorderedMapHook {
   }
 
   /**
-   * Specify byte offset within epoch until (and include) the current record.
+   * Specify map of byte offsets within epoch until (and include) the current
+   * record.
    *
    * @param offset_within_epoch   How many bytes were written in epoch (to which
    *                              this Appender belongs) until and include
    *                              record of this Appender.
    */
-  void setLogByteOffset(uint64_t offset_within_epoch);
+  void setLogOffset(OffsetMap offset_within_epoch);
 
   void setAppendMessageCount(uint32_t count) {
     append_message_count_ = count;

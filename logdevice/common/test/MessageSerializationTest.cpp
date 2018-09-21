@@ -182,6 +182,12 @@ class MessageSerializationTest : public ::testing::Test {
       ASSERT_TRUE(recv.e2e_tracing_context_.empty());
     }
 
+    if (proto >= Compatibility::OFFSET_MAP_SUPPORT &&
+        sent.header_.flags & STORE_Header::OFFSET_MAP) {
+      ASSERT_EQ(
+          sent.extra_.offsets_within_epoch, recv.extra_.offsets_within_epoch);
+    }
+
     ASSERT_EQ(getPayload(*sent.payload_), getPayload(*recv.payload_));
   }
 
@@ -431,8 +437,17 @@ struct TestStoreMessageFactory {
         "54A58B50" // sequencer_node_id
         ;
 
+    // Take into account OffsetMap bits
+    if (header_.flags & STORE_Header::OFFSET_MAP &&
+        proto >= Compatibility::OFFSET_MAP_SUPPORT) {
+      if (header_.flags & STORE_Header::OFFSET_WITHIN_EPOCH) {
+        rv += "0100";
+      }
+    }
+
     // Copyset, optional blobs, payload
     rv += extra_serialized_;
+
     // StoreChainLink
     rv += "010000000400008002000000050000800300000006000080";
 
@@ -595,6 +610,28 @@ TEST_F(MessageSerializationTest, STORE_WithByteOffsetInfo) {
   DO_TEST(m,
           check,
           Compatibility::SHARD_ID_IN_STORE_MSG,
+          Compatibility::MAX_PROTOCOL_SUPPORTED,
+          std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
+          [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
+}
+
+TEST_F(MessageSerializationTest, STORE_WithByteOffsetMapInfo) {
+  STORE_Extra extra;
+  extra.offset_within_epoch = 0x99;
+  extra.offsets_within_epoch.setCounter(CounterType::BYTE_OFFSET, 0x99);
+
+  TestStoreMessageFactory factory;
+  factory.setFlags(STORE_Header::OFFSET_WITHIN_EPOCH |
+                   STORE_Header::OFFSET_MAP);
+  factory.setExtra(extra, "9900000000000000");
+
+  STORE_Message m = factory.message();
+  auto check = [&](const STORE_Message& m2, uint16_t proto) {
+    checkSTORE(m, m2, proto);
+  };
+  DO_TEST(m,
+          check,
+          Compatibility::OFFSET_MAP_SUPPORT,
           Compatibility::MAX_PROTOCOL_SUPPORTED,
           std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
           [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });

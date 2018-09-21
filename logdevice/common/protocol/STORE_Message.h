@@ -27,6 +27,7 @@
 #include "logdevice/common/protocol/Message.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Record.h"
+#include "logdevice/common/OffsetMap.h"
 
 namespace facebook { namespace logdevice {
 
@@ -161,6 +162,9 @@ struct STORE_Header {
   // used to know weather we should expect e2e tracing information or not
   static const STORE_flags_t E2E_TRACING_ON = 1u << 17; //=131072
 
+  // used to know if contains OffsetMap or not
+  static const STORE_flags_t OFFSET_MAP = 1u << 18; //=262144
+
   // NOTE: Reserved to match the same bit in RECORD_Header. Should never
   //       be set on a STORE. Used for asserts.
   static const STORE_flags_t DRAINED = 1u << 19; //=524288
@@ -173,6 +177,9 @@ struct STORE_Header {
  * such as rebuilding, recovery or byte offset.
  */
 struct STORE_Extra {
+  // Contains different offsets within epoch
+  OffsetMap offsets_within_epoch;
+
   // Number which uniquely identifies the recovery machine responsible for
   // sending this message. Used only if STORE_Header::RECOVERY flag is set.
   recovery_id_t recovery_id = recovery_id_t(0);
@@ -219,7 +226,8 @@ struct STORE_Extra {
                       r.rebuilding_version,
                       r.rebuilding_wave,
                       r.rebuilding_id,
-                      r.offset_within_epoch);
+                      r.offset_within_epoch,
+                      r.offsets_within_epoch);
     };
     return as_tuple(*this) == as_tuple(other);
   }

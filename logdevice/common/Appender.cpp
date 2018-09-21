@@ -807,12 +807,13 @@ void Appender::prepareTailRecord(bool include_payload) {
     flags |= TailRecordHeader::CHECKSUM_PARITY;
   }
 
-  TailRecordHeader header{log_id_,
-                          store_hdr_.rid.lsn(),
-                          store_hdr_.timestamp,
-                          {extra_.offset_within_epoch},
-                          flags,
-                          {}};
+  TailRecordHeader header{
+      log_id_,
+      store_hdr_.rid.lsn(),
+      store_hdr_.timestamp,
+      {extra_.offsets_within_epoch.getCounter(CounterType::BYTE_OFFSET)},
+      flags,
+      {}};
 
   if (!include_payload) {
     tail_record_ =
@@ -836,7 +837,7 @@ void Appender::prepareTailRecord(bool include_payload) {
         esn_t(store_hdr_.last_known_good),
         uint32_t(store_hdr_.wave),
         /*unused copyset*/ copyset_t{},
-        extra_.offset_within_epoch,
+        extra_.offsets_within_epoch.getCounter(CounterType::BYTE_OFFSET),
         /*unused keys*/ std::map<KeyType, std::string>{},
         Slice{ph_raw},
         payload_);
@@ -2368,13 +2369,15 @@ bool Appender::maxAppendersHardLimitReached() const {
       getSettings().max_total_appenders_size_hard / getSettings().num_workers;
 }
 
-void Appender::setLogByteOffset(uint64_t offset_within_epoch) {
+void Appender::setLogOffset(OffsetMap offset_map) {
   // Log size should be set before starting append operation
   ld_check(!started());
   ld_check(!retired_);
-
-  extra_.offset_within_epoch = offset_within_epoch;
+  // TODO(T33977412)
+  extra_.offset_within_epoch = offset_map.getCounter(CounterType::BYTE_OFFSET);
+  extra_.offsets_within_epoch = std::move(offset_map);
   passthru_flags_ |= STORE_Header::OFFSET_WITHIN_EPOCH;
+  passthru_flags_ |= STORE_Header::OFFSET_MAP;
 }
 
 bool Appender::isDraining() const {
