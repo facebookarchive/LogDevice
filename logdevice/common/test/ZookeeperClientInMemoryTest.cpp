@@ -170,30 +170,33 @@ void runMultiThreadedTests(std::unique_ptr<ZookeeperClientInMemory> z) {
                  p.setValue(rc);
                });
     ASSERT_EQ(ZOK, std::move(fut).get());
+    ASSERT_GE(initialVersion, 0);
   }
 
-  auto fn = [&]() {
+  auto fn = [&, initialVersion]() {
     // wait to start
     std::unique_lock<std::mutex> lk{m};
     cv.wait(lk, [&]() { return start; });
 
-    zk::version_t base_version = initialVersion;
     for (uint64_t k = 0; k < kIter; ++k) {
+      zk::version_t base_version = initialVersion + k;
       Promise<zk::version_t> promise;
       auto f = promise.getSemiFuture();
-      z->setData(
-          kFoo,
-          folly::to<std::string>(k + 1),
-          [&successCnt, p = std::move(promise)](int rc, zk::Stat stat) mutable {
-            if (rc == ZOK) {
-              successCnt++;
-            } else {
-              EXPECT_EQ(ZBADVERSION, rc);
-            }
-            p.setValue(stat.version_);
-          },
-          base_version);
-      base_version = std::move(f).get();
+      z->setData(kFoo,
+                 folly::to<std::string>(k + 1),
+                 [&successCnt, p = std::move(promise), base_version](
+                     int rc, zk::Stat stat) mutable {
+                   if (rc == ZOK) {
+                     successCnt++;
+                     EXPECT_GT(stat.version_, base_version);
+                   } else {
+                     EXPECT_EQ(ZBADVERSION, rc);
+                   }
+                   p.setValue(stat.version_);
+                 },
+                 base_version);
+      // do not ignore
+      static_cast<void>(std::move(f).get());
     }
   };
   for (auto i = 0; i < kNumThreads; ++i) {

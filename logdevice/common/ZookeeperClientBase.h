@@ -27,7 +27,8 @@ namespace zk {
 using version_t = int32_t;
 
 struct Stat {
-  version_t version_ = -1;
+  // version -1 has special meaning in Zookeeper
+  version_t version_ = -0xbad;
 };
 
 struct Id {
