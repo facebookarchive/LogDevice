@@ -113,4 +113,18 @@ const std::string& release_type_to_string(ReleaseType release_type) {
   }
 }
 
+std::vector<std::pair<std::string, folly::dynamic>>
+RELEASE_Message::getDebugInfo() const {
+  std::vector<std::pair<std::string, folly::dynamic>> res;
+
+  auto add = [&res](const char* key, folly::dynamic val) {
+    res.emplace_back(key, std::move(val));
+  };
+  add("log_id", toString(header_.rid.logid));
+  add("upto_lsn", lsn_to_string(header_.rid.lsn()));
+  add("release_type", release_type_to_string(header_.release_type));
+  add("shard", header_.shard);
+  return res;
+}
+
 }} // namespace facebook::logdevice

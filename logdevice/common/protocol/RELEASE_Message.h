@@ -66,6 +66,9 @@ class RELEASE_Message : public Message {
     return header_;
   }
 
+  virtual std::vector<std::pair<std::string, folly::dynamic>>
+  getDebugInfo() const override;
+
   RELEASE_Header header_;
 };
 
