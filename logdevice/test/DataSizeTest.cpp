@@ -86,6 +86,9 @@ static void commonSetup(IntegrationTestUtils::ClusterFactory& cluster) {
       .setParam("--sequencer-batching", "false")
       // Don't have overlapping partition timestamps.
       .setParam("--rocksdb-new-partition-timestamp-margin", "0s")
+      // To keep the test simple, make sure no appends time out, e.g. during
+      // stress testing, since each wave will dump the dataSize counter.
+      .setParam("--store-timeout", "30s")
       .setNumDBShards(1)
       .setLogConfig(log_config)
       .setEventLogConfig(event_log)
@@ -352,7 +355,7 @@ TEST_F(DataSizeTest, RestartNode) {
   ASSERT_TRUE(dataSizeResultsMatch({
       /* log_id, status, size_range_lo, size_range_hi,
          time_range_lo (default: min), time_range_hi (default: max) */
-      {1, E::OK, 800, 1200},
+      {1, E::OK, 1040, 1040},
       {2, E::OK, 0, 0},
       {3, E::OK, 0, 0},
       {4, E::OK, 0, 0},
@@ -365,8 +368,8 @@ TEST_F(DataSizeTest, RestartNode) {
   ASSERT_TRUE(dataSizeResultsMatch({
       /* log_id, status, size_range_lo, size_range_hi,
          time_range_lo (default: min), time_range_hi (default: max) */
-      {1, E::OK, 800, 1200},
-      {2, E::OK, 30000, 34000},
+      {1, E::OK, 1040, 1040},
+      {2, E::OK, 32160, 32160},
       {3, E::OK, 0, 0},
       {4, E::OK, 0, 0},
   }));
@@ -378,8 +381,8 @@ TEST_F(DataSizeTest, RestartNode) {
   ASSERT_TRUE(dataSizeResultsMatch({
       /* log_id, status, size_range_lo, size_range_hi,
          time_range_lo (default: min), time_range_hi (default: max) */
-      {1, E::OK, 800, 1200},
-      {2, E::OK, 30000, 34000},
+      {1, E::OK, 1040, 1040},
+      {2, E::OK, 32160, 32160},
       {3, E::OK, 0, 0},
       {4, E::OK, 0, 0},
   }));
@@ -394,7 +397,7 @@ TEST_F(DataSizeTest, RestartNode) {
       /* log_id, status, size_range_lo, size_range_hi,
          time_range_lo (default: min), time_range_hi (default: max) */
       {1, E::OK, 0, 0},
-      {2, E::OK, 30000, 34000},
+      {2, E::OK, 32185, 32185},
       {3, E::OK, 0, 0},
       {4, E::OK, 0, 0},
   }));
@@ -405,7 +408,7 @@ TEST_F(DataSizeTest, RestartNode) {
       /* log_id, status, size_range_lo, size_range_hi,
          time_range_lo (default: min), time_range_hi (default: max) */
       {1, E::OK, 0, 0},
-      {2, E::OK, 30000, 34000},
+      {2, E::OK, 32185, 32185},
       {3, E::OK, 0, 0},
       {4, E::OK, 0, 0},
   }));

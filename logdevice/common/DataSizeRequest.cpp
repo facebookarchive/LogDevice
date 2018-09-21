@@ -282,7 +282,8 @@ void DataSizeRequest::finalize(Status status, bool delete_this) {
       callback_(E::FAILED, 0);
     } else {
       size_t avg_size = result_size / double(num_responses);
-      size_t final_estimate = avg_size * failure_domain_->numShards();
+      size_t final_estimate =
+          round(avg_size * double(failure_domain_->numShards()));
       callback_(status, final_estimate);
     }
   } else {
