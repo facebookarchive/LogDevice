@@ -437,7 +437,7 @@ int shell(Cluster& cluster) {
 #if BOOST_VERSION >= 106000
     write_path = fs::relative(fs::path(write_path)).string();
 #endif
-    std::cout << "\033[1;31mTo write to a log 1:\033[1;0m" << std::endl;
+    std::cout << "\033[1;31mTo write to log 1:\033[1;0m" << std::endl;
     std::cout << "\t echo hello | " << write_path << " "
               << cluster.getConfigPath() << " 1"
               << "\n\n";

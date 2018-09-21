@@ -9,11 +9,11 @@ start a local cluster. The utility will create directories for nodes under the
 specified path, write a config that includes all of these nodes and start an
 instance of the `logdeviced` daemon for each node.
 
-The simplest way to use it is just run the binary:
+The simplest way to use it is just run the binary (e.g. from within the git
+repo):
 
 ```text
-# (e.g. from within the git repo)
-~/$ ./_build/bin/ld-dev-cluster
+~/LogDevice/$ ./_build/bin/ld-dev-cluster
 ...
 Cluster running. ^C or type "quit" or "q" to stop. Commands:
 

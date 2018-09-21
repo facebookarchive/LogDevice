@@ -11,7 +11,7 @@ Currently the only supported platform is Ubuntu 18 LTS "Bionic Beaver".
 **Clone the LogDevice GitHub repository, including its submodules.**
 
 ```shell
-git clone --recurse-submodules git@github.com:facebookincubator/LogDevice.git
+git clone --recurse-submodules git://github.com/facebookincubator/LogDevice
 ```
 
 That will create a top-level `LogDevice` directory. The source code is in `LogDevice/logdevice`. There are two git submodules in the tree: `logdevice/external/folly` and `logdevice/external/rocksdb`.
@@ -21,6 +21,8 @@ That will create a top-level `LogDevice` directory. The source code is in `LogDe
 ```shell
 sudo apt-get install -y $(cat LogDevice/logdevice/build_tools/ubuntu.deps)
 ```
+
+If the above fails with "Unable to locate package", run `sudo apt-get update` first to update the package list.
 
 **Create a build directory.**
 
@@ -48,7 +50,7 @@ make -j $(nproc)
 Upon successful completion, the build process will create the following binaries and libraries:
 
 * `_build/bin/logdeviced` -- the LogDevice server
-* `_build/lib/libldclient.{a,so}` -- the LogDevice client library
+* `_build/lib/liblogdevice.{a,so}` -- the LogDevice client library
 * `_build/bin/ld{write,cat,tail,trim}` -- simple utilities for writing into a log, reading from a log, tailing a log, and trimming a log.
 * `_build/bin/ld-dev-cluster` -- a test utility that configures and runs a test LogDevice cluster on the local machine
 

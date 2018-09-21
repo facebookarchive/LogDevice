@@ -5,7 +5,9 @@ sidebar_label: Creating your first cluster
 ---
 
 ## 1. Provision the servers
-The recommended minimum for running a fully functional LogDevice cluster is 4 servers. Each LogDevice server should have at least 4GB of RAM. For best results the network latency between the servers in the cluster should be low.
+The recommended minimum for running a fully functional LogDevice cluster is 4 servers. If you want to try out LogDevice on a single machine for development/experimental purposes, you can follow a much simpler process to [run a local cluster](localcluster.md) instead.
+
+Each LogDevice server should have at least 4GB of RAM. For best results the network latency between the servers in the cluster should be low.
 
 The only platform currently supported is Ubuntu 18 LTS "Bionic Beaver".
 
@@ -16,14 +18,14 @@ Make sure that network ports specified in the config (`16111` and `16112` for th
 ## 2. Set up a ZooKeeper ensemble
 LogDevice requires ZooKeeper in order to store minimal per-log metadata accessed during sequencer activation and failover.  ZooKeeper can also be used as a mechanism for distributing the config file (see the [Configuration section](#5-create-a-configuration-file) below).
 
-You can re-use an existing ZooKeeper ensemble, or create a new one. Different LogDevice clusters can use the same ZooKeeper ensemble as long as they have a different value of the `cluster` attribute.
+You can re-use an existing ZooKeeper ensemble, or create a new one. Different LogDevice clusters can use the same ZooKeeper ensemble as long as they have a different value of the `cluster` attribute in the LogDevice configuration file.
 
-You can run ZooKeeper on the same machines as LogDevice or on separate hardware. For best results, latency from the LogDevice cluster to the ZooKeeper ensemble should be minimal. However, LogDevice doesn't communicate with ZooKeeper outside of config loading / sequencer activation / failover scenarios, so this shouldn't affect performance in steady state.
+You can run ZooKeeper on the same machines as LogDevice or on separate hardware. For best results, latency from the LogDevice cluster to the ZooKeeper ensemble should be minimal. However, LogDevice doesn't communicate with ZooKeeper outside of config loading / sequencer activation / failover scenarios, so having higher latency to ZooKeeper shouldn't affect performance in steady state.
 
 You can find a tutorial online on how to set up a proper Zookeeper ensemble. Note that if the metadata in the ZooKeeper ensemble is lost, the data in the cluster will be corrupted and unreadable.
 
 #### Unsafe single-node ZooKeeper setup on Ubuntu
-If you are just setting up a test cluster and are OK with it becoming unusable and losing all your data if you lose your ZooKeeper node, you can set up a single-node Zookeeper ensemble easily on Ubuntu by running this:
+If you are just setting up a test LogDevice cluster and are OK with it becoming unusable and losing all your data if you lose your ZooKeeper node, you can set up a single-node Zookeeper ensemble easily on Ubuntu by running this:
 ```sh
 sudo apt-get update && sudo apt-get install zookeeper zookeeperd
 ```
@@ -58,10 +60,10 @@ sudo chown -R logdevice /mnt/data0/
 ```
 
 ## 5. Create a configuration file
-An example of a minimal configuration file for 4 nodes and a 3-node ZooKeeper ensemble hosted on the same machine can be found below (and is also included in the source tree under `examples/logdevice.conf`).
+An example of a minimal configuration file for 4 nodes and a 3-node ZooKeeper ensemble hosted on the same machine can be found below (and is also included in the source tree under `logdevice/examples/logdevice.conf`).
 
 Modify it to adapt it to your situation and save it to a file somewhere (e.g. `~/logdevice_test.conf`). The parts that you need to modify are:
-1. `host` attribute for every node. It should be an IP:port pair, hostnames are not supported.
+1. `host` attribute for every node. It should be an `IPv4:port` or `[IPv6]:port` pair, hostnames are not supported.
 2. `quorum` in the `zookeeper` section - list of ZooKeeper ensemble nodes and ports.
 3. (optional) The `cluster` attribute if you are creating several clusters - it has to be unique for each cluster sharing a ZooKeeper ensemble!
 5. (optional) `gossip_port` for every node if you intend to use a different one.
