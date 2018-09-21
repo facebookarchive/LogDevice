@@ -54,4 +54,18 @@ TEST(OffsetMapTest, BasicSerialization) {
   }
   ASSERT_EQ(written, n_read);
 }
+
+TEST(OffsetMapTest, Operators) {
+  OffsetMap om1, om2, result, result_test;
+  result_test.setCounter(CounterType::BYTE_OFFSET, 8);
+  result = om1 + om2;
+  ASSERT_EQ(result == om1, true);
+  om1.setCounter(CounterType::BYTE_OFFSET, 4);
+  om2.setCounter(CounterType::BYTE_OFFSET, 4);
+  result = om1 + om2;
+  ASSERT_EQ(result == result_test, true);
+  result += om1;
+  ASSERT_NE(result == result_test, true);
+}
+
 } // namespace

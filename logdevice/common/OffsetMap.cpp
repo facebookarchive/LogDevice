@@ -9,15 +9,32 @@
 #include "OffsetMap.h"
 
 namespace facebook { namespace logdevice {
-void OffsetMap::setCounter(CounterType counter_type, uint64_t counter_val) {
+OffsetMap::OffsetMap() {}
+
+void OffsetMap::setCounter(const CounterType counter_type,
+                           uint64_t counter_val) {
   counterTypeMap_[counter_type] = counter_val;
 }
 
-uint64_t OffsetMap::getCounter(CounterType counter_type) {
-  if (counterTypeMap_.find(counter_type) != counterTypeMap_.end()) {
-    return counterTypeMap_[counter_type];
+bool OffsetMap::isValid() const {
+  return counterTypeMap_.size() > 0;
+}
+
+uint64_t OffsetMap::getCounter(const CounterType counter_type) const {
+  auto it = counterTypeMap_.find(counter_type);
+  if (it == counterTypeMap_.end()) {
+    return BYTE_OFFSET_INVALID;
   }
-  return BYTE_OFFSET_INVALID;
+  return it->second;
+}
+
+const std::unordered_map<CounterType, uint64_t, folly::Hash>&
+OffsetMap::getCounterMap() const {
+  return counterTypeMap_;
+}
+
+bool OffsetMap::isValidOffset(const CounterType counter_type) const {
+  return counterTypeMap_.find(counter_type) != counterTypeMap_.end();
 }
 
 void OffsetMap::serialize(ProtocolWriter& writer) const {
@@ -44,6 +61,31 @@ void OffsetMap::deserialize(ProtocolReader& reader,
     }
     counterTypeMap_[counter_type] = counter_val;
   }
+}
+
+bool OffsetMap::operator==(const OffsetMap& om) const {
+  if (this->counterTypeMap_.size() != om.counterTypeMap_.size()) {
+    return false;
+  }
+  for (auto& it : this->counterTypeMap_) {
+    if (it.second != om.getCounter(it.first)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+OffsetMap& OffsetMap::operator+=(const OffsetMap& om) {
+  for (auto& it : om.counterTypeMap_) {
+    this->counterTypeMap_[it.first] += it.second;
+  }
+  return *this;
+}
+
+OffsetMap OffsetMap::operator+(const OffsetMap& om) const {
+  OffsetMap result = *this;
+  result += om;
+  return result;
 }
 
 }} // namespace facebook::logdevice
