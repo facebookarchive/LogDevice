@@ -342,7 +342,7 @@ sidebar_label: Settings
 | rocksdb-partition-idle-flush-trigger | Maximum wait after writes to a time partition cease before any uncommitted data are flushed to stable storage. 0 disables the trigger. | 300s | server&nbsp;only |
 | rocksdb-read-amp-bytes-per-bit | If greater than 0, will create a bitmap to estimate rocksdb read amplification and expose the result through READ\_AMP\_ESTIMATE\_USEFUL\_BYTES and READ\_AMP\_TOTAL\_READ\_BYTES stats. | 32 | requires&nbsp;restart, server&nbsp;only |
 | rocksdb-skip-list-lookahead | number of keys to examine in the neighborhood of the current key when searching within a skiplist (0 to disable the optimization) | 3 | requires&nbsp;restart, server&nbsp;only |
-| rocksdb-sst-delete-bytes-per-sec | ratelimit in bytes/sec on deletion of SST files per shard; 0 for unlimited. | 0 | server&nbsp;only |
+| rocksdb-sst-delete-bytes-per-sec | ratelimit in bytes/sec on deletion of SST files per node; 0 for unlimited. | 0 | server&nbsp;only |
 | rocksdb-target-file-size-base | target L1 file size for compaction | 67108864 | requires&nbsp;restart, server&nbsp;only |
 | rocksdb-uc-max-merge-width | maximum number of files in a single universal compaction run | 4294967295 | requires&nbsp;restart, server&nbsp;only |
 | rocksdb-uc-max-size-amplification-percent | target size amplification percentage for universal compaction | 200 | requires&nbsp;restart, server&nbsp;only |

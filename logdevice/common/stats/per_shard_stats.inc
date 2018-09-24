@@ -56,8 +56,6 @@ STAT_DEFINE(disk_io_errors, SUM)
 STAT_DEFINE(corruption_errors, SUM)
 // Number of times the MemTable window for shard moved
 STAT_DEFINE(active_memtables_window_move, SUM)
-// The total size of trash files
-STAT_DEFINE(trash_size, SUM)
 
 // For how long this shard was stalling low-pri writes.
 STAT_DEFINE(write_stall_microsec, SUM)

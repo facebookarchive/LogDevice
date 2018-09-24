@@ -170,8 +170,10 @@ ShardedRocksDBLocalLogStore::ShardedRocksDBLocalLogStore(
       RocksDBLogStoreConfig shard_config = rocksdb_config_;
       shard_config.createMergeOperator(shard_idx);
 
-      // Create SstFileManager for this shard
-      shard_config.addSstFileManagerForShard();
+      // Create per-shard SstFileManager, if per-node is not supported
+#ifndef LOGDEVICED_ROCKSDB_SUPPORTS_TRASH_INPLACE
+      shard_config.addSstFileManagerForShard(shard_path.string(), nshards);
+#endif
 
       // If rocksdb statistics are enabled, create a Statistics object for
       // each shard.

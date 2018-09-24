@@ -202,21 +202,31 @@ RocksDBLogStoreConfig::RocksDBLogStoreConfig(
               rocksdb_settings_->memtable_size_per_node);
     }
   }
+
+#ifdef LOGDEVICED_ROCKSDB_SUPPORTS_TRASH_INPLACE
+  addSstFileManager();
+#endif
 }
 
 void RocksDBLogStoreConfig::createMergeOperator(shard_index_t this_shard) {
   options_.merge_operator.reset(new RocksDBWriterMergeOperator(this_shard));
 }
 
-void RocksDBLogStoreConfig::addSstFileManagerForShard() {
+#ifdef LOGDEVICED_ROCKSDB_SUPPORTS_TRASH_INPLACE
+void RocksDBLogStoreConfig::addSstFileManager() {
   if (!options_.env) {
-    ld_error("Can't create SstFileManager: no env");
+    ld_error("sst_delete_bytes_per_sec=%ld but no env was given - not "
+             "creating SstFileManager!",
+             rocksdb_settings_->sst_delete_bytes_per_sec);
     return;
   }
 
+  ld_check(!options_.sst_file_manager);
   rocksdb::Status status; // status of delete of any existing trash
   std::shared_ptr<rocksdb::Logger> logger =
       std::make_shared<RocksDBLogger>(dbg::currentLevel);
+
+#ifdef LOGDEVICED_ROCKSDB_TRASH_DB_RATIO_CONFIGURABLE
   options_.sst_file_manager.reset(
       rocksdb::NewSstFileManager(options_.env,
                                  std::move(logger),
@@ -226,11 +236,51 @@ void RocksDBLogStoreConfig::addSstFileManagerForShard() {
                                  &status,
                                  1.1)); // max_trash_db_ratio > 100 % to always
                                         // enforce ratelimit
+#else
+  options_.sst_file_manager.reset(
+      rocksdb::NewSstFileManager(options_.env,
+                                 std::move(logger),
+                                 "" /* trash_dir, deprecated */,
+                                 rocksdb_settings_->sst_delete_bytes_per_sec,
+                                 true, // delete_existing_trash
+                                 &status));
+#endif
 
   if (!status.ok()) {
     ld_error("An error occurred when deleting existing trash: %s",
              status.ToString().c_str());
   }
 }
+#else
+void RocksDBLogStoreConfig::addSstFileManagerForShard(std::string shard_path,
+                                                      shard_size_t nshards) {
+  if (!options_.env) {
+    ld_error("sst_delete_bytes_per_sec=%ld but no env was given - "
+             "not creating SstFileManager",
+             rocksdb_settings_->sst_delete_bytes_per_sec);
+    return;
+  }
+
+  std::string trash_dir = shard_path + "/trash";
+  uint64_t delete_rate = rocksdb_settings_->sst_delete_bytes_per_sec / nshards;
+  ld_info("Total sst file delete rate limit: %ld B/s, per-shard: %ld B/s",
+          rocksdb_settings_->sst_delete_bytes_per_sec,
+          delete_rate);
+  rocksdb::Status status; // status of delete of any existing trash
+  std::shared_ptr<rocksdb::Logger> logger =
+      std::make_shared<RocksDBLogger>(dbg::currentLevel);
+  options_.sst_file_manager.reset(
+      rocksdb::NewSstFileManager(options_.env,
+                                 std::move(logger),
+                                 trash_dir,
+                                 delete_rate,
+                                 true, // delete_existing_trash
+                                 &status));
+  if (!status.ok()) {
+    ld_error("An error occurred when deleting existing trash: %s",
+             status.ToString().c_str());
+  }
+}
+#endif // LOGDEVICED_ROCKSDB_SUPPORTS_TRASH_INPLACE
 
 }} // namespace facebook::logdevice

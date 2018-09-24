@@ -57,6 +57,14 @@
 #define LOGDEVICED_ROCKSDB_BLOOM_UNBROKEN
 #endif
 
+#if ROCKSDB_MAJOR > 5 || (ROCKSDB_MAJOR == 5 && ROCKSDB_MINOR >= 9)
+#define LOGDEVICED_ROCKSDB_SUPPORTS_TRASH_INPLACE
+#endif
+
+#if ROCKSDB_MAJOR > 5 || (ROCKSDB_MAJOR == 5 && ROCKSDB_MINOR >= 10)
+#define LOGDEVICED_ROCKSDB_TRASH_DB_RATIO_CONFIGURABLE
+#endif
+
 #if ROCKSDB_MAJOR > 5 || (ROCKSDB_MAJOR == 5 && ROCKSDB_MINOR >= 14)
 // These performance counters were added in rocksdb 5.14.
 #define ROCKSDB_PERF_COUNTER_write_scheduling_flushes_compactions_time( \

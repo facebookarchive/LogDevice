@@ -5307,6 +5307,7 @@ TEST_F(PartitionedRocksDBStoreTest, ApplySpaceBasedRetentionPerDisk) {
 }
 
 TEST_F(PartitionedRocksDBStoreTest, DeleteRatelimit) {
+  std::string trash_dir = path_ + "/trash";
   ServerConfig::SettingsConfig s_slow;
   s_slow["rocksdb-compression-type"] = "none";
   s_slow["rocksdb-sst-delete-bytes-per-sec"] = "500000"; // should take 2s
@@ -5325,6 +5326,7 @@ TEST_F(PartitionedRocksDBStoreTest, DeleteRatelimit) {
     size_t tot_size = 0;
     size_t size = 0;
 
+#ifdef LOGDEVICED_ROCKSDB_SUPPORTS_TRASH_INPLACE
     for (auto it = fs::directory_iterator(path_);
          it != fs::directory_iterator();
          it++) {
@@ -5336,6 +5338,18 @@ TEST_F(PartitionedRocksDBStoreTest, DeleteRatelimit) {
       } catch (const fs::filesystem_error& e) {
       }
     }
+#else
+    for (auto it = fs::directory_iterator(trash_dir);
+         it != fs::directory_iterator();
+         it++) {
+      try {
+        auto& p = it->path();
+        tot_size += fs::file_size(p);
+        count++;
+      } catch (const fs::filesystem_error& e) {
+      }
+    }
+#endif
 
     ld_info("trash file count: %d, total size: %ld", count, tot_size);
     return count;
@@ -5382,19 +5396,18 @@ TEST_F(PartitionedRocksDBStoreTest, DeleteRatelimit) {
     // notification to shards.
     store_->onSettingsUpdated(store_->getSettings());
 
-    // Don't expect to see much trash
-    ASSERT_LT(store_->getTotalTrashSize(), 1e4);
-
     write_100K_to_10_partitions();
     ASSERT_EQ(baseID, store_->getPartitionList()->firstID());
 
-    // Don't expect to see much trash
-    ASSERT_LT(store_->getTotalTrashSize(), 1e4);
-
     partition_id_t dropToID = currentID;
-
+#ifdef LOGDEVICED_ROCKSDB_TRASH_DB_RATIO_CONFIGURABLE
     // Create a tiny partition so we can drop everything else
     write_to_one_partition((size_t)1, 1);
+#else
+    // RocksDB will remove files immediately if the total size of trash files
+    // >= 25% of DB size. Write another 5MB to ensure ratelimit is enforced.
+    write_to_one_partition((size_t)5e6, 1);
+#endif
 
     // Drop up to latest (empty) partition
     auto start = std::chrono::steady_clock::now();
@@ -5404,11 +5417,6 @@ TEST_F(PartitionedRocksDBStoreTest, DeleteRatelimit) {
             PartitionedRocksDBStore::BackgroundThreadType::LO_PRI)
         .wait();
     ASSERT_EQ(dropToID, store_->getPartitionList()->firstID());
-
-    // Let's not trust this check to happen very quickly given the fast run
-    // takes 100ms till the trash should be gone, but let's at least assume
-    // we'll see half of the trash files, or 500kb.
-    ASSERT_GT(store_->getTotalTrashSize(), 500000);
 
     // All partitions but the last should be gone as far as LogsDB is concerned
     for (int j = 0; j < 10; j++) {
@@ -5424,9 +5432,6 @@ TEST_F(PartitionedRocksDBStoreTest, DeleteRatelimit) {
             .count();
     *ret_val = elapsed;
 
-    // Expect minimal trash
-    ASSERT_LT(store_->getTotalTrashSize(), 1e3);
-
     // Drop extra file
     store_->setSpaceBasedTrimLimit(currentID);
     store_
@@ -5436,10 +5441,6 @@ TEST_F(PartitionedRocksDBStoreTest, DeleteRatelimit) {
     ASSERT_EQ(currentID, store_->getPartitionList()->firstID());
     wait_until("Wait until extra file is gone",
                [&] { return num_trash_files() == 0; });
-
-    // Expect minimal trash
-    ASSERT_LT(store_->getTotalTrashSize(), 1e3);
-
     ASSERT_FALSE(store_->getPartitionList()->get(dropToID));
     ASSERT_TRUE(store_->getPartitionList()->get(currentID));
 
@@ -5453,12 +5454,16 @@ TEST_F(PartitionedRocksDBStoreTest, DeleteRatelimit) {
       RocksDBSettings::defaultTestSettings());
   settings_updater_ = std::make_unique<SettingsUpdater>();
   settings_updater_->registerSettings(rocksdb_settings_);
+#ifdef LOGDEVICED_ROCKSDB_SUPPORTS_TRASH_INPLACE
+  openStore(s_fast, nullptr);
+#else
   // Callback function that'll add an SstFileManager to the conf,
   // which will enforce the ratelimit
   auto customize_conf_fn = [this](RocksDBLogStoreConfig& cfg) {
-    cfg.addSstFileManagerForShard();
+    cfg.addSstFileManagerForShard(path_, /* nshards= */ 1);
   };
   openStore(s_fast, customize_conf_fn);
+#endif
   // SstFileManager, which ratelimits deletes, needs RocksDBEnv for OS
   // functionality like the filesystem
   if (!env_) {

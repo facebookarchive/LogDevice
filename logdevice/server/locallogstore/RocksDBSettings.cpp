@@ -184,7 +184,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        &sst_delete_bytes_per_sec,
        "0",
        nullptr,
-       "ratelimit in bytes/sec on deletion of SST files per shard; 0 for "
+       "ratelimit in bytes/sec on deletion of SST files per node; 0 for "
        "unlimited.",
        SERVER,
        SettingsCategory::RocksDB);
