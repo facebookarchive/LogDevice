@@ -5719,6 +5719,9 @@ void PartitionedRocksDBStore::loPriBackgroundThreadRun() {
         cancelManualCompaction(p.partition->id_);
       }
     }
+
+    // Update trash size stat
+    PER_SHARD_STAT_SET(stats_, trash_size, shard_idx_, getTotalTrashSize());
   }
 
   ld_info("Shard %d lo-pri background thread finished", getShardIdx());
@@ -5888,6 +5891,13 @@ void PartitionedRocksDBStore::onSettingsUpdated(
   if (settingsUpdated) {
     ld_info("Changes: %s", ss.str().c_str());
   }
+}
+
+uint64_t PartitionedRocksDBStore::getTotalTrashSize() {
+  auto options = rocksdb_config_.getRocksDBOptions();
+  return options->sst_file_manager != nullptr
+      ? options->sst_file_manager->GetTotalTrashSize()
+      : 0;
 }
 
 }} // namespace facebook::logdevice

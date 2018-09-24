@@ -86,14 +86,9 @@ struct RocksDBLogStoreConfig {
   UpdateableSettings<RocksDBSettings> rocksdb_settings_;
   UpdateableSettings<RebuildingSettings> rebuilding_settings_;
 
-  // Create SstFileManager, used to ratelimit deletes
-#ifdef LOGDEVICED_ROCKSDB_SUPPORTS_TRASH_INPLACE
-  // For per-node use case
-  void addSstFileManager();
-#else
-  // For per-shard use case
-  void addSstFileManagerForShard(std::string shard_path, shard_size_t nshards);
-#endif
+  // Create an SstFileManager, used to ratelimit deletes. This should only be
+  // called on a copy that has been created for a particular shard.
+  void addSstFileManagerForShard();
 };
 
 }} // namespace facebook::logdevice

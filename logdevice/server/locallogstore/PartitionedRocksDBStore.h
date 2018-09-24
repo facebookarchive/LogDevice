@@ -711,6 +711,9 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
                        std::vector<logid_t> logs,
                        std::vector<std::pair<logid_t, DirectoryEntry>>& out);
 
+  // Returns the total size of trash files for this shard.
+  uint64_t getTotalTrashSize();
+
   // Schedules a manual compaction. If hi_pri is true, it will be done before
   // other compactions. Otherwise, lo-pri compactions will only be scheduled
   // when there are no other compactions taking place. If there already is a
