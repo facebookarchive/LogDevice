@@ -145,7 +145,7 @@ can be placed on machines with 3 different rack identifiers (but could share sam
 
 Each section can be expressed as a string.
 
-### Roles and state (`roles`, `sequencer`, `storage` and `storage_weight`)
+### Roles and state (`roles`, `sequencer`, `sequencer_weight`, `storage` and `storage_weight`)
 A distinction should be made between roles and state:
 - Role: this remains the same during the lifetime of the node.
 - State: could change (for e.g. maintenance operations)
@@ -155,19 +155,18 @@ A distinction should be made between roles and state:
 - `sequencer`
 - `storage`
 
-`storage_weight` defines a proportional value compared to other machines. When e.g. total disk size is used as weight for machines with variable disk sizes, the storage will be used proportionally.
+`storage_weight` defines a proportional value for the amount of data to be stored compared to other machines. When e.g. total disk size is used as weight for machines with variable disk sizes, the storage will be used proportionally.
+`sequencer_weight` can similarly define a proportional value for the number of sequencers to be placed on the machine.
 
 #### State
 The following variables can be used to perform maintenances / temporarily change the state of a node:
 
 `storage` can have the following values:
-- `none`: This node does not serve reads nor writes
+- `disabled`: This node does not serve reads nor writes
 - `read-only`: This node still serves reads, but not writes
 - `read-write`: This node takes both reads and writes
 
-`sequencer` can be toggled to temporarily disable or enable the sequencer (if the node has the `sequencer` role).
-
-_Note:_ in future versions, `sequencer` will be split into `sequencer` and `sequencer_weight`, for which the latter can control the proportional sequencer placement on a node)
+`sequencer` is a boolean value that can be toggled to temporarily disable or enable the sequencer (if the node has the `sequencer` role).
 
 ### Gossip port (`gossip_port`)
 The (TCP) port LogDevice uses to gossip node state internally. This is required when `gossip-enabled` is `true`.
