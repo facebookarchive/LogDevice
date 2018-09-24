@@ -43,6 +43,7 @@ class AdminClientConnection
         timeout_(timeout) {
     if (request_response_.conntype_ ==
         AdminCommandClient::ConnectionType::ENCRYPTED) {
+      ld_check(context);
       socket_ = AsyncSSLSocket::newSocket(context, evb);
     } else {
       socket_ = AsyncSocket::newSocket(evb);
@@ -191,7 +192,6 @@ class AdminClientConnection
             size,
             d1,
             d2);
-
     result_.clear();
   }
 
@@ -218,68 +218,94 @@ AdminCommandClient::semifuture_send(
     std::vector<AdminCommandClient::RequestResponse>& rr,
     std::chrono::milliseconds command_timeout,
     std::chrono::milliseconds connect_timeout) {
-  std::vector<folly::Promise<AdminCommandClient::RequestResponse*>> proms(
-      rr.size());
+  std::shared_ptr<
+      std::vector<folly::Promise<AdminCommandClient::RequestResponse*>>>
+      proms = std::make_shared<
+          std::vector<folly::Promise<AdminCommandClient::RequestResponse*>>>(
+          rr.size());
   std::vector<folly::SemiFuture<AdminCommandClient::RequestResponse*>> futures;
   futures.reserve(rr.size());
-  for (auto& p : proms) {
+  for (auto& p : *proms) {
     futures.emplace_back(p.getSemiFuture());
   }
-  executor_ = std::make_unique<folly::CPUThreadPoolExecutor>(1);
-  executor_->add([promises = std::move(proms),
-                  command_timeout,
-                  connect_timeout,
-                  &rr]() mutable {
-    bool timed_out = false;
-    size_t connections_done = 0;
-    size_t connections_size;
 
-    {
-      // Scope event_base and connections objects
-      EventBase event_base;
-      std::vector<std::unique_ptr<AdminClientConnection>> connections;
+  ld_check(num_threads_ > 0);
+  size_t actual_num_threads = num_threads_;
+  int num_requests_per_thread = rr.size() / actual_num_threads + 1;
+  if (num_threads_ > rr.size()) {
+    actual_num_threads = rr.size();
+    num_requests_per_thread = 1;
+  }
+  executor_ =
+      std::make_unique<folly::CPUThreadPoolExecutor>(actual_num_threads);
+  for (int k = 0; k < actual_num_threads; k++) {
+    int start = k * num_requests_per_thread;
+    if (start >= rr.size()) {
+      break;
+    }
+    executor_->add([proms,
+                    command_timeout,
+                    connect_timeout,
+                    start,
+                    num_requests_per_thread,
+                    &rr]() mutable {
+      bool timed_out = false;
+      size_t connections_done = 0;
+      size_t connections_size;
+      auto& promises = *proms;
+      {
+        // Scope event_base and connections objects
+        EventBase event_base;
+        std::vector<std::unique_ptr<AdminClientConnection>> connections;
 
-      auto timeout =
-          AsyncTimeout::make(event_base, [&]() noexcept { timed_out = true; });
-      timeout->scheduleTimeout(command_timeout);
-      auto context = std::make_shared<folly::SSLContext>();
-      for (size_t i = 0; i < rr.size(); ++i) {
-        auto connection = std::make_unique<AdminClientConnection>(
-            &event_base,
-            rr[i],
-            [i, &connections_done, &promises, &rr]() {
+        auto timeout = AsyncTimeout::make(
+            event_base, [&]() noexcept { timed_out = true; });
+        timeout->scheduleTimeout(command_timeout);
+        auto context = std::make_shared<folly::SSLContext>();
+
+        for (size_t i = start;
+             i < rr.size() && i - start < num_requests_per_thread;
+             ++i) {
+          auto connection = std::make_unique<AdminClientConnection>(
+              &event_base,
+              rr[i],
+              [i, &connections_done, &promises, &rr]() {
+                ++connections_done;
+                promises[i].setValue(&rr[i]);
+              },
+              connect_timeout,
+              context);
+          connection->connect();
+          connections.push_back(std::move(connection));
+        }
+        connections_size = connections.size();
+        do {
+          event_base.loopOnce();
+        } while (connections_done < connections_size && !timed_out);
+      }
+
+      if (timed_out) {
+        ld_error("Timed out after %lums reading from %lu nodes",
+                 command_timeout.count(),
+                 connections_size - connections_done);
+        for (size_t i = start;
+             i < rr.size() && i - start < num_requests_per_thread;
+             ++i) {
+          if (!rr[i].success && rr[i].failure_reason.empty()) {
+            rr[i].failure_reason = "TIMEOUT";
+            if (!promises[i].isFulfilled()) {
               ++connections_done;
               promises[i].setValue(&rr[i]);
-            },
-            connect_timeout,
-            context);
-        connection->connect();
-        connections.push_back(std::move(connection));
-      }
-      connections_size = connections.size();
-      do {
-        event_base.loopOnce();
-      } while (connections_done < connections_size && !timed_out);
-    }
-
-    if (timed_out) {
-      ld_error("Timed out after %lums reading from %lu nodes",
-               command_timeout.count(),
-               connections_size - connections_done);
-      for (size_t i = 0; i < rr.size(); ++i) {
-        if (!rr[i].success && rr[i].failure_reason.empty()) {
-          rr[i].failure_reason = "TIMEOUT";
-          if (!promises[i].isFulfilled()) {
-            ++connections_done;
-            promises[i].setValue(&rr[i]);
-            if (connections_done == connections_size) {
-              break;
+              if (connections_done == connections_size) {
+                break;
+              }
             }
           }
         }
       }
-    }
-  });
+    });
+  }
+
   return futures;
 }
 

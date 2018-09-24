@@ -26,7 +26,9 @@ class AdminCommandClient {
  public:
   enum class ConnectionType { UNKNOWN, PLAIN, ENCRYPTED };
 
-  AdminCommandClient() : executor_() {}
+  AdminCommandClient(size_t num_threads = 4)
+      : executor_(), num_threads_(num_threads) {}
+
   class RequestResponse {
    public:
     RequestResponse(folly::SocketAddress addr,
@@ -61,6 +63,7 @@ class AdminCommandClient {
 
  private:
   std::unique_ptr<folly::CPUThreadPoolExecutor> executor_;
+  size_t num_threads_{4};
 };
 
 }} // namespace facebook::logdevice
