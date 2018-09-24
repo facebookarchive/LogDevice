@@ -21,8 +21,8 @@ add_dependencies(ldquery common gason_sources admin_command_client)
 target_link_libraries(ldquery
   common
   logdevice_server
-  logdevice_python_static
-  ldclient_static
+  logdevice_python
+  ldclient
   admin_command_client
   gason_static
   ${SQLITE_LIBRARY}
