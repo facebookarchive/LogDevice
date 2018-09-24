@@ -773,11 +773,9 @@ void AppenderTest::updateConfig() {
     ld_check(!nodes.count(nid));
     Configuration::Node& node = nodes[nid];
     node.address = Sockaddr("::1", folly::to<std::string>(4440 + nid));
-    node.storage_state = configuration::StorageState::READ_WRITE;
-    node.num_shards = 1;
     node.generation = 0;
-    node.sequencer_weight = 1.0;
-    node.num_shards = 1;
+    node.addStorageRole();
+    node.addSequencerRole();
   }
 
   Configuration::Log log{};
@@ -801,7 +799,7 @@ void AppenderTest::updateConfig() {
 
   StorageSet shards;
   for (const auto& it : nodes) {
-    for (shard_index_t s = 0; s < it.second.num_shards; ++s) {
+    for (shard_index_t s = 0; s < it.second.getNumShards(); ++s) {
       shards.push_back(ShardID(it.first, s));
     }
   }

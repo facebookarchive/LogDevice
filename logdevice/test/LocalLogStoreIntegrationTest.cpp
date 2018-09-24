@@ -63,15 +63,12 @@ TEST_F(LocalLogStoreIntegrationTest, StartWithCorruptDB) {
   for (int i = 0; i < NNODES; ++i) {
     Configuration::Node node;
     if (i == 0) {
-      node.storage_state = configuration::StorageState::NONE;
-      node.num_shards = 0;
+      node.addSequencerRole();
     } else {
-      ld_check(node.storage_state == configuration::StorageState::READ_WRITE);
-      node.num_shards = 4;
+      node.addStorageRole(/*num_shards*/ 4);
     }
     node.generation = i < NNODES - 2 ? 1 : 2;
-    node.sequencer_weight = (i == 0);
-    nodes_config[i] = node;
+    nodes_config[i] = std::move(node);
   }
 
   auto cluster = IntegrationTestUtils::ClusterFactory()

@@ -121,7 +121,8 @@ Message::Disposition START_onReceived(START_Message* msg, const Address& from) {
   auto scfg = w->getServerConfig();
   auto* node = scfg->getNode(scfg->getMyNodeID().index());
   ld_check(node);
-  const shard_size_t n_shards = node->num_shards;
+  ld_check(node->storage_attributes);
+  const shard_size_t n_shards = node->getNumShards();
   ld_check(n_shards > 0); // We already checked we are a storage node.
 
   shard_index_t shard_idx = header.shard;
@@ -232,7 +233,8 @@ onReceivedContinuation(START_Message* msg,
 
   auto* node = scfg->getNode(scfg->getMyNodeID().index());
   ld_check(node);
-  const shard_size_t n_shards = node->num_shards;
+  ld_check(node->storage_attributes);
+  const shard_size_t n_shards = node->getNumShards();
   ld_check(n_shards > 0); // We already checked we are a storage node.
 
   if (permission_status == PermissionCheckStatus::DENIED) {

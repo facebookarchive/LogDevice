@@ -240,30 +240,33 @@ std::unique_ptr<Cluster> ClusterFactory::create(int nnodes) {
     for (int i = 0; i < nnodes; ++i) {
       Configuration::Node node;
       node.generation = 1;
-      node.num_shards = num_db_shards_;
-      node.sequencer_weight = 1;
       NodeLocation location;
       location.fromDomainString(loc_prefix +
                                 std::to_string(i % num_racks_ + 1));
       node.location = location;
-      nodes[i] = node;
+
+      node.addSequencerRole();
+      node.addStorageRole(num_db_shards_);
+
+      nodes[i] = std::move(node);
     }
   } else {
     // N0 is the only sequencer node.
     for (int i = 0; i < nnodes; ++i) {
       const bool is_storage_node = (nnodes == 1 || i > 0);
       Configuration::Node node;
-      node.storage_state = is_storage_node
-          ? configuration::StorageState::READ_WRITE
-          : configuration::StorageState::NONE;
-      node.generation = 1;
-      node.num_shards = is_storage_node ? num_db_shards_ : 0;
-      node.sequencer_weight = (i == 0);
       NodeLocation location;
       location.fromDomainString(loc_prefix +
                                 std::to_string(i % num_racks_ + 1));
       node.location = location;
-      nodes[i] = node;
+      node.generation = 1;
+      if (i == 0) {
+        node.addSequencerRole();
+      }
+      if (is_storage_node) {
+        node.addStorageRole(num_db_shards_);
+      }
+      nodes[i] = std::move(node);
     }
   }
 
@@ -608,9 +611,10 @@ int Cluster::expand(std::vector<node_index_t> new_indices, bool start_nodes) {
   for (node_index_t idx : new_indices) {
     Configuration::Node node;
     node.generation = 1;
-    node.num_shards = num_db_shards_;
-    node.sequencer_weight = 0;
-    nodes[idx] = node;
+
+    // Storage only node.
+    node.addStorageRole(num_db_shards_);
+    nodes[idx] = std::move(node);
   }
 
   std::vector<SockaddrPair> addrs(new_indices.size());
@@ -2249,12 +2253,19 @@ int Cluster::updateNodeAttributes(node_index_t index,
     ld_check(false);
     return -1;
   }
-  nodes[index].storage_state = storage_state;
-  if (storage_state == configuration::StorageState::READ_WRITE &&
-      nodes[index].storage_capacity.value_or(1) == 0) {
-    nodes[index].storage_capacity = 1;
+  const auto& node = nodes[index];
+  if (node.storage_attributes != nullptr) {
+    node.storage_attributes->state = storage_state;
+    if (storage_state == configuration::StorageState::READ_WRITE &&
+        node.storage_attributes->capacity == 0) {
+      node.storage_attributes->capacity = 1;
+    }
   }
-  nodes[index].sequencer_weight = sequencer_weight;
+
+  if (node.sequencer_attributes != nullptr) {
+    node.sequencer_attributes->weight = sequencer_weight;
+  }
+
   Configuration::NodesConfig nodes_config(std::move(nodes));
   auto config = config_->get();
   std::shared_ptr<ServerConfig> new_server_config =

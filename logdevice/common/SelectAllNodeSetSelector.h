@@ -50,9 +50,9 @@ class SelectAllNodeSetSelector : public NodeSetSelector {
     for (const auto& it : cfg->serverConfig()->getNodes()) {
       if ((!options || !options->exclude_nodes.count(it.first)) &&
           it.second.isReadableStorageNode()) {
-        ld_check(it.second.num_shards > 0);
-        shard_index_t shard_idx =
-            getLegacyShardIndexForLog(log_id, it.second.num_shards);
+        auto num_shards = it.second.getNumShards();
+        ld_check(num_shards > 0);
+        shard_index_t shard_idx = getLegacyShardIndexForLog(log_id, num_shards);
         indices->push_back(ShardID(it.first, shard_idx));
       }
     }

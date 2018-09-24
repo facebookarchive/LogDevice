@@ -2664,8 +2664,8 @@ void ClientReadStream::updateCurrentReadSet() {
       continue;
     }
 
-    if (!it->second.isReadableStorageNode() || it->second.num_shards <= 0) {
-      // Not a storage node, or we're not supposed to be reading from it.
+    if (!it->second.isReadableStorageNode() || it->second.getNumShards() <= 0) {
+      // Not a storage node, or it's not currently readable.
       // Ignore.
       continue;
     }

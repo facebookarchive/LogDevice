@@ -180,12 +180,12 @@ using Domain = facebook::logdevice::NodeLocationHierarchy::Domain;
 
 TEST(NodeLocationTest, BuildHierarchy) {
   Configuration::Nodes nodes;
-  addNodes(&nodes, 1, 1, {}, "rg1.dc1...", 1);          // node 0
-  addNodes(&nodes, 1, 1, {}, "rg2.dc2.cl1.ro1.rk1", 1); // node 1
-  addNodes(&nodes, 1, 1, {}, "....", 1);                // node 2
-  addNodes(&nodes, 1, 1, {}, "rg2.dc2...", 1);          // node 3
-  addNodes(&nodes, 1, 1, {}, "rg2.dc1.cl1.ro1.", 1);    // node 4
-  addNodes(&nodes, 1, 1, {}, "rg2.dc1.cl1.ro1.rk1", 1); // node 5
+  addNodes(&nodes, 1, 1, "rg1.dc1...", 1);          // node 0
+  addNodes(&nodes, 1, 1, "rg2.dc2.cl1.ro1.rk1", 1); // node 1
+  addNodes(&nodes, 1, 1, "....", 1);                // node 2
+  addNodes(&nodes, 1, 1, "rg2.dc2...", 1);          // node 3
+  addNodes(&nodes, 1, 1, "rg2.dc1.cl1.ro1.", 1);    // node 4
+  addNodes(&nodes, 1, 1, "rg2.dc1.cl1.ro1.rk1", 1); // node 5
 
   Configuration::NodesConfig nodes_config;
   nodes_config.setNodes(std::move(nodes));

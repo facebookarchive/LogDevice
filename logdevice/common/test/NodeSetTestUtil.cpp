@@ -10,6 +10,7 @@
 #include <folly/Memory.h>
 #include <folly/Random.h>
 #include <folly/String.h>
+
 #include "logdevice/common/util.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
 
@@ -18,11 +19,10 @@ namespace facebook { namespace logdevice { namespace NodeSetTestUtil {
 void addNodes(ServerConfig::Nodes* nodes,
               size_t num_nodes,
               shard_size_t num_shards,
-              folly::Optional<std::chrono::seconds> retention,
               std::string location_string,
-              size_t num_non_zw_nodes,
               double weight,
-              double sequencer) {
+              double sequencer,
+              size_t num_non_zw_nodes) {
   ld_check(nodes != nullptr);
   ld_check(num_nodes >= num_non_zw_nodes);
 
@@ -35,20 +35,21 @@ void addNodes(ServerConfig::Nodes* nodes,
   for (size_t i = 0; i < num_nodes; ++i) {
     ServerConfig::Node node;
     node.address = Sockaddr("::1", std::to_string(first_new_index + i));
-    node.storage_capacity = weight;
-    node.storage_state = (i < num_non_zw_nodes)
-        ? configuration::StorageState::READ_WRITE
-        : configuration::StorageState::READ_ONLY;
-    node.sequencer_weight = sequencer;
-    node.num_shards = num_shards;
     node.generation = 1;
-    node.retention = retention;
     if (!location_string.empty()) {
       NodeLocation loc;
       int rv = loc.fromDomainString(location_string);
       ld_check(rv == 0);
       node.location = std::move(loc);
     }
+
+    node.addSequencerRole(sequencer);
+    node.addStorageRole(num_shards);
+    node.storage_attributes->state = (i < num_non_zw_nodes)
+        ? configuration::StorageState::READ_WRITE
+        : configuration::StorageState::READ_ONLY;
+    node.storage_attributes->capacity = weight;
+
     new_nodes.push_back(node);
   }
 
@@ -56,7 +57,7 @@ void addNodes(ServerConfig::Nodes* nodes,
   // shuffle the nodes added
   std::shuffle(new_nodes.begin(), new_nodes.end(), folly::ThreadLocalPRNG());
   for (size_t i = 0; i < new_nodes.size(); ++i) {
-    (*nodes)[first_new_index + i] = new_nodes[i];
+    (*nodes)[first_new_index + i] = std::move(new_nodes[i]);
   }
 
   ld_check(nodes->size() == size_begin + num_nodes);

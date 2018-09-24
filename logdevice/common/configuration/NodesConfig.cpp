@@ -24,11 +24,10 @@ void NodesConfig::calculateHash() {
   // Generating a list of sorted node IDs, so the order is consistent regardless
   // of std::unordered_map internals
   std::vector<node_index_t> sorted_node_ids(nodes_.size());
-  std::transform(
-      nodes_.begin(),
-      nodes_.end(),
-      sorted_node_ids.begin(),
-      [](const std::pair<node_index_t, Node>& src) { return src.first; });
+  std::transform(nodes_.begin(),
+                 nodes_.end(),
+                 sorted_node_ids.begin(),
+                 [](const auto& src) { return src.first; });
   std::sort(sorted_node_ids.begin(), sorted_node_ids.end());
 
   std::string hashable_string;
@@ -52,11 +51,15 @@ void NodesConfig::calculateHash() {
     std::string location_str = node.locationStr();
 
     append(&node_id, sizeof(node_id));
-    double storage_capacity = node.storage_capacity.value_or(0);
-    append(&storage_capacity, sizeof(storage_capacity));
-    append(&node.storage_state, sizeof(node.storage_state));
-    append(&node.exclude_from_nodesets, sizeof(node.exclude_from_nodesets));
-    append(&node.num_shards, sizeof(node.num_shards));
+    if (node.hasRole(NodeRole::STORAGE)) {
+      auto* storage = node.storage_attributes.get();
+      append(&storage->capacity, sizeof(storage->capacity));
+      append(&storage->state, sizeof(storage->state));
+      append(&storage->exclude_from_nodesets,
+             sizeof(storage->exclude_from_nodesets));
+      append(&storage->num_shards, sizeof(storage->num_shards));
+    }
+
     // appending location str and the terminating null-byte
     append(location_str.c_str(), location_str.size() + 1);
   }
@@ -68,12 +71,12 @@ void NodesConfig::calculateHash() {
 // TODO(T15517759): remove when Flexible Log Sharding is fully implemented.
 void NodesConfig::calculateNumShards() {
   num_shards_ = 0;
-  for (auto& it : nodes_) {
+  for (const auto& it : nodes_) {
     if (!it.second.isReadableStorageNode()) {
       continue;
     }
-    ld_check(it.second.num_shards > 0);
-    num_shards_ = it.second.num_shards;
+    ld_check(it.second.getNumShards() > 0);
+    num_shards_ = it.second.getNumShards();
     break; // The other storage nodes have the same amount of shards.
   }
 }

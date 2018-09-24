@@ -2309,11 +2309,12 @@ TEST_P(RebuildingTest, SkipEverything) {
 
   Configuration::Nodes nodes(3);
   for (int i = 0; i < 3; ++i) {
-    nodes[i].num_shards = 1;
+    nodes[i].addSequencerRole();
+    nodes[i].addStorageRole(/*num_shards*/ 1);
     nodes[i].generation = 1;
-    nodes[i].sequencer_weight = 1.0;
-    nodes[i].storage_state = i == 2 ? configuration::StorageState::READ_ONLY
-                                    : configuration::StorageState::READ_WRITE;
+    nodes[i].storage_attributes->state = i == 2
+        ? configuration::StorageState::READ_ONLY
+        : configuration::StorageState::READ_WRITE;
   }
 
   ld_info("Creating cluster");

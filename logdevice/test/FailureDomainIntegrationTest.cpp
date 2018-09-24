@@ -27,9 +27,18 @@ class FailureDomainIntegrationTest : public IntegrationTestBase {};
 static Configuration::Nodes createFailureDomainNodes() {
   Configuration::Nodes nodes;
   for (int i = 0; i < 6; ++i) {
+    auto& node = nodes[i];
+
     // store data on all nodes
-    ld_check(nodes[i].storage_state == configuration::StorageState::READ_WRITE);
-    nodes[i].sequencer_weight = i == 0; // node 0 running sequencer
+    node.addStorageRole(/*num_shards*/ 2);
+    ld_check(nodes[i].isWritableStorageNode());
+
+    // node 0 running sequencer
+    if (i == 0) {
+      node.addSequencerRole();
+      ld_check_eq(node.sequencer_attributes->weight, 1);
+    }
+
     std::string domain_string;
     if (i < 1) {
       domain_string = "region0.dc1..."; // node 0 is in region 0
@@ -40,8 +49,7 @@ static Configuration::Nodes createFailureDomainNodes() {
     }
     NodeLocation location;
     location.fromDomainString(domain_string);
-    nodes[i].location = location;
-    nodes[i].num_shards = 2;
+    node.location = location;
   }
 
   return nodes;
@@ -162,9 +170,9 @@ TEST_F(FailureDomainIntegrationTest, TolerateRegionFailure) {
   EXPECT_EQ(0, rv);
 }
 
-// Test ReadHealth with failure domain support end-to-end
-// if records are cross-region replicated, the state of reading should still
-// considered health even if all nodes from one single region are down
+// Test ReadHealth with failure domain support end-to-end.
+// If records are cross-region replicated, the state of reading should still
+// be considered healthy even if all nodes from one single region are down.
 TEST_F(FailureDomainIntegrationTest, ReadHealthWithFailureDomain) {
   const logid_t LOG_ID(1);
   Configuration::Nodes nodes = createFailureDomainNodes();
@@ -245,7 +253,8 @@ TEST_F(FailureDomainIntegrationTest,
   const logid_t logid(2);
   Configuration::Nodes nodes = createFailureDomainNodes();
   for (auto& it : nodes) {
-    it.second.sequencer_weight = 1;
+    auto& node = it.second;
+    node.addSequencerRole();
   }
 
   Configuration::Log log_config;

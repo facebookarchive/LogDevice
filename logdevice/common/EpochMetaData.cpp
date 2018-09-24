@@ -67,7 +67,7 @@ bool nodesetContainsInvalidNodes(logid_t log_id,
   for (auto shard : shards) {
     auto node = cfg.getNode(shard.node());
     if (!node || !node->isReadableStorageNode() ||
-        node->exclude_from_nodesets) {
+        node->storage_attributes->exclude_from_nodesets) {
       RATELIMIT_INFO(std::chrono::seconds(10),
                      10,
                      "Node %d is in the nodeset for log %lu, but is not a "

@@ -518,11 +518,13 @@ TEST_P(ReadingIntegrationTest, PurgingSmokeTest) {
 
   Configuration::Nodes nodes;
   for (int i = 0; i < 4; ++i) {
-    nodes[i].storage_state = i > 0 ? configuration::StorageState::READ_WRITE
-                                   : configuration::StorageState::NONE;
-    nodes[i].generation = 1;
-    nodes[i].sequencer_weight = i == 0;
-    nodes[i].num_shards = i > 0 ? 2 : 0;
+    auto& node = nodes[i];
+    node.generation = 1;
+    if (i == 0) {
+      node.addSequencerRole();
+    } else {
+      node.addStorageRole(/*num_shards*/ 2);
+    }
   }
 
   Configuration::NodesConfig nodes_config(nodes);
@@ -891,11 +893,13 @@ TEST_P(ReadingIntegrationTest, LogTailAttributes) {
 
   Configuration::Nodes nodes;
   for (int i = 0; i < 4; ++i) {
-    nodes[i].storage_state = i > 0 ? configuration::StorageState::READ_WRITE
-                                   : configuration::StorageState::NONE;
-    nodes[i].generation = 1;
-    nodes[i].sequencer_weight = i == 0;
-    nodes[i].num_shards = i > 0 ? 2 : 0;
+    auto& node = nodes[i];
+    node.generation = 1;
+    if (i == 0) {
+      node.addSequencerRole();
+    } else {
+      node.addStorageRole(/*num_shards*/ 2);
+    }
   }
 
   Configuration::NodesConfig nodes_config(nodes);

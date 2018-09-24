@@ -153,10 +153,9 @@ ServerConfig::NodesConfig createSimpleNodesConfig(size_t nnodes) {
   for (size_t i = 0; i < nnodes; ++i) {
     auto& node = nodes[i];
     node.address = Sockaddr("::1", folly::to<std::string>(4440 + i));
-    node.storage_state = configuration::StorageState::READ_WRITE;
-    node.num_shards = 2;
     node.generation = 1;
-    node.sequencer_weight = 1.0;
+    node.addSequencerRole();
+    node.addStorageRole(/*num_shards*/ 2);
   }
   return ServerConfig::NodesConfig(std::move(nodes));
 }
@@ -240,8 +239,9 @@ std::shared_ptr<Configuration> createSimpleConfig(size_t nnodes, size_t logs) {
     node.gossip_address =
         Sockaddr("::1", folly::to<std::string>(4440 + nnodes + i));
     node.generation = 1;
-    node.num_shards = 2;
-    nodes[i] = node;
+    node.addSequencerRole();
+    node.addStorageRole(/*num_shards*/ 2);
+    nodes[i] = std::move(node);
   }
   ServerConfig::NodesConfig nodes_config(nodes);
   return createSimpleConfig(std::move(nodes_config), logs);

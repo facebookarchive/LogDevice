@@ -758,7 +758,7 @@ void AllServerReadStreams::sendShardStatusToClient(ClientID cid) {
   auto my_node_id = Worker::onThisThread()->getServerConfig()->getMyNodeID();
   auto node = Worker::onThisThread()->getServerConfig()->getNode(my_node_id);
   ld_check(node);
-  hdr.num_shards_deprecated = node->num_shards;
+  hdr.num_shards_deprecated = node->getNumShards();
 
   auto msg =
       std::make_unique<SHARD_STATUS_UPDATE_Message>(hdr, shard_status_map);

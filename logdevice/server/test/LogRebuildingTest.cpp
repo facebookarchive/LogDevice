@@ -431,9 +431,9 @@ class LogRebuildingTest : public ::testing::Test {
       Configuration::Node& node = nodes[i];
       node.address = Sockaddr(
           get_localhost_address_str(), folly::to<std::string>(4440 + i));
-      node.num_shards = 1;
       node.generation = 1;
-      node.sequencer_weight = 1.0;
+      node.addSequencerRole();
+      node.addStorageRole();
     }
 
     auto logs_config = std::make_unique<configuration::LocalLogsConfig>();

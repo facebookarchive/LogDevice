@@ -39,9 +39,9 @@ TEST_F(FailureDetectorIntegrationTest, GossipListOnNodeRestarts) {
   /* make half of the nodes sequencers, and other half storage nodes */
   for (i = 0; i < num_nodes; ++i) {
     nodes[i].generation = 1;
-    nodes[i].num_shards = 2;
+    nodes[i].addStorageRole(/*num_shards*/ 2);
     if (i < num_nodes / 2) {
-      nodes[i].sequencer_weight = 1.0;
+      nodes[i].addSequencerRole();
     }
   }
 
@@ -137,9 +137,10 @@ static bool noIsolatedScope(IntegrationTestUtils::Cluster* cluster,
 static Configuration::Nodes createFailureDomainNodes() {
   Configuration::Nodes nodes;
   for (int i = 0; i < 6; ++i) {
-    nodes[i].sequencer_weight = i == 0; // node 0 running sequencer
+    auto& node = nodes[i];
     std::string domain_string;
     if (i < 1) {
+      node.addSequencerRole();
       domain_string = "region0.dc1..."; // node 0 is in region 0
     } else if (i < 3) {
       domain_string = "region1.dc1.cl1.ro1.rk1"; // node 1, 2 is in region 1
@@ -148,8 +149,8 @@ static Configuration::Nodes createFailureDomainNodes() {
     }
     NodeLocation location;
     location.fromDomainString(domain_string);
-    nodes[i].location = location;
-    nodes[i].num_shards = 2;
+    node.location = location;
+    node.addStorageRole(/*num_shards*/ 2);
   }
 
   return nodes;
@@ -233,7 +234,9 @@ TEST_F(FailureDetectorIntegrationTest, ResetStoreTimerAfterIsolation) {
   // node 5 is in the same rack in region 2
   Configuration::Nodes nodes;
   for (int i = 0; i < 6; ++i) {
-    nodes[i].sequencer_weight = 1;
+    auto& node = nodes[i];
+    node.addSequencerRole();
+    node.addStorageRole(/*num_shards*/ 2);
     std::string domain_string;
     if (i < 1) {
       domain_string = "region0.dc1.cl1.ro1.rk1";
@@ -244,8 +247,7 @@ TEST_F(FailureDetectorIntegrationTest, ResetStoreTimerAfterIsolation) {
     }
     NodeLocation location;
     location.fromDomainString(domain_string);
-    nodes[i].location = location;
-    nodes[i].num_shards = 2;
+    node.location = location;
   }
   Configuration::Log log_config;
   log_config.rangeName = "mylogs";
@@ -482,14 +484,11 @@ TEST_F(FailureDetectorIntegrationTest, GetClusterState) {
 TEST_F(FailureDetectorIntegrationTest, GetClusterStatePeerUnavailable) {
   // 1 sequencer and 2 storage nodes.
   Configuration::Nodes nodes;
-  nodes[0].storage_state = configuration::StorageState::NONE;
   nodes[0].generation = 1;
-  nodes[0].sequencer_weight = 1.0;
-  nodes[0].num_shards = 2;
+  nodes[0].addSequencerRole();
   for (node_index_t i = 1; i < 3; ++i) {
     nodes[i].generation = 1;
-    nodes[i].sequencer_weight = 0.0;
-    nodes[i].num_shards = 2;
+    nodes[i].addStorageRole(/*num_shards*/ 2);
   }
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
@@ -561,8 +560,8 @@ TEST_F(FailureDetectorIntegrationTest, FDClusterExpandStateTransition) {
   /* make all nodes as sequencers */
   for (int i = 0; i < NUM_NODES - 1; ++i) {
     nodes[i].generation = 1;
-    nodes[i].sequencer_weight = 1.0;
-    nodes[i].num_shards = 2;
+    nodes[i].addSequencerRole();
+    nodes[i].addStorageRole(/*num_shards*/ 2);
   }
 
   auto cluster = IntegrationTestUtils::ClusterFactory()

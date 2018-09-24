@@ -495,21 +495,13 @@ TEST(MessagingTest, OnClientClose) {
 // close callback or the onSent callback that is issued during close.
 TEST(MessagingTest, SendFromCallback) {
   NodeID target(0, 1);
-  Configuration::NodesConfig nodes(
-      {{0,
-        Configuration::Node({
-            // port nobody listens on hopefully
-            Sockaddr("127.0.0.1", "65534"),
-            Sockaddr("127.0.0.1", "65535"),
-            nullptr, // ssl_address
-            nullptr, // admin_address
-            1,       // storage_capacity
-            configuration::StorageState::READ_WRITE,
-            false, // exclude from nodesets
-            1,     // generation
-            1,     // num_shards
-            false  // sequencer_weight
-        })}});
+  Configuration::Node node;
+  // port nobody listens on hopefully
+  node.address = Sockaddr("127.0.0.1", "65534"),
+  node.gossip_address = Sockaddr("127.0.0.1", "65535"), node.generation = 1;
+  node.addStorageRole();
+
+  Configuration::NodesConfig nodes({{0, std::move(node)}});
   auto config =
       std::make_shared<UpdateableConfig>(std::make_shared<Configuration>(
           ServerConfig::fromData(

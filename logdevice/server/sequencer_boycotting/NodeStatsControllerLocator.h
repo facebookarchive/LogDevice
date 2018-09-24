@@ -38,7 +38,7 @@ class NodeStatsControllerLocator {
   bool isController(NodeID node, int count);
 
  protected:
-  virtual Nodes getNodes() const;
+  virtual std::shared_ptr<const Nodes> getNodes() const;
   virtual StateList getNodeState(node_index_t max_node_index) const;
 
  private:

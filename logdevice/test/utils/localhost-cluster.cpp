@@ -595,6 +595,10 @@ int main(int argc, const char* argv[]) {
   try {
     if (options::config_path != "") {
       auto config = Configuration::fromJsonFile(options::config_path.c_str());
+      if (config == nullptr) {
+        ld_error("Unable to load config. Could not create cluster");
+        return 1;
+      }
       cluster = factory.create(*config);
     } else {
       cluster = factory.create(options::nnodes);

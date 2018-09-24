@@ -31,7 +31,8 @@ TEST_F(ServerConfigIntegrationTest, NodeIndexChange) {
   auto nodes = server_config->getNodes();
 
   // swap index of the two nodes
-  configuration::Nodes new_nodes{{0, nodes[1]}, {1, nodes[0]}};
+  configuration::Nodes new_nodes{
+      {0, std::move(nodes[1])}, {1, std::move(nodes[0])}};
   cluster->writeConfig(config->serverConfig()
                            ->withNodes(configuration::NodesConfig(new_nodes))
                            .get(),

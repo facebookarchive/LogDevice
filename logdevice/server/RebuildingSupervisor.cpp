@@ -72,7 +72,7 @@ void RebuildingSupervisor::init() {
   };
   clusterStateSubscription_ = cs->subscribeToUpdates(cb);
 
-  for (auto& node : config->getNodes()) {
+  for (const auto& node : config->getNodes()) {
     auto nid = node.first;
     if (!cs->isNodeAlive(nid) && nid != myNodeId_.index()) {
       addForRebuilding(nid);
@@ -169,7 +169,7 @@ void RebuildingSupervisor::addForRebuilding(
     } else {
       timeout = rebuildingSettings_->self_initiated_rebuilding_grace_period;
       trigger.expiry_ = now + timeout;
-      for (int shard = 0; shard < node->num_shards; ++shard) {
+      for (int shard = 0; shard < node->getNumShards(); ++shard) {
         trigger.shards_.insert(shard);
       }
     }
@@ -584,8 +584,8 @@ bool RebuildingSupervisor::shouldThrottleRebuilding(
   auto set = w->processor_->rebuilding_set_.get();
   auto threshold = rebuildingSettings_->max_node_rebuilding_percentage;
   if (threshold < 100 && set != nullptr) {
-    auto config = w->getServerConfig();
-    auto nodes = config->getNodes();
+    const auto& config = w->getServerConfig();
+    const auto& nodes = config->getNodes();
     auto shards = set->toShardStatusMap(nodes).getShards();
     size_t rebuilding_nodes = 0;
     for (auto n : shards) {

@@ -143,7 +143,7 @@ class NodeStatsController : public NodeStatsControllerCallback {
   /**
    * @return The nodes defined in the nodes config
    */
-  virtual configuration::Nodes getNodes() const;
+  virtual const configuration::Nodes& getNodes() const;
 
   /**
    * @return The failure detector if set, nullptr otherwise

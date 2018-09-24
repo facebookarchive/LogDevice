@@ -529,9 +529,9 @@ class ClientReadStreamTest
       Configuration::Node& node = nodes[shard.node()];
       node.address =
           Sockaddr("::1", folly::to<std::string>(4440 + shard.node()));
-      node.num_shards = 1;
       node.generation = 1;
-      node.sequencer_weight = 1.0;
+      node.addSequencerRole();
+      node.addStorageRole();
 
       auto it = node_locations_.find(shard.node());
       if (it != node_locations_.end()) {

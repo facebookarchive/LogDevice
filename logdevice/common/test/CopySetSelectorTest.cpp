@@ -300,14 +300,14 @@ void CopySetSelectorTest::setUp() {
   dbg::assertOnData = true;
 
   configuration::Nodes nodes;
-  addNodes(&nodes, 1, 1, {}, "rg0.dc0.cl0.ro0.rk0", 1);
-  addNodes(&nodes, 1, 1, {}, "rg1.dc0.cl0.ro0.rk0", 1);
-  addNodes(&nodes, 2, 1, {}, "rg1.dc0.cl0.ro0.rk1", 2);
-  addNodes(&nodes, 1, 1, {}, "rg1.dc0.cl0.ro0.rk2", 1);
-  addNodes(&nodes, 1, 1, {}, "rg1.dc0.cl0..", 1);
-  addNodes(&nodes, 1, 1, {}, "rg2.dc0.cl0.ro0.rk0", 1);
-  addNodes(&nodes, 1, 1, {}, "rg2.dc0.cl0.ro0.rk1", 1);
-  addNodes(&nodes, 1, 1, {}, "....", 1);
+  addNodes(&nodes, 1, 1, "rg0.dc0.cl0.ro0.rk0", 1);
+  addNodes(&nodes, 1, 1, "rg1.dc0.cl0.ro0.rk0", 1);
+  addNodes(&nodes, 2, 1, "rg1.dc0.cl0.ro0.rk1", 2);
+  addNodes(&nodes, 1, 1, "rg1.dc0.cl0.ro0.rk2", 1);
+  addNodes(&nodes, 1, 1, "rg1.dc0.cl0..", 1);
+  addNodes(&nodes, 1, 1, "rg2.dc0.cl0.ro0.rk0", 1);
+  addNodes(&nodes, 1, 1, "rg2.dc0.cl0.ro0.rk1", 1);
+  addNodes(&nodes, 1, 1, "....", 1);
 
   const size_t nodeset_size = nodes.size();
   configuration::NodesConfig nodes_config(std::move(nodes));

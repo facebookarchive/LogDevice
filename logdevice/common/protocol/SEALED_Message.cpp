@@ -108,7 +108,7 @@ Message::Disposition SEALED_Message::onReceived(const Address& from) {
     return Disposition::NORMAL;
   }
 
-  const shard_size_t n_shards = node->num_shards;
+  const shard_size_t n_shards = node->getNumShards();
   ld_check(n_shards > 0); // We already checked we are a storage node.
   shard_index_t shard_idx = header_.shard;
   if (shard_idx >= n_shards) {

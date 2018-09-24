@@ -48,8 +48,9 @@ class SelectAllShardsNodeSetSelector : public NodeSetSelector {
     for (const auto& it : cfg->serverConfig()->getNodes()) {
       if ((!options || !options->exclude_nodes.count(it.first)) &&
           it.second.isReadableStorageNode()) {
-        ld_check(it.second.num_shards > 0);
-        for (shard_index_t s = 0; s < it.second.num_shards; ++s) {
+        auto num_shards = it.second.getNumShards();
+        ld_check(num_shards > 0);
+        for (shard_index_t s = 0; s < num_shards; ++s) {
           indices->push_back(ShardID(it.first, s));
         }
       }
@@ -70,7 +71,7 @@ class SelectAllShardsNodeSetSelector : public NodeSetSelector {
     storage_set_size_t count = 0;
     for (const auto& it : cfg->serverConfig()->getNodes()) {
       if (it.second.isReadableStorageNode()) {
-        count += it.second.num_shards;
+        count += it.second.getNumShards();
       }
     }
     return count;

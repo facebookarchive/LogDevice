@@ -38,8 +38,8 @@ bool NodeStatsControllerLocator::isController(NodeID node, int count) {
 
 std::vector<NodeID>
 NodeStatsControllerLocator::locateControllers(int controller_count) {
-  const auto nodes = getNodes();
-  const auto max_node_index = getMaxNodeIndex(nodes);
+  auto nodes = getNodes();
+  const auto max_node_index = getMaxNodeIndex(*nodes);
   const auto states = getNodeState(max_node_index);
 
   std::vector<node_index_t> controller_indices;
@@ -50,23 +50,23 @@ NodeStatsControllerLocator::locateControllers(int controller_count) {
 
   // remove weight for any nodes without location before using the rack-aware
   // locator
-  for (const auto& node : nodes) {
+  for (const auto& node : *nodes) {
     if (!node.second.location) {
       weights[node.first] = 0.0;
     }
   }
 
   // rack-aware locator
-  locate(controller_count,
-         [this, &nodes](
-             node_index_t new_controller, std::vector<double>* weights) {
-           auto node = nodes.at(new_controller);
-           // only nodes with location should be considered this time
-           ld_check(node.location);
-           this->banRack(node.location.value(), nodes, weights);
-         },
-         &weights,
-         &controller_indices);
+  locate(
+      controller_count,
+      [this, nodes](node_index_t new_controller, std::vector<double>* weights) {
+        const auto& node = nodes->at(new_controller);
+        // only nodes with location should be considered this time
+        ld_check(node.location);
+        this->banRack(node.location.value(), *nodes, weights);
+      },
+      &weights,
+      &controller_indices);
 
   if (controller_indices.size() < controller_count) {
     weights = initialWeightVector(states);
@@ -93,7 +93,7 @@ NodeStatsControllerLocator::locateControllers(int controller_count) {
   std::vector<NodeID> controllers;
   for (auto index : controller_indices) {
     controllers.emplace_back(
-        index, static_cast<node_gen_t>(nodes.at(index).generation));
+        index, static_cast<node_gen_t>(nodes->at(index).generation));
   }
   return controllers;
 }
@@ -116,14 +116,17 @@ void NodeStatsControllerLocator::locate(
   }
 }
 
-NodeStatsControllerLocator::Nodes NodeStatsControllerLocator::getNodes() const {
-  return Worker::onThisThread()->getServerConfig()->getNodes();
+std::shared_ptr<const NodeStatsControllerLocator::Nodes>
+NodeStatsControllerLocator::getNodes() const {
+  auto server_config = Worker::onThisThread()->getServerConfig();
+  return std::shared_ptr<const Nodes>(
+      server_config, &server_config->getNodes());
 }
 
 node_index_t
 NodeStatsControllerLocator::getMaxNodeIndex(const Nodes& nodes) const {
   node_index_t max_node_index = 0;
-  for (auto& entry : nodes) {
+  for (const auto& entry : nodes) {
     max_node_index = std::max(max_node_index, entry.first);
   }
   return max_node_index;
@@ -158,7 +161,7 @@ void NodeStatsControllerLocator::banRack(
     const NodeLocation& banned_rack,
     const Nodes& nodes,
     /*modifiable*/ std::vector<double>* weight_vector) const {
-  for (auto& entry : nodes) {
+  for (const auto& entry : nodes) {
     if (!entry.second.location ||
         entry.second.location.value().sharesScopeWith(
             banned_rack, NodeLocationScope::RACK)) {

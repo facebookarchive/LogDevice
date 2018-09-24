@@ -90,17 +90,12 @@ class APPEND_MessageTest : public ::testing::Test {
   explicit APPEND_MessageTest()
       : settings_(create_default_settings<Settings>()) {
     // build a Configuration object and use it to initialize a Sequencer
-    Configuration::NodesConfig nodes(
-        {{0,
-          Configuration::Node({Sockaddr("127.0.0.1", "20034"),
-                               Sockaddr("127.0.0.1", "20035"),
-                               nullptr,
-                               nullptr,
-                               1 /* storage capacity*/,
-                               configuration::StorageState::READ_WRITE,
-                               false /* exclude from nodesets */,
-                               1 /* generation */,
-                               1 /* num_shards */})}});
+    Configuration::Node node;
+    node.address = Sockaddr("127.0.0.1", "20034");
+    node.gossip_address = Sockaddr("127.0.0.1", "20035");
+    node.generation = 1;
+    node.addStorageRole();
+    Configuration::NodesConfig nodes({{0, std::move(node)}});
 
     Configuration::Log log{};
     log.replicationFactor = 1;

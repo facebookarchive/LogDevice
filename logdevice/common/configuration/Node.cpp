@@ -13,8 +13,25 @@
 #include "logdevice/common/commandline_util_chrono.h"
 
 namespace facebook { namespace logdevice { namespace configuration {
-constexpr double Node::DEFAULT_STORAGE_CAPACITY;
-constexpr StorageState Node::DEFAULT_STORAGE_STATE;
+
+Node::Node(const Node& other) {
+  address = other.address;
+  gossip_address = other.gossip_address;
+  ssl_address = other.ssl_address;
+  admin_address = other.admin_address;
+  generation = other.generation;
+  location = other.location;
+  settings = other.settings;
+  roles = other.roles;
+  if (hasRole(NodeRole::SEQUENCER)) {
+    sequencer_attributes =
+        std::make_unique<SequencerNodeAttributes>(*other.sequencer_attributes);
+  }
+  if (hasRole(NodeRole::STORAGE)) {
+    storage_attributes =
+        std::make_unique<StorageNodeAttributes>(*other.storage_attributes);
+  }
+}
 
 const Sockaddr& Node::getSockaddr(SocketType type,
                                   ConnectionType conntype) const {
@@ -54,8 +71,8 @@ std::string storageStateToString(StorageState v) {
       return "read-write";
     case StorageState::READ_ONLY:
       return "read-only";
-    case StorageState::NONE:
-      return "none";
+    case StorageState::DISABLED:
+      return "disabled";
   }
 
   // Make the server fail if this func is called with a StorageState
@@ -70,8 +87,8 @@ bool storageStateFromString(const std::string& str, StorageState* out) {
     *out = StorageState::READ_WRITE;
   } else if (str == "read-only") {
     *out = StorageState::READ_ONLY;
-  } else if (str == "none") {
-    *out = StorageState::NONE;
+  } else if (str == "disabled" || str == "none") {
+    *out = StorageState::DISABLED;
   } else {
     return false;
   }

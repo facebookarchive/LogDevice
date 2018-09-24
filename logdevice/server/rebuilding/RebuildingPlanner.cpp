@@ -308,7 +308,7 @@ RebuildingPlanner::findDonorShards(EpochMetaData& metadata) const {
   node_index_t nid = cfg->serverConfig()->getMyNodeID().index();
   const auto node = cfg->serverConfig()->getNode(nid);
   ld_check(node);
-  for (shard_index_t shard = 0; shard < node->num_shards; ++shard) {
+  for (shard_index_t shard = 0; shard < node->getNumShards(); ++shard) {
     ShardID donor = ShardID(nid, shard);
     if (std::find(shards.begin(), shards.end(), donor) != shards.end()) {
       donors.push_back(shard);

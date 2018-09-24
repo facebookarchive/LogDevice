@@ -73,14 +73,14 @@ void DomainIsolationTest::setUp(
   if (preset_nodes != nullptr) {
     nodes = *preset_nodes;
   } else {
-    addNodes(&nodes, 1, 1, {}, "rg0.dc0.cl0.ro0.rk0", 1);
-    addNodes(&nodes, 1, 1, {}, "rg1.dc0.cl0.ro0.rk0", 1);
-    addNodes(&nodes, 2, 1, {}, "rg1.dc0.cl0.ro0.rk1", 2);
-    addNodes(&nodes, 1, 1, {}, "rg1.dc0.cl0.ro0.rk2", 1);
-    addNodes(&nodes, 1, 1, {}, "rg1.dc0.cl0..", 1);
-    addNodes(&nodes, 1, 1, {}, "rg2.dc0.cl0.ro0.rk0", 1);
-    addNodes(&nodes, 1, 1, {}, "rg2.dc0.cl0.ro0.rk1", 1);
-    addNodes(&nodes, 1, 1, {}, "....", 1);
+    addNodes(&nodes, 1, 1, "rg0.dc0.cl0.ro0.rk0", 1);
+    addNodes(&nodes, 1, 1, "rg1.dc0.cl0.ro0.rk0", 1);
+    addNodes(&nodes, 2, 1, "rg1.dc0.cl0.ro0.rk1", 2);
+    addNodes(&nodes, 1, 1, "rg1.dc0.cl0.ro0.rk2", 1);
+    addNodes(&nodes, 1, 1, "rg1.dc0.cl0..", 1);
+    addNodes(&nodes, 1, 1, "rg2.dc0.cl0.ro0.rk0", 1);
+    addNodes(&nodes, 1, 1, "rg2.dc0.cl0.ro0.rk1", 1);
+    addNodes(&nodes, 1, 1, "....", 1);
   }
   Configuration::NodesConfig nodes_config(std::move(nodes));
   // auto logs_config = std::make_unique<configuration::LocalLogsConfig>();
@@ -187,12 +187,12 @@ TEST_F(DomainIsolationTest, ClusterExpansion) {
   auto add_node = [this](const std::string& location_str) {
     auto nodes = config_->getNodes();
     Configuration::Node node;
-    node.sequencer_weight = 0;
+    node.addStorageRole();
     node.address = Sockaddr("::1", std::to_string(nodes.size()));
     NodeLocation location;
     ASSERT_EQ(0, location.fromDomainString(location_str));
     node.location = std::move(location);
-    nodes.insert({nodes.size(), node});
+    nodes.insert({nodes.size(), std::move(node)});
     auto new_config =
         config_->withNodes(ServerConfig::NodesConfig(std::move(nodes)));
     config_ = std::move(new_config);
@@ -217,9 +217,9 @@ TEST_F(DomainIsolationTest, ClusterExpansion) {
 
 TEST_F(DomainIsolationTest, WholeClusterScopeNotIsolated) {
   auto nodes = std::make_unique<configuration::Nodes>();
-  addNodes(nodes.get(), 1, 1, {}, "rg0.dc0.cl0.ro0.rk0", 1);
-  addNodes(nodes.get(), 1, 1, {}, "rg0.dc0.cl0.ro0.rk1", 1);
-  addNodes(nodes.get(), 1, 1, {}, "rg0.dc0.cl0.ro0.rk1", 1);
+  addNodes(nodes.get(), 1, 1, "rg0.dc0.cl0.ro0.rk0", 1);
+  addNodes(nodes.get(), 1, 1, "rg0.dc0.cl0.ro0.rk1", 1);
+  addNodes(nodes.get(), 1, 1, "rg0.dc0.cl0.ro0.rk1", 1);
   my_node_idx_ = 2;
   setDownNodes({0});
   setUp(std::move(nodes));

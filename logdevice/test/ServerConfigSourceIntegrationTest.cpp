@@ -40,7 +40,7 @@ TEST_F(ServerConfigSourceIntegrationTest, Basic) {
   std::string config_path = "server:";
   auto nodes = new_server_config->getNodes();
   for (node_index_t index = 0; index < nodes.size(); index++) {
-    auto node = nodes.at(index);
+    auto& node = nodes.at(index);
     config_path += node.address.toString();
     if (index < nodes.size() - 1) {
       config_path += ',';

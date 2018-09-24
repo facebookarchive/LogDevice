@@ -155,20 +155,16 @@ struct CONFIG_ADVISORY_Raw {
 } __attribute__((__packed__));
 
 static std::shared_ptr<UpdateableConfig> create_config(int ld_port) {
-  Configuration::Node node = {
-      Sockaddr("127.0.0.1", std::to_string(ld_port).c_str()),     // address
-      Sockaddr("127.0.0.1", std::to_string(ld_port + 1).c_str()), // gossip addr
-      Sockaddr("127.0.0.1", std::to_string(ld_port + 3).c_str()), // admin addr
-      nullptr,                                                    // ssl_address
-      1, // storage capacity
-      configuration::StorageState::READ_WRITE,
-      false, // exclude_from_nodesets
-      3,     // generation
-      2,     // num_shards
-      false  // sequencer_weight
-  };
+  Configuration::Node node;
+  node.address = Sockaddr("127.0.0.1", std::to_string(ld_port).c_str());
+  node.gossip_address =
+      Sockaddr("127.0.0.1", std::to_string(ld_port + 1).c_str());
+  node.admin_address =
+      Sockaddr("127.0.0.1", std::to_string(ld_port + 3).c_str());
+  node.generation = 3;
+  node.addStorageRole(/*num_shards*/ 2);
 
-  Configuration::NodesConfig nodes({{0, node}});
+  Configuration::NodesConfig nodes({{0, std::move(node)}});
 
   configuration::MetaDataLogsConfig meta_config;
 

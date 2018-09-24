@@ -98,8 +98,8 @@ WeightAwareNodeSetSelector::getStorageSet(
       location_str = location.getDomain(replication_scope, i);
     }
 
-    assert(node->num_shards > 0);
-    shard_index_t shard_idx = mapLogToShard_(log_id, node->num_shards);
+    assert(node->getNumShards() > 0);
+    shard_index_t shard_idx = mapLogToShard_(log_id, node->getNumShards());
 
     ShardID current_shard_id = ShardID(i, shard_idx);
     uint64_t curr_hash;

@@ -317,8 +317,8 @@ void WeightedCopySetSelector::optimizeWeightsForLocality(
     NodeLocation location = node_cfg->location.value_or(NodeLocation());
     std::string domain =
         location.getDomain(secondary_replication_scope_, p.first);
-    domain_sequencer_weight[domain] += node_cfg->sequencer_weight;
-    total_sequencer_weight += node_cfg->sequencer_weight;
+    domain_sequencer_weight[domain] += node_cfg->getSequencerWeight();
+    total_sequencer_weight += node_cfg->getSequencerWeight();
   }
 
   // Note that, unlike the doc, we have unnormalized weights, so we'll need to
@@ -351,6 +351,7 @@ void WeightedCopySetSelector::optimizeWeightsForLocality(
   for (const auto& p : domain_target_weight) {
     std::string domain = p.first;
     double weight = p.second;
+    ld_check_gt(domain_sequencer_weight.count(domain), 0);
     double sequencer_weight = domain_sequencer_weight.at(domain);
 
     // Target weight = total_weight / replication_, i.e. one copy of every

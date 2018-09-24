@@ -158,8 +158,8 @@ TEST_F(SequencerIntegrationTest, SequencerIsolation) {
     }
     nodes[i].location = location;
     nodes[i].generation = 1;
-    nodes[i].sequencer_weight = 1.0;
-    nodes[i].num_shards = 2;
+    nodes[i].addSequencerRole();
+    nodes[i].addStorageRole(/*num_shards*/ 2);
   }
 
   auto cluster =
@@ -201,9 +201,10 @@ TEST_F(SequencerIntegrationTest, SequencerReactivationOnFailure) {
   const int NNODES = 4;
   Configuration::Nodes nodes;
   for (node_index_t i = 0; i < NNODES; ++i) {
-    nodes[i].generation = 1;
-    nodes[i].sequencer_weight = 1.0;
-    nodes[i].num_shards = 2;
+    auto& node = nodes[i];
+    node.generation = 1;
+    node.addSequencerRole();
+    node.addStorageRole(/*num_shards*/ 2);
   }
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
@@ -272,8 +273,8 @@ TEST_F(SequencerIntegrationTest, SequencerReactivationPreemptorDead) {
   for (node_index_t i = 0; i < 4; ++i) {
     auto& node = nodes[i];
     node.generation = 1;
-    node.sequencer_weight = 1.0;
-    node.num_shards = 2;
+    node.addSequencerRole();
+    node.addStorageRole(/*num_shards*/ 2);
   }
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
@@ -365,18 +366,17 @@ TEST_F(SequencerIntegrationTest, SequencerReactivationRedirectedNotAlive) {
   for (node_index_t i = 0; i < 4; ++i) {
     auto& node = nodes[i];
     node.generation = 1;
-    node.sequencer_weight = 0.0;
-    node.num_shards = 2;
-    weights[i] = 0.0;
+    node.addStorageRole(/*num_shards*/ 2);
+    weights[i] = node.getSequencerWeight();
+    ASSERT_EQ(weights[i], 0);
   }
   // 2 sequencer-only nodes
   for (node_index_t i = 4; i < 6; ++i) {
     auto& node = nodes[i];
-    node.storage_state = configuration::StorageState::NONE;
     node.generation = 1;
-    node.sequencer_weight = 1.0;
-    node.num_shards = 2;
-    weights[i] = 1.0;
+    node.addSequencerRole();
+    weights[i] = node.getSequencerWeight();
+    ASSERT_EQ(weights[i], 1.0);
   }
 
   auto cluster =
@@ -563,9 +563,10 @@ TEST_F(SequencerIntegrationTest, SequencerReactivationPreemptorNotInConfig) {
   dbg::parseLoglevelOption("debug");
   Configuration::Nodes nodes;
   for (node_index_t i = 0; i < 4; ++i) {
-    nodes[i].generation = 1;
-    nodes[i].sequencer_weight = 1.0;
-    nodes[i].num_shards = 2;
+    auto& node = nodes[i];
+    node.generation = 1;
+    node.addSequencerRole();
+    node.addStorageRole(/*num_shards*/ 2);
   }
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
@@ -651,15 +652,15 @@ TEST_F(SequencerIntegrationTest, SequencerReactivationPreemptorZeroWeight) {
   for (node_index_t i = 0; i < 4; ++i) {
     Configuration::Node node;
     node.generation = 1;
-    node.sequencer_weight = 1.0;
-    node.num_shards = 2;
+    node.addSequencerRole();
+    node.addStorageRole(/*num_shards*/ 2);
 
-    nodes[i] = node;
     if (i != secondary) {
       // Don't put secondary sequencer node in metadata logs nodeset because
       // we're going to turn it into a non-storage node.
-      metadata_nodes[i] = node;
+      metadata_nodes[i] = configuration::Node(node);
     }
+    nodes[i] = std::move(node);
   }
 
   Configuration::MetaDataLogsConfig meta_config =
@@ -709,7 +710,7 @@ TEST_F(SequencerIntegrationTest, SequencerReactivationPreemptorZeroWeight) {
 
   // update the weights so the secondary is no longer a sequencer
   cluster->updateNodeAttributes(
-      secondary, configuration::StorageState::NONE, 0);
+      secondary, configuration::StorageState::DISABLED, 0);
   cluster->waitForConfigUpdate();
 
   // write into the log again - this should succeed after internally retrying
@@ -727,10 +728,9 @@ std::unique_ptr<IntegrationTestUtils::Cluster> createClusterFromNodes(
     size_t num_nodes,
     std::vector<IntegrationTestUtils::ParamSpec> extra_params) {
   for (int i = 0; i < num_nodes; ++i) {
-    nodes[i].storage_state = configuration::StorageState::READ_WRITE;
-    nodes[i].sequencer_weight = 1;
     nodes[i].generation = 1;
-    nodes[i].num_shards = 2;
+    nodes[i].addSequencerRole();
+    nodes[i].addStorageRole(/*num_shards*/ 2);
   }
 
   Configuration::Log logcfg =
@@ -793,7 +793,7 @@ uint64_t sequencerNode(IntegrationTestUtils::Cluster& cluster,
   std::vector<double> weights(nodes.size());
 
   for (const auto& n : nodes) {
-    weights[n.first] = n.second.sequencer_weight;
+    weights[n.first] = n.second.getSequencerWeight();
   }
   for (uint64_t idx : down_nodes) {
     weights[idx] = 0.0;
@@ -931,9 +931,9 @@ TEST_F(SequencerIntegrationTest, AutoLogProvisioning) {
   Configuration::Nodes nodes;
   size_t num_nodes = 3;
   for (int i = 0; i < 3; ++i) {
-    nodes[i].num_shards = 1;
-    nodes[i].sequencer_weight = 1;
     nodes[i].generation = 1;
+    nodes[i].addSequencerRole();
+    nodes[i].addStorageRole(/*num_shards*/ 1);
   }
 
   Configuration::Log logcfg;
@@ -1177,17 +1177,13 @@ TEST_F(SequencerIntegrationTest, AutoLogProvisioningEpochStorePreemption) {
   size_t num_nodes = 5;
   // 2 sequencer nodes and 3 storage nodes
   for (int i = 0; i < num_nodes; ++i) {
+    auto& node = nodes[i];
+    node.generation = 1;
     if (i < 2) {
-      nodes[i].storage_state = configuration::StorageState::NONE;
-      nodes[i].num_shards = 0;
-      nodes[i].sequencer_weight = 1;
+      node.addSequencerRole();
     } else {
-      ld_check(nodes[i].storage_state ==
-               configuration::StorageState::READ_WRITE);
-      nodes[i].num_shards = 1;
-      nodes[i].sequencer_weight = 0;
+      node.addStorageRole();
     }
-    nodes[i].generation = 1;
   }
 
   Configuration::Log logcfg;
@@ -1714,16 +1710,13 @@ TEST_F(SequencerIntegrationTest, DISABLED_SilentDuplicatesCancelled) {
   for (; idx < 3; idx++) {
     auto& node = nodes[idx];
     node.generation = 1;
-    node.sequencer_weight = 0.0;
-    node.num_shards = 2;
+    node.addStorageRole(/*num_shards*/ 2);
   }
   // 2 sequencer-only nodes
   for (; idx < num_nodes; idx++) {
     auto& node = nodes[idx];
-    node.storage_state = configuration::StorageState::NONE;
     node.generation = 1;
-    node.sequencer_weight = 1.0;
-    node.num_shards = 2;
+    node.addSequencerRole();
   }
 
   Configuration::Log logcfg =
@@ -1870,16 +1863,13 @@ TEST_F(SequencerIntegrationTest, SilentDuplicatesBypassed) {
   for (; idx < 2; idx++) {
     auto& node = nodes[idx];
     node.generation = 1;
-    node.sequencer_weight = 0.0;
-    node.num_shards = 2;
+    node.addStorageRole(/*num_shards*/ 2);
   }
   // 2 sequencer-only nodes
   for (; idx < num_nodes; idx++) {
     auto& node = nodes[idx];
-    node.storage_state = configuration::StorageState::NONE;
     node.generation = 1;
-    node.sequencer_weight = 1.0;
-    node.num_shards = 2;
+    node.addSequencerRole();
   }
 
   Configuration::Log logcfg =
@@ -2155,7 +2145,7 @@ TEST_F(SequencerIntegrationTest, SequencerMetaDataManagerNullptrCrash) {
 
   // set the weight of N2 to -1 (in order to trigger new nodeset generation,
   // and sequencer reactivation).
-  cluster->updateNodeAttributes(2, configuration::StorageState::NONE, 1);
+  cluster->updateNodeAttributes(2, configuration::StorageState::DISABLED, 1);
   // set sequencer weight of N0 to 0 (in order to reproduce the condition of
   // the crash)
   cluster->updateNodeAttributes(0, configuration::StorageState::READ_WRITE, 0);
@@ -2173,9 +2163,10 @@ TEST_F(SequencerIntegrationTest, LogRemovalStressTest) {
   Configuration::Nodes nodes;
   size_t num_nodes = 5;
   for (int i = 0; i < num_nodes; ++i) {
-    nodes[i].num_shards = 1;
-    nodes[i].sequencer_weight = 1;
-    nodes[i].generation = 1;
+    auto& node = nodes[i];
+    node.generation = 1;
+    node.addSequencerRole();
+    node.addStorageRole();
   }
 
   Configuration::Log logcfg;
@@ -2311,9 +2302,10 @@ TEST_F(SequencerIntegrationTest, DynamicallyChangingWindowSize) {
   Configuration::Nodes nodes;
   size_t num_nodes = 5;
   for (int i = 0; i < num_nodes; ++i) {
-    nodes[i].num_shards = 1;
-    nodes[i].sequencer_weight = 1;
-    nodes[i].generation = 1;
+    auto& node = nodes[i];
+    node.generation = 1;
+    node.addSequencerRole();
+    node.addStorageRole();
   }
 
   Configuration::Log logcfg =
@@ -2393,11 +2385,12 @@ TEST_F(SequencerIntegrationTest, SequencerZeroWeightWhileAppendsPending) {
   for (node_index_t i = 0; i < 4; ++i) {
     Configuration::Node node;
     node.generation = 1;
-    node.sequencer_weight = 1.0;
-    node.num_shards = 2;
+    node.addSequencerRole();
+    node.addStorageRole(/*num_shards*/ 2);
 
-    nodes[i] = node;
-    metadata_nodes[i] = node;
+    auto meta_node(node);
+    nodes[i] = std::move(node);
+    metadata_nodes[i] = std::move(meta_node);
   }
 
   Configuration::MetaDataLogsConfig meta_config =
@@ -2475,11 +2468,13 @@ TEST_F(SequencerIntegrationTest, MetaDataLogSequencerReactToWeightChanges) {
   const int NNODES = 5;
   Configuration::Nodes nodes;
   for (node_index_t i = 0; i < NNODES; ++i) {
-    nodes[i].generation = 1;
-    nodes[i].sequencer_weight = (i == 0 ? 1.0 : 0);
-    nodes[i].storage_state = (i == 0 ? configuration::StorageState::NONE
-                                     : configuration::StorageState::READ_WRITE);
-    nodes[i].num_shards = 2;
+    auto& node = nodes[i];
+    node.generation = 1;
+    if (i == 0) {
+      node.addSequencerRole();
+    } else {
+      node.addStorageRole(/*num_shards*/ 2);
+    }
   }
 
   Configuration::MetaDataLogsConfig meta_config =
@@ -2582,10 +2577,12 @@ TEST_F(SequencerIntegrationTest, SequencerReadTrimPointTest) {
   const int NNODES = 6;
   Configuration::Nodes nodes;
   for (node_index_t i = 0; i < NNODES; ++i) {
-    nodes[i].generation = 1;
-    nodes[i].sequencer_weight = (i == 0 ? 1.0 : 0);
-    nodes[i].storage_state = configuration::StorageState::READ_WRITE;
-    nodes[i].num_shards = 2;
+    auto& node = nodes[i];
+    node.generation = 1;
+    if (i == 0) {
+      node.addSequencerRole();
+    }
+    node.addStorageRole(/*num_shards*/ 2);
   }
 
   auto cluster = IntegrationTestUtils::ClusterFactory()

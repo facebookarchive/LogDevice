@@ -108,8 +108,8 @@ std::shared_ptr<UpdateableConfig> buildConfig() {
     Configuration::Node& node = nodes[nid];
     node.address = Sockaddr("::1", folly::to<std::string>(4440 + nid));
     node.generation = 1;
-    node.sequencer_weight = 1.0;
-    node.num_shards = 1;
+    node.addSequencerRole();
+    node.addStorageRole();
   }
   Configuration::NodesConfig nodes_config(std::move(nodes));
   Configuration::MetaDataLogsConfig meta_config =

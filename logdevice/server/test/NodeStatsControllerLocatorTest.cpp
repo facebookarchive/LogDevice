@@ -20,20 +20,21 @@ using StateList = NodeStatsControllerLocator::StateList;
 class MockLocator : public NodeStatsControllerLocator {
  public:
   MOCK_CONST_METHOD1(getNodeState, StateList(node_index_t));
-  MOCK_CONST_METHOD0(getNodes, Nodes());
+  MOCK_CONST_METHOD0(getNodes, std::shared_ptr<const Nodes>());
 };
 
 class NodeStatsControllerLocatorTest : public Test {
  public:
-  Nodes nodesWithLocations(std::vector<std::string> locations) {
-    Nodes nodes;
+  std::shared_ptr<Nodes>
+  nodesWithLocations(std::vector<std::string> locations) {
+    auto nodes = std::make_shared<Nodes>();
     for (const auto& location_str : locations) {
       NodeLocation location;
       location.fromDomainString(location_str);
       Node node;
       node.location = location;
       node.generation = 0;
-      nodes[node_index] = node;
+      nodes->emplace(node_index, std::move(node));
       ++node_index;
     }
 
@@ -55,8 +56,8 @@ TEST_F(NodeStatsControllerLocatorTest, MoreControllersThanNodes) {
 }
 
 TEST_F(NodeStatsControllerLocatorTest, SingleNode) {
-  EXPECT_CALL(locator, getNodes())
-      .WillRepeatedly(Return(nodesWithLocations({"rg0.dc0.cl0.ro0.rk0"})));
+  auto nodes = nodesWithLocations({"rg0.dc0.cl0.ro0.rk0"});
+  EXPECT_CALL(locator, getNodes()).WillRepeatedly(Return(nodes));
   EXPECT_CALL(locator, getNodeState(_))
       .WillRepeatedly(Return(StateList{ALIVE}));
 
@@ -64,11 +65,10 @@ TEST_F(NodeStatsControllerLocatorTest, SingleNode) {
 }
 
 TEST_F(NodeStatsControllerLocatorTest, DifferentRack) {
+  auto nodes = nodesWithLocations(
+      {"rg0.dc0.cl0.ro0.rk0", "rg0.dc0.cl0.ro0.rk0", "rg0.dc0.cl0.ro0.rk1"});
   // two in the same rack, one in another
-  EXPECT_CALL(locator, getNodes())
-      .WillRepeatedly(Return(nodesWithLocations({"rg0.dc0.cl0.ro0.rk0",
-                                                 "rg0.dc0.cl0.ro0.rk0",
-                                                 "rg0.dc0.cl0.ro0.rk1"})));
+  EXPECT_CALL(locator, getNodes()).WillRepeatedly(Return(nodes));
   EXPECT_CALL(locator, getNodeState(_))
       .WillRepeatedly(Return(StateList{ALIVE, ALIVE, ALIVE}));
 
@@ -80,10 +80,9 @@ TEST_F(NodeStatsControllerLocatorTest, DifferentRack) {
 
 // will choose from same rack if necessary
 TEST_F(NodeStatsControllerLocatorTest, SameRack) {
-  EXPECT_CALL(locator, getNodes())
-      .WillRepeatedly(Return(nodesWithLocations({"rg0.dc0.cl0.ro0.rk0",
-                                                 "rg0.dc0.cl0.ro0.rk0",
-                                                 "rg0.dc0.cl0.ro0.rk1"})));
+  auto nodes = nodesWithLocations(
+      {"rg0.dc0.cl0.ro0.rk0", "rg0.dc0.cl0.ro0.rk0", "rg0.dc0.cl0.ro0.rk1"});
+  EXPECT_CALL(locator, getNodes()).WillRepeatedly(Return(nodes));
   EXPECT_CALL(locator, getNodeState(_))
       .WillRepeatedly(Return(StateList{ALIVE, ALIVE, ALIVE}));
 
@@ -93,10 +92,9 @@ TEST_F(NodeStatsControllerLocatorTest, SameRack) {
 }
 
 TEST_F(NodeStatsControllerLocatorTest, DeadNode) {
-  EXPECT_CALL(locator, getNodes())
-      .WillRepeatedly(Return(nodesWithLocations({"rg0.dc0.cl0.ro0.rk0",
-                                                 "rg0.dc0.cl0.ro0.rk0",
-                                                 "rg0.dc0.cl0.ro0.rk1"})));
+  auto nodes = nodesWithLocations(
+      {"rg0.dc0.cl0.ro0.rk0", "rg0.dc0.cl0.ro0.rk0", "rg0.dc0.cl0.ro0.rk1"});
+  EXPECT_CALL(locator, getNodes()).WillRepeatedly(Return(nodes));
   // if a node is DEAD, pick another one, even if it's in the same rack
   EXPECT_CALL(locator, getNodeState(_))
       .WillRepeatedly(Return(StateList{ALIVE, ALIVE, DEAD}));
@@ -108,8 +106,8 @@ TEST_F(NodeStatsControllerLocatorTest, GapInIndex) {
   auto nodes = nodesWithLocations(
       {"rg0.dc0.cl0.ro0.rk0", "rg0.dc0.cl0.ro0.rk0", "rg0.dc0.cl0.ro0.rk1"});
   // make gap
-  nodes.emplace(std::make_pair(2, nodes.at(1)));
-  nodes.erase(1);
+  nodes->emplace(std::make_pair(2, nodes->at(1)));
+  nodes->erase(1);
 
   EXPECT_CALL(locator, getNodes()).WillRepeatedly(Return(nodes));
 
@@ -124,7 +122,7 @@ TEST_F(NodeStatsControllerLocatorTest, WithoutLocation) {
   auto nodes = nodesWithLocations(
       {"rg0.dc0.cl0.ro0.rk0", "rg0.dc0.cl0.ro0.rk1", "rg0.dc0.cl0.ro0.rk2"});
 
-  nodes.at(1).location.clear();
+  nodes->at(1).location.clear();
 
   EXPECT_CALL(locator, getNodes()).WillRepeatedly(Return(nodes));
 

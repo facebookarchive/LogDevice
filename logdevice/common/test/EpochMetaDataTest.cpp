@@ -381,7 +381,7 @@ TEST_F(EpochMetaDataTest, BackwardCompatibility) {
 
   info.nodesconfig_hash.assign(cfg_hash);
   ld_check(info.isValid());
-  std::string hash_string = "5073A7B26F07DA3B"; // if you changed the test
+  std::string hash_string = "6214F5912227DA6A"; // if you changed the test
                                                 // config, update this hash
 
   str = info.toStringPayload();

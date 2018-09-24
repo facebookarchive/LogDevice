@@ -128,7 +128,7 @@ thrift::ShardOperationalState
 toShardOperationalState(StorageState storage_state,
                         const EventLogRebuildingSet::NodeInfo* node_info) {
   switch (storage_state) {
-    case StorageState::NONE:
+    case StorageState::DISABLED:
       return thrift::ShardOperationalState::DRAINED;
     case StorageState::READ_ONLY:
       // The node will be in READ_ONLY if we are draining.
@@ -151,7 +151,7 @@ toShardOperationalState(StorageState storage_state,
 
 thrift::ShardStorageState toShardStorageState(StorageState storage_state) {
   switch (storage_state) {
-    case StorageState::NONE:
+    case StorageState::DISABLED:
       return thrift::ShardStorageState::DISABLED;
     case StorageState::READ_ONLY:
       return thrift::ShardStorageState::READ_ONLY;
@@ -172,7 +172,7 @@ void fillNodeConfig(thrift::NodeConfig& out,
     roles.insert(thrift::Role::SEQUENCER);
     // Sequencer Config
     thrift::SequencerConfig sequencer_config;
-    sequencer_config.set_weight(node.sequencer_weight);
+    sequencer_config.set_weight(node.sequencer_attributes->weight);
     out.set_sequencer(std::move(sequencer_config));
   }
 
@@ -180,9 +180,8 @@ void fillNodeConfig(thrift::NodeConfig& out,
     roles.insert(thrift::Role::STORAGE);
     // Storage Node Config
     thrift::StorageConfig storage_config;
-    storage_config.set_capacity(
-        node.storage_capacity.value_or(Node::DEFAULT_STORAGE_CAPACITY));
-    storage_config.set_num_shards(node.num_shards);
+    storage_config.set_capacity(node.storage_attributes->capacity);
+    storage_config.set_num_shards(node.getNumShards());
     out.set_storage(std::move(storage_config));
   }
 
@@ -271,15 +270,17 @@ void fillNodeState(thrift::NodeState& out,
   // Storage State
   if (node.hasRole(NodeRole::STORAGE)) {
     std::vector<thrift::ShardState> shard_states;
-    for (int shard_index = 0; shard_index < node.num_shards; shard_index++) {
+    for (int shard_index = 0; shard_index < node.getNumShards();
+         shard_index++) {
       // For every shard.
       thrift::ShardState state;
       auto node_info = rebuilding_set
           ? rebuilding_set->getNodeInfo(node_index, shard_index)
           : nullptr;
-      state.set_current_storage_state(toShardStorageState(node.storage_state));
+      state.set_current_storage_state(
+          toShardStorageState(node.getStorageState()));
       state.set_current_operational_state(
-          toShardOperationalState(node.storage_state, node_info));
+          toShardOperationalState(node.getStorageState(), node_info));
       AuthoritativeStatus auth_status =
           AuthoritativeStatus::FULLY_AUTHORITATIVE;
       bool has_dirty_ranges = false;

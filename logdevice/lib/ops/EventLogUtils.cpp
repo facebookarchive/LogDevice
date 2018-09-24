@@ -107,12 +107,11 @@ int getShardAuthoritativeStatusMap(Client& client,
     return rv;
   }
 
-  auto nodes = dynamic_cast<ClientImpl*>(&client)
-                   ->getConfig()
-                   ->get()
-                   ->serverConfig()
-                   ->getNodes();
-  map = set.toShardStatusMap(nodes);
+  // Hold a shared_ptr reference to the current ServerConfig so it cannot
+  // change while we update the map.
+  std::shared_ptr<ServerConfig> server_config =
+      dynamic_cast<ClientImpl*>(&client)->getConfig()->get()->serverConfig();
+  map = set.toShardStatusMap(server_config->getNodes());
   return 0;
 }
 
@@ -138,7 +137,7 @@ bool canWipeShardsWithoutCausingDataLoss(
 
     std::vector<ShardID> storage_set;
     for (const auto& k : config->serverConfig()->getNodes()) {
-      if (shard < k.second.num_shards) {
+      if (shard < k.second.getNumShards()) {
         storage_set.push_back(ShardID(k.first, shard));
       }
     }

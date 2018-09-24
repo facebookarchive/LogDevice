@@ -27,54 +27,59 @@ namespace facebook {
       namespace tables {
 
 TableColumns Nodes::getColumns() const {
-  return {
-      {"node_id", DataType::BIGINT, "Id of the node."},
-      {"address",
-       DataType::TEXT,
-       "Ip and port that should be used for communication with the node."},
-      {"ssl_address", DataType::TEXT, "Same as \"address\" but with SSL"},
-      {"generation",
-       DataType::BIGINT,
-       "Generation of the node.  This value is bumped each time the "
-       "node is swapped, sent to repair, or has one of its drives "
-       "sent to repair."},
-      {"location",
-       DataType::TEXT,
-       "Location of the node: <region>.<cluster>.<row>.<rack>."},
-      {"sequencer",
-       DataType::INTEGER,
-       "1 if this node is a sequencer node, 0 otherwise."},
-      {"storage",
-       DataType::INTEGER,
-       "1 if this node is a storage node, 0 otherwise."},
-      {"sequencer_enabled",
-       DataType::INTEGER,
-       "1 if this node has sequencers enabled, 0 otherwise."},
-      {"sequencer_weight",
-       DataType::REAL,
-       "A non-negative value indicating how many logs this node should be "
-       "a sequencer for relative to other nodes in the cluster.  A value "
-       "of 0 means this node cannot run sequencers."},
-      {"weight",
-       DataType::BIGINT,
-       "A positive value indicating how much STORE traffic this storage "
-       "node should receive relative to other storage nodes in the "
-       "cluster.  A value of -1 means this node is not a storage node and "
-       "should only run sequencers."},
-      {"storage_state",
-       DataType::TEXT,
-       "Determines the current state of the storage node. One of "
-       "\"read-write\", \"read-only\" or \"none\"."},
-      {"storage_capacity",
-       DataType::BIGINT,
-       "A positive value indicating how much STORE traffic this storage "
-       "node should receive relative to other storage nodes in the cluster."},
-      {"num_shards",
-       DataType::BIGINT,
-       "Number of shards on this node, 0 if this node is not a storage node."},
-      {"is_metadata_node",
-       DataType::INTEGER,
-       "Whether this node is in the metadata nodeset."}};
+  return {{"node_id", DataType::BIGINT, "Id of the node"},
+          {"address",
+           DataType::TEXT,
+           "Ip and port that should be used for communication with the node"},
+          {"ssl_address", DataType::TEXT, "Same as \"address\" but with SSL"},
+          {"generation",
+           DataType::BIGINT,
+           "Generation of the node.  This value is bumped each time the "
+           "node is swapped, sent to repair, or has one of its drives "
+           "sent to repair."},
+          {"location",
+           DataType::TEXT,
+           "Location of the node: <region>.<cluster>.<row>.<rack>"},
+          {"sequencer",
+           DataType::INTEGER,
+           "1 if this node is provisioned for the sequencing role. "
+           "Otherwise 0. Provisioned roles must be enabled in order "
+           "to be considered active. See 'sequencer_enabled'."},
+          {"storage",
+           DataType::INTEGER,
+           "1 if this node is provisioned for the storage role. "
+           "Otherwise 0. Provisioned roles must be enabled in order "
+           "to be considered active. See 'storage_state'."},
+          {"sequencer_enabled",
+           DataType::INTEGER,
+           "1 if sequencing on this node is enabled. Othewise 0."},
+          {"sequencer_weight",
+           DataType::REAL,
+           "A non-negative value indicating how many logs this node "
+           "should be a sequencer for relative to other nodes in the "
+           "cluster.  A value of 0 means this node cannot run "
+           "sequencers."},
+          {"is_storage",
+           DataType::INTEGER,
+           "1 if this node is provisioned for the storage role. "
+           "Otherwise 0. Provisioned roles must be enabled in order "
+           "to be considered active. See 'storage_state'."},
+          {"storage_state",
+           DataType::TEXT,
+           "Determines the current state of the storage node. One "
+           "of \"read-write\", \"read-only\" or \"none\"."},
+          {"storage_capacity",
+           DataType::BIGINT,
+           "A positive value indicating how much STORE traffic this "
+           "storage node should receive relative to other storage nodes "
+           "in the cluster."},
+          {"num_shards",
+           DataType::BIGINT,
+           "Number of storage shards on this node.  "
+           "0 if this node is not a storage node."},
+          {"is_metadata_node",
+           DataType::INTEGER,
+           "1 if this node is in the metadata nodeset. Otherwise 0."}};
 }
 
 std::shared_ptr<TableData> Nodes::getData(QueryContext& /*ctx*/) {
@@ -105,15 +110,17 @@ std::shared_ptr<TableData> Nodes::getData(QueryContext& /*ctx*/) {
         s(node.hasRole(Configuration::NodeRole::SEQUENCER)));
     result->cols["storage"].push_back(
         s(node.hasRole(Configuration::NodeRole::STORAGE)));
-    result->cols["sequencer_enabled"].push_back(s(node.sequencer_weight > 0));
-    result->cols["sequencer_weight"].push_back(s(node.sequencer_weight));
-    result->cols["weight"].push_back(s(node.getLegacyWeight()));
-    result->cols["storage_state"].push_back(
-        configuration::storageStateToString(node.storage_state));
-    result->cols["storage_capacity"].push_back(
-        node.storage_capacity.hasValue() ? s(node.storage_capacity.value())
-                                         : "");
-    result->cols["num_shards"].push_back(s(node.num_shards));
+    result->cols["sequencer_weight"].push_back(
+        node.hasRole(Configuration::NodeRole::SEQUENCER)
+            ? s(node.getSequencerWeight())
+            : "");
+    if (node.hasRole(Configuration::NodeRole::STORAGE)) {
+      auto* storage = node.storage_attributes.get();
+      result->cols["storage_state"].push_back(
+          configuration::storageStateToString(node.getStorageState()));
+      result->cols["storage_capacity"].push_back(s(storage->capacity));
+      result->cols["num_shards"].push_back(s(storage->num_shards));
+    }
     const bool is_metadata_node =
         std::find(metadata_nodes.begin(), metadata_nodes.end(), nid) !=
         metadata_nodes.end();

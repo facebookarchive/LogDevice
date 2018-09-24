@@ -211,7 +211,7 @@ void PurgeUncleanEpochsTest::setUp() {
   dbg::assertOnData = true;
 
   Configuration::Nodes nodes;
-  addNodes(&nodes, 1, 1, {}, "....", 1);
+  addNodes(&nodes, 1, 1, "....", 1);
   Configuration::NodesConfig nodes_config(std::move(nodes));
 
   auto logs_config = std::make_shared<configuration::LocalLogsConfig>();

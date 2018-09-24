@@ -30,7 +30,7 @@ int parseShardIDSet(const std::string& descriptor,
   }
 
   auto add_node = [&](node_index_t nid, const configuration::Node& node) {
-    for (shard_index_t i = 0; i < node.num_shards; ++i) {
+    for (shard_index_t i = 0; i < node.getNumShards(); ++i) {
       out.insert(ShardID(nid, i));
     }
   };
@@ -84,7 +84,7 @@ int parseShardIDSet(const std::string& descriptor,
     if (shard_id < 0 || shard_id > std::numeric_limits<shard_index_t>::max()) {
       return -1;
     }
-    if (shard_id >= node->num_shards) {
+    if (shard_id >= node->getNumShards()) {
       return -1;
     }
     out.insert(ShardID(index, shard_id));

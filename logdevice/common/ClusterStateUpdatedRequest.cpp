@@ -21,10 +21,9 @@ Request::Execution ClusterStateUpdatedRequest::execute() {
   auto cs = worker->getClusterState();
   ld_check(cs);
 
-  auto nodes = config->serverConfig()->getNodes();
-  for (node_index_t i = 0; i < nodes.size(); i++) {
-    if (cs->getNodeState(i) == ClusterState::NodeState::DEAD) {
-      NodeID nid(i, nodes[i].generation);
+  for (const auto& entry : config->serverConfig()->getNodes()) {
+    if (cs->getNodeState(entry.first) == ClusterState::NodeState::DEAD) {
+      NodeID nid(entry.first, entry.second.generation);
       worker->sender().closeServerSocket(nid, E::PEER_UNAVAILABLE);
     }
   }

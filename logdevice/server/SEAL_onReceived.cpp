@@ -69,7 +69,8 @@ Message::Disposition SEAL_onReceived(SEAL_Message* msg, const Address& from) {
   auto scfg = config->serverConfig();
   auto* node = scfg->getNode(scfg->getMyNodeID().index());
   ld_check(node);
-  const shard_size_t n_shards = node->num_shards;
+  ld_check(node->storage_attributes);
+  const shard_size_t n_shards = node->getNumShards();
   ld_check(n_shards > 0); // We already checked we are a storage node.
 
   shard_index_t shard_idx = header.shard;

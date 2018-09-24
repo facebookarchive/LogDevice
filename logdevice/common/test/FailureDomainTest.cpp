@@ -92,12 +92,12 @@ void FailureDomainTest::setUp() {
   // 10 nodes in the cluster each with 5 shards, from 4 different
   // network-clusters
   configuration::Nodes nodes;
-  addNodes(&nodes, 1, 1, {}, "rg0.dc0.cl0.ro0.rk1", 1); // 0
-  addNodes(&nodes, 1, 1, {}, "rg0.dc0.cl0.ro0.rk2", 1); // 1
-  addNodes(&nodes, 4, 1, {}, "rg0.dc0.cl1.ro0.rk3", 2); // 2-5
-  addNodes(&nodes, 1, 1, {}, "rg0.dc0.cl2.ro0.rk6", 1); // 6
-  addNodes(&nodes, 2, 1, {}, "rg0.dc0.cl3.ro0.rk7", 2); // 7-8
-  addNodes(&nodes, 1, 1, {}, "rg0.dc0.cl4.ro0.rk8", 1); // 9
+  addNodes(&nodes, 1, 1, "rg0.dc0.cl0.ro0.rk1", 1); // 0
+  addNodes(&nodes, 1, 1, "rg0.dc0.cl0.ro0.rk2", 1); // 1
+  addNodes(&nodes, 4, 1, "rg0.dc0.cl1.ro0.rk3", 2); // 2-5
+  addNodes(&nodes, 1, 1, "rg0.dc0.cl2.ro0.rk6", 1); // 6
+  addNodes(&nodes, 2, 1, "rg0.dc0.cl3.ro0.rk7", 2); // 7-8
+  addNodes(&nodes, 1, 1, "rg0.dc0.cl4.ro0.rk8", 1); // 9
 
   for (node_index_t nid = 0; nid < nodes.size(); ++nid) {
     storage_set_.push_back(ShardID(nid, 0));
@@ -125,12 +125,12 @@ void FailureDomainTest::setUpWithMultiScopes() {
   dbg::assertOnData = true;
 
   configuration::Nodes nodes;
-  addNodes(&nodes, 4, 1, {}, "rg0.dc0.cl0.ro0.rk1", 1); // 0-3
-  addNodes(&nodes, 4, 1, {}, "rg0.dc0.cl0.ro0.rk2", 1); // 4-7
-  addNodes(&nodes, 4, 1, {}, "rg0.dc0.cl0.ro0.rk3", 2); // 8-11
-  addNodes(&nodes, 4, 1, {}, "rg1.dc0.cl0.ro0.rk6", 1); // 12-15
-  addNodes(&nodes, 4, 1, {}, "rg1.dc0.cl0.ro0.rk7", 2); // 16-19
-  addNodes(&nodes, 4, 1, {}, "rg1.dc0.cl0.ro0.rk8", 1); // 20-23
+  addNodes(&nodes, 4, 1, "rg0.dc0.cl0.ro0.rk1", 1); // 0-3
+  addNodes(&nodes, 4, 1, "rg0.dc0.cl0.ro0.rk2", 1); // 4-7
+  addNodes(&nodes, 4, 1, "rg0.dc0.cl0.ro0.rk3", 2); // 8-11
+  addNodes(&nodes, 4, 1, "rg1.dc0.cl0.ro0.rk6", 1); // 12-15
+  addNodes(&nodes, 4, 1, "rg1.dc0.cl0.ro0.rk7", 2); // 16-19
+  addNodes(&nodes, 4, 1, "rg1.dc0.cl0.ro0.rk8", 1); // 20-23
 
   for (node_index_t nid = 0; nid < nodes.size(); ++nid) {
     storage_set_.push_back(ShardID(nid, 0));
@@ -162,9 +162,9 @@ void FailureDomainTest::setUpWithShards() {
 
   // 24 shards spanning 3 racks.
   configuration::Nodes nodes;
-  addNodes(&nodes, 4, 2, {}, "rg0.dc0.cl0.ro0.rk1", 1); // 0-3
-  addNodes(&nodes, 4, 2, {}, "rg0.dc0.cl0.ro0.rk2", 1); // 4-7
-  addNodes(&nodes, 4, 2, {}, "rg0.dc0.cl0.ro0.rk3", 2); // 8-11
+  addNodes(&nodes, 4, 2, "rg0.dc0.cl0.ro0.rk1", 1); // 0-3
+  addNodes(&nodes, 4, 2, "rg0.dc0.cl0.ro0.rk2", 1); // 4-7
+  addNodes(&nodes, 4, 2, "rg0.dc0.cl0.ro0.rk3", 2); // 8-11
 
   // Shard set contains 24 nodes (2 shards per node in the cluster).
   for (node_index_t i = 0; i < 12; ++i) {
@@ -197,9 +197,9 @@ void FailureDomainTest::setUpWithShardsAndOnlyRackReplication() {
 
   // 24 shards spanning 3 racks.
   configuration::Nodes nodes;
-  addNodes(&nodes, 4, 1, {}, "rg0.dc0.cl0.ro0.rk1", 1); // 0-3
-  addNodes(&nodes, 4, 1, {}, "rg0.dc0.cl0.ro0.rk2", 1); // 4-7
-  addNodes(&nodes, 4, 1, {}, "rg0.dc0.cl0.ro0.rk3", 2); // 8-11
+  addNodes(&nodes, 4, 1, "rg0.dc0.cl0.ro0.rk1", 1); // 0-3
+  addNodes(&nodes, 4, 1, "rg0.dc0.cl0.ro0.rk2", 1); // 4-7
+  addNodes(&nodes, 4, 1, "rg0.dc0.cl0.ro0.rk3", 2); // 8-11
 
   // Shard set contains 24 nodes (2 shards per node in the cluster).
   for (node_index_t i = 0; i < 12; ++i) {
@@ -843,12 +843,12 @@ TEST_F(FailureDomainTest, T30067676) {
   dbg::assertOnData = true;
 
   configuration::Nodes nodes;
-  addNodes(&nodes, 4, 1, {}, "rg0.dc0.cl0.ro0.rk1", 4); // 0-3
-  addNodes(&nodes, 4, 1, {}, "rg0.dc0.cl0.ro0.rk2", 4); // 4-7
-  addNodes(&nodes, 4, 1, {}, "rg0.dc0.cl0.ro0.rk3", 4); // 8-11
-  addNodes(&nodes, 4, 1, {}, "rg1.dc0.cl0.ro0.rk6", 4); // 12-15
-  addNodes(&nodes, 4, 1, {}, "rg1.dc0.cl0.ro0.rk7", 4); // 16-19
-  addNodes(&nodes, 4, 1, {}, "rg1.dc0.cl0.ro0.rk8", 4); // 20-23
+  addNodes(&nodes, 4, 1, "rg0.dc0.cl0.ro0.rk1", 4); // 0-3
+  addNodes(&nodes, 4, 1, "rg0.dc0.cl0.ro0.rk2", 4); // 4-7
+  addNodes(&nodes, 4, 1, "rg0.dc0.cl0.ro0.rk3", 4); // 8-11
+  addNodes(&nodes, 4, 1, "rg1.dc0.cl0.ro0.rk6", 4); // 12-15
+  addNodes(&nodes, 4, 1, "rg1.dc0.cl0.ro0.rk7", 4); // 16-19
+  addNodes(&nodes, 4, 1, "rg1.dc0.cl0.ro0.rk8", 4); // 20-23
 
   for (node_index_t nid = 0; nid < 20; ++nid) {
     storage_set_.push_back(ShardID(nid, 0));

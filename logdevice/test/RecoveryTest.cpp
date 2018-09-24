@@ -1304,8 +1304,8 @@ TEST_P(RecoveryTest, MultipleSequencers) {
   for (node_index_t i = 0; i < 4; ++i) {
     auto& node = node_configs[i];
     node.generation = 1;
-    node.num_shards = 2;
-    node.sequencer_weight = 1.0;
+    node.addSequencerRole();
+    node.addStorageRole(/*num_shards*/ 2);
   }
 
   node_configs_ = node_configs;
@@ -1716,8 +1716,11 @@ TEST_P(RecoveryTest, FailureDomainAuthoritative) {
   // Region 3:  {5}
   Configuration::Nodes node_configs;
   for (int i = 0; i < nodes_; ++i) {
-    node_configs[i].sequencer_weight = i == 5 ? 1.0 : 0;
-    node_configs[i].num_shards = 2;
+    auto& node = node_configs[i];
+    if (i == 5) {
+      node.addSequencerRole();
+    }
+    node.addStorageRole(/*num_shards*/ 2);
     std::string domain_string;
     if (i < 3) {
       domain_string = "region1....";

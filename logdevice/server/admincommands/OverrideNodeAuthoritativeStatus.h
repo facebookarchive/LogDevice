@@ -69,7 +69,7 @@ class OverrideNodeAuthoritativeStatus : public AdminCommand {
                   nid_);
       return;
     }
-    const size_t num_shards = node->num_shards;
+    const size_t num_shards = node->getNumShards();
 
     run_on_all_workers(server_->getProcessor(), [&]() {
       Worker* w = Worker::onThisThread();

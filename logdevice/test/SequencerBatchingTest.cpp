@@ -240,8 +240,8 @@ TEST_F(SequencerBatchingTest, DISABLED_RollingRestart) {
   for (node_index_t i = 0; i < NNODES; ++i) {
     Configuration::Node& node = nodes[i];
     node.generation = 1;
-    node.sequencer_weight = 1;
-    node.num_shards = 2;
+    node.addSequencerRole();
+    node.addStorageRole(/*num_shards*/ 2);
   }
   auto cluster =
       IntegrationTestUtils::ClusterFactory()

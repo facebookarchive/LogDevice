@@ -76,7 +76,7 @@ class GetEpochRecoveryMetadataRequestTest : public ::testing::Test {
     dbg::assertOnData = true;
 
     Configuration::Nodes nodes;
-    NodeSetTestUtil::addNodes(&nodes, 10, 1, {}, "rg0.dc0.cl0.ro0.rk0", 1);
+    NodeSetTestUtil::addNodes(&nodes, 10, 1, "rg0.dc0.cl0.ro0.rk0", 1);
     Configuration::NodesConfig nodes_config(std::move(nodes));
     auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
     NodeSetTestUtil::addLog(logs_config.get(), kLogID, 1, 0, 1, {});

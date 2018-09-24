@@ -106,10 +106,9 @@ std::shared_ptr<ServerConfig> gen_config(size_t num_nodes,
     auto& node = nodes[i];
     node.address =
         Sockaddr(get_localhost_address_str(), folly::to<std::string>(1337 + i));
-    node.storage_state = configuration::StorageState::READ_WRITE;
-    node.sequencer_weight = 1.0;
     node.generation = 1;
-    node.num_shards = 1;
+    node.addSequencerRole();
+    node.addStorageRole();
   }
 
   Configuration::NodesConfig nodes_config(std::move(nodes));

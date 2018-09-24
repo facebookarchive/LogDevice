@@ -230,13 +230,13 @@ TEST_F(RebuildingSupervisorIntegrationTest, DontRebuildNonStorageNode) {
   // Make N3 a non-storage node, all the others storage nodes
   for (int i = 0; i < num_nodes; ++i) {
     Configuration::Node node;
-    node.storage_state = (i == dead_node)
-        ? configuration::StorageState::NONE
-        : configuration::StorageState::READ_WRITE;
     node.generation = 1;
-    node.sequencer_weight = 1;
-    node.num_shards = num_shards;
-    nodes[i] = node;
+    node.addSequencerRole();
+    node.addStorageRole(num_shards);
+    if (i == dead_node) {
+      node.storage_attributes->state = configuration::StorageState::DISABLED;
+    }
+    nodes[i] = std::move(node);
   }
 
   // Replication factor is 2 by default.
@@ -522,9 +522,11 @@ TEST_F(RebuildingSupervisorIntegrationTest, BasicShard) {
   for (int i = 0; i < 5; ++i) {
     Configuration::Node node;
     node.generation = i != 2 ? 1 : 2;
-    node.sequencer_weight = (i == 0);
-    node.num_shards = 3;
-    nodes_config[i] = node;
+    if (i == 0) {
+      node.addSequencerRole();
+    }
+    node.addStorageRole(/*num_shards*/ 3);
+    nodes_config[i] = std::move(node);
   }
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
@@ -575,9 +577,11 @@ TEST_F(RebuildingSupervisorIntegrationTest, NodeRebuildingThreshold) {
   for (int i = 0; i < num_nodes; ++i) {
     Configuration::Node node;
     node.generation = 1;
-    node.num_shards = 1;
-    node.sequencer_weight = (i == 0);
-    nodes_config[i] = node;
+    if (i == 0) {
+      node.addSequencerRole();
+    }
+    node.addStorageRole(/*num_shards*/ 1);
+    nodes_config[i] = std::move(node);
   }
 
   Configuration::Log event_log;
@@ -685,9 +689,11 @@ TEST_F(RebuildingSupervisorIntegrationTest,
   for (int i = 0; i < num_nodes; ++i) {
     Configuration::Node node;
     node.generation = 1;
-    node.num_shards = 1;
-    node.sequencer_weight = (i == 0);
-    nodes_config[i] = node;
+    if (i == 0) {
+      node.addSequencerRole();
+    }
+    node.addStorageRole(/*num_shards*/ 1);
+    nodes_config[i] = std::move(node);
   }
 
   Configuration::Log event_log;
@@ -761,9 +767,11 @@ TEST_F(RebuildingSupervisorIntegrationTest,
   for (int i = 0; i < num_nodes; ++i) {
     Configuration::Node node;
     node.generation = 1;
-    node.num_shards = 1;
-    node.sequencer_weight = (i == 0);
-    nodes_config[i] = node;
+    if (i == 0) {
+      node.addSequencerRole();
+    }
+    node.addStorageRole(/*num_shards*/ 1);
+    nodes_config[i] = std::move(node);
   }
 
   Configuration::Log event_log;
@@ -843,9 +851,11 @@ TEST_F(RebuildingSupervisorIntegrationTest, ReadIOError) {
   for (int i = 0; i < 5; ++i) {
     Configuration::Node node;
     node.generation = 1;
-    node.sequencer_weight = (i == 0);
-    node.num_shards = 1;
-    nodes_config[i] = node;
+    if (i == 0) {
+      node.addSequencerRole();
+    }
+    node.addStorageRole(/*num_shards*/ 1);
+    nodes_config[i] = std::move(node);
   }
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
@@ -919,9 +929,11 @@ TEST_F(RebuildingSupervisorIntegrationTest, RebuildingTriggerQueueThreshold) {
   for (int i = 0; i < num_nodes; ++i) {
     Configuration::Node node;
     node.generation = 1;
-    node.num_shards = 1;
-    node.sequencer_weight = (i == 0);
-    nodes_config[i] = node;
+    node.addStorageRole(/*num_shards*/ 1);
+    if (i == 0) {
+      node.addSequencerRole();
+    }
+    nodes_config[i] = std::move(node);
   }
 
   Configuration::Log event_log;
@@ -1033,9 +1045,11 @@ TEST_F(RebuildingSupervisorIntegrationTest,
   for (int i = 0; i < num_nodes; ++i) {
     Configuration::Node node;
     node.generation = 1;
-    node.num_shards = 1;
-    node.sequencer_weight = (i == 0);
-    nodes_config[i] = node;
+    node.addStorageRole(/*num_shards*/ 1);
+    if (i == 0) {
+      node.addSequencerRole();
+    }
+    nodes_config[i] = std::move(node);
   }
 
   Configuration::Log event_log;

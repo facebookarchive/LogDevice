@@ -275,7 +275,7 @@ void NodeStatsController::aggregate() {
 std::vector<NodeID> NodeStatsController::detectOutliers() const {
   const auto now = std::chrono::steady_clock::now();
   auto outliers = outlier_detector_->detectOutliers(now);
-  const auto nodes = getNodes();
+  const auto& nodes = getNodes();
   std::vector<NodeID> outlier_nodes;
   outliers.reserve(outliers.size());
 
@@ -357,7 +357,7 @@ std::chrono::milliseconds NodeStatsController::getAggregationPeriod() const {
 }
 
 std::vector<NodeID> NodeStatsController::getTargetNodes() const {
-  const auto nodes = getNodes();
+  const auto& nodes = getNodes();
 
   std::vector<NodeID> target_nodes;
   target_nodes.reserve(nodes.size());
@@ -369,7 +369,7 @@ std::vector<NodeID> NodeStatsController::getTargetNodes() const {
   return target_nodes;
 }
 
-configuration::Nodes NodeStatsController::getNodes() const {
+const configuration::Nodes& NodeStatsController::getNodes() const {
   return Worker::onThisThread()->getServerConfig()->getNodes();
 }
 

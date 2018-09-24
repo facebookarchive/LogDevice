@@ -528,9 +528,9 @@ class RebuildingCoordinatorTest : public ::testing::Test {
     for (int i = 0; i < num_nodes; ++i) {
       Configuration::Node& node = nodes[i];
       node.address = Sockaddr("::1", folly::to<std::string>(4440 + i));
-      node.num_shards = 2;
       node.generation = 1;
-      node.sequencer_weight = 1.0;
+      node.addSequencerRole();
+      node.addStorageRole(/*num_shards*/ 2);
     }
 
     auto logs_config = std::make_unique<configuration::LocalLogsConfig>();

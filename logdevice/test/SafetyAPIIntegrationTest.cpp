@@ -64,9 +64,9 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithExpand) {
   Configuration::Nodes nodes;
 
   for (int i = 0; i < num_nodes; ++i) {
-    nodes[i].num_shards = num_shards;
-    nodes[i].sequencer_weight = 1;
     nodes[i].generation = 1;
+    nodes[i].addSequencerRole();
+    nodes[i].addStorageRole(num_shards);
   }
 
   Configuration::Log logcfg;
@@ -179,10 +179,9 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithSetWeight) {
   Configuration::Nodes nodes;
 
   for (int i = 0; i < num_nodes; ++i) {
-    nodes[i].storage_state = configuration::StorageState::READ_WRITE;
-    nodes[i].num_shards = num_shards;
-    nodes[i].sequencer_weight = 1;
     nodes[i].generation = 1;
+    nodes[i].addSequencerRole();
+    nodes[i].addStorageRole(num_shards);
   }
 
   Configuration::Log logcfg;
@@ -324,10 +323,9 @@ TEST_F(SafetyAPIIntegrationTest, DisableReads) {
   Configuration::Nodes nodes;
 
   for (int i = 0; i < num_nodes; ++i) {
-    nodes[i].storage_state = configuration::StorageState::READ_WRITE;
-    nodes[i].num_shards = num_shards;
-    nodes[i].sequencer_weight = 1;
     nodes[i].generation = 1;
+    nodes[i].addSequencerRole();
+    nodes[i].addStorageRole(num_shards);
   }
 
   Configuration::Log logcfg;
@@ -424,9 +422,9 @@ TEST_F(SafetyAPIIntegrationTest, SafetyMargin) {
   Configuration::Nodes nodes;
 
   for (int i = 0; i < num_nodes; ++i) {
-    nodes[i].num_shards = num_shards;
-    nodes[i].sequencer_weight = 1;
     nodes[i].generation = 1;
+    nodes[i].addSequencerRole();
+    nodes[i].addStorageRole(num_shards);
   }
 
   Configuration::Log logcfg;

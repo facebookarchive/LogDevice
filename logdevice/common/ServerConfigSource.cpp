@@ -58,7 +58,8 @@ constructConfig(const std::vector<std::string>& hosts) {
   for (size_t index = 0; index < hosts.size(); index++) {
     folly::dynamic node_dict = folly::dynamic::object
         // "node_id" only needs to be unique per node here
-        ("node_id", index)("host", hosts[index])("generation", 1);
+        ("node_id", index)("host", hosts[index])(
+            "roles", folly::dynamic::array())("generation", 1);
     nodes.push_back(node_dict);
   }
 

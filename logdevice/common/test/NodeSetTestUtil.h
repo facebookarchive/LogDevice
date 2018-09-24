@@ -21,26 +21,24 @@ namespace facebook { namespace logdevice { namespace NodeSetTestUtil {
 void addNodes(ServerConfig::Nodes* nodes,
               size_t num_nodes,
               shard_size_t num_shards,
-              folly::Optional<std::chrono::seconds> retention = folly::none,
-              std::string location_string = "",
-              size_t num_non_zw_nodes = 0,
-              double weight = 1.,
-              double sequencer = 1.);
+              std::string location_string,
+              double weight,
+              double sequencer,
+              size_t num_non_zw_nodes);
 
 inline void addNodes(ServerConfig::Nodes* nodes,
                      size_t num_nodes,
                      shard_size_t num_shards,
-                     std::string location_string,
+                     std::string location_string = "",
                      double weight = 1.,
                      double sequencer = 1.) {
   addNodes(nodes,
            num_nodes,
            num_shards,
-           folly::none,
            location_string,
-           num_nodes,
            weight,
-           sequencer);
+           sequencer,
+           /*num_non_zw_nodes*/ num_nodes);
 }
 
 // add a log to the logs_config with given attributes

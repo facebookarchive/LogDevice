@@ -100,9 +100,9 @@ class TestMetaDataLogReader : public MetaDataLogReader {
 
   void initConfig() {
     Configuration::Nodes nodes;
-    addNodes(&nodes, 3, 1, {}, "rg0.dc0.cl0.ro0.rk0", 1);
-    addNodes(&nodes, 3, 1, {}, "rg1.dc0.cl0.ro0.rk0", 1);
-    addNodes(&nodes, 3, 1, {}, "rg1.dc0.cl0.ro0.rk1", 1);
+    addNodes(&nodes, 3, 1, "rg0.dc0.cl0.ro0.rk0", 1);
+    addNodes(&nodes, 3, 1, "rg1.dc0.cl0.ro0.rk0", 1);
+    addNodes(&nodes, 3, 1, "rg1.dc0.cl0.ro0.rk1", 1);
     Configuration::NodesConfig nodes_config;
     nodes_config.setNodes(std::move(nodes));
 

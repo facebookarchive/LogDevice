@@ -27,8 +27,8 @@ TEST_F(ProtocolChecksumIntegrationTest, ChecksummingEnabled) {
   Configuration::Nodes nodes;
   for (node_index_t i = 0; i < NNODES; ++i) {
     nodes[i].generation = 1;
-    nodes[i].sequencer_weight = 1.0;
-    nodes[i].num_shards = 2;
+    nodes[i].addSequencerRole();
+    nodes[i].addStorageRole(/*num_shards*/ 2);
   }
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
@@ -55,8 +55,8 @@ TEST_F(ProtocolChecksumIntegrationTest, ChecksummingDisabled) {
   Configuration::Nodes nodes;
   for (node_index_t i = 0; i < NNODES; ++i) {
     nodes[i].generation = 1;
-    nodes[i].sequencer_weight = 1.0;
-    nodes[i].num_shards = 2;
+    nodes[i].addSequencerRole();
+    nodes[i].addStorageRole(/*num_shards*/ 2);
   }
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
@@ -83,8 +83,8 @@ TEST_F(ProtocolChecksumIntegrationTest, TestBlacklistedMessages) {
   Configuration::Nodes nodes;
   for (node_index_t i = 0; i < NNODES; ++i) {
     nodes[i].generation = 1;
-    nodes[i].sequencer_weight = 1.0;
-    nodes[i].num_shards = 2;
+    nodes[i].addSequencerRole();
+    nodes[i].addStorageRole(/*num_shards*/ 2);
   }
 
   ld_check(sizeof(MessageType) == sizeof(char));

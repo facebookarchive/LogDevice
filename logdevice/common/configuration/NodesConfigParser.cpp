@@ -28,23 +28,46 @@ namespace parser {
 static bool parseOneNode(const folly::dynamic&,
                          node_index_t&,
                          Configuration::Node&);
+
+// Common to all node roles
 static bool parseNodeID(const folly::dynamic&, node_index_t&);
 static bool parseGeneration(const folly::dynamic&, Configuration::Node&);
-static bool parseNumShards(const folly::dynamic&, Configuration::Node&);
 static bool parseHostFields(const folly::dynamic&,
                             Sockaddr&,                  /* host address */
                             Sockaddr&,                  /* gossip address */
                             folly::Optional<Sockaddr>&, /* ssl address */
                             folly::Optional<Sockaddr>& /* admin address */);
-static bool parseRoles(const folly::dynamic&, Configuration::Node&);
-static bool parseStorageState(const folly::dynamic&, Configuration::Node&);
 static bool parseLocation(const folly::dynamic&, Configuration::Node&);
+static bool parseRoles(const folly::dynamic&, Configuration::Node&);
+using RoleParser = bool(const folly::dynamic&, Configuration::Node&);
+
+// Sequencer role attributes
+static RoleParser parseSequencerAttributes;
 static bool parseSequencer(const folly::dynamic&, Configuration::Node&);
-static bool parseRetention(const folly::dynamic&, Configuration::Node&);
+
+// Storage role attributes
+static RoleParser parseStorageAttributes;
+static bool parseNumShards(const folly::dynamic&, Configuration::Node&);
+static bool parseStorageState(const folly::dynamic&, Configuration::Node&);
 static bool parseCompactionSchedule(const folly::dynamic&,
                                     Configuration::Node&);
 static bool parseProactiveCompaction(const folly::dynamic&,
                                      Configuration::Node&);
+
+static bool parseRole(NodeRole role,
+                      const folly::dynamic& nodeMap,
+                      Configuration::Node& output) {
+  switch (role) {
+    case NodeRole::SEQUENCER:
+      output.setRole(role);
+      return parseSequencerAttributes(nodeMap, output);
+    case NodeRole::STORAGE:
+      output.setRole(role);
+      return parseStorageAttributes(nodeMap, output);
+    default:
+      return false;
+  }
+}
 
 bool parseNodes(const folly::dynamic& clusterMap,
                 ServerConfig::NodesConfig& output) {
@@ -63,8 +86,6 @@ bool parseNodes(const folly::dynamic& clusterMap,
   }
 
   size_t ssl_enabled_nodes = 0;
-  size_t nodes_with_capacity_set = 0;
-  size_t writeable_storage_nodes = 0;
 
   std::unordered_map<Sockaddr, node_index_t, Sockaddr::Hash> seen_addresses;
 
@@ -88,13 +109,6 @@ bool parseNodes(const folly::dynamic& clusterMap,
       ++ssl_enabled_nodes;
     }
 
-    if (node.storage_state == StorageState::READ_WRITE) {
-      ++writeable_storage_nodes;
-      if (node.storage_capacity.hasValue()) {
-        ++nodes_with_capacity_set;
-      }
-    }
-
     auto insert_result =
         seen_addresses.insert(std::make_pair(node.address, index));
     if (!insert_result.second) {
@@ -116,14 +130,6 @@ bool parseNodes(const folly::dynamic& clusterMap,
     return false;
   }
 
-  if (nodes_with_capacity_set != 0 &&
-      nodes_with_capacity_set != writeable_storage_nodes) {
-    ld_error("Storage capacity has to be set for all writable storage nodes "
-             "if it is set for at least one writable storage node");
-    err = E::INVALID_CONFIG;
-    return false;
-  }
-
   if (res.empty()) {
     ld_error("Node config is empty");
     err = E::INVALID_CONFIG;
@@ -136,13 +142,13 @@ bool parseNodes(const folly::dynamic& clusterMap,
   // implemented, we validate here that all storage nodes have the same number
   // of shards.
   folly::Optional<uint8_t> num_shards;
-  for (auto it : res) {
+  for (const auto& it : res) {
     if (!it.second.isReadableStorageNode()) {
       continue;
     }
     if (!num_shards.hasValue()) {
-      num_shards = it.second.num_shards;
-    } else if (num_shards.value() != it.second.num_shards) {
+      num_shards = it.second.getNumShards();
+    } else if (num_shards.value() != it.second.getNumShards()) {
       ld_error("Not all nodes are configured with the same value for "
                "num_shards. LogDevice does not yet support running tiers "
                "with heterogeneous number of shards.");
@@ -189,12 +195,18 @@ static bool parseOneNode(const folly::dynamic& nodeMap,
                          output.gossip_address,
                          output.ssl_address,
                          output.admin_address) &&
-      parseRoles(nodeMap, output) && parseStorageState(nodeMap, output) &&
-      parseNumShards(nodeMap, output) && parseLocation(nodeMap, output) &&
-      parseSequencer(nodeMap, output) && parseRetention(nodeMap, output) &&
-      parseCompactionSchedule(nodeMap, output) &&
-      parseProactiveCompaction(nodeMap, output) &&
+      parseLocation(nodeMap, output) && parseRoles(nodeMap, output) &&
       parseSettings(nodeMap, "settings", output.settings);
+}
+
+static bool parseStorageAttributes(const folly::dynamic& nodeMap,
+                                   Configuration::Node& output) {
+  ld_check(output.hasRole(NodeRole::STORAGE));
+  output.addStorageRole();
+  return parseNumShards(nodeMap, output) &&
+      parseStorageState(nodeMap, output) &&
+      parseCompactionSchedule(nodeMap, output) &&
+      parseProactiveCompaction(nodeMap, output);
 }
 
 static bool parseNodeID(const folly::dynamic& nodeMap,
@@ -209,34 +221,30 @@ static bool parseGeneration(const folly::dynamic& nodeMap,
 
 static bool parseNumShards(const folly::dynamic& nodeMap,
                            Configuration::Node& output) {
+  auto* storage = output.storage_attributes.get();
   bool ret =
-      getIntFromMap<shard_size_t>(nodeMap, "num_shards", output.num_shards);
+      getIntFromMap<shard_size_t>(nodeMap, "num_shards", storage->num_shards);
   if (!ret) {
     // "num_shards" property not found.
-    if (output.isReadableStorageNode()) {
-      ld_error("\"num_shards\" must be present in a node config for all "
-               "storage nodes ");
-      err = E::INVALID_CONFIG;
-      return false;
-    } else {
-      output.num_shards = 0;
-      return true;
-    }
+    ld_error("\"num_shards\" must be present in a node config for all "
+             "storage nodes");
+    err = E::INVALID_CONFIG;
+    return false;
   }
 
-  if (output.num_shards > MAX_SHARDS) {
+  if (storage->num_shards > MAX_SHARDS) {
     ld_error("\"num_shards\" must be <= %lu", MAX_SHARDS);
     err = E::INVALID_CONFIG;
     return false;
   }
 
-  if (output.num_shards < 0) {
+  if (storage->num_shards < 0) {
     ld_error("\"num_shards\" must be >= 0");
     err = E::INVALID_CONFIG;
     return false;
   }
 
-  if (output.isReadableStorageNode() && output.num_shards == 0) {
+  if (storage->num_shards == 0) {
     ld_error("\"num_shards\" must be > 0 for storage nodes");
     err = E::INVALID_CONFIG;
     return false;
@@ -439,51 +447,81 @@ static bool parseLocation(const folly::dynamic& nodeMap,
   return true;
 }
 
-// node_cfg is expected to have .weight already set to its final value
+static bool parseSequencerAttributes(const folly::dynamic& nodeMap,
+                                     Configuration::Node& output) {
+  ld_check(output.hasRole(NodeRole::SEQUENCER));
+  output.addSequencerRole();
+  return parseSequencer(nodeMap, output);
+}
+
 static bool parseSequencer(const folly::dynamic& nodeMap,
                            Configuration::Node& output) {
-  if (getDoubleFromMap(nodeMap, "sequencer", output.sequencer_weight)) {
-    if (!output.hasRole(NodeRole::SEQUENCER)) {
-      ld_error("Invalid 'sequencer' attribute. 'sequencer' can only be set "
-               "on sequencer nodes");
-      err = E::INVALID_CONFIG;
-      return false;
-    }
+  // Sequencing is controlled by two attributes:
+  // 'sequencer':        This is a bool that enables or disables sequencing.
+  //                     The node must also be provisioned with the 'sequencer'
+  //                     role. If omitted, sequencing is disabled.
+  // 'sequencer_weight': This is a double that controls the amount of logs
+  //                     this node should sequence relative to other nodes
+  //                     in the cluster. If omitted, weight defaults to 1.
+  //
+  // The deprecated config format, where weight and binary control of
+  // sequencing are conflated, is also supported. In this case
+  // sequencer is a double indicating sequencing weight and positive values
+  // enable sequencing.
 
-    if (output.sequencer_weight < 0) {
+  // Default to no sequencing.
+  auto* sequencer = output.sequencer_attributes.get();
+  sequencer->weight = 0;
+
+  // Handle deprecated format.
+  double sequencer_weight = 0;
+  if (getDoubleFromMap(nodeMap, "sequencer", sequencer_weight)) {
+    if (sequencer_weight < 0) {
       ld_error("Invalid value of 'sequencer' attribute. Expected a "
-               "non-negative number");
+               "non-negative floating point number, or a bool.");
       err = E::INVALID_CONFIG;
       return false;
     }
+    sequencer->weight = sequencer_weight;
+    return true;
+  }
 
+  // New format.
+  bool sequencing_enabled = false;
+  if (getBoolFromMap(nodeMap, "sequencer", sequencing_enabled)) {
+    // Default weight is 1.0 or 0 depending on enable state.
+    sequencer_weight = static_cast<double>(sequencing_enabled);
+    if (getDoubleFromMap(nodeMap, "sequencer_weight", sequencer_weight)) {
+      if (sequencer_weight < 0) {
+        ld_error("Invalid value of 'sequencer_weight' attribute. Expected a "
+                 "non-negative, floating point number");
+        err = E::INVALID_CONFIG;
+        return false;
+      }
+      if (sequencing_enabled && sequencer_weight == 0) {
+        ld_warning("Enabled sequencer has a weight of 0. This sequencer will "
+                   "not orchestrate the writes for any logs. Prefer setting "
+                   "'sequencer' to false when disabling sequencing on a node.");
+      }
+    } else if (err != E::NOTFOUND) {
+      ld_error("Invalid type for 'sequencer_weight' attribute. Expected a "
+               "double");
+      err = E::INVALID_CONFIG;
+      return false;
+    }
+    sequencer->weight = sequencer_weight;
     return true;
   }
 
   if (err == E::NOTFOUND) {
-    // key doesn't exist; defaults to zero
-    output.sequencer_weight = 0.0;
+    // 'sequencer' key doesn't exist. Sequencing is disabled.
+    sequencer->weight = 0.0;
     return true;
   }
 
-  // "sequencer" exists, but is not a double, trying reading a bool instead
-  ld_check(err == E::INVALID_CONFIG);
-  bool seq_bool;
-  if (getBoolFromMap(nodeMap, "sequencer", seq_bool)) {
-    if (!output.hasRole(NodeRole::SEQUENCER)) {
-      ld_error("Invalid 'sequencer' attribute. 'sequencer' can only be set "
-               "on sequencer nodes");
-      err = E::INVALID_CONFIG;
-      return false;
-    }
-
-    // If set to 'true', treat it as having weight 1.
-    output.sequencer_weight = static_cast<double>(seq_bool);
-    return true;
-  }
-
-  ld_error("Invalid value of 'sequencer' attribute. Expected a floating "
-           "point number or a bool.");
+  // "sequencer" exists, but is not a double or a bool.
+  ld_error("Invalid value of 'sequencer' attribute. Expected a "
+           "non-negative floating point number, or a bool.");
   err = E::INVALID_CONFIG;
   return false;
 }
@@ -503,29 +541,6 @@ static bool parseProactiveCompaction(const folly::dynamic& nodeMap,
   const folly::dynamic& val = iter->second;
   return parseOneSetting(
       "rocksdb-proactive-compaction-enabled", val, "settings", output.settings);
-}
-
-static bool parseRetention(const folly::dynamic& nodeMap,
-                           Configuration::Node& output) {
-  // parse the optional `retention` parameter
-  std::chrono::seconds retention;
-  if (parseChronoValue(nodeMap,
-                       "retention",
-                       "node: " + output.address.toString(),
-                       &retention)) {
-    if (retention.count() <= 0) {
-      ld_error("invalid value of \"retention\" attribute for node %s",
-               output.address.toString().c_str());
-      err = E::INVALID_CONFIG;
-      return false;
-    }
-
-    output.retention.assign(retention);
-  } else if (err != E::NOTFOUND) {
-    return false;
-  }
-
-  return true;
 }
 
 static bool parseCompactionSchedule(const folly::dynamic& nodeMap,
@@ -551,14 +566,11 @@ static bool parseRoles(const folly::dynamic& nodeMap,
                        Configuration::Node& output) {
   auto iter = nodeMap.find("roles");
   if (iter == nodeMap.items().end()) {
-    /* By default, nodes are both sequencers and storage nodes */
+    /* The role attribute is required. It may be empty, but not missing. */
     RATELIMIT_INFO(std::chrono::seconds(10),
                    1,
-                   "no \"roles\" entry in config. setting node's roles "
-                   "to [\"sequencer\", \"storage\"].");
-    output.setRole(NodeRole::SEQUENCER);
-    output.setRole(NodeRole::STORAGE);
-    return true;
+                   "no \"roles\" entry in config. Failing config load.");
+    return false;
   }
 
   const folly::dynamic& rolesList = iter->second;
@@ -571,10 +583,12 @@ static bool parseRoles(const folly::dynamic& nodeMap,
 
   /* Parse roles in config */
   if (rolesList.empty()) {
-    ld_error("found empty \"roles\" entry. nodes must have at "
-             "last one role");
-    err = E::INVALID_CONFIG;
-    return false;
+    node_index_t out_node_index = NODE_INDEX_INVALID;
+    // Already parsed earlier. Should succeed here.
+    bool have_node_index = parseNodeID(nodeMap, out_node_index);
+    ld_check(have_node_index);
+    ld_info("No roles configured for N%d", out_node_index);
+    return true;
   }
 
   for (auto& role : rolesList) {
@@ -587,9 +601,8 @@ static bool parseRoles(const folly::dynamic& nodeMap,
 
     NodeRole nodeRole;
     std::string roleStr = role.asString();
-    if (nodeRoleFromString(roleStr, &nodeRole)) {
-      output.setRole(nodeRole);
-    } else {
+    if (!nodeRoleFromString(roleStr, &nodeRole) ||
+        !parseRole(nodeRole, nodeMap, output)) {
       ld_error("found unknown \"roles\" entry: %s", roleStr.c_str());
       err = E::INVALID_CONFIG;
       return false;
@@ -620,7 +633,7 @@ static bool parseStorageState(const folly::dynamic& nodeMap,
       return false;
     }
     if (legacy_weight == -1) {
-      legacy_storage_state.assign(StorageState::NONE);
+      legacy_storage_state.assign(StorageState::DISABLED);
     } else if (legacy_weight == 0) {
       legacy_storage_state.assign(StorageState::READ_ONLY);
     } else {
@@ -684,8 +697,8 @@ static bool parseStorageState(const folly::dynamic& nodeMap,
   // Decide on final values based on presence of either old or new attributes
   // and defaults
   if (!storage_state.hasValue() && !legacy_storage_state.hasValue()) {
-    // no setting specified, set default
-    storage_state.assign(Node::DEFAULT_STORAGE_STATE);
+    // Use default settings as set by StorageNodeAttributes constructor.
+    storage_state.assign(output.storage_attributes->state);
   } else if (storage_state.hasValue() && legacy_storage_state.hasValue()) {
     // both settings specified, they should be identical
     if (storage_state.value() != legacy_storage_state.value()) {
@@ -732,21 +745,22 @@ static bool parseStorageState(const folly::dynamic& nodeMap,
     return false;
   }
 
-  output.storage_state = storage_state.value();
-  output.storage_capacity = storage_capacity;
+  auto* storage = output.storage_attributes.get();
+  storage->state = storage_state.value();
+  storage->capacity = storage_capacity.value_or(1);
 
   // Transitionary setting until we move everything to auto log provisioning at
   // which point read-only storage state will mean a node has to be excluded
   // from the nodesets
   if (!getBoolFromMap(
-          nodeMap, "exclude_from_nodesets", output.exclude_from_nodesets)) {
+          nodeMap, "exclude_from_nodesets", storage->exclude_from_nodesets)) {
     if (err != E::NOTFOUND) {
       ld_error(
           "Invalid value for \"exclude_from_nodesets\". Expecting true/false");
       err = E::INVALID_CONFIG;
       return false;
     }
-    output.exclude_from_nodesets = false;
+    storage->exclude_from_nodesets = false;
   }
   return true;
 }

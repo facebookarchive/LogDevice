@@ -29,15 +29,16 @@
 namespace facebook { namespace logdevice { namespace configuration {
 
 enum class StorageState {
-  // This is a storage node, it should serve reads and accept writes
+  // This storage node can currently serve reads and accept writes
   READ_WRITE = 0,
 
-  // This node should get reads, but not writes. Note that it can still take
-  // recovery writes (and rebuilding writes if it's not in the rebuilding set)
+  // This storage node can currently serve reads, but not writes from
+  // clients.  Recovery writes and rebuilding writes (unless excluded by
+  // its membership in the rebuilding set) are allowed.
   READ_ONLY,
 
-  // This is not a storage node
-  NONE,
+  // Storage operations are completely disabled on this node.
+  DISABLED
 };
 
 // Roles available for any given node
@@ -52,13 +53,51 @@ enum class NodeRole : unsigned int {
   STORAGE,
 };
 
-std::string storageStateToString(StorageState);
-bool storageStateFromString(const std::string&, StorageState* out);
-
 std::string toString(NodeRole& v);
 bool nodeRoleFromString(const std::string&, NodeRole* out);
 
+std::string storageStateToString(StorageState);
+bool storageStateFromString(const std::string&, StorageState* out);
+
+struct SequencerNodeAttributes {
+  /**
+   * A non-negative value indicating how many logs this node will run
+   * sequencers for relative to other nodes in the cluster.  A value of
+   * zero means sequencing is disabled on this node.
+   */
+  double weight = 1;
+};
+
+struct StorageNodeAttributes {
+  /**
+   * A positive value indicating how much store traffic this node will
+   * receive relative to other nodes in the cluster.
+   */
+  double capacity = 1;
+
+  /**
+   * See the definition of StorageState above
+   */
+  StorageState state = StorageState::READ_WRITE;
+
+  /**
+   * Number of storage shards on this node.
+   */
+  shard_size_t num_shards = 1;
+
+  /**
+   * If true, the node will not be selected into any newly generated nodesets
+   */
+  bool exclude_from_nodesets = false;
+};
+
 struct Node {
+  explicit Node(const Node&);
+
+  Node() = default;
+  Node(Node&&) = default;
+  Node& operator=(Node&&) = default;
+
   /**
    * The IP (v4 or v6) address, including port number.
    */
@@ -80,22 +119,6 @@ struct Node {
   folly::Optional<Sockaddr> admin_address;
 
   /**
-   * If this node is a storage node, this is a positive value indicating how
-   * much traffic it will get relative to other nodes in the cluster.
-   */
-  folly::Optional<double> storage_capacity;
-
-  /**
-   * See the definition of StorageState above
-   */
-  StorageState storage_state = StorageState::READ_WRITE;
-
-  /**
-   * If true, the node will not be selected into any newly generated nodesets
-   */
-  bool exclude_from_nodesets = false;
-
-  /**
    * Generation number of this slot.  Hosts in a cluster are uniquely
    * identified by (index, generation) where index is into the array of
    * nodes.
@@ -109,27 +132,9 @@ struct Node {
   int generation;
 
   /**
-   * Number of shards on this storage server.
-   */
-  shard_size_t num_shards = 1;
-
-  /**
-   * A non-negative value indicating how many logs this node will run
-   * sequencers for relative to other nodes in the cluster.  A value of
-   * zero means this is not a sequencer node.
-   */
-  double sequencer_weight = 1;
-
-  /**
    * Location information of the node.
    */
   folly::Optional<NodeLocation> location;
-
-  /**
-   * Data retention duration for the node. Used by NodeSetSelector to
-   * determine node set for a log.
-   */
-  folly::Optional<std::chrono::seconds> retention;
 
   /**
    * Settings overridden for this node.
@@ -141,57 +146,84 @@ struct Node {
    */
   std::bitset<NUM_ROLES> roles;
 
+  std::unique_ptr<SequencerNodeAttributes> sequencer_attributes;
+  std::unique_ptr<StorageNodeAttributes> storage_attributes;
+
   bool hasRole(NodeRole r) const {
     auto id = static_cast<size_t>(r);
-    return (
-        // By default, if no roles are provided, the node is both a sequencer
-        // and a storage node
-        (roles.none() &&
-         (r == NodeRole::SEQUENCER || r == NodeRole::STORAGE)) ||
-        roles.test(id));
+    return roles.test(id);
   }
+
   void setRole(NodeRole r) {
     auto id = static_cast<size_t>(r);
     roles.set(id);
   }
+
+  double getSequencerWeight() const {
+    if (hasRole(NodeRole::SEQUENCER)) {
+      return sequencer_attributes->weight;
+    } else {
+      return 0;
+    }
+  }
+  bool includeInNodesets() const {
+    return isWritableStorageNode() &&
+        !storage_attributes->exclude_from_nodesets;
+  }
+  bool isSequencingEnabled() const {
+    return getSequencerWeight() > 0;
+  }
+
   bool isReadableStorageNode() const {
     return hasRole(NodeRole::STORAGE) &&
-        (storage_state == StorageState::READ_WRITE ||
-         storage_state == StorageState::READ_ONLY);
+        storage_attributes->state != StorageState::DISABLED;
   }
   bool isWritableStorageNode() const {
     return hasRole(NodeRole::STORAGE) &&
-        storage_state == StorageState::READ_WRITE;
+        storage_attributes->state == StorageState::READ_WRITE;
   }
-  bool includeInNodesets() const {
-    return isWritableStorageNode() && !exclude_from_nodesets;
+  double getWritableStorageCapacity() const {
+    if (!isWritableStorageNode()) {
+      return 0.0;
+    }
+    return storage_attributes->capacity;
   }
-  bool isSequencingEnabled() const {
-    return hasRole(NodeRole::SEQUENCER) && sequencer_weight > 0;
+  StorageState getStorageState() const {
+    return !hasRole(NodeRole::STORAGE) ? StorageState::DISABLED
+                                       : storage_attributes->state;
   }
+
   bool isDisabled() const {
     return !isReadableStorageNode() && !isSequencingEnabled();
   }
-  double getWritableStorageCapacity() const {
-    if (storage_state != StorageState::READ_WRITE) {
-      return 0.0;
-    }
-    return storage_capacity.value_or(DEFAULT_STORAGE_CAPACITY);
+  shard_size_t getNumShards() const {
+    return !hasRole(NodeRole::STORAGE) ? 0 : storage_attributes->num_shards;
   }
-
   // Should only be used for backwards-compatible config serialization
   int getLegacyWeight() const {
-    switch (storage_state) {
+    switch (getStorageState()) {
       case StorageState::READ_WRITE:
       case StorageState::READ_ONLY: {
         double res = getWritableStorageCapacity();
         return res == 0.0 ? 0 : std::max(1, int(std::lround(res)));
       }
-      case StorageState::NONE:
+      case StorageState::DISABLED:
         return -1;
     }
     ld_check(false);
     return -1;
+  }
+
+  void addSequencerRole(double weight = 1.0) {
+    setRole(NodeRole::SEQUENCER);
+    sequencer_attributes = std::make_unique<SequencerNodeAttributes>();
+    sequencer_attributes->weight = weight;
+  }
+
+  void addStorageRole(shard_size_t num_shards = 1) {
+    setRole(NodeRole::STORAGE);
+    storage_attributes = std::make_unique<StorageNodeAttributes>();
+    storage_attributes->num_shards = num_shards;
   }
 
   // return a human-readable string for the location info
@@ -199,13 +231,6 @@ struct Node {
 
   // return the corresponding sockaddr for the given socket type
   const Sockaddr& getSockaddr(SocketType type, ConnectionType conntype) const;
-
-  // storage capacity that would be used for a storage node if no value is
-  // specified
-  static constexpr double DEFAULT_STORAGE_CAPACITY = 1;
-
-  // storage state that would be used for a node if no value is specified
-  static constexpr StorageState DEFAULT_STORAGE_STATE = StorageState::NONE;
 };
 
 using Nodes = std::unordered_map<node_index_t, Node>;

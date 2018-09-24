@@ -55,7 +55,7 @@ Message::Disposition STARTED_Message::onReceived(const Address& from) {
     return Disposition::ERROR;
   }
 
-  shard_size_t n_shards = node->num_shards;
+  shard_size_t n_shards = node->getNumShards();
   if (n_shards <= 0) {
     RATELIMIT_ERROR(std::chrono::seconds(1),
                     10,

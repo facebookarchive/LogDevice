@@ -27,6 +27,21 @@ using Decision = NodeSetSelector::Decision;
 
 using verify_func_t = std::function<void(StorageSet*)>;
 
+// Wrapper to provide always defaulted args to addNodes().
+static inline void addWeightedNodes(ServerConfig::Nodes* nodes,
+                                    size_t num_nodes,
+                                    shard_size_t num_shards,
+                                    std::string location_string,
+                                    size_t num_non_zw_nodes) {
+  return addNodes(nodes,
+                  num_nodes,
+                  num_shards,
+                  location_string,
+                  /*storage_capacity*/ 1.,
+                  /*sequencer_weight*/ 1.,
+                  num_non_zw_nodes);
+}
+
 static void verify_result(NodeSetSelector* selector,
                           std::shared_ptr<Configuration>& config,
                           logid_t logid,
@@ -140,11 +155,11 @@ compare_nodesets(NodeSetSelector* selector,
 TEST(RandomCrossDomainNodeSetSelectorTest, RackAssignment) {
   // 100-node cluster with nodes from 5 different racks
   Nodes nodes;
-  addNodes(&nodes, 10, 5, {}, "region0.datacenter1.01.a.a", 10);
-  addNodes(&nodes, 35, 5, {}, "region0.datacenter2.01.a.a", 35);
-  addNodes(&nodes, 20, 5, {}, "region0.datacenter1.01.a.b", 10);
-  addNodes(&nodes, 20, 5, {}, "region1.datacenter1.02.a.a", 20);
-  addNodes(&nodes, 15, 5, {}, "region1.datacenter1.02.a.b", 15);
+  addWeightedNodes(&nodes, 10, 5, "region0.datacenter1.01.a.a", 10);
+  addWeightedNodes(&nodes, 35, 5, "region0.datacenter2.01.a.a", 35);
+  addWeightedNodes(&nodes, 20, 5, "region0.datacenter1.01.a.b", 10);
+  addWeightedNodes(&nodes, 20, 5, "region1.datacenter1.02.a.a", 20);
+  addWeightedNodes(&nodes, 15, 5, "region1.datacenter1.02.a.b", 15);
 
   ld_check(nodes.size() == 100);
 
@@ -194,7 +209,7 @@ TEST(RandomNodeSetSelectorTest, NodeExclusion) {
   // 10 node cluster
   configuration::Nodes nodes;
   const int SHARDS_PER_NODE = 5;
-  addNodes(&nodes, 10, SHARDS_PER_NODE, {}, "", 10);
+  addWeightedNodes(&nodes, 10, SHARDS_PER_NODE, "", 10);
   ld_check(nodes.size() == 10);
 
   Configuration::NodesConfig nodes_config(std::move(nodes));
@@ -255,11 +270,11 @@ TEST(RandomNodeSetSelector, ImpreciseNodeSetSize) {
   // 26-node cluster with nodes from 5 different racks
   dbg::currentLevel = dbg::Level::SPEW;
   Nodes nodes;
-  addNodes(&nodes, 5, 1, {}, "region0.datacenter1.01.a.a", 5);
-  addNodes(&nodes, 5, 1, {}, "region0.datacenter2.01.a.a", 5);
-  addNodes(&nodes, 5, 1, {}, "region0.datacenter1.01.a.b", 5);
-  addNodes(&nodes, 5, 1, {}, "region1.datacenter1.02.a.a", 5);
-  addNodes(&nodes, 6, 1, {}, "region1.datacenter1.02.a.b", 6);
+  addWeightedNodes(&nodes, 5, 1, "region0.datacenter1.01.a.a", 5);
+  addWeightedNodes(&nodes, 5, 1, "region0.datacenter2.01.a.a", 5);
+  addWeightedNodes(&nodes, 5, 1, "region0.datacenter1.01.a.b", 5);
+  addWeightedNodes(&nodes, 5, 1, "region1.datacenter1.02.a.a", 5);
+  addWeightedNodes(&nodes, 6, 1, "region1.datacenter1.02.a.b", 6);
 
   ASSERT_EQ(26, nodes.size());
 
@@ -343,11 +358,11 @@ TEST(RandomNodeSetSelector, ImpreciseNodeSetSize) {
 TEST(RandomCrossDomainNodeSetSelectorTest, NodeExclusion) {
   // 26-node cluster with nodes from 5 different racks
   Nodes nodes;
-  addNodes(&nodes, 5, 1, {}, "region0.datacenter1.01.a.a", 5);
-  addNodes(&nodes, 5, 1, {}, "region0.datacenter2.01.a.a", 5);
-  addNodes(&nodes, 5, 1, {}, "region0.datacenter1.01.a.b", 5);
-  addNodes(&nodes, 5, 1, {}, "region1.datacenter1.02.a.a", 5);
-  addNodes(&nodes, 6, 1, {}, "region1.datacenter1.02.a.b", 6);
+  addWeightedNodes(&nodes, 5, 1, "region0.datacenter1.01.a.a", 5);
+  addWeightedNodes(&nodes, 5, 1, "region0.datacenter2.01.a.a", 5);
+  addWeightedNodes(&nodes, 5, 1, "region0.datacenter1.01.a.b", 5);
+  addWeightedNodes(&nodes, 5, 1, "region1.datacenter1.02.a.a", 5);
+  addWeightedNodes(&nodes, 6, 1, "region1.datacenter1.02.a.b", 6);
 
   ASSERT_EQ(26, nodes.size());
 
@@ -434,12 +449,12 @@ void basic_test(NodeSetSelectorType ns_type) {
   // 22-node cluster with nodes from 5 different racks
   Nodes nodes;
   std::vector<int> rack_sizes = {1, 5, 5, 6, 5};
-  addNodes(&nodes, rack_sizes[0], 1, {}, "region0.datacenter1.01.a.a", 1);
-  addNodes(&nodes, rack_sizes[1], 1, {}, "region0.datacenter2.01.a.a", 5);
+  addWeightedNodes(&nodes, rack_sizes[0], 1, "region0.datacenter1.01.a.a", 1);
+  addWeightedNodes(&nodes, rack_sizes[1], 1, "region0.datacenter2.01.a.a", 5);
   // Only 2 out 5 nodes are storage nodes.
-  addNodes(&nodes, rack_sizes[2], 1, {}, "region0.datacenter1.01.a.b", 2);
-  addNodes(&nodes, rack_sizes[3], 1, {}, "region1.datacenter1.02.a.a", 6);
-  addNodes(&nodes, rack_sizes[4], 1, {}, "region1.datacenter1.02.a.b", 5);
+  addWeightedNodes(&nodes, rack_sizes[2], 1, "region0.datacenter1.01.a.b", 2);
+  addWeightedNodes(&nodes, rack_sizes[3], 1, "region1.datacenter1.02.a.a", 6);
+  addWeightedNodes(&nodes, rack_sizes[4], 1, "region1.datacenter1.02.a.b", 5);
 
   ASSERT_EQ(22, nodes.size());
 
@@ -585,7 +600,7 @@ TEST(WeightAwareNodeSetSelectorTest, ExcludeFromNodesets) {
   ASSERT_EQ(6, nodes.size());
   // Settings exclude_from_nodesets on 3 nodes
   for (node_index_t node_id : {0, 1, 3}) {
-    nodes[node_id].exclude_from_nodesets = true;
+    nodes[node_id].storage_attributes->exclude_from_nodesets = true;
   }
 
   Configuration::NodesConfig nodes_config(std::move(nodes));
@@ -624,16 +639,16 @@ TEST(ConsistentHashingWeightAwareNodeSetSelectorTest, Basic) {
 
 TEST(ConsistentHashingWeightAwareNodeSetSelectorTest, AddNode) {
   Nodes nodes1, nodes2;
-  addNodes(&nodes1, 16, 1, {}, "region0.datacenter1.01.a.a", 16);
-  addNodes(&nodes1, 16, 1, {}, "region0.datacenter2.01.a.a", 16);
-  addNodes(&nodes1, 16, 1, {}, "region0.datacenter1.01.a.b", 16);
-  addNodes(&nodes1, 16, 1, {}, "region1.datacenter1.02.a.a", 16);
-  addNodes(&nodes1, 15, 1, {}, "region1.datacenter1.02.a.b", 15);
+  addWeightedNodes(&nodes1, 16, 1, "region0.datacenter1.01.a.a", 16);
+  addWeightedNodes(&nodes1, 16, 1, "region0.datacenter2.01.a.a", 16);
+  addWeightedNodes(&nodes1, 16, 1, "region0.datacenter1.01.a.b", 16);
+  addWeightedNodes(&nodes1, 16, 1, "region1.datacenter1.02.a.a", 16);
+  addWeightedNodes(&nodes1, 15, 1, "region1.datacenter1.02.a.b", 15);
 
   nodes2 = nodes1;
 
   // another node added to the 5th rack
-  addNodes(&nodes2, 1, 1, {}, "region1.datacenter1.02.a.b", 1);
+  addWeightedNodes(&nodes2, 1, 1, "region1.datacenter1.02.a.b", 1);
   Configuration::NodesConfig nodes_config1(std::move(nodes1));
   Configuration::NodesConfig nodes_config2(std::move(nodes2));
 

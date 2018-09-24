@@ -56,8 +56,8 @@ std::unique_ptr<StorageSet> RandomNodeSetSelector::randomlySelectNodes(
       continue;
     }
 
-    ld_check(node->num_shards > 0);
-    shard_index_t shard_idx = map_log_to_shard_(log_id, node->num_shards);
+    ld_check(node->getNumShards() > 0);
+    shard_index_t shard_idx = map_log_to_shard_(log_id, node->getNumShards());
 
     candidates->push_back(ShardID(i, shard_idx));
   }
@@ -87,7 +87,7 @@ storage_set_size_t RandomNodeSetSelector::getStorageSetSize(
     const Options* /*options*/) {
   const auto& all_nodes = cfg->serverConfig()->getNodes();
   size_t storage_set_count = 0;
-  for (auto& kv : all_nodes) {
+  for (const auto& kv : all_nodes) {
     if (kv.second.includeInNodesets()) {
       ++storage_set_count;
     }

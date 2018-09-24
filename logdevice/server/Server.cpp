@@ -308,12 +308,8 @@ ServerParameters::ServerParameters(
     trace_logger_ = plugin_->createTraceLogger(updateable_config_);
   }
 
-  storage_node_ = this_node->isReadableStorageNode();
-  if (this_node->isReadableStorageNode()) {
-    // This is a storage node. The config must contain a "num_shards" property
-    // that indicates the number of shards.
-    num_db_shards_ = this_node->num_shards;
-  }
+  storage_node_ = this_node->hasRole(Configuration::NodeRole::STORAGE);
+  num_db_shards_ = this_node->getNumShards();
 
   run_sequencers_ = this_node->isSequencingEnabled();
   if (run_sequencers_ &&

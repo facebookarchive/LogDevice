@@ -65,6 +65,10 @@ makeConfigForLayoutTest(int range_start,
       "host": "127.0.0.1:4444",
       "gossip_port": 4445,
       "weight": 1,
+      "roles": [
+        "sequencer",
+        "storage"
+      ],
       "num_shards": 2,
       "generation": 3,
       "sequencer": true
@@ -270,9 +274,8 @@ TEST(ConfigurationTest, SimpleValid) {
     expected_port = htons(4446);
     EXPECT_EQ(expected_port, aptr->sin_port);
 
-    EXPECT_EQ(configuration::StorageState::READ_WRITE, node.storage_state);
-    EXPECT_TRUE(node.storage_capacity.hasValue());
-    EXPECT_EQ(1, node.storage_capacity.value());
+    EXPECT_EQ(configuration::StorageState::READ_WRITE, node.getStorageState());
+    EXPECT_EQ(1, node.storage_attributes->capacity);
     EXPECT_EQ(1, node.getWritableStorageCapacity());
 
     EXPECT_EQ(3, node.generation);
@@ -286,12 +289,6 @@ TEST(ConfigurationTest, SimpleValid) {
     EXPECT_EQ("k", location.getLabel(NodeLocationScope::ROW));
     EXPECT_EQ("z", location.getLabel(NodeLocationScope::RACK));
     EXPECT_EQ("ash.ash2.08.k.z", node.locationStr());
-
-    EXPECT_TRUE(node.retention.hasValue());
-    EXPECT_EQ(std::chrono::hours(48), node.retention.value());
-
-    EXPECT_TRUE(node.hasRole(NodeRole::SEQUENCER));
-    EXPECT_TRUE(node.hasRole(NodeRole::STORAGE));
   }
 
   {
@@ -321,9 +318,9 @@ TEST(ConfigurationTest, SimpleValid) {
     expected_port = htons(6670);
     EXPECT_EQ(expected_port, aptr->sin6_port);
 
-    EXPECT_EQ(configuration::StorageState::READ_WRITE, node.storage_state);
-    EXPECT_TRUE(node.storage_capacity.hasValue());
-    EXPECT_EQ(4, node.storage_capacity.value());
+    EXPECT_EQ(configuration::StorageState::READ_WRITE,
+              node.storage_attributes->state);
+    EXPECT_EQ(4, node.storage_attributes->capacity);
     EXPECT_EQ(4, node.getWritableStorageCapacity());
 
     EXPECT_EQ(6, node.generation);
@@ -361,9 +358,9 @@ TEST(ConfigurationTest, SimpleValid) {
     expected_port = htons(6673);
     EXPECT_EQ(expected_port, aptr->sin6_port);
 
-    EXPECT_EQ(configuration::StorageState::READ_WRITE, node.storage_state);
-    EXPECT_TRUE(node.storage_capacity.hasValue());
-    EXPECT_EQ(2, node.storage_capacity.value());
+    EXPECT_EQ(configuration::StorageState::READ_WRITE,
+              node.storage_attributes->state);
+    EXPECT_EQ(2, node.storage_attributes->capacity);
     EXPECT_EQ(2, node.getWritableStorageCapacity());
 
     EXPECT_EQ(2, node.generation);
@@ -372,53 +369,8 @@ TEST(ConfigurationTest, SimpleValid) {
     ASSERT_TRUE(node.location.hasValue());
     EXPECT_EQ("ash.ash2.07.a.b", node.locationStr());
 
-    EXPECT_FALSE(node.retention.hasValue());
-
     EXPECT_TRUE(node.hasRole(NodeRole::SEQUENCER));
     EXPECT_TRUE(node.hasRole(NodeRole::STORAGE));
-  }
-
-  {
-    const Configuration::Node& node = nodes.at(6);
-    EXPECT_EQ(AF_INET6, node.address.family());
-
-    struct sockaddr_storage ss;
-    int len = node.address.toStructSockaddr(&ss);
-    ASSERT_NE(len, -1);
-    auto aptr = reinterpret_cast<const sockaddr_in6*>(&ss);
-    const char* result =
-        inet_ntop(aptr->sin6_family, &aptr->sin6_addr, buf, sizeof buf);
-    EXPECT_NE(result, nullptr);
-    EXPECT_STREQ("::1", buf);
-    int expected_port = htons(6670);
-    EXPECT_EQ(expected_port, aptr->sin6_port);
-
-    EXPECT_TRUE(node.ssl_address);
-    EXPECT_EQ(AF_INET6, node.ssl_address->family());
-
-    len = node.ssl_address->toStructSockaddr(&ss);
-    ASSERT_NE(len, -1);
-    aptr = reinterpret_cast<const sockaddr_in6*>(&ss);
-    result = inet_ntop(aptr->sin6_family, &aptr->sin6_addr, buf, sizeof buf);
-    EXPECT_NE(result, nullptr);
-    EXPECT_STREQ("::1", buf);
-    expected_port = htons(6674);
-    EXPECT_EQ(expected_port, aptr->sin6_port);
-
-    EXPECT_EQ(configuration::StorageState::NONE, node.storage_state);
-    EXPECT_FALSE(node.storage_capacity.hasValue());
-    EXPECT_EQ(0.0, node.getWritableStorageCapacity());
-
-    EXPECT_EQ(2, node.generation);
-    EXPECT_TRUE(node.isSequencingEnabled());
-
-    ASSERT_TRUE(node.location.hasValue());
-    EXPECT_EQ("ash.ash2.07.a.b", node.locationStr());
-
-    EXPECT_FALSE(node.retention.hasValue());
-
-    EXPECT_TRUE(node.hasRole(NodeRole::SEQUENCER));
-    EXPECT_FALSE(node.hasRole(NodeRole::STORAGE));
   }
 
   {
@@ -448,20 +400,15 @@ TEST(ConfigurationTest, SimpleValid) {
     expected_port = htons(6672);
     EXPECT_EQ(expected_port, aptr->sin6_port);
 
-    EXPECT_EQ(configuration::StorageState::READ_WRITE, node.storage_state);
-    EXPECT_TRUE(node.storage_capacity.hasValue());
-    EXPECT_EQ(4, node.storage_capacity.value());
+    EXPECT_EQ(configuration::StorageState::READ_WRITE,
+              node.storage_attributes->state);
+    EXPECT_EQ(4, node.storage_attributes->capacity);
     EXPECT_EQ(4, node.getWritableStorageCapacity());
     EXPECT_EQ(5, node.generation);
     EXPECT_TRUE(node.isSequencingEnabled());
 
     ASSERT_TRUE(node.location.hasValue());
     EXPECT_EQ("ash.ash2.07.a.b", node.locationStr());
-
-    EXPECT_FALSE(node.retention.hasValue());
-
-    EXPECT_TRUE(node.hasRole(NodeRole::SEQUENCER));
-    EXPECT_TRUE(node.hasRole(NodeRole::STORAGE));
   }
 
   EXPECT_EQ(nullptr, config->getLogGroupByIDRaw(logid_t(7)));
@@ -706,9 +653,9 @@ TEST(ConfigurationTest, LookupNodeByID) {
   // right generation.
   node = config->serverConfig()->getNode(NodeID(0, 3));
   EXPECT_NE(node, nullptr);
-  EXPECT_EQ(configuration::StorageState::READ_WRITE, node->storage_state);
-  EXPECT_TRUE(node->storage_capacity.hasValue());
-  EXPECT_EQ(1, node->storage_capacity.value());
+  EXPECT_EQ(
+      configuration::StorageState::READ_WRITE, node->storage_attributes->state);
+  EXPECT_EQ(1, node->storage_attributes->capacity);
   EXPECT_EQ(1, node->getWritableStorageCapacity());
   EXPECT_EQ(nullptr, config->serverConfig()->getNode(NodeID(0, 2)));
   EXPECT_EQ(E::NOTFOUND, err);
@@ -718,9 +665,9 @@ TEST(ConfigurationTest, LookupNodeByID) {
   // Same for the second node
   node = config->serverConfig()->getNode(NodeID(1, 6));
   EXPECT_NE(node, nullptr);
-  EXPECT_EQ(configuration::StorageState::READ_WRITE, node->storage_state);
-  EXPECT_TRUE(node->storage_capacity.hasValue());
-  EXPECT_EQ(4, node->storage_capacity.value());
+  EXPECT_EQ(
+      configuration::StorageState::READ_WRITE, node->storage_attributes->state);
+  EXPECT_EQ(4, node->storage_attributes->capacity);
   EXPECT_EQ(4, node->getWritableStorageCapacity());
   EXPECT_EQ(nullptr, config->serverConfig()->getNode(NodeID(1, 5)));
   EXPECT_EQ(E::NOTFOUND, err);
@@ -729,9 +676,9 @@ TEST(ConfigurationTest, LookupNodeByID) {
 
   node = config->serverConfig()->getNode(NodeID(5, 2));
   EXPECT_NE(node, nullptr);
-  EXPECT_EQ(configuration::StorageState::READ_WRITE, node->storage_state);
-  EXPECT_TRUE(node->storage_capacity.hasValue());
-  EXPECT_EQ(2, node->storage_capacity.value());
+  EXPECT_EQ(
+      configuration::StorageState::READ_WRITE, node->storage_attributes->state);
+  EXPECT_EQ(2, node->storage_attributes->capacity);
   EXPECT_EQ(2, node->getWritableStorageCapacity());
   EXPECT_EQ(nullptr, config->serverConfig()->getNode(NodeID(5, 1)));
   EXPECT_EQ(E::NOTFOUND, err);
@@ -740,9 +687,9 @@ TEST(ConfigurationTest, LookupNodeByID) {
 
   node = config->serverConfig()->getNode(42);
   EXPECT_NE(node, nullptr);
-  EXPECT_EQ(configuration::StorageState::READ_WRITE, node->storage_state);
-  EXPECT_TRUE(node->storage_capacity.hasValue());
-  EXPECT_EQ(4, node->storage_capacity.value());
+  EXPECT_EQ(
+      configuration::StorageState::READ_WRITE, node->storage_attributes->state);
+  EXPECT_EQ(4, node->storage_attributes->capacity);
   EXPECT_EQ(4, node->getWritableStorageCapacity());
 }
 
@@ -2169,6 +2116,10 @@ TEST(ConfigurationTest, MetaDataLogsConfig) {
       "host": "127.0.0.1:)" +
           std::to_string(4444 + i) + R"(",
       "generation": 1,
+      "roles": [
+        "sequencer",
+        "storage"
+      ],
       "sequencer": true,
       "weight": 1,
       "num_shards": 2
@@ -2364,43 +2315,48 @@ TEST(ConfigurationTest, StorageCapacityVsWeight) {
 
   auto verify_node = [&](node_index_t node_id,
                          StorageState state,
-                         folly::Optional<double> storage_capacity,
+                         double storage_capacity,
                          int weight,
                          bool exclude_from_nodesets) {
     ld_info("Verifying node %d", node_id);
     auto const node = config->serverConfig()->getNode(node_id);
     EXPECT_NE(nullptr, node);
-    EXPECT_EQ(state, node->storage_state);
-    EXPECT_EQ(storage_capacity, node->storage_capacity);
+    if (node->storage_attributes != nullptr) {
+      EXPECT_EQ(state, node->storage_attributes->state);
+      EXPECT_EQ(storage_capacity, node->storage_attributes->capacity);
+      EXPECT_EQ(exclude_from_nodesets,
+                node->storage_attributes->exclude_from_nodesets);
+    } else {
+      EXPECT_EQ(state, configuration::StorageState::DISABLED);
+      EXPECT_EQ(storage_capacity, 0);
+    }
 
-    double expected_capacity =
-        storage_capacity.value_or(Node::DEFAULT_STORAGE_CAPACITY);
+    double expected_capacity = storage_capacity;
     if (state != StorageState::READ_WRITE) {
       expected_capacity = 0;
     }
     EXPECT_EQ(expected_capacity, node->getWritableStorageCapacity());
     EXPECT_EQ(weight, node->getLegacyWeight());
-    EXPECT_EQ(exclude_from_nodesets, node->exclude_from_nodesets);
   };
 
   verify_node(1, StorageState::READ_WRITE, 1, 1, true);
-  verify_node(2, StorageState::READ_ONLY, folly::none, 0, false);
-  verify_node(3, StorageState::NONE, folly::none, -1, false);
+  verify_node(2, StorageState::READ_ONLY, 1, 0, false);
+  verify_node(3, StorageState::DISABLED, 1, -1, false);
   verify_node(4, StorageState::READ_WRITE, 0.2, 1, false);
   verify_node(5, StorageState::READ_ONLY, 0, 0, true);
   verify_node(6, StorageState::READ_ONLY, 1.2, 0, false);
-  verify_node(7, StorageState::NONE, 5.7, -1, true);
+  verify_node(7, StorageState::DISABLED, 5.7, -1, true);
   verify_node(8, StorageState::READ_WRITE, 1.8, 2, false);
   verify_node(9, StorageState::READ_ONLY, 0, 0, false);
   verify_node(10, StorageState::READ_ONLY, 1, 0, false);
-  verify_node(11, StorageState::NONE, 1, -1, false);
+  verify_node(11, StorageState::DISABLED, 1, -1, false);
   verify_node(12, StorageState::READ_WRITE, 2, 2, false);
-  verify_node(13, StorageState::READ_ONLY, folly::none, 0, false);
-  verify_node(14, StorageState::NONE, folly::none, -1, false);
+  verify_node(13, StorageState::READ_ONLY, 1, 0, false);
+  verify_node(14, StorageState::DISABLED, 1, -1, false);
   verify_node(18, StorageState::READ_WRITE, 2, 2, false);
   verify_node(19, StorageState::READ_ONLY, 2, 0, false);
   verify_node(20, StorageState::READ_ONLY, 0, 0, false);
-  verify_node(21, StorageState::NONE, 0, -1, false);
+  verify_node(21, StorageState::DISABLED, 0, -1, false);
 
   // Configs with storage_capacity/weight not specified for writable nodes
   path = TEST_CONFIG_FILE("storage_capacity_success2.conf");
@@ -2408,19 +2364,17 @@ TEST(ConfigurationTest, StorageCapacityVsWeight) {
   config = Configuration::fromJsonFile(path.c_str());
   ASSERT_NE(config, nullptr);
 
-  verify_node(0, StorageState::NONE, folly::none, -1, false);
-  verify_node(2, StorageState::READ_ONLY, folly::none, 0, false);
-  verify_node(3, StorageState::NONE, folly::none, -1, false);
-  verify_node(5, StorageState::READ_ONLY, folly::none, 0, true);
-  verify_node(13, StorageState::READ_ONLY, folly::none, 0, false);
-  verify_node(14, StorageState::NONE, folly::none, -1, false);
-  verify_node(15, StorageState::READ_WRITE, folly::none, 1, false);
-  verify_node(16, StorageState::READ_ONLY, folly::none, 0, false);
-  verify_node(17, StorageState::NONE, folly::none, -1, false);
+  verify_node(0, StorageState::DISABLED, 0, -1, false);
+  verify_node(2, StorageState::READ_ONLY, 1, 0, false);
+  verify_node(3, StorageState::DISABLED, 1, -1, false);
+  verify_node(5, StorageState::READ_ONLY, 1, 0, true);
+  verify_node(13, StorageState::READ_ONLY, 1, 0, false);
+  verify_node(14, StorageState::DISABLED, 1, -1, false);
+  verify_node(15, StorageState::READ_WRITE, 1, 1, false);
+  verify_node(16, StorageState::READ_ONLY, 1, 0, false);
+  verify_node(17, StorageState::DISABLED, 1, -1, false);
 
   std::vector<std::string> failing_configs = {
-      // storage_capacity set for some nodes, but not others
-      TEST_CONFIG_FILE("storage_capacity_fail1.conf"),
       // weight: -1 and storage_state: read-write
       TEST_CONFIG_FILE("storage_capacity_fail2.conf"),
       // weight: 0 and storage_state: read-write
