@@ -30,7 +30,7 @@ Internal logs are used for:
 - Logs configuration
 - Event log
 
-Both of these have a delta and and snapshot log. Their log ranges are hard-coded, but their replication can be [configured dynamically](Logs.html).
+Both of these have a delta and and snapshot log. Their log ranges are hard-coded, but their replication can be [configured dynamically](log_configuration.md).
 Since a lot of LogDevice internals depend on these logs, you want higher fault-tolerance than normal data logs.
 
 ```
@@ -129,7 +129,7 @@ Host is an IP:port pair. The port is the data port (non-ssl) to which both nodes
 For IPv6, the `[::1]:4440` format can be used.
 
 ### Location (`location`)
-Location is used to encode the failure domain of a the host. This is used for data placement, based on the [log configuration](Logs.html)
+Location is used to encode the failure domain of a the host. This is used for data placement, based on the [log configuration](log_configuration.md)
 
 The format of the string is: `region.datacenter.cluster.row.rack`.
 As an example, a log configuration using:
@@ -198,12 +198,12 @@ Generally, using current unix epoch timestamp is an easy way to provide incremen
 - `timeout` defines the connection timeout.
 
 ## Settings (`client_settings` and `server_settings`)
-Please check the [settings documentation](Settings.html) for a detailed explanation on all the settings.
+Please check the [settings documentation](settings.md) for a detailed explanation on all the settings.
 
 Settings are expressed as key-value pairs in both `client_settings` and `server_settings`.
 For boolean-like values, any of the following can be used:
 - `1`, `true`, `True`
 - `0`, `false`, `False`
 
-## Traffic shaping (`traffic_shaping`) 
+## Traffic shaping (`traffic_shaping`)
 TODO
