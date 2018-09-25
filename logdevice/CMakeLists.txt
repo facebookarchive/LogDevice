@@ -27,6 +27,7 @@ include(build-config)
 
 include(build-folly)
 include(build-rocksdb)
+include(build-docs)
 include(logdevice-deps)
 
 # GTest Project

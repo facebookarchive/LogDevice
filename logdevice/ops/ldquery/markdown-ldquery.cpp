@@ -32,6 +32,13 @@ int main(int argc, char** argv) {
 
   std::sort(tables.begin(), tables.end(), order_by_name);
 
+  cout << "---" << endl;
+  cout << "id: LDQuery" << endl;
+  cout << "title: LDQuery" << endl;
+  cout << "sidebar_label: LDQuery" << endl;
+  cout << "---" << endl;
+  cout << endl;
+
   for (const TableMetadata& tm : tables) {
     cout << "## " << markdown_sanitize(tm.name) << endl;
     cout << markdown_sanitize(tm.description) << endl << endl;
