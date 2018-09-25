@@ -129,17 +129,18 @@ static bool isValidServerConnection(const NodeID& peer_nid,
  * @param from          Address of the sender.
  */
 template <typename HelloHeader, typename AckHeader>
-static void checkAuthenticationData(const HelloHeader& hellohdr,
-                                    AckHeader& ackhdr,
-                                    const Address& from,
-                                    const std::string& csid) {
+static PrincipalIdentity checkAuthenticationData(const HelloHeader& hellohdr,
+                                                 AckHeader& ackhdr,
+                                                 const Address& from,
+                                                 const std::string& csid) {
   Worker* w = Worker::onThisThread();
 
   auto principal_parser = w->processor_->security_info_->getPrincipalParser();
 
+  PrincipalIdentity principal;
+
   if (principal_parser != nullptr) {
     bool useAuthenticationData = true;
-    PrincipalIdentity principal;
 
     // If enable_server_ip_authentication is set, we ignore the credentials
     // that were provided by servers. Connections are identified as server
@@ -156,7 +157,7 @@ static void checkAuthenticationData(const HelloHeader& hellohdr,
           // peer provided a node_id but the connection is not from a
           // valid nodeID
           ackhdr.status = E::ACCESS;
-          return;
+          return principal;
         }
       }
     }
@@ -186,7 +187,7 @@ static void checkAuthenticationData(const HelloHeader& hellohdr,
           // This should never happen. Authentication should not be enabled
           // if the PrincipalParser is of type NONE or MAX
           ld_check(false);
-          return;
+          return principal;
       }
     }
     principal.csid = csid;
@@ -202,7 +203,7 @@ static void checkAuthenticationData(const HelloHeader& hellohdr,
                       3,
                       "ACCESS ERROR: Got a HELLO message with an invalid "
                       "authentication data that could not be parsed.");
-      return;
+      return principal;
     }
 
     // we will reject when we require a credential, and one is not supplied
@@ -214,7 +215,7 @@ static void checkAuthenticationData(const HelloHeader& hellohdr,
                       "authentication data when cluster requries "
                       "authentication.");
       ackhdr.status = E::ACCESS;
-      return;
+      return principal;
     }
 
     int rv = w->sender().setPrincipal(from, std::move(principal));
@@ -228,6 +229,8 @@ static void checkAuthenticationData(const HelloHeader& hellohdr,
       ackhdr.status = E::INTERNAL;
     }
   }
+
+  return principal;
 }
 
 /**
@@ -247,6 +250,7 @@ static Message::Disposition
 sendReply(ACK_Header& ackhdr,
           const Address& from,
           const bool should_log,
+          const PrincipalIdentity& principal,
           const folly::Optional<folly::dynamic>& build_info) {
   const auto reject_hello = Worker::settings().reject_hello;
   if (reject_hello != E::OK) {
@@ -274,10 +278,11 @@ sendReply(ACK_Header& ackhdr,
 
   // log the handshake result
   if (should_log) {
-    auto from_addr = worker->sender().getSockaddr(from);
+    auto conn_type = worker->sender().getSockConnType(from);
     ClientHelloInfoTracer logger(worker->getTraceLogger());
 
-    logger.traceClientHelloInfo(build_info, from_addr, ackhdr.status);
+    logger.traceClientHelloInfo(
+        build_info, principal, conn_type, ackhdr.status);
   }
 
   if (ackhdr.status != E::OK) {
@@ -346,7 +351,7 @@ Message::Disposition HELLO_Message::onReceived(const Address& from) {
   }
 
   // must be called after we check if the connection is from a source node.
-  checkAuthenticationData(header_, ackhdr, from, csid_);
+  auto principal = checkAuthenticationData(header_, ackhdr, from, csid_);
 
   if (header_.flags & HELLO_Header::DESTINATION_NODE) {
     if (!destination_node_id_.isNodeID()) {
@@ -430,8 +435,11 @@ Message::Disposition HELLO_Message::onReceived(const Address& from) {
     }
   }
 
-  return sendReply(
-      ackhdr, from, !(header_.flags & HELLO_Header::SOURCE_NODE), build_info);
+  return sendReply(ackhdr,
+                   from,
+                   !(header_.flags & HELLO_Header::SOURCE_NODE),
+                   principal,
+                   build_info);
 }
 
 MessageReadResult HELLO_Message::deserialize(ProtocolReader& reader) {

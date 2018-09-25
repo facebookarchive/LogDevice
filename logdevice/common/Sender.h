@@ -523,6 +523,13 @@ class Sender : public SenderBase {
   Sockaddr getSockaddr(const Address& addr);
 
   /**
+   * @param addr  peer name of a client or server Socket expected to be
+   *              under the management of this Sender.
+   * @return the type of the connection (SSL/PLAIN)
+   */
+  ConnectionType getSockConnType(const Address& addr);
+
+  /**
    * Notifies the peer that our configuration is newer and updates the config
    * version on the given socket if needed.
    *

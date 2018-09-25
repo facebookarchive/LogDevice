@@ -11,7 +11,9 @@
 #include <folly/Optional.h>
 #include <memory>
 
+#include "logdevice/common/PrincipalIdentity.h"
 #include "logdevice/common/SampledTracer.h"
+#include "logdevice/common/Socket-fwd.h"
 #include "logdevice/include/Err.h"
 #include "logdevice/include/types.h"
 
@@ -28,7 +30,8 @@ class ClientHelloInfoTracer : SampledTracer {
 
   void
   traceClientHelloInfo(const folly::Optional<folly::dynamic>& client_build_json,
-                       const Sockaddr& sa,
+                       const PrincipalIdentity& principal,
+                       ConnectionType conn_type,
                        const Status status);
 
  private:

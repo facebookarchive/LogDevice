@@ -31,7 +31,7 @@ void SecurityTracer::traceSecurityEvent(
     sample->addNormalValue("log_group_name", log_group_name);
     sample->addNormalValue("action", action);
     sample->addNormalValue("action_result", statusToString(action_result));
-    sample->addNormalValue("principal", principal.primary_idenity.second);
+    sample->addNormalValue("principal", principal.primary_identity.second);
 
     std::vector<std::string> identities;
     for (auto& identity : principal.identities) {

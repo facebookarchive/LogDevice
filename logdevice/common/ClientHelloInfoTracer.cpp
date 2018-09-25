@@ -22,7 +22,8 @@ ClientHelloInfoTracer::ClientHelloInfoTracer(
 
 void ClientHelloInfoTracer::traceClientHelloInfo(
     const folly::Optional<folly::dynamic>& json,
-    const Sockaddr& sa,
+    const PrincipalIdentity& principal,
+    ConnectionType conn_type,
     const Status status) {
   if (json.hasValue() && !(*json).isObject()) {
     RATELIMIT_ERROR(std::chrono::seconds(1),
@@ -36,12 +37,21 @@ void ClientHelloInfoTracer::traceClientHelloInfo(
     auto sample = std::make_unique<TraceSample>();
 
     // include basic client socket description
-    sample->addNormalValue(
-        "client_address",
-        sa.valid() ? sa.toStringNoPort() : std::string("UNKNOWN"));
+    sample->addNormalValue("client_address", principal.client_address);
 
     // extra information on the hello / status
     sample->addNormalValue("ack_status_code", error_name(status));
+
+    sample->addNormalValue(
+        "connection_type", connectionTypeToString(conn_type));
+
+    std::vector<std::string> identities;
+    for (auto& identity : principal.identities) {
+      identities.push_back(identity.first + ":" + identity.second);
+    }
+
+    sample->addNormVectorValue("identities", identities);
+    sample->addNormalValue("csid", principal.csid);
 
     if (json.hasValue()) {
       // dynamically build the trace based on the field name prefixes
@@ -59,13 +69,11 @@ void ClientHelloInfoTracer::traceClientHelloInfo(
         } else if (key_piece.startsWith("int_") && val.isInt()) {
           sample->addIntValue(pair.first.asString(), val.asInt());
         } else {
-          RATELIMIT_WARNING(
-              std::chrono::seconds(1),
-              10,
-              "Unknown build info field '%s' from '%s'",
-              pair.first.c_str(),
-              (sa.valid() ? sa.toStringNoPort() : std::string("UNKNOWN"))
-                  .c_str());
+          RATELIMIT_WARNING(std::chrono::seconds(1),
+                            10,
+                            "Unknown build info field '%s' from '%s'",
+                            pair.first.c_str(),
+                            principal.client_address.c_str());
         }
       }
     }

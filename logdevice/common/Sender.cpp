@@ -1073,6 +1073,23 @@ Sockaddr Sender::getSockaddr(const Address& addr) {
   return Sockaddr::INVALID;
 }
 
+ConnectionType Sender::getSockConnType(const Address& addr) {
+  if (addr.isClientAddress()) {
+    auto pos = impl_->client_sockets_.find(addr.id_.client_);
+    if (pos != impl_->client_sockets_.end()) {
+      ld_check(pos->second.peer_name_ == addr);
+      return pos->second.getConnType();
+    }
+  } else { // addr is a server address
+    Socket* s = findServerSocket(addr.id_.node_.index());
+    if (s && s->peer_name_.id_.node_.equalsRelaxed(addr.id_.node_)) {
+      return s->getConnType();
+    }
+  }
+
+  return ConnectionType::NONE;
+}
+
 Socket* FOLLY_NULLABLE Sender::getSocket(const ClientID& cid) {
   ld_check(onMyWorker());
 

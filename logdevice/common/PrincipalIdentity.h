@@ -29,7 +29,7 @@ struct PrincipalIdentity {
   /**
    * Primary (first) identity. Used for logging only
    */
-  std::pair<std::string, std::string> primary_idenity;
+  std::pair<std::string, std::string> primary_identity;
   std::string client_address;
   std::string csid;
 

@@ -18,7 +18,7 @@ PrincipalIdentity::PrincipalIdentity(const std::string& type) : type(type) {}
 PrincipalIdentity::PrincipalIdentity(
     const std::string& type,
     const std::pair<std::string, std::string>& identity)
-    : type(type), primary_idenity(identity) {
+    : type(type), primary_identity(identity) {
   identities.push_back(identity);
 }
 
@@ -26,7 +26,7 @@ PrincipalIdentity::PrincipalIdentity(
     const std::string& type,
     const std::pair<std::string, std::string>& identity,
     const std::vector<std::pair<std::string, std::string>>& identities)
-    : type(type), identities(identities), primary_idenity(identity) {}
+    : type(type), identities(identities), primary_identity(identity) {}
 
 std::string PrincipalIdentity::toString() const {
   std::ostringstream oss;
