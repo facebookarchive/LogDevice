@@ -123,7 +123,7 @@ void handle_fatal_signal(int sig) {
                               g_rocksdb_caches.metadata_block_cache}) {
     std::shared_ptr<rocksdb::Cache> cache = cache_weak_ptr.lock();
     if (cache != nullptr) {
-      cache->ApplyToAllCacheEntries(unmap_callback, true);
+      cache->ApplyToAllCacheEntries(unmap_callback, false);
     }
   }
 
