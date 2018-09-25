@@ -10,6 +10,8 @@
 #include "logdevice/common/debug.h"
 #include "logdevice/common/util.h"
 #include "logdevice/common/protocol/MessageTypeNames.h"
+#include "logdevice/common/protocol/STORE_Message.h"
+#include "logdevice/common/protocol/STORED_Message.h"
 #include "logdevice/lib/NODE_STATS_onSent.h"
 #include "logdevice/lib/NODE_STATS_REPLY_onReceived.h"
 
@@ -21,6 +23,8 @@ ClientMessageDispatch::onReceivedImpl(Message* msg, const Address& from) {
     case MessageType::NODE_STATS_REPLY:
       return NODE_STATS_REPLY_onReceived(
           checked_downcast<NODE_STATS_REPLY_Message*>(msg), from);
+    case MessageType::STORED:
+      return checked_downcast<STORED_Message*>(msg)->onReceivedCommon(from);
     case MessageType::CHECK_NODE_HEALTH:
     case MessageType::CHECK_SEAL:
     case MessageType::CLEAN:
@@ -64,6 +68,10 @@ void ClientMessageDispatch::onSentImpl(const Message& msg,
     case MessageType::NODE_STATS:
       NODE_STATS_onSent(
           checked_downcast<const NODE_STATS_Message&>(msg), st, to);
+      return;
+
+    case MessageType::STORE:
+      checked_downcast<const STORE_Message&>(msg).onSentCommon(st, to);
       return;
 
     case MessageType::GET_EPOCH_RECOVERY_METADATA:

@@ -318,23 +318,8 @@ MessageReadResult STORE_Message::deserialize(ProtocolReader& reader,
   });
 }
 
-void STORE_Message::onSent(Status st, const Address& to) const {
+void STORE_Message::onSentCommon(Status st, const Address& to) const {
   ld_check(!to.isClientAddress());
-
-  if (my_pos_in_copyset_ >= 0) {
-    // message is being forwarded by a storage node to the next link
-    // in the delivery chain
-    ld_check(my_pos_in_copyset_ + 1 < header_.copyset_size);
-    ld_assert(
-        copyset_[my_pos_in_copyset_ + 1].destination.asNodeID().equalsRelaxed(
-            to.id_.node_));
-    ld_check(header_.flags & STORE_Header::CHAIN);
-
-    if (st != Status::OK) {
-      onForwardingFailure(st);
-    }
-    return;
-  }
 
   ld_check(header_.copyset_offset < copyset_.size());
   shard_index_t shard_idx =
@@ -352,35 +337,6 @@ void STORE_Message::onSent(Status st, const Address& to) const {
     }
 
     recovery->onStoreSent(shard, header_, st);
-    return;
-  }
-
-  if (header_.flags & STORE_Header::REBUILDING) {
-    Worker* w = Worker::onThisThread();
-    auto log_rebuilding =
-        w->runningLogRebuildings().find(header_.rid.logid, shard_idx);
-    if (log_rebuilding) {
-      RecordRebuildingInterface* r =
-          log_rebuilding->findRecordRebuilding(header_.rid.lsn());
-      if (r) {
-        r->onStoreSent(st,
-                       header_,
-                       shard,
-                       extra_.rebuilding_version,
-                       extra_.rebuilding_wave);
-        return;
-      }
-    }
-
-    RATELIMIT_INFO(std::chrono::seconds(1),
-                   5,
-                   "Couldn't find RecordRebuilding for STORE_Message to %s"
-                   "for record %lu%s; this is expected if rebuilding set "
-                   "changed or sending was slow",
-                   Sender::describeConnection(to).c_str(),
-                   header_.rid.logid.val_,
-                   lsn_to_string(header_.rid.lsn()).c_str());
-
     return;
   }
 

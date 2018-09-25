@@ -115,7 +115,20 @@ class STORED_Message : public Message {
                           ShardID rebuildingRecipient = ShardID());
 
   void serialize(ProtocolWriter&) const override;
-  Disposition onReceived(const Address& from) override;
+
+  // The onReceived() logic is a bit different on client and server. This method
+  // is the part that is shared by both. The server-specific part lives in
+  // server/STORED_onReceived.cpp.
+  // (Normal clients don't currently send STORE messages, but meta-fixer tool
+  //  does.)
+  Disposition onReceivedCommon(const Address& from);
+
+  Disposition onReceived(const Address& /* from */) override {
+    // Handler lives either in STORED_onReceived() (server)
+    // or onReceivedCommon() (client). This should never get called.
+    std::abort();
+  }
+
   static Message::deserializer_t deserialize;
 
   /**
@@ -168,6 +181,9 @@ class STORED_Message : public Message {
   static Message::Disposition handleOneMessage(const STORED_Header& header,
                                                ShardID from,
                                                ShardID rebuildingRecipient);
+
+  friend Disposition STORED_onReceived(STORED_Message* msg,
+                                       const Address& from);
 };
 
 }} // namespace facebook::logdevice

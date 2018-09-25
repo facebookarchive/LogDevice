@@ -40,6 +40,8 @@
 #include "logdevice/server/START_onReceived.h"
 #include "logdevice/server/STARTED_onSent.h"
 #include "logdevice/server/STOP_onReceived.h"
+#include "logdevice/server/STORE_onSent.h"
+#include "logdevice/server/STORED_onReceived.h"
 #include "logdevice/server/ServerWorker.h"
 #include "logdevice/server/StoreStateMachine.h"
 #include "logdevice/server/TRIM_onReceived.h"
@@ -134,6 +136,9 @@ ServerMessageDispatch::onReceivedImpl(Message* msg, const Address& from) {
       return StoreStateMachine::onReceived(
           checked_downcast<STORE_Message*>(msg), from);
 
+    case MessageType::STORED:
+      return STORED_onReceived(checked_downcast<STORED_Message*>(msg), from);
+
     case MessageType::TRIM:
       return TRIM_onReceived(checked_downcast<TRIM_Message*>(msg), from);
 
@@ -198,6 +203,10 @@ void ServerMessageDispatch::onSentImpl(const Message& msg,
     case MessageType::STARTED:
       return STARTED_onSent(
           checked_downcast<const STARTED_Message&>(msg), st, to, enqueue_time);
+
+    case MessageType::STORE:
+      return STORE_onSent(
+          checked_downcast<const STORE_Message&>(msg), st, to, enqueue_time);
 
     default:
       // By default, call the Message's onSent() implementation (for messages

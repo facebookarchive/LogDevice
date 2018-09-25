@@ -283,7 +283,19 @@ class STORE_Message : public Message {
   // see Message.h
   bool cancelled() const override;
   void serialize(ProtocolWriter& writer) const override;
-  void onSent(Status st, const Address& to) const override;
+
+  // The onSent() logic is a bit different on client and server. This method
+  // is the part that is shared by both. The server-specific part lives in
+  // server/STORE_onSent.cpp.
+  // (Normal clients don't currently send STORE messages, but meta-fixer tool
+  //  does.)
+  void onSentCommon(Status st, const Address& to) const;
+
+  void onSent(Status, const Address& /* to */) const override {
+    // Handler lives either in STORE_onSent() (server)
+    // or onSentCommon() (client). This should never get called.
+    std::abort();
+  }
   Disposition onReceived(const Address&) override {
     // Receipt handler lives in StoreStateMachine::onReceived(); this should
     // never get called.
@@ -441,6 +453,10 @@ class STORE_Message : public Message {
   std::string e2e_tracing_context_;
 
   friend class StoreStateMachine;
+  friend void STORE_onSent(const STORE_Message& msg,
+                           Status st,
+                           const Address& to,
+                           const SteadyTimestamp enqueue_time);
   friend class MutatorTest;
   friend class AppenderTest;
   friend class TestAppender;

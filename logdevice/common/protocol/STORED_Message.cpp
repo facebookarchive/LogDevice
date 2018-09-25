@@ -62,6 +62,16 @@ MessageReadResult STORED_Message::deserialize(ProtocolReader& reader) {
   ShardID rebuildingRecipient;
   if (hdr.status == E::REBUILDING) {
     reader.read(&rebuildingRecipient);
+
+    if (!rebuildingRecipient.isValid()) {
+      // The other end should provide a valid rebuilding recipient when
+      // replied with E::REBUILDING
+      ld_error("PROTOCOL ERROR: got a STORED message for record %s "
+               "with E::REBUILDING but no valid rebuildingRecipient "
+               "is provided.",
+               hdr.rid.toString().c_str());
+      return reader.errorResult(E::BADMSG);
+    }
   }
 
   return reader.result([&] {
@@ -112,7 +122,7 @@ STORED_Message::handleOneMessage(const STORED_Header& header,
       : Disposition::NORMAL;
 }
 
-Message::Disposition STORED_Message::onReceived(const Address& from) {
+Message::Disposition STORED_Message::onReceivedCommon(const Address& from) {
   if (from.isClientAddress()) {
     ld_error("PROTOCOL ERROR: got a STORED message for record %s from "
              "client %s. STORED can only arrive from servers",
@@ -128,102 +138,45 @@ Message::Disposition STORED_Message::onReceived(const Address& from) {
   ld_check(shard_idx != -1);
   ShardID shard(from.id_.node_.index(), shard_idx);
 
-  if (header_.status == E::REBUILDING) {
-    if (!rebuildingRecipient_.isValid()) {
-      // The other end should provide a valid rebuilding recipient when
-      // replied with E::REBUILDING
-      ld_error("PROTOCOL ERROR: got a STORED message for record %s from "
-               "%s with E::REBUILDING but no valid rebuildingRecipient "
-               "is provided.",
+  if (Worker::settings().hold_store_replies) {
+    // Appender that sent the corresponding STORE
+    Appender* appender{w->activeAppenders().map.find(header_.rid)};
+
+    if (!appender) { // a reply from an extra will often hit this path
+      ld_debug("Appender for record %s sent to %s not found",
                header_.rid.toString().c_str(),
                Sender::describeConnection(from).c_str());
-      err = E::PROTO;
-      return Disposition::ERROR;
-    }
-  }
-
-  if (header_.flags & STORED_Header::REBUILDING) {
-    do {
-      auto log_rebuilding =
-          w->runningLogRebuildings().find(header_.rid.logid, shard_idx);
-      if (!log_rebuilding) {
-        break;
-      }
-      RecordRebuildingInterface* r =
-          log_rebuilding->findRecordRebuilding(header_.rid.lsn());
-      if (!r) {
-        break;
-      }
-
-      ld_spew("STORED received for Log:%lu, {Node:%d, serverInstance:%lu,"
-              "Flushtoken:%lu}",
-              header_.rid.logid.val_,
-              from.id_.node_.index(),
-              serverInstanceId_,
-              flushToken_);
-
-      r->onStored(header_,
-                  shard,
-                  rebuilding_version_,
-                  rebuilding_wave_,
-                  rebuilding_id_,
-                  serverInstanceId_,
-                  flushToken_);
-
       return Disposition::NORMAL;
-    } while (false);
-
-    RATELIMIT_INFO(std::chrono::seconds(1),
-                   5,
-                   "Couldn't find RecordRebuilding for STORED_Message from %s"
-                   "for record %lu%s; this is expected if rebuilding set "
-                   "changed or store was slow",
-                   Sender::describeConnection(from).c_str(),
-                   header_.rid.logid.val_,
-                   lsn_to_string(header_.rid.lsn()).c_str());
-
-    return Disposition::NORMAL;
-  } else {
-    if (Worker::settings().hold_store_replies) {
-      // Appender that sent the corresponding STORE
-      Appender* appender{w->activeAppenders().map.find(header_.rid)};
-
-      if (!appender) { // a reply from an extra will often hit this path
-        ld_debug("Appender for record %s sent to %s not found",
-                 header_.rid.toString().c_str(),
-                 Sender::describeConnection(from).c_str());
-        return Disposition::NORMAL;
-      }
-
-      // There's a possible race condition here.  repliesExpected() can decrease
-      // in some error conditions, like a socket closing, but we don't recheck
-      // the condition in that case.  In fact, we don't know whether one of the
-      // replies we're holding came in on that socket, or whether it will now
-      // never come.  That's one reason why this is only for tests.
-      if (appender->repliesHeld() + 1 < appender->repliesExpected()) {
-        appender->holdReply(header_, shard, rebuildingRecipient_);
-        return Disposition::NORMAL;
-      } else {
-        // This is the last reply.  Time to process them all!
-
-        // Because the Appender may be deleted after any call, we need to
-        // move out the list of replies here.
-        auto replies = appender->takeHeldReplies();
-
-        for (auto& reply : replies) {
-          auto rv = handleOneMessage(
-              reply.hdr, reply.from, reply.rebuildingRecipient);
-          if (rv == Disposition::ERROR) {
-            ld_info("Got an error on proccessing a held STORED message, but "
-                    "not closing connection.");
-          }
-        }
-        // Fall through to normal processing for current message.
-      }
     }
 
-    return handleOneMessage(header_, shard, rebuildingRecipient_);
+    // There's a possible race condition here.  repliesExpected() can decrease
+    // in some error conditions, like a socket closing, but we don't recheck
+    // the condition in that case.  In fact, we don't know whether one of the
+    // replies we're holding came in on that socket, or whether it will now
+    // never come.  That's one reason why this is only for tests.
+    if (appender->repliesHeld() + 1 < appender->repliesExpected()) {
+      appender->holdReply(header_, shard, rebuildingRecipient_);
+      return Disposition::NORMAL;
+    } else {
+      // This is the last reply.  Time to process them all!
+
+      // Because the Appender may be deleted after any call, we need to
+      // move out the list of replies here.
+      auto replies = appender->takeHeldReplies();
+
+      for (auto& reply : replies) {
+        auto rv =
+            handleOneMessage(reply.hdr, reply.from, reply.rebuildingRecipient);
+        if (rv == Disposition::ERROR) {
+          ld_info("Got an error on proccessing a held STORED message, but "
+                  "not closing connection.");
+        }
+      }
+      // Fall through to normal processing for current message.
+    }
   }
+
+  return handleOneMessage(header_, shard, rebuildingRecipient_);
 }
 
 /**
