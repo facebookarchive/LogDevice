@@ -315,8 +315,11 @@ bool parseCopySetIndexSingleEntry(const Slice& cs_dir_slice,
                                   shard_index_t this_shard);
 
 /**
- * Parses the record blob as read from the local log store.  The blob is
- * validated to be in the format described at the top of the file.
+ * Parses the record blob as read from the local log store. The blob is
+ * validated to be in the format described at the top of the file. Note that
+ * the validation doesn't depend on the arguments passed to parse(); e.g.
+ * if the blob has malformed description of optional keys, parse() will report
+ * MALFORMED_RECORD even if optional_keys = nullptr.
  *
  * All of the pointer parameters are optional, pass in nullptr if not
  * interested.

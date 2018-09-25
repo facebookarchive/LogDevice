@@ -67,6 +67,7 @@ struct RebuildingSettings : public SettingsBundle {
   std::chrono::seconds record_durability_timeout;
   std::chrono::milliseconds auto_mark_unrecoverable_timeout;
   chrono_expbackoff_t<std::chrono::milliseconds> wait_purges_backoff_time;
+  uint64_t max_malformed_records_to_tolerate;
 
  private:
   // Only UpdateableSettings can create this bundle.

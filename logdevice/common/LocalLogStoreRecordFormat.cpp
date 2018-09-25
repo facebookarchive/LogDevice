@@ -407,6 +407,9 @@ int parse(const Slice& log_store_blob,
                            log_store_blob.data),
                        *const end = start + log_store_blob.size, *ptr = start;
 
+  // Throughout this function, remember that we need to fully verify record
+  // format regardless of which options are nullptr.
+
   const size_t MINIMUM_SIZE = minLogStoreBlobSize();
   if (log_store_blob.size < MINIMUM_SIZE) {
     RATELIMIT_ERROR(std::chrono::seconds(10),

@@ -103,10 +103,8 @@ int RecordRebuildingStore::parseRecord() {
                                         &optional_keys_read,
                                         &payload,
                                         getMyShardID().shard());
-  if (rv != 0) {
-    ld_check(err == E::MALFORMED_RECORD);
-    return -1;
-  }
+  // The record was successfully parsed before creation of RecordRebuilding.
+  ld_check(rv == 0);
 
   if ((recordFlags_ & LocalLogStoreRecordFormat::FLAG_CUSTOM_KEY) ||
       (recordFlags_ & LocalLogStoreRecordFormat::FLAG_OPTIONAL_KEYS)) {
@@ -139,10 +137,7 @@ int RecordRebuildingStore::parseRecord() {
                                         nullptr,
                                         nullptr,
                                         getMyShardID().shard());
-  if (rv != 0) {
-    ld_check(false);
-    return rv;
-  }
+  ld_check(rv == 0);
 
   // We want to give STORE_Message a shared_ptr<PayloadHolder> that shares
   // ownership of the payload. The payload is a part of record_.blob,
@@ -218,7 +213,7 @@ void RecordRebuildingStore::buildNewCopysetBase() {
                                             nullptr,
                                             nullptr,
                                             getMyShardID().shard());
-  // The record was successfully parsed before creation of RecordRebuilding.
+  // The record was successfully parsed before.
   ld_check(rv == 0);
   const DataClass dc =
       (flags & LocalLogStoreRecordFormat::FLAG_WRITTEN_BY_REBUILDING)

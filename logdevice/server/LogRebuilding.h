@@ -717,6 +717,9 @@ class LogRebuilding : public LogRebuildingInterface,
   // distribution of data.
   size_t bytes_in_current_block_{0};
 
+  // If we encounter too many invalid records, stall rebuilding just in case.
+  size_t num_malformed_records_seen_{0};
+
   // This uniquely identifies a run of this state machine. Updated every time
   // the state machine is restarted. This is used to discard stale STORED
   // responses
@@ -725,8 +728,9 @@ class LogRebuilding : public LogRebuildingInterface,
   static std::atomic<log_rebuilding_id_t::raw_type> next_id;
 
   // Checks if the copyset has changed compared to the last seen record and
-  // bumps current_block_id_ if it has
-  void checkRecordForBlockChange(const RawRecord& rec);
+  // bumps current_block_id_ if it has.
+  // If record is invalid, sets erro to E::MALFORMED_RECORD and returns -1.
+  int checkRecordForBlockChange(const RawRecord& rec);
 
   // Returns Worker::settings().sticky_copysets_block_size.
   // Overridden in tests

@@ -780,7 +780,7 @@ bool LogRebuilding::isLogRebuildingMakingProgress() {
           getTotalLogRebuildingSize() < progressSizeThreshold);
 }
 
-void LogRebuilding::checkRecordForBlockChange(const RawRecord& rec) {
+int LogRebuilding::checkRecordForBlockChange(const RawRecord& rec) {
   copyset_size_t new_copyset_size;
   Payload payload;
   last_seen_copyset_candidate_buf_.resize(COPYSET_SIZE_MAX);
@@ -797,15 +797,16 @@ void LogRebuilding::checkRecordForBlockChange(const RawRecord& rec) {
                                        nullptr,
                                        &payload,
                                        getMyShardID().shard());
-  last_seen_copyset_candidate_buf_.resize(new_copyset_size);
   if (rv != 0) {
     RATELIMIT_ERROR(std::chrono::seconds(1),
                     1,
                     "Cannot parse record at lsn %s of log %lu.",
                     lsn_to_string(rec.lsn).c_str(),
                     logid_.val_);
-    return;
+    ld_check(err == E::MALFORMED_RECORD);
+    return -1;
   }
+  last_seen_copyset_candidate_buf_.resize(new_copyset_size);
   bool copyset_changed =
       (last_seen_copyset_ != last_seen_copyset_candidate_buf_);
   bool byte_limit_exceeded = bytes_in_current_block_ > getMaxBlockSize();
@@ -816,21 +817,35 @@ void LogRebuilding::checkRecordForBlockChange(const RawRecord& rec) {
     std::swap(last_seen_copyset_, last_seen_copyset_candidate_buf_);
   }
   bytes_in_current_block_ += payload.size();
+  return 0;
 }
 
 void LogRebuilding::startRecordRebuildingStores(
     int numRecordRebuildingToStart) {
-  if (curPosition_ == buffer_.end()) {
-    if (numRecordRebuildingStoresInFlight_ == 0) {
-      onBatchEnd();
-      // `this` might be deleted here
-    }
-    return;
-  }
-
   while (numRecordRebuildingToStart > 0 && curPosition_ != buffer_.end()) {
     ld_check((*curPosition_).blob.data);
-    checkRecordForBlockChange(*curPosition_);
+    int rv = checkRecordForBlockChange(*curPosition_);
+    if (rv != 0) {
+      ld_check_eq(err, E::MALFORMED_RECORD);
+      if (num_malformed_records_seen_ >=
+          rebuildingSettings_->max_malformed_records_to_tolerate) {
+        // Suspiciously many records are malformed. Escalate and stall.
+        RATELIMIT_CRITICAL(
+            std::chrono::seconds(10),
+            10,
+            "Rebuilding saw too many (%lu) malformed records for log %lu. "
+            "Stopping rebuilding just in case. Please investigate.",
+            num_malformed_records_seen_,
+            logid_.val());
+        return;
+      }
+      WORKER_STAT_INCR(rebuilding_malformed_records);
+      ++num_malformed_records_seen_;
+
+      // Don't create RecordRebuilding for bad records.
+      curPosition_++;
+      continue;
+    }
 
     auto r = createRecordRebuildingStore(
         current_block_id_, std::move(*curPosition_), cur_replication_scheme_);
@@ -866,6 +881,14 @@ void LogRebuilding::startRecordRebuildingStores(
     }
     curPosition_++;
   }
+
+  if (curPosition_ == buffer_.end() &&
+      numRecordRebuildingStoresInFlight_ == 0) {
+    onBatchEnd();
+    // `this` might be deleted here
+    return;
+  }
+
   restartLsn_ = nonDurableRecordList_.front().lsn;
   aggregateFilterStats();
 }
