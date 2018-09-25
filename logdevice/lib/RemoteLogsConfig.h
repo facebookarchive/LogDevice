@@ -39,14 +39,11 @@ class RemoteLogsConfig : public LogsConfig {
     return true;
   }
 
-  std::shared_ptr<LogGroupNode> getLogGroupByIDShared(
-      logid_t id,
-      const std::shared_ptr<LogsConfig::LogGroupNode>& metadata_log_fallback)
-      const override;
+  std::shared_ptr<LogGroupNode>
+  getLogGroupByIDShared(logid_t id) const override;
 
   void getLogGroupByIDAsync(
       logid_t id,
-      const std::shared_ptr<LogsConfig::LogGroupNode>& metadata_log_fallback,
       std::function<void(std::shared_ptr<LogGroupNode>)> cb) const override;
 
   bool logExists(logid_t id) const override;

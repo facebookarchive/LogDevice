@@ -5,12 +5,16 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "logdevice/common/configuration/Configuration.h"
-#include "logdevice/common/configuration/ServerConfig.h"
-#include "logdevice/common/configuration/LocalLogsConfig.h"
-#include "logdevice/common/configuration/ParsingHelpers.h"
+#include "Configuration.h"
+
 #include <folly/synchronization/Baton.h>
 #include <boost/filesystem.hpp>
+
+#include "logdevice/common/configuration/InternalLogs.h"
+#include "logdevice/common/configuration/ServerConfig.h"
+#include "logdevice/common/configuration/MetaDataLogsConfig.h"
+#include "logdevice/common/configuration/LocalLogsConfig.h"
+#include "logdevice/common/configuration/ParsingHelpers.h"
 
 using namespace facebook::logdevice::configuration::parser;
 using namespace facebook::logdevice::configuration;
@@ -35,31 +39,59 @@ Configuration::Configuration(std::shared_ptr<ServerConfig> server_config,
 
 std::shared_ptr<LogsConfig::LogGroupNode>
 Configuration::getLogGroupByIDShared(logid_t id) const {
-  return logs_config_->getLogGroupByIDShared(
-      id, server_config_->getMetaDataLogGroup());
+  if (MetaDataLog::isMetaDataLog(id)) {
+    return server_config_->getMetaDataLogGroup();
+  } else if (configuration::InternalLogs::isInternal(id)) {
+    const auto raw_directory =
+        server_config_->getInternalLogsConfig().getLogGroupByID(id);
+    return raw_directory != nullptr ? raw_directory->log_group : nullptr;
+  } else {
+    return logs_config_->getLogGroupByIDShared(id);
+  }
 }
 
 const LogsConfig::LogGroupInDirectory*
 Configuration::getLogGroupInDirectoryByIDRaw(logid_t id) const {
   // raw access is only supported by the local config.
   ld_check(logs_config_->isLocal());
-  return localLogsConfig()->getLogGroupInDirectoryByIDRaw(
-      id, &server_config_->getMetaDataLogGroupInDir());
+  if (MetaDataLog::isMetaDataLog(id)) {
+    return &server_config_->getMetaDataLogGroupInDir();
+  } else if (configuration::InternalLogs::isInternal(id)) {
+    return server_config_->getInternalLogsConfig().getLogGroupByID(id);
+  } else {
+    return localLogsConfig()->getLogGroupInDirectoryByIDRaw(id);
+  }
 }
 
 void Configuration::getLogGroupByIDAsync(
     logid_t id,
     std::function<void(std::shared_ptr<LogsConfig::LogGroupNode>)> cb) const {
-  return logs_config_->getLogGroupByIDAsync(
-      id, server_config_->getMetaDataLogGroup(), cb);
+  if (MetaDataLog::isMetaDataLog(id)) {
+    cb(server_config_->getMetaDataLogGroup());
+    return;
+  } else if (configuration::InternalLogs::isInternal(id)) {
+    const auto raw_directory =
+        server_config_->getInternalLogsConfig().getLogGroupByID(id);
+    cb(raw_directory != nullptr ? raw_directory->log_group : nullptr);
+    return;
+  } else {
+    logs_config_->getLogGroupByIDAsync(id, cb);
+  }
 }
 
 const LogsConfig::LogGroupNode*
 Configuration::getLogGroupByIDRaw(logid_t id) const {
   // raw access is only supported by the local config.
   ld_check(logs_config_->isLocal());
-  return localLogsConfig()->getLogGroupByIDRaw(
-      id, server_config_->getMetaDataLogGroup());
+  if (MetaDataLog::isMetaDataLog(id)) {
+    return server_config_->getMetaDataLogGroup().get();
+  } else if (configuration::InternalLogs::isInternal(id)) {
+    const auto raw_directory =
+        server_config_->getInternalLogsConfig().getLogGroupByID(id);
+    return raw_directory != nullptr ? raw_directory->log_group.get() : nullptr;
+  } else {
+    return localLogsConfig()->getLogGroupByIDRaw(id);
+  }
 }
 
 folly::Optional<std::string> Configuration::getLogGroupPath(logid_t id) const {

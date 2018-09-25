@@ -167,7 +167,7 @@ void Shadow::loadLogRangeForID(logid_t logid) {
     return;
   }
   ld_debug(LD_SHADOW_PREFIX "Loading log group for logid %ld", logid.val());
-  lc->getLogGroupByIDAsync(logid, nullptr, [logid, this](auto group) {
+  lc->getLogGroupByIDAsync(logid, [logid, this](auto group) {
     this->onLogGroupLoaded(group, logid);
   });
   // This needs to be here, since the above might have already called the
@@ -177,7 +177,7 @@ void Shadow::loadLogRangeForID(logid_t logid) {
 
 // **NOTE** Assumes shadow lock has already been acquired
 void Shadow::updateLogGroup(
-    std::shared_ptr<const LogsConfig::LogGroupNode> group) {
+    const std::shared_ptr<const LogsConfig::LogGroupNode>& group) {
   logid_range_t range = group->range();
   auto& shadow_attrs = group->attrs().shadow();
   if (shadow_attrs.hasValue()) {
@@ -241,9 +241,9 @@ void Shadow::onLogsConfigUpdate() {
   // full path of a log range just from its ID (TODO t20016989)
   auto lc = origin_config_->getLogsConfig();
   std::unique_lock<Mutex> shadow_lock(shadow_mutex_);
-  for (auto range : range_cache_) {
+  for (const auto& range : range_cache_) {
     // This should be cached locally... if not then might be a problem?
-    auto group = lc->getLogGroupByIDShared(range.first, nullptr);
+    const auto group = lc->getLogGroupByIDShared(range.first);
     updateLogGroup(group);
   }
 }

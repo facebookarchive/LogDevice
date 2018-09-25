@@ -1526,16 +1526,13 @@ class TestLogsConfigStub : public LogsConfig {
     return false;
   }
 
-  std::shared_ptr<LogsConfig::LogGroupNode> getLogGroupByIDShared(
-      logid_t /* unused */,
-      const std::shared_ptr<LogsConfig::LogGroupNode>& /* unused */)
-      const override {
+  std::shared_ptr<LogsConfig::LogGroupNode>
+  getLogGroupByIDShared(logid_t /* unused */) const override {
     return nullptr;
   }
 
   void getLogGroupByIDAsync(
       logid_t /* unused */,
-      const std::shared_ptr<LogsConfig::LogGroupNode>& /* unused */,
       std::function<void(std::shared_ptr<LogsConfig::LogGroupNode>)> cb)
       const override {
     cb(nullptr);

@@ -29,20 +29,12 @@ using facebook::logdevice::logsconfig::LogGroupNode;
 
 namespace facebook { namespace logdevice {
 
-std::shared_ptr<LogGroupNode> RemoteLogsConfig::getLogGroupByIDShared(
-    logid_t id,
-    const std::shared_ptr<LogsConfig::LogGroupNode>& metadata_log_fallback)
-    const {
-  if (MetaDataLog::isMetaDataLog(id)) {
-    return metadata_log_fallback;
-  }
-
+std::shared_ptr<LogGroupNode>
+RemoteLogsConfig::getLogGroupByIDShared(logid_t id) const {
   std::shared_ptr<LogsConfig::LogGroupNode> res;
   Semaphore sem;
   this->getLogGroupByIDAsync(
-      id,
-      metadata_log_fallback,
-      [&](const std::shared_ptr<LogsConfig::LogGroupNode> loggrp) {
+      id, [&res, &sem](const std::shared_ptr<LogsConfig::LogGroupNode> loggrp) {
         res = loggrp;
         sem.post();
       });
@@ -94,13 +86,7 @@ int RemoteLogsConfig::postRequest(LOGS_CONFIG_API_Header::Type request_type,
 
 void RemoteLogsConfig::getLogGroupByIDAsync(
     logid_t id,
-    const std::shared_ptr<LogsConfig::LogGroupNode>& metadata_log_fallback,
     std::function<void(std::shared_ptr<LogGroupNode>)> cb) const {
-  if (MetaDataLog::isMetaDataLog(id)) {
-    cb(metadata_log_fallback);
-    return;
-  }
-
   {
     // Attempting to fetch result from cache
     shared_lock<RWSpinLock> lock(id_cache_mutex);
@@ -174,8 +160,7 @@ bool RemoteLogsConfig::logExists(logid_t id) const {
   Semaphore sem;
   this->getLogGroupByIDAsync(
       id,
-      nullptr,
-      [&](const std::shared_ptr<const LogsConfig::LogGroupNode> log) {
+      [&res, &sem](const std::shared_ptr<const LogsConfig::LogGroupNode> log) {
         res = (bool)log;
         sem.post();
       });
@@ -258,8 +243,7 @@ RemoteLogsConfig::getLogGroup(const std::string& path) const {
   rangeName = tokens.back();
   this->getLogGroupByIDAsync(
       range.first,
-      nullptr,
-      [&](const std::shared_ptr<LogsConfig::LogGroupNode> log) {
+      [&result, &sem](const std::shared_ptr<LogsConfig::LogGroupNode> log) {
         result = log;
         sem.post();
       });

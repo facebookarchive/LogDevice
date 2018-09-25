@@ -122,7 +122,8 @@ class Shadow {
 
   void reset(); // Called when shadowing disabled, to free resources
   void loadLogRangeForID(logid_t logid);
-  void updateLogGroup(std::shared_ptr<const LogsConfig::LogGroupNode> group);
+  void
+  updateLogGroup(const std::shared_ptr<const LogsConfig::LogGroupNode>& group);
   bool checkAndUpdateRatio(ShadowInfo& shadow_info);
 
   void onSettingsUpdate();

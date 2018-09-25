@@ -19,6 +19,7 @@
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
+#include "logdevice/common/configuration/InternalLogs.h"
 #include "logdevice/common/hash.h"
 #include "logdevice/lib/ClientPluginPack.h"
 #include "logdevice/include/Client.h"
@@ -275,6 +276,12 @@ TEST_F(ConfigIntegrationTest, RemoteLogsConfigTest) {
   auto fetched_range =
       config2->logsConfig()->getLogRangeByName("ns/modified_range_name");
   ASSERT_EQ(changed_range, fetched_range);
+
+  ld_info("Testing internal logs");
+  log_cfg = config2->getLogGroupByIDShared(
+      configuration::InternalLogs::CONFIG_LOG_DELTAS);
+  ASSERT_TRUE(log_cfg != nullptr);
+  ASSERT_EQ(1, log_cfg->attrs().replicationFactor().value());
 }
 
 TEST_F(ConfigIntegrationTest, RemoteLogsConfigWithLogsConfigManagerTest) {

@@ -389,7 +389,7 @@ class TestCopySetSelector : public CopySetSelector {
     return CopySetSelector::Result::SUCCESS;
   }
 
-  CopySetSelector::Result augment(ShardID /*inout_copyset*/[],
+  CopySetSelector::Result augment(ShardID /*inout_copyset*/ [],
                                   copyset_size_t /*existing_copyset_size*/,
                                   copyset_size_t*, /* out_full_size, unused */
                                   RNG&,
@@ -427,7 +427,7 @@ void EpochSequencerTest::setUp() {
       std::make_shared<configuration::LocalLogsConfig>(
           *updateable_config_->get()->localLogsConfig());
 
-  auto lid = logs_config->getLogGroupInDirectoryByIDRaw(LOG_ID, nullptr);
+  auto lid = logs_config->getLogGroupInDirectoryByIDRaw(LOG_ID);
   auto new_loggrp = lid->log_group->withLogAttributes(
       lid->log_group->attrs()
           .with_maxWritesInFlight(window_size_)

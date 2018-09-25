@@ -63,14 +63,8 @@ LocalLogsConfig::fromJson(const folly::dynamic& parsed,
   return local_logs_config;
 }
 
-const LogGroupNode* FOLLY_NULLABLE LocalLogsConfig::getLogGroupByIDRaw(
-    logid_t id,
-    const std::shared_ptr<LogsConfig::LogGroupNode>& metadata_log_fallback)
-    const {
-  if (MetaDataLog::isMetaDataLog(id)) {
-    return metadata_log_fallback.get();
-  }
-
+const LogGroupNode* FOLLY_NULLABLE
+LocalLogsConfig::getLogGroupByIDRaw(logid_t id) const {
   const logsconfig::LogGroupInDirectory* res =
       config_tree_->getLogGroupByID(id);
   if (res) {
@@ -100,13 +94,7 @@ LocalLogsConfig::getLogGroupPath(logid_t id) const {
 }
 
 const LocalLogsConfig::LogGroupInDirectory* FOLLY_NULLABLE
-LocalLogsConfig::getLogGroupInDirectoryByIDRaw(
-    logid_t id,
-    const LogGroupInDirectory* metadata_log_fallback) const {
-  if (MetaDataLog::isMetaDataLog(id)) {
-    return metadata_log_fallback;
-  }
-
+LocalLogsConfig::getLogGroupInDirectoryByIDRaw(logid_t id) const {
   const logsconfig::LogGroupInDirectory* res =
       config_tree_->getLogGroupByID(id);
 
@@ -130,13 +118,8 @@ bool LocalLogsConfig::logExists(logid_t id) const {
       internal_logs_.logExists(data_log_id);
 }
 
-std::shared_ptr<LogGroupNode> LocalLogsConfig::getLogGroupByIDShared(
-    logid_t id,
-    const std::shared_ptr<LogsConfig::LogGroupNode>& metadata_log_fallback)
-    const {
-  if (MetaDataLog::isMetaDataLog(id)) {
-    return metadata_log_fallback;
-  }
+std::shared_ptr<LogGroupNode>
+LocalLogsConfig::getLogGroupByIDShared(logid_t id) const {
   // LogGroupNode can be both a normal or an internal log
   const logsconfig::LogGroupInDirectory* res =
       config_tree_->getLogGroupByID(id);
@@ -149,11 +132,10 @@ std::shared_ptr<LogGroupNode> LocalLogsConfig::getLogGroupByIDShared(
 
 void LocalLogsConfig::getLogGroupByIDAsync(
     logid_t id,
-    const std::shared_ptr<LogsConfig::LogGroupNode>& metadata_log_fallback,
     std::function<void(std::shared_ptr<LogGroupNode>)> cb) const {
   // since LocalLogsConfig does everything locally and without locking,
   // we can just call the callback immediately from here.
-  cb(getLogGroupByIDShared(id, metadata_log_fallback));
+  cb(getLogGroupByIDShared(id));
 }
 
 void LocalLogsConfig::getLogRangeByNameAsync(

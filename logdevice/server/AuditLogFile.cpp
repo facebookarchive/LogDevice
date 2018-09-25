@@ -81,18 +81,12 @@ void log_trim_movement(ServerProcessor& processor,
   entry.host_address = node_config->address.toStringNoPort();
   std::shared_ptr<configuration::LocalLogsConfig> logs_config =
       config->localLogsConfig();
-  auto loggroup_metadata_fallback =
-      std::make_shared<logsconfig::LogGroupNode>();
-  auto log_group =
-      logs_config->getLogGroupByIDRaw(log_id, loggroup_metadata_fallback);
-  if (log_group && (loggroup_metadata_fallback.get() != log_group)) {
-    entry.log_group = log_group->name();
-  }
 
   if (!MetaDataLog::isMetaDataLog(log_id)) {
-    auto log = config->getLogGroupByIDRaw(log_id);
-    if (log) {
-      auto retention = *log->attrs().backlogDuration();
+    auto log_group = logs_config->getLogGroupByIDRaw(log_id);
+    if (log_group) {
+      entry.log_group = log_group->name();
+      auto retention = *log_group->attrs().backlogDuration();
       entry.retention =
           retention.hasValue() ? chrono_string(retention.value()) : "infinity";
     }

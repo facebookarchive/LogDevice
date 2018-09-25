@@ -12,7 +12,6 @@
 
 #include <boost/container/flat_map.hpp>
 
-#include "logdevice/common/MetaDataLog.h"
 #include "logdevice/common/configuration/InternalLogs.h"
 #include "logdevice/common/configuration/LocalLogsConfigIterator.h"
 #include "logdevice/common/configuration/LogsConfig.h"
@@ -71,14 +70,11 @@ class LocalLogsConfig : public LogsConfig {
            LoadFileCallback loadFileCallback,
            const ConfigParserOptions& options);
 
-  std::shared_ptr<LogGroupNode> getLogGroupByIDShared(
-      logid_t id,
-      const std::shared_ptr<LogsConfig::LogGroupNode>& metadata_log_fallback)
-      const override;
+  std::shared_ptr<LogGroupNode>
+  getLogGroupByIDShared(logid_t id) const override;
 
   void getLogGroupByIDAsync(
       logid_t id,
-      const std::shared_ptr<LogsConfig::LogGroupNode>& metadata_log_fallback,
       std::function<void(std::shared_ptr<LogGroupNode>)> cb) const override;
 
   bool logExists(logid_t id) const override;
@@ -104,14 +100,9 @@ class LocalLogsConfig : public LogsConfig {
   }
 
   // get raw pointer into the struct that LocalLogsConfig owns
-  const LogGroupNode* getLogGroupByIDRaw(
-      logid_t id,
-      const std::shared_ptr<LogsConfig::LogGroupNode>& metadata_log_fallback)
-      const;
+  const LogGroupNode* getLogGroupByIDRaw(logid_t id) const;
 
-  const LogGroupInDirectory* getLogGroupInDirectoryByIDRaw(
-      logid_t id,
-      const LogGroupInDirectory* metadata_log_fallback = nullptr) const;
+  const LogGroupInDirectory* getLogGroupInDirectoryByIDRaw(logid_t id) const;
 
   folly::Optional<std::string> getLogGroupPath(logid_t id) const;
 

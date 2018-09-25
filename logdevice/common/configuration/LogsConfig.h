@@ -12,7 +12,6 @@
 
 #include "logdevice/common/configuration/InternalLogs.h"
 #include "logdevice/common/configuration/Log.h"
-#include "logdevice/common/configuration/MetaDataLogsConfig.h"
 #include "logdevice/common/configuration/logs/LogsConfigTree.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Err.h"
@@ -68,14 +67,10 @@ class LogsConfig {
    * thread on the client.
    *
    * @param id                    ID of the log
-   * @param metadata_log_fallback If the log is a metadata log, the function
-   *                              will return a shared_ptr to this pointer.
    * @return                      Returns a shared_ptr to the log struct.
    */
-  virtual std::shared_ptr<LogGroupNode> getLogGroupByIDShared(
-      logid_t id,
-      const std::shared_ptr<LogsConfig::LogGroupNode>& metadata_log_fallback)
-      const = 0;
+  virtual std::shared_ptr<LogGroupNode>
+  getLogGroupByIDShared(logid_t id) const = 0;
 
   /**
    * Will call the submitted callback asynchronously with a shared_ptr to a
@@ -83,13 +78,9 @@ class LogsConfig {
    * operations.
    *
    * @param id                    ID of the log
-   * @param metadata_log_fallback If the log is a metadatalog, the callback
-   *                              will be called with a shared_ptr to this
-   *                              pointer.
    */
   virtual void getLogGroupByIDAsync(
       logid_t id,
-      const std::shared_ptr<LogsConfig::LogGroupNode>& metadata_log_fallback,
       std::function<void(std::shared_ptr<LogGroupNode>)> cb) const = 0;
 
   /**
