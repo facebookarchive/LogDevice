@@ -94,6 +94,11 @@ TEST_F(ConfigIntegrationTest, RemoteLogsConfigTest) {
   ASSERT_NE(LSN_INVALID, range.first.val_);
   ASSERT_NE(LSN_INVALID, range.second.val_);
 
+  // By absolute path
+  range = config->logsConfig()->getLogRangeByName("/ns/test_logs");
+  ASSERT_NE(LSN_INVALID, range.first.val_);
+  ASSERT_NE(LSN_INVALID, range.second.val_);
+
   std::unique_ptr<client::LogGroup> log_group =
       client->getLogGroupSync("ns/test_logs");
   ASSERT_TRUE(log_group);
@@ -166,10 +171,9 @@ TEST_F(ConfigIntegrationTest, RemoteLogsConfigTest) {
   ASSERT_EQ(E::OK, st);
   ASSERT_EQ(ranges, ranges2);
   // Fetching again - the result should come from cache
-  ld_info("Async fetching by namespace 2");
+  ld_info("Sync fetching by namespace 2");
   auto ranges3 = config->logsConfig()->getLogRangesByNamespace("ns");
   ASSERT_EQ(ranges, ranges3);
-  ;
 
   // Fetching logs under non-existent namespace
   ld_info("Fetching non-existent namespace");
@@ -182,7 +186,9 @@ TEST_F(ConfigIntegrationTest, RemoteLogsConfigTest) {
       "non_existent_ns", [&](Status err, decltype(ranges) r) {
         st = err;
         ranges = r;
+        sem.post();
       });
+  sem.wait();
   ASSERT_EQ(E::NOTFOUND, st);
   ASSERT_EQ(0, ranges.size());
 
@@ -269,6 +275,99 @@ TEST_F(ConfigIntegrationTest, RemoteLogsConfigTest) {
   auto fetched_range =
       config2->logsConfig()->getLogRangeByName("ns/modified_range_name");
   ASSERT_EQ(changed_range, fetched_range);
+}
+
+TEST_F(ConfigIntegrationTest, RemoteLogsConfigWithLogsConfigManagerTest) {
+  auto cluster = IntegrationTestUtils::ClusterFactory()
+                     .useHashBasedSequencerAssignment()
+                     .enableLogsConfigManager()
+                     .create(3);
+  std::shared_ptr<Client> client = cluster->createIndependentClient();
+
+  ld_info("Creating directories and log groups");
+  ASSERT_NE(
+      nullptr,
+      client->makeDirectorySync(
+          "/dir", false, client::LogAttributes().with_replicationFactor(5)));
+  ASSERT_NE(nullptr,
+            client->makeDirectorySync(
+                "/dir/subdir",
+                false,
+                client::LogAttributes().with_replicationFactor(6)));
+  ASSERT_NE(nullptr,
+            client->makeLogGroupSync(
+                "/dir/subdir/log1",
+                logid_range_t(logid_t(1), logid_t(100)),
+                client::LogAttributes().with_replicationFactor(2),
+                false));
+  ASSERT_NE(nullptr,
+            client->makeLogGroupSync("/dir/subdir/log2",
+                                     logid_range_t(logid_t(201), logid_t(300)),
+                                     client::LogAttributes(),
+                                     false));
+
+  // Create a second client with on-demand-logs-config
+  std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
+  ASSERT_EQ(0, client_settings->set("file-config-update-interval", "10ms"));
+  ASSERT_EQ(0, client_settings->set("on-demand-logs-config", true));
+
+  std::string client_config_path(cluster->getConfigPath() + "_client");
+  boost::filesystem::copy_file(cluster->getConfigPath(), client_config_path);
+  auto client2 = Client::create("included_logs",
+                                client_config_path,
+                                "password",
+                                testTimeout(),
+                                std::move(client_settings));
+  ASSERT_TRUE((bool)client2);
+  auto client_impl = static_cast<ClientImpl*>(client2.get());
+  auto config = client_impl->getConfig()->get();
+
+  ASSERT_FALSE(config->logsConfig()->isLocal());
+
+  ld_info("Fetching by ID");
+  auto log_cfg = config->getLogGroupByIDShared(logid_t(1));
+  ASSERT_TRUE(log_cfg != nullptr);
+  ASSERT_EQ(2, log_cfg->attrs().replicationFactor().value());
+
+  ld_info("Fetching by namespace");
+  auto ranges = config->logsConfig()->getLogRangesByNamespace("");
+  ASSERT_EQ(2, ranges.size());
+  ASSERT_EQ("/dir/subdir/log1", ranges.begin()->first);
+  ASSERT_EQ(logid_range_t(logid_t(1), logid_t(100)), ranges.begin()->second);
+  ASSERT_EQ("/dir/subdir/log2", (++ranges.begin())->first);
+  ASSERT_EQ(
+      logid_range_t(logid_t(201), logid_t(300)), (++ranges.begin())->second);
+
+  ld_info("Fetching by log group name");
+  std::pair<logid_t, logid_t> range =
+      config->logsConfig()->getLogRangeByName("/dir/subdir/log2");
+  ASSERT_EQ(201, range.first.val());
+  ASSERT_EQ(300, range.second.val());
+
+  // Update a log group and see whether we can read the change
+  // Wait for the CONFIG_CHANGED to propagate
+  Semaphore config_change_sem;
+  auto handle = client2->subscribeToConfigUpdates([&]() {
+    ld_info("Received config update");
+    config_change_sem.post();
+  });
+  ld_info("Changing logsconfig property");
+  ASSERT_TRUE(client->setAttributesSync(
+      "/dir/subdir/log1", client::LogAttributes().with_replicationFactor(3)));
+
+  // Waiting for the client to get a CONFIG_CHANGED message from the server
+  config_change_sem.wait();
+
+  ld_info("Verifying logs config invalidation");
+  // Check if RemoteLogsConfig got invalidated
+  auto config2 = client_impl->getConfig()->get();
+  ASSERT_NE(config, config2);
+
+  // Check if new properties are propagated
+  ld_info("Fetching updated logs config properties");
+  log_cfg = config2->getLogGroupByIDShared(logid_t(1));
+  ASSERT_TRUE(log_cfg != nullptr);
+  ASSERT_EQ(3, log_cfg->attrs().replicationFactor().value());
 }
 
 TEST_F(ConfigIntegrationTest, ClientConfigSubscription) {

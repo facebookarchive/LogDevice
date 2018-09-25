@@ -17,7 +17,7 @@
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/debug.h"
-#include "logdevice/common/protocol/GET_LOG_INFO_Message.h"
+#include "logdevice/common/protocol/LOGS_CONFIG_API_Message.h"
 
 namespace facebook { namespace logdevice {
 
@@ -25,7 +25,8 @@ GetLogInfoFromNodeRequest::GetLogInfoFromNodeRequest(GetLogInfoRequest* parent)
     : Request(RequestType::GET_LOG_INFO),
       gli_req_id_(parent->id_),
       shared_state_(parent->shared_state_),
-      worker_id_(shared_state_->worker_id_) {
+      worker_id_(shared_state_->worker_id_),
+      response_expected_size_(0) {
   std::lock_guard<std::mutex> lock(shared_state_->mutex_);
   shared_state_version_ = shared_state_->current_version_;
 }
@@ -73,12 +74,13 @@ void GetLogInfoFromNodeRequest::attemptSend() {
 
   lock.unlock();
 
-  ld_debug("Sending a GET_LOG_INFO message to %s", send_to.toString().c_str());
+  ld_debug("Sending a LOGS_CONFIG_API_Message message to %s",
+           send_to.toString().c_str());
   int rv = this->sendOneMessage(send_to);
   if (rv != 0) {
     RATELIMIT_ERROR(std::chrono::seconds(10),
                     1,
-                    "Failed to send GET_LOG_INFO message to %s: %s",
+                    "Failed to send LOGS_CONFIG_API_Message message to %s: %s",
                     send_to.toString().c_str(),
                     error_description(err));
     finalize(E::FAILED);
@@ -89,7 +91,7 @@ void GetLogInfoFromNodeRequest::onMessageSent(NodeID to, Status status) {
   if (status != E::OK) {
     RATELIMIT_INFO(std::chrono::seconds(10),
                    10,
-                   "Couldn't send GET_LOG_INFO message to %s: %s",
+                   "Couldn't send LOGS_CONFIG_API_Message message to %s: %s",
                    to.toString().c_str(),
                    error_description(status));
     finalize(E::FAILED);
@@ -149,9 +151,14 @@ int GetLogInfoFromNodeRequest::sendOneMessage(NodeID to) {
     // after self-destruction
     return 0;
   }
-  GET_LOG_INFO_Header header = {id_, parent->request_type_, parent->log_id_};
+
+  LOGS_CONFIG_API_Header header = {
+      .client_rqid = id_,
+      .request_type = parent->request_type_,
+      .subscribe_to_config_ = true, /* Subscribes to CONFIG_CHANGED */
+      .origin = LogsConfigRequestOrigin::REMOTE_LOGS_CONFIG_REQUEST};
   auto msg =
-      std::make_unique<GET_LOG_INFO_Message>(header, parent->log_group_name_);
+      std::make_unique<LOGS_CONFIG_API_Message>(header, parent->identifier_);
   auto w = Worker::onThisThread();
 
   // registering callback in case the socket gets closed, even when we aren't
@@ -167,17 +174,41 @@ int GetLogInfoFromNodeRequest::sendOneMessage(NodeID to) {
   return w->sender().sendMessage(std::move(msg), to, onclose_to_use);
 }
 
+void GetLogInfoFromNodeRequest::processChunk(std::string payload,
+                                             size_t total_payload_size) {
+  if (payload.length() == total_payload_size) {
+    finalize(E::OK, payload);
+    return;
+  }
+
+  // Only the first message will contain the full payload length
+  if (total_payload_size != 0) {
+    ld_assert(response_payload_.empty());
+    ld_assert(response_expected_size_ == 0);
+    response_payload_.reserve(total_payload_size);
+    response_expected_size_ = total_payload_size;
+  }
+  response_payload_.append(payload);
+  ld_assert(response_payload_.length() <= response_expected_size_);
+  if (response_payload_.length() >= response_expected_size_) {
+    ld_debug("LOGS_CONFIG_API_REPLY received full message");
+    finalize(E::OK, response_payload_);
+  } else {
+    ld_debug("LOGS_CONFIG_API_REPLY waiting for more data "
+             "(recv: %zu, total: %zu)",
+             response_payload_.length(),
+             response_expected_size_);
+  }
+}
+
 void GetLogInfoFromNodeRequest::onReply(NodeID from,
                                         Status status,
-                                        std::string json) {
-  ld_debug("received GET_LOG_INFO_REPLY from %s, status=%s, result='%s'",
-           from.toString().c_str(),
-           error_description(status),
-           json.c_str());
-
+                                        uint64_t /* unused */,
+                                        std::string payload,
+                                        size_t total_payload_size) {
   switch (status) {
     case E::OK:
-      finalize(E::OK, json);
+      processChunk(payload, total_payload_size);
       return;
 
     case E::NOTFOUND:
@@ -190,7 +221,7 @@ void GetLogInfoFromNodeRequest::onReply(NodeID from,
       break;
 
     default:
-      ld_error("received GET_LOG_INFO_REPLY message from %s with unexpected "
+      ld_error("received LOGS_CONFIG_API_REPLY message from %s with unexpected "
                "status %s",
                from.toString().c_str(),
                error_description(status));
@@ -217,7 +248,7 @@ void GetLogInfoFromNodeRequest::finalize(Status st, std::string json) {
   } else {
     // findParent() can return nullptr if the parent GetLogInfoRequest has
     // finished already. This can happen if another (newer)
-    // GetLogInfoFromNodeRequest has received a GET_LOG_INFO_REPLY message.
+    // GetLogInfoFromNodeRequest has received a LOGS_CONFIG_API_REPLY message.
   }
   deleteThis();
 }

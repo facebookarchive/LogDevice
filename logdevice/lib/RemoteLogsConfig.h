@@ -77,6 +77,8 @@ class RemoteLogsConfig : public LogsConfig {
   std::shared_ptr<GetLogInfoRequestSharedState> getTargetNodeInfo() const;
 
  private:
+  using RangeLookupMap = LogsConfig::NamespaceRangeLookupMap;
+
   // Inserts entries into logid->log struct cache
   void insertIntoIdCache(const std::shared_ptr<LogGroupNode>& log) const;
 
@@ -87,10 +89,17 @@ class RemoteLogsConfig : public LogsConfig {
 
   // Creates the request and posts it to a worker. If posting the request fails,
   // will call the callback with E::FAILED
-  int postRequest(GET_LOG_INFO_Header::Type request_type,
-                  logid_t logid,
-                  std::string log_group_name,
+  int postRequest(LOGS_CONFIG_API_Header::Type request_type,
+                  std::string identifier,
                   get_log_info_callback_t callback) const;
+
+  // Recursively processes the result of the BY_NAMESPACE result and adds it
+  // to the cache
+  static void processDirectoryResult(RemoteLogsConfig* rlc,
+                                     RangeLookupMap& map,
+                                     const logsconfig::DirectoryNode& directory,
+                                     const std::string& parent_name,
+                                     const std::string& delimiter);
 
   std::chrono::milliseconds timeout_ = std::chrono::milliseconds(5000);
 

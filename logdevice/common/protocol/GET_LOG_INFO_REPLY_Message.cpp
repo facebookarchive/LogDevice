@@ -16,21 +16,8 @@ namespace facebook { namespace logdevice {
 template <>
 Message::Disposition
 GET_LOG_INFO_REPLY_Message::onReceived(const Address& from) {
-  if (from.isClientAddress()) {
-    ld_error("got GET_LOG_INFO_REPLY message from client %s",
-             Sender::describeConnection(from).c_str());
-    err = E::PROTO;
-    return Disposition::ERROR;
-  }
-
-  // Status gets validated in GetLogInfoFromNodeRequest::onReply() where
-  // we switch on it
-
-  auto& rqmap = Worker::onThisThread()->runningGetLogInfo().per_node_map;
-  auto it = rqmap.find(header_.client_rqid);
-  if (it != rqmap.end()) {
-    it->second->onReply(from.id_.node_, header_.status, std::move(blob_));
-  }
+  // T25310022 - New clients do not use this message anymore
+  // To be removed once all clients use LOGS_CONFIG_API_REPLY
   return Disposition::NORMAL;
 }
 

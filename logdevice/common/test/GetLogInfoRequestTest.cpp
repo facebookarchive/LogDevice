@@ -75,13 +75,11 @@ class MockGetLogInfoFromNodeRequest : public GetLogInfoFromNodeRequest {
 class MockGetLogInfoRequest : public GetLogInfoRequest {
  public:
   MockGetLogInfoRequest(int nnodes,
-                        GET_LOG_INFO_Header::Type req_type,
-                        logid_t log_id,
-                        const std::string& log_group_name,
+                        LOGS_CONFIG_API_Header::Type request_type,
+                        std::string identifier,
                         Callback& callback)
-      : GetLogInfoRequest(req_type,
-                          log_id,
-                          log_group_name,
+      : GetLogInfoRequest(request_type,
+                          identifier,
                           100_ms,
                           std::make_shared<GetLogInfoRequestSharedState>(),
                           std::ref(callback),
@@ -160,28 +158,28 @@ NodeID node(node_index_t index) {
 TEST(GetLogInfoRequestTest, Simple) {
   Callback cb;
   MockGetLogInfoRequest req(
-      3, GET_LOG_INFO_Header::Type::BY_ID, logid_t(1), "", cb);
+      3, LOGS_CONFIG_API_Header::Type::GET_LOG_GROUP_BY_ID, "1", cb);
   cb.assertNotCalled();
   ASSERT_TRUE(req.getLastPerNodeRequest());
-  req.getLastPerNodeRequest()->onReply(node(0), E::OK, "{}");
-  cb.assertCalled(E::OK, "{}");
+  req.getLastPerNodeRequest()->onReply(node(0), E::OK, 1, "binary_payload", 14);
+  cb.assertCalled(E::OK, "binary_payload");
 }
 
 TEST(GetLogInfoRequestTest, Failures) {
   Callback cb;
   MockGetLogInfoRequest req(
-      3, GET_LOG_INFO_Header::Type::BY_ID, logid_t(1), "", cb);
+      3, LOGS_CONFIG_API_Header::Type::GET_LOG_GROUP_BY_ID, "1", cb);
   ASSERT_TRUE(req.getLastPerNodeRequest());
-  req.getLastPerNodeRequest()->onReply(node(0), E::SHUTDOWN, "");
+  req.getLastPerNodeRequest()->onReply(node(0), E::SHUTDOWN, 1, "", 0);
   cb.assertNotCalled();
-  req.getLastPerNodeRequest()->onReply(node(1), E::OK, "{}");
-  cb.assertCalled(E::OK, "{}");
+  req.getLastPerNodeRequest()->onReply(node(1), E::OK, 1, "binary_payload", 14);
+  cb.assertCalled(E::OK, "binary_payload");
 }
 
 TEST(GetLogInfoRequestTest, ClientTimeout) {
   Callback cb;
   MockGetLogInfoRequest req(
-      3, GET_LOG_INFO_Header::Type::BY_ID, logid_t(1), "", cb);
+      3, LOGS_CONFIG_API_Header::Type::GET_LOG_GROUP_BY_ID, "1", cb);
   cb.assertNotCalled();
   ASSERT_FALSE(req.config_reload_requested_);
 
@@ -191,8 +189,8 @@ TEST(GetLogInfoRequestTest, ClientTimeout) {
   ASSERT_FALSE(req.config_reload_requested_);
 
   ASSERT_TRUE(req.getLastPerNodeRequest());
-  req.getLastPerNodeRequest()->onReply(node(2), E::OK, "{}");
-  cb.assertCalled(E::OK, "{}");
+  req.getLastPerNodeRequest()->onReply(node(2), E::OK, 1, "binary_payload", 14);
+  cb.assertCalled(E::OK, "binary_payload");
 
   req.onClientTimeout();
   // timeout should trigger a reload if replies have been received
@@ -202,7 +200,7 @@ TEST(GetLogInfoRequestTest, ClientTimeout) {
 TEST(GetLogInfoRequestTest, StaleResponses) {
   Callback cb;
   MockGetLogInfoRequest req(
-      3, GET_LOG_INFO_Header::Type::BY_ID, logid_t(1), "", cb);
+      3, LOGS_CONFIG_API_Header::Type::GET_LOG_GROUP_BY_ID, "1", cb);
   cb.assertNotCalled();
   ASSERT_FALSE(req.config_reload_requested_);
 
@@ -215,10 +213,22 @@ TEST(GetLogInfoRequestTest, StaleResponses) {
   ASSERT_EQ(2, per_node_requests.size());
 
   // simulating a response on a stale request
-  per_node_requests[0]->onReply(node(2), E::OK, "{}");
+  per_node_requests[0]->onReply(node(2), E::OK, 1, "binary_payload", 14);
   cb.assertNotCalled();
 
   // same response on the last request should work fine
-  per_node_requests[1]->onReply(node(2), E::OK, "{}");
-  cb.assertCalled(E::OK, "{}");
+  per_node_requests[1]->onReply(node(2), E::OK, 1, "binary_payload", 14);
+  cb.assertCalled(E::OK, "binary_payload");
+}
+
+TEST(GetLogInfoRequestTest, Chunking) {
+  Callback cb;
+  MockGetLogInfoRequest req(
+      3, LOGS_CONFIG_API_Header::Type::GET_LOG_GROUP_BY_ID, "1", cb);
+  cb.assertNotCalled();
+  ASSERT_TRUE(req.getLastPerNodeRequest());
+  req.getLastPerNodeRequest()->onReply(node(0), E::OK, 1, "binary_", 14);
+  cb.assertNotCalled();
+  req.getLastPerNodeRequest()->onReply(node(0), E::OK, 1, "payload", 0);
+  cb.assertCalled(E::OK, "binary_payload");
 }

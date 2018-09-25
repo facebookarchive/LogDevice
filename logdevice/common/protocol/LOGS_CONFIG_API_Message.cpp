@@ -73,9 +73,7 @@ void LOGS_CONFIG_API_Message::onSent(Status status, const Address& to) const {
   }
 }
 
-// This is a 1-1 copy of the logic in GET_LOG_INFO_Message.cpp
-// LOGS_CONFIG_API_Message will soon replace these and then all of the code
-// there can be removed
+// This is a 1-1 copy of the old logic in GET_LOG_INFO_Message.cpp
 //
 // This is the callback to be called whenever the socket that we use for config
 // change notifications is closed on the node. It erases the client from the

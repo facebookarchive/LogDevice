@@ -16,7 +16,7 @@
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/debug.h"
-#include "logdevice/common/protocol/GET_LOG_INFO_Message.h"
+#include "logdevice/common/protocol/LOGS_CONFIG_API_Message.h"
 
 namespace facebook { namespace logdevice {
 

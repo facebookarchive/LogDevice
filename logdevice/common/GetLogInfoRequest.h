@@ -38,8 +38,7 @@ namespace facebook { namespace logdevice {
  */
 
 class GetLogInfoRequest;
-typedef std::function<void(Status, const std::string& result_json)>
-    get_log_info_callback_t;
+using get_log_info_callback_t = std::function<void(Status, const std::string&)>;
 
 // Wrapper instead of typedef to allow forward-declaring in Worker.h
 struct GetLogInfoRequestMaps {
@@ -55,9 +54,8 @@ struct GetLogInfoRequestMaps {
 
 class GetLogInfoRequest : public Request {
  public:
-  GetLogInfoRequest(GET_LOG_INFO_Header::Type request_type,
-                    logid_t log_id,
-                    std::string log_group_name,
+  GetLogInfoRequest(LOGS_CONFIG_API_Header::Type request_type,
+                    std::string identifier,
                     std::chrono::milliseconds client_timeout,
                     std::shared_ptr<GetLogInfoRequestSharedState> shared_state,
                     get_log_info_callback_t callback,
@@ -65,8 +63,7 @@ class GetLogInfoRequest : public Request {
       : Request(RequestType::GET_LOG_INFO),
         shared_state_(shared_state),
         request_type_(request_type),
-        log_id_(log_id),
-        log_group_name_(std::move(log_group_name)),
+        identifier_(std::move(identifier)),
         client_timeout_(client_timeout),
         callback_(callback),
         worker_id_(shared_state->worker_id_),
@@ -103,9 +100,12 @@ class GetLogInfoRequest : public Request {
 
   std::shared_ptr<GetLogInfoRequestSharedState> shared_state_;
 
-  const GET_LOG_INFO_Header::Type request_type_;
-  const logid_t log_id_;
-  const std::string log_group_name_;
+  // Type of request (e.g. log group, directory or namespace)
+  const LOGS_CONFIG_API_Header::Type request_type_;
+
+  // Identifier for the type of request,
+  // e.g. for log group this is the log group name
+  const std::string identifier_;
 
  protected: // tests can override
   // Changes the target node if necessary, saves some metadata in the shared

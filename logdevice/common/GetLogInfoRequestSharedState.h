@@ -20,7 +20,7 @@ class SocketCallback;
 struct GetLogInfoRequestSharedState {
   std::mutex mutex_;
 
-  // Node ID that GET_LOG_INFO messages will be sent to
+  // Node ID that LOGS_CONFIG_API messages will be sent to
   NodeID node_id_;
 
   // callback that will be called when the socket to the target node closes
@@ -29,7 +29,7 @@ struct GetLogInfoRequestSharedState {
   // Worker ID that will process GetLogInfoRequests
   worker_id_t worker_id_{-1};
 
-  // A flag that enables/disables sending GET_LOG_INFO messages. This is used
+  // A flag that enables/disables sending LOGS_CONFIG_API messages. This is used
   // to delay message sending while the config is being reloaded (since we
   // drop all the caches on config reload).
   bool message_sending_enabled_{false};
@@ -43,7 +43,7 @@ struct GetLogInfoRequestSharedState {
   // multiple GetLogInfoRequests run in parallel
   uint64_t current_version_{1};
 
-  // True if the current version got any GET_LOG_INFO_REPLY messages
+  // True if the current version got any LOGS_CONFIG_API_REPLY messages
   bool current_version_got_replies_ = false;
 
   // Limits the number of config reloads in a period of time. This prevents

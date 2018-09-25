@@ -20,8 +20,7 @@
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/RequestType.h"
-#include "logdevice/common/protocol/GET_LOG_INFO_Message.h"
-#include "logdevice/common/protocol/GET_LOG_INFO_REPLY_Message.h"
+#include "logdevice/common/protocol/LOGS_CONFIG_API_Message.h"
 #include "logdevice/include/Client.h"
 
 namespace facebook { namespace logdevice {
@@ -46,14 +45,23 @@ class GetLogInfoFromNodeRequest : public Request {
 
   /**
    * Called by the messaging layer after it successfully sends out our
-   * GET_LOG_INFO message, or fails to do so.
+   * LOGS_CONFIG_API message, or fails to do so.
    */
   void onMessageSent(NodeID, Status);
 
   /**
-   * Called when we receive a GET_LOG_INFO_REPLY message from a storage node.
+   * LOGS_CONFIG_API_REPLY messages support chunking. This will either add a
+   * new block to the final response or finalize the request
    */
-  void onReply(NodeID, Status, std::string);
+  void processChunk(std::string payload, size_t total_payload_size);
+  /**
+   * Called when we receive a LOGS_CONFIG_API_REPLY message from a storage node.
+   */
+  void onReply(NodeID from,
+               Status status,
+               uint64_t config_version,
+               std::string payload,
+               size_t total_payload_size);
 
   /**
    * Starts execution of the request (execute() includes registering it on the
@@ -106,8 +114,13 @@ class GetLogInfoFromNodeRequest : public Request {
   // E::STALE
   uint64_t shared_state_version_;
 
-  // Sends a single GET_LOG_INFO message to the specified node
+  // Sends a single LOGS_CONFIG_API message to the specified node
   int sendOneMessage(NodeID to);
+
+  // The response body can be returned in chunks
+  // Keeps track of the intermediate result until completed
+  size_t response_expected_size_;
+  std::string response_payload_;
 };
 
 }} // namespace facebook::logdevice

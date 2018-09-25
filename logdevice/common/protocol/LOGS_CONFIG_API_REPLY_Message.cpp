@@ -82,7 +82,11 @@ LOGS_CONFIG_API_REPLY_Message::onReceived(const Address& from) {
       auto& rqmap = Worker::onThisThread()->runningGetLogInfo().per_node_map;
       auto it = rqmap.find(header_.client_rqid);
       if (it != rqmap.end()) {
-        it->second->onReply(from.id_.node_, header_.status, std::move(blob_));
+        it->second->onReply(from.id_.node_,
+                            header_.status,
+                            header_.config_version,
+                            std::move(blob_),
+                            header_.total_payload_size);
       }
       break;
     }

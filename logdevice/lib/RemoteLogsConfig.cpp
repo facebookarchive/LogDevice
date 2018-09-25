@@ -18,6 +18,7 @@
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/LogsConfigParser.h"
 #include "logdevice/common/configuration/ParsingHelpers.h"
+#include "logdevice/common/configuration/logs/LogsConfigStateMachine.h"
 #include "logdevice/include/LogAttributes.h"
 
 using folly::RWSpinLock;
@@ -27,8 +28,6 @@ using namespace facebook::logdevice::configuration::parser;
 using facebook::logdevice::logsconfig::LogGroupNode;
 
 namespace facebook { namespace logdevice {
-
-using RangeLookupMap = LogsConfig::NamespaceRangeLookupMap;
 
 std::shared_ptr<LogGroupNode> RemoteLogsConfig::getLogGroupByIDShared(
     logid_t id,
@@ -51,9 +50,8 @@ std::shared_ptr<LogGroupNode> RemoteLogsConfig::getLogGroupByIDShared(
   return res;
 }
 
-int RemoteLogsConfig::postRequest(GET_LOG_INFO_Header::Type request_type,
-                                  logid_t log_id,
-                                  std::string log_group_name,
+int RemoteLogsConfig::postRequest(LOGS_CONFIG_API_Header::Type request_type,
+                                  std::string identifier,
                                   get_log_info_callback_t callback) const {
   ld_check(processor_);
   std::shared_ptr<Processor> processor = processor_->lock();
@@ -78,14 +76,12 @@ int RemoteLogsConfig::postRequest(GET_LOG_INFO_Header::Type request_type,
     worker_id = target_node_info_->worker_id_;
   }
 
-  std::unique_ptr<Request> req =
-      std::make_unique<GetLogInfoRequest>(request_type,
-                                          log_id,
-                                          log_group_name,
-                                          timeout_,
-                                          target_node_info_,
-                                          callback,
-                                          callback_thread_affinity);
+  std::unique_ptr<Request> req(new GetLogInfoRequest(request_type,
+                                                     identifier,
+                                                     timeout_,
+                                                     target_node_info_,
+                                                     callback,
+                                                     callback_thread_affinity));
   int rv = processor->postWithRetrying(req);
   if (rv == -1) {
     ld_error("Failed to post request to %s: %s",
@@ -124,7 +120,7 @@ void RemoteLogsConfig::getLogGroupByIDAsync(
 
   std::string delimiter = getNamespaceDelimiter();
   // No suitable results in cache - proceed to get them from remote hosts.
-  auto request_callback = [cb, delimiter](Status st, std::string json) {
+  auto request_callback = [cb, delimiter](Status st, std::string payload) {
     auto config = Worker::onThisThread()->getConfig();
     RemoteLogsConfig* rlc = checked_downcast<RemoteLogsConfig*>(
         const_cast<LogsConfig*>(config->logsConfig().get()));
@@ -136,14 +132,20 @@ void RemoteLogsConfig::getLogGroupByIDAsync(
       return;
     }
 
-    auto log_group = LogGroupNode::createFromJson(json, delimiter);
-    if (!log_group) {
-      ld_error("Failed to parse LogGroupNode result");
+    ld_assert(payload.size() > 0);
+
+    std::unique_ptr<logsconfig::LogGroupWithParentPath> lid =
+        logsconfig::FBuffersLogsConfigCodec::deserialize<
+            logsconfig::LogGroupWithParentPath>(
+            Payload(payload.data(), payload.size()), delimiter);
+    ld_check(lid != nullptr);
+    if (lid == nullptr) {
+      ld_error("Failed to deserialize LogGroupWithParentPath result");
       cb(nullptr);
       return;
     }
 
-    const std::shared_ptr<LogGroupNode> log_shared(log_group.release());
+    const std::shared_ptr<LogGroupNode> log_shared = lid->log_group;
 
     // Placing result in cache
     rlc->insertIntoIdCache(log_shared);
@@ -151,8 +153,9 @@ void RemoteLogsConfig::getLogGroupByIDAsync(
     // Returning to client
     cb(std::move(log_shared));
   };
-  this->postRequest(
-      GET_LOG_INFO_Header::Type::BY_ID, id, std::string(), request_callback);
+  this->postRequest(LOGS_CONFIG_API_Header::Type::GET_LOG_GROUP_BY_ID,
+                    std::to_string(id.val()),
+                    request_callback);
 }
 
 void RemoteLogsConfig::insertIntoIdCache(
@@ -202,7 +205,8 @@ void RemoteLogsConfig::getLogRangeByNameAsync(
     }
   }
 
-  auto request_callback = [delimiter, name, cb](Status st, std::string json) {
+  auto request_callback = [delimiter, name, cb](
+                              Status st, std::string payload) {
     auto config = Worker::onThisThread()->getConfig();
     RemoteLogsConfig* rlc = dynamic_cast<RemoteLogsConfig*>(
         const_cast<LogsConfig*>(config->logsConfig().get()));
@@ -213,8 +217,13 @@ void RemoteLogsConfig::getLogRangeByNameAsync(
       return;
     }
 
-    auto log_group = LogGroupNode::createFromJson(json, delimiter);
-    if (!log_group) {
+    ld_assert(payload.size() > 0);
+
+    // deserialize the payload
+    std::shared_ptr<logsconfig::LogGroupNode> log_group =
+        LogsConfigStateMachine::deserializeLogGroup(payload, delimiter);
+    ld_assert(log_group != nullptr);
+    if (log_group == nullptr) {
       ld_error("Failed to parse LogGroupNode result");
       cb(E::FAILED, std::make_pair(logid_t(LSN_INVALID), logid_t(LSN_INVALID)));
       return;
@@ -227,14 +236,13 @@ void RemoteLogsConfig::getLogRangeByNameAsync(
       NameMapEntry entry{res, steady_clock::now()};
       rlc->name_result_cache[name] = std::move(entry);
     }
-    // writing to id -> log info cache
-    const std::shared_ptr<LogGroupNode> log_shared(log_group.release());
-    rlc->insertIntoIdCache(log_shared);
+    rlc->insertIntoIdCache(log_group);
     cb(E::OK, res);
   };
 
-  this->postRequest(
-      GET_LOG_INFO_Header::Type::BY_NAME, logid_t(0), name, request_callback);
+  this->postRequest(LOGS_CONFIG_API_Header::Type::GET_LOG_GROUP_BY_NAME,
+                    name,
+                    request_callback);
 }
 
 std::shared_ptr<logsconfig::LogGroupNode>
@@ -306,13 +314,62 @@ bool RemoteLogsConfig::getLogRangesByNamespaceCached(
   return true;
 }
 
+void RemoteLogsConfig::processDirectoryResult(
+    RemoteLogsConfig* rlc,
+    RangeLookupMap& map,
+    const logsconfig::DirectoryNode& directory,
+    const std::string& parent_name,
+    const std::string& delimiter) {
+  std::string directory_name;
+
+  // Directory names should always end with delimiter
+  if (!boost::algorithm::ends_with(parent_name, delimiter)) {
+    directory_name = parent_name + delimiter + directory.name();
+  } else {
+    directory_name = parent_name + directory.name();
+  }
+
+  for (const auto& lg : directory.logs()) {
+    // We have to flatten the LogGroup structures so they fit into the
+    // cache and do not depend on RAW DirectoryNode pointers
+    std::shared_ptr<logsconfig::LogGroupNode> flat_log_group =
+        std::make_shared<logsconfig::LogGroupNode>(
+            directory_name + delimiter + lg.second->name(),
+            lg.second->attrs(),
+            lg.second->range());
+    map.insert(std::make_pair(flat_log_group->name(), flat_log_group->range()));
+
+    // writing to name->range cache
+    NameMapEntry entry{flat_log_group->range(), steady_clock::now()};
+    rlc->name_result_cache[flat_log_group->name()] = std::move(entry);
+
+    // writing to id -> log info cache
+    rlc->insertIntoIdCache(flat_log_group);
+  }
+
+  // Process children recursively
+  for (const auto& dir : directory.children()) {
+    processDirectoryResult(rlc, map, *dir.second, directory_name, delimiter);
+  }
+}
+
 void RemoteLogsConfig::getLogRangesByNamespaceAsync(
     const std::string& ns,
     std::function<void(Status, RangeLookupMap)> cb) const {
   std::string delimiter = getNamespaceDelimiter();
+
+  // Calls from Client are automatically namespaced / absolute, but internally
+  // they might not be.
+  std::string path;
+  if (ns.size() > 0 && ns.compare(0, delimiter.size(), delimiter) == 0) {
+    path = ns;
+  } else {
+    path = delimiter + ns;
+  }
+
   RangeLookupMap rangeMap;
   // Attempting to fetch result from cache
-  if (getLogRangesByNamespaceCached(ns, rangeMap)) {
+  if (getLogRangesByNamespaceCached(path, rangeMap)) {
     if (rangeMap.empty()) {
       cb(E::NOTFOUND, std::move(rangeMap));
     } else {
@@ -321,7 +378,8 @@ void RemoteLogsConfig::getLogRangesByNamespaceAsync(
     return;
   }
 
-  auto request_callback = [ns, cb, delimiter](Status st, std::string json) {
+  auto request_callback = [path, cb, delimiter](
+                              Status st, std::string payload) {
     auto config = Worker::onThisThread()->getConfig();
     RemoteLogsConfig* rlc = dynamic_cast<RemoteLogsConfig*>(
         const_cast<LogsConfig*>(config->logsConfig().get()));
@@ -331,21 +389,13 @@ void RemoteLogsConfig::getLogRangesByNamespaceAsync(
       return;
     }
 
-    // parsing JSON
-    folly::dynamic parsed = folly::dynamic::object;
-    try {
-      folly::json::serialization_opts opts;
-      opts.allow_trailing_comma = true;
-      parsed = folly::parseJson(json, opts);
-    } catch (std::exception& e) {
-      ld_error("Error parsing JSON received from remote server: %s", e.what());
-      cb(E::FAILED, RangeLookupMap());
-      return;
-    }
+    ld_check(payload.size() > 0);
 
-    if (!parsed.isArray()) {
-      ld_error("Error parsing JSON received from remote server: "
-               "top-level JSON item is not an array");
+    // deserialize the payload
+    std::unique_ptr<logsconfig::DirectoryNode> directory =
+        LogsConfigStateMachine::deserializeDirectory(payload, delimiter);
+    if (directory == nullptr) {
+      ld_error("Error parsing DirectoryNode result");
       cb(E::FAILED, RangeLookupMap());
       return;
     }
@@ -353,35 +403,15 @@ void RemoteLogsConfig::getLogRangesByNamespaceAsync(
     // writing to namespace timing cache
     auto now = steady_clock::now();
     std::unique_lock<RWSpinLock> lock(rlc->name_cache_mutex);
-    rlc->namespace_last_fetch_times[ns] = now;
+    rlc->namespace_last_fetch_times[path] = now;
 
     RangeLookupMap res;
-    for (auto& iter : parsed) {
-      // LogGroupNode forgets its full path, hence we have to return it from
-      // the parse method as an extra return argument
-      auto grp = LogGroupNode::createFromFollyDynamic(iter, delimiter);
-      ld_check(grp.second != nullptr);
-      auto& logs_config = grp.second;
-      auto& name = grp.first;
-      auto& range = logs_config->range();
-
-      res.insert(std::make_pair(name, range));
-
-      // writing to name->range cache
-      NameMapEntry entry{range, steady_clock::now()};
-      rlc->name_result_cache[name] = std::move(entry);
-
-      // writing to id -> log info cache
-      const std::shared_ptr<LogGroupNode> log_shared(logs_config.release());
-      rlc->insertIntoIdCache(log_shared);
-    }
+    processDirectoryResult(rlc, res, *directory, "", delimiter);
     cb(res.empty() ? E::NOTFOUND : E::OK, res);
   };
 
-  this->postRequest(GET_LOG_INFO_Header::Type::BY_NAMESPACE,
-                    logid_t(0),
-                    ns,
-                    request_callback);
+  this->postRequest(
+      LOGS_CONFIG_API_Header::Type::GET_DIRECTORY, path, request_callback);
 }
 
 std::unique_ptr<LogsConfig> RemoteLogsConfig::copy() const {
@@ -401,7 +431,7 @@ RemoteLogsConfig::RemoteLogsConfig(const RemoteLogsConfig& src)
   processor_ = src.processor_;
   target_node_info_ = src.target_node_info_;
 
-  // Enabling sending GET_LOG_INFO messages if it's disabled
+  // Enabling sending LOGS_CONFIG_API messages if it's disabled
   std::unique_lock<std::mutex> lock(target_node_info_->mutex_);
   if (!target_node_info_->message_sending_enabled_) {
     target_node_info_->message_sending_enabled_ = true;
