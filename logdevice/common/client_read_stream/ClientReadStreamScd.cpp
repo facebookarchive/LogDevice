@@ -216,29 +216,16 @@ bool ClientReadStreamScd::allSendAllFailoverTimerCallback(
     small_shardset_t down) {
   ld_check(isActive());
 
-  if (isSlowShardsDetectionEnabled()) {
-    // If slow shards detection is enabled, the shards that are stuck and
-    // haven't sent a record for a long time will be marked as slow instead of
-    // down (see onOutliersChanged()).
-    // TODO(T21282553): remove this function once the outlier detector has
-    // proven stable.
-    return false;
-  }
+  // TODO(T21282553): consider removing this function once the outlier detector
+  // has proven stable. We could also keep it as a last resort if there is a bug
+  // preventing the reader to make progress while in SCD.
 
   // Failover to all send all mode if:
   // - all the shards are in the shards down list (nobody sent anything) OR
-  // - the shards down list did not change since the last tick OR
-  // - slow shard detection is enabled; in this case
-  //   shardsDownFailoverTimerCallback is a noop, and
-  //   onOutliersChanged() would only rewind with the shards that
-  //   are not making progress in the shards slow list iff by doing so the
-  //   filtered out shards wouldn't satisfy the replication requirements; So if
-  //   we got here, it means there are too many slow shards to do a rewind, so
-  //   try to failover to an ALL_SEND_ALL instead;
+  // - the shards down list did not change since the last tick
 
   if (down.empty() ||
-      getShardsDown().size() + down.size() == owner_->readSetSize() ||
-      isSlowShardsDetectionEnabled()) {
+      getShardsDown().size() + down.size() == owner_->readSetSize()) {
     RATELIMIT_INFO(std::chrono::seconds(10),
                    1,
                    "Failing over to ALL_SEND_ALL mode for log %lu because "
@@ -713,8 +700,8 @@ void ClientReadStreamScd::FailoverTimer::callback() {
     return;
   }
 
-  // Build the list of shards that have not sent anything with lsn >=
-  // next_lsn_to_deliver_ and are considered down by ClusterState.
+  // Build the list of shards not not blacklisted that have not sent anything
+  // with lsn >= next_lsn_to_deliver_.
   small_shardset_t new_known_down;
 
   for (auto& it : scd_->owner_->storage_set_states_) {
