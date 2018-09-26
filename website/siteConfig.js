@@ -36,6 +36,11 @@ const siteConfig = {
     {blog: true, label: 'Blog'},
   ],
 
+  algolia: {
+    apiKey: 'f0ece773627cb7003a57c0edd6ec7dd8',
+    indexName: 'logdevice',
+  },
+
   // do not try to merge .css from static/api into main site css.
   // That directory contains a Doxygen-generated API subtree.
   separateCss: ['static/api'],
