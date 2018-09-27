@@ -8,9 +8,11 @@
 
 #include <condition_variable>
 #include <mutex>
+#include <ostream>
 
 #include <folly/Conv.h>
 #include <folly/json.h>
+#include <folly/synchronization/Baton.h>
 #include <gtest/gtest.h>
 
 #include "logdevice/common/configuration/NodesConfigStore.h"
@@ -58,6 +60,10 @@ struct TestEntry {
     return value_;
   }
 
+  friend std::ostream& operator<<(std::ostream& os, const TestEntry& entry) {
+    return os << entry.serialize(); // whatever needed to print bar to os
+  }
+
  private:
   version_t version_;
   std::string value_;
@@ -73,39 +79,43 @@ version_t extractVersionFn(folly::StringPiece buf) {
   return TestEntry::fromSerialized(buf).version();
 }
 
+void checkAndResetBaton(folly::Baton<>& b) {
+  using namespace std::chrono_literals;
+  // The baton should have be "posted" way sooner. We do this so that if the
+  // baton is not posted, and the program hangs, we get a clear timeout message
+  // instead of waiting for the test to time out.
+  EXPECT_TRUE(b.try_wait_for(1s));
+  b.reset();
+}
+
 void runBasicTests(std::unique_ptr<NodesConfigStore> store) {
-  Status status_out;
+  folly::Baton<> b;
   std::string value_out{};
 
   // no config stored yet
-  EXPECT_NE(0, store->getConfig(kFoo, [](Status status, std::string) {
+  EXPECT_EQ(0, store->getConfig(kFoo, [&b](Status status, std::string) {
     EXPECT_EQ(Status::NOTFOUND, status);
+    b.post();
   }));
-  EXPECT_NE(0, store->getConfigSync(kFoo, &status_out, &value_out));
-  EXPECT_EQ(Status::NOTFOUND, status_out);
+  checkAndResetBaton(b);
+
+  EXPECT_EQ(Status::NOTFOUND, store->getConfigSync(kFoo, &value_out));
 
   // initial write
-  EXPECT_EQ(
-      0,
-      store->updateConfigSync(
-          kFoo, &status_out, TestEntry{10, "foo123"}.serialize(), folly::none));
-  EXPECT_EQ(Status::OK, status_out);
+  EXPECT_EQ(Status::OK,
+            store->updateConfigSync(
+                kFoo, TestEntry{10, "foo123"}.serialize(), folly::none));
 
-  EXPECT_EQ(0, store->getConfigSync(kFoo, &status_out, &value_out));
-  EXPECT_EQ(Status::OK, status_out);
+  EXPECT_EQ(Status::OK, store->getConfigSync(kFoo, &value_out));
   EXPECT_EQ(TestEntry(10, "foo123"), TestEntry::fromSerialized(value_out));
 
-  EXPECT_NE(0, store->getConfigSync(kBar, &status_out, &value_out));
-  EXPECT_EQ(Status::NOTFOUND, status_out);
+  EXPECT_EQ(Status::NOTFOUND, store->getConfigSync(kBar, &value_out));
 
   // update: blind overwrite
-  EXPECT_EQ(
-      0,
-      store->updateConfigSync(
-          kFoo, &status_out, TestEntry{12, "foo456"}.serialize(), folly::none));
-  EXPECT_EQ(Status::OK, status_out);
-  EXPECT_EQ(0, store->getConfigSync(kFoo, &status_out, &value_out));
-  EXPECT_EQ(Status::OK, status_out);
+  EXPECT_EQ(Status::OK,
+            store->updateConfigSync(
+                kFoo, TestEntry{12, "foo456"}.serialize(), folly::none));
+  EXPECT_EQ(Status::OK, store->getConfigSync(kFoo, &value_out));
   auto e = TestEntry::fromSerialized(value_out);
   EXPECT_EQ(TestEntry(12, "foo456"), e);
 
@@ -115,42 +125,43 @@ void runBasicTests(std::unique_ptr<NodesConfigStore> store) {
   MembershipVersion::Type next_version{e.version().val() + 1};
   version_t version_out = MembershipVersion::EMPTY_VERSION;
   value_out = "";
-  EXPECT_NE(
-      0,
+  EXPECT_EQ(
+      Status::VERSION_MISMATCH,
       store->updateConfigSync(kFoo,
-                              &status_out,
                               TestEntry{next_version, "foo789"}.serialize(),
                               prev_version,
                               &version_out,
                               &value_out));
-  EXPECT_EQ(Status::VERSION_MISMATCH, status_out);
   EXPECT_EQ(curr_version, version_out);
   EXPECT_EQ(TestEntry(12, "foo456"), TestEntry::fromSerialized(value_out));
-  EXPECT_NE(
-      0,
-      store->updateConfig(
-          kFoo,
-          TestEntry{next_version, "foo789"}.serialize(),
-          next_version,
-          [curr_version](Status status, version_t version, std::string value) {
-            EXPECT_EQ(Status::VERSION_MISMATCH, status);
-            EXPECT_EQ(curr_version, version);
-            EXPECT_EQ(
-                TestEntry(12, "foo456"), TestEntry::fromSerialized(value));
-          }));
+  EXPECT_EQ(0,
+            store->updateConfig(
+                kFoo,
+                TestEntry{next_version, "foo789"}.serialize(),
+                next_version,
+                [&b, curr_version](
+                    Status status, version_t version, std::string value) {
+                  EXPECT_EQ(Status::VERSION_MISMATCH, status);
+                  EXPECT_EQ(curr_version, version);
+                  EXPECT_EQ(TestEntry(12, "foo456"),
+                            TestEntry::fromSerialized(value));
+                  b.post();
+                }));
+  checkAndResetBaton(b);
 
   EXPECT_EQ(
-      0,
-      store->updateConfigSync(kFoo,
-                              &status_out,
-                              TestEntry{next_version, "foo789"}.serialize(),
-                              curr_version));
-  EXPECT_EQ(Status::OK, status_out);
-  EXPECT_EQ(0, store->getConfig(kFoo, [&](Status status, std::string value) {
-    EXPECT_EQ(Status::OK, status);
-    EXPECT_EQ(TestEntry(next_version, "foo789"),
-              TestEntry::fromSerialized(std::move(value)));
-  }));
+      Status::OK,
+      store->updateConfigSync(
+          kFoo, TestEntry{next_version, "foo789"}.serialize(), curr_version));
+  EXPECT_EQ(0,
+            store->getConfig(
+                kFoo, [&b, next_version](Status status, std::string value) {
+                  EXPECT_EQ(Status::OK, status);
+                  EXPECT_EQ(TestEntry(next_version, "foo789"),
+                            TestEntry::fromSerialized(std::move(value)));
+                  b.post();
+                }));
+  checkAndResetBaton(b);
 }
 
 void runMultiThreadedTests(std::unique_ptr<NodesConfigStore> store) {
@@ -167,15 +178,16 @@ void runMultiThreadedTests(std::unique_ptr<NodesConfigStore> store) {
     std::unique_lock<std::mutex> lk{m};
     cv.wait(lk, [&]() { return start; });
 
-    version_t base_version{0};
+    folly::Baton<> b;
     for (uint64_t k = 0; k < kIter; ++k) {
-      version_t next_version{base_version.val() + 1};
+      version_t base_version{k};
+      version_t next_version{k + 1};
       store->updateConfig(
           kFoo,
           TestEntry{next_version, "foo" + folly::to<std::string>(k + 1)}
               .serialize(),
           base_version,
-          [&base_version, &successCnt](
+          [&b, &base_version, &successCnt](
               Status status, version_t new_version, std::string value) {
             if (status == Status::OK) {
               successCnt++;
@@ -183,9 +195,11 @@ void runMultiThreadedTests(std::unique_ptr<NodesConfigStore> store) {
               EXPECT_EQ(Status::VERSION_MISMATCH, status);
               auto entry = TestEntry::fromSerialized(value);
               EXPECT_GT(entry.version(), base_version);
+              EXPECT_GT(new_version, base_version);
             }
-            base_version = new_version;
+            b.post();
           });
+      checkAndResetBaton(b);
     }
   };
   for (auto i = 0; i < kNumThreads; ++i) {
@@ -193,10 +207,9 @@ void runMultiThreadedTests(std::unique_ptr<NodesConfigStore> store) {
   }
 
   // write version 0 (i.e., ~provision)
-  Status status_out;
-  store->updateConfigSync(
-      kFoo, &status_out, TestEntry{0, "foobar"}.serialize(), folly::none);
-  ASSERT_EQ(Status::OK, status_out);
+  ASSERT_EQ(Status::OK,
+            store->updateConfigSync(
+                kFoo, TestEntry{0, "foobar"}.serialize(), folly::none));
 
   {
     std::lock_guard<std::mutex> g{m};
@@ -208,7 +221,7 @@ void runMultiThreadedTests(std::unique_ptr<NodesConfigStore> store) {
   }
 
   std::string value_out;
-  store->getConfigSync(kFoo, &status_out, &value_out);
+  EXPECT_EQ(Status::OK, store->getConfigSync(kFoo, &value_out));
   EXPECT_EQ(TestEntry(kIter, "foo" + folly::to<std::string>(kIter)),
             TestEntry::fromSerialized(std::move(value_out)));
   EXPECT_EQ(kIter, successCnt.load());

@@ -19,21 +19,18 @@ class InMemNodesConfigStore : public NodesConfigStore {
       : NodesConfigStore(std::move(f)) {}
   int getConfig(std::string key, value_callback_t cb) const override;
 
-  int getConfigSync(std::string key,
-                    Status* status_out,
-                    std::string* value_out) const override;
+  Status getConfigSync(std::string key, std::string* value_out) const override;
 
   int updateConfig(std::string key,
                    std::string value,
                    folly::Optional<version_t> base_version,
                    write_callback_t cb = {}) override;
 
-  int updateConfigSync(std::string key,
-                       Status* status_out,
-                       std::string value,
-                       folly::Optional<version_t> base_version,
-                       version_t* version_out = nullptr,
-                       std::string* value_out = nullptr) override;
+  Status updateConfigSync(std::string key,
+                          std::string value,
+                          folly::Optional<version_t> base_version,
+                          version_t* version_out = nullptr,
+                          std::string* value_out = nullptr) override;
 
  private:
   // TODO: switch to a more efficient map; avoid copying mapped_type; more

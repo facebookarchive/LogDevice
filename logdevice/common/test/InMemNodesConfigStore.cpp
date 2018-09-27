@@ -23,85 +23,71 @@ void setIfNotNull(std::decay_t<T>* output, T&& value) {
 
 int InMemNodesConfigStore::getConfig(std::string key,
                                      value_callback_t cb) const {
-  Status status;
   std::string value{};
-  int rv = getConfigSync(std::move(key), &status, &value);
-  if (rv != 0) {
-    return rv;
-  }
+  Status status = getConfigSync(std::move(key), &value);
 
   if (status == Status::OK || status == Status::NOTFOUND ||
-      status == Status::ACCESS) {
+      status == Status::ACCESS || status == Status::AGAIN) {
     cb(status, value);
+    return 0;
   }
-  return 0;
+
+  err = status;
+  return -1;
 }
 
-int InMemNodesConfigStore::getConfigSync(std::string key,
-                                         Status* status_out,
-                                         std::string* value_out) const {
+Status InMemNodesConfigStore::getConfigSync(std::string key,
+                                            std::string* value_out) const {
   {
     auto lockedConfigs = configs_.rlock();
     auto it = lockedConfigs->find(key);
     if (it == lockedConfigs->end()) {
-      // TODO: set err accordingly
-      setIfNotNull(status_out, Status::NOTFOUND);
-      return -1;
+      return Status::NOTFOUND;
     }
     if (value_out) {
       *value_out = it->second;
     }
   }
-  setIfNotNull(status_out, Status::OK);
-  return 0;
+  return Status::OK;
 }
 
 int InMemNodesConfigStore::updateConfig(std::string key,
                                         std::string value,
                                         folly::Optional<version_t> base_version,
                                         write_callback_t cb) {
-  Status status;
   version_t version;
   std::string value_out;
-  int rv = updateConfigSync(std::move(key),
-                            &status,
-                            std::move(value),
-                            base_version,
-                            &version,
-                            &value_out);
-  if (rv != 0) {
-    return rv;
-  }
+  Status status = updateConfigSync(
+      std::move(key), std::move(value), base_version, &version, &value_out);
 
   if (status == Status::OK || status == Status::NOTFOUND ||
       status == Status::VERSION_MISMATCH || status == Status::ACCESS ||
       status == Status::AGAIN) {
     cb(status, version, std::move(value_out));
+    return 0;
   }
-  return 0;
+
+  err = status;
+  return -1;
 }
 
-int InMemNodesConfigStore::updateConfigSync(
-    std::string key,
-    Status* status_out,
-    std::string value,
-    folly::Optional<version_t> base_version,
-    version_t* version_out,
-    std::string* value_out) {
+Status
+InMemNodesConfigStore::updateConfigSync(std::string key,
+                                        std::string value,
+                                        folly::Optional<version_t> base_version,
+                                        version_t* version_out,
+                                        std::string* value_out) {
   {
     auto lockedConfigs = configs_.wlock();
     auto it = lockedConfigs->find(key);
     if (it == lockedConfigs->end()) {
       if (base_version) {
-        // TODO: set err accordingly
-        setIfNotNull(status_out, Status::NOTFOUND);
-        return -1;
+        return Status::NOTFOUND;
       }
       setIfNotNull(version_out, extract_fn_(value));
       auto res = lockedConfigs->emplace(std::move(key), std::move(value));
       ld_assert(res.second); // inserted
-      setIfNotNull(status_out, Status::OK);
-      return 0;
+      return Status::OK;
     }
 
     auto curr_version = extract_fn_(it->second);
@@ -109,14 +95,12 @@ int InMemNodesConfigStore::updateConfigSync(
       // conditional update version mismatch
       // TODO: set err accordingly
       setIfNotNull(version_out, curr_version);
-      setIfNotNull(status_out, Status::VERSION_MISMATCH);
       setIfNotNull(value_out, it->second);
-      return -1;
+      return Status::VERSION_MISMATCH;
     }
     setIfNotNull(version_out, extract_fn_(value));
     it->second = std::move(value);
   }
-  setIfNotNull(status_out, Status::OK);
-  return 0;
+  return Status::OK;
 }
 }}} // namespace facebook::logdevice::configuration

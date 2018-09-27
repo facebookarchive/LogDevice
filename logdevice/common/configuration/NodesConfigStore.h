@@ -52,47 +52,49 @@ class NodesConfigStore {
    *
    * @param key: key of the config
    * @param cb:
-   *   callback void(Status, std::string value) that will be
-   *   invoked if the status is OK, NOTFOUND, ACCESS, or AGAIN. If status is OK,
-   *   cb will be invoked with the value. Otherwise, the value parameter is
-   *   meaningless.
+   *   callback void(Status, std::string value) that will be invoked with
+   *   status OK, NOTFOUND, ACCESS, or AGAIN. If status is OK, cb will be
+   *   invoked with the value. Otherwise, the value parameter is meaningless
+   *   (but default-constructed).
    *
    * @return
-   *   0 on success;
-   *   -1 on error
+   *   0 on success, callback will be invoked;
+   *   -1 on error, err will be set accordingly, possibly one of:
+   *     INVALID_PARAM
+   *     INVALID_CONFIG
    *
    * Note that the reads do not need to be linearizable with the writes.
    */
   virtual int getConfig(std::string key, value_callback_t cb) const = 0;
+
   /*
    * synchronous read
    *
    * @param key: key of the config
-   * @param status_out: status is one of:
-   *   OK
-   *   NOTFOUND
-   *   ACCESS
-   *   AGAIN
    * @param value_out: the config (string)
    *   If the status is OK, value will be set to the returned config. Otherwise,
    *   it will be untouched.
    *
-   * @return
-   *   0 on success;
-   *   -1 on error
+   * @return status is one of:
+   *   OK // == 0
+   *   NOTFOUND
+   *   ACCESS
+   *   AGAIN
+   *   INVALID_PARAM
+   *   INVALID_CONFIG
    */
-  virtual int getConfigSync(std::string key,
-                            Status* status_out,
-                            std::string* value_out) const = 0;
+  virtual Status getConfigSync(std::string key,
+                               std::string* value_out) const = 0;
 
   /*
-   * NodesConfigStore provides strict conditional update semantics--it will
-   * only update the value for a key if the base_version matches the latest
-   * version in the store.
+   * NodesConfigStore provides strict conditional update semantics--it will only
+   * update the value for a key if the base_version matches the latest version
+   * in the store.
    *
    * @param key: key of the config
-   * @param value: value to be stored. Note that the callsite need not guarantee
-   * the validity of the underlying buffer till callback is invoked.
+   * @param value:
+   *   value to be stored. Note that the callsite need not guarantee the
+   *   validity of the underlying buffer till callback is invoked.
    * @param base_version:
    *   base_version == folly::none =>
    *     overwrites the corresponding config for key with value, regardless of
@@ -110,14 +112,18 @@ class NodesConfigStore {
    *     VERSION_MISMATCH
    *     ACCESS
    *     AGAIN
-   *   If status is OK, cb will be invoked with the version
-   *   of the newly written config. If status is VERSION_MISMATCH, cb will be
-   *   invoked with the version that caused the mismatch as well as the existing
-   *   config. Otherwise, the version and value parameter(s) are undefined.
+   *   If status is OK, cb will be invoked with the version of the newly written
+   *   config. If status is VERSION_MISMATCH, cb will be invoked with the
+   *   version that caused the mismatch as well as the existing config, if
+   *   available (i.e., always check in the callback whether version is
+   *   EMPTY_VERSION). Otherwise, the version and value parameter(s) are
+   *   meaningless (default-constructed).
    *
    * @return
-   *   0 on success;
-   *   -1 on error
+   *   0 on success, callback will be invoked;
+   *   -1 on error, err will be set accordingly, possibly one of:
+   *     INVALID_PARAM
+   *     INVALID_CONFIG
    */
   virtual int updateConfig(std::string key,
                            std::string value,
@@ -129,12 +135,6 @@ class NodesConfigStore {
    *
    * See params for updateConfig()
    *
-   * @param status: status will be one of:
-   *   OK
-   *   NOTFOUND // only possible when base_version.hasValue()
-   *   VERSION_MISMATCH
-   *   ACCESS
-   *   AGAIN
    * @param version_out:
    *   If not nullptr and status is OK or VERSION_MISMATCH, *version_out
    *   will be set to the version of the newly written config or the version
@@ -143,16 +143,20 @@ class NodesConfigStore {
    * @param value_out:
    *   If not nullptr and status is VERSION_MISMATCH, *value_out will be set to
    *   the existing config. Otherwise, *value_out is untouched.
-   * @return
-   *   0 on success;
-   *   -1 on error
+   * @return status: status will be one of:
+   *   OK // == 0
+   *   NOTFOUND // only possible when base_version.hasValue()
+   *   VERSION_MISMATCH
+   *   ACCESS
+   *   AGAIN
+   *   INVALID_PARAM
+   *   INVALID_CONFIG
    */
-  virtual int updateConfigSync(std::string key,
-                               Status* status_out,
-                               std::string value,
-                               folly::Optional<version_t> base_version,
-                               version_t* version_out = nullptr,
-                               std::string* value_out = nullptr) = 0;
+  virtual Status updateConfigSync(std::string key,
+                                  std::string value,
+                                  folly::Optional<version_t> base_version,
+                                  version_t* version_out = nullptr,
+                                  std::string* value_out = nullptr) = 0;
 
   // TODO: add subscription API
 
