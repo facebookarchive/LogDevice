@@ -165,10 +165,11 @@ class RateLimiterBase {
     const Duration time_cost = std::chrono::duration_cast<Duration>(
         std::chrono::duration<double>(cost / limit_per_second));
 
-    auto next = next_allowed_time.load();
+    Duration next;
     TimePoint new_next;
     Duration res;
     do {
+      next = next_allowed_time.load();
       res = TimePoint(next) - now; // how long to wait
       if (res.count() <= 0) {
         // No waiting needed.
