@@ -326,6 +326,11 @@ void ClientReadStream::getDebugInfo(InfoClientReadStreamsTable& table) const {
         table.set<18>(val.timestamp_lagged_delta.value());
       }
     }
+    table.set<19>(
+        to_msec((readers_flow_tracer_->last_time_lagging_.time_since_epoch())));
+    table.set<20>(
+        to_msec((readers_flow_tracer_->last_time_stuck_.time_since_epoch())));
+    table.set<21>((readers_flow_tracer_->lastReportedStatePretty()));
   }
 }
 

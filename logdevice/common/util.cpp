@@ -492,18 +492,6 @@ int get_io_priority_of_this_thread(std::pair<int, int>* out_prio) {
   return 0;
 }
 
-int64_t usec_since(const std::chrono::steady_clock::time_point& start) {
-  return to_usec(std::chrono::steady_clock::now() - start).count();
-}
-
-int64_t msec_since(const std::chrono::steady_clock::time_point& start) {
-  return to_msec(std::chrono::steady_clock::now() - start).count();
-}
-
-int64_t sec_since(const std::chrono::steady_clock::time_point& start) {
-  return to_sec(std::chrono::steady_clock::now() - start).count();
-}
-
 std::string lowerCase(std::string s) {
   std::transform(s.begin(), s.end(), s.begin(), ::tolower);
   return s;

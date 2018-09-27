@@ -289,7 +289,7 @@ void ClientReadersFlowTracer::updateTimeStuck(lsn_t tail_lsn, Status st) {
   if (!is_stuck) {
     last_time_stuck_ = TimePoint::max();
   } else if (last_time_stuck_ == TimePoint::max()) {
-    last_time_stuck_ = SteadyClock::now();
+    last_time_stuck_ = SystemClock::now();
   }
   maybeBumpStats();
 }
@@ -305,13 +305,13 @@ void ClientReadersFlowTracer::updateTimeLagging(Status st) {
   if (!is_lagging) {
     last_time_lagging_ = TimePoint::max();
   } else if (last_time_stuck_ == TimePoint::max()) {
-    last_time_lagging_ = SteadyClock::now();
+    last_time_lagging_ = SystemClock::now();
   }
   maybeBumpStats();
 }
 
 void ClientReadersFlowTracer::maybeBumpStats(bool force_healthy) {
-  auto now = SteadyClock::now();
+  auto now = SystemClock::now();
   State state_to_report;
 
   if (last_time_stuck_ != TimePoint::max()
@@ -349,6 +349,19 @@ void ClientReadersFlowTracer::maybeBumpStats(bool force_healthy) {
     update_counter_for_state(state_to_report, +1);
     last_reported_state_ = state_to_report;
   }
+}
+
+std::string ClientReadersFlowTracer::lastReportedStatePretty() const {
+  switch (last_reported_state_) {
+    case State::HEALTHY:
+      return "healthy";
+    case State::STUCK:
+      return "stuck";
+    case State::LAGGING:
+      return "lagging";
+  }
+  ld_check(false);
+  return "";
 }
 
 }} // namespace facebook::logdevice

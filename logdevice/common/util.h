@@ -501,9 +501,20 @@ std::chrono::seconds to_sec(const T& value) {
   return std::chrono::duration_cast<std::chrono::seconds>(value);
 }
 
-int64_t usec_since(const std::chrono::steady_clock::time_point& start);
-int64_t msec_since(const std::chrono::steady_clock::time_point& start);
-int64_t sec_since(const std::chrono::steady_clock::time_point& start);
+template <typename TimePoint>
+int64_t usec_since(const TimePoint& start) {
+  return to_usec(TimePoint::clock::now() - start).count();
+}
+
+template <typename TimePoint>
+int64_t msec_since(const TimePoint& start) {
+  return to_msec(TimePoint::clock::now() - start).count();
+}
+
+template <typename TimePoint>
+int64_t sec_since(const TimePoint& start) {
+  return to_sec(TimePoint::clock::now() - start).count();
+}
 
 // Erases a single element of the vector by swapping it with the last element
 // first. Note that this will change the order of the elements in the vector

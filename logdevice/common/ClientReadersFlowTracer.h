@@ -34,8 +34,8 @@ class ClientReadersFlowTracer
     folly::Optional<int64_t> timestamp_lagged;
     folly::Optional<int64_t> timestamp_lagged_delta;
   };
-  using SteadyClock = std::chrono::steady_clock;
-  using TimePoint = SteadyClock::time_point;
+  using SystemClock = std::chrono::system_clock;
+  using TimePoint = SystemClock::time_point;
 
   ClientReadersFlowTracer(std::shared_ptr<TraceLogger> logger,
                           ClientReadStream* owner);
@@ -52,6 +52,7 @@ class ClientReadersFlowTracer
   }
 
   void onSettingsUpdated();
+  std::string lastReportedStatePretty() const;
 
  private:
   void onTimerTriggered();
@@ -85,6 +86,7 @@ class ClientReadersFlowTracer
   std::unique_ptr<LibeventTimer> timer_;
 
   const ClientReadStream* owner_;
+  friend class ClientReadStream;
 };
 
 }} // namespace facebook::logdevice
