@@ -99,9 +99,6 @@ class LocalLogsConfig : public LogsConfig {
     return copyLocal();
   }
 
-  // get raw pointer into the struct that LocalLogsConfig owns
-  const LogGroupNode* getLogGroupByIDRaw(logid_t id) const;
-
   const LogGroupInDirectory* getLogGroupInDirectoryByIDRaw(logid_t id) const;
 
   folly::Optional<std::string> getLogGroupPath(logid_t id) const;

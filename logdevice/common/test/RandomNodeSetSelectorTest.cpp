@@ -73,7 +73,8 @@ static void verify_result(NodeSetSelector* selector,
                                std::less_equal<ShardID>()));
 
     // must comply with the config
-    const LogsConfig::LogGroupNode* logcfg = config->getLogGroupByIDRaw(logid);
+    const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
+        config->getLogGroupByIDShared(logid);
     ASSERT_NE(nullptr, logcfg);
     const auto& attrs = logcfg->attrs();
     const auto& all_nodes = config->serverConfig()->getNodes();

@@ -238,8 +238,8 @@ void RocksDBTablePropertiesCollector::flushCurrentLog() {
 
   if (config_) {
     std::chrono::seconds backlog;
-    const LogsConfig::LogGroupNode* log_config =
-        config_->getLogGroupByIDRaw(current_log_);
+    const std::shared_ptr<LogsConfig::LogGroupNode> log_config =
+        config_->getLogGroupByIDShared(current_log_);
     if (!log_config) {
       backlog = std::chrono::seconds(0);
     } else if (log_config->attrs().backlogDuration().value()) {

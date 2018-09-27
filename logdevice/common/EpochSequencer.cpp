@@ -340,7 +340,7 @@ void EpochSequencer::createOrUpdateCopySetManager(
         metadata->shards, log_id_, NodeSetState::HealthCheck::ENABLED);
   }
 
-  auto log_group = cfg->getLogGroupByIDRaw(log_id_);
+  auto log_group = cfg->getLogGroupByIDShared(log_id_);
 
   copyset_manager_.update(CopySetSelectorFactory::createManager(
       log_id_,

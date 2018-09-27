@@ -81,9 +81,8 @@ void log_trim_movement(ServerProcessor& processor,
   entry.host_address = node_config->address.toStringNoPort();
   std::shared_ptr<configuration::LocalLogsConfig> logs_config =
       config->localLogsConfig();
-
   if (!MetaDataLog::isMetaDataLog(log_id)) {
-    auto log_group = logs_config->getLogGroupByIDRaw(log_id);
+    auto log_group = logs_config->getLogGroupByIDShared(log_id);
     if (log_group) {
       entry.log_group = log_group->name();
       auto retention = *log_group->attrs().backlogDuration();

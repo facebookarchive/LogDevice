@@ -106,7 +106,8 @@ int AllSequencers::activateSequencer(
   ld_check(!MetaDataLog::isMetaDataLog(logid));
 
   std::shared_ptr<Configuration> cfg = updateable_config_->get();
-  const LogsConfig::LogGroupNode* logcfg = cfg->getLogGroupByIDRaw(logid);
+  const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
+      cfg->getLogGroupByIDShared(logid);
   if (!logcfg) {
     err = E::NOTFOUND;
     return -1;
@@ -829,8 +830,8 @@ bool AllSequencers::sequencerShouldReprovisionMetaData(
     return false;
   }
 
-  const LogsConfig::LogGroupNode* logcfg =
-      config->getLogGroupByIDRaw(seq.getLogID());
+  const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
+      config->getLogGroupByIDShared(seq.getLogID());
   if (!logcfg) {
     // no need to reprovision non-existent logs
     return false;
@@ -867,8 +868,8 @@ bool AllSequencers::sequencerShouldReactivate(
     return false;
   }
 
-  const LogsConfig::LogGroupNode* logcfg =
-      config->getLogGroupByIDRaw(seq.getLogID());
+  const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
+      config->getLogGroupByIDShared(seq.getLogID());
   if (!logcfg) {
     // logid no longer in config, do not reactivate
     return false;

@@ -498,8 +498,7 @@ TEST_F(EpochMetaDataTest, EpochMetaDataUpdaterTest) {
   ASSERT_NE(nullptr, cfg.get());
   ASSERT_NE(nullptr, cfg.get()->serverConfig());
   ASSERT_NE(nullptr, cfg.get()->logsConfig());
-  LogsConfig::LogGroupNode* logcfg = const_cast<LogsConfig::LogGroupNode*>(
-      cfg->getLogGroupByIDRaw(logid_t(2)));
+  auto logcfg = cfg->getLogGroupByIDShared(logid_t(2));
   LogsConfig::LogAttributes& attrs =
       const_cast<LogsConfig::LogAttributes&>(logcfg->attrs());
   auto selector = std::make_shared<TestNodeSetSelector>();
@@ -589,8 +588,7 @@ TEST_F(EpochMetaDataTest, EpochMetaDataUpdateToNextEpochTest) {
   ASSERT_NE(nullptr, cfg.get());
   ASSERT_NE(nullptr, cfg.get()->serverConfig());
   ASSERT_NE(nullptr, cfg.get()->logsConfig());
-  LogsConfig::LogGroupNode* logcfg = const_cast<LogsConfig::LogGroupNode*>(
-      cfg->getLogGroupByIDRaw(logid_t(2)));
+  auto logcfg = cfg->getLogGroupByIDShared(logid_t(2));
   LogsConfig::LogAttributes& attrs =
       const_cast<LogsConfig::LogAttributes&>(logcfg->attrs());
   EpochMetaDataUpdateToNextEpoch updater(cfg);

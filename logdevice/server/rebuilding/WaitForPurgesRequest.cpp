@@ -46,8 +46,8 @@ void WaitForPurgesRequest::executionBody() {
 }
 
 void WaitForPurgesRequest::tryAgain() {
-  const auto* logcfg =
-      Worker::getConfig()->getLogGroupByIDRaw(MetaDataLog::dataLogID(logid_));
+  const auto logcfg = Worker::getConfig()->getLogGroupByIDShared(
+      MetaDataLog::dataLogID(logid_));
   if (!logcfg) {
     // The log was removed from the config.
     onComplete(E::NOTFOUND);

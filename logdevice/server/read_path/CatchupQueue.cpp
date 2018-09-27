@@ -648,7 +648,7 @@ void CatchupQueueDependencies::invalidateIterators(ClientID client_id) {
 folly::Optional<std::chrono::milliseconds>
 CatchupQueueDependencies::getDeliveryLatency(logid_t log_id) {
   auto config = Worker::getConfig();
-  auto log = config->getLogGroupByIDRaw(log_id);
+  auto log = config->getLogGroupByIDShared(log_id);
   return log ? log->attrs().deliveryLatency().value()
              : folly::Optional<std::chrono::milliseconds>();
 }

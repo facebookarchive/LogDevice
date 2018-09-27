@@ -549,9 +549,10 @@ TEST_P(ReadingIntegrationTest, PurgingSmokeTest) {
   ld_check(config->serverConfig()->getNode(1)->isReadableStorageNode());
   ld_check(config->serverConfig()->getNode(2)->isReadableStorageNode());
   ld_check(config->serverConfig()->getNode(3)->isReadableStorageNode());
-  ld_check(
-      config->getLogGroupByIDRaw(LOG_ID)->attrs().replicationFactor().value() ==
-      2);
+  ld_check(config->getLogGroupByIDShared(LOG_ID)
+               ->attrs()
+               .replicationFactor()
+               .value() == 2);
 
   std::shared_ptr<Client> client = cluster->createClient();
 

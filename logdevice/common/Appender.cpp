@@ -733,7 +733,7 @@ int Appender::start(std::shared_ptr<EpochSequencer> epoch_sequencer,
 
   biggest_replication_scope_ = getCurrentBiggestReplicationScope();
 
-  const auto* logcfg = cfg->getLogGroupByIDRaw(store_hdr_.rid.logid);
+  const auto logcfg = cfg->getLogGroupByIDShared(store_hdr_.rid.logid);
 
   recipients_.reset(replication, getExtras());
 

@@ -953,7 +953,7 @@ void RebuildingCoordinator::onFinishedRetrievingPlans(uint32_t shard_idx,
   auto config = config_->get();
   for (auto it = shard_state.logsWithPlan.begin();
        it != shard_state.logsWithPlan.end();) {
-    if (!config->getLogGroupByIDRaw(it->first)) {
+    if (!config->getLogGroupByIDShared(it->first)) {
       it = shard_state.logsWithPlan.erase(it);
     } else {
       ++it;

@@ -297,16 +297,17 @@ Message::Disposition PurgeCoordinator::onReceived(RELEASE_Message* msg,
   RecordCache* cache = log_state->record_cache_.get();
 
   // Decide whether to update the mutable per-epoch log metadata, and whether
-  // or not to broadcast the release request immediately. getLogGroupByIDRaw()
-  // may be nullptr in case the log is unknown or the config is not yet
-  // available (may happen during startup). In that case, we assume that
-  // mutable per-epoch log metadata is disabled (the default). Nothing bad
-  // can come from that except a brief and unlikely loss of read availability.
+  // or not to broadcast the release request immediately.
+  // getLogGroupByIDShared() may be nullptr in case the log is unknown or the
+  // config is not yet available (may happen during startup). In that case, we
+  // assume that mutable per-epoch log metadata is disabled (the default).
+  // Nothing bad can come from that except a brief and unlikely loss of read
+  // availability.
   bool update_metadata;
   bool do_broadcast;
-  const LogsConfig::LogGroupNode* log =
+  const std::shared_ptr<LogsConfig::LogGroupNode> log =
       header.release_type == ReleaseType::PER_EPOCH
-      ? w->getConfiguration()->getLogGroupByIDRaw(header.rid.logid)
+      ? w->getConfiguration()->getLogGroupByIDShared(header.rid.logid)
       : nullptr;
   if (log && log->attrs().mutablePerEpochLogMetadataEnabled().value()) {
     // Config available, per-epoch release, and mutable per-epoch log metadata

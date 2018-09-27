@@ -125,7 +125,7 @@ Message::Disposition SEAL_onReceived(SEAL_Message* msg, const Address& from) {
   }
 
   bool tail_optimized = false;
-  auto log = config->getLogGroupByIDRaw(header.log_id);
+  auto log = config->getLogGroupByIDShared(header.log_id);
   if (!log) {
     RATELIMIT_ERROR(std::chrono::seconds(10),
                     10,

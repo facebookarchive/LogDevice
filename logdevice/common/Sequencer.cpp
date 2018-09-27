@@ -1250,7 +1250,8 @@ std::shared_ptr<EpochSequencer>
 Sequencer::createEpochSequencer(epoch_t epoch,
                                 std::unique_ptr<EpochMetaData> metadata) {
   auto cfg = getClusterConfig();
-  const LogsConfig::LogGroupNode* logcfg = cfg->getLogGroupByIDRaw(log_id_);
+  const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
+      cfg->getLogGroupByIDShared(log_id_);
   if (!logcfg) {
     RATELIMIT_WARNING(std::chrono::seconds(5),
                       5,
@@ -1656,7 +1657,8 @@ void Sequencer::noteConfigurationChanged(std::shared_ptr<Configuration> cfg,
   // Note: nodeset and replication factor are updated upon sequencer
   // activation, with the value from the epochstore. Here we only update
   // properties that do not require an epoch bump.
-  const LogsConfig::LogGroupNode* log = cfg->getLogGroupByIDRaw(log_id_);
+  const std::shared_ptr<LogsConfig::LogGroupNode> log =
+      cfg->getLogGroupByIDShared(log_id_);
   if (!log) {
     // Handle deletion of logs. Drain/abort all epoches and put the Sequencer
     // into UNAVAILABLE state.

@@ -31,7 +31,8 @@ class SelectAllShardsNodeSetSelector : public NodeSetSelector {
       const StorageSet* prev,
       const Options* options = nullptr /* ignored */
       ) override {
-    const LogsConfig::LogGroupNode* logcfg = cfg->getLogGroupByIDRaw(log_id);
+    const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
+        cfg->getLogGroupByIDShared(log_id);
     if (!logcfg) {
       err = E::NOTFOUND;
       return std::make_tuple(Decision::FAILED, nullptr);

@@ -411,7 +411,6 @@ TEST(ConfigurationTest, SimpleValid) {
     EXPECT_EQ("ash.ash2.07.a.b", node.locationStr());
   }
 
-  EXPECT_EQ(nullptr, config->getLogGroupByIDRaw(logid_t(7)));
   EXPECT_EQ(nullptr, config->getLogGroupByIDShared(logid_t(7)));
   EXPECT_FALSE(config->logsConfig()->logExists(logid_t(7)));
   {
@@ -427,7 +426,8 @@ TEST(ConfigurationTest, SimpleValid) {
     EXPECT_EQ(nullptr, async_log_cfg);
   }
 
-  const LogsConfig::LogGroupNode* log = config->getLogGroupByIDRaw(logid_t(3));
+  const std::shared_ptr<LogsConfig::LogGroupNode> log =
+      config->getLogGroupByIDShared(logid_t(3));
   EXPECT_TRUE(log);
   auto log_shared = config->getLogGroupByIDShared(logid_t(3));
   ASSERT_NE(log, nullptr);
@@ -956,7 +956,7 @@ TEST(ConfigurationTest, Defaults) {
       Configuration::fromJsonFile(TEST_CONFIG_FILE("defaults.conf")));
 
   ASSERT_NE(nullptr, config);
-  const LogsConfig::LogGroupNode* log;
+  std::shared_ptr<LogsConfig::LogGroupNode> log;
 
   // rate with no default override in cfg at all
   ASSERT_FALSE(config->serverConfig()
@@ -964,7 +964,7 @@ TEST(ConfigurationTest, Defaults) {
                    .hasValue());
   EXPECT_DOUBLE_EQ(0.1, config->serverConfig()->getDefaultSamplePercentage());
 
-  log = config->getLogGroupByIDRaw(logid_t(1));
+  log = config->getLogGroupByIDShared(logid_t(1));
   ASSERT_NE(nullptr, log);
   const auto& attrs = log->attrs();
   ASSERT_TRUE(config->logsConfig()->logExists(logid_t(1)));
@@ -983,13 +983,13 @@ TEST(ConfigurationTest, Defaults) {
   EXPECT_EQ(91, range.first.val_);
   EXPECT_EQ(9911, range.second.val_);
 
-  log = config->getLogGroupByIDRaw(logid_t(2));
+  log = config->getLogGroupByIDShared(logid_t(2));
   const auto& attrs2 = log->attrs();
   EXPECT_TRUE(attrs2.backlogDuration().value().hasValue());
   EXPECT_EQ(std::chrono::seconds(3600 * 24 * 4),
             attrs2.backlogDuration().value().value());
 
-  log = config->getLogGroupByIDRaw(logid_t(500));
+  log = config->getLogGroupByIDShared(logid_t(500));
   const auto& attrs3 = log->attrs();
   EXPECT_EQ(3, *attrs3.replicationFactor());
   EXPECT_EQ(0, *attrs3.extraCopies());
@@ -1695,13 +1695,14 @@ TEST(ConfigurationTest, CustomFields) {
       Configuration::fromJsonFile(TEST_CONFIG_FILE("custom_fields.conf")));
   ASSERT_NE(nullptr, config);
 
-  const LogsConfig::LogGroupNode* log = config->getLogGroupByIDRaw(logid_t(1));
+  std::shared_ptr<LogsConfig::LogGroupNode> log =
+      config->getLogGroupByIDShared(logid_t(1));
   ASSERT_NE(nullptr, log);
   ASSERT_EQ(1, log->attrs().extras().value().size());
 
   ASSERT_EQ("custom_value", log->attrs().extras().value().at("custom_key"));
 
-  log = config->getLogGroupByIDRaw(logid_t(2));
+  log = config->getLogGroupByIDShared(logid_t(2));
   ASSERT_NE(nullptr, log);
   ASSERT_EQ(1, log->attrs().extras().value().size());
   ASSERT_EQ("default_value", log->attrs().extras().value().at("custom_key"));
@@ -1816,7 +1817,8 @@ TEST(ConfigurationTest, SecurityAndPermissionInfo) {
             config->serverConfig()->getPermissionCheckerType());
 
   ASSERT_TRUE(config->logsConfig()->logExists(logid_t(1)));
-  const LogsConfig::LogGroupNode* log = config->getLogGroupByIDRaw(logid_t(1));
+  const std::shared_ptr<LogsConfig::LogGroupNode> log =
+      config->getLogGroupByIDShared(logid_t(1));
   ASSERT_NE(nullptr, log);
   const auto& permissions = log->attrs().permissions().value();
 
@@ -1857,8 +1859,8 @@ TEST(ConfigurationTest, SecurityAndPermissionInfo) {
   // check that for logs that did not set any permissions, default permissions
   // propergate to them
   ASSERT_TRUE(config->logsConfig()->logExists(logid_t(11)));
-  const LogsConfig::LogGroupNode* log2 =
-      config->getLogGroupByIDRaw(logid_t(11));
+  const std::shared_ptr<LogsConfig::LogGroupNode> log2 =
+      config->getLogGroupByIDShared(logid_t(11));
   ASSERT_NE(nullptr, log2);
 
   const auto& permissions2 = log2->attrs().permissions().value();
@@ -2266,7 +2268,8 @@ TEST(ConfigurationTest, ACLS) {
   std::shared_ptr<Configuration> config(Configuration::fromJsonFile(
       TEST_CONFIG_FILE("conf_permission_acl_test.conf")));
   ASSERT_NE(nullptr, config);
-  const LogsConfig::LogGroupNode* log = config->getLogGroupByIDRaw(logid_t(1));
+  const std::shared_ptr<LogsConfig::LogGroupNode> log =
+      config->getLogGroupByIDShared(logid_t(1));
   ASSERT_NE(log, nullptr);
   const Configuration::LogAttributes& log_attrs = log->attrs();
 
@@ -2286,7 +2289,8 @@ TEST(ConfigurationTest, SequencerAffinity) {
   std::shared_ptr<Configuration> config = Configuration::fromJsonFile(
       TEST_CONFIG_FILE("sequencer_affinity_2nodes.conf"));
   ASSERT_NE(config, nullptr);
-  const LogsConfig::LogGroupNode* log = config->getLogGroupByIDRaw(logid_t(1));
+  const std::shared_ptr<LogsConfig::LogGroupNode> log =
+      config->getLogGroupByIDShared(logid_t(1));
   ASSERT_NE(log, nullptr);
   const Configuration::LogAttributes& log_attrs = log->attrs();
   ASSERT_TRUE(log_attrs.sequencerAffinity().hasValue());

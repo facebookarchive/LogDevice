@@ -486,7 +486,7 @@ int LogRecoveryRequest::createEpochRecoveryMachines(
   ld_check(start <= until);
   ld_check(metadata.isValid());
   auto config = Worker::onThisThread()->getConfig();
-  auto log = config->getLogGroupByIDRaw(log_id_);
+  auto log = config->getLogGroupByIDShared(log_id_);
   if (!log) {
     // config has changed since the time this Sequencer was activated
     // log_id_ is no longer there.
@@ -821,7 +821,7 @@ void LogRecoveryRequest::sealLog() {
   auto config = Worker::onThisThread()->getConfig();
   const auto& cluster_nodes = config->serverConfig()->getNodes();
 
-  auto log = config->getLogGroupByIDRaw(log_id_);
+  auto log = config->getLogGroupByIDShared(log_id_);
   if (!log) {
     // config has changed since the time this Sequencer was activated
     // log_id_ is no longer there.

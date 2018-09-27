@@ -114,17 +114,6 @@ class Configuration {
   folly::Optional<std::string> getLogGroupPath(logid_t id) const;
 
   /**
-   * Looks up a log by ID and returns a raw pointer to the LogGroupNode object.
-   * This method should only be used when we can ensure the LogsConfig is local
-   * i.e. on the server and in tests.
-   *
-   * @return On success, returns a pointer to a LogGroupNode object contained in
-   *         this config.  On failure, returns nullptr and sets err to:
-   *           NOTFOUND       no log with given ID appears in config
-   */
-  const LogsConfig::LogGroupNode* getLogGroupByIDRaw(logid_t id) const;
-
-  /**
    * Looks up a log by ID and returns a shared pointer to the LogGroupNode
    * object. Use this on the client when you don't care about blocking the
    * current thread.  Note that this method should not be called on a worker

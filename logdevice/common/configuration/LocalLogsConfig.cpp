@@ -63,22 +63,6 @@ LocalLogsConfig::fromJson(const folly::dynamic& parsed,
   return local_logs_config;
 }
 
-const LogGroupNode* FOLLY_NULLABLE
-LocalLogsConfig::getLogGroupByIDRaw(logid_t id) const {
-  const logsconfig::LogGroupInDirectory* res =
-      config_tree_->getLogGroupByID(id);
-  if (res) {
-    return res->log_group.get();
-  }
-
-  res = internal_logs_.getLogGroupByID(id);
-  if (res) {
-    return res->log_group.get();
-  }
-
-  return nullptr;
-}
-
 folly::Optional<std::string>
 LocalLogsConfig::getLogGroupPath(logid_t id) const {
   if (MetaDataLog::isMetaDataLog(id)) {

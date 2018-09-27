@@ -45,7 +45,8 @@ bool EpochMetaData::validWithConfig(
     ld_error("Invalid epoch metadata for log %lu", log_id.val_);
     return false;
   }
-  const LogsConfig::LogGroupNode* logcfg = cfg->getLogGroupByIDRaw(log_id);
+  const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
+      cfg->getLogGroupByIDShared(log_id);
   if (!logcfg) {
     ld_error("No log config for log %lu", log_id.val_);
     return false;
@@ -89,7 +90,8 @@ bool EpochMetaData::matchesConfig(logid_t log_id,
   if (!validWithConfig(log_id, cfg)) {
     return false;
   }
-  const LogsConfig::LogGroupNode* logcfg = cfg->getLogGroupByIDRaw(log_id);
+  const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
+      cfg->getLogGroupByIDShared(log_id);
   if (!logcfg) {
     ld_log(debug_level, "No log config for log %lu", log_id.val_);
     return false;

@@ -394,8 +394,8 @@ void RocksDBCompactionFilter::getTrimInfo(logid_t log_id) {
 
   // TODO: right now, for non-partitioned stores, if a log is removed,
   //       its data will never be deleted.
-  const LogsConfig::LogGroupNode* log =
-      current_config->getLogGroupByIDRaw(log_id);
+  const std::shared_ptr<LogsConfig::LogGroupNode> log =
+      current_config->getLogGroupByIDShared(log_id);
   folly::Optional<std::chrono::seconds> backlog =
       log ? log->attrs().backlogDuration().value() : folly::none;
   // Don't trim metadata logs based on time.

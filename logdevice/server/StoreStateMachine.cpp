@@ -545,7 +545,7 @@ void StoreStateMachine::storeAndForward() {
   // written out.  This can happen if records are received or released out of
   // order.)
   std::shared_ptr<Configuration> cfg = worker->getConfiguration();
-  const auto* log_config = cfg->getLogGroupByIDRaw(log_id);
+  const auto log_config = cfg->getLogGroupByIDShared(log_id);
   bool merge_mutable_per_epoch_log_metadata = log_config &&
       log_config->attrs().mutablePerEpochLogMetadataEnabled().value();
   if (merge_mutable_per_epoch_log_metadata) {

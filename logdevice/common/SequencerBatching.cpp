@@ -45,7 +45,8 @@ static BufferedWriter::LogOptions get_log_options(logid_t log_id) {
   auto config = Worker::getConfig();
   const auto& settings = Worker::settings();
 
-  const LogsConfig::LogGroupNode* group = config->getLogGroupByIDRaw(log_id);
+  const std::shared_ptr<LogsConfig::LogGroupNode> group =
+      config->getLogGroupByIDShared(log_id);
 
   if (!group) {
     opts.time_trigger = settings.sequencer_batching_time_trigger;
@@ -148,8 +149,8 @@ static int prepare_batch(logid_t log_id,
 
 bool SequencerBatching::buffer(logid_t log_id,
                                std::unique_ptr<Appender>& appender_in) {
-  auto config = Worker::getConfig();
-  const LogsConfig::LogGroupNode* group = config->getLogGroupByIDRaw(log_id);
+  const std::shared_ptr<LogsConfig::LogGroupNode> group =
+      Worker::getConfig()->getLogGroupByIDShared(log_id);
 
   const bool enable_batching = group
       ? group->attrs().sequencerBatching().getValue(
@@ -230,9 +231,8 @@ bool SequencerBatching::buffer(logid_t log_id,
 }
 
 bool SequencerBatching::shouldPassthru(const Appender& appender) const {
-  auto config = Worker::getConfig();
-  const LogsConfig::LogGroupNode* group =
-      config->getLogGroupByIDRaw(appender.getLogID());
+  const std::shared_ptr<LogsConfig::LogGroupNode> group =
+      Worker::getConfig()->getLogGroupByIDShared(appender.getLogID());
 
   const auto passthru_threshold = group
       ? group->attrs().sequencerBatchingPassthruThreshold().getValue(

@@ -1764,7 +1764,7 @@ void LogRebuilding::deleteThis() {
 std::shared_ptr<ReplicationScheme>
 LogRebuilding::createReplicationScheme(EpochMetaData metadata) {
   auto cfg = Worker::getConfig();
-  auto log_group = cfg->getLogGroupByIDRaw(logid_);
+  auto log_group = cfg->getLogGroupByIDShared(logid_);
   auto& rebuilding_shards = getRebuildingSet().shards;
   auto it = rebuilding_shards.find(getMyShardID());
   bool relocate_local_records = it != rebuilding_shards.end() &&

@@ -79,21 +79,6 @@ void Configuration::getLogGroupByIDAsync(
   }
 }
 
-const LogsConfig::LogGroupNode*
-Configuration::getLogGroupByIDRaw(logid_t id) const {
-  // raw access is only supported by the local config.
-  ld_check(logs_config_->isLocal());
-  if (MetaDataLog::isMetaDataLog(id)) {
-    return server_config_->getMetaDataLogGroup().get();
-  } else if (configuration::InternalLogs::isInternal(id)) {
-    const auto raw_directory =
-        server_config_->getInternalLogsConfig().getLogGroupByID(id);
-    return raw_directory != nullptr ? raw_directory->log_group.get() : nullptr;
-  } else {
-    return localLogsConfig()->getLogGroupByIDRaw(id);
-  }
-}
-
 folly::Optional<std::string> Configuration::getLogGroupPath(logid_t id) const {
   ld_check(logs_config_->isLocal());
   return localLogsConfig()->getLogGroupPath(id);
