@@ -66,6 +66,8 @@ class StoreStorageTask : public WriteStorageTask {
 
   bool isPreempted(Seal* preempted_by) override;
 
+  bool isLsnBeforeTrimPoint() override;
+
   bool isTimedout() const override;
 
   ThreadType getThreadType() const override {

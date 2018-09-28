@@ -54,6 +54,15 @@ class WriteStorageTask : public StorageTask {
     return false;
   }
 
+  /**
+   * Called by WriteBatchStorageTask to check if this task is for a record
+   * with LSN before the local trim point.
+   *
+   */
+  virtual bool isLsnBeforeTrimPoint() {
+    return false;
+  }
+
   virtual bool isTimedout() const {
     return false;
   }

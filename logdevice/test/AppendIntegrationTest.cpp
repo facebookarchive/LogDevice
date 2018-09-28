@@ -5,6 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include <algorithm>
 #include <chrono>
 #include <memory>
 #include <mutex>
@@ -12,6 +13,8 @@
 #include <thread>
 
 #include <gtest/gtest.h>
+
+#include <folly/json.h>
 
 #include "logdevice/common/AppendRequest.h"
 #include "logdevice/common/configuration/Configuration.h"
@@ -796,6 +799,68 @@ TEST_F(AppendIntegrationTest, CheckNodeHealthTest) {
   std::map<std::string, int64_t> stats = cluster->getNode(0).stats();
   // No more than 1 store should have been sent
   EXPECT_EQ(1, stats["store_received"]);
+}
+
+// test write lsn after local trim point
+TEST_F(AppendIntegrationTest, WriteLsnAfterTrimPoint) {
+  auto cluster = IntegrationTestUtils::ClusterFactory().create(1);
+  auto client = cluster->createClient();
+
+  std::string data(128, 'x');
+
+  auto stats = cluster->getNode(0).stats();
+  ASSERT_EQ(0, stats["skipped_record_lsn_before_trim_point"]);
+
+  // write two records
+  auto old_lsn = client->appendSync(logid_t(2), data);
+  ASSERT_NE(LSN_INVALID, old_lsn);
+  old_lsn = client->appendSync(logid_t(2), data);
+  ASSERT_NE(LSN_INVALID, old_lsn);
+
+  std::string cmd = folly::sformat(
+      "info record {} {} {} --json  --table", 2, old_lsn, old_lsn);
+  auto response = cluster->getNode(0).sendCommand(cmd, false);
+  // even with --json, there are some trailing chars that need to be clipped
+  EXPECT_GT(response.size(), 7);
+  auto json = folly::parseJson(response.substr(0, response.size() - 7));
+  // sanity check (this is a dict with rows and headers keys)
+  EXPECT_EQ(2, json.size());
+
+  stats = cluster->getNode(0).stats();
+  ASSERT_EQ(0, stats["skipped_record_lsn_before_trim_point"]);
+
+  // trim way past this lsn
+  auto rv = client->settings().set("disable-trim-past-tail-check", "true");
+  EXPECT_EQ(0, rv);
+  // 1024 because, why not!
+  rv = client->trimSync(logid_t(2), old_lsn + 1024);
+  ASSERT_EQ(0, rv);
+
+  // write another record. we expect the lsn to be less than the trim point
+  auto new_lsn = client->appendSync(logid_t(2), data);
+  ASSERT_NE(LSN_INVALID, new_lsn);
+  ASSERT_GT(old_lsn + 1024, new_lsn);
+
+  // the write for the record with new_lsn should succeed but the record
+  // shouldn't actually get written to RocksDB. verify with stats
+  stats = cluster->getNode(0).stats();
+  ASSERT_EQ(1, stats["skipped_record_lsn_before_trim_point"]);
+
+  // double check with admin command that the record wasn't written to RocksDB
+  cmd = folly::sformat("info record {} {} {}", 2, new_lsn, new_lsn);
+  response = cluster->getNode(0).sendCommand(cmd, false);
+  EXPECT_EQ("END\r\n", response);
+
+  // we shouldn't be able to read anything back (everything is trimmed)
+  auto reader = client->createReader(1);
+  reader->setTimeout(std::chrono::seconds(5));
+  rv = reader->startReading(logid_t(2), old_lsn);
+  ASSERT_EQ(0, rv);
+
+  std::vector<std::unique_ptr<DataRecord>> records;
+  GapRecord gap;
+  auto nread = reader->read(2, &records, &gap);
+  ASSERT_EQ(-1, nread);
 }
 
 // Returns the number of successful writes

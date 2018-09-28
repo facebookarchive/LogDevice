@@ -170,6 +170,19 @@ bool StoreStorageTask::isPreempted(Seal* preempted_by) {
   return false;
 }
 
+bool StoreStorageTask::isLsnBeforeTrimPoint() {
+  const auto& log_state = getLogStorageState();
+  auto trim_point = log_state.getTrimPoint();
+  // err on the side of caution
+  if (!trim_point.hasValue()) {
+    return false;
+  }
+  if (rid_.lsn() <= trim_point.value()) {
+    return true;
+  }
+  return false;
+}
+
 bool StoreStorageTask::isTimedout() const {
   return std::chrono::steady_clock::now() > task_deadline_;
 }

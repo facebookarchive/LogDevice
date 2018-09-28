@@ -18,6 +18,8 @@ STAT_DEFINE(read_requests, SUM)
 STAT_DEFINE(read_requests_to_storage, SUM)
 // Number of epoch offset request that got kicked to storage threads
 STAT_DEFINE(epoch_offset_to_storage, SUM)
+// Number of records not written to RocksDB because their LSN <= trim point
+STAT_DEFINE(skipped_record_lsn_before_trim_point, SUM)
 // Number of write ops of all types submitted to the storage thread pool
 STAT_DEFINE(write_ops, SUM)
 // Number of multi-write requests passed to the local log store (RocksDB)
