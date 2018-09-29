@@ -106,6 +106,14 @@ std::string SettingsUpdater::markdownDoc(bool include_deprecated) const {
 
   using std::endl;
 
+  // Markdown header
+  doc << "---" << endl;
+  doc << "id: Settings" << endl;
+  doc << "title: Configuration settings" << endl;
+  doc << "sidebar_label: Settings" << endl;
+  doc << "---" << endl;
+  doc << endl;
+
   for (const auto& cat : cats) {
     doc << "## " << cat.first << endl;
     doc << "|   Name    |   Description   |  Default  |   Notes   |" << endl;
