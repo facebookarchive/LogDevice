@@ -180,7 +180,7 @@ void fillNodeConfig(thrift::NodeConfig& out,
     roles.insert(thrift::Role::STORAGE);
     // Storage Node Config
     thrift::StorageConfig storage_config;
-    storage_config.set_capacity(node.storage_attributes->capacity);
+    storage_config.set_weight(node.storage_attributes->capacity);
     storage_config.set_num_shards(node.getNumShards());
     out.set_storage(std::move(storage_config));
   }

@@ -73,7 +73,7 @@ struct SequencerConfig {
 struct StorageConfig {
   // This is a positive value indicating how much storage traffic it will get
   // relative to other nodes in the cluster. This cannot be zero.
-  1: required double capacity = 1,
+  1: required double weight = 1,
   // How many shards does this storage node has. Each shard will have to map to
   // a directory called.
   2: required i32 num_shards = 1,
@@ -156,6 +156,13 @@ enum ShardOperationalState {
   // read-write enabled.
   //
   MAY_DISAPPEAR = 2,
+  // The shard is broken (has I/O errors) and has been marked as (needs rebuilding)
+  // by the RebuildingSupervisor. In this case, the shard is temporarily disabled
+  // until it comes back with either its data intact (at which rebuilding will be
+  // cancelled if it's not complete). Or wiped which in that case we will switch it
+  // back to ENABLED or whatever the next logical maintenance in the pending
+  // maintenance list is.
+  DOWN = 3,
   // The shard has been fully drained. It does not contain any data
   // (ShardDataHealth == EMPTY). It's safe to remove this shard from the
   // cluster. Drained also means that this node is not in the metadata nodeset
@@ -176,6 +183,12 @@ enum ShardOperationalState {
   // The is transitioning from _any_ state into ENABLED. This might be swift
   // enough that you don't ever see this state but it's here for completeness.
   ENABLING = 52,
+  // Provisioning is set when this is a NEW shard that has just been added. We
+  // know that there is no data on this shard and the node will skip rebuilding.
+  // In this state the node is trying to converge into ENABLED. On order for
+  // this to happen, the now need to acknowledge starting up and writing the
+  // internal markers before we can go ahead and move into enabled.
+  PROVISIONING = 53,
   // INVALID means that this is not a storage node. (We should never see this)
   INVALID = 99,
 }
