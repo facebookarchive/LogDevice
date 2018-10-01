@@ -95,7 +95,7 @@ int fromLinearBuffer(const char* buf,
 int toLinearBuffer(const EpochMetaData& metadata,
                    char* buf,
                    size_t size,
-                   const NodeID* node_id) {
+                   const folly::Optional<NodeID>& node_id) {
   if (!metadata.isValid() || !buf || size == 0 ||
       (node_id && !node_id->isNodeID())) {
     err = E::INVALID_PARAM;
@@ -127,7 +127,8 @@ int toLinearBuffer(const EpochMetaData& metadata,
   return header_size + len;
 }
 
-int sizeInLinearBuffer(const EpochMetaData& metadata, const NodeID* node_id) {
+int sizeInLinearBuffer(const EpochMetaData& metadata,
+                       const folly::Optional<NodeID>& node_id) {
   if (!metadata.isValid() || (node_id && !node_id->isNodeID())) {
     err = E::INVALID_PARAM;
     return -1;

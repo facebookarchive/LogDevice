@@ -57,7 +57,7 @@ int fromLinearBuffer(const char* buf,
  * @param metadata      EpochMetaData object to get the content from
  * @param buf           linear buffer to be written
  * @param size          length of @buf in bytes
- * @nid                 if non-nullptr and nid is valid, NodeID will also be
+ * @nid                 if it has a value and nid is valid, NodeID will also be
  *                      written to the linear buffer
  *
  * @return              on success, return size written in the buffer
@@ -69,21 +69,21 @@ int fromLinearBuffer(const char* buf,
 int toLinearBuffer(const EpochMetaData& metadata,
                    char* buf,
                    size_t size,
-                   const NodeID* node_id = nullptr);
+                   const folly::Optional<NodeID>& node_id);
 
 /**
  * Calculate the size of the object as if it is written to a linear buffer
  * using toLinearBuffer().
  *
  * @param metadata      EpochMetaData object to get the content from
- * @nid                 if non-nullptr, indicates NodeID to be written
+ * @nid                 if it has a value, indicates NodeID to be written
  *
  * @return             on success, return the size estimate in the buffer
  *                     on failure, -1 is returned, and err is set to:
  *                        E::INVALID_PARAM  object is in an invalid state
  */
 int sizeInLinearBuffer(const EpochMetaData& metadata,
-                       const NodeID* node_id = nullptr);
+                       const folly::Optional<NodeID>& node_id);
 
 } // namespace EpochStoreEpochMetaDataFormat
 

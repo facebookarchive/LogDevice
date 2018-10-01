@@ -408,13 +408,13 @@ TEST_F(EpochMetaDataTest, ZookeeperRecordZnodeBuffer) {
   std::shared_ptr<Configuration> cfg = parseConfig();
 
   const auto zk_record = genValidEpochMetaData();
-  const NodeID nid(1234, 2345);
+  const folly::Optional<NodeID> nid(NodeID(1234, 2345));
 
   char zbuf[ZookeeperEpochStore::ZNODE_VALUE_WRITE_LEN_MAX];
   int rv = EpochStoreEpochMetaDataFormat::toLinearBuffer(
-      zk_record, zbuf, sizeof(zbuf) / sizeof(zbuf[0]), &nid);
+      zk_record, zbuf, sizeof(zbuf) / sizeof(zbuf[0]), nid);
   int expected_size =
-      EpochStoreEpochMetaDataFormat::sizeInLinearBuffer(zk_record, &nid);
+      EpochStoreEpochMetaDataFormat::sizeInLinearBuffer(zk_record, nid);
   EXPECT_EQ(expected_size, rv);
 
   EpochMetaData record_from_buffer;
@@ -448,10 +448,10 @@ TEST_F(EpochMetaDataTest, ZookeeperRecordZnodeBuffer) {
 
   std::string small;
   small.resize(
-      EpochStoreEpochMetaDataFormat::sizeInLinearBuffer(zk_record, &nid) - 1);
+      EpochStoreEpochMetaDataFormat::sizeInLinearBuffer(zk_record, nid) - 1);
 
   rv = EpochStoreEpochMetaDataFormat::toLinearBuffer(
-      zk_record, &small[0], small.size(), &nid);
+      zk_record, &small[0], small.size(), nid);
   EXPECT_EQ(-1, rv);
   EXPECT_EQ(E::NOBUFS, err);
 

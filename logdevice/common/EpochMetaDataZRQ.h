@@ -141,10 +141,10 @@ class EpochMetaDataZRQ : public ZookeeperEpochStoreRequest {
 
     // Only record the NodeID for requests that are written by the sequencer
     // node.
-    std::unique_ptr<NodeID> node_id_to_write;
+    folly::Optional<NodeID> node_id_to_write;
     switch (write_node_id_) {
       case EpochStore::WriteNodeID::MY:
-        node_id_to_write = std::make_unique<NodeID>(store_->getMyNodeID());
+        node_id_to_write = store_->getMyNodeID();
         if (!node_id_to_write->isNodeID()) {
           ld_check(false);
           err = E::INTERNAL;
@@ -152,17 +152,15 @@ class EpochMetaDataZRQ : public ZookeeperEpochStoreRequest {
         }
         break;
       case EpochStore::WriteNodeID::KEEP_LAST:
-        if (completion_meta_properties_ &&
-            completion_meta_properties_->last_writer_node_id.hasValue()) {
-          node_id_to_write = std::make_unique<NodeID>(
-              completion_meta_properties_->last_writer_node_id.value());
+        if (completion_meta_properties_) {
+          node_id_to_write = completion_meta_properties_->last_writer_node_id;
         }
         break;
       case EpochStore::WriteNodeID::NO:
         break;
     }
     return EpochStoreEpochMetaDataFormat::toLinearBuffer(
-        *metadata_, buf, size, node_id_to_write.get());
+        *metadata_, buf, size, node_id_to_write);
   }
 
   static constexpr const char* znodeName = "sequencer";
