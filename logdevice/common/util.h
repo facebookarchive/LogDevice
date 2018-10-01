@@ -468,6 +468,14 @@ ToSharedPtr checked_downcast(const std::shared_ptr<From>& ptr) {
   return std::static_pointer_cast<typename ToSharedPtr::element_type>(ptr);
 }
 
+template <typename T>
+void set_if_not_null(std::add_pointer_t<folly::remove_cvref_t<T>> output,
+                     T&& value) {
+  if (output) {
+    *output = std::forward<T>(value);
+  }
+}
+
 /**
  * Wrap ioprio_set() and ioprio_get() syscalls.
  * @return 0 on success, -1 on error

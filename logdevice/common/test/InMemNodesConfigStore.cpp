@@ -8,18 +8,11 @@
 
 #include "logdevice/common/test/InMemNodesConfigStore.h"
 
+#include "logdevice/common/util.h"
+
 namespace facebook { namespace logdevice { namespace configuration {
 
 //////// InMemNodesConfigStore ////////
-
-namespace {
-template <typename T>
-void setIfNotNull(std::decay_t<T>* output, T&& value) {
-  if (output) {
-    *output = std::forward<T>(value);
-  }
-}
-} // namespace
 
 int InMemNodesConfigStore::getConfig(std::string key,
                                      value_callback_t cb) const {
@@ -84,7 +77,7 @@ InMemNodesConfigStore::updateConfigSync(std::string key,
       if (base_version) {
         return Status::NOTFOUND;
       }
-      setIfNotNull(version_out, extract_fn_(value));
+      set_if_not_null(version_out, extract_fn_(value));
       auto res = lockedConfigs->emplace(std::move(key), std::move(value));
       ld_assert(res.second); // inserted
       return Status::OK;
@@ -94,11 +87,11 @@ InMemNodesConfigStore::updateConfigSync(std::string key,
     if (base_version && curr_version != base_version) {
       // conditional update version mismatch
       // TODO: set err accordingly
-      setIfNotNull(version_out, curr_version);
-      setIfNotNull(value_out, it->second);
+      set_if_not_null(version_out, curr_version);
+      set_if_not_null(value_out, it->second);
       return Status::VERSION_MISMATCH;
     }
-    setIfNotNull(version_out, extract_fn_(value));
+    set_if_not_null(version_out, extract_fn_(value));
     it->second = std::move(value);
   }
   return Status::OK;
