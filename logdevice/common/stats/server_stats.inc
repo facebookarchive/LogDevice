@@ -392,16 +392,6 @@ STAT_DEFINE(storage_tasks_dequeued_fast_stallable, SUM)
 STAT_DEFINE(storage_tasks_dequeued_slow, SUM)
 STAT_DEFINE(storage_tasks_dequeued_metadata, SUM)
 
-// Number of calls to postRequest
-STAT_DEFINE(post_request_total, SUM)
-// Number of postRequest failures.
-STAT_DEFINE(post_request_failed, SUM)
-// Number of Requests executed on Worker threads.
-STAT_DEFINE(worker_requests_executed, SUM)
-// Number of Requests > request_execution_delay_threshold in execute().
-STAT_DEFINE(worker_slow_requests, SUM)
-// Number of tasks on background thread that spent > 10 msec executing.
-STAT_DEFINE(background_slow_requests, SUM)
 // Number of failures forwarding a message in the delivery chain
 STAT_DEFINE(store_forwarding_failed, SUM)
 

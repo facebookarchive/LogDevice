@@ -14,6 +14,17 @@
 
 // Stats shared between server and client
 
+// Number of calls to postRequest
+STAT_DEFINE(post_request_total, SUM)
+// Number of postRequest failures.
+STAT_DEFINE(post_request_failed, SUM)
+// Number of Requests executed on Worker threads.
+STAT_DEFINE(worker_requests_executed, SUM)
+// Number of Requests > request_execution_delay_threshold in execute().
+STAT_DEFINE(worker_slow_requests, SUM)
+// Number of tasks on background thread that spent > 10 msec executing.
+STAT_DEFINE(background_slow_requests, SUM)
+
 // number of MetaDataLogReaders created
 STAT_DEFINE(metadata_log_readers_created, SUM)
 // number of MetaDataLogReaders started
