@@ -108,7 +108,7 @@ class LogDeviceIntegrationTest(TestCase):
         # Keep track of the last written LSN for each log
         last_written_lsn = {logid: logdevice.client.LSN_OLDEST for logid in LOGS}
 
-        rng = random.Random(0xbababa)
+        rng = random.Random(0xBABABA)
         for _ in range(NWRITES):
             logid = rng.choice(LOGS)
             last_written_lsn[logid] = client.append(logid, "hello")
