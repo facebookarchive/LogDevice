@@ -307,6 +307,10 @@ void TextConfigUpdaterImpl::update(bool force_reload_logsconfig) {
   // include the updated settings
   std::shared_ptr<UpdateableLogsConfig> updateable_logsconfig =
       target_logs_config_.lock();
+  if (!updateable_logsconfig) {
+    ld_debug("Attempting log config update, but config doesn't exist anymore");
+    return;
+  }
   if (!updateable_settings_->server &&
       (updateable_settings_->on_demand_logs_config ||
        updateable_settings_->force_on_demand_logs_config)) {
@@ -324,7 +328,7 @@ void TextConfigUpdaterImpl::update(bool force_reload_logsconfig) {
                error_description(config_parse_status));
       err = E::INVALID_CONFIG;
       config_validity = false;
-    } else if (updateable_logsconfig) {
+    } else {
       ld_info("Updating LogsConfig from file: version %lu",
               config->logsConfig()->getVersion());
       rv = updateable_logsconfig->update(config->logsConfig());
@@ -335,8 +339,6 @@ void TextConfigUpdaterImpl::update(bool force_reload_logsconfig) {
         config_validity = false;
         ld_error("LogsConfig update aborted");
       }
-    } else {
-      ld_debug("Attempting config update, but config doesn't exist anymore");
     }
   } else {
     ld_info("Ignoring changes in the 'logs' section in the config file because "
