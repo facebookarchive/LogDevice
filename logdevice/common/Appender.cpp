@@ -796,6 +796,9 @@ int Appender::start(std::shared_ptr<EpochSequencer> epoch_sequencer,
 
 void Appender::prepareTailRecord(bool include_payload) {
   TailRecordHeader::flags_t flags = TailRecordHeader::OFFSET_WITHIN_EPOCH;
+  if (getSettings().enable_offset_map) {
+    flags |= TailRecordHeader::OFFSET_MAP;
+  }
   if (include_payload) {
     // include the payload in the tail record
     flags |= TailRecordHeader::HAS_PAYLOAD;
@@ -807,17 +810,17 @@ void Appender::prepareTailRecord(bool include_payload) {
     flags |= TailRecordHeader::CHECKSUM_PARITY;
   }
 
-  TailRecordHeader header{
-      log_id_,
-      store_hdr_.rid.lsn(),
-      store_hdr_.timestamp,
-      {extra_.offsets_within_epoch.getCounter(CounterType::BYTE_OFFSET)},
-      flags,
-      {}};
+  TailRecordHeader header{log_id_,
+                          store_hdr_.rid.lsn(),
+                          store_hdr_.timestamp,
+                          // TODO (T33977412)
+                          {extra_.offset_within_epoch},
+                          flags,
+                          {}};
 
   if (!include_payload) {
-    tail_record_ =
-        std::make_shared<TailRecord>(header, std::shared_ptr<PayloadHolder>());
+    tail_record_ = std::make_shared<TailRecord>(
+        header, extra_.offsets_within_epoch, std::shared_ptr<PayloadHolder>());
     return;
   }
 
@@ -837,16 +840,18 @@ void Appender::prepareTailRecord(bool include_payload) {
         esn_t(store_hdr_.last_known_good),
         uint32_t(store_hdr_.wave),
         /*unused copyset*/ copyset_t{},
-        extra_.offsets_within_epoch.getCounter(CounterType::BYTE_OFFSET),
+        // TODO(T33977412)
+        extra_.offset_within_epoch,
         /*unused keys*/ std::map<KeyType, std::string>{},
         Slice{ph_raw},
         payload_);
 
-    tail_record_ =
-        std::make_shared<TailRecord>(header, std::move(zero_copied_record));
+    tail_record_ = std::make_shared<TailRecord>(
+        header, extra_.offsets_within_epoch, std::move(zero_copied_record));
   } else {
     // payload is linear buffer and can be freed on any thread
-    tail_record_ = std::make_shared<TailRecord>(header, payload_);
+    tail_record_ = std::make_shared<TailRecord>(
+        header, extra_.offsets_within_epoch, payload_);
   }
 }
 
@@ -2377,7 +2382,9 @@ void Appender::setLogOffset(OffsetMap offset_map) {
   extra_.offset_within_epoch = offset_map.getCounter(CounterType::BYTE_OFFSET);
   extra_.offsets_within_epoch = std::move(offset_map);
   passthru_flags_ |= STORE_Header::OFFSET_WITHIN_EPOCH;
-  passthru_flags_ |= STORE_Header::OFFSET_MAP;
+  if (getSettings().enable_offset_map) {
+    passthru_flags_ |= STORE_Header::OFFSET_MAP;
+  }
 }
 
 bool Appender::isDraining() const {

@@ -100,7 +100,10 @@ class SetLastCleanEpochZRQ : public LastCleanEpochZRQ {
                         parsed_tail.header.u.byte_offset,
                         logid_.val_,
                         epoch_.val_);
+      // TODO(T33977412) remove byte_offset when fully deployed
       tail_record_.header.u.byte_offset = parsed_tail.header.u.byte_offset;
+      tail_record_.offsets_map_.setCounter(
+          CounterType::BYTE_OFFSET, parsed_tail.header.u.byte_offset);
     }
 
     return NextStep::MODIFY;

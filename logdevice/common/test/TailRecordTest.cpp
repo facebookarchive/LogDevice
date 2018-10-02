@@ -13,6 +13,7 @@
 
 #include "logdevice/include/Record.h"
 #include "logdevice/common/TailRecord.h"
+#include "logdevice/common/OffsetMap.h"
 
 namespace {
 
@@ -42,6 +43,22 @@ class TailRecordTest : public ::testing::Test {
                                        1502502135,
                                        {2349045994592},
                                        flags},
+                      include_payload ? createPayload(2323, 't') : nullptr);
+  }
+
+  TailRecord genTailRecordWithOffsetMap(bool include_payload) {
+    OffsetMap offset_map;
+    offset_map.setCounter(CounterType::BYTE_OFFSET, 2349045994592);
+    TailRecordHeader::flags_t flags = TailRecordHeader::CHECKSUM_PARITY |
+        (include_payload ? TailRecordHeader::HAS_PAYLOAD : 0);
+    flags |= TailRecordHeader::OFFSET_WITHIN_EPOCH;
+    flags |= TailRecordHeader::OFFSET_MAP;
+    return TailRecord(TailRecordHeader{LOG_ID,
+                                       compose_lsn(epoch_t(933), esn_t(3347)),
+                                       1502502135,
+                                       {2349045994592},
+                                       flags},
+                      std::move(offset_map),
                       include_payload ? createPayload(2323, 't') : nullptr);
   }
 };
@@ -74,6 +91,38 @@ TEST_F(TailRecordTest, BasicSerialization) {
     ASSERT_FALSE(d.header.flags & TailRecordHeader::INCLUDE_BLOB);
     ASSERT_TRUE(TailRecord::sameContent(d, genTailRecord(i % 2 == 0)));
     n_read += nbytes;
+  }
+
+  ASSERT_EQ(written, n_read);
+}
+
+TEST_F(TailRecordTest, CompatibilityWithOffsetMap) {
+  const size_t n_records = 10;
+  const size_t max_len = 1024 * 1024;
+  std::unique_ptr<char[]> buf1(new char[max_len]);
+  size_t written = 0;
+  std::vector<size_t> record_size(n_records, 0);
+  for (int i = 0; i < n_records; ++i) {
+    TailRecord r;
+    r = genTailRecordWithOffsetMap(i % 2 == 0);
+    ASSERT_TRUE(r.isValid());
+    record_size[i] = r.serialize(buf1.get() + written, max_len - written);
+    ASSERT_GT(record_size[i], 0);
+    written += record_size[i];
+  }
+  ld_info("Wrote %lu records of %lu bytes.", n_records, written);
+  size_t n_read = 0;
+  for (int i = 0; i < n_records; ++i) {
+    TailRecord d;
+    ASSERT_FALSE(d.isValid());
+    int nbytes = d.deserialize({buf1.get() + n_read, max_len - n_read});
+    ASSERT_EQ(record_size[i], nbytes);
+    ASSERT_TRUE(d.isValid());
+    // INCLUDE_BLOB only used in serialization format
+    ASSERT_FALSE(d.header.flags & TailRecordHeader::INCLUDE_BLOB);
+    ASSERT_TRUE(
+        TailRecord::sameContent(d, genTailRecordWithOffsetMap(i % 2 == 0)));
+    n_read += record_size[i];
   }
 
   ASSERT_EQ(written, n_read);

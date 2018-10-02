@@ -11,9 +11,17 @@
 namespace facebook { namespace logdevice {
 OffsetMap::OffsetMap() {}
 
+OffsetMap::OffsetMap(const OffsetMap& om) noexcept {
+  this->counterTypeMap_ = om.getCounterMap();
+}
+
 void OffsetMap::setCounter(const CounterType counter_type,
                            uint64_t counter_val) {
-  counterTypeMap_[counter_type] = counter_val;
+  if (counter_val == BYTE_OFFSET_INVALID) {
+    counterTypeMap_.erase(counter_type);
+  } else {
+    counterTypeMap_[counter_type] = counter_val;
+  }
 }
 
 bool OffsetMap::isValid() const {
@@ -86,6 +94,20 @@ OffsetMap OffsetMap::operator+(const OffsetMap& om) const {
   OffsetMap result = *this;
   result += om;
   return result;
+}
+
+OffsetMap& OffsetMap::operator=(const OffsetMap& om) noexcept {
+  this->counterTypeMap_ = om.getCounterMap();
+  return *this;
+}
+
+OffsetMap& OffsetMap::operator=(OffsetMap&& om) noexcept {
+  this->counterTypeMap_ = std::move(om.counterTypeMap_);
+  return *this;
+}
+
+OffsetMap::OffsetMap(OffsetMap&& om) noexcept {
+  this->counterTypeMap_ = std::move(om.counterTypeMap_);
 }
 
 }} // namespace facebook::logdevice

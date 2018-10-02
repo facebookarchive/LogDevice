@@ -221,6 +221,10 @@ class MockAppender : public Appender {
     return lsn_;
   }
 
+  const Settings& getSettings() const override {
+    return test_->settings_;
+  }
+
   void onReaped() override {
     epoch_t last_released_epoch;
     bool lng_changed;

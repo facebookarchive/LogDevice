@@ -12,30 +12,55 @@
 
 namespace facebook { namespace logdevice {
 
+// TODO(T33977412): Remove once all call sites are converted to using
+// the other overload
 TailRecord::TailRecord(const TailRecordHeader& header_in,
                        std::shared_ptr<PayloadHolder> payload)
     : header(header_in), payload_(hasPayload() ? std::move(payload) : nullptr) {
   // should be a flat payload for this constructor
   ld_check(payload == nullptr || !payload->isEvbuffer());
+  offsets_map_.setCounter(CounterType::BYTE_OFFSET, header_in.u.byte_offset);
 }
 
 TailRecord::TailRecord(const TailRecordHeader& header_in,
+                       OffsetMap offset_map,
+                       std::shared_ptr<PayloadHolder> payload)
+    : header(header_in),
+      offsets_map_(std::move(offset_map)),
+      payload_(hasPayload() ? std::move(payload) : nullptr) {
+  // should be a flat payload for this constructor
+  ld_check(payload == nullptr || !payload->isEvbuffer());
+}
+
+// TODO(T33977412)
+TailRecord::TailRecord(const TailRecordHeader& header_in,
                        std::shared_ptr<ZeroCopiedRecord> record)
     : header(header_in),
-      zero_copied_record_(hasPayload() ? std::move(record) : nullptr) {}
+      zero_copied_record_(hasPayload() ? std::move(record) : nullptr) {
+  offsets_map_.setCounter(CounterType::BYTE_OFFSET, header_in.u.byte_offset);
+}
 
 TailRecord::TailRecord(TailRecord&& rhs) noexcept
     : header(rhs.header),
+      offsets_map_(std::move(rhs.offsets_map_)),
       payload_(std::move(rhs.payload_)),
       zero_copied_record_(std::move(rhs.zero_copied_record_)) {
   rhs.reset();
 }
+
+TailRecord::TailRecord(const TailRecordHeader& header_in,
+                       OffsetMap offset_map,
+                       std::shared_ptr<ZeroCopiedRecord> record)
+    : header(header_in),
+      offsets_map_(std::move(offset_map)),
+      zero_copied_record_(hasPayload() ? std::move(record) : nullptr) {}
 
 TailRecord& TailRecord::operator=(TailRecord&& rhs) noexcept {
   if (this != &rhs) {
     header = rhs.header;
     payload_ = std::move(rhs.payload_);
     zero_copied_record_ = std::move(rhs.zero_copied_record_);
+    offsets_map_ = std::move(rhs.offsets_map_);
     rhs.reset();
   }
   return *this;
@@ -57,15 +82,22 @@ Slice TailRecord::getPayloadSlice() const {
 
 TailRecordHeader::blob_size_t TailRecord::calculateBlobSize() const {
   ld_check(isValid());
+  TailRecordHeader::blob_size_t offset_map_size = 0;
+
+  if (containsOffsetMap()) {
+    offset_map_size = static_cast<TailRecordHeader::blob_size_t>(
+        offsets_map_.sizeInLinearBuffer());
+  }
+
   if (!hasPayload()) {
     // currently the blob only contains payload
-    return 0;
+    return offset_map_size;
   }
 
   const size_t payload_size = getPayloadSlice().size;
   ld_check(payload_size < Message::MAX_LEN);
   return static_cast<TailRecordHeader::blob_size_t>(payload_size) +
-      sizeof(TailRecordHeader::payload_size_t);
+      sizeof(TailRecordHeader::payload_size_t) + offset_map_size;
 }
 
 void TailRecord::serialize(ProtocolWriter& writer) const {
@@ -75,7 +107,11 @@ void TailRecord::serialize(ProtocolWriter& writer) const {
   }
 
   TailRecordHeader write_header = header;
+  ld_check(offsets_map_.getCounter(CounterType::BYTE_OFFSET) ==
+           write_header.u.offset_within_epoch);
+
   const TailRecordHeader::blob_size_t blob_size = calculateBlobSize();
+
   if (blob_size > 0) {
     write_header.flags |= TailRecordHeader::INCLUDE_BLOB;
   }
@@ -83,13 +119,18 @@ void TailRecord::serialize(ProtocolWriter& writer) const {
   writer.write(write_header);
   if (blob_size > 0) {
     writer.write(blob_size);
-    ld_check(hasPayload());
-    auto payload_slice = getPayloadSlice();
-    TailRecordHeader::payload_size_t payload_size =
-        static_cast<TailRecordHeader::payload_size_t>(payload_slice.size);
-    writer.write(payload_size);
-    // if possible, zero-copy write the actual payload
-    writer.writeWithoutCopy(payload_slice.data, payload_slice.size);
+    if (hasPayload()) {
+      auto payload_slice = getPayloadSlice();
+      TailRecordHeader::payload_size_t payload_size =
+          static_cast<TailRecordHeader::payload_size_t>(payload_slice.size);
+      writer.write(payload_size);
+      // if possible, zero-copy write the actual payload
+      writer.writeWithoutCopy(payload_slice.data, payload_slice.size);
+    }
+  }
+
+  if (containsOffsetMap()) {
+    offsets_map_.serialize(writer);
   }
 }
 
@@ -109,6 +150,7 @@ void TailRecord::deserialize(ProtocolReader& reader,
   TailRecordHeader::blob_size_t blob_size = 0;
   if (header.flags & TailRecordHeader::INCLUDE_BLOB) {
     reader.read(&blob_size);
+
     if (hasPayload()) {
       TailRecordHeader::payload_size_t payload_size;
       reader.read(&payload_size);
@@ -140,6 +182,13 @@ void TailRecord::deserialize(ProtocolReader& reader,
         ld_check(payload_ == nullptr);
       }
     }
+  }
+
+  if (containsOffsetMap()) {
+    offsets_map_.deserialize(reader, false /* unused */);
+  } else {
+    // TODO(T33977412)
+    offsets_map_.setCounter(CounterType::BYTE_OFFSET, header.u.byte_offset);
   }
 
   // clear the TailRecordHeader::INCLUDE_BLOB flag as it is only used

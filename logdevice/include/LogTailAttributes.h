@@ -12,6 +12,7 @@
 
 #include "folly/Format.h"
 #include "logdevice/include/types.h"
+#include "logdevice/common/OffsetMap.h"
 
 namespace facebook { namespace logdevice {
 

@@ -840,6 +840,10 @@ struct Settings : public SettingsBundle {
   // NOTE: this involve extra work for storage nodes during recovery.
   bool byte_offsets;
 
+  // If true, cluster will use OffsetMap to keep track of logs offsets.
+  // NOTE: this involve extra work for storage nodes during recovery.
+  bool enable_offset_map;
+
   // With config synchronization enabled, nodes on both ends of a connection
   // will synchronize their configs if there is a mismatch in the config
   // version

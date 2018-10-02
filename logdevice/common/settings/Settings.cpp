@@ -2585,6 +2585,17 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "If omitted the client timeout will be used.",
        CLIENT,
        SettingsCategory::Core);
+  init("enable-offset-map",
+       &enable_offset_map,
+       "false",
+       nullptr, // no validation
+       "Enables the server-side OffsetMap calculation feature."
+       "NOTE: There is no guarantee of byte offsets result correctness if "
+       "feature"
+       "was switched on->off->on in period shorter than retention value for"
+       "logs.",
+       SERVER,
+       SettingsCategory::WritePath);
 
   sequencer_boycotting.defineSettings(init);
 }

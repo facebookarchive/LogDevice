@@ -407,6 +407,7 @@ Status SealStorageTask::getEpochInfo(LocalLogStore& store,
           // the tail record does not include epoch offset information,
           // use the `epoch_size` as an approximation
           tail.header.u.offset_within_epoch = epoch_size;
+          tail.offsets_map_.setCounter(CounterType::BYTE_OFFSET, epoch_size);
         }
 
         if (tail.hasPayload() &&

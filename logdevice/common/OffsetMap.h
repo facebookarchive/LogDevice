@@ -24,6 +24,12 @@ class OffsetMap : public SerializableData {
 
   OffsetMap();
 
+  OffsetMap(const OffsetMap& om) noexcept;
+  OffsetMap& operator=(const OffsetMap& om) noexcept;
+
+  OffsetMap(OffsetMap&& om) noexcept;
+  OffsetMap& operator=(OffsetMap&& om) noexcept;
+
   /**
    * get CounterType value from CounterTypeMap
    * @param counter_type CounterType to read

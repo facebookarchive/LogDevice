@@ -16,6 +16,7 @@
 #include "logdevice/common/protocol/ProtocolWriter.h"
 #include "logdevice/common/protocol/RECORD_Message.h"
 #include "logdevice/common/types_internal.h"
+#include "logdevice/common/OffsetMap.h"
 #include "logdevice/include/Record.h"
 
 namespace facebook { namespace logdevice {
@@ -55,6 +56,7 @@ struct TailRecordHeader {
   // beginning of the epoch (epoch_size). BYTE_OFFSET_INVALID if the information
   // is not available. The OFFSET_WITHIN_EPOCH flags decide the meaning of the
   // value.
+  // TODO(T33977412) : Remove union when code is all nodes support OffsetMap
   union {
     uint64_t byte_offset;
     uint64_t offset_within_epoch;
@@ -89,8 +91,14 @@ struct TailRecordHeader {
   // header instead of accumulateive byte offset
   static const flags_t OFFSET_WITHIN_EPOCH = 1u << 9; //=512
 
+  // if set, an OffsetMap is present after the payload. `u` will
+  // however be populated to preserve backward compatibility.
+  // Old servers that do not understand this flag will read `u`
+  // and discard the trailing bytes at the end.
+  static const flags_t OFFSET_MAP = 1u << 10; //=1024
+
   static const flags_t ALL_KNOWN_FLAGS = INCLUDE_BLOB | HAS_PAYLOAD | CHECKSUM |
-      CHECKSUM_64BIT | CHECKSUM_PARITY | GAP | OFFSET_WITHIN_EPOCH;
+      CHECKSUM_64BIT | CHECKSUM_PARITY | GAP | OFFSET_WITHIN_EPOCH | OFFSET_MAP;
 };
 
 static_assert(sizeof(TailRecordHeader) == 40,
@@ -123,16 +131,35 @@ class TailRecord : public SerializableData {
   /**
    * Construct a TailRecord with an optional linear payload.
    * Note: payload must be backed by linear buffer. For evbuffer-based
+   * payload, use the constructor with ZeroCopiedRecord param.
+   */
+  // TODO(T33977412)
+  TailRecord(const TailRecordHeader& header,
+             std::shared_ptr<PayloadHolder> payload);
+
+  /**
+   * Construct a TailRecord with an OffsetMap and an optional linear payload.
+   * Note: payload must be backed by linear buffer. For evbuffer-based
    * payload, use the constructor below.
    */
   TailRecord(const TailRecordHeader& header,
+             OffsetMap offset_map,
              std::shared_ptr<PayloadHolder> payload);
 
   /**
    * Construct a TailRecord with an optional evbuffer-based payload
    * encapsulated in a ZeroCopiedRecord
    */
+  // TODO(T33977412)
   TailRecord(const TailRecordHeader& header,
+             std::shared_ptr<ZeroCopiedRecord> record);
+
+  /**
+   * Construct a TailRecord with and OffsetMap and an optional evbuffer-based
+   * payload encapsulated in a ZeroCopiedRecord
+   */
+  TailRecord(const TailRecordHeader& header,
+             OffsetMap offset_map,
              std::shared_ptr<ZeroCopiedRecord> record);
 
   bool hasPayload() const {
@@ -148,24 +175,56 @@ class TailRecord : public SerializableData {
     return header.flags & TailRecordHeader::OFFSET_WITHIN_EPOCH;
   }
 
+  bool containsOffsetMap() const {
+    return header.flags & TailRecordHeader::OFFSET_MAP;
+  }
+
+  // TODO(T33977412)
   void reset(const TailRecordHeader& h,
              std::shared_ptr<PayloadHolder> payload) {
     header = h;
     payload_ = std::move(payload);
     zero_copied_record_.reset();
+    OffsetMap om;
+    om.setCounter(CounterType::BYTE_OFFSET, header.u.byte_offset);
+    offsets_map_ = std::move(om);
   }
 
+  void reset(const TailRecordHeader& h,
+             std::shared_ptr<PayloadHolder> payload,
+             OffsetMap offset_map) {
+    header = h;
+    payload_ = std::move(payload);
+    zero_copied_record_.reset();
+    offsets_map_ = std::move(offset_map);
+  }
+
+  // TODO(T33977412)
   void reset(const TailRecordHeader& h,
              std::shared_ptr<ZeroCopiedRecord> record) {
     header = h;
     payload_.reset();
     zero_copied_record_ = std::move(record);
+    OffsetMap om;
+    om.setCounter(CounterType::BYTE_OFFSET, header.u.byte_offset);
+    offsets_map_ = std::move(om);
+  }
+
+  void reset(const TailRecordHeader& h,
+             std::shared_ptr<ZeroCopiedRecord> record,
+             OffsetMap offset_map) {
+    header = h;
+    payload_.reset();
+    zero_copied_record_ = std::move(record);
+    offsets_map_ = std::move(offset_map);
   }
 
   void reset() {
     header = {LOGID_INVALID, LSN_INVALID, 0, {BYTE_OFFSET_INVALID}, 0, {}};
     payload_.reset();
     zero_copied_record_.reset();
+    OffsetMap om;
+    offsets_map_ = std::move(om);
   }
 
   void removePayload() {
@@ -218,6 +277,11 @@ class TailRecord : public SerializableData {
   static bool sameContent(const TailRecord& lhs, const TailRecord& rhs);
 
   TailRecordHeader header;
+
+  // Keep track of offsets. If flags_t OFFSET_WITHIN_EPOCH is set, the value in
+  // offsets_map_ would be the offset_within_epoch else it would represent the
+  // byte_offset
+  OffsetMap offsets_map_;
 
  private:
   // container of the actual payload, can be one of
