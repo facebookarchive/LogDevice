@@ -1,4 +1,4 @@
-FROM ubuntu:bionic
+FROM ubuntu:bionic as builder
 
 MAINTAINER Ahmed Soliman <asoli@fb.com>
 
@@ -6,21 +6,57 @@ ARG PARALLEL=4
 
 COPY logdevice logdevice
 
-RUN echo "/usr/local/lib" >> /etc/ld.so.conf && ldconfig && \
-    apt-get update && \
+RUN apt-get update && \
     apt-get install -y $(cat /logdevice/build_tools/ubuntu.deps) && \
-    rm -rf /var/lib/apt/lists/* && \
-    mkdir /build && cd /build && \
-    cmake /logdevice/ && \
-    make -j$PARALLEL && \
-    make install && \
-    cp /build/bin/ld* /usr/local/bin/ && \
-    cp /build/bin/ld-dev-cluster /usr/local/bin/ && \
-    apt-get remove -y $(cat /logdevice/build_tools/ubuntu_cleanup.deps) && \
-    apt-get autoremove -y && \
-    rm -rf /build /logdevice
+    python3 -m pip install --user --upgrade setuptools wheel
 
-ENV LOGDEVICE_TEST_BINARY=/usr/local/bin/logdeviced
+RUN mkdir /build && cd /build && \
+    cmake /logdevice/ && \
+    make -j $PARALLEL && \
+    make install && \
+    cp /build/bin/ld* /usr/local/bin/
+
+RUN cd /logdevice/ops && python3 setup.py sdist bdist_wheel
+
+WORKDIR /build
+
+CMD /bin/bash
+
+# The production image
+FROM ubuntu:bionic
+
+# Copy LogDevice development tools
+COPY --from=builder /build/bin/ld* \
+                  /build/bin/logdeviced /usr/local/bin/
+
+# Python tools, ldshell, ldquery and client lib
+COPY --from=builder /logdevice/ops/dist/ldshell-*.whl /tmp
+COPY --from=builder /build/lib/liblogdevice.so /usr/local/lib/
+COPY --from=builder /build/lib/client.so \
+    /usr/local/lib/python3.6/dist-packages/logdevice/client.so
+COPY --from=builder /build/lib/ext.so \
+    /usr/local/lib/python3.6/dist-packages/logdevice/ldquery/internal/ext.so
+COPY --from=builder /build/lib/admin_command_client.so \
+    /usr/local/lib/python3.6/dist-packages/logdevice/ops/admin_command_client.so
+COPY /logdevice/ops/ldquery/py/lib.py \
+    /usr/local/lib/python3.6/dist-packages/logdevice/ldquery/
+COPY /logdevice/ops/ldquery/py/__init__.py \
+    /usr/local/lib/python3.6/dist-packages/logdevice/ldquery/
+
+# Install runtime dependencies for ld-dev-cluster, ldshell friends.
+# To install the ldshell wheel we also need python3 build tools, as
+# we depend on python-Levenshtein for which a many-linux binary wheel is not
+# available; these are removed following install to keep docker image size low.
+
+COPY logdevice/build_tools/ubuntu_runtime.deps /tmp/logdevice_runtime.deps
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends $(cat /tmp/logdevice_runtime.deps) \
+        gcc python3-setuptools python3-dev && \
+    python3 -m pip install --user --upgrade setuptools wheel && \
+    pip3 install /tmp/ldshell-*.whl && \
+    apt-get remove -y --auto-remove gcc python3-setuptools python3-dev && \
+    rm -rf /var/lib/apt/lists/*
 
 EXPOSE 4440 4441 4443 5440
 
