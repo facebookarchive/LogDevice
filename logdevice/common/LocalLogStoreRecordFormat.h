@@ -19,6 +19,7 @@
 #include "logdevice/common/protocol/STORE_Message.h"
 #include "logdevice/include/Record.h"
 #include "logdevice/include/types.h"
+#include "logdevice/common/OffsetMap.h"
 
 /**
  * @file
@@ -113,6 +114,9 @@ const flags_t FLAG_DRAINED = 1u << 19; //=524288
 // copyset is made of ShardIDs instead of node_index_t.
 const flags_t FLAG_SHARD_ID = 1u << 20; //=1048576
 
+// Indicates if record contains OffsetMap.
+const flags_t FLAG_OFFSET_MAP = 1u << 21; //=2097152
+
 // Please update flagsToString() when adding new flags.
 
 // Flags that indicate that the record in question is a pseudorecord, and can
@@ -176,9 +180,15 @@ static_assert(CSI_FLAG_HOLE == STORE_Header::HOLE,
  * reserve an appropriate amount of memory before calling
  * formRecordHeaderBufAppend().
  */
+// TODO (T33977412)
 size_t recordHeaderSizeEstimate(flags_t flags,
                                 copyset_size_t copyset_size,
                                 const Slice& optional_keys);
+
+size_t recordHeaderSizeEstimate(flags_t flags,
+                                copyset_size_t copyset_size,
+                                const Slice& optional_keys,
+                                const OffsetMap& offsets_within_epoch);
 
 /**
  * Behaves like formRecordHeader(), but does not clear, reserve, and overwrite
@@ -212,12 +222,22 @@ Slice formRecordHeaderBufAppend(int64_t timestamp,
  *
  * @return Slice pointing into supplied std::string
  */
+// TODO (T33977412)
 Slice formRecordHeader(int64_t timestamp,
                        esn_t last_known_good,
                        flags_t flags,
                        uint32_t wave_or_recovery_epoch,
                        const folly::Range<const ShardID*>& copyset,
                        uint64_t offset_within_epoch,
+                       const std::map<KeyType, std::string>& optional_keys,
+                       std::string* buf);
+
+Slice formRecordHeader(int64_t timestamp,
+                       esn_t last_known_good,
+                       flags_t flags,
+                       uint32_t wave_or_recovery_epoch,
+                       const folly::Range<const ShardID*>& copyset,
+                       OffsetMap offsets_within_epoch,
                        const std::map<KeyType, std::string>& optional_keys,
                        std::string* buf);
 
@@ -354,6 +374,20 @@ int parse(const Slice& log_store_blob,
           ShardID* copyset_arr_out,
           size_t copyset_arr_out_size,
           uint64_t* offset_within_epoch_out,
+          std::map<KeyType, std::string>* optional_keys,
+          Payload* payload_out,
+          shard_index_t this_shard);
+
+int parse(const Slice& log_store_blob,
+          std::chrono::milliseconds* timestamp_out,
+          esn_t* last_known_good_out,
+          flags_t* flags_out,
+          uint32_t* wave_or_recovery_epoch_out,
+          copyset_size_t* copyset_size_out,
+          ShardID* copyset_arr_out,
+          size_t copyset_arr_out_size,
+          uint64_t* offset_within_epoch_out,
+          OffsetMap* offsets_within_epoch,
           std::map<KeyType, std::string>* optional_keys,
           Payload* payload_out,
           shard_index_t this_shard);

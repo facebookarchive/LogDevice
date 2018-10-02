@@ -35,7 +35,7 @@ class OffsetMap : public SerializableData {
    * @param counter_type CounterType to read
    * @return  value of CounterType
    */
-  uint64_t getCounter(const CounterType counter_type) const;
+  uint64_t getCounter(CounterType counter_type) const;
 
   /**
    * get counterTypeMap_
