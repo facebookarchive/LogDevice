@@ -1,0 +1,17 @@
+libunwind8
+libboost-filesystem1.65.1
+libboost-program-options1.65.1
+libboost-regex1.65.1
+libboost-thread1.65.1
+libssl1.1
+libevent-2.1-6
+libevent-openssl-2.1-6
+libdouble-conversion1
+libzookeeper-mt2
+libgoogle-glog0v5
+libjemalloc1
+libsnappy1v5
+libpython3.6
+python3-pip
+libboost-python1.65.1
+libboost-context1.65.1
