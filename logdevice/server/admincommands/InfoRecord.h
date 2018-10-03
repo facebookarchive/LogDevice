@@ -7,6 +7,8 @@
  */
 #pragma once
 
+#include <folly/Synchronized.h>
+
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Request.h"
@@ -42,7 +44,7 @@ class InfoRecordStorageTask : public StorageTask {
                                  lsn_t lsn_end,
                                  size_t payload_max_len,
                                  Semaphore& sem,
-                                 EvbufferTextOutput& out,
+                                 folly::Synchronized<EvbufferTextOutput*> out,
                                  InfoRecordTable& table,
                                  bool print_table,
                                  size_t max_records)
@@ -95,7 +97,7 @@ class InfoRecordStorageTask : public StorageTask {
                                            &payload,
                                            storageThreadPool_->getShardIdx());
       if (rv != 0) {
-        out_.printf("Could not parse record.\r\n");
+        (*out_.wlock())->printf("Could not parse record.\r\n");
         continue;
       }
 
@@ -136,29 +138,30 @@ class InfoRecordStorageTask : public StorageTask {
             .set<12>(payload_str.c_str());
       } else {
         auto timestamp_str = format_time(timestamp);
-        out_.printf("%s: %u, "
-                    "timestamp: %s, lng: %u, copyset: %s, flags: %s, "
-                    "offset within epoch: %s, "
-                    "key: %s, "
-                    "written_by_recovery: %s, "
-                    "payload: %s\r\n",
-                    written_by_recovery ? "recovery_epoch" : "wave",
-                    wave,
-                    timestamp_str.c_str(),
-                    last_known_good.val_,
-                    copyset_str.c_str(),
-                    flags_str.c_str(),
-                    flags & LocalLogStoreRecordFormat::FLAG_OFFSET_WITHIN_EPOCH
-                        ? std::to_string(offset_within_epoch).c_str()
-                        : "(empty)",
-                    optional_keys_string.c_str(),
-                    written_by_recovery ? "true" : "false",
-                    payload_str.c_str());
+        (*out_.wlock())
+            ->printf("%s: %u, "
+                     "timestamp: %s, lng: %u, copyset: %s, flags: %s, "
+                     "offset within epoch: %s, "
+                     "key: %s, "
+                     "written_by_recovery: %s, "
+                     "payload: %s\r\n",
+                     written_by_recovery ? "recovery_epoch" : "wave",
+                     wave,
+                     timestamp_str.c_str(),
+                     last_known_good.val_,
+                     copyset_str.c_str(),
+                     flags_str.c_str(),
+                     flags & LocalLogStoreRecordFormat::FLAG_OFFSET_WITHIN_EPOCH
+                         ? std::to_string(offset_within_epoch).c_str()
+                         : "(empty)",
+                     optional_keys_string.c_str(),
+                     written_by_recovery ? "true" : "false",
+                     payload_str.c_str());
       }
     }
 
     if (it->state() == IteratorState::ERROR) {
-      out_.printf("Failed to read from log store.\r\n");
+      (*out_.wlock())->printf("Failed to read from log store.\r\n");
     }
   }
 
@@ -178,7 +181,7 @@ class InfoRecordStorageTask : public StorageTask {
   const lsn_t lsn_start_, lsn_end_;
   const size_t payload_max_len_, max_records_;
   Semaphore& sem_;
-  EvbufferTextOutput& out_;
+  folly::Synchronized<EvbufferTextOutput*> out_;
   InfoRecordTable& table_;
   const bool print_table_;
 };
@@ -190,7 +193,7 @@ class InfoRecordRequest : public Request {
                              lsn_t lsn_end,
                              size_t payload_max_len,
                              Semaphore& sem,
-                             EvbufferTextOutput& out,
+                             folly::Synchronized<EvbufferTextOutput*> out,
                              InfoRecordTable& table,
                              bool print_table,
                              size_t max_records)
@@ -233,7 +236,7 @@ class InfoRecordRequest : public Request {
   const lsn_t lsn_start_, lsn_end_;
   const size_t payload_max_len_, max_records_;
   Semaphore& sem_;
-  EvbufferTextOutput& out_;
+  folly::Synchronized<EvbufferTextOutput*> out_;
   InfoRecordTable& table_;
   const bool print_table_;
 };
@@ -315,6 +318,10 @@ class InfoRecord : public AdminCommand {
       return;
     }
 
+    // Several storage threads may want to write to the evbuffer. Wrap it with a
+    // folly::Synchronized to protect concurrent writes.
+    folly::Synchronized<EvbufferTextOutput*> out_ptr(&out_);
+
     InfoRecordTable table(!json_,
                           "Log ID",
                           "LSN",
@@ -339,12 +346,12 @@ class InfoRecord : public AdminCommand {
                                             lsn_end,
                                             max_len,
                                             sem,
-                                            out_,
+                                            out_ptr,
                                             table,
                                             table_,
                                             max_records_);
     if (server_->getProcessor()->postRequest(req) != 0) {
-      out_.printf("Error: cannot post request on worker\r\n");
+      (*out_ptr.wlock())->printf("Error: cannot post request on worker\r\n");
       return;
     }
 
