@@ -178,26 +178,6 @@ class PartitionDirtyMetadata : public PartitionMetadata {
   mutable std::vector<uint8_t> serialize_buffer_;
 };
 
-// NOTE Deprecated and unused, just kept so we can purge shards of it on
-// startup. Will be removed in T24192781.
-// ID of the oldest existing partition. This metadata is deprecated and ignored.
-// It used to be needed for correctness in case we crash in the middle of
-// dropping a partition - then on startup we would finish the drop.
-// With LogsDB v2 it's not needed.
-class OldestPartitionMetadata_DEPRECATED_DO_NOT_USE final : public Metadata {
- public:
-  explicit OldestPartitionMetadata_DEPRECATED_DO_NOT_USE(
-      partition_id_t partition_id = PARTITION_INVALID)
-      : partition_id_(partition_id) {}
-
-  GEN_METADATA_SERIALIZATION_METHODS(
-      OldestPartitionMetadata_DEPRECATED_DO_NOT_USE,
-      partition_id_,
-      std::to_string(partition_id_))
-
-  partition_id_t partition_id_;
-};
-
 /**
  * Value of partition directory entry. Contains the maximum LSN for this log
  * in this partition. May be slightly overestimated in rare cases.

@@ -1078,10 +1078,6 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
                                  logid_t log,
                                  lsn_t lsn);
 
-  // Drops any deprecated and unsupported metadata found in shards;
-  // currently just OldestPartitionMetadata.
-  bool removeDeprecatedMetadata();
-
   // Called by the constructor. Populates directory in LogState for each log.
   bool readDirectories();
 

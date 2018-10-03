@@ -51,8 +51,6 @@ enum class KeyPrefix : char {
   CustomIndexDirectory = 'M',
   LogMeta_LastReleased = 'm',
   // NOTE 'o' is deprecated and removed from shards on startup from now on
-  // TODO (T24192781) get rid of this once it's gone everywhere
-  OldestPartition = 'o',
   PartitionDirectory = 'p',
   StoreMeta_RebuildingRanges = 'q',
   LogMeta_RebuildingCheckpoint = 'R',
@@ -436,20 +434,6 @@ class PartitionDirectoryKey {
   uint64_t log_id_big_endian_;
   uint64_t lsn_big_endian_;
   uint64_t partition_id_big_endian_;
-} __attribute__((__packed__));
-
-/**
- * NOTE Deprecated, only kept so we can find and remove such entries on startup
- * ID of the oldest non-dropped partition.
- */
-class OldestPartitionKey_DEPRECATED_DO_NOT_USE {
- public:
-  OldestPartitionKey_DEPRECATED_DO_NOT_USE() {}
-
-  static constexpr char HEADER = prefix(KeyPrefix::OldestPartition);
-
- private:
-  char header = HEADER;
 } __attribute__((__packed__));
 
 /**

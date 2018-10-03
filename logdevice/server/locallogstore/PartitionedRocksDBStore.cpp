@@ -408,8 +408,7 @@ void PartitionedRocksDBStore::init(const Configuration* config) {
   ld_spew("Found %zd column families", column_families.size());
 
   if (!(open(column_families, meta_cf_options, config) && readDirectories() &&
-        (getSettings()->read_only ||
-         (finishInterruptedDrops() && removeDeprecatedMetadata())))) {
+        (getSettings()->read_only || finishInterruptedDrops()))) {
     throw ConstructorFailed();
   }
 
@@ -1347,26 +1346,6 @@ bool PartitionedRocksDBStore::finishInterruptedDrops() {
     cleanUpPartitionMetadataAfterDrop(oldest_partition_id_);
   }
 
-  return true;
-}
-
-bool PartitionedRocksDBStore::removeDeprecatedMetadata() {
-  ld_check(!getSettings()->read_only);
-  ld_check(!immutable_.load());
-  // Remove OldestPartitionMetadata
-  RocksDBKeyFormat::OldestPartitionKey_DEPRECATED_DO_NOT_USE key;
-  rocksdb::WriteBatch batch;
-  batch.Delete(
-      metadata_cf_.get(),
-      rocksdb::Slice(reinterpret_cast<const char*>(&key), sizeof(key)));
-  rocksdb::WriteOptions options;
-  auto status = writer_->writeBatch(options, &batch);
-  if (!status.ok()) {
-    ld_error("Error when trying to delete any OldestPartitionMetadata: %s",
-             status.ToString().c_str());
-    return false;
-  }
-  batch.Clear();
   return true;
 }
 
