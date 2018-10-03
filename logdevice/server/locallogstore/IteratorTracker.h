@@ -166,6 +166,30 @@ class TrackableIterator {
   // Returns a copy of both immutable and mutable info.
   TrackingInfo getDebugInfo() const;
 
+  // Returns information that can be used to deduce how many bytes this
+  // iterator has read from disk (including OS page cache, but excluding any
+  // caches and buffers maintained by LocalLogStore).
+  // It should be used like this:
+  //
+  //   size_t before = iterator->getIOBytesUnnormalized();
+  //   [do stuff with iterator]
+  //   size_t disk_io_done = iterator->getIOBytesUnnormalized() - before;
+  //
+  // With an additional requirement that the "[do stuff with iterator]" doesn't
+  // use any other iterators.
+  // This interface allows this method to be implemented in either of two ways:
+  //  1. Return a global thread-local counter of total bytes read from disk by
+  //     current thread (across all iterators and other readers). This is what
+  //     rocksdb-based LocalLogStores do.
+  //  2. Return a per-iterator counter of bytes read from disk.
+  //
+  // This is used only for stats, useful for estimating effectiveness of caches
+  // and buffers in LocalLogStore (in particular, rocksdb block cache and
+  // memtables). Implementing is optional.
+  virtual size_t getIOBytesUnnormalized() const {
+    return 0;
+  }
+
  protected:
   // Call this to register the iterator for tracking.
   // Usually called from constructor of the TrackableIterator subclass.

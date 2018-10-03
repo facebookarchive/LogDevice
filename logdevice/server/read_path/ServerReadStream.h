@@ -472,16 +472,11 @@ class ServerReadStream : boost::noncopyable {
   // onSent handler
   std::shared_ptr<std::string> log_group_path_;
 
-  enum class RecordSource {
-    REAL_TIME,    //
-    NON_BLOCKING, //
-    BLOCKING,     //
-    MAX
-  };
+  enum class RecordSource { REAL_TIME, NON_BLOCKING, BLOCKING, MAX };
 
   static const SimpleEnumMap<RecordSource, const char*> names;
 
-  void noteSent(StatsHolder* stats, RecordSource);
+  void noteSent(StatsHolder* stats, RecordSource, size_t msg_size_bytes_approx);
 
  private:
   // LSN to read from next time we try to read a batch of records

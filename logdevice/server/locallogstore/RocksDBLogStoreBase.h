@@ -340,6 +340,10 @@ class RocksDBLogStoreBase : public LocalLogStore {
   virtual void onSettingsUpdated(
       const std::shared_ptr<const RocksDBSettings> /* unused */) {}
 
+  static size_t getIOBytesUnnormalized() {
+    return ROCKSDB_PERF_CONTEXT()->block_read_byte;
+  }
+
  protected:
   /**
    * Assumes ownership of the raw rocksdb::DB pointer.

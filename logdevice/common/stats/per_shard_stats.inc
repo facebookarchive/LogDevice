@@ -30,14 +30,6 @@ STAT_DEFINE(rebuilding_local_window_slide_num, SUM)
 // The total number of milliseconds the local window slid by
 STAT_DEFINE(rebuilding_local_window_slide_total, SUM)
 
-// number of times that a storage node failed to write to the local log store
-// (err is E::LOCAL_LOG_STORE_WRITE)
-STAT_DEFINE(local_logstore_failed_writes, SUM)
-// number of times that a storage node failed to access metadata on the local
-// log store (err is E::LOCAL_LOG_STORE)
-STAT_DEFINE(local_logstore_failed_metadata, SUM)
-// Number of times we've seen rocksdb::Iterator::status().ok() == false.
-STAT_DEFINE(iterator_errors, SUM)
 // Number of records read by LocalLogStoreReader in rebuilding read streams
 STAT_DEFINE(read_streams_num_records_read_rebuilding, SUM)
 // Number of bytes read by LocalLogStoreReader in rebuilding read streams
@@ -48,6 +40,18 @@ STAT_DEFINE(read_streams_num_record_bytes_read_rebuilding, SUM)
 STAT_DEFINE(read_streams_num_csi_bytes_read_rebuilding, SUM)
 // Number of CSI entries read by LocalLogStoreReader in rebuilding read streams
 STAT_DEFINE(read_streams_num_csi_entries_read_rebuilding, SUM)
+// Total size of rocksdb blocks read from disk by LocalLogStoreReader for rebuilding
+STAT_DEFINE(read_streams_block_bytes_read_rebuilding, SUM)
+
+// number of times that a storage node failed to write to the local log store
+// (err is E::LOCAL_LOG_STORE_WRITE)
+STAT_DEFINE(local_logstore_failed_writes, SUM)
+// number of times that a storage node failed to access metadata on the local
+// log store (err is E::LOCAL_LOG_STORE)
+STAT_DEFINE(local_logstore_failed_metadata, SUM)
+// Number of times we've seen rocksdb::Iterator::status().ok() == false.
+STAT_DEFINE(iterator_errors, SUM)
+
 // IO errors reported by rocksdb. Usually indicates hardware or filesystem
 // problem. External tools can use this stat as a trigger for disk maintenance
 // or swap.

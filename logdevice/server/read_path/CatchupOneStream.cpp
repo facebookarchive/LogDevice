@@ -417,7 +417,9 @@ int ReadingCallback::processRecord(
     stream_->setReadPtr(lsn + 1);
   }
 
-  stream_->noteSent(catchup_->deps_.getStatsHolder(), source_);
+  stream_->noteSent(catchup_->deps_.getStatsHolder(),
+                    source_,
+                    RECORD_Message::expectedSize(payload.size()));
 
   return 0;
 }
@@ -1280,7 +1282,7 @@ CatchupOneStream::readNonBlocking(WeakRef<CatchupQueue> /*catchup_queue*/,
     // limit.
     //
     // Note that this can fail, because record_bytes_queued_ counts the *actual*
-    // bytes aueued, whereas all our tests of whether or not to send depend on
+    // bytes queued, whereas all our tests of whether or not to send depend on
     // RECORD_Message::expectedSize(), which doesn't include rebuilding metadata
     // or byte_offset and is therefore an underestimate.
     ld_check(read_ctx.max_bytes_to_deliver_ > record_bytes_queued_);

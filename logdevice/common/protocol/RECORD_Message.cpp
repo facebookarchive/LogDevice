@@ -57,6 +57,9 @@ RECORD_Message::~RECORD_Message() {
 void RECORD_Message::serialize(ProtocolWriter& writer) const {
   writer.write(header_);
 
+  // Note: this method needs to be kept at least approximately in sync with
+  // expectedSize().
+
   if (extra_metadata_) {
     ld_check(header_.flags & RECORD_Header::INCLUDES_EXTRA_METADATA);
     ld_check(extra_metadata_->header.copyset_size ==
@@ -256,12 +259,10 @@ Message::Disposition RECORD_Message::onReceived(const Address& from) {
 }
 
 size_t RECORD_Message::expectedSize(size_t payload_size) {
-  RECORD_Header header;
-  Payload payload(nullptr, payload_size);
-  // TODO also account for extra metadata
-  RECORD_Message tmp(
-      header, TrafficClass::READ_TAIL, std::move(payload), nullptr);
-  return tmp.size();
+  // TODO: Also account for extra metadata and byte offset.
+  return ProtocolHeader::bytesNeeded(
+             MessageType::RECORD, Compatibility::MAX_PROTOCOL_SUPPORTED) +
+      sizeof(RECORD_Header) + payload_size;
 }
 
 std::unique_ptr<ExtraMetadata> read_extra_metadata(ProtocolReader& reader,

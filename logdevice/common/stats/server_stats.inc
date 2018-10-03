@@ -619,6 +619,8 @@ STAT_DEFINE(read_streams_num_records_read, SUM)
 STAT_DEFINE(read_streams_num_bytes_read, SUM)
 STAT_DEFINE(read_streams_num_record_bytes_read, SUM)
 STAT_DEFINE(read_streams_num_csi_bytes_read, SUM)
+// Total size of rocksdb blocks read from disk by LocalLogStoreReader.
+STAT_DEFINE(read_streams_block_bytes_read, SUM)
 
 // Total number of records filtered by LocalLogStoreReader for all read streams.
 STAT_DEFINE(read_streams_num_records_filtered, SUM)
@@ -658,11 +660,15 @@ STAT_DEFINE(real_time_record_buffer_eviction, SUM)
 
 // Number of sent records that came real time, i.e. on release were sent from
 // the writer to the reader, and never read from RocksDB.
-STAT_DEFINE(real_time_records_real_time, SUM)
+STAT_DEFINE(read_streams_records_real_time, SUM)
 // Number of sent records that were read from RocksDB using non blocking reads.
-STAT_DEFINE(real_time_records_non_blocking, SUM)
+STAT_DEFINE(read_streams_records_non_blocking, SUM)
 // Number of sent records that came from blocking reads of RocksDB.
-STAT_DEFINE(real_time_records_blocking, SUM)
+STAT_DEFINE(read_streams_records_blocking, SUM)
+// Same but in bytes.
+STAT_DEFINE(read_streams_bytes_real_time, SUM)
+STAT_DEFINE(read_streams_bytes_non_blocking, SUM)
+STAT_DEFINE(read_streams_bytes_blocking, SUM)
 
 // Number of times the previous record sent did NOT come from the real time
 // buffer, and the current record is from it.
@@ -693,7 +699,7 @@ STAT_DEFINE(real_time_too_new_regular, SUM)
 #define ITERATOR_OP_STATS(op) \
 STAT_DEFINE(read_streams_rocksdb_locallogstore_ ## op ## _reads, SUM) \
 STAT_DEFINE(read_streams_rocksdb_locallogstore_ ## op ## _reads_from_disk, SUM) \
-STAT_DEFINE(read_streams_rocksdb_locallogstore_ ## op ## _blocks_read_from_disk, SUM) \
+STAT_DEFINE(read_streams_rocksdb_locallogstore_ ## op ## _block_bytes_read_from_disk, SUM) \
 STAT_DEFINE(read_streams_rocksdb_locallogstore_ ## op ## _reads_from_block_cache, SUM) \
 STAT_DEFINE(read_streams_rocksdb_locallogstore_ ## op ## _blocks_read_from_block_cache, SUM) \
 

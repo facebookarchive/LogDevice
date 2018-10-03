@@ -280,18 +280,24 @@ void ServerReadStream::addReleasedRecords(
   released_records_.push_back(ptr);
 }
 
-void ServerReadStream::noteSent(StatsHolder* stats, RecordSource source) {
+void ServerReadStream::noteSent(StatsHolder* stats,
+                                RecordSource source,
+                                size_t msg_size_bytes_approx) {
   switch (source) {
     case RecordSource::REAL_TIME:
-      STAT_INCR(stats, real_time_records_real_time);
+      STAT_INCR(stats, read_streams_records_real_time);
+      STAT_ADD(stats, read_streams_bytes_real_time, msg_size_bytes_approx);
       break;
     case RecordSource::NON_BLOCKING:
-      STAT_INCR(stats, real_time_records_non_blocking);
+      STAT_INCR(stats, read_streams_records_non_blocking);
+      STAT_ADD(stats, read_streams_bytes_non_blocking, msg_size_bytes_approx);
       break;
     case RecordSource::BLOCKING:
-      STAT_INCR(stats, real_time_records_blocking);
+      STAT_INCR(stats, read_streams_records_blocking);
+      STAT_ADD(stats, read_streams_bytes_blocking, msg_size_bytes_approx);
       break;
     case RecordSource::MAX:
+      ld_check(false);
       break;
   }
 

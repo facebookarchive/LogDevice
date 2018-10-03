@@ -66,6 +66,10 @@ class PartitionedRocksDBStore::Iterator : public LocalLogStore::ReadIterator {
     }
   }
 
+  size_t getIOBytesUnnormalized() const override {
+    return RocksDBLogStoreBase::getIOBytesUnnormalized();
+  }
+
  private:
   enum class Operation { SEEK, SEEK_FOR_PREV, NEXT, PREV };
 
@@ -295,6 +299,10 @@ class PartitionedRocksDBStore::PartitionedAllLogsIterator
 
   const LocalLogStore* getStore() const override;
   bool tracingEnabled() const override;
+
+  size_t getIOBytesUnnormalized() const override {
+    return RocksDBLogStoreBase::getIOBytesUnnormalized();
+  }
 
  private:
   // Goes to the first existing partition between `partition` and

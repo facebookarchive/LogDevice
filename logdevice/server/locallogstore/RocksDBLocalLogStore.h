@@ -156,6 +156,10 @@ class RocksDBLocalLogStore : public RocksDBLogStoreBase {
     // Propagate debug info to subiterators.
     void setContextString(const char* str) override;
 
+    size_t getIOBytesUnnormalized() const override {
+      return RocksDBLogStoreBase::getIOBytesUnnormalized();
+    }
+
     // Passed to ReadFilter.
     // Used by PartitionedRocksDBStore::Iterator: it uses a CSIWrapper confined
     // to a single partition, and the time range comes from partition metadata.
@@ -257,6 +261,9 @@ class RocksDBLocalLogStore : public RocksDBLogStoreBase {
     void invalidate() override;
     const LocalLogStore* getStore() const override;
     bool tracingEnabled() const override;
+    size_t getIOBytesUnnormalized() const override {
+      return RocksDBLogStoreBase::getIOBytesUnnormalized();
+    }
 
    private:
     std::unique_ptr<CSIWrapper> iterator_;
