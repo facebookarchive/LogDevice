@@ -809,42 +809,60 @@ TEST_F(AppendIntegrationTest, WriteLsnAfterTrimPoint) {
   std::string data(128, 'x');
 
   auto stats = cluster->getNode(0).stats();
-  ASSERT_EQ(0, stats["skipped_record_lsn_before_trim_point"]);
+  auto skipped_records = stats["skipped_record_lsn_before_trim_point"];
 
-  // write two records
-  auto old_lsn = client->appendSync(logid_t(2), data);
-  ASSERT_NE(LSN_INVALID, old_lsn);
-  old_lsn = client->appendSync(logid_t(2), data);
-  ASSERT_NE(LSN_INVALID, old_lsn);
+  // it is highly unlikely that this doesn't succeed in 10 tries.
+  auto tries = 0;
+  auto max_tries = 10;
+  int rv;
+  std::string cmd, response;
+  lsn_t new_lsn, old_lsn;
+  for (tries = 0; tries < max_tries; tries++) {
+    // write two records
+    old_lsn = client->appendSync(logid_t(2), data);
+    ASSERT_NE(LSN_INVALID, old_lsn);
+    old_lsn = client->appendSync(logid_t(2), data);
+    ASSERT_NE(LSN_INVALID, old_lsn);
 
-  std::string cmd = folly::sformat(
-      "info record {} {} {} --json  --table", 2, old_lsn, old_lsn);
-  auto response = cluster->getNode(0).sendCommand(cmd, false);
-  // even with --json, there are some trailing chars that need to be clipped
-  EXPECT_GT(response.size(), 7);
-  auto json = folly::parseJson(response.substr(0, response.size() - 7));
-  // sanity check (this is a dict with rows and headers keys)
-  EXPECT_EQ(2, json.size());
+    cmd = folly::sformat(
+        "info record {} {} {} --json  --table", 2, old_lsn, old_lsn);
+    response = cluster->getNode(0).sendCommand(cmd, false);
+    // even with --json, there are some trailing chars that need to be clipped
+    EXPECT_GT(response.size(), 7);
+    auto json = folly::parseJson(response.substr(0, response.size() - 7));
+    // sanity check (this is a dict with rows and headers keys)
+    EXPECT_EQ(2, json.size());
 
-  stats = cluster->getNode(0).stats();
-  ASSERT_EQ(0, stats["skipped_record_lsn_before_trim_point"]);
+    stats = cluster->getNode(0).stats();
+    skipped_records = stats["skipped_record_lsn_before_trim_point"];
 
-  // trim way past this lsn
-  auto rv = client->settings().set("disable-trim-past-tail-check", "true");
-  EXPECT_EQ(0, rv);
-  // 1024 because, why not!
-  rv = client->trimSync(logid_t(2), old_lsn + 1024);
-  ASSERT_EQ(0, rv);
+    // trim way past this lsn
+    rv = client->settings().set("disable-trim-past-tail-check", "true");
+    EXPECT_EQ(0, rv);
+    // 1024 because, why not!
+    rv = client->trimSync(logid_t(2), old_lsn + 1024);
+    ASSERT_EQ(0, rv);
 
-  // write another record. we expect the lsn to be less than the trim point
-  auto new_lsn = client->appendSync(logid_t(2), data);
-  ASSERT_NE(LSN_INVALID, new_lsn);
-  ASSERT_GT(old_lsn + 1024, new_lsn);
+    // write another record. we expect the lsn to be less than the trim point
+    new_lsn = client->appendSync(logid_t(2), data);
+    ASSERT_NE(LSN_INVALID, new_lsn);
+    // if epoch incremented, we cannot proceed with the test. retry.
+    if (lsn_to_epoch(new_lsn) == lsn_to_epoch(old_lsn)) {
+      ASSERT_GT(old_lsn + 1024, new_lsn);
+      break;
+    }
+  }
+
+  if (tries == max_tries) {
+    // this is highly unlikely but this is NOT a test failure
+    ld_info("Test did not exercise WriteLsnAfterTrimPoint");
+    return;
+  }
 
   // the write for the record with new_lsn should succeed but the record
   // shouldn't actually get written to RocksDB. verify with stats
   stats = cluster->getNode(0).stats();
-  ASSERT_EQ(1, stats["skipped_record_lsn_before_trim_point"]);
+  ASSERT_GT(stats["skipped_record_lsn_before_trim_point"], skipped_records);
 
   // double check with admin command that the record wasn't written to RocksDB
   cmd = folly::sformat("info record {} {} {}", 2, new_lsn, new_lsn);
