@@ -20,6 +20,11 @@
 
 namespace facebook { namespace logdevice {
 
+ClientDigests::ClientDigests(ClientID cid, AllCachedDigests* parent)
+    : client_id_(cid), parent_(parent) {
+  ld_check(parent_ != nullptr);
+}
+
 bool ClientDigests::canPushRecords() const {
   return bytes_queued_ < parent_->getMaxQueueKBytesPerClient() * 1024;
 }
@@ -51,15 +56,13 @@ std::pair<CachedDigest*, bool> ClientDigests::insert(
   }
 
   // insertion happens, construct the actual digest object
-  result.first->second =
-      std::make_unique<CachedDigest>(log_id,
-                                     shard,
-                                     rid,
-                                     client_id_,
-                                     start_lsn,
-                                     std::move(epoch_snapshot),
-                                     this,
-                                     parent_);
+  result.first->second = parent_->createCachedDigest(log_id,
+                                                     shard,
+                                                     rid,
+                                                     client_id_,
+                                                     start_lsn,
+                                                     std::move(epoch_snapshot),
+                                                     this);
 
   return std::make_pair(result.first->second.get(), true);
 }
@@ -215,7 +218,16 @@ void AllCachedDigests::onStartedSent(ClientID client_id,
 }
 
 void AllCachedDigests::scheduleMoreDigests() {
-  while (!queue_.empty() && canStartDigest()) {
+  if (scheduling_) {
+    // Called recursively due to a synchronous completion of
+    // a digest started in the loop below. No-op
+    return;
+  }
+
+  scheduling_ = true;
+  size_t num_processed = 0;
+  while (!queue_.empty() && canStartDigest() &&
+         num_processed < getMaxStreamsStartedBatch()) {
     auto pair = queue_.front();
     queue_.pop();
 
@@ -224,7 +236,24 @@ void AllCachedDigests::scheduleMoreDigests() {
       // the digest of the enqueued id has already been destroyed
       continue;
     }
+    num_processed++;
     activateDigest(digest);
+  }
+
+  scheduling_ = false;
+
+  if (!queue_.empty() && canStartDigest()) {
+    // we have reached the maximum number of streams started for this batch,
+    // schedule the next batch in the next event loop iteration
+    if (!reschedule_timer_) {
+      reschedule_timer_ =
+          createRescheduleTimer([this] { scheduleMoreDigests(); });
+    }
+    activateRescheduleTimer();
+  } else {
+    if (reschedule_timer_) {
+      reschedule_timer_->cancel();
+    }
   }
 }
 
@@ -244,6 +273,35 @@ operator()(Status /*st*/, const Address& name) {
   ld_check(name.isClientAddress());
   ld_check(owner != nullptr);
   owner->eraseClient(name.id_.client_);
+}
+
+std::unique_ptr<CachedDigest> AllCachedDigests::createCachedDigest(
+    logid_t log_id,
+    shard_index_t shard,
+    read_stream_id_t rid,
+    ClientID client_id,
+    lsn_t start_lsn,
+    std::unique_ptr<const EpochRecordCache::Snapshot> epoch_snapshot,
+    ClientDigests* client_digests) {
+  return std::make_unique<CachedDigest>(log_id,
+                                        shard,
+                                        rid,
+                                        client_id,
+                                        start_lsn,
+                                        std::move(epoch_snapshot),
+                                        client_digests,
+                                        this);
+}
+
+std::unique_ptr<LibeventTimer>
+AllCachedDigests::createRescheduleTimer(std::function<void()> callback) {
+  return std::make_unique<LibeventTimer>(
+      EventLoop::onThisThread()->getEventBase(), callback);
+}
+
+void AllCachedDigests::activateRescheduleTimer() {
+  ld_check(reschedule_timer_ != nullptr);
+  reschedule_timer_->activate(EventLoop::onThisThread()->zero_timeout_);
 }
 
 }} // namespace facebook::logdevice

@@ -25,6 +25,7 @@
 #include "logdevice/common/protocol/RECORD_Message.h"
 #include "logdevice/common/protocol/STARTED_Message.h"
 #include "logdevice/common/test/MockBackoffTimer.h"
+#include "logdevice/common/test/MockLibeventTimer.h"
 #include "logdevice/server/EpochRecordCache.h"
 #include "logdevice/server/EpochRecordCacheEntry.h"
 #include "logdevice/server/RecordCacheDependencies.h"
@@ -585,6 +586,168 @@ TEST_F(CachedDigestTest, WorkerShutDown) {
   // neither push timer or delay timer should be active on shutdown
   ASSERT_FALSE(push_timer_active_);
   ASSERT_FALSE(isDelayTimerActive());
+}
+
+////////////   AllCachedDigestTest ////////////
+
+class AllCachedDigestsTest : public ::testing::Test {
+ public:
+  std::unique_ptr<AllCachedDigests> digests_;
+  size_t max_active_digests_{10};
+  size_t max_bytes_queued_per_client_kb_{800};
+  size_t max_streams_per_batch_{200};
+  bool can_push_ = false;
+
+  void setUp();
+};
+
+// a cached digest that can be synchronously finished
+class DummyCachedDigest : public CachedDigest {
+  using MockSender = SenderTestProxy<DummyCachedDigest>;
+
+ public:
+  explicit DummyCachedDigest(AllCachedDigestsTest* test,
+                             ClientID client_id,
+                             read_stream_id_t rid,
+                             ClientDigests* client_digests,
+                             AllCachedDigests* all_digests)
+      : CachedDigest(LOG_ID,
+                     shard_index_t{0},
+                     rid,
+                     client_id,
+                     compose_lsn(EPOCH, esn_t(1)),
+                     nullptr,
+                     client_digests,
+                     all_digests),
+        test_(test) {
+    sender_ = std::make_unique<MockSender>(this);
+  }
+
+  std::unique_ptr<LibeventTimer>
+  createPushTimer(std::function<void()>) override {
+    return nullptr;
+  }
+  void activatePushTimer() override {}
+  void cancelPushTimer() override {}
+
+  std::unique_ptr<BackoffTimer>
+  createDelayTimer(std::function<void()> callback) override {
+    auto timer = std::make_unique<MockBackoffTimer>();
+    timer->setCallback(callback);
+    return std::move(timer);
+  }
+
+  bool canPushRecords() const override {
+    return test_->can_push_;
+  }
+
+  void onBytesEnqueued(size_t msg_size) override {}
+
+  bool includeExtraMetadata() const override {
+    return false;
+  }
+
+  bool canSendToImpl(const Address&, TrafficClass, BWAvailableCallback&) {
+    return true;
+  }
+
+  int sendMessageImpl(std::unique_ptr<Message>&& msg,
+                      const Address& addr,
+                      BWAvailableCallback*,
+                      SocketCallback*) {
+    return test_->can_push_ ? 0 : -1;
+  }
+
+ private:
+  AllCachedDigestsTest* const test_;
+};
+
+class MockAllCachedDigests : public AllCachedDigests {
+ public:
+  explicit MockAllCachedDigests(AllCachedDigestsTest* test)
+      : AllCachedDigests(test->max_active_digests_,
+                         test->max_bytes_queued_per_client_kb_),
+        test_(test) {}
+
+  std::unique_ptr<CachedDigest> createCachedDigest(
+      logid_t log_id,
+      shard_index_t shard,
+      read_stream_id_t rid,
+      ClientID client_id,
+      lsn_t start_lsn,
+      std::unique_ptr<const EpochRecordCache::Snapshot> epoch_snapshot,
+      ClientDigests* client_digests) override {
+    return std::make_unique<DummyCachedDigest>(
+        test_, client_id, rid, client_digests, this);
+  }
+
+  std::unique_ptr<LibeventTimer>
+  createRescheduleTimer(std::function<void()> callback) override {
+    auto timer = std::make_unique<MockLibeventTimer>();
+    timer->setCallback(std::move(callback));
+    return std::move(timer);
+  }
+
+  void activateRescheduleTimer() override {
+    auto& timer = getRescheduleTimer();
+    ASSERT_NE(nullptr, timer);
+    timer->activate(nullptr);
+  }
+
+  size_t getMaxStreamsStartedBatch() const override {
+    return test_->max_streams_per_batch_;
+  }
+
+ private:
+  AllCachedDigestsTest* const test_;
+};
+
+void AllCachedDigestsTest::setUp() {
+  digests_ = std::make_unique<MockAllCachedDigests>(this);
+}
+
+TEST_F(AllCachedDigestsTest, MaximumDigestsPerIteration) {
+  max_active_digests_ = 10;
+  max_streams_per_batch_ = 233;
+  can_push_ = false;
+  setUp();
+  // start 8000 cached digests
+  for (int i = 1; i <= 8000; ++i) {
+    auto st = digests_->startDigest(LOG_ID,
+                                    shard_index_t(0),
+                                    read_stream_id_t(i),
+                                    i % 2 ? ClientID(1) : ClientID(2),
+                                    compose_lsn(EPOCH, ESN_MIN),
+                                    nullptr);
+    ASSERT_EQ(E::OK, st);
+  }
+
+  const size_t init_queue_size = digests_->queueSize();
+  // all digests other than the 10 active ones are enqueued
+  ASSERT_EQ(8000 - 10, init_queue_size);
+
+  // make digests can sychonously finish
+  can_push_ = true;
+
+  for (int i = 0; digests_->queueSize() > 0; ++i) {
+    ASSERT_EQ(
+        init_queue_size - max_streams_per_batch_ * i, digests_->queueSize());
+    if (i == 0) {
+      CachedDigest* first_digest =
+          digests_->getDigest(ClientID(1), read_stream_id_t(1));
+      ASSERT_NE(nullptr, first_digest);
+      first_digest->pushRecords();
+    } else {
+      const auto& timer = digests_->getRescheduleTimer();
+      ASSERT_NE(nullptr, timer);
+      if (digests_->queueSize() > 0) {
+        // timer must be active for the next batch
+        ASSERT_TRUE(timer->isActive());
+      }
+      checked_downcast<MockLibeventTimer*>(timer.get())->trigger();
+    }
+  }
+  ASSERT_EQ(0, digests_->queueSize());
 }
 
 }} // namespace facebook::logdevice
