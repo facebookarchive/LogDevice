@@ -1692,15 +1692,8 @@ TEST_F(PartitionedRocksDBStoreTest, ReadOnlyWritesCrash) {
   s["rocksdb-read-only"] = "true";
   openStore(s);
 
-#ifdef NDEBUG
-  // Verify that write failed
-  put({TestRecord(logid, 40)},
-      /*csi_copyset=*/{},
-      /*assert_write_fail=*/true);
-#else
-  // Assertions should get hit
+  // ld_check should get hit
   ASSERT_DEATH(put({TestRecord(logid, 40)}), "");
-#endif
 }
 
 TEST_F(PartitionedRocksDBStoreTest, TailingIterator) {
