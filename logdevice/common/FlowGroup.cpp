@@ -198,7 +198,11 @@ bool FlowGroup::run(std::mutex& flow_meters_mutex,
   // witout delay during normal operation.
   priorityq_tap_priority_ = Priority::MAX;
 
-  return !priorityq_.enabledEmpty() && canRunPriorityQ();
+  // If there is more work to do and there is capacity available to dispatch
+  // work, run again at the end of the next event loop.
+  //
+  // NOTE: We have unrestricted capacity if traffic shaping is disabled.
+  return !priorityq_.enabledEmpty() && (!enabled_ || canRunPriorityQ());
 }
 
 }} // namespace facebook::logdevice

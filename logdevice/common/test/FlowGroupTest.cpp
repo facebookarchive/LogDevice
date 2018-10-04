@@ -105,6 +105,7 @@ TEST_F(FlowGroupTest, FlowGroupRunLimits) {
     std::chrono::microseconds delay_;
   };
 
+  // Test 1
   update.policy.setEnabled(true);
   flow_group.applyUpdate(update);
 
@@ -128,6 +129,37 @@ TEST_F(FlowGroupTest, FlowGroupRunLimits) {
   EXPECT_FALSE(callback1.active());
   EXPECT_TRUE(callback2.active());
 
+  // Running again should release the second callback and return false since
+  // the run deadline was not exceeded.
+  EXPECT_FALSE(run());
+  EXPECT_FALSE(callback2.active());
+
+  // Test Case 2
+  // Push the callbacks again. Disable policy and make sure after disabling we
+  // should still be able to drain all the callback
+
+  update.policy.setEnabled(false);
+  flow_group.applyUpdate(update);
+  flow_group.push(callback1, Priority::MAX);
+  flow_group.push(callback2, Priority::MAX);
+  EXPECT_TRUE(run());
+  EXPECT_FALSE(callback1.active());
+  EXPECT_TRUE(callback2.active());
+  // Running again should release the second callback and return false since
+  // the run deadline was not exceeded.
+  EXPECT_FALSE(run());
+  EXPECT_FALSE(callback2.active());
+
+  // Test Case 3
+  // Transition from enabled to disabled when flow_group already has pending
+  // callbacks. Same expectations as Test Case 2.
+  flow_group.push(callback1, Priority::MAX);
+  flow_group.push(callback2, Priority::MAX);
+  update.policy.setEnabled(false);
+  flow_group.applyUpdate(update);
+  EXPECT_TRUE(run());
+  EXPECT_FALSE(callback1.active());
+  EXPECT_TRUE(callback2.active());
   // Running again should release the second callback and return false since
   // the run deadline was not exceeded.
   EXPECT_FALSE(run());
