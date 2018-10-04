@@ -981,7 +981,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
   init(
       "client-is-log-empty-grace-period",
       &client_is_log_empty_grace_period,
-      "100ms",
+      "5s",
       validate_nonnegative<ssize_t>(),
       "After receiving responses to an isLogEmpty() request from an f-majority "
       "of nodes, wait up to this long for more nodes to chime in if there is "
