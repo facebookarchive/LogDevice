@@ -5699,8 +5699,12 @@ void PartitionedRocksDBStore::loPriBackgroundThreadRun() {
       }
     }
 
-    // Update trash size stat
+    // Update stats for total trash size and the rate limit on its deletion
     PER_SHARD_STAT_SET(stats_, trash_size, shard_idx_, getTotalTrashSize());
+    PER_SHARD_STAT_SET(stats_,
+                       trash_deletion_ratelimit,
+                       shard_idx_,
+                       getSettings()->sst_delete_bytes_per_sec);
   }
 
   ld_info("Shard %d lo-pri background thread finished", getShardIdx());

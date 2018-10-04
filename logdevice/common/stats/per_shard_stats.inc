@@ -62,6 +62,8 @@ STAT_DEFINE(corruption_errors, SUM)
 STAT_DEFINE(active_memtables_window_move, SUM)
 // The total size of trash files
 STAT_DEFINE(trash_size, SUM)
+// The rate limit on deletions of trash files
+STAT_DEFINE(trash_deletion_ratelimit, SUM)
 
 // For how long this shard was stalling low-pri writes.
 STAT_DEFINE(write_stall_microsec, SUM)
