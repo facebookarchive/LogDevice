@@ -116,6 +116,12 @@ int PartitionedRocksDBStore::FindTime::execute(lsn_t* lo, lsn_t* hi) {
         return -1;
       } else {
         ld_check(err == E::FAILED);
+        RATELIMIT_INFO(std::chrono::seconds(1),
+                       10,
+                       "PartitionedRocksDBStore::FindTime hit error on read "
+                       "during findPartition() for logid %lu, timestamp %s.",
+                       uint64_t(logid_),
+                       timestamp_.toString().c_str());
         err = E::FAILED;
         return -1;
       }
@@ -152,6 +158,14 @@ int PartitionedRocksDBStore::FindTime::execute(lsn_t* lo, lsn_t* hi) {
         return -1;
       } else {
         ld_check(err == E::FAILED);
+        RATELIMIT_INFO(std::chrono::seconds(1),
+                       10,
+                       "PartitionedRocksDBStore::FindTime execution failed "
+                       "during binary search for logid %lu, timestamp %s on "
+                       "partition %s.",
+                       uint64_t(logid_),
+                       timestamp_.toString().c_str(),
+                       p ? std::to_string(p->id_).c_str() : "unpartitioned");
         err = E::FAILED;
         return -1;
       }

@@ -150,6 +150,14 @@ Message::Disposition FINDKEY_onReceived(FINDKEY_Message* msg,
     if (log_state == nullptr ||        // LogStorageStateMap is at capacity
         log_state->hasPermanentError() // LogStorageState may be stale.
     ) {
+      RATELIMIT_ERROR(std::chrono::seconds(10),
+                      10,
+                      "Got FINDKEY message from client %s but the "
+                      "LogStorageStateMap is at capacity (%d) or is in "
+                      "permanent error (%d)",
+                      Sender::describeConnection(from).c_str(),
+                      log_state == nullptr,
+                      log_state->hasPermanentError());
       send_error(from, msg->header_.client_rqid, E::FAILED, shard_idx, tracer);
       return Message::Disposition::NORMAL;
     }
