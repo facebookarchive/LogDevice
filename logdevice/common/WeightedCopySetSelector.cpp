@@ -6,9 +6,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 #include "logdevice/common/WeightedCopySetSelector.h"
+
 #include "logdevice/common/CopySet.h"
 #include "logdevice/common/stats/Stats.h"
-#include <logdevice/common/HashBasedSequencerLocator.h>
+#include "logdevice/common/util.h"
+#include "logdevice/common/HashBasedSequencerLocator.h"
 
 namespace facebook { namespace logdevice {
 
@@ -572,7 +574,7 @@ WeightedCopySetSelector::prepareCachedNodeAvailability() const {
 }
 
 bool WeightedCopySetSelector::checkAvailabilityAndBlacklist(
-    const ShardID* copyset,
+    const StoreChainLink copyset_chain[],
     size_t copyset_size,
     AdjustedHierarchy& hierarchy,
     NodeAvailabilityCache& cache,
@@ -586,19 +588,20 @@ bool WeightedCopySetSelector::checkAvailabilityAndBlacklist(
   bool ok = true;
   for (size_t i = 0; i < copyset_size; ++i) {
     StoreChainLink destination;
+    ShardID node = copyset_chain[i].destination;
     auto node_status = deps_->getNodeAvailability()->checkNode(
-        nodeset_state_.get(), copyset[i], &destination);
+        nodeset_state_.get(), node, &destination);
     if (node_status == NodeStatus::NOT_AVAILABLE) {
       ld_assert(!std::count(cache.unavailable_nodes.begin(),
                             cache.unavailable_nodes.end(),
-                            copyset[i]));
+                            node));
       // Node is unavailable. Disable it both in cache and in the local
       // AdjustedHierarchy.
-      bool was_enabled_local = hierarchy.detachNode(copyset[i]);
-      bool was_enabled_cache = cache.adjusted_hierarchy->detachNode(copyset[i]);
+      bool was_enabled_local = hierarchy.detachNode(node);
+      bool was_enabled_cache = cache.adjusted_hierarchy->detachNode(node);
       ld_check(was_enabled_local);
       if (was_enabled_cache) {
-        cache.unavailable_nodes.push_back(copyset[i]);
+        cache.unavailable_nodes.push_back(node);
         cache.avoid_detaching_my_domain = false;
       } else {
         // Be extra paranoid and don't allow cache.unavailable_nodes to grow
@@ -609,7 +612,7 @@ bool WeightedCopySetSelector::checkAvailabilityAndBlacklist(
       // node. Graylisting is too noisy.
       if (!*out_biased &&
           (!nodeset_state_ ||
-           nodeset_state_->getNotAvailableReason(copyset[i]) !=
+           nodeset_state_->getNotAvailableReason(node) !=
                NodeSetState::NotAvailableReason::SLOW)) {
         RATELIMIT_INFO(
             std::chrono::seconds(10),
@@ -617,7 +620,7 @@ bool WeightedCopySetSelector::checkAvailabilityAndBlacklist(
             "Copyset for log %lu is biased because we've just blacklisted node "
             "%s. This should be transient.",
             logid_.val_,
-            copyset[i].toString().c_str());
+            node.toString().c_str());
         *out_biased = true;
       }
       ok = false;
@@ -647,7 +650,7 @@ WeightedCopySetSelector::select(copyset_size_t extras,
   AdjustedHierarchy hierarchy = cache.adjusted_hierarchy.value();
 
   bool biased = false;
-  folly::small_vector<ShardID> copyset(replication_);
+  copyset_chain_t copyset_chain(replication_);
 
   // On each attempt we pick a copyset and check availability of its nodes.
   // If all are available, we return this copyset, otherwise blacklist
@@ -752,7 +755,7 @@ WeightedCopySetSelector::select(copyset_size_t extras,
       size_t num_picked = selectCrossDomain(secondary_replication_,
                                             replication_,
                                             hierarchy.getRoot(),
-                                            &copyset[0],
+                                            copyset_chain.data(),
                                             &biased,
                                             rng);
       if (num_picked != replication_) {
@@ -787,14 +790,17 @@ WeightedCopySetSelector::select(copyset_size_t extras,
       size_t num_picked_outside;
 
       auto pick = [&] {
-        num_picked_locally = selectFlat(
-            target_num_local_copies, my_domain, &copyset[0], &biased, rng);
+        num_picked_locally = selectFlat(target_num_local_copies,
+                                        my_domain,
+                                        copyset_chain.data(),
+                                        &biased,
+                                        rng);
 
         num_picked_outside =
             selectCrossDomain(secondary_replication_ - (num_picked_locally > 0),
                               replication_ - num_picked_locally,
                               hierarchy.getRoot(),
-                              copyset.data() + num_picked_locally,
+                              copyset_chain.data() + num_picked_locally,
                               &biased,
                               rng);
       };
@@ -836,12 +842,13 @@ WeightedCopySetSelector::select(copyset_size_t extras,
         // Try picking more from local domain.
 
         // Move the outside copies to the end of copyset.
-        std::rotate(copyset.begin(),
-                    copyset.begin() + num_picked_locally + num_picked_outside,
-                    copyset.end());
+        std::rotate(
+            copyset_chain.begin(),
+            copyset_chain.begin() + num_picked_locally + num_picked_outside,
+            copyset_chain.end());
         num_picked_locally = selectFlat(replication_ - num_picked_outside,
                                         my_domain,
-                                        &copyset[0],
+                                        copyset_chain.data(),
                                         &biased,
                                         rng);
 
@@ -858,7 +865,7 @@ WeightedCopySetSelector::select(copyset_size_t extras,
     }
 
     // Check if all selected nodes are available. If not, blacklist and retry.
-    if (checkAvailabilityAndBlacklist(&copyset[0],
+    if (checkAvailabilityAndBlacklist(copyset_chain.data(),
                                       replication_,
                                       hierarchy,
                                       cache,
@@ -874,7 +881,7 @@ WeightedCopySetSelector::select(copyset_size_t extras,
 
 // See comment in .h for explanation.
 void WeightedCopySetSelector::splitExistingCopySet(
-    ShardID inout_copyset[],
+    StoreChainLink inout_copyset[],
     copyset_size_t existing_copyset_size,
     copyset_size_t* out_full_size,
     AdjustedHierarchy& hierarchy,
@@ -883,7 +890,7 @@ void WeightedCopySetSelector::splitExistingCopySet(
     bool& have_local_copies) const {
   // The transformtation can be done in place, but for simplicity let's use
   // a temporary array.
-  copyset_custsz_t<3> useful_existing_copies;
+  copyset_chain_custsz_t<3> useful_existing_copies;
   size_t redundant_existing_copies = 0;
   // How many more domains we need to pick to satisfy secondary_replication_.
   size_t need_new_domains = secondary_replication_;
@@ -949,16 +956,16 @@ void WeightedCopySetSelector::splitExistingCopySet(
   };
 
   for (size_t i = 0; i < existing_copyset_size; ++i) {
-    ShardID node = inout_copyset[i];
+    ShardID node = inout_copyset[i].destination;
     bool useful = process_node(node);
 
     // Move redundant nodes to the beginning of inout_copyset.
     // Move useful nodes to a separate array. We could do it the other way
     // around, but then the temporary array would be bigger in the worst case.
     if (useful) {
-      useful_existing_copies.push_back(node);
+      useful_existing_copies.push_back({node, ClientID::INVALID});
     } else {
-      inout_copyset[redundant_existing_copies++] = node;
+      inout_copyset[redundant_existing_copies++].destination = node;
     }
   }
 
@@ -987,8 +994,47 @@ WeightedCopySetSelector::augment(ShardID inout_copyset[],
                                  copyset_size_t* out_full_size,
                                  RNG& rng,
                                  bool retry) const {
+  ld_check(inout_copyset != nullptr);
+  copyset_chain_t new_copyset(COPYSET_SIZE_MAX);
+  copyset_size_t new_out_full_size = 0;
+
+  std::transform(inout_copyset,
+                 inout_copyset + existing_copyset_size,
+                 new_copyset.begin(),
+                 [](const ShardID& idx) {
+                   return StoreChainLink{idx, ClientID::INVALID};
+                 });
+  auto result = augment(new_copyset.data(),
+                        existing_copyset_size,
+                        &new_out_full_size,
+                        /* fill_client_id = */ false,
+                        /* chain_out = */ nullptr,
+                        rng,
+                        retry);
+
+  if (result != CopySetSelector::Result::SUCCESS) {
+    return result;
+  }
+
+  std::transform(new_copyset.data(),
+                 new_copyset.data() + new_out_full_size,
+                 inout_copyset,
+                 [](const StoreChainLink& c) { return c.destination; });
+  set_if_not_null(out_full_size, new_out_full_size);
+
+  return CopySetSelector::Result::SUCCESS;
+}
+
+CopySetSelector::Result
+WeightedCopySetSelector::augment(StoreChainLink inout_copyset[],
+                                 copyset_size_t existing_copyset_size,
+                                 copyset_size_t* out_full_size,
+                                 bool fill_client_id,
+                                 bool* chain_out,
+                                 RNG& rng,
+                                 bool retry) const {
   // make a copy of original input for retry
-  copyset_t inout_copyset_dup(
+  copyset_chain_t inout_copyset_dup(
       inout_copyset, inout_copyset + existing_copyset_size);
   // retry if allowed
   auto retry_on_copyset_failure = [&] {
@@ -1004,8 +1050,11 @@ WeightedCopySetSelector::augment(ShardID inout_copyset[],
     return augment(inout_copyset,
                    existing_copyset_size,
                    out_full_size,
+                   fill_client_id,
+                   chain_out,
                    rng,
-                   false /* retry */);
+                   false /* retry */
+    );
   };
   NodeAvailabilityCache& cache = prepareCachedNodeAvailability();
   // Need to make a copy because we'll be detaching nodes and domains based on
@@ -1155,14 +1204,19 @@ WeightedCopySetSelector::augment(ShardID inout_copyset[],
       return ret = retry_on_copyset_failure();
     }
 
-#ifndef NDEBUG
-    // Check that we didn't pick any duplicates.
-    folly::small_vector<ShardID, 6> sorted(
-        inout_copyset,
-        inout_copyset + (out_full_size ? *out_full_size : replication_));
-    std::sort(sorted.begin(), sorted.end());
-    ld_check(std::unique(sorted.begin(), sorted.end()) == sorted.end());
-#endif
+    if (folly::kIsDebug) {
+      // Check that we didn't pick any duplicates.
+      auto size = (out_full_size ? *out_full_size : replication_);
+      std::vector<ShardID> e(size);
+      std::transform(
+          inout_copyset,
+          inout_copyset + size,
+          e.begin(),
+          [](const StoreChainLink& link) { return link.destination; });
+      std::sort(e.begin(), e.end());
+      ld_assert(std::unique(e.begin(), e.end()) == e.end() &&
+                "existing copyset cannot contain duplicate indices");
+    }
 
     // Check if all selected nodes are available. If not, blacklist and retry.
     if (checkAvailabilityAndBlacklist(inout_copyset + useful_existing_copies,
@@ -1183,7 +1237,7 @@ WeightedCopySetSelector::augment(ShardID inout_copyset[],
 size_t WeightedCopySetSelector::selectCrossDomain(size_t num_domains,
                                                   size_t replication,
                                                   AdjustedDomain domain,
-                                                  ShardID* out,
+                                                  StoreChainLink out[],
                                                   bool* out_biased,
                                                   RNG& rng) const {
   // Limitations of the current implementation
@@ -1262,7 +1316,7 @@ size_t WeightedCopySetSelector::selectCrossDomain(size_t num_domains,
         selectFlat(to_select, subdomain, out + out_size, out_biased, rng);
     ld_check(selected > 0);
     if (selected < to_select) {
-      shard_in_overly_small_domain = out[out_size];
+      shard_in_overly_small_domain = out[out_size].destination;
     }
     out_size += selected;
   }
@@ -1334,7 +1388,7 @@ size_t WeightedCopySetSelector::selectCrossDomain(size_t num_domains,
 
 size_t WeightedCopySetSelector::selectFlat(size_t replication,
                                            AdjustedDomain domain,
-                                           ShardID* out,
+                                           StoreChainLink out[],
                                            bool* out_biased,
                                            RNG& rng) const {
   if (replication == 0) {
@@ -1393,7 +1447,7 @@ size_t WeightedCopySetSelector::selectFlat(size_t replication,
     // The subdomain must have at least one nonzero-weight node. Otherwise it
     // would have zero weight and wouldn't be selected by sampleMulti().
     ld_check(rv == Sampling::Result::OK);
-    out[i] = subdomain.getShardID(idx);
+    out[i].destination = subdomain.getShardID(idx);
   }
 
   // Shuffle the copyset to more evenly distribute

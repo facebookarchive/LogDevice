@@ -54,9 +54,7 @@ class WeightedCopySetSelector : public CopySetSelector {
                                   bool fill_client_id = false,
                                   bool* chain_out = nullptr,
                                   RNG& rng = DefaultRNG::get(),
-                                  bool retry = true) const override {
-    throw std::runtime_error("unimplemented");
-  }
+                                  bool retry = true) const override;
 
   copyset_size_t getReplicationFactor() const override {
     return replication_;
@@ -314,7 +312,7 @@ class WeightedCopySetSelector : public CopySetSelector {
   // initializing it if needed and re-checking the cached blacklist of nodes.
   NodeAvailabilityCache& prepareCachedNodeAvailability() const;
 
-  bool checkAvailabilityAndBlacklist(const ShardID* copyset,
+  bool checkAvailabilityAndBlacklist(const StoreChainLink copyset[],
                                      size_t copyset_size,
                                      AdjustedHierarchy& hierarchy,
                                      NodeAvailabilityCache& cache,
@@ -330,7 +328,7 @@ class WeightedCopySetSelector : public CopySetSelector {
   // @return  Number of selected nodes.
   size_t selectFlat(size_t replication,
                     AdjustedDomain domain,
-                    ShardID* out,
+                    StoreChainLink out[],
                     bool* out_biased,
                     RNG& rng) const;
   // Selects `replication` nodes from at least `num_domains` different
@@ -344,7 +342,7 @@ class WeightedCopySetSelector : public CopySetSelector {
   size_t selectCrossDomain(size_t num_domains,
                            size_t replication,
                            AdjustedDomain domain,
-                           ShardID* out,
+                           StoreChainLink out[],
                            bool* out_biased,
                            RNG& rng) const;
 
@@ -382,7 +380,7 @@ class WeightedCopySetSelector : public CopySetSelector {
   // The rest of augment() needs to fill
   // inout_copyset[useful_existing_copies ... replication_ - 1].
   void splitExistingCopySet(
-      ShardID inout_copyset[],
+      StoreChainLink inout_copyset[],
       copyset_size_t existing_copyset_size,
       copyset_size_t* out_full_size,
       AdjustedHierarchy& hierarchy,
