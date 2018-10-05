@@ -217,9 +217,10 @@ void EventLogStateMachine::onUpdate(const EventLogRebuildingSet& set,
   }
 }
 
-void EventLogStateMachine::onSnapshotCreated(Status st) {
+void EventLogStateMachine::onSnapshotCreated(Status st, size_t snapshotSize) {
   if (st == E::OK) {
     ld_info("Successfully created a snapshot");
+    WORKER_STAT_SET(eventlog_snapshot_size, snapshotSize);
     if (shouldTrim()) {
       trim();
     }

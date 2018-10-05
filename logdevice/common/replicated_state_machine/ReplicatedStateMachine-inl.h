@@ -1208,7 +1208,7 @@ void ReplicatedStateMachine<T, D>::snapshot(std::function<void(Status st)> cb) {
     }
     snapshot_in_flight_ = false;
 
-    onSnapshotCreated(st);
+    onSnapshotCreated(st, payload.size());
 
     cb_or_noop(st);
   };

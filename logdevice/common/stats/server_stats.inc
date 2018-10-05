@@ -983,6 +983,8 @@ STAT_DEFINE(logsconfig_api_requests_failed, SUM)
 STAT_DEFINE(logsconfig_api_reply_payload_size, MAX)
 // Messages that had a big payload that was too big and were dropped
 STAT_DEFINE(logsconfig_api_response_toobig, SUM)
+// Size of the logsconfig snapshot record
+STAT_DEFINE(logsconfig_snapshot_size, MAX)
 
 // the amount of boycotts active by a controller
 STAT_DEFINE(boycotts_by_controller_active, SUM)
@@ -995,6 +997,9 @@ STAT_DEFINE(append_success_outliers_active, SUM)
 
 // Event log RSM snapshotting errors
 STAT_DEFINE(eventlog_snapshotting_errors, SUM)
+
+// Size of the event log snapshot
+STAT_DEFINE(eventlog_snapshot_size, MAX)
 
 /*
  * The following stats will not be reset by Stats::reset() and the 'reset'

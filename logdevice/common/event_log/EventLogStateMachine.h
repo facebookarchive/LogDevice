@@ -202,7 +202,7 @@ class EventLogStateMachine
 
   // Snapshot creation completion callback. On success, also issue a request to
   // trim the RSM if possible.
-  void onSnapshotCreated(Status st) override;
+  void onSnapshotCreated(Status st, size_t snapshotSize) override;
 
   UpdateableSettings<Settings> settings_;
 

@@ -587,7 +587,7 @@ class ReplicatedStateMachine {
 
   virtual bool shouldCreateSnapshot() const = 0;
   virtual bool canSnapshot() const = 0;
-  virtual void onSnapshotCreated(Status st) = 0;
+  virtual void onSnapshotCreated(Status st, size_t snapshotSize) = 0;
 
   const RSMType rsm_type_;
   const logid_t delta_log_id_;

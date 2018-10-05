@@ -111,12 +111,13 @@ void LogsConfigStateMachine::onUpdate(const LogsConfigTree& /* unused */,
   }
 }
 
-void LogsConfigStateMachine::onSnapshotCreated(Status st) {
+void LogsConfigStateMachine::onSnapshotCreated(Status st, size_t snapshotSize) {
   // Snapshot creation completion callback.
   // On success, issue a request to trim the RSM if possible.
   if (st == E::OK) {
     ld_info("LogsConfig snapshot was taken successfully!");
     STAT_INCR(getStats(), logsconfig_manager_snapshot_created);
+    STAT_SET(getStats(), logsconfig_snapshot_size, snapshotSize);
     if (shouldTrim()) {
       STAT_INCR(getStats(), logsconfig_manager_trimming_requests);
       trim();
