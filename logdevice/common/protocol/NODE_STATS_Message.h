@@ -46,8 +46,6 @@ class NODE_STATS_Message : public Message {
   // should not be called, only call in lib/NODE_STATS_onSent.cpp
   void onSent(Status status, const Address& to) const override;
 
-  uint16_t getMinProtocolVersion() const override;
-
   // It gets very verbose because of the retries when trying to send a message
   // Instead let the NodeStatsHandler care about the mismatch in protocols
   bool warnAboutOldProtocol() const override {

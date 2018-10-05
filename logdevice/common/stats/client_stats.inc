@@ -57,10 +57,6 @@ STAT_DEFINE(append_probes_bytes_saved, SUM)
 // How many bytes were not sent because APPEND_PROBE message could not be sent
 // (stat mainly for tests)
 STAT_DEFINE(append_probes_bytes_unsent_probe_send_error, SUM)
-// How many times we ignored part of a message in serialization because server
-// does not support this part of the protocol and we don't want to drop the
-// message entirely.
-STAT_DEFINE(serialization_ignored_part_of_message, SUM)
 
 // Read path stats
 STAT_DEFINE(records_lost, SUM)

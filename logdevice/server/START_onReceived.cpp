@@ -552,14 +552,12 @@ onReceivedContinuation(START_Message* msg,
     stream->rebuilding_ = true;
   }
 
-  if (msg->proto_ >= Compatibility::SERVER_CAN_FILTER_RECORD) {
-    stream->filter_pred_ = ServerRecordFilterFactory::create(msg->attrs_);
-    if (stream->filter_pred_ != nullptr) {
-      RATELIMIT_INFO(std::chrono::seconds(10),
-                     1,
-                     "Server-side filtering is enabled. %s",
-                     toString(*stream->filter_pred_).c_str());
-    }
+  stream->filter_pred_ = ServerRecordFilterFactory::create(msg->attrs_);
+  if (stream->filter_pred_ != nullptr) {
+    RATELIMIT_INFO(std::chrono::seconds(10),
+                   1,
+                   "Server-side filtering is enabled. %s",
+                   toString(*stream->filter_pred_).c_str());
   }
 
   w->processor_->getLogStorageStateMap().recoverLogState(

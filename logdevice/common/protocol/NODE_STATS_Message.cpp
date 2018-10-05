@@ -80,10 +80,6 @@ void NODE_STATS_Message::onSent(Status /*status*/,
   std::abort();
 }
 
-uint16_t NODE_STATS_Message::getMinProtocolVersion() const {
-  return Compatibility::ProtocolVersion::CLIENT_SEND_NODE_STATS;
-}
-
 void NODE_STATS_Message::storeReceivedStats(ClientID from) {
   ld_check(ids_.size() == append_successes_.size());
   ld_check(ids_.size() == append_fails_.size());

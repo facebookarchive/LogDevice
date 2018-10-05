@@ -102,11 +102,9 @@ void START_Message::serialize(ProtocolWriter& writer) const {
     writer.writeVector(filtered_out_);
   }
 
-  if (writer.proto() >= Compatibility::SERVER_CAN_FILTER_RECORD) {
-    writer.write(static_cast<uint8_t>(attrs_.filter_type));
-    writer.writeLengthPrefixedVector(attrs_.filter_key1);
-    writer.writeLengthPrefixedVector(attrs_.filter_key2);
-  }
+  writer.write(static_cast<uint8_t>(attrs_.filter_type));
+  writer.writeLengthPrefixedVector(attrs_.filter_key1);
+  writer.writeLengthPrefixedVector(attrs_.filter_key2);
 
   if (writer.proto() >= Compatibility::SERVER_CAN_PROCESS_CSID) {
     if (hdr.scd_copyset_reordering ==
@@ -154,20 +152,18 @@ MessageReadResult START_Message::deserialize(ProtocolReader& reader) {
   if (reader.ok()) {
     readFilteredOut(reader, *m);
 
-    if (proto >= Compatibility::SERVER_CAN_FILTER_RECORD) {
-      uint8_t temp;
-      reader.read(&temp, sizeof(temp));
-      m->attrs_.filter_type = static_cast<ServerRecordFilterType>(temp);
-      if (m->attrs_.filter_type != ServerRecordFilterType::EQUALITY &&
-          m->attrs_.filter_type != ServerRecordFilterType::RANGE &&
-          m->attrs_.filter_type != ServerRecordFilterType::NOFILTER) {
-        ld_error("Bad START message, unknown ServerRecordFilterType: %d",
-                 static_cast<int>(m->attrs_.filter_type));
-        return reader.errorResult(E::BADMSG);
-      }
-      reader.readLengthPrefixedVector(&m->attrs_.filter_key1);
-      reader.readLengthPrefixedVector(&m->attrs_.filter_key2);
+    uint8_t temp;
+    reader.read(&temp, sizeof(temp));
+    m->attrs_.filter_type = static_cast<ServerRecordFilterType>(temp);
+    if (m->attrs_.filter_type != ServerRecordFilterType::EQUALITY &&
+        m->attrs_.filter_type != ServerRecordFilterType::RANGE &&
+        m->attrs_.filter_type != ServerRecordFilterType::NOFILTER) {
+      ld_error("Bad START message, unknown ServerRecordFilterType: %d",
+               static_cast<int>(m->attrs_.filter_type));
+      return reader.errorResult(E::BADMSG);
     }
+    reader.readLengthPrefixedVector(&m->attrs_.filter_key1);
+    reader.readLengthPrefixedVector(&m->attrs_.filter_key2);
 
     if (proto >= Compatibility::SERVER_CAN_PROCESS_CSID) {
       if (m->header_.scd_copyset_reordering ==

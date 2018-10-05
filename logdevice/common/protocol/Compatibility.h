@@ -20,22 +20,7 @@ enum ProtocolVersion : uint16_t {
   //
   // Minimum version number of the protocol this version of LogDevice is
   // backward compatible with - 1
-  PROTOCOL_VERSION_LOWER_BOUND = 56,
-
-  // START_Message can specify key(s) which server can uses
-  // to filter out records.
-  SERVER_CAN_FILTER_RECORD, // == 57;
-
-  // Client can provide custom counter in APPEND_message which get aggregated
-  // on server.
-  SERVER_CUSTOM_COUNTER_SUPPORT, // == 58
-
-  // clients can send NODE_STATS_Message and nodes can send
-  // NODE_STATS_REPLY_Messages in response
-  CLIENT_SEND_NODE_STATS, // == 59
-
-  // All optional keys including FINDKEY and filterable for now
-  APPEND_WITH_OPTIONAL_KEYS, // == 60;
+  PROTOCOL_VERSION_LOWER_BOUND = 60,
 
   SHARD_ID_IN_CLEANED_PROTOCOL, // == 61;
 
@@ -116,10 +101,6 @@ enum ProtocolVersion : uint16_t {
   // NOTE: do not add anything below PROTOCOL_VERSION_UPPER_BOUND
 };
 
-static_assert(SERVER_CAN_FILTER_RECORD == 57, "");
-static_assert(SERVER_CUSTOM_COUNTER_SUPPORT == 58, "");
-static_assert(CLIENT_SEND_NODE_STATS == 59, "");
-static_assert(APPEND_WITH_OPTIONAL_KEYS == 60, "");
 static_assert(SHARD_ID_IN_CLEANED_PROTOCOL == 61, "");
 static_assert(REBUILDING_WITHOUT_WAL_2 == 62, "");
 static_assert(SHARD_ID_IN_STORE_MSG == 63, "");

@@ -18,8 +18,4 @@ NODE_STATS_REPLY_Message::onReceived(const Address& /*from*/) {
   std::abort();
 }
 
-template <>
-uint16_t NODE_STATS_REPLY_Message::getMinProtocolVersion() const {
-  return Compatibility::ProtocolVersion::CLIENT_SEND_NODE_STATS;
-}
 }} // namespace facebook::logdevice

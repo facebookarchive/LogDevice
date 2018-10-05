@@ -164,26 +164,17 @@ void STORE_Message::serialize(ProtocolWriter& writer) const {
   }
 
   if (header_.flags & STORE_Header::CUSTOM_KEY) {
-    if (proto < Compatibility::APPEND_WITH_OPTIONAL_KEYS) {
-      const auto it = optional_keys_.find(KeyType::FINDKEY);
-      ld_check(it != optional_keys_.end() &&
-               it->second.size() <= std::numeric_limits<uint16_t>::max());
-      uint16_t key_length = it->second.length();
-      writer.write(key_length);
-      writer.writeVector(it->second);
-    } else {
-      // Replacing it with write/readLengthPrefixedVector breaks existing
-      // MessageSerializationTest test infrastructure.
-      uint8_t optional_keys_length = optional_keys_.size();
-      writer.write(optional_keys_length);
-      for (const auto& key_pair : optional_keys_) {
-        uint8_t type = static_cast<uint8_t>(key_pair.first);
-        ld_check(type <= std::numeric_limits<uint8_t>::max());
-        writer.write(type);
-        uint16_t length = key_pair.second.size();
-        writer.write(length);
-        writer.writeVector(key_pair.second);
-      }
+    // Replacing it with write/readLengthPrefixedVector breaks existing
+    // MessageSerializationTest test infrastructure.
+    uint8_t optional_keys_length = optional_keys_.size();
+    writer.write(optional_keys_length);
+    for (const auto& key_pair : optional_keys_) {
+      uint8_t type = static_cast<uint8_t>(key_pair.first);
+      ld_check(type <= std::numeric_limits<uint8_t>::max());
+      writer.write(type);
+      uint16_t length = key_pair.second.size();
+      writer.write(length);
+      writer.writeVector(key_pair.second);
     }
   }
 
@@ -265,30 +256,20 @@ MessageReadResult STORE_Message::deserialize(ProtocolReader& reader,
   }
 
   if (hdr.flags & STORE_Header::CUSTOM_KEY) {
-    if (reader.proto() < Compatibility::APPEND_WITH_OPTIONAL_KEYS) {
+    uint8_t optional_keys_length;
+    reader.read(&optional_keys_length);
+    for (uint8_t i = 0; i < optional_keys_length; ++i) {
+      if (!reader.ok()) {
+        break;
+      }
+      uint8_t type;
+      std::string str;
       uint16_t length;
+      reader.read(&type);
       reader.read(&length);
-      if (reader.ok()) {
-        std::string str;
-        reader.readVector(&str, length);
-        optional_keys.insert(std::make_pair(KeyType::FINDKEY, str));
-      }
-    } else {
-      uint8_t optional_keys_length;
-      reader.read(&optional_keys_length);
-      for (uint8_t i = 0; i < optional_keys_length; ++i) {
-        if (!reader.ok()) {
-          break;
-        }
-        uint8_t type;
-        std::string str;
-        uint16_t length;
-        reader.read(&type);
-        reader.read(&length);
-        reader.readVector(&str, length);
-        auto keytype = static_cast<KeyType>(type);
-        optional_keys.insert(std::make_pair(keytype, str));
-      }
+      reader.readVector(&str, length);
+      auto keytype = static_cast<KeyType>(type);
+      optional_keys.insert(std::make_pair(keytype, str));
     }
   }
 

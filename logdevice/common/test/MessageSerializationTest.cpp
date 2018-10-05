@@ -154,26 +154,12 @@ class MessageSerializationTest : public ::testing::Test {
     }
 
     ASSERT_EQ(sent.block_starting_lsn_, recv.block_starting_lsn_);
-    if (proto >= Compatibility::APPEND_WITH_OPTIONAL_KEYS) {
-      // When proto >= Compatibility::APPEND_WITH_OPTIONAL_KEYS, recv should
-      // be able to recv multiple keys. So we need to check all keys.
-      ASSERT_EQ(sent.optional_keys_.size(), recv.optional_keys_.size());
-      for (const auto& key_pair : sent.optional_keys_) {
-        ASSERT_NE(recv.optional_keys_.find(key_pair.first),
-                  recv.optional_keys_.end());
-        ASSERT_EQ(
-            recv.optional_keys_.find(key_pair.first)->second, key_pair.second);
-      }
-    } else {
-      // proto < Compatibility::APPEND_WITH_OPTIONAL_KEYS Only KeyType::FINDKEY
-      if (sent.optional_keys_.find(KeyType::FINDKEY) !=
-          sent.optional_keys_.end()) {
-        ASSERT_EQ(sent.optional_keys_.find(KeyType::FINDKEY)->second,
-                  recv.optional_keys_.find(KeyType::FINDKEY)->second);
-      } else {
-        ASSERT_EQ(recv.optional_keys_.find(KeyType::FINDKEY),
-                  recv.optional_keys_.end());
-      }
+    ASSERT_EQ(sent.optional_keys_.size(), recv.optional_keys_.size());
+    for (const auto& key_pair : sent.optional_keys_) {
+      ASSERT_NE(
+          recv.optional_keys_.find(key_pair.first), recv.optional_keys_.end());
+      ASSERT_EQ(
+          recv.optional_keys_.find(key_pair.first)->second, key_pair.second);
     }
 
     if (proto >= Compatibility::STORE_E2E_TRACING_SUPPORT) {
@@ -199,18 +185,7 @@ class MessageSerializationTest : public ::testing::Test {
     ASSERT_EQ(m.header_.seen, m2.header_.seen);
     ASSERT_EQ(m.header_.timeout_ms, m2.header_.timeout_ms);
     ASSERT_EQ(m.header_.flags, m2.header_.flags);
-    if (proto < Compatibility::APPEND_WITH_OPTIONAL_KEYS) {
-      if (m.header_.flags & APPEND_Header::CUSTOM_KEY) {
-        ASSERT_EQ(m.attrs_.optional_keys.at(KeyType::FINDKEY),
-                  m2.attrs_.optional_keys.at(KeyType::FINDKEY));
-      } else {
-        ASSERT_EQ(
-            m.attrs_.optional_keys.size(), m2.attrs_.optional_keys.size());
-        ASSERT_EQ(m.attrs_.optional_keys.size(), 0);
-      }
-    } else {
-      ASSERT_EQ(m.attrs_.optional_keys, m2.attrs_.optional_keys);
-    }
+    ASSERT_EQ(m.attrs_.optional_keys, m2.attrs_.optional_keys);
     ASSERT_EQ(m.attrs_.counters.hasValue(), m2.attrs_.counters.hasValue());
     if (m.attrs_.counters.hasValue()) {
       ASSERT_EQ(m.attrs_.counters->size(), m2.attrs_.counters->size());
@@ -452,18 +427,15 @@ struct TestStoreMessageFactory {
     rv += "010000000400008002000000050000800300000006000080";
 
     if (header_.flags & STORE_Header::CUSTOM_KEY) {
-      if (proto >= Compatibility::APPEND_WITH_OPTIONAL_KEYS) {
-        // When proto >= proto >= Compatibility::APPEND_WITH_OPTIONAL_KEYS,
-        // The protocol is:  1. Send number of keys. For here: "02".
-        //                   2. For each key, send KeyType. Here, "00" or "01"
-        //                   3. Length + serialized key (as before)
-        if (optional_keys_.find(KeyType::FILTERABLE) != optional_keys_.end()) {
-          rv += "0200"; //"02" means 2 optional keys, "00" type for first key
-          rv += key_serialized_;
-          rv += "01"; // "01" type for second key
-        } else {
-          rv += "0100"; // "01" means 1 optional key. "00" type for first key
-        }
+      // The protocol is:  1. Send number of keys. For here: "02".
+      //                   2. For each key, send KeyType. Here, "00" or "01"
+      //                   3. Length + serialized key (as before)
+      if (optional_keys_.find(KeyType::FILTERABLE) != optional_keys_.end()) {
+        rv += "0200"; //"02" means 2 optional keys, "00" type for first key
+        rv += key_serialized_;
+        rv += "01"; // "01" type for second key
+      } else {
+        rv += "0100"; // "01" means 1 optional key. "00" type for first key
       }
       rv += key_serialized_;
     }
@@ -942,7 +914,7 @@ TEST_F(MessageSerializationTest, APPEND) {
     };
     DO_TEST(m,
             check,
-            Compatibility::SERVER_CUSTOM_COUNTER_SUPPORT,
+            Compatibility::MIN_PROTOCOL_SUPPORTED,
             Compatibility::MAX_PROTOCOL_SUPPORTED,
             expected_fn,
             deserializer);
@@ -963,7 +935,7 @@ TEST_F(MessageSerializationTest, APPEND) {
     };
     DO_TEST(m,
             check,
-            Compatibility::SERVER_CUSTOM_COUNTER_SUPPORT,
+            Compatibility::MIN_PROTOCOL_SUPPORTED,
             Compatibility::MAX_PROTOCOL_SUPPORTED,
             expected_fn,
             deserializer);
@@ -980,7 +952,7 @@ TEST_F(MessageSerializationTest, APPEND) {
     };
     DO_TEST(m,
             check,
-            Compatibility::SERVER_CUSTOM_COUNTER_SUPPORT,
+            Compatibility::MIN_PROTOCOL_SUPPORTED,
             Compatibility::MAX_PROTOCOL_SUPPORTED,
             expected_fn,
             deserializer);
@@ -1194,22 +1166,7 @@ TEST_F(MessageSerializationTest, START_num_filtered_out) {
   auto expect = [&](uint16_t proto) {
     if (filtered_out.empty()) {
       // expect num_filtered_out to be 0 and no element in filtered_out
-      if (proto < Compatibility::SERVER_CAN_FILTER_RECORD) {
-        // prior to this protocol, there was no read stream attributes in the
-        // START message, so the serialized payload is different.
-        return "D38347F48F9EC4DC" // log_id
-               "3A3B472C8D47498B" // read_stream_id
-               "0500000000000000" // start_lsn
-               "0D00000000000000" // until_lsn
-               "0800000000000000" // window_high
-               "80000000"         // flags = SINGLE_COPY_DELIVERY
-               "0000"             // required_node_in_copyset
-               "3A3B472C8D47498B" // filter_version
-               "00"               // num_filtered_out = 0
-               "00"               // replication
-               "00"               // scd_copyset_reordering
-               "0000";            // shard
-      } else if (proto < Compatibility::SUPPORT_LARGER_FILTERED_OUT_LIST) {
+      if (proto < Compatibility::SUPPORT_LARGER_FILTERED_OUT_LIST) {
         return "D38347F48F9EC4DC3A3B472C8D47498B05000000000000000D0000000000000"
                "0080000000000000080000000" // flags = SINGLE_COPY_DELIVERY
                "00003A3B472C8D47498B00"    // num_filtered_out = 0
@@ -1223,14 +1180,7 @@ TEST_F(MessageSerializationTest, START_num_filtered_out) {
       }
     } else if (filtered_out.size() == 3) {
       // expect num_filtered_out to be 3 and 3 elements encoded in filtered_out
-      if (proto < Compatibility::SERVER_CAN_FILTER_RECORD) {
-        return "D38347F48F9EC4DC3A3B472C8D47498B05000000000000000D0000000000000"
-               "0080000000000000080000000" // flags = SINGLE_COPY_DELIVERY
-               "00003A3B472C8D47498B03"    // num_filtered_out = 3
-               "0000000000000000"          // N0:S0
-               "01000000"                  // N1:S0
-               "02000000";                 // N2:S0
-      } else if (proto < Compatibility::SUPPORT_LARGER_FILTERED_OUT_LIST) {
+      if (proto < Compatibility::SUPPORT_LARGER_FILTERED_OUT_LIST) {
         return "D38347F48F9EC4DC3A3B472C8D47498B05000000000000000D0000000000000"
                "0080000000000000080000000" // flags = SINGLE_COPY_DELIVERY
                "00003A3B472C8D47498B03"    // num_filtered_out = 3
@@ -1250,30 +1200,7 @@ TEST_F(MessageSerializationTest, START_num_filtered_out) {
       }
     } else if (filtered_out.size() == COPYSET_SIZE_MAX + 1) {
       // expect num_filtered_out to be 128 and as many elements encoded
-      if (proto < Compatibility::SERVER_CAN_FILTER_RECORD) {
-        return "D38347F48F9EC4DC3A3B472C8D47498B05000000000000000D0000000000000"
-               "0080000000000000080000000" // flags = SINGLE_COPY_DELIVERY
-               "00003A3B472C8D47498B80"    // num_filtered_out = 0x80 = 128
-               "0000000000000000"          // N0:S0
-               "01000000"                  // ...
-               "020000000300000004000000050000000600000007000000080000000900000"
-               "00A0000000B0000000C0000000D0000000E0000000F00000010000000110000"
-               "001200000013000000140000001500000016000000170000001800000019000"
-               "0001A0000001B0000001C0000001D0000001E0000001F000000200000002100"
-               "000022000000230000002400000025000000260000002700000028000000290"
-               "000002A0000002B0000002C0000002D0000002E0000002F0000003000000031"
-               "000000320000003300000034000000350000003600000037000000380000003"
-               "90000003A0000003B0000003C0000003D0000003E0000003F00000040000000"
-               "410000004200000043000000440000004500000046000000470000004800000"
-               "0490000004A0000004B0000004C0000004D0000004E0000004F000000500000"
-               "005100000052000000530000005400000055000000560000005700000058000"
-               "000590000005A0000005B0000005C0000005D0000005E0000005F0000006000"
-               "000061000000620000006300000064000000650000006600000067000000680"
-               "00000690000006A0000006B0000006C0000006D0000006E0000006F00000070"
-               "000000710000007200000073000000740000007500000076000000770000007"
-               "8000000790000007A0000007B0000007C0000007D0000007E0000007F00000"
-               "0";
-      } else if (proto < Compatibility::SUPPORT_LARGER_FILTERED_OUT_LIST) {
+      if (proto < Compatibility::SUPPORT_LARGER_FILTERED_OUT_LIST) {
         return "D38347F48F9EC4DC3A3B472C8D47498B05000000000000000D0000000000000"
                "0080000000000000080000000" // flags = SINGLE_COPY_DELIVERY
                "00003A3B472C8D47498B80"    // num_filtered_out = 128

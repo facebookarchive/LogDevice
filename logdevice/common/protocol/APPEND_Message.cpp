@@ -44,44 +44,28 @@ void APPEND_Message::serialize(ProtocolWriter& writer) const {
   }
 
   if (header_.flags & APPEND_Header::CUSTOM_KEY) {
-    if (proto < Compatibility::APPEND_WITH_OPTIONAL_KEYS) {
-      // This is for backward compatibility. KeyType::FINDKEY is for former
-      // optional key field. To use server-side filtering, it is advised
-      // to use KeyType::FILTERATBLE.
-      const auto it = attrs_.optional_keys.find(KeyType::FINDKEY);
-      ld_check(it != attrs_.optional_keys.end() &&
-               it->second.size() <= std::numeric_limits<uint16_t>::max());
-      uint16_t key_length = it->second.length();
-      writer.write(key_length);
-      writer.writeVector(it->second);
-    } else {
-      uint8_t optional_keys_length = attrs_.optional_keys.size();
-      writer.write(optional_keys_length);
-      for (const auto& key_pair : attrs_.optional_keys) {
-        uint8_t type = static_cast<uint8_t>(key_pair.first);
-        ld_check(type <= std::numeric_limits<uint8_t>::max());
-        writer.write(type);
-        ld_check(key_pair.second.length() <=
-                 std::numeric_limits<uint16_t>::max());
-        writer.writeLengthPrefixedVector(key_pair.second);
-      }
+    uint8_t optional_keys_length = attrs_.optional_keys.size();
+    writer.write(optional_keys_length);
+    for (const auto& key_pair : attrs_.optional_keys) {
+      uint8_t type = static_cast<uint8_t>(key_pair.first);
+      ld_check(type <= std::numeric_limits<uint8_t>::max());
+      writer.write(type);
+      ld_check(key_pair.second.length() <=
+               std::numeric_limits<uint16_t>::max());
+      writer.writeLengthPrefixedVector(key_pair.second);
     }
   }
 
   ld_check(bool(header_.flags & APPEND_Header::CUSTOM_COUNTERS) ==
            attrs_.counters.hasValue());
   if (header_.flags & APPEND_Header::CUSTOM_COUNTERS) {
-    if (proto >= Compatibility::SERVER_CUSTOM_COUNTER_SUPPORT) {
-      ld_check(attrs_.counters->size() <= std::numeric_limits<uint8_t>::max());
-      uint8_t counters_length = attrs_.counters->size();
-      writer.write(counters_length);
+    ld_check(attrs_.counters->size() <= std::numeric_limits<uint8_t>::max());
+    uint8_t counters_length = attrs_.counters->size();
+    writer.write(counters_length);
 
-      for (auto counter : attrs_.counters.value()) {
-        writer.write(counter.first);
-        writer.write(counter.second);
-      }
-    } else {
-      WORKER_STAT_INCR(client.serialization_ignored_part_of_message);
+    for (auto counter : attrs_.counters.value()) {
+      writer.write(counter.first);
+      writer.write(counter.second);
     }
   }
 
@@ -165,29 +149,18 @@ MessageReadResult APPEND_Message::deserialize(ProtocolReader& reader,
   AppendAttributes attrs;
 
   if (header.flags & APPEND_Header::CUSTOM_KEY) {
-    if (reader.proto() < Compatibility::APPEND_WITH_OPTIONAL_KEYS) {
-      // This is for backward compatibility. See comments in serialize().
-      uint16_t length;
-      reader.read(&length);
-      if (reader.ok()) {
-        std::string str;
-        reader.readVector(&str, length);
-        attrs.optional_keys.insert(std::make_pair(KeyType::FINDKEY, str));
+    uint8_t optional_keys_length;
+    reader.read(&optional_keys_length);
+    for (uint8_t i = 0; i < optional_keys_length; ++i) {
+      if (!reader.ok()) {
+        break;
       }
-    } else {
-      uint8_t optional_keys_length;
-      reader.read(&optional_keys_length);
-      for (uint8_t i = 0; i < optional_keys_length; ++i) {
-        if (!reader.ok()) {
-          break;
-        }
-        uint8_t type;
-        std::string str;
-        reader.read(&type);
-        reader.readLengthPrefixedVector(&str);
-        attrs.optional_keys.insert(
-            std::make_pair(static_cast<KeyType>(type), str));
-      }
+      uint8_t type;
+      std::string str;
+      reader.read(&type);
+      reader.readLengthPrefixedVector(&str);
+      attrs.optional_keys.insert(
+          std::make_pair(static_cast<KeyType>(type), str));
     }
   }
 
