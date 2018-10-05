@@ -10,6 +10,7 @@
 #include <boost/icl/interval_map.hpp>
 
 #include "logdevice/common/EpochMetaData.h"
+#include "logdevice/common/Timestamp.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/types.h"
 

@@ -9,11 +9,12 @@
 
 #include <folly/Optional.h>
 
-#include "logdevice/common/protocol/ProtocolReader.h"
-#include "logdevice/common/protocol/ProtocolWriter.h"
 #include "logdevice/common/types_internal.h"
 
 namespace facebook { namespace logdevice {
+
+class ProtocolWriter;
+class ProtocolReader;
 
 /**
  * Abstract type for a piece of data/metadata that can be serialized and
@@ -81,15 +82,7 @@ class SerializableData {
    *           INVALID_PARAM  object is not valid
    *           NOBUFS         @size is not enough to hold the data
    */
-  int serialize(void* buffer, size_t size) const {
-    ProtocolWriter w({buffer, size}, name(), 0);
-    this->serialize(w);
-    if (w.error()) {
-      err = w.status();
-      return -1;
-    }
-    return w.result();
-  }
+  int serialize(void* buffer, size_t size) const;
 
   /**
    * Returns serialized size, or -1 if the data cannot be serialized
@@ -108,15 +101,7 @@ class SerializableData {
    *           BADMSG  content of the buffer does not contain valid data
    */
   int deserialize(Slice buffer,
-                  folly::Optional<size_t> expected_size = folly::none) {
-    ProtocolReader reader(buffer, name(), 0);
-    this->deserialize(reader, false, expected_size);
-    if (reader.error()) {
-      err = reader.status();
-      return -1;
-    }
-    return reader.bytesRead();
-  }
+                  folly::Optional<size_t> expected_size = folly::none);
 
   int deserialize(void* payload,
                   size_t size,

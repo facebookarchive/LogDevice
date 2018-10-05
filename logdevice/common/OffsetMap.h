@@ -85,6 +85,8 @@ class OffsetMap : public SerializableData {
     return "OffsetMap";
   }
 
+  std::string toString() const;
+
   // Add two counterTypeMap_ and return a new OffsetMap object
   OffsetMap operator+(const OffsetMap& om) const;
 

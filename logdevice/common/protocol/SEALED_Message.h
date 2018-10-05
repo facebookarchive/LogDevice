@@ -9,6 +9,7 @@
 
 #include <vector>
 
+#include "logdevice/common/OffsetMap.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/Seal.h"
 #include "logdevice/common/TailRecord.h"
@@ -40,7 +41,7 @@ struct SEALED_Header {
 
   // number of lsn_t values following the header.
   // An additional this many uint64_t's follow,
-  // forming the epoch_size list.
+  // forming the epoch_offset_map list.
   uint32_t lng_list_size;
 
   // shard that was sealed.
@@ -65,7 +66,7 @@ class SEALED_Message : public Message {
                  std::vector<lsn_t> lng,
                  Seal seal,
                  std::vector<uint64_t> last_timestamp,
-                 std::vector<uint64_t> epoch_size,
+                 std::vector<OffsetMap> epoch_offset_map,
                  std::vector<lsn_t> max_seen_lsn,
                  std::vector<TailRecord> tail_records)
       : Message(MessageType::SEALED, TrafficClass::RECOVERY),
@@ -73,7 +74,7 @@ class SEALED_Message : public Message {
         epoch_lng_(std::move(lng)),
         seal_(seal),
         last_timestamp_(std::move(last_timestamp)),
-        epoch_size_(std::move(epoch_size)),
+        epoch_offset_map_(std::move(epoch_offset_map)),
         max_seen_lsn_(std::move(max_seen_lsn)),
         tail_records_(std::move(tail_records)) {
     header_.lng_list_size = epoch_lng_.size();
@@ -102,7 +103,7 @@ class SEALED_Message : public Message {
       Status status,
       std::vector<lsn_t> lng_list = std::vector<lsn_t>(),
       Seal seal = Seal(),
-      std::vector<uint64_t> offset_within_epoch = std::vector<uint64_t>(),
+      std::vector<OffsetMap> epoch_offset_map = std::vector<OffsetMap>(),
       std::vector<uint64_t> last_timestamp = std::vector<uint64_t>(),
       std::vector<lsn_t> max_seen_lsn = std::vector<lsn_t>(),
       std::vector<TailRecord> tail_records = std::vector<TailRecord>());
@@ -121,7 +122,7 @@ class SEALED_Message : public Message {
   std::vector<uint64_t> last_timestamp_;
 
   // Node's view of amount of data written in seal_epoch.
-  std::vector<uint64_t> epoch_size_;
+  std::vector<OffsetMap> epoch_offset_map_;
 
   // since Compatibility::TAIL_RECORD_IN_SEALED
   // Node's view of maximum stored lsn of the epoch

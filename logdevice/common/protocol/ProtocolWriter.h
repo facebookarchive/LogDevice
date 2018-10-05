@@ -11,9 +11,10 @@
 #include <type_traits>
 #include <vector>
 
+#include "logdevice/common/SerializableData.h"
 #include "logdevice/common/debug.h"
-#include "logdevice/common/types_internal.h"
 #include "logdevice/common/protocol/MessageType.h"
+#include "logdevice/common/types_internal.h"
 #include "logdevice/include/Err.h"
 
 struct evbuffer;
@@ -152,6 +153,22 @@ class ProtocolWriter {
   template <typename Vector>
   void writeVector(const Vector& v) {
     write(v.data(), v.size() * sizeof(typename Vector::value_type));
+  }
+
+  /**
+   * Writes a vector of SerializableData.
+   *
+   * NOTE: The length of the vector is not included, assumed to be known to
+   * the reader (from a header field for example).
+   */
+  template <typename Vector>
+  void writeVectorOfSerializable(const Vector& v) {
+    if (proto_ < proto_gate_) {
+      return;
+    }
+    for (const auto& e : v) {
+      e.serialize(*this);
+    }
   }
 
   /**

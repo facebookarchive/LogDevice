@@ -9,9 +9,11 @@
 
 #include <folly/Memory.h>
 
-#include "logdevice/common/debug.h"
 #include "logdevice/common/LegacyLogToShard.h"
 #include "logdevice/common/NodeSetSelectorUtils.h"
+#include "logdevice/common/debug.h"
+#include "logdevice/common/protocol/ProtocolReader.h"
+#include "logdevice/common/protocol/ProtocolWriter.h"
 #include "logdevice/common/util.h"
 #include "logdevice/include/Err.h"
 #include "logdevice/include/Record.h"

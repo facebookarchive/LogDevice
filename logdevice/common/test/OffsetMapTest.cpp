@@ -12,6 +12,7 @@
 #include <memory>
 
 #include "logdevice/common/OffsetMap.h"
+#include "logdevice/common/debug.h"
 
 namespace {
 

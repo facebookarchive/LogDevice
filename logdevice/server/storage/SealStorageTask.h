@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "logdevice/common/Address.h"
+#include "logdevice/common/OffsetMap.h"
 #include "logdevice/common/Seal.h"
 #include "logdevice/common/TailRecord.h"
 #include "logdevice/common/WeakRefHolder.h"
@@ -41,18 +42,19 @@ class SealStorageTask : public StorageTask {
   struct EpochInfo {
     esn_t lng;
     esn_t last_record;
-    uint64_t epoch_size;
+    OffsetMap epoch_offset_map;
     uint64_t last_timestamp;
 
     bool operator==(const EpochInfo& rhs) const {
       return lng == rhs.lng && last_record == rhs.last_record &&
-          epoch_size == rhs.epoch_size && last_timestamp == rhs.last_timestamp;
+          epoch_offset_map == rhs.epoch_offset_map &&
+          last_timestamp == rhs.last_timestamp;
     }
 
     std::string toString() const {
       return "[lng: " + folly::to<std::string>(lng.val()) +
           ", last_record: " + folly::to<std::string>(last_record.val()) +
-          ", epoch_size: " + folly::to<std::string>(epoch_size) +
+          ", epoch_offset_map: " + epoch_offset_map.toString() +
           ", last_timestamp: " + folly::to<std::string>(last_timestamp) + "]";
     }
   };
@@ -112,7 +114,7 @@ class SealStorageTask : public StorageTask {
   // get LNG values for all epochs in [last_clean_ + 1, seal_epoch_],
   // used to reply the SEAL message
   void getAllEpochInfo(std::vector<lsn_t>& epoch_lng,
-                       std::vector<uint64_t>& epoch_size,
+                       std::vector<OffsetMap>& epoch_offset_map,
                        std::vector<uint64_t>& last_timestamp,
                        std::vector<lsn_t>& max_seen_lsn) const;
 

@@ -11,6 +11,7 @@
 #include <type_traits>
 #include <vector>
 
+#include "logdevice/common/SerializableData.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/Message.h"
 #include "logdevice/common/protocol/MessageReadResult.h"
@@ -181,6 +182,19 @@ class ProtocolReader {
       } else {
         // Same rationale as zeroing out in read(void*, size_t)
         out->clear();
+      }
+    }
+  }
+
+  /**
+   * Reads a vector of SerializableData, resizing it to `n' elements.
+   */
+  template <typename Vector>
+  void readVectorOfSerializable(Vector* out, size_t n) {
+    if (proto_ >= proto_gate_) {
+      out->resize(n);
+      for (auto& o : *out) {
+        o.deserialize(*this, false);
       }
     }
   }

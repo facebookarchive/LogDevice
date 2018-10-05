@@ -7,6 +7,9 @@
  */
 #include "EpochMetaDataMap.h"
 
+#include "logdevice/common/protocol/ProtocolReader.h"
+#include "logdevice/common/protocol/ProtocolWriter.h"
+
 namespace facebook { namespace logdevice {
 
 EpochMetaDataMap::EpochMetaDataMap(std::shared_ptr<const Map> epoch_map,

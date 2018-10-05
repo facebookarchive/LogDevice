@@ -7,6 +7,7 @@
  */
 #include <gtest/gtest.h>
 
+#include "logdevice/common/OffsetMap.h"
 #include "logdevice/server/locallogstore/test/StoreUtil.h"
 #include "logdevice/server/locallogstore/test/TemporaryLogStore.h"
 #include "logdevice/server/read_path/LogStorageStateMap.h"
@@ -122,10 +123,11 @@ TEST(SealStorageTaskTest, LastKnownGood) {
 
   ASSERT_EQ(E::OK, task1.executeImpl(store, map));
   std::vector<lsn_t> epoch_lng;
-  std::vector<uint64_t> epoch_size;
+  std::vector<OffsetMap> epoch_offset_map;
   std::vector<uint64_t> last_timestamp;
   std::vector<lsn_t> max_seen_lsn;
-  task1.getAllEpochInfo(epoch_lng, epoch_size, last_timestamp, max_seen_lsn);
+  task1.getAllEpochInfo(
+      epoch_lng, epoch_offset_map, last_timestamp, max_seen_lsn);
   EXPECT_EQ(std::vector<lsn_t>({
                 lsn(1, 3),
                 lsn(2, 1),
@@ -154,7 +156,8 @@ TEST(SealStorageTaskTest, LastKnownGood) {
       create_task(logid_t(1), EPOCH_MAX, epoch_t(EPOCH_MAX.val_ - 1));
 
   ASSERT_EQ(E::OK, task2.executeImpl(store, map));
-  task2.getAllEpochInfo(epoch_lng, epoch_size, last_timestamp, max_seen_lsn);
+  task2.getAllEpochInfo(
+      epoch_lng, epoch_offset_map, last_timestamp, max_seen_lsn);
   EXPECT_EQ(std::vector<lsn_t>({
                 lsn(EPOCH_MAX.val_, 1),
             }),
@@ -271,18 +274,18 @@ TEST(SealStorageTaskTest, EpochInfo) {
   TestSealStorageTask task1 = create_task(logid_t(1), epoch_t(120), epoch_t(0));
   ASSERT_EQ(E::OK, task1.executeImpl(store, map));
   ASSERT_NE(nullptr, task1.epoch_info_);
-  EXPECT_EQ(
-      EpochInfoMap({{2, EpochInfo{esn_t(1), esn_t(2), BYTE_OFFSET_INVALID}},
-                    {4, EpochInfo{esn_t(3), esn_t(4), BYTE_OFFSET_INVALID}},
-                    {7, EpochInfo{esn_t(0), esn_t(21), BYTE_OFFSET_INVALID}}}),
-      *(task1.epoch_info_));
+  EXPECT_EQ(EpochInfoMap({{2, EpochInfo{esn_t(1), esn_t(2), OffsetMap()}},
+                          {4, EpochInfo{esn_t(3), esn_t(4), OffsetMap()}},
+                          {7, EpochInfo{esn_t(0), esn_t(21), OffsetMap()}}}),
+            *(task1.epoch_info_));
   std::vector<lsn_t> epoch_lng;
-  std::vector<uint64_t> epoch_size;
+  std::vector<OffsetMap> epoch_offset_map;
   std::vector<uint64_t> last_timestamp;
   std::vector<lsn_t> max_seen_lsn;
-  task1.getAllEpochInfo(epoch_lng, epoch_size, last_timestamp, max_seen_lsn);
+  task1.getAllEpochInfo(
+      epoch_lng, epoch_offset_map, last_timestamp, max_seen_lsn);
   ASSERT_EQ(120, epoch_lng.size());
-  ASSERT_EQ(120, epoch_size.size());
+  ASSERT_EQ(120, epoch_offset_map.size());
   ASSERT_EQ(120, last_timestamp.size());
   ASSERT_EQ(120, max_seen_lsn.size());
 
@@ -296,15 +299,15 @@ TEST(SealStorageTaskTest, EpochInfo) {
       create_task_purging(logid_t(1), epoch_t(6000), epoch_t(3));
   ASSERT_EQ(E::OK, task2.executeImpl(store, map));
   ASSERT_NE(nullptr, task2.epoch_info_);
-  EXPECT_EQ(
-      EpochInfoMap(
-          {{4, EpochInfo{esn_t(3), esn_t(4), BYTE_OFFSET_INVALID}},
-           {7, EpochInfo{esn_t(0), esn_t(21), BYTE_OFFSET_INVALID}},
-           {6000, EpochInfo{esn_t(35353), esn_t(77213), BYTE_OFFSET_INVALID}}}),
-      *(task2.epoch_info_));
-  task2.getAllEpochInfo(epoch_lng, epoch_size, last_timestamp, max_seen_lsn);
+  EXPECT_EQ(EpochInfoMap(
+                {{4, EpochInfo{esn_t(3), esn_t(4), OffsetMap()}},
+                 {7, EpochInfo{esn_t(0), esn_t(21), OffsetMap()}},
+                 {6000, EpochInfo{esn_t(35353), esn_t(77213), OffsetMap()}}}),
+            *(task2.epoch_info_));
+  task2.getAllEpochInfo(
+      epoch_lng, epoch_offset_map, last_timestamp, max_seen_lsn);
   ASSERT_EQ(5997, epoch_lng.size());
-  ASSERT_EQ(5997, epoch_size.size());
+  ASSERT_EQ(5997, epoch_offset_map.size());
   ASSERT_EQ(5997, last_timestamp.size());
   ASSERT_EQ(5997, max_seen_lsn.size());
 
@@ -332,12 +335,13 @@ TEST(SealStorageTaskTest, PurgeStillGetEpochInfoOnPreemption) {
       create_task(logid_t(1), epoch_t(10), EPOCH_INVALID);
   EXPECT_EQ(E::PREEMPTED, task.executeImpl(store, map));
   std::vector<lsn_t> epoch_lng;
-  std::vector<uint64_t> epoch_size;
+  std::vector<OffsetMap> epoch_offset_map;
   std::vector<uint64_t> last_timestamp;
   std::vector<lsn_t> max_seen_lsn;
-  task.getAllEpochInfo(epoch_lng, epoch_size, last_timestamp, max_seen_lsn);
+  task.getAllEpochInfo(
+      epoch_lng, epoch_offset_map, last_timestamp, max_seen_lsn);
   ASSERT_TRUE(epoch_lng.empty());
-  ASSERT_TRUE(epoch_size.empty());
+  ASSERT_TRUE(epoch_offset_map.empty());
   ASSERT_TRUE(max_seen_lsn.empty());
   EXPECT_EQ(Seal(epoch_t(98), NodeID(0, 1)), task.getSeal());
 
@@ -347,12 +351,13 @@ TEST(SealStorageTaskTest, PurgeStillGetEpochInfoOnPreemption) {
   EXPECT_EQ(E::PREEMPTED, task2.executeImpl(store, map));
   ASSERT_NE(nullptr, task2.epoch_info_);
   EXPECT_EQ(EpochInfoMap({
-                {7, EpochInfo{esn_t(5), esn_t(21), BYTE_OFFSET_INVALID}},
+                {7, EpochInfo{esn_t(5), esn_t(21), OffsetMap()}},
             }),
             *(task2.epoch_info_));
-  task2.getAllEpochInfo(epoch_lng, epoch_size, last_timestamp, max_seen_lsn);
+  task2.getAllEpochInfo(
+      epoch_lng, epoch_offset_map, last_timestamp, max_seen_lsn);
   ASSERT_EQ(6, epoch_lng.size());
-  ASSERT_EQ(6, epoch_size.size());
+  ASSERT_EQ(6, epoch_offset_map.size());
   ASSERT_EQ(6, last_timestamp.size());
   ASSERT_EQ(6, max_seen_lsn.size());
   EXPECT_EQ(Seal(epoch_t(98), NodeID(0, 1)), task2.getSeal());
@@ -379,7 +384,7 @@ TEST(SealStorageTaskTest, TailRecordWithMutablePerEpochLogMetadata) {
   store_fill(store, records);
   // write mutable per-epoch log metadata for some epochs
   auto write_per_epoch_release = [&](epoch_t epoch, esn_t lng) {
-    MutablePerEpochLogMetadata metadata(0, lng, /*epoch_size*/ 0);
+    MutablePerEpochLogMetadata metadata(0, lng, /*epoch_offset_map*/ 0);
     int rv =
         store.updatePerEpochLogMetadata(logid_t(1),
                                         epoch,
@@ -473,7 +478,9 @@ TEST(SealStorageTaskTest, TailRecordWithEpochOffset) {
     }
   }
   ASSERT_EQ(32, task1.tail_records_[0].header.u.offset_within_epoch);
-  ASSERT_EQ(32, (*task1.epoch_info_)[2].epoch_size);
+  ASSERT_EQ(32,
+            (*task1.epoch_info_)[2].epoch_offset_map.getCounter(
+                CounterType::BYTE_OFFSET));
   ASSERT_EQ(54214, task1.tail_records_[1].header.u.offset_within_epoch);
   ASSERT_EQ(672, task1.tail_records_[2].header.u.offset_within_epoch);
 }
@@ -495,10 +502,11 @@ TEST(SealStorageTaskTest, RetrySealingAndDurability) {
     TestSealStorageTask task1 = create_task(logid_t(1), epoch_t(2), epoch_t(0));
     ASSERT_EQ(E::OK, task1.executeImpl(store, map));
     std::vector<lsn_t> epoch_lng;
-    std::vector<uint64_t> epoch_size;
+    std::vector<OffsetMap> epoch_offset_map;
     std::vector<uint64_t> last_timestamp;
     std::vector<lsn_t> max_seen_lsn;
-    task1.getAllEpochInfo(epoch_lng, epoch_size, last_timestamp, max_seen_lsn);
+    task1.getAllEpochInfo(
+        epoch_lng, epoch_offset_map, last_timestamp, max_seen_lsn);
     EXPECT_EQ(
         std::vector<lsn_t>({lsn(1, 1), lsn(2, ESN_INVALID.val_)}), epoch_lng);
 

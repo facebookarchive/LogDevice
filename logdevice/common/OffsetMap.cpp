@@ -8,6 +8,9 @@
 
 #include "OffsetMap.h"
 
+#include "logdevice/common/protocol/ProtocolReader.h"
+#include "logdevice/common/protocol/ProtocolWriter.h"
+
 namespace facebook { namespace logdevice {
 OffsetMap::OffsetMap() {}
 
@@ -108,6 +111,26 @@ OffsetMap& OffsetMap::operator=(OffsetMap&& om) noexcept {
 
 OffsetMap::OffsetMap(OffsetMap&& om) noexcept {
   this->counterTypeMap_ = std::move(om.counterTypeMap_);
+}
+
+std::string OffsetMap::toString() const {
+  std::string res = "{";
+  bool first = true;
+  for (const auto& counter : counterTypeMap_) {
+    if (!first) {
+      res += ", ";
+    }
+    first = false;
+    res += std::to_string(static_cast<uint8_t>(counter.first));
+    res += ":";
+    if (counter.second == BYTE_OFFSET_INVALID) {
+      res += "invalid";
+    } else {
+      res += std::to_string(counter.second);
+    }
+  }
+  res += "}";
+  return res;
 }
 
 }} // namespace facebook::logdevice

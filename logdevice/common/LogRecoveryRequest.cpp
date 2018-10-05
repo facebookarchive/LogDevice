@@ -1147,7 +1147,7 @@ void LogRecoveryRequest::onSealReply(ShardID from,
     ld_check(epoch_recovery_machines_.size() <= n_recovering_epochs);
     // the following are guaranteed by the deserializaton method for SEALED
     ld_check(reply.epoch_lng_.size() == n_recovering_epochs);
-    ld_check(reply.epoch_size_.size() == reply.epoch_lng_.size());
+    ld_check(reply.epoch_offset_map_.size() == reply.epoch_lng_.size());
     ld_check(reply.last_timestamp_.size() == reply.epoch_lng_.size());
     ld_check(reply.max_seen_lsn_.size() == n_recovering_epochs);
 
@@ -1161,6 +1161,10 @@ void LogRecoveryRequest::onSealReply(ShardID from,
     for (int i = n_recovering_epochs - epoch_recovery_machines_.size();
          i < reply.epoch_lng_.size();
          i++, erm++) {
+      // TODO:(T33977412): modify EpochRecovery to deal with OffsetMap instead
+      // of just a byte offset.
+      const auto offset =
+          reply.epoch_offset_map_[i].getCounter(CounterType::BYTE_OFFSET);
       ld_check(erm != epoch_recovery_machines_.end());
 
       if (erm->epoch_ != lsn_to_epoch(reply.epoch_lng_[i])) {
@@ -1226,15 +1230,16 @@ void LogRecoveryRequest::onSealReply(ShardID from,
         }
       } else {
         // the sealed node does not support sending TailRecord yet, compose a
-        // tail record from its (lng, last_timestamp, epoch_size).
+        // tail record from its (lng, last_timestamp, epoch_offset_map).
         // Note: only consider it as a tail if lng > ESN_INVALID
         if (lsn_to_esn(reply.epoch_lng_[i]) > ESN_INVALID) {
           epoch_tail = TailRecord({log_id_,
                                    reply.epoch_lng_[i],
                                    reply.last_timestamp_[i],
-                                   {reply.epoch_size_[i]},
+                                   {offset},
                                    TailRecordHeader::OFFSET_WITHIN_EPOCH,
                                    {}},
+                                  reply.epoch_offset_map_[i],
                                   std::shared_ptr<PayloadHolder>());
 
           ld_check(epoch_tail.value().isValid());
@@ -1249,7 +1254,7 @@ void LogRecoveryRequest::onSealReply(ShardID from,
       if (erm->onSealed(from,
                         lsn_to_esn(reply.epoch_lng_[i]),
                         max_seen_esn,
-                        reply.epoch_size_[i],
+                        offset,
                         std::move(epoch_tail))) {
         return;
       }

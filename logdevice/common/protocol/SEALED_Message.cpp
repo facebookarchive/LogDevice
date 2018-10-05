@@ -28,13 +28,25 @@ size_t SEALED_Header::getExpectedSize(uint16_t proto) {
 
 void SEALED_Message::serialize(ProtocolWriter& writer) const {
   ld_check(header_.lng_list_size == epoch_lng_.size());
-  ld_check(header_.lng_list_size == epoch_size_.size());
+  ld_check(header_.lng_list_size == epoch_offset_map_.size());
   ld_check(header_.lng_list_size == last_timestamp_.size());
   ld_check(header_.lng_list_size == max_seen_lsn_.size());
   writer.write(&header_, SEALED_Header::getExpectedSize(writer.proto()));
   writer.writeVector(epoch_lng_);
   writer.write(seal_);
-  writer.writeVector(epoch_size_);
+
+  if (writer.proto() >= Compatibility::OFFSET_MAP_SUPPORT_IN_SEALED_MSG) {
+    writer.writeVectorOfSerializable(epoch_offset_map_);
+  } else {
+    // Serialize the old format.
+    std::vector<uint64_t> epoch_offset_map(epoch_offset_map_.size());
+    for (size_t i = 0; i < epoch_offset_map_.size(); ++i) {
+      epoch_offset_map[i] =
+          epoch_offset_map_[i].getCounter(CounterType::BYTE_OFFSET);
+    }
+    writer.writeVector(epoch_offset_map);
+  }
+
   writer.writeVector(last_timestamp_);
 
   writer.protoGate(Compatibility::TAIL_RECORD_IN_SEALED);
@@ -54,13 +66,26 @@ MessageReadResult SEALED_Message::deserialize(ProtocolReader& reader) {
 
   std::vector<lsn_t> epoch_lng(header.lng_list_size);
   Seal seal;
-  std::vector<uint64_t> epoch_size(header.lng_list_size, BYTE_OFFSET_INVALID);
+  std::vector<OffsetMap> epoch_offset_map(header.lng_list_size);
   std::vector<uint64_t> last_timestamp(header.lng_list_size, 0);
   std::vector<lsn_t> max_seen_lsn(header.lng_list_size, LSN_INVALID);
 
   reader.readVector(&epoch_lng);
   reader.read(&seal);
-  reader.readVector(&epoch_size);
+
+  if (reader.proto() >= Compatibility::OFFSET_MAP_SUPPORT_IN_SEALED_MSG) {
+    reader.readVectorOfSerializable(&epoch_offset_map, header.lng_list_size);
+  } else {
+    // Read the old format.
+    std::vector<uint64_t> epoch_offset_map_legacy(
+        header.lng_list_size, BYTE_OFFSET_INVALID);
+    reader.readVector(&epoch_offset_map_legacy);
+    for (size_t i = 0; i < epoch_offset_map_legacy.size(); ++i) {
+      epoch_offset_map[i].setCounter(
+          CounterType::BYTE_OFFSET, epoch_offset_map_legacy[i]);
+    }
+  }
+
   reader.readVector(&last_timestamp);
   reader.protoGate(Compatibility::TAIL_RECORD_IN_SEALED);
 
@@ -81,7 +106,7 @@ MessageReadResult SEALED_Message::deserialize(ProtocolReader& reader) {
                               std::move(epoch_lng),
                               seal,
                               std::move(last_timestamp),
-                              std::move(epoch_size),
+                              std::move(epoch_offset_map),
                               std::move(max_seen_lsn),
                               std::move(tail_records));
   });
@@ -134,12 +159,12 @@ void SEALED_Message::createAndSend(const Address& to,
                                    Status status,
                                    std::vector<lsn_t> lng_list,
                                    Seal seal,
-                                   std::vector<uint64_t> epoch_size,
+                                   std::vector<OffsetMap> epoch_offset_map,
                                    std::vector<uint64_t> last_timestamp,
                                    std::vector<lsn_t> max_seen_lsn,
                                    std::vector<TailRecord> tail_records) {
   ld_check(lng_list.size() == last_timestamp.size());
-  ld_check(lng_list.size() == epoch_size.size());
+  ld_check(lng_list.size() == epoch_offset_map.size());
   SEALED_Header header;
   header.log_id = log_id;
   header.shard = shard_idx;
@@ -153,7 +178,7 @@ void SEALED_Message::createAndSend(const Address& to,
                                        std::move(lng_list),
                                        seal,
                                        std::move(last_timestamp),
-                                       std::move(epoch_size),
+                                       std::move(epoch_offset_map),
                                        std::move(max_seen_lsn),
                                        std::move(tail_records)),
       to);
@@ -198,7 +223,7 @@ std::string SEALED_Message::toString() const {
   for (const lsn_t lsn : epoch_lng_) {
     ret += " " + lsn_to_string(lsn);
   }
-  // TODO: Add last_timestamp_ and epoch_size_.
+  // TODO: Add last_timestamp_ and epoch_offset_map_.
   return ret;
 }
 }} // namespace facebook::logdevice

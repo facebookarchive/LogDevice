@@ -274,7 +274,7 @@ class MessageSerializationTest : public ::testing::Test {
     ASSERT_EQ(m.epoch_lng_, m2.epoch_lng_);
     ASSERT_EQ(m.seal_, m2.seal_);
     ASSERT_EQ(m.last_timestamp_, m2.last_timestamp_);
-    ASSERT_EQ(m.epoch_size_, m2.epoch_size_);
+    ASSERT_EQ(m.epoch_offset_map_, m2.epoch_offset_map_);
 
     if (proto < Compatibility::TAIL_RECORD_IN_SEALED) {
       ASSERT_EQ(0, m2.tail_records_.size());
@@ -1047,11 +1047,18 @@ TEST_F(MessageSerializationTest, SEALED) {
 
   std::vector<TailRecord> tails({genTailRecord(false), genTailRecord(true)});
 
+  OffsetMap o1;
+  o1.setCounter(CounterType::BYTE_OFFSET, 9);
+  OffsetMap o2;
+  o2.setCounter(CounterType::BYTE_OFFSET, 10);
+  OffsetMap o3;
+  o3.setCounter(CounterType::BYTE_OFFSET, 11);
+
   SEALED_Message m(h,
                    {3, 4, 5},
                    Seal(epoch_t(9), NodeID(2, 1)),
                    {6, 7, 8},
-                   {9, 10, 11},
+                   {o1, o2, o3},
                    {13, 14, 15},
                    tails);
   auto check = [&](const SEALED_Message& m2, uint16_t proto) {
@@ -1087,6 +1094,32 @@ TEST_F(MessageSerializationTest, SEALED) {
       DO_TEST(m,
               check,
               Compatibility::TAIL_RECORD_IN_SEALED,
+              Compatibility::OFFSET_MAP_SUPPORT_IN_SEALED_MSG - 1,
+              [&](uint16_t /*proto*/) { return expected; },
+              nullptr);
+      return 0;
+    };
+
+    auto processor = make_test_processor(create_default_settings<Settings>());
+    run_on_worker(processor.get(), /*worker_id=*/0, test);
+  }
+  {
+    std::string expected =
+        "D38347A48A8EC1BB05CE49A8000027FAEBDD3400000003000000070002000000030000"
+        "0000000000040000000000000005000000000000000900000001000200010009000000"
+        "0000000001000A0000000000000001000B000000000000000600000000000000070000"
+        "000000000008000000000000000D000000000000000E000000000000000F0000000000"
+        "0000D38347A48A8EC1BB130D0000A5030000F75C8E590000000060540DEE2202000000"
+        "02000000000000D38347A48A8EC1BB130D0000A5030000F75C8E590000000060540DEE"
+        "22020000030200000000000018000000140000005461696C205265636F726420546573"
+        "742E000000";
+
+    // this test involves contructing an evbuffer based payload holder and has
+    // to be done on a worker thread
+    auto test = [&] {
+      DO_TEST(m,
+              check,
+              Compatibility::OFFSET_MAP_SUPPORT_IN_SEALED_MSG,
               Compatibility::MAX_PROTOCOL_SUPPORTED,
               [&](uint16_t /*proto*/) { return expected; },
               nullptr);
