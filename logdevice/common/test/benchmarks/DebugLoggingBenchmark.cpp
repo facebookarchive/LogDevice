@@ -62,6 +62,7 @@ BENCHMARK(LoggingOverridesMulti, n) {
   }
 }
 
+#ifndef BENCHMARK_BUNDLE
 int main(int argc, char** argv) {
   folly::SingletonVault::singleton()->registrationComplete();
   gflags::ParseCommandLineFlags(&argc, &argv, true);
@@ -69,3 +70,4 @@ int main(int argc, char** argv) {
 
   return 0;
 }
+#endif

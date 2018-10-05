@@ -90,9 +90,12 @@ BENCHMARK(WorkerBenchmark, n) {
 
 }} // namespace facebook::logdevice
 
+#ifndef BENCHMARK_BUNDLE
+
 int main(int argc, char** argv) {
   folly::SingletonVault::singleton()->registrationComplete();
   gflags::ParseCommandLineFlags(&argc, &argv, true);
   folly::runBenchmarks();
   return 0;
 }
+#endif
