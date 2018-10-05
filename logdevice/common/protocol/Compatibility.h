@@ -20,17 +20,7 @@ enum ProtocolVersion : uint16_t {
   //
   // Minimum version number of the protocol this version of LogDevice is
   // backward compatible with - 1
-  PROTOCOL_VERSION_LOWER_BOUND = 60,
-
-  SHARD_ID_IN_CLEANED_PROTOCOL, // == 61;
-
-  // A rebuilding store message will include the durability of the
-  // rebuilding.
-  REBUILDING_WITHOUT_WAL_2, // ==  62;
-
-  SHARD_ID_IN_STORE_MSG, // = 63;
-
-  SHARD_ID_IN_DELETE_MSG, // = 64;
+  PROTOCOL_VERSION_LOWER_BOUND = 64,
 
   // NODE_STATS_AGGREGATE_Message for controller nodes to aggregate information
   // from all other nodes
@@ -101,10 +91,6 @@ enum ProtocolVersion : uint16_t {
   // NOTE: do not add anything below PROTOCOL_VERSION_UPPER_BOUND
 };
 
-static_assert(SHARD_ID_IN_CLEANED_PROTOCOL == 61, "");
-static_assert(REBUILDING_WITHOUT_WAL_2 == 62, "");
-static_assert(SHARD_ID_IN_STORE_MSG == 63, "");
-static_assert(SHARD_ID_IN_DELETE_MSG == 64, "");
 static_assert(NODE_STATS_AGGREGATE == 65, "");
 static_assert(BOYCOTT_IN_CLUSTER == 66, "");
 static_assert(GOSSIP_WITH_BOYCOTT == 67, "");

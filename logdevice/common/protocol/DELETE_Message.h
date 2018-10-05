@@ -29,9 +29,6 @@ struct DELETE_Header {
   uint32_t wave_DEPRECATED;
 
   shard_index_t shard;
-
-  // Return the expected size of the header given a protocol version.
-  static size_t getExpectedSize(uint16_t proto);
 } __attribute__((__packed__));
 
 class DELETE_Message : public Message {

@@ -26,7 +26,6 @@ namespace facebook { namespace logdevice {
 struct SHUTDOWN_Header {
   Status status;
   ServerInstanceId serverInstanceId;
-  static size_t getExpectedSize(uint16_t proto);
 } __attribute__((__packed__));
 
 class SHUTDOWN_Message : public Message {

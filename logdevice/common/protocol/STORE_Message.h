@@ -196,8 +196,7 @@ struct STORE_Extra {
   lsn_t rebuilding_version = LSN_INVALID;
   uint32_t rebuilding_wave = 0;
 
-  // With protocol version REBUILDING_WITHOUT_WAL_2, if this
-  // STORE message is for rebuilding, the rebuilding_id which uniquely
+  // If this STORE message is for rebuilding, the rebuilding_id which uniquely
   // identifies a run of the LogRebuilding state machine where this store
   // originated from, is sent along. This version will be passed back in the
   // STORED reply.

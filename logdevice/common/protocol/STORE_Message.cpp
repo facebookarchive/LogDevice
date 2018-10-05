@@ -136,9 +136,7 @@ void STORE_Message::serialize(ProtocolWriter& writer) const {
   if (header_.flags & STORE_Header::REBUILDING) {
     writer.write(extra_.rebuilding_version);
     writer.write(extra_.rebuilding_wave);
-    if (proto >= Compatibility::REBUILDING_WITHOUT_WAL_2) {
-      writer.write(extra_.rebuilding_id);
-    }
+    writer.write(extra_.rebuilding_id);
   }
 
   if (header_.flags & STORE_Header::OFFSET_WITHIN_EPOCH) {
@@ -154,9 +152,7 @@ void STORE_Message::serialize(ProtocolWriter& writer) const {
     writer.write(extra_.first_amendable_offset);
   }
 
-  // All servers should have been upgraded to a recent enough protocol version.
   writer.writeVector(copyset_);
-  ld_check(writer.proto() >= Compatibility::SHARD_ID_IN_STORE_MSG);
   ld_check(header_.copyset_size == copyset_.size());
 
   if (header_.flags & STORE_Header::STICKY_COPYSET) {
@@ -214,9 +210,7 @@ MessageReadResult STORE_Message::deserialize(ProtocolReader& reader,
   if (hdr.flags & STORE_Header::REBUILDING) {
     reader.read(&extra.rebuilding_version);
     reader.read(&extra.rebuilding_wave);
-    if (proto >= Compatibility::REBUILDING_WITHOUT_WAL_2) {
-      reader.read(&extra.rebuilding_id);
-    }
+    reader.read(&extra.rebuilding_id);
   }
 
   if (hdr.flags & STORE_Header::OFFSET_WITHIN_EPOCH) {

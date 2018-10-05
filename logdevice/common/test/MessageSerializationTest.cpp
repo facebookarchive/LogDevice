@@ -478,7 +478,7 @@ TEST_F(MessageSerializationTest, STORE) {
   };
   DO_TEST(m,
           check,
-          Compatibility::SHARD_ID_IN_STORE_MSG,
+          Compatibility::MIN_PROTOCOL_SUPPORTED,
           Compatibility::MAX_PROTOCOL_SUPPORTED,
           std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
           [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
@@ -497,7 +497,7 @@ TEST_F(MessageSerializationTest, STORE_WithKey) {
   };
   DO_TEST(m,
           check,
-          Compatibility::SHARD_ID_IN_STORE_MSG,
+          Compatibility::MIN_PROTOCOL_SUPPORTED,
           Compatibility::MAX_PROTOCOL_SUPPORTED,
           std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
           [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
@@ -518,29 +518,8 @@ TEST_F(MessageSerializationTest, STORE_WithFilterableKey) {
   };
   DO_TEST(m,
           check,
-          Compatibility::SHARD_ID_IN_STORE_MSG,
+          Compatibility::MIN_PROTOCOL_SUPPORTED,
           Compatibility::MAX_PROTOCOL_SUPPORTED,
-          std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
-          [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
-}
-
-TEST_F(MessageSerializationTest, STORE_WithRebuildingInfo) {
-  STORE_Extra extra;
-  extra.rebuilding_version = 42;
-  extra.rebuilding_wave = 3;
-
-  TestStoreMessageFactory factory;
-  factory.setFlags(STORE_Header::REBUILDING);
-  factory.setExtra(extra, "2A0000000000000003000000");
-
-  STORE_Message m = factory.message();
-  auto check = [&](const STORE_Message& m2, uint16_t proto) {
-    checkSTORE(m, m2, proto);
-  };
-  DO_TEST(m,
-          check,
-          Compatibility::SHARD_ID_IN_STORE_MSG,
-          Compatibility::REBUILDING_WITHOUT_WAL_2 - 1,
           std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
           [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
 }
@@ -561,7 +540,7 @@ TEST_F(MessageSerializationTest, STORE_WithRebuildingInfo2) {
   };
   DO_TEST(m,
           check,
-          Compatibility::SHARD_ID_IN_STORE_MSG,
+          Compatibility::MIN_PROTOCOL_SUPPORTED,
           Compatibility::MAX_PROTOCOL_SUPPORTED,
           std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
           [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
@@ -581,7 +560,7 @@ TEST_F(MessageSerializationTest, STORE_WithByteOffsetInfo) {
   };
   DO_TEST(m,
           check,
-          Compatibility::SHARD_ID_IN_STORE_MSG,
+          Compatibility::MIN_PROTOCOL_SUPPORTED,
           Compatibility::MAX_PROTOCOL_SUPPORTED,
           std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
           [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
@@ -623,7 +602,7 @@ TEST_F(MessageSerializationTest, STORE_WithFirstAmendableOffset) {
   };
   DO_TEST(m,
           check,
-          Compatibility::SHARD_ID_IN_STORE_MSG,
+          Compatibility::MIN_PROTOCOL_SUPPORTED,
           Compatibility::MAX_PROTOCOL_SUPPORTED,
           std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
           [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
@@ -643,7 +622,7 @@ TEST_F(MessageSerializationTest, STORE_WithE2ETracingContext) {
   };
   DO_TEST(m,
           check,
-          Compatibility::SHARD_ID_IN_STORE_MSG,
+          Compatibility::MIN_PROTOCOL_SUPPORTED,
           Compatibility::MAX_PROTOCOL_SUPPORTED,
           std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
           [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
@@ -660,7 +639,7 @@ TEST_F(MessageSerializationTest, SHUTDOWN_WithServerInstanceId) {
     std::string expected = "17000A00000000000000";
     DO_TEST(m,
             check,
-            Compatibility::REBUILDING_WITHOUT_WAL_2,
+            Compatibility::MIN_PROTOCOL_SUPPORTED,
             Compatibility::MAX_PROTOCOL_SUPPORTED,
             [&](uint16_t /*proto*/) { return expected; },
             nullptr);

@@ -257,12 +257,9 @@ Message::Disposition StoreStateMachine::onReceived(STORE_Message* msg,
 
   if (rebuilding && default_durability <= Durability::MEMORY) {
     if (msg->extra_.rebuilding_id == LOG_REBUILDING_ID_INVALID) {
-      // rebuilding_id is used a proxy to determine if the node
+      // rebuilding_id is used as proxy to determine if the node
       // where this STORE originated from can tolerate a record with
-      // low durability. A node can tolerate low record durability
-      // if it supports protocol version
-      // REBUILDING_WITHOUT_WAL_2. If not, up the
-      // durability of the record
+      // low durability.
       default_durability = Durability::ASYNC_WRITE;
     }
   }

@@ -55,7 +55,6 @@ MessageReadResult STORED_Message::deserialize(ProtocolReader& reader) {
     reader.read(&rebuilding_wave);
     reader.read(&flushToken);
     reader.read(&serverInstanceId);
-    reader.protoGate(Compatibility::REBUILDING_WITHOUT_WAL_2);
     reader.read(&rebuilding_id);
   }
 
@@ -92,7 +91,6 @@ void STORED_Message::serialize(ProtocolWriter& writer) const {
     writer.write(rebuilding_wave_);
     writer.write(flushToken_);
     writer.write(serverInstanceId_);
-    writer.protoGate(Compatibility::REBUILDING_WITHOUT_WAL_2);
     writer.write(rebuilding_id_);
   }
   if (header_.status == E::REBUILDING) {
