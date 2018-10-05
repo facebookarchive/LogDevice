@@ -301,6 +301,8 @@ class FailureDetector {
   // 'gossip_time_skew_threshold' milli-seconds delayed
   bool checkSkew(const GOSSIP_Message& msg);
 
+  bool isValidInstanceId(std::chrono::milliseconds id, node_index_t idx);
+
   // Detects which nodes are down based on the data in gossip_list_ and
   // suspect_matrix_.
   void detectFailures(node_index_t self, size_t n);

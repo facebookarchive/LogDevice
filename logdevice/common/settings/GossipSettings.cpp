@@ -78,7 +78,7 @@ void GossipSettings::defineSettings(SettingEasyInit& init) {
        SettingsCategory::FailureDetector);
   init("gossip-time-skew",
        &gossip_time_skew_threshold,
-       "max",
+       "10s",
        nullptr, // no validation
        "How much delay is acceptable in receiving a gossip "
        "message.",

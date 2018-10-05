@@ -71,7 +71,7 @@ sidebar_label: Settings
 | gossip-logging-duration | How long to keep logging FailureDetector/Gossip related activity after server comes up. | 0s | server&nbsp;only |
 | gossip-mode | How to select a node to send a gossip message to. One of: 'round-robin', 'random' (default) | random | requires&nbsp;restart, server&nbsp;only |
 | gossip-threshold | Specifies after how many gossip intervals of inactivity a node is marked as dead. Lower values reduce detection time, but make false positives more likely. | 30 | server&nbsp;only |
-| gossip-time-skew | How much delay is acceptable in receiving a gossip message. | max | server&nbsp;only |
+| gossip-time-skew | How much delay is acceptable in receiving a gossip message. | 10s | server&nbsp;only |
 | ignore-isolation | Ignore isolation detection. If set, a sequencer will accept append operations even if a majority of nodes appear to be dead. | false | server&nbsp;only |
 | min-gossips-for-stable-state | After receiving how many gossips, should the FailureDetector consider itself stable and start doing state transitions of cluster nodes based on incoming gossips. | 3 | server&nbsp;only |
 | suspect-duration | How long to keep a node in an intermediate state before marking it as available. Larger values make the cluster less prone to node flakiness, but extend the time needed for sequencer nodes to start participating. | 10s | server&nbsp;only |
