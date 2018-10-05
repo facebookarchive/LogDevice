@@ -15,7 +15,8 @@
 
 namespace facebook { namespace logdevice {
 
-enum class CounterType : uint8_t { BYTE_OFFSET = 0 };
+// Reserve the last 10 counters for internal use
+enum class CounterType : uint8_t { BYTE_OFFSET = 246 };
 
 class OffsetMap : public SerializableData {
  public:
