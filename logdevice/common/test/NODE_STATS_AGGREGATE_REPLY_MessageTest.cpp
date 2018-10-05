@@ -19,7 +19,7 @@
 using namespace facebook::logdevice;
 
 namespace {
-void testSerializeDeserialize(Compatibility::ProtocolVersion proto) {
+void testSerializeDeserialize(uint16_t proto) {
   using unique_evbuffer =
       std::unique_ptr<struct evbuffer, std::function<void(struct evbuffer*)>>;
 
@@ -56,13 +56,6 @@ void testSerializeDeserialize(Compatibility::ProtocolVersion proto) {
   stats.node_ids = {NodeID{1}, NodeID{2}};
   stats.summed_counts->resize(boost::extents[2][3]);
   stats.client_counts->resize(boost::extents[2][3][1]);
-  if (proto < Compatibility::ProtocolVersion::WORST_CLIENT_FOR_BOYCOTT) {
-    for (int i = 0; i < sums.num_elements(); ++i) {
-      // in the old protocol the client count is not known
-      sums.data()[i].client_count = 1;
-    }
-  }
-
   *stats.summed_counts = sums;
   *stats.client_counts = clients;
 
@@ -98,28 +91,12 @@ void testSerializeDeserialize(Compatibility::ProtocolVersion proto) {
   EXPECT_THAT(deserialized_msg->stats_.node_ids,
               testing::ElementsAre(NodeID{1}, NodeID{2}));
   EXPECT_EQ(sums, *deserialized_msg->stats_.summed_counts);
-  if (proto < Compatibility::ProtocolVersion::WORST_CLIENT_FOR_BOYCOTT) {
-    EXPECT_EQ(0, deserialized_msg->stats_.client_counts->num_elements());
-  } else {
-    EXPECT_EQ(header.separate_client_count,
-              deserialized_msg->header_.separate_client_count);
-    EXPECT_EQ(clients, *deserialized_msg->stats_.client_counts);
-  }
+  EXPECT_EQ(header.separate_client_count,
+            deserialized_msg->header_.separate_client_count);
+  EXPECT_EQ(clients, *deserialized_msg->stats_.client_counts);
 }
 } // namespace
 
-TEST(NODE_STATS_AGGREGATE_REPLY_MessageTest, GetMinProtocolVersion) {
-  NODE_STATS_AGGREGATE_REPLY_Message msg({}, BucketedNodeStats{});
-  EXPECT_EQ(Compatibility::ProtocolVersion::NODE_STATS_AGGREGATE,
-            msg.getMinProtocolVersion());
-}
-
-TEST(NODE_STATS_AGGREGATE_REPLY_MessageTest, SerializeAndDeserializeOldProto) {
-  testSerializeDeserialize(
-      Compatibility::ProtocolVersion::NODE_STATS_AGGREGATE);
-}
-
-TEST(NODE_STATS_AGGREGATE_REPLY_MessageTest, SerializeAndDeserializeNewProto) {
-  testSerializeDeserialize(
-      Compatibility::ProtocolVersion::WORST_CLIENT_FOR_BOYCOTT);
+TEST(NODE_STATS_AGGREGATE_REPLY_MessageTest, SerializeAndDeserialize) {
+  testSerializeDeserialize(Compatibility::MIN_PROTOCOL_SUPPORTED);
 }

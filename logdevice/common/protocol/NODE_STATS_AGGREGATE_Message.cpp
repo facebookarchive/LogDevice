@@ -49,7 +49,4 @@ NODE_STATS_AGGREGATE_Message::onReceived(const Address& /*from*/) {
   return Disposition::ERROR;
 }
 
-uint16_t NODE_STATS_AGGREGATE_Message::getMinProtocolVersion() const {
-  return Compatibility::ProtocolVersion::NODE_STATS_AGGREGATE;
-}
 }} // namespace facebook::logdevice

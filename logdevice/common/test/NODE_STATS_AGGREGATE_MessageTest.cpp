@@ -15,12 +15,6 @@
 
 using namespace facebook::logdevice;
 
-TEST(NODE_STATS_AGGREGATE_MessageTest, GetMinProtocolVersion) {
-  NODE_STATS_AGGREGATE_Message msg(NODE_STATS_AGGREGATE_Header{});
-  EXPECT_EQ(Compatibility::ProtocolVersion::NODE_STATS_AGGREGATE,
-            msg.getMinProtocolVersion());
-}
-
 TEST(NODE_STATS_AGGREGATE_MessageTest, SerializeAndDeserialize) {
   using unique_evbuffer =
       std::unique_ptr<struct evbuffer, std::function<void(struct evbuffer*)>>;
@@ -29,7 +23,7 @@ TEST(NODE_STATS_AGGREGATE_MessageTest, SerializeAndDeserialize) {
     LD_EV(evbuffer_free)(ptr);
   });
 
-  auto proto = Compatibility::ProtocolVersion::NODE_STATS_AGGREGATE;
+  auto proto = Compatibility::MIN_PROTOCOL_SUPPORTED;
 
   NODE_STATS_AGGREGATE_Header header;
   header.msg_id = 1;

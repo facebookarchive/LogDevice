@@ -33,10 +33,7 @@ GET_CLUSTER_STATE_REPLY_Message::deserialize(ProtocolReader& reader) {
   reader.read(&msg->header_);
   if (msg->header_.status == E::OK) {
     reader.readLengthPrefixedVector(&msg->nodes_state_);
-
-    if (reader.proto() >= Compatibility::ProtocolVersion::BOYCOTT_IN_CLUSTER) {
-      reader.readLengthPrefixedVector(&msg->boycotted_nodes_);
-    }
+    reader.readLengthPrefixedVector(&msg->boycotted_nodes_);
   }
   return reader.resultMsg(std::move(msg));
 }
@@ -45,10 +42,7 @@ void GET_CLUSTER_STATE_REPLY_Message::serialize(ProtocolWriter& writer) const {
   writer.write(header_);
   if (header_.status == E::OK) {
     writer.writeLengthPrefixedVector(nodes_state_);
-
-    if (writer.proto() >= Compatibility::ProtocolVersion::BOYCOTT_IN_CLUSTER) {
-      writer.writeLengthPrefixedVector(boycotted_nodes_);
-    }
+    writer.writeLengthPrefixedVector(boycotted_nodes_);
   }
 }
 

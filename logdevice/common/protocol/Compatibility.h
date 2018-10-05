@@ -20,18 +20,7 @@ enum ProtocolVersion : uint16_t {
   //
   // Minimum version number of the protocol this version of LogDevice is
   // backward compatible with - 1
-  PROTOCOL_VERSION_LOWER_BOUND = 64,
-
-  // NODE_STATS_AGGREGATE_Message for controller nodes to aggregate information
-  // from all other nodes
-  NODE_STATS_AGGREGATE, // == 65
-
-  BOYCOTT_IN_CLUSTER, // == 66
-
-  // GOSSIP_Message now includes boycott information
-  GOSSIP_WITH_BOYCOTT, // == 67
-
-  WORST_CLIENT_FOR_BOYCOTT, // == 68
+  PROTOCOL_VERSION_LOWER_BOUND = 68,
 
   // Change START to support encoding of the known down size along with the
   // vector and ignore the num_filtered_out member of the header
@@ -91,10 +80,6 @@ enum ProtocolVersion : uint16_t {
   // NOTE: do not add anything below PROTOCOL_VERSION_UPPER_BOUND
 };
 
-static_assert(NODE_STATS_AGGREGATE == 65, "");
-static_assert(BOYCOTT_IN_CLUSTER == 66, "");
-static_assert(GOSSIP_WITH_BOYCOTT == 67, "");
-static_assert(WORST_CLIENT_FOR_BOYCOTT == 68, "");
 static_assert(SUPPORT_LARGER_FILTERED_OUT_LIST == 69, "");
 static_assert(TAIL_RECORD_IN_SEALED == 70, "");
 static_assert(SHARD_ID_IN_REBUILD_METADATA == 71, "");

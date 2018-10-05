@@ -74,10 +74,7 @@ void GOSSIP_Message::serialize(ProtocolWriter& writer) const {
     writer.writeVector(failover_list_);
   }
 
-  if (writer.proto() >= Compatibility::ProtocolVersion::GOSSIP_WITH_BOYCOTT) {
-    writeBoycottList(writer);
-  }
-
+  writeBoycottList(writer);
   writeSuspectMatrix(writer);
 }
 
@@ -96,9 +93,7 @@ MessageReadResult GOSSIP_Message::deserialize(ProtocolReader& reader) {
     reader.readVector(&msg->failover_list_, msg->num_nodes_);
   }
 
-  if (reader.proto() >= Compatibility::ProtocolVersion::GOSSIP_WITH_BOYCOTT) {
-    msg->readBoycottList(reader);
-  }
+  msg->readBoycottList(reader);
 
   if (reader.ok() && reader.bytesRemaining() > 0) {
     msg->readSuspectMatrix(reader);

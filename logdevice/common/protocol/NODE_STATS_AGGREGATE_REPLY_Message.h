@@ -34,8 +34,6 @@ class NODE_STATS_AGGREGATE_REPLY_Message : public Message {
   // should be implemented in server/NODE_STATS_AGGREGATE_onReceived.cpp
   virtual Disposition onReceived(const Address& from) override;
 
-  virtual uint16_t getMinProtocolVersion() const override;
-
   NODE_STATS_AGGREGATE_REPLY_Header header_;
   BucketedNodeStats stats_;
 
@@ -44,9 +42,6 @@ class NODE_STATS_AGGREGATE_REPLY_Message : public Message {
 
  private:
   void writeCountsForVersionWorstClientForBoycott(ProtocolWriter& writer) const;
-  void writeCountsForVersionNodeStatsAggregate(ProtocolWriter& writer) const;
-
   void readCountsForVersionWorstClientsForBoycott(ProtocolReader& reader);
-  void readCountsForVersionNodeStatsAggregate(ProtocolReader& reader);
 };
 }} // namespace facebook::logdevice

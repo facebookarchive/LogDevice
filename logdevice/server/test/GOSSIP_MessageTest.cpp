@@ -31,9 +31,9 @@ using GOSSIP_flags_t = GOSSIP_Message::GOSSIP_flags_t;
 
 namespace {
 struct Params {
-  explicit Params(Compatibility::ProtocolVersion proto) : proto(proto) {}
+  explicit Params(uint16_t proto) : proto(proto) {}
 
-  Compatibility::ProtocolVersion proto;
+  uint16_t proto;
   bool with_suspect = false;
   bool with_failover = false;
   bool with_boycott = false;
@@ -116,7 +116,7 @@ void serializeAndDeserializeTest(Params params) {
 
 TEST(GOSSIP_MessageTest, SerializeAndDeserialize) {
   // last protocol before boycott info
-  Params params{Compatibility::ProtocolVersion::NODE_STATS_AGGREGATE};
+  Params params{Compatibility::MIN_PROTOCOL_SUPPORTED};
   serializeAndDeserializeTest(params);
 
   params.with_suspect = true;
@@ -132,7 +132,7 @@ TEST(GOSSIP_MessageTest, SerializeAndDeserialize) {
 }
 
 TEST(GOSSIP_MessageTest, SerializeAndDeserializeWithBoycott) {
-  Params params{Compatibility::ProtocolVersion::GOSSIP_WITH_BOYCOTT};
+  Params params{Compatibility::MIN_PROTOCOL_SUPPORTED};
   params.with_boycott = true;
 
   serializeAndDeserializeTest(params);
