@@ -134,6 +134,8 @@ Status ZookeeperEpochStore::zkOpStatus(int rc,
       return E::INTERNAL;
     case ZINVALIDSTATE:
 
+      // Note: state() returns the current state of the session and does not
+      // necessarily reflect that state at the time of error
       zstate = zkclient->state();
       // ZOO_ constants are C const ints, can't switch()
       if (zstate == ZOO_EXPIRED_SESSION_STATE) {
@@ -141,12 +143,14 @@ Status ZookeeperEpochStore::zkOpStatus(int rc,
       } else if (zstate == ZOO_AUTH_FAILED_STATE) {
         return E::ACCESS;
       } else {
-        ld_check(false);
-        RATELIMIT_ERROR(std::chrono::seconds(1),
-                        1,
-                        "Unexpected session state %s after ZINVALIDSTATE",
-                        ZookeeperClient::stateString(zstate).c_str());
-        return E::INTERNAL;
+        RATELIMIT_WARNING(
+            std::chrono::seconds(10),
+            5,
+            "Unable to recover session state at time of ZINVALIDSTATE error, "
+            "possibly EXPIRED or AUTH_FAILED. But the current session state is "
+            "%s, could be due to a session re-establishment.",
+            ZookeeperClient::stateString(zstate).c_str());
+        return E::FAILED;
       }
     case ZMARSHALLINGERROR:
       return E::SYSLIMIT;
