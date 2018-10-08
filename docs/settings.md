@@ -153,7 +153,7 @@ sidebar_label: Settings
 | connection-retries | the number of TCP connection retries before giving up | 4 |  |
 | handshake-timeout | LogDevice protocol handshake timeout | 1s |  |
 | include-destination-on-handshake | Include the destination node ID in the LogDevice protocol handshake. If the actual node ID of the connection target does not match the intended destination ID, the connection is terminated. | false |  |
-| max-protocol | maximum version of LogDevice protocol that the server/client will accept | 83 |  |
+| max-protocol | maximum version of LogDevice protocol that the server/client will accept | 84 |  |
 | nagle | enable Nagle's algorithm on TCP sockets. Changing this setting on-the-fly will not apply it to existing sockets, only to newly created ones | false |  |
 | outbuf-kb | max output buffer size (userspace extension of socket sendbuf) in KB. Changing this setting on-the-fly will not apply it to existing sockets, only to newly created ones | 32768 |  |
 | outbytes-mb | per-thread limit on bytes pending in output evbuffers (in MB) | 512 |  |
@@ -188,6 +188,7 @@ sidebar_label: Settings
 | grace-counter-limit | Maximum number of consecutive grace periods a storage node may fail to send a record or gap (if in all read all mode) before it is considered disgraced and client read streams no longer wait for it. If all nodes are disgraced or in GAP state, a gap record is issued. May be 0. Set to -1 to disable grace counters and use simpler logic: no disgraced nodes, issue gap record as soon as grace period expires. | 2 |  |
 | log-state-recovery-interval | interval between consecutive attempts by a storage node to obtain the attributes of a log residing on that storage node Such 'log state recovery' is performed independently for each log upon the first request to start delivery of records of that log. The attributes to be recovered include the LSN of the last cumulatively released record in the log, which may have to be requested from the log's sequencer over the network. | 500ms | requires&nbsp;restart, server&nbsp;only |
 | max-record-bytes-read-at-once | amount of RECORD data to read from local log store at once | 1048576 | server&nbsp;only |
+| metadata-log-gap-grace-period | When non-zero, replaces gap-grace-period for metadata logs. | 0ms |  |
 | output-max-records-kb | amount of RECORD data to push to the client at once | 1024 |  |
 | reader-reconnect-delay | When a reader client loses a connection to a storage node, delay after which it tries reconnecting. | 10ms..30s | client&nbsp;only |
 | reader-retry-window-delay | When a reader client fails to send a WINDOW message, delay after which it retries sending it. | 10ms..30s | client&nbsp;only |
@@ -505,3 +506,4 @@ sidebar_label: Settings
 | verify-checksum-before-replicating | If set, sequencers and rebuilding will verify checksums of records that have checksums. If there is a mismatch, sequencer will reject the append. Note that this setting doesn't make storage nodes verify checksums. Note that if not set, and --rocksdb-verify-checksum-during-store is set, a corrupted record kills write-availability for that log, as the appender keeps retrying and storage nodes reject the record. | true | server&nbsp;only |
 | write-shard-id-in-copyset | Serialize copysets using ShardIDs instead of node\_index\_t on disk. TODO(T15517759): enable by default once Flexible Log Sharding is fully implemented and this has been thoroughly tested. | false | **experimental**, server&nbsp;only |
 | write-sticky-copysets | If set, will enable sticky copysets and will write the copyset index for all records. This must be set before --rocksdb-use-copyset-index is enabled | true | requires&nbsp;restart, server&nbsp;only |
+

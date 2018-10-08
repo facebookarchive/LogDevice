@@ -4298,15 +4298,17 @@ void ClientReadStreamDependencies::updateBackoffTimerSettings(
 
 std::chrono::milliseconds
 ClientReadStreamDependencies::computeGapGracePeriod() const {
-  auto gap_grace_period = getSettings().gap_grace_period;
-  if (!MetaDataLog::isMetaDataLog(log_id_)) {
-    // Overwrite grace period for data logs if setting is non-zero.
-    auto dlog_ggp = getSettings().data_log_gap_grace_period;
-    if (dlog_ggp != decltype(dlog_ggp)::zero()) {
-      gap_grace_period = dlog_ggp;
-    }
+  using std::chrono::milliseconds;
+  milliseconds ggp{0};
+  if (MetaDataLog::isMetaDataLog(log_id_)) {
+    ggp = std::max(ggp, getSettings().metadata_log_gap_grace_period);
+  } else {
+    ggp = std::max(ggp, getSettings().data_log_gap_grace_period);
   }
-  return gap_grace_period;
+  if (ggp == milliseconds::zero()) {
+    ggp = getSettings().gap_grace_period;
+  }
+  return ggp;
 }
 
 std::unique_ptr<LibeventTimer>

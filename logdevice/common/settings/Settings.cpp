@@ -1056,6 +1056,13 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "When non-zero, replaces gap-grace-period for data logs.",
        SERVER | CLIENT,
        SettingsCategory::ReadPath);
+  init("metadata-log-gap-grace-period",
+       &metadata_log_gap_grace_period,
+       "0ms",
+       validate_nonnegative<ssize_t>(),
+       "When non-zero, replaces gap-grace-period for metadata logs.",
+       SERVER | CLIENT,
+       SettingsCategory::ReadPath);
   init("reader-stalled-grace-period",
        &reader_stalled_grace_period,
        "30s",

@@ -446,9 +446,11 @@ struct Settings : public SettingsBundle {
   // under-replicated (i.e. it's known that only at most f, but at least one,
   // nodes may have it)
   // If data_log_gap_grace_period is non-zero, it replaces gap_grace_period for
-  // data logs.
+  // data logs. The same applies for metadata_log_gap_grace_period for metadata
+  // logs.
   std::chrono::milliseconds gap_grace_period;
   std::chrono::milliseconds data_log_gap_grace_period;
+  std::chrono::milliseconds metadata_log_gap_grace_period;
 
   // @see Settings.cpp
   std::chrono::milliseconds reader_stalled_grace_period;
