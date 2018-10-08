@@ -119,7 +119,7 @@ sidebar_label: Settings
 ## Monitoring
 |   Name    |   Description   |  Default  |   Notes   |
 |-----------|-----------------|:---------:|-----------|
-| client-readers-flow-tracer-period | Period for logging in logdevice\_readers\_flow scuba table.Set it to 0 to disable feature. | 0s | client&nbsp;only |
+| client-readers-flow-tracer-period | Period for logging in logdevice\_readers\_flow scuba table and for triggering certain sampling actions for monitoring. Set it to 0 to disable feature. | 0s | client&nbsp;only |
 | disable-trace-logger | If disabled, NoopTraceLogger will be used, otherwise FBTraceLogger is used | false | requires&nbsp;restart |
 | message-tracing-log-level | For messages that pass the message tracing filters, emit a log line at this level. One of: critical, error, warning, notify, info, debug, spew | info |  |
 | message-tracing-peers | Emit a log line for each sent/received message to/from the specified address(es). Separate different addresses with a comma, prefix unix socket paths with 'unix://'. An empty unix path will match all unix paths |  |  |
@@ -364,7 +364,6 @@ sidebar_label: Settings
 | ssl-cert-refresh-interval | TTL for an SSL certificate that we have loaded from disk. | 300s | requires&nbsp;restart |
 | ssl-key-path | Path to LogDevice SSL key. |  | requires&nbsp;restart |
 | ssl-load-client-cert | Set to include client certificate for mutual ssl authenticaiton | false |  |
-| ssl-server-hostname-prefix-regex | A regex that should match the names of hosts that may be included in a LogDevice cluster. Note: this is not a raw string, all '\\'' characters should be written as '\\\\'. | logdevice[rfh]? | server&nbsp;only |
 
 ## Sequencer State
 |   Name    |   Description   |  Default  |   Notes   |
@@ -469,6 +468,9 @@ sidebar_label: Settings
 ## Uncategorized
 |   Name    |   Description   |  Default  |   Notes   |
 |-----------|-----------------|:---------:|-----------|
+| client-readers-flow-tracer-lagging-metric-num-sample-groups | Maximum number of samples that are kept by ClientReadersFlowTracer for computing relative reading speed in relation to writing speed. See client\_readers\_flow\_tracer\_lagging\_slope\_threshold. | 3 | client&nbsp;only |
+| client-readers-flow-tracer-lagging-metric-sample-group-size | Number of samples in ClientReadersFlowTracer that are aggregated and recorded as one entry. See client-readers-flow-tracer-lagging-metric-sample-group-size. | 20 | client&nbsp;only |
+| client-readers-flow-tracer-lagging-slope-threshold | If a reader's lag increase at at least this rate, the reader is considered lagging (rate given as variation of time lag per time unit). If the desired read ratio needs to be x% of the write ratio, set this threshold to be (1 - x / 100). | -0.3 | client&nbsp;only |
 | enable-adaptive-store-timeout | decides whether to enable an adaptive store timeout | false | **experimental**, server&nbsp;only |
 | sync-metadata-log-writes | If set, storage nodes will wait for wal sync of metadata log writes before sending the STORED ack. | true | server&nbsp;only |
 

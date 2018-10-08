@@ -6,14 +6,15 @@
  * LICENSE file in the root directory of this source tree.
  */
 #pragma once
-#include <memory>
+#include <boost/circular_buffer.hpp>
 #include <chrono>
+#include <memory>
 #include "logdevice/common/SampledTracer.h"
 #include "logdevice/common/settings/Settings.h"
 
 /**
- * @file ClientReadersFlowTracer is a sampled tracer responsible for tracking
- * ClientReadStream.
+ * @file ClientReadersFlowTracer keeps track of a ClientReadStream reading
+ * performance, submitting counters and sampled traces for monitoring.
  */
 
 namespace facebook { namespace logdevice {
@@ -30,12 +31,12 @@ class ClientReadersFlowTracer
  public:
   struct AsyncRecords {
     folly::Optional<int64_t> bytes_lagged;
-    folly::Optional<int64_t> bytes_lagged_delta;
     folly::Optional<int64_t> timestamp_lagged;
-    folly::Optional<int64_t> timestamp_lagged_delta;
   };
   using SystemClock = std::chrono::system_clock;
   using TimePoint = SystemClock::time_point;
+  template <typename T>
+  using CircularBuffer = boost::circular_buffer_space_optimized<T>;
 
   ClientReadersFlowTracer(std::shared_ptr<TraceLogger> logger,
                           ClientReadStream* owner);
@@ -47,7 +48,7 @@ class ClientReadersFlowTracer
     return 0.005;
   }
 
-  folly::Optional<AsyncRecords> getAsyncRecords() {
+  folly::Optional<AsyncRecords> getAsyncRecords() const {
     return last_async_records_;
   }
 
@@ -66,15 +67,14 @@ class ClientReadersFlowTracer
                           LogTailAttributes* attrs);
 
   std::string log_group_name_;
-  UpdateableSettings<Settings> settings_;
   std::chrono::milliseconds tracer_period_;
 
   folly::Optional<AsyncRecords> last_async_records_;
+  CircularBuffer<int64_t> ts_lagged_record_;
 
+  size_t sample_counter_{0};
   size_t last_num_bytes_read_{0};
   size_t last_num_records_read_{0};
-  folly::Optional<int64_t> last_bytes_lagged_;
-  folly::Optional<int64_t> last_timestamp_lagged_;
 
   enum class State { HEALTHY, STUCK, LAGGING };
   State last_reported_state_{State::HEALTHY};

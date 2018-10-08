@@ -966,10 +966,37 @@ void Settings::defineSettings(SettingEasyInit& init) {
        &client_readers_flow_tracer_period,
        "0s",
        validate_nonnegative<ssize_t>(),
-       "Period for logging in logdevice_readers_flow scuba table."
-       "Set it to 0 to disable feature.",
+       "Period for logging in logdevice_readers_flow scuba table and for "
+       "triggering certain sampling actions for monitoring. Set it to 0 to "
+       "disable feature.",
        CLIENT,
        SettingsCategory::Monitoring);
+  init("client-readers-flow-tracer-lagging-metric-num-sample-groups",
+       &client_readers_flow_tracer_lagging_metric_num_sample_groups,
+       "3",
+       validate_nonnegative<ssize_t>(),
+       "Maximum number of samples that are kept by ClientReadersFlowTracer for "
+       "computing relative reading speed in relation to writing speed. See "
+       "client_readers_flow_tracer_lagging_slope_threshold.",
+       CLIENT);
+  init("client-readers-flow-tracer-lagging-metric-sample-group-size",
+       &client_readers_flow_tracer_lagging_metric_sample_group_size,
+       "20",
+       validate_nonnegative<ssize_t>(),
+       "Number of samples in ClientReadersFlowTracer that are aggregated and "
+       "recorded as one entry. See "
+       "client-readers-flow-tracer-lagging-metric-sample-group-size.",
+       CLIENT);
+  init(
+      "client-readers-flow-tracer-lagging-slope-threshold",
+      &client_readers_flow_tracer_lagging_slope_threshold,
+      "-0.3",
+      validate_range<double>(-100, 100),
+      "If a reader's lag increase at at least this rate, the reader is "
+      "considered lagging (rate given as variation of time lag per time unit). "
+      "If the desired read ratio needs to be x\% of the write ratio, set this "
+      "threshold to be (1 - x / 100).",
+      CLIENT);
   init("client-test-force-stats",
        &client_test_force_stats,
        "false",

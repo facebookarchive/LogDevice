@@ -222,9 +222,7 @@ typedef AdminCommandTable<logid_t,                    /* Log id */
                           std::string,                /* Shards down */
                           std::string,                /* Shards slow */
                           int64_t,                    /* bytes_lagged */
-                          int64_t,                    /* bytes_lagged_delta */
                           int64_t,                    /* timestamp_lagged */
-                          int64_t, /* timestamp_lagged_delta */
                           std::chrono::milliseconds, /* last_time_lagging */
                           std::chrono::milliseconds, /* last_time_stuck */
                           std::string                /* last_reported_state */

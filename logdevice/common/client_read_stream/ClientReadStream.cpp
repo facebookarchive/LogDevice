@@ -316,21 +316,15 @@ void ClientReadStream::getDebugInfo(InfoClientReadStreamsTable& table) const {
       if (val.bytes_lagged.has_value()) {
         table.set<15>(val.bytes_lagged.value());
       }
-      if (val.bytes_lagged_delta.has_value()) {
-        table.set<16>(val.bytes_lagged_delta.value());
-      }
-      if (val.timestamp_lagged.hasValue()) {
-        table.set<17>(val.timestamp_lagged.value());
-      }
-      if (val.timestamp_lagged_delta.has_value()) {
-        table.set<18>(val.timestamp_lagged_delta.value());
+      if (val.timestamp_lagged.has_value()) {
+        table.set<16>(val.timestamp_lagged.value());
       }
     }
-    table.set<19>(
+    table.set<17>(
         to_msec((readers_flow_tracer_->last_time_lagging_.time_since_epoch())));
-    table.set<20>(
+    table.set<18>(
         to_msec((readers_flow_tracer_->last_time_stuck_.time_since_epoch())));
-    table.set<21>((readers_flow_tracer_->lastReportedStatePretty()));
+    table.set<19>((readers_flow_tracer_->lastReportedStatePretty()));
   }
 }
 

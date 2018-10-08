@@ -25,9 +25,7 @@ namespace facebook { namespace logdevice {
 ClientReadersFlowTracer::ClientReadersFlowTracer(
     std::shared_ptr<TraceLogger> logger,
     ClientReadStream* owner)
-    : SampledTracer(std::move(logger)),
-      settings_(Worker::onThisThread()->processor_->updateableSettings()),
-      owner_(owner) {
+    : SampledTracer(std::move(logger)), owner_(owner) {
   timer_ = std::make_unique<LibeventTimer>(
       Worker::onThisThread()->getEventBase(), [this] { onTimerTriggered(); });
 
@@ -101,17 +99,9 @@ void ClientReadersFlowTracer::traceReaderFlow(size_t num_bytes_read,
       if (async_data->bytes_lagged.has_value()) {
         sample->addIntValue("bytes_lagged", async_data->bytes_lagged.value());
       }
-      if (async_data->bytes_lagged_delta.has_value()) {
-        sample->addIntValue(
-            "bytes_lagged_delta", async_data->bytes_lagged_delta.value());
-      }
       if (async_data->timestamp_lagged.has_value()) {
         sample->addIntValue(
             "timestamp_lagged", async_data->timestamp_lagged.value());
-      }
-      if (async_data->timestamp_lagged_delta.has_value()) {
-        sample->addIntValue("timestamp_lagged_delta",
-                            async_data->timestamp_lagged_delta.value());
       }
     }
     sample->addIntValue("time_stuck", time_stuck);
@@ -130,7 +120,8 @@ void ClientReadersFlowTracer::traceReaderFlow(size_t num_bytes_read,
 }
 
 void ClientReadersFlowTracer::onSettingsUpdated() {
-  tracer_period_ = settings_->client_readers_flow_tracer_period;
+  auto& settings = Worker::settings();
+  tracer_period_ = settings.client_readers_flow_tracer_period;
   if (tracer_period_ != std::chrono::milliseconds::zero()) {
     if (!timer_->isActive()) {
       timer_->activate(std::chrono::milliseconds{0});
@@ -139,6 +130,12 @@ void ClientReadersFlowTracer::onSettingsUpdated() {
     if (timer_->isActive()) {
       timer_->cancel();
     }
+  }
+
+  const auto len =
+      settings.client_readers_flow_tracer_lagging_metric_num_sample_groups;
+  if (len != ts_lagged_record_.capacity()) {
+    ts_lagged_record_.set_capacity(len);
   }
 }
 
@@ -169,12 +166,6 @@ void ClientReadersFlowTracer::updateAsyncRecords(
     bytes_lagged = 0;
   }
 
-  folly::Optional<int64_t> bytes_lagged_delta;
-  if (bytes_lagged.has_value() && last_bytes_lagged_.has_value()) {
-    bytes_lagged_delta = bytes_lagged.value() - last_bytes_lagged_.value();
-  }
-  last_bytes_lagged_ = bytes_lagged;
-
   folly::Optional<int64_t> timestamp_lagged;
   if (last_in_record_ts.count() > 0) {
     timestamp_lagged = (attrs->last_timestamp - last_in_record_ts).count();
@@ -183,18 +174,8 @@ void ClientReadersFlowTracer::updateAsyncRecords(
     timestamp_lagged = 0;
   }
 
-  folly::Optional<int64_t> timestamp_lagged_delta;
-  if (timestamp_lagged.hasValue() && last_timestamp_lagged_.has_value()) {
-    timestamp_lagged_delta =
-        timestamp_lagged.value() - last_timestamp_lagged_.value();
-  }
-  last_timestamp_lagged_ = timestamp_lagged;
-
   last_async_records_.assign(
-      {.bytes_lagged = bytes_lagged,
-       .bytes_lagged_delta = bytes_lagged_delta,
-       .timestamp_lagged = timestamp_lagged,
-       .timestamp_lagged_delta = timestamp_lagged_delta});
+      {.bytes_lagged = bytes_lagged, .timestamp_lagged = timestamp_lagged});
 }
 
 void ClientReadersFlowTracer::sendSyncSequencerRequest() {
@@ -295,31 +276,66 @@ void ClientReadersFlowTracer::updateTimeStuck(lsn_t tail_lsn, Status st) {
 }
 
 void ClientReadersFlowTracer::updateTimeLagging(Status st) {
-  int64_t timestamp_lagged_delta =
-      (last_async_records_.hasValue()
-           ? last_async_records_->timestamp_lagged_delta.value_or(0)
-           : 0);
+  int64_t cur_ts_lag;
+  auto& settings = Worker::settings();
+  if (last_async_records_.has_value() &&
+      last_async_records_->timestamp_lagged.has_value()) {
+    cur_ts_lag = last_async_records_->timestamp_lagged.value();
+  } else if (ts_lagged_record_.size() > 0) {
+    /* let's repeat the ts lag */
+    cur_ts_lag = ts_lagged_record_.back();
+  } else {
+    RATELIMIT_WARNING(std::chrono::seconds{10},
+                      1,
+                      "Unable to obtain timestamp lagged in read stream with "
+                      "id %ld for logid %lu.",
+                      owner_->getID().val(),
+                      owner_->log_id_.val());
+    return;
+  }
+
+  const auto group_size = std::max(
+      settings.client_readers_flow_tracer_lagging_metric_sample_group_size,
+      1ul);
+  const auto slope_threshold =
+      settings.client_readers_flow_tracer_lagging_slope_threshold;
+  const auto num_groups =
+      settings.client_readers_flow_tracer_lagging_metric_num_sample_groups;
+
+  const auto time_window = tracer_period_.count() * group_size * num_groups;
+  bool is_catching_up = cur_ts_lag <= tracer_period_.count() ||
+      !ts_lagged_record_.full() ||
+      cur_ts_lag - ts_lagged_record_.front() <= slope_threshold * time_window;
+
   bool is_lagging =
       !(owner_->redelivery_timer_ && owner_->redelivery_timer_->isActive()) &&
-      (st != E::OK || timestamp_lagged_delta > 0);
+      (st != E::OK || !is_catching_up);
+
   if (!is_lagging) {
     last_time_lagging_ = TimePoint::max();
   } else if (last_time_stuck_ == TimePoint::max()) {
     last_time_lagging_ = SystemClock::now();
   }
+
   maybeBumpStats();
+
+  /* should we record this sample? */
+  if ((sample_counter_++) % group_size == 0) {
+    ts_lagged_record_.push_back(cur_ts_lag);
+  }
 }
 
 void ClientReadersFlowTracer::maybeBumpStats(bool force_healthy) {
   auto now = SystemClock::now();
   State state_to_report;
+  auto& settings = Worker::settings();
 
   if (last_time_stuck_ != TimePoint::max()
-          ? last_time_stuck_ + settings_->reader_stuck_threshold <= now
+          ? last_time_stuck_ + settings.reader_stuck_threshold <= now
           : false) {
     state_to_report = State::STUCK;
   } else if ((last_time_lagging_ != TimePoint::max()
-                  ? last_time_lagging_ + settings_->reader_lagging_threshold <=
+                  ? last_time_lagging_ + settings.reader_lagging_threshold <=
                       now
                   : false) &&
              owner_->until_lsn_ == LSN_MAX) {

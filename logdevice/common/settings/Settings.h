@@ -509,6 +509,17 @@ struct Settings : public SettingsBundle {
   // table. Set it to 0 to disable feature.
   std::chrono::milliseconds client_readers_flow_tracer_period;
 
+  // (client-only setting) Number of sample groups to maintain for the lagging
+  // metric.
+  size_t client_readers_flow_tracer_lagging_metric_num_sample_groups;
+
+  // (client-only setting) Size of a sample group for the lagging metric.
+  size_t client_readers_flow_tracer_lagging_metric_sample_group_size;
+
+  // (client-only setting) Minimum admissible slope to consider a reader as
+  // lagging.
+  double client_readers_flow_tracer_lagging_slope_threshold;
+
   // (client-only setting) Force instantiation of StatsHolder within
   // ClientImpl even if stats publishing is disabled (via
   // `stats_collection_interval').  This allows counters to be queried and
