@@ -55,12 +55,14 @@ GetSeqStateRequest::getContextString(GetSeqStateRequest::Context ctx) {
       return "historical-metadata";
     case GetSeqStateRequest::Context::GET_TAIL_RECORD:
       return "get-tail-record";
+    case GetSeqStateRequest::Context::READER_MONITORING:
+      return "reader-monitoring";
     default:
       break;
   }
 
   static_assert(
-      static_cast<int>(GetSeqStateRequest::Context::MAX) == 17,
+      static_cast<int>(GetSeqStateRequest::Context::MAX) == 18,
       "Not in sync with GetSeqStateRequest::Context, and fix switch case "
       "above.");
 
@@ -118,6 +120,9 @@ void GetSeqStateRequest::bumpContextStatsAllAttempts(
     case GetSeqStateRequest::Context::GET_TAIL_RECORD:
       WORKER_STAT_INCR(get_seq_state_attempts_context_get_tail_record);
       break;
+    case GetSeqStateRequest::Context::READER_MONITORING:
+      WORKER_STAT_INCR(get_seq_state_attempts_context_reader_monitoring);
+      break;
     case GetSeqStateRequest::Context::UNKNOWN:
     default:
       WORKER_STAT_INCR(get_seq_state_attempts_context_unknown);
@@ -125,7 +130,7 @@ void GetSeqStateRequest::bumpContextStatsAllAttempts(
   }
 
   static_assert(
-      static_cast<int>(GetSeqStateRequest::Context::MAX) == 17,
+      static_cast<int>(GetSeqStateRequest::Context::MAX) == 18,
       "Not in sync with GetSeqStateRequest::Context, and fix switch case "
       "above.");
 }
@@ -180,6 +185,9 @@ void GetSeqStateRequest::bumpContextStats(GetSeqStateRequest::Context ctx) {
     case Context::GET_TAIL_RECORD:
       WORKER_STAT_INCR(get_seq_state_unique_context_get_tail_record);
       break;
+    case Context::READER_MONITORING:
+      WORKER_STAT_INCR(get_seq_state_unique_context_reader_monitoring);
+      break;
     case Context::UNKNOWN:
     default:
       WORKER_STAT_INCR(get_seq_state_unique_context_unknown);
@@ -187,7 +195,7 @@ void GetSeqStateRequest::bumpContextStats(GetSeqStateRequest::Context ctx) {
   }
 
   static_assert(
-      static_cast<int>(GetSeqStateRequest::Context::MAX) == 17,
+      static_cast<int>(GetSeqStateRequest::Context::MAX) == 18,
       "Not in sync with GetSeqStateRequest::Context, and fix switch case "
       "above.");
 }

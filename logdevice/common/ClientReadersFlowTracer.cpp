@@ -22,6 +22,10 @@
 
 namespace facebook { namespace logdevice {
 
+inline uint16_t get_initial_ttl(size_t group_size, size_t num_groups) {
+  return 1.25 * group_size * num_groups;
+}
+
 ClientReadersFlowTracer::ClientReadersFlowTracer(
     std::shared_ptr<TraceLogger> logger,
     ClientReadStream* owner)
@@ -63,12 +67,14 @@ void ClientReadersFlowTracer::traceReaderFlow(size_t num_bytes_read,
   auto time_stuck = std::max(msec_since(last_time_stuck_), 0l);
   auto time_lagging = std::max(msec_since(last_time_lagging_), 0l);
   auto shard_status_version = owner_->deps_->getShardStatus().getVersion();
+  auto time_lag = estimateTimeLag();
+  auto byte_lag = estimateByteLag();
 
   auto sample_builder =
       [=,
        reading_speed_bytes = num_bytes_read - last_num_bytes_read_,
-       reading_speed_records = num_records_read - last_num_records_read_,
-       async_data = last_async_records_]() -> std::unique_ptr<TraceSample> {
+       reading_speed_records = num_records_read -
+           last_num_records_read_]() -> std::unique_ptr<TraceSample> {
     auto sample = std::make_unique<TraceSample>();
     sample->addNormalValue("log_id", std::to_string(owner_->log_id_.val()));
 
@@ -95,14 +101,11 @@ void ClientReadersFlowTracer::traceReaderFlow(size_t num_bytes_read,
                            owner_->storage_set_health_status_str_factory_());
     sample->addNormalValue("trim_point", lsn_to_string(owner_->trim_point_));
     sample->addIntValue("readset_size", owner_->readSetSize());
-    if (async_data.has_value()) {
-      if (async_data->bytes_lagged.has_value()) {
-        sample->addIntValue("bytes_lagged", async_data->bytes_lagged.value());
-      }
-      if (async_data->timestamp_lagged.has_value()) {
-        sample->addIntValue(
-            "timestamp_lagged", async_data->timestamp_lagged.value());
-      }
+    if (byte_lag.has_value()) {
+      sample->addIntValue("bytes_lagged", byte_lag.value());
+    }
+    if (time_lag.has_value()) {
+      sample->addIntValue("timestamp_lagged", time_lag.value());
     }
     sample->addIntValue("time_stuck", time_stuck);
     sample->addIntValue("time_lagging", time_lagging);
@@ -115,7 +118,6 @@ void ClientReadersFlowTracer::traceReaderFlow(size_t num_bytes_read,
   };
   last_num_bytes_read_ = num_bytes_read;
   last_num_records_read_ = num_records_read;
-  last_async_records_.clear();
   publish(READERS_FLOW_TRACER, sample_builder);
 }
 
@@ -134,8 +136,8 @@ void ClientReadersFlowTracer::onSettingsUpdated() {
 
   const auto len =
       settings.client_readers_flow_tracer_lagging_metric_num_sample_groups;
-  if (len != ts_lagged_record_.capacity()) {
-    ts_lagged_record_.set_capacity(len);
+  if (len != time_lag_record_.capacity()) {
+    time_lag_record_.set_capacity(len);
   }
 }
 
@@ -149,42 +151,11 @@ void ClientReadersFlowTracer::onTimerTriggered() {
   timer_->activate(tracer_period_);
 }
 
-void ClientReadersFlowTracer::updateAsyncRecords(
-    uint64_t acc_byte_offset,
-    std::chrono::milliseconds last_in_record_ts,
-    lsn_t tail_lsn_approx,
-    LogTailAttributes* attrs) {
-  folly::Optional<int64_t> bytes_lagged;
-  if (attrs->byte_offset != BYTE_OFFSET_INVALID &&
-      acc_byte_offset != BYTE_OFFSET_INVALID) {
-    bytes_lagged = attrs->byte_offset - acc_byte_offset;
-  } else if (tail_lsn_approx < owner_->next_lsn_to_deliver_) {
-    // Here, we can assume that we are at the tail and we simply
-    // ignore issues with the sequencer not reporting a byte offset.
-    // Note, however, that this will appear as a 0 even for clusters
-    // that do not normally report byte offset.
-    bytes_lagged = 0;
-  }
-
-  folly::Optional<int64_t> timestamp_lagged;
-  if (last_in_record_ts.count() > 0) {
-    timestamp_lagged = (attrs->last_timestamp - last_in_record_ts).count();
-  } else if (tail_lsn_approx < owner_->next_lsn_to_deliver_) {
-    // see bytes_lagged
-    timestamp_lagged = 0;
-  }
-
-  last_async_records_.assign(
-      {.bytes_lagged = bytes_lagged, .timestamp_lagged = timestamp_lagged});
-}
-
 void ClientReadersFlowTracer::sendSyncSequencerRequest() {
   auto ssr = std::make_unique<SyncSequencerRequest>(
       owner_->log_id_,
       SyncSequencerRequest::INCLUDE_TAIL_ATTRIBUTES,
-      [weak_ptr = std::weak_ptr<ClientReadersFlowTracer>(shared_from_this()),
-       acc_byte_offset = owner_->accumulated_byte_offset_,
-       last_in_record_ts = owner_->last_in_record_ts_](
+      [weak_ptr = std::weak_ptr<ClientReadersFlowTracer>(shared_from_this())](
           Status st,
           NodeID seq_node,
           lsn_t next_lsn,
@@ -192,52 +163,59 @@ void ClientReadersFlowTracer::sendSyncSequencerRequest() {
           std::shared_ptr<const EpochMetaDataMap> /*unused*/,
           std::shared_ptr<TailRecord> /*unused*/) {
         if (auto ptr = weak_ptr.lock()) {
-          if (st == E::OK && attrs) {
-            auto tail_lsn_approx = attrs->last_released_real_lsn != LSN_INVALID
-                ? attrs->last_released_real_lsn
-                : next_lsn - 1; // in case we haven't gotten the
-                                // last_released_real_lsn, we use the maximum
-                                // possible lsn for the tail record.
-            ptr->updateAsyncRecords(acc_byte_offset,
-                                    last_in_record_ts,
-                                    tail_lsn_approx,
-                                    attrs.get());
-            ptr->updateTimeStuck(tail_lsn_approx);
-          } else {
-            // If the sequencer is not responding, we assume we are stuck until
-            // further notice.
-            if (st == E::OK) {
-              RATELIMIT_WARNING(
-                  std::chrono::seconds(10),
-                  10,
-                  "SyncSequencerRequest (sent to sequencer node %s) returned "
-                  "E::OK for log %lu in read stream %lu but did not provide "
-                  "tail attributes.",
-                  seq_node.toString().c_str(),
-                  ptr->owner_->log_id_.val(),
-                  ptr->owner_->deps_->getReadStreamID().val());
-            } else {
-              RATELIMIT_WARNING(
-                  std::chrono::seconds(10),
-                  10,
-                  "SyncSequencerRequest (sent to sequencer node %s) "
-                  "failed for log %lu in read stream %lu with error %s",
-                  seq_node.toString().c_str(),
-                  ptr->owner_->log_id_.val(),
-                  ptr->owner_->deps_->getReadStreamID().val(),
-                  error_description(st));
-            }
-            ptr->updateTimeStuck(LSN_INVALID, st);
-          }
-          ptr->updateTimeLagging(st);
+          ptr->onSyncSequencerRequestResponse(
+              st, seq_node, next_lsn, std::move(attrs));
         }
       },
-      GetSeqStateRequest::Context::GET_TAIL_ATTRIBUTES,
+      GetSeqStateRequest::Context::READER_MONITORING,
       /*timeout=*/tracer_period_,
       GetSeqStateRequest::MergeType::GSS_MERGE_INTO_OLD);
   ssr->setThreadIdx(Worker::onThisThread()->idx_.val());
   std::unique_ptr<Request> req(std::move(ssr));
   Worker::onThisThread()->processor_->postRequest(req);
+}
+
+void ClientReadersFlowTracer::onSyncSequencerRequestResponse(
+    Status st,
+    NodeID seq_node,
+    lsn_t next_lsn,
+    std::unique_ptr<LogTailAttributes> attrs) {
+  if (st == E::OK && attrs) {
+    auto tail_lsn_approx = attrs->last_released_real_lsn != LSN_INVALID
+        ? attrs->last_released_real_lsn
+        : next_lsn - 1; // in case we haven't gotten the
+                        // last_released_real_lsn, we use the maximum
+                        // possible lsn for the tail record.
+    latest_tail_info_ = TailInfo{.byte_offset = attrs->byte_offset,
+                                 .timestamp = attrs->last_timestamp.count(),
+                                 .lsn_approx = tail_lsn_approx};
+    updateTimeStuck(tail_lsn_approx);
+  } else {
+    if (st == E::OK) {
+      RATELIMIT_WARNING(
+          std::chrono::seconds(10),
+          10,
+          "SyncSequencerRequest (sent to sequencer node %s) returned "
+          "E::OK for log %lu in read stream %lu but did not provide "
+          "tail attributes.",
+          seq_node.toString().c_str(),
+          owner_->log_id_.val(),
+          owner_->deps_->getReadStreamID().val());
+    } else {
+      RATELIMIT_WARNING(std::chrono::seconds(10),
+                        10,
+                        "SyncSequencerRequest (sent to sequencer node %s) "
+                        "failed for log %lu in read stream %lu with error %s",
+                        seq_node.toString().c_str(),
+                        owner_->log_id_.val(),
+                        owner_->deps_->getReadStreamID().val(),
+                        error_description(st));
+    }
+    // If the sequencer is not responding, we assume we are stuck until
+    // further notice.
+    updateTimeStuck(LSN_INVALID, st);
+  }
+  updateTimeLagging(st);
 }
 
 /**
@@ -257,11 +235,7 @@ void ClientReadersFlowTracer::updateTimeStuck(lsn_t tail_lsn, Status st) {
     maybeBumpStats();
   }
 
-  // We use redelivery_timer_ being active as a hint that the client is not
-  // consuming records fast enough and therefore we are not waiting on the
-  // server.
-  bool is_stuck =
-      !(owner_->redelivery_timer_ && owner_->redelivery_timer_->isActive()) &&
+  bool is_stuck = is_client_reading_ &&
       (st != E::OK ||
        owner_->next_lsn_to_deliver_ <= std::min(tail_lsn, owner_->until_lsn_));
 
@@ -278,19 +252,40 @@ void ClientReadersFlowTracer::updateTimeStuck(lsn_t tail_lsn, Status st) {
 void ClientReadersFlowTracer::updateTimeLagging(Status st) {
   int64_t cur_ts_lag;
   auto& settings = Worker::settings();
-  if (last_async_records_.has_value() &&
-      last_async_records_->timestamp_lagged.has_value()) {
-    cur_ts_lag = last_async_records_->timestamp_lagged.value();
-  } else if (ts_lagged_record_.size() > 0) {
-    /* let's repeat the ts lag */
-    cur_ts_lag = ts_lagged_record_.back();
+  auto last_lag = estimateTimeLag();
+  if (st == E::OK && last_lag.has_value()) {
+    cur_ts_lag = last_lag.value();
+  } else if (st != E::OK && !time_lag_record_.empty()) {
+    // Our last_lag value is computed from stale info, let's repeat the
+    // previous lag time lag that we have recorded instead.
+    cur_ts_lag = time_lag_record_.back().time_lag;
   } else {
-    RATELIMIT_WARNING(std::chrono::seconds{10},
-                      1,
-                      "Unable to obtain timestamp lagged in read stream with "
-                      "id %ld for logid %lu.",
-                      owner_->getID().val(),
-                      owner_->log_id_.val());
+    RATELIMIT_WARNING(
+        std::chrono::seconds{10},
+        1,
+        "Unable to obtain timestamp lagged in read stream with "
+        "id %ld for logid %lu. We haven't gotten any log tail information ",
+        owner_->getID().val(),
+        owner_->log_id_.val());
+    return;
+  }
+
+  /* pop old samples */
+  while (!time_lag_record_.empty() && time_lag_record_.front().ttl == 0) {
+    time_lag_record_.pop_front();
+  }
+  /* update counters */
+  for (auto& s : time_lag_record_) {
+    --s.ttl;
+  }
+
+  if (!is_client_reading_) {
+    if (!time_lag_record_.full()) {
+      // if we have stale samples, let's go back to not be lagging because the
+      // client is purposefully not reading right now.
+      last_time_lagging_ = TimePoint::max();
+    }
+    maybeBumpStats();
     return;
   }
 
@@ -302,27 +297,36 @@ void ClientReadersFlowTracer::updateTimeLagging(Status st) {
   const auto num_groups =
       settings.client_readers_flow_tracer_lagging_metric_num_sample_groups;
 
-  const auto time_window = tracer_period_.count() * group_size * num_groups;
+  /* Should we record this sample?
+   * We do this now so time_window computation has a nicer expression. */
+  if ((sample_counter_++) % group_size == 0) {
+    time_lag_record_.push_back(
+        {.time_lag = cur_ts_lag,
+         .time_lag_correction = 0,
+         .ttl = get_initial_ttl(group_size, num_groups)});
+  }
+
+  const auto time_window = tracer_period_.count() *
+      (group_size * (num_groups - 1) + sample_counter_ % group_size);
+
+  int64_t correction = 0;
+  for (auto& x : time_lag_record_) {
+    // accumulate corrections
+    correction += x.time_lag_correction;
+  }
+
   bool is_catching_up = cur_ts_lag <= tracer_period_.count() ||
-      !ts_lagged_record_.full() ||
-      cur_ts_lag - ts_lagged_record_.front() <= slope_threshold * time_window;
+      !time_lag_record_.full() ||
+      cur_ts_lag - time_lag_record_.front().time_lag + correction <=
+          slope_threshold * time_window;
 
-  bool is_lagging =
-      !(owner_->redelivery_timer_ && owner_->redelivery_timer_->isActive()) &&
-      (st != E::OK || !is_catching_up);
-
-  if (!is_lagging) {
+  if (is_catching_up) {
     last_time_lagging_ = TimePoint::max();
-  } else if (last_time_stuck_ == TimePoint::max()) {
+  } else if (last_time_lagging_ == TimePoint::max()) {
     last_time_lagging_ = SystemClock::now();
   }
 
   maybeBumpStats();
-
-  /* should we record this sample? */
-  if ((sample_counter_++) % group_size == 0) {
-    ts_lagged_record_.push_back(cur_ts_lag);
-  }
 }
 
 void ClientReadersFlowTracer::maybeBumpStats(bool force_healthy) {
@@ -378,6 +382,87 @@ std::string ClientReadersFlowTracer::lastReportedStatePretty() const {
   }
   ld_check(false);
   return "";
+}
+
+folly::Optional<int64_t> ClientReadersFlowTracer::estimateTimeLag() const {
+  if (latest_tail_info_.hasValue()) {
+    auto tail_lsn = latest_tail_info_->lsn_approx;
+    auto tail_ts = latest_tail_info_->timestamp;
+    int64_t last_in_record_ts = owner_->last_in_record_ts_.count();
+
+    if (last_in_record_ts > 0) {
+      return std::max(tail_ts - last_in_record_ts, (int64_t)0);
+    } else if (tail_lsn < owner_->next_lsn_to_deliver_) {
+      return 0;
+    }
+  }
+  return folly::none;
+}
+
+folly::Optional<int64_t> ClientReadersFlowTracer::estimateByteLag() const {
+  if (latest_tail_info_.hasValue()) {
+    auto tail_lsn = latest_tail_info_->lsn_approx;
+    int64_t tail_byte_offset = latest_tail_info_->byte_offset;
+    int64_t acc_byte_offset = owner_->accumulated_byte_offset_;
+
+    if (acc_byte_offset != BYTE_OFFSET_INVALID &&
+        tail_byte_offset != BYTE_OFFSET_INVALID) {
+      if (tail_byte_offset >= acc_byte_offset) {
+        return tail_byte_offset - acc_byte_offset;
+      } else {
+        return 0;
+      }
+    } else if (tail_lsn < owner_->next_lsn_to_deliver_) {
+      return 0;
+    }
+  }
+  return folly::none;
+}
+
+void ClientReadersFlowTracer::updateIsClientReading() {
+  bool was_client_reading = is_client_reading_;
+  is_client_reading_ =
+      !(owner_->redelivery_timer_ && owner_->redelivery_timer_->isActive()) ||
+      !owner_->window_update_pending_; // We check window_update_pending_ as a
+                                       // best effort attempt to assess if the
+                                       // client is reading because a
+                                       // synchronous reader that is not
+                                       // consuming records (T34286876) might
+                                       // hold all records of the CRS buffer
+                                       // while not notifying the CRS to slide
+                                       // the window, creating a situation where
+                                       // the client is not reading,
+                                       // next_lsn_to_deliver does not move and
+                                       // the redelivery timer is not active.
+
+  /* check if we transitioned to reading */
+  if (was_client_reading && !is_client_reading_) {
+    auto time_lag = estimateTimeLag();
+    if (!time_lag_record_.empty() && time_lag.hasValue()) {
+      time_lag_record_.back().time_lag_correction -= time_lag.value();
+    }
+  } else if (!was_client_reading && is_client_reading_) {
+    auto time_lag = estimateTimeLag();
+    if (!time_lag_record_.empty() && time_lag.hasValue()) {
+      time_lag_record_.back().time_lag_correction += time_lag.value();
+    }
+  }
+}
+
+void ClientReadersFlowTracer::onRedeliveryTimerInactive() {
+  updateIsClientReading();
+}
+
+void ClientReadersFlowTracer::onRedeliveryTimerActive() {
+  updateIsClientReading();
+}
+
+void ClientReadersFlowTracer::onWindowUpdatePending() {
+  updateIsClientReading();
+}
+
+void ClientReadersFlowTracer::onWindowUpdateSent() {
+  updateIsClientReading();
 }
 
 }} // namespace facebook::logdevice

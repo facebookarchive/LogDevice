@@ -310,15 +310,13 @@ void ClientReadStream::getDebugInfo(InfoClientReadStreamsTable& table) const {
   }
 
   if (readers_flow_tracer_) {
-    auto records = readers_flow_tracer_->getAsyncRecords();
-    if (records.has_value()) {
-      auto val = records.value();
-      if (val.bytes_lagged.has_value()) {
-        table.set<15>(val.bytes_lagged.value());
-      }
-      if (val.timestamp_lagged.has_value()) {
-        table.set<16>(val.timestamp_lagged.value());
-      }
+    auto last_bytes_lagged = readers_flow_tracer_->estimateByteLag();
+    if (last_bytes_lagged.has_value()) {
+      table.set<15>(last_bytes_lagged.value());
+    }
+    auto last_timestamp_lagged = readers_flow_tracer_->estimateTimeLag();
+    if (last_timestamp_lagged.has_value()) {
+      table.set<16>(last_timestamp_lagged.value());
     }
     table.set<17>(
         to_msec((readers_flow_tracer_->last_time_lagging_.time_since_epoch())));
@@ -1833,6 +1831,9 @@ void ClientReadStream::onReaderProgress() {
   }
 
   window_update_pending_ = false;
+  if (readers_flow_tracer_) {
+    readers_flow_tracer_->onWindowUpdateSent();
+  }
 
   disposeIfDone();
 }
@@ -2823,7 +2824,7 @@ void ClientReadStream::checkConsistency() const {
 
 void ClientReadStream::resumeReading() {
   if (redelivery_timer_ != nullptr && redelivery_timer_->isActive()) {
-    redelivery_timer_->cancel();
+    cancelRedeliveryTimer();
     redeliver();
     // `this` may be deleted here.
   }
@@ -3304,18 +3305,38 @@ void ClientReadStream::deliverNoConfigGapAndDispose() {
 
 void ClientReadStream::adjustRedeliveryTimer(bool delivery_success) {
   if (delivery_success) {
-    if (redelivery_timer_ != nullptr) {
-      redelivery_timer_->reset();
-    }
+    cancelRedeliveryTimer();
   } else {
-    if (redelivery_timer_ == nullptr) {
-      redelivery_timer_ = deps_->createBackoffTimer(
-          deps_->getSettings().client_initial_redelivery_delay,
-          deps_->getSettings().client_max_redelivery_delay);
-      redelivery_timer_->setCallback(
-          std::bind(&ClientReadStream::redeliver, this));
-    }
+    activateRedeliveryTimer();
+  }
+}
+
+void ClientReadStream::activateRedeliveryTimer() {
+  if (!redelivery_timer_) {
+    redelivery_timer_ = deps_->createBackoffTimer(
+        deps_->getSettings().client_initial_redelivery_delay,
+        deps_->getSettings().client_max_redelivery_delay);
+    redelivery_timer_->setCallback([this]() {
+      if (readers_flow_tracer_) {
+        readers_flow_tracer_->onRedeliveryTimerInactive();
+      }
+      redeliver();
+    });
+  }
+  if (!redelivery_timer_->isActive()) {
     redelivery_timer_->activate();
+    if (readers_flow_tracer_) {
+      readers_flow_tracer_->onRedeliveryTimerActive();
+    }
+  }
+}
+
+void ClientReadStream::cancelRedeliveryTimer() {
+  if (redelivery_timer_ && redelivery_timer_->isActive()) {
+    redelivery_timer_->cancel();
+    if (readers_flow_tracer_) {
+      readers_flow_tracer_->onRedeliveryTimerInactive();
+    }
   }
 }
 
@@ -3496,6 +3517,9 @@ bool ClientReadStream::slideSenderWindows() {
   if (reader_) {
     // Let onReaderProgress() know that it needs to send WINDOW messages
     window_update_pending_ = true;
+    if (readers_flow_tracer_) {
+      readers_flow_tracer_->onWindowUpdatePending();
+    }
   } else {
     updateServerWindow();
     scd_->onWindowSlid(server_window_.high, filter_version_);

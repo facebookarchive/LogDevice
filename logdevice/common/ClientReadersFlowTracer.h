@@ -29,14 +29,26 @@ class ClientReadersFlowTracer
     : public std::enable_shared_from_this<ClientReadersFlowTracer>,
       public SampledTracer {
  public:
-  struct AsyncRecords {
-    folly::Optional<int64_t> bytes_lagged;
-    folly::Optional<int64_t> timestamp_lagged;
-  };
   using SystemClock = std::chrono::system_clock;
   using TimePoint = SystemClock::time_point;
   template <typename T>
   using CircularBuffer = boost::circular_buffer_space_optimized<T>;
+
+  struct Sample {
+    int64_t time_lag;
+    int64_t time_lag_correction{
+        0}; // `time_lag_correction` is the amount of time lag accumulated due
+            // to client rejecting records from the time the sample was first
+            // recorded until the next sample is recorded (in
+            // `time_lag_record_`).
+    uint16_t ttl; // for how many periods do we keep this sample
+  };
+
+  struct TailInfo {
+    uint64_t byte_offset;
+    int64_t timestamp;
+    lsn_t lsn_approx;
+  };
 
   ClientReadersFlowTracer(std::shared_ptr<TraceLogger> logger,
                           ClientReadStream* owner);
@@ -44,13 +56,17 @@ class ClientReadersFlowTracer
 
   void traceReaderFlow(size_t num_bytes_read, size_t num_records_read);
 
+  void onRedeliveryTimerInactive();
+  void onRedeliveryTimerActive();
+  void onWindowUpdatePending();
+  void onWindowUpdateSent();
+
   folly::Optional<double> getDefaultSamplePercentage() const override {
     return 0.005;
   }
 
-  folly::Optional<AsyncRecords> getAsyncRecords() const {
-    return last_async_records_;
-  }
+  folly::Optional<int64_t> estimateTimeLag() const;
+  folly::Optional<int64_t> estimateByteLag() const;
 
   void onSettingsUpdated();
   std::string lastReportedStatePretty() const;
@@ -58,23 +74,25 @@ class ClientReadersFlowTracer
  private:
   void onTimerTriggered();
   void sendSyncSequencerRequest();
+  void onSyncSequencerRequestResponse(Status st,
+                                      NodeID seq_node,
+                                      lsn_t next_lsn,
+                                      std::unique_ptr<LogTailAttributes> attrs);
   void updateTimeStuck(lsn_t tail_lsn, Status st = E::OK);
   void updateTimeLagging(Status st = E::OK);
+  void updateIsClientReading();
   void maybeBumpStats(bool force_healthy = false);
-  void updateAsyncRecords(uint64_t acc_byte_offset,
-                          std::chrono::milliseconds last_in_record_ts,
-                          lsn_t tail_lsn_approx,
-                          LogTailAttributes* attrs);
 
   std::string log_group_name_;
   std::chrono::milliseconds tracer_period_;
 
-  folly::Optional<AsyncRecords> last_async_records_;
-  CircularBuffer<int64_t> ts_lagged_record_;
+  CircularBuffer<Sample> time_lag_record_;
+  folly::Optional<TailInfo> latest_tail_info_;
 
   size_t sample_counter_{0};
   size_t last_num_bytes_read_{0};
   size_t last_num_records_read_{0};
+  bool is_client_reading_{true};
 
   enum class State { HEALTHY, STUCK, LAGGING };
   State last_reported_state_{State::HEALTHY};

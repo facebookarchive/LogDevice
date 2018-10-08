@@ -134,6 +134,7 @@ STAT_DEFINE(get_seq_state_attempts_context_unreleased_record, SUM)
 STAT_DEFINE(get_seq_state_attempts_context_metadata_util, SUM)
 STAT_DEFINE(get_seq_state_attempts_context_historical_metadata, SUM)
 STAT_DEFINE(get_seq_state_attempts_context_get_tail_record, SUM)
+STAT_DEFINE(get_seq_state_attempts_context_reader_monitoring, SUM)
 
 // No. of actual GetSeqStateRequests that were sent out
 STAT_DEFINE(get_seq_state_unique_context_unknown, SUM)
@@ -153,5 +154,6 @@ STAT_DEFINE(get_seq_state_unique_context_unreleased_record, SUM)
 STAT_DEFINE(get_seq_state_unique_context_metadata_util, SUM)
 STAT_DEFINE(get_seq_state_unique_context_historical_metadata, SUM)
 STAT_DEFINE(get_seq_state_unique_context_get_tail_record, SUM)
+STAT_DEFINE(get_seq_state_unique_context_reader_monitoring, SUM)
 
 #undef STAT_DEFINE

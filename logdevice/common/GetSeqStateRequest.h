@@ -130,6 +130,7 @@ class GetSeqStateRequest : public Request, public SequencerRouter::Handler {
     METADATA_UTIL,
     HISTORICAL_METADATA,
     GET_TAIL_RECORD,
+    READER_MONITORING,
     MAX,
   };
 

@@ -1130,6 +1130,9 @@ class ClientReadStream : boost::noncopyable {
   // delivery of a record or gap to the application
   void adjustRedeliveryTimer(bool delivery_success);
 
+  void activateRedeliveryTimer();
+  void cancelRedeliveryTimer();
+
   /**
    * Number of shards we are trying to read from.
    */
