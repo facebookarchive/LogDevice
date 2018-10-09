@@ -70,6 +70,20 @@ cmake -DCMAKE_BUILD_TYPE=Debug ../../logdevice
 make -j$(nproc)
 ```
 
+## Building using docker
+
+A Dockerfile is also provided for building logdevice under the `docker` directory. To build logdevice using docker, run the following from the root of the repo:
+
+```shell
+docker build -t logdevice-ubuntu -f docker/Dockerfile.ubuntu .
+```
+
+This will build the docker image and tag it with `logdevice-ubuntu`. The binaries are then available under `/usr/local/bin/` of the docker image. So you can for example start the test cluster by running:
+
+```shell
+docker run -it logdevice-ubuntu /usr/local/bin/ld-dev-cluster
+```
+
 ## Documentation
 
 This web site is created with [Docusaurus](https://docusaurus.io/).
