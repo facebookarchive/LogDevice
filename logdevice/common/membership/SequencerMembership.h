@@ -55,6 +55,10 @@ struct SequencerNodeState {
 
   bool isValid() const;
 
+  bool operator==(const SequencerNodeState& rhs) const {
+    return weight == rhs.weight && active_maintenance == rhs.active_maintenance;
+  }
+
   // Describe the update that can apply to SequencerNodeState
   struct Update {
     SequencerMembershipTransition transition;
@@ -131,6 +135,11 @@ class SequencerMembership : public Membership {
   bool validate() const override;
 
   /**
+   * See Membership::getMembershipNodes().
+   */
+  std::vector<node_index_t> getMembershipNodes() const override;
+
+  /**
    * Get the node state of a given sequencer node.
    *
    * @return   a pair of (exist, SequencerNodeState) in which _exist_ is true if
@@ -138,6 +147,25 @@ class SequencerMembership : public Membership {
    *           SequencerNodeState is also returned.
    */
   std::pair<bool, SequencerNodeState> getNodeState(node_index_t node) const;
+
+  size_t numNodes() const {
+    return node_states_.size();
+  }
+
+  bool hasNode(node_index_t node) const override {
+    return node_states_.count(node) > 0;
+  }
+
+  std::string toString() const;
+
+  bool isEmpty() const override {
+    return node_states_.empty();
+  }
+
+  bool operator==(const SequencerMembership& rhs) const;
+
+ private:
+  std::unordered_map<node_index_t, SequencerNodeState> node_states_;
 
   // update the sequencer node state of the given node; If _node_ doesn't exist
   // in membership, create an entry for it.
@@ -147,18 +175,7 @@ class SequencerMembership : public Membership {
   // @return  true if the removal actual happened
   bool eraseNodeState(node_index_t node);
 
-  size_t numNodes() const {
-    return node_states_.size();
-  }
-
-  std::string toString() const;
-
-  bool isEmpty() const {
-    return node_states_.empty();
-  }
-
- private:
-  std::unordered_map<node_index_t, SequencerNodeState> node_states_;
+  friend class MembershipCodecFlatBuffers;
 };
 
 }}} // namespace facebook::logdevice::membership

@@ -9,6 +9,7 @@
 
 #include "logdevice/common/membership/types.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/NodeID.h"
 
 namespace facebook { namespace logdevice { namespace membership {
 
@@ -51,6 +52,21 @@ class Membership {
    * membership is valid.
    */
   virtual bool validate() const = 0;
+
+  /**
+   * @return  a vector of all nodes (node_index_t) tracked in the membership.
+   */
+  virtual std::vector<node_index_t> getMembershipNodes() const = 0;
+
+  /**
+   * @return  if the membership contains the given node.
+   */
+  virtual bool hasNode(node_index_t node) const = 0;
+
+  /**
+   * @return  true if no nodes are tracked in the membership.
+   */
+  virtual bool isEmpty() const = 0;
 
   // run internal validate() checks in DEBUG mode
   void dcheckConsistency() const {

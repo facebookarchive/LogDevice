@@ -27,7 +27,7 @@ namespace facebook { namespace logdevice { namespace membership {
  *
  *       Note: all state and transition functions defined are not thread-safe.
  *       Upper layer is responsible for atomically update the state and
- * propagate them to all execution contexts.
+ *       propagate them to all execution contexts.
  */
 
 // Describe the per-shard state of a storage membership
@@ -66,6 +66,13 @@ struct ShardState {
   bool isValid() const;
 
   std::string toString() const;
+
+  bool operator==(const ShardState& rhs) const {
+    return storage_state == rhs.storage_state && flags == rhs.flags &&
+        metadata_state == rhs.metadata_state &&
+        active_maintenance == rhs.active_maintenance &&
+        since_version == rhs.since_version;
+  }
 
   /**
    * Perform state transition by applying an update to the current shard state
@@ -169,6 +176,11 @@ class StorageMembership : public Membership {
   bool validate() const override;
 
   /**
+   * See Membership::getMembershipNodes().
+   */
+  std::vector<node_index_t> getMembershipNodes() const override;
+
+  /**
    * Get the shard state of a given storage shard.
    *
    * @return   a pair of (exist, ShardState) in which _exist_ is true if the
@@ -217,9 +229,15 @@ class StorageMembership : public Membership {
 
   std::string toString() const;
 
-  bool isEmpty() const {
+  bool isEmpty() const override {
     return node_states_.empty();
   }
+
+  bool hasNode(node_index_t node) const override {
+    return node_states_.count(node) > 0;
+  }
+
+  bool operator==(const StorageMembership& rhs) const;
 
  private:
   class NodeState {
@@ -227,6 +245,10 @@ class StorageMembership : public Membership {
     std::unordered_map<shard_index_t, ShardState> shard_states;
     size_t numShards() const {
       return shard_states.size();
+    }
+
+    bool operator==(const NodeState& rhs) const {
+      return shard_states == rhs.shard_states;
     }
   };
 

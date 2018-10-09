@@ -565,6 +565,15 @@ bool StorageMembership::validate() const {
   return true;
 }
 
+std::vector<node_index_t> StorageMembership::getMembershipNodes() const {
+  std::vector<node_index_t> res;
+  res.reserve(node_states_.size());
+  for (const auto& kv : node_states_) {
+    res.push_back(kv.first);
+  }
+  return res;
+}
+
 bool StorageMembership::canWriteToShard(ShardID shard) const {
   auto result = getShardState(shard);
   return result.first ? canWriteTo(result.second.storage_state) : false;
@@ -632,6 +641,11 @@ StorageSet StorageMembership::readerViewMetaData() const {
 StorageSet StorageMembership::getMetaDataStorageSet() const {
   return storageset_filter(
       metadata_shards_, [](ShardID shard) { return true; });
+}
+
+bool StorageMembership::operator==(const StorageMembership& rhs) const {
+  return version_ == rhs.getVersion() && node_states_ == rhs.node_states_ &&
+      metadata_shards_ == rhs.metadata_shards_;
 }
 
 }}} // namespace facebook::logdevice::membership

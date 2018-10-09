@@ -109,6 +109,15 @@ class StorageMembershipTest : public ::testing::Test {
     EXPECT_FALSE(res.first);             \
   } while (0)
 
+#define ASSERT_MEMBERSHIP_NODES(_m, ...)                      \
+  do {                                                        \
+    auto nodes = _m.getMembershipNodes();                     \
+    auto expected = std::vector<node_index_t>({__VA_ARGS__}); \
+    std::sort(nodes.begin(), nodes.end());                    \
+    std::sort(expected.begin(), expected.end());              \
+    EXPECT_EQ(expected, nodes);                               \
+  } while (0)
+
 #define CHECK_METADATA_SHARDS(_m, ...)                                         \
   do {                                                                         \
     auto metadata_set = StorageSet({__VA_ARGS__});                             \
@@ -136,6 +145,7 @@ TEST_F(StorageMembershipTest, EmptyStorageMembershipValid) {
   ASSERT_EQ(EMPTY_VERSION, StorageMembership().getVersion());
   ASSERT_EQ(0, StorageMembership().numNodes());
   ASSERT_TRUE(StorageMembership().isEmpty());
+  ASSERT_MEMBERSHIP_NODES(StorageMembership());
 }
 
 // go through the life cycle of a shard with all successful transitions
@@ -337,6 +347,7 @@ TEST_F(StorageMembershipTest, ShardLifeCycle) {
                      MetaDataStorageState::NONE,
                      StorageStateFlags::NONE,
                      2);
+  ASSERT_MEMBERSHIP_NODES(m, 2);
 }
 
 // test various invalid transitions
@@ -748,6 +759,7 @@ TEST_F(StorageMembershipTest, MetaDataShards) {
                      MetaDataStorageState::METADATA,
                      StorageStateFlags::NONE,
                      13);
+  ASSERT_MEMBERSHIP_NODES(m, 1, 2, 3);
 }
 
 TEST_F(StorageMembershipTest, InvalidProvisionUpdate) {
@@ -871,6 +883,7 @@ TEST_F(StorageMembershipTest, ProvisionTransition) {
                      StorageStateFlags::NONE,
                      2);
   CHECK_METADATA_SHARDS(m, N3, N7);
+  ASSERT_MEMBERSHIP_NODES(m, 1, 2, 3, 4, 7);
 }
 
 // TODO: test getting writer's and reader's view?

@@ -74,11 +74,21 @@ class SequencerMembershipTest : public ::testing::Test {
     EXPECT_FALSE(res.first);           \
   } while (0)
 
+#define ASSERT_MEMBERSHIP_NODES(_m, ...)                      \
+  do {                                                        \
+    auto nodes = _m.getMembershipNodes();                     \
+    auto expected = std::vector<node_index_t>({__VA_ARGS__}); \
+    std::sort(nodes.begin(), nodes.end());                    \
+    std::sort(expected.begin(), expected.end());              \
+    EXPECT_EQ(expected, nodes);                               \
+  } while (0)
+
 TEST_F(SequencerMembershipTest, EmptySequencerMembershipValid) {
   ASSERT_TRUE(SequencerMembership().validate());
   ASSERT_EQ(EMPTY_VERSION, SequencerMembership().getVersion());
   ASSERT_EQ(0, SequencerMembership().numNodes());
   ASSERT_TRUE(SequencerMembership().isEmpty());
+  ASSERT_MEMBERSHIP_NODES(SequencerMembership());
 }
 
 TEST_F(SequencerMembershipTest, NodeLifeCycle) {
@@ -129,6 +139,7 @@ TEST_F(SequencerMembershipTest, NodeLifeCycle) {
   ASSERT_EQ(4, m.getVersion().val());
   ASSERT_NO_NODE(m, node_index_t(1));
   ASSERT_NODE_STATE(m, node_index_t(2), 3.2);
+  ASSERT_MEMBERSHIP_NODES(m, 2);
 }
 
 // test various invalid transitions
@@ -175,6 +186,7 @@ TEST_F(SequencerMembershipTest, InvalidTransitions) {
       &m);
   ASSERT_EQ(-1, rv);
   ASSERT_EQ(E::VERSION_MISMATCH, err);
+  ASSERT_MEMBERSHIP_NODES(m, 1);
 }
 
 } // namespace

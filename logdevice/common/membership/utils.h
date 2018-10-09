@@ -33,7 +33,7 @@ inline constexpr folly::StringPiece toString(StorageState state) {
       return "dm";
     case StorageState::INVALID:
       return "invalid";
-  };
+  }
   return "internal error";
 }
 
@@ -47,7 +47,7 @@ inline constexpr folly::StringPiece toString(MetaDataStorageState state) {
       return "promoting";
     case MetaDataStorageState::INVALID:
       return "invalid";
-  };
+  }
   return "internal error";
 }
 

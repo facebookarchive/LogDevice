@@ -240,4 +240,17 @@ SequencerMembership::SequencerMembership() : Membership(EMPTY_VERSION) {
   dcheckConsistency();
 }
 
+std::vector<node_index_t> SequencerMembership::getMembershipNodes() const {
+  std::vector<node_index_t> res;
+  res.reserve(node_states_.size());
+  for (const auto& kv : node_states_) {
+    res.push_back(kv.first);
+  }
+  return res;
+}
+
+bool SequencerMembership::operator==(const SequencerMembership& rhs) const {
+  return version_ == rhs.getVersion() && node_states_ == rhs.node_states_;
+}
+
 }}} // namespace facebook::logdevice::membership

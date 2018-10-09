@@ -191,6 +191,10 @@ class NodeLocation {
     return tmp.fromDomainString(location_str) == 0;
   }
 
+  bool operator==(const NodeLocation& rhs) const {
+    return labels_ == rhs.labels_ && num_specified_ == rhs.num_specified_;
+  }
+
  private:
   // internal storage for labels of all scopes, the order of scopes in the array
   // is the reverse order of their type value: largest scope gets stored at
