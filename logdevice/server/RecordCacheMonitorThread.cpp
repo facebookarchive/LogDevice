@@ -46,10 +46,13 @@ void RecordCacheMonitorThread::threadMain() {
   while (!shutdown_.signaled()) {
     auto result = recordCacheNeedsEviction();
     if (result.first) {
-      ld_info("Total record cache size has exceed the limit of %lu bytes, "
-              "attempting to evict %lu bytes.",
-              processor_->settings()->record_cache_max_size,
-              result.second);
+      RATELIMIT_INFO(
+          std::chrono::seconds(10),
+          1,
+          "Total record cache size has exceed the limit of %lu bytes, "
+          "attempting to evict %lu bytes.",
+          processor_->settings()->record_cache_max_size,
+          result.second);
       evictCaches(result.second);
     }
 
@@ -162,7 +165,9 @@ void RecordCacheMonitorThread::evictCaches(size_t target_bytes) {
   log_map.forEachLog(access_log);
 
   if (min_queue.empty()) {
-    ld_info("Can't find a log to evict, nothing to do.");
+    RATELIMIT_INFO(std::chrono::seconds(10),
+                   1,
+                   "Can't find a log to evict, nothing to do.");
     return;
   }
 
@@ -184,11 +189,14 @@ void RecordCacheMonitorThread::evictCaches(size_t target_bytes) {
            record_cache_bytes_evicted_by_monitor,
            bytes_in_queue);
 
-  ld_info("Evicted %lu logs from the record cache, estimate actual total "
-          "bytes evicted: %lu, bytes evicted target: %lu",
-          num_logs_evicted,
-          bytes_in_queue,
-          target_bytes);
+  RATELIMIT_INFO(
+      std::chrono::seconds(10),
+      1,
+      "Evicted %lu logs from the record cache, estimate actual total "
+      "bytes evicted: %lu, bytes evicted target: %lu",
+      num_logs_evicted,
+      bytes_in_queue,
+      target_bytes);
 }
 
 }} // namespace facebook::logdevice
