@@ -1,4 +1,7 @@
 aliases:
+  - &filter-ignore-gh-pages
+    branches:
+      ignore: gh-pages
   - &filter-only-master
     branches:
       only: master
@@ -61,6 +64,7 @@ workflows:
   version: 2
   build_and_deploy:
     jobs:
-      - build
+      - build:
+          filters: *ignore-gh-pages
       - deploy-website:
           filters: *filter-only-master
