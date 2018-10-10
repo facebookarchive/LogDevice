@@ -15,6 +15,7 @@
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/configuration/Log.h"
 #include "logdevice/common/event_log/EventLogRebuildingSet.h"
+#include "logdevice/common/protocol/RELEASE_Message.h"
 #include "logdevice/common/protocol/STORE_Message.h"
 #include "logdevice/common/protocol/STORED_Message.h"
 #include "logdevice/common/stats/Stats.h"
@@ -418,21 +419,59 @@ class StoreStateMachine::SoftSealStorageTask : public StorageTask {
 };
 
 void StoreStateMachine::execute() {
-  if (message_->header_.flags & STORE_Header::REBUILDING) {
-    // Rebuilding doesn't care about seals.
-    storeAndForward();
-    return;
-  }
+  auto deleter = folly::makeGuard([this] { delete this; });
 
   auto& map = ServerWorker::onThisThread()->processor_->getLogStorageStateMap();
   LogStorageState* log_state =
       map.insertOrGet(message_->header_.rid.logid, shard_);
   if (log_state == nullptr) {
     // unlikely
-    onSealRecovered(E::FAILED, LogStorageState::Seals());
+    message_->sendReply(E::DISABLED);
     return;
   }
 
+  if (message_->header_.flags & STORE_Header::REBUILDING) {
+    // Accept this rebuilding store only if
+    //  the lsn of the store is at/or below last_released OR
+    //  the epoch of the store is at/or below LCE.
+    // Otherwise, treat this as a release so that
+    // it triggers purging which consequently updates the
+    // LCE and last_released_lsn
+    auto last_clean_epoch = log_state->getLastCleanEpoch();
+    auto last_released_lsn = log_state->getLastReleasedLSN();
+    if ((last_released_lsn.hasValue() &&
+         message_->header_.rid.lsn() <= last_released_lsn.value()) ||
+        (last_clean_epoch.hasValue() &&
+         message_->header_.rid.epoch <= last_clean_epoch.value())) {
+      deleter.dismiss();
+      storeAndForward();
+    } else {
+      // Trigger purging by treating this store as a proxy
+      // for release message.
+      RATELIMIT_INFO(std::chrono::seconds(1), 1,
+          "Treating Rebuilding STORE as proxy for release for log:%lu,"
+          "store lsn: %s, current last_clean_epoch: %u, "
+          "current last_released_lsn: %s ",
+          message_->header_.rid.logid.val_,
+          lsn_to_string(message_->header_.rid.lsn()).c_str(),
+          last_clean_epoch.hasValue() ? last_clean_epoch.value().val_ : 0,
+          lsn_to_string(last_released_lsn.hasValue() ? last_released_lsn.value()
+                                                     : LSN_INVALID)
+              .c_str());
+
+      log_state->purge_coordinator_->onReleaseMessage(
+          message_->header_.rid.lsn(),
+          message_->header_.sequencer_node_id,
+          ReleaseType::GLOBAL,
+          true);
+
+      // Respond to rebuilding store
+      message_->sendReply(E::DISABLED);
+    }
+    return;
+  }
+
+  deleter.dismiss();
   log_state->recoverSeal(std::bind(&StoreStateMachine::onSealRecovered,
                                    this,
                                    std::placeholders::_1,
