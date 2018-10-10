@@ -114,7 +114,17 @@ class StoreStorageTask : public WriteStorageTask {
     return soft_preempted_only_;
   }
 
- protected: // tests may override
+  // used in tests
+  const std::string& getRecordHeaderBuf() const {
+    return record_header_buf_;
+  }
+
+  // used in tests
+  const std::string& getCopySetIndexEntryBuf() const {
+    return copyset_index_entry_buf_;
+  }
+
+ protected:
   virtual LogStorageStateMap* getLogStateMap() const;
 
   virtual StatsHolder* stats();

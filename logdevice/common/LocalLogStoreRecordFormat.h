@@ -167,6 +167,9 @@ const csi_flags_t CSI_FLAG_DRAINED = (unsigned)1 << 1;
 // copyset is made of ShardIDs instead of node_index_t.
 const csi_flags_t CSI_FLAG_SHARD_ID = (unsigned)1 << 2;
 
+// written by recovery
+const csi_flags_t CSI_FLAG_WRITTEN_BY_RECOVERY = (unsigned)1 << 3;
+
 // record represents a plug for a hole in the numbering sequence
 const csi_flags_t CSI_FLAG_HOLE = (unsigned)1 << 6;
 
@@ -274,6 +277,11 @@ csi_flags_t formCopySetIndexFlags(const STORE_Header&,
 csi_flags_t formCopySetIndexFlags(const flags_t flags);
 
 /**
+ * Convert copyset index entry flags into record flags
+ */
+flags_t copySetIndexFlagsToRecordFlags(csi_flags_t flags);
+
+/**
  * Forms the copyset index entry for the record. This entry will contain
  * the size of the copyset, and the nodes present in the copyset.
  *
@@ -298,6 +306,7 @@ Slice formCopySetIndexEntry(uint32_t wave,
  * the size of the copyset, and the nodes present in the copyset.
  *
  * @param store_header        header of STORE_Message being processed
+ * @param store_extra         extra attributes of STORE_Message being processed
  * @param copyset             copy set, also in STORE_Message
  * @param block_starting_lsn  LSN where the block starts, also in STORE_Message
  * @param buf                 std::string to use as storage
@@ -305,6 +314,7 @@ Slice formCopySetIndexEntry(uint32_t wave,
  * @return Slice pointing into supplied std::string
  */
 Slice formCopySetIndexEntry(const STORE_Header& store_header,
+                            const STORE_Extra& store_extra,
                             const StoreChainLink* copyset,
                             const folly::Optional<lsn_t>& block_starting_lsn,
                             bool shard_id_in_copyset,

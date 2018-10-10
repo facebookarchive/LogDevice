@@ -205,6 +205,39 @@ bool RocksDBWriterMergeOperator::AnyWayMerge(
 }
 
 namespace {
+// Descriptor which is compared to decide which copyset to keep.
+struct Precedence {
+  LocalLogStoreRecordFormat::flags_t flags = 0;
+  uint32_t wave = 1;
+  int32_t index = -1;
+
+  Precedence() {}
+  Precedence(LocalLogStoreRecordFormat::flags_t flags,
+             uint32_t wave,
+             int32_t index)
+      : flags(flags), wave(wave), index(index) {}
+
+  bool empty() {
+    ld_check(index >= -1);
+    return index <= -1;
+  }
+
+  bool operator<(const Precedence& rhs) const {
+    // use the same precedence rules by Digest in epoch recovery.
+    // In addtion, for two records that have the same FLAG_WRITTEN_BY_RECOVERY
+    // flag and the same seal_epoch/wave number, the one with higher index
+    // (more recently written) has the higher precedence
+
+    auto get = [](const Precedence& p) {
+      return std::make_tuple(
+          Digest::RecordMetadata{
+              p.flags & LocalLogStoreRecordFormat::FLAG_MASK, p.wave},
+          p.index);
+    };
+
+    return get(*this) < get(rhs);
+  }
+};
 
 void combine(const Slice&,
              const Slice&,
@@ -236,39 +269,6 @@ bool handleDataRecord(const rocksdb::Slice& key,
                       const OperandList& operand_list,
                       shard_index_t this_shard,
                       DataMergeOutput& out) {
-  // Descriptor which is compared to decide which copyset to keep.
-  struct Precedence {
-    LocalLogStoreRecordFormat::flags_t flags = 0;
-    uint32_t wave = 1;
-    int32_t index = -1;
-
-    Precedence() {}
-    Precedence(LocalLogStoreRecordFormat::flags_t flags,
-               uint32_t wave,
-               int32_t index)
-        : flags(flags), wave(wave), index(index) {}
-
-    bool empty() {
-      ld_check(index >= -1);
-      return index <= -1;
-    }
-
-    bool operator<(const Precedence& rhs) const {
-      // use the same precedence rules by Digest in epoch recovery.
-      // In addtion, for two records that have the same FLAG_WRITTEN_BY_RECOVERY
-      // flag and the same seal_epoch/wave number, the one with higher index
-      // (more recently written) has the higher precedence
-
-      auto get = [](const Precedence& p) {
-        return std::make_tuple(
-            Digest::RecordMetadata{
-                p.flags & LocalLogStoreRecordFormat::FLAG_MASK, p.wave},
-            p.index);
-      };
-
-      return get(*this) < get(rhs);
-    }
-  };
   struct Pick {
     // This is the entire slice (as can be passed to
     // LocalLogStoreRecordFormat::parse)
@@ -387,7 +387,6 @@ bool handleCopySetIndexEntry(const rocksdb::Slice& key,
                              shard_index_t this_shard,
                              DataMergeOutput& out) {
   Slice result_value{nullptr, 0};
-  int64_t max_wave = -1;
 
   if (!CopySetIndexKey::valid(key.data(), key.size())) {
     RATELIMIT_ERROR(std::chrono::seconds(1),
@@ -404,14 +403,21 @@ bool handleCopySetIndexEntry(const rocksdb::Slice& key,
                     key.ToString(true).c_str());
   }
 
+  int32_t next_index = 0;
+  Precedence max_precedence;
+
   // Helper function used both for *existing_value and merge operands.
-  // Updates `result_slice` and `max_wave`
-  auto process = [&](const rocksdb::Slice& k, const Slice& value) {
+  auto process = [&key,
+                  &result_value,
+                  &next_index,
+                  &max_precedence,
+                  this_shard](const rocksdb::Slice& rocks_value) {
+    const auto value = toLdSlice(rocks_value);
     if (!value.data || !value.size) {
       RATELIMIT_ERROR(std::chrono::seconds(1),
                       10,
                       "encountered empty copyset index entry at key %s",
-                      k.ToString(true).c_str());
+                      key.ToString(true).c_str());
       return false;
     }
     std::vector<ShardID> copyset;
@@ -434,23 +440,23 @@ bool handleCopySetIndexEntry(const rocksdb::Slice& key,
       return false;
     }
 
-    // Merging single entry - wave 0 overrides any non-zero waves. Otherwise
-    // the one with the largest wave number wins. The '>=' ensures that among
-    // copysets with the same wave we pick the one that was written last. This
-    // is important for rebuilding.
-    if (wave == 0 || (max_wave != 0 && wave >= max_wave)) {
+    Precedence p(
+        LocalLogStoreRecordFormat::copySetIndexFlagsToRecordFlags(csi_flags),
+        wave,
+        next_index++);
+    if (max_precedence < p) {
       result_value = value;
-      max_wave = wave;
+      max_precedence = p;
     }
     return true;
   };
 
-  if (existing_value && !process(key, toLdSlice(*existing_value))) {
+  if (existing_value && !process(*existing_value)) {
     return false;
   }
 
   for (const rocksdb::Slice& op : operand_list) {
-    if (!process(key, toLdSlice(op))) {
+    if (!process(op)) {
       return false;
     }
   }

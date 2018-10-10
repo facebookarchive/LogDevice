@@ -983,6 +983,7 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
         Slice payload(&payloads[i][0], payloads[i].size());
         Slice csi_entry = LocalLogStoreRecordFormat::formCopySetIndexEntry(
             hdr,
+            STORE_Extra(),
             csi_copyset.data(),
             LSN_INVALID,
             shardIdInCopySet(),

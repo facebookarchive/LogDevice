@@ -72,33 +72,64 @@ ParseResult parse(const RawRecord& rec) {
   return ret;
 }
 
-TEST(RocksDBWriterMergeOperatorTest, SingleWave) {
-  TemporaryRocksDBStore store;
+class RocksDBWriterMergeOperatorTest : public ::testing::Test {
+ public:
+  void storeRecords(const std::vector<TestRecord>& records) {
+    store_fill(store_, records);
+  }
+  void
+  verify(std::function<void(const std::vector<RawRecord>&)> run_on_all,
+         std::function<void(const std::vector<RawRecord>&)> run_on_records =
+             [](const std::vector<RawRecord>&) {},
+         std::function<void(const std::vector<RawRecord>&)> run_on_csi =
+             [](const std::vector<RawRecord>&) {}) {
+    for (int csi = 0; csi <= 1; ++csi) {
+      auto reader = test::LocalLogStoreTestReader().logID(LOG_ID);
+      if (csi) {
+        reader.use_csi(true).csi_only();
+      }
+      std::vector<RawRecord> rec;
+      Status st = reader.logID(LOG_ID).process(&store_, rec);
+      ASSERT_EQ(E::UNTIL_LSN_REACHED, st);
+      run_on_all(rec);
+      if (csi) {
+        run_on_csi(rec);
+      } else {
+        run_on_records(rec);
+      }
+    }
+  }
 
+  LocalLogStore& getStore() {
+    return store_;
+  }
+
+ private:
+  TemporaryRocksDBStore store_;
+};
+
+TEST_F(RocksDBWriterMergeOperatorTest, SingleWave) {
   std::vector<TestRecord> test_data = {
       TestRecord(LOG_ID, lsn_t(1), esn_t(0))
           .wave(1)
           .copyset({N1, N2, N3})
           .payload(Payload("foo", 3)),
   };
-  store_fill(store, test_data);
-
-  std::vector<RawRecord> rec;
-  Status st =
-      test::LocalLogStoreTestReader().logID(LOG_ID).process(&store, rec);
-  ASSERT_EQ(E::UNTIL_LSN_REACHED, st);
-
-  ASSERT_EQ(1, rec.size());
-  ASSERT_FALSE(parse(rec[0]).flags & FLAG_AMEND);
-  ASSERT_EQ(1, parse(rec[0]).wave);
-  ASSERT_EQ("foo", parse(rec[0]).payload);
-  ASSERT_EQ(std::vector<ShardID>({N1, N2, N3}), parse(rec[0]).copyset);
+  storeRecords(test_data);
+  auto cb_all = [](const std::vector<RawRecord>& rec) {
+    ASSERT_EQ(1, rec.size());
+    ASSERT_FALSE(parse(rec[0]).flags & FLAG_AMEND);
+    ASSERT_EQ(1, parse(rec[0]).wave);
+    ASSERT_EQ(std::vector<ShardID>({N1, N2, N3}), parse(rec[0]).copyset);
+  };
+  auto cb_records_only = [](const std::vector<RawRecord>& rec) {
+    ASSERT_EQ("foo", parse(rec[0]).payload);
+  };
+  verify(cb_all, cb_records_only);
 }
 
 // With multiple waves containing the payload, must take the later wave
-TEST(RocksDBWriterMergeOperatorTest, TwoWavesWithPayload) {
-  TemporaryRocksDBStore store;
-
+TEST_F(RocksDBWriterMergeOperatorTest, TwoWavesWithPayload) {
   std::vector<TestRecord> test_data = {
       TestRecord(LOG_ID, lsn_t(1), esn_t(0))
           .wave(1)
@@ -109,24 +140,21 @@ TEST(RocksDBWriterMergeOperatorTest, TwoWavesWithPayload) {
           .copyset({N4, N5, N6, N7})
           .payload(Payload("foo", 3)),
   };
-  store_fill(store, test_data);
-
-  std::vector<RawRecord> rec;
-  Status st =
-      test::LocalLogStoreTestReader().logID(LOG_ID).process(&store, rec);
-  ASSERT_EQ(E::UNTIL_LSN_REACHED, st);
-
-  ASSERT_EQ(1, rec.size());
-  ASSERT_FALSE(parse(rec[0]).flags & FLAG_AMEND);
-  ASSERT_EQ(2, parse(rec[0]).wave);
-  ASSERT_EQ("foo", parse(rec[0]).payload);
-  ASSERT_EQ(std::vector<ShardID>({N4, N5, N6, N7}), parse(rec[0]).copyset);
+  storeRecords(test_data);
+  auto cb_all = [](const std::vector<RawRecord>& rec) {
+    ASSERT_EQ(1, rec.size());
+    ASSERT_FALSE(parse(rec[0]).flags & FLAG_AMEND);
+    ASSERT_EQ(2, parse(rec[0]).wave);
+    ASSERT_EQ(std::vector<ShardID>({N4, N5, N6, N7}), parse(rec[0]).copyset);
+  };
+  auto cb_records_only = [](const std::vector<RawRecord>& rec) {
+    ASSERT_EQ("foo", parse(rec[0]).payload);
+  };
+  verify(cb_all, cb_records_only);
 }
 
 // Must take later wave+copyset even if STOREs get reordered
-TEST(RocksDBWriterMergeOperatorTest, TwoWavesReordered) {
-  TemporaryRocksDBStore store;
-
+TEST_F(RocksDBWriterMergeOperatorTest, TwoWavesReordered) {
   std::vector<TestRecord> test_data = {
       TestRecord(LOG_ID, lsn_t(1), esn_t(0))
           .wave(2)
@@ -137,24 +165,22 @@ TEST(RocksDBWriterMergeOperatorTest, TwoWavesReordered) {
           .copyset({N1, N2, N3})
           .payload(Payload("foo", 3)),
   };
-  store_fill(store, test_data);
 
-  std::vector<RawRecord> rec;
-  Status st =
-      test::LocalLogStoreTestReader().logID(LOG_ID).process(&store, rec);
-  ASSERT_EQ(E::UNTIL_LSN_REACHED, st);
-
-  ASSERT_EQ(1, rec.size());
-  ASSERT_FALSE(parse(rec[0]).flags & FLAG_AMEND);
-  ASSERT_EQ(2, parse(rec[0]).wave);
-  ASSERT_EQ("foo", parse(rec[0]).payload);
-  ASSERT_EQ(std::vector<ShardID>({N4, N5, N6, N7}), parse(rec[0]).copyset);
+  storeRecords(test_data);
+  auto cb_all = [](const std::vector<RawRecord>& rec) {
+    ASSERT_EQ(1, rec.size());
+    ASSERT_FALSE(parse(rec[0]).flags & FLAG_AMEND);
+    ASSERT_EQ(2, parse(rec[0]).wave);
+    ASSERT_EQ(std::vector<ShardID>({N4, N5, N6, N7}), parse(rec[0]).copyset);
+  };
+  auto cb_records_only = [](const std::vector<RawRecord>& rec) {
+    ASSERT_EQ("foo", parse(rec[0]).payload);
+  };
+  verify(cb_all, cb_records_only);
 }
 
 // A simple case where a proper first wave is followed by a payloadless amend
-TEST(RocksDBWriterMergeOperatorTest, TwoWavesAmend) {
-  TemporaryRocksDBStore store;
-
+TEST_F(RocksDBWriterMergeOperatorTest, TwoWavesAmend) {
   std::vector<TestRecord> test_data = {
       TestRecord(LOG_ID, lsn_t(1), esn_t(0))
           .wave(1)
@@ -166,24 +192,22 @@ TEST(RocksDBWriterMergeOperatorTest, TwoWavesAmend) {
           .flagAmend()
           .payload(Payload()),
   };
-  store_fill(store, test_data);
 
-  std::vector<RawRecord> rec;
-  Status st =
-      test::LocalLogStoreTestReader().logID(LOG_ID).process(&store, rec);
-  ASSERT_EQ(E::UNTIL_LSN_REACHED, st);
-
-  ASSERT_EQ(1, rec.size());
-  ASSERT_FALSE(parse(rec[0]).flags & FLAG_AMEND);
-  ASSERT_EQ(2, parse(rec[0]).wave);
-  ASSERT_EQ("foo", parse(rec[0]).payload);
-  ASSERT_EQ(std::vector<ShardID>({N4, N5, N6, N7}), parse(rec[0]).copyset);
+  storeRecords(test_data);
+  auto cb_all = [](const std::vector<RawRecord>& rec) {
+    ASSERT_EQ(1, rec.size());
+    ASSERT_FALSE(parse(rec[0]).flags & FLAG_AMEND);
+    ASSERT_EQ(2, parse(rec[0]).wave);
+    ASSERT_EQ(std::vector<ShardID>({N4, N5, N6, N7}), parse(rec[0]).copyset);
+  };
+  auto cb_records_only = [](const std::vector<RawRecord>& rec) {
+    ASSERT_EQ("foo", parse(rec[0]).payload);
+  };
+  verify(cb_all, cb_records_only);
 }
 
 // Record followed by amend with the same wave
-TEST(RocksDBWriterMergeOperatorTest, OneWaveAmend) {
-  TemporaryRocksDBStore store;
-
+TEST_F(RocksDBWriterMergeOperatorTest, OneWaveAmend) {
   std::vector<TestRecord> test_data = {
       TestRecord(LOG_ID, lsn_t(1), esn_t(0))
           .wave(1)
@@ -195,24 +219,21 @@ TEST(RocksDBWriterMergeOperatorTest, OneWaveAmend) {
           .flagAmend()
           .payload(Payload()),
   };
-  store_fill(store, test_data);
-
-  std::vector<RawRecord> rec;
-  Status st =
-      test::LocalLogStoreTestReader().logID(LOG_ID).process(&store, rec);
-  ASSERT_EQ(E::UNTIL_LSN_REACHED, st);
-
-  ASSERT_EQ(1, rec.size());
-  ASSERT_FALSE(parse(rec[0]).flags & FLAG_AMEND);
-  ASSERT_EQ(1, parse(rec[0]).wave);
-  ASSERT_EQ("foo", parse(rec[0]).payload);
-  ASSERT_EQ(std::vector<ShardID>({N4, N5, N6, N7}), parse(rec[0]).copyset);
+  storeRecords(test_data);
+  auto cb_all = [](const std::vector<RawRecord>& rec) {
+    ASSERT_EQ(1, rec.size());
+    ASSERT_FALSE(parse(rec[0]).flags & FLAG_AMEND);
+    ASSERT_EQ(1, parse(rec[0]).wave);
+    ASSERT_EQ(std::vector<ShardID>({N4, N5, N6, N7}), parse(rec[0]).copyset);
+  };
+  auto cb_records_only = [](const std::vector<RawRecord>& rec) {
+    ASSERT_EQ("foo", parse(rec[0]).payload);
+  };
+  verify(cb_all, cb_records_only);
 }
 
 // A payloadless amend followed by a record with the same wave
-TEST(RocksDBWriterMergeOperatorTest, OneWaveAmendReversed) {
-  TemporaryRocksDBStore store;
-
+TEST_F(RocksDBWriterMergeOperatorTest, OneWaveAmendReversed) {
   std::vector<TestRecord> test_data = {
       TestRecord(LOG_ID, lsn_t(1), esn_t(0))
           .wave(2)
@@ -224,24 +245,21 @@ TEST(RocksDBWriterMergeOperatorTest, OneWaveAmendReversed) {
           .copyset({N1, N2, N3})
           .payload(Payload("foo", 3)),
   };
-  store_fill(store, test_data);
-
-  std::vector<RawRecord> rec;
-  Status st =
-      test::LocalLogStoreTestReader().logID(LOG_ID).process(&store, rec);
-  ASSERT_EQ(E::UNTIL_LSN_REACHED, st);
-
-  ASSERT_EQ(1, rec.size());
-  ASSERT_FALSE(parse(rec[0]).flags & FLAG_AMEND);
-  ASSERT_EQ(2, parse(rec[0]).wave);
-  ASSERT_EQ("foo", parse(rec[0]).payload);
-  ASSERT_EQ(std::vector<ShardID>({N1, N2, N3}), parse(rec[0]).copyset);
+  storeRecords(test_data);
+  auto cb_all = [](const std::vector<RawRecord>& rec) {
+    ASSERT_EQ(1, rec.size());
+    ASSERT_FALSE(parse(rec[0]).flags & FLAG_AMEND);
+    ASSERT_EQ(2, parse(rec[0]).wave);
+    ASSERT_EQ(std::vector<ShardID>({N1, N2, N3}), parse(rec[0]).copyset);
+  };
+  auto cb_records_only = [](const std::vector<RawRecord>& rec) {
+    ASSERT_EQ("foo", parse(rec[0]).payload);
+  };
+  verify(cb_all, cb_records_only);
 }
 
 // Should be able to partially merge copyset amends
-TEST(RocksDBWriterMergeOperatorTest, PartialMergeAmends) {
-  TemporaryRocksDBStore store;
-
+TEST_F(RocksDBWriterMergeOperatorTest, PartialMergeAmends) {
   std::vector<TestRecord> test_data = {
       TestRecord(LOG_ID, lsn_t(1), esn_t(0))
           .wave(3)
@@ -254,20 +272,20 @@ TEST(RocksDBWriterMergeOperatorTest, PartialMergeAmends) {
           .flagAmend()
           .payload(Payload()),
   };
-  store_fill(store, test_data);
+  storeRecords(test_data);
 
-  // Iterator should skip the dangling amends.
-  std::vector<RawRecord> rec;
-  Status st =
-      test::LocalLogStoreTestReader().logID(LOG_ID).process(&store, rec);
-  ASSERT_EQ(E::UNTIL_LSN_REACHED, st);
-
-  ASSERT_EQ(0, rec.size());
+  // Iterator should skip the dangling amends for data records, however CSI
+  // should register fine.
+  auto cb_records_only = [](const std::vector<RawRecord>& rec) {
+    ASSERT_EQ(0, rec.size());
+  };
+  auto cb_csi_only = [](const std::vector<RawRecord>& rec) {
+    ASSERT_EQ(1, rec.size());
+  };
+  verify([](const std::vector<RawRecord>&) {}, cb_records_only, cb_csi_only);
 }
 
-TEST(RocksDBWriterMergeOperatorTest, SkipDanglingAmends) {
-  TemporaryRocksDBStore store;
-
+TEST_F(RocksDBWriterMergeOperatorTest, SkipDanglingAmends) {
   std::vector<TestRecord> test_data = {
       TestRecord(LOG_ID, lsn_t(1), esn_t(0))
           .wave(3)
@@ -293,36 +311,39 @@ TEST(RocksDBWriterMergeOperatorTest, SkipDanglingAmends) {
           .flagAmend()
           .payload(Payload()),
   };
-  store_fill(store, test_data);
+  storeRecords(test_data);
 
-  auto it =
-      store.read(LOG_ID,
-                 LocalLogStore::ReadOptions(
-                     "RocksDBWriterMergeOperatorTest.SkipDanglingAmends"));
-  it->seek(2);
-  ASSERT_EQ(IteratorState::AT_RECORD, it->state());
-  ASSERT_EQ(3, it->getLSN());
+  for (int csi = 0; csi < 1; ++csi) {
+    auto options = LocalLogStore::ReadOptions(
+        "RocksDBWriterMergeOperatorTest.SkipDanglingAmends");
+    if (csi) {
+      options.allow_copyset_index = true;
+      options.csi_data_only = true;
+    };
+    auto it = getStore().read(LOG_ID, options);
+    it->seek(2);
+    ASSERT_EQ(IteratorState::AT_RECORD, it->state());
+    ASSERT_EQ(3, it->getLSN());
 
-  it->prev();
-  ASSERT_EQ(IteratorState::AT_RECORD, it->state());
-  ASSERT_EQ(1, it->getLSN());
+    it->prev();
+    ASSERT_EQ(IteratorState::AT_RECORD, it->state());
+    ASSERT_EQ(1, it->getLSN());
 
-  it->prev();
-  ASSERT_EQ(IteratorState::AT_END, it->state());
+    it->prev();
+    ASSERT_EQ(IteratorState::AT_END, it->state());
 
-  it->seekForPrev(42);
-  ASSERT_EQ(IteratorState::AT_RECORD, it->state());
-  ASSERT_EQ(3, it->getLSN());
+    it->seekForPrev(42);
+    ASSERT_EQ(IteratorState::AT_RECORD, it->state());
+    ASSERT_EQ(3, it->getLSN());
 
-  it->next();
-  ASSERT_EQ(IteratorState::AT_END, it->state());
+    it->next();
+    ASSERT_EQ(IteratorState::AT_END, it->state());
+  }
 }
 
 // epoch recovery should be able to amend an existing record with the seal_epoch
 // and the FLAG_WRITTEN_BY_RECOVERY
-TEST(RocksDBWriterMergeOperatorTest, AmendByEpochRecovery) {
-  TemporaryRocksDBStore store;
-
+TEST_F(RocksDBWriterMergeOperatorTest, AmendByEpochRecovery) {
   std::vector<TestRecord> test_data = {
       TestRecord(LOG_ID, lsn_t(1), esn_t(0))
           .wave(9999)
@@ -334,30 +355,28 @@ TEST(RocksDBWriterMergeOperatorTest, AmendByEpochRecovery) {
           .flagAmend()
           .payload(Payload()),
   };
-  store_fill(store, test_data);
+  storeRecords(test_data);
 
-  std::vector<RawRecord> rec;
-  Status st =
-      test::LocalLogStoreTestReader().logID(LOG_ID).process(&store, rec);
-  ASSERT_EQ(E::UNTIL_LSN_REACHED, st);
-
-  ASSERT_EQ(1, rec.size());
-  ASSERT_FALSE(parse(rec[0]).flags & FLAG_AMEND);
-  // the new record must be marked as written by recovery
-  ASSERT_TRUE(parse(rec[0]).flags & FLAG_WRITTEN_BY_RECOVERY);
-  // despite that the previous record has wave of 9999, the recovery store must
-  // take the precedence
-  ASSERT_EQ(2, parse(rec[0]).wave);
-  ASSERT_EQ("foo", parse(rec[0]).payload);
-  // copyset should also be amended
-  ASSERT_EQ(std::vector<ShardID>({N1, N2, N3}), parse(rec[0]).copyset);
+  auto cb_all = [](const std::vector<RawRecord>& rec) {
+    ASSERT_EQ(1, rec.size());
+    ASSERT_FALSE(parse(rec[0]).flags & FLAG_AMEND);
+    // the new record must be marked as written by recovery
+    ASSERT_TRUE(parse(rec[0]).flags & FLAG_WRITTEN_BY_RECOVERY);
+    // despite that the previous record has wave of 9999, the recovery store
+    // must take the precedence
+    ASSERT_EQ(2, parse(rec[0]).wave);
+    // copyset should also be amended
+    ASSERT_EQ(std::vector<ShardID>({N1, N2, N3}), parse(rec[0]).copyset);
+  };
+  auto cb_records_only = [](const std::vector<RawRecord>& rec) {
+    ASSERT_EQ("foo", parse(rec[0]).payload);
+  };
+  verify(cb_all, cb_records_only);
 }
 
 // epoch recovery should be able to overwrite a hole written by a previous epoch
 // recovery instance with a record
-TEST(RocksDBWriterMergeOperatorTest, EpochRecoveryRecordOverwriteHole) {
-  TemporaryRocksDBStore store;
-
+TEST_F(RocksDBWriterMergeOperatorTest, EpochRecoveryRecordOverwriteHole) {
   std::vector<TestRecord> test_data = {
       TestRecord(LOG_ID, lsn_t(1), esn_t(0))
           .writtenByRecovery(epoch_t(2))
@@ -369,30 +388,28 @@ TEST(RocksDBWriterMergeOperatorTest, EpochRecoveryRecordOverwriteHole) {
           .copyset({N1, N2, N3})
           .payload(Payload("foo", 3)),
   };
-  store_fill(store, test_data);
+  storeRecords(test_data);
 
-  std::vector<RawRecord> rec;
-  Status st =
-      test::LocalLogStoreTestReader().logID(LOG_ID).process(&store, rec);
-  ASSERT_EQ(E::UNTIL_LSN_REACHED, st);
-
-  ASSERT_EQ(1, rec.size());
-  ASSERT_FALSE(parse(rec[0]).flags & FLAG_AMEND);
-  // the new record must be marked as written by recovery
-  ASSERT_TRUE(parse(rec[0]).flags & FLAG_WRITTEN_BY_RECOVERY);
-  // the new record must not be a hole
-  ASSERT_FALSE(parse(rec[0]).flags & FLAG_HOLE);
-  // the new record must be written by recovery with seal epoch == 5
-  ASSERT_EQ(5, parse(rec[0]).wave);
-  ASSERT_EQ("foo", parse(rec[0]).payload);
-  ASSERT_EQ(std::vector<ShardID>({N1, N2, N3}), parse(rec[0]).copyset);
+  auto cb_all = [](const std::vector<RawRecord>& rec) {
+    ASSERT_EQ(1, rec.size());
+    ASSERT_FALSE(parse(rec[0]).flags & FLAG_AMEND);
+    // the new record must be marked as written by recovery
+    ASSERT_TRUE(parse(rec[0]).flags & FLAG_WRITTEN_BY_RECOVERY);
+    // the new record must not be a hole
+    ASSERT_FALSE(parse(rec[0]).flags & FLAG_HOLE);
+    // the new record must be written by recovery with seal epoch == 5
+    ASSERT_EQ(5, parse(rec[0]).wave);
+    ASSERT_EQ(std::vector<ShardID>({N1, N2, N3}), parse(rec[0]).copyset);
+  };
+  auto cb_records_only = [](const std::vector<RawRecord>& rec) {
+    ASSERT_EQ("foo", parse(rec[0]).payload);
+  };
+  verify(cb_all, cb_records_only);
 }
 
 // epoch recovery should be able to overwrite a bridge record  written by
 // a previous epoch recovery instance with a normal hole record
-TEST(RocksDBWriterMergeOperatorTest, EpochRecoveryRecordOverwriteBridge) {
-  TemporaryRocksDBStore store;
-
+TEST_F(RocksDBWriterMergeOperatorTest, EpochRecoveryRecordOverwriteBridge) {
   std::vector<TestRecord> test_data = {
       TestRecord(LOG_ID, lsn_t(1), esn_t(3))
           .writtenByRecovery(epoch_t(2))
@@ -404,28 +421,25 @@ TEST(RocksDBWriterMergeOperatorTest, EpochRecoveryRecordOverwriteBridge) {
           .copyset({N1, N2, N3})
           .hole(),
   };
-  store_fill(store, test_data);
+  storeRecords(test_data);
 
-  std::vector<RawRecord> rec;
-  Status st =
-      test::LocalLogStoreTestReader().logID(LOG_ID).process(&store, rec);
-  ASSERT_EQ(E::UNTIL_LSN_REACHED, st);
-
-  ASSERT_EQ(1, rec.size());
-  ASSERT_FALSE(parse(rec[0]).flags & FLAG_AMEND);
-  // the new record must be written by recovery with seal epoch == 5
-  ASSERT_TRUE(parse(rec[0]).flags & FLAG_WRITTEN_BY_RECOVERY);
-  ASSERT_TRUE(parse(rec[0]).flags & FLAG_HOLE);
-  ASSERT_FALSE(parse(rec[0]).flags & FLAG_BRIDGE);
-  ASSERT_EQ(5, parse(rec[0]).wave);
-  ASSERT_EQ(std::vector<ShardID>({N1, N2, N3}), parse(rec[0]).copyset);
+  auto cb_all = [](const std::vector<RawRecord>& rec) {
+    ASSERT_EQ(1, rec.size());
+    ASSERT_FALSE(parse(rec[0]).flags & FLAG_AMEND);
+    // the new record must be written by recovery with seal epoch == 5
+    ASSERT_TRUE(parse(rec[0]).flags & FLAG_WRITTEN_BY_RECOVERY);
+    ASSERT_TRUE(parse(rec[0]).flags & FLAG_HOLE);
+    ASSERT_FALSE(parse(rec[0]).flags & FLAG_BRIDGE);
+    ASSERT_EQ(5, parse(rec[0]).wave);
+    ASSERT_EQ(std::vector<ShardID>({N1, N2, N3}), parse(rec[0]).copyset);
+  };
+  auto cb_records_only = [](const std::vector<RawRecord>&) {};
+  verify(cb_all, cb_records_only);
 }
 
 // epoch recovery should be not be able to amend an existing record written by
 // recovery with higher seal epoch with amends or stores
-TEST(RocksDBWriterMergeOperatorTest, DeniedAmendAndStore) {
-  TemporaryRocksDBStore store;
-
+TEST_F(RocksDBWriterMergeOperatorTest, DeniedAmendAndStore) {
   std::vector<TestRecord> test_data = {
       TestRecord(LOG_ID, lsn_t(1), esn_t(0))
           .writtenByRecovery(epoch_t(25))
@@ -446,26 +460,24 @@ TEST(RocksDBWriterMergeOperatorTest, DeniedAmendAndStore) {
           .flagAmend()
           .payload(Payload()),
   };
-  store_fill(store, test_data);
+  storeRecords(test_data);
 
-  std::vector<RawRecord> rec;
-  Status st =
-      test::LocalLogStoreTestReader().logID(LOG_ID).process(&store, rec);
-  ASSERT_EQ(E::UNTIL_LSN_REACHED, st);
-
-  ASSERT_EQ(1, rec.size());
-  ASSERT_FALSE(parse(rec[0]).flags & FLAG_AMEND);
-  ASSERT_TRUE(parse(rec[0]).flags & FLAG_WRITTEN_BY_RECOVERY);
-  ASSERT_EQ(25, parse(rec[0]).wave);
-  ASSERT_EQ("foo", parse(rec[0]).payload);
-  // copyset should also be amended
-  ASSERT_EQ(std::vector<ShardID>({N1, N2, N3, N5}), parse(rec[0]).copyset);
+  auto cb_all = [](const std::vector<RawRecord>& rec) {
+    ASSERT_EQ(1, rec.size());
+    ASSERT_FALSE(parse(rec[0]).flags & FLAG_AMEND);
+    ASSERT_TRUE(parse(rec[0]).flags & FLAG_WRITTEN_BY_RECOVERY);
+    ASSERT_EQ(25, parse(rec[0]).wave);
+    // copyset should also be amended
+    ASSERT_EQ(std::vector<ShardID>({N1, N2, N3, N5}), parse(rec[0]).copyset);
+  };
+  auto cb_records_only = [](const std::vector<RawRecord>& rec) {
+    ASSERT_EQ("foo", parse(rec[0]).payload);
+  };
+  verify(cb_all, cb_records_only);
 }
 
 // epoch recovery should be able to amend byteoffset
-TEST(RocksDBWriterMergeOperatorTest, EpochRecoveryOverrideByteOffset) {
-  TemporaryRocksDBStore store;
-
+TEST_F(RocksDBWriterMergeOperatorTest, EpochRecoveryOverrideByteOffset) {
   std::vector<TestRecord> test_data = {TestRecord(LOG_ID, lsn_t(1), esn_t(0))
                                            .writtenByRecovery(epoch_t(2))
                                            .copyset({N2, N3})
@@ -477,27 +489,25 @@ TEST(RocksDBWriterMergeOperatorTest, EpochRecoveryOverrideByteOffset) {
                                            .payload(Payload())
                                            .flagAmend()
                                            .offsetWithinEpoch(15)};
-  store_fill(store, test_data);
+  storeRecords(test_data);
 
-  std::vector<RawRecord> rec;
-  Status st =
-      test::LocalLogStoreTestReader().logID(LOG_ID).process(&store, rec);
-  ASSERT_EQ(E::UNTIL_LSN_REACHED, st);
-
-  ASSERT_EQ(1, rec.size());
-  ASSERT_FALSE(parse(rec[0]).flags & FLAG_AMEND);
-  // the new record must be marked as written by recovery
-  ASSERT_TRUE(parse(rec[0]).flags & FLAG_WRITTEN_BY_RECOVERY);
-  // the new record must be written by recovery with seal epoch == 5
-  ASSERT_EQ(5, parse(rec[0]).wave);
-  ASSERT_EQ("foo", parse(rec[0]).payload);
-  ASSERT_EQ(15, parse(rec[0]).offset_within_epoch);
+  auto cb_all = [](const std::vector<RawRecord>& rec) {
+    ASSERT_EQ(1, rec.size());
+    ASSERT_FALSE(parse(rec[0]).flags & FLAG_AMEND);
+    // the new record must be marked as written by recovery
+    ASSERT_TRUE(parse(rec[0]).flags & FLAG_WRITTEN_BY_RECOVERY);
+    // the new record must be written by recovery with seal epoch == 5
+    ASSERT_EQ(5, parse(rec[0]).wave);
+  };
+  auto cb_records_only = [](const std::vector<RawRecord>& rec) {
+    ASSERT_EQ("foo", parse(rec[0]).payload);
+    ASSERT_EQ(15, parse(rec[0]).offset_within_epoch);
+  };
+  verify(cb_all, cb_records_only);
 }
 
 // if FLAG_OFFSET_WITHIN_EPOCH not set, recovery shouldn't amend byteoffset
-TEST(RocksDBWriterMergeOperatorTest, EpochRecoveryNotOverrideByteOffset) {
-  TemporaryRocksDBStore store;
-
+TEST_F(RocksDBWriterMergeOperatorTest, EpochRecoveryNotOverrideByteOffset) {
   std::vector<TestRecord> test_data = {
       TestRecord(LOG_ID, lsn_t(1), esn_t(0))
           .writtenByRecovery(epoch_t(2))
@@ -510,21 +520,21 @@ TEST(RocksDBWriterMergeOperatorTest, EpochRecoveryNotOverrideByteOffset) {
           .payload(Payload())
           .flagAmend(),
   };
-  store_fill(store, test_data);
+  storeRecords(test_data);
 
-  std::vector<RawRecord> rec;
-  Status st =
-      test::LocalLogStoreTestReader().logID(LOG_ID).process(&store, rec);
-  ASSERT_EQ(E::UNTIL_LSN_REACHED, st);
-
-  ASSERT_EQ(1, rec.size());
-  ASSERT_FALSE(parse(rec[0]).flags & FLAG_AMEND);
-  // the new record must be marked as written by recovery
-  ASSERT_TRUE(parse(rec[0]).flags & FLAG_WRITTEN_BY_RECOVERY);
-  // the new record must be written by recovery with seal epoch == 5
-  ASSERT_EQ(5, parse(rec[0]).wave);
-  ASSERT_EQ("foo", parse(rec[0]).payload);
-  ASSERT_EQ(10, parse(rec[0]).offset_within_epoch);
+  auto cb_all = [](const std::vector<RawRecord>& rec) {
+    ASSERT_EQ(1, rec.size());
+    ASSERT_FALSE(parse(rec[0]).flags & FLAG_AMEND);
+    // the new record must be marked as written by recovery
+    ASSERT_TRUE(parse(rec[0]).flags & FLAG_WRITTEN_BY_RECOVERY);
+    // the new record must be written by recovery with seal epoch == 5
+    ASSERT_EQ(5, parse(rec[0]).wave);
+  };
+  auto cb_records_only = [](const std::vector<RawRecord>& rec) {
+    ASSERT_EQ("foo", parse(rec[0]).payload);
+    ASSERT_EQ(10, parse(rec[0]).offset_within_epoch);
+  };
+  verify(cb_all, cb_records_only);
 }
 
 } // namespace

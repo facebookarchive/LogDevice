@@ -1121,16 +1121,9 @@ Slice RocksDBLocalLogStore::CSIWrapper::CopySetIndexIterator::getCurrentRecord()
     const {
   ld_check(state() == IteratorState::AT_RECORD);
   LocalLogStoreRecordFormat::flags_t flags =
+      LocalLogStoreRecordFormat::copySetIndexFlagsToRecordFlags(
+          current_single_flags_) |
       LocalLogStoreRecordFormat::FLAG_CSI_DATA_ONLY;
-  if (current_single_flags_ & LocalLogStoreRecordFormat::CSI_FLAG_HOLE) {
-    flags |= LocalLogStoreRecordFormat::FLAG_HOLE;
-  }
-  if (current_single_flags_ & LocalLogStoreRecordFormat::CSI_FLAG_DRAINED) {
-    flags |= LocalLogStoreRecordFormat::FLAG_DRAINED;
-  }
-  if (current_single_flags_ & LocalLogStoreRecordFormat::CSI_FLAG_SHARD_ID) {
-    flags |= LocalLogStoreRecordFormat::FLAG_SHARD_ID;
-  }
   return LocalLogStoreRecordFormat::formRecordHeader(
       0,                            // timestamp
       ESN_INVALID,                  // last known good

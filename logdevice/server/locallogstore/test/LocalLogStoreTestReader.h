@@ -68,6 +68,10 @@ class LocalLogStoreTestReader {
     use_csi_ = v;
     return *this;
   }
+  LocalLogStoreTestReader& csi_only() {
+    csi_only_ = true;
+    return *this;
+  }
   LocalLogStoreTestReader& fail_after(int v) {
     fail_after_ = v;
     return *this;
@@ -84,6 +88,7 @@ class LocalLogStoreTestReader {
   LocalLogStoreReader::ReadPointer read_ptr_{lsn_t{1}};
   int fail_after_ = -1;
   bool use_csi_ = false;
+  bool csi_only_ = false;
   Settings settings_;
 };
 

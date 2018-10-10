@@ -43,12 +43,14 @@ void store_fill(LocalLogStore& store,
 
     copyset_bufs.emplace_back();
     std::string* copyset_buf = &copyset_bufs.back();
+    LocalLogStoreRecordFormat::csi_flags_t csi_flags =
+        LocalLogStoreRecordFormat::formCopySetIndexFlags(tr.flags_);
     Slice copyset_slice =
         LocalLogStoreRecordFormat::formCopySetIndexEntry(tr.wave_,
                                                          tr.copyset_.data(),
                                                          tr.copyset_.size(),
                                                          block_starting_lsn,
-                                                         false, // is_hole
+                                                         csi_flags,
                                                          copyset_buf);
 
     std::vector<std::pair<char, std::string>> index_key_list;

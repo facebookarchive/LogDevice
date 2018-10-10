@@ -50,6 +50,7 @@ LocalLogStoreTestReader::process(const TemporaryRocksDBStore* store,
   TestCallback cb(fail_after_);
   LocalLogStore::ReadOptions read_options("TestReader");
   read_options.allow_copyset_index = use_csi_;
+  read_options.csi_data_only = csi_only_;
   std::unique_ptr<LocalLogStore::ReadIterator> it =
       store->read(log_id_, read_options);
 

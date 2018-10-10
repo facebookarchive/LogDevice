@@ -23,11 +23,22 @@ namespace {
 /**
  * Returns minimum possible size for log store blob.
  */
-static constexpr size_t minLogStoreBlobSize() {
+constexpr size_t minLogStoreBlobSize() {
   return sizeof(uint64_t) + sizeof(esn_t) +
       sizeof(uint8_t) + // flags are at least 1 byte
       sizeof(copyset_size_t);
 }
+
+uint32_t getRecordWaveOrRecoveryEpoch(const STORE_Header& header,
+                                      const STORE_Extra& extra) {
+  // TODO 11866467: deprecate STORE_Header::RECOVERY
+  return (((header.flags & STORE_Header::RECOVERY ||
+            header.flags & STORE_Header::WRITTEN_BY_RECOVERY)) &&
+          (extra.recovery_epoch != EPOCH_INVALID))
+      ? extra.recovery_epoch.val_
+      : header.wave;
+}
+
 } // namespace
 
 #define APPEND_TO_STRING(pstr, thing)                                     \
@@ -202,7 +213,8 @@ Slice formRecordHeader(const STORE_Header& store_header,
                        const std::map<KeyType, std::string>& optional_keys,
                        const STORE_Extra& store_extra) {
   flags_t flags = store_header.flags & FLAG_MASK;
-  uint32_t wave_or_recovery_epoch_to_store = store_header.wave;
+  uint32_t wave_or_recovery_epoch_to_store =
+      getRecordWaveOrRecoveryEpoch(store_header, store_extra);
   OffsetMap offsets_within_epoch;
 
   if (shard_id_in_copyset) {
@@ -225,12 +237,6 @@ Slice formRecordHeader(const STORE_Header& store_header,
   if (store_header.flags & STORE_Header::RECOVERY ||
       store_header.flags & STORE_Header::WRITTEN_BY_RECOVERY) {
     flags |= FLAG_WRITTEN_BY_RECOVERY;
-    // if available, replace wave with the recovery epoch.
-    // TODO 11866467: always use the wave value in STORE_Header once migration
-    // is done.
-    if (store_extra.recovery_epoch != EPOCH_INVALID) {
-      wave_or_recovery_epoch_to_store = store_extra.recovery_epoch.val_;
-    }
   }
 
   if ((store_header.flags & (STORE_Header::REBUILDING | STORE_Header::AMEND)) ==
@@ -264,21 +270,33 @@ csi_flags_t formCopySetIndexFlags(const STORE_Header& store_header,
                                   bool shard_id_in_copyset) {
   dd_assert((store_header.flags & STORE_Header::DRAINED) == 0,
             "A STORE with DRAINED flag should never be issued.");
-  return ((store_header.flags & STORE_Header::HOLE) ? CSI_FLAG_HOLE : 0) |
-      (shard_id_in_copyset ? CSI_FLAG_SHARD_ID : 0) |
-      (((store_header.flags &
-         (STORE_Header::REBUILDING | STORE_Header::AMEND)) ==
-        STORE_Header::REBUILDING)
-           ? CSI_FLAG_WRITTEN_BY_REBUILDING
-           : 0);
+  csi_flags_t ret = 0;
+  ret |= (store_header.flags & STORE_Header::HOLE) ? CSI_FLAG_HOLE : 0;
+  ret |= shard_id_in_copyset ? CSI_FLAG_SHARD_ID : 0;
+  ret |= ((store_header.flags &
+           (STORE_Header::REBUILDING | STORE_Header::AMEND)) ==
+          STORE_Header::REBUILDING)
+      ? CSI_FLAG_WRITTEN_BY_REBUILDING
+      : 0;
+  ret |= (store_header.flags &
+          (STORE_Header::WRITTEN_BY_RECOVERY | STORE_Header::RECOVERY))
+      ? CSI_FLAG_WRITTEN_BY_RECOVERY
+      : 0;
+  return ret;
 }
 
 csi_flags_t formCopySetIndexFlags(const flags_t flags) {
-  return ((flags & FLAG_HOLE) ? CSI_FLAG_HOLE : 0) |
-      ((flags & FLAG_DRAINED) ? CSI_FLAG_DRAINED : 0) |
-      ((flags & FLAG_SHARD_ID) ? CSI_FLAG_SHARD_ID : 0) |
-      ((flags & FLAG_WRITTEN_BY_REBUILDING) ? CSI_FLAG_WRITTEN_BY_REBUILDING
-                                            : 0);
+#define CONV(x) ((flags & FLAG_##x) ? CSI_FLAG_##x : 0)
+  return CONV(HOLE) | CONV(DRAINED) | CONV(SHARD_ID) |
+      CONV(WRITTEN_BY_REBUILDING) | CONV(WRITTEN_BY_RECOVERY);
+#undef CONV
+}
+
+flags_t copySetIndexFlagsToRecordFlags(csi_flags_t flags) {
+#define CONV(x) ((flags & CSI_FLAG_##x) ? FLAG_##x : 0)
+  return CONV(HOLE) | CONV(DRAINED) | CONV(SHARD_ID) |
+      CONV(WRITTEN_BY_REBUILDING) | CONV(WRITTEN_BY_RECOVERY);
+#undef CONV
 }
 
 Slice formCopySetIndexEntry(uint32_t wave,
@@ -326,10 +344,12 @@ Slice formCopySetIndexEntry(uint32_t wave,
 #undef APPEND_TO_STRING
 
 Slice formCopySetIndexEntry(const STORE_Header& store_header,
+                            const STORE_Extra& store_extra,
                             const StoreChainLink* chainlink,
                             const folly::Optional<lsn_t>& block_starting_lsn,
                             bool shard_id_in_copyset,
                             std::string* buf) {
+  uint32_t wave = getRecordWaveOrRecoveryEpoch(store_header, store_extra);
   csi_flags_t flags = formCopySetIndexFlags(store_header, shard_id_in_copyset);
 
   if (shard_id_in_copyset) {
@@ -340,7 +360,7 @@ Slice formCopySetIndexEntry(const STORE_Header& store_header,
   for (int i = 0; i < store_header.copyset_size; ++i) {
     copyset.push_back(chainlink[i].destination);
   }
-  return formCopySetIndexEntry(store_header.wave,
+  return formCopySetIndexEntry(wave,
                                copyset.data(),
                                store_header.copyset_size,
                                block_starting_lsn,

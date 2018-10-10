@@ -355,4 +355,56 @@ TEST(StoreStorageTaskTest, SoftSeals) {
   EXPECT_EQ(std::vector<size_t>({2}), redirect_to[2]);
 }
 
+TEST(StoreStorageTaskTest, ValidBuffers) {
+  LogStorageStateMap map(1);
+  MockStoreStorageTask task(
+      0, logid_t(1), compose_lsn(epoch_t(1), esn_t(1)), epoch_t(555), &map);
+
+  const std::string& record_buf = task.getRecordHeaderBuf();
+  Slice record_blob(record_buf.data(), record_buf.size());
+  std::chrono::milliseconds ts{100};
+  esn_t lng{100};
+  LocalLogStoreRecordFormat::flags_t flags{100};
+  uint32_t wave{100};
+  copyset_size_t copyset_size{100};
+  std::array<ShardID, 100> copyset_arr;
+  Payload payload{reinterpret_cast<void*>(0xff), 5};
+
+  int rv = LocalLogStoreRecordFormat::parse(record_blob,
+                                            &ts,
+                                            &lng,
+                                            &flags,
+                                            &wave,
+                                            &copyset_size,
+                                            copyset_arr.data(),
+                                            copyset_arr.size(),
+                                            /*offset_within_epoch*/ nullptr,
+                                            /*optional_keys*/ nullptr,
+                                            &payload,
+                                            THIS_SHARD);
+  ASSERT_EQ(rv, 0);
+  ASSERT_EQ(ts, std::chrono::milliseconds(0));
+  ASSERT_EQ(lng, esn_t(0));
+  ASSERT_EQ(flags, LocalLogStoreRecordFormat::FLAG_WRITTEN_BY_RECOVERY);
+  ASSERT_EQ(wave, 555);
+  ASSERT_EQ(copyset_size, 1);
+  ASSERT_EQ(chain_link.destination, copyset_arr[0]);
+  ASSERT_EQ(payload.data(), nullptr);
+  ASSERT_EQ(payload.size(), 0);
+
+  const std::string& csi_buf = task.getCopySetIndexEntryBuf();
+  Slice csi_blob(csi_buf.data(), csi_buf.size());
+
+  std::vector<ShardID> csi_copyset = {ShardID(1, 15), ShardID(2, 3)};
+  uint32_t csi_wave{100};
+  LocalLogStoreRecordFormat::csi_flags_t csi_flags{0xff};
+
+  bool bool_rv = LocalLogStoreRecordFormat::parseCopySetIndexSingleEntry(
+      csi_blob, &csi_copyset, &csi_wave, &csi_flags, THIS_SHARD);
+  ASSERT_TRUE(bool_rv);
+  ASSERT_EQ(csi_wave, 555);
+  ASSERT_EQ(csi_flags, LocalLogStoreRecordFormat::CSI_FLAG_WRITTEN_BY_RECOVERY);
+  ASSERT_EQ(csi_copyset, std::vector<ShardID>{chain_link.destination});
+}
+
 }} // namespace facebook::logdevice

@@ -81,6 +81,7 @@ StoreStorageTask::StoreStorageTask(
           block_starting_lsn,
           LocalLogStoreRecordFormat::formCopySetIndexEntry(
               store_header,
+              extra_,
               copyset,
               block_starting_lsn,
               write_shard_id_in_copyset,

@@ -238,7 +238,7 @@ TEST_P(LocalLogStoreRecordFormatTest, CSIRoundTrip) {
       std::make_pair(KeyType::FINDKEY, std::string("12345678")));
   std::string buf;
   Slice csi_blob = LocalLogStoreRecordFormat::formCopySetIndexEntry(
-      header, copyset, LSN_INVALID, shard_id_in_copyset, &buf);
+      header, STORE_Extra(), copyset, LSN_INVALID, shard_id_in_copyset, &buf);
 
   size_t blob_size = sizeof(header.wave) +
       sizeof(LocalLogStoreRecordFormat::csi_flags_t) + sizeof(copyset_size_t) +
