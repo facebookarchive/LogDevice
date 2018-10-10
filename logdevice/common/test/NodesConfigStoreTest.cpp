@@ -16,7 +16,9 @@
 #include <gtest/gtest.h>
 
 #include "logdevice/common/configuration/NodesConfigStore.h"
+#include "logdevice/common/configuration/ZookeeperNodesConfigStore.h"
 #include "logdevice/common/test/InMemNodesConfigStore.h"
+#include "logdevice/common/test/ZookeeperClientInMemory.h"
 
 using namespace facebook::logdevice;
 using namespace facebook::logdevice::configuration;
@@ -92,26 +94,29 @@ void checkAndResetBaton(folly::Baton<>& b) {
   b.reset();
 }
 
-void runBasicTests(std::unique_ptr<NodesConfigStore> store) {
+void runBasicTests(std::unique_ptr<NodesConfigStore> store,
+                   bool initialWrite = true) {
   folly::Baton<> b;
   std::string value_out{};
 
-  // no config stored yet
-  EXPECT_EQ(0, store->getConfig(kFoo, [&b](Status status, std::string) {
-    EXPECT_EQ(Status::NOTFOUND, status);
-    b.post();
-  }));
-  checkAndResetBaton(b);
+  if (initialWrite) {
+    // no config stored yet
+    EXPECT_EQ(0, store->getConfig(kFoo, [&b](Status status, std::string) {
+      EXPECT_EQ(Status::NOTFOUND, status);
+      b.post();
+    }));
+    checkAndResetBaton(b);
 
-  EXPECT_EQ(Status::NOTFOUND, store->getConfigSync(kFoo, &value_out));
+    EXPECT_EQ(Status::NOTFOUND, store->getConfigSync(kFoo, &value_out));
 
-  // initial write
-  EXPECT_EQ(Status::OK,
-            store->updateConfigSync(
-                kFoo, TestEntry{10, "foo123"}.serialize(), folly::none));
+    // initial write
+    EXPECT_EQ(Status::OK,
+              store->updateConfigSync(
+                  kFoo, TestEntry{10, "foo123"}.serialize(), folly::none));
 
-  EXPECT_EQ(Status::OK, store->getConfigSync(kFoo, &value_out));
-  EXPECT_EQ(TestEntry(10, "foo123"), TestEntry::fromSerialized(value_out));
+    EXPECT_EQ(Status::OK, store->getConfigSync(kFoo, &value_out));
+    EXPECT_EQ(TestEntry(10, "foo123"), TestEntry::fromSerialized(value_out));
+  }
 
   EXPECT_EQ(Status::NOTFOUND, store->getConfigSync(kBar, &value_out));
 
@@ -169,8 +174,8 @@ void runBasicTests(std::unique_ptr<NodesConfigStore> store) {
 }
 
 void runMultiThreadedTests(std::unique_ptr<NodesConfigStore> store) {
-  constexpr size_t kNumThreads = 10;
-  constexpr size_t kIter = 1000;
+  constexpr size_t kNumThreads = 5;
+  constexpr size_t kIter = 30;
   std::array<std::thread, kNumThreads> threads;
   std::atomic<uint64_t> successCnt{0};
 
@@ -178,15 +183,18 @@ void runMultiThreadedTests(std::unique_ptr<NodesConfigStore> store) {
   std::mutex m;
   bool start = false;
 
-  auto f = [&]() {
-    std::unique_lock<std::mutex> lk{m};
-    cv.wait(lk, [&]() { return start; });
+  auto f = [&](int thread_idx) {
+    {
+      std::unique_lock<std::mutex> lk{m};
+      cv.wait(lk, [&]() { return start; });
+    }
 
+    LOG(INFO) << folly::sformat("thread {} started...", thread_idx);
     folly::Baton<> b;
     for (uint64_t k = 0; k < kIter; ++k) {
       version_t base_version{k};
       version_t next_version{k + 1};
-      store->updateConfig(
+      int rv = store->updateConfig(
           kFoo,
           TestEntry{next_version, "foo" + folly::to<std::string>(k + 1)}
               .serialize(),
@@ -197,17 +205,25 @@ void runMultiThreadedTests(std::unique_ptr<NodesConfigStore> store) {
               successCnt++;
             } else {
               EXPECT_EQ(Status::VERSION_MISMATCH, status);
-              auto entry = TestEntry::fromSerialized(value);
-              EXPECT_GT(entry.version(), base_version);
-              EXPECT_GT(new_version, base_version);
+              if (new_version != MembershipVersion::EMPTY_VERSION) {
+                auto entry = TestEntry::fromSerialized(value);
+                EXPECT_GT(entry.version(), base_version);
+                EXPECT_GT(new_version, base_version);
+              }
             }
             b.post();
           });
-      checkAndResetBaton(b);
+      if (rv == 0) {
+        // Note: if the check fails here, the thread dies but the test would
+        // keep hanging unfortunately.
+        checkAndResetBaton(b);
+      } else {
+        b.reset();
+      }
     }
   };
   for (auto i = 0; i < kNumThreads; ++i) {
-    threads[i] = std::thread(f);
+    threads[i] = std::thread(std::bind(f, i));
   }
 
   // write version 0 (i.e., ~provision)
@@ -239,4 +255,25 @@ TEST(NodesConfigStore, basic) {
 TEST(NodesConfigStore, basicMT) {
   runMultiThreadedTests(
       std::make_unique<InMemNodesConfigStore>(extractVersionFn));
+}
+
+TEST(NodesConfigStore, zk_basic) {
+  auto z = std::make_shared<ZookeeperClientInMemory>(
+      "unused",
+      ZookeeperClientInMemory::state_map_t{
+          {kFoo,
+           {TestEntry{0, "initValue"}.serialize(), zk::Stat{.version_ = 4}}}});
+  runBasicTests(std::make_unique<ZookeeperNodesConfigStore>(
+                    extractVersionFn, std::move(z)),
+                /* initialWrite = */ false);
+}
+
+TEST(NodesConfigStore, zk_basicMT) {
+  auto z = std::make_shared<ZookeeperClientInMemory>(
+      "unused",
+      ZookeeperClientInMemory::state_map_t{
+          {kFoo,
+           {TestEntry{0, "initValue"}.serialize(), zk::Stat{.version_ = 4}}}});
+  runMultiThreadedTests(std::make_unique<ZookeeperNodesConfigStore>(
+      extractVersionFn, std::move(z)));
 }

@@ -44,7 +44,7 @@ class NodesConfigStore {
   // consume the value string (folly::StringPiece does not take ownership of the
   // string).
   using extract_version_fn =
-      folly::Function<folly::Optional<version_t>(folly::StringPiece)>;
+      folly::Function<folly::Optional<version_t>(folly::StringPiece) const>;
 
   explicit NodesConfigStore() {}
   virtual ~NodesConfigStore() {}
@@ -114,12 +114,19 @@ class NodesConfigStore {
    *     VERSION_MISMATCH
    *     ACCESS
    *     AGAIN
+   *     BADMSG // see implementation notes below
+   *     INVALID_PARAM // see implementation notes below
+   *     INVALID_CONFIG // see implementation notes below
    *   If status is OK, cb will be invoked with the version of the newly written
    *   config. If status is VERSION_MISMATCH, cb will be invoked with the
    *   version that caused the mismatch as well as the existing config, if
    *   available (i.e., always check in the callback whether version is
    *   EMPTY_VERSION). Otherwise, the version and value parameter(s) are
    *   meaningless (default-constructed).
+   *
+   *   Implementation note: because updateConfig performs a read-modify-write
+   *   operation, the write_callback_t should expect both synchronous statuses
+   *   as well as asynchonous statuses.
    *
    * @return
    *   0 on success, callback will be invoked;
@@ -151,6 +158,7 @@ class NodesConfigStore {
    *   VERSION_MISMATCH
    *   ACCESS
    *   AGAIN
+   *   BADMSG
    *   INVALID_PARAM
    *   INVALID_CONFIG
    */
