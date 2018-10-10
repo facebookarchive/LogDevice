@@ -8,5 +8,9 @@ add_custom_target(ldquery.md
 	WORKING_DIRECTORY ${LOGDEVICE_DIR}/../docs
 	DEPENDS markdown-ldquery)
 
+add_custom_target(client-api-doxy
+	COMMAND rm -rf website/static/api && doxygen logdevice/build_tools/Doxyfile.client-api
+	WORKING_DIRECTORY ${LOGDEVICE_DIR}/..)
+
 add_custom_target(docs)
-add_dependencies(docs settings.md ldquery.md)
+add_dependencies(docs settings.md ldquery.md client-api-doxy)
