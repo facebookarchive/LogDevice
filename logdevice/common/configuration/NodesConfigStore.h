@@ -37,14 +37,16 @@ class NodesConfigStore {
       folly::Function<void(Status, version_t, std::string)>;
 
   // Function that NodesConfigStore could call on stored values to extract the
-  // corresponding membership version.
+  // corresponding membership version. If value is invalid, the function should
+  // return folly::none and set err accordingly.
   //
   // This function should be synchronous, relatively fast, and should not
   // consume the value string (folly::StringPiece does not take ownership of the
   // string).
-  using extract_version_fn = folly::Function<version_t(folly::StringPiece)>;
+  using extract_version_fn =
+      folly::Function<folly::Optional<version_t>(folly::StringPiece)>;
 
-  explicit NodesConfigStore(extract_version_fn f) : extract_fn_(std::move(f)) {}
+  explicit NodesConfigStore() {}
   virtual ~NodesConfigStore() {}
 
   /*
@@ -159,8 +161,5 @@ class NodesConfigStore {
                                   std::string* value_out = nullptr) = 0;
 
   // TODO: add subscription API
-
- protected:
-  extract_version_fn extract_fn_;
 };
 }}} // namespace facebook::logdevice::configuration

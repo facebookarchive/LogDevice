@@ -75,8 +75,12 @@ bool operator==(const TestEntry& lhs, const TestEntry& rhs) {
   return lhs.version_ == rhs.version_ && lhs.value_ == rhs.value_;
 }
 
-version_t extractVersionFn(folly::StringPiece buf) {
-  return TestEntry::fromSerialized(buf).version();
+folly::Optional<version_t> extractVersionFn(folly::StringPiece buf) {
+  try {
+    return TestEntry::fromSerialized(buf).version();
+  } catch (const std::runtime_error&) {
+    return folly::none;
+  }
 }
 
 void checkAndResetBaton(folly::Baton<>& b) {

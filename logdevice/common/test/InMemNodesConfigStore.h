@@ -16,7 +16,7 @@ class InMemNodesConfigStore : public NodesConfigStore {
 
  public:
   explicit InMemNodesConfigStore(extract_version_fn f)
-      : NodesConfigStore(std::move(f)) {}
+      : configs_(), extract_fn_(std::move(f)) {}
   int getConfig(std::string key, value_callback_t cb) const override;
 
   Status getConfigSync(std::string key, std::string* value_out) const override;
@@ -36,5 +36,6 @@ class InMemNodesConfigStore : public NodesConfigStore {
   // TODO: switch to a more efficient map; avoid copying mapped_type; more
   // granular synchronization.
   folly::Synchronized<std::unordered_map<std::string, std::string>> configs_;
+  extract_version_fn extract_fn_;
 };
 }}} // namespace facebook::logdevice::configuration

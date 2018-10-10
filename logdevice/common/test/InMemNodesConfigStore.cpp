@@ -70,6 +70,11 @@ InMemNodesConfigStore::updateConfigSync(std::string key,
                                         folly::Optional<version_t> base_version,
                                         version_t* version_out,
                                         std::string* value_out) {
+  auto opt = extract_fn_(value);
+  if (!opt) {
+    return Status::INVALID_PARAM;
+  }
+  version_t value_version = opt.value();
   {
     auto lockedConfigs = configs_.wlock();
     auto it = lockedConfigs->find(key);
@@ -77,13 +82,17 @@ InMemNodesConfigStore::updateConfigSync(std::string key,
       if (base_version) {
         return Status::NOTFOUND;
       }
-      set_if_not_null(version_out, extract_fn_(value));
+      set_if_not_null(version_out, value_version);
       auto res = lockedConfigs->emplace(std::move(key), std::move(value));
       ld_assert(res.second); // inserted
       return Status::OK;
     }
 
-    auto curr_version = extract_fn_(it->second);
+    auto curr_version_opt = extract_fn_(it->second);
+    if (!opt) {
+      return Status::INVALID_PARAM;
+    }
+    version_t curr_version = curr_version_opt.value();
     if (base_version && curr_version != base_version) {
       // conditional update version mismatch
       // TODO: set err accordingly
@@ -91,7 +100,7 @@ InMemNodesConfigStore::updateConfigSync(std::string key,
       set_if_not_null(value_out, it->second);
       return Status::VERSION_MISMATCH;
     }
-    set_if_not_null(version_out, extract_fn_(value));
+    set_if_not_null(version_out, value_version);
     it->second = std::move(value);
   }
   return Status::OK;
