@@ -153,7 +153,7 @@ sidebar_label: Settings
 | connection-retries | the number of TCP connection retries before giving up | 4 |  |
 | handshake-timeout | LogDevice protocol handshake timeout | 1s |  |
 | include-destination-on-handshake | Include the destination node ID in the LogDevice protocol handshake. If the actual node ID of the connection target does not match the intended destination ID, the connection is terminated. | false |  |
-| max-protocol | maximum version of LogDevice protocol that the server/client will accept | 84 |  |
+| max-protocol | maximum version of LogDevice protocol that the server/client will accept | 85 |  |
 | nagle | enable Nagle's algorithm on TCP sockets. Changing this setting on-the-fly will not apply it to existing sockets, only to newly created ones | false |  |
 | outbuf-kb | max output buffer size (userspace extension of socket sendbuf) in KB. Changing this setting on-the-fly will not apply it to existing sockets, only to newly created ones | 32768 |  |
 | outbytes-mb | per-thread limit on bytes pending in output evbuffers (in MB) | 512 |  |
@@ -179,7 +179,7 @@ sidebar_label: Settings
 |-----------|-----------------|:---------:|-----------|
 | client-epoch-metadata-cache-size | maximum number of entries in the client-side epoch metadata cache. Set it to 0 to disable the epoch metadata cache. | 50000 | requires&nbsp;restart, client&nbsp;only |
 | client-initial-redelivery-delay | Initial delay to use when reader application rejects a record or gap | 1s |  |
-| client-is-log-empty-grace-period | After receiving responses to an isLogEmpty() request from an f-majority of nodes, wait up to this long for more nodes to chime in if there is not yet consensus. | 100ms | **experimental**, client&nbsp;only |
+| client-is-log-empty-grace-period | After receiving responses to an isLogEmpty() request from an f-majority of nodes, wait up to this long for more nodes to chime in if there is not yet consensus. | 5s | **experimental**, client&nbsp;only |
 | client-max-redelivery-delay | Maximum delay to use when reader application rejects a record or gap | 30s |  |
 | client-read-buffer-size | number of records to buffer per read stream in the client object while reading. If this setting is changed on-the-fly, the change will only apply to new reader instances | 512 |  |
 | client-read-flow-control-threshold | threshold (relative to buffer size) at which the client broadcasts window update messages (less means more often) | 0.7 |  |
@@ -472,6 +472,7 @@ sidebar_label: Settings
 | client-readers-flow-tracer-lagging-metric-sample-group-size | Number of samples in ClientReadersFlowTracer that are aggregated and recorded as one entry. See client-readers-flow-tracer-lagging-metric-sample-group-size. | 20 | client&nbsp;only |
 | client-readers-flow-tracer-lagging-slope-threshold | If a reader's lag increase at at least this rate, the reader is considered lagging (rate given as variation of time lag per time unit). If the desired read ratio needs to be x% of the write ratio, set this threshold to be (1 - x / 100). | -0.3 | client&nbsp;only |
 | enable-adaptive-store-timeout | decides whether to enable an adaptive store timeout | false | **experimental**, server&nbsp;only |
+| rebuilding-max-malformed-records-to-tolerate | Controls how rebuilding donors handle unexpected values in local log store (e.g. caused by bugs, forward incompatibility, or other processes writing unexpected things to rocksdb directly).If rebuilding encounters invalid records, it skips them and logs warnings. But if it encounters at least this many of them in the same log, it freaks out, logs a critical error and stalls indefinitely. The rest of the server keeps trying to run normally, to the extent to which you can run normally when you can't parse most of the records in the DB. | 1000 | requires&nbsp;restart, server&nbsp;only |
 | sync-metadata-log-writes | If set, storage nodes will wait for wal sync of metadata log writes before sending the STORED ack. | true | server&nbsp;only |
 
 ## Write path
@@ -487,6 +488,7 @@ sidebar_label: Settings
 | disable-chain-sending | never send a wave of STORE messages through a chain | false | server&nbsp;only |
 | disable-graylisting | setting this to true disables graylisting nodes by sequencers in the write path | false | server&nbsp;only |
 | disabled-retry-interval | Time interval during which a sequencer will not route record copies to a storage node that reported a permanent error. | 30s | server&nbsp;only |
+| enable-offset-map | Enables the server-side OffsetMap calculation feature.NOTE: There is no guarantee of byte offsets result correctness if featurewas switched on->off->on in period shorter than retention value forlogs. | false | server&nbsp;only |
 | epoch-metadata-use-new-storage-set-format | Serialize copysets using ShardIDs instead of node\_index\_t inside EpochMetaData. TODO(T15517759): enable by default once Flexible Log Sharding is fully implemented and this has been thoroughly tested. | false | **experimental** |
 | gray-list-threshold | if the number of storage nodes graylisted on the write path of a log exceeds this fraction of the log's nodeset size the gray list will be cleared to make sure that copysets can still be picked | 0.25 | server&nbsp;only |
 | isolated-sequencer-ttl | How long we wait before disabling isolated sequencers. A sequencer is declared isolated if nodes outside of the innermost failure domain of the sequencer's epoch appear unreachable to the failure detector. For example, a sequencer of a rack-replicated log epoch is declared isolated if the failure detector can't reach any nodes outside of that sequencer node's rack. A disabled sequencer rejects all append requests. | 1200s | server&nbsp;only |
