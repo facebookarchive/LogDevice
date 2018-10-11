@@ -8448,3 +8448,74 @@ TEST_F(PartitionedRocksDBStoreTest, StallLowPriWritesShutdownTest) {
   });
   stallLowPriWriteThread.join();
 }
+
+TEST_F(PartitionedRocksDBStoreTest, InterleavingCompactions) {
+  using PartitionToCompact = PartitionedRocksDBStore::PartitionToCompact;
+  using Reason = PartitionedRocksDBStore::PartitionToCompact::Reason;
+  using Partition = PartitionedRocksDBStore::Partition;
+  using PartitionPtr = PartitionedRocksDBStore::PartitionPtr;
+
+  std::vector<PartitionPtr> ps(10);
+  for (partition_id_t i = 1; i < ps.size(); ++i) {
+    ps[i] = std::make_shared<Partition>(i, nullptr, RecordTimestamp::min());
+  }
+
+  std::vector<PartitionToCompact> c;
+
+  auto check = [&](size_t num_pairs,
+                   std::initializer_list<std::pair<PartitionPtr, Reason>> il) {
+    std::vector<std::pair<PartitionPtr, Reason>> ex(il.begin(), il.end());
+    ASSERT_EQ(ex.size(), c.size());
+    for (size_t i = 0; i < c.size(); ++i) {
+      // Allow either order in each pair.
+      if (i < num_pairs * 2 && i % 2 == 0 && ex[i].second != c[i].reason) {
+        swap(ex[i], ex[i + 1]);
+      }
+      EXPECT_EQ(ex[i].first->id_, c[i].partition->id_);
+      EXPECT_EQ(ex[i].second, c[i].reason);
+    }
+  };
+
+  c = {{ps[1], Reason::MANUAL},
+       {ps[2], Reason::MANUAL},
+       {ps[3], Reason::PARTIAL},
+       {ps[4], Reason::PARTIAL},
+       {ps[5], Reason::PARTIAL},
+       {ps[6], Reason::PROACTIVE}};
+  PartitionToCompact::interleavePartialAndNormalCompactions(&c);
+  check(2,
+        {{ps[1], Reason::MANUAL},
+         {ps[3], Reason::PARTIAL},
+         {ps[2], Reason::MANUAL},
+         {ps[4], Reason::PARTIAL},
+         {ps[5], Reason::PARTIAL},
+         {ps[6], Reason::PROACTIVE}});
+
+  c = {{ps[1], Reason::MANUAL},
+       {ps[2], Reason::MANUAL},
+       {ps[3], Reason::MANUAL},
+       {ps[4], Reason::PARTIAL},
+       {ps[5], Reason::PARTIAL},
+       {ps[6], Reason::PROACTIVE}};
+  PartitionToCompact::interleavePartialAndNormalCompactions(&c);
+  check(2,
+        {{ps[1], Reason::MANUAL},
+         {ps[4], Reason::PARTIAL},
+         {ps[2], Reason::MANUAL},
+         {ps[5], Reason::PARTIAL},
+         {ps[3], Reason::MANUAL},
+         {ps[6], Reason::PROACTIVE}});
+
+  c = {{ps[1], Reason::MANUAL},
+       {ps[2], Reason::MANUAL},
+       {ps[3], Reason::PROACTIVE}};
+  PartitionToCompact::interleavePartialAndNormalCompactions(&c);
+  check(0,
+        {{ps[1], Reason::MANUAL},
+         {ps[2], Reason::MANUAL},
+         {ps[3], Reason::PROACTIVE}});
+
+  c = {};
+  PartitionToCompact::interleavePartialAndNormalCompactions(&c);
+  check(0, {});
+}

@@ -811,6 +811,60 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
                 });
     }
 
+    // Here's a little hack: instead of doing all partial compactions after
+    // all retention compactions, interleave the two in 1:1 ratio.
+    // This avoids starving partial compactions if there's a long backlog of
+    // retention compactions (in particular, when starting the server after a
+    // long downtime), while still giving the majority of iops to retention
+    // compactions (because partial compactions are usually small).
+    static void
+    interleavePartialAndNormalCompactions(std::vector<PartitionToCompact>* ps) {
+      // Legend:
+      //  # - full compaction of higher priority
+      //  . - partial compaction
+      //  ~ - full compaction of lower priority
+      // There are the following cases:
+      //  1. in:  ###......~~~~          (num_pre_partial = 3, num_partial = 6,
+      //     out: #.#.#....~~~~           num_pairs = 3)
+      //  2. in:  ######...~~~~          (num_pre_partial = 6, num_partial = 3,
+      //     out: #.#.#.###~~~~           num_pairs = 3)
+      //  3. in:  ###~~~~                (num_pre_partial = 7, num_partial = 0,
+      //     out: ###~~~~                 num_pairs = 0)
+      // (order of compactions of the same type is preserved in all cases)
+      size_t num_pre_partial = 0;
+      while (num_pre_partial < ps->size() &&
+             (*ps)[num_pre_partial].reason !=
+                 PartitionToCompact::Reason::PARTIAL) {
+        ++num_pre_partial;
+      }
+      size_t num_partial = 0;
+      while (num_pre_partial + num_partial < ps->size() &&
+             (*ps)[num_pre_partial + num_partial].reason ==
+                 PartitionToCompact::Reason::PARTIAL) {
+        ++num_partial;
+      }
+      if (num_partial < num_pre_partial) {
+        // Case 2: rotate from: ######...~~~~
+        //                  to: ###...###~~~~
+        std::rotate(ps->begin() + num_partial,
+                    ps->begin() + num_pre_partial,
+                    ps->begin() + num_pre_partial + num_partial);
+      }
+      // Pair up partial and normal compactions.
+      size_t num_pairs = std::min(num_partial, num_pre_partial);
+      std::vector<PartitionToCompact> pre_partial(
+          ps->begin(), ps->begin() + num_pairs);
+      for (size_t i = 0; i < num_pairs; ++i) {
+        (*ps)[i * 2 + 0] = pre_partial[i];
+        (*ps)[i * 2 + 1] = std::move((*ps)[num_pairs + i]);
+
+        // Randomize order in each pair.
+        if (folly::Random::rand32() % 2) {
+          std::swap((*ps)[i * 2 + 0], (*ps)[i * 2 + 1]);
+        }
+      }
+    }
+
    private:
     size_t sort_order;
   };

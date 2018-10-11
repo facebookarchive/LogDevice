@@ -5664,6 +5664,7 @@ void PartitionedRocksDBStore::loPriBackgroundThreadRun() {
     }
 
     PartitionToCompact::removeDuplicates(&to_compact);
+    PartitionToCompact::interleavePartialAndNormalCompactions(&to_compact);
 
     PER_SHARD_STAT_SET(stats_,
                        pending_compactions,
