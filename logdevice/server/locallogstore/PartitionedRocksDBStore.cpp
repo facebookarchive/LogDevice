@@ -4342,7 +4342,8 @@ void PartitionedRocksDBStore::performCompactionInternal(
   ld_check(!immutable_.load());
   PartitionPtr partition = to_compact.partition;
   partition_id_t partition_id = partition->id_;
-  if (partition_id == latest_.get()->id_) {
+  if (to_compact.reason != PartitionToCompact::Reason::PARTIAL &&
+      partition_id == latest_.get()->id_) {
     ld_warning("Tried to compact latest partition %lu", partition_id);
     return;
   }
@@ -4358,7 +4359,8 @@ void PartitionedRocksDBStore::performCompactionInternal(
       last_compacted = std::to_string(ago_seconds.count()) + " seconds ago";
     }
 
-    ld_log(partial ? dbg::Level::DEBUG : dbg::Level::INFO,
+    ld_log((partial && partition_id < latest_.get()->id_) ? dbg::Level::DEBUG
+                                                          : dbg::Level::INFO,
            "Starting %spartial compaction of partition %lu, reason: %s, "
            "last compacted: %s, shard %u",
            partial ? "" : "non-",
