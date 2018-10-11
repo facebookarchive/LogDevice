@@ -11,7 +11,6 @@
 #include <folly/Random.h>
 
 namespace facebook { namespace logdevice {
-
 namespace {
 template <class Iterator>
 void advanceIfNodeIsExcluded(NodeID& exclude, Iterator& it) {
@@ -19,16 +18,14 @@ void advanceIfNodeIsExcluded(NodeID& exclude, Iterator& it) {
     ++it;
   }
 }
-} // namespace
 
-NodeID RandomNodeSelector::getNode(const ServerConfig& cfg, NodeID exclude) {
+NodeID selectNodeIdHelper(const configuration::Nodes& nodes, NodeID exclude) {
   NodeID new_node;
-  const auto& nodes = cfg.getNodes();
 
   // Pick a random node from nodes, excluding `exclude`.
   size_t count = nodes.size();
   ld_check(count >= 1);
-  if (exclude.isNodeID() && cfg.getNode(exclude)) {
+  if (exclude.isNodeID() && nodes.count(exclude.index())) {
     --count;
   } else {
     exclude = NodeID();
@@ -54,5 +51,33 @@ NodeID RandomNodeSelector::getNode(const ServerConfig& cfg, NodeID exclude) {
     new_node = NodeID(it->first, it->second.generation);
   }
   return new_node;
+}
+} // namespace
+
+NodeID RandomNodeSelector::getAliveNode(const ServerConfig& cfg,
+                                        ClusterState* cluster_state,
+                                        NodeID exclude) {
+  if (cluster_state == nullptr) {
+    return getNode(cfg, exclude);
+  }
+
+  configuration::Nodes alive_nodes;
+  for (const auto& node : cfg.getNodes()) {
+    if (cluster_state->isNodeAlive(node.first)) {
+      alive_nodes.emplace(node.first, node.second);
+    }
+  }
+  if (alive_nodes.size() == 0) {
+    ld_check(cfg.getNodes().size() > 0);
+    const size_t offset = folly::Random::rand32() % cfg.getNodes().size();
+    const auto node = std::next(cfg.getNodes().begin(), offset);
+    return NodeID(node->first, node->second.generation);
+  }
+  return selectNodeIdHelper(alive_nodes, exclude);
+}
+
+NodeID RandomNodeSelector::getNode(const ServerConfig& cfg, NodeID exclude) {
+  const auto& nodes = cfg.getNodes();
+  return selectNodeIdHelper(nodes, exclude);
 }
 }} // namespace facebook::logdevice

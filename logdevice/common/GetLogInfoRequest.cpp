@@ -30,6 +30,8 @@ Request::Execution GetLogInfoRequest::execute() {
           std::make_pair(id_, std::unique_ptr<GetLogInfoRequest>(this)));
   ld_check(insert_result.second);
 
+  Worker::onThisThread()->activateClusterStatePolling();
+
   start();
   return Execution::CONTINUE;
 }
@@ -55,7 +57,13 @@ void GetLogInfoRequest::changeTargetNode(std::unique_lock<std::mutex>& lock) {
   const auto config = getConfig()->serverConfig();
   NodeID exclude = shared_state_->node_id_;
 
-  const auto new_node = RandomNodeSelector::getNode(*config, exclude);
+  const auto* worker = Worker::onThisThread(false);
+  ClusterState* cluster_state = nullptr;
+  if (worker != nullptr) {
+    cluster_state = worker->getClusterState();
+  }
+  const auto new_node =
+      RandomNodeSelector::getAliveNode(*config, cluster_state, exclude);
   shared_state_->node_id_ = new_node;
   shared_state_->socket_callback_.reset();
   ld_info("Changing GetLogInfoRequest target node to %s",

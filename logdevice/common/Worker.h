@@ -680,6 +680,8 @@ class Worker : public EventLoop {
 
   void activateIsolationTimer();
 
+  void activateClusterStatePolling();
+
   void deactivateIsolationTimer();
 
  protected:
@@ -781,6 +783,8 @@ class Worker : public EventLoop {
   int64_t last_load_ = -1;
   std::chrono::steady_clock::time_point last_load_time_;
   std::unique_ptr<Timer> isolation_timer_;
+
+  std::unique_ptr<Timer> cluster_state_polling_;
 
   // Size limit for commonTimeouts_ (NB: libevent has a default upper bound
   // of MAX_COMMON_TIMEOUTS = 256)

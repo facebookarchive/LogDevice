@@ -407,6 +407,8 @@ void Worker::onThreadStarted() {
   load_timer_ = std::make_unique<Timer>(std::bind(&Worker::reportLoad, this));
   isolation_timer_ = std::make_unique<Timer>(
       std::bind(&Worker::disableSequencersDueIsolationTimeout, this));
+  cluster_state_polling_ = std::make_unique<Timer>(
+      []() { getClusterState()->refreshClusterStateAsync(); });
 
   // Now that virtual calls are available (unlike in the constructor),
   // initialise `message_dispatch_'
@@ -862,6 +864,10 @@ void Worker::onStartedRunning(RunState new_state) {
 
 void Worker::activateIsolationTimer() {
   isolation_timer_->activate(immutable_settings_->isolated_sequencer_ttl);
+}
+
+void Worker::activateClusterStatePolling() {
+  cluster_state_polling_->activate(std::chrono::seconds(600));
 }
 
 void Worker::deactivateIsolationTimer() {
