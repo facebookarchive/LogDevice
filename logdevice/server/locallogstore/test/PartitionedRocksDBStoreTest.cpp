@@ -1179,7 +1179,7 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
       std::unique_ptr<rocksdb::Iterator> it(db->NewIterator(
           RocksDBLogStoreBase::getDefaultReadOptions(), cf_handles[i].get()));
       for (it->Seek(first_key_slice); it->Valid(); it->Next()) {
-        EXPECT_EQ(sizeof(DataKey), it->key().size());
+        EXPECT_EQ(DataKey::sizeForWriting(), it->key().size());
         EXPECT_TRUE(DataKey::valid(it->key().data(), it->key().size()));
         EXPECT_EQ(1, extractWave(*it));
 

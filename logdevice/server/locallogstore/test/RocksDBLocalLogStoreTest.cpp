@@ -213,14 +213,15 @@ TEST_F(RocksDBLocalLogStoreTest, WriteTest) {
       continue;
     }
 
+    // clang-format off
     unsigned char expected_key[] = {
         'd',                                  // header
         0,    0,    0,    0,    0, 0, 0, 123, // log id
         0,    0,    0,    0,    0, 0, 1, 255, // lsn
-        0xee, 0xee, 0xee, 0xee,               // wave  TODO(#10357210) remove
     };
-    static_assert(sizeof expected_key == 21, "must be 21 bytes");
-    EXPECT_EQ(21, it->key().size());
+    // clang-format on
+    static_assert(sizeof expected_key == 17, "must be 17 bytes");
+    EXPECT_EQ(17, it->key().size());
     EXPECT_EQ(0, memcmp(it->key().data(), expected_key, sizeof expected_key));
     EXPECT_EQ(getHeader().size + strlen("abc1"), it->value().size());
     EXPECT_EQ(
