@@ -123,7 +123,8 @@ class GetEpochRecoveryMetadataRequest
 
   virtual const ShardAuthoritativeStatusMap& getShardAuthoritativeStatusMap();
 
-  virtual std::unique_ptr<LibeventTimer> createDeferredCompleteTimer();
+  virtual std::unique_ptr<Timer>
+  createDeferredCompleteTimer(std::function<void()> callback);
 
   virtual void activateDeferredCompleteTimer();
 
@@ -135,7 +136,7 @@ class GetEpochRecoveryMetadataRequest
 
   // A zero delay timer that on firing, calls the provided
   // callback and deletes the request from worker's map
-  std::unique_ptr<LibeventTimer> deferredCompleteTimer_;
+  std::unique_ptr<Timer> deferredCompleteTimer_;
 
  private:
   // We'll keep sending GET_EPOCH_RECOVERY_METADATA messages to storage nodes

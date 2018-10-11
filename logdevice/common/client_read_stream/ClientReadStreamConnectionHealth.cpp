@@ -13,7 +13,7 @@
 #include "logdevice/common/ClientStalledReadTracer.h"
 #include "logdevice/common/EpochMetaDataUpdater.h"
 #include "logdevice/common/ExponentialBackoffTimer.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/NodeSetSelectorFactory.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Worker.h"
@@ -101,14 +101,15 @@ void ClientReadStreamConnectionHealth::traceStall(const std::string& reason) {
 
 void ClientReadStreamConnectionHealth::scheduleTraceStall(std::string reason) {
   if (!stalled_read_timer_) {
-    stalled_read_timer_ = owner_->deps_->createLibeventTimer();
+    stalled_read_timer_ = owner_->deps_->createTimer();
   }
 
   stalled_read_timer_->setCallback([this, r = std::move(reason)] {
     traceStall(r);
     stalled_read_timer_->activate(std::chrono::seconds(60));
   });
-  stalled_read_timer_->activate(owner_->deps_->getZeroTimeout());
+  stalled_read_timer_->activate(
+      std::chrono::microseconds(0), owner_->deps_->getCommonTimeouts());
 }
 
 void ClientReadStreamConnectionHealth::recalculate(bool grace_period_expired) {
@@ -191,7 +192,8 @@ void ClientReadStreamConnectionHealth::recalculate(bool grace_period_expired) {
           traceStall(r);
           stalled_read_timer_->activate(std::chrono::seconds(60));
         });
-        stalled_read_timer_->activate(owner_->deps_->getZeroTimeout());
+        stalled_read_timer_->activate(
+            std::chrono::microseconds(0), owner_->deps_->getCommonTimeouts());
       }
     } else {
       // 3.b/

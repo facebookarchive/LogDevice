@@ -10,7 +10,7 @@
 #include "folly/container/Array.h"
 
 #include "logdevice/common/DataRecordOwnsPayload.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/client_read_stream/ClientReadStream.h"
 #include "logdevice/common/client_read_stream/ClientReadStreamBuffer.h"
@@ -660,7 +660,7 @@ ClientReadStreamScd::FailoverTimer::FailoverTimer(
       cb_(cb),
       scd_(scd) {
   if (period_.count() > 0) {
-    timer_ = scd_->owner_->deps_->createLibeventTimer([this] { callback(); });
+    timer_ = scd_->owner_->deps_->createTimer([this] { callback(); });
   }
 }
 

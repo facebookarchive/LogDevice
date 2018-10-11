@@ -23,7 +23,7 @@
 #include "logdevice/common/commandline_util.h"
 #include "logdevice/common/commandline_util_chrono.h"
 #include "logdevice/common/EpochMetaData.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/ReaderImpl.h"
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/util.h"

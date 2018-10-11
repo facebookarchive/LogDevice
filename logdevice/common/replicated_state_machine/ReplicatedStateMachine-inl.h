@@ -925,7 +925,7 @@ void ReplicatedStateMachine<T, D>::activateGracePeriodForFastForward() {
   ld_check(w);
   if (!fastForwardGracePeriodTimer_.isAssigned()) {
     fastForwardGracePeriodTimer_.assign(
-        w->getEventBase(), [this] { resumeReadStream(snapshot_log_rsid_); });
+        [this] { resumeReadStream(snapshot_log_rsid_); });
   }
   fastForwardGracePeriodTimer_.activate(fast_forward_grace_period_);
 }
@@ -945,7 +945,7 @@ void ReplicatedStateMachine<T, D>::activateStallGracePeriod() {
   Worker* w = Worker::onThisThread(false);
   ld_check(w);
   if (!stallGracePeriodTimer_.isAssigned()) {
-    stallGracePeriodTimer_.assign(w->getEventBase(), [this] {
+    stallGracePeriodTimer_.assign([this] {
       if (waiting_for_snapshot_ != LSN_INVALID) {
         WORKER_STAT_INCR(num_replicated_state_machines_stalled);
         bumped_stalled_stat_ = true;
@@ -962,12 +962,9 @@ void ReplicatedStateMachine<T, D>::cancelStallGracePeriod() {
 
 template <typename T, typename D>
 void ReplicatedStateMachine<T, D>::activateGracePeriodForSnapshotting() {
-  Worker* w = Worker::onThisThread(false);
-  assert(w);
-
   rsm_info(rsm_type_, "Activating time-based snapshotting");
   if (!snapshotting_timer_.isAssigned()) {
-    snapshotting_timer_.assign(w->getEventBase(), [this] {
+    snapshotting_timer_.assign([this] {
       if (canSnapshot()) {
         // Create a snapshot if:
         // 1. We are not already snapshotting;
@@ -1016,9 +1013,8 @@ void ReplicatedStateMachine<T, D>::activateConfirmTimer(
   Worker* w = Worker::onThisThread(false);
   ld_check(w);
   ld_check(!it->second->timer);
-  it->second->timer = std::make_unique<LibeventTimer>();
-  it->second->timer->assign(
-      w->getEventBase(), [this, uuid] { onDeltaConfirmationTimeout(uuid); });
+  it->second->timer = std::make_unique<Timer>();
+  it->second->timer->assign([this, uuid] { onDeltaConfirmationTimeout(uuid); });
   it->second->timer->activate(confirm_timeout_);
 }
 

@@ -10,6 +10,7 @@
 #include "ClientReadStream.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cinttypes>
 #include <utility>
 
@@ -331,7 +332,7 @@ void ClientReadStream::start() {
   started_ = true;
 
   immediate_rewind_timer_ =
-      deps_->createLibeventTimer([this] { rewind(rewind_reason_); });
+      deps_->createTimer([this] { rewind(rewind_reason_); });
 
   gap_tracer_ = std::make_unique<ClientGapTracer>(
       Worker::onThisThread(false) ? Worker::onThisThread()->getTraceLogger()
@@ -3827,7 +3828,8 @@ void ClientReadStream::scheduleRewind(std::string reason) {
   } else {
     rewind_reason_ = std::move(reason);
     rewind_scheduled_ = true;
-    immediate_rewind_timer_->activate(deps_->getZeroTimeout());
+    immediate_rewind_timer_->activate(
+        std::chrono::microseconds(0), deps_->getCommonTimeouts());
   }
 }
 
@@ -4056,12 +4058,7 @@ void ClientReadStreamDependencies::getMetaDataForEpoch(
       ld_check(!require_consistent_from_cache ||
                source == MetaDataLogReader::RecordSource::CACHED_CONSISTENT);
 
-      if (delivery_timer_ == nullptr) {
-        delivery_timer_ = std::make_unique<LibeventTimer>(
-            EventLoop::onThisThread()->getEventBase());
-      }
-
-      delivery_timer_->setCallback([this, epoch, until, source, cb] {
+      auto callback = [this, epoch, until, source, cb] {
         cb(E::OK,
            {log_id_,
             epoch,
@@ -4070,11 +4067,18 @@ void ClientReadStreamDependencies::getMetaDataForEpoch(
             compose_lsn(epoch, esn_t(1)),
             std::chrono::milliseconds(0),
             std::move(metadata_cached_)});
-      });
+      };
+
+      if (delivery_timer_ == nullptr) {
+        delivery_timer_ = std::make_unique<Timer>(std::move(callback));
+      } else {
+        delivery_timer_->setCallback(std::move(callback));
+      }
 
       // deliver the metadata on the next event loop iteration to avoid
       // recursively calling findGapsAndRecords()
-      delivery_timer_->activate(Worker::onThisThread()->zero_timeout_);
+      delivery_timer_->activate(std::chrono::microseconds(0),
+                                &Worker::onThisThread()->commonTimeouts());
 
       ld_debug("Got epoch metadata from client cache for epoch %u of log %lu. "
                "metadata epoch %u, effective until %u, metadata: %s",
@@ -4277,7 +4281,7 @@ void ClientReadStreamDependencies::dispose() {
 std::unique_ptr<BackoffTimer> ClientReadStreamDependencies::createBackoffTimer(
     const chrono_expbackoff_t<std::chrono::milliseconds>& settings) {
   auto timer = std::make_unique<ExponentialBackoffTimer>(
-      EventLoop::onThisThread()->getEventBase(),
+
       std::function<void()>(), // SenderState will change
       settings);
   // Tell the timer to use a TimeoutMap common to all ClientReadStream
@@ -4329,22 +4333,14 @@ ClientReadStreamDependencies::computeGapGracePeriod() const {
   return ggp;
 }
 
-std::unique_ptr<LibeventTimer>
-ClientReadStreamDependencies::createLibeventTimer(std::function<void()> cb) {
-  auto timer = std::make_unique<LibeventTimer>(
-      EventLoop::onThisThread()->getEventBase());
-  if (cb != nullptr) {
-    timer->setCallback(cb);
-  }
+std::unique_ptr<Timer>
+ClientReadStreamDependencies::createTimer(std::function<void()> cb) {
+  auto timer = std::make_unique<Timer>(cb);
   return timer;
 }
 
 TimeoutMap* ClientReadStreamDependencies::getCommonTimeouts() {
   return &Worker::onThisThread()->commonTimeouts();
-}
-
-const struct timeval* ClientReadStreamDependencies::getZeroTimeout() {
-  return EventLoop::onThisThread()->zero_timeout_;
 }
 
 std::function<ClientReadStream*(read_stream_id_t)>

@@ -35,7 +35,7 @@
 #include "logdevice/common/CopySet.h"
 #include "logdevice/common/DataRecordOwnsPayload.h"
 #include "logdevice/common/debug.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
 #include "logdevice/common/MetaDataLog.h"
 #include "logdevice/common/NoopTraceLogger.h"
@@ -672,21 +672,19 @@ class LogChecker : public std::enable_shared_from_this<LogChecker> {
     // reset, we  give up reading that log. This makes it possible for the user
     // to request that checker does not hang indefinitely if a log is not
     // available for reads.
-    idle_timer_ = std::make_unique<LibeventTimer>(
-        EventLoop::onThisThread()->getEventBase(), [self_weak] {
-          if (auto self = self_weak.lock()) {
-            self->finish("Timed out.");
-          }
-        });
+    idle_timer_ = std::make_unique<Timer>([self_weak] {
+      if (auto self = self_weak.lock()) {
+        self->finish("Timed out.");
+      }
+    });
 
-    read_duration_timer_ = std::make_unique<LibeventTimer>(
-        EventLoop::onThisThread()->getEventBase(), [self_weak] {
-          // The user requires to not spend more time reading this log. Finish
-          // successfully.
-          if (auto self = self_weak.lock()) {
-            self->finish("");
-          }
-        });
+    read_duration_timer_ = std::make_unique<Timer>([self_weak] {
+      // The user requires to not spend more time reading this log. Finish
+      // successfully.
+      if (auto self = self_weak.lock()) {
+        self->finish("");
+      }
+    });
     auto elapsed_time = std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::steady_clock::now() - start_time);
     auto execution_time_left =
@@ -696,12 +694,11 @@ class LogChecker : public std::enable_shared_from_this<LogChecker> {
 
     read_duration_timer_->activate(timer_duration);
 
-    throttle_timer_ = std::make_unique<LibeventTimer>(
-        EventLoop::onThisThread()->getEventBase(), [self_weak] {
-          if (auto self = self_weak.lock()) {
-            self->onThrottleTimerTick();
-          }
-        });
+    throttle_timer_ = std::make_unique<Timer>([self_weak] {
+      if (auto self = self_weak.lock()) {
+        self->onThrottleTimerTick();
+      }
+    });
 
     if (until_lsn_ != LSN_MAX) {
       startReading();
@@ -771,9 +768,9 @@ class LogChecker : public std::enable_shared_from_this<LogChecker> {
 
   folly::dynamic record_errors = folly::dynamic::object(); // Used if json==true
 
-  std::unique_ptr<LibeventTimer> idle_timer_;
-  std::unique_ptr<LibeventTimer> read_duration_timer_;
-  std::unique_ptr<LibeventTimer> throttle_timer_;
+  std::unique_ptr<Timer> idle_timer_;
+  std::unique_ptr<Timer> read_duration_timer_;
+  std::unique_ptr<Timer> throttle_timer_;
 
   // Used in order to throttle read throughput.
   bool throttled_ = false;

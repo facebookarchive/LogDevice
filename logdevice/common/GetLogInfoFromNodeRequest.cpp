@@ -255,7 +255,7 @@ void GetLogInfoFromNodeRequest::finalize(Status st, std::string json) {
 
 void GetLogInfoFromNodeRequest::createRetryTimer() {
   retry_timer_ = std::make_unique<ExponentialBackoffTimer>(
-      EventLoop::onThisThread()->getEventBase(),
+
       std::bind(&GetLogInfoFromNodeRequest::attemptSend, this),
       Worker::onThisThread()->settings().on_demand_logs_config_retry_delay);
   ld_check(retry_timer_ != nullptr);

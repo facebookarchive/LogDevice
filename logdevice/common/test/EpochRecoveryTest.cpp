@@ -19,7 +19,7 @@
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/test/DigestTestUtil.h"
 #include "logdevice/common/test/MockBackoffTimer.h"
-#include "logdevice/common/test/MockLibeventTimer.h"
+#include "logdevice/common/test/MockTimer.h"
 #include "logdevice/common/test/TestUtil.h"
 
 #define N0 ShardID(0, 0)
@@ -219,9 +219,8 @@ class MockEpochRecoveryDependencies : public EpochRecoveryDependencies {
     return std::move(timer);
   }
 
-  std::unique_ptr<LibeventTimer>
-  createLibeventTimer(std::function<void()> cb) override {
-    auto timer = std::make_unique<MockLibeventTimer>();
+  std::unique_ptr<Timer> createTimer(std::function<void()> cb) override {
+    auto timer = std::make_unique<MockTimer>();
     timer->setCallback(std::move(cb));
     return std::move(timer);
   }
@@ -487,7 +486,7 @@ TEST_F(EpochRecoveryTest, Basic) {
   // started
   ASSERT_TRUE(erm_->getGracePeriodTimer()->isActive());
   checkRecoveryState(ERMState::DIGEST);
-  static_cast<MockLibeventTimer*>(erm_->getGracePeriodTimer())->trigger();
+  static_cast<MockTimer*>(erm_->getGracePeriodTimer())->trigger();
 
   // begin mutation once grace period expires
   checkRecoveryState(ERMState::MUTATION);
@@ -573,7 +572,7 @@ TEST_F(EpochRecoveryTest, RestartWhenAuthoritativeStatusChanges) {
   ASSERT_NODE_STATE(NState::MUTATABLE, N1, N2);
   ASSERT_NODE_STATE(NState::SEALING, N3);
   ASSERT_TRUE(erm_->getGracePeriodTimer()->isActive());
-  static_cast<MockLibeventTimer*>(erm_->getGracePeriodTimer())->trigger();
+  static_cast<MockTimer*>(erm_->getGracePeriodTimer())->trigger();
   checkRecoveryState(ERMState::MUTATION);
   // mutator is done
   erm_->onMutationComplete(esn_t(2), E::OK, ShardID());
@@ -644,7 +643,7 @@ TEST_F(EpochRecoveryTest, UnexpectedHolePlugBelowLNG) {
   ASSERT_NODE_STATE(NState::MUTATABLE, N1, N2);
   ASSERT_NODE_STATE(NState::SEALING, N3);
   ASSERT_TRUE(erm_->getGracePeriodTimer()->isActive());
-  static_cast<MockLibeventTimer*>(erm_->getGracePeriodTimer())->trigger();
+  static_cast<MockTimer*>(erm_->getGracePeriodTimer())->trigger();
   checkRecoveryState(ERMState::MUTATION);
   // mutator is done
   erm_->onMutationComplete(esn_t(2), E::OK, ShardID());

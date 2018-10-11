@@ -29,7 +29,7 @@
 #include "logdevice/common/stats/Stats.h"
 
 #include "logdevice/common/test/MockBackoffTimer.h"
-#include "logdevice/common/test/MockLibeventTimer.h"
+#include "logdevice/common/test/MockTimer.h"
 #include "logdevice/server/ServerRecordFilterFactory.h"
 
 #include "logdevice/server/read_path/AllServerReadStreams.h"
@@ -340,9 +340,9 @@ class MockCatchupQueueDependencies : public CatchupQueueDependencies {
     return std::move(timer);
   }
 
-  std::unique_ptr<LibeventTimer>
+  std::unique_ptr<Timer>
   createIteratorTimer(std::function<void()> callback) override {
-    auto timer = std::make_unique<MockLibeventTimer>();
+    auto timer = std::make_unique<MockTimer>();
     timer->setCallback(callback);
     return std::move(timer);
   }

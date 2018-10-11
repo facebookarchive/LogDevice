@@ -64,7 +64,7 @@ void NodeStatsController::stop() {
 
 void NodeStatsController::activateAggregationTimer() {
   if (!aggregation_timer_.isAssigned()) {
-    aggregation_timer_.assign(EventLoop::onThisThread()->getEventBase(), [&] {
+    aggregation_timer_.assign([&] {
       this->aggregationTimerCallback();
       this->activateAggregationTimer();
     });
@@ -103,8 +103,7 @@ void NodeStatsController::cancelAggregationTimer() {
 
 void NodeStatsController::activateResponseTimer() {
   if (!response_timer_.isAssigned()) {
-    response_timer_.assign(EventLoop::onThisThread()->getEventBase(),
-                           [&] { this->responseTimerCallback(); });
+    response_timer_.assign([&] { this->responseTimerCallback(); });
   }
 
   response_timer_.activate(

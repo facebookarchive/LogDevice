@@ -12,7 +12,7 @@
 
 #include "logdevice/common/CopySet.h"
 #include "logdevice/common/EpochMetaData.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/protocol/STORE_Message.h"
@@ -701,25 +701,20 @@ StorageSet StorageSetAccessor::getShardsInState(ShardState state) const {
       [state](ShardStatus st) { return st.state == state; });
 }
 
-std::unique_ptr<LibeventTimer>
+std::unique_ptr<Timer>
 StorageSetAccessor::createJobTimer(std::function<void()> callback) {
-  return std::make_unique<LibeventTimer>(
-      EventLoop::onThisThread()->getEventBase(), callback);
+  return std::make_unique<Timer>(callback);
 }
 
-std::unique_ptr<LibeventTimer>
+std::unique_ptr<Timer>
 StorageSetAccessor::createGracePeriodTimer(std::function<void()> callback) {
-  return std::make_unique<LibeventTimer>(
-      EventLoop::onThisThread()->getEventBase(), callback);
+  return std::make_unique<Timer>(callback);
 }
 
 std::unique_ptr<BackoffTimer>
 StorageSetAccessor::createWaveTimer(std::function<void()> callback) {
   auto timer = std::make_unique<ExponentialBackoffTimer>(
-      EventLoop::onThisThread()->getEventBase(),
-      callback,
-      wave_timeout_min_,
-      wave_timeout_max_);
+      callback, wave_timeout_min_, wave_timeout_max_);
 
   timer->setTimeoutMap(&Worker::onThisThread()->commonTimeouts());
   return std::move(timer);

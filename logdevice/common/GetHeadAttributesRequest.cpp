@@ -34,8 +34,7 @@ Request::Execution GetHeadAttributesRequest::execute() {
 
   // Set the client timer
   client_timeout_timer_ =
-      std::make_unique<LibeventTimer>(Worker::onThisThread()->getEventBase(),
-                                      [this] { this->onClientTimeout(); });
+      std::make_unique<Timer>([this] { this->onClientTimeout(); });
   client_timeout_timer_->activate(client_timeout_);
 
   // Insert request into map for worker to track it

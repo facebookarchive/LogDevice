@@ -205,7 +205,7 @@ void AppendRequest::setupTimer() {
   if (timeout_ < std::chrono::milliseconds::max()) {
     Worker* w = Worker::onThisThread();
 
-    timer_.assign(w->getEventBase(), [this] { onTimeout(); });
+    timer_.assign([this] { onTimeout(); });
     timer_.activate(timeout_, &w->commonTimeouts());
   }
 }

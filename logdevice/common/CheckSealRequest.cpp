@@ -33,8 +33,7 @@ CheckSealRequest::CheckSealRequest(
 }
 
 void CheckSealRequest::initTimer() {
-  request_timer_ = std::make_unique<LibeventTimer>(
-      Worker::onThisThread()->getEventBase(), [this] { this->onTimeout(); });
+  request_timer_ = std::make_unique<Timer>([this] { this->onTimeout(); });
 
   std::chrono::milliseconds delay(
       Worker::settings().check_seal_req_min_timeout.count());

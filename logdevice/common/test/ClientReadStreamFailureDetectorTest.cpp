@@ -9,7 +9,7 @@
 #include <gtest/gtest.h>
 
 #include "logdevice/common/client_read_stream/ClientReadStreamFailureDetector.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/configuration/ReplicationProperty.h"
 #include "logdevice/common/ShardID.h"
 

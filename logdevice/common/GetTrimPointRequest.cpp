@@ -34,8 +34,7 @@ Request::Execution GetTrimPointRequest::execute() {
 
   // set request timer
   request_timer_ =
-      std::make_unique<LibeventTimer>(Worker::onThisThread()->getEventBase(),
-                                      [this] { this->onRequestTimeout(); });
+      std::make_unique<Timer>([this] { this->onRequestTimeout(); });
 
   // broadcast the init messages
   onRequestTimeout();

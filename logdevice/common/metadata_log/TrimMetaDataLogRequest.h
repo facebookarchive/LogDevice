@@ -150,14 +150,14 @@ class TrimMetaDataLogRequest : public Request {
   // initial delay for executing the entire operation, used by upper
   // layer retries
   std::chrono::milliseconds start_delay_{std::chrono::milliseconds::zero()};
-  std::unique_ptr<LibeventTimer> start_delay_timer_;
+  std::unique_ptr<Timer> start_delay_timer_;
 
   // time out for reading the data log for the first trim gap
   const std::chrono::milliseconds read_timeout_;
-  std::unique_ptr<LibeventTimer> reader_timer_;
+  std::unique_ptr<Timer> reader_timer_;
 
   // timer used to schedule the destruction of the read stream
-  std::unique_ptr<LibeventTimer> destroy_readstream_timer_;
+  std::unique_ptr<Timer> destroy_readstream_timer_;
 
   // indicate if reading data log is finalized and the read stream is
   // scheduled to be destroyed

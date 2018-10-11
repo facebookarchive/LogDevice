@@ -19,7 +19,7 @@
 #include "logdevice/common/ClusterState.h"
 #include "logdevice/common/event_log/EventLogStateMachine.h"
 #include "logdevice/common/event_log/EventLogWriter.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/settings/RebuildingSettings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
@@ -301,7 +301,7 @@ class RebuildingSupervisor {
   State state_{IDLE};
 
   // main timer. fires when the next rebuilding trigger is due for execution.
-  LibeventTimer rebuilding_timer_;
+  Timer rebuilding_timer_;
   // retry timer. used when writing to the event log failed.
   ExponentialBackoffTimer retry_timer_;
 

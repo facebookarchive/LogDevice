@@ -497,18 +497,18 @@ class LogRecoveryRequest : public Request,
 
   // timer used for periodically checking and scheduling retries on node that
   // has not yet been sealed
-  std::unique_ptr<LibeventTimer> check_seal_timer_;
+  std::unique_ptr<Timer> check_seal_timer_;
 
   // timer used for getLastCleanEpoch() retries
   std::unique_ptr<BackoffTimer> lce_backoff_timer_;
 
   // timer used for the initial delay (if requested)
-  std::unique_ptr<LibeventTimer> start_delay_timer_;
+  std::unique_ptr<Timer> start_delay_timer_;
 
   // timer used for reading the sequencer metadata
   std::unique_ptr<BackoffTimer> seq_metadata_timer_;
 
-  std::unique_ptr<LibeventTimer> deferredCompleteTimer_;
+  std::unique_ptr<Timer> deferredCompleteTimer_;
 
   // a list of EpochRecovery machines for epochs in the ]lce, next_epoch[
   // range, sorted by epoch number ascending

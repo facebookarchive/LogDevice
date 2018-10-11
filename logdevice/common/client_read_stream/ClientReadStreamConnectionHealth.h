@@ -42,7 +42,7 @@ namespace facebook { namespace logdevice {
 class BackoffTimer;
 class ClientReadStream;
 class ClientStalledReadTracer;
-class LibeventTimer;
+class Timer;
 
 class ClientReadStreamConnectionHealth {
  public:
@@ -74,7 +74,7 @@ class ClientReadStreamConnectionHealth {
   std::unique_ptr<BackoffTimer> stall_grace_period_;
 
   // a timer to publish periodically the stalled reads
-  std::unique_ptr<LibeventTimer> stalled_read_timer_;
+  std::unique_ptr<Timer> stalled_read_timer_;
 
   // change last_health_state_, send notifications, update stats
   void updateHealthState(const FmajorityResult& health_state);

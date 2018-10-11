@@ -12,7 +12,7 @@
 
 #include "logdevice/common/DataRecordOwnsPayload.h"
 #include "logdevice/common/EpochMetaDataUpdater.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
 #include "logdevice/common/Metadata.h"
 #include "logdevice/common/NodeSetSelectorFactory.h"

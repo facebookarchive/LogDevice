@@ -9,7 +9,7 @@
 
 #include <unordered_map>
 
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/protocol/CHECK_SEAL_Message.h"
 #include "logdevice/common/protocol/CHECK_SEAL_REPLY_Message.h"
 #include "logdevice/common/protocol/GET_SEQ_STATE_Message.h"
@@ -109,7 +109,7 @@ class CheckSealRequest : public Request {
    * If not all nodes could reply within the timeout specified, the request is
    * destroyed and E::AGAIN sent back to the client of GET_SEQ_STATE Message.
    */
-  std::unique_ptr<LibeventTimer> request_timer_;
+  std::unique_ptr<Timer> request_timer_;
 
   /**
    * List of nodes from which successful replies have been

@@ -18,14 +18,14 @@
 
 #include "logdevice/common/CopySet.h"
 #include "logdevice/common/DataRecordOwnsPayload.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
 #include "logdevice/common/protocol/GAP_Message.h"
 #include "logdevice/common/protocol/Message.h"
 #include "logdevice/common/protocol/RECORD_Message.h"
 #include "logdevice/common/protocol/STARTED_Message.h"
 #include "logdevice/common/test/MockBackoffTimer.h"
-#include "logdevice/common/test/MockLibeventTimer.h"
+#include "logdevice/common/test/MockTimer.h"
 #include "logdevice/server/EpochRecordCache.h"
 #include "logdevice/server/EpochRecordCacheEntry.h"
 #include "logdevice/server/RecordCacheDependencies.h"
@@ -127,8 +127,7 @@ class MockedCachedDigest : public CachedDigest {
     sender_ = std::make_unique<MockSender>(this);
   }
 
-  std::unique_ptr<LibeventTimer>
-  createPushTimer(std::function<void()>) override {
+  std::unique_ptr<Timer> createPushTimer(std::function<void()>) override {
     return nullptr;
   }
   void activatePushTimer() override {
@@ -623,8 +622,7 @@ class DummyCachedDigest : public CachedDigest {
     sender_ = std::make_unique<MockSender>(this);
   }
 
-  std::unique_ptr<LibeventTimer>
-  createPushTimer(std::function<void()>) override {
+  std::unique_ptr<Timer> createPushTimer(std::function<void()>) override {
     return nullptr;
   }
   void activatePushTimer() override {}
@@ -681,17 +679,16 @@ class MockAllCachedDigests : public AllCachedDigests {
         test_, client_id, rid, client_digests, this);
   }
 
-  std::unique_ptr<LibeventTimer>
+  std::unique_ptr<Timer>
   createRescheduleTimer(std::function<void()> callback) override {
-    auto timer = std::make_unique<MockLibeventTimer>();
-    timer->setCallback(std::move(callback));
+    auto timer = std::make_unique<MockTimer>(std::move(callback));
     return std::move(timer);
   }
 
   void activateRescheduleTimer() override {
     auto& timer = getRescheduleTimer();
     ASSERT_NE(nullptr, timer);
-    timer->activate(nullptr);
+    timer->activate(std::chrono::microseconds(0));
   }
 
   size_t getMaxStreamsStartedBatch() const override {
@@ -744,7 +741,7 @@ TEST_F(AllCachedDigestsTest, MaximumDigestsPerIteration) {
         // timer must be active for the next batch
         ASSERT_TRUE(timer->isActive());
       }
-      checked_downcast<MockLibeventTimer*>(timer.get())->trigger();
+      checked_downcast<MockTimer*>(timer.get())->trigger();
     }
   }
   ASSERT_EQ(0, digests_->queueSize());

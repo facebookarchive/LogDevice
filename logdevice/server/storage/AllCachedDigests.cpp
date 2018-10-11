@@ -293,15 +293,15 @@ std::unique_ptr<CachedDigest> AllCachedDigests::createCachedDigest(
                                         this);
 }
 
-std::unique_ptr<LibeventTimer>
+std::unique_ptr<Timer>
 AllCachedDigests::createRescheduleTimer(std::function<void()> callback) {
-  return std::make_unique<LibeventTimer>(
-      EventLoop::onThisThread()->getEventBase(), callback);
+  return std::make_unique<Timer>(callback);
 }
 
 void AllCachedDigests::activateRescheduleTimer() {
   ld_check(reschedule_timer_ != nullptr);
-  reschedule_timer_->activate(EventLoop::onThisThread()->zero_timeout_);
+  reschedule_timer_->activate(
+      std::chrono::microseconds(0), &Worker::onThisThread()->commonTimeouts());
 }
 
 }} // namespace facebook::logdevice

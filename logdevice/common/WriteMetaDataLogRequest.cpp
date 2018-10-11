@@ -146,7 +146,7 @@ void WriteMetaDataLogRequest::onAppendResult(Status st, lsn_t lsn) {
       // transient error, retry
       if (!append_retry_timer_) {
         append_retry_timer_ = std::make_unique<ExponentialBackoffTimer>(
-            Worker::onThisThread()->getEventBase(),
+
             [this]() { writeRecord(); },
             Worker::settings().sequencer_metadata_log_write_retry_delay);
         append_retry_timer_->randomize();
@@ -212,7 +212,7 @@ void WriteMetaDataLogRequest::onEpochStoreUpdated(
   auto scheduleRetry = [this]() {
     if (!epoch_store_retry_timer_) {
       epoch_store_retry_timer_ = std::make_unique<ExponentialBackoffTimer>(
-          Worker::onThisThread()->getEventBase(),
+
           [this]() { setMetaDataWrittenES(); },
           Worker::settings().sequencer_epoch_store_write_retry_delay);
       epoch_store_retry_timer_->randomize();

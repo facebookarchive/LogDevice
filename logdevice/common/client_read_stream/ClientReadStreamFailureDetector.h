@@ -107,7 +107,7 @@
 
 namespace facebook { namespace logdevice {
 
-class LibeventTimer;
+class Timer;
 
 class ClientReadStreamFailureDetector {
  public:
@@ -236,10 +236,10 @@ class ClientReadStreamFailureDetector {
  private:
   // Used to check if a shard that has not yet completed the window should be
   // marked an outlier.
-  std::unique_ptr<LibeventTimer> timer_;
+  std::unique_ptr<Timer> timer_;
 
   // Used to schedule reinstating shards that are outliers.
-  std::unique_ptr<LibeventTimer> expiry_timer_;
+  std::unique_ptr<Timer> expiry_timer_;
 
   Callback cb_;
   ReplicationProperty replication_;

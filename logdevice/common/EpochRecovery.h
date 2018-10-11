@@ -18,7 +18,7 @@
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/Digest.h"
 #include "logdevice/common/EpochStore.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/Mutator.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/RecoverySet.h"
@@ -79,8 +79,8 @@ class EpochRecoveryDependencies {
       const chrono_expbackoff_t<std::chrono::milliseconds>& backoff,
       std::function<void()> callback = nullptr);
 
-  virtual std::unique_ptr<LibeventTimer>
-  createLibeventTimer(std::function<void()> cb = nullptr);
+  virtual std::unique_ptr<Timer>
+  createTimer(std::function<void()> cb = nullptr);
 
   // used to activate timers
   virtual TimeoutMap* getCommonTimeouts() const;
@@ -486,11 +486,11 @@ class EpochRecovery {
     return mutators_;
   }
 
-  LibeventTimer* getGracePeriodTimer() {
+  Timer* getGracePeriodTimer() {
     return grace_period_.get();
   }
 
-  LibeventTimer* getMutationCleaningTimer() {
+  Timer* getMutationCleaningTimer() {
     return mutation_and_cleaning_.get();
   }
 
@@ -707,13 +707,13 @@ class EpochRecovery {
   // without delaying recovery too much. We move on to the mutation phase
   // once we (1) have received all recovery records from all N nodes in
   // the epoch node set, or (2) this timer expires.
-  std::unique_ptr<LibeventTimer> grace_period_;
+  std::unique_ptr<Timer> grace_period_;
 
   // This timer is started when we start mutations. If it goes off
   // before we complete recovery of this epoch, all nodes in
   // recovery_set_ whose states are greater than SEALING are reset
   // into SEALED and recovery is restarted.
-  std::unique_ptr<LibeventTimer> mutation_and_cleaning_;
+  std::unique_ptr<Timer> mutation_and_cleaning_;
 
   // increasing unique id that's assigned to each EpochRecovery object when
   // it's created or restarted

@@ -45,13 +45,11 @@ Request::Execution SyncSequencerRequest::execute() {
       *this);
 
   retry_timer_ = std::make_unique<ExponentialBackoffTimer>(
-      Worker::onThisThread()->getEventBase(),
-      [this]() { tryAgain(); },
-      Worker::settings().seq_state_backoff_time);
+
+      [this]() { tryAgain(); }, Worker::settings().seq_state_backoff_time);
 
   if (timeout_.count() > 0) {
-    timeout_timer_ = std::make_unique<LibeventTimer>(
-        Worker::onThisThread()->getEventBase(), [this] { this->onTimeout(); });
+    timeout_timer_ = std::make_unique<Timer>([this] { this->onTimeout(); });
     timeout_timer_->activate(timeout_);
   }
 

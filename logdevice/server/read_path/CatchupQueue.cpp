@@ -14,7 +14,7 @@
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/ExponentialBackoffTimer.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/protocol/Message.h"
@@ -658,10 +658,7 @@ create_timer_common(std::chrono::milliseconds initial_delay,
                     std::chrono::milliseconds max_delay,
                     std::function<void()> callback) {
   auto timer = std::make_unique<ExponentialBackoffTimer>(
-      EventLoop::onThisThread()->getEventBase(),
-      callback,
-      initial_delay,
-      max_delay);
+      callback, initial_delay, max_delay);
 
   // Tell the timer to use a TimeoutMap common to all ClientReadStream
   // instances in a Worker.  See docs for TimeoutMap.
@@ -679,10 +676,9 @@ std::chrono::milliseconds CatchupQueueDependencies::iteratorTimerTTL() const {
   return Worker::settings().iterator_cache_ttl;
 }
 
-std::unique_ptr<LibeventTimer>
+std::unique_ptr<Timer>
 CatchupQueueDependencies::createIteratorTimer(std::function<void()> callback) {
-  return std::make_unique<LibeventTimer>(
-      EventLoop::onThisThread()->getEventBase(), std::move(callback));
+  return std::make_unique<Timer>(std::move(callback));
 }
 
 void CatchupQueueDependencies::putStorageTask(

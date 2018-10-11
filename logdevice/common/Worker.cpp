@@ -104,7 +104,11 @@ class WorkerImpl {
                     w->immutable_settings_->ssl_ca_path,
                     w->immutable_settings_->ssl_cert_refresh_interval)
 
-  {}
+  {
+    const bool rv =
+        commonTimeouts_.add(std::chrono::microseconds(0), w->zero_timeout_);
+    ld_check(rv);
+  }
 
   ShardAuthoritativeStatusManager shardStatusManager_;
   Sender sender_;
@@ -173,14 +177,7 @@ Worker::Worker(Processor* processor,
       config_(config),
       stats_(stats),
       shutting_down_(false),
-      accepting_work_(true),
-      requests_stuck_timer_(
-          getEventBase(),
-          std::bind(&Worker::reportOldestRecoveryRequest, this)),
-      load_timer_(getEventBase(), std::bind(&Worker::reportLoad, this)),
-      isolation_timer_(
-          getEventBase(),
-          std::bind(&Worker::disableSequencersDueIsolationTimeout, this)) {}
+      accepting_work_(true) {}
 
 size_t Worker::destroyZeroCopiedRecordsInDisposal() {
   return processor_->zeroCopiedRecordDisposal().drainRecords(
@@ -405,6 +402,12 @@ void Worker::initializeSubscriptions() {
 }
 
 void Worker::onThreadStarted() {
+  requests_stuck_timer_ = std::make_unique<Timer>(
+      std::bind(&Worker::reportOldestRecoveryRequest, this));
+  load_timer_ = std::make_unique<Timer>(std::bind(&Worker::reportLoad, this));
+  isolation_timer_ = std::make_unique<Timer>(
+      std::bind(&Worker::disableSequencersDueIsolationTimeout, this));
+
   // Now that virtual calls are available (unlike in the constructor),
   // initialise `message_dispatch_'
   message_dispatch_ = createMessageDispatch();
@@ -521,23 +524,22 @@ void Worker::finishWorkAndCloseSockets() {
       // Initialize the force abort timer.
       force_abort_pending_requests_counter_ =
           settings().time_delay_before_force_abort;
-      requests_pending_timer_.reset(
-          new LibeventTimer(EventLoop::onThisThread()->getEventBase(), [this] {
-            finishWorkAndCloseSockets();
-            if (force_abort_pending_requests_counter_ > 0) {
-              --force_abort_pending_requests_counter_;
-              if (force_abort_pending_requests_counter_ == 0) {
-                forceAbortPendingWork();
-              }
-            }
+      requests_pending_timer_.reset(new Timer([this] {
+        finishWorkAndCloseSockets();
+        if (force_abort_pending_requests_counter_ > 0) {
+          --force_abort_pending_requests_counter_;
+          if (force_abort_pending_requests_counter_ == 0) {
+            forceAbortPendingWork();
+          }
+        }
 
-            if (force_close_sockets_counter_ > 0) {
-              --force_close_sockets_counter_;
-              if (force_close_sockets_counter_ == 0) {
-                forceCloseSockets();
-              }
-            }
-          }));
+        if (force_close_sockets_counter_ > 0) {
+          --force_close_sockets_counter_;
+          if (force_close_sockets_counter_ == 0) {
+            forceCloseSockets();
+          }
+        }
+      }));
     }
     requests_pending_timer_->activate(PENDING_REQUESTS_POLL_DELAY);
   }
@@ -602,7 +604,7 @@ void Worker::reportOldestRecoveryRequest() {
         describe_oldest_recovery().c_str());
   }
 
-  requests_stuck_timer_.activate(std::chrono::minutes(1));
+  requests_stuck_timer_->activate(std::chrono::minutes(1));
 }
 
 EpochRecovery* Worker::findActiveEpochRecovery(logid_t logid) const {
@@ -702,7 +704,7 @@ ExponentialBackoffTimerNode* Worker::registerTimer(
     std::function<void(ExponentialBackoffTimerNode*)> callback,
     const chrono_expbackoff_t<ExponentialBackoffTimer::Duration>& settings) {
   auto timer = std::make_unique<ExponentialBackoffTimer>(
-      getEventBase(), std::function<void()>(), settings);
+      std::function<void()>(), settings);
   ExponentialBackoffTimerNode* node =
       new ExponentialBackoffTimerNode(std::move(timer));
 
@@ -724,12 +726,11 @@ void Worker::disposeOfMetaReader(std::unique_ptr<MetaDataLogReader> reader) {
 
   // create the timer if not exist
   if (accepting_work_ && dispose_metareader_timer_ == nullptr) {
-    dispose_metareader_timer_.reset(
-        new LibeventTimer(EventLoop::onThisThread()->getEventBase(), [this] {
-          while (!finished_meta_readers_.empty()) {
-            finished_meta_readers_.pop();
-          }
-        }));
+    dispose_metareader_timer_.reset(new Timer([this] {
+      while (!finished_meta_readers_.empty()) {
+        finished_meta_readers_.pop();
+      }
+    }));
   }
 
   reader->finalize();
@@ -772,7 +773,7 @@ void Worker::reportLoad() {
 
   last_load_ = now_load;
   last_load_time_ = now;
-  load_timer_.activate(seconds(10));
+  load_timer_->activate(seconds(10));
 }
 
 EventLogStateMachine* Worker::getEventLogStateMachine() {
@@ -860,11 +861,11 @@ void Worker::onStartedRunning(RunState new_state) {
 }
 
 void Worker::activateIsolationTimer() {
-  isolation_timer_.activate(immutable_settings_->isolated_sequencer_ttl);
+  isolation_timer_->activate(immutable_settings_->isolated_sequencer_ttl);
 }
 
 void Worker::deactivateIsolationTimer() {
-  isolation_timer_.cancel();
+  isolation_timer_->cancel();
 }
 
 void Worker::setCurrentlyRunningState(RunState new_state, RunState prev_state) {

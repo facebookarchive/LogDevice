@@ -14,7 +14,7 @@
 #include <gtest/gtest.h>
 
 #include "logdevice/common/Checksum.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/ReaderImpl.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/stats/Stats.h"

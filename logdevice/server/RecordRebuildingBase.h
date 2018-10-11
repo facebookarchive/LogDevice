@@ -328,7 +328,7 @@ class RecordRebuildingBase : public RecordRebuildingInterface {
 
   ExponentialBackoffTimer retryTimer_;
   ExponentialBackoffTimer storeTimer_;
-  std::unique_ptr<LibeventTimer> deferredCompleteTimer_;
+  std::unique_ptr<Timer> deferredCompleteTimer_;
   bool amendSelfStorageTaskInFlight_ = false;
 
   // On failure returns -1 and sets err to:

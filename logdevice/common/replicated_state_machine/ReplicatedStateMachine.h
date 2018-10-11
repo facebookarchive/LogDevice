@@ -736,7 +736,7 @@ class ReplicatedStateMachine {
     std::function<void(Status, lsn_t, const std::string&)> cb;
     // After the append completes, we activate this timer. If the timer expires
     // before we can confirm the delta, we confirm the delta with E::TIMEDOUT.
-    std::unique_ptr<LibeventTimer> timer;
+    std::unique_ptr<Timer> timer;
   };
 
   // List of delta appends in flight that were written with
@@ -803,11 +803,11 @@ class ReplicatedStateMachine {
   bool delta_read_stream_is_healthy_{true};
 
   // See comment in onSnapshotRecord().
-  LibeventTimer fastForwardGracePeriodTimer_;
+  Timer fastForwardGracePeriodTimer_;
   lsn_t allow_fast_forward_up_to_{LSN_INVALID};
 
   // See commen considerStalledAfterGracePeriod().
-  LibeventTimer stallGracePeriodTimer_;
+  Timer stallGracePeriodTimer_;
 
   // Used by wait() method.
   Semaphore sem_;
@@ -817,7 +817,7 @@ class ReplicatedStateMachine {
   //  - grace period passed after last snapshot
   //  - there are new deltas since last snapshot
   std::chrono::milliseconds snapshot_log_timestamp_{0};
-  LibeventTimer snapshotting_timer_;
+  Timer snapshotting_timer_;
 };
 
 template <typename T>

@@ -10,7 +10,7 @@
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/EpochMetaDataMap.h"
 #include "logdevice/common/ExponentialBackoffTimer.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/MetaDataLogReader.h"
 #include "logdevice/common/WorkerCallbackHelper.h"
 
@@ -198,7 +198,7 @@ class NodeSetFinder {
    * (Only Used for testing).
    * Expose Timers for testing.
    */
-  LibeventTimer* getMetaDataLogReadTimer() const {
+  Timer* getMetaDataLogReadTimer() const {
     return metadata_log_read_job_timer_.get();
   }
 
@@ -207,8 +207,7 @@ class NodeSetFinder {
   }
 
  protected:
-  virtual std::unique_ptr<LibeventTimer>
-  createJobTimer(std::function<void()> callback);
+  virtual std::unique_ptr<Timer> createJobTimer(std::function<void()> callback);
 
   virtual std::unique_ptr<BackoffTimer>
   createMetaDataLogRetryTimer(std::function<void()> callback);
@@ -239,7 +238,7 @@ class NodeSetFinder {
   MetaDataExtrasMap metadata_extras_;
 
   // timers used for reading metadata logs
-  std::unique_ptr<LibeventTimer> metadata_log_read_job_timer_;
+  std::unique_ptr<Timer> metadata_log_read_job_timer_;
   std::unique_ptr<BackoffTimer> metadata_log_retry_timer_;
   std::unique_ptr<MetaDataLogReader> meta_reader_;
 

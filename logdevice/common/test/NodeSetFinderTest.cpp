@@ -13,7 +13,7 @@
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
 #include "logdevice/common/test/MockBackoffTimer.h"
-#include "logdevice/common/test/MockLibeventTimer.h"
+#include "logdevice/common/test/MockTimer.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/include/types.h"
 
@@ -87,9 +87,9 @@ class MockNodeSetFinder : public NodeSetFinder {
                       test->source_),
         test_(test) {}
 
-  std::unique_ptr<LibeventTimer>
+  std::unique_ptr<Timer>
   createJobTimer(std::function<void()> callback) override {
-    auto timer = std::make_unique<MockLibeventTimer>();
+    auto timer = std::make_unique<MockTimer>();
     timer->setCallback(std::move(callback));
     return timer;
   }
@@ -221,9 +221,9 @@ TEST_F(NodeSetFinderTest, ReadMetadataLog) {
   // job timer should started for the job with the nodeset finder timeout
   ASSERT_NE(nullptr, finder_->getMetaDataLogReadTimer());
   ASSERT_TRUE(finder_->getMetaDataLogReadTimer()->isActive());
-  ASSERT_EQ(timeout_,
-            ((MockLibeventTimer*)finder_->getMetaDataLogReadTimer())
-                ->getCurrentDelay());
+  ASSERT_EQ(
+      timeout_,
+      ((MockTimer*)finder_->getMetaDataLogReadTimer())->getCurrentDelay());
 
   auto r1 =
       createMetaDataLogReaderResult(epoch_t(1), epoch_t(42), 2, {N1, N2, N3});
@@ -308,7 +308,7 @@ TEST_F(NodeSetFinderTest, ReadMetadataLogTimedout) {
   finder_->onMetaDataLogRecord(E::OK, std::move(r1));
 
   // trigger the job timeout
-  ((MockLibeventTimer*)finder_->getMetaDataLogReadTimer())->trigger();
+  ((MockTimer*)finder_->getMetaDataLogReadTimer())->trigger();
 
   // reading should be stopped
   ASSERT_EQ(nullptr, finder_->getMetaDataLogReadTimer());
@@ -420,9 +420,9 @@ TEST_F(NodeSetFinderTest, ReadFromBothSequencerFailed) {
   ASSERT_NE(nullptr, finder_->getMetaDataLogReadTimer());
   ASSERT_TRUE(finder_->getMetaDataLogReadTimer()->isActive());
   // 8s timeout for the metadaata stage
-  ASSERT_EQ(std::chrono::milliseconds(8000),
-            ((MockLibeventTimer*)finder_->getMetaDataLogReadTimer())
-                ->getCurrentDelay());
+  ASSERT_EQ(
+      std::chrono::milliseconds(8000),
+      ((MockTimer*)finder_->getMetaDataLogReadTimer())->getCurrentDelay());
 
   auto r1 =
       createMetaDataLogReaderResult(epoch_t(1), epoch_t(42), 2, {N1, N2, N3});

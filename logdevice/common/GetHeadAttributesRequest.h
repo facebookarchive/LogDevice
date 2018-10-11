@@ -8,7 +8,7 @@
 #pragma once
 
 #include "logdevice/common/configuration/Configuration.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/NodeSetAccessor.h"
 #include "logdevice/common/NodeSetFinder.h"
 #include "logdevice/common/Request.h"
@@ -123,7 +123,7 @@ class GetHeadAttributesRequest : public Request,
   const std::chrono::milliseconds client_timeout_;
   const get_head_attributes_callback_t callback_;
 
-  std::unique_ptr<LibeventTimer> client_timeout_timer_{nullptr};
+  std::unique_ptr<Timer> client_timeout_timer_{nullptr};
   std::unique_ptr<NodeSetFinder> nodeset_finder_{nullptr};
   std::unique_ptr<StorageSetAccessor> nodeset_accessor_{nullptr};
 

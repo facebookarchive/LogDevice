@@ -15,7 +15,7 @@
 #include "logdevice/common/AdminCommandTable-fwd.h"
 #include "logdevice/common/BackoffTimer.h"
 #include "logdevice/common/CircularBuffer.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/MetaDataLogReader.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/RebuildingEventsTracer.h"
@@ -576,13 +576,13 @@ class LogRebuilding : public LogRebuildingInterface,
   /**
    * Creates a periodic timer to use for iterator invalidation.
    */
-  virtual std::unique_ptr<LibeventTimer> createIteratorTimer();
+  virtual std::unique_ptr<Timer> createIteratorTimer();
 
   /**
    * Creates a timer to stall rebuilding on reaching the memory
    * threshold
    */
-  virtual std::unique_ptr<LibeventTimer> createStallTimer();
+  virtual std::unique_ptr<Timer> createStallTimer();
 
   /**
    * Activates the stall timer
@@ -602,8 +602,7 @@ class LogRebuilding : public LogRebuildingInterface,
   /**
    * Creates a timer with zero-timeout to call `notifyRebuildingCoordinator`
    */
-  virtual std::unique_ptr<LibeventTimer>
-  createNotifyRebuildingCoordinatorTimer();
+  virtual std::unique_ptr<Timer> createNotifyRebuildingCoordinatorTimer();
 
   /**
    * Activates notifyRebuildingCoordinatorTimer_
@@ -613,7 +612,7 @@ class LogRebuilding : public LogRebuildingInterface,
   /**
    * Creates a timer to call `readNewBatch`
    */
-  virtual std::unique_ptr<LibeventTimer> createReadNewBatchTimer();
+  virtual std::unique_ptr<Timer> createReadNewBatchTimer();
 
   /**
    * Activates `readNewBatchTimer_` with zero-timeout.
@@ -883,18 +882,18 @@ class LogRebuilding : public LogRebuildingInterface,
   // Timer used to periodically invalidate the iterators inside
   // `iteratorCache_` so that they don't pin memtables for too long.
   // This timer is only initialized if iteratorCache_ is not null.
-  std::unique_ptr<LibeventTimer> iteratorInvalidationTimer_;
+  std::unique_ptr<Timer> iteratorInvalidationTimer_;
 
   // Timer used to stall rebuilding when we are ready to read a new batch
   // but have hit the size limit
-  std::unique_ptr<LibeventTimer> stallTimer_;
+  std::unique_ptr<Timer> stallTimer_;
 
   // Timer used to call notifyRebuildingCoordinator in the next iteration of
   // event loop to prevent recursive calls
-  std::unique_ptr<LibeventTimer> notifyRebuildingCoordinatorTimer_;
+  std::unique_ptr<Timer> notifyRebuildingCoordinatorTimer_;
 
   // Timer used to call `readNewBatch` in the next iteration of the event loop
-  std::unique_ptr<LibeventTimer> readNewBatchTimer_;
+  std::unique_ptr<Timer> readNewBatchTimer_;
 
   // A queue of lsns for which stores are durable
   std::queue<lsn_t> lsnStoresDurable_;

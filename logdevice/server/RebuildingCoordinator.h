@@ -476,7 +476,7 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
    */
   std::unordered_map<uint32_t, ShardState> shardsRebuilding_;
 
-  std::vector<std::unique_ptr<LibeventTimer>> scheduledRestarts_;
+  std::vector<std::unique_ptr<Timer>> scheduledRestarts_;
 
   /**
    * Cache of RebuildingRangesMetadata fully populated at startup. Ranges

@@ -2206,15 +2206,12 @@ void Appender::initStoreTimer() {
     timeout.initial_delay =
         Worker::onThisThread()->adaptiveStoreDelay().getCurrentValue();
   }
-  store_timer_.assign(EventLoop::onThisThread()->getEventBase(),
-                      std::bind(&Appender::onTimeout, this),
-                      timeout);
+  store_timer_.assign(std::bind(&Appender::onTimeout, this), timeout);
   store_timer_.setTimeoutMap(&Worker::onThisThread()->commonTimeouts());
 }
 
 void Appender::initRetryTimer() {
-  retry_timer_.assign(EventLoop::onThisThread()->getEventBase(),
-                      std::bind(&Appender::onTimeout, this));
+  retry_timer_.assign(std::bind(&Appender::onTimeout, this));
 }
 
 void Appender::cancelStoreTimer() {
@@ -2236,7 +2233,8 @@ void Appender::cancelRetryTimer() {
   retry_timer_.cancel();
 }
 void Appender::activateRetryTimer() {
-  retry_timer_.activate(EventLoop::onThisThread()->zero_timeout_);
+  retry_timer_.activate(
+      std::chrono::microseconds(0), &Worker::onThisThread()->commonTimeouts());
 }
 bool Appender::retryTimerIsActive() {
   return retry_timer_.isActive();

@@ -14,7 +14,6 @@
 #include <boost/noncopyable.hpp>
 #include <folly/IntrusiveList.h>
 
-#include "event2/event.h"
 #include "logdevice/common/BackoffTimer.h"
 #include "logdevice/common/LibeventTimer.h"
 #include "logdevice/common/util.h"
@@ -30,12 +29,44 @@
 namespace facebook { namespace logdevice {
 
 class TimeoutMap;
+class Worker;
 
 class ExponentialBackoffTimer : public BackoffTimer, boost::noncopyable {
  public:
   using BackoffTimer::Duration;
 
   ExponentialBackoffTimer() = default;
+
+  ExponentialBackoffTimer(
+      std::function<void()> callback,
+      Duration initial_delay,
+      Duration max_delay,
+      Duration::rep multiplier =
+          chrono_expbackoff_t<Duration>::DEFAULT_MULTIPLIER) {
+    assign(std::move(callback), initial_delay, max_delay, multiplier);
+  }
+
+  ExponentialBackoffTimer(std::function<void()> callback,
+                          const chrono_expbackoff_t<Duration>& settings) {
+    assign(std::move(callback), settings);
+  }
+
+  /**
+   * Deactivates any pending timers.
+   */
+  ~ExponentialBackoffTimer() override;
+
+  void assign(std::function<void()> callback,
+              Duration initial_delay,
+              Duration max_delay,
+              Duration::rep multiplier =
+                  chrono_expbackoff_t<Duration>::DEFAULT_MULTIPLIER) {
+    assign(std::move(callback),
+           chrono_expbackoff_t<Duration>(initial_delay, max_delay, multiplier));
+  }
+
+  void assign(std::function<void()> callback,
+              const chrono_expbackoff_t<Duration>& settings);
 
   ExponentialBackoffTimer(
       struct event_base* base,
@@ -52,11 +83,6 @@ class ExponentialBackoffTimer : public BackoffTimer, boost::noncopyable {
                           const chrono_expbackoff_t<Duration>& settings) {
     assign(base, std::move(callback), settings);
   }
-
-  /**
-   * Deactivates any pending timers.
-   */
-  ~ExponentialBackoffTimer() override;
 
   void assign(struct event_base* base,
               std::function<void()> callback,

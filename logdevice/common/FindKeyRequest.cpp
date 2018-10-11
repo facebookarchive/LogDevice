@@ -45,8 +45,7 @@ Request::Execution FindKeyRequest::execute() {
   }
 
   client_timeout_timer_ =
-      std::make_unique<LibeventTimer>(Worker::onThisThread()->getEventBase(),
-                                      [this] { this->onClientTimeout(); });
+      std::make_unique<Timer>([this] { this->onClientTimeout(); });
   client_timeout_timer_->activate(client_timeout_);
 
   auto insert_result = Worker::onThisThread()->runningFindKey().map.insert(

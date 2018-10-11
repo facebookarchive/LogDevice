@@ -20,7 +20,7 @@
 namespace facebook { namespace logdevice {
 
 class ClientReadStream;
-class LibeventTimer;
+class Timer;
 struct LogTailAttributes;
 
 constexpr auto READERS_FLOW_TRACER = "readers_flow_tracer";
@@ -101,7 +101,7 @@ class ClientReadersFlowTracer
   TimePoint last_time_lagging_{TimePoint::max()};
   lsn_t last_next_lsn_to_deliver_{LSN_INVALID};
 
-  std::unique_ptr<LibeventTimer> timer_;
+  std::unique_ptr<Timer> timer_;
 
   const ClientReadStream* owner_;
   friend class ClientReadStream;

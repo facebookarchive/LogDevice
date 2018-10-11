@@ -16,14 +16,12 @@ namespace facebook { namespace logdevice {
 
 void NodeStatsHandler::init() {
   const auto& settings = Worker::settings();
-  auto event_base = EventLoop::onThisThread()->getEventBase();
+  aggregation_timer_.assign([&] { this->onAggregation(); });
 
-  aggregation_timer_.assign(event_base, [&] { this->onAggregation(); });
-
-  client_timeout_timer_.assign(event_base, [&] { this->onClientTimeout(); });
+  client_timeout_timer_.assign([&] { this->onClientTimeout(); });
 
   retry_timer_.assign(
-      event_base,
+
       [&]() { this->onRetry(); },
       settings.sequencer_boycotting.node_stats_send_retry_delay);
 }

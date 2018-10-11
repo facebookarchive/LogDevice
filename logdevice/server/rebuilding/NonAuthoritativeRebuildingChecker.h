@@ -9,7 +9,7 @@
 
 #include "logdevice/common/event_log/EventLogStateMachine.h"
 #include "logdevice/common/event_log/EventLogWriter.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/settings/RebuildingSettings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/common/ShardID.h"
@@ -46,8 +46,8 @@ class NonAuthoritativeRebuildingChecker {
   void checkShard(ShardID);
   void onSettingsUpdated();
 
-  std::unique_ptr<LibeventTimer> timer_;
-  std::unordered_map<ShardID, std::unique_ptr<LibeventTimer>> shardTimers_;
+  std::unique_ptr<Timer> timer_;
+  std::unordered_map<ShardID, std::unique_ptr<Timer>> shardTimers_;
   std::unordered_map<ShardID, RecordTimestamp> lastMarkedUnrecoverable_;
   std::chrono::milliseconds period_;
 

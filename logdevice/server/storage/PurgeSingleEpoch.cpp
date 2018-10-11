@@ -12,7 +12,7 @@
 #include <folly/Memory.h>
 
 #include "logdevice/common/configuration/Configuration.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
 #include "logdevice/common/PurgingTracer.h"
 #include "logdevice/common/protocol/GET_EPOCH_RECOVERY_METADATA_Message.h"
@@ -346,19 +346,18 @@ void PurgeSingleEpoch::finalizeIfDone() {
 
 void PurgeSingleEpoch::deferredComplete() {
   // Start a timer with zero delay.
-  deferredCompleteTimer_ = std::make_unique<LibeventTimer>(
-      EventLoop::onThisThread()->getEventBase(), [this] {
-        if (driver_ != nullptr) {
-          driver_->onPurgeSingleEpochDone(epoch_, result_);
-        }
-      });
+  deferredCompleteTimer_ = std::make_unique<Timer>([this] {
+    if (driver_ != nullptr) {
+      driver_->onPurgeSingleEpochDone(epoch_, result_);
+    }
+  });
   deferredCompleteTimer_->activate(
       std::chrono::milliseconds(0), &Worker::onThisThread()->commonTimeouts());
 }
 
 std::unique_ptr<BackoffTimer> PurgeSingleEpoch::createRetryTimer() {
   auto timer = std::make_unique<ExponentialBackoffTimer>(
-      EventLoop::onThisThread()->getEventBase(),
+
       std::function<void()>(),
       PurgeUncleanEpochs::INITIAL_RETRY_DELAY,
       PurgeUncleanEpochs::MAX_RETRY_DELAY);

@@ -12,7 +12,7 @@
 #include "logdevice/common/DataRecordOwnsPayload.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/GetSeqStateRequest.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/ShardAuthoritativeStatusMap.h"
@@ -30,8 +30,7 @@ ClientReadersFlowTracer::ClientReadersFlowTracer(
     std::shared_ptr<TraceLogger> logger,
     ClientReadStream* owner)
     : SampledTracer(std::move(logger)), owner_(owner) {
-  timer_ = std::make_unique<LibeventTimer>(
-      Worker::onThisThread()->getEventBase(), [this] { onTimerTriggered(); });
+  timer_ = std::make_unique<Timer>([this] { onTimerTriggered(); });
 
   // obtain log group name
   log_group_name_ = "<WAITING LOGSCONFIG>";

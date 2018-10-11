@@ -22,7 +22,7 @@
 #include "logdevice/common/CopySetManager.h"
 #include "logdevice/common/ExponentialBackoffTimer.h"
 #include "logdevice/common/IntrusiveUnorderedMap.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/NodeSetState.h"
 #include "logdevice/common/RecipientSet.h"
 #include "logdevice/common/RecordID.h"
@@ -785,7 +785,7 @@ class Appender : public IntrusiveUnorderedMapHook {
   // special timer, set up with a zero timeout, used to trigger another wave
   // of STOREs to be sent on the next iteration of the event loop
   // Note: in tests, this is left uninitialized.
-  LibeventTimer retry_timer_;
+  Timer retry_timer_;
 
   // If the append was created by SequencerBatching, this contains the number
   // of constituent appends (APPEND messages that came over the wire).  Used

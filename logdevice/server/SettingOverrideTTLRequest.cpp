@@ -25,7 +25,7 @@ void SettingOverrideTTLRequest::onTimeout() {
 
 void SettingOverrideTTLRequest::setupTimer() {
   ServerWorker* w = ServerWorker::onThisThread();
-  timer_.assign(w->getEventBase(), [this] { onTimeout(); });
+  timer_.assign([this] { onTimeout(); });
   timer_.activate(ttl_, &w->commonTimeouts());
 }
 

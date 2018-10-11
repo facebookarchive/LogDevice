@@ -69,10 +69,8 @@ const Settings& RecordRebuildingBase::getSettings() const {
 void RecordRebuildingBase::activateRetryTimer() {
   if (!retryTimer_.isAssigned()) {
     const auto& retry_timeout = owner_->getRebuildingSettings()->retry_timeout;
-    retryTimer_.assign(EventLoop::onThisThread()->getEventBase(),
-                       [this] { onRetryTimeout(); },
-                       retry_timeout.lo,
-                       retry_timeout.hi);
+    retryTimer_.assign(
+        [this] { onRetryTimeout(); }, retry_timeout.lo, retry_timeout.hi);
     retryTimer_.setTimeoutMap(&Worker::onThisThread()->commonTimeouts());
   }
 
@@ -90,10 +88,8 @@ bool RecordRebuildingBase::isStoreTimerActive() {
 void RecordRebuildingBase::activateStoreTimer() {
   if (!storeTimer_.isAssigned()) {
     const auto& store_timeout = owner_->getRebuildingSettings()->store_timeout;
-    storeTimer_.assign(EventLoop::onThisThread()->getEventBase(),
-                       [this] { onStoreTimeout(); },
-                       store_timeout.lo,
-                       store_timeout.hi);
+    storeTimer_.assign(
+        [this] { onStoreTimeout(); }, store_timeout.lo, store_timeout.hi);
     storeTimer_.setTimeoutMap(&Worker::onThisThread()->commonTimeouts());
   }
 
@@ -106,8 +102,7 @@ void RecordRebuildingBase::resetStoreTimer() {
 
 void RecordRebuildingBase::deferredComplete() {
   // Start a timer with zero delay.
-  deferredCompleteTimer_ = std::make_unique<LibeventTimer>(
-      EventLoop::onThisThread()->getEventBase(), [this] { onComplete(); });
+  deferredCompleteTimer_ = std::make_unique<Timer>([this] { onComplete(); });
   deferredCompleteTimer_->activate(
       std::chrono::milliseconds(0), &Worker::onThisThread()->commonTimeouts());
 }

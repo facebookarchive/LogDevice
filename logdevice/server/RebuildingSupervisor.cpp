@@ -79,9 +79,8 @@ void RebuildingSupervisor::init() {
     }
   }
 
-  rebuilding_timer_.assign(w->getEventBase(), [this] { triggerRebuilding(); });
+  rebuilding_timer_.assign([this] { triggerRebuilding(); });
   retry_timer_.assign(
-      w->getEventBase(),
       [this]() {
         state_ = State::PENDING;
         triggerRebuilding();

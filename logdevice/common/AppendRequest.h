@@ -26,7 +26,7 @@
 #include "logdevice/common/ClientAppendTracer.h"
 #include "logdevice/common/ClientBridge.h"
 #include "logdevice/common/configuration/Configuration.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/RequestType.h"
@@ -329,10 +329,10 @@ class AppendRequest : public AppendRequestBase,
   lsn_t previous_lsn_{LSN_INVALID};
 
   // timer used to detect when the append timeout expires
-  LibeventTimer timer_;
+  Timer timer_;
 
   // timer to trigger a cluster state refresh if it expires
-  LibeventTimer cluster_state_refresh_timer_;
+  Timer cluster_state_refresh_timer_;
 
   // this functor is called when Socket through which we sent our
   // APPEND message closes before a reply is received

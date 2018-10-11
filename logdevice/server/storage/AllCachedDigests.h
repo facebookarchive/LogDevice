@@ -203,12 +203,12 @@ class AllCachedDigests {
     return queue_.size();
   }
 
-  std::unique_ptr<LibeventTimer>& getRescheduleTimer() {
+  std::unique_ptr<Timer>& getRescheduleTimer() {
     return reschedule_timer_;
   }
 
  protected:
-  virtual std::unique_ptr<LibeventTimer>
+  virtual std::unique_ptr<Timer>
   createRescheduleTimer(std::function<void()> callback);
 
   virtual void activateRescheduleTimer();
@@ -234,7 +234,7 @@ class AllCachedDigests {
 
   // To support yielding/re-entrance in scheduleMoreDigests()
   bool scheduling_{false};
-  std::unique_ptr<LibeventTimer> reschedule_timer_;
+  std::unique_ptr<Timer> reschedule_timer_;
 
   // get the ClientDigests object for the given client ID, create one if no
   // existing object is found.

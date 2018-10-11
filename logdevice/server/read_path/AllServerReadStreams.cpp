@@ -813,7 +813,7 @@ void AllServerReadStreams::scheduleShardStatusUpdateRetry(ClientID cid) {
 
   if (!it->second.timer_) {
     auto timer = std::make_unique<ExponentialBackoffTimer>(
-        EventLoop::onThisThread()->getEventBase(),
+
         [this, cid]() { sendShardStatusToClient(cid); },
         std::chrono::milliseconds(1),
         std::chrono::seconds(10));

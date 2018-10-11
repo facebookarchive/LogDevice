@@ -13,7 +13,7 @@
 #include <unordered_map>
 
 #include "logdevice/common/ClientBridge.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/NodeSetAccessor.h"
 #include "logdevice/common/NodeSetFinder.h"

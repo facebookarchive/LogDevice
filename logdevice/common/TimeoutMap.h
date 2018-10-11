@@ -65,6 +65,8 @@ class TimeoutMap {
   const struct timeval* get(std::chrono::microseconds timeout,
                             struct timeval* tv_buf);
 
+  bool add(std::chrono::microseconds timeout, const struct timeval* tv_buf);
+
  private:
   std::unordered_map<std::chrono::microseconds,
                      const struct timeval*,

@@ -84,7 +84,7 @@ namespace facebook { namespace logdevice {
  */
 class BackoffTimer;
 class EpochRecoveryMetadata;
-class LibeventTimer;
+class Timer;
 class LocalLogStore;
 class LogStorageState;
 class PurgeCoordinator;
@@ -282,7 +282,7 @@ class PurgeUncleanEpochs : public IntrusiveUnorderedMapHook {
 
   // Used when --skip-recovery setting is set to complete this state machine in
   // the next iteration of the event loop.
-  std::unique_ptr<LibeventTimer> deferred_complete_timer_;
+  std::unique_ptr<Timer> deferred_complete_timer_;
 
   // Used to ensure that callback when GetEpochRecoveryMetadataRequest completes
   // gets called on the worker that is running this PurgeUncleanEpochs machine

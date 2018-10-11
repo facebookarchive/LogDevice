@@ -546,8 +546,7 @@ void SequencerRouter::startClusterStateRefreshTimer() {
     Worker* w = Worker::onThisThread();
     auto cs = getClusterState();
     if (cs && !cluster_state_refresh_timer_.isAssigned()) {
-      cluster_state_refresh_timer_.assign(
-          w->getEventBase(), [this] { onTimeout(); });
+      cluster_state_refresh_timer_.assign([this] { onTimeout(); });
       cluster_state_refresh_timer_.activate(
           getSettings().sequencer_router_internal_timeout,
           &w->commonTimeouts());

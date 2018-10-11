@@ -13,7 +13,7 @@
 
 #include <folly/Memory.h>
 #include "logdevice/common/buffered_writer/BufferedWriteDecoderImpl.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/ReaderProgressRequest.h"
 #include "logdevice/common/StartReadingRequest.h"

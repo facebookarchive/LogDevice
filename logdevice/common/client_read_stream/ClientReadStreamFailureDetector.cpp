@@ -61,12 +61,10 @@ void ClientReadStreamFailureDetector::start() {
   // `removeExpiredOutliers()` and `checkForShardsBlockingWindow()` manually.
   Worker* worker = Worker::onThisThread(false);
   if (worker) {
-    expiry_timer_ = std::make_unique<LibeventTimer>(
-        EventLoop::onThisThread()->getEventBase());
-    expiry_timer_->setCallback([this] { removeExpiredOutliers(TS::now()); });
-    timer_ = std::make_unique<LibeventTimer>(
-        EventLoop::onThisThread()->getEventBase());
-    timer_->setCallback([this] { checkForShardsBlockingWindow(TS::now()); });
+    expiry_timer_ =
+        std::make_unique<Timer>([this] { removeExpiredOutliers(TS::now()); });
+    timer_ = std::make_unique<Timer>(
+        [this] { checkForShardsBlockingWindow(TS::now()); });
   }
 }
 

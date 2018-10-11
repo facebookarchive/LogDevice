@@ -14,7 +14,7 @@
 #include <gtest/gtest.h>
 
 #include "logdevice/common/configuration/Configuration.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/ReaderImpl.h"
 #include "logdevice/common/ReadStreamAttributes.h"
 #include "logdevice/common/types_internal.h"

@@ -447,16 +447,15 @@ TimeoutMap* NodeSetFinder::getTimeoutMap() const {
   return &Worker::onThisThread()->commonTimeouts();
 }
 
-std::unique_ptr<LibeventTimer>
+std::unique_ptr<Timer>
 NodeSetFinder::createJobTimer(std::function<void()> callback) {
-  return std::make_unique<LibeventTimer>(
-      EventLoop::onThisThread()->getEventBase(), callback);
+  return std::make_unique<Timer>(callback);
 }
 
 std::unique_ptr<BackoffTimer>
 NodeSetFinder::createMetaDataLogRetryTimer(std::function<void()> callback) {
   auto timer = std::make_unique<ExponentialBackoffTimer>(
-      EventLoop::onThisThread()->getEventBase(),
+
       callback,
       RETRY_READ_METADATALOG_INITIAL_DELAY,
       RETRY_READ_METADATALOG_MAX_DELAY);

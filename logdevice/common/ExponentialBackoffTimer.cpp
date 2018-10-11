@@ -11,7 +11,7 @@
 
 #include <folly/Random.h>
 
-#include "logdevice/common/EventLoop.h"
+#include "logdevice/common/Worker.h"
 #include "logdevice/common/TimeoutMap.h"
 
 namespace facebook { namespace logdevice {
@@ -21,11 +21,16 @@ ExponentialBackoffTimer::~ExponentialBackoffTimer() {
 }
 
 void ExponentialBackoffTimer::assign(
+    std::function<void()> callback,
+    const chrono_expbackoff_t<Duration>& settings) {
+  assign(Worker::onThisThread()->getEventBase(), callback, settings);
+}
+
+void ExponentialBackoffTimer::assign(
     struct event_base* base,
     std::function<void()> callback,
     const chrono_expbackoff_t<Duration>& settings) {
   // Sanity checks
-  ld_check(base != nullptr);
   updateSettings(settings);
 
   // (Re-)initialize members
@@ -64,7 +69,8 @@ void ExponentialBackoffTimer::activate() {
 }
 
 void ExponentialBackoffTimer::fire() {
-  timer_.activate(EventLoop::onThisThread()->zero_timeout_);
+  timer_.activate(
+      std::chrono::microseconds(0), &Worker::onThisThread()->commonTimeouts());
   next_delay_ = settings_.initial_delay;
   calculateNextEffectiveDelay();
 }

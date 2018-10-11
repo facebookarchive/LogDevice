@@ -235,10 +235,9 @@ int GetLogInfoRequest::reloadConfig() {
 
 void GetLogInfoRequest::createTimers() {
   target_change_timer_ =
-      std::make_unique<LibeventTimer>(Worker::onThisThread()->getEventBase(),
-                                      [this] { this->onClientTimeout(); });
+      std::make_unique<Timer>([this] { this->onClientTimeout(); });
   retry_timer_ = std::make_unique<ExponentialBackoffTimer>(
-      Worker::onThisThread()->getEventBase(),
+
       [this]() { attemptTargetNodeChange(); },
       Worker::settings().on_demand_logs_config_retry_delay);
 }

@@ -7,7 +7,7 @@
  */
 #pragma once
 
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/ExponentialBackoffTimer.h"
 #include "logdevice/common/protocol/NODE_STATS_Message.h"
 #include "logdevice/common/stats/Stats.h"
@@ -92,8 +92,8 @@ class NodeStatsHandler : public NodeStatsMessageCallback {
   // Where to send the stats to
   NodeID destination_;
 
-  LibeventTimer aggregation_timer_;
-  LibeventTimer client_timeout_timer_;
+  Timer aggregation_timer_;
+  Timer client_timeout_timer_;
   // between unsuccessful sends, this timer defines the delay before retrying
   ExponentialBackoffTimer retry_timer_;
 };

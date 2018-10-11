@@ -7,7 +7,7 @@
  */
 #include "logdevice/lib/test/copyloadtestapp/server/CopyLoadTestServiceHandler.h"
 
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 
 namespace facebook { namespace logdevice { namespace copyloadtestapp {
 

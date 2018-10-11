@@ -9,7 +9,7 @@
 
 #include "logdevice/common/ClusterState.h"
 #include "logdevice/common/Request.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/settings/Settings.h"
@@ -85,8 +85,8 @@ class GetClusterStateRequest : public Request {
 
   std::chrono::milliseconds timeout_;
   std::chrono::milliseconds wave_timeout_;
-  std::unique_ptr<LibeventTimer> timer_;
-  std::unique_ptr<LibeventTimer> wave_timer_;
+  std::unique_ptr<Timer> timer_;
+  std::unique_ptr<Timer> wave_timer_;
   std::vector<node_index_t> nodes_;
   size_t next_node_pos_{0};
   size_t wave_size_{kMinWaveSize};

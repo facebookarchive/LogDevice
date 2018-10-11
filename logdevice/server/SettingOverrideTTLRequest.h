@@ -53,7 +53,7 @@ class SettingOverrideTTLRequest : public Request {
   void destroy();
 
  private:
-  LibeventTimer timer_;
+  Timer timer_;
   std::chrono::microseconds ttl_;
   std::string name_;
   Server* server_;

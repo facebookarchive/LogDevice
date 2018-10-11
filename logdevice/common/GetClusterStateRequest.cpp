@@ -123,13 +123,11 @@ void GetClusterStateRequest::initNodes() {
 }
 
 void GetClusterStateRequest::initTimers() {
-  timer_ = std::make_unique<LibeventTimer>(
-      Worker::onThisThread()->getEventBase(), [&] { onTimeout(); });
+  timer_ = std::make_unique<Timer>([&] { onTimeout(); });
   // Immediately activate request timer
   timer_->activate(timeout_);
 
-  wave_timer_ = std::make_unique<LibeventTimer>(
-      Worker::onThisThread()->getEventBase(), [&] { onWaveTimeout(); });
+  wave_timer_ = std::make_unique<Timer>([&] { onWaveTimeout(); });
 }
 
 void GetClusterStateRequest::activateWaveTimer() {

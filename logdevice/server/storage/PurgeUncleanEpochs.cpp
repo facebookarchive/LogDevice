@@ -81,9 +81,8 @@ void PurgeUncleanEpochs::start() {
     // It is not safe to call allEpochsPurged() directly as this may cause more
     // PurgeUncleanEpochs state machines to be started. Ensure we trigger this
     // in the next iteration of the event loop.
-    deferred_complete_timer_ = std::make_unique<LibeventTimer>(
-        EventLoop::onThisThread()->getEventBase(),
-        [this] { allEpochsPurged(); });
+    deferred_complete_timer_ =
+        std::make_unique<Timer>([this] { allEpochsPurged(); });
     deferred_complete_timer_->activate(
         std::chrono::milliseconds(0),
         &Worker::onThisThread()->commonTimeouts());
@@ -672,11 +671,8 @@ void PurgeUncleanEpochs::complete(Status status) {
 }
 
 std::unique_ptr<BackoffTimer> PurgeUncleanEpochs::createTimer() {
-  return std::unique_ptr<BackoffTimer>(
-      new ExponentialBackoffTimer(Worker::onThisThread()->getEventBase(),
-                                  std::function<void()>(),
-                                  INITIAL_RETRY_DELAY,
-                                  MAX_RETRY_DELAY));
+  return std::unique_ptr<BackoffTimer>(new ExponentialBackoffTimer(
+      std::function<void()>(), INITIAL_RETRY_DELAY, MAX_RETRY_DELAY));
 }
 
 void PurgeUncleanEpochs::startStorageTask(std::unique_ptr<StorageTask>&& task) {

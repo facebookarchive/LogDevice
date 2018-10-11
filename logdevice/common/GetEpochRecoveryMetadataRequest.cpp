@@ -13,7 +13,7 @@
 #include <folly/Memory.h>
 
 #include "logdevice/common/configuration/Configuration.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
 #include "logdevice/common/protocol/GET_EPOCH_RECOVERY_METADATA_Message.h"
 #include "logdevice/common/stats/Stats.h"
@@ -566,10 +566,7 @@ const Settings& GetEpochRecoveryMetadataRequest::getSettings() const {
 std::unique_ptr<BackoffTimer>
 GetEpochRecoveryMetadataRequest::createRetryTimer() {
   auto timer = std::make_unique<ExponentialBackoffTimer>(
-      EventLoop::onThisThread()->getEventBase(),
-      std::function<void()>(),
-      INITIAL_RETRY_DELAY,
-      MAX_RETRY_DELAY);
+      std::function<void()>(), INITIAL_RETRY_DELAY, MAX_RETRY_DELAY);
 
   timer->setTimeoutMap(&Worker::onThisThread()->commonTimeouts());
   return std::move(timer);
@@ -582,10 +579,10 @@ GetEpochRecoveryMetadataRequest::getShardAuthoritativeStatusMap() {
       .getShardAuthoritativeStatusMap();
 }
 
-std::unique_ptr<LibeventTimer>
-GetEpochRecoveryMetadataRequest::createDeferredCompleteTimer() {
-  return std::make_unique<LibeventTimer>(
-      EventLoop::onThisThread()->getEventBase());
+std::unique_ptr<Timer>
+GetEpochRecoveryMetadataRequest::createDeferredCompleteTimer(
+    std::function<void()> callback) {
+  return std::make_unique<Timer>(callback);
 }
 
 void GetEpochRecoveryMetadataRequest::activateDeferredCompleteTimer() {
@@ -605,8 +602,7 @@ void GetEpochRecoveryMetadataRequest::deferredComplete() {
   ld_check(result_ != E::UNKNOWN);
   ld_check(result_ == E::OK || result_ == E::ABORTED);
   // Start a timer with zero delay.
-  deferredCompleteTimer_ = createDeferredCompleteTimer();
-  deferredCompleteTimer_->setCallback([this] { done(); });
+  deferredCompleteTimer_ = createDeferredCompleteTimer([this] { done(); });
   activateDeferredCompleteTimer();
 }
 

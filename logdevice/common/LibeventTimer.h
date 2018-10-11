@@ -54,10 +54,6 @@ class LibeventTimer : boost::noncopyable {
   // activated.
   LibeventTimer(struct event_base* base);
 
-  // Methods are virtual to allow MockLibeventTimer to override in tests
-
-  virtual void assign(struct event_base* base, std::function<void()> callback);
-
   /**
    * Activates the timer to fire once after the specified delay.  Microseconds
    * are the granularity which libevent offers.  Larger std::chrono::duration
@@ -73,11 +69,6 @@ class LibeventTimer : boost::noncopyable {
    */
   virtual void activate(std::chrono::microseconds delay,
                         TimeoutMap* timeout_map = nullptr);
-
-  /**
-   * Variant of activate() that takes a struct timeval.
-   */
-  virtual void activate(const struct timeval* delay);
 
   /**
    * Cancels the timer if active.
@@ -103,7 +94,20 @@ class LibeventTimer : boost::noncopyable {
 
   virtual ~LibeventTimer();
 
+  // Methods are virtual to allow MockLibeventTimer to override in tests
+
+  virtual void assign(struct event_base* base, std::function<void()> callback);
+
  private:
+  /**
+   * Variant of activate() that takes a struct timeval.
+   */
+  virtual void activate(const struct timeval* delay);
+
+  // Called by libevent when the timer goes off.  Invokes the supplied
+  // callback.
+  static void libeventCallback(void* instance, short);
+
   bool initialized_{false};
 
   struct event timer_;
@@ -113,10 +117,6 @@ class LibeventTimer : boost::noncopyable {
   // The worker run state that this timer was activated in. Will be propagated
   // with all callbacks.
   RunState workerRunState_;
-
-  // Called by libevent when the timer goes off.  Invokes the supplied
-  // callback.
-  static void libeventCallback(void* instance, short);
 };
 
 }} // namespace facebook::logdevice

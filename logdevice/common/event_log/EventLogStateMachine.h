@@ -210,7 +210,7 @@ class EventLogStateMachine
   bool write_delta_header_{true};
 
   // Used to publish rebuilding set changes after event_log_grace_period.
-  LibeventTimer gracePeriodTimer_;
+  Timer gracePeriodTimer_;
 
   // Last ShardAuthoritativeStatusMap that was broadcast.
   ShardAuthoritativeStatusMap last_broadcast_map_;

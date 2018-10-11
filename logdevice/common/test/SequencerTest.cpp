@@ -14,7 +14,7 @@
 
 #include "logdevice/common/Appender.h"
 #include "logdevice/common/EpochSequencer.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/LogRecoveryRequest.h"
 #include "logdevice/common/MetaDataLogWriter.h"
 #include "logdevice/common/NoopTraceLogger.h"

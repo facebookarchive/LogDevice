@@ -10,7 +10,7 @@
 #include <set>
 
 #include "logdevice/common/ClientID.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/RequestType.h"
 #include "logdevice/common/types_internal.h"
@@ -53,7 +53,7 @@ class LogsConfigUpdatedRequest : public Request {
   std::set<ClientID> clients_to_notify_;
 
   // timer for retries
-  LibeventTimer timer_;
+  Timer timer_;
 
   // request timeout
   const std::chrono::milliseconds timeout_;

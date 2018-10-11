@@ -67,8 +67,7 @@ Request::Execution TrimMetaDataLogRequest::execute() {
   // if start delay is specified, start a timer to defer starting the
   // entire operation
   if (start_delay_ > std::chrono::milliseconds::zero()) {
-    start_delay_timer_ = std::make_unique<LibeventTimer>(
-        Worker::onThisThread()->getEventBase(), [this] { start(); });
+    start_delay_timer_ = std::make_unique<Timer>([this] { start(); });
 
     start_delay_timer_->activate(
         start_delay_, &Worker::onThisThread()->commonTimeouts());
@@ -177,8 +176,7 @@ void TrimMetaDataLogRequest::readTrimGapDataLog() {
 
   // start a timer for reading the data log
   ld_check(reader_timer_ == nullptr);
-  reader_timer_ = std::make_unique<LibeventTimer>(
-      Worker::onThisThread()->getEventBase(), [this] { onReadTimeout(); });
+  reader_timer_ = std::make_unique<Timer>([this] { onReadTimeout(); });
 
   reader_timer_->activate(
       read_timeout_, &Worker::onThisThread()->commonTimeouts());
@@ -286,9 +284,8 @@ void TrimMetaDataLogRequest::finalizeReadingDataLog(Status st) {
 
   // use a zero timer to schedule the destruction of the read stream
   // in the next event loop iteration
-  destroy_readstream_timer_ = std::make_unique<LibeventTimer>(
-      Worker::onThisThread()->getEventBase(),
-      [this, st] { onDestroyReadStreamTimedout(st); });
+  destroy_readstream_timer_ =
+      std::make_unique<Timer>([this, st] { onDestroyReadStreamTimedout(st); });
   destroy_readstream_timer_->activate(
       std::chrono::milliseconds::zero(),
       &Worker::onThisThread()->commonTimeouts());
@@ -347,8 +344,7 @@ void TrimMetaDataLogRequest::readMetaDataLog() {
 
   // start a timer for reading the metadata log
   if (reader_timer_ == nullptr) {
-    reader_timer_ = std::make_unique<LibeventTimer>(
-        Worker::onThisThread()->getEventBase(), [this] { onReadTimeout(); });
+    reader_timer_ = std::make_unique<Timer>([this] { onReadTimeout(); });
   } else {
     // we used the read_timer_ for data log reading
     ld_check(!backlog_.hasValue());

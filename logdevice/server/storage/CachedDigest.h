@@ -35,7 +35,7 @@ namespace facebook { namespace logdevice {
 class AllCachedDigests;
 class BackoffTimer;
 class ClientDigests;
-class LibeventTimer;
+class Timer;
 
 class CachedDigest {
   enum class State { INIT, SEND_STARTED, SEND_RECORDS, CONCLUDE_DIGEST };
@@ -103,7 +103,7 @@ class CachedDigest {
   virtual ~CachedDigest();
 
  protected:
-  virtual std::unique_ptr<LibeventTimer>
+  virtual std::unique_ptr<Timer>
   createPushTimer(std::function<void()> callback);
   virtual void cancelPushTimer();
   virtual void activatePushTimer();
@@ -165,7 +165,7 @@ class CachedDigest {
   // resume on the next iteration of this thread's event loop. The delay timer
   // resumes pushing after exponential backoff and is activated when network TX
   // limits are exceed.
-  std::unique_ptr<LibeventTimer> push_timer_;
+  std::unique_ptr<Timer> push_timer_;
   std::unique_ptr<BackoffTimer> delay_timer_;
 
   // @return true if all required records are enqueued to the client and the

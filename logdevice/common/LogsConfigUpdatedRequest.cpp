@@ -55,7 +55,7 @@ Request::Execution LogsConfigUpdatedRequest::execute() {
     clients_to_notify_ = clients_not_notified;
 
     if (!timer_.isAssigned()) {
-      timer_.assign(worker->getEventBase(), [this] { execute(); });
+      timer_.assign([this] { execute(); });
     }
     timer_.activate(timeout_, &worker->commonTimeouts());
   } else {

@@ -49,7 +49,7 @@ namespace facebook { namespace logdevice {
 
 class AllServerReadStreams;
 class BackoffTimer;
-class LibeventTimer;
+class Timer;
 class LogStorageStateMap;
 class ReadStorageTask;
 class RECORD_Message;
@@ -112,7 +112,7 @@ class CatchupQueueDependencies {
    * Creates a timer to use for iterator invalidation. See doc for
    * CatchupQueue::iterator_invalidation_timer_.
    */
-  virtual std::unique_ptr<LibeventTimer>
+  virtual std::unique_ptr<Timer>
   createIteratorTimer(std::function<void()> callback);
 
   virtual std::chrono::milliseconds iteratorTimerTTL() const;
@@ -332,7 +332,7 @@ class CatchupQueue {
   // Timer used to periodically go through all read streams handled by this
   // CatchupQueue in order to ensure that iterators are not holding references
   // to potentially unused resources.
-  std::unique_ptr<LibeventTimer> iterator_invalidation_timer_;
+  std::unique_ptr<Timer> iterator_invalidation_timer_;
 
   /**
    * Helper method used in pushRecords(). Moves all streams from queue_delayed_

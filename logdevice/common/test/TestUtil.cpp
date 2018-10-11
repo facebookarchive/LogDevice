@@ -27,7 +27,7 @@
 #include <folly/dynamic.h>
 #include <folly/json.h>
 #include <folly/experimental/TestUtil.h>
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/PermissionChecker.h"
 #include "logdevice/common/PluginPack.h"

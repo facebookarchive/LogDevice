@@ -14,7 +14,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/NodeSetAccessor.h"
 #include "logdevice/common/NodeSetFinder.h"
@@ -191,7 +191,7 @@ class FindKeyRequest : public Request,
   const FindKeyAccuracy accuracy_;
 
   std::chrono::milliseconds running_timer_timeout_;
-  std::unique_ptr<LibeventTimer> client_timeout_timer_;
+  std::unique_ptr<Timer> client_timeout_timer_;
   std::chrono::time_point<std::chrono::steady_clock> client_timer_expiry_;
 
   // Result range.  Initially (0, LSN_MAX].  As storage nodes reply to our

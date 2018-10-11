@@ -27,7 +27,7 @@ TrimRSMRetryHandler::TrimRSMRetryHandler(logid_t delta_log_id,
       rsm_type_(rsm_type),
       ref_holder_(this) {
   retry_timer_ = std::make_unique<ExponentialBackoffTimer>(
-      EventLoop::onThisThread()->getEventBase(),
+
       std::bind(&TrimRSMRetryHandler::trimImpl, this),
       std::chrono::seconds{5},
       std::chrono::seconds{300});

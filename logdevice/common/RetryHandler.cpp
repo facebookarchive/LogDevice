@@ -15,7 +15,7 @@ namespace facebook { namespace logdevice {
 
 std::unique_ptr<BackoffTimer> RetryHandler::createRetryTimer(ShardID shard) {
   return std::make_unique<ExponentialBackoffTimer>(
-      Worker::onThisThread()->getEventBase(),
+
       [this, shard] { this->execute(shard); },
       retry_initial_delay_,
       retry_max_delay_);

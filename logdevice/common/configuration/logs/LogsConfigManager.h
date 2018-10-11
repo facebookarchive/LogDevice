@@ -137,7 +137,7 @@ class LogsConfigManager {
    * logsconfig-manager-grace-period setting. If the grace period is set to zero
    * then we publish the config on every change.
    */
-  LibeventTimer publish_timer_;
+  Timer publish_timer_;
   UpdateableSettings<Settings> settings_;
   std::shared_ptr<UpdateableConfig> updateable_config_;
   std::unique_ptr<LogsConfigStateMachine> state_machine_;

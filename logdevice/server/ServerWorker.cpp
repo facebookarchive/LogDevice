@@ -54,7 +54,7 @@ class ServerWorkerImpl {
    * Once executed, decides if this node is a controller or not
    * have to be destructed before the node_stats_controller_
    */
-  LibeventTimer node_stats_controller_locator_timer_;
+  Timer node_stats_controller_locator_timer_;
 };
 
 ServerWorker::ServerWorker(ServerProcessor* processor,
@@ -215,7 +215,6 @@ NodeStatsControllerCallback* ServerWorker::nodeStatsControllerCallback() const {
 void ServerWorker::initializeNodeStatsController() {
   impl_->node_stats_controller_ = std::make_unique<NodeStatsController>();
   impl_->node_stats_controller_locator_timer_.assign(
-      getEventBase(),
       [this, timer = &impl_->node_stats_controller_locator_timer_] {
         auto max_boycott_count =
             this->processor_->settings()

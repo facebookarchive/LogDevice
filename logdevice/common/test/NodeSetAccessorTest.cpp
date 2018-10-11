@@ -10,7 +10,7 @@
 #include <folly/Memory.h>
 #include <queue>
 #include "logdevice/common/configuration/Configuration.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/NodeSetAccessor.h"
 
 #include "logdevice/common/configuration/LocalLogsConfig.h"
@@ -224,7 +224,7 @@ class MockedStorageSetAccessor : public StorageSetAccessor {
                            test->timeout_),
         test_(test) {}
 
-  std::unique_ptr<LibeventTimer>
+  std::unique_ptr<Timer>
   createJobTimer(std::function<void()> /*callback*/) override {
     return nullptr;
   }

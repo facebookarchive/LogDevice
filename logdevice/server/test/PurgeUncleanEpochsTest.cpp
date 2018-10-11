@@ -11,7 +11,7 @@
 #include <memory>
 #include <vector>
 
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/test/MockBackoffTimer.h"

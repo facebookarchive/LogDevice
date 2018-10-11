@@ -40,7 +40,7 @@
 
 namespace facebook { namespace logdevice {
 
-class LibeventTimer;
+class Timer;
 
 class StorageSetAccessor {
  public:
@@ -293,9 +293,8 @@ class StorageSetAccessor {
                               CompletionCondition completion_cond);
 
  protected:
-  virtual std::unique_ptr<LibeventTimer>
-  createJobTimer(std::function<void()> callback);
-  virtual std::unique_ptr<LibeventTimer>
+  virtual std::unique_ptr<Timer> createJobTimer(std::function<void()> callback);
+  virtual std::unique_ptr<Timer>
   createGracePeriodTimer(std::function<void()> callback);
   virtual void cancelJobTimer();
   virtual void activateJobTimer();
@@ -400,7 +399,7 @@ class StorageSetAccessor {
   bool finished_{false};
   uint32_t wave_{0};
   std::unique_ptr<BackoffTimer> wave_timer_;
-  std::unique_ptr<LibeventTimer> grace_period_timer_;
+  std::unique_ptr<Timer> grace_period_timer_;
 
   // min and max timeout for sending waves in a backoff manner
   std::chrono::milliseconds wave_timeout_min_{500};
@@ -409,7 +408,7 @@ class StorageSetAccessor {
   std::function<void(void)> wave_preflight_{nullptr};
 
   // timer for controlling the timeout the entire operation
-  std::unique_ptr<LibeventTimer> job_timer_;
+  std::unique_ptr<Timer> job_timer_;
 
   // extra nodes to send to for each wave, by default send one extras each wave
   copyset_size_t extras_{1};

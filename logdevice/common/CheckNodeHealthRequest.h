@@ -15,7 +15,7 @@
 #include <boost/multi_index/sequenced_index.hpp>
 #include <boost/multi_index_container.hpp>
 
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/NodeSetState.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/settings/Settings.h"
@@ -90,7 +90,7 @@ class CheckNodeHealthRequest : public Request {
 
   std::weak_ptr<NodeSetState> nodeset_state_;
   std::chrono::steady_clock::time_point request_sent_time_;
-  std::unique_ptr<LibeventTimer> request_timeout_timer_;
+  std::unique_ptr<Timer> request_timeout_timer_;
   const bool enable_space_based_trimming_;
   SocketClosedCallback on_socket_close_;
 

@@ -18,7 +18,7 @@
 #include <folly/Memory.h>
 
 #include "logdevice/common/DataRecordOwnsPayload.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/ReaderImpl.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/common/test/TestUtil.h"

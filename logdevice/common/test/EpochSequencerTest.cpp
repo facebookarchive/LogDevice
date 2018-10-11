@@ -15,7 +15,7 @@
 #include "event2/buffer.h"
 #include "logdevice/common/Appender.h"
 #include "logdevice/common/EpochSequencer.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/MetaDataLogWriter.h"
 #include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/PassThroughCopySetManager.h"
@@ -224,8 +224,7 @@ class MockAppender : public Appender {
                  epoch_t(0),
                  /*size=*/size_t(0)),
         retire_after_(retire_after),
-        timer_(EventLoop::onThisThread()->getEventBase(),
-               [this] { onTimerFired(); }),
+        timer_([this] { onTimerFired(); }),
         test_(test) {
     sender_ = std::make_unique<MockSender>(this);
     ++test_->stats.appender_created;
@@ -362,7 +361,7 @@ class MockAppender : public Appender {
  private:
   // retire after this duration. if zero, Appender will not automatically retire
   std::chrono::milliseconds retire_after_;
-  LibeventTimer timer_;
+  Timer timer_;
 
   std::unique_ptr<STORE_Header> store_header_;
   // Recipient of first STORE message sent.

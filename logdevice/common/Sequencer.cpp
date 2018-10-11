@@ -456,7 +456,7 @@ class GetHistoricalMetaDataRequest : public FireAndForgetRequest {
     if (should_retry) {
       if (!backoff_timer_) {
         backoff_timer_ = std::make_unique<ExponentialBackoffTimer>(
-            EventLoop::onThisThread()->getEventBase(),
+
             [this]() { getMetaData(); },
             Worker::settings().sequencer_historical_metadata_retry_delay);
         backoff_timer_->randomize();

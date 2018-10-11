@@ -391,19 +391,15 @@ void CachedDigest::onDigestComplete() {
   all_digests_->eraseDigest(client_id_, stream_id_);
 }
 
-std::unique_ptr<LibeventTimer>
+std::unique_ptr<Timer>
 CachedDigest::createPushTimer(std::function<void()> callback) {
-  return std::make_unique<LibeventTimer>(
-      EventLoop::onThisThread()->getEventBase(), callback);
+  return std::make_unique<Timer>(callback);
 }
 
 std::unique_ptr<BackoffTimer>
 CachedDigest::createDelayTimer(std::function<void()> callback) {
   auto timer = std::make_unique<ExponentialBackoffTimer>(
-      EventLoop::onThisThread()->getEventBase(),
-      callback,
-      INITIAL_PUSH_DELAY,
-      MAX_PUSH_DELAY);
+      callback, INITIAL_PUSH_DELAY, MAX_PUSH_DELAY);
 
   timer->setTimeoutMap(&Worker::onThisThread()->commonTimeouts());
   return std::move(timer);
@@ -411,7 +407,8 @@ CachedDigest::createDelayTimer(std::function<void()> callback) {
 
 void CachedDigest::activatePushTimer() {
   ld_check(push_timer_ != nullptr);
-  push_timer_->activate(EventLoop::onThisThread()->zero_timeout_);
+  push_timer_->activate(
+      std::chrono::microseconds(0), &Worker::onThisThread()->commonTimeouts());
 }
 
 void CachedDigest::cancelPushTimer() {

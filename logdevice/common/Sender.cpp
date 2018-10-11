@@ -654,7 +654,7 @@ void Sender::runFlowGroups(RunType /*rt*/) {
       STAT_INCR(Worker::stats(), flow_groups_run_deadline_exceeded);
       flow_groups_run_requested_time_ = SteadyTimestamp::now();
       evtimer_add(flow_groups_run_deadline_exceeded_,
-                  Worker::onThisThread()->zero_timeout_);
+                  EventLoop::onThisThread()->zero_timeout_);
       break;
     }
   }

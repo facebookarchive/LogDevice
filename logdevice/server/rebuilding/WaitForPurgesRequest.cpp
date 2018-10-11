@@ -37,9 +37,8 @@ WaitForPurgesRequest::WaitForPurgesRequest(
 
 void WaitForPurgesRequest::executionBody() {
   retryTimer_ = std::make_unique<ExponentialBackoffTimer>(
-      Worker::onThisThread()->getEventBase(),
-      [this]() { tryAgain(); },
-      rebuildingSettings_->wait_purges_backoff_time);
+
+      [this]() { tryAgain(); }, rebuildingSettings_->wait_purges_backoff_time);
 
   tryAgain();
   // `this` may be destroyed.

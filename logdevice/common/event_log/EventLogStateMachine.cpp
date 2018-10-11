@@ -50,8 +50,7 @@ void EventLogStateMachine::start() {
   Worker* w = Worker::onThisThread(false);
   if (update_workers_) {
     ld_check(w);
-    gracePeriodTimer_.assign(
-        w->getEventBase(), [this] { updateWorkerShardStatusMap(); });
+    gracePeriodTimer_.assign([this] { updateWorkerShardStatusMap(); });
   }
 
   Parent::start();

@@ -208,7 +208,7 @@ void FailureDetector::startClusterStateTimer() {
     ld_info("Invalid get-cluster-state");
     buildInitialState();
   } else {
-    cs_timer_.assign(w->getEventBase(), [=] {
+    cs_timer_.assign([=] {
       if (waiting_for_cluster_state_) {
         ld_info("Timed out waiting for cluster state reply.");
         buildInitialState();
@@ -740,7 +740,7 @@ void FailureDetector::startSuspectTimer() {
   gossip_list_[my_idx] = 0;
   updateNodeState(my_idx, false, true, false);
 
-  suspect_timer_.assign(w->getEventBase(), [=] {
+  suspect_timer_.assign([=] {
     ld_info("Suspect timeout expired");
     updateNodeState(my_idx, false, true, false);
   });

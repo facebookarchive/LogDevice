@@ -228,7 +228,7 @@ class FailureDetector {
   class RandomSelector;
   class RoundRobinSelector;
 
-  LibeventTimer cs_timer_;
+  Timer cs_timer_;
   bool waiting_for_cluster_state_{true};
 
   // Don't rely on gossip() and detectFailures() to transition this node out
@@ -236,7 +236,7 @@ class FailureDetector {
   // sure that this node transitions from SUSPECT to ALIVE earliest(on this node
   // , as opposed to some other node). The rare case when this may not happen is
   // when gossip thread is not scheduled for some time.
-  LibeventTimer suspect_timer_;
+  Timer suspect_timer_;
   void startSuspectTimer();
 
   void startGossiping();

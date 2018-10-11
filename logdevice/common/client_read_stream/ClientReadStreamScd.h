@@ -20,7 +20,7 @@
 
 namespace facebook { namespace logdevice {
 
-class LibeventTimer;
+class Timer;
 
 /**
  * @file Contains the logic of the Single Copy Delivery (SCD) optimization
@@ -307,7 +307,7 @@ class ClientReadStreamScd : public boost::noncopyable {
     void activate();
 
     // The timer object.
-    std::unique_ptr<LibeventTimer> timer_;
+    std::unique_ptr<Timer> timer_;
     // Period of the timer.
     std::chrono::milliseconds period_;
     // LSN of the next record we expected to deliver the last time the timer

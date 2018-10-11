@@ -12,7 +12,7 @@
 
 #include "logdevice/common/CrossDomainCopySetSelector.h"
 #include "logdevice/common/EpochMetaData.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/LinearCopySetSelector.h"
 #include "logdevice/common/Mutator.h"
 #include "logdevice/common/Random.h"
@@ -138,7 +138,7 @@ class MockedNodeSetAccessor : public StorageSetAccessor {
     rng_ = test->rng_wrapper_.get();
   }
 
-  std::unique_ptr<LibeventTimer>
+  std::unique_ptr<Timer>
   createJobTimer(std::function<void()> /*callback*/) override {
     return nullptr;
   }

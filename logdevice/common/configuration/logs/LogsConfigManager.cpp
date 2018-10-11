@@ -177,7 +177,7 @@ void LogsConfigManager::activatePublishTimer() {
     // timer.
     Worker* w = Worker::onThisThread(true);
     if (!publish_timer_.isAssigned()) {
-      publish_timer_.assign(w->getEventBase(), [this] {
+      publish_timer_.assign([this] {
         // the tree may have been updated during grace_period, use
         // ReplicatedStateMachine::getState() to retrieve the current tree.
         updateLogsConfig(getStateMachine()->getState());
@@ -594,7 +594,7 @@ Request::Execution LogsConfigManagerReply::execute() {
     ld_check(insert_result.second);
 
     retry_timer_ = std::make_unique<ExponentialBackoffTimer>(
-        EventLoop::onThisThread()->getEventBase(),
+
         std::bind(&LogsConfigManagerReply::onRetry, this),
         std::chrono::milliseconds(10),
         std::chrono::milliseconds(100));

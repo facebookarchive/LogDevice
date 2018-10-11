@@ -8,7 +8,7 @@
 #include "ClientReadStreamCircularBuffer.h"
 
 #include "logdevice/common/DataRecordOwnsPayload.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/client_read_stream/ClientReadStream.h"
 #include "logdevice/common/debug.h"
 

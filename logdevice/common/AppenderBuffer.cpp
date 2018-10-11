@@ -21,8 +21,7 @@ namespace facebook { namespace logdevice {
 AppenderBufferQueue::AppenderBufferQueue(logid_t logid,
                                          AppenderBuffer* appender_buffer)
     : logid_(logid),
-      process_timer_(Worker::onThisThread()->getEventBase(),
-                     [this] { this->onTimerFired(); }),
+      process_timer_([this] { this->onTimerFired(); }),
       resume_callback_(AppenderBuffer::EMPTY_APPENDER_CB),
       appender_buffer_(appender_buffer) {
   ld_check(appender_buffer != nullptr);

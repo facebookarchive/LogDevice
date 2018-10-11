@@ -85,8 +85,7 @@ void RebuildingPlanner::activateRetryTimer() {
   if (!retry_timer_.isAssigned()) {
     const auto& retry_interval =
         rebuildingSettings_->rebuilding_planner_sync_seq_retry_interval;
-    retry_timer_.assign(EventLoop::onThisThread()->getEventBase(),
-                        [this] { retrySyncSequencerRequests(); },
+    retry_timer_.assign([this] { retrySyncSequencerRequests(); },
                         retry_interval.lo,
                         retry_interval.hi);
   }

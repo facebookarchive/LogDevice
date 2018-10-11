@@ -8,7 +8,7 @@
 
 #include <gtest/gtest.h>
 #include "logdevice/common/DataRecordOwnsPayload.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/client_read_stream/ClientReadStream.h"
 #include "logdevice/common/client_read_stream/ClientReadStreamBuffer.h"
 #include "logdevice/common/client_read_stream/ClientReadStreamBufferFactory.h"

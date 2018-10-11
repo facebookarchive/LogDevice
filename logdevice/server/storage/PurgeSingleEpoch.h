@@ -104,7 +104,7 @@ class PurgeSingleEpoch {
   PurgeUncleanEpochs* const driver_;
 
   std::unique_ptr<BackoffTimer> retry_timer_ = nullptr;
-  std::unique_ptr<LibeventTimer> deferredCompleteTimer_;
+  std::unique_ptr<Timer> deferredCompleteTimer_;
 
   State state_{State::UNKNOWN};
 

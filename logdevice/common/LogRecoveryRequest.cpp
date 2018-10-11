@@ -224,8 +224,7 @@ Request::Execution LogRecoveryRequest::execute() {
   }
 
   if (delay_ > std::chrono::milliseconds::zero()) {
-    start_delay_timer_ = std::make_unique<LibeventTimer>(
-        Worker::onThisThread()->getEventBase(), [this] { start(); });
+    start_delay_timer_ = std::make_unique<Timer>([this] { start(); });
 
     // Defer log recovery, for delay_ milliseconds. We do this when we retry
     // recovery after a soft error.
@@ -315,7 +314,7 @@ void LogRecoveryRequest::getLastCleanEpoch() {
 
   if (!lce_backoff_timer_) {
     lce_backoff_timer_.reset(new ExponentialBackoffTimer(
-        EventLoop::onThisThread()->getEventBase(),
+
         std::bind(&LogRecoveryRequest::getLastCleanEpoch, this),
         std::chrono::milliseconds(100),
         std::chrono::milliseconds(10000)));
@@ -665,7 +664,7 @@ void LogRecoveryRequest::readSequencerMetaData() {
 
   if (!seq_metadata_timer_) {
     auto timer = std::make_unique<ExponentialBackoffTimer>(
-        Worker::onThisThread()->getEventBase(),
+
         [this]() {
           ld_check(!seq_metadata_read_); // Otherwise timer should be cancelled
           readSequencerMetaData();
@@ -935,13 +934,12 @@ void LogRecoveryRequest::checkNodesForSeal() {
 
 void LogRecoveryRequest::activateCheckSealTimer() {
   if (check_seal_timer_ == nullptr) {
-    check_seal_timer_ = std::make_unique<LibeventTimer>(
-        EventLoop::onThisThread()->getEventBase(), [this] {
-          checkNodesForSeal();
-          // run the job periodically throughout the life time of this
-          // LogRecoveryRequest
-          activateCheckSealTimer();
-        });
+    check_seal_timer_ = std::make_unique<Timer>([this] {
+      checkNodesForSeal();
+      // run the job periodically throughout the life time of this
+      // LogRecoveryRequest
+      activateCheckSealTimer();
+    });
   }
   check_seal_timer_->activate(
       SEAL_CHECK_INTERVAL, &Worker::onThisThread()->commonTimeouts());
@@ -1324,8 +1322,7 @@ void LogRecoveryRequest::allEpochsRecovered() {
 void LogRecoveryRequest::completeSoon(Status status) {
   epoch_recovery_machines_.clear();
   deferredCompleteTimer_ =
-      std::make_unique<LibeventTimer>(EventLoop::onThisThread()->getEventBase(),
-                                      [this, status] { complete(status); });
+      std::make_unique<Timer>([this, status] { complete(status); });
   deferredCompleteTimer_->activate(
       std::chrono::milliseconds(0), &Worker::onThisThread()->commonTimeouts());
 }

@@ -12,7 +12,7 @@
 #include <folly/stats/BucketedTimeSeries-defs.h>
 #include <folly/stats/BucketedTimeSeries.h>
 
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/configuration/Node.h"
 #include "logdevice/server/sequencer_boycotting/MovingAverageAppendOutlierDetector.h"
@@ -181,8 +181,8 @@ class NodeStatsController : public NodeStatsControllerCallback {
  private:
   bool is_started_{false};
 
-  LibeventTimer aggregation_timer_;
-  LibeventTimer response_timer_;
+  Timer aggregation_timer_;
+  Timer response_timer_;
 
   /**
    * Set before sending a message. Used to not have to not get the current time

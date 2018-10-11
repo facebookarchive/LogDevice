@@ -26,6 +26,7 @@
 #include "logdevice/common/RunState.h"
 #include "logdevice/common/ThreadID.h"
 #include "logdevice/common/TimeoutMap.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/common/util.h"
 #include "logdevice/common/WorkerType.h"
@@ -732,7 +733,7 @@ class Worker : public EventLoop {
 
   // timer that checks requestsPending() == 0 and !sender().isConnected() and
   // calls Processor's noteWorkerQuiescent() once both are true.
-  std::unique_ptr<LibeventTimer> requests_pending_timer_;
+  std::unique_ptr<Timer> requests_pending_timer_;
 
   // Force abort pending requests. This is a derived timer based on
   // requests_pending_timer to force abort the requests.
@@ -753,14 +754,14 @@ class Worker : public EventLoop {
 
   // timer that checks stuck requests and update counter if there are some
   // stuck requests
-  LibeventTimer requests_stuck_timer_;
+  std::unique_ptr<Timer> requests_stuck_timer_;
 
   // true iff we've called flushOutputAndClose() on sender().
   bool waiting_for_sockets_to_close_{false};
 
   // used to dispose concluded MetaDataLogReader objects and their associated
   // ClientReadStream objects
-  std::unique_ptr<LibeventTimer> dispose_metareader_timer_;
+  std::unique_ptr<Timer> dispose_metareader_timer_;
 
   // finished MetaDataLogReader objects to be disposed
   std::queue<std::unique_ptr<MetaDataLogReader>> finished_meta_readers_;
@@ -776,11 +777,10 @@ class Worker : public EventLoop {
 
   // Timer for the worker to periodically report its load, and associated
   // state required to calculate recent load. See reportLoad().
-  LibeventTimer load_timer_;
+  std::unique_ptr<Timer> load_timer_;
   int64_t last_load_ = -1;
   std::chrono::steady_clock::time_point last_load_time_;
-
-  LibeventTimer isolation_timer_;
+  std::unique_ptr<Timer> isolation_timer_;
 
   // Size limit for commonTimeouts_ (NB: libevent has a default upper bound
   // of MAX_COMMON_TIMEOUTS = 256)

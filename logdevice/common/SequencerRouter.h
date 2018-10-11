@@ -11,7 +11,7 @@
 #include <unordered_map>
 
 #include "logdevice/common/ClusterState.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/common/util.h"
 #include "logdevice/common/WeakRefHolder.h"
@@ -202,7 +202,7 @@ class SequencerRouter {
   // Timer for cluster state refresh; It starts before onSequencerKnown() is
   // called. When this timer expires, it calls callback to refresh cluster
   // state. Here we also set a timeout for cluster_state_refresh_timer_.
-  LibeventTimer cluster_state_refresh_timer_;
+  Timer cluster_state_refresh_timer_;
 };
 
 }} // namespace facebook::logdevice

@@ -313,22 +313,22 @@ class MockLogRebuilding : public LogRebuilding {
     return nullptr;
   }
 
-  std::unique_ptr<LibeventTimer> createIteratorTimer() override {
+  std::unique_ptr<Timer> createIteratorTimer() override {
     return nullptr;
   }
 
-  virtual std::unique_ptr<LibeventTimer> createStallTimer() override {
+  virtual std::unique_ptr<Timer> createStallTimer() override {
     stallTimerCreated = true;
     return nullptr;
   }
 
-  virtual std::unique_ptr<LibeventTimer>
+  virtual std::unique_ptr<Timer>
   createNotifyRebuildingCoordinatorTimer() override {
     notifyRebuildingCoordinatorTimerCreated = true;
     return nullptr;
   }
 
-  virtual std::unique_ptr<LibeventTimer> createReadNewBatchTimer() override {
+  virtual std::unique_ptr<Timer> createReadNewBatchTimer() override {
     readNewBatchTimerCreated = true;
     return nullptr;
   }

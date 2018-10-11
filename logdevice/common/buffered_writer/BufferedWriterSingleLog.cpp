@@ -20,7 +20,7 @@
 #include "logdevice/common/AppendRequest.h"
 #include "logdevice/common/Checksum.h"
 #include "logdevice/common/debug.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/SimpleEnumMap.h"
 #include "logdevice/common/Worker.h"
@@ -481,12 +481,11 @@ void BufferedWriterSingleLog::activateTimeTrigger() {
 
   Worker* w = Worker::onThisThread();
   if (!time_trigger_timer_) {
-    time_trigger_timer_ =
-        std::make_unique<LibeventTimer>(w->getEventBase(), [this] {
-          StatsHolder* stats{parent_->parent_->processor()->stats_};
-          STAT_INCR(stats, buffered_writer_time_trigger_flush);
-          flush();
-        });
+    time_trigger_timer_ = std::make_unique<Timer>([this] {
+      StatsHolder* stats{parent_->parent_->processor()->stats_};
+      STAT_INCR(stats, buffered_writer_time_trigger_flush);
+      flush();
+    });
   }
   if (!time_trigger_timer_->isActive()) {
     time_trigger_timer_->activate(options.time_trigger, &w->commonTimeouts());
@@ -514,8 +513,6 @@ int BufferedWriterSingleLog::scheduleRetry(Batch& batch,
     return -1;
   }
 
-  Worker* w = Worker::onThisThread();
-
   // Initialize `retry_timer' if this is the first retry
   if (!batch.retry_timer) {
     ld_check(options.retry_initial_delay.count() >= 0);
@@ -525,7 +522,6 @@ int BufferedWriterSingleLog::scheduleRetry(Batch& batch,
     max_delay = std::max(max_delay, options.retry_initial_delay);
 
     batch.retry_timer = std::make_unique<ExponentialBackoffTimer>(
-        w->getEventBase(),
         [this, &batch]() { sendBatch(batch); },
         options.retry_initial_delay,
         max_delay);

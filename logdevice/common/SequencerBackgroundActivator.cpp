@@ -178,7 +178,7 @@ void SequencerBackgroundActivator::activateQueueProcessingTimer() {
   Worker* w = Worker::onThisThread();
   ld_check(w);
   if (!retry_timer_.isAssigned()) {
-    retry_timer_.assign(w->getEventBase(), [this] { maybeProcessQueue(); });
+    retry_timer_.assign([this] { maybeProcessQueue(); });
   }
   auto timeout =
       Worker::settings().sequencer_background_activation_retry_interval;

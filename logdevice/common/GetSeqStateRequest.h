@@ -19,7 +19,7 @@
 #include "logdevice/common/BWAvailableCallback.h"
 #include "logdevice/common/ExponentialBackoffTimer.h"
 #include "logdevice/common/GetSeqStateRequest-fwd.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/SequencerRouter.h"
 #include "logdevice/common/settings/Settings.h"
@@ -323,7 +323,7 @@ class GetSeqStateRequest : public Request, public SequencerRouter::Handler {
 
   // Timer used to select a different node if the current one takes too long to
   // respond.
-  LibeventTimer reply_timer_;
+  Timer reply_timer_;
 
   // Timer used to retry GET_SEQ_STATE request if sequencer bringup is
   // in progress. As long as the sequencer node replies with E:AGAIN until

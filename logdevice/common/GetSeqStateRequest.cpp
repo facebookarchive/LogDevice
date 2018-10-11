@@ -563,17 +563,13 @@ void GetSeqStateRequest::retrySending() {
 }
 
 void GetSeqStateRequest::setupTimers() {
-  Worker* worker = Worker::onThisThread();
-
   auto on_reply_timeout = [this] { onReplyTimeout(dest_); };
-  reply_timer_.assign(worker->getEventBase(), on_reply_timeout);
+  reply_timer_.assign(on_reply_timeout);
   // reply_timer_ is activated after sending a message
 
   // setting up exponential backoff timer
   backoff_timer_ = std::make_unique<ExponentialBackoffTimer>(
-      EventLoop::onThisThread()->getEventBase(),
-      std::function<void()>(),
-      Worker::settings().seq_state_backoff_time);
+      std::function<void()>(), Worker::settings().seq_state_backoff_time);
   ld_check(backoff_timer_ != nullptr);
   backoff_timer_->setTimeoutMap(&Worker::onThisThread()->commonTimeouts());
   backoff_timer_->setCallback(

@@ -11,7 +11,7 @@
 
 #include "logdevice/common/AllSequencers.h"
 #include "logdevice/common/debug.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/MetaDataLogWriter.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Sequencer.h"

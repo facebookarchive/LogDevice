@@ -56,10 +56,8 @@ EpochRecovery::EpochRecovery(logid_t log_id,
                // settings allow _and_ log id is not a metadata log
                !MetaDataLog::isMetaDataLog(log_id_) &&
                deps_->getSettings().bridge_record_in_empty_epoch}),
-      grace_period_(
-          deps_->createLibeventTimer([this] { onGracePeriodExpired(); })),
-      mutation_and_cleaning_(
-          deps_->createLibeventTimer([this] { onTimeout(); })) {
+      grace_period_(deps_->createTimer([this] { onGracePeriodExpired(); })),
+      mutation_and_cleaning_(deps_->createTimer([this] { onTimeout(); })) {
   ld_check(log_id_ != LOGID_INVALID);
   ld_check(epoch_ != EPOCH_INVALID);
   ld_check(deps_ != nullptr);
@@ -1849,19 +1847,15 @@ void EpochRecoveryDependencies::noteMutationsCompleted(
 std::unique_ptr<BackoffTimer> EpochRecoveryDependencies::createBackoffTimer(
     const chrono_expbackoff_t<std::chrono::milliseconds>& backoff,
     std::function<void()> callback) {
-  auto timer = std::make_unique<ExponentialBackoffTimer>(
-      EventLoop::onThisThread()->getEventBase(), std::move(callback), backoff);
+  auto timer =
+      std::make_unique<ExponentialBackoffTimer>(std::move(callback), backoff);
   timer->setTimeoutMap(&Worker::onThisThread()->commonTimeouts());
   return std::move(timer);
 }
 
-std::unique_ptr<LibeventTimer>
-EpochRecoveryDependencies::createLibeventTimer(std::function<void()> cb) {
-  auto timer = std::make_unique<LibeventTimer>(
-      EventLoop::onThisThread()->getEventBase());
-  if (cb != nullptr) {
-    timer->setCallback(cb);
-  }
+std::unique_ptr<Timer>
+EpochRecoveryDependencies::createTimer(std::function<void()> cb) {
+  auto timer = std::make_unique<Timer>(cb);
   return timer;
 }
 

@@ -243,7 +243,7 @@ class ShardRebuildingV1 : public ShardRebuildingInterface {
 
     // This timer is created lazily and started when the LogRebuilding State
     // machine has reached until_lsn but not all records are durable.
-    std::unique_ptr<LibeventTimer> restartTimer;
+    std::unique_ptr<Timer> restartTimer;
 
     // When a LogRebuilding state machine reaches past the local timestamp
     // window, it notifies us through a call to onLogRebuildingWindowEnd() and
@@ -372,7 +372,7 @@ class ShardRebuildingV1 : public ShardRebuildingInterface {
   // until memory usage comes below the limit. This timer is activated
   // when the limit is exceeded and on expiry, schedules the logs
   // with non-zero memory usage for restart
-  std::unique_ptr<LibeventTimer> stallTimer_;
+  std::unique_ptr<Timer> stallTimer_;
 
   // End of the local timestamp window for this shard. The local timestamp
   // window is smaller than the global timestamp window.  Each time a
