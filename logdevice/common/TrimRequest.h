@@ -90,6 +90,10 @@ class TrimRequest : public Request {
     bypass_write_token_check_ = true;
   }
 
+  void bypassTailLSNCheck() {
+    bypass_tail_lsn_check_ = true;
+  }
+
  private:
   void fetchLogConfig();
 
@@ -154,6 +158,7 @@ class TrimRequest : public Request {
   worker_id_t target_worker_{-1};
 
   bool bypass_write_token_check_ = false;
+  bool bypass_tail_lsn_check_ = false;
 
   std::unique_ptr<NodeSetFinder> nodeset_finder_{nullptr};
   std::unique_ptr<StorageSetAccessor> storage_set_accessor_{nullptr};

@@ -584,6 +584,9 @@ void TrimMetaDataLogRequest::trimMetaDataLog() {
   // set the request affinity to the same worker thread
   request->setTargetWorker(current_worker_);
   request->bypassWriteTokenCheck();
+  // This is a hack to work around SyncSequencerRequest returning underestimated
+  // next_lsn for metadata logs.
+  request->bypassTailLSNCheck();
 
   std::unique_ptr<Request> req(std::move(request));
   int rv = processor_->postWithRetrying(req);
