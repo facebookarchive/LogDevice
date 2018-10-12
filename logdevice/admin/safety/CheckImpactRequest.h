@@ -16,6 +16,8 @@
 #include "logdevice/common/ShardID.h"
 
 namespace facebook { namespace logdevice {
+class ReplicationProperty;
+
 namespace configuration {
 class InternalLogs;
 }
@@ -98,7 +100,8 @@ class CheckImpactRequest : public Request {
                                   int impact_result,
                                   logid_t log_id,
                                   epoch_t error_epoch,
-                                  std::string message);
+                                  StorageSet storage_set,
+                                  ReplicationProperty replication);
   ShardAuthoritativeStatusMap status_map_;
   ShardSet shards_;
   int operations_{0};
@@ -109,9 +112,7 @@ class CheckImpactRequest : public Request {
   size_t logs_done_{0};
 
   int impact_result_all_{0};
-  std::vector<logid_t> sampled_error_logs_;
-  std::vector<epoch_t> sampled_error_epochs_;
-  std::vector<logid_t> logs_affected_;
+  std::vector<Impact::ImpactOnEpoch> affected_logs_sample_;
   bool internal_logs_affected_{false};
   size_t in_flight_{0};
 

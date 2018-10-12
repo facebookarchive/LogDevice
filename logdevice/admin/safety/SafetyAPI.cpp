@@ -16,19 +16,16 @@ namespace facebook { namespace logdevice {
 
 Impact::Impact(Status status,
                int result,
-               std::string details,
-               std::vector<logid_t> logs_affected,
+               std::vector<ImpactOnEpoch> logs_affected,
                bool internal_logs_affected)
     : status(status),
       result(result),
-      details(std::move(details)),
       logs_affected(std::move(logs_affected)),
       internal_logs_affected(internal_logs_affected) {}
 
 Impact::Impact(Status status)
     : status(status),
       result(ImpactResult::INVALID),
-      details("FAILED"),
       internal_logs_affected(false) {
   ld_assert(status != E::OK);
 }
@@ -36,7 +33,6 @@ Impact::Impact(Status status)
 Impact::Impact()
     : status(E::OK),
       result(ImpactResult::NONE),
-      details(""),
       internal_logs_affected(false) {}
 
 std::string Impact::toStringImpactResult(int result) {
@@ -66,7 +62,7 @@ std::string Impact::toStringImpactResult(int result) {
 }
 
 std::string Impact::toString() const {
-  return toStringImpactResult(result) + ". " + details;
+  return toStringImpactResult(result);
 }
 
 int parseSafetyMargin(const std::string& descriptor, SafetyMargin& out) {

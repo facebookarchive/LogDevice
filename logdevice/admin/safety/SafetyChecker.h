@@ -63,6 +63,11 @@ class SafetyChecker {
                      SafetyMargin safety_margin = SafetyMargin(),
                      std::vector<logid_t> logids_to_check = {});
 
+  static std::string
+  impactToString(const ShardSet& shards,
+                 const ShardAuthoritativeStatusMap& shard_status,
+                 const Impact& impact);
+
  private:
   Processor* processor_;
   std::chrono::milliseconds timeout_;

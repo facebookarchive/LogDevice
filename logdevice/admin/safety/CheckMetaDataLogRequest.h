@@ -41,7 +41,8 @@ class CheckMetaDataLogRequest : public Request {
       logid_t,
       epoch_t,    // Which epoch in logid_t has failed the safety check
       StorageSet, // The storage set that caused the failure (if st != E::OK)
-      std::string)>;
+      ReplicationProperty // The replication property for the offending epoch
+      )>;
 
   /**
    * create a CheckMetaDataLogRequest. CheckMetaDataLogRequest verifies that
@@ -77,10 +78,10 @@ class CheckMetaDataLogRequest : public Request {
 
   Request::Execution execute() override;
   void complete(Status st,
-                int, // impact result bit set
-                epoch_t error_epoch,
-                StorageSet storage_set,
-                std::string message);
+                int = Impact::ImpactResult::INVALID, // impact result bit set
+                epoch_t error_epoch = EPOCH_INVALID,
+                StorageSet storage_set = {},
+                ReplicationProperty replication = ReplicationProperty());
 
   /*
    * Instructs this utility to not assume the server is recent enough to be able

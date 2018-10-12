@@ -96,7 +96,11 @@ void CheckMetaDataLogRequest::checkMetadataNodeset() {
   auto metadatalogs_config = config->serverConfig()->getMetaDataLogsConfig();
   auto metadatalog_group = config->serverConfig()->getMetaDataLogGroup();
   if (!metadatalog_group) {
-    complete(E::OK, Impact::ImpactResult::NONE, EPOCH_INVALID, {}, "");
+    complete(E::OK,
+             Impact::ImpactResult::NONE,
+             EPOCH_INVALID,
+             {},
+             ReplicationProperty());
     return;
   }
   ReplicationProperty replication_property =
@@ -113,7 +117,6 @@ void CheckMetaDataLogRequest::checkMetadataNodeset() {
   std::tie(safe_reads, safe_writes, fail_scope) =
       checkReadWriteAvailablity(storage_set, replication_property);
 
-  std::string message;
   if (!safe_writes) {
     impact_result |= Impact::ImpactResult::WRITE_AVAILABILITY_LOSS;
   }
@@ -121,31 +124,26 @@ void CheckMetaDataLogRequest::checkMetadataNodeset() {
     impact_result |= Impact::ImpactResult::READ_AVAILABILITY_LOSS;
     ld_debug("It is safe to perform operations on metadata nodes");
   }
-  if (impact_result != Impact::ImpactResult::NONE) {
-    message = "Operation would cause loss of read "
-              "or write availability for metadata logs";
-    ld_warning("ERROR: %s", message.c_str());
-  }
 
   complete(E::OK,
            impact_result,
            EPOCH_INVALID,
            std::move(storage_set),
-           std::move(message));
+           replication_property);
 }
 
 void CheckMetaDataLogRequest::complete(Status st,
                                        int impact_result,
                                        epoch_t error_epoch,
                                        StorageSet storage_set,
-                                       std::string message) {
+                                       ReplicationProperty replication) {
   // call user provided callback
   callback_(st,
             impact_result,
             log_id_,
             error_epoch,
             std::move(storage_set),
-            std::move(message));
+            std::move(replication));
 
   // destroy the request
   delete this;
@@ -163,7 +161,11 @@ void CheckMetaDataLogRequest::fetchHistoricalMetadata() {
             // E::NOTFOUND - metadata not provisioned
             // is ignored as this means log is empty
             // We treat as it's safe for the above reasons
-            complete(E::OK, Impact::ImpactResult::NONE, EPOCH_INVALID, {}, "");
+            complete(E::OK,
+                     Impact::ImpactResult::NONE,
+                     EPOCH_INVALID,
+                     {},
+                     ReplicationProperty());
             return;
           }
           std::string message =
@@ -172,8 +174,7 @@ void CheckMetaDataLogRequest::fetchHistoricalMetadata() {
                   log_id_.val(),
                   error_description(st))
                   .str();
-          complete(
-              st, Impact::ImpactResult::INVALID, EPOCH_INVALID, {}, message);
+          complete(st);
           return; // `this` has been destroyed.
         }
 
@@ -184,7 +185,11 @@ void CheckMetaDataLogRequest::fetchHistoricalMetadata() {
             return;
           }
         }
-        complete(E::OK, Impact::ImpactResult::NONE, EPOCH_INVALID, {}, "");
+        complete(E::OK,
+                 Impact::ImpactResult::NONE,
+                 EPOCH_INVALID,
+                 {},
+                 ReplicationProperty());
       },
       (read_epoch_metadata_from_sequencer_
            ? NodeSetFinder::Source::BOTH
@@ -219,9 +224,9 @@ ReplicationProperty CheckMetaDataLogRequest::extendReplicationWithSafetyMargin(
         }
         // required to bypass ReplicationProperty validation
         // as lower scope can't be smaller
-        int max_for_higher_domians = std::max(replication, prev);
-        replication_new.setReplication(scope, max_for_higher_domians);
-        prev = max_for_higher_domians;
+        int max_for_higher_domains = std::max(replication, prev);
+        replication_new.setReplication(scope, max_for_higher_domains);
+        prev = max_for_higher_domains;
       }
     }
     scope = NodeLocation::nextSmallerScope(scope);
@@ -298,7 +303,7 @@ bool CheckMetaDataLogRequest::onEpochMetaData(EpochMetaData metadata) {
            impact_result,
            metadata.h.effective_since,
            std::move(metadata.shards),
-           std::move(message));
+           std::move(metadata.replication));
   return false;
 }
 

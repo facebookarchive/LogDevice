@@ -43,7 +43,6 @@ Request::Execution CheckImpactRequest::execute() {
     callback_(Impact(
         E::INVALID_PARAM,
         Impact::ImpactResult::INVALID,
-        "You have to select either disable_reads, disable_writes or both",
         {}));
     callback_called_ = true;
     return Request::Execution::COMPLETE;
@@ -96,12 +95,16 @@ int CheckImpactRequest::requestSingleLog(logid_t log_id) {
                      int impact_result,
                      logid_t completed_log_id,
                      epoch_t error_epoch,
-                     StorageSet /*unused*/,
-                     std::string message) {
+                     StorageSet storage_set,
+                     ReplicationProperty replication) {
     ticket.postCallbackRequest([=](CheckImpactRequest* rq) {
       if (rq) {
-        rq->onCheckMetadataLogResponse(
-            st, impact_result, completed_log_id, error_epoch, message);
+        rq->onCheckMetadataLogResponse(st,
+                                       impact_result,
+                                       completed_log_id,
+                                       error_epoch,
+                                       storage_set,
+                                       std::move(replication));
       }
     });
   };
@@ -187,11 +190,13 @@ void CheckImpactRequest::requestNextBatch() {
                  submitted);
 }
 
-void CheckImpactRequest::onCheckMetadataLogResponse(Status st,
-                                                    int impact_result,
-                                                    logid_t log_id,
-                                                    epoch_t error_epoch,
-                                                    std::string message) {
+void CheckImpactRequest::onCheckMetadataLogResponse(
+    Status st,
+    int impact_result,
+    logid_t log_id,
+    epoch_t error_epoch,
+    StorageSet storage_set,
+    ReplicationProperty replication) {
   ld_debug("Response from %zu: %s", log_id.val_, error_description(st));
   --in_flight_;
   ++logs_done_;
@@ -217,28 +222,25 @@ void CheckImpactRequest::onCheckMetadataLogResponse(Status st,
           std::chrono::seconds{5},
           1,
           "Operation is unsafe on the metadata log(s), status: %s, "
-          "impact: %s. %s",
+          "impact: %s.",
           error_name(st),
-          Impact::toStringImpactResult(impact_result).c_str(),
-          message.c_str());
+          Impact::toStringImpactResult(impact_result).c_str());
     } else {
       RATELIMIT_WARNING(std::chrono::seconds{5},
                         1,
                         "Operation is unsafe on log %lu%s), status: %s, "
-                        "impact: %s. %s",
+                        "impact: %s.",
                         log_id.val_,
                         internal_logs_complete_ ? "" : " *Internal Log*",
                         error_name(st),
-                        Impact::toStringImpactResult(impact_result).c_str(),
-                        message.c_str());
+                        Impact::toStringImpactResult(impact_result).c_str());
     }
 
     impact_result_all_ |= impact_result;
-    if (sampled_error_logs_.size() < error_sample_size_) {
-      sampled_error_logs_.push_back(log_id);
-      sampled_error_epochs_.push_back(error_epoch);
+    if (affected_logs_sample_.size() < error_sample_size_) {
+      affected_logs_sample_.push_back(Impact::ImpactOnEpoch(
+          log_id, error_epoch, storage_set, replication, impact_result));
     }
-    logs_affected_.push_back(log_id);
     if (log_id == LOGID_INVALID || !internal_logs_complete_) {
       internal_logs_affected_ = true;
     }
@@ -301,39 +303,9 @@ void CheckImpactRequest::complete(Status st) {
           total_time,
           logs_done_);
 
-  std::unordered_set<node_index_t> nodes_to_drain;
-  for (const auto& shard_id : shards_) {
-    nodes_to_drain.insert(shard_id.node());
-  }
-
-  std::stringstream ss;
-  if (st != E::OK) {
-    ss << "ERROR: Could NOT determine impact of all logs. "
-          "Sample (log_id, epoch) pairs affected: ";
-  } else if (impact_result_all_ != Impact::ImpactResult::NONE) {
-    ss << folly::format(
-              "UNSAFE: Operation(s) on ({} shards, {} nodes) would cause "
-              "{} for some log(s), as in "
-              "that storage set, as not enough domains would be "
-              "available. Sample (log_id, epoch) pairs affected: ",
-              shards_.size(),
-              nodes_to_drain.size(),
-              Impact::toStringImpactResult(impact_result_all_).c_str())
-              .str();
-  }
-  ld_check(sampled_error_logs_.size() == sampled_error_epochs_.size());
-  for (int i = 0; i < sampled_error_logs_.size(); ++i) {
-    ss << folly::format("({}, {})",
-                        sampled_error_logs_[i].val(),
-                        sampled_error_epochs_[i].val());
-    if (i < sampled_error_logs_.size() - 1) {
-      ss << "; ";
-    }
-  }
   callback_(Impact(st,
                    impact_result_all_,
-                   ss.str(),
-                   logs_affected_,
+                   std::move(affected_logs_sample_),
                    internal_logs_affected_));
   callback_called_ = true;
   deleteThis();

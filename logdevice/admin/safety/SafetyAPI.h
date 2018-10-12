@@ -8,15 +8,40 @@
 #pragma once
 
 #include <map>
+#include "logdevice/common/ShardID.h"
+#include "logdevice/common/configuration/ReplicationProperty.h"
+#include "logdevice/common/types_internal.h"
+#include "logdevice/include/Err.h"
 #include "logdevice/include/NodeLocationScope.h"
 #include "logdevice/include/types.h"
-#include "logdevice/include/Err.h"
 
 namespace facebook { namespace logdevice {
 
 using SafetyMargin = std::map<NodeLocationScope, int>;
 
 struct Impact {
+  /**
+   * A data structure that holds the operation impact on a specific epoch in a
+   * log.
+   */
+  struct ImpactOnEpoch {
+    logid_t log_id = LOGID_INVALID;
+    epoch_t epoch = EPOCH_INVALID;
+    StorageSet storage_set;
+    ReplicationProperty replication;
+    int impact_result = ImpactResult::INVALID;
+    ImpactOnEpoch(logid_t log_id,
+                  epoch_t epoch,
+                  StorageSet storage_set,
+                  ReplicationProperty replication,
+                  int impact_result)
+        : log_id(log_id),
+          epoch(epoch),
+          storage_set(storage_set),
+          replication(std::move(replication)),
+          impact_result(impact_result) {}
+  };
+
   enum ImpactResult {
     NONE = 0,
     // operation could lead to rebuilding stall, as full rebuilding
@@ -39,10 +64,9 @@ struct Impact {
   Status status;
   // bit set of ImpactResult
   int32_t result;
-  std::string details;
 
   // Set of data logs affected.
-  std::vector<logid_t> logs_affected;
+  std::vector<ImpactOnEpoch> logs_affected;
 
   // Whether metadata logs are also affected (ie the operations have impact on
   // the metadata nodeset or the internal logs).
@@ -50,8 +74,7 @@ struct Impact {
 
   Impact(Status status,
          int result,
-         std::string details = "",
-         std::vector<logid_t> logs_affected = {},
+         std::vector<ImpactOnEpoch> logs_affected = {},
          bool internal_logs_affected = false);
 
   // A helper constructor that must only be used if status != E::OK
