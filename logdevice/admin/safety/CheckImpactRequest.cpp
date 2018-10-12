@@ -8,7 +8,7 @@
 #include "logdevice/admin/safety/CheckImpactRequest.h"
 
 #include "logdevice/admin/safety/CheckMetaDataLogRequest.h"
-#include "logdevice/common/LibeventTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/Processor.h"
 
 using namespace facebook::logdevice::configuration;
@@ -62,8 +62,7 @@ Request::Execution CheckImpactRequest::execute() {
 
   auto ret = start();
   if (ret == Request::Execution::CONTINUE) {
-    timeout_timer_ = std::make_unique<LibeventTimer>(
-        Worker::onThisThread()->getEventBase(),
+    timeout_timer_ = std::make_unique<Timer>(
         std::bind(&CheckImpactRequest::onTimeout, this));
     // Insert request into map for worker to track it
     auto insert_result =

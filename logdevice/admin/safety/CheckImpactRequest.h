@@ -18,7 +18,7 @@
 
 namespace facebook { namespace logdevice {
 class ReplicationProperty;
-class LibeventTimer;
+class Timer;
 
 namespace configuration {
 class InternalLogs;
@@ -146,6 +146,6 @@ class CheckImpactRequest : public Request {
   // The final status of this request
   Status st_{E::OK};
 
-  std::unique_ptr<LibeventTimer> timeout_timer_;
+  std::unique_ptr<Timer> timeout_timer_;
 };
 }} // namespace facebook::logdevice
