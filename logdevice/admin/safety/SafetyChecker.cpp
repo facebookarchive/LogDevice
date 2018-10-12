@@ -59,6 +59,7 @@ SafetyChecker::checkImpact(const ShardAuthoritativeStatusMap& shard_status,
     impact_result = std::move(impact);
   };
 
+  WorkerType worker_type = CheckImpactRequest::workerType(processor_);
   std::unique_ptr<Request> request =
       std::make_unique<CheckImpactRequest>(shard_status,
                                            shards,
@@ -69,6 +70,7 @@ SafetyChecker::checkImpact(const ShardAuthoritativeStatusMap& shard_status,
                                            abort_on_error_,
                                            timeout_,
                                            error_sample_size_,
+                                           worker_type,
                                            cb);
   int rv = processor_->postRequest(request);
   if (rv != 0) {

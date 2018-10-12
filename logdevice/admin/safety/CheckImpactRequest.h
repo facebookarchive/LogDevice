@@ -46,8 +46,16 @@ class CheckImpactRequest : public Request {
                      bool abort_on_error,
                      std::chrono::milliseconds per_log_timeout,
                      size_t error_sample_size,
+                     WorkerType worker_type,
                      Callback cb);
   Request::Execution execute() override;
+
+  /**
+   * Use this function to decide whether the request will be scheduled on
+   * GENERAL or BACKGROUND worker pool
+   */
+  static WorkerType workerType(Processor* processor);
+  WorkerType getWorkerTypeAffinity() override;
   ~CheckImpactRequest() override;
 
  private:
@@ -122,6 +130,7 @@ class CheckImpactRequest : public Request {
   // TODO(T28386689): Set automatically to true once sequencers get the ability
   // to update their in-memory metadata cache after trims.
   bool read_epoch_metadata_from_sequencer_{false};
+  WorkerType worker_type_;
   Callback callback_;
   WorkerCallbackHelper<CheckImpactRequest> metadata_check_callback_helper_;
   bool callback_called_{false};

@@ -23,6 +23,7 @@ CheckImpactRequest::CheckImpactRequest(
     bool abort_on_error,
     std::chrono::milliseconds per_log_timeout,
     size_t error_sample_size,
+    WorkerType worker_type,
     Callback cb)
     : Request(RequestType::CHECK_IMPACT),
       status_map_(std::move(status_map)),
@@ -34,16 +35,27 @@ CheckImpactRequest::CheckImpactRequest(
       abort_on_error_(abort_on_error),
       per_log_timeout_(per_log_timeout),
       error_sample_size_(error_sample_size),
+      worker_type_(worker_type),
       callback_(std::move(cb)),
       metadata_check_callback_helper_(this) {}
+
+WorkerType CheckImpactRequest::workerType(Processor* processor) {
+  // This returns either WorkerType::BACKGROUND or WorkerType::GENERAL based
+  // on whether we have background workers.
+  if (processor->getWorkerCount(WorkerType::BACKGROUND) > 0) {
+    return WorkerType::BACKGROUND;
+  }
+  return WorkerType::GENERAL;
+}
+
+WorkerType CheckImpactRequest::getWorkerTypeAffinity() {
+  return worker_type_;
+}
 
 Request::Execution CheckImpactRequest::execute() {
   if ((operations_ & (Operation::DISABLE_WRITES | Operation::DISABLE_READS)) ==
       0) {
-    callback_(Impact(
-        E::INVALID_PARAM,
-        Impact::ImpactResult::INVALID,
-        {}));
+    callback_(Impact(E::INVALID_PARAM, Impact::ImpactResult::INVALID, {}));
     callback_called_ = true;
     return Request::Execution::COMPLETE;
   }
@@ -122,6 +134,7 @@ int CheckImpactRequest::requestSingleLog(logid_t log_id) {
                                                        operations_,
                                                        safety_margin_,
                                                        is_metadata,
+                                                       worker_type_,
                                                        cb);
   if (read_epoch_metadata_from_sequencer_) {
     req->readEpochMetaDataFromSequencer();

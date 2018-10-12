@@ -23,6 +23,7 @@ CheckMetaDataLogRequest::CheckMetaDataLogRequest(
     int operations,
     SafetyMargin safety_margin,
     bool check_metadata_nodeset,
+    WorkerType worker_type,
     Callback callback)
     : Request(RequestType::CHECK_METADATA_LOG),
       log_id_(log_id),
@@ -32,6 +33,7 @@ CheckMetaDataLogRequest::CheckMetaDataLogRequest(
       operations_(operations),
       safety_margin_(std::move(safety_margin)),
       check_metadata_nodeset_(check_metadata_nodeset),
+      worker_type_(worker_type),
       callback_(std::move(callback)) {
   if (!check_metadata_nodeset_) {
     ld_check(log_id != LOGID_INVALID);
@@ -44,6 +46,10 @@ CheckMetaDataLogRequest::CheckMetaDataLogRequest(
 CheckMetaDataLogRequest::~CheckMetaDataLogRequest() {
   ld_check(current_worker_.val_ == -1 ||
            current_worker_ == Worker::onThisThread()->idx_);
+}
+
+WorkerType CheckMetaDataLogRequest::getWorkerTypeAffinity() {
+  return worker_type_;
 }
 
 Request::Execution CheckMetaDataLogRequest::execute() {

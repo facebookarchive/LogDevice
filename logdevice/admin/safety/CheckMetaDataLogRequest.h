@@ -72,9 +72,12 @@ class CheckMetaDataLogRequest : public Request {
                           int operations,
                           SafetyMargin safety_margin,
                           bool check_meta_nodeset,
+                          WorkerType worker_type_,
                           Callback callback);
 
   ~CheckMetaDataLogRequest() override;
+
+  WorkerType getWorkerTypeAffinity() override;
 
   Request::Execution execute() override;
   void complete(Status st,
@@ -164,6 +167,7 @@ class CheckMetaDataLogRequest : public Request {
   SafetyMargin safety_margin_;
 
   const bool check_metadata_nodeset_;
+  WorkerType worker_type_;
   // callback function provided by user of the class. Called when the state
   // machine completes.
   Callback callback_;
