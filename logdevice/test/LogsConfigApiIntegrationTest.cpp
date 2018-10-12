@@ -793,6 +793,6 @@ TEST_F(LogsConfigIntegrationTest, SetAttributesLogGroupClash) {
 
   for (int node_index = 0; node_index < node_count; ++node_index) {
     IntegrationTestUtils::Node& node = cluster->getNode(node_index);
-    ASSERT(node.isRunning());
+    ASSERT_TRUE(node.isRunning());
   }
 }
