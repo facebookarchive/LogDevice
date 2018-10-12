@@ -125,8 +125,8 @@ SafetyChecker::impactToString(const ShardSet& shards,
                               const Impact& impact) {
   std::stringstream ss;
   if (impact.status != E::OK) {
-    ss << "ERROR: Could NOT determine impact of all logs. "
-          "Sample (log_id, epoch) pairs affected: ";
+    ss << "ERROR: Could NOT determine impact of all logs due to error: "
+       << error_description(impact.status);
   } else if (impact.result != Impact::ImpactResult::NONE) {
     ss << folly::format("\033[31;1mUNSAFE\033[0m: Operation(s) on ({} shards) "
                         "would cause "

@@ -18,6 +18,7 @@
 
 namespace facebook { namespace logdevice {
 class ReplicationProperty;
+class LibeventTimer;
 
 namespace configuration {
 class InternalLogs;
@@ -45,7 +46,7 @@ class CheckImpactRequest : public Request {
                      std::vector<logid_t> logids_to_check,
                      size_t max_in_flight,
                      bool abort_on_error,
-                     std::chrono::milliseconds per_log_timeout,
+                     std::chrono::milliseconds timeout,
                      size_t error_sample_size,
                      WorkerType worker_type,
                      Callback cb);
@@ -111,6 +112,10 @@ class CheckImpactRequest : public Request {
                                   epoch_t error_epoch,
                                   StorageSet storage_set,
                                   ReplicationProperty replication);
+  // Starts the global timeout timer
+  void activateTimeoutTimer();
+  void onTimeout();
+
   ShardAuthoritativeStatusMap status_map_;
   ShardSet shards_;
   configuration::StorageState target_storage_state_;
@@ -126,6 +131,7 @@ class CheckImpactRequest : public Request {
   size_t in_flight_{0};
 
   bool abort_on_error_{true};
+  std::chrono::milliseconds timeout_;
   std::chrono::milliseconds per_log_timeout_;
   size_t error_sample_size_{100};
   // TODO(T28386689): Set automatically to true once sequencers get the ability
@@ -139,5 +145,7 @@ class CheckImpactRequest : public Request {
   bool abort_processing_{false};
   // The final status of this request
   Status st_{E::OK};
+
+  std::unique_ptr<LibeventTimer> timeout_timer_;
 };
 }} // namespace facebook::logdevice

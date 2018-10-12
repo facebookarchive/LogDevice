@@ -8,23 +8,23 @@
 #include "logdevice/admin/safety/CheckImpactRequest.h"
 
 #include "logdevice/admin/safety/CheckMetaDataLogRequest.h"
+#include "logdevice/common/LibeventTimer.h"
 #include "logdevice/common/Processor.h"
 
 using namespace facebook::logdevice::configuration;
 
 namespace facebook { namespace logdevice {
-CheckImpactRequest::CheckImpactRequest(
-    ShardAuthoritativeStatusMap status_map,
-    ShardSet shards,
-    StorageState target_storage_state,
-    SafetyMargin safety_margin,
-    std::vector<logid_t> logids_to_check,
-    size_t max_in_flight,
-    bool abort_on_error,
-    std::chrono::milliseconds per_log_timeout,
-    size_t error_sample_size,
-    WorkerType worker_type,
-    Callback cb)
+CheckImpactRequest::CheckImpactRequest(ShardAuthoritativeStatusMap status_map,
+                                       ShardSet shards,
+                                       StorageState target_storage_state,
+                                       SafetyMargin safety_margin,
+                                       std::vector<logid_t> logids_to_check,
+                                       size_t max_in_flight,
+                                       bool abort_on_error,
+                                       std::chrono::milliseconds timeout,
+                                       size_t error_sample_size,
+                                       WorkerType worker_type,
+                                       Callback cb)
     : Request(RequestType::CHECK_IMPACT),
       status_map_(std::move(status_map)),
       shards_(std::move(shards)),
@@ -33,7 +33,8 @@ CheckImpactRequest::CheckImpactRequest(
       logids_to_check_(std::move(logids_to_check)),
       max_in_flight_(max_in_flight),
       abort_on_error_(abort_on_error),
-      per_log_timeout_(per_log_timeout),
+      timeout_(timeout),
+      per_log_timeout_(timeout / 2),
       error_sample_size_(error_sample_size),
       worker_type_(worker_type),
       callback_(std::move(cb)),
@@ -61,11 +62,15 @@ Request::Execution CheckImpactRequest::execute() {
 
   auto ret = start();
   if (ret == Request::Execution::CONTINUE) {
+    timeout_timer_ = std::make_unique<LibeventTimer>(
+        Worker::onThisThread()->getEventBase(),
+        std::bind(&CheckImpactRequest::onTimeout, this));
     // Insert request into map for worker to track it
     auto insert_result =
         Worker::onThisThread()->runningCheckImpactRequests().map.insert(
             std::make_pair(id_, std::unique_ptr<CheckImpactRequest>(this)));
     ld_check(insert_result.second);
+    activateTimeoutTimer();
   }
   return ret;
 }
@@ -311,14 +316,21 @@ void CheckImpactRequest::complete(Status st) {
   double total_time = std::chrono::duration_cast<std::chrono::duration<double>>(
                           std::chrono::steady_clock::now() - start_time_)
                           .count();
-  ld_info("CheckImpactRequest completed in %.1fs, %zu logs checked",
+  ld_info("CheckImpactRequest completed with %s in %.1fs, %zu logs checked",
+          error_name(st),
           total_time,
           logs_done_);
 
-  callback_(Impact(st,
-                   impact_result_all_,
-                   std::move(affected_logs_sample_),
-                   internal_logs_affected_));
+  if (st != E::OK) {
+    // This is to ensure that we don't return ImpactResult::NONE if the
+    // operation was not successful.
+    callback_(Impact(st, Impact::ImpactResult::INVALID, {}, false));
+  } else {
+    callback_(Impact(st,
+                     impact_result_all_,
+                     std::move(affected_logs_sample_),
+                     internal_logs_affected_));
+  }
   callback_called_ = true;
   deleteThis();
 };
@@ -349,6 +361,23 @@ void CheckImpactRequest::deleteThis() {
   ld_check(it != map.end());
 
   map.erase(it); // destroys unique_ptr which owns this
+}
+
+void CheckImpactRequest::activateTimeoutTimer() {
+  ld_check(timeout_timer_);
+  timeout_timer_->activate(timeout_);
+}
+
+void CheckImpactRequest::onTimeout() {
+  ld_warning(
+      "Timeout waiting for %zu in-flight CheckMetaDataLogRequests to "
+      "complete. We have processed %lu logs. Timeout is (%lus). Consider "
+      "increasing the timeout if you "
+      "have many logs and we can't process all of them fast enough.",
+      in_flight_,
+      logs_done_,
+      std::chrono::duration_cast<std::chrono::seconds>(timeout_).count());
+  complete(E::TIMEDOUT);
 }
 
 }} // namespace facebook::logdevice
