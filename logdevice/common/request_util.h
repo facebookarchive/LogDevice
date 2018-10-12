@@ -236,14 +236,14 @@ run_on_worker_pool(Processor* processor, WorkerType worker_type, Func&& cb) {
 }
 
 template <typename T, typename Func>
-folly::Future<T>
+folly::SemiFuture<T>
 fulfill_on_worker(Processor* processor,
                   folly::Optional<worker_id_t> worker_id,
                   WorkerType worker_type,
                   Func&& cb, // std::function<void(folly::Promise<T>)>
                   bool with_retrying = false) {
   folly::Promise<T> p; // will be moved to Request;
-  folly::Future<T> fut = p.getFuture();
+  auto future = p.getSemiFuture();
   const int nworkers = processor->getWorkerCount(worker_type);
   if (nworkers <= 0) {
     // We don't have workers in this pool
@@ -255,8 +255,10 @@ fulfill_on_worker(Processor* processor,
         std::runtime_error(folly::sformat("No workers of {} type are available",
                                           workerTypeStr(worker_type))
                                .c_str()));
-    return fut;
+    return future;
   }
+  // It's important to not use the promise after moving, it becomes invalid.
+  // This is why we have the future extracted earlier.
   auto req = PromiseRequest<T>::make(std::move(worker_id),
                                      worker_type,
                                      RequestType::ADMIN_CMD_UTIL_INTERNAL,
@@ -286,7 +288,7 @@ fulfill_on_worker(Processor* processor,
                            workerTypeStr(worker_type))
                 .c_str()));
   }
-  return fut;
+  return future;
 }
 
 }} // namespace facebook::logdevice

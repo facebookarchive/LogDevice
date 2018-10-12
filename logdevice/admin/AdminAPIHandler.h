@@ -47,8 +47,8 @@ class AdminAPIHandler : public NodesConfigAPIHandler,
                    std::unique_ptr<thrift::SettingsRequest> request) override;
 
   // Take a snapshot of the LogTree running on this server.
-  folly::Future<folly::Unit>
-  future_takeLogTreeSnapshot(thrift::unsigned64 min_version) override;
+  folly::SemiFuture<folly::Unit>
+  semifuture_takeLogTreeSnapshot(thrift::unsigned64 min_version) override;
 
   void getLogGroupThroughput(
       thrift::LogGroupThroughputResponse& response,

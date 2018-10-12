@@ -114,21 +114,22 @@ void AdminAPIHandler::getSettings(
   }
 }
 
-folly::Future<folly::Unit>
-AdminAPIHandler::future_takeLogTreeSnapshot(thrift::unsigned64 min_version) {
+folly::SemiFuture<folly::Unit> AdminAPIHandler::semifuture_takeLogTreeSnapshot(
+    thrift::unsigned64 min_version) {
   folly::Promise<folly::Unit> p;
+  auto future = p.getSemiFuture();
 
   // Are we running with LCM?
   if (!processor_->settings()->enable_logsconfig_manager) {
     thrift::NotSupported error;
     error.set_message("LogsConfigManager is disabled in settings on this node");
     p.setException(std::move(error));
-    return p.getFuture();
+    return future;
   } else if (!processor_->settings()->logsconfig_snapshotting) {
     thrift::NotSupported error;
     error.set_message("LogsConfigManager snapshotting is not enabled");
     p.setException(std::move(error));
-    return p.getFuture();
+    return future;
   }
 
   auto logsconfig_worker_type =
@@ -158,8 +159,7 @@ AdminAPIHandler::future_takeLogTreeSnapshot(thrift::unsigned64 min_version) {
                         logsconfig->getVersion(),
                         minimum_version)
               .str());
-      error.set_server_version(
-          static_cast<std::int64_t>(logsconfig->getVersion()));
+      error.set_server_version(static_cast<int64_t>(logsconfig->getVersion()));
       mpromise->setException(std::move(error));
       return;
     }
