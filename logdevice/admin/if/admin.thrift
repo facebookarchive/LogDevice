@@ -41,7 +41,25 @@ struct SocketAddress {
 
 typedef SocketAddress Node
 typedef i64 Timestamp
-typedef i16 NodeIndex
+typedef i16 NodeIndex // node_index_t
+typedef i16 ShardIndex // shard_index_t
+
+// This data structure is used to represent one or (all) shards on a storage
+// node. This is typically used in the low-level APIs of the Administrative API.
+struct ShardID {
+  // this can be -1 which means all shards in a node.
+  1: required ShardIndex shard_index = -1,
+  // You should use either node_index OR address to refer to the node. You
+  // CANNOT have both unset. You will get InvalidRequest exception in this case.
+  2: optional NodeIndex node_index, // if setthis has to be a positive value.
+  3: optional Node address,
+}
+
+// An ordered list of shards that a record can be stored onto.
+typedef list<ShardID> StorageSet
+// unordered set of shard. This should be a set<> but set of non
+// int/string/binary/enums are not portable in some languages.
+typedef list<ShardID> ShardSet
 
 /**
  * Role is what defines if this node is a storage node or a sequencer node,
@@ -225,10 +243,8 @@ enum SequencingState {
   // This node is temporarily boycotted from running sequencers due to its
   // current poor performance.
   BOYCOTTED = 2,
-  // Both DRAINED and DISABLED has the exact same meaning for sequencer node.
-  // This is done this way to be consistent with the ShardOperationalState(s).
-  DRAINED = 3,
-  DISABLED = 4,
+  // Sequencing is disabled.
+  DISABLED = 3,
 }
 
 /**
@@ -397,6 +413,7 @@ exception NotSupported {
 // An operation that failed for unexpected reasons
 exception OperationError {
   1: string message,
+  2: optional i32 error_code, // maps to E
 }
 
 // The request contains invalid parameters
@@ -435,6 +452,89 @@ struct NodesStateRequest {
   2: optional bool force,
 }
 
+/**
+ * Defines the different location scopes that logdevice recognizes
+ */
+enum LocationScope {
+  NODE = 1,
+  RACK = 2,
+  ROW = 3,
+  CLUSTER = 4,
+  DATA_CENTER = 5,
+  REGION = 6,
+}
+
+// Replication property is how many copies per Location scope for the various
+// scopes
+typedef map<LocationScope, i32> ReplicationProperty // replication per scope
+
+enum OperationImpact {
+  // This means that rebuilding will not be able to complete given the current
+  // status of ShardDataHealth. This assumes that rebuilding may need to run at
+  // certain point. This can happen if we have epochs that have lost so many
+  // _writable_ shards in its storage-set that it became impossible to amend
+  // copysets according to the replication property.
+  REBUILDING_STALL = 1,
+  // This means that if we perform the operation, we will not be able to
+  // generate a nodeset that satisfy the current replication policy for all logs
+  // in the log tree.
+  WRITE_AVAILABILITY_LOSS = 2,
+  // This means that this operation _might_ lead to stalling readers in cases
+  // were they need to establish f-majority on some records.
+  READ_AVAILABILITY_LOSS = 3,
+}
+
+// A data structure that describe the operation impact on a specific epoch in a
+// log.
+struct ImpactOnEpoch {
+  1: required unsigned64 log_id,
+  2: required unsigned64 epoch,
+  // What is the storage set for this epoch (aka. NodeSet)
+  3: required StorageSet storage_set,
+  // What is the replication policy for this particular epoch
+  4: required ReplicationProperty replication,
+  5: required list<OperationImpact> impact,
+}
+
+struct CheckImpactRequest {
+  // Which shards/nodes we would like to check state change against. Using the
+  // ShardID data structure you can refer to individual shards or entire storage
+  // or sequencer nodes based on their address or index.
+  1: required ShardSet shards,
+  // This can be unset ONLY if disable_sequencers is set to true. In this case
+  // we are only interested in checking for sequencing capacity constraints of
+  // the cluster. Alternatively, you can set target_storage_state to READ_WRITE.
+  2: optional ShardStorageState target_storage_state,
+  // Do we want to validate if sequencers will be disabled on these nodes as
+  // well?
+  3: optional bool disable_sequencers,
+  // The set of shards that you would like to update their state
+  // How much of the location-scope do we want to keep as a safety margin. This
+  // assumes that X number of LocationScope can be impacted along with the list
+  // of shards/nodes that you supply in the request.
+  4: optional ReplicationProperty safety_margin,
+  // Choose which log-ids to check for safety. Remember that we will always
+  // check the metadata and internal logs. This is to ensure that no matter
+  // what, operations are safe to these critical logs.
+  5: optional list<unsigned64> log_ids_to_check,
+  // Defaulted to true. In case we found a reason why we think the operation is
+  // unsafe, we will not check the rest of the logs.
+  6: optional bool abort_on_negative_impact = true,
+  // In case the operation is unsafe, how many example ImpactOnEpoch records you
+  // want in return?
+  7: optional i32 return_sample_size = 50,
+}
+
+struct CheckImpactResponse {
+  // empty means that no impact, operation is SAFE.
+  1: required list<OperationImpact> impact,
+  // Only set if there is impact. This indicates whether there will be effect on
+  // the metadata logs or the internal state machine logs.
+  2: optional bool internal_logs_affected,
+  // A sample of the affected epochs by this operation.
+  3: optional list<ImpactOnEpoch> logs_affected,
+}
+
 // *** AdminAPI Service
 service AdminAPI extends fb303.FacebookService {
   // Gets the config for all nodes that matches the supplied NodesFilter. If
@@ -452,6 +552,10 @@ service AdminAPI extends fb303.FacebookService {
   // not throw NodeNotReady exception but we will return partial data.
   NodesStateResponse getNodesState(1: NodesStateRequest request) throws
       (1: NodeNotReady notready);
+
+  // Safety check an operation.
+  CheckImpactResponse checkImpact(1: CheckImpactRequest request) throws
+      (1: NodeNotReady notready, 2: OperationError error);
 
   // *** LogTree specific APIs
   LogTreeInfo getLogTreeInfo();
