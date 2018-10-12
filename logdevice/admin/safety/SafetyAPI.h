@@ -52,8 +52,6 @@ struct Impact {
     // operation could lead to loss of read availability,
     // as there is no f-majority for certain logs
     READ_AVAILABILITY_LOSS = (1u << 3),
-    // operation could lead to data loss.
-    DATA_LOSS = (1u << 4),
     // Impact Could not be established due to an error.
     INVALID = (1u << 30),
   };

@@ -48,7 +48,6 @@ std::string Impact::toStringImpactResult(int result) {
 
   TO_STR(WRITE_AVAILABILITY_LOSS)
   TO_STR(READ_AVAILABILITY_LOSS)
-  TO_STR(DATA_LOSS)
   TO_STR(REBUILDING_STALL)
   TO_STR(INVALID)
 
