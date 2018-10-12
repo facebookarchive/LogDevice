@@ -45,6 +45,8 @@ struct ServerSettings : public SettingsBundle {
   int ssl_command_port;
   std::string ssl_command_unix_socket;
   bool admin_enabled;
+  int safety_max_logs_in_flight;
+  std::chrono::milliseconds safety_check_timeout;
   int command_conn_limit;
   dbg::Level loglevel;
   dbg::LogLevelMap loglevel_overrides;

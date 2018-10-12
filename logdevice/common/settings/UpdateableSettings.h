@@ -79,6 +79,7 @@ constexpr const char* Sequencer = "Sequencer State";
 constexpr const char* Storage = "Storage";
 constexpr const char* Testing = "Testing";
 constexpr const char* WritePath = "Write path";
+constexpr const char* AdminAPI = "Admin API/server";
 }; // namespace SettingsCategory
 
 // Every bandle must implement this interface.
