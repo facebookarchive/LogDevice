@@ -296,6 +296,7 @@ Contains debugging information about the LogsDB directory on storage shards.
 | first\_lsn | lsn | Lower bound of the LSN range for that log in this partition. |
 | max\_lsn | lsn | Upper bound of the LSN range for that log in this partition. |
 | flags | string | Flags for this partition. "UNDER\_REPLICATED" means that some writes for this partition were lost (for instance due to the server crashing) and these records have not yet been rebuilt. |
+| approximate\_size\_bytes | long | Approximate data size in this partition for the given log. |
 
 ## logsdb\_metadata
 List of auxiliary RocksDB column families used by LogsDB (partitioned local log store). "metadata" column family contains partition directory and various logdevice metadata, per-log and otherwise. "unpartitioned" column family contains records of metadata logs and event log.
@@ -320,20 +321,20 @@ Lists the nodes in the cluster from the configuration.
 
 |   Column   |   Type   |   Description   |
 |------------|:--------:|-----------------|
-| node\_id | long | Id of the node. |
-| address | string | Ip and port that should be used for communication with the node. |
+| node\_id | long | Id of the node |
+| address | string | Ip and port that should be used for communication with the node |
 | ssl\_address | string | Same as "address" but with SSL |
 | generation | long | Generation of the node.  This value is bumped each time the node is swapped, sent to repair, or has one of its drives sent to repair. |
-| location | string | Location of the node: <region>.<cluster>.<row>.<rack>. |
-| sequencer | int | 1 if this node is a sequencer node, 0 otherwise. |
-| storage | int | 1 if this node is a storage node, 0 otherwise. |
-| sequencer\_enabled | int | 1 if this node has sequencers enabled, 0 otherwise. |
+| location | string | Location of the node: <region>.<cluster>.<row>.<rack> |
+| sequencer | int | 1 if this node is provisioned for the sequencing role. Otherwise 0. Provisioned roles must be enabled in order to be considered active. See 'sequencer\_enabled'. |
+| storage | int | 1 if this node is provisioned for the storage role. Otherwise 0. Provisioned roles must be enabled in order to be considered active. See 'storage\_state'. |
+| sequencer\_enabled | int | 1 if sequencing on this node is enabled. Othewise 0. |
 | sequencer\_weight | real | A non-negative value indicating how many logs this node should be a sequencer for relative to other nodes in the cluster.  A value of 0 means this node cannot run sequencers. |
-| weight | long | A positive value indicating how much STORE traffic this storage node should receive relative to other storage nodes in the cluster.  A value of -1 means this node is not a storage node and should only run sequencers. |
+| is\_storage | int | 1 if this node is provisioned for the storage role. Otherwise 0. Provisioned roles must be enabled in order to be considered active. See 'storage\_state'. |
 | storage\_state | string | Determines the current state of the storage node. One of "read-write", "read-only" or "none". |
 | storage\_capacity | long | A positive value indicating how much STORE traffic this storage node should receive relative to other storage nodes in the cluster. |
-| num\_shards | long | Number of shards on this node, 0 if this node is not a storage node. |
-| is\_metadata\_node | int | Whether this node is in the metadata nodeset. |
+| num\_shards | long | Number of storage shards on this node.  0 if this node is not a storage node. |
+| is\_metadata\_node | int | 1 if this node is in the metadata nodeset. Otherwise 0. |
 
 ## partitions
 List of LogsDB partitions that store records.  Each shard on each node has a sequence of partitions.  Each partition corresponds to a time range a few minutes or tens of minutes log.  Each partition is a RocksDB column family.
