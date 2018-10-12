@@ -370,6 +370,7 @@
 <tr><td>first_lsn</td><td style="text-align:center">lsn</td><td>Lower bound of the LSN range for that log in this partition.</td></tr>
 <tr><td>max_lsn</td><td style="text-align:center">lsn</td><td>Upper bound of the LSN range for that log in this partition.</td></tr>
 <tr><td>flags</td><td style="text-align:center">string</td><td>Flags for this partition. &quot;UNDER_REPLICATED&quot; means that some writes for this partition were lost (for instance due to the server crashing) and these records have not yet been rebuilt.</td></tr>
+<tr><td>approximate_size_bytes</td><td style="text-align:center">long</td><td>Approximate data size in this partition for the given log.</td></tr>
 </tbody>
 </table>
 <h2><a class="anchor" aria-hidden="true" id="logsdb-metadata"></a><a href="#logsdb-metadata" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>logsdb_metadata</h2>
@@ -400,20 +401,20 @@
 <tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td>node_id</td><td style="text-align:center">long</td><td>Id of the node.</td></tr>
-<tr><td>address</td><td style="text-align:center">string</td><td>Ip and port that should be used for communication with the node.</td></tr>
+<tr><td>node_id</td><td style="text-align:center">long</td><td>Id of the node</td></tr>
+<tr><td>address</td><td style="text-align:center">string</td><td>Ip and port that should be used for communication with the node</td></tr>
 <tr><td>ssl_address</td><td style="text-align:center">string</td><td>Same as &quot;address&quot; but with SSL</td></tr>
 <tr><td>generation</td><td style="text-align:center">long</td><td>Generation of the node.  This value is bumped each time the node is swapped, sent to repair, or has one of its drives sent to repair.</td></tr>
-<tr><td>location</td><td style="text-align:center">string</td><td>Location of the node: <region>.<cluster>.<row>.<rack>.</td></tr>
-<tr><td>sequencer</td><td style="text-align:center">int</td><td>1 if this node is a sequencer node, 0 otherwise.</td></tr>
-<tr><td>storage</td><td style="text-align:center">int</td><td>1 if this node is a storage node, 0 otherwise.</td></tr>
-<tr><td>sequencer_enabled</td><td style="text-align:center">int</td><td>1 if this node has sequencers enabled, 0 otherwise.</td></tr>
+<tr><td>location</td><td style="text-align:center">string</td><td>Location of the node: <region>.<cluster>.<row>.<rack></td></tr>
+<tr><td>sequencer</td><td style="text-align:center">int</td><td>1 if this node is provisioned for the sequencing role. Otherwise 0. Provisioned roles must be enabled in order to be considered active. See 'sequencer_enabled'.</td></tr>
+<tr><td>storage</td><td style="text-align:center">int</td><td>1 if this node is provisioned for the storage role. Otherwise 0. Provisioned roles must be enabled in order to be considered active. See 'storage_state'.</td></tr>
+<tr><td>sequencer_enabled</td><td style="text-align:center">int</td><td>1 if sequencing on this node is enabled. Othewise 0.</td></tr>
 <tr><td>sequencer_weight</td><td style="text-align:center">real</td><td>A non-negative value indicating how many logs this node should be a sequencer for relative to other nodes in the cluster.  A value of 0 means this node cannot run sequencers.</td></tr>
-<tr><td>weight</td><td style="text-align:center">long</td><td>A positive value indicating how much STORE traffic this storage node should receive relative to other storage nodes in the cluster.  A value of -1 means this node is not a storage node and should only run sequencers.</td></tr>
+<tr><td>is_storage</td><td style="text-align:center">int</td><td>1 if this node is provisioned for the storage role. Otherwise 0. Provisioned roles must be enabled in order to be considered active. See 'storage_state'.</td></tr>
 <tr><td>storage_state</td><td style="text-align:center">string</td><td>Determines the current state of the storage node. One of &quot;read-write&quot;, &quot;read-only&quot; or &quot;none&quot;.</td></tr>
 <tr><td>storage_capacity</td><td style="text-align:center">long</td><td>A positive value indicating how much STORE traffic this storage node should receive relative to other storage nodes in the cluster.</td></tr>
-<tr><td>num_shards</td><td style="text-align:center">long</td><td>Number of shards on this node, 0 if this node is not a storage node.</td></tr>
-<tr><td>is_metadata_node</td><td style="text-align:center">int</td><td>Whether this node is in the metadata nodeset.</td></tr>
+<tr><td>num_shards</td><td style="text-align:center">long</td><td>Number of storage shards on this node.  0 if this node is not a storage node.</td></tr>
+<tr><td>is_metadata_node</td><td style="text-align:center">int</td><td>1 if this node is in the metadata nodeset. Otherwise 0.</td></tr>
 </tbody>
 </table>
 <h2><a class="anchor" aria-hidden="true" id="partitions"></a><a href="#partitions" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>partitions</h2>

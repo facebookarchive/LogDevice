@@ -21,3 +21,4 @@ var indexSectionLabels =
   2: "Namespaces",
   3: "Functions"
 };
+
