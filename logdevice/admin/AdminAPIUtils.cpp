@@ -61,13 +61,16 @@ void forFilteredNodes(const configuration::Nodes& nodes,
     if (role_filter) {
       res &= node.hasRole(*role_filter);
     }
-    // filter by address
-    if (filter->get_address()) {
-      res &= match_by_address(node, filter->get_address());
-    }
-    // filter by index
-    if (filter->get_node_index()) {
-      res &= (index == *filter->get_node_index());
+    // filter by node
+    if (filter->get_node()) {
+      auto* node_identifier = filter->get_node();
+      if (node_identifier->get_address()) {
+        res &= match_by_address(node, node_identifier->get_address());
+      }
+      // filter by index
+      if (node_identifier->get_node_index()) {
+        res &= (index == *node_identifier->get_node_index());
+      }
     }
     // filter by location
     if (filter->get_location()) {

@@ -43,15 +43,19 @@ typedef i64 Timestamp
 typedef i16 NodeIndex // node_index_t
 typedef i16 ShardIndex // shard_index_t
 
+// This is an identifier for a node, it can locate a node by either the
+// node_index or the socket address.
+struct NodeID {
+  1: optional NodeIndex node_index,
+  2: optional Node address,
+}
+
 // This data structure is used to represent one or (all) shards on a storage
 // node. This is typically used in the low-level APIs of the Administrative API.
 struct ShardID {
+  1: required NodeID node,
   // this can be -1 which means all shards in a node.
-  1: required ShardIndex shard_index = -1,
-  // You should use either node_index OR address to refer to the node. You
-  // CANNOT have both unset. You will get InvalidRequest exception in this case.
-  2: optional NodeIndex node_index, // if setthis has to be a positive value.
-  3: optional Node address,
+  2: required ShardIndex shard_index = -1,
 }
 
 // An ordered list of shards that a record can be stored onto.

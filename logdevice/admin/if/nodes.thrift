@@ -228,12 +228,11 @@ typedef list<NodeConfig> NodesConfig
 typedef list<NodeState> NodesState
 
 struct NodesFilter {
-  1: optional common.Node address,
+  1: optional common.NodeID node,
   2: optional common.Role role,
-  3: optional common.NodeIndex node_index,
   // This is a prefix-based filter. Can be used to return all nodes in a rack,
   // row, cluster, and etc.
-  4: optional string location,
+  3: optional string location,
 }
 
 struct NodesConfigResponse {
