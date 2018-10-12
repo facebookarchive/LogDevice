@@ -46,7 +46,8 @@ class CheckMetaDataLogRequest : public Request {
 
   /**
    * create a CheckMetaDataLogRequest. CheckMetaDataLogRequest verifies that
-   * it is safe to perform 'operations' on op_shards.
+   * it is safe to set the storage state to 'target_storage_state' for
+   op_shards.
    * If it is data log (check_metadata=false) it reads corresponding metadata
    * log records by record to do so.
    * If check_metadata=true, it ignores log_id and verifies we have enough nodes
@@ -58,7 +59,9 @@ class CheckMetaDataLogRequest : public Request {
    *  @param shard_status    shard authoritative status map
    *  @param op_shards       check those shards if it is safe to perform
    *                         operations on them
-   *  @param operations      bitset of operations to check
+   *  @param target_storage_state
+   *                         The configuration::StorageState that we want
+   *                         to set
    *  @safety_margin         safety margin (number of domains in each scope)
                              which we could afford to lose after operations
    *  @param abort_on_error  abort on the first problem detected
@@ -69,7 +72,7 @@ class CheckMetaDataLogRequest : public Request {
                           std::chrono::milliseconds timeout,
                           ShardAuthoritativeStatusMap shard_status,
                           ShardSet op_shards,
-                          int operations,
+                          configuration::StorageState target_storage_state,
                           SafetyMargin safety_margin,
                           bool check_meta_nodeset,
                           WorkerType worker_type_,
@@ -158,7 +161,7 @@ class CheckMetaDataLogRequest : public Request {
 
   ShardAuthoritativeStatusMap shard_status_;
   ShardSet op_shards_;
-  int operations_;
+  configuration::StorageState target_storage_state_;
 
   // safety margin for each replication scope
   // we consider operations safe, only if after draining/stopping

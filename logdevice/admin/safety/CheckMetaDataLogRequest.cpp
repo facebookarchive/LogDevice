@@ -13,6 +13,7 @@
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/server/FailureDetector.h"
 
+using namespace facebook::logdevice::configuration;
 namespace facebook { namespace logdevice {
 
 CheckMetaDataLogRequest::CheckMetaDataLogRequest(
@@ -20,7 +21,7 @@ CheckMetaDataLogRequest::CheckMetaDataLogRequest(
     std::chrono::milliseconds timeout,
     ShardAuthoritativeStatusMap shard_status,
     ShardSet op_shards,
-    int operations,
+    StorageState target_storage_state,
     SafetyMargin safety_margin,
     bool check_metadata_nodeset,
     WorkerType worker_type,
@@ -30,7 +31,7 @@ CheckMetaDataLogRequest::CheckMetaDataLogRequest(
       timeout_(timeout),
       shard_status_(std::move(shard_status)),
       op_shards_(std::move(op_shards)),
-      operations_(operations),
+      target_storage_state_(target_storage_state),
       safety_margin_(std::move(safety_margin)),
       check_metadata_nodeset_(check_metadata_nodeset),
       worker_type_(worker_type),
@@ -75,18 +76,19 @@ CheckMetaDataLogRequest::checkReadWriteAvailablity(
   bool safe_reads = true;
   NodeLocationScope fail_scope;
 
-  if (operations_ & Operation::DISABLE_WRITES) {
-    ReplicationProperty replication_prop =
-        extendReplicationWithSafetyMargin(replication_property, true);
-    if (replication_prop.isEmpty()) {
-      safe_writes = false;
-    } else {
-      safe_writes =
-          checkWriteAvailability(storage_set, replication_prop, &fail_scope);
-    }
+  // We always validate write availability issues, this is because the
+  // target_storage_state cannot be READ_WRITE in this class. it will either be
+  // READ_ONLY or DISABLED.
+  ReplicationProperty replication_prop =
+      extendReplicationWithSafetyMargin(replication_property, true);
+  if (replication_prop.isEmpty()) {
+    safe_writes = false;
+  } else {
+    safe_writes =
+        checkWriteAvailability(storage_set, replication_prop, &fail_scope);
   }
-  if (operations_ & Operation::DISABLE_READS) {
-    ReplicationProperty replication_prop =
+  if (target_storage_state_ == StorageState::DISABLED) {
+    replication_prop =
         extendReplicationWithSafetyMargin(replication_property, false);
     if (replication_prop.isEmpty()) {
       safe_reads = false;
@@ -205,7 +207,7 @@ void CheckMetaDataLogRequest::fetchHistoricalMetadata() {
 }
 
 // returns empty ReplicationProperty if is impossible to satisfy
-// resulting replicaiton property
+// resulting replication property
 ReplicationProperty CheckMetaDataLogRequest::extendReplicationWithSafetyMargin(
     const ReplicationProperty& replication_base,
     bool add) const {

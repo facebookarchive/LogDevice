@@ -16,7 +16,7 @@ namespace facebook { namespace logdevice {
 CheckImpactRequest::CheckImpactRequest(
     ShardAuthoritativeStatusMap status_map,
     ShardSet shards,
-    int operations,
+    StorageState target_storage_state,
     SafetyMargin safety_margin,
     std::vector<logid_t> logids_to_check,
     size_t max_in_flight,
@@ -28,7 +28,7 @@ CheckImpactRequest::CheckImpactRequest(
     : Request(RequestType::CHECK_IMPACT),
       status_map_(std::move(status_map)),
       shards_(std::move(shards)),
-      operations_(operations),
+      target_storage_state_(target_storage_state),
       safety_margin_(safety_margin),
       logids_to_check_(std::move(logids_to_check)),
       max_in_flight_(max_in_flight),
@@ -53,8 +53,7 @@ WorkerType CheckImpactRequest::getWorkerTypeAffinity() {
 }
 
 Request::Execution CheckImpactRequest::execute() {
-  if ((operations_ & (Operation::DISABLE_WRITES | Operation::DISABLE_READS)) ==
-      0) {
+  if (target_storage_state_ == StorageState::READ_WRITE) {
     callback_(Impact(E::INVALID_PARAM, Impact::ImpactResult::INVALID, {}));
     callback_called_ = true;
     return Request::Execution::COMPLETE;
@@ -131,7 +130,7 @@ int CheckImpactRequest::requestSingleLog(logid_t log_id) {
                                                        per_log_timeout_,
                                                        status_map_,
                                                        shards_,
-                                                       operations_,
+                                                       target_storage_state_,
                                                        safety_margin_,
                                                        is_metadata,
                                                        worker_type_,

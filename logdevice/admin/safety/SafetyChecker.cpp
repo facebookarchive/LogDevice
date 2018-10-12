@@ -37,15 +37,17 @@ SafetyChecker::SafetyChecker(Processor* processor,
 Impact
 SafetyChecker::checkImpact(const ShardAuthoritativeStatusMap& shard_status,
                            const ShardSet& shards,
-                           int operations,
+                           StorageState target_storage_state,
                            SafetyMargin safety_margin,
                            std::vector<logid_t> logids_to_check) {
-  if ((operations & (Operation::DISABLE_WRITES | Operation::DISABLE_READS)) ==
-      0) {
+  // There is no point of checking this. It's always safe.
+  if (target_storage_state == StorageState::READ_WRITE) {
     return Impact();
   }
 
   ld_info("Shards to drain: %s", toString(shards).c_str());
+  ld_info("Target storage state is: %s",
+          storageStateToString(target_storage_state).c_str());
 
   std::chrono::steady_clock::time_point start_time =
       std::chrono::steady_clock::now();
@@ -63,7 +65,7 @@ SafetyChecker::checkImpact(const ShardAuthoritativeStatusMap& shard_status,
   std::unique_ptr<Request> request =
       std::make_unique<CheckImpactRequest>(shard_status,
                                            shards,
-                                           operations,
+                                           target_storage_state,
                                            safety_margin,
                                            logids_to_check,
                                            logs_in_flight_,

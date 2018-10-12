@@ -9,11 +9,12 @@
 
 #include <folly/Function.h>
 #include <folly/Optional.h>
-#include "logdevice/common/WorkerCallbackHelper.h"
 #include "logdevice/admin/safety/SafetyAPI.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/ShardAuthoritativeStatusMap.h"
 #include "logdevice/common/ShardID.h"
+#include "logdevice/common/WorkerCallbackHelper.h"
+#include "logdevice/common/configuration/Node.h"
 
 namespace facebook { namespace logdevice {
 class ReplicationProperty;
@@ -39,7 +40,7 @@ class CheckImpactRequest : public Request {
 
   CheckImpactRequest(ShardAuthoritativeStatusMap status_map,
                      ShardSet shards,
-                     int operations,
+                     configuration::StorageState target_storage_state,
                      SafetyMargin safety_margin,
                      std::vector<logid_t> logids_to_check,
                      size_t max_in_flight,
@@ -112,7 +113,7 @@ class CheckImpactRequest : public Request {
                                   ReplicationProperty replication);
   ShardAuthoritativeStatusMap status_map_;
   ShardSet shards_;
-  int operations_{0};
+  configuration::StorageState target_storage_state_;
   SafetyMargin safety_margin_;
   std::vector<logid_t> logids_to_check_;
   bool internal_logs_complete_{false};

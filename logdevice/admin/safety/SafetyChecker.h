@@ -13,7 +13,7 @@
 #include "logdevice/common/Request.h"
 #include "logdevice/common/ShardAuthoritativeStatusMap.h"
 #include "logdevice/common/Worker.h"
-
+#include "logdevice/common/configuration/Node.h"
 #include "logdevice/include/types.h"
 #include "logdevice/include/Err.h"
 
@@ -55,11 +55,11 @@ class SafetyChecker {
   /*
    * Find out what would be impact on 'logids_to_check'
    * (if 'logids_to_check' is empty then on all logs in the cluster)
-   * if 'operations' are applied on specified shards
+   * if 'target_storage_state' is applied on specified shards
    */
   Impact checkImpact(const ShardAuthoritativeStatusMap& status_map,
                      const ShardSet& shards,
-                     int operations,
+                     configuration::StorageState target_storage_state,
                      SafetyMargin safety_margin = SafetyMargin(),
                      std::vector<logid_t> logids_to_check = {});
 

@@ -84,12 +84,6 @@ struct Impact {
   static std::string toStringImpactResult(int);
 };
 
-enum Operation {
-  DISABLE_WRITES = (1u << 0),
-  DISABLE_READS = (1u << 1),
-  WIPE_DATA = (1u << 2)
-};
-
 /**
  * @param descriptor A descriptor describing one safety margin or a set of .
                      safety marings. Safety marging is simular to replication
