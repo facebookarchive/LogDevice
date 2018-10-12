@@ -31,9 +31,7 @@ class SafetyChecker {
    * @param logs_in_flight                      How many logs to check in
    *                                            parallel;
    * @param abort_on_error                      If some errors are found,
-   *                                            abort immediately after
-   *                                            having found
-   *                                            `error_sample_size` errors;
+   *                                            abort as soon as possible
    * @param timeout                             How long before we give up. In
    *                                            this case `err` will be set to
    *                                            `E::TIMEDOUT`
@@ -41,13 +39,13 @@ class SafetyChecker {
    *                                            collect and describe in the
    *                                            human readable error returned
    * @param read_epoch_metadata_from_sequencer  Assume the server is recent
-   *                                            eNough to be able to send
+   *                                            enough to be able to send
    *                                            EpochMetaData through the
    *                                            sequencer.
    */
   SafetyChecker(Processor* processor,
                 size_t logs_in_flight,
-                bool abort_on_error,
+                bool abort_on_error = true,
                 std::chrono::milliseconds timeout = std::chrono::minutes(2),
                 size_t error_sample_size = 10,
                 bool read_epoch_metadata_from_sequencer = false);
@@ -60,11 +58,10 @@ class SafetyChecker {
    * if 'operations' are applied on specified shards
    */
   Impact checkImpact(const ShardAuthoritativeStatusMap& status_map,
-                     std::shared_ptr<ShardSet> shards,
+                     const ShardSet& shards,
                      int operations,
-                     const SafetyMargin& safety_margin = SafetyMargin(),
-                     const std::vector<logid_t>& logids_to_check = {},
-                     const bool check_metadata_logs = true);
+                     SafetyMargin safety_margin = SafetyMargin(),
+                     std::vector<logid_t> logids_to_check = {});
 
  private:
   Processor* processor_;
@@ -75,26 +72,5 @@ class SafetyChecker {
   // TODO(T28386689): remove once all production tiers are on 2.35.
   bool read_epoch_metadata_from_sequencer_;
 };
-
-/**
- * @param descriptor A descriptor describing one safety margin or a set of .
-                     safety marings. Safety marging is simular to replication
-                     property - it is list of <domain>:<number> pairs.
- *                   For instance, \"rack:1\",\"node:2\".
- * @param out        Populated set of NodeLocationScope, int  pairs.
- *
- * @return           0 on success, or -1 on error
- */
-int parseSafetyMargin(const std::vector<std::string>& descriptors,
-                      SafetyMargin& out);
-
-/**
- * @param descriptors A list of descriptors, @see parseSafetyMargin.
- * @param out        Populated set of NodeLocationScope, int  pairs.
- *
- * @return           0 on success, or -1 on error
- *
- */
-int parseSafetyMargin(const std::string& descriptor, SafetyMargin& out);
 
 }} // namespace facebook::logdevice

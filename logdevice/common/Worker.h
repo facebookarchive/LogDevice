@@ -122,10 +122,11 @@ class MetaDataLogReader;
 class Mutator;
 class Processor;
 class RebuildingCoordinatorInterface;
+class Request;
 class SSLFetcher;
 class Sender;
-class ServerConfig;
 class SequencerBackgroundActivator;
+class ServerConfig;
 class ShardAuthoritativeStatusManager;
 class SocketCallback;
 class StatsHolder;
@@ -140,6 +141,7 @@ struct AppenderMap;
 struct CheckNodeHealthRequestSet;
 struct CheckSealRequestMap;
 struct ClusterStateSubscriptionList;
+struct DataSizeRequestMap;
 struct ExponentialBackoffTimerNode;
 struct FindKeyRequestMap;
 struct FireAndForgetRequestMap;
@@ -149,7 +151,6 @@ struct GetHeadAttributesRequestMap;
 struct GetLogInfoRequestMaps;
 struct GetTrimPointRequestMap;
 struct IsLogEmptyRequestMap;
-struct DataSizeRequestMap;
 struct LogIDUniqueQueue;
 struct LogRebuildingMap;
 struct LogRecoveryRequestMap;
@@ -159,6 +160,15 @@ struct LogsConfigManagerRequestMap;
 struct MUTATED_Header;
 struct TrimRequestMap;
 struct WriteMetaDataRecordMap;
+
+struct CheckImpactRequestMap {
+  std::unordered_map<request_id_t,
+                     // We are not using the concrete type here to avoid the
+                     // dependency on this type.
+                     std::unique_ptr<Request>,
+                     request_id_t::Hash>
+      map;
+};
 
 template <typename Duration>
 class ChronoExponentialBackoffAdaptiveVariable;
@@ -366,6 +376,9 @@ class Worker : public EventLoop {
 
   // a map for all currently running LogsConfigApiRequest
   LogsConfigApiRequestMap& runningLogsConfigApiRequests() const;
+
+  // a map for all currently running CheckImpactRequests
+  CheckImpactRequestMap& runningCheckImpactRequests() const;
 
   // Internal LogsConfigManager requests map
   LogsConfigManagerRequestMap& runningLogsConfigManagerRequests() const;

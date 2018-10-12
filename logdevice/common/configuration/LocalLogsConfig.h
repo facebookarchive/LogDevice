@@ -113,6 +113,10 @@ class LocalLogsConfig : public LogsConfig {
     narrowest_replication_cache_.clear();
   }
 
+  const InternalLogs& getInternalLogs() const {
+    return internal_logs_;
+  }
+
   LocalLogsConfigIterator logsBegin() const {
     return LocalLogsConfigIterator(
         &internal_logs_, config_tree_.get(), config_tree_->logsBegin(), false);

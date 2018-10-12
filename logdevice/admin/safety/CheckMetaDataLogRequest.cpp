@@ -7,7 +7,6 @@
  */
 #include "CheckMetaDataLogRequest.h"
 
-#include <boost/format.hpp>
 #include "logdevice/common/ClusterState.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Worker.h"
@@ -19,24 +18,21 @@ namespace facebook { namespace logdevice {
 CheckMetaDataLogRequest::CheckMetaDataLogRequest(
     logid_t log_id,
     std::chrono::milliseconds timeout,
-    std::shared_ptr<Configuration> config,
-    const ShardAuthoritativeStatusMap& shard_status,
-    std::shared_ptr<ShardSet> op_shards,
+    ShardAuthoritativeStatusMap shard_status,
+    ShardSet op_shards,
     int operations,
-    const SafetyMargin* safety_margin,
+    SafetyMargin safety_margin,
     bool check_metadata_nodeset,
     Callback callback)
     : Request(RequestType::CHECK_METADATA_LOG),
       log_id_(log_id),
       timeout_(timeout),
-      config_(std::move(config)),
-      shard_status_(shard_status),
+      shard_status_(std::move(shard_status)),
       op_shards_(std::move(op_shards)),
       operations_(operations),
-      safety_margin_(safety_margin),
+      safety_margin_(std::move(safety_margin)),
       check_metadata_nodeset_(check_metadata_nodeset),
       callback_(std::move(callback)) {
-  ld_check(op_shards_ != nullptr);
   if (!check_metadata_nodeset_) {
     ld_check(log_id != LOGID_INVALID);
     ld_check(!MetaDataLog::isMetaDataLog(log_id_));
@@ -96,8 +92,9 @@ CheckMetaDataLogRequest::checkReadWriteAvailablity(
 }
 
 void CheckMetaDataLogRequest::checkMetadataNodeset() {
-  auto metadatalogs_config = config_->serverConfig()->getMetaDataLogsConfig();
-  auto metadatalog_group = config_->serverConfig()->getMetaDataLogGroup();
+  auto config = Worker::onThisThread()->getConfiguration();
+  auto metadatalogs_config = config->serverConfig()->getMetaDataLogsConfig();
+  auto metadatalog_group = config->serverConfig()->getMetaDataLogGroup();
   if (!metadatalog_group) {
     complete(E::OK, Impact::ImpactResult::NONE, EPOCH_INVALID, {}, "");
     return;
@@ -109,26 +106,32 @@ void CheckMetaDataLogRequest::checkMetadataNodeset() {
   auto storage_set =
       EpochMetaData::nodesetToStorageSet(metadatalogs_config.metadata_nodes);
 
+  int impact_result = Impact::ImpactResult::NONE;
   NodeLocationScope fail_scope;
   bool safe_reads;
   bool safe_writes;
   std::tie(safe_reads, safe_writes, fail_scope) =
       checkReadWriteAvailablity(storage_set, replication_property);
 
-  if (safe_writes && safe_reads) {
-    ld_debug("It is safe to perform operations on metadata nodes");
-    complete(E::OK, Impact::ImpactResult::NONE, EPOCH_INVALID, {}, "");
-  } else {
-    std::string message = "Operation would cause loss of read "
-                          "or wite availability for metadata logs";
-
-    ld_warning("ERROR: %s", message.c_str());
-    complete(E::FAILED,
-             Impact::ImpactResult::METADATA_LOSS,
-             EPOCH_INVALID,
-             std::move(storage_set),
-             std::move(message));
+  std::string message;
+  if (!safe_writes) {
+    impact_result |= Impact::ImpactResult::WRITE_AVAILABILITY_LOSS;
   }
+  if (!safe_reads) {
+    impact_result |= Impact::ImpactResult::READ_AVAILABILITY_LOSS;
+    ld_debug("It is safe to perform operations on metadata nodes");
+  }
+  if (impact_result != Impact::ImpactResult::NONE) {
+    message = "Operation would cause loss of read "
+              "or write availability for metadata logs";
+    ld_warning("ERROR: %s", message.c_str());
+  }
+
+  complete(E::OK,
+           impact_result,
+           EPOCH_INVALID,
+           std::move(storage_set),
+           std::move(message));
 }
 
 void CheckMetaDataLogRequest::complete(Status st,
@@ -155,14 +158,22 @@ void CheckMetaDataLogRequest::fetchHistoricalMetadata() {
       [this](Status st) {
         if (st != E::OK) {
           if (st == E::NOTINCONFIG || st == E::NOTFOUND) {
-            complete(st, 0, EPOCH_INVALID, {}, "");
+            // E::NOTINCONFIG - log not in config,
+            // is ignored as it is possible due to config change
+            // E::NOTFOUND - metadata not provisioned
+            // is ignored as this means log is empty
+            // We treat as it's safe for the above reasons
+            complete(E::OK, Impact::ImpactResult::NONE, EPOCH_INVALID, {}, "");
             return;
           }
-          std::string message = boost::str(
-              boost::format(
-                  "Fetching historical metadata for log %lu FAILED: %s. ") %
-              log_id_.val() % error_description(st));
-          complete(st, Impact::ImpactResult::ERROR, EPOCH_INVALID, {}, message);
+          std::string message =
+              folly::format(
+                  "Fetching historical metadata for log {} FAILED: {}. ",
+                  log_id_.val(),
+                  error_description(st))
+                  .str();
+          complete(
+              st, Impact::ImpactResult::INVALID, EPOCH_INVALID, {}, message);
           return; // `this` has been destroyed.
         }
 
@@ -195,8 +206,8 @@ ReplicationProperty CheckMetaDataLogRequest::extendReplicationWithSafetyMargin(
     // Do not consider the scope if the user did not specify a replication
     // factor for it
     if (replication != 0) {
-      auto safety = safety_margin_->find(scope);
-      if (safety != safety_margin_->end()) {
+      auto safety = safety_margin_.find(scope);
+      if (safety != safety_margin_.end()) {
         if (add) {
           replication += safety->second;
         } else {
@@ -239,31 +250,39 @@ bool CheckMetaDataLogRequest::onEpochMetaData(EpochMetaData metadata) {
   // in case we can't replicate we return epoch & nodeset for it
 
   std::unordered_set<node_index_t> nodes_to_drain;
-  for (const auto& shard_id : *op_shards_) {
+  for (const auto& shard_id : op_shards_) {
     nodes_to_drain.insert(shard_id.node());
   }
 
   std::string message;
 
   if (!safe_writes) {
-    message = boost::str(
-        boost::format(
-            "Drain on (%u shards, %u nodes) would cause "
-            "loss of write availability for log %lu, epochs [%u, %u], as in "
-            "that storage set not enough %s domains would be "
-            "available for writes. ") %
-        op_shards_->size() % nodes_to_drain.size() % log_id_.val() % since %
-        epoch % NodeLocation::scopeNames()[fail_scope].c_str());
+    message =
+        folly::format(
+            "Drain on ({} shards, {} nodes) would cause "
+            "loss of write availability for log {}, epochs [{}, {}], as in "
+            "that storage set not enough {} domains would be "
+            "available for writes. ",
+            op_shards_.size(),
+            nodes_to_drain.size(),
+            log_id_.val(),
+            since,
+            epoch,
+            NodeLocation::scopeNames()[fail_scope])
+            .str();
   }
 
   if (!safe_reads) {
-    message += boost::str(
-        boost::format(
-            "Disabling reads on (%u shards, %u nodes) would cause "
-            "loss of read availability for log %lu, epochs [%u, %u], as "
-            "that storage would not constitute f-majority ") %
-        op_shards_->size() % nodes_to_drain.size() % log_id_.val() % since %
-        epoch);
+    message += folly::format(
+                   "Disabling reads on ({} shards, {} nodes) would cause "
+                   "loss of read availability for log {}, epochs [{}, {}], as "
+                   "that storage would not constitute f-majority ",
+                   op_shards_.size(),
+                   nodes_to_drain.size(),
+                   log_id_.val(),
+                   since,
+                   epoch)
+                   .str();
   }
 
   int impact_result = 0;
@@ -272,10 +291,10 @@ bool CheckMetaDataLogRequest::onEpochMetaData(EpochMetaData metadata) {
   }
   if (!safe_writes) {
     impact_result |= Impact::ImpactResult::REBUILDING_STALL;
-    // TODO #22911589 check do we loose write availablility
+    // TODO #22911589 check do we lose write availablility
   }
 
-  complete(E::FAILED,
+  complete(E::OK,
            impact_result,
            metadata.h.effective_since,
            std::move(metadata.shards),
@@ -287,6 +306,7 @@ bool CheckMetaDataLogRequest::checkWriteAvailability(
     const StorageSet& storage_set,
     const ReplicationProperty& replication,
     NodeLocationScope* fail_scope) const {
+  auto config = Worker::onThisThread()->getConfiguration();
   // We use FailureDomainNodeSet to determine if draining shards in
   // `op_shards_` would result in this StorageSet being unwritable. The boolean
   // attribute indicates for each node whether it will be able to take writes
@@ -300,13 +320,13 @@ bool CheckMetaDataLogRequest::checkWriteAvailability(
   // if N nodes are required to maintain write availability, make sure to
   // always have N+x nodes to have room for organic failures of x nodes
   FailureDomainNodeSet<bool> available_node_set(
-      storage_set, config_->serverConfig(), replication);
+      storage_set, config->serverConfig(), replication);
 
   for (const ShardID& shard : storage_set) {
-    const auto& node = config_->serverConfig()->getNode(shard.node());
+    const auto& node = config->serverConfig()->getNode(shard.node());
 
     if (node && node->isWritableStorageNode()) {
-      if (!op_shards_->count(shard)) {
+      if (!op_shards_.count(shard)) {
         AuthoritativeStatus status = shard_status_.getShardStatus(shard);
         if (status == AuthoritativeStatus::FULLY_AUTHORITATIVE) {
           available_node_set.setShardAttribute(shard, true);
@@ -320,6 +340,7 @@ bool CheckMetaDataLogRequest::checkWriteAvailability(
 bool CheckMetaDataLogRequest::checkReadAvailability(
     const StorageSet& storage_set,
     const ReplicationProperty& replication) const {
+  auto config = Worker::onThisThread()->getConfiguration();
   // We use FailureDomainNodeSet to determine if disabling reads for shards in
   // `op_shards_` would result in this StorageSet being unreadable.
   // The boolean attribute indicates for each node whether it will be able to
@@ -333,15 +354,15 @@ bool CheckMetaDataLogRequest::checkReadAvailability(
   // shards on which we are going to be stopped.
 
   FailureDomainNodeSet<bool> available_node_set(
-      storage_set, config_->serverConfig(), replication);
+      storage_set, config->serverConfig(), replication);
 
   for (const ShardID& shard : storage_set) {
-    const auto& node = config_->serverConfig()->getNode(shard.node());
+    const auto& node = config->serverConfig()->getNode(shard.node());
 
     if (node && node->isReadableStorageNode()) {
       AuthoritativeStatus status = shard_status_.getShardStatus(shard);
       available_node_set.setShardAuthoritativeStatus(shard, status);
-      if ((!op_shards_ || !op_shards_->count(shard)) && isAlive(shard.node())) {
+      if ((!op_shards_.count(shard)) && isAlive(shard.node())) {
         available_node_set.setShardAttribute(shard, true);
       }
     }
