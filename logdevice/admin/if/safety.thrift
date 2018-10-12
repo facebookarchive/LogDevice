@@ -15,6 +15,7 @@ namespace php LogDevice
 
 
 enum OperationImpact {
+  INVALID = 0,
   // This means that rebuilding will not be able to complete given the current
   // status of ShardDataHealth. This assumes that rebuilding may need to run at
   // certain point. This can happen if we have epochs that have lost so many

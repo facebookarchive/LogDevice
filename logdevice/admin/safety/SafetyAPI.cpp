@@ -7,8 +7,8 @@
  */
 
 #include "logdevice/admin/safety/SafetyAPI.h"
-#include <folly/String.h>
 
+#include <folly/String.h>
 #include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/common/debug.h"
 
@@ -98,6 +98,17 @@ int parseSafetyMargin(const std::string& descriptor, SafetyMargin& out) {
     out.emplace(scope, margin);
   }
   return 0;
+}
+
+SafetyMargin
+safetyMarginFromReplication(const ReplicationProperty& replication) {
+  SafetyMargin output;
+  for (const auto& scope_replication :
+       replication.getDistinctReplicationFactors()) {
+    output.insert(
+        std::make_pair(scope_replication.first, scope_replication.second));
+  }
+  return output;
 }
 
 int parseSafetyMargin(const std::vector<std::string>& descriptors,

@@ -96,6 +96,11 @@ struct Impact {
 int parseSafetyMargin(const std::vector<std::string>& descriptors,
                       SafetyMargin& out);
 
+// Converts a ReplicationProperty object into SafetyMargin
+// TODO: We should replace SafetyMargin type with ReplicationProperty
+SafetyMargin
+safetyMarginFromReplication(const ReplicationProperty& replication);
+
 /**
  * @param descriptors A list of descriptors, @see parseSafetyMargin.
  * @param out        Populated set of NodeLocationScope, int  pairs.
@@ -104,5 +109,4 @@ int parseSafetyMargin(const std::vector<std::string>& descriptors,
  *
  */
 int parseSafetyMargin(const std::string& descriptor, SafetyMargin& out);
-
 }} // namespace facebook::logdevice

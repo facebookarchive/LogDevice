@@ -94,6 +94,7 @@ enum LocationScope {
   CLUSTER = 4,
   DATA_CENTER = 5,
   REGION = 6,
+  ROOT = 99,
 }
 
 // Replication property is how many copies per Location scope for the various
