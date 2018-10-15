@@ -332,7 +332,7 @@ Lists the nodes in the cluster from the configuration.
 | sequencer\_weight | real | A non-negative value indicating how many logs this node should be a sequencer for relative to other nodes in the cluster.  A value of 0 means this node cannot run sequencers. |
 | is\_storage | int | 1 if this node is provisioned for the storage role. Otherwise 0. Provisioned roles must be enabled in order to be considered active. See 'storage\_state'. |
 | storage\_state | string | Determines the current state of the storage node. One of "read-write", "read-only" or "none". |
-| storage\_capacity | long | A positive value indicating how much STORE traffic this storage node should receive relative to other storage nodes in the cluster. |
+| storage\_weight | real | A positive value indicating how much STORE traffic this storage node should receive relative to other storage nodes in the cluster. |
 | num\_shards | long | Number of storage shards on this node.  0 if this node is not a storage node. |
 | is\_metadata\_node | int | 1 if this node is in the metadata nodeset. Otherwise 0. |
 

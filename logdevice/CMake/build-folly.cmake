@@ -12,8 +12,8 @@ ExternalProject_Add(folly
     SOURCE_DIR "${FOLLY_ROOT_DIR}"
     DOWNLOAD_COMMAND ""
     CMAKE_ARGS -DCMAKE_POSITION_INDEPENDENT_CODE=True
-    INSTALL_COMMAND ""
-    )
+    INSTALL_COMMAND make install DESTDIR=${LOGDEVICE_STAGING_DIR}
+)
 
 ExternalProject_Get_Property(folly SOURCE_DIR)
 ExternalProject_Get_Property(folly BINARY_DIR)
@@ -23,7 +23,7 @@ set(FOLLY_LIBRARIES
 set(FOLLY_BENCHMARK_LIBRARIES
     ${BINARY_DIR}/folly/libfollybenchmark.a)
 
-set(FOLLY_INCLUDE_DIR ${SOURCE_DIR} ${BINARY_DIR})
+set(FOLLY_INCLUDE_DIR ${SOURCE_DIR})
 message(STATUS "Folly Library: ${FOLLY_LIBRARIES}")
 message(STATUS "Folly Benchmark: ${FOLLY_BENCHMARK_LIBRARIES}")
 message(STATUS "Folly Includes: ${FOLLY_INCLUDE_DIR}")

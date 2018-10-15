@@ -3,14 +3,7 @@ wget
 git
 g++
 make
-libboost-dev
-libboost-python-dev
-libboost-thread-dev
-libboost-regex-dev
-libboost-filesystem-dev
-libboost-chrono-dev
-libboost-system-dev
-libboost-program-options-dev
+libboost-all-dev
 libevent-dev
 python3-dev
 zlib1g-dev
@@ -40,5 +33,10 @@ autoconf-archive
 automake
 pkg-config
 libtool
-libboost-context-dev
 libzstd1-dev
+bison
+flex
+libmstch-dev
+libkrb5-dev
+libsodium-dev
+libssl-dev
