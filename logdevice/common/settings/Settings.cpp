@@ -1608,7 +1608,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        SettingsCategory::Configuration);
   init("use-tcp-keep-alive",
        &use_tcp_keep_alive,
-       "false",
+       "true",
        nullptr, // no validation
        "Enable TCP keepalive for all connections",
        SERVER | CLIENT,
@@ -1713,7 +1713,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        SettingsCategory::ReadPath);
   init("include-destination-on-handshake",
        &include_destination_on_handshake,
-       "false",
+       "true",
        nullptr, // no validation
        "Include the destination node ID in the LogDevice protocol handshake. "
        "If the actual node ID of the connection target does not match the "

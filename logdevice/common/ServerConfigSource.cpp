@@ -105,6 +105,7 @@ void ServerConfigSource::init(const std::string& path,
   Settings settings = create_default_settings<Settings>();
   settings.num_workers = 1;
   settings.include_cluster_name_on_handshake = false;
+  settings.include_destination_on_handshake = false;
   updateable_settings_ = UpdateableSettings<Settings>(settings);
 
   // Construct a Processor to send the first CONFIG_FETCH message
