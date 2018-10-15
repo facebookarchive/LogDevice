@@ -5,3 +5,12 @@
 [submodule "logdevice/external/folly"]
 	path = logdevice/external/folly
 	url = https://github.com/facebook/folly/
+[submodule "logdevice/external/fizz"]
+	path = logdevice/external/fizz
+	url = https://github.com/facebookincubator/fizz/
+[submodule "logdevice/external/wangle"]
+	path = logdevice/external/wangle
+	url = https://github.com/facebook/wangle/
+[submodule "logdevice/external/fbthrift"]
+	path = logdevice/external/fbthrift
+	url = https://github.com/facebook/fbthrift/
