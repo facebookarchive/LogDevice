@@ -68,8 +68,8 @@ TableColumns Nodes::getColumns() const {
            DataType::TEXT,
            "Determines the current state of the storage node. One "
            "of \"read-write\", \"read-only\" or \"none\"."},
-          {"storage_capacity",
-           DataType::BIGINT,
+          {"storage_weight",
+           DataType::REAL,
            "A positive value indicating how much STORE traffic this "
            "storage node should receive relative to other storage nodes "
            "in the cluster."},
@@ -118,7 +118,7 @@ std::shared_ptr<TableData> Nodes::getData(QueryContext& /*ctx*/) {
       auto* storage = node.storage_attributes.get();
       result->cols["storage_state"].push_back(
           configuration::storageStateToString(node.getStorageState()));
-      result->cols["storage_capacity"].push_back(s(storage->capacity));
+      result->cols["storage_weight"].push_back(s(storage->capacity));
       result->cols["num_shards"].push_back(s(storage->num_shards));
     }
     const bool is_metadata_node =
