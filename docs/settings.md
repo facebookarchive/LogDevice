@@ -158,7 +158,7 @@ sidebar_label: Settings
 | connection-backlog | (server-only setting) Maximum number of incoming connections that have been accepted by listener (have an open FD) but have not been processed by workers (made logdevice protocol handshake). | 2000 | server&nbsp;only |
 | connection-retries | the number of TCP connection retries before giving up | 4 |  |
 | handshake-timeout | LogDevice protocol handshake timeout | 1s |  |
-| include-destination-on-handshake | Include the destination node ID in the LogDevice protocol handshake. If the actual node ID of the connection target does not match the intended destination ID, the connection is terminated. | false |  |
+| include-destination-on-handshake | Include the destination node ID in the LogDevice protocol handshake. If the actual node ID of the connection target does not match the intended destination ID, the connection is terminated. | true |  |
 | max-protocol | maximum version of LogDevice protocol that the server/client will accept | 85 |  |
 | nagle | enable Nagle's algorithm on TCP sockets. Changing this setting on-the-fly will not apply it to existing sockets, only to newly created ones | false |  |
 | outbuf-kb | max output buffer size (userspace extension of socket sendbuf) in KB. Changing this setting on-the-fly will not apply it to existing sockets, only to newly created ones | 32768 |  |
@@ -170,7 +170,7 @@ sidebar_label: Settings
 | tcp-keep-alive-probes | TCP keepalive probes. How many unacknowledged probes before the connection is considered broken. If negative the OS default will be used. | -1 |  |
 | tcp-keep-alive-time | TCP keepalive time. This is the time, in seconds, before the first probe will be sent. If negative the OS default will be used. | -1 |  |
 | tcp-user-timeout | The time in miliseconds that transmitted data may remain unacknowledgedbefore TCP will close the connection. 0 for system default. -1 to disable. default is 5min = 300000 | 300000 |  |
-| use-tcp-keep-alive | Enable TCP keepalive for all connections | false |  |
+| use-tcp-keep-alive | Enable TCP keepalive for all connections | true |  |
 
 ## Performance
 |   Name    |   Description   |  Default  |   Notes   |
