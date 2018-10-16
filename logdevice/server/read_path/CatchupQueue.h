@@ -246,7 +246,7 @@ class CatchupQueue {
 
   /**
    * Called after a ReadStorageTask completes on a storage thread.  The
-   * docblock for LocalLogStoreReader::execute() explains the output.
+   * docblock for LocalLogStoreReader::read() explains the output.
    */
   void onReadTaskDone(const ReadStorageTask& task);
 
