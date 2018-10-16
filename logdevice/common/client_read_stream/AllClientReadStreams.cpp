@@ -181,7 +181,9 @@ AllClientReadStreams::getAllReadStreamsDebugInfo(bool pretty,
                                    "Timestamp Lagged",
                                    "Last Time Lagging",
                                    "Last Time Stuck",
-                                   "Last Reported State");
+                                   "Last Reported State",
+                                   "Last Tail Info",
+                                   "Time Lag Record");
 
   auto tables = run_on_all_workers(&processor, [&]() {
     InfoClientReadStreamsTable t(table);

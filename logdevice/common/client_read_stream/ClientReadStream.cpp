@@ -323,7 +323,9 @@ void ClientReadStream::getDebugInfo(InfoClientReadStreamsTable& table) const {
         to_msec((readers_flow_tracer_->last_time_lagging_.time_since_epoch())));
     table.set<18>(
         to_msec((readers_flow_tracer_->last_time_stuck_.time_since_epoch())));
-    table.set<19>((readers_flow_tracer_->lastReportedStatePretty()));
+    table.set<19>(readers_flow_tracer_->lastReportedStatePretty());
+    table.set<20>(readers_flow_tracer_->lastTailInfoPretty());
+    table.set<21>(readers_flow_tracer_->timeLagRecordPretty());
   }
 }
 

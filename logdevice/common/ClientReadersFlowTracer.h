@@ -70,6 +70,8 @@ class ClientReadersFlowTracer
 
   void onSettingsUpdated();
   std::string lastReportedStatePretty() const;
+  std::string lastTailInfoPretty() const;
+  std::string timeLagRecordPretty() const;
 
  private:
   void onTimerTriggered();

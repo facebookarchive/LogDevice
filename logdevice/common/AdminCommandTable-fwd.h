@@ -225,7 +225,9 @@ typedef AdminCommandTable<logid_t,                    /* Log id */
                           int64_t,                    /* timestamp_lagged */
                           std::chrono::milliseconds,  /* last_time_lagging */
                           std::chrono::milliseconds,  /* last_time_stuck */
-                          std::string                 /* last_reported_state */
+                          std::string,                /* last_reported_state */
+                          std::string,                /* last_tail_info */
+                          std::string                 /* time_lag_record */
                           >
     InfoClientReadStreamsTable;
 

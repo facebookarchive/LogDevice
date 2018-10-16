@@ -383,6 +383,29 @@ std::string ClientReadersFlowTracer::lastReportedStatePretty() const {
   return "";
 }
 
+std::string ClientReadersFlowTracer::lastTailInfoPretty() const {
+  if (latest_tail_info_.has_value()) {
+    auto t = latest_tail_info_.value();
+    return folly::sformat("BO={},TS={},LSN={}",
+                          t.byte_offset,
+                          t.timestamp,
+                          lsn_to_string(t.lsn_approx));
+  } else {
+    return "NONE";
+  }
+}
+
+std::string ClientReadersFlowTracer::timeLagRecordPretty() const {
+  std::vector<std::string> entries_pretty;
+  for (auto& s : time_lag_record_) {
+    entries_pretty.push_back(folly::sformat("[ts_lag={},ts_lag_cor={},ttl={}]",
+                                            s.time_lag,
+                                            s.time_lag_correction,
+                                            s.ttl));
+  }
+  return folly::join(",", entries_pretty);
+}
+
 folly::Optional<int64_t> ClientReadersFlowTracer::estimateTimeLag() const {
   if (latest_tail_info_.hasValue()) {
     auto tail_lsn = latest_tail_info_->lsn_approx;
