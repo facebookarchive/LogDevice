@@ -2827,7 +2827,7 @@ void ClientReadStream::checkConsistency() const {
 
 void ClientReadStream::resumeReading() {
   if (redelivery_timer_ != nullptr && redelivery_timer_->isActive()) {
-    cancelRedeliveryTimer();
+    resetRedeliveryTimer();
     redeliver();
     // `this` may be deleted here.
   }
@@ -3308,7 +3308,7 @@ void ClientReadStream::deliverNoConfigGapAndDispose() {
 
 void ClientReadStream::adjustRedeliveryTimer(bool delivery_success) {
   if (delivery_success) {
-    cancelRedeliveryTimer();
+    resetRedeliveryTimer();
   } else {
     activateRedeliveryTimer();
   }
@@ -3334,9 +3334,9 @@ void ClientReadStream::activateRedeliveryTimer() {
   }
 }
 
-void ClientReadStream::cancelRedeliveryTimer() {
+void ClientReadStream::resetRedeliveryTimer() {
   if (redelivery_timer_ && redelivery_timer_->isActive()) {
-    redelivery_timer_->cancel();
+    redelivery_timer_->reset();
     if (readers_flow_tracer_) {
       readers_flow_tracer_->onRedeliveryTimerInactive();
     }

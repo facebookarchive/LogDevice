@@ -1129,7 +1129,7 @@ class ClientReadStream : boost::noncopyable {
   void adjustRedeliveryTimer(bool delivery_success);
 
   void activateRedeliveryTimer();
-  void cancelRedeliveryTimer();
+  void resetRedeliveryTimer();
 
   /**
    * Number of shards we are trying to read from.
