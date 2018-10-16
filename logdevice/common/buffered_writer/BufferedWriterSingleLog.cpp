@@ -221,10 +221,10 @@ void BufferedWriterSingleLog::flush() {
   // Parent shouldn't have called us from flushAll() if we're not flushable,
   // internal methods ensure we're flushable
   ld_check(isFlushable());
-  // Should cease being flushable after this method has finished, make sure to
-  // let parent know
+  // Make sure to let parent know whether this log is flushable or not. It could
+  // still be flushable if we flushed a batch (e.g. because of reaching the size
+  // threshold) and have blocked appenders that are not deferred.
   SCOPE_EXIT {
-    ld_check(!isFlushable());
     parent_->setFlushable(*this, isFlushable());
   };
 
@@ -448,7 +448,9 @@ void BufferedWriterSingleLog::unblockAppends() {
   }
   blocked_appends_.compact();
 
-  if (flush_at_end) {
+  // Despite `flush_at_end == true`, the log may not be flushable if the last
+  // call to `appendImpl()` above has flushed the last batch
+  if (flush_at_end && isFlushable()) {
     flush();
   }
 }
