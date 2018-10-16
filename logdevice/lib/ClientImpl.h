@@ -456,7 +456,6 @@ class ClientImpl : public Client,
   std::string cluster_name_;
 
   std::shared_ptr<TraceLogger> trace_logger_;
-  std::unique_ptr<ClientAPIHitsTracer> api_hits_tracer_;
 
   std::string credentials_;
 

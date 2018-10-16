@@ -356,7 +356,6 @@ ClientImpl::ClientImpl(std::string cluster_name,
     trace_logger_ = plugin_->createTraceLogger(config_);
   }
 
-  api_hits_tracer_ = std::make_unique<ClientAPIHitsTracer>(trace_logger_);
   event_tracer_ =
       std::make_unique<ClientEventTracer>(trace_logger_, stats_.get());
 
@@ -1527,18 +1526,15 @@ int ClientImpl::trim(logid_t logid,
                      lsn_t lsn,
                      std::unique_ptr<std::string> per_request_token,
                      trim_callback_t cb) noexcept {
-  auto cb_wrapper =
-      [logid,
-       lsn,
-       cb,
-       start = SteadyClock::now(),
-       weak_ref = std::weak_ptr<ClientImpl>(shared_from_this())](Status st) {
-        // log response
-        if (auto self = weak_ref.lock()) {
-          self->api_hits_tracer_->traceTrim(msec_since(start), logid, lsn, st);
-        }
-        cb(st);
-      };
+  auto cb_wrapper = [logid, lsn, cb, start = SteadyClock::now()](Status st) {
+    // log response
+    Worker* w = Worker::onThisThread();
+    if (w) {
+      w->processor_->api_hits_tracer_->traceTrim(
+          msec_since(start), logid, lsn, st);
+    }
+    cb(st);
+  };
   auto reqImpl = std::make_unique<TrimRequest>(
       bridge_.get(),
       logid,
@@ -1620,18 +1616,16 @@ int ClientImpl::findTime(logid_t logid,
                          std::chrono::milliseconds timestamp,
                          find_time_callback_t cb,
                          FindKeyAccuracy accuracy) noexcept {
-  auto cb_wrapper = [cb,
-                     logid,
-                     timestamp,
-                     accuracy,
-                     weak_ref = std::weak_ptr<ClientImpl>(shared_from_this()),
-                     start = SteadyClock::now()](Status st, lsn_t result) {
-    if (auto self = weak_ref.lock()) {
-      self->api_hits_tracer_->traceFindTime(
-          msec_since(start), logid, timestamp, accuracy, st, result);
-    }
-    cb(st, result);
-  };
+  auto cb_wrapper =
+      [cb, logid, timestamp, accuracy, start = SteadyClock::now()](
+          Status st, lsn_t result) {
+        Worker* w = Worker::onThisThread();
+        if (w) {
+          w->processor_->api_hits_tracer_->traceFindTime(
+              msec_since(start), logid, timestamp, accuracy, st, result);
+        }
+        cb(st, result);
+      };
 
   std::unique_ptr<Request> req = std::make_unique<FindKeyRequest>(
       logid,
@@ -1664,21 +1658,18 @@ int ClientImpl::findKey(logid_t logid,
                         std::string key,
                         find_key_callback_t cb,
                         FindKeyAccuracy accuracy) noexcept {
-  auto cb_wrapper = [cb,
-                     logid,
-                     key,
-                     accuracy,
-                     weak_ref = std::weak_ptr<ClientImpl>(shared_from_this()),
-                     start = SteadyClock::now()](FindKeyResult result) {
+  auto cb_wrapper = [cb, logid, key, accuracy, start = SteadyClock::now()](
+                        FindKeyResult result) {
     // log response
-    if (auto self = weak_ref.lock()) {
-      self->api_hits_tracer_->traceFindKey(msec_since(start),
-                                           logid,
-                                           key,
-                                           accuracy,
-                                           result.status,
-                                           result.lo,
-                                           result.hi);
+    Worker* w = Worker::onThisThread();
+    if (w) {
+      w->processor_->api_hits_tracer_->traceFindKey(msec_since(start),
+                                                    logid,
+                                                    key,
+                                                    accuracy,
+                                                    result.status,
+                                                    result.lo,
+                                                    result.hi);
     }
     cb(result);
   };
@@ -1734,13 +1725,12 @@ int ClientImpl::isLogEmptySync(logid_t logid, bool* empty) noexcept {
 }
 
 int ClientImpl::isLogEmpty(logid_t logid, is_empty_callback_t cb) noexcept {
-  auto cb_wrapper = [cb,
-                     logid,
-                     weak_ref = std::weak_ptr<ClientImpl>(shared_from_this()),
-                     start = SteadyClock::now()](Status st, bool empty) {
+  auto cb_wrapper = [cb, logid, start = SteadyClock::now()](
+                        Status st, bool empty) {
     // log response
-    if (auto self = weak_ref.lock()) {
-      self->api_hits_tracer_->traceIsLogEmpty(
+    Worker* w = Worker::onThisThread();
+    if (w) {
+      w->processor_->api_hits_tracer_->traceIsLogEmpty(
           msec_since(start), logid, st, empty);
     }
     cb(st, empty);
@@ -1800,13 +1790,13 @@ int ClientImpl::dataSize(logid_t logid,
                          std::chrono::milliseconds end,
                          DataSizeAccuracy accuracy,
                          data_size_callback_t cb) noexcept {
-  auto cb_wrapper = [cb,
-                     logid,
-                     weak_ref = std::weak_ptr<ClientImpl>(shared_from_this()),
-                     start = SteadyClock::now()](Status st, size_t size) {
+  auto cb_wrapper = [cb, logid, start = SteadyClock::now()](
+                        Status st, size_t size) {
     // log response
-    if (auto self = weak_ref.lock()) {
-      self->api_hits_tracer_->traceDataSize(msec_since(start), logid, st, size);
+    Worker* w = Worker::onThisThread();
+    if (w) {
+      w->processor_->api_hits_tracer_->traceDataSize(
+          msec_since(start), logid, st, size);
     }
     cb(st, size);
   };
@@ -1847,10 +1837,7 @@ lsn_t ClientImpl::getTailLSNSync(logid_t logid) noexcept {
 
 int ClientImpl::getTailLSN(logid_t logid, get_tail_lsn_callback_t cb) noexcept {
   auto cb_wrapper =
-      [logid,
-       cb,
-       weak_ref = std::weak_ptr<ClientImpl>(shared_from_this()),
-       start = SteadyClock::now()](
+      [logid, cb, start = SteadyClock::now()](
           Status st,
           NodeID /*seq*/,
           lsn_t next_lsn,
@@ -1859,8 +1846,9 @@ int ClientImpl::getTailLSN(logid_t logid, get_tail_lsn_callback_t cb) noexcept {
           std::shared_ptr<TailRecord> /*tail_record*/) {
         auto resp = next_lsn <= LSN_OLDEST ? next_lsn : next_lsn - 1;
         // log response
-        if (auto self = weak_ref.lock()) {
-          self->api_hits_tracer_->traceGetTailLSN(
+        Worker* w = Worker::onThisThread();
+        if (w) {
+          w->processor_->api_hits_tracer_->traceGetTailLSN(
               msec_since(start), logid, st, resp);
         }
         cb(st, resp);
@@ -1902,10 +1890,7 @@ ClientImpl::getTailAttributesSync(logid_t logid) noexcept {
 
 int ClientImpl::getTailAttributes(logid_t logid,
                                   get_tail_attributes_callback_t cb) noexcept {
-  auto cb_wrapper = [logid,
-                     cb,
-                     start = SteadyClock::now(),
-                     weak_ref = std::weak_ptr<ClientImpl>(shared_from_this())](
+  auto cb_wrapper = [logid, cb, start = SteadyClock::now()](
                         Status st,
                         NodeID /*seq*/,
                         lsn_t /*next_lsn*/,
@@ -1913,8 +1898,9 @@ int ClientImpl::getTailAttributes(logid_t logid,
                         std::shared_ptr<const EpochMetaDataMap> /*unused*/,
                         std::shared_ptr<TailRecord> /*unused*/) {
     // log response
-    if (auto self = weak_ref.lock()) {
-      self->api_hits_tracer_->traceGetTailAttributes(
+    Worker* w = Worker::onThisThread();
+    if (w) {
+      w->processor_->api_hits_tracer_->traceGetTailAttributes(
           msec_since(start), logid, st, tail_attributes.get());
     }
     // Check if recovery is running and sequencer can not provide log tail
@@ -2113,15 +2099,13 @@ ClientImpl::getHeadAttributesSync(logid_t logid) noexcept {
 
 int ClientImpl::getHeadAttributes(logid_t logid,
                                   get_head_attributes_callback_t cb) noexcept {
-  auto cb_wrapper = [logid,
-                     cb,
-                     start = SteadyClock::now(),
-                     weak_ref = std::weak_ptr<ClientImpl>(shared_from_this())](
+  auto cb_wrapper = [logid, cb, start = SteadyClock::now()](
                         Status st,
                         std::unique_ptr<LogHeadAttributes> head_attributes) {
     // log response
-    if (auto self = weak_ref.lock()) {
-      self->api_hits_tracer_->traceGetHeadAttributes(
+    Worker* w = Worker::onThisThread();
+    if (w) {
+      w->processor_->api_hits_tracer_->traceGetHeadAttributes(
           msec_since(start), logid, st, head_attributes.get());
     }
     cb(st, std::move(head_attributes));

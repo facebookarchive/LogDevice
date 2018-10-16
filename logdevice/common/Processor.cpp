@@ -20,8 +20,11 @@
 
 #include "logdevice/common/AllSequencers.h"
 #include "logdevice/common/AppendProbeController.h"
+#include "logdevice/common/ClientAPIHitsTracer.h"
 #include "logdevice/common/ClientIdxAllocator.h"
 #include "logdevice/common/ClusterState.h"
+#include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/event_log/EventLogRebuildingSet.h"
 #include "logdevice/common/EventLoopHandle.h"
 #include "logdevice/common/MetaDataLogWriter.h"
 #include "logdevice/common/PermissionChecker.h"
@@ -30,19 +33,17 @@
 #include "logdevice/common/SecurityInformation.h"
 #include "logdevice/common/SequencerBatching.h"
 #include "logdevice/common/SequencerLocator.h"
+#include "logdevice/common/stats/ServerHistograms.h"
+#include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/Thread.h"
 #include "logdevice/common/TraceLogger.h"
 #include "logdevice/common/TrafficShaper.h"
 #include "logdevice/common/types_internal.h"
-#include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/UpdateableSecurityInfo.h"
 #include "logdevice/common/WatchDogThread.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/WorkerLoadBalancing.h"
 #include "logdevice/common/ZeroCopiedRecordDisposal.h"
-#include "logdevice/common/event_log/EventLogRebuildingSet.h"
-#include "logdevice/common/stats/ServerHistograms.h"
-#include "logdevice/common/stats/Stats.h"
 #include "logdevice/include/Err.h"
 
 namespace {
@@ -138,6 +139,7 @@ Processor::Processor(std::shared_ptr<UpdateableConfig> updateable_config,
       conn_budget_incoming_(settings_->max_incoming_connections),
       conn_budget_backlog_(settings_->connection_backlog),
       conn_budget_external_(settings_->max_external_connections),
+      api_hits_tracer_(std::make_unique<ClientAPIHitsTracer>(trace_logger)),
       HELLOCredentials_(settings_->server ? Principal::CLUSTER_NODE
                                           : std::move(credentials)),
       csid_(std::move(csid)),

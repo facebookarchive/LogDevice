@@ -39,6 +39,7 @@ namespace facebook { namespace logdevice {
 
 class AllSequencers;
 class AppendProbeController;
+class ClientAPIHitsTracer;
 class ClientIdxAllocator;
 class ClusterState;
 class EventLogRebuildingSet;
@@ -467,6 +468,11 @@ class Processor : public folly::enable_shared_from_this<Processor> {
   // If it's non-nullptr we don't have any guarantees about how up-to-date it
   // is either, but it's not likely to be far behind.
   UpdateableSharedPtr<EventLogRebuildingSet> rebuilding_set_;
+
+  /**
+   * Tracer for API calls.
+   */
+  std::unique_ptr<ClientAPIHitsTracer> api_hits_tracer_;
 
   // The credentials used in HELLO message if the authentication_type specified
   // in the configuration file is set to "self_identification"
