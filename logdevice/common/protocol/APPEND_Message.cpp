@@ -24,7 +24,7 @@
 #include "logdevice/common/Checksum.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/MetaDataLogWriter.h"
-#include "logdevice/common/PluginPack.h"
+#include "logdevice/common/LegacyPluginPack.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/protocol/ProtocolReader.h"

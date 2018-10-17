@@ -60,6 +60,7 @@
 #include "logdevice/include/Err.h"
 #include "logdevice/include/Record.h"
 #include "logdevice/lib/AsyncReaderImpl.h"
+#include "logdevice/lib/ClientBuiltinPluginProvider.h"
 #include "logdevice/lib/ClientPluginPack.h"
 #include "logdevice/lib/ClientProcessor.h"
 #include "logdevice/lib/ClientSettingsImpl.h"
@@ -134,7 +135,14 @@ std::shared_ptr<Client> Client::create(std::string cluster_name,
           cluster_name.c_str(),
           config_url.c_str());
 
-  std::shared_ptr<ClientPluginPack> plugin = load_client_plugin();
+  auto plugin_registry =
+      std::make_shared<PluginRegistry>(getClientPluginProviders());
+  ld_info(
+      "Plugins loaded: %s", plugin_registry->getStateDescriptionStr().c_str());
+  std::shared_ptr<ClientPluginPack> plugin =
+      plugin_registry->getSinglePlugin<ClientPluginPack>(
+          PluginType::LEGACY_CLIENT_PLUGIN);
+  ld_check(plugin);
 
   // If caller provided a ClientSettings instance, use that, otherwise create
   // one with default settings
@@ -143,15 +151,13 @@ std::shared_ptr<Client> Client::create(std::string cluster_name,
   std::unique_ptr<ClientSettingsImpl> impl_settings(
       static_cast<ClientSettingsImpl*>(raw_settings));
 
-  if (plugin) {
-    std::string plugin_location = plugin->getMyLocation();
-    auto location = raw_settings->get("my-location");
-    std::string location_str = location.hasValue() ? location.value() : "";
-    if (location_str.empty() && !plugin_location.empty()) {
-      // if my-location was not specified, set the value to what the plugin
-      // provides.
-      raw_settings->set("my-location", plugin_location.c_str());
-    }
+  std::string plugin_location = plugin->getMyLocation();
+  auto location = raw_settings->get("my-location");
+  std::string location_str = location.hasValue() ? location.value() : "";
+  if (location_str.empty() && !plugin_location.empty()) {
+    // if my-location was not specified, set the value to what the plugin
+    // provides.
+    raw_settings->set("my-location", plugin_location.c_str());
   }
 
   auto settings_updater = impl_settings->getSettingsUpdater();
@@ -239,7 +245,7 @@ std::shared_ptr<Client> Client::create(std::string cluster_name,
                                         csid,
                                         timeout,
                                         std::move(impl_settings),
-                                        plugin);
+                                        plugin_registry);
   } catch (const ConstructorFailed&) {
     // err set by the constructor
     ld_error("Constructing ClientImpl failed with %s.", error_description(err));
@@ -274,15 +280,18 @@ ClientImpl::ClientImpl(std::string cluster_name,
                        std::string csid,
                        std::chrono::milliseconds timeout,
                        std::unique_ptr<ClientSettings>&& settings,
-                       std::shared_ptr<ClientPluginPack> plugin)
+                       std::shared_ptr<PluginRegistry> plugin_registry)
     : ClientImpl(std::move(cluster_name),
                  config,
                  std::move(credentials),
                  std::move(csid),
                  std::move(timeout),
                  std::move(settings),
-                 plugin->createSequencerLocator(config),
-                 plugin) {}
+                 plugin_registry
+                     ->getSinglePlugin<ClientPluginPack>(
+                         PluginType::LEGACY_CLIENT_PLUGIN)
+                     ->createSequencerLocator(config),
+                 plugin_registry) {}
 
 bool ClientImpl::validateServerConfig(ServerConfig& cfg) const {
   ld_check(config_);
@@ -306,8 +315,9 @@ ClientImpl::ClientImpl(std::string cluster_name,
                        std::chrono::milliseconds timeout,
                        std::unique_ptr<ClientSettings>&& client_settings,
                        std::unique_ptr<SequencerLocator> sequencer_locator,
-                       std::shared_ptr<ClientPluginPack> plugin)
-    : plugin_(std::move(plugin)),
+                       std::shared_ptr<PluginRegistry> plugin_registry)
+    : plugin_(plugin_registry->getSinglePlugin<ClientPluginPack>(
+          PluginType::LEGACY_CLIENT_PLUGIN)),
       cluster_name_(cluster_name),
       credentials_(std::move(credentials)),
       csid_(std::move(csid)),

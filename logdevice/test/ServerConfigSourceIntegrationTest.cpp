@@ -14,6 +14,7 @@
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/lib/ClientBuiltinPluginProvider.h"
 #include "logdevice/lib/ClientImpl.h"
 #include "logdevice/lib/ClientSettingsImpl.h"
 #include "logdevice/lib/ClientPluginPack.h"
@@ -107,6 +108,8 @@ TEST_F(ServerConfigSourceIntegrationTest, StaleServerConfigFetchFromClient) {
 
   std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
   ASSERT_EQ(0, client_settings->set("enable-config-synchronization", true));
+  auto plugin_registry =
+      std::make_shared<PluginRegistry>(getClientPluginProviders());
   std::shared_ptr<Client> client = std::make_shared<ClientImpl>(
       client_config->get()->serverConfig()->getClusterName(),
       client_config,
@@ -114,7 +117,7 @@ TEST_F(ServerConfigSourceIntegrationTest, StaleServerConfigFetchFromClient) {
       "",
       std::chrono::seconds(1),
       std::move(client_settings),
-      load_client_plugin());
+      plugin_registry);
   ASSERT_TRUE((bool)client);
 
   // Make an appendSync() call. The server config should detect that its config
@@ -176,6 +179,8 @@ TEST_F(ServerConfigSourceIntegrationTest, StaleServerConfigFetchFromSource) {
 
   std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
   ASSERT_EQ(0, client_settings->set("enable-config-synchronization", true));
+  auto plugin_registry =
+      std::make_shared<PluginRegistry>(getClientPluginProviders());
   std::shared_ptr<Client> client = std::make_shared<ClientImpl>(
       client_config->get()->serverConfig()->getClusterName(),
       client_config,
@@ -183,7 +188,7 @@ TEST_F(ServerConfigSourceIntegrationTest, StaleServerConfigFetchFromSource) {
       "",
       std::chrono::seconds(1),
       std::move(client_settings),
-      load_client_plugin());
+      plugin_registry);
   ASSERT_TRUE((bool)client);
 
   // Make an appendSync() call. The server config should detect that its config

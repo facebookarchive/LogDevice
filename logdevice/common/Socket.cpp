@@ -29,7 +29,7 @@
 #include "logdevice/common/debug.h"
 #include "logdevice/common/EventHandler.h"
 #include "logdevice/common/FlowGroup.h"
-#include "logdevice/common/PluginPack.h"
+#include "logdevice/common/LegacyPluginPack.h"
 #include "logdevice/common/PrincipalParser.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/ResourceBudget.h"

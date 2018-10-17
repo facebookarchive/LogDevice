@@ -7,7 +7,9 @@
  */
 #pragma once
 
-#include "logdevice/common/PluginPack.h"
+#include "logdevice/common/plugin/Plugin.h"
+#include "logdevice/common/plugin/PluginRegistry.h"
+#include "logdevice/common/LegacyPluginPack.h"
 
 /**
  * @file Server Plugin pack for LogDevice
@@ -33,8 +35,21 @@ namespace facebook { namespace logdevice {
 
 class Server;
 
-class ServerPluginPack : public virtual PluginPack {
+class ServerPluginPack : public virtual LegacyPluginPack,
+                         public virtual Plugin {
  public:
+  Type type() const override {
+    return Type::LEGACY_SERVER_PLUGIN;
+  }
+
+  std::string identifier() const override {
+    return PluginRegistry::kBuiltin().str();
+  }
+
+  std::string displayName() const override {
+    return description();
+  }
+
   virtual const char* description() const override {
     return "built-in server plugin";
   }
@@ -51,17 +66,5 @@ class ServerPluginPack : public virtual PluginPack {
    */
   virtual void optimizeHotText() {}
 };
-
-// Internal: attempts to dynamically load the plugin.  Returns a
-// default Plugin instance if the "logdevice_server_plugin" symbol is not
-// found.
-//
-// If `logstr_out' is null (default), the function logs the outcome
-// of plugin loading using the standard LogDevice logging framework.
-// If non-null, the debug info is saved into the string instead (
-// useful because this function can be called very early on, before
-// the logging framework is initialised.)
-std::unique_ptr<ServerPluginPack>
-load_server_plugin(std::string* logstr_out = nullptr);
 
 }} // namespace facebook::logdevice

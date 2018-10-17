@@ -9,7 +9,7 @@
 
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/FileConfigSource.h"
-#include "logdevice/common/PluginPack.h"
+#include "logdevice/common/LegacyPluginPack.h"
 #include "logdevice/common/ServerConfigSource.h"
 #include "logdevice/common/configuration/TextConfigUpdater.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
@@ -19,7 +19,7 @@
 namespace facebook { namespace logdevice {
 
 int ConfigInit::attach(const std::string& location,
-                       std::shared_ptr<PluginPack> plugin,
+                       std::shared_ptr<LegacyPluginPack> plugin,
                        std::shared_ptr<UpdateableServerConfig> server_config,
                        std::shared_ptr<UpdateableLogsConfig> logs_config,
                        std::unique_ptr<LogsConfig> alternative_logs_config,
@@ -55,7 +55,7 @@ int ConfigInit::attach(const std::string& location,
 }
 
 int ConfigInit::attach(const std::string& source,
-                       std::shared_ptr<PluginPack> plugin,
+                       std::shared_ptr<LegacyPluginPack> plugin,
                        std::shared_ptr<UpdateableConfig> updateable_config,
                        std::unique_ptr<LogsConfig> alternative_logs_config,
                        UpdateableSettings<Settings> settings,

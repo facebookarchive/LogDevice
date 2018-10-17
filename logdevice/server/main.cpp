@@ -20,18 +20,21 @@
 #include <folly/Singleton.h>
 
 #include "logdevice/common/BuildInfo.h"
-#include "logdevice/common/commandline_util.h"
 #include "logdevice/common/ConstructorFailed.h"
-#include "logdevice/common/debug.h"
-#include "logdevice/common/settings/GossipSettings.h"
 #include "logdevice/common/NoopTraceLogger.h"
-#include "logdevice/common/settings/RebuildingSettings.h"
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/StatsCollectionThread.h"
 #include "logdevice/common/ThreadID.h"
 #include "logdevice/common/ZookeeperClient.h"
+#include "logdevice/common/commandline_util.h"
+#include "logdevice/common/debug.h"
+#include "logdevice/common/plugin/PluginRegistry.h"
+#include "logdevice/common/plugin/StaticPluginLoader.h"
+#include "logdevice/common/settings/GossipSettings.h"
+#include "logdevice/common/settings/RebuildingSettings.h"
 #include "logdevice/common/settings/SettingsUpdater.h"
 #include "logdevice/server/Server.h"
+#include "logdevice/server/ServerBuiltinPluginProvider.h"
 #include "logdevice/server/ServerPluginPack.h"
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/fatalsignal.h"
@@ -276,9 +279,14 @@ int main(int argc, const char** argv) {
 
   ThreadID::set(ThreadID::Type::UTILITY, "logdeviced-main");
 
-  std::string plugin_debug_str;
+  std::shared_ptr<PluginRegistry> plugin_registry =
+      std::make_shared<PluginRegistry>(
+          createPluginVector<StaticPluginLoader,
+                             ServerBuiltinPluginProvider>());
   std::shared_ptr<ServerPluginPack> plugin =
-      load_server_plugin(&plugin_debug_str);
+      plugin_registry->getSinglePlugin<ServerPluginPack>(
+          PluginType::LEGACY_SERVER_PLUGIN);
+  ld_check(plugin);
 
   plugin->optimizeHotText();
 
@@ -361,7 +369,8 @@ int main(int argc, const char** argv) {
       std::bind(on_server_settings_changed, server_settings));
 
   // Now that the logging framework is initialised, log plugin info
-  ld_info("%s", plugin_debug_str.c_str());
+  ld_info(
+      "Plugins loaded: %s", plugin_registry->getStateDescriptionStr().c_str());
 
   ld_info("server starting");
   {

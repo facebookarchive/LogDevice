@@ -26,6 +26,7 @@
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
 #include "logdevice/common/test/TestUtil.h"
+#include "logdevice/lib/ClientBuiltinPluginProvider.h"
 #include "logdevice/lib/ClientImpl.h"
 #include "logdevice/lib/ClientPluginPack.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"
@@ -425,6 +426,8 @@ TEST_F(AppendIntegrationTest, NoSequencer) {
   client_config->updateableServerConfig()->update(
       cluster_config->serverConfig());
   client_config->updateableLogsConfig()->update(logs_config);
+  auto plugin_registry =
+      std::make_shared<PluginRegistry>(getClientPluginProviders());
   std::shared_ptr<Client> client = std::make_shared<ClientImpl>(
       client_config->get()->serverConfig()->getClusterName(),
       client_config,
@@ -432,7 +435,7 @@ TEST_F(AppendIntegrationTest, NoSequencer) {
       "",
       this->testTimeout(),
       std::unique_ptr<ClientSettings>(),
-      load_client_plugin());
+      plugin_registry);
   ASSERT_TRUE((bool)client);
 
   // make an appendSync() call for the new log. Expect "no sequencer for log"
@@ -471,6 +474,8 @@ TEST_F(AppendIntegrationTest, LogIdNotInServerConfig) {
   client_config->updateableServerConfig()->update(
       cluster_config->serverConfig());
   client_config->updateableLogsConfig()->update(logs_config);
+  auto plugin_registry =
+      std::make_shared<PluginRegistry>(getClientPluginProviders());
   std::shared_ptr<Client> client = std::make_shared<ClientImpl>(
       client_config->get()->serverConfig()->getClusterName(),
       client_config,
@@ -478,7 +483,7 @@ TEST_F(AppendIntegrationTest, LogIdNotInServerConfig) {
       "",
       this->testTimeout(),
       std::unique_ptr<ClientSettings>(),
-      load_client_plugin());
+      plugin_registry);
   ASSERT_TRUE((bool)client);
 
   // make an appendSync() call for the new log.

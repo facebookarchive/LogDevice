@@ -6,12 +6,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "logdevice/common/configuration/Configuration.h"
-#include "logdevice/common/PrincipalParser.h"
-#include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/UpdateableSecurityInfo.h"
+
+#include "logdevice/common/LegacyPluginPack.h"
+#include "logdevice/common/PrincipalParser.h"
 #include "logdevice/common/Worker.h"
-#include "logdevice/common/PluginPack.h"
+#include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/common/configuration/UpdateableConfig.h"
 
 namespace facebook { namespace logdevice {
 

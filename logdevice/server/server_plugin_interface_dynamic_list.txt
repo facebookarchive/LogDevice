@@ -1,3 +1,6 @@
 {
-  extern "C" { logdevice_server_plugin; };
+  extern "C" {
+    logdevice_server_plugin;
+    logdevice_plugin;
+  };
 };

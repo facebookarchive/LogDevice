@@ -40,7 +40,9 @@
 #include "logdevice/common/configuration/InternalLogs.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
 #include "logdevice/common/event_log/EventLogRebuildingSet.h"
+#include "logdevice/common/plugin/PluginRegistry.h"
 #include "logdevice/lib/ClientSettingsImpl.h"
+#include "logdevice/lib/ClientBuiltinPluginProvider.h"
 #include "logdevice/lib/ClientPluginPack.h"
 #include "logdevice/server/locallogstore/LocalLogStore.h"
 
@@ -2051,6 +2053,11 @@ Cluster::createClient(std::chrono::milliseconds timeout,
     settings->set("enable-logsconfig-manager", "true");
   }
 
+  std::shared_ptr<PluginRegistry> plugin_registry =
+      std::make_shared<PluginRegistry>(getClientPluginProviders());
+  ld_info(
+      "Plugins loaded: %s", plugin_registry->getStateDescriptionStr().c_str());
+
   return std::make_shared<ClientImpl>(cluster_name_,
                                       config_,
                                       credentials,
@@ -2058,7 +2065,7 @@ Cluster::createClient(std::chrono::milliseconds timeout,
                                       timeout,
                                       std::move(settings),
                                       std::move(sequencer_locator),
-                                      load_client_plugin());
+                                      plugin_registry);
 }
 
 std::shared_ptr<Client>

@@ -14,7 +14,7 @@
 
 namespace facebook { namespace logdevice {
 
-class PluginPack;
+class LegacyPluginPack;
 class LogsConfig;
 class UpdateableConfig;
 
@@ -27,7 +27,7 @@ class UpdateableConfig;
 class ServerConfigSource : public ConfigSource {
  public:
   explicit ServerConfigSource(const LogsConfig* alternative_logs_config,
-                              std::shared_ptr<PluginPack> plugin)
+                              std::shared_ptr<LegacyPluginPack> plugin)
       : alternative_logs_config_(alternative_logs_config),
         plugin_(std::move(plugin)) {}
   ~ServerConfigSource() override {
@@ -50,7 +50,7 @@ class ServerConfigSource : public ConfigSource {
   UpdateableSettings<Settings> updateable_settings_;
   std::shared_ptr<UpdateableConfig> config_;
   const LogsConfig* alternative_logs_config_;
-  std::shared_ptr<PluginPack> plugin_;
+  std::shared_ptr<LegacyPluginPack> plugin_;
   ConfigSubscriptionHandle server_config_subscription_;
 
   void init(const std::string& path, const std::vector<std::string>& hosts);

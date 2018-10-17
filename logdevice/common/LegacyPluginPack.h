@@ -9,7 +9,6 @@
 
 #include <boost/program_options.hpp>
 #include <chrono>
-#include <dlfcn.h>
 #include <folly/Format.h>
 #include <memory>
 #include <opentracing/noop.h>
@@ -39,23 +38,26 @@ class TraceLogger;
 class UpdateableConfig;
 
 /**
+ * NOTE: this interface is now deprecated. If you want to create a new type of
+ * plugin, look into common/plugin/
+ *
  * Interface for pluggable common components of LogDevice.  Subclasses may
  * override some or all methods. Most of the methods are invoked at various
  * points during initialization.  Default implementations typically produce null
  * pointers or no-op instances where appropriate.
  *
  * The server and client will keep the Plugin instance alive throughout their
- * lifetime, allowing PluginPack subclasses to be stateful.
+ * lifetime, allowing LegacyPluginPack subclasses to be stateful.
  *
  * This is a base class that contains the list of accessible plugins by both
  * server and clients. If you want to define a server-specific or
  * client-specific plugin see server/ServerPluginPack.h or
  * lib/ClientPluginPack.h respectively.
  */
-class PluginPack {
+class LegacyPluginPack {
  public:
   virtual const char* description() const {
-    return "default PluginPack";
+    return "default LegacyPluginPack";
   };
 
   /**
@@ -127,43 +129,7 @@ class PluginPack {
     return opentracing::MakeNoopTracer();
   }
 
-  virtual ~PluginPack() {}
+  virtual ~LegacyPluginPack() {}
 };
-
-/**
- * A plugin pack loader, this takes the name (just for logging) and a
- * constructor symbol name that it will lookup on the symbol table and
- * dynamically load it if found. If the ctor_symbol was not found we load an
- * instance of the type T instead
- *
- * If `logstr_out' is null (default), the function logs the outcome
- * of plugin loading using the standard LogDevice logging framework.
- * If non-null, the debug info is saved into the string instead (
- * useful because this function can be called very early on, before
- * the logging framework is initialised.)
- */
-template <class T>
-std::unique_ptr<T> load_plugin_pack(const char* name,
-                                    const char* ctor_symbol,
-                                    std::string* logstr_out) {
-  std::string logstr;
-  void* ptr = dlsym(RTLD_DEFAULT, ctor_symbol);
-  std::unique_ptr<T> rv;
-  if (ptr != nullptr) {
-    auto fnptr = reinterpret_cast<T* (*)()>(ptr);
-    rv.reset(fnptr());
-    logstr =
-        folly::format("{} plugin loaded: {}", name, rv->description()).str();
-  } else {
-    rv.reset(new T());
-    logstr = folly::format("No plugin found for {}", std::string(name)).str();
-  }
-  if (logstr_out != nullptr) {
-    *logstr_out = std::move(logstr);
-  } else {
-    ld_info("%s", logstr.c_str());
-  }
-  return rv;
-}
 
 }} // namespace facebook::logdevice

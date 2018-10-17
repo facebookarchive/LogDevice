@@ -30,7 +30,7 @@
 #include "logdevice/common/Timer.h"
 #include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/PermissionChecker.h"
-#include "logdevice/common/PluginPack.h"
+#include "logdevice/common/LegacyPluginPack.h"
 #include "logdevice/common/PrincipalParser.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/ReaderImpl.h"
@@ -363,14 +363,14 @@ bool testsShouldLeaveData() {
   return getenv_switch("LOGDEVICE_TEST_LEAVE_DATA");
 }
 
-class TestPluginPack : public PluginPack {
+class TestPluginPack : public LegacyPluginPack {
  public:
   virtual const char* description() const override {
     return "testing plugin";
   }
 };
 
-std::shared_ptr<PluginPack> make_test_plugin_pack() {
+std::shared_ptr<LegacyPluginPack> make_test_plugin_pack() {
   return std::make_shared<TestPluginPack>();
 }
 

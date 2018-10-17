@@ -44,19 +44,19 @@ class ClientIdxAllocator;
 class ClusterState;
 class EventLogRebuildingSet;
 class EventLoopHandle;
+class LegacyPluginPack;
 class PermissionChecker;
-class PluginPack;
 class PrincipalParser;
 class ProcessorImpl;
 class RebuildingSupervisor;
 class Request;
-class UpdateableSecurityInfo;
 class SequencerBatching;
 class SequencerLocator;
 class StatsHolder;
 class TraceLogger;
 class TrafficShaper;
 class UpdateableConfig;
+class UpdateableSecurityInfo;
 class WatchDogThread;
 class Worker;
 class ZeroCopiedRecordDisposal;
@@ -97,7 +97,7 @@ class Processor : public folly::enable_shared_from_this<Processor> {
             UpdateableSettings<Settings> settings,
             StatsHolder* stats,
             std::unique_ptr<SequencerLocator> sequencer_locator,
-            std::shared_ptr<PluginPack> plugin,
+            std::shared_ptr<LegacyPluginPack> plugin,
             std::string credentials = "",
             std::string csid = "",
             std::string name = "logdevice");
@@ -409,7 +409,7 @@ class Processor : public folly::enable_shared_from_this<Processor> {
   UpdateableSettings<Settings> settings_;
 
  public:
-  std::shared_ptr<PluginPack> plugin_;
+  std::shared_ptr<LegacyPluginPack> plugin_;
   StatsHolder* stats_;
 
   friend class ProcessorImpl;
@@ -548,7 +548,7 @@ class Processor : public folly::enable_shared_from_this<Processor> {
 
   ClientIdxAllocator& clientIdxAllocator() const;
 
-  std::shared_ptr<PluginPack> getPlugin() {
+  std::shared_ptr<LegacyPluginPack> getPlugin() {
     return plugin_;
   }
 

@@ -23,27 +23,27 @@
 #include "logdevice/common/ClientAPIHitsTracer.h"
 #include "logdevice/common/ClientIdxAllocator.h"
 #include "logdevice/common/ClusterState.h"
-#include "logdevice/common/configuration/UpdateableConfig.h"
-#include "logdevice/common/event_log/EventLogRebuildingSet.h"
 #include "logdevice/common/EventLoopHandle.h"
+#include "logdevice/common/LegacyPluginPack.h"
 #include "logdevice/common/MetaDataLogWriter.h"
 #include "logdevice/common/PermissionChecker.h"
-#include "logdevice/common/PluginPack.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/SecurityInformation.h"
 #include "logdevice/common/SequencerBatching.h"
 #include "logdevice/common/SequencerLocator.h"
-#include "logdevice/common/stats/ServerHistograms.h"
-#include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/Thread.h"
 #include "logdevice/common/TraceLogger.h"
 #include "logdevice/common/TrafficShaper.h"
-#include "logdevice/common/types_internal.h"
 #include "logdevice/common/UpdateableSecurityInfo.h"
 #include "logdevice/common/WatchDogThread.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/WorkerLoadBalancing.h"
 #include "logdevice/common/ZeroCopiedRecordDisposal.h"
+#include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/event_log/EventLogRebuildingSet.h"
+#include "logdevice/common/stats/ServerHistograms.h"
+#include "logdevice/common/stats/Stats.h"
+#include "logdevice/common/types_internal.h"
 #include "logdevice/include/Err.h"
 
 namespace {
@@ -124,7 +124,7 @@ Processor::Processor(std::shared_ptr<UpdateableConfig> updateable_config,
                      UpdateableSettings<Settings> settings,
                      StatsHolder* stats,
                      std::unique_ptr<SequencerLocator> sequencer_locator,
-                     std::shared_ptr<PluginPack> plugin,
+                     std::shared_ptr<LegacyPluginPack> plugin,
                      std::string credentials,
                      std::string csid,
                      std::string name)
@@ -259,7 +259,7 @@ Processor::Processor(UpdateableSettings<Settings> settings,
                      StatsHolder* stats)
     : fake_storage_node_(fake_storage_node),
       settings_(settings),
-      plugin_(std::make_shared<PluginPack>()),
+      plugin_(std::make_shared<LegacyPluginPack>()),
       stats_(stats),
       impl_(new ProcessorImpl(this, settings)),
       conn_budget_incoming_(settings_.get()->max_incoming_connections),

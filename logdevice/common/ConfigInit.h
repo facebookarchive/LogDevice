@@ -20,7 +20,7 @@
 
 namespace facebook { namespace logdevice {
 
-class PluginPack;
+class LegacyPluginPack;
 class MyNodeID;
 class StatsHolder;
 
@@ -78,7 +78,7 @@ class ConfigInit {
    *           SYSLIMIT    config monitoring thread could not be started
    */
   int attach(const std::string& source,
-             std::shared_ptr<PluginPack>,
+             std::shared_ptr<LegacyPluginPack>,
              std::shared_ptr<UpdateableServerConfig> server_config,
              std::shared_ptr<UpdateableLogsConfig> logs_config = nullptr,
              std::unique_ptr<LogsConfig> alternative_logs_config = nullptr,
@@ -87,7 +87,7 @@ class ConfigInit {
              const ConfigParserOptions& options = ConfigParserOptions());
 
   int attach(const std::string& source,
-             std::shared_ptr<PluginPack>,
+             std::shared_ptr<LegacyPluginPack>,
              std::shared_ptr<UpdateableConfig> updateable_config,
              std::unique_ptr<LogsConfig> alternative_logs_config,
              UpdateableSettings<Settings> updateable_settings =

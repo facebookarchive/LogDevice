@@ -30,24 +30,25 @@
 namespace facebook { namespace logdevice {
 
 class AppendRequest;
+class ClientAPIHitsTracer;
 class ClientBridgeImpl;
 class ClientEventTracer;
+class ClientPluginPack;
 class ClientProcessor;
 class ClientSettings;
 class ClientSettingsImpl;
 class ConfigSubscriptionHandle;
 class EpochMetaDataCache;
 class EpochMetaDataMap;
-class ClientPluginPack;
+class PluginRegistry;
 class Processor;
 class SequencerLocator;
 struct Settings;
 class Shadow;
-class StatsHolder;
 class StatsCollectionThread;
+class StatsHolder;
 class TailRecord;
 class TraceLogger;
-class ClientAPIHitsTracer;
 
 class ClientImpl : public Client,
                    public std::enable_shared_from_this<ClientImpl>,
@@ -69,17 +70,17 @@ class ClientImpl : public Client,
              std::chrono::milliseconds timeout,
              std::unique_ptr<ClientSettings>&& settings,
              std::unique_ptr<SequencerLocator> sequencer_locator,
-             std::shared_ptr<ClientPluginPack> plugin);
+             std::shared_ptr<PluginRegistry> plugin_registry);
 
-  // An overload that uses PluginPack::createSequencerLocator() to construct a
-  // SequencerLocator.
+  // An overload that uses LegacyPluginPack::createSequencerLocator() to
+  // construct a SequencerLocator.
   ClientImpl(std::string cluster_name,
              std::shared_ptr<UpdateableConfig> config,
              std::string credentials,
              std::string csid,
              std::chrono::milliseconds timeout,
              std::unique_ptr<ClientSettings>&& settings,
-             std::shared_ptr<ClientPluginPack> plugin);
+             std::shared_ptr<PluginRegistry> plugin_registry);
 
   virtual ~ClientImpl() override;
 
