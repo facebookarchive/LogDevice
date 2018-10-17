@@ -118,28 +118,36 @@ void ld_check_fail_impl(CheckType type,
 #define ld_assert_gt(x, y) ld_assert_op(>, x, y)
 
 template <typename T>
-inline std::initializer_list<T> ListHelper(std::initializer_list<T> mylist) {
-  return mylist;
-}
+struct CheckInHelper {
+  T& target;
+  CheckInHelper(T& t) : target(t) {}
+  bool isIn(std::initializer_list<T> mylist) {
+    for (auto it = mylist.begin(); it != mylist.end(); ++it) {
+      if (*it == target) {
+        return true;
+      }
+    }
+    return false;
+  }
+};
 
 // mylist must be enclosed in parens, like this:
 //   ld_check_in(state_, ({State::MUTATION, State::CLEAN}));
-#define ld_check_in(target, mylist)                                            \
-  do {                                                                         \
-    auto target1{target};                                                      \
-    auto mylist1(facebook::logdevice::dbg::ListHelper mylist);                 \
-    if (UNLIKELY(!std::any_of(mylist1.begin(),                                 \
-                              mylist1.end(),                                   \
-                              [&target1](auto x) { return x == target1; }))) { \
-      ld_check_fail_impl(                                                      \
-          ::facebook::logdevice::dbg::CheckType::CHECK,                        \
-          (std::string(#target) + " (" +                                       \
-           ::facebook::logdevice::toString(target1) + ") in " #mylist)         \
-              .c_str(),                                                        \
-          __FILE__,                                                            \
-          __FUNCTION__,                                                        \
-          __LINE__);                                                           \
-    }                                                                          \
+#define ld_check_in(target, mylist)                                           \
+  do {                                                                        \
+    auto target1{target};                                                     \
+    if (UNLIKELY(!facebook::logdevice::dbg::CheckInHelper<decltype(target1)>( \
+                      target1)                                                \
+                      .isIn mylist)) {                                        \
+      ld_check_fail_impl(                                                     \
+          ::facebook::logdevice::dbg::CheckType::CHECK,                       \
+          (std::string(#target) + " (" +                                      \
+           ::facebook::logdevice::toString(target1) + ") in " #mylist)        \
+              .c_str(),                                                       \
+          __FILE__,                                                           \
+          __FUNCTION__,                                                       \
+          __LINE__);                                                          \
+    }                                                                         \
   } while (false)
 
 }}} // namespace facebook::logdevice::dbg
