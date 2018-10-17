@@ -82,7 +82,6 @@ LogsConfigManager::LogsConfigManager(
   auto updateable_server_config = updateable_config_->updateableServerConfig();
   state_machine_ = std::make_unique<LogsConfigStateMachine>(
       settings_, updateable_server_config, is_writable_);
-  is_running_ = false;
 }
 
 void LogsConfigManager::onSettingsUpdated() {
@@ -145,8 +144,10 @@ void LogsConfigManager::start() {
               "being disabled in settings, ignoring the update. ");
       return;
     }
-    ld_info("Received update from LogsConfigStateMachine, version %s",
-            toString(tree.version()).c_str());
+    RATELIMIT_INFO(std::chrono::seconds(10),
+                   1,
+                   "Received update from LogsConfigStateMachine, version %s",
+                   toString(tree.version()).c_str());
     STAT_INCR(getStats(), logsconfig_manager_received_update);
     activatePublishTimer();
   };

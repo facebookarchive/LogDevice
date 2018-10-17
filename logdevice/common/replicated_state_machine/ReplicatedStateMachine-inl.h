@@ -35,6 +35,7 @@ void ReplicatedStateMachine<T, D>::start() {
   } else {
     getSnapshotLogTailLSN();
   }
+  stopped_ = false;
 }
 
 template <typename T, typename D>
