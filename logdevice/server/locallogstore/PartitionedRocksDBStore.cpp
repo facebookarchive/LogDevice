@@ -3137,9 +3137,10 @@ int PartitionedRocksDBStore::writeMultiImpl(
       }
       auto status = writer_->writeBatch(rocksdb::WriteOptions(), &dirty_batch);
       if (!status.ok()) {
-        ld_critical("Failed to write partition dirty data for shard %u: %s",
-                    getShardIdx(),
-                    status.ToString().c_str());
+        // TODO (#34059727): this is not handled property.
+        ld_error("Failed to write partition dirty data for shard %u: %s",
+                 getShardIdx(),
+                 status.ToString().c_str());
       } else {
         FlushToken wal_token = maxWALSyncToken();
         for (const auto& op : dirty_ops) {
