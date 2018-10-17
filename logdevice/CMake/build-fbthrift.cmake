@@ -19,7 +19,7 @@ ExternalProject_Add(fbthrift
 ExternalProject_Get_Property(fbthrift SOURCE_DIR)
 ExternalProject_Get_Property(fbthrift BINARY_DIR)
 
-ExternalProject_Add_StepDependencies(fbthrift configure folly wangle)
+ExternalProject_Add_StepDependencies(fbthrift configure mstch folly wangle)
 
 set(FBTHRIFT_LIBRARIES
     ${BINARY_DIR}/libfbthrift.a)

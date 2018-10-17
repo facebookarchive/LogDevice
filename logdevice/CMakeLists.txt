@@ -30,6 +30,7 @@ include (logdevice-functions)
 
 include(build-config)
 
+include(build-mstch)
 include(build-folly)
 include(build-fizz)
 include(build-wangle)
