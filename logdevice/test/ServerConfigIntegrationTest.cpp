@@ -20,11 +20,11 @@ TEST_F(ServerConfigIntegrationTest, NodeIndexChange) {
   cluster->getNode(1).waitUntilStarted();
 
   const auto get_stat = [](auto& node) {
-    return node.stats()["last_config_valid"];
+    return node.stats()["last_config_invalid"];
   };
 
-  EXPECT_EQ(1, get_stat(cluster->getNode(0)));
-  EXPECT_EQ(1, get_stat(cluster->getNode(1)));
+  EXPECT_EQ(0, get_stat(cluster->getNode(0)));
+  EXPECT_EQ(0, get_stat(cluster->getNode(1)));
 
   auto config = cluster->getConfig()->get();
   auto server_config = config->serverConfig();
@@ -41,11 +41,10 @@ TEST_F(ServerConfigIntegrationTest, NodeIndexChange) {
   // can't use cluster->waitForConfigUpdate(), because the config is never
   // updated due to it being invalid
   wait_until([&] {
-    return get_stat(cluster->getNode(0)) == 0 &&
-        get_stat(cluster->getNode(1)) == 0;
+    return get_stat(cluster->getNode(0)) || get_stat(cluster->getNode(1));
   });
 
   // this is implicitly true due to the wait_until, but let's be explicit
-  EXPECT_EQ(0, get_stat(cluster->getNode(0)));
-  EXPECT_EQ(0, get_stat(cluster->getNode(1)));
+  EXPECT_EQ(1, get_stat(cluster->getNode(0)));
+  EXPECT_EQ(1, get_stat(cluster->getNode(1)));
 }

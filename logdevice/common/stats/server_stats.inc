@@ -1106,15 +1106,8 @@ STAT_DEFINE(read_streams_total_known_down_size, SUM)
 // Number of ServerReadStreams that see themselves in the SCD known down list.
 STAT_DEFINE(read_streams_total_self_in_known_down, SUM)
 
-
-// Set to 1 once the node received valid config. It also resets to 0 if a bad
-// config is received, so this is really the validity of the most recent config
-// received.
-STAT_DEFINE(last_config_valid, SUM)
 // Counts config updates
 STAT_DEFINE(updated_config, SUM)
-// Config update rejected by a hook
-STAT_DEFINE(config_update_invalid, SUM)
 // Counts config updates ignored because their version is older than the
 // running config
 STAT_DEFINE(config_update_old_version, SUM)

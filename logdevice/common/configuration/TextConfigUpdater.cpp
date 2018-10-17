@@ -445,9 +445,9 @@ void TextConfigUpdaterImpl::setRecentConfigValidity(bool state) {
 
   isRecentConfigValid_ = state;
   if (isRecentConfigValid_) {
-    STAT_INCR(stats_, last_config_valid);
+    STAT_SET(stats_, last_config_invalid, 0);
   } else {
-    STAT_DECR(stats_, last_config_valid);
+    STAT_SET(stats_, last_config_invalid, 1);
   }
 }
 

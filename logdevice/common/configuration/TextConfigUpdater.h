@@ -188,7 +188,7 @@ class TextConfigUpdaterImpl : public ConfigSource::AsyncCallback,
   // Supported extensions: .gz
   std::string maybeDecompress(const std::string& path,
                               std::string raw_contents);
-  // Update local config stat and set last_config_valid stats to 0 or 1
+  // Update local config stat and set last_config_invalid stats to 0 or 1
   // depending on validity of most recent received config.
   // Supposed to be called synchronously since update() is locked under mutex
   void setRecentConfigValidity(bool state);

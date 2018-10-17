@@ -50,6 +50,13 @@ STAT_DEFINE(config_changed_ignored_update_in_progress, SUM)
 // CONFIG_CHANGED_Messages.
 STAT_DEFINE(config_changed_update, SUM)
 
+// Set to 1 once the node received valid config. It also resets to 0 if a bad
+// config is received, so this is really the validity of the most recent config
+// received.
+STAT_DEFINE(last_config_invalid, MAX)
+// Config update rejected by a hook
+STAT_DEFINE(config_update_invalid, SUM)
+
 // number of times nodeset finder got metadata from sequencer
 STAT_DEFINE(nodeset_finder_read_from_sequencer, SUM)
 // number of times nodeset finder got metadata from metadata log
