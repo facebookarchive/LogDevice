@@ -23,9 +23,11 @@ ExternalProject_Add(rocksdb
     SOURCE_DIR "${ROCKSDB_ROOT_DIR}"
     DOWNLOAD_COMMAND ""
     CMAKE_ARGS -DUSE_RTTI=1
+        -DCMAKE_PREFIX_PATH=${LOGDEVICE_STAGING_DIR}/usr/local
     INSTALL_COMMAND ""
     )
 
+ExternalProject_Add_StepDependencies(rocksdb configure zstd)
 ExternalProject_Get_Property(rocksdb BINARY_DIR)
 set(ROCKSDB_LIBRARIES
     ${BINARY_DIR}/librocksdb.a)

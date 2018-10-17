@@ -12,8 +12,11 @@ ExternalProject_Add(folly
     SOURCE_DIR "${FOLLY_ROOT_DIR}"
     DOWNLOAD_COMMAND ""
     CMAKE_ARGS -DCMAKE_POSITION_INDEPENDENT_CODE=True
+               -DCMAKE_PREFIX_PATH=${LOGDEVICE_STAGING_DIR}/usr/local
     INSTALL_COMMAND make install DESTDIR=${LOGDEVICE_STAGING_DIR}
 )
+
+ExternalProject_Add_StepDependencies(folly configure zstd)
 
 ExternalProject_Get_Property(folly SOURCE_DIR)
 ExternalProject_Get_Property(folly BINARY_DIR)
