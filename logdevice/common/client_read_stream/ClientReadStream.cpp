@@ -2828,7 +2828,7 @@ void ClientReadStream::checkConsistency() const {
 
 void ClientReadStream::resumeReading() {
   if (redelivery_timer_ != nullptr && redelivery_timer_->isActive()) {
-    resetRedeliveryTimer();
+    cancelRedeliveryTimer();
     redeliver();
     // `this` may be deleted here.
   }
@@ -3327,18 +3327,28 @@ void ClientReadStream::activateRedeliveryTimer() {
       redeliver();
     });
   }
-  if (!redelivery_timer_->isActive()) {
-    redelivery_timer_->activate();
-    if (readers_flow_tracer_) {
-      readers_flow_tracer_->onRedeliveryTimerActive();
-    }
+  bool was_active = redelivery_timer_->isActive();
+  redelivery_timer_->activate();
+  if (readers_flow_tracer_ && !was_active) {
+    readers_flow_tracer_->onRedeliveryTimerActive();
   }
 }
 
 void ClientReadStream::resetRedeliveryTimer() {
-  if (redelivery_timer_ && redelivery_timer_->isActive()) {
+  if (redelivery_timer_) {
+    bool was_active = redelivery_timer_->isActive();
     redelivery_timer_->reset();
-    if (readers_flow_tracer_) {
+    if (readers_flow_tracer_ && was_active) {
+      readers_flow_tracer_->onRedeliveryTimerInactive();
+    }
+  }
+}
+
+void ClientReadStream::cancelRedeliveryTimer() {
+  if (redelivery_timer_) {
+    bool was_active = redelivery_timer_->isActive();
+    redelivery_timer_->cancel();
+    if (readers_flow_tracer_ && was_active) {
       readers_flow_tracer_->onRedeliveryTimerInactive();
     }
   }
