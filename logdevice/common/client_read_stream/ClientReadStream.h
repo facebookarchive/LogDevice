@@ -1251,6 +1251,11 @@ class ClientReadStream : boost::noncopyable {
   logid_t log_id_;
 
   /**
+   * Log group name to be retrieved at start.
+   */
+  std::string log_group_name_ = "<WAITING LOGSCONFIG>";
+
+  /**
    * LSN from which the client started reading.
    */
   lsn_t start_lsn_;

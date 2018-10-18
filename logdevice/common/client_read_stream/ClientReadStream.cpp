@@ -418,6 +418,7 @@ void ClientReadStream::startContinuation(
 
   auto attrs = log_config->attrs();
   sequencer_window_size_ = *attrs.maxWritesInFlight();
+  log_group_name_ = log_config->name();
 
   log_uses_scd_ = attrs.scdEnabled().hasValue() && *attrs.scdEnabled();
   log_uses_local_scd_ =

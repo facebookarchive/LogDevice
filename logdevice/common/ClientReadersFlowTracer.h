@@ -85,7 +85,6 @@ class ClientReadersFlowTracer
   void updateIsClientReading();
   void maybeBumpStats(bool force_healthy = false);
 
-  std::string log_group_name_;
   std::chrono::milliseconds tracer_period_;
 
   CircularBuffer<Sample> time_lag_record_;
