@@ -69,8 +69,9 @@ void ExponentialBackoffTimer::activate() {
 }
 
 void ExponentialBackoffTimer::fire() {
-  timer_.activate(
-      std::chrono::microseconds(0), &Worker::onThisThread()->commonTimeouts());
+  Worker* worker = Worker::onThisThread(false);
+  timer_.activate(std::chrono::microseconds(0),
+                  worker ? &worker->commonTimeouts() : nullptr);
   next_delay_ = settings_.initial_delay;
   calculateNextEffectiveDelay();
 }
