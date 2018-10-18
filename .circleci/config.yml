@@ -27,6 +27,18 @@ jobs:
             cmake ../logdevice/
             make -j 8
       - run:
+          name: Unit Tests
+          working_directory: _build
+          command: |
+            mkdir -p ../gtest_results/unit_tests
+            make ARGS="-j 8 --output-on-failure --no-compress-output -T Test" test
+      - run:
+          name: Collect results
+          working_directory: _build
+          command: |
+            xsltproc ../.circleci/conv.xsl Testing/*/Test.xml > ../gtest_results/unit_tests/results.xml
+          when: always
+      - run:
           name: Generate Documentation
           working_directory: _build
           command: |
@@ -39,18 +51,6 @@ jobs:
           paths:
             - website
             - docs
-      - run:
-          name: Unit Tests
-          working_directory: _build
-          command: |
-            mkdir -p ../gtest_results/unit_tests
-            make ARGS="-j 8 --output-on-failure --no-compress-output -T Test" test
-      - run:
-          name: Collect results
-          working_directory: _build
-          command: |
-            xsltproc ../.circleci/conv.xsl Testing/*/Test.xml > ../gtest_results/unit_tests/results.xml
-          when: always
       - store_artifacts:
           path: gtest_results
           when: always
