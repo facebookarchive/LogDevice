@@ -407,25 +407,14 @@ int main(int argc, const char** argv) {
   drop_root(server_settings);
 
   // Run the StatsCollectionThread
-  // This is a singleton thread even if multiple server are running, the Stats
-  // are shared across all instances.
-  std::unique_ptr<StatsCollectionThread> stats_thread;
-
-  auto stats_collection_interval = settings->stats_collection_interval;
-
-  if (stats_collection_interval.count() > 0) {
-    auto cfg = params.get()->getUpdateableConfig()->get();
-    auto stats_publisher = plugin->createStatsPublisher(
-        StatsPublisherScope::SERVER, settings, params->getNumDBShards());
-    if (stats_publisher) {
-      auto rollup_entity = cfg->serverConfig()->getClusterName();
-      stats_publisher->addRollupEntity(rollup_entity);
-      stats_thread =
-          std::make_unique<StatsCollectionThread>(params.get()->getStats(),
-                                                  stats_collection_interval,
-                                                  std::move(stats_publisher));
-    }
-  }
+  std::unique_ptr<StatsCollectionThread> stats_thread =
+      StatsCollectionThread::maybeCreate(
+          settings,
+          params.get()->getUpdateableConfig()->get()->serverConfig(),
+          plugin_registry,
+          StatsPublisherScope::SERVER,
+          params->getNumDBShards(),
+          params.get()->getStats());
 
   Server server(params.get(), signal_shutdown);
 

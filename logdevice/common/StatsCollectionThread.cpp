@@ -10,7 +10,12 @@
 #include <folly/Optional.h>
 
 #include "logdevice/common/ThreadID.h"
+#include "logdevice/common/configuration/ServerConfig.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/plugin/PluginRegistry.h"
+#include "logdevice/common/plugin/StatsPublisherFactory.h"
+#include "logdevice/common/settings/Settings.h"
+#include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/common/stats/Stats.h"
 
 namespace facebook { namespace logdevice {
@@ -69,6 +74,42 @@ void StatsCollectionThread::mainLoop() {
       // push once more so we don't lose data from the partial interval
     }
   }
+}
+
+std::unique_ptr<StatsCollectionThread> StatsCollectionThread::maybeCreate(
+    const UpdateableSettings<Settings>& settings,
+    std::shared_ptr<ServerConfig> config,
+    std::shared_ptr<PluginRegistry> plugin_registry,
+    StatsPublisherScope scope,
+    int num_shards,
+    const StatsHolder* source) {
+  ld_check(settings.get());
+  ld_check(config);
+  ld_check(plugin_registry);
+
+  auto stats_collection_interval = settings->stats_collection_interval;
+  if (stats_collection_interval.count() <= 0) {
+    return nullptr;
+  }
+  auto factory = plugin_registry->getSinglePlugin<StatsPublisherFactory>(
+      PluginType::STATS_PUBLISHER_FACTORY);
+  if (!factory) {
+    return nullptr;
+  }
+  auto stats_publisher = (*factory)(scope, settings, num_shards);
+  if (!stats_publisher) {
+    return nullptr;
+  }
+  auto rollup_entity = config->getClusterName();
+  stats_publisher->addRollupEntity(rollup_entity);
+  if (scope == StatsPublisherScope::CLIENT) {
+    // This is here for backward compatibility with our tooling. The
+    // <tier>.client entity space is deprecated and all new tooling should
+    // be using the tier name without suffix
+    stats_publisher->addRollupEntity(rollup_entity + ".client");
+  }
+  return std::make_unique<StatsCollectionThread>(
+      source, stats_collection_interval, std::move(stats_publisher));
 }
 
 }} // namespace facebook::logdevice

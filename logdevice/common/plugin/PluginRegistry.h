@@ -40,7 +40,7 @@ class PluginRegistry {
     ld_check(!pluginTypeDescriptors()[type].allow_multiple);
     std::shared_ptr<Plugin> p = getSinglePluginImpl(type);
     auto res = std::dynamic_pointer_cast<T>(p);
-    ld_check(res);
+    ld_check(!p || res);
     return res;
   }
 

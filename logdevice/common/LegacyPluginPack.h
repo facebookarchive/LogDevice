@@ -76,18 +76,6 @@ class LegacyPluginPack {
                         std::chrono::milliseconds /* zk_polling_interval */) {}
 
   /**
-   * If this returns non-null, the client/server will also create a
-   * StatsPublishingThread, periodically collect them and push to the
-   * StatsPublisher object.
-   */
-  virtual std::unique_ptr<StatsPublisher>
-  createStatsPublisher(StatsPublisherScope,
-                       UpdateableSettings<Settings>,
-                       int /* num_db_shards */) {
-    return nullptr;
-  }
-
-  /**
    * Creates a TraceLogger to which trace samples are pushed if tracing is on.
    * The default implementation creates a NoopTraceLogger.
    */

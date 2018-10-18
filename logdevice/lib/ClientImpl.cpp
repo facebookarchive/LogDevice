@@ -316,8 +316,7 @@ ClientImpl::ClientImpl(std::string cluster_name,
                        std::unique_ptr<ClientSettings>&& client_settings,
                        std::unique_ptr<SequencerLocator> sequencer_locator,
                        std::shared_ptr<PluginRegistry> plugin_registry)
-    : plugin_(plugin_registry->getSinglePlugin<ClientPluginPack>(
-          PluginType::LEGACY_CLIENT_PLUGIN)),
+    : plugin_registry_(std::move(plugin_registry)),
       cluster_name_(cluster_name),
       credentials_(std::move(credentials)),
       csid_(std::move(csid)),
@@ -360,10 +359,15 @@ ClientImpl::ClientImpl(std::string cluster_name,
 
   std::shared_ptr<ServerConfig> server_cfg = config_->get()->serverConfig();
 
+  std::shared_ptr<ClientPluginPack> plugin =
+      plugin_registry_->getSinglePlugin<ClientPluginPack>(
+          PluginType::LEGACY_CLIENT_PLUGIN);
+  ld_check(plugin);
+
   if (settings->trace_logger_disabled) {
     trace_logger_ = std::make_shared<NoopTraceLogger>(config_);
   } else {
-    trace_logger_ = plugin_->createTraceLogger(config_);
+    trace_logger_ = plugin->createTraceLogger(config_);
   }
 
   event_tracer_ =
@@ -374,7 +378,7 @@ ClientImpl::ClientImpl(std::string cluster_name,
                                        settings,
                                        stats_.get(),
                                        std::move(sequencer_locator),
-                                       plugin_,
+                                       plugin,
                                        credentials_,
                                        csid_);
 
@@ -386,22 +390,13 @@ ClientImpl::ClientImpl(std::string cluster_name,
     throw ConstructorFailed();
   }
 
-  if (settings->stats_collection_interval.count() > 0) {
-    auto stats_publisher =
-        plugin_->createStatsPublisher(StatsPublisherScope::CLIENT, settings, 0);
-    if (stats_publisher) {
-      auto rollup_entity = config_->get()->serverConfig()->getClusterName();
-      stats_publisher->addRollupEntity(rollup_entity);
-      // This is here for backward compatibility with our tooling. The
-      // <tier>.client entity space is deprecated and all new tooling should
-      // be using the tier name without suffix
-      stats_publisher->addRollupEntity(rollup_entity + ".client");
-      stats_thread_ = std::make_unique<StatsCollectionThread>(
-          stats_.get(),
-          settings->stats_collection_interval,
-          std::move(stats_publisher));
-    }
-  }
+  stats_thread_ =
+      StatsCollectionThread::maybeCreate(settings_->getSettings(),
+                                         config_->get()->serverConfig(),
+                                         plugin_registry_,
+                                         StatsPublisherScope::CLIENT,
+                                         /* num_shards */ 0,
+                                         stats_.get());
 
   if (!config_->getLogsConfig() || !config_->getLogsConfig()->isFullyLoaded()) {
     Semaphore sem;

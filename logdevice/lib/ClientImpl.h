@@ -452,7 +452,7 @@ class ClientImpl : public Client,
 
   void updateStatsSettings();
 
-  std::shared_ptr<ClientPluginPack> plugin_;
+  std::shared_ptr<PluginRegistry> plugin_registry_;
 
   std::string cluster_name_;
 

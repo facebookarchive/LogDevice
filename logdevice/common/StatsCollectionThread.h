@@ -22,8 +22,13 @@ namespace facebook { namespace logdevice {
  * and publishes to a provided StatsPublisher.
  */
 
+class PluginRegistry;
+class ServerConfig;
+struct Settings;
 struct Stats;
 class StatsHolder;
+template <typename T>
+class UpdateableSettings;
 
 class StatsCollectionThread {
  public:
@@ -47,6 +52,14 @@ class StatsCollectionThread {
     stop_ = true;
     cv_.notify_one();
   }
+
+  static std::unique_ptr<StatsCollectionThread>
+  maybeCreate(const UpdateableSettings<Settings>&,
+              std::shared_ptr<ServerConfig>,
+              std::shared_ptr<PluginRegistry>,
+              StatsPublisherScope,
+              int num_shards,
+              const StatsHolder* source);
 
  private:
   void mainLoop();

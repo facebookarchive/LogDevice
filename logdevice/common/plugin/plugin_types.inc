@@ -22,6 +22,11 @@
 // Provides other plugins. Use this if your plugin implements more than one
 // type of plugin or for plugin loaders. See PluginProvider.h
 PLUGIN_TYPE(PLUGIN_PROVIDER, 1, "Plugin provider", true)
+// See StatsPublisherFactory.h
+PLUGIN_TYPE(STATS_PUBLISHER_FACTORY,
+            2,
+            "Stats publisher factory",
+            false)
 
 // TODO: add more plugin types
 

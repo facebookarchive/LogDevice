@@ -20,8 +20,13 @@ namespace facebook { namespace logdevice {
  * The server and client will keep the Plugin instance alive throughout their
  * lifetime, allowing Plugin subclasses to be stateful.
  *
- * The implementation has to ensure that calls to all methods defined here are
- * thread-safe.
+ * A couple of things to keep in mind when writing plugins:
+ * 1) The implementation has to ensure that calls to all methods defined here
+ * are thread-safe.
+ * 2) PluginRegistry will load all plugins available, but not all of them may
+ * end up being used - so avoid consuming a lot of resources or creating
+ * threads/doing RPC in the Plugin's constructor. Opt to do things lazily
+ * instead.
  */
 class Plugin {
  public:
