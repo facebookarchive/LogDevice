@@ -332,7 +332,7 @@ void CheckImpactRequest::complete(Status st) {
   }
   callback_called_ = true;
   deleteThis();
-};
+}
 
 CheckImpactRequest::~CheckImpactRequest() {
   const Worker* worker = static_cast<Worker*>(EventLoop::onThisThread());
