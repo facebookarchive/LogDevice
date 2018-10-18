@@ -8,7 +8,6 @@
 #include "logdevice/clients/python/logdevice_logsconfig.h"
 
 #include <boost/python.hpp>
-#include <boost/python/stl_iterator.hpp>
 #include <boost/python/suite/indexing/map_indexing_suite.hpp>
 #include <boost/shared_ptr.hpp>
 #include <folly/String.h>

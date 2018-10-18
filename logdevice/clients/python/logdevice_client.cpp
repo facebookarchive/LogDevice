@@ -22,7 +22,7 @@
 #include "logdevice/include/debug.h"
 
 #include <boost/format.hpp>
-#include <boost/python/stl_iterator.hpp>
+#include <boost/python.hpp>
 #include <folly/container/Array.h>
 
 namespace facebook { namespace logdevice {

@@ -15,7 +15,7 @@
 #include "logdevice/server/locallogstore/RocksDBSettings.h"
 #include "logdevice/server/ServerSettings.h"
 
-#include <boost/python/stl_iterator.hpp>
+#include <boost/python.hpp>
 
 using namespace boost::python;
 using namespace facebook::logdevice;
