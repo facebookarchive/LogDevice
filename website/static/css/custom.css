@@ -11,7 +11,7 @@ h6 {
     '.SFNSText-Regular', 'Helvetica Neue', Helvetica, sans-serif;
 }
 .homeContainer {
-    background: #20232a url('/LogDevice/img/top_bg_dc.png') no-repeat;
+    background: #20232a url('/img/top_bg_dc.png') no-repeat;
     color: white;
 }
 a {
