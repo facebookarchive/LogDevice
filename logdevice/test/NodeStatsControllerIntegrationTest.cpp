@@ -264,17 +264,17 @@ class NodeStatsControllerIntegrationTest
       new_settings[kv.first] = kv.second;
     }
 
-    std::shared_ptr<ServerConfig> new_config =
-        ServerConfig::fromData(other->getClusterName(),
-                               configuration::NodesConfig(other->getNodes()),
-                               other->getMetaDataLogsConfig(),
-                               ServerConfig::PrincipalsConfig(),
-                               ServerConfig::SecurityConfig(),
-                               ServerConfig::TraceLoggerConfig(),
-                               ServerConfig::TrafficShapingConfig(),
-                               ServerConfig::ZookeeperConfig(),
-                               new_settings,
-                               other->getClientSettingsConfig());
+    std::shared_ptr<ServerConfig> new_config = ServerConfig::fromDataTest(
+        other->getClusterName(),
+        configuration::NodesConfig(other->getNodes()),
+        other->getMetaDataLogsConfig(),
+        ServerConfig::PrincipalsConfig(),
+        ServerConfig::SecurityConfig(),
+        ServerConfig::TraceLoggerConfig(),
+        ServerConfig::TrafficShapingConfig(),
+        ServerConfig::ZookeeperConfig(),
+        new_settings,
+        other->getClientSettingsConfig());
 
     ASSERT_TRUE(new_config != nullptr) << "Invalid setting given";
 

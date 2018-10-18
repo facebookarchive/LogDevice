@@ -89,7 +89,7 @@ class MockGetLogInfoRequest : public GetLogInfoRequest {
     Configuration::MetaDataLogsConfig meta_config = createMetaDataLogsConfig(
         nodes_config, nodes_config.getNodes().size(), 3);
     config_ = std::make_shared<Configuration>(
-        ServerConfig::fromData(
+        ServerConfig::fromDataTest(
             __FILE__, std::move(nodes_config), std::move(meta_config)),
         std::make_shared<configuration::LocalLogsConfig>());
 

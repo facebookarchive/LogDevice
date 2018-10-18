@@ -107,6 +107,15 @@ class NodesConfiguration {
     return version_;
   }
 
+  // TODO(T33035439): this should only be used in migration or emergency. Config
+  // version bump should be automatically handled through Update.
+  void setVersion(membership::MembershipVersion::Type version) {
+    version_ = version;
+  }
+
+  std::shared_ptr<const NodesConfiguration>
+  withVersion(membership::MembershipVersion::Type version) const;
+
  private:
   std::shared_ptr<const ServiceDiscoveryConfig> service_discovery_;
   std::shared_ptr<const SequencerConfig> sequencer_config_;
@@ -128,12 +137,23 @@ class NodesConfiguration {
   // need to convert node_index_t values to ShardID values.
   shard_size_t num_shards_;
 
+  // mapping from node address to the index
+  // TODO(T33035439): get rid of this on config sync revamp
+  std::unordered_map<Sockaddr, node_index_t, Sockaddr::Hash> addr_to_index_;
+
   uint64_t last_change_timestamp_;
   membership::MaintenanceID::Type last_maintenance_;
   std::string last_change_context_;
 
   uint64_t computeStorageNodesHash() const;
   shard_size_t computeNumShards() const;
+
+  // recompute configuration metadata (e.g., storage_hash_, num_shards_, and
+  // addr_to_index_) from each sub-configuration, note that version, timestamp,
+  // etc are not reset in this function
+  void recomputeConfigMetadata();
+
+  friend class NodesConfigLegacyConverter;
 };
 
 }}}} // namespace facebook::logdevice::configuration::nodes

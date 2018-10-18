@@ -33,7 +33,7 @@ class MockGetTrimPointRequest : public GetTrimPointRequest {
         createMetaDataLogsConfig(nodes_config,
                                  nodes_config.getNodes().size(),
                                  replication.getReplicationFactor());
-    config_ = ServerConfig::fromData(
+    config_ = ServerConfig::fromDataTest(
         __FILE__, std::move(nodes_config), std::move(meta_config));
 
     storage_set_.reserve(storage_set_size);

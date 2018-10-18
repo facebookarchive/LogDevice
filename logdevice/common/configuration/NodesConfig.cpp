@@ -7,7 +7,11 @@
  */
 
 #include "NodesConfig.h"
+
 #include <folly/hash/SpookyHashV2.h>
+
+#include "logdevice/common/configuration/MetaDataLogsConfig.h"
+#include "logdevice/common/configuration/nodes/NodesConfigLegacyConverter.h"
 
 namespace facebook { namespace logdevice { namespace configuration {
 
@@ -79,6 +83,19 @@ void NodesConfig::calculateNumShards() {
     num_shards_ = it.second.getNumShards();
     break; // The other storage nodes have the same amount of shards.
   }
+}
+
+bool NodesConfig::generateNodesConfiguration(
+    const MetaDataLogsConfig& meta_config,
+    config_version_t version) {
+  auto config = nodes::NodesConfigLegacyConverter::fromLegacyNodesConfig(
+      *this, meta_config, version);
+
+  if (config == nullptr) {
+    return false;
+  }
+  nodes_configuration_ = std::move(config);
+  return true;
 }
 
 }}} // namespace facebook::logdevice::configuration

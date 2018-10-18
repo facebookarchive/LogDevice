@@ -452,7 +452,7 @@ class LogRebuildingTest : public ::testing::Test {
         nodes_config, nodes_config.getNodes().size(), 3);
 
     config->updateableServerConfig()->update(
-        ServerConfig::fromData(__FILE__, nodes_config, meta_config));
+        ServerConfig::fromDataTest(__FILE__, nodes_config, meta_config));
     config->updateableLogsConfig()->update(std::move(logs_config));
   }
 

@@ -307,7 +307,7 @@ void MutatorTest::setUp() {
   addLog(logs_config.get(), LOG_ID, replication_, 0, nodeset_size, {});
 
   config_ = std::make_shared<Configuration>(
-      ServerConfig::fromData("mutator_test", std::move(nodes_config)),
+      ServerConfig::fromDataTest("mutator_test", std::move(nodes_config)),
       std::move(logs_config));
 
   config_->serverConfig()->setMyNodeID(my_node_);

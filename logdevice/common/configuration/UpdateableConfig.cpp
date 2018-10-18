@@ -60,7 +60,7 @@ UpdateableConfig::getLocalLogsConfig() const {
 
 std::shared_ptr<UpdateableConfig> UpdateableConfig::createEmpty() {
   auto updateable_config = std::make_shared<UpdateableConfig>();
-  auto empty_config = ServerConfig::fromData(std::string(), NodesConfig());
+  auto empty_config = ServerConfig::createEmpty();
   updateable_config->updateableServerConfig()->update(std::move(empty_config));
   updateable_config->updateableLogsConfig()->update(
       std::make_shared<configuration::LocalLogsConfig>());

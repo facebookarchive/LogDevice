@@ -172,7 +172,8 @@ TEST(RandomCrossDomainNodeSetSelectorTest, RackAssignment) {
   addLog(logs_config.get(), logid_t{3}, 5, 0, 18, {}, NodeLocationScope::RACK);
 
   auto config = std::make_shared<Configuration>(
-      ServerConfig::fromData("nodeset_selector_test", std::move(nodes_config)),
+      ServerConfig::fromDataTest(
+          "nodeset_selector_test", std::move(nodes_config)),
       std::move(logs_config));
 
   auto selector =
@@ -221,7 +222,8 @@ TEST(RandomNodeSetSelectorTest, NodeExclusion) {
   addLog(logs_config.get(), logid_t{6}, 3, 0, 8, {}, NodeLocationScope::NODE);
 
   auto config = std::make_shared<Configuration>(
-      ServerConfig::fromData("nodeset_selector_test", std::move(nodes_config)),
+      ServerConfig::fromDataTest(
+          "nodeset_selector_test", std::move(nodes_config)),
       std::move(logs_config));
 
   auto selector =
@@ -301,9 +303,9 @@ TEST(RandomNodeSetSelector, ImpreciseNodeSetSize) {
       NodeSetSelectorType::RANDOM_CROSSDOMAIN;
 
   auto config = std::make_shared<Configuration>(
-      ServerConfig::fromData("nodeset_selector_test",
-                             std::move(nodes_config),
-                             std::move(metadata_config)),
+      ServerConfig::fromDataTest("nodeset_selector_test",
+                                 std::move(nodes_config),
+                                 std::move(metadata_config)),
       std::move(logs_config));
 
   auto selector =
@@ -379,7 +381,8 @@ TEST(RandomCrossDomainNodeSetSelectorTest, NodeExclusion) {
          NodeLocationScope::RACK);
 
   auto config = std::make_shared<Configuration>(
-      ServerConfig::fromData("nodeset_selector_test", std::move(nodes_config)),
+      ServerConfig::fromDataTest(
+          "nodeset_selector_test", std::move(nodes_config)),
       std::move(logs_config));
 
   auto selector =
@@ -492,7 +495,8 @@ void basic_test(NodeSetSelectorType ns_type) {
          6 /* nodeset_size */);
 
   auto config = std::make_shared<Configuration>(
-      ServerConfig::fromData("nodeset_selector_test", std::move(nodes_config)),
+      ServerConfig::fromDataTest(
+          "nodeset_selector_test", std::move(nodes_config)),
       std::move(logs_config));
 
   auto selector = NodeSetSelectorFactory::create(ns_type);
@@ -615,7 +619,8 @@ TEST(WeightAwareNodeSetSelectorTest, ExcludeFromNodesets) {
          5 /* nodeset_size */);
 
   auto config = std::make_shared<Configuration>(
-      ServerConfig::fromData("nodeset_selector_test", std::move(nodes_config)),
+      ServerConfig::fromDataTest(
+          "nodeset_selector_test", std::move(nodes_config)),
       std::move(logs_config));
 
   auto selector =
@@ -667,11 +672,13 @@ TEST(ConsistentHashingWeightAwareNodeSetSelectorTest, AddNode) {
   auto logs_config2 = logs_config;
 
   auto config1 = std::make_shared<Configuration>(
-      ServerConfig::fromData("nodeset_selector_test", std::move(nodes_config1)),
+      ServerConfig::fromDataTest(
+          "nodeset_selector_test", std::move(nodes_config1)),
       std::move(logs_config));
 
   auto config2 = std::make_shared<Configuration>(
-      ServerConfig::fromData("nodeset_selector_test", std::move(nodes_config2)),
+      ServerConfig::fromDataTest(
+          "nodeset_selector_test", std::move(nodes_config2)),
       std::move(logs_config2));
 
   auto selector =

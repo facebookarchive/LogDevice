@@ -59,7 +59,7 @@ constructConfig(const std::vector<std::string>& hosts) {
     folly::dynamic node_dict = folly::dynamic::object
         // "node_id" only needs to be unique per node here
         ("node_id", index)("host", hosts[index])(
-            "roles", folly::dynamic::array())("generation", 1);
+            "roles", folly::dynamic::array("sequencer"))("generation", 1);
     nodes.push_back(node_dict);
   }
 
@@ -83,7 +83,9 @@ void ServerConfigSource::init(const std::string& path,
 
   // Make a placeholder config with the seed hosts
   auto updateable_server_config = config_->updateableServerConfig();
-  updateable_server_config->update(constructConfig(hosts));
+  auto serv_config = constructConfig(hosts);
+  ld_check(serv_config != nullptr);
+  updateable_server_config->update(std::move(serv_config));
 
   // Set a callback to pass the received config to the AsyncCallback
   server_config_subscription_ =

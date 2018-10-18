@@ -34,6 +34,7 @@
 #include "logdevice/common/configuration/TraceLoggerConfig.h"
 #include "logdevice/common/configuration/TrafficShapingConfig.h"
 #include "logdevice/common/configuration/ZookeeperConfig.h"
+#include "logdevice/common/configuration/nodes/NodesConfiguration.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Err.h"
 #include "logdevice/include/types.h"
@@ -56,6 +57,7 @@ class ServerConfig {
   using Node = facebook::logdevice::configuration::Node;
   using Nodes = facebook::logdevice::configuration::Nodes;
   using NodesConfig = facebook::logdevice::configuration::NodesConfig;
+  using NodesConfiguration = configuration::nodes::NodesConfiguration;
   using PrincipalsConfig = facebook::logdevice::configuration::PrincipalsConfig;
   using SecurityConfig = facebook::logdevice::configuration::SecurityConfig;
   using SequencersConfig = facebook::logdevice::configuration::SequencersConfig;
@@ -136,6 +138,10 @@ class ServerConfig {
 
   void setVersion(config_version_t version) {
     version_ = version;
+  }
+
+  void setNodesConfigurationVersion(config_version_t version) {
+    nodesConfig_.setNodesConfigurationVersion(version);
   }
 
   /**
@@ -387,27 +393,46 @@ class ServerConfig {
     return metaDataLogsConfig_;
   }
 
+  const NodesConfig& getNodesConfig() const {
+    return nodesConfig_;
+  }
+
+  /**
+   * Get the new representation of cluster nodes (i.e. NodesConfiguration
+   * class).
+   */
+  const std::shared_ptr<const NodesConfiguration>&
+  getNodesConfiguration() const {
+    return nodesConfig_.getNodesConfiguration();
+  }
+
   /**
    * Creates a ServerConfig object from existing cluster name,
    * NodesConfig, LogsConfig, SecurityConfig and an optional ZookeeperConfig
-   * instances. Public for testing.
+   * instances.
+   *
+   * Note that it regenerates the new NodesConfiguration format from the
+   * existing NodesConfig and MetaDataLogsConfig. returns nullptr if the
+   * conversion failed.
+   *
+   * Public for testing.
    */
   static std::unique_ptr<ServerConfig>
-  fromData(std::string cluster_name,
-           NodesConfig nodes,
-           MetaDataLogsConfig metadata_logs = MetaDataLogsConfig(),
-           PrincipalsConfig = PrincipalsConfig(),
-           SecurityConfig securityConfig = SecurityConfig(),
-           TraceLoggerConfig trace_config = TraceLoggerConfig(),
-           TrafficShapingConfig = TrafficShapingConfig(),
-           ZookeeperConfig zookeeper = ZookeeperConfig(),
-           SettingsConfig server_settings_config = SettingsConfig(),
-           SettingsConfig client_settings_config = SettingsConfig(),
-           InternalLogs internal_logs = InternalLogs(),
-           OptionalTimestamp clusterCreationTime = OptionalTimestamp(),
-           folly::dynamic customFields = folly::dynamic::object,
-           const std::string& ns_delimiter =
-               LogsConfig::default_namespace_delimiter_);
+  fromDataTest(std::string cluster_name,
+               NodesConfig nodes,
+               MetaDataLogsConfig metadata_logs = MetaDataLogsConfig(),
+               PrincipalsConfig = PrincipalsConfig(),
+               SecurityConfig securityConfig = SecurityConfig(),
+               TraceLoggerConfig trace_config = TraceLoggerConfig(),
+               TrafficShapingConfig = TrafficShapingConfig(),
+               ZookeeperConfig zookeeper = ZookeeperConfig(),
+               SettingsConfig server_settings_config = SettingsConfig(),
+               SettingsConfig client_settings_config = SettingsConfig(),
+               InternalLogs internal_logs = InternalLogs(),
+               OptionalTimestamp clusterCreationTime = OptionalTimestamp(),
+               folly::dynamic customFields = folly::dynamic::object,
+               const std::string& ns_delimiter =
+                   LogsConfig::default_namespace_delimiter_);
 
   /**
    * Returns a duplicate of the configuration.
@@ -565,8 +590,29 @@ class ServerConfig {
   ServerConfig& operator=(const ServerConfig&) = delete;
   ServerConfig& operator=(ServerConfig&&) = delete;
 
+  // Creates a ServerConfig object from existing cluster name,
+  // NodesConfig, LogsConfig, SecurityConfig and an optional ZookeeperConfig
+  // instances.
+  static std::unique_ptr<ServerConfig>
+  fromData(std::string cluster_name,
+           NodesConfig nodes,
+           MetaDataLogsConfig metadata_logs = MetaDataLogsConfig(),
+           PrincipalsConfig = PrincipalsConfig(),
+           SecurityConfig securityConfig = SecurityConfig(),
+           TraceLoggerConfig trace_config = TraceLoggerConfig(),
+           TrafficShapingConfig = TrafficShapingConfig(),
+           ZookeeperConfig zookeeper = ZookeeperConfig(),
+           SettingsConfig server_settings_config = SettingsConfig(),
+           SettingsConfig client_settings_config = SettingsConfig(),
+           InternalLogs internal_logs = InternalLogs(),
+           OptionalTimestamp clusterCreationTime = OptionalTimestamp(),
+           folly::dynamic customFields = folly::dynamic::object,
+           const std::string& ns_delimiter =
+               LogsConfig::default_namespace_delimiter_);
+
   std::string clusterName_;
   OptionalTimestamp clusterCreationTime_;
+
   NodesConfig nodesConfig_;
   MetaDataLogsConfig metaDataLogsConfig_;
   PrincipalsConfig principalsConfig_;

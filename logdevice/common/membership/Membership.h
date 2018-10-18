@@ -11,7 +11,12 @@
 #include "logdevice/common/debug.h"
 #include "logdevice/common/NodeID.h"
 
-namespace facebook { namespace logdevice { namespace membership {
+namespace facebook { namespace logdevice {
+namespace configuration { namespace nodes {
+class NodesConfigLegacyConverter;
+}} // namespace configuration::nodes
+
+namespace membership {
 
 /**
  * Membership is the part of cluster nodes configuration that usually requires
@@ -81,6 +86,9 @@ class Membership {
 
  protected:
   MembershipVersion::Type version_;
+
+  friend class configuration::nodes::NodesConfigLegacyConverter;
 };
 
-}}} // namespace facebook::logdevice::membership
+} // namespace membership
+}} // namespace facebook::logdevice

@@ -15,6 +15,15 @@ using namespace facebook::logdevice;
 using namespace facebook::logdevice::configuration;
 using namespace ::testing;
 
+// Convenient shortcuts for writting NodeIDs.
+#define N0 NodeID(0, 1)
+#define N1 NodeID(1, 1)
+#define N2 NodeID(2, 1)
+#define N3 NodeID(3, 1)
+#define N4 NodeID(4, 1)
+#define N5 NodeID(5, 1)
+#define N6 NodeID(6, 1)
+
 using StateList = NodeStatsControllerLocator::StateList;
 
 class MockLocator : public NodeStatsControllerLocator {
@@ -33,7 +42,7 @@ class NodeStatsControllerLocatorTest : public Test {
       location.fromDomainString(location_str);
       Node node;
       node.location = location;
-      node.generation = 0;
+      node.generation = 1;
       nodes->emplace(node_index, std::move(node));
       ++node_index;
     }
@@ -52,7 +61,7 @@ TEST_F(NodeStatsControllerLocatorTest, MoreControllersThanNodes) {
   EXPECT_CALL(locator, getNodeState(_))
       .WillRepeatedly(Return(StateList{ALIVE}));
   // best effort
-  EXPECT_TRUE(locator.isController(NodeID{0}, 2));
+  EXPECT_TRUE(locator.isController(N0, 2));
 }
 
 TEST_F(NodeStatsControllerLocatorTest, SingleNode) {
@@ -61,7 +70,7 @@ TEST_F(NodeStatsControllerLocatorTest, SingleNode) {
   EXPECT_CALL(locator, getNodeState(_))
       .WillRepeatedly(Return(StateList{ALIVE}));
 
-  EXPECT_TRUE(locator.isController(NodeID{0}, 1));
+  EXPECT_TRUE(locator.isController(N0, 1));
 }
 
 TEST_F(NodeStatsControllerLocatorTest, DifferentRack) {
@@ -73,9 +82,8 @@ TEST_F(NodeStatsControllerLocatorTest, DifferentRack) {
       .WillRepeatedly(Return(StateList{ALIVE, ALIVE, ALIVE}));
 
   // any of the nodes in the first rack may be chosen
-  EXPECT_TRUE(locator.isController(NodeID{0}, 2) ||
-              locator.isController(NodeID{1}, 2));
-  EXPECT_TRUE(locator.isController(NodeID{2}, 2));
+  EXPECT_TRUE(locator.isController(N0, 2) || locator.isController(N1, 2));
+  EXPECT_TRUE(locator.isController(N2, 2));
 }
 
 // will choose from same rack if necessary
@@ -86,9 +94,9 @@ TEST_F(NodeStatsControllerLocatorTest, SameRack) {
   EXPECT_CALL(locator, getNodeState(_))
       .WillRepeatedly(Return(StateList{ALIVE, ALIVE, ALIVE}));
 
-  EXPECT_TRUE(locator.isController(NodeID{0}, 3));
-  EXPECT_TRUE(locator.isController(NodeID{1}, 3));
-  EXPECT_TRUE(locator.isController(NodeID{2}, 3));
+  EXPECT_TRUE(locator.isController(N0, 3));
+  EXPECT_TRUE(locator.isController(N1, 3));
+  EXPECT_TRUE(locator.isController(N2, 3));
 }
 
 TEST_F(NodeStatsControllerLocatorTest, DeadNode) {
@@ -98,8 +106,8 @@ TEST_F(NodeStatsControllerLocatorTest, DeadNode) {
   // if a node is DEAD, pick another one, even if it's in the same rack
   EXPECT_CALL(locator, getNodeState(_))
       .WillRepeatedly(Return(StateList{ALIVE, ALIVE, DEAD}));
-  EXPECT_TRUE(locator.isController(NodeID{0}, 2));
-  EXPECT_TRUE(locator.isController(NodeID{1}, 2));
+  EXPECT_TRUE(locator.isController(N0, 2));
+  EXPECT_TRUE(locator.isController(N1, 2));
 }
 
 TEST_F(NodeStatsControllerLocatorTest, GapInIndex) {
@@ -114,8 +122,8 @@ TEST_F(NodeStatsControllerLocatorTest, GapInIndex) {
   EXPECT_CALL(locator, getNodeState(_))
       .WillRepeatedly(Return(StateList{ALIVE, DEAD, ALIVE}));
 
-  EXPECT_TRUE(locator.isController(NodeID{0}, 2));
-  EXPECT_TRUE(locator.isController(NodeID{2}, 2));
+  EXPECT_TRUE(locator.isController(N0, 2));
+  EXPECT_TRUE(locator.isController(N2, 2));
 }
 
 TEST_F(NodeStatsControllerLocatorTest, WithoutLocation) {
@@ -131,11 +139,11 @@ TEST_F(NodeStatsControllerLocatorTest, WithoutLocation) {
 
   // if only 2 are chosen, the one with location (and different rack) should be
   // chosen
-  EXPECT_TRUE(locator.isController(NodeID{0}, 2));
-  EXPECT_TRUE(locator.isController(NodeID{2}, 2));
+  EXPECT_TRUE(locator.isController(N0, 2));
+  EXPECT_TRUE(locator.isController(N2, 2));
 
   // when we are forced to not consider location, choose any
-  EXPECT_TRUE(locator.isController(NodeID{0}, 3));
-  EXPECT_TRUE(locator.isController(NodeID{1}, 3));
-  EXPECT_TRUE(locator.isController(NodeID{2}, 3));
+  EXPECT_TRUE(locator.isController(N0, 3));
+  EXPECT_TRUE(locator.isController(N1, 3));
+  EXPECT_TRUE(locator.isController(N2, 3));
 }

@@ -15,7 +15,7 @@ using namespace facebook::logdevice;
 
 TEST(RandomNodeSelector, OneNode) {
   auto node_config = createSimpleNodesConfig(1 /* 1 node */);
-  auto server_config = ServerConfig::fromData(
+  auto server_config = ServerConfig::fromDataTest(
       "random_node_selector_test", std::move(node_config));
 
   auto nodes = server_config->getNodes();
@@ -26,7 +26,7 @@ TEST(RandomNodeSelector, OneNode) {
 
 TEST(RandomNodeSelector, ExcludeNode) {
   auto node_config = createSimpleNodesConfig(2 /* 2 nodes*/);
-  auto server_config = ServerConfig::fromData(
+  auto server_config = ServerConfig::fromDataTest(
       "random_node_selector_test", std::move(node_config));
 
   auto nodes = server_config->getNodes();
@@ -40,7 +40,7 @@ TEST(RandomNodeSelector, ExcludeNode) {
 
 TEST(RandomNodeSelector, DontExcludeSingleNode) {
   auto node_config = createSimpleNodesConfig(1 /* 1 node */);
-  auto server_config = ServerConfig::fromData(
+  auto server_config = ServerConfig::fromDataTest(
       "random_node_selector_test", std::move(node_config));
 
   auto nodes = server_config->getNodes();

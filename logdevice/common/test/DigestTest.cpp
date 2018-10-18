@@ -74,7 +74,8 @@ class DigestTest : public ::testing::Test {
     const size_t nodeset_size = nodes.size();
     Configuration::NodesConfig nodes_config(std::move(nodes));
 
-    config_ = ServerConfig::fromData("digest_test", std::move(nodes_config));
+    config_ =
+        ServerConfig::fromDataTest("digest_test", std::move(nodes_config));
   }
 
   void setUp() {

@@ -41,6 +41,8 @@ class MetaDataLogsReplication {
  private:
   membership::MembershipVersion::Type version_;
   ReplicationProperty replication_;
+
+  friend class NodesConfigLegacyConverter;
 };
 
 }}}} // namespace facebook::logdevice::configuration::nodes

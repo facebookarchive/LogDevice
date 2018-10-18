@@ -279,7 +279,8 @@ void NodeSetAccessorTest::setUp() {
   auto logs_config = std::make_unique<configuration::LocalLogsConfig>();
   addLog(logs_config.get(), LOG_ID, replication_, extras_, nodeset_size, {});
   config_ = std::make_shared<Configuration>(
-      ServerConfig::fromData("nodeset_accessor_test", std::move(nodes_config)),
+      ServerConfig::fromDataTest(
+          "nodeset_accessor_test", std::move(nodes_config)),
       std::move(logs_config));
 
   accessor_.reset(new MockedStorageSetAccessor(this));

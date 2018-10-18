@@ -81,7 +81,7 @@ class GetEpochRecoveryMetadataRequestTest : public ::testing::Test {
     auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
     NodeSetTestUtil::addLog(logs_config.get(), kLogID, 1, 0, 1, {});
     config_ = std::make_shared<Configuration>(
-        ServerConfig::fromData(
+        ServerConfig::fromDataTest(
             "GetEpochRecoveryMetadataRequestTest", std::move(nodes_config)),
         std::move(logs_config));
     int i = 0;

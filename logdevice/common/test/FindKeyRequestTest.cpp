@@ -171,7 +171,7 @@ class MockFindKeyRequest : public FindKeyRequest {
     auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
     logs_config->insert(
         boost::icl::right_open_interval<logid_t::raw_type>(1, 2), log);
-    config_ = ServerConfig::fromData(
+    config_ = ServerConfig::fromDataTest(
         __FILE__, std::move(nodes_config), std::move(meta_config));
 
     logs_config_ = std::move(logs_config);
@@ -203,7 +203,7 @@ class MockFindKeyRequest : public FindKeyRequest {
     auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
     logs_config->insert(
         boost::icl::right_open_interval<logid_t::raw_type>(1, 2), log);
-    config_ = ServerConfig::fromData(
+    config_ = ServerConfig::fromDataTest(
         __FILE__, std::move(nodes_config), std::move(meta_config));
 
     logs_config_ = std::move(logs_config);

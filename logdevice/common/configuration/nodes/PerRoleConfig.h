@@ -152,6 +152,8 @@ class PerRoleConfig {
  private:
   std::shared_ptr<const MembershipConfig> membership_;
   std::shared_ptr<const AttributesConfig> attributes_;
+
+  friend class NodesConfigLegacyConverter;
 };
 
 }}}} // namespace facebook::logdevice::configuration::nodes

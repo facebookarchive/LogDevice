@@ -116,7 +116,7 @@ std::shared_ptr<UpdateableConfig> buildConfig() {
       createMetaDataLogsConfig(nodes_config, nodes_config.getNodes().size(), 2);
   auto config = std::make_shared<UpdateableConfig>();
   config->updateableServerConfig()->update(
-      ServerConfig::fromData(__FILE__, nodes_config, meta_config));
+      ServerConfig::fromDataTest(__FILE__, nodes_config, meta_config));
   return config;
 }
 

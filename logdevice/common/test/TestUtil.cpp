@@ -226,7 +226,7 @@ createSimpleConfig(ServerConfig::NodesConfig nodes, size_t logs) {
   ServerConfig::MetaDataLogsConfig meta_config =
       createMetaDataLogsConfig(nodes, 1, 1);
 
-  auto server_config = ServerConfig::fromData(__FILE__, nodes, meta_config);
+  auto server_config = ServerConfig::fromDataTest(__FILE__, nodes, meta_config);
   return std::make_shared<Configuration>(
       std::move(server_config), std::move(logs_config));
 }

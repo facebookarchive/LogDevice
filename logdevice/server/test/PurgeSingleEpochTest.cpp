@@ -132,7 +132,7 @@ void PurgeSingleEpochTest::setUp() {
   auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
   addLog(logs_config.get(), log_id_, 1, 0, 1, {});
   config_ = std::make_shared<Configuration>(
-      ServerConfig::fromData(
+      ServerConfig::fromDataTest(
           "purge_single_epoch_test", std::move(nodes_config)),
       std::move(logs_config));
 

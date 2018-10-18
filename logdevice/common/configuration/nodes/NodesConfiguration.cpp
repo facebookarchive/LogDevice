@@ -12,6 +12,7 @@
 #include <folly/hash/SpookyHashV2.h>
 
 #include "logdevice/common/debug.h"
+#include "logdevice/common/configuration/ServerConfig.h"
 
 namespace facebook { namespace logdevice { namespace configuration {
 namespace nodes {
@@ -240,8 +241,8 @@ NodesConfiguration::applyUpdate(NodesConfiguration::Update update) const {
 
   // 6) bump the config version and updates the configuration metadata
   new_config->version_ = MembershipVersion::Type(version_.val() + 1);
-  new_config->storage_hash_ = new_config->computeStorageNodesHash();
-  new_config->num_shards_ = new_config->computeNumShards();
+  // update storage_hash, num_shards and addr_to_index
+  new_config->recomputeConfigMetadata();
   new_config->last_change_timestamp_ =
       std::chrono::duration_cast<std::chrono::milliseconds>(
           std::chrono::system_clock::now().time_since_epoch())
@@ -313,6 +314,28 @@ shard_size_t NodesConfiguration::computeNumShards() const {
     return storage_attr.num_shards;
   }
   return 0;
+}
+
+void NodesConfiguration::recomputeConfigMetadata() {
+  storage_hash_ = computeStorageNodesHash();
+  num_shards_ = computeNumShards();
+
+  auto add_addr_index = [this](const std::vector<node_index_t>& nodes) {
+    for (auto n : nodes) {
+      const auto& serv_disc = getServiceDiscovery()->nodeAttributesAt(n);
+      addr_to_index_.insert(std::make_pair(serv_disc.address, n));
+    }
+  };
+
+  add_addr_index(getSequencerMembership()->getMembershipNodes());
+  add_addr_index(getStorageMembership()->getMembershipNodes());
+}
+
+std::shared_ptr<const NodesConfiguration> NodesConfiguration::withVersion(
+    membership::MembershipVersion::Type version) const {
+  auto config = std::make_shared<NodesConfiguration>(*this);
+  config->setVersion(version);
+  return config;
 }
 
 }}}} // namespace facebook::logdevice::configuration::nodes

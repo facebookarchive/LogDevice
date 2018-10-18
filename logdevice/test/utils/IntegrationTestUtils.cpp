@@ -414,17 +414,17 @@ std::unique_ptr<Cluster> ClusterFactory::create(int nnodes) {
   }
 
   auto config = std::make_unique<Configuration>(
-      ServerConfig::fromData(cluster_name_,
-                             std::move(nodes_config),
-                             std::move(meta_config),
-                             ServerConfig::PrincipalsConfig(),
-                             ServerConfig::SecurityConfig(),
-                             ServerConfig::TraceLoggerConfig(),
-                             std::move(ts_config),
-                             ServerConfig::ZookeeperConfig(),
-                             std::move(server_settings),
-                             std::move(client_settings),
-                             internal_logs_),
+      ServerConfig::fromDataTest(cluster_name_,
+                                 std::move(nodes_config),
+                                 std::move(meta_config),
+                                 ServerConfig::PrincipalsConfig(),
+                                 ServerConfig::SecurityConfig(),
+                                 ServerConfig::TraceLoggerConfig(),
+                                 std::move(ts_config),
+                                 ServerConfig::ZookeeperConfig(),
+                                 std::move(server_settings),
+                                 std::move(client_settings),
+                                 internal_logs_),
       enable_logsconfig_manager_ ? nullptr : logs_config);
   logs_config->setInternalLogsConfig(
       config->serverConfig()->getInternalLogsConfig());

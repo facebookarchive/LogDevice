@@ -773,7 +773,7 @@ void AppenderTest::updateConfig() {
     ld_check(!nodes.count(nid));
     Configuration::Node& node = nodes[nid];
     node.address = Sockaddr("::1", folly::to<std::string>(4440 + nid));
-    node.generation = 0;
+    node.generation = 1;
     node.addStorageRole();
     node.addSequencerRole();
   }
@@ -793,7 +793,7 @@ void AppenderTest::updateConfig() {
       createMetaDataLogsConfig(nodes_config, nodes_config.getNodes().size(), 3);
 
   config_.updateableServerConfig()->update(
-      ServerConfig::fromData(__FILE__, nodes_config, meta_config));
+      ServerConfig::fromDataTest(__FILE__, nodes_config, meta_config));
   config_.updateableLogsConfig()->update(std::move(logs_config));
   config_.get()->serverConfig()->setMyNodeID(NodeID(10, 20));
 

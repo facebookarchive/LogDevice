@@ -13,12 +13,12 @@
 
 using namespace facebook::logdevice;
 
-/*
-An address is needed when creating ServerConfig
-
-Testing that if destination does not have SSL settings, should not downgrade
-Give origin SSL settings just to be sure that it has no impact
-*/
+/**
+ * An address is needed when creating ServerConfig
+ *
+ * Testing that if destination does not have SSL settings, should not downgrade
+ * Give origin SSL settings just to be sure that it has no impact
+ */
 #define SSL_DOWNGRADE_TEST_SETUP(origin_str, destination_str)             \
   configuration::Node origin, destination;                                \
   node_index_t id_origin = 1, id_destination = 2;                         \
@@ -40,10 +40,14 @@ Give origin SSL settings just to be sure that it has no impact
   auto nodes =                                                            \
       ServerConfig::Nodes({std::make_pair(id_origin, origin),             \
                            std::make_pair(id_destination, destination)}); \
+  for (auto& kv : nodes) {                                                \
+    kv.second.addSequencerRole();                                         \
+    kv.second.addStorageRole();                                           \
+  }                                                                       \
   configuration::NodesConfig nodes_config(std::move(nodes));              \
                                                                           \
-  const auto serverConfig =                                               \
-      ServerConfig::fromData("server_config_test", std::move(nodes_config));
+  const auto serverConfig = ServerConfig::fromDataTest(                   \
+      "server_config_test", std::move(nodes_config));
 
 TEST(ServerConfigTest, NoSslDowngradeSameLocation) {
   SSL_DOWNGRADE_TEST_SETUP("rg0.dc0.cl0.ro0.rk0", "rg0.dc0.cl0.ro0.rk0")

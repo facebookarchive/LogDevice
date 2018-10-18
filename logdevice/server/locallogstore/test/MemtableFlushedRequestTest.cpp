@@ -30,7 +30,7 @@ class MemtableFlushedRequestTest : public ::testing::Test {
 
     const size_t nodeset_size = nodes.size();
     Configuration::NodesConfig nodes_config(std::move(nodes));
-    config = ServerConfig::fromData(
+    config = ServerConfig::fromDataTest(
         "memtableflushedrequest_test", std::move(nodes_config));
     config->setMyNodeID(my_node_id);
   }

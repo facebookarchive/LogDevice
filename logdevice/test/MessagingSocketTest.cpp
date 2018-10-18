@@ -170,7 +170,7 @@ static std::shared_ptr<UpdateableConfig> create_config(int ld_port) {
 
   auto updateable_config = std::make_shared<UpdateableConfig>();
   updateable_config->updateableServerConfig()->update(
-      ServerConfig::fromData(CLUSTER_NAME, nodes, meta_config));
+      ServerConfig::fromDataTest(CLUSTER_NAME, nodes, meta_config));
   return updateable_config;
 }
 

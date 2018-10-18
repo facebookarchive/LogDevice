@@ -556,7 +556,7 @@ class RebuildingCoordinatorTest : public ::testing::Test {
         nodes_config, nodes_config.getNodes().size(), 3);
 
     config_->updateableServerConfig()->update(
-        ServerConfig::fromData(__FILE__, nodes_config, meta_config));
+        ServerConfig::fromDataTest(__FILE__, nodes_config, meta_config));
     logs_config->setInternalLogsConfig(internal_logs);
     logs_config->markAsFullyLoaded();
     config_->updateableLogsConfig()->update(std::move(logs_config));

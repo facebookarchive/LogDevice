@@ -135,6 +135,15 @@ ServerConfig::fromJson(const folly::dynamic& parsed) {
     return nullptr;
   }
 
+  // TODO(T33035439): generate the new NodesConfiguration format based on
+  // existing NodesConfig and MetaDataLogsConfig parsed
+  if (!nodesConfig.generateNodesConfiguration(metaDataLogsConfig, version)) {
+    // unable to generate the new nodes configuration representation, consider
+    // the config invalid;
+    return nullptr;
+  }
+  ld_check(nodesConfig.hasNodesConfiguration());
+
   folly::dynamic customFields = folly::dynamic::object;
   for (auto& pair : parsed.items()) {
     if (config_recognized_keys.find(pair.first.asString()) !=
@@ -161,6 +170,8 @@ ServerConfig::fromJson(const folly::dynamic& parsed) {
                          ns_delimiter);
 
   config->setVersion(version);
+  ld_check_eq(membership::MembershipVersion::Type(config->getVersion().val()),
+              config->getNodesConfiguration()->getVersion());
   return config;
 }
 
@@ -192,6 +203,8 @@ ServerConfig::ServerConfig(std::string cluster_name,
       internalLogs_(std::move(internalLogs)),
       ns_delimiter_(ns_delimiter),
       customFields_(std::move(customFields)) {
+  ld_check(nodesConfig_.hasNodesConfiguration());
+
   // sequencersConfig_ needs consecutive node indexes, see comment in
   // SequencersConfig.h.
   // Pad with zero-weight invalid nodes if there are gaps in numbering.
@@ -342,6 +355,7 @@ ServerConfig::fromData(std::string cluster_name,
                        OptionalTimestamp clusterCreationTime,
                        folly::dynamic customFields,
                        const std::string& ns_delimiter) {
+  ld_check(nodes.hasNodesConfiguration());
   return std::unique_ptr<ServerConfig>(
       new ServerConfig(std::move(cluster_name),
                        std::move(nodes),
@@ -359,9 +373,50 @@ ServerConfig::fromData(std::string cluster_name,
                        ns_delimiter));
 }
 
+std::unique_ptr<ServerConfig>
+ServerConfig::fromDataTest(std::string cluster_name,
+                           NodesConfig nodes,
+                           MetaDataLogsConfig metadata_logs,
+                           PrincipalsConfig principalsConfig,
+                           SecurityConfig securityConfig,
+                           TraceLoggerConfig traceLoggerConfig,
+                           TrafficShapingConfig trafficShapingConfig,
+                           ZookeeperConfig zookeeper,
+                           SettingsConfig serverSettingsConfig,
+                           SettingsConfig clientSettingsConfig,
+                           InternalLogs internalLogs,
+                           OptionalTimestamp clusterCreationTime,
+                           folly::dynamic customFields,
+                           const std::string& ns_delimiter) {
+  // fromData() always generates config with version 1
+  if (!nodes.generateNodesConfiguration(metadata_logs, config_version_t(1))) {
+    return nullptr;
+  }
+
+  auto config = std::unique_ptr<ServerConfig>(
+      new ServerConfig(std::move(cluster_name),
+                       std::move(nodes),
+                       std::move(metadata_logs),
+                       std::move(principalsConfig),
+                       std::move(securityConfig),
+                       std::move(traceLoggerConfig),
+                       std::move(trafficShapingConfig),
+                       std::move(zookeeper),
+                       std::move(serverSettingsConfig),
+                       std::move(clientSettingsConfig),
+                       std::move(internalLogs),
+                       std::move(clusterCreationTime),
+                       std::move(customFields),
+                       ns_delimiter));
+
+  ld_check_eq(membership::MembershipVersion::Type(config->getVersion().val()),
+              config->getNodesConfiguration()->getVersion());
+  return config;
+}
+
 std::unique_ptr<ServerConfig> ServerConfig::copy() const {
   std::unique_ptr<ServerConfig> config = fromData(clusterName_,
-                                                  NodesConfig(getNodes()),
+                                                  nodesConfig_,
                                                   metaDataLogsConfig_,
                                                   principalsConfig_,
                                                   securityConfig_,
@@ -397,6 +452,12 @@ std::shared_ptr<ServerConfig> ServerConfig::withNodes(NodesConfig nodes) const {
   if (metaDataLogsConfig.metadata_nodes != metadata_nodes) {
     metaDataLogsConfig.metadata_nodes = metadata_nodes;
   }
+
+  // generate the new NodesConfig representation
+  if (!nodes.generateNodesConfiguration(metaDataLogsConfig, version_)) {
+    return nullptr;
+  }
+
   std::shared_ptr<ServerConfig> config = fromData(clusterName_,
                                                   std::move(nodes),
                                                   metaDataLogsConfig,
@@ -462,6 +523,7 @@ ServerConfig::withVersion(config_version_t version) const {
                                                   getCustomFields(),
                                                   ns_delimiter_);
   config->setVersion(version);
+  config->setNodesConfigurationVersion(version);
   if (hasMyNodeID()) {
     config->setMyNodeID(my_node_id_);
   }

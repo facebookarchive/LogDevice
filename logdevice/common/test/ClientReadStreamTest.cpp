@@ -560,7 +560,7 @@ class ClientReadStreamTest
         nodes_config, nodes_config.getNodes().size(), 3);
 
     state_.config->updateableServerConfig()->update(
-        ServerConfig::fromData(__FILE__, nodes_config, meta_config));
+        ServerConfig::fromDataTest(__FILE__, nodes_config, meta_config));
     state_.config->updateableLogsConfig()->update(std::move(logs_config));
   }
 

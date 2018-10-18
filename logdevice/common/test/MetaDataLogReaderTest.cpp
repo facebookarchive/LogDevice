@@ -107,9 +107,9 @@ class TestMetaDataLogReader : public MetaDataLogReader {
     nodes_config.setNodes(std::move(nodes));
 
     config_ = std::make_shared<Configuration>(
-        ServerConfig::fromData(__FILE__,
-                               std::move(nodes_config),
-                               Configuration::MetaDataLogsConfig()),
+        ServerConfig::fromDataTest(__FILE__,
+                                   std::move(nodes_config),
+                                   Configuration::MetaDataLogsConfig()),
         std::make_shared<configuration::LocalLogsConfig>());
   }
 

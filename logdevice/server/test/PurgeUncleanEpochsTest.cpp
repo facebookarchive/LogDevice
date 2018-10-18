@@ -221,9 +221,9 @@ void PurgeUncleanEpochsTest::setUp() {
       createMetaDataLogsConfig(nodes_config, nodes_config.getNodes().size(), 1);
 
   config_ = std::make_shared<Configuration>(
-      ServerConfig::fromData("purge_unclean_epochs_test",
-                             std::move(nodes_config),
-                             std::move(meta_config)),
+      ServerConfig::fromDataTest("purge_unclean_epochs_test",
+                                 std::move(nodes_config),
+                                 std::move(meta_config)),
       std::move(logs_config));
 
   if (test_metadata_log_) {

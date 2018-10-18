@@ -20,7 +20,8 @@ bool StorageNodeAttribute::isValid() const {
     return false;
   }
 
-  if (capacity <= 0) {
+  // TODO T33035439: enforce that storage capacity must be positive
+  if (capacity < 0) {
     RATELIMIT_ERROR(
         std::chrono::seconds(10), 5, "invalid storage capacity: %f.", capacity);
     return false;

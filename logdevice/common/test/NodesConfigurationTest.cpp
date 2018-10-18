@@ -8,6 +8,7 @@
 
 #include <gtest/gtest.h>
 
+#include "logdevice/common/configuration/nodes/NodesConfigLegacyConverter.h"
 #include "logdevice/common/configuration/nodes/NodesConfiguration.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/test/TestUtil.h"
@@ -472,6 +473,16 @@ TEST_F(NodesConfigurationTest, RoleConflict) {
     EXPECT_EQ(nullptr, new_config);
     EXPECT_EQ(E::INVALID_CONFIG, err);
   }
+}
+
+///////////// Legacy Format conversion //////////////
+
+TEST_F(NodesConfigurationTest, LegacyConversion1) {
+  std::shared_ptr<Configuration> config(
+      Configuration::fromJsonFile(TEST_CONFIG_FILE("sample_valid.conf")));
+  ASSERT_NE(config, nullptr);
+  const auto server_config = config->serverConfig();
+  ASSERT_TRUE(NodesConfigLegacyConverter::testWithServerConfig(*server_config));
 }
 
 } // namespace

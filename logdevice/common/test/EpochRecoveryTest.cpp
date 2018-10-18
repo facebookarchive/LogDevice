@@ -322,7 +322,7 @@ void EpochRecoveryTest::initConfig() {
       createMetaDataLogsConfig(nodes_config, nodes_config.getNodes().size(), 3);
 
   updateable_config_->updateableServerConfig()->update(
-      ServerConfig::fromData(__FILE__, nodes_config, meta_config));
+      ServerConfig::fromDataTest(__FILE__, nodes_config, meta_config));
   updateable_config_->updateableLogsConfig()->update(std::move(logs_config));
 }
 

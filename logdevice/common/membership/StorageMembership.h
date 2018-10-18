@@ -266,6 +266,8 @@ class StorageMembership : public Membership {
   // remove the given _shard_ from the storage membership if the shard exists;
   // also update the metadata_shards_ index as needed.
   void eraseShardState(ShardID shard);
+
+  friend class configuration::nodes::NodesConfigLegacyConverter;
 };
 
 }}} // namespace facebook::logdevice::membership

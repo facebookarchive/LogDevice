@@ -504,7 +504,7 @@ TEST(MessagingTest, SendFromCallback) {
   Configuration::NodesConfig nodes({{0, std::move(node)}});
   auto config =
       std::make_shared<UpdateableConfig>(std::make_shared<Configuration>(
-          ServerConfig::fromData(
+          ServerConfig::fromDataTest(
               __FILE__, nodes, Configuration::MetaDataLogsConfig()),
           nullptr));
 

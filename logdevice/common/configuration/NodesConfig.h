@@ -7,18 +7,28 @@
  */
 #pragma once
 
+#include <memory>
 #include <unordered_map>
 
-#include "Node.h"
+#include "logdevice/common/configuration/Node.h"
+#include "logdevice/common/configuration/nodes/NodesConfiguration.h"
 
 namespace facebook { namespace logdevice { namespace configuration {
 
+struct MetaDataLogsConfig;
+
 class NodesConfig {
  public:
-  NodesConfig() {}
-  explicit NodesConfig(Nodes nodes) {
+  explicit NodesConfig()
+      : nodes_configuration_(
+            std::make_shared<const nodes::NodesConfiguration>()) {}
+
+  explicit NodesConfig(Nodes nodes)
+      : nodes_configuration_(
+            std::make_shared<const nodes::NodesConfiguration>()) {
     setNodes(std::move(nodes));
   }
+
   void setNodes(Nodes nodes) {
     nodes_ = std::move(nodes);
     calculateHash();
@@ -34,6 +44,32 @@ class NodesConfig {
   shard_size_t getNumShards() const {
     return num_shards_;
   }
+
+  ////////////////////// New NodesConfiguration ///////////////////////
+
+  bool hasNodesConfiguration() const {
+    return nodes_configuration_ != nullptr;
+  }
+
+  const std::shared_ptr<const nodes::NodesConfiguration>&
+  getNodesConfiguration() const {
+    return nodes_configuration_;
+  }
+
+  void setNodesConfigurationVersion(config_version_t version) {
+    // TODO(T33035439): set the nodes config version to be the same as the
+    // config version_ during the migration period. Will be deprecated.
+    if (nodes_configuration_) {
+      nodes_configuration_ = nodes_configuration_->withVersion(
+          membership::MembershipVersion::Type(version.val()));
+    }
+  }
+
+  // generate the new NodesConfiguration representation based on `this',
+  // and the given @param meta_config and @param version.
+  // @return   true if the new NodesConfiguration is successfully generated
+  bool generateNodesConfiguration(const MetaDataLogsConfig& meta_config,
+                                  config_version_t version);
 
  private:
   // calculates a hash of storage-relevant attributes of nodes: for all nodes,
@@ -55,6 +91,11 @@ class NodesConfig {
   // In the mean time, this member is used by state machines that need to
   // convert node_index_t values to ShardID values.
   shard_size_t num_shards_{0};
+
+  // NOTE: NodesConfig is the current nodes config data structure in use, which
+  // will be replaced by nodesConfiguration_ in the future. nodesConfiguration_
+  // is the new format, and it co-exists with current representation.
+  std::shared_ptr<const nodes::NodesConfiguration> nodes_configuration_;
 };
 
 }}} // namespace facebook::logdevice::configuration

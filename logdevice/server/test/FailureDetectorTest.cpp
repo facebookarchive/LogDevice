@@ -118,7 +118,7 @@ std::shared_ptr<ServerConfig> gen_config(size_t num_nodes,
       createMetaDataLogsConfig(nodes_config, nodes_config.getNodes().size(), 3);
 
   std::shared_ptr<ServerConfig> config =
-      ServerConfig::fromData(__FILE__, nodes_config, meta_config);
+      ServerConfig::fromDataTest(__FILE__, nodes_config, meta_config);
   config->setMyNodeID(NodeID(this_node, 1));
   return config;
 }

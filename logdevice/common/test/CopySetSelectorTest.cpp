@@ -316,7 +316,8 @@ void CopySetSelectorTest::setUp() {
   addLog(logs_config.get(), LOG_ID, replication_, extras_, nodeset_size, {});
 
   config_ = std::make_shared<Configuration>(
-      ServerConfig::fromData("copyset_selector_test", std::move(nodes_config)),
+      ServerConfig::fromDataTest(
+          "copyset_selector_test", std::move(nodes_config)),
       std::move(logs_config));
 
   NodeID seq_node_id = NodeID(seq_node_idx_, 1);

@@ -138,7 +138,7 @@ void NodeSetFinderTest::setUp() {
       boost::icl::right_open_interval<logid_t::raw_type>(1, 2), log);
 
   config_ = std::make_shared<Configuration>(
-      ServerConfig::fromData(
+      ServerConfig::fromDataTest(
           __FILE__, std::move(nodes_config), std::move(meta_config)),
       std::move(logs_config));
 

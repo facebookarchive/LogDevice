@@ -203,8 +203,9 @@ void WeightedCopySetSelectorTest::initIfNeeded() {
   replication_checker_ = std::make_unique<FailureDomainNodeSet<size_t>>(
       nodeset_indices_, nodes_in_config_, replication_);
   configuration::NodesConfig nodes_config(nodes_in_config_);
-  anon_server_config_ = std::unique_ptr<ServerConfig>(ServerConfig::fromData(
-      "weighted_copyset_selector_test(anon)", std::move(nodes_config)));
+  anon_server_config_ =
+      std::unique_ptr<ServerConfig>(ServerConfig::fromDataTest(
+          "weighted_copyset_selector_test(anon)", std::move(nodes_config)));
 }
 
 node_index_t WeightedCopySetSelectorTest::getPrimarySequencerNode(logid_t log) {
@@ -245,13 +246,14 @@ WeightedCopySetSelectorTest::getSelector(logid_t log,
     replication_checker_ = std::make_unique<FailureDomainNodeSet<size_t>>(
         nodeset_indices_, nodes_in_config_, replication_);
     configuration::NodesConfig nodes_config(nodes_in_config_);
-    anon_server_config_ = std::unique_ptr<ServerConfig>(ServerConfig::fromData(
-        "weighted_copyset_selector_test(anon)", std::move(nodes_config)));
+    anon_server_config_ =
+        std::unique_ptr<ServerConfig>(ServerConfig::fromDataTest(
+            "weighted_copyset_selector_test(anon)", std::move(nodes_config)));
   }
 
   Selector& s = selectors_[key];
   configuration::NodesConfig nodes_config(nodes_in_config_);
-  s.server_config = std::shared_ptr<ServerConfig>(ServerConfig::fromData(
+  s.server_config = std::shared_ptr<ServerConfig>(ServerConfig::fromDataTest(
       "weighted_copyset_selector_test", std::move(nodes_config)));
   s.server_config->setMyNodeID(NodeID(my_node, 1));
   s.selector = std::make_unique<WeightedCopySetSelector>(log,

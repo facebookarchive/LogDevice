@@ -76,6 +76,8 @@ class NodeAttributesConfig {
 
   void setNodeAttributes(node_index_t node, Attributes state);
   bool eraseNodeAttribute(node_index_t node);
+
+  friend class NodesConfigLegacyConverter;
 };
 
 }}}} // namespace facebook::logdevice::configuration::nodes
