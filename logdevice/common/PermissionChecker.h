@@ -8,7 +8,6 @@
 #pragma once
 
 #include "folly/Function.h"
-
 #include "logdevice/common/PrincipalIdentity.h"
 #include "logdevice/common/SecurityInformation.h"
 #include "logdevice/include/types.h"

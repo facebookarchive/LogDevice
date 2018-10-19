@@ -6,8 +6,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <thread>
 #include <atomic>
+#include <thread>
 
 #include "logdevice/common/client_read_stream/AllClientReadStreams.h"
 #include "logdevice/include/Client.h"

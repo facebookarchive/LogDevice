@@ -9,7 +9,6 @@
 
 #include "logdevice/common/AppendRequestBase.h"
 #include "logdevice/common/Timestamp.h"
-
 #include "logdevice/common/protocol/APPENDED_Message.h"
 #include "logdevice/common/protocol/APPEND_Message.h"
 

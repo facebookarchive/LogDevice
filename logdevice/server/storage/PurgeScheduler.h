@@ -7,8 +7,8 @@
  */
 #pragma once
 
-#include <vector>
 #include <memory>
+#include <vector>
 
 #include "logdevice/common/LogIDUniqueQueue.h"
 #include "logdevice/common/ResourceBudget.h"

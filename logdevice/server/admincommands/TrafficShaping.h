@@ -11,10 +11,10 @@
 
 #include <folly/ScopeGuard.h>
 
-#include "logdevice/common/configuration/Configuration.h"
-#include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/common/Priority.h"
 #include "logdevice/common/PriorityMap.h"
+#include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/server/AdminCommand.h"
 
 namespace facebook { namespace logdevice { namespace commands {

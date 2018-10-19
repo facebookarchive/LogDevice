@@ -12,6 +12,7 @@
 #include "logdevice/common/Metadata.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Sender.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/CLEANED_Message.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/server/ServerWorker.h"
@@ -19,8 +20,6 @@
 #include "logdevice/server/locallogstore/WriteOps.h"
 #include "logdevice/server/storage_tasks/PerWorkerStorageTaskQueue.h"
 #include "logdevice/server/storage_tasks/StorageThreadPool.h"
-
-#include "logdevice/common/debug.h"
 
 namespace facebook { namespace logdevice {
 

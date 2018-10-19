@@ -11,14 +11,14 @@
 #include <algorithm>
 #include <alloca.h>
 #include <cstdlib>
+
 #include <opentracing/tracer.h>
 
 #include "logdevice/common/Address.h"
-#include "logdevice/common/AppenderTracer.h"
 #include "logdevice/common/AppendRequest.h"
+#include "logdevice/common/AppenderTracer.h"
 #include "logdevice/common/Checksum.h"
 #include "logdevice/common/ClusterState.h"
-#include "logdevice/common/debug.h"
 #include "logdevice/common/EpochMetaData.h"
 #include "logdevice/common/EpochSequencer.h"
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
@@ -30,14 +30,15 @@
 #include "logdevice/common/Sequencer.h"
 #include "logdevice/common/TailRecord.h"
 #include "logdevice/common/TraceLogger.h"
-#include "logdevice/common/types_internal.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/APPENDED_Message.h"
 #include "logdevice/common/protocol/DELETE_Message.h"
 #include "logdevice/common/protocol/RELEASE_Message.h"
-#include "logdevice/common/protocol/STORE_Message.h"
 #include "logdevice/common/protocol/STORED_Message.h"
+#include "logdevice/common/protocol/STORE_Message.h"
 #include "logdevice/common/stats/ServerHistograms.h"
+#include "logdevice/common/types_internal.h"
 #include "logdevice/include/Err.h"
 
 // Helper macro for checking that the current worker thread is the worker thread

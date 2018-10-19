@@ -9,11 +9,12 @@
 
 #include <errno.h>
 #include <memory>
+
 #include <sys/stat.h>
 
-#include "logdevice/common/configuration/ParsingHelpers.h"
 #include "logdevice/common/ConstructorFailed.h"
 #include "logdevice/common/FileConfigSourceThread.h"
+#include "logdevice/common/configuration/ParsingHelpers.h"
 #include "logdevice/common/configuration/TextConfigUpdater.h"
 #include "logdevice/common/debug.h"
 

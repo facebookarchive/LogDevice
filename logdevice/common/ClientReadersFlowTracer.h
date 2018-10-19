@@ -6,9 +6,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 #pragma once
-#include <boost/circular_buffer.hpp>
 #include <chrono>
 #include <memory>
+
+#include <boost/circular_buffer.hpp>
+
 #include "logdevice/common/SampledTracer.h"
 #include "logdevice/common/settings/Settings.h"
 

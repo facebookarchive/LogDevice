@@ -14,10 +14,10 @@
 #include "logdevice/common/BackoffTimer.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/RebuildingTypes.h"
-#include "logdevice/common/types_internal.h"
 #include "logdevice/common/WorkerCallbackHelper.h"
 #include "logdevice/common/event_log/EventLogRecord.h"
 #include "logdevice/common/event_log/EventLogStateMachine.h"
+#include "logdevice/common/types_internal.h"
 #include "logdevice/include/types.h"
 
 /**

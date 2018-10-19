@@ -8,6 +8,7 @@
 #pragma once
 
 #include <memory>
+
 #include "logdevice/common/EpochMetaData.h"
 #include "logdevice/common/SampledTracer.h"
 

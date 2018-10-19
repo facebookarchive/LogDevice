@@ -7,6 +7,7 @@
  */
 
 #include "logdevice/common/protocol/CHECK_SEAL_REPLY_Message.h"
+
 #include "logdevice/common/CheckSealRequest.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Worker.h"

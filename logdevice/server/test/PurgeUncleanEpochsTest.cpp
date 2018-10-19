@@ -5,11 +5,14 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/server/storage/PurgeUncleanEpochs.h"
+
+#include <memory>
+#include <vector>
+
 #include <folly/Memory.h>
 #include <folly/Optional.h>
 #include <gtest/gtest.h>
-#include <memory>
-#include <vector>
 
 #include "logdevice/common/Timer.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
@@ -20,7 +23,6 @@
 #include "logdevice/server/locallogstore/test/StoreUtil.h"
 #include "logdevice/server/locallogstore/test/TemporaryLogStore.h"
 #include "logdevice/server/storage/PurgeSingleEpoch.h"
-#include "logdevice/server/storage/PurgeUncleanEpochs.h"
 
 #define N0 ShardID(0, 0)
 

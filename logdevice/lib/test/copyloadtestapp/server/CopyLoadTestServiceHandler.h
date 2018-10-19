@@ -7,42 +7,40 @@
  */
 #pragma once
 
-#include <vector>
-#include "common/fb303/cpp/FacebookBase2.h"
-#include "logdevice/include/Err.h"
-#include "logdevice/lib/test/copyloadtestapp/server/gen-cpp2/CopyLoaderTest.h"
-
-#include <memory>
-#include <unistd.h>
-#include <cstdlib>
 #include <atomic>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <iostream>
+#include <memory>
 #include <mutex>
 #include <random>
 #include <signal.h>
 #include <thread>
+#include <unistd.h>
 #include <unordered_map>
+#include <vector>
 
-#include "common/init/Init.h"
 #include <folly/Memory.h>
 #include <folly/Optional.h>
 #include <folly/io/async/EventBase.h>
 #include <thrift/lib/cpp/async/TAsyncSocket.h>
 #include <thrift/lib/cpp2/async/HeaderClientChannel.h>
 
-#include "logdevice/common/debug.h"
-
+#include "common/fb303/cpp/FacebookBase2.h"
+#include "common/init/Init.h"
 #include "logdevice/common/Checksum.h"
 #include "logdevice/common/EpochMetaData.h"
 #include "logdevice/common/ReaderImpl.h"
 #include "logdevice/common/Semaphore.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/util.h"
-#include "logdevice/lib/ClientSettingsImpl.h"
 #include "logdevice/include/Client.h"
+#include "logdevice/include/Err.h"
 #include "logdevice/include/Record.h"
 #include "logdevice/include/types.h"
+#include "logdevice/lib/ClientSettingsImpl.h"
+#include "logdevice/lib/test/copyloadtestapp/server/gen-cpp2/CopyLoaderTest.h"
 
 namespace facebook { namespace logdevice { namespace copyloadtestapp {
 

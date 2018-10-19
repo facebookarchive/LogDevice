@@ -8,6 +8,7 @@
 #include "StorageMembership.h"
 
 #include <algorithm>
+
 #include <folly/Format.h>
 
 #include "logdevice/common/debug.h"

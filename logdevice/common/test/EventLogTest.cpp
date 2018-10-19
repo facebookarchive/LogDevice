@@ -10,8 +10,8 @@
 #include <gtest/gtest.h>
 
 #include "logdevice/common/DataRecordOwnsPayload.h"
-#include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/configuration/InternalLogs.h"
+#include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/event_log/EventLogRebuildingSet.h"
 #include "logdevice/common/event_log/EventLogStateMachine.h"

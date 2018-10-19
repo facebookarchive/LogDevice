@@ -9,6 +9,7 @@
 
 #include <functional>
 #include <memory>
+
 #include "logdevice/common/WorkerType.h"
 
 namespace facebook { namespace logdevice {

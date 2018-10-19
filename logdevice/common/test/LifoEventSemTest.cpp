@@ -5,6 +5,8 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/common/LifoEventSem.h"
+
 #include <semaphore.h>
 #include <thread>
 
@@ -13,8 +15,6 @@
 #include <folly/portability/GFlags.h>
 #include <folly/portability/GTest.h>
 #include <folly/test/DeterministicSchedule.h>
-
-#include "logdevice/common/LifoEventSem.h"
 
 using namespace folly;
 using namespace folly::test;

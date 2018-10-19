@@ -11,9 +11,9 @@
 #include <cstdio>
 #include <new>
 
-#include "logdevice/include/Err.h"
 #include "logdevice/common/ConstructorFailed.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/include/Err.h"
 
 namespace facebook { namespace logdevice {
 

@@ -10,8 +10,8 @@
 #include "logdevice/common/Metadata.h"
 #include "logdevice/common/protocol/GET_EPOCH_RECOVERY_METADATA_Message.h"
 #include "logdevice/common/protocol/GET_EPOCH_RECOVERY_METADATA_REPLY_Message.h"
-#include "logdevice/server/ServerWorker.h"
 #include "logdevice/server/ServerProcessor.h"
+#include "logdevice/server/ServerWorker.h"
 #include "logdevice/server/read_path/LogStorageStateMap.h"
 #include "logdevice/server/storage_tasks/StorageThreadPool.h"
 

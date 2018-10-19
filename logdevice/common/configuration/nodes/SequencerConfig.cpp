@@ -7,8 +7,8 @@
  */
 #include "SequencerConfig.h"
 
-#include "logdevice/common/types_internal.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/types_internal.h"
 
 namespace facebook { namespace logdevice { namespace configuration {
 namespace nodes {

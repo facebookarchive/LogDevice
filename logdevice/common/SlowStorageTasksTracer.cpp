@@ -7,8 +7,9 @@
  */
 #include "logdevice/common/SlowStorageTasksTracer.h"
 
-#include "logdevice/common/configuration/Log.h"
 #include <algorithm>
+
+#include "logdevice/common/configuration/Log.h"
 
 namespace facebook { namespace logdevice {
 

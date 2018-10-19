@@ -8,9 +8,10 @@
 #include "ConnectThrottle.h"
 
 #include <algorithm>
+
+#include "logdevice/common/Socket.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/settings/Settings.h"
-#include "logdevice/common/Socket.h"
 
 namespace facebook { namespace logdevice {
 

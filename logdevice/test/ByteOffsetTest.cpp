@@ -5,23 +5,22 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include <gtest/gtest.h>
-#include <unistd.h>
 #include <thread>
+#include <unistd.h>
 
 #include <folly/Memory.h>
 #include <folly/Random.h>
+#include <gtest/gtest.h>
 
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/ConfigParser.h"
+#include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/include/Client.h"
 #include "logdevice/lib/ClientImpl.h"
 #include "logdevice/server/locallogstore/test/StoreUtil.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
-
-#include "logdevice/common/debug.h"
 
 using namespace facebook::logdevice;
 

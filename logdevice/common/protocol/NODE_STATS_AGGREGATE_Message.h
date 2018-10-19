@@ -9,8 +9,8 @@
 
 #include <unordered_map>
 
-#include "logdevice/common/protocol/Message.h"
 #include "logdevice/common/ClientID.h"
+#include "logdevice/common/protocol/Message.h"
 
 namespace facebook { namespace logdevice {
 

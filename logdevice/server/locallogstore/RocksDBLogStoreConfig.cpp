@@ -12,8 +12,8 @@
 #include <rocksdb/filter_policy.h>
 #include <rocksdb/options.h>
 #include <rocksdb/slice_transform.h>
-#include <rocksdb/statistics.h>
 #include <rocksdb/sst_file_manager.h>
+#include <rocksdb/statistics.h>
 #include <rocksdb/table.h>
 #include <rocksdb/write_buffer_manager.h>
 

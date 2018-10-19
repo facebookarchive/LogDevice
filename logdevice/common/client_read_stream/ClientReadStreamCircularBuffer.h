@@ -7,8 +7,8 @@
  */
 #pragma once
 
-#include "logdevice/common/client_read_stream/ClientReadStreamBuffer.h"
 #include "logdevice/common/CircularBuffer.h"
+#include "logdevice/common/client_read_stream/ClientReadStreamBuffer.h"
 
 namespace facebook { namespace logdevice {
 

@@ -10,9 +10,9 @@
 #include <folly/dynamic.h>
 #include <folly/json.h>
 
+#include "logdevice/common/ShardAuthoritativeStatusMap.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/debug.h"
-#include "logdevice/common/ShardAuthoritativeStatusMap.h"
 #include "logdevice/include/Err.h"
 
 namespace facebook { namespace logdevice {

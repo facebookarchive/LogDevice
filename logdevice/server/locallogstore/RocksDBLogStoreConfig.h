@@ -9,8 +9,8 @@
 
 #include <rocksdb/env.h>
 
-#include "logdevice/common/settings/RebuildingSettings.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/settings/RebuildingSettings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/types.h"

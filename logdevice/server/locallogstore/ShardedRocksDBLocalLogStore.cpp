@@ -17,16 +17,14 @@
 #include <folly/FileUtil.h>
 #include <folly/Memory.h>
 #include <folly/ScopeGuard.h>
-
 #include <rocksdb/db.h>
 #include <rocksdb/statistics.h>
-
 #include <sys/stat.h>
 
 #include "logdevice/common/ConstructorFailed.h"
 #include "logdevice/common/RandomAccessQueue.h"
-#include "logdevice/common/settings/RebuildingSettings.h"
 #include "logdevice/common/ThreadID.h"
+#include "logdevice/common/settings/RebuildingSettings.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/fatalsignal.h"

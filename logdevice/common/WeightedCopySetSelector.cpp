@@ -8,9 +8,9 @@
 #include "logdevice/common/WeightedCopySetSelector.h"
 
 #include "logdevice/common/CopySet.h"
+#include "logdevice/common/HashBasedSequencerLocator.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/util.h"
-#include "logdevice/common/HashBasedSequencerLocator.h"
 
 namespace facebook { namespace logdevice {
 

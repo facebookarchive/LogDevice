@@ -7,8 +7,8 @@
  */
 #pragma once
 
-#include "logdevice/server/storage_tasks/StorageTask.h"
 #include "logdevice/server/RebuildingLogEnumerator.h"
+#include "logdevice/server/storage_tasks/StorageTask.h"
 
 namespace facebook { namespace logdevice {
 

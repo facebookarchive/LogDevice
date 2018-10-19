@@ -7,9 +7,9 @@
  */
 #include "FileConfigSourceThread.h"
 
-#include <folly/Singleton.h>
-
 #include <thread>
+
+#include <folly/Singleton.h>
 
 #include "logdevice/common/ConstructorFailed.h"
 #include "logdevice/common/FileConfigSource.h"

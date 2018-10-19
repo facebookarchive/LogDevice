@@ -14,12 +14,12 @@
 #include <boost/container/flat_map.hpp>
 #include <boost/iterator/iterator_adaptor.hpp>
 #include <boost/type_traits/is_same.hpp>
-
-#include <folly/synchronization/CallOnce.h>
 #include <folly/Memory.h>
 #include <folly/Optional.h>
 #include <folly/Range.h>
 #include <folly/dynamic.h>
+#include <folly/synchronization/CallOnce.h>
+
 #include "logdevice/common/MetaDataLog.h"
 #include "logdevice/common/configuration/InternalLogs.h"
 #include "logdevice/common/configuration/LogsConfig.h"

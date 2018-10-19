@@ -9,8 +9,8 @@
 
 #include <gtest/gtest.h>
 
-#include "logdevice/common/test/TestUtil.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/test/TestUtil.h"
 
 /**
  * @file Base class for integration tests.  Sets up logging, a timeout.

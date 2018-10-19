@@ -7,8 +7,8 @@
  */
 #include "logdevice/server/locallogstore/RocksDBLogStoreBase.h"
 
-#include "logdevice/server/locallogstore/RocksDBSettings.h"
 #include "logdevice/server/locallogstore/RocksDBMemTableRep.h"
+#include "logdevice/server/locallogstore/RocksDBSettings.h"
 #include "logdevice/server/locallogstore/RocksDBWriter.h"
 
 namespace facebook { namespace logdevice {

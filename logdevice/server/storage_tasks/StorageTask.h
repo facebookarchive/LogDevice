@@ -11,10 +11,10 @@
 #include <string>
 
 #include "logdevice/common/AdminCommandTable-fwd.h"
-#include "logdevice/common/settings/Durability.h"
 #include "logdevice/common/StorageTask-enums.h"
 #include "logdevice/common/StorageTaskDebugInfo.h"
 #include "logdevice/common/Timestamp.h"
+#include "logdevice/common/settings/Durability.h"
 
 namespace facebook { namespace logdevice {
 

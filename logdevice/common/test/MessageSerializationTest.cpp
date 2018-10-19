@@ -5,23 +5,24 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include <functional>
-
 #include <cstring>
+#include <functional>
 
 #include <folly/Memory.h>
 #include <folly/ScopeGuard.h>
 #include <gtest/gtest.h>
 
 #include "event2/buffer.h"
+#include "logdevice/common/Metadata.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/debug.h"
-#include "logdevice/common/util.h"
 #include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/protocol/APPEND_Message.h"
 #include "logdevice/common/protocol/CLEAN_Message.h"
 #include "logdevice/common/protocol/DELETE_Message.h"
+#include "logdevice/common/protocol/GET_EPOCH_RECOVERY_METADATA_Message.h"
+#include "logdevice/common/protocol/GET_EPOCH_RECOVERY_METADATA_REPLY_Message.h"
 #include "logdevice/common/protocol/HELLO_Message.h"
 #include "logdevice/common/protocol/MessageDeserializers.h"
 #include "logdevice/common/protocol/MessageTypeNames.h"
@@ -30,15 +31,13 @@
 #include "logdevice/common/protocol/RECORD_Message.h"
 #include "logdevice/common/protocol/SEALED_Message.h"
 #include "logdevice/common/protocol/SHUTDOWN_Message.h"
-#include "logdevice/common/protocol/START_Message.h"
 #include "logdevice/common/protocol/STARTED_Message.h"
+#include "logdevice/common/protocol/START_Message.h"
 #include "logdevice/common/protocol/STOP_Message.h"
 #include "logdevice/common/protocol/STORE_Message.h"
-#include "logdevice/common/protocol/GET_EPOCH_RECOVERY_METADATA_Message.h"
-#include "logdevice/common/protocol/GET_EPOCH_RECOVERY_METADATA_REPLY_Message.h"
-#include "logdevice/common/Metadata.h"
 #include "logdevice/common/request_util.h"
 #include "logdevice/common/test/TestUtil.h"
+#include "logdevice/common/util.h"
 
 namespace arg = std::placeholders;
 

@@ -7,9 +7,9 @@
  */
 #pragma once
 
-#include "logdevice/server/AdminCommand.h"
 #include "logdevice/common/AdminCommandTable.h"
 #include "logdevice/common/Processor.h"
+#include "logdevice/server/AdminCommand.h"
 
 namespace facebook { namespace logdevice { namespace commands {
 

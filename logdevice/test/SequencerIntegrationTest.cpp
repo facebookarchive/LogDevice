@@ -13,8 +13,6 @@
 #include <gtest/gtest.h>
 
 #include "logdevice/common/AppendRequest.h"
-#include "logdevice/common/configuration/Configuration.h"
-#include "logdevice/common/hash.h"
 #include "logdevice/common/HashBasedSequencerLocator.h"
 #include "logdevice/common/MetaDataLogReader.h"
 #include "logdevice/common/NoopTraceLogger.h"
@@ -24,6 +22,8 @@
 #include "logdevice/common/SequencerLocator.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/ConfigParser.h"
+#include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/common/hash.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/include/Client.h"
@@ -185,7 +185,6 @@ TEST_F(SequencerIntegrationTest, SequencerIsolation) {
 
   ASSERT_EQ(
       "ACTIVE", cluster->getNode(node_idx).sequencerInfo(logid_t(1))["State"]);
-
 
   cluster->partition({partition1, partition2});
   wait_until("node isolated. waiting for sequencers to be disabled.", [&]() {

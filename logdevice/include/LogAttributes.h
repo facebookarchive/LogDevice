@@ -7,16 +7,18 @@
  */
 #pragma once
 
-#include <folly/Optional.h>
 #include <algorithm>
 #include <cassert>
-#include <cmath>
 #include <chrono>
+#include <cmath>
 #include <memory>
 #include <set>
 #include <unordered_map>
 #include <utility>
 #include <vector>
+
+#include <folly/Optional.h>
+
 #include "logdevice/include/NodeLocationScope.h"
 #include "logdevice/include/PermissionActions.h"
 #include "logdevice/include/types.h"

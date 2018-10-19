@@ -11,9 +11,8 @@
 #include <iostream>
 #include <string>
 
-#include <folly/Singleton.h>
-
 #include <boost/program_options.hpp>
+#include <folly/Singleton.h>
 
 #include "logdevice/common/commandline_util_chrono.h"
 #include "logdevice/examples/parse_target_log.h"

@@ -9,8 +9,8 @@
 
 #include "logdevice/common/AdminCommandTable.h"
 #include "logdevice/common/Worker.h"
-#include "logdevice/server/AdminCommand.h"
 #include "logdevice/common/request_util.h"
+#include "logdevice/server/AdminCommand.h"
 #include "logdevice/server/LogRebuilding.h"
 #include "logdevice/server/RebuildingCoordinator.h"
 

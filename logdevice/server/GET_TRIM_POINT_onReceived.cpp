@@ -8,8 +8,8 @@
 
 #include "GET_TRIM_POINT_onReceived.h"
 
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/Sender.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/protocol/GET_TRIM_POINT_REPLY_Message.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/server/ServerProcessor.h"

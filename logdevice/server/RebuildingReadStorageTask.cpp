@@ -9,8 +9,8 @@
 #include "RebuildingReadStorageTask.h"
 
 #include <chrono>
-#include <memory>
 #include <cstdlib>
+#include <memory>
 
 #include <folly/Memory.h>
 
@@ -21,10 +21,8 @@
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/RECORD_Message.h"
 #include "logdevice/common/util.h"
-
 #include "logdevice/include/Err.h"
 #include "logdevice/include/types.h"
-
 #include "logdevice/server/read_path/LocalLogStoreReader.h"
 #include "logdevice/server/storage_tasks/PerWorkerStorageTaskQueue.h"
 #include "logdevice/server/storage_tasks/StorageThreadPool.h"

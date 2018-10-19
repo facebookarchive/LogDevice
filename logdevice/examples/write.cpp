@@ -5,17 +5,15 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include <semaphore.h>
-
 #include <atomic>
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
+#include <semaphore.h>
 #include <string>
 
-#include <folly/Singleton.h>
-
 #include <boost/program_options.hpp>
+#include <folly/Singleton.h>
 
 #include "logdevice/examples/parse_target_log.h"
 #include "logdevice/include/Client.h"

@@ -5,12 +5,14 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/common/LibeventTimer.h"
+
 #include <chrono>
+
 #include <folly/ScopeGuard.h>
 #include <gtest/gtest.h>
 
 #include "event2/event.h"
-#include "logdevice/common/LibeventTimer.h"
 #include "logdevice/common/libevent/compat.h"
 
 using namespace facebook::logdevice;

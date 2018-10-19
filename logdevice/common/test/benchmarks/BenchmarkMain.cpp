@@ -1,6 +1,6 @@
 #include <folly/Benchmark.h>
-#include <gflags/gflags.h>
 #include <folly/Singleton.h>
+#include <gflags/gflags.h>
 
 int main(int argc, char** argv) {
   folly::SingletonVault::singleton()->registrationComplete();

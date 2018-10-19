@@ -8,18 +8,18 @@
 #pragma once
 #include <mutex>
 #include <queue>
+#include <set>
 #include <unordered_map>
 #include <vector>
-#include <set>
 
 #include "logdevice/common/EpochMetaDataMap.h"
 #include "logdevice/common/ExponentialBackoffTimer.h"
 #include "logdevice/common/MetaDataLogReader.h"
 #include "logdevice/common/RebuildingTypes.h"
-#include "logdevice/common/settings/RebuildingSettings.h"
-#include "logdevice/common/types_internal.h"
 #include "logdevice/common/WeakRefHolder.h"
 #include "logdevice/common/WorkerCallbackHelper.h"
+#include "logdevice/common/settings/RebuildingSettings.h"
+#include "logdevice/common/types_internal.h"
 #include "logdevice/include/LogTailAttributes.h"
 #include "logdevice/server/RebuildingLogEnumerator.h"
 #include "logdevice/server/rebuilding/RebuildingPlan.h"

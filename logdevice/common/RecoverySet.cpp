@@ -10,7 +10,6 @@
 #include <algorithm>
 #include <utility>
 
-#include "logdevice/common/debug.h"
 #include "logdevice/common/EpochRecovery.h"
 #include "logdevice/common/RecoveryNode.h"
 #include "logdevice/common/ShardID.h"

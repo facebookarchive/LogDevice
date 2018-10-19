@@ -8,8 +8,8 @@
 #pragma once
 
 #include "logdevice/common/event_log/EventLogRebuildingSet.h"
-#include "logdevice/common/event_log/EventLogRebuildingSet_generated.h"
 #include "logdevice/common/event_log/EventLogRebuildingSetCodec.h"
+#include "logdevice/common/event_log/EventLogRebuildingSet_generated.h"
 #include "logdevice/common/event_log/EventLogRecord.h"
 #include "logdevice/common/replicated_state_machine/ReplicatedStateMachine.h"
 #include "logdevice/common/replicated_state_machine/TrimRSMRetryHandler.h"

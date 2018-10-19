@@ -7,9 +7,9 @@
  */
 #include "TableRegistry.h"
 
-#include "VirtualTable.h"
-
 #include <unordered_map>
+
+#include "VirtualTable.h"
 
 namespace facebook { namespace logdevice { namespace ldquery {
 

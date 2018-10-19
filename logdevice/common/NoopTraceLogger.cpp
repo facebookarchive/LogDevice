@@ -6,10 +6,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 #include "logdevice/common/NoopTraceLogger.h"
-#include "logdevice/common/debug.h"
-#include "logdevice/common/TraceSample.h"
-#include "logdevice/common/TraceLogger.h"
+
 #include <memory>
+
+#include "logdevice/common/TraceLogger.h"
+#include "logdevice/common/TraceSample.h"
+#include "logdevice/common/debug.h"
 
 namespace facebook { namespace logdevice {
 

@@ -8,8 +8,9 @@
 #pragma once
 
 #include <cstdint>
-#include "logdevice/common/NodeID.h"
+
 #include "logdevice/common/ClientID.h"
+#include "logdevice/common/NodeID.h"
 
 namespace facebook { namespace logdevice {
 

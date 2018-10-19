@@ -5,18 +5,17 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include <gtest/gtest.h>
-
 #include <cstdio>
 #include <cstring>
 #include <memory>
 
-#include "logdevice/include/Record.h"
+#include <gtest/gtest.h>
 
 #include "logdevice/common/EpochStoreEpochMetaDataFormat.h"
 #include "logdevice/common/EpochStoreLastCleanEpochFormat.h"
 #include "logdevice/common/LastCleanEpochZRQ.h"
 #include "logdevice/common/TailRecord.h"
+#include "logdevice/include/Record.h"
 
 namespace {
 

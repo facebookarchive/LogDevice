@@ -9,9 +9,8 @@
 
 #include <utility>
 
-#include <google/dense_hash_map>
-
 #include <folly/Portability.h>
+#include <google/dense_hash_map>
 
 #include "logdevice/common/checks.h"
 

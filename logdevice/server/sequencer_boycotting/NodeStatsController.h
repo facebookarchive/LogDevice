@@ -12,8 +12,8 @@
 #include <folly/stats/BucketedTimeSeries-defs.h>
 #include <folly/stats/BucketedTimeSeries.h>
 
-#include "logdevice/common/Timer.h"
 #include "logdevice/common/NodeID.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/configuration/Node.h"
 #include "logdevice/server/sequencer_boycotting/MovingAverageAppendOutlierDetector.h"
 #include "logdevice/server/sequencer_boycotting/NodeStatsControllerCallback.h"

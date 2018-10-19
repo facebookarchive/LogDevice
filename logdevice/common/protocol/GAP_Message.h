@@ -8,6 +8,7 @@
 #pragma once
 
 #include <string>
+
 #include "logdevice/common/protocol/FixedSizeMessage.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/EnumMap.h"

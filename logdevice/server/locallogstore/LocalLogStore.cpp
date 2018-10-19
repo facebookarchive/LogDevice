@@ -11,9 +11,9 @@
 
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
 #include "logdevice/common/Random.h"
+#include "logdevice/common/SimpleEnumMap.h"
 #include "logdevice/common/configuration/ServerConfig.h"
 #include "logdevice/common/debug.h"
-#include "logdevice/common/SimpleEnumMap.h"
 #include "logdevice/common/protocol/STORE_Message.h"
 #include "logdevice/include/Err.h"
 

@@ -12,8 +12,8 @@
 #include <vector>
 
 #include <folly/SocketAddress.h>
-#include <folly/futures/Future.h>
 #include <folly/executors/CPUThreadPoolExecutor.h>
+#include <folly/futures/Future.h>
 
 /**
  * @file AdminCommandClient sends an admin command in parallel to several

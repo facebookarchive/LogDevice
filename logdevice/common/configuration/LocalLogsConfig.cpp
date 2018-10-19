@@ -8,12 +8,13 @@
 #include "LocalLogsConfig.h"
 
 #include <folly/dynamic.h>
-#include "logdevice/include/Err.h"
-#include "logdevice/common/debug.h"
-#include "logdevice/common/configuration/ReplicationProperty.h"
+
 #include "logdevice/common/configuration/ConfigParser.h"
 #include "logdevice/common/configuration/LogsConfigParser.h"
 #include "logdevice/common/configuration/ParsingHelpers.h"
+#include "logdevice/common/configuration/ReplicationProperty.h"
+#include "logdevice/common/debug.h"
+#include "logdevice/include/Err.h"
 
 using facebook::logdevice::logsconfig::LogGroupNode;
 

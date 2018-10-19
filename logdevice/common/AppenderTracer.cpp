@@ -6,6 +6,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 #include "logdevice/common/AppenderTracer.h"
+
+#include <memory>
+
+#include "logdevice/common/ClientID.h"
 #include "logdevice/common/Recipient.h"
 #include "logdevice/common/RecipientSet.h"
 #include "logdevice/common/Request.h"
@@ -13,8 +17,6 @@
 #include "logdevice/common/TraceLogger.h"
 #include "logdevice/common/configuration/Log.h"
 #include "logdevice/common/types_internal.h"
-#include "logdevice/common/ClientID.h"
-#include <memory>
 
 namespace facebook { namespace logdevice {
 

@@ -5,8 +5,6 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include <gtest/gtest.h>
-
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -15,6 +13,7 @@
 #include <vector>
 
 #include <folly/Random.h>
+#include <gtest/gtest.h>
 
 #include "logdevice/include/Client.h"
 #include "logdevice/include/ClientSettings.h"

@@ -7,11 +7,11 @@
  */
 #include "SyncSequencerRequest.h"
 
+#include <folly/Optional.h>
+
 #include "logdevice/common/MetaDataLog.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Worker.h"
-
-#include <folly/Optional.h>
 
 namespace facebook { namespace logdevice {
 

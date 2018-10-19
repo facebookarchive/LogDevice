@@ -9,21 +9,19 @@
 
 #include <fcntl.h>
 #include <unistd.h>
-
 #include <utility>
 
 #include <folly/Likely.h>
 
 #include "event2/event.h"
-
 #include "logdevice/common/ConstructorFailed.h"
-#include "logdevice/common/debug.h"
 #include "logdevice/common/EventHandler.h"
 #include "logdevice/common/EventLoop.h"
 #include "logdevice/common/LifoEventSem.h"
 #include "logdevice/common/MPSCQueue.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/stats/ServerHistograms.h"
 #include "logdevice/common/stats/Stats.h"

@@ -8,10 +8,11 @@
 #include "logdevice/common/DataSizeRequest.h"
 
 #include <folly/Memory.h>
-#include "logdevice/common/configuration/Configuration.h"
+
 #include "logdevice/common/EventLoop.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/DATA_SIZE_Message.h"
 

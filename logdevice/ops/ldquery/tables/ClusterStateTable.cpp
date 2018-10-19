@@ -8,19 +8,17 @@
 #include "ClusterStateTable.h"
 
 #include <folly/Conv.h>
-
-#include "logdevice/common/configuration/Configuration.h"
-#include "logdevice/common/GetClusterStateRequest.h"
-#include "logdevice/common/Processor.h"
-#include "logdevice/common/Semaphore.h"
-#include "logdevice/common/configuration/UpdateableConfig.h"
-#include "logdevice/common/debug.h"
-#include "logdevice/lib/ClientImpl.h"
-
 #include <folly/json.h>
 
 #include "../Table.h"
 #include "../Utils.h"
+#include "logdevice/common/GetClusterStateRequest.h"
+#include "logdevice/common/Processor.h"
+#include "logdevice/common/Semaphore.h"
+#include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/debug.h"
+#include "logdevice/lib/ClientImpl.h"
 
 using facebook::logdevice::Configuration;
 

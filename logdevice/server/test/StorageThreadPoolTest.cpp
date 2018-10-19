@@ -5,16 +5,18 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/server/storage_tasks/StorageThreadPool.h"
+
 #include <atomic>
+
+#include <folly/Memory.h>
+#include <folly/synchronization/Baton.h>
 #include <gtest/gtest.h>
 
-#include <folly/synchronization/Baton.h>
-#include <folly/Memory.h>
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/server/locallogstore/test/TemporaryLogStore.h"
 #include "logdevice/server/storage_tasks/StorageTask.h"
-#include "logdevice/server/storage_tasks/StorageThreadPool.h"
 #include "logdevice/server/storage_tasks/WriteStorageTask.h"
 
 using namespace facebook::logdevice;

@@ -7,10 +7,6 @@
  */
 #pragma once
 
-#include <folly/Optional.h>
-#include <folly/Synchronized.h>
-#include <folly/ThreadLocal.h>
-
 #include <array>
 #include <chrono>
 #include <cstdint>
@@ -21,17 +17,21 @@
 #include <unordered_map>
 #include <vector>
 
+#include <folly/Optional.h>
+#include <folly/Synchronized.h>
+#include <folly/ThreadLocal.h>
+
 #include "logdevice/common/ClientID.h"
-#include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/common/Priority.h"
 #include "logdevice/common/RequestType.h"
 #include "logdevice/common/StorageTask-enums.h"
+#include "logdevice/common/UpdateableSharedPtr.h"
+#include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/common/configuration/TrafficClass.h"
 #include "logdevice/common/protocol/MessageType.h"
+#include "logdevice/common/stats/StatsCounter.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/common/util.h"
-#include "logdevice/common/UpdateableSharedPtr.h"
-#include "logdevice/common/stats/StatsCounter.h"
 // Think twice before adding new includes here!  This file is included in many
 // translation units and increasing its transitive dependency footprint will
 // slow down the build.  We use forward declaration and the pimpl idiom to

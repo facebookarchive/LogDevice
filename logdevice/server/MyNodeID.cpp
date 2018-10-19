@@ -9,12 +9,12 @@
 
 #include <cerrno>
 #include <cstring>
-
 #include <ifaddrs.h>
 
 #include <folly/ScopeGuard.h>
-#include "logdevice/common/debug.h"
+
 #include "logdevice/common/Sockaddr.h"
+#include "logdevice/common/debug.h"
 
 namespace facebook { namespace logdevice {
 

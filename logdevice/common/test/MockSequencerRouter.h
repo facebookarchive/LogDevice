@@ -8,12 +8,12 @@
 #pragma once
 #include <folly/ThreadLocal.h>
 
+#include "logdevice/common/ClusterState.h"
+#include "logdevice/common/HashBasedSequencerLocator.h"
+#include "logdevice/common/SequencerRouter.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
-#include "logdevice/common/SequencerRouter.h"
-#include "logdevice/common/HashBasedSequencerLocator.h"
 #include "logdevice/common/settings/Settings.h"
-#include "logdevice/common/ClusterState.h"
 #include "logdevice/common/test/TestUtil.h"
 
 namespace facebook { namespace logdevice {

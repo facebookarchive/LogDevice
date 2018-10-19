@@ -16,13 +16,13 @@
 #include <vector>
 
 #include "logdevice/common/ConfigSource.h"
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/Semaphore.h"
-#include "logdevice/common/settings/Settings.h"
-#include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/configuration/ConfigUpdater.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/LogsConfig.h"
 #include "logdevice/common/configuration/ServerConfig.h"
+#include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/common/stats/Stats.h"
 

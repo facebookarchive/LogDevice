@@ -5,16 +5,17 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/common/GetEpochRecoveryMetadataRequest.h"
+
 #include <gtest/gtest.h>
 
-#include "logdevice/common/GetEpochRecoveryMetadataRequest.h"
+#include "logdevice/common/LinearCopySetSelector.h"
+#include "logdevice/common/Random.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/test/MockBackoffTimer.h"
 #include "logdevice/common/test/MockTimer.h"
 #include "logdevice/common/test/NodeSetTestUtil.h"
 #include "logdevice/common/test/TestUtil.h"
-#include "logdevice/common/LinearCopySetSelector.h"
-#include "logdevice/common/Random.h"
 
 namespace facebook { namespace logdevice {
 

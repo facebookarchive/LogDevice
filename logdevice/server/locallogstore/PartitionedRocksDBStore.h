@@ -16,11 +16,10 @@
 #include <thread>
 #include <vector>
 
-#include <folly/concurrency/ConcurrentHashMap.h>
 #include <folly/IntrusiveList.h>
-#include <folly/ThreadLocal.h>
 #include <folly/SharedMutex.h>
-
+#include <folly/ThreadLocal.h>
+#include <folly/concurrency/ConcurrentHashMap.h>
 #include <rocksdb/db.h>
 #include <rocksdb/iterator.h>
 #include <rocksdb/merge_operator.h>
@@ -32,16 +31,13 @@
 #include "logdevice/common/SingleEvent.h"
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/UpdateableSharedPtr.h"
+#include "logdevice/common/configuration/InternalLogs.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/util.h"
 #include "logdevice/server/FixedKeysMap.h"
-
-#include "logdevice/common/configuration/InternalLogs.h"
-
 #include "logdevice/server/locallogstore/NodeDirtyData.h"
 #include "logdevice/server/locallogstore/RocksDBLogStoreBase.h"
 #include "logdevice/server/locallogstore/RocksDBWriter.h"
-
 #include "logdevice/server/storage_tasks/StorageTask.h"
 
 namespace facebook { namespace logdevice {

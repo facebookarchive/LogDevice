@@ -5,19 +5,19 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include <gtest/gtest.h>
+#include "logdevice/server/LogRebuilding.h"
 
 #include <vector>
 
 #include <folly/hash/Hash.h> // implements hash functor for tuples.
+#include <gtest/gtest.h>
 
 #include "logdevice/common/CopySetSelector.h"
 #include "logdevice/common/NodeID.h"
+#include "logdevice/common/configuration/LocalLogsConfig.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/debug.h"
-#include "logdevice/common/configuration/LocalLogsConfig.h"
 #include "logdevice/common/test/TestUtil.h"
-#include "logdevice/server/LogRebuilding.h"
 #include "logdevice/server/RecordRebuildingStore.h"
 
 using namespace facebook::logdevice;

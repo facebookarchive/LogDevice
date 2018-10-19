@@ -10,13 +10,13 @@
 #include <folly/Memory.h>
 #include <folly/Random.h>
 
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/EventLoop.h"
 #include "logdevice/common/Sender.h"
-#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/FINDKEY_Message.h"
+#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/stats/Stats.h"
 
 using namespace facebook::logdevice::configuration;

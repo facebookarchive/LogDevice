@@ -11,6 +11,7 @@
 #include <lz4.h>
 #include <lz4hc.h>
 #include <zstd.h>
+
 #include <folly/IntrusiveList.h>
 #include <folly/Memory.h>
 #include <folly/Random.h>
@@ -19,14 +20,14 @@
 
 #include "logdevice/common/AppendRequest.h"
 #include "logdevice/common/Checksum.h"
-#include "logdevice/common/debug.h"
-#include "logdevice/common/Timer.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/SimpleEnumMap.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/buffered_writer/BufferedWriteDecoderImpl.h"
 #include "logdevice/common/buffered_writer/BufferedWriterImpl.h"
 #include "logdevice/common/buffered_writer/BufferedWriterShard.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/stats/Stats.h"
 
 namespace facebook { namespace logdevice {

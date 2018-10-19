@@ -8,7 +8,6 @@
 #include "EventLogUtils.h"
 
 #include <signal.h>
-
 #include <unordered_map>
 #include <unordered_set>
 
@@ -16,11 +15,11 @@
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/ReaderImpl.h"
 #include "logdevice/common/ThreadID.h"
-#include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/configuration/InternalLogs.h"
+#include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/event_log/EventLogStateMachine.h"
-#include "logdevice/common/replicated_state_machine/TrimRSMRequest.h"
 #include "logdevice/common/replicated_state_machine/ReplicatedStateMachine-enum.h"
+#include "logdevice/common/replicated_state_machine/TrimRSMRequest.h"
 #include "logdevice/lib/ClientImpl.h"
 #include "logdevice/lib/ClientSettingsImpl.h"
 

@@ -8,13 +8,14 @@
 #pragma once
 
 #include <chrono>
+
 #include <folly/Optional.h>
 
 #include "logdevice/common/WeakRefHolder.h"
+#include "logdevice/common/replicated_state_machine/ReplicatedStateMachine-enum.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Err.h"
 #include "logdevice/include/types.h"
-#include "logdevice/common/replicated_state_machine/ReplicatedStateMachine-enum.h"
 
 /**
  * A utility for requesting trimming of a RSM, and which retries on the

@@ -11,8 +11,8 @@
 #include <memory>
 
 #include "logdevice/common/Address.h"
-#include "logdevice/common/settings/Durability.h"
 #include "logdevice/common/protocol/Message.h"
+#include "logdevice/common/settings/Durability.h"
 #include "logdevice/server/read_path/LogStorageState.h"
 
 namespace facebook { namespace logdevice {

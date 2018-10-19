@@ -9,8 +9,8 @@
 
 #include <folly/Memory.h>
 
-#include "logdevice/common/WeakRefHolder.h"
 #include "logdevice/common/Request.h"
+#include "logdevice/common/WeakRefHolder.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/include/Err.h"
 

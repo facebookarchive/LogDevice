@@ -7,12 +7,11 @@
  */
 #include "PartitionedRocksDBStoreFindTime.h"
 
+#include "PartitionedRocksDBStoreIterators.h"
 #include "RocksDBKeyFormat.h"
 #include "RocksDBLocalLogStore.h"
-#include "PartitionedRocksDBStoreIterators.h"
-
-#include "logdevice/common/util.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/util.h"
 #include "logdevice/server/locallogstore/IteratorSearch.h"
 
 namespace facebook { namespace logdevice {

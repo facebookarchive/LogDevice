@@ -12,7 +12,6 @@
 
 #include "../Context.h"
 #include "../Table.h"
-
 #include "logdevice/common/configuration/Configuration.h"
 
 namespace facebook {

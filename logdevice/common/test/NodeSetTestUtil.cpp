@@ -11,8 +11,8 @@
 #include <folly/Random.h>
 #include <folly/String.h>
 
-#include "logdevice/common/util.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
+#include "logdevice/common/util.h"
 
 namespace facebook { namespace logdevice { namespace NodeSetTestUtil {
 

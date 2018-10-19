@@ -8,15 +8,14 @@
 #pragma once
 
 #include <chrono>
-#include <rocksdb/slice.h>
 
 #include <folly/small_vector.h>
+#include <rocksdb/slice.h>
 
-#include "logdevice/common/debug.h"
 #include "logdevice/common/Metadata.h"
 #include "logdevice/common/Timestamp.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/util.h"
-
 #include "logdevice/server/locallogstore/NodeDirtyData.h"
 
 namespace facebook { namespace logdevice {

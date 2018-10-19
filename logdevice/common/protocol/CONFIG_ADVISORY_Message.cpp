@@ -9,8 +9,8 @@
 
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Sender.h"
-#include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/protocol/CONFIG_FETCH_Message.h"
 
 namespace facebook { namespace logdevice {

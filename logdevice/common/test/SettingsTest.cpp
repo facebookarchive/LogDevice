@@ -8,11 +8,10 @@
 #include <gtest/gtest.h>
 
 #include "logdevice/common/commandline_util_chrono.h"
-
+#include "logdevice/common/debug.h"
 #include "logdevice/common/settings/SettingsUpdater.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/common/settings/Validators.h"
-#include "logdevice/common/debug.h"
 #include "logdevice/common/test/TestUtil.h"
 
 namespace facebook { namespace logdevice {

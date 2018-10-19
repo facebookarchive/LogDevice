@@ -8,10 +8,9 @@
 #pragma once
 
 #include <memory>
+#include <sqlite3.h>
 
 #include <folly/Memory.h>
-
-#include <sqlite3.h>
 
 #include "Table.h"
 

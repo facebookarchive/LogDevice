@@ -7,9 +7,10 @@
  */
 #include "logdevice/server/IOFaultInjection.h"
 
-#include <gtest/gtest.h>
 #include <thread>
 #include <unordered_set>
+
+#include <gtest/gtest.h>
 namespace facebook { namespace logdevice {
 
 using namespace testing;

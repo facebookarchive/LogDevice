@@ -12,8 +12,8 @@
 #include <folly/Random.h>
 #include <folly/SharedMutex.h>
 
-#include "logdevice/include/Err.h"
 #include "logdevice/common/types_internal.h"
+#include "logdevice/include/Err.h"
 
 namespace facebook { namespace logdevice {
 

@@ -8,13 +8,11 @@
 #pragma once
 
 #include <chrono>
-#include <string>
 #include <memory>
+#include <string>
 
 #include <boost/noncopyable.hpp>
-
 #include <folly/Optional.h>
-
 #include <zookeeper/zookeeper.h>
 
 #include "logdevice/common/EpochStore.h"
@@ -22,9 +20,9 @@
 #include "logdevice/common/MetaDataTracer.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/Processor.h"
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/UpdateableSharedPtr.h"
 #include "logdevice/common/ZookeeperClientBase.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/include/ConfigSubscriptionHandle.h"

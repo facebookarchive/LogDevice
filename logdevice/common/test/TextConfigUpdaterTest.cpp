@@ -5,14 +5,15 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/common/configuration/TextConfigUpdater.h"
+
 #include <folly/Memory.h>
 #include <gtest/gtest.h>
 
 #include "logdevice/common/FileConfigSource.h"
-#include "logdevice/common/configuration/TextConfigUpdater.h"
 #include "logdevice/common/configuration/Configuration.h"
-#include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
+#include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/test/TestUtil.h"
 
 // NOTE: file reading assumes the test is being run from the top-level fbcode

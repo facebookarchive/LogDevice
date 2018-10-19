@@ -15,15 +15,14 @@
 #include <utility>
 
 #include <boost/noncopyable.hpp>
-
 #include <folly/Memory.h>
 #include <folly/concurrency/ConcurrentHashMap.h>
 #include <folly/memory/EnableSharedFromThis.h>
 
 #include "logdevice/common/GetSeqStateRequest.h"
 #include "logdevice/common/settings/Settings.h"
-#include "logdevice/common/types_internal.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
+#include "logdevice/common/types_internal.h"
 #include "logdevice/include/types.h"
 
 /**

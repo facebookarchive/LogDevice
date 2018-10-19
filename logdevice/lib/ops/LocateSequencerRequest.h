@@ -6,10 +6,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "logdevice/lib/ClientImpl.h"
-#include "logdevice/common/Worker.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/SequencerLocator.h"
+#include "logdevice/common/Worker.h"
+#include "logdevice/lib/ClientImpl.h"
 
 namespace facebook { namespace logdevice {
 

@@ -9,19 +9,18 @@
 
 #include <cctype>
 #include <chrono>
-#include "logdevice/common/debug.h"
-#include "logdevice/ops/ldquery/Errors.h"
 
 #include "Context.h"
 #include "Table.h"
 #include "TableRegistry.h"
 #include "VirtualTable.h"
+#include "logdevice/common/debug.h"
+#include "logdevice/ops/ldquery/Errors.h"
 #include "tables/AppendOutliers.h"
 #include "tables/AppendThroughput.h"
 #include "tables/CatchupQueues.h"
 #include "tables/ClientReadStreams.h"
 #include "tables/ClusterStateTable.h"
-#include "tables/LogsDBDirectory.h"
 #include "tables/EpochStore.h"
 #include "tables/EventLog.h"
 #include "tables/HistoricalMetadata.h"
@@ -33,6 +32,7 @@
 #include "tables/LogRebuildings.h"
 #include "tables/LogStorageState.h"
 #include "tables/LogsConfigRsm.h"
+#include "tables/LogsDBDirectory.h"
 #include "tables/LogsDBMetadata.h"
 #include "tables/Nodes.h"
 #include "tables/Partitions.h"

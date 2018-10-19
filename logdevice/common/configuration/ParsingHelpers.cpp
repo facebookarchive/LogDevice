@@ -7,19 +7,18 @@
  */
 #include "ParsingHelpers.h"
 
-#include <fcntl.h>
-
 #include <algorithm>
+#include <fcntl.h>
 #include <unordered_set>
 
+#include <folly/FileUtil.h>
 #include <folly/dynamic.h>
 #include <folly/json.h>
-#include <folly/FileUtil.h>
 
-#include "logdevice/common/commandline_util_chrono.h"
-#include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/common/PriorityMap.h"
 #include "logdevice/common/SecurityInformation.h"
+#include "logdevice/common/commandline_util_chrono.h"
+#include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/common/configuration/ZookeeperConfig.h"
 
 using namespace facebook::logdevice::configuration;

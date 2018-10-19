@@ -9,8 +9,8 @@
 
 #include <boost/algorithm/string/predicate.hpp>
 
-#include "logdevice/include/LogsConfigTypes.h"
 #include "logdevice/common/configuration/logs/LogsConfigTree.h"
+#include "logdevice/include/LogsConfigTypes.h"
 
 namespace facebook { namespace logdevice { namespace client {
 

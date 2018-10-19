@@ -7,10 +7,10 @@
  */
 #include "DELETE_Message.h"
 
+#include <cstdlib>
+
 #include "logdevice/common/protocol/ProtocolReader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
-
-#include <cstdlib>
 
 namespace facebook { namespace logdevice {
 

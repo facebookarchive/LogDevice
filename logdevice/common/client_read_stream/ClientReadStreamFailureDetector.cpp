@@ -6,14 +6,15 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "logdevice/common/client_read_stream/ClientReadStreamFailureDetector.h"
+
 #include <algorithm>
 
 #include <folly/Format.h>
 #include <folly/Random.h>
 
-#include "logdevice/common/client_read_stream/ClientReadStreamFailureDetector.h"
-#include "logdevice/common/Worker.h"
 #include "logdevice/common/OutlierDetection.h"
+#include "logdevice/common/Worker.h"
 
 namespace facebook { namespace logdevice {
 

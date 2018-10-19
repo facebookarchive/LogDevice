@@ -10,13 +10,13 @@
 #include <atomic>
 #include <chrono>
 
-#include "logdevice/common/UpdateableSharedPtr.h"
-#include "logdevice/common/configuration/ServerConfig.h"
-#include "logdevice/common/settings/UpdateableSettings.h"
-
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
 #include <rocksdb/table.h>
+
+#include "logdevice/common/UpdateableSharedPtr.h"
+#include "logdevice/common/configuration/ServerConfig.h"
+#include "logdevice/common/settings/UpdateableSettings.h"
 
 #if ROCKSDB_MAJOR > 4 || (ROCKSDB_MAJOR == 4 && ROCKSDB_MINOR >= 2)
 #define LOGDEVICED_ROCKSDB_HAS_GET_AGGREGATED_INT_PROPERTY

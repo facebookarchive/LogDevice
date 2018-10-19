@@ -8,10 +8,9 @@
 #pragma once
 
 #include <chrono>
+#include <sqlite3.h>
 #include <string>
 #include <vector>
-
-#include <sqlite3.h>
 
 #include "TableRegistry.h"
 

@@ -8,6 +8,7 @@
 #pragma once
 
 #include <memory>
+
 #include <google/dense_hash_map>
 #include <zookeeper/zookeeper.h>
 

@@ -11,12 +11,10 @@
 
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/debug.h"
-#include "logdevice/common/util.h"
-
 #include "logdevice/common/protocol/RECORD_Message.h"
 #include "logdevice/common/protocol/STARTED_Message.h"
-
 #include "logdevice/common/stats/Stats.h"
+#include "logdevice/common/util.h"
 
 namespace facebook { namespace logdevice {
 

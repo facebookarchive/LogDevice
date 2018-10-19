@@ -5,14 +5,14 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/common/test/ZookeeperClientInMemory.h"
+
 #include <condition_variable>
 #include <memory>
 #include <mutex>
 
 #include <folly/futures/Future.h>
 #include <gtest/gtest.h>
-
-#include "logdevice/common/test/ZookeeperClientInMemory.h"
 
 using namespace facebook::logdevice;
 using namespace folly;

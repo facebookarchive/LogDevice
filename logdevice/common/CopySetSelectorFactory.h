@@ -11,8 +11,8 @@
 
 #include "logdevice/common/CopySetSelector.h"
 #include "logdevice/common/EpochMetaData.h"
-#include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/common/NodeSetState.h"
+#include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/common/types_internal.h"
 
 namespace facebook { namespace logdevice {

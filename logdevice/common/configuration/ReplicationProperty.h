@@ -7,13 +7,12 @@
  */
 #pragma once
 
-#include <array>
-
 #include <algorithm>
+#include <array>
 #include <vector>
 
-#include "logdevice/common/debug.h"
 #include "logdevice/common/configuration/NodeLocation.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/types_internal.h"
 
 namespace facebook { namespace logdevice {

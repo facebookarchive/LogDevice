@@ -12,14 +12,14 @@
 #include <folly/small_vector.h>
 
 #include "logdevice/common/ClusterState.h"
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/GetClusterStateRequest.h"
-#include "logdevice/server/ServerProcessor.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Socket.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/stats/ServerHistograms.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/util.h"
+#include "logdevice/server/ServerProcessor.h"
 
 namespace facebook { namespace logdevice {
 

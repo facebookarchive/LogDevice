@@ -7,9 +7,10 @@
  */
 #pragma once
 
-#include <vector>
-#include <string>
 #include <map>
+#include <string>
+#include <vector>
+
 #include <folly/Memory.h>
 
 struct evbuffer;

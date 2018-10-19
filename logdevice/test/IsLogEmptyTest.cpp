@@ -11,12 +11,10 @@
 #include "logdevice/common/debug.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/common/util.h"
-#include "logdevice/server/locallogstore/PartitionedRocksDBStore.h"
-
 #include "logdevice/include/Client.h"
 #include "logdevice/include/ClientSettings.h"
 #include "logdevice/include/NodeLocationScope.h"
-
+#include "logdevice/server/locallogstore/PartitionedRocksDBStore.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
 

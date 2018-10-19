@@ -10,8 +10,8 @@
 #include <array>
 #include <chrono>
 
-#include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/common/Priority.h"
+#include "logdevice/common/configuration/NodeLocation.h"
 
 namespace folly {
 struct dynamic;

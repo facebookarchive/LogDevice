@@ -14,11 +14,11 @@
 #include <string>
 #include <unordered_set>
 #include <utility>
+
 #include <folly/SharedMutex.h>
 
 #include "logdevice/include/Client.h"
 #include "logdevice/include/types.h"
-
 #include "logdevice/lib/verifier/DataSourceReader.h"
 
 namespace facebook { namespace logdevice {

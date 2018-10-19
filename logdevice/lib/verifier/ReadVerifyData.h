@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <folly/SharedMutex.h>
 #include <atomic>
 #include <chrono>
 #include <memory>
@@ -17,12 +16,14 @@
 #include <unordered_set>
 #include <utility>
 
+#include <folly/SharedMutex.h>
+
+#include "logdevice/common/DataRecordOwnsPayload.h"
+#include "logdevice/common/toString.h"
 #include "logdevice/include/Client.h"
 #include "logdevice/include/types.h"
-#include "logdevice/common/toString.h"
 #include "logdevice/lib/verifier/GenVerifyData.h"
 #include "logdevice/lib/verifier/VerificationDataStructures.h"
-#include "logdevice/common/DataRecordOwnsPayload.h"
 
 namespace facebook { namespace logdevice {
 

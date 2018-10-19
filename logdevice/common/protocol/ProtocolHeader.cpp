@@ -7,8 +7,8 @@
  */
 #include "ProtocolHeader.h"
 
-#include "logdevice/common/protocol/Compatibility.h"
 #include "logdevice/common/Socket.h"
+#include "logdevice/common/protocol/Compatibility.h"
 
 namespace facebook { namespace logdevice {
 

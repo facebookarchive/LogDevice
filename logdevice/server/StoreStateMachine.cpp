@@ -10,14 +10,14 @@
 #include <folly/Memory.h>
 #include <folly/ScopeGuard.h>
 
-#include "logdevice/common/configuration/Configuration.h"
-#include "logdevice/common/debug.h"
 #include "logdevice/common/Sender.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/Log.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/event_log/EventLogRebuildingSet.h"
 #include "logdevice/common/protocol/RELEASE_Message.h"
-#include "logdevice/common/protocol/STORE_Message.h"
 #include "logdevice/common/protocol/STORED_Message.h"
+#include "logdevice/common/protocol/STORE_Message.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/server/EpochRecordCache.h"
 #include "logdevice/server/RecordCache.h"
@@ -448,7 +448,9 @@ void StoreStateMachine::execute() {
     } else {
       // Trigger purging by treating this store as a proxy
       // for release message.
-      RATELIMIT_INFO(std::chrono::seconds(1), 1,
+      RATELIMIT_INFO(
+          std::chrono::seconds(1),
+          1,
           "Treating Rebuilding STORE as proxy for release for log:%lu,"
           "store lsn: %s, current last_clean_epoch: %u, "
           "current last_released_lsn: %s ",

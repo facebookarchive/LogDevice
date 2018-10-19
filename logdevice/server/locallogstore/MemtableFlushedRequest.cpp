@@ -7,8 +7,8 @@
  */
 #include "MemtableFlushedRequest.h"
 
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/RebuildingTypes.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/ServerWorker.h"
 #include "logdevice/server/storage_tasks/ShardedStorageThreadPool.h"

@@ -9,6 +9,7 @@
 
 #include <memory>
 
+#include "logdevice/common/OffsetMap.h"
 #include "logdevice/common/PayloadHolder.h"
 #include "logdevice/common/SerializableData.h"
 #include "logdevice/common/ZeroCopiedRecord.h"
@@ -16,7 +17,6 @@
 #include "logdevice/common/protocol/ProtocolWriter.h"
 #include "logdevice/common/protocol/RECORD_Message.h"
 #include "logdevice/common/types_internal.h"
-#include "logdevice/common/OffsetMap.h"
 #include "logdevice/include/Record.h"
 
 namespace facebook { namespace logdevice {

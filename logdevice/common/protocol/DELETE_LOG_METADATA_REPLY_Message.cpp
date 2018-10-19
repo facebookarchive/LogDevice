@@ -6,11 +6,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 #include "logdevice/common/protocol/DELETE_LOG_METADATA_REPLY_Message.h"
-#include "logdevice/common/DeleteLogMetadataRequest.h"
-#include "logdevice/common/Worker.h"
+
 #include "logdevice/common/Address.h"
+#include "logdevice/common/DeleteLogMetadataRequest.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/ShardID.h"
+#include "logdevice/common/Worker.h"
 
 namespace facebook { namespace logdevice {
 

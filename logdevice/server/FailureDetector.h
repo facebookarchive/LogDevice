@@ -14,7 +14,6 @@
 
 #include "logdevice/common/DomainIsolationChecker.h"
 #include "logdevice/common/EventLoopHandle.h"
-#include "logdevice/common/settings/GossipSettings.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/RequestPump.h"
@@ -23,6 +22,7 @@
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/ServerConfig.h"
 #include "logdevice/common/protocol/GOSSIP_Message.h"
+#include "logdevice/common/settings/GossipSettings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/server/sequencer_boycotting/BoycottTracker.h"

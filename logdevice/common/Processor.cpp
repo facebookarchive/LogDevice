@@ -14,8 +14,8 @@
 
 #include <folly/Conv.h>
 #include <folly/Hash.h>
-#include <folly/Memory.h>
 #include <folly/MPMCQueue.h>
+#include <folly/Memory.h>
 #include <folly/synchronization/CallOnce.h>
 
 #include "logdevice/common/AllSequencers.h"

@@ -10,8 +10,8 @@
 #include <array>
 #include <atomic>
 
-#include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/common/configuration/NodeLocation.h"
 
 namespace facebook { namespace logdevice {
 

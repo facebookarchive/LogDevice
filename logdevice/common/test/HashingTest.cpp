@@ -5,12 +5,12 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include <gtest/gtest.h>
 #include <random>
 #include <vector>
 
-#include <logdevice/include/types.h>
+#include <gtest/gtest.h>
 #include <logdevice/common/hash.h>
+#include <logdevice/include/types.h>
 
 #include "logdevice/common/checks.h"
 

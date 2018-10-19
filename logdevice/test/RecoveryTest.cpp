@@ -14,7 +14,6 @@
 #include <folly/Memory.h>
 #include <gtest/gtest.h>
 
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/Digest.h"
 #include "logdevice/common/EpochMetaDataUpdater.h"
 #include "logdevice/common/EpochStore.h"
@@ -24,9 +23,12 @@
 #include "logdevice/common/Metadata.h"
 #include "logdevice/common/NodeSetSelectorFactory.h"
 #include "logdevice/common/Semaphore.h"
-#include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/configuration/ConfigParser.h"
+#include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/test/TestUtil.h"
+#include "logdevice/common/util.h"
 #include "logdevice/include/Client.h"
 #include "logdevice/include/ClientSettings.h"
 #include "logdevice/server/EpochRecordCache.h"
@@ -35,9 +37,6 @@
 #include "logdevice/server/RecordCacheDependencies.h"
 #include "logdevice/server/locallogstore/test/StoreUtil.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
-
-#include "logdevice/common/debug.h"
-#include "logdevice/common/util.h"
 
 // TODO 11866467: convert all tests to support immutable consensus
 

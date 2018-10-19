@@ -7,12 +7,12 @@
  */
 #pragma once
 
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/EpochMetaDataMap.h"
 #include "logdevice/common/ExponentialBackoffTimer.h"
-#include "logdevice/common/Timer.h"
 #include "logdevice/common/MetaDataLogReader.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/WorkerCallbackHelper.h"
+#include "logdevice/common/configuration/Configuration.h"
 
 namespace facebook { namespace logdevice {
 

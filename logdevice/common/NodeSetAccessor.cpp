@@ -12,8 +12,8 @@
 
 #include "logdevice/common/CopySet.h"
 #include "logdevice/common/EpochMetaData.h"
-#include "logdevice/common/Timer.h"
 #include "logdevice/common/Processor.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/protocol/STORE_Message.h"
 

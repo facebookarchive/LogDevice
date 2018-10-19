@@ -7,11 +7,11 @@
  */
 #include "PurgeCoordinator.h"
 
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/Metadata.h"
 #include "logdevice/common/RecordID.h"
 #include "logdevice/common/RequestType.h"
 #include "logdevice/common/Sender.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/LogsConfig.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/CLEANED_Message.h"

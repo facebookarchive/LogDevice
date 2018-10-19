@@ -13,16 +13,16 @@
 #include <unordered_map>
 
 #include "logdevice/common/ClientBridge.h"
-#include "logdevice/common/Timer.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/NodeSetAccessor.h"
 #include "logdevice/common/NodeSetFinder.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/RequestType.h"
-#include "logdevice/common/types_internal.h"
-#include "logdevice/include/Err.h"
-#include "logdevice/include/Client.h"
 #include "logdevice/common/SocketCallback.h"
+#include "logdevice/common/Timer.h"
+#include "logdevice/common/types_internal.h"
+#include "logdevice/include/Client.h"
+#include "logdevice/include/Err.h"
 
 namespace facebook { namespace logdevice {
 

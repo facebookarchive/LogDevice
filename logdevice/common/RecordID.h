@@ -10,6 +10,7 @@
 #include <string>
 
 #include <folly/hash/Hash.h>
+
 #include "logdevice/common/types_internal.h"
 
 namespace facebook { namespace logdevice {

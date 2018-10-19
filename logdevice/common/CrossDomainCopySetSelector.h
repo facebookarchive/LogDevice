@@ -8,8 +8,8 @@
 #pragma once
 
 #include <array>
-#include <vector>
 #include <functional>
+#include <vector>
 
 #include "logdevice/common/CopySetSelector.h"
 #include "logdevice/common/CopySetSelectorDependencies.h"

@@ -13,9 +13,8 @@
 #include <folly/small_vector.h>
 
 #include "logdevice/common/Semaphore.h"
-#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/SimpleEnumMap.h"
-
+#include "logdevice/common/settings/Settings.h"
 #include "logdevice/server/storage_tasks/PrioritizedQueue.h"
 #include "logdevice/server/storage_tasks/StorageTask.h"
 

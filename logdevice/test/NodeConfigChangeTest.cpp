@@ -8,11 +8,11 @@
 
 #include <gtest/gtest.h>
 
+#include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/lib/ClientImpl.h"
 #include "logdevice/lib/ClientPluginPack.h"
-#include "logdevice/common/Worker.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
 

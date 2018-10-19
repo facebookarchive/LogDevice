@@ -12,19 +12,18 @@
 #include <pthread.h>
 #include <thread>
 
+#include <folly/json.h>
 #include <gtest/gtest.h>
 
-#include <folly/json.h>
-
 #include "logdevice/common/AppendRequest.h"
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/HashBasedSequencerLocator.h"
 #include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Semaphore.h"
-#include "logdevice/common/settings/Settings.h"
-#include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
+#include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/lib/ClientBuiltinPluginProvider.h"
 #include "logdevice/lib/ClientImpl.h"

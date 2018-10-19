@@ -8,12 +8,13 @@
 #include "NodeAvailabilityChecker.h"
 
 #include <chrono>
+
 #include <folly/CppAttributes.h>
 
-#include "logdevice/common/debug.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/debug.h"
 
 namespace facebook { namespace logdevice {
 

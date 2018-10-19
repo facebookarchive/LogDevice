@@ -7,15 +7,16 @@
  */
 #pragma once
 
-#include <boost/utility.hpp>
 #include <fcntl.h>
 #include <mutex>
 #include <string>
-#include <sys/types.h>
-#include <sys/stat.h>
 
-#include "logdevice/common/debug.h"
+#include <boost/utility.hpp>
+#include <sys/stat.h>
+#include <sys/types.h>
+
 #include "logdevice/common/UpdateableSharedPtr.h"
+#include "logdevice/common/debug.h"
 
 namespace facebook { namespace logdevice {
 

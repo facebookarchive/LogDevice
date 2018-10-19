@@ -22,7 +22,6 @@
 #include "event2/event_struct.h"
 #include "logdevice/common/Address.h"
 #include "logdevice/common/AdminCommandTable-fwd.h"
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/ConnectThrottle.h"
 #include "logdevice/common/CostQueue.h"
 #include "logdevice/common/Envelope.h"
@@ -31,10 +30,11 @@
 #include "logdevice/common/ResourceBudget.h"
 #include "logdevice/common/RunState.h"
 #include "logdevice/common/SecurityInformation.h"
-#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/Sockaddr.h"
 #include "logdevice/common/Socket-fwd.h"
 #include "logdevice/common/WeakRefHolder.h"
+#include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/common/settings/Settings.h"
 
 namespace facebook { namespace logdevice {
 

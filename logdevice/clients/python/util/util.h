@@ -7,11 +7,12 @@
  */
 #pragma once
 
+#include <memory>
+
 #include <boost/python.hpp>
 #include <boost/python/suite/indexing/vector_indexing_suite.hpp>
 #include <boost/shared_ptr.hpp>
 #include <folly/Demangle.h>
-#include <memory>
 
 // PyString has been re-named to PyBytes in Python3.  This is a little
 // hack to keep this code compatible with Python 2 and 3

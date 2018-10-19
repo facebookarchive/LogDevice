@@ -7,22 +7,22 @@
  */
 #pragma once
 
-#include <boost/noncopyable.hpp>
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
 
+#include <boost/noncopyable.hpp>
+
 #include "logdevice/common/CopySet.h"
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
 #include "logdevice/common/SCDCopysetReordering.h"
-#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/TailRecord.h"
+#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/types_internal.h"
-#include "logdevice/server/locallogstore/LocalLogStore.h"
-
 #include "logdevice/include/Err.h"
 #include "logdevice/include/Record.h"
+#include "logdevice/server/locallogstore/LocalLogStore.h"
 
 namespace facebook { namespace logdevice {
 

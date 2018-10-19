@@ -6,6 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 #include "logdevice/common/LegacyPluginPack.h"
+
 #include "logdevice/common/HashBasedSequencerLocator.h"
 #include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"

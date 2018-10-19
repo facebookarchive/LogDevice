@@ -7,11 +7,12 @@
  */
 #pragma once
 
-#include <boost/noncopyable.hpp>
 #include <memory>
 
-#include "logdevice/common/configuration/Configuration.h"
+#include <boost/noncopyable.hpp>
+
 #include "logdevice/common/NodeID.h"
+#include "logdevice/common/configuration/Configuration.h"
 
 namespace facebook { namespace logdevice {
 

@@ -7,14 +7,13 @@
  */
 #include "Table.h"
 
-#include "logdevice/common/MetaDataLog.h"
-#include "logdevice/common/util.h"
-
 #include <folly/Conv.h>
 #include <folly/Format.h>
 
 #include "Errors.h"
 #include "Utils.h"
+#include "logdevice/common/MetaDataLog.h"
+#include "logdevice/common/util.h"
 
 namespace facebook { namespace logdevice { namespace ldquery {
 

@@ -7,24 +7,23 @@
  */
 #include "logdevice/common/util.h"
 
-#include <errno.h>
-#include <limits.h>
-#include <pwd.h>
-#include <signal.h>
-#include <sys/syscall.h>
-#include <sys/prctl.h>
-
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <errno.h>
+#include <limits.h>
+#include <pwd.h>
+#include <signal.h>
 
 #include <folly/Format.h>
 #include <folly/Singleton.h>
+#include <sys/prctl.h>
+#include <sys/syscall.h>
 
+#include "logdevice/common/MetaDataLog.h"
 #include "logdevice/common/commandline_util_chrono.h"
 #include "logdevice/common/debug.h"
-#include "logdevice/common/MetaDataLog.h"
 
 #pragma GCC diagnostic ignored "-Wchar-subscripts"
 

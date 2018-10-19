@@ -8,6 +8,7 @@
 #pragma once
 
 #include <memory>
+
 #include "logdevice/common/SampledTracer.h"
 #include "logdevice/common/protocol/FINDKEY_Message.h"
 

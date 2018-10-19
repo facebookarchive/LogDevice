@@ -11,11 +11,11 @@
 #include <memory>
 #include <string>
 
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/FileConfigSource.h"
-#include "logdevice/common/settings/Settings.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/configuration/ZookeeperConfigSource.h"
+#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 
 namespace facebook { namespace logdevice {

@@ -13,13 +13,13 @@
 #include <unordered_map>
 #include <vector>
 
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/ExponentialBackoffTimer.h"
 #include "logdevice/common/GetLogInfoRequestSharedState.h"
-#include "logdevice/common/Timer.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/RequestType.h"
+#include "logdevice/common/Timer.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/protocol/LOGS_CONFIG_API_Message.h"
 #include "logdevice/include/Client.h"
 

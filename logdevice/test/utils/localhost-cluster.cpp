@@ -9,17 +9,16 @@
 #include <signal.h>
 #include <unordered_map>
 
-#include <folly/Format.h>
-#include <folly/Singleton.h>
-
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
 #include <boost/version.hpp>
+#include <folly/Format.h>
+#include <folly/Singleton.h>
 
+#include "logdevice/common/NodeSetSelectorFactory.h"
 #include "logdevice/common/commandline_util.h"
 #include "logdevice/common/commandline_util_chrono.h"
 #include "logdevice/common/debug.h"
-#include "logdevice/common/NodeSetSelectorFactory.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
 
 using namespace facebook::logdevice;
@@ -423,8 +422,7 @@ int shell(Cluster& cluster) {
         << std::endl;
     std::cout << "\t" << loadtest_path << " --config-path "
               << cluster.getConfigPath() << " --logs 1.." << options::nlogs
-              << " -n -1 --rate 10"
-              << std::endl
+              << " -n -1 --rate 10" << std::endl
               << std::endl;
   }
 #else

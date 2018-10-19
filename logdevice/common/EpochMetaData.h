@@ -10,13 +10,13 @@
 #include <cstring>
 #include <vector>
 
-#include "logdevice/include/types.h"
+#include "logdevice/common/NodeID.h"
+#include "logdevice/common/SerializableData.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/EpochMetaDataVersion.h"
 #include "logdevice/common/configuration/NodeLocation.h"
-#include "logdevice/common/NodeID.h"
 #include "logdevice/common/configuration/ReplicationProperty.h"
-#include "logdevice/common/SerializableData.h"
+#include "logdevice/include/types.h"
 
 namespace facebook { namespace logdevice {
 

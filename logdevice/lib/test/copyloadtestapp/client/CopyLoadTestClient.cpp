@@ -17,23 +17,21 @@
 #include <thrift/lib/cpp2/async/HeaderClientChannel.h>
 
 #include "common/init/Init.h"
-
-#include "logdevice/lib/test/copyloadtestapp/server/gen-cpp2/CopyLoaderTest.h"
-
 #include "logdevice/common/Checksum.h"
+#include "logdevice/common/EpochMetaData.h"
+#include "logdevice/common/ReaderImpl.h"
+#include "logdevice/common/Semaphore.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/commandline_util.h"
 #include "logdevice/common/commandline_util_chrono.h"
 #include "logdevice/common/debug.h"
-#include "logdevice/common/EpochMetaData.h"
-#include "logdevice/common/Timer.h"
-#include "logdevice/common/ReaderImpl.h"
-#include "logdevice/common/Semaphore.h"
 #include "logdevice/common/util.h"
 #include "logdevice/include/Client.h"
 #include "logdevice/include/Err.h"
 #include "logdevice/include/Record.h"
 #include "logdevice/include/types.h"
 #include "logdevice/lib/ClientSettingsImpl.h"
+#include "logdevice/lib/test/copyloadtestapp/server/gen-cpp2/CopyLoaderTest.h"
 
 using namespace facebook;
 using namespace facebook::logdevice;

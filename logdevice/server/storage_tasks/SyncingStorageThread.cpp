@@ -11,12 +11,11 @@
 #include <deque>
 
 #include "logdevice/common/debug.h"
+#include "logdevice/common/stats/Stats.h"
 #include "logdevice/server/locallogstore/LocalLogStore.h"
 #include "logdevice/server/storage_tasks/StorageTask.h"
 #include "logdevice/server/storage_tasks/StorageTaskResponse.h"
 #include "logdevice/server/storage_tasks/StorageThreadPool.h"
-
-#include "logdevice/common/stats/Stats.h"
 
 namespace facebook { namespace logdevice {
 

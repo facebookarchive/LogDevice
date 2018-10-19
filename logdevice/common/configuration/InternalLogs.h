@@ -7,8 +7,9 @@
  */
 #pragma once
 
-#include <folly/dynamic.h>
 #include <unordered_map>
+
+#include <folly/dynamic.h>
 
 #include "logdevice/common/configuration/logs/LogsConfigTree.h"
 #include "logdevice/include/types.h"

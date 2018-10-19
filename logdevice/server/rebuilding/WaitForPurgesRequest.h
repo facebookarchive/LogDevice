@@ -11,8 +11,8 @@
 
 #include "logdevice/common/ExponentialBackoffTimer.h"
 #include "logdevice/common/FireAndForgetRequest.h"
-#include "logdevice/common/settings/RebuildingSettings.h"
 #include "logdevice/common/WorkerCallbackHelper.h"
+#include "logdevice/common/settings/RebuildingSettings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/common/types_internal.h"
 

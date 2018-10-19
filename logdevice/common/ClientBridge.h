@@ -8,6 +8,7 @@
 #pragma once
 
 #include <string>
+
 #include <opentracing/tracer.h>
 
 namespace facebook { namespace logdevice {

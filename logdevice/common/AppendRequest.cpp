@@ -10,22 +10,22 @@
 
 #include <memory>
 
-#include <folly/synchronization/Baton.h>
 #include <folly/stats/BucketedTimeSeries.h>
+#include <folly/synchronization/Baton.h>
 #include <opentracing/tracer.h>
 
 #include "logdevice/common/AppendProbeController.h"
-#include "logdevice/common/debug.h"
 #include "logdevice/common/MetaDataLog.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/SequencerLocator.h"
-#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/debug.h"
+#include "logdevice/common/protocol/APPENDED_Message.h"
 #include "logdevice/common/protocol/APPEND_Message.h"
 #include "logdevice/common/protocol/APPEND_PROBE_Message.h"
 #include "logdevice/common/protocol/APPEND_PROBE_REPLY_Message.h"
-#include "logdevice/common/protocol/APPENDED_Message.h"
+#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/stats/ClientHistograms.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/include/Err.h"

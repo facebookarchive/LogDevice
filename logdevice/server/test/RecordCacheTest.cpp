@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include <gtest/gtest.h>
+#include "logdevice/server/RecordCache.h"
 
 #include <algorithm>
 #include <chrono>
@@ -14,17 +14,17 @@
 
 #include <folly/Memory.h>
 #include <folly/Random.h>
+#include <gtest/gtest.h>
 
 #include "logdevice/common/CopySet.h"
-#include "logdevice/common/debug.h"
 #include "logdevice/common/RandomAccessQueue.h"
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/SlidingWindow.h"
-#include "logdevice/common/util.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/STORE_Message.h"
+#include "logdevice/common/util.h"
 #include "logdevice/server/EpochRecordCache.h"
 #include "logdevice/server/EpochRecordCacheEntry.h"
-#include "logdevice/server/RecordCache.h"
 #include "logdevice/server/RecordCacheDependencies.h"
 
 using namespace facebook::logdevice;

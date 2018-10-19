@@ -8,7 +8,6 @@
 #pragma once
 
 #include "PartitionedRocksDBStore.h"
-
 #include "logdevice/server/locallogstore/RocksDBLocalLogStore.h"
 #include "logdevice/server/locallogstore/RocksDBLogStoreBase.h"
 

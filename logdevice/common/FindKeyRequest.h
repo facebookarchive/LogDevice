@@ -14,12 +14,12 @@
 #include <unordered_set>
 #include <vector>
 
-#include "logdevice/common/Timer.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/NodeSetAccessor.h"
 #include "logdevice/common/NodeSetFinder.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/RequestType.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/configuration/ServerConfig.h"
 #include "logdevice/common/protocol/FINDKEY_Message.h"
 #include "logdevice/common/protocol/FINDKEY_REPLY_Message.h"

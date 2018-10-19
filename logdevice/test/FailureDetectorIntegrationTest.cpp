@@ -15,8 +15,8 @@
 #include <folly/Conv.h>
 #include <gtest/gtest.h>
 
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/ConfigParser.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/hash.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/test/TestUtil.h"

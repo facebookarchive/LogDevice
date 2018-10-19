@@ -5,20 +5,20 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include <gtest/gtest.h>
-
-#include <folly/Memory.h>
-#include <queue>
-#include "logdevice/common/configuration/Configuration.h"
-#include "logdevice/common/Timer.h"
 #include "logdevice/common/NodeSetAccessor.h"
 
+#include <queue>
+
+#include <folly/Memory.h>
+#include <gtest/gtest.h>
+
+#include "logdevice/common/Timer.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/test/MockBackoffTimer.h"
 #include "logdevice/common/test/NodeSetTestUtil.h"
 #include "logdevice/common/util.h"
-
-#include "logdevice/common/debug.h"
 
 namespace facebook { namespace logdevice {
 

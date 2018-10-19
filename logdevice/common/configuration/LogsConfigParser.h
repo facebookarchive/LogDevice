@@ -15,10 +15,10 @@
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
 #include "logdevice/common/configuration/Log.h"
-#include "logdevice/common/configuration/logs/LogsConfigTree.h"
 #include "logdevice/common/configuration/SecurityConfig.h"
-#include "logdevice/include/LogAttributes.h"
+#include "logdevice/common/configuration/logs/LogsConfigTree.h"
 #include "logdevice/include/Err.h"
+#include "logdevice/include/LogAttributes.h"
 
 namespace folly {
 struct dynamic;

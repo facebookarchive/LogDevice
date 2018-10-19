@@ -6,6 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 #include "logdevice/common/protocol/IS_LOG_EMPTY_REPLY_Message.h"
+
 #include "logdevice/common/IsLogEmptyRequest.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Worker.h"

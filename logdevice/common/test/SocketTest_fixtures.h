@@ -6,32 +6,29 @@
  * LICENSE file in the root directory of this source tree.
  */
 #pragma once
-#include <gtest/gtest.h>
-
 #include <map>
 #include <queue>
+
+#include <gtest/gtest.h>
 
 #include "event2/buffer.h"
 #include "event2/bufferevent.h"
 #include "event2/bufferevent_struct.h"
 #include "event2/event.h"
-
 #include "logdevice/common/Envelope.h"
 #include "logdevice/common/FlowGroup.h"
 #include "logdevice/common/ResourceBudget.h"
 #include "logdevice/common/SSLFetcher.h"
-#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/Socket.h"
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/protocol/ACK_Message.h"
 #include "logdevice/common/protocol/HELLO_Message.h"
 #include "logdevice/common/protocol/MessageDeserializers.h"
 #include "logdevice/common/protocol/ProtocolReader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
-
-#include "logdevice/common/libevent/compat.h"
-
+#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/test/TestUtil.h"
 
 namespace facebook { namespace logdevice {

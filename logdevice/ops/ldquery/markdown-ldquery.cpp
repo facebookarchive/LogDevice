@@ -5,9 +5,9 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "LDQuery.h"
-
 #include <iostream>
+
+#include "LDQuery.h"
 #include "logdevice/common/util.h"
 
 using facebook::logdevice::markdown_sanitize;

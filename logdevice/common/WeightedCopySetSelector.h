@@ -10,9 +10,9 @@
 #include "logdevice/common/CopySetSelector.h"
 #include "logdevice/common/CopySetSelectorDependencies.h"
 #include "logdevice/common/EpochMetaData.h"
+#include "logdevice/common/Random.h"
 #include "logdevice/common/Sampling.h"
 #include "logdevice/common/SmallMap.h"
-#include "logdevice/common/Random.h"
 #include "logdevice/common/configuration/ReplicationProperty.h"
 
 namespace facebook { namespace logdevice {

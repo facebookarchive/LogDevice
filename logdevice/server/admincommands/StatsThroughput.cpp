@@ -10,8 +10,8 @@
 #include <chrono>
 #include <vector>
 
-#include "logdevice/server/LogGroupThroughput.h"
 #include "logdevice/common/commandline_util_chrono.h"
+#include "logdevice/server/LogGroupThroughput.h"
 
 namespace facebook { namespace logdevice { namespace commands {
 

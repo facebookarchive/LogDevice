@@ -12,10 +12,9 @@
 #include <mutex>
 
 #include <boost/noncopyable.hpp>
-
 #include <folly/Optional.h>
-#include <folly/ThreadLocal.h>
 #include <folly/SpinLock.h>
+#include <folly/ThreadLocal.h>
 
 namespace facebook { namespace logdevice {
 

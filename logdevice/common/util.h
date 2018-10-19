@@ -22,9 +22,8 @@
 #include <utility>
 #include <vector>
 
-#include <folly/Optional.h>
-
 #include <boost/icl/interval_set.hpp>
+#include <folly/Optional.h>
 
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/ShardID.h"

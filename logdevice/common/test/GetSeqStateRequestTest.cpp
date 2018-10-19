@@ -5,11 +5,12 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/common/GetSeqStateRequest.h"
+
 #include <folly/Memory.h>
 #include <gtest/gtest.h>
 
 #include "logdevice/common/ClusterState.h"
-#include "logdevice/common/GetSeqStateRequest.h"
 #include "logdevice/common/HashBasedSequencerLocator.h"
 #include "logdevice/common/SequencerRouter.h"
 #include "logdevice/common/debug.h"

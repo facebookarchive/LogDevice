@@ -9,8 +9,8 @@
 
 #include "logdevice/common/ClusterState.h"
 #include "logdevice/common/Processor.h"
-#include "logdevice/common/Worker.h"
 #include "logdevice/common/Timestamp.h"
+#include "logdevice/common/Worker.h"
 #include "logdevice/server/FailureDetector.h"
 
 using namespace facebook::logdevice::configuration;

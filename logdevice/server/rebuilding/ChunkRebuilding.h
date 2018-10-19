@@ -8,8 +8,8 @@
 #pragma once
 
 #include "logdevice/common/PayloadHolder.h"
-#include "logdevice/server/locallogstore/LocalLogStore.h"
 #include "logdevice/server/RecordRebuildingStore.h"
+#include "logdevice/server/locallogstore/LocalLogStore.h"
 
 namespace facebook { namespace logdevice {
 

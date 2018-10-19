@@ -5,15 +5,16 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/common/protocol/ProtocolReader.h"
+
 #include <deque>
+
 #include <gtest/gtest.h>
 
 #include "event2/buffer.h"
-
 #include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/protocol/Compatibility.h"
 #include "logdevice/common/protocol/Message.h"
-#include "logdevice/common/protocol/ProtocolReader.h"
 
 using namespace facebook::logdevice;
 

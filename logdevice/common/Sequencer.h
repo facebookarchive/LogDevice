@@ -22,11 +22,10 @@
 #include "logdevice/common/ResourceBudget.h"
 #include "logdevice/common/Seal.h"
 #include "logdevice/common/SequencerMetaDataLogManager.h"
-#include "logdevice/common/settings/Settings.h"
-#include "logdevice/common/types_internal.h"
 #include "logdevice/common/UpdateableSharedPtr.h"
+#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
-
+#include "logdevice/common/types_internal.h"
 #include "logdevice/include/Err.h"
 #include "logdevice/include/LogTailAttributes.h"
 

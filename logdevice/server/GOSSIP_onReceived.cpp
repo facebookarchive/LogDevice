@@ -7,6 +7,7 @@
  */
 
 #include "logdevice/server/GOSSIP_onReceived.h"
+
 #include "logdevice/common/Request.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/debug.h"

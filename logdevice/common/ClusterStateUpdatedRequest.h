@@ -9,9 +9,9 @@
 
 #include <set>
 
-#include "logdevice/common/Timer.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/RequestType.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/types_internal.h"
 
 namespace facebook { namespace logdevice {

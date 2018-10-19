@@ -6,9 +6,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 #include "logdevice/server/rebuilding/ChunkRebuilding.h"
-#include "logdevice/server/rebuilding/ShardRebuildingV2.h"
-#include "logdevice/server/ServerWorker.h"
+
 #include "logdevice/common/Processor.h"
+#include "logdevice/server/ServerWorker.h"
+#include "logdevice/server/rebuilding/ShardRebuildingV2.h"
 
 namespace facebook { namespace logdevice {
 

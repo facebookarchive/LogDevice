@@ -8,13 +8,12 @@
 #include "TextConfigUpdater.h"
 
 #include <boost/filesystem.hpp>
-#include <folly/hash/SpookyHashV2.h>
 #include <folly/compression/Compression.h>
-
-#include "logdevice/common/debug.h"
-#include "logdevice/common/settings/SettingsUpdater.h"
+#include <folly/hash/SpookyHashV2.h>
 
 #include "logdevice/common/configuration/ParsingHelpers.h"
+#include "logdevice/common/debug.h"
+#include "logdevice/common/settings/SettingsUpdater.h"
 #include "logdevice/include/Err.h"
 
 using namespace facebook::logdevice::configuration;

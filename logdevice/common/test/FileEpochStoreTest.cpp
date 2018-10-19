@@ -5,19 +5,19 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/common/FileEpochStore.h"
+
+#include <cstdint>
+#include <memory>
+
 #include <gtest/gtest.h>
 
-#include <memory>
-#include <cstdint>
-
-#include "logdevice/common/FileEpochStore.h"
 #include "logdevice/common/EpochMetaDataUpdater.h"
-#include "logdevice/common/NodeSetSelectorFactory.h"
 #include "logdevice/common/MetaDataLog.h"
+#include "logdevice/common/NodeSetSelectorFactory.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
-
-#include "logdevice/common/test/TestUtil.h"
 #include "logdevice/common/test/TestNodeSetSelector.h"
+#include "logdevice/common/test/TestUtil.h"
 
 using namespace facebook::logdevice;
 

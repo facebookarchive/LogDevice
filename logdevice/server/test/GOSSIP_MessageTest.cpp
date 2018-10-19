@@ -6,15 +6,16 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <gtest/gtest.h>
+#include "logdevice/common/protocol/GOSSIP_Message.h"
 
 #include <chrono>
 
+#include <gtest/gtest.h>
+
 #include "event2/buffer.h"
 #include "logdevice/common/libevent/compat.h"
-#include "logdevice/common/protocol/GOSSIP_Message.h"
-#include "logdevice/common/protocol/ProtocolWriter.h"
 #include "logdevice/common/protocol/ProtocolReader.h"
+#include "logdevice/common/protocol/ProtocolWriter.h"
 
 using namespace std::literals::chrono_literals;
 using namespace facebook::logdevice;

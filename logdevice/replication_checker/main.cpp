@@ -6,35 +6,23 @@
  * LICENSE file in the root directory of this source tree.
  */
 #include <signal.h>
-
-#include <sys/prctl.h>
-
 #include <unordered_map>
 #include <unordered_set>
 
 #include <boost/program_options.hpp>
 #include <boost/tokenizer.hpp>
-
-#include <folly/dynamic.h>
-#include <folly/json.h>
 #include <folly/Bits.h>
 #include <folly/Random.h>
 #include <folly/Range.h>
 #include <folly/Singleton.h>
 #include <folly/Varint.h>
+#include <folly/dynamic.h>
+#include <folly/json.h>
+#include <sys/prctl.h>
 
 #include "logdevice/common/Checksum.h"
-#include "logdevice/common/client_read_stream/AllClientReadStreams.h"
-#include "logdevice/common/client_read_stream/ClientReadStream.h"
-#include "logdevice/common/client_read_stream/ClientReadStreamBufferFactory.h"
-#include "logdevice/common/commandline_util.h"
-#include "logdevice/common/commandline_util_chrono.h"
-
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/CopySet.h"
 #include "logdevice/common/DataRecordOwnsPayload.h"
-#include "logdevice/common/debug.h"
-#include "logdevice/common/Timer.h"
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
 #include "logdevice/common/MetaDataLog.h"
 #include "logdevice/common/NoopTraceLogger.h"
@@ -42,24 +30,31 @@
 #include "logdevice/common/PrincipalParser.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/SequencerLocator.h"
-#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/SingleEvent.h"
 #include "logdevice/common/StopReadingRequest.h"
 #include "logdevice/common/SyncSequencerRequest.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/Timestamp.h"
-#include "logdevice/common/types_internal.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/WorkerCallbackHelper.h"
+#include "logdevice/common/client_read_stream/AllClientReadStreams.h"
+#include "logdevice/common/client_read_stream/ClientReadStream.h"
+#include "logdevice/common/client_read_stream/ClientReadStreamBufferFactory.h"
+#include "logdevice/common/commandline_util.h"
+#include "logdevice/common/commandline_util_chrono.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
+#include "logdevice/common/debug.h"
+#include "logdevice/common/settings/Settings.h"
+#include "logdevice/common/types_internal.h"
 #include "logdevice/common/util.h"
 #include "logdevice/include/Client.h"
 #include "logdevice/include/Err.h"
 #include "logdevice/include/LogTailAttributes.h"
 #include "logdevice/include/types.h"
-#include "logdevice/lib/ClientPluginPack.h"
 #include "logdevice/lib/ClientImpl.h"
+#include "logdevice/lib/ClientPluginPack.h"
 #include "logdevice/lib/ClientSettingsImpl.h"
-
 #include "logdevice/replication_checker/LogErrorTracker.h"
 #include "logdevice/replication_checker/ReplicationCheckerSettings.h"
 

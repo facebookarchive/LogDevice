@@ -7,8 +7,8 @@
  */
 #pragma once
 
-#include "logdevice/common/TraceLogger.h"
 #include "logdevice/common/RateLimiter.h"
+#include "logdevice/common/TraceLogger.h"
 
 namespace facebook { namespace logdevice {
 

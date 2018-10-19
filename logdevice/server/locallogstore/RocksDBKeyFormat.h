@@ -11,7 +11,6 @@
 
 #include <folly/CppAttributes.h>
 #include <folly/small_vector.h>
-
 #include <rocksdb/slice.h>
 
 #include "logdevice/common/Metadata.h"

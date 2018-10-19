@@ -12,14 +12,13 @@
 #include <memory>
 #include <zstd.h>
 
-#include <folly/Memory.h>
-#include <folly/IntrusiveList.h>
-#include <folly/Optional.h>
-
 #include <boost/functional/hash.hpp>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
+#include <folly/IntrusiveList.h>
+#include <folly/Memory.h>
+#include <folly/Optional.h>
 
 #include "logdevice/common/AdminCommandTable.h"
 #include "logdevice/common/AppendRequest.h"

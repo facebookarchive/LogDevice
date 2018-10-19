@@ -10,15 +10,15 @@
 #include <utility>
 
 #include "logdevice/common/AllSequencers.h"
-#include "logdevice/common/debug.h"
-#include "logdevice/common/Timer.h"
 #include "logdevice/common/MetaDataLogWriter.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Sequencer.h"
+#include "logdevice/common/Timer.h"
+#include "logdevice/common/Worker.h"
+#include "logdevice/common/debug.h"
+#include "logdevice/common/protocol/RELEASE_Message.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/util.h"
-#include "logdevice/common/Worker.h"
-#include "logdevice/common/protocol/RELEASE_Message.h"
 
 namespace facebook { namespace logdevice {
 

@@ -7,10 +7,10 @@
  */
 #pragma once
 
-#include <boost/noncopyable.hpp>
 #include <chrono>
 #include <memory>
 
+#include <boost/noncopyable.hpp>
 #include <folly/IntrusiveList.h>
 #include <folly/Optional.h>
 

@@ -7,8 +7,9 @@
  */
 #pragma once
 
-#include <folly/SocketAddress.h>
 #include <string>
+
+#include <folly/SocketAddress.h>
 
 namespace facebook { namespace logdevice { namespace test {
 

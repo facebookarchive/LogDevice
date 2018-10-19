@@ -11,17 +11,14 @@
 #include <chrono>
 #include <string>
 
-#include "logdevice/common/debug.h"
 #include "logdevice/common/SequencerLocator.h"
-#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/StorageTask-enums.h"
-#include "logdevice/common/util.h"
 #include "logdevice/common/configuration/ZookeeperConfigSource.h"
-
+#include "logdevice/common/debug.h"
+#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
-
+#include "logdevice/common/util.h"
 #include "logdevice/server/locallogstore/LocalLogStoreSettings.h"
-
 #include "logdevice/server/storage_tasks/StorageThreadPool.h"
 
 /**

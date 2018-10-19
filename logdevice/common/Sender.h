@@ -21,16 +21,16 @@
 #include <folly/Optional.h>
 #include <openssl/ossl_typ.h>
 
-#include "logdevice/common/protocol/Message.h"
 #include "logdevice/common/Address.h"
-#include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/common/PrincipalIdentity.h"
 #include "logdevice/common/Priority.h"
 #include "logdevice/common/ResourceBudget.h"
 #include "logdevice/common/Socket-fwd.h"
 #include "logdevice/common/Timestamp.h"
-#include "logdevice/common/configuration/TrafficClass.h"
 #include "logdevice/common/WeakRefHolder.h"
+#include "logdevice/common/configuration/NodeLocation.h"
+#include "logdevice/common/configuration/TrafficClass.h"
+#include "logdevice/common/protocol/Message.h"
 #include "logdevice/include/Err.h"
 // Think twice before adding new includes here!  This file is included in many
 // translation units and increasing its transitive dependency footprint will

@@ -12,13 +12,13 @@
 
 #include "logdevice/common/AllSequencers.h"
 #include "logdevice/common/AppenderBuffer.h"
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/EpochMetaData.h"
 #include "logdevice/common/MetaDataLog.h"
 #include "logdevice/common/MetaSequencer.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Sequencer.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/protocol/RECORD_Message.h"
 #include "logdevice/include/Err.h"
 

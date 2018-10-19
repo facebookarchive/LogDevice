@@ -5,20 +5,21 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include <algorithm>
+#include <chrono>
+
 #include <folly/Random.h>
 #include <folly/synchronization/Baton.h>
 #include <gtest/gtest.h>
-#include <chrono>
-#include <algorithm>
 
-#include "logdevice/lib/verifier/GenVerifyData.h"
-#include "logdevice/lib/verifier/VerificationDataStructures.h"
-#include "logdevice/lib/verifier/MockDataSourceWriter.h"
-#include "logdevice/lib/verifier/VerificationWriter.h"
-#include "logdevice/lib/verifier/VerificationReader.h"
-#include "logdevice/lib/verifier/MockDataSourceReader.h"
 #include "logdevice/common/protocol/ProtocolReader.h"
 #include "logdevice/common/toString.h"
+#include "logdevice/lib/verifier/GenVerifyData.h"
+#include "logdevice/lib/verifier/MockDataSourceReader.h"
+#include "logdevice/lib/verifier/MockDataSourceWriter.h"
+#include "logdevice/lib/verifier/VerificationDataStructures.h"
+#include "logdevice/lib/verifier/VerificationReader.h"
+#include "logdevice/lib/verifier/VerificationWriter.h"
 
 using namespace facebook::logdevice;
 

@@ -9,13 +9,12 @@
 
 #include <boost/format.hpp>
 
+#include "CheckMetaDataLogRequest.h"
 #include "logdevice/admin/safety/CheckImpactRequest.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/stats/Stats.h"
-
-#include "CheckMetaDataLogRequest.h"
 
 namespace facebook { namespace logdevice {
 

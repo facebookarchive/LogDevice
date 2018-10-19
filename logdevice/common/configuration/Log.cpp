@@ -16,8 +16,8 @@
 #include "logdevice/common/commandline_util_chrono.h"
 #include "logdevice/common/configuration/LogsConfigParser.h"
 #include "logdevice/common/configuration/ParsingHelpers.h"
-#include "logdevice/include/LogAttributes.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/include/LogAttributes.h"
 
 using namespace facebook::logdevice::configuration::parser;
 using namespace facebook::logdevice::logsconfig;

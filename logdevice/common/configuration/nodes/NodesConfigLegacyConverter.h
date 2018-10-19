@@ -7,8 +7,8 @@
  */
 #pragma once
 
-#include "logdevice/common/configuration/nodes/NodesConfiguration.h"
 #include "logdevice/common/configuration/ServerConfig.h"
+#include "logdevice/common/configuration/nodes/NodesConfiguration.h"
 
 namespace facebook { namespace logdevice { namespace configuration {
 namespace nodes {

@@ -7,8 +7,8 @@
  */
 #pragma once
 
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/EpochMetaData.h"
+#include "logdevice/common/configuration/Configuration.h"
 
 namespace facebook { namespace logdevice {
 

@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include <gtest/gtest.h>
+#include "logdevice/include/Reader.h"
 
 #include <chrono>
 #include <condition_variable>
@@ -16,14 +16,14 @@
 #include <thread>
 
 #include <folly/Memory.h>
+#include <gtest/gtest.h>
 
 #include "logdevice/common/DataRecordOwnsPayload.h"
-#include "logdevice/common/Timer.h"
 #include "logdevice/common/ReaderImpl.h"
-#include "logdevice/common/types_internal.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/test/TestUtil.h"
+#include "logdevice/common/types_internal.h"
 #include "logdevice/include/Client.h"
-#include "logdevice/include/Reader.h"
 
 namespace facebook { namespace logdevice {
 

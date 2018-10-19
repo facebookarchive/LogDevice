@@ -9,12 +9,12 @@
 
 #include <folly/compression/Compression.h>
 
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Socket.h"
-#include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/ServerConfig.h"
+#include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/protocol/ProtocolReader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
 #include "logdevice/common/stats/Stats.h"

@@ -8,6 +8,7 @@
 #pragma once
 
 #include <vector>
+
 #include "logdevice/common/protocol/Message.h"
 #include "logdevice/common/sequencer_boycotting/Boycott.h"
 

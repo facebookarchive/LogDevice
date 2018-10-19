@@ -12,12 +12,12 @@
 #include <pwd.h>
 #include <signal.h>
 #include <unistd.h>
-#include <sys/mman.h>
-#include <sys/prctl.h>
-#include <sys/resource.h>
 
 #include <folly/Optional.h>
 #include <folly/Singleton.h>
+#include <sys/mman.h>
+#include <sys/prctl.h>
+#include <sys/resource.h>
 
 #include "logdevice/common/BuildInfo.h"
 #include "logdevice/common/ConstructorFailed.h"

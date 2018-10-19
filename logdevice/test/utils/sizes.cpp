@@ -8,10 +8,10 @@
 #include "logdevice/common/Appender.h"
 #include "logdevice/common/EpochSequencer.h"
 #include "logdevice/common/ExponentialBackoffTimer.h"
-#include "logdevice/common/Timer.h"
 #include "logdevice/common/MetaDataLogWriter.h"
 #include "logdevice/common/RecipientSet.h"
 #include "logdevice/common/Sequencer.h"
+#include "logdevice/common/Timer.h"
 
 using namespace facebook::logdevice;
 

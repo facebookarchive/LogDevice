@@ -10,6 +10,7 @@
 #include <map>
 #include <queue>
 #include <utility>
+
 #include <folly/Random.h>
 
 namespace facebook { namespace logdevice {

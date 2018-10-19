@@ -7,16 +7,14 @@
  */
 #pragma once
 
+#include <sqlite3.h>
 #include <unordered_map>
 
 #include <folly/Conv.h>
 
-#include <sqlite3.h>
-
-#include "logdevice/common/debug.h"
-
 #include "Table.h"
 #include "TableRegistry.h"
+#include "logdevice/common/debug.h"
 
 namespace facebook { namespace logdevice { namespace ldquery {
 

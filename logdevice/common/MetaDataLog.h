@@ -7,8 +7,8 @@
  */
 #pragma once
 
-#include "logdevice/include/types.h"
 #include "logdevice/common/types_internal.h"
+#include "logdevice/include/types.h"
 
 namespace facebook { namespace logdevice {
 

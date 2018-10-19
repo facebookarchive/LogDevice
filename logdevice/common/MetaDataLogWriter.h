@@ -12,8 +12,8 @@
 
 #include "logdevice/common/Appender.h"
 #include "logdevice/common/CompletionRequest.h"
-#include "logdevice/common/types_internal.h"
 #include "logdevice/common/WriteMetaDataRecord.h"
+#include "logdevice/common/types_internal.h"
 
 namespace facebook { namespace logdevice {
 

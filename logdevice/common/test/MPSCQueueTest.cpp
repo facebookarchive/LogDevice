@@ -5,6 +5,8 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/common/MPSCQueue.h"
+
 #include <atomic>
 #include <thread>
 #include <unordered_set>
@@ -12,7 +14,6 @@
 
 #include <gtest/gtest.h>
 
-#include "logdevice/common/MPSCQueue.h"
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/test/TestUtil.h"
 

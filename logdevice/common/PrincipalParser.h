@@ -9,8 +9,8 @@
 
 #include <string>
 
-#include "logdevice/common/SecurityInformation.h"
 #include "logdevice/common/PrincipalIdentity.h"
+#include "logdevice/common/SecurityInformation.h"
 
 namespace facebook { namespace logdevice {
 

@@ -7,9 +7,9 @@
  */
 #pragma once
 
-#include "logdevice/common/debug.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/SecurityConfig.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/include/Err.h"
 #include "logdevice/include/LogAttributes.h"
 

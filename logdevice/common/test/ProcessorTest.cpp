@@ -5,26 +5,28 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include <gtest/gtest.h>
+#include "logdevice/common/Processor.h"
+
 #include <map>
 #include <memory>
 #include <mutex>
 #include <pthread.h>
-#include <sys/types.h>
 #include <thread>
 #include <vector>
 
 #include <folly/Memory.h>
-#include "logdevice/common/debug.h"
+#include <gtest/gtest.h>
+#include <sys/types.h>
+
 #include "logdevice/common/EventLoopHandle.h"
-#include "logdevice/common/LibeventTimer.h"
 #include "logdevice/common/ExponentialBackoffTimer.h"
+#include "logdevice/common/LibeventTimer.h"
 #include "logdevice/common/NoopTraceLogger.h"
-#include "logdevice/common/Processor.h"
 #include "logdevice/common/Request.h"
+#include "logdevice/common/Worker.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/common/types_internal.h"
-#include "logdevice/common/Worker.h"
 
 using namespace facebook::logdevice;
 

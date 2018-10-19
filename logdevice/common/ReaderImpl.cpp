@@ -8,19 +8,20 @@
 #include "ReaderImpl.h"
 
 #include <chrono>
-#include <sys/time.h>
 #include <thread>
 
 #include <folly/Memory.h>
-#include "logdevice/common/buffered_writer/BufferedWriteDecoderImpl.h"
-#include "logdevice/common/Timer.h"
+#include <sys/time.h>
+
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/ReaderProgressRequest.h"
 #include "logdevice/common/StartReadingRequest.h"
 #include "logdevice/common/StopReadingRequest.h"
 #include "logdevice/common/ThreadID.h"
-#include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/buffered_writer/BufferedWriteDecoderImpl.h"
+#include "logdevice/common/configuration/UpdateableConfig.h"
 
 namespace facebook { namespace logdevice {
 

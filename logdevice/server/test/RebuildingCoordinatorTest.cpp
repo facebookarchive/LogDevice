@@ -5,27 +5,24 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include <gtest/gtest.h>
+#include "logdevice/server/RebuildingCoordinator.h"
 
 #include <algorithm>
 #include <unordered_set>
 #include <vector>
 
-#include "logdevice/common/configuration/Configuration.h"
-#include "logdevice/common/debug.h"
-#include "logdevice/common/configuration/UpdateableConfig.h"
+#include <gtest/gtest.h>
 
+#include "logdevice/common/LegacyLogToShard.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/InternalLogs.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
-
+#include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/event_log/EventLogRecord.h"
-
 #include "logdevice/common/test/TestUtil.h"
-
-#include "logdevice/server/RebuildingCoordinator.h"
 #include "logdevice/server/rebuilding/RebuildingPlan.h"
 #include "logdevice/server/rebuilding/ShardRebuildingV1.h"
-#include "logdevice/common/LegacyLogToShard.h"
 
 using namespace facebook::logdevice;
 

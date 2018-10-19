@@ -5,17 +5,17 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include <gtest/gtest.h>
+#include "logdevice/common/protocol/NODE_STATS_Message.h"
 
 #include <folly/stats/BucketedTimeSeries.h>
+#include <gtest/gtest.h>
 
 #include "event2/buffer.h"
-#include "logdevice/common/libevent/compat.h"
-#include "logdevice/common/protocol/NODE_STATS_Message.h"
 #include "logdevice/common/Address.h"
-#include "logdevice/common/stats/Stats.h"
-#include "logdevice/common/protocol/ProtocolWriter.h"
+#include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/protocol/ProtocolReader.h"
+#include "logdevice/common/protocol/ProtocolWriter.h"
+#include "logdevice/common/stats/Stats.h"
 
 using namespace facebook::logdevice;
 

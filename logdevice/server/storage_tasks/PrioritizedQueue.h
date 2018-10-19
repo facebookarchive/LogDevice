@@ -16,11 +16,10 @@
 #include <folly/MPMCQueue.h>
 #include <folly/SharedMutex.h>
 #include <folly/small_vector.h>
-
-#include <logdevice/common/debug.h>
 #include <logdevice/common/Semaphore.h>
-#include <logdevice/common/util.h>
+#include <logdevice/common/debug.h>
 #include <logdevice/common/stats/Stats.h>
+#include <logdevice/common/util.h>
 
 /**
  * @file  The priority queue implementation used by StorageThreadPool.

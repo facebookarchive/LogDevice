@@ -6,20 +6,22 @@
  * LICENSE file in the root directory of this source tree.
  */
 #include "logdevice/common/configuration/logs/LogsConfigTree.h"
+
+#include <deque>
+#include <iostream>
+
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/join.hpp>
-#include <deque>
 #include <folly/CppAttributes.h>
 #include <folly/Format.h>
 #include <folly/json.h>
-#include <iostream>
 
+#include "logdevice/common/SlidingWindow.h"
 #include "logdevice/common/commandline_util_chrono.h"
 #include "logdevice/common/configuration/LogsConfigParser.h"
-#include "logdevice/common/configuration/ParsingHelpers.h"
 #include "logdevice/common/configuration/NodeLocation.h"
+#include "logdevice/common/configuration/ParsingHelpers.h"
 #include "logdevice/common/configuration/ReplicationProperty.h"
-#include "logdevice/common/SlidingWindow.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/include/types.h"
 

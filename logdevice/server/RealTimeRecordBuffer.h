@@ -7,13 +7,12 @@
  */
 #pragma once
 
-#include "folly/AtomicIntrusiveLinkedList.h"
-
-#include "logdevice/common/UnorderedMapWithLRU.h"
-#include "logdevice/include/types.h"
-
 #include <memory>
 #include <string>
+
+#include "folly/AtomicIntrusiveLinkedList.h"
+#include "logdevice/common/UnorderedMapWithLRU.h"
+#include "logdevice/include/types.h"
 
 namespace facebook { namespace logdevice {
 

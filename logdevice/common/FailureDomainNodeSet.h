@@ -13,11 +13,10 @@
 
 #include "logdevice/common/AuthoritativeStatus.h"
 #include "logdevice/common/EpochMetaData.h"
+#include "logdevice/common/ShardID.h"
 #include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/common/configuration/ReplicationProperty.h"
-#include "logdevice/common/ShardID.h"
 #include "logdevice/common/configuration/ServerConfig.h"
-
 #include "logdevice/common/debug.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/common/util.h"

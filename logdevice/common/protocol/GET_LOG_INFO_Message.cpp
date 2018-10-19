@@ -7,8 +7,8 @@
  */
 #include "GET_LOG_INFO_Message.h"
 
-#include <folly/json.h>
 #include <folly/Memory.h>
+#include <folly/json.h>
 
 #include "logdevice/common/GetLogInfoRequest.h"
 #include "logdevice/common/Sender.h"

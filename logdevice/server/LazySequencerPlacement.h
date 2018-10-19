@@ -7,8 +7,8 @@
  */
 #pragma once
 
-#include "logdevice/server/FailureDetector.h"
 #include "logdevice/common/settings/GossipSettings.h"
+#include "logdevice/server/FailureDetector.h"
 #include "logdevice/server/ServerProcessor.h"
 
 namespace facebook { namespace logdevice {

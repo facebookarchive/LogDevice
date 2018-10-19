@@ -45,8 +45,9 @@ Cpp11BracedListStyle: true
 DerivePointerAlignment: false
 DisableFormat:   false
 ForEachMacros:   [ FOR_EACH_RANGE, FOR_EACH, ]
+IncludeBlocks: Regroup
 IncludeCategories:
-  - Regex:           '^<.*\.h(pp)?>'
+  - Regex:           '^<[^/]+>'
     Priority:        1
   - Regex:           '^<.*'
     Priority:        2
@@ -72,8 +73,7 @@ PenaltyExcessCharacter: 1000000
 PenaltyReturnTypeOnItsOwnLine: 115
 PointerAlignment: Left
 ReflowComments:  true
-# Sorts case-sensitive, but LogDevice uses case-insensitive
-SortIncludes:    false
+SortIncludes:    true
 SpaceAfterCStyleCast: false
 SpaceBeforeAssignmentOperators: true
 SpaceBeforeParens: ControlStatements

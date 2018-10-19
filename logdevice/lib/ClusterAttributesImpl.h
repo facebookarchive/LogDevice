@@ -7,11 +7,12 @@
  */
 #pragma once
 
-#include "logdevice/include/ClusterAttributes.h"
-#include "logdevice/common/configuration/Configuration.h"
+#include <folly/Optional.h>
 #include <folly/dynamic.h>
 #include <folly/json.h>
-#include <folly/Optional.h>
+
+#include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/include/ClusterAttributes.h"
 
 namespace facebook { namespace logdevice {
 

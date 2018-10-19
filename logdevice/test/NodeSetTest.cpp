@@ -7,24 +7,25 @@
  */
 #include <thread>
 #include <unistd.h>
-#include <gtest/gtest.h>
 
 #include <folly/Memory.h>
 #include <folly/Random.h>
+#include <gtest/gtest.h>
 
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/Digest.h"
 #include "logdevice/common/EpochMetaDataMap.h"
 #include "logdevice/common/EpochMetaDataUpdater.h"
 #include "logdevice/common/EpochStore.h"
 #include "logdevice/common/FileEpochStore.h"
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
-#include "logdevice/common/Metadata.h"
 #include "logdevice/common/MetaDataLog.h"
+#include "logdevice/common/Metadata.h"
 #include "logdevice/common/NodeSetSelectorFactory.h"
 #include "logdevice/common/Semaphore.h"
-#include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/configuration/ConfigParser.h"
+#include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/test/TestNodeSetSelector.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/include/Client.h"
@@ -33,8 +34,6 @@
 #include "logdevice/server/locallogstore/test/StoreUtil.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
-
-#include "logdevice/common/debug.h"
 
 #define N0 ShardID(0, 0)
 #define N1 ShardID(1, 0)

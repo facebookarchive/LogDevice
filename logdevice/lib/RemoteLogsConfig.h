@@ -11,10 +11,10 @@
 
 #include <folly/synchronization/RWSpinLock.h>
 
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/GetLogInfoRequest.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Semaphore.h"
+#include "logdevice/common/configuration/Configuration.h"
 
 namespace facebook { namespace logdevice {
 

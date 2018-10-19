@@ -8,12 +8,13 @@
 #pragma once
 
 #include <string>
+
 #include <folly/Range.h>
 
 #include "logdevice/common/debug.h"
+#include "logdevice/common/membership/SequencerMembership.h"
 #include "logdevice/common/membership/StorageState.h"
 #include "logdevice/common/membership/StorageStateTransitions.h"
-#include "logdevice/common/membership/SequencerMembership.h"
 
 namespace facebook { namespace logdevice { namespace membership {
 

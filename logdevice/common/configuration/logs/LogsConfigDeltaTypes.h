@@ -6,8 +6,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 #pragma once
-#include "logdevice/common/types_internal.h"
 #include "logdevice/common/configuration/logs/LogsConfigTree.h"
+#include "logdevice/common/types_internal.h"
 
 namespace facebook { namespace logdevice { namespace logsconfig {
 

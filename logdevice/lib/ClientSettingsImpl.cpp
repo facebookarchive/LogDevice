@@ -7,8 +7,9 @@
  */
 #include "logdevice/lib/ClientSettingsImpl.h"
 
-#include <boost/program_options.hpp>
 #include <string>
+
+#include <boost/program_options.hpp>
 
 #include "logdevice/common/debug.h"
 #include "logdevice/include/Err.h"

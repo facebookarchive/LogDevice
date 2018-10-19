@@ -6,6 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 #include "logdevice/common/configuration/logs/LogsConfigDeltaTypes.h"
+
 #include "logdevice/common/debug.h"
 
 namespace facebook { namespace logdevice { namespace logsconfig {

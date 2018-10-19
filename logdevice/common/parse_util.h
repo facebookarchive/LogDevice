@@ -9,9 +9,9 @@
 
 #include <string>
 
-#include "logdevice/common/configuration/ServerConfig.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/ShardID.h"
+#include "logdevice/common/configuration/ServerConfig.h"
 
 /**
  * @file   Parse utilities.

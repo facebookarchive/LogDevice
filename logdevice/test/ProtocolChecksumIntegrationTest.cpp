@@ -9,10 +9,10 @@
 #include <folly/synchronization/Baton.h>
 #include <gtest/gtest.h>
 
+#include "logdevice/common/test/SocketTest_fixtures.h"
 #include "logdevice/include/Client.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
-#include "logdevice/common/test/SocketTest_fixtures.h"
 
 /**
  * @file Tests for Protocol layer Checksumming.

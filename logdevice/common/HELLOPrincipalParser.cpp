@@ -8,8 +8,9 @@
 #include "logdevice/common/HELLOPrincipalParser.h"
 
 #include <cstring>
-#include "logdevice/common/checks.h"
+
 #include "logdevice/common/PrincipalIdentity.h"
+#include "logdevice/common/checks.h"
 
 namespace facebook { namespace logdevice {
 

@@ -9,12 +9,13 @@
 
 #include <cstdio>
 #include <cstring>
-#include "logdevice/include/LogTailAttributes.h"
+
 #include "logdevice/common/MetaDataLog.h"
 #include "logdevice/common/TailRecord.h"
 #include "logdevice/common/ZookeeperEpochStoreRequest.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/util.h"
+#include "logdevice/include/LogTailAttributes.h"
 
 namespace facebook { namespace logdevice {
 

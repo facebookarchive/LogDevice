@@ -10,11 +10,10 @@
 #include <tuple>
 
 #include "folly/Function.h"
-
-#include "logdevice/include/Err.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/RequestType.h"
 #include "logdevice/common/types_internal.h"
+#include "logdevice/include/Err.h"
 
 /**
  * @file CompletionRequest is a variadic template for defining Request types

@@ -7,8 +7,9 @@
  */
 #pragma once
 
-#include <boost/noncopyable.hpp>
 #include <memory>
+
+#include <boost/noncopyable.hpp>
 
 #include "logdevice/common/EpochStore.h"
 #include "logdevice/common/MetaDataTracer.h"

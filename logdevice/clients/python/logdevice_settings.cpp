@@ -5,17 +5,17 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "logdevice/common/settings/RebuildingSettings.h"
+#include <boost/python.hpp>
+
+#include "logdevice/clients/python/util/util.h"
 #include "logdevice/common/settings/GossipSettings.h"
+#include "logdevice/common/settings/RebuildingSettings.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/settings/SettingsUpdater.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
-#include "logdevice/clients/python/util/util.h"
+#include "logdevice/server/ServerSettings.h"
 #include "logdevice/server/locallogstore/LocalLogStoreSettings.h"
 #include "logdevice/server/locallogstore/RocksDBSettings.h"
-#include "logdevice/server/ServerSettings.h"
-
-#include <boost/python.hpp>
 
 using namespace boost::python;
 using namespace facebook::logdevice;

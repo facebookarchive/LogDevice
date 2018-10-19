@@ -10,8 +10,8 @@
 #include "logdevice/common/CheckNodeHealthRequest.h"
 #include "logdevice/common/EpochMetaData.h"
 #include "logdevice/common/Processor.h"
-#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/stats/Stats.h"
 
 namespace facebook { namespace logdevice {

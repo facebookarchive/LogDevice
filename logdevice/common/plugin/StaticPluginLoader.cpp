@@ -6,9 +6,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <dlfcn.h>
-
 #include "logdevice/common/plugin/StaticPluginLoader.h"
+
+#include <dlfcn.h>
 
 namespace facebook { namespace logdevice {
 

@@ -15,9 +15,9 @@
  */
 
 #include "logdevice/lib/verifier/VerificationDataStructures.h"
-#include "logdevice/common/protocol/ProtocolWriter.h"
-#include "logdevice/common/protocol/ProtocolReader.h"
 
+#include "logdevice/common/protocol/ProtocolReader.h"
+#include "logdevice/common/protocol/ProtocolWriter.h"
 #include "logdevice/common/toString.h"
 
 namespace facebook { namespace logdevice {

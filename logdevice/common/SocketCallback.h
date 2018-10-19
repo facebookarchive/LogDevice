@@ -8,8 +8,9 @@
 #pragma once
 
 #include <folly/IntrusiveList.h>
-#include "logdevice/include/Err.h"
+
 #include "logdevice/common/Address.h"
+#include "logdevice/include/Err.h"
 
 namespace facebook { namespace logdevice {
 

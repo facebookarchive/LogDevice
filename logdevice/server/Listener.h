@@ -15,7 +15,6 @@
 
 #include "event2/event.h"
 #include "event2/listener.h"
-
 #include "logdevice/common/EventLoop.h"
 
 namespace facebook { namespace logdevice {

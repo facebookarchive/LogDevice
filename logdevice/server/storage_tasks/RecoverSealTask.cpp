@@ -10,8 +10,8 @@
 #include <folly/Memory.h>
 
 #include "logdevice/common/CompletionRequest.h"
-#include "logdevice/common/debug.h"
 #include "logdevice/common/Metadata.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/ServerWorker.h"
 #include "logdevice/server/locallogstore/LocalLogStore.h"

@@ -7,13 +7,13 @@
  */
 #pragma once
 
-#include <boost/noncopyable.hpp>
 #include <chrono>
 #include <functional>
 
-#include "event2/event_struct.h"
+#include <boost/noncopyable.hpp>
 #include <folly/IntrusiveList.h>
 
+#include "event2/event_struct.h"
 #include "logdevice/common/RunState.h"
 
 /**

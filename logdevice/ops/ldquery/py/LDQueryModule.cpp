@@ -8,14 +8,15 @@
 #include <chrono>
 
 #include <boost/python.hpp>
-#include <boost/python/suite/indexing/vector_indexing_suite.hpp>
 #include <boost/python/suite/indexing/map_indexing_suite.hpp>
+#include <boost/python/suite/indexing/vector_indexing_suite.hpp>
+
 #include "logdevice/clients/python/util/util.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/ops/ldquery/Errors.h"
 #include "logdevice/ops/ldquery/LDQuery.h"
 #include "logdevice/ops/ldquery/TableRegistry.h"
 #include "logdevice/ops/ldquery/Utils.h"
-#include "logdevice/common/debug.h"
 
 using namespace boost::python;
 using namespace facebook::logdevice;

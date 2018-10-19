@@ -5,8 +5,9 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include <thread>
 #include <iostream>
+#include <thread>
+
 #include <folly/Benchmark.h>
 #include <folly/Singleton.h>
 #include <gflags/gflags.h>

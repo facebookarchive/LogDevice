@@ -5,6 +5,8 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/common/PeriodicReleases.h"
+
 #include <chrono>
 #include <mutex>
 #include <queue>
@@ -12,9 +14,8 @@
 
 #include <gtest/gtest.h>
 
-#include "logdevice/common/PeriodicReleases.h"
-#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/protocol/RELEASE_Message.h"
+#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/test/TestUtil.h"
 

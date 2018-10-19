@@ -10,9 +10,10 @@
 #include <unordered_set>
 
 #include <folly/Optional.h>
+
+#include "logdevice/common/SecurityInformation.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/types.h"
-#include "logdevice/common/SecurityInformation.h"
 
 /**
  * @file Config reading and parsing.

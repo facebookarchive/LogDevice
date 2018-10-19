@@ -7,6 +7,8 @@
  */
 #pragma once
 
+#include <cstddef>
+
 #include "logdevice/common/checks.h"
 
 namespace facebook { namespace logdevice {

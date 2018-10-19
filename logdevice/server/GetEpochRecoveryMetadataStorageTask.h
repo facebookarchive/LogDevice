@@ -8,9 +8,9 @@
 #pragma once
 
 #include "logdevice/common/Address.h"
+#include "logdevice/common/protocol/GET_EPOCH_RECOVERY_METADATA_REPLY_Message.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Err.h"
-#include "logdevice/common/protocol/GET_EPOCH_RECOVERY_METADATA_REPLY_Message.h"
 #include "logdevice/server/locallogstore/LocalLogStore.h"
 #include "logdevice/server/storage_tasks/StorageTask.h"
 

@@ -9,10 +9,10 @@
 
 #include <cstring>
 
-#include "logdevice/common/debug.h"
 #include "logdevice/common/EventHandler.h"
 #include "logdevice/common/TimeoutMap.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/libevent/compat.h"
 
 namespace facebook { namespace logdevice {

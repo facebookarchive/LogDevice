@@ -7,11 +7,12 @@
  */
 #pragma once
 
-#include <folly/small_vector.h>
 #include <chrono>
 
-#include "logdevice/server/RecordRebuildingBase.h"
+#include <folly/small_vector.h>
+
 #include "logdevice/server/RecordRebuildingAmend.h"
+#include "logdevice/server/RecordRebuildingBase.h"
 
 /**
  * @file RecordRebuildingStore is a state machine for rebuilding a single record

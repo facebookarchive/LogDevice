@@ -10,15 +10,16 @@
 #include <queue>
 #include <unordered_map>
 #include <vector>
-#include <folly/hash/Hash.h>
-#include <folly/IntrusiveList.h>
 
-#include "logdevice/include/LogTailAttributes.h"
+#include <folly/IntrusiveList.h>
+#include <folly/hash/Hash.h>
+
 #include "logdevice/common/ExponentialBackoffTimer.h"
 #include "logdevice/common/GetSeqStateRequest.h"
 #include "logdevice/common/Timer.h"
 #include "logdevice/common/WorkerCallbackHelper.h"
 #include "logdevice/common/types_internal.h"
+#include "logdevice/include/LogTailAttributes.h"
 
 /**
  * @file SyncSequencerRequest.h

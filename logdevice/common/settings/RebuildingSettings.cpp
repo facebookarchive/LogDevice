@@ -6,10 +6,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 #include "RebuildingSettings.h"
+
 #include <boost/program_options.hpp>
+
 #include "logdevice/common/commandline_util_chrono.h"
-#include "logdevice/common/util.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/util.h"
 
 namespace facebook { namespace logdevice {
 

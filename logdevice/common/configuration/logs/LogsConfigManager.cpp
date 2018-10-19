@@ -5,19 +5,20 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/common/configuration/logs/LogsConfigManager.h"
+
+#include <algorithm>
+
 #include "logdevice/common/Sender.h"
-#include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/InternalLogs.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
+#include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/configuration/logs/LogsConfigApiTracer.h"
 #include "logdevice/common/configuration/logs/LogsConfigDeltaTypes.h"
-#include "logdevice/common/configuration/logs/LogsConfigManager.h"
 #include "logdevice/common/configuration/logs/LogsConfigTree.h"
 #include "logdevice/common/protocol/LOGS_CONFIG_API_REPLY_Message.h"
 #include "logdevice/common/stats/ServerHistograms.h"
-
-#include <algorithm>
 
 using facebook::logdevice::configuration::LocalLogsConfig;
 using facebook::logdevice::logsconfig::Delta;

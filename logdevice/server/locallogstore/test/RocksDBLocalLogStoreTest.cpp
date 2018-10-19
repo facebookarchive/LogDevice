@@ -5,21 +5,23 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include <gtest/gtest.h>
+#include "logdevice/server/locallogstore/RocksDBLocalLogStore.h"
+
 #include <memory>
 
 #include <folly/Memory.h>
 #include <folly/ScopeGuard.h>
-#include "logdevice/common/configuration/InternalLogs.h"
+#include <gtest/gtest.h>
+
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
 #include "logdevice/common/Metadata.h"
+#include "logdevice/common/configuration/InternalLogs.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Err.h"
 #include "logdevice/include/types.h"
 #include "logdevice/server/locallogstore/LocalLogStore.h"
 #include "logdevice/server/locallogstore/PartitionedRocksDBStore.h"
-#include "logdevice/server/locallogstore/RocksDBLocalLogStore.h"
 #include "logdevice/server/locallogstore/WriteOps.h"
 #include "logdevice/server/locallogstore/test/TemporaryLogStore.h"
 #include "rocksdb/db.h"

@@ -10,9 +10,9 @@
 #include <cstdlib>
 
 #include "logdevice/common/MetaDataLog.h"
+#include "logdevice/common/Worker.h"
 #include "logdevice/common/protocol/ProtocolReader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
-#include "logdevice/common/Worker.h"
 
 namespace facebook { namespace logdevice {
 

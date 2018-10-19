@@ -14,14 +14,13 @@
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/program_options.hpp>
-
-#include <folly/Optional.h>
 #include <folly/Format.h>
+#include <folly/Optional.h>
 
-#include "logdevice/include/EnumMap.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/common/util.h"
+#include "logdevice/include/EnumMap.h"
 
 /**
  * @file SettingsUpdater.h

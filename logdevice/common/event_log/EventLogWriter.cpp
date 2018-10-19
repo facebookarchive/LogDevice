@@ -15,10 +15,10 @@
 #include "logdevice/common/EventLoop.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/RebuildingTypes.h"
-#include "logdevice/common/types_internal.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/WorkerCallbackHelper.h"
 #include "logdevice/common/event_log/EventLogRecord.h"
+#include "logdevice/common/types_internal.h"
 
 namespace facebook { namespace logdevice {
 

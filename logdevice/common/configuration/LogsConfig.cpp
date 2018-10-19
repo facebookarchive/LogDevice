@@ -7,9 +7,9 @@
  */
 #include "LogsConfig.h"
 
-#include <folly/synchronization/Baton.h>
 #include <folly/dynamic.h>
 #include <folly/json.h>
+#include <folly/synchronization/Baton.h>
 
 #include "logdevice/common/configuration/LocalLogsConfig.h"
 #include "logdevice/common/configuration/SecurityConfig.h"

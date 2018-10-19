@@ -5,27 +5,23 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include <cstdlib>
 #include <err.h>
-#include <unistd.h>
 #include <fcntl.h>
-
-#include <sys/types.h>
-#include <sys/socket.h>
-
-#include <thread>
 #include <iostream>
 #include <memory>
-#include <cstdlib>
+#include <thread>
+#include <unistd.h>
+
+#include <folly/Benchmark.h>
+#include <folly/ScopeGuard.h>
+#include <gflags/gflags.h>
+#include <sys/socket.h>
+#include <sys/types.h>
 
 #include "event2/buffer.h"
 #include "event2/bufferevent.h"
 #include "event2/event.h"
-
-#include <folly/Benchmark.h>
-#include <folly/ScopeGuard.h>
-
-#include <gflags/gflags.h>
-
 #include "logdevice/common/libevent/compat.h"
 
 namespace {

@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <gtest/gtest.h>
+#include "logdevice/lib/shadow/Shadow.h"
 
 #include <algorithm>
 #include <array>
@@ -14,14 +14,15 @@
 #include <memory>
 #include <utility>
 
-#include "logdevice/common/configuration/UpdateableConfig.h"
+#include <gtest/gtest.h>
+
 #include "logdevice/common/configuration/LocalLogsConfig.h"
+#include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/include/ClientSettings.h"
 #include "logdevice/include/LogAttributes.h"
 #include "logdevice/include/debug.h"
 #include "logdevice/lib/ClientSettingsImpl.h"
-#include "logdevice/lib/shadow/Shadow.h"
 #include "logdevice/lib/shadow/ShadowClient.h"
 
 namespace facebook { namespace logdevice {

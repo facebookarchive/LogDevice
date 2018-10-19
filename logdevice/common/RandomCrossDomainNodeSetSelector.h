@@ -7,8 +7,8 @@
  */
 #pragma once
 
-#include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/common/RandomNodeSetSelector.h"
+#include "logdevice/common/configuration/NodeLocation.h"
 
 namespace facebook { namespace logdevice {
 

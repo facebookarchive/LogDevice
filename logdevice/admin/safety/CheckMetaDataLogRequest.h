@@ -10,6 +10,7 @@
 #include <chrono>
 #include <memory>
 
+#include "SafetyAPI.h"
 #include "logdevice/common/EpochMetaData.h"
 #include "logdevice/common/FailureDomainNodeSet.h"
 #include "logdevice/common/NodeSetFinder.h"
@@ -17,12 +18,9 @@
 #include "logdevice/common/ShardAuthoritativeStatusMap.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/Configuration.h"
-
-#include "logdevice/include/types.h"
-#include "logdevice/include/Record.h"
 #include "logdevice/include/Err.h"
-
-#include "SafetyAPI.h"
+#include "logdevice/include/Record.h"
+#include "logdevice/include/types.h"
 
 namespace facebook { namespace logdevice {
 

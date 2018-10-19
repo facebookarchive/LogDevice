@@ -10,12 +10,12 @@
 #include <functional>
 #include <string>
 
-#include "logdevice/include/LogTailAttributes.h"
 #include "logdevice/common/CompletionRequest.h"
 #include "logdevice/common/EpochMetaData.h"
 #include "logdevice/common/MetaDataTracer.h"
 #include "logdevice/common/TailRecord.h"
 #include "logdevice/common/types_internal.h"
+#include "logdevice/include/LogTailAttributes.h"
 
 /**
  * @file  EpochStore is an abstract class that defines the interface of an

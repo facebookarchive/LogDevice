@@ -5,14 +5,15 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/common/AppendProbeController.h"
+
 #include <chrono>
 
 #include <folly/Random.h>
 #include <gtest/gtest.h>
 
-#include "logdevice/common/AppendProbeController.h"
-#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/settings/Settings.h"
 
 using namespace facebook::logdevice;
 

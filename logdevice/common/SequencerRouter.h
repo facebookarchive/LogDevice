@@ -12,11 +12,11 @@
 
 #include "logdevice/common/ClusterState.h"
 #include "logdevice/common/Timer.h"
-#include "logdevice/common/types_internal.h"
-#include "logdevice/common/util.h"
 #include "logdevice/common/WeakRefHolder.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/ServerConfig.h"
+#include "logdevice/common/types_internal.h"
+#include "logdevice/common/util.h"
 #include "logdevice/include/Err.h"
 #include "logdevice/include/types.h"
 

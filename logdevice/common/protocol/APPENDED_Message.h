@@ -11,9 +11,7 @@
 
 #include "logdevice/common/Request.h"
 #include "logdevice/common/Timestamp.h"
-
 #include "logdevice/common/protocol/Message.h"
-
 #include "logdevice/include/types.h"
 
 namespace facebook { namespace logdevice {

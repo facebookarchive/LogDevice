@@ -8,18 +8,16 @@
 #include "ShardAuthoritativeStatus.h"
 
 #include <folly/Conv.h>
+#include <folly/json.h>
 
+#include "../Table.h"
+#include "../Utils.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/lib/ClientImpl.h"
 #include "logdevice/lib/ops/EventLogUtils.h"
 #include "logdevice/ops/ldquery/Errors.h"
-
-#include <folly/json.h>
-
-#include "../Table.h"
-#include "../Utils.h"
 
 using facebook::logdevice::Configuration;
 

@@ -6,6 +6,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "logdevice/common/configuration/NodesConfigStore.h"
+
 #include <condition_variable>
 #include <mutex>
 #include <ostream>
@@ -15,7 +17,6 @@
 #include <folly/synchronization/Baton.h>
 #include <gtest/gtest.h>
 
-#include "logdevice/common/configuration/NodesConfigStore.h"
 #include "logdevice/common/configuration/ZookeeperNodesConfigStore.h"
 #include "logdevice/common/test/InMemNodesConfigStore.h"
 #include "logdevice/common/test/ZookeeperClientInMemory.h"

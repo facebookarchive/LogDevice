@@ -14,15 +14,16 @@
 #include <string>
 #include <unordered_set>
 #include <utility>
+
 #include <folly/SharedMutex.h>
 #include <opentracing/tracer.h>
 
-#include "logdevice/common/settings/Settings.h"
-#include "logdevice/common/types_internal.h"
-#include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/buffered_writer/BufferedWriterImpl.h"
 #include "logdevice/common/configuration/LogsConfig.h"
+#include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
+#include "logdevice/common/types_internal.h"
 #include "logdevice/include/Client.h"
 #include "logdevice/include/types.h"
 #include "logdevice/lib/AppendErrorInjector.h"

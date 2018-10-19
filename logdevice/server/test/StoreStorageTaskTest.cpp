@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include <gtest/gtest.h>
+#include "logdevice/server/StoreStorageTask.h"
 
 #include <cstdint>
 #include <iterator>
@@ -14,10 +14,11 @@
 #include <vector>
 
 #include <folly/Memory.h>
+#include <gtest/gtest.h>
+
 #include "logdevice/common/protocol/STORE_Message.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/server/RecordCacheDisposal.h"
-#include "logdevice/server/StoreStorageTask.h"
 #include "logdevice/server/read_path/LogStorageStateMap.h"
 #include "logdevice/server/storage_tasks/WriteBatchStorageTask.h"
 

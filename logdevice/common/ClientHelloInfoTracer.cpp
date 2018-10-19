@@ -6,13 +6,15 @@
  * LICENSE file in the root directory of this source tree.
  */
 #include "logdevice/common/ClientHelloInfoTracer.h"
-#include "logdevice/common/Sockaddr.h"
-#include "logdevice/common/configuration/Log.h"
 
-#include <folly/String.h>
 #include <algorithm>
 #include <memory>
 #include <string>
+
+#include <folly/String.h>
+
+#include "logdevice/common/Sockaddr.h"
+#include "logdevice/common/configuration/Log.h"
 
 namespace facebook { namespace logdevice {
 

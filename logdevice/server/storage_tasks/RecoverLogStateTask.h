@@ -9,8 +9,8 @@
 
 #include <folly/Optional.h>
 
-#include "logdevice/common/debug.h"
 #include "logdevice/common/Metadata.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/server/storage_tasks/StorageTask.h"
 #include "logdevice/server/storage_tasks/StorageThreadPool.h"

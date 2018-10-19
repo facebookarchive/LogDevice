@@ -7,15 +7,17 @@
  */
 
 #include "GetTrimPointRequest.h"
+
 #include <folly/Memory.h>
+
 #include "logdevice/common/AllSequencers.h"
-#include "logdevice/common/configuration/Configuration.h"
-#include "logdevice/common/debug.h"
 #include "logdevice/common/EventLoop.h"
 #include "logdevice/common/Processor.h"
-#include "logdevice/common/protocol/GET_TRIM_POINT_Message.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/common/debug.h"
+#include "logdevice/common/protocol/GET_TRIM_POINT_Message.h"
 
 namespace facebook { namespace logdevice {
 

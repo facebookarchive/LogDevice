@@ -7,11 +7,11 @@
  */
 #pragma once
 
-#include "event2/event.h"
-#include "event2/listener.h"
 #include <memory>
 #include <vector>
 
+#include "event2/event.h"
+#include "event2/listener.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/SimpleEnumMap.h"
 #include "logdevice/common/WorkerType.h"

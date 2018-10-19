@@ -7,13 +7,14 @@
  */
 #pragma once
 
-#include <arpa/inet.h>
-#include <folly/hash/Hash.h>
-#include <folly/IPAddress.h>
-#include <folly/SocketAddress.h>
-#include <netinet/in.h>
 #include <string>
 #include <unordered_set>
+
+#include <arpa/inet.h>
+#include <folly/IPAddress.h>
+#include <folly/SocketAddress.h>
+#include <folly/hash/Hash.h>
+#include <netinet/in.h>
 
 namespace facebook { namespace logdevice {
 

@@ -8,11 +8,12 @@
 #pragma once
 
 #include <vector>
+
 #include <folly/Optional.h>
 
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
-#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/protocol/STORE_Message.h"
+#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/server/locallogstore/LocalLogStore.h"
 #include "logdevice/server/locallogstore/WriteOps.h"

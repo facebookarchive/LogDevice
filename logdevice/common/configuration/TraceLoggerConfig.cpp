@@ -6,9 +6,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 #include "logdevice/common/configuration/TraceLoggerConfig.h"
-#include "logdevice/common/ClientReadTracer.h"
 
 #include <iostream>
+
+#include "logdevice/common/ClientReadTracer.h"
 
 namespace facebook { namespace logdevice { namespace configuration {
 

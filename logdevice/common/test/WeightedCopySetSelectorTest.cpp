@@ -5,11 +5,12 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include <gtest/gtest.h>
+#include <logdevice/common/WeightedCopySetSelector.h>
 
+#include <gtest/gtest.h>
 #include <logdevice/common/FailureDomainNodeSet.h>
 #include <logdevice/common/HashBasedSequencerLocator.h>
-#include <logdevice/common/WeightedCopySetSelector.h>
+
 #include "logdevice/common/configuration/ServerConfig.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/test/CopySetSelectorTestUtil.h"

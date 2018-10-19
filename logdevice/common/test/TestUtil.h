@@ -14,6 +14,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+
 #include <folly/experimental/TestUtil.h>
 
 #include "logdevice/common/configuration/Configuration.h"
@@ -21,9 +22,9 @@
 #include "logdevice/common/protocol/MessageType.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/common/settings/util.h"
-#include "logdevice/include/debug.h"
 #include "logdevice/include/Err.h"
 #include "logdevice/include/Record.h"
+#include "logdevice/include/debug.h"
 
 namespace facebook { namespace logdevice {
 

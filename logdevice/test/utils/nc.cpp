@@ -7,8 +7,8 @@
  */
 #include "nc.h"
 
-#include <folly/io/async/AsyncSocket.h>
 #include <folly/io/async/AsyncSSLSocket.h>
+#include <folly/io/async/AsyncSocket.h>
 #include <folly/io/async/EventBase.h>
 
 namespace facebook { namespace logdevice { namespace test {

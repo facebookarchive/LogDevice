@@ -11,7 +11,6 @@
 #include <utility>
 
 #include "logdevice/common/Processor.h"
-
 #include "logdevice/common/settings/GossipSettings.h"
 #include "logdevice/server/FailureDetector.h"
 #include "logdevice/server/LocalLogFile.h"

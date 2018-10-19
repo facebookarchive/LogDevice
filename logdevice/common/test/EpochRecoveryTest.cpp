@@ -5,16 +5,17 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include <algorithm>
-#include <gtest/gtest.h>
-
 #include "logdevice/common/EpochRecovery.h"
+
+#include <algorithm>
+
+#include <gtest/gtest.h>
 
 #include "logdevice/common/DataRecordOwnsPayload.h"
 #include "logdevice/common/Mutator.h"
-#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/protocol/GAP_Message.h"
 #include "logdevice/common/protocol/MUTATED_Message.h"
+#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/stats/ServerHistograms.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/test/DigestTestUtil.h"

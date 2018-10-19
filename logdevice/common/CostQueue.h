@@ -11,6 +11,8 @@
 
 #include <folly/IntrusiveList.h>
 
+#include "logdevice/common/checks.h"
+
 /**
  * @file CostQueue: an object-intrusive deque container for objects
  *       supporting a cost() method, that sums the cost of its contents.

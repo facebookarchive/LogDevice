@@ -10,15 +10,14 @@
 #include <chrono>
 #include <type_traits>
 #include <unordered_map>
-#include <boost/noncopyable.hpp>
 
 #include <boost/make_shared.hpp>
+#include <boost/noncopyable.hpp>
 #include <boost/program_options.hpp>
 
 #include "logdevice/common/UpdateableSharedPtr.h"
-#include "logdevice/common/util.h"
-
 #include "logdevice/common/settings/UpdateableSettings-details.h"
+#include "logdevice/common/util.h"
 
 /**
  * @file UpdateableSettings.h

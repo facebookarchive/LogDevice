@@ -10,14 +10,14 @@
 
 #include <gtest/gtest.h>
 
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/Processor.h"
-#include "logdevice/common/settings/Settings.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/settings/Settings.h"
 #include "logdevice/lib/ClientBuiltinPluginProvider.h"
 #include "logdevice/lib/ClientImpl.h"
-#include "logdevice/lib/ClientSettingsImpl.h"
 #include "logdevice/lib/ClientPluginPack.h"
+#include "logdevice/lib/ClientSettingsImpl.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
 

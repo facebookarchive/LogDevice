@@ -14,12 +14,12 @@
 #include <folly/small_vector.h>
 
 #include "logdevice/common/AdminCommandTable.h"
-#include "logdevice/common/debug.h"
 #include "logdevice/common/Digest.h"
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
 #include "logdevice/common/RecordID.h"
-#include "logdevice/common/util.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/stats/Stats.h"
+#include "logdevice/common/util.h"
 #include "logdevice/server/EpochRecordCacheEntry.h"
 #include "logdevice/server/RecordCacheDependencies.h"
 

@@ -10,9 +10,9 @@
 #include <memory>
 #include <unordered_map>
 
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/EpochMetaData.h"
 #include "logdevice/common/EpochStore.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/include/types.h"
 #include "logdevice/server/locallogstore/LocalLogStore.h"
 

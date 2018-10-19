@@ -5,20 +5,19 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include <signal.h>
-
 #include <atomic>
 #include <memory>
+#include <signal.h>
 
 #include <gtest/gtest.h>
 
-#include "logdevice/include/Err.h"
 #include "logdevice/common/NoopTraceLogger.h"
-#include "logdevice/common/Request.h"
 #include "logdevice/common/Processor.h"
+#include "logdevice/common/Request.h"
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/test/TestUtil.h"
+#include "logdevice/include/Err.h"
 
 using namespace facebook::logdevice;
 

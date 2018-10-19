@@ -5,11 +5,12 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include <folly/Random.h>
-#include <gtest/gtest.h>
 #include <mutex>
 #include <string>
 #include <thread>
+
+#include <folly/Random.h>
+#include <gtest/gtest.h>
 
 #include "logdevice/common/Appender.h"
 #include "logdevice/common/configuration/Log.h"

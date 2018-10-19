@@ -8,24 +8,25 @@
 #include "ZookeeperConfigSource.h"
 
 #include <atomic>
-#include <boost/multi_index_container.hpp>
-#include <boost/multi_index/composite_key.hpp>
-#include <boost/multi_index/hashed_index.hpp>
-#include <boost/multi_index/ordered_index.hpp>
-#include <boost/multi_index/identity.hpp>
-#include <boost/multi_index/mem_fun.hpp>
 #include <condition_variable>
-#include <folly/MapUtil.h>
-#include <folly/Random.h>
 #include <mutex>
 #include <queue>
 #include <thread>
 
-#include "logdevice/common/configuration/Configuration.h"
+#include <boost/multi_index/composite_key.hpp>
+#include <boost/multi_index/hashed_index.hpp>
+#include <boost/multi_index/identity.hpp>
+#include <boost/multi_index/mem_fun.hpp>
+#include <boost/multi_index/ordered_index.hpp>
+#include <boost/multi_index_container.hpp>
+#include <folly/MapUtil.h>
+#include <folly/Random.h>
+
 #include "logdevice/common/ConstructorFailed.h"
-#include "logdevice/common/configuration/TextConfigUpdater.h"
 #include "logdevice/common/ThreadID.h"
 #include "logdevice/common/ZookeeperClient.h"
+#include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/common/configuration/TextConfigUpdater.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/include/Err.h"
 

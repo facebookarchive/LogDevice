@@ -8,9 +8,10 @@
 #define __STDC_FORMAT_MACROS
 #include "LogStorageState.h"
 
+#include <limits>
+
 #include <folly/Memory.h>
 #include <folly/ScopeGuard.h>
-#include <limits>
 
 #include "logdevice/common/AdminCommandTable.h"
 #include "logdevice/common/ExponentialBackoffTimer.h"

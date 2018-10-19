@@ -8,13 +8,13 @@
 #pragma once
 
 #include <array>
-#include <string>
 #include <memory>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
 
-#include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/common/ShardID.h"
+#include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/common/configuration/ServerConfig.h"
 
 namespace facebook { namespace logdevice {

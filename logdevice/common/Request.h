@@ -12,11 +12,11 @@
 
 #include <folly/AtomicIntrusiveLinkedList.h>
 
-#include "logdevice/include/strong_typedef.h"
 #include "logdevice/common/RequestType.h"
 #include "logdevice/common/Semaphore.h"
-#include "logdevice/common/types_internal.h"
 #include "logdevice/common/WorkerType.h"
+#include "logdevice/common/types_internal.h"
+#include "logdevice/include/strong_typedef.h"
 
 namespace facebook { namespace logdevice {
 

@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include <gtest/gtest.h>
+#include "logdevice/server/storage/CachedDigest.h"
 
 #include <chrono>
 #include <memory>
@@ -15,11 +15,13 @@
 
 #include <folly/Memory.h>
 #include <folly/Random.h>
+#include <gtest/gtest.h>
 
 #include "logdevice/common/CopySet.h"
 #include "logdevice/common/DataRecordOwnsPayload.h"
-#include "logdevice/common/Timer.h"
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
+#include "logdevice/common/Timer.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/GAP_Message.h"
 #include "logdevice/common/protocol/Message.h"
 #include "logdevice/common/protocol/RECORD_Message.h"
@@ -30,9 +32,6 @@
 #include "logdevice/server/EpochRecordCacheEntry.h"
 #include "logdevice/server/RecordCacheDependencies.h"
 #include "logdevice/server/storage/AllCachedDigests.h"
-#include "logdevice/server/storage/CachedDigest.h"
-
-#include "logdevice/common/debug.h"
 
 namespace facebook { namespace logdevice {
 

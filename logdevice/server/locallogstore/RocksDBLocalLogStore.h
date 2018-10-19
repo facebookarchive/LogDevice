@@ -8,8 +8,8 @@
 #pragma once
 
 #include <atomic>
-#include <cstdlib>
 #include <chrono>
+#include <cstdlib>
 #include <mutex>
 #include <string>
 #include <utility>
@@ -22,14 +22,12 @@
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/stats/Stats.h"
-#include "logdevice/server/locallogstore/IteratorTracker.h"
-
 #include "logdevice/include/types.h"
-
-#include "logdevice/server/locallogstore/RocksDBLogStoreBase.h"
-#include "logdevice/server/locallogstore/RocksDBWriter.h"
+#include "logdevice/server/locallogstore/IteratorTracker.h"
 #include "logdevice/server/locallogstore/RocksDBKeyFormat.h"
+#include "logdevice/server/locallogstore/RocksDBLogStoreBase.h"
 #include "logdevice/server/locallogstore/RocksDBLogStoreConfig.h"
+#include "logdevice/server/locallogstore/RocksDBWriter.h"
 
 namespace facebook { namespace logdevice {
 

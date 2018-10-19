@@ -7,8 +7,8 @@
  */
 #pragma once
 
-#include "logdevice/common/Timer.h"
 #include "logdevice/common/ExponentialBackoffTimer.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/protocol/NODE_STATS_Message.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/lib/NodeStatsMessageCallback.h"

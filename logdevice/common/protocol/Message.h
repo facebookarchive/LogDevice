@@ -8,20 +8,19 @@
 #pragma once
 
 #include <cstddef>
-#include <folly/dynamic.h>
 #include <limits>
+
+#include <folly/dynamic.h>
 
 #include "logdevice/common/PriorityMap.h"
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/configuration/TrafficClass.h"
-#include "logdevice/common/types_internal.h"
-
 #include "logdevice/common/protocol/Compatibility.h"
 #include "logdevice/common/protocol/MessageTracer.h"
 #include "logdevice/common/protocol/MessageType.h"
 #include "logdevice/common/protocol/ProtocolHeader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
-
+#include "logdevice/common/types_internal.h"
 #include "logdevice/include/Err.h"
 
 namespace facebook { namespace logdevice {

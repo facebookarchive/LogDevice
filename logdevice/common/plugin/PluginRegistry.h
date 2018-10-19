@@ -7,16 +7,17 @@
  */
 #pragma once
 
-#include <folly/Synchronized.h>
 #include <memory>
 #include <string>
 #include <type_traits>
 #include <unordered_map>
 
+#include <folly/Synchronized.h>
+
+#include "logdevice/common/UpdateableSharedPtr.h"
 #include "logdevice/common/checks.h"
 #include "logdevice/common/plugin/Plugin.h"
 #include "logdevice/common/plugin/PluginProvider.h"
-#include "logdevice/common/UpdateableSharedPtr.h"
 
 namespace folly {
 struct dynamic;

@@ -14,8 +14,8 @@
 
 #include "logdevice/common/AppendRequest.h"
 #include "logdevice/common/configuration/Configuration.h"
-#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/settings/Settings.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
 

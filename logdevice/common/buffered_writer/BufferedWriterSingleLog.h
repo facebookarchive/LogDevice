@@ -21,8 +21,8 @@
 #include "logdevice/common/ExponentialBackoffTimer.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/SimpleEnumMap.h"
-#include "logdevice/common/types_internal.h"
 #include "logdevice/common/buffered_writer/BufferedWriteDecoderImpl.h"
+#include "logdevice/common/types_internal.h"
 #include "logdevice/include/BufferedWriter.h"
 
 class ProcessorTestProxy;

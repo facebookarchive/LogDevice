@@ -8,6 +8,7 @@
 #include "TrimRequest.h"
 
 #include <folly/Memory.h>
+
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/SyncSequencerRequest.h"

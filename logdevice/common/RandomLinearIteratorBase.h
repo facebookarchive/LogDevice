@@ -10,8 +10,8 @@
 #include <memory>
 #include <random>
 
-#include "logdevice/common/debug.h"
 #include "logdevice/common/Random.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/types_internal.h"
 
 namespace facebook { namespace logdevice {

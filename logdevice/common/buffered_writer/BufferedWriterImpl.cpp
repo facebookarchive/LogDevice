@@ -10,13 +10,13 @@
 #include <folly/Memory.h>
 #include <folly/hash/Hash.h>
 
-#include "logdevice/common/debug.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Request.h"
-#include "logdevice/common/request_util.h"
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/buffered_writer/BufferedWriterShard.h"
+#include "logdevice/common/debug.h"
+#include "logdevice/common/request_util.h"
 #include "logdevice/include/Client.h"
 
 namespace facebook { namespace logdevice {

@@ -7,11 +7,10 @@
  */
 #include "LifoEventSem.h"
 
-#include <sys/eventfd.h>
-
 #include <folly/Exception.h>
 #include <folly/portability/Sockets.h>
 #include <folly/portability/Unistd.h>
+#include <sys/eventfd.h>
 
 namespace facebook { namespace logdevice { namespace detail {
 

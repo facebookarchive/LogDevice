@@ -6,15 +6,17 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "logdevice/server/RotatingFile.h"
+
 #include <atomic>
 #include <chrono>
-#include <gmock/gmock.h>
-#include <gtest/gtest.h>
 #include <mutex>
 #include <thread>
 
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
+
 #include "logdevice/common/Semaphore.h"
-#include "logdevice/server/RotatingFile.h"
 
 using namespace facebook::logdevice;
 using namespace testing;

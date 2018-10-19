@@ -14,11 +14,8 @@
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Worker.h"
-
 #include "logdevice/common/protocol/FINDKEY_REPLY_Message.h"
-
 #include "logdevice/common/stats/Stats.h"
-
 #include "logdevice/server/storage_tasks/StorageThread.h"
 #include "logdevice/server/storage_tasks/StorageThreadPool.h"
 

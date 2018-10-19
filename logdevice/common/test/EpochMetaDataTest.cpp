@@ -5,24 +5,23 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include <gtest/gtest.h>
+#include "logdevice/common/EpochMetaData.h"
 
 #include <cstdio>
 #include <cstring>
 
 #include <folly/Memory.h>
+#include <gtest/gtest.h>
 
-#include "logdevice/common/MetaDataLog.h"
-#include "logdevice/common/EpochMetaData.h"
 #include "logdevice/common/EpochMetaDataMap.h"
 #include "logdevice/common/EpochMetaDataUpdater.h"
 #include "logdevice/common/EpochStoreEpochMetaDataFormat.h"
+#include "logdevice/common/MetaDataLog.h"
 #include "logdevice/common/ZookeeperEpochStore.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/test/TestNodeSetSelector.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/include/Record.h"
-
-#include "logdevice/common/test/TestNodeSetSelector.h"
 
 namespace facebook { namespace logdevice {
 

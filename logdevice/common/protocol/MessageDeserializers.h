@@ -7,8 +7,8 @@
  */
 #pragma once
 
-#include "MessageType.h"
 #include "Message.h"
+#include "MessageType.h"
 #include "logdevice/include/EnumMap.h"
 
 namespace facebook { namespace logdevice {

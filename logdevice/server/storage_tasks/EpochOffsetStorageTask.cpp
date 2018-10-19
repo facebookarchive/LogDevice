@@ -10,8 +10,8 @@
 
 #include <memory>
 
-#include "logdevice/common/debug.h"
 #include "logdevice/common/Processor.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/RECORD_Message.h"
 #include "logdevice/include/Err.h"
 #include "logdevice/include/types.h"

@@ -7,7 +7,10 @@
  */
 #pragma once
 
+#include <cstddef>
+#include <iterator>
 #include <type_traits>
+#include <utility>
 
 /**
  * @file An adapter around std containers which provides a `compact()' method

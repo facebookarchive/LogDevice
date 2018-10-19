@@ -7,6 +7,7 @@
  */
 
 #include "GET_TRIM_POINT_REPLY_Message.h"
+
 #include "logdevice/common/GetTrimPointRequest.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Worker.h"

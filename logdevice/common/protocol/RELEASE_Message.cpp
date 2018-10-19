@@ -11,12 +11,12 @@
 
 #include "logdevice/common/Address.h"
 #include "logdevice/common/AllSequencers.h"
-#include "logdevice/common/debug.h"
 #include "logdevice/common/MetaDataLogWriter.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Sequencer.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/include/Err.h"
 
 namespace facebook { namespace logdevice {

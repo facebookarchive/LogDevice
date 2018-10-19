@@ -10,9 +10,9 @@
 #include <cstddef>
 #include <vector>
 
+#include "logdevice/common/StorageTask-enums.h"
 #include "logdevice/common/stats/Histogram.h"
 #include "logdevice/common/stats/HistogramBundle.h"
-#include "logdevice/common/StorageTask-enums.h"
 
 namespace facebook { namespace logdevice {
 

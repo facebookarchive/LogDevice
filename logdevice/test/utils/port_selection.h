@@ -7,11 +7,12 @@
  */
 #pragma once
 
-#include <boost/noncopyable.hpp>
 #include <memory>
 #include <unistd.h>
 #include <utility>
 #include <vector>
+
+#include <boost/noncopyable.hpp>
 
 #include "logdevice/common/checks.h"
 

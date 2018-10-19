@@ -7,9 +7,10 @@
  */
 #pragma once
 
-#include <folly/dynamic.h>
-#include <folly/Optional.h>
 #include <memory>
+
+#include <folly/Optional.h>
+#include <folly/dynamic.h>
 
 #include "logdevice/common/PrincipalIdentity.h"
 #include "logdevice/common/SampledTracer.h"

@@ -8,7 +8,9 @@
 #pragma once
 
 #include <initializer_list>
+
 #include <folly/Likely.h>
+#include <folly/Portability.h>
 
 namespace facebook { namespace logdevice { namespace dbg {
 

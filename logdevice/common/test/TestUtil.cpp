@@ -15,9 +15,6 @@
 #include <fstream>
 #include <ifaddrs.h>
 #include <memory>
-#include <sys/stat.h>
-#include <sys/time.h>
-#include <sys/types.h>
 #include <thread>
 #include <unistd.h>
 
@@ -25,20 +22,24 @@
 #include <folly/Memory.h>
 #include <folly/String.h>
 #include <folly/dynamic.h>
-#include <folly/json.h>
 #include <folly/experimental/TestUtil.h>
-#include "logdevice/common/Timer.h"
+#include <folly/json.h>
+#include <sys/stat.h>
+#include <sys/time.h>
+#include <sys/types.h>
+
+#include "logdevice/common/LegacyPluginPack.h"
 #include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/PermissionChecker.h"
-#include "logdevice/common/LegacyPluginPack.h"
 #include "logdevice/common/PrincipalParser.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/ReaderImpl.h"
 #include "logdevice/common/SequencerLocator.h"
-#include "logdevice/common/settings/Settings.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/configuration/ConfigParser.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/MessageTypeNames.h"
+#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/util.h"
 #include "logdevice/include/Reader.h"
 

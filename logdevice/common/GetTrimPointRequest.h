@@ -8,10 +8,10 @@
 
 #pragma once
 
-#include "logdevice/common/configuration/Configuration.h"
-#include "logdevice/common/Timer.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/RequestType.h"
+#include "logdevice/common/Timer.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/protocol/GET_TRIM_POINT_Message.h"
 #include "logdevice/common/protocol/GET_TRIM_POINT_REPLY_Message.h"
 #include "logdevice/include/types.h"

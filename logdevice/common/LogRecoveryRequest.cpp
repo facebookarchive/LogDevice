@@ -19,10 +19,10 @@
 #include "logdevice/common/MetaDataLogWriter.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Sequencer.h"
-#include "logdevice/common/settings/Settings.h"
-#include "logdevice/common/util.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/stats/ServerHistograms.h"
+#include "logdevice/common/util.h"
 
 namespace facebook { namespace logdevice {
 

@@ -14,11 +14,10 @@
 #include <unordered_map>
 
 #include "event2/bufferevent.h"
-
+#include "logdevice/common/SSLFetcher.h"
 #include "logdevice/common/Sockaddr.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/stats/Stats.h"
-#include "logdevice/common/SSLFetcher.h"
 #include "logdevice/server/AdminCommandFactory.h"
 #include "logdevice/server/Listener.h"
 #include "logdevice/server/ServerSettings.h"

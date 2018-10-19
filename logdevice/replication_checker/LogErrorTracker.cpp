@@ -12,9 +12,8 @@
 #include <sstream>
 
 #include <boost/tokenizer.hpp>
-
-#include <folly/container/Array.h>
 #include <folly/Bits.h>
+#include <folly/container/Array.h>
 
 #include "logdevice/common/checks.h"
 

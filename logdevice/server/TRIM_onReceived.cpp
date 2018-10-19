@@ -9,13 +9,13 @@
 
 #include <string>
 
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/Metadata.h"
 #include "logdevice/common/PermissionChecker.h"
 #include "logdevice/common/PrincipalIdentity.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/UpdateableSecurityInfo.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/protocol/TRIMMED_Message.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/server/AuditLogFile.h"

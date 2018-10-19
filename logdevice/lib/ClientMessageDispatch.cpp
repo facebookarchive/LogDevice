@@ -8,12 +8,12 @@
 #include "ClientMessageDispatch.h"
 
 #include "logdevice/common/debug.h"
-#include "logdevice/common/util.h"
 #include "logdevice/common/protocol/MessageTypeNames.h"
-#include "logdevice/common/protocol/STORE_Message.h"
 #include "logdevice/common/protocol/STORED_Message.h"
-#include "logdevice/lib/NODE_STATS_onSent.h"
+#include "logdevice/common/protocol/STORE_Message.h"
+#include "logdevice/common/util.h"
 #include "logdevice/lib/NODE_STATS_REPLY_onReceived.h"
+#include "logdevice/lib/NODE_STATS_onSent.h"
 
 namespace facebook { namespace logdevice {
 

@@ -8,17 +8,18 @@
 #pragma once
 
 #include <set>
-#include <folly/SharedMutex.h>
-#include <folly/Conv.h>
 
-#include "logdevice/include/types.h"
+#include <folly/Conv.h>
+#include <folly/SharedMutex.h>
+
+#include "logdevice/common/FireAndForgetRequest.h"
 #include "logdevice/common/Metadata.h"
 #include "logdevice/common/Request.h"
-#include "logdevice/common/ShardID.h"
-#include "logdevice/common/FireAndForgetRequest.h"
 #include "logdevice/common/RequestType.h"
+#include "logdevice/common/ShardID.h"
 #include "logdevice/common/Timer.h"
 #include "logdevice/common/protocol/DELETE_LOG_METADATA_Message.h"
+#include "logdevice/include/types.h"
 
 namespace facebook { namespace logdevice {
 

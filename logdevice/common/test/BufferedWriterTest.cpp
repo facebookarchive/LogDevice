@@ -5,22 +5,24 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/include/BufferedWriter.h"
+
 #include <random>
+
 #include <folly/Memory.h>
 #include <gtest/gtest.h>
 
 #include "logdevice/common/DataRecordOwnsPayload.h"
-#include "logdevice/common/debug.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Request.h"
-#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/buffered_writer/BufferedWriteDecoderImpl.h"
 #include "logdevice/common/buffered_writer/BufferedWriterImpl.h"
 #include "logdevice/common/buffered_writer/BufferedWriterSingleLog.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/RECORD_Message.h"
+#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/settings/util.h"
 #include "logdevice/common/test/TestUtil.h"
-#include "logdevice/include/BufferedWriter.h"
 
 /**
  * @file Unit tests for BufferedWriter.  Outgoing (batched) appends are

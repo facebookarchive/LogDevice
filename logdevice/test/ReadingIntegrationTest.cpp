@@ -9,14 +9,14 @@
 #include <memory>
 #include <thread>
 
-#include <folly/hash/Checksum.h>
 #include <folly/Random.h>
+#include <folly/hash/Checksum.h>
 #include <gtest/gtest.h>
 
-#include "logdevice/common/configuration/Configuration.h"
-#include "logdevice/common/Timer.h"
-#include "logdevice/common/ReaderImpl.h"
 #include "logdevice/common/ReadStreamAttributes.h"
+#include "logdevice/common/ReaderImpl.h"
+#include "logdevice/common/Timer.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Client.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"

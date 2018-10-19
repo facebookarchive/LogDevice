@@ -14,8 +14,8 @@
 #include <folly/AtomicIntrusiveLinkedList.h>
 
 #include "logdevice/common/CopySet.h"
-#include "logdevice/common/types_internal.h"
 #include "logdevice/common/ZeroCopiedRecord.h"
+#include "logdevice/common/types_internal.h"
 
 namespace facebook { namespace logdevice {
 

@@ -8,9 +8,9 @@
 #define __STDC_FORMAT_MACROS // pull in PRIu64 etc
 #include "LocalLogStoreRecordFormat.h"
 
-#include <folly/hash/Hash.h>
 #include <folly/Range.h>
 #include <folly/Varint.h>
+#include <folly/hash/Hash.h>
 
 #include "logdevice/common/Checksum.h"
 #include "logdevice/common/CopySet.h"

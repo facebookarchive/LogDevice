@@ -7,11 +7,10 @@
  */
 #pragma once
 
-#include "logdevice/common/Timestamp.h"
-
 #include <chrono>
 
 #include "folly/Optional.h"
+#include "logdevice/common/Timestamp.h"
 
 /**
  * @file Implementation of a variable value that grows multiplicatively upon

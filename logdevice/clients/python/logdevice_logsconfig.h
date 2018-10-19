@@ -8,12 +8,13 @@
 #pragma once
 
 #include <boost/python.hpp>
+
+#include "logdevice/clients/python/util/util.h"
 #include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/include/Client.h"
 #include "logdevice/include/LogAttributes.h"
 #include "logdevice/include/LogsConfigTypes.h"
 #include "logdevice/include/debug.h"
-#include "logdevice/clients/python/util/util.h"
 
 namespace facebook { namespace logdevice { namespace logsconfig {
 

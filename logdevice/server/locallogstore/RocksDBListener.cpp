@@ -11,9 +11,9 @@
 
 #include <folly/Conv.h>
 
+#include "logdevice/common/LocalLogStoreRecordFormat.h"
 #include "logdevice/common/commandline_util_chrono.h"
 #include "logdevice/common/debug.h"
-#include "logdevice/common/LocalLogStoreRecordFormat.h"
 #include "logdevice/server/locallogstore/RocksDBKeyFormat.h"
 
 namespace facebook { namespace logdevice {

@@ -8,20 +8,18 @@
 #define __STDC_FORMAT_MACROS
 #include "CommandListener.h"
 
-#include <folly/String.h>
 #include <pthread.h>
+
 #include <boost/token_functions.hpp>
-
-#include "event2/event.h"
-#include "event2/util.h"
-#include "event2/bufferevent.h"
-#include "event2/bufferevent_ssl.h"
-
 #include <folly/Memory.h>
 #include <folly/Optional.h>
-
+#include <folly/String.h>
 #include <rocksdb/statistics.h>
 
+#include "event2/bufferevent.h"
+#include "event2/bufferevent_ssl.h"
+#include "event2/event.h"
+#include "event2/util.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/RequestType.h"
 #include "logdevice/common/Semaphore.h"

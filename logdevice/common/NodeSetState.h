@@ -12,13 +12,13 @@
 #include <limits>
 #include <unordered_map>
 
-#include "logdevice/common/types_internal.h"
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/ShardID.h"
-#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/settings/Settings.h"
+#include "logdevice/common/types_internal.h"
 
 namespace facebook { namespace logdevice {
 

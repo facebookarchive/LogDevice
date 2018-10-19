@@ -5,29 +5,28 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include <gflags/gflags.h>
-#include <gtest/gtest.h>
+#include "logdevice/common/stats/Stats.h"
 
 #include <array>
 #include <atomic>
 #include <condition_variable>
 #include <mutex>
 #include <thread>
-#include <vector>
-
 #include <unistd.h>
+#include <vector>
 
 #include <folly/Benchmark.h>
 #include <folly/Random.h>
 #include <folly/ScopeGuard.h>
 #include <folly/ThreadCachedInt.h>
 #include <folly/stats/BucketedTimeSeries.h>
+#include <gflags/gflags.h>
+#include <gtest/gtest.h>
 
 #include "logdevice/common/ClientID.h"
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/stats/ClientHistograms.h"
 #include "logdevice/common/stats/Histogram.h"
-#include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/test/TestUtil.h"
 
 using namespace facebook::logdevice;

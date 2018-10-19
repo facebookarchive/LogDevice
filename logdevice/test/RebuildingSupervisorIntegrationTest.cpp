@@ -7,8 +7,8 @@
  */
 #include <gtest/gtest.h>
 
-#include "logdevice/common/debug.h"
 #include "logdevice/common/configuration/ConfigParser.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/event_log/EventLogStateMachine.h"
 #include "logdevice/include/Client.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"

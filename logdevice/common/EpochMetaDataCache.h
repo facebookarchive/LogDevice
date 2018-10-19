@@ -8,11 +8,11 @@
 #pragma once
 
 #include <utility>
-#include <boost/noncopyable.hpp>
 
+#include <boost/noncopyable.hpp>
+#include <folly/SharedMutex.h>
 #include <folly/container/EvictingCacheMap.h>
 #include <folly/hash/Hash.h>
-#include <folly/SharedMutex.h>
 
 #include "logdevice/common/EpochMetaData.h"
 #include "logdevice/common/MetaDataLogReader.h"

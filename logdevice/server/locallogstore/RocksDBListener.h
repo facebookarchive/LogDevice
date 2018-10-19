@@ -10,14 +10,13 @@
 #include <queue>
 
 #include <folly/ThreadLocal.h>
-
 #include <rocksdb/listener.h>
 #include <rocksdb/version.h>
 
 #include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/stats/PerShardHistograms.h"
 #include "logdevice/common/stats/Stats.h"
-#include "logdevice/common/configuration/UpdateableConfig.h"
 
 namespace facebook { namespace logdevice {
 

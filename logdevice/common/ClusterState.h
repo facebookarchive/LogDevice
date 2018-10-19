@@ -8,17 +8,18 @@
 #pragma once
 
 #include <atomic>
-#include <memory>
 #include <chrono>
 #include <condition_variable>
-#include <vector>
 #include <list>
-#include "logdevice/common/NodeID.h"
-#include "logdevice/common/types_internal.h"
-#include "logdevice/common/UpdateableSharedPtr.h"
-#include "logdevice/include/Err.h"
+#include <memory>
+#include <vector>
 
 #include <folly/SharedMutex.h>
+
+#include "logdevice/common/NodeID.h"
+#include "logdevice/common/UpdateableSharedPtr.h"
+#include "logdevice/common/types_internal.h"
+#include "logdevice/include/Err.h"
 
 /**
  * @file ClusterState provides an interface to query whether a node is dead or

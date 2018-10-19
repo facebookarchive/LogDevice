@@ -8,9 +8,9 @@
 #include "ServerProcessor.h"
 
 #include "logdevice/common/EventLoopHandle.h"
-#include "logdevice/server/FailureDetector.h"
 #include "logdevice/common/UpdateableSecurityInfo.h"
 #include "logdevice/common/stats/Stats.h"
+#include "logdevice/server/FailureDetector.h"
 #include "logdevice/server/storage/PurgeCoordinator.h"
 #include "logdevice/server/storage_tasks/ShardedStorageThreadPool.h"
 

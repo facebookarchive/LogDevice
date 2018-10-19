@@ -8,9 +8,8 @@
 #include <gflags/gflags.h>
 #include <gtest/gtest.h>
 
-#include "logdevice/include/Err.h"
-
 #include "logdevice/common/debug.h"
+#include "logdevice/include/Err.h"
 
 using namespace facebook::logdevice;
 using ErrorCodeInfoMap = EnumMap<E, ErrorCodeInfo, E::UNKNOWN>;

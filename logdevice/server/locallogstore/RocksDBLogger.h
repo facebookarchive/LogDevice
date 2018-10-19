@@ -7,9 +7,9 @@
  */
 #pragma once
 
-#include "logdevice/common/debug.h"
-
 #include <rocksdb/db.h>
+
+#include "logdevice/common/debug.h"
 
 namespace facebook { namespace logdevice {
 

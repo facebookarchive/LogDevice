@@ -13,13 +13,13 @@
 #include <folly/Range.h>
 
 #include "logdevice/common/NodeID.h"
+#include "logdevice/common/OffsetMap.h"
 #include "logdevice/common/ShardID.h"
-#include "logdevice/common/types_internal.h"
 #include "logdevice/common/protocol/RECORD_Message.h"
 #include "logdevice/common/protocol/STORE_Message.h"
+#include "logdevice/common/types_internal.h"
 #include "logdevice/include/Record.h"
 #include "logdevice/include/types.h"
-#include "logdevice/common/OffsetMap.h"
 
 /**
  * @file

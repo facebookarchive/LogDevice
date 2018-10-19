@@ -5,17 +5,17 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "GetLogInfoRequest.h"
-
 #include <folly/Memory.h>
 #include <folly/Random.h>
-#include "logdevice/common/configuration/Configuration.h"
+
+#include "GetLogInfoRequest.h"
 #include "logdevice/common/EventLoop.h"
 #include "logdevice/common/GetLogInfoRequest.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Sender.h"
-#include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/LOGS_CONFIG_API_Message.h"
 

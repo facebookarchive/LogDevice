@@ -14,10 +14,9 @@
 #include "logdevice/common/MetaDataLogReader.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/Worker.h"
-
-#include "logdevice/include/types.h"
-#include "logdevice/include/Record.h"
 #include "logdevice/include/Err.h"
+#include "logdevice/include/Record.h"
+#include "logdevice/include/types.h"
 
 namespace facebook { namespace logdevice {
 

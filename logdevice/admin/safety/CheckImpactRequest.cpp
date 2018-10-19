@@ -8,8 +8,8 @@
 #include "logdevice/admin/safety/CheckImpactRequest.h"
 
 #include "logdevice/admin/safety/CheckMetaDataLogRequest.h"
-#include "logdevice/common/Timer.h"
 #include "logdevice/common/Processor.h"
+#include "logdevice/common/Timer.h"
 
 using namespace facebook::logdevice::configuration;
 

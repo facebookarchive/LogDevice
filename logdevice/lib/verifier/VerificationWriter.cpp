@@ -7,13 +7,12 @@
  */
 #include "logdevice/lib/verifier/VerificationWriter.h"
 
-#include <chrono>
-#include <unordered_map>
-#include <memory>
 #include <algorithm>
+#include <chrono>
+#include <memory>
+#include <unordered_map>
 
 #include <boost/algorithm/string.hpp>
-
 #include <folly/Memory.h>
 #include <folly/Random.h>
 

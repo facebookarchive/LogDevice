@@ -5,19 +5,20 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/common/Checksum.h"
+
 #include <memory>
-#include <gtest/gtest.h>
 
 #include <folly/ScopeGuard.h>
+#include <gtest/gtest.h>
 
 #include "event2/buffer.h"
-#include "logdevice/common/Checksum.h"
-#include "logdevice/common/util.h"
 #include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/protocol/APPEND_Message.h"
 #include "logdevice/common/protocol/ProtocolReader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
 #include "logdevice/common/protocol/RECORD_Message.h"
+#include "logdevice/common/util.h"
 
 namespace facebook { namespace logdevice {
 

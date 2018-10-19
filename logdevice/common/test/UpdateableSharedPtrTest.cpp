@@ -5,12 +5,13 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/common/UpdateableSharedPtr.h"
+
 #include <atomic>
 #include <random>
 #include <thread>
-#include <gtest/gtest.h>
 
-#include "logdevice/common/UpdateableSharedPtr.h"
+#include <gtest/gtest.h>
 
 #include "logdevice/common/checks.h"
 

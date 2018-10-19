@@ -8,12 +8,12 @@
 #pragma once
 #include <functional>
 
-#include "logdevice/include/types.h"
+#include "logdevice/common/NodeSetAccessor.h"
 #include "logdevice/common/Timer.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
-#include "logdevice/common/NodeSetAccessor.h"
 #include "logdevice/common/test/MockBackoffTimer.h"
+#include "logdevice/include/types.h"
 
 namespace facebook { namespace logdevice {
 

@@ -5,17 +5,19 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/common/FindKeyRequest.h"
+
 #include <functional>
-#include <gtest/gtest.h>
 
 #include <folly/Memory.h>
-#include "logdevice/common/FindKeyRequest.h"
-#include "logdevice/common/settings/Settings.h"
+#include <gtest/gtest.h>
+
 #include "logdevice/common/configuration/LocalLogsConfig.h"
 #include "logdevice/common/protocol/FINDKEY_Message.h"
+#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/test/MockBackoffTimer.h"
-#include "logdevice/common/test/MockTimer.h"
 #include "logdevice/common/test/MockNodeSetAccessor.h"
+#include "logdevice/common/test/MockTimer.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/include/types.h"
 

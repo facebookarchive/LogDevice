@@ -5,23 +5,24 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/server/read_path/LocalLogStoreReader.h"
+
 #include <folly/Memory.h>
 #include <folly/Random.h>
 #include <gtest/gtest.h>
 
-#include "logdevice/common/debug.h"
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
 #include "logdevice/common/MetaDataLog.h"
-#include "logdevice/common/util.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/RECORD_Message.h"
 #include "logdevice/common/protocol/STORE_Message.h"
 #include "logdevice/common/test/TestUtil.h"
+#include "logdevice/common/util.h"
 #include "logdevice/server/locallogstore/LocalLogStore.h"
 #include "logdevice/server/locallogstore/WriteOps.h"
 #include "logdevice/server/locallogstore/test/LocalLogStoreTestReader.h"
 #include "logdevice/server/locallogstore/test/StoreUtil.h"
 #include "logdevice/server/locallogstore/test/TemporaryLogStore.h"
-#include "logdevice/server/read_path/LocalLogStoreReader.h"
 
 using namespace facebook::logdevice;
 using LocalLogStoreReader::getTailRecord;
@@ -1045,7 +1046,8 @@ TEST_P(LocalLogStoreReaderTest, NextFilteredWindowEndReached) {
 TEST_P(LocalLogStoreReaderTest, SeekFilteredCaughtUp) {
   auto store = createStore(
       {{1, 1, {N1, N2, N3, N4}}, // Filtered
-       // Record with LSN 2 still not written (last released is 1...)
+                                 // Record with LSN 2 still not written (last
+                                 // released is 1...)
        {3, 1, {N1, N2, N3, N4}}, // Filtered, and here we reaching read limit
        {4, 1, {N1, N2, N3, N4}}});
 
@@ -1076,7 +1078,8 @@ TEST_P(LocalLogStoreReaderTest, SeekFilteredCaughtUp) {
 TEST_P(LocalLogStoreReaderTest, NextFilteredCaughtUp) {
   auto store = createStore(
       {{1, 1, {N3, N2, N1, N4}}, // Shipped
-       // Record with LSN 2 still not written (last released is 1...)
+                                 // Record with LSN 2 still not written (last
+                                 // released is 1...)
        {3, 1, {N1, N2, N3, N4}}, // Filtered, and here we reach read limit
        {4, 1, {N1, N2, N3, N4}}});
 

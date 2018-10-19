@@ -7,10 +7,9 @@
  */
 #pragma once
 
-#include "logdevice/common/event_log/EventLogRebuildingSet.h"
-#include "logdevice/common/configuration/ReplicationProperty.h"
 #include "logdevice/common/ShardAuthoritativeStatusMap.h"
-
+#include "logdevice/common/configuration/ReplicationProperty.h"
+#include "logdevice/common/event_log/EventLogRebuildingSet.h"
 #include "logdevice/include/Client.h"
 
 namespace facebook { namespace logdevice { namespace EventLogUtils {

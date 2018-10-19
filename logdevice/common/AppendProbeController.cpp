@@ -7,8 +7,8 @@
  */
 #include "AppendProbeController.h"
 
-#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/util.h"
 
 namespace facebook { namespace logdevice {

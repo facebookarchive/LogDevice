@@ -7,10 +7,10 @@
  */
 #include "ConfigInit.h"
 
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/FileConfigSource.h"
 #include "logdevice/common/LegacyPluginPack.h"
 #include "logdevice/common/ServerConfigSource.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/TextConfigUpdater.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/debug.h"

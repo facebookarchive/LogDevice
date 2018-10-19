@@ -8,9 +8,9 @@
 #include "RecordCacheDisposal.h"
 
 #include "logdevice/common/MetaDataLog.h"
-#include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/ZeroCopiedRecordDisposal.h"
+#include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/server/EpochRecordCache.h"
 #include "logdevice/server/ServerProcessor.h"

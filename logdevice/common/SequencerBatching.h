@@ -8,15 +8,14 @@
 #pragma once
 
 #include <atomic>
+
 #include <folly/IntrusiveList.h>
 #include <folly/Preprocessor.h>
 
 #include "logdevice/common/ClientID.h"
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/WeakRefHolder.h"
-
 #include "logdevice/common/buffered_writer/BufferedWriterImpl.h"
-
 #include "logdevice/common/protocol/APPEND_Message.h"
 
 namespace facebook { namespace logdevice {

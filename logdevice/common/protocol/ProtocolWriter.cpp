@@ -9,11 +9,10 @@
 
 #include "event2/buffer.h"
 #include "event2/event.h"
-
+#include "logdevice/common/Checksum.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/protocol/MessageTypeNames.h"
-#include "logdevice/common/Checksum.h"
 
 namespace facebook { namespace logdevice {
 

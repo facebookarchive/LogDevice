@@ -12,9 +12,9 @@
 #include <vector>
 
 #include "logdevice/common/BackoffTimer.h"
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/ShardID.h"
+#include "logdevice/common/configuration/Configuration.h"
 
 namespace facebook { namespace logdevice {
 

@@ -9,15 +9,15 @@
 
 #include <memory>
 #include <netdb.h>
-#include <netinet/in.h>
 #include <string>
+
+#include <folly/ScopeGuard.h>
+#include <netinet/in.h>
 #include <sys/socket.h>
 
 #include "event2/event.h"
 #include "event2/listener.h"
 #include "event2/util.h"
-#include <folly/ScopeGuard.h>
-
 #include "logdevice/common/ConstructorFailed.h"
 #include "logdevice/common/Sockaddr.h"
 #include "logdevice/common/debug.h"

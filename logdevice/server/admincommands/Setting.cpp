@@ -6,10 +6,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "logdevice/server/admincommands/Setting.h"
+
 #include "logdevice/common/commandline_util_chrono.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/settings/SettingsUpdater.h"
-#include "logdevice/server/admincommands/Setting.h"
 #include "logdevice/server/ServerProcessor.h"
 
 namespace facebook { namespace logdevice {
@@ -44,6 +45,15 @@ void commands::SettingSet::run() {
                error_name(err));
       return;
     }
+  } catch (const boost::program_options::error& ex) {
+    out_.printf("Error: %s.\r\n", ex.what());
+  }
+}
+
+void commands::SettingUnset::run() {
+  try {
+    server_->getSettings().unsetFromAdminCmd(name_);
+    out_.printf("Setting \"%s\" now unset.\r\n", name_.c_str());
   } catch (const boost::program_options::error& ex) {
     out_.printf("Error: %s.\r\n", ex.what());
   }

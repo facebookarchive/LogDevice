@@ -14,12 +14,12 @@
 #include <gtest/gtest.h>
 
 #include "logdevice/common/AppendRequest.h"
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Semaphore.h"
-#include "logdevice/common/settings/Settings.h"
-#include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
+#include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/lib/ClientImpl.h"
 #include "logdevice/lib/ClientPluginPack.h"

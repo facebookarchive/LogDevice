@@ -6,8 +6,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 #include "logdevice/common/protocol/LOGS_CONFIG_API_Message.h"
-#include "logdevice/common/GetLogInfoRequest.h"
+
 #include <folly/Memory.h>
+
+#include "logdevice/common/GetLogInfoRequest.h"
 #include "logdevice/common/LogsConfigApiRequest.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Sender.h"

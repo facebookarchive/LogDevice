@@ -7,20 +7,18 @@
  */
 #pragma once
 
-#include <unordered_set>
 #include <unordered_map>
+#include <unordered_set>
 
+#include <folly/FBVector.h>
 #include <google/dense_hash_map>
 #include <google/dense_hash_set>
-#include <folly/FBVector.h>
-
-#include "logdevice/common/configuration/Node.h"
-#include "logdevice/common/configuration/ServerConfig.h"
-
-#include "logdevice/common/event_log/EventLogRecord.h"
 
 #include "logdevice/common/RebuildingTypes.h"
 #include "logdevice/common/ShardAuthoritativeStatusMap.h"
+#include "logdevice/common/configuration/Node.h"
+#include "logdevice/common/configuration/ServerConfig.h"
+#include "logdevice/common/event_log/EventLogRecord.h"
 #include "logdevice/common/types_internal.h"
 
 /**

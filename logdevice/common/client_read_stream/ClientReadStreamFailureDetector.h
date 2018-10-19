@@ -16,8 +16,8 @@
 #include <folly/stats/BucketedTimeSeries.h>
 
 #include "logdevice/common/ExponentialBackoffAdaptiveVariable.h"
-#include "logdevice/common/configuration/ReplicationProperty.h"
 #include "logdevice/common/Timestamp.h"
+#include "logdevice/common/configuration/ReplicationProperty.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 
 /**

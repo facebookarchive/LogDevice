@@ -6,6 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 #include "logdevice/common/protocol/GET_CLUSTER_STATE_REPLY_Message.h"
+
 #include "logdevice/common/GetClusterStateRequest.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/protocol/ProtocolReader.h"

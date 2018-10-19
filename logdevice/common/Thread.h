@@ -11,9 +11,8 @@
 // Let me know if you want me to make that change.
 
 #include <atomic>
-#include <string>
-
 #include <pthread.h>
+#include <string>
 
 #include <folly/CppAttributes.h>
 

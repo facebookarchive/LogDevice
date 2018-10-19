@@ -6,10 +6,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "logdevice/common/membership/SequencerMembership.h"
+
 #include <gtest/gtest.h>
 
 #include "logdevice/common/NodeID.h"
-#include "logdevice/common/membership/SequencerMembership.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/test/TestUtil.h"
 

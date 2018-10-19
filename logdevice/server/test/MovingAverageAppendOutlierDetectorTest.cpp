@@ -6,12 +6,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <gtest/gtest.h>
-#include <gmock/gmock.h>
+#include "logdevice/server/sequencer_boycotting/MovingAverageAppendOutlierDetector.h"
 
 #include <random>
 
-#include "logdevice/server/sequencer_boycotting/MovingAverageAppendOutlierDetector.h"
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
 
 using namespace facebook::logdevice;
 using namespace std::literals::chrono_literals;

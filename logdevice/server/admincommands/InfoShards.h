@@ -7,11 +7,10 @@
  */
 #pragma once
 
+#include "logdevice/common/AdminCommandTable.h"
 #include "logdevice/server/AdminCommand.h"
 #include "logdevice/server/locallogstore/FailingLocalLogStore.h"
 #include "logdevice/server/locallogstore/ShardedRocksDBLocalLogStore.h"
-
-#include "logdevice/common/AdminCommandTable.h"
 
 namespace facebook { namespace logdevice { namespace commands {
 

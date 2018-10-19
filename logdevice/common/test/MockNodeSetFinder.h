@@ -8,12 +8,12 @@
 #pragma once
 #include <functional>
 
-#include "logdevice/include/types.h"
+#include "logdevice/common/ClusterState.h"
+#include "logdevice/common/NodeSetFinder.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/settings/Settings.h"
-#include "logdevice/common/ClusterState.h"
-#include "logdevice/common/NodeSetFinder.h"
+#include "logdevice/include/types.h"
 
 namespace facebook { namespace logdevice {
 

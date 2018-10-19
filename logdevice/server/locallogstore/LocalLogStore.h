@@ -14,25 +14,22 @@
 #include <vector>
 
 #include <boost/noncopyable.hpp>
-
 #include <folly/IntrusiveList.h>
 #include <folly/Optional.h>
 
 #include "logdevice/common/CopySet.h"
-#include "logdevice/common/settings/Durability.h"
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
 #include "logdevice/common/Metadata.h"
-#include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/common/SCDCopysetReordering.h"
 #include "logdevice/common/Timestamp.h"
-#include "logdevice/common/configuration/UpdateableConfig.h"
-#include "logdevice/common/types_internal.h"
+#include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/common/configuration/ServerConfig.h"
-
+#include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/settings/Durability.h"
+#include "logdevice/common/types_internal.h"
 #include "logdevice/include/Err.h"
 #include "logdevice/include/strong_typedef.h"
 #include "logdevice/include/types.h"
-
 #include "logdevice/server/locallogstore/IteratorTracker.h"
 
 namespace facebook { namespace logdevice {

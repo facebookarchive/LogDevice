@@ -11,8 +11,8 @@
 #include <memory>
 #include <string>
 
-#include "logdevice/common/debug.h"
 #include "logdevice/common/SampledTracer.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/include/Client.h"
 
 namespace facebook { namespace logdevice {

@@ -9,16 +9,16 @@
 
 #include <errno.h>
 #include <unistd.h>
+
+#include <folly/Memory.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
 
-#include <folly/Memory.h>
-
 #include "logdevice/common/ConstructorFailed.h"
-#include "logdevice/common/debug.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/RequestPump.h"
 #include "logdevice/common/ThreadID.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/libevent/compat.h"
 #include "logdevice/include/Err.h"
 

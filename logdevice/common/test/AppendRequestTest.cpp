@@ -5,14 +5,16 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/common/AppendRequest.h"
+
+#include <memory>
+
 #include <folly/Memory.h>
 #include <gtest/gtest.h>
-#include <memory>
 #include <opentracing/mocktracer/in_memory_recorder.h>
 #include <opentracing/mocktracer/tracer.h>
 #include <opentracing/value.h>
 
-#include "logdevice/common/AppendRequest.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/SequencerRouter.h"
 #include "logdevice/common/StaticSequencerLocator.h"

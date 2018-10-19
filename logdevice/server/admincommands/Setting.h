@@ -7,9 +7,9 @@
  */
 #pragma once
 
+#include "logdevice/common/AdminCommandTable.h"
 #include "logdevice/server/AdminCommand.h"
 #include "logdevice/server/SettingOverrideTTLRequest.h"
-#include "logdevice/common/AdminCommandTable.h"
 
 namespace facebook { namespace logdevice { namespace commands {
 
@@ -71,14 +71,7 @@ class SettingUnset : public AdminCommand {
     return "unset <name>";
   }
 
-  void run() override {
-    try {
-      server_->getSettings().unsetFromAdminCmd(name_);
-      out_.printf("Setting \"%s\" now unset.\r\n", name_.c_str());
-    } catch (const boost::program_options::error& ex) {
-      out_.printf("Error: %s.\r\n", ex.what());
-    }
-  }
+  void run() override;
 };
 
 }}} // namespace facebook::logdevice::commands

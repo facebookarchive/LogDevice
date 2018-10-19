@@ -7,13 +7,13 @@
  */
 #include <atomic>
 #include <semaphore.h>
-#include <gtest/gtest.h>
 
 #include <folly/Memory.h>
+#include <gtest/gtest.h>
 
-#include "logdevice/common/debug.h"
 #include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/Request.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/ServerWorker.h"
 #include "logdevice/server/locallogstore/LocalLogStore.h"

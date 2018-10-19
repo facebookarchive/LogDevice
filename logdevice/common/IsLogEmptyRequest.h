@@ -7,12 +7,12 @@
  */
 #pragma once
 
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/NodeSetAccessor.h"
 #include "logdevice/common/NodeSetFinder.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/RequestType.h"
 #include "logdevice/common/ShardAuthoritativeStatusMap.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/protocol/IS_LOG_EMPTY_Message.h"
 #include "logdevice/common/protocol/IS_LOG_EMPTY_REPLY_Message.h"
 #include "logdevice/include/Client.h"

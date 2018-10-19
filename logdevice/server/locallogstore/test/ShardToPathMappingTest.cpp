@@ -5,14 +5,16 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/server/locallogstore/ShardToPathMapping.h"
+
+#include <fstream>
+
 #include <boost/filesystem.hpp>
 #include <folly/Memory.h>
 #include <folly/experimental/TestUtil.h>
 #include <gtest/gtest.h>
-#include <fstream>
 
 #include "logdevice/common/debug.h"
-#include "logdevice/server/locallogstore/ShardToPathMapping.h"
 
 using namespace facebook::logdevice;
 namespace fs = boost::filesystem;

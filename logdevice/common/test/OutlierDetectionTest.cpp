@@ -5,9 +5,10 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/common/OutlierDetection.h"
+
 #include <gtest/gtest.h>
 
-#include "logdevice/common/OutlierDetection.h"
 #include "logdevice/common/ShardID.h"
 
 #define N0 ShardID(0, 0)

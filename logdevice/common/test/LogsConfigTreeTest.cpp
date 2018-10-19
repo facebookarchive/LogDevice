@@ -5,12 +5,15 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "logdevice/include/LogAttributes.h"
+#include "logdevice/common/configuration/logs/LogsConfigTree.h"
+
+#include <iostream>
+
+#include <gtest/gtest.h>
+
 #include "logdevice/common/MetaDataLog.h"
 #include "logdevice/common/configuration/logs/DefaultLogAttributes.h"
-#include "logdevice/common/configuration/logs/LogsConfigTree.h"
-#include <gtest/gtest.h>
-#include <iostream>
+#include "logdevice/include/LogAttributes.h"
 
 using namespace facebook::logdevice::logsconfig;
 using namespace facebook::logdevice;

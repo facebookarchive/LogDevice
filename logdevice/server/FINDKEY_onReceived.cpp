@@ -7,9 +7,9 @@
  */
 #include "FINDKEY_onReceived.h"
 
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/FindKeyTracer.h"
 #include "logdevice/common/Sender.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/protocol/FINDKEY_REPLY_Message.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/server/FindKeyStorageTask.h"

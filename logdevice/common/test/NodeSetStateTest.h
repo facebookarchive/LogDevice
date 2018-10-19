@@ -7,11 +7,11 @@
  */
 #pragma once
 
-#include <gtest/gtest.h>
-
 #include <memory>
 
 #include <folly/Memory.h>
+#include <gtest/gtest.h>
+
 #include "logdevice/common/NodeSetState.h"
 
 #define N0 ShardID(0, 0)

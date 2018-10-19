@@ -12,10 +12,10 @@
 #include <folly/Conv.h>
 #include <folly/Optional.h>
 
-#include "logdevice/common/debug.h"
-#include "logdevice/common/settings/Durability.h"
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
 #include "logdevice/common/Metadata.h"
+#include "logdevice/common/debug.h"
+#include "logdevice/common/settings/Durability.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/common/util.h"
 #include "logdevice/include/Record.h"

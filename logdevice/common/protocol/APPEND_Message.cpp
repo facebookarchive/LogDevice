@@ -8,25 +8,24 @@
 #define __STDC_FORMAT_MACROS
 #include "APPEND_Message.h"
 
-#include <stdlib.h>
-
 #include <algorithm>
 #include <array>
 #include <atomic>
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <stdlib.h>
 
 #include <folly/stats/MultiLevelTimeSeries.h>
 
-#include "logdevice/common/AppenderPrep.h"
 #include "logdevice/common/AppendRequest.h"
+#include "logdevice/common/AppenderPrep.h"
 #include "logdevice/common/Checksum.h"
-#include "logdevice/common/debug.h"
-#include "logdevice/common/MetaDataLogWriter.h"
 #include "logdevice/common/LegacyPluginPack.h"
+#include "logdevice/common/MetaDataLogWriter.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/ProtocolReader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
 #include "logdevice/common/stats/Stats.h"

@@ -8,8 +8,8 @@
 #include <folly/Memory.h>
 #include <gtest/gtest.h>
 
-#include "logdevice/common/debug.h"
 #include "logdevice/common/SequencerLocator.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/test/MockSequencerRouter.h"
 #include "logdevice/common/test/TestUtil.h"
 

@@ -7,10 +7,11 @@
  */
 #include "logdevice/common/ZookeeperEpochStoreRequest.h"
 
-#include "logdevice/common/Worker.h"
-#include "logdevice/include/Err.h"
-#include "logdevice/common/types_internal.h"
 #include <folly/Memory.h>
+
+#include "logdevice/common/Worker.h"
+#include "logdevice/common/types_internal.h"
+#include "logdevice/include/Err.h"
 
 namespace facebook { namespace logdevice {
 

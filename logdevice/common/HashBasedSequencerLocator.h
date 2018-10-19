@@ -7,12 +7,12 @@
  */
 #pragma once
 
-#include "logdevice/common/SequencerLocator.h"
-#include "logdevice/common/configuration/Configuration.h"
-#include "logdevice/include/types.h"
 #include "logdevice/common/ClusterState.h"
-#include "logdevice/common/settings/Settings.h"
+#include "logdevice/common/SequencerLocator.h"
 #include "logdevice/common/WeakRefHolder.h"
+#include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/common/settings/Settings.h"
+#include "logdevice/include/types.h"
 
 /**
  * @file HashBasedSequencerLocator is an implementation of the SequencerLocator

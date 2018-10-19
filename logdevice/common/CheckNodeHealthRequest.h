@@ -15,13 +15,13 @@
 #include <boost/multi_index/sequenced_index.hpp>
 #include <boost/multi_index_container.hpp>
 
-#include "logdevice/common/Timer.h"
 #include "logdevice/common/NodeSetState.h"
 #include "logdevice/common/Sender.h"
-#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/SocketCallback.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/protocol/CHECK_NODE_HEALTH_Message.h"
 #include "logdevice/common/protocol/CHECK_NODE_HEALTH_REPLY_Message.h"
+#include "logdevice/common/settings/Settings.h"
 
 namespace facebook { namespace logdevice {
 

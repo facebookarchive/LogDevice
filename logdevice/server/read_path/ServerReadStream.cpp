@@ -11,11 +11,11 @@
 #include <string>
 
 #include "logdevice/common/AdminCommandTable.h"
+#include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/debug.h"
-#include "logdevice/common/util.h"
-#include "logdevice/common/Worker.h"
 #include "logdevice/common/stats/Stats.h"
+#include "logdevice/common/util.h"
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/ServerWorker.h"
 #include "logdevice/server/read_path/CatchupQueue.h"

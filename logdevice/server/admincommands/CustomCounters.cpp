@@ -16,7 +16,6 @@
 
 #include <boost/algorithm/string.hpp>
 #include <boost/program_options/errors.hpp>
-
 #include <folly/experimental/StringKeyedUnorderedMap.h>
 
 #include "logdevice/common/commandline_util_chrono.h"

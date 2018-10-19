@@ -8,21 +8,19 @@
 #include "logdevice/lib/verifier/GenVerifyData.h"
 
 #include <chrono>
-#include <unordered_map>
 #include <exception>
-#include <string>
-#include <utility>
 #include <stdlib.h>
+#include <string.h>
+#include <string>
+#include <unordered_map>
+#include <utility>
 
 #include <boost/algorithm/string.hpp>
-
 #include <folly/Memory.h>
-
 #include <folly/hash/Hash.h>
-#include <string.h>
 
-#include "logdevice/include/Record.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
+#include "logdevice/include/Record.h"
 #include "logdevice/lib/verifier/VerificationDataStructures.h"
 
 namespace facebook { namespace logdevice {

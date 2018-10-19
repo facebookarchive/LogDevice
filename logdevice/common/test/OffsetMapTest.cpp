@@ -6,12 +6,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <gtest/gtest.h>
+#include "logdevice/common/OffsetMap.h"
 
 #include <cstring>
 #include <memory>
 
-#include "logdevice/common/OffsetMap.h"
+#include <gtest/gtest.h>
+
 #include "logdevice/common/debug.h"
 
 namespace {

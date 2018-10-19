@@ -8,9 +8,10 @@
 #pragma once
 
 #include <atomic>
-#include <folly/Preprocessor.h>
 #include <mutex>
 #include <random>
+
+#include <folly/Preprocessor.h>
 
 #include "logdevice/common/types_internal.h"
 

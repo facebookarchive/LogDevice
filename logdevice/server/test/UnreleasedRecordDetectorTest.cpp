@@ -5,6 +5,8 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/server/UnreleasedRecordDetector.h"
+
 #include <chrono>
 #include <csignal>
 #include <functional>
@@ -31,12 +33,12 @@
 #include "logdevice/common/ReaderImpl.h"
 #include "logdevice/common/Sequencer.h"
 #include "logdevice/common/SequencerLocator.h"
-#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/StaticSequencerLocator.h"
-#include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/NodesConfigParser.h"
+#include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/settings/SettingsUpdater.h"
 #include "logdevice/common/settings/util.h"
 #include "logdevice/common/test/TestUtil.h"
@@ -44,7 +46,6 @@
 #include "logdevice/include/Record.h"
 #include "logdevice/server/ConnectionListener.h"
 #include "logdevice/server/ServerProcessor.h"
-#include "logdevice/server/UnreleasedRecordDetector.h"
 #include "logdevice/server/locallogstore/LocalLogStore.h"
 #include "logdevice/server/locallogstore/test/TemporaryLogStore.h"
 #include "logdevice/server/read_path/LogStorageStateMap.h"

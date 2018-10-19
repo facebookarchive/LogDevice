@@ -7,25 +7,24 @@
  */
 #include "logdevice/common/debug.h"
 
-#include <fcntl.h>
-#include <time.h>
-#include <unistd.h>
-#include <sys/time.h>
-#include <sys/types.h>
-
 #include <chrono>
 #include <cstdarg>
 #include <cstring>
+#include <fcntl.h>
 #include <fstream>
 #include <mutex>
 #include <thread>
+#include <time.h>
+#include <unistd.h>
 
 #include <boost/program_options.hpp>
-#include <folly/container/Array.h>
 #include <folly/Format.h>
 #include <folly/ScopeGuard.h>
 #include <folly/Singleton.h>
+#include <folly/container/Array.h>
 #include <folly/synchronization/LifoSem.h>
+#include <sys/time.h>
+#include <sys/types.h>
 
 #include "logdevice/common/MPSCQueue.h"
 #include "logdevice/common/ThreadID.h"

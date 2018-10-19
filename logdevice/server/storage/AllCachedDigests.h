@@ -10,10 +10,9 @@
 #include <queue>
 #include <unordered_map>
 
-#include "logdevice/server/storage/CachedDigest.h"
-
 #include "logdevice/common/SocketCallback.h"
 #include "logdevice/common/types_internal.h"
+#include "logdevice/server/storage/CachedDigest.h"
 
 namespace facebook { namespace logdevice {
 

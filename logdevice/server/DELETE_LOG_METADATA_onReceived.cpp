@@ -7,17 +7,17 @@
  */
 #include "DELETE_LOG_METADATA_onReceived.h"
 
-#include <memory>
 #include <cstring>
+#include <memory>
 
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/configuration/ServerConfig.h"
+#include "logdevice/common/protocol/DELETE_LOG_METADATA_REPLY_Message.h"
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/ServerWorker.h"
 #include "logdevice/server/locallogstore/WriteOps.h"
-#include "logdevice/server/storage_tasks/PerWorkerStorageTaskQueue.h"
 #include "logdevice/server/storage/DeleteLogMetadataStorageTask.h"
-#include "logdevice/common/protocol/DELETE_LOG_METADATA_REPLY_Message.h"
+#include "logdevice/server/storage_tasks/PerWorkerStorageTaskQueue.h"
 
 namespace facebook { namespace logdevice {
 

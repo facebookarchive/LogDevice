@@ -7,6 +7,7 @@
  */
 
 #include "logdevice/common/WorkerType.h"
+
 #include "logdevice/common/checks.h"
 
 namespace facebook { namespace logdevice {

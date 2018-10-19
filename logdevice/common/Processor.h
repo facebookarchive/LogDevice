@@ -20,10 +20,10 @@
 
 #include "logdevice/common/ResourceBudget.h"
 #include "logdevice/common/Semaphore.h"
-#include "logdevice/common/settings/Settings.h"
-#include "logdevice/common/types_internal.h"
 #include "logdevice/common/WorkerType.h"
+#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
+#include "logdevice/common/types_internal.h"
 #include "logdevice/include/types.h"
 // Think twice before adding new includes here!  This file is included in many
 // translation units and increasing its transitive dependency footprint will

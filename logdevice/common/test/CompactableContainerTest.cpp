@@ -5,12 +5,14 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/common/CompactableContainer.h"
+
 #include <atomic>
 #include <deque>
-#include <gtest/gtest.h>
 #include <memory>
 
-#include "logdevice/common/CompactableContainer.h"
+#include <gtest/gtest.h>
+
 #include "logdevice/common/debug.h"
 
 using namespace facebook::logdevice;

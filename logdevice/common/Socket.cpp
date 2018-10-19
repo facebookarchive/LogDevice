@@ -7,40 +7,36 @@
  */
 #include "Socket.h"
 
+#include <algorithm>
 #include <errno.h>
+#include <memory>
+
+#include <folly/Random.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <openssl/err.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 
-#include <algorithm>
-#include <memory>
-
-#include <folly/Random.h>
-
 #include "event2/bufferevent_ssl.h"
 #include "event2/event.h"
-
 #include "logdevice/common/AdminCommandTable.h"
 #include "logdevice/common/BWAvailableCallback.h"
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/ConstructorFailed.h"
-#include "logdevice/common/debug.h"
 #include "logdevice/common/EventHandler.h"
 #include "logdevice/common/FlowGroup.h"
 #include "logdevice/common/LegacyPluginPack.h"
 #include "logdevice/common/PrincipalParser.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/ResourceBudget.h"
-#include "logdevice/common/Sender.h"
-#include "logdevice/common/settings/Settings.h"
-#include "logdevice/common/SocketCallback.h"
 #include "logdevice/common/SSLFetcher.h"
+#include "logdevice/common/Sender.h"
+#include "logdevice/common/SocketCallback.h"
 #include "logdevice/common/TimeoutMap.h"
 #include "logdevice/common/UpdateableSecurityInfo.h"
-#include "logdevice/common/util.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/protocol/ACK_Message.h"
 #include "logdevice/common/protocol/Compatibility.h"
@@ -52,8 +48,10 @@
 #include "logdevice/common/protocol/ProtocolReader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
 #include "logdevice/common/protocol/SHUTDOWN_Message.h"
+#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/stats/Histogram.h"
 #include "logdevice/common/stats/Stats.h"
+#include "logdevice/common/util.h"
 
 #ifdef __linux__
 #ifndef TCP_USER_TIMEOUT

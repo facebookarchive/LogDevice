@@ -5,25 +5,26 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/common/ZookeeperEpochStore.h"
+
 #include <memory>
 #include <thread>
 #include <vector>
+
+#include <gtest/gtest.h>
 
 #include "logdevice/common/EpochMetaData.h"
 #include "logdevice/common/EpochMetaDataUpdater.h"
 #include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/SetLastCleanEpochZRQ.h"
+#include "logdevice/common/Worker.h"
+#include "logdevice/common/ZookeeperClient.h"
+#include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/settings/SettingsUpdater.h"
 #include "logdevice/common/test/TestNodeSetSelector.h"
 #include "logdevice/common/test/TestUtil.h"
-#include "logdevice/common/configuration/UpdateableConfig.h"
-#include "logdevice/common/Worker.h"
-#include "logdevice/common/ZookeeperClient.h"
-#include "logdevice/common/ZookeeperEpochStore.h"
 #include "logdevice/common/test/ZookeeperClientInMemory.h"
-
-#include <gtest/gtest.h>
 
 using namespace facebook::logdevice;
 

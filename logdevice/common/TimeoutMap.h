@@ -7,13 +7,12 @@
  */
 #pragma once
 
-#include "time.h"
-
 #include <chrono>
-#include <unordered_map>
 #include <functional>
+#include <unordered_map>
 
 #include "event2/event.h"
+#include "time.h"
 
 namespace facebook { namespace logdevice {
 

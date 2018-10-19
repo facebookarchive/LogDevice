@@ -7,17 +7,18 @@
  */
 
 #include "TestUtil.h"
+
 #include "logdevice/common/EventLoopHandle.h"
-#include "logdevice/common/settings/GossipSettings.h"
 #include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/SequencerLocator.h"
 #include "logdevice/common/admin/AdminServer.h"
+#include "logdevice/common/settings/GossipSettings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/common/settings/util.h"
 #include "logdevice/server/LogStoreMonitor.h"
-#include "logdevice/server/ServerPluginPack.h"
 #include "logdevice/server/RebuildingCoordinator.h"
 #include "logdevice/server/RebuildingSupervisor.h"
+#include "logdevice/server/ServerPluginPack.h"
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/locallogstore/ShardedRocksDBLocalLogStore.h"
 #include "logdevice/server/shutdown.h"

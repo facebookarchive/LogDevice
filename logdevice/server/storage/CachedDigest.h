@@ -10,13 +10,11 @@
 #include "logdevice/common/BWAvailableCallback.h"
 #include "logdevice/common/ClientID.h"
 #include "logdevice/common/Sender.h"
-#include "logdevice/common/types_internal.h"
-
 #include "logdevice/common/protocol/GAP_Message.h"
 #include "logdevice/common/protocol/RECORD_Message.h"
-#include "logdevice/common/protocol/START_Message.h"
 #include "logdevice/common/protocol/STARTED_Message.h"
-
+#include "logdevice/common/protocol/START_Message.h"
+#include "logdevice/common/types_internal.h"
 #include "logdevice/server/EpochRecordCache.h"
 
 namespace facebook { namespace logdevice {

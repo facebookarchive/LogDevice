@@ -12,7 +12,6 @@
 #include <vector>
 
 #include <boost/algorithm/string/predicate.hpp>
-
 #include <folly/Synchronized.h>
 #include <folly/stats/BucketedTimeSeries-defs.h>
 #include <folly/stats/BucketedTimeSeries.h>

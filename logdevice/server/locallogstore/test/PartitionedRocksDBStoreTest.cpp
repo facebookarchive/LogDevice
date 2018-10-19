@@ -5,6 +5,8 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/server/locallogstore/PartitionedRocksDBStore.h"
+
 #include <algorithm>
 #include <fstream>
 #include <future>
@@ -12,27 +14,24 @@
 #include <queue>
 #include <set>
 
-#include <gtest/gtest.h>
-
-#include "rocksdb/db.h"
-#include <rocksdb/sst_file_manager.h>
-
 #include <folly/Random.h>
 #include <folly/Varint.h>
+#include <gtest/gtest.h>
+#include <rocksdb/sst_file_manager.h>
 
+#include "logdevice/common/EventLoopHandle.h"
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
 #include "logdevice/common/NodeID.h"
-#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/ThreadID.h"
 #include "logdevice/common/configuration/InternalLogs.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/settings/SettingsUpdater.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/common/util.h"
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/locallogstore/PartitionMetadata.h"
-#include "logdevice/server/locallogstore/PartitionedRocksDBStore.h"
 #include "logdevice/server/locallogstore/RocksDBCompactionFilter.h"
 #include "logdevice/server/locallogstore/RocksDBEnv.h"
 #include "logdevice/server/locallogstore/RocksDBKeyFormat.h"
@@ -40,9 +39,9 @@
 #include "logdevice/server/locallogstore/RocksDBWriterMergeOperator.h"
 #include "logdevice/server/locallogstore/WriteOps.h"
 #include "logdevice/server/locallogstore/test/TemporaryLogStore.h"
-#include "logdevice/common/EventLoopHandle.h"
 #include "logdevice/server/read_path/LogStorageStateMap.h"
 #include "logdevice/server/storage_tasks/StorageThreadPool.h"
+#include "rocksdb/db.h"
 
 using namespace facebook::logdevice;
 using RocksDBKeyFormat::CopySetIndexKey;

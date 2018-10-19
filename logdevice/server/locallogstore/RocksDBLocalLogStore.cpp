@@ -22,9 +22,9 @@
 #include <rocksdb/status.h>
 
 #include "logdevice/common/ConstructorFailed.h"
-#include "logdevice/common/debug.h"
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
 #include "logdevice/common/MetaDataLog.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/util.h"
 #include "logdevice/include/Err.h"
 #include "logdevice/server/locallogstore/IteratorSearch.h"

@@ -8,10 +8,11 @@
 #pragma once
 
 #include <folly/Optional.h>
-#include "logdevice/common/configuration/Configuration.h"
+
 #include "logdevice/common/Request.h"
 #include "logdevice/common/RequestType.h"
 #include "logdevice/common/Sender.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/protocol/MEMTABLE_FLUSHED_Message.h"
 
 namespace facebook { namespace logdevice {

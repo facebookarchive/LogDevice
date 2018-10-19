@@ -11,18 +11,16 @@
 #include <chrono>
 #include <memory>
 
-#include <folly/synchronization/Baton.h>
 #include <folly/Memory.h>
+#include <folly/synchronization/Baton.h>
 
 #include "logdevice/common/AdminCommandTable.h"
-#include "logdevice/common/debug.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Sender.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/RECORD_Message.h"
-
 #include "logdevice/include/Err.h"
 #include "logdevice/include/types.h"
-
 #include "logdevice/server/IOFaultInjection.h"
 #include "logdevice/server/ServerWorker.h"
 #include "logdevice/server/read_path/AllServerReadStreams.h"

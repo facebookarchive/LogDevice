@@ -11,13 +11,13 @@
 #include <memory>
 
 #include "logdevice/common/EventLoopHandle.h"
-#include "logdevice/common/settings/GossipSettings.h"
 #include "logdevice/common/PermissionChecker.h"
 #include "logdevice/common/PrincipalParser.h"
-#include "logdevice/common/settings/RebuildingSettings.h"
-#include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/admin/AdminServer.h"
 #include "logdevice/common/configuration/ServerConfig.h"
+#include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/settings/GossipSettings.h"
+#include "logdevice/common/settings/RebuildingSettings.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/include/ConfigSubscriptionHandle.h"
 #include "logdevice/server/CommandListener.h"

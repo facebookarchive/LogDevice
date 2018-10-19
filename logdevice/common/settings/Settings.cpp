@@ -10,20 +10,20 @@
 #include <cctype>
 #include <limits>
 #include <utility>
-
 #include <zstd.h>
+
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/program_options.hpp>
 #include <boost/thread/thread.hpp>
 #include <folly/String.h>
 
-#include "logdevice/common/commandline_util_chrono.h"
-#include "logdevice/common/debug.h"
-#include "logdevice/common/protocol/MessageTypeNames.h"
 #include "logdevice/common/FileConfigSource.h"
 #include "logdevice/common/Sockaddr.h"
+#include "logdevice/common/commandline_util_chrono.h"
 #include "logdevice/common/configuration/ZookeeperConfigSource.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/Compatibility.h"
+#include "logdevice/common/protocol/MessageTypeNames.h"
 #include "logdevice/common/settings/Validators.h"
 
 using namespace facebook::logdevice::setting_validators;

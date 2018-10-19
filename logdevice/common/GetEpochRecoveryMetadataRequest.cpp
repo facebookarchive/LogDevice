@@ -12,12 +12,12 @@
 #include <folly/CppAttributes.h>
 #include <folly/Memory.h>
 
-#include "logdevice/common/configuration/Configuration.h"
-#include "logdevice/common/Timer.h"
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
+#include "logdevice/common/Timer.h"
+#include "logdevice/common/Worker.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/protocol/GET_EPOCH_RECOVERY_METADATA_Message.h"
 #include "logdevice/common/stats/Stats.h"
-#include "logdevice/common/Worker.h"
 
 namespace facebook { namespace logdevice {
 

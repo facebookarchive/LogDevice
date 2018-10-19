@@ -7,9 +7,9 @@
  */
 #pragma once
 
-#include <folly/small_vector.h>
-
 #include <type_traits>
+
+#include <folly/small_vector.h>
 
 namespace facebook { namespace logdevice {
 

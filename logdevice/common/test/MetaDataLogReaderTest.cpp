@@ -5,6 +5,8 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/common/MetaDataLogReader.h"
+
 #include <folly/Memory.h>
 #include <folly/Optional.h>
 #include <gtest/gtest.h>
@@ -12,7 +14,6 @@
 #include "logdevice/common/DataRecordOwnsPayload.h"
 #include "logdevice/common/EpochMetaData.h"
 #include "logdevice/common/MetaDataLog.h"
-#include "logdevice/common/MetaDataLogReader.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/test/NodeSetTestUtil.h"

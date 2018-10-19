@@ -5,15 +5,17 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/server/storage_tasks/WriteStorageTask.h"
+
 #include <vector>
-#include <gtest/gtest.h>
 
 #include <folly/Memory.h>
+#include <gtest/gtest.h>
 
-#include "logdevice/common/debug.h"
 #include "logdevice/common/MetaDataLog.h"
 #include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/Request.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/ServerWorker.h"
 #include "logdevice/server/locallogstore/LocalLogStore.h"
@@ -23,7 +25,6 @@
 #include "logdevice/server/storage_tasks/ShardedStorageThreadPool.h"
 #include "logdevice/server/storage_tasks/StorageTask.h"
 #include "logdevice/server/storage_tasks/StorageThreadPool.h"
-#include "logdevice/server/storage_tasks/WriteStorageTask.h"
 #include "logdevice/server/test/TestUtil.h"
 
 using namespace facebook::logdevice;

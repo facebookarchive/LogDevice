@@ -7,11 +7,11 @@
  */
 #include "logdevice/server/RealTimeRecordBuffer.h"
 
-#include "logdevice/common/debug.h"
-#include "logdevice/common/ZeroCopiedRecord.h"
-#include "logdevice/common/stats/Stats.h"
-
 #include <folly/Format.h>
+
+#include "logdevice/common/ZeroCopiedRecord.h"
+#include "logdevice/common/debug.h"
+#include "logdevice/common/stats/Stats.h"
 
 namespace facebook { namespace logdevice {
 

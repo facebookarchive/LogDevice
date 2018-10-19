@@ -6,14 +6,15 @@
  * LICENSE file in the root directory of this source tree.
  */
 #pragma once
-#include <memory>
-#include <functional>
 #include <cmath>
-#include "logdevice/common/TraceLogger.h"
-#include "logdevice/common/debug.h"
+#include <functional>
+#include <memory>
 
 #include <folly/Optional.h>
 #include <folly/Random.h>
+
+#include "logdevice/common/TraceLogger.h"
+#include "logdevice/common/debug.h"
 
 namespace facebook { namespace logdevice {
 

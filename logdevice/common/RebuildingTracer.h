@@ -8,6 +8,7 @@
 #pragma once
 
 #include <memory>
+
 #include <folly/small_vector.h>
 
 #include "logdevice/common/CopySet.h"

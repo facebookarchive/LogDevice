@@ -5,16 +5,17 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/common/ClientIdxAllocator.h"
+
 #include <iterator>
-#include <vector>
 #include <set>
 #include <unordered_set>
+#include <vector>
 
 #include <folly/Memory.h>
 #include <folly/Random.h>
 #include <gtest/gtest.h>
 
-#include "logdevice/common/ClientIdxAllocator.h"
 #include "logdevice/common/debug.h"
 
 using namespace facebook::logdevice;

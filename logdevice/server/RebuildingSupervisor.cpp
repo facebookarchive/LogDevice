@@ -8,11 +8,10 @@
 #include "RebuildingSupervisor.h"
 
 #include <chrono>
-#include <functional>
 #include <cmath>
+#include <functional>
 
 #include "logdevice/common/AuthoritativeStatus.h"
-#include "logdevice/server/FailureDetector.h"
 #include "logdevice/common/FailureDomainNodeSet.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Request.h"
@@ -24,6 +23,7 @@
 #include "logdevice/common/event_log/EventLogRecord.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/types_internal.h"
+#include "logdevice/server/FailureDetector.h"
 
 namespace facebook { namespace logdevice {
 

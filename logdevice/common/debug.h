@@ -14,9 +14,9 @@
 
 #include <folly/Likely.h>
 
-#include "logdevice/common/checks.h"
-#include "logdevice/common/ModuleRegistry.h"
 #include "logdevice/common/EBRateLimiter.h"
+#include "logdevice/common/ModuleRegistry.h"
+#include "logdevice/common/checks.h"
 #include "logdevice/common/toString.h"
 #include "logdevice/include/debug.h"
 

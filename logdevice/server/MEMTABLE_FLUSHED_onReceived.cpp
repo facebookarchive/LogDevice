@@ -8,10 +8,10 @@
 #include "MEMTABLE_FLUSHED_onReceived.h"
 
 #include "logdevice/common/RebuildingTypes.h"
-#include "logdevice/server/storage_tasks/ShardedStorageThreadPool.h"
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/ServerWorker.h"
 #include "logdevice/server/locallogstore/MemtableFlushedRequest.h"
+#include "logdevice/server/storage_tasks/ShardedStorageThreadPool.h"
 
 namespace facebook { namespace logdevice {
 

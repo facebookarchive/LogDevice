@@ -8,6 +8,7 @@
 #pragma once
 
 #include <map>
+
 #include "logdevice/common/ShardID.h"
 #include "logdevice/common/configuration/ReplicationProperty.h"
 #include "logdevice/common/types_internal.h"

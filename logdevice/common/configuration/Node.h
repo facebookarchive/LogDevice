@@ -7,18 +7,19 @@
  */
 #pragma once
 
+#include <bitset>
 #include <chrono>
 #include <memory>
 #include <unordered_map>
 
-#include <bitset>
 #include <folly/Optional.h>
+
 #include "logdevice/common/NodeID.h"
-#include "logdevice/common/configuration/NodeLocation.h"
-#include "logdevice/common/configuration/ReplicationProperty.h"
 #include "logdevice/common/ShardID.h"
 #include "logdevice/common/Sockaddr.h"
 #include "logdevice/common/Socket-fwd.h"
+#include "logdevice/common/configuration/NodeLocation.h"
+#include "logdevice/common/configuration/ReplicationProperty.h"
 
 #define NUM_ROLES 2
 

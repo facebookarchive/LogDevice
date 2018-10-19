@@ -5,12 +5,14 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/server/FindKeyStorageTask.h"
+
 #include <deque>
-#include <gtest/gtest.h>
 #include <vector>
 
+#include <gtest/gtest.h>
+
 #include "logdevice/include/types.h"
-#include "logdevice/server/FindKeyStorageTask.h"
 #include "logdevice/server/locallogstore/test/StoreUtil.h"
 #include "logdevice/server/locallogstore/test/TemporaryLogStore.h"
 

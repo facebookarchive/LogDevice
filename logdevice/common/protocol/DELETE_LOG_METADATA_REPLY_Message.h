@@ -11,12 +11,12 @@
 
 #include "folly/Conv.h"
 #include "logdevice/common/Metadata.h"
-#include "logdevice/common/protocol/FixedSizeMessage.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/configuration/TrafficClass.h"
+#include "logdevice/common/protocol/DELETE_LOG_METADATA_Message.h"
+#include "logdevice/common/protocol/FixedSizeMessage.h"
 #include "logdevice/common/protocol/Message.h"
 #include "logdevice/common/protocol/MessageType.h"
-#include "logdevice/common/protocol/DELETE_LOG_METADATA_Message.h"
 
 namespace facebook { namespace logdevice {
 

@@ -6,8 +6,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 #pragma once
-#include <memory>
 #include <chrono>
+#include <memory>
+
 #include "logdevice/common/SampledTracer.h"
 
 namespace facebook { namespace logdevice {

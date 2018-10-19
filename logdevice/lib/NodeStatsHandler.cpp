@@ -8,9 +8,9 @@
 
 #include "NodeStatsHandler.h"
 
-#include "logdevice/common/Worker.h"
-#include "logdevice/common/Sender.h"
 #include "logdevice/common/RandomNodeSelector.h"
+#include "logdevice/common/Sender.h"
+#include "logdevice/common/Worker.h"
 
 namespace facebook { namespace logdevice {
 

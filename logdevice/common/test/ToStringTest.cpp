@@ -6,18 +6,21 @@
  * LICENSE file in the root directory of this source tree.
  */
 #include "logdevice/common/toString.h"
+
+#include <array>
+#include <deque>
+#include <forward_list>
+#include <list>
+#include <map>
+#include <set>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+
+#include <gtest/gtest.h>
+
 #include "logdevice/common/SmallMap.h"
 #include "logdevice/common/Timestamp.h"
-#include <gtest/gtest.h>
-#include <set>
-#include <map>
-#include <vector>
-#include <unordered_set>
-#include <unordered_map>
-#include <deque>
-#include <array>
-#include <list>
-#include <forward_list>
 
 using namespace facebook::logdevice;
 

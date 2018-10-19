@@ -7,9 +7,9 @@
  */
 #pragma once
 
-#include <folly/stats/MultiLevelTimeSeries.h>
 #include <folly/experimental/StringKeyedUnorderedMap.h>
 #include <folly/small_vector.h>
+#include <folly/stats/MultiLevelTimeSeries.h>
 
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/server/Server.h"

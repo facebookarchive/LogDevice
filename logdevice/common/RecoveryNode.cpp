@@ -8,6 +8,7 @@
 #include "logdevice/common/RecoveryNode.h"
 
 #include <functional>
+
 #include <folly/CppAttributes.h>
 
 #include "logdevice/common/EpochRecovery.h"

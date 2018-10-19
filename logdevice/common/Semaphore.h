@@ -12,8 +12,8 @@
 #include <memory>
 #include <semaphore.h>
 
-#include "logdevice/include/Err.h"
 #include "logdevice/common/checks.h"
+#include "logdevice/include/Err.h"
 
 namespace facebook { namespace logdevice {
 

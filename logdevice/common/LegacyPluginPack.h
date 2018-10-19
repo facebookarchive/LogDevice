@@ -7,22 +7,23 @@
  */
 #pragma once
 
-#include <boost/program_options.hpp>
 #include <chrono>
-#include <folly/Format.h>
 #include <memory>
+#include <string>
+
+#include <boost/program_options.hpp>
+#include <folly/Format.h>
 #include <opentracing/noop.h>
 #include <opentracing/tracer.h>
-#include <string>
 
 #include "logdevice/common/BuildInfo.h"
 #include "logdevice/common/PermissionChecker.h"
 #include "logdevice/common/PrincipalParser.h"
 #include "logdevice/common/SequencerLocator.h"
 #include "logdevice/common/SequencerPlacement.h"
-#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/StatsPublisher.h"
 #include "logdevice/common/admin/AdminServer.h"
+#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/settings/SettingsUpdater.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 

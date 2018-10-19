@@ -9,6 +9,7 @@
 
 #include <functional>
 #include <memory>
+
 #include <boost/intrusive/options.hpp>
 #include <boost/intrusive/unordered_set.hpp>
 

@@ -12,17 +12,15 @@
 #include <memory>
 
 #include <boost/iterator/iterator_facade.hpp>
-
 #include <folly/SharedMutex.h>
-
 #include <google/dense_hash_map>
 
 #include "logdevice/common/EpochStore.h"
 #include "logdevice/common/MetaDataLog.h"
 #include "logdevice/common/Sequencer.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
-#include "logdevice/common/util.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
+#include "logdevice/common/util.h"
 #include "logdevice/include/ConfigSubscriptionHandle.h"
 
 namespace facebook { namespace logdevice {

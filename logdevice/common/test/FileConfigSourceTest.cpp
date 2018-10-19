@@ -5,15 +5,16 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/common/FileConfigSource.h"
+
 #include <chrono>
 #include <cstdlib>
-#include <gtest/gtest.h>
-#include <unistd.h>
 #include <thread>
+#include <unistd.h>
 
 #include <folly/ScopeGuard.h>
+#include <gtest/gtest.h>
 
-#include "logdevice/common/FileConfigSource.h"
 #include "logdevice/common/FileConfigSourceThread.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/TextConfigUpdater.h"

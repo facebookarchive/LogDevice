@@ -12,14 +12,14 @@
 
 #include <folly/Optional.h>
 
+#include "logdevice/common/SCDCopysetReordering.h"
+#include "logdevice/common/Sockaddr.h"
 #include "logdevice/common/client_read_stream/ClientReadStreamFailureDetector.h"
 #include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/common/protocol/MessageType.h"
 #include "logdevice/common/settings/Durability.h"
 #include "logdevice/common/settings/SequencerBoycottingSettings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
-#include "logdevice/common/SCDCopysetReordering.h"
-#include "logdevice/common/Sockaddr.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Err.h"
 #include "logdevice/include/debug.h"

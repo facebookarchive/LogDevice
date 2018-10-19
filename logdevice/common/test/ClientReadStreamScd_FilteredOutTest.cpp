@@ -5,8 +5,9 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include <gtest/gtest.h>
 #include <numeric>
+
+#include <gtest/gtest.h>
 
 #include "logdevice/common/client_read_stream/ClientReadStreamScd.h"
 #include "logdevice/common/configuration/Configuration.h"

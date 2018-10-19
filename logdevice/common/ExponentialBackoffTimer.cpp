@@ -11,8 +11,8 @@
 
 #include <folly/Random.h>
 
-#include "logdevice/common/Worker.h"
 #include "logdevice/common/TimeoutMap.h"
+#include "logdevice/common/Worker.h"
 
 namespace facebook { namespace logdevice {
 

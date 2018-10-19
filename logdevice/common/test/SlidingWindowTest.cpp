@@ -5,16 +5,15 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include <stdlib.h>
-#include <time.h>
-
-#include <thread>
-#include <atomic>
-#include <vector>
-#include <cstdint>
 #include <algorithm>
-#include <queue>
+#include <atomic>
+#include <cstdint>
 #include <iostream>
+#include <queue>
+#include <stdlib.h>
+#include <thread>
+#include <time.h>
+#include <vector>
 
 #include <gtest/gtest.h>
 

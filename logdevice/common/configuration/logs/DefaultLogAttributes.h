@@ -6,8 +6,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 #pragma once
-#include "logdevice/include/LogAttributes.h"
 #include "logdevice/common/SlidingWindow.h"
+#include "logdevice/include/LogAttributes.h"
 
 namespace facebook { namespace logdevice { namespace logsconfig {
 /*

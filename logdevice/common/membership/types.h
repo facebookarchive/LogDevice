@@ -7,8 +7,8 @@
  */
 #pragma once
 
-#include "logdevice/include/types.h"
 #include "logdevice/common/configuration/nodes/NodeRole.h"
+#include "logdevice/include/types.h"
 
 namespace facebook { namespace logdevice { namespace membership {
 

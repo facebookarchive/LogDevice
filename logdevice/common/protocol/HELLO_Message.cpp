@@ -9,10 +9,9 @@
 
 #include <memory>
 
-#include <openssl/ssl.h>
-
-#include <folly/json.h>
 #include <folly/Optional.h>
+#include <folly/json.h>
+#include <openssl/ssl.h>
 
 #include "logdevice/common/ClientHelloInfoTracer.h"
 #include "logdevice/common/PrincipalParser.h"

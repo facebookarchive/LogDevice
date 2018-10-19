@@ -5,28 +5,23 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include <boost/filesystem.hpp>
+#include <folly/Memory.h>
 #include <gtest/gtest.h>
 
-#include <folly/Memory.h>
-#include <boost/filesystem.hpp>
-
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
 #include "logdevice/common/Metadata.h"
 #include "logdevice/common/configuration/ConfigParser.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/event_log/EventLogRecord.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/common/util.h"
-#include "logdevice/server/locallogstore/test/StoreUtil.h"
-
 #include "logdevice/include/Client.h"
 #include "logdevice/include/ClientSettings.h"
-
 #include "logdevice/lib/ops/EventLogUtils.h"
-
 #include "logdevice/server/locallogstore/ShardToPathMapping.h"
-
+#include "logdevice/server/locallogstore/test/StoreUtil.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
 

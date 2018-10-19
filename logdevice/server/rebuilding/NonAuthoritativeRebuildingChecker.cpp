@@ -7,6 +7,7 @@
  */
 
 #include "NonAuthoritativeRebuildingChecker.h"
+
 #include "logdevice/common/Request.h"
 
 namespace facebook { namespace logdevice {

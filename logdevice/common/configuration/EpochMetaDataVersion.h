@@ -7,8 +7,9 @@
  */
 #pragma once
 
-#include <folly/Optional.h>
 #include <memory>
+
+#include <folly/Optional.h>
 
 namespace facebook { namespace logdevice {
 

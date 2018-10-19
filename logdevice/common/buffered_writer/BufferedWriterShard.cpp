@@ -7,12 +7,10 @@
  */
 #include "BufferedWriterShard.h"
 
-#include "logdevice/common/debug.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Request.h"
-
 #include "logdevice/common/buffered_writer/BufferedWriterImpl.h"
-
+#include "logdevice/common/debug.h"
 #include "logdevice/common/stats/Stats.h"
 
 namespace facebook { namespace logdevice {

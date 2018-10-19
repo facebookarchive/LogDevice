@@ -8,6 +8,7 @@
 #pragma once
 
 #include <memory>
+
 #include "logdevice/common/settings/RebuildingSettings.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"

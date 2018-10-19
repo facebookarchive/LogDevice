@@ -8,12 +8,13 @@
 #pragma once
 
 #include <initializer_list>
+
 #include <folly/Random.h>
 #include <folly/small_vector.h>
 
-#include "logdevice/common/checks.h"
 #include "logdevice/common/Random.h"
 #include "logdevice/common/SmallMap.h"
+#include "logdevice/common/checks.h"
 
 namespace facebook { namespace logdevice {
 

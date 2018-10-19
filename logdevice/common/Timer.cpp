@@ -7,6 +7,7 @@
  */
 
 #include "logdevice/common/Timer.h"
+
 #include "logdevice/common/Worker.h"
 
 namespace facebook { namespace logdevice {

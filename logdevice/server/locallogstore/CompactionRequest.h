@@ -9,8 +9,8 @@
 
 #include <folly/Optional.h>
 
-#include "logdevice/include/Err.h"
 #include "logdevice/common/Request.h"
+#include "logdevice/include/Err.h"
 
 namespace facebook { namespace logdevice {
 

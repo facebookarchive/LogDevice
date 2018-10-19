@@ -9,10 +9,10 @@
 
 #include <pthread.h>
 #include <unistd.h>
-#include <sys/syscall.h>
-#include <sys/types.h>
 
 #include <folly/Range.h>
+#include <sys/syscall.h>
+#include <sys/types.h>
 
 /**
  * @file A class for identifying a thread

@@ -15,13 +15,13 @@
 #include <pwd.h>
 #include <signal.h>
 #include <unistd.h>
+
+#include <folly/experimental/symbolizer/Symbolizer.h>
 #include <sys/mman.h>
 #include <sys/types.h>
 
 #include "logdevice/common/debug.h"
 #include "rocksdb/cache.h"
-
-#include <folly/experimental/symbolizer/Symbolizer.h>
 
 namespace facebook { namespace logdevice {
 

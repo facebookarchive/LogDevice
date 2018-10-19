@@ -11,10 +11,10 @@
 #include <set>
 #include <vector>
 
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/EpochMetaData.h"
 #include "logdevice/common/FailureDomainNodeSet.h"
 #include "logdevice/common/RecoveryNode.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/types_internal.h"
 
 namespace facebook { namespace logdevice {

@@ -6,9 +6,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 #include "logdevice/common/TraceSample.h"
+
 #include <stdexcept>
-#include <folly/json.h>
+
 #include <folly/dynamic.h>
+#include <folly/json.h>
 
 namespace facebook { namespace logdevice {
 

@@ -8,8 +8,9 @@
 #pragma once
 
 #include <map>
-#include "logdevice/include/Record.h"
+
 #include "logdevice/include/Client.h"
+#include "logdevice/include/Record.h"
 
 namespace facebook { namespace logdevice {
 

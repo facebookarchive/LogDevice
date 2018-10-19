@@ -7,8 +7,8 @@
  */
 #pragma once
 
-#include "logdevice/common/checks.h"
 #include "logdevice/common/RequestType.h"
+#include "logdevice/common/checks.h"
 #include "logdevice/common/protocol/MessageTypeNames.h"
 
 /**

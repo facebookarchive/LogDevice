@@ -10,9 +10,8 @@
 #include <iostream>
 #include <string>
 
-#include <folly/Singleton.h>
-
 #include <boost/program_options.hpp>
+#include <folly/Singleton.h>
 
 #include "logdevice/examples/parse_target_log.h"
 #include "logdevice/include/Client.h"

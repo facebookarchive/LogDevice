@@ -7,19 +7,20 @@
  */
 #pragma once
 
-#include <boost/icl/interval_map.hpp>
-#include <boost/icl/map.hpp>
-#include <folly/Memory.h>
-#include <folly/Optional.h>
-#include <folly/String.h>
 #include <iostream>
 #include <memory>
 #include <sstream>
 #include <string>
 #include <unordered_map>
 
-#include "logdevice/common/configuration/ReplicationProperty.h"
+#include <boost/icl/interval_map.hpp>
+#include <boost/icl/map.hpp>
+#include <folly/Memory.h>
+#include <folly/Optional.h>
+#include <folly/String.h>
+
 #include "logdevice/common/configuration/Log.h"
+#include "logdevice/common/configuration/ReplicationProperty.h"
 #include "logdevice/common/configuration/logs/CodecType.h"
 #include "logdevice/common/configuration/logs/DefaultLogAttributes.h"
 #include "logdevice/include/Err.h"

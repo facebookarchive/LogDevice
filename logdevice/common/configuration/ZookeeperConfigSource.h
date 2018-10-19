@@ -8,14 +8,15 @@
 #pragma once
 
 #include <atomic>
-#include <folly/hash/Hash.h>
-#include <folly/IntrusiveList.h>
-#include <folly/Memory.h>
 #include <memory>
 #include <mutex>
 #include <set>
 #include <unordered_map>
 #include <unordered_set>
+
+#include <folly/IntrusiveList.h>
+#include <folly/Memory.h>
+#include <folly/hash/Hash.h>
 #include <zookeeper/zookeeper.h>
 
 #include "logdevice/common/ConfigSource.h"

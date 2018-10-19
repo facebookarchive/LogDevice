@@ -8,10 +8,11 @@
 #include "logdevice/common/GetHeadAttributesRequest.h"
 
 #include <folly/Memory.h>
-#include "logdevice/common/configuration/Configuration.h"
+
 #include "logdevice/common/EventLoop.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/protocol/GET_HEAD_ATTRIBUTES_Message.h"
 
 namespace facebook { namespace logdevice {

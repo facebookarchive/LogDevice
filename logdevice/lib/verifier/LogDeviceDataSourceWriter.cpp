@@ -8,11 +8,10 @@
 #include "logdevice/lib/verifier/LogDeviceDataSourceWriter.h"
 
 #include <chrono>
-#include <unordered_map>
 #include <exception>
+#include <unordered_map>
 
 #include <boost/algorithm/string.hpp>
-
 #include <folly/Memory.h>
 #include <folly/Random.h>
 

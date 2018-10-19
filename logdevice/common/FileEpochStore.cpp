@@ -9,19 +9,19 @@
 
 #include <cstdio>
 #include <cstdlib>
-#include <sys/file.h>
 #include <unistd.h>
 
-#include <folly/experimental/TestUtil.h>
 #include <folly/FileUtil.h>
 #include <folly/Memory.h>
 #include <folly/ScopeGuard.h>
+#include <folly/experimental/TestUtil.h>
+#include <sys/file.h>
 
 #include "logdevice/common/CompletionRequest.h"
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/EpochMetaDataUpdater.h"
 #include "logdevice/common/EpochStoreLastCleanEpochFormat.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/types_internal.h"

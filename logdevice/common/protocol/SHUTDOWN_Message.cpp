@@ -6,10 +6,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 #include "logdevice/common/protocol/SHUTDOWN_Message.h"
+
 #include "logdevice/common/Processor.h"
+#include "logdevice/common/RebuildingTypes.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Worker.h"
-#include "logdevice/common/RebuildingTypes.h"
 
 namespace facebook { namespace logdevice {
 

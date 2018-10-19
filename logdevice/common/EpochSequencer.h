@@ -15,9 +15,9 @@
 #include <folly/concurrency/AtomicSharedPtr.h>
 
 #include "logdevice/common/Appender.h"
-#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/SlidingWindowSingleEpoch.h"
 #include "logdevice/common/UpdateableSharedPtr.h"
+#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Err.h"

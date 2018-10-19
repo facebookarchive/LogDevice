@@ -6,10 +6,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "logdevice/common/membership/StorageMembership.h"
+
 #include <gtest/gtest.h>
 
 #include "logdevice/common/ShardID.h"
-#include "logdevice/common/membership/StorageMembership.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/test/TestUtil.h"
 

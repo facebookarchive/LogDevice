@@ -7,9 +7,8 @@
  */
 #include "TimeoutMap.h"
 
-#include "logdevice/common/libevent/compat.h"
-
 #include "logdevice/common/checks.h"
+#include "logdevice/common/libevent/compat.h"
 
 namespace facebook { namespace logdevice {
 

@@ -5,26 +5,28 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/server/FailureDetector.h"
+
+#include <vector>
+
 #include <folly/Memory.h>
 #include <folly/Random.h>
 #include <gtest/gtest.h>
-#include <vector>
 
 #include "logdevice/common/ClusterState.h"
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Timestamp.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/GOSSIP_Message.h"
-#include "logdevice/server/test/TestUtil.h"
-#include "logdevice/common/test/TestUtil.h"
-#include "logdevice/server/FailureDetector.h"
-#include "logdevice/server/ServerProcessor.h"
 #include "logdevice/common/settings/GossipSettings.h"
+#include "logdevice/common/test/TestUtil.h"
+#include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/ServerSettings.h"
 #include "logdevice/server/shutdown.h"
+#include "logdevice/server/test/TestUtil.h"
 
 using namespace facebook::logdevice;
 

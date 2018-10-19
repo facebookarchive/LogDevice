@@ -8,17 +8,18 @@
 #pragma once
 
 #include <numeric>
+
+#include <folly/Format.h>
 #include <folly/Memory.h>
 #include <folly/Optional.h>
-#include <folly/futures/Future.h>
 #include <folly/Random.h>
-#include <folly/Format.h>
+#include <folly/futures/Future.h>
 
-#include "logdevice/common/debug.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/WorkerType.h"
+#include "logdevice/common/debug.h"
 
 namespace facebook { namespace logdevice {
 

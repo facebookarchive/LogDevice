@@ -7,12 +7,14 @@
  */
 #include "logdevice/common/RebuildingEventsTracer.h"
 
-#include "logdevice/common/settings/RebuildingSettings.h"
+#include <chrono>
+
+#include <folly/Memory.h>
+
 #include "logdevice/common/TraceLogger.h"
 #include "logdevice/common/TraceSample.h"
 #include "logdevice/common/configuration/Log.h"
-#include <chrono>
-#include <folly/Memory.h>
+#include "logdevice/common/settings/RebuildingSettings.h"
 
 namespace facebook { namespace logdevice {
 

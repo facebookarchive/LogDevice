@@ -7,10 +7,10 @@
  */
 #pragma once
 
-#include "logdevice/include/ConfigSubscriptionHandle.h"
 #include "logdevice/common/PermissionChecker.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/configuration/SecurityConfig.h"
+#include "logdevice/include/ConfigSubscriptionHandle.h"
 
 namespace facebook { namespace logdevice {
 

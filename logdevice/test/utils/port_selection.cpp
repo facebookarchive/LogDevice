@@ -8,11 +8,12 @@
 #include "port_selection.h"
 
 #include <cerrno>
-#include <netinet/in.h>
 #include <random>
 
-#include "event2/util.h"
 #include <folly/Memory.h>
+#include <netinet/in.h>
+
+#include "event2/util.h"
 #include "logdevice/common/Sockaddr.h"
 #include "logdevice/common/libevent/compat.h"
 

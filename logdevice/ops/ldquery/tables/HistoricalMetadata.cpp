@@ -8,20 +8,18 @@
 #include "HistoricalMetadata.h"
 
 #include <folly/Conv.h>
-
-#include "logdevice/common/configuration/Configuration.h"
-#include "logdevice/common/configuration/ReplicationProperty.h"
-#include "logdevice/common/Semaphore.h"
-#include "logdevice/common/configuration/UpdateableConfig.h"
-#include "logdevice/common/debug.h"
-#include "logdevice/ops/ldquery/Errors.h"
-#include "logdevice/lib/ClientImpl.h"
-#include "logdevice/lib/ops/LogMetaDataFetcher.h"
-
 #include <folly/json.h>
 
 #include "../Table.h"
 #include "../Utils.h"
+#include "logdevice/common/Semaphore.h"
+#include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/common/configuration/ReplicationProperty.h"
+#include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/debug.h"
+#include "logdevice/lib/ClientImpl.h"
+#include "logdevice/lib/ops/LogMetaDataFetcher.h"
+#include "logdevice/ops/ldquery/Errors.h"
 
 using facebook::logdevice::Configuration;
 

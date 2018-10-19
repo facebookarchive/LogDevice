@@ -9,8 +9,8 @@
 
 #include <folly/Random.h>
 
-#include "logdevice/common/stats/PerShardHistograms.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/stats/PerShardHistograms.h"
 
 namespace facebook { namespace logdevice {
 

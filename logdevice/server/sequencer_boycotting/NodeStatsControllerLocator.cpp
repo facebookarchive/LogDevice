@@ -8,10 +8,10 @@
 
 #include "NodeStatsControllerLocator.h"
 
-#include "logdevice/common/debug.h"
-#include "logdevice/common/hash.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/ServerConfig.h"
+#include "logdevice/common/debug.h"
+#include "logdevice/common/hash.h"
 
 namespace facebook { namespace logdevice {
 

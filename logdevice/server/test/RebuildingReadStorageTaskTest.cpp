@@ -9,8 +9,8 @@
 
 #include "logdevice/common/settings/SettingsUpdater.h"
 #include "logdevice/common/test/NodeSetTestUtil.h"
-#include "logdevice/server/rebuilding/RebuildingReadStorageTaskV2.h"
 #include "logdevice/server/locallogstore/test/TemporaryLogStore.h"
+#include "logdevice/server/rebuilding/RebuildingReadStorageTaskV2.h"
 
 using namespace facebook::logdevice;
 

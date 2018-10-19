@@ -7,9 +7,10 @@
  */
 #pragma once
 
-#include "logdevice/common/configuration/logs/CodecType.h"
-#include "logdevice/common/PayloadHolder.h"
 #include <memory>
+
+#include "logdevice/common/PayloadHolder.h"
+#include "logdevice/common/configuration/logs/CodecType.h"
 
 namespace facebook { namespace logdevice { namespace logsconfig {
 

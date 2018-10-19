@@ -5,16 +5,18 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include <boost/noncopyable.hpp>
+#include "logdevice/server/read_path/LogStorageStateMap.h"
+
 #include <deque>
-#include <gtest/gtest.h>
 #include <thread>
 #include <vector>
+
+#include <boost/noncopyable.hpp>
+#include <gtest/gtest.h>
 
 #include "logdevice/common/debug.h"
 #include "logdevice/include/Err.h"
 #include "logdevice/include/types.h"
-#include "logdevice/server/read_path/LogStorageStateMap.h"
 
 using namespace facebook::logdevice;
 

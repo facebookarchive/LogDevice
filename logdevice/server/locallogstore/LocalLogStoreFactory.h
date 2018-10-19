@@ -8,6 +8,7 @@
 #pragma once
 
 #include <memory>
+
 #include "logdevice/server/locallogstore/LocalLogStore.h"
 
 namespace facebook { namespace logdevice {

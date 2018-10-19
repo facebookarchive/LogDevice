@@ -5,13 +5,14 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/server/storage/SealStorageTask.h"
+
 #include <gtest/gtest.h>
 
 #include "logdevice/common/OffsetMap.h"
 #include "logdevice/server/locallogstore/test/StoreUtil.h"
 #include "logdevice/server/locallogstore/test/TemporaryLogStore.h"
 #include "logdevice/server/read_path/LogStorageStateMap.h"
-#include "logdevice/server/storage/SealStorageTask.h"
 
 namespace facebook { namespace logdevice {
 

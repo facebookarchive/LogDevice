@@ -10,9 +10,9 @@
 #include "logdevice/common/ClusterState.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/Timer.h"
-#include "logdevice/common/types_internal.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/settings/Settings.h"
+#include "logdevice/common/types_internal.h"
 
 namespace facebook { namespace logdevice {
 

@@ -8,20 +8,20 @@
 #pragma once
 
 #include <functional>
+#include <list>
 #include <memory>
 #include <unordered_map>
 #include <vector>
-#include <list>
 
-#include <folly/hash/Hash.h>
 #include <folly/Memory.h>
+#include <folly/hash/Hash.h>
 
 #include "logdevice/common/BWAvailableCallback.h"
 #include "logdevice/common/ExponentialBackoffTimer.h"
 #include "logdevice/common/GetSeqStateRequest-fwd.h"
-#include "logdevice/common/Timer.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/SequencerRouter.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/LogTailAttributes.h"

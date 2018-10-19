@@ -5,27 +5,29 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include <arpa/inet.h>
-#include <gtest/gtest.h>
+#include "logdevice/common/configuration/Configuration.h"
+
 #include <memory>
-#include <netinet/in.h>
 #include <string>
 
+#include <arpa/inet.h>
+#include <folly/FBString.h>
 #include <folly/dynamic.h>
 #include <folly/json.h>
 #include <folly/test/JsonTestUtil.h>
-#include <folly/FBString.h>
-#include "logdevice/include/Err.h"
-#include "logdevice/include/types.h"
-#include "logdevice/common/configuration/ParsingHelpers.h"
-#include "logdevice/common/configuration/Configuration.h"
-#include "logdevice/common/configuration/LocalLogsConfig.h"
-#include "logdevice/common/configuration/logs/LogsConfigTree.h"
+#include <gtest/gtest.h>
+#include <netinet/in.h>
+
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/Semaphore.h"
+#include "logdevice/common/configuration/LocalLogsConfig.h"
+#include "logdevice/common/configuration/ParsingHelpers.h"
+#include "logdevice/common/configuration/logs/LogsConfigTree.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/common/types_internal.h"
-#include "logdevice/common/debug.h"
+#include "logdevice/include/Err.h"
+#include "logdevice/include/types.h"
 
 // NOTE: file reading assumes the test is being run from the top-level fbcode
 // dir

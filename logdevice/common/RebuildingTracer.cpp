@@ -7,11 +7,12 @@
  */
 #include "logdevice/common/RebuildingTracer.h"
 
-#include "logdevice/common/RebuildingTypes.h"
-#include "logdevice/common/configuration/Log.h"
 #include <algorithm>
 #include <memory>
 #include <string>
+
+#include "logdevice/common/RebuildingTypes.h"
+#include "logdevice/common/configuration/Log.h"
 
 namespace facebook { namespace logdevice {
 

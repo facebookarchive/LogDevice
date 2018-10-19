@@ -7,9 +7,9 @@
  */
 #pragma once
 
-#include <folly/synchronization/LifoSem.h>
 #include <folly/Memory.h>
 #include <folly/ScopeGuard.h>
+#include <folly/synchronization/LifoSem.h>
 
 #include "logdevice/common/checks.h"
 

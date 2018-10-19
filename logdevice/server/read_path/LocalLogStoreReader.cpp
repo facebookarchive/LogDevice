@@ -14,12 +14,12 @@
 #include <folly/small_vector.h>
 
 #include "logdevice/common/DataRecordOwnsPayload.h"
-#include "logdevice/common/debug.h"
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
 #include "logdevice/common/Random.h"
-#include "logdevice/common/util.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/RECORD_Message.h"
 #include "logdevice/common/protocol/STORE_Message.h"
+#include "logdevice/common/util.h"
 #include "logdevice/server/read_path/IteratorCache.h"
 
 namespace facebook { namespace logdevice { namespace LocalLogStoreReader {

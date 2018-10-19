@@ -8,10 +8,10 @@
 #include "ClusterStateUpdatedRequest.h"
 
 #include "logdevice/common/ClusterState.h"
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/configuration/Configuration.h"
 
 namespace facebook { namespace logdevice {
 

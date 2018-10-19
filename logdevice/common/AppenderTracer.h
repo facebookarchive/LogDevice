@@ -8,6 +8,7 @@
 #pragma once
 
 #include <memory>
+
 #include "logdevice/common/SampledTracer.h"
 #include "logdevice/include/Err.h"
 

@@ -7,25 +7,25 @@
  */
 #include "STORE_Message.h"
 
-#include <unistd.h>
-
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <random>
+#include <unistd.h>
 #include <vector>
 
 #include <folly/Memory.h>
+
 #include "logdevice/common/Appender.h"
 #include "logdevice/common/EpochRecovery.h"
 #include "logdevice/common/RebuildingTypes.h"
-#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/MUTATED_Message.h"
 #include "logdevice/common/protocol/ProtocolReader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
 #include "logdevice/common/protocol/STORED_Message.h"
+#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/util.h"
 

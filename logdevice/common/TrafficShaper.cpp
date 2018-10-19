@@ -10,15 +10,15 @@
 #include <algorithm>
 #include <numeric>
 
-#include "logdevice/common/debug.h"
-#include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/Sender.h"
+#include "logdevice/common/Worker.h"
+#include "logdevice/common/configuration/NodeLocation.h"
+#include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/stats/ServerHistograms.h"
 #include "logdevice/common/stats/Stats.h"
-#include "logdevice/common/configuration/UpdateableConfig.h"
-#include "logdevice/common/Worker.h"
 
 namespace facebook { namespace logdevice {
 

@@ -7,13 +7,13 @@
  */
 #include "logdevice/common/configuration/logs/LogsConfigApiTracer.h"
 
-#include "logdevice/common/Sender.h"
-#include "logdevice/common/configuration/Log.h"
-#include "logdevice/common/configuration/logs/LogsConfigDeltaTypes.h"
-
 #include <algorithm>
 #include <memory>
 #include <string>
+
+#include "logdevice/common/Sender.h"
+#include "logdevice/common/configuration/Log.h"
+#include "logdevice/common/configuration/logs/LogsConfigDeltaTypes.h"
 
 namespace facebook { namespace logdevice {
 

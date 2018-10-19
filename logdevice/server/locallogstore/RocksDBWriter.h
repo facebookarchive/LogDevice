@@ -13,7 +13,6 @@
 #include <vector>
 
 #include <folly/Demangle.h>
-
 #include <rocksdb/cache.h>
 #include <rocksdb/db.h>
 #include <rocksdb/env.h>
@@ -22,8 +21,8 @@
 #include <rocksdb/slice_transform.h>
 #include <rocksdb/statistics.h>
 
-#include "logdevice/common/settings/RebuildingSettings.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/settings/RebuildingSettings.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Err.h"

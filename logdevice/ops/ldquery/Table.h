@@ -7,21 +7,19 @@
  */
 #pragma once
 
-#include <unordered_map>
 #include <map>
 #include <set>
-#include <vector>
-#include <tuple>
-
 #include <sqlite3.h>
+#include <tuple>
+#include <unordered_map>
+#include <vector>
 
 #include <folly/Conv.h>
-#include <folly/hash/Hash.h>
 #include <folly/Optional.h>
-
-#include "logdevice/include/Client.h"
+#include <folly/hash/Hash.h>
 
 #include "Context.h"
+#include "logdevice/include/Client.h"
 
 /**
  * @file Table is the base class for virtual tables. Each virtual table must

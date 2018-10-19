@@ -27,11 +27,11 @@
 #include "logdevice/common/ThreadID.h"
 #include "logdevice/common/TimeoutMap.h"
 #include "logdevice/common/Timer.h"
-#include "logdevice/common/types_internal.h"
-#include "logdevice/common/util.h"
 #include "logdevice/common/WorkerType.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
+#include "logdevice/common/types_internal.h"
+#include "logdevice/common/util.h"
 #include "logdevice/include/ConfigSubscriptionHandle.h"
 // Think twice before adding new includes here!  This file is included in many
 // translation units and increasing its transitive dependency footprint will

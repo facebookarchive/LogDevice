@@ -11,11 +11,11 @@
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/Worker.h"
-#include "logdevice/common/configuration/logs/LogsConfigStateMachine.h"
 #include "logdevice/common/configuration/logs/LogsConfigManager.h"
+#include "logdevice/common/configuration/logs/LogsConfigStateMachine.h"
+#include "logdevice/common/event_log/EventLogStateMachine.h"
 #include "logdevice/common/request_util.h"
 #include "logdevice/common/util.h"
-#include "logdevice/common/event_log/EventLogStateMachine.h"
 #include "logdevice/include/Err.h"
 #include "logdevice/server/AdminCommand.h"
 

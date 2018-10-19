@@ -7,14 +7,14 @@
  */
 #include "Configuration.h"
 
-#include <folly/synchronization/Baton.h>
 #include <boost/filesystem.hpp>
+#include <folly/synchronization/Baton.h>
 
 #include "logdevice/common/configuration/InternalLogs.h"
-#include "logdevice/common/configuration/ServerConfig.h"
-#include "logdevice/common/configuration/MetaDataLogsConfig.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
+#include "logdevice/common/configuration/MetaDataLogsConfig.h"
 #include "logdevice/common/configuration/ParsingHelpers.h"
+#include "logdevice/common/configuration/ServerConfig.h"
 
 using namespace facebook::logdevice::configuration::parser;
 using namespace facebook::logdevice::configuration;

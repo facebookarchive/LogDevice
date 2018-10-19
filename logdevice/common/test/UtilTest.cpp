@@ -5,11 +5,12 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/common/util.h"
+
 #include <gtest/gtest.h>
 
 #include "logdevice/common/MetaDataLog.h"
 #include "logdevice/common/Worker.h"
-#include "logdevice/common/util.h"
 
 using namespace facebook::logdevice;
 

@@ -12,9 +12,9 @@
 
 #include <folly/Optional.h>
 
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/TraceSample.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 
 namespace facebook { namespace logdevice {

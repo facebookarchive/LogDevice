@@ -15,22 +15,17 @@
 #include <utility>
 
 #include <boost/intrusive/set.hpp>
-
 #include <folly/IntrusiveList.h>
 #include <folly/Optional.h>
 
 #include "logdevice/common/AdminCommandTable-fwd.h"
 #include "logdevice/common/BWAvailableCallback.h"
 #include "logdevice/common/ClientID.h"
-#include "logdevice/common/types_internal.h"
 #include "logdevice/common/WeakRefHolder.h"
-#include "logdevice/common/types_internal.h"
-
 #include "logdevice/common/protocol/GAP_Message.h"
 #include "logdevice/common/protocol/STARTED_Message.h"
-
+#include "logdevice/common/types_internal.h"
 #include "logdevice/include/types.h"
-
 #include "logdevice/server/read_path/ServerReadStream.h"
 
 namespace facebook { namespace logdevice {

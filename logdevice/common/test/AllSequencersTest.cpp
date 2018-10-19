@@ -5,6 +5,8 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/common/AllSequencers.h"
+
 #include <chrono>
 #include <mutex>
 #include <thread>
@@ -12,19 +14,17 @@
 #include <folly/Random.h>
 #include <gtest/gtest.h>
 
-#include "logdevice/common/AllSequencers.h"
 #include "logdevice/common/Appender.h"
 #include "logdevice/common/EpochSequencer.h"
-#include "logdevice/common/Timer.h"
 #include "logdevice/common/LogRecoveryRequest.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Sequencer.h"
-#include "logdevice/common/settings/Settings.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
-
 #include "logdevice/common/request_util.h"
+#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/test/TestUtil.h"
 

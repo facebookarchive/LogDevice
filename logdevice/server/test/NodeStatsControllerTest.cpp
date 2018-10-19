@@ -8,8 +8,8 @@
 
 #include "logdevice/server/sequencer_boycotting/NodeStatsController.h"
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
 
 using namespace facebook::logdevice;
 using namespace testing;

@@ -8,10 +8,11 @@
 #include "logdevice/common/IsLogEmptyRequest.h"
 
 #include <folly/Memory.h>
-#include "logdevice/common/configuration/Configuration.h"
+
 #include "logdevice/common/EventLoop.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/IS_LOG_EMPTY_Message.h"
 
@@ -171,8 +172,7 @@ IsLogEmptyRequest::getWaveTimeoutInterval(std::chrono::milliseconds timeout) {
                  std::min(min, WAVE_TIMEOUT_LOWER_BOUND_MAX));
   // Stick to a max of 10s regardless of the client timeout.
   return chrono_interval_t<std::chrono::milliseconds>{
-    std::chrono::milliseconds(min),
-    std::chrono::milliseconds(10000)};
+      std::chrono::milliseconds(min), std::chrono::milliseconds(10000)};
 }
 
 void IsLogEmptyRequest::onShardStatusChanged(bool initialize) {

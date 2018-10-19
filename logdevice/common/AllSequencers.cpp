@@ -7,12 +7,12 @@
  */
 #include "logdevice/common/AllSequencers.h"
 
-#include <memory>
 #include <chrono>
+#include <memory>
 #include <thread>
 
 #include <folly/Memory.h>
-#include "logdevice/include/Err.h"
+
 #include "logdevice/common/AppenderBuffer.h"
 #include "logdevice/common/EpochMetaDataUpdater.h"
 #include "logdevice/common/FireAndForgetRequest.h"
@@ -26,6 +26,7 @@
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/include/Err.h"
 
 namespace facebook { namespace logdevice {
 

@@ -8,10 +8,11 @@
 #include <mutex>
 #include <string>
 #include <thread>
+
 #include <gtest/gtest.h>
 
-#include "logdevice/common/debug.h"
 #include "logdevice/common/Semaphore.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/include/ClientSettings.h"

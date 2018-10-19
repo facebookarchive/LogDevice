@@ -6,17 +6,19 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "logdevice/common/GetTrimPointRequest.h"
+
 #include <functional>
-#include <gtest/gtest.h>
 
 #include <folly/Memory.h>
-#include "logdevice/common/GetTrimPointRequest.h"
-#include "logdevice/common/test/TestUtil.h"
-#include "logdevice/include/types.h"
+#include <gtest/gtest.h>
+
 #include "logdevice/common/debug.h"
 #include "logdevice/common/test/MockBackoffTimer.h"
 #include "logdevice/common/test/MockNodeSetAccessor.h"
 #include "logdevice/common/test/MockNodeSetFinder.h"
+#include "logdevice/common/test/TestUtil.h"
+#include "logdevice/include/types.h"
 
 using namespace facebook::logdevice;
 

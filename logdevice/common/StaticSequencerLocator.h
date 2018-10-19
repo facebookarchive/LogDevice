@@ -8,8 +8,8 @@
 #pragma once
 
 #include "logdevice/common/SequencerLocator.h"
-#include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/common/configuration/UpdateableConfig.h"
 
 /**
  * @file  StaticSequencerLocator is an implementation of SequencerLocator which

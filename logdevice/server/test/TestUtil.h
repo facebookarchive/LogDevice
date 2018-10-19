@@ -7,8 +7,8 @@
  */
 #pragma once
 
-#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/settings/Settings.h"
 #include "logdevice/server/ServerSettings.h"
 
 namespace facebook { namespace logdevice {

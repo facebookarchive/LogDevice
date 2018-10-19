@@ -5,11 +5,12 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/include/Client.h"
+
 #include <chrono>
+
 #include <folly/synchronization/Baton.h>
 #include <gtest/gtest.h>
-
-#include "logdevice/include/Client.h"
 
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/test/TestUtil.h"

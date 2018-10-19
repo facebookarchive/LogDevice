@@ -5,13 +5,14 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/common/client_read_stream/ClientReadStreamFailureDetector.h"
+
 #include <folly/Random.h>
 #include <gtest/gtest.h>
 
-#include "logdevice/common/client_read_stream/ClientReadStreamFailureDetector.h"
+#include "logdevice/common/ShardID.h"
 #include "logdevice/common/Timer.h"
 #include "logdevice/common/configuration/ReplicationProperty.h"
-#include "logdevice/common/ShardID.h"
 
 #define N0 ShardID(0, 0)
 #define N1 ShardID(1, 0)

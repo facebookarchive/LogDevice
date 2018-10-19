@@ -10,15 +10,15 @@
 #include <cstdint>
 #include <limits>
 
-#include <folly/hash/Hash.h>
 #include <folly/Memory.h>
 #include <folly/SharedMutex.h>
+#include <folly/hash/Hash.h>
 #include <google/dense_hash_map>
 
 #include "logdevice/common/ClientID.h"
+#include "logdevice/common/WorkerType.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/types_internal.h"
-#include "logdevice/common/WorkerType.h"
 
 namespace facebook { namespace logdevice {
 

@@ -10,21 +10,21 @@
 #include "logdevice/common/AbortAppendersEpochRequest.h"
 #include "logdevice/common/AllSequencers.h"
 #include "logdevice/common/Appender.h"
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/CopySetManager.h"
 #include "logdevice/common/CopySetSelectorFactory.h"
 #include "logdevice/common/EpochMetaData.h"
 #include "logdevice/common/MetaDataLogWriter.h"
 #include "logdevice/common/NodeID.h"
+#include "logdevice/common/OffsetMap.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Sequencer.h"
 #include "logdevice/common/Socket.h"
 #include "logdevice/common/TailRecord.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/APPEND_Message.h"
 #include "logdevice/common/util.h"
-#include "logdevice/common/OffsetMap.h"
 
 namespace facebook { namespace logdevice {
 

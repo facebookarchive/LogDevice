@@ -12,8 +12,8 @@
 #include <boost/shared_ptr.hpp>
 #include <folly/String.h>
 
-#include "logdevice/common/configuration/ReplicationProperty.h"
 #include "logdevice/common/configuration/ParsingHelpers.h"
+#include "logdevice/common/configuration/ReplicationProperty.h"
 #include "logdevice/include/PermissionActions.h"
 
 using boost::python::dict;

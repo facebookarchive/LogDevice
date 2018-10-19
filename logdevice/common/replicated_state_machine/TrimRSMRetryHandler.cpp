@@ -14,8 +14,8 @@
 #include "logdevice/common/Request.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/debug.h"
-#include "logdevice/common/replicated_state_machine/TrimRSMRequest.h"
 #include "logdevice/common/replicated_state_machine/ReplicatedStateMachine.h"
+#include "logdevice/common/replicated_state_machine/TrimRSMRequest.h"
 
 namespace facebook { namespace logdevice {
 

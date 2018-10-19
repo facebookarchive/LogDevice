@@ -8,8 +8,9 @@
 
 #pragma once
 
-#include <folly/hash/Hash.h>
 #include <unordered_map>
+
+#include <folly/hash/Hash.h>
 
 #include "logdevice/common/SerializableData.h"
 

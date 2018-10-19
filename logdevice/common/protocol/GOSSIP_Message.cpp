@@ -8,11 +8,12 @@
 #include "GOSSIP_Message.h"
 
 #include <memory>
+
 #include <folly/small_vector.h>
 
-#include "logdevice/common/debug.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/ProtocolReader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
 #include "logdevice/common/stats/ServerHistograms.h"

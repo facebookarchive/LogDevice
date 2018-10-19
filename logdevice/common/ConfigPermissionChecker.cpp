@@ -6,9 +6,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 #include "logdevice/common/ConfigPermissionChecker.h"
-#include "logdevice/common/configuration/Configuration.h"
+
 #include "logdevice/common/PrincipalParser.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/configuration/Configuration.h"
 
 namespace facebook { namespace logdevice {
 

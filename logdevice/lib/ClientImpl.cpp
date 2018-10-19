@@ -11,7 +11,6 @@
 #include <unordered_map>
 
 #include <boost/algorithm/string.hpp>
-
 #include <folly/Memory.h>
 #include <folly/Random.h>
 
@@ -20,8 +19,8 @@
 #include "logdevice/common/ClientBridge.h"
 #include "logdevice/common/ClientEventTracer.h"
 #include "logdevice/common/ConfigInit.h"
-#include "logdevice/common/DataSizeRequest.h"
 #include "logdevice/common/DataRecordFromTailRecord.h"
+#include "logdevice/common/DataSizeRequest.h"
 #include "logdevice/common/E2ETracer.h"
 #include "logdevice/common/EpochMetaDataCache.h"
 #include "logdevice/common/EpochMetaDataMap.h"
@@ -51,8 +50,8 @@
 #include "logdevice/common/configuration/logs/LogsConfigTree.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/HELLO_Message.h"
-#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/settings/SSLSettingValidation.h"
+#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/util.h"

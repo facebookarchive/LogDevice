@@ -8,13 +8,14 @@
 #include "GetLogInfoRequest.h"
 
 #include <folly/Memory.h>
-#include "logdevice/common/configuration/Configuration.h"
+
 #include "logdevice/common/EventLoop.h"
 #include "logdevice/common/Processor.h"
-#include "logdevice/common/Sender.h"
 #include "logdevice/common/RandomNodeSelector.h"
-#include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/Sender.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/LOGS_CONFIG_API_Message.h"
 

@@ -7,9 +7,9 @@
  */
 #pragma once
 
+#include "logdevice/common/LegacyPluginPack.h"
 #include "logdevice/common/plugin/Plugin.h"
 #include "logdevice/common/plugin/PluginRegistry.h"
-#include "logdevice/common/LegacyPluginPack.h"
 
 /**
  * @file Server Plugin pack for LogDevice

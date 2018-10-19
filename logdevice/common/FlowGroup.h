@@ -13,17 +13,15 @@
 
 #include "logdevice/common/BWAvailableCallback.h"
 #include "logdevice/common/Envelope.h"
-#include "logdevice/common/configuration/FlowGroupPolicy.h"
 #include "logdevice/common/FlowMeter.h"
-#include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/common/PriorityQueue.h"
 #include "logdevice/common/Sender.h"
-#include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/Worker.h"
-#include "logdevice/common/stats/Stats.h"
-
+#include "logdevice/common/configuration/FlowGroupPolicy.h"
+#include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/common/protocol/Message.h"
+#include "logdevice/common/stats/Stats.h"
 
 namespace facebook { namespace logdevice {
 

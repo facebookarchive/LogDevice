@@ -14,10 +14,9 @@
 #include <utility>
 
 #include <boost/concept/assert.hpp>
-
-#include <folly/dynamic.h>
 #include <folly/Memory.h>
 #include <folly/Optional.h>
+#include <folly/dynamic.h>
 
 #include "logdevice/common/Address.h"
 #include "logdevice/common/NodeID.h"
@@ -29,8 +28,8 @@
 #include "logdevice/common/configuration/Node.h"
 #include "logdevice/common/configuration/NodesConfig.h"
 #include "logdevice/common/configuration/PrincipalsConfig.h"
-#include "logdevice/common/configuration/SequencersConfig.h"
 #include "logdevice/common/configuration/SecurityConfig.h"
+#include "logdevice/common/configuration/SequencersConfig.h"
 #include "logdevice/common/configuration/TraceLoggerConfig.h"
 #include "logdevice/common/configuration/TrafficShapingConfig.h"
 #include "logdevice/common/configuration/ZookeeperConfig.h"

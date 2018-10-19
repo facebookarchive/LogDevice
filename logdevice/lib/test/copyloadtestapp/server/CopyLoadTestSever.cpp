@@ -5,16 +5,14 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include <folly/Singleton.h>
 #include <thrift/lib/cpp2/server/ThriftServer.h>
 
-#include <folly/Singleton.h>
-
 #include "common/services/cpp/ServiceFramework.h"
-#include "logdevice/lib/test/copyloadtestapp/server/CopyLoadTestServiceHandler.h"
-
 #include "logdevice/common/Timer.h"
 #include "logdevice/common/commandline_util.h"
 #include "logdevice/common/commandline_util_chrono.h"
+#include "logdevice/lib/test/copyloadtestapp/server/CopyLoadTestServiceHandler.h"
 
 using namespace facebook;
 using namespace facebook::logdevice;

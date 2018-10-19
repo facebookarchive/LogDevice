@@ -16,17 +16,16 @@
 #include <utility>
 
 #include <boost/noncopyable.hpp>
-
 #include <folly/Memory.h>
 #include <folly/Portability.h>
 #include <folly/ThreadLocal.h>
 #include <folly/memory/EnableSharedFromThis.h>
 #include <folly/stop_watch.h>
 
+#include "logdevice/common/UpdateableSharedPtr.h"
 #include "logdevice/common/configuration/ConfigUpdater.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/types_internal.h"
-#include "logdevice/common/UpdateableSharedPtr.h"
 #include "logdevice/common/util.h"
 #include "logdevice/include/ConfigSubscriptionHandle.h"
 #include "logdevice/include/Err.h"

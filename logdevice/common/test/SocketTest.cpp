@@ -7,9 +7,8 @@
  */
 #include <gtest/gtest.h>
 
-#include "logdevice/common/test/SocketTest_fixtures.h"
-
 #include "logdevice/common/protocol/GET_SEQ_STATE_Message.h"
+#include "logdevice/common/test/SocketTest_fixtures.h"
 
 namespace facebook { namespace logdevice {
 

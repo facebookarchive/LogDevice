@@ -6,15 +6,18 @@
  * LICENSE file in the root directory of this source tree.
  */
 #include "logdevice/common/configuration/ConfigParser.h"
-#include <folly/Memory.h>
-#include <folly/dynamic.h>
+
 #include <numeric>
 #include <string>
-#include "logdevice/common/configuration/Configuration.h"
+
+#include <folly/Memory.h>
+#include <folly/dynamic.h>
+
 #include "logdevice/common/ConstructorFailed.h"
 #include "logdevice/common/EpochMetaData.h"
 #include "logdevice/common/SlidingWindow.h"
 #include "logdevice/common/commandline_util_chrono.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Err.h"

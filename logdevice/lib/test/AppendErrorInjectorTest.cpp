@@ -6,9 +6,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "logdevice/lib/AppendErrorInjector.h"
+
 #include <gtest/gtest.h>
 
-#include "logdevice/lib/AppendErrorInjector.h"
 #include "logdevice/lib/ClientImpl.h"
 
 using namespace facebook::logdevice;

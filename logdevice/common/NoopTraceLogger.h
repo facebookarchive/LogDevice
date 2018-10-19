@@ -7,10 +7,11 @@
  */
 #pragma once
 
+#include <memory>
+
 #include "logdevice/common/TraceLogger.h"
 #include "logdevice/common/TraceSample.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
-#include <memory>
 
 namespace facebook { namespace logdevice {
 

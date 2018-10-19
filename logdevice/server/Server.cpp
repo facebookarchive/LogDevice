@@ -8,7 +8,6 @@
 #include "Server.h"
 
 #include "logdevice/common/ConfigInit.h"
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/ConstructorFailed.h"
 #include "logdevice/common/CopySetManager.h"
 #include "logdevice/common/EpochMetaDataUpdater.h"
@@ -19,18 +18,20 @@
 #include "logdevice/common/SequencerLocator.h"
 #include "logdevice/common/SequencerPlacement.h"
 #include "logdevice/common/StaticSequencerPlacement.h"
-#include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/ZookeeperClient.h"
 #include "logdevice/common/ZookeeperEpochStore.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/InternalLogs.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
 #include "logdevice/common/configuration/Node.h"
+#include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/configuration/logs/LogsConfigManager.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/event_log/EventLogStateMachine.h"
-#include "logdevice/common/settings/SettingsUpdater.h"
 #include "logdevice/common/settings/SSLSettingValidation.h"
+#include "logdevice/common/settings/SettingsUpdater.h"
+#include "logdevice/common/stats/PerShardHistograms.h"
 #include "logdevice/server/FailureDetector.h"
 #include "logdevice/server/IOFaultInjection.h"
 #include "logdevice/server/LazySequencerPlacement.h"
@@ -48,8 +49,6 @@
 #include "logdevice/server/storage_tasks/RecordCacheRepopulationTask.h"
 #include "logdevice/server/storage_tasks/ShardedStorageThreadPool.h"
 #include "logdevice/server/util.h"
-
-#include "logdevice/common/stats/PerShardHistograms.h"
 
 using facebook::logdevice::configuration::LocalLogsConfig;
 

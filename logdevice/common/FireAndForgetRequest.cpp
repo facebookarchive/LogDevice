@@ -7,8 +7,8 @@
  */
 #include "FireAndForgetRequest.h"
 
-#include "logdevice/common/debug.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/debug.h"
 
 namespace facebook { namespace logdevice {
 

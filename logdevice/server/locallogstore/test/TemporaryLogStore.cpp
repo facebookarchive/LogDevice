@@ -7,12 +7,12 @@
  */
 #include "TemporaryLogStore.h"
 
-#include "rocksdb/db.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/test/TestUtil.h"
-#include "logdevice/server/locallogstore/RocksDBLocalLogStore.h"
 #include "logdevice/server/locallogstore/PartitionedRocksDBStore.h"
+#include "logdevice/server/locallogstore/RocksDBLocalLogStore.h"
 #include "logdevice/server/locallogstore/WriteOps.h"
+#include "rocksdb/db.h"
 
 namespace facebook { namespace logdevice {
 

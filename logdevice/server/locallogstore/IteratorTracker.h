@@ -12,10 +12,11 @@
 #include <list>
 #include <mutex>
 #include <vector>
+
 #include <folly/Memory.h>
 
-#include "logdevice/include/types.h"
 #include "logdevice/common/Timestamp.h"
+#include "logdevice/include/types.h"
 
 /**
  * @file A container for keeping track of most rocksdb data iterators, and

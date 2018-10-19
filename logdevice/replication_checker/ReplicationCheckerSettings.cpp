@@ -6,6 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 #include "ReplicationCheckerSettings.h"
+
 #include <boost/program_options.hpp>
 
 #include "logdevice/common/commandline_util_chrono.h"

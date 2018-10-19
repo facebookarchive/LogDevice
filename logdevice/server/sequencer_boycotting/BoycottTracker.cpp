@@ -12,9 +12,9 @@
 #include <queue>
 #include <unordered_set>
 
-#include "logdevice/common/debug.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/server/sequencer_boycotting/NodeStatsControllerTraceRequest.h"
 

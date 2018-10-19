@@ -6,10 +6,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "logdevice/server/GOSSIP_onReceived.h"
-#include "logdevice/server/ServerWorker.h"
-#include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/FailureDetector.h"
+#include "logdevice/server/GOSSIP_onReceived.h"
+#include "logdevice/server/ServerProcessor.h"
+#include "logdevice/server/ServerWorker.h"
 
 namespace facebook { namespace logdevice {
 

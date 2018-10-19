@@ -8,6 +8,7 @@
 #pragma once
 
 #include <vector>
+
 #include <folly/Memory.h>
 
 #include "logdevice/server/RecordCache.h"

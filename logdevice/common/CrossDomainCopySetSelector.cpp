@@ -9,11 +9,11 @@
 
 #include <unordered_set>
 
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/CopySet.h"
 #include "logdevice/common/LinearCopySetSelector.h"
 #include "logdevice/common/RandomLinearIteratorBase.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/debug.h"
 
 namespace facebook { namespace logdevice {

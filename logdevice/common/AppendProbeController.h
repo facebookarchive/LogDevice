@@ -9,8 +9,9 @@
 
 #include <atomic>
 #include <chrono>
-#include <folly/SharedMutex.h>
 #include <unordered_map>
+
+#include <folly/SharedMutex.h>
 
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Err.h"

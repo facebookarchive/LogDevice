@@ -5,9 +5,8 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "logdevice/include/Client.h"
-
 #include "logdevice/clients/python/util/util.h"
+#include "logdevice/include/Client.h"
 
 using namespace boost::python;
 using namespace facebook::logdevice;

@@ -11,7 +11,6 @@
 #include <memory>
 
 #include <boost/intrusive/set.hpp>
-
 #include <folly/AtomicIntrusiveLinkedList.h>
 #include <folly/IntrusiveList.h>
 
@@ -21,8 +20,8 @@
 #include "logdevice/common/SCDCopysetReordering.h"
 #include "logdevice/common/ServerRecordFilter.h"
 #include "logdevice/common/SimpleEnumMap.h"
-#include "logdevice/common/configuration/TrafficClass.h"
 #include "logdevice/common/WeakRefHolder.h"
+#include "logdevice/common/configuration/TrafficClass.h"
 #include "logdevice/common/protocol/START_Message.h"
 #include "logdevice/include/Record.h"
 #include "logdevice/include/strong_typedef.h"

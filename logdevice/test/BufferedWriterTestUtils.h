@@ -9,8 +9,8 @@
 #include <string>
 #include <vector>
 
-#include "logdevice/common/debug.h"
 #include "logdevice/common/Semaphore.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/include/BufferedWriter.h"
 #include "logdevice/include/types.h"
 

@@ -5,13 +5,13 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include <gtest/gtest.h>
+#include "logdevice/common/Digest.h"
 
 #include <memory>
 
 #include <folly/Memory.h>
+#include <gtest/gtest.h>
 
-#include "logdevice/common/Digest.h"
 #include "logdevice/common/protocol/RECORD_Message.h"
 #include "logdevice/common/test/DigestTestUtil.h"
 #include "logdevice/common/test/NodeSetTestUtil.h"

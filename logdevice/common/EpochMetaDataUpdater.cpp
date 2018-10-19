@@ -6,10 +6,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 #include "EpochMetaDataUpdater.h"
+
 #include "logdevice/common/MetaDataTracer.h"
 #include "logdevice/common/NodeSetSelectorFactory.h"
 #include "logdevice/common/debug.h"
-
 #include "logdevice/lib/ClientProcessor.h"
 
 namespace facebook { namespace logdevice {

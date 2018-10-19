@@ -7,8 +7,8 @@
  */
 #include "Request.h"
 
-#include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/stats/Stats.h"
 
 namespace facebook { namespace logdevice {
 

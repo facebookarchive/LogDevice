@@ -6,13 +6,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <gtest/gtest.h>
-#include <gmock/gmock.h>
+#include "logdevice/server/sequencer_boycotting/PerClientNodeStatsAggregator.h"
 
 #include <folly/stats/BucketedTimeSeries.h>
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
 
 #include "logdevice/common/test/TestUtil.h"
-#include "logdevice/server/sequencer_boycotting/PerClientNodeStatsAggregator.h"
 
 using namespace facebook::logdevice;
 using namespace ::testing;

@@ -9,11 +9,12 @@
 
 #include <array>
 #include <string>
+
 #include <folly/Optional.h>
 
+#include "logdevice/common/NodeID.h"
 #include "logdevice/include/EnumMap.h"
 #include "logdevice/include/NodeLocationScope.h"
-#include "logdevice/common/NodeID.h"
 
 namespace facebook { namespace logdevice {
 

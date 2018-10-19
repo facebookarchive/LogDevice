@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <type_traits>
 #include <vector>
+
 #include <folly/small_vector.h>
 
 namespace facebook { namespace logdevice {

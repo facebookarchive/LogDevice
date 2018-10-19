@@ -7,9 +7,9 @@
  */
 #pragma once
 
-#include "logdevice/common/settings/RebuildingSettings.h"
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/WeakRefHolder.h"
+#include "logdevice/common/settings/RebuildingSettings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/include/Err.h"
 #include "logdevice/include/types.h"

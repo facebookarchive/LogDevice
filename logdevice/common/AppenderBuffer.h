@@ -7,13 +7,14 @@
  */
 #pragma once
 
+#include <functional>
+#include <memory>
 #include <queue>
 #include <unordered_map>
-#include <memory>
-#include <functional>
-#include "logdevice/include/types.h"
+
 #include "logdevice/common/Appender.h"
 #include "logdevice/common/Timer.h"
+#include "logdevice/include/types.h"
 
 namespace facebook { namespace logdevice {
 

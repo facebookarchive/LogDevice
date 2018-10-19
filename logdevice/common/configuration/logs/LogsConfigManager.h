@@ -7,13 +7,13 @@
  */
 #pragma once
 
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/LogsConfigRequestOrigin.h"
 #include "logdevice/common/Request.h"
-#include "logdevice/common/settings/Settings.h"
+#include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/common/configuration/logs/LogsConfigApiTracer.h"
 #include "logdevice/common/configuration/logs/LogsConfigStateMachine.h"
 #include "logdevice/common/protocol/LOGS_CONFIG_API_Message.h"
-#include "logdevice/common/configuration/logs/LogsConfigApiTracer.h"
+#include "logdevice/common/settings/Settings.h"
 
 namespace facebook { namespace logdevice {
 /** Forward Declarations **/

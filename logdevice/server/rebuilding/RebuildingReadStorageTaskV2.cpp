@@ -6,8 +6,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 #include "logdevice/server/rebuilding/RebuildingReadStorageTaskV2.h"
-#include "logdevice/server/storage_tasks/StorageThreadPool.h"
+
 #include "logdevice/server/ServerProcessor.h"
+#include "logdevice/server/storage_tasks/StorageThreadPool.h"
 
 namespace facebook { namespace logdevice {
 

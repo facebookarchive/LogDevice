@@ -6,9 +6,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 #include "logdevice/common/ClientAPIHitsTracer.h"
-#include "logdevice/common/stats/Stats.h"
+
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/stats/ClientHistograms.h"
+#include "logdevice/common/stats/Stats.h"
 
 namespace facebook { namespace logdevice {
 

@@ -16,18 +16,19 @@
 
 #include <folly/Optional.h>
 #include <folly/small_vector.h>
+
 #include "logdevice/common/ClientID.h"
-#include "logdevice/common/settings/Durability.h"
 #include "logdevice/common/NodeID.h"
+#include "logdevice/common/OffsetMap.h"
 #include "logdevice/common/PayloadHolder.h"
 #include "logdevice/common/RecordID.h"
 #include "logdevice/common/Seal.h"
 #include "logdevice/common/ShardID.h"
 #include "logdevice/common/configuration/TrafficClass.h"
 #include "logdevice/common/protocol/Message.h"
+#include "logdevice/common/settings/Durability.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Record.h"
-#include "logdevice/common/OffsetMap.h"
 
 namespace facebook { namespace logdevice {
 

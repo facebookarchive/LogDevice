@@ -11,8 +11,8 @@
 
 #include <folly/hash/SpookyHashV2.h>
 
-#include "logdevice/common/debug.h"
 #include "logdevice/common/configuration/ServerConfig.h"
+#include "logdevice/common/debug.h"
 
 namespace facebook { namespace logdevice { namespace configuration {
 namespace nodes {

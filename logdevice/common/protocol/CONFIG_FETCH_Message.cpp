@@ -9,9 +9,9 @@
 
 #include <folly/Memory.h>
 
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/protocol/CONFIG_CHANGED_Message.h"
 
 namespace facebook { namespace logdevice {

@@ -5,22 +5,24 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include <gtest/gtest.h>
+#include "logdevice/include/ClientSettings.h"
+
+#include <algorithm>
 #include <chrono>
 #include <fstream>
 #include <memory>
-#include <algorithm>
+
 #include <boost/filesystem.hpp>
 #include <boost/thread/thread.hpp>
+#include <gtest/gtest.h>
 
 #include "logdevice/common/Processor.h"
+#include "logdevice/common/Worker.h"
+#include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/request_util.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/test/TestUtil.h"
-#include "logdevice/common/configuration/UpdateableConfig.h"
-#include "logdevice/common/Worker.h"
 #include "logdevice/include/Client.h"
-#include "logdevice/include/ClientSettings.h"
 #include "logdevice/lib/ClientImpl.h"
 #include "logdevice/lib/ClientSettingsImpl.h"
 

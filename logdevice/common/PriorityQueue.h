@@ -8,14 +8,15 @@
 #pragma once
 
 #include <bitset>
+#include <climits>
 #include <cstdint>
 
 #include <boost/noncopyable.hpp>
-
 #include <folly/lang/Bits.h>
 
 #include "logdevice/common/CostQueue.h"
 #include "logdevice/common/Priority.h"
+#include "logdevice/common/checks.h"
 
 /**
  * @file PriorityQueue: an object-intrusive, finite priority bucket,

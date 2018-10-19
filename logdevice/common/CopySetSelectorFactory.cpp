@@ -7,11 +7,11 @@
  */
 #include "CopySetSelectorFactory.h"
 
-#include "logdevice/common/LinearCopySetSelector.h"
 #include "logdevice/common/CrossDomainCopySetSelector.h"
-#include "logdevice/common/WeightedCopySetSelector.h"
+#include "logdevice/common/LinearCopySetSelector.h"
 #include "logdevice/common/PassThroughCopySetManager.h"
 #include "logdevice/common/StickyCopySetManager.h"
+#include "logdevice/common/WeightedCopySetSelector.h"
 #include "logdevice/common/Worker.h"
 
 namespace facebook { namespace logdevice {

@@ -9,8 +9,8 @@
 
 #include <string>
 
-#include "logdevice/common/types_internal.h"
 #include "logdevice/common/WeakRefHolder.h"
+#include "logdevice/common/types_internal.h"
 #include "logdevice/include/EnumMap.h"
 #include "logdevice/include/Err.h"
 #include "logdevice/server/read_path/LocalLogStoreReader.h"

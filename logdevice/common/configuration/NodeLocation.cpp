@@ -8,10 +8,11 @@
 #include "NodeLocation.h"
 
 #include <algorithm>
+
 #include <folly/String.h>
 
-#include "logdevice/include/Err.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/include/Err.h"
 
 namespace facebook { namespace logdevice {
 

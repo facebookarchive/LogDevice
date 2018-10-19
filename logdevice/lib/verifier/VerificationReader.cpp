@@ -7,18 +7,16 @@
  */
 #include "logdevice/lib/verifier/VerificationReader.h"
 
-#include <chrono>
-#include <unordered_map>
-#include <memory>
 #include <algorithm>
+#include <chrono>
+#include <memory>
+#include <unordered_map>
 
 #include <boost/algorithm/string.hpp>
-
 #include <folly/Memory.h>
 #include <folly/Random.h>
 
 #include "logdevice/include/Record.h"
-
 #include "logdevice/lib/verifier/DataSourceReader.h"
 
 namespace facebook { namespace logdevice {

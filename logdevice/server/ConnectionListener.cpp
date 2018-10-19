@@ -11,19 +11,19 @@
 #include <netdb.h>
 #include <pthread.h>
 #include <string>
+
 #include <sys/socket.h>
 
 #include "event2/listener.h"
 #include "event2/util.h"
-
 #include "logdevice/common/ClientID.h"
-#include "logdevice/common/debug.h"
-#include "logdevice/server/FailureDetector.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/Sockaddr.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/include/Err.h"
+#include "logdevice/server/FailureDetector.h"
 #include "logdevice/server/NewConnectionRequest.h"
 #include "logdevice/server/ServerProcessor.h"
 

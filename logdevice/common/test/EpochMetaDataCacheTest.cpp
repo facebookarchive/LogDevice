@@ -5,15 +5,15 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include <gtest/gtest.h>
+#include "logdevice/common/EpochMetaDataCache.h"
 
 #include <cstdio>
 #include <cstring>
 
 #include <folly/Memory.h>
+#include <gtest/gtest.h>
 
 #include "logdevice/common/EpochMetaData.h"
-#include "logdevice/common/EpochMetaDataCache.h"
 #include "logdevice/common/MetaDataLogReader.h"
 
 #define N3 ShardID(3, 0)

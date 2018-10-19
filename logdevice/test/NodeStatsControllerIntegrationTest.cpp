@@ -9,9 +9,8 @@
 
 #include "folly/dynamic.h"
 #include "folly/json.h"
-
-#include "logdevice/lib/ClientImpl.h"
 #include "logdevice/common/stats/Stats.h"
+#include "logdevice/lib/ClientImpl.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
 

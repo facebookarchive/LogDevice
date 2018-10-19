@@ -7,13 +7,13 @@
  */
 #include "SequencerRouter.h"
 
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/MetaDataLog.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/SequencerLocator.h"
-#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/settings/Settings.h"
 
 namespace facebook { namespace logdevice {
 

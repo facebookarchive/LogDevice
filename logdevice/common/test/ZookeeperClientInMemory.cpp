@@ -7,10 +7,11 @@
  */
 #include "ZookeeperClientInMemory.h"
 
-#include "logdevice/common/debug.h"
+#include <iostream>
 
 #include <boost/filesystem.hpp>
-#include <iostream>
+
+#include "logdevice/common/debug.h"
 
 namespace fs = boost::filesystem;
 

@@ -11,7 +11,6 @@
 
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/positional_options.hpp>
-
 #include <folly/stats/MultiLevelTimeSeries.h>
 
 #include "logdevice/common/stats/Stats.h"
