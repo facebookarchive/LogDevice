@@ -27,7 +27,7 @@ Logging Level: WARNING
   - backlog: None
   ...
 ```
-The tree is current empty, we can only see the root directory `/` with the default attributes. 
+The tree is currently empty, we can only see the root directory `/` with the default attributes.
 
 To create log-groups or directories, you will need to use `ldshell` for this. Here is an example of creating a single log-group with a range of IDs from 1 to 10 (inclusive). Setting the replication property to be 3 nodes replicated.
 
@@ -63,10 +63,10 @@ If you would like to remove a log-group or a directory, you can use ldshell:
 $ ldshell -c <config-path> logs remove /my-logs
 ```
 
-NOTE: Deleteing the logs from the logs config means that the data stored for these logs will eventually get trimmed. LogDevice has a safety mechanism that prevents data from getting deleted immediately. Only after a configurable grace period (see setting ....[TODO].) the data will deleted. This is 48 hours by default. During that period if you created the same log-range again, the old data will be accessible.
+NOTE: Deleting the logs from the logs config means that the data stored for these logs will eventually get trimmed. LogDevice has a safety mechanism that prevents data from getting deleted immediately. Only after a configurable grace period (see setting ....[TODO].) the data will deleted. This is 48 hours by default. During that period if you created the same log-range again, the old data will be accessible.
 
 ## Directories
-You can also create directories to organize your log-groups. These directories can have sub-directories or log-groups. You can always assign attributes to directories and these attributes will be inherited by all sub-directories and log-groups as long as they are not overriden further down the tree.
+You can also create directories to organize your log-groups. These directories can have sub-directories or log-groups. You can always assign attributes to directories and these attributes will be inherited by all sub-directories and log-groups as long as they are not overridden further down the tree.
 
 For instance, you can create a directory for all log-groups that are replicated 4 times on at least two racks.
 
@@ -215,4 +215,3 @@ New Attributes will be:
   - extra-attributes: {'oncall': 'security-team'} (Edited)
 Are you sure you want to update the attributes at '/my-logs'? (y/n)
 ```
-

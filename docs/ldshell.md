@@ -8,7 +8,7 @@ clusters, the tool offers two modes of operation, a CLI mode where you pass
 the commands to `ldshell` as arguments to execute and exit. Another mode is the
 _interactive_ mode where you start ldshell connected to a cluster without
 passing a command, this will drop you into an interactive shell where you can
-execute consequtive commands and get dynamic help and auto-completion of
+execute consecutive commands and get dynamic help and auto-completion of
 commands, and arguments along the way.
 
 LDShell is built on top of Facebook's
