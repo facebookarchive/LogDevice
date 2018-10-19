@@ -302,8 +302,10 @@ class MockSequencer : public Sequencer {
 
   void processRedirectedRecords() override {}
 
-  void getHistoricalMetaData() override {
-    test_->request_epoch_reading_metadata_.assign(getCurrentEpoch());
+  void getHistoricalMetaData(GetHistoricalMetaDataMode mode) override {
+    if (mode == GetHistoricalMetaDataMode::IMMEDIATE) {
+      test_->request_epoch_reading_metadata_.assign(getCurrentEpoch());
+    }
   }
 
  private:

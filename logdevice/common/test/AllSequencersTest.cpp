@@ -124,7 +124,7 @@ class MockSequencer : public Sequencer {
     }
   }
 
-  void getHistoricalMetaData() override {}
+  void getHistoricalMetaData(GetHistoricalMetaDataMode /* unused */) override {}
 
   void schedulePeriodicReleases() override {}
 

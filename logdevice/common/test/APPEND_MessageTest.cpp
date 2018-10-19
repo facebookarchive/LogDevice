@@ -79,6 +79,8 @@ class MockSequencer : public Sequencer {
 
   void startPeriodicReleasesBroadcast() override {}
 
+  void getHistoricalMetaData(GetHistoricalMetaDataMode /* unused */) override {}
+
  private:
   APPEND_MessageTest* const test_;
 };

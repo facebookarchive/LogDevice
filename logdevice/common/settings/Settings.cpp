@@ -1161,6 +1161,15 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "smaller of this value and half the value of --seq-state-reply-timeout.",
        SERVER,
        SettingsCategory::Sequencer);
+  init("update-metadata-map-interval",
+       &update_metadata_map_interval,
+       "1h",
+       nullptr,
+       "Sequencer has a timer for periodically reading metadata logs and "
+       "and refreshing the in memory metadata_map_. This setting specifies "
+       "the interval for this timer",
+       SERVER,
+       SettingsCategory::Sequencer);
   init("delete_log_metadata_request_timeout",
        &delete_log_metadata_request_timeout,
        "30000ms",

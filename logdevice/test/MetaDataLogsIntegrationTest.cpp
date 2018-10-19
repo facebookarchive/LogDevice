@@ -11,10 +11,16 @@
 
 #include <gtest/gtest.h>
 
+#include "logdevice/common/EpochMetaDataMap.h"
 #include "logdevice/common/EpochMetaDataUpdater.h"
 #include "logdevice/common/EpochStore.h"
 #include "logdevice/common/MetaDataLog.h"
 #include "logdevice/common/NodeSetSelectorFactory.h"
+#include "logdevice/common/NoopTraceLogger.h"
+#include "logdevice/common/Sequencer.h"
+#include "logdevice/common/StaticSequencerLocator.h"
+#include "logdevice/common/Processor.h"
+#include "logdevice/common/metadata_log/TrimMetaDataLogRequest.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/include/Client.h"
 #include "logdevice/lib/ClientImpl.h"
@@ -479,4 +485,161 @@ TEST_F(MetaDataLogsIntegrationTest, MetaDataLogAppendWithStaleSequencerEpoch) {
   // try append a data log record, verify its lsn epoch >= 5
   lsn_t lsn = client->appendSync(LOG_ID, "dummy1");
   ASSERT_LE(epoch_t(5), lsn_to_epoch(lsn));
+}
+
+// Test to ensure sequencer periodically updates the metadata_map_ by reading
+// the metadata log.
+TEST_F(MetaDataLogsIntegrationTest, SequencerReadHistoricMetadata) {
+  const logid_t LOG_ID(1);
+  auto cluster = IntegrationTestUtils::ClusterFactory()
+                     .setParam("--update-metadata-map-interval",
+                               "1s",
+                               IntegrationTestUtils::ParamScope::SEQUENCER)
+                     .setParam("--get-trimpoint-interval",
+                               "1s",
+                               IntegrationTestUtils::ParamScope::SEQUENCER)
+                     .create(4);
+  auto client_orig = cluster->createClient();
+  std::shared_ptr<Client> client = cluster->createClient();
+  auto* client_impl = static_cast<ClientImpl*>(client.get());
+  Settings settings = create_default_settings<Settings>();
+  auto processor = Processor::create(
+      cluster->getConfig(),
+      std::make_shared<NoopTraceLogger>(cluster->getConfig()),
+      UpdateableSettings<Settings>(settings),
+      nullptr, /* stats*/
+      std::make_unique<StaticSequencerLocator>(cluster->getConfig()),
+      make_test_plugin_pack());
+
+  std::string data(1024, 'x');
+  // write one record
+  lsn_t lsn = client->appendSync(LOG_ID, Payload(data.data(), data.size()));
+  ASSERT_NE(LSN_INVALID, lsn);
+  auto first_epoch = lsn_to_epoch(lsn);
+  auto result = client_impl->getHistoricalMetaDataSync(LOG_ID);
+
+  // epoch metadata should be valid
+  auto epoch_metadata_first = result->getEpochMetaData(first_epoch);
+  ld_info("epoch_metadata_first: %s", epoch_metadata_first->toString().c_str());
+  ASSERT_NE(nullptr, epoch_metadata_first);
+
+  // change the nodes config and force two metadata log entries
+  for (auto i = 0; i < 2; i++) {
+    Semaphore sem;
+    auto handle = client->subscribeToConfigUpdates([&]() { sem.post(); });
+    auto org_res = client_impl->getHistoricalMetaDataSync(LOG_ID);
+    auto org_epoch_metadata = org_res->getLastEpochMetaData();
+    ASSERT_NE(nullptr, org_epoch_metadata);
+
+    // Get the nodes in the server config
+    auto current_config = cluster->getConfig()->get();
+    auto nodes = current_config->serverConfig()->getNodes();
+    nodes[1].storage_attributes->exclude_from_nodesets =
+        nodes[1].storage_attributes->exclude_from_nodesets ? false : true;
+
+    Configuration::NodesConfig nodes_config(std::move(nodes));
+    // create a new config with the modified node config
+    Configuration config(
+        current_config->serverConfig()->withNodes(nodes_config),
+        current_config->logsConfig());
+    // Write it out to the logdevice.conf file
+    cluster->writeConfig(config);
+
+    ld_info("Waiting for Client to pick up the config changes");
+    sem.wait();
+
+    // verify new metadata log entry; there is no good way to do this, so
+    // get the last epoch metadata and make sure this is not the same as the
+    // first (which by definition means a new entry was added ;))
+    wait_until([&]() {
+      auto res = client_impl->getHistoricalMetaDataSync(LOG_ID);
+      auto epoch_metadata_second = res->getLastEpochMetaData();
+      ld_spew("epoch_metadata_second: %s",
+              epoch_metadata_second->toString().c_str());
+      EXPECT_NE(nullptr, epoch_metadata_second);
+      if (org_epoch_metadata->h.epoch != epoch_metadata_second->h.epoch) {
+        return true;
+      }
+      return false;
+    });
+  }
+
+  result = client_impl->getHistoricalMetaDataSync(LOG_ID);
+  auto epoch_metadata_second = result->getLastEpochMetaData();
+  ld_info("epoch_metadata_full: %s", result->toString().c_str());
+  ld_info(
+      "epoch_metadata_second: %s", epoch_metadata_second->toString().c_str());
+  ASSERT_NE(nullptr, epoch_metadata_second);
+  ASSERT_NE(epoch_metadata_first->h.epoch, epoch_metadata_second->h.epoch);
+
+  // at this point, the metadata log should have something like this:
+  // E:1 S:1 Until: 3 (has one record)
+  // E:3 S:3 Until: 5
+  // E:5 S:5 Until: 6
+  // write two more records: first_lsn and second_lsn. these should have
+  // epoch >=5. trim first_lsn this should make <E:1 S:1 Until: 3> stale.
+  // if first_lsn epoch is 6 then <E:3 S:3 Until:5> is also stale. (this is
+  // why we force two metadata log entries above)
+  auto first_lsn =
+      client->appendSync(LOG_ID, Payload(data.data(), data.size()));
+  ASSERT_NE(LSN_INVALID, first_lsn);
+  auto second_lsn =
+      client->appendSync(LOG_ID, Payload(data.data(), data.size()));
+  ASSERT_NE(LSN_INVALID, second_lsn);
+
+  auto rv = client->trimSync(LOG_ID, first_lsn);
+  ld_info("Trimming lsn: %lu", first_lsn);
+  EXPECT_EQ(0, rv);
+
+  // trim metadata logs needs an updated trim point. the test sets the trim
+  // point interval to 1s, so wait slightly longer: 5 secs
+  // wait for the records to expire
+  /* sleep override */
+  std::this_thread::sleep_for(std::chrono::seconds(5));
+
+  // trim metadata log. this should trim the stale entry <E:1 S:1 Until:3>
+  // this could also trim <E: 3 S:3 Until: 5> (see comment above).
+  // the sucess of this depends on the sequencer having an up to date trim point
+  // so do this in a wait_until loop.
+  wait_until([&]() {
+    auto trim_status = E::UPTODATE;
+    std::unique_ptr<Request> request = std::make_unique<TrimMetaDataLogRequest>(
+        LOG_ID,
+        cluster->getConfig()->get(),
+        processor,
+        std::chrono::milliseconds(30000),
+        std::chrono::milliseconds(30000),
+        [&trim_status](Status st, logid_t /* unused */) { trim_status = st; },
+        std::chrono::seconds(3600 * 24),
+        false);
+    rv = processor->blockingRequest(request);
+    EXPECT_EQ(0, rv);
+    if (trim_status == E::OK) {
+      return true;
+    }
+    return false;
+  });
+
+  // verify that the stale entry is gone from the sequencer's metadata_map_
+  // since the sequencer reads metadata log based on a timer that the test
+  // sets to 1 sec, wait slightly longer: 5 secs
+  auto start_time = std::chrono::system_clock::now();
+  auto cur_time = start_time;
+  std::unique_ptr<EpochMetaData> epoch_metadata;
+  do {
+    result = client_impl->getHistoricalMetaDataSync(LOG_ID);
+    epoch_metadata = result->getEpochMetaData(first_epoch);
+    ld_spew("epoch_metadata_third: %s", epoch_metadata->toString().c_str());
+    if (epoch_metadata->h.epoch != epoch_metadata_first->h.epoch) {
+      break;
+    }
+    cur_time = std::chrono::system_clock::now();
+  } while (cur_time - start_time < std::chrono::seconds(5));
+
+  ld_info("epoch_metadata_full: %s", result->toString().c_str());
+  ld_info("epoch_metadata_third: %s", epoch_metadata->toString().c_str());
+  // manually verify; we cannot strcmp since the FLAGS are different
+  ASSERT_NE(epoch_metadata->h.epoch, epoch_metadata_first->h.epoch);
+  ASSERT_NE(epoch_metadata->h.effective_since,
+            epoch_metadata_first->h.effective_since);
 }

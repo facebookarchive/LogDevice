@@ -468,6 +468,10 @@ struct Settings : public SettingsBundle {
   // Minium timeout for a CheckSealRequest
   std::chrono::milliseconds check_seal_req_min_timeout;
 
+  // interval for update_medatata_map_timer_; default 1 hr
+  std::chrono::milliseconds update_metadata_map_interval{
+      std::chrono::seconds(3600)};
+
   // (client-only setting) Minium timeout for a DeleteLogMetadataRequest
   std::chrono::milliseconds delete_log_metadata_request_timeout;
 

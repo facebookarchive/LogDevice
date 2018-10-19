@@ -381,6 +381,8 @@ sidebar_label: Settings
 | read-historical-metadata-timeout | maximum time interval for a sequencer to get historical epoch metadata through reading the metadata log before retrying. | 10s | server&nbsp;only |
 | seq-state-backoff-time | how long to wait before resending a 'get sequencer state' request after a timeout. | 1s..10s |  |
 | seq-state-reply-timeout | how long to wait for a reply to a 'get sequencer state' request before retrying (usually to a different node) | 2s |  |
+| update-metadata-map-interval | Sequencer has a timer for periodically reading metadata logs and refreshing the in memory metadata_map_. This setting specifies
+the interval for this timer | 1h |  |
 
 ## Sequencer boycotting
 |   Name    |   Description   |  Default  |   Notes   |
@@ -516,4 +518,3 @@ sidebar_label: Settings
 | verify-checksum-before-replicating | If set, sequencers and rebuilding will verify checksums of records that have checksums. If there is a mismatch, sequencer will reject the append. Note that this setting doesn't make storage nodes verify checksums. Note that if not set, and --rocksdb-verify-checksum-during-store is set, a corrupted record kills write-availability for that log, as the appender keeps retrying and storage nodes reject the record. | true | server&nbsp;only |
 | write-shard-id-in-copyset | Serialize copysets using ShardIDs instead of node\_index\_t on disk. TODO(T15517759): enable by default once Flexible Log Sharding is fully implemented and this has been thoroughly tested. | false | **experimental**, server&nbsp;only |
 | write-sticky-copysets | If set, will enable sticky copysets and will write the copyset index for all records. This must be set before --rocksdb-use-copyset-index is enabled | true | requires&nbsp;restart, server&nbsp;only |
-
