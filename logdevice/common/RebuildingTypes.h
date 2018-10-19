@@ -102,7 +102,10 @@ struct STORED_Header;
 struct STORE_Header;
 
 class ShardRebuildingV1;
-using ShardRebuildingRef = WorkerCallbackHelper<ShardRebuildingV1>::Ticket;
+using ShardRebuildingV1Ref = WorkerCallbackHelper<ShardRebuildingV1>::Ticket;
+
+class ShardRebuildingV2;
+using ShardRebuildingV2Ref = WorkerCallbackHelper<ShardRebuildingV2>::Ticket;
 
 class RecordRebuildingInterface {
  public:
@@ -202,7 +205,7 @@ class ShardRebuildingInterface {
 
   virtual ~ShardRebuildingInterface() = default;
 
-  // Must be called exactly once, right after constructor. Starte the
+  // Must be called exactly once, right after constructor. Starts the
   // re-replication work.
   virtual void
   start(std::unordered_map<logid_t, std::unique_ptr<RebuildingPlan>> plan) = 0;

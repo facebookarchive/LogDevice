@@ -27,6 +27,7 @@ class StorageThreadPool;
 class ServerProcessor;
 class ServerWorkerImpl;
 
+struct ChunkRebuildingMap;
 struct PurgeUncleanEpochsMap;
 struct SettingOverrideTTLRequestMap;
 
@@ -69,6 +70,8 @@ class ServerWorker : public Worker {
 
   // a map of all currently running SettingOverrideTTLRequest
   SettingOverrideTTLRequestMap& activeSettingOverrides() const;
+
+  ChunkRebuildingMap& runningChunkRebuildings() const;
 
   // Intentionally shadows `Worker::processor_' to expose a more specific
   // subclass of Processor

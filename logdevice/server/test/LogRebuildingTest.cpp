@@ -201,7 +201,7 @@ class MockLogRebuilding : public LogRebuilding {
       ReceivedMessages& received_messages,
       UpdateableSettings<RebuildingSettings> rebuilding_settings,
       Settings& settings)
-      : LogRebuilding(ShardRebuildingRef(nullptr),
+      : LogRebuilding(ShardRebuildingV1Ref(nullptr),
                       kLogID,
                       /*shard=*/0,
                       rebuilding_settings,

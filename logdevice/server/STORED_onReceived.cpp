@@ -10,6 +10,7 @@
 #include "logdevice/common/RebuildingTypes.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/server/ServerWorker.h"
+#include "logdevice/server/rebuilding/ChunkRebuilding.h"
 
 namespace facebook { namespace logdevice {
 
@@ -31,35 +32,53 @@ Message::Disposition STORED_onReceived(STORED_Message* msg,
   ShardID shard(from.id_.node_.index(), shard_idx);
 
   if (msg->header_.flags & STORED_Header::REBUILDING) {
-    do {
-      auto log_rebuilding =
-          w->runningLogRebuildings().find(msg->header_.rid.logid, shard_idx);
-      if (!log_rebuilding) {
-        break;
-      }
+    auto log_rebuilding =
+        w->runningLogRebuildings().find(msg->header_.rid.logid, shard_idx);
+    if (log_rebuilding) {
       RecordRebuildingInterface* r =
           log_rebuilding->findRecordRebuilding(msg->header_.rid.lsn());
-      if (!r) {
-        break;
+      if (r) {
+        ld_spew("STORED received for Log:%lu, {Node:%d, serverInstance:%lu,"
+                "Flushtoken:%lu}",
+                msg->header_.rid.logid.val_,
+                from.id_.node_.index(),
+                msg->serverInstanceId_,
+                msg->flushToken_);
+
+        r->onStored(msg->header_,
+                    shard,
+                    msg->rebuilding_version_,
+                    msg->rebuilding_wave_,
+                    msg->rebuilding_id_,
+                    msg->serverInstanceId_,
+                    msg->flushToken_);
+
+        return Message::Disposition::NORMAL;
       }
-
-      ld_spew("STORED received for Log:%lu, {Node:%d, serverInstance:%lu,"
-              "Flushtoken:%lu}",
-              msg->header_.rid.logid.val_,
-              from.id_.node_.index(),
-              msg->serverInstanceId_,
-              msg->flushToken_);
-
-      r->onStored(msg->header_,
-                  shard,
-                  msg->rebuilding_version_,
-                  msg->rebuilding_wave_,
-                  msg->rebuilding_id_,
-                  msg->serverInstanceId_,
-                  msg->flushToken_);
-
-      return Message::Disposition::NORMAL;
-    } while (false);
+    } else {
+      auto& chunk_rebuildings = w->runningChunkRebuildings();
+      if (!chunk_rebuildings.map.empty() &&
+          msg->rebuilding_id_ == LOG_REBUILDING_ID_INVALID) {
+        RATELIMIT_ERROR(std::chrono::seconds(10),
+                        2,
+                        "Rebuilding got a STORED for %s without chunk ID from "
+                        "%s. Unexpected.",
+                        msg->header_.rid.toString().c_str(),
+                        Sender::describeConnection(from).c_str());
+      }
+      auto it = chunk_rebuildings.map.find(msg->rebuilding_id_);
+      if (it != chunk_rebuildings.map.end()) {
+        if (it->second->onStored(msg->header_,
+                                 shard,
+                                 msg->rebuilding_version_,
+                                 msg->rebuilding_wave_,
+                                 msg->rebuilding_id_,
+                                 msg->serverInstanceId_,
+                                 msg->flushToken_)) {
+          return Message::Disposition::NORMAL;
+        }
+      }
+    }
 
     RATELIMIT_INFO(std::chrono::seconds(1),
                    5,

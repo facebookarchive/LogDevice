@@ -326,10 +326,6 @@ void LogRebuilding::start(std::shared_ptr<const RebuildingSet> rs,
     seekToTimestamp_ = curDirtyTimeWindow_->lower();
   }
 
-  if (meta_reader_) {
-    Worker::onThisThread()->disposeOfMetaReader(std::move(meta_reader_));
-  }
-
   timer_ = createTimer([this]() { timerCallback(); });
   if (iteratorCache_) {
     iteratorInvalidationTimer_ = createIteratorTimer();
@@ -378,10 +374,6 @@ void LogRebuilding::start(std::shared_ptr<const RebuildingSet> rs,
 }
 
 void LogRebuilding::abort(bool notify_complete) {
-  if (meta_reader_) {
-    Worker::onThisThread()->disposeOfMetaReader(std::move(meta_reader_));
-  }
-
   ld_info("Aborting LogRebuilding state machine for log %lu", logid_.val_);
   publishTrace(RebuildingEventsTracer::ABORTED);
 

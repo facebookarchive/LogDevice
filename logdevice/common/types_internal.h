@@ -193,6 +193,8 @@ constexpr request_id_t REQUEST_ID_INVALID(0);
 
 /**
  * Type used to identify a run of LogRebuilding state machine.
+ * TODO (#24665001): In rebuilding v2 it's used to identiy chunks rather than
+ * logs. Rename to chunk_rebuilding_id_t.
  */
 LOGDEVICE_STRONG_TYPEDEF(uint64_t, log_rebuilding_id_t);
 
@@ -353,3 +355,10 @@ enum class DataKeyFormat {
 };
 
 }} // namespace facebook::logdevice
+
+// Specialization of std::hash for log_rebuilding_id_t
+namespace std {
+template <>
+struct hash<facebook::logdevice::log_rebuilding_id_t>
+    : public facebook::logdevice::log_rebuilding_id_t::Hash {};
+} // namespace std

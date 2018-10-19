@@ -31,16 +31,25 @@ class RecordRebuildingStore : public RecordRebuildingBase {
    *                              RecordRebuildingStore object.
    * @param replication           How copysets should be selected for the
    *                              current epoch.
+   * @param scratch_payload_holder If `record` doesn't own its memory
+   *                              (owned = false) then this shared_ptr owns that
+   *                              memory (usually that memory is part of a chunk
+   *                              containing multiple records, and the
+   *                              shared_ptr owns the whole chunk), as well as
+   *                              a PayloadHolder object that
+   *                              RecordRebuildingStore needs for internal use.
    * @param node_availability     Object to use for checking which nodes are
-   *                              alive.
+   *                              alive. Only tests override it.
    */
-  RecordRebuildingStore(size_t block_id,
-                        shard_index_t shard,
-                        RawRecord record,
-                        RecordRebuildingOwner* owner,
-                        std::shared_ptr<ReplicationScheme> replication,
-                        const NodeAvailabilityChecker* node_availability =
-                            NodeAvailabilityChecker::instance());
+  RecordRebuildingStore(
+      size_t block_id,
+      shard_index_t shard,
+      RawRecord record,
+      RecordRebuildingOwner* owner,
+      std::shared_ptr<ReplicationScheme> replication,
+      std::shared_ptr<PayloadHolder> scratch_payload_holder = nullptr,
+      const NodeAvailabilityChecker* node_availability =
+          NodeAvailabilityChecker::instance());
 
   ~RecordRebuildingStore() override;
 

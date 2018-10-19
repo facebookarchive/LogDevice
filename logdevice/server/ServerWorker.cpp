@@ -17,6 +17,7 @@
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/SettingOverrideTTLRequest.h"
 #include "logdevice/server/read_path/AllServerReadStreams.h"
+#include "logdevice/server/rebuilding/ChunkRebuilding.h"
 #include "logdevice/server/storage/AllCachedDigests.h"
 #include "logdevice/server/storage/PurgeScheduler.h"
 #include "logdevice/server/storage/PurgeUncleanEpochs.h"
@@ -44,6 +45,7 @@ class ServerWorkerImpl {
   AllCachedDigests cachedDigests_;
   PurgeUncleanEpochsMap activePurges_;
   SettingOverrideTTLRequestMap activeSettingOverrides_;
+  ChunkRebuildingMap runningChunkRebuildings_;
 
   /**
    * Should only be instantiated on a single worker, decided by
@@ -116,6 +118,12 @@ void ServerWorker::subclassFinishWork() {
     ld_info("Aborting %lu purges", activePurges().map.size());
     activePurges().map.clearAndDispose();
   }
+
+  if (!runningChunkRebuildings().map.empty()) {
+    ld_info(
+        "Aborting %lu chunk rebuildings", runningChunkRebuildings().map.size());
+    runningChunkRebuildings().map.clear();
+  }
 }
 
 void ServerWorker::subclassWorkFinished() {
@@ -150,6 +158,10 @@ PurgeUncleanEpochsMap& ServerWorker::activePurges() const {
 
 SettingOverrideTTLRequestMap& ServerWorker::activeSettingOverrides() const {
   return impl_->activeSettingOverrides_;
+}
+
+ChunkRebuildingMap& ServerWorker::runningChunkRebuildings() const {
+  return impl_->runningChunkRebuildings_;
 }
 
 AllServerReadStreams& ServerWorker::serverReadStreams() const {

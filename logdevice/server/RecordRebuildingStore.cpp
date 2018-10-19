@@ -25,6 +25,7 @@ RecordRebuildingStore::RecordRebuildingStore(
     RawRecord record,
     RecordRebuildingOwner* owner,
     std::shared_ptr<ReplicationScheme> replication,
+    std::shared_ptr<PayloadHolder> scratch_payload_holder,
     const NodeAvailabilityChecker* node_availability)
     : RecordRebuildingBase(record.lsn,
                            shard,
@@ -32,8 +33,11 @@ RecordRebuildingStore::RecordRebuildingStore(
                            replication,
                            node_availability),
       blockID_(block_id),
-      record_(std::move(record)) {
-  ld_check(record_.owned);
+      record_(std::move(record)),
+      payloadHolder_(std::move(scratch_payload_holder)) {
+  // Record bytes need to be owned either by record_ or scratch_payload_holder,
+  // but not both.
+  ld_check(record_.owned != (payloadHolder_ != nullptr));
 }
 
 RecordRebuildingStore::~RecordRebuildingStore() {
@@ -139,26 +143,31 @@ int RecordRebuildingStore::parseRecord() {
                                         getMyShardID().shard());
   ld_check(rv == 0);
 
-  // We want to give STORE_Message a shared_ptr<PayloadHolder> that shares
-  // ownership of the payload. The payload is a part of record_.blob,
-  // owned by record_. Move the blob into CustomPayloadHolder and use
-  // shared_ptr aliasing constructor to make shared_ptr<PayloadHolder> own it.
-  struct CustomPayloadHolder {
-    Slice blob;
-    PayloadHolder holder;
+  if (payloadHolder_ != nullptr) {
+    ld_check(!record_.owned);
+    *payloadHolder_ = PayloadHolder(payload, PayloadHolder::UNOWNED);
+  } else {
+    // We want to give STORE_Message a shared_ptr<PayloadHolder> that shares
+    // ownership of the payload. The payload is a part of record_.blob,
+    // owned by record_. Move the blob into CustomPayloadHolder and use
+    // shared_ptr aliasing constructor to make shared_ptr<PayloadHolder> own it.
+    struct CustomPayloadHolder {
+      Slice blob;
+      PayloadHolder holder;
 
-    CustomPayloadHolder(Slice blob, Payload payload)
-        : blob(blob), holder(payload, PayloadHolder::UNOWNED) {}
-    ~CustomPayloadHolder() {
-      std::free(const_cast<void*>(blob.data));
-    }
-  };
-  ld_check(record_.owned);
-  auto custom_ptr =
-      std::make_shared<CustomPayloadHolder>(record_.blob, payload);
-  record_.owned = false;
-  payloadHolder_ =
-      std::shared_ptr<PayloadHolder>(custom_ptr, &custom_ptr->holder);
+      CustomPayloadHolder(Slice blob, Payload payload)
+          : blob(blob), holder(payload, PayloadHolder::UNOWNED) {}
+      ~CustomPayloadHolder() {
+        std::free(const_cast<void*>(blob.data));
+      }
+    };
+    ld_check(record_.owned);
+    auto custom_ptr =
+        std::make_shared<CustomPayloadHolder>(record_.blob, payload);
+    record_.owned = false;
+    payloadHolder_ =
+        std::shared_ptr<PayloadHolder>(custom_ptr, &custom_ptr->holder);
+  }
 
   return 0;
 }
