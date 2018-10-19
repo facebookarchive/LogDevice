@@ -208,6 +208,31 @@ class TextConfigUpdaterImpl : public ConfigSource::AsyncCallback,
   // Returns true if configs are identical
   bool compareZookeeperConfig(const ZookeeperConfig* old_config,
                               const ZookeeperConfig* new_config);
+
+  /* Result for a config update, of either
+   * - UPDATED:                   the config section was pushed successfully
+   * - SKIPPED:                   the config was already up to date and update
+   *                                was skipped
+   * - INVALID:                   the config update is invalid and was rejected
+   * - FORCE_RELOAD_LOGSCONFIG:   the config is updated and also requires an
+   *                                extra refresh of the log configuration
+   */
+  enum class ConfigUpdateResult {
+    UPDATED,
+    SKIPPED,
+    INVALID,
+    FORCE_RELOAD_LOGSCONFIG
+  };
+  ConfigUpdateResult
+  pushZookeeperConfig(const std::shared_ptr<ZookeeperConfig>& new_config);
+
+  ConfigUpdateResult
+  pushServerConfig(const std::shared_ptr<ServerConfig>& new_config);
+
+  ConfigUpdateResult
+  pushLogsConfig(const std::shared_ptr<LogsConfig>& new_config);
+
+  static std::string updateResultToString(ConfigUpdateResult result);
 };
 
 class TextConfigUpdater : public ConfigSource::AsyncCallback,

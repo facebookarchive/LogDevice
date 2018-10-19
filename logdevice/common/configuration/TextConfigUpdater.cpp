@@ -240,129 +240,39 @@ void TextConfigUpdaterImpl::update(bool force_reload_logsconfig) {
   config->serverConfig()->setMainConfigMetadata(main_config_metadata);
   config->serverConfig()->setIncludedConfigMetadata(included_config_metadata);
 
-  // First update Zookeeper config, since it cannot fail validation
-  std::shared_ptr<UpdateableZookeeperConfig> updateable_zookeeper_config =
-      target_zk_config_.lock();
-  if (!updateable_zookeeper_config) {
-    ld_debug("Attempting ZK config update, but config doesn't exist anymore");
-    return;
-  }
+  ConfigUpdateResult server_config_update, zookeeper_config_update,
+      logs_config_update;
+  server_config_update = pushServerConfig(config->serverConfig());
+  zookeeper_config_update = pushZookeeperConfig(config->zookeeperConfig());
 
-  auto& new_zookeeper_config = config->zookeeperConfig();
-  if (!compareZookeeperConfig(updateable_zookeeper_config->get().get(),
-                              new_zookeeper_config.get())) {
-    updateable_zookeeper_config->update(new_zookeeper_config);
-  }
-
-  std::shared_ptr<UpdateableServerConfig> server_config =
-      target_server_config_.lock();
-  if (!server_config) {
-    ld_debug("Attempting to update ServerConfig after it has been destroyed");
-    return;
-  }
-
-  int server_config_cmp = compareServerConfig(server_config->get(),  // old
-                                              config->serverConfig() // new
-  );
-
-  int rv;
-
-  // Reloading config is expensive, so we try as much as we can to avoid it.
-  // The logic is the following:
-  // if the server config changed, we have no choice but to reload both server
-  // and logs config.
-  // if the server config has not changed, but force_reload_logsconfig is true,
-  // or the hash of the included logs config has changed, we reload the logs
-  // config only.
-  // otherwise, neither are reloaded.
-
-  if (server_config_cmp <= 0) {
-    // received config is not newer than running config. skip server
-    // config update.
-
-    // check if logsconfig needs to be reloaded
-    if (!force_reload_logsconfig) {
-      auto old_metadata = server_config->get()->getIncludedConfigMetadata();
-      auto new_metadata = config->serverConfig()->getIncludedConfigMetadata();
-      if (hashes_equal(old_metadata, new_metadata)) {
-        // no need to reload logsconfig either. we can return early.
-        return;
-      } else {
-        ld_debug("Server config has not changed but included logs config "
-                 "was updated (%s != %s). Reloading logs config.",
-                 old_metadata.hash.c_str(),
-                 new_metadata.hash.c_str());
-      }
-    }
+  // LogsConfig is a special snowflake. We need to update when:
+  // - ServerConfig is changed
+  // - Included config (in ServerConfig) has changed (based on hash)
+  //   and requests a force update
+  // - Force reload flag for LogsConfig is set
+  if (server_config_update == ConfigUpdateResult::UPDATED ||
+      server_config_update == ConfigUpdateResult::FORCE_RELOAD_LOGSCONFIG ||
+      force_reload_logsconfig) {
+    logs_config_update = pushLogsConfig(config->logsConfig());
   } else {
-    // Need to increase the stat _before_ publishing config because some
-    // integration tests rely on it.
-    STAT_INCR(stats_, updated_config);
-
-    rv = server_config->update(config->serverConfig());
-
-    if (rv != 0) {
-      STAT_INCR(stats_, config_update_invalid);
-      setRecentConfigValidity(false);
-      ld_error("ServerConfig update aborted");
-      return;
-    }
-
-    ld_info("Updated config (version: %u - hash: %s)",
-            server_config->get()->getVersion().val(),
-            main_config_metadata.hash.c_str());
+    logs_config_update = ConfigUpdateResult::SKIPPED;
   }
 
-  // Should we mark this config update invalid?
-  bool config_validity = false;
-  // See if we need to care about the logsconfig changes or not. At this point
-  // since the ServerConfig has been pushed to UpdateableServerConfig we can
-  // rely that the updateable_settings are up-to-date and they (potentially)
-  // include the updated settings
-  std::shared_ptr<UpdateableLogsConfig> updateable_logsconfig =
-      target_logs_config_.lock();
-  if (!updateable_logsconfig) {
-    ld_debug("Attempting log config update, but config doesn't exist anymore");
-    return;
+  ld_info("Config update result: ServerConfig=%s, ZK=%s, LogsConfig=%s",
+          updateResultToString(server_config_update).c_str(),
+          updateResultToString(zookeeper_config_update).c_str(),
+          updateResultToString(logs_config_update).c_str());
+
+  if (logs_config_update == ConfigUpdateResult::INVALID) {
+    ld_error("LogsConfig update (from file) was aborted because: %s",
+             error_description(config_parse_status));
+    err = E::INVALID_CONFIG;
   }
-  if (!updateable_settings_->server &&
-      (updateable_settings_->on_demand_logs_config ||
-       updateable_settings_->force_on_demand_logs_config)) {
-    ld_info("Ignoring the 'logs' section in the config file because "
-            "'on-demand-logs-config' is ENABLED (Client)");
-    // config->logsConfig() contains the alternative_logs
-    updateable_logsconfig->update(config->logsConfig());
-    config_validity = true;
-  } else if (!updateable_settings_->enable_logsconfig_manager) {
-    // if we didn't get logsconfig as a return of the parsing
-    if (!config->logsConfig()) {
-      // While we could successfully parse and load the ServerConfig, the
-      // LogsConfig section failed to be loaded from the file.
-      ld_error("LogsConfig update (from file) was aborted because: %s",
-               error_description(config_parse_status));
-      err = E::INVALID_CONFIG;
-      config_validity = false;
-    } else {
-      ld_info("Updating LogsConfig from file: version %lu",
-              config->logsConfig()->getVersion());
-      rv = updateable_logsconfig->update(config->logsConfig());
-      config_validity = true;
-      if (rv != 0) {
-        // This happens if any of the hooks registered on the
-        // UpdateableLogsConfig failed. We reject this config.
-        config_validity = false;
-        ld_error("LogsConfig update aborted");
-      }
-    }
-  } else {
-    ld_info("Ignoring changes in the 'logs' section in the config file because "
-            "LogsConfigManager is ENABLED");
-    // We mark this as a valid update because we don't care about the logs
-    // config in that context.
-    config_validity = true;
-  }
-  invalid_logs_config_ = !config_validity;
-  setRecentConfigValidity(config_validity);
+  invalid_logs_config_ = logs_config_update == ConfigUpdateResult::INVALID;
+  setRecentConfigValidity(server_config_update != ConfigUpdateResult::INVALID &&
+                          zookeeper_config_update !=
+                              ConfigUpdateResult::INVALID &&
+                          logs_config_update != ConfigUpdateResult::INVALID);
 }
 
 std::pair<ConfigSource*, std::string>
@@ -465,6 +375,23 @@ void TextConfigUpdaterImpl::setRecentConfigValidity(bool state) {
   }
 }
 
+std::string TextConfigUpdaterImpl::updateResultToString(
+    TextConfigUpdaterImpl::ConfigUpdateResult result) {
+  switch (result) {
+    case ConfigUpdateResult::SKIPPED:
+      return "skipped";
+    case ConfigUpdateResult::INVALID:
+      return "invalid";
+    case ConfigUpdateResult::UPDATED:
+      return "updated";
+    case ConfigUpdateResult::FORCE_RELOAD_LOGSCONFIG:
+      return "force_reload_logsconfig";
+    default:
+      ld_assert(false);
+      return "";
+  }
+}
+
 int TextConfigUpdaterImpl::compareServerConfig(
     const std::shared_ptr<ServerConfig>& old_config,
     const std::shared_ptr<ServerConfig>& new_config) {
@@ -514,6 +441,48 @@ int TextConfigUpdaterImpl::compareServerConfig(
   return 1;
 }
 
+TextConfigUpdaterImpl::ConfigUpdateResult
+TextConfigUpdaterImpl::pushServerConfig(
+    const std::shared_ptr<ServerConfig>& new_config) {
+  std::shared_ptr<UpdateableServerConfig> server_config =
+      target_server_config_.lock();
+  if (!server_config) {
+    ld_debug("Attempting to update ServerConfig after it has been destroyed");
+    return ConfigUpdateResult::SKIPPED;
+  }
+
+  if (compareServerConfig(server_config->get(), new_config) <= 0) {
+    // ServerConfig can have extra includes (logsconfig) which might need
+    // a force update. Eventually, we'll pull LogsConfig out of the ServerConfig
+    // metadata entirely. When includes have changed, we need to return a
+    // force update
+    auto old_metadata = server_config->get()->getIncludedConfigMetadata();
+    auto new_metadata = new_config->getIncludedConfigMetadata();
+    if (hashes_equal(old_metadata, new_metadata)) {
+      return ConfigUpdateResult::SKIPPED;
+    } else {
+      return ConfigUpdateResult::FORCE_RELOAD_LOGSCONFIG;
+    }
+  } else {
+    // Need to increase the stat _before_ publishing config because some
+    // integration tests rely on it.
+    STAT_INCR(stats_, updated_config);
+
+    int rv = server_config->update(new_config);
+
+    if (rv != 0) {
+      STAT_INCR(stats_, config_update_invalid);
+      ld_error("Server config update was rejected");
+      return ConfigUpdateResult::INVALID;
+    } else {
+      ld_info("Updated config (version: %u - hash: %s)",
+              new_config->getVersion().val(),
+              new_config->getMainConfigMetadata().hash.c_str());
+      return ConfigUpdateResult::UPDATED;
+    }
+  }
+}
+
 bool TextConfigUpdaterImpl::compareZookeeperConfig(
     const ZookeeperConfig* old_config,
     const ZookeeperConfig* new_config) {
@@ -527,6 +496,73 @@ bool TextConfigUpdaterImpl::compareZookeeperConfig(
     // older
     return old_config->getQuorumString() == new_config->getQuorumString() &&
         old_config->getSessionTimeout() == new_config->getSessionTimeout();
+  }
+}
+
+TextConfigUpdaterImpl::ConfigUpdateResult
+TextConfigUpdaterImpl::pushZookeeperConfig(
+    const std::shared_ptr<ZookeeperConfig>& new_config) {
+  std::shared_ptr<UpdateableZookeeperConfig> updateable_zookeeper_config =
+      target_zk_config_.lock();
+  if (!updateable_zookeeper_config) {
+    ld_debug("Attempting ZK config update, but config doesn't exist anymore");
+    return ConfigUpdateResult::SKIPPED;
+  }
+
+  if (!compareZookeeperConfig(
+          updateable_zookeeper_config->get().get(), new_config.get())) {
+    int rv = updateable_zookeeper_config->update(new_config);
+    if (rv != 0) {
+      ld_error("Zookeeper config update was rejected");
+      return ConfigUpdateResult::INVALID;
+    } else {
+      return ConfigUpdateResult::UPDATED;
+    }
+  } else {
+    return ConfigUpdateResult::SKIPPED;
+  }
+}
+
+TextConfigUpdaterImpl::ConfigUpdateResult TextConfigUpdaterImpl::pushLogsConfig(
+    const std::shared_ptr<LogsConfig>& new_config) {
+  std::shared_ptr<UpdateableLogsConfig> updateable_logsconfig =
+      target_logs_config_.lock();
+  if (!updateable_logsconfig) {
+    ld_debug("Attempting log config update, but config doesn't exist anymore");
+    return TextConfigUpdaterImpl::ConfigUpdateResult::SKIPPED;
+  }
+
+  if (!updateable_settings_->server &&
+      (updateable_settings_->on_demand_logs_config ||
+       updateable_settings_->force_on_demand_logs_config)) {
+    ld_info("Ignoring the 'logs' section in the config file because "
+            "'on-demand-logs-config' is ENABLED (Client)");
+    // config->logsConfig() contains the alternative_logs
+    if (updateable_logsconfig->update(new_config) != 0) {
+      return ConfigUpdateResult::INVALID;
+    } else {
+      return ConfigUpdateResult::UPDATED;
+    }
+  } else if (!updateable_settings_->enable_logsconfig_manager) {
+    // if we didn't get logsconfig as a return of the parsing
+    if (!new_config) {
+      return ConfigUpdateResult::INVALID;
+    } else {
+      ld_info("Updating LogsConfig from file: version %lu",
+              new_config->getVersion());
+      if (updateable_logsconfig->update(new_config) != 0) {
+        ld_error("LogsConfig config update got rejected");
+        return ConfigUpdateResult::INVALID;
+      } else {
+        return ConfigUpdateResult::UPDATED;
+      }
+    }
+  } else {
+    ld_info("Ignoring changes in the 'logs' section in the config file because "
+            "LogsConfigManager is ENABLED");
+    // We mark this as a valid update because we don't care about the logs
+    // config in that context.
+    return ConfigUpdateResult::UPDATED;
   }
 }
 
