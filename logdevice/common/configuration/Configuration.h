@@ -14,6 +14,7 @@
 #include "logdevice/common/configuration/LogsConfig.h"
 #include "logdevice/common/configuration/ServerConfig.h"
 #include "logdevice/common/configuration/UpdateableConfigTmpl.h"
+#include "logdevice/common/configuration/ZookeeperConfig.h"
 
 namespace facebook { namespace logdevice {
 
@@ -52,6 +53,11 @@ using UpdateableServerConfig =
 using UpdateableLogsConfig =
     configuration::UpdateableConfigTmpl<LogsConfig, NoopOverrides<LogsConfig>>;
 
+using facebook::logdevice::configuration::ZookeeperConfig;
+using UpdateableZookeeperConfig =
+    configuration::UpdateableConfigTmpl<ZookeeperConfig,
+                                        NoopOverrides<ZookeeperConfig>>;
+
 class Configuration {
  public:
   using Log = facebook::logdevice::configuration::Log;
@@ -66,12 +72,12 @@ class Configuration {
       facebook::logdevice::configuration::TraceLoggerConfig;
   using TrafficShapingConfig =
       facebook::logdevice::configuration::TrafficShapingConfig;
-  using ZookeeperConfig = facebook::logdevice::configuration::ZookeeperConfig;
   using MetaDataLogsConfig =
       facebook::logdevice::configuration::MetaDataLogsConfig;
 
   Configuration(std::shared_ptr<ServerConfig> server_config,
-                std::shared_ptr<LogsConfig> logs_config);
+                std::shared_ptr<LogsConfig> logs_config,
+                std::shared_ptr<ZookeeperConfig> zookeeper_config = nullptr);
 
   /**
    * NOTE: This returns a *reference* to the shared_ptr, but the shared_ptr and
@@ -91,6 +97,16 @@ class Configuration {
    */
   const std::shared_ptr<LogsConfig>& logsConfig() const {
     return logs_config_;
+  }
+
+  /**
+   * NOTE: This returns a *reference* to the shared_ptr, but the shared_ptr and
+   * the underlying ZookeeperConfig are guaranteed to to last at least as
+   * long as the Configuration object, even if the user doesn't make a
+   * copy of the shared_ptr. This pointer might be nullptr in some cases.
+   */
+  const std::shared_ptr<ZookeeperConfig>& zookeeperConfig() const {
+    return zookeeper_config_;
   }
 
   // Helper to convert logs config into LocalLogsConfig
@@ -235,5 +251,6 @@ class Configuration {
   loadFromString(const std::string& server, const std::string& logs);
   const std::shared_ptr<ServerConfig> server_config_;
   const std::shared_ptr<LogsConfig> logs_config_;
+  const std::shared_ptr<ZookeeperConfig> zookeeper_config_;
 };
 }} // namespace facebook::logdevice

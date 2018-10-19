@@ -25,11 +25,8 @@ using namespace facebook::logdevice::logsconfig;
 namespace facebook { namespace logdevice { namespace configuration {
 namespace parser {
 
-static bool parseZookeeperQuorum(const folly::dynamic& quorum_list,
-                                 ZookeeperConfig& output);
 static bool parseMetaDataLogNodes(const folly::dynamic& nodes,
                                   MetaDataLogsConfig& output);
-
 bool parseTraceLogger(const folly::dynamic& clusterMap,
                       TraceLoggerConfig& output) {
   auto iter = clusterMap.find("trace-logger");
@@ -120,107 +117,6 @@ bool parseInternalLogs(const folly::dynamic& clusterMap,
     return false;
   }
 
-  return true;
-}
-
-bool parseZookeeper(const folly::dynamic& clusterMap, ZookeeperConfig& output) {
-  auto iter = clusterMap.find("zookeeper");
-  if (iter == clusterMap.items().end()) {
-    return true; // "zookeeper" section is optional and unused on clients
-  }
-
-  const folly::dynamic& zookeeperSection = iter->second;
-  if (!zookeeperSection.isObject()) {
-    ld_error("\"zookeeper\" entry for cluster is not a JSON object");
-    err = E::INVALID_CONFIG;
-    return false;
-  }
-
-  iter = zookeeperSection.find("quorum");
-  if (iter == zookeeperSection.items().end()) {
-    ld_error("\"quorum\" is missing in \"zookeeper\" section");
-    err = E::INVALID_CONFIG;
-    return false;
-  }
-
-  if (!parseZookeeperQuorum(iter->second, output)) {
-    return false;
-  }
-
-  std::string session_timeout;
-
-  if (!getStringFromMap(zookeeperSection, "timeout", session_timeout)) {
-    ld_error("\"timeout\" entry in \"zookeeper\" section is missing or is "
-             "not a string");
-    err = E::INVALID_CONFIG;
-    return false;
-  }
-
-  static const std::chrono::milliseconds MAX_SESSION_TIMEOUT((1ull << 32) - 1);
-
-  int rv = parse_chrono_string(session_timeout, &output.session_timeout);
-
-  if (rv != 0 || output.session_timeout <= output.session_timeout.zero() ||
-      output.session_timeout > MAX_SESSION_TIMEOUT) {
-    ld_error("\"timeout\" entry in \"zookeeper\" section is invalid. Expected "
-             "a number followed by one of: us,ms,s,min,h,hr,d,days, "
-             "representing from 1ms to (2^32)-1 ms. Got \"%s\".",
-             session_timeout.c_str());
-    err = E::INVALID_CONFIG;
-    return false;
-  }
-
-  return true;
-}
-
-static bool parseZookeeperQuorum(const folly::dynamic& quorum_list,
-                                 ZookeeperConfig& output) {
-  if (!quorum_list.isArray()) {
-    ld_error("\"quorum\" entry in \"zookeeper\" section must be an array");
-    err = E::INVALID_CONFIG;
-    return false;
-  }
-
-  ld_check(output.quorum.empty());
-  int itemno = 0;
-  for (const folly::dynamic& item : quorum_list) {
-    if (!item.isString()) {
-      ld_error("Item %d in the zookeeper quorum section "
-               "is not a string",
-               itemno + 1);
-      err = E::INVALID_CONFIG;
-      return false;
-    }
-    std::string ip_port_str = item.asString();
-
-    std::pair<std::string, std::string> ip_port = parseIpPort(ip_port_str);
-    if (ip_port.first.empty() || ip_port.second.empty()) {
-      ld_error("malformed ip:port entry \"%s\" in item %d of the zookeeper "
-               "quorum section",
-               ip_port_str.c_str(),
-               itemno + 1);
-      err = E::INVALID_CONFIG;
-      return false;
-    }
-
-    try {
-      output.quorum.emplace_back( // creating a Sockaddr
-          ip_port.first,
-          ip_port.second);
-    } catch (const ConstructorFailed&) {
-      ld_error("invalid ip:port entry \"%s\" in item %d of the zookeeper "
-               "quorum section",
-               ip_port_str.c_str(),
-               itemno + 1);
-      err = E::INVALID_CONFIG;
-      return false;
-    }
-    itemno++;
-  }
-
-  if (output.quorum.empty()) {
-    ld_error("zookeeper quorum section is empty");
-  }
   return true;
 }
 

@@ -170,6 +170,10 @@ struct CheckImpactRequestMap {
       map;
 };
 
+namespace configuration {
+class ZookeeperConfig;
+}
+
 template <typename Duration>
 class ChronoExponentialBackoffAdaptiveVariable;
 
@@ -231,6 +235,12 @@ class Worker : public EventLoop {
    *         auto updated
    */
   std::shared_ptr<LogsConfig> getLogsConfig() const;
+
+  /**
+   * @return zookeeper configuration object cached on this Worker and
+   *         auto updated
+   */
+  std::shared_ptr<configuration::ZookeeperConfig> getZookeeperConfig() const;
 
   /**
    * Gets the UpdateableConfig object - used to force a reload of the config

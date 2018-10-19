@@ -46,18 +46,16 @@ class ConfigInit {
 
   /**
    * Takes an empty UpdateableConfig (possibly with some hooks added) and
-   * attaches an updater to it.  The source of the config is parsed from the
-   * given string.
+   * attaches an updater to it. UpdateableConfig will hold the ownership of the
+   * updater. The source of the config is parsed from the given string.
    *
    * Examples of acceptable source strings:
    *   "configerator:logdevice/logdevice.test.conf"
    *   "file:logdevice.test.conf" or just "logdevice.test.conf"
    *
    * @param source                    string specifying the config source
-   * @param server_config             UpdateableServerConfig instance
-   * @param logs_config               UpdateableLogsConfig instance. If defined
-   *                                  as nullptr then we will ignore managing
-   *                                  logs_config.
+   * @param legacy_plugin_pack        Plugin pack
+   * @param updateable_config         UpdateableConfig instance
    * @param alternative_logs_config   an alternative log configuration fetcher,
    *                                  in case log data isn't included in the
    *                                  main config file. If null, log config
@@ -77,15 +75,6 @@ class ConfigInit {
    *       INVALID_PARAM   @param source has invalid format
    *           SYSLIMIT    config monitoring thread could not be started
    */
-  int attach(const std::string& source,
-             std::shared_ptr<LegacyPluginPack>,
-             std::shared_ptr<UpdateableServerConfig> server_config,
-             std::shared_ptr<UpdateableLogsConfig> logs_config = nullptr,
-             std::unique_ptr<LogsConfig> alternative_logs_config = nullptr,
-             UpdateableSettings<Settings> updateable_settings =
-                 UpdateableSettings<Settings>(),
-             const ConfigParserOptions& options = ConfigParserOptions());
-
   int attach(const std::string& source,
              std::shared_ptr<LegacyPluginPack>,
              std::shared_ptr<UpdateableConfig> updateable_config,

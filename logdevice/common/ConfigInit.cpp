@@ -18,18 +18,15 @@
 
 namespace facebook { namespace logdevice {
 
-int ConfigInit::attach(const std::string& location,
+int ConfigInit::attach(const std::string& source,
                        std::shared_ptr<LegacyPluginPack> plugin,
-                       std::shared_ptr<UpdateableServerConfig> server_config,
-                       std::shared_ptr<UpdateableLogsConfig> logs_config,
+                       std::shared_ptr<UpdateableConfig> updateable_config,
                        std::unique_ptr<LogsConfig> alternative_logs_config,
-                       UpdateableSettings<Settings> updateable_settings,
+                       UpdateableSettings<Settings> settings,
                        const ConfigParserOptions& options) {
-  ld_check(server_config != nullptr);
-
   int rv;
   auto updater = std::make_shared<TextConfigUpdater>(
-      server_config, logs_config, std::move(updateable_settings), stats_);
+      updateable_config, std::move(settings), stats_);
   updater->registerSource(
       std::make_unique<FileConfigSource>(file_polling_interval_));
   updater->registerSource(
@@ -40,7 +37,7 @@ int ConfigInit::attach(const std::string& location,
   // Ask the plugin if it wants to register additional sources
   plugin->registerConfigSources(*updater, zk_polling_interval_);
 
-  rv = updater->load(location, std::move(alternative_logs_config), options);
+  rv = updater->load(source, std::move(alternative_logs_config), options);
   if (rv != 0) {
     return rv;
   }
@@ -49,23 +46,10 @@ int ConfigInit::attach(const std::string& location,
     return rv;
   }
 
-  server_config->setUpdater(updater);
-  logs_config->setUpdater(updater);
+  updateable_config->updateableServerConfig()->setUpdater(updater);
+  updateable_config->updateableLogsConfig()->setUpdater(updater);
+  updateable_config->updateableZookeeperConfig()->setUpdater(updater);
   return 0;
 }
 
-int ConfigInit::attach(const std::string& source,
-                       std::shared_ptr<LegacyPluginPack> plugin,
-                       std::shared_ptr<UpdateableConfig> updateable_config,
-                       std::unique_ptr<LogsConfig> alternative_logs_config,
-                       UpdateableSettings<Settings> settings,
-                       const ConfigParserOptions& options) {
-  return attach(source,
-                std::move(plugin),
-                updateable_config->updateableServerConfig(),
-                updateable_config->updateableLogsConfig(),
-                std::move(alternative_logs_config),
-                std::move(settings),
-                options);
-}
 }} // namespace facebook::logdevice

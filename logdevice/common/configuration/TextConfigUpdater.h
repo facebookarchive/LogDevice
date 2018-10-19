@@ -46,10 +46,12 @@ class TextConfigUpdaterImpl : public ConfigSource::AsyncCallback,
       std::vector<std::unique_ptr<ConfigSource>>& sources_,
       std::shared_ptr<UpdateableServerConfig> target_server_config,
       std::shared_ptr<UpdateableLogsConfig> target_logs_config,
+      std::shared_ptr<UpdateableZookeeperConfig> target_zk_config,
       UpdateableSettings<Settings> updateable_settings,
       StatsHolder* stats = nullptr)
       : target_server_config_(target_server_config),
         target_logs_config_(target_logs_config),
+        target_zk_config_(target_zk_config),
         sources_(sources_),
         updateable_settings_(std::move(updateable_settings)),
         stats_(stats),
@@ -66,6 +68,7 @@ class TextConfigUpdaterImpl : public ConfigSource::AsyncCallback,
                               sources_,
                               updateable_config->updateableServerConfig(),
                               updateable_config->updateableLogsConfig(),
+                              updateable_config->updateableZookeeperConfig(),
                               std::move(updateable_settings),
                               stats) {}
   /**
@@ -134,6 +137,7 @@ class TextConfigUpdaterImpl : public ConfigSource::AsyncCallback,
  private:
   std::weak_ptr<UpdateableServerConfig> target_server_config_;
   std::weak_ptr<UpdateableLogsConfig> target_logs_config_;
+  std::weak_ptr<UpdateableZookeeperConfig> target_zk_config_;
 
   std::vector<std::unique_ptr<ConfigSource>>& sources_;
   std::unique_ptr<LogsConfig> alternative_logs_config_;
@@ -199,6 +203,11 @@ class TextConfigUpdaterImpl : public ConfigSource::AsyncCallback,
   //         1 if new_config has a more recent version
   int compareServerConfig(const std::shared_ptr<ServerConfig>& old_config,
                           const std::shared_ptr<ServerConfig>& new_config);
+
+  // Compares new and old zookeeper configs
+  // Returns true if configs are identical
+  bool compareZookeeperConfig(const ZookeeperConfig* old_config,
+                              const ZookeeperConfig* new_config);
 };
 
 class TextConfigUpdater : public ConfigSource::AsyncCallback,

@@ -90,7 +90,7 @@ std::shared_ptr<TableData> EpochStore::getData(QueryContext& ctx) {
 
   std::shared_ptr<logdevice::EpochStore> epoch_store;
 
-  auto zookeeper_quorum = config->serverConfig()->getZookeeperQuorumString();
+  auto zookeeper_quorum = config->zookeeperConfig()->getQuorumString();
   if (zookeeper_quorum.empty()) {
     // There is no zookeeper quorum.
     folly::StringPiece config_path{getContext().config_path};
@@ -113,10 +113,12 @@ std::shared_ptr<TableData> EpochStore::getData(QueryContext& ctx) {
         client_impl->getConfig()->updateableServerConfig());
   } else {
     try {
+      auto upd_config = client_impl->getConfig();
       epoch_store = std::make_shared<ZookeeperEpochStore>(
           config->serverConfig()->getClusterName(),
           &(client_impl->getProcessor()),
-          client_impl->getConfig()->updateableServerConfig(),
+          upd_config->updateableZookeeperConfig(),
+          upd_config->updateableServerConfig(),
           client_impl->getProcessor().updateableSettings(),
           zkFactoryProd);
     } catch (const ConstructorFailed&) {

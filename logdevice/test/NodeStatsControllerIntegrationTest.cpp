@@ -272,7 +272,6 @@ class NodeStatsControllerIntegrationTest
         ServerConfig::SecurityConfig(),
         ServerConfig::TraceLoggerConfig(),
         ServerConfig::TrafficShapingConfig(),
-        ServerConfig::ZookeeperConfig(),
         new_settings,
         other->getClientSettingsConfig());
 

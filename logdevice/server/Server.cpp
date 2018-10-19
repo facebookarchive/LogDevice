@@ -248,8 +248,12 @@ ServerParameters::ServerParameters(
 
   auto updateable_server_config = std::make_shared<UpdateableServerConfig>();
   auto updateable_logs_config = std::make_shared<UpdateableLogsConfig>();
-  updateable_config_ = std::make_shared<UpdateableConfig>(
-      updateable_server_config, updateable_logs_config);
+  auto updatable_zookeeper_config =
+      std::make_shared<UpdateableZookeeperConfig>();
+  updateable_config_ =
+      std::make_shared<UpdateableConfig>(updateable_server_config,
+                                         updateable_logs_config,
+                                         updatable_zookeeper_config);
   server_config_hook_handles_.push_back(
       updateable_server_config->addHook(std::bind(
           &ServerParameters::updateMyNodeId, this, std::placeholders::_1)));
@@ -270,8 +274,7 @@ ServerParameters::ServerParameters(
         processor_settings_->zk_config_polling_interval);
     int rv = config_init.attach(server_settings_->config_path,
                                 plugin_,
-                                updateable_server_config,
-                                updateable_logs_config,
+                                updateable_config_,
                                 nullptr,
                                 processor_settings_);
     if (rv != 0) {
@@ -704,10 +707,10 @@ bool Server::initSequencers() {
   if (!server_settings_->epoch_store_path.empty()) {
     try {
       ld_info("Initializing FileEpochStore");
-      epoch_store.reset(
-          new FileEpochStore(server_settings_->epoch_store_path,
-                             processor_.get(),
-                             updateable_config_->updateableServerConfig()));
+      epoch_store = std::make_unique<FileEpochStore>(
+          server_settings_->epoch_store_path,
+          processor_.get(),
+          updateable_config_->updateableServerConfig());
     } catch (const ConstructorFailed&) {
       ld_error(
           "Failed to construct FileEpochStore: %s", error_description(err));
@@ -716,12 +719,13 @@ bool Server::initSequencers() {
   } else {
     ld_info("Initializing ZookeeperEpochStore");
     try {
-      epoch_store.reset(
-          new ZookeeperEpochStore(server_config_->getClusterName(),
-                                  processor_.get(),
-                                  updateable_config_->updateableServerConfig(),
-                                  processor_->updateableSettings(),
-                                  zkFactoryProd));
+      epoch_store = std::make_unique<ZookeeperEpochStore>(
+          server_config_->getClusterName(),
+          processor_.get(),
+          updateable_config_->updateableZookeeperConfig(),
+          updateable_config_->updateableServerConfig(),
+          processor_->updateableSettings(),
+          zkFactoryProd);
     } catch (const ConstructorFailed&) {
       ld_error("Failed to construct ZookeeperEpochStore: %s",
                error_description(err));

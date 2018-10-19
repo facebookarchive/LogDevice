@@ -92,7 +92,9 @@ TEST_F(ServerConfigSourceIntegrationTest, StaleServerConfigFetchFromClient) {
       std::make_shared<UpdateableConfig>(
           std::make_shared<UpdateableServerConfig>(
               cluster_config->serverConfig()->copy()),
-          std::make_shared<UpdateableLogsConfig>(cluster_config->logsConfig()));
+          std::make_shared<UpdateableLogsConfig>(cluster_config->logsConfig()),
+          std::make_shared<UpdateableZookeeperConfig>(
+              cluster_config->zookeeperConfig()));
   // Set the client config version to 2, so it's higher than the cluster's
   client_config->get()->serverConfig()->setVersion(config_version_t(2));
   // Pretend this config is from the server
@@ -165,7 +167,9 @@ TEST_F(ServerConfigSourceIntegrationTest, StaleServerConfigFetchFromSource) {
       std::make_shared<UpdateableConfig>(
           std::make_shared<UpdateableServerConfig>(
               cluster_config->serverConfig()->copy()),
-          std::make_shared<UpdateableLogsConfig>(cluster_config->logsConfig()));
+          std::make_shared<UpdateableLogsConfig>(cluster_config->logsConfig()),
+          std::make_shared<UpdateableZookeeperConfig>(
+              cluster_config->zookeeperConfig()));
   // Set the client config version to 2, so it's higher than the cluster's
   client_config->get()->serverConfig()->setVersion(config_version_t(2));
 

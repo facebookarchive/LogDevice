@@ -28,7 +28,9 @@ Message::Disposition CONFIG_FETCH_Message::onReceived(const Address& from) {
   }
 
   Worker* worker = Worker::onThisThread();
-  auto server_config = worker->getConfig()->serverConfig();
+  auto config = worker->getConfig();
+  auto server_config = config->serverConfig();
+  auto zk_config = config->zookeeperConfig();
 
   ServerConfig::ConfigMetadata metadata =
       server_config->getMainConfigMetadata();
@@ -39,9 +41,14 @@ Message::Disposition CONFIG_FETCH_Message::onReceived(const Address& from) {
       CONFIG_CHANGED_Header::ConfigType::MAIN_CONFIG,
       CONFIG_CHANGED_Header::Action::UPDATE};
   metadata.hash.copy(hdr.hash, sizeof hdr.hash);
+
+  // We still send the Zookeeper section for backwards compatibility on
+  // older servers, but on newer servers this is ignored
+  // Clients already ignore / don't use the Zookeeper section
+  // TODO deprecate in T32793726
   std::unique_ptr<CONFIG_CHANGED_Message> msg =
       std::make_unique<CONFIG_CHANGED_Message>(
-          hdr, server_config->toString(nullptr, true));
+          hdr, server_config->toString(nullptr, zk_config.get(), true));
 
   int rv = worker->sender().sendMessage(std::move(msg), from);
   if (rv != 0) {

@@ -61,11 +61,12 @@ class ZookeeperEpochStoreTest : public ::testing::Test {
     epochstore = std::make_unique<ZookeeperEpochStore>(
         TEST_CLUSTER,
         processor.get(),
+        config->updateableZookeeperConfig(),
         config->updateableServerConfig(),
         processor->updateableSettings(),
-        [znodes](const ServerConfig& config) {
+        [znodes](const ZookeeperConfig& config) {
           return std::make_unique<ZookeeperClientInMemory>(
-              config.getZookeeperQuorumString(), znodes);
+              config.getQuorumString(), znodes);
         });
 
     dbg::assertOnData = true;
@@ -651,17 +652,17 @@ TEST_F(ZookeeperEpochStoreTestEmpty, NoRootNodeEpochMetaDataTestNoCreation) {
 
 TEST_F(ZookeeperEpochStoreTest, QuorumChangeTest) {
   // Change the quorum to one that points somewhere else
-  auto orig_server_config = config->getServerConfig();
-  auto zk_config = orig_server_config->getZookeeperConfig();
-  auto dumb_zk_config = zk_config;
-  dumb_zk_config.quorum = {Sockaddr("2401:db00:21:3:face:0:43:0", 2183),
-                           Sockaddr("2401:db00:21:3:face:0:45:0", 2183),
-                           Sockaddr("2401:db00:2030:6103:face:0:27:0", 2183),
-                           Sockaddr("2401:db00:2030:6103:face:0:1d:0", 2183),
-                           Sockaddr("2401:db00:2030:6103:face:0:17:0", 2183)};
-  auto modified_config =
-      orig_server_config->withZookeeperConfig(dumb_zk_config);
-  config->updateableServerConfig()->update(modified_config);
+  auto orig_zk_config = config->getZookeeperConfig();
+  ASSERT_NE(orig_zk_config, nullptr);
+  const std::vector<Sockaddr> new_quorum = {
+      Sockaddr("2401:db00:21:3:face:0:43:0", 2183),
+      Sockaddr("2401:db00:21:3:face:0:45:0", 2183),
+      Sockaddr("2401:db00:2030:6103:face:0:27:0", 2183),
+      Sockaddr("2401:db00:2030:6103:face:0:1d:0", 2183),
+      Sockaddr("2401:db00:2030:6103:face:0:17:0", 2183)};
+  config->updateableZookeeperConfig()->update(
+      std::make_shared<configuration::ZookeeperConfig>(
+          new_quorum, orig_zk_config->getSessionTimeout()));
 
   // Run a ZK request
   Semaphore sem;
@@ -676,8 +677,8 @@ TEST_F(ZookeeperEpochStoreTest, QuorumChangeTest) {
       });
   ASSERT_EQ(0, rv);
   ld_info("Posted request");
-  // Change the quorum
-  config->updateableServerConfig()->update(orig_server_config);
+  // Change the quorum back to the original
+  config->updateableZookeeperConfig()->update(orig_zk_config);
   ld_info("Changed quorum");
 
   ld_info("Waiting for request to complete");

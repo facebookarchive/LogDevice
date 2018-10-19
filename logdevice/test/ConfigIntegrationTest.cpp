@@ -771,7 +771,9 @@ TEST_F(ConfigIntegrationTest, ExpandWithVersionUpdate) {
       std::make_shared<UpdateableConfig>(
           std::make_shared<UpdateableServerConfig>(
               cluster_config->serverConfig()->copy()),
-          std::make_shared<UpdateableLogsConfig>(cluster_config->logsConfig()));
+          std::make_shared<UpdateableLogsConfig>(cluster_config->logsConfig()),
+          std::make_shared<UpdateableZookeeperConfig>(
+              cluster_config->zookeeperConfig()));
 
   std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
   ASSERT_EQ(0, client_settings->set("enable-config-synchronization", true));
@@ -869,7 +871,9 @@ TEST_F(ConfigIntegrationTest, ConfigSyncAfterReconnect) {
   std::shared_ptr<UpdateableConfig> client_config =
       std::make_shared<UpdateableConfig>(
           std::make_shared<UpdateableServerConfig>(new_server_config->copy()),
-          std::make_shared<UpdateableLogsConfig>(cluster_config->logsConfig()));
+          std::make_shared<UpdateableLogsConfig>(cluster_config->logsConfig()),
+          std::make_shared<UpdateableZookeeperConfig>(
+              cluster_config->zookeeperConfig()));
 
   std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
   ASSERT_EQ(0, client_settings->set("enable-config-synchronization", true));
@@ -973,7 +977,9 @@ TEST_F(ConfigIntegrationTest, ExpandWithoutVersionUpdate) {
       std::make_shared<UpdateableConfig>(
           std::make_shared<UpdateableServerConfig>(
               cluster_config->serverConfig()->copy()),
-          std::make_shared<UpdateableLogsConfig>(cluster_config->logsConfig()));
+          std::make_shared<UpdateableLogsConfig>(cluster_config->logsConfig()),
+          std::make_shared<UpdateableZookeeperConfig>(
+              cluster_config->zookeeperConfig()));
 
   std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
   ASSERT_EQ(0, client_settings->set("enable-config-synchronization", true));

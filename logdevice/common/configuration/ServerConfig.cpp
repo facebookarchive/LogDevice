@@ -86,7 +86,6 @@ ServerConfig::fromJson(const folly::dynamic& parsed) {
   SecurityConfig securityConfig;
   TraceLoggerConfig traceLoggerConfig;
   TrafficShapingConfig trafficShapingConfig;
-  ZookeeperConfig zookeeperConfig;
   SettingsConfig serverSettingsConfig;
   SettingsConfig clientSettingsConfig;
 
@@ -125,7 +124,6 @@ ServerConfig::fromJson(const folly::dynamic& parsed) {
       parseTrafficShaping(parsed, trafficShapingConfig) &&
       parseNodes(parsed, nodesConfig) &&
       parseMetaDataLog(parsed, securityConfig, metaDataLogsConfig) &&
-      parseZookeeper(parsed, zookeeperConfig) &&
       parseSettings(parsed, "server_settings", serverSettingsConfig) &&
       parseSettings(parsed, "client_settings", clientSettingsConfig) &&
       parseInternalLogs(parsed, internalLogs) &&
@@ -161,7 +159,6 @@ ServerConfig::fromJson(const folly::dynamic& parsed) {
                          std::move(securityConfig),
                          std::move(traceLoggerConfig),
                          std::move(trafficShapingConfig),
-                         std::move(zookeeperConfig),
                          std::move(serverSettingsConfig),
                          std::move(clientSettingsConfig),
                          std::move(internalLogs),
@@ -182,7 +179,6 @@ ServerConfig::ServerConfig(std::string cluster_name,
                            SecurityConfig securityConfig,
                            TraceLoggerConfig traceLoggerConfig,
                            TrafficShapingConfig trafficShapingConfig,
-                           ZookeeperConfig zookeeperConfig,
                            SettingsConfig serverSettingsConfig,
                            SettingsConfig clientSettingsConfig,
                            InternalLogs internalLogs,
@@ -197,7 +193,6 @@ ServerConfig::ServerConfig(std::string cluster_name,
       securityConfig_(std::move(securityConfig)),
       trafficShapingConfig_(std::move(trafficShapingConfig)),
       traceLoggerConfig_(std::move(traceLoggerConfig)),
-      zookeeperConfig_(std::move(zookeeperConfig)),
       serverSettingsConfig_(std::move(serverSettingsConfig)),
       clientSettingsConfig_(std::move(clientSettingsConfig)),
       internalLogs_(std::move(internalLogs)),
@@ -326,20 +321,6 @@ bool ServerConfig::validStorageSet(const Nodes& cluster_nodes,
   return failure_domain.canReplicate(true);
 }
 
-std::string ServerConfig::getZookeeperQuorumString() const {
-  std::string result;
-  for (const Sockaddr& addr : zookeeperConfig_.quorum) {
-    if (!result.empty()) {
-      result += ',';
-    }
-    // Do not include brackets "[a:b:c..]" around IPv6 addresses in Zookeeper
-    // quorum string. Zookeeper C client currently only supports
-    // a:b:c:..:z:port format of IPv6+port specifiers
-    result += addr.toStringNoBrackets();
-  }
-  return result;
-}
-
 std::unique_ptr<ServerConfig>
 ServerConfig::fromData(std::string cluster_name,
                        NodesConfig nodes,
@@ -348,7 +329,6 @@ ServerConfig::fromData(std::string cluster_name,
                        SecurityConfig securityConfig,
                        TraceLoggerConfig traceLoggerConfig,
                        TrafficShapingConfig trafficShapingConfig,
-                       ZookeeperConfig zookeeper,
                        SettingsConfig serverSettingsConfig,
                        SettingsConfig clientSettingsConfig,
                        InternalLogs internalLogs,
@@ -364,7 +344,6 @@ ServerConfig::fromData(std::string cluster_name,
                        std::move(securityConfig),
                        std::move(traceLoggerConfig),
                        std::move(trafficShapingConfig),
-                       std::move(zookeeper),
                        std::move(serverSettingsConfig),
                        std::move(clientSettingsConfig),
                        std::move(internalLogs),
@@ -381,7 +360,6 @@ ServerConfig::fromDataTest(std::string cluster_name,
                            SecurityConfig securityConfig,
                            TraceLoggerConfig traceLoggerConfig,
                            TrafficShapingConfig trafficShapingConfig,
-                           ZookeeperConfig zookeeper,
                            SettingsConfig serverSettingsConfig,
                            SettingsConfig clientSettingsConfig,
                            InternalLogs internalLogs,
@@ -401,7 +379,6 @@ ServerConfig::fromDataTest(std::string cluster_name,
                        std::move(securityConfig),
                        std::move(traceLoggerConfig),
                        std::move(trafficShapingConfig),
-                       std::move(zookeeper),
                        std::move(serverSettingsConfig),
                        std::move(clientSettingsConfig),
                        std::move(internalLogs),
@@ -422,7 +399,6 @@ std::unique_ptr<ServerConfig> ServerConfig::copy() const {
                                                   securityConfig_,
                                                   traceLoggerConfig_,
                                                   trafficShapingConfig_,
-                                                  zookeeperConfig_,
                                                   serverSettingsConfig_,
                                                   clientSettingsConfig_,
                                                   internalLogs_,
@@ -465,32 +441,6 @@ std::shared_ptr<ServerConfig> ServerConfig::withNodes(NodesConfig nodes) const {
                                                   securityConfig_,
                                                   traceLoggerConfig_,
                                                   trafficShapingConfig_,
-                                                  zookeeperConfig_,
-                                                  serverSettingsConfig_,
-                                                  clientSettingsConfig_,
-                                                  internalLogs_,
-                                                  getClusterCreationTime(),
-                                                  getCustomFields(),
-                                                  ns_delimiter_);
-  config->setVersion(version_);
-  if (hasMyNodeID()) {
-    config->setMyNodeID(my_node_id_);
-  }
-  config->setMainConfigMetadata(main_config_metadata_);
-  config->setIncludedConfigMetadata(included_config_metadata_);
-  return config;
-}
-
-std::shared_ptr<ServerConfig>
-ServerConfig::withZookeeperConfig(ZookeeperConfig zk) const {
-  std::shared_ptr<ServerConfig> config = fromData(clusterName_,
-                                                  nodesConfig_,
-                                                  metaDataLogsConfig_,
-                                                  principalsConfig_,
-                                                  securityConfig_,
-                                                  traceLoggerConfig_,
-                                                  trafficShapingConfig_,
-                                                  std::move(zk),
                                                   serverSettingsConfig_,
                                                   clientSettingsConfig_,
                                                   internalLogs_,
@@ -515,7 +465,6 @@ ServerConfig::withVersion(config_version_t version) const {
                                                   securityConfig_,
                                                   traceLoggerConfig_,
                                                   trafficShapingConfig_,
-                                                  zookeeperConfig_,
                                                   serverSettingsConfig_,
                                                   clientSettingsConfig_,
                                                   internalLogs_,
@@ -540,7 +489,6 @@ std::shared_ptr<ServerConfig> ServerConfig::createEmpty() {
                   SecurityConfig(),
                   TraceLoggerConfig(),
                   TrafficShapingConfig(),
-                  ZookeeperConfig(),
                   SettingsConfig(),
                   SettingsConfig(),
                   InternalLogs(),
@@ -549,6 +497,7 @@ std::shared_ptr<ServerConfig> ServerConfig::createEmpty() {
 }
 
 const std::string ServerConfig::toString(const LogsConfig* with_logs,
+                                         const ZookeeperConfig* with_zk,
                                          bool compress) const {
   // Grab the lock and initialize the cached result if this is the first call
   // to toString()
@@ -578,7 +527,7 @@ const std::string ServerConfig::toString(const LogsConfig* with_logs,
       ? uncached_config_str
       : with_logs ? all_to_string_cache_ : main_to_string_cache_;
   if (config_str.empty()) {
-    config_str = toStringImpl(with_logs);
+    config_str = toStringImpl(with_logs, with_zk);
   }
   ld_check(!config_str.empty());
 
@@ -608,8 +557,9 @@ const std::string ServerConfig::toString(const LogsConfig* with_logs,
   return compressed_config_str;
 }
 
-std::string ServerConfig::toStringImpl(const LogsConfig* with_logs) const {
-  auto json = toJson(with_logs);
+std::string ServerConfig::toStringImpl(const LogsConfig* with_logs,
+                                       const ZookeeperConfig* with_zk) const {
+  auto json = toJson(with_logs, with_zk);
 
   folly::json::serialization_opts opts;
   opts.pretty_formatting = true;
@@ -617,7 +567,8 @@ std::string ServerConfig::toStringImpl(const LogsConfig* with_logs) const {
   return folly::json::serialize(json, opts);
 }
 
-folly::dynamic ServerConfig::toJson(const LogsConfig* with_logs) const {
+folly::dynamic ServerConfig::toJson(const LogsConfig* with_logs,
+                                    const ZookeeperConfig* with_zk) const {
   folly::dynamic output_nodes = folly::dynamic::array;
 
   const auto& nodes = nodesConfig_.getNodes();
@@ -723,17 +674,19 @@ folly::dynamic ServerConfig::toJson(const LogsConfig* with_logs) const {
     json_all["security_information"] = securityConfig_.toFollyDynamic();
   }
 
-  // Zookeeper section is optional
-  if (!zookeeperConfig_.quorum.empty()) {
-    folly::dynamic quorum = folly::dynamic::array;
-    for (const Sockaddr& addr : zookeeperConfig_.quorum) {
-      quorum.push_back(addr.toString());
+  if (with_zk) {
+    auto& quorum = with_zk->getQuorum();
+    if (!quorum.empty()) {
+      folly::dynamic quorum_out = folly::dynamic::array;
+      for (const Sockaddr& addr : quorum) {
+        quorum_out.push_back(addr.toString());
+      }
+      std::string timeout_str =
+          std::to_string(with_zk->getSessionTimeout().count()) + "ms";
+      folly::dynamic zookeeper = folly::dynamic::object()("quorum", quorum_out)(
+          "timeout", timeout_str);
+      json_all["zookeeper"] = zookeeper;
     }
-    std::string timeout_str =
-        std::to_string(zookeeperConfig_.session_timeout.count()) + "ms";
-    folly::dynamic zookeeper =
-        folly::dynamic::object()("quorum", quorum)("timeout", timeout_str);
-    json_all["zookeeper"] = zookeeper;
   }
 
   // insert custom fields

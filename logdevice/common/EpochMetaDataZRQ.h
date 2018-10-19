@@ -144,7 +144,8 @@ class EpochMetaDataZRQ : public ZookeeperEpochStoreRequest {
     folly::Optional<NodeID> node_id_to_write;
     switch (write_node_id_) {
       case EpochStore::WriteNodeID::MY:
-        node_id_to_write = store_->getMyNodeID();
+        ld_check(cfg_ != nullptr);
+        node_id_to_write = cfg_->getMyNodeID();
         if (!node_id_to_write->isNodeID()) {
           ld_check(false);
           err = E::INTERNAL;

@@ -30,7 +30,6 @@
 #include "logdevice/common/commandline_util.h"
 #include "logdevice/common/commandline_util_chrono.h"
 
-#include "logdevice/common/ConfigInit.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/CopySet.h"
 #include "logdevice/common/DataRecordOwnsPayload.h"

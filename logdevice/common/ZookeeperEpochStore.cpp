@@ -35,12 +35,14 @@ using CreateRootsState = ZookeeperEpochStore::CreateRootsState;
 ZookeeperEpochStore::ZookeeperEpochStore(
     std::string cluster_name,
     Processor* processor,
-    const std::shared_ptr<UpdateableServerConfig>& config,
+    const std::shared_ptr<UpdateableZookeeperConfig>& zk_config,
+    const std::shared_ptr<UpdateableServerConfig>& server_config,
     UpdateableSettings<Settings> settings,
     ZKFactory zkFactory)
     : processor_(processor),
       cluster_name_(cluster_name),
-      config_(config),
+      zk_config_(zk_config),
+      server_config_(server_config),
       settings_(settings),
       shutting_down_(std::make_shared<std::atomic<bool>>(false)),
       zkFactory_(std::move(zkFactory)) {
@@ -48,14 +50,15 @@ ZookeeperEpochStore::ZookeeperEpochStore(
            cluster_name.length() <
                configuration::ZookeeperConfig::MAX_CLUSTER_NAME);
 
-  std::shared_ptr<ZookeeperClientBase> zkclient = zkFactory_(*config->get());
+  std::shared_ptr<ZookeeperClientBase> zkclient =
+      zkFactory_(*zk_config_->get());
 
   if (!zkclient) {
     throw ConstructorFailed();
   }
   zkclient_.update(std::move(zkclient));
 
-  config_subscription_ = config_->subscribeToUpdates(
+  config_subscription_ = zk_config_->subscribeToUpdates(
       std::bind(&ZookeeperEpochStore::onConfigUpdate, this));
 }
 
@@ -694,15 +697,22 @@ int ZookeeperEpochStore::runRequest(
 }
 
 void ZookeeperEpochStore::onConfigUpdate() {
-  std::shared_ptr<ServerConfig> cfg = config_->get();
-  std::shared_ptr<ZookeeperClientBase> cur = zkclient_.get();
-  if (cfg->getZookeeperQuorumString() == cur->getQuorum()) {
-    // No changes.
+  std::shared_ptr<ZookeeperConfig> cfg = zk_config_->get();
+  if (cfg == nullptr) {
+    RATELIMIT_ERROR(
+        std::chrono::seconds(10),
+        1,
+        "Zookeeper configuration is empty. Failed to update epoch store.");
     return;
   }
 
-  ld_info("Zookeeper quorum changed, reconnecting: %s",
-          cfg->getZookeeperQuorumString().c_str());
+  std::shared_ptr<ZookeeperClientBase> cur = zkclient_.get();
+  auto quorum = cfg->getQuorumString();
+  if (quorum == cur->getQuorum()) {
+    return;
+  }
+
+  ld_info("Zookeeper quorum changed, reconnecting: %s", quorum.c_str());
 
   std::shared_ptr<ZookeeperClientBase> zkclient = zkFactory_(*cfg);
 
@@ -759,11 +769,7 @@ int ZookeeperEpochStore::createOrUpdateMetaData(
                            std::move(updater),
                            std::move(tracer),
                            write_node_id,
-                           config_->get())));
-}
-
-NodeID ZookeeperEpochStore::getMyNodeID() const {
-  return config_->get()->getMyNodeID();
+                           server_config_->get())));
 }
 
 }} // namespace facebook::logdevice

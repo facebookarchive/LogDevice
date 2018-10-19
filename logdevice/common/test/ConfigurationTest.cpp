@@ -556,13 +556,14 @@ TEST(ConfigurationTest, SimpleValid) {
     EXPECT_EQ(NodeSetSelectorType::SELECT_ALL, ml_conf.nodeset_selector_type);
   }
 
+  ASSERT_NE(nullptr, config->zookeeperConfig());
   const std::string zookeeper_quorum =
-      config->serverConfig()->getZookeeperQuorumString();
+      config->zookeeperConfig()->getQuorumString();
 
   EXPECT_EQ(zookeeper_quorum, "1.2.3.4:2181,5.6.7.8:2181,9.10.11.12:2181");
 
   const std::chrono::milliseconds zookeeper_timeout =
-      config->serverConfig()->getZookeeperTimeout();
+      config->zookeeperConfig()->getSessionTimeout();
 
   EXPECT_EQ(zookeeper_timeout, std::chrono::milliseconds(30000));
   EXPECT_NE(config->serverConfig()->getCustomFields(), nullptr);

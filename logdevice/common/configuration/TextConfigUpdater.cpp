@@ -240,6 +240,20 @@ void TextConfigUpdaterImpl::update(bool force_reload_logsconfig) {
   config->serverConfig()->setMainConfigMetadata(main_config_metadata);
   config->serverConfig()->setIncludedConfigMetadata(included_config_metadata);
 
+  // First update Zookeeper config, since it cannot fail validation
+  std::shared_ptr<UpdateableZookeeperConfig> updateable_zookeeper_config =
+      target_zk_config_.lock();
+  if (!updateable_zookeeper_config) {
+    ld_debug("Attempting ZK config update, but config doesn't exist anymore");
+    return;
+  }
+
+  auto& new_zookeeper_config = config->zookeeperConfig();
+  if (!compareZookeeperConfig(updateable_zookeeper_config->get().get(),
+                              new_zookeeper_config.get())) {
+    updateable_zookeeper_config->update(new_zookeeper_config);
+  }
+
   std::shared_ptr<UpdateableServerConfig> server_config =
       target_server_config_.lock();
   if (!server_config) {
@@ -498,6 +512,22 @@ int TextConfigUpdaterImpl::compareServerConfig(
   }
 
   return 1;
+}
+
+bool TextConfigUpdaterImpl::compareZookeeperConfig(
+    const ZookeeperConfig* old_config,
+    const ZookeeperConfig* new_config) {
+  if (old_config == nullptr && new_config == nullptr) {
+    return true;
+  } else if ((old_config == nullptr && new_config != nullptr) ||
+             (old_config != nullptr && new_config == nullptr)) {
+    return false;
+  } else {
+    // Zookeeper config has no versioning for now, so we cannot compare newer vs
+    // older
+    return old_config->getQuorumString() == new_config->getQuorumString() &&
+        old_config->getSessionTimeout() == new_config->getSessionTimeout();
+  }
 }
 
 int TextConfigUpdater::waitForInitialLoad(std::chrono::milliseconds timeout) {

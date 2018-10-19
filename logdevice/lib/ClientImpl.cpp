@@ -205,8 +205,7 @@ std::shared_ptr<Client> Client::create(std::string cluster_name,
 
   int rv = config_init.attach(config_url,
                               plugin,
-                              config->updateableServerConfig(),
-                              config->updateableLogsConfig(),
+                              config,
                               std::move(logs_cfg),
                               impl_settings->getSettings(),
                               options);

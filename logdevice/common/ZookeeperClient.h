@@ -23,10 +23,10 @@ namespace facebook { namespace logdevice {
 
 /**
  * Production Zookeper factory used to create ZookeeperClient instances,
- * which connect to  Zookeeper servers.
- * initialized using zookeeper_quorum from ServerConfig.
+ * which connect to Zookeeper servers.
  */
-std::unique_ptr<ZookeeperClientBase> zkFactoryProd(const ServerConfig& config);
+std::unique_ptr<ZookeeperClientBase>
+zkFactoryProd(const configuration::ZookeeperConfig& config);
 
 class ZookeeperClient : public ZookeeperClientBase {
  public:

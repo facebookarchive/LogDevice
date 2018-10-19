@@ -378,8 +378,14 @@ int Sender::notifyPeerConfigUpdated(Socket& sock) {
         CONFIG_CHANGED_Header::ConfigType::MAIN_CONFIG,
         CONFIG_CHANGED_Header::Action::UPDATE};
     metadata.hash.copy(hdr.hash, sizeof hdr.hash);
+
+    // We still send the Zookeeper section for backwards compatibility on
+    // older servers, but on newer servers this is ignored
+    // Clients already ignore / don't use the Zookeeper section
+    // TODO deprecate in T32793726
+    auto zk_config = Worker::onThisThread()->getZookeeperConfig();
     msg = std::make_unique<CONFIG_CHANGED_Message>(
-        hdr, server_config->toString(nullptr, true));
+        hdr, server_config->toString(nullptr, zk_config.get(), true));
   } else {
     // The peer is a server. Send a CONFIG_ADVISORY to let it know about our
     // config version. Upon receiving this message, if the server config hasn't
