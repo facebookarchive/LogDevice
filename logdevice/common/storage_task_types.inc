@@ -36,6 +36,7 @@ STORAGE_TASK_TYPE(READ_LOG_REBUILDING_CHECKPOINT, "ReadLogRebuildingCheckpointSt
 STORAGE_TASK_TYPE(REBUILDING_AMEND_SELF, "AmendSelfStorageTask", false)
 STORAGE_TASK_TYPE(REBUILDING_ENUMERATE_LOGS, "RebuildingEnumerateMetadataLogsStorageTask", false)
 STORAGE_TASK_TYPE(REBUILDING_READ, "RebuildingReadStorageTask", true)
+STORAGE_TASK_TYPE(REBUILDING_READ_V2, "RebuildingReadStorageTaskV2", true)
 STORAGE_TASK_TYPE(REBUILDING_WRITE_COMPLETE_METADATA, "WriteShardRebuildingCompleteMetadataStorageTask", false)
 STORAGE_TASK_TYPE(RECORD_CACHE_REPOPULATION, "RecordCacheRepopulationStorageTask", false)
 STORAGE_TASK_TYPE(RECOVER_LOG_STATE, "RecoverLogStateStorageTask", false)

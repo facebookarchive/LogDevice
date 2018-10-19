@@ -113,10 +113,17 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
                "rebuilding-max-batch-bytes must be positive");
          }
        },
-       "max amount of data that a node can read in one batch for rebuilding a "
-       "log",
+       "max amount of data that a node can read in one batch for rebuilding",
        SERVER,
        SettingsCategory::Rebuilding);
+  init("rebuilding-max-batch-time",
+       &max_batch_time,
+       "1000ms",
+       nullptr,
+       "Max amount of time rebuilding read storage task is allowed to "
+       "take before yielding to other storage tasks. Only supported by "
+       "rebuilding V2 (partition by partition). \"max\" for unlimited.",
+       SERVER);
   init("rebuilding-max-records-in-flight",
        &max_records_in_flight,
        "5",

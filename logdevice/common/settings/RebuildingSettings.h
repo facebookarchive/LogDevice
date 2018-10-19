@@ -41,6 +41,7 @@ struct RebuildingSettings : public SettingsBundle {
   bool local_window_uses_partition_boundary;
   std::chrono::milliseconds global_window;
   size_t max_batch_bytes;
+  std::chrono::milliseconds max_batch_time;
   size_t max_records_in_flight;
   size_t max_amends_in_flight;
   size_t max_logs_in_flight;

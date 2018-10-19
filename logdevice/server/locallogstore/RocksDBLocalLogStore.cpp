@@ -780,12 +780,11 @@ void RocksDBLocalLogStore::CSIWrapper::moveTo(const Location& target,
     if (stats && stats->readLimitReached()) {
       // Some limit reached. We should probably stop. But:
       //  * If we haven't made any progress, don't stop yet. Otherwise we
-      //  could
-      //    get into an infinite loop if the limit is set too small.
+      //    could get into an infinite loop if the limit is set too small.
       //  * If we're doing a seek but know in advance that we're above
-      //  timestamp
+      //    timestamp
       //    window, stop immediately without even seeking any subiterators.
-      //    This is useful for rebuilding: normally, timestamp window is
+      //    This is useful for LogRebuilding: normally, timestamp window is
       //    aligned with partition boundaries, and this check prevents us from
       //    creating iterators in the partition we're not interested in.
       if (current != target || (!near && stats->hardLimitReached())) {

@@ -69,10 +69,10 @@ void PartitionedRocksDBStore::Iterator::setMetaIteratorAndCurrentFromLSN(
   ld_check(!meta_iterator_->status().IsIncomplete());
   ld_check(PartitionDirectoryKey::valid(
       meta_iterator_->key().data(), meta_iterator_->key().size()));
-  ld_check(PartitionDirectoryKey::getLogID(meta_iterator_->key().data()) ==
-           log_id_);
-  ld_check(PartitionDirectoryKey::getPartition(meta_iterator_->key().data()) ==
-           new_current.partition_->id_);
+  ld_check_eq(
+      PartitionDirectoryKey::getLogID(meta_iterator_->key().data()), log_id_);
+  ld_check_eq(PartitionDirectoryKey::getPartition(meta_iterator_->key().data()),
+              new_current.partition_->id_);
   checkDirectoryValue();
 
   new_current.min_lsn_ =
@@ -388,7 +388,7 @@ void PartitionedRocksDBStore::Iterator::moveUntilValid(bool forward,
   //       since the records were written. So, incorrectly treating new
   //       records as orphans here is ok.
   auto atOrphanedRecord = [&] {
-    ld_assert_ne(current_.max_lsn_, LSN_INVALID);
+    ld_check_ne(current_.max_lsn_, LSN_INVALID);
     return (getLSN() > current_.max_lsn_);
   };
 
@@ -402,7 +402,7 @@ void PartitionedRocksDBStore::Iterator::moveUntilValid(bool forward,
     ld_check(state_ != IteratorState::MAX);
     if (data_iterator_ == nullptr && current_.partition_ != nullptr) {
       // All partitions got filtered out by ReadFilter.
-      ld_check(state_ == IteratorState::AT_END);
+      ld_check_eq(state_, IteratorState::AT_END);
       ld_check(filter);
       current_.clear();
     }
@@ -716,7 +716,7 @@ IteratorState PartitionedRocksDBStore::Iterator::state() const {
   if (state_ == IteratorState::AT_RECORD ||
       state_ == IteratorState::LIMIT_REACHED) {
     ld_check(data_iterator_ != nullptr);
-    ld_check(data_iterator_->state() == state_);
+    ld_check_eq(data_iterator_->state(), state_);
   }
   return state_;
 }
@@ -806,7 +806,7 @@ PartitionedRocksDBStore::PartitionedAllLogsIterator::PartitionedAllLogsIterator(
     : pstore_(pstore),
       options_(options),
       last_partition_id_(pstore->getLatestPartition()->id_) {
-  ld_assert(!options.tailing);
+  ld_check(!options.tailing);
   registerTracking(std::string(),
                    LOGID_INVALID,
                    /* tailing */ false,
@@ -821,20 +821,20 @@ PartitionedRocksDBStore::PartitionedAllLogsIterator::state() const {
     return IteratorState::AT_END;
   }
   IteratorState s = data_iterator_->state();
-  ld_assert(s != IteratorState::AT_END);
+  ld_check(s != IteratorState::AT_END);
   return s;
 }
 
 logid_t PartitionedRocksDBStore::PartitionedAllLogsIterator::getLogID() const {
-  ld_assert(data_iterator_ != nullptr);
+  ld_check(data_iterator_ != nullptr);
   return data_iterator_->getLogID();
 }
 lsn_t PartitionedRocksDBStore::PartitionedAllLogsIterator::getLSN() const {
-  ld_assert(data_iterator_ != nullptr);
+  ld_check(data_iterator_ != nullptr);
   return data_iterator_->getLSN();
 }
 Slice PartitionedRocksDBStore::PartitionedAllLogsIterator::getRecord() const {
-  ld_assert(data_iterator_ != nullptr);
+  ld_check(data_iterator_ != nullptr);
   return data_iterator_->getRecord();
 }
 std::unique_ptr<Location>
@@ -860,7 +860,7 @@ void PartitionedRocksDBStore::PartitionedAllLogsIterator::seek(
     return;
   }
   if (current_partition_ && current_partition_->id_ != location.partition) {
-    ld_assert_gt(current_partition_->id_, location.partition);
+    ld_check_gt(current_partition_->id_, location.partition);
     location.log = logid_t(0);
     location.lsn = 0;
   }
@@ -897,7 +897,7 @@ void PartitionedRocksDBStore::PartitionedAllLogsIterator::setPartition(
     ReadFilter* filter,
     ReadStats* stats) {
   SCOPE_EXIT {
-    ld_assert(!current_partition_ || data_iterator_);
+    ld_check(!current_partition_ || data_iterator_);
   };
 
   data_iterator_ = nullptr;

@@ -11,6 +11,8 @@
 #include "logdevice/common/debug.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/server/locallogstore/RocksDBLocalLogStore.h"
+#include "logdevice/server/locallogstore/PartitionedRocksDBStore.h"
+#include "logdevice/server/locallogstore/WriteOps.h"
 
 namespace facebook { namespace logdevice {
 
@@ -233,5 +235,143 @@ TemporaryRocksDBStore::TemporaryRocksDBStore(bool read_find_time_index)
         return new RocksDBLocalLogStore(
             shard_idx, path.c_str(), std::move(rocksdb_config));
       }) {}
+
+class TemporaryPartitionedStoreImpl : public PartitionedRocksDBStore {
+ public:
+  explicit TemporaryPartitionedStoreImpl(uint32_t shard_idx,
+                                         const std::string& path,
+                                         RocksDBLogStoreConfig rocksdb_config,
+                                         const Configuration* config,
+                                         StatsHolder* stats,
+                                         SystemTimestamp* time)
+      : PartitionedRocksDBStore(shard_idx,
+                                path,
+                                std::move(rocksdb_config),
+                                config,
+                                stats,
+                                DeferInit::YES),
+        time_(time) {
+    PartitionedRocksDBStore::init(config);
+  }
+
+  SystemTimestamp currentTime() override {
+    ld_check(time_);
+    return *time_;
+  }
+
+  SystemTimestamp* time_;
+};
+
+void TemporaryPartitionedStore::setTime(SystemTimestamp time) {
+  time_ = time;
+}
+
+TemporaryPartitionedStore::TemporaryPartitionedStore(bool use_csi)
+    : TemporaryLogStore([use_csi, this](std::string path) {
+        shard_index_t shard_idx = 0;
+
+        RocksDBSettings raw_settings = RocksDBSettings::defaultTestSettings();
+        raw_settings.use_copyset_index = use_csi;
+
+        UpdateableSettings<RocksDBSettings> settings(raw_settings);
+        UpdateableSettings<RebuildingSettings> rebuilding_settings;
+
+        RocksDBLogStoreConfig rocksdb_config(
+            settings, rebuilding_settings, nullptr, nullptr, nullptr);
+        rocksdb_config.createMergeOperator(shard_idx);
+
+        return new TemporaryPartitionedStoreImpl(shard_idx,
+                                                 path,
+                                                 std::move(rocksdb_config),
+                                                 /* config */ nullptr,
+                                                 /* stats */ nullptr,
+                                                 &time_);
+      }) {}
+
+int TemporaryPartitionedStore::putRecord(
+    logid_t log,
+    lsn_t lsn,
+    RecordTimestamp timestamp,
+    copyset_t copyset,
+    LocalLogStoreRecordFormat::flags_t extra_flags,
+    folly::Optional<Slice> payload) {
+  LocalLogStoreRecordFormat::flags_t flags =
+      extra_flags | LocalLogStoreRecordFormat::FLAG_SHARD_ID;
+  if (!(flags &
+        (LocalLogStoreRecordFormat::FLAG_CHECKSUM |
+         LocalLogStoreRecordFormat::FLAG_CHECKSUM_64BIT))) {
+    flags |= LocalLogStoreRecordFormat::FLAG_CHECKSUM_PARITY;
+  }
+  LocalLogStoreRecordFormat::csi_flags_t csi_flags =
+      LocalLogStoreRecordFormat::formCopySetIndexFlags(flags);
+
+  std::string header_buf;
+  Slice header = LocalLogStoreRecordFormat::formRecordHeader(
+      timestamp.toMilliseconds().count(),
+      esn_t(0), // LNG
+      flags,
+      1, // wave
+      folly::Range<const ShardID*>(
+          copyset.data(), copyset.data() + copyset.size()),
+      0,  // byte offset
+      {}, // keys
+      &header_buf);
+
+  std::string csi_entry_buf;
+  Slice csi_entry = LocalLogStoreRecordFormat::formCopySetIndexEntry(
+      1, // wave
+      copyset.data(),
+      copyset.size(),
+      LSN_INVALID, // block starting LSN
+      csi_flags,
+      &csi_entry_buf);
+
+  std::string payload_buf;
+  if (!payload.hasValue()) {
+    payload_buf = toString(log.val()) + lsn_to_string(lsn);
+    payload = Slice::fromString(payload_buf);
+  }
+
+  PutWriteOp op(log,
+                lsn,
+                header,
+                payload.value(),
+                node_index_t(1), // coordinator
+                LSN_INVALID,     // block starting LSN
+                csi_entry,
+                {}, // keys
+                Durability::ASYNC_WRITE,
+                flags &
+                    LocalLogStoreRecordFormat::
+                        FLAG_WRITTEN_BY_REBUILDING); // is_rebuilding
+
+  return writeMulti({&op}, LocalLogStore::WriteOptions());
+}
+
+void TemporaryPartitionedStore::createPartition() {
+  dynamic_cast<PartitionedRocksDBStore*>(db_.get())->createPartition();
+}
+
+std::vector<size_t> TemporaryPartitionedStore::getNumLogsPerPartition() {
+  std::vector<std::pair<logid_t, PartitionedRocksDBStore::DirectoryEntry>> dir;
+  dynamic_cast<PartitionedRocksDBStore*>(db_.get())->getLogsDBDirectories(
+      {}, {}, dir);
+  if (dir.empty()) {
+    return {};
+  }
+  partition_id_t first_partition = PARTITION_MAX;
+  for (const auto& p : dir) {
+    first_partition = std::min(first_partition, p.second.id);
+  }
+  std::vector<size_t> res;
+  for (const auto& p : dir) {
+    auto idx = p.second.id - first_partition;
+    if (idx >= res.size()) {
+      res.resize(idx + 1);
+    }
+    ++res[idx];
+  }
+  return res;
+}
 
 }} // namespace facebook::logdevice

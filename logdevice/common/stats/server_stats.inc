@@ -1025,7 +1025,6 @@ STAT_DEFINE(read_storage_tasks_delayed, SUM)
 STAT_DEFINE(recovery_enqueued, SUM)
 
 // Stats for rebuilding
-STAT_DEFINE(rebuilding_read_storage_tasks_allocated_records_bytes, SUM)
 STAT_DEFINE(num_in_flight_rebuilding_read_storage_tasks, SUM)
 STAT_DEFINE(num_logs_rebuilding, SUM)
 STAT_DEFINE(log_rebuilding_stall_timer_expired, SUM)

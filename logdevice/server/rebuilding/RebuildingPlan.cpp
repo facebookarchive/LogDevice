@@ -22,6 +22,41 @@ void RebuildingPlan::addEpochRange(epoch_ranges_t::interval_type epoch_range,
   epochsToRead.insert(std::make_pair(epoch_range, std::move(metadata)));
 }
 
+std::shared_ptr<EpochMetaData>
+RebuildingPlan::lookUpEpoch(epoch_t epoch,
+                            std::pair<epoch_t, epoch_t>* out_range) {
+  // For this we'll be treating the boost::interval_map as if it were an
+  // std::map<right_open_interval, T>, which it essentially is.
+
+  // Find the first epoch range in epochsToRead whose lower end is strictly
+  // above `epoch`.
+  auto it = epochsToRead.upper_bound(
+      boost::icl::right_open_interval<epoch_t::raw_type>(
+          epoch.val(), epoch.val() + 1));
+  epoch_t next_epoch =
+      (it == epochsToRead.end()) ? EPOCH_MAX : epoch_t(it->first.lower());
+
+  if (it == epochsToRead.begin()) {
+    // We're below first epoch to read.
+    *out_range = std::make_pair(EPOCH_INVALID, next_epoch);
+    return nullptr;
+  }
+
+  // Find the last epoch range whose lower end is <= `epoch`.
+  --it;
+
+  if (it->first.upper() > epoch.val()) {
+    // Found our epoch metadata.
+    *out_range =
+        std::make_pair(epoch_t(it->first.lower()), epoch_t(it->first.upper()));
+    return it->second;
+  }
+
+  // `epoch` is in the empty space between `it` and `next_epoch`.
+  *out_range = std::make_pair(epoch_t(it->first.upper()), next_epoch);
+  return nullptr;
+}
+
 std::string RebuildingPlan::toString() const {
   std::string res = "until:" + logdevice::toString(untilLSN) + "; ";
 

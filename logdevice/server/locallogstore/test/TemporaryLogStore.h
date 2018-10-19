@@ -132,7 +132,7 @@ class TemporaryLogStore : public LocalLogStore {
               bool approximate = false,
               bool allow_blocking_io = true) const override;
 
- private:
+ protected:
   factory_func_t factory_;
   std::unique_ptr<folly::test::TemporaryDirectory> temp_dir_;
   std::unique_ptr<LocalLogStore> db_;
@@ -140,6 +140,44 @@ class TemporaryLogStore : public LocalLogStore {
 
 struct TemporaryRocksDBStore : public TemporaryLogStore {
   explicit TemporaryRocksDBStore(bool read_find_time_index = false);
+};
+
+// A temporary logsdb store with fake clock.
+// The clock starts at BASE_TIME and only moves when you call setTime().
+// This allows controlling which partition each record goes to.
+struct TemporaryPartitionedStore : public TemporaryLogStore {
+  explicit TemporaryPartitionedStore(bool use_csi = true);
+
+  void setTime(SystemTimestamp time);
+
+  // Convenience wrapper around writeMulti() that forms and writes record and
+  // CSI entry.
+  // Default payload is log ID concatenated with LSN, e.g. "42e13n1337".
+  int putRecord(logid_t log,
+                lsn_t lsn,
+                RecordTimestamp timestamp,
+                copyset_t copyset,
+                LocalLogStoreRecordFormat::flags_t extra_flags = 0,
+                folly::Optional<Slice> payload = folly::none);
+
+  void createPartition();
+
+  // For each partition between first and last nonempty ones, return number of
+  // different logs present in that partition.
+  // E.g. {2,0,1} would mean that the first nonempty partition has records of 2
+  // different logs, next partition is empty, next partition has records of only
+  // one log, and all partitions after that (if any) are empty.
+  // Useful if you're trying to distribute records across partitions in a
+  // specific way (by assigning timestamps in a specific way) and want to verify
+  // that it worked.
+  std::vector<size_t> getNumLogsPerPartition();
+
+  static SystemTimestamp baseTime() {
+    return SystemTimestamp(std::chrono::milliseconds(1000000000000));
+  }
+
+ private:
+  SystemTimestamp time_ = baseTime();
 };
 
 }} // namespace facebook::logdevice
