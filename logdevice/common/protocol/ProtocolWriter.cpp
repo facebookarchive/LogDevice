@@ -22,7 +22,7 @@ class EvbufferDestination : public ProtocolWriter::Destination {
   int write(const void* src, size_t nbytes, size_t /*nwritten*/) override {
     // caller should check and shouldn't call this when dest isNull
     ld_check(!isNull());
-    int rv = LD_EV(evbuffer_add)(cksum_evbuf_, src, nbytes);
+    int rv = LD_EV(evbuffer_add)(dest_evbuf_, src, nbytes);
     if (rv != 0) {
       err = E::INTERNAL;
       ld_check(false);
@@ -35,7 +35,7 @@ class EvbufferDestination : public ProtocolWriter::Destination {
                        size_t /*nwritten*/) override {
     ld_check(!isNull());
     int rv = LD_EV(evbuffer_add_reference)(
-        cksum_evbuf_, src, nbytes, nullptr, nullptr);
+        dest_evbuf_, src, nbytes, nullptr, nullptr);
     if (rv != 0) {
       err = E::INTERNAL;
       ld_check(false);
@@ -48,9 +48,9 @@ class EvbufferDestination : public ProtocolWriter::Destination {
 #if LIBEVENT_VERSION_NUMBER >= 0x02010100
     // In libevent >= 2.1 we can add the evbuffer by reference which should be
     // cheaper
-    int rv = LD_EV(evbuffer_add_buffer_reference)(cksum_evbuf_, src);
+    int rv = LD_EV(evbuffer_add_buffer_reference)(dest_evbuf_, src);
 #else
-    int rv = LD_EV(evbuffer_add_buffer)(cksum_evbuf_, src);
+    int rv = LD_EV(evbuffer_add_buffer)(dest_evbuf_, src);
 #endif
     if (rv != 0) {
       err = E::INTERNAL;
@@ -59,21 +59,13 @@ class EvbufferDestination : public ProtocolWriter::Destination {
     return rv;
   }
 
-  void endSerialization() override {
-    if (dest_evbuf_ && cksum_evbuf_) {
-      // This moves all data b/w evbuffers without memory copy
-      int rv = LD_EV(evbuffer_add_buffer)(dest_evbuf_, cksum_evbuf_);
-      ld_check(rv == 0);
-    }
-  }
-
   uint64_t computeChecksum() override {
     uint64_t checksum = 0;
-    ld_check(cksum_evbuf_);
+    ld_check(dest_evbuf_);
 
-    const size_t len = LD_EV(evbuffer_get_length)(cksum_evbuf_);
+    const size_t len = LD_EV(evbuffer_get_length)(dest_evbuf_);
     std::string data(len, 0);
-    ev_ssize_t nbytes = LD_EV(evbuffer_copyout)(cksum_evbuf_, &data[0], len);
+    ev_ssize_t nbytes = LD_EV(evbuffer_copyout)(dest_evbuf_, &data[0], len);
     ld_check(nbytes == len);
     Slice slice(&data[0], nbytes);
     checksum_bytes(slice, 64, (char*)&checksum);
@@ -89,22 +81,12 @@ class EvbufferDestination : public ProtocolWriter::Destination {
     return dest_evbuf_ == nullptr;
   }
 
-  explicit EvbufferDestination(evbuffer* dest) : dest_evbuf_(dest) {
-    if (dest_evbuf_) {
-      cksum_evbuf_ = LD_EV(evbuffer_new)();
-    }
-  }
+  explicit EvbufferDestination(evbuffer* dest) : dest_evbuf_(dest) {}
 
-  ~EvbufferDestination() {
-    if (cksum_evbuf_) {
-      LD_EV(evbuffer_free)(cksum_evbuf_);
-      cksum_evbuf_ = nullptr;
-    }
-  }
+  ~EvbufferDestination() {}
 
  private:
   struct evbuffer* const dest_evbuf_;
-  struct evbuffer* cksum_evbuf_ = nullptr;
 };
 
 class LinearBufferDestination : public ProtocolWriter::Destination {

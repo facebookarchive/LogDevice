@@ -90,7 +90,6 @@ void serializeAndDeserializeTest(Params params) {
 
   ProtocolWriter writer(msg.type_, evbuf.get(), params.proto);
   msg.serialize(writer);
-  writer.endSerialization();
   auto write_count = writer.result();
 
   ASSERT_GT(write_count, 0);

@@ -58,7 +58,6 @@ void DO_TEST(const SomeMessage& m,
     struct evbuffer* evbuf = LD_EV(evbuffer_new)();
     ProtocolWriter writer(m.type_, evbuf, proto);
     m.serialize(writer);
-    writer.endSerialization();
     ssize_t sz = writer.result();
     ASSERT_EQ(writer.status(), proto_writer_status);
     if (proto_writer_status != E::OK) {
@@ -105,7 +104,6 @@ static std::string getPayload(const PayloadHolder& h) {
   ProtocolWriter writer(
       MessageType::STORE, evbuf, Compatibility::MAX_PROTOCOL_SUPPORTED);
   h.serialize(writer);
-  writer.endSerialization();
   ssize_t sz = writer.result();
   EXPECT_GE(sz, 0);
   std::string s(sz, '\0');
@@ -1439,7 +1437,6 @@ TEST_F(MessageSerializationTest, DrainExtraBytes) {
   }};
   ProtocolWriter w1(hello_msg.type_, evbuf, proto);
   hello_msg.serialize(w1);
-  w1.endSerialization();
   size_t hello_size = w1.result();
   ASSERT_LT(0, hello_size);
   // write some extra bytes after the HELLO message
@@ -1454,7 +1451,6 @@ TEST_F(MessageSerializationTest, DrainExtraBytes) {
   }};
   ProtocolWriter w2(delete_msg.type_, evbuf, proto);
   delete_msg.serialize(w2);
-  w2.endSerialization();
   size_t delete_size = w2.result();
   ASSERT_LT(0, delete_size);
 

@@ -477,7 +477,6 @@ PayloadHolder EpochSequencerTest::genPayload(bool evbuffer) {
     ProtocolWriter writer(MessageType::APPEND, evbuf, 0);
     std::string raw(payload_size_, 'c');
     writer.write(raw.data(), raw.size());
-    writer.endSerialization();
     return PayloadHolder(evbuf);
   }
 

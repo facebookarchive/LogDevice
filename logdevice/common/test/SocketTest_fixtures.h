@@ -207,39 +207,18 @@ class SocketTest : public ::testing::Test {
     // the message without the protocol header
     ProtocolWriter wtmp(msg->type_, nullptr, socket_->proto_);
     msg->serialize(wtmp);
-    wtmp.endSerialization();
     auto bodylen = wtmp.result();
     EXPECT_TRUE(bodylen > 0);
 
-    ProtocolHeader protohdr;
-    bool checksumming_enabled =
-        ProtocolHeader::needChecksumInHeader(msg->type_, socket_->proto_);
     size_t protohdr_bytes =
         ProtocolHeader::bytesNeeded(msg->type_, socket_->proto_);
-    protohdr.len = bodylen + protohdr_bytes;
-    protohdr.type = msg->type_;
 
-    // Follows the order in Socket::serializeMessage()
-    // 1. Serialize the message into checksum buffer
-    ProtocolWriter writer(msg->type_, input_, socket_->proto_);
-    msg->serialize(writer);
-
-    // 2. Compute checksum if needed
-    if (checksumming_enabled) {
-      protohdr.cksum = writer.computeChecksum();
-      if (tamper_checksum_) {
-        protohdr.cksum += 1;
-      }
-    }
-
-    // 3. Add proto header to evbuffer
-    int rv = LD_EV(evbuffer_add)(input_, &protohdr, protohdr_bytes);
-    EXPECT_EQ(0, rv);
-
-    // 4. Move the serialized message from cksum buffer to outbuf
-    writer.endSerialization();
-    auto bodylen2 = writer.result();
-    EXPECT_EQ(bodylen, bodylen2);
+    // using checksum version because some tests like
+    // ClientSocketTest.CloseConnectionOnProtocolChecksumMismatch
+    // need to always run irrespective of the
+    // "Settings::checksumming_enabled" value
+    socket_->serializeMessageWithChecksum(
+        *msg, protohdr_bytes + bodylen, input_);
 
     triggerOnDataAvailable();
   }
@@ -272,13 +251,6 @@ class SocketTest : public ::testing::Test {
     const size_t nbytes = LD_EV(evbuffer_get_length)(output_);
     ASSERT_TRUE(nbytes <= 1024);
     LD_EV(evbuffer_remove)(output_, buf, nbytes);
-  }
-
-  /**
-   * Tamper the checksum in Protocol Header (for tests)
-   */
-  void tamperChecksum(bool tamper) {
-    tamper_checksum_ = tamper;
   }
 
   size_t getTotalOutbufLength() {
@@ -354,10 +326,6 @@ class SocketTest : public ::testing::Test {
   ResourceBudget conn_budget_external_{std::numeric_limits<uint64_t>::max()};
 
   std::unique_ptr<Socket> socket_;
-
-  // for testing
-  bool tamper_checksum_{false}; // if set to true, protocol checksum will be
-                                // tampered
 };
 
 class ClientSocketTest : public SocketTest {

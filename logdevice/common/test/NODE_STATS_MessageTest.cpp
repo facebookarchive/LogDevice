@@ -74,7 +74,6 @@ TEST(NODE_STATS_MessageTest, SerializationAndDeserialization) {
   ProtocolWriter writer(msg.type_, evbuf.get(), proto);
 
   msg.serialize(writer);
-  writer.endSerialization();
   auto write_count = writer.result();
 
   // make sure something was written

@@ -69,7 +69,6 @@ TEST_F(RECORD_MessageTest, SerializationNoExtraMetadata) {
   ProtocolWriter writer(
       orig.type_, evbuf, Compatibility::MAX_PROTOCOL_SUPPORTED);
   orig.serialize(writer);
-  writer.endSerialization();
   ASSERT_GT(writer.result(), 0);
 
   ProtocolReader reader(MessageType::RECORD,
@@ -110,7 +109,6 @@ TEST_F(RECORD_MessageTest, SerializationWithExtraMetadata) {
   ProtocolWriter writer(
       orig.type_, evbuf, Compatibility::MAX_PROTOCOL_SUPPORTED);
   orig.serialize(writer);
-  writer.endSerialization();
   ASSERT_GT(writer.result(), 0);
 
   ProtocolReader reader(MessageType::RECORD,

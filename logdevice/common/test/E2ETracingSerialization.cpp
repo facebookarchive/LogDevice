@@ -106,7 +106,6 @@ E2ETracingSerializationTest::simpleRoundTrip(Message* msg_to_send,
                         ap_to_send_evbuf,
                         Compatibility::MAX_PROTOCOL_SUPPORTED);
   msg_to_send->serialize(writer);
-  writer.endSerialization();
   ssize_t ap_to_send_size = writer.result();
   ld_check(ap_to_send_size > 0);
 

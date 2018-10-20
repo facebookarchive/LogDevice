@@ -553,14 +553,14 @@ TEST_F(ClientSocketTest, CloseConnectionOnProtocolChecksumMismatch) {
   // 1. Receiving a non-tampered message when checksumming is disabled,
   //    socket shouldn't be closed
   settings_.checksumming_enabled = false;
-  tamperChecksum(false);
+  socket_->enableChecksumTampering(false);
   receiveMsg(new VarLengthTestMessage(
       Compatibility::MIN_PROTOCOL_SUPPORTED, Message::MAX_LEN));
   ld_check(!socket_->isClosed());
 
   // 2. Receiving a tampered message won't close socket since checksumming
   //    is disabled
-  tamperChecksum(true);
+  socket_->enableChecksumTampering(true);
   receiveMsg(new VarLengthTestMessage(
       Compatibility::MIN_PROTOCOL_SUPPORTED, Message::MAX_LEN));
   ld_check(!socket_->isClosed());
@@ -568,14 +568,14 @@ TEST_F(ClientSocketTest, CloseConnectionOnProtocolChecksumMismatch) {
   // 3. Receiving a non-tampered message, when checksumming is enabled,
   //    socket shouldn't be closed
   settings_.checksumming_enabled = true;
-  tamperChecksum(false);
+  socket_->enableChecksumTampering(false);
   receiveMsg(new VarLengthTestMessage(
       Compatibility::MIN_PROTOCOL_SUPPORTED, Message::MAX_LEN));
   ld_check(!socket_->isClosed());
 
   // 4. Receive a tampered message, when checksumming is enabled,
   //    verify that socket gets closed
-  tamperChecksum(true);
+  socket_->enableChecksumTampering(true);
   receiveMsg(new VarLengthTestMessage(
       Compatibility::MIN_PROTOCOL_SUPPORTED, Message::MAX_LEN));
   ld_check(socket_->isClosed());

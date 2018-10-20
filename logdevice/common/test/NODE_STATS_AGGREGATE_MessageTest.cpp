@@ -36,7 +36,6 @@ TEST(NODE_STATS_AGGREGATE_MessageTest, SerializeAndDeserialize) {
 
   ProtocolWriter writer(msg.type_, evbuf.get(), proto);
   msg.serialize(writer);
-  writer.endSerialization();
   auto write_count = writer.result();
 
   ASSERT_GT(write_count, 0);

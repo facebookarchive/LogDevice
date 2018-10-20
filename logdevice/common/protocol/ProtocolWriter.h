@@ -79,12 +79,6 @@ class ProtocolWriter {
      */
     virtual uint64_t computeChecksum() = 0;
 
-    /**
-     * Moves the temp evbuffer contents into Destination evbuffer.
-     * Frees the temp evbuffer.
-     */
-    virtual void endSerialization() {}
-
     virtual ~Destination() {}
   };
 
@@ -233,9 +227,6 @@ class ProtocolWriter {
   }
   uint64_t computeChecksum() {
     return dest_->computeChecksum();
-  }
-  void endSerialization() {
-    dest_->endSerialization();
   }
 
   ProtocolWriter(std::unique_ptr<Destination> dest,

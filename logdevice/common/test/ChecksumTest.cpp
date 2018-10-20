@@ -88,7 +88,6 @@ std::unique_ptr<RECORD_Message> ChecksumTest::roundTrip(
                           ap_send_evbuf,
                           Compatibility::MAX_PROTOCOL_SUPPORTED);
     ap_send_msg.serialize(writer);
-    writer.endSerialization();
     ssize_t ap_send_size = writer.result();
     ld_check(ap_send_size > 0);
 
@@ -126,7 +125,6 @@ std::unique_ptr<RECORD_Message> ChecksumTest::roundTrip(
                         record_send_evbuf,
                         Compatibility::MAX_PROTOCOL_SUPPORTED);
   record_send_msg.serialize(writer);
-  writer.endSerialization();
   ssize_t record_send_size = writer.result();
   ld_check(record_send_size > 0);
 

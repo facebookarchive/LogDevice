@@ -71,7 +71,6 @@ void testSerializeDeserialize(uint16_t proto) {
 
   ProtocolWriter writer(msg.type_, evbuf.get(), proto);
   msg.serialize(writer);
-  writer.endSerialization();
   auto write_count = writer.result();
 
   ASSERT_GT(write_count, 0);

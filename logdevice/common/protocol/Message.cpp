@@ -31,7 +31,6 @@ void Message::onSent(Status st,
 size_t Message::size(uint16_t proto) const {
   ProtocolWriter writer(type_, nullptr, proto);
   serialize(writer);
-  writer.endSerialization();
   ssize_t size = writer.result();
   ld_check(size >= 0);
   return ProtocolHeader::bytesNeeded(type_, proto) + size;

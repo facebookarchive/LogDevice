@@ -1153,30 +1153,68 @@ bool Socket::isChecksummingEnabled(MessageType msgtype) {
   return msg_checksum_set.find((char)msgtype) == msg_checksum_set.end();
 }
 
-// Serialization steps:
-//  1. ProtocolWriter allocates a temp evbuffer if output buffer is also
-//     an evbuffer.
-//  2. message.serialize() writes serialized version of the message
-//     to the ProtocolWriter, which internally writes to temp evbuffer first.
-//  3. Checksum is computed on temp evbuffer and a ProtocolHeader
-//     is generated. This ProtocolHeader is then written into output evbuffer.
-//  4. protocol_writer.endSerialization() is called which moves temp evbuffer
-//     contents into output evbuffer (after the ProtocolHeader)
-int Socket::serializeMessage(std::unique_ptr<Envelope>&& envelope,
-                             size_t msglen) {
-  // We should only write to the output buffer once connected.
-  ld_check(connected_);
-
-  const auto& msg = envelope->message();
+int Socket::serializeMessageWithoutChecksum(const Message& msg,
+                                            size_t msglen,
+                                            struct evbuffer* outbuf) {
   ProtocolHeader protohdr;
   protohdr.len = msglen;
   protohdr.type = msg.type_;
-  struct evbuffer* outbuf =
-      buffered_output_ ? buffered_output_ : deps_->getOutput(bev_);
-  ld_check(outbuf);
+  size_t protohdr_bytes = ProtocolHeader::bytesNeeded(msg.type_, proto_);
+
+  if (LD_EV(evbuffer_add)(outbuf, &protohdr, protohdr_bytes) != 0) {
+    // unlikely
+    ld_critical("INTERNAL ERROR: failed to add message length and type "
+                "to output evbuffer");
+    ld_check(0);
+    close(E::INTERNAL);
+    err = E::INTERNAL;
+    return -1;
+  }
+
+  ProtocolWriter writer(msg.type_, outbuf, proto_);
+  msg.serialize(writer);
+  ssize_t bodylen = writer.result();
+  if (bodylen <= 0) { // unlikely
+    ld_critical("INTERNAL ERROR: failed to serialize a message of "
+                "type %s into an evbuffer",
+                messageTypeNames[msg.type_].c_str());
+    ld_check(0);
+    close(E::INTERNAL);
+    err = E::INTERNAL;
+    return -1;
+  }
+
+  ld_check(bodylen + protohdr_bytes == protohdr.len);
+  return 0;
+}
+
+// Serialization steps:
+//  1. ProtocolWriter allocates a temp evbuffer and uses that in its
+//     constructor
+//  2. message.serialize() writes serialized version of the message
+//     to the ProtocolWriter, which internally writes to temp evbuffer.
+//  3. Checksum is computed on temp evbuffer and a ProtocolHeader
+//     is generated. This ProtocolHeader is then written into output evbuffer.
+//  4. Move temp evbuffer contents into output evbuffer (after the
+//     ProtocolHeader)
+int Socket::serializeMessageWithChecksum(const Message& msg,
+                                         size_t msglen,
+                                         struct evbuffer* outbuf) {
+  struct evbuffer* cksum_evbuf = nullptr;
+  SCOPE_EXIT {
+    if (cksum_evbuf) {
+      LD_EV(evbuffer_free)(cksum_evbuf);
+      cksum_evbuf = nullptr;
+    }
+  };
+
+  ProtocolHeader protohdr;
+  protohdr.len = msglen;
+  protohdr.type = msg.type_;
+  cksum_evbuf = LD_EV(evbuffer_new)();
 
   // 1. Serialize the message into checksum buffer
-  ProtocolWriter writer(msg.type_, outbuf, proto_);
+  ProtocolWriter writer(msg.type_, cksum_evbuf, proto_);
   msg.serialize(writer);
   ssize_t bodylen = writer.result();
   if (bodylen <= 0) { // unlikely
@@ -1191,14 +1229,14 @@ int Socket::serializeMessage(std::unique_ptr<Envelope>&& envelope,
     return -1;
   }
 
-  // 2. Compute checksum if needed
-  protohdr.cksum = 0;
-  if (isChecksummingEnabled(msg.type_) &&
-      ProtocolHeader::needChecksumInHeader(msg.type_, proto_)) {
-    protohdr.cksum = writer.computeChecksum();
+  // 2. Compute checksum
+  protohdr.cksum = writer.computeChecksum();
+  /* For Tests only */
+  if (shouldTamperChecksum()) {
+    protohdr.cksum += 1;
   }
 
-  // 3. Add proto header to evbuffer, maybe with checksum
+  // 3. Add proto header to evbuffer
   size_t protohdr_bytes = ProtocolHeader::bytesNeeded(msg.type_, proto_);
   if (LD_EV(evbuffer_add)(outbuf, &protohdr, protohdr_bytes) != 0) {
     // unlikely
@@ -1213,24 +1251,55 @@ int Socket::serializeMessage(std::unique_ptr<Envelope>&& envelope,
   }
 
   // 4. Move the serialized message from cksum buffer to outbuf
-  writer.endSerialization();
+  if (outbuf && cksum_evbuf) {
+    // This moves all data b/w evbuffers without memory copy
+    int rv = LD_EV(evbuffer_add_buffer)(outbuf, cksum_evbuf);
+    ld_check(rv == 0);
+  }
 
   ld_check(bodylen + protohdr_bytes == protohdr.len);
+  return 0;
+}
+
+int Socket::serializeMessage(std::unique_ptr<Envelope>&& envelope,
+                             size_t msglen) {
+  // We should only write to the output buffer once connected.
+  ld_check(connected_);
+
+  const auto& msg = envelope->message();
+  struct evbuffer* outbuf =
+      buffered_output_ ? buffered_output_ : deps_->getOutput(bev_);
+  ld_check(outbuf);
+
+  bool compute_checksum = !buffered_output_ &&
+      ProtocolHeader::needChecksumInHeader(msg.type_, proto_) &&
+      isChecksummingEnabled(msg.type_);
+
+  int rv = 0;
+  if (compute_checksum) {
+    rv = serializeMessageWithChecksum(msg, msglen, outbuf);
+  } else {
+    rv = serializeMessageWithoutChecksum(msg, msglen, outbuf);
+  }
+
+  if (rv != 0) {
+    return rv;
+  }
+
   MESSAGE_TYPE_STAT_INCR(deps_->getStats(), msg.type_, message_sent);
   TRAFFIC_CLASS_STAT_INCR(deps_->getStats(), msg.tc_, messages_sent);
-  TRAFFIC_CLASS_STAT_ADD(deps_->getStats(), msg.tc_, bytes_sent, protohdr.len);
+  TRAFFIC_CLASS_STAT_ADD(deps_->getStats(), msg.tc_, bytes_sent, msglen);
 
   ld_check(!isHandshakeMessage(msg.type_) || next_pos_ == 0);
   ld_check(next_pos_ >= drain_pos_);
 
-  next_pos_ += protohdr.len;
+  next_pos_ += msglen;
   envelope->setDrainPos(next_pos_);
 
   sendq_.push_back(*envelope.release());
   ld_check(!envelope);
 
-  ld_check(protohdr.len <= Message::MAX_LEN + protohdr_bytes);
-  deps_->noteBytesQueued(protohdr.len);
+  deps_->noteBytesQueued(msglen);
   return 0;
 }
 

@@ -187,6 +187,13 @@ class Socket {
     return peer_sockaddr_;
   }
 
+  /**
+   * For Testing only!
+   */
+  void enableChecksumTampering(bool enable) {
+    tamper_ = enable;
+  }
+
   // LogDevice-level address of peer end-point at the other end of the
   // connection
   const Address peer_name_;
@@ -559,6 +566,24 @@ class Socket {
    *         failure and err is set to E::INTERNAL.
    */
   int serializeMessage(std::unique_ptr<Envelope>&& msg, size_t msglen);
+
+  /**
+   * Helper functions to split serializeMessage() functionality.
+   * This will be used when:
+   * - SSL is enabled
+   * - checksumming is disabled
+   * - Message Type is ACK/HELLO
+   * @return 0 for success, -1 for failure
+   */
+  int serializeMessageWithoutChecksum(const Message& msg,
+                                      size_t msglen,
+                                      struct evbuffer* outbuf);
+  /**
+   * @return 0 for success, -1 for failure
+   */
+  int serializeMessageWithChecksum(const Message& msg,
+                                   size_t msglen,
+                                   struct evbuffer* outbuf);
 
   /**
    * Allow the async message error simulator to optionally take ownership of
@@ -1035,6 +1060,15 @@ class Socket {
    * where the file descriptor is not known (e.g., before connecting).
    */
   int fd_;
+
+  /**
+   * For Testing only!
+   */
+  bool shouldTamperChecksum() {
+    return tamper_;
+  }
+
+  bool tamper_{false};
 
   friend class SocketTest;
   friend class ClientSocketTest;
