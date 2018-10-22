@@ -41,6 +41,8 @@
 #include "logdevice/common/ZeroCopiedRecordDisposal.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/event_log/EventLogRebuildingSet.h"
+#include "logdevice/common/plugin/CommonBuiltinPlugins.h"
+#include "logdevice/common/plugin/StaticPluginLoader.h"
 #include "logdevice/common/stats/ServerHistograms.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/types_internal.h"
@@ -125,6 +127,7 @@ Processor::Processor(std::shared_ptr<UpdateableConfig> updateable_config,
                      StatsHolder* stats,
                      std::unique_ptr<SequencerLocator> sequencer_locator,
                      std::shared_ptr<LegacyPluginPack> plugin,
+                     std::shared_ptr<PluginRegistry> plugin_registry,
                      std::string credentials,
                      std::string csid,
                      std::string name)
@@ -133,6 +136,7 @@ Processor::Processor(std::shared_ptr<UpdateableConfig> updateable_config,
       config_(std::move(updateable_config)),
       settings_(settings),
       plugin_(std::move(plugin)),
+      plugin_registry_(std::move(plugin_registry)),
       stats_(stats),
       impl_(new ProcessorImpl(this, settings)),
       sequencer_locator_(std::move(sequencer_locator)),
@@ -252,6 +256,23 @@ EventLoopHandle& Processor::findWorker(WorkerType type, int worker_idx) {
   return *workers[worker_idx];
 }
 
+namespace {
+class TestBuiltinPlugin : public virtual Plugin,
+                          public virtual LegacyPluginPack {
+  Type type() const override {
+    return Type::LEGACY_CLIENT_PLUGIN;
+  }
+
+  std::string identifier() const override {
+    return PluginRegistry::kBuiltin().str() + " test";
+  }
+
+  std::string displayName() const override {
+    return "Test plugin";
+  }
+};
+} // namespace
+
 // Testing Constructor
 Processor::Processor(UpdateableSettings<Settings> settings,
                      bool fake_storage_node,
@@ -260,6 +281,9 @@ Processor::Processor(UpdateableSettings<Settings> settings,
     : fake_storage_node_(fake_storage_node),
       settings_(settings),
       plugin_(std::make_shared<LegacyPluginPack>()),
+      plugin_registry_(std::make_shared<PluginRegistry>(
+          createAugmentedCommonBuiltinPluginVector<StaticPluginLoader,
+                                                   TestBuiltinPlugin>())),
       stats_(stats),
       impl_(new ProcessorImpl(this, settings)),
       conn_budget_incoming_(settings_.get()->max_incoming_connections),

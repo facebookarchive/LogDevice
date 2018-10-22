@@ -38,6 +38,7 @@
 #include "logdevice/common/Timer.h"
 #include "logdevice/common/configuration/ConfigParser.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/plugin/CommonBuiltinPlugins.h"
 #include "logdevice/common/protocol/MessageTypeNames.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/util.h"
@@ -364,8 +365,20 @@ bool testsShouldLeaveData() {
   return getenv_switch("LOGDEVICE_TEST_LEAVE_DATA");
 }
 
-class TestPluginPack : public LegacyPluginPack {
+class TestPluginPack : public virtual LegacyPluginPack, public virtual Plugin {
  public:
+  Type type() const override {
+    return Type::LEGACY_CLIENT_PLUGIN;
+  }
+
+  std::string identifier() const override {
+    return PluginRegistry::kBuiltin().str();
+  }
+
+  std::string displayName() const override {
+    return description();
+  }
+
   virtual const char* description() const override {
     return "testing plugin";
   }
@@ -373,6 +386,11 @@ class TestPluginPack : public LegacyPluginPack {
 
 std::shared_ptr<LegacyPluginPack> make_test_plugin_pack() {
   return std::make_shared<TestPluginPack>();
+}
+
+std::shared_ptr<PluginRegistry> make_test_plugin_registry() {
+  return std::make_shared<PluginRegistry>(
+      createAugmentedCommonBuiltinPluginVector<TestPluginPack>());
 }
 
 std::shared_ptr<Processor>
@@ -387,7 +405,8 @@ make_test_processor(const Settings& settings,
                            UpdateableSettings<Settings>(settings),
                            stats,
                            nullptr,
-                           make_test_plugin_pack());
+                           make_test_plugin_pack(),
+                           make_test_plugin_registry());
 }
 
 const char* verifyFileExists(const char* filename) {

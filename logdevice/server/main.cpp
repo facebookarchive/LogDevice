@@ -339,7 +339,9 @@ int main(int argc, const char** argv) {
     }
 
     if (parsed.count("version")) {
-      std::unique_ptr<BuildInfo> build_info = plugin->createBuildInfo();
+      auto build_info =
+          plugin_registry->getSinglePlugin<BuildInfo>(PluginType::BUILD_INFO);
+      ld_check(build_info);
       std::cout << "version " << build_info->version() << '\n';
       std::string package = build_info->packageNameWithVersion();
       if (!package.empty()) {
@@ -374,7 +376,9 @@ int main(int argc, const char** argv) {
 
   ld_info("server starting");
   {
-    std::unique_ptr<BuildInfo> build_info = plugin->createBuildInfo();
+    auto build_info =
+        plugin_registry->getSinglePlugin<BuildInfo>(PluginType::BUILD_INFO);
+    ld_check(build_info);
     ld_info("version %s", build_info->version().c_str());
     std::string str = build_info_string(*build_info);
     if (!str.empty()) {
@@ -397,7 +401,7 @@ int main(int argc, const char** argv) {
                                                 gossip_settings,
                                                 settings,
                                                 rocksdb_settings,
-                                                plugin);
+                                                plugin_registry);
   } catch (const ConstructorFailed&) {
     return 1;
   }

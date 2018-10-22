@@ -46,6 +46,7 @@ class EventLogRebuildingSet;
 class EventLoopHandle;
 class LegacyPluginPack;
 class PermissionChecker;
+class PluginRegistry;
 class PrincipalParser;
 class ProcessorImpl;
 class RebuildingSupervisor;
@@ -98,6 +99,7 @@ class Processor : public folly::enable_shared_from_this<Processor> {
             StatsHolder* stats,
             std::unique_ptr<SequencerLocator> sequencer_locator,
             std::shared_ptr<LegacyPluginPack> plugin,
+            std::shared_ptr<PluginRegistry> plugin_registry,
             std::string credentials = "",
             std::string csid = "",
             std::string name = "logdevice");
@@ -408,8 +410,10 @@ class Processor : public folly::enable_shared_from_this<Processor> {
   // all objects running on those EventLoops
   UpdateableSettings<Settings> settings_;
 
- public:
   std::shared_ptr<LegacyPluginPack> plugin_;
+  std::shared_ptr<PluginRegistry> plugin_registry_;
+
+ public:
   StatsHolder* stats_;
 
   friend class ProcessorImpl;
@@ -550,6 +554,9 @@ class Processor : public folly::enable_shared_from_this<Processor> {
 
   std::shared_ptr<LegacyPluginPack> getPlugin() {
     return plugin_;
+  }
+  std::shared_ptr<PluginRegistry> getPluginRegistry() {
+    return plugin_registry_;
   }
 
   // Run the given function on whichever background thread gets to it first.

@@ -117,6 +117,7 @@ void ServerConfigSource::init(const std::string& path,
                                  /*stats*/ nullptr,
                                  /*sequencer_locator*/ nullptr,
                                  plugin_,
+                                 plugin_registry_,
                                  /*credentials*/ "",
                                  "ld:cfg-src");
 }

@@ -8,14 +8,13 @@
 
 #include "logdevice/server/ServerBuiltinPluginProvider.h"
 
+#include "logdevice/common/plugin/CommonBuiltinPlugins.h"
 #include "logdevice/server/ServerPluginPack.h"
 
 namespace facebook { namespace logdevice {
 
 PluginVector ServerBuiltinPluginProvider::getPlugins() {
-  PluginVector res;
-  res.push_back(std::make_unique<ServerPluginPack>());
-  return res;
+  return createAugmentedCommonBuiltinPluginVector<ServerPluginPack>();
 }
 
 }} // namespace facebook::logdevice

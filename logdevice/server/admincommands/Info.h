@@ -99,8 +99,9 @@ class Info : public AdminCommand {
 
     auto processor = server_->getProcessor();
     auto config = processor->config_;
-    std::unique_ptr<BuildInfo> build_info =
-        processor->getPlugin()->createBuildInfo();
+    auto build_info =
+        processor->getPluginRegistry()->getSinglePlugin<BuildInfo>(
+            PluginType::BUILD_INFO);
 
     const auto& security_info = processor->security_info_;
     auto permission_checker = security_info->getPermissionChecker();

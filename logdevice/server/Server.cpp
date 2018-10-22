@@ -214,8 +214,8 @@ ServerParameters::ServerParameters(
     UpdateableSettings<GossipSettings> gossip_settings,
     UpdateableSettings<Settings> processor_settings,
     UpdateableSettings<RocksDBSettings> rocksdb_settings,
-    std::shared_ptr<ServerPluginPack> plugin)
-    : plugin_(std::move(plugin)),
+    std::shared_ptr<PluginRegistry> plugin_registry)
+    : plugin_registry_(std::move(plugin_registry)),
       server_stats_(StatsParams().setIsServer(true)),
       settings_updater_(std::move(settings_updater)),
       server_settings_(std::move(server_settings)),
@@ -264,6 +264,10 @@ ServerParameters::ServerParameters(
       updateable_server_config->addHook(std::bind(
           &ServerParameters::validateNodes, this, std::placeholders::_1)));
 
+  std::shared_ptr<ServerPluginPack> plugin =
+      getPluginRegistry()->getSinglePlugin<ServerPluginPack>(
+          PluginType::LEGACY_SERVER_PLUGIN);
+  ld_check(plugin);
   {
     ConfigInit config_init(
         processor_settings_->initial_config_load_timeout, getStats());
@@ -272,7 +276,8 @@ ServerParameters::ServerParameters(
     config_init.setZookeeperPollingInterval(
         processor_settings_->zk_config_polling_interval);
     int rv = config_init.attach(server_settings_->config_path,
-                                plugin_,
+                                plugin,
+                                getPluginRegistry(),
                                 updateable_config_,
                                 nullptr,
                                 processor_settings_);
@@ -307,7 +312,7 @@ ServerParameters::ServerParameters(
   if (processor_settings_->trace_logger_disabled) {
     trace_logger_ = std::make_shared<NoopTraceLogger>(updateable_config_);
   } else {
-    trace_logger_ = plugin_->createTraceLogger(updateable_config_);
+    trace_logger_ = plugin->createTraceLogger(updateable_config_);
   }
 
   storage_node_ = this_node->hasRole(Configuration::NodeRole::STORAGE);
@@ -593,7 +598,9 @@ bool Server::initStore() {
 }
 
 bool Server::initProcessor() {
-  std::shared_ptr<ServerPluginPack> plugin = params_->getPlugin();
+  std::shared_ptr<ServerPluginPack> plugin =
+      params_->getPluginRegistry()->getSinglePlugin<ServerPluginPack>(
+          PluginType::LEGACY_SERVER_PLUGIN);
   ld_check(plugin);
   std::unique_ptr<SequencerLocator> sequencer_locator =
       plugin->createSequencerLocator(updateable_config_);
@@ -609,7 +616,8 @@ bool Server::initProcessor() {
                                 params_->getProcessorSettings(),
                                 params_->getStats(),
                                 std::move(sequencer_locator),
-                                params_->getPlugin(),
+                                plugin,
+                                params_->getPluginRegistry(),
                                 "",
                                 "",
                                 "ld:srv" // prefix of worker thread names

@@ -204,6 +204,7 @@ std::shared_ptr<Client> Client::create(std::string cluster_name,
 
   int rv = config_init.attach(config_url,
                               plugin,
+                              plugin_registry,
                               config,
                               std::move(logs_cfg),
                               impl_settings->getSettings(),
@@ -377,6 +378,7 @@ ClientImpl::ClientImpl(std::string cluster_name,
                                        stats_.get(),
                                        std::move(sequencer_locator),
                                        plugin,
+                                       plugin_registry_,
                                        credentials_,
                                        csid_);
 

@@ -29,6 +29,7 @@
 namespace facebook { namespace logdevice {
 
 class LegacyPluginPack;
+class PluginRegistry;
 
 // Timeout shared by many tests, especially integration tests
 
@@ -279,6 +280,7 @@ make_test_processor(const Settings& settings,
                     StatsHolder* stats = nullptr);
 
 std::shared_ptr<LegacyPluginPack> make_test_plugin_pack();
+std::shared_ptr<PluginRegistry> make_test_plugin_registry();
 
 // verifies that file exists and returns the filename if it does. Throws
 // an instance of std::runtime_error otherwise

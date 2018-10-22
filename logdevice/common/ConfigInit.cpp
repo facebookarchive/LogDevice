@@ -20,6 +20,7 @@ namespace facebook { namespace logdevice {
 
 int ConfigInit::attach(const std::string& source,
                        std::shared_ptr<LegacyPluginPack> plugin,
+                       std::shared_ptr<PluginRegistry> plugin_registry,
                        std::shared_ptr<UpdateableConfig> updateable_config,
                        std::unique_ptr<LogsConfig> alternative_logs_config,
                        UpdateableSettings<Settings> settings,
@@ -32,7 +33,7 @@ int ConfigInit::attach(const std::string& source,
   updater->registerSource(
       std::make_unique<ZookeeperConfigSource>(zk_polling_interval_));
   updater->registerSource(std::make_unique<ServerConfigSource>(
-      alternative_logs_config.get(), plugin));
+      alternative_logs_config.get(), plugin, plugin_registry));
 
   // Ask the plugin if it wants to register additional sources
   plugin->registerConfigSources(*updater, zk_polling_interval_);

@@ -52,7 +52,8 @@ TEST_F(AppendIntegrationTest, AppendRequestEcho) {
                         nullptr, /*stats*/
                         std::make_unique<HashBasedSequencerLocator>(
                             cluster->getConfig()->updateableServerConfig()),
-                        make_test_plugin_pack());
+                        make_test_plugin_pack(),
+                        make_test_plugin_registry());
 
   char data[128]; // send the contents of this array as payload
 
@@ -565,7 +566,8 @@ TEST_F(AppendIntegrationTest, ThreadMapping) {
                         nullptr, /*Stats*/
                         std::make_unique<HashBasedSequencerLocator>(
                             cluster->getConfig()->updateableServerConfig()),
-                        make_test_plugin_pack());
+                        make_test_plugin_pack(),
+                        make_test_plugin_registry());
 
   const std::string payload = "foo";
   auto append = [&](logid_t log_id) -> std::thread::id {

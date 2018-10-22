@@ -22,6 +22,7 @@ namespace facebook { namespace logdevice {
 
 class LegacyPluginPack;
 class MyNodeID;
+class PluginRegistry;
 class StatsHolder;
 
 /**
@@ -77,6 +78,7 @@ class ConfigInit {
    */
   int attach(const std::string& source,
              std::shared_ptr<LegacyPluginPack>,
+             std::shared_ptr<PluginRegistry>,
              std::shared_ptr<UpdateableConfig> updateable_config,
              std::unique_ptr<LogsConfig> alternative_logs_config,
              UpdateableSettings<Settings> updateable_settings =

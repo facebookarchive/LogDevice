@@ -99,10 +99,6 @@ class LegacyPluginPack {
   virtual std::unique_ptr<SequencerLocator>
   createSequencerLocator(const std::shared_ptr<UpdateableConfig>&);
 
-  virtual std::unique_ptr<BuildInfo> createBuildInfo() {
-    return std::unique_ptr<BuildInfo>(new BuildInfo());
-  }
-
   // Called by watchdog thread for each stalled worker thread, if
   // Settings::watchdog_print_bt_on_stall is true.  Called with the thread id of
   // the worker, as returned by gettid(2), which is different than

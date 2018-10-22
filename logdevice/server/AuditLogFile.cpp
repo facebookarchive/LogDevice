@@ -68,8 +68,11 @@ void log_trim_movement(ServerProcessor& processor,
   entry.client_address = client_address;
   entry.identity = identity;
 
-  static std::string build_info =
-      processor.getPlugin()->createBuildInfo()->version();
+  static auto build_info_plugin =
+      processor.getPluginRegistry()->getSinglePlugin<BuildInfo>(
+          PluginType::BUILD_INFO);
+  ld_check(build_info_plugin);
+  static std::string build_info = build_info_plugin->version();
   entry.build_info = build_info;
 
   std::shared_ptr<Configuration> config = processor.config_->get();

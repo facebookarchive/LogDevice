@@ -515,7 +515,8 @@ TEST_F(SequencerIntegrationTest, SeenEpochReactivation) {
                         nullptr, /* stats*/
                         std::make_unique<HashBasedSequencerLocator>(
                             cluster->getConfig()->updateableServerConfig()),
-                        make_test_plugin_pack());
+                        make_test_plugin_pack(),
+                        make_test_plugin_registry());
 
   epoch_t first_epoch;
 

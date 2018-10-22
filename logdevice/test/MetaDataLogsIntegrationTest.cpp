@@ -509,7 +509,8 @@ TEST_F(MetaDataLogsIntegrationTest, SequencerReadHistoricMetadata) {
       UpdateableSettings<Settings>(settings),
       nullptr, /* stats*/
       std::make_unique<StaticSequencerLocator>(cluster->getConfig()),
-      make_test_plugin_pack());
+      make_test_plugin_pack(),
+      make_test_plugin_registry());
 
   std::string data(1024, 'x');
   // write one record

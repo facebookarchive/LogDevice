@@ -32,7 +32,7 @@ namespace facebook { namespace logdevice {
 
 class LogStoreMonitor;
 class MyNodeID;
-class ServerPluginPack;
+class PluginRegistry;
 class Processor;
 class RebuildingCoordinator;
 class RebuildingSupervisor;
@@ -60,7 +60,7 @@ class ServerParameters {
       UpdateableSettings<GossipSettings> gossip_settings,
       UpdateableSettings<Settings> processor_settings,
       UpdateableSettings<RocksDBSettings> rocksdb_settings,
-      std::shared_ptr<ServerPluginPack> plugin);
+      std::shared_ptr<PluginRegistry> plugin_registry);
   ~ServerParameters();
 
   ServerParameters(const ServerParameters& rhs) = delete;
@@ -78,8 +78,8 @@ class ServerParameters {
   std::shared_ptr<TraceLogger> getTraceLogger();
   const std::shared_ptr<LocalLogFile>& getAuditLog();
   StatsHolder* getStats();
-  std::shared_ptr<ServerPluginPack> getPlugin() const {
-    return plugin_;
+  std::shared_ptr<PluginRegistry> getPluginRegistry() const {
+    return plugin_registry_;
   }
 
   std::shared_ptr<SettingsUpdater> getSettingsUpdater();
@@ -108,7 +108,7 @@ class ServerParameters {
   }
 
  private:
-  std::shared_ptr<ServerPluginPack> plugin_;
+  std::shared_ptr<PluginRegistry> plugin_registry_;
   StatsHolder server_stats_;
   std::shared_ptr<SettingsUpdater> settings_updater_;
   UpdateableSettings<ServerSettings> server_settings_;

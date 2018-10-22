@@ -15,6 +15,7 @@
 #include "logdevice/common/settings/GossipSettings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/common/settings/util.h"
+#include "logdevice/common/test/TestUtil.h"
 #include "logdevice/server/LogStoreMonitor.h"
 #include "logdevice/server/RebuildingCoordinator.h"
 #include "logdevice/server/RebuildingSupervisor.h"
@@ -57,7 +58,8 @@ std::shared_ptr<ServerProcessor> make_test_server_processor(
       UpdateableSettings<Settings>(settings),
       stats,
       nullptr,
-      make_test_server_plugin_pack());
+      make_test_server_plugin_pack(),
+      make_test_plugin_registry());
 }
 
 std::shared_ptr<ServerProcessor> make_test_server_processor(

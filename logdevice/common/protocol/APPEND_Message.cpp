@@ -223,7 +223,7 @@ Message::Disposition APPEND_Message::onReceived(const Address& from) {
   WORKER_LOG_STAT_ADD(header_.logid, append_payload_bytes, payload_size);
 
   std::shared_ptr<opentracing::Tracer> e2e_tracer =
-      Worker::onThisThread()->processor_->plugin_->createOTTracer();
+      Worker::onThisThread()->processor_->getPlugin()->createOTTracer();
 
   ld_check(e2e_tracer);
 

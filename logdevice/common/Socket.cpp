@@ -2740,8 +2740,9 @@ const std::string& SocketDependencies::getCSID() {
 }
 
 std::string SocketDependencies::getClientBuildInfo() {
-  auto build_info =
-      Worker::onThisThread()->processor_->getPlugin()->createBuildInfo();
+  auto build_info = Worker::onThisThread()
+                        ->processor_->getPluginRegistry()
+                        ->getSinglePlugin<BuildInfo>(PluginType::BUILD_INFO);
   ld_check(build_info);
   return build_info->getBuildInfoJson();
 }

@@ -8,15 +8,14 @@
 
 #include "logdevice/lib/ClientBuiltinPluginProvider.h"
 
+#include "logdevice/common/plugin/CommonBuiltinPlugins.h"
 #include "logdevice/common/plugin/StaticPluginLoader.h"
 #include "logdevice/lib/ClientPluginPack.h"
 
 namespace facebook { namespace logdevice {
 
 PluginVector ClientBuiltinPluginProvider::getPlugins() {
-  PluginVector res;
-  res.push_back(std::make_unique<ClientPluginPack>());
-  return res;
+  return createAugmentedCommonBuiltinPluginVector<ClientPluginPack>();
 }
 
 PluginVector getClientPluginProviders() {

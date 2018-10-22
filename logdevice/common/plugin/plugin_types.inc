@@ -27,6 +27,8 @@ PLUGIN_TYPE(STATS_PUBLISHER_FACTORY,
             2,
             "Stats publisher factory",
             false)
+// See BuildInfo.h
+PLUGIN_TYPE(BUILD_INFO, 3, "Build Info", false)
 
 // TODO: add more plugin types
 
