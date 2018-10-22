@@ -76,13 +76,6 @@ class LegacyPluginPack {
   registerConfigSources(TextConfigUpdater&,
                         std::chrono::milliseconds /* zk_polling_interval */) {}
 
-  /**
-   * Creates a TraceLogger to which trace samples are pushed if tracing is on.
-   * The default implementation creates a NoopTraceLogger.
-   */
-  virtual std::unique_ptr<TraceLogger>
-  createTraceLogger(const std::shared_ptr<UpdateableConfig>&);
-
   virtual std::unique_ptr<PrincipalParser>
   createPrincipalParser(AuthenticationType type) {
     ld_check(type == AuthenticationType::NONE);

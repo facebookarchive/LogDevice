@@ -20,9 +20,4 @@ std::unique_ptr<SequencerLocator> LegacyPluginPack::createSequencerLocator(
       new HashBasedSequencerLocator(config->updateableServerConfig()));
 }
 
-std::unique_ptr<TraceLogger> LegacyPluginPack::createTraceLogger(
-    const std::shared_ptr<UpdateableConfig>& config) {
-  return std::make_unique<NoopTraceLogger>(config);
-}
-
 }} // namespace facebook::logdevice

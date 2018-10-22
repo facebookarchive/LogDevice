@@ -29,6 +29,7 @@
 #include "logdevice/common/configuration/logs/LogsConfigManager.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/event_log/EventLogStateMachine.h"
+#include "logdevice/common/plugin/TraceLoggerFactory.h"
 #include "logdevice/common/settings/SSLSettingValidation.h"
 #include "logdevice/common/settings/SettingsUpdater.h"
 #include "logdevice/common/stats/PerShardHistograms.h"
@@ -309,10 +310,13 @@ ServerParameters::ServerParameters(
   }
 
   // Construct the Server Trace Logger
-  if (processor_settings_->trace_logger_disabled) {
+  std::shared_ptr<TraceLoggerFactory> trace_logger_factory =
+      plugin_registry_->getSinglePlugin<TraceLoggerFactory>(
+          PluginType::TRACE_LOGGER_FACTORY);
+  if (!trace_logger_factory || processor_settings_->trace_logger_disabled) {
     trace_logger_ = std::make_shared<NoopTraceLogger>(updateable_config_);
   } else {
-    trace_logger_ = plugin->createTraceLogger(updateable_config_);
+    trace_logger_ = (*trace_logger_factory)(updateable_config_);
   }
 
   storage_node_ = this_node->hasRole(Configuration::NodeRole::STORAGE);

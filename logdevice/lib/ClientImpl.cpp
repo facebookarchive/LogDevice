@@ -50,6 +50,7 @@
 #include "logdevice/common/configuration/logs/LogsConfigTree.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/plugin/LocationProvider.h"
+#include "logdevice/common/plugin/TraceLoggerFactory.h"
 #include "logdevice/common/protocol/HELLO_Message.h"
 #include "logdevice/common/settings/SSLSettingValidation.h"
 #include "logdevice/common/settings/Settings.h"
@@ -363,19 +364,22 @@ ClientImpl::ClientImpl(std::string cluster_name,
 
   std::shared_ptr<ServerConfig> server_cfg = config_->get()->serverConfig();
 
-  std::shared_ptr<ClientPluginPack> plugin =
-      plugin_registry_->getSinglePlugin<ClientPluginPack>(
-          PluginType::LEGACY_CLIENT_PLUGIN);
-  ld_check(plugin);
-
-  if (settings->trace_logger_disabled) {
+  std::shared_ptr<TraceLoggerFactory> trace_logger_factory =
+      plugin_registry_->getSinglePlugin<TraceLoggerFactory>(
+          PluginType::TRACE_LOGGER_FACTORY);
+  if (!trace_logger_factory || settings->trace_logger_disabled) {
     trace_logger_ = std::make_shared<NoopTraceLogger>(config_);
   } else {
-    trace_logger_ = plugin->createTraceLogger(config_);
+    trace_logger_ = (*trace_logger_factory)(config_);
   }
 
   event_tracer_ =
       std::make_unique<ClientEventTracer>(trace_logger_, stats_.get());
+
+  std::shared_ptr<ClientPluginPack> plugin =
+      plugin_registry_->getSinglePlugin<ClientPluginPack>(
+          PluginType::LEGACY_CLIENT_PLUGIN);
+  ld_check(plugin);
 
   processor_ = ClientProcessor::create(config_,
                                        trace_logger_,

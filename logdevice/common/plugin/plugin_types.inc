@@ -31,6 +31,8 @@ PLUGIN_TYPE(STATS_PUBLISHER_FACTORY,
 PLUGIN_TYPE(BUILD_INFO, 3, "Build Info", false)
 // See LocationProvider.h
 PLUGIN_TYPE(LOCATION_PROVIDER, 4, "Location provider", false)
+// See TraceLoggerFactory.h
+PLUGIN_TYPE(TRACE_LOGGER_FACTORY, 5, "TraceLogger factory", false)
 
 // TODO: add more plugin types
 
