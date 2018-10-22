@@ -49,6 +49,7 @@
 #include "logdevice/common/configuration/logs/LogsConfigStateMachine.h"
 #include "logdevice/common/configuration/logs/LogsConfigTree.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/plugin/LocationProvider.h"
 #include "logdevice/common/protocol/HELLO_Message.h"
 #include "logdevice/common/settings/SSLSettingValidation.h"
 #include "logdevice/common/settings/Settings.h"
@@ -138,10 +139,6 @@ std::shared_ptr<Client> Client::create(std::string cluster_name,
       std::make_shared<PluginRegistry>(getClientPluginProviders());
   ld_info(
       "Plugins loaded: %s", plugin_registry->getStateDescriptionStr().c_str());
-  std::shared_ptr<ClientPluginPack> plugin =
-      plugin_registry->getSinglePlugin<ClientPluginPack>(
-          PluginType::LEGACY_CLIENT_PLUGIN);
-  ld_check(plugin);
 
   // If caller provided a ClientSettings instance, use that, otherwise create
   // one with default settings
@@ -150,7 +147,11 @@ std::shared_ptr<Client> Client::create(std::string cluster_name,
   std::unique_ptr<ClientSettingsImpl> impl_settings(
       static_cast<ClientSettingsImpl*>(raw_settings));
 
-  std::string plugin_location = plugin->getMyLocation();
+  std::shared_ptr<LocationProvider> location_plugin =
+      plugin_registry->getSinglePlugin<LocationProvider>(
+          PluginType::LOCATION_PROVIDER);
+  std::string plugin_location =
+      location_plugin ? location_plugin->getMyLocation() : "";
   auto location = raw_settings->get("my-location");
   std::string location_str = location.hasValue() ? location.value() : "";
   if (location_str.empty() && !plugin_location.empty()) {
@@ -202,6 +203,10 @@ std::shared_ptr<Client> Client::create(std::string cluster_name,
   config_init.setZookeeperPollingInterval(
       impl_settings->getSettings()->zk_config_polling_interval);
 
+  std::shared_ptr<ClientPluginPack> plugin =
+      plugin_registry->getSinglePlugin<ClientPluginPack>(
+          PluginType::LEGACY_CLIENT_PLUGIN);
+  ld_check(plugin);
   int rv = config_init.attach(config_url,
                               plugin,
                               plugin_registry,

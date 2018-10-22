@@ -29,6 +29,8 @@ PLUGIN_TYPE(STATS_PUBLISHER_FACTORY,
             false)
 // See BuildInfo.h
 PLUGIN_TYPE(BUILD_INFO, 3, "Build Info", false)
+// See LocationProvider.h
+PLUGIN_TYPE(LOCATION_PROVIDER, 4, "Location provider", false)
 
 // TODO: add more plugin types
 
