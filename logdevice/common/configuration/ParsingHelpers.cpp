@@ -20,6 +20,7 @@
 #include "logdevice/common/commandline_util_chrono.h"
 #include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/common/configuration/ZookeeperConfig.h"
+#include "logdevice/common/util.h"
 
 using namespace facebook::logdevice::configuration;
 
@@ -977,66 +978,8 @@ bool parseTrafficShapingScopeMeter(const std::string& scope_name,
   return true;
 }
 
-namespace {
-bool validatePort(folly::StringPiece port) {
-  return port.size() > 0 && std::all_of(port.begin(), port.end(), ::isdigit);
-}
-
-bool validateIpV4(folly::StringPiece ip) {
-  return ip.size() > 0 && std::all_of(ip.begin(), ip.end(), [](const char c) {
-           return ::isdigit(c) || c == '.';
-         });
-}
-
-bool validateIpV6(folly::StringPiece ip) {
-  return ip.size() > 0 && std::all_of(ip.begin(), ip.end(), [](const char c) {
-           return ::isxdigit(c) || c == '.' || c == ':';
-         });
-}
-} // namespace
-
-/**
- * Attempts to parse the input string as "ip:port" and return the two parts.
- * Differentiates between ipv4 and ipv6 addresses but does not fully validate
- * them.  (It is assumed that the ip part will go through a more robust
- * parsing facility such as getaddrinfo().)
- *
- * For ipv4 addresses, this function admits "[0-9.]+";
- * For ipv6 addresses, this function admits "\[[0-9a-fA-F:.]+\]" but strips the
- * brackets.
- *
- * @return pair<ip, host> or a pair of empty strings if there was a parse error
- */
 std::pair<std::string, std::string> parseIpPort(const std::string& hostStr) {
-  auto delim_pos = hostStr.rfind(":");
-  if (delim_pos == std::string::npos) {
-    return {};
-  }
-
-  // try to parse port
-  folly::StringPiece port =
-      folly::StringPiece{hostStr, /* startFrom */ delim_pos + 1};
-  if (!validatePort(port)) {
-    return {};
-  }
-
-  folly::StringPiece ip;
-  if (hostStr.at(0) == '[' && hostStr.at(delim_pos - 1) == ']') {
-    // try parsing as IPv6, and strip the brackets
-    ld_check(delim_pos >= 2);
-    ip = folly::StringPiece{
-        hostStr, /* startFrom */ 1, /* size */ delim_pos - 2};
-    if (!validateIpV6(ip)) {
-      return {};
-    }
-  } else {
-    ip = folly::StringPiece{hostStr, /* startFrom */ 0, /* size */ delim_pos};
-    if (!validateIpV4(ip)) {
-      return {};
-    }
-  }
-
-  return std::make_pair(ip.str(), port.str());
+  return parse_ip_port(hostStr);
 }
 
 template <typename Duration>

@@ -199,6 +199,20 @@ int parse_compaction_schedule(
     folly::Optional<std::vector<std::chrono::seconds>>& out);
 
 /**
+ * Attempts to parse the input string as "ip:port" and return the two parts.
+ * Differentiates between ipv4 and ipv6 addresses but does not fully validate
+ * them.  (It is assumed that the ip part will go through a more robust
+ * parsing facility such as getaddrinfo().)
+ *
+ * For ipv4 addresses, this function admits "[0-9.]+";
+ * For ipv6 addresses, this function admits "\[[0-9a-fA-F:.]+\]" but strips the
+ * brackets.
+ *
+ * @return pair<ip, host> or a pair of empty strings if there was a parse error
+ */
+std::pair<std::string, std::string> parse_ip_port(const std::string& host_str);
+
+/**
  * Print n into buf of size _size_. Separate 000 digit groups with commas.
  *
  * @return a pointer into buf on success, nullptr if buf is too small.

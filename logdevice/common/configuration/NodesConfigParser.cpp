@@ -257,37 +257,15 @@ static bool parseNumShards(const folly::dynamic& nodeMap,
 bool parseHostString(const std::string& hostStr,
                      Sockaddr& addr_out,
                      const std::string& fieldName) {
-  if (hostStr[0] == '/') {
-    // The host entry contains the path for a unix domain socket.
-    try {
-      addr_out = Sockaddr(hostStr.c_str());
-      return true;
-    } catch (const ConstructorFailed&) {
-      ld_error(
-          "invalid \"%s\" entry: \"%s\"", fieldName.c_str(), hostStr.c_str());
-      err = E::INVALID_CONFIG;
-      return false;
-    }
-  }
-
-  std::pair<std::string, std::string> ipPortPair = parseIpPort(hostStr);
-  if (ipPortPair.first.empty() || ipPortPair.second.empty()) {
+  auto result = Sockaddr::fromString(hostStr);
+  if (!result.hasValue()) {
     ld_error(
-        "malformed \"%s\" entry: \"%s\"", fieldName.c_str(), hostStr.c_str());
+        "invalid \"%s\" entry: \"%s\"", fieldName.c_str(), hostStr.c_str());
     err = E::INVALID_CONFIG;
     return false;
   }
 
-  try {
-    addr_out = Sockaddr(ipPortPair.first, ipPortPair.second);
-  } catch (const ConstructorFailed&) {
-    ld_error("invalid \"%s\" entry for node: \"%s\"",
-             fieldName.c_str(),
-             hostStr.c_str());
-    err = E::INVALID_CONFIG;
-    return false;
-  }
-
+  addr_out = result.value();
   return true;
 }
 

@@ -13,6 +13,8 @@
 
 #include "logdevice/common/ConstructorFailed.h"
 #include "logdevice/common/checks.h"
+#include "logdevice/common/debug.h"
+#include "logdevice/common/util.h"
 #include "logdevice/include/Err.h"
 
 namespace facebook { namespace logdevice {
@@ -170,6 +172,31 @@ Sockaddr Sockaddr::withPort(in_port_t new_port) const {
     return Sockaddr();
   }
   return copy;
+}
+
+/*static*/
+folly::Optional<Sockaddr> Sockaddr::fromString(const std::string& hostStr) {
+  if (hostStr.empty()) {
+    return folly::none;
+  }
+
+  try {
+    if (hostStr[0] == '/') {
+      // The address string contains the path for a unix domain socket.
+      return Sockaddr(hostStr.c_str());
+    }
+
+    // it's an ipv4/ipv6 address
+    std::pair<std::string, std::string> ipPortPair = parse_ip_port(hostStr);
+    if (ipPortPair.first.empty() || ipPortPair.second.empty()) {
+      ld_error("invalid sockaddr string: \"%s\"", hostStr.c_str());
+      return folly::none;
+    }
+    return Sockaddr(ipPortPair.first, ipPortPair.second);
+  } catch (const ConstructorFailed&) {
+    ld_error("invalid sockaddr string: \"%s\"", hostStr.c_str());
+    return folly::none;
+  }
 }
 
 }} // namespace facebook::logdevice

@@ -231,6 +231,56 @@ int parse_compaction_schedule(
   return 0;
 }
 
+namespace {
+bool validatePort(folly::StringPiece port) {
+  return port.size() > 0 && std::all_of(port.begin(), port.end(), ::isdigit);
+}
+
+bool validateIpV4(folly::StringPiece ip) {
+  return ip.size() > 0 && std::all_of(ip.begin(), ip.end(), [](const char c) {
+           return ::isdigit(c) || c == '.';
+         });
+}
+
+bool validateIpV6(folly::StringPiece ip) {
+  return ip.size() > 0 && std::all_of(ip.begin(), ip.end(), [](const char c) {
+           return ::isxdigit(c) || c == '.' || c == ':';
+         });
+}
+} // namespace
+
+std::pair<std::string, std::string> parse_ip_port(const std::string& hostStr) {
+  auto delim_pos = hostStr.rfind(":");
+  if (delim_pos == std::string::npos) {
+    return {};
+  }
+
+  // try to parse port
+  folly::StringPiece port =
+      folly::StringPiece{hostStr, /* startFrom */ delim_pos + 1};
+  if (!validatePort(port)) {
+    return {};
+  }
+
+  folly::StringPiece ip;
+  if (hostStr.at(0) == '[' && hostStr.at(delim_pos - 1) == ']') {
+    // try parsing as IPv6, and strip the brackets
+    ld_check(delim_pos >= 2);
+    ip = folly::StringPiece{
+        hostStr, /* startFrom */ 1, /* size */ delim_pos - 2};
+    if (!validateIpV6(ip)) {
+      return {};
+    }
+  } else {
+    ip = folly::StringPiece{hostStr, /* startFrom */ 0, /* size */ delim_pos};
+    if (!validateIpV4(ip)) {
+      return {};
+    }
+  }
+
+  return std::make_pair(ip.str(), port.str());
+}
+
 std::string lsn_to_string(lsn_t lsn) {
   if (lsn == LSN_INVALID) {
     return "LSN_INVALID";

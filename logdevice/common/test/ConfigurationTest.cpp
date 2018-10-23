@@ -841,6 +841,23 @@ TEST(ConfigurationTest, Sockaddr) {
   EXPECT_EQ("[::1]:6666", nodes.at(1).address.toString());
 }
 
+TEST(ConfigurationTest, SockaddrFromString) {
+  std::shared_ptr<Configuration> config(
+      Configuration::fromJsonFile(TEST_CONFIG_FILE("sample_valid.conf")));
+  ASSERT_NE(nullptr, config);
+
+  const auto& nodes = config->serverConfig()->getNodes();
+  auto check_address = [](const facebook::logdevice::Sockaddr& a) {
+    auto r = facebook::logdevice::Sockaddr::fromString(a.toString());
+    EXPECT_TRUE(r.hasValue());
+    EXPECT_EQ(a, r);
+  };
+
+  for (const auto& kv : nodes) {
+    check_address(kv.second.address);
+  }
+}
+
 TEST(ConfigurationTest, SockaddrDefaultConstructor) {
   facebook::logdevice::Sockaddr addr;
   ASSERT_FALSE(addr.valid());

@@ -223,6 +223,7 @@ bool parseChronoValueOptAttribute(
     const std::string& entity_name,
     logsconfig::Attribute<folly::Optional<Duration>>& out);
 
+// alias for parse_ip_port() in util.h
 std::pair<std::string, std::string> parseIpPort(const std::string&);
 
 /**
