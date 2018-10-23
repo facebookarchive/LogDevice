@@ -54,6 +54,13 @@ struct NodeServiceDiscovery {
    */
   RoleSet roles;
 
+  /**
+   * A hostname string for the node. Currently we require it to be immutable.
+   * Currently logdeviced doesn't use it but some tooling does so we set it in
+   * prod. But this can be omitted (as an empty string) in tests.
+   */
+  std::string hostname;
+
   bool hasRole(NodeRole role) const {
     auto id = static_cast<size_t>(role);
     return roles.test(id);
@@ -69,7 +76,8 @@ struct NodeServiceDiscovery {
   bool operator==(const NodeServiceDiscovery& rhs) const {
     return address == rhs.address && gossip_address == rhs.gossip_address &&
         ssl_address == rhs.ssl_address && admin_address == rhs.admin_address &&
-        location == rhs.location && roles == rhs.roles;
+        location == rhs.location && roles == rhs.roles &&
+        hostname == rhs.hostname;
   }
 
   bool isValid() const;

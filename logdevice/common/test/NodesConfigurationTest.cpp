@@ -45,7 +45,8 @@ class NodesConfigurationTest : public ::testing::Test {
                                 /*ssl address*/ folly::none,
                                 /*admin address*/ folly::none,
                                 l,
-                                roles};
+                                roles,
+                                "host" + std::to_string(n)};
   }
 };
 
