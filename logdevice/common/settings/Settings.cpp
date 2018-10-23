@@ -1166,8 +1166,8 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "1h",
        nullptr,
        "Sequencer has a timer for periodically reading metadata logs and "
-       "and refreshing the in memory metadata_map_. This setting specifies "
-       "the interval for this timer",
+       "refreshing the in memory metadata_map_. This setting specifies the "
+       "interval for this timer",
        SERVER,
        SettingsCategory::Sequencer);
   init("delete_log_metadata_request_timeout",

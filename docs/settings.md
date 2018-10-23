@@ -239,7 +239,7 @@ sidebar_label: Settings
 | rebuilding-local-window | the size of rebuilding local window expressd in units of time. In the current implementation of rebuilding each log is rebuilt independently. The local window forces all rebuilding reads on a given node to be at most the local window size apart. Reading on logs that are read too fast is stalled until lagging logs catch up. This improves the locality of reading from LogsDB and makes the disk IO pattern more sequential. | 20min | server&nbsp;only |
 | rebuilding-local-window-uses-partition-boundary | If true, the local window will be moved on partition boundaries. If false, it will instead be moved on fixed time intervals, as set by --rebuilding-local-window. | true | server&nbsp;only |
 | rebuilding-max-amends-in-flight | maximum number of requests to update (amend) a rebuilt record's copyset that a rebuilding donor node can have in flight at the same time, per log. | 100 | server&nbsp;only |
-| rebuilding-max-batch-bytes | max amount of data that a node can read in one batch for rebuilding a log | 10485760 | server&nbsp;only |
+| rebuilding-max-batch-bytes | max amount of data that a node can read in one batch for rebuilding | 10485760 | server&nbsp;only |
 | rebuilding-max-get-seq-state-in-flight | maximum number of 'get sequencer state' requests that a rebuilding donor node can have in flight at the same time. Every storage node participating in rebuilding gets the sequencer state for all logs residing on that node before beginning to re-replicate records. This is done in order to determine the LSN at which to stop rebuilding the log. | 100 | server&nbsp;only |
 | rebuilding-max-logs-in-flight | maximum number of logs that a donor node can be rebuilding at the same time. | 1 | server&nbsp;only |
 | rebuilding-max-records-in-flight | maximum number of rebuilding STORE requests that a rebuilding donor node can have in flight at the same time, per log | 5 | server&nbsp;only |
@@ -370,6 +370,7 @@ sidebar_label: Settings
 | ssl-cert-refresh-interval | TTL for an SSL certificate that we have loaded from disk. | 300s | requires&nbsp;restart |
 | ssl-key-path | Path to LogDevice SSL key. |  | requires&nbsp;restart |
 | ssl-load-client-cert | Set to include client certificate for mutual ssl authenticaiton | false |  |
+| ssl-server-hostname-prefix-regex | A regex that should match the names of hosts that may be included in a LogDevice cluster. Note: this is not a raw string, all '\\'' characters should be written as '\\\\'. | logdevice[rfh]? | server&nbsp;only |
 
 ## Sequencer State
 |   Name    |   Description   |  Default  |   Notes   |
@@ -381,8 +382,7 @@ sidebar_label: Settings
 | read-historical-metadata-timeout | maximum time interval for a sequencer to get historical epoch metadata through reading the metadata log before retrying. | 10s | server&nbsp;only |
 | seq-state-backoff-time | how long to wait before resending a 'get sequencer state' request after a timeout. | 1s..10s |  |
 | seq-state-reply-timeout | how long to wait for a reply to a 'get sequencer state' request before retrying (usually to a different node) | 2s |  |
-| update-metadata-map-interval | Sequencer has a timer for periodically reading metadata logs and refreshing the in memory metadata_map_. This setting specifies
-the interval for this timer | 1h |  |
+| update-metadata-map-interval | Sequencer has a timer for periodically reading metadata logs and refreshing the in memory metadata\_map\_. This setting specifies the interval for this timer | 1h | server&nbsp;only |
 
 ## Sequencer boycotting
 |   Name    |   Description   |  Default  |   Notes   |
@@ -480,6 +480,7 @@ the interval for this timer | 1h |  |
 | client-readers-flow-tracer-lagging-metric-sample-group-size | Number of samples in ClientReadersFlowTracer that are aggregated and recorded as one entry. See client-readers-flow-tracer-lagging-metric-sample-group-size. | 20 | client&nbsp;only |
 | client-readers-flow-tracer-lagging-slope-threshold | If a reader's lag increase at at least this rate, the reader is considered lagging (rate given as variation of time lag per time unit). If the desired read ratio needs to be x% of the write ratio, set this threshold to be (1 - x / 100). | -0.3 | client&nbsp;only |
 | enable-adaptive-store-timeout | decides whether to enable an adaptive store timeout | false | **experimental**, server&nbsp;only |
+| rebuilding-max-batch-time | Max amount of time rebuilding read storage task is allowed to take before yielding to other storage tasks. Only supported by rebuilding V2 (partition by partition). "max" for unlimited. | 1000ms | server&nbsp;only |
 | rebuilding-max-malformed-records-to-tolerate | Controls how rebuilding donors handle unexpected values in local log store (e.g. caused by bugs, forward incompatibility, or other processes writing unexpected things to rocksdb directly).If rebuilding encounters invalid records, it skips them and logs warnings. But if it encounters at least this many of them in the same log, it freaks out, logs a critical error and stalls indefinitely. The rest of the server keeps trying to run normally, to the extent to which you can run normally when you can't parse most of the records in the DB. | 1000 | requires&nbsp;restart, server&nbsp;only |
 | sync-metadata-log-writes | If set, storage nodes will wait for wal sync of metadata log writes before sending the STORED ack. | true | server&nbsp;only |
 
@@ -518,3 +519,4 @@ the interval for this timer | 1h |  |
 | verify-checksum-before-replicating | If set, sequencers and rebuilding will verify checksums of records that have checksums. If there is a mismatch, sequencer will reject the append. Note that this setting doesn't make storage nodes verify checksums. Note that if not set, and --rocksdb-verify-checksum-during-store is set, a corrupted record kills write-availability for that log, as the appender keeps retrying and storage nodes reject the record. | true | server&nbsp;only |
 | write-shard-id-in-copyset | Serialize copysets using ShardIDs instead of node\_index\_t on disk. TODO(T15517759): enable by default once Flexible Log Sharding is fully implemented and this has been thoroughly tested. | false | **experimental**, server&nbsp;only |
 | write-sticky-copysets | If set, will enable sticky copysets and will write the copyset index for all records. This must be set before --rocksdb-use-copyset-index is enabled | true | requires&nbsp;restart, server&nbsp;only |
+
