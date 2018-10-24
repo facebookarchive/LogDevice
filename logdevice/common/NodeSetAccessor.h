@@ -238,6 +238,8 @@ class StorageSetAccessor {
    */
   void printShardStatus();
 
+  std::string getDebugInfo() const;
+
   /**
    * Set the authoritative status of a node, by default all nodes are
    * FULLY_AUTHORITATIVE. Note that for certain properties, changing
@@ -400,6 +402,10 @@ class StorageSetAccessor {
   uint32_t wave_{0};
   std::unique_ptr<BackoffTimer> wave_timer_;
   std::unique_ptr<Timer> grace_period_timer_;
+
+  // These are used by getDebugInfo().
+  StorageSet wave_shards_;
+  SteadyTimestamp wave_start_time_;
 
   // min and max timeout for sending waves in a backoff manner
   std::chrono::milliseconds wave_timeout_min_{500};

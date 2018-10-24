@@ -1076,9 +1076,32 @@ void EpochRecovery::onTimeout() {
 
   if (n_clean < mutation_set_size_) {
     STAT_INCR(deps_->getStats(), recovery_mutation_and_cleaning_timeouts);
+
+    auto describe_mutators = [&] {
+      std::stringstream ss;
+      ss << "{";
+      bool first = true;
+      for (auto& m : mutators_) {
+        if (!first) {
+          ss << ", ";
+        }
+        first = false;
+        ss << "e" << m.first.val() << ": {" << m.second->getDebugInfo() << "}";
+      }
+      ss << "}";
+      return ss.str();
+    };
+
     ld_warning("Recovery timeout expired for %s. Restarting recovery "
-               "for that epoch.",
-               identify().c_str());
+               "for that epoch. State: %s, epoch recovery start: %s, last "
+               "restart: %s, nodes: %s, running mutators: %s",
+               identify().c_str(),
+               toString(state_).c_str(),
+               RecordTimestamp(creation_timestamp_).toString().c_str(),
+               RecordTimestamp(last_restart_timestamp_).toString().c_str(),
+               recoveryState().c_str(),
+               describe_mutators().c_str());
+
     restart();
   } else {
     ld_warning("Recovery timeout expired for %s. Epoch is fully recovered. "

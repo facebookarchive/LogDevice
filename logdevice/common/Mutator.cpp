@@ -368,6 +368,14 @@ void Mutator::finalize(Status status, ShardID node_to_reseal) {
   epoch_recovery_->onMutationComplete(header_.rid.esn, status, node_to_reseal);
 }
 
+std::string Mutator::getDebugInfo() const {
+  std::stringstream ss;
+  ss << "amend: " << toString(amend_metadata_)
+     << ", conflict: " << toString(conflict_copies_) << ", "
+     << nodeset_accessor_->getDebugInfo();
+  return ss.str();
+}
+
 std::unique_ptr<StorageSetAccessor> Mutator::createStorageSetAccessor(
     logid_t log_id,
     EpochMetaData epoch_metadata_with_mutation_set,

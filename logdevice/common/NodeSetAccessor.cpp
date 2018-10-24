@@ -314,6 +314,8 @@ void StorageSetAccessor::sendWave() {
               st.state != ShardState::PERMANENT_ERROR);
     });
   }
+  wave_shards_ = wave_shards;
+  wave_start_time_ = SteadyTimestamp::now();
 
 #ifndef NDEBUG
   // wave_shards should not contain duplicates
@@ -814,6 +816,32 @@ void StorageSetAccessor::printShardStatus() {
   ld_info("log:%lu, shards that couldn't reply successfully :[%s]",
           log_id_.val(),
           result.c_str());
+}
+
+std::string StorageSetAccessor::getDebugInfo() const {
+  std::stringstream ss;
+  ss.precision(3);
+  ss.setf(std::ios::fixed, std::ios::floatfield);
+  ss << "wave " << wave_ << ": " << toString(wave_shards_) << ", wave started "
+     << (SteadyTimestamp::now().toMilliseconds() -
+         wave_start_time_.toMilliseconds())
+              .count() /
+          1000.
+     << "s ago, shards involved: {";
+  bool first = true;
+  for (ShardID shard : epoch_metadata_.shards) {
+    ShardStatus s;
+    if (failure_domain_.getShardAttribute(shard, &s) != 0) {
+      continue;
+    }
+    if (!first) {
+      ss << ", ";
+    }
+    first = false;
+    ss << shard.toString() << ": " << getShardState(s.state);
+  }
+  ss << "}";
+  return ss.str();
 }
 
 void StorageSetAccessor::onShardStatusChanged() {

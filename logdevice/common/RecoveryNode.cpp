@@ -140,6 +140,8 @@ void RecoveryNode::transition(State to) {
                             recovery_->getEpochSize(),
                             shard_.shard()};
 
+        msg.reset(new CLEAN_Message(header, std::move(absent_shards)));
+
         ld_debug("Sending CLEAN message to %s, logid %lu, clean epoch %u, "
                  "recovery id: %lu, sequencer epoch: %u, "
                  "recovery window (%u, %u], absent nodes: [%s], "
@@ -154,9 +156,6 @@ void RecoveryNode::transition(State to) {
                  toString(absent_shards).c_str(),
                  header.epoch_end_offset,
                  header.epoch_size);
-
-        msg.reset(new CLEAN_Message(header, std::move(absent_shards)));
-
       } else {
         ld_check(to == State::DIGESTING);
         expected_read_stream_id_ = recovery_->getDeps().issueReadStreamID();
@@ -176,14 +175,14 @@ void RecoveryNode::transition(State to) {
              0,                                        // replication (ignored)
              SCDCopysetReordering::NONE,
              shard_.shard()})));
+
+        ld_debug("Sending START_Message to %s for log:%lu, rsid=%lu",
+                 shard_.toString().c_str(),
+                 recovery_->getLogID().val(),
+                 expected_read_stream_id_.val());
       }
 
       ld_check(msg);
-
-      ld_debug("Sending START_Message to %s for log:%lu, rsid=%lu",
-               shard_.toString().c_str(),
-               recovery_->getLogID().val(),
-               expected_read_stream_id_.val());
       rv = recovery_->getDeps().sender_->sendMessage(std::move(msg), nid_);
 
       if (rv == 0) {

@@ -125,6 +125,11 @@ class Mutator {
     return preempted_seal_;
   }
 
+  /**
+   * What to print to the log if this mutation times out.
+   */
+  std::string getDebugInfo() const;
+
   //// expose some internal members for testing
 
   const STORE_Header& getStoreHeader() const {
