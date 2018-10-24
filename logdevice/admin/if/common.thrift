@@ -9,6 +9,7 @@
 namespace cpp2 facebook.logdevice.thrift
 namespace py3 logdevice.admin
 namespace php LogDevice
+namespace wiki LogDevice.Common
 
 // Because thrift doesn't have a u64.
 typedef i64 /* (cpp.type = "std::uint64_t") */ unsigned64
@@ -22,46 +23,58 @@ typedef i64 /* (cpp.type = "std::uint64_t") */ unsigned64
  * are running LogDevice in a no-network mode.
  */
 enum SocketAddressFamily {
-  // IPv4 or IPv6 address
-  INET = 1,
-  // Unix socket address
-  UNIX = 2,
+  INET = 1, /** IPv4 or IPv6 address */
+  UNIX = 2, /** Unix socket address */
 }
 
 struct SocketAddress {
   1: required SocketAddressFamily address_family = SocketAddressFamily.INET,
-  // This contains the unix_socket path if address_family is set to UNIX
+  /**
+   * This contains the unix_socket path if address_family is set to UNIX
+   */
   2: optional string address,
-  // A port should be uint16_t but such a type does not exist in thrift
-  // port will be unset or (-1) if this points to a unix socket or we are only
-  // interested in the address value.
+  /**
+   * A port should be uint16_t but such a type does not exist in thrift
+   * port will be unset or (-1) if this points to a unix socket or we are only
+   * interested in the address value.
+   */
   3: optional i32 port = -1,
 }
 
 typedef SocketAddress Node
 typedef i64 Timestamp
-typedef i16 NodeIndex // node_index_t
-typedef i16 ShardIndex // shard_index_t
+typedef i16 NodeIndex /** node_index_t */
+typedef i16 ShardIndex /** shard_index_t */
 
-// This is an identifier for a node, it can locate a node by either the
-// node_index or the socket address.
+/**
+ * This is an identifier for a node, it can locate a node by either the
+ * node_index or the socket address.
+ */
 struct NodeID {
   1: optional NodeIndex node_index,
   2: optional Node address,
 }
 
-// This data structure is used to represent one or (all) shards on a storage
-// node. This is typically used in the low-level APIs of the Administrative API.
+/**
+ * This data structure is used to represent one or (all) shards on a storage
+ * node. This is typically used in the low-level APIs of the Administrative API.
+ */
 struct ShardID {
   1: required NodeID node,
-  // this can be -1 which means all shards in a node.
+  /**
+   * this can be -1 which means all shards in a node.
+   */
   2: required ShardIndex shard_index = -1,
 }
 
-// An ordered list of shards that a record can be stored onto.
+/**
+ * An ordered list of shards that a record can be stored onto.
+ */
 typedef list<ShardID> StorageSet
-// unordered set of shard. This should be a set<> but set of non
-// int/string/binary/enums are not portable in some languages.
+/**
+ * unordered set of shard. This should be a set<> but set of non
+ * int/string/binary/enums are not portable in some languages.
+ */
 typedef list<ShardID> ShardSet
 
 /**
@@ -76,11 +89,17 @@ enum Role {
 }
 
 struct Addresses {
-  // The socket address at which we expect gossip to use.
+  /**
+   * The socket address at which we expect gossip to use.
+   */
   1: optional SocketAddress gossip;
-  // The socket address for SSL (data) connections to the server.
+  /**
+   * The socket address for SSL (data) connections to the server.
+   */
   2: optional SocketAddress ssl;
-  // The socket address for the admin API.
+  /**
+   * The socket address for the admin API.
+   */
   3: optional SocketAddress admin;
 }
 
@@ -97,6 +116,8 @@ enum LocationScope {
   ROOT = 99,
 }
 
-// Replication property is how many copies per Location scope for the various
-// scopes
+/**
+ * Replication property is how many copies per Location scope for the various
+ * scopes
+ */
 typedef map<LocationScope, i32> ReplicationProperty // replication per scope
