@@ -7,6 +7,8 @@
  */
 #pragma once
 
+#include <functional>
+#include <tuple>
 #include <utility>
 
 #include <folly/Portability.h>
