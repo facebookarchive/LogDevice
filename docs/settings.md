@@ -370,7 +370,6 @@ sidebar_label: Settings
 | ssl-cert-refresh-interval | TTL for an SSL certificate that we have loaded from disk. | 300s | requires&nbsp;restart |
 | ssl-key-path | Path to LogDevice SSL key. |  | requires&nbsp;restart |
 | ssl-load-client-cert | Set to include client certificate for mutual ssl authenticaiton | false |  |
-| ssl-server-hostname-prefix-regex | A regex that should match the names of hosts that may be included in a LogDevice cluster. Note: this is not a raw string, all '\\'' characters should be written as '\\\\'. | logdevice[rfh]? | server&nbsp;only |
 
 ## Sequencer State
 |   Name    |   Description   |  Default  |   Notes   |
