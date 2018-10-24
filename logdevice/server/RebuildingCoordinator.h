@@ -139,6 +139,19 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
                              lsn_t version) override;
 
   /**
+   * Called when the local logs have been enumerated.
+   *
+   * @param shard_idx                         Shard index.
+   * @param version                           Current shard rebuilding version.
+   * @param max_rebuild_by_retention_backlog  Max backlog retention on this
+   *                                          shard.
+   *
+   */
+  void onLogsEnumerated(uint32_t shard,
+                        lsn_t version,
+                        std::chrono::milliseconds maxBacklogDuration) override;
+
+  /**
    * Called when RebuildingPlanner has completed for all logs so we can move on
    * and finish rebuilding.
    *
@@ -297,6 +310,14 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
                                const char* reason);
 
   /**
+   * A CB that is either invoked immediately if rebuild is done
+   * or deffered if a delay was requested.
+   *
+   * @param shard            Shard that we rebuilt.
+   */
+  virtual void notifyShardRebuiltCB(uint32_t shard);
+
+  /**
    * Write to the event log to notify other nodes that we rebuilt a shard.
    *
    * @param shard            Shard that we rebuilt.
@@ -452,6 +473,18 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
     // The object responsible for the actual re-replication.
     // Created after RebuildingPlanner finishes for all logs.
     std::unique_ptr<ShardRebuildingInterface> shardRebuilding;
+
+    // The max backlog duration of all the logs with retention on this shard
+    std::chrono::milliseconds max_rebuild_by_retention_backlog{0};
+
+    // Timestamp of the latest SHARD_NEEDS_REBUILT message we received.
+    std::chrono::milliseconds rebuilding_started_ts{0};
+
+    // Timer that fires when all data under rebuild has expired.
+    // The timer is only activated when disable-data-log-rebuilt
+    // setting is set. The SHARD_IS_REBUILT message is sent when the timer
+    // fires.
+    std::unique_ptr<LibeventTimer> shardIsRebuiltDelayTimer{nullptr};
   };
 
   bool shuttingDown_{false};
@@ -532,7 +565,15 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
                         uint32_t shard_idx,
                         lsn_t version,
                         const EventLogRebuildingSet& set);
-
+  /**
+   * Actual callback used to send the SHARD_IS_REBUILT message.
+   *
+   * The SHARD_IS_REBULT message may be delayed if the planning
+   * stage requested it, based on the 'disable_data_log_rebuilding'
+   * setting. This callback is either called immediately after
+   * onshardIsRebuilt or after a delay.
+   */
+  void notifyShardIsRebuilt();
   /**
    * Called when a shard has been marked unrecoverable in the event log.
    * If we are in the rebuilding set, check if this changes anything and enables

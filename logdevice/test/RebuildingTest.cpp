@@ -11,6 +11,7 @@
 
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
 #include "logdevice/common/Metadata.h"
+#include "logdevice/common/Timestamp.h"
 #include "logdevice/common/configuration/ConfigParser.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/debug.h"
@@ -24,13 +25,13 @@
 #include "logdevice/server/locallogstore/test/StoreUtil.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
-
 using namespace facebook::logdevice;
 using IntegrationTestUtils::markShardUndrained;
 using IntegrationTestUtils::markShardUnrecoverable;
 using IntegrationTestUtils::requestShardRebuilding;
 using IntegrationTestUtils::waitUntilShardHasEventLogState;
 using IntegrationTestUtils::waitUntilShardsHaveEventLogState;
+
 namespace fs = boost::filesystem;
 
 const logid_t LOG_ID(1);
@@ -2552,6 +2553,290 @@ TEST_P(RebuildingTest, ReplicationCheckerDuringRebuilding) {
 
   ld_info("Running checker again, expecting errors");
   EXPECT_NE(0, cluster->checkConsistency());
+}
+
+/*
+ * Test the disable-data-log-rebuilding setting.
+ * This feature is tested with the following 4 test cases:
+ * - Shards are wiped before a failed node comes back:
+ * DisableDataLogRebuildShardsWiped
+ * - Shards come back in good condition: DisableDataLogRebuildShardsWiped
+ * - Shards (node) never comes back: DisableDataLogRebuildNodeFailed
+ * - Shards that need rebuild had no data.
+ *
+ * Each test runs two iterations. The second iteration
+ * is to ensure that there is no incorrectly left-over rebuilding state,
+ * from the previous iteration, that impacts future
+ * rebuilds.
+ */
+
+// Case: shards come back wiped.
+TEST_F(RebuildingTest, DisableDataLogRebuildShardsWiped) {
+  // FIXME: Need to add a mix of retentions.
+  std::chrono::seconds maxBacklogDuration(30);
+
+  Configuration::Log log_config;
+  log_config.replicationFactor = 3;
+  log_config.extraCopies = 0;
+  log_config.syncedCopies = 0;
+  log_config.rangeName = "test-log-group";
+  log_config.maxWritesInFlight = 30;
+  log_config.backlogDuration = maxBacklogDuration;
+
+  Configuration::Log event_log_config;
+  event_log_config.replicationFactor = 3;
+  event_log_config.extraCopies = 0;
+  event_log_config.syncedCopies = 0;
+  event_log_config.rangeName = "event_log";
+  event_log_config.maxWritesInFlight = 30;
+
+  auto cluster =
+      IntegrationTestUtils::ClusterFactory()
+          .apply(commonSetup)
+          .setParam("--rebuild-store-durability", "async_write")
+          .setParam("--disable-data-log-rebuilding", "true")
+          .setLogConfig(log_config)
+          .setEventLogConfig(event_log_config)
+          .eventLogMode(
+              IntegrationTestUtils::ClusterFactory::EventLogMode::SNAPSHOTTED)
+          .setNumLogs(42)
+          .create(7);
+
+  // Run two iterations of each test to make sure that
+  // there is no incorrectly left over state from the previous
+  // iterations that impacts future rebuilds.
+  int id = 1;
+  int maxIters = 2;
+  for (int iter = 0; iter < maxIters; iter++) {
+    int numRecords = 1000;
+
+    // Write some records
+    auto client = cluster->createClient();
+    while (numRecords--) {
+      std::string data("data" + std::to_string(id++));
+      lsn_t lsn = client->appendSync(LOG_ID, Payload(data.data(), data.size()));
+      /* sleep override */
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+      ASSERT_NE(LSN_INVALID, lsn);
+    }
+
+    cluster->waitForRecovery();
+
+    // Wipe some of the shards.
+    int nodeToFail = 1;
+    EXPECT_EQ(0, cluster->getNode(nodeToFail).shutdown());
+    cluster->getNode(nodeToFail).wipeShard(0);
+    cluster->getNode(nodeToFail).wipeShard(1);
+    ASSERT_EQ(0, cluster->bumpGeneration(nodeToFail));
+    cluster->getNode(nodeToFail).start();
+    cluster->getNode(nodeToFail).waitUntilStarted();
+
+    // Ask to rebuild the shards.
+    ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, nodeToFail, 0));
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, nodeToFail, 1));
+
+    // Wait a little and fail the same shard on another node
+    nodeToFail = 4;
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    EXPECT_EQ(0, cluster->getNode(nodeToFail).shutdown());
+    cluster->getNode(nodeToFail).wipeShard(0);
+    cluster->getNode(nodeToFail).wipeShard(1);
+    ASSERT_EQ(0, cluster->bumpGeneration(nodeToFail));
+    cluster->getNode(nodeToFail).start();
+    cluster->getNode(nodeToFail).waitUntilStarted();
+
+    // The max time we expect to wait is from the latest
+    // SHARD_NEEDS_REBUILD message.
+    auto tstart = RecordTimestamp::now().toSeconds();
+
+    // Ask to rebuild the shards.
+    ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, nodeToFail, 0));
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, nodeToFail, 1));
+
+    // Wait a little and restart one of the other nodes. We want to
+    // make sure that donor restarts don't impact the expected outcome.
+    nodeToFail = 2;
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    EXPECT_EQ(0, cluster->getNode(nodeToFail).shutdown());
+    cluster->getNode(nodeToFail).start();
+    cluster->getNode(nodeToFail).waitUntilStarted();
+
+    cluster->getNode(1).waitUntilAllShardsFullyAuthoritative(client);
+    cluster->getNode(4).waitUntilAllShardsFullyAuthoritative(client);
+
+    // The failed shards must be FA only after all its original data expired.
+    auto elapsed = RecordTimestamp::now().toSeconds() - tstart;
+    ASSERT_LT(maxBacklogDuration.count(), elapsed.count());
+  }
+}
+
+// Case: shards come back good.
+TEST_F(RebuildingTest, DisableDataLogRebuildShardsAborted) {
+  std::chrono::seconds maxBacklogDuration(30);
+
+  Configuration::Log log_config;
+  log_config.replicationFactor = 3;
+  log_config.extraCopies = 0;
+  log_config.syncedCopies = 0;
+  log_config.rangeName = "test-log-group";
+  log_config.maxWritesInFlight = 30;
+  log_config.backlogDuration = maxBacklogDuration;
+
+  Configuration::Log event_log_config;
+  event_log_config.replicationFactor = 3;
+  event_log_config.extraCopies = 0;
+  event_log_config.syncedCopies = 0;
+  event_log_config.rangeName = "event_log";
+  event_log_config.maxWritesInFlight = 60;
+
+  auto cluster =
+      IntegrationTestUtils::ClusterFactory()
+          .apply(commonSetup)
+          .setParam("--rebuild-store-durability", "async_write")
+          .setParam("--disable-data-log-rebuilding", "true")
+          .setLogConfig(log_config)
+          .setEventLogConfig(event_log_config)
+          .eventLogMode(
+              IntegrationTestUtils::ClusterFactory::EventLogMode::SNAPSHOTTED)
+          .setNumLogs(42)
+          .create(5);
+
+  // Run two iterations of each test to make sure that
+  // there is no incorrectly left over state from the previous
+  // iterations that impacts future rebuilds.
+  int id = 1;
+  int maxIters = 2;
+  for (int iter = 0; iter < maxIters; iter++) {
+    int numRecords = 1000;
+    // Write some records
+    auto client = cluster->createClient();
+    while (numRecords--) {
+      std::string data("data" + std::to_string(id++));
+      lsn_t lsn = client->appendSync(LOG_ID, Payload(data.data(), data.size()));
+      /* sleep override */
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+      ASSERT_NE(LSN_INVALID, lsn);
+    }
+
+    cluster->waitForRecovery();
+
+    EXPECT_EQ(0, cluster->getNode(1).shutdown());
+    auto tstart = RecordTimestamp::now().toSeconds();
+
+    // Ask to rebuild the shards.
+    int numShards = cluster->getNode(1).num_db_shards_;
+    int nodeToFail = 1;
+    for (shard_index_t shard = 0; shard < numShards; shard++) {
+      ASSERT_NE(
+          LSN_INVALID, requestShardRebuilding(*client, nodeToFail, shard));
+      std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    }
+
+    // Sleep for a little and re-enable the node. The nodes data is available
+    // again.
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+    cluster->getNode(nodeToFail).start();
+    cluster->getNode(nodeToFail).waitUntilStarted();
+
+    // Wait a little and restart one of the other nodes. We want to
+    // make sure that donor restarts don't impact the expected outcome.
+    nodeToFail = 2;
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    EXPECT_EQ(0, cluster->getNode(nodeToFail).shutdown());
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    cluster->getNode(nodeToFail).start();
+    cluster->getNode(nodeToFail).waitUntilStarted();
+
+    cluster->getNode(nodeToFail).waitUntilAllShardsFullyAuthoritative(client);
+
+    // Rebuilding should have aborted and all shards must
+    // be FA without waiting for the maxBacklogDuration.
+    auto elapsed = RecordTimestamp::now().toSeconds() - tstart;
+    ASSERT_GT(maxBacklogDuration.count(), elapsed.count());
+  }
+}
+
+// Case: shards never come back.
+TEST_F(RebuildingTest, DisableDataLogRebuildNodeFailed) {
+  std::chrono::seconds maxBacklogDuration(30);
+
+  Configuration::Log log_config;
+  log_config.replicationFactor = 3;
+  log_config.extraCopies = 0;
+  log_config.syncedCopies = 0;
+  log_config.rangeName = "test-log-group";
+  log_config.maxWritesInFlight = 30;
+  log_config.backlogDuration = maxBacklogDuration;
+
+  Configuration::Log event_log_config;
+  event_log_config.replicationFactor = 3;
+  event_log_config.extraCopies = 0;
+  event_log_config.syncedCopies = 0;
+  event_log_config.rangeName = "event_log";
+  event_log_config.maxWritesInFlight = 30;
+
+  auto cluster =
+      IntegrationTestUtils::ClusterFactory()
+          .apply(commonSetup)
+          .setParam("--rebuild-store-durability", "async_write")
+          .setParam("--disable-data-log-rebuilding", "true")
+          .setLogConfig(log_config)
+          .setEventLogConfig(event_log_config)
+          .eventLogMode(
+              IntegrationTestUtils::ClusterFactory::EventLogMode::SNAPSHOTTED)
+          .setNumLogs(42)
+          .create(5);
+
+  // Run two iterations of each test to make sure that
+  // there is no incorrectly left over state from the previous
+  // iterations that impacts future rebuilds.
+  int id = 1;
+  int maxIters = 2;
+  for (int iter = 0; iter < maxIters; iter++) {
+    int numRecords = 1000;
+    // Write some records
+    auto client = cluster->createClient();
+    while (numRecords--) {
+      std::string data("data" + std::to_string(id++));
+      lsn_t lsn = client->appendSync(LOG_ID, Payload(data.data(), data.size()));
+      /* sleep override */
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+      ASSERT_NE(LSN_INVALID, lsn);
+    }
+
+    cluster->waitForRecovery();
+
+    // Fail node and ask to rebuild its shards.
+    int nodeToFail = 1;
+    EXPECT_EQ(0, cluster->getNode(nodeToFail).shutdown());
+
+    auto tstart = RecordTimestamp::now().toSeconds();
+    int numShards = cluster->getNode(nodeToFail).num_db_shards_;
+    std::vector<ShardID> rebuildingShards;
+    for (shard_index_t shard = 0; shard < numShards; shard++) {
+      ASSERT_NE(
+          LSN_INVALID, requestShardRebuilding(*client, nodeToFail, shard));
+      rebuildingShards.push_back(ShardID(nodeToFail, shard));
+      std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+
+    waitUntilShardsHaveEventLogState(client,
+                                     rebuildingShards,
+                                     AuthoritativeStatus::AUTHORITATIVE_EMPTY,
+                                     true);
+
+    // The failed shards can be AE only after all its original data has expired.
+    auto elapsed = RecordTimestamp::now().toSeconds() - tstart;
+    ASSERT_LT(maxBacklogDuration.count(), elapsed.count());
+
+    // Restart the node. It should become FA.
+    cluster->getNode(nodeToFail).start();
+    cluster->getNode(nodeToFail).waitUntilStarted();
+
+    cluster->getNode(nodeToFail).waitUntilAllShardsFullyAuthoritative(client);
+  }
 }
 
 INSTANTIATE_TEST_CASE_P(RebuildingTest,

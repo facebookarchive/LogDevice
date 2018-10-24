@@ -25,7 +25,8 @@ class RebuildingLogEnumerator {
     virtual void
     onLogsEnumerated(uint32_t shard_idx,
                      lsn_t version,
-                     std::unordered_map<logid_t, RecordTimestamp> logs) = 0;
+                     std::unordered_map<logid_t, RecordTimestamp> logs,
+                     std::chrono::milliseconds maxBacklogDuration) = 0;
     virtual ~Listener() {}
   };
 
@@ -69,6 +70,7 @@ class RebuildingLogEnumerator {
   const bool rebuild_metadata_logs_;
   const bool rebuild_internal_logs_;
   const uint32_t num_shards_;
+  std::chrono::milliseconds maxBacklogDuration_{0};
   Listener* const callback_;
   std::unordered_map<logid_t, RecordTimestamp> result_;
   WeakRefHolder<RebuildingLogEnumerator> ref_holder_;

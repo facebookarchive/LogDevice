@@ -327,7 +327,8 @@ void ShardRebuildingV1::onLogRebuildingComplete(logid_t logid) {
   log_state.logRebuildingSize = 0;
   activeLogs_.erase(it);
   restartLogRebuilding_.erase(logid);
-  ld_info("LogRebuilding of log:%lu, version:%s completed durably",
+  ld_info("LogRebuilding of %s log:%lu, version:%s completed durably",
+          MetaDataLog::isMetaDataLog(logid) ? "metadata" : "data",
           logid.val_,
           lsn_to_string(rebuildingVersion_).c_str());
 

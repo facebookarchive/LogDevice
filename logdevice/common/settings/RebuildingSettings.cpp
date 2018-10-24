@@ -323,6 +323,16 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
        "--append-store-durability=sync_write, or don't care about data loss.",
        SERVER,
        SettingsCategory::Rebuilding);
+  init("disable-data-log-rebuilding",
+       &disable_data_log_rebuilding,
+       "false",
+       nullptr,
+       "If set then data logs are not rebuilt. This may be enabled for "
+       "clusters with very low retention, where the probability of data-loss "
+       "due to a 2nd or 3rd failure is low and the work done during rebuild "
+       "interferes with the primary workload.",
+       SERVER | REQUIRES_RESTART,
+       SettingsCategory::Rebuilding);
   init("enable-self-initiated-rebuilding",
        &enable_self_initiated_rebuilding,
        "true",

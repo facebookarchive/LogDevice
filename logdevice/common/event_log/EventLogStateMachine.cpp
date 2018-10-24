@@ -133,7 +133,8 @@ int EventLogStateMachine::applyDelta(const EventLogRecord& delta,
                                      std::string& /* unused */) {
   auto server_cfg = getServerConfig();
   WORKER_STAT_INCR(num_event_log_records_read);
-  ld_info("Applying delta %s: %s",
+  ld_info("Applying delta ts=%s, %s: %s",
+          format_time(timestamp).c_str(),
           lsn_to_string(version).c_str(),
           delta.describe().c_str());
   return state.update(version, timestamp, delta, *server_cfg);

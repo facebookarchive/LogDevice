@@ -96,6 +96,13 @@ class RebuildingPlanner : public RebuildingLogEnumerator::Listener {
                                        bool is_authoritative,
                                        lsn_t version) = 0;
 
+    // Used to pass up the ms until expiration of the log with the
+    // highest retention backlog on this shard.
+    virtual void onLogsEnumerated(
+        uint32_t shard,
+        lsn_t version,
+        std::chrono::milliseconds max_rebuild_by_retention_backlog) = 0;
+
     // Tell listener to not expect new plans.
     // May destroy the RebuildingPlanner.
     virtual void onFinishedRetrievingPlans(uint32_t shard, lsn_t version) = 0;
@@ -115,10 +122,11 @@ class RebuildingPlanner : public RebuildingLogEnumerator::Listener {
   /**
    * Called when logs that should be rebuilt have been enumerated
    */
-  void
-  onLogsEnumerated(uint32_t shard_idx,
-                   lsn_t version,
-                   std::unordered_map<logid_t, RecordTimestamp> logs) override;
+  void onLogsEnumerated(
+      uint32_t shard_idx,
+      lsn_t version,
+      std::unordered_map<logid_t, RecordTimestamp> logs,
+      std::chrono::milliseconds max_rebuild_by_retention_backlog) override;
 
   size_t getNumRemainingLogs();
 

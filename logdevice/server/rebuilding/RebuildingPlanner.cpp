@@ -106,8 +106,13 @@ void RebuildingPlanner::start() {
 void RebuildingPlanner::onLogsEnumerated(
     uint32_t shard_idx,
     lsn_t version,
-    std::unordered_map<logid_t, RecordTimestamp> logs) {
+    std::unordered_map<logid_t, RecordTimestamp> logs,
+    std::chrono::milliseconds max_rebuild_by_retention_backlog) {
   ld_check(version == version_);
+
+  listener_->onLogsEnumerated(
+      shard_, version_, max_rebuild_by_retention_backlog);
+
   if (logs.empty()) {
     // No logs to rebuild in this shard.
     ld_info("There are no logs to rebuild in shard %u", shard_idx);

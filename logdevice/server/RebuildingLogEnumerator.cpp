@@ -24,6 +24,9 @@ void RebuildingLogEnumerator::start() {
   ld_check(logs_config->isFullyLoaded());
   auto local_logs_config =
       checked_downcast<configuration::LocalLogsConfig*>(logs_config.get());
+
+  uint32_t internalSkipped = 0;
+  uint32_t dataSkipped = 0;
   for (auto it = local_logs_config->logsBegin();
        it != local_logs_config->logsEnd();
        ++it) {
@@ -32,6 +35,7 @@ void RebuildingLogEnumerator::start() {
     // Tests don't rebuild internal logs.
     if (!rebuild_internal_logs_ &&
         configuration::InternalLogs::isInternal(logid)) {
+      internalSkipped++;
       continue;
     }
 
@@ -44,6 +48,28 @@ void RebuildingLogEnumerator::start() {
     // encounters the first record.
     const auto& backlog =
         it->second.log_group->attrs().backlogDuration().value();
+
+    // FIXME: Ideally we want to delay SHARD_IS_REBUILT past the
+    // maxBacklogDuration only if we have logs relevant to the failed shard. But
+    // not sure if it's possible to determine that without performing copy-set
+    // iteration. Simpler to just track the biggest backlog.
+    if (rebuilding_settings_->disable_data_log_rebuilding &&
+        !MetaDataLog::isMetaDataLog(logid) && backlog.hasValue()) {
+      // We want to skip over data logs with a finite backlog but we don't
+      // want to notify that the shard is rebuilt until after the contents
+      // of the longest-lived log, since rebuild was requested, has expired.
+      //
+      // This ensures that readers will correctly account for the shard as
+      // still rebuilding for the purpose of FMAJORITY calculation. To
+      // accomplish this, we track the log with the max backlog and only
+      // trigger SHARD_IS_REBUILT after that logs current data has expired.
+      if (backlog.value() > maxBacklogDuration_) {
+        maxBacklogDuration_ = backlog.value();
+      }
+      dataSkipped++;
+      continue;
+    }
+
     RecordTimestamp next_ts = RecordTimestamp::min();
     if (backlog.hasValue()) {
       next_ts = cur_timestamp - backlog.value();
@@ -59,6 +85,11 @@ void RebuildingLogEnumerator::start() {
       result_.emplace(logid, next_ts);
     }
   }
+  ld_info("Enumerator skipped %d internal and %d data logs. Queued %ld logs "
+          "for rebuild.",
+          internalSkipped,
+          dataSkipped,
+          result_.size());
   if (rebuild_metadata_logs_) {
     putStorageTask();
   } else {
@@ -108,7 +139,9 @@ void RebuildingLogEnumerator::onMetaDataLogsStorageTaskDropped() {
 void RebuildingLogEnumerator::finalize() {
   ld_check(!finalize_called_);
   finalize_called_ = true;
-  callback_->onLogsEnumerated(shard_idx_, version_, std::move(result_));
+
+  callback_->onLogsEnumerated(
+      shard_idx_, version_, std::move(result_), maxBacklogDuration_);
   // `this` may be destroyed here.
 }
 

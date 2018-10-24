@@ -237,10 +237,11 @@ class EventLogRebuildingSet {
 
   /**
    * Inform of a new record in the event log.
-   * @param lsn    Lsn of the record (used for logging);
-   * @param record Record read from the event log.
-   * @param cfg    ServerConfig object used to retrieve the list of potential
-   *               donors for rebuilding.
+   * @param lsn       Lsn of the record (used for logging);
+   * @param timestamp Timestamp of the record
+   * @param record    Record read from the event log.
+   * @param cfg       ServerConfig object used to retrieve the list of potential
+   *                  donors for rebuilding.
    *
    * @return 0 on success, or -1 and err set to E::FAILED.
    */
@@ -252,8 +253,20 @@ class EventLogRebuildingSet {
   lsn_t getLastUpdate() const {
     return last_update_;
   }
+
   lsn_t getLastSeenLSN() const {
     return last_seen_lsn_;
+  }
+
+  std::chrono::milliseconds
+  getLastSeenShardNeedsRebuildTS(shard_index_t shard) const {
+    auto maxTS = RecordTimestamp::zero();
+    const RebuildingShardInfo& s = shards_.find(shard)->second;
+    for (auto node : s.nodes_) {
+      const NodeInfo& n = node.second;
+      maxTS.storeMax(RecordTimestamp(n.rebuilding_started_ts));
+    }
+    return maxTS.time_since_epoch();
   }
 
   bool empty() const {

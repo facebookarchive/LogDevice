@@ -47,6 +47,8 @@ void RebuildingEnumerateMetadataLogsTask::execute() {
       prev = l;
     }
   }
+  ld_info("Enumerator queued %ld metadata logs for rebuild", result_.size());
+
   switch (it->state()) {
     case IteratorState::AT_END:
     case IteratorState::AT_RECORD:

@@ -57,6 +57,7 @@ struct RebuildingSettings : public SettingsBundle {
       rebuilding_planner_sync_seq_retry_interval;
   bool use_iterator_cache;
   bool rebuild_dirty_shards;
+  bool disable_data_log_rebuilding;
   bool enable_self_initiated_rebuilding;
   std::chrono::seconds self_initiated_rebuilding_grace_period;
   std::chrono::seconds self_initiated_rebuilding_extra_period; // deprecated
