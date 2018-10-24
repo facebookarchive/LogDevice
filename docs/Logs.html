@@ -45,7 +45,7 @@ Logging Level: WARNING
   - backlog: None
   ...
 </code></pre>
-<p>The tree is current empty, we can only see the root directory <code>/</code> with the default attributes.</p>
+<p>The tree is currently empty, we can only see the root directory <code>/</code> with the default attributes.</p>
 <p>To create log-groups or directories, you will need to use <code>ldshell</code> for this. Here is an example of creating a single log-group with a range of IDs from 1 to 10 (inclusive). Setting the replication property to be 3 nodes replicated.</p>
 <pre><code class="hljs css language-text">$ ldshell -c <config-path> logs create --from 1 --to 100 --replicate-across "node:3" /my-logs
 
@@ -73,9 +73,9 @@ Logging Level: WARNING
 <p>If you would like to remove a log-group or a directory, you can use ldshell:</p>
 <pre><code class="hljs css language-text">$ ldshell -c <config-path> logs remove /my-logs
 </code></pre>
-<p>NOTE: Deleteing the logs from the logs config means that the data stored for these logs will eventually get trimmed. LogDevice has a safety mechanism that prevents data from getting deleted immediately. Only after a configurable grace period (see setting ....[TODO].) the data will deleted. This is 48 hours by default. During that period if you created the same log-range again, the old data will be accessible.</p>
+<p>NOTE: Deleting the logs from the logs config means that the data stored for these logs will eventually get trimmed. LogDevice has a safety mechanism that prevents data from getting deleted immediately. Only after a configurable grace period (see setting ....[TODO].) the data will deleted. This is 48 hours by default. During that period if you created the same log-range again, the old data will be accessible.</p>
 <h2><a class="anchor" aria-hidden="true" id="directories"></a><a href="#directories" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Directories</h2>
-<p>You can also create directories to organize your log-groups. These directories can have sub-directories or log-groups. You can always assign attributes to directories and these attributes will be inherited by all sub-directories and log-groups as long as they are not overriden further down the tree.</p>
+<p>You can also create directories to organize your log-groups. These directories can have sub-directories or log-groups. You can always assign attributes to directories and these attributes will be inherited by all sub-directories and log-groups as long as they are not overridden further down the tree.</p>
 <p>For instance, you can create a directory for all log-groups that are replicated 4 times on at least two racks.</p>
 <pre><code class="hljs css language-text">$ ldshell -c <config-path> logs create --directory --replicate-across "rack:2; node:4" /important
 
