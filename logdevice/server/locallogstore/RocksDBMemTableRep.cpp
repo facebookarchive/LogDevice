@@ -13,10 +13,12 @@ namespace facebook { namespace logdevice {
 
 RocksDBMemTableRep::RocksDBMemTableRep(RocksDBMemTableRepFactory& factory,
                                        std::unique_ptr<rocksdb::MemTableRep> r,
-                                       rocksdb::Allocator* allocator)
+                                       rocksdb::Allocator* allocator,
+                                       uint32_t cf_id)
     : RocksDBMemTableRepWrapper(r.get(), allocator),
       factory_(&factory),
-      mtr_(std::move(r)) {
+      mtr_(std::move(r)),
+      column_family_id_(cf_id) {
   // Registration with the factory is deferred until the first time
   // this MemTableRep is dirtied.
 }
@@ -35,10 +37,11 @@ rocksdb::MemTableRep* RocksDBMemTableRepFactory::CreateMemTableRep(
     const rocksdb::MemTableRep::KeyComparator& cmp,
     rocksdb::Allocator* mta,
     const rocksdb::SliceTransform* st,
-    rocksdb::Logger* logger) {
+    rocksdb::Logger* logger,
+    uint32_t cf_id) {
   std::unique_ptr<rocksdb::MemTableRep> wrapped_mtr(
-      mtr_factory_->CreateMemTableRep(cmp, mta, st, logger));
-  return new RocksDBMemTableRep(*this, std::move(wrapped_mtr), mta);
+      mtr_factory_->CreateMemTableRep(cmp, mta, st, logger, cf_id));
+  return new RocksDBMemTableRep(*this, std::move(wrapped_mtr), mta, cf_id);
 }
 
 void RocksDBMemTableRepFactory::registerMemTableRep(RocksDBMemTableRep& mtr) {
@@ -58,9 +61,10 @@ void RocksDBMemTableRepFactory::registerMemTableRep(RocksDBMemTableRep& mtr) {
       mtr.dirty_.store(true, std::memory_order_release);
       PER_SHARD_STAT_INCR(
           store_->getStatsHolder(), num_memtables, store_->getShardIdx());
-      ld_debug("Registering MemTableRep(%p). ID:%ju",
+      ld_debug("Registering MemTableRep(%p). FlushToken:%ju, CF_ID:%u",
                &mtr,
-               (uintmax_t)mtr.flush_token_);
+               (uintmax_t)mtr.flush_token_,
+               mtr.column_family_id_);
     }
   }
 }
@@ -70,6 +74,10 @@ void RocksDBMemTableRepFactory::unregisterMemTableRep(RocksDBMemTableRep& mtr) {
     return;
   }
 
+  ld_debug("Unregistering MemTableRep(%p). FlushToken:%ju, CF_ID:%u",
+           &mtr,
+           (uintmax_t)mtr.flush_token_,
+           mtr.column_family_id_);
   std::unique_lock<std::mutex> lock(active_memtables_mutex_);
 
   ld_check(!active_memtables_.empty());

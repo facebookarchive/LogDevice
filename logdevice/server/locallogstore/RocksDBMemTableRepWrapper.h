@@ -84,8 +84,9 @@ class RocksDBMemTableRepFactoryWrapper : public rocksdb::MemTableRepFactory {
   CreateMemTableRep(const rocksdb::MemTableRep::KeyComparator& cmp,
                     rocksdb::Allocator* mta,
                     const rocksdb::SliceTransform* st,
-                    rocksdb::Logger* logger) override {
-    return mtr_factory_->CreateMemTableRep(cmp, mta, st, logger);
+                    rocksdb::Logger* logger,
+                    uint32_t cf_id) override {
+    return mtr_factory_->CreateMemTableRep(cmp, mta, st, logger, cf_id);
   }
 
   const char* Name() const override {

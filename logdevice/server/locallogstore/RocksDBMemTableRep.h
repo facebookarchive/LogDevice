@@ -8,6 +8,7 @@
 #pragma once
 
 #include <folly/IntrusiveList.h>
+#include <folly/lang/SafeAssert.h>
 
 #include "logdevice/server/locallogstore/RocksDBLogStoreBase.h"
 #include "logdevice/server/locallogstore/RocksDBMemTableRepWrapper.h"
@@ -28,7 +29,8 @@ class RocksDBMemTableRep : public RocksDBMemTableRepWrapper {
  public:
   RocksDBMemTableRep(RocksDBMemTableRepFactory& factory,
                      std::unique_ptr<rocksdb::MemTableRep> wrapped,
-                     rocksdb::Allocator* allocator);
+                     rocksdb::Allocator* allocator,
+                     uint32_t cf_id);
 
   ~RocksDBMemTableRep() override;
 
@@ -44,6 +46,7 @@ class RocksDBMemTableRep : public RocksDBMemTableRepWrapper {
   FlushToken flush_token_ = FlushToken_INVALID;
   std::unique_ptr<rocksdb::MemTableRep> mtr_;
   SteadyTimestamp first_dirtied_time_{SteadyTimestamp::max()};
+  uint32_t column_family_id_;
   std::atomic<bool> dirty_ = {false};
 
   friend class RocksDBMemTableRepFactory;
@@ -65,10 +68,20 @@ class RocksDBMemTableRepFactory : public RocksDBMemTableRepFactoryWrapper {
   }
 
   rocksdb::MemTableRep*
+  CreateMemTableRep(const rocksdb::MemTableRep::KeyComparator& /* unused */,
+                    rocksdb::Allocator* /* unused */,
+                    const rocksdb::SliceTransform* /* unused */,
+                    rocksdb::Logger* /* unused */) override {
+    // Old interface. Should never be called.
+    FOLLY_SAFE_CHECK(false, "Legacy CreateMemTableRep interface accessed");
+  }
+
+  rocksdb::MemTableRep*
   CreateMemTableRep(const rocksdb::MemTableRep::KeyComparator& cmp,
                     rocksdb::Allocator* mta,
                     const rocksdb::SliceTransform* st,
-                    rocksdb::Logger* logger) override;
+                    rocksdb::Logger* logger,
+                    uint32_t cf_id) override;
 
   const char* Name() const override {
     return name_.c_str();
