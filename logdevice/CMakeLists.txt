@@ -9,6 +9,7 @@ cmake_minimum_required(VERSION 3.4.0 FATAL_ERROR)
 # includes
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMake" ${CMAKE_MODULE_PATH})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+include_directories("${LOGDEVICE_STAGING_DIR}/usr/local/include/")
 
 set(PACKAGE_NAME "logdevice")
 set(PACKAGE_VERSION "1.0-dev")
@@ -30,6 +31,12 @@ include (logdevice-functions)
 include(build-config)
 
 include(build-folly)
+include(build-fizz)
+include(build-wangle)
+include(build-fbthrift)
+
+include(${LOGDEVICE_DIR}/external/fbthrift/ThriftLibrary.cmake)
+
 include(build-rocksdb)
 include(build-docs)
 include(logdevice-deps)

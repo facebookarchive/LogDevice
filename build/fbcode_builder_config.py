@@ -9,6 +9,7 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 import specs.zstd as zstd
+from shell_quoting import ShellQuoted
 
 
 "fbcode_builder steps to build & test LogDevice"
@@ -33,9 +34,18 @@ Which outputs a legocastle job to stdout; to be fed into scutil create ...
 
 
 def fbcode_builder_spec(builder):
+    # This API should change rarely, so build the latest tag instead of master.
+    builder.add_option(
+        "no1msd/mstch:git_hash", ShellQuoted("$(git describe --abbrev=0 --tags)")
+    )
     return {
         "depends_on": [zstd],
-        "steps": [builder.fb_github_cmake_install("LogDevice/logdevice/_build")],
+        "steps": [
+            # This isn't a separete spec, since only fbthrift uses mstch.
+            builder.github_project_workdir("no1msd/mstch", "build"),
+            builder.cmake_install("no1msd/mstch"),
+            builder.fb_github_cmake_install("LogDevice/logdevice/_build"),
+        ],
     }
 
 
