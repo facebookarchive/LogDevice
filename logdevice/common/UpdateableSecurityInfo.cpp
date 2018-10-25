@@ -13,6 +13,7 @@
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/plugin/PrincipalParserFactory.h"
 
 namespace facebook { namespace logdevice {
 
@@ -35,7 +36,7 @@ void UpdateableSecurityInfo::onConfigUpdate() {
   ld_debug("UpdateableSecurityInfo::onConfigUpdate");
   auto processor = security_info->processor_;
   auto server_config = processor->config_->get()->serverConfig();
-  auto plugin = processor->getPlugin();
+  auto plugin_registry = processor->getPluginRegistry();
 
   auto principal_parser_ptr = security_info->principal_parser_.get();
   AuthenticationType auth_type_cur;
@@ -46,10 +47,12 @@ void UpdateableSecurityInfo::onConfigUpdate() {
   }
   if (auth_type_cur != server_config->getAuthenticationType()) {
     ld_info("PrincipalParser is changed");
-    std::shared_ptr<PrincipalParser> principal_parser =
-        plugin->createPrincipalParser(server_config->getAuthenticationType());
-    security_info->principal_parser_.update(
-        std::shared_ptr<PrincipalParser>(principal_parser));
+    auto pp_plugin = plugin_registry->getSinglePlugin<PrincipalParserFactory>(
+        PluginType::PRINCIPAL_PARSER_FACTORY);
+    std::shared_ptr<PrincipalParser> principal_parser = pp_plugin
+        ? (*pp_plugin)(server_config->getAuthenticationType())
+        : nullptr;
+    security_info->principal_parser_.update(principal_parser);
   }
 
   auto permission_checker_ptr = security_info->permission_checker_.get();
@@ -71,6 +74,7 @@ void UpdateableSecurityInfo::onConfigUpdate() {
   if (permission_checker_type_cur != permission_checker_type_new) {
     ld_info("PermissionChecker is changed");
 
+    auto plugin = processor->getPlugin();
     std::shared_ptr<PermissionChecker> permission_checker =
         plugin->createPermissionChecker(
             permission_checker_type_new,

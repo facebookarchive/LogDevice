@@ -15,6 +15,8 @@
 
 namespace facebook { namespace logdevice {
 
+class SettingsUpdater;
+
 /**
  * Interface for pluggable common components of LogDevice.
  *
@@ -48,6 +50,15 @@ class Plugin {
   // A string that we can log somewhere when using this plugin. If your plugin
   // is versioned, you can include the version of the plugin in it too.
   virtual std::string displayName() const = 0;
+
+  /**
+   * Invoked by the server/client before parsing its command line or config
+   * file.  Allows the plugin to define additional groups of options for the
+   * parser by maintaining an `UpdateableSettings<T>` instance on its own and
+   * passing that instance to `updater->registerSettings()`. Shouldn't store the
+   * pointer to SettingsUpdater
+   */
+  virtual void addOptions(SettingsUpdater* updater) {}
 
   virtual ~Plugin() {}
 };

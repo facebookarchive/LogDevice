@@ -148,6 +148,9 @@ std::shared_ptr<Client> Client::create(std::string cluster_name,
   std::unique_ptr<ClientSettingsImpl> impl_settings(
       static_cast<ClientSettingsImpl*>(raw_settings));
 
+  auto settings_updater = impl_settings->getSettingsUpdater();
+  plugin_registry->addOptions(settings_updater.get());
+
   std::shared_ptr<LocationProvider> location_plugin =
       plugin_registry->getSinglePlugin<LocationProvider>(
           PluginType::LOCATION_PROVIDER);
@@ -161,7 +164,6 @@ std::shared_ptr<Client> Client::create(std::string cluster_name,
     raw_settings->set("my-location", plugin_location.c_str());
   }
 
-  auto settings_updater = impl_settings->getSettingsUpdater();
   auto update_settings = [settings_updater](ServerConfig& config) -> bool {
     auto settings = config.getClientSettingsConfig();
 

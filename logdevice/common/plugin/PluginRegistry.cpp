@@ -141,4 +141,17 @@ std::string PluginRegistry::getStateDescriptionStr() {
   return folly::json::serialize(data, opts);
 }
 
+void PluginRegistry::addOptions(SettingsUpdater* updater) {
+  auto all_plugins = allPlugins_.rlock();
+  for (PluginType type : pluginTypeDescriptors().allValidKeys()) {
+    auto idx = static_cast<plugin_type_t>(type);
+    ld_check(idx < all_plugins->size());
+    const auto& map = (*all_plugins)[idx];
+    for (auto& kv : map) {
+      ld_check(kv.second);
+      kv.second->addOptions(updater);
+    }
+  }
+}
+
 }} // namespace facebook::logdevice

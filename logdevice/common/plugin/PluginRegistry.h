@@ -67,6 +67,9 @@ class PluginRegistry {
     return folly::StringPiece("builtin");
   }
 
+  // Runs addOptions() for all loaded plugins
+  void addOptions(SettingsUpdater* updater);
+
  private:
   void loadPlugins(PluginVector initial_plugins);
 

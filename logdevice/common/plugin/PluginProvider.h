@@ -21,6 +21,9 @@ class PluginProvider : public Plugin {
   Type type() const override {
     return Type::PLUGIN_PROVIDER;
   }
+  // settings are parsed after the plugins are loaded. PluginProviders are only
+  // used before that, so they won't see any setting changes
+  void addOptions(SettingsUpdater* updater) override final {}
   virtual PluginVector getPlugins() = 0;
 };
 

@@ -62,25 +62,12 @@ class LegacyPluginPack {
   };
 
   /**
-   * Invoked by the server before parsing its command line.  Allows the
-   * plugin to define additional groups of options for the parser. Doesn't
-   * store pointer to SettingsUpdater
-   */
-  virtual void addOptions(SettingsUpdater*) {}
-
-  /**
    * Allows the plugin to register additional ConfigSource instances with the
    * TextConfigUpdater.  Invoked by the server before fetching its config.
    */
   virtual void
   registerConfigSources(TextConfigUpdater&,
                         std::chrono::milliseconds /* zk_polling_interval */) {}
-
-  virtual std::unique_ptr<PrincipalParser>
-  createPrincipalParser(AuthenticationType type) {
-    ld_check(type == AuthenticationType::NONE);
-    return nullptr;
-  }
 
   virtual std::shared_ptr<PermissionChecker>
   createPermissionChecker(PermissionCheckerType type,

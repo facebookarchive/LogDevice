@@ -305,7 +305,7 @@ int main(int argc, const char** argv) {
   settings_updater->registerSettings(settings);
   settings_updater->registerSettings(rocksdb_settings);
 
-  plugin->addOptions(settings_updater.get());
+  plugin_registry->addOptions(settings_updater.get());
 
   settings_updater->setInternalSetting("server", "true");
 
