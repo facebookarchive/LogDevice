@@ -123,91 +123,68 @@ Status ZookeeperEpochStore::zkOpStatus(int rc,
   int zstate; // zookeeper session state
 
   std::shared_ptr<ZookeeperClientBase> zkclient = zkclient_.get();
-  switch (rc) {
-    case ZOK:
-      return E::OK;
-    case ZBADARGUMENTS:
-      ld_check(false);
-      RATELIMIT_ERROR(std::chrono::seconds(1),
-                      1,
-                      "%s() reported "
-                      "ZBADARGUMENTS. logid was %lu.",
-                      op,
-                      logid.val_);
-      return E::INTERNAL;
-    case ZINVALIDSTATE:
-
-      // Note: state() returns the current state of the session and does not
-      // necessarily reflect that state at the time of error
-      zstate = zkclient->state();
-      // ZOO_ constants are C const ints, can't switch()
-      if (zstate == ZOO_EXPIRED_SESSION_STATE) {
-        return E::NOTCONN;
-      } else if (zstate == ZOO_AUTH_FAILED_STATE) {
-        return E::ACCESS;
-      } else {
-        RATELIMIT_WARNING(
-            std::chrono::seconds(10),
-            5,
-            "Unable to recover session state at time of ZINVALIDSTATE error, "
-            "possibly EXPIRED or AUTH_FAILED. But the current session state is "
-            "%s, could be due to a session re-establishment.",
-            ZookeeperClient::stateString(zstate).c_str());
-        return E::FAILED;
-      }
-    case ZMARSHALLINGERROR:
-      return E::SYSLIMIT;
-    default:
-      RATELIMIT_ERROR(std::chrono::seconds(1),
-                      1,
-                      "Got unexpected status code %s from %s() for log %lu",
-                      zerror(rc),
-                      op,
-                      logid.val_);
+  // Special handling for cases where additional information would be helpful
+  if (rc == ZBADARGUMENTS) {
+    RATELIMIT_ERROR(std::chrono::seconds(1),
+                    1,
+                    "%s() reported "
+                    "ZBADARGUMENTS. logid was %lu.",
+                    op,
+                    logid.val_);
+    ld_assert(false);
+    return E::INTERNAL;
+  } else if (rc == ZINVALIDSTATE) {
+    // Note: state() returns the current state of the session and does not
+    // necessarily reflect that state at the time of error
+    zstate = zkclient->state();
+    // ZOO_ constants are C const ints, can't switch()
+    if (zstate == ZOO_EXPIRED_SESSION_STATE) {
+      return E::NOTCONN;
+    } else if (zstate == ZOO_AUTH_FAILED_STATE) {
+      return E::ACCESS;
+    } else {
+      RATELIMIT_WARNING(
+          std::chrono::seconds(10),
+          5,
+          "Unable to recover session state at time of ZINVALIDSTATE error, "
+          "possibly EXPIRED or AUTH_FAILED. But the current session state is "
+          "%s, could be due to a session re-establishment.",
+          ZookeeperClient::stateString(zstate).c_str());
+      return E::FAILED;
+    }
   }
 
-  return E::INTERNAL;
+  return ZookeeperClientBase::toStatus(rc);
 }
 
 static Status zkCfStatus(int rc, logid_t logid, StatsHolder* stats = nullptr) {
-  switch (rc) {
-    case ZOK:
-      return E::OK;
-    case ZNONODE:
-      return E::NOTFOUND;
-    case ZNOAUTH:
-      return E::ACCESS;
-    case ZCONNECTIONLOSS:
-    case ZOPERATIONTIMEOUT:
-    case ZSESSIONEXPIRED:
-      return E::CONNFAILED;
-    case ZCLOSING:
-      return E::SHUTDOWN;
-    case ZBADVERSION:
-      return E::AGAIN;
-    case ZNODEEXISTS:
-      return E::EXISTS;
-    case ZRUNTIMEINCONSISTENCY: {
-      RATELIMIT_CRITICAL(
-          std::chrono::seconds(10),
-          10,
-          "Got status code %s from Zookeeper completion function for log %lu.",
-          zerror(rc),
-          logid.val_);
-      STAT_INCR(stats, zookeeper_epoch_store_internal_inconsistency_error);
-      return E::FAILED;
-    }
-    default:
-      RATELIMIT_ERROR(std::chrono::seconds(1),
-                      1,
-                      "Got unexpected status code %s from Zookeeper completion "
-                      "function for log %lu",
-                      zerror(rc),
-                      logid.val_);
-      ld_check(false);
+  // Special handling for cases where additional information would be helpful
+  if (rc == ZRUNTIMEINCONSISTENCY) {
+    RATELIMIT_CRITICAL(
+        std::chrono::seconds(10),
+        10,
+        "Got status code %s from Zookeeper completion function for log %lu.",
+        zerror(rc),
+        logid.val_);
+    STAT_INCR(stats, zookeeper_epoch_store_internal_inconsistency_error);
+    return E::FAILED;
   }
 
-  return E::INTERNAL;
+  Status status = ZookeeperClientBase::toStatus(rc);
+  if (status == E::VERSION_MISMATCH) {
+    return E::AGAIN;
+  }
+  if (status == E::UNKNOWN) {
+    RATELIMIT_ERROR(std::chrono::seconds(1),
+                    1,
+                    "Got unexpected status code %s from Zookeeper completion "
+                    "function for log %lu",
+                    zerror(rc),
+                    logid.val_);
+    ld_check(false);
+  }
+
+  return status;
 }
 
 std::string ZookeeperEpochStore::znodePathForLog(logid_t logid) const {

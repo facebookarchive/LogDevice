@@ -24,10 +24,11 @@ int ZookeeperNodesConfigStore::getConfig(std::string key,
                                          value_callback_t callback) const {
   ZookeeperClientBase::data_callback_t completion =
       [cb = std::move(callback)](int rc, std::string value, zk::Stat) mutable {
-        Status status = toStatus(rc);
+        Status status = ZookeeperClientBase::toStatus(rc);
         cb(status, status == Status::OK ? std::move(value) : "");
       };
-  Status status = toStatus(zk_->getData(std::move(key), std::move(completion)));
+  Status status = ZookeeperClientBase::toStatus(
+      zk_->getData(std::move(key), std::move(completion)));
   if (status != Status::OK) {
     err = status;
     return -1;
@@ -83,7 +84,7 @@ int ZookeeperNodesConfigStore::updateConfig(
           int rc, std::string current_value, zk::Stat zk_stat) mutable {
         if (rc != ZOK) {
           // TODO: handle ZNONODE (create one);
-          write_callback(toStatus(rc), {}, "");
+          write_callback(ZookeeperClientBase::toStatus(rc), {}, "");
           return;
         }
 
@@ -111,7 +112,7 @@ int ZookeeperNodesConfigStore::updateConfig(
             std::make_shared<write_callback_t>(std::move(write_callback));
         ZookeeperClientBase::stat_callback_t completion =
             [new_version, cb_ptr](int write_rc, zk::Stat) mutable {
-              Status write_status = toStatus(write_rc);
+              Status write_status = ZookeeperClientBase::toStatus(write_rc);
               if (write_status == Status::OK) {
                 (*cb_ptr)(write_status, new_version, "");
               } else {
@@ -125,7 +126,7 @@ int ZookeeperNodesConfigStore::updateConfig(
                                 std::move(write_value),
                                 std::move(completion),
                                 zk_stat.version_);
-        Status write_status = ZookeeperNodesConfigStore::toStatus(zk_rc);
+        Status write_status = ZookeeperClientBase::toStatus(zk_rc);
         if (write_status != Status::OK) {
           RATELIMIT_ERROR(
               std::chrono::seconds(10),
@@ -143,7 +144,8 @@ int ZookeeperNodesConfigStore::updateConfig(
         }
       }; // read_cb
 
-  Status status = toStatus(zk_->getData(std::move(key), std::move(read_cb)));
+  Status status = ZookeeperClientBase::toStatus(
+      zk_->getData(std::move(key), std::move(read_cb)));
   if (status != Status::OK) {
     err = status;
     return -1;
@@ -180,33 +182,6 @@ Status ZookeeperNodesConfigStore::updateConfigSync(
 
   b.wait();
   return ret_status;
-}
-
-/* static */ Status ZookeeperNodesConfigStore::toStatus(int zk_rc) {
-  switch (zk_rc) {
-    case ZOK:
-      return Status::OK;
-    case ZNONODE:
-      return Status::NOTFOUND;
-    case ZBADVERSION:
-      return Status::VERSION_MISMATCH;
-    case ZNOAUTH:
-      return Status::ACCESS;
-    case ZCONNECTIONLOSS:
-    case ZOPERATIONTIMEOUT:
-      return Status::AGAIN;
-
-    case ZBADARGUMENTS:
-      return Status::INVALID_PARAM;
-    case ZMARSHALLINGERROR:
-      return Status::INVALID_CONFIG;
-  }
-
-  RATELIMIT_ERROR(std::chrono::seconds(10),
-                  5,
-                  "Unknown / unexpected Zookeeper error code %d",
-                  zk_rc);
-  return Status::UNKNOWN;
 }
 
 }}} // namespace facebook::logdevice::configuration

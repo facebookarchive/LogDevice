@@ -18,8 +18,10 @@
 #include <zookeeper/zookeeper.h>
 
 #include "logdevice/common/UpdateableSharedPtr.h"
+#include "logdevice/common/configuration/ServerConfig.h"
 #include "logdevice/common/configuration/ZookeeperConfig.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/include/Err.h"
 
 namespace facebook { namespace logdevice {
 
@@ -172,6 +174,9 @@ class ZookeeperClientBase : boost::noncopyable {
   using create_callback_t = folly::Function<void(int, std::string)>;
   using multi_op_callback_t =
       folly::Function<void(int, std::vector<zk::OpResponse>)>;
+
+  // Converts a Zookeeper return code to LogDevice status
+  static Status toStatus(int zk_rc);
 
   explicit ZookeeperClientBase() : quorum_() {}
 

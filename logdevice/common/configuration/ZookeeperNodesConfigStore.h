@@ -52,8 +52,6 @@ class ZookeeperNodesConfigStore : public NodesConfigStore {
                           std::string* value_out = nullptr) override;
 
  private:
-  static Status toStatus(int zk_rc);
-
   const std::shared_ptr<const extract_version_fn> extract_fn_;
   std::shared_ptr<ZookeeperClientBase> zk_;
 };
