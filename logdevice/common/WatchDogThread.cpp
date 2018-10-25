@@ -14,6 +14,7 @@
 #include "logdevice/common/ThreadID.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/plugin/BacktraceRunner.h"
 #include "logdevice/common/stats/Stats.h"
 
 namespace facebook { namespace logdevice {
@@ -85,7 +86,9 @@ void WatchDogThread::detectStalls() {
         processor_->stats_, num_stalled_workers, stalled_worker_pids.size());
 
     if (processor_->settings()->watchdog_print_bt_on_stall) {
-      auto plugin = processor_->getPlugin();
+      auto plugin =
+          processor_->getPluginRegistry()->getSinglePlugin<BacktraceRunner>(
+              PluginType::BACKTRACE_RUNNER);
       if (plugin != nullptr) {
         for (size_t i = 0;
              (i < stalled_worker_pids.size()) && (bt_ratelimiter_.isAllowed());
@@ -93,9 +96,9 @@ void WatchDogThread::detectStalls() {
           ld_info("bt of %s(pid=%d)",
                   stalled_worker_names[i].c_str(),
                   stalled_worker_pids[i]);
-          plugin->watchdogPrintBacktraceOnStall(stalled_worker_pids[i]);
+          plugin->printBacktraceOnStall(stalled_worker_pids[i]);
         }
-        plugin->watchdogKernelStacktrace();
+        plugin->printKernelStacktrace();
       }
     }
 

@@ -39,6 +39,8 @@ PLUGIN_TYPE(PRINCIPAL_PARSER_FACTORY, 6, "PrincipalParser factory", false)
 PLUGIN_TYPE(PERMISSION_CHECKER_FACTORY, 7, "PermissionChecker factory", false)
 // See ConfigSourceFactory.h
 PLUGIN_TYPE(CONFIG_SOURCE_FACTORY, 8, "ConfigSource factory", true)
+// See BacktraceRunner.h
+PLUGIN_TYPE(BACKTRACE_RUNNER, 9, "Backtrace runner", false)
 
 // TODO: add more plugin types
 

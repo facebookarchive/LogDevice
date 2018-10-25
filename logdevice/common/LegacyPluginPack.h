@@ -64,17 +64,6 @@ class LegacyPluginPack {
   virtual std::unique_ptr<SequencerLocator>
   createSequencerLocator(const std::shared_ptr<UpdateableConfig>&);
 
-  // Called by watchdog thread for each stalled worker thread, if
-  // Settings::watchdog_print_bt_on_stall is true.  Called with the thread id of
-  // the worker, as returned by gettid(2), which is different than
-  // pthread_self().  Intended for printing the stack trace of the given thread.
-  virtual void watchdogPrintBacktraceOnStall(int /*pid*/) {}
-
-  // Called by watchdog thread once, if Settings::watchdog_print_bt_on_stall is
-  // true.  Intended to call 'kernelctl walker' which outputs stack traces of
-  // threads in UNINTERRUPTIBLE state.
-  virtual void watchdogKernelStacktrace() {}
-
   virtual std::shared_ptr<opentracing::Tracer> createOTTracer() {
     return opentracing::MakeNoopTracer();
   }
