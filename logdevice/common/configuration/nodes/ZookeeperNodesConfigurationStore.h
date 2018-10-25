@@ -14,17 +14,19 @@
 #include <folly/Synchronized.h>
 
 #include "logdevice/common/ZookeeperClientBase.h"
-#include "logdevice/common/configuration/NodesConfigStore.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationStore.h"
 #include "logdevice/common/membership/StorageMembership.h"
 
 namespace facebook { namespace logdevice { namespace configuration {
+namespace nodes {
 
-class ZookeeperNodesConfigStore : public NodesConfigStore {
+class ZookeeperNodesConfigurationStore : public NodesConfigurationStore {
  public:
   using version_t = membership::MembershipVersion::Type;
 
-  explicit ZookeeperNodesConfigStore(extract_version_fn extract_fn,
-                                     std::shared_ptr<ZookeeperClientBase> zk)
+  explicit ZookeeperNodesConfigurationStore(
+      extract_version_fn extract_fn,
+      std::shared_ptr<ZookeeperClientBase> zk)
       : extract_fn_(
             std::make_shared<extract_version_fn>(std::move(extract_fn))),
         zk_(std::move(zk)) {
@@ -35,9 +37,9 @@ class ZookeeperNodesConfigStore : public NodesConfigStore {
   // Note on destruction: while this class does not keep track of pending
   // callbacks, we take care to ensure that the callbacks in the async methods
   // do not captures state that would be otherwise invalid after the
-  // ZookeeperNodesConfigStore instance gets destroyed. (This is why we store
-  // the extraction function and Zookeeper client as shared_ptr-s.
-  ~ZookeeperNodesConfigStore() override {}
+  // ZookeeperNodesConfigurationStore instance gets destroyed. (This is why we
+  // store the extraction function and Zookeeper client as shared_ptr-s.
+  ~ZookeeperNodesConfigurationStore() override {}
 
   int getConfig(std::string key, value_callback_t cb) const override;
   Status getConfigSync(std::string key, std::string* value_out) const override;
@@ -55,4 +57,4 @@ class ZookeeperNodesConfigStore : public NodesConfigStore {
   const std::shared_ptr<const extract_version_fn> extract_fn_;
   std::shared_ptr<ZookeeperClientBase> zk_;
 };
-}}} // namespace facebook::logdevice::configuration
+}}}} // namespace facebook::logdevice::configuration::nodes

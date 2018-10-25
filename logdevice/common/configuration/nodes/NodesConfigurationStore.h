@@ -17,11 +17,12 @@
 #include "logdevice/include/Err.h"
 
 namespace facebook { namespace logdevice { namespace configuration {
+namespace nodes {
 
 // Backing data source of NodesConfig, used both by the LogDevice server and by
 // tooling. Exposes a key-value API, owned and accessed by the
 // NodesConfigStateMachine singleton.
-class NodesConfigStore {
+class NodesConfigurationStore {
  public:
   using version_t = membership::MembershipVersion::Type;
 
@@ -36,9 +37,9 @@ class NodesConfigStore {
   using write_callback_t =
       folly::Function<void(Status, version_t, std::string)>;
 
-  // Function that NodesConfigStore could call on stored values to extract the
-  // corresponding membership version. If value is invalid, the function should
-  // return folly::none and set err accordingly.
+  // Function that NodesConfigurationStore could call on stored values to
+  // extract the corresponding membership version. If value is invalid, the
+  // function should return folly::none and set err accordingly.
   //
   // This function should be synchronous, relatively fast, and should not
   // consume the value string (folly::StringPiece does not take ownership of the
@@ -46,8 +47,8 @@ class NodesConfigStore {
   using extract_version_fn =
       folly::Function<folly::Optional<version_t>(folly::StringPiece) const>;
 
-  explicit NodesConfigStore() {}
-  virtual ~NodesConfigStore() {}
+  explicit NodesConfigurationStore() {}
+  virtual ~NodesConfigurationStore() {}
 
   /*
    * read
@@ -89,9 +90,9 @@ class NodesConfigStore {
                                std::string* value_out) const = 0;
 
   /*
-   * NodesConfigStore provides strict conditional update semantics--it will only
-   * update the value for a key if the base_version matches the latest version
-   * in the store.
+   * NodesConfigurationStore provides strict conditional update semantics--it
+   * will only update the value for a key if the base_version matches the latest
+   * version in the store.
    *
    * @param key: key of the config
    * @param value:
@@ -170,4 +171,4 @@ class NodesConfigStore {
 
   // TODO: add subscription API
 };
-}}} // namespace facebook::logdevice::configuration
+}}}} // namespace facebook::logdevice::configuration::nodes

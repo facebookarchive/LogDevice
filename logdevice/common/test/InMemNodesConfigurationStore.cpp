@@ -6,16 +6,17 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "logdevice/common/test/InMemNodesConfigStore.h"
+#include "logdevice/common/test/InMemNodesConfigurationStore.h"
 
 #include "logdevice/common/util.h"
 
 namespace facebook { namespace logdevice { namespace configuration {
+namespace nodes {
 
-//////// InMemNodesConfigStore ////////
+//////// InMemNodesConfigurationStore ////////
 
-int InMemNodesConfigStore::getConfig(std::string key,
-                                     value_callback_t cb) const {
+int InMemNodesConfigurationStore::getConfig(std::string key,
+                                            value_callback_t cb) const {
   std::string value{};
   Status status = getConfigSync(std::move(key), &value);
 
@@ -29,7 +30,8 @@ int InMemNodesConfigStore::getConfig(std::string key,
   return -1;
 }
 
-Status InMemNodesConfigStore::getConfigSync(std::string key,
+Status
+InMemNodesConfigurationStore::getConfigSync(std::string key,
                                             std::string* value_out) const {
   {
     auto lockedConfigs = configs_.rlock();
@@ -44,10 +46,11 @@ Status InMemNodesConfigStore::getConfigSync(std::string key,
   return Status::OK;
 }
 
-int InMemNodesConfigStore::updateConfig(std::string key,
-                                        std::string value,
-                                        folly::Optional<version_t> base_version,
-                                        write_callback_t cb) {
+int InMemNodesConfigurationStore::updateConfig(
+    std::string key,
+    std::string value,
+    folly::Optional<version_t> base_version,
+    write_callback_t cb) {
   version_t version;
   std::string value_out;
   Status status = updateConfigSync(
@@ -64,12 +67,12 @@ int InMemNodesConfigStore::updateConfig(std::string key,
   return -1;
 }
 
-Status
-InMemNodesConfigStore::updateConfigSync(std::string key,
-                                        std::string value,
-                                        folly::Optional<version_t> base_version,
-                                        version_t* version_out,
-                                        std::string* value_out) {
+Status InMemNodesConfigurationStore::updateConfigSync(
+    std::string key,
+    std::string value,
+    folly::Optional<version_t> base_version,
+    version_t* version_out,
+    std::string* value_out) {
   auto opt = extract_fn_(value);
   if (!opt) {
     return Status::INVALID_PARAM;
@@ -105,4 +108,4 @@ InMemNodesConfigStore::updateConfigSync(std::string key,
   }
   return Status::OK;
 }
-}}} // namespace facebook::logdevice::configuration
+}}}} // namespace facebook::logdevice::configuration::nodes

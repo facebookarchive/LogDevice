@@ -7,15 +7,16 @@
  */
 #pragma once
 
-#include "logdevice/common/configuration/NodesConfigStore.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationStore.h"
 
 namespace facebook { namespace logdevice { namespace configuration {
+namespace nodes {
 
-class InMemNodesConfigStore : public NodesConfigStore {
-  using version_t = NodesConfigStore::version_t;
+class InMemNodesConfigurationStore : public NodesConfigurationStore {
+  using version_t = NodesConfigurationStore::version_t;
 
  public:
-  explicit InMemNodesConfigStore(extract_version_fn f)
+  explicit InMemNodesConfigurationStore(extract_version_fn f)
       : configs_(), extract_fn_(std::move(f)) {}
   int getConfig(std::string key, value_callback_t cb) const override;
 
@@ -38,4 +39,4 @@ class InMemNodesConfigStore : public NodesConfigStore {
   folly::Synchronized<std::unordered_map<std::string, std::string>> configs_;
   extract_version_fn extract_fn_;
 };
-}}} // namespace facebook::logdevice::configuration
+}}}} // namespace facebook::logdevice::configuration::nodes

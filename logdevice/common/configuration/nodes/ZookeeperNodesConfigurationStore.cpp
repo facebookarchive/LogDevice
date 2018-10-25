@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "logdevice/common/configuration/ZookeeperNodesConfigStore.h"
+#include "logdevice/common/configuration/nodes/ZookeeperNodesConfigurationStore.h"
 
 #include <chrono>
 
@@ -17,11 +17,13 @@
 #include "logdevice/include/Err.h"
 
 namespace facebook { namespace logdevice { namespace configuration {
+namespace nodes {
 
-//////// ZookeeperNodesConfigStore ////////
+//////// ZookeeperNodesConfigurationStore ////////
 
-int ZookeeperNodesConfigStore::getConfig(std::string key,
-                                         value_callback_t callback) const {
+int ZookeeperNodesConfigurationStore::getConfig(
+    std::string key,
+    value_callback_t callback) const {
   ZookeeperClientBase::data_callback_t completion =
       [cb = std::move(callback)](int rc, std::string value, zk::Stat) mutable {
         Status status = ZookeeperClientBase::toStatus(rc);
@@ -36,7 +38,8 @@ int ZookeeperNodesConfigStore::getConfig(std::string key,
   return 0;
 }
 
-Status ZookeeperNodesConfigStore::getConfigSync(std::string key,
+Status
+ZookeeperNodesConfigurationStore::getConfigSync(std::string key,
                                                 std::string* value_out) const {
   folly::Baton<> b;
   Status ret_status = Status::OK;
@@ -60,7 +63,7 @@ Status ZookeeperNodesConfigStore::getConfigSync(std::string key,
   return ret_status;
 }
 
-int ZookeeperNodesConfigStore::updateConfig(
+int ZookeeperNodesConfigurationStore::updateConfig(
     std::string key,
     std::string value,
     folly::Optional<version_t> base_version,
@@ -93,7 +96,7 @@ int ZookeeperNodesConfigStore::updateConfig(
           RATELIMIT_WARNING(std::chrono::seconds(10),
                             5,
                             "Failed to extract version from value read from "
-                            "ZookeeperNodesConfigStore. key: \"%s\"",
+                            "ZookeeperNodesConfigurationStore. key: \"%s\"",
                             key.c_str());
           write_callback(Status::BADMSG, {}, "");
           return;
@@ -153,7 +156,7 @@ int ZookeeperNodesConfigStore::updateConfig(
   return 0;
 }
 
-Status ZookeeperNodesConfigStore::updateConfigSync(
+Status ZookeeperNodesConfigurationStore::updateConfigSync(
     std::string key,
     std::string value,
     folly::Optional<version_t> base_version,
@@ -184,4 +187,4 @@ Status ZookeeperNodesConfigStore::updateConfigSync(
   return ret_status;
 }
 
-}}} // namespace facebook::logdevice::configuration
+}}}} // namespace facebook::logdevice::configuration::nodes

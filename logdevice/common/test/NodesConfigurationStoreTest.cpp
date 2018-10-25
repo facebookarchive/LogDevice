@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "logdevice/common/configuration/NodesConfigStore.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationStore.h"
 
 #include <condition_variable>
 #include <mutex>
@@ -17,20 +17,21 @@
 #include <folly/synchronization/Baton.h>
 #include <gtest/gtest.h>
 
-#include "logdevice/common/configuration/ZookeeperNodesConfigStore.h"
-#include "logdevice/common/test/InMemNodesConfigStore.h"
+#include "logdevice/common/configuration/nodes/ZookeeperNodesConfigurationStore.h"
+#include "logdevice/common/test/InMemNodesConfigurationStore.h"
 #include "logdevice/common/test/ZookeeperClientInMemory.h"
 
 using namespace facebook::logdevice;
 using namespace facebook::logdevice::configuration;
+using namespace facebook::logdevice::configuration::nodes;
 using namespace facebook::logdevice::membership;
 
-using version_t = NodesConfigStore::version_t;
+using version_t = NodesConfigurationStore::version_t;
 
 namespace {
 const std::string kFoo{"/foo"};
 const std::string kBar{"/bar"};
-std::unique_ptr<NodesConfigStore> store{nullptr};
+std::unique_ptr<NodesConfigurationStore> store{nullptr};
 
 const std::string kValue{"value"};
 const std::string kVersion{"version"};
@@ -95,7 +96,7 @@ void checkAndResetBaton(folly::Baton<>& b) {
   b.reset();
 }
 
-void runBasicTests(std::unique_ptr<NodesConfigStore> store,
+void runBasicTests(std::unique_ptr<NodesConfigurationStore> store,
                    bool initialWrite = true) {
   folly::Baton<> b;
   std::string value_out{};
@@ -174,7 +175,7 @@ void runBasicTests(std::unique_ptr<NodesConfigStore> store,
   checkAndResetBaton(b);
 }
 
-void runMultiThreadedTests(std::unique_ptr<NodesConfigStore> store) {
+void runMultiThreadedTests(std::unique_ptr<NodesConfigurationStore> store) {
   constexpr size_t kNumThreads = 5;
   constexpr size_t kIter = 30;
   std::array<std::thread, kNumThreads> threads;
@@ -249,32 +250,33 @@ void runMultiThreadedTests(std::unique_ptr<NodesConfigStore> store) {
 }
 } // namespace
 
-TEST(NodesConfigStore, basic) {
-  runBasicTests(std::make_unique<InMemNodesConfigStore>(extractVersionFn));
+TEST(NodesConfigurationStore, basic) {
+  runBasicTests(
+      std::make_unique<InMemNodesConfigurationStore>(extractVersionFn));
 }
 
-TEST(NodesConfigStore, basicMT) {
+TEST(NodesConfigurationStore, basicMT) {
   runMultiThreadedTests(
-      std::make_unique<InMemNodesConfigStore>(extractVersionFn));
+      std::make_unique<InMemNodesConfigurationStore>(extractVersionFn));
 }
 
-TEST(NodesConfigStore, zk_basic) {
+TEST(NodesConfigurationStore, zk_basic) {
   auto z = std::make_shared<ZookeeperClientInMemory>(
       "unused",
       ZookeeperClientInMemory::state_map_t{
           {kFoo,
            {TestEntry{0, "initValue"}.serialize(), zk::Stat{.version_ = 4}}}});
-  runBasicTests(std::make_unique<ZookeeperNodesConfigStore>(
+  runBasicTests(std::make_unique<ZookeeperNodesConfigurationStore>(
                     extractVersionFn, std::move(z)),
                 /* initialWrite = */ false);
 }
 
-TEST(NodesConfigStore, zk_basicMT) {
+TEST(NodesConfigurationStore, zk_basicMT) {
   auto z = std::make_shared<ZookeeperClientInMemory>(
       "unused",
       ZookeeperClientInMemory::state_map_t{
           {kFoo,
            {TestEntry{0, "initValue"}.serialize(), zk::Stat{.version_ = 4}}}});
-  runMultiThreadedTests(std::make_unique<ZookeeperNodesConfigStore>(
+  runMultiThreadedTests(std::make_unique<ZookeeperNodesConfigurationStore>(
       extractVersionFn, std::move(z)));
 }
