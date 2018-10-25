@@ -198,7 +198,8 @@ folly::SemiFuture<folly::Unit> AdminAPIHandler::semifuture_takeLogTreeSnapshot(
       processor_,
       folly::Optional<worker_id_t>(logsconfig_owner_worker),
       logsconfig_worker_type,
-      cb);
+      cb,
+      RequestType::ADMIN_CMD_UTIL_INTERNAL);
 }
 
 void AdminAPIHandler::getLogGroupThroughput(

@@ -70,7 +70,7 @@ class PromiseRequest : public Request {
                  WorkerType worker_type,
                  RequestType type,
                  folly::Promise<T>&& p,
-                 std::function<void(folly::Promise<T>)>&& func)
+                 folly::Function<void(folly::Promise<T>)> func)
       : Request(type),
         worker_(std::move(worker)),
         worker_type_(std::move(worker_type)),
@@ -88,7 +88,7 @@ class PromiseRequest : public Request {
   folly::Optional<worker_id_t> worker_;
   WorkerType worker_type_;
   folly::Promise<T> p_;
-  std::function<void(folly::Promise<T>)> func_;
+  folly::Function<void(folly::Promise<T>)> func_;
 
   int getThreadAffinity(int /*nthreads*/) override {
     return worker_.value_or(worker_id_t{-1}).val();
@@ -236,13 +236,15 @@ run_on_worker_pool(Processor* processor, WorkerType worker_type, Func&& cb) {
       processor, worker_ids, worker_type, std::forward<Func>(cb));
 }
 
-template <typename T, typename Func>
+template <typename T>
 folly::SemiFuture<T>
 fulfill_on_worker(Processor* processor,
                   folly::Optional<worker_id_t> worker_id,
                   WorkerType worker_type,
-                  Func&& cb, // std::function<void(folly::Promise<T>)>
+                  folly::Function<void(folly::Promise<T>)> cb,
+                  RequestType request_type = RequestType::MISC,
                   bool with_retrying = false) {
+  ld_check(processor);
   folly::Promise<T> p; // will be moved to Request;
   auto future = p.getSemiFuture();
   const int nworkers = processor->getWorkerCount(worker_type);
@@ -262,9 +264,9 @@ fulfill_on_worker(Processor* processor,
   // This is why we have the future extracted earlier.
   auto req = PromiseRequest<T>::make(std::move(worker_id),
                                      worker_type,
-                                     RequestType::ADMIN_CMD_UTIL_INTERNAL,
+                                     request_type,
                                      std::move(p),
-                                     std::forward<Func>(cb));
+                                     std::move(cb));
 
   int rv;
   if (with_retrying) {
@@ -274,12 +276,11 @@ fulfill_on_worker(Processor* processor,
   }
 
   if (rv != 0) {
-    RATELIMIT_ERROR(
-        std::chrono::seconds(1),
-        10,
-        "Error: cannot post request of type %s: %s",
-        requestTypeNames[RequestType::ADMIN_CMD_UTIL_INTERNAL].c_str(),
-        error_name(err));
+    RATELIMIT_ERROR(std::chrono::seconds(1),
+                    10,
+                    "Error: cannot post request of type %s: %s",
+                    requestTypeNames[request_type].c_str(),
+                    error_name(err));
 
     // creating a new promise since we moved the first promise to the Request
     return folly::makeFuture<T>(
@@ -290,6 +291,57 @@ fulfill_on_worker(Processor* processor,
                 .c_str()));
   }
   return future;
+}
+
+// To run a functor on a single other worker, we allow mutable lambdas as the
+// functor will be owned by the worker and it's free to modify the states
+// captured by value however it pleases.
+//
+// However, to dispatch the same functor to multiple other workers (i.e., via
+// fulfill_on_worker_pool or fulfill_on_all_workers), the cb function will be
+// operating on shared state (captured by value or by reference). Hence the
+// function signature contains the const qualifier.
+template <typename T>
+std::vector<folly::SemiFuture<T>>
+fulfill_on_worker_pool(Processor* processor,
+                       WorkerType worker_type,
+                       folly::Function<void(folly::Promise<T>) const> cb,
+                       RequestType request_type = RequestType::MISC,
+                       bool with_retrying = false) {
+  const int nworkers = processor->getWorkerCount(worker_type);
+  std::vector<folly::SemiFuture<T>> futures;
+  auto func = std::move(cb).asSharedProxy();
+  for (int i = 0; i < nworkers; ++i) {
+    futures.emplace_back(fulfill_on_worker<T>(processor,
+                                              worker_id_t{i},
+                                              worker_type,
+                                              func,
+                                              request_type,
+                                              with_retrying));
+  }
+  return futures;
+}
+
+template <typename T>
+std::vector<folly::SemiFuture<T>>
+fulfill_on_all_workers(Processor* processor,
+                       folly::Function<void(folly::Promise<T>) const> cb,
+                       RequestType request_type = RequestType::MISC,
+                       bool with_retrying = false) {
+  ld_check(processor);
+  const auto nWorkers = processor->getAllWorkersCount();
+  std::vector<folly::SemiFuture<T>> futures;
+  futures.reserve(nWorkers);
+  auto func = std::move(cb).asSharedProxy();
+  for (int i = 0; i < numOfWorkerTypes(); ++i) {
+    WorkerType worker_type = workerTypeByIndex(i);
+    auto pool_futures = fulfill_on_worker_pool<T>(
+        processor, worker_type, func, request_type, with_retrying);
+    futures.insert(futures.end(),
+                   std::make_move_iterator(pool_futures.begin()),
+                   std::make_move_iterator(pool_futures.end()));
+  }
+  return futures;
 }
 
 }} // namespace facebook::logdevice
