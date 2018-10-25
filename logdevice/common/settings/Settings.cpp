@@ -17,10 +17,8 @@
 #include <boost/thread/thread.hpp>
 #include <folly/String.h>
 
-#include "logdevice/common/FileConfigSource.h"
 #include "logdevice/common/Sockaddr.h"
 #include "logdevice/common/commandline_util_chrono.h"
-#include "logdevice/common/configuration/ZookeeperConfigSource.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/Compatibility.h"
 #include "logdevice/common/protocol/MessageTypeNames.h"
@@ -1423,27 +1421,6 @@ void Settings::defineSettings(SettingEasyInit& init) {
        validate_positive<ssize_t>(),
        "maximum time to wait for initial server configuration until giving up",
        SERVER | REQUIRES_RESTART | CLI_ONLY,
-       SettingsCategory::Configuration);
-  init("file-config-update-interval",
-       &file_config_update_interval,
-       (std::to_string(
-            to_msec(FileConfigSource::defaultPollingInterval()).count()) +
-        "ms")
-           .c_str(),
-       validate_positive<ssize_t>(),
-       "interval at which to poll config file for changes (if reading config "
-       "from file on disk",
-       SERVER | CLIENT | CLI_ONLY /* TODO(t13429319): consider changing this*/,
-       SettingsCategory::Configuration);
-  init("zk-config-polling-interval",
-       &zk_config_polling_interval,
-       (std::to_string(
-            to_msec(ZookeeperConfigSource::defaultPollingInterval()).count()) +
-        "ms")
-           .c_str(),
-       validate_positive<ssize_t>(),
-       "polling and retry interval for Zookeeper config source",
-       SERVER | CLIENT | CLI_ONLY /* TODO(t13429319): consider changing this*/,
        SettingsCategory::Configuration);
   init(
       "zk-create-root-znodes",

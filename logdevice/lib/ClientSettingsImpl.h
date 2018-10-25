@@ -7,6 +7,7 @@
  */
 #pragma once
 
+#include "logdevice/common/plugin/PluginRegistry.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/settings/SettingsUpdater.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
@@ -31,11 +32,19 @@ class ClientSettingsImpl : public ClientSettings {
   /**
    * Returns the SettingsUpdater
    */
-  std::shared_ptr<SettingsUpdater> getSettingsUpdater() {
+  std::shared_ptr<SettingsUpdater> getSettingsUpdater() const {
     return settings_updater_;
   }
 
+  /**
+   * Returns the plugin registry if one was created in this instance
+   */
+  std::shared_ptr<PluginRegistry> getPluginRegistry() const {
+    return plugin_registry_;
+  }
+
  private:
+  std::shared_ptr<PluginRegistry> plugin_registry_;
   UpdateableSettings<Settings> settings_;
   std::shared_ptr<SettingsUpdater> settings_updater_;
 };

@@ -28,15 +28,15 @@ int ConfigInit::attach(const std::string& source,
   int rv;
   auto updater = std::make_shared<TextConfigUpdater>(
       updateable_config, std::move(settings), stats_);
-  updater->registerSource(
-      std::make_unique<FileConfigSource>(file_polling_interval_));
-  updater->registerSource(
-      std::make_unique<ZookeeperConfigSource>(zk_polling_interval_));
-  updater->registerSource(std::make_unique<ServerConfigSource>(
-      alternative_logs_config.get(), plugin, plugin_registry));
 
-  // Ask the plugin if it wants to register additional sources
-  plugin->registerConfigSources(*updater, zk_polling_interval_);
+  auto factories = plugin_registry->getMultiPlugin<ConfigSourceFactory>(
+      PluginType::CONFIG_SOURCE_FACTORY);
+  for (const auto& f : factories) {
+    std::vector<std::unique_ptr<ConfigSource>> sources = (*f)();
+    for (auto& src : sources) {
+      updater->registerSource(std::move(src));
+    }
+  }
 
   rv = updater->load(source, std::move(alternative_logs_config), options);
   if (rv != 0) {

@@ -84,20 +84,9 @@ class ConfigInit {
              UpdateableSettings<Settings> updateable_settings =
                  UpdateableSettings<Settings>(),
              const ConfigParserOptions& options = ConfigParserOptions());
-  void setZookeeperPollingInterval(std::chrono::milliseconds interval) {
-    zk_polling_interval_ = interval;
-  }
-
-  void setFilePollingInterval(std::chrono::milliseconds interval) {
-    file_polling_interval_ = interval;
-  }
 
  private:
   std::chrono::milliseconds timeout_;
-  std::chrono::milliseconds file_polling_interval_{
-      FileConfigSource::defaultPollingInterval()};
-  std::chrono::milliseconds zk_polling_interval_{
-      ZookeeperConfigSource::defaultPollingInterval()};
   StatsHolder* stats_;
 };
 

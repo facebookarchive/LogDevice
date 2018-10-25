@@ -8,6 +8,7 @@
 #pragma once
 
 #include "logdevice/common/BuildInfo.h"
+#include "logdevice/common/plugin/BuiltinConfigSourceFactory.h"
 #include "logdevice/common/plugin/Plugin.h"
 
 namespace facebook { namespace logdevice {
@@ -18,7 +19,7 @@ namespace facebook { namespace logdevice {
  */
 template <class... Types>
 PluginVector createAugmentedCommonBuiltinPluginVector() {
-  return createPluginVector<BuildInfo, Types...>();
+  return createPluginVector<BuildInfo, BuiltinConfigSourceFactory, Types...>();
 }
 
 }} // namespace facebook::logdevice

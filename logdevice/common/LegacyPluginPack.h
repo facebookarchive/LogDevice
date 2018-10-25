@@ -61,14 +61,6 @@ class LegacyPluginPack {
     return "default LegacyPluginPack";
   };
 
-  /**
-   * Allows the plugin to register additional ConfigSource instances with the
-   * TextConfigUpdater.  Invoked by the server before fetching its config.
-   */
-  virtual void
-  registerConfigSources(TextConfigUpdater&,
-                        std::chrono::milliseconds /* zk_polling_interval */) {}
-
   virtual std::unique_ptr<SequencerLocator>
   createSequencerLocator(const std::shared_ptr<UpdateableConfig>&);
 

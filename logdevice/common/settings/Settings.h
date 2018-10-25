@@ -652,14 +652,6 @@ struct Settings : public SettingsBundle {
 
   std::chrono::seconds initial_config_load_timeout;
 
-  // How often to poll for config changes when the config is stored in a local
-  // file
-  std::chrono::milliseconds file_config_update_interval;
-
-  // How often to poll for config changes when the config is stored in
-  // ZooKeeper
-  std::chrono::milliseconds zk_config_polling_interval;
-
   // If `true`, logdevice will create the root znodes (all znodes that are
   // parents of znodes for individual logs) if they doesn't exist. If `false`,
   // the root znodes should be created by external tooling.

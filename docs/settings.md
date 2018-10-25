@@ -28,7 +28,7 @@ sidebar_label: Settings
 | client-config-fetch-allowed | If true, servers will be allowed to fetch configs from the client side of a connection during config synchronization. | true | server&nbsp;only |
 | config-path | location of the cluster config file to use. Format: [file:]<path-to-config-file> or configerator:<configerator-path> |  | CLI&nbsp;only, requires&nbsp;restart, server&nbsp;only |
 | enable-logsconfig-manager | If true, logdeviced will load the logs configuration from the internal replicated storage and will ignore the logs section in the config file. This also enables the remote management API for logs config. | true |  |
-| file-config-update-interval | interval at which to poll config file for changes (if reading config from file on disk | 10000ms | CLI&nbsp;only |
+| file-config-update-interval | interval at which to poll config file for changes (if reading config from file on disk | 10000ms |  |
 | initial-config-load-timeout | maximum time to wait for initial server configuration until giving up | 15s | CLI&nbsp;only, requires&nbsp;restart, server&nbsp;only |
 | logsconfig-manager-grace-period | Grace period before making a change to the logs config available to the server. | 0ms |  |
 | logsconfig-max-delta-bytes | How many bytes of deltas to keep in the logsconfig deltas log before we snapshot it. | 10485760 | server&nbsp;only |

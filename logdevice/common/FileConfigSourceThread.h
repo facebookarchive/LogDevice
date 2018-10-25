@@ -16,6 +16,7 @@
 #include <unordered_set>
 
 #include "logdevice/common/debug.h"
+#include "logdevice/common/plugin/BuiltinConfigSourceFactory.h"
 
 namespace facebook { namespace logdevice {
 
@@ -28,8 +29,9 @@ class FileConfigSource;
 
 class FileConfigSourceThread {
  public:
-  FileConfigSourceThread(FileConfigSource* parent,
-                         std::chrono::milliseconds polling_interval);
+  FileConfigSourceThread(
+      FileConfigSource* parent,
+      UpdateableSettings<BuiltinConfigSourceFactory::Settings> settings);
   ~FileConfigSourceThread();
 
   // Tells the thread to wake up and poll the config file as soon as possible.
@@ -61,7 +63,11 @@ class FileConfigSourceThread {
   std::condition_variable mainLoopWaitCondition_;
   std::mutex mainLoopWaitMutex_;
 
-  std::chrono::milliseconds pollingInterval_;
+  std::atomic<std::chrono::milliseconds> pollingInterval_;
+
+  UpdateableSettings<BuiltinConfigSourceFactory::Settings> settings_;
+  UpdateableSettings<BuiltinConfigSourceFactory::Settings>::SubscriptionHandle
+      settings_sub_handle_;
 };
 
 }} // namespace facebook::logdevice

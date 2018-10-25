@@ -17,11 +17,19 @@
 #include "logdevice/common/configuration/ParsingHelpers.h"
 #include "logdevice/common/configuration/TextConfigUpdater.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/settings/util.h"
 
 namespace facebook { namespace logdevice {
 
-FileConfigSource::FileConfigSource(std::chrono::milliseconds polling_interval)
-    : polling_interval_(polling_interval) {}
+FileConfigSource::FileConfigSource(std::chrono::milliseconds polling_interval) {
+  auto s = create_default_settings<BuiltinConfigSourceFactory::Settings>();
+  s.file_config_update_interval = polling_interval;
+  settings_ = UpdateableSettings<BuiltinConfigSourceFactory::Settings>(s);
+}
+
+FileConfigSource::FileConfigSource(
+    UpdateableSettings<BuiltinConfigSourceFactory::Settings> settings)
+    : settings_(settings) {}
 
 FileConfigSource::~FileConfigSource() {
   // The FileConfigSourceThread that accesses this FileConfigSource should be
@@ -81,8 +89,7 @@ void FileConfigSource::checkForUpdates() {
 FileConfigSourceThread* FileConfigSource::thread() {
   folly::call_once(thread_init_flag_, [&]() {
     try {
-      thread_ =
-          std::make_unique<FileConfigSourceThread>(this, polling_interval_);
+      thread_ = std::make_unique<FileConfigSourceThread>(this, settings_);
     } catch (const ConstructorFailed&) {
       // `thread_' remains null, err set by the constructor
     }

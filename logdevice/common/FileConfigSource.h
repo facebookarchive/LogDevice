@@ -17,6 +17,7 @@
 #include <folly/synchronization/CallOnce.h>
 
 #include "logdevice/common/ConfigSource.h"
+#include "logdevice/common/plugin/BuiltinConfigSourceFactory.h"
 
 namespace facebook { namespace logdevice {
 
@@ -25,6 +26,8 @@ class FileConfigSourceThread;
 class FileConfigSource : public ConfigSource {
  public:
   explicit FileConfigSource(std::chrono::milliseconds polling_interval);
+  explicit FileConfigSource(
+      UpdateableSettings<BuiltinConfigSourceFactory::Settings>);
   FileConfigSource()
       : FileConfigSource(FileConfigSource::defaultPollingInterval()) {}
   ~FileConfigSource() override;
@@ -59,8 +62,7 @@ class FileConfigSource : public ConfigSource {
   void checkForUpdates();
 
  private:
-  const std::chrono::milliseconds polling_interval_;
-
+  UpdateableSettings<BuiltinConfigSourceFactory::Settings> settings_;
   // Type of modification timestamp
   using mtime_t = std::chrono::nanoseconds;
   // Thread that periodically checks for updates (lazily initialized)

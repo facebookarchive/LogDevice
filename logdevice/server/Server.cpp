@@ -272,10 +272,6 @@ ServerParameters::ServerParameters(
   {
     ConfigInit config_init(
         processor_settings_->initial_config_load_timeout, getStats());
-    config_init.setFilePollingInterval(
-        processor_settings_->file_config_update_interval);
-    config_init.setZookeeperPollingInterval(
-        processor_settings_->zk_config_polling_interval);
     int rv = config_init.attach(server_settings_->config_path,
                                 plugin,
                                 getPluginRegistry(),

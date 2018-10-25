@@ -136,11 +136,6 @@ std::shared_ptr<Client> Client::create(std::string cluster_name,
           cluster_name.c_str(),
           config_url.c_str());
 
-  auto plugin_registry =
-      std::make_shared<PluginRegistry>(getClientPluginProviders());
-  ld_info(
-      "Plugins loaded: %s", plugin_registry->getStateDescriptionStr().c_str());
-
   // If caller provided a ClientSettings instance, use that, otherwise create
   // one with default settings
   ClientSettings* raw_settings =
@@ -149,7 +144,16 @@ std::shared_ptr<Client> Client::create(std::string cluster_name,
       static_cast<ClientSettingsImpl*>(raw_settings));
 
   auto settings_updater = impl_settings->getSettingsUpdater();
-  plugin_registry->addOptions(settings_updater.get());
+
+  auto plugin_registry = impl_settings->getPluginRegistry();
+  if (!plugin_registry) {
+    plugin_registry =
+        std::make_shared<PluginRegistry>(getClientPluginProviders());
+    plugin_registry->addOptions(settings_updater.get());
+  }
+
+  ld_info(
+      "Plugins loaded: %s", plugin_registry->getStateDescriptionStr().c_str());
 
   std::shared_ptr<LocationProvider> location_plugin =
       plugin_registry->getSinglePlugin<LocationProvider>(
@@ -201,10 +205,6 @@ std::shared_ptr<Client> Client::create(std::string cluster_name,
       impl_settings->getSettings()->alternative_layout_property;
 
   ConfigInit config_init(timeout);
-  config_init.setFilePollingInterval(
-      impl_settings->getSettings()->file_config_update_interval);
-  config_init.setZookeeperPollingInterval(
-      impl_settings->getSettings()->zk_config_polling_interval);
 
   std::shared_ptr<ClientPluginPack> plugin =
       plugin_registry->getSinglePlugin<ClientPluginPack>(

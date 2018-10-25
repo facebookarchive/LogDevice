@@ -37,6 +37,8 @@ PLUGIN_TYPE(TRACE_LOGGER_FACTORY, 5, "TraceLogger factory", false)
 PLUGIN_TYPE(PRINCIPAL_PARSER_FACTORY, 6, "PrincipalParser factory", false)
 // See PermissionCheckerFactory.h
 PLUGIN_TYPE(PERMISSION_CHECKER_FACTORY, 7, "PermissionChecker factory", false)
+// See ConfigSourceFactory.h
+PLUGIN_TYPE(CONFIG_SOURCE_FACTORY, 8, "ConfigSource factory", true)
 
 // TODO: add more plugin types
 

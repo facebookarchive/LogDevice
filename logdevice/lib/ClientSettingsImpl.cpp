@@ -13,6 +13,7 @@
 
 #include "logdevice/common/debug.h"
 #include "logdevice/include/Err.h"
+#include "logdevice/lib/ClientBuiltinPluginProvider.h"
 
 namespace facebook { namespace logdevice {
 
@@ -26,6 +27,10 @@ ClientSettingsImpl::ClientSettingsImpl()
           {{"abort-on-failed-check", folly::kIsDebug ? "true" : "false"}}) {
   settings_updater_ = std::make_shared<SettingsUpdater>();
   settings_updater_->registerSettings(settings_);
+
+  plugin_registry_ =
+      std::make_shared<PluginRegistry>(getClientPluginProviders());
+  plugin_registry_->addOptions(settings_updater_.get());
 }
 
 int ClientSettingsImpl::set(const char* name, const char* value) {

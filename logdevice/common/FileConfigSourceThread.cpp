@@ -21,8 +21,19 @@ namespace facebook { namespace logdevice {
 
 FileConfigSourceThread::FileConfigSourceThread(
     FileConfigSource* parent,
-    std::chrono::milliseconds polling_interval)
-    : parent_(parent), pollingInterval_(polling_interval) {
+    UpdateableSettings<BuiltinConfigSourceFactory::Settings> settings)
+    : parent_(parent), settings_(settings) {
+  pollingInterval_.store(settings_->file_config_update_interval);
+  auto cb = [this]() {
+    if (pollingInterval_.load() != settings_->file_config_update_interval) {
+      pollingInterval_.store(settings_->file_config_update_interval);
+      // Note that changing the setting will cause the updater to re-read the
+      // config right away
+      advisePollingIteration();
+    }
+  };
+  settings_sub_handle_ = settings_.callAndSubscribeToUpdates(std::move(cb));
+
   int rv = pthread_create(&mainLoopThread_,
                           nullptr,
                           FileConfigSourceThread::threadEntryPoint,
@@ -38,6 +49,7 @@ FileConfigSourceThread::FileConfigSourceThread(
 }
 
 FileConfigSourceThread::~FileConfigSourceThread() {
+  settings_sub_handle_.unsubscribe();
   {
     std::lock_guard<std::mutex> lock(mainLoopWaitMutex_);
     mainLoopStop_.store(true);
@@ -61,7 +73,7 @@ void* FileConfigSourceThread::threadEntryPoint(void* arg) {
 void FileConfigSourceThread::mainLoop() {
   while (!mainLoopStop_.load()) {
     std::unique_lock<std::mutex> cv_lock_(mainLoopWaitMutex_);
-    mainLoopWaitCondition_.wait_for(cv_lock_, pollingInterval_);
+    mainLoopWaitCondition_.wait_for(cv_lock_, pollingInterval_.load());
     if (mainLoopStop_.load()) {
       break;
     }

@@ -11,12 +11,15 @@
 #include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/PermissionChecker.h"
 #include "logdevice/common/PrincipalParser.h"
+#include "logdevice/common/Processor.h"
 #include "logdevice/common/SequencerLocator.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
 #include "logdevice/common/configuration/NodesConfigParser.h"
 #include "logdevice/common/configuration/ParsingHelpers.h"
 #include "logdevice/common/configuration/ServerConfig.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/plugin/CommonBuiltinPlugins.h"
+#include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/settings/util.h"
 
 namespace facebook { namespace logdevice {
@@ -34,10 +37,6 @@ Status ServerConfigSource::getConfig(const std::string& path,
     pos = next_delim_pos + 1;
   }
 
-  if (!alternative_logs_config_) {
-    ld_error("ServerConfigSource requires that on-demand-logs-config be set.");
-    return E::INVALID_PARAM;
-  }
   if (!processor_) {
     ld_info("Initializating processor to fetch config");
     init(path, hosts);
@@ -108,16 +107,20 @@ void ServerConfigSource::init(const std::string& path,
   settings.num_workers = 1;
   settings.include_cluster_name_on_handshake = false;
   settings.include_destination_on_handshake = false;
-  updateable_settings_ = UpdateableSettings<Settings>(settings);
+
+  // ServerConfigSource doesn't really need any plugins. Loading BuildInfo since
+  // it's used in socket communication though
+  auto plugin_registry = std::make_shared<PluginRegistry>(
+      createAugmentedCommonBuiltinPluginVector<>());
 
   // Construct a Processor to send the first CONFIG_FETCH message
   processor_ = Processor::create(config_,
                                  trace_logger,
-                                 updateable_settings_,
+                                 UpdateableSettings<Settings>(settings),
                                  /*stats*/ nullptr,
                                  /*sequencer_locator*/ nullptr,
-                                 plugin_,
-                                 plugin_registry_,
+                                 /*plugin*/ nullptr,
+                                 plugin_registry,
                                  /*credentials*/ "",
                                  "ld:cfg-src");
 }
