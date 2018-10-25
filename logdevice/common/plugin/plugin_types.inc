@@ -35,6 +35,8 @@ PLUGIN_TYPE(LOCATION_PROVIDER, 4, "Location provider", false)
 PLUGIN_TYPE(TRACE_LOGGER_FACTORY, 5, "TraceLogger factory", false)
 // See PrincipalParserFactory.h
 PLUGIN_TYPE(PRINCIPAL_PARSER_FACTORY, 6, "PrincipalParser factory", false)
+// See PermissionCheckerFactory.h
+PLUGIN_TYPE(PERMISSION_CHECKER_FACTORY, 7, "PermissionChecker factory", false)
 
 // TODO: add more plugin types
 

@@ -69,13 +69,6 @@ class LegacyPluginPack {
   registerConfigSources(TextConfigUpdater&,
                         std::chrono::milliseconds /* zk_polling_interval */) {}
 
-  virtual std::shared_ptr<PermissionChecker>
-  createPermissionChecker(PermissionCheckerType type,
-                          const std::unordered_set<std::string>& /*domains*/) {
-    ld_check(type == PermissionCheckerType::NONE);
-    return nullptr;
-  }
-
   virtual std::unique_ptr<SequencerLocator>
   createSequencerLocator(const std::shared_ptr<UpdateableConfig>&);
 

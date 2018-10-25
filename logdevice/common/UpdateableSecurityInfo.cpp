@@ -13,6 +13,7 @@
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/plugin/PermissionCheckerFactory.h"
 #include "logdevice/common/plugin/PrincipalParserFactory.h"
 
 namespace facebook { namespace logdevice {
@@ -74,13 +75,14 @@ void UpdateableSecurityInfo::onConfigUpdate() {
   if (permission_checker_type_cur != permission_checker_type_new) {
     ld_info("PermissionChecker is changed");
 
-    auto plugin = processor->getPlugin();
-    std::shared_ptr<PermissionChecker> permission_checker =
-        plugin->createPermissionChecker(
-            permission_checker_type_new,
-            server_config->getSecurityConfig().domains);
-    security_info->permission_checker_.update(
-        std::shared_ptr<PermissionChecker>(permission_checker));
+    auto pc_plugin = plugin_registry->getSinglePlugin<PermissionCheckerFactory>(
+        PluginType::PERMISSION_CHECKER_FACTORY);
+    std::shared_ptr<PermissionChecker> permission_checker = pc_plugin
+        ? (*pc_plugin)(permission_checker_type_new,
+                       server_config->getSecurityConfig().domains)
+        : nullptr;
+
+    security_info->permission_checker_.update(permission_checker);
   }
 
   security_info->dumpSecurityInfo();
