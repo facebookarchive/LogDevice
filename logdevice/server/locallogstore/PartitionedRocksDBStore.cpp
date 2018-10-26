@@ -2940,8 +2940,10 @@ int PartitionedRocksDBStore::writeMultiImpl(
                                wal_batch,
                                mem_batch,
                                /*skip_checksum_verification=*/true);
-  // Remember err to make sure we return the right thing if the above failed
-  const auto rocksdb_writer_err = err;
+  if (rv != 0) {
+    ld_check_in(err, ({E::INTERNAL, E::LOCAL_LOG_STORE_WRITE}));
+    return -1;
+  }
 
   auto flush_token = maxFlushToken();
   auto timestamp_wal_flush_token = maxWALSyncToken();
@@ -3130,10 +3132,10 @@ int PartitionedRocksDBStore::writeMultiImpl(
       }
       auto status = writer_->writeBatch(rocksdb::WriteOptions(), &dirty_batch);
       if (!status.ok()) {
-        // TODO (#34059727): this is not handled property.
-        ld_error("Failed to write partition dirty data for shard %u: %s",
-                 getShardIdx(),
-                 status.ToString().c_str());
+        // Should have entered fail-safe mode. Fail all writes.
+        ld_check_in(acceptingWrites(), ({E::DISABLED, E::NOSPC}));
+        err = E::LOCAL_LOG_STORE_WRITE;
+        return -1;
       } else {
         FlushToken wal_token = maxWALSyncToken();
         for (const auto& op : dirty_ops) {
@@ -3181,11 +3183,7 @@ int PartitionedRocksDBStore::writeMultiImpl(
   ld_spew("------------- Write Batch End: FlushToken %jx --------------",
           static_cast<uintmax_t>(flush_token));
 
-  if (rv != 0) {
-    ld_check_eq(err, rocksdb_writer_err);
-    err = rocksdb_writer_err;
-  }
-  return rv;
+  return 0;
 }
 
 int PartitionedRocksDBStore::writeStoreMetadata(
