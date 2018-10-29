@@ -1,5 +1,5 @@
 var searchData=
 [
-  ['waitonlywhennodata',['waitOnlyWhenNoData',['../classfacebook_1_1logdevice_1_1_reader.html#a7ef97dd78f6f5c5da4200c6cdfd90d63',1,'facebook::logdevice::Reader']]],
-  ['withoutpayload',['withoutPayload',['../classfacebook_1_1logdevice_1_1_async_reader.html#a59b684294bf9b6c97ab26671a5bb3894',1,'facebook::logdevice::AsyncReader::withoutPayload()'],['../classfacebook_1_1logdevice_1_1_reader.html#af1812e18565f35607e5111a053bc6edf',1,'facebook::logdevice::Reader::withoutPayload()']]]
+  ['trim',['trim',['../classfacebook_1_1logdevice_1_1_client.html#a51dbf28a3fc8266e4662a71deb73c21a',1,'facebook::logdevice::Client']]],
+  ['trimsync',['trimSync',['../classfacebook_1_1logdevice_1_1_client.html#a01eb0f0c77e1c55ad2958a05aad4bdc3',1,'facebook::logdevice::Client']]]
 ];

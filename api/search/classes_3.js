@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['reader',['Reader',['../classfacebook_1_1logdevice_1_1_reader.html',1,'facebook::logdevice']]]
+  ['findkeyresult',['FindKeyResult',['../structfacebook_1_1logdevice_1_1_find_key_result.html',1,'facebook::logdevice']]]
 ];

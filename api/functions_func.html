@@ -65,7 +65,8 @@ $(function() {
 : <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#ab2363408b3b4c928cac60845cbe31d05">facebook::logdevice::Client</a>
 </li>
 <li>append()
-: <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#aadaa483f8ea0d2fc39d0eb3c5f65c09a">facebook::logdevice::Client</a>
+: <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer.html#a1a9dc6ecd14efcda214658d73e05c52f">facebook::logdevice::BufferedWriter</a>
+, <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a91988929326118a897b33f0be79cde3b">facebook::logdevice::Client</a>
 </li>
 <li>appendSync()
 : <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a038c93eefa0a8aa337b0c0b10970c7d0">facebook::logdevice::Client</a>
@@ -81,7 +82,9 @@ $(function() {
 : <a class="el" href="classfacebook_1_1logdevice_1_1_config_subscription_handle.html#a14b7d0e00c3e41c226cbc4974f476977">facebook::logdevice::ConfigSubscriptionHandle</a>
 </li>
 <li>create()
-: <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a22c6047d80ec6b513bef7d61883f0bb4">facebook::logdevice::Client</a>
+: <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_write_decoder.html#afe0277293f5907fdf0b728b74e691b25">facebook::logdevice::BufferedWriteDecoder</a>
+, <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer.html#a09c466c0852cd7b8a4c531967aeb8bb1">facebook::logdevice::BufferedWriter</a>
+, <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a22c6047d80ec6b513bef7d61883f0bb4">facebook::logdevice::Client</a>
 , <a class="el" href="classfacebook_1_1logdevice_1_1_client_settings.html#a24c0a7fa56735b0fa2ddd0216527f7b2">facebook::logdevice::ClientSettings</a>
 </li>
 <li>createAsyncReader()
@@ -99,6 +102,12 @@ $(function() {
 </li>
 <li>dataSizeSync()
 : <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a2c058bc9b12472e46ce95d77f32a0b2c">facebook::logdevice::Client</a>
+</li>
+<li>decode()
+: <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_write_decoder.html#afe3d17b824232aa6eb7567e3670442ca">facebook::logdevice::BufferedWriteDecoder</a>
+</li>
+<li>decodeOne()
+: <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_write_decoder.html#a114b36f88e274c8f6af45195098d5903">facebook::logdevice::BufferedWriteDecoder</a>
 </li>
 <li>doNotDecodeBufferedWrites()
 : <a class="el" href="classfacebook_1_1logdevice_1_1_async_reader.html#a8ccc11109a00b0806cc213567f37929c">facebook::logdevice::AsyncReader</a>
@@ -124,6 +133,9 @@ $(function() {
 <li>findTimeSync()
 : <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a2a04ef35610e51a47c3160e3e3b452bf">facebook::logdevice::Client</a>
 </li>
+<li>flushAll()
+: <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer.html#aa3131537024efc32fcb05aaea4a17d41">facebook::logdevice::BufferedWriter</a>
+</li>
 <li>forceNoSingleCopyDelivery()
 : <a class="el" href="classfacebook_1_1logdevice_1_1_async_reader.html#ae12350808c55ead68ad150cd8c6bec59">facebook::logdevice::AsyncReader</a>
 , <a class="el" href="classfacebook_1_1logdevice_1_1_reader.html#a71fcd2eda3b543ab4190d3c6c69c39a6">facebook::logdevice::Reader</a>
@@ -140,6 +152,9 @@ $(function() {
 </li>
 <li>getAllReadStreamsDebugInfo()
 : <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a57471fa5b9d0641343e9a5f07e79da20">facebook::logdevice::Client</a>
+</li>
+<li>getBatchSize()
+: <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_write_decoder.html#a56317ec50f7c9deaf4a27bca50615be1">facebook::logdevice::BufferedWriteDecoder</a>
 </li>
 <li>getBytesBuffered()
 : <a class="el" href="classfacebook_1_1logdevice_1_1_async_reader.html#a515c9bd5aafeb7885ae4514dac88191d">facebook::logdevice::AsyncReader</a>
@@ -253,6 +268,15 @@ $(function() {
 
 
 <h3><a id="index_o"></a>- o -</h3><ul>
+<li>onFailure()
+: <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer_1_1_append_callback.html#a90a9c1969fa4ec73e09dac41ae397d59">facebook::logdevice::BufferedWriter::AppendCallback</a>
+</li>
+<li>onRetry()
+: <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer_1_1_append_callback.html#a1f38b04e0e6f93c7445769b599301fd3">facebook::logdevice::BufferedWriter::AppendCallback</a>
+</li>
+<li>onSuccess()
+: <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer_1_1_append_callback.html#aeacea69c608664c841f92ca97994f1be">facebook::logdevice::BufferedWriter::AppendCallback</a>
+</li>
 <li>operator=()
 : <a class="el" href="classfacebook_1_1logdevice_1_1_config_subscription_handle.html#a90f35b31afc668e2ee0a359ce9dd87b2">facebook::logdevice::ConfigSubscriptionHandle</a>
 </li>
@@ -378,6 +402,9 @@ $(function() {
 
 
 <h3><a id="index_0x7e"></a>- ~ -</h3><ul>
+<li>~BufferedWriter()
+: <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer.html#adf83b1dda804fd101f0ad47c6688f288">facebook::logdevice::BufferedWriter</a>
+</li>
 <li>~Client()
 : <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a7f65fb0d14fe6a210a6001956a31b2a6">facebook::logdevice::Client</a>
 </li>

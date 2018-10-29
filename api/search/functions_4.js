@@ -3,6 +3,7 @@ var searchData=
   ['get',['get',['../classfacebook_1_1logdevice_1_1_client_settings.html#a0e3e08a6e1dc00ff3ea2962cdad57911',1,'facebook::logdevice::ClientSettings']]],
   ['getall',['getAll',['../classfacebook_1_1logdevice_1_1_client_settings.html#a85f7db3bfc9543580db2c5fb29b84ee3',1,'facebook::logdevice::ClientSettings']]],
   ['getallreadstreamsdebuginfo',['getAllReadStreamsDebugInfo',['../classfacebook_1_1logdevice_1_1_client.html#a57471fa5b9d0641343e9a5f07e79da20',1,'facebook::logdevice::Client']]],
+  ['getbatchsize',['getBatchSize',['../classfacebook_1_1logdevice_1_1_buffered_write_decoder.html#a56317ec50f7c9deaf4a27bca50615be1',1,'facebook::logdevice::BufferedWriteDecoder']]],
   ['getbytesbuffered',['getBytesBuffered',['../classfacebook_1_1logdevice_1_1_async_reader.html#a515c9bd5aafeb7885ae4514dac88191d',1,'facebook::logdevice::AsyncReader']]],
   ['getclusterattributes',['getClusterAttributes',['../classfacebook_1_1logdevice_1_1_client.html#aef7b6cbbef31366b14cec7a578e80bb9',1,'facebook::logdevice::Client']]],
   ['getdirectory',['getDirectory',['../classfacebook_1_1logdevice_1_1_client.html#a2c2b8650e686d6165f1d5a7945d63996',1,'facebook::logdevice::Client']]],

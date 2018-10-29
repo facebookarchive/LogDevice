@@ -1,10 +1,9 @@
 var searchData=
 [
-  ['facebook',['facebook',['../namespacefacebook.html',1,'']]],
-  ['findkey',['findKey',['../classfacebook_1_1logdevice_1_1_client.html#a4d954a3bca85a3b41ffd23600463cfcb',1,'facebook::logdevice::Client']]],
-  ['findkeyresult',['FindKeyResult',['../structfacebook_1_1logdevice_1_1_find_key_result.html',1,'facebook::logdevice']]],
-  ['findkeysync',['findKeySync',['../classfacebook_1_1logdevice_1_1_client.html#ab42189ee10063b1917555aa83799c82f',1,'facebook::logdevice::Client']]],
-  ['findtime',['findTime',['../classfacebook_1_1logdevice_1_1_client.html#a1e0c38ddae87c659ff68bbea760f020b',1,'facebook::logdevice::Client']]],
-  ['findtimesync',['findTimeSync',['../classfacebook_1_1logdevice_1_1_client.html#a2a04ef35610e51a47c3160e3e3b452bf',1,'facebook::logdevice::Client']]],
-  ['forcenosinglecopydelivery',['forceNoSingleCopyDelivery',['../classfacebook_1_1logdevice_1_1_async_reader.html#ae12350808c55ead68ad150cd8c6bec59',1,'facebook::logdevice::AsyncReader::forceNoSingleCopyDelivery()'],['../classfacebook_1_1logdevice_1_1_reader.html#a71fcd2eda3b543ab4190d3c6c69c39a6',1,'facebook::logdevice::Reader::forceNoSingleCopyDelivery()']]]
+  ['datasize',['dataSize',['../classfacebook_1_1logdevice_1_1_client.html#af19a0efc76f548b493957873002c1c15',1,'facebook::logdevice::Client']]],
+  ['datasizesync',['dataSizeSync',['../classfacebook_1_1logdevice_1_1_client.html#a2c058bc9b12472e46ce95d77f32a0b2c',1,'facebook::logdevice::Client']]],
+  ['decode',['decode',['../classfacebook_1_1logdevice_1_1_buffered_write_decoder.html#afe3d17b824232aa6eb7567e3670442ca',1,'facebook::logdevice::BufferedWriteDecoder']]],
+  ['decodeone',['decodeOne',['../classfacebook_1_1logdevice_1_1_buffered_write_decoder.html#a114b36f88e274c8f6af45195098d5903',1,'facebook::logdevice::BufferedWriteDecoder']]],
+  ['donotdecodebufferedwrites',['doNotDecodeBufferedWrites',['../classfacebook_1_1logdevice_1_1_async_reader.html#a8ccc11109a00b0806cc213567f37929c',1,'facebook::logdevice::AsyncReader::doNotDecodeBufferedWrites()'],['../classfacebook_1_1logdevice_1_1_reader.html#ab1c42c7d423374e6fd5072d686d6d557',1,'facebook::logdevice::Reader::doNotDecodeBufferedWrites()']]],
+  ['donotskippartiallytrimmedsections',['doNotSkipPartiallyTrimmedSections',['../classfacebook_1_1logdevice_1_1_async_reader.html#ad42800430d4e5c088b81c1c271857a95',1,'facebook::logdevice::AsyncReader::doNotSkipPartiallyTrimmedSections()'],['../classfacebook_1_1logdevice_1_1_reader.html#a02ec782bdf411227da857eec6c88749f',1,'facebook::logdevice::Reader::doNotSkipPartiallyTrimmedSections()']]]
 ];
