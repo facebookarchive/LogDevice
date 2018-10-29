@@ -2935,11 +2935,14 @@ TEST_F(PartitionedRocksDBStoreTest, DropVsTrimRace) {
   trimming_thread.join();
 }
 
-// Drop a CF in rocksdb directly, check that PartitionedRocksDBStore() removes
-// obsolete directory entries.
+// Drop a CF in rocksdb directly, check that PartitionedRocksDBStore() drops
+// preceding partitions and removes obsolete directory entries.
 TEST_F(PartitionedRocksDBStoreTest, InterruptedDrop) {
   put({TestRecord(logid_t(1), 10)});
   put({TestRecord(logid_t(2), 5)});
+  store_->createPartition();
+  put({TestRecord(logid_t(1), 15)});
+  put({TestRecord(logid_t(2), 100)});
   store_->createPartition();
   put({TestRecord(logid_t(1), 20)});
   put({TestRecord(logid_t(2), 300)});
@@ -2950,12 +2953,13 @@ TEST_F(PartitionedRocksDBStoreTest, InterruptedDrop) {
     std::map<std::string, std::unique_ptr<rocksdb::ColumnFamilyHandle>> cfs;
     openDirectly(db, cfs);
 
-    EXPECT_EQ(cfs.size(), 5); // Default, metadata, unpartitioned, 0, 1.
+    EXPECT_EQ(cfs.size(), 6); // Default, metadata, unpartitioned, 0, 1, 2.
     EXPECT_TRUE(cfs.count(toString(ID0)));
     EXPECT_TRUE(cfs.count(toString(ID0 + 1)));
+    EXPECT_TRUE(cfs.count(toString(ID0 + 2)));
     ASSERT_TRUE(cfs.count("metadata"));
 
-    auto status = db->DropColumnFamily(cfs[toString(ID0)].get());
+    auto status = db->DropColumnFamily(cfs[toString(ID0 + 1)].get());
     ASSERT_TRUE(status.ok());
   }
   openStore();

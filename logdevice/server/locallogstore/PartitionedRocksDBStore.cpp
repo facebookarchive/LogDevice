@@ -3355,11 +3355,11 @@ int PartitionedRocksDBStore::dropPartitions(
   }
 
   // If oldest_to_keep_est is an overestimate, release unneeded locks.
-  partition_locks.erase(
-      partition_locks.begin() + (oldest_to_keep - prev_oldest),
-      partition_locks.end());
-  partitions.erase(
-      partitions.begin() + (oldest_to_keep - prev_oldest), partitions.end());
+  while (!partitions.empty() && partitions.back()->id_ >= oldest_to_keep) {
+    partition_locks.pop_back();
+    partitions.pop_back();
+  }
+  ld_check(!partitions.empty());
 
   ld_info("Dropping partitions [%lu, %lu), shard %u",
           prev_oldest,
@@ -3423,8 +3423,8 @@ int PartitionedRocksDBStore::dropPartitions(
 
   cleanUpPartitionMetadataAfterDrop(oldest_to_keep);
 
-  STAT_ADD(stats_, partitions_dropped, oldest_to_keep - prev_oldest);
-  STAT_SUB(stats_, partitions, oldest_to_keep - prev_oldest);
+  STAT_ADD(stats_, partitions_dropped, partitions.size());
+  STAT_SUB(stats_, partitions, partitions.size());
 
   ld_debug("Dropped partitions [%lu, %lu)", prev_oldest, oldest_to_keep);
 
