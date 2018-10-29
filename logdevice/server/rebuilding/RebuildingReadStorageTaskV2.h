@@ -24,6 +24,9 @@ class RebuildingReadStorageTaskV2 : public StorageTask {
  public:
   struct Context {
     struct LogState {
+      LogState() = default;
+      explicit LogState(RebuildingPlan p) : plan(std::move(p)) {}
+
       RebuildingPlan plan;
 
       lsn_t lastSeenLSN = LSN_INVALID;

@@ -43,6 +43,7 @@ struct RebuildingSettings : public SettingsBundle {
   size_t max_batch_bytes;
   std::chrono::milliseconds max_batch_time;
   size_t max_records_in_flight;
+  size_t max_record_bytes_in_flight;
   size_t max_amends_in_flight;
   size_t max_logs_in_flight;
   bool use_rocksdb_cache;
@@ -65,6 +66,7 @@ struct RebuildingSettings : public SettingsBundle {
   ssize_t max_rebuilding_trigger_queue_size;
   bool allow_conditional_rebuilding_restarts;
   bool test_stall_rebuilding;
+  bool enable_v2;
   std::chrono::milliseconds rebuilding_restarts_grace_period;
   std::chrono::seconds record_durability_timeout;
   std::chrono::milliseconds auto_mark_unrecoverable_timeout;

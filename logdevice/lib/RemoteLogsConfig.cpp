@@ -62,7 +62,7 @@ int RemoteLogsConfig::postRequest(LOGS_CONFIG_API_Header::Type request_type,
     if (target_node_info_->worker_id_.val_ == -1) {
       // select random worker
       target_node_info_->worker_id_ = processor->selectWorkerRandomly(
-          request_id_t(folly::Random::rand64()), WorkerType::GENERAL);
+          folly::Random::rand64(), WorkerType::GENERAL);
     }
     worker_id = target_node_info_->worker_id_;
   }

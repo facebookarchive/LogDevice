@@ -204,13 +204,13 @@ class ShardRebuildingInterface {
 
   virtual ~ShardRebuildingInterface() = default;
 
-  // Must be called exactly once, right after constructor. Starts the
-  // re-replication work.
+  // Must be called exactly once. Starts the re-replication work.
   virtual void
   start(std::unordered_map<logid_t, std::unique_ptr<RebuildingPlan>> plan) = 0;
 
   // Notification that other donors made enough progress to allow us to advance
   // the global window to the given point.
+  // Can be called before start().
   virtual void advanceGlobalWindow(RecordTimestamp new_window_end) = 0;
 
   virtual void noteConfigurationChanged() = 0;

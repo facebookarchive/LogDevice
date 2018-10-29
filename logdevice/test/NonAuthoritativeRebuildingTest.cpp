@@ -63,7 +63,9 @@ const logid_t LOG_ID(1);
 // around 25s to execute so giving them a longer timeout.
 const std::chrono::seconds TEST_TIMEOUT(DEFAULT_TEST_TIMEOUT * 2);
 
-class NonAuthoritativeRebuildingTest : public IntegrationTestBase {
+class NonAuthoritativeRebuildingTest
+    : public IntegrationTestBase,
+      public ::testing::WithParamInterface<bool /* rebuilding-v2 */> {
  public:
   NonAuthoritativeRebuildingTest() : IntegrationTestBase(TEST_TIMEOUT) {}
   ~NonAuthoritativeRebuildingTest() override {}
@@ -116,6 +118,7 @@ class NonAuthoritativeRebuildingTest : public IntegrationTestBase {
             .setParam("--disabled-retry-interval", "0s")
             .setParam("--seq-state-backoff-time", "10ms..1s")
             .setParam("--sticky-copysets-block-max-time", "1ms")
+            .setParam("--rebuilding-v2", GetParam() ? "true" : "false")
             .setNumDBShards(1)
             .setNumRacks(3)
             .useHashBasedSequencerAssignment()
@@ -226,7 +229,7 @@ class NonAuthoritativeRebuildingTest : public IntegrationTestBase {
  * even if rebuilding completes. When the rack comes back, rebuilding is
  * restarted non authoritatively and readers are unstalled.
  */
-TEST_F(NonAuthoritativeRebuildingTest,
+TEST_P(NonAuthoritativeRebuildingTest,
        RackPlusAnotherShardFailButWooHooTheRackComesBack) {
   // Create a reader and writer thread to read/write during the whole test.
   auto reader_thread =
@@ -326,7 +329,7 @@ TEST_F(NonAuthoritativeRebuildingTest,
 // we lose all the data (ie a SHARD_UNRECOVERABLE is written for every single
 // shard). The readers should unstall once the non authoritative rebuilding
 // completes even though this means they see DATALOSS.
-TEST_F(NonAuthoritativeRebuildingTest, LoseRackPlusAnotherShard) {
+TEST_P(NonAuthoritativeRebuildingTest, LoseRackPlusAnotherShard) {
   // Create a reader and writer thread to read/write during the whole test.
   auto reader_thread =
       std::make_unique<ReaderThread>(cluster_->createClient(), LOG_ID);
@@ -456,7 +459,7 @@ TEST_F(NonAuthoritativeRebuildingTest, LoseRackPlusAnotherShard) {
 // In the following test, we enable auto mark unrecoverable when in
 // non-authoritative state for more than 1s. We then lose an entire rack, and
 // wait for shards to enter in AUTHORITATIVE_EMPTY state after ~1s.
-TEST_F(NonAuthoritativeRebuildingTest, LoseRackAutoMarkUnrecoverable) {
+TEST_P(NonAuthoritativeRebuildingTest, LoseRackAutoMarkUnrecoverable) {
   // Create a reader and writer thread to read/write during the whole test.
   auto reader_thread =
       std::make_unique<ReaderThread>(cluster_->createClient(), LOG_ID);
@@ -511,7 +514,7 @@ TEST_F(NonAuthoritativeRebuildingTest, LoseRackAutoMarkUnrecoverable) {
 // STARTED(FAILED) so it can take it into account in f-majority for gap
 // detection.
 #ifndef NDEBUG // Both tests require fault injection.
-TEST_F(NonAuthoritativeRebuildingTest, LoseRackPlusAnotherShardAndReadIOError) {
+TEST_P(NonAuthoritativeRebuildingTest, LoseRackPlusAnotherShardAndReadIOError) {
   // Create a reader and writer thread to read/write during the whole test.
   auto reader_thread =
       std::make_unique<ReaderThread>(cluster_->createClient(), LOG_ID);
@@ -653,7 +656,7 @@ TEST_F(NonAuthoritativeRebuildingTest, LoseRackPlusAnotherShardAndReadIOError) {
 // A fix was implemented to mark the log in permanent error and fail
 // immediately when a client tries to initiate a read stream. so step 3 is
 // removed from that sequence.
-TEST_F(NonAuthoritativeRebuildingTest,
+TEST_P(NonAuthoritativeRebuildingTest,
        ReadIOErrorAndAuthEmptyStatusRewindLoop) {
   // Create a writer to append data to the log
   auto append_thread =
@@ -710,7 +713,7 @@ TEST_F(NonAuthoritativeRebuildingTest,
 // Rebuild a shard in N11 authoritatively. After the rebuilding completed,
 // rebuild a rack. Verify that although N11 is in the rebuilding set and did not
 // ack, we consider the rebuilding authoritative.
-TEST_F(NonAuthoritativeRebuildingTest, RebuildRackAfterCompletedRebuildShard) {
+TEST_P(NonAuthoritativeRebuildingTest, RebuildRackAfterCompletedRebuildShard) {
   // Create a reader and writer thread to read/write during the whole test.
   auto reader_thread =
       std::make_unique<ReaderThread>(cluster_->createClient(), LOG_ID);
@@ -802,7 +805,7 @@ TEST_F(NonAuthoritativeRebuildingTest, RebuildRackAfterCompletedRebuildShard) {
 // AUTHORITATIVE_EMPTY keep that status. We also restart one of the nodes that
 // was part of the non authoritative rebuilding set and verify that this causes
 // rebuilding to be started authoritatively.
-TEST_F(NonAuthoritativeRebuildingTest, Mix1) {
+TEST_P(NonAuthoritativeRebuildingTest, Mix1) {
   auto client = cluster_->createClient();
 
   // Kill N11
@@ -854,7 +857,7 @@ TEST_F(NonAuthoritativeRebuildingTest, Mix1) {
       client, ShardID(7, 0), AuthoritativeStatus::FULLY_AUTHORITATIVE, true);
 }
 
-TEST_F(NonAuthoritativeRebuildingTest, Mix2) {
+TEST_P(NonAuthoritativeRebuildingTest, Mix2) {
   auto client = cluster_->createClient();
 
   // Kill N11
@@ -953,7 +956,7 @@ TEST_F(NonAuthoritativeRebuildingTest, Mix2) {
       true);
 }
 
-TEST_F(NonAuthoritativeRebuildingTest, Mix3) {
+TEST_P(NonAuthoritativeRebuildingTest, Mix3) {
   auto client = cluster_->createClient();
 
   // Kill N11
@@ -1051,7 +1054,7 @@ TEST_F(NonAuthoritativeRebuildingTest, Mix3) {
       true);
 }
 
-TEST_F(NonAuthoritativeRebuildingTest, Mix4) {
+TEST_P(NonAuthoritativeRebuildingTest, Mix4) {
   auto client = cluster_->createClient();
 
   // Kill N9, N8, N7
@@ -1131,7 +1134,7 @@ TEST_F(NonAuthoritativeRebuildingTest, Mix4) {
 // authoritatively. Because the node is drained in RELOCATE mode, it should not
 // prevent the drain from completing (ie its authoritative status to become
 // AUTHORITATIVE_EMPTY).
-TEST_F(NonAuthoritativeRebuildingTest,
+TEST_P(NonAuthoritativeRebuildingTest,
        RackDrainDuringNonAuthoritativeRebuilding) {
   auto client = cluster_->createClient();
 
@@ -1163,3 +1166,7 @@ TEST_F(NonAuthoritativeRebuildingTest,
   waitUntilShardHasEventLogState(
       client, drained, AuthoritativeStatus::AUTHORITATIVE_EMPTY, true);
 }
+
+INSTANTIATE_TEST_CASE_P(P,
+                        NonAuthoritativeRebuildingTest,
+                        ::testing::Values(false, true));

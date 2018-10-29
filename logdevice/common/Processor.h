@@ -515,11 +515,10 @@ class Processor : public folly::enable_shared_from_this<Processor> {
   }
 
   /**
-   * Selects a worker to process a Request with the given ID when the Request
-   * owner does not care.  Round-robin.
-   *
+   * Selects a worker based on hash of the given `seed` value.
+   * Seed can be e.g. request ID or a random number.
    */
-  worker_id_t selectWorkerRandomly(request_id_t rqid, WorkerType type);
+  worker_id_t selectWorkerRandomly(uint64_t seed, WorkerType type);
 
   /**
    * Selects a worker to process a Request when the Request owner does not

@@ -21,6 +21,7 @@
 #include "logdevice/server/locallogstore/LocalLogStore.h"
 #include "logdevice/server/read_path/AllServerReadStreams.h"
 #include "logdevice/server/rebuilding/ShardRebuildingV1.h"
+#include "logdevice/server/rebuilding/ShardRebuildingV2.h"
 #include "logdevice/server/storage_tasks/PerWorkerStorageTaskQueue.h"
 #include "logdevice/server/storage_tasks/ReadStorageTask.h"
 #include "logdevice/server/storage_tasks/ShardedStorageThreadPool.h"
@@ -803,14 +804,24 @@ RebuildingCoordinator::createShardRebuilding(
     lsn_t restart_version,
     std::shared_ptr<const RebuildingSet> rebuilding_set,
     UpdateableSettings<RebuildingSettings> rebuilding_settings) {
-  return std::make_unique<ShardRebuildingV1>(shard,
-                                             version,
-                                             restart_version,
-                                             rebuilding_set,
-                                             shardedStore_->getByIndex(shard),
-                                             rebuilding_settings,
-                                             config_,
-                                             this);
+  if (rebuilding_settings->enable_v2) {
+    return std::make_unique<ShardRebuildingV2>(shard,
+                                               version,
+                                               restart_version,
+                                               rebuilding_set,
+                                               rebuilding_settings,
+                                               config_,
+                                               this);
+  } else {
+    return std::make_unique<ShardRebuildingV1>(shard,
+                                               version,
+                                               restart_version,
+                                               rebuilding_set,
+                                               shardedStore_->getByIndex(shard),
+                                               rebuilding_settings,
+                                               config_,
+                                               this);
+  }
 }
 
 void RebuildingCoordinator::abortShardRebuilding(uint32_t shard_idx) {
@@ -1449,6 +1460,11 @@ void RebuildingCoordinator::notifyShardDonorProgress(uint32_t shard,
     // is enabled while a rebuilding is running.
     return;
   }
+
+  // TODO (#T24665001): Only write an event if next_ts moved sufficiently far
+  // forward, and add "IfNeeded" to this method's name. In particular, don't
+  // write if next_ts moved back, which is possible with rebuilding v2.
+
   auto event = std::make_unique<SHARD_DONOR_PROGRESS_Event>(
       myNodeId_, shard, next_ts.toMilliseconds().count(), version);
   writer_->writeEvent(std::move(event));

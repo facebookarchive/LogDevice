@@ -34,6 +34,13 @@ using IntegrationTestUtils::waitUntilShardsHaveEventLogState;
 
 namespace fs = boost::filesystem;
 
+enum class Mode {
+  V1_WITH_WAL,
+  V1_WITHOUT_WAL,
+  V2_WITH_WAL,
+  // V2 doesn't support disabling wal.
+};
+
 const logid_t LOG_ID(1);
 const int NUM_DB_SHARDS = 3;
 
@@ -45,37 +52,6 @@ static Configuration::Log logConfig(int replication) {
   log_config.syncedCopies = 0;
   log_config.maxWritesInFlight = 300;
   return log_config;
-}
-
-static void commonSetup(IntegrationTestUtils::ClusterFactory& cluster) {
-  // TODO enableMessageErrorInjection() once CatchupQueue properly
-  //      handles streams waiting for log recoveries that have timed out.
-  cluster
-      // there is a known issue where purging deletes records that gets surfaced
-      // in tests with sequencer-written metadata. See t13850978
-      .doPreProvisionEpochMetaData()
-      .doNotLetSequencersProvisionEpochMetaData()
-      .setRocksDBType(IntegrationTestUtils::RocksDBType::PARTITIONED)
-      .setParam("--file-config-update-interval", "10ms")
-      .setParam("--disable-rebuilding", "false")
-      // A rebuilding node responds to STOREs with E::DISABLED. Setting this to
-      // 0s makes it so that the sequencer does not wait for a while before
-      // trying to store to that node again, otherwise the test would timeout.
-      .setParam("--disabled-retry-interval", "0s")
-      .setParam("--seq-state-backoff-time", "10ms..1s")
-      .setParam("--rocksdb-partition-data-age-flush-trigger", "1s")
-      .setParam("--rocksdb-partition-idle-flush-trigger", "100ms")
-      .setParam("--rocksdb-min-manual-flush-interval", "200ms")
-      .setParam("--rocksdb-partition-hi-pri-check-period", "50ms")
-      .setParam("--rebuilding-store-timeout", "6s..10s")
-      // When rebuilding Without WAL, destruction of memtable is used as proxy
-      // for memtable being flushed to stable storage. Iterators can pin a
-      // memtable preventing its destruction. Low ttl in tests ensures iterators
-      // are invalidated and memtable flush notifications are not delayed
-      .setParam("--iterator-cache-ttl", "1s")
-      .setParam("--rocksdb-partitioned", "true")
-      .setNumDBShards(NUM_DB_SHARDS)
-      .useDefaultTrafficShapingConfig(false);
 }
 
 void writeRecords(Client& client,
@@ -209,11 +185,51 @@ static fs::path path_for_node_shard(IntegrationTestUtils::Cluster& cluster,
   return out[shard_index];
 }
 
-class RebuildingTest
-    : public IntegrationTestBase,
-      public ::testing::WithParamInterface<bool /*rebuild-store-durability*/> {
+class RebuildingTest : public IntegrationTestBase,
+                       public ::testing::WithParamInterface<Mode> {
  protected:
   enum class NodeFailureMode { REPLACE, KILL };
+
+  std::function<void(IntegrationTestUtils::ClusterFactory& cluster)>
+  commonSetup() {
+    // TODO enableMessageErrorInjection() once CatchupQueue properly
+    //      handles streams waiting for log recoveries that have timed out.
+    return [this](IntegrationTestUtils::ClusterFactory& cluster) {
+      cluster
+          // there is a known issue where purging deletes records that gets
+          // surfaced in tests with sequencer-written metadata. See t13850978
+          .doPreProvisionEpochMetaData()
+          .doNotLetSequencersProvisionEpochMetaData()
+          .setRocksDBType(IntegrationTestUtils::RocksDBType::PARTITIONED)
+          .setParam("--file-config-update-interval", "10ms")
+          .setParam("--disable-rebuilding", "false")
+          // A rebuilding node responds to STOREs with E::DISABLED. Setting this
+          // to 0s makes it so that the sequencer does not wait for a while
+          // before trying to store to that node again, otherwise the test would
+          // timeout.
+          .setParam("--disabled-retry-interval", "0s")
+          .setParam("--seq-state-backoff-time", "10ms..1s")
+          .setParam("--rocksdb-partition-data-age-flush-trigger", "1s")
+          .setParam("--rocksdb-partition-idle-flush-trigger", "100ms")
+          .setParam("--rocksdb-min-manual-flush-interval", "200ms")
+          .setParam("--rocksdb-partition-hi-pri-check-period", "50ms")
+          .setParam("--rebuilding-store-timeout", "6s..10s")
+          .setParam(
+              "--rebuild-store-durability",
+              GetParam() == Mode::V1_WITHOUT_WAL ? "memory" : "async_write")
+          .setParam("--rebuilding-v2",
+                    GetParam() == Mode::V2_WITH_WAL ? "true" : "false")
+          // When rebuilding Without WAL, destruction of memtable is used as
+          // proxy for memtable being flushed to stable storage. Iterators can
+          // pin a memtable preventing its destruction. Low ttl in tests ensures
+          // iterators are invalidated and memtable flush notifications are not
+          // delayed
+          .setParam("--iterator-cache-ttl", "1s")
+          .setParam("--rocksdb-partitioned", "true")
+          .setNumDBShards(NUM_DB_SHARDS)
+          .useDefaultTrafficShapingConfig(false);
+    };
+  }
 
   /**
    * Create a cluster factory to be used in rolling rebuilding tests.
@@ -240,14 +256,12 @@ class RebuildingTest
     event_log.rangeName = "event-log";
 
     return IntegrationTestUtils::ClusterFactory()
-        .apply(commonSetup)
+        .apply(commonSetup())
         .setLogConfig(log_config)
         .setEventLogConfig(event_log)
         .setParam("--disable-event-log-trimming", trim ? "false" : "true")
         .setParam("--byte-offsets")
         .setParam("--event-log-max-delta-records", "5")
-        .setParam(
-            "--rebuild-store-durability", GetParam() ? "async_write" : "memory")
         .setParam(
             "--message-tracing-types", "RECORD,APPEND,APPENDED,STORE,STORED")
         .setNumLogs(1)
@@ -496,11 +510,9 @@ TEST_P(RebuildingTest, OnlineDiskRepair) {
   event_log.maxWritesInFlight = 30;
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .apply(commonSetup)
+                     .apply(commonSetup())
                      .setLogConfig(log_config)
                      .setEventLogConfig(event_log)
-                     .setParam("--rebuild-store-durability",
-                               GetParam() ? "async_write" : "memory")
                      .setNumDBShards(3)
                      .setNumLogs(1)
                      .create(5);
@@ -605,14 +617,11 @@ TEST_P(RebuildingTest, AllNodesRebuildingSameShard) {
   event_log.syncedCopies = 0;
   event_log.maxWritesInFlight = 30;
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .apply(commonSetup)
+                     .apply(commonSetup())
                      .setLogConfig(log_config)
-                     .setParam("--rebuild-store-durability",
-                               GetParam() ? "async_write" : "memory")
                      .setEventLogConfig(event_log)
                      .setNumLogs(42)
                      .create(5);
-
   cluster->waitForRecovery();
 
   // Restart all nodes with an empty disk for shard 1.
@@ -652,11 +661,9 @@ TEST_P(RebuildingTest, RebuildingWithNoAmends) {
   meta_config.sequencers_write_metadata_logs = false;
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .apply(commonSetup)
+                     .apply(commonSetup())
                      .setLogConfig(logConfig(3))
                      .setEventLogConfig(logConfig(5))
-                     .setParam("--rebuild-store-durability",
-                               GetParam() ? "async_write" : "memory")
                      .setMetaDataLogsConfig(meta_config)
                      // read quickly when nodes are down
                      .setParam("--gap-grace-period", "10ms")
@@ -731,11 +738,9 @@ TEST_P(RebuildingTest, RecoveryWhenManyNodesAreRebuilding) {
   meta_config.sequencers_write_metadata_logs = false;
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .apply(commonSetup)
+                     .apply(commonSetup())
                      .setLogConfig(logConfig(3))
                      .setEventLogConfig(logConfig(5))
-                     .setParam("--rebuild-store-durability",
-                               GetParam() ? "async_write" : "memory")
                      .setMetaDataLogsConfig(meta_config)
                      // read quickly when nodes are down
                      .setParam("--gap-grace-period", "10ms")
@@ -855,10 +860,8 @@ TEST_P(RebuildingTest, ClusterExpandedWhileRebuilding) {
   event_log.maxWritesInFlight = 30;
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .apply(commonSetup)
+                     .apply(commonSetup())
                      .setLogConfig(log_config)
-                     .setParam("--rebuild-store-durability",
-                               GetParam() ? "async_write" : "memory")
                      .setEventLogConfig(event_log)
                      .setNumLogs(1)
                      .create(6);
@@ -937,10 +940,8 @@ TEST_P(RebuildingTest, ClusterExpandedWhileRebuilding2) {
   event_log.syncedCopies = 0;
   event_log.maxWritesInFlight = 30;
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .apply(commonSetup)
+                     .apply(commonSetup())
                      .setLogConfig(log_config)
-                     .setParam("--rebuild-store-durability",
-                               GetParam() ? "async_write" : "memory")
                      .setEventLogConfig(event_log)
                      .setNumLogs(1)
                      .create(6);
@@ -1014,10 +1015,8 @@ TEST_P(RebuildingTest, DonorNodeRemovedFromConfigDuringRestoreRebuilding) {
   meta_config.sequencers_provision_epoch_store = false;
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .apply(commonSetup)
+                     .apply(commonSetup())
                      .setLogConfig(log_config)
-                     .setParam("--rebuild-store-durability",
-                               GetParam() ? "async_write" : "memory")
                      .setEventLogConfig(event_log)
                      .setNumLogs(1)
                      .setMetaDataLogsConfig(meta_config)
@@ -1076,11 +1075,9 @@ TEST_P(RebuildingTest, NodeComesBackAfterRebuildingIsComplete) {
   meta_config.sequencers_provision_epoch_store = false;
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .apply(commonSetup)
+                     .apply(commonSetup())
                      .setLogConfig(log_config)
                      .setEventLogConfig(event_log)
-                     .setParam("--rebuild-store-durability",
-                               GetParam() ? "async_write" : "memory")
                      .setParam("--disable-event-log-trimming", "true")
                      .setNumLogs(1)
                      .setMetaDataLogsConfig(meta_config)
@@ -1104,7 +1101,7 @@ TEST_P(RebuildingTest, NodeComesBackAfterRebuildingIsComplete) {
   cluster->getNode(3).waitUntilAllShardsFullyAuthoritative(client);
 }
 
-TEST_F(RebuildingTest, ShardAckFromNodeAlreadyRebuilt) {
+TEST_P(RebuildingTest, ShardAckFromNodeAlreadyRebuilt) {
   Configuration::Log log_config;
   log_config.replicationFactor = 3;
   log_config.rangeName = "alog";
@@ -1120,7 +1117,7 @@ TEST_F(RebuildingTest, ShardAckFromNodeAlreadyRebuilt) {
   meta_config.sequencers_provision_epoch_store = false;
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .apply(commonSetup)
+                     .apply(commonSetup())
                      .setLogConfig(log_config)
                      .setEventLogConfig(log_config)
                      .setNumLogs(1)
@@ -1194,11 +1191,9 @@ TEST_P(RebuildingTest, NodeDrain) {
   meta_config.sequencers_provision_epoch_store = false;
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .apply(commonSetup)
+                     .apply(commonSetup())
                      .setLogConfig(log_config)
                      .setEventLogConfig(log_config)
-                     .setParam("--rebuild-store-durability",
-                               GetParam() ? "async_write" : "memory")
                      .setNumLogs(1)
                      .setMetaDataLogsConfig(meta_config)
                      .create(6);
@@ -1227,7 +1222,7 @@ TEST_P(RebuildingTest, NodeDrain) {
 }
 
 // Verify that writing SHARD_UNDRAIN to the event log cancels any ongoing drain.
-TEST_F(RebuildingTest, NodeDrainCanceled) {
+TEST_P(RebuildingTest, NodeDrainCanceled) {
   Configuration::Log log_config;
   log_config.replicationFactor = 3;
   log_config.rangeName = "alog";
@@ -1243,7 +1238,7 @@ TEST_F(RebuildingTest, NodeDrainCanceled) {
   meta_config.sequencers_provision_epoch_store = false;
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .apply(commonSetup)
+                     .apply(commonSetup())
                      .setLogConfig(log_config)
                      .setEventLogConfig(log_config)
                      .setNumLogs(1)
@@ -1307,11 +1302,9 @@ TEST_P(RebuildingTest, NodeDiesAfterDrain) {
   meta_config.sequencers_provision_epoch_store = false;
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .apply(commonSetup)
+                     .apply(commonSetup())
                      .setLogConfig(log_config)
                      .setEventLogConfig(log_config)
-                     .setParam("--rebuild-store-durability",
-                               GetParam() ? "async_write" : "memory")
                      .setNumLogs(1)
                      .setMetaDataLogsConfig(meta_config)
                      .create(6);
@@ -1365,11 +1358,9 @@ TEST_P(RebuildingTest, NodeRebuildingInRelocateModeRemovedFromConfig) {
   meta_config.sequencers_provision_epoch_store = false;
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .apply(commonSetup)
+                     .apply(commonSetup())
                      .setLogConfig(log_config)
                      .setEventLogConfig(log_config)
-                     .setParam("--rebuild-store-durability",
-                               GetParam() ? "async_write" : "memory")
                      .setNumLogs(1)
                      .setMetaDataLogsConfig(meta_config)
                      .create(6);
@@ -1445,10 +1436,8 @@ TEST_P(RebuildingTest, RebuildingNodeRemovedFromConfig) {
   meta_config.sequencers_provision_epoch_store = false;
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .apply(commonSetup)
+                     .apply(commonSetup())
                      .setLogConfig(log_config)
-                     .setParam("--rebuild-store-durability",
-                               GetParam() ? "async_write" : "memory")
                      .setEventLogConfig(event_log)
                      .setNumLogs(1)
                      .setMetaDataLogsConfig(meta_config)
@@ -1500,10 +1489,8 @@ TEST_P(RebuildingTest, RebuildingNodeRemovedFromConfigButNotAlone) {
   meta_config.sequencers_provision_epoch_store = false;
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .apply(commonSetup)
+                     .apply(commonSetup())
                      .setLogConfig(log_config)
-                     .setParam("--rebuild-store-durability",
-                               GetParam() ? "async_write" : "memory")
                      .setEventLogConfig(event_log)
                      .setNumLogs(1)
                      .setMetaDataLogsConfig(meta_config)
@@ -1564,9 +1551,7 @@ TEST_P(RebuildingTest, FMajorityInRebuildingSet) {
   event_log.backlogDuration.clear();
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .apply(commonSetup)
-                     .setParam("--rebuild-store-durability",
-                               GetParam() ? "async_write" : "memory")
+                     .apply(commonSetup())
                      .setLogConfig(log_config)
                      .setEventLogConfig(event_log)
                      .setNumLogs(42)
@@ -1639,9 +1624,7 @@ TEST_P(RebuildingTest, LocalWindow) {
   event_log_config.maxWritesInFlight = 30;
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .apply(commonSetup)
-                     .setParam("--rebuild-store-durability",
-                               GetParam() ? "async_write" : "memory")
+                     .apply(commonSetup())
                      .setLogConfig(log_config)
                      .setEventLogConfig(event_log_config)
                      .setNumLogs(42)
@@ -1701,9 +1684,7 @@ TEST_P(RebuildingTest, LocalAndGlobalWindow) {
   event_log_config.maxWritesInFlight = 30;
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .apply(commonSetup)
-                     .setParam("--rebuild-store-durability",
-                               GetParam() ? "async_write" : "memory")
+                     .apply(commonSetup())
                      .setLogConfig(log_config)
                      .setEventLogConfig(event_log_config)
                      .setParam("--rebuilding-local-window", "5ms")
@@ -1811,7 +1792,7 @@ TEST_P(RebuildingTest, MiniRebuildingIsAuthoritative) {
   std::iota(node_set.begin(), node_set.end(), 0);
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
-          .apply(commonSetup)
+          .apply(commonSetup())
           .setLogConfig(log_config)
           .setEventLogConfig(event_log)
           .setParam("--append-store-durability", "memory")
@@ -1872,7 +1853,7 @@ TEST_P(RebuildingTest, MiniRebuildingIsAuthoritative) {
 
 // We shouldn't have to explicitly mark dirty-nodes unrecoverable
 // when they cause other shards to be rebuilt non-authoritatively.
-TEST_F(RebuildingTest, MiniRebuildingAlwaysNonRecoverable) {
+TEST_P(RebuildingTest, MiniRebuildingAlwaysNonRecoverable) {
   // Higher replication factor for event log and metadata logs.
   Configuration::MetaDataLogsConfig meta_config = createMetaDataLogsConfig(
       /*nodeset=*/{1, 2, 3, 4, 5, 6, 7, 8},
@@ -1883,7 +1864,7 @@ TEST_F(RebuildingTest, MiniRebuildingAlwaysNonRecoverable) {
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
-          .apply(commonSetup)
+          .apply(commonSetup())
           .setLogConfig(logConfig(3))
           .setEventLogConfig(logConfig(5))
           .setParam("--rebuild-store-durability", "async_write")
@@ -2043,7 +2024,7 @@ TEST_F(RebuildingTest, MiniRebuildingAlwaysNonRecoverable) {
   });
 }
 
-TEST_F(RebuildingTest, RebuildingWithDifferentDurabilities) {
+TEST_P(RebuildingTest, RebuildingWithDifferentDurabilities) {
   Configuration::Log log_config;
   log_config.replicationFactor = 4;
   log_config.extraCopies = 0;
@@ -2060,7 +2041,7 @@ TEST_F(RebuildingTest, RebuildingWithDifferentDurabilities) {
   event_log_config.maxWritesInFlight = 30;
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .apply(commonSetup)
+                     .apply(commonSetup())
                      .setParam("--rebuild-store-durability", "async_write")
                      .setLogConfig(log_config)
                      .setEventLogConfig(event_log_config)
@@ -2189,7 +2170,7 @@ TEST_P(RebuildingTest, RebuildMetaDataLogsOfDeletedLogs) {
 // Create under-replicated regions of the log store on a node and
 // verify that a reader can successfully read without seeing
 // spurious dataloss gaps.
-TEST_F(RebuildingTest, UnderReplicatedRegions) {
+TEST_P(RebuildingTest, UnderReplicatedRegions) {
   Configuration::Log log_config;
   log_config.replicationFactor = 3;
   log_config.rangeName = "my-test-log";
@@ -2208,7 +2189,7 @@ TEST_F(RebuildingTest, UnderReplicatedRegions) {
   std::iota(node_set.begin(), node_set.end(), 0);
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
-          .apply(commonSetup)
+          .apply(commonSetup())
           .setLogConfig(log_config)
           .setEventLogConfig(event_log)
           .setParam("--append-store-durability", "memory")
@@ -2315,7 +2296,7 @@ TEST_P(RebuildingTest, SkipEverything) {
 
   ld_info("Creating cluster");
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .apply(commonSetup)
+                     .apply(commonSetup())
                      .setLogConfig(log_config)
                      .setEventLogConfig(event_log)
                      .setMetaDataLogsConfig(meta_config)
@@ -2370,7 +2351,7 @@ TEST_P(RebuildingTest, DerivedStats) {
   ld_info("Creating cluster");
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
-          .apply(commonSetup)
+          .apply(commonSetup())
           .setNumDBShards(1)
           .useHashBasedSequencerAssignment()
           .setInternalLogsReplicationFactor(3)
@@ -2484,7 +2465,7 @@ TEST_P(RebuildingTest, DerivedStats) {
 TEST_P(RebuildingTest, ReplicationCheckerDuringRebuilding) {
   ld_info("Creating cluster");
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .apply(commonSetup)
+                     .apply(commonSetup())
                      .setNumDBShards(1)
                      .useHashBasedSequencerAssignment()
                      .setLogConfig(logConfig(2))
@@ -2571,7 +2552,7 @@ TEST_P(RebuildingTest, ReplicationCheckerDuringRebuilding) {
  */
 
 // Case: shards come back wiped.
-TEST_F(RebuildingTest, DisableDataLogRebuildShardsWiped) {
+TEST_P(RebuildingTest, DisableDataLogRebuildShardsWiped) {
   // FIXME: Need to add a mix of retentions.
   std::chrono::seconds maxBacklogDuration(30);
 
@@ -2592,7 +2573,7 @@ TEST_F(RebuildingTest, DisableDataLogRebuildShardsWiped) {
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
-          .apply(commonSetup)
+          .apply(commonSetup())
           .setParam("--rebuild-store-durability", "async_write")
           .setParam("--disable-data-log-rebuilding", "true")
           .setLogConfig(log_config)
@@ -2673,7 +2654,7 @@ TEST_F(RebuildingTest, DisableDataLogRebuildShardsWiped) {
 }
 
 // Case: shards come back good.
-TEST_F(RebuildingTest, DisableDataLogRebuildShardsAborted) {
+TEST_P(RebuildingTest, DisableDataLogRebuildShardsAborted) {
   std::chrono::seconds maxBacklogDuration(30);
 
   Configuration::Log log_config;
@@ -2693,7 +2674,7 @@ TEST_F(RebuildingTest, DisableDataLogRebuildShardsAborted) {
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
-          .apply(commonSetup)
+          .apply(commonSetup())
           .setParam("--rebuild-store-durability", "async_write")
           .setParam("--disable-data-log-rebuilding", "true")
           .setLogConfig(log_config)
@@ -2759,7 +2740,7 @@ TEST_F(RebuildingTest, DisableDataLogRebuildShardsAborted) {
 }
 
 // Case: shards never come back.
-TEST_F(RebuildingTest, DisableDataLogRebuildNodeFailed) {
+TEST_P(RebuildingTest, DisableDataLogRebuildNodeFailed) {
   std::chrono::seconds maxBacklogDuration(30);
 
   Configuration::Log log_config;
@@ -2779,7 +2760,7 @@ TEST_F(RebuildingTest, DisableDataLogRebuildNodeFailed) {
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
-          .apply(commonSetup)
+          .apply(commonSetup())
           .setParam("--rebuild-store-durability", "async_write")
           .setParam("--disable-data-log-rebuilding", "true")
           .setLogConfig(log_config)
@@ -2841,7 +2822,9 @@ TEST_F(RebuildingTest, DisableDataLogRebuildNodeFailed) {
 
 INSTANTIATE_TEST_CASE_P(RebuildingTest,
                         RebuildingTest,
-                        ::testing::Values(false, true));
+                        ::testing::Values(Mode::V1_WITH_WAL,
+                                          Mode::V1_WITHOUT_WAL,
+                                          Mode::V2_WITH_WAL));
 
 // TODO(#8570293): write at test where we use a cross-domain copyset selector.
 // TODO(#8570293): once we support rebuilding with extras, write a test.

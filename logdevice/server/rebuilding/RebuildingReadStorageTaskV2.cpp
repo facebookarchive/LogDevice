@@ -253,6 +253,8 @@ void RebuildingReadStorageTaskV2::execute() {
       break;
     case IteratorState::AT_END:
       context->reachedEnd = true;
+      context->iterator.reset();
+      context->nextLocation.reset();
       break;
     case IteratorState::WOULDBLOCK:
     case IteratorState::MAX:

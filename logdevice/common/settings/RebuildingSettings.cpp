@@ -11,9 +11,12 @@
 
 #include "logdevice/common/commandline_util_chrono.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/settings/Validators.h"
 #include "logdevice/common/util.h"
 
 namespace facebook { namespace logdevice {
+
+using namespace facebook::logdevice::setting_validators;
 
 /**
  * Compose an error message about the value of an option being out of range and
@@ -53,9 +56,7 @@ std::istream& operator>>(std::istream& in, RebuildingReadOnlyOption& val) {
 void RebuildingSettings::defineSettings(SettingEasyInit& init) {
   using namespace SettingFlag;
 
-  init
-
-      ("use-legacy-log-to-shard-mapping-in-rebuilding",
+  init("use-legacy-log-to-shard-mapping-in-rebuilding",
        &use_legacy_log_to_shard_mapping_in_rebuilding,
        "true",
        nullptr,
@@ -108,13 +109,8 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
        SettingsCategory::Rebuilding);
   init("rebuilding-max-batch-bytes",
        &max_batch_bytes,
-       "10485760",
-       [](size_t val) {
-         if ((ssize_t)val <= 0) {
-           throw boost::program_options::error(
-               "rebuilding-max-batch-bytes must be positive");
-         }
-       },
+       "10M",
+       parse_positive<size_t>(),
        "max amount of data that a node can read in one batch for rebuilding",
        SERVER,
        SettingsCategory::Rebuilding);
@@ -136,10 +132,21 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
                "positive");
          }
        },
-       "maximum number of rebuilding STORE requests that a rebuilding donor "
-       "node can have in flight at the same time, per log",
+       "Maximum number of rebuilding STORE requests that a rebuilding donor "
+       "node can have in flight at the same time. Rebuilding v1: per log, "
+       "rebuilding v2: per shard.",
        SERVER,
        SettingsCategory::Rebuilding);
+  init(
+      "rebuilding-max-record-bytes-in-flight",
+      &max_record_bytes_in_flight,
+      "100M",
+      parse_positive<size_t>(),
+      "Maximum total size of rebuilding STORE requests that a rebuilding donor "
+      "node can have in flight at the same time, per shard. Only used by "
+      "rebuilding v2.",
+      SERVER,
+      SettingsCategory::Rebuilding);
   init("rebuilding-max-amends-in-flight",
        &max_amends_in_flight,
        "100",
@@ -172,8 +179,7 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
       "done in order to determine the LSN at which to stop rebuilding the log.",
       SERVER,
       SettingsCategory::Rebuilding);
-  init("rebuilding-planner-sync-seq-retry-"
-       "interval",
+  init("rebuilding-planner-sync-seq-retry-interval",
        &rebuilding_planner_sync_seq_retry_interval,
        "60s..5min",
        nullptr,
@@ -203,8 +209,7 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
        "RocksDB block cache.",
        SERVER,
        SettingsCategory::Rebuilding);
-  init("rebuilding-checkpoint-"
-       "interval-mb",
+  init("rebuilding-checkpoint-interval-mb",
        &checkpoint_interval_mb,
        "100",
        [](size_t val) {
@@ -221,8 +226,7 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
        "log from that log's last checkpoint.",
        SERVER,
        SettingsCategory::Rebuilding);
-  init("total-log-rebuilding-"
-       "size-per-shard-mb",
+  init("total-log-rebuilding-size-per-shard-mb",
        &total_log_rebuilding_size_per_shard_mb,
        "100",
        [](double val) {
@@ -235,8 +239,7 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
        "state machines, per shard",
        SERVER,
        SettingsCategory::Rebuilding);
-  init("max-log-rebuilding-"
-       "size-mb",
+  init("max-log-rebuilding-size-mb",
        &max_log_rebuilding_size_mb,
        "5",
        [](double val) {
@@ -249,8 +252,7 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
        "LogRebuilding state machine",
        SERVER,
        SettingsCategory::Rebuilding);
-  init("rebuilding-"
-       "read-only",
+  init("rebuilding-read-only",
        &read_only,
        "none",
        nullptr,
@@ -486,6 +488,14 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
        "Used in tests.",
        SERVER,
        SettingsCategory::Testing);
+  init("rebuilding-v2",
+       &enable_v2,
+       "false",
+       nullptr,
+       "Enables a new experimental implementation of rebuilding. Don't use it "
+       "in production yet.",
+       SERVER,
+       SettingsCategory::Rebuilding);
 }
 
 }} // namespace facebook::logdevice

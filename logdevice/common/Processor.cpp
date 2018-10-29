@@ -330,10 +330,8 @@ int Processor::getAllWorkersCount() const {
   return nworkers;
 }
 
-worker_id_t Processor::selectWorkerRandomly(request_id_t rqid,
-                                            WorkerType type) {
-  return worker_id_t(folly::hash::twang_mix64(rqid.val()) %
-                     getWorkerCount(type));
+worker_id_t Processor::selectWorkerRandomly(uint64_t seed, WorkerType type) {
+  return worker_id_t(folly::hash::twang_mix64(seed) % getWorkerCount(type));
 }
 
 int Processor::getTargetThreadForRequest(const std::unique_ptr<Request>& rq) {
@@ -348,7 +346,7 @@ int Processor::getTargetThreadForRequest(const std::unique_ptr<Request>& rq) {
   // If the Request does not care about which thread it runs on, schedule it
   // round-robin.
   if (target_thread == -1) {
-    target_thread = selectWorkerRandomly(rq->id_, worker_type).val_;
+    target_thread = selectWorkerRandomly(rq->id_.val(), worker_type).val_;
   }
   return target_thread;
 }
