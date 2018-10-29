@@ -41,6 +41,7 @@
 #include "logdevice/common/debug.h"
 #include "logdevice/common/event_log/EventLogRebuildingSet.h"
 #include "logdevice/common/plugin/PluginRegistry.h"
+#include "logdevice/common/plugin/SequencerLocatorFactory.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/include/Client.h"
 #include "logdevice/include/ClientSettings.h"
@@ -2002,6 +2003,24 @@ void Cluster::populateClientSettings(
   }
 }
 
+namespace {
+
+class StaticSequencerLocatorFactory : public SequencerLocatorFactory {
+  std::string identifier() const override {
+    return "static";
+  }
+
+  std::string displayName() const override {
+    return "Static sequencer placement";
+  }
+  std::unique_ptr<SequencerLocator>
+  operator()(const std::shared_ptr<UpdateableConfig>& config) override {
+    return std::make_unique<StaticSequencerLocator>(config);
+  }
+};
+
+} // namespace
+
 std::shared_ptr<Client>
 Cluster::createClient(std::chrono::milliseconds timeout,
                       std::unique_ptr<ClientSettings> settings,
@@ -2010,15 +2029,6 @@ Cluster::createClient(std::chrono::milliseconds timeout,
   // our UpdateableConfig instance (instead of reading the file).  This way
   // in-process Client instances will see config updates instantly, making
   // tests behave more intuitively.
-
-  std::unique_ptr<SequencerLocator> sequencer_locator;
-  if (hash_based_sequencer_assignment_) {
-    sequencer_locator.reset(
-        new HashBasedSequencerLocator(config_->updateableServerConfig()));
-  } else {
-    // assume N0 runs sequencers for all logs
-    sequencer_locator.reset(new StaticSequencerLocator(config_));
-  }
 
   populateClientSettings(settings);
 
@@ -2053,8 +2063,14 @@ Cluster::createClient(std::chrono::milliseconds timeout,
     settings->set("enable-logsconfig-manager", "true");
   }
 
+  PluginVector seed_plugins = getClientPluginProviders();
+  if (!hash_based_sequencer_assignment_) {
+    // assume N0 runs sequencers for all logs
+    seed_plugins.emplace_back(
+        std::make_unique<StaticSequencerLocatorFactory>());
+  }
   std::shared_ptr<PluginRegistry> plugin_registry =
-      std::make_shared<PluginRegistry>(getClientPluginProviders());
+      std::make_shared<PluginRegistry>(std::move(seed_plugins));
   ld_info(
       "Plugins loaded: %s", plugin_registry->getStateDescriptionStr().c_str());
 
@@ -2064,7 +2080,6 @@ Cluster::createClient(std::chrono::milliseconds timeout,
                                       "",
                                       timeout,
                                       std::move(settings),
-                                      std::move(sequencer_locator),
                                       plugin_registry);
 }
 

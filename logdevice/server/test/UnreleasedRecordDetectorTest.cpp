@@ -211,7 +211,6 @@ void UnreleasedRecordDetectorTest::SetUp() {
       std::make_shared<NoopTraceLogger>(config_),
       *usettings_,
       nullptr,
-      std::make_unique<StaticSequencerLocator>(config_),
       make_test_plugin_pack(),
       make_test_plugin_registry());
   processor_->config_->get()->serverConfig()->setMyNodeID(NodeID(0, 1));

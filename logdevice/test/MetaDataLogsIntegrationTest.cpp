@@ -508,7 +508,6 @@ TEST_F(MetaDataLogsIntegrationTest, SequencerReadHistoricMetadata) {
       std::make_shared<NoopTraceLogger>(cluster->getConfig()),
       UpdateableSettings<Settings>(settings),
       nullptr, /* stats*/
-      std::make_unique<StaticSequencerLocator>(cluster->getConfig()),
       make_test_plugin_pack(),
       make_test_plugin_registry());
 

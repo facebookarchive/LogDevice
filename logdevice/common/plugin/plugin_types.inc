@@ -41,6 +41,8 @@ PLUGIN_TYPE(PERMISSION_CHECKER_FACTORY, 7, "PermissionChecker factory", false)
 PLUGIN_TYPE(CONFIG_SOURCE_FACTORY, 8, "ConfigSource factory", true)
 // See BacktraceRunner.h
 PLUGIN_TYPE(BACKTRACE_RUNNER, 9, "Backtrace runner", false)
+// See SequencerLocatorFactory.h
+PLUGIN_TYPE(SEQUENCER_LOCATOR_FACTORY, 10, "SequencerLocator factory", false)
 
 // TODO: add more plugin types
 

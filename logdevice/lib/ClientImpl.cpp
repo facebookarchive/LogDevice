@@ -26,7 +26,6 @@
 #include "logdevice/common/EpochMetaDataMap.h"
 #include "logdevice/common/FindKeyRequest.h"
 #include "logdevice/common/GetHeadAttributesRequest.h"
-#include "logdevice/common/HashBasedSequencerLocator.h"
 #include "logdevice/common/IsLogEmptyRequest.h"
 #include "logdevice/common/LogsConfigApiRequest.h"
 #include "logdevice/common/NoopTraceLogger.h"
@@ -34,7 +33,6 @@
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/ReaderImpl.h"
 #include "logdevice/common/Semaphore.h"
-#include "logdevice/common/SequencerLocator.h"
 #include "logdevice/common/StatsCollectionThread.h"
 #include "logdevice/common/SyncSequencerRequest.h"
 #include "logdevice/common/TailRecord.h"
@@ -281,25 +279,6 @@ std::shared_ptr<Client> Client::create(std::string cluster_name,
   return std::shared_ptr<Client>(impl);
 }
 
-ClientImpl::ClientImpl(std::string cluster_name,
-                       std::shared_ptr<UpdateableConfig> config,
-                       std::string credentials,
-                       std::string csid,
-                       std::chrono::milliseconds timeout,
-                       std::unique_ptr<ClientSettings>&& settings,
-                       std::shared_ptr<PluginRegistry> plugin_registry)
-    : ClientImpl(std::move(cluster_name),
-                 config,
-                 std::move(credentials),
-                 std::move(csid),
-                 std::move(timeout),
-                 std::move(settings),
-                 plugin_registry
-                     ->getSinglePlugin<ClientPluginPack>(
-                         PluginType::LEGACY_CLIENT_PLUGIN)
-                     ->createSequencerLocator(config),
-                 plugin_registry) {}
-
 bool ClientImpl::validateServerConfig(ServerConfig& cfg) const {
   ld_check(config_);
   ld_check(config_->get());
@@ -321,7 +300,6 @@ ClientImpl::ClientImpl(std::string cluster_name,
                        std::string csid,
                        std::chrono::milliseconds timeout,
                        std::unique_ptr<ClientSettings>&& client_settings,
-                       std::unique_ptr<SequencerLocator> sequencer_locator,
                        std::shared_ptr<PluginRegistry> plugin_registry)
     : plugin_registry_(std::move(plugin_registry)),
       cluster_name_(cluster_name),
@@ -387,7 +365,6 @@ ClientImpl::ClientImpl(std::string cluster_name,
                                        trace_logger_,
                                        settings,
                                        stats_.get(),
-                                       std::move(sequencer_locator),
                                        plugin,
                                        plugin_registry_,
                                        credentials_,

@@ -404,7 +404,6 @@ make_test_processor(const Settings& settings,
                            std::make_shared<NoopTraceLogger>(config),
                            UpdateableSettings<Settings>(settings),
                            stats,
-                           nullptr,
                            make_test_plugin_pack(),
                            make_test_plugin_registry());
 }

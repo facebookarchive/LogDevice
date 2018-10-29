@@ -57,7 +57,6 @@ std::shared_ptr<ServerProcessor> make_test_server_processor(
       std::make_shared<NoopTraceLogger>(config),
       UpdateableSettings<Settings>(settings),
       stats,
-      nullptr,
       make_test_server_plugin_pack(),
       make_test_plugin_registry());
 }

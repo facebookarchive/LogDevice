@@ -97,7 +97,6 @@ class Processor : public folly::enable_shared_from_this<Processor> {
             std::shared_ptr<TraceLogger> traceLogger,
             UpdateableSettings<Settings> settings,
             StatsHolder* stats,
-            std::unique_ptr<SequencerLocator> sequencer_locator,
             std::shared_ptr<LegacyPluginPack> plugin,
             std::shared_ptr<PluginRegistry> plugin_registry,
             std::string credentials = "",

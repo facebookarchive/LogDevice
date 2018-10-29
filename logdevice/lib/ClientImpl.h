@@ -43,7 +43,6 @@ class EpochMetaDataCache;
 class EpochMetaDataMap;
 class PluginRegistry;
 class Processor;
-class SequencerLocator;
 struct Settings;
 class Shadow;
 class StatsCollectionThread;
@@ -64,17 +63,6 @@ class ClientImpl : public Client,
    * by a shared_ptr. See Client::create() for a description of
    * arguments. credentials are currently unused.
    */
-  ClientImpl(std::string cluster_name,
-             std::shared_ptr<UpdateableConfig> config,
-             std::string credentials,
-             std::string csid,
-             std::chrono::milliseconds timeout,
-             std::unique_ptr<ClientSettings>&& settings,
-             std::unique_ptr<SequencerLocator> sequencer_locator,
-             std::shared_ptr<PluginRegistry> plugin_registry);
-
-  // An overload that uses LegacyPluginPack::createSequencerLocator() to
-  // construct a SequencerLocator.
   ClientImpl(std::string cluster_name,
              std::shared_ptr<UpdateableConfig> config,
              std::string credentials,

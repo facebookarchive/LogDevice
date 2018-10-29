@@ -61,9 +61,6 @@ class LegacyPluginPack {
     return "default LegacyPluginPack";
   };
 
-  virtual std::unique_ptr<SequencerLocator>
-  createSequencerLocator(const std::shared_ptr<UpdateableConfig>&);
-
   virtual std::shared_ptr<opentracing::Tracer> createOTTracer() {
     return opentracing::MakeNoopTracer();
   }

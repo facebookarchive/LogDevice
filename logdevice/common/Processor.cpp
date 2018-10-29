@@ -24,6 +24,7 @@
 #include "logdevice/common/ClientIdxAllocator.h"
 #include "logdevice/common/ClusterState.h"
 #include "logdevice/common/EventLoopHandle.h"
+#include "logdevice/common/HashBasedSequencerLocator.h"
 #include "logdevice/common/LegacyPluginPack.h"
 #include "logdevice/common/MetaDataLogWriter.h"
 #include "logdevice/common/PermissionChecker.h"
@@ -42,6 +43,7 @@
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/event_log/EventLogRebuildingSet.h"
 #include "logdevice/common/plugin/CommonBuiltinPlugins.h"
+#include "logdevice/common/plugin/SequencerLocatorFactory.h"
 #include "logdevice/common/plugin/StaticPluginLoader.h"
 #include "logdevice/common/stats/ServerHistograms.h"
 #include "logdevice/common/stats/Stats.h"
@@ -119,13 +121,26 @@ void settingsUpdated(const UpdateableSettings<Settings>& settings) {
     ld_info("abort-on-failed-catch is %s", ca ? "on" : "off");
   }
 }
+
+std::unique_ptr<SequencerLocator>
+get_sequencer_locator(std::shared_ptr<PluginRegistry> plugin_registry,
+                      const std ::shared_ptr<UpdateableConfig>& config) {
+  auto plugin = plugin_registry->getSinglePlugin<SequencerLocatorFactory>(
+      PluginType::SEQUENCER_LOCATOR_FACTORY);
+  if (plugin) {
+    return (*plugin)(config);
+  } else {
+    return std::make_unique<HashBasedSequencerLocator>(
+        config->updateableServerConfig());
+  }
+}
+
 } // namespace
 
 Processor::Processor(std::shared_ptr<UpdateableConfig> updateable_config,
                      std::shared_ptr<TraceLogger> trace_logger,
                      UpdateableSettings<Settings> settings,
                      StatsHolder* stats,
-                     std::unique_ptr<SequencerLocator> sequencer_locator,
                      std::shared_ptr<LegacyPluginPack> plugin,
                      std::shared_ptr<PluginRegistry> plugin_registry,
                      std::string credentials,
@@ -139,7 +154,7 @@ Processor::Processor(std::shared_ptr<UpdateableConfig> updateable_config,
       plugin_registry_(std::move(plugin_registry)),
       stats_(stats),
       impl_(new ProcessorImpl(this, settings)),
-      sequencer_locator_(std::move(sequencer_locator)),
+      sequencer_locator_(get_sequencer_locator(plugin_registry_, config_)),
       conn_budget_incoming_(settings_->max_incoming_connections),
       conn_budget_backlog_(settings_->connection_backlog),
       conn_budget_external_(settings_->max_external_connections),

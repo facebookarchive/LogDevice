@@ -602,8 +602,6 @@ bool Server::initProcessor() {
       params_->getPluginRegistry()->getSinglePlugin<ServerPluginPack>(
           PluginType::LEGACY_SERVER_PLUGIN);
   ld_check(plugin);
-  std::unique_ptr<SequencerLocator> sequencer_locator =
-      plugin->createSequencerLocator(updateable_config_);
 
   try {
     processor_ =
@@ -615,7 +613,6 @@ bool Server::initProcessor() {
                                 params_->getTraceLogger(),
                                 params_->getProcessorSettings(),
                                 params_->getStats(),
-                                std::move(sequencer_locator),
                                 plugin,
                                 params_->getPluginRegistry(),
                                 "",

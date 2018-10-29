@@ -50,8 +50,6 @@ TEST_F(AppendIntegrationTest, AppendRequestEcho) {
                         std::make_shared<NoopTraceLogger>(cluster->getConfig()),
                         UpdateableSettings<Settings>(settings),
                         nullptr, /*stats*/
-                        std::make_unique<HashBasedSequencerLocator>(
-                            cluster->getConfig()->updateableServerConfig()),
                         make_test_plugin_pack(),
                         make_test_plugin_registry());
 
@@ -564,8 +562,6 @@ TEST_F(AppendIntegrationTest, ThreadMapping) {
                         std::make_shared<NoopTraceLogger>(cluster->getConfig()),
                         UpdateableSettings<Settings>(settings),
                         nullptr, /*Stats*/
-                        std::make_unique<HashBasedSequencerLocator>(
-                            cluster->getConfig()->updateableServerConfig()),
                         make_test_plugin_pack(),
                         make_test_plugin_registry());
 
