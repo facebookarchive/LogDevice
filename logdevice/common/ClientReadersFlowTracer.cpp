@@ -424,7 +424,7 @@ folly::Optional<int64_t> ClientReadersFlowTracer::estimateByteLag() const {
 void ClientReadersFlowTracer::updateIsClientReading() {
   bool was_client_reading = is_client_reading_;
   is_client_reading_ =
-      !(owner_->redelivery_timer_ && owner_->redelivery_timer_->isActive()) ||
+      !(owner_->redelivery_timer_ && owner_->redelivery_timer_->isActive()) &&
       !owner_->window_update_pending_; // We check window_update_pending_ as a
                                        // best effort attempt to assess if the
                                        // client is reading because a
