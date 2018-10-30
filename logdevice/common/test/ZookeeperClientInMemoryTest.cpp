@@ -42,6 +42,19 @@ struct C {
   }
 };
 
+void getDataRecursive(ZookeeperClientInMemory& z,
+                      Promise<Unit> promise,
+                      std::string expected) {
+  z.getData(kFoo,
+            [&z, p = std::move(promise), expected](
+                int rc, std::string value, zk::Stat) mutable {
+              if (rc != ZOK || value != expected) {
+                getDataRecursive(z, std::move(p), std::move(expected));
+              }
+              p.setValue();
+            });
+}
+
 void runBasicTests(std::unique_ptr<ZookeeperClientInMemory> z) {
   initBasicTests();
 
@@ -146,6 +159,13 @@ void runBasicTests(std::unique_ptr<ZookeeperClientInMemory> z) {
                        },
                        /* version = */ -1));
   std::move(f6).wait();
+
+  Promise<Unit> p7;
+  auto f7 = p7.getSemiFuture();
+  EXPECT_EQ(
+      ZOK, z->setData(kFoo, "Another_blind_write", {}, /* version = */ -1));
+  getDataRecursive(*z, std::move(p7), "Another_blind_write");
+  std::move(f7).wait();
 }
 
 void runMultiThreadedTests(std::unique_ptr<ZookeeperClientInMemory> z) {

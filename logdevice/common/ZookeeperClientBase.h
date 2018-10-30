@@ -168,7 +168,9 @@ class ZookeeperClientBase : boost::noncopyable {
   //////// New API ////////
  public:
   // callbacks will only be called when the return code (first param of the
-  // callback) matches the Zookeeper C API specification.
+  // callback) matches the Zookeeper C API specification. It is valid to
+  // pass in an empty function as a callback (to send a fire-and-forget type of
+  // request).
   using data_callback_t = folly::Function<void(int, std::string, zk::Stat)>;
   using stat_callback_t = folly::Function<void(int, zk::Stat)>;
   using create_callback_t = folly::Function<void(int, std::string)>;
