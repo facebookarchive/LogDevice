@@ -185,7 +185,7 @@ class Attribute {
 
  protected:
   void reset() {
-    value_ = nullptr;
+    value_ = folly::none;
     inherited_ = false;
   }
   folly::Optional<Type> value_;
