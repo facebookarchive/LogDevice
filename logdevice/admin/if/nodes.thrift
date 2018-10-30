@@ -230,6 +230,8 @@ enum SequencingState {
    * Sequencing is disabled.
    */
   DISABLED = 3,
+  // TODO: Remove servers stop reporting it
+  DRAINED = 4,
 }
 
 /**
