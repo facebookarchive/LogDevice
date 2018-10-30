@@ -963,7 +963,6 @@ void ReplicatedStateMachine<T, D>::cancelStallGracePeriod() {
 
 template <typename T, typename D>
 void ReplicatedStateMachine<T, D>::activateGracePeriodForSnapshotting() {
-  rsm_info(rsm_type_, "Activating time-based snapshotting");
   if (!snapshotting_timer_.isAssigned()) {
     snapshotting_timer_.assign([this] {
       if (canSnapshot()) {
