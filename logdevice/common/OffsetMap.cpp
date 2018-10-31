@@ -12,7 +12,6 @@
 #include "logdevice/common/protocol/ProtocolWriter.h"
 
 namespace facebook { namespace logdevice {
-OffsetMap::OffsetMap() {}
 
 OffsetMap::OffsetMap(const OffsetMap& om) noexcept {
   this->counterTypeMap_ = om.getCounterMap();
@@ -88,6 +87,10 @@ bool OffsetMap::operator==(const OffsetMap& om) const {
     }
   }
   return true;
+}
+
+bool OffsetMap::operator!=(const OffsetMap& om) const {
+  return !(*this == om);
 }
 
 OffsetMap& OffsetMap::operator+=(const OffsetMap& om) {

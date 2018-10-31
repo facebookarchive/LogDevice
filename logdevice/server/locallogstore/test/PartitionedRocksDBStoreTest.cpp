@@ -69,6 +69,10 @@ partition_id_t ID0 = PartitionedRocksDBStore::INITIAL_PARTITION_ID;
 
 const logid_t EVENT_LOG_ID(123123123);
 
+TailRecord tail_record;
+OffsetMap epoch_size_map;
+OffsetMap epoch_end_offsets;
+
 // Payloads used in these tests are a function of record's log ID, LSN and
 // timestamp. This makes them easy to verify.
 static std::string formTestPayload(logid_t log, lsn_t lsn, uint64_t timestamp) {
@@ -2287,12 +2291,18 @@ TEST_F(PartitionedRocksDBStoreTest, TrimPerEpochLogMetadata) {
   }
 
   // write some metadata
+  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 12);
+  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 10);
+  tail_record.header.u.offset_within_epoch = 10;
+  tail_record.header.log_id = logid_t(1);
+  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 10);
   EpochRecoveryMetadata metadata(epoch_t(9),
                                  esn_t(1),
                                  esn_t(3),
-                                 /*flags*/ 0,
-                                 10,
-                                 12);
+                                 1,
+                                 tail_record,
+                                 epoch_size_map,
+                                 epoch_end_offsets);
   auto write_metadata = [&](const std::vector<int>& epochs) {
     for (auto e : epochs) {
       int rv = store_->updatePerEpochLogMetadata(

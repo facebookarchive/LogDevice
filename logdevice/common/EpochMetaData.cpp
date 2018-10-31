@@ -63,6 +63,64 @@ bool EpochMetaData::validWithConfig(
   return true;
 }
 
+void EpochMetaData::reset() {
+  h.version = 0;
+  h.epoch = h.effective_since = EPOCH_INVALID;
+  h.nodeset_size = 0;
+  h.replication_factor_DO_NOT_USE = 0;
+  h.sync_replication_scope_DO_NOT_USE = NodeLocationScope::NODE;
+  h.flags = 0;
+
+  shards.clear();
+}
+
+bool EpochMetaData::isEmpty() const {
+  return *this == EpochMetaData();
+}
+
+bool EpochMetaData::isSubstantiallyIdentical(const EpochMetaData& rhs) const {
+  static_assert(sizeof(h) == 20, "MetaDataLogRecordHeader size changed");
+
+  // flags to ignore:
+  // - wire flags only used for serialization: HAS_REPLICATION_PROPERTY and
+  //   HAS_WEIGHTS
+  // - only used to indicate written status: WRITTEN_IN_METADATALOG
+  const epoch_metadata_flags_t flags_mask =
+      MetaDataLogRecordHeader::ALL_KNOWN_FLAGS &
+      ~MetaDataLogRecordHeader::HAS_REPLICATION_PROPERTY &
+      ~MetaDataLogRecordHeader::HAS_WEIGHTS &
+      ~MetaDataLogRecordHeader::WRITTEN_IN_METADATALOG;
+
+  return h.version == rhs.h.version &&
+      h.effective_since == rhs.h.effective_since &&
+      h.nodeset_size == rhs.h.nodeset_size &&
+      (h.flags & flags_mask) == (rhs.h.flags & flags_mask) &&
+      shards == rhs.shards && weights == rhs.weights &&
+      replication == rhs.replication &&
+      nodesconfig_hash == rhs.nodesconfig_hash;
+}
+
+bool EpochMetaData::operator!=(const EpochMetaData& rhs) const {
+  return !(*this == rhs);
+}
+
+bool EpochMetaData::operator==(const EpochMetaData& rhs) const {
+  return h.epoch == rhs.h.epoch && isSubstantiallyIdentical(rhs) &&
+      writtenInMetaDataLog() == rhs.writtenInMetaDataLog();
+}
+
+bool EpochMetaData::disabled() const {
+  return h.flags & MetaDataLogRecordHeader::DISABLED;
+}
+
+bool EpochMetaData::writtenInMetaDataLog() const {
+  return h.flags & MetaDataLogRecordHeader::WRITTEN_IN_METADATALOG;
+}
+
+int EpochMetaData::sizeInPayload() const {
+  return toPayload(nullptr, 0);
+}
+
 namespace {
 bool nodesetContainsInvalidNodes(logid_t log_id,
                                  const StorageSet& shards,

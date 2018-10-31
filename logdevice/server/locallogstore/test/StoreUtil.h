@@ -85,6 +85,12 @@ class TestRecord {
     return *this;
   }
 
+  TestRecord& offsetsWithinEpoch(OffsetMap offsets_within_epoch) {
+    // TODO (T33977412) : Set LocalLogStoreRecordFormat::FLAG_OFFSET_MAP
+    offsets_within_epoch_ = offsets_within_epoch;
+    return *this;
+  }
+
   TestRecord& writtenByRecovery(epoch_t recovery_epoch) {
     flags_ |= LocalLogStoreRecordFormat::FLAG_WRITTEN_BY_RECOVERY;
     wave_ = (uint32_t)recovery_epoch.val_;
@@ -109,6 +115,7 @@ class TestRecord {
   std::chrono::milliseconds timestamp_{0};
   uint32_t wave_{1};
   uint64_t offset_within_epoch_ = BYTE_OFFSET_INVALID;
+  OffsetMap offsets_within_epoch_;
   LocalLogStoreRecordFormat::flags_t flags_ =
       LocalLogStoreRecordFormat::FLAG_CHECKSUM_PARITY;
   folly::Optional<Payload> payload_;

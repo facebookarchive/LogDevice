@@ -130,6 +130,9 @@ class PurgeUncleanEpochsTest : public ::testing::Test {
   int metadata_read_attempt_ = 0;
   std::shared_ptr<const EpochMetaDataMap> epoch_metadata_map_;
   bool test_metadata_log_ = false;
+  TailRecord tail_record;
+  OffsetMap epoch_size_map;
+  OffsetMap epoch_end_offsets;
 };
 
 class MockPurgeUncleanEpochs : public PurgeUncleanEpochs {
@@ -327,7 +330,16 @@ TEST_F(PurgeUncleanEpochsTest, BasicWorkFlow) {
   ASSERT_EQ(State::GET_EPOCH_RECOVERY_METADATA, getState());
 
   // Say GetEpochRecoveryMetadataRequest completes for E15
-  EpochRecoveryMetadata erm(epoch_t(16), esn_t(2), esn_t(4), 1, 100, 200);
+  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 200);
+  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 100);
+  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 100);
+  EpochRecoveryMetadata erm(epoch_t(16),
+                            esn_t(2),
+                            esn_t(4),
+                            0,
+                            tail_record,
+                            epoch_size_map,
+                            epoch_end_offsets);
   EpochRecoveryStateMap map = {{15, {E::OK, erm}}};
   onGetEpochRecoveryMetadataComplete(E::OK, map);
 
@@ -336,9 +348,27 @@ TEST_F(PurgeUncleanEpochsTest, BasicWorkFlow) {
   ASSERT_EQ(1, getPurgeSingleEpochsMap().count(epoch_t(15)));
 
   // Say GetEpochRecoveryMetadataRequest completes for [16, 18]
-  EpochRecoveryMetadata erm1(epoch_t(17), esn_t(2), esn_t(4), 1, 100, 200);
+  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 200);
+  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 100);
+  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 100);
+  EpochRecoveryMetadata erm1(epoch_t(17),
+                             esn_t(2),
+                             esn_t(4),
+                             0,
+                             tail_record,
+                             epoch_size_map,
+                             epoch_end_offsets);
   EpochRecoveryMetadata erm2;
-  EpochRecoveryMetadata erm3(epoch_t(19), esn_t(2), esn_t(4), 1, 100, 200);
+  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 200);
+  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 100);
+  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 100);
+  EpochRecoveryMetadata erm3(epoch_t(19),
+                             esn_t(2),
+                             esn_t(4),
+                             0,
+                             tail_record,
+                             epoch_size_map,
+                             epoch_end_offsets);
   EpochRecoveryStateMap map2 = {
       {16, {E::OK, erm1}}, {17, {E::EMPTY, erm2}}, {18, {E::OK, erm3}}};
   onGetEpochRecoveryMetadataComplete(E::OK, map2);
@@ -354,9 +384,18 @@ TEST_F(PurgeUncleanEpochsTest, BasicWorkFlow) {
 
   // Now GetEpochRecoveryMetadataRequest completes for [6, 14]
   EpochRecoveryStateMap map3;
+  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 200);
+  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 100);
+  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 100);
   for (auto epoch = 6; epoch <= 14; epoch++) {
     if (epoch % 2 == 0) {
-      EpochRecoveryMetadata md(epoch_t(epoch), esn_t(2), esn_t(4), 1, 100, 200);
+      EpochRecoveryMetadata md(epoch_t(epoch),
+                               esn_t(2),
+                               esn_t(4),
+                               0,
+                               tail_record,
+                               epoch_size_map,
+                               epoch_end_offsets);
       map3.emplace(epoch, std::make_pair(E::OK, md));
     } else {
       map3.emplace(epoch, std::make_pair(E::EMPTY, EpochRecoveryMetadata()));
@@ -373,9 +412,18 @@ TEST_F(PurgeUncleanEpochsTest, BasicWorkFlow) {
   }
 
   EpochRecoveryStateMap map4;
+  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 200);
+  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 100);
+  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 100);
   for (auto epoch = 19; epoch <= 200; epoch++) {
     if (epoch % 2 == 0) {
-      EpochRecoveryMetadata md(epoch_t(epoch), esn_t(2), esn_t(4), 1, 100, 200);
+      EpochRecoveryMetadata md(epoch_t(epoch),
+                               esn_t(2),
+                               esn_t(4),
+                               0,
+                               tail_record,
+                               epoch_size_map,
+                               epoch_end_offsets);
       map4.emplace(epoch, std::make_pair(E::OK, md));
     } else {
       map4.emplace(epoch, std::make_pair(E::EMPTY, EpochRecoveryMetadata()));
@@ -451,9 +499,18 @@ TEST_F(PurgeUncleanEpochsTest, EmptyEpochs) {
 
   // Now GetEpochRecoveryMetadataRequest completes for [7, 20]
   EpochRecoveryStateMap map;
+  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 200);
+  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 100);
+  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 100);
   for (auto epoch = 7; epoch <= 20; epoch++) {
     if (epoch % 2 == 0) {
-      EpochRecoveryMetadata md(epoch_t(epoch), esn_t(2), esn_t(4), 1, 100, 200);
+      EpochRecoveryMetadata md(epoch_t(epoch),
+                               esn_t(2),
+                               esn_t(4),
+                               0,
+                               tail_record,
+                               epoch_size_map,
+                               epoch_end_offsets);
       map.emplace(epoch, std::make_pair(E::OK, md));
     } else {
       map.emplace(epoch, std::make_pair(E::EMPTY, EpochRecoveryMetadata()));
@@ -515,9 +572,18 @@ TEST_F(PurgeUncleanEpochsTest, EmptyEpochsMetaDataLog) {
 
   // Now GetEpochRecoveryMetadataRequest completes for [7, 20]
   EpochRecoveryStateMap map;
+  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 200);
+  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 100);
+  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 100);
   for (auto epoch = 7; epoch <= 20; epoch++) {
     if (epoch % 2 == 0) {
-      EpochRecoveryMetadata md(epoch_t(epoch), esn_t(2), esn_t(4), 1, 100, 200);
+      EpochRecoveryMetadata md(epoch_t(epoch),
+                               esn_t(2),
+                               esn_t(4),
+                               0,
+                               tail_record,
+                               epoch_size_map,
+                               epoch_end_offsets);
       map.emplace(epoch, std::make_pair(E::OK, md));
     } else {
       map.emplace(epoch, std::make_pair(E::EMPTY, EpochRecoveryMetadata()));
@@ -589,7 +655,16 @@ TEST_F(PurgeUncleanEpochsTest, EmptyEpochsDoNotFetchERM) {
   checkGetEpochRecoveryMetadataRequestPosted(epoch_t(19), epoch_t(19));
 
   // Now GetEpochRecoveryMetadataRequest completes
-  EpochRecoveryMetadata md(epoch_t(15), esn_t(2), esn_t(4), 1, 100, 200);
+  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 200);
+  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 100);
+  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 100);
+  EpochRecoveryMetadata md(epoch_t(15),
+                           esn_t(2),
+                           esn_t(4),
+                           0,
+                           tail_record,
+                           epoch_size_map,
+                           epoch_end_offsets);
 
   onGetEpochRecoveryMetadataComplete(
       E::OK, EpochRecoveryStateMap{{15, std::make_pair(E::OK, md)}});
@@ -701,7 +776,16 @@ TEST_F(PurgeUncleanEpochsTest, DoNotPurgeBeyondPurgeTo) {
   ASSERT_TRUE(pendingEpochRecoveryMetadataRequests.empty());
 
   // Now GetEpochRecoveryMetadataRequest completes for [6, 6]
-  EpochRecoveryMetadata md(epoch_t(6), esn_t(2), esn_t(4), 1, 100, 200);
+  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 200);
+  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 100);
+  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 100);
+  EpochRecoveryMetadata md(epoch_t(6),
+                           esn_t(2),
+                           esn_t(4),
+                           0,
+                           tail_record,
+                           epoch_size_map,
+                           epoch_end_offsets);
   EpochRecoveryStateMap map;
   map.emplace(6, std::make_pair(E::OK, md));
   onGetEpochRecoveryMetadataComplete(E::OK, map);
@@ -792,7 +876,16 @@ TEST_F(PurgeUncleanEpochsTest, BadEpochMetadata) {
   ASSERT_EQ(State::GET_EPOCH_RECOVERY_METADATA, getState());
 
   // Say GetEpochRecoveryMetadataRequest completes for E15
-  EpochRecoveryMetadata erm(epoch_t(16), esn_t(2), esn_t(4), 1, 100, 200);
+  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 200);
+  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 100);
+  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 100);
+  EpochRecoveryMetadata erm(epoch_t(16),
+                            esn_t(2),
+                            esn_t(4),
+                            0,
+                            tail_record,
+                            epoch_size_map,
+                            epoch_end_offsets);
   EpochRecoveryStateMap map = {{15, {E::OK, erm}}};
   onGetEpochRecoveryMetadataComplete(E::OK, map);
 
@@ -801,9 +894,27 @@ TEST_F(PurgeUncleanEpochsTest, BadEpochMetadata) {
   ASSERT_EQ(1, getPurgeSingleEpochsMap().count(epoch_t(15)));
 
   // Say GetEpochRecoveryMetadataRequest completes for [16, 18]
-  EpochRecoveryMetadata erm1(epoch_t(17), esn_t(2), esn_t(4), 1, 100, 200);
+  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 200);
+  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 100);
+  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 100);
+  EpochRecoveryMetadata erm1(epoch_t(17),
+                             esn_t(2),
+                             esn_t(4),
+                             0,
+                             tail_record,
+                             epoch_size_map,
+                             epoch_end_offsets);
   EpochRecoveryMetadata erm2;
-  EpochRecoveryMetadata erm3(epoch_t(19), esn_t(2), esn_t(4), 1, 100, 200);
+  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 200);
+  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 100);
+  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 100);
+  EpochRecoveryMetadata erm3(epoch_t(19),
+                             esn_t(2),
+                             esn_t(4),
+                             0,
+                             tail_record,
+                             epoch_size_map,
+                             epoch_end_offsets);
   EpochRecoveryStateMap map2 = {
       {16, {E::OK, erm1}}, {17, {E::EMPTY, erm2}}, {18, {E::OK, erm3}}};
   onGetEpochRecoveryMetadataComplete(E::OK, map2);
@@ -819,9 +930,18 @@ TEST_F(PurgeUncleanEpochsTest, BadEpochMetadata) {
 
   // Now GetEpochRecoveryMetadataRequest completes for [6, 14]
   EpochRecoveryStateMap map3;
+  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 200);
+  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 100);
+  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 100);
   for (auto epoch = 6; epoch <= 14; epoch++) {
     if (epoch % 2 == 0) {
-      EpochRecoveryMetadata md(epoch_t(epoch), esn_t(2), esn_t(4), 1, 100, 200);
+      EpochRecoveryMetadata md(epoch_t(epoch),
+                               esn_t(2),
+                               esn_t(4),
+                               0,
+                               tail_record,
+                               epoch_size_map,
+                               epoch_end_offsets);
       map3.emplace(epoch, std::make_pair(E::OK, md));
     } else {
       map3.emplace(epoch, std::make_pair(E::EMPTY, EpochRecoveryMetadata()));
@@ -838,9 +958,18 @@ TEST_F(PurgeUncleanEpochsTest, BadEpochMetadata) {
   }
 
   EpochRecoveryStateMap map4;
+  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 200);
+  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 100);
+  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 100);
   for (auto epoch = 19; epoch <= 200; epoch++) {
     if (epoch % 2 == 0) {
-      EpochRecoveryMetadata md(epoch_t(epoch), esn_t(2), esn_t(4), 1, 100, 200);
+      EpochRecoveryMetadata md(epoch_t(epoch),
+                               esn_t(2),
+                               esn_t(4),
+                               0,
+                               tail_record,
+                               epoch_size_map,
+                               epoch_end_offsets);
       map4.emplace(epoch, std::make_pair(E::OK, md));
     } else {
       map4.emplace(epoch, std::make_pair(E::EMPTY, EpochRecoveryMetadata()));

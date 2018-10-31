@@ -231,6 +231,10 @@ class RecoveryTest : public ::testing::TestWithParam<PopulateRecordCache> {
 
   // sequencer reactivation limit setting string. optional
   folly::Optional<std::string> seq_reactivation_limit_;
+
+  TailRecord tail_record;
+  OffsetMap epoch_size_map;
+  OffsetMap epoch_end_offsets;
 };
 
 class MockRecordCacheDependencies : public RecordCacheDependencies {
@@ -1995,14 +1999,18 @@ TEST_P(RecoveryTest, PerEpochLogMetadata) {
                           .timestamp(std::chrono::milliseconds(3)),
                   });
 
+  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 8);
+  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 8);
+  tail_record.reset();
+  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 8);
   const EpochRecoveryMetadata expected_metadata_epoch_1(
       epoch_t(2), // sequencer epoch
       esn_t(1),   // last known good
       esn_t(3),   // last digest record
       0,          // flags
-      8,
-      8 // epoch size
-  );
+      tail_record,
+      epoch_size_map,
+      epoch_end_offsets);
 
   // sequencer crashed and a replacement is starting with epoch 2
   cluster_->setStartingEpoch(LOG_ID, epoch_t(2));
@@ -2025,7 +2033,6 @@ TEST_P(RecoveryTest, PerEpochLogMetadata) {
     EpochRecoveryMetadata metadata;
     int rv = store->getByIndex(SHARD_IDX)->readPerEpochLogMetadata(
         LOG_ID, epoch_t(1), &metadata);
-
     if (i == 1) {
       // for node 1, there should be no such metadata since it is down
       ASSERT_EQ(-1, rv);
@@ -2566,6 +2573,8 @@ TEST_P(RecoveryTest, PurgingAvailabilityTest) {
   const copyset_t copyset_e1 = {N1, N2};
   const copyset_t copyset_e2 = {N4, N5};
   const copyset_t copyset_e3 = {N1, N3, N4, N5};
+  OffsetMap epoch_end_offset;
+  epoch_end_offset.setCounter(CounterType::BYTE_OFFSET, 4);
 
   // Storage nodes contain the following records (x) and plugs (o):
   //      (1,1) (1,2) (1,3) (1,4) (3,1)
@@ -2582,7 +2591,8 @@ TEST_P(RecoveryTest, PurgingAvailabilityTest) {
                       TestRecord(LOG_ID, lsn(1, 1), ESN_INVALID)
                           .copyset(copyset_e1)
                           .timestamp(std::chrono::milliseconds(1))
-                          .offsetWithinEpoch(4),
+                          .offsetWithinEpoch(4)
+                          .offsetsWithinEpoch(epoch_end_offset),
                       TestRecord(LOG_ID, lsn(1, 2), esn_t(1))
                           .copyset(copyset_e1)
                           .timestamp(std::chrono::milliseconds(2))
@@ -2614,7 +2624,8 @@ TEST_P(RecoveryTest, PurgingAvailabilityTest) {
                       TestRecord(LOG_ID, lsn(1, 1), ESN_INVALID)
                           .copyset(copyset_e1)
                           .timestamp(std::chrono::milliseconds(1))
-                          .offsetWithinEpoch(4),
+                          .offsetWithinEpoch(4)
+                          .offsetsWithinEpoch(epoch_end_offset),
                       TestRecord(LOG_ID, lsn(1, 3), esn_t(1))
                           .copyset(copyset_e1)
                           .timestamp(std::chrono::milliseconds(4)),
@@ -2698,25 +2709,32 @@ TEST_P(RecoveryTest, PurgingAvailabilityTest) {
                std::vector<esn_t>({esn_t(2)})  // bridges
   );
   {
+    epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 12);
+    epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 12);
+    tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 12);
     const EpochRecoveryMetadata expected_metadata_epoch_1(
         epoch_t(4), // sequencer epoch
         esn_t(1),   // last known good
         esn_t(3),   // last digest record
         0,          // flags
-        12,         // epoch end offset
-        12          // epoch size
-    );
+        tail_record,
+        epoch_size_map,
+        epoch_end_offsets);
+
+    tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 16);
+    epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 16);
+    epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 4);
     const EpochRecoveryMetadata expected_metadata_epoch_3(
         epoch_t(4),  // sequencer epoch
         ESN_INVALID, // last known good
         esn_t(1),    // last digest record
         0,           // flags
-        16,          // epoch end offset
-        4            // epoch size
-    );
+        tail_record,
+        epoch_size_map,
+        epoch_end_offsets);
 
     // examine Node 1, it should advance its local LCE to at least epoch 3, and
-    // it does not have EpochRecoveryMetadata for epoch 2 becaues of the epoch
+    // it does not have EpochRecoveryMetadata for epoch 2 because the epoch
     // is empty. And it should have EpochRecoveryMetadata for epoch 3
     auto store = cluster_->getNode(1).createLocalLogStore();
     LastCleanMetadata lce_metadata;
@@ -2889,14 +2907,17 @@ TEST_P(RecoveryTest, D4187744) {
                           .timestamp(std::chrono::milliseconds(3)),
                   });
 
+  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 8);
+  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 8);
+  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 8);
   const EpochRecoveryMetadata expected_metadata_epoch_1(
       epoch_t(2), // sequencer epoch
       esn_t(1),   // last known good
       esn_t(3),   // last digest record
       0,          // flags
-      8,
-      8 // epoch size
-  );
+      tail_record,
+      epoch_size_map,
+      epoch_end_offsets);
 
   // sequencer crashed and a replacement is starting with epoch 2
   cluster_->setStartingEpoch(LOG_ID, epoch_t(2));

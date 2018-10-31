@@ -706,9 +706,27 @@ TEST_F(MessageSerializationTest, GET_EPOCH_RECOVERY_METADATA_REPLY_RangeEpoch) {
       status.push_back(E::NOTREADY);
     } else {
       status.push_back(E::OK);
-      EpochRecoveryMetadata erm(epoch_t(7), esn_t(10), esn_t(10), 0, 0, 0);
+      OffsetMap epoch_size_map;
+      epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 0);
+      TailRecord tail_record;
+      tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 4);
+      tail_record.header.u.offset_within_epoch = 4;
+      tail_record.header.log_id = logid_t(1);
+      OffsetMap epoch_end_offsets;
+      epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 4);
+      EpochRecoveryMetadata erm(epoch_t(7),
+                                esn_t(10),
+                                esn_t(10),
+                                1,
+                                tail_record,
+                                epoch_size_map,
+                                epoch_end_offsets);
+
       ld_check(erm.valid());
       Slice slice = erm.serialize();
+      EpochRecoveryMetadata erm2;
+      erm2.deserialize(slice);
+      ASSERT_EQ(erm, erm2);
       std::string md(reinterpret_cast<const char*>(slice.data), slice.size);
       metadata.push_back(md);
     }
@@ -725,8 +743,10 @@ TEST_F(MessageSerializationTest, GET_EPOCH_RECOVERY_METADATA_REPLY_RangeEpoch) {
     std::string expected =
         "00000000000000000A0000000100000000000000000000000A00000001000000000000"
         "000A000000000000000100000002000000030000000400000005000000060000000700"
-        "000008000000090000000A0000006D006D006D006D006D00000032003200320032001E"
-        "000000070000000A0000000A000000000000000000000000000000000000000000";
+        "000008000000090000000A0000006D006D006D006D006D000000320032003200320050"
+        "000000070000000A0000000A0000000100040000000000000000000000000000000100"
+        "0000000000000000000000000000000000000000000004000000000000000000000000"
+        "00000001F60000000000000000";
     DO_TEST(msg,
             check,
             Compatibility::GET_EPOCH_RECOVERY_RANGE_SUPPORT,

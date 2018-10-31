@@ -221,6 +221,8 @@ MessageReadResult STORE_Message::deserialize(ProtocolReader& reader,
           extra.offsets_within_epoch.getCounter(CounterType::BYTE_OFFSET);
     } else {
       reader.read(&extra.offset_within_epoch);
+      extra.offsets_within_epoch.setCounter(
+          CounterType::BYTE_OFFSET, extra.offset_within_epoch);
     }
   }
 

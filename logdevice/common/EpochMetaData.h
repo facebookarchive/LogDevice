@@ -168,21 +168,10 @@ class EpochMetaData {
                      bool output_errors = false) const;
 
   // reset to empty state
-  void reset() {
-    h.version = 0;
-    h.epoch = h.effective_since = EPOCH_INVALID;
-    h.nodeset_size = 0;
-    h.replication_factor_DO_NOT_USE = 0;
-    h.sync_replication_scope_DO_NOT_USE = NodeLocationScope::NODE;
-    h.flags = 0;
-
-    shards.clear();
-  }
+  void reset();
 
   // check if the metdata is in the empty state
-  bool isEmpty() const {
-    return *this == EpochMetaData();
-  }
+  bool isEmpty() const;
 
   //
   // TODO(TT15517759): inherit from SerializableData
@@ -223,9 +212,7 @@ class EpochMetaData {
   /**
    * Returns serialized size, or -1 if the epoch metadata is invalid.
    */
-  int sizeInPayload() const {
-    return toPayload(nullptr, 0);
-  }
+  int sizeInPayload() const;
 
   // @return: a std::string containing serialized data in binary form;
   //          empty string if object is invaid
@@ -233,49 +220,20 @@ class EpochMetaData {
 
   // @return: if the EpochMetadata indicates that its content has been
   //          successfully written to the metadata log
-  bool writtenInMetaDataLog() const {
-    return h.flags & MetaDataLogRecordHeader::WRITTEN_IN_METADATALOG;
-  }
+  bool writtenInMetaDataLog() const;
 
   // @return: if the EpochMetadata indicates that the log has been
   //          disabled
-  bool disabled() const {
-    return h.flags & MetaDataLogRecordHeader::DISABLED;
-  }
+  bool disabled() const;
 
   // check if epoch metadata is _exactly_ the same as @param rhs
-  bool operator==(const EpochMetaData& rhs) const {
-    return h.epoch == rhs.h.epoch && isSubstantiallyIdentical(rhs) &&
-        writtenInMetaDataLog() == rhs.writtenInMetaDataLog();
-  }
+  bool operator==(const EpochMetaData& rhs) const;
 
   // checks if epoch metadata is the same as @param rhs, except for the current
   // epoch
-  bool isSubstantiallyIdentical(const EpochMetaData& rhs) const {
-    static_assert(sizeof(h) == 20, "MetaDataLogRecordHeader size changed");
+  bool isSubstantiallyIdentical(const EpochMetaData& rhs) const;
 
-    // flags to ignore:
-    // - wire flags only used for serialization: HAS_REPLICATION_PROPERTY and
-    //   HAS_WEIGHTS
-    // - only used to indicate written status: WRITTEN_IN_METADATALOG
-    const epoch_metadata_flags_t flags_mask =
-        MetaDataLogRecordHeader::ALL_KNOWN_FLAGS &
-        ~MetaDataLogRecordHeader::HAS_REPLICATION_PROPERTY &
-        ~MetaDataLogRecordHeader::HAS_WEIGHTS &
-        ~MetaDataLogRecordHeader::WRITTEN_IN_METADATALOG;
-
-    return h.version == rhs.h.version &&
-        h.effective_since == rhs.h.effective_since &&
-        h.nodeset_size == rhs.h.nodeset_size &&
-        (h.flags & flags_mask) == (rhs.h.flags & flags_mask) &&
-        shards == rhs.shards && weights == rhs.weights &&
-        replication == rhs.replication &&
-        nodesconfig_hash == rhs.nodesconfig_hash;
-  }
-
-  bool operator!=(const EpochMetaData& rhs) const {
-    return !(*this == rhs);
-  }
+  bool operator!=(const EpochMetaData& rhs) const;
 
   // return a human readable string to show the content of metadata
   std::string toString() const;

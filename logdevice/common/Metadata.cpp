@@ -27,6 +27,80 @@ Status EpochRecoveryMetadata::update(PerEpochLogMetadata& new_metadata) {
   return E::UPTODATE;
 }
 
+Slice EpochRecoveryMetadata::serialize() const {
+  serialize_buffer_.clear();
+  ld_check(header_.epoch_size ==
+           epoch_size_map_.getCounter(CounterType::BYTE_OFFSET));
+  ld_check(epoch_end_offsets_.getCounter(CounterType::BYTE_OFFSET) ==
+           header_.epoch_end_offset);
+  serialize_buffer_.resize(
+      sizeInLinearBuffer(header_, tail_record_, epoch_size_map_), 0);
+  memcpy(serialize_buffer_.data(), &header_, sizeof(header_));
+  if (header_.flags & Header::SUPPORT_OFFSET_MAP_AND_TAIL_RECORD) {
+    ld_check(tail_record_.isValid());
+    ld_check(epoch_end_offsets_ == tail_record_.offsets_map_);
+    uint64_t buf_size = sizeof(header_);
+    int rv;
+    rv = tail_record_.serialize(
+        serialize_buffer_.data() + buf_size, tail_record_.sizeInLinearBuffer());
+    ld_check(rv != -1);
+    buf_size += rv;
+    rv = epoch_size_map_.serialize(serialize_buffer_.data() + buf_size,
+                                   epoch_size_map_.sizeInLinearBuffer());
+    ld_check(rv != -1);
+  }
+  return Slice(serialize_buffer_.data(), serialize_buffer_.size());
+}
+
+int EpochRecoveryMetadata::deserialize(Slice blob) {
+  const char* ptr = blob.ptr();
+  ld_check(ptr != nullptr);
+  std::memcpy(&header_, ptr, sizeof(header_));
+  ptr += sizeof(header_);
+  if (header_.flags & Header::SUPPORT_OFFSET_MAP_AND_TAIL_RECORD) {
+    uint64_t buf_size = sizeof(header_);
+    int rv;
+    rv = tail_record_.deserialize({ptr, blob.size - buf_size});
+    ld_check(rv != -1);
+    epoch_end_offsets_ = tail_record_.offsets_map_;
+    ptr += rv;
+    buf_size += rv;
+    rv = epoch_size_map_.deserialize({ptr, blob.size - buf_size});
+    ld_check(rv != -1);
+  } else {
+    epoch_end_offsets_.setCounter(
+        CounterType::BYTE_OFFSET, header_.epoch_end_offset);
+    epoch_size_map_.setCounter(CounterType::BYTE_OFFSET, header_.epoch_size);
+  }
+  return 0;
+}
+
+bool EpochRecoveryMetadata::isPreempted(Seal seal) const {
+  return seal.valid() &&
+      (seal.epoch == EPOCH_MAX ||
+       header_.sequencer_epoch.val_ < seal.epoch.val_ + 1);
+}
+
+bool EpochRecoveryMetadata::operator==(const EpochRecoveryMetadata& erm) const {
+  return this->header_ == erm.header_ &&
+      this->epoch_size_map_ == erm.epoch_size_map_ &&
+      this->epoch_end_offsets_ == erm.epoch_end_offsets_ &&
+      this->tail_record_.sameContent(erm.tail_record_);
+}
+
+void EpochRecoveryMetadata::reset() {
+  header_ = {EPOCH_INVALID,
+             ESN_INVALID,
+             ESN_INVALID,
+             0,
+             BYTE_OFFSET_INVALID,
+             BYTE_OFFSET_INVALID};
+  tail_record_.reset();
+  epoch_size_map_.clear();
+  serialize_buffer_.clear();
+  epoch_end_offsets_.clear();
+}
+
 std::string EpochRecoveryMetadata::toStringShort() const {
   std::string out = "[";
   if (!valid()) {
@@ -37,9 +111,9 @@ std::string EpochRecoveryMetadata::toStringShort() const {
           " L:" + std::to_string(header_.last_known_good.val_) +
           " H:" + std::to_string(header_.last_digest_esn.val_) +
           " F:" + std::to_string(header_.flags) +
-          " O:" + std::to_string(header_.epoch_end_offset) +
-          " Z:" + std::to_string(header_.epoch_size));
-  out += "]";
+          " T:" + tail_record_.toString() + " Z:" + epoch_size_map_.toString() +
+          "O:" + epoch_end_offsets_.toString() + "]");
+
   return out;
 }
 

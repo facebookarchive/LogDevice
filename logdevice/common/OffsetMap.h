@@ -30,7 +30,7 @@ class OffsetMap : public SerializableData {
   using SerializableData::deserialize;
   using SerializableData::serialize;
 
-  OffsetMap();
+  OffsetMap() noexcept = default;
 
   OffsetMap(const OffsetMap& om) noexcept;
   OffsetMap& operator=(const OffsetMap& om) noexcept;
@@ -113,6 +113,9 @@ class OffsetMap : public SerializableData {
 
   // Check if the counterTypeMap_ are equal
   bool operator==(const OffsetMap& om) const;
+
+  // Check if the counterTypeMap_ are not equal
+  bool operator!=(const OffsetMap& om) const;
 
  private:
   std::unordered_map<CounterType, uint64_t, folly::Hash> counterTypeMap_;

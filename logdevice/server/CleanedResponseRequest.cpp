@@ -123,13 +123,28 @@ void CleanedResponseRequest::prepareMetadata() {
     return;
   }
 
+  EpochRecoveryMetadata::FlagsType flags = 0;
+  if (Worker::settings().enable_offset_map) {
+    flags |= EpochRecoveryMetadata::Header::SUPPORT_OFFSET_MAP_AND_TAIL_RECORD;
+  }
+
+  ld_check(clean_msg_->tail_record_.isValid());
+  ld_check(!clean_msg_->tail_record_.containOffsetWithinEpoch());
+  ld_check(header.epoch_end_offset ==
+           clean_msg_->tail_record_.offsets_map_.getCounter(
+               CounterType::BYTE_OFFSET));
+  ld_check(header.epoch_size ==
+           clean_msg_->epoch_size_map_.getCounter(CounterType::BYTE_OFFSET));
+
   // TODO 9929743: byte offset
-  metadata_ = std::make_unique<EpochRecoveryMetadata>(header.sequencer_epoch,
-                                                      header.last_known_good,
-                                                      header.last_digest_esn,
-                                                      /* flags= */ 0,
-                                                      header.epoch_end_offset,
-                                                      header.epoch_size);
+  metadata_ = std::make_unique<EpochRecoveryMetadata>(
+      header.sequencer_epoch,
+      header.last_known_good,
+      header.last_digest_esn,
+      flags,
+      clean_msg_->tail_record_,
+      clean_msg_->epoch_size_map_,
+      clean_msg_->tail_record_.offsets_map_);
 
   // CLEAN message was checked when it was received
   ld_check(metadata_->valid());

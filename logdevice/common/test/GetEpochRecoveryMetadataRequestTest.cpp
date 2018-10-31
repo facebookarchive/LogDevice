@@ -140,6 +140,9 @@ class GetEpochRecoveryMetadataRequestTest : public ::testing::Test {
   bool deferredCompleteTimerCreated_{false};
   bool deferredCompleteCalled_{false};
   bool deferredCompleteTimerActivated_{false};
+  TailRecord tail_record;
+  OffsetMap epoch_size_map;
+  OffsetMap epoch_end_offsets;
 };
 
 class MyCopySetSelectorDeps : public CopySetSelectorDependencies,
@@ -373,7 +376,15 @@ void GetEpochRecoveryMetadataRequestTest::verifyShardsStateInError(
 TEST_F(GetEpochRecoveryMetadataRequestTest, BasicTest) {
   init();
   auto request = createRequest(epoch_t(1), epoch_t(1));
-  EpochRecoveryMetadata md(epoch_t(2), esn_t(10), esn_t(10), 0, 0, 0);
+  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 0);
+  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 0);
+  EpochRecoveryMetadata md(epoch_t(2),
+                           esn_t(10),
+                           esn_t(10),
+                           0,
+                           tail_record,
+                           epoch_size_map,
+                           epoch_end_offsets);
   EpochRecoveryStateMap map{{1, {E::OK, md}}};
   request->execute();
   int i = 0;
@@ -396,7 +407,15 @@ TEST_F(GetEpochRecoveryMetadataRequestTest, BasicTest) {
 TEST_F(GetEpochRecoveryMetadataRequestTest, BasicTest2) {
   init();
   auto request = createRequest(epoch_t(1), epoch_t(2));
-  EpochRecoveryMetadata md1(epoch_t(2), esn_t(10), esn_t(10), 0, 0, 0);
+  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 0);
+  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 0);
+  EpochRecoveryMetadata md1(epoch_t(2),
+                            esn_t(10),
+                            esn_t(10),
+                            0,
+                            tail_record,
+                            epoch_size_map,
+                            epoch_end_offsets);
   EpochRecoveryStateMap map1{
       {1, {E::OK, md1}}, {2, {E::EMPTY, EpochRecoveryMetadata()}}};
   request->execute();

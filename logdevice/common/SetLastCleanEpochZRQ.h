@@ -94,16 +94,18 @@ class SetLastCleanEpochZRQ : public LastCleanEpochZRQ {
         parsed_tail.header.u.byte_offset != BYTE_OFFSET_INVALID) {
       RATELIMIT_WARNING(std::chrono::seconds(10),
                         10,
-                        "Setting the tail with BYTE_OFFSET_INVALID while the "
-                        "previous tail in LCE has byte offset of %lu for log "
+                        "Setting the tail with invalid OffsetMap while the "
+                        "previous tail in LCE has OffsetMap of %s for log "
                         "%lu epoch %u.",
-                        parsed_tail.header.u.byte_offset,
+                        parsed_tail.offsets_map_.toString().c_str(),
                         logid_.val_,
                         epoch_.val_);
       // TODO(T33977412) remove byte_offset when fully deployed
-      tail_record_.header.u.byte_offset = parsed_tail.header.u.byte_offset;
-      tail_record_.offsets_map_.setCounter(
-          CounterType::BYTE_OFFSET, parsed_tail.header.u.byte_offset);
+      ld_check(parsed_tail.header.u.byte_offset ==
+               parsed_tail.offsets_map_.getCounter(CounterType::BYTE_OFFSET));
+      tail_record_.header.u.byte_offset =
+          std::move(parsed_tail.header.u.byte_offset);
+      tail_record_.offsets_map_ = std::move(parsed_tail.offsets_map_);
     }
 
     return NextStep::MODIFY;

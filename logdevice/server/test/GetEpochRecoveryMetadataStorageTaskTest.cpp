@@ -110,10 +110,21 @@ TEST(GetEpochRecoveryMetadataStorageTask, GetMetadata) {
   std::vector<EpochRecoveryMetadata> non_empty_epoch;
   epoch_t start = epoch_t(1);
   epoch_t end = epoch_t(20);
+  OffsetMap epoch_size_map;
+  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 200);
+  TailRecord tail_record;
+  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 100);
+  OffsetMap epoch_end_offsets;
+  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 100);
   for (auto epoch = 2; epoch <= 10; epoch++) {
     if (epoch % 2 == 0) {
-      EpochRecoveryMetadata erm(
-          epoch_t(epoch), esn_t(2), esn_t(4), 1, 100, 200);
+      EpochRecoveryMetadata erm(epoch_t(epoch),
+                                esn_t(2),
+                                esn_t(4),
+                                0,
+                                tail_record,
+                                epoch_size_map,
+                                epoch_end_offsets);
       non_empty_epoch.push_back(erm);
       int rv =
           store.updatePerEpochLogMetadata(LOG_ID,
