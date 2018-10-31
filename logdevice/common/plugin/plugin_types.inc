@@ -43,6 +43,8 @@ PLUGIN_TYPE(CONFIG_SOURCE_FACTORY, 8, "ConfigSource factory", true)
 PLUGIN_TYPE(BACKTRACE_RUNNER, 9, "Backtrace runner", false)
 // See SequencerLocatorFactory.h
 PLUGIN_TYPE(SEQUENCER_LOCATOR_FACTORY, 10, "SequencerLocator factory", false)
+// See OpenTracerFactory.h
+PLUGIN_TYPE(OPEN_TRACER_FACTORY, 11, "Open Tracing tracer factory", false)
 
 // TODO: add more plugin types
 

@@ -26,6 +26,7 @@
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/plugin/OpenTracerFactory.h"
 #include "logdevice/common/protocol/ProtocolReader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
 #include "logdevice/common/stats/Stats.h"
@@ -222,24 +223,28 @@ Message::Disposition APPEND_Message::onReceived(const Address& from) {
   }
   WORKER_LOG_STAT_ADD(header_.logid, append_payload_bytes, payload_size);
 
-  std::shared_ptr<opentracing::Tracer> e2e_tracer =
-      Worker::onThisThread()->processor_->getPlugin()->createOTTracer();
-
-  ld_check(e2e_tracer);
-
+  std::shared_ptr<opentracing::Tracer> e2e_tracer;
   std::unique_ptr<opentracing::Span> append_message_receive_span;
-
   if (!e2e_tracing_context_.empty()) {
-    // receiving a non empty tracing context means that we should create
-    // tracing spans
-    std::stringstream sstream(e2e_tracing_context_);
-    auto extracted_context_ = e2e_tracer->Extract(sstream);
+    auto ot_plugin = Worker::onThisThread()
+                         ->processor_->getPluginRegistry()
+                         ->getSinglePlugin<OpenTracerFactory>(
+                             PluginType::OPEN_TRACER_FACTORY);
+    if (ot_plugin) {
+      e2e_tracer = ot_plugin->createOTTracer();
 
-    append_message_receive_span = e2e_tracer->StartSpan(
-        "APPEND_Message_receive", {ChildOf(extracted_context_->get())});
-    append_message_receive_span->SetTag("source_client_id", from.toString());
-    append_message_receive_span->SetTag(
-        "lsn_before_redirect", lsn_before_redirect_);
+      ld_check(e2e_tracer);
+      // receiving a non empty tracing context means that we should create
+      // tracing spans
+      std::stringstream sstream(e2e_tracing_context_);
+      auto extracted_context_ = e2e_tracer->Extract(sstream);
+
+      append_message_receive_span = e2e_tracer->StartSpan(
+          "APPEND_Message_receive", {ChildOf(extracted_context_->get())});
+      append_message_receive_span->SetTag("source_client_id", from.toString());
+      append_message_receive_span->SetTag(
+          "lsn_before_redirect", lsn_before_redirect_);
+    }
   }
 
   std::shared_ptr<AppenderPrep> append_prep =

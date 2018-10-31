@@ -61,10 +61,6 @@ class LegacyPluginPack {
     return "default LegacyPluginPack";
   };
 
-  virtual std::shared_ptr<opentracing::Tracer> createOTTracer() {
-    return opentracing::MakeNoopTracer();
-  }
-
   virtual ~LegacyPluginPack() {}
 };
 
