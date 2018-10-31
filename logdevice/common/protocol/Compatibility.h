@@ -67,6 +67,8 @@ enum ProtocolVersion : uint16_t {
 
   OFFSET_MAP_SUPPORT_IN_SEALED_MSG, // = 85
 
+  CLEAN_MESSAGE_SUPPORT_OFFSET_MAP, // = 86
+
   // NOTE: insert new protocol versions here
 
   // Maximum version number of the protocol this version of LogDevice
@@ -97,6 +99,7 @@ static_assert(TAIL_RECORD_IN_GSS_REPLY == 82, "");
 static_assert(STORE_E2E_TRACING_SUPPORT == 83, "");
 static_assert(OFFSET_MAP_SUPPORT == 84, "");
 static_assert(OFFSET_MAP_SUPPORT_IN_SEALED_MSG == 85, "");
+static_assert(CLEAN_MESSAGE_SUPPORT_OFFSET_MAP == 86, "");
 
 constexpr uint16_t MIN_PROTOCOL_SUPPORTED = PROTOCOL_VERSION_LOWER_BOUND + 1;
 constexpr uint16_t MAX_PROTOCOL_SUPPORTED = PROTOCOL_VERSION_UPPER_BOUND - 1;

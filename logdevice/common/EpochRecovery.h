@@ -186,8 +186,17 @@ class EpochRecovery {
     return final_tail_record_.header.u.byte_offset;
   }
 
+  const TailRecord& getEpochTailRecord() const {
+    return final_tail_record_;
+  }
+
   uint64_t getEpochSize() const {
-    return epoch_size_; // may be BYTE_OFFSET_INVALID
+    return epoch_size_map_.getCounter(
+        CounterType::BYTE_OFFSET); // may be BYTE_OFFSET_INVALID
+  }
+
+  const OffsetMap& getEpochSizeMap() const {
+    return epoch_size_map_;
   }
 
   logid_t getLogID() const;
@@ -230,14 +239,14 @@ class EpochRecovery {
    *                        reporting max_seen_esn is not supported on the
    *                        sealed node.
    *
-   * @param epoch_size      Node view of amount of data written in epoch_.
-   *                        May be equal to BYTE_OFFSET_INVALID if:
-   *                        1) node have never received STORE messages
-   *                           with epoch_size_ info.
-   *                        2) some failure of fetching offset happens on
-   *                           node side.
-   *                        3) LD version on node does not support
-   *                           byte offsets.
+   * @param epoch_size      OffsetMap containing counters that represent the
+   *                        amount of data written in epoch_. May be invalid if:
+   *                        1) node have never received STORE messages with
+   *                           epoch_size_ info.
+   *                        2) some failure of fetching offset happens on node
+   *                           side.
+   *                        3) LD version on node does not support counter
+   *                           offsets.
    *
    * @param tail           the tail (i.e., last per-epoch released) record
    *                       reported on the sealed node. no value means that
@@ -248,7 +257,7 @@ class EpochRecovery {
   bool onSealed(ShardID from,
                 esn_t lng,
                 esn_t max_seen_esn,
-                uint64_t epoch_size,
+                const OffsetMap& epoch_size,
                 folly::Optional<TailRecord> tail);
 
   /**
@@ -719,10 +728,10 @@ class EpochRecovery {
   // it's created or restarted
   static std::atomic<recovery_id_t::raw_type> next_id;
 
-  // How much data is written to current epoch. Sealed nodes will send their
-  // view of this info and epoch_size_ will be set as maximum value
-  // among them.
-  uint64_t epoch_size_ = 0;
+  // OffsetMap containing multiple counters on how much data is written
+  // to current epoch. Refer to OffsetMap.h. Sealed nodes will send their view
+  // of this info and epoch_size_ will be set as maximum value among them.
+  OffsetMap epoch_size_map_;
 
   // Timestamp of the last written record before epoch_.
   uint64_t last_timestamp_ = 0;

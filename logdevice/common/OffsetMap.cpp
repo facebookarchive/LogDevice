@@ -44,6 +44,10 @@ OffsetMap::getCounterMap() const {
   return counterTypeMap_;
 }
 
+void OffsetMap::clear() {
+  this->counterTypeMap_.clear();
+}
+
 bool OffsetMap::isValidOffset(const CounterType counter_type) const {
   return counterTypeMap_.find(counter_type) != counterTypeMap_.end();
 }
@@ -111,6 +115,13 @@ OffsetMap& OffsetMap::operator=(OffsetMap&& om) noexcept {
 
 OffsetMap::OffsetMap(OffsetMap&& om) noexcept {
   this->counterTypeMap_ = std::move(om.counterTypeMap_);
+}
+
+void OffsetMap::max(const OffsetMap& om) {
+  for (auto& it : om.getCounterMap()) {
+    this->counterTypeMap_[it.first] =
+        std::max(it.second, this->counterTypeMap_[it.first]);
+  }
 }
 
 std::string OffsetMap::toString() const {

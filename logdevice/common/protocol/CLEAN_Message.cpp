@@ -18,15 +18,33 @@
 namespace facebook { namespace logdevice {
 
 CLEAN_Message::CLEAN_Message(const CLEAN_Header& header,
+                             TailRecord tail_record,
+                             OffsetMap epoch_size_map,
                              StorageSet absent_nodes)
     : Message(MessageType::CLEAN, TrafficClass::RECOVERY),
       header_(header),
+      tail_record_(std::move(tail_record)),
+      epoch_size_map_(std::move(epoch_size_map)),
       absent_nodes_(std::move(absent_nodes)) {}
 
 void CLEAN_Message::serialize(ProtocolWriter& writer) const {
   ld_check(header_.num_absent_nodes == absent_nodes_.size());
-  writer.write(header_);
+  ld_check(header_.epoch_end_offset ==
+           tail_record_.offsets_map_.getCounter(CounterType::BYTE_OFFSET));
+  ld_check(header_.epoch_size ==
+           epoch_size_map_.getCounter(CounterType::BYTE_OFFSET));
+  CLEAN_Header write_header = header_;
+  if (tail_record_.isValid()) {
+    write_header.flags |= CLEAN_Header::INCLUDE_TAIL_RECORD;
+  }
+  writer.write(write_header);
   writer.writeVector(absent_nodes_);
+  if (writer.proto() >= Compatibility::CLEAN_MESSAGE_SUPPORT_OFFSET_MAP) {
+    if (tail_record_.isValid()) {
+      tail_record_.serialize(writer);
+    }
+    epoch_size_map_.serialize(writer);
+  }
 }
 
 StorageSet CLEAN_Message::readAbsentNodes(ProtocolReader& reader,
@@ -49,7 +67,21 @@ MessageReadResult CLEAN_Message::deserialize(ProtocolReader& reader) {
     absent_nodes = readAbsentNodes(reader, hdr);
   }
 
-  return reader.result([&] { return new CLEAN_Message(hdr, absent_nodes); });
+  TailRecord tail_record;
+  OffsetMap epoch_size_map;
+  if (reader.proto() >= Compatibility::CLEAN_MESSAGE_SUPPORT_OFFSET_MAP) {
+    if (hdr.flags & CLEAN_Header::INCLUDE_TAIL_RECORD) {
+      tail_record.deserialize(reader, true);
+    }
+    epoch_size_map.deserialize(reader, false /* unused */);
+  }
+
+  return reader.result([&] {
+    return new CLEAN_Message(hdr,
+                             std::move(tail_record),
+                             std::move(epoch_size_map),
+                             std::move(absent_nodes));
+  });
 }
 
 void CLEAN_Message::onSent(Status st, const Address& to) const {

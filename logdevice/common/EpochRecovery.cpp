@@ -82,17 +82,16 @@ bool EpochRecovery::digestComplete() const {
 bool EpochRecovery::onSealed(ShardID from,
                              esn_t lng,
                              esn_t max_seen_esn,
-                             uint64_t epoch_size,
+                             const OffsetMap& epoch_size,
                              folly::Optional<TailRecord> tail) {
   ld_debug("SEALED for %s: from %s, lng %u, max_seen %u, "
-           "epoch_size %lu, tail %s.",
+           "epoch_size %s, tail %s.",
            identify().c_str(),
            from.toString().c_str(),
            lng.val_,
            max_seen_esn.val_,
-           epoch_size,
+           epoch_size.toString().c_str(),
            tail.hasValue() ? tail.value().toString().c_str() : "n/a");
-
   recovery_set_.transition(from, RecoveryNode::State::SEALED);
 
   // It's ok to update lng_ even if we already sent some START messages and
@@ -102,8 +101,8 @@ bool EpochRecovery::onSealed(ShardID from,
   lng_ = std::max(lng_, lng);
   max_seen_esn_ = std::max(max_seen_esn_, max_seen_esn);
 
-  if (epoch_size != BYTE_OFFSET_INVALID) {
-    epoch_size_ = std::max(epoch_size_, epoch_size);
+  if (epoch_size.isValid()) {
+    epoch_size_map_.max(epoch_size);
   }
 
   uint64_t last_timestamp = 0;
@@ -691,29 +690,27 @@ void EpochRecovery::updateEpochTailRecord() {
   // if the tail record happen to have an offset within epoch associated with
   // it, use that as the epoch size, otherwise, use the maximum epoch size
   // reported in SEALED replies as an approximation
-  // TODO(T33977412)
-  if (final_tail_record_.header.u.offset_within_epoch == BYTE_OFFSET_INVALID) {
-    if (epoch_size_ != BYTE_OFFSET_INVALID) {
-      // TODO(T33977412): Remove offset_within_epoch
-      final_tail_record_.header.u.offset_within_epoch = epoch_size_;
-      final_tail_record_.offsets_map_.setCounter(
-          CounterType::BYTE_OFFSET, epoch_size_);
+  if (!final_tail_record_.offsets_map_.isValid()) {
+    if (epoch_size_map_.isValid()) {
+      final_tail_record_.header.u.offset_within_epoch =
+          epoch_size_map_.getCounter(CounterType::BYTE_OFFSET);
+      final_tail_record_.offsets_map_ = epoch_size_map_;
     } else {
       final_tail_record_.header.u.offset_within_epoch = 0;
-      final_tail_record_.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 0);
+      final_tail_record_.offsets_map_.clear();
     }
   }
 
-  // the epoch_size_ got from sealed reply may not be accurate,
-  // we need to correct epoch_size_ to be the same as final_tail_record_,
-  // so that later CLEAN message can contain the correct number
-  epoch_size_ = final_tail_record_.header.u.offset_within_epoch;
+  // the epoch_size_map_ got from sealed reply may not be accurate,
+  // we need to correct epoch_size_map_ to be the same as the one in
+  // final_tail_record_, so that later CLEAN message can contain the correct
+  // OffsetMap
+  epoch_size_map_ = final_tail_record_.offsets_map_;
 
   // the finalized tail record should contain byte offset instead of offset
   // within epoch. Its byte offset should be the sum of the epoch size (offset
   // within epoch of the tail record) and the accumulative byte offset from the
   // previous epoch
-  // TODO(T33977412): Remove byte_offset when fully deployed
   auto& prev_epoch_offsets_map = tail_record_before_this_epoch_.offsets_map_;
   final_tail_record_.offsets_map_ += prev_epoch_offsets_map;
   final_tail_record_.header.u.byte_offset =

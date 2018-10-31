@@ -1159,12 +1159,8 @@ void LogRecoveryRequest::onSealReply(ShardID from,
     for (int i = n_recovering_epochs - epoch_recovery_machines_.size();
          i < reply.epoch_lng_.size();
          i++, erm++) {
-      // TODO:(T33977412): modify EpochRecovery to deal with OffsetMap instead
-      // of just a byte offset.
-      const auto offset =
-          reply.epoch_offset_map_[i].getCounter(CounterType::BYTE_OFFSET);
+      const auto& offset = reply.epoch_offset_map_[i];
       ld_check(erm != epoch_recovery_machines_.end());
-
       if (erm->epoch_ != lsn_to_epoch(reply.epoch_lng_[i])) {
         RATELIMIT_ERROR(std::chrono::seconds(1),
                         10,
@@ -1231,14 +1227,15 @@ void LogRecoveryRequest::onSealReply(ShardID from,
         // tail record from its (lng, last_timestamp, epoch_offset_map).
         // Note: only consider it as a tail if lng > ESN_INVALID
         if (lsn_to_esn(reply.epoch_lng_[i]) > ESN_INVALID) {
-          epoch_tail = TailRecord({log_id_,
-                                   reply.epoch_lng_[i],
-                                   reply.last_timestamp_[i],
-                                   {offset},
-                                   TailRecordHeader::OFFSET_WITHIN_EPOCH,
-                                   {}},
-                                  reply.epoch_offset_map_[i],
-                                  std::shared_ptr<PayloadHolder>());
+          epoch_tail =
+              TailRecord({log_id_,
+                          reply.epoch_lng_[i],
+                          reply.last_timestamp_[i],
+                          {offset.getCounter(CounterType::BYTE_OFFSET)},
+                          TailRecordHeader::OFFSET_WITHIN_EPOCH,
+                          {}},
+                         offset,
+                         std::shared_ptr<PayloadHolder>());
 
           ld_check(epoch_tail.value().isValid());
         }

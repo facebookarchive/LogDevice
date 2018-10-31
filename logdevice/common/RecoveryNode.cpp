@@ -126,6 +126,8 @@ void RecoveryNode::transition(State to) {
         expected_read_stream_id_ = READ_STREAM_ID_INVALID;
 
         const StorageSet& absent_shards = recovery_->getAbsentNodes();
+        const TailRecord& tail_record = recovery_->getEpochTailRecord();
+        const OffsetMap& epoch_size_map = recovery_->getEpochSizeMap();
         ld_check(absent_shards.size() <
                  std::numeric_limits<nodeset_size_t>::max());
         CLEAN_Header header{recovery_->getLogID(),
@@ -140,12 +142,10 @@ void RecoveryNode::transition(State to) {
                             recovery_->getEpochSize(),
                             shard_.shard()};
 
-        msg.reset(new CLEAN_Message(header, std::move(absent_shards)));
-
         ld_debug("Sending CLEAN message to %s, logid %lu, clean epoch %u, "
                  "recovery id: %lu, sequencer epoch: %u, "
                  "recovery window (%u, %u], absent nodes: [%s], "
-                 "epoch end offset %lu, epoch size %lu.",
+                 "epoch end offset %lu, epoch size map %s, TailRecord %s.",
                  shard_.toString().c_str(),
                  header.log_id.val_,
                  header.epoch.val_,
@@ -155,7 +155,10 @@ void RecoveryNode::transition(State to) {
                  header.last_digest_esn.val_,
                  toString(absent_shards).c_str(),
                  header.epoch_end_offset,
-                 header.epoch_size);
+                 epoch_size_map.toString().c_str(),
+                 tail_record.toString().c_str());
+        msg.reset(new CLEAN_Message(
+            header, tail_record, epoch_size_map, absent_shards));
       } else {
         ld_check(to == State::DIGESTING);
         expected_read_stream_id_ = recovery_->getDeps().issueReadStreamID();

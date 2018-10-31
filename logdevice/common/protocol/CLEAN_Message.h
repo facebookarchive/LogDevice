@@ -9,6 +9,7 @@
 
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/ShardID.h"
+#include "logdevice/common/TailRecord.h"
 #include "logdevice/common/protocol/FixedSizeMessage.h"
 #include "logdevice/common/types_internal.h"
 
@@ -78,11 +79,16 @@ struct CLEAN_Header {
 
   // Shard that this CLEAN is for.
   shard_index_t shard;
+
+  // if set, TailRecord is valid
+  static const CLEAN_flags_t INCLUDE_TAIL_RECORD = 1u << 0; //=1
 } __attribute__((__packed__));
 
 class CLEAN_Message : public Message {
  public:
   explicit CLEAN_Message(const CLEAN_Header& header,
+                         TailRecord tail_record,
+                         OffsetMap epoch_size_map,
                          StorageSet absent_nodes = StorageSet{});
 
   CLEAN_Message(const CLEAN_Message&) noexcept = delete;
@@ -105,6 +111,8 @@ class CLEAN_Message : public Message {
                                     const CLEAN_Header& hdr);
 
   CLEAN_Header header_;
+  TailRecord tail_record_;
+  OffsetMap epoch_size_map_;
   StorageSet absent_nodes_;
 };
 

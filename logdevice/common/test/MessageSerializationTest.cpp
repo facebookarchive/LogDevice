@@ -271,11 +271,15 @@ class MessageSerializationTest : public ::testing::Test {
 
   void checkCLEAN(const CLEAN_Message& m,
                   const CLEAN_Message& m2,
-                  uint16_t /*proto*/) {
+                  uint16_t proto) {
     ASSERT_EQ(m.header_.log_id, m2.header_.log_id);
     ASSERT_EQ(m.header_.epoch, m2.header_.epoch);
     ASSERT_EQ(m.header_.recovery_id, m2.header_.recovery_id);
     ASSERT_EQ(m.header_.epoch_size, m2.header_.epoch_size);
+    if (proto >= Compatibility::CLEAN_MESSAGE_SUPPORT_OFFSET_MAP) {
+      ASSERT_TRUE(m.tail_record_.sameContent(m2.tail_record_));
+      ASSERT_EQ(m.epoch_size_map_, m2.epoch_size_map_);
+    }
   }
 
   void checkSHUTDOWN(const SHUTDOWN_Message& m,
@@ -1386,23 +1390,41 @@ TEST_F(MessageSerializationTest, CLEAN) {
 
   StorageSet absent_nodes{
       ShardID(9, 0), ShardID(8, 0), ShardID(113, 0), ShardID(7, 0)};
-  CLEAN_Message m(h, absent_nodes);
+  OffsetMap epoch_end_offset;
+  epoch_end_offset.setCounter(CounterType::BYTE_OFFSET, 0x9B7D7B3FEC8486AA);
+  TailRecord tail;
+  tail.header.log_id = logid_t(0xBBC18E8AA44783D3);
+  tail.header.u.byte_offset = 0x9B7D7B3FEC8486AA;
+  tail.offsets_map_ = epoch_end_offset;
+
+  OffsetMap offset_within_epoch;
+  offset_within_epoch.setCounter(CounterType::BYTE_OFFSET, 0xABB4842249C95413);
+
+  CLEAN_Message m(h, tail, offset_within_epoch, absent_nodes);
   auto check = [&](const CLEAN_Message& m2, uint16_t proto) {
     checkCLEAN(m, m2, proto);
   };
 
   absent_nodes =
       StorageSet{ShardID(9, 8), ShardID(8, 2), ShardID(113, 0), ShardID(7, 3)};
-  CLEAN_Message m2(h, absent_nodes);
+  CLEAN_Message m2(h, tail, offset_within_epoch, absent_nodes);
   {
-    std::string expected = "D38347A48A8EC1BB05CE49A83A3B472C8D47498B0000DCC49E8"
+    std::string expected = "D38347A48A8EC1BB05CE49A83A3B472C8D47498B0100DCC49E8"
                            "FF7C34E08B373C4D20400AA8684EC3F7B7D9B1354C9492284B4"
                            "AB030009000800080002007100000007000300";
     DO_TEST(m2,
             check,
             Compatibility::MIN_PROTOCOL_SUPPORTED,
             Compatibility::MAX_PROTOCOL_SUPPORTED,
-            [&](uint16_t /*proto*/) { return expected; },
+            [&](uint16_t proto) {
+              if (proto < Compatibility::CLEAN_MESSAGE_SUPPORT_OFFSET_MAP) {
+                return expected;
+              } else {
+                return expected +
+                    "D38347A48A8EC1BB00000000000000000000000000000000AA8684EC3F"
+                    "7B7D9B000000000000000001F61354C9492284B4AB";
+              }
+            },
             nullptr);
   }
 }

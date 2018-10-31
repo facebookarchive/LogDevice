@@ -19,6 +19,12 @@ namespace facebook { namespace logdevice {
 // Reserve the last 10 counters for internal use
 enum class CounterType : uint8_t { BYTE_OFFSET = 246 };
 
+/**
+ * @file map of counters that contains information on amount of data within
+ *       epoch or at the end of epoch. Currently contains information on number
+ *       of bytes. Tracked counters are present in enum class CounterType.
+ */
+
 class OffsetMap : public SerializableData {
  public:
   using SerializableData::deserialize;
@@ -60,11 +66,22 @@ class OffsetMap : public SerializableData {
   bool isValidOffset(const CounterType count) const;
 
   /**
+   * counterTypeMap_ would have BYTE_OFFSET_INVALID value for all counters
+   */
+  void clear();
+
+  /**
    * Check if OffsetMap is valid
    * @return true if contains at least one CounterType (counterTypeMap_ size >
    * 0)
    */
   bool isValid() const;
+
+  /**
+   * set counterTypeMap_ entries to be equal to the max of both OffsetMap
+   * entries
+   */
+  void max(const OffsetMap& om);
 
   /**
    * See SerializableData::serialize().

@@ -441,8 +441,9 @@ GAP_Header mockGap(ShardID shard,
 // - epoch recovery will simply plug a bridge record in esn_t(2) to N1 and N2
 TEST_F(EpochRecoveryTest, Basic) {
   setUp();
-
-  erm_->onSealed(N1, esn_t(1), esn_t(1), 19, folly::none);
+  OffsetMap om;
+  om.setCounter(CounterType::BYTE_OFFSET, 19);
+  erm_->onSealed(N1, esn_t(1), esn_t(1), om, folly::none);
   ASSERT_FALSE(erm_->isActive());
   checkRecoveryState(ERMState::SEAL_OR_INACTIVE);
   erm_->activate(prev_tail_);
@@ -455,7 +456,7 @@ TEST_F(EpochRecoveryTest, Basic) {
 
   // with N2 reply, there is f-majority and erm should start digesting on
   // N1 and N2
-  erm_->onSealed(N2, esn_t(1), esn_t(1), 19, folly::none);
+  erm_->onSealed(N2, esn_t(1), esn_t(1), om, folly::none);
   checkRecoveryState(ERMState::DIGEST);
   ASSERT_NODE_STATE(NState::DIGESTING, N1, N2);
   ASSERT_NODE_STATE(NState::SEALING, N3);
@@ -548,11 +549,12 @@ TEST_F(EpochRecoveryTest, Basic) {
 // causing state machine to be restarted
 TEST_F(EpochRecoveryTest, RestartWhenAuthoritativeStatusChanges) {
   setUp();
-
-  erm_->onSealed(N1, esn_t(1), esn_t(1), 19, folly::none);
+  OffsetMap om;
+  om.setCounter(CounterType::BYTE_OFFSET, 19);
+  erm_->onSealed(N1, esn_t(1), esn_t(1), om, folly::none);
   checkRecoveryState(ERMState::SEAL_OR_INACTIVE);
   erm_->activate(prev_tail_);
-  erm_->onSealed(N2, esn_t(1), esn_t(1), 19, folly::none);
+  erm_->onSealed(N2, esn_t(1), esn_t(1), om, folly::none);
   checkRecoveryState(ERMState::DIGEST);
   ASSERT_NODE_STATE(NState::DIGESTING, N1, N2);
   ASSERT_NODE_STATE(NState::SEALING, N3);
@@ -620,9 +622,11 @@ TEST_F(EpochRecoveryTest, UnexpectedHolePlugBelowLNG) {
   rep_ = ReplicationProperty({{NodeLocationScope::NODE, 2}});
 
   setUp();
-  erm_->onSealed(N1, esn_t(1), esn_t(1), 19, folly::none);
+  OffsetMap om;
+  om.setCounter(CounterType::BYTE_OFFSET, 19);
+  erm_->onSealed(N1, esn_t(1), esn_t(1), om, folly::none);
   erm_->activate(prev_tail_);
-  erm_->onSealed(N2, esn_t(1), esn_t(1), 19, folly::none);
+  erm_->onSealed(N2, esn_t(1), esn_t(1), om, folly::none);
   erm_->onMessageSent(N1, MessageType::START, E::OK, read_stream_id_t(1));
   erm_->onMessageSent(N2, MessageType::START, E::OK, read_stream_id_t(2));
   erm_->onDigestStreamStarted(N1, read_stream_id_t(1), lsn(epoch_, 1), E::OK);
@@ -686,14 +690,15 @@ TEST_F(EpochRecoveryTest, MutationSetShouldNotContainDrainingNodes) {
   draining_shards_ = {N2};
 
   setUp();
-
+  OffsetMap om;
+  om.setCounter(CounterType::BYTE_OFFSET, 19);
   // N3 will be absent in the beginning, causing recovery to get stuck
   // even if it does have f-majority (authoritative_incomplete) digest
-  erm_->onSealed(N1, esn_t(0), esn_t(1), 19, folly::none);
+  erm_->onSealed(N1, esn_t(0), esn_t(1), om, folly::none);
   checkRecoveryState(ERMState::SEAL_OR_INACTIVE);
   // with N2 reply, there is f-majority and erm should start digesting on
   // N1 and N2
-  erm_->onSealed(N2, esn_t(0), esn_t(1), 19, folly::none);
+  erm_->onSealed(N2, esn_t(0), esn_t(1), om, folly::none);
   erm_->activate(prev_tail_);
 
   checkRecoveryState(ERMState::DIGEST);
@@ -741,7 +746,7 @@ TEST_F(EpochRecoveryTest, MutationSetShouldNotContainDrainingNodes) {
   checkRecoveryState(ERMState::DIGEST);
 
   // finally N3 finished sealing and became SEALED
-  erm_->onSealed(N3, esn_t(0), esn_t(1), 19, folly::none);
+  erm_->onSealed(N3, esn_t(0), esn_t(1), om, folly::none);
   // should start digesting on N3
   erm_->onMessageSent(N3, MessageType::START, E::OK, read_stream_id_t(3));
   erm_->onDigestStreamStarted(N3, read_stream_id_t(3), lsn(epoch_, 0), E::OK);
@@ -843,8 +848,9 @@ TEST_F(EpochRecoveryTest, MutationSetShouldNotContainDrainingNodes) {
 TEST_F(EpochRecoveryTest, correctByteOffset) {
   storage_set_ = StorageSet({N1, N2});
   setUp();
-
-  erm_->onSealed(N1, esn_t(1), esn_t(1), 40, folly::none);
+  OffsetMap om;
+  om.setCounter(CounterType::BYTE_OFFSET, 40);
+  erm_->onSealed(N1, esn_t(1), esn_t(1), om, folly::none);
   ASSERT_FALSE(erm_->isActive());
   checkRecoveryState(ERMState::SEAL_OR_INACTIVE);
   erm_->activate(prev_tail_);
@@ -856,7 +862,7 @@ TEST_F(EpochRecoveryTest, correctByteOffset) {
 
   // with N2 reply, there is f-majority and erm should start digesting on
   // N1 and N2
-  erm_->onSealed(N2, esn_t(1), esn_t(1), 40, folly::none);
+  erm_->onSealed(N2, esn_t(1), esn_t(1), om, folly::none);
   checkRecoveryState(ERMState::DIGEST);
   ASSERT_NODE_STATE(NState::DIGESTING, N1, N2);
 
