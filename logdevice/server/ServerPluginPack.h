@@ -60,11 +60,6 @@ class ServerPluginPack : public virtual LegacyPluginPack,
    * will not start the admin server.
    */
   virtual std::unique_ptr<AdminServer> createAdminServer(Server* server);
-
-  /**
-   * Places hot text on large pages to improve performance.
-   */
-  virtual void optimizeHotText() {}
 };
 
 }} // namespace facebook::logdevice

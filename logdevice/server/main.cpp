@@ -28,6 +28,7 @@
 #include "logdevice/common/ZookeeperClient.h"
 #include "logdevice/common/commandline_util.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/plugin/HotTextOptimizerPlugin.h"
 #include "logdevice/common/plugin/PluginRegistry.h"
 #include "logdevice/common/plugin/StaticPluginLoader.h"
 #include "logdevice/common/settings/GossipSettings.h"
@@ -283,12 +284,11 @@ int main(int argc, const char** argv) {
       std::make_shared<PluginRegistry>(
           createPluginVector<StaticPluginLoader,
                              ServerBuiltinPluginProvider>());
-  std::shared_ptr<ServerPluginPack> plugin =
-      plugin_registry->getSinglePlugin<ServerPluginPack>(
-          PluginType::LEGACY_SERVER_PLUGIN);
-  ld_check(plugin);
-
-  plugin->optimizeHotText();
+  auto ht_plugin = plugin_registry->getSinglePlugin<HotTextOptimizerPlugin>(
+      PluginType::HOT_TEXT_OPTIMIZER);
+  if (ht_plugin) {
+    (*ht_plugin)();
+  }
 
   UpdateableSettings<ServerSettings> server_settings;
   UpdateableSettings<RebuildingSettings> rebuilding_settings;

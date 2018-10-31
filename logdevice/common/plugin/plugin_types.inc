@@ -45,6 +45,8 @@ PLUGIN_TYPE(BACKTRACE_RUNNER, 9, "Backtrace runner", false)
 PLUGIN_TYPE(SEQUENCER_LOCATOR_FACTORY, 10, "SequencerLocator factory", false)
 // See OpenTracerFactory.h
 PLUGIN_TYPE(OPEN_TRACER_FACTORY, 11, "Open Tracing tracer factory", false)
+// See HotTextOptimizerPlugin.h
+PLUGIN_TYPE(HOT_TEXT_OPTIMIZER, 12, "HotTextOptimizer", false)
 
 // TODO: add more plugin types
 
