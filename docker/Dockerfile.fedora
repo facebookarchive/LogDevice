@@ -4,7 +4,7 @@
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
 
-FROM fedora:25
+FROM fedora
 
 MAINTAINER Ahmed Soliman <asoli@fb.com>
 
@@ -14,7 +14,7 @@ COPY logdevice logdevice
 
 RUN echo "/usr/local/lib" >> /etc/ld.so.conf && ldconfig
 
-RUN dnf install -y $(cat /logdevice/build_tools/fedora-25.deps) && \
+RUN dnf install -y $(cat /logdevice/build_tools/fedora.deps) && \
     dnf clean all && \
     mkdir /tmp/build && cd /tmp/build && \
     cmake /logdevice/ && \

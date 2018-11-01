@@ -29,7 +29,7 @@ If the above fails with "Unable to locate package", run `sudo apt-get update` fi
 On Fedora you may try:
 
 ```shell
-sudo yum install $(cat LogDevice/logdevice/build_tools/fedora-25.deps)
+sudo yum install $(cat LogDevice/logdevice/build_tools/fedora.deps)
 ```
 
 You will also need mstch, which is not shipped with Fedora, so you will do have to do:
