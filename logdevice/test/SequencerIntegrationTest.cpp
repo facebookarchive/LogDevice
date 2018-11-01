@@ -2107,7 +2107,7 @@ TEST_F(SequencerIntegrationTest, SequencerMetaDataManagerNullptrCrash) {
 
   const int num_logs = 1000;
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .setParam("--write-sticky-copysets",
+                     .setParam("--enable-sticky-copysets",
                                "false",
                                IntegrationTestUtils::ParamScope::ALL)
                      .doPreProvisionEpochMetaData()

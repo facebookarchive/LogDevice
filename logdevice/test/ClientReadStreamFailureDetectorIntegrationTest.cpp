@@ -38,9 +38,7 @@ TEST_F(ClientReadStreamFailureDetectorIntegrationTest, Simple) {
                      // data during the test, which will help guarantee that
                      // some records are replicated on the node we will be pick
                      // to be slow.
-                     .setParam("--write-sticky-copysets", "false")
-                     .setParam("--rocksdb-use-copyset-index", "false")
-                     .setParam("--sticky-copysets-block-size", "1")
+                     .setParam("--enable-sticky-copysets", "false")
                      .create(12);
 
   std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());

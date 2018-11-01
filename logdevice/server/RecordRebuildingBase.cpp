@@ -358,10 +358,6 @@ RecordRebuildingBase::buildStoreMessage(ShardID target_shard, bool amend) {
       amend ? nullptr : getPayloadHolder(),
       false);
 
-  if (getSettings().write_sticky_copysets) {
-    message->setBlockStartingLSN(LSN_INVALID); // TODO (#9002309): block entry
-                                               // support
-  }
   return message;
 }
 
@@ -739,7 +735,8 @@ PutWriteOp RecordRebuildingBase::AmendSelfStorageTask::createWriteOp(
       &recordHeaderBuf_);
 
   folly::Optional<lsn_t> block_starting_lsn;
-  if (owner.getSettings().write_sticky_copysets ||
+  if ((owner.getSettings().write_copyset_index &&
+       owner.getSettings().write_sticky_copysets_deprecated) ||
       MetaDataLog::isMetaDataLog(owner.getLogID()) ||
       configuration::InternalLogs::isInternal(owner.getLogID())) {
     // Always write CSI for internal logs. This makes enabling CSI operationally

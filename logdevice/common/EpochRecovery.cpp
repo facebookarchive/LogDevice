@@ -940,7 +940,6 @@ bool EpochRecovery::mutateEpoch(const std::set<ShardID>& mutation_set,
                              replication_,
                              std::move(amend_metadata),
                              std::move(conflict_copies),
-                             deps_->getSettings().write_sticky_copysets,
                              this));
     ld_check(res.second);
   }
@@ -1917,7 +1916,6 @@ EpochRecoveryDependencies::createMutator(const STORE_Header& header,
                                          ReplicationProperty replication,
                                          std::set<ShardID> amend_metadata,
                                          std::set<ShardID> conflict_copies,
-                                         bool sticky_copysets,
                                          EpochRecovery* epoch_recovery) {
   return std::make_unique<Mutator>(header,
                                    extra,
@@ -1926,7 +1924,6 @@ EpochRecoveryDependencies::createMutator(const STORE_Header& header,
                                    std::move(replication),
                                    std::move(amend_metadata),
                                    std::move(conflict_copies),
-                                   sticky_copysets,
                                    epoch_recovery);
 }
 

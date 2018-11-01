@@ -777,10 +777,10 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        "efficiency of reading and rebuilding if records are large (1KB or "
        "bigger). For small records, the overhead of maintaining the copyset "
        "index negates the savings. **WARNING**: if this setting is enabled, "
-       "records written without --write-sticky-copysets will be skipped by the "
+       "records written without --write-copyset-index will be skipped by the "
        "copyset filter and will not be delivered to readers. Enable "
-       "--write-sticky-copysets first and wait for all data records written "
-       "before --write-sticky-copysets was enabled (if any) to be trimmed "
+       "--write-copyset-index first and wait for all data records written "
+       "before --write-copyset-index was enabled (if any) to be trimmed "
        "before enabling this setting.",
        SERVER | REQUIRES_RESTART,
        SettingsCategory::LogsDB);
@@ -826,7 +826,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        "new block when copyset changes. Both 'each_*' don't start a new block "
        "if current block is smaller than --rocksdb-min-block-size. 'each_log' "
        "should be safe to use in all cases. 'each_copyset' should only be used "
-       "when sticky copysets are enabled with --write-sticky-copysets "
+       "when sticky copysets are enabled with --enable-sticky-copysets "
        "(otherwise it would start a block for almost every record).",
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);

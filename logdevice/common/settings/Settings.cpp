@@ -1218,12 +1218,21 @@ void Settings::defineSettings(SettingEasyInit& init) {
       SERVER,
       SettingsCategory::Recovery);
   init("write-sticky-copysets",
-       &write_sticky_copysets,
+       &write_sticky_copysets_deprecated,
        "true",
        nullptr, // no validation
-       "If set, will enable sticky copysets and will write the copyset index "
-       "for all records. This must be set before "
-       "--rocksdb-use-copyset-index is enabled",
+       "DEPRECATED. Instead, use --enable-sticky-copysets to enable copyset "
+       "stickiness and --write-copyset-index to write the copyset index. If "
+       "set to `false`, has the same effect as --enable-sticky-copysets=false "
+       "--write-copyset-index=false. Otherwise has no effect.",
+       SERVER | DEPRECATED | REQUIRES_RESTART /* Used in CopySetManager ctor */,
+       SettingsCategory::WritePath);
+  init("enable-sticky-copysets",
+       &enable_sticky_copysets,
+       "true",
+       nullptr, // no validation
+       "If set, sequencers will enable sticky copysets. Doesn't affect the "
+       "copyset index.",
        SERVER | REQUIRES_RESTART /* Used in CopySetManager ctor */,
        SettingsCategory::WritePath);
   init("sticky-copysets-block-size",
@@ -1243,6 +1252,15 @@ void Settings::defineSettings(SettingEasyInit& init) {
       "will consider it expired and start a new one.",
       SERVER | REQUIRES_RESTART /* Used in CopySetManager ctor */,
       SettingsCategory::WritePath);
+  init("write-copyset-index",
+       &write_copyset_index,
+       "true",
+       nullptr, // no validation
+       "If set, storage nodes will write the copyset index for all records. "
+       "This must be set before --rocksdb-use-copyset-index is enabled. "
+       "Doesn't affect copyset stickiness",
+       SERVER,
+       SettingsCategory::WritePath);
   init("iterator-cache-ttl",
        &iterator_cache_ttl,
        "20s",

@@ -154,7 +154,7 @@ void UnreleasedRecordDetectorTest::SetUp() {
   // create settings with unreleased record detector disabled
   Settings settings(create_default_settings<Settings>());
   settings.server = true;
-  settings.write_sticky_copysets = true;
+  settings.enable_sticky_copysets = true;
   settings.num_workers = NUM_WORKERS;
   settings.max_inflight_storage_tasks = NUM_INFLIGHT_STORAGE_TASKS;
   settings.per_worker_storage_task_queue_size = STORAGE_TASK_QUEUE_SIZE;

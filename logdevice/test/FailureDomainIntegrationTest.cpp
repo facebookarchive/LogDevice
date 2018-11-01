@@ -419,7 +419,7 @@ TEST_F(FailureDomainIntegrationTest, ThreeRackReplication) {
                   {{NodeLocationScope::RACK, 4}})))
           .setRocksDBType(IntegrationTestUtils::RocksDBType::PARTITIONED)
           .useHashBasedSequencerAssignment()
-          .setParam("--write-sticky-copysets", "false")
+          .setParam("--enable-sticky-copysets", "false")
           .setParam("--rocksdb-use-copyset-index", "false")
           .create(0);
 

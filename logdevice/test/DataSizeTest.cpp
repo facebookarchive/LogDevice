@@ -78,7 +78,7 @@ static void commonSetup(IntegrationTestUtils::ClusterFactory& cluster) {
       .setParam("--disable-rebuilding", "false")
       .setParam("--rocksdb-min-manual-flush-interval", "0")
       // Disable sticky copysets to make records more evenly distributed
-      .setParam("--write-sticky-copysets", "false")
+      .setParam("--enable-sticky-copysets", "false")
       // Don't compress or batch data
       .setParam("--rocksdb-compression-type", "none")
       .setParam("--sequencer-batching", "false")

@@ -92,13 +92,6 @@ Message::Disposition StoreStateMachine::onReceived(STORE_Message* msg,
   WORKER_TRAFFIC_CLASS_STAT_INCR(msg->tc_, store_received);
   WORKER_TRAFFIC_CLASS_STAT_ADD(msg->tc_, store_payload_bytes, payload_size);
 
-  if (Worker::settings().write_sticky_copysets) {
-    dd_assert(msg->block_starting_lsn_.hasValue(),
-              "Writing sticky copysets is on, but received STORE %s without the"
-              "block starting lsn.",
-              msg->header_.rid.toString().c_str());
-  }
-
   const ShardedStorageThreadPool* sharded_pool =
       worker->processor_->sharded_storage_thread_pool_;
 
@@ -600,13 +593,18 @@ void StoreStateMachine::storeAndForward() {
     }
   }
 
+  const auto& worker_settings = Worker::settings();
+
   // For internal logs, write CSI even if the STORE message didn't have
   // STICKY_COPYSET flag. This makes enabling CSI operationally easier.
-  auto block_starting_lsn = message_->block_starting_lsn_;
-  if (!block_starting_lsn.hasValue() &&
-      (MetaDataLog::isMetaDataLog(header.rid.logid) ||
-       configuration::InternalLogs::isInternal(header.rid.logid))) {
-    block_starting_lsn = LSN_INVALID;
+  // Same deal if write_copyset_index is set
+  folly::Optional<lsn_t> block_starting_lsn;
+  if ((worker_settings.write_copyset_index &&
+       worker_settings.write_sticky_copysets_deprecated) ||
+      MetaDataLog::isMetaDataLog(header.rid.logid) ||
+      configuration::InternalLogs::isInternal(header.rid.logid)) {
+    block_starting_lsn.assign(
+        message_->block_starting_lsn_.value_or(LSN_INVALID));
   }
 
   // First create a storage task for the local log store.  The constructor
@@ -614,7 +612,6 @@ void StoreStateMachine::storeAndForward() {
   // std::shared_ptr<PayloadHolder>), making the task self-sufficient.  We'll
   // send the task to a storage thread later (at the end of this method), to
   // avoid delaying forwarding.
-  const auto& worker_settings = Worker::settings();
   auto task = std::make_unique<StoreStorageTask>(
       header,
       message_->copyset_.begin(),

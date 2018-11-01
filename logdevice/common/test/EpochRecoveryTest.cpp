@@ -128,7 +128,6 @@ class DummyMutator : public Mutator {
                         ReplicationProperty replication,
                         std::set<ShardID> amend_metadata,
                         std::set<ShardID> conflict_copies,
-                        bool sticky_copysets,
                         EpochRecovery* epoch_recovery)
       : Mutator(header,
                 extra,
@@ -137,7 +136,6 @@ class DummyMutator : public Mutator {
                 std::move(replication),
                 std::move(amend_metadata),
                 std::move(conflict_copies),
-                sticky_copysets,
                 epoch_recovery),
         test_(test) {
     ld_check(test_ != nullptr);
@@ -253,7 +251,6 @@ class MockEpochRecoveryDependencies : public EpochRecoveryDependencies {
                 ReplicationProperty replication,
                 std::set<ShardID> amend_metadata,
                 std::set<ShardID> conflict_copies,
-                bool sticky_copysets,
                 EpochRecovery* epoch_recovery) override {
     return std::make_unique<DummyMutator>(test_,
                                           header,
@@ -263,7 +260,6 @@ class MockEpochRecoveryDependencies : public EpochRecoveryDependencies {
                                           std::move(replication),
                                           std::move(amend_metadata),
                                           std::move(conflict_copies),
-                                          sticky_copysets,
                                           epoch_recovery);
   }
 

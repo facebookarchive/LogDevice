@@ -100,7 +100,6 @@ class EpochRecoveryDependencies {
                 ReplicationProperty replication,
                 std::set<ShardID> amend_metadata,
                 std::set<ShardID> conflict_copies,
-                bool sticky_copysets,
                 EpochRecovery* epoch_recovery);
 
   virtual const Settings& getSettings() const;

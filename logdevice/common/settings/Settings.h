@@ -548,9 +548,15 @@ struct Settings : public SettingsBundle {
   // mutations to.
   std::chrono::milliseconds mutation_timeout;
 
-  // if true, the StickyCopySetManager will be initialized and all records will
-  // have the copyset index written for them
-  bool write_sticky_copysets;
+  // DEPRECATED. Can be removed when all configs use --enable-sticky-copysets
+  // and --write-copyset-index instead
+  bool write_sticky_copysets_deprecated;
+
+  // if true, StickyCopySetManager will be initialized
+  bool enable_sticky_copysets;
+
+  // if true, all records will have the copyset index written for them
+  bool write_copyset_index;
 
   // CopySetSelector manager - sticky copyset block size
   size_t sticky_copysets_block_size;

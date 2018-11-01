@@ -75,10 +75,6 @@ class Mutator {
    * @param conflict_copies          the set of nodes whose record needs to be
    *                                 overwritten
    *
-   * @param sticky_copysets          if true, the mutator will send the
-   *                                 sticky copyset bit with the records it
-   *                                 sends
-   *
    * @param epoch_recovery           EpochRecovery object that owns this Mutator
    */
   Mutator(const STORE_Header& header,
@@ -88,7 +84,6 @@ class Mutator {
           ReplicationProperty replication,
           std::set<ShardID> amend_metadata,
           std::set<ShardID> conflict_copies,
-          bool sticky_copysets,
           EpochRecovery* epoch_recovery);
 
   virtual ~Mutator() {}
@@ -216,9 +211,6 @@ class Mutator {
 
   std::set<ShardID> amend_metadata_;
   std::set<ShardID> conflict_copies_;
-
-  // sticky copyset bit
-  const bool sticky_copysets_;
 
   EpochRecovery* const epoch_recovery_;
 

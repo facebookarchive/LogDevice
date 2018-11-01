@@ -349,7 +349,10 @@ void EpochSequencer::createOrUpdateCopySetManager(
       cfg->serverConfig(),
       log_group ? &log_group->attrs() : nullptr,
       settings,
-      settings.write_sticky_copysets,
+      settings.enable_sticky_copysets &&
+          settings
+              .write_sticky_copysets_deprecated, /* disable sticky copysets
+                                                    if either one is false */
       settings.sticky_copysets_block_size,
       settings.sticky_copysets_block_max_time));
 }

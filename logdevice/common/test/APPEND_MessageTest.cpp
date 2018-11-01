@@ -116,7 +116,7 @@ class APPEND_MessageTest : public ::testing::Test {
         ServerConfig::fromDataTest(__FILE__, nodes, std::move(ml_config)),
         std::move(logs_config));
 
-    settings_.write_sticky_copysets = true;
+    settings_.enable_sticky_copysets = true;
 
     rate_limit_t dummy_limit(1, std::chrono::seconds(1));
     sequencer_ = std::make_shared<MockSequencer>(

@@ -195,7 +195,6 @@ class MockMutator : public Mutator {
                 test->replication_,
                 test->amend_metadata_,
                 test->conflict_copies_,
-                false, // sticky copyset bit
                 nullptr),
         test_(test) {
     sender_ = std::make_unique<MockSender>(this);

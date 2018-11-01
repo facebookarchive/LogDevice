@@ -27,7 +27,6 @@ Mutator::Mutator(const STORE_Header& header,
                  ReplicationProperty replication,
                  std::set<ShardID> amend_metadata,
                  std::set<ShardID> conflict_copies,
-                 bool sticky_copysets,
                  EpochRecovery* epoch_recovery)
     : sender_(std::make_unique<SenderProxy>()),
       header_(header),
@@ -37,7 +36,6 @@ Mutator::Mutator(const STORE_Header& header,
       replication_(replication),
       amend_metadata_(std::move(amend_metadata)),
       conflict_copies_(std::move(conflict_copies)),
-      sticky_copysets_(sticky_copysets),
       epoch_recovery_(epoch_recovery) {
   // ensure that all nodes in the three sets belong the nodeset
 #ifndef NDEBUG
@@ -199,11 +197,6 @@ Mutator::sendSTORE(ShardID shard,
       (include_payload
            ? std::make_shared<PayloadHolder>(payload_, PayloadHolder::UNOWNED)
            : nullptr));
-
-  if (sticky_copysets_) {
-    msg->setBlockStartingLSN(LSN_INVALID); // TODO: block directory entry
-                                           // support
-  }
 
   // socket callbacks must be deactivated at the beginning of the wave
   ld_assert(node_state_.count(shard) > 0);

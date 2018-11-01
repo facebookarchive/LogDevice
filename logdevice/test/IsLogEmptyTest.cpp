@@ -119,7 +119,7 @@ void IsLogEmptyTest::commonSetup(
       .setParam("--disable-rebuilding", "false")
       .setParam("--rocksdb-min-manual-flush-interval", "0")
       // Disable sticky copysets to make records more randomly distributed
-      .setParam("--write-sticky-copysets", "false")
+      .setParam("--enable-sticky-copysets", "false")
       .setNumDBShards(1)
       .setLogConfig(log_config)
       .setEventLogConfig(event_log)
