@@ -58,18 +58,25 @@
 #include "logdevice/test/utils/port_selection.h"
 
 using facebook::logdevice::configuration::LocalLogsConfig;
-
 #ifdef FB_BUILD_PATHS
 #include "common/files/FbcodePaths.h"
-static const char* DEFAULT_LOGDEVICED_PATH = "logdevice/server/logdeviced_nofb";
-static const char* CHECKER_PATH =
-    "logdevice/replication_checker/replication_checker_nofb";
-#else
-static const char* DEFAULT_LOGDEVICED_PATH = "bin/logdeviced";
-static const char* CHECKER_PATH = "bin/replication_checker_nofb";
 #endif
 
 namespace facebook { namespace logdevice { namespace IntegrationTestUtils {
+
+#ifdef FB_BUILD_PATHS
+std::string defaultLogdevicedPath() {
+  return "logdevice/server/logdeviced_nofb";
+}
+static const char* CHECKER_PATH =
+    "logdevice/replication_checker/replication_checker_nofb";
+#else
+std::string defaultLogdevicedPath() {
+  return "bin/logdeviced";
+}
+static const char* CHECKER_PATH = "bin/replication_checker_nofb";
+#endif
+
 
 using folly::test::TemporaryDirectory;
 namespace fs = boost::filesystem;
@@ -2465,7 +2472,7 @@ std::string ClusterFactory::actualServerBinary() const {
     return envpath;
   }
   std::string relative_to_build_out =
-      server_binary_.value_or(DEFAULT_LOGDEVICED_PATH);
+      server_binary_.value_or(defaultLogdevicedPath());
   return findBinary(relative_to_build_out);
 }
 
@@ -2703,6 +2710,12 @@ std::string findBinary(const std::string& relative_path) {
   // dependencies (default plugin) to speed up build and run times.
   return facebook::files::FbcodePaths::findPathInFbcodeBin(relative_path);
 #else
+  return findFile(relative_path, /* require_excutable */ true);
+#endif
+}
+
+std::string findFile(const std::string& relative_path,
+                     bool require_executable) {
   // Find the path to the currently running program ...
   boost::system::error_code ec;
   fs::path proc_exe_path = fs::read_symlink("/proc/self/exe", ec);
@@ -2717,7 +2730,7 @@ std::string findBinary(const std::string& relative_path) {
     fs::path path = search_dir / relative_path;
     if (fs::exists(path)) {
       std::string path_str = path.string();
-      if (::access(path_str.c_str(), X_OK) < 0) {
+      if (require_executable && ::access(path_str.c_str(), X_OK) < 0) {
         ld_error("Found \"%s\" but it is not executable!?", path_str.c_str());
         return "";
       }
@@ -2728,7 +2741,6 @@ std::string findBinary(const std::string& relative_path) {
   ld_error("Reached top of filesystem without finding \"%s\"",
            relative_path.c_str());
   return "";
-#endif
 }
 
 int Cluster::writeConfig(const ServerConfig* server_cfg,
