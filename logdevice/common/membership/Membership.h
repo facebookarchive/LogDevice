@@ -88,6 +88,7 @@ class Membership {
   MembershipVersion::Type version_;
 
   friend class configuration::nodes::NodesConfigLegacyConverter;
+  friend class MembershipCodecFlatBuffers;
 };
 
 } // namespace membership

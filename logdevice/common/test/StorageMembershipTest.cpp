@@ -12,6 +12,8 @@
 
 #include "logdevice/common/ShardID.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/membership/MembershipCodecFlatBuffers.h"
+#include "logdevice/common/membership/StorageMembership.h"
 #include "logdevice/common/test/TestUtil.h"
 
 using namespace facebook::logdevice;
@@ -74,6 +76,29 @@ class StorageMembershipTest : public ::testing::Test {
     StorageMembership::Update res{MembershipVersion::Type(base_ver)};
     addShards(&res, shards, transition, conditions);
     return res;
+  }
+
+  inline void checkCodecSerialization(const StorageMembership& m) {
+    flatbuffers::FlatBufferBuilder builder;
+    auto membership = MembershipCodecFlatBuffers::serialize(builder, m);
+    builder.Finish(membership);
+
+    // run flatbuffers internal verification
+    auto verifier =
+        flatbuffers::Verifier(builder.GetBufferPointer(), builder.GetSize());
+
+    auto res =
+        verifier.VerifyBuffer<flat_buffer_codec::StorageMembership>(nullptr);
+    ASSERT_TRUE(res);
+
+    auto membership_ptr =
+        flatbuffers::GetRoot<flat_buffer_codec::StorageMembership>(
+            builder.GetBufferPointer());
+    auto m_deserialized =
+        MembershipCodecFlatBuffers::deserialize(membership_ptr);
+
+    ASSERT_NE(nullptr, m_deserialized);
+    ASSERT_EQ(m, *m_deserialized);
   }
 };
 
@@ -349,6 +374,7 @@ TEST_F(StorageMembershipTest, ShardLifeCycle) {
                      StorageStateFlags::NONE,
                      2);
   ASSERT_MEMBERSHIP_NODES(m, 2);
+  checkCodecSerialization(m);
 }
 
 // test various invalid transitions
@@ -420,6 +446,7 @@ TEST_F(StorageMembershipTest, InvalidTransitions) {
                      &m);
   ASSERT_EQ(-1, rv);
   ASSERT_EQ(E::SOURCE_STATE_MISMATCH, err);
+  checkCodecSerialization(m);
 }
 
 // test that the force flag can override condition checks
@@ -457,6 +484,7 @@ TEST_F(StorageMembershipTest, ForceFlag) {
                      MetaDataStorageState::NONE,
                      StorageStateFlags::NONE,
                      2);
+  checkCodecSerialization(m);
 }
 
 // test the behavior of marking shard as unrecoverable
@@ -523,6 +551,7 @@ TEST_F(StorageMembershipTest, UNRECOVERABLE) {
                      MetaDataStorageState::NONE,
                      StorageStateFlags::NONE,
                      4);
+  checkCodecSerialization(m);
 }
 
 // test that behavior of manipulating metadata storage shards
@@ -761,6 +790,7 @@ TEST_F(StorageMembershipTest, MetaDataShards) {
                      StorageStateFlags::NONE,
                      13);
   ASSERT_MEMBERSHIP_NODES(m, 1, 2, 3);
+  checkCodecSerialization(m);
 }
 
 TEST_F(StorageMembershipTest, InvalidProvisionUpdate) {
@@ -806,6 +836,7 @@ TEST_F(StorageMembershipTest, InvalidProvisionUpdate) {
       &m);
   ASSERT_EQ(-1, rv);
   ASSERT_EQ(E::VERSION_MISMATCH, err);
+  checkCodecSerialization(m);
 }
 
 TEST_F(StorageMembershipTest, ProvisionTransition) {
@@ -885,6 +916,86 @@ TEST_F(StorageMembershipTest, ProvisionTransition) {
                      2);
   CHECK_METADATA_SHARDS(m, N3, N7);
   ASSERT_MEMBERSHIP_NODES(m, 1, 2, 3, 4, 7);
+  checkCodecSerialization(m);
+}
+
+///////////  Testing the flatbuffers Codec //////////////////
+
+TEST_F(StorageMembershipTest, CodecEmptyMembership) {
+  // serialize and deserialize an empty membership
+  StorageMembership m;
+  checkCodecSerialization(m);
+}
+
+TEST_F(StorageMembershipTest, CodecBasic) {
+  StorageMembership m;
+  int rv;
+  auto update = genUpdateShards({N5, N6, N7},
+                                EMPTY_VERSION.val(),
+                                StorageStateTransition::PROVISION_SHARD,
+                                Condition::FORCE);
+  addShards(&update,
+            {N8, N9},
+            StorageStateTransition::PROVISION_METADATA_SHARD,
+            Condition::FORCE);
+  rv = m.applyUpdate(update, &m);
+  ASSERT_EQ(0, rv);
+  auto update2 = genUpdateOneShard(
+      N2, 1, StorageStateTransition::ADD_EMPTY_METADATA_SHARD, Condition::NONE);
+  addShards(&update2,
+            {N1, N3},
+            StorageStateTransition::ADD_EMPTY_SHARD,
+            Condition::NONE);
+  rv = m.applyUpdate(update2, &m);
+  ASSERT_EQ(0, rv);
+  rv = m.applyUpdate(genUpdateShards({N1, N2, N3},
+                                     2,
+                                     StorageStateTransition::ENABLING_READ,
+                                     Condition::FORCE),
+                     &m);
+  ASSERT_EQ(0, rv);
+  rv =
+      m.applyUpdate(genUpdateShards({N1, N2, N3},
+                                    3,
+                                    StorageStateTransition::COMMIT_READ_ENABLED,
+                                    Condition::COPYSET_CONFIRMATION),
+                    &m);
+  ASSERT_EQ(0, rv);
+  rv = m.applyUpdate(genUpdateShards({N1, N2},
+                                     4,
+                                     StorageStateTransition::ENABLE_WRITE,
+                                     Condition::LOCAL_STORE_WRITABLE),
+                     &m);
+  ASSERT_EQ(0, rv);
+  rv = m.applyUpdate(
+      genUpdateOneShard(N1,
+                        5,
+                        StorageStateTransition::PROMOTING_METADATA_SHARD,
+                        Condition::NONE),
+      &m);
+  ASSERT_EQ(0, rv);
+  rv = m.applyUpdate(
+      genUpdateOneShard(N1,
+                        6,
+                        StorageStateTransition::COMMIT_PROMOTION_METADATA_SHARD,
+                        Condition::COPYSET_CONFIRMATION),
+      &m);
+  ASSERT_EQ(0, rv);
+  rv = m.applyUpdate(genUpdateShards({N3},
+                                     7,
+                                     StorageStateTransition::ENABLE_WRITE,
+                                     Condition::LOCAL_STORE_WRITABLE),
+                     &m);
+  ASSERT_EQ(0, rv);
+  rv = m.applyUpdate(
+      genUpdateOneShard(N3,
+                        8,
+                        StorageStateTransition::PROMOTING_METADATA_SHARD,
+                        Condition::NONE),
+      &m);
+  ASSERT_EQ(0, rv);
+  CHECK_METADATA_SHARDS(m, N1, N2, N3, N8, N9);
+  checkCodecSerialization(m);
 }
 
 // TODO: test getting writer's and reader's view?

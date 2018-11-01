@@ -268,6 +268,7 @@ class StorageMembership : public Membership {
   void eraseShardState(ShardID shard);
 
   friend class configuration::nodes::NodesConfigLegacyConverter;
+  friend class MembershipCodecFlatBuffers;
 };
 
 }}} // namespace facebook::logdevice::membership

@@ -1,0 +1,72 @@
+/**
+ * Copyright (c) 2018-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+// Important: regenerate flatbuffer structure definitions if you change this:
+// flatc --cpp --scoped-enums <your-flatbuffer.fbs>
+
+namespace facebook.logdevice.membership.flat_buffer_codec;
+
+///////////// StorageMembership ///////////////////
+
+// keep consistent with logdevice/common/membership/StorageState.h
+enum StorageState : ubyte {
+  NONE = 0,
+  NONE_TO_RO,
+  READ_ONLY,
+  READ_WRITE,
+  RW_TO_RO,
+  DATA_MIGRATION,
+  INVALID
+}
+
+enum MetaDataStorageState : ubyte {
+  NONE = 0,
+  METADATA,
+  PROMOTING,
+  INVALID
+}
+
+struct ShardID {
+  node_idx: ushort;
+  shard_idx: ushort;
+}
+
+table ShardState {
+  shard_idx: ushort;
+  storage_state: StorageState;      // enum
+  flags: uint;
+  metadata_state: MetaDataStorageState; // enum
+  active_maintenance: ulong;
+  since_version: ulong;
+}
+
+table StorageNodeState {
+  node_idx: ushort;
+  shard_states: [ShardState];
+}
+
+table StorageMembership {
+  proto_version: uint;
+  membership_version: ulong;
+  node_states: [StorageNodeState];
+  metadata_shards:[ShardID];
+}
+
+////////////////// Sequencer Membership ////////////////
+
+table SequencerNodeState {
+  node_idx: ushort;
+  weight: double;
+  active_maintenance: ulong;
+}
+
+table SequencerMembership {
+  proto_version: uint;
+  membership_version: ulong;
+  node_states: [SequencerNodeState];
+}

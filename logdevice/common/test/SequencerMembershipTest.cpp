@@ -12,6 +12,8 @@
 
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/membership/MembershipCodecFlatBuffers.h"
+#include "logdevice/common/membership/SequencerMembership.h"
 #include "logdevice/common/test/TestUtil.h"
 
 using namespace facebook::logdevice;
@@ -58,6 +60,29 @@ class SequencerMembershipTest : public ::testing::Test {
     SequencerMembership::Update res{MembershipVersion::Type(base_ver)};
     addNodes(&res, nodes, transition, weight);
     return res;
+  }
+
+  inline void checkCodecSerialization(const SequencerMembership& m) {
+    flatbuffers::FlatBufferBuilder builder;
+    auto membership = MembershipCodecFlatBuffers::serialize(builder, m);
+    builder.Finish(membership);
+
+    // run flatbuffers internal verification
+    auto verifier =
+        flatbuffers::Verifier(builder.GetBufferPointer(), builder.GetSize());
+
+    auto res =
+        verifier.VerifyBuffer<flat_buffer_codec::SequencerMembership>(nullptr);
+    ASSERT_TRUE(res);
+
+    auto membership_ptr =
+        flatbuffers::GetRoot<flat_buffer_codec::SequencerMembership>(
+            builder.GetBufferPointer());
+    auto m_deserialized =
+        MembershipCodecFlatBuffers::deserialize(membership_ptr);
+
+    ASSERT_NE(nullptr, m_deserialized);
+    ASSERT_EQ(m, *m_deserialized);
   }
 };
 
@@ -141,6 +166,7 @@ TEST_F(SequencerMembershipTest, NodeLifeCycle) {
   ASSERT_NO_NODE(m, node_index_t(1));
   ASSERT_NODE_STATE(m, node_index_t(2), 3.2);
   ASSERT_MEMBERSHIP_NODES(m, 2);
+  checkCodecSerialization(m);
 }
 
 // test various invalid transitions
@@ -188,6 +214,39 @@ TEST_F(SequencerMembershipTest, InvalidTransitions) {
   ASSERT_EQ(-1, rv);
   ASSERT_EQ(E::VERSION_MISMATCH, err);
   ASSERT_MEMBERSHIP_NODES(m, 1);
+  checkCodecSerialization(m);
+}
+
+//////////  Testing the flatbuffers Codec ////////////////
+
+TEST_F(SequencerMembershipTest, CodecEmptyMembership) {
+  // serialize and deserialize an empty membership
+  SequencerMembership m;
+  checkCodecSerialization(m);
+}
+
+TEST_F(SequencerMembershipTest, CodecBasic) {
+  SequencerMembership m;
+  int rv;
+  rv = m.applyUpdate(
+      genUpdateNodes({node_index_t(5), node_index_t(6), node_index_t(7)},
+                     EMPTY_VERSION.val(),
+                     SequencerMembershipTransition::ADD_NODE,
+                     23.1),
+      &m);
+  ASSERT_EQ(0, rv);
+
+  rv = m.applyUpdate(
+      genUpdateNodes(
+          {node_index_t(1), node_index_t(2), node_index_t(3), node_index_t(4)},
+          1,
+          SequencerMembershipTransition::ADD_NODE,
+          0.0),
+      &m);
+
+  ASSERT_EQ(0, rv);
+  ASSERT_EQ(7, m.numNodes());
+  checkCodecSerialization(m);
 }
 
 } // namespace
