@@ -13,13 +13,14 @@
 #include <folly/json.h>
 
 #include "logdevice/common/AdminCommandTable.h"
+#include "logdevice/common/BuildInfo.h"
 #include "logdevice/common/PermissionChecker.h"
 #include "logdevice/common/PrincipalParser.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/UpdateableSecurityInfo.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/plugin/PluginRegistry.h"
 #include "logdevice/server/AdminCommand.h"
-#include "logdevice/server/ServerPluginPack.h"
 #include "logdevice/server/util.h"
 
 namespace facebook { namespace logdevice { namespace commands {

@@ -8,12 +8,12 @@
 
 #include "logdevice/common/UpdateableSecurityInfo.h"
 
-#include "logdevice/common/LegacyPluginPack.h"
 #include "logdevice/common/PrincipalParser.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/plugin/PermissionCheckerFactory.h"
+#include "logdevice/common/plugin/PluginRegistry.h"
 #include "logdevice/common/plugin/PrincipalParserFactory.h"
 
 namespace facebook { namespace logdevice {

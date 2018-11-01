@@ -7,20 +7,9 @@
  */
 #pragma once
 
-#include "logdevice/common/plugin/PluginProvider.h"
+#include "logdevice/common/plugin/Plugin.h"
 
 namespace facebook { namespace logdevice {
-
-class ClientBuiltinPluginProvider : public PluginProvider {
- public:
-  std::string identifier() const override {
-    return "client_builtin";
-  }
-  std::string displayName() const override {
-    return "Client built-in plugin provider";
-  }
-  PluginVector getPlugins() override;
-};
 
 PluginVector getClientPluginProviders();
 

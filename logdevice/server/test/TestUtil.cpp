@@ -19,24 +19,12 @@
 #include "logdevice/server/LogStoreMonitor.h"
 #include "logdevice/server/RebuildingCoordinator.h"
 #include "logdevice/server/RebuildingSupervisor.h"
-#include "logdevice/server/ServerPluginPack.h"
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/locallogstore/ShardedRocksDBLocalLogStore.h"
 #include "logdevice/server/shutdown.h"
 #include "logdevice/server/storage_tasks/ShardedStorageThreadPool.h"
 
 namespace facebook { namespace logdevice {
-
-class TestServerPluginPack : public ServerPluginPack {
- public:
-  virtual const char* description() const override {
-    return "testing server plugin";
-  }
-};
-
-std::shared_ptr<ServerPluginPack> make_test_server_plugin_pack() {
-  return std::make_shared<TestServerPluginPack>();
-}
 
 std::shared_ptr<ServerProcessor> make_test_server_processor(
     const Settings& settings,
@@ -57,7 +45,6 @@ std::shared_ptr<ServerProcessor> make_test_server_processor(
       std::make_shared<NoopTraceLogger>(config),
       UpdateableSettings<Settings>(settings),
       stats,
-      make_test_server_plugin_pack(),
       make_test_plugin_registry());
 }
 

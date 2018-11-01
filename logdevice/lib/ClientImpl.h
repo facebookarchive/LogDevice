@@ -34,7 +34,6 @@ class AppendRequest;
 class ClientAPIHitsTracer;
 class ClientBridgeImpl;
 class ClientEventTracer;
-class ClientPluginPack;
 class ClientProcessor;
 class ClientSettings;
 class ClientSettingsImpl;

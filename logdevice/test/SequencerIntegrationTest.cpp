@@ -513,7 +513,7 @@ TEST_F(SequencerIntegrationTest, SeenEpochReactivation) {
                         std::make_shared<NoopTraceLogger>(cluster->getConfig()),
                         UpdateableSettings<Settings>(settings),
                         nullptr, /* stats*/
-                        make_test_plugin_pack(),
+
                         make_test_plugin_registry());
 
   epoch_t first_epoch;

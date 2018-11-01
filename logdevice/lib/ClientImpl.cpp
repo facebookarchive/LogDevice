@@ -59,8 +59,7 @@
 #include "logdevice/include/Err.h"
 #include "logdevice/include/Record.h"
 #include "logdevice/lib/AsyncReaderImpl.h"
-#include "logdevice/lib/ClientBuiltinPluginProvider.h"
-#include "logdevice/lib/ClientPluginPack.h"
+#include "logdevice/lib/ClientPluginHelper.h"
 #include "logdevice/lib/ClientProcessor.h"
 #include "logdevice/lib/ClientSettingsImpl.h"
 #include "logdevice/lib/ClusterAttributesImpl.h"
@@ -204,12 +203,7 @@ std::shared_ptr<Client> Client::create(std::string cluster_name,
 
   ConfigInit config_init(timeout);
 
-  std::shared_ptr<ClientPluginPack> plugin =
-      plugin_registry->getSinglePlugin<ClientPluginPack>(
-          PluginType::LEGACY_CLIENT_PLUGIN);
-  ld_check(plugin);
   int rv = config_init.attach(config_url,
-                              plugin,
                               plugin_registry,
                               config,
                               std::move(logs_cfg),
@@ -356,16 +350,10 @@ ClientImpl::ClientImpl(std::string cluster_name,
   event_tracer_ =
       std::make_unique<ClientEventTracer>(trace_logger_, stats_.get());
 
-  std::shared_ptr<ClientPluginPack> plugin =
-      plugin_registry_->getSinglePlugin<ClientPluginPack>(
-          PluginType::LEGACY_CLIENT_PLUGIN);
-  ld_check(plugin);
-
   processor_ = ClientProcessor::create(config_,
                                        trace_logger_,
                                        settings,
                                        stats_.get(),
-                                       plugin,
                                        plugin_registry_,
                                        credentials_,
                                        csid_);

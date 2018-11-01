@@ -13,7 +13,7 @@
 
 #include "logdevice/common/debug.h"
 #include "logdevice/include/Err.h"
-#include "logdevice/lib/ClientBuiltinPluginProvider.h"
+#include "logdevice/lib/ClientPluginHelper.h"
 
 namespace facebook { namespace logdevice {
 

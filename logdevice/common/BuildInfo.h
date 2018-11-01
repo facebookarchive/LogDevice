@@ -19,10 +19,9 @@
 
 /**
  * @file If the build system can bake build information into the binary, this
- * interface can be implemented (and hooked up via the plugin interface; see
- * LegacyPluginPack.h) to provide it.  The server will log the build info at
- * startup and expose it through operational channels (admin commands,
- * ldshell).
+ * interface can be implemented (and hooked up via the plugin interface) to
+ * provide it.  The server will log the build info at startup and expose it
+ * through operational channels (admin commands, ldshell).
  */
 
 namespace facebook { namespace logdevice {

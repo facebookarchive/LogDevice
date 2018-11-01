@@ -118,7 +118,6 @@ void ServerConfigSource::init(const std::string& path,
                                  trace_logger,
                                  UpdateableSettings<Settings>(settings),
                                  /*stats*/ nullptr,
-                                 /*plugin*/ nullptr,
                                  plugin_registry,
                                  /*credentials*/ "",
                                  "ld:cfg-src");

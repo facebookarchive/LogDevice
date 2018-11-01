@@ -6,15 +6,15 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "logdevice/server/ServerBuiltinPluginProvider.h"
+#include "logdevice/lib/ClientPluginHelper.h"
 
 #include "logdevice/common/plugin/CommonBuiltinPlugins.h"
-#include "logdevice/server/ServerPluginPack.h"
+#include "logdevice/common/plugin/StaticPluginLoader.h"
 
 namespace facebook { namespace logdevice {
 
-PluginVector ServerBuiltinPluginProvider::getPlugins() {
-  return createAugmentedCommonBuiltinPluginVector<ServerPluginPack>();
+PluginVector getClientPluginProviders() {
+  return createPluginVector<StaticPluginLoader, BuiltinPluginProvider>();
 }
 
 }} // namespace facebook::logdevice

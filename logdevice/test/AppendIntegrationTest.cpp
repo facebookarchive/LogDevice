@@ -23,11 +23,11 @@
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/plugin/PluginRegistry.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/test/TestUtil.h"
-#include "logdevice/lib/ClientBuiltinPluginProvider.h"
 #include "logdevice/lib/ClientImpl.h"
-#include "logdevice/lib/ClientPluginPack.h"
+#include "logdevice/lib/ClientPluginHelper.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
 
@@ -50,7 +50,7 @@ TEST_F(AppendIntegrationTest, AppendRequestEcho) {
                         std::make_shared<NoopTraceLogger>(cluster->getConfig()),
                         UpdateableSettings<Settings>(settings),
                         nullptr, /*stats*/
-                        make_test_plugin_pack(),
+
                         make_test_plugin_registry());
 
   char data[128]; // send the contents of this array as payload
@@ -562,7 +562,7 @@ TEST_F(AppendIntegrationTest, ThreadMapping) {
                         std::make_shared<NoopTraceLogger>(cluster->getConfig()),
                         UpdateableSettings<Settings>(settings),
                         nullptr, /*Stats*/
-                        make_test_plugin_pack(),
+
                         make_test_plugin_registry());
 
   const std::string payload = "foo";

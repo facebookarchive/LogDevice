@@ -12,8 +12,6 @@
 
 namespace facebook { namespace logdevice {
 
-class LegacyPluginPack;
-class PluginRegistry;
 class Processor;
 class UpdateableConfig;
 

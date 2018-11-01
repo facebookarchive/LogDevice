@@ -47,13 +47,7 @@ PLUGIN_TYPE(SEQUENCER_LOCATOR_FACTORY, 10, "SequencerLocator factory", false)
 PLUGIN_TYPE(OPEN_TRACER_FACTORY, 11, "Open Tracing tracer factory", false)
 // See HotTextOptimizerPlugin.h
 PLUGIN_TYPE(HOT_TEXT_OPTIMIZER, 12, "HotTextOptimizer", false)
-
-// TODO: add more plugin types
-
-// Plugin type used for legacy client plugin bundle
-PLUGIN_TYPE(LEGACY_CLIENT_PLUGIN, 100, "Legacy client plugin", false)
-
-// Plugin type used for legacy server plugin bundle
-PLUGIN_TYPE(LEGACY_SERVER_PLUGIN, 101, "Legacy server plugin", false)
+// See AdminServerFactory.h
+PLUGIN_TYPE(ADMIN_SERVER_FACTORY, 13, "AdminServer factory", false)
 
 #undef PLUGIN_TYPE

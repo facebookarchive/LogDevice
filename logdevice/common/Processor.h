@@ -44,7 +44,6 @@ class ClientIdxAllocator;
 class ClusterState;
 class EventLogRebuildingSet;
 class EventLoopHandle;
-class LegacyPluginPack;
 class PermissionChecker;
 class PluginRegistry;
 class PrincipalParser;
@@ -97,7 +96,6 @@ class Processor : public folly::enable_shared_from_this<Processor> {
             std::shared_ptr<TraceLogger> traceLogger,
             UpdateableSettings<Settings> settings,
             StatsHolder* stats,
-            std::shared_ptr<LegacyPluginPack> plugin,
             std::shared_ptr<PluginRegistry> plugin_registry,
             std::string credentials = "",
             std::string csid = "",
@@ -409,7 +407,6 @@ class Processor : public folly::enable_shared_from_this<Processor> {
   // all objects running on those EventLoops
   UpdateableSettings<Settings> settings_;
 
-  std::shared_ptr<LegacyPluginPack> plugin_;
   std::shared_ptr<PluginRegistry> plugin_registry_;
 
  public:
@@ -550,9 +547,6 @@ class Processor : public folly::enable_shared_from_this<Processor> {
 
   ClientIdxAllocator& clientIdxAllocator() const;
 
-  std::shared_ptr<LegacyPluginPack> getPlugin() {
-    return plugin_;
-  }
   std::shared_ptr<PluginRegistry> getPluginRegistry() {
     return plugin_registry_;
   }

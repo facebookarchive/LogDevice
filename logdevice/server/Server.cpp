@@ -29,6 +29,7 @@
 #include "logdevice/common/configuration/logs/LogsConfigManager.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/event_log/EventLogStateMachine.h"
+#include "logdevice/common/plugin/AdminServerFactory.h"
 #include "logdevice/common/plugin/TraceLoggerFactory.h"
 #include "logdevice/common/settings/SSLSettingValidation.h"
 #include "logdevice/common/settings/SettingsUpdater.h"
@@ -40,7 +41,6 @@
 #include "logdevice/server/MyNodeID.h"
 #include "logdevice/server/RebuildingCoordinator.h"
 #include "logdevice/server/RebuildingSupervisor.h"
-#include "logdevice/server/ServerPluginPack.h"
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/UnreleasedRecordDetector.h"
 #include "logdevice/server/fatalsignal.h"
@@ -265,15 +265,10 @@ ServerParameters::ServerParameters(
       updateable_server_config->addHook(std::bind(
           &ServerParameters::validateNodes, this, std::placeholders::_1)));
 
-  std::shared_ptr<ServerPluginPack> plugin =
-      getPluginRegistry()->getSinglePlugin<ServerPluginPack>(
-          PluginType::LEGACY_SERVER_PLUGIN);
-  ld_check(plugin);
   {
     ConfigInit config_init(
         processor_settings_->initial_config_load_timeout, getStats());
     int rv = config_init.attach(server_settings_->config_path,
-                                plugin,
                                 getPluginRegistry(),
                                 updateable_config_,
                                 nullptr,
@@ -598,11 +593,6 @@ bool Server::initStore() {
 }
 
 bool Server::initProcessor() {
-  std::shared_ptr<ServerPluginPack> plugin =
-      params_->getPluginRegistry()->getSinglePlugin<ServerPluginPack>(
-          PluginType::LEGACY_SERVER_PLUGIN);
-  ld_check(plugin);
-
   try {
     processor_ =
         ServerProcessor::create(params_->getAuditLog(),
@@ -613,7 +603,6 @@ bool Server::initProcessor() {
                                 params_->getTraceLogger(),
                                 params_->getProcessorSettings(),
                                 params_->getStats(),
-                                plugin,
                                 params_->getPluginRegistry(),
                                 "",
                                 "",
@@ -639,7 +628,15 @@ bool Server::initProcessor() {
   }
 
   if (params_->getServerSettings()->admin_enabled) {
-    admin_server_handle_ = plugin->createAdminServer(this);
+    auto adm_plugin =
+        params_->getPluginRegistry()->getSinglePlugin<AdminServerFactory>(
+            PluginType::ADMIN_SERVER_FACTORY);
+    if (adm_plugin) {
+      admin_server_handle_ = (*adm_plugin)(this);
+    } else {
+      ld_info("Not initializing Admin API, since there are no implementations "
+              "available.");
+    }
   } else {
     ld_info("Not initializing Admin API,"
             " since admin-enabled server setting is set to false");

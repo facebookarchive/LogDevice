@@ -28,7 +28,6 @@
 #include <sys/time.h>
 #include <sys/types.h>
 
-#include "logdevice/common/LegacyPluginPack.h"
 #include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/PermissionChecker.h"
 #include "logdevice/common/PrincipalParser.h"
@@ -365,32 +364,9 @@ bool testsShouldLeaveData() {
   return getenv_switch("LOGDEVICE_TEST_LEAVE_DATA");
 }
 
-class TestPluginPack : public virtual LegacyPluginPack, public virtual Plugin {
- public:
-  Type type() const override {
-    return Type::LEGACY_CLIENT_PLUGIN;
-  }
-
-  std::string identifier() const override {
-    return PluginRegistry::kBuiltin().str();
-  }
-
-  std::string displayName() const override {
-    return description();
-  }
-
-  virtual const char* description() const override {
-    return "testing plugin";
-  }
-};
-
-std::shared_ptr<LegacyPluginPack> make_test_plugin_pack() {
-  return std::make_shared<TestPluginPack>();
-}
-
 std::shared_ptr<PluginRegistry> make_test_plugin_registry() {
   return std::make_shared<PluginRegistry>(
-      createAugmentedCommonBuiltinPluginVector<TestPluginPack>());
+      createAugmentedCommonBuiltinPluginVector<>());
 }
 
 std::shared_ptr<Processor>
@@ -404,7 +380,6 @@ make_test_processor(const Settings& settings,
                            std::make_shared<NoopTraceLogger>(config),
                            UpdateableSettings<Settings>(settings),
                            stats,
-                           make_test_plugin_pack(),
                            make_test_plugin_registry());
 }
 

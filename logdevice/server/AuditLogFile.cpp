@@ -10,11 +10,12 @@
 
 #include <folly/json.h>
 
+#include "logdevice/common/BuildInfo.h"
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/commandline_util_chrono.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/plugin/PluginRegistry.h"
 #include "logdevice/server/LocalLogFile.h"
-#include "logdevice/server/ServerPluginPack.h"
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/locallogstore/PartitionedRocksDBStore.h"
 

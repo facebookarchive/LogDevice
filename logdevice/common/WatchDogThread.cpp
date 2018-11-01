@@ -9,12 +9,12 @@
 
 #include <signal.h>
 
-#include "logdevice/common/LegacyPluginPack.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/ThreadID.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/plugin/BacktraceRunner.h"
+#include "logdevice/common/plugin/PluginRegistry.h"
 #include "logdevice/common/stats/Stats.h"
 
 namespace facebook { namespace logdevice {

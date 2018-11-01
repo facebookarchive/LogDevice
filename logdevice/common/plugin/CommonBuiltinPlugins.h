@@ -22,4 +22,17 @@ PluginVector createAugmentedCommonBuiltinPluginVector() {
   return createPluginVector<BuildInfo, BuiltinConfigSourceFactory, Types...>();
 }
 
+class BuiltinPluginProvider : public PluginProvider {
+ public:
+  std::string identifier() const override {
+    return "builtin";
+  }
+  std::string displayName() const override {
+    return "Built-in plugin provider";
+  }
+  PluginVector getPlugins() override {
+    return createAugmentedCommonBuiltinPluginVector<>();
+  }
+};
+
 }} // namespace facebook::logdevice

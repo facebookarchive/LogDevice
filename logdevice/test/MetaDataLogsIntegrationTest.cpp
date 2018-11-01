@@ -503,13 +503,13 @@ TEST_F(MetaDataLogsIntegrationTest, SequencerReadHistoricMetadata) {
   std::shared_ptr<Client> client = cluster->createClient();
   auto* client_impl = static_cast<ClientImpl*>(client.get());
   Settings settings = create_default_settings<Settings>();
-  auto processor = Processor::create(
-      cluster->getConfig(),
-      std::make_shared<NoopTraceLogger>(cluster->getConfig()),
-      UpdateableSettings<Settings>(settings),
-      nullptr, /* stats*/
-      make_test_plugin_pack(),
-      make_test_plugin_registry());
+  auto processor =
+      Processor::create(cluster->getConfig(),
+                        std::make_shared<NoopTraceLogger>(cluster->getConfig()),
+                        UpdateableSettings<Settings>(settings),
+                        nullptr, /* stats*/
+
+                        make_test_plugin_registry());
 
   std::string data(1024, 'x');
   // write one record

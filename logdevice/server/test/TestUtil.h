@@ -18,9 +18,7 @@ class ShardedStorageThreadPool;
 class StatsHolder;
 class ServerProcessor;
 class GossipSettings;
-class ServerPluginPack;
 
-std::shared_ptr<ServerPluginPack> make_test_server_plugin_pack();
 std::shared_ptr<ServerProcessor> make_test_server_processor(
     const Settings& settings,
     const ServerSettings& server_settings,

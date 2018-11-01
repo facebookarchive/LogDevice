@@ -53,7 +53,6 @@
 #include "logdevice/include/LogTailAttributes.h"
 #include "logdevice/include/types.h"
 #include "logdevice/lib/ClientImpl.h"
-#include "logdevice/lib/ClientPluginPack.h"
 #include "logdevice/lib/ClientSettingsImpl.h"
 #include "logdevice/replication_checker/LogErrorTracker.h"
 #include "logdevice/replication_checker/ReplicationCheckerSettings.h"
