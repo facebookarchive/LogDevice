@@ -286,8 +286,9 @@ void ShardRebuildingV2::finalizeIfNeeded() {
 }
 
 void ShardRebuildingV2::noteConfigurationChanged() {
-  // TODO (#T24665001): Do we need to handle logs being removed from config, or
-  // do RecordRebuildings already handle it sufficiently?
+  // No need to do anything even when logs are removed from config.
+  // Neither RebuildingReadStorageTaskV2 nor ChunkRebuilding require the log to
+  // be in config.
 }
 
 void ShardRebuildingV2::getDebugInfo(InfoShardsRebuildingTable& table) const {

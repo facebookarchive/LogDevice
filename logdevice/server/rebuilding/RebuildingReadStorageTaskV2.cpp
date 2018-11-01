@@ -37,7 +37,13 @@ void RebuildingReadStorageTaskV2::execute() {
     opts.fill_cache = false;
     opts.allow_copyset_index = true;
 
-    context->iterator = createIterator(opts);
+    std::vector<logid_t> logs;
+    logs.reserve(context->logs.size());
+    for (const auto& p : context->logs) {
+      logs.push_back(p.first);
+    }
+
+    context->iterator = createIterator(opts, logs);
     context->nextLocation = context->iterator->minLocation();
   }
 
@@ -157,12 +163,8 @@ void RebuildingReadStorageTaskV2::execute() {
 
     // Make sure log_state points to current log.
     if (chunk == nullptr || log != chunk->address.log) {
-      // TODO (T24665001): After adding support for filtering by log ID in
-      //                   iterator, this lookup should always succeed.
       auto it = context->logs.find(log);
-      if (it == context->logs.end()) {
-        continue;
-      }
+      ld_check(it != context->logs.end()); // Filter should reject such records
       log_state = &it->second;
       start_new_chunk = true;
     }
@@ -415,8 +417,9 @@ StatsHolder* RebuildingReadStorageTaskV2::getStats() {
 
 std::unique_ptr<LocalLogStore::AllLogsIterator>
 RebuildingReadStorageTaskV2::createIterator(
-    const LocalLogStore::ReadOptions& opts) {
-  return storageThreadPool_->getLocalLogStore().readAllLogs(opts);
+    const LocalLogStore::ReadOptions& opts,
+    const std::vector<logid_t>& logs) {
+  return storageThreadPool_->getLocalLogStore().readAllLogs(opts, logs);
 }
 
 RebuildingReadStorageTaskV2::Filter::Filter(RebuildingReadStorageTaskV2* task,
@@ -479,6 +482,44 @@ bool RebuildingReadStorageTaskV2::Filter::shouldProcessTimeRange(
   return have_shards_intersecting_range;
 }
 
+bool RebuildingReadStorageTaskV2::Filter::shouldProcessRecordRange(
+    logid_t log,
+    lsn_t min_lsn,
+    lsn_t max_lsn,
+    RecordTimestamp /* min_ts */,
+    RecordTimestamp /* max_ts */) {
+  // Note: we're not taking time ranges into account. I.e. if in some partition
+  // the effective rebuilding set (rebuilding set minus shardsOutsideTimeRange)
+  // doesn't intersect some log's nodeset, we could detect it here and skip
+  // this log in this partition. For simplicity we're not doing it currently.
+  // We're just skipping epoch ranges not covered by rebuilding plan.
+
+  if (!lookUpLogState(log)) {
+    return false;
+  }
+
+  // Find the epoch range covering min_lsn.
+  bool first_epoch_good =
+      task->lookUpEpochMetadata(log,
+                                min_lsn,
+                                context,
+                                currentLogState,
+                                /* create_replication_scheme */ false);
+  // If min_lsn is covered by rebuilding plan, process the range.
+  if (first_epoch_good) {
+    return true;
+  }
+  // If max_lsn is in the same, non-covered, epoch range as min_lsn, reject the
+  // lsn range.
+  if (lsn_to_epoch(max_lsn) < currentLogState->currentEpochRange.second) {
+    return false;
+  }
+
+  // The epoch currentEpochRange.second is covered by plan and
+  // intersects [min_lsn, max_lsn]. Process the lsn range.
+  return true;
+}
+
 bool RebuildingReadStorageTaskV2::Filter::
 operator()(logid_t log,
            lsn_t lsn,
@@ -502,17 +543,9 @@ operator()(logid_t log,
     return false;
   }
 
-  // Look up the LogState.
-  if (log != currentLog) {
-    auto it = context->logs.find(log);
-    if (it == context->logs.end()) {
-      currentLogState = nullptr;
-      // TODO (T24665001): Do this filtering on logsdb directory
-      //                   instead of individual records.
-      noteRecordFiltered(FilteredReason::EPOCH_RANGE, late);
-      return false;
-    }
-    currentLogState = &it->second;
+  if (!lookUpLogState(log)) {
+    noteRecordFiltered(FilteredReason::EPOCH_RANGE, late);
+    return false;
   }
 
   // Look up the EpochMetaData to find replication factor.
@@ -641,6 +674,20 @@ operator()(logid_t log,
     noteRecordFiltered(filtered_reason, late);
   }
   return result;
+}
+
+bool RebuildingReadStorageTaskV2::Filter::lookUpLogState(logid_t log) {
+  if (log == currentLog) {
+    return currentLogState != nullptr;
+  }
+  currentLog = log;
+  auto it = context->logs.find(log);
+  if (it == context->logs.end()) {
+    currentLogState = nullptr;
+    return false;
+  }
+  currentLogState = &it->second;
+  return true;
 }
 
 /**

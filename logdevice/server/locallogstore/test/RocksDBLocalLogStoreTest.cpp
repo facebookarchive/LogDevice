@@ -329,8 +329,8 @@ STORE_TEST(RocksDBLocalLogStoreTest, AllLogsIterators, store) {
 
   // Read everything using an AllLogsIterator.
 
-  auto iterator =
-      store.readAllLogs(LocalLogStore::ReadOptions("AllLogsIterators"));
+  auto iterator = store.readAllLogs(
+      LocalLogStore::ReadOptions("AllLogsIterators"), folly::none);
   std::map<std::pair<logid_t::raw_type, lsn_t>, std::string> read_records;
   const size_t header_size = getHeader().size;
   for (iterator->seek(*iterator->minLocation());

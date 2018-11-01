@@ -110,7 +110,9 @@ FailingLocalLogStore::read(logid_t, const ReadOptions&) const {
 }
 
 std::unique_ptr<LocalLogStore::AllLogsIterator>
-FailingLocalLogStore::readAllLogs(const ReadOptions&) const {
+FailingLocalLogStore::readAllLogs(
+    const ReadOptions&,
+    const folly::Optional<std::vector<logid_t>>&) const {
   return std::unique_ptr<AllLogsIterator>(new FailingAllLogsIterator(this));
 }
 

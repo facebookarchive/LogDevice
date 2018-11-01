@@ -143,9 +143,9 @@ struct ReadContext {
   std::shared_ptr<LocalLogStore::ReadFilter> lls_filter_;
   // A reason of the current catchup
   CatchupEventTrigger catchup_reason_;
-  // Iterabtor statistics. Reset by LocalLogStoreReader::read().
+  // Iterator statistics. Reset by LocalLogStoreReader::read().
   // It duplicates some of the stopping conditions, e.g.
-  // it_stats_.stop_reading_after_lsn is usually set to
+  // the lsn in it_stats_.stop_reading_after is usually set to
   // min(until_lsn_, window_high_, last_released_lsn_).
   // However, some users of ReadContext don't use it_stats_, so we shouldn't
   // rely on it being in sync with the rest of ReadContext.

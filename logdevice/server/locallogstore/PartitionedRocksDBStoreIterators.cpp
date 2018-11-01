@@ -802,10 +802,12 @@ void PartitionedRocksDBStore::Iterator::seekToPartitionBeforeOrAfter(
 
 PartitionedRocksDBStore::PartitionedAllLogsIterator::PartitionedAllLogsIterator(
     const PartitionedRocksDBStore* pstore,
-    const LocalLogStore::ReadOptions& options)
+    const LocalLogStore::ReadOptions& options,
+    const folly::Optional<std::vector<logid_t>>& logs)
     : pstore_(pstore),
       options_(options),
-      last_partition_id_(pstore->getLatestPartition()->id_) {
+      last_partition_id_(pstore->getLatestPartition()->id_),
+      filter_using_directory_(logs.hasValue()) {
   ld_check(!options.tailing);
   registerTracking(std::string(),
                    LOGID_INVALID,
@@ -813,6 +815,20 @@ PartitionedRocksDBStore::PartitionedAllLogsIterator::PartitionedAllLogsIterator(
                    options.allow_blocking_io,
                    IteratorType::PARTITIONED_ALL_LOGS,
                    options.tracking_ctx);
+
+  if (filter_using_directory_) {
+    if (!logs.value().empty()) {
+      pstore_->getLogsDBDirectories({}, logs.value(), directory_);
+    }
+    // Sort by tuple (partition, log, lsn).
+    std::sort(directory_.begin(),
+              directory_.end(),
+              [](const LogDirectoryEntry& lhs, LogDirectoryEntry& rhs) {
+                return std::tie(
+                           lhs.second.id, lhs.first, lhs.second.first_lsn) <
+                    std::tie(rhs.second.id, rhs.first, rhs.second.first_lsn);
+              });
+  }
 }
 
 IteratorState
@@ -851,28 +867,262 @@ void PartitionedRocksDBStore::PartitionedAllLogsIterator::seek(
     const Location& base_location,
     ReadFilter* filter,
     ReadStats* stats) {
+  if (filter_using_directory_) {
+    ld_check(filter != nullptr);
+    ld_check(stats != nullptr);
+  }
   PartitionedLocation location =
       checked_downcast<const PartitionedLocation&>(base_location);
-
   trackSeek(lsn_t(0), /* version */ 0);
-  setPartition(location.partition, filter, stats);
-  if (!data_iterator_) {
-    return;
+
+  data_iterator_ = nullptr;     // Order of destruction is important.
+  current_partition_ = nullptr; //
+
+  if (location.partition == PARTITION_INVALID &&
+      (!filter ||
+       filter->shouldProcessTimeRange(
+           RecordTimestamp::min(), RecordTimestamp::max()))) {
+    // Seeking to unpartitioned column family.
+    data_iterator_ = std::make_unique<RocksDBLocalLogStore::CSIWrapper>(
+        pstore_,
+        /* log_id */ folly::none,
+        options_,
+        pstore_->unpartitioned_cf_.get());
+    if (stats) {
+      stats->stop_reading_after = std::make_pair(
+          logid_t(std::numeric_limits<logid_t::raw_type>::max()), LSN_MAX);
+    }
+    data_iterator_->seek(location.log, location.lsn, filter, stats);
+    if (data_iterator_->state() != IteratorState::AT_END) {
+      // Found a suitable unpartitioned record (or hit a limit or error).
+      return;
+    }
+    // No unpartitioned records passed filter. Move on to partitions.
   }
-  if (current_partition_ && current_partition_->id_ != location.partition) {
-    ld_check_gt(current_partition_->id_, location.partition);
-    location.log = logid_t(0);
-    location.lsn = 0;
+
+  if (filter_using_directory_) {
+    // Look up the `location` in directory.
+    // More precisely, find the first directory entry having tuple
+    // (partition, log, max_lsn) >= location.
+    current_entry_ = std::lower_bound(
+        directory_.begin(),
+        directory_.end(),
+        location,
+        [](const LogDirectoryEntry& entry, const PartitionedLocation& loc) {
+          return std::tie(entry.second.id, entry.first, entry.second.max_lsn) <
+              std::tie(loc.partition, loc.log, loc.lsn);
+        });
   }
-  data_iterator_->seek(location.log, location.lsn, filter, stats);
-  moveUntilValid(filter, stats);
+
+  seekToCurrentEntry(
+      std::max(location.partition, 1ul), location, filter, stats);
 }
+
 void PartitionedRocksDBStore::PartitionedAllLogsIterator::next(
     ReadFilter* filter,
     ReadStats* stats) {
   ld_assert_eq(state(), IteratorState::AT_RECORD);
+  if (filter_using_directory_) {
+    ld_check(filter != nullptr);
+    ld_check(stats != nullptr);
+  }
+
+  // Step the data iterator forward. If it reaches the end of current partition
+  // or directory entry, step to the next partition or directory entry and
+  // hand off to seekToCurrentEntry().
+
   data_iterator_->next(filter, stats);
-  moveUntilValid(filter, stats);
+  IteratorState s = data_iterator_->state();
+
+  partition_id_t next_partition = PARTITION_INVALID;
+  if (s == IteratorState::AT_END) {
+    // End of partition.
+    if (!filter_using_directory_) {
+      // Go to next partition. If we were in unpartitioned CF, go to first
+      // partition.
+      next_partition =
+          current_partition_ ? current_partition_->id_ + 1 : partition_id_t(1);
+    } else if (current_partition_) {
+      // Go to directory entry in a higher partition.
+      partition_id_t id = current_entry_->second.id;
+      while (current_entry_ != directory_.end() &&
+             current_entry_->second.id <= id) {
+        ld_check(current_entry_->second.id == id); // should be sorted
+        ++current_entry_;
+      }
+    } else {
+      // End of unpartitioned CF, go to first directory entry.
+      current_entry_ = directory_.begin();
+    }
+  } else if (s == IteratorState::LIMIT_REACHED && stats->maxLSNReached()) {
+    // End of log strand in this partition. Go to next directory entry.
+    ld_check(filter_using_directory_);
+    ld_check(stats->maxLSNReached());
+    ld_check(current_partition_ != nullptr);
+    ++current_entry_;
+  } else {
+    // Found a record, got an error or reached a limit (except maxLSNReached(),
+    // which is used internally by PartitionedAllLogsIterator).
+    return;
+  }
+
+  seekToCurrentEntry(next_partition, PartitionedLocation(), filter, stats);
+}
+
+void PartitionedRocksDBStore::PartitionedAllLogsIterator::seekToCurrentEntry(
+    partition_id_t current_partition_id,
+    PartitionedLocation seek_to,
+    ReadFilter* filter,
+    ReadStats* stats) {
+  auto partitions = pstore_->getPartitionList();
+  // Latest partition ID never decreases.
+  ld_check(partitions->nextID() > last_partition_id_);
+
+  RecordTimestamp min_ts, max_ts;
+  if (current_partition_) {
+    if (data_iterator_) {
+      ld_check(current_partition_ != nullptr);
+      min_ts = data_iterator_->min_ts_;
+      max_ts = data_iterator_->max_ts_;
+    } else {
+      min_ts = current_partition_->min_timestamp;
+      max_ts = current_partition_->max_timestamp;
+    }
+  }
+
+  // Skip dropped partitions.
+  if (filter_using_directory_) {
+    while (current_entry_ != directory_.end() &&
+           current_entry_->second.id < partitions->firstID()) {
+      ++current_entry_;
+    }
+  } else {
+    current_partition_id =
+        std::max(current_partition_id, partitions->firstID());
+  }
+
+  auto go_to_next_partition = [&] {
+    if (filter_using_directory_) {
+      partition_id_t id = current_entry_->second.id;
+      while (current_entry_ != directory_.end() &&
+             current_entry_->second.id <= id) {
+        ld_check(current_entry_->second.id == id); // directory_ is sorted
+        ++current_entry_;
+      }
+    } else {
+      ++current_partition_id;
+    }
+  };
+
+  while (true) {
+    if (filter_using_directory_) {
+      if (current_entry_ == directory_.end()) {
+        // Reached end of directory.
+        break;
+      }
+      current_partition_id = current_entry_->second.id;
+    }
+
+    if (current_partition_id > last_partition_id_) {
+      // Reached end of partition list.
+      break;
+    }
+
+    if (!current_partition_ ||
+        current_partition_->id_ != current_partition_id) {
+      // Need to switch to a different partition.
+
+      // Latest partition ID never decreases.
+      ld_check_between(current_partition_id,
+                       partitions->firstID(),
+                       partitions->nextID() - 1);
+      data_iterator_ = nullptr;
+      current_partition_ = partitions->get(current_partition_id);
+      ld_check(current_partition_ != nullptr);
+      // Cache the timestamps to avoid loading from the atomics every time.
+      min_ts = current_partition_->min_timestamp;
+      max_ts = current_partition_->max_timestamp;
+
+      if (filter && !filter->shouldProcessTimeRange(min_ts, max_ts)) {
+        // Partition is filtered out, try the next one.
+        current_partition_ = nullptr;
+        go_to_next_partition();
+        continue;
+      }
+    }
+    if (filter_using_directory_ && filter &&
+        !filter->shouldProcessRecordRange(current_entry_->first,
+                                          current_entry_->second.first_lsn,
+                                          current_entry_->second.max_lsn,
+                                          min_ts,
+                                          max_ts)) {
+      // Directory entry is filtered out, try the next one.
+      ++current_entry_;
+      continue;
+    }
+
+    if (data_iterator_ == nullptr) {
+      // Create iterator in current partition.
+      data_iterator_ = std::make_unique<RocksDBLocalLogStore::CSIWrapper>(
+          pstore_,
+          /* log_id */ folly::none,
+          options_,
+          current_partition_->cf_.get());
+      data_iterator_->min_ts_ = min_ts;
+      data_iterator_->max_ts_ = max_ts;
+
+      if (stats) {
+        ++stats->seen_logsdb_partitions;
+      }
+    }
+
+    // Seek the iterator.
+    if (filter_using_directory_) {
+      stats->stop_reading_after =
+          std::make_pair(current_entry_->first, current_entry_->second.max_lsn);
+      lsn_t requested_lsn = (current_partition_id == seek_to.partition &&
+                             current_entry_->first == seek_to.log)
+          ? seek_to.lsn
+          : lsn_t(0);
+      data_iterator_->seek(
+          current_entry_->first,
+          std::max(requested_lsn, current_entry_->second.first_lsn),
+          filter,
+          stats);
+    } else if (current_partition_id == seek_to.partition) {
+      // We're in the partition than seek()'s Location requested.
+      // Seek to the log+lsn requested by Location.
+      data_iterator_->seek(seek_to.log, seek_to.lsn, filter, stats);
+    } else {
+      // We're in a higher partition than seek()'s Location requested.
+      // Seek to the beginning of partition.
+      data_iterator_->seek(logid_t(0), lsn_t(0), filter, stats);
+    }
+
+    IteratorState s = data_iterator_->state();
+    if (s == IteratorState::ERROR || s == IteratorState::WOULDBLOCK ||
+        (s != IteratorState::AT_END && (!stats || !stats->maxLSNReached()))) {
+      return;
+    }
+
+    ld_check_in(s,
+                ({IteratorState::AT_END,
+                  IteratorState::AT_RECORD,
+                  IteratorState::LIMIT_REACHED}));
+    if (s == IteratorState::AT_END) {
+      // End of partition.
+      go_to_next_partition();
+    } else {
+      // End of log strand in this partition. Go to next directory entry.
+      ld_check(filter_using_directory_);
+      ld_check(stats->maxLSNReached());
+      ++current_entry_;
+    }
+  }
+
+  // Reached the end.
+  data_iterator_ = nullptr;
+  current_partition_ = nullptr;
 }
 
 std::unique_ptr<Location>
@@ -888,74 +1138,8 @@ PartitionedRocksDBStore::PartitionedAllLogsIterator::metadataLogsBegin() const {
 
 void PartitionedRocksDBStore::PartitionedAllLogsIterator::invalidate() {
   trackIteratorRelease();
+  data_iterator_ = nullptr;
   current_partition_ = nullptr;
-  data_iterator_ = nullptr;
-}
-
-void PartitionedRocksDBStore::PartitionedAllLogsIterator::setPartition(
-    partition_id_t partition,
-    ReadFilter* filter,
-    ReadStats* stats) {
-  SCOPE_EXIT {
-    ld_check(!current_partition_ || data_iterator_);
-  };
-
-  data_iterator_ = nullptr;
-  auto partitions = pstore_->getPartitionList();
-  RecordTimestamp min_ts;
-  RecordTimestamp max_ts;
-
-  // Iterate over partitions until we see one that `filter` accepts.
-  for (;; ++partition) {
-    if (partition > last_partition_id_) {
-      // We're at end.
-      current_partition_ = nullptr;
-      return;
-    }
-
-    if (partition == PARTITION_INVALID) {
-      current_partition_ = nullptr;
-      min_ts = RecordTimestamp::min();
-      max_ts = RecordTimestamp::max();
-    } else {
-      // Latest partition ID never decreases.
-      ld_assert_lt(partition, partitions->nextID());
-
-      partition = std::max(partition, partitions->firstID());
-      current_partition_ = partitions->get(partition);
-      min_ts = current_partition_->min_timestamp;
-      max_ts = current_partition_->max_timestamp;
-    }
-    if (!filter || filter->shouldProcessTimeRange(min_ts, max_ts)) {
-      // Found a good partition.
-      break;
-    }
-  }
-
-  data_iterator_ = std::make_unique<RocksDBLocalLogStore::CSIWrapper>(
-      pstore_,
-      /* log_id */ folly::none,
-      options_,
-      current_partition_ ? current_partition_->cf_.get()
-                         : pstore_->unpartitioned_cf_.get());
-  data_iterator_->min_ts_ = min_ts;
-  data_iterator_->max_ts_ = max_ts;
-
-  if (stats) {
-    ++stats->seen_logsdb_partitions;
-  }
-}
-
-void PartitionedRocksDBStore::PartitionedAllLogsIterator::moveUntilValid(
-    ReadFilter* filter,
-    ReadStats* stats) {
-  while (data_iterator_ && data_iterator_->state() == IteratorState::AT_END) {
-    setPartition(
-        current_partition_ ? current_partition_->id_ + 1 : 1, filter, stats);
-    if (data_iterator_) {
-      data_iterator_->seek(logid_t(0), lsn_t(0), filter, stats);
-    }
-  }
 }
 
 const LocalLogStore*
@@ -1057,5 +1241,4 @@ bool PartitionedRocksDBStore::PartitionDirectoryIterator::itValid() {
 logid_t PartitionedRocksDBStore::PartitionDirectoryIterator::itLogID() {
   return PartitionDirectoryKey::getLogID(meta_it_.key().data());
 }
-
 }} // namespace facebook::logdevice

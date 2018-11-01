@@ -277,7 +277,8 @@ class PartitionedRocksDBStore::PartitionedAllLogsIterator
   };
 
   PartitionedAllLogsIterator(const PartitionedRocksDBStore* pstore,
-                             const LocalLogStore::ReadOptions& options);
+                             const LocalLogStore::ReadOptions& options,
+                             const folly::Optional<std::vector<logid_t>>& logs);
 
   IteratorState state() const override;
 
@@ -304,16 +305,21 @@ class PartitionedRocksDBStore::PartitionedAllLogsIterator
   }
 
  private:
-  // Goes to the first existing partition between `partition` and
-  // `last_partition_id_` that passes filter->shouldProcessTimeRange().
-  // If no such partition exists, sets current_partition_ and data_iterator_ to
-  // nullptr.
-  // If `partition` is PARTITION_INVALID, goes to unpartitioned column family.
-  void setPartition(partition_id_t partition,
-                    ReadFilter* filter,
-                    ReadStats* stats);
-  // While data_iterator_ is AT_END advances to the next partition.
-  void moveUntilValid(ReadFilter* filter, ReadStats* stats);
+  // This implements the "move until valid"-style logic of stepping through
+  // directory and partitions until we find a suitable record or reach a limit.
+  //
+  // The initial seek target is given by `seek_to` and either
+  // current_entry_ (if filter_using_directory_ is true) or
+  // current_partition_id (if filter_using_directory_ is false).
+  //
+  // This method only reads from partitions. The unpartitioned column family is
+  // handled by seek() and next() directly.
+  void seekToCurrentEntry(partition_id_t current_partition_id,
+                          PartitionedLocation seek_to,
+                          ReadFilter* filter,
+                          ReadStats* stats);
+
+  using LogDirectoryEntry = std::pair<logid_t, DirectoryEntry>;
 
   const PartitionedRocksDBStore* pstore_;
   const LocalLogStore::ReadOptions options_;
@@ -323,9 +329,22 @@ class PartitionedRocksDBStore::PartitionedAllLogsIterator
   // that were created after the rebuilding started.
   const partition_id_t last_partition_id_;
 
+  // If true, we'll keep a copy of logsdb directory and call
+  // ReadFilter::shouldProcessRecordRange() based on it.
+  const bool filter_using_directory_;
+
+  // Copy of the logsdb directory for the requested logs. Only populated if
+  // filter_using_directory_ is true.
+  std::vector<LogDirectoryEntry> directory_;
+  // Index in directory_ at which we're currently positioned.
+  std::vector<LogDirectoryEntry>::iterator current_entry_;
+
   // nullptr if we're either AT_END or in unpartitioned column family.
   PartitionPtr current_partition_;
   // nullptr if we're AT_END.
+  // Points into the CF owned by current_partition_. Therefore, whenever
+  // current_partition_ pointer is changed, data_iterator_ needs to be reset
+  // first.
   std::unique_ptr<RocksDBLocalLogStore::CSIWrapper> data_iterator_;
 };
 

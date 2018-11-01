@@ -45,7 +45,8 @@ constexpr size_t MAX_E2E_TRACING_CONTEXT_SIZE = 64;
 // uint64_t integer
 constexpr size_t LOGID_BITS_INTERNAL = 64;
 
-// max valid logid for all logs (data logs, internal logs, and metadata logs)
+// Max valid logid for all logs (data logs, internal logs, and metadata logs).
+// Not to be confused with numeric_limits<>::max() and with LOGID_MAX.
 // the most significant bit is used to indicate a metadata log (see
 // common/MetaDataLog.h) Note on LOGID_MAX: LOGID_MAX (defined in
 // include/types.h) does not use the 62nd bit for data log ids. The reason is

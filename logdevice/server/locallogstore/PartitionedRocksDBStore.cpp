@@ -504,8 +504,9 @@ PartitionedRocksDBStore::read(logid_t log_id,
 
 std::unique_ptr<LocalLogStore::AllLogsIterator>
 PartitionedRocksDBStore::readAllLogs(
-    const LocalLogStore::ReadOptions& options) const {
-  return std::make_unique<PartitionedAllLogsIterator>(this, options);
+    const LocalLogStore::ReadOptions& options,
+    const folly::Optional<std::vector<logid_t>>& logs) const {
+  return std::make_unique<PartitionedAllLogsIterator>(this, options, logs);
 }
 
 std::unique_ptr<rocksdb::ColumnFamilyHandle>
@@ -1536,14 +1537,12 @@ void PartitionedRocksDBStore::addPartitions(
 
 void PartitionedRocksDBStore::getLogsDBDirectories(
     std::vector<partition_id_t> partitions,
-    std::vector<logid_t> logs,
-    std::vector<std::pair<logid_t, DirectoryEntry>>& out) {
+    const std::vector<logid_t>& logs,
+    std::vector<std::pair<logid_t, DirectoryEntry>>& out) const {
   // Verify partitions and logs are sorted and don't contain duplicates
   ld_assert(std::is_sorted(partitions.begin(), partitions.end()));
   ld_assert(std::unique(partitions.begin(), partitions.end()) ==
             partitions.end());
-  ld_assert(std::is_sorted(logs.begin(), logs.end()));
-  ld_assert(std::unique(logs.begin(), logs.end()) == logs.end());
   // Prevent dropping partitions for simplicity
   std::lock_guard<std::mutex> drop_lock(oldest_partition_mutex_);
 

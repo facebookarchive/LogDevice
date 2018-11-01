@@ -112,11 +112,21 @@ class RebuildingReadStorageTaskV2 : public StorageTask {
     bool shouldProcessTimeRange(RecordTimestamp min,
                                 RecordTimestamp max) override;
 
-    /**
-     * Update stats regarding skipped records.
-     * @param late  true if the filter was called on the full record rather than
-     *              CSI entry.
-     */
+    bool shouldProcessRecordRange(logid_t log,
+                                  lsn_t min_lsn,
+                                  lsn_t max_lsn,
+                                  RecordTimestamp min_ts,
+                                  RecordTimestamp max_ts) override;
+
+    // Finds the log in `context->logs` and puts it in `currentLogState`.
+    // Has a fast path for consecutive lookups of the same log.
+    // If the log is not in `context->logs`, sets currentLogState = nullptr
+    // and returns false.
+    bool lookUpLogState(logid_t log);
+
+    // Update stats regarding skipped records.
+    // @param late  true if the filter was called on the full record rather
+    // than CSI entry.
     void noteRecordFiltered(FilteredReason reason, bool late);
 
     RebuildingReadStorageTaskV2* task;
@@ -191,7 +201,8 @@ class RebuildingReadStorageTaskV2 : public StorageTask {
   virtual StatsHolder* getStats();
 
   virtual std::unique_ptr<LocalLogStore::AllLogsIterator>
-  createIterator(const LocalLogStore::ReadOptions& opts);
+  createIterator(const LocalLogStore::ReadOptions& opts,
+                 const std::vector<logid_t>& logs);
 
  private:
   std::weak_ptr<Context> context_;

@@ -397,7 +397,8 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
   read(logid_t log_id, const LocalLogStore::ReadOptions&) const override;
 
   std::unique_ptr<LocalLogStore::AllLogsIterator>
-  readAllLogs(const LocalLogStore::ReadOptions&) const override;
+  readAllLogs(const LocalLogStore::ReadOptions&,
+              const folly::Optional<std::vector<logid_t>>& logs) const override;
 
   // See LocalLogStore.h for details.
 
@@ -699,13 +700,13 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
   //  - AGAIN if the store is not fully initialised (no processor),
   int trimLogsBasedOnTime();
 
-  // Used for admin command 'logsdb print_directory'. Puts all directory
-  // entries for the given partitions and logs in 'out'. empty 'partitions' or
-  // 'logs' is interpreted as 'all'. partitions and logs must be sorted.
-  void
-  getLogsDBDirectories(std::vector<partition_id_t> partitions,
-                       std::vector<logid_t> logs,
-                       std::vector<std::pair<logid_t, DirectoryEntry>>& out);
+  // Puts all directory entries for the given partitions and logs in 'out'.
+  // Empty 'partitions' or 'logs' is interpreted as 'all'.
+  // `partitions` must be sorted.
+  void getLogsDBDirectories(
+      std::vector<partition_id_t> partitions,
+      const std::vector<logid_t>& logs,
+      std::vector<std::pair<logid_t, DirectoryEntry>>& out) const;
 
   // Returns the total size of trash files for this shard.
   uint64_t getTotalTrashSize();
@@ -1445,7 +1446,7 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
 
   // Locked when creating/dropping partitions at the beginning of partition
   // list.
-  std::mutex oldest_partition_mutex_;
+  mutable std::mutex oldest_partition_mutex_;
 
   // Locked when creating partitions at the end of partition list.
   std::mutex latest_partition_mutex_;

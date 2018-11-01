@@ -146,7 +146,8 @@ RocksDBLocalLogStore::read(logid_t log_id,
 }
 std::unique_ptr<LocalLogStore::AllLogsIterator>
 RocksDBLocalLogStore::readAllLogs(
-    const LocalLogStore::ReadOptions& options_in) const {
+    const LocalLogStore::ReadOptions& options_in,
+    const folly::Optional<std::vector<logid_t>>&) const {
   return std::make_unique<AllLogsIteratorImpl>(
       std::make_unique<CSIWrapper>(this, folly::none, options_in, nullptr));
 }
@@ -717,13 +718,13 @@ void RocksDBLocalLogStore::CSIWrapper::moveTo(const Location& target,
 
   if (stats) {
     // We are executing a seek/next that may land us on an LSN that is less than
-    // stats->last_read_lsn. This can happen if the caller has previously seen
-    // a record with LSN above read limit but for some reason proceeded to make
-    // another seek anyway, usually using a different iterator.
+    // stats->last_read.second. This can happen if the caller has previously
+    // seen a record with LSN above read limit but for some reason proceeded to
+    // make another seek anyway, usually using a different iterator.
     // (As of the time of writing the only way this can happen is when logsdb
     // iterator discards an "orphaned" record and has to seek an iterator in
     // the next partition even if the orphaned record was over the limit.)
-    stats->last_read_lsn = LSN_INVALID;
+    stats->last_read = std::make_pair(LOGID_INVALID, LSN_INVALID);
   }
 
   // Assigned right before return.
@@ -818,27 +819,33 @@ void RocksDBLocalLogStore::CSIWrapper::moveTo(const Location& target,
       LocalLogStoreRecordFormat::csi_flags_t flags =
           csi_iterator_->getCurrentFlags();
 
-      // Running the filter on the copyset.
-      ld_check(!current_is_filtered_out);
-      current_is_filtered_out |= filter &&
-          !(*filter)(current.log_id,
-                     current.lsn,
-                     cs.data(),
-                     cs.size(),
-                     flags,
-                     min_ts_,
-                     max_ts_);
-
       if (stats) {
-        stats->countCSIEntry(csi_iterator_->getCurrentEntrySize(),
-                             csi_loc.lsn,
-                             !current_is_filtered_out);
-        // Don't seek data iterator if CSI iterator is above max LSN.
-        if (!current_is_filtered_out && stats->hardLimitReached()) {
+        stats->countReadCSIEntry(
+            csi_iterator_->getCurrentEntrySize(), csi_loc.log_id, csi_loc.lsn);
+        // Don't run filter if CSI iterator is above max LSN.
+        if (stats->hardLimitReached()) {
           limit_reached_at_ = csi_loc;
           state_ = IteratorState::LIMIT_REACHED;
           return;
         }
+      }
+
+      // Running the filter on the copyset. If we're above lsn limit, don't run
+      // filter and consider the record filtered out; we'll break out of the
+      // loop after the countCSIEntry() below and hardLimitReached() check on
+      // next iteration.
+      ld_check(!current_is_filtered_out);
+      current_is_filtered_out = (filter &&
+                                 !(*filter)(current.log_id,
+                                            current.lsn,
+                                            cs.data(),
+                                            cs.size(),
+                                            flags,
+                                            min_ts_,
+                                            max_ts_));
+
+      if (stats) {
+        stats->countFilteredCSIEntry(!current_is_filtered_out);
       }
 
       if (current_is_filtered_out) {
@@ -888,20 +895,31 @@ void RocksDBLocalLogStore::CSIWrapper::moveTo(const Location& target,
         }
         current = data_loc;
         csi_iterator_good = false;
-        current_is_filtered_out = false;
+      }
+
+      if (stats) {
+        stats->countReadRecord(
+            current.log_id, current.lsn, data_iterator_->getRecord().size);
+        // Don't run filter if we're above LSN limit.
+        // If csi_iterator_good, we already did this check above, no need
+        // to check again.
+        if (!UNLIKELY(csi_iterator_good) && stats->hardLimitReached()) {
+          limit_reached_at_ = data_loc;
+          state_ = IteratorState::LIMIT_REACHED;
+          return;
+        }
       }
 
       // Apply the filter and check for dangling amend.
-      bool data_passes_filter = applyFilterToDataRecord(
+      current_is_filtered_out = !applyFilterToDataRecord(
           data_loc,
           data_iterator_->getRecord(),
           filter,
           csi_iterator_good ? csi_iterator_.get() : nullptr);
-      current_is_filtered_out |= !data_passes_filter;
 
       if (stats) {
-        stats->countRecord(
-            current.lsn, data_iterator_->getRecord().size, data_passes_filter);
+        stats->countFilteredRecord(
+            data_iterator_->getRecord().size, !current_is_filtered_out);
       }
     }
 

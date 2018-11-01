@@ -58,7 +58,8 @@ class TemporaryLogStore : public LocalLogStore {
   std::unique_ptr<ReadIterator>
   read(logid_t log_id, const LocalLogStore::ReadOptions&) const override;
   std::unique_ptr<AllLogsIterator>
-  readAllLogs(const LocalLogStore::ReadOptions&) const override;
+  readAllLogs(const LocalLogStore::ReadOptions&,
+              const folly::Optional<std::vector<logid_t>>& logs) const override;
 
   int readLogMetadata(logid_t log_id, LogMetadata* metadata) override;
   int writeLogMetadata(logid_t log_id,

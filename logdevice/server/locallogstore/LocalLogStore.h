@@ -58,7 +58,8 @@ enum class IteratorState {
   // read byte limit or execution time limit) before finding a record passing
   // the filter. getLSN() is the LSN at which the search stopped.
   // To continue the search (after renewing the limits), seek to that LSN.
-  // Note that ReadStats::last_read_lsn is not always equal to getLSN().
+  // Note that ReadStats::last_read is _not_ always equal
+  // to {getLogID(), getLSN()}.
   LIMIT_REACHED,
   // Iterator is positioned on a record.
   AT_RECORD,
@@ -388,9 +389,10 @@ class LocalLogStore : boost::noncopyable {
     // RocksDBLocalLogStore.cpp.
     bool allow_copyset_index = false;
 
-    // Skip reading records altogether and provide only data available through
-    // copyset index. If copyset index not available or overridden by
-    // RocksDBSettings falling back to regular reads and returning all data.
+    // Skip reading records altogether and provide only data available
+    // through copyset index. If copyset index not available or overridden
+    // by RocksDBSettings falling back to regular reads and returning all
+    // data.
     bool csi_data_only = false;
 
     // Whether to inject a synthetic latency in read requests; Makes sense only
@@ -427,15 +429,17 @@ class LocalLogStore : boost::noncopyable {
         std::chrono::milliseconds::max()};
 
     // Max lsn to read. Not supported by AllLogsIterator.
-    lsn_t stop_reading_after_lsn{LSN_MAX};
+    std::pair<logid_t, lsn_t> stop_reading_after{
+        logid_t(std::numeric_limits<logid_t::raw_type>::max()),
+        LSN_MAX};
 
     // Max timestamp to read. Not supported by AllLogsIterator.
     std::chrono::milliseconds stop_reading_after_timestamp{
         std::chrono::milliseconds::max()};
 
-    // Checked against stop_reading_after_lsn to see if we should stop.
+    // Checked against stop_reading_after to see if we should stop.
     // Can be underestimated.
-    lsn_t last_read_lsn{LSN_INVALID};
+    std::pair<logid_t, lsn_t> last_read{LOGID_INVALID, LSN_INVALID};
     // Lower bound of max timestamp read. This is only filled by the
     // partitioned iterator from the partition directory, and doesn't
     // necessarily reflect the max timestamp of all records that were read.
@@ -445,7 +449,7 @@ class LocalLogStore : boost::noncopyable {
     // LSN or by timestamp. The current record shouldn't be delivered even if
     // it's readily available.
     bool hardLimitReached() {
-      return last_read_lsn > stop_reading_after_lsn || maxTimestampReached();
+      return maxLSNReached() || maxTimestampReached();
     }
 
     // True if we exceeded some resource limit. In this case the
@@ -461,6 +465,10 @@ class LocalLogStore : boost::noncopyable {
       return hardLimitReached() || softLimitReached();
     }
 
+    bool maxLSNReached() const {
+      return last_read > stop_reading_after;
+    }
+
     // True if we read past `stop_reading_after_timestamp`.
     // This check is approximate: it uses `max_read_timestamp_lower_bound`
     // (which usually comes from logsdb partition boundaries), not the exact
@@ -472,11 +480,12 @@ class LocalLogStore : boost::noncopyable {
 
     // Sets the last lsn and increments counters depending on
     // whether the record was filtered or not
-    void countRecord(lsn_t lsn, size_t record_size, bool sent) {
-      last_read_lsn = lsn;
+    void countReadRecord(logid_t log, lsn_t lsn, size_t record_size) {
+      last_read = std::make_pair(log, lsn);
       ++read_records;
       read_record_bytes += record_size;
-
+    }
+    void countFilteredRecord(size_t record_size, bool sent) {
       if (sent) {
         ++sent_records;
         sent_record_bytes += record_size;
@@ -486,11 +495,12 @@ class LocalLogStore : boost::noncopyable {
       }
     }
 
-    void countCSIEntry(size_t size, lsn_t lsn, bool sent) {
+    void countReadCSIEntry(size_t size, logid_t log, lsn_t lsn) {
       ++read_csi_entries;
       read_csi_bytes += size;
-      last_read_lsn = lsn;
-
+      last_read = std::make_pair(log, lsn);
+    }
+    void countFilteredCSIEntry(bool sent) {
       if (sent) {
         ++sent_csi_entries;
       } else {
@@ -525,8 +535,19 @@ class LocalLogStore : boost::noncopyable {
                             RecordTimestamp max_ts) = 0;
     virtual ~ReadFilter() {}
 
+    // These methods allow skipping ranges of records at once. Not all iterators
+    // use these methods: currently only logsdb AllLogsIterator does.
+
     virtual bool shouldProcessTimeRange(RecordTimestamp /* min */,
                                         RecordTimestamp /* max */) {
+      return true;
+    }
+
+    virtual bool shouldProcessRecordRange(logid_t,
+                                          lsn_t /* min_lsn */,
+                                          lsn_t /* max_lsn */,
+                                          RecordTimestamp /* min_ts */,
+                                          RecordTimestamp /* max_ts */) {
       return true;
     }
   };
@@ -665,10 +686,24 @@ class LocalLogStore : boost::noncopyable {
 
   /**
    * Creates a new AllLogsIterator.
-   * This method doesn't do blocking IO and is safe to call from worker threads.
+   * May wait for blocking IO, don't call from worker threads.
+   * @param logs
+   *    If not folly::none, read only the given logs and use
+   *    shouldProcessRecordRange() to filter out groups of records.
+   *    Current implementation has some limitations:
+   *     1. If `logs` is not folly::none, all calls to seek() and next()
+   *        require non-null `filter` and `stats` arguments.
+   *     2. Nonempty `logs` may make readAllLogs() call somewhat slow because it
+   *        makes a copy of the logsdb directory, locking per-log mutexes along
+   *        the way.
+   *     3. The non-partitioned implementation of LocalLogStore ignores `logs`
+   *        argument and reads everything. Use ReadFilter to filter out records
+   *        of undesired logs.
    */
   virtual std::unique_ptr<AllLogsIterator>
-  readAllLogs(const ReadOptions& options) const = 0;
+  readAllLogs(const ReadOptions& options,
+              const folly::Optional<std::vector<logid_t>>& logs =
+                  folly::none) const = 0;
 
   /**
    * Reads per-store or per-log metadata.

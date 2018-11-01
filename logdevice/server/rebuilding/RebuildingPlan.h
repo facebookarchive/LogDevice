@@ -56,6 +56,7 @@ class RebuildingPlan {
   // EpochMetadata. Otherwise finds the longest epoch range that contains
   // the given epoch and doesn't intersect any epochsToRead, assigns that
   // range to *out_range and returns nullptr.
+  // out_range is a right-open interval.
   std::shared_ptr<EpochMetaData>
   lookUpEpoch(epoch_t epoch, std::pair<epoch_t, epoch_t>* out_range);
 

@@ -68,7 +68,8 @@ Status readImpl(LocalLogStore::ReadIterator& read_iterator,
       settings.max_record_bytes_read_at_once < 0
       ? std::numeric_limits<size_t>::max()
       : static_cast<size_t>(settings.max_record_bytes_read_at_once);
-  read_ctx->it_stats_.stop_reading_after_lsn =
+  read_ctx->it_stats_.stop_reading_after.first = read_ctx->logid_;
+  read_ctx->it_stats_.stop_reading_after.second =
       std::min(std::min(read_ctx->until_lsn_, read_ctx->last_released_lsn_),
                read_ctx->window_high_);
   read_ctx->it_stats_.stop_reading_after_timestamp = read_ctx->ts_window_high_;
@@ -172,10 +173,10 @@ Status readImpl(LocalLogStore::ReadIterator& read_iterator,
       read_ctx->read_ptr_ = {
           std::max(read_ctx->read_ptr_.lsn, read_iterator.getLSN())};
     }
-    ld_spew("Advanced read_ptr to %s, log %lu, last_read_lsn %s, state %s%s",
+    ld_spew("Advanced read_ptr to %s, log %lu, last_read %s, state %s%s",
             lsn_to_string(read_ctx->read_ptr_.lsn).c_str(),
             read_ctx->logid_.val_,
-            lsn_to_string(read_ctx->it_stats_.last_read_lsn).c_str(),
+            lsn_to_string(read_ctx->it_stats_.last_read.second).c_str(),
             logdevice::toString(state).c_str(),
             read_iterator.accessedUnderReplicatedRegion()
                 ? " - UNDER_REPLICATED"

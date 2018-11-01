@@ -76,8 +76,9 @@ TemporaryLogStore::read(logid_t log_id,
 }
 
 std::unique_ptr<LocalLogStore::AllLogsIterator> TemporaryLogStore::readAllLogs(
-    const LocalLogStore::ReadOptions& options) const {
-  return db_->readAllLogs(options);
+    const LocalLogStore::ReadOptions& options,
+    const folly::Optional<std::vector<logid_t>>& logs) const {
+  return db_->readAllLogs(options, logs);
 }
 
 int TemporaryLogStore::readLogMetadata(logid_t log_id, LogMetadata* metadata) {

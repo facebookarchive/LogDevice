@@ -31,6 +31,7 @@ constexpr logid_t LOGID_INVALID2(~0);
 constexpr size_t LOGID_BITS(62);
 
 // max valid data logid value. This accounts for internal logs.
+// Not to be confused with numeric_limits<>::max().
 constexpr logid_t LOGID_MAX((1ull << LOGID_BITS) - 1);
 
 // max valid user data logid value.

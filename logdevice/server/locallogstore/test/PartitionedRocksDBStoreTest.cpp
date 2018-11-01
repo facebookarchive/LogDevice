@@ -413,35 +413,56 @@ class TestReadFilter : public LocalLogStore::ReadFilter {
   struct Call {
     enum class Type {
       TIME_RANGE,
+      RECORD_RANGE,
       CALL,
     };
     static constexpr int FULL_TIME_RANGE = -1;
     static constexpr int EMPTY_TIME_RANGE = -2;
 
     Type type;
-    int copyset;
-    // min and max timestamps from shouldProcessTimeRange().
+    int copyset = -1;
+    // min and max timestamps from shouldProcess{Time,Record}Range().
     // If [RecordTimestamp::min(), RecordTimestamp::max()],
     // min_ts = max_ts = FULL_TIME_RANGE.
     // If [RecordTimestamp::max(), RecordTimestamp::min()],
     // min_ts = max_ts = EMPTY_TIME_RANGE.
-    int min_ts, max_ts; // only for TIME_RANGE
-    bool exact_ts;      // only for CALL
+    int min_ts = -3, max_ts = -3; // only for TIME_RANGE
+    bool exact_ts = false;        // only for CALL
     // Zero out the padding bytes to make the byte representation of the struct
     // deterministic, making gtest error output more readable.
     char padding[3] = {};
+    // Only for RECORD_RANGE.
+    logid_t log = LOGID_INVALID;
+    lsn_t min_lsn = LSN_INVALID;
+    lsn_t max_lsn = LSN_INVALID;
 
-    static Call range(int min, int max) {
-      return {Type::TIME_RANGE, -1, min, max, false};
+    static Call timeRange(int min, int max) {
+      Call c;
+      c.type = Type::TIME_RANGE;
+      c.min_ts = min;
+      c.max_ts = max;
+      return c;
     }
-    static Call fullRange() {
-      return {Type::TIME_RANGE, -1, FULL_TIME_RANGE, FULL_TIME_RANGE, false};
-    }
-    static Call emptyRange() {
-      return {Type::TIME_RANGE, -1, EMPTY_TIME_RANGE, EMPTY_TIME_RANGE, false};
+    static Call recordRange(logid_t log, lsn_t min_lsn, lsn_t max_lsn) {
+      Call c;
+      c.type = Type::RECORD_RANGE;
+      c.log = log;
+      c.min_lsn = min_lsn;
+      c.max_lsn = max_lsn;
+      return c;
     }
     static Call call(int copyset, bool exact_ts = false) {
-      return {Type::CALL, copyset, 0, 0, exact_ts};
+      Call c;
+      c.type = Type::CALL;
+      c.copyset = copyset;
+      c.exact_ts = exact_ts;
+      return c;
+    }
+    static Call fullRange() {
+      return timeRange(FULL_TIME_RANGE, FULL_TIME_RANGE);
+    }
+    static Call emptyRange() {
+      return timeRange(EMPTY_TIME_RANGE, EMPTY_TIME_RANGE);
     }
     bool operator==(const Call& c) const {
       return std::tie(type, copyset, min_ts, max_ts) ==
@@ -493,20 +514,50 @@ class TestReadFilter : public LocalLogStore::ReadFilter {
       min = convertTs(min_ts);
       max = convertTs(max_ts);
     }
-    history.push_back(Call::range(min, max));
-    return ranges.count(min);
+    history.push_back(Call::timeRange(min, max));
+    return time_ranges.count(min);
+  }
+
+  bool shouldProcessRecordRange(logid_t log,
+                                lsn_t min_lsn,
+                                lsn_t max_lsn,
+                                RecordTimestamp min_ts,
+                                RecordTimestamp max_ts) override {
+    // Time range should be the same range that shouldProcessTimeRange() got.
+    EXPECT_EQ(prev_min_ts, min_ts);
+    EXPECT_EQ(prev_max_ts, max_ts);
+
+    history.push_back(Call::recordRange(log, min_lsn, max_lsn));
+    return record_ranges.count(std::make_pair(log, min_lsn));
   }
 
   // operator() returns true for records whose copyset[0].node() is in this set.
   std::set<int> records;
-  // setTimeRangeImpl() returns true if `min - BASE_TIME` is in this set.
-  std::set<int> ranges;
+  // shouldProcessTimeRange() returns true if `min - BASE_TIME` is in this set.
+  std::set<int> time_ranges;
+  // shouldProcessRecordRange() returns true if (log, min_lsn) is in this set.
+  std::set<std::pair<logid_t, lsn_t>> record_ranges;
 
   std::vector<Call> history;
 
   RecordTimestamp prev_min_ts = RecordTimestamp::min();
   RecordTimestamp prev_max_ts = RecordTimestamp::max();
 };
+
+std::ostream& operator<<(std::ostream& o, const TestReadFilter::Call& c) {
+  using Type = TestReadFilter::Call::Type;
+  switch (c.type) {
+    case Type::TIME_RANGE:
+      return o << "timeRange(" << c.min_ts << "," << c.max_ts << ")";
+    case Type::RECORD_RANGE:
+      return o << "recordRange(L" << c.log.val() << "," << c.min_lsn << ","
+               << c.max_lsn << ")";
+    case Type::CALL:
+      return o << "call(" << c.copyset << "," << c.exact_ts << ")";
+  }
+  ld_check(false);
+  return o;
+}
 
 class PartitionedRocksDBStoreTest : public ::testing::Test {
  public:
@@ -7238,17 +7289,17 @@ TEST_F(PartitionedRocksDBStoreTest, FilteredIterators) {
   // All partitions are filtered out.
   it->seek(0, &filter, &stats);
   EXPECT_EQ(IteratorState::AT_END, it->state());
-  EXPECT_EQ(std::vector<C>({C::range(10, 90),
-                            C::range(110, 190),
-                            C::range(210, 290),
-                            C::range(310, 390),
-                            C::range(410, 490)}),
+  EXPECT_EQ(std::vector<C>({C::timeRange(10, 90),
+                            C::timeRange(110, 190),
+                            C::timeRange(210, 290),
+                            C::timeRange(310, 390),
+                            C::timeRange(410, 490)}),
             filter.history);
   filter.history.clear();
 
   // Read from partitions 1 and 4 (second and last).
   // 2 records pass the filter.
-  filter.ranges = {110, 410};
+  filter.time_ranges = {110, 410};
   filter.records = {190, 410};
   // Seek.
   it->seek(0, &filter, &stats);
@@ -7258,8 +7309,8 @@ TEST_F(PartitionedRocksDBStoreTest, FilteredIterators) {
   // For a record that passes the filter, filter() is called 3 times:
   // for CSI entry (with partition's timestamp range), for data record
   // (with exact timestamp), for CSI entry again for an assert in CSIWrapper.
-  EXPECT_EQ(std::vector<C>({C::range(10, 90),
-                            C::range(110, 190),
+  EXPECT_EQ(std::vector<C>({C::timeRange(10, 90),
+                            C::timeRange(110, 190),
                             C::call(110),
                             C::call(190),
                             C::call(190, true),
@@ -7269,9 +7320,9 @@ TEST_F(PartitionedRocksDBStoreTest, FilteredIterators) {
   // Next.
   it->next(&filter, &stats);
   EXPECT_EQ(IteratorState::AT_RECORD, it->state());
-  EXPECT_EQ(std::vector<C>({C::range(210, 290),
-                            C::range(310, 390),
-                            C::range(410, 490),
+  EXPECT_EQ(std::vector<C>({C::timeRange(210, 290),
+                            C::timeRange(310, 390),
+                            C::timeRange(410, 490),
                             C::call(410),
                             C::call(410, true),
                             IF_DEBUG(C::call(410))}),
@@ -7287,31 +7338,31 @@ TEST_F(PartitionedRocksDBStoreTest, FilteredIterators) {
 
   // Read from partitions 2 and 4.
   // All records are filtered out.
-  filter.ranges = {210, 410};
+  filter.time_ranges = {210, 410};
   filter.records = {};
   // Seek to LSN 150.
   it->seek(150, &filter, &stats);
   EXPECT_EQ(IteratorState::AT_END, it->state());
-  EXPECT_EQ(std::vector<C>({C::range(110, 190),
-                            C::range(210, 290),
+  EXPECT_EQ(std::vector<C>({C::timeRange(110, 190),
+                            C::timeRange(210, 290),
                             C::call(210),
                             C::call(290),
-                            C::range(310, 390),
-                            C::range(410, 490),
+                            C::timeRange(310, 390),
+                            C::timeRange(410, 490),
                             C::call(410),
                             C::call(490)}),
             filter.history);
   filter.history.clear();
 
   // Combining filtering and byte limit.
-  filter.ranges = {10, 210, 410};
+  filter.time_ranges = {10, 210, 410};
   filter.records = {10, 90, 490};
   // Seek to LSN 50.
   it->seek(50, &filter, &stats);
   EXPECT_EQ(IteratorState::AT_RECORD, it->state());
   EXPECT_EQ(90, it->getLSN());
   EXPECT_GT(it->getRecord().size, 0);
-  EXPECT_EQ(std::vector<C>({C::range(10, 90),
+  EXPECT_EQ(std::vector<C>({C::timeRange(10, 90),
                             C::call(90),
                             C::call(90, true),
                             IF_DEBUG(C::call(90))}),
@@ -7323,9 +7374,9 @@ TEST_F(PartitionedRocksDBStoreTest, FilteredIterators) {
   it->next(&filter, &stats);
   EXPECT_EQ(IteratorState::LIMIT_REACHED, it->state());
   EXPECT_EQ(211, it->getLSN());
-  EXPECT_EQ(
-      std::vector<C>({C::range(110, 190), C::range(210, 290), C::call(210)}),
-      filter.history);
+  EXPECT_EQ(std::vector<C>(
+                {C::timeRange(110, 190), C::timeRange(210, 290), C::call(210)}),
+            filter.history);
   filter.history.clear();
   // Read limit = infinity.
   stats.max_bytes_to_read = std::numeric_limits<size_t>::max();
@@ -7334,10 +7385,10 @@ TEST_F(PartitionedRocksDBStoreTest, FilteredIterators) {
   EXPECT_EQ(IteratorState::AT_RECORD, it->state());
   EXPECT_EQ(490, it->getLSN());
   EXPECT_GT(it->getRecord().size, 0);
-  EXPECT_EQ(std::vector<C>({C::range(210, 290),
+  EXPECT_EQ(std::vector<C>({C::timeRange(210, 290),
                             C::call(290),
-                            C::range(310, 390),
-                            C::range(410, 490),
+                            C::timeRange(310, 390),
+                            C::timeRange(410, 490),
                             C::call(410),
                             C::call(490),
                             C::call(490, true),
@@ -7663,11 +7714,11 @@ TEST_F(PartitionedRocksDBStoreTest, AllLogsIter) {
   LocalLogStore::ReadOptions read_options(
       "PartitionedRocksDBStoreTest.AllLogsIter");
   read_options.allow_copyset_index = true;
-  auto it = store_->readAllLogs(read_options);
+  auto it = store_->readAllLogs(read_options, folly::none);
 
   auto set_it = records.begin();
   std::unique_ptr<LocalLogStore::AllLogsIterator::Location> mid_location,
-      last_location;
+      last_location, location_21;
   for (it->seek(*it->minLocation()); it->state() == IteratorState::AT_RECORD;
        it->next()) {
     if (set_it == records.end()) {
@@ -7681,6 +7732,9 @@ TEST_F(PartitionedRocksDBStoreTest, AllLogsIter) {
     verifyRecord(it->getLogID(), it->getLSN(), it->getRecord());
 
     // Save some Location's along the way.
+    if (it->getLogID() == log1 && it->getLSN() == 300) {
+      location_21 = it->getLocation();
+    }
     if (it->getLogID() == log2 && it->getLSN() == 300) {
       mid_location = it->getLocation();
     }
@@ -7707,7 +7761,7 @@ TEST_F(PartitionedRocksDBStoreTest, AllLogsIter) {
   ld_info("Seeking a new iterator to a location returned by old iterator. "
           "Checking that the seek goes to the right record and that iterator "
           "sees new record.");
-  auto it2 = store_->readAllLogs(read_options);
+  auto it2 = store_->readAllLogs(read_options, folly::none);
   it2->seek(*mid_location);
   ASSERT_EQ(IteratorState::AT_RECORD, it2->state());
   EXPECT_EQ(log2, it2->getLogID());
@@ -7746,17 +7800,19 @@ TEST_F(PartitionedRocksDBStoreTest, AllLogsIter) {
   ld_info("Reading with all partitions filtered out.");
   it->seek(*it->minLocation(), &filter, &stats);
   EXPECT_EQ(IteratorState::AT_END, it->state());
+  // Note that, as currently implemented, the time range filter is not applied
+  // to unpartitioned CF.
   EXPECT_EQ(std::vector<C>({C::fullRange(),
-                            C::range(10, 30),
+                            C::timeRange(10, 30),
                             C::emptyRange(),
-                            C::range(210, 230),
-                            C::range(310, 310)}),
+                            C::timeRange(210, 230),
+                            C::timeRange(310, 310)}),
             filter.history);
   filter.history.clear();
 
   ld_info("Reading with filter accepting 3 records from unpartitioned and "
           "partition 2.");
-  filter.ranges = {C::FULL_TIME_RANGE, C::EMPTY_TIME_RANGE, 210};
+  filter.time_ranges = {C::FULL_TIME_RANGE, C::EMPTY_TIME_RANGE, 210};
   filter.records = {21, 23, 2002};
   it->seek(*it->minLocation(), &filter, &stats);
   EXPECT_EQ(std::vector<C>({C::fullRange(),
@@ -7774,9 +7830,9 @@ TEST_F(PartitionedRocksDBStoreTest, AllLogsIter) {
   verifyRecord(it->getLogID(), it->getLSN(), it->getRecord());
   it->next(&filter, &stats);
   EXPECT_EQ(std::vector<C>({C::call(3001),
-                            C::range(10, 30),
+                            C::timeRange(10, 30),
                             C::emptyRange(),
-                            C::range(210, 230),
+                            C::timeRange(210, 230),
                             C::call(21),
                             C::call(21, true),
                             IF_DEBUG(C::call(21))}),
@@ -7797,16 +7853,16 @@ TEST_F(PartitionedRocksDBStoreTest, AllLogsIter) {
   EXPECT_EQ(300, it->getLSN());
   verifyRecord(it->getLogID(), it->getLSN(), it->getRecord());
   it->next(&filter, &stats);
-  EXPECT_EQ(std::vector<C>({C::range(310, 310)}), filter.history);
+  EXPECT_EQ(std::vector<C>({C::timeRange(310, 310)}), filter.history);
   filter.history.clear();
   ASSERT_EQ(IteratorState::AT_END, it->state());
 
   ld_info("Reading with filtering and byte limit.");
-  filter.ranges.insert(310);
+  filter.time_ranges.insert(310);
   // Read limit = now + 1 byte.
   stats.max_bytes_to_read = stats.read_record_bytes + stats.read_csi_bytes + 1;
   it->seek(*mid_location, &filter, &stats);
-  EXPECT_EQ(std::vector<C>({C::range(210, 230),
+  EXPECT_EQ(std::vector<C>({C::timeRange(210, 230),
                             C::call(23),
                             C::call(23, true),
                             IF_DEBUG(C::call(23))}),
@@ -7818,7 +7874,8 @@ TEST_F(PartitionedRocksDBStoreTest, AllLogsIter) {
   verifyRecord(it->getLogID(), it->getLSN(), it->getRecord());
   auto limit_reached_location = it->getLocation();
   it->next(&filter, &stats);
-  EXPECT_EQ(std::vector<C>({C::range(310, 310), C::call(31)}), filter.history);
+  EXPECT_EQ(
+      std::vector<C>({C::timeRange(310, 310), C::call(31)}), filter.history);
   filter.history.clear();
   ASSERT_EQ(IteratorState::LIMIT_REACHED, it->state());
   EXPECT_EQ(log3, it->getLogID());
@@ -7827,7 +7884,7 @@ TEST_F(PartitionedRocksDBStoreTest, AllLogsIter) {
   // Read limit = infinity.
   stats.max_bytes_to_read = std::numeric_limits<size_t>::max();
   it->seek(*limit_reached_location, &filter, &stats);
-  EXPECT_EQ(std::vector<C>({C::range(310, 310)}), filter.history);
+  EXPECT_EQ(std::vector<C>({C::timeRange(310, 310)}), filter.history);
   filter.history.clear();
   ASSERT_EQ(IteratorState::AT_END, it->state());
 
@@ -7852,6 +7909,269 @@ TEST_F(PartitionedRocksDBStoreTest, AllLogsIter) {
     EXPECT_EQ(IteratorState::AT_RECORD, it->state());
     EXPECT_FALSE(MetaDataLog::isMetaDataLog(it->getLogID()));
   }
+
+  ld_info("Reading an empty subset of logs filtering out all metadata records");
+  it = store_->readAllLogs(read_options, std::vector<logid_t>({}));
+  filter.records.clear();
+  filter.time_ranges = {C::FULL_TIME_RANGE};
+  it->seek(*it->minLocation(), &filter, &stats);
+  EXPECT_EQ(IteratorState::AT_END, it->state());
+  EXPECT_EQ(std::vector<C>({C::fullRange(),
+                            C::call(1001),
+                            C::call(1002),
+                            C::call(2001),
+                            C::call(2002),
+                            C::call(3001)}),
+            filter.history);
+  filter.history.clear();
+
+  ld_info("Reading an empty subset of logs and some metadata records");
+  filter.records = {1002, 2002};
+  it->seek(*it->minLocation(), &filter, &stats);
+  EXPECT_EQ(IteratorState::AT_RECORD, it->state());
+  EXPECT_EQ(internal_log, it->getLogID());
+  EXPECT_EQ(200, it->getLSN());
+  verifyRecord(it->getLogID(), it->getLSN(), it->getRecord());
+  EXPECT_EQ(std::vector<C>({C::fullRange(),
+                            C::call(1001),
+                            C::call(1002),
+                            C::call(1002, true),
+                            IF_DEBUG(C::call(1002))}),
+            filter.history);
+  filter.history.clear();
+  it->next(&filter, &stats);
+  EXPECT_EQ(std::vector<C>({C::call(2001),
+                            C::call(2002),
+                            C::call(2002, true),
+                            IF_DEBUG(C::call(2002))}),
+            filter.history);
+  EXPECT_EQ(IteratorState::AT_RECORD, it->state());
+  EXPECT_EQ(meta_log1, it->getLogID());
+  EXPECT_EQ(200, it->getLSN());
+  verifyRecord(it->getLogID(), it->getLSN(), it->getRecord());
+  filter.history.clear();
+  it->next(&filter, &stats);
+  EXPECT_EQ(std::vector<C>({C::call(3001)}), filter.history);
+  EXPECT_EQ(IteratorState::AT_END, it->state());
+  filter.history.clear();
+
+  ld_info("Reading a subset of logs and no metadata records");
+  it = store_->readAllLogs(read_options, std::vector<logid_t>({log1, log2}));
+  filter.time_ranges = {10, 210};
+  filter.record_ranges = {std::make_pair(log1, 100), std::make_pair(log2, 200)};
+  filter.records = {1, 23};
+  it->seek(*it->minLocation(), &filter, &stats);
+  EXPECT_EQ(IteratorState::AT_RECORD, it->state());
+  EXPECT_EQ(log1, it->getLogID());
+  EXPECT_EQ(100, it->getLSN());
+  verifyRecord(it->getLogID(), it->getLSN(), it->getRecord());
+  EXPECT_EQ(std::vector<C>({C::fullRange(),
+                            C::timeRange(10, 30),
+                            C::recordRange(log1, 100, 200),
+                            C::call(1),
+                            C::call(1, true),
+                            IF_DEBUG(C::call(1))}),
+            filter.history);
+  filter.history.clear();
+  it->next(&filter, &stats);
+  EXPECT_EQ(IteratorState::AT_RECORD, it->state());
+  EXPECT_EQ(log2, it->getLogID());
+  EXPECT_EQ(300, it->getLSN());
+  verifyRecord(it->getLogID(), it->getLSN(), it->getRecord());
+  EXPECT_EQ(std::vector<C>({C::call(2),
+                            C::recordRange(log2, 100, 100),
+                            C::timeRange(210, 230),
+                            C::recordRange(log1, 300, 300),
+                            C::recordRange(log2, 200, 300),
+                            C::call(22),
+                            C::call(23),
+                            C::call(23, true),
+                            IF_DEBUG(C::call(23))}),
+            filter.history);
+  filter.history.clear();
+  it->next(&filter, &stats);
+  EXPECT_EQ(IteratorState::AT_END, it->state());
+  EXPECT_EQ(std::vector<C>({C::timeRange(410, 410)}), filter.history);
+  filter.history.clear();
+
+  ld_info("Reading a metadata record and a data record");
+  filter.time_ranges = {C::FULL_TIME_RANGE, 210, 310};
+  filter.record_ranges = {std::make_pair(log1, 300)};
+  filter.records = {2002, 21};
+  it->seek(*it->minLocation(), &filter, &stats);
+  EXPECT_EQ(IteratorState::AT_RECORD, it->state());
+  EXPECT_EQ(meta_log1, it->getLogID());
+  EXPECT_EQ(200, it->getLSN());
+  verifyRecord(it->getLogID(), it->getLSN(), it->getRecord());
+  EXPECT_EQ(std::vector<C>({C::fullRange(),
+                            C::call(1001),
+                            C::call(1002),
+                            C::call(2001),
+                            C::call(2002),
+                            C::call(2002, true),
+                            IF_DEBUG(C::call(2002))}),
+            filter.history);
+  filter.history.clear();
+  it->next(&filter, &stats);
+  EXPECT_EQ(IteratorState::AT_RECORD, it->state());
+  EXPECT_EQ(log1, it->getLogID());
+  EXPECT_EQ(300, it->getLSN());
+  verifyRecord(it->getLogID(), it->getLSN(), it->getRecord());
+  EXPECT_EQ(std::vector<C>({C::call(3001),
+                            C::timeRange(10, 30),
+                            C::timeRange(210, 230),
+                            C::recordRange(log1, 300, 300),
+                            C::call(21),
+                            C::call(21, true),
+                            IF_DEBUG(C::call(21))}),
+            filter.history);
+  filter.history.clear();
+  it->next(&filter, &stats);
+  EXPECT_EQ(IteratorState::AT_END, it->state());
+  EXPECT_EQ(
+      std::vector<C>({C::recordRange(log2, 200, 300), C::timeRange(410, 410)}),
+      filter.history);
+  filter.history.clear();
+
+  ld_info("Seeking to the middle with directory filtering");
+  filter.time_ranges = {210};
+  filter.record_ranges = {std::make_pair(log2, 200)};
+  filter.records = {23};
+  it->seek(*mid_location, &filter, &stats);
+  EXPECT_EQ(IteratorState::AT_RECORD, it->state());
+  EXPECT_EQ(log2, it->getLogID());
+  EXPECT_EQ(300, it->getLSN());
+  verifyRecord(it->getLogID(), it->getLSN(), it->getRecord());
+  EXPECT_EQ(std::vector<C>({C::timeRange(210, 230),
+                            C::recordRange(log2, 200, 300),
+                            C::call(23),
+                            C::call(23, true),
+                            IF_DEBUG(C::call(23))}),
+            filter.history);
+  filter.history.clear();
+  it->next(&filter, &stats);
+  EXPECT_EQ(IteratorState::AT_END, it->state());
+  EXPECT_EQ(std::vector<C>({C::timeRange(410, 410)}), filter.history);
+  filter.history.clear();
+
+  ld_info("Now filter out the record");
+  it = store_->readAllLogs(read_options, std::vector<logid_t>({log2, log3}));
+  filter.time_ranges = {210};
+  filter.record_ranges = {std::make_pair(log2, 200)};
+  filter.records = {};
+  it->seek(*mid_location, &filter, &stats);
+  EXPECT_EQ(IteratorState::AT_END, it->state());
+  EXPECT_EQ(std::vector<C>({C::timeRange(210, 230),
+                            C::recordRange(log2, 200, 300),
+                            C::call(23),
+                            C::timeRange(310, 310)}),
+            filter.history);
+  filter.history.clear();
+
+  ld_info("Now filter out the directory entry");
+  filter.time_ranges = {210};
+  filter.record_ranges = {};
+  it->seek(*mid_location, &filter, &stats);
+  EXPECT_EQ(IteratorState::AT_END, it->state());
+  EXPECT_EQ(std::vector<C>({C::timeRange(210, 230),
+                            C::recordRange(log2, 200, 300),
+                            C::timeRange(310, 310)}),
+            filter.history);
+  filter.history.clear();
+
+  ld_info("Now filter out the partition");
+  filter.time_ranges = {};
+  filter.record_ranges = {};
+  it->seek(*mid_location, &filter, &stats);
+  EXPECT_EQ(IteratorState::AT_END, it->state());
+  EXPECT_EQ(std::vector<C>({C::timeRange(210, 230), C::timeRange(310, 310)}),
+            filter.history);
+  filter.history.clear();
+
+  ld_info("Now filter out the log");
+  it = store_->readAllLogs(read_options, std::vector<logid_t>({log1, log3}));
+  filter.time_ranges = {310};
+  filter.record_ranges = {std::make_pair(log3, 100)};
+  it->seek(*mid_location, &filter, &stats);
+  EXPECT_EQ(IteratorState::AT_END, it->state());
+  EXPECT_EQ(std::vector<C>({C::timeRange(310, 310),
+                            C::recordRange(log3, 100, 100),
+                            C::call(31),
+                            C::timeRange(410, 410)}),
+            filter.history);
+  filter.history.clear();
+
+  ld_info("Seeking to a filtered out record");
+  it = store_->readAllLogs(read_options, std::vector<logid_t>({log1, log2}));
+  filter.time_ranges = {210};
+  filter.record_ranges = {std::make_pair(log2, 200)};
+  it->seek(*location_21, &filter, &stats);
+  EXPECT_EQ(IteratorState::AT_END, it->state());
+  EXPECT_EQ(std::vector<C>({C::timeRange(210, 230),
+                            C::recordRange(log1, 300, 300),
+                            C::recordRange(log2, 200, 300),
+                            C::call(22),
+                            C::call(23),
+                            C::timeRange(410, 410)}),
+            filter.history);
+  filter.history.clear();
+
+  ld_info("Stepping to a newly written record");
+  it = store_->readAllLogs(read_options, std::vector<logid_t>({log3}));
+  filter.time_ranges = {310};
+  filter.record_ranges = {std::make_pair(log3, 100)};
+  write(log3, 200, 32);
+  it->seek(*location_21, &filter, &stats);
+  EXPECT_EQ(IteratorState::AT_END, it->state());
+  EXPECT_EQ(std::vector<C>({C::timeRange(310, 320),
+                            C::recordRange(log3, 100, 100),
+                            C::call(31)}),
+            filter.history);
+  filter.history.clear();
+
+  ld_info("End of log and byte limit hit simultaneously.");
+  it = store_->readAllLogs(read_options, std::vector<logid_t>({log1, log2}));
+  filter.time_ranges = {210};
+  filter.record_ranges = {std::make_pair(log1, 300), std::make_pair(log2, 200)};
+  filter.records = {21, 23};
+  it->seek(*location_21, &filter, &stats);
+  EXPECT_EQ(IteratorState::AT_RECORD, it->state());
+  EXPECT_EQ(log1, it->getLogID());
+  EXPECT_EQ(300, it->getLSN());
+  verifyRecord(it->getLogID(), it->getLSN(), it->getRecord());
+  EXPECT_EQ(std::vector<C>({C::timeRange(210, 230),
+                            C::recordRange(log1, 300, 300),
+                            C::call(21),
+                            C::call(21, true),
+                            IF_DEBUG(C::call(21))}),
+            filter.history);
+  filter.history.clear();
+  // Read limit = now + 1 byte.
+  stats.max_bytes_to_read = stats.read_record_bytes + stats.read_csi_bytes + 1;
+  it->next(&filter, &stats);
+  EXPECT_EQ(IteratorState::LIMIT_REACHED, it->state());
+  EXPECT_EQ(log2, it->getLogID());
+  EXPECT_EQ(201, it->getLSN());
+  EXPECT_EQ(std::vector<C>({C::recordRange(log2, 200, 300), C::call(22)}),
+            filter.history);
+  filter.history.clear();
+  // Read limit = infinity.
+  stats.max_bytes_to_read = std::numeric_limits<size_t>::max();
+  it->seek(*it->getLocation(), &filter, &stats);
+  EXPECT_EQ(IteratorState::AT_RECORD, it->state());
+  EXPECT_EQ(log2, it->getLogID());
+  EXPECT_EQ(300, it->getLSN());
+  EXPECT_EQ(std::vector<C>({C::timeRange(210, 230),
+                            C::recordRange(log2, 200, 300),
+                            C::call(23),
+                            C::call(23, true),
+                            IF_DEBUG(C::call(23))}),
+            filter.history);
+  filter.history.clear();
+  it->next(&filter, &stats);
+  EXPECT_EQ(IteratorState::AT_END, it->state());
+  EXPECT_EQ(std::vector<C>({C::timeRange(410, 410)}), filter.history);
+  filter.history.clear();
 }
 
 // Reproduces a former bug where time-based-trimmed records weren't compacted

@@ -50,7 +50,8 @@ class FailingLocalLogStore : public LocalLogStore {
   std::unique_ptr<ReadIterator> read(logid_t log_id,
                                      const ReadOptions& options) const override;
   std::unique_ptr<AllLogsIterator>
-  readAllLogs(const ReadOptions& options) const override;
+  readAllLogs(const ReadOptions& options,
+              const folly::Optional<std::vector<logid_t>>& logs) const override;
 
   int readLogMetadata(logid_t, LogMetadata*) override {
     err = E::LOCAL_LOG_STORE_READ;

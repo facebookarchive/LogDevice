@@ -54,8 +54,9 @@ class RebuildingReadStorageTaskTest : public ::testing::Test {
       return test->config;
     }
     std::unique_ptr<LocalLogStore::AllLogsIterator>
-    createIterator(const LocalLogStore::ReadOptions& opts) override {
-      return test->store->readAllLogs(opts);
+    createIterator(const LocalLogStore::ReadOptions& opts,
+                   const std::vector<logid_t>& logs) override {
+      return test->store->readAllLogs(opts, logs);
     }
     StatsHolder* getStats() override {
       return &test->stats;

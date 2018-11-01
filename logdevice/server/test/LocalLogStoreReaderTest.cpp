@@ -1040,7 +1040,7 @@ TEST_P(LocalLogStoreReaderTest, NextFilteredWindowEndReached) {
 
   ASSERT_EQ(E::WINDOW_END_REACHED, st);
   ASSERT_SHIPPED(records, 1);
-  ASSERT_EQ(4, read_ptr.lsn); // Next time we start reading LSN 4...
+  ASSERT_EQ(3, read_ptr.lsn); // Next time we start reading LSN 3...
 }
 
 TEST_P(LocalLogStoreReaderTest, SeekFilteredCaughtUp) {
