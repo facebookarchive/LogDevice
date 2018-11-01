@@ -10,7 +10,7 @@ find_package(PythonInterp ${LD_PYTHON_VERSION} REQUIRED)
 find_package(PythonLibs ${LD_PYTHON_VERSION} REQUIRED)
 
 set(_boost_py_component
-	    python-py${PYTHON_VERSION_MAJOR}${PYTHON_VERSION_MINOR})
+	    python${PYTHON_VERSION_MAJOR})
 message(STATUS "Boost Python Component ${_boost_py_component}")
 
 find_package(Boost 1.55.0 MODULE
@@ -26,6 +26,7 @@ find_package(Boost 1.55.0 MODULE
     ${_boost_py_component}
   REQUIRED
 )
+
 
 set(CMAKE_THREAD_PREFER_PTHREAD ON)
 find_package(Libunwind REQUIRED)
