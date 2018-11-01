@@ -45,6 +45,7 @@ enum RecordType {
   BRIDGE
 };
 
+// TODO(T33977412) : Change constructor to take OffsetMap
 // TODO 11866467: support for specifying copyset
 std::unique_ptr<DataRecordOwnsPayload> create_record(
     logid_t logid,

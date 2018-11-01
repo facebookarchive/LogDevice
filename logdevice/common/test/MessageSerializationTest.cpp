@@ -222,6 +222,9 @@ class MessageSerializationTest : public ::testing::Test {
     ASSERT_EQ(m.extra_metadata_->header.copyset_size,
               m2.extra_metadata_->header.copyset_size);
     ASSERT_EQ(m.extra_metadata_->copyset, m2.extra_metadata_->copyset);
+    ASSERT_EQ(m.offsets_, m2.offsets_);
+    ASSERT_EQ(m.extra_metadata_->offsets_within_epoch,
+              m2.extra_metadata_->offsets_within_epoch);
   }
 
   void checkSEALED(const SEALED_Message& m,
@@ -968,25 +971,54 @@ TEST_F(MessageSerializationTest, RECORD) {
       read_stream_id_t(0xf8822b40e1a45f42),
       0xe7933997c8a866b0,
       0xda6c898046f65fe7,
-      RECORD_Header::CHECKSUM_PARITY | RECORD_Header::INCLUDES_EXTRA_METADATA,
+      RECORD_Header::CHECKSUM_PARITY | RECORD_Header::INCLUDES_EXTRA_METADATA |
+          RECORD_Header::INCLUDE_OFFSET_WITHIN_EPOCH |
+          RECORD_Header::INCLUDE_BYTE_OFFSET,
   };
-  ExtraMetadata reb = {
-      {
-          esn_t(0x0b7430da),
-          0xdb270ae5,
-          2,
-      },
-      {ShardID(0x1d53, 0), ShardID(0x0287, 0)},
-      BYTE_OFFSET_INVALID,
-  };
+  OffsetMap offsets_within_epoch;
+  offsets_within_epoch.setCounter(CounterType::BYTE_OFFSET, 4);
+  ExtraMetadata reb = {{
+                           esn_t(0x0b7430da),
+                           0xdb270ae5,
+                           2,
+                       },
+                       {ShardID(0x1d53, 0), ShardID(0x0287, 0)},
+                       std::move(offsets_within_epoch)};
   std::string payload = "preved";
+  OffsetMap byte_offsets;
+  byte_offsets.setCounter(CounterType::BYTE_OFFSET, 10);
   RECORD_Message m(h,
                    TrafficClass::REBUILD,
                    Payload(payload.data(), payload.size()).dup(),
-                   std::make_unique<ExtraMetadata>(reb));
+                   std::make_unique<ExtraMetadata>(reb),
+                   RECORD_Message::Source::LOCAL_LOG_STORE,
+                   std::move(byte_offsets));
   auto check = [&](const RECORD_Message& m2, uint16_t proto) {
     checkRECORD(m, m2, proto);
   };
+
+  auto deserializer = [](ProtocolReader& reader) {
+    return RECORD_Message::deserialize(reader);
+  };
+
+  auto expected_fn = [](uint16_t proto) {
+    if (proto < Compatibility::RECORD_MESSAGE_SUPPORT_OFFSET_MAP) {
+      return "ADCDC109386DAEB1425FA4E1402B82F8B066A8C8973993E7E75FF64680896CDA1"
+             "10300000000DA30740BE50A27DB02531D00008702000004000000000000000A00"
+             "000000000000707265766564";
+    } else {
+      return "ADCDC109386DAEB1425FA4E1402B82F8B066A8C8973993E7E75FF64680896CDA1"
+             "10300000000DA30740BE50A27DB02531D00008702000001F60400000000000000"
+             "01F60A00000000000000707265766564";
+    }
+  };
+
+  DO_TEST(m,
+          check,
+          Compatibility::SHARD_ID_IN_REBUILD_METADATA,
+          Compatibility::MAX_PROTOCOL_SUPPORTED,
+          expected_fn,
+          deserializer);
 }
 
 namespace {

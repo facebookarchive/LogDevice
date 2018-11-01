@@ -8,7 +8,7 @@
 #include "DigestTestUtil.h"
 
 namespace facebook { namespace logdevice { namespace DigestTestUtil {
-
+// TODO(T33977412) : change offset params to OffsetMap
 std::unique_ptr<DataRecordOwnsPayload>
 create_record(logid_t logid,
               lsn_t lsn,
@@ -45,8 +45,11 @@ create_record(logid_t logid,
   }
 
   auto extra_metadata = std::make_unique<ExtraMetadata>();
+  OffsetMap offsets_within_epoch;
+  offsets_within_epoch.setCounter(
+      CounterType::BYTE_OFFSET, offset_within_epoch);
   extra_metadata->header.wave = wave_or_seal_epoch;
-  extra_metadata->offset_within_epoch = offset_within_epoch;
+  extra_metadata->offsets_within_epoch = std::move(offsets_within_epoch);
 
   auto record = std::make_unique<DataRecordOwnsPayload>(
       logid,

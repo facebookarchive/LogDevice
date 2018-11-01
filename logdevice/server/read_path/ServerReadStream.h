@@ -457,7 +457,7 @@ class ServerReadStream : boost::noncopyable {
       boost::intrusive::link_mode<boost::intrusive::auto_unlink>>;
   set_member_hook_type queue_delayed_hook_;
 
-  folly::Optional<std::pair<epoch_t, uint64_t>> epoch_offset_ = folly::none;
+  folly::Optional<std::pair<epoch_t, OffsetMap>> epoch_offsets_ = folly::none;
 
   // ServerRecordFilter used to filter out record. It will be constructed
   // by ServerRecordFilterFactory.

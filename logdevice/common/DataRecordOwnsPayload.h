@@ -33,6 +33,7 @@ struct DataRecordOwnsPayload : public DataRecord {
    * If `decoder' is non-null, `payload' is expected to be a soft pointer into
    * memory owned by the decoder.
    */
+  // TODO(T33977412) : Change constructor to take OffsetMap
   explicit DataRecordOwnsPayload(logid_t log_id,
                                  Payload&& payload,
                                  lsn_t lsn,

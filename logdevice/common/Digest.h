@@ -244,8 +244,8 @@ class Digest {
 
   /**
    * since some records might be recognized as holes during recovery, we need
-   * to recalculate byteoffset during digest. the process will start from
-   * last know good record and recalculate the byteoffset of each record
+   * to recalculate OffsetMap during digest. the process will start from
+   * last know good record and recalculate the OffsetMap of each record
    * afterwards.
    *
    * Note that this function is called when epoch recovery has finished
@@ -254,20 +254,20 @@ class Digest {
    * @param last_known_good         epoch sequence number where byteoffset
    *                                recompute will start
    *
-   * @param offset_within_epoch     the byte offset of the corresponding
+   * @param offsets_within_epoch    the OffsetMap of the corresponding
    *                                last_known_good, If it is not given digest
    *                                will try to check if it has the record with
    *                                last_known_good in its entries and get
-   *                                offset from that record. If
-   *                                offset_within_epoch is not given and also
-   *                                last_known_good entry's byteoffset is not
-   *                                found. recomputeOffsetWithinEpoch will stop
+   *                                offsets from that record. If
+   *                                offsets_within_epoch is not given and also
+   *                                last_known_good entry's OffsetMap is not
+   *                                found. recomputeOffsetsWithinEpoch will stop
    *                                and return -1, otherwise on succeed it will
    *                                return 0
    */
-  int recomputeOffsetWithinEpoch(
+  int recomputeOffsetsWithinEpoch(
       esn_t last_known_good,
-      folly::Optional<uint64_t> offset_within_epoch = folly::none);
+      folly::Optional<OffsetMap> offsets_within_epoch = folly::none);
 
   /**
    * Checks if mutation is needed for the given entry. Things to check include

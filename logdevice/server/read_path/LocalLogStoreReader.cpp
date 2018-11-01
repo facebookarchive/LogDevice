@@ -486,6 +486,7 @@ int getTailRecord(LocalLogStore::ReadIterator& iterator,
   // if the tail record does not have byte offset included, use
   // BYTE_OFFSET_INVALID
   uint64_t offset_within_epoch = BYTE_OFFSET_INVALID;
+  OffsetMap offsets_within_epoch;
 
   int rv =
       LocalLogStoreRecordFormat::parse(iterator.getRecord(),
@@ -497,6 +498,7 @@ int getTailRecord(LocalLogStore::ReadIterator& iterator,
                                        nullptr,
                                        0,
                                        &offset_within_epoch,
+                                       &offsets_within_epoch,
                                        nullptr,
                                        include_payload ? &payload : nullptr,
                                        -1 /* unused */);
@@ -537,7 +539,8 @@ int getTailRecord(LocalLogStore::ReadIterator& iterator,
                    {offset_within_epoch},
                    flags,
                    {}},
-                  std::move(ph));
+                  std::move(ph),
+                  std::move(offsets_within_epoch));
   return 0;
 }
 

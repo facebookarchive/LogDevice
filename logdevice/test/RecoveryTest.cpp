@@ -580,6 +580,7 @@ void RecoveryTest::read(lsn_t start_lsn, lsn_t end_lsn, bool use_scd) {
     reader->forceNoSingleCopyDelivery();
   }
   reader->includeByteOffset();
+
   int rv = reader->startReading(LOG_ID, start_lsn, end_lsn);
   ASSERT_EQ(0, rv);
 
@@ -775,7 +776,7 @@ RecoveryTest::buildDigest(epoch_t epoch,
       copyset_size_t copyset_size;
       copyset.resize(15);
       uint64_t offset_within_epoch = BYTE_OFFSET_INVALID;
-
+      OffsetMap offsets_within_epoch;
       int rv = LocalLogStoreRecordFormat::parse(blob,
                                                 &timestamp,
                                                 &last_known_good,
@@ -785,6 +786,7 @@ RecoveryTest::buildDigest(epoch_t epoch,
                                                 &copyset[0],
                                                 15,
                                                 &offset_within_epoch,
+                                                &offsets_within_epoch,
                                                 nullptr,
                                                 &payload,
                                                 0 /* shard_index_t */);
@@ -802,12 +804,12 @@ RecoveryTest::buildDigest(epoch_t epoch,
       extra_metadata->header = {
           last_known_good, wave_or_recovery_epoch, copyset_size};
       extra_metadata->copyset = std::move(copyset);
-      extra_metadata->offset_within_epoch = offset_within_epoch;
+      extra_metadata->offsets_within_epoch = offsets_within_epoch;
 
       RECORD_flags_t record_flags =
           disk_flags & LocalLogStoreRecordFormat::FLAG_MASK;
       record_flags |= RECORD_Header::INCLUDES_EXTRA_METADATA;
-      if (extra_metadata->offset_within_epoch != BYTE_OFFSET_INVALID) {
+      if (extra_metadata->offsets_within_epoch.isValid()) {
         record_flags |= RECORD_Header::INCLUDE_OFFSET_WITHIN_EPOCH;
       }
 
@@ -2573,9 +2575,6 @@ TEST_P(RecoveryTest, PurgingAvailabilityTest) {
   const copyset_t copyset_e1 = {N1, N2};
   const copyset_t copyset_e2 = {N4, N5};
   const copyset_t copyset_e3 = {N1, N3, N4, N5};
-  OffsetMap epoch_end_offset;
-  epoch_end_offset.setCounter(CounterType::BYTE_OFFSET, 4);
-
   // Storage nodes contain the following records (x) and plugs (o):
   //      (1,1) (1,2) (1,3) (1,4) (3,1)
   // ------------------------------------
@@ -2591,8 +2590,7 @@ TEST_P(RecoveryTest, PurgingAvailabilityTest) {
                       TestRecord(LOG_ID, lsn(1, 1), ESN_INVALID)
                           .copyset(copyset_e1)
                           .timestamp(std::chrono::milliseconds(1))
-                          .offsetWithinEpoch(4)
-                          .offsetsWithinEpoch(epoch_end_offset),
+                          .offsetWithinEpoch(4),
                       TestRecord(LOG_ID, lsn(1, 2), esn_t(1))
                           .copyset(copyset_e1)
                           .timestamp(std::chrono::milliseconds(2))
@@ -2624,8 +2622,7 @@ TEST_P(RecoveryTest, PurgingAvailabilityTest) {
                       TestRecord(LOG_ID, lsn(1, 1), ESN_INVALID)
                           .copyset(copyset_e1)
                           .timestamp(std::chrono::milliseconds(1))
-                          .offsetWithinEpoch(4)
-                          .offsetsWithinEpoch(epoch_end_offset),
+                          .offsetWithinEpoch(4),
                       TestRecord(LOG_ID, lsn(1, 3), esn_t(1))
                           .copyset(copyset_e1)
                           .timestamp(std::chrono::milliseconds(4)),

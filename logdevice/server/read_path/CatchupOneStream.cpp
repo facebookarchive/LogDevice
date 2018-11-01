@@ -180,7 +180,7 @@ class ReadingCallback : public LocalLogStoreReader::Callback {
                     const esn_t last_known_good,
                     const copyset_size_t copyset_size,
                     const ShardID* const copyset,
-                    const uint64_t offset_within_epoch);
+                    const OffsetMap& offsets_within_epoch);
 
  private:
   // Sends a RECORD_Message for the given record over the wire
@@ -189,19 +189,19 @@ class ReadingCallback : public LocalLogStoreReader::Callback {
                  LocalLogStoreRecordFormat::flags_t disk_flags,
                  Payload payload,
                  std::unique_ptr<ExtraMetadata> extra_metadata,
-                 uint64_t byte_offset);
+                 OffsetMap byte_offsets);
 
   std::unique_ptr<ExtraMetadata>
   prepareExtraMetadata(esn_t last_known_good,
                        uint32_t wave,
                        const ShardID copyset[],
                        copyset_size_t copyset_size,
-                       uint64_t offset_within_epoch);
+                       OffsetMap offsets_within_epoch);
   /**
-   * @return    epoch_offset of epoch record_epoch.
-   *            BYTE_OFFSET_INVALID if it is unavailable at this moment.
+   * @return    OffsetMap of epoch record_epoch.
+   *            Empty OffsetMap if it is unavailable at this moment.
    */
-  uint64_t getEpochOffset(epoch_t record_epoch, LogStorageState& log_state);
+  OffsetMap getEpochOffsets(epoch_t record_epoch, LogStorageState& log_state);
 
   CatchupOneStream* catchup_;
   ServerReadStream* stream_;
@@ -223,6 +223,7 @@ int ReadingCallback::processRecord(const RawRecord& record) {
   ShardID* copyset = nullptr;
   uint32_t wave;
   uint64_t offset_within_epoch = BYTE_OFFSET_INVALID;
+  OffsetMap offsets_within_epoch;
   // Parse the copyset only if necessary
   if (stream_->include_extra_metadata_) {
     copyset = (ShardID*)alloca(COPYSET_SIZE_MAX * sizeof(ShardID));
@@ -237,6 +238,7 @@ int ReadingCallback::processRecord(const RawRecord& record) {
       stream_->include_extra_metadata_ ? copyset : nullptr,
       COPYSET_SIZE_MAX,
       &offset_within_epoch,
+      &offsets_within_epoch,
       stream_->filter_pred_ != nullptr ? &optional_keys : nullptr,
       &payload,
       stream_->shard_);
@@ -265,7 +267,6 @@ int ReadingCallback::processRecord(const RawRecord& record) {
   //       is only reset at the end of each read if the read only accessed
   //       fully replicated portions of the LocalLogStore.
   stream_->in_under_replicated_region_ |= record.from_under_replicated_region;
-
   return processRecord(lsn,
                        timestamp,
                        flags,
@@ -275,7 +276,7 @@ int ReadingCallback::processRecord(const RawRecord& record) {
                        last_known_good,
                        copyset_size,
                        copyset,
-                       offset_within_epoch);
+                       offsets_within_epoch);
 }
 
 int ReadingCallback::processRecord(
@@ -288,7 +289,7 @@ int ReadingCallback::processRecord(
     const esn_t last_known_good,
     const copyset_size_t copyset_size,
     const ShardID* const copyset,
-    const uint64_t offset_within_epoch) {
+    const OffsetMap& offsets_within_epoch) {
   ld_check(lsn > stream_->last_delivered_lsn_);
 
   // [Experimental Feature] If server-side filtering is enabled, we should
@@ -353,16 +354,15 @@ int ReadingCallback::processRecord(
   if (stream_->include_extra_metadata_) {
     DCHECK_NOTNULL(copyset);
     extra_metadata = this->prepareExtraMetadata(
-        last_known_good, wave, copyset, copyset_size, offset_within_epoch);
+        last_known_good, wave, copyset, copyset_size, offsets_within_epoch);
   }
 
-  uint64_t byte_offset = BYTE_OFFSET_INVALID;
-  if (stream_->include_byte_offset_ &&
-      offset_within_epoch != BYTE_OFFSET_INVALID) {
-    // epoch byte offset value has to be know to determine global offset.
-    uint64_t epoch_offset = getEpochOffset(lsn_to_epoch(lsn), log_state);
-    if (epoch_offset != BYTE_OFFSET_INVALID) {
-      byte_offset = epoch_offset + offset_within_epoch;
+  OffsetMap byte_offsets;
+  if (stream_->include_byte_offset_ && offsets_within_epoch.isValid()) {
+    // epoch OffsetMap value has to be known to determine global OffsetMap.
+    OffsetMap epoch_offsets = getEpochOffsets(lsn_to_epoch(lsn), log_state);
+    if (epoch_offsets.isValid()) {
+      byte_offsets = epoch_offsets + offsets_within_epoch;
     }
   }
 
@@ -391,8 +391,12 @@ int ReadingCallback::processRecord(
       return -1;
     }
 
-    int rv = shipRecord(
-        lsn, timestamp, flags, payload, std::move(extra_metadata), byte_offset);
+    int rv = shipRecord(lsn,
+                        timestamp,
+                        flags,
+                        payload,
+                        std::move(extra_metadata),
+                        std::move(byte_offsets));
     if (rv != 0) {
       return -1;
     }
@@ -424,11 +428,11 @@ int ReadingCallback::processRecord(
   return 0;
 }
 
-uint64_t ReadingCallback::getEpochOffset(epoch_t record_epoch,
-                                         LogStorageState& log_state) {
+OffsetMap ReadingCallback::getEpochOffsets(epoch_t record_epoch,
+                                           LogStorageState& log_state) {
   if (store_ == nullptr) {
-    ld_error("Store is not initialized in ReadingCallback::getEpochOffset");
-    return BYTE_OFFSET_INVALID;
+    ld_error("Store is not initialized in ReadingCallback::getEpochOffsets");
+    return OffsetMap();
   }
   LogStorageState::LastReleasedLSN last_released_lsn =
       log_state.getLastReleasedLSN();
@@ -437,20 +441,22 @@ uint64_t ReadingCallback::getEpochOffset(epoch_t record_epoch,
   // now.
   ld_check(last_released_lsn.hasValue());
   epoch_t last_epoch = lsn_to_epoch(last_released_lsn.value());
-  folly::Optional<std::pair<epoch_t, uint64_t>> epoch_offset_from_log_state =
-      log_state.getEpochOffset();
-  folly::Optional<std::pair<epoch_t, uint64_t>> epoch_offset_from_metadata =
-      stream_->epoch_offset_;
 
-  // First check if right epoch offset is already available from
+  const folly::Optional<std::pair<epoch_t, OffsetMap>>&
+      epoch_offsets_from_log_state = log_state.getEpochOffsetMap();
+
+  const folly::Optional<std::pair<epoch_t, OffsetMap>>&
+      epoch_offsets_from_metadata = stream_->epoch_offsets_;
+
+  // First check if right epoch offsets are already available from
   // LogStorageState or cached value from PerEpochLogMetadata in
   // ServerReadStream.
-  if (epoch_offset_from_log_state.hasValue() &&
-      epoch_offset_from_log_state.value().first == record_epoch) {
-    return epoch_offset_from_log_state.value().second;
-  } else if (epoch_offset_from_metadata.hasValue() &&
-             epoch_offset_from_metadata.value().first == record_epoch) {
-    return epoch_offset_from_metadata.value().second;
+  if (epoch_offsets_from_log_state.hasValue() &&
+      epoch_offsets_from_log_state.value().first == record_epoch) {
+    return epoch_offsets_from_log_state.value().second;
+  } else if (epoch_offsets_from_metadata.hasValue() &&
+             epoch_offsets_from_metadata.value().first == record_epoch) {
+    return epoch_offsets_from_metadata.value().second;
   }
 
   // PerEpochLogMetadata is written on node after epoch recovery.
@@ -458,8 +464,8 @@ uint64_t ReadingCallback::getEpochOffset(epoch_t record_epoch,
   // record_epoch is not active epoch which sequencer use.
   // Optimization: PerEpochLogMetadata for epoch (record_epoch.val_ - 1) will be
   // available on node if nodeset for record_epoch epoch still includes this
-  // node. In this case epoch_end_offset of epoch (record_epoch.val_ - 1) can
-  // be used as epoch_offset of record_epoch.
+  // node. In this case epoch_end_offsets of epoch (record_epoch.val_ - 1) can
+  // be used as epoch_offsets of record_epoch.
 
   bool allow_reads_on_workers =
       catchup_->deps_.getSettings().allow_reads_on_workers;
@@ -472,11 +478,14 @@ uint64_t ReadingCallback::getEpochOffset(epoch_t record_epoch,
                                              false,  // find_last_available
                                              false); // allow_blocking_io
     if (rv == 0) {
-      return metadata.header_.epoch_end_offset;
+      ld_check(
+          metadata.header_.epoch_end_offset ==
+          metadata.epoch_end_offsets_.getCounter(CounterType::BYTE_OFFSET));
+      return metadata.epoch_end_offsets_;
     } else if (rv != 0 && err == E::LOCAL_LOG_STORE_READ) {
       ld_error("Error while reading PerEpochLogMetadata for epoch %u",
                record_epoch.val_ - 1);
-      return BYTE_OFFSET_INVALID;
+      return OffsetMap();
     } else {
       ld_check(err == E::NOTFOUND || err == E::WOULDBLOCK);
       // Optimization failed. Continue looking for epoch offset.
@@ -484,7 +493,7 @@ uint64_t ReadingCallback::getEpochOffset(epoch_t record_epoch,
   }
 
   if (record_epoch < last_epoch) {
-    // Try to get epoch_offset from PerEpochLogMetadata.
+    // Try to get epoch_offsets from PerEpochLogMetadata.
     // First try to read on worker thread without blocking.
     if (allow_reads_on_workers) {
       EpochRecoveryMetadata metadata_;
@@ -494,8 +503,10 @@ uint64_t ReadingCallback::getEpochOffset(epoch_t record_epoch,
                                                false,  // find_last_available
                                                false); // allow_blocking_io
       if (rv == 0) {
-        return metadata_.header_.epoch_end_offset -
-            metadata_.header_.epoch_size;
+        ld_check(
+            metadata_.header_.epoch_end_offset ==
+            metadata_.epoch_end_offsets_.getCounter(CounterType::BYTE_OFFSET));
+        return metadata_.epoch_end_offsets_ - metadata_.epoch_size_map_;
       }
       ld_check(rv == -1);
       if (err == E::NOTFOUND) {
@@ -509,12 +520,12 @@ uint64_t ReadingCallback::getEpochOffset(epoch_t record_epoch,
                           "but missing PerEpochLogMetadata",
                           record_epoch.val_,
                           last_epoch.val_);
-        return BYTE_OFFSET_INVALID;
+        return OffsetMap();
       } else if (err != E::WOULDBLOCK) {
         ld_check(err == E::LOCAL_LOG_STORE_READ);
         ld_error("Error while reading PerEpochLogMetadata for epoch %u",
                  record_epoch.val_);
-        return BYTE_OFFSET_INVALID;
+        return OffsetMap();
       }
       ld_check(err == E::WOULDBLOCK);
       // Proceed to reading on storage thread.
@@ -529,19 +540,19 @@ uint64_t ReadingCallback::getEpochOffset(epoch_t record_epoch,
         ->putTask(std::move(task));
     STAT_INCR(catchup_->deps_.getStatsHolder(), epoch_offset_to_storage);
   } else {
-    // epoch_offset_from_log_state is not updated or was not fetched yet
+    // epoch_offsets_from_log_state is not updated or was not fetched yet
     // as checked above.
-    // Try to get epoch_offset from contacting sequencer. The result of log
+    // Try to get epoch_offsets from contacting sequencer. The result of log
     // state recovery may be available next times when record have
-    // offset_within_epoch and epoch_offset has to be found. Request will be
+    // offsets_within_epoch and epoch_offsets has to be found. Request will be
     // rejected if previous one was sent recently.
     catchup_->deps_.recoverLogState(stream_->log_id_,
                                     stream_->shard_,
                                     true // force to send request to sequencer
     );
-    return BYTE_OFFSET_INVALID;
+    return OffsetMap();
   }
-  return BYTE_OFFSET_INVALID;
+  return OffsetMap();
 }
 
 int ReadingCallback::shipRecord(lsn_t lsn,
@@ -549,7 +560,7 @@ int ReadingCallback::shipRecord(lsn_t lsn,
                                 LocalLogStoreRecordFormat::flags_t disk_flags,
                                 Payload payload,
                                 std::unique_ptr<ExtraMetadata> extra_metadata,
-                                uint64_t byte_offset) {
+                                OffsetMap byte_offsets) {
   ++nrecords_;
 
   RECORD_flags_t wire_flags = 0;
@@ -616,11 +627,11 @@ int ReadingCallback::shipRecord(lsn_t lsn,
     payload = payload.dup();
   }
 
-  if (stream_->include_byte_offset_ && byte_offset != BYTE_OFFSET_INVALID) {
+  if (stream_->include_byte_offset_ && byte_offsets.isValid()) {
     header.flags |= RECORD_Header::INCLUDE_BYTE_OFFSET;
   }
-  if (extra_metadata &&
-      extra_metadata->offset_within_epoch != BYTE_OFFSET_INVALID) {
+
+  if (extra_metadata && extra_metadata->offsets_within_epoch.isValid()) {
     header.flags |= RECORD_Header::INCLUDE_OFFSET_WITHIN_EPOCH;
   }
 
@@ -630,7 +641,7 @@ int ReadingCallback::shipRecord(lsn_t lsn,
                                        std::move(payload),
                                        std::move(extra_metadata),
                                        RECORD_Message::Source::LOCAL_LOG_STORE,
-                                       byte_offset,
+                                       std::move(byte_offsets),
                                        stream_->log_group_path_);
 
   if (lsn <= stream_->last_delivered_lsn_) {
@@ -697,11 +708,11 @@ ReadingCallback::prepareExtraMetadata(esn_t last_known_good,
                                       uint32_t wave,
                                       const ShardID copyset[],
                                       copyset_size_t copyset_size,
-                                      uint64_t offset_within_epoch) {
+                                      OffsetMap offsets_within_epoch) {
   auto result = std::make_unique<ExtraMetadata>();
   result->header = {last_known_good, wave, copyset_size};
   result->copyset.assign(copyset, copyset + copyset_size);
-  result->offset_within_epoch = offset_within_epoch;
+  result->offsets_within_epoch = std::move(offsets_within_epoch);
   return result;
 }
 
@@ -1184,7 +1195,8 @@ CatchupOneStream::Action CatchupOneStream::pushReleasedRecords(
       }
 
       nrecords++;
-
+      ld_check(entry->offsets_within_epoch.getCounter(
+                   CounterType::BYTE_OFFSET) == entry->offset_within_epoch);
       int rv = callback.processRecord(
           entry->lsn,
           std::chrono::milliseconds(entry->timestamp),
@@ -1195,7 +1207,7 @@ CatchupOneStream::Action CatchupOneStream::pushReleasedRecords(
           entry->last_known_good,
           entry->copyset.size(),
           entry->copyset.data(),
-          entry->offset_within_epoch);
+          entry->offsets_within_epoch);
       if (rv != 0) {
         ld_check_ne(err, E::CBREGISTERED);
         status = E::ABORTED;

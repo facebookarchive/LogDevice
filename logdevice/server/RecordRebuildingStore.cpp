@@ -119,6 +119,8 @@ int RecordRebuildingStore::parseRecord() {
   storeHeader_.wave = wave;
 
   storeHeader_.flags = recordFlags_ & LocalLogStoreRecordFormat::FLAG_MASK;
+  // TODO (T33977412) Set STORE_Header flag if settings enable_offsets_map and
+  // offsets_within_epoch_ valid
   if (offset_within_epoch_ != BYTE_OFFSET_INVALID) {
     storeHeader_.flags |= STORE_Header::OFFSET_WITHIN_EPOCH;
   }

@@ -613,7 +613,7 @@ void PurgeCoordinator::shutdown() {
   ld_check(active_purge_);
   active_purge_.reset();
 }
-
+// TODO(T33977412) : change function to take OffsetMap
 void PurgeCoordinator::doRelease(lsn_t lsn,
                                  ReleaseType release_type,
                                  bool do_broadcast,
@@ -638,8 +638,10 @@ void PurgeCoordinator::doRelease(lsn_t lsn,
     case ReleaseType::GLOBAL:
       // Global release. Update epoch offset and last-released LSN.
       if (epoch_offset != BYTE_OFFSET_INVALID) {
-        parent_->updateEpochOffset(
-            std::make_pair(lsn_to_epoch(lsn), epoch_offset));
+        OffsetMap epoch_offsets;
+        epoch_offsets.setCounter(CounterType::BYTE_OFFSET, epoch_offset);
+        parent_->updateEpochOffsetMap(
+            std::make_pair(lsn_to_epoch(lsn), std::move(epoch_offsets)));
       }
 
       // releasing the lsn means that the lsn_to_epoch(lsn)-1 is clean and

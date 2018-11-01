@@ -31,14 +31,15 @@ read_extra_metadata(ProtocolReader& reader,
                     RECORD_flags_t flags);
 
 static void write_extra_metadata(ProtocolWriter& writer,
-                                 const ExtraMetadata& metadata);
+                                 const ExtraMetadata& metadata,
+                                 const RECORD_Header& header);
 
 RECORD_Message::RECORD_Message(const RECORD_Header& header,
                                TrafficClass tc,
                                Payload&& payload,
                                std::unique_ptr<ExtraMetadata> extra_metadata,
                                Source source,
-                               uint64_t byte_offset,
+                               OffsetMap offsets,
                                std::shared_ptr<std::string> log_group_path)
     :
 
@@ -47,7 +48,7 @@ RECORD_Message::RECORD_Message(const RECORD_Header& header,
       payload_(std::move(payload)),
       extra_metadata_(std::move(extra_metadata)),
       source_(source),
-      byte_offset_(byte_offset),
+      offsets_(std::move(offsets)),
       log_group_path_(std::move(log_group_path)) {}
 
 RECORD_Message::~RECORD_Message() {
@@ -61,19 +62,16 @@ void RECORD_Message::serialize(ProtocolWriter& writer) const {
   // expectedSize().
 
   if (extra_metadata_) {
-    ld_check(header_.flags & RECORD_Header::INCLUDES_EXTRA_METADATA);
-    ld_check(extra_metadata_->header.copyset_size ==
-             extra_metadata_->copyset.size());
-    write_extra_metadata(writer, *extra_metadata_);
-    const uint64_t offset_within_epoch = extra_metadata_->offset_within_epoch;
-    if (offset_within_epoch != BYTE_OFFSET_INVALID) {
-      writer.write(offset_within_epoch);
-    }
+    write_extra_metadata(writer, *extra_metadata_, header_);
   }
 
-  if (byte_offset_ != BYTE_OFFSET_INVALID) {
+  if (offsets_.isValid()) {
     ld_check(header_.flags & RECORD_Header::INCLUDE_BYTE_OFFSET);
-    writer.write(byte_offset_);
+    if (writer.proto() >= Compatibility::RECORD_MESSAGE_SUPPORT_OFFSET_MAP) {
+      offsets_.serialize(writer);
+    } else {
+      writer.write(offsets_.getCounter(CounterType::BYTE_OFFSET));
+    }
   }
 
   ld_check(payload_.size() < Message::MAX_LEN); // must have been checked
@@ -96,9 +94,15 @@ MessageReadResult RECORD_Message::deserialize(ProtocolReader& reader) {
     extra_metadata = read_extra_metadata(reader, header.log_id, header.flags);
   }
 
-  uint64_t byte_offset = BYTE_OFFSET_INVALID;
+  OffsetMap offsets;
   if (header.flags & RECORD_Header::INCLUDE_BYTE_OFFSET) {
-    reader.read(&byte_offset);
+    if (reader.proto() >= Compatibility::RECORD_MESSAGE_SUPPORT_OFFSET_MAP) {
+      offsets.deserialize(reader, false /* unused */);
+    } else {
+      uint64_t byte_offset = BYTE_OFFSET_INVALID;
+      reader.read(&byte_offset);
+      offsets.setCounter(CounterType::BYTE_OFFSET, byte_offset);
+    }
   }
 
   if (header.flags & RECORD_Header::DIGEST) {
@@ -164,7 +168,7 @@ MessageReadResult RECORD_Message::deserialize(ProtocolReader& reader) {
     auto m = std::make_unique<RECORD_Message>(
         header, tc, Payload(payload, payload_size), std::move(extra_metadata));
     m->expected_checksum_ = expected_checksum;
-    m->byte_offset_ = byte_offset;
+    m->offsets_ = std::move(offsets);
     return m;
   });
 }
@@ -233,6 +237,7 @@ Message::Disposition RECORD_Message::onReceived(const Address& from) {
 
   bool invalid_checksum = (verifyChecksum() != 0);
 
+  // TODO(T33977412) : send offsets
   std::unique_ptr<DataRecordOwnsPayload> record(
       new DataRecordOwnsPayload(header_.log_id,
                                 std::move(payload_),
@@ -242,7 +247,7 @@ Message::Disposition RECORD_Message::onReceived(const Address& from) {
                                 std::move(extra_metadata_),
                                 std::shared_ptr<BufferedWriteDecoder>(),
                                 0, // batch_offset
-                                byte_offset_,
+                                offsets_.getCounter(CounterType::BYTE_OFFSET),
                                 invalid_checksum));
   // We have transferred ownership of the payload.
   ld_check(!payload_.data());
@@ -273,20 +278,40 @@ std::unique_ptr<ExtraMetadata> read_extra_metadata(ProtocolReader& reader,
 
   reader.readVector(&result->copyset, result->header.copyset_size);
 
-  result->offset_within_epoch = BYTE_OFFSET_INVALID;
   if (flags & RECORD_Header::INCLUDE_OFFSET_WITHIN_EPOCH) {
-    reader.read(&result->offset_within_epoch);
+    if (reader.proto() >= Compatibility::RECORD_MESSAGE_SUPPORT_OFFSET_MAP) {
+      OffsetMap offsets_within_epoch;
+      offsets_within_epoch.deserialize(reader, false /* unused */);
+      result->offsets_within_epoch = std::move(offsets_within_epoch);
+    } else {
+      uint64_t offset_within_epoch;
+      reader.read(&offset_within_epoch);
+      result->offsets_within_epoch.setCounter(
+          CounterType::BYTE_OFFSET, offset_within_epoch);
+    }
   }
   return result;
 }
 
 void write_extra_metadata(ProtocolWriter& writer,
-                          const ExtraMetadata& metadata) {
+                          const ExtraMetadata& metadata,
+                          const RECORD_Header& header) {
+  ld_check(header.flags & RECORD_Header::INCLUDES_EXTRA_METADATA);
+  ld_check(metadata.header.copyset_size == metadata.copyset.size());
   writer.write(metadata.header);
   // Only servers should pass INCLUDES_EXTRA_METADATA, and servers should have
-  // all ben upgraded to a recent enough protocol version.
+  // all been upgraded to a recent enough protocol version.
   ld_check(writer.proto() >= Compatibility::SHARD_ID_IN_REBUILD_METADATA);
   writer.writeVector(metadata.copyset);
+  if (metadata.offsets_within_epoch.isValid()) {
+    ld_check(header.flags & RECORD_Header::INCLUDE_OFFSET_WITHIN_EPOCH);
+    if (writer.proto() >= Compatibility::RECORD_MESSAGE_SUPPORT_OFFSET_MAP) {
+      metadata.offsets_within_epoch.serialize(writer);
+    } else {
+      writer.write(
+          metadata.offsets_within_epoch.getCounter(CounterType::BYTE_OFFSET));
+    }
+  }
 }
 
 int RECORD_Message::verifyChecksum() const {
@@ -382,9 +407,7 @@ RECORD_Message::getDebugInfo() const {
   if (source_ != RECORD_Message::Source::UNKNOWN) {
     add("source", sourceToString(source_));
   }
-  if (byte_offset_ != BYTE_OFFSET_INVALID) {
-    add("byte_offset", byte_offset_);
-  }
+  add("offsets", offsets_.toString().c_str());
   if (extra_metadata_) {
     folly::dynamic map = folly::dynamic::object;
     map["last_known_good"] = extra_metadata_->header.last_known_good.val();
@@ -392,8 +415,8 @@ RECORD_Message::getDebugInfo() const {
     map["copyset_size"] = extra_metadata_->header.copyset_size;
     map["copyset"] = toString(
         extra_metadata_->copyset.data(), extra_metadata_->copyset.size());
-    map["offset_within_epoch"] = extra_metadata_->offset_within_epoch;
-
+    map["offsets_within_epoch_"] =
+        extra_metadata_->offsets_within_epoch.toString().c_str();
     add("extra_metadata", std::move(map));
   }
   return res;

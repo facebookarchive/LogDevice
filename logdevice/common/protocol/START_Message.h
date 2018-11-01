@@ -104,7 +104,6 @@ struct START_Header {
   // if it is the primary recipient (left-most in copyset) of the record in the
   // client's region.
   static const START_flags_t LOCAL_SCD_ENABLED = 1u << 11; //=2048
-
 } __attribute__((__packed__));
 
 class START_Message : public Message {

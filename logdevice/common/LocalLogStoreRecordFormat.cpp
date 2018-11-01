@@ -46,13 +46,18 @@ uint32_t getRecordWaveOrRecoveryEpoch(const STORE_Header& header,
     pstr->append(reinterpret_cast<const char*>(&(thing)), sizeof(thing)); \
   } while (0)
 
-// TODO (T33977412)
 size_t recordHeaderSizeEstimate(flags_t flags,
                                 copyset_size_t copyset_size,
-                                const Slice& optional_keys) {
+                                const Slice& optional_keys,
+                                const OffsetMap& offsets_within_epoch) {
   size_t ret = sizeof(int64_t) + sizeof(esn_t) + folly::kMaxVarintLength32 +
       sizeof(uint32_t) +
-      ((flags & FLAG_OFFSET_WITHIN_EPOCH) ? sizeof(uint64_t) : 0);
+      // TODO (T33977412) : do not add size of offset_within_epoch if
+      // FLAG_OFFSET_MAP is set
+      ((flags & FLAG_OFFSET_WITHIN_EPOCH) ? sizeof(uint64_t) : 0) +
+      ((flags & FLAG_OFFSET_MAP && flags & FLAG_OFFSET_WITHIN_EPOCH)
+           ? offsets_within_epoch.sizeInLinearBuffer()
+           : 0);
 
   if ((flags & FLAG_CUSTOM_KEY) || (flags & FLAG_OPTIONAL_KEYS)) {
     ret += sizeof(uint16_t) + optional_keys.size;
@@ -65,16 +70,6 @@ size_t recordHeaderSizeEstimate(flags_t flags,
     ret += sizeof(node_index_t) * copyset_size;
   }
 
-  return ret;
-}
-
-size_t recordHeaderSizeEstimate(flags_t flags,
-                                copyset_size_t copyset_size,
-                                const Slice& optional_keys,
-                                const OffsetMap& offsets_within_epoch) {
-  size_t ret = recordHeaderSizeEstimate(flags, copyset_size, optional_keys) +
-      ((flags & FLAG_OFFSET_MAP) ? offsets_within_epoch.sizeInLinearBuffer()
-                                 : 0);
   return ret;
 }
 

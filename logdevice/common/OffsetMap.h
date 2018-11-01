@@ -53,6 +53,12 @@ class OffsetMap : public SerializableData {
   getCounterMap() const;
 
   /**
+   * removes counter_type from counterTypeMap_
+   * @param counter_type  counter_type to remove from counterTypeMap_
+   */
+  void unsetCounter(CounterType counter_type);
+
+  /**
    * set CounterType value from CounterTypeMap
    * @param counter_type CounterType to add
    * @param counter_val  value to set for counter_type
@@ -110,6 +116,12 @@ class OffsetMap : public SerializableData {
 
   // Increment counterTypeMap_ entries based on passed OffsetMap
   OffsetMap& operator+=(const OffsetMap& om);
+
+  // Subtract two counterTypeMap_ and return a new OffsetMap object
+  OffsetMap operator-(const OffsetMap& om) const;
+
+  // Decrement counterTypeMap_ entries based on passed OffsetMap
+  OffsetMap& operator-=(const OffsetMap& om);
 
   // Check if the counterTypeMap_ are equal
   bool operator==(const OffsetMap& om) const;

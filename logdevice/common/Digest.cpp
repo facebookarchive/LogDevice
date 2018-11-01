@@ -225,6 +225,7 @@ esn_t Digest::applyBridgeRecords(esn_t last_known_good,
             RECORD_Header::HOLE | RECORD_Header::DIGEST;
 
         // create a hole record from the existing record
+        // TODO (T33977412) change attrs to take byte_offsets
         std::unique_ptr<DataRecordOwnsPayload> hole_record(
             new DataRecordOwnsPayload(
                 existing_record->logid,
@@ -296,31 +297,33 @@ esn_t Digest::applyBridgeRecords(esn_t last_known_good,
   return bridge;
 }
 
-int Digest::recomputeOffsetWithinEpoch(
+int Digest::recomputeOffsetsWithinEpoch(
     esn_t last_known_good,
-    folly::Optional<uint64_t> offset_within_epoch) {
+    folly::Optional<OffsetMap> offsets_within_epoch) {
   ld_check(digest_start_esn_ != ESN_INVALID);
-
   // nothing to change
   if (entries_.empty()) {
     return 0;
   }
 
-  // if last_known_good is invalid, recalculate byteoffset of the whole epoch
+  // if last_known_good is invalid, recalculate OffsetMap of the whole epoch
   if (last_known_good == ESN_INVALID) {
-    offset_within_epoch = 0;
+    // To make offsets_within_epoch valid
+    OffsetMap om;
+    om.setCounter(CounterType::BYTE_OFFSET, 0);
+    offsets_within_epoch = std::move(om);
   }
 
-  // if offset_within_epoch is not given, figure out offset_within_epoch from
+  // if offsets_within_epoch is not given, figure out offsets_within_epoch from
   // digest entries
-  if (!offset_within_epoch.hasValue()) {
+  if (!offsets_within_epoch.hasValue()) {
     ld_check(last_known_good >= digest_start_esn_);
     auto iter = entries_.find(last_known_good);
     if (iter == entries_.end()) {
       RATELIMIT_ERROR(
           std::chrono::seconds(10),
           10,
-          "cannot get logid:%lu e%un%u's byteoffset from digest entry",
+          "cannot get logid:%lu e%un%u's OffsetMap from digest entry",
           log_id_.val_,
           epoch_.val_,
           last_known_good.val_);
@@ -330,54 +333,57 @@ int Digest::recomputeOffsetWithinEpoch(
     ld_check(iter->second.record != nullptr);
 
     if (iter->second.record->extra_metadata_ != nullptr) {
-      offset_within_epoch =
-          iter->second.record->extra_metadata_->offset_within_epoch;
+      offsets_within_epoch =
+          iter->second.record->extra_metadata_->offsets_within_epoch;
     } else {
-      offset_within_epoch = BYTE_OFFSET_INVALID;
+      offsets_within_epoch = OffsetMap();
     }
 
   } else {
-    // if offset_within_epoch is given, in this case last_known_good should be
+    // if offsets_within_epoch is given, in this case last_known_good should be
     // exactly digest_start_esn_.val_ - 1
     ld_check(last_known_good.val_ == digest_start_esn_.val_ - 1);
   }
 
-  if (offset_within_epoch.value() == BYTE_OFFSET_INVALID) {
+  if (!offsets_within_epoch.value().isValid()) {
     RATELIMIT_ERROR(
         std::chrono::seconds(10),
         10,
-        "last known good esn logid:%lu e%un%u's byteoffset is invalid",
+        "last known good esn logid:%lu e%un%u's OffsetMap is invalid",
         log_id_.val_,
         epoch_.val_,
         last_known_good.val_);
-    // abort correct byte offset
+    // abort correct OffsetMap
     return -1;
   }
 
-  // correct byteoffset from last_known_good
+  // correct OffsetMap from last_known_good
   for (auto& kv : entries_) {
     if (kv.first <= last_known_good) {
       continue;
     }
 
     auto& entry = kv.second;
-    size_t payload_size = 0;
+    // TODO(T33977412) : Change to take into account other counters
+    OffsetMap payload_size_map;
     if (!entry.isHolePlug() && !entry.isBridgeRecord()) {
-      payload_size = entry.getPayload().size() - entry.getChecksumBytes();
+      payload_size_map.setCounter(
+          CounterType::BYTE_OFFSET,
+          entry.getPayload().size() - entry.getChecksumBytes());
     }
-    offset_within_epoch.value() += payload_size;
+    offsets_within_epoch.value() += payload_size_map;
 
     ld_check(entry.record != nullptr);
 
-    // if offset_within_epoch doesn't match, marked it has been changed
+    // if offsets_within_epoch doesn't match, marked it has been changed
     // this can ensure that mutation phase will amend the copy's metadata
-    // to have the correct byte offset
+    // to have the correct OffsetMap
     // update rebuild_matadata_
     if (entry.record->extra_metadata_ != nullptr &&
-        entry.record->extra_metadata_->offset_within_epoch !=
-            offset_within_epoch.value()) {
-      entry.record->extra_metadata_->offset_within_epoch =
-          offset_within_epoch.value();
+        entry.record->extra_metadata_->offsets_within_epoch !=
+            offsets_within_epoch.value()) {
+      entry.record->extra_metadata_->offsets_within_epoch =
+          offsets_within_epoch.value();
       entry.record->flags_ |= RECORD_Header::INCLUDE_OFFSET_WITHIN_EPOCH;
       entry.byte_offset_changed = true;
     }

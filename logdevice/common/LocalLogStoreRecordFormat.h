@@ -183,11 +183,6 @@ static_assert(CSI_FLAG_HOLE == STORE_Header::HOLE,
  * reserve an appropriate amount of memory before calling
  * formRecordHeaderBufAppend().
  */
-// TODO (T33977412)
-size_t recordHeaderSizeEstimate(flags_t flags,
-                                copyset_size_t copyset_size,
-                                const Slice& optional_keys);
-
 size_t recordHeaderSizeEstimate(flags_t flags,
                                 copyset_size_t copyset_size,
                                 const Slice& optional_keys,

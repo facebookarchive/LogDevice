@@ -546,8 +546,12 @@ void combine(const Slice& with_payload_slice,
         &optional_keys_string, optional_keys);
     optional_keys_slice = Slice::fromString(optional_keys_string);
   }
+  // TODO (T33977412) : get offsets_within_epoch from parse
+  OffsetMap offsets_within_epoch;
+  offsets_within_epoch.setCounter(
+      CounterType::BYTE_OFFSET, offset_within_epoch);
   size_t header_size_est = LocalLogStoreRecordFormat::recordHeaderSizeEstimate(
-      flags, copyset_range.size(), optional_keys_slice);
+      flags, copyset_range.size(), optional_keys_slice, offsets_within_epoch);
   size_t new_value_reserved =
       out.new_value.size() + header_size_est + payload.size();
 

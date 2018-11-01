@@ -90,6 +90,10 @@ TEST_F(RECORD_MessageTest, SerializationNoExtraMetadata) {
 TEST_F(RECORD_MessageTest, SerializationWithExtraMetadata) {
   RECORD_Header header = create_test_header();
   header.flags |= RECORD_Header::INCLUDES_EXTRA_METADATA;
+  header.flags |= RECORD_Header::INCLUDE_OFFSET_WITHIN_EPOCH;
+  OffsetMap offsets_within_epoch;
+  offsets_within_epoch.setCounter(CounterType::BYTE_OFFSET, 3);
+  OffsetMap byte_offsets;
   ExtraMetadata::Header meta_header = create_test_extra_metadata_header(3);
   std::vector<ShardID> meta_copyset{
       ShardID(4, 0), ShardID(5, 0), ShardID(9, 0)};
@@ -98,9 +102,14 @@ TEST_F(RECORD_MessageTest, SerializationWithExtraMetadata) {
   auto orig_meta = std::make_unique<ExtraMetadata>();
   orig_meta->header = meta_header;
   orig_meta->copyset.assign(meta_copyset.begin(), meta_copyset.end());
+  orig_meta->offsets_within_epoch = offsets_within_epoch;
 
-  RECORD_Message orig(
-      header, TrafficClass::REBUILD, Payload(nullptr, 0), std::move(orig_meta));
+  RECORD_Message orig(header,
+                      TrafficClass::REBUILD,
+                      Payload(nullptr, 0),
+                      std::move(orig_meta),
+                      RECORD_Message::Source::LOCAL_LOG_STORE,
+                      byte_offsets);
   struct evbuffer* evbuf = LD_EV(evbuffer_new)();
   SCOPE_EXIT {
     LD_EV(evbuffer_free)(evbuf);
@@ -119,7 +128,8 @@ TEST_F(RECORD_MessageTest, SerializationWithExtraMetadata) {
       RECORD_Message::deserialize(reader).msg);
   ASSERT_NE(read.get(), nullptr);
   RECORD_Header expected_header = header;
-  expected_header.flags = RECORD_Header::INCLUDES_EXTRA_METADATA;
+  expected_header.flags |= RECORD_Header::INCLUDES_EXTRA_METADATA;
+  expected_header.flags |= RECORD_Header::INCLUDE_OFFSET_WITHIN_EPOCH;
   ASSERT_EQ(
       0,
       memcmp(
@@ -127,6 +137,8 @@ TEST_F(RECORD_MessageTest, SerializationWithExtraMetadata) {
 
   ExtraMetadata* read_metadata = this->getExtraMetadata(*read);
   ASSERT_NE(read_metadata, nullptr);
+  ASSERT_EQ(read_metadata->offsets_within_epoch, offsets_within_epoch);
+  ASSERT_EQ(read->offsets_, orig.offsets_);
   ASSERT_EQ(
       0, memcmp(&meta_header, &read_metadata->header, sizeof meta_header));
 

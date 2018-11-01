@@ -20,6 +20,7 @@
 #include "logdevice/server/read_path/LocalLogStoreReader.h"
 #include "logdevice/server/read_path/ServerReadStream.h"
 #include "logdevice/server/storage_tasks/StorageTask.h"
+#include "logdevice/common/OffsetMap.h"
 
 namespace facebook { namespace logdevice {
 
@@ -71,6 +72,6 @@ class EpochOffsetStorageTask : public StorageTask {
   epoch_t epoch_;
 
   Status status_{E::UNKNOWN};
-  uint64_t result_offset_;
+  OffsetMap result_offsets_;
 };
 }} // namespace facebook::logdevice

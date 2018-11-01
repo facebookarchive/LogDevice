@@ -19,6 +19,7 @@
 #include "logdevice/common/AdminCommandTable-fwd.h"
 #include "logdevice/common/AtomicOptional.h"
 #include "logdevice/common/GetSeqStateRequest-fwd.h"
+#include "logdevice/common/OffsetMap.h"
 #include "logdevice/common/Seal.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Err.h"
@@ -191,7 +192,8 @@ class LogStorageState {
 
   folly::Optional<epoch_t> getLastCleanEpoch() const;
 
-  folly::Optional<std::pair<epoch_t, uint64_t>> getEpochOffset() const;
+  const folly::Optional<std::pair<epoch_t, OffsetMap>>&
+  getEpochOffsetMap() const;
 
   std::chrono::seconds getLogRemovalTime() const {
     return log_removal_time_.load();
@@ -254,7 +256,7 @@ class LogStorageState {
 
   void updateLastCleanEpoch(epoch_t epoch);
 
-  void updateEpochOffset(std::pair<epoch_t, uint64_t>);
+  void updateEpochOffsetMap(std::pair<epoch_t, OffsetMap>);
 
   /**
    * Looks up the worker in the set of workers subscribed to the log.
@@ -440,13 +442,13 @@ class LogStorageState {
   std::atomic<std::chrono::seconds> log_removal_time_{std::chrono::seconds(0)};
 
   using RWLock = folly::SharedMutexWritePriority;
-  // Lock to update and read latest_epoch_offset_ safely.
+  // Lock to update and read latest_epoch_offsets_ safely.
   mutable RWLock rw_lock_;
-  // Pair of latest updated epoch and corresponding epoch offset.
+  // Pair of latest updated epoch and corresponding epoch offsets.
   // This value get updated from sequencer once recover() get triggered.
   // It is not updated with RELEASE messages, so epoch of last_released_lsn_
-  // can be different from epoch in latest_epoch_offset_ pair.
-  folly::Optional<std::pair<epoch_t, uint64_t>> latest_epoch_offset_;
+  // can be different from epoch in latest_epoch_offsets_ pair.
+  folly::Optional<std::pair<epoch_t, OffsetMap>> latest_epoch_offsets_;
 
   // Data needed to manage retrying sending ReleaseRequests to workers.
   struct RetryRelease {

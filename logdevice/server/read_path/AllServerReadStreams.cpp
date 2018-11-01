@@ -330,8 +330,8 @@ void AllServerReadStreams::onEpochOffsetTask(EpochOffsetStorageTask& task) {
   stream->epoch_task_in_flight = false;
 
   if (task.status_ == E::OK) {
-    task.stream_.get()->epoch_offset_ =
-        std::make_pair(task.epoch_, task.result_offset_);
+    task.stream_.get()->epoch_offsets_ =
+        std::make_pair(task.epoch_, task.result_offsets_);
   } else {
     ld_error("Got error while executing EpochOffsetStorageTask for epoch %u "
              "in log %ld with status=%s",

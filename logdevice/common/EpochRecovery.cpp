@@ -471,9 +471,9 @@ bool EpochRecovery::startMutations() {
   ld_check(mutation_set.size() <= recovery_set_.size());
   ld_check(mutation_set.size() == mutation_set_size_);
 
-  //// Perform final processing on the Digest recevied:
+  //// Perform final processing on the Digest received:
 
-  // 1) discard entires whose esn < lng_. For entry == lng (if exist), it is
+  // 1) discard entries whose esn < lng_. For entry == lng (if exist), it is
   // not trimmed until the tail record is decided.
   if (lng_ >= ESN_MIN) {
     digest_.trim(esn_t(lng_.val_ - 1));
@@ -494,7 +494,7 @@ bool EpochRecovery::startMutations() {
   // 3) finalize the digest by
   //    a. applying bridge record received and compute the bridge esn for the
   //       epoch. The tail record of the epoch is also determined.
-  //    b. recompute offset within the epoch
+  //    b. recompute offsets within the epoch
 
   bridge_esn_ = digest_.applyBridgeRecords(lng_, &tail_esn_);
   ld_check(bridge_esn_ >= lng_ || bridge_esn_ == ESN_INVALID);
@@ -502,9 +502,9 @@ bool EpochRecovery::startMutations() {
 
   int rv;
   if (lng_ == ESN_INVALID || lng_ >= digest_start_esn_) {
-    // lng is zero or in the digest, Digest can compute byteoffset to the end of
+    // lng is zero or in the digest, Digest can compute OffsetMap to the end of
     // epoch by itself
-    rv = digest_.recomputeOffsetWithinEpoch(lng_);
+    rv = digest_.recomputeOffsetsWithinEpoch(lng_);
   } else {
     // lng must be exactly one esn before the digest start esn
     ld_check(tail_record_from_sealed_.isValid());
@@ -512,9 +512,12 @@ bool EpochRecovery::startMutations() {
     ld_check(digest_start_esn_ > ESN_INVALID);
     ld_check(lsn_to_esn(tail_record_from_sealed_.header.lsn).val_ ==
              digest_start_esn_.val_ - 1);
-    rv = digest_.recomputeOffsetWithinEpoch(
+    ld_check(tail_record_from_sealed_.offsets_map_.getCounter(
+                 CounterType::BYTE_OFFSET) ==
+             tail_record_from_sealed_.header.u.offset_within_epoch);
+    rv = digest_.recomputeOffsetsWithinEpoch(
         lsn_to_esn(tail_record_from_sealed_.header.lsn),
-        tail_record_from_sealed_.header.u.offset_within_epoch);
+        tail_record_from_sealed_.offsets_map_);
   }
 
   if (rv != 0 && deps_->getSettings().byte_offsets) {
@@ -650,12 +653,12 @@ void EpochRecovery::updateEpochTailRecord() {
         final_tail_record_ = gen_tail_record_for_dataloss();
         STAT_INCR(deps_->getStats(), epoch_recovery_tail_record_hole_plug);
       } else {
-        uint64_t offset_within_epoch = BYTE_OFFSET_INVALID;
+        OffsetMap offsets_within_epoch;
         if ((tail_entry->record->flags_ &
              RECORD_Header::INCLUDE_OFFSET_WITHIN_EPOCH) &&
             tail_entry->record->extra_metadata_ != nullptr) {
-          offset_within_epoch =
-              tail_entry->record->extra_metadata_->offset_within_epoch;
+          offsets_within_epoch =
+              tail_entry->record->extra_metadata_->offsets_within_epoch;
         }
 
         TailRecordHeader::flags_t flags = TailRecordHeader::OFFSET_WITHIN_EPOCH;
@@ -672,7 +675,8 @@ void EpochRecovery::updateEpochTailRecord() {
         } else {
           flags |= TailRecordHeader::CHECKSUM_PARITY;
         }
-
+        uint64_t offset_within_epoch =
+            offsets_within_epoch.getCounter(CounterType::BYTE_OFFSET);
         final_tail_record_.reset(
             {tail_entry->record->logid,
              tail_entry->record->attrs.lsn,
@@ -680,7 +684,8 @@ void EpochRecovery::updateEpochTailRecord() {
              {offset_within_epoch},
              flags,
              {}},
-            std::move(ph));
+            std::move(ph),
+            std::move(offsets_within_epoch));
       }
     }
   }
@@ -976,7 +981,7 @@ EpochRecovery::createMutationHeader(esn_t esn,
                                     uint64_t timestamp,
                                     STORE_flags_t flags,
                                     DataRecordOwnsPayload* record) const {
-  uint64_t offset_within_epoch = BYTE_OFFSET_INVALID;
+  OffsetMap offsets_within_epoch;
   NodeID my_node_id = deps_->getMyNodeID();
 
   if (record != nullptr) {
@@ -985,8 +990,11 @@ EpochRecovery::createMutationHeader(esn_t esn,
     }
     if (record->flags_ & RECORD_Header::INCLUDE_OFFSET_WITHIN_EPOCH) {
       flags |= STORE_Header::OFFSET_WITHIN_EPOCH;
+      if (deps_->getSettings().enable_offset_map) {
+        flags |= STORE_Header::OFFSET_MAP;
+      }
       if (record->extra_metadata_) {
-        offset_within_epoch = record->extra_metadata_->offset_within_epoch;
+        offsets_within_epoch = record->extra_metadata_->offsets_within_epoch;
       }
     }
   }
@@ -994,7 +1002,10 @@ EpochRecovery::createMutationHeader(esn_t esn,
   STORE_Extra extra;
   extra.recovery_id = id_;
   extra.recovery_epoch = deps_->getSealEpoch();
-  extra.offset_within_epoch = offset_within_epoch;
+  // TODO(T33977412) : remove offset_within_epoch from STORE_Extra
+  extra.offset_within_epoch =
+      offsets_within_epoch.getCounter(CounterType::BYTE_OFFSET);
+  extra.offsets_within_epoch = std::move(offsets_within_epoch);
 
   return std::make_pair(
       STORE_Header{
@@ -1012,7 +1023,7 @@ EpochRecovery::createMutationHeader(esn_t esn,
                   .count()), // mutation timeout
           my_node_id,        // sequencer node id
       },
-      extra);
+      std::move(extra));
 }
 
 bool EpochRecovery::restart() {

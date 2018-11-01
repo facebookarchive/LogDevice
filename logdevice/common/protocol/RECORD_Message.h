@@ -12,6 +12,7 @@
 #include <boost/noncopyable.hpp>
 
 #include "logdevice/common/CopySet.h"
+#include "logdevice/common/OffsetMap.h"
 #include "logdevice/common/protocol/Message.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Record.h"
@@ -64,7 +65,7 @@ struct RECORD_Header {
 
   static const RECORD_flags_t INCLUDE_BYTE_OFFSET = 1u << 8; //=256
 
-  // If set, offset within epoch value is going to be included into
+  // If set, offsets within epoch value is going to be included into
   // rebuilding metadata.
   static const RECORD_flags_t INCLUDE_OFFSET_WITHIN_EPOCH = 1u << 9; //=4096
 
@@ -115,7 +116,7 @@ struct ExtraMetadata {
   } __attribute__((__packed__));
   Header header;
   copyset_t copyset;
-  uint64_t offset_within_epoch;
+  OffsetMap offsets_within_epoch;
 };
 
 class RECORD_Message : public Message, boost::noncopyable {
@@ -143,7 +144,7 @@ class RECORD_Message : public Message, boost::noncopyable {
                  Payload&& payload,
                  std::unique_ptr<ExtraMetadata> extra_metadata,
                  Source source = Source::LOCAL_LOG_STORE,
-                 uint64_t byte_offset = BYTE_OFFSET_INVALID,
+                 OffsetMap offsets = OffsetMap(),
                  std::shared_ptr<std::string> log_group_path = nullptr);
 
   /**
@@ -204,7 +205,7 @@ class RECORD_Message : public Message, boost::noncopyable {
   // used only on the sending end
   Source source_{Source::UNKNOWN};
 
-  uint64_t byte_offset_;
+  OffsetMap offsets_;
 
   // used for per-log-group stats on the server side, can be nullptr if log
   // group is unknown. Doesn't get serialized into the message.

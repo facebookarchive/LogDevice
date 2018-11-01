@@ -142,25 +142,26 @@ folly::Optional<epoch_t> LogStorageState::getLastCleanEpoch() const {
   return result;
 }
 
-folly::Optional<std::pair<epoch_t, uint64_t>>
-LogStorageState::getEpochOffset() const {
+const folly::Optional<std::pair<epoch_t, OffsetMap>>&
+LogStorageState::getEpochOffsetMap() const {
   RWLock::ReadHolder read_guard(rw_lock_);
-  return latest_epoch_offset_;
+  return latest_epoch_offsets_;
 }
 
 void LogStorageState::updateLastCleanEpoch(epoch_t epoch) {
   last_clean_epoch_.fetchMax(epoch.val_);
 }
 
-void LogStorageState::updateEpochOffset(
-    std::pair<epoch_t, uint64_t> epoch_offset) {
+void LogStorageState::updateEpochOffsetMap(
+    std::pair<epoch_t, OffsetMap> epoch_offsets) {
   RWLock::WriteHolder write_guard(rw_lock_);
-  if (latest_epoch_offset_.hasValue() &&
-      latest_epoch_offset_.value().first < epoch_offset.first) {
+  if (latest_epoch_offsets_.hasValue() &&
+      latest_epoch_offsets_.value().first < epoch_offsets.first) {
     // No updates needed for older epoch.
     return;
   }
-  latest_epoch_offset_.assign(epoch_offset);
+  latest_epoch_offsets_.assign(
+      std::make_pair(epoch_offsets.first, std::move(epoch_offsets.second)));
 }
 
 int LogStorageState::updateTrimPoint(lsn_t new_val) {
@@ -409,10 +410,11 @@ void LogStorageState::getDebugInfo(InfoLogStorageStateTable& table) const {
     table.set<12>(last_clean.value());
   }
 
-  auto latest_epoch = getEpochOffset();
+  // TODO(T33977412) : Change to have tables print OffsetMap
+  auto latest_epoch = getEpochOffsetMap();
   if (latest_epoch.hasValue()) {
     table.set<13>(latest_epoch->first);
-    table.set<14>(latest_epoch->second);
+    table.set<14>(latest_epoch->second.getCounter(CounterType::BYTE_OFFSET));
   }
 
   table.set<15>(permanent_error_.load());

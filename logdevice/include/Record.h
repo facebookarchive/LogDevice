@@ -19,6 +19,7 @@
 
 #include <folly/Optional.h>
 
+#include "logdevice/common/OffsetMap.h"
 #include "logdevice/include/types.h"
 
 namespace facebook { namespace logdevice {
@@ -96,6 +97,10 @@ struct DataRecordAttributes {
   // up to this record. Set as BYTE_OFFSET_INVALID if this attribute was not
   // requested by client (see includeByteOffset() reader option) or if it is
   // not available to storage nodes.
+  // TODO(T33977412) : Replace byte_offset with new OffsetMap structure.
+  // This is a map of <CounterType, uint64_t>, currently only support
+  // CounterType::BYTE_OFFSET which is the same as the current uint64_t
+  // byte_offset
   uint64_t byte_offset;
 };
 

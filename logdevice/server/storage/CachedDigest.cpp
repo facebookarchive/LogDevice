@@ -299,6 +299,7 @@ CachedDigest::shipRecord(esn_t esn,
       record.payload_raw.size > 0 ? record.payload_raw.data : nullptr,
       record.payload_raw.size};
 
+  // TODO(T33977412) : Edit record to contain OffsetMap
   // add extra metadata if requested
   std::unique_ptr<ExtraMetadata> extra_metadata = nullptr;
   if (includeExtraMetadata()) {
@@ -308,11 +309,11 @@ CachedDigest::shipRecord(esn_t esn,
     extra_metadata->header.wave = record.wave_or_recovery_epoch;
     extra_metadata->header.copyset_size = record.copyset.size();
     extra_metadata->copyset = record.copyset;
-    extra_metadata->offset_within_epoch = record.offset_within_epoch;
+    extra_metadata->offsets_within_epoch.setCounter(
+        CounterType::BYTE_OFFSET, record.offset_within_epoch);
   }
 
-  if (extra_metadata &&
-      extra_metadata->offset_within_epoch != BYTE_OFFSET_INVALID) {
+  if (extra_metadata && extra_metadata->offsets_within_epoch.isValid()) {
     header.flags |= RECORD_Header::INCLUDE_OFFSET_WITHIN_EPOCH;
   }
 

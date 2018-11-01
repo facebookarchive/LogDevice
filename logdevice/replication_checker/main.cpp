@@ -1002,7 +1002,7 @@ class LogChecker : public std::enable_shared_from_this<LogChecker> {
     folly::Range<const ShardID*> copyset(copies.begin()->second.copyset.begin(),
                                          copies.begin()->second.copyset.end());
     bytes_ += LocalLogStoreRecordFormat::recordHeaderSizeEstimate(
-        copies.begin()->second.flags, copyset.size(), Slice());
+        copies.begin()->second.flags, copyset.size(), Slice(), OffsetMap());
 
     refreshEpochMetaData(lsn);
     copyset_size_t replication_factor =

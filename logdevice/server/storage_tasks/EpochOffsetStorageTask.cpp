@@ -28,8 +28,7 @@ EpochOffsetStorageTask::EpochOffsetStorageTask(WeakRef<ServerReadStream> stream,
     : StorageTask(StorageTask::Type::EPOCH_OFFSET),
       stream_(std::move(stream)),
       log_id_(log_id),
-      epoch_(epoch),
-      result_offset_(BYTE_OFFSET_INVALID) {
+      epoch_(epoch) {
   ld_check(stream_);
 }
 
@@ -47,7 +46,9 @@ void EpochOffsetStorageTask::execute() {
                                          true); // allow_blocking_io
   if (rv == 0) {
     status_ = E::OK;
-    result_offset_ = metadata.header_.epoch_end_offset;
+    ld_check(metadata.epoch_end_offsets_.getCounter(CounterType::BYTE_OFFSET) ==
+             metadata.header_.epoch_end_offset);
+    result_offsets_ = metadata.epoch_end_offsets_;
     return;
   } else if (rv != 0 && err == E::LOCAL_LOG_STORE_READ) {
     ld_error("Error while reading PerEpochLogMetadata in "
@@ -70,8 +71,11 @@ void EpochOffsetStorageTask::execute() {
     status_ = err;
     return;
   }
-  result_offset_ =
-      metadata.header_.epoch_end_offset - metadata.header_.epoch_size;
+  ld_check(metadata.epoch_end_offsets_.getCounter(CounterType::BYTE_OFFSET) ==
+           metadata.header_.epoch_end_offset);
+  ld_check(metadata.epoch_size_map_.getCounter(CounterType::BYTE_OFFSET) ==
+           metadata.header_.epoch_size);
+  result_offsets_ = metadata.epoch_end_offsets_ - metadata.epoch_size_map_;
 }
 
 void EpochOffsetStorageTask::onDone() {
@@ -79,7 +83,7 @@ void EpochOffsetStorageTask::onDone() {
 }
 
 void EpochOffsetStorageTask::onDropped() {
-  ld_check(result_offset_ == BYTE_OFFSET_INVALID);
+  ld_check(!result_offsets_.isValid());
   ServerWorker::onThisThread()->serverReadStreams().onEpochOffsetTask(*this);
 }
 }} // namespace facebook::logdevice

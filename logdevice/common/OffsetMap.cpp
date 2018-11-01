@@ -47,6 +47,10 @@ void OffsetMap::clear() {
   this->counterTypeMap_.clear();
 }
 
+void OffsetMap::unsetCounter(CounterType counter_type) {
+  counterTypeMap_.erase(counter_type);
+}
+
 bool OffsetMap::isValidOffset(const CounterType counter_type) const {
   return counterTypeMap_.find(counter_type) != counterTypeMap_.end();
 }
@@ -106,6 +110,20 @@ OffsetMap OffsetMap::operator+(const OffsetMap& om) const {
   return result;
 }
 
+OffsetMap& OffsetMap::operator-=(const OffsetMap& om) {
+  for (auto& it : om.counterTypeMap_) {
+    ld_check(counterTypeMap_[it.first] >= it.second);
+    this->counterTypeMap_[it.first] -= it.second;
+  }
+  return *this;
+}
+
+OffsetMap OffsetMap::operator-(const OffsetMap& om) const {
+  OffsetMap result = *this;
+  result -= om;
+  return result;
+}
+
 OffsetMap& OffsetMap::operator=(const OffsetMap& om) noexcept {
   this->counterTypeMap_ = om.getCounterMap();
   return *this;
@@ -146,5 +164,4 @@ std::string OffsetMap::toString() const {
   res += "}";
   return res;
 }
-
 }} // namespace facebook::logdevice

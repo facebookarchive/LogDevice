@@ -69,6 +69,9 @@ enum ProtocolVersion : uint16_t {
 
   CLEAN_MESSAGE_SUPPORT_OFFSET_MAP, // = 86
 
+  // RECORD_Message contains offsets in OffsetMap structure
+  RECORD_MESSAGE_SUPPORT_OFFSET_MAP, // = 87
+
   // NOTE: insert new protocol versions here
 
   // Maximum version number of the protocol this version of LogDevice
@@ -100,6 +103,7 @@ static_assert(STORE_E2E_TRACING_SUPPORT == 83, "");
 static_assert(OFFSET_MAP_SUPPORT == 84, "");
 static_assert(OFFSET_MAP_SUPPORT_IN_SEALED_MSG == 85, "");
 static_assert(CLEAN_MESSAGE_SUPPORT_OFFSET_MAP == 86, "");
+static_assert(RECORD_MESSAGE_SUPPORT_OFFSET_MAP == 87, "");
 
 constexpr uint16_t MIN_PROTOCOL_SUPPORTED = PROTOCOL_VERSION_LOWER_BOUND + 1;
 constexpr uint16_t MAX_PROTOCOL_SUPPORTED = PROTOCOL_VERSION_UPPER_BOUND - 1;

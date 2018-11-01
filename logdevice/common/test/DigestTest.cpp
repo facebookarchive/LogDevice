@@ -746,7 +746,7 @@ TEST_F(DigestTest, recomputeOffsetWithinEpoch) {
            payload_size,
            payload_size * 5);
 
-  digest_->recomputeOffsetWithinEpoch(lng_);
+  digest_->recomputeOffsetsWithinEpoch(lng_);
 
   size_t nentries = 0;
   for (auto& it : *digest_) {
@@ -763,7 +763,9 @@ TEST_F(DigestTest, recomputeOffsetWithinEpoch) {
         checkMutation(entry, /*complete_digest*/ true);
         ASSERT_TRUE(needs_mutation_);
         EXPECT_EQ(
-            payload_size, entry.record->extra_metadata_->offset_within_epoch);
+            payload_size,
+            entry.record->extra_metadata_->offsets_within_epoch.getCounter(
+                CounterType::BYTE_OFFSET));
         break;
       case 2:
         checkMutation(entry);
@@ -772,8 +774,10 @@ TEST_F(DigestTest, recomputeOffsetWithinEpoch) {
         ASSERT_SUCCESS_SET(N0, N2, N3);
         ASSERT_CONFLICT_SET();
         ASSERT_RECORD(entry, RecordType::MUTATED, seal_epoch_.val_);
-        EXPECT_EQ(payload_size * 2,
-                  entry.record->extra_metadata_->offset_within_epoch);
+        EXPECT_EQ(
+            payload_size * 2,
+            entry.record->extra_metadata_->offsets_within_epoch.getCounter(
+                CounterType::BYTE_OFFSET));
         break;
       case 3:
         checkMutation(entry);
@@ -782,8 +786,10 @@ TEST_F(DigestTest, recomputeOffsetWithinEpoch) {
         ASSERT_SUCCESS_SET(N3);
         ASSERT_CONFLICT_SET();
         ASSERT_RECORD(entry, RecordType::HOLE, seal_epoch_.val_);
-        EXPECT_EQ(payload_size * 2,
-                  entry.record->extra_metadata_->offset_within_epoch);
+        EXPECT_EQ(
+            payload_size * 2,
+            entry.record->extra_metadata_->offsets_within_epoch.getCounter(
+                CounterType::BYTE_OFFSET));
         break;
       case 4:
         checkMutation(entry);
@@ -792,8 +798,10 @@ TEST_F(DigestTest, recomputeOffsetWithinEpoch) {
         ASSERT_SUCCESS_SET();
         ASSERT_CONFLICT_SET(N1, N3);
         ASSERT_RECORD(entry, RecordType::MUTATED, 49);
-        EXPECT_EQ(payload_size * 3,
-                  entry.record->extra_metadata_->offset_within_epoch);
+        EXPECT_EQ(
+            payload_size * 3,
+            entry.record->extra_metadata_->offsets_within_epoch.getCounter(
+                CounterType::BYTE_OFFSET));
         break;
       case 5:
         checkMutation(entry);
@@ -802,8 +810,10 @@ TEST_F(DigestTest, recomputeOffsetWithinEpoch) {
         ASSERT_SUCCESS_SET();
         ASSERT_CONFLICT_SET();
         ASSERT_RECORD(entry, RecordType::MUTATED, seal_epoch_.val_);
-        EXPECT_EQ(payload_size * 4,
-                  entry.record->extra_metadata_->offset_within_epoch);
+        EXPECT_EQ(
+            payload_size * 4,
+            entry.record->extra_metadata_->offsets_within_epoch.getCounter(
+                CounterType::BYTE_OFFSET));
         break;
       default:
         break;
