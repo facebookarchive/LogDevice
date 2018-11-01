@@ -13,7 +13,6 @@
 #include <ostream>
 
 #include <folly/Conv.h>
-#include <folly/json.h>
 #include <folly/synchronization/Baton.h>
 #include <gtest/gtest.h>
 
@@ -32,60 +31,6 @@ namespace {
 const std::string kFoo{"/foo"};
 const std::string kBar{"/bar"};
 std::unique_ptr<NodesConfigurationStore> store{nullptr};
-
-const std::string kValue{"value"};
-const std::string kVersion{"version"};
-
-struct TestEntry {
-  explicit TestEntry(version_t version, std::string value)
-      : version_(version), value_(std::move(value)) {}
-
-  explicit TestEntry(version_t::raw_type version, std::string value)
-      : version_(version), value_(std::move(value)) {}
-
-  static TestEntry fromSerialized(folly::StringPiece buf) {
-    auto d = folly::parseJson(buf);
-    version_t version{
-        folly::to<typename version_t::raw_type>(d.at(kVersion).getString())};
-    return TestEntry{version, d.at(kValue).getString()};
-  }
-
-  std::string serialize() const {
-    folly::dynamic d = folly::dynamic::object(kValue, value_)(
-        kVersion, folly::to<std::string>(version_.val()));
-    return folly::toJson(d);
-  }
-
-  version_t version() const {
-    return version_;
-  }
-
-  std::string value() const {
-    return value_;
-  }
-
-  friend std::ostream& operator<<(std::ostream& os, const TestEntry& entry) {
-    return os << entry.serialize(); // whatever needed to print bar to os
-  }
-
- private:
-  version_t version_;
-  std::string value_;
-
-  friend bool operator==(const TestEntry& lhs, const TestEntry& rhs);
-};
-
-bool operator==(const TestEntry& lhs, const TestEntry& rhs) {
-  return lhs.version_ == rhs.version_ && lhs.value_ == rhs.value_;
-}
-
-folly::Optional<version_t> extractVersionFn(folly::StringPiece buf) {
-  try {
-    return TestEntry::fromSerialized(buf).version();
-  } catch (const std::runtime_error&) {
-    return folly::none;
-  }
-}
 
 void checkAndResetBaton(folly::Baton<>& b) {
   using namespace std::chrono_literals;
@@ -251,32 +196,32 @@ void runMultiThreadedTests(std::unique_ptr<NodesConfigurationStore> store) {
 } // namespace
 
 TEST(NodesConfigurationStore, basic) {
-  runBasicTests(
-      std::make_unique<InMemNodesConfigurationStore>(extractVersionFn));
+  runBasicTests(std::make_unique<InMemNodesConfigurationStore>(
+      TestEntry::extractVersionFn));
 }
 
 TEST(NodesConfigurationStore, basicMT) {
-  runMultiThreadedTests(
-      std::make_unique<InMemNodesConfigurationStore>(extractVersionFn));
+  runMultiThreadedTests(std::make_unique<InMemNodesConfigurationStore>(
+      TestEntry::extractVersionFn));
 }
 
 TEST(NodesConfigurationStore, zk_basic) {
   auto z = std::make_shared<ZookeeperClientInMemory>(
-      "unused",
+      "unused quorum",
       ZookeeperClientInMemory::state_map_t{
           {kFoo,
            {TestEntry{0, "initValue"}.serialize(), zk::Stat{.version_ = 4}}}});
   runBasicTests(std::make_unique<ZookeeperNodesConfigurationStore>(
-                    extractVersionFn, std::move(z)),
+                    TestEntry::extractVersionFn, std::move(z)),
                 /* initialWrite = */ false);
 }
 
 TEST(NodesConfigurationStore, zk_basicMT) {
   auto z = std::make_shared<ZookeeperClientInMemory>(
-      "unused",
+      "unused quorum",
       ZookeeperClientInMemory::state_map_t{
           {kFoo,
            {TestEntry{0, "initValue"}.serialize(), zk::Stat{.version_ = 4}}}});
   runMultiThreadedTests(std::make_unique<ZookeeperNodesConfigurationStore>(
-      extractVersionFn, std::move(z)));
+      TestEntry::extractVersionFn, std::move(z)));
 }

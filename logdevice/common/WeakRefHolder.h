@@ -30,7 +30,7 @@ namespace facebook { namespace logdevice {
  *   };
  *
  *   auto object = std::make_unique<Object>();
- *   Ref ref = object->holder->ref()
+ *   Ref ref = object->holder.ref()
  *
  *   {
  *   ld_check(ref);                 // Ref is valid since holder is still alive

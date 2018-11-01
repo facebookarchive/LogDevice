@@ -7,14 +7,14 @@
  */
 #pragma once
 
+#include <folly/json.h>
+
 #include "logdevice/common/configuration/nodes/NodesConfigurationStore.h"
 
 namespace facebook { namespace logdevice { namespace configuration {
 namespace nodes {
 
 class InMemNodesConfigurationStore : public NodesConfigurationStore {
-  using version_t = NodesConfigurationStore::version_t;
-
  public:
   explicit InMemNodesConfigurationStore(extract_version_fn f)
       : configs_(), extract_fn_(std::move(f)) {}
@@ -38,5 +38,45 @@ class InMemNodesConfigurationStore : public NodesConfigurationStore {
   // granular synchronization.
   folly::Synchronized<std::unordered_map<std::string, std::string>> configs_;
   extract_version_fn extract_fn_;
+};
+
+struct TestEntry {
+ private:
+  using version_t = NodesConfigurationStore::version_t;
+
+ public:
+  constexpr static const folly::StringPiece kValue{"value"};
+  constexpr static const folly::StringPiece kVersion{"version"};
+
+  static version_t extractVersionFn(folly::StringPiece buf);
+
+  explicit TestEntry(version_t version, std::string value)
+      : version_(version), value_(std::move(value)) {}
+  explicit TestEntry(version_t::raw_type version, std::string value)
+      : version_(version), value_(std::move(value)) {}
+
+  static TestEntry fromSerialized(folly::StringPiece buf);
+
+  std::string serialize() const;
+
+  version_t version() const {
+    return version_;
+  }
+
+  std::string value() const {
+    return value_;
+  }
+
+  friend std::ostream& operator<<(std::ostream& os, const TestEntry& entry) {
+    return os << entry.serialize(); // whatever needed to print bar to os
+  }
+
+  bool operator==(const TestEntry& other) const {
+    return version_ == other.version_ && value_ == other.value_;
+  }
+
+ private:
+  version_t version_;
+  std::string value_;
 };
 }}}} // namespace facebook::logdevice::configuration::nodes

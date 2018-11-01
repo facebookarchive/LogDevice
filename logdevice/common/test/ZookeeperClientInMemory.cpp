@@ -209,6 +209,8 @@ int ZookeeperClientInMemory::getData(std::string path, data_callback_t cb) {
     auto callback =
         std::unique_ptr<data_callback_t>(const_cast<data_callback_t*>(
             reinterpret_cast<const data_callback_t*>(context)));
+    ld_check(callback != nullptr);
+    ld_check(*callback);
     if (rc == ZOK) {
       ld_check_ge(value_len, 0);
       ld_check(stat);
@@ -242,6 +244,7 @@ int ZookeeperClientInMemory::setData(std::string path,
         std::unique_ptr<stat_callback_t>(const_cast<stat_callback_t*>(
             reinterpret_cast<const stat_callback_t*>(context)));
     ld_check(callback != nullptr);
+    ld_check(*callback);
     if (rc == ZOK) {
       ld_check(stat);
       (*callback)(rc, zk::Stat{stat->version});

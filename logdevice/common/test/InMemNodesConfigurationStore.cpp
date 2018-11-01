@@ -108,4 +108,26 @@ Status InMemNodesConfigurationStore::updateConfigSync(
   }
   return Status::OK;
 }
+
+/* static */ constexpr const folly::StringPiece TestEntry::kValue;
+/* static */ constexpr const folly::StringPiece TestEntry::kVersion;
+
+/* static */ NodesConfigurationStore::version_t
+TestEntry::extractVersionFn(folly::StringPiece buf) {
+  return TestEntry::fromSerialized(buf).version();
+}
+
+/* static */
+TestEntry TestEntry::fromSerialized(folly::StringPiece buf) {
+  auto d = folly::parseJson(buf);
+  version_t version{
+      folly::to<typename version_t::raw_type>(d.at(kVersion).getString())};
+  return TestEntry{version, d.at(kValue).getString()};
+}
+
+std::string TestEntry::serialize() const {
+  folly::dynamic d = folly::dynamic::object(kValue, value_)(
+      kVersion, folly::to<std::string>(version_.val()));
+  return folly::toJson(d);
+}
 }}}} // namespace facebook::logdevice::configuration::nodes
