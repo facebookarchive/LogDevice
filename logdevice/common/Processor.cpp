@@ -309,17 +309,19 @@ int Processor::getAllWorkersCount() const {
 }
 
 worker_id_t Processor::selectWorkerRandomly(uint64_t seed, WorkerType type) {
-  return worker_id_t(folly::hash::twang_mix64(seed) % getWorkerCount(type));
+  auto count = getWorkerCount(type);
+  ld_check_gt(count, 0);
+  return worker_id_t(folly::hash::twang_mix64(seed) % count);
 }
 
 int Processor::getTargetThreadForRequest(const std::unique_ptr<Request>& rq) {
   WorkerType worker_type = rq->getWorkerTypeAffinity();
   const int nworkers = getWorkerCount(worker_type);
   int target_thread = rq->getThreadAffinity(nworkers);
-  ld_check(nworkers > 0);
+  ld_check_gt(nworkers, 0);
   // target_thread can be > nworkers if the target thread is gossip or admin
   // api worker
-  ld_check(target_thread >= -1);
+  ld_check_ge(target_thread, -1);
 
   // If the Request does not care about which thread it runs on, schedule it
   // round-robin.
