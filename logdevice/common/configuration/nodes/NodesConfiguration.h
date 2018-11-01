@@ -116,6 +116,8 @@ class NodesConfiguration {
   std::shared_ptr<const NodesConfiguration>
   withVersion(membership::MembershipVersion::Type version) const;
 
+  bool operator==(const NodesConfiguration& rhs) const;
+
  private:
   std::shared_ptr<const ServiceDiscoveryConfig> service_discovery_;
   std::shared_ptr<const SequencerConfig> sequencer_config_;
@@ -154,6 +156,7 @@ class NodesConfiguration {
   void recomputeConfigMetadata();
 
   friend class NodesConfigLegacyConverter;
+  friend class NodesConfigurationCodecFlatBuffers;
 };
 
 }}}} // namespace facebook::logdevice::configuration::nodes

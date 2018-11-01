@@ -1,0 +1,104 @@
+/**
+ * Copyright (c) 2018-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+// Important: regenerate flatbuffer structure definitions if you change this:
+// flatc --cpp --scoped-enums --keep-prefix <your-flatbuffer.fbs>
+
+// Note: use --keep-prefix in `flatc' to preserve the relative path of the include,
+// however, for flatbuffers version not supporting the option, you have to manually
+// edit the include file path in the generated file
+include "../../membership/MembershipCodec.fbs";
+
+namespace facebook.logdevice.configuration.nodes.flat_buffer_codec;
+
+table NodeServiceDiscovery {
+  address: string;
+  gossip_address: string;
+  // empty string means the optional field is not provided
+  ssl_address: string;
+  admin_address: string;
+  location: string;
+  roles: ulong;
+  hostname: string;
+}
+
+table ServiceDiscoveryConfigMapItem {
+  // index
+  node_idx: ushort;
+  node_attribute: NodeServiceDiscovery;
+}
+
+table ServiceDiscoveryConfig {
+   node_states: [ServiceDiscoveryConfigMapItem];
+}
+
+table SequencerNodeAttribute {
+}
+
+table SequencerAttributeConfigMapItem {
+  // index
+  node_idx: ushort;
+  node_attribute: SequencerNodeAttribute;
+}
+
+table SequencerAttributeConfig {
+   node_states: [SequencerAttributeConfigMapItem];
+}
+
+table StorageNodeAttribute {
+  capacity: double;
+  num_shards: short;
+  generation: ushort;
+  exclude_from_nodesets: bool;
+}
+
+table StorageAttributeConfigMapItem {
+  // index
+  node_idx: ushort;
+  node_attribute: StorageNodeAttribute;
+}
+
+table StorageAttributeConfig {
+  node_states: [StorageAttributeConfigMapItem];
+}
+
+table SequencerConfig {
+  attr_conf: SequencerAttributeConfig;
+  membership: facebook.logdevice.membership.flat_buffer_codec.SequencerMembership;
+}
+
+table StorageConfig {
+  attr_conf: StorageAttributeConfig;
+  membership: facebook.logdevice.membership.flat_buffer_codec.StorageMembership;
+}
+
+struct ScopeReplication {
+  scope: ubyte;
+  replication_factor: ubyte;
+}
+
+table ReplicationProperty {
+  scopes: [ScopeReplication];
+}
+
+table MetaDataLogsReplication {
+  version: ulong;
+  replication: ReplicationProperty;
+}
+
+table NodesConfiguration {
+  proto_version: uint;
+  version: ulong;
+  service_discovery: ServiceDiscoveryConfig;
+  sequencer_config: SequencerConfig;
+  storage_config: StorageConfig;
+  metadata_logs_rep: MetaDataLogsReplication;
+  last_timestamp: ulong;
+  last_maintenance: ulong;
+  last_context: string;
+}

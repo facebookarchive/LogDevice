@@ -11,6 +11,7 @@
 #include <gtest/gtest.h>
 
 #include "logdevice/common/configuration/nodes/NodesConfigLegacyConverter.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationCodecFlatBuffers.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/test/TestUtil.h"
 
@@ -48,6 +49,28 @@ class NodesConfigurationTest : public ::testing::Test {
                                 roles,
                                 "host" + std::to_string(n)};
   }
+
+  inline void checkCodecSerialization(const NodesConfiguration& c) {
+    flatbuffers::FlatBufferBuilder builder;
+    auto config = NodesConfigurationCodecFlatBuffers::serialize(builder, c);
+    builder.Finish(config);
+
+    // run flatbuffers internal verification
+    auto verifier =
+        flatbuffers::Verifier(builder.GetBufferPointer(), builder.GetSize());
+    auto res = verifier.VerifyBuffer<
+        configuration::nodes::flat_buffer_codec::NodesConfiguration>(nullptr);
+    ASSERT_TRUE(res);
+
+    auto config_ptr = flatbuffers::GetRoot<
+        configuration::nodes::flat_buffer_codec::NodesConfiguration>(
+        builder.GetBufferPointer());
+    auto c_deserialized =
+        NodesConfigurationCodecFlatBuffers::deserialize(config_ptr);
+
+    ASSERT_NE(nullptr, c_deserialized);
+    ASSERT_EQ(c, *c_deserialized);
+  }
 };
 
 constexpr NodeServiceDiscovery::RoleSet NodesConfigurationTest::seq_role;
@@ -57,6 +80,7 @@ constexpr NodeServiceDiscovery::RoleSet NodesConfigurationTest::both_role;
 TEST_F(NodesConfigurationTest, EmptyNodesConfigValid) {
   ASSERT_TRUE(NodesConfiguration().validate());
   ASSERT_EQ(EMPTY_VERSION, NodesConfiguration().getVersion());
+  checkCodecSerialization(NodesConfiguration());
 }
 
 // provision a LD nodes config with:
@@ -216,6 +240,7 @@ TEST_F(NodesConfigurationTest, ProvisionBasic) {
     EXPECT_TRUE(storage_membership->canWriteMetaDataToShard(ShardID(n, 0)));
     EXPECT_TRUE(storage_membership->shouldReadMetaDataFromShard(ShardID(n, 0)));
   }
+  checkCodecSerialization(*config);
 }
 
 TEST_F(NodesConfigurationTest, ChangingServiceDiscoveryAfterProvision) {
@@ -304,6 +329,7 @@ TEST_F(NodesConfigurationTest, RemovingServiceDiscovery) {
     auto new_config = config->applyUpdate(std::move(update));
     EXPECT_NE(nullptr, new_config);
     EXPECT_FALSE(new_config->getSequencerConfig()->getMembership()->hasNode(7));
+    checkCodecSerialization(*new_config);
   }
 }
 
@@ -332,6 +358,7 @@ TEST_F(NodesConfigurationTest, ChangingAttributes) {
   const auto& new_attr =
       new_config->getStorageConfig()->getAttributes()->nodeAttributesAt(2);
   EXPECT_EQ(next_attr, new_attr);
+  checkCodecSerialization(*new_config);
 }
 
 TEST_F(NodesConfigurationTest, AddingNodeWithoutServiceDiscoveryOrAttribute) {
@@ -413,6 +440,7 @@ TEST_F(NodesConfigurationTest, AddingNodeWithoutServiceDiscoveryOrAttribute) {
     auto new_config = config->applyUpdate(std::move(update));
     EXPECT_NE(nullptr, new_config);
     EXPECT_TRUE(new_config->getStorageConfig()->getMembership()->hasNode(17));
+    checkCodecSerialization(*new_config);
   }
 }
 
@@ -485,6 +513,16 @@ TEST_F(NodesConfigurationTest, LegacyConversion1) {
   ASSERT_NE(config, nullptr);
   const auto server_config = config->serverConfig();
   ASSERT_TRUE(NodesConfigLegacyConverter::testWithServerConfig(*server_config));
+
+  // check serialization of the converted config
+  auto converted_nodes_config =
+      NodesConfigLegacyConverter::fromLegacyNodesConfig(
+          server_config->getNodesConfig(),
+          server_config->getMetaDataLogsConfig(),
+          server_config->getVersion());
+
+  ASSERT_NE(converted_nodes_config, nullptr);
+  checkCodecSerialization(*converted_nodes_config);
 }
 
 } // namespace

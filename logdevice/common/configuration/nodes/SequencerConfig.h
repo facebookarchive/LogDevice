@@ -18,6 +18,10 @@ struct SequencerNodeAttribute {
   bool isValid() const {
     return true;
   }
+
+  bool operator==(const SequencerNodeAttribute& rhs) const {
+    return true;
+  }
 };
 
 using SequencerAttributeConfig =

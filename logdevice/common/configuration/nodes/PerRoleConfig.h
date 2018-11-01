@@ -11,6 +11,7 @@
 
 #include "logdevice/common/configuration/nodes/NodeRole.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/util.h"
 #include "logdevice/include/Err.h"
 
 namespace facebook { namespace logdevice { namespace configuration {
@@ -149,11 +150,17 @@ class PerRoleConfig {
     return membership_->isEmpty() && attributes_->isEmpty();
   }
 
+  bool operator==(const PerRoleConfig& rhs) const {
+    return compare_obj_ptrs(membership_, rhs.membership_) &&
+        compare_obj_ptrs(attributes_, rhs.attributes_);
+  }
+
  private:
   std::shared_ptr<const MembershipConfig> membership_;
   std::shared_ptr<const AttributesConfig> attributes_;
 
   friend class NodesConfigLegacyConverter;
+  friend class NodesConfigurationCodecFlatBuffers;
 };
 
 }}}} // namespace facebook::logdevice::configuration::nodes

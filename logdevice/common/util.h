@@ -489,6 +489,17 @@ void set_if_not_null(std::add_pointer_t<folly::remove_cvref_t<T>> output,
   }
 }
 
+template <typename Ptr>
+static bool compare_obj_ptrs(Ptr l, Ptr r) {
+  if (l == nullptr && r == nullptr) {
+    return true;
+  }
+  if (l == nullptr || r == nullptr) {
+    return false;
+  }
+  return *l == *r;
+}
+
 /**
  * Wrap ioprio_set() and ioprio_get() syscalls.
  * @return 0 on success, -1 on error

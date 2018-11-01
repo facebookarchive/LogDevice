@@ -13,6 +13,7 @@
 
 #include "logdevice/common/configuration/ServerConfig.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/util.h"
 
 namespace facebook { namespace logdevice { namespace configuration {
 namespace nodes {
@@ -327,6 +328,7 @@ void NodesConfiguration::recomputeConfigMetadata() {
     }
   };
 
+  addr_to_index_.clear();
   add_addr_index(getSequencerMembership()->getMembershipNodes());
   add_addr_index(getStorageMembership()->getMembershipNodes());
 }
@@ -336,6 +338,18 @@ std::shared_ptr<const NodesConfiguration> NodesConfiguration::withVersion(
   auto config = std::make_shared<NodesConfiguration>(*this);
   config->setVersion(version);
   return config;
+}
+
+bool NodesConfiguration::operator==(const NodesConfiguration& rhs) const {
+  return compare_obj_ptrs(service_discovery_, rhs.service_discovery_) &&
+      compare_obj_ptrs(sequencer_config_, rhs.sequencer_config_) &&
+      compare_obj_ptrs(storage_config_, rhs.storage_config_) &&
+      compare_obj_ptrs(metadata_logs_rep_, rhs.metadata_logs_rep_) &&
+      version_ == rhs.version_ && storage_hash_ == rhs.storage_hash_ &&
+      num_shards_ == rhs.num_shards_ && addr_to_index_ == rhs.addr_to_index_ &&
+      last_change_timestamp_ == rhs.last_change_timestamp_ &&
+      last_maintenance_ == rhs.last_maintenance_ &&
+      last_change_context_ == rhs.last_change_context_;
 }
 
 }}}} // namespace facebook::logdevice::configuration::nodes

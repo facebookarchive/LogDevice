@@ -78,6 +78,7 @@ class NodeAttributesConfig {
   bool eraseNodeAttribute(node_index_t node);
 
   friend class NodesConfigLegacyConverter;
+  friend class NodesConfigurationCodecFlatBuffers;
 };
 
 }}}} // namespace facebook::logdevice::configuration::nodes

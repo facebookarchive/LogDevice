@@ -38,11 +38,16 @@ class MetaDataLogsReplication {
     return version_;
   }
 
+  bool operator==(const MetaDataLogsReplication& rhs) const {
+    return version_ == rhs.version_ && replication_ == rhs.replication_;
+  }
+
  private:
   membership::MembershipVersion::Type version_;
   ReplicationProperty replication_;
 
   friend class NodesConfigLegacyConverter;
+  friend class NodesConfigurationCodecFlatBuffers;
 };
 
 }}}} // namespace facebook::logdevice::configuration::nodes
