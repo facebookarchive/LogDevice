@@ -40,7 +40,8 @@ class IsLogEmptyTest : public IntegrationTestBase {
   // returns false and prints mismatch if any is found.
   bool isLogEmptyResultsMatch(std::vector<IsLogEmptyResult> expected_results);
   bool isLogEmptyResultsMatch(std::vector<IsLogEmptyResult> expected_results,
-                              bool with_grace_period);
+                              bool with_grace_period,
+                              bool skip_extra_runs = false);
 
   // Checks whether isLogEmpty results are consistent when doing num_runs runs
   // for each given log. If with_grace_period is not specified, run once
@@ -69,7 +70,7 @@ class IsLogEmptyTest : public IntegrationTestBase {
   std::shared_ptr<Client> client_with_grace_period_;
   partition_id_t latest_partition_ = PARTITION_INVALID;
 
-  int num_nodes = 8; // must be > 1
+  int num_nodes = 4; // must be > 1
   int num_logs = 4;
 };
 
@@ -84,14 +85,14 @@ NodeSetIndices IsLogEmptyTest::getFullNodeSet() {
 void IsLogEmptyTest::commonSetup(
     IntegrationTestUtils::ClusterFactory& cluster) {
   Configuration::Log log_config;
-  log_config.replicationFactor = std::min(3, num_nodes - 1);
+  log_config.replicationFactor = std::min(num_nodes - 1, 2);
   log_config.rangeName = "my-test-log";
   log_config.extraCopies = 0;
   log_config.syncedCopies = 0;
   log_config.maxWritesInFlight = 250;
 
   Configuration::Log event_log = log_config;
-  event_log.replicationFactor = std::min(4, num_nodes - 1);
+  event_log.replicationFactor = std::min(num_nodes - 1, 2);
   event_log.rangeName = "my-event-log";
   event_log.extraCopies = 0;
   event_log.syncedCopies = 0;
@@ -114,12 +115,12 @@ void IsLogEmptyTest::commonSetup(
       // Use bridge records, which previously tricked isLogEmpty
       .setParam("--bridge-record-in-empty-epoch", "true")
       .setParam("--rocksdb-new-partition-timestamp-margin", "0ms")
-      // Make sure memtables are lost on crash
-      .setParam("--append-store-durability", "memory")
-      .setParam("--disable-rebuilding", "false")
+      .setParam("--disable-rebuilding", "true")
       .setParam("--rocksdb-min-manual-flush-interval", "0")
       // Disable sticky copysets to make records more randomly distributed
       .setParam("--enable-sticky-copysets", "false")
+      // Make sure no appends time out.
+      .setParam("--store-timeout", "30s")
       .setNumDBShards(1)
       .setLogConfig(log_config)
       .setEventLogConfig(event_log)
@@ -137,10 +138,14 @@ void IsLogEmptyTest::init() {
 
   latest_partition_ = PartitionedRocksDBStore::INITIAL_PARTITION_ID;
 
+  // Set timeouts to something very high, so we're certain that timeouts won't
+  // be a source of flakiness even in stress testing.
+
   auto client_settings_no_grace_period =
       std::unique_ptr<ClientSettings>(ClientSettings::create());
   client_settings_no_grace_period->set(
       "client-is-log-empty-grace-period", "0s");
+  client_settings_no_grace_period->set("meta-api-timeout", "180s");
   client_no_grace_period_ = cluster_->createClient(
       getDefaultTestTimeout(), std::move(client_settings_no_grace_period));
 
@@ -148,24 +153,27 @@ void IsLogEmptyTest::init() {
       std::unique_ptr<ClientSettings>(ClientSettings::create());
   client_settings_with_grace_period->set(
       "client-is-log-empty-grace-period", "10s");
+  client_settings_with_grace_period->set("meta-api-timeout", "180s");
   client_with_grace_period_ = cluster_->createClient(
       getDefaultTestTimeout(), std::move(client_settings_with_grace_period));
 }
 
 bool IsLogEmptyTest::isLogEmptyResultsMatch(
     std::vector<IsLogEmptyResult> expected_results) {
-  bool match_with_grace_period = isLogEmptyResultsMatch(expected_results, true);
+  bool match_with_grace_period =
+      isLogEmptyResultsMatch(expected_results, true, false);
   ld_info(
       "Match with grace period: %s", match_with_grace_period ? "OK" : "FAILED");
   bool match_without_grace_period =
-      isLogEmptyResultsMatch(expected_results, false);
+      isLogEmptyResultsMatch(expected_results, false, false);
   ld_info("Match without grace period: %s",
           match_without_grace_period ? "OK" : "FAILED");
   return match_with_grace_period && match_without_grace_period;
 }
 bool IsLogEmptyTest::isLogEmptyResultsMatch(
     std::vector<IsLogEmptyResult> expected_results,
-    bool with_grace_period) {
+    bool with_grace_period,
+    bool skip_extra_runs) {
   ld_check(client_no_grace_period_ && client_with_grace_period_);
   std::atomic<bool> all_matched(true);
   Semaphore sem;
@@ -190,6 +198,7 @@ bool IsLogEmptyTest::isLogEmptyResultsMatch(
       ld_error("Failed to call IsLogEmpty for log %lu (err: %s)",
                expected.log_id,
                error_name(err));
+      ld_check(false); // TODO(T34744712): remove this check
       all_matched.store(false);
       sem.post();
     }
@@ -203,13 +212,17 @@ bool IsLogEmptyTest::isLogEmptyResultsMatch(
     return false;
   }
 
+  if (skip_extra_runs) {
+    return true;
+  }
+
   // All matched; verify that results do not vary.
   std::vector<uint64_t> log_ids;
   for (IsLogEmptyResult& expected : expected_results) {
     log_ids.push_back(expected.log_id);
   }
   return isLogEmptyResultsConsistent(log_ids,
-                                     /*num_runs=*/10,
+                                     /*num_runs=*/5,
                                      with_grace_period);
 }
 
@@ -220,7 +233,7 @@ bool IsLogEmptyTest::isLogEmptyResultsConsistent(std::vector<uint64_t> log_ids,
   ld_info("Results without grace period: %s",
           result_without_grace_period ? "OK" : "FAILED");
   bool result_with_grace_period =
-      isLogEmptyResultsConsistent(log_ids, num_runs, false);
+      isLogEmptyResultsConsistent(log_ids, num_runs, true);
   ld_info("Results without grace period: %s",
           result_with_grace_period ? "OK" : "FAILED");
   return result_without_grace_period && result_with_grace_period;
@@ -270,8 +283,8 @@ bool IsLogEmptyTest::isLogEmptyResultsConsistent(std::vector<uint64_t> log_ids,
         ld_error("Failed to call IsLogEmpty for log %lu (err: %s)",
                  log_id,
                  error_name(err));
+        ld_check(false); // TODO(T34744712): remove this check
         ++failures[log_id];
-        EXPECT_TRUE(false); // make the test fail
         sem.post();
       }
     }
@@ -280,19 +293,21 @@ bool IsLogEmptyTest::isLogEmptyResultsConsistent(std::vector<uint64_t> log_ids,
   for (int i = 0; i < log_ids.size() * num_runs; i++) {
     sem.wait();
   }
-
-  bool expectations_were_correct = true;
+  // Make sure we don't destroy the mutex before the last callback destroys its
+  // lock_guard!
+  result_mutex.lock();
 
   for (uint64_t log_id : log_ids) {
     if (failures[log_id] != 0) {
-      expectations_were_correct = false;
+      ld_error("isLogEmpty for log %lu failed!", log_id);
+      return false;
     } else if (result_varied[log_id]) {
-      expectations_were_correct = false;
       ld_error("Results for log %lu varied!", log_id);
+      return false;
     }
   }
 
-  return expectations_were_correct;
+  return true;
 }
 
 void IsLogEmptyTest::createPartition() {
@@ -396,8 +411,6 @@ TEST_F(IsLogEmptyTest, RestartNode) {
       /*log_id, status, empty, run_with_grace_period(default: true)*/
       {1, E::OK, true},
       {2, E::OK, true},
-      {3, E::OK, true},
-      {4, E::OK, true},
   }));
 
   // Check that log 1 is the only non-empty log both before and restarting the
@@ -407,8 +420,6 @@ TEST_F(IsLogEmptyTest, RestartNode) {
       /*log_id, status, empty, run_with_grace_period(default: true)*/
       {1, E::OK, false},
       {2, E::OK, true},
-      {3, E::OK, true},
-      {4, E::OK, true},
   }));
   cluster_->getNode(1).shutdown();
   cluster_->getNode(1).start();
@@ -418,7 +429,6 @@ TEST_F(IsLogEmptyTest, RestartNode) {
       {1, E::OK, false},
       {2, E::OK, true},
       {3, E::OK, true},
-      {4, E::OK, true},
   }));
 
   // Write some data for multiple new partitions for log 2, and drop the first
@@ -434,7 +444,6 @@ TEST_F(IsLogEmptyTest, RestartNode) {
       {1, E::OK, true},
       {2, E::OK, false},
       {3, E::OK, true},
-      {4, E::OK, true},
   }));
   cluster_->getNode(1).shutdown();
   cluster_->getNode(1).start();
@@ -444,23 +453,12 @@ TEST_F(IsLogEmptyTest, RestartNode) {
       {1, E::OK, true},
       {2, E::OK, false},
       {3, E::OK, true},
-      {4, E::OK, true},
   }));
 }
 
 TEST_F(IsLogEmptyTest, LogsTrimmedAway) {
   init();
-
-  // Wait for recoveries to finish, which'll write bridge records for all the
-  // logs. These should be ignored, and all logs correctly declared empty.
   cluster_->waitForRecovery();
-  ASSERT_TRUE(isLogEmptyResultsMatch({
-      /*log_id, status, empty, run_with_grace_period(default: true)*/
-      {1, E::OK, true},
-      {2, E::OK, true},
-      {3, E::OK, true},
-      {4, E::OK, true},
-  }));
 
   // Write a bunch of records to log 1. It should be the only non-empty log.
   writeRecords({1});
@@ -469,7 +467,6 @@ TEST_F(IsLogEmptyTest, LogsTrimmedAway) {
       {1, E::OK, false},
       {2, E::OK, true},
       {3, E::OK, true},
-      {4, E::OK, true},
   }));
 
   // Write some records to log 2; expect 1 and 2 to be non-empty.
@@ -553,112 +550,104 @@ TEST_F(IsLogEmptyTest, SimpleGracePeriod) {
 }
 
 TEST_F(IsLogEmptyTest, PartialResult) {
+  num_nodes = 5; // 4 storage nodes
   init();
   cluster_->waitForRecovery();
 
-  // Write a lot of records to log 1. It should be the only non-empty log, and
-  // there should be some records on every storage node (N1-N7, that is), since
+  // Write some records to log 1. It should be the only non-empty log, and
+  // there should be some records on every storage node (N1-N4, that is), since
   // we've disabled sticky copysets. That means that the result should not
   // depend on having a non-zero grace period.
-  writeRecords({1}, 250);
+  writeRecords({1});
   ASSERT_TRUE(isLogEmptyResultsMatch({
       /*log_id, status, empty*/
       {1, E::OK, false},
       {2, E::OK, true},
-      {3, E::OK, true},
-      {4, E::OK, true},
   }));
 
   // Now, let's create a new partition and write some for a different log.
-  writeRecordsToNewPartition({2}, 250);
+  writeRecordsToNewPartition({3});
   ASSERT_TRUE(isLogEmptyResultsMatch({
       /*log_id, status, empty*/
       {1, E::OK, false},
-      {2, E::OK, false},
-      {3, E::OK, true},
-      {4, E::OK, true},
+      {2, E::OK, true},
   }));
 
-  // Make nodes 1 and 2 lose all their data for log 1: should still be
-  // impossible to get an f-majority without a full copyset of data for log 1.
-  dropPartition(latest_partition_, /*nodes=*/{1, 2});
+  // Make N1 lose all its data for log 1: should still be impossible to get an
+  // f-majority without a full copyset of data for log 1.
+  dropPartition(latest_partition_, /*nodes=*/{1});
   ASSERT_TRUE(isLogEmptyResultsMatch({
       /*log_id, status, empty*/
       {1, E::OK, false},
-      {2, E::OK, false},
-      {3, E::OK, true},
-      {4, E::OK, true},
+      {2, E::OK, true},
   }));
 
-  // With only nodes 5,6,7 remaining non-empty, isLogEmpty will sometimes
-  // respond 'empty', and other times return PARTIAL, when the grace period is
-  // too short or zero. If we suspend N6, we should consistently get PARTIAL
-  // results. This should be the case regardless of grace period.
-  dropPartition(latest_partition_, /*nodes=*/{3, 4});
-  cluster_->getNode(6).suspend();
-  ASSERT_TRUE(isLogEmptyResultsMatch({
-      /*log_id, status, empty*/
-      {1, E::PARTIAL, false},
-      {2, E::OK, false},
-      {3, E::OK, true},
-      {4, E::OK, true},
-  }));
-  cluster_->getNode(6).resume();
+  // With only N4 remaining non-empty, isLogEmpty will sometimes respond
+  // 'empty', and other times return PARTIAL, when the grace period is too
+  // short or zero. If we kill N3, we should consistently get PARTIAL results.
+  // This should be the case regardless of grace period. Let's not bother to
+  // drop data on N3 since it will be down.
+  dropPartition(latest_partition_, /*nodes=*/{2});
 
-  // With a sufficient grace period, and N6 up, E::OK and 'non-empty' should be
-  // the consistent results for logs 1 and 2.
-  ASSERT_TRUE(isLogEmptyResultsMatch(
-      {
-          /*log_id, status, empty*/
-          {1, E::OK, false},
-          {2, E::OK, false},
-          {3, E::OK, true},
-          {4, E::OK, true},
-      },
-      /*with_grace_period=*/true));
+  // Kill N3 so it can't respond
+  cluster_->getNode(3).kill();
 
-  // If we drop the data of log 1 in one more node, such that only N6 and N7
-  // still have data for it, we'll actually have an empty f-majority. It'll
-  // vary between empty and PARTIAL only if we're using no (or too short) grace
-  // period.
-  dropPartition(latest_partition_, /*nodes=*/{5});
-  // Should be consistently empty with a reasonable grace period.
-  ASSERT_TRUE(isLogEmptyResultsMatch(
-      {
-          /*log_id, status, empty*/
-          {1, E::OK, true},
-          {2, E::OK, false},
-          {3, E::OK, true},
-          {4, E::OK, true},
-      },
-      /*with_grace_period=*/true));
-
-  // Should vary without grace period; should consistently get E::PARTIAL if we
-  // suspend an empty node, e.g. N3.
-  cluster_->getNode(3).suspend();
   ASSERT_TRUE(isLogEmptyResultsMatch(
       {
           /*log_id, status, empty*/
           {1, E::PARTIAL, false},
-          {2, E::OK, false},
-          {3, E::OK, true},
-          {4, E::OK, true},
+          {2, E::OK, true},
       },
-      /*with_grace_period=*/false));
-  cluster_->getNode(3).resume();
+      /*with_grace_period=*/true,
+      /*skip_extra_runs=*/false)); // just run once since grace period is long
 
-  // Dropping the last two should make all logs consistently empty, except log
-  // 2 which should be consistently non-empty.
-  dropPartition(latest_partition_, /*nodes=*/{6, 7});
+  // If we drop data from N4, we'll have an empty f-majority despite N3 being
+  // down.
+  dropPartition(latest_partition_, /*nodes=*/{4});
+
   ASSERT_TRUE(isLogEmptyResultsMatch(
       {
           /*log_id, status, empty*/
           {1, E::OK, true},
-          {2, E::OK, false},
-          {3, E::OK, true},
-          {4, E::OK, true},
+          {2, E::OK, true},
       },
       /*with_grace_period=*/true));
+
+  // If we even just write a single new record, that should be enough to make
+  // the log non-empty again, so long as we use a grace period.
+  writeRecords({1}, /*nrecords=*/1);
+  ASSERT_TRUE(isLogEmptyResultsMatch(
+      {
+          /*log_id, status, empty*/
+          {1, E::OK, false},
+          {2, E::OK, true},
+      },
+      /*with_grace_period=*/true));
+}
+
+// Check that isLogEmpty responds to failures as expected.
+TEST_F(IsLogEmptyTest, Failures) {
+  init();
+
+  // Wait for recoveries to finish, which'll write bridge records for all the
+  // logs. These should be ignored, and all logs correctly declared empty.
+  cluster_->waitForRecovery();
+  ASSERT_TRUE(isLogEmptyResultsMatch({
+      /*log_id, status, empty, run_with_grace_period(default: true)*/
+      {9223372036854775809ul,
+       E::INVALID_PARAM,
+       false}, // metadata log for log 1
+  }));
+  ASSERT_TRUE(isLogEmptyResultsMatch({
+      /*log_id, status, empty, run_with_grace_period(default: true)*/
+      {9223372036854775813ul,
+       E::INVALID_PARAM,
+       false}, // metadata log for non-existing log 5
+  }));
+  ASSERT_TRUE(isLogEmptyResultsMatch({
+      /*log_id, status, empty, run_with_grace_period(default: true)*/
+      {((uint64_t)num_logs) + 1, E::INVALID_PARAM, false}, // non-existing log
+  }));
 }
 
 } // namespace

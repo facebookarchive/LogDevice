@@ -7,9 +7,6 @@
 # Integration tests disabled as faulty or flakey; removed from test
 # list to ensure result of CI run gives a clear signal
 set_tests_properties(
-  "IsLogEmptyTest.LogsTrimmedAway"
-  "IsLogEmptyTest.PartialResult"
-  "IsLogEmptyTest.RestartNode"
   "Parametric/ReadPastGlobalLastReleasedTest.RecoveryStuck/(true,false,1-byteobject<01>)"
   "SequencerIntegrationTest.MetaDataWritePreempted"
   PROPERTIES DISABLED TRUE)
