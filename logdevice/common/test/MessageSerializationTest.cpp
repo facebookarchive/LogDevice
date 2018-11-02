@@ -136,7 +136,8 @@ class MessageSerializationTest : public ::testing::Test {
     ASSERT_EQ(sent.copyset_.size(), recv.copyset_.size());
     ASSERT_EQ(sent.extra_.rebuilding_version, recv.extra_.rebuilding_version);
     ASSERT_EQ(sent.extra_.rebuilding_wave, recv.extra_.rebuilding_wave);
-    ASSERT_EQ(sent.extra_.offset_within_epoch, recv.extra_.offset_within_epoch);
+    ASSERT_EQ(
+        sent.extra_.offsets_within_epoch, recv.extra_.offsets_within_epoch);
 
     if (sent.header_.wave > 1) {
       ASSERT_EQ(sent.extra_.first_amendable_offset,
@@ -555,7 +556,9 @@ TEST_F(MessageSerializationTest, STORE_WithRebuildingInfo2) {
 
 TEST_F(MessageSerializationTest, STORE_WithByteOffsetInfo) {
   STORE_Extra extra;
-  extra.offset_within_epoch = 0x99;
+  OffsetMap offsets_within_epoch;
+  offsets_within_epoch.setCounter(CounterType::BYTE_OFFSET, 0x99);
+  extra.offsets_within_epoch = std::move(offsets_within_epoch);
 
   TestStoreMessageFactory factory;
   factory.setFlags(STORE_Header::OFFSET_WITHIN_EPOCH);
@@ -575,7 +578,6 @@ TEST_F(MessageSerializationTest, STORE_WithByteOffsetInfo) {
 
 TEST_F(MessageSerializationTest, STORE_WithByteOffsetMapInfo) {
   STORE_Extra extra;
-  extra.offset_within_epoch = 0x99;
   extra.offsets_within_epoch.setCounter(CounterType::BYTE_OFFSET, 0x99);
 
   TestStoreMessageFactory factory;

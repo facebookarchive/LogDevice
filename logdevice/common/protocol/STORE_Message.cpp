@@ -144,7 +144,8 @@ void STORE_Message::serialize(ProtocolWriter& writer) const {
         writer.proto() >= Compatibility::OFFSET_MAP_SUPPORT) {
       extra_.offsets_within_epoch.serialize(writer);
     } else {
-      writer.write(extra_.offset_within_epoch);
+      writer.write(
+          extra_.offsets_within_epoch.getCounter(CounterType::BYTE_OFFSET));
     }
   }
 
@@ -217,12 +218,11 @@ MessageReadResult STORE_Message::deserialize(ProtocolReader& reader,
     if (hdr.flags & STORE_Header::OFFSET_MAP &&
         reader.proto() >= Compatibility::OFFSET_MAP_SUPPORT) {
       extra.offsets_within_epoch.deserialize(reader, false /*not used */);
-      extra.offset_within_epoch =
-          extra.offsets_within_epoch.getCounter(CounterType::BYTE_OFFSET);
     } else {
-      reader.read(&extra.offset_within_epoch);
+      uint64_t offset_within_epoch;
+      reader.read(&offset_within_epoch);
       extra.offsets_within_epoch.setCounter(
-          CounterType::BYTE_OFFSET, extra.offset_within_epoch);
+          CounterType::BYTE_OFFSET, offset_within_epoch);
     }
   }
 
@@ -545,9 +545,7 @@ STORE_Message::getDebugInfo() const {
   if (extra_.rebuilding_id != LOG_REBUILDING_ID_INVALID) {
     add("rebuilding_id", extra_.rebuilding_id.val());
   }
-  for (auto& it : extra_.offsets_within_epoch.getCounterMap()) {
-    add("offset_within_epoch, with offset number: ", it.second);
-  }
+  add("offsets_within_epoch", extra_.offsets_within_epoch.toString().c_str());
   if (extra_.first_amendable_offset != COPYSET_SIZE_MAX) {
     add("first_amendable_offset", extra_.first_amendable_offset);
   }

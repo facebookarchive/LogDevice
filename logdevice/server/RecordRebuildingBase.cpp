@@ -344,7 +344,7 @@ RecordRebuildingBase::buildStoreMessage(ShardID target_shard, bool amend) {
   extra.rebuilding_version = owner_->getRestartVersion();
   extra.rebuilding_wave = rebuildingWave_;
   extra.rebuilding_id = owner_->getLogRebuildingId();
-  extra.offset_within_epoch = offset_within_epoch_;
+  extra.offsets_within_epoch = offsets_within_epoch_;
 
   copyset_off_t offset = findCopysetOffset(newCopyset_, target_shard);
   ld_check(offset >= 0 && offset < copyset.size());
@@ -730,7 +730,7 @@ PutWriteOp RecordRebuildingBase::AmendSelfStorageTask::createWriteOp(
       owner.storeHeader_.wave,
       folly::Range<const ShardID*>(
           owner.newCopyset_.begin(), owner.newCopyset_.end()),
-      owner.offset_within_epoch_,
+      owner.offsets_within_epoch_,
       std::map<KeyType, std::string>(),
       &recordHeaderBuf_);
 

@@ -1001,9 +1001,6 @@ EpochRecovery::createMutationHeader(esn_t esn,
   STORE_Extra extra;
   extra.recovery_id = id_;
   extra.recovery_epoch = deps_->getSealEpoch();
-  // TODO(T33977412) : remove offset_within_epoch from STORE_Extra
-  extra.offset_within_epoch =
-      offsets_within_epoch.getCounter(CounterType::BYTE_OFFSET);
   extra.offsets_within_epoch = std::move(offsets_within_epoch);
 
   return std::make_pair(

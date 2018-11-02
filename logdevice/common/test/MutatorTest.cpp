@@ -282,7 +282,10 @@ void MutatorTest::initStoreHeaderAndExtras() {
 
   store_extra_.recovery_id = recovery_id_;
   store_extra_.recovery_epoch = SEAL_EPOCH;
-  store_extra_.offset_within_epoch = (hole_ ? BYTE_OFFSET_INVALID : 22334455);
+  OffsetMap offsets_within_epoch;
+  offsets_within_epoch.setCounter(CounterType::BYTE_OFFSET, 22334455);
+  store_extra_.offsets_within_epoch =
+      (hole_ ? OffsetMap() : offsets_within_epoch);
 }
 
 void MutatorTest::setUp() {

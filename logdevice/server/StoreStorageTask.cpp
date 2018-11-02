@@ -112,9 +112,11 @@ StoreStorageTask::StoreStorageTask(
   }
 
   if (merge_mutable_per_epoch_log_metadata) {
-    uint64_t epoch_size = (extra.offset_within_epoch == BYTE_OFFSET_INVALID
-                               ? 0
-                               : extra.offset_within_epoch);
+    // TODO(T33977412) : change epoch_size to OffsetMap
+    uint64_t epoch_size =
+        (extra.offsets_within_epoch.isValidOffset(CounterType::BYTE_OFFSET)
+             ? extra.offsets_within_epoch.getCounter(CounterType::BYTE_OFFSET)
+             : 0);
     metadata_.emplace(0 /* flags */, store_header.last_known_good, epoch_size);
     metadata_write_op_.emplace(store_header.rid.logid,
                                store_header.rid.epoch,
@@ -335,16 +337,17 @@ int StoreStorageTask::putCache() {
       (flags_ & STORE_Header::WRITTEN_BY_RECOVERY ? extra_.recovery_epoch.val_
                                                   : wave_);
 
-  int rv = cache->putRecord(rid_,
-                            timestamp_,
-                            lng_,
-                            wave_or_recovery_epoch,
-                            copyset_,
-                            flags_,
-                            write_op_.getKeys(),
-                            payload_raw_,
-                            payload_holder_,
-                            extra_.offset_within_epoch);
+  int rv = cache->putRecord(
+      rid_,
+      timestamp_,
+      lng_,
+      wave_or_recovery_epoch,
+      copyset_,
+      flags_,
+      write_op_.getKeys(),
+      payload_raw_,
+      payload_holder_,
+      extra_.offsets_within_epoch.getCounter(CounterType::BYTE_OFFSET));
   if (rv == 0) {
     STAT_ADD(stats(),
              record_cache_bytes_cached_estimate,

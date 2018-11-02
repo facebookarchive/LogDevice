@@ -373,7 +373,7 @@ class RecordRebuildingBase : public RecordRebuildingInterface {
   WeakRefHolder<RecordRebuildingBase> refHolder_;
   LocalLogStoreRecordFormat::flags_t recordFlags_;
   STORE_Header storeHeader_;
-  uint64_t offset_within_epoch_{BYTE_OFFSET_INVALID};
+  OffsetMap offsets_within_epoch_;
   std::map<KeyType, std::string> optional_keys_;
   uint32_t rebuildingWave_ = 1;
 

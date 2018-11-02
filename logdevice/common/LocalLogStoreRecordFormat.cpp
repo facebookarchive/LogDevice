@@ -52,9 +52,9 @@ size_t recordHeaderSizeEstimate(flags_t flags,
                                 const OffsetMap& offsets_within_epoch) {
   size_t ret = sizeof(int64_t) + sizeof(esn_t) + folly::kMaxVarintLength32 +
       sizeof(uint32_t) +
-      // TODO (T33977412) : do not add size of offset_within_epoch if
-      // FLAG_OFFSET_MAP is set
-      ((flags & FLAG_OFFSET_WITHIN_EPOCH) ? sizeof(uint64_t) : 0) +
+      ((flags & FLAG_OFFSET_WITHIN_EPOCH && !(flags & FLAG_OFFSET_MAP))
+           ? sizeof(uint64_t)
+           : 0) +
       ((flags & FLAG_OFFSET_MAP && flags & FLAG_OFFSET_WITHIN_EPOCH)
            ? offsets_within_epoch.sizeInLinearBuffer()
            : 0);
@@ -104,9 +104,8 @@ Slice formRecordHeaderBufAppend(int64_t timestamp,
       APPEND_TO_STRING(buf, nid);
     }
   }
-  // TODO (T33977412) : do not serialize offset_within_epoch if FLAG_OFFSET_MAP
-  // is set
-  if (flags & FLAG_OFFSET_WITHIN_EPOCH) {
+
+  if (flags & FLAG_OFFSET_WITHIN_EPOCH && !(flags & FLAG_OFFSET_MAP)) {
     uint64_t offset_within_epoch =
         offsets_within_epoch.getCounter(CounterType::BYTE_OFFSET);
     APPEND_TO_STRING(buf, offset_within_epoch);
@@ -220,8 +219,7 @@ Slice formRecordHeader(const STORE_Header& store_header,
   }
   if (store_header.flags & STORE_Header::OFFSET_WITHIN_EPOCH) {
     flags |= FLAG_OFFSET_WITHIN_EPOCH;
-    offsets_within_epoch.setCounter(
-        CounterType::BYTE_OFFSET, store_extra.offset_within_epoch);
+    offsets_within_epoch = store_extra.offsets_within_epoch;
   }
 
   if (store_header.flags & STORE_Header::OFFSET_MAP) {
@@ -669,7 +667,7 @@ int parse(const Slice& log_store_blob,
   //
   // Offset within epoch (if FLAG_OFFSET_WITHIN_EPOCH was set)
   //
-  if (flags & FLAG_OFFSET_WITHIN_EPOCH) {
+  if (flags & FLAG_OFFSET_WITHIN_EPOCH && !(flags & FLAG_OFFSET_MAP)) {
     uint64_t out;
     rv = parseOffsetWithinEpochValue(&out, &ptr, end);
     if (rv != 0) {
@@ -791,11 +789,13 @@ int parse(const Slice& log_store_blob,
     if (rv == -1) {
       return rv;
     }
-    if (offset_within_epoch_out != nullptr) {
-      ld_check(*offset_within_epoch_out ==
-               out.getCounter(CounterType::BYTE_OFFSET));
+
+    // TODO(T33977412) : remove offset_within_epoch_out from parse function
+    if (offset_within_epoch_out) {
+      *offset_within_epoch_out = out.getCounter(CounterType::BYTE_OFFSET);
     }
-    if (offsets_within_epoch_out != nullptr) {
+
+    if (offsets_within_epoch_out) {
       *offsets_within_epoch_out = std::move(out);
     }
     ptr += rv;

@@ -16,11 +16,11 @@
 #include "logdevice/common/DataClass.h"
 #include "logdevice/common/RebuildingTypes.h"
 #include "logdevice/common/Seal.h"
+#include "logdevice/common/TailRecord.h"
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/common/util.h"
 #include "logdevice/include/Err.h"
-#include "logdevice/common/TailRecord.h"
 
 /**
  * Macro for generating simple metadata serialization methods, used by most

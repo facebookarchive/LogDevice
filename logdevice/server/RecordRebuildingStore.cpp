@@ -91,7 +91,7 @@ int RecordRebuildingStore::parseRecord() {
   Payload payload;
   uint32_t wave;
   std::map<KeyType, std::string> optional_keys_read;
-  offset_within_epoch_ = BYTE_OFFSET_INVALID;
+  uint64_t offset_within_epoch = BYTE_OFFSET_INVALID;
 
   // Call parse() twice: first time to get copyset size and everything except
   // copyset, second time to get copyset (after allocating memory for it).
@@ -103,7 +103,8 @@ int RecordRebuildingStore::parseRecord() {
                                         &copyset_size,
                                         nullptr,
                                         0,
-                                        &offset_within_epoch_,
+                                        &offset_within_epoch,
+                                        &offsets_within_epoch_,
                                         &optional_keys_read,
                                         &payload,
                                         getMyShardID().shard());
@@ -119,10 +120,11 @@ int RecordRebuildingStore::parseRecord() {
   storeHeader_.wave = wave;
 
   storeHeader_.flags = recordFlags_ & LocalLogStoreRecordFormat::FLAG_MASK;
-  // TODO (T33977412) Set STORE_Header flag if settings enable_offsets_map and
-  // offsets_within_epoch_ valid
-  if (offset_within_epoch_ != BYTE_OFFSET_INVALID) {
+  if (offsets_within_epoch_.isValid()) {
     storeHeader_.flags |= STORE_Header::OFFSET_WITHIN_EPOCH;
+    if (Worker::settings().enable_offset_map) {
+      storeHeader_.flags |= STORE_Header::OFFSET_MAP;
+    }
   }
   storeHeader_.flags |= STORE_Header::REBUILDING;
   // For the local amend, we retain the FLAG_WRITTEN_BY_REBUILDING as

@@ -212,7 +212,7 @@ size_t EpochRecordCache::bufferedRecords() const {
 size_t EpochRecordCache::bufferedPayloadBytes() const {
   return buffer_payload_bytes_.load(std::memory_order_relaxed);
 }
-
+// TODO (T33977412) : Change to take OffsetMap
 int EpochRecordCache::putRecord(
     RecordID rid,
     uint64_t timestamp,

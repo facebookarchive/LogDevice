@@ -178,9 +178,6 @@ struct STORE_Header {
  * such as rebuilding, recovery or byte offset.
  */
 struct STORE_Extra {
-  // Contains different offsets within epoch
-  OffsetMap offsets_within_epoch;
-
   // Number which uniquely identifies the recovery machine responsible for
   // sending this message. Used only if STORE_Header::RECOVERY flag is set.
   recovery_id_t recovery_id = recovery_id_t(0);
@@ -203,12 +200,13 @@ struct STORE_Extra {
   // STORED reply.
   log_rebuilding_id_t rebuilding_id = LOG_REBUILDING_ID_INVALID;
 
-  // If this STORE message include byte offset (BYTE_OFFSET flag is set), the
-  // amount of bytes were written in epoch (to which this message belongs)
-  // before record of this message is going to be sent along.
-  // Not all STORE message will have this info. This info is sent along with
-  // store header every X bytes being appended.
-  uint64_t offset_within_epoch = BYTE_OFFSET_INVALID;
+  // If this STORE message include CounterType::BYTE_OFFSET (BYTE_OFFSET flag is
+  // set), the amount of bytes were written in epoch (to which this message
+  // belongs) before record of this message is going to be sent along. Not all
+  // STORE message will have this info. This info is sent along with store
+  // header every X bytes being appended. If OFFSET_MAP flag is set, internal
+  // counters list is present. Refer to OffsetMap.h for other CounterTypes
+  OffsetMap offsets_within_epoch;
 
   // Serialized when wave > 1.
   // If flags.CHAIN is set and copyset_offset >= first_amendable_offset, the
@@ -226,7 +224,6 @@ struct STORE_Extra {
                       r.rebuilding_version,
                       r.rebuilding_wave,
                       r.rebuilding_id,
-                      r.offset_within_epoch,
                       r.offsets_within_epoch);
     };
     return as_tuple(*this) == as_tuple(other);
