@@ -73,19 +73,32 @@ TEST_F(TailRecordTest, BasicSerialization) {
   std::unique_ptr<char[]> buf1(new char[max_len]);
   size_t written = 0;
   std::vector<size_t> record_size(n_records, 0);
+  std::string buf_str;
+  ProtocolWriter w(&buf_str, "TailRecordTest", 0);
+
   for (int i = 0; i < n_records; ++i) {
     TailRecord r = genTailRecord(i % 2 == 0);
     ASSERT_TRUE(r.isValid());
     record_size[i] = r.serialize(buf1.get() + written, max_len - written);
     ASSERT_GT(record_size[i], 0);
     written += record_size[i];
+    // also serialize to the string
+    r.serialize(w);
+    ASSERT_FALSE(w.error());
   }
   ld_info("Wrote %lu records of %lu bytes.", n_records, written);
+  ASSERT_EQ(written, buf_str.size());
   size_t n_read = 0;
   for (int i = 0; i < n_records; ++i) {
     TailRecord d;
     ASSERT_FALSE(d.isValid());
     int nbytes = d.deserialize({buf1.get() + n_read, max_len - n_read});
+
+    TailRecord d2;
+    int nbytes2 = d2.deserialize({buf_str.data() + n_read, max_len - n_read});
+    ASSERT_EQ(nbytes, nbytes2);
+    ASSERT_TRUE(TailRecord::sameContent(d, d2));
+
     ASSERT_EQ(record_size[i], nbytes);
     ASSERT_TRUE(d.isValid());
     // INCLUDE_BLOB only used in serialization format

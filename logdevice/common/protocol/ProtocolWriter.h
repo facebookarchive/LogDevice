@@ -239,6 +239,16 @@ class ProtocolWriter {
 
   ProtocolWriter(Slice dest, std::string context, uint16_t proto);
 
+  // Use a std::string (@param dest) as destination. ProtocolWriter::write()
+  // will resize the string with potential allocations. Users can also
+  // optionally specify the max_size parameter to limit the maximum size the
+  // string can grow. Note: caller must ensure that the dest string outlives the
+  // ProtocolWriter
+  ProtocolWriter(std::string* dest,
+                 std::string context,
+                 uint16_t proto,
+                 folly::Optional<size_t> max_size = folly::none);
+
  private:
   std::unique_ptr<Destination> dest_;
   const std::string context_;

@@ -89,11 +89,13 @@ class EvbufferDestination : public ProtocolWriter::Destination {
   struct evbuffer* const dest_evbuf_;
 };
 
-class LinearBufferDestination : public ProtocolWriter::Destination {
+class LinearBufferDestinationBase : public ProtocolWriter::Destination {
  public:
-  int write(const void* src, size_t nbytes, size_t nwritten) override {
-    ld_check(!isNull());
-    if (nwritten > dest_.size || dest_.size - nwritten < nbytes) {
+  static int writeBuffer(const void* src,
+                         size_t nbytes,
+                         size_t nwritten,
+                         Slice dest) {
+    if (!checkBufferSize(dest.size, nbytes, nwritten)) {
       err = E::NOBUFS;
       return -1;
     }
@@ -101,9 +103,15 @@ class LinearBufferDestination : public ProtocolWriter::Destination {
     if (nbytes != 0) {
       // must from a valid source
       ld_check(src != nullptr);
-      memcpy((char*)dest_.data + nwritten, src, nbytes);
+      memcpy((char*)dest.data + nwritten, src, nbytes);
     }
     return 0;
+  }
+
+  static bool checkBufferSize(size_t max_size,
+                              size_t to_write,
+                              size_t written) {
+    return written <= max_size && max_size - written >= to_write;
   }
 
   int writeWithoutCopy(const void* src,
@@ -119,6 +127,21 @@ class LinearBufferDestination : public ProtocolWriter::Destination {
     return -1;
   }
 
+  /* unused */
+  uint64_t computeChecksum() override {
+    return 0;
+  }
+
+  explicit LinearBufferDestinationBase() = default;
+};
+
+class LinearBufferDestination : public LinearBufferDestinationBase {
+ public:
+  int write(const void* src, size_t nbytes, size_t nwritten) override {
+    ld_check(!isNull());
+    return writeBuffer(src, nbytes, nwritten, dest_);
+  }
+
   const char* identify() const override {
     return "linear buffer destination";
   }
@@ -127,16 +150,45 @@ class LinearBufferDestination : public ProtocolWriter::Destination {
     return dest_.data == nullptr;
   }
 
-  /* unused */
-  uint64_t computeChecksum() override {
-    return 0;
-  }
-
-  explicit LinearBufferDestination(Slice dest) : dest_(dest) {}
+  explicit LinearBufferDestination(Slice dest)
+      : LinearBufferDestinationBase(), dest_(dest) {}
 
  private:
   const Slice dest_;
 };
+
+class StringBufferDestination : public LinearBufferDestinationBase {
+ public:
+  int write(const void* src, size_t nbytes, size_t nwritten) override {
+    ld_check(!isNull());
+    if (!checkBufferSize(max_size_, nbytes, nwritten)) {
+      err = E::NOBUFS;
+      return -1;
+    }
+
+    dest_->resize(nbytes + nwritten);
+    return writeBuffer(
+        src, nbytes, nwritten, Slice(dest_->data(), dest_->size()));
+  }
+
+  const char* identify() const override {
+    return "string buffer destination";
+  }
+
+  bool isNull() const override {
+    return dest_ == nullptr;
+  }
+
+  explicit StringBufferDestination(
+      std::string* dest,
+      size_t max_size = std::numeric_limits<size_t>::max())
+      : LinearBufferDestinationBase(), dest_(dest), max_size_(max_size) {}
+
+ private:
+  std::string* const dest_;
+  const size_t max_size_;
+};
+
 } // anonymous namespace
 
 ProtocolWriter::ProtocolWriter(std::unique_ptr<Destination> dest,
@@ -157,6 +209,16 @@ ProtocolWriter::ProtocolWriter(MessageType type,
 
 ProtocolWriter::ProtocolWriter(Slice dest, std::string context, uint16_t proto)
     : ProtocolWriter(std::make_unique<LinearBufferDestination>(dest),
+                     std::move(context),
+                     proto) {}
+
+ProtocolWriter::ProtocolWriter(std::string* dest,
+                               std::string context,
+                               uint16_t proto,
+                               folly::Optional<size_t> max_size)
+    : ProtocolWriter(std::make_unique<StringBufferDestination>(
+                         dest,
+                         max_size.value_or(std::numeric_limits<size_t>::max())),
                      std::move(context),
                      proto) {}
 
