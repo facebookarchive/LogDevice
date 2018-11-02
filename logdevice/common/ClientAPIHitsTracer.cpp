@@ -204,6 +204,7 @@ void ClientAPIHitsTracer::traceIsLogEmpty(int64_t msec_resp_time,
                                           logid_t in_logid,
                                           Status out_status,
                                           bool out_bool) {
+  bool is_flappy = assessIsLogEmptyFlappiness(out_status, in_logid, out_bool);
   CLIENT_HISTOGRAM_ADD(Worker::stats(), is_log_empty_latency, msec_resp_time);
   switch (out_status) {
     API_HITS_STATUS_CASE(is_log_empty, OK)
@@ -217,6 +218,9 @@ void ClientAPIHitsTracer::traceIsLogEmpty(int64_t msec_resp_time,
     API_HITS_STATUS_CASE(is_log_empty, INTERNAL)
     API_HITS_DEFAULT(is_log_empty)
   }
+  if (is_flappy) {
+    WORKER_STAT_INCR(client.is_log_empty_flappy);
+  }
   auto sample_builder = [=]() -> std::unique_ptr<TraceSample> {
     auto sample = std::make_unique<TraceSample>();
     sample->addNormalValue("method", "isLogEmpty");
@@ -224,9 +228,40 @@ void ClientAPIHitsTracer::traceIsLogEmpty(int64_t msec_resp_time,
     sample->addNormalValue("input_log_id", std::to_string(in_logid.val()));
     sample->addNormalValue("output_status", error_name(out_status));
     sample->addIntValue("output_bool", out_bool);
+    sample->addIntValue("is_log_empty_flappy", is_flappy);
     return sample;
   };
-  publish(API_HITS_TRACER, sample_builder);
+  publish(API_HITS_TRACER, sample_builder, /*force = */ is_flappy);
+}
+
+bool ClientAPIHitsTracer::assessIsLogEmptyFlappiness(Status st,
+                                                     logid_t logid,
+                                                     bool empty) {
+  if (st != E::OK && st != E::PARTIAL) {
+    return false;
+  } else if (is_log_empty_record_.count(logid)) {
+    auto& rec = is_log_empty_record_[logid];
+    /* transition */
+    switch (rec.step) {
+      case 0:
+        if (rec.prev_val && !empty) {
+          rec.step = 1;
+        }
+        break;
+      case 1:
+        if (!rec.prev_val && empty) {
+          is_log_empty_record_.erase(logid);
+          return true;
+        }
+        break;
+    }
+
+    rec.prev_val = empty ? 1 : 0;
+    return false;
+  } else {
+    is_log_empty_record_[logid] = {.step = 0, .prev_val = empty ? 1u : 0};
+    return false;
+  }
 }
 
 void ClientAPIHitsTracer::traceDataSize(int64_t msec_resp_time,

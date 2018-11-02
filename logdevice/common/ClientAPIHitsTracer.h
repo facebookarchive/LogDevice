@@ -70,6 +70,21 @@ class ClientAPIHitsTracer : public SampledTracer {
                  logid_t in_logid,
                  lsn_t in_lsn,
                  Status out_status);
+
+ private:
+  bool assessIsLogEmptyFlappiness(Status st, logid_t logid, bool empty);
+
+  struct FlappinessRecord {
+    /**
+     * Steps are:
+     * 0   =   no flappiness
+     * 1   =   went from empty to not empty before
+     */
+    unsigned int step : 1;
+    unsigned int prev_val : 1;
+  };
+  std::unordered_map<logid_t, FlappinessRecord, logid_t::Hash>
+      is_log_empty_record_;
 };
 
 }} // namespace facebook::logdevice

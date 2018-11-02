@@ -209,6 +209,7 @@ STAT_DEFINE(is_log_empty_NOTEMPTY, SUM)
 STAT_DEFINE(is_log_empty_NOTFOUND, SUM)
 STAT_DEFINE(is_log_empty_CONNFAILED, SUM)
 STAT_DEFINE(is_log_empty_OTHER, SUM)
+STAT_DEFINE(is_log_empty_flappy, SUM)
 //data_size
 STAT_DEFINE(data_size_OK, SUM)
 STAT_DEFINE(data_size_TIMEDOUT, SUM)

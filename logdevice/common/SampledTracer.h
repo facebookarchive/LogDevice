@@ -34,10 +34,10 @@ class SampledTracer {
 
  protected:
   template <typename BuilderFn /*should return a std::unique_ptr<TraceSample>*/>
-  bool publish(const char* table, BuilderFn&& builder) {
+  bool publish(const char* table, BuilderFn&& builder, bool force = false) {
     if (logger_) {
       // flipping the coin
-      bool isLogging = shouldLog(table);
+      bool isLogging = (force || shouldLog(table));
       if (isLogging) {
         std::unique_ptr<TraceSample> sample = builder();
         logger_->pushSample(table, sampleRate(table), std::move(sample));
