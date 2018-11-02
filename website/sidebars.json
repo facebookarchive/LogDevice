@@ -2,9 +2,9 @@
   "docs": {
       "Getting started": [
           "Overview",
+          "Concepts",
           "Installation",
-          "LocalCluster",
-          "Concepts"
+          "LocalCluster"
       ],
       "Configuration": [
           "FirstCluster",

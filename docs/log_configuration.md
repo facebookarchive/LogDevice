@@ -1,9 +1,8 @@
 ---
 id: Logs
 title: Log configuration
-sidebar_label: Logs
+sidebar_label: Log configuration
 ---
-# Logs Config
 In order to use LogDevice, you will need to create logs groups. Each log-group
 in LogDevice defines a range of log IDs, and log-groups can be further grouped into directories forming a file-system-like structure. Attributes of directories propagate to sub-directories and log-groups. Attributes of log-groups give you the control over things like the replication property, some sequencer settings, and more. Log attributes are defined below in this document for your reference.
 

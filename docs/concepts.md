@@ -1,6 +1,6 @@
 ---
 id: Concepts
-title: LogDevice Concepts and architecture
+title: Concepts and architecture
 sidebar_label: Concepts and architecture
 ---
 ***

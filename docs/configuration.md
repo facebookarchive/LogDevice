@@ -1,7 +1,7 @@
 ---
 id: Config
 title: Cluster configuration
-sidebar_label: Cluster config
+sidebar_label: Cluster configuration
 ---
 
 The main config file passed to LogDevice server through the `--config-path` command line argument.
