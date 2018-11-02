@@ -1751,13 +1751,16 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "positive).",
        SERVER | REQUIRES_RESTART /* used in SequencerBatching ctor */,
        SettingsCategory::Batching);
-  init("sequencer-batching-compression",
-       &sequencer_batching_compression,
-       "zstd",
-       parse_compression,
-       "Compression setting for sequencer batching (if used).",
-       SERVER | REQUIRES_RESTART /* used in SequencerBatching ctor */,
-       SettingsCategory::Batching);
+  init(
+      "sequencer-batching-compression",
+      &sequencer_batching_compression,
+      "zstd",
+      parse_compression,
+      "Compression setting for sequencer batching (if used). It can be "
+      "'none' for no compression; 'zstd' for ZSTD; 'lz4' for LZ4; or lz4_hc for"
+      " LZ4 High Compression. The default is ZSTD.",
+      SERVER | REQUIRES_RESTART /* used in SequencerBatching ctor */,
+      SettingsCategory::Batching);
   init(
       "sequencer-batching-passthru-threshold",
       &sequencer_batching_passthru_threshold,
