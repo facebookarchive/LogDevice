@@ -475,18 +475,21 @@ class Client {
    * @return      Returns 0 if the request was successfully acknowledged
    *              by all nodes. Otherwise, returns -1 with logdevice::err set to
    *
-   *    E::INVALID_PARAM      logid or lsn is invalid
-   *    E::FAILED             FAILED to trim on all storage nodes
-   *    E::PARTIAL            if some, but not all, nodes successfully
-   *                          trimmed the log. In this case, some storage
-   *                          nodes might not have trimmed their part of the
-   *                          log, so records with LSNs less than or equal to
-   *                          'lsn' might still be delivered).
-   *    E::ACCESS             Client has invalid credentials or client does not
-   *                          have the correct permissions to perform the trim
-   *                          operation.
-   *    E::NOTFOUND           There is no log with such logid.
-   *    E::TOOBIG             The trim LSN is beyond the tail of the log.
+   *    E::NOTFOUND        There is no log with such logid.
+   *    E::FAILED          Failed to even start trimming
+   *    E::PARTIAL         Got replies from all storage nodes, but some of them
+   *                       were unsuccessful. The trimming operation is only
+   *                       partially complete: if you read the log now, you may
+   *                       see it trimmed or untrimmed, and it may change from
+   *                       reader to reader.
+   *    E::TIMEDOUT        The operation timed out before reaching all storage
+   *                       nodes. The trimming may be partially complete,
+   *                       just like with E::PARTIAL.
+   *    E::ACCESS          Client has invalid credentials or client does not
+   *                       have the correct permissions to perform the trim
+   *                       operation.
+   *    E::TOOBIG          The trim LSN is beyond the tail of the log.
+   *    E::NOBUFS          The Client is overloaded.
    */
   virtual int trimSync(logid_t logid, lsn_t lsn) noexcept = 0;
 

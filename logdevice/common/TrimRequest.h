@@ -67,8 +67,6 @@ class TrimRequest : public Request {
    */
   void onLogConfigAvailable(std::shared_ptr<LogsConfig::LogGroupNode> cfg);
 
-  void onClientTimeout();
-
   void onReply(ShardID from, Status status);
   void onMessageSent(ShardID to, Status status);
 
@@ -107,10 +105,7 @@ class TrimRequest : public Request {
   // deleted
   void deleteThis();
 
-  // Determine the correct status based on server replies then invoke
-  // finalize(Status)
-  void finalize();
-  // invoke callback_ with the supplied status and delete this instance
+  // Invoke callback_ with the supplied status and delete this instance.
   void finalize(Status);
 
   // send a single TRIM message to the specified node
@@ -125,7 +120,7 @@ class TrimRequest : public Request {
   /**
    * Initializes state and broadcasts initial messages to all servers.
    */
-  void start(Status status);
+  void start();
 
   /**
    * Construct a TRIM_Message and send it to the node at index

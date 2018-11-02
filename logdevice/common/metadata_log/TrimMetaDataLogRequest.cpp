@@ -607,10 +607,24 @@ void TrimMetaDataLogRequest::onTrimComplete(Status st) {
       // all done
       state_ = State::FINISHED;
       break;
+    case E::NOTFOUND:
+      st = E::NOTINCONFIG;
+      break;
     case E::PARTIAL:
     case E::FAILED:
+    case E::TIMEDOUT:
+    case E::ACCESS:
+      break;
+    case E::TOOBIG:
+      ld_error("TrimRequest said that the target lsn %s for log %lu is above "
+               "log's tail lsn. This should be impossible.",
+               lsn_to_string(trim_target_metadatalog_).c_str(),
+               MetaDataLog::metaDataLogID(log_id_).val());
+      st = E::FAILED;
       break;
     default:
+      ld_critical(
+          "Unexpected status returned from TrimRequest: %s", error_name(st));
       ld_check(false);
       st = E::INTERNAL;
   }

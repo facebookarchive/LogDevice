@@ -19,7 +19,19 @@ namespace facebook { namespace logdevice {
 
 struct TRIMMED_Header {
   request_id_t client_rqid; // id of TrimRequest to deliver reply to
-  Status status;            // one of: OK, NOTSTORAGE, INVALID_PARAM, FAILED
+
+  // Status is one of:
+  //  * NOTSTORAGE - I'm not a storage node
+  //  * ACCESS - you're not allowed to trim this log
+  //  * AGAIN - something's not initialized yet, try again later
+  //  * SYSLIMIT - we've hit some limit, probably don't try again
+  //  * NOTFOUND - the log is not in config
+  //  * SHUTDOWN - logdeviced is shutting down
+  //  * INVALID_PARAM - log ID or lsn is very invalid, e.g. LOGID_INVALID or
+  //                    LSN_INVALID or EPOCH_MAX
+  //  * FAILED - local log store is either unwritable or overloaded
+  Status status;
+
   shard_index_t shard;      // shard on which the log was trimmed
 
   // Return the expected size of the header given a protocol version.

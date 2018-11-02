@@ -56,7 +56,7 @@ TrimRequest::~TrimRequest() {
 
 void TrimRequest::onTrimPastTailCheckDone() {
   if (MetaDataLog::isMetaDataLog(log_id_)) {
-    start(E::OK);
+    start();
   } else {
     // for data logs, find the historical nodesets using NodeSetFinder
     initNodeSetFinder();
@@ -73,18 +73,45 @@ void TrimRequest::checkForTrimPastTail() {
                              std::shared_ptr<TailRecord> /*unused*/) {
     ticket.postCallbackRequest([=](TrimRequest* trimReq) {
       if (trimReq) {
-        if (st == E::OK && trimReq->trim_point_ < next_lsn) {
-          // Continue to the next stage.
-          trimReq->onTrimPastTailCheckDone();
-        } else {
-          // something went wrong
-          Status s = st;
-          if (s == E::OK) {
+        Status s;
+        switch (st) {
+          case E::OK:
+            if (trimReq->trim_point_ < next_lsn) {
+              // Continue to the next stage.
+              trimReq->onTrimPastTailCheckDone();
+              return;
+            }
             // Trim was past the tail
+            RATELIMIT_ERROR(std::chrono::seconds(10),
+                            2,
+                            "Tried to trim past tail of log %lu. Tail "
+                            "(next_lsn): %s, requested trim point: %s",
+                            trimReq->log_id_.val(),
+                            lsn_to_string(next_lsn).c_str(),
+                            lsn_to_string(trimReq->trim_point_).c_str());
             s = E::TOOBIG;
-          }
-          trimReq->finalize(s);
+            break;
+          case E::TIMEDOUT:
+          case E::CONNFAILED:
+          case E::NOSEQUENCER:
+          case E::FAILED:
+            RATELIMIT_INFO(std::chrono::seconds(10),
+                           2,
+                           "SyncSequencerRequest for log %lu failed with %s",
+                           trimReq->log_id_.val(),
+                           error_name(st));
+            // We didn't start advancing trim points, so report FAILED.
+            s = E::FAILED;
+            break;
+          default:
+            RATELIMIT_ERROR(
+                std::chrono::seconds(10),
+                2,
+                "Unexpected error code from SyncSequencerRequest: %s",
+                error_name(st));
+            s = E::FAILED;
         }
+        trimReq->finalize(s);
       }
     });
   };
@@ -106,19 +133,48 @@ void TrimRequest::initNodeSetFinder() {
 
 std::unique_ptr<NodeSetFinder> TrimRequest::makeNodeSetFinder() {
   return std::make_unique<NodeSetFinder>(
-      log_id_, client_timeout_, [this](Status status) { this->start(status); });
+      log_id_, client_timeout_, [this](Status status) {
+        if (status == E::OK) {
+          start();
+          return;
+        }
+
+        RATELIMIT_ERROR(
+            std::chrono::seconds(10),
+            2,
+            "Unable to get the set of shards to send TrimRequest requests to "
+            "for log %lu: %s.",
+            log_id_.val(),
+            error_name(status));
+
+        // Translate error code.
+        Status s;
+        switch (status) {
+          case E::INVALID_PARAM:
+            // Maybe the log was removed from config during the call.
+            s = E::NOTFOUND;
+            break;
+          case E::ACCESS:
+            s = E::ACCESS;
+            break;
+          case E::TIMEDOUT:
+          case E::FAILED:
+            // We didn't start advancing trim points, so report FAILED.
+            s = E::FAILED;
+            break;
+          default:
+            RATELIMIT_ERROR(std::chrono::seconds(10),
+                            2,
+                            "Unexpected error code from NodeSetFinder: %s",
+                            error_name(status));
+            s = E::FAILED;
+            break;
+        }
+        finalize(s);
+      });
 }
 
-void TrimRequest::start(Status status) {
-  if (status != E::OK) {
-    ld_error("Unable to get the set of shards to send TrimRequest requests to "
-             "for log %lu: %s.",
-             log_id_.val_,
-             error_description(status));
-    finalize(status);
-    return;
-  }
-
+void TrimRequest::start() {
   initStorageSetAccessor();
 }
 
@@ -190,9 +246,10 @@ void TrimRequest::onReply(ShardID from, Status status) {
     case E::NOTSTORAGE:
     case E::OK:
       break;
-    case E::NOTSUPPORTED:
     case E::FAILED:
     case E::INVALID_PARAM:
+    case E::NOTFOUND:
+    case E::SYSLIMIT:
       RATELIMIT_WARNING(std::chrono::seconds(1),
                         10,
                         "Failure while trimming from %s with status %s.",
@@ -203,8 +260,8 @@ void TrimRequest::onReply(ShardID from, Status status) {
     case E::ACCESS:
       finalize(E::ACCESS);
       return;
-    case E::NOTREADY:
     case E::AGAIN:
+    case E::SHUTDOWN:
       res = StorageSetAccessor::AccessResult::TRANSIENT_ERROR;
       break;
     default:
@@ -237,10 +294,6 @@ void TrimRequest::onMessageSent(ShardID to, Status status) {
           to, StorageSetAccessor::AccessResult::TRANSIENT_ERROR);
     }
   }
-}
-
-void TrimRequest::onClientTimeout() {
-  finalize(E::TIMEDOUT);
 }
 
 void TrimRequest::finalize(Status status) {
@@ -315,6 +368,11 @@ void TrimRequest::initStorageSetAccessor() {
       };
 
   StorageSetAccessor::CompletionFunc completion = [this](Status st) {
+    ld_check_in(st, ({E::OK, E::TIMEDOUT, E::FAILED}));
+    if (st == E::FAILED) {
+      // We could have advanced trim point on some storage nodes.
+      st = E::PARTIAL;
+    }
     finalize(st);
   };
 

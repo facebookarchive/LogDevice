@@ -69,9 +69,10 @@ class NodeSetFinder {
    *
    * Once historical metadata has been found or there was an error,
    * NodeSetFinder executes the callback passed by the caller with the status as
-   * argument. The status can have the following values: OK - the process
-   * completed successfully and the caller may access the gathered data through
-   * the accessors. TIMEDOUT - a timeout occurred while fetching the result
+   * argument. The status can have the following values:
+   *    OK - the process completed successfully and the caller may access the
+   *         gathered data through the accessors.
+   *    TIMEDOUT - a timeout occurred while fetching the result
    *    INVALID_PARAM - the log_id is not in the configuration
    *    ACCESS - permission denied
    *    FAILED - failed to read the metadata log
