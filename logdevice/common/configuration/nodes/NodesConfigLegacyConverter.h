@@ -28,6 +28,9 @@ class NodesConfigLegacyConverter {
   // got converted back, compare with the original. return true if the
   // generated server is the same as the original.
   static bool testWithServerConfig(const ServerConfig& server_config);
+
+  static bool testSerialization(const ServerConfig& server_config,
+                                bool compress);
 };
 
 }}}} // namespace facebook::logdevice::configuration::nodes

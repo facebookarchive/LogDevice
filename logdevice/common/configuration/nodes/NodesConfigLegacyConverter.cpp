@@ -13,6 +13,7 @@
 #include "logdevice/common/configuration/MetaDataLogsConfig.h"
 #include "logdevice/common/configuration/Node.h"
 #include "logdevice/common/configuration/NodesConfig.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationCodecFlatBuffers.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/membership/utils.h"
 
@@ -354,6 +355,62 @@ bool NodesConfigLegacyConverter::testWithServerConfig(
     std::cerr << orig_str << std::endl;
     std::cerr << "<<<<<< Converted:" << std::endl;
     std::cerr << compare_str << std::endl;
+    return false;
+  }
+
+  return true;
+}
+
+/*static*/
+bool NodesConfigLegacyConverter::testSerialization(
+    const ServerConfig& server_config,
+    bool compress) {
+  auto nodes_config = server_config.getNodesConfiguration();
+  ld_check(nodes_config != nullptr);
+
+  auto serialization_start_time = std::chrono::steady_clock::now();
+  auto config_str =
+      NodesConfigurationCodecFlatBuffers::serialize(*nodes_config, {compress});
+  auto serialization_end_time = std::chrono::steady_clock::now();
+  if (config_str.empty()) {
+    ld_error("Serialization failed for config %s.",
+             server_config.getClusterName().c_str());
+    return false;
+  }
+
+  ld_info(
+      "Serialization took %lu usec with compression %s for config with cluster "
+      "name %s. Blob size: %lu.",
+      SystemTimestamp(serialization_end_time - serialization_start_time)
+          .toMicroseconds()
+          .count(),
+      compress ? "ON" : "OFF",
+      server_config.getClusterName().c_str(),
+      config_str.size());
+
+  auto deserialization_start_time = std::chrono::steady_clock::now();
+  auto deseriazed_config = NodesConfigurationCodecFlatBuffers::deserialize(
+      (void*)config_str.data(), config_str.size());
+  auto deserialization_end_time = std::chrono::steady_clock::now();
+
+  ld_info("Deserialization took %lu usec with compression %s for config with "
+          "cluster "
+          "name %s.",
+          SystemTimestamp(deserialization_end_time - deserialization_start_time)
+              .toMicroseconds()
+              .count(),
+          compress ? "ON" : "OFF",
+          server_config.getClusterName().c_str());
+
+  if (deseriazed_config == nullptr) {
+    ld_error("Deserialization failed for config %s.",
+             server_config.getClusterName().c_str());
+    return false;
+  }
+
+  if (!(*nodes_config == *deseriazed_config)) {
+    ld_error("Deserialized config is different from original for config %s.",
+             server_config.getClusterName().c_str());
     return false;
   }
 

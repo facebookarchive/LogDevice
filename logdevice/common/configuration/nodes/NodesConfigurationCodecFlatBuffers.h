@@ -7,11 +7,17 @@
  */
 #pragma once
 
+#include <folly/Range.h>
+
 #include "logdevice/common/configuration/nodes/NodesConfiguration.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationCodec_generated.h"
 
-namespace facebook { namespace logdevice { namespace configuration {
-namespace nodes {
+namespace facebook { namespace logdevice {
+
+class ProtocolWriter;
+class ProtocolReader;
+
+namespace configuration { namespace nodes {
 
 class NodesConfigurationCodecFlatBuffers {
  public:
@@ -45,6 +51,69 @@ class NodesConfigurationCodecFlatBuffers {
   GEN_SERIALIZATION_CONFIG(MetaDataLogsReplication);
   GEN_SERIALIZATION_CONFIG(NodesConfiguration);
 
+  ////////// serialization to linear buffer ///////////
+
+  struct Header {
+    using flags_t = uint32_t;
+    using blob_size_t = uint64_t;
+
+    ProtocolVersion proto_version;
+    flags_t flags;
+    uint64_t config_version;
+    // size of the data blob after the fixed sized header
+    blob_size_t blob_size;
+
+    // if set, the data blob is compressed and will be decompressed during
+    // deserialization. currently only ZSTD is used.
+    static const flags_t COMPRESSED = 1u << 0;
+  };
+
+  static_assert(sizeof(Header) == 24,
+                "NodesConfigurationCodecFlatBuffers::Header is not packed.");
+
+  struct SerializeOptions {
+    // use zstd to compress the configuration data blob
+    bool compression;
+  };
+
+  /**
+   * Serializes the object into the buffer handled by ProtocoWriter.
+   *
+   *
+   * @return  nothing is returned. But if there is an error on serialization,
+   *          @param writer should enter error state (i.e., writer.error()
+   *          == true).
+   */
+  static void serialize(const NodesConfiguration& nodes_config,
+                        ProtocolWriter& writer,
+                        SerializeOptions options = {false});
+
+  /**
+   * @param  evbuffer_zero_copy  if true, use evbuffer zero copy to get the
+   *                             payload. Must be reading from evbuffer.
+   *
+   * @return  a shared ptr of the deserialized config is returned. But if there
+   *          is an error on deserialization, nullptr is returned and
+   *          @param reader should enter error state (i.e., reader.error() ==
+   *          true).
+   */
+  static std::shared_ptr<const NodesConfiguration>
+  deserialize(ProtocolReader& reader, bool evbuffer_zero_copy = false);
+
+  // convenience wrappers for serialization / deserialization with linear buffer
+  // such as strings
+  static std::string serialize(const NodesConfiguration& nodes_config,
+                               SerializeOptions options = {false});
+
+  static std::shared_ptr<const NodesConfiguration> deserialize(void* buffer,
+                                                               size_t size);
+  static std::shared_ptr<const NodesConfiguration>
+  deserialize(folly::StringPiece buf);
+
+  // try to extract the nodes configuration version from a data blob
+  static folly::Optional<membership::MembershipVersion::Type>
+  extractConfigVersion(folly::StringPiece serialized_data);
+
  private:
   GEN_SERIALIZATION_OBJECT(NodeServiceDiscovery)
   GEN_SERIALIZATION_OBJECT(SequencerNodeAttribute)
@@ -54,4 +123,5 @@ class NodesConfigurationCodecFlatBuffers {
 #undef GEN_SERIALIZATION_OBJECT
 };
 
-}}}} // namespace facebook::logdevice::configuration::nodes
+}} // namespace configuration::nodes
+}} // namespace facebook::logdevice

@@ -8,6 +8,7 @@
 
 #include "logdevice/common/configuration/nodes/NodesConfiguration.h"
 
+#include <folly/Random.h>
 #include <gtest/gtest.h>
 
 #include "logdevice/common/configuration/nodes/NodesConfigLegacyConverter.h"
@@ -51,25 +52,46 @@ class NodesConfigurationTest : public ::testing::Test {
   }
 
   inline void checkCodecSerialization(const NodesConfiguration& c) {
-    flatbuffers::FlatBufferBuilder builder;
-    auto config = NodesConfigurationCodecFlatBuffers::serialize(builder, c);
-    builder.Finish(config);
+    {
+      flatbuffers::FlatBufferBuilder builder;
+      auto config = NodesConfigurationCodecFlatBuffers::serialize(builder, c);
+      builder.Finish(config);
 
-    // run flatbuffers internal verification
-    auto verifier =
-        flatbuffers::Verifier(builder.GetBufferPointer(), builder.GetSize());
-    auto res = verifier.VerifyBuffer<
-        configuration::nodes::flat_buffer_codec::NodesConfiguration>(nullptr);
-    ASSERT_TRUE(res);
+      // run flatbuffers internal verification
+      auto verifier =
+          flatbuffers::Verifier(builder.GetBufferPointer(), builder.GetSize());
+      auto res = verifier.VerifyBuffer<
+          configuration::nodes::flat_buffer_codec::NodesConfiguration>(nullptr);
+      ASSERT_TRUE(res);
 
-    auto config_ptr = flatbuffers::GetRoot<
-        configuration::nodes::flat_buffer_codec::NodesConfiguration>(
-        builder.GetBufferPointer());
-    auto c_deserialized =
-        NodesConfigurationCodecFlatBuffers::deserialize(config_ptr);
+      auto config_ptr = flatbuffers::GetRoot<
+          configuration::nodes::flat_buffer_codec::NodesConfiguration>(
+          builder.GetBufferPointer());
+      auto c_deserialized =
+          NodesConfigurationCodecFlatBuffers::deserialize(config_ptr);
 
-    ASSERT_NE(nullptr, c_deserialized);
-    ASSERT_EQ(c, *c_deserialized);
+      ASSERT_NE(nullptr, c_deserialized);
+      ASSERT_EQ(c, *c_deserialized);
+    }
+    {
+      // also test serialization with linear buffers
+      bool compress = folly::Random::rand64(2) == 0;
+      ld_info("Compression: %s", compress ? "enabled" : "disabled");
+      std::string str_buf =
+          NodesConfigurationCodecFlatBuffers::serialize(c, {compress});
+      ASSERT_FALSE(str_buf.empty());
+      ld_info("Serialized config blob has %lu bytes", str_buf.size());
+
+      auto version =
+          NodesConfigurationCodecFlatBuffers::extractConfigVersion(str_buf);
+      ASSERT_TRUE(version.hasValue());
+      ASSERT_EQ(c.getVersion(), version.value());
+
+      auto c_deserialized2 = NodesConfigurationCodecFlatBuffers::deserialize(
+          (void*)str_buf.data(), str_buf.size());
+      ASSERT_NE(nullptr, c_deserialized2);
+      ASSERT_EQ(c, *c_deserialized2);
+    }
   }
 };
 
@@ -523,6 +545,15 @@ TEST_F(NodesConfigurationTest, LegacyConversion1) {
 
   ASSERT_NE(converted_nodes_config, nullptr);
   checkCodecSerialization(*converted_nodes_config);
+}
+
+TEST_F(NodesConfigurationTest, ExtractVersionError) {
+  auto version =
+      NodesConfigurationCodecFlatBuffers::extractConfigVersion(std::string());
+  ASSERT_FALSE(version.hasValue());
+  version = NodesConfigurationCodecFlatBuffers::extractConfigVersion(
+      std::string("123"));
+  ASSERT_FALSE(version.hasValue());
 }
 
 } // namespace
