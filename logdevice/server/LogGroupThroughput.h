@@ -25,14 +25,7 @@ using OneGroupResults = folly::small_vector<RateType, 4>;
 using Duration = PerLogTimeSeries::TimeSeries::Duration;
 using TimePoint = PerLogTimeSeries::TimeSeries::TimePoint;
 
-struct StringPieceHash {
-  size_t operator()(folly::StringPiece s) const {
-    return folly::hash::SpookyHashV2::Hash64(s.data(), s.size(), 0);
-  }
-};
-
-using AggregateMap =
-    folly::StringKeyedUnorderedMap<OneGroupResults, StringPieceHash>;
+using AggregateMap = folly::StringKeyedUnorderedMap<OneGroupResults>;
 
 AggregateMap doAggregate(StatsHolder* stats,
                          std::string time_series_,

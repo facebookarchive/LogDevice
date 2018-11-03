@@ -28,14 +28,7 @@ using Duration = StatsCustomCounters::Duration;
 
 using TimePoint = CustomCountersTimeSeries::TimeSeries::TimePoint;
 
-struct StringPieceHash {
-  size_t operator()(folly::StringPiece s) const {
-    return folly::hash::SpookyHashV2::Hash64(s.data(), s.size(), 0);
-  }
-};
-
-using AggregateMap =
-    folly::StringKeyedUnorderedMap<OneGroupResults, StringPieceHash>;
+using AggregateMap = folly::StringKeyedUnorderedMap<OneGroupResults>;
 
 static Duration getCustomCountersMaxInterval() {
   return CustomCountersTimeSeries::getCustomCounterIntervals().back();
