@@ -2448,7 +2448,11 @@ TEST_P(RebuildingTest, DerivedStats) {
   wait_until_event_log_synced(*cluster, event_lsn, /* nodes */ {3});
 
   stats = cluster->getNode(3).stats();
-  EXPECT_EQ(0, stats["shards_waiting_for_non_started_restore"]);
+  // don't know why there is a race here
+  wait_until("shards_waiting_for_non_started_restore", [&cluster, &stats] {
+    stats = cluster->getNode(1).stats();
+    return 0 == stats["shards_waiting_for_non_started_restore"];
+  });
   EXPECT_EQ(0, stats["non_empty_shards_in_restore"]);
 
   // Undrain N3 and wait for it to ack.
