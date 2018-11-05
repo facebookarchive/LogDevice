@@ -472,7 +472,8 @@ void LogRebuilding::startReading() {
     return;
   }
 
-  cur_replication_scheme_ = createReplicationScheme(*curEpochRange_->second);
+  cur_replication_scheme_ = createReplicationScheme(
+      *curEpochRange_->second, rebuildingPlan_.sequencerNodeID);
   readNewBatch();
 }
 
@@ -1463,8 +1464,8 @@ void LogRebuilding::onBatchEnd() {
         // There should be a new epoch interval to read otherwise the status
         // would have been E::UNTIL_LSN_REACHED.
         ld_check(curEpochRange_ != rebuildingPlan_.epochsToRead.end());
-        cur_replication_scheme_ =
-            createReplicationScheme(*curEpochRange_->second);
+        cur_replication_scheme_ = createReplicationScheme(
+            *curEpochRange_->second, rebuildingPlan_.sequencerNodeID);
         readPointer_.lsn =
             compose_lsn(epoch_t(curEpochRange_->first.lower()), ESN_MIN);
         ld_debug("LogID %ju: Setting lsn to 0x%jx.",
@@ -1754,7 +1755,8 @@ void LogRebuilding::deleteThis() {
 }
 
 std::shared_ptr<ReplicationScheme>
-LogRebuilding::createReplicationScheme(EpochMetaData metadata) {
+LogRebuilding::createReplicationScheme(EpochMetaData metadata,
+                                       NodeID sequencer_node_id) {
   auto cfg = Worker::getConfig();
   auto log_group = cfg->getLogGroupByIDShared(logid_);
   auto& rebuilding_shards = getRebuildingSet().shards;
@@ -1767,7 +1769,8 @@ LogRebuilding::createReplicationScheme(EpochMetaData metadata) {
       cfg->serverConfig(),
       log_group ? &log_group->attrs() : nullptr,
       Worker::settings(),
-      relocate_local_records);
+      relocate_local_records,
+      sequencer_node_id);
   markNodesInRebuildingSetNotAvailable(*scheme);
   return scheme;
 }

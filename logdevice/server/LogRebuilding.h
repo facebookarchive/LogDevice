@@ -537,7 +537,7 @@ class LogRebuilding : public LogRebuildingInterface,
   virtual void deleteThis();
 
   virtual std::shared_ptr<ReplicationScheme>
-  createReplicationScheme(EpochMetaData metadata);
+  createReplicationScheme(EpochMetaData metadata, NodeID sequencer_node_id);
 
   /**
    * Create a RecordRebuildingStore state machine.

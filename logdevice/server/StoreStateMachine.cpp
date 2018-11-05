@@ -425,8 +425,8 @@ void StoreStateMachine::execute() {
 
   if (message_->header_.flags & STORE_Header::REBUILDING) {
     // Accept this rebuilding store only if
-    //  the lsn of the store is at/or below last_released OR
-    //  the epoch of the store is at/or below LCE.
+    //  the lsn of the store is at or below last_released OR
+    //  the epoch of the store is at or below LCE.
     // Otherwise, treat this as a release so that
     // it triggers purging which consequently updates the
     // LCE and last_released_lsn
@@ -441,24 +441,31 @@ void StoreStateMachine::execute() {
     } else {
       // Trigger purging by treating this store as a proxy
       // for release message.
+      NodeID seq = message_->header_.sequencer_node_id;
       RATELIMIT_INFO(
           std::chrono::seconds(1),
           1,
           "Treating Rebuilding STORE as proxy for release for log:%lu,"
           "store lsn: %s, current last_clean_epoch: %u, "
-          "current last_released_lsn: %s ",
+          "current last_released_lsn: %s, sequencer: %s",
           message_->header_.rid.logid.val_,
           lsn_to_string(message_->header_.rid.lsn()).c_str(),
           last_clean_epoch.hasValue() ? last_clean_epoch.value().val_ : 0,
           lsn_to_string(last_released_lsn.hasValue() ? last_released_lsn.value()
                                                      : LSN_INVALID)
-              .c_str());
+              .c_str(),
+          seq.toString().c_str());
 
-      log_state->purge_coordinator_->onReleaseMessage(
-          message_->header_.rid.lsn(),
-          message_->header_.sequencer_node_id,
-          ReleaseType::GLOBAL,
-          true);
+      if (seq.isNodeID()) {
+        log_state->purge_coordinator_->onReleaseMessage(
+            message_->header_.rid.lsn(), seq, ReleaseType::GLOBAL, true);
+      } else {
+        RATELIMIT_ERROR(std::chrono::seconds(1),
+                        1,
+                        "Got rebuilding STORE with invalid sequencer_node_id "
+                        "(%d). Rejecting.",
+                        (unsigned)seq);
+      }
 
       // Respond to rebuilding store
       message_->sendReply(E::DISABLED);

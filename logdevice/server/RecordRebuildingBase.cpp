@@ -332,6 +332,7 @@ RecordRebuildingBase::buildStoreMessage(ShardID target_shard, bool amend) {
                  });
 
   storeHeader_.timeout_ms = getStoreTimeoutMs();
+  storeHeader_.sequencer_node_id = replication_->sequencer_node_id;
   STORE_flags_t add_flags = 0;
   if (amend) {
     add_flags |= STORE_Header::AMEND;

@@ -107,7 +107,7 @@ Status SealStorageTask::executeImpl(LocalLogStore& store,
   int rv = store.updateLogMetadata(log_id_, seal_metadata, write_options);
   if (rv != 0) {
     ld_check(durability_ == Durability::INVALID);
-    ;
+
     if (err != E::UPTODATE) {
       return E::FAILED;
     }
@@ -329,11 +329,7 @@ Status SealStorageTask::getEpochInfo(LocalLogStore& store,
   read_options.allow_blocking_io = true;
   read_options.tailing = false;
   auto iterator = store.read(log_id_, read_options);
-  if (!iterator) {
-    ld_check(false && "Creating a ReadIterator failed");
-    err = E::INTERNAL;
-    return E::FAILED;
-  }
+  ld_check(iterator != nullptr);
 
   ld_check(epoch_info_->empty());
   for (int64_t epoch = (int64_t)last_clean_.val_ + 1;

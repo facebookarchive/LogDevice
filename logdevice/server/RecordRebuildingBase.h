@@ -57,6 +57,7 @@ struct ReplicationScheme {
   EpochMetaData epoch_metadata;
   std::shared_ptr<NodeSetState> nodeset_state;
   std::unique_ptr<CopySetSelector> copysetSelector;
+  NodeID sequencer_node_id; // this is put in STORE messages
   bool relocate_local_records = false;
 
   ReplicationScheme() {} // only used in tests
@@ -66,7 +67,8 @@ struct ReplicationScheme {
                     const std::shared_ptr<ServerConfig>& cfg,
                     const logsconfig::LogAttributes* log_attrs,
                     const Settings& settings,
-                    bool relocate)
+                    bool relocate,
+                    NodeID sequencer_node)
       : epoch_metadata(std::move(_epoch_metadata))
         // not excluding zero-weight nodes
         ,
@@ -74,6 +76,7 @@ struct ReplicationScheme {
             epoch_metadata.shards,
             logid,
             NodeSetState::HealthCheck::DISABLED)),
+        sequencer_node_id(sequencer_node),
         relocate_local_records(relocate) {
     // Copyset selector initialization may need an RNG (e.g. to shuffle
     // racks). Use a deterministic PRNG seeded with log ID, to make sure that

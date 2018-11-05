@@ -360,7 +360,8 @@ bool RebuildingReadStorageTaskV2::lookUpEpochMetadata(
         cfg->serverConfig(),
         log_group ? &log_group->attrs() : nullptr,
         *getSettings().get(),
-        relocate_local_records);
+        relocate_local_records,
+        log_state->plan.sequencerNodeID);
     markNodesInRebuildingSetNotAvailable(
         log_state->currentReplication->nodeset_state.get(), context);
   }

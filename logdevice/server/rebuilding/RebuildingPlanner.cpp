@@ -479,6 +479,7 @@ void RebuildingPlanner::onComplete(logid_t logid) {
   LogPlan plan = std::move(log_state.plan);
   for (auto& p : plan) {
     p.second->untilLSN = log_state.until_lsn;
+    p.second->sequencerNodeID = log_state.seq;
   }
   listener_->onRetrievedPlanForLog(
       logid, shard_, std::move(plan), log_state.isAuthoritative, version_);
