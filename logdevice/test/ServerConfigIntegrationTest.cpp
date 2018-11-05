@@ -41,7 +41,7 @@ TEST_F(ServerConfigIntegrationTest, NodeIndexChange) {
   // can't use cluster->waitForConfigUpdate(), because the config is never
   // updated due to it being invalid
   wait_until([&] {
-    return get_stat(cluster->getNode(0)) || get_stat(cluster->getNode(1));
+    return get_stat(cluster->getNode(0)) && get_stat(cluster->getNode(1));
   });
 
   // this is implicitly true due to the wait_until, but let's be explicit
