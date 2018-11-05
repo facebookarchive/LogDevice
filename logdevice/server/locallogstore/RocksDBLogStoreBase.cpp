@@ -36,6 +36,10 @@ RocksDBLogStoreBase::~RocksDBLogStoreBase() {
   if (fail_safe_mode_.load()) {
     PER_SHARD_STAT_DECR(getStatsHolder(), failed_safe_log_stores, shard_idx_);
   }
+
+  // Clears the last reference to all column family handles in the map.
+  cf_accessor_.wlock()->clear();
+
   // Destruction of db_ could trigger a flush of dirty memtable
   // when WAL is not used for writes. Such a flush, could in turn
   // callback into this class if we have regiestered event listeners.
@@ -350,6 +354,19 @@ int RocksDBLogStoreBase::deletePerEpochLogMetadata(
     const WriteOptions& write_options) {
   return writer_->deletePerEpochLogMetadata(
       log_id, epoch, type, write_options, getMetadataCFHandle());
+}
+
+RocksDBCFPtr
+RocksDBLogStoreBase::getColumnFamilyPtr(uint32_t column_family_id) {
+  RocksDBCFPtr cf_ptr;
+  cf_accessor_.withRLock([&](auto& locked_accessor) {
+    const auto& iter = locked_accessor.find(column_family_id);
+    if (iter != locked_accessor.end()) {
+      cf_ptr = iter->second;
+    }
+  });
+
+  return cf_ptr;
 }
 
 }} // namespace facebook::logdevice

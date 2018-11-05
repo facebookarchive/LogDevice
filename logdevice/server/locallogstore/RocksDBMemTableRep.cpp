@@ -61,10 +61,13 @@ void RocksDBMemTableRepFactory::registerMemTableRep(RocksDBMemTableRep& mtr) {
       mtr.dirty_.store(true, std::memory_order_release);
       PER_SHARD_STAT_INCR(
           store_->getStatsHolder(), num_memtables, store_->getShardIdx());
-      ld_debug("Registering MemTableRep(%p). FlushToken:%ju, CF_ID:%u",
+      auto owner = store_->getColumnFamilyPtr(mtr.column_family_id_);
+      ld_debug("Registering MemTableRep(%p). FlushToken:%ju, CF_ID:%u"
+               "%s",
                &mtr,
                (uintmax_t)mtr.flush_token_,
-               mtr.column_family_id_);
+               mtr.column_family_id_,
+               owner != nullptr ? "" : ", created during db recovery");
     }
   }
 }
@@ -87,6 +90,9 @@ void RocksDBMemTableRepFactory::unregisterMemTableRep(RocksDBMemTableRep& mtr) {
            (intmax_t)active_memtables_.front().flush_token_,
            (intmax_t)active_memtables_.back().flush_token_,
            (intmax_t)flushed_up_through_.load());
+
+  // Let mtr.owner know that memtable was flushed. We check to make
+  // sure that all dependencies for this memtable rep are satisfied.
 
   bool window_slid = &active_memtables_.front() == &mtr;
   mtr.links_.unlink();
@@ -131,5 +137,4 @@ void RocksDBMemTableRepFactory::unregisterMemTableRep(RocksDBMemTableRep& mtr) {
     store_->onMemTableWindowUpdated();
   }
 }
-
 }} // namespace facebook::logdevice

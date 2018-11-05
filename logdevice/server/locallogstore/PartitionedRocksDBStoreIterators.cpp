@@ -20,7 +20,7 @@ using Location = LocalLogStore::AllLogsIterator::Location;
 void PartitionedRocksDBStore::Iterator::setDataIteratorFromCurrent(
     ReadFilter* filter) {
   if (data_iterator_) {
-    ld_check(data_iterator_->getCF() == current_.partition_->cf_.get());
+    ld_check(data_iterator_->getCF() == current_.partition_->cf_->get());
   }
   if (!current_.partition_) {
     ld_check(!data_iterator_);
@@ -31,7 +31,7 @@ void PartitionedRocksDBStore::Iterator::setDataIteratorFromCurrent(
   if (!filter || checkFilterTimeRange(*filter, &min_ts, &max_ts)) {
     if (data_iterator_ == nullptr) {
       data_iterator_ = std::make_unique<RocksDBLocalLogStore::CSIWrapper>(
-          pstore_, log_id_, options_, current_.partition_->cf_.get());
+          pstore_, log_id_, options_, current_.partition_->cf_->get());
     }
     data_iterator_->min_ts_ = min_ts;
     data_iterator_->max_ts_ = max_ts;
@@ -43,7 +43,7 @@ void PartitionedRocksDBStore::Iterator::setDataIteratorFromCurrent(
 void PartitionedRocksDBStore::Iterator::setMetaIteratorAndCurrentFromLSN(
     lsn_t lsn) {
   if (data_iterator_) {
-    ld_check(data_iterator_->getCF() == current_.partition_->cf_.get());
+    ld_check(data_iterator_->getCF() == current_.partition_->cf_->get());
   }
   ld_check(latest_.partition_ != nullptr);
 
@@ -126,7 +126,7 @@ bool PartitionedRocksDBStore::Iterator::setMetaIteratorFromCurrent() {
 
 void PartitionedRocksDBStore::Iterator::setCurrent(PartitionInfo new_current) {
   if (data_iterator_) {
-    ld_check(data_iterator_->getCF() == current_.partition_->cf_.get());
+    ld_check(data_iterator_->getCF() == current_.partition_->cf_->get());
   }
   ld_check(new_current.partition_ != nullptr);
 
@@ -1067,7 +1067,7 @@ void PartitionedRocksDBStore::PartitionedAllLogsIterator::seekToCurrentEntry(
           pstore_,
           /* log_id */ folly::none,
           options_,
-          current_partition_->cf_.get());
+          current_partition_->cf_->get());
       data_iterator_->min_ts_ = min_ts;
       data_iterator_->max_ts_ = max_ts;
 

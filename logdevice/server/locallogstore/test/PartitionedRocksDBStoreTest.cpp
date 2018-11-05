@@ -4409,9 +4409,11 @@ TEST_F(PartitionedRocksDBStoreTest, PartialCompactionEvaluator) {
     explicit PartitionGenerator(std::vector<std::vector<size_t>> sizes) {
       for (size_t i = 0; i < sizes.size(); ++i) {
         // setting CF pointers to numeric values to reference it later
+        auto cf_holder = std::make_shared<RocksDBColumnFamily>(
+            reinterpret_cast<rocksdb::ColumnFamilyHandle*>(i));
         partitions_.emplace_back(new PartitionedRocksDBStore::Partition(
             i,
-            reinterpret_cast<rocksdb::ColumnFamilyHandle*>(i),
+            cf_holder,
             RecordTimestamp(std::chrono::milliseconds(BASE_TIME))));
         rocksdb::ColumnFamilyMetaData cf_metadata;
         std::vector<rocksdb::SstFileMetaData> l0_files;
@@ -4432,7 +4434,7 @@ TEST_F(PartitionedRocksDBStoreTest, PartialCompactionEvaluator) {
       // We set some weird pointer values in cf_. We have to drop them before
       // destroying partitions
       for (auto& p : partitions_) {
-        const_cast<std::unique_ptr<rocksdb::ColumnFamilyHandle>&>(p->cf_)
+        const_cast<std::unique_ptr<rocksdb::ColumnFamilyHandle>&>(p->cf_->cf_)
             .release();
       }
     }
@@ -4479,7 +4481,7 @@ TEST_F(PartitionedRocksDBStoreTest, PartialCompactionEvaluator) {
     for (auto& p : to_compact) {
       ld_check(PartitionedRocksDBStore::PartitionToCompact::Reason::PARTIAL ==
                p.reason);
-      size_t partition_id = reinterpret_cast<size_t>(p.partition->cf_.get());
+      size_t partition_id = reinterpret_cast<size_t>(p.partition->cf_->get());
       ld_check(partition_id < num_partitions);
       std::vector<size_t> files;
       for (auto& filename : p.partial_compaction_filenames) {
@@ -8851,4 +8853,29 @@ TEST_F(PartitionedRocksDBStoreTest, InterleavingCompactions) {
   c = {};
   PartitionToCompact::interleavePartialAndNormalCompactions(&c);
   check(0, {});
+}
+
+// The shared_ptr pointer returned will be invalidated after the partition
+// is dropped. This test makes sure that is the case.
+TEST_F(PartitionedRocksDBStoreTest, RocksDBCFPtrInvalidateAfterPartitionDrop) {
+  // Get the rocksdb cf shared_ptr similar to how memtables fetch it.
+  auto latest_partition = store_->getLatestPartition();
+  auto cf_id = latest_partition->cf_->getID();
+  auto rocksdb_ptr = store_->getColumnFamilyPtr(cf_id);
+  const logid_t logid(1);
+  ASSERT_TRUE(rocksdb_ptr != nullptr);
+  ASSERT_TRUE(rocksdb_ptr->getID() == cf_id);
+  put({TestRecord(logid, 10)});
+  // Create a new partition just so that previous partition can be dropped.
+  store_->createPartition();
+  store_->dropPartitionsUpTo(ID0 + 1);
+  // Now try to fetch the cf_ptr again. This time the returned ptr should
+  // be invalid.
+  rocksdb_ptr = store_->getColumnFamilyPtr(cf_id);
+  ASSERT_TRUE(rocksdb_ptr == nullptr);
+
+  // Other threads who already got access to the partition ptr should still be
+  // able to access the cf_ptr.
+  ASSERT_TRUE(latest_partition->cf_ != nullptr);
+  ASSERT_TRUE(latest_partition->cf_->getID() == cf_id);
 }

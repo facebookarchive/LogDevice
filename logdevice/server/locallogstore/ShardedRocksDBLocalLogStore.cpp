@@ -497,7 +497,7 @@ int ShardedRocksDBLocalLogStore::trimLogsBasedOnSpaceIfNeeded(
 
     for (PartitionPtr partition_ptr : *partition_list) { // Partitions
       partition_space_usage += partitioned_store->getApproximatePartitionSize(
-          partition_ptr->cf_.get());
+          partition_ptr->cf_->get());
     }
 
     total_space_used_by_partitions += partition_space_usage;
@@ -576,7 +576,7 @@ int ShardedRocksDBLocalLogStore::trimLogsBasedOnSpaceIfNeeded(
     auto partitioned_store =
         dynamic_cast<PartitionedRocksDBStore*>(getByIndex(current.shard_idx));
     size_t partition_size = partitioned_store->getApproximatePartitionSize(
-        (*current.it)->cf_.get());
+        (*current.it)->cf_->get());
     reclaimed_so_far += partition_size;
     current.reclaimed += partition_size;
     current.it++;

@@ -128,14 +128,14 @@ class InfoPartitions : public AdminCommand {
               .set<4>(partition->max_timestamp.toMilliseconds())
               .set<5>(partition->last_compaction_time.toMilliseconds())
               .set<6>(partitioned_store->getApproximatePartitionSize(
-                  partition->cf_.get()))
-              .set<7>(partitioned_store->getNumL0Files(partition->cf_.get()));
+                  partition->cf_->get()))
+              .set<7>(partitioned_store->getNumL0Files(partition->cf_->get()));
 
           if (level_ >= 1) {
             auto prop = [&](const char* name) -> std::string {
               std::string val;
               bool ok = partitioned_store->getDB().GetProperty(
-                  partition->cf_.get(),
+                  partition->cf_->get(),
                   rocksdb::Slice(name, strlen(name)),
                   &val);
               if (ok) {
@@ -147,7 +147,7 @@ class InfoPartitions : public AdminCommand {
             auto uint_prop = [&](const char* name) -> uint64_t {
               uint64_t val;
               bool ok = partitioned_store->getDB().GetIntProperty(
-                  partition->cf_.get(),
+                  partition->cf_->get(),
                   rocksdb::Slice(name, strlen(name)),
                   &val);
               if (ok) {

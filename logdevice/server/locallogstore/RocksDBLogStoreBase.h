@@ -9,6 +9,7 @@
 #include <atomic>
 
 #include <boost/noncopyable.hpp>
+#include <folly/Synchronized.h>
 #include <rocksdb/db.h>
 #include <rocksdb/iterator.h>
 #include <rocksdb/perf_context.h>
@@ -19,6 +20,7 @@
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/server/IOFaultInjection.h"
 #include "logdevice/server/locallogstore/LocalLogStore.h"
+#include "logdevice/server/locallogstore/RocksDBColumnFamily.h"
 #include "logdevice/server/locallogstore/RocksDBKeyFormat.h"
 #include "logdevice/server/locallogstore/RocksDBLogStoreConfig.h"
 #include "logdevice/server/locallogstore/RocksDBSettings.h"
@@ -343,6 +345,26 @@ class RocksDBLogStoreBase : public LocalLogStore {
     return ROCKSDB_PERF_CONTEXT()->block_read_byte;
   }
 
+  // Get column family holder shared ptr. Returned instance could be
+  // freed from other thread as part of column family drop or during shutdown
+  // hence it is necessary to check validity of ptr before using. This method
+  // returns nullptr if the column family was not found.
+  RocksDBCFPtr getColumnFamilyPtr(uint32_t column_family_id);
+
+  // Invoked when RocksDB decides to flush memtables of column families in this
+  // db.
+  // Returns the array of all column families that need to be
+  // flushed and the order in which they should be flushed. Return value is a
+  // two-dimensional array, where first dimension tells what column families
+  // should be flushed on a single thread. Hence, each element in first
+  // dimension of array can be flushed in parallel on different threads. Second
+  // dimension indicates in what order the column families need to be flushed on
+  // a single thread.
+  virtual std::vector<std::vector<uint32_t>>
+  onMemtableFlushBegin(std::vector<uint32_t> /*unused*/) {
+    return {};
+  }
+
  protected:
   /**
    * Assumes ownership of the raw rocksdb::DB pointer.
@@ -488,6 +510,11 @@ class RocksDBLogStoreBase : public LocalLogStore {
   std::atomic<bool> low_watermark_crossed_{false};
 
   RocksDBLogStoreConfig rocksdb_config_;
+
+  // Contains references to all the column family handles within this
+  // rocksdb instance.
+  using RocksDBColumnFamilyMap = std::unordered_map<uint32_t, RocksDBCFPtr>;
+  folly::Synchronized<RocksDBColumnFamilyMap> cf_accessor_;
 
  private:
   // Write stalling stuff.

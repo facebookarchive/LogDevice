@@ -134,7 +134,7 @@ int PartitionedRocksDBStore::FindTime::execute(lsn_t* lo, lsn_t* hi) {
       return 0;
     }
     if (p) {
-      cf = p->cf_.get();
+      cf = p->cf_->get();
     }
   }
 

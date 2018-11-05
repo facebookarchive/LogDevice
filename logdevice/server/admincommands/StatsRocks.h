@@ -107,7 +107,7 @@ class StatsRocks : public AdminCommand {
     for (size_t i = 0; i < partitions.size(); ++i) {
       auto partition = partitions[i];
       rocksdb::ColumnFamilyHandle* cf = partition
-          ? partition->cf_.get()
+          ? partition->cf_->get()
           : store->getDB().DefaultColumnFamily();
 
       std::vector<std::string> properties{

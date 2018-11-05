@@ -10,6 +10,7 @@
 #include <folly/IntrusiveList.h>
 #include <folly/lang/SafeAssert.h>
 
+#include "logdevice/server/locallogstore/RocksDBColumnFamily.h"
 #include "logdevice/server/locallogstore/RocksDBLogStoreBase.h"
 #include "logdevice/server/locallogstore/RocksDBMemTableRepWrapper.h"
 

@@ -237,8 +237,16 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
     // id of the partition.
     const partition_id_t id_;
 
-    // Underlying column family.
-    const std::unique_ptr<rocksdb::ColumnFamilyHandle> cf_;
+    // Column family holder for this partition.
+    // This partition instance caches a shared ptr directly to the underlying
+    // RocksDBColumnFamily instance. This allows to extend lifetime of the
+    // object even after partition gets dropped, as other threads might still be
+    // accessing partition ptr for a short while till they figure that the
+    // partition was dropped.
+    // NOTE: The updateable copy of this pointer retrieved via
+    // getColumnFamilyPtr interface is invalidated when partition is dropped or
+    // during shutdown.
+    RocksDBCFPtr cf_;
 
     // Locked for writing when cf_ is being dropped.
     // Locked for reading when data is being written to cf_.
@@ -278,10 +286,10 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
     bool is_dropped{false};
 
     Partition(partition_id_t id,
-              rocksdb::ColumnFamilyHandle* cf,
+              RocksDBCFPtr cf,
               RecordTimestamp starting_timestamp,
               const DirtyState* pre_dirty_state = nullptr)
-        : id_(id), cf_(cf), starting_timestamp(starting_timestamp) {
+        : id_(id), cf_(std::move(cf)), starting_timestamp(starting_timestamp) {
       if (pre_dirty_state != nullptr) {
         dirty_state_ = *pre_dirty_state;
       }
@@ -604,7 +612,7 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
 
   // Returns rocksdb handle of metadata column family.
   rocksdb::ColumnFamilyHandle* getMetadataCFHandle() const override {
-    return metadata_cf_.get();
+    return metadata_cf_->get();
   }
 
   // Returns rocksdb handle of unpartitioned column family.
@@ -1475,7 +1483,7 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
   AtomicSteadyTimestamp avoid_drops_until_{};
 
   // Column family containing metadata
-  std::unique_ptr<rocksdb::ColumnFamilyHandle> metadata_cf_;
+  RocksDBCFPtr metadata_cf_;
 
   // Column family for unpartitioned logs. See isLogPartitioned().
   std::unique_ptr<rocksdb::ColumnFamilyHandle> unpartitioned_cf_;

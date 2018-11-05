@@ -156,7 +156,7 @@ int PartitionedRocksDBStore::FindKey::findPreciseBound(PartitionPtr partition) {
   options.read_tier =
       (allow_blocking_io_ ? rocksdb::kReadAllTier : rocksdb::kBlockCacheTier);
 
-  RocksDBIterator it = store_.newIterator(options, partition->cf_.get());
+  RocksDBIterator it = store_.newIterator(options, partition->cf_->get());
   auto it_error = [&] {
     rocksdb::Status status = it.status();
     if (status.ok()) {

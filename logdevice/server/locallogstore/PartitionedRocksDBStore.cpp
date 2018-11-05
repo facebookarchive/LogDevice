@@ -611,6 +611,14 @@ bool PartitionedRocksDBStore::open(
   partition_id_t latest_partition_id = PARTITION_INVALID;
   partition_id_t oldest_partition_id = PARTITION_MAX;
 
+  auto create_cf_holder =
+      [this](std::unique_ptr<rocksdb::ColumnFamilyHandle> h) {
+        auto cf_id = h->GetID();
+        auto cf_holder = std::make_shared<RocksDBColumnFamily>(h.release());
+        cf_accessor_.wlock()->insert(std::make_pair(cf_id, cf_holder));
+        return cf_holder;
+      };
+
   ld_check_eq(cf_descriptors.size(), cf_handles.size());
   for (size_t i = 0; i < cf_descriptors.size(); ++i) {
     auto& desc = cf_descriptors[i];
@@ -633,7 +641,7 @@ bool PartitionedRocksDBStore::open(
       }
       continue;
     } else if (desc.name == METADATA_CF_NAME) {
-      metadata_cf_ = std::move(cf_handles[i]);
+      metadata_cf_ = create_cf_holder(std::move(cf_handles[i]));
     } else if (desc.name == UNPARTITIONED_CF_NAME) {
       unpartitioned_cf_ = std::move(cf_handles[i]);
     } else if (desc.name == SNAPSHOTS_CF_NAME) {
@@ -655,8 +663,9 @@ bool PartitionedRocksDBStore::open(
         }
       }
       // readPartitionTimestamps() will initialize starting_timestamp.
-      PartitionPtr partition = std::make_shared<Partition>(
-          id, cf_handles[i].release(), RecordTimestamp::min());
+      auto cf_holder = create_cf_holder(std::move(cf_handles[i]));
+      PartitionPtr partition =
+          std::make_shared<Partition>(id, cf_holder, RecordTimestamp::min());
       addPartitions({partition});
       latest_partition_id = id;
       oldest_partition_id = std::min(oldest_partition_id, id);
@@ -665,7 +674,8 @@ bool PartitionedRocksDBStore::open(
 
   // create the metadata column family unless it already exists
   if (!metadata_cf_ && !getSettings()->read_only) {
-    metadata_cf_ = createColumnFamily(METADATA_CF_NAME, meta_cf_options);
+    metadata_cf_ =
+        create_cf_holder(createColumnFamily(METADATA_CF_NAME, meta_cf_options));
   }
   if (!metadata_cf_) {
     ld_error("Couldn't find/create metadata column family");
@@ -682,7 +692,7 @@ bool PartitionedRocksDBStore::open(
     return false;
   }
 
-  int rv = checkSchemaVersion(db, metadata_cf_.get(), SCHEMA_VERSION);
+  int rv = checkSchemaVersion(db, metadata_cf_->get(), SCHEMA_VERSION);
   if (rv != 0) {
     PER_SHARD_STAT_INCR(stats_, corruption_errors, shard_idx_);
     return false;
@@ -723,7 +733,7 @@ bool PartitionedRocksDBStore::open(
                    "before we could write it. Dropping the CF.",
                    partition->id_);
         ld_check_ne(oldest_partition_id, id);
-        status = db_->DropColumnFamilies({partition->cf_.get()});
+        status = db_->DropColumnFamilies({partition->cf_->get()});
         if (!status.ok()) {
           ld_error("Failed to drop column family %lu: %s",
                    partition->id_,
@@ -953,7 +963,7 @@ PartitionedRocksDBStore::createPartitionsImpl(
           PartitionMetaKey(PartitionMetadataType::STARTING_TIMESTAMP, id),
           meta,
           write_options,
-          metadata_cf_.get());
+          metadata_cf_->get());
       if (rv != 0) {
         return false;
       }
@@ -963,7 +973,7 @@ PartitionedRocksDBStore::createPartitionsImpl(
             PartitionMetaKey(PartitionMetadataType::DIRTY, id),
             pre_dirty_state->metadata(),
             write_options,
-            metadata_cf_.get());
+            metadata_cf_->get());
         if (rv != 0) {
           return false;
         }
@@ -985,14 +995,21 @@ PartitionedRocksDBStore::createPartitionsImpl(
     }
   }
 
+  auto create_cf_holder =
+      [this](std::unique_ptr<rocksdb::ColumnFamilyHandle> h) {
+        auto cf_id = h->GetID();
+        auto cf_holder = std::make_shared<RocksDBColumnFamily>(h.release());
+        cf_accessor_.wlock()->insert(std::make_pair(cf_id, cf_holder));
+        return cf_holder;
+      };
+
   // Add the new partitions to the list.
   std::vector<PartitionPtr> new_partitions(count);
   ld_check_eq(starting_timestamps.size(), count);
   for (size_t i = 0; i < count; ++i) {
-    new_partitions[i] = std::make_shared<Partition>(first_id + i,
-                                                    cfs[i].release(),
-                                                    starting_timestamps[i],
-                                                    pre_dirty_state);
+    auto cf_holder = create_cf_holder(std::move(cfs[i]));
+    new_partitions[i] = std::make_shared<Partition>(
+        first_id + i, cf_holder, starting_timestamps[i], pre_dirty_state);
   }
   addPartitions(new_partitions);
 
@@ -1443,7 +1460,7 @@ bool PartitionedRocksDBStore::readPartitionTimestamps(PartitionPtr partition) {
                                  &partition->last_compaction_time)}) {
     PartitionTimestampMetadata meta(it.first);
     int rv = RocksDBWriter::readMetadata(
-        this, PartitionMetaKey(it.first, id), &meta, metadata_cf_.get());
+        this, PartitionMetaKey(it.first, id), &meta, metadata_cf_->get());
     if (rv != 0 && err != E::NOTFOUND) {
       return false;
     }
@@ -1461,7 +1478,7 @@ bool PartitionedRocksDBStore::readPartitionTimestamps(PartitionPtr partition) {
         this,
         PartitionMetaKey(PartitionMetadataType::COMPACTED_RETENTION, id),
         &meta,
-        metadata_cf_.get());
+        metadata_cf_->get());
     if (rv != 0 && err != E::NOTFOUND) {
       return false;
     }
@@ -1476,7 +1493,7 @@ bool PartitionedRocksDBStore::readPartitionTimestamps(PartitionPtr partition) {
         this,
         PartitionMetaKey(PartitionMetadataType::STARTING_TIMESTAMP, id),
         &meta,
-        metadata_cf_.get());
+        metadata_cf_->get());
     if (rv != 0) {
       return false;
     }
@@ -1494,7 +1511,7 @@ bool PartitionedRocksDBStore::readPartitionDirtyState(PartitionPtr partition) {
       this,
       PartitionMetaKey(PartitionMetadataType::DIRTY, partition->id_),
       &meta,
-      metadata_cf_.get());
+      metadata_cf_->get());
   if (rv != 0 && err != E::NOTFOUND) {
     return false;
   }
@@ -1725,7 +1742,7 @@ PartitionedRocksDBStore::getWritePartition(
       }
       current_partition->max_lsn = lsn;
       current_partition->doPut(
-          log_id, durability, metadata_cf_.get(), rocksdb_batch);
+          log_id, durability, metadata_cf_->get(), rocksdb_batch);
       if (current_partition->id == max_used_partition) {
         // New max lsn of latest used partition, update LogState
         log_state->latest_partition.updateMaxLSN(lsn);
@@ -1736,7 +1753,7 @@ PartitionedRocksDBStore::getWritePartition(
                payload_size_bytes != 0 || unset_pseudorecords_only_flag) {
       // Upgrade to a durable entry.
       current_partition->doPut(
-          log_id, durability, metadata_cf_.get(), rocksdb_batch);
+          log_id, durability, metadata_cf_->get(), rocksdb_batch);
     }
   } else if (next_partition && target_partition == next_partition->id) {
     // Need to decrease first_lsn of next_partition.
@@ -1746,13 +1763,13 @@ PartitionedRocksDBStore::getWritePartition(
 
     // Replace next partition with a copy with decreased first_lsn
     DirectoryEntry new_next_partition = *next_partition;
-    next_partition->doDelete(log_id, metadata_cf_.get(), durable_batch);
+    next_partition->doDelete(log_id, metadata_cf_->get(), durable_batch);
     ld_check_lt(lsn, new_next_partition.first_lsn);
     new_next_partition.first_lsn = lsn;
     // Update data size
     new_next_partition.approximate_size_bytes += payload_size_bytes;
     new_next_partition.doPut(
-        log_id, Durability::ASYNC_WRITE, metadata_cf_.get(), durable_batch);
+        log_id, Durability::ASYNC_WRITE, metadata_cf_->get(), durable_batch);
     STAT_INCR(stats_, logsdb_writes_dir_key_decrease);
 
     // Apply same as above in in-memory directory metadata
@@ -1783,7 +1800,7 @@ PartitionedRocksDBStore::getWritePartition(
         directory_entry_flags, // flags
         payload_size_bytes     // approximate size in bytes
     };
-    new_partition.doPut(log_id, durability, metadata_cf_.get(), rocksdb_batch);
+    new_partition.doPut(log_id, durability, metadata_cf_->get(), rocksdb_batch);
     STAT_INCR(stats_, logsdb_writes_dir_key_add);
 
     // Add to in-memory directory metadata
@@ -1971,7 +1988,7 @@ PartitionedRocksDBStore::updatePartitionTimestampsIfNeeded(
         PartitionMetadataType::MAX_TIMESTAMP, new_max);
     Slice value = meta.serialize();
     rocksdb_batch.Put(
-        metadata_cf_.get(),
+        metadata_cf_->get(),
         rocksdb::Slice(reinterpret_cast<const char*>(&key), sizeof key),
         rocksdb::Slice(reinterpret_cast<const char*>(value.data), value.size));
   }
@@ -1982,7 +1999,7 @@ PartitionedRocksDBStore::updatePartitionTimestampsIfNeeded(
         PartitionMetadataType::MIN_TIMESTAMP, new_min);
     Slice value = meta.serialize();
     rocksdb_batch.Put(
-        metadata_cf_.get(),
+        metadata_cf_->get(),
         rocksdb::Slice(reinterpret_cast<const char*>(&key), sizeof key),
         rocksdb::Slice(reinterpret_cast<const char*>(value.data), value.size));
   }
@@ -2282,7 +2299,7 @@ PartitionedRocksDBStore::createMetadataIterator(bool allow_blocking_io) const {
   options.read_tier =
       (allow_blocking_io ? rocksdb::kReadAllTier : rocksdb::kBlockCacheTier);
 
-  return newIterator(options, metadata_cf_.get());
+  return newIterator(options, metadata_cf_->get());
 }
 
 bool PartitionedRocksDBStore::flushPartitionAndDependencies(
@@ -2352,13 +2369,13 @@ bool PartitionedRocksDBStore::shouldCreatePartition() {
 
   auto file_limit = getSettings()->partition_file_limit_;
   if (!partition_limit_crossed && file_limit > 0 &&
-      getNumL0Files(partition->cf_.get()) >= file_limit) {
+      getNumL0Files(partition->cf_->get()) >= file_limit) {
     return true;
   }
 
   auto size_limit = getSettings()->partition_size_limit_;
   if (size_limit > 0 &&
-      getApproximatePartitionSize(partition->cf_.get()) >= size_limit) {
+      getApproximatePartitionSize(partition->cf_->get()) >= size_limit) {
     return true;
   }
 
@@ -2839,7 +2856,7 @@ int PartitionedRocksDBStore::writeMultiImpl(
         // It indeed does when the writes arrive in order of increasing LSN.
         dir_updates_pending[op->log_id] = dir_updates_flushed + 1;
 
-        cf_handle = partition->cf_.get();
+        cf_handle = partition->cf_->get();
 
         // Complain about suspicious writes.
         if (write->getType() != WriteType::PUT ||
@@ -2905,7 +2922,7 @@ int PartitionedRocksDBStore::writeMultiImpl(
                   op->lsn);
               rocksdb::Slice value_slice(value.data(), value.size());
 
-              rocksdb_batch.Merge(metadata_cf_.get(), key_slice, value_slice);
+              rocksdb_batch.Merge(metadata_cf_->get(), key_slice, value_slice);
             }
           }
         }
@@ -2934,7 +2951,7 @@ int PartitionedRocksDBStore::writeMultiImpl(
   // Actually write the records to rocksdb.
   int rv = writer_->writeMulti(writes,
                                options,
-                               metadata_cf_.get(),
+                               metadata_cf_->get(),
                                &cf_handles,
                                wal_batch,
                                mem_batch,
@@ -3191,7 +3208,7 @@ int PartitionedRocksDBStore::writeStoreMetadata(
   ld_check(!getSettings()->read_only);
   ld_check(!immutable_.load());
   int rv =
-      writer_->writeStoreMetadata(metadata, write_options, metadata_cf_.get());
+      writer_->writeStoreMetadata(metadata, write_options, metadata_cf_->get());
   if (rv == 0 && metadata.getType() == StoreMetadataType::REBUILDING_RANGES) {
     auto& rrm = static_cast<const RebuildingRangesMetadata&>(metadata);
     if (rrm.empty()) {
@@ -3226,7 +3243,7 @@ void PartitionedRocksDBStore::writePartitionDirtyState(
   PartitionDirtyMetadata meta = partition->dirty_state_.metadata();
   Slice value = meta.serialize();
   batch.Put(
-      metadata_cf_.get(),
+      metadata_cf_->get(),
       rocksdb::Slice(reinterpret_cast<const char*>(&key), sizeof key),
       rocksdb::Slice(reinterpret_cast<const char*>(value.data), value.size));
 }
@@ -3373,7 +3390,9 @@ int PartitionedRocksDBStore::dropPartitions(
   // 3) Mark partitions as officially dropped. After that no one will try to
   // write to our partitions. Someone might still successfully read from them,
   // but no one will complain if they can't.
+
   oldest_partition_id_.store(oldest_to_keep);
+
   for (auto partition : partitions) {
     partition->is_dropped = true;
   }
@@ -3387,6 +3406,13 @@ int PartitionedRocksDBStore::dropPartitions(
 
   // 4b) Remove partitions from the list,
   // RocksDB will only remove data when ColumnFamilyHandles are destroyed.
+  // Removes column family ptr from the accessor map as well.
+  cf_accessor_.withWLock([&partitions](auto& locked_accessor) {
+    for (const auto& partition : partitions) {
+      locked_accessor.erase(partition->cf_->getID());
+    }
+  });
+
   partitions_.popUpTo(oldest_to_keep);
 
   // 4c) Now we can release threads trying to write records to our partitions.
@@ -3397,7 +3423,7 @@ int PartitionedRocksDBStore::dropPartitions(
   std::vector<rocksdb::ColumnFamilyHandle*> cf_handles;
   cf_handles.reserve(partitions.size());
   for (auto& partition : partitions) {
-    cf_handles.push_back(partition->cf_.get());
+    cf_handles.push_back(partition->cf_->get());
   }
 
   ld_spew("Dropping prepared CFs");
@@ -3569,7 +3595,7 @@ void PartitionedRocksDBStore::updatePartitionDirtyState(
           PartitionMetaKey(PartitionMetadataType::DIRTY, partition->id_),
           dirty_state.metadata(),
           write_options,
-          metadata_cf_.get());
+          metadata_cf_->get());
       if (rv != 0) {
         ld_warning("Failed to update PartitionDirtyMetadata for partition "
                    "s%u:%lu; ignoring",
@@ -3609,7 +3635,7 @@ int PartitionedRocksDBStore::holdDirty(PartitionPtr partition) {
       PartitionMetaKey(PartitionMetadataType::DIRTY, partition->id_),
       partition->dirty_state_.metadata(),
       write_options,
-      metadata_cf_.get());
+      metadata_cf_->get());
 }
 
 void PartitionedRocksDBStore::releaseDirtyHold(PartitionPtr partition) {
@@ -3730,7 +3756,7 @@ bool PartitionedRocksDBStore::PartialCompactionEvaluator::evaluateAll(
     bool only_if_lots_of_files = i + 2 >= partitions_.size();
 
     auto metadata = std::make_shared<rocksdb::ColumnFamilyMetaData>();
-    deps_->getColumnFamilyMetaData(partitions_[i]->cf_.get(), metadata.get());
+    deps_->getColumnFamilyMetaData(partitions_[i]->cf_->get(), metadata.get());
     // l0 files for a partition
     ld_check_gt(metadata->levels.size(), 0);
     auto& level0 = metadata->levels[0];
@@ -4398,7 +4424,7 @@ void PartitionedRocksDBStore::performCompactionInternal(
 
 #ifdef LOGDEVICED_ENABLE_PARTIAL_COMPACTIONS
         status = db_->CompactFiles(options,
-                                   partition->cf_.get(),
+                                   partition->cf_->get(),
                                    to_compact.partial_compaction_filenames,
                                    0 /* L0 */);
 #else
@@ -4407,7 +4433,7 @@ void PartitionedRocksDBStore::performCompactionInternal(
 #endif
       } else {
         status = db_->CompactRange(rocksdb::CompactRangeOptions(),
-                                   partition->cf_.get(),
+                                   partition->cf_->get(),
                                    nullptr,
                                    nullptr);
       }
@@ -4472,7 +4498,7 @@ void PartitionedRocksDBStore::performCompactionInternal(
             PartitionMetadataType::COMPACTED_RETENTION, partition_id),
         PartitionCompactedRetentionMetadata(to_compact.retention),
         write_options,
-        metadata_cf_.get());
+        metadata_cf_->get());
     if (rv != 0) {
       ld_warning("Failed to store last compacted retention for partition %lu; "
                  "ignoring",
@@ -4486,7 +4512,7 @@ void PartitionedRocksDBStore::performCompactionInternal(
       PartitionTimestampMetadata(PartitionMetadataType::LAST_COMPACTION,
                                  partition->last_compaction_time),
       write_options,
-      metadata_cf_.get());
+      metadata_cf_->get());
   if (rv != 0) {
     ld_warning("Failed to store last compaction time of partition %lu; "
                "ignoring",
@@ -4526,7 +4552,7 @@ bool PartitionedRocksDBStore::performStronglyFilteredCompactionInternal(
   // 1.
   std::vector<std::string> files_to_compact;
   rocksdb::ColumnFamilyMetaData cf_meta;
-  db_->GetColumnFamilyMetaData(partition->cf_.get(), &cf_meta);
+  db_->GetColumnFamilyMetaData(partition->cf_->get(), &cf_meta);
   ld_check_gt(cf_meta.levels.size(), 0);
   for (const auto& f : cf_meta.levels[0].files) {
     files_to_compact.push_back(f.name);
@@ -4604,7 +4630,7 @@ bool PartitionedRocksDBStore::performStronglyFilteredCompactionInternal(
     ld_check(false); // shouldn't call this method on old rocksdb
 #endif
     status = db_->CompactFiles(
-        options, partition->cf_.get(), files_to_compact, 0 /* L0 */);
+        options, partition->cf_->get(), files_to_compact, 0 /* L0 */);
   }
 
   if (!status.ok()) {
@@ -4819,7 +4845,7 @@ void PartitionedRocksDBStore::cleanUpDirectory(
 
       if (res == Decision::DELETE) {
         // Delete the directory entry.
-        batch.Delete(metadata_cf_.get(), it.key());
+        batch.Delete(metadata_cf_->get(), it.key());
         // From in-memory directory as well
         in_memory_directory_it =
             log_state->directory.erase(in_memory_directory_it);
@@ -4831,7 +4857,7 @@ void PartitionedRocksDBStore::cleanUpDirectory(
         for (char index_type :
              CustomIndexDirectoryKey::allEligibleIndexTypes()) {
           CustomIndexDirectoryKey ikey(log_id, index_type, partition_id);
-          batch.Delete(metadata_cf_.get(),
+          batch.Delete(metadata_cf_->get(),
                        rocksdb::Slice(
                            reinterpret_cast<const char*>(&ikey), sizeof(ikey)));
         }
@@ -4922,7 +4948,7 @@ void PartitionedRocksDBStore::cleanUpDirectory(
       // LogState::mutex. The creation of partitions with id's less than
       // oldest_partition_id is prevented because oldest_partition_mutex_ is
       // held on entry to this method.
-      batch.Delete(metadata_cf_.get(), it.key());
+      batch.Delete(metadata_cf_->get(), it.key());
       it.Next();
       if (it_error()) {
         return;
@@ -4962,7 +4988,7 @@ void PartitionedRocksDBStore::cleanUpPartitionMetadataAfterDrop(
 
       rocksdb::WriteOptions options;
       rocksdb::WriteBatch batch;
-      batch.Delete(metadata_cf_.get(), it.key());
+      batch.Delete(metadata_cf_->get(), it.key());
       writer_->writeBatch(options, &batch);
 
       it.Next();
@@ -5039,7 +5065,7 @@ void PartitionedRocksDBStore::compactMetadataCFIfNeeded() {
   auto now = currentSteadyTime();
   if (period.count() > 0 &&
       last_metadata_manual_compaction_time_ < (now - period) &&
-      getNumL0Files(metadata_cf_.get()) > 1) {
+      getNumL0Files(metadata_cf_->get()) > 1) {
     performMetadataCompaction();
   }
 }
@@ -5102,7 +5128,7 @@ uint64_t PartitionedRocksDBStore::getApproximateObsoleteBytes(
 
   rocksdb::TablePropertiesCollection props;
   rocksdb::Status status =
-      db_->GetPropertiesOfAllTables(partition->cf_.get(), &props);
+      db_->GetPropertiesOfAllTables(partition->cf_->get(), &props);
   if (!status.ok()) {
     ld_warning("Failed to get properties of sst files in partition %lu: %s",
                partition_id,
@@ -5352,7 +5378,7 @@ bool PartitionedRocksDBStore::flushMemtables(PartitionPtr partition,
   ld_check(!immutable_.load());
   auto options = rocksdb::FlushOptions();
   options.wait = wait;
-  rocksdb::Status status = db_->Flush(options, partition->cf_.get());
+  rocksdb::Status status = db_->Flush(options, partition->cf_->get());
   enterFailSafeIfFailed(status, "Flush()");
   return status.ok();
 }
