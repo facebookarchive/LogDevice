@@ -3,10 +3,11 @@ id: Installation
 title: Installation
 sidebar_label: Installation
 ---
+Follow these instructions to build LogDevice components including `logdeviced` (the LogDevice server), the client library, and `ldshell`, an administrative shell utility.
 
-## Building from sources
+At this time, the only supported platform is Ubuntu 18 LTS "Bionic Beaver".
 
-Currently the only supported platform is Ubuntu 18 LTS "Bionic Beaver".
+## Clone the repo and build from the source
 
 **Clone the LogDevice GitHub repository, including its submodules.**
 
@@ -14,7 +15,7 @@ Currently the only supported platform is Ubuntu 18 LTS "Bionic Beaver".
 git clone --recurse-submodules git://github.com/facebookincubator/LogDevice
 ```
 
-That will create a top-level `LogDevice` directory. The source code is in `LogDevice/logdevice`. There are two git submodules in the tree: `logdevice/external/folly` and `logdevice/external/rocksdb`.
+This creates a top-level `LogDevice` directory, with the source code in `LogDevice/logdevice`. There are two git submodules in the tree: `logdevice/external/folly` and `logdevice/external/rocksdb`.
 
 **Install packages that LogDevice depends on.**
 
@@ -22,7 +23,7 @@ That will create a top-level `LogDevice` directory. The source code is in `LogDe
 sudo apt-get install -y $(cat LogDevice/logdevice/build_tools/ubuntu.deps)
 ```
 
-If the above fails with "Unable to locate package", run `sudo apt-get update` first to update the package list.
+If the command fails with "Unable to locate package", run `sudo apt-get update` to update the package list.
 
 **Create a build directory.**
 
@@ -45,16 +46,19 @@ make -j $(nproc)
 
 -j $(nproc) sets building concurrency equal to the number of processor cores.
 
+If the build does not complete successfully, for example, if you get an internal compiler error,
+you may need to reduce the number of parallel jobs. In the above make command, try `make -j 4` or `make -j 2`.
+
 ## Output
 
-Upon successful completion, the build process will create the following binaries and libraries:
+On successful completion, the build process creates the following binaries and libraries:
 
 * `_build/bin/logdeviced` -- the LogDevice server
 * `_build/lib/liblogdevice.{a,so}` -- the LogDevice client library
 * `_build/bin/ld{write,cat,tail,trim}` -- simple utilities for writing into a log, reading from a log, tailing a log, and trimming a log.
 * `_build/bin/ld-dev-cluster` -- a test utility that configures and runs a test LogDevice cluster on the local machine
 
-If you want these binaries (and [LDShell](ldshell.md)) installed into your system, run:
+To install these binaries and [LDShell](ldshell.md) installed into your system, run:
 
 ```shell
 sudo make install
@@ -62,7 +66,7 @@ sudo make install
 
 ## Debug and release builds
 
-If you prefer to keep separate debug and release builds, we recommend creating build/debug and build/release subdirectories and running CMake in them with a flag requesting the desired build type. For example:
+If you prefer to keep separate debug and release builds, create `_build/debug` and `_build/release` subdirectories and run CMake in them with a flag to request the desired build type. For example:
 
 ```shell
 cd LogDevice/_build/debug
@@ -70,15 +74,17 @@ cmake -DCMAKE_BUILD_TYPE=Debug ../../logdevice
 make -j$(nproc)
 ```
 
-## Building using docker
+## Build using Docker
 
-A Dockerfile is also provided for building logdevice under the `docker` directory. To build logdevice using docker, run the following from the root of the repo:
+You can build a Docker container that runs LogDevice using the Dockerfile under the `docker` directory. First, install and launch Docker. You may need to increase the number of resources available to Docker to avoid a build failure.
+
+From the root directory of the repo, enter the following command:
 
 ```shell
 docker build -t logdevice-ubuntu -f docker/Dockerfile.ubuntu .
 ```
 
-This will build the docker image and tag it with `logdevice-ubuntu`. The binaries are then available under `/usr/local/bin/` of the docker image. So you can for example start the test cluster by running:
+This builds the docker image, tags it with `logdevice-ubuntu`, and puts the binaries under `/usr/local/bin/` of the docker image. So you can, for example, start the test cluster by running:
 
 ```shell
 docker run -it logdevice-ubuntu /usr/local/bin/ld-dev-cluster
@@ -106,5 +112,5 @@ To start a Node.js server and load the doc site in a new browser tab
 `cd LogDevice/website` and run `yarn run start`. To stop the server,
 Ctrl+C the process.
 
-Most of LogDevice documentation lives in `LogDevice/docs`. The API reference
+Most of the LogDevice documentation lives in `LogDevice/docs`. The API reference
 in `LogDevice/website/static/api` is generated with Doxygen.
