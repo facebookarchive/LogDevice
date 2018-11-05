@@ -47,7 +47,9 @@ int RemoteLogsConfig::postRequest(LOGS_CONFIG_API_Header::Type request_type,
   ld_check(processor_);
   std::shared_ptr<Processor> processor = processor_->lock();
   if (!processor) {
-    ld_spew("Attempting to post request to a processor when there is none");
+    ld_critical("Attempting to post request to a processor when there is none");
+    ld_check(false);
+    err = E::INTERNAL;
     return -1;
   }
 
@@ -86,6 +88,38 @@ int RemoteLogsConfig::postRequest(LOGS_CONFIG_API_Header::Type request_type,
 void RemoteLogsConfig::getLogGroupByIDAsync(
     logid_t id,
     std::function<void(std::shared_ptr<LogGroupNode>)> cb) const {
+  // Process internal logs and metadata logs separately since their attributes
+  // are in server config, not in logs config.
+  // We have server config locally, so no need to talk to servers.
+  if (MetaDataLog::isMetaDataLog(id) ||
+      configuration::InternalLogs::isInternal(id)) {
+    std::shared_ptr<Processor> processor = processor_->lock();
+    if (!processor) {
+      ld_critical("Attempting to post request to a processor when there is none");
+      ld_check(false);
+      err = E::INTERNAL;
+      cb(nullptr);
+      return;
+    }
+
+    auto server_config = processor->config_->getServerConfig();
+    if (MetaDataLog::isMetaDataLog(id)) {
+      // Don't check that the corresponding data log exists, to allow reading
+      // metadata log left over after data log was deleted.
+      cb(server_config->getMetaDataLogsConfig().metadata_log_group);
+    } else {
+      const logsconfig::LogGroupInDirectory* in_dir =
+          server_config->getInternalLogsConfig().getLogGroupByID(id);
+      if (in_dir == nullptr) {
+        err = E::NOTFOUND;
+        cb(nullptr);
+      } else {
+        cb(in_dir->log_group);
+      }
+    }
+    return;
+  }
+
   {
     // Attempting to fetch result from cache
     shared_lock<RWSpinLock> lock(id_cache_mutex);
@@ -138,9 +172,13 @@ void RemoteLogsConfig::getLogGroupByIDAsync(
     // Returning to client
     cb(std::move(log_shared));
   };
-  this->postRequest(LOGS_CONFIG_API_Header::Type::GET_LOG_GROUP_BY_ID,
-                    std::to_string(id.val()),
-                    request_callback);
+  int rv = this->postRequest(LOGS_CONFIG_API_Header::Type::GET_LOG_GROUP_BY_ID,
+                             std::to_string(id.val()),
+                             request_callback);
+  if (rv != 0) {
+    err = E::INTERNAL;
+    cb(nullptr);
+  }
 }
 
 void RemoteLogsConfig::insertIntoIdCache(

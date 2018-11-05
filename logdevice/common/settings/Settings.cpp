@@ -149,13 +149,23 @@ static Status validate_reject_hello(const std::string& value) {
 static std::unordered_set<MessageType>
 parse_message_types(const std::string& val) {
   std::unordered_set<MessageType> res;
+  if (val == "all") {
+    auto types = messageTypeNames.allValidKeys();
+    res.insert(types.begin(), types.end());
+    return res;
+  }
   std::vector<std::string> tokens;
   folly::split(",", val, tokens, true);
+  bool inverse = false;
+  if (!tokens.empty() && !tokens[0].empty() && tokens[0][0] == '~') {
+    inverse = true;
+    tokens[0].erase(tokens[0].begin());
+  }
   for (const auto& str : tokens) {
     MessageType type = messageTypeNames.reverseLookup(str);
     if (type == MessageType::INVALID) {
       throw boost::program_options::error(
-          std::string("Invalid message type in the list (\"" + str + "\""));
+          std::string("Invalid message type in the list (\"" + str + "\")."));
     }
     auto rv = res.insert(type);
     if (!rv.second) {
@@ -163,6 +173,15 @@ parse_message_types(const std::string& val) {
           std::string("Duplicate message type in the list (\"" + str + "\")."));
     }
   }
+  if (inverse) {
+    auto exclude = std::move(res);
+    auto types = messageTypeNames.allValidKeys();
+    res = std::unordered_set<MessageType>(types.begin(), types.end());
+    for (MessageType t : exclude) {
+      res.erase(t);
+    }
+  }
+
   return res;
 }
 
@@ -2441,7 +2460,10 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "",
        parse_message_types,
        "Emit a log line for each sent/received message of the type(s) "
-       "specified. Separate different types with a comma.",
+       "specified. Separate different types with a comma. 'all' to trace all "
+       "messages. Prefix the value with '~' to trace all types except the "
+       "given ones, e.g. '~WINDOW,RELEASE' will trace messages of all types "
+       "except WINDOW and RELEASE.",
        SERVER | CLIENT,
        SettingsCategory::Monitoring);
 

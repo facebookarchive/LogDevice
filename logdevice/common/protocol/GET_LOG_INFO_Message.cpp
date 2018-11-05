@@ -181,4 +181,33 @@ void GET_LOG_INFO_Message::onSent(Status status, const Address& to) const {
   }
 }
 
+template<>
+std::vector<std::pair<std::string, folly::dynamic>>
+GET_LOG_INFO_Message::getDebugInfo() const {
+  std::vector<std::pair<std::string, folly::dynamic>> res;
+
+  res.emplace_back("client_rqid", header_.client_rqid.val());
+
+  using Type = GET_LOG_INFO_Header::Type;
+  switch (header_.request_type) {
+    case Type::BY_ID:
+      res.emplace_back("type", "by_id");
+      res.emplace_back("log_id", header_.log_id.val());
+      break;
+    case Type::BY_NAME:
+      res.emplace_back("type", "by_name");
+      res.emplace_back("name", blob_);
+      break;
+    case Type::BY_NAMESPACE:
+      res.emplace_back("type", "by_namespace");
+      res.emplace_back("namespace", blob_);
+      break;
+    case Type::ALL:
+      res.emplace_back("type", "all");
+      break;
+  }
+
+  return res;
+}
+
 }} // namespace facebook::logdevice

@@ -57,6 +57,9 @@ class LOGS_CONFIG_API_REPLY_Message : public Message {
   void onSent(Status st, const Address& to) const override;
   static Message::deserializer_t deserialize;
 
+  std::vector<std::pair<std::string, folly::dynamic>>
+  getDebugInfo() const override;
+
  private:
   LOGS_CONFIG_API_REPLY_Header header_;
   std::string blob_;

@@ -20,10 +20,14 @@ namespace facebook { namespace logdevice {
 struct GET_LOG_INFO_Header {
   // Different types of requests
   enum class Type : uint8_t {
-    BY_ID = 0,    // Get a logs config entry by log ID
-    BY_NAME,      // Get a logs config entry by log range name
-    BY_NAMESPACE, // Gets config for all named log ranges in a namespace
-    ALL           // Get all logs config entries (not implemented)
+    // Get a logs config entry by log ID; blob_ is empty
+    BY_ID = 0,
+    // Get a logs config entry by log range name; blob_ is the name
+    BY_NAME,
+    // Gets config for all named log ranges in a namespace; blob_ is namespace
+    BY_NAMESPACE,
+    // Get all logs config entries (not implemented)
+    ALL
   };
 
   request_id_t client_rqid;

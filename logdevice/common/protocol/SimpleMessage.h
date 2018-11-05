@@ -58,18 +58,24 @@ class SimpleMessage : public Message {
 
   static MessageReadResult deserialize(ProtocolReader& reader);
 
-  // see Message.h. MUST be specialized in every template instantiation.
+  // See Message.h. MUST be specialized in every template instantiation.
   Disposition onReceived(const Address& from) override;
 
-  // see Message.h. MAY be specialized if the instantiation needs to
+  // See Message.h. MAY be specialized if the instantiation needs to
   // process onSent() events.
   void onSent(Status st, const Address& to) const override {
     Message::onSent(st, to);
   }
-  // see Message.h. MAY be specialized if the instantiation needs a different
-  // implementation
+  // See Message.h. MAY be specialized if the instantiation needs a different
+  // implementation.
   bool allowUnencrypted() const override {
     return Message::allowUnencrypted();
+  }
+  // See Message.h. MAY be specialized. It's recommended to specialize it for
+  // all messages to make message tracing more useful.
+  std::vector<std::pair<std::string, folly::dynamic>>
+  getDebugInfo() const override {
+    return Message::getDebugInfo();
   }
 
   uint16_t getMinProtocolVersion() const override {

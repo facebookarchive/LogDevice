@@ -73,6 +73,9 @@ class LOGS_CONFIG_API_Message : public Message {
 
   void onSent(Status st, const Address& to) const override;
 
+  std::vector<std::pair<std::string, folly::dynamic>>
+  getDebugInfo() const override;
+
  protected:
   LOGS_CONFIG_API_Header header_;
   std::string blob_;

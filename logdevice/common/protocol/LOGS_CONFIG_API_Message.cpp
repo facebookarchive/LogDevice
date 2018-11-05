@@ -50,6 +50,35 @@ MessageReadResult LOGS_CONFIG_API_Message::deserialize(ProtocolReader& reader) {
   return reader.resultMsg(std::move(m));
 }
 
+std::vector<std::pair<std::string, folly::dynamic>>
+LOGS_CONFIG_API_Message::getDebugInfo() const {
+  std::vector<std::pair<std::string, folly::dynamic>> res;
+
+  res.emplace_back("client_rqid", header_.client_rqid.val());
+
+  using Type = LOGS_CONFIG_API_Header::Type;
+  switch (header_.request_type) {
+    case Type::MUTATION_REQUEST:
+      res.emplace_back("type", "mutation");
+      res.emplace_back("delta_size", blob_.size());
+      break;
+    case Type::GET_DIRECTORY:
+      res.emplace_back("type", "get_directory");
+      res.emplace_back("path", blob_);
+      break;
+    case Type::GET_LOG_GROUP_BY_NAME:
+      res.emplace_back("type", "get_log_group_by_name");
+      res.emplace_back("path", blob_);
+      break;
+    case Type::GET_LOG_GROUP_BY_ID:
+      res.emplace_back("type", "get_log_group_by_id");
+      res.emplace_back("log_id", blob_);
+      break;
+  }
+
+  return res;
+}
+
 void LOGS_CONFIG_API_Message::onSent(Status status, const Address& to) const {
   switch (header_.origin) {
     case LogsConfigRequestOrigin::LOGS_CONFIG_API_REQUEST: {

@@ -65,6 +65,8 @@ class LogsConfig {
    * Gets a particular log's config struct synchronously. Can be used when
    * the caller doesn't care about blocking. Shouldn't be called from a worker
    * thread on the client.
+   * On error returns nullptr and sets err.
+   * See getLogGroupByIDAsync() for the list of error codes.
    *
    * @param id                    ID of the log
    * @return                      Returns a shared_ptr to the log struct.
@@ -76,8 +78,13 @@ class LogsConfig {
    * Will call the submitted callback asynchronously with a shared_ptr to a
    * particular log's config struct. Should be used for non-blocking
    * operations.
+   * Note that callback might be called inline.
    *
    * @param id                    ID of the log
+   *
+   * On error call back is called with nullptr argument and err set to:
+   *  - NOTFOUND if the log doesn't exist.
+   *  - SHUTDOWN if Client was destroyed while the request was outstanding.
    */
   virtual void getLogGroupByIDAsync(
       logid_t id,

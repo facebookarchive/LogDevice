@@ -21,4 +21,16 @@ GET_LOG_INFO_REPLY_Message::onReceived(const Address& from) {
   return Disposition::NORMAL;
 }
 
+template <>
+std::vector<std::pair<std::string, folly::dynamic>>
+GET_LOG_INFO_REPLY_Message::getDebugInfo() const {
+  std::vector<std::pair<std::string, folly::dynamic>> res;
+
+  res.emplace_back("client_rqid", header_.client_rqid.val());
+  res.emplace_back("status", error_name(header_.status));
+  res.emplace_back("blob_size", blob_.size());
+
+  return res;
+}
+
 }} // namespace facebook::logdevice

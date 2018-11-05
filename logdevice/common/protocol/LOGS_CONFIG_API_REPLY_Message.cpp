@@ -53,6 +53,20 @@ LOGS_CONFIG_API_REPLY_Message::deserialize(ProtocolReader& reader) {
   return reader.resultMsg(std::move(m));
 }
 
+std::vector<std::pair<std::string, folly::dynamic>>
+LOGS_CONFIG_API_REPLY_Message::getDebugInfo() const {
+  std::vector<std::pair<std::string, folly::dynamic>> res;
+
+  res.emplace_back("client_rqid", header_.client_rqid.val());
+  res.emplace_back("config_version", header_.config_version);
+  res.emplace_back("status", error_name(header_.status));
+  res.emplace_back("total_payload_size", header_.total_payload_size);
+  res.emplace_back("origin", toString(header_.origin));
+  res.emplace_back("blob_size", blob_.size());
+
+  return res;
+}
+
 void LOGS_CONFIG_API_REPLY_Message::onSent(Status st, const Address& to) const {
   Message::onSent(st, to);
 }
