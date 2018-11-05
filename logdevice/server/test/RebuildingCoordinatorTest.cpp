@@ -314,8 +314,6 @@ class MockedRebuildingCoordinator : public RebuildingCoordinator {
       owner_->rebuildingPlanners.erase(shardIdx_);
     }
 
-    void activateRetryTimer() override {}
-
     shard_index_t shardIdx_;
     lsn_t version_;
     MockedRebuildingCoordinator* owner_;

@@ -130,9 +130,6 @@ class RebuildingPlanner : public RebuildingLogEnumerator::Listener {
 
   size_t getNumRemainingLogs();
 
- protected:
-  virtual void activateRetryTimer();
-
  private:
   friend class SyncSequencerRequestAdapter;
 
@@ -161,23 +158,13 @@ class RebuildingPlanner : public RebuildingLogEnumerator::Listener {
 
   size_t inFlight_{0};
   std::vector<logid_t> remaining_;
-  std::vector<logid_t> retry_logs_;
   int64_t last_reported_num_logs_to_plan_{0};
-
-  // Used to retry SyncSequencerRequest(s).
-  // Gets activated when a new log id is added to list of logs for which
-  // SyncSequencerRequest needs to be retried.
-  ExponentialBackoffTimer retry_timer_;
 
   // Looks at queue to see if some requests are ready to be sent.
   // May destroy `this`.
   void maybeSendMoreRequests();
 
   void sendSyncSequencerRequest(logid_t logid);
-
-  void handleSyncSeqReqError(logid_t logid, Status st);
-
-  void retrySyncSequencerRequests();
 
   // Calls the onRetrievedPlanForLog() method of the listener.
   void

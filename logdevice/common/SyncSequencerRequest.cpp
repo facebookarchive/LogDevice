@@ -112,14 +112,16 @@ void SyncSequencerRequest::tryAgain() {
            logid_.val_);
   auto rv = Worker::onThisThread()->processor_->postRequest(rq);
   if (rv != 0) {
+    ld_check_in(err, ({E::NOBUFS, E::SHUTDOWN}));
     RATELIMIT_ERROR(
         std::chrono::seconds(1),
         1,
         "Failed to post GetSeqStateRequest for log:%lu with error:%s",
         logid_.val_,
         error_description(err));
-    complete(E::FAILED);
-    return;
+    if (err != E::SHUTDOWN) {
+      retry_timer_->activate();
+    }
   }
 }
 
@@ -153,7 +155,16 @@ void SyncSequencerRequest::onGotSeqState(GetSeqStateRequest::Result res) {
   }
 
   if (res.status == E::ACCESS) {
-    complete(E::ACCESS);
+    RATELIMIT_WARNING(std::chrono::seconds(10),
+                      10,
+                      "Got GET_SEQ_STATE_REPLY with E::ACCESS error from %s.%s",
+                      res.last_seq.toString().c_str(),
+                      complete_if_access_denied_ ? "" : "Will keep trying.");
+    if (complete_if_access_denied_) {
+      complete(E::ACCESS);
+    } else {
+      retry_timer_->activate();
+    }
     return;
   }
 
@@ -238,6 +249,9 @@ void SyncSequencerRequest::onTimeout() {
     case E::CONNFAILED:
     case E::NOSEQUENCER:
       break;
+    case E::NOTFOUND:
+      res = E::FAILED;
+      break;
     case E::UNROUTABLE:
     case E::PROTONOSUPPORT:
     case E::DESTINATION_MISMATCH:
@@ -252,9 +266,10 @@ void SyncSequencerRequest::onTimeout() {
       res = E::NOSEQUENCER;
       break;
     case E::OK:
+    // If res==E::OK, it means we timed out waiting for lastReleased_ + 1 >=
+    // untilLsn_.
+    case E::ACCESS:
     default:
-      // If res==E::OK, it means we timed out waiting for lastReleased_ + 1 >=
-      // untilLsn_.
       res = E::TIMEDOUT;
       break;
   }
@@ -264,7 +279,23 @@ void SyncSequencerRequest::onTimeout() {
 
 void SyncSequencerRequest::complete(Status status) {
   ld_check(cb_);
-  ld_check(status != E::INTERNAL);
+  ld_check_in(status,
+              ({E::OK,
+                E::TIMEDOUT,
+                E::CONNFAILED,
+                E::NOSEQUENCER,
+                E::FAILED,
+                E::CANCELLED,
+                E::ACCESS,
+                E::NOTFOUND}));
+  if (!complete_if_log_not_found_) {
+    ld_check(status != E::NOTFOUND);
+  }
+  if (timeout_.count() == 0) {
+    ld_check(status != E::TIMEDOUT);
+    ld_check(status != E::CONNFAILED);
+    ld_check(status != E::NOSEQUENCER);
+  }
   cb_(status,
       getLastSequencer(),
       nextLsn_.hasValue() ? nextLsn_.value() : LSN_INVALID,

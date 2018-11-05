@@ -91,7 +91,8 @@ class GET_SEQ_STATE_REPLY_Message : public Message {
   //    REBUILDING    The node is rebuilding local log storage.
   //    FAILED        Sequencer activation failed for some other reason
   //                  e.g. due to E::SYSLIMIT, E::NOBUFS, E::TOOMANY(too many
-  //                  activations), E::NOTFOUND(log-id not found)
+  //                  activations).
+  //    NOTFOUND      The log ID is not in config.
   // next_lsn and last_released_lsn will be set by the sender
   // only if status is E::OK.
   // Otherwise, these values will be LSN_INVALID

@@ -37,8 +37,13 @@ class SyncSequencerRequestAdapter : public SyncSequencerRequest {
             GetSeqStateRequest::Context::REBUILDING_SEQ_ACTIVATOR),
         ref_(std::move(ref)),
         logid_(logid) {
-    // if log is not found we will send an error message.
+    // If log is not in config, stop SyncSequencerRequest and skip rebuilding
+    // the log.
     complete_if_log_not_found_ = true;
+    // If we don't have access to the log, keep trying forever. We don't have
+    // anything better to do, and the access error is probably due to
+    // a configuration mistake.
+    complete_if_access_denied_ = false;
   }
 
   bool isCanceled() const override {
@@ -78,25 +83,7 @@ RebuildingPlanner::~RebuildingPlanner() {
 }
 
 size_t RebuildingPlanner::getNumRemainingLogs() {
-  return remaining_.size() + inFlight_ + retry_logs_.size();
-}
-
-void RebuildingPlanner::activateRetryTimer() {
-  if (!retry_timer_.isAssigned()) {
-    const auto& retry_interval =
-        rebuildingSettings_->rebuilding_planner_sync_seq_retry_interval;
-    retry_timer_.assign([this] { retrySyncSequencerRequests(); },
-                        retry_interval.lo,
-                        retry_interval.hi);
-  }
-  retry_timer_.activate();
-}
-
-void RebuildingPlanner::retrySyncSequencerRequests() {
-  ld_check(!retry_logs_.empty());
-  remaining_.insert(remaining_.end(), retry_logs_.begin(), retry_logs_.end());
-  retry_logs_.clear();
-  maybeSendMoreRequests();
+  return remaining_.size() + inFlight_;
 }
 
 void RebuildingPlanner::start() {
@@ -179,28 +166,37 @@ void RebuildingPlanner::sendSyncSequencerRequest(logid_t logid) {
 
       // We did not define a timeout, so SyncSequencerRequest should
       // eventually succeed, be aborted because log was removed
-      // from config or return E::NOTFOUND or if GSS failed to post
-      ld_check(st == E::OK || st == E::CANCELLED || st == E::NOTFOUND ||
-               st == E::FAILED);
+      // from config or return E::NOTFOUND.
+      ld_check_in(st, ({E::OK, E::CANCELLED, E::NOTFOUND}));
 
       LogState& log_state = log_states_[logid];
-      // We don't need to worry about error conditions when it's a metadata log,
-      // because we don't use historical epoch metadata for it and we simply
-      // rebuild until EPOCH_MAX instead of next_lsn-1.
+      // If it's metadata log, and the corresponding data log is not in config
+      // anymore, rebuild the metadata log anyway. This way if the log is
+      // re-added to config, its metadata log won't be underreplicated.
       if (st == E::OK ||
-          (st != E::FAILED && MetaDataLog::isMetaDataLog(logid))) {
-        // Setup log_state.until_lsn
-        log_state.until_lsn = LSN_MAX;
+          (st == E::NOTFOUND && MetaDataLog::isMetaDataLog(logid))) {
         if (st == E::OK) {
           ld_check(next_lsn != LSN_INVALID);
           ld_check(seq.isNodeID());
           log_state.until_lsn = next_lsn - 1;
+          log_state.seq = seq;
+        } else {
+          ld_info("Log %lu is not in config, but its metadata log %lu has some "
+                  "records. Will rebuild the metadata log until LSN_MAX, and "
+                  "use fake node ID (N0:1) for seals.",
+                  MetaDataLog::dataLogID(logid).val(),
+                  logid.val());
+          log_state.until_lsn = LSN_MAX;
+          log_state.seq = NodeID(0, 1);
         }
-        log_state.seq = seq;
         planner->onSyncSequencerComplete(logid, std::move(metadata_map));
       } else {
         // logid was not found, remove it.
-        planner->handleSyncSeqReqError(logid, st);
+        ld_warning("Error in SyncSequencerRequest for log %lu: %s.",
+                   logid.val(),
+                   error_name(st));
+        log_state.plan.clear(); // Empty plan, nothing to rebuild.
+        onComplete(logid);
       }
     });
   };
@@ -212,22 +208,6 @@ void RebuildingPlanner::sendSyncSequencerRequest(logid_t logid) {
            (uint64_t)rq->id_,
            logid.val_);
   Worker::onThisThread()->processor_->postWithRetrying(rq);
-}
-
-void RebuildingPlanner::handleSyncSeqReqError(logid_t logid, Status st) {
-  if (st == E::FAILED) {
-    // Failed to post GSS. Add the log to rety_logs and start timer
-    retry_logs_.push_back(logid);
-    inFlight_--;
-    activateRetryTimer();
-    return;
-  }
-  LogState& log_state = log_states_[logid];
-  ld_warning("Error in SyncSequencerRequest for log %lu: %s.",
-             logid.val_,
-             error_name(st));
-  log_state.plan.clear(); // Empty plan, nothing to rebuild.
-  onComplete(logid);
 }
 
 void RebuildingPlanner::onSyncSequencerComplete(

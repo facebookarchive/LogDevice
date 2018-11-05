@@ -53,21 +53,31 @@ class SyncSequencerRequest : public Request {
   /**
    * Callback called when this request completes.
    *
-   * @param status   E::OK on success or one of the following errors if we timed
-   *                 out waiting for a Sequencer:
-   *                 - E::TIMEDOUT: We could not get a reply from a sequencer in
-   *                   time. If WAIT_RELEASED is used, this can also mean that
-   *                   we timed out before the Sequencer finished recovering all
-   *                   records up to LSN `next_lsn`;
-   *                 - E::CONNFAILED: Unable to reach a sequencer node;
-   *                 - E::NOSEQUENCER: Failed to determine which node runs the
-   *                   sequencer;
-   *                 - E::FAILED: Sequencer activation failed for some other
-   *                   reason e.g. due to E::SYSLIMIT, E::NOBUFS, E::TOOMANY(too
-   *                   many activations), E::NOTFOUND(log-id not found);
-   *                 - E::CANCELED: If isCanceled() is implemeted by a base
-   *                   class and returned true before this request could
-   *                   complete.
+   * @param status
+   *   - E::OK: On success.
+   *   - E::CANCELED: If isCanceled() is implemeted by a base class and returned
+   *     true before this request could complete.
+   *   - E::ACCESS: If sequencer node denied us access.
+   *     If complete_if_access_denied_ is true, ACCESS is returned right away.
+   *     If complete_if_access_denied_ is false, SyncSequencerRequest keeps
+   *     trying until timeout expires (and if timeout is inifinite, ACCESS error
+   *     is never returned).
+   *   - E::NOTFOUND: If complete_if_log_not_found_ is true, NOTFOUND is
+   *     returned if a sequencer node says that the log is not in config.
+   *     complete_if_log_not_found_ is false, we keep trying until timeout
+   *     expires and then return FAILED.
+   *   - The following errors can be returned after timeout expires. If timeout
+   *     is infinite, these error codes are not used:
+   *      -- E::TIMEDOUT: We could not get successful a reply from a sequencer
+   *         in time. If WAIT_RELEASED is used, this can also mean that we timed
+   *         out before the Sequencer finished recovering all records up to LSN
+   *         `next_lsn`.
+   *      -- E::CONNFAILED: Unable to reach a sequencer node.
+   *      -- E::NOSEQUENCER: Failed to determine which node runs the sequencer.
+   *      -- E::FAILED: Sequencer activation failed for some other reason e.g.
+   *         due to E::SYSLIMIT, E::NOBUFS, E::TOOMANY(too many activations).
+   *         If complete_if_log_not_found_ is false, FAILED is also returned if
+   *         the log is not in config.
    *
    * param  seq      NodeID that runs the sequencer.
    * @param next_lsn All records up to next_lsn-1 are guaranteed to be released
@@ -198,6 +208,10 @@ class SyncSequencerRequest : public Request {
   // If the log does not exist, SyncSequencerRequest should complete with
   // E::NOTFOUND
   bool complete_if_log_not_found_{false};
+
+  // If sequencer node replied with E::ACCESS, complete with E::ACCESS right
+  // away. If false, we'll keep trying until timeout expires.
+  bool complete_if_access_denied_{true};
 
  private:
   logid_t logid_;
