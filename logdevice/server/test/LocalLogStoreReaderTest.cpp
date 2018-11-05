@@ -42,7 +42,7 @@ using LocalLogStoreReader::ReadPointer;
 #define N5 ShardID(5, 0)
 
 #define CONFIG_PATH \
-  verifyFileExists("logdevice/server/test/configs/local_scd_test.conf")
+  verifyFileExists("logdevice/server/test/configs/local_scd_test.conf").c_str()
 
 namespace {
 

@@ -2714,35 +2714,6 @@ std::string findBinary(const std::string& relative_path) {
 #endif
 }
 
-std::string findFile(const std::string& relative_path,
-                     bool require_executable) {
-  // Find the path to the currently running program ...
-  boost::system::error_code ec;
-  fs::path proc_exe_path = fs::read_symlink("/proc/self/exe", ec);
-  if (proc_exe_path.empty()) {
-    ld_error("Error reading /proc/self/exe: %s", ec.message().c_str());
-    return "";
-  }
-
-  // Start the search in the same directory, then move up the filesystem
-  for (fs::path search_dir = proc_exe_path.parent_path(); !search_dir.empty();
-       search_dir = search_dir.parent_path()) {
-    fs::path path = search_dir / relative_path;
-    if (fs::exists(path)) {
-      std::string path_str = path.string();
-      if (require_executable && ::access(path_str.c_str(), X_OK) < 0) {
-        ld_error("Found \"%s\" but it is not executable!?", path_str.c_str());
-        return "";
-      }
-      return path_str;
-    }
-  }
-
-  ld_error("Reached top of filesystem without finding \"%s\"",
-           relative_path.c_str());
-  return "";
-}
-
 int Cluster::writeConfig(const ServerConfig* server_cfg,
                          const LogsConfig* logs_cfg,
                          bool wait_for_update) {

@@ -280,14 +280,21 @@ make_test_processor(const Settings& settings,
 
 std::shared_ptr<PluginRegistry> make_test_plugin_registry();
 
-// verifies that file exists and returns the filename if it does. Throws
-// an instance of std::runtime_error otherwise
-const char* verifyFileExists(const char* filename);
+// verifies that file exists (using findFile()) and returns the filename if it
+// does. Throws an instance of std::runtime_error otherwise
+std::string verifyFileExists(const std::string& filename);
+
+// Attempts to find a file, give a relative path to search for. The search
+// starts in the directory of the currently running program, then walks up the
+// filesystem.  To goal is to be able to find e.g. "logdeviced" from a running
+// test which is in a subdirectory, regardless of the current working directory.
+std::string findFile(const std::string& relative_path,
+                     bool require_executable = false);
 
 #define TEST_CONFIG_PATH "logdevice/common/test/configs"
 #define TEST_SSL_CERT_PATH "logdevice/common/test/ssl_certs"
-#define TEST_SSL_FILE(x) verifyFileExists(TEST_SSL_CERT_PATH "/" x)
-#define TEST_CONFIG_FILE(x) verifyFileExists(TEST_CONFIG_PATH "/" x)
+#define TEST_SSL_FILE(x) verifyFileExists(TEST_SSL_CERT_PATH "/" x).c_str()
+#define TEST_CONFIG_FILE(x) verifyFileExists(TEST_CONFIG_PATH "/" x).c_str()
 
 // Returns the first loopback interface address found, typically "::1" or
 // "127.0.0.1"

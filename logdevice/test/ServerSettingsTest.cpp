@@ -11,6 +11,7 @@
 //#include "logdevice/test/utils/IntegrationTestBase.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
 
+using namespace facebook::logdevice;
 using namespace facebook::logdevice::IntegrationTestUtils;
 
 // Output of running `logdeviced(_nofb) --markdown-settings` must match contents

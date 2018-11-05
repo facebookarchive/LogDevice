@@ -1518,12 +1518,5 @@ std::string defaultLogdevicedPath();
 // we just ask the build system for the path. For open source, calls findFile()
 std::string findBinary(const std::string& relative_path);
 
-// Attempts to find a file, give a relative path to search for. The search
-// starts in the directory of the currently running program, then walks up the
-// filesystem.  To goal is to be able to find e.g. "logdeviced" from a running
-// test which is in a subdirectory, regardless of the current working directory.
-std::string findFile(const std::string& relative_path,
-                     bool require_executable = false);
-
 } // namespace IntegrationTestUtils
 }} // namespace facebook::logdevice
