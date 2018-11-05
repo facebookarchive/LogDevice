@@ -19,6 +19,7 @@
 #include "tables/AppendOutliers.h"
 #include "tables/AppendThroughput.h"
 #include "tables/CatchupQueues.h"
+#include "tables/ChunkRebuildings.h"
 #include "tables/ClientReadStreams.h"
 #include "tables/ClusterStateTable.h"
 #include "tables/EpochStore.h"
@@ -145,6 +146,7 @@ LDQuery::LDQuery(std::string config_path,
   table_registry_.registerTable<tables::AppendOutliers>(ctx_);
   table_registry_.registerTable<tables::AppendThroughput>(ctx_);
   table_registry_.registerTable<tables::CatchupQueues>(ctx_);
+  table_registry_.registerTable<tables::ChunkRebuildings>(ctx_);
   table_registry_.registerTable<tables::ClientReadStreams>(ctx_);
   table_registry_.registerTable<tables::ClusterStateTable>(ctx_);
   table_registry_.registerTable<tables::LogsDBDirectory>(ctx_);

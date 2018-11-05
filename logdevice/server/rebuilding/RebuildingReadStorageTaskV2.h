@@ -58,6 +58,11 @@ class RebuildingReadStorageTaskV2 : public StorageTask {
       // ReplicationScheme corresponding to currentEpochMetadata.
       // Initialized lazily, can be nullptr even if currentEpochMetadata is not.
       std::shared_ptr<ReplicationScheme> currentReplication;
+
+      // Just for admin command.
+      size_t bytesDelivered = 0;
+      size_t recordsDelivered = 0;
+      size_t chunksDelivered = 0;
     };
 
     // Immutable parameters.
@@ -67,9 +72,14 @@ class RebuildingReadStorageTaskV2 : public StorageTask {
     UpdateableSettings<RebuildingSettings> rebuildingSettings;
     ShardID myShardID;
 
-    // The mutable fields are accessed by storage task on storage thread and
-    // by ShardRebuilding on worker thread. The ShardRebuilding only accesses
-    // them when there's no storage task in flight or in queue.
+    // The mutex protects the LogState-s in `logs`, which are only accessed by
+    // the storage task and getDebugInfo().
+    //
+    // The other mutable fields are accessed by storage task on storage thread
+    // and by ShardRebuilding on worker thread. The ShardRebuilding only
+    // accesses them when there's no storage task in flight or in queue, so
+    // there's no need for a mutex.
+    mutable std::mutex logsMutex;
 
     // What to read.
     std::unordered_map<logid_t, LogState> logs;
@@ -79,7 +89,7 @@ class RebuildingReadStorageTaskV2 : public StorageTask {
     std::unique_ptr<LocalLogStore::AllLogsIterator> iterator;
     // The first location not processed yet.
     // Next storage task needs to start reading from here.
-    std::unique_ptr<LocalLogStore::AllLogsIterator::Location> nextLocation;
+    std::shared_ptr<LocalLogStore::AllLogsIterator::Location> nextLocation;
     // If we encounter too many invalid records, stall rebuilding just in case.
     size_t numMalformedRecordsSeen{0};
 
@@ -87,6 +97,8 @@ class RebuildingReadStorageTaskV2 : public StorageTask {
     bool reachedEnd = false;
     // true if we're not going to be able to read everything we need.
     bool persistentError = false;
+
+    void getLogsDebugInfo(InfoRebuildingLogsTable& table) const;
   };
 
   class Filter : public LocalLogStoreReadFilter {

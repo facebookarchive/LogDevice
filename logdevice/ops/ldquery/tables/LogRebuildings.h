@@ -99,6 +99,7 @@ class LogRebuildings : public AdminCommandTable {
     };
   }
   std::string getCommandToSend(QueryContext& /*ctx*/) const override {
+    // TODO (#35636262): Use "info rebuildin logs --json" instead.
     return std::string("info rebuildings --json\n");
   }
 };

@@ -7,6 +7,7 @@
  */
 #pragma once
 
+#include "logdevice/common/AdminCommandTable-fwd.h"
 #include "logdevice/common/PayloadHolder.h"
 #include "logdevice/server/RecordRebuildingStore.h"
 #include "logdevice/server/locallogstore/LocalLogStore.h"
@@ -150,6 +151,8 @@ class ChunkRebuilding : public RecordRebuildingOwner {
   // Unregisters itself from ServerWorker's ChunkRebuildingMap.
   void deleteThis();
 
+  void getDebugInfo(InfoRebuildingChunksTable& table) const;
+
  private:
   ShardRebuildingV2Ref owner_;
   // This needs to be a shared_ptr to allow STORE_Message to keep the payload
@@ -161,6 +164,7 @@ class ChunkRebuilding : public RecordRebuildingOwner {
   lsn_t rebuildingVersion_;
   lsn_t restartVersion_;
   uint32_t shard_;
+  SteadyTimestamp startTime_;
 
   std::vector<std::unique_ptr<RecordRebuildingStore>> rrStores_;
   std::vector<std::unique_ptr<RecordRebuildingAmend>> rrAmends_;

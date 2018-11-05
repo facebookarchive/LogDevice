@@ -1558,7 +1558,7 @@ void LogRebuilding::onReadTaskDropped(RebuildingReadStorageTask& task) {
   timer_->activate();
 }
 
-void LogRebuilding::getDebugInfo(InfoRebuildingsTable& table) const {
+void LogRebuilding::getDebugInfo(InfoRebuildingLogsTable& table) const {
   table.next()
       .set<0>(logid_)
       .set<1>(shard_)

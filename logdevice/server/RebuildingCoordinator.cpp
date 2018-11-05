@@ -761,6 +761,7 @@ void RebuildingCoordinator::restartForShard(uint32_t shard_idx,
       .rebuild_internal_logs = !rebuildUserLogsOnly_,
       .min_timestamp = rsi->all_dirty_time_intervals.begin()->lower()};
 
+  shard_state.planningStartTime = SteadyTimestamp::now();
   shard_state.planner = createRebuildingPlanner(shard_idx,
                                                 rsi->version,
                                                 options,
@@ -1035,9 +1036,6 @@ void RebuildingCoordinator::onLogsEnumerated(
 
 void RebuildingCoordinator::onFinishedRetrievingPlans(uint32_t shard_idx,
                                                       lsn_t version) {
-  ld_info("All plans for logs were retrieved for shard %u in version %s",
-          shard_idx,
-          lsn_to_string(version).c_str());
   auto& shard_state = getShardState(shard_idx);
   ld_check(version == shard_state.version);
   ld_check(shard_state.waitingForMorePlans);
@@ -1045,25 +1043,36 @@ void RebuildingCoordinator::onFinishedRetrievingPlans(uint32_t shard_idx,
 
   // Remove logs that are not in config anymore.
   auto config = config_->get();
+  size_t total_epoch_ranges = 0;
   for (auto it = shard_state.logsWithPlan.begin();
        it != shard_state.logsWithPlan.end();) {
     if (!config->getLogGroupByIDShared(it->first)) {
       it = shard_state.logsWithPlan.erase(it);
     } else {
+      total_epoch_ranges += it->second->epochsToRead.size();
       ++it;
     }
   }
 
+  double planning_seconds =
+      std::chrono::duration_cast<std::chrono::duration<double>>(
+          SteadyTimestamp::now() - shard_state.planningStartTime)
+          .count();
+
   if (shard_state.logsWithPlan.empty()) {
-    ld_info("Got empty rebuild plan for shard %u with rebuilding set: %s",
-            shard_idx,
-            shard_state.rebuildingSet->describe().c_str());
+    ld_info(
+        "Got empty rebuild plan for shard %u in %.3fs with rebuilding set: %s",
+        shard_idx,
+        planning_seconds,
+        shard_state.rebuildingSet->describe().c_str());
     onShardRebuildingComplete(shard_idx);
   } else {
-    ld_info("Got rebuilding plan (%lu logs) for shard %u, starting "
-            "rebuilding. Rebuilding set: %s",
+    ld_info("Got rebuilding plan (%lu epoch ranges in %lu logs) for shard %u "
+            "in %.3fs. Starting rebuilding. Rebuilding set: %s",
+            total_epoch_ranges,
             shard_state.logsWithPlan.size(),
             shard_idx,
+            planning_seconds,
             shard_state.rebuildingSet->describe().c_str());
     shard_state.shardRebuilding =
         createShardRebuilding(shard_idx,
@@ -1522,7 +1531,7 @@ node_index_t RebuildingCoordinator::getMyNodeID() {
 }
 
 void RebuildingCoordinator::getDebugInfo(
-    InfoShardsRebuildingTable& table) const {
+    InfoRebuildingShardsTable& table) const {
   for (auto& s : shardsRebuilding_) {
     auto& shard_state = s.second;
     auto nLogsWaitingForPlan =
@@ -1540,6 +1549,26 @@ void RebuildingCoordinator::getDebugInfo(
       shard_state.shardRebuilding->getDebugInfo(table);
     }
   }
+}
+
+std::function<void(InfoRebuildingLogsTable&)>
+RebuildingCoordinator::beginGetLogsDebugInfo() const {
+  ld_check(rebuildingSettings_->enable_v2);
+  std::vector<std::function<void(InfoRebuildingLogsTable&)>> funcs;
+  for (auto& s : shardsRebuilding_) {
+    auto& shard_state = s.second;
+    if (shard_state.shardRebuilding != nullptr) {
+      auto sr =
+          dynamic_cast<ShardRebuildingV2*>(shard_state.shardRebuilding.get());
+      ld_check(sr != nullptr);
+      funcs.push_back(sr->beginGetLogsDebugInfo());
+    }
+  }
+  return [funcs](InfoRebuildingLogsTable& table) {
+    for (auto& f : funcs) {
+      f(table);
+    }
+  };
 }
 
 RecordTimestamp

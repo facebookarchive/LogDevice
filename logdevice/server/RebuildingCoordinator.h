@@ -172,7 +172,15 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
    * @param table Filled with debug information about the state of rebuilding
    *              for each shard. Used by admin commands.
    */
-  void getDebugInfo(InfoShardsRebuildingTable& table) const;
+  void getDebugInfo(InfoRebuildingShardsTable& table) const;
+
+  /**
+   * Returns a function that fills out the per-log debug info table.
+   * The function needs to be called on a non-worker thread.
+   * Requires rebuilding-v2 to be enabled in settings.
+   * See ShardRebuildingV2::beginGetLogsDebugInfo() for more details.
+   */
+  std::function<void(InfoRebuildingLogsTable&)> beginGetLogsDebugInfo() const;
 
   RecordTimestamp getGlobalWindowEnd(uint32_t shard) const;
 
@@ -436,6 +444,7 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
     // GET_SEQ_STATE requests to sequencers until they give us all `untilLsn`s
     // and release all records up to it.
     std::unique_ptr<RebuildingPlanner> planner;
+    SteadyTimestamp planningStartTime = SteadyTimestamp::max();
 
     int waitingForMorePlans{1};
 

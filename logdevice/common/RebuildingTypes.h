@@ -217,7 +217,7 @@ class ShardRebuildingInterface {
 
   // Fills the current row of @param table with debug information about the
   // state of rebuilding for this shard. Used by admin commands.
-  virtual void getDebugInfo(InfoShardsRebuildingTable& table) const = 0;
+  virtual void getDebugInfo(InfoRebuildingShardsTable& table) const = 0;
 };
 
 }} // namespace facebook::logdevice

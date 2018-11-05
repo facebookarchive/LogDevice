@@ -7,6 +7,7 @@
  */
 #include "logdevice/server/rebuilding/RebuildingReadStorageTaskV2.h"
 
+#include "logdevice/common/AdminCommandTable.h"
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/storage_tasks/StorageThreadPool.h"
 
@@ -22,6 +23,15 @@ void RebuildingReadStorageTaskV2::execute() {
     // The ShardRebuilding was aborted. Nothing to do.
     return;
   }
+
+  auto start_time = SteadyTimestamp::now();
+
+  // Let's just lock the mutex for the whole duration of the storage task.
+  // We could make it more fine-grained and lock it only for accesses to
+  // context's fields, avoiding blocking IO with locked mutex, but it doesn't
+  // really matter because ShardRebuilding never accesses Context when a storage
+  // task is in flight.
+  std::lock_guard<std::mutex> context_lock(context->logsMutex);
 
   ld_check(!context->reachedEnd);
   ld_check(!context->persistentError);
@@ -44,7 +54,9 @@ void RebuildingReadStorageTaskV2::execute() {
     }
 
     context->iterator = createIterator(opts, logs);
-    context->nextLocation = context->iterator->minLocation();
+    context->nextLocation =
+        std::shared_ptr<LocalLogStore::AllLogsIterator::Location>(
+            context->iterator->minLocation());
   }
 
   LocalLogStore::AllLogsIterator* iterator = context->iterator.get();
@@ -100,12 +112,17 @@ void RebuildingReadStorageTaskV2::execute() {
           filter.nRecordsNotDirtyFiltered + filter.nRecordsTimestampFiltered +
           filter.nRecordsDrainedFiltered + filter.nRecordsEpochRangeFiltered;
 
+      auto end_time = SteadyTimestamp::now();
+
       RATELIMIT_INFO(
           std::chrono::seconds(10),
           1,
-          "Rebuilding has read a batch of records. Got %lu records (%lu bytes) "
-          "in %lu chunks. Skipped %lu records (SCD: %lu, ND: %lu, DRAINED: "
-          "%lu, TS: %lu, EPOCH: %lu; LATE: %lu).",
+          "Rebuilding has read a batch of records in %.3fs. Got %lu records "
+          "(%lu bytes) in %lu chunks. Skipped %lu records (SCD: %lu, ND: %lu, "
+          "DRAINED: %lu, TS: %lu, EPOCH: %lu; LATE: %lu).",
+          std::chrono::duration_cast<std::chrono::duration<double>>(end_time -
+                                                                    start_time)
+              .count(),
           records_in_result,
           bytes_in_result,
           result_.size(),
@@ -223,6 +240,7 @@ void RebuildingReadStorageTaskV2::execute() {
       chunk->address.min_lsn = lsn;
       chunk->blockID = log_state->currentBlockID;
       chunk->oldestTimestamp = timestamp;
+      ++log_state->chunksDelivered;
 
       bool found = lookUpEpochMetadata(log,
                                        lsn,
@@ -244,6 +262,8 @@ void RebuildingReadStorageTaskV2::execute() {
 
     chunk->address.max_lsn = lsn;
     chunk->addRecord(lsn, record);
+    ++log_state->recordsDelivered;
+    log_state->bytesDelivered += record.size;
     ++records_in_result;
     bytes_in_result += record.size;
   }
@@ -251,7 +271,9 @@ void RebuildingReadStorageTaskV2::execute() {
   switch (iterator->state()) {
     case IteratorState::AT_RECORD:
     case IteratorState::LIMIT_REACHED:
-      context->nextLocation = iterator->getLocation();
+      context->nextLocation =
+          std::shared_ptr<LocalLogStore::AllLogsIterator::Location>(
+              iterator->getLocation());
       break;
     case IteratorState::AT_END:
       context->reachedEnd = true;
@@ -402,8 +424,17 @@ void RebuildingReadStorageTaskV2::onDropped() {
 }
 
 void RebuildingReadStorageTaskV2::getDebugInfoDetailed(
-    StorageTaskDebugInfo&) const {
-  // TODO (T24665001): implement
+    StorageTaskDebugInfo& info) const {
+  std::shared_ptr<Context> context = context_.lock();
+  if (context == nullptr) {
+    info.extra_info = "ShardRebuilding went away";
+    return;
+  }
+  info.extra_info =
+      folly::sformat("{} logs, location: {}",
+                     context->logs.size(),
+                     context->nextLocation ? context->nextLocation->toString()
+                                           : std::string("none"));
 }
 
 UpdateableSettings<Settings> RebuildingReadStorageTaskV2::getSettings() {
@@ -716,6 +747,21 @@ void RebuildingReadStorageTaskV2::Filter::noteRecordFiltered(
   }
   if (late) {
     ++nRecordsLateFiltered;
+  }
+}
+
+void RebuildingReadStorageTaskV2::Context::getLogsDebugInfo(
+    InfoRebuildingLogsTable& table) const {
+  std::lock_guard<std::mutex> lock(logsMutex);
+  for (const auto& p : logs) {
+    const LogState& s = p.second;
+    table.next()
+        .set<0>(p.first)
+        .set<1>(myShardID.shard())
+        .set<5>(s.plan.untilLSN)
+        .set<7>(s.lastSeenLSN)
+        .set<8>(s.recordsDelivered)
+        .set<9>(s.bytesDelivered);
   }
 }
 

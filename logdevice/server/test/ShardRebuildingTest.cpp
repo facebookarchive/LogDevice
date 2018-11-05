@@ -96,6 +96,7 @@ class MockedShardRebuilding : public ShardRebuildingV2,
   StatsHolder* getStats() override {
     return &stats;
   }
+  void createAndActivateProfilingTimer() override {}
   node_index_t getMyNodeIndex() override {
     return MY_NODE_IDX;
   }

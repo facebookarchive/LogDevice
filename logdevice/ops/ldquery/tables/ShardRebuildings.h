@@ -90,9 +90,35 @@ class ShardRebuildings : public AdminCommandTable {
          DataType::INTEGER,
          "true if this shard is a donor for this rebuilding and hasn't "
          "finished rebuilding yet."},
+        {"time_by_state",
+         DataType::TEXT,
+         "Time spent in each state. 'stalled' means either waiting for global "
+         "window or aborted because of a persistent error. V2 only"},
+        {"task_in_flight",
+         DataType::INTEGER,
+         "True if a storage task for reading records is in queue or in flight "
+         "right now. V2 only."},
+        {"persistent_error",
+         DataType::INTEGER,
+         "True if we encountered an unrecoverable error when reading. Shard "
+         "shouldn't stay in this state for more than a few seconds: it's "
+         "expected that RebuildingCoordinator will request a rebuilding for "
+         "this shard, and rebuilding will rewind without this node's "
+         "participation. V2 only."},
+        {"read_buffer_bytes",
+         DataType::BIGINT,
+         "Bytes of records that we've read but haven't started re-replicating "
+         "yet. V2 only."},
+        {"records_in_flight",
+         DataType::BIGINT,
+         "Number of records that are being re-replicated right now. V2 only."},
+        {"read_pointer",
+         DataType::TEXT,
+         "How far we have read: partition, log ID, LSN. V2 only."},
     };
   }
   std::string getCommandToSend(QueryContext& /*ctx*/) const override {
+    // TODO (#35636262): Use "info rebuilding shards --json" instead.
     return std::string("info rebuildings --shards --json\n");
   }
 };

@@ -191,7 +191,7 @@ void ShardRebuildingV1::someLogMadeProgress() {
   }
 }
 
-void ShardRebuildingV1::getDebugInfo(InfoShardsRebuildingTable& table) const {
+void ShardRebuildingV1::getDebugInfo(InfoRebuildingShardsTable& table) const {
   table.set<4>(localWindowEnd_.toMilliseconds())
       .set<6>(nRunningLogRebuildings_)
       .set<7>(wakeupQueue_.sizeInsideWindow())

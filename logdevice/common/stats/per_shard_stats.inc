@@ -21,7 +21,7 @@ STAT_DEFINE(rebuilding_global_window_slide_total, SUM)
 // 1 if we are waiting on the global window, 0 otherwise
 STAT_DEFINE(rebuilding_global_window_waiting_flag, SUM)
 // total amount of milliseconds we waited for the global window to slide
-// (updated when it finally slides)
+// (updated when it finally slides). V1 only, on V2 use rebuilding_ms_stalled.
 STAT_DEFINE(rebuilding_global_window_waiting_total, SUM)
 // The end of the rebuilding local window
 STAT_DEFINE(rebuilding_local_window_end, MAX)
@@ -75,6 +75,23 @@ STAT_DEFINE(num_metadata_memtable_flush_completed, SUM)
 STAT_DEFINE(num_memtables, SUM)
 // Cumulative sum of age for all memtables created.
 STAT_DEFINE(cumulative_memtable_age_ms, SUM)
+
+// Total number of chunks rebuilt, and total number of records and bytes in
+// them. V2 only.
+STAT_DEFINE(chunks_rebuilt, SUM)
+STAT_DEFINE(records_rebuilt, SUM)
+STAT_DEFINE(bytes_rebuilt, SUM)
+
+// Time spent by shard rebuilding in different states. V2 only.
+// Time spent waiting for global window.
+STAT_DEFINE(rebuilding_ms_stalled, SUM)
+// Time spent without any RecordRebuilding-s in flight.
+STAT_DEFINE(rebuilding_ms_waiting_for_read, SUM)
+// Time spent without a read storage task in flight.
+STAT_DEFINE(rebuilding_ms_waiting_for_rereplication, SUM)
+// The remaining time (i.e. with both read task and RecordRebuilding-s in
+// flight).
+STAT_DEFINE(rebuilding_ms_fully_occupied, SUM)
 
 /*
  * The following stats will not be reset by Stats::reset() and the 'reset'

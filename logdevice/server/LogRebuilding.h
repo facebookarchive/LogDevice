@@ -357,7 +357,7 @@ class LogRebuilding : public LogRebuildingInterface,
    * Add some debugging information about this LogRebuilding state machine to
    * `table`.
    */
-  void getDebugInfo(InfoRebuildingsTable& table) const;
+  void getDebugInfo(InfoRebuildingLogsTable& table) const;
 
   virtual ServerInstanceId getServerInstanceId() const override;
 

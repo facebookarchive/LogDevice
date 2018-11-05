@@ -88,7 +88,21 @@ typedef AdminCommandTable<std::string, /* State */
                           >
     InfoSocketsTable;
 
-// For rebuilding.
+typedef AdminCommandTable<logid_t,                   /* Log id */
+                          int64_t,                   /* Shard */
+                          admin_command_table::LSN,  /* Min LSN */
+                          admin_command_table::LSN,  /* Max LSN */
+                          uint64_t,                  /* Chunk ID */
+                          uint64_t,                  /* Block ID */
+                          uint64_t,                  /* Total bytes */
+                          std::chrono::milliseconds, /* Oldest timestamp */
+                          uint64_t,                  /* Stores in flight */
+                          uint64_t,                  /* Amends in flight */
+                          uint64_t,                  /* Amend self in flight */
+                          std::chrono::milliseconds  /* Started */
+                          >
+    InfoRebuildingChunksTable;
+
 typedef AdminCommandTable<logid_t,                   /* Log id */
                           int64_t,                   /* Shard */
                           std::chrono::milliseconds, /* Started */
@@ -106,25 +120,30 @@ typedef AdminCommandTable<logid_t,                   /* Log id */
                           uint64_t, /* Num Amends waiting for flush*/
                           std::string /* Last storage task status */
                           >
-    InfoRebuildingsTable;
+    InfoRebuildingLogsTable;
 
-// For rebuilding.
 typedef AdminCommandTable<uint32_t,                  /* Shard id */
                           std::string,               /* Rebuilding set */
                           admin_command_table::LSN,  /* Version */
                           std::chrono::milliseconds, /* Global window end */
                           std::chrono::milliseconds, /* Local window end */
-                          uint64_t, /* Num logs waiting for until LSN */
-                          uint64_t, /* Num logs catching up */
-                          uint64_t, /* Num logs queued for catchup */
-                          uint64_t, /* Num logs in restart queue */
-                          uint64_t, /* Total memory used */
-                          bool,     /* Stall timer active */
-                          uint64_t, /* Num restart timers active */
-                          uint64_t, /* Num active logs */
-                          bool      /* Participating */
+                          uint64_t,    /* Num logs waiting for until LSN */
+                          uint64_t,    /* Num logs catching up */
+                          uint64_t,    /* Num logs queued for catchup */
+                          uint64_t,    /* Num logs in restart queue */
+                          uint64_t,    /* Total memory used */
+                          bool,        /* Stall timer active */
+                          uint64_t,    /* Num restart timers active */
+                          uint64_t,    /* Num active logs */
+                          bool,        /* Participating */
+                          std::string, /* Time by state */
+                          bool,        /* Task in flight */
+                          bool,        /* Persistent error */
+                          uint64_t,    /* Read buffer bytes */
+                          uint64_t,    /* Records in flight */
+                          std::string  /* Read pointer */
                           >
-    InfoShardsRebuildingTable;
+    InfoRebuildingShardsTable;
 
 typedef AdminCommandTable<int,                       /* Shard */
                           uint64_t,                  /* ID */

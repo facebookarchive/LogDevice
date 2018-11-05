@@ -7,6 +7,7 @@
  */
 #include "logdevice/server/rebuilding/ChunkRebuilding.h"
 
+#include "logdevice/common/AdminCommandTable.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/server/ServerWorker.h"
 #include "logdevice/server/rebuilding/ShardRebuildingV2.h"
@@ -29,7 +30,8 @@ ChunkRebuilding::ChunkRebuilding(
       rebuildingSettings_(rebuilding_settings),
       rebuildingVersion_(rebuilding_version),
       restartVersion_(restart_version),
-      shard_(shard) {}
+      shard_(shard),
+      startTime_(SteadyTimestamp::now()) {}
 
 ChunkRebuilding::~ChunkRebuilding() {}
 
@@ -233,6 +235,34 @@ void ChunkRebuilding::onAmendDone(lsn_t lsn) {
 
 void ChunkRebuilding::deleteThis() {
   ServerWorker::onThisThread()->runningChunkRebuildings().map.erase(chunkID_);
+}
+
+void ChunkRebuilding::getDebugInfo(InfoRebuildingChunksTable& table) const {
+  size_t amend_self = 0;
+  size_t amend_others = 0;
+  for (auto& a : rrAmends_) {
+    if (a != nullptr) {
+      if (a->isAmendingSelf()) {
+        ++amend_self;
+      } else {
+        ++amend_others;
+      }
+    }
+  }
+
+  table.next()
+      .set<0>(data_->address.log)
+      .set<1>(shard_)
+      .set<2>(data_->address.min_lsn)
+      .set<3>(data_->address.max_lsn)
+      .set<4>(chunkID_.val())
+      .set<5>(data_->blockID)
+      .set<6>(data_->totalBytes())
+      .set<7>(data_->oldestTimestamp.toMilliseconds())
+      .set<8>(numInFlight_ - amend_self - amend_others)
+      .set<9>(amend_others)
+      .set<10>(amend_self)
+      .set<11>(toSystemTimestamp(startTime_).toMilliseconds());
 }
 
 StartChunkRebuildingRequest::StartChunkRebuildingRequest(

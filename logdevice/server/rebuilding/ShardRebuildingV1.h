@@ -83,7 +83,7 @@ class ShardRebuildingV1 : public ShardRebuildingInterface {
    * Fills the current row of @param table with debug information about the
    * state of rebuilding for this shard. Used by admin commands.
    */
-  void getDebugInfo(InfoShardsRebuildingTable& table) const override;
+  void getDebugInfo(InfoRebuildingShardsTable& table) const override;
 
   lsn_t getRestartVersion() const;
   RecordTimestamp getLocalWindowEnd() const;

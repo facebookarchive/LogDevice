@@ -7,10 +7,15 @@
  */
 #include "logdevice/server/rebuilding/ShardRebuildingV2.h"
 
+#include "logdevice/common/AdminCommandTable.h"
 #include "logdevice/server/ServerWorker.h"
 #include "logdevice/server/storage_tasks/PerWorkerStorageTaskQueue.h"
 
 namespace facebook { namespace logdevice {
+
+// Hard coded because it's very unlikely that anyone would want to change it.
+static constexpr std::chrono::milliseconds PROFILING_TIMER_PERIOD =
+    std::chrono::minutes(1);
 
 std::atomic<log_rebuilding_id_t::raw_type> ShardRebuildingV2::nextChunkID_{0};
 
@@ -52,13 +57,14 @@ void ShardRebuildingV2::abortChunkRebuildings() {
 
 void ShardRebuildingV2::start(
     std::unordered_map<logid_t, std::unique_ptr<RebuildingPlan>> plan) {
+  numLogs_ = plan.size();
+  startTime_ = SteadyTimestamp::now();
   readContext_ = std::make_shared<RebuildingReadStorageTaskV2::Context>();
   readContext_->onDone = [this, this_ref = callbackHelper_.getHolder().ref()](
                              std::vector<std::unique_ptr<ChunkData>> chunks) {
-    // onDone is only called if Context is still alive, which means
-    // ShardRebuildingV2 must be alive as well.
-    assert(this_ref.get() != nullptr);
-    onReadTaskDone(std::move(chunks));
+    if (this_ref.get() != nullptr) {
+      onReadTaskDone(std::move(chunks));
+    }
   };
   readContext_->rebuildingSet = rebuildingSet_;
   readContext_->rebuildingSettings = rebuildingSettings_;
@@ -71,6 +77,8 @@ void ShardRebuildingV2::start(
         std::forward_as_tuple(std::move(*log_plan.second)));
     ld_check(ins.second);
   }
+
+  createAndActivateProfilingTimer();
 
   tryMakeProgress();
 }
@@ -123,6 +131,8 @@ void ShardRebuildingV2::onReadTaskDone(
                      std::make_move_iterator(chunks.begin()),
                      std::make_move_iterator(chunks.end()));
   storageTaskInFlight_ = false;
+  ++readTasksDone_;
+  nextLocation_ = readContext_->nextLocation;
   tryMakeProgress();
 }
 
@@ -141,14 +151,11 @@ void ShardRebuildingV2::startSomeChunkRebuildingsIfNeeded() {
         local_window;
   };
 
-  bool waiting_for_global_window = false;
-
   while (!readBuffer_.empty() &&
          chunkRebuildingRecordsInFlight_ < max_records_in_flight &&
          chunkRebuildingBytesInFlight_ < max_bytes_in_flight &&
          !record_rebuildings_are_too_spread_out()) {
     if (readBuffer_.front()->oldestTimestamp > globalWindowEnd_) {
-      waiting_for_global_window = true;
       break;
     }
 
@@ -191,40 +198,6 @@ void ShardRebuildingV2::startSomeChunkRebuildingsIfNeeded() {
     listener_->notifyShardDonorProgress(
         shard_, readBuffer_.front()->oldestTimestamp, rebuildingVersion_);
   }
-
-  // Update stats about how much time we're spending waiting on global window.
-  waiting_for_global_window &= chunkRebuildings_.empty();
-  if (waiting_for_global_window !=
-      (waitingOnGlobalWindowSince_ != SteadyTimestamp::max())) {
-    if (waiting_for_global_window) {
-      waitingOnGlobalWindowSince_ = SteadyTimestamp::now();
-      PER_SHARD_STAT_SET(
-          getStats(), rebuilding_global_window_waiting_flag, shard_, 1);
-
-      ld_info("Rebuilding of shard %u is now waiting for global window to "
-              "slide. Next timestamp to rebuild: %s, global window end: %s",
-              shard_,
-              readBuffer_.front()->oldestTimestamp.toString().c_str(),
-              globalWindowEnd_.toString().c_str());
-    } else {
-      auto waited_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-          SteadyTimestamp::now() - waitingOnGlobalWindowSince_);
-      waitingOnGlobalWindowSince_ = SteadyTimestamp::max();
-      PER_SHARD_STAT_ADD(getStats(),
-                         rebuilding_global_window_waiting_total,
-                         shard_,
-                         waited_ms.count());
-      PER_SHARD_STAT_SET(
-          getStats(), rebuilding_global_window_waiting_flag, shard_, 0);
-
-      ld_info(
-          "Rebuilding of shard %u has finished waiting for global window to "
-          "slide. Waited for %.3fs. Global window end: %s",
-          shard_,
-          waited_ms.count() / 1e3,
-          globalWindowEnd_.toString().c_str());
-    }
-  }
 }
 
 worker_id_t
@@ -264,6 +237,14 @@ void ShardRebuildingV2::onChunkRebuildingDone(
   ld_check_ge(chunkRebuildingBytesInFlight_, info.totalBytes);
   chunkRebuildingRecordsInFlight_ -= info.numRecords;
   chunkRebuildingBytesInFlight_ -= info.totalBytes;
+
+  chunksRebuilt_ += 1;
+  recordsRebuilt_ += info.numRecords;
+  bytesRebuilt_ += info.totalBytes;
+  PER_SHARD_STAT_ADD(getStats(), chunks_rebuilt, shard_, 1);
+  PER_SHARD_STAT_ADD(getStats(), records_rebuilt, shard_, info.numRecords);
+  PER_SHARD_STAT_ADD(getStats(), bytes_rebuilt, shard_, info.totalBytes);
+
   chunkRebuildings_.erase(it);
 
   tryMakeProgress();
@@ -282,6 +263,17 @@ void ShardRebuildingV2::finalizeIfNeeded() {
     return;
   }
   completed_ = true;
+  ld_info("Rebuilt shard %u in %.3fs (%s). Rebuilt %lu chunks, %lu records, "
+          "%lu bytes. Executed %lu read storage tasks.",
+          shard_,
+          std::chrono::duration_cast<std::chrono::duration<double>>(
+              SteadyTimestamp::now() - startTime_)
+              .count(),
+          describeTimeByState().c_str(),
+          chunksRebuilt_,
+          recordsRebuilt_,
+          bytesRebuilt_,
+          readTasksDone_);
   listener_->onShardRebuildingComplete(shard_);
 }
 
@@ -291,8 +283,41 @@ void ShardRebuildingV2::noteConfigurationChanged() {
   // be in config.
 }
 
-void ShardRebuildingV2::getDebugInfo(InfoShardsRebuildingTable& table) const {
-  // TODO (#T24665001): implement.
+void ShardRebuildingV2::getDebugInfo(InfoRebuildingShardsTable& table) const {
+  // Timestamp of the oldest running ChunkRebuilding.
+  // TODO (#24665001):
+  //   This doesn't match the current column name is "local_window_end".
+  //   When rebuilding v2 becomes the default, rename the column.
+  if (!chunkRebuildings_.empty()) {
+    table.set<4>(
+        chunkRebuildings_.begin()->first.oldestTimestamp.toMilliseconds());
+  } else if (!readBuffer_.empty()) {
+    table.set<4>(readBuffer_.front()->oldestTimestamp.toMilliseconds());
+  }
+  // Total memory used.
+  table.set<9>(bytesInReadBuffer_ + chunkRebuildingBytesInFlight_);
+  table.set<12>(numLogs_);
+  table.set<14>(describeTimeByState());
+  table.set<15>(storageTaskInFlight_);
+  if (!storageTaskInFlight_) {
+    table.set<16>(readContext_->persistentError);
+  }
+  table.set<17>(bytesInReadBuffer_);
+  // TODO (#24665001):
+  //   When ChunkRebuilding gets reimplemented to process all records at once,
+  //   change this into number of chunks in flight.
+  table.set<18>(chunkRebuildingRecordsInFlight_);
+  if (nextLocation_ != nullptr) {
+    table.set<19>(nextLocation_->toString());
+  }
+}
+
+std::function<void(InfoRebuildingLogsTable&)>
+ShardRebuildingV2::beginGetLogsDebugInfo() const {
+  ld_check(readContext_ != nullptr);
+  return [context = readContext_](InfoRebuildingLogsTable& table) {
+    context->getLogsDebugInfo(table);
+  };
 }
 
 StatsHolder* ShardRebuildingV2::getStats() {
@@ -303,10 +328,112 @@ node_index_t ShardRebuildingV2::getMyNodeIndex() {
   return config_->getServerConfig()->getMyNodeID().index();
 }
 
+const SimpleEnumMap<ShardRebuildingV2::ProfilingState, std::string>&
+ShardRebuildingV2::profilingStateNames() {
+  static SimpleEnumMap<ProfilingState, std::string> s_names(
+      {{ProfilingState::FULLY_OCCUPIED, "fully_occupied"},
+       {ProfilingState::WAITING_FOR_READ, "waiting_for_read"},
+       {ProfilingState::WAITING_FOR_REREPLICATION, "waiting_for_rereplication"},
+       {ProfilingState::STALLED, "stalled"}});
+  return s_names;
+}
+
+void ShardRebuildingV2::flushCurrentStateTime() {
+  auto now = SteadyTimestamp::now();
+  if (profilingState_ == ProfilingState::MAX) {
+    currentStateStartTime_ = now;
+    return;
+  }
+  ld_check(currentStateStartTime_ != SteadyTimestamp::min());
+  auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+      now - currentStateStartTime_);
+  currentStateStartTime_ = now;
+
+  totalTimeByState_[(int)profilingState_] += elapsed_ms;
+
+  switch (profilingState_) {
+#define S(upper, lower)                                                 \
+  case ProfilingState::upper:                                           \
+    PER_SHARD_STAT_ADD(                                                 \
+        getStats(), rebuilding_ms_##lower, shard_, elapsed_ms.count()); \
+    break;
+    S(FULLY_OCCUPIED, fully_occupied)
+    S(WAITING_FOR_READ, waiting_for_read)
+    S(WAITING_FOR_REREPLICATION, waiting_for_rereplication)
+    S(STALLED, stalled)
+#undef S
+    case ProfilingState::MAX:
+      ld_check(false);
+  }
+}
+void ShardRebuildingV2::updateProfilingState() {
+  ProfilingState new_state;
+  if (chunkRebuildings_.empty()) {
+    new_state = storageTaskInFlight_ ? ProfilingState::WAITING_FOR_READ
+                                     : ProfilingState::STALLED;
+  } else {
+    new_state = storageTaskInFlight_
+        ? ProfilingState::FULLY_OCCUPIED
+        : ProfilingState::WAITING_FOR_REREPLICATION;
+  }
+  if (new_state != profilingState_) {
+    // Log a message if we started or stopped waiting on global window.
+    if (storageTaskInFlight_ || !readContext_->persistentError) {
+      if (new_state == ProfilingState::STALLED &&
+          profilingState_ != ProfilingState::STALLED) {
+        PER_SHARD_STAT_SET(
+            getStats(), rebuilding_global_window_waiting_flag, shard_, 1);
+        ld_info("Rebuilding of shard %u is now waiting for global window to "
+                "slide. Next timestamp to rebuild: %s, global window end: %s, "
+                "total wait time so far: %.3fs",
+                shard_,
+                readBuffer_.empty()
+                    ? "none"
+                    : readBuffer_.front()->oldestTimestamp.toString().c_str(),
+                globalWindowEnd_.toString().c_str(),
+                totalTimeByState_[(int)ProfilingState::STALLED].count() / 1e3);
+      } else {
+        PER_SHARD_STAT_SET(
+            getStats(), rebuilding_global_window_waiting_flag, shard_, 0);
+        ld_info(
+            "Rebuilding of shard %u has finished waiting for global window to "
+            "slide. Global window end: %s, total wait time so far: %.3fs",
+            shard_,
+            globalWindowEnd_.toString().c_str(),
+            totalTimeByState_[(int)ProfilingState::STALLED].count() / 1e3);
+      }
+    }
+
+    flushCurrentStateTime();
+    profilingState_ = new_state;
+  }
+}
+
+void ShardRebuildingV2::createAndActivateProfilingTimer() {
+  profilingTimer_ = std::make_unique<Timer>([this] {
+    profilingTimer_->activate(PROFILING_TIMER_PERIOD);
+    flushCurrentStateTime();
+  });
+  profilingTimer_->activate(PROFILING_TIMER_PERIOD);
+}
+
+std::string ShardRebuildingV2::describeTimeByState() const {
+  std::stringstream ss;
+  ss.precision(3);
+  ss.setf(std::ios::fixed, std::ios::floatfield);
+  for (int i = 0; i < (int)ProfilingState::MAX; ++i) {
+    if (i > 0) {
+      ss << ", ";
+    }
+    ss << profilingStateNames()[(ProfilingState)i] << ": "
+       << totalTimeByState_[i].count() / 1e3 << "s";
+  }
+  return ss.str();
+}
+
 bool ShardRebuildingV2::ChunkRebuildingKey::
 operator<(const ChunkRebuildingKey& rhs) const {
   return std::tie(oldestTimestamp, chunkID) <
       std::tie(rhs.oldestTimestamp, rhs.chunkID);
 }
-
 }} // namespace facebook::logdevice

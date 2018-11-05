@@ -115,7 +115,10 @@ AdminCommandFactory::AdminCommandFactory() {
   selector_.add<commands::InfoReplication>("info replication");
 
   // Admin command for querying the state of rebuilding.
-  selector_.add<commands::InfoRebuildings>("info rebuildings");
+  selector_.add<commands::InfoRebuildingsLegacy>("info rebuildings");
+  selector_.add<commands::InfoRebuildingShards>("info rebuilding shards");
+  selector_.add<commands::InfoRebuildingLogs>("info rebuilding logs");
+  selector_.add<commands::InfoRebuildingChunks>("info rebuilding chunks");
 
   // Admin commands for rebuilding.
   selector_.add<commands::Rebuilding>(

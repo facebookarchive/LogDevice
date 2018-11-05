@@ -59,6 +59,12 @@ class RecordRebuildingAmend : public RecordRebuildingBase {
 
   void start(bool read_only = false) override;
 
+  // True if we finished amending copysets on other nodes and are now amending
+  // copyset on this node.
+  bool isAmendingSelf() const {
+    return curStage_ > 0;
+  }
+
  private:
   void traceEvent(const char* event_type, const char* status) override;
   int curStage_ = 0;
