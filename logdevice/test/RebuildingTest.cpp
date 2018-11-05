@@ -2389,7 +2389,10 @@ TEST_P(RebuildingTest, DerivedStats) {
 
   // Rebuilding should be stuck because N2 is down.
   stats = cluster->getNode(1).stats();
-  EXPECT_EQ(0, stats["shards_waiting_for_non_started_restore"]);
+  wait_until("shards_waiting_for_non_started_restore", [&cluster, &stats] {
+    stats = cluster->getNode(1).stats();
+    return 0 == stats["shards_waiting_for_non_started_restore"];
+  });
   EXPECT_EQ(0, stats["non_empty_shards_in_restore"]);
 
   // Start N2.
