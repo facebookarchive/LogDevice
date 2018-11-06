@@ -30,6 +30,7 @@
 #include "logdevice/common/debug.h"
 #include "logdevice/common/event_log/EventLogStateMachine.h"
 #include "logdevice/common/plugin/AdminServerFactory.h"
+#include "logdevice/common/plugin/BuiltinZookeeperClientFactory.h"
 #include "logdevice/common/plugin/TraceLoggerFactory.h"
 #include "logdevice/common/settings/SSLSettingValidation.h"
 #include "logdevice/common/settings/SettingsUpdater.h"
@@ -248,12 +249,12 @@ ServerParameters::ServerParameters(
 
   auto updateable_server_config = std::make_shared<UpdateableServerConfig>();
   auto updateable_logs_config = std::make_shared<UpdateableLogsConfig>();
-  auto updatable_zookeeper_config =
+  auto updateable_zookeeper_config =
       std::make_shared<UpdateableZookeeperConfig>();
   updateable_config_ =
       std::make_shared<UpdateableConfig>(updateable_server_config,
                                          updateable_logs_config,
-                                         updatable_zookeeper_config);
+                                         updateable_zookeeper_config);
   server_config_hook_handles_.push_back(
       updateable_server_config->addHook(std::bind(
           &ServerParameters::updateMyNodeId, this, std::placeholders::_1)));
@@ -265,11 +266,16 @@ ServerParameters::ServerParameters(
       updateable_server_config->addHook(std::bind(
           &ServerParameters::validateNodes, this, std::placeholders::_1)));
 
+  std::shared_ptr<ZookeeperClientFactory> zookeeper_client_factory_ =
+      plugin_registry_->getSinglePlugin<ZookeeperClientFactory>(
+          PluginType::ZOOKEEPER_CLIENT_FACTORY);
+  ld_assert(zookeeper_client_factory_);
+
   {
     ConfigInit config_init(
         processor_settings_->initial_config_load_timeout, getStats());
     int rv = config_init.attach(server_settings_->config_path,
-                                getPluginRegistry(),
+                                plugin_registry_,
                                 updateable_config_,
                                 nullptr,
                                 processor_settings_);

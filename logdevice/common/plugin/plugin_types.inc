@@ -49,5 +49,7 @@ PLUGIN_TYPE(OPEN_TRACER_FACTORY, 11, "Open Tracing tracer factory", false)
 PLUGIN_TYPE(HOT_TEXT_OPTIMIZER, 12, "HotTextOptimizer", false)
 // See AdminServerFactory.h
 PLUGIN_TYPE(ADMIN_SERVER_FACTORY, 13, "AdminServer factory", false)
+// See ZookeeperClientPlugin.h
+PLUGIN_TYPE(ZOOKEEPER_CLIENT_FACTORY, 14, "ZookeeperClient factory", false)
 
 #undef PLUGIN_TYPE
