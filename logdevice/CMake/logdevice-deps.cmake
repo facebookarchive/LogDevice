@@ -26,14 +26,24 @@ find_package(Boost 1.55.0 MODULE
     regex
     system
     thread
-  OPTIONAL_COMPONENTS
     ${_boost_py_component1}
-    ${_boost_py_component2}
 )
 
-if(NOT Boost_${_boost_py_component1uc}_FOUND)
+if(NOT Boost_FOUND)
   message(STATUS "Boost Python Component ${_boost_py_component1} not found")
-  if(NOT Boost_${_boost_py_component2uc}_FOUND)
+  find_package(Boost 1.55.0 MODULE
+    COMPONENTS
+      context
+      chrono
+      date_time
+      filesystem
+      program_options
+      regex
+      system
+      thread
+      ${_boost_py_component2}
+  )
+  if(NOT Boost_FOUND)
     message(FATAL_ERROR "Boost Python Component ${_boost_py_component2} is also not found, terminating. At least one is required")
   else()
     message(STATUS "Boost Python Component ${_boost_py_component2} found")

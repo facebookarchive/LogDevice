@@ -39,6 +39,7 @@ git clone https://github.com/no1msd/mstch.git
 cd mstch
 mkdir build
 cd build
+cmake ..
 make && make install
 cd
 ```
