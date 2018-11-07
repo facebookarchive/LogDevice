@@ -49,9 +49,8 @@ class MockedShardRebuilding : public ShardRebuildingV2,
     bool waiting = stats.get()
                        .per_shard_stats->get(SHARD_IDX)
                        ->rebuilding_global_window_waiting_flag;
-    int64_t waited_ms = stats.get()
-                            .per_shard_stats->get(SHARD_IDX)
-                            ->rebuilding_global_window_waiting_total;
+    int64_t waited_ms =
+        stats.get().per_shard_stats->get(SHARD_IDX)->rebuilding_ms_stalled;
     if (waiting == waitingForGlobalWindow) {
       EXPECT_EQ(waited_ms, waitedForGlobalWindow);
       return;
@@ -304,7 +303,7 @@ TEST_F(ShardRebuildingTest, WindowsAndLimits) {
        makeChunk(logid_t(1), 102, 103, 100, BASE_TIME),
        makeChunk(logid_t(1), 120, 121, 200, BASE_TIME + MINUTE * 10)});
   EXPECT_TRUE(reb.taskInFlight);
-  EXPECT_TRUE(reb.waitingForGlobalWindow);
+  EXPECT_FALSE(reb.waitingForGlobalWindow);
   ASSERT_EQ(0, reb.chunkRebuildings.size());
   EXPECT_DONOR_PROGRESS(BASE_TIME + MINUTE);
 

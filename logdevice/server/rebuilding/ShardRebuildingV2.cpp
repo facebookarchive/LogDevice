@@ -379,8 +379,7 @@ void ShardRebuildingV2::updateProfilingState() {
   if (new_state != profilingState_) {
     // Log a message if we started or stopped waiting on global window.
     if (storageTaskInFlight_ || !readContext_->persistentError) {
-      if (new_state == ProfilingState::STALLED &&
-          profilingState_ != ProfilingState::STALLED) {
+      if (new_state == ProfilingState::STALLED) {
         PER_SHARD_STAT_SET(
             getStats(), rebuilding_global_window_waiting_flag, shard_, 1);
         ld_info("Rebuilding of shard %u is now waiting for global window to "
@@ -392,7 +391,7 @@ void ShardRebuildingV2::updateProfilingState() {
                     : readBuffer_.front()->oldestTimestamp.toString().c_str(),
                 globalWindowEnd_.toString().c_str(),
                 totalTimeByState_[(int)ProfilingState::STALLED].count() / 1e3);
-      } else {
+      } else if (profilingState_ == ProfilingState::STALLED) {
         PER_SHARD_STAT_SET(
             getStats(), rebuilding_global_window_waiting_flag, shard_, 0);
         ld_info(
