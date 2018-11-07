@@ -94,8 +94,9 @@ class Context(context.Context):
                     """
                 ),
                 "yellow",
+                file=sys.stderr,
             )
-            cprint("connect /var/shared/logdevice-cluster.conf")
+            cprint("connect /var/shared/logdevice-cluster.conf", file=sys.stderr)
             return
         settings = {"on-demand-logs-config": "true", "num-workers": 2}
         with self._lock:
