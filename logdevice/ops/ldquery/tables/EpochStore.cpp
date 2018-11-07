@@ -138,21 +138,21 @@ std::shared_ptr<TableData> EpochStore::getData(QueryContext& ctx) {
                      epoch_t meta_lce,
                      EpochStoreMetaProperties* meta_props,
                      TailRecord tail_record) {
-    result->cols["log_id"].push_back(s(logid.val_));
-    result->cols["status"].push_back(s(error_name(status)));
+    result->newRow();
+    result->set("log_id", s(logid.val_));
+    result->set("status", s(error_name(status)));
     if (m) {
-      result->cols["since"].push_back(s(m->h.effective_since.val_));
-      result->cols["epoch"].push_back(s(m->h.epoch.val_));
-      result->cols["replication"].push_back(m->replication.toString());
-      result->cols["storage_set"].push_back(toString(m->shards));
-      result->cols["flags"].push_back(EpochMetaData::flagsToString(m->h.flags));
+      result->set("since", s(m->h.effective_since.val_));
+      result->set("epoch", s(m->h.epoch.val_));
+      result->set("replication", m->replication.toString());
+      result->set("storage_set", toString(m->shards));
+      result->set("flags", EpochMetaData::flagsToString(m->h.flags));
     }
-    result->cols["lce"].push_back(s(lce.val_));
-    result->cols["meta_lce"].push_back(s(meta_lce.val_));
-    result->cols["tail_record"].push_back(tail_record.toString());
+    result->set("lce", s(lce.val_));
+    result->set("meta_lce", s(meta_lce.val_));
+    result->set("tail_record", tail_record.toString());
     if (meta_props && meta_props->last_writer_node_id.hasValue()) {
-      result->cols["written_by"].push_back(
-          meta_props->last_writer_node_id->toString());
+      result->set("written_by", meta_props->last_writer_node_id->toString());
     }
   };
 

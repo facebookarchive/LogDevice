@@ -280,6 +280,19 @@ int VirtualTable::xFilter(sqlite3_vtab_cursor* pVtabCursor,
   // Generate the data.
   pVtab->data = pVtab->table->getData(ctx);
 
+  // Check that the data structure is well-formed.
+  if (!pVtab->data->cols.empty()) {
+    size_t num_rows = pVtab->data->cols.begin()->second.size();
+    for (const auto& col : pVtab->data->cols) {
+      if (col.second.size() != num_rows) {
+        ld_critical("Table %s returned different number of rows in different "
+                    "columns. This is a bug in the table's code, please fix.",
+                    pVtab->name.c_str());
+        std::abort();
+      }
+    }
+  }
+
   ld_debug("Queried table %s with constraints: {%s}. Used constraints: {%s}.",
            pVtab->name.c_str(),
            pVtab->table->printConstraints(ctx.constraints).c_str(),

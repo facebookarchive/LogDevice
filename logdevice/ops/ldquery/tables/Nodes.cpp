@@ -92,37 +92,35 @@ std::shared_ptr<TableData> Nodes::getData(QueryContext& /*ctx*/) {
   const auto& metadata_nodes = config->serverConfig()->getMetaDataNodeIndices();
 
   for (const auto& it : nodes) {
+    result->newRow();
     node_index_t nid = it.first;
     const Configuration::Node& node = it.second;
-    result->cols["node_id"].push_back(s(nid));
-    result->cols["address"].push_back(node.address.toString());
+    result->set("node_id", s(nid));
+    result->set("address", node.address.toString());
     if (node.ssl_address.hasValue()) {
-      result->cols["ssl_address"].push_back(
-          node.ssl_address.value().toString());
+      result->set("ssl_address", node.ssl_address.value().toString());
     }
-    result->cols["generation"].push_back(s(node.generation));
+    result->set("generation", s(node.generation));
     if (node.location.hasValue()) {
-      result->cols["location"].push_back(node.location.value().toString());
+      result->set("location", node.location.value().toString());
     }
-    result->cols["sequencer"].push_back(
-        s(node.hasRole(Configuration::NodeRole::SEQUENCER)));
-    result->cols["storage"].push_back(
-        s(node.hasRole(Configuration::NodeRole::STORAGE)));
-    result->cols["sequencer_weight"].push_back(
-        node.hasRole(Configuration::NodeRole::SEQUENCER)
-            ? s(node.getSequencerWeight())
-            : "");
+    result->set(
+        "sequencer", s(node.hasRole(Configuration::NodeRole::SEQUENCER)));
+    result->set("storage", s(node.hasRole(Configuration::NodeRole::STORAGE)));
+    if (node.hasRole(Configuration::NodeRole::SEQUENCER)) {
+      result->set("sequencer_weight", s(node.getSequencerWeight()));
+    }
     if (node.hasRole(Configuration::NodeRole::STORAGE)) {
       auto* storage = node.storage_attributes.get();
-      result->cols["storage_state"].push_back(
-          configuration::storageStateToString(node.getStorageState()));
-      result->cols["storage_weight"].push_back(s(storage->capacity));
-      result->cols["num_shards"].push_back(s(storage->num_shards));
+      result->set("storage_state",
+                  configuration::storageStateToString(node.getStorageState()));
+      result->set("storage_weight", s(storage->capacity));
+      result->set("num_shards", s(storage->num_shards));
     }
     const bool is_metadata_node =
         std::find(metadata_nodes.begin(), metadata_nodes.end(), nid) !=
         metadata_nodes.end();
-    result->cols["is_metadata_node"].push_back(s(is_metadata_node));
+    result->set("is_metadata_node", s(is_metadata_node));
   }
 
   return result;

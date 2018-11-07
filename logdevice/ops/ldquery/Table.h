@@ -83,6 +83,47 @@ struct TableData {
   size_t numRows() const {
     return cols.empty() ? 0ul : cols.begin()->second.size();
   }
+
+  // To fill the table you can directly push_back values into `cols`.
+  // Alternatively, you can use newRow() and set() like this:
+  //  for (...) {
+  //    table->newRow();
+  //    table->set("some_column", some_value);
+  //    // This wouldn't work with push_back-s because columns would end up
+  //    // having different length.
+  //    if (have_another_value) {
+  //      table->set("another_column", another_value);
+  //    }
+  //    ...
+  //  }
+
+  // Adds a new row filled with folly::none-s in all existing columns.
+  // Asserts that all columns have the same length.
+  void newRow() {
+    if (cols.empty()) {
+      return;
+    }
+    size_t num_rows = cols.begin()->second.size();
+    for (auto& col : cols) {
+      ld_check_eq(col.second.size(), num_rows);
+      col.second.push_back(folly::none);
+    }
+  }
+
+  // Assigns a value in the last row. If the column doesn't exist, adds it and
+  // pads with folly::none-s to the length of other columns.
+  void set(const ColumnName& column, ColumnValue value) {
+    auto it = cols.find(column);
+    if (it != cols.end()) {
+      it->second.back() = std::move(value);
+      return;
+    }
+    size_t num_rows = cols.empty() ? 1ul : cols.begin()->second.size();
+    ld_check(num_rows > 0);
+    auto& c = cols[column];
+    c.resize(num_rows);
+    c.back() = std::move(value);
+  }
 };
 
 // A constraint on the value of one column.

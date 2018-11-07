@@ -88,18 +88,19 @@ HistoricalMetadataTableBase::getDataImpl(QueryContext& ctx, bool legacy) {
                      const EpochMetaData* m,
                      lsn_t lsn,
                      std::chrono::milliseconds timestamp) {
-    result->cols["log_id"].push_back(s(logid.val_));
-    result->cols["status"].push_back(s(error_name(status)));
+    result->newRow();
+    result->set("log_id", s(logid.val_));
+    result->set("status", s(error_name(status)));
     if (m) {
-      result->cols["since"].push_back(s(m->h.effective_since.val_));
-      result->cols["epoch"].push_back(s(m->h.epoch.val_));
-      result->cols["replication"].push_back(m->replication.toString());
-      result->cols["storage_set"].push_back(toString(m->shards));
-      result->cols["flags"].push_back(EpochMetaData::flagsToString(m->h.flags));
+      result->set("since", s(m->h.effective_since.val_));
+      result->set("epoch", s(m->h.epoch.val_));
+      result->set("replication", m->replication.toString());
+      result->set("storage_set", toString(m->shards));
+      result->set("flags", EpochMetaData::flagsToString(m->h.flags));
     }
     if (legacy) {
-      result->cols["lsn"].push_back(s(lsn));
-      result->cols["timestamp"].push_back(s(timestamp.count()));
+      result->set("lsn", s(lsn));
+      result->set("timestamp", s(timestamp.count()));
     }
   };
 
