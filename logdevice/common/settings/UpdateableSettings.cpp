@@ -12,7 +12,8 @@
 namespace facebook { namespace logdevice {
 
 void UpdateableSettingsBase::setDefaultValue(const char* name,
-                                             const char* value) {
+                                             const char* value,
+                                             const char* docs_override) {
   namespace style = boost::program_options::command_line_style;
 
   std::string dash_name = std::string("--") + name;
@@ -46,6 +47,10 @@ void UpdateableSettingsBase::setDefaultValue(const char* name,
     ld_check(settings_[opt.string_key].default_value.empty());
     for (auto& v : opt.value) {
       settings_[opt.string_key].default_value.push_back(v);
+    }
+    if (docs_override) {
+      settings_[opt.string_key].default_value_docs_override.assign(
+          docs_override);
     }
   }
 }

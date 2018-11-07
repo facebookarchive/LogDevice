@@ -126,10 +126,11 @@ std::string SettingsUpdater::markdownDoc(bool include_deprecated) const {
           ((desc.flags & SettingFlag::DEPRECATED) && !include_deprecated)) {
         continue; // do not document internal or deprecated settings
       }
-
+      std::string default_value =
+          desc.default_value_docs_override.value_or(desc.default_value.at(0));
       doc << "| " << markdown_sanitize(setting_name) << " | "
           << markdown_sanitize(desc.description) << " | "
-          << markdown_sanitize(desc.default_value.at(0)) << " | "
+          << markdown_sanitize(default_value) << " | "
           << SettingFlag::toMarkdown(desc.flags) << " |" << endl;
     }
     doc << endl;

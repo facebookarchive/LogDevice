@@ -52,6 +52,9 @@ class UpdateableSettingsBase {
     uint32_t flags;
     // Default value for the setting.
     std::vector<std::string> default_value;
+    // Default value to show in documentation. If not set, `default_value` will
+    // be used
+    folly::Optional<std::string> default_value_docs_override;
   };
 
   UpdateableSettingsBase() {}
@@ -61,7 +64,9 @@ class UpdateableSettingsBase {
 
  private:
   // Inform boost::program_options of the default value for a settng.
-  void setDefaultValue(const char* name, const char* value);
+  void setDefaultValue(const char* name,
+                       const char* value,
+                       const char* docs_override);
   // Return a mapping from setting names to their state.
   const std::unordered_map<std::string, SettingDescriptor> getSettings() const {
     return settings_;
@@ -253,7 +258,8 @@ class SettingEasyInit : boost::noncopyable {
                               const F validate_fn,
                               const char* description,
                               uint32_t flags,
-                              const char* category = "Uncategorized") {
+                              const char* category = "Uncategorized",
+                              const char* default_doc_override = nullptr) {
     // Assert no duplicates.
     ld_check(!owner_->settings_.count(name));
 
@@ -286,7 +292,7 @@ class SettingEasyInit : boost::noncopyable {
     opt.category = category ? category : "Uncategorized";
 
     opt.help = "Default: \"";
-    opt.help += default_value;
+    opt.help += default_doc_override ? default_doc_override : default_value;
     opt.help += "\".";
     const std::string flags_str = SettingFlag::toHelpString(flags);
     if (!flags_str.empty()) {
@@ -303,7 +309,7 @@ class SettingEasyInit : boost::noncopyable {
     opt.flags = flags;
 
     owner_->settings_[name] = std::move(opt);
-    owner_->setDefaultValue(name, default_value);
+    owner_->setDefaultValue(name, default_value, default_doc_override);
     return *this;
   }
 

@@ -622,7 +622,8 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "When an ld_check() fails, call abort().  If not, just continue "
        "executing.  We'll log either way.",
        SERVER | CLIENT,
-       SettingsCategory::Testing);
+       SettingsCategory::Testing,
+       "`false` in the client, `true` elsewhere");
   init("abort-on-failed-catch",
        &abort_on_failed_catch,
        folly::kIsDebug ? "true" : "false",
@@ -630,7 +631,8 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "When an ld_catch() fails, call abort().  If not, just continue "
        "executing.  We'll log either way.",
        SERVER | CLIENT,
-       SettingsCategory::Testing);
+       SettingsCategory::Testing,
+       "`true` in debug builds, `false` in release builds");
   init("watchdog-poll-interval",
        &watchdog_poll_interval_ms,
        "5000ms",

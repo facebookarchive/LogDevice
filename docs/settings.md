@@ -438,8 +438,8 @@ sidebar_label: Settings
 ## Testing
 |   Name    |   Description   |  Default  |   Notes   |
 |-----------|-----------------|:---------:|-----------|
-| abort-on-failed-catch | When an ld\_catch() fails, call abort().  If not, just continue executing.  We'll log either way. | true |  |
-| abort-on-failed-check | When an ld\_check() fails, call abort().  If not, just continue executing.  We'll log either way. | true |  |
+| abort-on-failed-catch | When an ld\_catch() fails, call abort().  If not, just continue executing.  We'll log either way. | `true` in debug builds, `false` in release builds |  |
+| abort-on-failed-check | When an ld\_check() fails, call abort().  If not, just continue executing.  We'll log either way. | `false` in the client, `true` elsewhere |  |
 | assert-on-data | Trigger asserts on data in RocksDB (or that received from the network). Should not be used in prod. | false | server&nbsp;only |
 | client-test-force-stats | force instantiation of StatsHolder within ClientImpl even if stats publishing is disabled | false | requires&nbsp;restart, client&nbsp;only |
 | command-unix-socket | Path to the unix domain socket the server will use to listen for admin commands, supports commands over SSL |  | requires&nbsp;restart, server&nbsp;only |
