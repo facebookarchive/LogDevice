@@ -13,8 +13,6 @@ set(_boost_py_component1
 	    python${PYTHON_VERSION_MAJOR})
 set(_boost_py_component2
 	    python-py${PYTHON_VERSION_MAJOR}${PYTHON_VERSION_MINOR})
-string(TOUPPER ${_boost_py_component1} _boost_py_component1uc)
-string(TOUPPER ${_boost_py_component2} _boost_py_component2uc)
 
 find_package(Boost 1.55.0 MODULE
   COMPONENTS
@@ -44,10 +42,10 @@ if(NOT Boost_FOUND)
       ${_boost_py_component2}
   )
   if(NOT Boost_FOUND)
-    message(FATAL_ERROR "Boost Python Component ${_boost_py_component2} is also not found, terminating. At least one is required")
+    message(FATAL_ERROR "Boost Python Component ${_boost_py_component2} is also not found, terminating. At least one is required. ${Boost_ERROR_REASON}")
   else()
     message(STATUS "Boost Python Component ${_boost_py_component2} found")
-  endif() 
+  endif()
 else()
   message(STATUS "Boost Python Component ${_boost_py_component1} found")
 endif()
