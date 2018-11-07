@@ -544,8 +544,8 @@
 <tr><th>Name</th><th>Description</th><th style="text-align:center">Default</th><th>Notes</th></tr>
 </thead>
 <tbody>
-<tr><td>abort-on-failed-catch</td><td>When an ld_catch() fails, call abort().  If not, just continue executing.  We'll log either way.</td><td style="text-align:center">true</td><td></td></tr>
-<tr><td>abort-on-failed-check</td><td>When an ld_check() fails, call abort().  If not, just continue executing.  We'll log either way.</td><td style="text-align:center">true</td><td></td></tr>
+<tr><td>abort-on-failed-catch</td><td>When an ld_catch() fails, call abort().  If not, just continue executing.  We'll log either way.</td><td style="text-align:center"><code>true</code> in debug builds, <code>false</code> in release builds</td><td></td></tr>
+<tr><td>abort-on-failed-check</td><td>When an ld_check() fails, call abort().  If not, just continue executing.  We'll log either way.</td><td style="text-align:center"><code>false</code> in the client, <code>true</code> elsewhere</td><td></td></tr>
 <tr><td>assert-on-data</td><td>Trigger asserts on data in RocksDB (or that received from the network). Should not be used in prod.</td><td style="text-align:center">false</td><td>server only</td></tr>
 <tr><td>client-test-force-stats</td><td>force instantiation of StatsHolder within ClientImpl even if stats publishing is disabled</td><td style="text-align:center">false</td><td>requires restart, client only</td></tr>
 <tr><td>command-unix-socket</td><td>Path to the unix domain socket the server will use to listen for admin commands, supports commands over SSL</td><td style="text-align:center"></td><td>requires restart, server only</td></tr>
