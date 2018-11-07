@@ -107,7 +107,7 @@ std::shared_ptr<TableData> LogGroups::getData(QueryContext& ctx) {
         s(*log_attrs.maxWritesInFlight()));
     result->cols["backlog_duration_sec"].push_back(
         s(*log_attrs.backlogDuration()));
-    result->cols["nodeset_size"].push_back(s(*log_attrs.nodeSetSize()));
+    result->cols["storage_set_size"].push_back(s(*log_attrs.nodeSetSize()));
     result->cols["delivery_latency"].push_back(s(*log_attrs.deliveryLatency()));
     result->cols["scd_enabled"].push_back(s(*log_attrs.scdEnabled()));
     result->cols["custom_fields"].push_back(custom);
