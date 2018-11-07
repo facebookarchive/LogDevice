@@ -198,30 +198,6 @@ int ZookeeperClientInMemory::multiOp(int count,
 }
 
 int ZookeeperClientInMemory::getData(std::string path, data_callback_t cb) {
-  auto completion = [](int rc,
-                       const char* value,
-                       int value_len,
-                       const struct Stat* stat,
-                       const void* context) {
-    if (!context) {
-      return;
-    }
-    auto callback =
-        std::unique_ptr<data_callback_t>(const_cast<data_callback_t*>(
-            reinterpret_cast<const data_callback_t*>(context)));
-    ld_check(callback != nullptr);
-    ld_check(*callback);
-    if (rc == ZOK) {
-      ld_check_ge(value_len, 0);
-      ld_check(stat);
-      (*callback)(
-          rc, {value, static_cast<size_t>(value_len)}, zk::Stat{stat->version});
-    } else {
-      std::string s;
-      (*callback)(rc, s, {});
-    }
-  };
-
   // Use the callback function object as context, which must be freed in
   // completion. The callback could also be empty.
   const void* context = nullptr;
@@ -229,30 +205,13 @@ int ZookeeperClientInMemory::getData(std::string path, data_callback_t cb) {
     auto p = std::make_unique<data_callback_t>(std::move(cb));
     context = p.release();
   }
-  return getData(path.data(), completion, context);
+  return getData(path.data(), &ZookeeperClient::getDataCompletion, context);
 }
 
 int ZookeeperClientInMemory::setData(std::string path,
                                      std::string data,
                                      stat_callback_t cb,
                                      zk::version_t base_version) {
-  auto completion = [](int rc, const struct Stat* stat, const void* context) {
-    if (!context) {
-      return;
-    }
-    auto callback =
-        std::unique_ptr<stat_callback_t>(const_cast<stat_callback_t*>(
-            reinterpret_cast<const stat_callback_t*>(context)));
-    ld_check(callback != nullptr);
-    ld_check(*callback);
-    if (rc == ZOK) {
-      ld_check(stat);
-      (*callback)(rc, zk::Stat{stat->version});
-    } else {
-      (*callback)(rc, {});
-    }
-  };
-
   // Use the callback function object as context, which must be freed in
   // completion. The callback could also be empty.
   const void* context = nullptr;
@@ -260,8 +219,12 @@ int ZookeeperClientInMemory::setData(std::string path,
     auto p = std::make_unique<stat_callback_t>(std::move(cb));
     context = p.release();
   }
-  return setData(
-      path.data(), data.data(), data.size(), base_version, completion, context);
+  return setData(path.data(),
+                 data.data(),
+                 data.size(),
+                 base_version,
+                 &ZookeeperClient::setDataCompletion,
+                 context);
 }
 
 int ZookeeperClientInMemory::multiOp(std::vector<zk::Op>, multi_op_callback_t) {

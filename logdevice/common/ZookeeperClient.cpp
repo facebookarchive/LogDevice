@@ -217,14 +217,83 @@ zkFactoryProd(const configuration::ZookeeperConfig& config) {
   }
 }
 
-int ZookeeperClient::getData(std::string, data_callback_t) {
-  throw std::runtime_error("unimplemented");
+/* static */
+void ZookeeperClient::getDataCompletion(int rc,
+                                        const char* value,
+                                        int value_len,
+                                        const struct Stat* stat,
+                                        const void* context) {
+  if (!context) {
+    return;
+  }
+  auto callback = std::unique_ptr<data_callback_t>(const_cast<data_callback_t*>(
+      reinterpret_cast<const data_callback_t*>(context)));
+  ld_check(callback);
+  // callback should not be empty
+  ld_check(*callback);
+  if (rc == ZOK) {
+    ld_check_ge(value_len, 0);
+    ld_check(stat);
+    (*callback)(
+        rc, {value, static_cast<size_t>(value_len)}, zk::Stat{stat->version});
+  } else {
+    std::string s;
+    (*callback)(rc, s, {});
+  }
 }
-int ZookeeperClient::setData(std::string,
-                             std::string,
-                             stat_callback_t,
-                             zk::version_t) {
-  throw std::runtime_error("unimplemented");
+
+int ZookeeperClient::getData(std::string path, data_callback_t cb) {
+  // Use the callback function object as context, which must be freed in
+  // completion. The callback could also be empty.
+  const void* context = nullptr;
+  if (cb) {
+    auto p = std::make_unique<data_callback_t>(std::move(cb));
+    context = p.release();
+  }
+  return zoo_aget(zh_.get().get(),
+                  path.data(),
+                  /* watch = */ 0,
+                  &ZookeeperClient::getDataCompletion,
+                  context);
+}
+
+/* static */ void ZookeeperClient::setDataCompletion(int rc,
+                                                     const struct Stat* stat,
+                                                     const void* context) {
+  if (!context) {
+    return;
+  }
+  auto callback = std::unique_ptr<stat_callback_t>(const_cast<stat_callback_t*>(
+      reinterpret_cast<const stat_callback_t*>(context)));
+  ld_check(callback);
+  // callback shouldn't be empty
+  ld_check(*callback);
+  if (rc == ZOK) {
+    ld_check(stat);
+    (*callback)(rc, zk::Stat{stat->version});
+  } else {
+    (*callback)(rc, {});
+  }
+}
+
+int ZookeeperClient::setData(std::string path,
+                             std::string data,
+                             stat_callback_t cb,
+                             zk::version_t base_version) {
+  // Use the callback function object as context, which must be freed in
+  // completion. The callback could also be nullptr.
+  const void* context = nullptr;
+  if (cb) {
+    auto p = std::make_unique<stat_callback_t>(std::move(cb));
+    context = p.release();
+  }
+  return zoo_aset(zh_.get().get(),
+                  path.data(),
+                  data.data(),
+                  data.size(),
+                  base_version,
+                  &ZookeeperClient::setDataCompletion,
+                  context);
 }
 
 int ZookeeperClient::multiOp(std::vector<zk::Op>, multi_op_callback_t) {

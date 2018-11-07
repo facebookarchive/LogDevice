@@ -131,6 +131,17 @@ class ZookeeperClient : public ZookeeperClientBase {
               zk::version_t base_version) override;
 
   int multiOp(std::vector<zk::Op> ops, multi_op_callback_t cb) override;
+
+ private:
+  static void getDataCompletion(int rc,
+                                const char* value,
+                                int value_len,
+                                const struct Stat* stat,
+                                const void* context);
+  static void setDataCompletion(int rc,
+                                const struct Stat* stat,
+                                const void* context);
+  friend class ZookeeperClientInMemory;
 };
 
 }} // namespace facebook::logdevice
