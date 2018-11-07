@@ -41,6 +41,25 @@ CatchupQueue is a state machine that manages all the read streams of one client 
 | storage\_task\_in\_flight | int | Each read stream is processed one by one.  When a read stream is processed, it will first try to read some records from the worker thread if there are some records that can be read from RocksDB's block cache. When all records that could be read from the worker thread were read, and if there are more records that can be read, the read stream will issue a storage task to read such records in a slow storage thread.  This flag indicates whether or not there is such a storage task currently in flight. |
 | ping\_timer\_active | int | Ping timer is a timer that is used to ensure we eventually try to schedule more reads under certain conditions.  This column indicates whether the timer is currently active. |
 
+## chunk\_rebuildings
+In-flight ChunkRebuilding state machines - each responsible for re-replicating a short range of records for the same log wich consecutive LSNs and the same copyset (see ChunkRebuilding.h). See also: shard\_rebuildings, log\_rebuildings
+
+|   Column   |   Type   |   Description   |
+|------------|:--------:|-----------------|
+| node\_id | int | Node ID this row is for. |
+| log\_id | log_id | Log ID of the records. |
+| shard | int | Index of the shard to which the records belong. |
+| min\_lsn | lsn | LSN of first record in the chunk. |
+| max\_lsn | lsn | LSN of last record in the chunk. |
+| chunk\_id | long | ID of the chunk, unique within a process. |
+| block\_id | long | Sticky copyset block to which the records belong. Block can be split into multiple chunks. |
+| total\_bytes | long | Sum of records' payload+header sizes. |
+| oldest\_timestamp | time | Timestamp of the first record in the chunk. |
+| stores\_in\_flight | long | Number of records for which we're in the process of storing new copies. |
+| amends\_in\_flight | long | Number of records for which we're in the process of amending copysets of existing copies, excluding our own copy. |
+| amend\_self\_in\_flight | long | Number of records for which we're in the process of amending copysets of our own copy. |
+| started | time | Time when the ChunkRebuilding was started. |
+
 ## client\_read\_streams
 ClientReadStream is the state machine responsible for reading records of a log on the client side.  The state machine connects to all storage nodes that may contain data for a log and request them to send new records as they are appended to the log.  For each ClientReadStream there is one ServerReadStream per storage node the ClientReadStream is talking to.  The "readers" table lists all existing ServerReadStreams.  Because LDQuery does not fetch any debugging information from clients connected to the cluster, the only ClientReadStreams that will be shown in this table are for internal read streams on the server.
 
@@ -545,6 +564,12 @@ Show debugging information about the ShardRebuilding state machines (see "logdev
 | num\_restart\_timers\_active | long | Number of logs that have completed but for which we are still waiting for acknowlegments that writes were durable. |
 | num\_active\_logs | long | Set of logs being rebuilt for this shard.  The shard completes rebuilding when this number reaches zero. |
 | participating | int | true if this shard is a donor for this rebuilding and hasn't finished rebuilding yet. |
+| time\_by\_state | string | Time spent in each state. 'stalled' means either waiting for global window or aborted because of a persistent error. V2 only |
+| task\_in\_flight | int | True if a storage task for reading records is in queue or in flight right now. V2 only. |
+| persistent\_error | int | True if we encountered an unrecoverable error when reading. Shard shouldn't stay in this state for more than a few seconds: it's expected that RebuildingCoordinator will request a rebuilding for this shard, and rebuilding will rewind without this node's participation. V2 only. |
+| read\_buffer\_bytes | long | Bytes of records that we've read but haven't started re-replicating yet. V2 only. |
+| records\_in\_flight | long | Number of records that are being re-replicated right now. V2 only. |
+| read\_pointer | string | How far we have read: partition, log ID, LSN. V2 only. |
 
 ## shards
 Show information about all shards in a cluster.
