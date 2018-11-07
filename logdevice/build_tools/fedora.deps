@@ -37,3 +37,7 @@ zlib-devel
 zookeeper-devel
 python3
 sqlite-devel
+libsodium
+libsodium-devel
+bison
+flex

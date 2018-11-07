@@ -9,6 +9,8 @@ At this time, the only supported platform is Ubuntu 18 LTS "Bionic Beaver".
 
 ## Clone the repo and build from the source
 
+Support for Fedora is experimental.
+
 **Clone the LogDevice GitHub repository, including its submodules.**
 
 ```shell
@@ -24,6 +26,24 @@ sudo apt-get install -y $(cat LogDevice/logdevice/build_tools/ubuntu.deps)
 ```
 
 If the command fails with "Unable to locate package", run `sudo apt-get update` to update the package list.
+
+On Fedora you may try:
+
+```shell
+sudo yum install $(cat LogDevice/logdevice/build_tools/fedora.deps)
+```
+
+You will also need mstch, which is not shipped with Fedora, so you will do have to do:
+
+```shell
+git clone https://github.com/no1msd/mstch.git
+cd mstch
+mkdir build
+cd build
+cmake ..
+make && make install
+cd
+```
 
 **Create a build directory.**
 

@@ -4,7 +4,7 @@
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
 
-FROM fedora:25
+FROM fedora:29
 
 MAINTAINER Ahmed Soliman <asoli@fb.com>
 
@@ -14,9 +14,9 @@ ARG PARALLEL=4
 # picked up by logdeviced
 RUN echo "/usr/local/lib" >> /etc/ld.so.conf && ldconfig
 
-COPY logdevice/build_tools/fedora-25.deps /tmp/
+COPY logdevice/build_tools/fedora.deps /tmp/
 
-RUN dnf install -y $(cat /tmp/fedora-25.deps) && dnf clean all
+RUN dnf install -y $(cat /tmp/fedora.deps) && dnf clean all
 
 COPY logdevice logdevice
 

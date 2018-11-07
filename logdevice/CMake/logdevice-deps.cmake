@@ -9,9 +9,10 @@ set(LD_PYTHON_VERSION 3.5 CACHE STRING "Python version")
 find_package(PythonInterp ${LD_PYTHON_VERSION} REQUIRED)
 find_package(PythonLibs ${LD_PYTHON_VERSION} REQUIRED)
 
-set(_boost_py_component
+set(_boost_py_component1
+	    python${PYTHON_VERSION_MAJOR})
+set(_boost_py_component2
 	    python-py${PYTHON_VERSION_MAJOR}${PYTHON_VERSION_MINOR})
-message(STATUS "Boost Python Component ${_boost_py_component}")
 
 find_package(Boost 1.55.0 MODULE
   COMPONENTS
@@ -23,9 +24,31 @@ find_package(Boost 1.55.0 MODULE
     regex
     system
     thread
-    ${_boost_py_component}
-  REQUIRED
+    ${_boost_py_component1}
 )
+
+if(NOT Boost_FOUND)
+  message(STATUS "Boost Python Component ${_boost_py_component1} not found")
+  find_package(Boost 1.55.0 MODULE
+    COMPONENTS
+      context
+      chrono
+      date_time
+      filesystem
+      program_options
+      regex
+      system
+      thread
+      ${_boost_py_component2}
+  )
+  if(NOT Boost_FOUND)
+    message(FATAL_ERROR "Boost Python Component ${_boost_py_component2} is also not found, terminating. At least one is required. ${Boost_ERROR_REASON}")
+  else()
+    message(STATUS "Boost Python Component ${_boost_py_component2} found")
+  endif()
+else()
+  message(STATUS "Boost Python Component ${_boost_py_component1} found")
+endif()
 
 set(CMAKE_THREAD_PREFER_PTHREAD ON)
 find_package(Libunwind REQUIRED)
