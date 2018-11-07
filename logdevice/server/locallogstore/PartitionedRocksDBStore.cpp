@@ -2164,11 +2164,22 @@ int PartitionedRocksDBStore::dataSize(logid_t log_id,
       partition_end_ts = partitions->get(partition_id + 1)->starting_timestamp;
     }
 
-    if (partition->starting_timestamp < lo_timestamp ||
-        partition_end_ts > hi_timestamp) {
+    if (partition_end_ts < lo_timestamp) {
+      // A partition being selected by the binary search above means that it's
+      // the last one with data for this log that starts before lo_timestamp,
+      // but it might end before lo_timestamp, probably because there's no
+      // directory entry for the following partition. Following directory
+      // entries may still match the given range.
+      continue;
+    } else if (partition->starting_timestamp < lo_timestamp ||
+               partition_end_ts > hi_timestamp) {
       // This partition is only partially covered; est. by linear interpolation
       uint64_t partition_time_range = partition_end_ts.toSeconds().count() -
           partition->starting_timestamp.toSeconds().count();
+      ld_check_ge(std::min(hi_timestamp.toSeconds().count(),
+                           partition_end_ts.toSeconds().count()),
+                  std::max(lo_timestamp.toSeconds().count(),
+                           partition->starting_timestamp.toSeconds().count()));
       uint64_t time_range_covered =
           std::min(hi_timestamp.toSeconds().count(),
                    partition_end_ts.toSeconds().count()) -

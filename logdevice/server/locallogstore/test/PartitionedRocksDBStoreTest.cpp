@@ -8879,3 +8879,95 @@ TEST_F(PartitionedRocksDBStoreTest, RocksDBCFPtrInvalidateAfterPartitionDrop) {
   ASSERT_TRUE(latest_partition->cf_ != nullptr);
   ASSERT_TRUE(latest_partition->cf_->getID() == cf_id);
 }
+
+// Test that there's no overflow when a log just has data in some partitions,
+// and we pass dataSize() a starting timestamp in an unoccupied region.
+TEST_F(PartitionedRocksDBStoreTest, DataSizeWithDirectoryGaps) {
+  closeStore();
+  openStore({{"rocksdb-partition-duration", "15min"},
+             {"rocksdb-partition-compaction-schedule", "1d,2d"}});
+
+  logid_t one_day_log = logid_t(1);
+  logid_t infinite_log = logid_t(400);
+  uint64_t time_raw = BASE_TIME + 2 * MINUTE;
+  size_t result = 0;
+  int num_partitions = 1;
+
+  auto dataSize =
+      [&](logid_t log_id,
+          std::chrono::milliseconds lo = std::chrono::milliseconds::min(),
+          std::chrono::milliseconds hi = std::chrono::milliseconds::max()) {
+        return store_->dataSize(log_id, lo, hi, &result);
+      };
+
+  auto wait_for_new_partition = [&] {
+    store_
+        ->backgroundThreadIteration(
+            PartitionedRocksDBStore::BackgroundThreadType::HI_PRI)
+        .wait();
+    store_
+        ->backgroundThreadIteration(
+            PartitionedRocksDBStore::BackgroundThreadType::LO_PRI)
+        .wait();
+    ASSERT_EQ(++num_partitions, store_->getPartitionList()->size());
+  };
+
+  // Write a few records to both logs and see that the approximate size in the
+  // DirectoryEntry increases.
+  int lsn_1d = 10;
+  ASSERT_EQ(dataSize(one_day_log), 0);
+  ASSERT_EQ(result, 0);
+  put({TestRecord(one_day_log, lsn_1d, time_raw, std::string(36, 'x'))});
+  ASSERT_EQ(dataSize(one_day_log), 0);
+  ASSERT_NE(result, 0);
+  size_t prev_1d_log_size = result;
+
+  int lsn_inf = 22;
+  ASSERT_EQ(dataSize(infinite_log), 0);
+  ASSERT_EQ(result, 0);
+  put({TestRecord(infinite_log, lsn_inf, time_raw, std::string(36, 'x'))});
+  ASSERT_EQ(dataSize(infinite_log), 0);
+  ASSERT_NE(result, 0);
+  size_t prev_inf_log_size = result;
+
+  // Create a new partition, and write some to the one-day log. Verify data
+  // sizes.
+  auto new_partition_for_1d_log = [&]() {
+    time_raw += 15 * MINUTE;
+    setTime(time_raw);
+    wait_for_new_partition();
+    put({TestRecord(one_day_log, ++lsn_1d, time_raw, std::string(51, 'x')),
+         TestRecord(one_day_log, ++lsn_1d, time_raw, std::string(33, 'x'))});
+    ASSERT_EQ(dataSize(one_day_log), 0);
+    ASSERT_GT(result, prev_1d_log_size);
+    prev_1d_log_size = result;
+  };
+  new_partition_for_1d_log();
+
+  ASSERT_EQ(dataSize(infinite_log), 0);
+  ASSERT_EQ(result, prev_inf_log_size);
+
+  // Now, let's create a few more partitions and write only to the one-day log.
+  // Pick a time somewhere here that we'll later use as lower time bound for a
+  // dataSize() call for the infinite-retention log.
+  new_partition_for_1d_log();
+  std::chrono::milliseconds lo_timestamp_for_final_query(time_raw);
+  new_partition_for_1d_log();
+
+  ASSERT_EQ(dataSize(infinite_log), 0);
+  ASSERT_EQ(result, prev_inf_log_size);
+  // Now use the lower timestamp we picked earlier.
+  ASSERT_EQ(dataSize(infinite_log, lo_timestamp_for_final_query), 0);
+  ASSERT_EQ(result, 0);
+
+  // Write some data for the infinite log and try again.
+  put({TestRecord(infinite_log, ++lsn_inf, time_raw, std::string(36, 'x'))});
+
+  ASSERT_EQ(dataSize(infinite_log), 0);
+  ASSERT_GT(result, prev_inf_log_size);
+  // Now use the lower timestamp we picked earlier.
+  ASSERT_EQ(dataSize(infinite_log, lo_timestamp_for_final_query), 0);
+  ASSERT_GT(result, 0);
+  // Now, check that there was no overflow.
+  ASSERT_LT(result, 10000);
+}
