@@ -74,14 +74,15 @@ class EpochRecoveryTest : public ::testing::Test {
   epoch_t seal_epoch_{27};
 
   // previous tail record before the epoch
-  TailRecord prev_tail_{{LOG_ID,
-                         lsn(21, 7),
-                         3432,
-                         {237419},
-                         TailRecordHeader::CHECKSUM_PARITY,
-                         {}},
-                        OffsetMap::fromLegacy(237419),
-                        std::shared_ptr<PayloadHolder>()};
+  TailRecord prev_tail_{
+      {LOG_ID,
+       lsn(21, 7),
+       3432,
+       {BYTE_OFFSET_INVALID /* deprecated, use OffsetMap instead */},
+       TailRecordHeader::CHECKSUM_PARITY,
+       {}},
+      OffsetMap::fromLegacy(237419),
+      std::shared_ptr<PayloadHolder>()};
 
   StorageSet all_shards_{N0, N1, N2, N3, N4, N5, N6};
 
@@ -530,8 +531,10 @@ TEST_F(EpochRecoveryTest, Basic) {
   ASSERT_EQ(lsn(epoch_, 1), lce_tail_.header.lsn);
   ASSERT_EQ(9, lce_tail_.header.timestamp);
   ASSERT_FALSE(lce_tail_.containOffsetWithinEpoch());
-  uint64_t expected_offset = prev_tail_.header.u.byte_offset + 19;
-  ASSERT_EQ(expected_offset, lce_tail_.header.u.byte_offset);
+  OffsetMap offsets_to_add;
+  offsets_to_add.setCounter(BYTE_OFFSET, 19);
+  OffsetMap expected_offsets = prev_tail_.offsets_map_ + offsets_to_add;
+  ASSERT_EQ(expected_offsets, lce_tail_.offsets_map_);
 
   // reply from epoch store
   erm_->onLastCleanEpochUpdated(E::OK, epoch_, lce_tail_);
@@ -667,8 +670,10 @@ TEST_F(EpochRecoveryTest, UnexpectedHolePlugBelowLNG) {
   ASSERT_TRUE(lce_tail_.header.flags & TailRecordHeader::GAP);
 
   // it should still maintain the byte offset though
-  uint64_t expected_offset = prev_tail_.header.u.byte_offset + 19;
-  ASSERT_EQ(expected_offset, lce_tail_.header.u.byte_offset);
+  OffsetMap offsets_to_add;
+  offsets_to_add.setCounter(BYTE_OFFSET, 19);
+  OffsetMap expected_offsets = prev_tail_.offsets_map_ + offsets_to_add;
+  ASSERT_EQ(expected_offsets, lce_tail_.offsets_map_);
 
   // reply from epoch store
   erm_->onLastCleanEpochUpdated(E::OK, epoch_, lce_tail_);
@@ -927,8 +932,10 @@ TEST_F(EpochRecoveryTest, correctByteOffset) {
   // appear in the final recovered log, so only 20 bytes in this epoch,
   // also shouldn't use the inaccurate epoch_size from sealed message, which is
   // 40 in this case
-  uint64_t expected_offset = prev_tail_.header.u.byte_offset + 20;
-  ASSERT_EQ(expected_offset, lce_tail_.header.u.byte_offset);
+  OffsetMap offsets_to_add;
+  offsets_to_add.setCounter(BYTE_OFFSET, 20);
+  OffsetMap expected_offsets = prev_tail_.offsets_map_ + offsets_to_add;
+  ASSERT_EQ(expected_offsets, lce_tail_.offsets_map_);
 }
 
 } // anonymous namespace

@@ -93,9 +93,7 @@ class Sequencers : public AdminCommandTable {
          DataType::BIGINT,
          "Whether the epoch metadata used by this sequencer has been written "
          "to the metadata log."},
-        {"last_byte_offset",
-         DataType::TEXT,
-         "Byte offset of the tail record."}};
+        {"last_offsets", DataType::TEXT, "Offsets of the tail record."}};
   }
   std::string getCommandToSend(QueryContext& ctx) const override {
     logid_t logid;

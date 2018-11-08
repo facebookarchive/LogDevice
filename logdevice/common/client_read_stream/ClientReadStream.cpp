@@ -3090,6 +3090,8 @@ int ClientReadStream::deliverRecord(
       std::chrono::system_clock::now().time_since_epoch());
 
   OffsetMap current_offsets = record->attrs.offsets;
+  // TODO (T33977412) : Add method that takes into account other counters.
+  // This method should receive a record and returns OffsetMap with offsets set.
   OffsetMap payload_size_map;
   // TODO(T33977412) : Change to take into account other counters
   payload_size_map.setCounter(BYTE_OFFSET, record->payload.size());

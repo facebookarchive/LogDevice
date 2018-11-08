@@ -192,12 +192,18 @@ TEST_F(FileEpochStoreTest, LastCleanEpoch) {
           EXPECT_EQ(EPOCH_INVALID, epoch);
           EXPECT_EQ(LSN_INVALID, tail.header.lsn);
           EXPECT_EQ(0, tail.header.timestamp);
-          EXPECT_EQ(0, tail.header.u.byte_offset);
+          EXPECT_EQ(0, tail.offsets_map_.getCounter(BYTE_OFFSET));
         });
 
-    TailRecord set_tail({logid, lsn_t(200), 15, {100}, 0, {}},
-                        OffsetMap::fromLegacy(100),
-                        std::shared_ptr<PayloadHolder>());
+    TailRecord set_tail(
+        {logid,
+         lsn_t(200),
+         15,
+         {BYTE_OFFSET_INVALID /* deprecated, use OffsetMap instead */},
+         0,
+         {}},
+        OffsetMap::fromLegacy(100),
+        std::shared_ptr<PayloadHolder>());
 
     store_->setLastCleanEpoch(logid,
                               epoch_t(10),
@@ -214,12 +220,18 @@ TEST_F(FileEpochStoreTest, LastCleanEpoch) {
           EXPECT_EQ(epoch_t(10), epoch);
           EXPECT_EQ(lsn_t(200), tail.header.lsn);
           EXPECT_EQ(15, tail.header.timestamp);
-          EXPECT_EQ(100, tail.header.u.byte_offset);
+          EXPECT_EQ(100, tail.offsets_map_.getCounter(BYTE_OFFSET));
         });
 
-    TailRecord set_tail2({logid, lsn_t(100), 30, {50}, 0, {}},
-                         OffsetMap::fromLegacy(50),
-                         std::shared_ptr<PayloadHolder>());
+    TailRecord set_tail2(
+        {logid,
+         lsn_t(100),
+         30,
+         {BYTE_OFFSET_INVALID /* deprecated, use OffsetMap instead */},
+         0,
+         {}},
+        OffsetMap::fromLegacy(50),
+        std::shared_ptr<PayloadHolder>());
 
     // Will not make any change because new value for lce is smaller than
     // previous stored value
@@ -234,7 +246,7 @@ TEST_F(FileEpochStoreTest, LastCleanEpoch) {
           EXPECT_EQ(epoch_t(10), epoch);
           EXPECT_EQ(lsn_t(200), tail.header.lsn);
           EXPECT_EQ(15, tail.header.timestamp);
-          EXPECT_EQ(100, tail.header.u.byte_offset);
+          EXPECT_EQ(100, tail.offsets_map_.getCounter(BYTE_OFFSET));
         });
   }
 }

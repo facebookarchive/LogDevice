@@ -2344,7 +2344,6 @@ TEST_F(PartitionedRocksDBStoreTest, TrimPerEpochLogMetadata) {
   // write some metadata
   epoch_size_map.setCounter(BYTE_OFFSET, 12);
   tail_record.offsets_map_.setCounter(BYTE_OFFSET, 10);
-  tail_record.header.u.offset_within_epoch = 10;
   tail_record.header.log_id = logid_t(1);
   epoch_end_offsets.setCounter(BYTE_OFFSET, 10);
   EpochRecoveryMetadata metadata(epoch_t(9),

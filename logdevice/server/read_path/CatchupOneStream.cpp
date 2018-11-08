@@ -1191,8 +1191,7 @@ CatchupOneStream::Action CatchupOneStream::pushReleasedRecords(
       }
 
       nrecords++;
-      ld_check(entry->offsets_within_epoch.getCounter(BYTE_OFFSET) ==
-               entry->offset_within_epoch);
+
       int rv = callback.processRecord(
           entry->lsn,
           std::chrono::milliseconds(entry->timestamp),

@@ -863,7 +863,6 @@ TEST_F(RocksDBLocalLogStoreTest, PerEpochLogMetadata) {
   epoch_size_map.setCounter(BYTE_OFFSET, 200);
   epoch_end_offsets.setCounter(BYTE_OFFSET, 100);
   tail_record.offsets_map_.setCounter(BYTE_OFFSET, 100);
-  tail_record.header.u.offset_within_epoch = 100;
   tail_record.header.log_id = logid_t(1);
   EpochRecoveryMetadata erm_empty;
   ASSERT_FALSE(erm_empty.valid());
@@ -895,7 +894,6 @@ TEST_F(RocksDBLocalLogStoreTest, PerEpochLogMetadata) {
   ASSERT_EQ(erm_valid, erm1);
   epoch_size_map.setCounter(BYTE_OFFSET, 1230);
   tail_record.offsets_map_.setCounter(BYTE_OFFSET, 1020);
-  tail_record.header.u.offset_within_epoch = 1020;
   epoch_end_offsets.setCounter(BYTE_OFFSET, 1020);
   EpochRecoveryMetadata erm_valid2(epoch_t(8),
                                    esn_t(1),

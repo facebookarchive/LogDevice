@@ -715,7 +715,6 @@ TEST_F(MessageSerializationTest, GET_EPOCH_RECOVERY_METADATA_REPLY_RangeEpoch) {
       epoch_size_map.setCounter(BYTE_OFFSET, 0);
       TailRecord tail_record;
       tail_record.offsets_map_.setCounter(BYTE_OFFSET, 4);
-      tail_record.header.u.offset_within_epoch = 4;
       tail_record.header.log_id = logid_t(1);
       OffsetMap epoch_end_offsets;
       epoch_end_offsets.setCounter(BYTE_OFFSET, 4);
@@ -1031,16 +1030,17 @@ TailRecord genTailRecord(bool include_payload) {
   void* payload_flat = malloc(20);
   memset(payload_flat, 0, 20);
   std::strncpy((char*)payload_flat, "Tail Record Test.", 20);
-  return TailRecord(TailRecordHeader{logid_t(0xBBC18E8AA44783D3),
-                                     compose_lsn(epoch_t(933), esn_t(3347)),
-                                     1502502135,
-                                     {2349045994592},
-                                     flags,
-                                     {}},
-                    OffsetMap::fromLegacy(2349045994592),
-                    include_payload
-                        ? std::make_shared<PayloadHolder>(payload_flat, 20)
-                        : nullptr);
+  return TailRecord(
+      TailRecordHeader{
+          logid_t(0xBBC18E8AA44783D3),
+          compose_lsn(epoch_t(933), esn_t(3347)),
+          1502502135,
+          {BYTE_OFFSET_INVALID /* deprecated use OffsetMap instead */},
+          flags,
+          {}},
+      OffsetMap::fromLegacy(2349045994592),
+      include_payload ? std::make_shared<PayloadHolder>(payload_flat, 20)
+                      : nullptr);
 }
 } // namespace
 
@@ -1081,6 +1081,7 @@ TEST_F(MessageSerializationTest, SEALED) {
         "0004000000000000000500000000000000090000000100020009000000000000000A00"
         "0000000000000B00000000000000060000000000000007000000000000000800000000"
         "000000";
+
     DO_TEST(m,
             check,
             Compatibility::MIN_PROTOCOL_SUPPORTED,
@@ -1449,9 +1450,7 @@ TEST_F(MessageSerializationTest, CLEAN) {
   epoch_end_offset.setCounter(BYTE_OFFSET, 0x9B7D7B3FEC8486AA);
   TailRecord tail;
   tail.header.log_id = logid_t(0xBBC18E8AA44783D3);
-  tail.header.u.byte_offset = 0x9B7D7B3FEC8486AA;
   tail.offsets_map_ = epoch_end_offset;
-
   OffsetMap offset_within_epoch;
   offset_within_epoch.setCounter(BYTE_OFFSET, 0xABB4842249C95413);
 

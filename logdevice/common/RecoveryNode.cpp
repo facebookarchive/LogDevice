@@ -157,6 +157,7 @@ void RecoveryNode::transition(State to) {
                  header.epoch_end_offset,
                  epoch_size_map.toString().c_str(),
                  tail_record.toString().c_str());
+
         msg.reset(new CLEAN_Message(
             header, tail_record, epoch_size_map, absent_shards));
       } else {

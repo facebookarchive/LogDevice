@@ -215,6 +215,7 @@ void verifyEntry(const Entry& entry,
   } while (0)
 
 template <typename ERCPointer>
+// TODO (T33977412): change to take OffsetMap
 void ASSERT_TAIL_RECORD_OFFSET(const ERCPointer& c,
                                lsn_t _lsn,
                                uint64_t _offset) {
@@ -223,7 +224,7 @@ void ASSERT_TAIL_RECORD_OFFSET(const ERCPointer& c,
   if (_lsn != LSN_INVALID) {
     ASSERT_EQ(_lsn, r.header.timestamp);
     if (_offset != BYTE_OFFSET_INVALID) {
-      ASSERT_EQ(_offset, r.header.u.offset_within_epoch);
+      ASSERT_EQ(_offset, r.offsets_map_.getCounter(BYTE_OFFSET));
     }
     ASSERT_NE(0, r.header.flags & TailRecordHeader::OFFSET_WITHIN_EPOCH);
     if ((c)->isTailOptimized()) {

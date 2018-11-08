@@ -225,7 +225,6 @@ esn_t Digest::applyBridgeRecords(esn_t last_known_good,
             RECORD_Header::HOLE | RECORD_Header::DIGEST;
 
         // create a hole record from the existing record
-        // TODO (T33977412) change attrs to take byte_offsets
         std::unique_ptr<DataRecordOwnsPayload> hole_record(
             new DataRecordOwnsPayload(
                 existing_record->logid,

@@ -227,13 +227,14 @@ int CachedDigest::shipRecords(size_t* bytes_pushed) {
       // tail record and here we just use dummy ones. This is fine because the
       // tail record is always per-epoch released and fuly replicated so that
       // epoch recovery will never use its metadata.
+      // TODO (T33977412) should take OffsetMap
       Snapshot::Record tail_record{
           tail_record_flags,
           tail.header.timestamp,           // timestamp
           lsn_to_esn(tail.header.lsn - 1), // lng
           1,                               // wave
           copyset_t({ShardID(0, 0)}),      // copyset (dummy)
-          tail.header.u.offset_within_epoch,
+          tail.offsets_map_.getCounter(BYTE_OFFSET),
           tail.getPayloadSlice()};
       ssize_t pushed = shipRecord(esn, tail_record);
       if (pushed < 0) {

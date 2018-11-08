@@ -249,7 +249,12 @@ void LogRecoveryRequest::skipRecovery() {
   EpochStore& epoch_store =
       Worker::onThisThread()->processor_->allSequencers().getEpochStore();
   TailRecord tail_record(
-      {getLogID(), LSN_INVALID, 0, {BYTE_OFFSET_INVALID}, /*flags*/ 0, {}},
+      {getLogID(),
+       LSN_INVALID,
+       0,
+       {BYTE_OFFSET_INVALID /* deprecated, OffsetMap used instead */},
+       /*flags*/ 0,
+       {}},
       OffsetMap(),
       std::shared_ptr<PayloadHolder>());
 
@@ -1159,14 +1164,14 @@ void LogRecoveryRequest::onSealReply(ShardID from,
     for (int i = n_recovering_epochs - epoch_recovery_machines_.size();
          i < reply.epoch_lng_.size();
          i++, erm++) {
-      const auto& offset = reply.epoch_offset_map_[i];
+      const auto& offsets = reply.epoch_offset_map_[i];
       ld_check(erm != epoch_recovery_machines_.end());
       if (erm->epoch_ != lsn_to_epoch(reply.epoch_lng_[i])) {
         RATELIMIT_ERROR(std::chrono::seconds(1),
                         10,
                         "A SEALED message for epoch %u of log %lu received from"
                         " node %s has an invalid epoch_lng_ list: LSN %s at"
-                        " offset %i has epoch number %u. Expected %u.",
+                        " offsets %i has epoch number %u. Expected %u.",
                         seal_header_->seal_epoch.val_,
                         log_id_.val_,
                         from.toString().c_str(),
@@ -1184,7 +1189,7 @@ void LogRecoveryRequest::onSealReply(ShardID from,
                         10,
                         "A SEALED message for epoch %u of log %lu received from"
                         " node %s has an invalid max_seen_lsn_ list: LSN %s at"
-                        " offset %i expected to be in epoch %u.",
+                        " offsets %i expected to be in epoch %u.",
                         seal_header_->seal_epoch.val_,
                         log_id_.val_,
                         from.toString().c_str(),
@@ -1227,14 +1232,15 @@ void LogRecoveryRequest::onSealReply(ShardID from,
         // tail record from its (lng, last_timestamp, epoch_offset_map).
         // Note: only consider it as a tail if lng > ESN_INVALID
         if (lsn_to_esn(reply.epoch_lng_[i]) > ESN_INVALID) {
-          epoch_tail = TailRecord({log_id_,
-                                   reply.epoch_lng_[i],
-                                   reply.last_timestamp_[i],
-                                   {offset.getCounter(BYTE_OFFSET)},
-                                   TailRecordHeader::OFFSET_WITHIN_EPOCH,
-                                   {}},
-                                  offset,
-                                  std::shared_ptr<PayloadHolder>());
+          epoch_tail = TailRecord(
+              {log_id_,
+               reply.epoch_lng_[i],
+               reply.last_timestamp_[i],
+               {BYTE_OFFSET_INVALID /* deprecated, OffsetMap below */},
+               TailRecordHeader::OFFSET_WITHIN_EPOCH,
+               {}},
+              offsets,
+              std::shared_ptr<PayloadHolder>());
 
           ld_check(epoch_tail.value().isValid());
         }
@@ -1248,7 +1254,7 @@ void LogRecoveryRequest::onSealReply(ShardID from,
       if (erm->onSealed(from,
                         lsn_to_esn(reply.epoch_lng_[i]),
                         max_seen_esn,
-                        offset,
+                        offsets,
                         std::move(epoch_tail))) {
         return;
       }

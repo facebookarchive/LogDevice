@@ -119,9 +119,15 @@ TailRecord gen_tail_record(logid_t logid,
                            lsn_t lsn,
                            uint64_t timestamp,
                            uint64_t byte_offset) {
-  return TailRecord({logid, lsn, timestamp, {byte_offset}, 0, {}},
-                    OffsetMap::fromLegacy(byte_offset),
-                    std::shared_ptr<PayloadHolder>());
+  return TailRecord(
+      {logid,
+       lsn,
+       timestamp,
+       {BYTE_OFFSET_INVALID /* deprecated use OffsetMap instead */},
+       0,
+       {}},
+      OffsetMap::fromLegacy(byte_offset),
+      std::shared_ptr<PayloadHolder>());
 }
 
 TailRecord gen_tail_record_with_payload(logid_t logid,
@@ -131,9 +137,15 @@ TailRecord gen_tail_record_with_payload(logid_t logid,
   TailRecordHeader::flags_t flags = TailRecordHeader::HAS_PAYLOAD;
   void* payload_flat = malloc(333);
   std::strncpy((char*)payload_flat, "Tail Record Test Payload", 50);
-  return TailRecord({logid, lsn, timestamp, {byte_offset}, 0, {}},
-                    OffsetMap::fromLegacy(byte_offset),
-                    std::make_shared<PayloadHolder>(payload_flat, 333));
+  return TailRecord(
+      {logid,
+       lsn,
+       timestamp,
+       {BYTE_OFFSET_INVALID /* deprecated use byte_offset instead */},
+       0,
+       {}},
+      OffsetMap::fromLegacy(byte_offset),
+      std::make_shared<PayloadHolder>(payload_flat, 333));
 }
 } // namespace
 
@@ -815,7 +827,7 @@ TEST_F(ZookeeperEpochStoreTest, LastCleanEpochWithTailRecord) {
         ASSERT_EQ(LSN_INVALID, tail.header.lsn);
         ASSERT_EQ(0, tail.header.timestamp);
         ASSERT_EQ(0, tail.header.flags & TailRecordHeader::OFFSET_WITHIN_EPOCH);
-        ASSERT_EQ(0, tail.header.u.byte_offset);
+        ASSERT_EQ(0, tail.offsets_map_.getCounter(BYTE_OFFSET));
 
         sem.post();
       });
@@ -900,8 +912,8 @@ TEST_F(ZookeeperEpochStoreTest, LastCleanEpochWithTailRecord) {
         ASSERT_EQ(logid_t(1), logid);
         ASSERT_EQ(new_lce3, lce);
         ASSERT_EQ(new_tail3.header.lsn, tail.header.lsn);
-        ASSERT_NE(new_tail3.header.u.byte_offset, tail.header.u.byte_offset);
-        ASSERT_EQ(new_tail.header.u.byte_offset, tail.header.u.byte_offset);
+        ASSERT_NE(new_tail3.offsets_map_, tail.offsets_map_);
+        ASSERT_EQ(new_tail.offsets_map_, tail.offsets_map_);
         sem.post();
       });
 
@@ -916,8 +928,8 @@ TEST_F(ZookeeperEpochStoreTest, LastCleanEpochWithTailRecord) {
         ASSERT_EQ(new_lce3, lce);
         ASSERT_EQ(new_tail3.header.lsn, tail.header.lsn);
         ASSERT_EQ(new_tail3.header.timestamp, tail.header.timestamp);
-        ASSERT_NE(new_tail3.header.u.byte_offset, tail.header.u.byte_offset);
-        ASSERT_EQ(new_tail.header.u.byte_offset, tail.header.u.byte_offset);
+        ASSERT_NE(new_tail3.offsets_map_, tail.offsets_map_);
+        ASSERT_EQ(new_tail.offsets_map_, tail.offsets_map_);
         sem.post();
       });
 

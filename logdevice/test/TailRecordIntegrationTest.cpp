@@ -139,7 +139,8 @@ TailRecordIntegrationTest::checkTail(std::shared_ptr<ClientImpl>& client,
   EXPECT_EQ(lsn, tail_record->header.lsn);
   EXPECT_EQ(timestamp, tail_record->header.timestamp);
   if (byte_offset.hasValue()) {
-    EXPECT_EQ(byte_offset.value(), tail_record->header.u.byte_offset);
+    EXPECT_EQ(
+        byte_offset.value(), tail_record->offsets_map_.getCounter(BYTE_OFFSET));
   }
 
   if (tail_optimized_ && payload.hasValue()) {

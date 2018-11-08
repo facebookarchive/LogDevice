@@ -681,7 +681,9 @@ class MutablePerEpochLogMetadata final : public PerEpochLogMetadata {
   MutablePerEpochLogMetadata(FlagsType flags,
                              esn_t last_known_good,
                              uint64_t epoch_size)
-      : data_{flags, last_known_good, epoch_size} {}
+      : data_{flags, last_known_good, epoch_size} {
+    epoch_size_map_.setCounter(BYTE_OFFSET, epoch_size);
+  }
 
   PerEpochLogMetadataType getType() const override {
     return PerEpochLogMetadataType::MUTABLE;
@@ -732,6 +734,7 @@ class MutablePerEpochLogMetadata final : public PerEpochLogMetadata {
   }
 
   Data data_;
+  OffsetMap epoch_size_map_;
 
  private:
   void merge(const Data& other) {

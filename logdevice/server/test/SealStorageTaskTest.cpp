@@ -478,11 +478,11 @@ TEST(SealStorageTaskTest, TailRecordWithEpochOffset) {
       ASSERT_TRUE(r.header.flags & TailRecordHeader::CHECKSUM_PARITY);
     }
   }
-  ASSERT_EQ(32, task1.tail_records_[0].header.u.offset_within_epoch);
+  ASSERT_EQ(32, task1.tail_records_[0].offsets_map_.getCounter(BYTE_OFFSET));
   ASSERT_EQ(
       32, (*task1.epoch_info_)[2].epoch_offset_map.getCounter(BYTE_OFFSET));
-  ASSERT_EQ(54214, task1.tail_records_[1].header.u.offset_within_epoch);
-  ASSERT_EQ(672, task1.tail_records_[2].header.u.offset_within_epoch);
+  ASSERT_EQ(54214, task1.tail_records_[1].offsets_map_.getCounter(BYTE_OFFSET));
+  ASSERT_EQ(672, task1.tail_records_[2].offsets_map_.getCounter(BYTE_OFFSET));
 }
 
 // test Seal should succeed on retries with the same Seal ID, but only

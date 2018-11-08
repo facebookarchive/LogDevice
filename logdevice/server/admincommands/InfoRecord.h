@@ -30,7 +30,7 @@ typedef AdminCommandTable<logid_t,                   /* Log ID */
                           uint32_t,                  /* Last known good */
                           std::string,               /* Copyset / Storage set */
                           std::string,               /* Flags */
-                          uint64_t,                  /* Offset within epoch */
+                          std::string,               /* Offsets within epoch */
                           std::string,               /* Optional keys */
                           bool,       /* Is written by recovery */
                           std::string /* Payload */
@@ -130,9 +130,7 @@ class InfoRecordStorageTask : public StorageTask {
             .set<8>(flags_str);
 
         if (flags & LocalLogStoreRecordFormat::FLAG_OFFSET_WITHIN_EPOCH) {
-          // TODO (T33977412) : change the type of the column
-          // to accept an offsetmap instead of just a uint64_t
-          table_.set<9>(offsets_within_epoch.getCounter(BYTE_OFFSET));
+          table_.set<9>(offsets_within_epoch.toString());
         }
 
         table_.set<10>(optional_keys_string.c_str())

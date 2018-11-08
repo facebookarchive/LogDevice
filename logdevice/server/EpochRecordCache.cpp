@@ -400,10 +400,14 @@ void EpochRecordCache::updateTailRecord(
     flags |= TailRecordHeader::CHECKSUM_PARITY;
   }
 
-  uint64_t offset = OffsetMap::toLegacy(offsets);
   // replace the existing tail record
   tail_record_ =
-      TailRecord({log_id_, tail->lsn, tail->timestamp, {offset}, flags, {}},
+      TailRecord({log_id_,
+                  tail->lsn,
+                  tail->timestamp,
+                  {BYTE_OFFSET_INVALID /* deprecated, use offsets instead */},
+                  flags,
+                  {}},
                  std::move(offsets),
                  tail_optimized_ == TailOptimized::YES ? tail : nullptr);
 }
