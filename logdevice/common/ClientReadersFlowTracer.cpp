@@ -407,7 +407,8 @@ folly::Optional<int64_t> ClientReadersFlowTracer::estimateByteLag() const {
     auto tail_lsn = latest_tail_info_->lsn_approx;
     int64_t tail_byte_offset =
         latest_tail_info_->offsets.getCounter(BYTE_OFFSET);
-    int64_t acc_byte_offset = owner_->accumulated_byte_offset_;
+    int64_t acc_byte_offset =
+        owner_->accumulated_offsets_.getCounter(BYTE_OFFSET);
     if (acc_byte_offset != BYTE_OFFSET_INVALID &&
         tail_byte_offset != BYTE_OFFSET_INVALID) {
       if (tail_byte_offset >= acc_byte_offset) {

@@ -196,6 +196,7 @@ TEST_F(FileEpochStoreTest, LastCleanEpoch) {
         });
 
     TailRecord set_tail({logid, lsn_t(200), 15, {100}, 0, {}},
+                        OffsetMap::fromLegacy(100),
                         std::shared_ptr<PayloadHolder>());
 
     store_->setLastCleanEpoch(logid,
@@ -216,8 +217,9 @@ TEST_F(FileEpochStoreTest, LastCleanEpoch) {
           EXPECT_EQ(100, tail.header.u.byte_offset);
         });
 
-    TailRecord set_tail2(
-        {logid, lsn_t(100), 30, {50}, 0, {}}, std::shared_ptr<PayloadHolder>());
+    TailRecord set_tail2({logid, lsn_t(100), 30, {50}, 0, {}},
+                         OffsetMap::fromLegacy(50),
+                         std::shared_ptr<PayloadHolder>());
 
     // Will not make any change because new value for lce is smaller than
     // previous stored value

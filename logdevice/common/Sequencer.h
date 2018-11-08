@@ -648,11 +648,12 @@ class Sequencer {
   std::shared_ptr<const TailRecord> getTailRecord() const;
 
   /**
-   * @return    the accumulative, epoch-end byte offset of the previous epoch.
-   *            BYTE_OFFSET_INVALID if the information is not available (e.g.,
-   *            byte offset not enabled, log recovery not completed)
+   * @return    the accumulative, epoch-end OffsetMap of the previous epoch.
+   *            it is invalid if the information is not available (e.g.,
+   *            byte offset not enabled, log recovery not completed). Counter
+   *            BYTE_OFFSET is invalid if its value is BYTE_OFFSET_INVALID
    */
-  uint64_t getEpochOffset() const;
+  OffsetMap getEpochOffsetMap() const;
 
   ///////////// Log Provision and MetaData Log /////////////////////
 

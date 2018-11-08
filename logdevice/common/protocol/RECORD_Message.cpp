@@ -237,7 +237,6 @@ Message::Disposition RECORD_Message::onReceived(const Address& from) {
 
   bool invalid_checksum = (verifyChecksum() != 0);
 
-  // TODO(T33977412) : send offsets
   std::unique_ptr<DataRecordOwnsPayload> record(
       new DataRecordOwnsPayload(header_.log_id,
                                 std::move(payload_),
@@ -247,7 +246,7 @@ Message::Disposition RECORD_Message::onReceived(const Address& from) {
                                 std::move(extra_metadata_),
                                 std::shared_ptr<BufferedWriteDecoder>(),
                                 0, // batch_offset
-                                offsets_.getCounter(BYTE_OFFSET),
+                                offsets_,
                                 invalid_checksum));
   // We have transferred ownership of the payload.
   ld_check(!payload_.data());

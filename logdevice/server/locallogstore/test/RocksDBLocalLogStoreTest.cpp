@@ -160,7 +160,7 @@ std::string makeRecordHeader() {
       LocalLogStoreRecordFormat::FLAG_CHECKSUM_PARITY,
       0,
       folly::Range<const ShardID*>(cs, cs + 2),
-      0,
+      OffsetMap(),
       std::map<KeyType, std::string>(),
       &s);
   ld_check(r.size > 0);

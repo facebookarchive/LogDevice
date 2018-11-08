@@ -101,11 +101,12 @@ TEST_F(ByteOffsetTest, InBandByteOffsetBasic) {
                reader->startReading(LOG_ID, first_lsn);
                auto nread = reader->read(NRECORDS_PER_EPOCH, &records, &gap);
                EXPECT_EQ(nread, NRECORDS_PER_EPOCH);
-               if (records[0]->attrs.byte_offset != BYTE_OFFSET_INVALID) {
+               if (records[0]->attrs.offsets.isValid()) {
                  for (int i = 0; i < NRECORDS_PER_EPOCH; ++i) {
                    const DataRecord& r = *records[i];
                    ld_info("lsn %s", lsn_to_string(r.attrs.lsn).c_str());
-                   EXPECT_EQ((i + 1) * RECORD_SIZE, r.attrs.byte_offset);
+                   EXPECT_EQ((i + 1) * RECORD_SIZE,
+                             OffsetMap::toLegacy(r.attrs.offsets));
                  }
                  return true;
                }

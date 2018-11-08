@@ -1037,6 +1037,7 @@ TailRecord genTailRecord(bool include_payload) {
                                      {2349045994592},
                                      flags,
                                      {}},
+                    OffsetMap::fromLegacy(2349045994592),
                     include_payload
                         ? std::make_shared<PayloadHolder>(payload_flat, 20)
                         : nullptr);

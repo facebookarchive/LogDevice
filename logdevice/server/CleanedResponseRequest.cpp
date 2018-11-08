@@ -124,6 +124,7 @@ void CleanedResponseRequest::prepareMetadata() {
   }
 
   EpochRecoveryMetadata::FlagsType flags = 0;
+  // TODO (T35832374) : remove if condition when all servers support OffsetMap
   if (Worker::settings().enable_offset_map) {
     flags |= EpochRecoveryMetadata::Header::SUPPORT_OFFSET_MAP_AND_TAIL_RECORD;
   }

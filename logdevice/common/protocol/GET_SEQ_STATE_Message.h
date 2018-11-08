@@ -259,7 +259,7 @@ class GET_SEQ_STATE_Message : public Message {
             Status status,
             NodeID redirect,
             folly::Optional<LogTailAttributes> tail_attributes = folly::none,
-            folly::Optional<uint64_t> epoch_offset = folly::none,
+            folly::Optional<OffsetMap> epoch_offsets = folly::none,
             std::shared_ptr<const EpochMetaDataMap> metadata_map = nullptr,
             std::shared_ptr<TailRecord> tail_record = nullptr);
 

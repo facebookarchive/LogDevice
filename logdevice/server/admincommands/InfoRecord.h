@@ -80,7 +80,7 @@ class InfoRecordStorageTask : public StorageTask {
       LocalLogStoreRecordFormat::flags_t flags;
       Payload payload;
       uint32_t wave;
-      uint64_t offset_within_epoch;
+      OffsetMap offsets_within_epoch;
       std::map<KeyType, std::string> optional_keys;
 
       int rv =
@@ -92,7 +92,7 @@ class InfoRecordStorageTask : public StorageTask {
                                            &copyset_size,
                                            copyset,
                                            COPYSET_SIZE_MAX,
-                                           &offset_within_epoch,
+                                           &offsets_within_epoch,
                                            &optional_keys,
                                            &payload,
                                            storageThreadPool_->getShardIdx());
@@ -130,7 +130,9 @@ class InfoRecordStorageTask : public StorageTask {
             .set<8>(flags_str);
 
         if (flags & LocalLogStoreRecordFormat::FLAG_OFFSET_WITHIN_EPOCH) {
-          table_.set<9>(offset_within_epoch);
+          // TODO (T33977412) : change the type of the column
+          // to accept an offsetmap instead of just a uint64_t
+          table_.set<9>(offsets_within_epoch.getCounter(BYTE_OFFSET));
         }
 
         table_.set<10>(optional_keys_string.c_str())
@@ -141,7 +143,7 @@ class InfoRecordStorageTask : public StorageTask {
         (*out_.wlock())
             ->printf("%s: %u, "
                      "timestamp: %s, lng: %u, copyset: %s, flags: %s, "
-                     "offset within epoch: %s, "
+                     "offsets within epoch: %s, "
                      "key: %s, "
                      "written_by_recovery: %s, "
                      "payload: %s\r\n",
@@ -152,7 +154,7 @@ class InfoRecordStorageTask : public StorageTask {
                      copyset_str.c_str(),
                      flags_str.c_str(),
                      flags & LocalLogStoreRecordFormat::FLAG_OFFSET_WITHIN_EPOCH
-                         ? std::to_string(offset_within_epoch).c_str()
+                         ? offsets_within_epoch.toString().c_str()
                          : "(empty)",
                      optional_keys_string.c_str(),
                      written_by_recovery ? "true" : "false",

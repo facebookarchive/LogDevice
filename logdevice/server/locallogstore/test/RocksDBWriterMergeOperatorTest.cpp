@@ -44,7 +44,7 @@ struct ParseResult {
   uint32_t wave;
   std::string payload;
   std::vector<ShardID> copyset;
-  uint64_t offset_within_epoch;
+  OffsetMap offsets_within_epoch;
 };
 
 ParseResult parse(const RawRecord& rec) {
@@ -61,7 +61,7 @@ ParseResult parse(const RawRecord& rec) {
                                             &copyset_size,
                                             ret.copyset.data(),
                                             ret.copyset.size(),
-                                            &ret.offset_within_epoch,
+                                            &ret.offsets_within_epoch,
                                             nullptr,
                                             &payload,
                                             THIS_SHARD);
@@ -502,7 +502,7 @@ TEST_F(RocksDBWriterMergeOperatorTest, EpochRecoveryOverrideByteOffset) {
   };
   auto cb_records_only = [](const std::vector<RawRecord>& rec) {
     ASSERT_EQ("foo", parse(rec[0]).payload);
-    ASSERT_EQ(15, parse(rec[0]).offset_within_epoch);
+    ASSERT_EQ(15, OffsetMap::toLegacy(parse(rec[0]).offsets_within_epoch));
   };
   verify(cb_all, cb_records_only);
 }
@@ -533,7 +533,7 @@ TEST_F(RocksDBWriterMergeOperatorTest, EpochRecoveryNotOverrideByteOffset) {
   };
   auto cb_records_only = [](const std::vector<RawRecord>& rec) {
     ASSERT_EQ("foo", parse(rec[0]).payload);
-    ASSERT_EQ(10, parse(rec[0]).offset_within_epoch);
+    ASSERT_EQ(10, parse(rec[0]).offsets_within_epoch.getCounter(BYTE_OFFSET));
   };
   verify(cb_all, cb_records_only);
 }

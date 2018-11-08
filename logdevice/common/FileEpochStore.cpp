@@ -486,7 +486,6 @@ int FileEpochStore::updateEpochStore(logid_t log_id,
     err = E::FAILED; // permission or I/O error
     return -1;
   }
-
   int bytes_written = file_updater.update(buf, bytes_read, buf, sizeof(buf));
   if (bytes_written <= 0) {
     // no record needs to be written, err set by update (could be E::OK)

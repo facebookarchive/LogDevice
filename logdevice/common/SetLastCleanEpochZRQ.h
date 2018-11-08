@@ -49,6 +49,7 @@ class SetLastCleanEpochZRQ : public LastCleanEpochZRQ {
 
     epoch_t parsed_epoch;
     TailRecord parsed_tail;
+
     int rv = EpochStoreLastCleanEpochFormat::fromLinearBuffer(
         znode_value, znode_value_len, logid_, &parsed_epoch, &parsed_tail);
 

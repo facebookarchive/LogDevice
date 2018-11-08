@@ -1518,12 +1518,12 @@ class ClientReadStream : boost::noncopyable {
 
   std::unique_ptr<ClientReadStreamScd> scd_;
 
-  // Log byte offset of next_lsn_to_deliver_. Will be delivered to client with
-  // next record once clientReadStream receive at least one valid byte_offset
+  // Log offsets of next_lsn_to_deliver_. Will be delivered to client with
+  // next record once clientReadStream receive at least one valid OffsetMap
   // value along with record form storage shard. Later it can conclude next
   // offsets based on payload sizes of next records unless there were any data
   // loss gaps.
-  uint64_t accumulated_byte_offset_ = BYTE_OFFSET_INVALID;
+  OffsetMap accumulated_offsets_;
 
   // Counters of the number of records and bytes delivered. Used to track
   // reading speed.

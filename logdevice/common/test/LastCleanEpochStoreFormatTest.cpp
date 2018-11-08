@@ -39,6 +39,7 @@ class LastCleanEpochStoreFormatTest : public ::testing::Test {
                                        1502502135,
                                        {2349045994592},
                                        flags},
+                      OffsetMap::fromLegacy(2349045994592),
                       include_payload
                           ? std::make_shared<PayloadHolder>(payload_flat, 20)
                           : nullptr);

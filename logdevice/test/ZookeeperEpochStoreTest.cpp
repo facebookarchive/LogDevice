@@ -120,6 +120,7 @@ TailRecord gen_tail_record(logid_t logid,
                            uint64_t timestamp,
                            uint64_t byte_offset) {
   return TailRecord({logid, lsn, timestamp, {byte_offset}, 0, {}},
+                    OffsetMap::fromLegacy(byte_offset),
                     std::shared_ptr<PayloadHolder>());
 }
 
@@ -131,6 +132,7 @@ TailRecord gen_tail_record_with_payload(logid_t logid,
   void* payload_flat = malloc(333);
   std::strncpy((char*)payload_flat, "Tail Record Test Payload", 50);
   return TailRecord({logid, lsn, timestamp, {byte_offset}, 0, {}},
+                    OffsetMap::fromLegacy(byte_offset),
                     std::make_shared<PayloadHolder>(payload_flat, 333));
 }
 } // namespace

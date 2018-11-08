@@ -222,7 +222,6 @@ int ReadingCallback::processRecord(const RawRecord& record) {
   esn_t last_known_good;
   ShardID* copyset = nullptr;
   uint32_t wave;
-  uint64_t offset_within_epoch = BYTE_OFFSET_INVALID;
   OffsetMap offsets_within_epoch;
   // Parse the copyset only if necessary
   if (stream_->include_extra_metadata_) {
@@ -237,7 +236,6 @@ int ReadingCallback::processRecord(const RawRecord& record) {
       &copyset_size,
       stream_->include_extra_metadata_ ? copyset : nullptr,
       COPYSET_SIZE_MAX,
-      &offset_within_epoch,
       &offsets_within_epoch,
       stream_->filter_pred_ != nullptr ? &optional_keys : nullptr,
       &payload,

@@ -34,7 +34,7 @@ void store_fill(LocalLogStore& store,
         tr.flags_,
         tr.wave_,
         folly::Range<const ShardID*>(tr.copyset_.data(), tr.copyset_.size()),
-        tr.offset_within_epoch_,
+        OffsetMap::fromLegacy(tr.offset_within_epoch_),
         tr.optional_keys_,
         buf);
 

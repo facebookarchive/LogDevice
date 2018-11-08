@@ -314,8 +314,8 @@ int TemporaryPartitionedStore::putRecord(
       1, // wave
       folly::Range<const ShardID*>(
           copyset.data(), copyset.data() + copyset.size()),
-      0,  // byte offset
-      {}, // keys
+      OffsetMap::fromLegacy(0), // offsets
+      {},                       // keys
       &header_buf);
 
   std::string csi_entry_buf;

@@ -44,6 +44,7 @@ class TailRecordTest : public ::testing::Test {
                                        1502502135,
                                        {2349045994592},
                                        flags},
+                      OffsetMap::fromLegacy(2349045994592),
                       include_payload ? createPayload(2323, 't') : nullptr);
   }
 
@@ -152,6 +153,7 @@ TEST_F(TailRecordTest, EmptyPayload) {
                                 1502502135,
                                 {2349045994592},
                                 flags},
+               OffsetMap::fromLegacy(2349045994592),
                std::make_shared<PayloadHolder>(nullptr, 0));
 
   std::unique_ptr<char[]> buf1(new char[512]);
