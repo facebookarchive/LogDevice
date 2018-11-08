@@ -812,13 +812,12 @@ void Appender::prepareTailRecord(bool include_payload) {
     flags |= TailRecordHeader::CHECKSUM_PARITY;
   }
 
-  TailRecordHeader header{
-      log_id_,
-      store_hdr_.rid.lsn(),
-      store_hdr_.timestamp,
-      {BYTE_OFFSET_INVALID /* deprecated, offsets_within_epoch used instead */},
-      flags,
-      {}};
+  TailRecordHeader header{log_id_,
+                          store_hdr_.rid.lsn(),
+                          store_hdr_.timestamp,
+                          {extra_.offsets_within_epoch.getCounter(BYTE_OFFSET)},
+                          flags,
+                          {}};
 
   if (!include_payload) {
     tail_record_ = std::make_shared<TailRecord>(

@@ -37,7 +37,7 @@ typedef AdminCommandTable<logid_t,                  // data log id
                           epoch_t,      // draining epoch
                           bool,         // metadata log written
                           admin_command_table::LSN, // trim point
-                          std::string               // last offsets
+                          std::string               // last byte offset
                           >
     InfoSequencersTable;
 
@@ -153,15 +153,17 @@ class InfoSequencers : public AdminCommand {
     table.set<16>(seq.getTrimPoint());
 
     auto tailRecord = seq.getTailRecord();
-    OffsetMap bo;
-    if (tailRecord) {
-      bo = tailRecord->offsets_map_;
+    uint64_t bo;
+    if (tailRecord == nullptr) {
+      bo = BYTE_OFFSET_INVALID;
+    } else {
+      bo = tailRecord->header.u.byte_offset;
     }
 
-    if (!bo.isValid()) {
-      table.set<17>("OFFSET_MAP_INVALID");
+    if (bo == BYTE_OFFSET_INVALID) {
+      table.set<17>("BYTE_OFFSET_INVALID");
     } else {
-      table.set<17>(bo.toString());
+      table.set<17>(std::to_string(bo));
     }
   }
 

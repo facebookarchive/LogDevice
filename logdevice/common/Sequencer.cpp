@@ -1077,9 +1077,9 @@ int Sequencer::startRecovery(std::chrono::milliseconds delay) {
     // there's nothing to recover since we are at epoch 1.
     TailRecord tail_empty_log{
         TailRecordHeader{log_id_,
-                         LSN_INVALID,                       // tail LSN 0
-                         0,                                 // timestamp
-                         {BYTE_OFFSET_INVALID},             // deprecated
+                         LSN_INVALID, // tail LSN 0
+                         0,           // timestamp
+                         {0},         // cumulative byteoffset
                          TailRecordHeader::CHECKSUM_PARITY, // flags
                          {}},
         OffsetMap::fromLegacy(0),
@@ -1885,10 +1885,13 @@ std::shared_ptr<const TailRecord> Sequencer::getTailRecord() const {
   ret_tail->header.flags &= ~TailRecordHeader::OFFSET_WITHIN_EPOCH;
   if (!ret_tail->offsets_map_.isValid() ||
       !previous_tail->offsets_map_.isValid()) {
+    ret_tail->header.u.byte_offset = BYTE_OFFSET_INVALID;
     ret_tail->offsets_map_.clear();
   } else {
     ret_tail->offsets_map_ =
         previous_tail->offsets_map_ + current_epoch_tail->offsets_map_;
+    ret_tail->header.u.byte_offset =
+        ret_tail->offsets_map_.getCounter(BYTE_OFFSET);
   }
 
   ld_check(!ret_tail->containOffsetWithinEpoch());

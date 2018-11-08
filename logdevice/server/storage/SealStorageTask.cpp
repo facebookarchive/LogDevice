@@ -405,10 +405,12 @@ Status SealStorageTask::getEpochInfo(LocalLogStore& store,
       } else { // tail record found
         ld_check(tail.containOffsetWithinEpoch());
         ld_check(lsn_to_epoch(tail.header.lsn) == epoch_t(epoch));
-        if (!tail.offsets_map_.isValid()) {
+        if (tail.header.u.offset_within_epoch == BYTE_OFFSET_INVALID) {
           // the tail record does not include epoch offset information,
           // use the `epoch_offset_map` as an approximation
           tail.offsets_map_ = epoch_offset_map;
+          tail.header.u.offset_within_epoch =
+              epoch_offset_map.getCounter(BYTE_OFFSET);
         }
 
         if (tail.hasPayload() &&

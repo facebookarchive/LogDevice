@@ -34,21 +34,18 @@ class LastCleanEpochStoreFormatTest : public ::testing::Test {
         (include_payload ? TailRecordHeader::HAS_PAYLOAD : 0);
     void* payload_flat = malloc(20);
     std::strncpy((char*)payload_flat, "Tail Record Test.", 20);
-    return TailRecord(
-        TailRecordHeader{
-            LOGID,
-            compose_lsn(epoch_t(933), esn_t(3347)),
-            1502502135,
-            {BYTE_OFFSET_INVALID /* deprecated, use OffsetMap instead */},
-            flags,
-            {}},
-        OffsetMap::fromLegacy(2349045994592),
-        include_payload ? std::make_shared<PayloadHolder>(payload_flat, 20)
-                        : nullptr);
+    return TailRecord(TailRecordHeader{LOGID,
+                                       compose_lsn(epoch_t(933), esn_t(3347)),
+                                       1502502135,
+                                       {2349045994592},
+                                       flags},
+                      OffsetMap::fromLegacy(2349045994592),
+                      include_payload
+                          ? std::make_shared<PayloadHolder>(payload_flat, 20)
+                          : nullptr);
   }
 
   // original implemenetation in SetLastCleanEpochZRQ.h
-  // TODO (T33977412): change to OffsetMap
   int composeZnodeValueLegacy(char* buf,
                               size_t size,
                               epoch_t lce,
@@ -92,7 +89,7 @@ TEST_F(LastCleanEpochStoreFormatTest, ReadLegacyFormat) {
   ASSERT_TRUE(tail.isValid());
   ASSERT_EQ(LOGID, tail.header.log_id);
   ASSERT_EQ(last_released_real, tail.header.lsn);
-  ASSERT_EQ(epoch_end_offset, tail.offsets_map_.getCounter(BYTE_OFFSET));
+  ASSERT_EQ(epoch_end_offset, tail.header.u.byte_offset);
   ASSERT_EQ(last_timestamp, tail.header.timestamp);
 }
 
@@ -111,7 +108,7 @@ TEST_F(LastCleanEpochStoreFormatTest, EmptyBuffer) {
   ASSERT_TRUE(tail.isValid());
   ASSERT_EQ(LOGID, tail.header.log_id);
   ASSERT_EQ(LSN_INVALID, tail.header.lsn);
-  ASSERT_EQ(0, tail.offsets_map_.getCounter(BYTE_OFFSET));
+  ASSERT_EQ(0, tail.header.u.byte_offset);
   ASSERT_EQ(0, tail.header.timestamp);
 }
 
@@ -125,6 +122,7 @@ TEST_F(LastCleanEpochStoreFormatTest, ParsingCurrentFormat) {
     } else {
       // represent a empty log
       tail.header.log_id = LOGID;
+      tail.header.u.byte_offset = 0;
       tail.offsets_map_.setCounter(BYTE_OFFSET, 0);
     }
     ld_check(tail.isValid());

@@ -541,7 +541,7 @@ void EpochSequencerTest::advanceEpoch() {
     }
   }
 }
-// TODO (T33977412) : change to take OffsetMap
+
 void EpochSequencerTest::checkTailRecord(lsn_t lsn,
                                          folly::Optional<uint64_t> offset) {
   if (lsn_to_esn(lsn) == ESN_INVALID) {
@@ -554,7 +554,7 @@ void EpochSequencerTest::checkTailRecord(lsn_t lsn,
   EXPECT_EQ(lsn, r.header.lsn);
   EXPECT_GT(r.header.timestamp, 0);
   if (offset.hasValue()) {
-    EXPECT_EQ(offset.value(), r.offsets_map_.getCounter(BYTE_OFFSET));
+    EXPECT_EQ(offset.value(), r.header.u.offset_within_epoch);
   }
   EXPECT_NE(0, r.header.flags & TailRecordHeader::OFFSET_WITHIN_EPOCH);
 

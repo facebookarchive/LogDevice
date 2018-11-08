@@ -179,10 +179,10 @@ class EpochRecovery {
   esn_t getBridgeEsn() const {
     return bridge_esn_;
   }
-  // TODO(T33977412) : return OffsetMap
+
   uint64_t getEpochEndOffset() const {
     ld_check(!final_tail_record_.containOffsetWithinEpoch());
-    return final_tail_record_.offsets_map_.getCounter(BYTE_OFFSET);
+    return final_tail_record_.header.u.byte_offset;
   }
 
   const TailRecord& getEpochTailRecord() const {

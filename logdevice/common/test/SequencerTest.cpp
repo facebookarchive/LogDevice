@@ -105,13 +105,11 @@ class SequencerTest : public ::testing::Test {
     void* payload_flat = malloc(20);
     std::strncpy((char*)payload_flat, "Tail Record Test.", 20);
     return TailRecord(
-        TailRecordHeader{
-            LOG_ID,
-            tail_lsn,
-            tail_lsn,              // ts and byteoffset same as lsn
-            {BYTE_OFFSET_INVALID}, // deprecated, use OffsetMap instead
-            flags,
-            {}},
+        TailRecordHeader{LOG_ID,
+                         tail_lsn,
+                         tail_lsn, // ts and byteoffset same as lsn
+                         {tail_lsn},
+                         flags},
         OffsetMap::fromLegacy(tail_lsn),
         include_payload ? std::make_shared<PayloadHolder>(payload_flat, 20)
                         : nullptr);
@@ -238,13 +236,12 @@ class MockAppender : public Appender {
                              : Appender::FullyReplicated::YES),
         getLSN(),
         std::make_shared<TailRecord>(
-            TailRecordHeader{
-                getLogID(),
-                getLSN(),
-                0,
-                {BYTE_OFFSET_INVALID /* deprecated, OffsetMap used instead */},
-                TailRecordHeader::OFFSET_WITHIN_EPOCH,
-                {}},
+            TailRecordHeader{getLogID(),
+                             getLSN(),
+                             0,
+                             {0},
+                             TailRecordHeader::OFFSET_WITHIN_EPOCH,
+                             {}},
             OffsetMap::fromLegacy(0),
             std::shared_ptr<PayloadHolder>()),
         &last_released_epoch,

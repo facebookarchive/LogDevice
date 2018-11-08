@@ -91,8 +91,8 @@ class SetLastCleanEpochZRQ : public LastCleanEpochZRQ {
       tail_record_.header.timestamp = parsed_tail.header.timestamp;
     }
 
-    if (!tail_record_.offsets_map_.isValid() &&
-        parsed_tail.offsets_map_.isValid()) {
+    if (tail_record_.header.u.byte_offset == BYTE_OFFSET_INVALID &&
+        parsed_tail.header.u.byte_offset != BYTE_OFFSET_INVALID) {
       RATELIMIT_WARNING(std::chrono::seconds(10),
                         10,
                         "Setting the tail with invalid OffsetMap while the "
@@ -101,6 +101,11 @@ class SetLastCleanEpochZRQ : public LastCleanEpochZRQ {
                         parsed_tail.offsets_map_.toString().c_str(),
                         logid_.val_,
                         epoch_.val_);
+      // TODO(T33977412) remove byte_offset when fully deployed
+      ld_check(parsed_tail.header.u.byte_offset ==
+               parsed_tail.offsets_map_.getCounter(BYTE_OFFSET));
+      tail_record_.header.u.byte_offset =
+          std::move(parsed_tail.header.u.byte_offset);
       tail_record_.offsets_map_ = std::move(parsed_tail.offsets_map_);
     }
 
