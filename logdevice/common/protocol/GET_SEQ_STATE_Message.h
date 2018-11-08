@@ -91,7 +91,7 @@ class GET_SEQ_STATE_Message : public Message {
   // Returns a pointer to the object containing stats.
   virtual StatsHolder* stats() const;
 
-  std::string getContextString(GetSeqStateRequest::Context ctx) {
+  static std::string getContextString(GetSeqStateRequest::Context ctx) {
     return GetSeqStateRequest::getContextString(ctx);
   }
 
@@ -117,6 +117,9 @@ class GET_SEQ_STATE_Message : public Message {
   std::shared_ptr<CopySetManager> copyset_manager_;
 
   uint16_t getMinProtocolVersion() const override;
+
+  virtual std::vector<std::pair<std::string, folly::dynamic>>
+  getDebugInfo() const override;
 
  private:
   // Check if the node is running or able to run sequencers (e.g. it's not

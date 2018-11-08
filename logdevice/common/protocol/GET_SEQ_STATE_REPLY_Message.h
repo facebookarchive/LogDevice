@@ -109,6 +109,9 @@ class GET_SEQ_STATE_REPLY_Message : public Message {
   std::shared_ptr<const EpochMetaDataMap> metadata_map_;
 
   std::shared_ptr<TailRecord> tail_record_;
+
+  virtual std::vector<std::pair<std::string, folly::dynamic>>
+  getDebugInfo() const override;
 };
 
 }} // namespace facebook::logdevice

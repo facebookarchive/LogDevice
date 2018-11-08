@@ -194,4 +194,48 @@ GET_SEQ_STATE_REPLY_Message::onReceived(const Address& from) {
   return Disposition::NORMAL;
 }
 
+std::vector<std::pair<std::string, folly::dynamic>>
+GET_SEQ_STATE_REPLY_Message::getDebugInfo() const {
+  std::vector<std::pair<std::string, folly::dynamic>> res;
+
+  auto flagsToString = [](GET_SEQ_STATE_REPLY_flags_t flags) {
+    folly::small_vector<std::string, 4> strings;
+#define FLAG(x)                                \
+  if (flags & GET_SEQ_STATE_REPLY_Header::x) { \
+    strings.emplace_back(#x);                  \
+  }
+    FLAG(INCLUDES_TAIL_ATTRIBUTES)
+    FLAG(INCLUDES_EPOCH_OFFSET)
+    FLAG(INCLUDES_HISTORICAL_METADATA)
+    FLAG(INCLUDES_TAIL_RECORD)
+#undef FLAG
+    return folly::join('|', strings);
+  };
+
+  auto add = [&res](const char* key, folly::dynamic val) {
+    res.emplace_back(key, std::move(val));
+  };
+  add("log_id", toString(header_.log_id));
+  add("flags", flagsToString(header_.flags));
+  add("rqid", request_id_.val());
+  add("status", toString(status_));
+  add("redirect", toString(redirect_));
+  add("last_released_lsn", lsn_to_string(header_.last_released_lsn));
+  add("next_lsn", lsn_to_string(header_.next_lsn));
+  if (header_.flags & GET_SEQ_STATE_REPLY_Header::INCLUDES_TAIL_ATTRIBUTES) {
+    add("tail_attributes", tail_attributes_.toString());
+  }
+  if (header_.flags & GET_SEQ_STATE_REPLY_Header::INCLUDES_EPOCH_OFFSET) {
+    add("epoch_offset", epoch_offset_);
+  }
+  if (header_.flags &
+      GET_SEQ_STATE_REPLY_Header::INCLUDES_HISTORICAL_METADATA) {
+    add("metadata_map", metadata_map_ ? metadata_map_->toString() : "null");
+  }
+  if (header_.flags & GET_SEQ_STATE_REPLY_Header::INCLUDES_TAIL_RECORD) {
+    add("tail_record", tail_record_ ? tail_record_->toString() : "null");
+  }
+  return res;
+}
+
 }} // namespace facebook::logdevice

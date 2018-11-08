@@ -901,4 +901,39 @@ SequencerLocator& GET_SEQ_STATE_Message::getSequencerLocator() {
   return *Worker::onThisThread()->processor_->sequencer_locator_;
 }
 
+std::vector<std::pair<std::string, folly::dynamic>>
+GET_SEQ_STATE_Message::getDebugInfo() const {
+  std::vector<std::pair<std::string, folly::dynamic>> res;
+
+  auto flagsToString = [](GET_SEQ_STATE_flags_t flags) {
+    folly::small_vector<std::string, 4> strings;
+#define FLAG(x)                           \
+  if (flags & GET_SEQ_STATE_Message::x) { \
+    strings.emplace_back(#x);             \
+  }
+    FLAG(NO_REDIRECT)
+    FLAG(REACTIVATE_IF_PREEMPTED)
+    FLAG(DONT_WAIT_FOR_RECOVERY)
+    FLAG(INCLUDE_TAIL_ATTRIBUTES)
+    FLAG(INCLUDE_EPOCH_OFFSET)
+    FLAG(MIN_EPOCH)
+    FLAG(INCLUDE_HISTORICAL_METADATA)
+    FLAG(INCLUDE_TAIL_RECORD)
+#undef FLAG
+    return folly::join('|', strings);
+  };
+
+  auto add = [&res](const char* key, folly::dynamic val) {
+    res.emplace_back(key, std::move(val));
+  };
+  add("log_id", toString(log_id_));
+  add("rqid", request_id_.val());
+  add("flags", flagsToString(flags_));
+  add("calling_ctx", getContextString(calling_ctx_));
+  if (min_epoch_.hasValue()) {
+    add("min_epoch", min_epoch_.value().val());
+  }
+  return res;
+}
+
 }} // namespace facebook::logdevice
