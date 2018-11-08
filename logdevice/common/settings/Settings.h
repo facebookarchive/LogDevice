@@ -859,6 +859,10 @@ struct Settings : public SettingsBundle {
   // NOTE: this involve extra work for storage nodes during recovery.
   bool enable_offset_map;
 
+  // If true, use the new version of timers which run on a different thread
+  // and use HHWheelTimer backend.
+  bool enable_hh_wheel_backed_timers;
+
   // With config synchronization enabled, nodes on both ends of a connection
   // will synchronize their configs if there is a mismatch in the config
   // version

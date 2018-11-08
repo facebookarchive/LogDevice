@@ -60,6 +60,7 @@ class UpdateableSecurityInfo;
 class WatchDogThread;
 class Worker;
 class ZeroCopiedRecordDisposal;
+class WheelTimer;
 
 enum class SequencerOptions : uint8_t;
 using workers_t = std::vector<std::unique_ptr<EventLoopHandle>>;
@@ -241,6 +242,11 @@ class Processor : public folly::enable_shared_from_this<Processor> {
    * worker pool.
    */
   Worker& getWorker(worker_id_t worker_id, WorkerType type);
+
+  /**
+   * Returns the refernce to an object which is responsible for timers
+   */
+  WheelTimer& getWheelTimer();
 
   /**
    * Schedules rq to run on one of the Workers managed by this Processor.

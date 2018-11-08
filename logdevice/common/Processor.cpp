@@ -36,6 +36,7 @@
 #include "logdevice/common/TrafficShaper.h"
 #include "logdevice/common/UpdateableSecurityInfo.h"
 #include "logdevice/common/WatchDogThread.h"
+#include "logdevice/common/WheelTimer.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/WorkerLoadBalancing.h"
 #include "logdevice/common/ZeroCopiedRecordDisposal.h"
@@ -95,6 +96,7 @@ class ProcessorImpl {
         background_init_flag_(),
         background_queue_() {}
 
+  WheelTimer wheel_timer_;
   std::array<workers_t, static_cast<size_t>(WorkerType::MAX)> workers_;
   AppendProbeController append_probe_controller_;
   std::unique_ptr<AllSequencers> allSequencers_;
@@ -329,6 +331,10 @@ int Processor::getTargetThreadForRequest(const std::unique_ptr<Request>& rq) {
     target_thread = selectWorkerRandomly(rq->id_.val(), worker_type).val_;
   }
   return target_thread;
+}
+
+WheelTimer& Processor::getWheelTimer() {
+  return impl_->wheel_timer_;
 }
 
 Worker& Processor::getWorker(worker_id_t worker_id, WorkerType worker_type) {

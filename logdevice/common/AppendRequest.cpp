@@ -125,7 +125,6 @@ AppendRequest::AppendRequest(AppendRequest&& other) noexcept
 AppendRequest::~AppendRequest() {
   if (failed_to_post_) {
     // the request has not made it to a Worker. Do not call the callback.
-    ld_check(!timer_.isActive());
     return;
   }
 

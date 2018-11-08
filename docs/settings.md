@@ -50,6 +50,7 @@ sidebar_label: Settings
 | admin-enabled | Is Admin API enabled? | true | requires&nbsp;restart, **experimental**, server&nbsp;only |
 | append-timeout | Timeout for appends. If omitted the client timeout will be used. |  | client&nbsp;only |
 | command-port | TCP port on which the server listens to for admin commands, supports commands over SSL | 5440 | requires&nbsp;restart, server&nbsp;only |
+| enable-hh-wheel-backed-timers | Enables the new version of timers which run on a different threadand use HHWheelTimer backend. | true | requires&nbsp;restart |
 | findkey-timeout | Findkey API call timeout. If omitted the client timeout will be used. |  | client&nbsp;only |
 | log-file | write server error log to specified file instead of stderr |  | server&nbsp;only |
 | loglevel | One of the following: critical, error, warning, info, debug | info | server&nbsp;only |

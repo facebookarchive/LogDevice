@@ -7,7 +7,10 @@
  */
 #pragma once
 
-#include "logdevice/common/LibeventTimer.h"
+#include <atomic>
+#include <memory>
+
+#include "logdevice/common/TimerInterface.h"
 
 /**
  * @file
@@ -20,18 +23,44 @@
 
 namespace facebook { namespace logdevice {
 
-class Worker;
-
-class Timer : public LibeventTimer {
+/**
+ * All methods and ctors should be called from the Worker which is going
+ * to use Timer, exception is default ctor which provides delayed init.
+ */
+class Timer : public TimerInterface {
  public:
   Timer();
 
   explicit Timer(std::function<void()> callback);
 
-  virtual void assign(std::function<void()> callback);
+  virtual void activate(std::chrono::microseconds delay,
+                        TimeoutMap* timeout_map = nullptr) override {
+    impl_->activate(delay, timeout_map);
+  }
+
+  virtual void cancel() override {
+    getTimerImpl().cancel();
+  }
+
+  virtual bool isActive() const override {
+    return getTimerImpl().isActive();
+  }
+
+  virtual void setCallback(std::function<void()> callback) override {
+    getTimerImpl().setCallback(callback);
+  }
+
+  virtual void assign(std::function<void()> callback) override {
+    getTimerImpl().assign(callback);
+  }
+
+  virtual bool isAssigned() const override {
+    return getTimerImpl().isAssigned();
+  }
 
  private:
-  using LibeventTimer::assign;
+  TimerInterface& getTimerImpl() const;
+  mutable std::unique_ptr<TimerInterface> impl_;
 };
 
 }} // namespace facebook::logdevice

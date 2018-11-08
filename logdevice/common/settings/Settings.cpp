@@ -2661,6 +2661,14 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "logs.",
        SERVER,
        SettingsCategory::WritePath);
+  init("enable-hh-wheel-backed-timers",
+       &enable_hh_wheel_backed_timers,
+       "true",
+       nullptr, // no validation
+       "Enables the new version of timers which run on a different thread"
+       "and use HHWheelTimer backend.",
+       SERVER | CLIENT | REQUIRES_RESTART,
+       SettingsCategory::Core);
 
   sequencer_boycotting.defineSettings(init);
 }
