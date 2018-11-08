@@ -88,7 +88,7 @@ class PurgeCoordinator : public LogStorageState_PurgeCoordinator_Bridge {
                         NodeID from,
                         ReleaseType release_type,
                         bool do_broadcast,
-                        OffsetMap epoch_offsets = OffsetMap()) override;
+                        uint64_t epoch_offset = BYTE_OFFSET_INVALID) override;
 
   /**
    * Called when a CLEAN message is received from the sequencer.  Starts
@@ -192,7 +192,7 @@ class PurgeCoordinator : public LogStorageState_PurgeCoordinator_Bridge {
   void doRelease(lsn_t lsn,
                  ReleaseType release_type,
                  bool do_broadcast,
-                 OffsetMap epoch_offsets);
+                 uint64_t epoch_offset);
 
   // Check if the CLEAN message sent by a sequencer with @param sequencer_epoch
   // is preempted by existing Seals for the log on the storage node

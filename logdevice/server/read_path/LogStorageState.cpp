@@ -447,7 +447,7 @@ void LogStorageState::getSeqStateRequestCallback(
         result.last_seq,
         ReleaseType::GLOBAL,
         true /* do_release */,
-        result.epoch_offsets.value_or(OffsetMap()));
+        result.epoch_offset.value_or(BYTE_OFFSET_INVALID));
   } else {
     // Sequencer may send LSN_INVALID if it's still not done recovering the
     // log -- ignore it in that case.

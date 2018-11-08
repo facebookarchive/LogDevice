@@ -583,20 +583,15 @@ void EpochRecovery::updateEpochTailRecord() {
   }
 
   auto gen_tail_record_for_dataloss = [&]() {
-    uint32_t flags = TailRecordHeader::CHECKSUM_PARITY | TailRecordHeader::GAP |
-        TailRecordHeader::OFFSET_WITHIN_EPOCH;
-    // TODO (T35832374) : remove if condition when all servers support OffsetMap
-    if (deps_->getSettings().enable_offset_map) {
-      flags |= TailRecordHeader::OFFSET_MAP;
-    }
-    return TailRecord({getLogID(),
-                       compose_lsn(epoch_, lng_),
-                       /*timestamp*/ 0,
-                       {BYTE_OFFSET_INVALID},
-                       flags,
-                       {}},
-                      OffsetMap(),
-                      std::shared_ptr<PayloadHolder>());
+    return TailRecord(
+        {getLogID(),
+         compose_lsn(epoch_, lng_),
+         /*timestamp*/ 0,
+         {BYTE_OFFSET_INVALID},
+         /*flags*/ TailRecordHeader::CHECKSUM_PARITY | TailRecordHeader::GAP |
+             TailRecordHeader::OFFSET_WITHIN_EPOCH,
+         {}},
+        std::shared_ptr<PayloadHolder>());
   };
 
   if (tail_esn_ < digest_start_esn_) {
@@ -993,8 +988,6 @@ EpochRecovery::createMutationHeader(esn_t esn,
     }
     if (record->flags_ & RECORD_Header::INCLUDE_OFFSET_WITHIN_EPOCH) {
       flags |= STORE_Header::OFFSET_WITHIN_EPOCH;
-      // TODO (T35832374) : remove if condition when all servers support
-      // OffsetMap
       if (deps_->getSettings().enable_offset_map) {
         flags |= STORE_Header::OFFSET_MAP;
       }

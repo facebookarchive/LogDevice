@@ -248,9 +248,9 @@ void LogRecoveryRequest::skipRecovery() {
 
   EpochStore& epoch_store =
       Worker::onThisThread()->processor_->allSequencers().getEpochStore();
+
   TailRecord tail_record(
       {getLogID(), LSN_INVALID, 0, {BYTE_OFFSET_INVALID}, /*flags*/ 0, {}},
-      OffsetMap(),
       std::shared_ptr<PayloadHolder>());
 
   ld_check(tail_record.isValid());

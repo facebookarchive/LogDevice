@@ -379,7 +379,7 @@ TEST(StoreStorageTaskTest, ValidBuffers) {
                                             &copyset_size,
                                             copyset_arr.data(),
                                             copyset_arr.size(),
-                                            /*offsets_within_epoch*/ nullptr,
+                                            /*offset_within_epoch*/ nullptr,
                                             /*optional_keys*/ nullptr,
                                             &payload,
                                             THIS_SHARD);

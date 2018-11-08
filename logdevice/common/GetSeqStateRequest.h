@@ -351,7 +351,7 @@ class GetSeqStateRequest : public Request, public SequencerRouter::Handler {
 
   folly::Optional<LogTailAttributes> log_tail_attributes_ = folly::none;
 
-  folly::Optional<OffsetMap> epoch_offsets_ = folly::none;
+  folly::Optional<uint64_t> epoch_offset_ = folly::none;
 
   std::shared_ptr<const EpochMetaDataMap> metadata_map_;
 

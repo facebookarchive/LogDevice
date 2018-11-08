@@ -110,7 +110,6 @@ class SequencerTest : public ::testing::Test {
                          tail_lsn, // ts and byteoffset same as lsn
                          {tail_lsn},
                          flags},
-        OffsetMap::fromLegacy(tail_lsn),
         include_payload ? std::make_shared<PayloadHolder>(payload_flat, 20)
                         : nullptr);
   }
@@ -242,7 +241,6 @@ class MockAppender : public Appender {
                              {0},
                              TailRecordHeader::OFFSET_WITHIN_EPOCH,
                              {}},
-            OffsetMap::fromLegacy(0),
             std::shared_ptr<PayloadHolder>()),
         &last_released_epoch,
         &lng_changed);

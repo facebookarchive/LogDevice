@@ -125,7 +125,8 @@ TailRecordIntegrationTest::checkTail(std::shared_ptr<ClientImpl>& client,
   if (data_record) {
     EXPECT_EQ(tail_attribute->last_released_real_lsn, data_record->attrs.lsn);
     EXPECT_EQ(tail_attribute->last_timestamp, data_record->attrs.timestamp);
-    EXPECT_EQ(tail_attribute->offsets, data_record->attrs.offsets);
+    EXPECT_EQ(tail_attribute->offsets.getCounter(BYTE_OFFSET),
+              data_record->attrs.byte_offset);
   }
 
   if (lsn == LSN_INVALID) {

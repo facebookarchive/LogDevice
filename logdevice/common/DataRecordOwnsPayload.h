@@ -33,6 +33,7 @@ struct DataRecordOwnsPayload : public DataRecord {
    * If `decoder' is non-null, `payload' is expected to be a soft pointer into
    * memory owned by the decoder.
    */
+  // TODO(T33977412) : Change constructor to take OffsetMap
   explicit DataRecordOwnsPayload(logid_t log_id,
                                  Payload&& payload,
                                  lsn_t lsn,
@@ -43,7 +44,7 @@ struct DataRecordOwnsPayload : public DataRecord {
                                  std::shared_ptr<BufferedWriteDecoder> decoder =
                                      std::shared_ptr<BufferedWriteDecoder>(),
                                  int batch_offset = 0,
-                                 OffsetMap offsets = OffsetMap(),
+                                 uint64_t byte_offset = BYTE_OFFSET_INVALID,
                                  bool invalid_checksum = false);
 
   ~DataRecordOwnsPayload() override;

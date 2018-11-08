@@ -797,7 +797,6 @@ int Appender::start(std::shared_ptr<EpochSequencer> epoch_sequencer,
 
 void Appender::prepareTailRecord(bool include_payload) {
   TailRecordHeader::flags_t flags = TailRecordHeader::OFFSET_WITHIN_EPOCH;
-  // TODO (T35832374) : remove if condition when all servers support OffsetMap
   if (getSettings().enable_offset_map) {
     flags |= TailRecordHeader::OFFSET_MAP;
   }
@@ -2379,7 +2378,6 @@ void Appender::setLogOffset(OffsetMap offset_map) {
   ld_check(!retired_);
   extra_.offsets_within_epoch = std::move(offset_map);
   passthru_flags_ |= STORE_Header::OFFSET_WITHIN_EPOCH;
-  // TODO (T35832374) : remove if condition when all servers support OffsetMap
   if (getSettings().enable_offset_map) {
     passthru_flags_ |= STORE_Header::OFFSET_MAP;
   }

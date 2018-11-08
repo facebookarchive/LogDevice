@@ -238,7 +238,7 @@ esn_t Digest::applyBridgeRecords(esn_t last_known_good,
                 std::move(extra_metadata),
                 std::shared_ptr<BufferedWriteDecoder>(),
                 0, // batch_offset
-                std::move(existing_record->attrs.offsets),
+                existing_record->attrs.byte_offset,
                 /*invalid_checksum=*/false));
 
         // this will free the payload the previous record

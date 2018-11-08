@@ -79,8 +79,8 @@ struct DataRecordAttributes {
   DataRecordAttributes(lsn_t ls,
                        std::chrono::milliseconds ts,
                        int bo = 0,
-                       OffsetMap offsets = OffsetMap())
-      : lsn(ls), timestamp(ts), batch_offset(bo), offsets(std::move(offsets)) {}
+                       uint64_t offset = BYTE_OFFSET_INVALID)
+      : lsn(ls), timestamp(ts), batch_offset(bo), byte_offset(offset) {}
 
   lsn_t lsn; // log sequence number (LSN) of this record
 
@@ -93,14 +93,12 @@ struct DataRecordAttributes {
   // get batched into a single write by BufferedWriter have the same LSN.)
   int batch_offset;
 
-  // OffsetMap object containing information on the amount of data written
-  // to the log (to which this record belongs) up to this record.
-  // Currently supports BYTE_OFFSET which represents the number of bytes
-  // written. if counter is invalid it will be set as BYTE_OFFSET_INVALID.
-  // BYTE_OFFSET will be invalid if this attribute was not requested by client
-  // (see includeByteOffset() reader option) or if it is not available to
-  // storage nodes.
-  OffsetMap offsets;
+  // How many bytes were written into the log (to which this record belongs)
+  // up to this record. Set as BYTE_OFFSET_INVALID if this attribute was not
+  // requested by client (see includeByteOffset() reader option) or if it is
+  // not available to storage nodes.
+  // TODO(T33977412) : Replace byte_offset with new OffsetMap structure.
+  uint64_t byte_offset;
 };
 
 /**
@@ -115,20 +113,20 @@ struct DataRecord : public LogRecord {
              lsn_t lsn = LSN_INVALID,
              std::chrono::milliseconds timestamp = std::chrono::milliseconds{0},
              int batch_offset = 0,
-             OffsetMap offsets = OffsetMap())
+             uint64_t byte_offset = BYTE_OFFSET_INVALID)
       : LogRecord(log_id),
         payload(pl),
-        attrs(lsn, timestamp, batch_offset, std::move(offsets)) {}
+        attrs(lsn, timestamp, batch_offset, byte_offset) {}
 
   DataRecord(logid_t log_id,
              Payload&& pl,
              lsn_t lsn = LSN_INVALID,
              std::chrono::milliseconds timestamp = std::chrono::milliseconds{0},
              int batch_offset = 0,
-             OffsetMap offsets = OffsetMap())
+             uint64_t byte_offset = BYTE_OFFSET_INVALID)
       : LogRecord(log_id),
         payload(std::move(pl)),
-        attrs(lsn, timestamp, batch_offset, std::move(offsets)) {}
+        attrs(lsn, timestamp, batch_offset, byte_offset) {}
 
   Payload payload;            // payload of this record
   DataRecordAttributes attrs; // attributes of this record. Not const,

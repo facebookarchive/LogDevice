@@ -386,9 +386,9 @@ void EpochRecordCache::updateTailRecord(
 
   // not all record has the offset_within_epoch, if not, use the
   // value in the existing tail_record instead
-  OffsetMap offsets =
-      (tail->offsets_within_epoch.isValid() ? tail->offsets_within_epoch
-                                            : tail_record_.offsets_map_);
+  uint64_t offset = (tail->offset_within_epoch == BYTE_OFFSET_INVALID
+                         ? tail_record_.header.u.offset_within_epoch
+                         : tail->offset_within_epoch);
   TailRecordHeader::flags_t flags = TailRecordHeader::OFFSET_WITHIN_EPOCH;
   if (tail_optimized_ == TailOptimized::YES) {
     flags |= TailRecordHeader::HAS_PAYLOAD;
@@ -400,11 +400,9 @@ void EpochRecordCache::updateTailRecord(
     flags |= TailRecordHeader::CHECKSUM_PARITY;
   }
 
-  uint64_t offset = OffsetMap::toLegacy(offsets);
   // replace the existing tail record
   tail_record_ =
       TailRecord({log_id_, tail->lsn, tail->timestamp, {offset}, flags, {}},
-                 std::move(offsets),
                  tail_optimized_ == TailOptimized::YES ? tail : nullptr);
 }
 

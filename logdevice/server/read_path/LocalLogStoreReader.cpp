@@ -485,6 +485,7 @@ int getTailRecord(LocalLogStore::ReadIterator& iterator,
 
   // if the tail record does not have byte offset included, use
   // BYTE_OFFSET_INVALID
+  uint64_t offset_within_epoch = BYTE_OFFSET_INVALID;
   OffsetMap offsets_within_epoch;
 
   int rv =
@@ -496,6 +497,7 @@ int getTailRecord(LocalLogStore::ReadIterator& iterator,
                                        nullptr,
                                        nullptr,
                                        0,
+                                       &offset_within_epoch,
                                        &offsets_within_epoch,
                                        nullptr,
                                        include_payload ? &payload : nullptr,
@@ -517,9 +519,6 @@ int getTailRecord(LocalLogStore::ReadIterator& iterator,
   }
 
   TailRecordHeader::flags_t flags = TailRecordHeader::OFFSET_WITHIN_EPOCH;
-  if (record_flags & LocalLogStoreRecordFormat::FLAG_OFFSET_MAP) {
-    flags |= TailRecordHeader::OFFSET_MAP;
-  }
   std::shared_ptr<PayloadHolder> ph;
   if (include_payload) {
     // make a private copy so that payload can be owned by the PayloadHolder
@@ -537,7 +536,7 @@ int getTailRecord(LocalLogStore::ReadIterator& iterator,
   tail_out->reset({log_id,
                    lsn,
                    static_cast<uint64_t>(timestamp.count()),
-                   {offsets_within_epoch.getCounter(BYTE_OFFSET)},
+                   {offset_within_epoch},
                    flags,
                    {}},
                   std::move(ph),

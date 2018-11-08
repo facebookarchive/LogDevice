@@ -269,7 +269,7 @@ void GetSeqStateRequest::onReply(NodeID from,
   }
 
   if (msg.header_.flags & GET_SEQ_STATE_REPLY_Header::INCLUDES_EPOCH_OFFSET) {
-    epoch_offsets_ = msg.epoch_offsets_;
+    epoch_offset_ = OffsetMap::toLegacy(msg.epoch_offsets_);
   }
 
   if (msg.header_.flags &
@@ -629,7 +629,7 @@ void GetSeqStateRequest::executeCallbacks() {
                                     last_released_lsn_,
                                     next_lsn_,
                                     log_tail_attributes_,
-                                    epoch_offsets_,
+                                    epoch_offset_,
                                     metadata_map_,
                                     tail_record_};
   for (auto& cb : callback_list_) {

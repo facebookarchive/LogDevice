@@ -129,12 +129,54 @@ Slice formRecordHeaderBufAppend(int64_t timestamp,
   return Slice(buf->data() + buf_size_prev, buf->size() - buf_size_prev);
 }
 
+// TODO (T33977412)
+Slice formRecordHeaderBufAppend(int64_t timestamp,
+                                esn_t last_known_good,
+                                flags_t flags,
+                                uint32_t wave_or_recovery_epoch,
+                                const folly::Range<const ShardID*>& copyset,
+                                uint64_t offset_within_epoch,
+                                const Slice& optional_keys,
+                                std::string* buf) {
+  OffsetMap offsets_within_epoch;
+  offsets_within_epoch.setCounter(BYTE_OFFSET, offset_within_epoch);
+  return formRecordHeaderBufAppend(timestamp,
+                                   last_known_good,
+                                   flags,
+                                   wave_or_recovery_epoch,
+                                   copyset,
+                                   offsets_within_epoch,
+                                   optional_keys,
+                                   buf);
+}
+
+// TODO (T33977412)
 Slice formRecordHeader(int64_t timestamp,
                        esn_t last_known_good,
                        flags_t flags,
                        uint32_t wave_or_recovery_epoch,
                        const folly::Range<const ShardID*>& copyset,
-                       const OffsetMap& offsets_within_epoch,
+                       uint64_t offset_within_epoch,
+                       const std::map<KeyType, std::string>& optional_keys,
+                       std::string* buf) {
+  OffsetMap offsets_within_epoch;
+  offsets_within_epoch.setCounter(BYTE_OFFSET, offset_within_epoch);
+  return formRecordHeader(timestamp,
+                          last_known_good,
+                          flags,
+                          wave_or_recovery_epoch,
+                          copyset,
+                          offsets_within_epoch,
+                          optional_keys,
+                          buf);
+}
+
+Slice formRecordHeader(int64_t timestamp,
+                       esn_t last_known_good,
+                       flags_t flags,
+                       uint32_t wave_or_recovery_epoch,
+                       const folly::Range<const ShardID*>& copyset,
+                       OffsetMap offsets_within_epoch,
                        const std::map<KeyType, std::string>& optional_keys,
                        std::string* buf) {
   std::string optional_keys_string;
@@ -431,6 +473,7 @@ bool parseCopySetIndexSingleEntry(const Slice& cs_dir_slice,
 
 #undef READ_FROM_SLICE
 
+// TODO (T33977412)
 int parse(const Slice& log_store_blob,
           std::chrono::milliseconds* timestamp_out,
           esn_t* last_known_good_out,
@@ -439,6 +482,34 @@ int parse(const Slice& log_store_blob,
           copyset_size_t* copyset_size_out,
           ShardID* copyset_arr_out,
           size_t copyset_arr_out_size,
+          uint64_t* offset_within_epoch_out,
+          std::map<KeyType, std::string>* optional_keys,
+          Payload* payload_out,
+          shard_index_t this_shard) {
+  return parse(log_store_blob,
+               timestamp_out,
+               last_known_good_out,
+               flags_out,
+               wave_or_recovery_epoch_out,
+               copyset_size_out,
+               copyset_arr_out,
+               copyset_arr_out_size,
+               offset_within_epoch_out,
+               nullptr,
+               optional_keys,
+               payload_out,
+               this_shard);
+}
+
+int parse(const Slice& log_store_blob,
+          std::chrono::milliseconds* timestamp_out,
+          esn_t* last_known_good_out,
+          flags_t* flags_out,
+          uint32_t* wave_or_recovery_epoch_out,
+          copyset_size_t* copyset_size_out,
+          ShardID* copyset_arr_out,
+          size_t copyset_arr_out_size,
+          uint64_t* offset_within_epoch_out,
           OffsetMap* offsets_within_epoch_out,
           std::map<KeyType, std::string>* optional_keys,
           Payload* payload_out,
@@ -599,6 +670,9 @@ int parse(const Slice& log_store_blob,
     if (rv != 0) {
       return rv;
     }
+    if (offset_within_epoch_out) {
+      *offset_within_epoch_out = out;
+    }
     if (offsets_within_epoch_out) {
       OffsetMap o;
       o.setCounter(BYTE_OFFSET, out);
@@ -712,6 +786,12 @@ int parse(const Slice& log_store_blob,
     if (rv == -1) {
       return rv;
     }
+
+    // TODO(T33977412) : remove offset_within_epoch_out from parse function
+    if (offset_within_epoch_out) {
+      *offset_within_epoch_out = out.getCounter(BYTE_OFFSET);
+    }
+
     if (offsets_within_epoch_out) {
       *offsets_within_epoch_out = std::move(out);
     }

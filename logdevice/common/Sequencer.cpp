@@ -1082,7 +1082,6 @@ int Sequencer::startRecovery(std::chrono::milliseconds delay) {
                          {0},         // cumulative byteoffset
                          TailRecordHeader::CHECKSUM_PARITY, // flags
                          {}},
-        OffsetMap::fromLegacy(0),
         std::shared_ptr<PayloadHolder>()};
 
     onRecoveryCompleted(E::OK,
@@ -1883,33 +1882,34 @@ std::shared_ptr<const TailRecord> Sequencer::getTailRecord() const {
   ld_check(ret_tail->containOffsetWithinEpoch());
 
   ret_tail->header.flags &= ~TailRecordHeader::OFFSET_WITHIN_EPOCH;
-  if (!ret_tail->offsets_map_.isValid() ||
-      !previous_tail->offsets_map_.isValid()) {
+  if (ret_tail->header.u.offset_within_epoch == BYTE_OFFSET_INVALID ||
+      previous_tail->header.u.byte_offset == BYTE_OFFSET_INVALID) {
     ret_tail->header.u.byte_offset = BYTE_OFFSET_INVALID;
-    ret_tail->offsets_map_.clear();
+    ret_tail->offsets_map_.unsetCounter(BYTE_OFFSET);
   } else {
-    ret_tail->offsets_map_ =
-        previous_tail->offsets_map_ + current_epoch_tail->offsets_map_;
-    ret_tail->header.u.byte_offset =
-        ret_tail->offsets_map_.getCounter(BYTE_OFFSET);
+    // TODO(T33977412) Remove byte_offset when fully deployed
+    ret_tail->header.u.byte_offset = previous_tail->header.u.byte_offset +
+        current_epoch_tail->header.u.offset_within_epoch;
+    ret_tail->offsets_map_.setCounter(
+        BYTE_OFFSET, ret_tail->header.u.byte_offset);
   }
 
   ld_check(!ret_tail->containOffsetWithinEpoch());
   return ret_tail;
 }
 
-OffsetMap Sequencer::getEpochOffsetMap() const {
+uint64_t Sequencer::getEpochOffset() const {
   if (!isRecoveryComplete()) {
-    return OffsetMap();
+    return BYTE_OFFSET_INVALID;
   }
 
   auto previous_tail = tail_record_previous_epoch_.get();
   if (previous_tail == nullptr) {
-    return OffsetMap();
+    return BYTE_OFFSET_INVALID;
   }
 
   ld_check(!previous_tail->containOffsetWithinEpoch());
-  return previous_tail->offsets_map_;
+  return previous_tail->header.u.byte_offset;
 }
 
 }} // namespace facebook::logdevice

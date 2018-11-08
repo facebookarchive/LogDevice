@@ -197,7 +197,7 @@ Slice formRecordHeaderBufAppend(int64_t timestamp,
                                 flags_t flags,
                                 uint32_t wave_or_recovery_epoch,
                                 const folly::Range<const ShardID*>& copyset,
-                                const OffsetMap& offsets_within_epoch,
+                                uint64_t offset_within_epoch,
                                 const Slice& optional_keys,
                                 std::string* buf);
 
@@ -220,12 +220,22 @@ Slice formRecordHeaderBufAppend(int64_t timestamp,
  *
  * @return Slice pointing into supplied std::string
  */
+// TODO (T33977412)
 Slice formRecordHeader(int64_t timestamp,
                        esn_t last_known_good,
                        flags_t flags,
                        uint32_t wave_or_recovery_epoch,
                        const folly::Range<const ShardID*>& copyset,
-                       const OffsetMap& offsets_within_epoch,
+                       uint64_t offset_within_epoch,
+                       const std::map<KeyType, std::string>& optional_keys,
+                       std::string* buf);
+
+Slice formRecordHeader(int64_t timestamp,
+                       esn_t last_known_good,
+                       flags_t flags,
+                       uint32_t wave_or_recovery_epoch,
+                       const folly::Range<const ShardID*>& copyset,
+                       OffsetMap offsets_within_epoch,
                        const std::map<KeyType, std::string>& optional_keys,
                        std::string* buf);
 
@@ -368,6 +378,20 @@ int parse(const Slice& log_store_blob,
           copyset_size_t* copyset_size_out,
           ShardID* copyset_arr_out,
           size_t copyset_arr_out_size,
+          uint64_t* offset_within_epoch_out,
+          std::map<KeyType, std::string>* optional_keys,
+          Payload* payload_out,
+          shard_index_t this_shard);
+
+int parse(const Slice& log_store_blob,
+          std::chrono::milliseconds* timestamp_out,
+          esn_t* last_known_good_out,
+          flags_t* flags_out,
+          uint32_t* wave_or_recovery_epoch_out,
+          copyset_size_t* copyset_size_out,
+          ShardID* copyset_arr_out,
+          size_t copyset_arr_out_size,
+          uint64_t* offset_within_epoch_out,
           OffsetMap* offsets_within_epoch,
           std::map<KeyType, std::string>* optional_keys,
           Payload* payload_out,

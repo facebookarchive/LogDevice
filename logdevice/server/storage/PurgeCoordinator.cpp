@@ -374,7 +374,7 @@ void PurgeCoordinator::onReleaseMessage(lsn_t lsn,
                                         NodeID from,
                                         ReleaseType release_type,
                                         bool do_broadcast,
-                                        OffsetMap epoch_offsets) {
+                                        uint64_t epoch_offset) {
   // During rebuilding, don't purge, don't persist last released LSN and
   // don't broadcast the release.
   ServerWorker* worker = ServerWorker::onThisThread();
@@ -400,7 +400,7 @@ void PurgeCoordinator::onReleaseMessage(lsn_t lsn,
     release_now = false;
   }
   if (release_now) {
-    this->doRelease(lsn, release_type, do_broadcast, std::move(epoch_offsets));
+    this->doRelease(lsn, release_type, do_broadcast, epoch_offset);
     return;
   }
   if (parent_->hasPermanentError()) {
@@ -613,11 +613,11 @@ void PurgeCoordinator::shutdown() {
   ld_check(active_purge_);
   active_purge_.reset();
 }
-
+// TODO(T33977412) : change function to take OffsetMap
 void PurgeCoordinator::doRelease(lsn_t lsn,
                                  ReleaseType release_type,
                                  bool do_broadcast,
-                                 OffsetMap epoch_offsets) {
+                                 uint64_t epoch_offset) {
   ld_spew("log %lu releasing %s, release_type=%s",
           log_id_.val_,
           lsn_to_string(lsn).c_str(),
@@ -637,7 +637,9 @@ void PurgeCoordinator::doRelease(lsn_t lsn,
   switch (release_type) {
     case ReleaseType::GLOBAL:
       // Global release. Update epoch offset and last-released LSN.
-      if (epoch_offsets.isValid()) {
+      if (epoch_offset != BYTE_OFFSET_INVALID) {
+        OffsetMap epoch_offsets;
+        epoch_offsets.setCounter(BYTE_OFFSET, epoch_offset);
         parent_->updateEpochOffsetMap(
             std::make_pair(lsn_to_epoch(lsn), std::move(epoch_offsets)));
       }

@@ -484,12 +484,10 @@ bool AsyncReaderImpl::handleBufferedWrite(std::unique_ptr<DataRecord>& record) {
         nullptr, // no rebuilding metadata
         decoder, // shared ownership of the decoder
         batch_offset++,
-        // TODO (T33977412) : change documentation when client counters are
-        // enabled.
-        // Report the same offsets for all subrecords. This may be
-        // confusing but we don't have better options since offsets
-        // currently count the bytes of compressed batches.
-        attrs.offsets));
+        // Report the same byte offset for all subrecords. This may be
+        // confusing but we don't have better options since byte offsets
+        // count bytes of compressed batches.
+        attrs.byte_offset));
     if (buffer_rest) {
       // The application already rejected a previous record in this batch,
       // just buffer for later redelivery

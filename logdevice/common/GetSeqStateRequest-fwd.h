@@ -31,7 +31,7 @@ struct GetSeqStateRequestResult {
   lsn_t last_released_lsn;
   lsn_t next_lsn;
   folly::Optional<LogTailAttributes> attributes;
-  folly::Optional<OffsetMap> epoch_offsets;
+  folly::Optional<uint64_t> epoch_offset;
   std::shared_ptr<const EpochMetaDataMap> metadata_map;
   std::shared_ptr<TailRecord> tail_record;
 };

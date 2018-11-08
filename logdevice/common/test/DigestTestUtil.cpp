@@ -59,7 +59,7 @@ create_record(logid_t logid,
       std::move(extra_metadata),
       nullptr /* BufferedWriteDecoder */,
       0 /* batch_offset */,
-      OffsetMap::fromLegacy(byte_offset));
+      byte_offset);
 
   return record;
 }

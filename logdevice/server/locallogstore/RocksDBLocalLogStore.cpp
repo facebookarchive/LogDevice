@@ -1141,7 +1141,6 @@ Slice RocksDBLocalLogStore::CSIWrapper::CopySetIndexIterator::getCurrentRecord()
       LocalLogStoreRecordFormat::copySetIndexFlagsToRecordFlags(
           current_single_flags_) |
       LocalLogStoreRecordFormat::FLAG_CSI_DATA_ONLY;
-
   return LocalLogStoreRecordFormat::formRecordHeader(
       0,                            // timestamp
       ESN_INVALID,                  // last known good
@@ -1150,7 +1149,7 @@ Slice RocksDBLocalLogStore::CSIWrapper::CopySetIndexIterator::getCurrentRecord()
       folly::Range<const ShardID*>( // copyset
           current_single_copyset_.data(),
           current_single_copyset_.size()),
-      OffsetMap(),                      // offsets_within_epoch
+      0,                                // offset_within_epoch
       std::map<KeyType, std::string>(), // key
       &current_record_);
 };

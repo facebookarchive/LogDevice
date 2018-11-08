@@ -722,11 +722,6 @@ PutWriteOp RecordRebuildingBase::AmendSelfStorageTask::createWriteOp(
            : 0) |
       (owner.getSettings().write_shard_id_in_copyset
            ? LocalLogStoreRecordFormat::FLAG_SHARD_ID
-           : 0) |
-      // TODO (T35832374) : remove if condition when all servers support
-      // OffsetMap
-      (owner.getSettings().enable_offset_map
-           ? LocalLogStoreRecordFormat::FLAG_OFFSET_MAP
            : 0);
 
   Slice record_header = LocalLogStoreRecordFormat::formRecordHeader(

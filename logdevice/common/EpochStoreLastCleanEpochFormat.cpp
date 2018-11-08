@@ -139,16 +139,13 @@ int fromLinearBuffer(const char* buf,
     } else {
       // we got an entry with legacy format, construct a TailRecord from
       // the legacy tail attribute values.
-      OffsetMap offsets;
-      offsets.setCounter(BYTE_OFFSET, parsed_epoch_end_offset);
       tail_out->reset({log_id,
                        lsn_t(parsed_last_released_real_lsn),
                        parsed_last_timestamp,
                        {parsed_epoch_end_offset},
                        /*flags*/ 0,
                        {}},
-                      std::shared_ptr<PayloadHolder>(),
-                      std::move(offsets));
+                      std::shared_ptr<PayloadHolder>());
     }
   }
 

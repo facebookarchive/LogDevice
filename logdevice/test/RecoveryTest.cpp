@@ -775,6 +775,7 @@ RecoveryTest::buildDigest(epoch_t epoch,
       copyset_t copyset;
       copyset_size_t copyset_size;
       copyset.resize(15);
+      uint64_t offset_within_epoch = BYTE_OFFSET_INVALID;
       OffsetMap offsets_within_epoch;
       int rv = LocalLogStoreRecordFormat::parse(blob,
                                                 &timestamp,
@@ -784,6 +785,7 @@ RecoveryTest::buildDigest(epoch_t epoch,
                                                 &copyset_size,
                                                 &copyset[0],
                                                 15,
+                                                &offset_within_epoch,
                                                 &offsets_within_epoch,
                                                 nullptr,
                                                 &payload,
@@ -1067,7 +1069,7 @@ TEST_P(RecoveryTest, MutationsWithImmutableConsensus) {
     // each data payload is 4 bytes,
     // e1n1 as the last know good has the byteoffset 10, which we will start
     // rebuild from
-    EXPECT_EQ(4 * i + 10, OffsetMap::toLegacy(data_[i]->attrs.offsets));
+    EXPECT_EQ(4 * i + 10, data_[i]->attrs.byte_offset);
   }
 
   EXPECT_EQ(std::vector<gap_record_t>({

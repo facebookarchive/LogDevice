@@ -3089,10 +3089,8 @@ int ClientReadStream::deliverRecord(
   last_received_ts_ = std::chrono::duration_cast<std::chrono::milliseconds>(
       std::chrono::system_clock::now().time_since_epoch());
 
-  OffsetMap current_offsets = record->attrs.offsets;
-  OffsetMap payload_size_map;
-  // TODO(T33977412) : Change to take into account other counters
-  payload_size_map.setCounter(BYTE_OFFSET, record->payload.size());
+  uint64_t current_offset = record->attrs.byte_offset;
+  size_t payload_size = record->payload.size();
 
   // we should always deliver the record at next_lsn_to_deliver_, which is at
   // the front of the buffer
@@ -3103,11 +3101,11 @@ int ClientReadStream::deliverRecord(
   // current record does not have byte_offset information and client
   // requested byte offset.
   if (additional_start_flags_ & START_Header::INCLUDE_BYTE_OFFSET &&
-      !record->attrs.offsets.isValid()) {
-    current_offsets = accumulated_offsets_.isValid()
-        ? accumulated_offsets_ + payload_size_map
-        : OffsetMap();
-    record->attrs.offsets = current_offsets;
+      record->attrs.byte_offset == BYTE_OFFSET_INVALID) {
+    current_offset = accumulated_byte_offset_ == BYTE_OFFSET_INVALID
+        ? BYTE_OFFSET_INVALID
+        : accumulated_byte_offset_ + payload_size;
+    record->attrs.byte_offset = current_offset;
   }
 
   if ((record->flags_ & RECORD_Header::HOLE) && !ship_pseudorecords_) {
@@ -3177,8 +3175,7 @@ int ClientReadStream::deliverRecord(
       } else {
         WORKER_STAT_INCR(client.metadata_log_records_delivered);
       }
-      WORKER_STAT_ADD(client.metadata_log_bytes_delivered,
-                      payload_size_map.getCounter(BYTE_OFFSET));
+      WORKER_STAT_ADD(client.metadata_log_bytes_delivered, payload_size);
     } else {
       if (wait_for_all_copies_) {
         WORKER_STAT_INCR(client.records_delivered_wait_for_all);
@@ -3190,15 +3187,14 @@ int ClientReadStream::deliverRecord(
           WORKER_STAT_INCR(client.records_delivered_noscd);
         }
       }
-      WORKER_STAT_ADD(
-          client.bytes_delivered, payload_size_map.getCounter(BYTE_OFFSET));
+      WORKER_STAT_ADD(client.bytes_delivered, payload_size);
     }
     num_records_delivered_++;
-    num_bytes_delivered_ += payload_size_map.getCounter(BYTE_OFFSET);
+    num_bytes_delivered_ += payload_size;
     // Updating info reg. buffer usage.
-    bytes_buffered_ -= payload_size_map.getCounter(BYTE_OFFSET);
-    if (current_offsets.isValid()) {
-      accumulated_offsets_ = std::move(current_offsets);
+    bytes_buffered_ -= payload_size;
+    if (current_offset != BYTE_OFFSET_INVALID) {
+      accumulated_byte_offset_ = current_offset;
     }
   } else {
     if (!MetaDataLog::isMetaDataLog(log_id_)) {
