@@ -9,6 +9,7 @@
 
 #include "logdevice/common/DataRecordOwnsPayload.h"
 #include "logdevice/common/GetSeqStateRequest.h"
+#include "logdevice/common/OffsetMap.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/ShardAuthoritativeStatusMap.h"
@@ -165,7 +166,7 @@ void ClientReadersFlowTracer::onSyncSequencerRequestResponse(
         : next_lsn - 1; // in case we haven't gotten the
                         // last_released_real_lsn, we use the maximum
                         // possible lsn for the tail record.
-    latest_tail_info_ = TailInfo{.byte_offset = attrs->byte_offset,
+    latest_tail_info_ = TailInfo{.offsets = std::move(attrs->offsets),
                                  .timestamp = attrs->last_timestamp.count(),
                                  .lsn_approx = tail_lsn_approx};
     updateTimeStuck(tail_lsn_approx);
@@ -366,8 +367,8 @@ std::string ClientReadersFlowTracer::lastReportedStatePretty() const {
 std::string ClientReadersFlowTracer::lastTailInfoPretty() const {
   if (latest_tail_info_.has_value()) {
     auto t = latest_tail_info_.value();
-    return folly::sformat("BO={},TS={},LSN={}",
-                          t.byte_offset,
+    return folly::sformat("OM={},TS={},LSN={}",
+                          t.offsets.toString().c_str(),
                           t.timestamp,
                           lsn_to_string(t.lsn_approx));
   } else {
@@ -404,9 +405,9 @@ folly::Optional<int64_t> ClientReadersFlowTracer::estimateTimeLag() const {
 folly::Optional<int64_t> ClientReadersFlowTracer::estimateByteLag() const {
   if (latest_tail_info_.hasValue()) {
     auto tail_lsn = latest_tail_info_->lsn_approx;
-    int64_t tail_byte_offset = latest_tail_info_->byte_offset;
+    int64_t tail_byte_offset =
+        latest_tail_info_->offsets.getCounter(BYTE_OFFSET);
     int64_t acc_byte_offset = owner_->accumulated_byte_offset_;
-
     if (acc_byte_offset != BYTE_OFFSET_INVALID &&
         tail_byte_offset != BYTE_OFFSET_INVALID) {
       if (tail_byte_offset >= acc_byte_offset) {

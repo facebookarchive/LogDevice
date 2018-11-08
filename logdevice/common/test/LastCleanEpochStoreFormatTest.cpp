@@ -122,7 +122,7 @@ TEST_F(LastCleanEpochStoreFormatTest, ParsingCurrentFormat) {
       // represent a empty log
       tail.header.log_id = LOGID;
       tail.header.u.byte_offset = 0;
-      tail.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 0);
+      tail.offsets_map_.setCounter(BYTE_OFFSET, 0);
     }
     ld_check(tail.isValid());
 

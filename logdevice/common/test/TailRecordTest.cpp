@@ -49,7 +49,7 @@ class TailRecordTest : public ::testing::Test {
 
   TailRecord genTailRecordWithOffsetMap(bool include_payload) {
     OffsetMap offset_map;
-    offset_map.setCounter(CounterType::BYTE_OFFSET, 2349045994592);
+    offset_map.setCounter(BYTE_OFFSET, 2349045994592);
     TailRecordHeader::flags_t flags = TailRecordHeader::CHECKSUM_PARITY |
         (include_payload ? TailRecordHeader::HAS_PAYLOAD : 0);
     flags |= TailRecordHeader::OFFSET_WITHIN_EPOCH;

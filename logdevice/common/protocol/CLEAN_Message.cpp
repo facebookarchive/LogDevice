@@ -30,9 +30,8 @@ CLEAN_Message::CLEAN_Message(const CLEAN_Header& header,
 void CLEAN_Message::serialize(ProtocolWriter& writer) const {
   ld_check(header_.num_absent_nodes == absent_nodes_.size());
   ld_check(header_.epoch_end_offset ==
-           tail_record_.offsets_map_.getCounter(CounterType::BYTE_OFFSET));
-  ld_check(header_.epoch_size ==
-           epoch_size_map_.getCounter(CounterType::BYTE_OFFSET));
+           tail_record_.offsets_map_.getCounter(BYTE_OFFSET));
+  ld_check(header_.epoch_size == epoch_size_map_.getCounter(BYTE_OFFSET));
   CLEAN_Header write_header = header_;
   if (tail_record_.isValid()) {
     write_header.flags |= CLEAN_Header::INCLUDE_TAIL_RECORD;

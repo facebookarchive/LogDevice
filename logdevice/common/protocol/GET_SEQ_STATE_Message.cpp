@@ -556,7 +556,7 @@ void GET_SEQ_STATE_Message::continueExecution(Address const& from) {
           attributes.last_released_real_lsn = tail->header.lsn;
           attributes.last_timestamp =
               std::chrono::milliseconds(tail->header.timestamp);
-          attributes.byte_offset = tail->header.u.byte_offset;
+          attributes.offsets = tail->offsets_map_;
           tail_attributes.assign(attributes);
           if (flags_ & GET_SEQ_STATE_Message::INCLUDE_TAIL_RECORD) {
             reply_hdr.flags |= GET_SEQ_STATE_REPLY_Header::INCLUDES_TAIL_RECORD;
@@ -856,7 +856,7 @@ void GET_SEQ_STATE_Message::sendReply(
     msg->tail_attributes_ = tail_attributes.value();
   }
   if (epoch_offset.hasValue()) {
-    msg->epoch_offset_ = epoch_offset.value();
+    msg->epoch_offsets_ = OffsetMap::fromLegacy(epoch_offset.value());
   }
   if (metadata_map) {
     msg->metadata_map_ = std::move(metadata_map);

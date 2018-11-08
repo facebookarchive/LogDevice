@@ -310,7 +310,7 @@ CachedDigest::shipRecord(esn_t esn,
     extra_metadata->header.copyset_size = record.copyset.size();
     extra_metadata->copyset = record.copyset;
     extra_metadata->offsets_within_epoch.setCounter(
-        CounterType::BYTE_OFFSET, record.offset_within_epoch);
+        BYTE_OFFSET, record.offset_within_epoch);
   }
 
   if (extra_metadata && extra_metadata->offsets_within_epoch.isValid()) {

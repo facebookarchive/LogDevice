@@ -1227,15 +1227,14 @@ void LogRecoveryRequest::onSealReply(ShardID from,
         // tail record from its (lng, last_timestamp, epoch_offset_map).
         // Note: only consider it as a tail if lng > ESN_INVALID
         if (lsn_to_esn(reply.epoch_lng_[i]) > ESN_INVALID) {
-          epoch_tail =
-              TailRecord({log_id_,
-                          reply.epoch_lng_[i],
-                          reply.last_timestamp_[i],
-                          {offset.getCounter(CounterType::BYTE_OFFSET)},
-                          TailRecordHeader::OFFSET_WITHIN_EPOCH,
-                          {}},
-                         offset,
-                         std::shared_ptr<PayloadHolder>());
+          epoch_tail = TailRecord({log_id_,
+                                   reply.epoch_lng_[i],
+                                   reply.last_timestamp_[i],
+                                   {offset.getCounter(BYTE_OFFSET)},
+                                   TailRecordHeader::OFFSET_WITHIN_EPOCH,
+                                   {}},
+                                  offset,
+                                  std::shared_ptr<PayloadHolder>());
 
           ld_check(epoch_tail.value().isValid());
         }

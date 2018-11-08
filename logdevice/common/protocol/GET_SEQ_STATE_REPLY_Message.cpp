@@ -33,12 +33,30 @@ GET_SEQ_STATE_REPLY_Message::deserialize(ProtocolReader& reader) {
     uint64_t timestamp;
     reader.read(&msg->tail_attributes_.last_released_real_lsn);
     reader.read(&timestamp);
-    reader.read(&msg->tail_attributes_.byte_offset);
+    if (reader.proto() >=
+        Compatibility::GET_SEQ_STATE_REPLY_MESSAGE_SUPPORT_OFFSET_MAP) {
+      OffsetMap offsets;
+      offsets.deserialize(reader, false /* unused */);
+      msg->tail_attributes_.offsets = std::move(offsets);
+    } else {
+      uint64_t byte_offset = BYTE_OFFSET_INVALID;
+      reader.read(&byte_offset);
+      msg->tail_attributes_.offsets.setCounter(BYTE_OFFSET, byte_offset);
+    }
     msg->tail_attributes_.last_timestamp = std::chrono::milliseconds(timestamp);
   }
 
   if (header.flags & GET_SEQ_STATE_REPLY_Header::INCLUDES_EPOCH_OFFSET) {
-    reader.read(&msg->epoch_offset_);
+    if (reader.proto() >=
+        Compatibility::GET_SEQ_STATE_REPLY_MESSAGE_SUPPORT_OFFSET_MAP) {
+      OffsetMap epoch_offsets;
+      epoch_offsets.deserialize(reader, false /* unused */);
+      msg->epoch_offsets_ = std::move(epoch_offsets);
+    } else {
+      uint64_t epoch_offset = BYTE_OFFSET_INVALID;
+      reader.read(&epoch_offset);
+      msg->epoch_offsets_.setCounter(BYTE_OFFSET, epoch_offset);
+    }
   }
 
   if (header.flags & GET_SEQ_STATE_REPLY_Header::INCLUDES_HISTORICAL_METADATA) {
@@ -89,11 +107,21 @@ void GET_SEQ_STATE_REPLY_Message::serialize(ProtocolWriter& writer) const {
     writer.write(tail_attributes_.last_released_real_lsn);
     uint64_t timestamp = tail_attributes_.last_timestamp.count();
     writer.write(timestamp);
-    writer.write(tail_attributes_.byte_offset);
+    if (writer.proto() >=
+        Compatibility::GET_SEQ_STATE_REPLY_MESSAGE_SUPPORT_OFFSET_MAP) {
+      tail_attributes_.offsets.serialize(writer);
+    } else {
+      writer.write(tail_attributes_.offsets.getCounter(BYTE_OFFSET));
+    }
   }
 
   if (header_.flags & GET_SEQ_STATE_REPLY_Header::INCLUDES_EPOCH_OFFSET) {
-    writer.write(epoch_offset_);
+    if (writer.proto() >=
+        Compatibility::GET_SEQ_STATE_REPLY_MESSAGE_SUPPORT_OFFSET_MAP) {
+      epoch_offsets_.serialize(writer);
+    } else {
+      writer.write(epoch_offsets_.getCounter(BYTE_OFFSET));
+    }
   }
 
   if (header_.flags &

@@ -639,7 +639,7 @@ void PurgeCoordinator::doRelease(lsn_t lsn,
       // Global release. Update epoch offset and last-released LSN.
       if (epoch_offset != BYTE_OFFSET_INVALID) {
         OffsetMap epoch_offsets;
-        epoch_offsets.setCounter(CounterType::BYTE_OFFSET, epoch_offset);
+        epoch_offsets.setCounter(BYTE_OFFSET, epoch_offset);
         parent_->updateEpochOffsetMap(
             std::make_pair(lsn_to_epoch(lsn), std::move(epoch_offsets)));
       }

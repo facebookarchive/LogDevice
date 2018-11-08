@@ -70,7 +70,7 @@ TEST_P(LocalLogStoreRecordFormatTest, RoundTrip) {
 
   header.copyset_size = 2;
   OffsetMap om;
-  om.setCounter(CounterType::BYTE_OFFSET, 34);
+  om.setCounter(BYTE_OFFSET, 34);
   extra.offsets_within_epoch = om;
 
   // if shard_id_in_copyset is set, we use a different shard_index_t value for
@@ -229,7 +229,7 @@ TEST_P(LocalLogStoreRecordFormatTest, CSIRoundTrip) {
 
   header.copyset_size = 2;
   OffsetMap offsets_within_epoch;
-  offsets_within_epoch.setCounter(CounterType::BYTE_OFFSET, 34);
+  offsets_within_epoch.setCounter(BYTE_OFFSET, 34);
   extra.offsets_within_epoch = std::move(offsets_within_epoch);
 
   // if shard_id_in_copyset is set, we use a different shard_index_t value for

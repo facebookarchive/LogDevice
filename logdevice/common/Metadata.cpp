@@ -29,9 +29,8 @@ Status EpochRecoveryMetadata::update(PerEpochLogMetadata& new_metadata) {
 
 Slice EpochRecoveryMetadata::serialize() const {
   serialize_buffer_.clear();
-  ld_check(header_.epoch_size ==
-           epoch_size_map_.getCounter(CounterType::BYTE_OFFSET));
-  ld_check(epoch_end_offsets_.getCounter(CounterType::BYTE_OFFSET) ==
+  ld_check(header_.epoch_size == epoch_size_map_.getCounter(BYTE_OFFSET));
+  ld_check(epoch_end_offsets_.getCounter(BYTE_OFFSET) ==
            header_.epoch_end_offset);
   serialize_buffer_.resize(
       sizeInLinearBuffer(header_, tail_record_, epoch_size_map_), 0);
@@ -68,9 +67,8 @@ int EpochRecoveryMetadata::deserialize(Slice blob) {
     rv = epoch_size_map_.deserialize({ptr, blob.size - buf_size});
     ld_check(rv != -1);
   } else {
-    epoch_end_offsets_.setCounter(
-        CounterType::BYTE_OFFSET, header_.epoch_end_offset);
-    epoch_size_map_.setCounter(CounterType::BYTE_OFFSET, header_.epoch_size);
+    epoch_end_offsets_.setCounter(BYTE_OFFSET, header_.epoch_end_offset);
+    epoch_size_map_.setCounter(BYTE_OFFSET, header_.epoch_size);
   }
   return 0;
 }

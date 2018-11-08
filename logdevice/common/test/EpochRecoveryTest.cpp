@@ -438,7 +438,7 @@ GAP_Header mockGap(ShardID shard,
 TEST_F(EpochRecoveryTest, Basic) {
   setUp();
   OffsetMap om;
-  om.setCounter(CounterType::BYTE_OFFSET, 19);
+  om.setCounter(BYTE_OFFSET, 19);
   erm_->onSealed(N1, esn_t(1), esn_t(1), om, folly::none);
   ASSERT_FALSE(erm_->isActive());
   checkRecoveryState(ERMState::SEAL_OR_INACTIVE);
@@ -546,7 +546,7 @@ TEST_F(EpochRecoveryTest, Basic) {
 TEST_F(EpochRecoveryTest, RestartWhenAuthoritativeStatusChanges) {
   setUp();
   OffsetMap om;
-  om.setCounter(CounterType::BYTE_OFFSET, 19);
+  om.setCounter(BYTE_OFFSET, 19);
   erm_->onSealed(N1, esn_t(1), esn_t(1), om, folly::none);
   checkRecoveryState(ERMState::SEAL_OR_INACTIVE);
   erm_->activate(prev_tail_);
@@ -619,7 +619,7 @@ TEST_F(EpochRecoveryTest, UnexpectedHolePlugBelowLNG) {
 
   setUp();
   OffsetMap om;
-  om.setCounter(CounterType::BYTE_OFFSET, 19);
+  om.setCounter(BYTE_OFFSET, 19);
   erm_->onSealed(N1, esn_t(1), esn_t(1), om, folly::none);
   erm_->activate(prev_tail_);
   erm_->onSealed(N2, esn_t(1), esn_t(1), om, folly::none);
@@ -687,7 +687,7 @@ TEST_F(EpochRecoveryTest, MutationSetShouldNotContainDrainingNodes) {
 
   setUp();
   OffsetMap om;
-  om.setCounter(CounterType::BYTE_OFFSET, 19);
+  om.setCounter(BYTE_OFFSET, 19);
   // N3 will be absent in the beginning, causing recovery to get stuck
   // even if it does have f-majority (authoritative_incomplete) digest
   erm_->onSealed(N1, esn_t(0), esn_t(1), om, folly::none);
@@ -845,7 +845,7 @@ TEST_F(EpochRecoveryTest, correctByteOffset) {
   storage_set_ = StorageSet({N1, N2});
   setUp();
   OffsetMap om;
-  om.setCounter(CounterType::BYTE_OFFSET, 40);
+  om.setCounter(BYTE_OFFSET, 40);
   erm_->onSealed(N1, esn_t(1), esn_t(1), om, folly::none);
   ASSERT_FALSE(erm_->isActive());
   checkRecoveryState(ERMState::SEAL_OR_INACTIVE);

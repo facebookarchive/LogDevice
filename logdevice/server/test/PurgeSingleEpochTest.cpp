@@ -168,9 +168,9 @@ TEST_F(PurgeSingleEpochTest, Basic) {
   setUp();
   purge_->start();
   ASSERT_TRUE(GetERMRequestPosted_);
-  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 0);
-  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 0);
-  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 0);
+  epoch_size_map.setCounter(BYTE_OFFSET, 0);
+  epoch_end_offsets.setCounter(BYTE_OFFSET, 0);
+  tail_record.offsets_map_.setCounter(BYTE_OFFSET, 0);
   EpochRecoveryMetadata md(epoch_t(9),
                            esn_t(10),
                            esn_t(11),
@@ -191,9 +191,9 @@ TEST_F(PurgeSingleEpochTest, ERMKnown) {
   epoch_ = epoch_t(8);
   local_lng_ = esn_t(10);
   local_last_record_ = esn_t(20);
-  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 0);
-  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 0);
-  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 0);
+  epoch_size_map.setCounter(BYTE_OFFSET, 0);
+  epoch_end_offsets.setCounter(BYTE_OFFSET, 0);
+  tail_record.offsets_map_.setCounter(BYTE_OFFSET, 0);
   erm_ = EpochRecoveryMetadata(epoch_t(9),
                                esn_t(10),
                                esn_t(11),
@@ -216,9 +216,9 @@ TEST_F(PurgeSingleEpochTest, EpochEmptyLocally) {
   epoch_ = epoch_t(8);
   local_lng_ = esn_t(0);
   local_last_record_ = esn_t(0);
-  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 0);
-  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 0);
-  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 0);
+  epoch_size_map.setCounter(BYTE_OFFSET, 0);
+  tail_record.offsets_map_.setCounter(BYTE_OFFSET, 0);
+  epoch_end_offsets.setCounter(BYTE_OFFSET, 0);
   erm_ = EpochRecoveryMetadata(epoch_t(9),
                                esn_t(10),
                                esn_t(11),

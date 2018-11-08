@@ -232,7 +232,7 @@ void GetSeqStateRequest::onReply(NodeID from,
 
   ld_debug("Sequencer for log:%lu on %s replied with status=%s "
            "for rqid:%lu, ctx:%s, next_lsn:%s, last_released_lsn:%s,"
-           "epoch_offset:%ld. Previous values "
+           "epoch_offsets:%s. Previous values "
            "[next_lsn:%s, last_released_lsn:%s]",
            log_id_.val_,
            from.toString().c_str(),
@@ -241,7 +241,7 @@ void GetSeqStateRequest::onReply(NodeID from,
            getContextString(getContext()).c_str(),
            lsn_to_string(msg.header_.next_lsn).c_str(),
            lsn_to_string(msg.header_.last_released_lsn).c_str(),
-           msg.epoch_offset_,
+           msg.epoch_offsets_.toString().c_str(),
            lsn_to_string(next_lsn_).c_str(),
            lsn_to_string(last_released_lsn_).c_str());
 
@@ -264,12 +264,12 @@ void GetSeqStateRequest::onReply(NodeID from,
     attributes.last_released_real_lsn =
         msg.tail_attributes_.last_released_real_lsn;
     attributes.last_timestamp = msg.tail_attributes_.last_timestamp;
-    attributes.byte_offset = msg.tail_attributes_.byte_offset;
+    attributes.offsets = msg.tail_attributes_.offsets;
     log_tail_attributes_ = attributes;
   }
 
   if (msg.header_.flags & GET_SEQ_STATE_REPLY_Header::INCLUDES_EPOCH_OFFSET) {
-    epoch_offset_ = msg.epoch_offset_;
+    epoch_offset_ = OffsetMap::toLegacy(msg.epoch_offsets_);
   }
 
   if (msg.header_.flags &

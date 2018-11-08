@@ -200,12 +200,13 @@ struct STORE_Extra {
   // STORED reply.
   log_rebuilding_id_t rebuilding_id = LOG_REBUILDING_ID_INVALID;
 
-  // If this STORE message include CounterType::BYTE_OFFSET (BYTE_OFFSET flag is
+  // If this STORE message include BYTE_OFFSET (BYTE_OFFSET flag is
   // set), the amount of bytes were written in epoch (to which this message
   // belongs) before record of this message is going to be sent along. Not all
   // STORE message will have this info. This info is sent along with store
-  // header every X bytes being appended. If OFFSET_MAP flag is set, internal
-  // counters list is present. Refer to OffsetMap.h for other CounterTypes
+  // header every X bytes being appended. If OFFSET_MAP flag is set, other
+  // counters will be included. Some of these counters are present in
+  // counter_type_t others are specified by logdevice clients.
   OffsetMap offsets_within_epoch;
 
   // Serialized when wave > 1.

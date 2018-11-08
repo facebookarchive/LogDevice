@@ -310,7 +310,7 @@ int Digest::recomputeOffsetsWithinEpoch(
   if (last_known_good == ESN_INVALID) {
     // To make offsets_within_epoch valid
     OffsetMap om;
-    om.setCounter(CounterType::BYTE_OFFSET, 0);
+    om.setCounter(BYTE_OFFSET, 0);
     offsets_within_epoch = std::move(om);
   }
 
@@ -368,8 +368,7 @@ int Digest::recomputeOffsetsWithinEpoch(
     OffsetMap payload_size_map;
     if (!entry.isHolePlug() && !entry.isBridgeRecord()) {
       payload_size_map.setCounter(
-          CounterType::BYTE_OFFSET,
-          entry.getPayload().size() - entry.getChecksumBytes());
+          BYTE_OFFSET, entry.getPayload().size() - entry.getChecksumBytes());
     }
     offsets_within_epoch.value() += payload_size_map;
 

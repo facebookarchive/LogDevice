@@ -47,7 +47,7 @@ class ClientReadersFlowTracer
   };
 
   struct TailInfo {
-    uint64_t byte_offset;
+    OffsetMap offsets;
     int64_t timestamp;
     lsn_t lsn_approx;
   };

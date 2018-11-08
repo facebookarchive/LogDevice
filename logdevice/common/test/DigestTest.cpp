@@ -765,7 +765,7 @@ TEST_F(DigestTest, recomputeOffsetWithinEpoch) {
         EXPECT_EQ(
             payload_size,
             entry.record->extra_metadata_->offsets_within_epoch.getCounter(
-                CounterType::BYTE_OFFSET));
+                BYTE_OFFSET));
         break;
       case 2:
         checkMutation(entry);
@@ -777,7 +777,7 @@ TEST_F(DigestTest, recomputeOffsetWithinEpoch) {
         EXPECT_EQ(
             payload_size * 2,
             entry.record->extra_metadata_->offsets_within_epoch.getCounter(
-                CounterType::BYTE_OFFSET));
+                BYTE_OFFSET));
         break;
       case 3:
         checkMutation(entry);
@@ -789,7 +789,7 @@ TEST_F(DigestTest, recomputeOffsetWithinEpoch) {
         EXPECT_EQ(
             payload_size * 2,
             entry.record->extra_metadata_->offsets_within_epoch.getCounter(
-                CounterType::BYTE_OFFSET));
+                BYTE_OFFSET));
         break;
       case 4:
         checkMutation(entry);
@@ -801,7 +801,7 @@ TEST_F(DigestTest, recomputeOffsetWithinEpoch) {
         EXPECT_EQ(
             payload_size * 3,
             entry.record->extra_metadata_->offsets_within_epoch.getCounter(
-                CounterType::BYTE_OFFSET));
+                BYTE_OFFSET));
         break;
       case 5:
         checkMutation(entry);
@@ -813,7 +813,7 @@ TEST_F(DigestTest, recomputeOffsetWithinEpoch) {
         EXPECT_EQ(
             payload_size * 4,
             entry.record->extra_metadata_->offsets_within_epoch.getCounter(
-                CounterType::BYTE_OFFSET));
+                BYTE_OFFSET));
         break;
       default:
         break;

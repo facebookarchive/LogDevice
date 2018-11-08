@@ -414,7 +414,7 @@ void LogStorageState::getDebugInfo(InfoLogStorageStateTable& table) const {
   auto latest_epoch = getEpochOffsetMap();
   if (latest_epoch.hasValue()) {
     table.set<13>(latest_epoch->first);
-    table.set<14>(latest_epoch->second.getCounter(CounterType::BYTE_OFFSET));
+    table.set<14>(latest_epoch->second.getCounter(BYTE_OFFSET));
   }
 
   table.set<15>(permanent_error_.load());

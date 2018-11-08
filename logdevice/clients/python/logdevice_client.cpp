@@ -246,9 +246,10 @@ tuple logdevice_get_tail_attributes(Client& self, logid_t logid) {
     throw_logdevice_exception();
     throw std::runtime_error("impossible, the line above always throws!");
   } else {
+    // TODO(T33977412) : return offsets
     return make_tuple(attributes->last_released_real_lsn,
                       attributes->last_timestamp.count(),
-                      attributes->byte_offset);
+                      OffsetMap::toLegacy(attributes->offsets));
   }
 }
 

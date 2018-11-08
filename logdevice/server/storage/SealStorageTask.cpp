@@ -253,8 +253,7 @@ bool SealStorageTask::getEpochInfoFromCache(LocalLogStore& /*store*/,
           ld_check(result.second != nullptr);
           // TODO(T33977412): convert EpochRecordCache to using OffsetMap.
           OffsetMap omap;
-          omap.setCounter(
-              CounterType::BYTE_OFFSET, result.second->getOffsetWithinEpoch());
+          omap.setCounter(BYTE_OFFSET, result.second->getOffsetWithinEpoch());
           auto insert_result = epoch_info_from_cache->insert(std::make_pair(
               epoch,
               EpochInfo{
@@ -361,7 +360,7 @@ Status SealStorageTask::getEpochInfo(LocalLogStore& store,
     }
 
     OffsetMap epoch_offset_map;
-    epoch_offset_map.setCounter(CounterType::BYTE_OFFSET, BYTE_OFFSET_INVALID);
+    epoch_offset_map.setCounter(BYTE_OFFSET, BYTE_OFFSET_INVALID);
     // read potentially more accurate LNG and epoch size from
     // the MutablePerEpochLogMetadata.
 
@@ -373,8 +372,7 @@ Status SealStorageTask::getEpochInfo(LocalLogStore& store,
       lng = std::max(lng, metadata.data_.last_known_good);
       // TODO(T33977412): MutablePerEpochLogMetadata should contain OffsetMap
       // instead of uint64_t.
-      epoch_offset_map.setCounter(
-          CounterType::BYTE_OFFSET, metadata.data_.epoch_size);
+      epoch_offset_map.setCounter(BYTE_OFFSET, metadata.data_.epoch_size);
     }
 
     auto result = epoch_info_->insert(std::make_pair(
@@ -412,7 +410,7 @@ Status SealStorageTask::getEpochInfo(LocalLogStore& store,
           // use the `epoch_offset_map` as an approximation
           tail.offsets_map_ = epoch_offset_map;
           tail.header.u.offset_within_epoch =
-              epoch_offset_map.getCounter(CounterType::BYTE_OFFSET);
+              epoch_offset_map.getCounter(BYTE_OFFSET);
         }
 
         if (tail.hasPayload() &&
@@ -495,7 +493,7 @@ void SealStorageTask::getAllEpochInfo(std::vector<lsn_t>& epoch_lng,
       // empty epoch
       epoch_lng.push_back(compose_lsn(epoch_t(epoch), ESN_INVALID));
       OffsetMap omap;
-      omap.setCounter(CounterType::BYTE_OFFSET, 0);
+      omap.setCounter(BYTE_OFFSET, 0);
       epoch_offset_map.push_back(omap);
       last_timestamp.push_back(0);
       max_seen_lsn.push_back(compose_lsn(epoch_t(epoch), ESN_INVALID));

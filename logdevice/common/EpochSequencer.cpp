@@ -94,7 +94,7 @@ void EpochSequencer::processNextBytes(Appender* appender) {
       appender->getPayload()->size() - in_payload_checksum_bytes;
   uint64_t offset = offset_within_epoch_.fetch_add(payload_size) + payload_size;
   OffsetMap offsets_within_epoch;
-  offsets_within_epoch.setCounter(CounterType::BYTE_OFFSET, offset);
+  offsets_within_epoch.setCounter(BYTE_OFFSET, offset);
   appender->setLogOffset(std::move(offsets_within_epoch));
 }
 
