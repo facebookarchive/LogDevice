@@ -2001,10 +2001,10 @@ TEST_P(RecoveryTest, PerEpochLogMetadata) {
                           .timestamp(std::chrono::milliseconds(3)),
                   });
 
-  epoch_size_map.setCounter(BYTE_OFFSET, 8);
-  epoch_end_offsets.setCounter(BYTE_OFFSET, 8);
+  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 8);
+  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 8);
   tail_record.reset();
-  tail_record.offsets_map_.setCounter(BYTE_OFFSET, 8);
+  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 8);
   const EpochRecoveryMetadata expected_metadata_epoch_1(
       epoch_t(2), // sequencer epoch
       esn_t(1),   // last known good
@@ -2706,9 +2706,9 @@ TEST_P(RecoveryTest, PurgingAvailabilityTest) {
                std::vector<esn_t>({esn_t(2)})  // bridges
   );
   {
-    epoch_size_map.setCounter(BYTE_OFFSET, 12);
-    epoch_end_offsets.setCounter(BYTE_OFFSET, 12);
-    tail_record.offsets_map_.setCounter(BYTE_OFFSET, 12);
+    epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 12);
+    epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 12);
+    tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 12);
     const EpochRecoveryMetadata expected_metadata_epoch_1(
         epoch_t(4), // sequencer epoch
         esn_t(1),   // last known good
@@ -2718,9 +2718,9 @@ TEST_P(RecoveryTest, PurgingAvailabilityTest) {
         epoch_size_map,
         epoch_end_offsets);
 
-    tail_record.offsets_map_.setCounter(BYTE_OFFSET, 16);
-    epoch_end_offsets.setCounter(BYTE_OFFSET, 16);
-    epoch_size_map.setCounter(BYTE_OFFSET, 4);
+    tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 16);
+    epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 16);
+    epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 4);
     const EpochRecoveryMetadata expected_metadata_epoch_3(
         epoch_t(4),  // sequencer epoch
         ESN_INVALID, // last known good
@@ -2904,9 +2904,9 @@ TEST_P(RecoveryTest, D4187744) {
                           .timestamp(std::chrono::milliseconds(3)),
                   });
 
-  epoch_size_map.setCounter(BYTE_OFFSET, 8);
-  epoch_end_offsets.setCounter(BYTE_OFFSET, 8);
-  tail_record.offsets_map_.setCounter(BYTE_OFFSET, 8);
+  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 8);
+  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 8);
+  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 8);
   const EpochRecoveryMetadata expected_metadata_epoch_1(
       epoch_t(2), // sequencer epoch
       esn_t(1),   // last known good
@@ -3390,7 +3390,7 @@ TEST_P(RecoveryTest, TailRecordAtLNG) {
 
   ASSERT_EQ(lsn(1, 1), tail->last_released_real_lsn);
   ASSERT_EQ(std::chrono::milliseconds(1), tail->last_timestamp);
-  ASSERT_EQ(17, tail->offsets.getCounter(BYTE_OFFSET));
+  ASSERT_EQ(17, tail->byte_offset);
   cluster_->stop();
 }
 
@@ -3445,7 +3445,7 @@ TEST_P(RecoveryTest, TailRecordAtLNGDataLoss) {
   ASSERT_EQ(lsn(1, 2), tail->last_released_real_lsn);
   // TODO T20425135: report dataloss for tail record
   ASSERT_EQ(std::chrono::milliseconds(0), tail->last_timestamp);
-  ASSERT_EQ(67, tail->offsets.getCounter(BYTE_OFFSET));
+  ASSERT_EQ(67, tail->byte_offset);
   cluster_->stop();
 }
 
@@ -3578,11 +3578,11 @@ TEST_P(RecoveryTest, ComputeTailRecord) {
     ASSERT_NE(nullptr, tail);
 
     // TODO: use tail record when api changes
-#define CHECK_TAIL(_lsn, _ts, _offset)                           \
-  do {                                                           \
-    ASSERT_EQ((_lsn), tail->last_released_real_lsn);             \
-    ASSERT_EQ((_ts), tail->last_timestamp);                      \
-    ASSERT_EQ((_offset), tail->offsets.getCounter(BYTE_OFFSET)); \
+#define CHECK_TAIL(_lsn, _ts, _offset)               \
+  do {                                               \
+    ASSERT_EQ((_lsn), tail->last_released_real_lsn); \
+    ASSERT_EQ((_ts), tail->last_timestamp);          \
+    ASSERT_EQ((_offset), tail->byte_offset);         \
   } while (0)
 
     switch (current) {

@@ -1885,13 +1885,14 @@ std::shared_ptr<const TailRecord> Sequencer::getTailRecord() const {
   if (ret_tail->header.u.offset_within_epoch == BYTE_OFFSET_INVALID ||
       previous_tail->header.u.byte_offset == BYTE_OFFSET_INVALID) {
     ret_tail->header.u.byte_offset = BYTE_OFFSET_INVALID;
-    ret_tail->offsets_map_.unsetCounter(BYTE_OFFSET);
+    ret_tail->offsets_map_.setCounter(
+        CounterType::BYTE_OFFSET, BYTE_OFFSET_INVALID);
   } else {
     // TODO(T33977412) Remove byte_offset when fully deployed
     ret_tail->header.u.byte_offset = previous_tail->header.u.byte_offset +
         current_epoch_tail->header.u.offset_within_epoch;
     ret_tail->offsets_map_.setCounter(
-        BYTE_OFFSET, ret_tail->header.u.byte_offset);
+        CounterType::BYTE_OFFSET, ret_tail->header.u.byte_offset);
   }
 
   ld_check(!ret_tail->containOffsetWithinEpoch());

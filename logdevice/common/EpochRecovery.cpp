@@ -512,7 +512,8 @@ bool EpochRecovery::startMutations() {
     ld_check(digest_start_esn_ > ESN_INVALID);
     ld_check(lsn_to_esn(tail_record_from_sealed_.header.lsn).val_ ==
              digest_start_esn_.val_ - 1);
-    ld_check(tail_record_from_sealed_.offsets_map_.getCounter(BYTE_OFFSET) ==
+    ld_check(tail_record_from_sealed_.offsets_map_.getCounter(
+                 CounterType::BYTE_OFFSET) ==
              tail_record_from_sealed_.header.u.offset_within_epoch);
     rv = digest_.recomputeOffsetsWithinEpoch(
         lsn_to_esn(tail_record_from_sealed_.header.lsn),
@@ -675,7 +676,7 @@ void EpochRecovery::updateEpochTailRecord() {
           flags |= TailRecordHeader::CHECKSUM_PARITY;
         }
         uint64_t offset_within_epoch =
-            offsets_within_epoch.getCounter(BYTE_OFFSET);
+            offsets_within_epoch.getCounter(CounterType::BYTE_OFFSET);
         final_tail_record_.reset(
             {tail_entry->record->logid,
              tail_entry->record->attrs.lsn,
@@ -697,7 +698,7 @@ void EpochRecovery::updateEpochTailRecord() {
   if (!final_tail_record_.offsets_map_.isValid()) {
     if (epoch_size_map_.isValid()) {
       final_tail_record_.header.u.offset_within_epoch =
-          epoch_size_map_.getCounter(BYTE_OFFSET);
+          epoch_size_map_.getCounter(CounterType::BYTE_OFFSET);
       final_tail_record_.offsets_map_ = epoch_size_map_;
     } else {
       final_tail_record_.header.u.offset_within_epoch = 0;
@@ -719,7 +720,7 @@ void EpochRecovery::updateEpochTailRecord() {
   final_tail_record_.offsets_map_ += prev_epoch_offsets_map;
   final_tail_record_.header.u.byte_offset =
       final_tail_record_.header.u.offset_within_epoch +
-      prev_epoch_offsets_map.getCounter(BYTE_OFFSET);
+      prev_epoch_offsets_map.getCounter(CounterType::BYTE_OFFSET);
   final_tail_record_.header.flags &= ~TailRecordHeader::OFFSET_WITHIN_EPOCH;
   ld_check(!final_tail_record_.containOffsetWithinEpoch());
 

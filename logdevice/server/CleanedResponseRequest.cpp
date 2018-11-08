@@ -130,9 +130,10 @@ void CleanedResponseRequest::prepareMetadata() {
   ld_check(clean_msg_->tail_record_.isValid());
   ld_check(!clean_msg_->tail_record_.containOffsetWithinEpoch());
   ld_check(header.epoch_end_offset ==
-           clean_msg_->tail_record_.offsets_map_.getCounter(BYTE_OFFSET));
+           clean_msg_->tail_record_.offsets_map_.getCounter(
+               CounterType::BYTE_OFFSET));
   ld_check(header.epoch_size ==
-           clean_msg_->epoch_size_map_.getCounter(BYTE_OFFSET));
+           clean_msg_->epoch_size_map_.getCounter(CounterType::BYTE_OFFSET));
 
   // TODO 9929743: byte offset
   metadata_ = std::make_unique<EpochRecoveryMetadata>(

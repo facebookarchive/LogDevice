@@ -191,7 +191,7 @@ class EpochRecovery {
 
   uint64_t getEpochSize() const {
     return epoch_size_map_.getCounter(
-        BYTE_OFFSET); // may be BYTE_OFFSET_INVALID
+        CounterType::BYTE_OFFSET); // may be BYTE_OFFSET_INVALID
   }
 
   const OffsetMap& getEpochSizeMap() const {

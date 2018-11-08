@@ -40,7 +40,8 @@ ZeroCopiedRecord::ZeroCopiedRecord(
       keys(std::move(keys)),
       payload_raw(payload_raw),
       payload_holder_(std::move(payload_holder)) {
-  offsets_within_epoch.setCounter(BYTE_OFFSET, offset_within_epoch);
+  offsets_within_epoch.setCounter(
+      CounterType::BYTE_OFFSET, offset_within_epoch);
 }
 
 worker_id_t ZeroCopiedRecord::getDisposalThread() const {

@@ -11,12 +11,10 @@
 #include <cstdint>
 
 #include "folly/Format.h"
-#include "logdevice/common/OffsetMap.h"
 #include "logdevice/include/types.h"
 
 namespace facebook { namespace logdevice {
-// TODO(T35365340) : Edit documentation when more counters are added and
-// change OffsetMap header location to include.
+
 /**
  * Structure that contains attributes of the tail of the log.
  * It includes:
@@ -25,35 +23,33 @@ namespace facebook { namespace logdevice {
  *  last_timestamp  Estimated timestamp of record with last_released_real_lsn
  *                  sequence number. It may be slightly larger than real
  *                  timestamp of a record with last_released_real_lsn lsn.
- *  offsets         OffsetMap object containing a map of <counter_type_t, value>
- *                  Currently supports BYTE_OFFSET. BYTE_OFFSET represents the
- *                  amount of data in bytes written from the beginning of the
+ *  byte_offset     Amount of data in bytes written from the beginning of the
  *                  log up to the end.
  */
-
 struct LogTailAttributes {
   lsn_t last_released_real_lsn;
 
   std::chrono::milliseconds last_timestamp;
 
-  OffsetMap offsets;
+  uint64_t byte_offset;
 
   LogTailAttributes() noexcept
       : last_released_real_lsn(LSN_INVALID),
-        last_timestamp(std::chrono::milliseconds{0}) {}
+        last_timestamp(std::chrono::milliseconds{0}),
+        byte_offset(BYTE_OFFSET_INVALID) {}
 
   LogTailAttributes(lsn_t last_released_lsn,
                     std::chrono::milliseconds lts,
-                    OffsetMap om) noexcept
+                    uint64_t bo) noexcept
       : last_released_real_lsn(last_released_lsn),
         last_timestamp(lts),
-        offsets(std::move(om)) {}
+        byte_offset(bo) {}
 
   LogTailAttributes& operator=(const LogTailAttributes&) = default;
 
   // This can return false if the log is empty
   bool valid() const noexcept {
-    // offsets can be invalid if byte_offsets feature is turned
+    // byte_offset can be BYTE_OFFSET_INVALID if byte_offsets feature is turned
     // off
     return last_released_real_lsn != LSN_INVALID &&
         last_timestamp != std::chrono::milliseconds{0};
@@ -61,10 +57,10 @@ struct LogTailAttributes {
 
   std::string toString() const {
     return folly::sformat(
-        "last_released_real_lsn={:s},last_timestamp={:d},offsets={:s}",
+        "last_released_real_lsn={:s},last_timestamp={:d},byte_offset={:d}",
         lsn_to_string(last_released_real_lsn),
         last_timestamp.count(),
-        offsets.toString().c_str());
+        byte_offset);
   }
 };
 

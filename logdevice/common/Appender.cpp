@@ -811,12 +811,13 @@ void Appender::prepareTailRecord(bool include_payload) {
     flags |= TailRecordHeader::CHECKSUM_PARITY;
   }
 
-  TailRecordHeader header{log_id_,
-                          store_hdr_.rid.lsn(),
-                          store_hdr_.timestamp,
-                          {extra_.offsets_within_epoch.getCounter(BYTE_OFFSET)},
-                          flags,
-                          {}};
+  TailRecordHeader header{
+      log_id_,
+      store_hdr_.rid.lsn(),
+      store_hdr_.timestamp,
+      {extra_.offsets_within_epoch.getCounter(CounterType::BYTE_OFFSET)},
+      flags,
+      {}};
 
   if (!include_payload) {
     tail_record_ = std::make_shared<TailRecord>(
@@ -841,7 +842,7 @@ void Appender::prepareTailRecord(bool include_payload) {
         uint32_t(store_hdr_.wave),
         /*unused copyset*/ copyset_t{},
         // TODO(T33977412) : send offsets_within_epoch
-        extra_.offsets_within_epoch.getCounter(BYTE_OFFSET),
+        extra_.offsets_within_epoch.getCounter(CounterType::BYTE_OFFSET),
         /*unused keys*/ std::map<KeyType, std::string>{},
         Slice{ph_raw},
         payload_);

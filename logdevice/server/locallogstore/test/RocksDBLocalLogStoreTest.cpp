@@ -860,9 +860,9 @@ TEST_F(RocksDBLocalLogStoreTest, PerEpochLogMetadata) {
   TailRecord tail_record;
   OffsetMap epoch_size_map;
   OffsetMap epoch_end_offsets;
-  epoch_size_map.setCounter(BYTE_OFFSET, 200);
-  epoch_end_offsets.setCounter(BYTE_OFFSET, 100);
-  tail_record.offsets_map_.setCounter(BYTE_OFFSET, 100);
+  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 200);
+  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 100);
+  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 100);
   tail_record.header.u.offset_within_epoch = 100;
   tail_record.header.log_id = logid_t(1);
   EpochRecoveryMetadata erm_empty;
@@ -893,10 +893,10 @@ TEST_F(RocksDBLocalLogStoreTest, PerEpochLogMetadata) {
   ASSERT_FALSE(erm1.valid());
   ASSERT_EQ(E::UPTODATE, erm_valid.update(erm1));
   ASSERT_EQ(erm_valid, erm1);
-  epoch_size_map.setCounter(BYTE_OFFSET, 1230);
-  tail_record.offsets_map_.setCounter(BYTE_OFFSET, 1020);
+  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 1230);
+  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 1020);
   tail_record.header.u.offset_within_epoch = 1020;
-  epoch_end_offsets.setCounter(BYTE_OFFSET, 1020);
+  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 1020);
   EpochRecoveryMetadata erm_valid2(epoch_t(8),
                                    esn_t(1),
                                    esn_t(99),
@@ -914,9 +914,9 @@ STORE_TEST(RocksDBLocalLogStoreTest, PerEpochLogMetadata, store) {
   TailRecord tail_record;
   OffsetMap epoch_size_map;
   OffsetMap epoch_end_offsets;
-  epoch_size_map.setCounter(BYTE_OFFSET, 200);
-  epoch_end_offsets.setCounter(BYTE_OFFSET, 100);
-  tail_record.offsets_map_.setCounter(BYTE_OFFSET, 100);
+  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 200);
+  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 100);
+  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 100);
   const EpochRecoveryMetadata erm(epoch_t(7),
                                   esn_t(2),
                                   esn_t(4),
@@ -941,9 +941,9 @@ STORE_TEST(RocksDBLocalLogStoreTest, PerEpochLogMetadata, store) {
   ASSERT_EQ(E::NOTFOUND, err);
   ASSERT_EQ(-1, store.readPerEpochLogMetadata(logid_t(2), epoch_t(1), &erm2));
   ASSERT_EQ(E::NOTFOUND, err);
-  epoch_size_map.setCounter(BYTE_OFFSET, 400);
-  epoch_end_offsets.setCounter(BYTE_OFFSET, 200);
-  tail_record.offsets_map_.setCounter(BYTE_OFFSET, 200);
+  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 400);
+  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 200);
+  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 200);
   EpochRecoveryMetadata erm_old(epoch_t(6),
                                 esn_t(9),
                                 esn_t(11),
@@ -960,9 +960,9 @@ STORE_TEST(RocksDBLocalLogStoreTest, PerEpochLogMetadata, store) {
                                       LocalLogStore::WriteOptions()));
   ASSERT_EQ(E::UPTODATE, err);
   ASSERT_EQ(erm, erm_old);
-  epoch_size_map.setCounter(BYTE_OFFSET, 1200);
-  epoch_end_offsets.setCounter(BYTE_OFFSET, 800);
-  tail_record.offsets_map_.setCounter(BYTE_OFFSET, 800);
+  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 1200);
+  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 800);
+  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 800);
   const EpochRecoveryMetadata erm_new(epoch_t(12),
                                       esn_t(3),
                                       esn_t(99),
@@ -987,9 +987,9 @@ STORE_TEST(RocksDBLocalLogStoreTest, EmptyPerEpochLogMetadata, store) {
   TailRecord tail_record;
   OffsetMap epoch_size_map;
   OffsetMap epoch_end_offsets;
-  epoch_size_map.setCounter(BYTE_OFFSET, 2);
-  tail_record.offsets_map_.setCounter(BYTE_OFFSET, 1);
-  epoch_end_offsets.setCounter(BYTE_OFFSET, 1);
+  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 2);
+  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 1);
+  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 1);
   const EpochRecoveryMetadata erm_6e(epoch_t(6),
                                      esn_t(0),
                                      esn_t(0),
@@ -997,9 +997,9 @@ STORE_TEST(RocksDBLocalLogStoreTest, EmptyPerEpochLogMetadata, store) {
                                      tail_record,
                                      epoch_size_map,
                                      epoch_end_offsets);
-  epoch_size_map.setCounter(BYTE_OFFSET, 5);
-  tail_record.offsets_map_.setCounter(BYTE_OFFSET, 4);
-  epoch_end_offsets.setCounter(BYTE_OFFSET, 4);
+  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 5);
+  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 4);
+  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 4);
   const EpochRecoveryMetadata erm_7(epoch_t(7),
                                     esn_t(2),
                                     esn_t(4),
@@ -1007,9 +1007,9 @@ STORE_TEST(RocksDBLocalLogStoreTest, EmptyPerEpochLogMetadata, store) {
                                     tail_record,
                                     epoch_size_map,
                                     epoch_end_offsets);
-  epoch_size_map.setCounter(BYTE_OFFSET, 7);
-  tail_record.offsets_map_.setCounter(BYTE_OFFSET, 3);
-  epoch_end_offsets.setCounter(BYTE_OFFSET, 3);
+  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 7);
+  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 3);
+  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 3);
   const EpochRecoveryMetadata erm_8e(epoch_t(8),
                                      esn_t(0),
                                      esn_t(0),
@@ -1085,9 +1085,9 @@ STORE_TEST(RocksDBLocalLogStoreTest, PerEpochLogMetadataFindLast, store) {
   TailRecord tail_record;
   OffsetMap epoch_size_map;
   OffsetMap epoch_end_offsets;
-  epoch_end_offsets.setCounter(BYTE_OFFSET, 100);
-  epoch_size_map.setCounter(BYTE_OFFSET, 50);
-  tail_record.offsets_map_.setCounter(BYTE_OFFSET, 100);
+  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 100);
+  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 50);
+  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 100);
   EpochRecoveryMetadata erm(epoch_t(7),
                             esn_t(3),
                             esn_t(5),
@@ -1095,9 +1095,9 @@ STORE_TEST(RocksDBLocalLogStoreTest, PerEpochLogMetadataFindLast, store) {
                             tail_record,
                             epoch_size_map,
                             epoch_end_offsets);
-  tail_record.offsets_map_.setCounter(BYTE_OFFSET, 200);
-  epoch_size_map.setCounter(BYTE_OFFSET, 50);
-  epoch_end_offsets.setCounter(BYTE_OFFSET, 200);
+  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 200);
+  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 50);
+  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 200);
   EpochRecoveryMetadata erm1(epoch_t(8),
                              esn_t(2),
                              esn_t(4),
@@ -1105,9 +1105,9 @@ STORE_TEST(RocksDBLocalLogStoreTest, PerEpochLogMetadataFindLast, store) {
                              tail_record,
                              epoch_size_map,
                              epoch_end_offsets);
-  epoch_size_map.setCounter(BYTE_OFFSET, 0);
-  tail_record.offsets_map_.setCounter(BYTE_OFFSET, 0);
-  epoch_end_offsets.setCounter(BYTE_OFFSET, 0);
+  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 0);
+  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 0);
+  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 0);
   EpochRecoveryMetadata erm2(epoch_t(9),
                              esn_t(3),
                              esn_t(4),

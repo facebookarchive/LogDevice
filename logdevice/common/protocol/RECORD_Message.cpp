@@ -70,7 +70,7 @@ void RECORD_Message::serialize(ProtocolWriter& writer) const {
     if (writer.proto() >= Compatibility::RECORD_MESSAGE_SUPPORT_OFFSET_MAP) {
       offsets_.serialize(writer);
     } else {
-      writer.write(offsets_.getCounter(BYTE_OFFSET));
+      writer.write(offsets_.getCounter(CounterType::BYTE_OFFSET));
     }
   }
 
@@ -101,7 +101,7 @@ MessageReadResult RECORD_Message::deserialize(ProtocolReader& reader) {
     } else {
       uint64_t byte_offset = BYTE_OFFSET_INVALID;
       reader.read(&byte_offset);
-      offsets.setCounter(BYTE_OFFSET, byte_offset);
+      offsets.setCounter(CounterType::BYTE_OFFSET, byte_offset);
     }
   }
 
@@ -247,7 +247,7 @@ Message::Disposition RECORD_Message::onReceived(const Address& from) {
                                 std::move(extra_metadata_),
                                 std::shared_ptr<BufferedWriteDecoder>(),
                                 0, // batch_offset
-                                offsets_.getCounter(BYTE_OFFSET),
+                                offsets_.getCounter(CounterType::BYTE_OFFSET),
                                 invalid_checksum));
   // We have transferred ownership of the payload.
   ld_check(!payload_.data());
@@ -286,7 +286,8 @@ std::unique_ptr<ExtraMetadata> read_extra_metadata(ProtocolReader& reader,
     } else {
       uint64_t offset_within_epoch;
       reader.read(&offset_within_epoch);
-      result->offsets_within_epoch.setCounter(BYTE_OFFSET, offset_within_epoch);
+      result->offsets_within_epoch.setCounter(
+          CounterType::BYTE_OFFSET, offset_within_epoch);
     }
   }
   return result;
@@ -307,7 +308,8 @@ void write_extra_metadata(ProtocolWriter& writer,
     if (writer.proto() >= Compatibility::RECORD_MESSAGE_SUPPORT_OFFSET_MAP) {
       metadata.offsets_within_epoch.serialize(writer);
     } else {
-      writer.write(metadata.offsets_within_epoch.getCounter(BYTE_OFFSET));
+      writer.write(
+          metadata.offsets_within_epoch.getCounter(CounterType::BYTE_OFFSET));
     }
   }
 }

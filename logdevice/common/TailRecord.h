@@ -186,7 +186,7 @@ class TailRecord : public SerializableData {
     payload_ = std::move(payload);
     zero_copied_record_.reset();
     OffsetMap om;
-    om.setCounter(BYTE_OFFSET, header.u.byte_offset);
+    om.setCounter(CounterType::BYTE_OFFSET, header.u.byte_offset);
     offsets_map_ = std::move(om);
   }
 
@@ -206,7 +206,7 @@ class TailRecord : public SerializableData {
     payload_.reset();
     zero_copied_record_ = std::move(record);
     OffsetMap om;
-    om.setCounter(BYTE_OFFSET, header.u.byte_offset);
+    om.setCounter(CounterType::BYTE_OFFSET, header.u.byte_offset);
     offsets_map_ = std::move(om);
   }
 

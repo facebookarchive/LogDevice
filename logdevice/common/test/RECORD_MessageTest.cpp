@@ -92,7 +92,7 @@ TEST_F(RECORD_MessageTest, SerializationWithExtraMetadata) {
   header.flags |= RECORD_Header::INCLUDES_EXTRA_METADATA;
   header.flags |= RECORD_Header::INCLUDE_OFFSET_WITHIN_EPOCH;
   OffsetMap offsets_within_epoch;
-  offsets_within_epoch.setCounter(BYTE_OFFSET, 3);
+  offsets_within_epoch.setCounter(CounterType::BYTE_OFFSET, 3);
   OffsetMap byte_offsets;
   ExtraMetadata::Header meta_header = create_test_extra_metadata_header(3);
   std::vector<ShardID> meta_copyset{

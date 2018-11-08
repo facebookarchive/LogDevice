@@ -970,8 +970,7 @@ TEST_P(ReadingIntegrationTest, LogTailAttributes) {
   EXPECT_EQ(compose_lsn(start_epoch, esn_t(NRECORDS_PER_EPOCH)),
             attributes->last_released_real_lsn);
   EXPECT_EQ(last_timestamp, attributes->last_timestamp);
-  EXPECT_EQ(NRECORDS_PER_EPOCH * RECORD_SIZE,
-            attributes->offsets.getCounter(BYTE_OFFSET));
+  EXPECT_EQ(NRECORDS_PER_EPOCH * RECORD_SIZE, attributes->byte_offset);
 
   // Restart the sequencer to trigger recovery
   cluster->getNode(0).kill();
@@ -990,8 +989,7 @@ TEST_P(ReadingIntegrationTest, LogTailAttributes) {
       compose_lsn(epoch_t(start_epoch.val_ + 1), esn_t(NRECORDS_PER_EPOCH)),
       attributes->last_released_real_lsn);
   EXPECT_EQ(last_timestamp, attributes->last_timestamp);
-  EXPECT_EQ(2 * NRECORDS_PER_EPOCH * RECORD_SIZE,
-            attributes->offsets.getCounter(BYTE_OFFSET));
+  EXPECT_EQ(2 * NRECORDS_PER_EPOCH * RECORD_SIZE, attributes->byte_offset);
 }
 
 // See T16695564. This test simulates a storage node not being able to complete

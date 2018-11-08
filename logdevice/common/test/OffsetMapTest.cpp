@@ -35,7 +35,8 @@ TEST(OffsetMapTest, BasicSerialization) {
 
   for (int i = 0; i < n_counters; ++i) {
     OffsetMap offset_map_writer;
-    offset_map_writer.setCounter(BYTE_OFFSET, i % 10);
+    offset_map_writer.setCounter(
+        CounterType::BYTE_OFFSET, static_cast<uint64_t>(i % 10));
     counter_size[i] =
         offset_map_writer.serialize(buf1.get() + written, max_len - written);
     ASSERT_GT(counter_size[i], 0);
@@ -49,7 +50,8 @@ TEST(OffsetMapTest, BasicSerialization) {
     OffsetMap offset_map_reader;
     int nbytes =
         offset_map_reader.deserialize({buf1.get() + n_read, max_len - n_read});
-    ASSERT_EQ(offset_map_reader.getCounter(BYTE_OFFSET), i % 10);
+    ASSERT_EQ(offset_map_reader.getCounter(CounterType::BYTE_OFFSET),
+              (uint64_t)i % 10);
     ASSERT_EQ(counter_size[i], nbytes);
     n_read += nbytes;
   }
@@ -58,11 +60,11 @@ TEST(OffsetMapTest, BasicSerialization) {
 
 TEST(OffsetMapTest, Operators) {
   OffsetMap om1, om2, result, result_test;
-  result_test.setCounter(BYTE_OFFSET, 8);
+  result_test.setCounter(CounterType::BYTE_OFFSET, 8);
   result = om1 + om2;
   ASSERT_EQ(result == om1, true);
-  om1.setCounter(BYTE_OFFSET, 4);
-  om2.setCounter(BYTE_OFFSET, 4);
+  om1.setCounter(CounterType::BYTE_OFFSET, 4);
+  om2.setCounter(CounterType::BYTE_OFFSET, 4);
   result = om1 + om2;
   ASSERT_EQ(result == result_test, true);
   result += om1;

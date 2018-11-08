@@ -58,12 +58,6 @@ const uint64_t BYTE_OFFSET_INVALID = std::numeric_limits<uint64_t>::max();
 // maximum size of CSID (Client Session ID)
 const size_t MAX_CSID_SIZE = 256;
 
-// Counter types to get offsets of OffsetMap
-typedef uint8_t counter_type_t;
-
-// counter type used in OffsetMap to refer to amount of data in bytes written
-const counter_type_t BYTE_OFFSET = 246;
-
 /**
  * This const struct represents an opaque payload that a client may wish to
  * store in a log record on a LogDevice.

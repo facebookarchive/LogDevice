@@ -19,7 +19,7 @@ TailRecord::TailRecord(const TailRecordHeader& header_in,
     : header(header_in), payload_(hasPayload() ? std::move(payload) : nullptr) {
   // should be a flat payload for this constructor
   ld_check(payload == nullptr || !payload->isEvbuffer());
-  offsets_map_.setCounter(BYTE_OFFSET, header_in.u.byte_offset);
+  offsets_map_.setCounter(CounterType::BYTE_OFFSET, header_in.u.byte_offset);
 }
 
 TailRecord::TailRecord(const TailRecordHeader& header_in,
@@ -37,7 +37,7 @@ TailRecord::TailRecord(const TailRecordHeader& header_in,
                        std::shared_ptr<ZeroCopiedRecord> record)
     : header(header_in),
       zero_copied_record_(hasPayload() ? std::move(record) : nullptr) {
-  offsets_map_.setCounter(BYTE_OFFSET, header_in.u.byte_offset);
+  offsets_map_.setCounter(CounterType::BYTE_OFFSET, header_in.u.byte_offset);
 }
 
 TailRecord::TailRecord(TailRecord&& rhs) noexcept
@@ -107,7 +107,7 @@ void TailRecord::serialize(ProtocolWriter& writer) const {
   }
 
   TailRecordHeader write_header = header;
-  ld_check(offsets_map_.getCounter(BYTE_OFFSET) ==
+  ld_check(offsets_map_.getCounter(CounterType::BYTE_OFFSET) ==
            write_header.u.offset_within_epoch);
 
   const TailRecordHeader::blob_size_t blob_size = calculateBlobSize();
@@ -188,7 +188,7 @@ void TailRecord::deserialize(ProtocolReader& reader,
     offsets_map_.deserialize(reader, false /* unused */);
   } else {
     // TODO(T33977412)
-    offsets_map_.setCounter(BYTE_OFFSET, header.u.byte_offset);
+    offsets_map_.setCounter(CounterType::BYTE_OFFSET, header.u.byte_offset);
   }
 
   // clear the TailRecordHeader::INCLUDE_BLOB flag as it is only used

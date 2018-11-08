@@ -376,8 +376,8 @@ void GetEpochRecoveryMetadataRequestTest::verifyShardsStateInError(
 TEST_F(GetEpochRecoveryMetadataRequestTest, BasicTest) {
   init();
   auto request = createRequest(epoch_t(1), epoch_t(1));
-  epoch_size_map.setCounter(BYTE_OFFSET, 0);
-  epoch_end_offsets.setCounter(BYTE_OFFSET, 0);
+  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 0);
+  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 0);
   EpochRecoveryMetadata md(epoch_t(2),
                            esn_t(10),
                            esn_t(10),
@@ -407,8 +407,8 @@ TEST_F(GetEpochRecoveryMetadataRequestTest, BasicTest) {
 TEST_F(GetEpochRecoveryMetadataRequestTest, BasicTest2) {
   init();
   auto request = createRequest(epoch_t(1), epoch_t(2));
-  epoch_end_offsets.setCounter(BYTE_OFFSET, 0);
-  epoch_size_map.setCounter(BYTE_OFFSET, 0);
+  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 0);
+  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 0);
   EpochRecoveryMetadata md1(epoch_t(2),
                             esn_t(10),
                             esn_t(10),

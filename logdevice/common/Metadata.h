@@ -552,8 +552,8 @@ class EpochRecoveryMetadata final : public PerEpochLogMetadata {
                 last_known_good,
                 last_digest_esn,
                 flags,
-                epoch_end_offsets.getCounter(BYTE_OFFSET),
-                epoch_size_map.getCounter(BYTE_OFFSET)},
+                epoch_end_offsets.getCounter(CounterType::BYTE_OFFSET),
+                epoch_size_map.getCounter(CounterType::BYTE_OFFSET)},
         tail_record_(std::move(tail_record)),
         epoch_size_map_(std::move(epoch_size_map)),
         epoch_end_offsets_(std::move(epoch_end_offsets)) {}

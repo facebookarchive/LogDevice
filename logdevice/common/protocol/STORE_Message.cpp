@@ -144,7 +144,8 @@ void STORE_Message::serialize(ProtocolWriter& writer) const {
         writer.proto() >= Compatibility::OFFSET_MAP_SUPPORT) {
       extra_.offsets_within_epoch.serialize(writer);
     } else {
-      writer.write(extra_.offsets_within_epoch.getCounter(BYTE_OFFSET));
+      writer.write(
+          extra_.offsets_within_epoch.getCounter(CounterType::BYTE_OFFSET));
     }
   }
 
@@ -220,7 +221,8 @@ MessageReadResult STORE_Message::deserialize(ProtocolReader& reader,
     } else {
       uint64_t offset_within_epoch;
       reader.read(&offset_within_epoch);
-      extra.offsets_within_epoch.setCounter(BYTE_OFFSET, offset_within_epoch);
+      extra.offsets_within_epoch.setCounter(
+          CounterType::BYTE_OFFSET, offset_within_epoch);
     }
   }
 

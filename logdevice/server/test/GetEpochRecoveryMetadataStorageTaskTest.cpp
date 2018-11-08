@@ -111,11 +111,11 @@ TEST(GetEpochRecoveryMetadataStorageTask, GetMetadata) {
   epoch_t start = epoch_t(1);
   epoch_t end = epoch_t(20);
   OffsetMap epoch_size_map;
-  epoch_size_map.setCounter(BYTE_OFFSET, 200);
+  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 200);
   TailRecord tail_record;
-  tail_record.offsets_map_.setCounter(BYTE_OFFSET, 100);
+  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 100);
   OffsetMap epoch_end_offsets;
-  epoch_end_offsets.setCounter(BYTE_OFFSET, 100);
+  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 100);
   for (auto epoch = 2; epoch <= 10; epoch++) {
     if (epoch % 2 == 0) {
       EpochRecoveryMetadata erm(epoch_t(epoch),

@@ -17,7 +17,7 @@ OffsetMap::OffsetMap(const OffsetMap& om) noexcept {
   this->counterTypeMap_ = om.getCounterMap();
 }
 
-void OffsetMap::setCounter(const counter_type_t counter_type,
+void OffsetMap::setCounter(const CounterType counter_type,
                            uint64_t counter_val) {
   if (counter_val == BYTE_OFFSET_INVALID) {
     counterTypeMap_.erase(counter_type);
@@ -30,7 +30,7 @@ bool OffsetMap::isValid() const {
   return counterTypeMap_.size() > 0;
 }
 
-uint64_t OffsetMap::getCounter(const counter_type_t counter_type) const {
+uint64_t OffsetMap::getCounter(const CounterType counter_type) const {
   auto it = counterTypeMap_.find(counter_type);
   if (it == counterTypeMap_.end()) {
     return BYTE_OFFSET_INVALID;
@@ -38,7 +38,8 @@ uint64_t OffsetMap::getCounter(const counter_type_t counter_type) const {
   return it->second;
 }
 
-const std::map<counter_type_t, uint64_t>& OffsetMap::getCounterMap() const {
+const std::unordered_map<CounterType, uint64_t, folly::Hash>&
+OffsetMap::getCounterMap() const {
   return counterTypeMap_;
 }
 
@@ -46,11 +47,11 @@ void OffsetMap::clear() {
   this->counterTypeMap_.clear();
 }
 
-void OffsetMap::unsetCounter(counter_type_t counter_type) {
+void OffsetMap::unsetCounter(CounterType counter_type) {
   counterTypeMap_.erase(counter_type);
 }
 
-bool OffsetMap::isValidOffset(const counter_type_t counter_type) const {
+bool OffsetMap::isValidOffset(const CounterType counter_type) const {
   return counterTypeMap_.find(counter_type) != counterTypeMap_.end();
 }
 
@@ -68,7 +69,7 @@ void OffsetMap::deserialize(ProtocolReader& reader,
   uint8_t counter_map_size = 0;
   reader.read(&counter_map_size);
   for (uint8_t counter = 0; counter < counter_map_size; ++counter) {
-    counter_type_t counter_type;
+    CounterType counter_type;
     reader.read(&counter_type);
     uint64_t counter_val;
     reader.read(&counter_val);
@@ -144,16 +145,6 @@ void OffsetMap::max(const OffsetMap& om) {
   }
 }
 
-OffsetMap OffsetMap::fromLegacy(uint64_t offset) {
-  OffsetMap om;
-  om.setCounter(BYTE_OFFSET, offset);
-  return om;
-}
-
-uint64_t OffsetMap::toLegacy(const OffsetMap& om) {
-  return om.getCounter(BYTE_OFFSET);
-}
-
 std::string OffsetMap::toString() const {
   std::string res = "{";
   bool first = true;
@@ -162,7 +153,7 @@ std::string OffsetMap::toString() const {
       res += ", ";
     }
     first = false;
-    res += std::to_string(counter.first);
+    res += std::to_string(static_cast<uint8_t>(counter.first));
     res += ":";
     if (counter.second == BYTE_OFFSET_INVALID) {
       res += "invalid";

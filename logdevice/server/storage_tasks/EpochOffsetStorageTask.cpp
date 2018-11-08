@@ -46,7 +46,7 @@ void EpochOffsetStorageTask::execute() {
                                          true); // allow_blocking_io
   if (rv == 0) {
     status_ = E::OK;
-    ld_check(metadata.epoch_end_offsets_.getCounter(BYTE_OFFSET) ==
+    ld_check(metadata.epoch_end_offsets_.getCounter(CounterType::BYTE_OFFSET) ==
              metadata.header_.epoch_end_offset);
     result_offsets_ = metadata.epoch_end_offsets_;
     return;
@@ -71,9 +71,9 @@ void EpochOffsetStorageTask::execute() {
     status_ = err;
     return;
   }
-  ld_check(metadata.epoch_end_offsets_.getCounter(BYTE_OFFSET) ==
+  ld_check(metadata.epoch_end_offsets_.getCounter(CounterType::BYTE_OFFSET) ==
            metadata.header_.epoch_end_offset);
-  ld_check(metadata.epoch_size_map_.getCounter(BYTE_OFFSET) ==
+  ld_check(metadata.epoch_size_map_.getCounter(CounterType::BYTE_OFFSET) ==
            metadata.header_.epoch_size);
   result_offsets_ = metadata.epoch_end_offsets_ - metadata.epoch_size_map_;
 }

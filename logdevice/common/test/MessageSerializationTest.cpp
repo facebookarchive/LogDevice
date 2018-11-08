@@ -557,7 +557,7 @@ TEST_F(MessageSerializationTest, STORE_WithRebuildingInfo2) {
 TEST_F(MessageSerializationTest, STORE_WithByteOffsetInfo) {
   STORE_Extra extra;
   OffsetMap offsets_within_epoch;
-  offsets_within_epoch.setCounter(BYTE_OFFSET, 0x99);
+  offsets_within_epoch.setCounter(CounterType::BYTE_OFFSET, 0x99);
   extra.offsets_within_epoch = std::move(offsets_within_epoch);
 
   TestStoreMessageFactory factory;
@@ -578,7 +578,7 @@ TEST_F(MessageSerializationTest, STORE_WithByteOffsetInfo) {
 
 TEST_F(MessageSerializationTest, STORE_WithByteOffsetMapInfo) {
   STORE_Extra extra;
-  extra.offsets_within_epoch.setCounter(BYTE_OFFSET, 0x99);
+  extra.offsets_within_epoch.setCounter(CounterType::BYTE_OFFSET, 0x99);
 
   TestStoreMessageFactory factory;
   factory.setFlags(STORE_Header::OFFSET_WITHIN_EPOCH |
@@ -712,13 +712,13 @@ TEST_F(MessageSerializationTest, GET_EPOCH_RECOVERY_METADATA_REPLY_RangeEpoch) {
     } else {
       status.push_back(E::OK);
       OffsetMap epoch_size_map;
-      epoch_size_map.setCounter(BYTE_OFFSET, 0);
+      epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 0);
       TailRecord tail_record;
-      tail_record.offsets_map_.setCounter(BYTE_OFFSET, 4);
+      tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 4);
       tail_record.header.u.offset_within_epoch = 4;
       tail_record.header.log_id = logid_t(1);
       OffsetMap epoch_end_offsets;
-      epoch_end_offsets.setCounter(BYTE_OFFSET, 4);
+      epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 4);
       EpochRecoveryMetadata erm(epoch_t(7),
                                 esn_t(10),
                                 esn_t(10),
@@ -978,7 +978,7 @@ TEST_F(MessageSerializationTest, RECORD) {
           RECORD_Header::INCLUDE_BYTE_OFFSET,
   };
   OffsetMap offsets_within_epoch;
-  offsets_within_epoch.setCounter(BYTE_OFFSET, 4);
+  offsets_within_epoch.setCounter(CounterType::BYTE_OFFSET, 4);
   ExtraMetadata reb = {{
                            esn_t(0x0b7430da),
                            0xdb270ae5,
@@ -988,7 +988,7 @@ TEST_F(MessageSerializationTest, RECORD) {
                        std::move(offsets_within_epoch)};
   std::string payload = "preved";
   OffsetMap byte_offsets;
-  byte_offsets.setCounter(BYTE_OFFSET, 10);
+  byte_offsets.setCounter(CounterType::BYTE_OFFSET, 10);
   RECORD_Message m(h,
                    TrafficClass::REBUILD,
                    Payload(payload.data(), payload.size()).dup(),
@@ -1057,11 +1057,11 @@ TEST_F(MessageSerializationTest, SEALED) {
   std::vector<TailRecord> tails({genTailRecord(false), genTailRecord(true)});
 
   OffsetMap o1;
-  o1.setCounter(BYTE_OFFSET, 9);
+  o1.setCounter(CounterType::BYTE_OFFSET, 9);
   OffsetMap o2;
-  o2.setCounter(BYTE_OFFSET, 10);
+  o2.setCounter(CounterType::BYTE_OFFSET, 10);
   OffsetMap o3;
-  o3.setCounter(BYTE_OFFSET, 11);
+  o3.setCounter(CounterType::BYTE_OFFSET, 11);
 
   SEALED_Message m(h,
                    {3, 4, 5},
@@ -1445,14 +1445,14 @@ TEST_F(MessageSerializationTest, CLEAN) {
   StorageSet absent_nodes{
       ShardID(9, 0), ShardID(8, 0), ShardID(113, 0), ShardID(7, 0)};
   OffsetMap epoch_end_offset;
-  epoch_end_offset.setCounter(BYTE_OFFSET, 0x9B7D7B3FEC8486AA);
+  epoch_end_offset.setCounter(CounterType::BYTE_OFFSET, 0x9B7D7B3FEC8486AA);
   TailRecord tail;
   tail.header.log_id = logid_t(0xBBC18E8AA44783D3);
   tail.header.u.byte_offset = 0x9B7D7B3FEC8486AA;
   tail.offsets_map_ = epoch_end_offset;
 
   OffsetMap offset_within_epoch;
-  offset_within_epoch.setCounter(BYTE_OFFSET, 0xABB4842249C95413);
+  offset_within_epoch.setCounter(CounterType::BYTE_OFFSET, 0xABB4842249C95413);
 
   CLEAN_Message m(h, tail, offset_within_epoch, absent_nodes);
   auto check = [&](const CLEAN_Message& m2, uint16_t proto) {

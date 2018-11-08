@@ -106,7 +106,8 @@ Slice formRecordHeaderBufAppend(int64_t timestamp,
   }
 
   if (flags & FLAG_OFFSET_WITHIN_EPOCH && !(flags & FLAG_OFFSET_MAP)) {
-    uint64_t offset_within_epoch = offsets_within_epoch.getCounter(BYTE_OFFSET);
+    uint64_t offset_within_epoch =
+        offsets_within_epoch.getCounter(CounterType::BYTE_OFFSET);
     APPEND_TO_STRING(buf, offset_within_epoch);
   }
 
@@ -139,7 +140,8 @@ Slice formRecordHeaderBufAppend(int64_t timestamp,
                                 const Slice& optional_keys,
                                 std::string* buf) {
   OffsetMap offsets_within_epoch;
-  offsets_within_epoch.setCounter(BYTE_OFFSET, offset_within_epoch);
+  offsets_within_epoch.setCounter(
+      CounterType::BYTE_OFFSET, offset_within_epoch);
   return formRecordHeaderBufAppend(timestamp,
                                    last_known_good,
                                    flags,
@@ -160,7 +162,8 @@ Slice formRecordHeader(int64_t timestamp,
                        const std::map<KeyType, std::string>& optional_keys,
                        std::string* buf) {
   OffsetMap offsets_within_epoch;
-  offsets_within_epoch.setCounter(BYTE_OFFSET, offset_within_epoch);
+  offsets_within_epoch.setCounter(
+      CounterType::BYTE_OFFSET, offset_within_epoch);
   return formRecordHeader(timestamp,
                           last_known_good,
                           flags,
@@ -675,7 +678,7 @@ int parse(const Slice& log_store_blob,
     }
     if (offsets_within_epoch_out) {
       OffsetMap o;
-      o.setCounter(BYTE_OFFSET, out);
+      o.setCounter(CounterType::BYTE_OFFSET, out);
       *offsets_within_epoch_out = std::move(o);
     }
   }
@@ -789,7 +792,7 @@ int parse(const Slice& log_store_blob,
 
     // TODO(T33977412) : remove offset_within_epoch_out from parse function
     if (offset_within_epoch_out) {
-      *offset_within_epoch_out = out.getCounter(BYTE_OFFSET);
+      *offset_within_epoch_out = out.getCounter(CounterType::BYTE_OFFSET);
     }
 
     if (offsets_within_epoch_out) {
