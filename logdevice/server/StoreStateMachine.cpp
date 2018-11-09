@@ -184,7 +184,7 @@ Message::Disposition StoreStateMachine::onReceived(STORE_Message* msg,
     }
   }
 
-  // Calculate the ClientID to reply to baesd on the valid copyset
+  // Calculate the ClientID to reply to based on the valid copyset
   if (msg->header_.flags & STORE_Header::CHAIN) {
     msg->reply_to_ = msg->copyset_[msg->my_pos_in_copyset_].origin;
     ld_debug("Will send a reply to chained STORE %s directly to %s.",

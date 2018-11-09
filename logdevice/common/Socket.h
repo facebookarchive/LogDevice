@@ -486,10 +486,6 @@ class Socket {
     return isHELLOMessage(type) || isACKMessage(type);
   }
 
-  static bool isShutdownMessage(MessageType type) {
-    return type == MessageType::SHUTDOWN;
-  }
-
   static bool isConfigSynchronizationMessage(MessageType type) {
     return type == MessageType::CONFIG_ADVISORY ||
         type == MessageType::CONFIG_CHANGED ||

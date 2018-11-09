@@ -1643,6 +1643,7 @@ void Socket::enqueueDeferredEvent(SocketEvent e) {
 void Socket::onBytesPassedToTCP(size_t nbytes) {
   message_pos_t next_drain_pos = drain_pos_ + nbytes;
   ld_check(next_pos_ >= next_drain_pos);
+  size_t num_messages = 0;
 
   while (!sendq_.empty() && sendq_.front().getDrainPos() <= next_drain_pos) {
     // All bytes of message at cur have been sent into the underlying socket.
@@ -1654,20 +1655,28 @@ void Socket::onBytesPassedToTCP(size_t nbytes) {
     // ACK messages are always at pos_ 0 since they are the first messages to
     // be sent on a connected socket.
     if (isHandshakeMessage(e->message().type_)) {
+      // HELLO or ACK must be the first thing we ever send through a socket.
       ld_check_eq(drain_pos_, 0);
-      // handshake was only message. A shutdown message can sneak in when we are
-      // trying to shutdown all the client sockets and a ack was just sent out.
-      ld_check(sendq_.empty() ||
-               isShutdownMessage(sendq_.front().message().type_));
-      // Handshake messages are resent on timeout so we can't check the state of
-      // handshaken_. It is typically false, but a retransmits attempt could get
-      // here just after we receive our peer's handshake reply.
+      ld_check_eq(num_messages, 0);
+
+      if (!peer_name_.isClientAddress()) {
+        // It's an outgoing connection, and we're sending HELLO.
+        // Socket doesn't allow enqueueing messages until we get an ACK,
+        // so the queue should be empty.
+        ld_check(!handshaken_);
+        ld_check(sendq_.empty());
+      }
     } else {
       ld_check(handshaken_);
+      if (!our_name_at_peer_.valid()) {
+        // It's an incoming connection. The first message we send must be ACK.
+        ld_check(drain_pos_ > 0 || num_messages > 0);
+      }
     }
 
     onSent(std::move(e), E::OK);
     ++num_messages_sent_;
+    ++num_messages;
   }
 
   deps_->noteBytesDrained(nbytes);

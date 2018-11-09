@@ -16,6 +16,7 @@
 #include "logdevice/common/Request.h"
 #include "logdevice/common/RequestType.h"
 #include "logdevice/common/Sender.h"
+#include "logdevice/common/Socket.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/ProtocolReader.h"
@@ -189,21 +190,11 @@ Message::Disposition STORED_Message::onReceivedCommon(const Address& from) {
  */
 class SendSTOREDRequest : public Request {
  public:
-  SendSTOREDRequest(const STORED_Header& header,
-                    lsn_t rebuilding_version,
-                    uint32_t rebuilding_wave,
-                    log_rebuilding_id_t rebuilding_id,
-                    FlushToken flushToken,
-                    ShardID rebuildingRecipient,
+  SendSTOREDRequest(std::unique_ptr<STORED_Message> msg,
                     ClientID to,
                     worker_id_t target_worker)
       : Request(RequestType::SEND_STORED),
-        header_(header),
-        rebuilding_version_(rebuilding_version),
-        rebuilding_wave_(rebuilding_wave),
-        rebuilding_id_(rebuilding_id),
-        flushToken_(flushToken),
-        rebuildingRecipient_(rebuildingRecipient),
+        msg_(std::move(msg)),
         to_(to),
         target_worker_(target_worker) {}
 
@@ -214,39 +205,59 @@ class SendSTOREDRequest : public Request {
   }
 
   Request::Execution execute() override {
-    auto serverInstanceId =
-        Worker::onThisThread()->processor_->getServerInstanceId();
-    auto msg = std::make_unique<STORED_Message>(header_,
-                                                rebuilding_version_,
-                                                rebuilding_wave_,
-                                                rebuilding_id_,
-                                                flushToken_,
-                                                serverInstanceId,
-                                                rebuildingRecipient_);
-
-    ld_check(to_.valid());
-
-    int rv = Worker::onThisThread()->sender().sendMessage(std::move(msg), to_);
-
-    if (rv != 0) {
-      RATELIMIT_INFO(std::chrono::seconds(1),
-                     10,
-                     "Failed to send a STORED message for %s to %s: %s",
-                     header_.rid.toString().c_str(),
-                     Sender::describeConnection(Address(to_)).c_str(),
-                     error_description(err));
-    }
-
+    execute(std::move(msg_), to_);
     return Execution::COMPLETE;
   }
 
+  static void execute(std::unique_ptr<STORED_Message> msg, ClientID to) {
+    // The ClientID we're sending to may come from an unreliable source: from
+    // inside a STORE message (in chain-sending case). The ClientID might have
+    // been freed and reused after the STORE_Message was formed.
+    // Before sending the STORED to this ClientID, check that the corresponding
+    // socket exists, that it's handshaken and that the other end is a server;
+    // this is done mostly to avoid overly strong error messages that Sender
+    // would otherwise produce. If it's not the right server or the server was
+    // restarted, it'll just reject our message based on epoch number and wave.
+    ld_check(to.valid());
+    Sender& sender = Worker::onThisThread()->sender();
+    WeakRef<Socket> socket_ref;
+    int rv = sender.getClientSocketRef(to, socket_ref);
+    if (rv != 0) {
+      RATELIMIT_WARNING(
+          std::chrono::seconds(10),
+          1,
+          "Dropping a STORED for %s for delivery to C%u because the "
+          "corresponding socket no longer exist. This should be rare.",
+          msg->header_.rid.toString().c_str(),
+          to.getIdx());
+      return;
+    }
+    Socket* sock = socket_ref.get();
+    ld_check(sock != nullptr);
+    if (!sock->isHandshaken() || sock->peerIsClient()) {
+      RATELIMIT_WARNING(
+          std::chrono::seconds(10),
+          1,
+          "Dropping a STORED for %s for delivery to C%u because the "
+          "corresponding socket is not handshaken or is connected to a client. "
+          "This is probably a ClientID collision. This should be rare.",
+          msg->header_.rid.toString().c_str(),
+          to.getIdx());
+    }
+
+    rv = sender.sendMessage(std::move(msg), to);
+    if (rv != 0) {
+      RATELIMIT_INFO(std::chrono::seconds(10),
+                     1,
+                     "Failed to send a STORED message for %s to %s: %s",
+                     msg->header_.rid.toString().c_str(),
+                     Sender::describeConnection(Address(to)).c_str(),
+                     error_description(err));
+    }
+  }
+
  private:
-  const STORED_Header header_; // header of request to send
-  lsn_t rebuilding_version_;
-  uint32_t rebuilding_wave_;
-  log_rebuilding_id_t rebuilding_id_;
-  FlushToken flushToken_;
-  ShardID rebuildingRecipient_;
+  std::unique_ptr<STORED_Message> msg_;
   const ClientID to_; // id of incoming ("client") connection
                       // to send the request to
   worker_id_t target_worker_;
@@ -320,7 +331,7 @@ void STORED_Message::createAndSend(const STORED_Header& header,
       // the connection was closed while we were processing the store. Ignore
       // message. StoreStateMachine machine should take care of retransmission.
       ld_debug("Dropping a STORED for %s for delivery to %d as client_id is "
-               "no longer valid",
+               "no longer valid.",
                header.rid.toString().c_str(),
                send_to.getIdx());
     } else {
@@ -329,15 +340,12 @@ void STORED_Message::createAndSend(const STORED_Header& header,
           10,
           "Dropping a STORED for %s for delivery to %u because this "
           "client_id refers to a gossip or background connection (on %s). "
-          "This is unexpected. Most likely we got a garbage client ID in a "
-          "STORE message. Or, very unlikely, the connection was closed, and "
-          "its ID was reused by a different kind of worker.",
+          "This is probably a ClientID collision. Should be rare.",
           header.rid.toString().c_str(),
           send_to.getIdx(),
           Worker::getName(target_worker.first, target_worker.second).c_str());
     }
-  } else if (target_worker.second == worker->idx_) {
-    // the connection to origin is handled by this Worker thread
+  } else {
     auto serverInstanceId = worker->processor_->getServerInstanceId();
     auto msg = std::make_unique<STORED_Message>(header,
                                                 rebuilding_version,
@@ -346,46 +354,36 @@ void STORED_Message::createAndSend(const STORED_Header& header,
                                                 flushToken,
                                                 serverInstanceId,
                                                 rebuildingRecipient);
-    int rv = worker->sender().sendMessage(std::move(msg), send_to);
-    if (rv != 0) {
-      RATELIMIT_INFO(std::chrono::seconds(1),
-                     10,
-                     "Failed to send STORED for %s (wave %u) to %s: %s",
-                     header.rid.toString().c_str(),
-                     header.wave,
-                     Sender::describeConnection(Address(send_to)).c_str(),
-                     error_description(err));
-    }
-  } else {
-    // the connection to origin is handled by another Worker
-    // thread. Have that Worker send the reply. Hopefully we will be
-    // able to skip this step by having the storage task reply
-    // directly to the correct thread.
-    ld_debug("%s is passing a STORED for %s to %s for delivery to %s",
-             worker->getName().c_str(),
-             header.rid.toString().c_str(),
-             Worker::getName(target_worker.first, target_worker.second).c_str(),
-             Sender::describeConnection(Address(send_to)).c_str());
 
-    std::unique_ptr<Request> send_stored =
-        std::make_unique<SendSTOREDRequest>(header,
-                                            rebuilding_version,
-                                            rebuilding_wave,
-                                            rebuilding_id,
-                                            flushToken,
-                                            rebuildingRecipient,
-                                            send_to,
-                                            target_worker.second);
-    int rv = worker->processor_->postRequest(send_stored);
-    if (rv != 0) {
-      RATELIMIT_INFO(std::chrono::seconds(1),
-                     10,
-                     "Failed to post a SendSTOREDRequest for %s (wave %u) "
-                     "for final delivery to %s: %s",
-                     header.rid.toString().c_str(),
-                     header.wave,
-                     Sender::describeConnection(Address(send_to)).c_str(),
-                     error_description(err));
+    if (target_worker.second == worker->idx_) {
+      // the connection to origin is handled by this Worker thread
+      SendSTOREDRequest::execute(std::move(msg), send_to);
+    } else {
+      // the connection to origin is handled by another Worker
+      // thread. Have that Worker send the reply. Hopefully we will be
+      // able to skip this step by having the storage task reply
+      // directly to the correct thread.
+      ld_debug(
+          "%s is passing a STORED for %s to %s for delivery to %s",
+          worker->getName().c_str(),
+          header.rid.toString().c_str(),
+          Worker::getName(target_worker.first, target_worker.second).c_str(),
+          Sender::describeConnection(Address(send_to)).c_str());
+
+      std::unique_ptr<Request> send_stored =
+          std::make_unique<SendSTOREDRequest>(
+              std::move(msg), send_to, target_worker.second);
+      int rv = worker->processor_->postRequest(send_stored);
+      if (rv != 0) {
+        RATELIMIT_INFO(std::chrono::seconds(1),
+                       10,
+                       "Failed to post a SendSTOREDRequest for %s (wave %u) "
+                       "for final delivery to %s: %s",
+                       header.rid.toString().c_str(),
+                       header.wave,
+                       Sender::describeConnection(Address(send_to)).c_str(),
+                       error_description(err));
+      }
     }
   }
 }
