@@ -16,7 +16,6 @@
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/configuration/TrafficClass.h"
 #include "logdevice/common/protocol/Compatibility.h"
-#include "logdevice/common/protocol/MessageTracer.h"
 #include "logdevice/common/protocol/MessageType.h"
 #include "logdevice/common/protocol/ProtocolHeader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
@@ -267,54 +266,6 @@ struct Message {
                     (size_t)std::numeric_limits<message_len_t>::max() -
                         MAX_HDR_LEN,
                 "Message::MAX_LEN overflows message_len_t");
-};
-
-/**
- * Interface for dispatching received/sent notifications for messages to their
- * handlers.  Dispatching through virtual methods allows code for server- and
- * client-specific message handlers to live in server/ or lib/ while the
- * Message subclasses themselves are in common/, as is the messaging layer.
- *
- * ServerMessageDispatch and ClientMessageDispatch are the context-specific
- * subclasses.
- */
-class MessageDispatch {
- public:
-  MessageDispatch() : message_tracer_(new MessageTracer()) {}
-  /**
-   * The handler may claim ownership of `msg' in which case it should return
-   * Disposition::KEEP.
-   */
-  Message::Disposition onReceived(Message* msg, const Address& from) {
-    message_tracer_->onReceived(msg, from);
-    return onReceivedImpl(msg, from);
-  }
-  virtual Message::Disposition onReceivedImpl(Message* msg,
-                                              const Address& from) {
-    // By default, dispatch to the Message's onReceived() implementation
-    return msg->onReceived(from);
-  }
-
-  void onSent(const Message& msg,
-              Status st,
-              const Address& to,
-              const SteadyTimestamp enqueue_time) {
-    message_tracer_->onSent(msg, st, to);
-    onSentImpl(msg, st, to, enqueue_time);
-  }
-
-  virtual void onSentImpl(const Message& msg,
-                          Status st,
-                          const Address& to,
-                          const SteadyTimestamp enqueue_time) {
-    // By default, dispatch to the Message's onSent() implementation
-    return msg.onSent(st, to, enqueue_time);
-  }
-
-  virtual ~MessageDispatch() {}
-
- protected:
-  std::unique_ptr<MessageTracer> message_tracer_;
 };
 
 }} // namespace facebook::logdevice

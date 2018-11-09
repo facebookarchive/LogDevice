@@ -13,6 +13,7 @@
 
 #include "logdevice/common/SequencerLocator.h"
 #include "logdevice/common/StorageTask-enums.h"
+#include "logdevice/common/configuration/ServerConfig.h"
 #include "logdevice/common/configuration/ZookeeperConfigSource.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/settings/Settings.h"

@@ -7,7 +7,7 @@
  */
 #include "logdevice/common/protocol/Message.h"
 
-#include "logdevice/common/Sender.h"
+#include "logdevice/common/Address.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/MessageTypeNames.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
@@ -21,7 +21,8 @@ void Message::onSent(Status st,
          ": message=%s st=%s to=%s msg_size=%zu enqueue_time=%s",
          messageTypeNames[type_].c_str(),
          error_name(st),
-         Sender::describeConnection(to).c_str(),
+         to.toString().c_str(),
+         // Sender::describeConnection(to).c_str(),
          size(),
          toString(enqueue_time).c_str());
   // Support legacy message handlers.

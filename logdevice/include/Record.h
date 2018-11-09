@@ -19,7 +19,6 @@
 
 #include <folly/Optional.h>
 
-#include "logdevice/common/OffsetMap.h"
 #include "logdevice/include/types.h"
 
 namespace facebook { namespace logdevice {

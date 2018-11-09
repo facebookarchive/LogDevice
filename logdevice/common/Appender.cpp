@@ -21,6 +21,7 @@
 #include "logdevice/common/ClusterState.h"
 #include "logdevice/common/EpochMetaData.h"
 #include "logdevice/common/EpochSequencer.h"
+#include "logdevice/common/ExponentialBackoffAdaptiveVariable.h"
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
 #include "logdevice/common/MetaDataLogWriter.h"
 #include "logdevice/common/PayloadHolder.h"

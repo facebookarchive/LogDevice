@@ -18,6 +18,7 @@
 #include "logdevice/common/FailureDomainNodeSet.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/ShardAuthoritativeStatusMap.h"
+#include "logdevice/common/Timestamp.h"
 
 /**
  * @file  StorageSetAccessor is a utility class that handles the common pattern

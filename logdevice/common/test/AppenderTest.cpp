@@ -15,6 +15,7 @@
 #include <opentracing/mocktracer/tracer.h>
 
 #include "logdevice/common/EventLoopHandle.h"
+#include "logdevice/common/ExponentialBackoffAdaptiveVariable.h"
 #include "logdevice/common/LinearCopySetSelector.h"
 #include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/PassThroughCopySetManager.h"

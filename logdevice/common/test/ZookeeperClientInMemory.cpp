@@ -8,6 +8,8 @@
 #include "ZookeeperClientInMemory.h"
 
 #include <iostream>
+#include <set>
+#include <vector>
 
 #include <boost/filesystem.hpp>
 

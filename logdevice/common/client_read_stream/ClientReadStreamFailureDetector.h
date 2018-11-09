@@ -18,6 +18,7 @@
 #include "logdevice/common/ExponentialBackoffAdaptiveVariable.h"
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/configuration/ReplicationProperty.h"
+#include "logdevice/common/settings/ClientReadStreamFailureDetectorSettings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 
 /**
@@ -113,29 +114,7 @@ class ClientReadStreamFailureDetector {
  public:
   using TS = SteadyTimestamp;
   using Callback = std::function<void(ShardSet outliers, std::string reason)>;
-
-  struct Settings {
-    // Duration to use for the moving average.
-    std::chrono::seconds moving_avg_duration;
-    // Define the required margin of the outlier detection algorithm.  For
-    // instance a required marginn of 5 means that a shard will be considered
-    // outlier only if it's 500% slower than the average of the other shards.
-    // This parameter changes adaptively in order to avoid too many rewinds.
-    float required_margin;
-    // Rate at which we decrease the required margin as we complete windows
-    // without a rewind. Defined in terms of units / 1s. For instance a value of
-    // 0.25 means we will substract 0.25 to the required margin for every second
-    // spent reading.
-    float required_margin_decrease_rate;
-    // Define how long a shard should remain in the outlier list after it has
-    // been detected slow. This duration is adaptive.
-    chrono_expbackoff_t<std::chrono::seconds> outlier_duration;
-    // Rate at which we decrease the time after which we'll try to reinstate an
-    // outlier in the read set. This rate gets applied when a shard is not
-    // detected an outlier.
-    float outlier_duration_decrease_rate;
-  };
-  Settings settings_;
+  ClientReadStreamFailureDetectorSettings settings_;
 
   /**
    * Create a ClientReadStreamFailureDetector.
@@ -145,8 +124,9 @@ class ClientReadStreamFailureDetector {
    * @param replication Replication factor. Used to cap the maximum allowed
    *                    number of outliers.
    */
-  ClientReadStreamFailureDetector(ReplicationProperty replication,
-                                  Settings settings);
+  ClientReadStreamFailureDetector(
+      ReplicationProperty replication,
+      ClientReadStreamFailureDetectorSettings settings);
 
   virtual ~ClientReadStreamFailureDetector();
 
@@ -160,7 +140,7 @@ class ClientReadStreamFailureDetector {
    *
    * @param settings New settings to use.
    */
-  void setSettings(ClientReadStreamFailureDetector::Settings settings);
+  void setSettings(ClientReadStreamFailureDetectorSettings settings);
 
   /**
    * @param tracking_set     Set of shards for which to track latency.

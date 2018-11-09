@@ -35,6 +35,8 @@
 #include "logdevice/common/protocol/CONFIG_ADVISORY_Message.h"
 #include "logdevice/common/protocol/CONFIG_CHANGED_Message.h"
 #include "logdevice/common/protocol/Message.h"
+#include "logdevice/common/protocol/MessageDispatch.h"
+#include "logdevice/common/protocol/MessageTracer.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/stats/ServerHistograms.h"
 #include "logdevice/common/stats/Stats.h"

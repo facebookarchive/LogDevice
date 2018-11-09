@@ -44,6 +44,8 @@
 #include "logdevice/common/protocol/HELLO_Message.h"
 #include "logdevice/common/protocol/Message.h"
 #include "logdevice/common/protocol/MessageDeserializers.h"
+#include "logdevice/common/protocol/MessageDispatch.h"
+#include "logdevice/common/protocol/MessageTracer.h"
 #include "logdevice/common/protocol/MessageTypeNames.h"
 #include "logdevice/common/protocol/ProtocolHeader.h"
 #include "logdevice/common/protocol/ProtocolReader.h"

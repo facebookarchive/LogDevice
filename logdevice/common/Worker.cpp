@@ -62,6 +62,8 @@
 #include "logdevice/common/configuration/logs/LogsConfigManager.h"
 #include "logdevice/common/event_log/EventLogStateMachine.h"
 #include "logdevice/common/protocol/APPENDED_Message.h"
+#include "logdevice/common/protocol/MessageDispatch.h"
+#include "logdevice/common/protocol/MessageTracer.h"
 #include "logdevice/common/stats/ServerHistograms.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/include/Err.h"

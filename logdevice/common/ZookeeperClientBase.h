@@ -18,12 +18,13 @@
 #include <zookeeper/zookeeper.h>
 
 #include "logdevice/common/UpdateableSharedPtr.h"
-#include "logdevice/common/configuration/ServerConfig.h"
-#include "logdevice/common/configuration/ZookeeperConfig.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/include/Err.h"
 
 namespace facebook { namespace logdevice {
+namespace configuration {
+class ZookeeperConfig;
+}
 
 namespace zk {
 using version_t = int32_t;

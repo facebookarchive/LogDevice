@@ -8,6 +8,7 @@
 #pragma once
 
 #include "logdevice/common/protocol/Message.h"
+#include "logdevice/common/protocol/MessageDispatch.h"
 
 /**
  * @file Client-specific dispatcher for message events.  Because it lives in

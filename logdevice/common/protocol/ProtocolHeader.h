@@ -9,7 +9,7 @@
 
 #include <cstdint>
 
-#include "MessageType.h"
+#include "logdevice/common/protocol/MessageType.h"
 
 namespace facebook { namespace logdevice {
 

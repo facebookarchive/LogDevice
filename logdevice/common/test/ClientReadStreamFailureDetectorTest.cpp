@@ -13,6 +13,7 @@
 #include "logdevice/common/ShardID.h"
 #include "logdevice/common/Timer.h"
 #include "logdevice/common/configuration/ReplicationProperty.h"
+#include "logdevice/common/settings/ClientReadStreamFailureDetectorSettings.h"
 
 #define N0 ShardID(0, 0)
 #define N1 ShardID(1, 0)
@@ -45,7 +46,7 @@ class MockClientReadStreamFailureDetector
  public:
   MockClientReadStreamFailureDetector(
       ReplicationProperty replication,
-      ClientReadStreamFailureDetector::Settings settings)
+      ClientReadStreamFailureDetectorSettings settings)
       : ClientReadStreamFailureDetector(std::move(replication),
                                         std::move(settings)) {}
   void activateTimer(std::chrono::milliseconds /* timeout */) override {
@@ -87,7 +88,7 @@ class ClientReadStreamFailureDetectorTest : public ::testing::Test {
   using TimePoint = TS::TimePoint;
 
   virtual void SetUp() override {
-    ClientReadStreamFailureDetector::Settings settings;
+    ClientReadStreamFailureDetectorSettings settings;
     settings.moving_avg_duration = std::chrono::seconds{10};
     settings.required_margin = 1.0;
     settings.required_margin_decrease_rate = 0.25;
@@ -160,7 +161,7 @@ class ClientReadStreamFailureDetectorTest : public ::testing::Test {
     detector->onExpiryTimerExpired(time);
   }
 
-  ClientReadStreamFailureDetector::Settings settings;
+  ClientReadStreamFailureDetectorSettings settings;
   std::unique_ptr<MockClientReadStreamFailureDetector> detector;
   TimePoint time;
   std::unordered_set<ShardID, ShardID::Hash> known_down_;

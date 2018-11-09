@@ -14,9 +14,9 @@
 
 #include "logdevice/common/SCDCopysetReordering.h"
 #include "logdevice/common/Sockaddr.h"
-#include "logdevice/common/client_read_stream/ClientReadStreamFailureDetector.h"
 #include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/common/protocol/MessageType.h"
+#include "logdevice/common/settings/ClientReadStreamFailureDetectorSettings.h"
 #include "logdevice/common/settings/Durability.h"
 #include "logdevice/common/settings/SequencerBoycottingSettings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
@@ -1116,8 +1116,7 @@ struct Settings : public SettingsBundle {
   // can be blacklisted so that we read faster.
   enum class ReaderSlowShardDetectionState { DISABLED, OBSERVE_ONLY, ENABLED };
   ReaderSlowShardDetectionState reader_slow_shards_detection;
-  ClientReadStreamFailureDetector::Settings
-      reader_slow_shards_detection_settings;
+  ClientReadStreamFailureDetectorSettings reader_slow_shards_detection_settings;
 
   SequencerBoycottingSettings sequencer_boycotting;
 

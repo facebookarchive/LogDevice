@@ -18,7 +18,6 @@
 
 #include "logdevice/common/UpdateableSharedPtr.h"
 #include "logdevice/common/ZookeeperClientBase.h"
-#include "logdevice/common/configuration/ServerConfig.h"
 #include "logdevice/common/debug.h"
 
 namespace facebook { namespace logdevice {

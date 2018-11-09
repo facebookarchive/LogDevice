@@ -201,22 +201,6 @@ int ZookeeperClient::multiOp(int count,
   return zoo_amulti(zh_.get().get(), count, ops, results, completion, data);
 }
 
-std::unique_ptr<ZookeeperClientBase>
-zkFactoryProd(const configuration::ZookeeperConfig& config) {
-  auto zookeeper_quorum = config.getQuorumString();
-  if (zookeeper_quorum.empty()) {
-    ld_error("\"zookeeper\" section is missing in config file");
-    err = E::INVALID_CONFIG;
-    return nullptr;
-  }
-  try {
-    return std::make_unique<ZookeeperClient>(
-        zookeeper_quorum, config.getSessionTimeout());
-  } catch (const ConstructorFailed&) {
-    return nullptr;
-  }
-}
-
 /* static */
 void ZookeeperClient::getDataCompletion(int rc,
                                         const char* value,

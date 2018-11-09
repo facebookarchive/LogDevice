@@ -29,7 +29,7 @@ static constexpr int kNumDeviationsFromCenter = 5;
 
 ClientReadStreamFailureDetector::ClientReadStreamFailureDetector(
     ReplicationProperty replication,
-    ClientReadStreamFailureDetector::Settings settings)
+    ClientReadStreamFailureDetectorSettings settings)
     : settings_(settings),
       replication_(replication),
       required_margin_(initRequiredMargin()) {}
@@ -70,7 +70,7 @@ void ClientReadStreamFailureDetector::start() {
 }
 
 void ClientReadStreamFailureDetector::setSettings(
-    ClientReadStreamFailureDetector::Settings settings) {
+    ClientReadStreamFailureDetectorSettings settings) {
   auto prev = std::move(settings_);
   settings_ = std::move(settings);
 

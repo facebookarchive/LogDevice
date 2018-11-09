@@ -8,7 +8,7 @@
 
 #include "logdevice/common/plugin/BuiltinZookeeperClientFactory.h"
 
-#include "logdevice/common/ZookeeperClient.h"
+#include "logdevice/common/ZookeeperClientFactoryProd.h"
 #include "logdevice/common/configuration/ZookeeperConfig.h"
 
 namespace facebook { namespace logdevice {
