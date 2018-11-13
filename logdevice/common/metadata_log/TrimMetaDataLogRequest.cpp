@@ -21,6 +21,7 @@
 #include "logdevice/common/client_read_stream/ClientReadStream.h"
 #include "logdevice/common/client_read_stream/ClientReadStreamBufferFactory.h"
 #include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/common/metadata_log/TrimDataLogRequest.h"
 
 namespace facebook { namespace logdevice {
 
@@ -30,6 +31,7 @@ TrimMetaDataLogRequest::TrimMetaDataLogRequest(
     std::shared_ptr<Processor> processor,
     std::chrono::milliseconds read_timeout,
     std::chrono::milliseconds trim_timeout,
+    bool do_trim_data_log,
     Callback callback,
     std::chrono::seconds metadata_log_record_time_grace_period,
     bool trim_all_UNSAFE)
@@ -41,6 +43,7 @@ TrimMetaDataLogRequest::TrimMetaDataLogRequest(
       callback_(std::move(callback)),
       read_timeout_(read_timeout),
       trim_timeout_(trim_timeout),
+      do_trim_data_log_(do_trim_data_log),
       metadata_log_record_time_grace_period_(
           metadata_log_record_time_grace_period),
       trim_all_UNSAFE_(trim_all_UNSAFE) {
@@ -135,196 +138,34 @@ void TrimMetaDataLogRequest::readTrimGapDataLog() {
 
   Worker* w = Worker::onThisThread();
   Processor* processor = w->processor_;
-  rsid_ = processor->issueReadStreamID();
 
-  // reference of `this' gets passed to the internal read stream, this
-  // is OK as it guarantees to outlive the read stream
-  auto deps = std::make_unique<ClientReadStreamDependencies>(
-      rsid_,
+  std::unique_ptr<Request> req = std::make_unique<TrimDataLogRequest>(
       log_id_,
-      "",
-      std::bind(
-          &TrimMetaDataLogRequest::onDataRecord, this, std::placeholders::_1),
-      std::bind(
-          &TrimMetaDataLogRequest::onGapRecord, this, std::placeholders::_1),
-      std::function<void(logid_t)>(),
-      nullptr, // metadata cache
-      nullptr);
-
-  // Create a client read stream to read the data log from LSN_OLDEST
-  auto read_stream = std::make_unique<ClientReadStream>(
-      rsid_,
-      log_id_,
-      // ClientReadStream will issue a BRIDGE gap [e0n0, e1n0] since sequencers
-      // never write records in epoch 0. This behavior was introduced in
-      // D6924080. Because this state machine stops reading the first time it
-      // encounters a gap that's not a trim gap, let's start reading from epoch
-      // 1 instead of LSN_OLDEST.
-      compose_lsn(epoch_t(1), esn_t(1)),
-      LSN_MAX - 1, // greatest lsn possible
-      Worker::settings().client_read_flow_control_threshold,
-      ClientReadStreamBufferType::CIRCULAR,
-      16,
-      std::move(deps),
-      processor->config_);
-
-  // disable single copy delivery as we only care about the first gap
-  read_stream->forceNoSingleCopyDelivery();
-  // transfer ownership of the ClientReadStream to the worker and kick it
-  // start
-  w->clientReadStreams().insertAndStart(std::move(read_stream));
-
-  // start a timer for reading the data log
-  ld_check(reader_timer_ == nullptr);
-  reader_timer_ = std::make_unique<Timer>([this] { onReadTimeout(); });
-
-  reader_timer_->activate(
-      read_timeout_, &Worker::onThisThread()->commonTimeouts());
+      current_worker_,
+      read_timeout_,
+      trim_timeout_,
+      do_trim_data_log_,
+      std::bind(&TrimMetaDataLogRequest::onDataLogTrimComplete,
+                this,
+                std::placeholders::_1,
+                std::placeholders::_2));
+  int rv = processor->postImportant(req);
+  ld_check(rv == 0);
 }
 
-bool TrimMetaDataLogRequest::onDataRecord(std::unique_ptr<DataRecord>& record) {
-  ld_check(Worker::onThisThread()->idx_ == current_worker_);
-  ld_check(record->logid.val_ == log_id_.val_);
-  ld_spew("Data record received for data log %lu, lsn %s.",
-          record->logid.val_,
-          lsn_to_string(record->attrs.lsn).c_str());
-
-  if (state_ != State::READ_DATALOG_TRIMGAP) {
-    ld_critical("Got data record in unexpected state: %s for log %lu",
-                getStateName(state_),
-                log_id_.val_);
-    ld_check(false);
-    finalizeReadingDataLog(E::INTERNAL);
-    return true;
-  }
-
-  // since we are reading from LSN_OLDEST, which does not belong to a valid
-  // epoch, we must get a gap before this record and must have acted on it
-  if (!reading_datalog_finalized_) {
-    ld_critical("Got record of lsn %s before any gap for log %lu!",
-                lsn_to_string(record->attrs.lsn).c_str(),
-                log_id_.val_);
-    ld_check(false);
-    finalizeReadingDataLog(E::INTERNAL);
-  } else {
-    // ignore the record
-  }
-  return true;
-}
-
-bool TrimMetaDataLogRequest::onGapRecord(const GapRecord& gap) {
-  ld_check(Worker::onThisThread()->idx_ == current_worker_);
-  ld_check(gap.logid.val_ == log_id_.val_);
-  ld_spew("Gap record received for data log %lu "
-          "range [%s, %s], type %d",
-          gap.logid.val_,
-          lsn_to_string(gap.lo).c_str(),
-          lsn_to_string(gap.hi).c_str(),
-          static_cast<int>(gap.type));
-
-  if (state_ != State::READ_DATALOG_TRIMGAP) {
-    ld_critical("Got gap record in unexpected state: %s for log %lu",
-                getStateName(state_),
-                log_id_.val_);
-    ld_check(false);
-    finalizeReadingDataLog(E::INTERNAL);
-    return true;
-  }
-
-  if (reading_datalog_finalized_) {
-    return true;
-  }
-
-  ld_check(!trim_point_datalog_.hasValue());
-  if (gap.type == GapType::TRIM || gap.type == GapType::BRIDGE) {
-    // use the right end of the first trim or bridge gap as the trim point
-    trim_point_datalog_.assign(gap.hi);
-    ld_debug("Trim point for data log %lu: %s",
-             log_id_.val_,
-             lsn_to_string(trim_point_datalog_.value()).c_str());
-
-    // some extra protection for misbehaving client / storage nodes
-    // that report a trim point to LSN_MAX
-    if (lsn_to_epoch(trim_point_datalog_.value()).val_ >=
-        lsn_to_epoch(LSN_MAX).val_) {
-      ld_error("Invalid trim point %s got from reading data log %lu!",
-               lsn_to_string(trim_point_datalog_.value()).c_str(),
-               log_id_.val_);
-      finalizeReadingDataLog(E::INVALID_PARAM);
-      return true;
-    }
-
-    // get what we want, schedule to destroy the data log readstream
-    finalizeReadingDataLog(E::OK);
-  } else {
-    // the first gap we got is not a trim gap, it is possible that trimming
-    // has not yet happen on storage nodes yet, abort the entire operation
-    // with E::UPTODATE
-    ld_info("The first gap received for data log %lu "
-            "range [%s, %s] is not a TRIM|BRIDGE gap but type %d. "
-            "Trim will NOT be performed for its metadata log.",
-            gap.logid.val_,
-            lsn_to_string(gap.lo).c_str(),
-            lsn_to_string(gap.hi).c_str(),
-            static_cast<int>(gap.type));
-    finalizeReadingDataLog(E::UPTODATE);
-  }
-
-  ld_check(reading_datalog_finalized_);
-  return true;
-}
-
-void TrimMetaDataLogRequest::finalizeReadingDataLog(Status st) {
-  ld_check(!reading_datalog_finalized_);
-  ld_check(destroy_readstream_timer_ == nullptr);
-
-  if (reader_timer_) {
-    reader_timer_->cancel();
-  }
-
-  // use a zero timer to schedule the destruction of the read stream
-  // in the next event loop iteration
-  destroy_readstream_timer_ =
-      std::make_unique<Timer>([this, st] { onDestroyReadStreamTimedout(st); });
-  destroy_readstream_timer_->activate(
-      std::chrono::milliseconds::zero(),
-      &Worker::onThisThread()->commonTimeouts());
-
-  reading_datalog_finalized_ = true;
-}
-
-void TrimMetaDataLogRequest::onDestroyReadStreamTimedout(Status st) {
-  ld_check(Worker::onThisThread()->idx_ == current_worker_);
-  ld_check(state_ == State::READ_DATALOG_TRIMGAP);
-  ld_check(reading_datalog_finalized_);
-
-  destroy_readstream_timer_.reset();
-  // destroy the data log readstream
-  stopReadingDataLog();
-
+void TrimMetaDataLogRequest::onDataLogTrimComplete(Status st,
+                                                   lsn_t data_trim_point) {
   if (st != E::OK) {
-    if (st == E::UPTODATE) {
-      state_ = State::FINISHED;
-    }
     complete(st);
     return;
   }
 
   // must have a valid trim point
-  ld_check(trim_point_datalog_.hasValue());
+  ld_check(data_trim_point != LSN_INVALID);
+  trim_point_datalog_ = data_trim_point;
   // advance to the next stage
   state_ = State::READ_METADATA_LOG;
   readMetaDataLog();
-}
-
-void TrimMetaDataLogRequest::stopReadingDataLog() {
-  ld_check(Worker::onThisThread()->idx_ == current_worker_);
-  ld_check(state_ == State::READ_DATALOG_TRIMGAP);
-
-  // destroy the client readstream reading the data log
-  ld_check(rsid_ != READ_STREAM_ID_INVALID);
-  Worker::onThisThread()->clientReadStreams().erase(rsid_);
-  rsid_ = READ_STREAM_ID_INVALID;
 }
 
 void TrimMetaDataLogRequest::readMetaDataLog() {
@@ -361,13 +202,6 @@ void TrimMetaDataLogRequest::onReadTimeout() {
   ld_check(!reader_timer_->isActive());
 
   switch (state_) {
-    case State::READ_DATALOG_TRIMGAP: {
-      // we have timed out reading data log, but haven't got the first gap yet,
-      // safe to stop reading since we are not in the readstream callback
-      stopReadingDataLog();
-      complete(E::TIMEDOUT);
-      return;
-    }
     case State::READ_METADATA_LOG: {
       // we have timed out reading metadata log, but we can proceed to perform
       // trimming. the worst thing can happen is that we may trim less record,

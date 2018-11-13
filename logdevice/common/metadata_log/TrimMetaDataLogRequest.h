@@ -53,18 +53,24 @@ class TrimMetaDataLogRequest : public Request {
   // @param processor     logdevice Processor object
   // @param read_timeout  timeout for reading data log and metadata log
   // @param trim_timeout  timeout for performing trim action using TrimRequest
+  // @param do_trim_data_log
+  //                      move the data log's trim point to the maximum position
+  //                      that doesn't drop any data before trimming the
+  //                      metadata log
   //
   // @param metadata_log_record_time_grace_period
-  //                        extra grace period for considering a metadata log
-  //                        record stale based on data log's rentention
-  // @param trim_all_UNSAFE    if true, trim ALL metadata log records for the
-  //                           log. used in emergency.
+  //                      extra grace period for considering a metadata log
+  //                      record stale based on data log's rentention
+  // @param trim_all_UNSAFE
+  //                      if true, trim ALL metadata log records for the log.
+  //                      used in emergency.
   TrimMetaDataLogRequest(
       logid_t log_id,
       std::shared_ptr<Configuration> config,
       std::shared_ptr<Processor> processor,
       std::chrono::milliseconds read_timeout,
       std::chrono::milliseconds trim_timeout,
+      bool do_trim_data_log,
       Callback callback,
       std::chrono::seconds metadata_log_record_time_grace_period,
       bool trim_all_UNSAFE = false);
@@ -72,11 +78,6 @@ class TrimMetaDataLogRequest : public Request {
   ~TrimMetaDataLogRequest() override;
 
   Request::Execution execute() override;
-
-  // callback functions for the internal ClientReadStream that reads the
-  // data log
-  bool onDataRecord(std::unique_ptr<DataRecord>&);
-  bool onGapRecord(const GapRecord&);
 
   // set an inital delay so that the entire operation will be delayed
   // for the specified amount of time before start
@@ -103,9 +104,7 @@ class TrimMetaDataLogRequest : public Request {
 
   // data log reading
   void readTrimGapDataLog();
-  void finalizeReadingDataLog(Status st);
-  void onDestroyReadStreamTimedout(Status st);
-  void stopReadingDataLog();
+  void onDataLogTrimComplete(Status st, lsn_t data_trim_point);
 
   // metadata log reading
   void readMetaDataLog();
@@ -133,8 +132,6 @@ class TrimMetaDataLogRequest : public Request {
 
   // trim point of the data log
   folly::Optional<lsn_t> trim_point_datalog_;
-  // readstream id of the internal readstream that reads the data log
-  read_stream_id_t rsid_;
 
   // target trim point of the metadata data log
   lsn_t trim_target_metadatalog_{LSN_INVALID};
@@ -151,19 +148,16 @@ class TrimMetaDataLogRequest : public Request {
   std::chrono::milliseconds start_delay_{std::chrono::milliseconds::zero()};
   std::unique_ptr<Timer> start_delay_timer_;
 
-  // time out for reading the data log for the first trim gap
+  // time out for reading the data log or the metadata log
   const std::chrono::milliseconds read_timeout_;
   std::unique_ptr<Timer> reader_timer_;
 
-  // timer used to schedule the destruction of the read stream
-  std::unique_ptr<Timer> destroy_readstream_timer_;
-
-  // indicate if reading data log is finalized and the read stream is
-  // scheduled to be destroyed
-  bool reading_datalog_finalized_{false};
-
   // timeout for trimming the metadata log
   const std::chrono::milliseconds trim_timeout_;
+
+  // move the data log trim point to the max position that doesn't lose any
+  // records before trimming the metadata log
+  const bool do_trim_data_log_;
 
   const std::chrono::seconds metadata_log_record_time_grace_period_;
 

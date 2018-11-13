@@ -609,6 +609,7 @@ TEST_F(MetaDataLogsIntegrationTest, SequencerReadHistoricMetadata) {
         processor,
         std::chrono::milliseconds(30000),
         std::chrono::milliseconds(30000),
+        /*do_trim_data_log=*/false,
         [&trim_status](Status st, logid_t /* unused */) { trim_status = st; },
         std::chrono::seconds(3600 * 24),
         false);
