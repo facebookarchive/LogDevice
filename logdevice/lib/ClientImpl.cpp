@@ -40,6 +40,7 @@
 #include "logdevice/common/TrimRequest.h"
 #include "logdevice/common/client_read_stream/AllClientReadStreams.h"
 #include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/common/configuration/ParsingHelpers.h"
 #include "logdevice/common/configuration/TextConfigUpdater.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/configuration/logs/LogsConfigDeltaTypes.h"
@@ -116,6 +117,38 @@ bool validateSSLSettings(std::shared_ptr<ServerConfig> config,
   bool ca_only = !settings->ssl_load_client_cert;
   return validateSSLCertificatesExist(settings, ca_only);
 }
+
+bool applySettingOverrides(SettingsUpdater& updater) {
+  const char* env = getenv("LOGDEVICE_OVERRIDE_CLIENT_SETTINGS");
+  if (env) {
+    auto parsed = configuration::parser::parseJson(env);
+    if (!parsed.isObject()) {
+      ld_error("Failed to parse environment variable "
+               "LOGDEVICE_OVERRIDE_CLIENT_SETTINGS, it should be a JSON map");
+      return false;
+    }
+
+    // the below will throw an exception that won't be caught by anything within
+    // LD if it can't represent the value as string or set the setting.
+    try {
+      for (auto& kv : parsed.items()) {
+        std::string key = kv.first.asString();
+        std::string val = kv.second.asString();
+        ld_info("Overriding client setting from environment variable "
+                "LOGDEVICE_OVERRIDE_CLIENT_SETTINGS: %s=\"%s\"",
+                key.c_str(),
+                val.c_str());
+        updater.setFromClient(key, val);
+      }
+    } catch (std::exception& e) {
+      ld_error("Error while setting settings from environment variable "
+               "LOGDEVICE_OVERRIDE_CLIENT_SETTINGS: %s",
+               e.what());
+      return false;
+    }
+  }
+  return true;
+}
 } // namespace
 
 // Implementing the member function of Client inside ClientImpl.cpp sounds
@@ -151,6 +184,11 @@ std::shared_ptr<Client> Client::create(std::string cluster_name,
 
   ld_info(
       "Plugins loaded: %s", plugin_registry->getStateDescriptionStr().c_str());
+
+  if (!applySettingOverrides(*settings_updater)) {
+    err = E::INVALID_PARAM;
+    return nullptr;
+  }
 
   std::shared_ptr<LocationProvider> location_plugin =
       plugin_registry->getSinglePlugin<LocationProvider>(
