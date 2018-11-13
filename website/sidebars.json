@@ -18,7 +18,10 @@
       ],
       "API": [
           "API_Intro",
-	  "API_Doxygen"
+	        "API_Doxygen"
+      ],
+      "Extending LogDevice": [
+          "WritingPlugins"
       ]
   }
 }
