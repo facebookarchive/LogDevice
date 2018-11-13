@@ -16,4 +16,5 @@
 <url> <loc>https://logdevice.io/docs/Logs.html</loc> <changefreq>hourly</changefreq> <priority>1.0</priority> <xhtml:link rel="alternate" hreflang="en" href="https://logdevice.io/docs/Logs.html" /> </url>
 <url> <loc>https://logdevice.io/docs/Overview.html</loc> <changefreq>hourly</changefreq> <priority>1.0</priority> <xhtml:link rel="alternate" hreflang="en" href="https://logdevice.io/docs/Overview.html" /> </url>
 <url> <loc>https://logdevice.io/docs/Settings.html</loc> <changefreq>hourly</changefreq> <priority>1.0</priority> <xhtml:link rel="alternate" hreflang="en" href="https://logdevice.io/docs/Settings.html" /> </url>
+<url> <loc>https://logdevice.io/docs/WritingPlugins.html</loc> <changefreq>hourly</changefreq> <priority>1.0</priority> <xhtml:link rel="alternate" hreflang="en" href="https://logdevice.io/docs/WritingPlugins.html" /> </url>
 </urlset>
