@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 # Copyright (c) Facebook, Inc. and its affiliates.
 # All rights reserved.
 #
@@ -13,8 +11,8 @@ from time import time as now
 from unittest import TestCase
 
 import logdevice.client as ld
+import logdevice.integration_test_util
 import logdevice.settings as settings
-import logdevice.test
 
 
 class LogDeviceIntegrationTest(TestCase):
@@ -24,8 +22,10 @@ class LogDeviceIntegrationTest(TestCase):
 
     def setUp(self):
         assert not self.cluster
-        factory = logdevice.test.ClusterFactory()
-        factory.set_rocks_db_type(logdevice.test.RocksDBType.PARTITIONED)
+        factory = logdevice.integration_test_util.ClusterFactory()
+        factory.set_rocks_db_type(
+            logdevice.integration_test_util.RocksDBType.PARTITIONED
+        )
         self.cluster = factory.create(3)
 
     def tearDown(self):
