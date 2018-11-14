@@ -127,7 +127,6 @@ void CleanedResponseRequest::prepareMetadata() {
   if (Worker::settings().enable_offset_map) {
     flags |= EpochRecoveryMetadata::Header::SUPPORT_OFFSET_MAP_AND_TAIL_RECORD;
   }
-  ld_check(clean_msg_->tail_record_.isValid());
   ld_check(!clean_msg_->tail_record_.containOffsetWithinEpoch());
   ld_check(header.epoch_end_offset ==
            clean_msg_->tail_record_.offsets_map_.getCounter(

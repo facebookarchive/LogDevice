@@ -34,15 +34,12 @@ void CLEAN_Message::serialize(ProtocolWriter& writer) const {
   ld_check(header_.epoch_size ==
            epoch_size_map_.getCounter(CounterType::BYTE_OFFSET));
   CLEAN_Header write_header = header_;
-  if (tail_record_.isValid()) {
-    write_header.flags |= CLEAN_Header::INCLUDE_TAIL_RECORD;
-  }
+  write_header.flags |= CLEAN_Header::INCLUDE_TAIL_RECORD;
   writer.write(write_header);
   writer.writeVector(absent_nodes_);
   if (writer.proto() >= Compatibility::CLEAN_MESSAGE_SUPPORT_OFFSET_MAP) {
-    if (tail_record_.isValid()) {
-      tail_record_.serialize(writer);
-    }
+    ld_check(tail_record_.isValid());
+    tail_record_.serialize(writer);
     epoch_size_map_.serialize(writer);
   }
 }
@@ -74,6 +71,10 @@ MessageReadResult CLEAN_Message::deserialize(ProtocolReader& reader) {
       tail_record.deserialize(reader, true);
     }
     epoch_size_map.deserialize(reader, false /* unused */);
+  } else {
+    epoch_size_map.setCounter(CounterType::BYTE_OFFSET, hdr.epoch_size);
+    tail_record.offsets_map_.setCounter(
+        CounterType::BYTE_OFFSET, hdr.epoch_end_offset);
   }
 
   return reader.result([&] {
