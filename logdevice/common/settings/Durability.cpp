@@ -24,7 +24,7 @@ const std::string& DurabilityNameMap::invalidValue() {
 template <>
 void DurabilityNameMap::setValues() {
 #define DURABILITY(d) set(Durability::d, #d);
-#include "logdevice/common/durability.inc"
+#include "logdevice/common/settings/durability.inc"
 }
 
 }} // namespace facebook::logdevice

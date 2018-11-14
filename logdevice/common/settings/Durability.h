@@ -20,7 +20,7 @@ namespace facebook { namespace logdevice {
 
 enum class Durability : uint8_t {
 #define DURABILITY(name) name,
-#include "logdevice/common/durability.inc"
+#include "logdevice/common/settings/durability.inc"
   NUM_DURABILITIES,
   INVALID
 };
