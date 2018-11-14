@@ -17,8 +17,11 @@ namespace facebook { namespace logdevice { namespace configuration {
 class NodesConfigurationAPI {
  public:
   using CompletionCb =
-      foly::Function<void(Status,
-                          std::shared_ptr<const nodes::NodesConfiguration>)>;
+      folly::Function<void(Status,
+                           std::shared_ptr<const nodes::NodesConfiguration>)>;
+
+  virtual std::shared_ptr<const nodes::NodesConfiguration>
+  getConfig() const = 0;
 
   virtual int update(nodes::NodesConfiguration::Update update,
                      CompletionCb callback) = 0;

@@ -21,7 +21,7 @@ namespace nodes {
 
 // Backing data source of NodesConfig, used both by the LogDevice server and by
 // tooling. Exposes a key-value API, owned and accessed by the
-// NodesConfigStateMachine singleton.
+// NodesConfigurationManager singleton.
 class NodesConfigurationStore {
  public:
   using version_t = membership::MembershipVersion::Type;
