@@ -1373,6 +1373,12 @@ class Node {
   std::vector<std::map<std::string, std::string>> socketInfo() const;
 
   /**
+   * Issues an INFO PARTITIONS command to the node's command port and collects
+   * the results in a vector of maps.
+   */
+  std::vector<std::map<std::string, std::string>> partitionsInfo() const;
+
+  /**
    * Issues an INFO GOSSIP command to the node's command port to collect info
    * about the availability of other nodes. Results are stored in the map, with
    * keys corresponding to nodes, and values being either "ALIVE" or "DEAD".

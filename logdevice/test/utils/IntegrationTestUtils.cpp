@@ -1868,6 +1868,15 @@ std::vector<std::map<std::string, std::string>> Node::socketInfo() const {
   return data;
 }
 
+std::vector<std::map<std::string, std::string>> Node::partitionsInfo() const {
+  const std::string command = "info partitions --spew --json";
+  auto data = parseJsonAdminCommand(sendCommand(command));
+  if (data.empty()) {
+    return std::vector<std::map<std::string, std::string>>();
+  }
+  return data;
+}
+
 std::map<std::string, std::string> Node::gossipState() const {
   return parseGossipState(sendCommand("info gossip"));
 }
