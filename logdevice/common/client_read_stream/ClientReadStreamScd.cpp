@@ -334,6 +334,12 @@ void ClientReadStreamScd::applyScheduledChanges() {
       ld_check(getShardsSlow().empty());
       // Adding the shards to the shards down list would cause the shards down
       // list to have all shards in it. Failover to all send all mode instead.
+      if (mode_ == Mode::ALL_SEND_ALL) {
+        // We are already here, nothing to do.
+        scheduled_mode_transition_.clear();
+        return;
+      }
+
       scheduleRewindToMode(Mode::ALL_SEND_ALL,
                            "Failing over to ALL_SEND_ALL: all shards in shards "
                            "down list");
