@@ -11,7 +11,6 @@
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/Worker.h"
-#include "logdevice/server/FailureDetector.h"
 
 using namespace facebook::logdevice::configuration;
 namespace facebook { namespace logdevice {
