@@ -39,13 +39,15 @@ Request::Execution NCMRequest::execute() {
 }
 
 Request::Execution Dependencies::InitRequest::executeOnNCM(
-    std::shared_ptr<NodesConfigurationManager> FOLLY_NONNULL ncm_ptr) {
+    std::shared_ptr<NodesConfigurationManager> ncm_ptr) {
+  ld_check(ncm_ptr);
   ncm_ptr->initOnNCM();
   return Execution::COMPLETE;
 }
 
 Request::Execution NewConfigRequest::executeOnNCM(
-    std::shared_ptr<NodesConfigurationManager> FOLLY_NONNULL ncm_ptr) {
+    std::shared_ptr<NodesConfigurationManager> ncm_ptr) {
+  ld_check(ncm_ptr);
   ncm_ptr->onNewConfig(std::move(new_config_));
 
   return Execution::COMPLETE;

@@ -7,7 +7,6 @@
  */
 #pragma once
 
-#include <folly/CppAttributes.h>
 #include <folly/Random.h>
 
 #include "logdevice/common/Processor.h"
@@ -56,8 +55,8 @@ class NCMRequest : public Request {
 
  protected:
   // Derived classes may assume executeOnNCM won't be called with nullptr
-  virtual Request::Execution executeOnNCM(
-      std::shared_ptr<NodesConfigurationManager> FOLLY_NONNULL ncm) = 0;
+  virtual Request::Execution
+  executeOnNCM(std::shared_ptr<NodesConfigurationManager> ncm) = 0;
 
   WorkerType worker_type_;
   worker_id_t worker_id_;
@@ -72,8 +71,8 @@ class NewConfigRequest : public NCMRequest {
       : NCMRequest(std::forward<Args>(args)...),
         new_config_(std::move(new_config)) {}
 
-  Request::Execution executeOnNCM(
-      std::shared_ptr<NodesConfigurationManager> FOLLY_NONNULL) override;
+  Request::Execution
+      executeOnNCM(std::shared_ptr<NodesConfigurationManager>) override;
 
  private:
   std::string new_config_;
@@ -112,8 +111,8 @@ class Dependencies {
   class InitRequest : public NCMRequest {
    public:
     using NCMRequest::NCMRequest;
-    Request::Execution executeOnNCM(
-        std::shared_ptr<NodesConfigurationManager> FOLLY_NONNULL) override;
+    Request::Execution
+        executeOnNCM(std::shared_ptr<NodesConfigurationManager>) override;
   };
 
   void init(NCMWeakPtr);
