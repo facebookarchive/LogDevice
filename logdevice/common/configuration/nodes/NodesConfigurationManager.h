@@ -61,13 +61,13 @@ class NodesConfigurationManager
     constexpr static const Flags kIsSequencer = static_cast<Flags>(1 << 5);
 
     // Only use the static methods to construct OperationMode
-    explicit OperationMode() {}
+    explicit OperationMode() : mode_{0} {}
 
     void setFlags(Flags flags);
     bool hasFlags(Flags flags) const;
     bool onlyHasFlags(Flags flags) const;
 
-    Flags mode_;
+    Flags mode_{0};
   }; // OperationMode
 
   template <typename... Args>
