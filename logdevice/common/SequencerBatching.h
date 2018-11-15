@@ -14,7 +14,6 @@
 
 #include "logdevice/common/ClientID.h"
 #include "logdevice/common/Timestamp.h"
-#include "logdevice/common/WeakRefHolder.h"
 #include "logdevice/common/buffered_writer/BufferedWriterImpl.h"
 #include "logdevice/common/protocol/APPEND_Message.h"
 
@@ -83,6 +82,7 @@ namespace facebook { namespace logdevice {
 
 class Appender;
 class Socket;
+class SocketProxy;
 
 class SequencerBatching : public BufferedWriterImpl::AppendCallbackInternal,
                           public BufferedWriterAppendSink {
@@ -185,7 +185,9 @@ class SequencerBatching : public BufferedWriterImpl::AppendCallbackInternal,
     // right thread.
     std::atomic<int> owner_worker;
     ClientID reply_to;
-    WeakRef<Socket> client_socket;
+    // Socket proxy instance which ensures that clientID does not get reused
+    // even if the socket closes.
+    std::unique_ptr<SocketProxy> socket_proxy;
     logid_t log_id;
     request_id_t append_request_id;
     folly::IntrusiveListHook list_hook;

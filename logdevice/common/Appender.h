@@ -29,7 +29,6 @@
 #include "logdevice/common/Request.h"
 #include "logdevice/common/Timer.h"
 #include "logdevice/common/Timestamp.h"
-#include "logdevice/common/WeakRefHolder.h"
 #include "logdevice/common/protocol/STORED_Message.h"
 #include "logdevice/common/stats/Stats.h"
 
@@ -79,6 +78,7 @@ class EpochSequencer;
 class PayloadHolder;
 class SenderBase;
 class Sequencer;
+class SocketProxy;
 class STORE_Message;
 class TailRecord;
 class TraceLogger;
@@ -442,9 +442,7 @@ class Appender : public IntrusiveUnorderedMapHook {
     return reply_to_;
   }
 
-  WeakRef<Socket> getClientSocketRef() const {
-    return client_socket_ref_;
-  }
+  std::unique_ptr<SocketProxy> getClientSocketProxy() const;
 
   request_id_t getClientRequestID() const {
     return append_request_id_;
@@ -742,7 +740,6 @@ class Appender : public IntrusiveUnorderedMapHook {
   // the id of client Socket into which to send an APPENDED reply. If this
   // Appender was created by an AppendRequest, this is an invalid ClientID.
   const ClientID reply_to_;
-  WeakRef<Socket> client_socket_ref_;
 
   // log id where the append is going
   logid_t log_id_;

@@ -1609,8 +1609,9 @@ Sequencer::handleAppendWithLSNBeforeRedirect(Appender* appender) {
       case RecoveredLSNs::RecoveryStatus::UNKNOWN: {
         STAT_INCR(stats_, append_redirected_maybe_stored);
         // Can we send a CANCELLED?
-        WeakRef<Socket> socket{appender->getClientSocketRef()};
-        if (socket) {
+        std::unique_ptr<SocketProxy> socket_proxy{
+            appender->getClientSocketProxy()};
+        if (socket_proxy && !socket_proxy->isClosed()) {
           err = E::CANCELLED;
           return RunAppenderStatus::ERROR_DELETE;
         } else {

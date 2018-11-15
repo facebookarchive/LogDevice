@@ -50,6 +50,7 @@ class SenderImpl;
 class Sockaddr;
 class Socket;
 class SocketCallback;
+class SocketProxy;
 class StatsHolder;
 
 namespace configuration {
@@ -371,18 +372,17 @@ class Sender : public SenderBase {
                       SocketCallback* onclose);
 
   /**
-   * Get WeakRef to the client socket associated with client-id 'cid'.
+   * Get client SocketProxy for the socket associated with client-id 'cid'.
    *
-   * When the socket is disconnected, the ref becomes null
-   * and the reference holder(e.g. Appender) can check it before
-   * sending message. This prevents sending messages to unintentional
-   * client sockets(since they can be re-issued by ClientIdxAllocator).
-   *
-   * @param
-   *  cid - client-id for the socket
-   *  ref - reference to socket associated with 'cid'
+   * This socket proxy makes sure socket instance to stays even after the socket
+   * is closed. By doing this life of the socket and consequetively the life of
+   * ClientID is extended until all the references for the socket go away.
+   * SocketProxy can get the underlying socket if it's not closed. It is
+   * expected to drop proxy immediately once it is detected that socket was
+   * closed so that we don't have too many zombie sockets and zombie clientIds
+   * in the system.
    */
-  int getClientSocketRef(const ClientID cid, WeakRef<Socket>& ref);
+  std::unique_ptr<SocketProxy> getSocketProxy(const ClientID cid) const;
 
   /**
    * Dispatch any accumulated message completions. Must be called from

@@ -43,6 +43,7 @@ class FlowGroup;
 class ResourceBudget;
 class SocketCallback;
 class SocketImpl;
+class SocketProxy;
 class StatsHolder;
 class Worker;
 
@@ -226,8 +227,6 @@ class Socket {
   // indicates purpose of this socket
   const SocketType type_;
 
-  WeakRefHolder<Socket> ref_holder_;
-
   /**
    * Initiate an asynchronous connect and handshake on the socket. The socket's
    * .peer_name_ must resolve to an ip:port to which we can connect. Currently
@@ -327,6 +326,32 @@ class Socket {
    *         a server socket that has never been connected
    */
   bool isClosed() const;
+
+  /**
+   * @return true iff close() has been called on the socket and all clients have
+   * dropped references.
+   */
+  bool isZombie() const {
+    ld_check(isClosed());
+    if (socket_ref_holder_.use_count() > 1) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * @return SocketProxy, this guarantees the encapsulated socket stays around
+   * till returned instance does not go out of scope. One use case of this is to
+   * stop ClientID from getting reused.
+   */
+  std::unique_ptr<SocketProxy> getSocketProxy() {
+    if (isClosed()) {
+      return std::unique_ptr<SocketProxy>();
+    }
+
+    return std::make_unique<SocketProxy>(socket_ref_holder_);
+  }
 
   /**
    * Push a callback onto the end of the list of callbacks that will be
@@ -769,6 +794,13 @@ class Socket {
    */
   void addConnectAttemptTimeoutEvent();
 
+  // Reference holder that holds socket pointer and is distributed to whoever
+  // wants cache the socket. It is encapsulated in SocketProxy. The socket
+  // instance itself is not reclaimed till all the references on the ref_holder
+  // go away.  This way we guarantee that the ClientID if valid does not get
+  // reclaimed.
+  std::shared_ptr<Socket> socket_ref_holder_;
+
   friend class SocketImpl;
   std::unique_ptr<SocketImpl> impl_;
 
@@ -1156,6 +1188,45 @@ class SocketDependencies {
   virtual void onStoppedRunning(RunState prev_state);
 
   virtual ~SocketDependencies() {}
+};
+
+/**
+ * SocketProxy is a simple reference to the socket that makes sure that the
+ * socket instance stays around till there is some one in the system is still
+ * holding this object. It also lets the holders of proxy know that the socket
+ * was closed. It also captures logic to safely decrement the ref count on the
+ * socket once the user goes out of scope. This class is non-copyable or
+ * assignable so that users explicitly have to get an instance if they want
+ * the socket to stay around.  Once the users holding socket ref come to know
+ * that socket is closed it is expected that they drop the corresponding ref
+ * as soon as possible, so that the zombie socket is reclaimed.
+ *
+ */
+class SocketProxy {
+ public:
+  explicit SocketProxy(std::shared_ptr<Socket> socket_ref_holder)
+      : socket_ref_holder_(std::move(socket_ref_holder)) {}
+
+  SocketProxy(const SocketProxy&) = delete;
+  SocketProxy& operator=(const SocketProxy&) = delete;
+
+  bool isClosed() {
+    auto socket = socket_ref_holder_.get();
+    if (!socket || socket->isClosed()) {
+      return true;
+    }
+
+    return false;
+  }
+
+  const Socket* get() const {
+    return socket_ref_holder_.get();
+  }
+  // TODO: Add proxy methods here that allow messages to be enqueued to
+  // network threadpool which will eventually be written to network socket.
+
+ private:
+  std::shared_ptr<Socket> socket_ref_holder_;
 };
 
 }} // namespace facebook::logdevice

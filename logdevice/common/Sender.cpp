@@ -329,15 +329,25 @@ ssize_t Sender::getTcpSendBufSizeForClient(ClientID client_id) const {
 }
 
 void Sender::eraseDisconnectedClients() {
-  for (const ClientID& cid : disconnected_clients_) {
+  auto prev = disconnected_clients_.before_begin();
+  for (auto it = disconnected_clients_.begin();
+       it != disconnected_clients_.end();) {
+    const ClientID& cid = *it;
     const auto pos = impl_->client_sockets_.find(cid);
     assert(pos != impl_->client_sockets_.end());
     assert(pos->second.isClosed());
-    impl_->client_sockets_.erase(pos);
-    impl_->client_id_allocator_->releaseClientIdx(cid);
+    ++it;
+    // Check if there are users that still have reference to the socket. If
+    // yes, wait for the clients to drop the socket instead of reclaiming it
+    // here.
+    if (!pos->second.isZombie()) {
+      impl_->client_sockets_.erase(pos);
+      impl_->client_id_allocator_->releaseClientIdx(cid);
+      disconnected_clients_.erase_after(prev);
+    } else {
+      ++prev;
+    }
   }
-
-  disconnected_clients_.clear();
 }
 
 int Sender::notifyPeerConfigUpdated(Socket& sock) {
@@ -1616,15 +1626,14 @@ void Sender::forEachSocket(std::function<void(const Socket&)> cb) const {
   }
 }
 
-int Sender::getClientSocketRef(const ClientID cid, WeakRef<Socket>& ref) {
+std::unique_ptr<SocketProxy> Sender::getSocketProxy(const ClientID cid) const {
   ld_check(cid.valid());
   auto pos = impl_->client_sockets_.find(cid);
   if (pos == impl_->client_sockets_.end()) {
-    return -1;
+    return std::unique_ptr<SocketProxy>();
   }
 
-  ref = pos->second.ref_holder_.ref();
-  return 0;
+  return pos->second.getSocketProxy();
 }
 
 void Sender::maybeScheduleRunFlowGroups(FlowGroup& flow_group) {

@@ -29,6 +29,7 @@
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Sequencer.h"
+#include "logdevice/common/Socket.h"
 #include "logdevice/common/TailRecord.h"
 #include "logdevice/common/TraceLogger.h"
 #include "logdevice/common/Worker.h"
@@ -94,9 +95,6 @@ Appender::Appender(Worker* worker,
     created_on_->totalSizeOfAppenders_ += full_appender_size_;
     STAT_INCR(getStats(), num_appenders);
     STAT_ADD(getStats(), total_size_of_appenders, full_appender_size_);
-    if (reply_to_.valid()) {
-      created_on_->sender().getClientSocketRef(reply_to_, client_socket_ref_);
-    }
   }
 }
 
@@ -1012,7 +1010,8 @@ void Appender::sendReply(lsn_t lsn, Status status, NodeID redirect) {
     return;
   }
 
-  if (!getClientSocketRef()) {
+  auto socket_proxy = getClientSocketProxy();
+  if (!socket_proxy || socket_proxy->isClosed()) {
     ld_debug("Not sending reply to client %s, socket has disconnected.",
              reply_to_.toString().c_str());
     return;
@@ -2445,4 +2444,11 @@ bool Appender::isNodeAlive(NodeID node) {
   return (cs == nullptr || cs->isNodeAlive(node.index()));
 }
 
+std::unique_ptr<SocketProxy> Appender::getClientSocketProxy() const {
+  if (created_on_) {
+    return created_on_->sender().getSocketProxy(reply_to_);
+  }
+
+  return std::unique_ptr<SocketProxy>();
+}
 }} // namespace facebook::logdevice

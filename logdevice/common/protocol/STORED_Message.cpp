@@ -220,9 +220,8 @@ class SendSTOREDRequest : public Request {
     // restarted, it'll just reject our message based on epoch number and wave.
     ld_check(to.valid());
     Sender& sender = Worker::onThisThread()->sender();
-    WeakRef<Socket> socket_ref;
-    int rv = sender.getClientSocketRef(to, socket_ref);
-    if (rv != 0) {
+    auto socket_proxy = sender.getSocketProxy(to);
+    if (socket_proxy == nullptr) {
       RATELIMIT_WARNING(
           std::chrono::seconds(10),
           1,
@@ -232,7 +231,7 @@ class SendSTOREDRequest : public Request {
           to.getIdx());
       return;
     }
-    Socket* sock = socket_ref.get();
+    const Socket* sock = socket_proxy->get();
     ld_check(sock != nullptr);
     if (!sock->isHandshaken() || sock->peerIsClient()) {
       RATELIMIT_WARNING(
@@ -245,7 +244,7 @@ class SendSTOREDRequest : public Request {
           to.getIdx());
     }
 
-    rv = sender.sendMessage(std::move(msg), to);
+    int rv = sender.sendMessage(std::move(msg), to);
     if (rv != 0) {
       RATELIMIT_INFO(std::chrono::seconds(10),
                      1,
