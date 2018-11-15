@@ -6,36 +6,28 @@
  * LICENSE file in the root directory of this source tree.
  */
 #pragma once
-
-#include <atomic>
-#include <memory>
+#include "logdevice/common/EventLoopTaskQueue.h"
 
 struct event_base;
 
 namespace facebook { namespace logdevice {
 
 /**
- * @file This is a specialized bufferevent-type state machine that allows work
- * items to be passed to an EventLoop instance in the form of Request instances.
- *
- * On the producer side, this provides a thread-safe facility to post Request
+ * @file This is a specialized EventLoopTaskQueue that accepts Request
  * instances.
  *
- * On the consumer/EventLoop side, this manages a libevent event that hooks
- * into the EventLoop's event base.  The event fires when there are pending
- * requests in the queue.  The event callback invokes Request::execute() on
- * those Requests.  The class returns control to the libevent loop after
- * processing a few requests (Settings::requests_per_iteration) to avoid
- * hogging the event loop.
+ * On the producer side, this provides a thread-safe facility to post Request
+ * instances. This class will wrap Request::execute into a folly function adds
+ * it to EventLoopTaskQueue.
  *
- * The expected pattern is for producers and the consumer to share a
- * std::shared_ptr<RequestPump> for shutdown safety.
+ * On the consumer side, EventLoopTaskQueue picks up a function to be executed
+ * and will call execute method on the wrapped object.
  */
 
 class Request;
 struct RequestPumpImpl;
 
-class RequestPump {
+class RequestPump : public EventLoopTaskQueue {
  public:
   /**
    * Registers the event.
@@ -49,26 +41,14 @@ class RequestPump {
               size_t capacity,
               int requests_per_iteration);
 
-  ~RequestPump();
-
-  /**
-   * May be called on any thread.  After this returns, RequestPump will not
-   * accept new Requests.  Additionally, if setCloseEventLoopOnShutdown() was
-   * called, this signals to the EventLoop to shut down soon.
-   */
-  void shutdown();
-
-  /**
-   * @see shutdown()
-   */
-  void setCloseEventLoopOnShutdown();
+  virtual ~RequestPump();
 
   /**
    * Attempts to post a Request for the EventLoop to process.  Respects the
    * soft capacity limit passed to the constructor; if too many requests are
    * already queued, fails with NOBUFS.
    *
-   * May be called from any thread.
+   * Can be called from any thread.
    *
    * @return 0 on success, -1 on failures setting `err' to one of:
    *     NOBUFS     too many requests are already queued
@@ -93,18 +73,14 @@ class RequestPump {
    * RequestPump runs.
    */
   void setNumRequestsPerIteration(int requestsPerIteration) {
-    requestsPerIteration_ = requestsPerIteration;
+    setNumDequeuesPerIteration(requestsPerIteration);
   }
 
  private:
-  std::unique_ptr<RequestPumpImpl> impl_;
-
-  int requestsPerIteration_;
-
-  static void haveRequestsEventHandler(void* self, short what);
-
-  // called by haveRequestsCallback() above to do work
-  void onRequestsPending(size_t n);
+  /**
+   * Called by enqueued folly function on this instance to process a request.
+   */
+  static void processRequest(std::unique_ptr<Request>& rq);
 };
 
 }} // namespace facebook::logdevice
