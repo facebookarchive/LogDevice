@@ -54,6 +54,7 @@
 #include "logdevice/common/TimeoutMap.h"
 #include "logdevice/common/TraceLogger.h"
 #include "logdevice/common/TrimRequest.h"
+#include "logdevice/common/WorkerTimeoutStats.h"
 #include "logdevice/common/WriteMetaDataRecord.h"
 #include "logdevice/common/ZeroCopiedRecordDisposal.h"
 #include "logdevice/common/client_read_stream/AllClientReadStreams.h"
@@ -180,7 +181,8 @@ Worker::Worker(Processor* processor,
       config_(config),
       stats_(stats),
       shutting_down_(false),
-      accepting_work_(true) {}
+      accepting_work_(true),
+      worker_timeout_stats_(std::make_unique<WorkerTimeoutStats>()) {}
 
 size_t Worker::destroyZeroCopiedRecordsInDisposal() {
   return processor_->zeroCopiedRecordDisposal().drainRecords(
@@ -341,6 +343,10 @@ void Worker::onSettingsUpdated() {
     // LogsConfigManager might want to start or stop the underlying RSM if
     // the enable-logsconfig-manager setting is changed.
     logsconfig_manager_->onSettingsUpdated();
+  }
+
+  if (!new_settings->enable_store_histogram_calculations) {
+    getWorkerTimeoutStats().clear();
   }
 }
 

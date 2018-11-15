@@ -134,6 +134,7 @@ class SyncSequencerRequestList;
 class TraceLogger;
 class UpdateableConfig;
 class WorkerImpl;
+class WorkerTimeoutStats;
 
 struct AppendRequestEpochMap;
 struct AppendRequestMap;
@@ -707,6 +708,10 @@ class Worker : public EventLoop {
 
   void deactivateIsolationTimer();
 
+  WorkerTimeoutStats& getWorkerTimeoutStats() {
+    return *worker_timeout_stats_;
+  }
+
  protected:
   virtual void onThreadStarted() override;
 
@@ -808,6 +813,8 @@ class Worker : public EventLoop {
   std::unique_ptr<Timer> isolation_timer_;
 
   std::unique_ptr<Timer> cluster_state_polling_;
+
+  std::unique_ptr<WorkerTimeoutStats> worker_timeout_stats_;
 
   // Size limit for commonTimeouts_ (NB: libevent has a default upper bound
   // of MAX_COMMON_TIMEOUTS = 256)

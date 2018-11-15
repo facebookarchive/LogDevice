@@ -68,6 +68,7 @@
 #include "logdevice/server/admincommands/StatsRocks.h"
 #include "logdevice/server/admincommands/StatsThroughput.h"
 #include "logdevice/server/admincommands/Stop.h"
+#include "logdevice/server/admincommands/StoreTimeouts.h"
 #include "logdevice/server/admincommands/TrafficShaping.h"
 #include "logdevice/server/admincommands/UpDown.h"
 #include "logdevice/server/storage_tasks/ReadStorageTask.h"
@@ -143,6 +144,7 @@ AdminCommandFactory::AdminCommandFactory() {
 
   selector_.add<commands::StatsHistogram>("stats2 histogram");
   selector_.add<commands::TrafficShapingHistogram>("stats2 shaping");
+  selector_.add<commands::StoreTimeoutHistogram>("stats2 store_timeouts");
 
   selector_.add<commands::StatsThroughput>("stats throughput");
   selector_.add<commands::StatsCustomCounters>("stats custom counters");

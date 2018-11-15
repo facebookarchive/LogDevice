@@ -2669,6 +2669,13 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "and use HHWheelTimer backend.",
        SERVER | CLIENT | REQUIRES_RESTART,
        SettingsCategory::Core);
+  init("enable-store-histograms-calculations",
+       &enable_store_histogram_calculations,
+       "false",
+       nullptr, // no validation
+       "Enables estimation of store timeouts per worker per node.",
+       SERVER,
+       SettingsCategory::Core);
 
   sequencer_boycotting.defineSettings(init);
 }

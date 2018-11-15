@@ -33,6 +33,7 @@
 #include "logdevice/common/TailRecord.h"
 #include "logdevice/common/TraceLogger.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/WorkerTimeoutStats.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/APPENDED_Message.h"
 #include "logdevice/common/protocol/DELETE_Message.h"
@@ -1334,6 +1335,12 @@ void Appender::onChainForwardingFailure(unsigned int index) {
 }
 
 void Appender::onCopySent(Status st, ShardID to, const STORE_Header& mhdr) {
+  auto worker = Worker::onThisThread(false);
+  if (worker &&
+      worker->updateable_settings_->enable_store_histogram_calculations) {
+    worker->getWorkerTimeoutStats().onCopySent(st, to, mhdr);
+  }
+
   if (mhdr.wave != store_hdr_.wave) {
     ld_check(mhdr.wave < store_hdr_.wave || mhdr.wave > INT_MAX ||
              store_hdr_.wave > INT_MAX);
@@ -1440,6 +1447,12 @@ void Appender::setNotAvailableShard(ShardID shard,
 int Appender::onReply(const STORED_Header& header,
                       ShardID from,
                       ShardID rebuildingRecipient) {
+  auto worker = Worker::onThisThread(false);
+  if (worker &&
+      worker->updateable_settings_->enable_store_histogram_calculations) {
+    worker->getWorkerTimeoutStats().onReply(from, store_hdr_);
+  }
+
   if (appender_span_) {
     // having an appender span means we have e2e tracing enabled
     std::pair<uint32_t, ShardID> current_info(header.wave, from);
