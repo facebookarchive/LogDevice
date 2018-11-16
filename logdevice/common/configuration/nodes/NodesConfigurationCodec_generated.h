@@ -3,8 +3,8 @@
 #ifndef FLATBUFFERS_GENERATED_NODESCONFIGURATIONCODEC_FACEBOOK_LOGDEVICE_CONFIGURATION_NODES_FLAT_BUFFER_CODEC_H_
 #define FLATBUFFERS_GENERATED_NODESCONFIGURATIONCODEC_FACEBOOK_LOGDEVICE_CONFIGURATION_NODES_FLAT_BUFFER_CODEC_H_
 
-#include "../../membership/MembershipCodec_generated.h"
 #include "flatbuffers/flatbuffers.h"
+#include "logdevice/common/membership/MembershipCodec_generated.h"
 
 namespace facebook { namespace logdevice { namespace configuration {
 namespace nodes { namespace flat_buffer_codec {

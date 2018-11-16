@@ -7,12 +7,15 @@
  */
 
 // Important: regenerate flatbuffer structure definitions if you change this:
-// flatc --cpp --scoped-enums --keep-prefix <your-flatbuffer.fbs>
+// flatc --cpp --scoped-enums -I <path/to/logdevice> \
+//   --keep-prefix <your-flatbuffer.fbs>
 
 // Note: use --keep-prefix in `flatc' to preserve the relative path of the include,
 // however, for flatbuffers version not supporting the option, you have to manually
-// edit the include file path in the generated file
-include "../../membership/MembershipCodec.fbs";
+// edit the include file path in the generated file. The generated include
+// should start with "logdevice/..."
+
+include "logdevice/common/membership/MembershipCodec.fbs";
 
 namespace facebook.logdevice.configuration.nodes.flat_buffer_codec;
 
