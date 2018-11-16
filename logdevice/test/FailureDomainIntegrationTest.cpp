@@ -482,7 +482,15 @@ TEST_F(FailureDomainIntegrationTest, ThreeRackReplication) {
       if (n == -1) {
         EXPECT_EQ(GapType::BRIDGE, gap.type);
       } else if (n == 0) {
-        EXPECT_EQ(0, reader->isConnectionHealthy(logid));
+        bool first = true;
+        wait_until([&first, &logid, &reader]() {
+          bool res = reader->isConnectionHealthy(logid);
+          if (!res && !first) {
+            ld_error("Got 0 records but connection still considered healthy!");
+          }
+          first = false;
+          return res;
+        });
         return false;
       } else {
         if (nread >= lsns.size()) {
