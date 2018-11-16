@@ -57,15 +57,12 @@ int main(int argc, const char* argv[]) {
   parse_command_line(argc, argv);
 
   std::shared_ptr<facebook::logdevice::Client> client =
-      facebook::logdevice::Client::create("some_cluster",
-                                          command_line_options.config_path,
-                                          "credentials",
-                                          std::chrono::seconds(5),
-                                          nullptr);
+      facebook::logdevice::ClientFactory().create(
+          command_line_options.config_path);
   if (!client) {
-    fprintf(
-        stderr,
-        "logdevice::Client::create() failed.  Is the config path correct?\n");
+    fprintf(stderr,
+            "logdevice::ClientFactory::create() failed.  Is the config path "
+            "correct?\n");
     exit(1);
   }
 

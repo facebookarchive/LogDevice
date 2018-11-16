@@ -1889,11 +1889,10 @@ int main(int argc, const char** argv) {
     errors_to_ignore |= noisy_errors;
   }
   start_time = std::chrono::steady_clock::now();
-  ldclient = Client::create("checker",
-                            config_path,
-                            "none",
-                            checker_settings->client_timeout,
-                            std::move(client_settings));
+  ldclient = ClientFactory()
+                 .setClientSettings(std::move(client_settings))
+                 .setTimeout(checker_settings->client_timeout)
+                 .create(config_path);
 
   if (!ldclient) {
     ld_error("Could not create client: %s", error_description(err));

@@ -93,6 +93,14 @@ class ClientFactory {
   }
 
   /**
+   * Shortcut for int values
+   */
+  ClientFactory& setSetting(std::string setting_name, int64_t value) {
+    string_settings_[std::move(setting_name)] = std::to_string(value);
+    return *this;
+  }
+
+  /**
    * Sets the client session ID. Used for logging to uniquely identify session.
    * If csid is empty, a random one is generated.
    */
@@ -101,8 +109,9 @@ class ClientFactory {
     return *this;
   }
 
-  // This is included here for backwards compatibility with Client::create().
-  // Shouldn't be used with setSetting().
+  // This interface can be used by command line utilities that have exported the
+  // entire ClientSettings bundle as command line arguments.
+  // Shouldn't be used with setSetting()
   //
   // Note that a ClientFactory instance for which this method was called will
   // move the supplied `ClientSettings` instance into the newly created client,

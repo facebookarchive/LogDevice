@@ -161,12 +161,15 @@ int main(int argc, const char** argv) {
 
   EventBase eventBase;
 
+  ld_check_eq(0,
+              clientSettings->set(
+                  "findkey-timeout",
+                  chrono_string(command_line_settings.findtime_timeout)));
+
   std::shared_ptr<Client> logdevice_client =
-      Client::create("Test cluster",
-                     command_line_settings.config_path,
-                     "none",
-                     command_line_settings.findtime_timeout,
-                     std::move(clientSettings));
+      ClientFactory()
+          .setClientSettings(std::move(clientSettings))
+          .create(command_line_settings.config_path);
 
   // getting all logs renges
   auto logs_map = logdevice_client->getLogRangesByNamespace("");

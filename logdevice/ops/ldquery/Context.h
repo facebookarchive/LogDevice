@@ -55,7 +55,7 @@ struct Context {
     }
     return logdeviceClient_;
   }
-  std::chrono::milliseconds commandTimeout;
+  folly::Optional<std::chrono::milliseconds> commandTimeout;
   std::string config_path;
   bool use_ssl{false};
 
@@ -75,16 +75,16 @@ struct Context {
   std::shared_ptr<logdevice::Client> logdeviceFullClient_;
 
   std::shared_ptr<logdevice::Client> createClient(bool withLogsConfig) {
-    std::shared_ptr<logdevice::Client> client;
-    std::unique_ptr<ClientSettings> settings(ClientSettings::create());
-    int rv = settings->set(
-        "on-demand-logs-config", withLogsConfig ? "false" : "true");
-    if (rv != 0) {
-      ld_error("Could not create client: %s", error_description(err));
-      throw ConstructorFailed();
+    ClientFactory factory;
+
+    if (commandTimeout.hasValue()) {
+      factory.setTimeout(commandTimeout.value());
     }
-    client = Client::create(
-        "foo", config_path, "none", commandTimeout, std::move(settings));
+    std::shared_ptr<logdevice::Client> client =
+        factory
+            .setSetting(
+                "on-demand-logs-config", withLogsConfig ? "false" : "true")
+            .create(config_path);
 
     if (!client) {
       ld_error("Could not create client: %s", error_description(err));

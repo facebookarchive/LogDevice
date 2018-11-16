@@ -740,7 +740,7 @@ class Cluster {
   }
 
   /**
-   * Like Client::create(), but:
+   * Like ClientFactory::create(), but:
    *  - tweaks some client settings to be more appropriate for tests,
    *  - the created client taps into the UpdateableConfig instance owned by
    *    this Cluster object. This speeds up client creation.

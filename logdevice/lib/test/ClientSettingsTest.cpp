@@ -42,9 +42,9 @@ create_client(std::unique_ptr<ClientSettings>&& settings) {
   // NOTE: assumes test is being run from top-level fbcode dir
   std::string config_path =
       std::string("file:") + TEST_CONFIG_FILE("sample_no_ssl.conf");
-  const std::chrono::milliseconds timeout(5);
-  return Client::create(
-      "", config_path.c_str(), "", timeout, std::move(settings));
+  return ClientFactory()
+      .setClientSettings(std::move(settings))
+      .create(config_path);
 }
 } // namespace
 
@@ -155,11 +155,6 @@ TEST(ClientSettingsTest, MethodUpdateableSettings) {
  */
 TEST(ClientSettingsTest, ConfigUpdateableSettings) {
   std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
-  client_settings->set("enable_logsconfig_manager", "false");
-
-  ASSERT_EQ(0, client_settings->set("checksum-bits", "32"));
-  ASSERT_EQ(0, client_settings->set("file-config-update-interval", "10ms"));
-  EXPECT_EQ(32, settings(client_settings)->checksum_bits);
 
   // Copying the config to a temporary location so we can modify it later
   char configPath[] = "/tmp/ClientSettingsTest.conf.XXXXXX";
@@ -176,14 +171,14 @@ TEST(ClientSettingsTest, ConfigUpdateableSettings) {
     dst << src.rdbuf();
   }
 
-  const std::chrono::milliseconds timeout(5);
-  auto client = Client::create("",
-                               std::string("file:") + configPath,
-                               "",
-                               timeout,
-                               std::move(client_settings));
+  auto client = ClientFactory()
+                    .setSetting("enable-logsconfig-manager", "false")
+                    .setSetting("checksum-bits", "32")
+                    .setSetting("file-config-update-interval", "10ms")
+                    .create(std::string("file:") + configPath);
   ClientImpl* clientImpl = dynamic_cast<ClientImpl*>(client.get());
   ASSERT_TRUE((bool)clientImpl);
+  EXPECT_EQ(32, settings(client->settings())->checksum_bits);
 
   std::vector<int> settings_read =
       run_on_all_workers(&clientImpl->getProcessor(),

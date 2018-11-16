@@ -43,7 +43,7 @@ class ShadowClientFactory {
 
   /**
    * Starts the background thread for initializing client objects.
-   * @param client_timeout will be passed to each Client::create().
+   * @param client_timeout will be passed to each ClientFactory::create().
    */
   virtual void start(std::chrono::milliseconds client_timeout);
 

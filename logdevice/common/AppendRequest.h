@@ -384,7 +384,7 @@ class AppendRequest : public AppendRequestBase,
   // of those append() calls.
   static __thread unsigned clientThreadId;
 
-  // value of clientThreadId to use for next thread to call Client::create()
+  // value of clientThreadId to use for next thread to call Client::append()
   static std::atomic<unsigned> nextThreadId;
 
   void onWriteTokenCheckDone();

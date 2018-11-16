@@ -45,18 +45,14 @@ TEST_F(ClientTest, ShutdownUseAfterFree) {
   // NOTE: assumes test is being run from top-level fbcode dir
   std::string config_path =
       std::string("file:") + TEST_CONFIG_FILE("sample_no_ssl.conf");
-  const std::chrono::milliseconds timeout(5);
-  std::shared_ptr<Client> client =
-      Client::create("", config_path.c_str(), "", timeout, nullptr);
+  std::shared_ptr<Client> client = ClientFactory().create(config_path);
   EXPECT_FALSE(client == nullptr);
 }
 
 TEST_F(ClientTest, Configuration) {
   std::string config_path =
       std::string("file:") + TEST_CONFIG_FILE("sample_no_ssl.conf");
-  const std::chrono::milliseconds timeout(5);
-  std::shared_ptr<Client> client = Client::create(
-      "ClientTest::Configuration", config_path.c_str(), "", timeout, nullptr);
+  std::shared_ptr<Client> client = ClientFactory().create(config_path);
 
   auto range = client->getLogRangeByName("foo");
   EXPECT_EQ(logid_t(8), range.first);
@@ -97,15 +93,10 @@ TEST_F(ClientTest, Configuration) {
 TEST_F(ClientTest, OnDemandLogsConfigShutdown) {
   std::string config_path =
       std::string("file:") + TEST_CONFIG_FILE("sample_no_ssl.conf");
-  const std::chrono::milliseconds timeout(5);
-  std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
-  ASSERT_EQ(0, client_settings->set("on-demand-logs-config", "true"));
   std::shared_ptr<Client> client =
-      Client::create("ClientTest::OnDemandLogsConfigShutdown",
-                     config_path.c_str(),
-                     "",
-                     timeout,
-                     std::move(client_settings));
+      ClientFactory()
+          .setSetting("on-demand-logs-config", "true")
+          .create(config_path);
 
   Semaphore sem;
   Status status = E::UNKNOWN;
@@ -188,11 +179,10 @@ TEST_F(ClientTest, nextFromLsnWhenStuck) {
 TEST_F(ClientTest, clientEvents) {
   std::string config_path =
       std::string("file:") + TEST_CONFIG_FILE("sample_no_ssl.conf");
-  const std::chrono::milliseconds timeout(5);
-  std::unique_ptr<ClientSettings> settings(ClientSettings::create());
-  settings->set("enable-logsconfig-manager", "false");
   std::shared_ptr<Client> client =
-      Client::create("", config_path.c_str(), "", timeout, std::move(settings));
+      ClientFactory()
+          .setSetting("enable-logsconfig-manager", "false")
+          .create(config_path);
   client->publishEvent(Severity::INFO,
                        "LD_CLIENT_TEST",
                        "TEST_EVENT",
@@ -212,20 +202,16 @@ TEST_F(ClientTest, NoAbortOnFailedCheck) {
   EXPECT_TRUE(dbg::abortOnFailedCheck.load());
   dbg::abortOnFailedCheck.store(!folly::kIsDebug);
   {
-    auto client = Client::create(
-        "", config_path.c_str(), "", std::chrono::seconds(5), nullptr);
+    auto client = ClientFactory().create(config_path);
     EXPECT_FALSE(client == nullptr);
     EXPECT_EQ(folly::kIsDebug, dbg::abortOnFailedCheck.load());
   }
   EXPECT_EQ(folly::kIsDebug, dbg::abortOnFailedCheck.load());
   {
-    std::unique_ptr<ClientSettings> settings(ClientSettings::create());
-    settings->set("abort-on-failed-check", folly::kIsDebug ? "false" : "true");
-    auto client = Client::create("",
-                                 config_path.c_str(),
-                                 "",
-                                 std::chrono::seconds(5),
-                                 std::move(settings));
+    auto client = ClientFactory()
+                      .setSetting("abort-on-failed-check",
+                                  folly::kIsDebug ? "false" : "true")
+                      .create(config_path);
     EXPECT_FALSE(client == nullptr);
     EXPECT_EQ(!folly::kIsDebug, dbg::abortOnFailedCheck.load());
   }

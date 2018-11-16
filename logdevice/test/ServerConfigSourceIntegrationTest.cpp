@@ -49,17 +49,10 @@ TEST_F(ServerConfigSourceIntegrationTest, Basic) {
     }
   }
 
-  std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
-  ASSERT_EQ(0, client_settings->set("on-demand-logs-config", true));
-  ASSERT_TRUE(dynamic_cast<ClientSettingsImpl*>(client_settings.get())
-                  ->getSettings()
-                  ->on_demand_logs_config);
   std::shared_ptr<Client> client =
-      Client::create(new_server_config->getClusterName(),
-                     config_path,
-                     "",
-                     std::chrono::seconds(1),
-                     std::move(client_settings));
+      ClientFactory()
+          .setSetting("on-demand-logs-config", true)
+          .create(config_path);
   ASSERT_TRUE((bool)client);
 
   auto client_config =

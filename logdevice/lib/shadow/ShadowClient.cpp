@@ -122,19 +122,20 @@ ShadowClient::create(const std::string& origin_name,
                      const Shadow::Attrs& attrs,
                      std::chrono::milliseconds timeout,
                      StatsHolder* stats) {
-  // Custom settings for shadow clients
-  std::unique_ptr<ClientSettings> settings(ClientSettings::create());
-  settings->set("shadow-client", "true");
-  // In case the default is changed in the future
-  settings->set("on-demand-logs-config", "false");
-  // Epoch metadata cache is used for reading, not necessary here
-  settings->set("client-epoch-metadata-cache-size", "0");
-  // Don't want to pollute traces with shadow data - TODO not sure about this
-  settings->set("disable-trace-logger", "true");
-
   std::string shadow_name(origin_name + ".shadow:" + attrs->destination());
-  std::shared_ptr<Client> client = Client::create(
-      shadow_name, attrs->destination(), "", timeout, std::move(settings), "");
+  std::shared_ptr<Client> client =
+      ClientFactory()
+          .setSetting("shadow-client", "true")
+          // In case the default is changed in the future
+          .setSetting("on-demand-logs-config", "false")
+          // Epoch metadata cache is used for reading, not necessary here
+          .setSetting("client-epoch-metadata-cache-size", "0")
+          // Don't want to pollute traces with shadow data - TODO not sure about
+          // this
+          .setSetting("disable-trace-logger", "true")
+          .setClusterName(shadow_name)
+          .setTimeout(timeout)
+          .create(attrs->destination());
   if (client == nullptr) {
     return nullptr;
   }

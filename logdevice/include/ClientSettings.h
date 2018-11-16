@@ -7,6 +7,7 @@
  */
 #pragma once
 
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -92,6 +93,11 @@ class ClientSettings {
    *            INVALID_PARAM          any other error
    */
   int set(const char* name, const char* value);
+
+  // Overload for std::string
+  int set(const std::string& name, const std::string& value) {
+    return set(name.c_str(), value.c_str());
+  }
 
   // Overload for settings with integral settings, for convenience
   int set(const char* name, int64_t value);

@@ -343,13 +343,14 @@ int main(int argc, const char* argv[]) {
   std::unique_ptr<ClientSettingsImpl> clientSettings =
       std::make_unique<ClientSettingsImpl>();
   parse_command_line(argc, argv, command_line_settings, clientSettings.get());
+  ld_check(clientSettings->set(
+               "findkey-timeout",
+               chrono_string(command_line_settings.findtime_timeout)) == 0);
 
   std::shared_ptr<Client> logdevice_client =
-      Client::create("Test cluster",
-                     command_line_settings.config_path,
-                     "none",
-                     command_line_settings.findtime_timeout,
-                     std::move(clientSettings));
+      ClientFactory()
+          .setClientSettings(std::move(clientSettings))
+          .create(command_line_settings.config_path);
 
   if (!logdevice_client) {
     ld_error("Could not create client: %s", error_description(err));

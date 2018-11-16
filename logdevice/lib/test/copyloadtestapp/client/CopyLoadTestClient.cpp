@@ -174,12 +174,15 @@ void client_thread(CommandLineSettings command_line_settings,
     auto local_client_settings =
         std::make_unique<ClientSettingsImpl>(client_settings);
 
+    ld_check_eq(0,
+                local_client_settings->set(
+                    "findkey-timeout",
+                    chrono_string(command_line_settings.findtime_timeout)));
+
     std::shared_ptr<Client> logdevice_client =
-        Client::create("Test cluster",
-                       command_line_settings.config_path,
-                       "none",
-                       command_line_settings.findtime_timeout,
-                       std::move(local_client_settings));
+        ClientFactory()
+            .setClientSettings(std::move(local_client_settings))
+            .create(command_line_settings.config_path);
 
     if (!logdevice_client) {
       ld_error("Could not create client: %s", error_description(err));

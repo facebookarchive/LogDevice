@@ -200,11 +200,10 @@ TEST_F(MetaDataLogsIntegrationTest, CorruptedMetaDataWithOnDemandLogsConfig) {
   cluster->start();
   std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
   ASSERT_EQ(0, client_settings->set("on-demand-logs-config", true));
-  auto client_orig = Client::create("corrupted_metadata_test",
-                                    cluster->getConfigPath(),
-                                    "password",
-                                    testTimeout(),
-                                    std::move(client_settings));
+  auto client_orig = ClientFactory()
+                         .setTimeout(testTimeout())
+                         .setClientSettings(std::move(client_settings))
+                         .create(cluster->getConfigPath());
 
   // Writing data
   std::string data("data_payload");

@@ -40,7 +40,10 @@ class AdminCommandTable : public Table {
 
   explicit AdminCommandTable(std::shared_ptr<Context> ctx,
                              Type type = Type::JSON_TABLE)
-      : Table(ctx), command_timeout_(ctx->commandTimeout), type_(type) {}
+      : Table(ctx), type_(type) {
+    ld_check(ctx->commandTimeout.hasValue());
+    command_timeout_ = ctx->commandTimeout.value();
+  }
 
   void init() override;
 
