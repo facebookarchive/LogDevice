@@ -397,6 +397,7 @@ void RebuildingCoordinator::onShardRebuildingComplete(uint32_t shard_idx) {
     std::chrono::milliseconds delay_ms = maxBacklogTS - now;
 
     // Planning stage requested a delay.
+    ld_check(rebuildingSettings_->disable_data_log_rebuilding);
     ld_check(shard_state.rebuilding_started_ts.count());
     ld_check(!shard_state.shardIsRebuiltDelayTimer->isActive());
 
@@ -669,10 +670,8 @@ void RebuildingCoordinator::restartForShard(uint32_t shard_idx,
 
   // Always init the timer even though currently it is only
   // used if disable_data_log_rebuilding is enabled.
-  if (rebuildingSettings_->disable_data_log_rebuilding) {
-    shard_state.shardIsRebuiltDelayTimer = std::make_unique<LibeventTimer>(
-        Worker::onThisThread()->getEventBase(), cb);
-  }
+  shard_state.shardIsRebuiltDelayTimer = std::make_unique<LibeventTimer>(
+      Worker::onThisThread()->getEventBase(), cb);
 
   if (shard_state.rebuildingSetContainsMyself) {
     // Increment rebuilding_set_contains_myself stat.
