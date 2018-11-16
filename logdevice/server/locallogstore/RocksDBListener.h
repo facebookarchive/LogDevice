@@ -60,7 +60,7 @@ class RocksDBListener : public rocksdb::EventListener {
   static bool isDataCF(const std::string& cf_name);
 
   void
-  onJobCompleted(int job_id,
+  onJobCompleted(const std::string& cf_name,
                  const std::vector<std::string>& paths,
                  PerShardHistograms::size_histogram_t& file_size_hist,
                  PerShardHistograms::size_histogram_t& log_run_length_hist);

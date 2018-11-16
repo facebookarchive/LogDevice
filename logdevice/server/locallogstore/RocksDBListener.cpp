@@ -33,7 +33,7 @@ void RocksDBListener::OnFlushCompleted(
     return;
   }
   ld_check(stats_);
-  onJobCompleted(flush_job_info.job_id,
+  onJobCompleted(flush_job_info.cf_name,
                  {flush_job_info.file_path},
                  stats_->get().per_shard_histograms->flushed_file_size,
                  stats_->get().per_shard_histograms->flushed_log_run_length);
@@ -49,7 +49,7 @@ void RocksDBListener::OnCompactionCompleted(
     return;
   }
   ld_check(stats_);
-  onJobCompleted(ci.job_id,
+  onJobCompleted(ci.cf_name,
                  ci.output_files,
                  stats_->get().per_shard_histograms->compacted_file_size,
                  stats_->get().per_shard_histograms->compacted_log_run_length);
@@ -60,14 +60,14 @@ bool RocksDBListener::isDataCF(const std::string& cf_name) {
 }
 
 void RocksDBListener::onJobCompleted(
-    int job_id,
+    const std::string& cf_name,
     const std::vector<std::string>& paths,
     PerShardHistograms::size_histogram_t& file_size_hist,
     PerShardHistograms::size_histogram_t& log_run_length_hist) {
   std::set<std::string> path_set(paths.begin(), paths.end());
   for (; !recently_created_files_->empty(); recently_created_files_->pop()) {
     const auto& info = recently_created_files_->front();
-    if (info.job_id != job_id) {
+    if (info.cf_name != cf_name) {
       continue;
     }
     ld_check(path_set.count(info.file_path));
