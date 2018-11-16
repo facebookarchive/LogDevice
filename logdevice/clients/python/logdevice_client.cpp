@@ -152,11 +152,16 @@ void logdevice_use_python_logging(object cb) {
  */
 boost::shared_ptr<Client> logdevice_make_client(object name,
                                                 object config,
-                                                double timeout_seconds,
+                                                object timeout_seconds,
                                                 dict settings,
                                                 object credentials,
                                                 object csid) {
-  auto timeout = std::chrono::milliseconds(lround(timeout_seconds * 1000));
+  folly::Optional<std::chrono::milliseconds> timeout;
+
+  if (!timeout_seconds.is_none()) {
+    double extracted_timeout = extract_double(timeout_seconds, "timeout", true);
+    timeout.assign(std::chrono::milliseconds(lround(extracted_timeout * 1000)));
+  }
 
   std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
 
@@ -191,12 +196,15 @@ boost::shared_ptr<Client> logdevice_make_client(object name,
   std::shared_ptr<Client> client;
   {
     gil_release_and_guard guard;
-    client = Client::create(client_name,
-                            config_path,
-                            credentials_str,
-                            timeout,
-                            std::move(client_settings),
-                            csid_str);
+    ClientFactory factory;
+    factory.setClusterName(std::move(client_name))
+        .setCredentials(std::move(credentials_str))
+        .setClientSettings(std::move(client_settings))
+        .setCSID(std::move(csid_str));
+    if (timeout.hasValue()) {
+      factory.setTimeout(timeout.value());
+    }
+    client = factory.create(std::move(config_path));
   }
   if (client) {
     return make_boost_shared_ptr_from_std_shared_ptr(client);
@@ -717,7 +725,7 @@ Python at this stage, and raises when errors happen.
                             default_call_policies(),
                             (arg("name"),
                              arg("config"),
-                             arg("timeout") = 15,
+                             arg("timeout") = object(), // None
                              arg("settings") = dict(),
                              arg("credentials") = "",
                              arg("csid") = "")),

@@ -55,6 +55,10 @@ make_boost_shared_ptr_from_std_shared_ptr(std::shared_ptr<T> ptr) {
 std::string extract_string(const boost::python::object& from,
                            const char* name,
                            bool coerce = false);
+// If `coerce` is true, converts integer and boolean types to double
+double extract_double(const boost::python::object& from,
+                      const char* name,
+                      bool coerce = false);
 
 // convenience wrappers for throwing a python exception
 [[noreturn]] void throw_python_exception();

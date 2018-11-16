@@ -23,6 +23,28 @@ gil_release_and_guard::~gil_release_and_guard() {
   }
 }
 
+double extract_double(const object& from, const char* name, bool coerce) {
+  if (PyFloat_Check(from.ptr())) {
+    return PyFloat_AsDouble(from.ptr());
+  }
+
+  if (coerce) {
+    if (PyInt_Check(from.ptr()) || PyLong_Check(from.ptr())) {
+      return PyInt_AsLong(from.ptr());
+    }
+    if (PyBool_Check(from.ptr())) {
+      return from.ptr() == Py_True ? 1 : 0;
+    }
+  }
+
+  static const str msgend(" is not a float");
+  static const str msgend_coerce(" is not a float, int, long, or bool");
+  auto msg = str(name) + (coerce ? msgend_coerce : msgend);
+
+  throw_python_exception(PyExc_TypeError, msg);
+  throw std::runtime_error("unpossible, the line above always throws!");
+}
+
 std::string extract_string(const object& from, const char* name, bool coerce) {
   if (PyString_Check(from.ptr())) {
     return extract<std::string>(from)();
