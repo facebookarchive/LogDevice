@@ -24,25 +24,17 @@ You only need one instance of the class in order to interact with the cluster
 (it will spawn several worker threads to enable it to scale), and all methods on
 it are thread-safe.
 
-`Client`s are created by a call to the `Client::create()` static method. A
-typical instantiation of the `Client` would look like this:
+`Client`s are created using a `ClientFactory`. A typical instantiation of the 
+`Client` would look like this:
 ```c++
 #include <logdevice/include/Client.h>
 
 // ...
 
 std::shared_ptr<facebook::logdevice::Client> client =
-    facebook::logdevice::Client::create(
-      // cluster name, only used for logging
-      "test_cluster", 
+    facebook::logdevice::ClientFactory().create(
       // path to the config file
-      "zk:10.0.0.1:2181,10.0.0.2:2181,10.0.0.3:2181/logdevice_test.conf",
-      // credentials
-      "",
-      // timeout
-      std::chrono::seconds(60),
-      // settings
-      nullptr);
+      "zk:10.0.0.1:2181,10.0.0.2:2181,10.0.0.3:2181/logdevice_test.conf");
 ```
 
 ### Synchronous vs. asynchronous API

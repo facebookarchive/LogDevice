@@ -45,19 +45,17 @@ TEST_F(ConfigIntegrationTest, RemoteLogsConfigTest) {
               IntegrationTestUtils::ClusterFactory::EventLogMode::NONE)
           .create(2);
 
-  std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
-  ASSERT_EQ(0, client_settings->set("file-config-update-interval", "10ms"));
-  ASSERT_EQ(0, client_settings->set("on-demand-logs-config", true));
-
   // Copying the config for the client so that it's not affected when we update
   // the server config
   std::string client_config_path(cluster->getConfigPath() + "_client");
   boost::filesystem::copy_file(cluster->getConfigPath(), client_config_path);
-  auto client = Client::create("included_logs",
-                               client_config_path,
-                               "password",
-                               testTimeout(),
-                               std::move(client_settings));
+
+  auto client = ClientFactory()
+                    .setSetting("file-config-update-interval", "10ms")
+                    .setSetting("on-demand-logs-config", "true")
+                    .setTimeout(testTimeout())
+                    .create(client_config_path);
+
   ASSERT_TRUE((bool)client);
   auto client_impl = static_cast<ClientImpl*>(client.get());
   auto config = client_impl->getConfig()->get();
@@ -315,17 +313,13 @@ TEST_F(ConfigIntegrationTest, RemoteLogsConfigWithLogsConfigManagerTest) {
                                      false));
 
   // Create a second client with on-demand-logs-config
-  std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
-  ASSERT_EQ(0, client_settings->set("file-config-update-interval", "10ms"));
-  ASSERT_EQ(0, client_settings->set("on-demand-logs-config", true));
-
   std::string client_config_path(cluster->getConfigPath() + "_client");
   boost::filesystem::copy_file(cluster->getConfigPath(), client_config_path);
-  auto client2 = Client::create("included_logs",
-                                client_config_path,
-                                "password",
-                                testTimeout(),
-                                std::move(client_settings));
+  auto client2 = ClientFactory()
+                     .setSetting("file-config-update-interval", "10ms")
+                     .setSetting("on-demand-logs-config", "true")
+                     .setTimeout(testTimeout())
+                     .create(client_config_path);
   ASSERT_TRUE((bool)client2);
   auto client_impl = static_cast<ClientImpl*>(client2.get());
   auto config = client_impl->getConfig()->get();
@@ -388,13 +382,10 @@ TEST_F(ConfigIntegrationTest, ClientConfigSubscription) {
           .eventLogMode(
               IntegrationTestUtils::ClusterFactory::EventLogMode::NONE)
           .create(2);
-  std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
-  ASSERT_EQ(0, client_settings->set("file-config-update-interval", "10ms"));
-  auto client = Client::create("integration_test",
-                               cluster->getConfigPath(),
-                               "password",
-                               testTimeout(),
-                               std::move(client_settings));
+  auto client = ClientFactory()
+                    .setSetting("file-config-update-interval", "10ms")
+                    .setTimeout(testTimeout())
+                    .create(cluster->getConfigPath());
 
   Semaphore sem;
   auto handle = client->subscribeToConfigUpdates([&]() {
@@ -432,13 +423,11 @@ TEST_F(ConfigIntegrationTest, IncludedConfigUpdated) {
               IntegrationTestUtils::ClusterFactory::EventLogMode::NONE)
           .writeLogsConfigFileSeparately()
           .create(2);
-  std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
-  ASSERT_EQ(0, client_settings->set("file-config-update-interval", "10ms"));
-  auto client = Client::create("integration_test",
-                               cluster->getConfigPath(),
-                               "password",
-                               testTimeout(),
-                               std::move(client_settings));
+
+  auto client = ClientFactory()
+                    .setSetting("file-config-update-interval", "10ms")
+                    .setTimeout(testTimeout())
+                    .create(cluster->getConfigPath());
 
   boost::filesystem::path config_path(cluster->getConfigPath());
   auto included_path = config_path.parent_path() / "included_logs.conf";
@@ -490,13 +479,10 @@ TEST_F(ConfigIntegrationTest, ConfigSyncMethodFailure) {
           .create(2);
 
   auto append_and_wait = [&](int iteration) {
-    std::unique_ptr<ClientSettings> settings(ClientSettings::create());
-    settings->set("abort-on-failed-check", "true");
-    auto client = Client::create("integration_test",
-                                 cluster->getConfigPath(),
-                                 "password",
-                                 testTimeout(),
-                                 std::move(settings));
+    auto client = ClientFactory()
+                      .setSetting("abort-on-failed-check", "true")
+                      .setTimeout(testTimeout())
+                      .create(cluster->getConfigPath());
     ASSERT_TRUE((bool)client);
     auto client_config =
         checked_downcast<ClientImpl*>(client.get())->getConfig()->get();
@@ -1167,13 +1153,8 @@ TEST_F(ConfigIntegrationTest, Stats) {
 }
 
 TEST_F(ConfigIntegrationTest, InvalidConfigClientCreationTest) {
-  std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
   std::string client_config_path = TEST_CONFIG_FILE("overlap1.conf");
-  auto client = Client::create("bad_layout",
-                               client_config_path,
-                               "password",
-                               std::chrono::milliseconds(2000),
-                               std::move(client_settings));
+  auto client = ClientFactory().create(client_config_path);
 
   // should return nullptr to indicate failure but no exceptions,
   // err should be set to E::INVALID_CONFIG
@@ -1184,11 +1165,7 @@ TEST_F(ConfigIntegrationTest, InvalidConfigClientCreationTest) {
 TEST_F(ConfigIntegrationTest, InvalidConfigClientCreationTest2) {
   std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
   std::string client_config_path = TEST_CONFIG_FILE("sample_invalid1.conf");
-  auto client = Client::create("invalid_config",
-                               client_config_path,
-                               "password",
-                               std::chrono::milliseconds(2000),
-                               std::move(client_settings));
+  auto client = ClientFactory().create(client_config_path);
 
   // should return nullptr to indicate failure but no exceptions,
   // err should be set to E::INVALID_CONFIG

@@ -753,16 +753,15 @@ class Cluster {
                std::string credentials = "");
 
   /**
-   * This creates a client by calling Client::create() that does not share the
-   * loaded config_. This function should be removed and instead we should
-   * update createClient to do the same. t18313631 tracks this and explains the
-   * reasons behind this.
+   * This creates a client by calling ClientFactory::create() that does not
+   * share the loaded config_. This function should be removed and instead we
+   * should update createClient to do the same. t18313631 tracks this and
+   * explains the reasons behind this.
    */
   std::shared_ptr<Client> createIndependentClient(
       std::chrono::milliseconds timeout = getDefaultTestTimeout(),
       std::unique_ptr<ClientSettings> settings =
-          std::unique_ptr<ClientSettings>(),
-      std::string credentials = "") const;
+          std::unique_ptr<ClientSettings>()) const;
 
   const Nodes& getNodes() const {
     return nodes_;

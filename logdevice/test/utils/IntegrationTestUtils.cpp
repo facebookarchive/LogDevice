@@ -2098,13 +2098,15 @@ Cluster::createClient(std::chrono::milliseconds timeout,
                                       plugin_registry);
 }
 
-std::shared_ptr<Client>
-Cluster::createIndependentClient(std::chrono::milliseconds timeout,
-                                 std::unique_ptr<ClientSettings> settings,
-                                 std::string credentials) const {
+std::shared_ptr<Client> Cluster::createIndependentClient(
+    std::chrono::milliseconds timeout,
+    std::unique_ptr<ClientSettings> settings) const {
   populateClientSettings(settings);
-  return Client::create(
-      cluster_name_, config_path_, credentials, timeout, std::move(settings));
+  return ClientFactory()
+      .setClusterName(cluster_name_)
+      .setTimeout(timeout)
+      .setClientSettings(std::move(settings))
+      .create(config_path_);
 }
 
 namespace {

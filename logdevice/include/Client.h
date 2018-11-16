@@ -15,6 +15,7 @@
 #include <utility>
 
 #include "logdevice/include/AsyncReader.h"
+#include "logdevice/include/ClientFactory.h"
 #include "logdevice/include/ClientSettings.h"
 #include "logdevice/include/ClusterAttributes.h"
 #include "logdevice/include/ConfigSubscriptionHandle.h"
@@ -198,42 +199,9 @@ typedef std::function<void(Status status, std::unique_ptr<LogHeadAttributes>)>
 class Client {
  public:
   /**
-   * This is the only way to create new Client instances.
-   *
-   * @param cluster_name   name of the LogDevice cluster to connect to
-   * @param config_url     a URL that identifies at a LogDevice configuration
-   *                       resource (such as a file) describing the LogDevice
-   *                       cluster this client will talk to. The only supported
-   *                       formats are currently
-   *                       file:<path-to-configuration-file> and
-   *                       configerator:<configerator-path>. Examples:
-   *                         "file:logdevice.test.conf"
-   *                         "configerator:logdevice/logdevice.test.conf"
-   * @param credentials    credentials specification. This may include
-   *                       credentials to present to the LogDevice cluster
-   *                       along with authentication and encryption specifiers.
-   * @param timeout        construction timeout. This value also serves as the
-   *                       default timeout for methods on the created object
-   * @param settings       client settings instance to take ownership of,
-   *                       or nullptr for default settings. See ClientSettings.h
-   *                       for a list of commonly used settings.
-   * @param csid           CSID (Client Session ID).
-   *                       Used for logging to uniquely identify session.
-   *                       If csid is empty, random one is generated.
-   *
-   * @return on success, a fully constructed LogDevice client object for the
-   *         specified LogDevice cluster. On failure nullptr is returned
-   *         and logdevice::err is set to
-   *           INVALID_PARAM    invalid config URL, cluster name or credentials
-   *                            is too log.
-   *           TIMEDOUT         timed out while trying to get config
-   *           FILE_OPEN        config file could not be opened
-   *           FILE_READ        error reading config file
-   *           INVALID_CONFIG   various errors in parsing the config
-   *           SYSLIMIT         monitoring thread for the config could
-   *                            not be started
+   * This interface is deprecated. Please use ClientFactory to create clients
    */
-  static std::shared_ptr<Client>
+  [[deprecated("Replaced by ClientFactory")]] static std::shared_ptr<Client>
   create(std::string cluster_name,
          std::string config_url,
          std::string credentials,
@@ -248,8 +216,8 @@ class Client {
   Client() = default;
 
   /**
-   * create() actually returns pointers to objects of class ClientImpl
-   * that inherits from Client. The destructor must be virtual in
+   * ClientFactory::create() actually returns pointers to objects of class
+   * ClientImpl that inherits from Client. The destructor must be virtual in
    * order to work correctly.
    */
   virtual ~Client() = default;
@@ -455,7 +423,7 @@ class Client {
   createAsyncReader(ssize_t buffer_size = -1) noexcept = 0;
 
   /**
-   * Overrides the timeout value passed to Client::create() everywhere
+   * Overrides the timeout value passed to ClientFactory::create() everywhere
    * that timeout is used.
    */
   virtual void setTimeout(std::chrono::milliseconds timeout) noexcept = 0;
@@ -807,8 +775,8 @@ class Client {
    * reading.
    *
    * This method is blocking until the tail LSN could be determined, the timeout
-   * occurs, or an error occurred. The timeout is specified in the `create()`
-   * method and can be overridden with `setTimeout()`.
+   * occurs, or an error occurred. The timeout is specified in the
+   * `ClientFactory::create()` method and can be overridden with `setTimeout()`.
    *
    * @param logid is the ID of the log for which to find the tail LSN;
    * @return tail LSN issued by the sequencer of log `logid` or LSN_INVALID on

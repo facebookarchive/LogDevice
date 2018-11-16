@@ -18,7 +18,6 @@
 #include "logdevice/common/ClientAPIHitsTracer.h"
 #include "logdevice/common/ClientBridge.h"
 #include "logdevice/common/ClientEventTracer.h"
-#include "logdevice/common/ConfigInit.h"
 #include "logdevice/common/DataRecordFromTailRecord.h"
 #include "logdevice/common/DataSizeRequest.h"
 #include "logdevice/common/E2ETracer.h"
@@ -40,7 +39,6 @@
 #include "logdevice/common/TrimRequest.h"
 #include "logdevice/common/client_read_stream/AllClientReadStreams.h"
 #include "logdevice/common/configuration/Configuration.h"
-#include "logdevice/common/configuration/ParsingHelpers.h"
 #include "logdevice/common/configuration/TextConfigUpdater.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/configuration/logs/LogsConfigDeltaTypes.h"
@@ -48,10 +46,7 @@
 #include "logdevice/common/configuration/logs/LogsConfigStateMachine.h"
 #include "logdevice/common/configuration/logs/LogsConfigTree.h"
 #include "logdevice/common/debug.h"
-#include "logdevice/common/plugin/LocationProvider.h"
 #include "logdevice/common/plugin/TraceLoggerFactory.h"
-#include "logdevice/common/protocol/HELLO_Message.h"
-#include "logdevice/common/settings/SSLSettingValidation.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/common/stats/Stats.h"
@@ -60,16 +55,13 @@
 #include "logdevice/include/Err.h"
 #include "logdevice/include/Record.h"
 #include "logdevice/lib/AsyncReaderImpl.h"
-#include "logdevice/lib/ClientPluginHelper.h"
 #include "logdevice/lib/ClientProcessor.h"
 #include "logdevice/lib/ClientSettingsImpl.h"
 #include "logdevice/lib/ClusterAttributesImpl.h"
 #include "logdevice/lib/LogsConfigTypesImpl.h"
-#include "logdevice/lib/RemoteLogsConfig.h"
 #include "logdevice/lib/shadow/Shadow.h"
 
 using facebook::logdevice::logsconfig::FBuffersLogsConfigCodec;
-using folly::RWSpinLock;
 using std::chrono::duration;
 using std::chrono::steady_clock;
 
@@ -99,58 +91,6 @@ class ClientBridgeImpl : public ClientBridge {
   ClientImpl* parent_;
 };
 
-namespace {
-bool validateSSLSettings(std::shared_ptr<ServerConfig> config,
-                         std::shared_ptr<const Settings> settings) {
-  size_t ssl_nodes = 0;
-  for (auto node : config->getNodes()) {
-    if (node.second.ssl_address.hasValue()) {
-      ++ssl_nodes;
-    }
-  }
-  if (ssl_nodes == 0) {
-    // There are no nodes configured with SSL, no need to validate SSL certs
-    return true;
-  }
-  // If not configured to load the client cert, we only need the CA cert.
-  // If loading client cert, we need to check all of them
-  bool ca_only = !settings->ssl_load_client_cert;
-  return validateSSLCertificatesExist(settings, ca_only);
-}
-
-bool applySettingOverrides(SettingsUpdater& updater) {
-  const char* env = getenv("LOGDEVICE_OVERRIDE_CLIENT_SETTINGS");
-  if (env) {
-    auto parsed = configuration::parser::parseJson(env);
-    if (!parsed.isObject()) {
-      ld_error("Failed to parse environment variable "
-               "LOGDEVICE_OVERRIDE_CLIENT_SETTINGS, it should be a JSON map");
-      return false;
-    }
-
-    // the below will throw an exception that won't be caught by anything within
-    // LD if it can't represent the value as string or set the setting.
-    try {
-      for (auto& kv : parsed.items()) {
-        std::string key = kv.first.asString();
-        std::string val = kv.second.asString();
-        ld_info("Overriding client setting from environment variable "
-                "LOGDEVICE_OVERRIDE_CLIENT_SETTINGS: %s=\"%s\"",
-                key.c_str(),
-                val.c_str());
-        updater.setFromClient(key, val);
-      }
-    } catch (std::exception& e) {
-      ld_error("Error while setting settings from environment variable "
-               "LOGDEVICE_OVERRIDE_CLIENT_SETTINGS: %s",
-               e.what());
-      return false;
-    }
-  }
-  return true;
-}
-} // namespace
-
 // Implementing the member function of Client inside ClientImpl.cpp sounds
 // confusing, but this is not an error. This is for the purpose of moving
 // the indirection of calling ClientImpl::create in Client::create.
@@ -161,154 +101,13 @@ std::shared_ptr<Client> Client::create(std::string cluster_name,
                                        std::chrono::milliseconds timeout,
                                        std::unique_ptr<ClientSettings> settings,
                                        std::string csid) noexcept {
-  auto start_time = std::chrono::steady_clock::now();
-  ld_info("Creating Client. Cluster name: %s, config: %s",
-          cluster_name.c_str(),
-          config_url.c_str());
-
-  // If caller provided a ClientSettings instance, use that, otherwise create
-  // one with default settings
-  ClientSettings* raw_settings =
-      settings ? settings.release() : ClientSettings::create();
-  std::unique_ptr<ClientSettingsImpl> impl_settings(
-      static_cast<ClientSettingsImpl*>(raw_settings));
-
-  auto settings_updater = impl_settings->getSettingsUpdater();
-
-  auto plugin_registry = impl_settings->getPluginRegistry();
-  if (!plugin_registry) {
-    plugin_registry =
-        std::make_shared<PluginRegistry>(getClientPluginProviders());
-    plugin_registry->addOptions(settings_updater.get());
-  }
-
-  ld_info(
-      "Plugins loaded: %s", plugin_registry->getStateDescriptionStr().c_str());
-
-  if (!applySettingOverrides(*settings_updater)) {
-    err = E::INVALID_PARAM;
-    return nullptr;
-  }
-
-  std::shared_ptr<LocationProvider> location_plugin =
-      plugin_registry->getSinglePlugin<LocationProvider>(
-          PluginType::LOCATION_PROVIDER);
-  std::string plugin_location =
-      location_plugin ? location_plugin->getMyLocation() : "";
-  auto location = raw_settings->get("my-location");
-  std::string location_str = location.hasValue() ? location.value() : "";
-  if (location_str.empty() && !plugin_location.empty()) {
-    // if my-location was not specified, set the value to what the plugin
-    // provides.
-    raw_settings->set("my-location", plugin_location.c_str());
-  }
-
-  auto update_settings = [settings_updater](ServerConfig& config) -> bool {
-    auto settings = config.getClientSettingsConfig();
-
-    try {
-      settings_updater->setFromConfig(settings);
-    } catch (const boost::program_options::error&) {
-      return false;
-    }
-    return true;
-  };
-
-  auto config = std::make_shared<UpdateableConfig>();
-  auto handle =
-      config->updateableServerConfig()->addHook(std::move(update_settings));
-
-  std::unique_ptr<LogsConfig> logs_cfg;
-
-  bool enable_remote_logsconfig =
-      impl_settings->getSettings()->on_demand_logs_config ||
-      impl_settings->getSettings()->force_on_demand_logs_config;
-
-  std::shared_ptr<std::weak_ptr<Processor>> logs_cfg_processor_ptr_ptr;
-  if (enable_remote_logsconfig) {
-    // We don't want internal logsconfig management if we have
-    // on_demand_logs_config enabled
-    ld_info("Remote (on-demand) LogsConfig is ENABLED");
-    auto cache_ttl = impl_settings->getSettings()->remote_logs_config_cache_ttl;
-    RemoteLogsConfig* raw_logs_cfg = new RemoteLogsConfig(timeout, cache_ttl);
-    logs_cfg_processor_ptr_ptr = raw_logs_cfg->getProcessorPtrPtr();
-    logs_cfg.reset(raw_logs_cfg);
-  }
-
-  ConfigParserOptions options;
-  options.alternative_layout_property =
-      impl_settings->getSettings()->alternative_layout_property;
-
-  ConfigInit config_init(timeout);
-
-  int rv = config_init.attach(config_url,
-                              plugin_registry,
-                              config,
-                              std::move(logs_cfg),
-                              impl_settings->getSettings(),
-                              options);
-  if (rv != 0) {
-    return nullptr;
-  }
-
-  if (!validateSSLSettings(
-          config->getServerConfig(), impl_settings->getSettings().get())) {
-    // validateSSLSettings() should output the error
-    return nullptr;
-  }
-
-  if (credentials.size() > HELLO_Header::CREDS_SIZE_V1) {
-    // credentials is too large to fit in HELLO_Message credential buffer
-    err = E::INVALID_PARAM;
-    return nullptr;
-  }
-
-  if (csid.size() > MAX_CSID_SIZE) {
-    // csid is too large
-    err = E::INVALID_PARAM;
-    return nullptr;
-  }
-
-  if (csid.empty()) {
-    boost::uuids::uuid gen_csid = boost::uuids::random_generator()();
-    csid = boost::uuids::to_string(gen_csid);
-  }
-
-  std::shared_ptr<ClientImpl> impl = nullptr;
-  try {
-    impl = std::make_shared<ClientImpl>(cluster_name,
-                                        std::move(config),
-                                        credentials,
-                                        csid,
-                                        timeout,
-                                        std::move(impl_settings),
-                                        plugin_registry);
-  } catch (const ConstructorFailed&) {
-    // err set by the constructor
-    ld_error("Constructing ClientImpl failed with %s.", error_description(err));
-    return nullptr;
-  }
-
-  ld_check(impl != nullptr);
-  ld_check(impl->getProcessorPtr());
-
-  impl->addServerConfigHookHandle(std::move(handle));
-
-  // Setting the logs config's shared processor pointer to the actual processor
-  if (logs_cfg_processor_ptr_ptr) {
-    *logs_cfg_processor_ptr_ptr =
-        std::weak_ptr<Processor>(impl->getProcessorPtr());
-  }
-
-  auto end_time = std::chrono::steady_clock::now();
-  ld_info("Created Client in %.3f seconds. Cluster name: %s, Config: %s",
-          std::chrono::duration_cast<std::chrono::duration<double>>(end_time -
-                                                                    start_time)
-              .count(),
-          cluster_name.c_str(),
-          config_url.c_str());
-
-  return std::shared_ptr<Client>(impl);
+  return ClientFactory()
+      .setClusterName(std::move(cluster_name))
+      .setCredentials(std::move(credentials))
+      .setTimeout(timeout)
+      .setClientSettings(std::move(settings))
+      .setCSID(std::move(csid))
+      .create(std::move(config_url));
 }
 
 bool ClientImpl::validateServerConfig(ServerConfig& cfg) const {
@@ -2281,4 +2080,5 @@ bool ClientImpl::shouldE2ETrace() {
   // flip the coin
   return folly::Random::randDouble(0, 100) < sampling_rate;
 }
+
 }} // namespace facebook::logdevice
