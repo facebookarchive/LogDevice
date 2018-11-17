@@ -668,11 +668,10 @@ void RebuildingCoordinator::restartForShard(uint32_t shard_idx,
     self->notifyShardRebuiltCB(shard);
   };
 
-  // Always init the timer even though currently it is only
-  // used if disable_data_log_rebuilding is enabled.
-  shard_state.shardIsRebuiltDelayTimer = std::make_unique<LibeventTimer>(
-      Worker::onThisThread()->getEventBase(), cb);
-
+  if (rebuildingSettings_->disable_data_log_rebuilding) {
+    shard_state.shardIsRebuiltDelayTimer = std::make_unique<LibeventTimer>(
+        Worker::onThisThread()->getEventBase(), cb);
+  }
   if (shard_state.rebuildingSetContainsMyself) {
     // Increment rebuilding_set_contains_myself stat.
     shard_state.rebuildingSetContainsMyselfStat.assign(
