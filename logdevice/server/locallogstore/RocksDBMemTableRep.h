@@ -37,6 +37,8 @@ class RocksDBMemTableRep : public RocksDBMemTableRepWrapper {
 
   void Insert(rocksdb::KeyHandle handle) override;
 
+  void MarkReadOnly() override;
+
  private:
   void ensureRegistered();
 
@@ -101,6 +103,8 @@ class RocksDBMemTableRepFactory : public RocksDBMemTableRepFactoryWrapper {
   }
 
   void registerMemTableRep(RocksDBMemTableRep& mtr);
+
+  void markMemtableRepImmutable(RocksDBMemTableRep& mtr);
 
   void unregisterMemTableRep(RocksDBMemTableRep& mtr);
 

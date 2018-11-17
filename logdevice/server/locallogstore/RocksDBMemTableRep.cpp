@@ -33,6 +33,11 @@ void RocksDBMemTableRep::Insert(rocksdb::KeyHandle handle) {
   mtr_->Insert(handle);
 }
 
+void RocksDBMemTableRep::MarkReadOnly() {
+  factory_->markMemtableRepImmutable(*this);
+  mtr_->MarkReadOnly();
+}
+
 rocksdb::MemTableRep* RocksDBMemTableRepFactory::CreateMemTableRep(
     const rocksdb::MemTableRep::KeyComparator& cmp,
     rocksdb::Allocator* mta,
@@ -63,12 +68,41 @@ void RocksDBMemTableRepFactory::registerMemTableRep(RocksDBMemTableRep& mtr) {
           store_->getStatsHolder(), num_memtables, store_->getShardIdx());
       auto owner = store_->getColumnFamilyPtr(mtr.column_family_id_);
       ld_debug("Registering MemTableRep(%p). FlushToken:%ju, CF_ID:%u"
-               "%s",
+               " owner ptr is %s",
                &mtr,
                (uintmax_t)mtr.flush_token_,
                mtr.column_family_id_,
-               owner != nullptr ? "" : ", created during db recovery");
+               owner != nullptr ? "non-null" : "null");
+
+      if (!owner) {
+        return;
+      }
+
+      owner->onMemTableDirtied(mtr.flush_token_);
     }
+  }
+}
+
+void RocksDBMemTableRepFactory::markMemtableRepImmutable(
+    RocksDBMemTableRep& mtr) {
+  ld_debug("Shard %d, CF_ID:%u memtable ID:%lu scheduled for flush",
+           store_->getShardIdx(),
+           mtr.column_family_id_,
+           mtr.flush_token_);
+  if (!mtr.links_.is_linked()) {
+    return;
+  }
+
+  std::unique_lock<std::mutex> lock(active_memtables_mutex_);
+
+  auto dirty = mtr.dirty_.load(std::memory_order_relaxed);
+  if (!dirty) {
+    return;
+  }
+
+  auto owner = store_->getColumnFamilyPtr(mtr.column_family_id_);
+  if (owner) {
+    owner->onFlushBegin();
   }
 }
 

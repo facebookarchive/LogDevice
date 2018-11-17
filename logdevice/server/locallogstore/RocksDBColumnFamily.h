@@ -85,24 +85,55 @@ struct RocksDBColumnFamily {
     return cf_.get();
   }
 
-  // Method returns dependent metadata memtable dependency for this
-  // cf's active metadata memtable. Invoked when rocksdb has picked up
-  // memtable of this column family for flushing.
-  MemtableFlushDependency onMemtableFlushBegin() {
-    return {FlushToken_INVALID, FlushToken_INVALID};
+  // Invoked when rocksdb has decided to flush this column family, but before
+  // the active MemTable is switched to a new, empty, MemTable instance. Push
+  // the active and dependent memtables to the queue and mark the values as
+  // invalid.
+  void onFlushBegin() {
+    tracker_.withWLock([&](auto& locked_dependencies) {
+      auto& active = locked_dependencies.active_memtable;
+      auto& dependent = locked_dependencies.dependent_memtable;
+      auto& memtables_being_flushed =
+          locked_dependencies.memtables_being_flushed;
+      memtables_being_flushed.emplace_back(std::piecewise_construct,
+                                           std::forward_as_tuple(active),
+                                           std::forward_as_tuple(dependent));
+      active = FlushToken_INVALID;
+      dependent = FlushToken_INVALID;
+    });
   }
 
-  // Invoked when RocksDBMemTableRepFactory instantiates a new memtable for
-  // this column family. FlushToken passed in argument belongs to the latest
-  // memtable allocated for the column family.
-  void newMemtableAllocated(FlushToken new_memtable_flush_token) {
+  // Invoked from RocksDBMemTableRepFactory when a memtable for
+  // this column family is dirtied for the first time. The FlushToken passed in
+  // belongs to the newly allocated MemTable which is now serving as the active
+  // MemTable for the column family.
+  void onMemTableDirtied(FlushToken new_memtable_flush_token) {
     tracker_.withWLock([&](auto& locked_dependencies) {
-      // Remove this once onMemtableFlushBegin is implemented to invalidate
-      // active_memtable value on flush.
-      ld_check(new_memtable_flush_token > locked_dependencies.active_memtable ||
-               locked_dependencies.active_memtable == FlushToken_INVALID);
+      ld_check(locked_dependencies.active_memtable == FlushToken_INVALID);
+      // Dependent memtable can be asserted to have FlushToken_INVALID and
+      // FlushToken_MAX.
+      // Consider the following :
+      // 1. Thread T1 initiates a write by marking dependent_memtable as
+      // FlushToken_MAX and successfully writes into the memtable.
+      // 2. Another thread T2 after write to memtable by T1 initiates flush of
+      // the memtable for some reason. Before switching the active memtable the
+      // dependent_memtable is marked as FlushToken_INVALID.
+      // 3. Now on T2 the new memtable will be allocated and let's assume for
+      // simplicity the first write happens on the same thread. This method is
+      // invoked on the first write.
+      // Now we can end up in following scenarios :
+      // 1. T1 has not updated the dependent memtable value, that means on
+      // invocation of this method it's still FlushToken_INVALID. T1 won't be
+      // able to update dependency anymore.
+      // 2. T2 writes before T1 can update dependency. In this case this method
+      // is called first and dependent_memtable value is still
+      // FlushToken_INVALID. T1 won't be able to update dependency anymore.
+      // 3. Another thread T3 can initiate write to the
+      // same column family after the memtable is switched but before this
+      // method gets called and it will mark the dependent value as
+      // FlushToken_MAX. ld_check_in(locked_dependencies.dependent_memtable,
+      // {FlushToken_INVALID, FlushToken_MAX});
       locked_dependencies.active_memtable = new_memtable_flush_token;
-      locked_dependencies.dependent_memtable = FlushToken_INVALID;
     });
   }
 

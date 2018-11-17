@@ -115,6 +115,7 @@ class RocksDBLocalLogStoreTest : public ::testing::Test {
                         &stats_) {
     rocksdb_config_.createMergeOperator(0);
     dbg::assertOnData = true;
+    dbg::currentLevel = getLogLevelFromEnv().value_or(dbg::Level::INFO);
   }
 
   std::unique_ptr<LocalLogStore> createRocksDBLocalLogStore() {
@@ -782,6 +783,9 @@ STORE_TEST(RocksDBLocalLogStoreTest, sync, store) {
 
 STORE_TEST(RocksDBLocalLogStoreTest, failed_sync, store) {
   EXPECT_EQ(E::OK, store.acceptingWrites());
+  // Flush memtables that can be in memory as part of recovery,
+  // before failing fsyncs.
+  store.sync(Durability::MEMORY);
   env_.fail_syncs_.store(true);
 
   PutWriteOp op{logid_t(123),

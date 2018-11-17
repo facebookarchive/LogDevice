@@ -8971,3 +8971,32 @@ TEST_F(PartitionedRocksDBStoreTest, DataSizeWithDirectoryGaps) {
   // Now, check that there was no overflow.
   ASSERT_LT(result, 10000);
 }
+
+// Get the latest partition for the store and check if new memtable allocated
+// notifications are triggered as expected.
+TEST_F(PartitionedRocksDBStoreTest, MemtableFlushNotifications) {
+  auto latest_partition = store_->getLatestPartition();
+  auto metadata_cf = store_->getMetadataCFPtr();
+  EXPECT_EQ(
+      latest_partition->cf_->activeMemtableFlushToken(), FlushToken_INVALID);
+  // As part of store open, new memtable cf is written to install the
+  // schema_version. At the end of initialization, we flush all memtables so
+  // that all memtables written during initialization or recovery are persisted.
+  // Next write will allocate two flush tokens first for metadata cf and next
+  // will be for the data cf.
+  auto maxFlushToken = store_->maxFlushToken();
+  put({TestRecord(logid_t(1), 1)});
+  // Verify expected flush token are assigned to memtables.
+  EXPECT_EQ(metadata_cf->activeMemtableFlushToken(), maxFlushToken + 1);
+  EXPECT_EQ(
+      latest_partition->cf_->activeMemtableFlushToken(), maxFlushToken + 2);
+  // Force flush out the existing memtable. Write another record and it should
+  // create a new memtable for the latest partition. Verify that is the case.
+  store_->flushMemtables(latest_partition);
+  // Active memtable flush token is reset when a memtable is flushed.
+  EXPECT_EQ(
+      latest_partition->cf_->activeMemtableFlushToken(), FlushToken_INVALID);
+  put({TestRecord(logid_t(1), 2)});
+  EXPECT_EQ(
+      latest_partition->cf_->activeMemtableFlushToken(), maxFlushToken + 3);
+}

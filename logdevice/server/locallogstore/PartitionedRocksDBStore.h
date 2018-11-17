@@ -615,6 +615,11 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
     return metadata_cf_->get();
   }
 
+  // Return the metadata column family for tests.
+  RocksDBCFPtr getMetadataCFPtr() const {
+    return metadata_cf_;
+  }
+
   // Returns rocksdb handle of unpartitioned column family.
   rocksdb::ColumnFamilyHandle* getUnpartitionedCFHandle() const {
     return unpartitioned_cf_.get();

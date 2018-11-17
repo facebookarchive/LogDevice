@@ -40,6 +40,7 @@
 #include "logdevice/server/locallogstore/RocksDBEnv.h"
 #include "logdevice/server/locallogstore/RocksDBKeyFormat.h"
 #include "logdevice/server/locallogstore/RocksDBListener.h"
+#include "logdevice/server/locallogstore/RocksDBMemTableRep.h"
 #include "logdevice/server/locallogstore/WriteOps.h"
 #include "logdevice/server/read_path/LogStorageStateMap.h"
 #include "logdevice/server/storage/LocalLogStoreUtils.h"
@@ -409,6 +410,13 @@ void PartitionedRocksDBStore::init(const Configuration* config) {
     startBackgroundThreads();
     // Register flush callback
     createAndRegisterFlushCallback();
+    // Memtables written as part of recovery do not have owner pointer
+    // initialized as the cf_accessor map is still getting initialized. Flush
+    // all the memtables created during recovery. Going forward we have all the
+    // necessary information to initialize the memtable completely.
+    // Wait for the flush to complete, so that system is started with clean
+    // slate and is ready to accept writes.
+    flushAllMemtables(/*wait*/ true);
   }
 }
 
