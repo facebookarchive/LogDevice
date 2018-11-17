@@ -246,7 +246,7 @@ Static Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
-<p><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a22c6047d80ec6b513bef7d61883f0bb4">create()</a> actually returns pointers to objects of class ClientImpl that inherits from <a class="el" href="classfacebook_1_1logdevice_1_1_client.html">Client</a>. The destructor must be virtual in order to work correctly. </p>
+<p>ClientFactory::create() actually returns pointers to objects of class ClientImpl that inherits from <a class="el" href="classfacebook_1_1logdevice_1_1_client.html">Client</a>. The destructor must be virtual in order to work correctly. </p>
 
 </div>
 </div>
@@ -572,19 +572,7 @@ Static Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
-<p>This is the only way to create new <a class="el" href="classfacebook_1_1logdevice_1_1_client.html">Client</a> instances.</p>
-<dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramname">cluster_name</td><td>name of the LogDevice cluster to connect to </td></tr>
-    <tr><td class="paramname">config_url</td><td>a URL that identifies at a LogDevice configuration resource (such as a file) describing the LogDevice cluster this client will talk to. The only supported formats are currently file:&lt;path-to-configuration-file&gt; and configerator:&lt;configerator-path&gt;. Examples: "file:logdevice.test.conf" "configerator:logdevice/logdevice.test.conf" </td></tr>
-    <tr><td class="paramname">credentials</td><td>credentials specification. This may include credentials to present to the LogDevice cluster along with authentication and encryption specifiers. </td></tr>
-    <tr><td class="paramname">timeout</td><td>construction timeout. This value also serves as the default timeout for methods on the created object </td></tr>
-    <tr><td class="paramname">settings</td><td>client settings instance to take ownership of, or nullptr for default settings. See <a class="el" href="_client_settings_8h_source.html">ClientSettings.h</a> for a list of commonly used settings. </td></tr>
-    <tr><td class="paramname">csid</td><td>CSID (<a class="el" href="classfacebook_1_1logdevice_1_1_client.html">Client</a> Session ID). Used for logging to uniquely identify session. If csid is empty, random one is generated.</td></tr>
-  </table>
-  </dd>
-</dl>
-<dl class="section return"><dt>Returns</dt><dd>on success, a fully constructed LogDevice client object for the specified LogDevice cluster. On failure nullptr is returned and logdevice::err is set to INVALID_PARAM invalid config URL, cluster name or credentials is too log. TIMEDOUT timed out while trying to get config FILE_OPEN config file could not be opened FILE_READ error reading config file INVALID_CONFIG various errors in parsing the config SYSLIMIT monitoring thread for the config could not be started </dd></dl>
+<p>This interface is deprecated. Please use ClientFactory to create clients </p>
 
 </div>
 </div>
@@ -1763,7 +1751,7 @@ Static Public Member Functions</h2></td></tr>
 <p>Return the sequence number that points to the tail of log <code>logid</code>. The returned LSN is guaranteed to be higher or equal than the LSN of any record that was successfully acknowledged as appended prior to this call.</p>
 <p>Note that there can be benign gaps in the numbering sequence of a log. As such, it is not guaranteed that a record was assigned the returned sequencer number.</p>
 <p>One can read the full content of a log by creating a reader to read from LSN_OLDEST until the LSN returned by this method. Note that it is not guaranteed that the full content of the log is immediately available for reading.</p>
-<p>This method is blocking until the tail LSN could be determined, the timeout occurs, or an error occurred. The timeout is specified in the <code><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a22c6047d80ec6b513bef7d61883f0bb4">create()</a></code> method and can be overridden with <code><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a2b30b82b19b71acd383c3f2fdbf321aa">setTimeout()</a></code>.</p>
+<p>This method is blocking until the tail LSN could be determined, the timeout occurs, or an error occurred. The timeout is specified in the <code>ClientFactory::create()</code> method and can be overridden with <code><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a2b30b82b19b71acd383c3f2fdbf321aa">setTimeout()</a></code>.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">logid</td><td>is the ID of the log for which to find the tail LSN; </td></tr>
@@ -2637,7 +2625,7 @@ Static Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
-<p>Overrides the timeout value passed to <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a22c6047d80ec6b513bef7d61883f0bb4">Client::create()</a> everywhere that timeout is used. </p>
+<p>Overrides the timeout value passed to ClientFactory::create() everywhere that timeout is used. </p>
 
 </div>
 </div>
