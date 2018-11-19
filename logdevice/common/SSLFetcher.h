@@ -11,6 +11,7 @@
 #include <string>
 
 #include <folly/io/async/SSLContext.h>
+#include <folly/portability/OpenSSL.h>
 
 #include "logdevice/common/debug.h"
 
@@ -68,11 +69,16 @@ class SSLFetcher {
         // encryption and authentication, we include eNULL ciphers in the
         // list of valid ciphers. It is up to the connecting socket to limit
         // the list of valid ciphers to enable or disable encryption.
+        std::string null_ciphers = "eNULL";
+#if FOLLY_OPENSSL_IS_110
+        null_ciphers += ":@SECLEVEL=0";
+#endif
         if (ssl_accepting) {
-          context_->ciphers("ALL:!COMPLEMENTOFDEFAULT:eNULL:@STRENGTH");
+          context_->ciphers("ALL:!COMPLEMENTOFDEFAULT:" + null_ciphers +
+                            ":@STRENGTH");
         } else if (null_ciphers_only) {
           ld_info("Creating SSL context using eNULL ciphers");
-          context_->ciphers("eNULL");
+          context_->ciphers(null_ciphers);
         } else {
           context_->ciphers("ALL:!COMPLEMENTOFDEFAULT:!eNULL:@STRENGTH");
         }
