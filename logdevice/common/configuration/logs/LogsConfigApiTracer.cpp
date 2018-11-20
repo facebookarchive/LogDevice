@@ -11,7 +11,6 @@
 #include <memory>
 #include <string>
 
-#include "logdevice/common/Sender.h"
 #include "logdevice/common/configuration/Log.h"
 #include "logdevice/common/configuration/logs/LogsConfigDeltaTypes.h"
 
@@ -26,10 +25,8 @@ void LogsConfigApiTracer::setPath(const std::string& path) {
   path_ = path;
 }
 
-void LogsConfigApiTracer::setClientAddress(const Address& client_address) {
-  auto sock_addr = Sender::sockaddrOrInvalid(client_address);
-  clientAddress_ =
-      sock_addr.valid() ? sock_addr.toStringNoPort() : std::string("UNKNOWN");
+void LogsConfigApiTracer::setClientAddress(std::string client_address) {
+  clientAddress_ = client_address;
 }
 
 void LogsConfigApiTracer::setStatus(Status status) {

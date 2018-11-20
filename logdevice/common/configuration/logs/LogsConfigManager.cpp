@@ -218,7 +218,10 @@ void LogsConfigManagerRequest::postRequest(Status st,
   tracer_->setStatus(st);
   tracer_->setRequestType(request_header_.request_type);
   tracer_->setTreeVersion(config_version);
-  tracer_->setClientAddress(to_);
+  auto sock_addr = Sender::sockaddrOrInvalid(to_);
+  auto client_addr_str =
+      sock_addr.valid() ? sock_addr.toStringNoPort() : std::string("UNKNOWN");
+  tracer_->setClientAddress(std::move(client_addr_str));
 
   std::unique_ptr<Request> req =
       std::make_unique<LogsConfigManagerReply>(st,

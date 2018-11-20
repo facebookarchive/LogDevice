@@ -36,7 +36,7 @@ class LogsConfigApiTracer : SampledTracer {
 
   void setRequestType(LOGS_CONFIG_API_Header::Type request_type);
   void setPath(const std::string& path);
-  void setClientAddress(const Address& client_address);
+  void setClientAddress(std::string client_address);
   void setStatus(Status status);
   void setChunkCount(int chunk_count);
   void setResponseSizeBytes(int response_size_bytes);

@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <unistd.h>
 
+#include <event2/event.h>
 #include <folly/Memory.h>
 #include <sys/syscall.h>
 #include <sys/types.h>

@@ -15,9 +15,10 @@
 #include <semaphore.h>
 #include <unordered_map>
 
-#include "event2/event.h"
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/ThreadID.h"
+
+struct event_base;
 
 namespace facebook { namespace logdevice {
 

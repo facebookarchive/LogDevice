@@ -27,8 +27,7 @@ RequestPump::RequestPump(struct event_base* base,
                          int requests_per_iteration)
     : EventLoopTaskQueue(base, capacity, requests_per_iteration) {}
 
-RequestPump::~RequestPump() {
-}
+RequestPump::~RequestPump() {}
 
 int RequestPump::tryPost(std::unique_ptr<Request>& req) {
   ld_check(req);
@@ -88,7 +87,7 @@ void RequestPump::processRequest(std::unique_ptr<Request>& rq) {
 
   if (on_worker_thread) {
     Worker::onStoppedRunning(run_state);
-    Request::bumpStatsWhenExecuted();
+    WORKER_STAT_INCR(worker_requests_executed);
   }
 
   switch (status) {

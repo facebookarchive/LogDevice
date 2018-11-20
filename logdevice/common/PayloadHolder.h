@@ -7,6 +7,7 @@
  */
 #pragma once
 
+#include "logdevice/common/EventLoop.h"
 #include "logdevice/common/WorkerType.h"
 #include "logdevice/common/protocol/Message.h"
 #include "logdevice/include/Record.h"
@@ -33,8 +34,7 @@ class PayloadHolder {
   PayloadHolder(const void* buf, size_t size, bool ignore_size_limit = false)
       : payload_flat_(buf, size),
         payload_evbuffer_(nullptr),
-        evbuffer_worker_id_(-1),
-        evbuffer_worker_type_(WorkerType::GENERAL) {
+        eventloop_(nullptr) {
     if (!ignore_size_limit) {
       ld_check(payload_flat_.size() == 0 || payload_flat_.data() != nullptr);
       ld_check(payload_flat_.size() < Message::MAX_LEN);
@@ -90,8 +90,7 @@ class PayloadHolder {
       std::swap(payload_flat_, other.payload_flat_);
       std::swap(payload_evbuffer_, other.payload_evbuffer_);
       std::swap(owned_, other.owned_);
-      std::swap(evbuffer_worker_id_, other.evbuffer_worker_id_);
-      std::swap(evbuffer_worker_type_, other.evbuffer_worker_type_);
+      std::swap(eventloop_, other.eventloop_);
       other.reset();
     }
     return *this;
@@ -189,19 +188,12 @@ class PayloadHolder {
   std::string toString();
 
   /**
-   * @return    the thread id of the worker on which the destruction of
-   *            the payload can _only_ happen. return -1 if the payload
-   *            can be safely destroyed on any thread.
+   * @return    the EventLoop on which the destruction of the payload must
+   *            happen. return nullptr if the payload can be safely destroyed on
+   *            any thread, e.g., if the payload is a flatbuffer.
    */
-  worker_id_t getThreadAffinity() const {
-    return evbuffer_worker_id_;
-  }
-  /**
-   * @return    the worker pool at which the destruction of this payload can
-   *            _only_ happen.
-   */
-  WorkerType getWorkerTypeAffinity() const {
-    return evbuffer_worker_type_;
+  EventLoop* getEventLoop() const {
+    return eventloop_;
   }
 
  private:
@@ -224,11 +216,10 @@ class PayloadHolder {
   // the destructor.
   bool owned_ = true;
 
-  // If the instance owns an evbuffer, this is the worker ID that the evbuffer
+  // If the instance owns an evbuffer, this is the EventLoop that the evbuffer
   // belongs to.  It is used to assert that all operations happen on the same
-  // worker thread, since we use libevent without locking.
-  worker_id_t evbuffer_worker_id_;
-  WorkerType evbuffer_worker_type_;
+  // event loop, since we use libevent without locking.
+  EventLoop* eventloop_{nullptr};
 };
 
 }} // namespace facebook::logdevice

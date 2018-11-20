@@ -119,12 +119,6 @@ class Request {
                                   bool success);
 
   /**
-   * Bump stats to reflect that this request was executed.
-   * Called right after execute() even in case of Execution::CONTINUE.
-   */
-  static void bumpStatsWhenExecuted();
-
-  /**
    * Allocates and returns the next request ID. Each thread maintains its own
    * pool of request IDs to avoid contention on the request ID atomic, and grabs
    * them in batches of 2^32

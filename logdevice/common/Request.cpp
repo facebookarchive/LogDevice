@@ -5,9 +5,9 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "Request.h"
+#include "logdevice/common/Request.h"
 
-#include "logdevice/common/Worker.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/stats/Stats.h"
 
 namespace facebook { namespace logdevice {
@@ -43,11 +43,6 @@ void Request::bumpStatsWhenPosted(StatsHolder* stats,
   if (!success) {
     STAT_INCR(stats, post_request_failed);
   }
-}
-
-void Request::bumpStatsWhenExecuted() {
-  ld_check(Worker::onThisThread());
-  WORKER_STAT_INCR(worker_requests_executed);
 }
 
 std::string Request::describe() const {

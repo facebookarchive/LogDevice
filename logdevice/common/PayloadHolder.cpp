@@ -9,8 +9,8 @@
 
 #include <cstdlib>
 
-#include "event2/buffer.h"
-#include "logdevice/common/Worker.h"
+#include <event2/buffer.h>
+
 #include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/protocol/ProtocolReader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
@@ -20,20 +20,20 @@ namespace facebook { namespace logdevice {
 PayloadHolder::PayloadHolder(struct evbuffer* payload)
     : payload_flat_(Payload(nullptr, 1)),
       payload_evbuffer_(payload),
-      evbuffer_worker_id_(Worker::onThisThread()->idx_),
-      evbuffer_worker_type_(Worker::onThisThread()->worker_type_) {
+      eventloop_(EventLoop::onThisThread()) {
   if (folly::kIsDebug) {
     ld_check(payload);
     size_t payload_size = LD_EV(evbuffer_get_length)(payload);
     ld_check(payload_size < Message::MAX_LEN);
   }
+  // This check may not be necessary, but we maintain the semantics previously.
+  ld_check(ThreadID::isWorker());
 }
 
 void PayloadHolder::reset() {
   if (payload_evbuffer_) {
     ld_check(payload_flat_.data() == nullptr);
-    ld_check(Worker::onThisThread()->idx_ == evbuffer_worker_id_);
-    ld_check(Worker::onThisThread()->worker_type_ == evbuffer_worker_type_);
+    ld_check(EventLoop::onThisThread() == eventloop_);
 
     if (owned_) {
       LD_EV(evbuffer_free)(payload_evbuffer_);
@@ -124,8 +124,7 @@ void PayloadHolder::TEST_corruptPayload() {
 Payload PayloadHolder::getPayload() {
   ld_check(valid());
   if (payload_evbuffer_ != nullptr) {
-    ld_check(Worker::onThisThread()->idx_ == evbuffer_worker_id_);
-    ld_check(Worker::onThisThread()->worker_type_ == evbuffer_worker_type_);
+    ld_check(EventLoop::onThisThread() == eventloop_);
     size_t size = LD_EV(evbuffer_get_length)(payload_evbuffer_);
     return Payload(LD_EV(evbuffer_pullup)(payload_evbuffer_, size), size);
   } else {

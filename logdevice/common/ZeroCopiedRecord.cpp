@@ -11,8 +11,10 @@
 #include <cstring>
 
 #include "logdevice/common/PayloadHolder.h"
+#include "logdevice/common/Worker.h"
 #include "logdevice/common/ZeroCopiedRecordDisposal.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/util.h"
 #include "logdevice/include/Err.h"
 
 namespace facebook { namespace logdevice {
@@ -45,13 +47,23 @@ ZeroCopiedRecord::ZeroCopiedRecord(
 }
 
 worker_id_t ZeroCopiedRecord::getDisposalThread() const {
-  return payload_holder_ == nullptr ? worker_id_t(-1)
-                                    : payload_holder_->getThreadAffinity();
+  Worker* w = nullptr;
+  if (payload_holder_ == nullptr ||
+      (w = checked_downcast_or_null<Worker*>(
+           payload_holder_->getEventLoop())) == nullptr) {
+    return worker_id_t(-1);
+  }
+  return w->idx_;
 }
 
 WorkerType ZeroCopiedRecord::getDisposalWorkerType() const {
-  return payload_holder_ == nullptr ? WorkerType::GENERAL
-                                    : payload_holder_->getWorkerTypeAffinity();
+  Worker* w = nullptr;
+  if (payload_holder_ == nullptr ||
+      (w = checked_downcast_or_null<Worker*>(
+           payload_holder_->getEventLoop())) == nullptr) {
+    return WorkerType::GENERAL;
+  }
+  return w->worker_type_;
 }
 
 /*static*/
