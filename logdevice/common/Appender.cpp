@@ -1251,6 +1251,20 @@ void Appender::onTimeout() {
     }
   }
 
+  auto worker = Worker::onThisThread(false);
+  if (worker &&
+      worker->updateable_settings_->enable_store_histogram_calculations) {
+    if (store_hdr_.flags & STORE_Header::CHAIN) {
+      worker->getWorkerTimeoutStats().onReply(
+          recipients_.getFirstOutstandingRecipient(), store_hdr_);
+    } else {
+      recipients_.forEachOutstandingRecipient(
+          [this, &worker](const ShardID& shard) {
+            worker->getWorkerTimeoutStats().onReply(shard, store_hdr_);
+          });
+    }
+  }
+
   // Only mark the first node in the list of outstanding
   // nodes as graylisted, because if we are doing chain-sending
   // it is possible that nodes further down in the chain, may not have

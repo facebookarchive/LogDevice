@@ -8,6 +8,7 @@
 #pragma once
 
 #include <folly/FBVector.h>
+#include <folly/Function.h>
 
 #include "logdevice/common/CopySet.h"
 #include "logdevice/common/Recipient.h"
@@ -148,6 +149,12 @@ class RecipientSet {
   // message and is in OUTSTANDING state. This can be used to graylist this
   // node.
   ShardID getFirstOutstandingRecipient();
+
+  // Run the callback for each outstanding shard in the copyset. An outstanding
+  // shard is a shard that hasn't replied to the STORE message and is in
+  // OUTSTANDING state.
+  void
+  forEachOutstandingRecipient(folly::Function<void(const ShardID&)> cb) const;
 
   bool allRecipientsOutstanding();
 

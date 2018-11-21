@@ -67,6 +67,15 @@ ShardID RecipientSet::getFirstOutstandingRecipient() {
   return ShardID();
 }
 
+void RecipientSet::forEachOutstandingRecipient(
+    folly::Function<void(const ShardID&)> cb) const {
+  for (const auto& r : recipients_) {
+    if (r.state_ == Recipient::State::OUTSTANDING) {
+      cb(r.getShardID());
+    }
+  }
+}
+
 bool RecipientSet::allRecipientsOutstanding() {
   for (auto& recipient : recipients_) {
     if (recipient.state_ != Recipient::State::OUTSTANDING) {
