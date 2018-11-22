@@ -104,7 +104,7 @@ class GET_SEQ_STATE_REPLY_Message : public Message {
 
   LogTailAttributes tail_attributes_;
 
-  uint64_t epoch_offset_;
+  OffsetMap epoch_offsets_;
 
   std::shared_ptr<const EpochMetaDataMap> metadata_map_;
 

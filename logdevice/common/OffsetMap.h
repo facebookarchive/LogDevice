@@ -8,21 +8,20 @@
 
 #pragma once
 
-#include <unordered_map>
+#include <atomic>
+#include <map>
 
-#include <folly/hash/Hash.h>
+#include <folly/SharedMutex.h>
 
 #include "logdevice/common/SerializableData.h"
+#include "logdevice/include/RecordOffset.h"
 
 namespace facebook { namespace logdevice {
-
-// Reserve the last 10 counters for internal use
-enum class CounterType : uint8_t { BYTE_OFFSET = 246 };
 
 /**
  * @file map of counters that contains information on amount of data within
  *       epoch or at the end of epoch. Currently contains information on number
- *       of bytes. Tracked counters are present in enum class CounterType.
+ *       of bytes. Refer to counter_type_t for information on tracked counters.
  */
 
 class OffsetMap : public SerializableData {
@@ -31,6 +30,14 @@ class OffsetMap : public SerializableData {
   using SerializableData::serialize;
 
   OffsetMap() noexcept = default;
+  /*
+   * Constructs an OffsetMap object from intializer_list. This constructor
+   * performs setCounter(counter_type, counter_value) on each pair of the list
+   * @param list of pairs <counter_type, counter_value>
+   */
+  explicit OffsetMap(
+      std::initializer_list<std::pair<const counter_type_t, uint64_t>>
+          list) noexcept;
 
   OffsetMap(const OffsetMap& om) noexcept;
   OffsetMap& operator=(const OffsetMap& om) noexcept;
@@ -39,37 +46,36 @@ class OffsetMap : public SerializableData {
   OffsetMap& operator=(OffsetMap&& om) noexcept;
 
   /**
-   * get CounterType value from CounterTypeMap
-   * @param counter_type CounterType to read
-   * @return  value of CounterType
+   * get counter_type value from CounterTypeMap
+   * @param counter_type to read
+   * @return  value of counter_type
    */
-  uint64_t getCounter(CounterType counter_type) const;
+  uint64_t getCounter(counter_type_t counter_type) const;
 
   /**
    * get counterTypeMap_
    * @return  counterTypeMap_
    */
-  const std::unordered_map<CounterType, uint64_t, folly::Hash>&
-  getCounterMap() const;
+  const std::map<counter_type_t, uint64_t>& getCounterMap() const;
 
   /**
    * removes counter_type from counterTypeMap_
    * @param counter_type  counter_type to remove from counterTypeMap_
    */
-  void unsetCounter(CounterType counter_type);
+  void unsetCounter(counter_type_t counter_type);
 
   /**
-   * set CounterType value from CounterTypeMap
-   * @param counter_type CounterType to add
+   * set counter_type value from CounterTypeMap
+   * @param counter_type counter_type_t to add to counterTypeMap_
    * @param counter_val  value to set for counter_type
    */
-  void setCounter(const CounterType counter_type, uint64_t counter_val);
+  void setCounter(const counter_type_t counter_type, uint64_t counter_val);
 
   /**
    * Check if counter value is valid
    * @return true if counter value is valid
    */
-  bool isValidOffset(const CounterType count) const;
+  bool isValidOffset(const counter_type_t count) const;
 
   /**
    * counterTypeMap_ would have BYTE_OFFSET_INVALID value for all counters
@@ -78,8 +84,8 @@ class OffsetMap : public SerializableData {
 
   /**
    * Check if OffsetMap is valid
-   * @return true if contains at least one CounterType (counterTypeMap_ size >
-   * 0)
+   * @return true if contains at least one counter exists
+   * (counterTypeMap_ size > 0)
    */
   bool isValid() const;
 
@@ -103,6 +109,22 @@ class OffsetMap : public SerializableData {
               folly::Optional<size_t> expected_size = folly::none) override;
 
   /**
+   * Used to convert uint64_t offset to new OffsetMap format
+   * returns  OffsetMap with only <BYTE_OFFSET, offset> stored
+   */
+  static OffsetMap fromLegacy(uint64_t offset);
+
+  /*
+   * Fill OffsetMap values from RecordOffset
+   */
+  static OffsetMap fromRecord(RecordOffset record_offset);
+
+  /*
+   * Returns an RecordOffset from current OffsetMap
+   */
+  static RecordOffset toRecord(OffsetMap om);
+
+  /**
    * See SerializableData::name().
    */
   const char* name() const override {
@@ -123,6 +145,9 @@ class OffsetMap : public SerializableData {
   // Decrement counterTypeMap_ entries based on passed OffsetMap
   OffsetMap& operator-=(const OffsetMap& om);
 
+  // Multiply all entry by scalar
+  OffsetMap operator*(uint64_t scalar) const;
+
   // Check if the counterTypeMap_ are equal
   bool operator==(const OffsetMap& om) const;
 
@@ -130,7 +155,32 @@ class OffsetMap : public SerializableData {
   bool operator!=(const OffsetMap& om) const;
 
  private:
-  std::unordered_map<CounterType, uint64_t, folly::Hash> counterTypeMap_;
+  std::map<counter_type_t, uint64_t> counterTypeMap_;
+};
+
+class AtomicOffsetMap {
+ public:
+  AtomicOffsetMap() noexcept = default;
+
+  /*
+   * Performs atomic_fetch_max on every entry of offsets_map
+   */
+  void atomicFetchMax(const OffsetMap& offsets_map);
+
+  /*
+   * Atomically loads OffsetMap entries and returns the resulting OffsetMap
+   */
+  OffsetMap load() const;
+
+  /*
+   * Performs atomic fetch_add on all OffsetMap entries and adds the entries.
+   */
+  OffsetMap fetchAdd(const OffsetMap& offsets_map);
+
+ private:
+  using FairRWLock = folly::SharedMutexWritePriority;
+  FairRWLock rw_lock_;
+  std::map<counter_type_t, std::atomic<uint64_t>> atomicCounterTypeMap_;
 };
 
 }} // namespace facebook::logdevice

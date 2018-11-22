@@ -11,6 +11,7 @@
 
 #include <boost/circular_buffer.hpp>
 
+#include "logdevice/common/OffsetMap.h"
 #include "logdevice/common/SampledTracer.h"
 #include "logdevice/common/settings/Settings.h"
 
@@ -47,9 +48,17 @@ class ClientReadersFlowTracer
   };
 
   struct TailInfo {
-    uint64_t byte_offset;
+    OffsetMap offsets;
     int64_t timestamp;
     lsn_t lsn_approx;
+
+    TailInfo(OffsetMap offset_map, int64_t ts, lsn_t lsn)
+        : offsets(std::move(offset_map)), timestamp(ts), lsn_approx(lsn) {}
+
+    TailInfo(const TailInfo& other) = delete;
+    TailInfo(TailInfo&& other) noexcept = default;
+    TailInfo& operator=(const TailInfo& other) = delete;
+    TailInfo& operator=(TailInfo&& other) noexcept = default;
   };
 
   ClientReadersFlowTracer(std::shared_ptr<TraceLogger> logger,

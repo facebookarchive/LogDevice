@@ -630,7 +630,7 @@ class Sequencer {
     return synced_.load();
   }
 
-  ///////////// Byte offsets and tail attributes ///////////////////
+  ///////////// offsets and tail attributes ///////////////////
 
   /**
    * Retrieve the tail of the log.
@@ -639,7 +639,7 @@ class Sequencer {
    *            in the form of TailRecord. Note that:
    *            1) only return a valid tail record if log recovery is completed;
    *               otherwise nullptr is returned;
-   *            2) the return tail record should have accumulated byte offset
+   *            2) the return tail record should have accumulated offsets
    *               instead of the within epoch one.
    *            3) for tail optimized logs, the tail record is likely to include
    *               the payload but the payload could be unavailable for a while
@@ -648,11 +648,14 @@ class Sequencer {
   std::shared_ptr<const TailRecord> getTailRecord() const;
 
   /**
-   * @return    the accumulative, epoch-end byte offset of the previous epoch.
-   *            BYTE_OFFSET_INVALID if the information is not available (e.g.,
-   *            byte offset not enabled, log recovery not completed)
+   * @return    the accumulative, epoch-end OffsetMap of the previous epoch.
+   *            it is invalid if the information is not available (e.g.,
+   *            byte offsets not enabled, log recovery not completed). Counter
+   *            BYTE_OFFSET is invalid if its value is BYTE_OFFSET_INVALID
+   *            To have access to other counters, enable_offset_map should be
+   *            set from settings.
    */
-  uint64_t getEpochOffset() const;
+  OffsetMap getEpochOffsetMap() const;
 
   ///////////// Log Provision and MetaData Log /////////////////////
 

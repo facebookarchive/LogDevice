@@ -10,10 +10,12 @@
 
 #include <cstring>
 #include <memory>
+#include <thread>
 
 #include <gtest/gtest.h>
 
 #include "logdevice/common/debug.h"
+#include "logdevice/include/RecordOffset.h"
 
 namespace {
 
@@ -35,8 +37,7 @@ TEST(OffsetMapTest, BasicSerialization) {
 
   for (int i = 0; i < n_counters; ++i) {
     OffsetMap offset_map_writer;
-    offset_map_writer.setCounter(
-        CounterType::BYTE_OFFSET, static_cast<uint64_t>(i % 10));
+    offset_map_writer.setCounter(BYTE_OFFSET, i % 10);
     counter_size[i] =
         offset_map_writer.serialize(buf1.get() + written, max_len - written);
     ASSERT_GT(counter_size[i], 0);
@@ -50,8 +51,7 @@ TEST(OffsetMapTest, BasicSerialization) {
     OffsetMap offset_map_reader;
     int nbytes =
         offset_map_reader.deserialize({buf1.get() + n_read, max_len - n_read});
-    ASSERT_EQ(offset_map_reader.getCounter(CounterType::BYTE_OFFSET),
-              (uint64_t)i % 10);
+    ASSERT_EQ(offset_map_reader.getCounter(BYTE_OFFSET), i % 10);
     ASSERT_EQ(counter_size[i], nbytes);
     n_read += nbytes;
   }
@@ -60,15 +60,46 @@ TEST(OffsetMapTest, BasicSerialization) {
 
 TEST(OffsetMapTest, Operators) {
   OffsetMap om1, om2, result, result_test;
-  result_test.setCounter(CounterType::BYTE_OFFSET, 8);
+  result_test.setCounter(BYTE_OFFSET, 8);
   result = om1 + om2;
   ASSERT_EQ(result == om1, true);
-  om1.setCounter(CounterType::BYTE_OFFSET, 4);
-  om2.setCounter(CounterType::BYTE_OFFSET, 4);
+  om1.setCounter(BYTE_OFFSET, 4);
+  om2.setCounter(BYTE_OFFSET, 4);
   result = om1 + om2;
   ASSERT_EQ(result == result_test, true);
   result += om1;
   ASSERT_NE(result == result_test, true);
+}
+
+TEST(OffsetMapTest, AtomicTest) {
+  AtomicOffsetMap atomic_offset_map;
+  OffsetMap offset_map_1, offset_map_2;
+  offset_map_1.setCounter(1, 10);
+  offset_map_1.setCounter(2, 20);
+  offset_map_2.setCounter(3, 30);
+
+  int n_loop = 10;
+
+  auto add_offsets = [&atomic_offset_map,
+                      &n_loop](const OffsetMap& offset_map) {
+    for (int i = 0; i < n_loop; ++i) {
+      atomic_offset_map.fetchAdd(offset_map);
+    }
+  };
+
+  std::thread thread1(add_offsets, offset_map_1);
+  std::thread thread2(add_offsets, offset_map_1);
+  std::thread thread3(add_offsets, offset_map_2);
+  std::thread thread4(add_offsets, offset_map_2);
+
+  thread1.join();
+  thread2.join();
+  thread3.join();
+  thread4.join();
+
+  OffsetMap result = ((offset_map_1 * 2) + (offset_map_2 * 2)) * n_loop;
+
+  ASSERT_EQ(atomic_offset_map.load(), result);
 }
 
 } // namespace

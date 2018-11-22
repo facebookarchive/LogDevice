@@ -220,7 +220,7 @@ void CachedDigestTest::setUp() {
                             /*lng*/ std::min(lng_, esn_t(esn.val_ - 1)),
                             /*wave*/ 0,
                             dummyCopyset,
-                            BYTE_OFFSET_INVALID,
+                            OffsetMap(),
                             Slice()};
   };
 

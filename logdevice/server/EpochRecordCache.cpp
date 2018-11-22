@@ -16,6 +16,7 @@
 #include "logdevice/common/AdminCommandTable.h"
 #include "logdevice/common/Digest.h"
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
+#include "logdevice/common/OffsetMap.h"
 #include "logdevice/common/RecordID.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/stats/Stats.h"
@@ -78,8 +79,7 @@ EpochRecordCache::createFromSnapshot(logid_t log_id,
                            header->buffer_capacity,
                            header->tail_optimized,
                            header->stored));
-
-  result->setOffsetWithinEpoch(header->offset_within_epoch);
+  result->setOffsetsWithinEpoch(snapshot.offsets_within_epoch_);
   result->first_seen_lng_.store(header->first_seen_lng);
   result->head_.store(header->head);
   result->max_seen_esn_.store(header->max_seen_esn);
@@ -212,7 +212,7 @@ size_t EpochRecordCache::bufferedRecords() const {
 size_t EpochRecordCache::bufferedPayloadBytes() const {
   return buffer_payload_bytes_.load(std::memory_order_relaxed);
 }
-// TODO (T33977412) : Change to take OffsetMap
+
 int EpochRecordCache::putRecord(
     RecordID rid,
     uint64_t timestamp,
@@ -223,7 +223,7 @@ int EpochRecordCache::putRecord(
     std::map<KeyType, std::string>&& keys,
     Slice payload_raw,
     const std::shared_ptr<PayloadHolder>& payload_holder,
-    uint64_t offset_within_epoch) {
+    OffsetMap offsets_within_epoch) {
   esn_t head = esn_t(head_.load());
   if (disabled_.load() || (head != ESN_INVALID && rid.esn < head)) {
     // the record should not be put into the cache if:
@@ -277,7 +277,7 @@ int EpochRecordCache::putRecord(
       lng,
       wave_or_recovery_epoch,
       copyset,
-      offset_within_epoch,
+      offsets_within_epoch,
       std::move(keys),
       payload_raw,
       payload_holder);
@@ -332,8 +332,8 @@ int EpochRecordCache::putRecord(
     // update max seen timestamp
     atomic_fetch_max(max_seen_timestamp_, timestamp);
 
-    // update accumulative epoch size with offset_within_epoch
-    setOffsetWithinEpoch(offset_within_epoch);
+    // update accumulative epoch size with offsets_within_epoch
+    setOffsetsWithinEpoch(offsets_within_epoch);
 
     // there might be old entry for the same esn, drop it first
     auto& old_entry = buffer_[getIndex(rid.esn)];
@@ -384,12 +384,16 @@ void EpochRecordCache::updateTailRecord(
                     STORE_Message::flagsToString(tail->flags).c_str());
   }
 
-  // not all record has the offset_within_epoch, if not, use the
+  // not all record has the offsets_within_epoch, if not, use the
   // value in the existing tail_record instead
-  uint64_t offset = (tail->offset_within_epoch == BYTE_OFFSET_INVALID
-                         ? tail_record_.header.u.offset_within_epoch
-                         : tail->offset_within_epoch);
+  OffsetMap offsets =
+      (tail->offsets_within_epoch.isValid() ? tail->offsets_within_epoch
+                                            : tail_record_.offsets_map_);
   TailRecordHeader::flags_t flags = TailRecordHeader::OFFSET_WITHIN_EPOCH;
+  // TODO (T35832374) : remove if condition when all servers support OffsetMap
+  if (tail->flags & STORE_Header::OFFSET_MAP) {
+    flags |= TailRecordHeader::OFFSET_MAP;
+  }
   if (tail_optimized_ == TailOptimized::YES) {
     flags |= TailRecordHeader::HAS_PAYLOAD;
     flags |= (tail->flags &
@@ -402,7 +406,13 @@ void EpochRecordCache::updateTailRecord(
 
   // replace the existing tail record
   tail_record_ =
-      TailRecord({log_id_, tail->lsn, tail->timestamp, {offset}, flags, {}},
+      TailRecord({log_id_,
+                  tail->lsn,
+                  tail->timestamp,
+                  {BYTE_OFFSET_INVALID /* deprecated, use offsets instead */},
+                  flags,
+                  {}},
+                 std::move(offsets),
                  tail_optimized_ == TailOptimized::YES ? tail : nullptr);
 }
 
@@ -553,14 +563,16 @@ EpochRecordCache::createSnapshot(esn_t esn_start, esn_t esn_end) const {
 }
 
 std::unique_ptr<EpochRecordCache::Snapshot>
-EpochRecordCache::createSerializableSnapshot() const {
-  return createSnapshotImpl(Snapshot::SnapshotType::FULL, ESN_INVALID, ESN_MAX);
+EpochRecordCache::createSerializableSnapshot(bool enable_offset_map) const {
+  return createSnapshotImpl(
+      Snapshot::SnapshotType::FULL, ESN_INVALID, ESN_MAX, enable_offset_map);
 }
 
 std::unique_ptr<EpochRecordCache::Snapshot>
 EpochRecordCache::createSnapshotImpl(Snapshot::SnapshotType type,
                                      esn_t esn_start,
-                                     esn_t esn_end) const {
+                                     esn_t esn_end,
+                                     bool enable_offset_map) const {
   if (type == Snapshot::SnapshotType::FULL) {
     ld_check(esn_start == ESN_INVALID || esn_end == ESN_MAX);
   }
@@ -572,17 +584,24 @@ EpochRecordCache::createSnapshotImpl(Snapshot::SnapshotType type,
     // with a higer seal epoch going on.
     FairRWLock::ReadHolder read_guard(rw_lock_);
     if (type == Snapshot::SnapshotType::FULL) {
+      OffsetMap offsets_within_epoch = getOffsetsWithinEpoch();
       // Initialize header fields
       CacheHeader header{};
       header.epoch = epoch_;
       header.tail_optimized = tail_optimized_;
-      header.offset_within_epoch = offset_within_epoch_.load();
       header.buffer_capacity = capacity();
+      header.offset_within_epoch = offsets_within_epoch.getCounter(BYTE_OFFSET);
       if (tail_record_.isValid()) {
         header.flags |=
             EpochRecordCacheSerializer::CacheHeader::VALID_TAIL_RECORD;
       } else {
         ld_check(header.flags == 0);
+      }
+      // TODO (T35832374) : remove if condition when all servers support
+      // OffsetMap
+      if (enable_offset_map) {
+        header.flags |=
+            EpochRecordCacheSerializer::CacheHeader::SUPPORT_OFFSET_MAP;
       }
 
       // If disabled, store as an empty inconsistent cache, so that we maintain
@@ -616,8 +635,8 @@ EpochRecordCache::createSnapshotImpl(Snapshot::SnapshotType type,
         ld_check(false);
         return nullptr;
       }
-
-      snapshot = std::unique_ptr<Snapshot>(new Snapshot(header, tail_record_));
+      snapshot = std::unique_ptr<Snapshot>(
+          new Snapshot(header, tail_record_, std::move(offsets_within_epoch)));
     } else { // PARTIAL Snapshot
       snapshot = std::unique_ptr<Snapshot>(new Snapshot(esn_start, esn_end));
     }
@@ -678,7 +697,27 @@ EpochRecordCache::Snapshot::createFromLinearBuffer(
     }
     cumulative_size += sizeof(CacheHeader);
 
-    // 2) Read TailRecord
+    // 2) Read offsets_within_epoch
+    OffsetMap offsets_within_epoch;
+    if (header.flags & CacheHeader::SUPPORT_OFFSET_MAP) {
+      int rv = offsets_within_epoch.deserialize(
+          Slice(buffer + cumulative_size, size - cumulative_size));
+      if (rv < 0) {
+        RATELIMIT_ERROR(std::chrono::seconds(30),
+                        5,
+                        "Failed to populate EpochRecordCache from linear "
+                        "buffer: bad offsets_within_epoch! header: %s",
+                        CacheHeader::toString(header).c_str());
+        return nullptr;
+      }
+      cumulative_size += rv;
+    } else {
+      // TODO (T35659884) : Remove offset_within_epoch
+      // Populate offsets_within_epoch from previous header format
+      offsets_within_epoch.setCounter(BYTE_OFFSET, header.offset_within_epoch);
+    }
+
+    // 3) Read TailRecord
     TailRecord tail_record;
     if (header.flags & CacheHeader::VALID_TAIL_RECORD) {
       // otherwise it won't be a valid header
@@ -698,7 +737,8 @@ EpochRecordCache::Snapshot::createFromLinearBuffer(
       ld_check(cumulative_size <= size);
     }
 
-    snapshot.reset(new Snapshot(header, tail_record));
+    snapshot.reset(
+        new Snapshot(header, tail_record, std::move(offsets_within_epoch)));
   }
 
   ld_check(snapshot);
@@ -710,7 +750,7 @@ EpochRecordCache::Snapshot::createFromLinearBuffer(
     return snapshot;
   }
 
-  // 3) Read cache entries
+  // 4) Read cache entries
   esn_t::raw_type previous_esn = ESN_INVALID.val();
   esn_t lng = prev_esn(esn_t(header->head));
 
@@ -772,12 +812,13 @@ EpochRecordCache::Snapshot::ConstIterator::getRecord() const {
   ld_assert(!atEnd());
   EpochRecordCacheEntry* e = it_->second.get();
   ld_check(e != nullptr);
+
   return Record{e->flags,
                 e->timestamp,
                 e->last_known_good,
                 e->wave_or_recovery_epoch,
                 e->copyset,
-                e->offset_within_epoch,
+                e->offsets_within_epoch,
                 e->payload_raw};
 }
 
@@ -794,7 +835,7 @@ void EpochRecordCache::getDebugInfo(InfoRecordCacheTable& table) const {
       .set<7>(head_.load())
       .set<8>(max_seen_esn_.load())
       .set<9>(first_seen_lng_.load())
-      .set<10>(offset_within_epoch_.load());
+      .set<10>(offsets_within_epoch_.load().toString());
 
   if (tail_record_.isValid()) {
     table.set<11>(tail_record_.header.lsn);
@@ -851,10 +892,12 @@ EpochRecordCache::Snapshot::Snapshot(esn_t start, esn_t until)
     : start_(start), until_(until), type_(SnapshotType::PARTIAL) {}
 
 EpochRecordCache::Snapshot::Snapshot(const CacheHeader& header,
-                                     const TailRecord& tail_record)
+                                     const TailRecord& tail_record,
+                                     OffsetMap offsets_within_epoch)
     : start_(ESN_INVALID),
       until_(ESN_MAX),
       tail_record_(tail_record),
+      offsets_within_epoch_(std::move(offsets_within_epoch)),
       type_(SnapshotType::FULL) {
   header_ = std::make_unique<CacheHeader>(header);
   ld_check(!!(header_->flags & CacheHeader::VALID_TAIL_RECORD) ==
@@ -865,7 +908,12 @@ size_t EpochRecordCache::Snapshot::sizeInLinearBuffer() const {
   // 1) header
   size_t result = sizeof(CacheHeader);
 
-  // 2) TailRecord
+  // 2) offsets_within_epoch
+  if (header_->flags & CacheHeader::SUPPORT_OFFSET_MAP) {
+    result += offsets_within_epoch_.sizeInLinearBuffer();
+  }
+
+  // 3) TailRecord
   if (header_->flags & CacheHeader::VALID_TAIL_RECORD) {
     ld_check(tail_record_.isValid());
     result += tail_record_.sizeInLinearBuffer();
@@ -873,7 +921,7 @@ size_t EpochRecordCache::Snapshot::sizeInLinearBuffer() const {
     ld_check(!tail_record_.isValid());
   }
 
-  // 3) cache entries
+  // 4) cache entries
   for (const auto& kv : entry_map_) {
     result += sizeof(esn_t::raw_type) + kv.second->sizeInLinearBuffer();
   }
@@ -905,7 +953,21 @@ ssize_t EpochRecordCache::Snapshot::toLinearBuffer(char* buffer,
 
   memcpy(buffer, header_.get(), sizeof(CacheHeader));
 
-  // 2) write TailRecord if it is valid
+  // 2) write offsets_within_epoch
+  if (header_->flags & CacheHeader::SUPPORT_OFFSET_MAP) {
+    int rv = offsets_within_epoch_.serialize(
+        buffer + cumulative_size, size - cumulative_size);
+    if (rv < 0) {
+      RATELIMIT_ERROR(std::chrono::seconds(30),
+                      5,
+                      "Not writing to linear buffer: failed to write "
+                      "OffsetMap counters.");
+      return -1;
+    }
+    cumulative_size += rv;
+  }
+
+  // 3) write TailRecord if it is valid
   if (header_->flags & CacheHeader::VALID_TAIL_RECORD) {
     ld_check(tail_record_.isValid());
     int rv = tail_record_.serialize(
@@ -922,7 +984,7 @@ ssize_t EpochRecordCache::Snapshot::toLinearBuffer(char* buffer,
     ld_check(!tail_record_.isValid());
   }
 
-  // 3) write cache entries
+  // 4) write cache entries
   ld_check(entry_map_.size() == header_->buffer_entries);
   for (const auto& kv : entry_map_) {
     auto& esn = kv.first;
@@ -964,7 +1026,7 @@ EpochRecordCache::Snapshot::getRecord(esn_t esn) const {
                                e->last_known_good,
                                e->wave_or_recovery_epoch,
                                e->copyset,
-                               e->offset_within_epoch,
+                               e->offsets_within_epoch,
                                e->payload_raw});
 }
 
@@ -981,7 +1043,7 @@ bool EpochRecordCacheCompare::testEntriesIdentical(
       a.wave_or_recovery_epoch == b.wave_or_recovery_epoch &&
       a.copyset.size() == b.copyset.size() &&
       std::equal(a.copyset.begin(), a.copyset.end(), b.copyset.begin()) &&
-      a.offset_within_epoch == b.offset_within_epoch && a.keys == b.keys &&
+      a.offsets_within_epoch == b.offsets_within_epoch && a.keys == b.keys &&
       a.payload_raw.size == b.payload_raw.size &&
       memcmp(a.payload_raw.data, b.payload_raw.data, a.payload_raw.size) == 0;
 }

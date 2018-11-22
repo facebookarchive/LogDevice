@@ -31,7 +31,7 @@ EpochRecordCacheEntry::EpochRecordCacheEntry(
     esn_t last_known_good,
     uint32_t wave_or_recovery_epoch,
     const copyset_t& copyset,
-    uint64_t offset_within_epoch,
+    OffsetMap offsets_within_epoch,
     std::map<KeyType, std::string>&& keys,
     Slice payload_raw,
     std::shared_ptr<PayloadHolder> payload_holder)
@@ -41,7 +41,7 @@ EpochRecordCacheEntry::EpochRecordCacheEntry(
                        last_known_good,
                        wave_or_recovery_epoch,
                        copyset,
-                       offset_within_epoch,
+                       std::move(offsets_within_epoch),
                        std::move(keys),
                        payload_raw,
                        std::move(payload_holder)) {}
@@ -75,7 +75,14 @@ int EpochRecordCacheEntry::fromLinearBuffer(lsn_t lsn,
   timestamp = header.timestamp;
   last_known_good = header.last_known_good;
   wave_or_recovery_epoch = header.wave_or_recovery_epoch;
-  offset_within_epoch = header.offset_within_epoch;
+
+  if (flags & STORE_Header::OFFSET_MAP) {
+    int rv = offsets_within_epoch.deserialize(
+        Slice(buffer + current_size, size - current_size));
+    ld_check(rv != -1);
+  } else {
+    offsets_within_epoch.setCounter(BYTE_OFFSET, header.offset_within_epoch);
+  }
 
   size_t copyset_memsize = sizeof(copyset_t::value_type) * header.copyset_size;
   if (current_size + copyset_memsize + header.payload_size > size) {
@@ -124,7 +131,10 @@ size_t EpochRecordCacheEntry::sizeInLinearBuffer() const {
 
   return sizeof(EntryHeader) +
       (sizeof(copyset_t::value_type) * copyset.size()) + key_sizes +
-      payload_raw.size;
+      payload_raw.size +
+      (flags & STORE_Header::OFFSET_MAP
+           ? offsets_within_epoch.sizeInLinearBuffer()
+           : 0);
 }
 
 ssize_t EpochRecordCacheEntry::toLinearBuffer(char* buffer, size_t size) const {
@@ -139,7 +149,7 @@ ssize_t EpochRecordCacheEntry::toLinearBuffer(char* buffer, size_t size) const {
                      last_known_good,
                      wave_or_recovery_epoch,
                      copyset_size_t(copyset.size()),
-                     offset_within_epoch,
+                     offsets_within_epoch.getCounter(BYTE_OFFSET),
                      {},
                      payload_raw.size};
   for (const auto& kv : keys) {
@@ -147,6 +157,12 @@ ssize_t EpochRecordCacheEntry::toLinearBuffer(char* buffer, size_t size) const {
   }
   memcpy(buffer, &header, sizeof(EntryHeader));
   int current_size = sizeof(EntryHeader);
+
+  if (header.flags & STORE_Header::OFFSET_MAP) {
+    int rv = offsets_within_epoch.serialize(
+        buffer + current_size, size - current_size);
+    current_size += rv;
+  }
 
   // copyset_
   size_t copyset_memsize = sizeof(copyset_t::value_type) * copyset.size();

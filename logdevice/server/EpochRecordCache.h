@@ -92,7 +92,7 @@ class EpochRecordCache {
                 std::map<KeyType, std::string>&& keys,
                 Slice payload_raw,
                 const std::shared_ptr<PayloadHolder>& payload_holder,
-                uint64_t offset_within_epoch = BYTE_OFFSET_INVALID);
+                OffsetMap offsets_within_epoch = OffsetMap());
 
   /**
    * Update the cache when the last known good lsn of the log advances.
@@ -205,20 +205,21 @@ class EpochRecordCache {
   bool emptyWithoutTailPayload() const;
 
   /**
-   * @return    return most recent value of amount of data written in given
+   * @return    return most recent OffsetMap of amount of data written in given
    *            epoch as seen by given node.
    */
-  uint64_t getOffsetWithinEpoch() const {
-    return offset_within_epoch_.load();
+  OffsetMap getOffsetsWithinEpoch() const {
+    return offsets_within_epoch_.load();
   }
 
   /**
-   * @param offset_within_epoch     most recent value of amount of data written
-   *                                in given epoch as seen by given node.
+   * @param offsets_within_epoch     most recent OffsetMap of amount of data
+   *                                 written in given epoch as seen by given
+   *                                 node.
    */
-  void setOffsetWithinEpoch(uint64_t offset_within_epoch) {
-    if (offset_within_epoch != BYTE_OFFSET_INVALID) {
-      atomic_fetch_max(offset_within_epoch_, offset_within_epoch);
+  void setOffsetsWithinEpoch(const OffsetMap& offsets_within_epoch) {
+    if (offsets_within_epoch.isValid()) {
+      offsets_within_epoch_.atomicFetchMax(offsets_within_epoch);
     }
   }
 
@@ -251,7 +252,7 @@ class EpochRecordCache {
       esn_t last_known_good;
       uint32_t wave_or_recovery_epoch;
       copyset_t copyset;
-      uint64_t offset_within_epoch;
+      OffsetMap offsets_within_epoch;
       Slice payload_raw;
     };
 
@@ -319,7 +320,8 @@ class EpochRecordCache {
     // private constructor, can be created by EpochRecordCache only
     Snapshot(esn_t start, esn_t until);
     explicit Snapshot(const EpochRecordCacheSerializer::CacheHeader& header,
-                      const TailRecord& TailRecord);
+                      const TailRecord& TailRecord,
+                      OffsetMap offsets_within_epoch);
 
     using InternalMap = std::map<esn_t, std::shared_ptr<EpochRecordCacheEntry>>;
 
@@ -330,6 +332,7 @@ class EpochRecordCache {
     // Is nullptr for PARTIAL snapshots
     std::unique_ptr<EpochRecordCacheSerializer::CacheHeader> header_;
     TailRecord tail_record_;
+    OffsetMap offsets_within_epoch_;
 
     const SnapshotType type_;
 
@@ -370,7 +373,8 @@ class EpochRecordCache {
     };
   };
 
-  std::unique_ptr<Snapshot> createSerializableSnapshot() const;
+  std::unique_ptr<Snapshot>
+  createSerializableSnapshot(bool enable_offset_map = false) const;
   std::unique_ptr<Snapshot> createSnapshot(esn_t esn_start = ESN_INVALID,
                                            esn_t esn_end = ESN_MAX) const;
 
@@ -472,8 +476,8 @@ class EpochRecordCache {
 
   // Most recent value of amount of data written in given epoch as seen by
   // given node. Storage node get it from STORE message which carried this info
-  // (byte offset sent periodically with some STORE messages).
-  std::atomic<uint64_t> offset_within_epoch_{0};
+  // (offsets sent periodically with some STORE messages).
+  AtomicOffsetMap offsets_within_epoch_;
 
   // true if cache is disabled
   std::atomic<bool> disabled_{false};
@@ -534,10 +538,14 @@ class EpochRecordCache {
    *                      esn will not be included in the snapshot
    *
    * @param esn_end       maximum esn to be included in the snapshot
+   *
+   * @param enable_offset_map flag from settings that enables OffsetMap feature
    */
-  std::unique_ptr<Snapshot> createSnapshotImpl(Snapshot::SnapshotType type,
-                                               esn_t esn_start = ESN_INVALID,
-                                               esn_t esn_end = ESN_MAX) const;
+  std::unique_ptr<Snapshot>
+  createSnapshotImpl(Snapshot::SnapshotType type,
+                     esn_t esn_start = ESN_INVALID,
+                     esn_t esn_end = ESN_MAX,
+                     bool enable_offset_map = false) const;
 
   friend class EpochRecordCacheSerializer::EpochRecordCacheCompare;
 };
@@ -555,6 +563,8 @@ struct EntryHeader {
   esn_t last_known_good;
   uint32_t wave_or_recovery_epoch;
   copyset_size_t copyset_size;
+  // TODO(T35659884) : Remove offset_within_epoch. Add a new protocol in
+  // toLinearBuffer and fromLinearBuffer in EpochRecordCacheEntry.cpp
   uint64_t offset_within_epoch;
   size_t key_size[to_integral(KeyType::MAX)];
   size_t payload_size;
@@ -575,13 +585,18 @@ struct CacheHeader {
   esn_t::raw_type first_seen_lng;
   esn_t::raw_type max_seen_esn;
   uint64_t max_seen_timestamp;
+  // TODO(T35659884) : Remove offset_within_epoch. Add a new protocol in
+  // toLinearBuffer and fromLinearBuffer in EpochRecordCache.cpp
   uint64_t offset_within_epoch;
   size_t buffer_entries;
   size_t buffer_payload_bytes;
   size_t buffer_capacity;
 
   // the cache has a valid tail record
-  static const flags_t VALID_TAIL_RECORD = 1u << 0;
+  static const flags_t VALID_TAIL_RECORD = 1u << 0; //=1
+
+  // OffsetMap is used to represent offsets_within_epoch
+  static const flags_t SUPPORT_OFFSET_MAP = 1u << 1; //=2
 
 } __attribute__((__packed__));
 

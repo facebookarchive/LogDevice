@@ -130,6 +130,10 @@ class ZookeeperEpochStore : public EpochStore, boost::noncopyable {
 
   Status zkOpStatus(int rc, logid_t logid, const char* op) const;
 
+  const UpdateableSettings<Settings>& getSettings() {
+    return settings_;
+  }
+
  private:
   // parent processor for current ZookeeperEpochStore
   Processor* processor_;

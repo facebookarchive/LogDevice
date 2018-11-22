@@ -285,10 +285,6 @@ class EpochSequencer : public std::enable_shared_from_this<EpochSequencer> {
     return window_.capacity();
   }
 
-  uint64_t getOffsetWithinEpoch() const {
-    return offset_within_epoch_.load();
-  }
-
   State getState() const {
     return state_;
   }
@@ -438,8 +434,8 @@ class EpochSequencer : public std::enable_shared_from_this<EpochSequencer> {
   std::atomic<lsn_t> last_reaped_;
 
   // TODO 7467469: more accumulated states, byte offset, etc
-  // How many bytes were written to current epoch up to last appended record.
-  std::atomic<uint64_t> offset_within_epoch_;
+  // Amount of data written to current epoch up to last appended record.
+  AtomicOffsetMap offsets_within_epoch_;
 
   // Target lsn for the completion of draining/destruction (i.e.,
   // last appender lsn in the window when it was disabled). Initialized to

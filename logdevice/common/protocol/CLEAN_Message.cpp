@@ -29,11 +29,10 @@ CLEAN_Message::CLEAN_Message(const CLEAN_Header& header,
 
 void CLEAN_Message::serialize(ProtocolWriter& writer) const {
   ld_check(header_.num_absent_nodes == absent_nodes_.size());
-  ld_check(header_.epoch_end_offset ==
-           tail_record_.offsets_map_.getCounter(CounterType::BYTE_OFFSET));
-  ld_check(header_.epoch_size ==
-           epoch_size_map_.getCounter(CounterType::BYTE_OFFSET));
   CLEAN_Header write_header = header_;
+  write_header.epoch_end_offset_DEPRECATED =
+      tail_record_.offsets_map_.getCounter(BYTE_OFFSET);
+  write_header.epoch_size_DEPRECATED = epoch_size_map_.getCounter(BYTE_OFFSET);
   write_header.flags |= CLEAN_Header::INCLUDE_TAIL_RECORD;
   writer.write(write_header);
   writer.writeVector(absent_nodes_);
@@ -72,10 +71,12 @@ MessageReadResult CLEAN_Message::deserialize(ProtocolReader& reader) {
     }
     epoch_size_map.deserialize(reader, false /* unused */);
   } else {
-    epoch_size_map.setCounter(CounterType::BYTE_OFFSET, hdr.epoch_size);
+    epoch_size_map.setCounter(BYTE_OFFSET, hdr.epoch_size_DEPRECATED);
     tail_record.offsets_map_.setCounter(
-        CounterType::BYTE_OFFSET, hdr.epoch_end_offset);
+        BYTE_OFFSET, hdr.epoch_end_offset_DEPRECATED);
   }
+  hdr.epoch_size_DEPRECATED = BYTE_OFFSET_INVALID;
+  hdr.epoch_end_offset_DEPRECATED = BYTE_OFFSET_INVALID;
 
   return reader.result([&] {
     return new CLEAN_Message(hdr,

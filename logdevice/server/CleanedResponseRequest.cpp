@@ -124,15 +124,11 @@ void CleanedResponseRequest::prepareMetadata() {
   }
 
   EpochRecoveryMetadata::FlagsType flags = 0;
+  // TODO (T35832374) : remove if condition when all servers support OffsetMap
   if (Worker::settings().enable_offset_map) {
     flags |= EpochRecoveryMetadata::Header::SUPPORT_OFFSET_MAP_AND_TAIL_RECORD;
   }
   ld_check(!clean_msg_->tail_record_.containOffsetWithinEpoch());
-  ld_check(header.epoch_end_offset ==
-           clean_msg_->tail_record_.offsets_map_.getCounter(
-               CounterType::BYTE_OFFSET));
-  ld_check(header.epoch_size ==
-           clean_msg_->epoch_size_map_.getCounter(CounterType::BYTE_OFFSET));
 
   // TODO 9929743: byte offset
   metadata_ = std::make_unique<EpochRecoveryMetadata>(

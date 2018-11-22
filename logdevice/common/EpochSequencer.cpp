@@ -41,8 +41,7 @@ EpochSequencer::EpochSequencer(logid_t log_id,
       state_(State::ACTIVE),
       window_(epoch, window_size, esn_max),
       lng_(compose_lsn(epoch, ESN_INVALID)),
-      last_reaped_(compose_lsn(epoch, ESN_INVALID)),
-      offset_within_epoch_(0) {}
+      last_reaped_(compose_lsn(epoch, ESN_INVALID)) {}
 
 RunAppenderStatus EpochSequencer::runAppender(Appender* appender) {
   if (!appender || appender->started()) {
@@ -90,12 +89,12 @@ RunAppenderStatus EpochSequencer::runAppender(Appender* appender) {
 void EpochSequencer::processNextBytes(Appender* appender) {
   ld_check(appender != nullptr);
   uint64_t in_payload_checksum_bytes = appender->getChecksumBytes();
-  uint64_t payload_size =
-      appender->getPayload()->size() - in_payload_checksum_bytes;
-  uint64_t offset = offset_within_epoch_.fetch_add(payload_size) + payload_size;
-  OffsetMap offsets_within_epoch;
-  offsets_within_epoch.setCounter(CounterType::BYTE_OFFSET, offset);
-  appender->setLogOffset(std::move(offsets_within_epoch));
+  OffsetMap payload_size_map;
+  // TODO(T33977412) Add record counter offset based on settings
+  payload_size_map.setCounter(
+      BYTE_OFFSET, appender->getPayload()->size() - in_payload_checksum_bytes);
+  OffsetMap offsets = offsets_within_epoch_.fetchAdd(payload_size_map);
+  appender->setLogOffset(std::move(offsets));
 }
 
 void EpochSequencer::transitionTo(State next) {

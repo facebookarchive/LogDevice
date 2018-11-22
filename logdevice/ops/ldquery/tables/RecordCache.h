@@ -56,8 +56,9 @@ class RecordCache : public AdminCommandTable {
         {"first_lng",
          DataType::BIGINT,
          "The first LNG the cache has ever seen since its creation."},
+        // TODO (T36984535) : deprecate column offset_within_epoch
         {"offset_within_epoch",
-         DataType::BIGINT,
+         DataType::TEXT,
          "Most recent value of the amount of data written in the given epoch "
          "as seen by this shard."},
         {"tail_record_lsn",

@@ -256,7 +256,7 @@ tuple logdevice_get_tail_attributes(Client& self, logid_t logid) {
   } else {
     return make_tuple(attributes->last_released_real_lsn,
                       attributes->last_timestamp.count(),
-                      attributes->byte_offset);
+                      attributes->offsets.getCounter(BYTE_OFFSET));
   }
 }
 

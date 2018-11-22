@@ -797,6 +797,7 @@ int Appender::start(std::shared_ptr<EpochSequencer> epoch_sequencer,
 
 void Appender::prepareTailRecord(bool include_payload) {
   TailRecordHeader::flags_t flags = TailRecordHeader::OFFSET_WITHIN_EPOCH;
+  // TODO (T35832374) : remove if condition when all servers support OffsetMap
   if (getSettings().enable_offset_map) {
     flags |= TailRecordHeader::OFFSET_MAP;
   }
@@ -815,7 +816,7 @@ void Appender::prepareTailRecord(bool include_payload) {
       log_id_,
       store_hdr_.rid.lsn(),
       store_hdr_.timestamp,
-      {extra_.offsets_within_epoch.getCounter(CounterType::BYTE_OFFSET)},
+      {BYTE_OFFSET_INVALID /* deprecated, offsets_within_epoch used instead */},
       flags,
       {}};
 
@@ -841,8 +842,7 @@ void Appender::prepareTailRecord(bool include_payload) {
         esn_t(store_hdr_.last_known_good),
         uint32_t(store_hdr_.wave),
         /*unused copyset*/ copyset_t{},
-        // TODO(T33977412) : send offsets_within_epoch
-        extra_.offsets_within_epoch.getCounter(CounterType::BYTE_OFFSET),
+        extra_.offsets_within_epoch,
         /*unused keys*/ std::map<KeyType, std::string>{},
         Slice{ph_raw},
         payload_);
@@ -2406,6 +2406,7 @@ void Appender::setLogOffset(OffsetMap offset_map) {
   ld_check(!retired_);
   extra_.offsets_within_epoch = std::move(offset_map);
   passthru_flags_ |= STORE_Header::OFFSET_WITHIN_EPOCH;
+  // TODO (T35832374) : remove if condition when all servers support OffsetMap
   if (getSettings().enable_offset_map) {
     passthru_flags_ |= STORE_Header::OFFSET_MAP;
   }

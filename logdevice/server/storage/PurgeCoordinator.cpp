@@ -57,11 +57,14 @@ static void broadcastReleaseRequest(LogStorageState* parent,
 class MergeMutablePerEpochLogMetadataTask final : public WriteStorageTask {
  public:
   MergeMutablePerEpochLogMetadataTask(LogStorageState* parent,
-                                      const RecordID& rid)
+                                      const RecordID& rid,
+                                      uint16_t flags)
       : WriteStorageTask(StorageTask::Type::MERGE_PER_EPOCH_METADATA),
         parent_(parent),
         rid_(rid),
-        metadata_(0 /* flags */, rid.esn, 0 /* unknown epoch size */),
+        metadata_(flags,
+                  rid.esn,
+                  OffsetMap::fromLegacy(0) /* unknown epoch_size_map */),
         write_op_(rid.logid, rid.epoch, &metadata_) {}
 
   void onDone() override {
@@ -356,9 +359,14 @@ Message::Disposition PurgeCoordinator::onReceived(RELEASE_Message* msg,
 
     // Create storage task which will asynchronously update the metadata and
     // broadcast the release request on termination.
+    uint16_t flags = 0;
+    // TODO (T35832374) : remove if condition when all servers support OffsetMap
+    if (w->settings().enable_offset_map) {
+      flags |= MutablePerEpochLogMetadata::Data::SUPPORT_OFFSET_MAP;
+    }
     w->getStorageTaskQueueForShard(shard)->putTask(
         std::make_unique<MergeMutablePerEpochLogMetadataTask>(
-            do_broadcast ? log_state : nullptr, header.rid));
+            do_broadcast ? log_state : nullptr, header.rid, flags));
   }
 
   checked_downcast<PurgeCoordinator&>(*log_state->purge_coordinator_)
@@ -374,7 +382,7 @@ void PurgeCoordinator::onReleaseMessage(lsn_t lsn,
                                         NodeID from,
                                         ReleaseType release_type,
                                         bool do_broadcast,
-                                        uint64_t epoch_offset) {
+                                        OffsetMap epoch_offsets) {
   // During rebuilding, don't purge, don't persist last released LSN and
   // don't broadcast the release.
   ServerWorker* worker = ServerWorker::onThisThread();
@@ -400,7 +408,7 @@ void PurgeCoordinator::onReleaseMessage(lsn_t lsn,
     release_now = false;
   }
   if (release_now) {
-    this->doRelease(lsn, release_type, do_broadcast, epoch_offset);
+    this->doRelease(lsn, release_type, do_broadcast, std::move(epoch_offsets));
     return;
   }
   if (parent_->hasPermanentError()) {
@@ -613,11 +621,11 @@ void PurgeCoordinator::shutdown() {
   ld_check(active_purge_);
   active_purge_.reset();
 }
-// TODO(T33977412) : change function to take OffsetMap
+
 void PurgeCoordinator::doRelease(lsn_t lsn,
                                  ReleaseType release_type,
                                  bool do_broadcast,
-                                 uint64_t epoch_offset) {
+                                 OffsetMap epoch_offsets) {
   ld_spew("log %lu releasing %s, release_type=%s",
           log_id_.val_,
           lsn_to_string(lsn).c_str(),
@@ -637,9 +645,7 @@ void PurgeCoordinator::doRelease(lsn_t lsn,
   switch (release_type) {
     case ReleaseType::GLOBAL:
       // Global release. Update epoch offset and last-released LSN.
-      if (epoch_offset != BYTE_OFFSET_INVALID) {
-        OffsetMap epoch_offsets;
-        epoch_offsets.setCounter(CounterType::BYTE_OFFSET, epoch_offset);
+      if (epoch_offsets.isValid()) {
         parent_->updateEpochOffsetMap(
             std::make_pair(lsn_to_epoch(lsn), std::move(epoch_offsets)));
       }

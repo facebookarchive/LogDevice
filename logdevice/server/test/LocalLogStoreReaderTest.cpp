@@ -1539,7 +1539,7 @@ TEST_P(LocalLogStoreReaderTest, GetTailRecord) {
       TestRecord(logid_t(1), lsn(4, 1), ESN_INVALID).payload(pl),
       TestRecord(logid_t(1), lsn(4, 4), esn_t(1))
           .timestamp(std::chrono::milliseconds(2335))
-          .offsetWithinEpoch(329971)
+          .offsetsWithinEpoch(OffsetMap({{BYTE_OFFSET, 329971}}))
           .writtenByRecovery(6)
           .bridge()
           .payload(pl),
@@ -1570,7 +1570,7 @@ TEST_P(LocalLogStoreReaderTest, GetTailRecord) {
   ASSERT_TRUE(tail.header.flags & TailRecordHeader::CHECKSUM_PARITY);
 
   // byteoffset not available
-  ASSERT_EQ(BYTE_OFFSET_INVALID, tail.header.u.offset_within_epoch);
+  ASSERT_EQ(OffsetMap(), tail.offsets_map_);
 
   // epoch 1 lng 3
   rv = getTailRecord(*it, logid_t(1), epoch_t(1), esn_t(3), &tail, false);
@@ -1581,8 +1581,8 @@ TEST_P(LocalLogStoreReaderTest, GetTailRecord) {
   ASSERT_FALSE(tail.header.flags & TailRecordHeader::CHECKSUM_64BIT);
   ASSERT_TRUE(tail.header.flags & TailRecordHeader::CHECKSUM_PARITY);
 
-  // byteoffset not available
-  ASSERT_EQ(BYTE_OFFSET_INVALID, tail.header.u.offset_within_epoch);
+  // offsets not available
+  ASSERT_EQ(OffsetMap(), tail.offsets_map_);
 
   // epoch 4 lng 10 w/ payload
   rv = getTailRecord(*it, logid_t(1), epoch_t(4), esn_t(10), &tail, true);
@@ -1591,11 +1591,12 @@ TEST_P(LocalLogStoreReaderTest, GetTailRecord) {
   ASSERT_EQ(lsn(4, 4), tail.header.lsn);
   ASSERT_TRUE(tail.hasPayload());
   ASSERT_EQ(2335, tail.header.timestamp);
-  ASSERT_EQ(329971, tail.header.u.offset_within_epoch);
+  ASSERT_EQ(329971, tail.offsets_map_.getCounter(BYTE_OFFSET));
   TailRecordHeader::flags_t expected_flags =
       (TailRecordHeader::HAS_PAYLOAD |
        TailRecordHeader::CHECKSUM_PARITY | // default in TestRecord
-       TailRecordHeader::OFFSET_WITHIN_EPOCH);
+       TailRecordHeader::OFFSET_WITHIN_EPOCH | TailRecordHeader::OFFSET_MAP);
+
   ASSERT_EQ(expected_flags, tail.header.flags);
   Slice s = tail.getPayloadSlice();
   rv = strncmp((const char*)s.data, (const char*)pl.data(), pl.size());

@@ -552,8 +552,8 @@ class EpochRecoveryMetadata final : public PerEpochLogMetadata {
                 last_known_good,
                 last_digest_esn,
                 flags,
-                epoch_end_offsets.getCounter(CounterType::BYTE_OFFSET),
-                epoch_size_map.getCounter(CounterType::BYTE_OFFSET)},
+                epoch_end_offsets.getCounter(BYTE_OFFSET),
+                epoch_size_map.getCounter(BYTE_OFFSET)},
         tail_record_(std::move(tail_record)),
         epoch_size_map_(std::move(epoch_size_map)),
         epoch_end_offsets_(std::move(epoch_end_offsets)) {}
@@ -666,8 +666,11 @@ class MutablePerEpochLogMetadata final : public PerEpochLogMetadata {
     // last known good esn of the epoch
     esn_t last_known_good;
 
-    // epoch size in bytes
-    uint64_t epoch_size;
+    // if set, store OffsetMap instead of uint64_t
+    static const FlagsType SUPPORT_OFFSET_MAP = 1u << 0; //=1
+
+    // All known flags
+    static const FlagsType ALL_FLAGS = SUPPORT_OFFSET_MAP;
   } __attribute__((__packed__));
 
   MutablePerEpochLogMetadata()
@@ -680,71 +683,46 @@ class MutablePerEpochLogMetadata final : public PerEpochLogMetadata {
 
   MutablePerEpochLogMetadata(FlagsType flags,
                              esn_t last_known_good,
-                             uint64_t epoch_size)
-      : data_{flags, last_known_good, epoch_size} {}
+                             OffsetMap epoch_size_map)
+      : data_{flags, last_known_good},
+        epoch_size_map_(std::move(epoch_size_map)) {}
 
   PerEpochLogMetadataType getType() const override {
     return PerEpochLogMetadataType::MUTABLE;
-  }
-
-  static bool valid(Slice blob) {
-    return blob.size == sizeof(data_) &&
-        static_cast<const Data*>(blob.data)->flags == 0;
-  }
-
-  bool valid() const override {
-    return data_.flags == 0;
-  }
-
-  void reset() override {
-    data_.flags = 0;
-    data_.last_known_good = ESN_INVALID;
-    data_.epoch_size = 0;
   }
 
   Status update(PerEpochLogMetadata&) override {
     return E::NOTSUPPORTED;
   }
 
-  Slice serialize() const override {
-    return Slice(&data_, sizeof(data_));
+  bool valid() const override {
+    return (data_.flags | Data::ALL_FLAGS) == Data::ALL_FLAGS;
   }
 
-  int deserialize(Slice blob) override {
-    if (blob.size != sizeof(data_)) {
-      err = E::MALFORMED_RECORD;
-      return -1;
-    }
-    std::memcpy(&data_, blob.data, blob.size);
-    return 0;
-  }
+  static bool valid(Slice blob);
+
+  void reset() override;
+
+  Slice serialize() const override;
+
+  int deserialize(Slice blob) override;
 
   std::string toString() const override;
 
-  void merge(const MutablePerEpochLogMetadata& other) {
-    ld_check(valid() && other.valid());
-    merge(other.data_);
-  }
+  void merge(const MutablePerEpochLogMetadata& other);
 
-  void merge(const Slice& other) {
-    ld_check(valid() && valid(other));
-    merge(*static_cast<const Data*>(other.data));
-  }
+  void merge(const Slice& other);
+
+  static size_t sizeInLinearBuffer(const Data& data,
+                                   const OffsetMap& epoch_size_map);
 
   Data data_;
+  // Map of counters to keep track of epoch size
+  OffsetMap epoch_size_map_;
+  mutable std::vector<uint8_t> serialize_buffer_;
 
  private:
-  void merge(const Data& other) {
-    // update last_known_good and epoch_size to maximum, respectively
-    if (other.last_known_good > data_.last_known_good) {
-      data_.last_known_good = other.last_known_good;
-    }
-    if (other.epoch_size != BYTE_OFFSET_INVALID &&
-        (data_.epoch_size == BYTE_OFFSET_INVALID ||
-         other.epoch_size > data_.epoch_size)) {
-      data_.epoch_size = other.epoch_size;
-    }
-  }
+  void merge(const Data& other, const OffsetMap& other_epoch_size_map);
 };
 
 class PerEpochLogMetadataFactory final {

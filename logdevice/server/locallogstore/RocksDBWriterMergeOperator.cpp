@@ -476,8 +476,8 @@ void combine(const Slice& with_payload_slice,
   esn_t last_known_good;
   LocalLogStoreRecordFormat::flags_t flags;
   Payload payload;
-  uint64_t offset_within_epoch = BYTE_OFFSET_INVALID;
-  uint64_t amend_offset_within_epoch = BYTE_OFFSET_INVALID;
+  OffsetMap offsets_within_epoch;
+  OffsetMap amend_offsets_within_epoch;
   std::map<KeyType, std::string> optional_keys;
   {
     int rv = LocalLogStoreRecordFormat::parse(with_payload_slice,
@@ -488,7 +488,7 @@ void combine(const Slice& with_payload_slice,
                                               nullptr,
                                               nullptr,
                                               0,
-                                              &offset_within_epoch,
+                                              &offsets_within_epoch,
                                               &optional_keys,
                                               &payload,
                                               -1 /* unused */);
@@ -507,7 +507,7 @@ void combine(const Slice& with_payload_slice,
                                               nullptr,
                                               copyset.data(),
                                               copyset.size(),
-                                              &amend_offset_within_epoch,
+                                              &amend_offsets_within_epoch,
                                               nullptr,
                                               nullptr,
                                               this_shard);
@@ -532,8 +532,11 @@ void combine(const Slice& with_payload_slice,
 
   if (amend_flags & LocalLogStoreRecordFormat::FLAG_OFFSET_WITHIN_EPOCH) {
     flags |= LocalLogStoreRecordFormat::FLAG_OFFSET_WITHIN_EPOCH;
-    if (amend_offset_within_epoch != BYTE_OFFSET_INVALID) {
-      offset_within_epoch = amend_offset_within_epoch;
+    if (amend_flags & LocalLogStoreRecordFormat::FLAG_OFFSET_MAP) {
+      flags |= LocalLogStoreRecordFormat::FLAG_OFFSET_MAP;
+    }
+    if (amend_offsets_within_epoch.isValid()) {
+      offsets_within_epoch = std::move(amend_offsets_within_epoch);
     }
   }
 
@@ -546,10 +549,6 @@ void combine(const Slice& with_payload_slice,
         &optional_keys_string, optional_keys);
     optional_keys_slice = Slice::fromString(optional_keys_string);
   }
-  // TODO (T33977412) : get offsets_within_epoch from parse
-  OffsetMap offsets_within_epoch;
-  offsets_within_epoch.setCounter(
-      CounterType::BYTE_OFFSET, offset_within_epoch);
   size_t header_size_est = LocalLogStoreRecordFormat::recordHeaderSizeEstimate(
       flags, copyset_range.size(), optional_keys_slice, offsets_within_epoch);
   size_t new_value_reserved =
@@ -557,14 +556,15 @@ void combine(const Slice& with_payload_slice,
 
   out.new_value.reserve(new_value_reserved);
   // Rebuild header with new copyset
-  LocalLogStoreRecordFormat::formRecordHeaderBufAppend(timestamp.count(),
-                                                       last_known_good,
-                                                       flags,
-                                                       amend_wave,
-                                                       copyset_range,
-                                                       offset_within_epoch,
-                                                       optional_keys_slice,
-                                                       &out.new_value);
+  LocalLogStoreRecordFormat::formRecordHeaderBufAppend(
+      timestamp.count(),
+      last_known_good,
+      flags,
+      amend_wave,
+      copyset_range,
+      std::move(offsets_within_epoch),
+      optional_keys_slice,
+      &out.new_value);
 
   // NOTE: Here we assume the value is the concatenation of the header and
   // data blobs.  This is how RocksDBWriter writes it; make sure to keep in

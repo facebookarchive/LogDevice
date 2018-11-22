@@ -127,6 +127,7 @@ std::shared_ptr<PayloadHolder> createPayload(size_t size, char fill) {
 }
 
 // convenient function for putting a record in the cache
+// TODO (T33977412) : change to take OffsetMap
 template <typename Cache>
 int putRecord(Cache* c,
               lsn_t lsn,
@@ -135,7 +136,7 @@ int putRecord(Cache* c,
               KeysType keys = {},
               uint32_t wave_or_recovery_epoch = uint32_t(1),
               copyset_t copyset = copyset_t({N0, N1, N2}),
-              uint64_t offset_within_epoch = BYTE_OFFSET_INVALID) {
+              OffsetMap offsets_within_epoch = OffsetMap()) {
   std::shared_ptr<PayloadHolder> ph = nullptr;
   Payload pl;
   if ((flags & STORE_Header::HOLE) || (flags & STORE_Header::AMEND)) {
@@ -146,6 +147,7 @@ int putRecord(Cache* c,
   }
   // use timestamp as the same as lsn
   uint64_t timestamp = lsn;
+
   return c->putRecord(RecordID(lsn, LOG_ID),
                       timestamp,
                       esn_t(lng),
@@ -156,7 +158,7 @@ int putRecord(Cache* c,
                       KeysType(keys),
                       Slice(pl),
                       ph,
-                      offset_within_epoch);
+                      std::move(offsets_within_epoch));
 }
 
 lsn_t lsn(epoch_t::raw_type epoch, esn_t::raw_type esn) {
@@ -217,13 +219,13 @@ void verifyEntry(const Entry& entry,
 template <typename ERCPointer>
 void ASSERT_TAIL_RECORD_OFFSET(const ERCPointer& c,
                                lsn_t _lsn,
-                               uint64_t _offset) {
+                               OffsetMap _offset) {
   TailRecord r = (c)->getTailRecord();
   ASSERT_EQ(_lsn, r.header.lsn);
   if (_lsn != LSN_INVALID) {
     ASSERT_EQ(_lsn, r.header.timestamp);
-    if (_offset != BYTE_OFFSET_INVALID) {
-      ASSERT_EQ(_offset, r.header.u.offset_within_epoch);
+    if (_offset.isValid()) {
+      ASSERT_EQ(_offset, r.offsets_map_);
     }
     ASSERT_NE(0, r.header.flags & TailRecordHeader::OFFSET_WITHIN_EPOCH);
     if ((c)->isTailOptimized()) {
@@ -241,7 +243,7 @@ void ASSERT_TAIL_RECORD_OFFSET(const ERCPointer& c,
 }
 
 #define ASSERT_TAIL_RECORD(c, _lsn) \
-  ASSERT_TAIL_RECORD_OFFSET(c, _lsn, BYTE_OFFSET_INVALID)
+  ASSERT_TAIL_RECORD_OFFSET(c, _lsn, OffsetMap())
 
 #define ASSERT_NO_TAIL_RECORD(c) ASSERT_TAIL_RECORD(c, LSN_INVALID)
 
@@ -385,30 +387,52 @@ TEST_F(EpochRecordCacheTest, OffsetWithinEpoch) {
   create();
 
   // insert one record of esn 4, offset 10
-  int rv = putRecord(cache_.get(), lsn(EPOCH, 4), 2, 0, {}, 1, {N0}, 10);
+  int rv = putRecord(cache_.get(),
+                     lsn(EPOCH, 4),
+                     2,
+                     0,
+                     {},
+                     1,
+                     {N0},
+                     OffsetMap({{BYTE_OFFSET, 10}}));
   ASSERT_EQ(0, rv);
   ASSERT_NO_TAIL_RECORD(cache_);
 
   // esn 5, offset INVALID
-  rv = putRecord(
-      cache_.get(), lsn(EPOCH, 5), 3, 0, {}, 1, {N0}, BYTE_OFFSET_INVALID);
+  rv = putRecord(cache_.get(), lsn(EPOCH, 5), 3, 0, {}, 1, {N0}, OffsetMap());
   ASSERT_EQ(0, rv);
   ASSERT_NO_TAIL_RECORD(cache_);
 
   // esn 6, offset 30
-  rv = putRecord(cache_.get(), lsn(EPOCH, 6), 4, 0, {}, 1, {N0}, 30);
+  rv = putRecord(cache_.get(),
+                 lsn(EPOCH, 6),
+                 4,
+                 0,
+                 {},
+                 1,
+                 {N0},
+                 OffsetMap({{BYTE_OFFSET, 30}}));
   ASSERT_EQ(0, rv);
   // 4 evicted and became the tail
-  ASSERT_TAIL_RECORD_OFFSET(cache_, lsn(EPOCH, 4), 10);
+  ASSERT_TAIL_RECORD_OFFSET(
+      cache_, lsn(EPOCH, 4), OffsetMap({{BYTE_OFFSET, 10}}));
 
   // esn 7, offset 25
-  rv = putRecord(cache_.get(), lsn(EPOCH, 7), 5, 0, {}, 1, {N0}, 25);
+  rv = putRecord(cache_.get(),
+                 lsn(EPOCH, 7),
+                 5,
+                 0,
+                 {},
+                 1,
+                 {N0},
+                 OffsetMap({{BYTE_OFFSET, 25}}));
   ASSERT_EQ(0, rv);
   // tail became 5 but offset is still 10
-  ASSERT_TAIL_RECORD_OFFSET(cache_, lsn(EPOCH, 5), 10);
+  ASSERT_TAIL_RECORD_OFFSET(
+      cache_, lsn(EPOCH, 5), OffsetMap({{BYTE_OFFSET, 10}}));
 
-  // offset within epoch should be 30
-  ASSERT_EQ(30, cache_->getOffsetWithinEpoch());
+  // offsets within epoch should be 30
+  ASSERT_EQ(30, cache_->getOffsetsWithinEpoch().getCounter(BYTE_OFFSET));
 }
 
 // test EpochRecordCache can handle AMENDs and STOREs well, considering
@@ -791,27 +815,30 @@ TEST_F(EpochRecordCacheTest, EntrySequencing) {
   Slice slice2 = Slice(payload2->getPayload());
   Slice slice_short = Slice(payload_short->getPayload());
 
+  // Serialize OffsetMap
+  uint32_t flags = STORE_Header::OFFSET_MAP;
+
   // Serialize different Entry objects w/ equal values, expect same result
   copyset_t copyset({N0, N1, N2});
   auto entry1 = Entry::create<Entry>(Entry::Disposer(deps_.get()),
                                      0,
-                                     0,
+                                     flags,
                                      10,
                                      esn_t(11),
                                      12,
                                      copyset,
-                                     15,
+                                     OffsetMap({{BYTE_OFFSET, 15}}),
                                      KeysType{},
                                      slice1,
                                      payload1);
   auto entry2 = Entry::create<Entry>(Entry::Disposer(deps_.get()),
                                      0,
-                                     0,
+                                     flags,
                                      10,
                                      esn_t(11),
                                      12,
                                      copyset,
-                                     15,
+                                     OffsetMap({{BYTE_OFFSET, 15}}),
                                      KeysType{},
                                      slice2,
                                      payload2);
@@ -832,7 +859,7 @@ TEST_F(EpochRecordCacheTest, EntrySequencing) {
                                 esn_t(11),
                                 12,
                                 copyset,
-                                15,
+                                OffsetMap({{BYTE_OFFSET, 15}}),
                                 KeysType{},
                                 slice_short,
                                 payload_short);
@@ -872,6 +899,29 @@ TEST_F(EpochRecordCacheTest, EntrySequencing) {
   ASSERT_NE(reconstructed_len, -1);
   ASSERT_EQ(reconstructed_len, entry2_serial_len);
   ASSERT_EQ(memcmp(buf1.get(), buf2.get(), buflen), 0);
+}
+
+TEST_F(EpochRecordCacheTest, SnapshotSequencingWithOffsetMap) {
+  capacity_ = 64;
+  stored_before_ = StoredBefore::NEVER;
+  bool enable_offset_map = true;
+  create();
+
+  size_t buflen = 1000000; // 1mb
+  std::unique_ptr<char[]> buf(new char[buflen]);
+  memset(buf.get(), 0, buflen);
+
+  // Create snapshot, verify linearized size
+  auto snapshot = cache_->createSerializableSnapshot(enable_offset_map);
+  ASSERT_NE(nullptr, snapshot);
+  auto linear_size = snapshot->toLinearBuffer(buf.get(), buflen);
+  ASSERT_NE(linear_size, -1);
+  ASSERT_EQ(linear_size, snapshot->sizeInLinearBuffer());
+  auto snapshot_repopulated =
+      EpochRecordCache::Snapshot::createFromLinearBuffer(
+          buf.get(), buflen, deps_.get());
+  ASSERT_NE(snapshot_repopulated, nullptr);
+  ASSERT_TRUE(testSnapshotsIdentical(*snapshot, *snapshot_repopulated));
 }
 
 TEST_F(EpochRecordCacheTest, SnapshotSequencing) {
@@ -1009,8 +1059,8 @@ TEST_F(EpochRecordCacheTest, BasicSequencing) {
   // timestamp is the same as LSN in these tests
   ASSERT_EQ(expect_ts, repopulated_cache->getMaxSeenTimestamp());
 
-  // Change byte offset within epoch, expect inequality
-  cache_->setOffsetWithinEpoch(1337);
+  // Change offsets within epoch, expect inequality
+  cache_->setOffsetsWithinEpoch(OffsetMap({{BYTE_OFFSET, 1337}}));
   ASSERT_FALSE(testEpochRecordCachesIdentical(*cache_, *repopulated_cache));
 
   // Linearize cache_, repopulate a cache and verify equality
@@ -1065,8 +1115,8 @@ TEST_F(EpochRecordCacheTest, SequencingDisabledCache) {
   ASSERT_EQ(repopulated_cache->bufferedPayloadBytes(), 0);
   ASSERT_EQ(repopulated_cache->getMaxSeenESN(), ESN_INVALID);
   ASSERT_TRUE(repopulated_cache->neverStored());
-  ASSERT_EQ(repopulated_cache->getOffsetWithinEpoch(),
-            cache_->getOffsetWithinEpoch());
+  ASSERT_EQ(repopulated_cache->getOffsetsWithinEpoch(),
+            cache_->getOffsetsWithinEpoch());
   repopulated_cache->disableCache();
   ASSERT_TRUE(testEpochRecordCachesIdentical(*cache_, *repopulated_cache));
   cache_.reset();

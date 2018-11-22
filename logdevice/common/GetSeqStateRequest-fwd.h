@@ -10,6 +10,7 @@
 #include <folly/Optional.h>
 
 #include "logdevice/common/NodeID.h"
+#include "logdevice/common/OffsetMap.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Err.h"
@@ -31,7 +32,7 @@ struct GetSeqStateRequestResult {
   lsn_t last_released_lsn;
   lsn_t next_lsn;
   folly::Optional<LogTailAttributes> attributes;
-  folly::Optional<uint64_t> epoch_offset;
+  folly::Optional<OffsetMap> epoch_offsets;
   std::shared_ptr<const EpochMetaDataMap> metadata_map;
   std::shared_ptr<TailRecord> tail_record;
 };

@@ -75,10 +75,10 @@ class RecordCache {
    * @param payload_raw       Slice for the linearized payload
    * @param paylaod_holder    PayloadHolder object that owns the allocated
    *                          payload
-   * @param offset_within_epoch   Number of bytes stored in the same epoch
-   *                              before current record as in STORE_Header.
-   *                              Present only for part of periodic records.
-   *                              Equals to BYTE_OFFSET_INVALID if not present.
+   * @param offsets_within_epoch  offsets stored in the same epoch before
+   *                              current record as in STORE_Header. Present
+   *                              only for part of periodic records. Default
+   *                              value is invalid.
    *
    * @return                  0 if the record is successfully put into the
    *                            cache, and the cache now holds a reference
@@ -96,7 +96,7 @@ class RecordCache {
                 std::map<KeyType, std::string>&& optional_keys,
                 Slice payload_raw,
                 const std::shared_ptr<PayloadHolder>& payload_holder,
-                uint64_t offset_within_epoch = BYTE_OFFSET_INVALID);
+                OffsetMap offsets_within_epoch = OffsetMap());
 
   /**
    * Result of the cache lookup.

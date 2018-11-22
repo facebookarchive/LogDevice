@@ -42,8 +42,7 @@ void SEALED_Message::serialize(ProtocolWriter& writer) const {
     // Serialize the old format.
     std::vector<uint64_t> epoch_offset_map(epoch_offset_map_.size());
     for (size_t i = 0; i < epoch_offset_map_.size(); ++i) {
-      epoch_offset_map[i] =
-          epoch_offset_map_[i].getCounter(CounterType::BYTE_OFFSET);
+      epoch_offset_map[i] = epoch_offset_map_[i].getCounter(BYTE_OFFSET);
     }
     writer.writeVector(epoch_offset_map);
   }
@@ -82,8 +81,7 @@ MessageReadResult SEALED_Message::deserialize(ProtocolReader& reader) {
         header.lng_list_size, BYTE_OFFSET_INVALID);
     reader.readVector(&epoch_offset_map_legacy);
     for (size_t i = 0; i < epoch_offset_map_legacy.size(); ++i) {
-      epoch_offset_map[i].setCounter(
-          CounterType::BYTE_OFFSET, epoch_offset_map_legacy[i]);
+      epoch_offset_map[i].setCounter(BYTE_OFFSET, epoch_offset_map_legacy[i]);
     }
   }
 

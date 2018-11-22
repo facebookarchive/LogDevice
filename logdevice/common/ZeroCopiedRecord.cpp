@@ -28,7 +28,7 @@ ZeroCopiedRecord::ZeroCopiedRecord(
     esn_t last_known_good,
     uint32_t wave_or_recovery_epoch,
     const copyset_t& copyset,
-    uint64_t offset_within_epoch,
+    OffsetMap offsets_within_epoch,
     std::map<KeyType, std::string>&& keys,
     Slice payload_raw,
     std::shared_ptr<PayloadHolder> payload_holder)
@@ -38,13 +38,10 @@ ZeroCopiedRecord::ZeroCopiedRecord(
       last_known_good(last_known_good),
       wave_or_recovery_epoch(wave_or_recovery_epoch),
       copyset(copyset),
-      offset_within_epoch(offset_within_epoch),
+      offsets_within_epoch(std::move(offsets_within_epoch)),
       keys(std::move(keys)),
       payload_raw(payload_raw),
-      payload_holder_(std::move(payload_holder)) {
-  offsets_within_epoch.setCounter(
-      CounterType::BYTE_OFFSET, offset_within_epoch);
-}
+      payload_holder_(std::move(payload_holder)) {}
 
 worker_id_t ZeroCopiedRecord::getDisposalThread() const {
   Worker* w = nullptr;

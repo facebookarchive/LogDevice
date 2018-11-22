@@ -61,9 +61,10 @@ class Record : public AdminCommandTable {
          "Flags for that record.  See "
          "\"logdevice/common/LocalLogStoreRecordFormat.h\" to see the list of "
          "flags."},
+         // TODO (T36984535) : deprecate column offset_within_epoch
         {"offset_within_epoch",
-         DataType::BIGINT,
-         "Byte offset of that record within the epoch."},
+         DataType::TEXT,
+         "Amount of data written to that record within the epoch."},
         {"optional_keys",
          DataType::TEXT,
          "Optional keys provided by the user.  See \"AppendAttributes\" in "

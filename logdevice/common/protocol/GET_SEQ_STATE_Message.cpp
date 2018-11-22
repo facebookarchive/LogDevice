@@ -532,7 +532,7 @@ void GET_SEQ_STATE_Message::continueExecution(Address const& from) {
     updateNoRedirectUntil(sequencer);
   }
   folly::Optional<LogTailAttributes> tail_attributes = folly::none;
-  folly::Optional<uint64_t> epoch_offset = folly::none;
+  folly::Optional<OffsetMap> epoch_offsets = folly::none;
   std::shared_ptr<const EpochMetaDataMap> metadata_map;
   std::shared_ptr<TailRecord> tail_record;
 
@@ -567,7 +567,7 @@ void GET_SEQ_STATE_Message::continueExecution(Address const& from) {
           attributes.last_released_real_lsn = tail->header.lsn;
           attributes.last_timestamp =
               std::chrono::milliseconds(tail->header.timestamp);
-          attributes.byte_offset = tail->header.u.byte_offset;
+          attributes.offsets = OffsetMap::toRecord(tail->offsets_map_);
           tail_attributes.assign(attributes);
           if (flags_ & GET_SEQ_STATE_Message::INCLUDE_TAIL_RECORD) {
             reply_hdr.flags |= GET_SEQ_STATE_REPLY_Header::INCLUDES_TAIL_RECORD;
@@ -584,7 +584,7 @@ void GET_SEQ_STATE_Message::continueExecution(Address const& from) {
       if (flags_ & GET_SEQ_STATE_Message::INCLUDE_EPOCH_OFFSET) {
         if (sequencer->isRecoveryComplete()) {
           reply_hdr.flags |= GET_SEQ_STATE_REPLY_Header::INCLUDES_EPOCH_OFFSET;
-          epoch_offset.assign(sequencer->getEpochOffset());
+          epoch_offsets.assign(sequencer->getEpochOffsetMap());
         }
       }
 
@@ -607,7 +607,7 @@ void GET_SEQ_STATE_Message::continueExecution(Address const& from) {
             status,
             NodeID(),
             tail_attributes,
-            epoch_offset,
+            std::move(epoch_offsets),
             std::move(metadata_map),
             std::move(tail_record));
 }
@@ -856,7 +856,7 @@ void GET_SEQ_STATE_Message::sendReply(
     Status status,
     NodeID redirect,
     folly::Optional<LogTailAttributes> tail_attributes,
-    folly::Optional<uint64_t> epoch_offset,
+    folly::Optional<OffsetMap> epoch_offsets,
     std::shared_ptr<const EpochMetaDataMap> metadata_map,
     std::shared_ptr<TailRecord> tail_record) {
   auto msg = std::make_unique<GET_SEQ_STATE_REPLY_Message>(header);
@@ -866,8 +866,8 @@ void GET_SEQ_STATE_Message::sendReply(
   if (tail_attributes.hasValue()) {
     msg->tail_attributes_ = tail_attributes.value();
   }
-  if (epoch_offset.hasValue()) {
-    msg->epoch_offset_ = epoch_offset.value();
+  if (epoch_offsets.hasValue()) {
+    msg->epoch_offsets_ = std::move(epoch_offsets.value());
   }
   if (metadata_map) {
     msg->metadata_map_ = std::move(metadata_map);

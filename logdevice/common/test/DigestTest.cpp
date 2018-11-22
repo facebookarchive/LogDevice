@@ -46,16 +46,16 @@ std::unique_ptr<DataRecordOwnsPayload> create_record(
     uint32_t wave_or_seal_epoch,
     std::chrono::milliseconds timestamp = std::chrono::milliseconds(0),
     size_t payload_size = 128,
-    uint64_t offset_within_epoch = BYTE_OFFSET_INVALID,
-    uint64_t byteoffset = BYTE_OFFSET_INVALID) {
+    OffsetMap offsets_within_epoch = OffsetMap(),
+    OffsetMap offsets = OffsetMap()) {
   return DigestTestUtil::create_record(TEST_LOG,
                                        DigestTestUtil::lsn(TEST_EPOCH, esn),
                                        type,
                                        wave_or_seal_epoch,
                                        timestamp,
                                        payload_size,
-                                       offset_within_epoch,
-                                       byteoffset);
+                                       std::move(offsets_within_epoch),
+                                       std::move(offsets));
 }
 
 class DigestTest : public ::testing::Test {
@@ -113,7 +113,7 @@ class DigestTest : public ::testing::Test {
                 RecordType type,
                 uint32_t wave_or_seal_epoch,
                 size_t payload_size = 128.,
-                uint64_t byteoffset = BYTE_OFFSET_INVALID) {
+                OffsetMap offsets = OffsetMap()) {
     ASSERT_NE(nullptr, digest_);
     digest_->onRecord(shard,
                       create_record(esn_t(esn),
@@ -121,7 +121,7 @@ class DigestTest : public ::testing::Test {
                                     wave_or_seal_epoch,
                                     std::chrono::milliseconds(0),
                                     payload_size,
-                                    byteoffset));
+                                    std::move(offsets)));
   }
 
   void checkMutation(Digest::Entry& entry, bool complete_digest = false) {
@@ -670,34 +670,35 @@ TEST_F(DigestTest, recomputeOffsetWithinEpoch) {
   digest_->setDigestStartEsn(esn_t(1));
 
   size_t payload_size = 128;
+  OffsetMap payload_size_map({{BYTE_OFFSET, payload_size}});
   // enough copies for esn 1, but records not written by recovery
   onRecord(N0,
            /*esn=*/1,
            RecordType::NORMAL,
            /*wave=*/1,
            payload_size,
-           /*byteoffset*/ payload_size);
-  onRecord(N2, 1, RecordType::NORMAL, 4, payload_size, payload_size);
-  onRecord(N3, 1, RecordType::NORMAL, 3, payload_size, payload_size);
+           /*offsets*/ payload_size_map);
+  onRecord(N2, 1, RecordType::NORMAL, 4, payload_size, payload_size_map);
+  onRecord(N3, 1, RecordType::NORMAL, 3, payload_size, payload_size_map);
 
   onRecord(N0,
            2,
            RecordType::MUTATED,
            seal_epoch_.val_,
            payload_size,
-           payload_size * 2);
+           payload_size_map * 2);
   onRecord(N2,
            2,
            RecordType::MUTATED,
            seal_epoch_.val_,
            payload_size,
-           payload_size * 2);
+           payload_size_map * 2);
   onRecord(N3,
            2,
            RecordType::MUTATED,
            seal_epoch_.val_,
            payload_size,
-           payload_size * 2);
+           payload_size_map * 2);
 
   // number for the recovery epoch, just used for creating tailRecord
   epoch_t epoch = epoch_t(2);
@@ -708,20 +709,20 @@ TEST_F(DigestTest, recomputeOffsetWithinEpoch) {
   // same thing for esn 3, but with two holes, one hole written by this recovery
   // instance
   // byteoffset should be payload_size * 2
-  onRecord(N1, 3, RecordType::HOLE, 45, payload_size, payload_size * 2);
+  onRecord(N1, 3, RecordType::HOLE, 45, payload_size, payload_size_map * 2);
   onRecord(N3,
            3,
            RecordType::HOLE,
            seal_epoch_.val_,
            payload_size,
-           payload_size * 2);
+           payload_size_map * 2);
 
   // esn 4, hole/copy conflict
   // byteoffset should be payload_size * 3
-  onRecord(N0, 4, RecordType::NORMAL, 99, payload_size, payload_size * 4);
-  onRecord(N1, 4, RecordType::HOLE, 27, payload_size, payload_size * 3);
-  onRecord(N2, 4, RecordType::MUTATED, 49, payload_size, payload_size * 3);
-  onRecord(N3, 4, RecordType::HOLE, 45, payload_size, payload_size * 3);
+  onRecord(N0, 4, RecordType::NORMAL, 99, payload_size, payload_size_map * 4);
+  onRecord(N1, 4, RecordType::HOLE, 27, payload_size, payload_size_map * 3);
+  onRecord(N2, 4, RecordType::MUTATED, 49, payload_size, payload_size_map * 3);
+  onRecord(N3, 4, RecordType::HOLE, 45, payload_size, payload_size_map * 3);
 
   // esn 5,
   // byteoffset should be payload_size * 4
@@ -732,19 +733,19 @@ TEST_F(DigestTest, recomputeOffsetWithinEpoch) {
            RecordType::MUTATED,
            seal_epoch_.val_,
            payload_size,
-           payload_size * 5);
+           payload_size_map * 5);
   onRecord(N1,
            5,
            RecordType::MUTATED,
            seal_epoch_.val_,
            payload_size,
-           payload_size * 5);
+           payload_size_map * 5);
   onRecord(N2,
            5,
            RecordType::MUTATED,
            seal_epoch_.val_,
            payload_size,
-           payload_size * 5);
+           payload_size_map * 5);
 
   digest_->recomputeOffsetsWithinEpoch(lng_);
 
@@ -765,7 +766,7 @@ TEST_F(DigestTest, recomputeOffsetWithinEpoch) {
         EXPECT_EQ(
             payload_size,
             entry.record->extra_metadata_->offsets_within_epoch.getCounter(
-                CounterType::BYTE_OFFSET));
+                BYTE_OFFSET));
         break;
       case 2:
         checkMutation(entry);
@@ -777,7 +778,7 @@ TEST_F(DigestTest, recomputeOffsetWithinEpoch) {
         EXPECT_EQ(
             payload_size * 2,
             entry.record->extra_metadata_->offsets_within_epoch.getCounter(
-                CounterType::BYTE_OFFSET));
+                BYTE_OFFSET));
         break;
       case 3:
         checkMutation(entry);
@@ -789,7 +790,7 @@ TEST_F(DigestTest, recomputeOffsetWithinEpoch) {
         EXPECT_EQ(
             payload_size * 2,
             entry.record->extra_metadata_->offsets_within_epoch.getCounter(
-                CounterType::BYTE_OFFSET));
+                BYTE_OFFSET));
         break;
       case 4:
         checkMutation(entry);
@@ -801,7 +802,7 @@ TEST_F(DigestTest, recomputeOffsetWithinEpoch) {
         EXPECT_EQ(
             payload_size * 3,
             entry.record->extra_metadata_->offsets_within_epoch.getCounter(
-                CounterType::BYTE_OFFSET));
+                BYTE_OFFSET));
         break;
       case 5:
         checkMutation(entry);
@@ -813,7 +814,7 @@ TEST_F(DigestTest, recomputeOffsetWithinEpoch) {
         EXPECT_EQ(
             payload_size * 4,
             entry.record->extra_metadata_->offsets_within_epoch.getCounter(
-                CounterType::BYTE_OFFSET));
+                BYTE_OFFSET));
         break;
       default:
         break;

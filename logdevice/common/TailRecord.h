@@ -56,11 +56,13 @@ struct TailRecordHeader {
   // beginning of the epoch (epoch_size). BYTE_OFFSET_INVALID if the information
   // is not available. The OFFSET_WITHIN_EPOCH flags decide the meaning of the
   // value.
-  // TODO(T33977412) : Remove union when code is all nodes support OffsetMap
+  // TODO(T35659884) : remove union from header, this variable is not used as it
+  // is replaced with OffsetMap. Can simply delete all places except in
+  // serialize and deserialize of TailRecord, more work is needed there.
   union {
-    uint64_t byte_offset;
-    uint64_t offset_within_epoch;
-  } u;
+    uint64_t byte_offset_DEPRECATED;
+    uint64_t offset_within_epoch_DEPRECATED;
+  } u_DEPRECATED;
 
   flags_t flags;
   uint8_t pad[4];
@@ -118,7 +120,12 @@ class TailRecord : public SerializableData {
   using SerializableData::serialize;
 
   explicit TailRecord()
-      : header{LOGID_INVALID, LSN_INVALID, 0, {BYTE_OFFSET_INVALID}, 0, {}} {}
+      : header{LOGID_INVALID,
+               LSN_INVALID,
+               0,
+               {BYTE_OFFSET_INVALID /* deprecated, offsets_map used instead */},
+               0,
+               {}} {}
 
   // use compiler generated copy constructor and assignment operator
   // since members can be safely copied with low cost
@@ -129,15 +136,6 @@ class TailRecord : public SerializableData {
   TailRecord& operator=(TailRecord&& rhs) noexcept;
 
   /**
-   * Construct a TailRecord with an optional linear payload.
-   * Note: payload must be backed by linear buffer. For evbuffer-based
-   * payload, use the constructor with ZeroCopiedRecord param.
-   */
-  // TODO(T33977412)
-  TailRecord(const TailRecordHeader& header,
-             std::shared_ptr<PayloadHolder> payload);
-
-  /**
    * Construct a TailRecord with an OffsetMap and an optional linear payload.
    * Note: payload must be backed by linear buffer. For evbuffer-based
    * payload, use the constructor below.
@@ -145,14 +143,6 @@ class TailRecord : public SerializableData {
   TailRecord(const TailRecordHeader& header,
              OffsetMap offset_map,
              std::shared_ptr<PayloadHolder> payload);
-
-  /**
-   * Construct a TailRecord with an optional evbuffer-based payload
-   * encapsulated in a ZeroCopiedRecord
-   */
-  // TODO(T33977412)
-  TailRecord(const TailRecordHeader& header,
-             std::shared_ptr<ZeroCopiedRecord> record);
 
   /**
    * Construct a TailRecord with and OffsetMap and an optional evbuffer-based
@@ -179,17 +169,6 @@ class TailRecord : public SerializableData {
     return header.flags & TailRecordHeader::OFFSET_MAP;
   }
 
-  // TODO(T33977412)
-  void reset(const TailRecordHeader& h,
-             std::shared_ptr<PayloadHolder> payload) {
-    header = h;
-    payload_ = std::move(payload);
-    zero_copied_record_.reset();
-    OffsetMap om;
-    om.setCounter(CounterType::BYTE_OFFSET, header.u.byte_offset);
-    offsets_map_ = std::move(om);
-  }
-
   void reset(const TailRecordHeader& h,
              std::shared_ptr<PayloadHolder> payload,
              OffsetMap offset_map) {
@@ -197,17 +176,6 @@ class TailRecord : public SerializableData {
     payload_ = std::move(payload);
     zero_copied_record_.reset();
     offsets_map_ = std::move(offset_map);
-  }
-
-  // TODO(T33977412)
-  void reset(const TailRecordHeader& h,
-             std::shared_ptr<ZeroCopiedRecord> record) {
-    header = h;
-    payload_.reset();
-    zero_copied_record_ = std::move(record);
-    OffsetMap om;
-    om.setCounter(CounterType::BYTE_OFFSET, header.u.byte_offset);
-    offsets_map_ = std::move(om);
   }
 
   void reset(const TailRecordHeader& h,
@@ -220,7 +188,12 @@ class TailRecord : public SerializableData {
   }
 
   void reset() {
-    header = {LOGID_INVALID, LSN_INVALID, 0, {BYTE_OFFSET_INVALID}, 0, {}};
+    header = {LOGID_INVALID,
+              LSN_INVALID,
+              0,
+              {BYTE_OFFSET_INVALID /* deprecated, offsets_map_ used instead */},
+              0,
+              {}};
     payload_.reset();
     zero_copied_record_.reset();
     OffsetMap om;
@@ -294,9 +267,14 @@ class TailRecord : public SerializableData {
   TailRecordHeader::blob_size_t calculateBlobSize() const;
 
   static size_t
-  expectedRecordSizeInBuffer(TailRecordHeader::blob_size_t blob_size) {
+  expectedRecordSizeInBuffer(const TailRecordHeader& header,
+                             TailRecordHeader::blob_size_t blob_size,
+                             const OffsetMap& offsets_map) {
     return sizeof(TailRecordHeader) +
-        (blob_size == 0 ? 0 : (sizeof(blob_size) + blob_size));
+        (blob_size == 0 ? 0 : (sizeof(blob_size) + blob_size)) +
+        (header.flags & TailRecordHeader::OFFSET_MAP
+             ? offsets_map.sizeInLinearBuffer()
+             : 0);
   }
 };
 

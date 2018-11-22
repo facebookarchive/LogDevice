@@ -85,9 +85,10 @@ class LogStorageState : public AdminCommandTable {
         {"latest_epoch",
          DataType::BIGINT,
          "Latest seen epoch from the sequencer."},
+        // TODO (T36984535) : deprecate column last_epoch_offset
         {"latest_epoch_offset",
-         DataType::BIGINT,
-         "Byte offset within the latest epoch"},
+         DataType::TEXT,
+         "Offsets within the latest epoch"},
         {"permanent_errors",
          DataType::BIGINT,
          "Set to true if a permanent error such as an IO error has been "

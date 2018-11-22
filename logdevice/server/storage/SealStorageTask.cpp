@@ -251,17 +251,13 @@ bool SealStorageTask::getEpochInfoFromCache(LocalLogStore& /*store*/,
       switch (result.first) {
         case RecordCache::Result::HIT: {
           ld_check(result.second != nullptr);
-          // TODO(T33977412): convert EpochRecordCache to using OffsetMap.
-          OffsetMap omap;
-          omap.setCounter(
-              CounterType::BYTE_OFFSET, result.second->getOffsetWithinEpoch());
           auto insert_result = epoch_info_from_cache->insert(std::make_pair(
               epoch,
               EpochInfo{
-                  result.second->getLNG(),             // lng
-                  result.second->getMaxSeenESN(),      // last record
-                  omap,                                // epoch_offset_map
-                  result.second->getMaxSeenTimestamp() // timestamp
+                  result.second->getLNG(),                // lng
+                  result.second->getMaxSeenESN(),         // last record
+                  result.second->getOffsetsWithinEpoch(), // epoch_offset_map
+                  result.second->getMaxSeenTimestamp()    // timestamp
               }));
 
           ld_check(insert_result.second);
@@ -361,7 +357,6 @@ Status SealStorageTask::getEpochInfo(LocalLogStore& store,
     }
 
     OffsetMap epoch_offset_map;
-    epoch_offset_map.setCounter(CounterType::BYTE_OFFSET, BYTE_OFFSET_INVALID);
     // read potentially more accurate LNG and epoch size from
     // the MutablePerEpochLogMetadata.
 
@@ -371,10 +366,7 @@ Status SealStorageTask::getEpochInfo(LocalLogStore& store,
     rv = store.readPerEpochLogMetadata(log_id_, epoch_t(epoch), &metadata);
     if (rv == 0) {
       lng = std::max(lng, metadata.data_.last_known_good);
-      // TODO(T33977412): MutablePerEpochLogMetadata should contain OffsetMap
-      // instead of uint64_t.
-      epoch_offset_map.setCounter(
-          CounterType::BYTE_OFFSET, metadata.data_.epoch_size);
+      epoch_offset_map = std::move(metadata.epoch_size_map_);
     }
 
     auto result = epoch_info_->insert(std::make_pair(
@@ -407,12 +399,10 @@ Status SealStorageTask::getEpochInfo(LocalLogStore& store,
       } else { // tail record found
         ld_check(tail.containOffsetWithinEpoch());
         ld_check(lsn_to_epoch(tail.header.lsn) == epoch_t(epoch));
-        if (tail.header.u.offset_within_epoch == BYTE_OFFSET_INVALID) {
+        if (!tail.offsets_map_.isValid()) {
           // the tail record does not include epoch offset information,
           // use the `epoch_offset_map` as an approximation
-          tail.offsets_map_ = epoch_offset_map;
-          tail.header.u.offset_within_epoch =
-              epoch_offset_map.getCounter(CounterType::BYTE_OFFSET);
+          tail.offsets_map_ = std::move(epoch_offset_map);
         }
 
         if (tail.hasPayload() &&
@@ -494,9 +484,7 @@ void SealStorageTask::getAllEpochInfo(std::vector<lsn_t>& epoch_lng,
     if (it == epoch_info_->cend() || epoch < it->first) {
       // empty epoch
       epoch_lng.push_back(compose_lsn(epoch_t(epoch), ESN_INVALID));
-      OffsetMap omap;
-      omap.setCounter(CounterType::BYTE_OFFSET, 0);
-      epoch_offset_map.push_back(omap);
+      epoch_offset_map.push_back(OffsetMap::fromLegacy(0));
       last_timestamp.push_back(0);
       max_seen_lsn.push_back(compose_lsn(epoch_t(epoch), ESN_INVALID));
     } else {

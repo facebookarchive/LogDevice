@@ -13,11 +13,19 @@
 
 namespace facebook { namespace logdevice {
 
-OffsetMap::OffsetMap(const OffsetMap& om) noexcept {
-  this->counterTypeMap_ = om.getCounterMap();
+OffsetMap::OffsetMap(
+    std::initializer_list<std::pair<const counter_type_t, uint64_t>>
+        list) noexcept {
+  for (const auto& it : list) {
+    setCounter(it.first, it.second);
+  }
 }
 
-void OffsetMap::setCounter(const CounterType counter_type,
+OffsetMap::OffsetMap(const OffsetMap& om) noexcept {
+  counterTypeMap_ = om.getCounterMap();
+}
+
+void OffsetMap::setCounter(const counter_type_t counter_type,
                            uint64_t counter_val) {
   if (counter_val == BYTE_OFFSET_INVALID) {
     counterTypeMap_.erase(counter_type);
@@ -30,7 +38,7 @@ bool OffsetMap::isValid() const {
   return counterTypeMap_.size() > 0;
 }
 
-uint64_t OffsetMap::getCounter(const CounterType counter_type) const {
+uint64_t OffsetMap::getCounter(const counter_type_t counter_type) const {
   auto it = counterTypeMap_.find(counter_type);
   if (it == counterTypeMap_.end()) {
     return BYTE_OFFSET_INVALID;
@@ -38,20 +46,19 @@ uint64_t OffsetMap::getCounter(const CounterType counter_type) const {
   return it->second;
 }
 
-const std::unordered_map<CounterType, uint64_t, folly::Hash>&
-OffsetMap::getCounterMap() const {
+const std::map<counter_type_t, uint64_t>& OffsetMap::getCounterMap() const {
   return counterTypeMap_;
 }
 
 void OffsetMap::clear() {
-  this->counterTypeMap_.clear();
+  counterTypeMap_.clear();
 }
 
-void OffsetMap::unsetCounter(CounterType counter_type) {
+void OffsetMap::unsetCounter(counter_type_t counter_type) {
   counterTypeMap_.erase(counter_type);
 }
 
-bool OffsetMap::isValidOffset(const CounterType counter_type) const {
+bool OffsetMap::isValidOffset(const counter_type_t counter_type) const {
   return counterTypeMap_.find(counter_type) != counterTypeMap_.end();
 }
 
@@ -69,7 +76,7 @@ void OffsetMap::deserialize(ProtocolReader& reader,
   uint8_t counter_map_size = 0;
   reader.read(&counter_map_size);
   for (uint8_t counter = 0; counter < counter_map_size; ++counter) {
-    CounterType counter_type;
+    counter_type_t counter_type;
     reader.read(&counter_type);
     uint64_t counter_val;
     reader.read(&counter_val);
@@ -82,10 +89,10 @@ void OffsetMap::deserialize(ProtocolReader& reader,
 }
 
 bool OffsetMap::operator==(const OffsetMap& om) const {
-  if (this->counterTypeMap_.size() != om.counterTypeMap_.size()) {
+  if (counterTypeMap_.size() != om.counterTypeMap_.size()) {
     return false;
   }
-  for (auto& it : this->counterTypeMap_) {
+  for (auto& it : counterTypeMap_) {
     if (it.second != om.getCounter(it.first)) {
       return false;
     }
@@ -99,7 +106,7 @@ bool OffsetMap::operator!=(const OffsetMap& om) const {
 
 OffsetMap& OffsetMap::operator+=(const OffsetMap& om) {
   for (auto& it : om.counterTypeMap_) {
-    this->counterTypeMap_[it.first] += it.second;
+    counterTypeMap_[it.first] += it.second;
   }
   return *this;
 }
@@ -110,10 +117,18 @@ OffsetMap OffsetMap::operator+(const OffsetMap& om) const {
   return result;
 }
 
+OffsetMap OffsetMap::operator*(uint64_t scalar) const {
+  OffsetMap om;
+  for (auto& it : counterTypeMap_) {
+    om.counterTypeMap_[it.first] = it.second * scalar;
+  }
+  return om;
+}
+
 OffsetMap& OffsetMap::operator-=(const OffsetMap& om) {
   for (auto& it : om.counterTypeMap_) {
     ld_check(counterTypeMap_[it.first] >= it.second);
-    this->counterTypeMap_[it.first] -= it.second;
+    counterTypeMap_[it.first] -= it.second;
   }
   return *this;
 }
@@ -125,24 +140,41 @@ OffsetMap OffsetMap::operator-(const OffsetMap& om) const {
 }
 
 OffsetMap& OffsetMap::operator=(const OffsetMap& om) noexcept {
-  this->counterTypeMap_ = om.getCounterMap();
+  counterTypeMap_ = om.getCounterMap();
   return *this;
 }
 
 OffsetMap& OffsetMap::operator=(OffsetMap&& om) noexcept {
-  this->counterTypeMap_ = std::move(om.counterTypeMap_);
+  counterTypeMap_ = std::move(om.counterTypeMap_);
   return *this;
 }
 
 OffsetMap::OffsetMap(OffsetMap&& om) noexcept {
-  this->counterTypeMap_ = std::move(om.counterTypeMap_);
+  counterTypeMap_ = std::move(om.counterTypeMap_);
 }
 
 void OffsetMap::max(const OffsetMap& om) {
   for (auto& it : om.getCounterMap()) {
-    this->counterTypeMap_[it.first] =
-        std::max(it.second, this->counterTypeMap_[it.first]);
+    counterTypeMap_[it.first] = std::max(it.second, counterTypeMap_[it.first]);
   }
+}
+
+OffsetMap OffsetMap::fromLegacy(uint64_t offset) {
+  OffsetMap om;
+  om.setCounter(BYTE_OFFSET, offset);
+  return om;
+}
+
+RecordOffset OffsetMap::toRecord(OffsetMap om) {
+  RecordOffset ro;
+  ro.offset_map->counterTypeMap_ = std::move(om.counterTypeMap_);
+  return ro;
+}
+
+OffsetMap OffsetMap::fromRecord(RecordOffset record_offset) {
+  OffsetMap om;
+  om.counterTypeMap_ = std::move(record_offset.offset_map->counterTypeMap_);
+  return om;
 }
 
 std::string OffsetMap::toString() const {
@@ -153,7 +185,7 @@ std::string OffsetMap::toString() const {
       res += ", ";
     }
     first = false;
-    res += std::to_string(static_cast<uint8_t>(counter.first));
+    res += std::to_string(counter.first);
     res += ":";
     if (counter.second == BYTE_OFFSET_INVALID) {
       res += "invalid";
@@ -164,4 +196,46 @@ std::string OffsetMap::toString() const {
   res += "}";
   return res;
 }
+
+void AtomicOffsetMap::atomicFetchMax(const OffsetMap& offsets_map) {
+  FairRWLock::UpgradeHolder upgradeLock(rw_lock_);
+  for (const auto& it : offsets_map.getCounterMap()) {
+    auto iterator = atomicCounterTypeMap_.find(it.first);
+    if (iterator == atomicCounterTypeMap_.end()) {
+      FairRWLock::WriteHolder writeLock(std::move(upgradeLock));
+      atomic_fetch_max(atomicCounterTypeMap_[it.first], it.second);
+      upgradeLock = FairRWLock::UpgradeHolder(std::move(writeLock));
+    } else {
+      atomic_fetch_max(atomicCounterTypeMap_[it.first], it.second);
+    }
+  }
+}
+
+OffsetMap AtomicOffsetMap::load() const {
+  OffsetMap om;
+  FairRWLock::ReadHolder read_guard(rw_lock_);
+  for (const auto& it : atomicCounterTypeMap_) {
+    om.setCounter(it.first, it.second.load());
+  }
+  return om;
+}
+
+OffsetMap AtomicOffsetMap::fetchAdd(const OffsetMap& offsets_map) {
+  OffsetMap om;
+  uint64_t offset;
+  FairRWLock::UpgradeHolder upgradeLock(rw_lock_);
+  for (const auto& it : offsets_map.getCounterMap()) {
+    auto iterator = atomicCounterTypeMap_.find(it.first);
+    if (iterator == atomicCounterTypeMap_.end()) {
+      FairRWLock::WriteHolder writeLock(std::move(upgradeLock));
+      offset = atomicCounterTypeMap_[it.first].fetch_add(it.second) + it.second;
+      upgradeLock = FairRWLock::UpgradeHolder(std::move(writeLock));
+    } else {
+      offset = atomicCounterTypeMap_[it.first].fetch_add(it.second) + it.second;
+    }
+    om.setCounter(it.first, offset);
+  }
+  return om;
+}
+
 }} // namespace facebook::logdevice

@@ -410,11 +410,10 @@ void LogStorageState::getDebugInfo(InfoLogStorageStateTable& table) const {
     table.set<12>(last_clean.value());
   }
 
-  // TODO(T33977412) : Change to have tables print OffsetMap
   auto latest_epoch = getEpochOffsetMap();
   if (latest_epoch.hasValue()) {
     table.set<13>(latest_epoch->first);
-    table.set<14>(latest_epoch->second.getCounter(CounterType::BYTE_OFFSET));
+    table.set<14>(latest_epoch->second.toString());
   }
 
   table.set<15>(permanent_error_.load());
@@ -447,7 +446,7 @@ void LogStorageState::getSeqStateRequestCallback(
         result.last_seq,
         ReleaseType::GLOBAL,
         true /* do_release */,
-        result.epoch_offset.value_or(BYTE_OFFSET_INVALID));
+        result.epoch_offsets.value_or(OffsetMap()));
   } else {
     // Sequencer may send LSN_INVALID if it's still not done recovering the
     // log -- ignore it in that case.

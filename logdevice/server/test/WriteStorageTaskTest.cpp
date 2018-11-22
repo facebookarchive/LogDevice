@@ -170,7 +170,7 @@ TEST(WriteStorageTaskTest, Simple) {
         LocalLogStoreRecordFormat::FLAG_CHECKSUM_PARITY,
         0,
         folly::Range<const ShardID*>(cs, cs + 2),
-        0,
+        OffsetMap(),
         std::map<KeyType, std::string>(),
         &datas[i]);
     PutWriteOp op{
@@ -225,7 +225,7 @@ TEST(WriteStorageTaskTest, MetadataLogNOSPC) {
         LocalLogStoreRecordFormat::FLAG_CHECKSUM_PARITY,
         0,
         folly::Range<const ShardID*>(cs, cs + 2),
-        0,
+        OffsetMap(),
         std::map<KeyType, std::string>(),
         &data[i]);
   }

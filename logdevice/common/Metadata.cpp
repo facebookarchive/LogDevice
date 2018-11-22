@@ -29,9 +29,8 @@ Status EpochRecoveryMetadata::update(PerEpochLogMetadata& new_metadata) {
 
 Slice EpochRecoveryMetadata::serialize() const {
   serialize_buffer_.clear();
-  ld_check(header_.epoch_size ==
-           epoch_size_map_.getCounter(CounterType::BYTE_OFFSET));
-  ld_check(epoch_end_offsets_.getCounter(CounterType::BYTE_OFFSET) ==
+  ld_check(header_.epoch_size == epoch_size_map_.getCounter(BYTE_OFFSET));
+  ld_check(epoch_end_offsets_.getCounter(BYTE_OFFSET) ==
            header_.epoch_end_offset);
   serialize_buffer_.resize(
       sizeInLinearBuffer(header_, tail_record_, epoch_size_map_), 0);
@@ -57,10 +56,10 @@ int EpochRecoveryMetadata::deserialize(Slice blob) {
   ld_check(ptr != nullptr);
   std::memcpy(&header_, ptr, sizeof(header_));
   ptr += sizeof(header_);
+  size_t buf_size = sizeof(header_);
   if (header_.flags & Header::SUPPORT_OFFSET_MAP_AND_TAIL_RECORD) {
-    uint64_t buf_size = sizeof(header_);
     int rv;
-    rv = tail_record_.deserialize({ptr, blob.size - buf_size});
+    rv = tail_record_.deserialize(Slice(ptr, blob.size - buf_size));
     ld_check(rv != -1);
     epoch_end_offsets_ = tail_record_.offsets_map_;
     ptr += rv;
@@ -68,9 +67,9 @@ int EpochRecoveryMetadata::deserialize(Slice blob) {
     rv = epoch_size_map_.deserialize({ptr, blob.size - buf_size});
     ld_check(rv != -1);
   } else {
-    epoch_end_offsets_.setCounter(
-        CounterType::BYTE_OFFSET, header_.epoch_end_offset);
-    epoch_size_map_.setCounter(CounterType::BYTE_OFFSET, header_.epoch_size);
+    epoch_end_offsets_.setCounter(BYTE_OFFSET, header_.epoch_end_offset);
+    tail_record_.offsets_map_.setCounter(BYTE_OFFSET, header_.epoch_end_offset);
+    epoch_size_map_.setCounter(BYTE_OFFSET, header_.epoch_size);
   }
   return 0;
 }
@@ -112,9 +111,92 @@ std::string EpochRecoveryMetadata::toStringShort() const {
           " H:" + std::to_string(header_.last_digest_esn.val_) +
           " F:" + std::to_string(header_.flags) +
           " T:" + tail_record_.toString() + " Z:" + epoch_size_map_.toString() +
-          "O:" + epoch_end_offsets_.toString() + "]");
+          " O:" + epoch_end_offsets_.toString() + "]");
 
   return out;
+}
+
+Slice MutablePerEpochLogMetadata::serialize() const {
+  serialize_buffer_.clear();
+  serialize_buffer_.resize(sizeInLinearBuffer(data_, epoch_size_map_));
+  memcpy(serialize_buffer_.data(), &data_, sizeof(data_));
+  size_t buf_size = sizeof(data_);
+  if (data_.flags & Data::SUPPORT_OFFSET_MAP) {
+    int rv = epoch_size_map_.serialize(serialize_buffer_.data() + buf_size,
+                                       epoch_size_map_.sizeInLinearBuffer());
+    ld_check(rv != -1);
+  } else {
+    uint64_t epoch_size = epoch_size_map_.getCounter(BYTE_OFFSET);
+    memcpy(
+        serialize_buffer_.data() + buf_size, &epoch_size, sizeof(epoch_size));
+  }
+  return Slice(serialize_buffer_.data(), serialize_buffer_.size());
+}
+
+int MutablePerEpochLogMetadata::deserialize(Slice blob) {
+  if (blob.size < sizeof(data_)) {
+    err = E::MALFORMED_RECORD;
+    return -1;
+  }
+  const char* ptr = blob.ptr();
+  ld_check(ptr != nullptr);
+  std::memcpy(&data_, ptr, sizeof(data_));
+  size_t buf_size = sizeof(data_);
+  if (data_.flags & Data::SUPPORT_OFFSET_MAP) {
+    int rv = epoch_size_map_.deserialize(
+        Slice(ptr + buf_size, blob.size - buf_size));
+    ld_check(rv != -1);
+  } else {
+    uint64_t epoch_size = BYTE_OFFSET_INVALID;
+    std::memcpy(&epoch_size, ptr + buf_size, sizeof(epoch_size));
+    epoch_size_map_.setCounter(BYTE_OFFSET, epoch_size);
+  }
+  return 0;
+}
+
+void MutablePerEpochLogMetadata::merge(
+    const MutablePerEpochLogMetadata& other) {
+  ld_check(valid() && other.valid());
+  merge(other.data_, other.epoch_size_map_);
+}
+
+void MutablePerEpochLogMetadata::merge(const Slice& other) {
+  MutablePerEpochLogMetadata mutable_per_epoch_log_metadata;
+  int rv = mutable_per_epoch_log_metadata.deserialize(other);
+  ld_check(rv == 0);
+  merge(mutable_per_epoch_log_metadata);
+}
+
+bool MutablePerEpochLogMetadata::valid(Slice blob) {
+  MutablePerEpochLogMetadata mutable_per_epoch_log_metadata;
+  return mutable_per_epoch_log_metadata.deserialize(blob) == 0 &&
+      mutable_per_epoch_log_metadata.valid();
+}
+
+size_t MutablePerEpochLogMetadata::sizeInLinearBuffer(
+    const Data& data,
+    const OffsetMap& epoch_size_map) {
+  return sizeof(data) +
+      (data.flags & Data::SUPPORT_OFFSET_MAP
+           ? epoch_size_map.sizeInLinearBuffer()
+           : sizeof(uint64_t)) /* size of previous format */;
+}
+
+void MutablePerEpochLogMetadata::reset() {
+  data_.flags = 0;
+  data_.last_known_good = ESN_INVALID;
+  epoch_size_map_ = OffsetMap::fromLegacy(0);
+}
+
+void MutablePerEpochLogMetadata::merge(const Data& other,
+                                       const OffsetMap& other_epoch_size_map) {
+  // update last_known_good and epoch_size to maximum, respectively
+  if (other.last_known_good > data_.last_known_good) {
+    data_.last_known_good = other.last_known_good;
+  }
+  if (other_epoch_size_map.isValid()) {
+    epoch_size_map_.max(other_epoch_size_map);
+  }
 }
 
 std::string MutablePerEpochLogMetadata::toString() const {
@@ -124,8 +206,8 @@ std::string MutablePerEpochLogMetadata::toString() const {
   }
   out.append("L:");
   out.append(std::to_string(data_.last_known_good.val_));
-  out.append(" Z:");
-  out.append(std::to_string(data_.epoch_size));
+  out.append(" OM:");
+  out.append(epoch_size_map_.toString());
   out.append(1, ']');
   return out;
 }

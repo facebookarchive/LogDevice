@@ -20,7 +20,7 @@ DataRecordFromTailRecord::DataRecordFromTailRecord(
                  tail->header.lsn,
                  std::chrono::milliseconds(tail->header.timestamp),
                  0 /* batch_offset */,
-                 tail->header.u.byte_offset),
+                 OffsetMap::toRecord(tail->offsets_map_)),
       tail_record_(std::move(tail)) {
   ld_check(tail_record_ != nullptr);
   // tail record must be valid and contains payload

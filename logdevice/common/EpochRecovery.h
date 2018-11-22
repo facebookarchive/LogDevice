@@ -180,18 +180,9 @@ class EpochRecovery {
     return bridge_esn_;
   }
 
-  uint64_t getEpochEndOffset() const {
-    ld_check(!final_tail_record_.containOffsetWithinEpoch());
-    return final_tail_record_.header.u.byte_offset;
-  }
-
   const TailRecord& getEpochTailRecord() const {
+    ld_check(final_tail_record_.isValid());
     return final_tail_record_;
-  }
-
-  uint64_t getEpochSize() const {
-    return epoch_size_map_.getCounter(
-        CounterType::BYTE_OFFSET); // may be BYTE_OFFSET_INVALID
   }
 
   const OffsetMap& getEpochSizeMap() const {

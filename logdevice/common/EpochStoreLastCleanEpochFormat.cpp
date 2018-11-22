@@ -24,7 +24,6 @@ int fromLinearBuffer(const char* buf,
                      epoch_t* epoch_out,
                      TailRecord* tail_out) {
   ld_check(buf);
-
   uint64_t parsed_epoch;
   uint64_t parsed_last_released_real_lsn = 0;
   uint64_t parsed_last_timestamp = 0;
@@ -139,13 +138,16 @@ int fromLinearBuffer(const char* buf,
     } else {
       // we got an entry with legacy format, construct a TailRecord from
       // the legacy tail attribute values.
+      OffsetMap offsets;
+      offsets.setCounter(BYTE_OFFSET, parsed_epoch_end_offset);
       tail_out->reset({log_id,
                        lsn_t(parsed_last_released_real_lsn),
                        parsed_last_timestamp,
-                       {parsed_epoch_end_offset},
+                       {BYTE_OFFSET_INVALID /* deprecated, offsets_within_epoch used instead */},
                        /*flags*/ 0,
                        {}},
-                      std::shared_ptr<PayloadHolder>());
+                      std::shared_ptr<PayloadHolder>(),
+                      std::move(offsets));
     }
   }
 
@@ -158,12 +160,11 @@ int sizeInLinearBuffer(epoch_t lce, const TailRecord& tail) {
     err = E::INVALID_PARAM;
     return -1;
   }
-
   int text_section_size = snprintf(nullptr,
                                    0,
                                    "%u@%lu@%lu@%lu#",
                                    lce.val_,
-                                   tail.header.u.byte_offset,
+                                   tail.offsets_map_.getCounter(BYTE_OFFSET),
                                    tail.header.lsn,
                                    tail.header.timestamp);
 
@@ -196,12 +197,11 @@ int toLinearBuffer(char* buf,
     err = E::NOBUFS;
     return -1;
   }
-
   int text_section_size = snprintf(buf,
                                    buf_len,
                                    "%u@%lu@%lu@%lu#",
                                    lce.val_,
-                                   tail.header.u.byte_offset,
+                                   tail.offsets_map_.getCounter(BYTE_OFFSET),
                                    tail.header.lsn,
                                    tail.header.timestamp);
 

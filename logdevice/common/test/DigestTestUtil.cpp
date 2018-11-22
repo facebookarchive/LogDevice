@@ -8,7 +8,6 @@
 #include "DigestTestUtil.h"
 
 namespace facebook { namespace logdevice { namespace DigestTestUtil {
-// TODO(T33977412) : change offset params to OffsetMap
 std::unique_ptr<DataRecordOwnsPayload>
 create_record(logid_t logid,
               lsn_t lsn,
@@ -16,8 +15,8 @@ create_record(logid_t logid,
               uint32_t wave_or_seal_epoch,
               std::chrono::milliseconds timestamp,
               size_t payload_size,
-              uint64_t offset_within_epoch,
-              uint64_t byte_offset) {
+              OffsetMap offsets_within_epoch,
+              OffsetMap offsets) {
   Payload payload;
   if (type != RecordType::HOLE && type != RecordType::BRIDGE) {
     char* buf = (char*)malloc(payload_size);
@@ -36,18 +35,15 @@ create_record(logid_t logid,
     flags |= RECORD_Header::BRIDGE;
   }
 
-  if (offset_within_epoch != BYTE_OFFSET_INVALID) {
+  if (offsets_within_epoch.isValid()) {
     flags |= RECORD_Header::INCLUDE_OFFSET_WITHIN_EPOCH;
   }
 
-  if (byte_offset != BYTE_OFFSET_INVALID) {
+  if (offsets.isValid()) {
     flags |= RECORD_Header::INCLUDE_BYTE_OFFSET;
   }
 
   auto extra_metadata = std::make_unique<ExtraMetadata>();
-  OffsetMap offsets_within_epoch;
-  offsets_within_epoch.setCounter(
-      CounterType::BYTE_OFFSET, offset_within_epoch);
   extra_metadata->header.wave = wave_or_seal_epoch;
   extra_metadata->offsets_within_epoch = std::move(offsets_within_epoch);
 
@@ -60,7 +56,7 @@ create_record(logid_t logid,
       std::move(extra_metadata),
       nullptr /* BufferedWriteDecoder */,
       0 /* batch_offset */,
-      byte_offset);
+      OffsetMap::toRecord(std::move(offsets)));
 
   return record;
 }

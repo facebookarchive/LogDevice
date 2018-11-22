@@ -55,7 +55,7 @@ int RecordCache::putRecord(RecordID rid,
                            std::map<KeyType, std::string>&& optional_keys,
                            Slice payload_raw,
                            const std::shared_ptr<PayloadHolder>& payload_holder,
-                           uint64_t offset_within_epoch) {
+                           OffsetMap offsets_within_epoch) {
   ld_check(rid.logid == log_id_);
 
 #ifndef NDEBUG
@@ -90,7 +90,7 @@ int RecordCache::putRecord(RecordID rid,
                                   std::move(optional_keys),
                                   payload_raw,
                                   payload_holder,
-                                  offset_within_epoch);
+                                  std::move(offsets_within_epoch));
   }
 
   epoch_t head_epoch_cached = epoch_t(head_epoch_cached_.load());
@@ -209,7 +209,7 @@ int RecordCache::putRecord(RecordID rid,
                                 std::move(optional_keys),
                                 payload_raw,
                                 payload_holder,
-                                offset_within_epoch);
+                                std::move(offsets_within_epoch));
 }
 
 std::pair<RecordCache::Result, std::shared_ptr<EpochRecordCache>>

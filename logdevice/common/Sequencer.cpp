@@ -1077,11 +1077,12 @@ int Sequencer::startRecovery(std::chrono::milliseconds delay) {
     // there's nothing to recover since we are at epoch 1.
     TailRecord tail_empty_log{
         TailRecordHeader{log_id_,
-                         LSN_INVALID, // tail LSN 0
-                         0,           // timestamp
-                         {0},         // cumulative byteoffset
+                         LSN_INVALID,                       // tail LSN 0
+                         0,                                 // timestamp
+                         {BYTE_OFFSET_INVALID},             // deprecated
                          TailRecordHeader::CHECKSUM_PARITY, // flags
                          {}},
+        OffsetMap::fromLegacy(0),
         std::shared_ptr<PayloadHolder>()};
 
     onRecoveryCompleted(E::OK,
@@ -1883,35 +1884,30 @@ std::shared_ptr<const TailRecord> Sequencer::getTailRecord() const {
   ld_check(ret_tail->containOffsetWithinEpoch());
 
   ret_tail->header.flags &= ~TailRecordHeader::OFFSET_WITHIN_EPOCH;
-  if (ret_tail->header.u.offset_within_epoch == BYTE_OFFSET_INVALID ||
-      previous_tail->header.u.byte_offset == BYTE_OFFSET_INVALID) {
-    ret_tail->header.u.byte_offset = BYTE_OFFSET_INVALID;
-    ret_tail->offsets_map_.setCounter(
-        CounterType::BYTE_OFFSET, BYTE_OFFSET_INVALID);
+  if (!ret_tail->offsets_map_.isValid() ||
+      !previous_tail->offsets_map_.isValid()) {
+    ret_tail->offsets_map_.clear();
   } else {
-    // TODO(T33977412) Remove byte_offset when fully deployed
-    ret_tail->header.u.byte_offset = previous_tail->header.u.byte_offset +
-        current_epoch_tail->header.u.offset_within_epoch;
-    ret_tail->offsets_map_.setCounter(
-        CounterType::BYTE_OFFSET, ret_tail->header.u.byte_offset);
+    ret_tail->offsets_map_ =
+        previous_tail->offsets_map_ + current_epoch_tail->offsets_map_;
   }
 
   ld_check(!ret_tail->containOffsetWithinEpoch());
   return ret_tail;
 }
 
-uint64_t Sequencer::getEpochOffset() const {
+OffsetMap Sequencer::getEpochOffsetMap() const {
   if (!isRecoveryComplete()) {
-    return BYTE_OFFSET_INVALID;
+    return OffsetMap();
   }
 
   auto previous_tail = tail_record_previous_epoch_.get();
   if (previous_tail == nullptr) {
-    return BYTE_OFFSET_INVALID;
+    return OffsetMap();
   }
 
   ld_check(!previous_tail->containOffsetWithinEpoch());
-  return previous_tail->header.u.byte_offset;
+  return previous_tail->offsets_map_;
 }
 
 }} // namespace facebook::logdevice

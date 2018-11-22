@@ -91,7 +91,6 @@ int RecordRebuildingStore::parseRecord() {
   Payload payload;
   uint32_t wave;
   std::map<KeyType, std::string> optional_keys_read;
-  uint64_t offset_within_epoch = BYTE_OFFSET_INVALID;
 
   // Call parse() twice: first time to get copyset size and everything except
   // copyset, second time to get copyset (after allocating memory for it).
@@ -103,7 +102,6 @@ int RecordRebuildingStore::parseRecord() {
                                         &copyset_size,
                                         nullptr,
                                         0,
-                                        &offset_within_epoch,
                                         &offsets_within_epoch_,
                                         &optional_keys_read,
                                         &payload,
@@ -122,6 +120,7 @@ int RecordRebuildingStore::parseRecord() {
   storeHeader_.flags = recordFlags_ & LocalLogStoreRecordFormat::FLAG_MASK;
   if (offsets_within_epoch_.isValid()) {
     storeHeader_.flags |= STORE_Header::OFFSET_WITHIN_EPOCH;
+    // TODO (T35832374) : remove if condition when all servers support OffsetMap
     if (Worker::settings().enable_offset_map) {
       storeHeader_.flags |= STORE_Header::OFFSET_MAP;
     }

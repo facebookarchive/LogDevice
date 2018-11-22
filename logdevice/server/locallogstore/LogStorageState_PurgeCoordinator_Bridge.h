@@ -8,6 +8,7 @@
 #pragma once
 
 #include "logdevice/common/NodeID.h"
+#include "logdevice/common/OffsetMap.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/types.h"
 
@@ -24,12 +25,11 @@ enum class ReleaseType : uint8_t;
 class LogStorageState_PurgeCoordinator_Bridge {
  public:
   virtual ~LogStorageState_PurgeCoordinator_Bridge() {}
-  virtual void
-  onReleaseMessage(lsn_t,
-                   NodeID from,
-                   ReleaseType,
-                   bool do_broadcast,
-                   uint64_t epoch_offset = BYTE_OFFSET_INVALID) = 0;
+  virtual void onReleaseMessage(lsn_t,
+                                NodeID from,
+                                ReleaseType,
+                                bool do_broadcast,
+                                OffsetMap epoch_offsets = OffsetMap()) = 0;
   virtual void updateLastCleanInMemory(epoch_t epoch) = 0;
 };
 

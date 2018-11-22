@@ -106,7 +106,7 @@ class EpochSequencerTest : public ::testing::Test {
 
   PayloadHolder genPayload(bool evbuffer);
   void checkTailRecord(lsn_t lsn,
-                       folly::Optional<uint64_t> offset = folly::none);
+                       folly::Optional<OffsetMap> offsets = folly::none);
 
   /////// for multi-threaded multi-epoch stress tests //////
   bool multi_epoch_ = false;
@@ -543,7 +543,7 @@ void EpochSequencerTest::advanceEpoch() {
 }
 
 void EpochSequencerTest::checkTailRecord(lsn_t lsn,
-                                         folly::Optional<uint64_t> offset) {
+                                         folly::Optional<OffsetMap> offsets) {
   if (lsn_to_esn(lsn) == ESN_INVALID) {
     EXPECT_EQ(nullptr, es_->getTailRecord());
     return;
@@ -553,8 +553,8 @@ void EpochSequencerTest::checkTailRecord(lsn_t lsn,
   const auto& r = *es_->getTailRecord();
   EXPECT_EQ(lsn, r.header.lsn);
   EXPECT_GT(r.header.timestamp, 0);
-  if (offset.hasValue()) {
-    EXPECT_EQ(offset.value(), r.header.u.offset_within_epoch);
+  if (offsets.hasValue()) {
+    EXPECT_EQ(offsets.value(), r.offsets_map_);
   }
   EXPECT_NE(0, r.header.flags & TailRecordHeader::OFFSET_WITHIN_EPOCH);
 
@@ -628,7 +628,8 @@ TEST_F(EpochSequencerTest, RetireMultipleAppends) {
   ASSERT_EQ(last_lsn, es_->getLastReaped());
   ASSERT_EQ(last_lsn, es_->getLastKnownGood());
   ASSERT_EQ(0, es_->getNumAppendsInFlight());
-  checkTailRecord(last_lsn, num_appenders * payload_size_);
+  checkTailRecord(
+      last_lsn, OffsetMap({{BYTE_OFFSET, num_appenders * payload_size_}}));
   maybeDeleteEpochSequencer();
 }
 
@@ -680,7 +681,8 @@ TEST_F(EpochSequencerTest, ESN_MAX) {
   run_on_worker(processor_.get(), /*worker_id=*/0, test);
   wait_until([&]() { return esn_max_.val_ == stats.appender_destroyed; });
 
-  checkTailRecord(compose_lsn(EPOCH, esn_max_), esn_max_.val_ * payload_size_);
+  checkTailRecord(compose_lsn(EPOCH, esn_max_),
+                  OffsetMap({{BYTE_OFFSET, esn_max_.val_ * payload_size_}}));
 
   auto test2 = [&]() {
     MockAppender* appender = createAppender();
@@ -694,7 +696,8 @@ TEST_F(EpochSequencerTest, ESN_MAX) {
 
   run_on_worker(processor_.get(), /*worker_id=*/0, test2);
   // tail should remain the same
-  checkTailRecord(compose_lsn(EPOCH, esn_max_), esn_max_.val_ * payload_size_);
+  checkTailRecord(compose_lsn(EPOCH, esn_max_),
+                  OffsetMap({{BYTE_OFFSET, esn_max_.val_ * payload_size_}}));
   maybeDeleteEpochSequencer();
 }
 
@@ -735,7 +738,8 @@ TEST_F(EpochSequencerTest, EmptySequencerStateTransition2) {
   // wait for all appenders to retire, be reaped and destroyed
   wait_until([&]() { return 10 == stats.appender_destroyed; });
 
-  checkTailRecord(compose_lsn(EPOCH, esn_t(10)), 10 * payload_size_);
+  checkTailRecord(compose_lsn(EPOCH, esn_t(10)),
+                  OffsetMap({{BYTE_OFFSET, 10 * payload_size_}}));
 
   auto test2 = [&]() {
     EXPECT_EQ(EpochSequencer::State::ACTIVE, es_->getState());
@@ -749,7 +753,8 @@ TEST_F(EpochSequencerTest, EmptySequencerStateTransition2) {
     return 0;
   };
   run_on_worker(processor_.get(), /*worker_id=*/0, test2);
-  checkTailRecord(compose_lsn(EPOCH, esn_t(10)), 10 * payload_size_);
+  checkTailRecord(compose_lsn(EPOCH, esn_t(10)),
+                  OffsetMap({{BYTE_OFFSET, 10 * payload_size_}}));
   maybeDeleteEpochSequencer();
 }
 

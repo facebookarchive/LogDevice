@@ -45,7 +45,6 @@ enum RecordType {
   BRIDGE
 };
 
-// TODO(T33977412) : Change constructor to take OffsetMap
 // TODO 11866467: support for specifying copyset
 std::unique_ptr<DataRecordOwnsPayload> create_record(
     logid_t logid,
@@ -54,7 +53,7 @@ std::unique_ptr<DataRecordOwnsPayload> create_record(
     uint32_t wave_or_seal_epoch,
     std::chrono::milliseconds timestamp = std::chrono::milliseconds(0),
     size_t payload_size = 128,
-    uint64_t offset_within_epoch = BYTE_OFFSET_INVALID,
-    uint64_t byteoffset = BYTE_OFFSET_INVALID);
+    OffsetMap offsets_within_epoch = OffsetMap(),
+    OffsetMap offsets = OffsetMap());
 
 }}} // namespace facebook::logdevice::DigestTestUtil

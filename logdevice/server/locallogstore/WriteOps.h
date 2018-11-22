@@ -156,7 +156,7 @@ struct PutWriteOp : public RecordWriteOp {
     copyset_size_t copyset_size;
     std::chrono::milliseconds timestamp;
     esn_t last_known_good;
-    uint64_t offset_within_epoch = BYTE_OFFSET_INVALID;
+    OffsetMap offsets_within_epoch;
     int rv = LocalLogStoreRecordFormat::parse(record_header,
                                               &timestamp,
                                               &last_known_good,
@@ -165,7 +165,7 @@ struct PutWriteOp : public RecordWriteOp {
                                               &copyset_size,
                                               nullptr,
                                               0,
-                                              &offset_within_epoch,
+                                              &offsets_within_epoch,
                                               nullptr,
                                               nullptr,
                                               -1 /* unused */);
@@ -186,8 +186,8 @@ struct PutWriteOp : public RecordWriteOp {
         std::to_string(last_known_good.val_) + std::string(", flags: ") +
         LocalLogStoreRecordFormat::flagsToString(flags) +
         std::string(", copyset size: ") + std::to_string(copyset_size) +
-        std::string(", offset within epoch: ") +
-        std::to_string(offset_within_epoch);
+        std::string(", offsets within epoch: ") +
+        offsets_within_epoch.toString();
   }
 
   std::map<KeyType, std::string> getKeys() const {
@@ -200,7 +200,7 @@ struct PutWriteOp : public RecordWriteOp {
                                               nullptr, // copyset_size
                                               nullptr, // copyset_arr
                                               0,       // copyset_arr_size
-                                              nullptr, // offset_within_epoch
+                                              nullptr, // offsets_within_epoch
                                               &keys,   // optional_keys
                                               nullptr, // payload_out
                                               -1);     // shard (unused)

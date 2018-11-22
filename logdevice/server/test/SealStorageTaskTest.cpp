@@ -238,7 +238,8 @@ TEST(SealStorageTaskTest, EpochInfoWithByteOffset) {
   LogStorageStateMap map(1);
 
   std::vector<TestRecord> records = {
-      TestRecord(logid_t(1), lsn(2, 1), ESN_INVALID).offsetWithinEpoch(10),
+      TestRecord(logid_t(1), lsn(2, 1), ESN_INVALID)
+          .offsetsWithinEpoch(OffsetMap({{BYTE_OFFSET, 10}})),
       TestRecord(logid_t(1), lsn(2, 2), esn_t(1)),
   };
 
@@ -385,7 +386,9 @@ TEST(SealStorageTaskTest, TailRecordWithMutablePerEpochLogMetadata) {
   store_fill(store, records);
   // write mutable per-epoch log metadata for some epochs
   auto write_per_epoch_release = [&](epoch_t epoch, esn_t lng) {
-    MutablePerEpochLogMetadata metadata(0, lng, /*epoch_offset_map*/ 0);
+    OffsetMap epoch_size_map;
+    epoch_size_map.setCounter(BYTE_OFFSET, 0);
+    MutablePerEpochLogMetadata metadata(1, lng, epoch_size_map);
     int rv =
         store.updatePerEpochLogMetadata(logid_t(1),
                                         epoch,
@@ -426,12 +429,14 @@ TEST(SealStorageTaskTest, TailRecordWithEpochOffset) {
   // epoch 7: tail record does not have epoch offset, but mutable per-epoch log
   //          metadata has the epoch size
   std::vector<TestRecord> records = {
-      TestRecord(logid_t(1), lsn(2, 1), ESN_INVALID).offsetWithinEpoch(32),
+      TestRecord(logid_t(1), lsn(2, 1), ESN_INVALID)
+          .offsetsWithinEpoch(OffsetMap({{BYTE_OFFSET, 32}})),
       TestRecord(logid_t(1), lsn(2, 2), esn_t(1)),
-      TestRecord(logid_t(1), lsn(4, 1), ESN_INVALID).offsetWithinEpoch(54210),
+      TestRecord(logid_t(1), lsn(4, 1), ESN_INVALID)
+          .offsetsWithinEpoch(OffsetMap({{BYTE_OFFSET, 54210}})),
       TestRecord(logid_t(1), lsn(4, 4), esn_t(2))
           .payload(Payload("test", 4))
-          .offsetWithinEpoch(54214),
+          .offsetsWithinEpoch(OffsetMap({{BYTE_OFFSET, 54214}})),
       TestRecord(logid_t(1), lsn(4, 7), esn_t(4)),
       TestRecord(logid_t(1), lsn(7, 21), ESN_INVALID)
           .payload(Payload(buf, sizeof(buf))),
@@ -440,7 +445,9 @@ TEST(SealStorageTaskTest, TailRecordWithEpochOffset) {
   store_fill(store, records);
   // write mutable per-epoch log metadata for some epochs
   auto write_per_epoch_release = [&](epoch_t epoch, esn_t lng, uint64_t es) {
-    MutablePerEpochLogMetadata metadata(0, lng, es);
+    OffsetMap epoch_size_map;
+    epoch_size_map.setCounter(BYTE_OFFSET, es);
+    MutablePerEpochLogMetadata metadata(1, lng, epoch_size_map);
     int rv =
         store.updatePerEpochLogMetadata(logid_t(1),
                                         epoch,
@@ -478,12 +485,11 @@ TEST(SealStorageTaskTest, TailRecordWithEpochOffset) {
       ASSERT_TRUE(r.header.flags & TailRecordHeader::CHECKSUM_PARITY);
     }
   }
-  ASSERT_EQ(32, task1.tail_records_[0].header.u.offset_within_epoch);
-  ASSERT_EQ(32,
-            (*task1.epoch_info_)[2].epoch_offset_map.getCounter(
-                CounterType::BYTE_OFFSET));
-  ASSERT_EQ(54214, task1.tail_records_[1].header.u.offset_within_epoch);
-  ASSERT_EQ(672, task1.tail_records_[2].header.u.offset_within_epoch);
+  ASSERT_EQ(32, task1.tail_records_[0].offsets_map_.getCounter(BYTE_OFFSET));
+  ASSERT_EQ(
+      32, (*task1.epoch_info_)[2].epoch_offset_map.getCounter(BYTE_OFFSET));
+  ASSERT_EQ(54214, task1.tail_records_[1].offsets_map_.getCounter(BYTE_OFFSET));
+  ASSERT_EQ(672, task1.tail_records_[2].offsets_map_.getCounter(BYTE_OFFSET));
 }
 
 // test Seal should succeed on retries with the same Seal ID, but only

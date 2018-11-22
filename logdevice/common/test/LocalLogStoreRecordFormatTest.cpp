@@ -70,7 +70,7 @@ TEST_P(LocalLogStoreRecordFormatTest, RoundTrip) {
 
   header.copyset_size = 2;
   OffsetMap om;
-  om.setCounter(CounterType::BYTE_OFFSET, 34);
+  om.setCounter(BYTE_OFFSET, 34);
   extra.offsets_within_epoch = om;
 
   // if shard_id_in_copyset is set, we use a different shard_index_t value for
@@ -125,7 +125,6 @@ TEST_P(LocalLogStoreRecordFormatTest, RoundTrip) {
   copyset_size_t copyset_size_read;
   std::map<KeyType, std::string> optional_keys_read;
   Payload payload_read;
-  uint64_t offset_within_epoch_read = 0xffff;
   OffsetMap offsets_within_epoch_read;
   uint32_t wave_read;
   // If you don't know the copyset size in advance, you can pass in a null
@@ -138,7 +137,6 @@ TEST_P(LocalLogStoreRecordFormatTest, RoundTrip) {
                                         &copyset_size_read,
                                         nullptr,
                                         0,
-                                        &offset_within_epoch_read,
                                         &offsets_within_epoch_read,
                                         &optional_keys_read,
                                         &payload_read,
@@ -172,10 +170,7 @@ TEST_P(LocalLogStoreRecordFormatTest, RoundTrip) {
 
   if (enable_offset) {
     ASSERT_EQ(om, offsets_within_epoch_read);
-    ASSERT_EQ(34, offset_within_epoch_read);
   } else {
-    // Shouldn't have changed from the sentinel 0xffff
-    ASSERT_EQ(0xffff, offset_within_epoch_read);
     ASSERT_FALSE(offsets_within_epoch_read.isValid());
   }
   ASSERT_EQ(optional_keys.at(KeyType::FILTERABLE),
@@ -229,7 +224,7 @@ TEST_P(LocalLogStoreRecordFormatTest, CSIRoundTrip) {
 
   header.copyset_size = 2;
   OffsetMap offsets_within_epoch;
-  offsets_within_epoch.setCounter(CounterType::BYTE_OFFSET, 34);
+  offsets_within_epoch.setCounter(BYTE_OFFSET, 34);
   extra.offsets_within_epoch = std::move(offsets_within_epoch);
 
   // if shard_id_in_copyset is set, we use a different shard_index_t value for

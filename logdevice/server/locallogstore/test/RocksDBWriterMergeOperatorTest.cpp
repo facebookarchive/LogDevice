@@ -44,7 +44,7 @@ struct ParseResult {
   uint32_t wave;
   std::string payload;
   std::vector<ShardID> copyset;
-  uint64_t offset_within_epoch;
+  OffsetMap offsets_within_epoch;
 };
 
 ParseResult parse(const RawRecord& rec) {
@@ -61,7 +61,7 @@ ParseResult parse(const RawRecord& rec) {
                                             &copyset_size,
                                             ret.copyset.data(),
                                             ret.copyset.size(),
-                                            &ret.offset_within_epoch,
+                                            &ret.offsets_within_epoch,
                                             nullptr,
                                             &payload,
                                             THIS_SHARD);
@@ -479,17 +479,18 @@ TEST_F(RocksDBWriterMergeOperatorTest, DeniedAmendAndStore) {
 
 // epoch recovery should be able to amend byteoffset
 TEST_F(RocksDBWriterMergeOperatorTest, EpochRecoveryOverrideByteOffset) {
-  std::vector<TestRecord> test_data = {TestRecord(LOG_ID, lsn_t(1), esn_t(0))
-                                           .writtenByRecovery(epoch_t(2))
-                                           .copyset({N2, N3})
-                                           .payload(Payload("foo", 3))
-                                           .offsetWithinEpoch(10),
-                                       TestRecord(LOG_ID, lsn_t(1), esn_t(0))
-                                           .writtenByRecovery(epoch_t(5))
-                                           .copyset({N1, N2, N3})
-                                           .payload(Payload())
-                                           .flagAmend()
-                                           .offsetWithinEpoch(15)};
+  std::vector<TestRecord> test_data = {
+      TestRecord(LOG_ID, lsn_t(1), esn_t(0))
+          .writtenByRecovery(epoch_t(2))
+          .copyset({N2, N3})
+          .payload(Payload("foo", 3))
+          .offsetsWithinEpoch(OffsetMap({{BYTE_OFFSET, 10}})),
+      TestRecord(LOG_ID, lsn_t(1), esn_t(0))
+          .writtenByRecovery(epoch_t(5))
+          .copyset({N1, N2, N3})
+          .payload(Payload())
+          .flagAmend()
+          .offsetsWithinEpoch(OffsetMap({{BYTE_OFFSET, 15}}))};
   storeRecords(test_data);
 
   auto cb_all = [](const std::vector<RawRecord>& rec) {
@@ -502,7 +503,8 @@ TEST_F(RocksDBWriterMergeOperatorTest, EpochRecoveryOverrideByteOffset) {
   };
   auto cb_records_only = [](const std::vector<RawRecord>& rec) {
     ASSERT_EQ("foo", parse(rec[0]).payload);
-    ASSERT_EQ(15, parse(rec[0]).offset_within_epoch);
+    ASSERT_EQ(
+        OffsetMap({{BYTE_OFFSET, 15}}), parse(rec[0]).offsets_within_epoch);
   };
   verify(cb_all, cb_records_only);
 }
@@ -514,7 +516,7 @@ TEST_F(RocksDBWriterMergeOperatorTest, EpochRecoveryNotOverrideByteOffset) {
           .writtenByRecovery(epoch_t(2))
           .copyset({N2, N3})
           .payload(Payload("foo", 3))
-          .offsetWithinEpoch(10),
+          .offsetsWithinEpoch(OffsetMap({{BYTE_OFFSET, 10}})),
       TestRecord(LOG_ID, lsn_t(1), esn_t(0))
           .writtenByRecovery(epoch_t(5))
           .copyset({N1, N2, N3})
@@ -533,7 +535,8 @@ TEST_F(RocksDBWriterMergeOperatorTest, EpochRecoveryNotOverrideByteOffset) {
   };
   auto cb_records_only = [](const std::vector<RawRecord>& rec) {
     ASSERT_EQ("foo", parse(rec[0]).payload);
-    ASSERT_EQ(10, parse(rec[0]).offset_within_epoch);
+    ASSERT_EQ(
+        OffsetMap({{BYTE_OFFSET, 10}}), parse(rec[0]).offsets_within_epoch);
   };
   verify(cb_all, cb_records_only);
 }

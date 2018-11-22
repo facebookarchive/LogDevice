@@ -233,7 +233,7 @@ int CachedDigest::shipRecords(size_t* bytes_pushed) {
           lsn_to_esn(tail.header.lsn - 1), // lng
           1,                               // wave
           copyset_t({ShardID(0, 0)}),      // copyset (dummy)
-          tail.header.u.offset_within_epoch,
+          tail.offsets_map_,
           tail.getPayloadSlice()};
       ssize_t pushed = shipRecord(esn, tail_record);
       if (pushed < 0) {
@@ -299,8 +299,6 @@ CachedDigest::shipRecord(esn_t esn,
       record.payload_raw.size > 0 ? record.payload_raw.data : nullptr,
       record.payload_raw.size};
 
-  // TODO(T33977412) : Edit record to contain OffsetMap
-  // add extra metadata if requested
   std::unique_ptr<ExtraMetadata> extra_metadata = nullptr;
   if (includeExtraMetadata()) {
     header.flags |= RECORD_Header::INCLUDES_EXTRA_METADATA;
@@ -309,8 +307,7 @@ CachedDigest::shipRecord(esn_t esn,
     extra_metadata->header.wave = record.wave_or_recovery_epoch;
     extra_metadata->header.copyset_size = record.copyset.size();
     extra_metadata->copyset = record.copyset;
-    extra_metadata->offsets_within_epoch.setCounter(
-        CounterType::BYTE_OFFSET, record.offset_within_epoch);
+    extra_metadata->offsets_within_epoch = record.offsets_within_epoch;
   }
 
   if (extra_metadata && extra_metadata->offsets_within_epoch.isValid()) {

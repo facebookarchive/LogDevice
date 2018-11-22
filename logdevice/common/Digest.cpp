@@ -225,7 +225,6 @@ esn_t Digest::applyBridgeRecords(esn_t last_known_good,
             RECORD_Header::HOLE | RECORD_Header::DIGEST;
 
         // create a hole record from the existing record
-        // TODO (T33977412) change attrs to take byte_offsets
         std::unique_ptr<DataRecordOwnsPayload> hole_record(
             new DataRecordOwnsPayload(
                 existing_record->logid,
@@ -238,7 +237,7 @@ esn_t Digest::applyBridgeRecords(esn_t last_known_good,
                 std::move(extra_metadata),
                 std::shared_ptr<BufferedWriteDecoder>(),
                 0, // batch_offset
-                existing_record->attrs.byte_offset,
+                std::move(existing_record->attrs.offsets),
                 /*invalid_checksum=*/false));
 
         // this will free the payload the previous record
@@ -310,7 +309,7 @@ int Digest::recomputeOffsetsWithinEpoch(
   if (last_known_good == ESN_INVALID) {
     // To make offsets_within_epoch valid
     OffsetMap om;
-    om.setCounter(CounterType::BYTE_OFFSET, 0);
+    om.setCounter(BYTE_OFFSET, 0);
     offsets_within_epoch = std::move(om);
   }
 
@@ -364,12 +363,11 @@ int Digest::recomputeOffsetsWithinEpoch(
     }
 
     auto& entry = kv.second;
-    // TODO(T33977412) : Change to take into account other counters
     OffsetMap payload_size_map;
+    // TODO(T33977412) Add record counter offset based on settings
     if (!entry.isHolePlug() && !entry.isBridgeRecord()) {
       payload_size_map.setCounter(
-          CounterType::BYTE_OFFSET,
-          entry.getPayload().size() - entry.getChecksumBytes());
+          BYTE_OFFSET, entry.getPayload().size() - entry.getChecksumBytes());
     }
     offsets_within_epoch.value() += payload_size_map;
 

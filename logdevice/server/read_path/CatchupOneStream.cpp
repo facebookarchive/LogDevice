@@ -222,7 +222,6 @@ int ReadingCallback::processRecord(const RawRecord& record) {
   esn_t last_known_good;
   ShardID* copyset = nullptr;
   uint32_t wave;
-  uint64_t offset_within_epoch = BYTE_OFFSET_INVALID;
   OffsetMap offsets_within_epoch;
   // Parse the copyset only if necessary
   if (stream_->include_extra_metadata_) {
@@ -237,7 +236,6 @@ int ReadingCallback::processRecord(const RawRecord& record) {
       &copyset_size,
       stream_->include_extra_metadata_ ? copyset : nullptr,
       COPYSET_SIZE_MAX,
-      &offset_within_epoch,
       &offsets_within_epoch,
       stream_->filter_pred_ != nullptr ? &optional_keys : nullptr,
       &payload,
@@ -478,9 +476,8 @@ OffsetMap ReadingCallback::getEpochOffsets(epoch_t record_epoch,
                                              false,  // find_last_available
                                              false); // allow_blocking_io
     if (rv == 0) {
-      ld_check(
-          metadata.header_.epoch_end_offset ==
-          metadata.epoch_end_offsets_.getCounter(CounterType::BYTE_OFFSET));
+      ld_check(metadata.header_.epoch_end_offset ==
+               metadata.epoch_end_offsets_.getCounter(BYTE_OFFSET));
       return metadata.epoch_end_offsets_;
     } else if (rv != 0 && err == E::LOCAL_LOG_STORE_READ) {
       ld_error("Error while reading PerEpochLogMetadata for epoch %u",
@@ -503,9 +500,8 @@ OffsetMap ReadingCallback::getEpochOffsets(epoch_t record_epoch,
                                                false,  // find_last_available
                                                false); // allow_blocking_io
       if (rv == 0) {
-        ld_check(
-            metadata_.header_.epoch_end_offset ==
-            metadata_.epoch_end_offsets_.getCounter(CounterType::BYTE_OFFSET));
+        ld_check(metadata_.header_.epoch_end_offset ==
+                 metadata_.epoch_end_offsets_.getCounter(BYTE_OFFSET));
         return metadata_.epoch_end_offsets_ - metadata_.epoch_size_map_;
       }
       ld_check(rv == -1);
@@ -1215,8 +1211,7 @@ CatchupOneStream::Action CatchupOneStream::pushReleasedRecords(
       }
 
       nrecords++;
-      ld_check(entry->offsets_within_epoch.getCounter(
-                   CounterType::BYTE_OFFSET) == entry->offset_within_epoch);
+
       int rv = callback.processRecord(
           entry->lsn,
           std::chrono::milliseconds(entry->timestamp),

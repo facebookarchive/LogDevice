@@ -112,12 +112,15 @@ StoreStorageTask::StoreStorageTask(
   }
 
   if (merge_mutable_per_epoch_log_metadata) {
-    // TODO(T33977412) : change epoch_size to OffsetMap
-    uint64_t epoch_size =
-        (extra.offsets_within_epoch.isValidOffset(CounterType::BYTE_OFFSET)
-             ? extra.offsets_within_epoch.getCounter(CounterType::BYTE_OFFSET)
-             : 0);
-    metadata_.emplace(0 /* flags */, store_header.last_known_good, epoch_size);
+    uint16_t flags = 0;
+    if (store_header.flags & STORE_Header::OFFSET_MAP) {
+      flags |= MutablePerEpochLogMetadata::Data::SUPPORT_OFFSET_MAP;
+    }
+    OffsetMap epoch_size_map =
+        (extra.offsets_within_epoch.isValid() ? extra.offsets_within_epoch
+                                              : OffsetMap::fromLegacy(0));
+    metadata_.emplace(
+        flags, store_header.last_known_good, std::move(epoch_size_map));
     metadata_write_op_.emplace(store_header.rid.logid,
                                store_header.rid.epoch,
                                metadata_.get_pointer());
@@ -313,6 +316,10 @@ void StoreStorageTask::sendReply(Status status) const {
     flags |= STORED_Header::LOW_WATERMARK_NOSPC;
     WORKER_STAT_INCR(node_stored_low_on_space_sent);
   }
+  // TODO (T35832374) : remove if condition when all servers support OffsetMap
+  if (worker->settings().enable_offset_map) {
+    flags |= STORE_Header::OFFSET_MAP;
+  }
 
   STORED_Message::createAndSend(
       STORED_Header{rid_, wave_, status, seal_.seq_node, flags, getShardIdx()},
@@ -337,17 +344,16 @@ int StoreStorageTask::putCache() {
       (flags_ & STORE_Header::WRITTEN_BY_RECOVERY ? extra_.recovery_epoch.val_
                                                   : wave_);
 
-  int rv = cache->putRecord(
-      rid_,
-      timestamp_,
-      lng_,
-      wave_or_recovery_epoch,
-      copyset_,
-      flags_,
-      write_op_.getKeys(),
-      payload_raw_,
-      payload_holder_,
-      extra_.offsets_within_epoch.getCounter(CounterType::BYTE_OFFSET));
+  int rv = cache->putRecord(rid_,
+                            timestamp_,
+                            lng_,
+                            wave_or_recovery_epoch,
+                            copyset_,
+                            flags_,
+                            write_op_.getKeys(),
+                            payload_raw_,
+                            payload_holder_,
+                            extra_.offsets_within_epoch);
   if (rv == 0) {
     STAT_ADD(stats(),
              record_cache_bytes_cached_estimate,

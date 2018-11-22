@@ -138,14 +138,14 @@ void RecoveryNode::transition(State to) {
                             recovery_->getLastKnownGood(),
                             recovery_->getLastDigestEsn(),
                             static_cast<nodeset_size_t>(absent_shards.size()),
-                            recovery_->getEpochEndOffset(),
-                            recovery_->getEpochSize(),
+                            BYTE_OFFSET_INVALID, /* unused */
+                            BYTE_OFFSET_INVALID, /* unused */
                             shard_.shard()};
 
         ld_debug("Sending CLEAN message to %s, logid %lu, clean epoch %u, "
                  "recovery id: %lu, sequencer epoch: %u, "
                  "recovery window (%u, %u], absent nodes: [%s], "
-                 "epoch end offset %lu, epoch size map %s, TailRecord %s.",
+                 "epoch size map %s, TailRecord %s.",
                  shard_.toString().c_str(),
                  header.log_id.val_,
                  header.epoch.val_,
@@ -154,7 +154,6 @@ void RecoveryNode::transition(State to) {
                  header.last_known_good.val_,
                  header.last_digest_esn.val_,
                  toString(absent_shards).c_str(),
-                 header.epoch_end_offset,
                  epoch_size_map.toString().c_str(),
                  tail_record.toString().c_str());
         msg.reset(new CLEAN_Message(

@@ -118,20 +118,34 @@ namespace {
 TailRecord gen_tail_record(logid_t logid,
                            lsn_t lsn,
                            uint64_t timestamp,
-                           uint64_t byte_offset) {
-  return TailRecord({logid, lsn, timestamp, {byte_offset}, 0, {}},
-                    std::shared_ptr<PayloadHolder>());
+                           OffsetMap offsets) {
+  return TailRecord(
+      {logid,
+       lsn,
+       timestamp,
+       {BYTE_OFFSET_INVALID /* deprecated use OffsetMap instead */},
+       0,
+       {}},
+      std::move(offsets),
+      std::shared_ptr<PayloadHolder>());
 }
 
 TailRecord gen_tail_record_with_payload(logid_t logid,
                                         lsn_t lsn,
                                         uint64_t timestamp,
-                                        uint64_t byte_offset) {
+                                        OffsetMap offsets) {
   TailRecordHeader::flags_t flags = TailRecordHeader::HAS_PAYLOAD;
   void* payload_flat = malloc(333);
   std::strncpy((char*)payload_flat, "Tail Record Test Payload", 50);
-  return TailRecord({logid, lsn, timestamp, {byte_offset}, 0, {}},
-                    std::make_shared<PayloadHolder>(payload_flat, 333));
+  return TailRecord(
+      {logid,
+       lsn,
+       timestamp,
+       {BYTE_OFFSET_INVALID /* deprecated use byte_offset instead */},
+       0,
+       {}},
+      std::move(offsets),
+      std::make_shared<PayloadHolder>(payload_flat, 333));
 }
 } // namespace
 
@@ -185,7 +199,7 @@ class LastCleanEpochTestRequest : public Request {
               int rv = epochstore_->setLastCleanEpoch(
                   logid_,
                   next_epoch,
-                  gen_tail_record(logid_, LSN_INVALID, 0, BYTE_OFFSET_INVALID),
+                  gen_tail_record(logid_, LSN_INVALID, 0, OffsetMap()),
                   cb_);
               EXPECT_EQ(0, rv);
               return;
@@ -205,7 +219,7 @@ class LastCleanEpochTestRequest : public Request {
             int rv = epochstore_->setLastCleanEpoch(
                 logid_,
                 read_epoch,
-                gen_tail_record(logid_, LSN_INVALID, 0, BYTE_OFFSET_INVALID),
+                gen_tail_record(logid_, LSN_INVALID, 0, OffsetMap()),
                 [next_epoch, this](
                     Status st3, logid_t lid3, epoch_t lce, TailRecord) {
                   EXPECT_EQ(E::STALE, st3);
@@ -220,7 +234,7 @@ class LastCleanEpochTestRequest : public Request {
           int rv = epochstore_->setLastCleanEpoch(
               logid_,
               next_epoch,
-              gen_tail_record(logid_, LSN_INVALID, 0, BYTE_OFFSET_INVALID),
+              gen_tail_record(logid_, LSN_INVALID, 0, OffsetMap()),
               cb_);
           EXPECT_EQ(0, rv);
         });
@@ -476,13 +490,13 @@ TEST_F(ZookeeperEpochStoreTest, LastCleanEpochMetaDataZnodePath) {
   SetLastCleanEpochZRQ lce_data_zrq(
       logid,
       epoch_t(1),
-      gen_tail_record(logid, LSN_INVALID, 0, BYTE_OFFSET_INVALID),
+      gen_tail_record(logid, LSN_INVALID, 0, OffsetMap()),
       [](Status, logid_t, epoch_t, TailRecord) {},
       epochstore.get());
   SetLastCleanEpochZRQ lce_metadata_zrq(
       meta_logid,
       epoch_t(1),
-      gen_tail_record(meta_logid, LSN_INVALID, 0, BYTE_OFFSET_INVALID),
+      gen_tail_record(meta_logid, LSN_INVALID, 0, OffsetMap()),
       [](Status, logid_t, epoch_t, TailRecord) {},
       epochstore.get());
   ASSERT_NE(lce_data_zrq.getZnodePath(), lce_metadata_zrq.getZnodePath());
@@ -813,7 +827,7 @@ TEST_F(ZookeeperEpochStoreTest, LastCleanEpochWithTailRecord) {
         ASSERT_EQ(LSN_INVALID, tail.header.lsn);
         ASSERT_EQ(0, tail.header.timestamp);
         ASSERT_EQ(0, tail.header.flags & TailRecordHeader::OFFSET_WITHIN_EPOCH);
-        ASSERT_EQ(0, tail.header.u.byte_offset);
+        ASSERT_EQ(0, tail.offsets_map_.getCounter(BYTE_OFFSET));
 
         sem.post();
       });
@@ -827,7 +841,7 @@ TEST_F(ZookeeperEpochStoreTest, LastCleanEpochWithTailRecord) {
       logid_t(1),
       compose_lsn(epoch_t(3429107), esn_t(43940088)),
       224433115,
-      1103428925893352348);
+      OffsetMap({{BYTE_OFFSET, 1103428925893352348}}));
 
   rv = epochstore->setLastCleanEpoch(
       logid_t(1),
@@ -863,7 +877,7 @@ TEST_F(ZookeeperEpochStoreTest, LastCleanEpochWithTailRecord) {
       logid_t(1),
       compose_lsn(epoch_t(3429102), esn_t(88423423)),
       11243115,
-      3289245847740);
+      OffsetMap({{BYTE_OFFSET, 3289245847740}}));
   rv = epochstore->setLastCleanEpoch(
       logid_t(1),
       epoch_t(new_lce.val_ - 1),
@@ -887,7 +901,7 @@ TEST_F(ZookeeperEpochStoreTest, LastCleanEpochWithTailRecord) {
       logid_t(1),
       compose_lsn(epoch_t(3429112), esn_t(894623233)),
       224439115,
-      BYTE_OFFSET_INVALID);
+      OffsetMap());
 
   rv = epochstore->setLastCleanEpoch(
       logid_t(1),
@@ -898,8 +912,8 @@ TEST_F(ZookeeperEpochStoreTest, LastCleanEpochWithTailRecord) {
         ASSERT_EQ(logid_t(1), logid);
         ASSERT_EQ(new_lce3, lce);
         ASSERT_EQ(new_tail3.header.lsn, tail.header.lsn);
-        ASSERT_NE(new_tail3.header.u.byte_offset, tail.header.u.byte_offset);
-        ASSERT_EQ(new_tail.header.u.byte_offset, tail.header.u.byte_offset);
+        ASSERT_NE(new_tail3.offsets_map_, tail.offsets_map_);
+        ASSERT_EQ(new_tail.offsets_map_, tail.offsets_map_);
         sem.post();
       });
 
@@ -914,8 +928,8 @@ TEST_F(ZookeeperEpochStoreTest, LastCleanEpochWithTailRecord) {
         ASSERT_EQ(new_lce3, lce);
         ASSERT_EQ(new_tail3.header.lsn, tail.header.lsn);
         ASSERT_EQ(new_tail3.header.timestamp, tail.header.timestamp);
-        ASSERT_NE(new_tail3.header.u.byte_offset, tail.header.u.byte_offset);
-        ASSERT_EQ(new_tail.header.u.byte_offset, tail.header.u.byte_offset);
+        ASSERT_NE(new_tail3.offsets_map_, tail.offsets_map_);
+        ASSERT_EQ(new_tail.offsets_map_, tail.offsets_map_);
         sem.post();
       });
 

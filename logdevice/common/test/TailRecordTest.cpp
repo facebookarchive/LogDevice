@@ -39,28 +39,17 @@ class TailRecordTest : public ::testing::Test {
     TailRecordHeader::flags_t flags = TailRecordHeader::CHECKSUM_PARITY |
         (include_payload ? TailRecordHeader::HAS_PAYLOAD : 0);
     flags |= TailRecordHeader::OFFSET_WITHIN_EPOCH;
-    return TailRecord(TailRecordHeader{LOG_ID,
-                                       compose_lsn(epoch_t(933), esn_t(3347)),
-                                       1502502135,
-                                       {2349045994592},
-                                       flags},
-                      include_payload ? createPayload(2323, 't') : nullptr);
-  }
-
-  TailRecord genTailRecordWithOffsetMap(bool include_payload) {
-    OffsetMap offset_map;
-    offset_map.setCounter(CounterType::BYTE_OFFSET, 2349045994592);
-    TailRecordHeader::flags_t flags = TailRecordHeader::CHECKSUM_PARITY |
-        (include_payload ? TailRecordHeader::HAS_PAYLOAD : 0);
-    flags |= TailRecordHeader::OFFSET_WITHIN_EPOCH;
     flags |= TailRecordHeader::OFFSET_MAP;
-    return TailRecord(TailRecordHeader{LOG_ID,
-                                       compose_lsn(epoch_t(933), esn_t(3347)),
-                                       1502502135,
-                                       {2349045994592},
-                                       flags},
-                      std::move(offset_map),
-                      include_payload ? createPayload(2323, 't') : nullptr);
+    return TailRecord(
+        TailRecordHeader{
+            LOG_ID,
+            compose_lsn(epoch_t(933), esn_t(3347)),
+            1502502135,
+            {BYTE_OFFSET_INVALID /* deprecated, OffsetMap used instead */},
+            flags,
+            {}},
+        OffsetMap({{BYTE_OFFSET, 2349045994592}}),
+        include_payload ? createPayload(2323, 't') : nullptr);
   }
 };
 
@@ -110,49 +99,17 @@ TEST_F(TailRecordTest, BasicSerialization) {
   ASSERT_EQ(written, n_read);
 }
 
-TEST_F(TailRecordTest, CompatibilityWithOffsetMap) {
-  const size_t n_records = 10;
-  const size_t max_len = 1024 * 1024;
-  std::unique_ptr<char[]> buf1(new char[max_len]);
-  size_t written = 0;
-  std::vector<size_t> record_size(n_records, 0);
-  for (int i = 0; i < n_records; ++i) {
-    TailRecord r;
-    r = genTailRecordWithOffsetMap(i % 2 == 0);
-    ASSERT_TRUE(r.isValid());
-    record_size[i] = r.serialize(buf1.get() + written, max_len - written);
-    ASSERT_GT(record_size[i], 0);
-    written += record_size[i];
-  }
-  ld_info("Wrote %lu records of %lu bytes.", n_records, written);
-  size_t n_read = 0;
-  for (int i = 0; i < n_records; ++i) {
-    TailRecord d;
-    ASSERT_FALSE(d.isValid());
-    int nbytes = d.deserialize({buf1.get() + n_read, max_len - n_read});
-    ASSERT_EQ(record_size[i], nbytes);
-    ASSERT_TRUE(d.isValid());
-    // INCLUDE_BLOB only used in serialization format
-    ASSERT_FALSE(d.header.flags & TailRecordHeader::INCLUDE_BLOB);
-    ASSERT_TRUE(
-        TailRecord::sameContent(d, genTailRecordWithOffsetMap(i % 2 == 0)));
-    n_read += record_size[i];
-  }
-
-  ASSERT_EQ(written, n_read);
-}
-
 TEST_F(TailRecordTest, EmptyPayload) {
   // tail record has payload but it is empty (size 0)
   TailRecordHeader::flags_t flags = TailRecordHeader::CHECKSUM_PARITY |
       TailRecordHeader::HAS_PAYLOAD | TailRecordHeader::OFFSET_WITHIN_EPOCH;
-
-  TailRecord r(TailRecordHeader{LOG_ID,
-                                compose_lsn(epoch_t(933), esn_t(3347)),
-                                1502502135,
-                                {2349045994592},
-                                flags},
-               std::make_shared<PayloadHolder>(nullptr, 0));
+  OffsetMap offsets;
+  offsets.setCounter(BYTE_OFFSET, 2349045994592);
+  TailRecord r(
+      TailRecordHeader{
+          LOG_ID, compose_lsn(epoch_t(933), esn_t(3347)), 1502502135, {BYTE_OFFSET_INVALID /* deprecated, offsets_within_epoch used instead */}, flags, {}},
+      std::move(offsets),
+      std::make_shared<PayloadHolder>(nullptr, 0));
 
   std::unique_ptr<char[]> buf1(new char[512]);
   ASSERT_TRUE(r.isValid());
@@ -228,7 +185,6 @@ int writeFutureRecord(const TailRecord& tr,
   }
 
   TailRecordHeader::flags_t* flags_ptr = &((TailRecordHeader*)payload)->flags;
-
 #define WRITE_BYTES(_data, _nbytes)                     \
   do {                                                  \
     if (written + _nbytes > size) {                     \
@@ -243,7 +199,8 @@ int writeFutureRecord(const TailRecord& tr,
     // if tr has payload, append 13 bytes after the payload
     TailRecordHeader::blob_size_t* bsize_ptr =
         (TailRecordHeader::blob_size_t*)((char*)payload +
-                                         sizeof(TailRecordHeader));
+                                         sizeof(TailRecordHeader) +
+                                         tr.offsets_map_.sizeInLinearBuffer());
     (*bsize_ptr) += 13;
     WRITE_BYTES(w.data(), w.size());
   } else {

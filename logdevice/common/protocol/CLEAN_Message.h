@@ -72,10 +72,17 @@ struct CLEAN_Header {
   nodeset_size_t num_absent_nodes;
 
   // accumulative byte offset of end of the epoch
-  uint64_t epoch_end_offset;
+  // size of epoch in bytes
+  // TODO(T35659884) : remove from header, this variable is not used as it
+  // is replaced with OffsetMap. Can simply delete all places except in
+  // serialize and deserialize of CLEAN_Message.
+  uint64_t epoch_end_offset_DEPRECATED;
 
-  // approximate size of epoch in bytes
-  uint64_t epoch_size;
+  // size of epoch in bytes
+  // TODO(T35659884) : remove from header, this variable is not used as it
+  // is replaced with OffsetMap. Can simply delete all places except in
+  // serialize and deserialize of CLEAN_Message.
+  uint64_t epoch_size_DEPRECATED;
 
   // Shard that this CLEAN is for.
   shard_index_t shard;
@@ -111,7 +118,9 @@ class CLEAN_Message : public Message {
                                     const CLEAN_Header& hdr);
 
   CLEAN_Header header_;
+  // tail_record_.offsets_map_ contains size on epoch_end_offset
   TailRecord tail_record_;
+  // Contains information on epoch size
   OffsetMap epoch_size_map_;
   StorageSet absent_nodes_;
 };

@@ -2342,11 +2342,10 @@ TEST_F(PartitionedRocksDBStoreTest, TrimPerEpochLogMetadata) {
   }
 
   // write some metadata
-  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 12);
-  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 10);
-  tail_record.header.u.offset_within_epoch = 10;
+  epoch_size_map.setCounter(BYTE_OFFSET, 12);
+  tail_record.offsets_map_.setCounter(BYTE_OFFSET, 10);
   tail_record.header.log_id = logid_t(1);
-  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 10);
+  epoch_end_offsets.setCounter(BYTE_OFFSET, 10);
   EpochRecoveryMetadata metadata(epoch_t(9),
                                  esn_t(1),
                                  esn_t(3),
@@ -5922,7 +5921,9 @@ class MutablePerEpochMetadataTest : public PartitionedRocksDBStoreTest {};
  */
 TEST_F(MutablePerEpochMetadataTest, SingeWrites) {
   // Write log 1, epoch 2, lng 3, size 100
-  MutablePerEpochLogMetadata metadata(0 /* flags */, esn_t{3}, 100);
+  OffsetMap epoch_size_map;
+  epoch_size_map.setCounter(BYTE_OFFSET, 100);
+  MutablePerEpochLogMetadata metadata(1 /* flags */, esn_t{3}, epoch_size_map);
   MergeMutablePerEpochLogMetadataWriteOp write_op(
       logid_t{1}, epoch_t{2}, &metadata);
   std::vector<const WriteOp*> op_ptrs(1, &write_op);
@@ -5932,27 +5933,30 @@ TEST_F(MutablePerEpochMetadataTest, SingeWrites) {
       0,
       store_->readPerEpochLogMetadata(logid_t{1}, epoch_t{2}, &metadata_out));
   ASSERT_EQ(esn_t{3}, metadata_out.data_.last_known_good);
-  ASSERT_EQ(uint64_t{100}, metadata_out.data_.epoch_size);
+  ASSERT_EQ(
+      uint64_t{100}, metadata_out.epoch_size_map_.getCounter(BYTE_OFFSET));
 
   // Write lng 5, size 10; should merge into lng 5, size 100
   metadata.data_.last_known_good = esn_t{5};
-  metadata.data_.epoch_size = 10;
+  metadata.epoch_size_map_.setCounter(BYTE_OFFSET, 10);
   ASSERT_EQ(0, store_->writeMulti(op_ptrs, LocalLogStore::WriteOptions()));
   ASSERT_EQ(
       0,
       store_->readPerEpochLogMetadata(logid_t{1}, epoch_t{2}, &metadata_out));
   ASSERT_EQ(esn_t{5}, metadata_out.data_.last_known_good);
-  ASSERT_EQ(uint64_t{100}, metadata_out.data_.epoch_size);
+  ASSERT_EQ(
+      uint64_t{100}, metadata_out.epoch_size_map_.getCounter(BYTE_OFFSET));
 
   // Write lng 1, size 200; should merge into lng 5, size 200
   metadata.data_.last_known_good = esn_t{1};
-  metadata.data_.epoch_size = 200;
+  metadata.epoch_size_map_.setCounter(BYTE_OFFSET, 200);
   ASSERT_EQ(0, store_->writeMulti(op_ptrs, LocalLogStore::WriteOptions()));
   ASSERT_EQ(
       0,
       store_->readPerEpochLogMetadata(logid_t{1}, epoch_t{2}, &metadata_out));
   ASSERT_EQ(esn_t{5}, metadata_out.data_.last_known_good);
-  ASSERT_EQ(uint64_t{200}, metadata_out.data_.epoch_size);
+  ASSERT_EQ(
+      uint64_t{200}, metadata_out.epoch_size_map_.getCounter(BYTE_OFFSET));
 }
 
 /**
@@ -5966,8 +5970,11 @@ TEST_F(MutablePerEpochMetadataTest, MultiWrite) {
   for (uint i = 0; i < metadata_vec.size(); ++i) {
     MutablePerEpochLogMetadata& metadata = metadata_vec[i];
     metadata.reset();
+    metadata.data_.flags =
+        MutablePerEpochLogMetadata::Data::SUPPORT_OFFSET_MAP; /* serialize
+                                                                 OffsetMap */
     metadata.data_.last_known_good = esn_t(i + 1);
-    metadata.data_.epoch_size = (i + 1) * 100;
+    metadata.epoch_size_map_.setCounter(BYTE_OFFSET, (i + 1) * 100);
     write_op_vec.emplace_back(logid_t{1}, epoch_t{2}, &metadata);
   }
   std::vector<const WriteOp*> op_ptrs;
@@ -5990,7 +5997,8 @@ TEST_F(MutablePerEpochMetadataTest, MultiWrite) {
       0,
       store_->readPerEpochLogMetadata(logid_t{1}, epoch_t{2}, &metadata_out));
   ASSERT_EQ(esn_t{NWRITES}, metadata_out.data_.last_known_good);
-  ASSERT_EQ(uint64_t{NWRITES * 100}, metadata_out.data_.epoch_size);
+  ASSERT_EQ(uint64_t{NWRITES * 100},
+            metadata_out.epoch_size_map_.getCounter(BYTE_OFFSET));
 }
 
 /**

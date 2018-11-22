@@ -325,7 +325,7 @@ typedef AdminCommandTable<logid_t,                  /* Log ID */
                           esn_t,                    /* Head ESN */
                           esn_t,                    /* Max ESN */
                           esn_t,                    /* First LNG */
-                          uint64_t,                 /* Offset within epoch */
+                          std::string,              /* Offsets within epoch */
                           admin_command_table::LSN, /* Tail record lsn */
                           std::chrono::milliseconds /* Tail record ts */
                           >
@@ -426,7 +426,7 @@ typedef AdminCommandTable<logid_t,                  /* Log ID */
                           std::chrono::seconds,      /* log_removal_time */
                           epoch_t,                   /* lce */
                           epoch_t,                   /* latest_epoch */
-                          uint64_t,                  /* latest_epoch_offset */
+                          std::string,               /* latest_epoch_offsets */
                           bool                       /* permanent_errors */
                           >
     InfoLogStorageStateTable;

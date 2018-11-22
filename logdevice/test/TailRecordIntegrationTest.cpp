@@ -121,25 +121,27 @@ TailRecordIntegrationTest::checkTail(std::shared_ptr<ClientImpl>& client,
   EXPECT_EQ(tail_attribute->last_timestamp,
             std::chrono::milliseconds(tail_record->header.timestamp));
   EXPECT_FALSE(tail_record->containOffsetWithinEpoch());
-  EXPECT_EQ(tail_attribute->byte_offset, tail_record->header.u.byte_offset);
+  EXPECT_EQ(
+      tail_attribute->offsets, OffsetMap::toRecord(tail_record->offsets_map_));
   if (data_record) {
     EXPECT_EQ(tail_attribute->last_released_real_lsn, data_record->attrs.lsn);
     EXPECT_EQ(tail_attribute->last_timestamp, data_record->attrs.timestamp);
-    EXPECT_EQ(tail_attribute->byte_offset, data_record->attrs.byte_offset);
+    EXPECT_EQ(tail_attribute->offsets, data_record->attrs.offsets);
   }
 
   if (lsn == LSN_INVALID) {
     // log is empty / never released any record
     EXPECT_EQ(LSN_INVALID, tail_attribute->last_released_real_lsn);
     EXPECT_EQ(std::chrono::milliseconds(0), tail_attribute->last_timestamp);
-    EXPECT_EQ(0, tail_attribute->byte_offset);
+    EXPECT_EQ(0, tail_attribute->offsets.getCounter(BYTE_OFFSET));
     return;
   }
 
   EXPECT_EQ(lsn, tail_record->header.lsn);
   EXPECT_EQ(timestamp, tail_record->header.timestamp);
   if (byte_offset.hasValue()) {
-    EXPECT_EQ(byte_offset.value(), tail_record->header.u.byte_offset);
+    EXPECT_EQ(
+        byte_offset.value(), tail_record->offsets_map_.getCounter(BYTE_OFFSET));
   }
 
   if (tail_optimized_ && payload.hasValue()) {

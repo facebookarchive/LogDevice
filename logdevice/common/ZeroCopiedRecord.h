@@ -65,8 +65,6 @@ class ZeroCopiedRecord {
   esn_t last_known_good;
   uint32_t wave_or_recovery_epoch;
   copyset_t copyset;
-  // TODO(T33977412) : Remove offset_within_epoch
-  uint64_t offset_within_epoch;
   OffsetMap offsets_within_epoch;
   std::map<KeyType, std::string> keys;
 
@@ -123,14 +121,13 @@ class ZeroCopiedRecord {
 
  protected:
   ZeroCopiedRecord();
-  // TODO(T33977412) : Change type of offset_within_epoch to OffsetMap
   ZeroCopiedRecord(lsn_t lsn,
                    STORE_flags_t flags,
                    uint64_t timestamp,
                    esn_t last_known_good,
                    uint32_t wave_or_recovery_epoch,
                    const copyset_t& copyset,
-                   uint64_t offset_within_epoch,
+                   OffsetMap offsets_within_epoch,
                    std::map<KeyType, std::string>&& keys,
                    Slice payload_raw,
                    std::shared_ptr<PayloadHolder> payload_holder);

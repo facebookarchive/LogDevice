@@ -349,8 +349,12 @@ onReceivedContinuation(START_Message* msg,
               // on the node so far.
               out_of_range = true;
             } else {
+              // TODO (T35832374) : Remove enable_offset_map when OffsetMap is
+              // supported by all servers
+              bool enable_offset_map = w->settings().enable_offset_map;
               // create an immutable snapshot of the epoch cache
-              epoch_snapshot = result.second->createSerializableSnapshot();
+              epoch_snapshot =
+                  result.second->createSerializableSnapshot(enable_offset_map);
               ld_check(epoch_snapshot != nullptr);
               ld_check(epoch_snapshot->getHeader() != nullptr);
 

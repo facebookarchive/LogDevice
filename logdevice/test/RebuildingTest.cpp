@@ -292,7 +292,7 @@ class RebuildingTest : public IntegrationTestBase,
     writeRecords(*client, 30, &first);
     size_t nrecords = 30;
 
-    std::vector<uint64_t> correct_byte_offsets;
+    std::vector<OffsetMap> correct_offsets;
     // Reading first time will trigger log storage state to get epoch offset
     // by sending GetSeqStateRequest to sequencer. We will try read from
     // beginning until epoch offset is ready.
@@ -307,10 +307,12 @@ class RebuildingTest : public IntegrationTestBase,
           EXPECT_EQ(0, rv);
           std::vector<std::unique_ptr<DataRecord>> data_out;
           read_records_no_gaps(*reader, nrecords, &data_out);
-          if (data_out[0]->attrs.byte_offset != BYTE_OFFSET_INVALID) {
+          if (data_out[0]->attrs.offsets.isValid()) {
             for (int i = 0; i < nrecords; ++i) {
-              EXPECT_NE(BYTE_OFFSET_INVALID, data_out[i]->attrs.byte_offset);
-              correct_byte_offsets.push_back(data_out[i]->attrs.byte_offset);
+              EXPECT_NE(RecordOffset(), data_out[i]->attrs.offsets);
+              OffsetMap offsets =
+                  OffsetMap::fromRecord(std::move(data_out[i]->attrs.offsets));
+              correct_offsets.push_back(offsets);
             }
             return true;
           }
@@ -356,12 +358,12 @@ class RebuildingTest : public IntegrationTestBase,
                 EXPECT_EQ(0, rv);
                 std::vector<std::unique_ptr<DataRecord>> data_out;
                 read_records_no_gaps(*reader, batch_records, &data_out);
-                if (data_out[0]->attrs.byte_offset != BYTE_OFFSET_INVALID) {
+                if (data_out[0]->attrs.offsets.isValid()) {
                   for (int i = 0; i < batch_records; ++i) {
-                    EXPECT_NE(
-                        BYTE_OFFSET_INVALID, data_out[i]->attrs.byte_offset);
-                    correct_byte_offsets.push_back(
-                        data_out[i]->attrs.byte_offset);
+                    EXPECT_NE(RecordOffset(), data_out[i]->attrs.offsets);
+                    OffsetMap offsets = OffsetMap::fromRecord(
+                        std::move(data_out[i]->attrs.offsets));
+                    correct_offsets.push_back(offsets);
                   }
                   return true;
                 }
@@ -415,10 +417,11 @@ class RebuildingTest : public IntegrationTestBase,
             std::vector<std::unique_ptr<DataRecord>> data_out;
             read_records_no_gaps(*reader, nrecords, &data_out);
             EXPECT_EQ(nrecords, data_out.size());
-            if (data_out[0]->attrs.byte_offset != BYTE_OFFSET_INVALID) {
+            if (data_out[0]->attrs.offsets.isValid()) {
               for (int i = 0; i < nrecords; ++i) {
-                EXPECT_EQ(
-                    correct_byte_offsets[i], data_out[i]->attrs.byte_offset);
+                OffsetMap offsets = OffsetMap::fromRecord(
+                    std::move(data_out[i]->attrs.offsets));
+                EXPECT_EQ(correct_offsets[i], offsets);
               }
               return true;
             }

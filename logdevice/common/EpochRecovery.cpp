@@ -512,9 +512,6 @@ bool EpochRecovery::startMutations() {
     ld_check(digest_start_esn_ > ESN_INVALID);
     ld_check(lsn_to_esn(tail_record_from_sealed_.header.lsn).val_ ==
              digest_start_esn_.val_ - 1);
-    ld_check(tail_record_from_sealed_.offsets_map_.getCounter(
-                 CounterType::BYTE_OFFSET) ==
-             tail_record_from_sealed_.header.u.offset_within_epoch);
     rv = digest_.recomputeOffsetsWithinEpoch(
         lsn_to_esn(tail_record_from_sealed_.header.lsn),
         tail_record_from_sealed_.offsets_map_);
@@ -584,14 +581,20 @@ void EpochRecovery::updateEpochTailRecord() {
   }
 
   auto gen_tail_record_for_dataloss = [&]() {
+    uint32_t flags = TailRecordHeader::CHECKSUM_PARITY | TailRecordHeader::GAP |
+        TailRecordHeader::OFFSET_WITHIN_EPOCH;
+    // TODO (T35832374) : remove if condition when all servers support OffsetMap
+    if (deps_->getSettings().enable_offset_map) {
+      flags |= TailRecordHeader::OFFSET_MAP;
+    }
     return TailRecord(
         {getLogID(),
          compose_lsn(epoch_, lng_),
          /*timestamp*/ 0,
-         {BYTE_OFFSET_INVALID},
-         /*flags*/ TailRecordHeader::CHECKSUM_PARITY | TailRecordHeader::GAP |
-             TailRecordHeader::OFFSET_WITHIN_EPOCH,
+         {BYTE_OFFSET_INVALID /* deprecated, OffsetMap used instead*/},
+         flags,
          {}},
+        OffsetMap(),
         std::shared_ptr<PayloadHolder>());
   };
 
@@ -662,6 +665,11 @@ void EpochRecovery::updateEpochTailRecord() {
         }
 
         TailRecordHeader::flags_t flags = TailRecordHeader::OFFSET_WITHIN_EPOCH;
+        // TODO (T35832374) : remove if condition when all servers support
+        // OffsetMap
+        if (deps_->getSettings().enable_offset_map) {
+          flags |= TailRecordHeader::OFFSET_MAP;
+        }
         std::shared_ptr<PayloadHolder> ph;
         if (tail_optimized_) {
           // TODO T9899761: use PayloadHolder when deserializing RECORD to avoid
@@ -675,13 +683,11 @@ void EpochRecovery::updateEpochTailRecord() {
         } else {
           flags |= TailRecordHeader::CHECKSUM_PARITY;
         }
-        uint64_t offset_within_epoch =
-            offsets_within_epoch.getCounter(CounterType::BYTE_OFFSET);
         final_tail_record_.reset(
             {tail_entry->record->logid,
              tail_entry->record->attrs.lsn,
              static_cast<uint64_t>(tail_entry->record->attrs.timestamp.count()),
-             {offset_within_epoch},
+             {BYTE_OFFSET_INVALID /* deprecated, offsets_within_epoch used instead */},
              flags,
              {}},
             std::move(ph),
@@ -697,12 +703,9 @@ void EpochRecovery::updateEpochTailRecord() {
   // reported in SEALED replies as an approximation
   if (!final_tail_record_.offsets_map_.isValid()) {
     if (epoch_size_map_.isValid()) {
-      final_tail_record_.header.u.offset_within_epoch =
-          epoch_size_map_.getCounter(CounterType::BYTE_OFFSET);
       final_tail_record_.offsets_map_ = epoch_size_map_;
     } else {
-      final_tail_record_.header.u.offset_within_epoch = 0;
-      final_tail_record_.offsets_map_.clear();
+      final_tail_record_.offsets_map_ = OffsetMap::fromLegacy(0);
     }
   }
 
@@ -718,9 +721,6 @@ void EpochRecovery::updateEpochTailRecord() {
   // previous epoch
   auto& prev_epoch_offsets_map = tail_record_before_this_epoch_.offsets_map_;
   final_tail_record_.offsets_map_ += prev_epoch_offsets_map;
-  final_tail_record_.header.u.byte_offset =
-      final_tail_record_.header.u.offset_within_epoch +
-      prev_epoch_offsets_map.getCounter(CounterType::BYTE_OFFSET);
   final_tail_record_.header.flags &= ~TailRecordHeader::OFFSET_WITHIN_EPOCH;
   ld_check(!final_tail_record_.containOffsetWithinEpoch());
 
@@ -931,16 +931,16 @@ bool EpochRecovery::mutateEpoch(const std::set<ShardID>& mutation_set,
 
     auto mutation_header =
         createMutationHeader(cur, mutation_timestamp, mutation_flags, record);
-    auto res = mutators_.emplace(
-        cur,
-        deps_->createMutator(mutation_header.first,
-                             mutation_header.second,
-                             payload,
-                             std::move(mutation_nodeset),
-                             replication_,
-                             std::move(amend_metadata),
-                             std::move(conflict_copies),
-                             this));
+    auto res =
+        mutators_.emplace(cur,
+                          deps_->createMutator(mutation_header.first,
+                                               mutation_header.second,
+                                               payload,
+                                               std::move(mutation_nodeset),
+                                               replication_,
+                                               std::move(amend_metadata),
+                                               std::move(conflict_copies),
+                                               this));
     ld_check(res.second);
   }
 
@@ -989,6 +989,8 @@ EpochRecovery::createMutationHeader(esn_t esn,
     }
     if (record->flags_ & RECORD_Header::INCLUDE_OFFSET_WITHIN_EPOCH) {
       flags |= STORE_Header::OFFSET_WITHIN_EPOCH;
+      // TODO (T35832374) : remove if condition when all servers support
+      // OffsetMap
       if (deps_->getSettings().enable_offset_map) {
         flags |= STORE_Header::OFFSET_MAP;
       }

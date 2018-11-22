@@ -84,7 +84,7 @@ class RecoveryTest : public ::testing::TestWithParam<PopulateRecordCache> {
   // initializes a Cluster object with the desired log config
   void init();
 
-  using PerEpochReleaseMap = std::map<epoch_t, std::pair<esn_t, uint64_t>>;
+  using PerEpochReleaseMap = std::map<epoch_t, std::pair<esn_t, OffsetMap>>;
 
   // writes given data records to the specified node's local log store,
   // may also populate per-epoch releases if given. Applies to both local log
@@ -508,7 +508,7 @@ void RecoveryTest::prepopulateRecordCacheForLog(
         {},
         payload_slice,
         ph,
-        tr.offset_within_epoch_);
+        tr.offsets_within_epoch_);
 
     ASSERT_EQ(0, rv);
   }
@@ -517,7 +517,7 @@ void RecoveryTest::prepopulateRecordCacheForLog(
     auto r = record_cache->getEpochRecordCache(kv.first);
     if (r.first == RecordCache::Result::HIT) {
       r.second->advanceLNG(kv.second.first);
-      r.second->setOffsetWithinEpoch(kv.second.second);
+      r.second->setOffsetsWithinEpoch(kv.second.second);
     }
   }
 
@@ -775,7 +775,6 @@ RecoveryTest::buildDigest(epoch_t epoch,
       copyset_t copyset;
       copyset_size_t copyset_size;
       copyset.resize(15);
-      uint64_t offset_within_epoch = BYTE_OFFSET_INVALID;
       OffsetMap offsets_within_epoch;
       int rv = LocalLogStoreRecordFormat::parse(blob,
                                                 &timestamp,
@@ -785,7 +784,6 @@ RecoveryTest::buildDigest(epoch_t epoch,
                                                 &copyset_size,
                                                 &copyset[0],
                                                 15,
-                                                &offset_within_epoch,
                                                 &offsets_within_epoch,
                                                 nullptr,
                                                 &payload,
@@ -926,9 +924,10 @@ TEST_P(RecoveryTest, MutationsWithImmutableConsensus) {
           TestRecord(LOG_ID, lsn(1, 1), ESN_INVALID)
               .copyset(copyset)
               .timestamp(std::chrono::milliseconds(1))
-              .offsetWithinEpoch(10), // since lsn(1, 1) is already someone's
-                                      // last konwn good, it should have the
-                                      // correct byteoffset
+              .offsetsWithinEpoch(OffsetMap(
+                  {{BYTE_OFFSET, 10}})), // since lsn(1, 1) is already someone's
+                                         // last konwn good, it should have the
+                                         // correct byteoffset
           TestRecord(LOG_ID, lsn(1, 2), esn_t(1))
               .copyset(copyset)
               .timestamp(std::chrono::milliseconds(2)),
@@ -970,9 +969,10 @@ TEST_P(RecoveryTest, MutationsWithImmutableConsensus) {
           TestRecord(LOG_ID, lsn(1, 1), ESN_INVALID)
               .copyset(copyset)
               .timestamp(std::chrono::milliseconds(1))
-              .offsetWithinEpoch(10), // since lsn(1, 1) is already someone's
-                                      // last konwn good, it should have the
-                                      // correct byteoffset
+              .offsetsWithinEpoch(OffsetMap(
+                  {{BYTE_OFFSET, 10}})), // since lsn(1, 1) is already someone's
+                                         // last konwn good, it should have the
+                                         // correct byteoffset
           TestRecord(LOG_ID, lsn(1, 2), esn_t(1))
               .copyset(copyset)
               .timestamp(std::chrono::milliseconds(2))
@@ -1010,11 +1010,11 @@ TEST_P(RecoveryTest, MutationsWithImmutableConsensus) {
                       TestRecord(LOG_ID, lsn(1, 1), ESN_INVALID)
                           .copyset(copyset)
                           .timestamp(std::chrono::milliseconds(1))
-                          .offsetWithinEpoch(10),
+                          .offsetsWithinEpoch(OffsetMap({{BYTE_OFFSET, 10}})),
                       TestRecord(LOG_ID, lsn(1, 3), esn_t(1))
                           .copyset(copyset)
                           .timestamp(std::chrono::milliseconds(3))
-                          .offsetWithinEpoch(12),
+                          .offsetsWithinEpoch(OffsetMap({{BYTE_OFFSET, 12}})),
                       TestRecord(LOG_ID, lsn(2, 2), ESN_INVALID)
                           .copyset(copyset)
                           .timestamp(std::chrono::milliseconds(11)),
@@ -1069,7 +1069,8 @@ TEST_P(RecoveryTest, MutationsWithImmutableConsensus) {
     // each data payload is 4 bytes,
     // e1n1 as the last know good has the byteoffset 10, which we will start
     // rebuild from
-    EXPECT_EQ(4 * i + 10, data_[i]->attrs.byte_offset);
+    EXPECT_EQ(
+        RecordOffset({{BYTE_OFFSET, 4 * i + 10}}), data_[i]->attrs.offsets);
   }
 
   EXPECT_EQ(std::vector<gap_record_t>({
@@ -1976,7 +1977,7 @@ TEST_P(RecoveryTest, PerEpochLogMetadata) {
                       TestRecord(LOG_ID, lsn(1, 1), ESN_INVALID)
                           .copyset({N1, N2})
                           .timestamp(std::chrono::milliseconds(1))
-                          .offsetWithinEpoch(4),
+                          .offsetsWithinEpoch(OffsetMap({{BYTE_OFFSET, 4}})),
                       TestRecord(LOG_ID, lsn(1, 2), esn_t(1))
                           .copyset({N1, N4})
                           .timestamp(std::chrono::milliseconds(2)),
@@ -1989,7 +1990,7 @@ TEST_P(RecoveryTest, PerEpochLogMetadata) {
                       TestRecord(LOG_ID, lsn(1, 1), ESN_INVALID)
                           .copyset({N1, N2})
                           .timestamp(std::chrono::milliseconds(1))
-                          .offsetWithinEpoch(4),
+                          .offsetsWithinEpoch(OffsetMap({{BYTE_OFFSET, 4}})),
                       TestRecord(LOG_ID, lsn(1, 3), esn_t(1))
                           .copyset({N2, N3})
                           .timestamp(std::chrono::milliseconds(3)),
@@ -2001,10 +2002,10 @@ TEST_P(RecoveryTest, PerEpochLogMetadata) {
                           .timestamp(std::chrono::milliseconds(3)),
                   });
 
-  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 8);
-  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 8);
+  epoch_size_map.setCounter(BYTE_OFFSET, 8);
+  epoch_end_offsets.setCounter(BYTE_OFFSET, 8);
   tail_record.reset();
-  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 8);
+  tail_record.offsets_map_.setCounter(BYTE_OFFSET, 8);
   const EpochRecoveryMetadata expected_metadata_epoch_1(
       epoch_t(2), // sequencer epoch
       esn_t(1),   // last known good
@@ -2590,7 +2591,7 @@ TEST_P(RecoveryTest, PurgingAvailabilityTest) {
                       TestRecord(LOG_ID, lsn(1, 1), ESN_INVALID)
                           .copyset(copyset_e1)
                           .timestamp(std::chrono::milliseconds(1))
-                          .offsetWithinEpoch(4),
+                          .offsetsWithinEpoch(OffsetMap({{BYTE_OFFSET, 4}})),
                       TestRecord(LOG_ID, lsn(1, 2), esn_t(1))
                           .copyset(copyset_e1)
                           .timestamp(std::chrono::milliseconds(2))
@@ -2622,7 +2623,7 @@ TEST_P(RecoveryTest, PurgingAvailabilityTest) {
                       TestRecord(LOG_ID, lsn(1, 1), ESN_INVALID)
                           .copyset(copyset_e1)
                           .timestamp(std::chrono::milliseconds(1))
-                          .offsetWithinEpoch(4),
+                          .offsetsWithinEpoch(OffsetMap({{BYTE_OFFSET, 4}})),
                       TestRecord(LOG_ID, lsn(1, 3), esn_t(1))
                           .copyset(copyset_e1)
                           .timestamp(std::chrono::milliseconds(4)),
@@ -2706,9 +2707,9 @@ TEST_P(RecoveryTest, PurgingAvailabilityTest) {
                std::vector<esn_t>({esn_t(2)})  // bridges
   );
   {
-    epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 12);
-    epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 12);
-    tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 12);
+    epoch_size_map.setCounter(BYTE_OFFSET, 12);
+    epoch_end_offsets.setCounter(BYTE_OFFSET, 12);
+    tail_record.offsets_map_.setCounter(BYTE_OFFSET, 12);
     const EpochRecoveryMetadata expected_metadata_epoch_1(
         epoch_t(4), // sequencer epoch
         esn_t(1),   // last known good
@@ -2718,9 +2719,9 @@ TEST_P(RecoveryTest, PurgingAvailabilityTest) {
         epoch_size_map,
         epoch_end_offsets);
 
-    tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 16);
-    epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 16);
-    epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 4);
+    tail_record.offsets_map_.setCounter(BYTE_OFFSET, 16);
+    epoch_end_offsets.setCounter(BYTE_OFFSET, 16);
+    epoch_size_map.setCounter(BYTE_OFFSET, 4);
     const EpochRecoveryMetadata expected_metadata_epoch_3(
         epoch_t(4),  // sequencer epoch
         ESN_INVALID, // last known good
@@ -2879,7 +2880,7 @@ TEST_P(RecoveryTest, D4187744) {
                       TestRecord(LOG_ID, lsn(1, 1), ESN_INVALID)
                           .copyset({N1, N2})
                           .timestamp(std::chrono::milliseconds(1))
-                          .offsetWithinEpoch(4),
+                          .offsetsWithinEpoch(OffsetMap({{BYTE_OFFSET, 4}})),
                       TestRecord(LOG_ID, lsn(1, 2), esn_t(1))
                           .copyset({N1, N4})
                           .timestamp(std::chrono::milliseconds(2)),
@@ -2892,7 +2893,7 @@ TEST_P(RecoveryTest, D4187744) {
                       TestRecord(LOG_ID, lsn(1, 1), ESN_INVALID)
                           .copyset({N1, N2})
                           .timestamp(std::chrono::milliseconds(1))
-                          .offsetWithinEpoch(4),
+                          .offsetsWithinEpoch(OffsetMap({{BYTE_OFFSET, 4}})),
                       TestRecord(LOG_ID, lsn(1, 3), esn_t(1))
                           .copyset({N2, N3})
                           .timestamp(std::chrono::milliseconds(3)),
@@ -2904,9 +2905,9 @@ TEST_P(RecoveryTest, D4187744) {
                           .timestamp(std::chrono::milliseconds(3)),
                   });
 
-  epoch_size_map.setCounter(CounterType::BYTE_OFFSET, 8);
-  epoch_end_offsets.setCounter(CounterType::BYTE_OFFSET, 8);
-  tail_record.offsets_map_.setCounter(CounterType::BYTE_OFFSET, 8);
+  epoch_size_map.setCounter(BYTE_OFFSET, 8);
+  epoch_end_offsets.setCounter(BYTE_OFFSET, 8);
+  tail_record.offsets_map_.setCounter(BYTE_OFFSET, 8);
   const EpochRecoveryMetadata expected_metadata_epoch_1(
       epoch_t(2), // sequencer epoch
       esn_t(1),   // last known good
@@ -3349,25 +3350,25 @@ TEST_P(RecoveryTest, TailRecordAtLNG) {
                       TestRecord(LOG_ID, lsn(1, 1), ESN_INVALID)
                           .copyset(copyset)
                           .timestamp(std::chrono::milliseconds(1))
-                          .offsetWithinEpoch(17),
+                          .offsetsWithinEpoch(OffsetMap({{BYTE_OFFSET, 17}})),
                   },
-                  {{epoch_t(1), {esn_t(1), 0}}});
+                  {{epoch_t(1), {esn_t(1), OffsetMap({{BYTE_OFFSET, 0}})}}});
   prepopulateData(node_index_t(2),
                   {
                       TestRecord(LOG_ID, lsn(1, 1), ESN_INVALID)
                           .copyset(copyset)
                           .timestamp(std::chrono::milliseconds(1))
-                          .offsetWithinEpoch(17),
+                          .offsetsWithinEpoch(OffsetMap({{BYTE_OFFSET, 17}})),
                   },
-                  {{epoch_t(1), {esn_t(1), 0}}});
+                  {{epoch_t(1), {esn_t(1), OffsetMap({{BYTE_OFFSET, 0}})}}});
   prepopulateData(node_index_t(3),
                   {
                       TestRecord(LOG_ID, lsn(1, 1), ESN_INVALID)
                           .copyset(copyset)
                           .timestamp(std::chrono::milliseconds(1))
-                          .offsetWithinEpoch(17),
+                          .offsetsWithinEpoch(OffsetMap({{BYTE_OFFSET, 17}})),
                   },
-                  {{epoch_t(1), {esn_t(1), 17}}});
+                  {{epoch_t(1), {esn_t(1), OffsetMap({{BYTE_OFFSET, 17}})}}});
 
   // latest epoch of store is 2, soft seal 1
   populateSoftSeals(epoch_t(1));
@@ -3390,7 +3391,7 @@ TEST_P(RecoveryTest, TailRecordAtLNG) {
 
   ASSERT_EQ(lsn(1, 1), tail->last_released_real_lsn);
   ASSERT_EQ(std::chrono::milliseconds(1), tail->last_timestamp);
-  ASSERT_EQ(17, tail->byte_offset);
+  ASSERT_EQ(17, tail->offsets.getCounter(BYTE_OFFSET));
   cluster_->stop();
 }
 
@@ -3409,25 +3410,25 @@ TEST_P(RecoveryTest, TailRecordAtLNGDataLoss) {
                       TestRecord(LOG_ID, lsn(1, 1), ESN_INVALID)
                           .copyset(copyset)
                           .timestamp(std::chrono::milliseconds(1))
-                          .offsetWithinEpoch(17),
+                          .offsetsWithinEpoch(OffsetMap({{BYTE_OFFSET, 17}})),
                   },
-                  {{epoch_t(1), {esn_t(2), 67}}});
+                  {{epoch_t(1), {esn_t(2), OffsetMap({{BYTE_OFFSET, 67}})}}});
   prepopulateData(node_index_t(2),
                   {
                       TestRecord(LOG_ID, lsn(1, 1), ESN_INVALID)
                           .copyset(copyset)
                           .timestamp(std::chrono::milliseconds(1))
-                          .offsetWithinEpoch(17),
+                          .offsetsWithinEpoch(OffsetMap({{BYTE_OFFSET, 17}})),
                   },
-                  {{epoch_t(1), {esn_t(2), 67}}});
+                  {{epoch_t(1), {esn_t(2), OffsetMap({{BYTE_OFFSET, 67}})}}});
   prepopulateData(node_index_t(3),
                   {
                       TestRecord(LOG_ID, lsn(1, 1), ESN_INVALID)
                           .copyset(copyset)
                           .timestamp(std::chrono::milliseconds(1))
-                          .offsetWithinEpoch(17),
+                          .offsetsWithinEpoch(OffsetMap({{BYTE_OFFSET, 17}})),
                   },
-                  {{epoch_t(1), {esn_t(2), 67}}});
+                  {{epoch_t(1), {esn_t(2), OffsetMap({{BYTE_OFFSET, 67}})}}});
   // latest epoch of store is 2, soft seal 1
   populateSoftSeals(epoch_t(1));
   cluster_->setStartingEpoch(LOG_ID, epoch_t(2));
@@ -3445,7 +3446,7 @@ TEST_P(RecoveryTest, TailRecordAtLNGDataLoss) {
   ASSERT_EQ(lsn(1, 2), tail->last_released_real_lsn);
   // TODO T20425135: report dataloss for tail record
   ASSERT_EQ(std::chrono::milliseconds(0), tail->last_timestamp);
-  ASSERT_EQ(67, tail->byte_offset);
+  ASSERT_EQ(67, tail->offsets.getCounter(BYTE_OFFSET));
   cluster_->stop();
 }
 
@@ -3481,16 +3482,16 @@ TEST_P(RecoveryTest, ComputeTailRecord) {
                       TestRecord(LOG_ID, lsn(3, 1), ESN_INVALID)
                           .copyset({N1, N2})
                           .timestamp(std::chrono::milliseconds(31))
-                          .offsetWithinEpoch(9),
+                          .offsetsWithinEpoch(OffsetMap({{BYTE_OFFSET, 9}})),
                       TestRecord(LOG_ID, lsn(5, 1), ESN_INVALID)
                           .copyset({N1, N2})
                           .timestamp(std::chrono::milliseconds(51))
-                          .offsetWithinEpoch(12),
+                          .offsetsWithinEpoch(OffsetMap({{BYTE_OFFSET, 12}})),
                       TestRecord(LOG_ID, lsn(6, 2), ESN_INVALID)
                           .copyset({N1, N2})
                           .timestamp(std::chrono::milliseconds(62))
                           .payload(Payload(std::string(7, 'a').c_str(), 7))
-                          .offsetWithinEpoch(7),
+                          .offsetsWithinEpoch(OffsetMap({{BYTE_OFFSET, 7}})),
                       TestRecord(LOG_ID, lsn(6, 3), ESN_INVALID)
                           .copyset({N1, N2})
                           .timestamp(std::chrono::milliseconds(63))
@@ -3500,32 +3501,33 @@ TEST_P(RecoveryTest, ComputeTailRecord) {
                           .copyset({N1, N3})
                           .timestamp(std::chrono::milliseconds(73))
                           .payload(Payload(std::string(14, 'a').c_str(), 14))
-                          .offsetWithinEpoch(23),
+                          .offsetsWithinEpoch(OffsetMap({{BYTE_OFFSET, 23}})),
                   },
                   {
-                      {epoch_t(3), {esn_t(1), 9}},
-                      {epoch_t(5), {esn_t(2), 17}},
+                      {epoch_t(3), {esn_t(1), OffsetMap({{BYTE_OFFSET, 9}})}},
+                      {epoch_t(5), {esn_t(2), OffsetMap({{BYTE_OFFSET, 17}})}},
                   });
+
   prepopulateData(node_index_t(2),
                   {
                       TestRecord(LOG_ID, lsn(3, 1), ESN_INVALID)
                           .copyset({N1, N2})
                           .timestamp(std::chrono::milliseconds(31))
-                          .offsetWithinEpoch(9),
+                          .offsetsWithinEpoch(OffsetMap({{BYTE_OFFSET, 9}})),
                       TestRecord(LOG_ID, lsn(5, 1), ESN_INVALID)
                           .copyset({N1, N2})
                           .timestamp(std::chrono::milliseconds(51))
-                          .offsetWithinEpoch(12),
+                          .offsetsWithinEpoch(OffsetMap({{BYTE_OFFSET, 12}})),
                       TestRecord(LOG_ID, lsn(5, 2), ESN_INVALID)
                           .copyset({N2, N3})
                           .timestamp(std::chrono::milliseconds(52))
                           .payload(Payload{std::string(5, 'a').c_str(), 5})
-                          .offsetWithinEpoch(17),
+                          .offsetsWithinEpoch(OffsetMap({{BYTE_OFFSET, 17}})),
                       TestRecord(LOG_ID, lsn(6, 2), ESN_INVALID)
                           .copyset({N1, N2})
                           .timestamp(std::chrono::milliseconds(62))
                           .payload(Payload(std::string(7, 'a').c_str(), 7))
-                          .offsetWithinEpoch(7),
+                          .offsetsWithinEpoch(OffsetMap({{BYTE_OFFSET, 7}})),
                       TestRecord(LOG_ID, lsn(6, 3), ESN_INVALID)
                           .copyset({N1, N2})
                           .timestamp(std::chrono::milliseconds(63))
@@ -3534,12 +3536,12 @@ TEST_P(RecoveryTest, ComputeTailRecord) {
                           .copyset({N2, N3})
                           .timestamp(std::chrono::milliseconds(71))
                           .payload(Payload(std::string(9, 'a').c_str(), 9))
-                          .offsetWithinEpoch(9),
+                          .offsetsWithinEpoch(OffsetMap({{BYTE_OFFSET, 9}})),
                   },
                   {
-                      {epoch_t(3), {esn_t(1), 0}},
-                      {epoch_t(5), {esn_t(1), 12}},
-                      {epoch_t(7), {esn_t(1), 23}},
+                      {epoch_t(3), {esn_t(1), OffsetMap({{BYTE_OFFSET, 0}})}},
+                      {epoch_t(5), {esn_t(1), OffsetMap({{BYTE_OFFSET, 12}})}},
+                      {epoch_t(7), {esn_t(1), OffsetMap({{BYTE_OFFSET, 23}})}},
                   });
   prepopulateData(node_index_t(3),
                   {
@@ -3547,21 +3549,21 @@ TEST_P(RecoveryTest, ComputeTailRecord) {
                           .copyset({N2, N3})
                           .timestamp(std::chrono::milliseconds(52))
                           .payload(Payload{std::string(5, 'a').c_str(), 5})
-                          .offsetWithinEpoch(17),
+                          .offsetsWithinEpoch(OffsetMap({{BYTE_OFFSET, 17}})),
                       TestRecord(LOG_ID, lsn(7, 1), ESN_INVALID)
                           .copyset({N2, N3})
                           .timestamp(std::chrono::milliseconds(71))
                           .payload(Payload(std::string(9, 'a').c_str(), 9))
-                          .offsetWithinEpoch(9),
+                          .offsetsWithinEpoch(OffsetMap({{BYTE_OFFSET, 9}})),
                       TestRecord(LOG_ID, lsn(7, 3), ESN_INVALID)
                           .copyset({N1, N3})
                           .timestamp(std::chrono::milliseconds(73))
                           .payload(Payload(std::string(14, 'a').c_str(), 14))
-                          .offsetWithinEpoch(23),
+                          .offsetsWithinEpoch(OffsetMap({{BYTE_OFFSET, 23}})),
                   },
                   {
-                      {epoch_t(5), {esn_t(1), 12}},
-                      {epoch_t(7), {esn_t(1), 23}},
+                      {epoch_t(5), {esn_t(1), OffsetMap({{BYTE_OFFSET, 12}})}},
+                      {epoch_t(7), {esn_t(1), OffsetMap({{BYTE_OFFSET, 23}})}},
                   });
 
   cluster_->setStartingEpoch(LOG_ID, epoch_t(1));
@@ -3582,33 +3584,49 @@ TEST_P(RecoveryTest, ComputeTailRecord) {
   do {                                               \
     ASSERT_EQ((_lsn), tail->last_released_real_lsn); \
     ASSERT_EQ((_ts), tail->last_timestamp);          \
-    ASSERT_EQ((_offset), tail->byte_offset);         \
+    ASSERT_EQ((_offset), tail->offsets);             \
   } while (0)
 
     switch (current) {
       case 1:
-        CHECK_TAIL(LSN_INVALID, std::chrono::milliseconds(0), 0);
+        CHECK_TAIL(LSN_INVALID,
+                   std::chrono::milliseconds(0),
+                   RecordOffset({{BYTE_OFFSET, 0}}));
         break;
       case 2:
-        CHECK_TAIL(LSN_INVALID, std::chrono::milliseconds(0), 0);
+        CHECK_TAIL(LSN_INVALID,
+                   std::chrono::milliseconds(0),
+                   RecordOffset({{BYTE_OFFSET, 0}}));
         break;
       case 3:
-        CHECK_TAIL(lsn(3, 1), std::chrono::milliseconds(31), 9);
+        CHECK_TAIL(lsn(3, 1),
+                   std::chrono::milliseconds(31),
+                   RecordOffset({{BYTE_OFFSET, 9}}));
         break;
       case 4:
-        CHECK_TAIL(lsn(3, 1), std::chrono::milliseconds(31), 9);
+        CHECK_TAIL(lsn(3, 1),
+                   std::chrono::milliseconds(31),
+                   RecordOffset({{BYTE_OFFSET, 9}}));
         break;
       case 5:
-        CHECK_TAIL(lsn(5, 2), std::chrono::milliseconds(52), 26);
+        CHECK_TAIL(lsn(5, 2),
+                   std::chrono::milliseconds(52),
+                   RecordOffset({{BYTE_OFFSET, 26}}));
         break;
       case 6:
-        CHECK_TAIL(lsn(6, 2), std::chrono::milliseconds(62), 33);
+        CHECK_TAIL(lsn(6, 2),
+                   std::chrono::milliseconds(62),
+                   RecordOffset({{BYTE_OFFSET, 33}}));
         break;
       case 7:
-        CHECK_TAIL(lsn(7, 3), std::chrono::milliseconds(73), 56);
+        CHECK_TAIL(lsn(7, 3),
+                   std::chrono::milliseconds(73),
+                   RecordOffset({{BYTE_OFFSET, 56}}));
         break;
       case 8:
-        CHECK_TAIL(lsn(7, 3), std::chrono::milliseconds(73), 56);
+        CHECK_TAIL(lsn(7, 3),
+                   std::chrono::milliseconds(73),
+                   RecordOffset({{BYTE_OFFSET, 56}}));
         break;
       default:
         ASSERT_FALSE(true);

@@ -76,7 +76,7 @@ class EpochRecordCacheEntry : public ZeroCopiedRecord {
                         esn_t last_known_good,
                         uint32_t wave_or_recovery_epoch,
                         const copyset_t& copyset,
-                        uint64_t offset_within_epoch,
+                        OffsetMap offsets_within_epoch,
                         std::map<KeyType, std::string>&& keys,
                         Slice payload_raw,
                         std::shared_ptr<PayloadHolder> payload_holder);

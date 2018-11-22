@@ -79,15 +79,10 @@ class TestRecord {
     return *this;
   }
 
-  TestRecord& offsetWithinEpoch(uint64_t offset_within_epoch) {
-    flags_ |= LocalLogStoreRecordFormat::FLAG_OFFSET_WITHIN_EPOCH;
-    offset_within_epoch_ = offset_within_epoch;
-    return *this;
-  }
-
   TestRecord& offsetsWithinEpoch(OffsetMap offsets_within_epoch) {
-    // TODO (T33977412) : Set LocalLogStoreRecordFormat::FLAG_OFFSET_MAP
-    offsets_within_epoch_ = offsets_within_epoch;
+    flags_ |= LocalLogStoreRecordFormat::FLAG_OFFSET_WITHIN_EPOCH;
+    flags_ |= LocalLogStoreRecordFormat::FLAG_OFFSET_MAP;
+    offsets_within_epoch_ = std::move(offsets_within_epoch);
     return *this;
   }
 
@@ -114,7 +109,6 @@ class TestRecord {
   copyset_t copyset_ = {ShardID(1, 0)};
   std::chrono::milliseconds timestamp_{0};
   uint32_t wave_{1};
-  uint64_t offset_within_epoch_ = BYTE_OFFSET_INVALID;
   OffsetMap offsets_within_epoch_;
   LocalLogStoreRecordFormat::flags_t flags_ =
       LocalLogStoreRecordFormat::FLAG_CHECKSUM_PARITY;
