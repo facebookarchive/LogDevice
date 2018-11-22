@@ -345,10 +345,6 @@ Slice formCopySetIndexEntry(const STORE_Header& store_header,
   uint32_t wave = getRecordWaveOrRecoveryEpoch(store_header, store_extra);
   csi_flags_t flags = formCopySetIndexFlags(store_header, shard_id_in_copyset);
 
-  if (shard_id_in_copyset) {
-    flags |= CSI_FLAG_SHARD_ID;
-  }
-
   copyset_custsz_t<8> copyset;
   for (int i = 0; i < store_header.copyset_size; ++i) {
     copyset.push_back(chainlink[i].destination);
@@ -1100,8 +1096,10 @@ std::string csiFlagsToString(csi_flags_t flags) {
   }
 
   FLAG(WRITTEN_BY_REBUILDING)
+  FLAG(WRITTEN_BY_RECOVERY)
   FLAG(SHARD_ID)
   FLAG(HOLE)
+  FLAG(DRAINED)
 
 #undef FLAG
 

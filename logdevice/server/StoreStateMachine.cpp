@@ -439,36 +439,62 @@ void StoreStateMachine::execute() {
       deleter.dismiss();
       storeAndForward();
     } else {
-      // Trigger purging by treating this store as a proxy
-      // for release message.
       NodeID seq = message_->header_.sequencer_node_id;
-      RATELIMIT_INFO(
-          std::chrono::seconds(1),
-          1,
-          "Treating Rebuilding STORE as proxy for release for log:%lu,"
-          "store lsn: %s, current last_clean_epoch: %u, "
-          "current last_released_lsn: %s, sequencer: %s",
-          message_->header_.rid.logid.val_,
-          lsn_to_string(message_->header_.rid.lsn()).c_str(),
-          last_clean_epoch.hasValue() ? last_clean_epoch.value().val_ : 0,
-          lsn_to_string(last_released_lsn.hasValue() ? last_released_lsn.value()
-                                                     : LSN_INVALID)
-              .c_str(),
-          seq.toString().c_str());
+
+      // Special case: if it's a metadata log that's not in config, don't do
+      // purging because purging would get stuck in some cases.
+      if (seq.isNodeID() &&
+          MetaDataLog::isMetaDataLog(message_->header_.rid.logid)) {
+        auto logs_config = Worker::onThisThread()->getLogsConfig();
+        if (logs_config->isFullyLoaded() &&
+            !logs_config->logExists(
+                MetaDataLog::dataLogID(message_->header_.rid.logid))) {
+          seq = NodeID();
+        }
+      }
 
       if (seq.isNodeID()) {
+        // Trigger purging by treating this store as a proxy
+        // for release message.
+        RATELIMIT_INFO(
+            std::chrono::seconds(10),
+            1,
+            "Treating rebuilding STORE as proxy for release for log:%lu,"
+            "store lsn: %s, current last_clean_epoch: %u, "
+            "current last_released_lsn: %s, sequencer: %s",
+            message_->header_.rid.logid.val(),
+            lsn_to_string(message_->header_.rid.lsn()).c_str(),
+            last_clean_epoch.hasValue() ? last_clean_epoch.value().val_ : 0,
+            lsn_to_string(last_released_lsn.hasValue()
+                              ? last_released_lsn.value()
+                              : LSN_INVALID)
+                .c_str(),
+            seq.toString().c_str());
+
         log_state->purge_coordinator_->onReleaseMessage(
             message_->header_.rid.lsn(), seq, ReleaseType::GLOBAL, true);
+        message_->sendReply(E::DISABLED);
+      } else if (MetaDataLog::isMetaDataLog(message_->header_.rid.logid)) {
+        RATELIMIT_INFO(
+            std::chrono::seconds(10),
+            1,
+            "Got rebuilding STORE %lu%s with invalid sequencer_node_id. "
+            "This is probably a metadata log deleted from config. Storing "
+            "without purging.",
+            message_->header_.rid.logid.val(),
+            lsn_to_string(message_->header_.rid.lsn()).c_str());
+        deleter.dismiss();
+        storeAndForward();
       } else {
         RATELIMIT_ERROR(std::chrono::seconds(1),
                         1,
-                        "Got rebuilding STORE with invalid sequencer_node_id "
-                        "(%d). Rejecting.",
+                        "Got rebuilding STORE %lu%s with invalid "
+                        "sequencer_node_id (%d). Rejecting.",
+                        message_->header_.rid.logid.val(),
+                        lsn_to_string(message_->header_.rid.lsn()).c_str(),
                         (unsigned)seq);
+        message_->sendReply(E::DISABLED);
       }
-
-      // Respond to rebuilding store
-      message_->sendReply(E::DISABLED);
     }
     return;
   }

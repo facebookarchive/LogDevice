@@ -183,11 +183,11 @@ void RebuildingPlanner::sendSyncSequencerRequest(logid_t logid) {
         } else {
           ld_info("Log %lu is not in config, but its metadata log %lu has some "
                   "records. Will rebuild the metadata log until LSN_MAX, and "
-                  "use fake node ID (N0:1) for seals.",
+                  "bypass purging.",
                   MetaDataLog::dataLogID(logid).val(),
                   logid.val());
           log_state.until_lsn = LSN_MAX;
-          log_state.seq = NodeID(0, 1);
+          log_state.seq = NodeID();
         }
         planner->onSyncSequencerComplete(logid, std::move(metadata_map));
       } else {

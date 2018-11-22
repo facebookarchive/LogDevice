@@ -79,6 +79,11 @@ struct STORE_Header {
                        // timeout_ms milliseconds after received it.
                        // 0 means no timeout
 
+  // ID of the _latest_ sequencer node for the log.
+  // (Not necessarily the node that ran sequencer for this record's epoch.)
+  // Used for sealing the log.
+  // Can be invalid in the unlikely corner case of metadata log records written
+  // by rebuilding after the log was removed from config.
   NodeID sequencer_node_id;
 
   // followed by an array of .copyset_size StoreChainLink structs. If CHAIN
