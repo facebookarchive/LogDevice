@@ -36,11 +36,11 @@ class WheelTimer {
   WheelTimer& operator=(const WheelTimer&) = delete;
   WheelTimer& operator=(WheelTimer&&) = delete;
 
-  static folly::HHWheelTimer::UniquePtr& getWheelTimer();
-
   constexpr int static kNumberOfThreads = 1;
-  std::thread timer_thread_;
+
+  folly::HHWheelTimer::UniquePtr wheel_timer_;
   std::atomic<folly::EventBase*> executor_{};
+  std::thread timer_thread_;
 };
 
 }} // namespace facebook::logdevice

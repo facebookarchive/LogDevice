@@ -63,6 +63,8 @@ WheelTimer::WheelTimer() {
 
   timer_thread_ = std::thread([this, promise = std::move(promise)]() mutable {
     executor_.store(folly::EventBaseManager::get()->getEventBase());
+    wheel_timer_ = folly::HHWheelTimer::newTimer(
+        folly::EventBaseManager::get()->getEventBase());
     promise.setValue();
     executor_.load()->loopForever();
   });
@@ -78,17 +80,11 @@ WheelTimer::~WheelTimer() {
 void WheelTimer::createTimer(folly::Function<void()>&& callback,
                              std::chrono::milliseconds timeout) {
   timeout = std::chrono::milliseconds(std::min(timeout.count(), kMaxTimeoutMs));
-  executor_.load()->add([callback = std::move(callback), timeout]() mutable {
-    getWheelTimer()->scheduleTimeout(
-        createCallback(std::move(callback)), timeout);
-  });
-}
-
-folly::HHWheelTimer::UniquePtr& WheelTimer::getWheelTimer() {
-  thread_local folly::HHWheelTimer::UniquePtr wheel_timer =
-      folly::HHWheelTimer::newTimer(
-          folly::EventBaseManager::get()->getEventBase());
-  return wheel_timer;
+  executor_.load()->add(
+      [callback = std::move(callback), timeout, this]() mutable {
+        wheel_timer_->scheduleTimeout(
+            createCallback(std::move(callback)), timeout);
+      });
 }
 
 }} // namespace facebook::logdevice
