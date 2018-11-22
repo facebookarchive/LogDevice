@@ -371,6 +371,58 @@ class NodeStatsControllerIntegrationTest
     return seq_state.node.index();
   }
 
+  // Builds a scenario where the outlier_node is not responding on the data port
+  // which resulted in it getting boycotted but its secondary was previously
+  // boycotted by the outlier node.
+  void buildPreemptedByBoycottedNodeScenarioThen(
+      node_index_t outlier_node,
+      folly::Function<void(std::shared_ptr<Client>, lsn_t)> then) {
+    unsigned int node_count = 5;
+    logid_t log_id = getDefaultLog(outlier_node);
+
+    initializeCluster(Params{}
+                          .set_max_boycott_count(1)
+                          .set_boycott_duration(std::chrono::seconds{10})
+                          .set_node_count(node_count));
+
+    auto client = cluster->createClient();
+
+    lsn_t lsn1 = client->appendSync(log_id, "HI");
+    EXPECT_NE(LSN_INVALID, lsn1);
+    auto epoch1 = lsn_to_epoch(lsn1);
+
+    // Suspend the node
+    cluster->getNode(outlier_node).suspend();
+    cluster->waitUntilGossip(/* alive */ false, outlier_node);
+
+    lsn_t lsn2 = client->appendSync(log_id, "HI");
+    EXPECT_NE(LSN_INVALID, lsn2);
+    auto epoch2 = lsn_to_epoch(lsn2);
+    EXPECT_GE(epoch2, epoch1);
+
+    // Renable the node, and make sure it preempts the secondary
+    cluster->getNode(outlier_node).resume();
+    cluster->waitUntilGossip(/* alive */ true, outlier_node);
+
+    lsn_t lsn3 = client->appendSync(log_id, "HI");
+    EXPECT_NE(LSN_INVALID, lsn3);
+    auto epoch3 = lsn_to_epoch(lsn3);
+    EXPECT_GE(epoch3, epoch2);
+
+    updateSettings({{"node-stats-boycott-duration", "1h"}});
+
+    // Disable accepting new connections on the outlier node
+    cluster->getNode(outlier_node).newConnections(false);
+
+    client = cluster->createClient();
+    AppendThread appender;
+    appender.start(client.get(), node_count);
+
+    waitUntilBoycottsOnAllNodes({outlier_node});
+    appender.stop();
+    then(client, lsn3);
+  }
+
   std::unique_ptr<Cluster> cluster;
 };
 } // namespace
@@ -824,6 +876,41 @@ TEST_P(NodeStatsControllerIntegrationTest, AdminCommand) {
     ld_assert_eq(node_id == outlier_node, is_outlier);
   }
   ld_assert(found_bad);
+}
+
+// The secondary sequencer is preempted by the primary sequencer but the
+// primary is boycotted, so the secondary should take over on the first append.
+// A test case covering T36990448.
+TEST_P(NodeStatsControllerIntegrationTest, PreemptedByBoycottedNodeAppend) {
+  node_index_t outlier_node{3};
+  logid_t log_id = getDefaultLog(outlier_node);
+
+  buildPreemptedByBoycottedNodeScenarioThen(
+      outlier_node, [&](std::shared_ptr<Client> client, lsn_t last_lsn) {
+        lsn_t lsn4 = client->appendSync(log_id, "HI");
+        auto epoch4 = lsn_to_epoch(lsn4);
+        auto last_epoch = lsn_to_epoch(last_lsn);
+        EXPECT_NE(LSN_INVALID, lsn4);
+        EXPECT_GE(epoch4, last_epoch);
+      });
+}
+
+// The secondary sequencer is preempted by the primary sequencer but the
+// primary is boycotted, so the secondary should take over on the first
+// GET_SEQ_STATE A test case covering T36990448.
+TEST_P(NodeStatsControllerIntegrationTest,
+       PreemptedByBoycottedNodeGetSeqState) {
+  node_index_t outlier_node{3};
+  logid_t log_id = getDefaultLog(outlier_node);
+
+  buildPreemptedByBoycottedNodeScenarioThen(
+      outlier_node, [&](std::shared_ptr<Client> client, lsn_t /* unused */) {
+        SequencerState state;
+        auto status = IntegrationTestUtils::getSeqState(
+            client.get(), log_id, state, true);
+        EXPECT_EQ(E::OK, status);
+        EXPECT_NE(outlier_node, state.node.index());
+      });
 }
 
 INSTANTIATE_TEST_CASE_P(NodeStatsControllerIntegrationTest,
