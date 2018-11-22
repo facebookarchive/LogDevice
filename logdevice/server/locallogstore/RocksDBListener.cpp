@@ -67,7 +67,15 @@ void RocksDBListener::onJobCompleted(
   std::set<std::string> path_set(paths.begin(), paths.end());
   for (; !recently_created_files_->empty(); recently_created_files_->pop()) {
     const auto& info = recently_created_files_->front();
-    if (info.cf_name != cf_name) {
+    if (info.cf_name != cf_name || !path_set.count(info.file_path)) {
+      RATELIMIT_INFO(
+          std::chrono::seconds(10),
+          1,
+          "RocksDB told us that it created sst file %s but didn't call a "
+          "corresponding flush/compaction callback right after. Maybe column "
+          "family %s was dropped during flush/compaction. This should be rare.",
+          info.file_path.c_str(),
+          info.cf_name.c_str());
       continue;
     }
     ld_check(path_set.count(info.file_path));
@@ -78,6 +86,15 @@ void RocksDBListener::onJobCompleted(
           SizeHistogram(info.table_properties.user_collected_properties,
                         LOGS_OF_SIZE_PREFIX));
     }
+  }
+  if (!path_set.empty()) {
+    RATELIMIT_WARNING(
+        std::chrono::seconds(10),
+        1,
+        "Flush/compaction callback called for files %s without corresponding "
+        "callbacks for creation of these files. Something's probably changed "
+        "in how rocksdb calls into Listener, please investigate.",
+        toString(path_set).c_str());
   }
 }
 
@@ -92,6 +109,12 @@ void RocksDBListener::OnTableFileCreated(
   }
   recently_created_files_->push(info);
   if (recently_created_files_->size() > 1000) {
+    RATELIMIT_WARNING(
+        std::chrono::seconds(10),
+        1,
+        "Lots of sst files were created without corresponding flush/compaction "
+        "callbacks being called. Something's probably changed in how rocksdb "
+        "calls into Listener, please investigate.");
     recently_created_files_->pop();
   }
 }
