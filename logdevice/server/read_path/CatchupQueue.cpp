@@ -242,6 +242,7 @@ void CatchupQueue::pushRecords(CatchupEventTrigger catchup_reason) {
     // stats.
     using std::chrono::steady_clock;
     stream->last_batch_started_time_ = steady_clock::now();
+    stream->last_batch_status_ = "(not assigned)";
     uint64_t t =
         std::chrono::duration_cast<std::chrono::microseconds>(
             stream->last_batch_started_time_ - stream->last_enqueued_time_)

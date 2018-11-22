@@ -192,4 +192,10 @@ void RecoverLogStateTask::onDropped() {
   // to true
   ld_check(Worker::onThisThread()->shuttingDown());
 }
+
+void RecoverLogStateTask::getDebugInfoDetailed(
+    StorageTaskDebugInfo& info) const {
+  info.log_id = log_id_;
+}
+
 }} // namespace facebook::logdevice

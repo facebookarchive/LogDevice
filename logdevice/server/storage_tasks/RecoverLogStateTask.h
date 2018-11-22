@@ -40,6 +40,8 @@ class RecoverLogStateTask : public StorageTask {
     return false;
   }
 
+  void getDebugInfoDetailed(StorageTaskDebugInfo&) const override;
+
  private:
   void readTrimPoint(LocalLogStore&);
   void readLastReleased(LocalLogStore&);

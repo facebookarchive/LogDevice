@@ -754,6 +754,7 @@ CatchupOneStream::startRead(WeakRef<CatchupQueue> catchup_queue,
 
   if (sendStarted(last_released_lsn) != 0) {
     ld_check(err != E::CBREGISTERED);
+    stream_->last_batch_status_ = "failed to send STARTED";
     return Action::TRANSIENT_ERROR;
   }
 
@@ -768,8 +769,10 @@ CatchupOneStream::startRead(WeakRef<CatchupQueue> catchup_queue,
     if (rv == 0) {
       stream_ld_debug(
           *stream_, "Dequeuing stream because log state needs to be recovered");
+      stream_->last_batch_status_ = "recover log state";
       return Action::DEQUEUE_AND_CONTINUE;
     } else {
+      stream_->last_batch_status_ = "permanent error in recoverLogState";
       return Action::PERMANENT_ERROR;
     }
   }
@@ -777,6 +780,7 @@ CatchupOneStream::startRead(WeakRef<CatchupQueue> catchup_queue,
   if (stream_->rebuilding_) {
     // We will wake up this stream once the shard finishes rebuilding.
     stream_ld_debug(*stream_, "Dequeuing stream because shard is rebuilding");
+    stream_->last_batch_status_ = "rebuilding";
     return Action::DEQUEUE_AND_CONTINUE;
   }
 
@@ -791,12 +795,14 @@ CatchupOneStream::startRead(WeakRef<CatchupQueue> catchup_queue,
       stream_ld_debug(*stream_,
                       "Failed to send a gap up to %s",
                       lsn_to_string(trim_point.value()).c_str());
+      stream_->last_batch_status_ = "failed to send gap";
       return Action::TRANSIENT_ERROR;
     }
 
     if (trim_point.value() >= LSN_MAX) {
       // log was fully trimmed, there's nothing more to read
       stream_ld_debug(*stream_, "trim_point >= LSN_MAX. Erasing stream.");
+      stream_->last_batch_status_ = "trim_point >= LSN_MAX";
       return Action::ERASE_AND_CONTINUE;
     }
 
@@ -865,7 +871,13 @@ CatchupOneStream::startRead(WeakRef<CatchupQueue> catchup_queue,
         if (readLastKnownGood(catchup_queue, allow_storage_task) != 0) {
           // A storage task is needed and, if allow_storage_task is true, was
           // created.
-          return allow_storage_task ? Action::WAIT_FOR_LNG : Action::WOULDBLOCK;
+          if (allow_storage_task) {
+            stream_->last_batch_status_ = "sent LNG storage task";
+            return Action::WAIT_FOR_LNG;
+          } else {
+            stream_->last_batch_status_ = "WOULDBLOCK for LNG";
+            return Action::WOULDBLOCK;
+          }
         }
       }
 
@@ -910,6 +922,8 @@ CatchupOneStream::startRead(WeakRef<CatchupQueue> catchup_queue,
     lsn_t end_lsn = std::min(stream_->getReadPtr().lsn - 1, last_released);
     if (sendGapNoRecords(end_lsn) != 0) {
       ld_check(err != E::CBREGISTERED);
+      stream_->last_batch_status_ =
+          "failed to send no records gap in startRead()";
       return Action::TRANSIENT_ERROR;
     }
   }
@@ -919,12 +933,14 @@ CatchupOneStream::startRead(WeakRef<CatchupQueue> catchup_queue,
     stream_ld_debug(*stream_,
                     "Stream hit until_lsn(%s), erasing",
                     lsn_to_string(stream_->until_lsn_).c_str());
+    stream_->last_batch_status_ = "reached until lsn in startRead()";
     return Action::ERASE_AND_CONTINUE;
   }
 
   // Or placed us at the end of the WINDOW.
   if (stream_->isPastWindow()) {
     stream_ld_debug(*stream_, "Stream waiting on WINDOW update, dequeuing");
+    stream_->last_batch_status_ = "waiting for WINDOW";
     return Action::DEQUEUE_AND_CONTINUE;
   }
 
@@ -943,12 +959,14 @@ CatchupOneStream::startRead(WeakRef<CatchupQueue> catchup_queue,
                       stream_->id_.val_,
                       stream_->log_id_.val_,
                       Sender::describeConnection(stream_->client_id_).c_str());
+      stream_->last_batch_status_ = "permanent error in log_state";
       return Action::PERMANENT_ERROR;
     } else {
       stream_ld_debug(
           *stream_,
           "Dequeing stream because it reached past last_released=%s",
           lsn_to_string(last_released).c_str());
+      stream_->last_batch_status_ = "reached last released in startRead()";
       return Action::DEQUEUE_AND_CONTINUE;
     }
   }
@@ -1018,6 +1036,7 @@ CatchupOneStream::startRead(WeakRef<CatchupQueue> catchup_queue,
   }
 
   if (!allow_storage_task) {
+    stream_->last_batch_status_ = "WOULDBLOCK";
     return Action::WOULDBLOCK;
   }
 
@@ -1029,6 +1048,7 @@ CatchupOneStream::startRead(WeakRef<CatchupQueue> catchup_queue,
 
   readOnStorageThread(std::move(catchup_queue), read_ctx, inject_latency);
 
+  stream_->last_batch_status_ = "sent storage task";
   return Action::WAIT_FOR_STORAGE_TASK;
 }
 
@@ -1285,7 +1305,6 @@ CatchupOneStream::readNonBlocking(WeakRef<CatchupQueue> /*catchup_queue*/,
       read_iterator && // May be null in tests.
       read_iterator->accessedUnderReplicatedRegion();
 
-  stream_->last_batch_status_ = status;
   ld_check(status != E::CBREGISTERED);
   ld_check(status != E::NOBUFS);
 
@@ -1617,7 +1636,6 @@ CatchupOneStream::Action CatchupOneStream::processRecords(
     }
   }
 
-  stream_->last_batch_status_ = status;
   stream_->in_under_replicated_region_ = accessed_under_replicated_region;
 
   return handleBatchEnd(version, status, read_ptr);
@@ -1659,6 +1677,8 @@ CatchupOneStream::Action CatchupOneStream::handleBatchEnd(
     if (read_ptr.lsn > stream_->last_delivered_lsn_ + 1) {
       if (sendGapNoRecords(read_ptr.lsn - 1) != 0) {
         ld_check(err != E::CBREGISTERED);
+        stream_->last_batch_status_ =
+            "failed to send no records gap up to read_ptr";
         return Action::TRANSIENT_ERROR;
       }
     }
@@ -1668,17 +1688,20 @@ CatchupOneStream::Action CatchupOneStream::handleBatchEnd(
     // the storage task came back.
     if (stream_->isPastWindow()) {
       stream_ld_debug(*stream_, "Read ptr is past window_high. Dequeuing.");
+      stream_->last_batch_status_ = "reached window high";
       return Action::DEQUEUE_AND_CONTINUE;
     } else if (stream_version_before == stream_->version_) {
       // We know last_released_lsn was not updated so it's safe to mark the
       // stream caught up.
       stream_ld_debug(*stream_, "Read ptr is past last_released. Dequeuing.");
+      stream_->last_batch_status_ = "reached last released";
       return Action::DEQUEUE_AND_CONTINUE;
     } else {
       // Version changed, so we don't want to call the stream caught up because
       // last_released_lsn may have changed after new records were released.
       // CatchupQueue will re-enqueue it for processing.
       stream_ld_debug(*stream_, "Version changed. Requeuing.");
+      stream_->last_batch_status_ = "version changed";
       return Action::REQUEUE_AND_CONTINUE;
     }
   } else if (status == E::UNTIL_LSN_REACHED) {
@@ -1689,12 +1712,18 @@ CatchupOneStream::Action CatchupOneStream::handleBatchEnd(
       // not to expect anything more from us.
       if (sendGapNoRecords(stream_->until_lsn_) != 0) {
         ld_check(err != E::CBREGISTERED);
+        stream_->last_batch_status_ =
+            "failed to send no records gap up to until_lsn";
         return Action::TRANSIENT_ERROR;
       }
     }
     stream_ld_debug(*stream_, "Reached until lsn. Erasing.");
+    stream_->last_batch_status_ = "reached until lsn";
     return Action::ERASE_AND_CONTINUE;
   }
+
+  // This is just a char* assignment, no string copying.
+  stream_->last_batch_status_ = error_name(status);
 
   switch (status) {
     case E::ABORTED:

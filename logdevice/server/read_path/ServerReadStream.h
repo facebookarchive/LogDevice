@@ -438,10 +438,9 @@ class ServerReadStream : boost::noncopyable {
   // which case the stream should be at the top of CatchupQueue.
   bool storage_task_in_flight_;
 
-  // Status of the last batch. Equal to E::UNKNOWN if a batch has not yet
-  // completed.
-  // Used for debugging only.
-  Status last_batch_status_;
+  // Status of the last batch. Used for debugging only.
+  // Pointer to a string literal, so that it's fast to assign.
+  const char* last_batch_status_ = "no batches";
 
   // Replication factor this client expects for records.
   // This value helps the storage node figure out that the copy it has is

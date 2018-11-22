@@ -58,7 +58,6 @@ ServerReadStream::ServerReadStream(read_stream_id_t id,
       last_batch_started_time_(SteadyTimestamp::min()),
       next_read_time_(SteadyTimestamp::min()),
       storage_task_in_flight_(false),
-      last_batch_status_(E::UNKNOWN),
       replication_(0),
       log_group_path_(std::move(log_group_path)),
       read_ptr_({LSN_INVALID}),
@@ -253,7 +252,7 @@ void ServerReadStream::getDebugInfo(InfoReadersTable& table) const {
     table.set<9>(last_released_lsn.value());
   }
 
-  table.set<14>(error_name(last_batch_status_));
+  table.set<14>(last_batch_status_);
   table.set<15>(toSystemTimestamp(created_).toMilliseconds());
 
   if (last_enqueued_time_ != std::chrono::steady_clock::time_point::min()) {
@@ -427,7 +426,7 @@ std::string ServerReadStream::toString() const {
       logdevice::toString(toSystemTimestamp(last_enqueued_time_)) +
       ","
       "last_batch_staus=" +
-      logdevice::toString(last_batch_status_) +
+      std::string(last_batch_status_) +
       ","
       "last_batch_time=" +
       logdevice::toString(toSystemTimestamp(last_batch_started_time_)) +
