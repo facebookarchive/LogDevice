@@ -75,7 +75,8 @@ void EpochOffsetStorageTask::execute() {
            metadata.header_.epoch_end_offset);
   ld_check(metadata.epoch_size_map_.getCounter(BYTE_OFFSET) ==
            metadata.header_.epoch_size);
-  result_offsets_ = metadata.epoch_end_offsets_ - metadata.epoch_size_map_;
+  result_offsets_ = OffsetMap::getOffsetsDifference(
+      std::move(metadata.epoch_end_offsets_), metadata.epoch_size_map_);
 }
 
 void EpochOffsetStorageTask::onDone() {

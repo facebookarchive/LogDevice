@@ -104,17 +104,21 @@ bool OffsetMap::operator!=(const OffsetMap& om) const {
   return !(*this == om);
 }
 
-OffsetMap& OffsetMap::operator+=(const OffsetMap& om) {
-  for (auto& it : om.counterTypeMap_) {
-    counterTypeMap_[it.first] += it.second;
+OffsetMap OffsetMap::mergeOffsets(OffsetMap lhs, const OffsetMap& rhs) {
+  OffsetMap om = std::move(lhs);
+  for (auto& it : rhs.counterTypeMap_) {
+    om.counterTypeMap_[it.first] += it.second;
   }
-  return *this;
+  return om;
 }
 
-OffsetMap OffsetMap::operator+(const OffsetMap& om) const {
-  OffsetMap result = *this;
-  result += om;
-  return result;
+OffsetMap OffsetMap::getOffsetsDifference(OffsetMap lhs, const OffsetMap& rhs) {
+  OffsetMap om = std::move(lhs);
+  for (auto& it : rhs.counterTypeMap_) {
+    ld_check(om.counterTypeMap_[it.first] >= it.second);
+    om.counterTypeMap_[it.first] -= it.second;
+  }
+  return om;
 }
 
 OffsetMap OffsetMap::operator*(uint64_t scalar) const {
@@ -123,20 +127,6 @@ OffsetMap OffsetMap::operator*(uint64_t scalar) const {
     om.counterTypeMap_[it.first] = it.second * scalar;
   }
   return om;
-}
-
-OffsetMap& OffsetMap::operator-=(const OffsetMap& om) {
-  for (auto& it : om.counterTypeMap_) {
-    ld_check(counterTypeMap_[it.first] >= it.second);
-    counterTypeMap_[it.first] -= it.second;
-  }
-  return *this;
-}
-
-OffsetMap OffsetMap::operator-(const OffsetMap& om) const {
-  OffsetMap result = *this;
-  result -= om;
-  return result;
 }
 
 OffsetMap& OffsetMap::operator=(const OffsetMap& om) noexcept {

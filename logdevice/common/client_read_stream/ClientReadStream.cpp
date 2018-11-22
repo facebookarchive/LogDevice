@@ -3105,7 +3105,8 @@ int ClientReadStream::deliverRecord(
   if (additional_start_flags_ & START_Header::INCLUDE_BYTE_OFFSET &&
       !record->attrs.offsets.isValid()) {
     current_offsets = accumulated_offsets_.isValid()
-        ? accumulated_offsets_ + payload_size_map
+        ? OffsetMap::mergeOffsets(
+              std::move(accumulated_offsets_), payload_size_map)
         : OffsetMap();
     record->attrs.offsets = OffsetMap::toRecord(current_offsets);
   }

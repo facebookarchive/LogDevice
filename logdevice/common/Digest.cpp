@@ -369,7 +369,8 @@ int Digest::recomputeOffsetsWithinEpoch(
       payload_size_map.setCounter(
           BYTE_OFFSET, entry.getPayload().size() - entry.getChecksumBytes());
     }
-    offsets_within_epoch.value() += payload_size_map;
+    offsets_within_epoch.value() = OffsetMap::mergeOffsets(
+        std::move(offsets_within_epoch.value()), payload_size_map);
 
     ld_check(entry.record != nullptr);
 

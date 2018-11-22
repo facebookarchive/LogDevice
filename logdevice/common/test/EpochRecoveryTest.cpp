@@ -533,7 +533,8 @@ TEST_F(EpochRecoveryTest, Basic) {
   ASSERT_FALSE(lce_tail_.containOffsetWithinEpoch());
   OffsetMap offsets_to_add;
   offsets_to_add.setCounter(BYTE_OFFSET, 19);
-  OffsetMap expected_offsets = prev_tail_.offsets_map_ + offsets_to_add;
+  OffsetMap expected_offsets =
+      OffsetMap::mergeOffsets(prev_tail_.offsets_map_, offsets_to_add);
   ASSERT_EQ(expected_offsets, lce_tail_.offsets_map_);
 
   // reply from epoch store
@@ -672,7 +673,8 @@ TEST_F(EpochRecoveryTest, UnexpectedHolePlugBelowLNG) {
   // it should still maintain the byte offset though
   OffsetMap offsets_to_add;
   offsets_to_add.setCounter(BYTE_OFFSET, 19);
-  OffsetMap expected_offsets = prev_tail_.offsets_map_ + offsets_to_add;
+  OffsetMap expected_offsets =
+      OffsetMap::mergeOffsets(prev_tail_.offsets_map_, offsets_to_add);
   ASSERT_EQ(expected_offsets, lce_tail_.offsets_map_);
 
   // reply from epoch store
@@ -942,7 +944,8 @@ TEST_F(EpochRecoveryTest, correctByteOffset) {
   // 40 in this case
   OffsetMap offsets_to_add;
   offsets_to_add.setCounter(BYTE_OFFSET, 20);
-  OffsetMap expected_offsets = prev_tail_.offsets_map_ + offsets_to_add;
+  OffsetMap expected_offsets =
+      OffsetMap::mergeOffsets(prev_tail_.offsets_map_, offsets_to_add);
   ASSERT_EQ(expected_offsets, lce_tail_.offsets_map_);
 }
 

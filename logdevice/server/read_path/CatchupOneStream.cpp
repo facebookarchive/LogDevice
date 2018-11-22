@@ -189,7 +189,7 @@ class ReadingCallback : public LocalLogStoreReader::Callback {
                  LocalLogStoreRecordFormat::flags_t disk_flags,
                  Payload payload,
                  std::unique_ptr<ExtraMetadata> extra_metadata,
-                 OffsetMap byte_offsets);
+                 OffsetMap offsets);
 
   std::unique_ptr<ExtraMetadata>
   prepareExtraMetadata(esn_t last_known_good,
@@ -355,12 +355,13 @@ int ReadingCallback::processRecord(
         last_known_good, wave, copyset, copyset_size, offsets_within_epoch);
   }
 
-  OffsetMap byte_offsets;
+  OffsetMap offsets;
   if (stream_->include_byte_offset_ && offsets_within_epoch.isValid()) {
     // epoch OffsetMap value has to be known to determine global OffsetMap.
     OffsetMap epoch_offsets = getEpochOffsets(lsn_to_epoch(lsn), log_state);
     if (epoch_offsets.isValid()) {
-      byte_offsets = epoch_offsets + offsets_within_epoch;
+      offsets = OffsetMap::mergeOffsets(
+          std::move(epoch_offsets), offsets_within_epoch);
     }
   }
 
@@ -394,7 +395,7 @@ int ReadingCallback::processRecord(
                         flags,
                         payload,
                         std::move(extra_metadata),
-                        std::move(byte_offsets));
+                        std::move(offsets));
     if (rv != 0) {
       return -1;
     }
@@ -502,7 +503,8 @@ OffsetMap ReadingCallback::getEpochOffsets(epoch_t record_epoch,
       if (rv == 0) {
         ld_check(metadata_.header_.epoch_end_offset ==
                  metadata_.epoch_end_offsets_.getCounter(BYTE_OFFSET));
-        return metadata_.epoch_end_offsets_ - metadata_.epoch_size_map_;
+        return OffsetMap::getOffsetsDifference(
+            std::move(metadata_.epoch_end_offsets_), metadata_.epoch_size_map_);
       }
       ld_check(rv == -1);
       if (err == E::NOTFOUND) {
@@ -556,7 +558,7 @@ int ReadingCallback::shipRecord(lsn_t lsn,
                                 LocalLogStoreRecordFormat::flags_t disk_flags,
                                 Payload payload,
                                 std::unique_ptr<ExtraMetadata> extra_metadata,
-                                OffsetMap byte_offsets) {
+                                OffsetMap offsets) {
   ++nrecords_;
 
   RECORD_flags_t wire_flags = 0;
@@ -623,7 +625,7 @@ int ReadingCallback::shipRecord(lsn_t lsn,
     payload = payload.dup();
   }
 
-  if (stream_->include_byte_offset_ && byte_offsets.isValid()) {
+  if (stream_->include_byte_offset_ && offsets.isValid()) {
     header.flags |= RECORD_Header::INCLUDE_BYTE_OFFSET;
   }
 
@@ -637,7 +639,7 @@ int ReadingCallback::shipRecord(lsn_t lsn,
                                        std::move(payload),
                                        std::move(extra_metadata),
                                        RECORD_Message::Source::LOCAL_LOG_STORE,
-                                       std::move(byte_offsets),
+                                       std::move(offsets),
                                        stream_->log_group_path_);
 
   if (lsn <= stream_->last_delivered_lsn_) {

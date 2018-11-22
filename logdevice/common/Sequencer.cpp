@@ -1888,8 +1888,8 @@ std::shared_ptr<const TailRecord> Sequencer::getTailRecord() const {
       !previous_tail->offsets_map_.isValid()) {
     ret_tail->offsets_map_.clear();
   } else {
-    ret_tail->offsets_map_ =
-        previous_tail->offsets_map_ + current_epoch_tail->offsets_map_;
+    ret_tail->offsets_map_ = OffsetMap::mergeOffsets(
+        previous_tail->offsets_map_, current_epoch_tail->offsets_map_);
   }
 
   ld_check(!ret_tail->containOffsetWithinEpoch());

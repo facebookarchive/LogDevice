@@ -133,17 +133,20 @@ class OffsetMap : public SerializableData {
 
   std::string toString() const;
 
-  // Add two counterTypeMap_ and return a new OffsetMap object
-  OffsetMap operator+(const OffsetMap& om) const;
+  /*
+   * Iterates over valid entries of rhs and add them to entries of lhs.
+   * Invalid Entries in lhs will be considered to be zero when adding them with
+   * valid ones from rhs.
+   * @return merge operation results
+   */
+  static OffsetMap mergeOffsets(OffsetMap lhs, const OffsetMap& rhs);
 
-  // Increment counterTypeMap_ entries based on passed OffsetMap
-  OffsetMap& operator+=(const OffsetMap& om);
-
-  // Subtract two counterTypeMap_ and return a new OffsetMap object
-  OffsetMap operator-(const OffsetMap& om) const;
-
-  // Decrement counterTypeMap_ entries based on passed OffsetMap
-  OffsetMap& operator-=(const OffsetMap& om);
+  /*
+   * Iterates over valid entries of rhs and computes the difference between lhs
+   * and rhs (lhs - rhs). All entries of lhs have to be greater than or equal
+   * to entries in rhs. Invalid entries of lhs will be considered to be zero.
+   */
+  static OffsetMap getOffsetsDifference(OffsetMap lhs, const OffsetMap& rhs);
 
   // Multiply all entry by scalar
   OffsetMap operator*(uint64_t scalar) const;

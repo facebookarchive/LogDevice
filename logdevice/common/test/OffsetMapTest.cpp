@@ -61,13 +61,13 @@ TEST(OffsetMapTest, BasicSerialization) {
 TEST(OffsetMapTest, Operators) {
   OffsetMap om1, om2, result, result_test;
   result_test.setCounter(BYTE_OFFSET, 8);
-  result = om1 + om2;
+  result = OffsetMap::mergeOffsets(om1, om2);
   ASSERT_EQ(result == om1, true);
   om1.setCounter(BYTE_OFFSET, 4);
   om2.setCounter(BYTE_OFFSET, 4);
-  result = om1 + om2;
+  result = OffsetMap::mergeOffsets(om1, om2);
   ASSERT_EQ(result == result_test, true);
-  result += om1;
+  result = OffsetMap::mergeOffsets(result, om1);
   ASSERT_NE(result == result_test, true);
 }
 
@@ -97,7 +97,8 @@ TEST(OffsetMapTest, AtomicTest) {
   thread3.join();
   thread4.join();
 
-  OffsetMap result = ((offset_map_1 * 2) + (offset_map_2 * 2)) * n_loop;
+  OffsetMap result =
+      OffsetMap::mergeOffsets(offset_map_1 * 2, offset_map_2 * 2) * n_loop;
 
   ASSERT_EQ(atomic_offset_map.load(), result);
 }

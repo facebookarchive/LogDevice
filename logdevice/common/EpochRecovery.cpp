@@ -720,7 +720,8 @@ void EpochRecovery::updateEpochTailRecord() {
   // within epoch of the tail record) and the accumulative byte offset from the
   // previous epoch
   auto& prev_epoch_offsets_map = tail_record_before_this_epoch_.offsets_map_;
-  final_tail_record_.offsets_map_ += prev_epoch_offsets_map;
+  final_tail_record_.offsets_map_ = OffsetMap::mergeOffsets(
+      std::move(final_tail_record_.offsets_map_), prev_epoch_offsets_map);
   final_tail_record_.header.flags &= ~TailRecordHeader::OFFSET_WITHIN_EPOCH;
   ld_check(!final_tail_record_.containOffsetWithinEpoch());
 
