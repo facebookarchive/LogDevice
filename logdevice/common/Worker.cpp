@@ -437,6 +437,8 @@ void Worker::onThreadStarted() {
   // Subscribe to config updates and setting updates
   initializeSubscriptions();
 
+  clientReadStreams().registerForShardAuthoritativeStatusUpdates();
+
   // Initialize load reporting and start timer
   reportLoad();
   reportOldestRecoveryRequest();

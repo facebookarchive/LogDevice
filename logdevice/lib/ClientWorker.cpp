@@ -39,7 +39,6 @@ std::unique_ptr<MessageDispatch> ClientWorker::createMessageDispatch() {
 
 void ClientWorker::onThreadStarted() {
   Worker::onThreadStarted();
-  clientReadStreams().registerForShardAuthoritativeStatusUpdates();
   if (idx_.val() ==
       NodeStatsHandler::getThreadAffinity(
           processor_->getWorkerCount(WorkerType::GENERAL))) {
