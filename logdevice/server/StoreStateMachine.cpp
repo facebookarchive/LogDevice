@@ -225,7 +225,7 @@ Message::Disposition StoreStateMachine::onReceived(STORE_Message* msg,
   // If LocalLogStore is not accepting writes, fail early.
   Status accepting =
       sharded_pool->getByIndex(shard_idx).getLocalLogStore().acceptingWrites();
-  if (accepting != E::OK && accepting != E::LOW_ON_SPC) {
+  if (accepting == E::DISABLED) {
     msg->sendReply(accepting);
     return Message::Disposition::NORMAL;
   }

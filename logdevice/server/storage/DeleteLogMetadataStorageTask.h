@@ -50,6 +50,11 @@ class DeleteLogMetadataStorageTask : public WriteStorageTask {
     }
   }
 
+  bool allowIfStoreIsNotAcceptingWrites(Status status) const override {
+    // Allow when running out of space.
+    return status == E::NOSPC;
+  }
+
  private:
   DeleteLogMetadataWriteOp write_op_;
   Callback callback_;

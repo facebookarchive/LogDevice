@@ -73,12 +73,13 @@ Message::Disposition CLEANED_Message::onReceived(const Address& from) {
         std::chrono::seconds(10),
         10,
         "Got a stale CLEANED message for log %lu epoch %u id %lu from %s. "
-        "No epoch recovery machine with matching id is active for "
-        "log. Ignoring.",
+        "%s. Ignoring.",
         header_.log_id.val_,
         header_.epoch.val_,
         header_.recovery_id.val_,
-        Sender::describeConnection(from).c_str());
+        Sender::describeConnection(from).c_str(),
+        recovery ? ("Active recovery has id " + toString(recovery->id_)).c_str()
+                 : "No epoch recovery machine is active for log");
     return Disposition::NORMAL;
   }
 

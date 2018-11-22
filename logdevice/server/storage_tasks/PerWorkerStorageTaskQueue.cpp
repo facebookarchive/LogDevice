@@ -118,8 +118,7 @@ void PerWorkerStorageTaskQueue::putTask(std::unique_ptr<StorageTask>&& task) {
     if (accepting != E::OK && accepting != E::LOW_ON_SPC) {
       ld_assert(dynamic_cast<WriteStorageTask*>(task.get()) != nullptr);
       WriteStorageTask* write = static_cast<WriteStorageTask*>(task.get());
-      ld_check(accepting == E::NOSPC || accepting == E::DISABLED ||
-               accepting == E::FAILED);
+      ld_check_in(accepting, ({E::NOSPC, E::DISABLED, E::FAILED}));
 
       if (!isWriteExempt(write, accepting)) {
         write->status_ = accepting;
