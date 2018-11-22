@@ -203,9 +203,9 @@ class FailureDetector {
   void resetBoycottedNode(node_index_t node_index);
 
   /*
-   * Returns whether the node is considered an outlier
+   * Returns whether the node is boycotted or not
    */
-  bool isOutlier(node_index_t node_index);
+  bool isBoycotted(node_index_t node_index);
 
   /**
    * Thread safe

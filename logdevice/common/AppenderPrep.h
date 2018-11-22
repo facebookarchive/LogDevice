@@ -100,6 +100,9 @@ class AppenderPrep : public std::enable_shared_from_this<AppenderPrep> {
   // Checks if the given node is considered to be available.
   virtual bool isAlive(NodeID node) const;
 
+  // Checks if the given node is boycotted or not
+  virtual bool isBoycotted(NodeID node) const;
+
   // Checks if we are isolated from the rest of the cluster
   virtual bool isIsolated() const;
 

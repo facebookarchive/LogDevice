@@ -412,7 +412,7 @@ void NodeStatsController::getDebugInfo(InfoAppendOutliersTable* table) {
                         now - timepoint)
                         .count())
             .set<4>(failure_detector != nullptr
-                        ? failure_detector->isOutlier(node_index)
+                        ? failure_detector->isBoycotted(node_index)
                         : false);
       });
 }

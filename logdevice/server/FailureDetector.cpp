@@ -1250,7 +1250,7 @@ void FailureDetector::resetBoycottedNode(node_index_t node_index) {
   getBoycottTracker().resetBoycott(node_index);
 }
 
-bool FailureDetector::isOutlier(node_index_t node_index) {
+bool FailureDetector::isBoycotted(node_index_t node_index) {
   return getBoycottTracker().isBoycotted(node_index);
 }
 

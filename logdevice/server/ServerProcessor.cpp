@@ -92,6 +92,13 @@ bool ServerProcessor::isNodeAlive(node_index_t index) const {
   return true;
 }
 
+bool ServerProcessor::isNodeBoycotted(node_index_t index) const {
+  if (failure_detector_) {
+    return failure_detector_->isBoycotted(index);
+  }
+  return false;
+}
+
 bool ServerProcessor::isNodeIsolated() const {
   if (failure_detector_) {
     return failure_detector_->isIsolated();

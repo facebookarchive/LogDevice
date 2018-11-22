@@ -794,6 +794,9 @@ STAT_DEFINE(get_seq_state_reactivate_if_preempted, SUM)
 // Number of times GET_SEQ_STATE message reactivated a sequencer because
 // its preemptor is dead
 STAT_DEFINE(get_seq_state_reactivate_preemptor_dead, SUM)
+// Number of times GET_SEQ_STATE message reactivated a sequencer because
+// its preemptor is boycotted
+STAT_DEFINE(get_seq_state_reactivate_preemptor_boycotted, SUM)
 
 // Number of times a GET_SEQ_STATE would have returned result from
 // a stale sequencer(older epoch), had it not sent out CheckSealRequest

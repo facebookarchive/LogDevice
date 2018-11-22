@@ -380,6 +380,17 @@ class Processor : public folly::enable_shared_from_this<Processor> {
 
   /**
    * This MUST be called on ServerProcessor only, this lives here as an
+   * transient state until we have cleaner separation between server and
+   * client code
+   */
+  virtual bool isNodeBoycotted(node_index_t /* unused */) const {
+    // Not Supposed to be called here.
+    std::abort();
+    return false;
+  }
+
+  /**
+   * This MUST be called on ServerProcessor only, this lives here as an
    * transiet state until we have cleaner separation between server and
    * client code
    */

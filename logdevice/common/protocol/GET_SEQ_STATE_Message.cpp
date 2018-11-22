@@ -258,8 +258,10 @@ GET_SEQ_STATE_Message::getSequencer(logid_t datalog_id,
       auto p = w->processor_;
       bool preemptor_dead = (p->isFailureDetectorRunning() &&
                              !p->isNodeAlive(preempted_by.index()));
+      bool preemptor_boycotted = (p->isFailureDetectorRunning() &&
+                                  p->isNodeBoycotted(preempted_by.index()));
       if ((flags_ & GET_SEQ_STATE_Message::REACTIVATE_IF_PREEMPTED) ||
-          preemptor_dead) {
+          preemptor_dead || preemptor_boycotted) {
         if (preemptor_dead) {
           ld_info("Sequencer for log:%lu was preempted by %s, "
                   "current sequencer's state (%s), "
@@ -269,6 +271,15 @@ GET_SEQ_STATE_Message::getSequencer(logid_t datalog_id,
                   preempted_by.toString().c_str(),
                   Sequencer::stateString(state));
           STAT_INCR(stats(), get_seq_state_reactivate_preemptor_dead);
+        } else if (preemptor_boycotted) {
+          ld_info("Sequencer for log:%lu was preempted by %s, "
+                  "current sequencer's state (%s), "
+                  "but the preemptor is boycotted according to the failure "
+                  "detector, reactivating sequencer.",
+                  datalog_id.val_,
+                  preempted_by.toString().c_str(),
+                  Sequencer::stateString(state));
+          STAT_INCR(stats(), get_seq_state_reactivate_preemptor_boycotted);
         } else {
           // client wants to forcefully re-activate(into higher epoch)
           // a sequencer

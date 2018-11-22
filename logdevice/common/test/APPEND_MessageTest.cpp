@@ -209,6 +209,11 @@ class MockAppenderPrep : public AppenderPrep {
       alive_[node.index()] = true;
     }
   }
+  void setBoycotted(std::initializer_list<NodeID> nodes) {
+    for (NodeID node : nodes) {
+      boycotted_[node.index()] = true;
+    }
+  }
   void setSequencer(logid_t log_id, NodeID node_id) {
     sequencer_nodes_[log_id] = node_id;
   }
@@ -263,6 +268,10 @@ class MockAppenderPrep : public AppenderPrep {
   bool isAlive(NodeID node) const override {
     auto it = alive_.find(node.index());
     return it != alive_.end() && it->second;
+  }
+  bool isBoycotted(NodeID node) const override {
+    auto it = boycotted_.find(node.index());
+    return it != boycotted_.end() && it->second;
   }
 
   bool isIsolated() const override {
@@ -365,6 +374,7 @@ class MockAppenderPrep : public AppenderPrep {
  private:
   APPEND_MessageTest* owner_;
   std::unordered_map<node_index_t, bool> alive_;
+  std::unordered_map<node_index_t, bool> boycotted_;
   std::unordered_map<logid_t, NodeID, logid_t::Hash> sequencer_nodes_;
   bool accept_work{true};
   MockSequencerLocator locator_;
@@ -586,6 +596,20 @@ TEST_F(APPEND_MessageTest, Basic) {
     prep->execute(std::move(a));
     ASSERT_RUNNING(prep, {raw});
   }
+  {
+    std::unique_ptr<Appender> a(new MockAppender);
+    Appender* raw = a.get();
+    auto prep = create(log2);
+    prep->my_node_id_ = N1;
+    prep->setSequencer(log2, N2);
+    prep->setAlive({N1, N2});
+    prep->setBoycotted({N2});
+
+    // even though N2 is responsible for log1, N1 should handle it because
+    // N2 is boycotted
+    prep->execute(std::move(a));
+    ASSERT_RUNNING(prep, {raw});
+  }
 }
 
 // Tests that an append with NO_REDIRECT flag is processed even though another
@@ -637,6 +661,20 @@ TEST_F(APPEND_MessageTest, PreemptionRedirects) {
 
     // N1 was preempted by N2, but N2 is dead. Make sure that N1 reactivates
     // the sequencer and buffers the appender.
+    prep->execute(std::move(appender));
+    ASSERT_BUFFERED(prep, {raw});
+  }
+  {
+    std::unique_ptr<Appender> appender(new MockAppender);
+    Appender* raw = appender.get();
+    auto prep = create(log);
+    prep->my_node_id_ = N1;
+    prep->setSequencer(log, N1);
+    prep->setAlive({N1, N2});
+    prep->setBoycotted({N2});
+
+    // N1 was preempted by N2, but N2 is boycotted. Make sure that N1
+    // reactivates the sequencer and buffers the appender.
     prep->execute(std::move(appender));
     ASSERT_BUFFERED(prep, {raw});
   }

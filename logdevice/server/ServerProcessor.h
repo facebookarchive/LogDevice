@@ -90,6 +90,8 @@ class ServerProcessor : public Processor {
 
   virtual bool isNodeAlive(node_index_t index) const override;
 
+  virtual bool isNodeBoycotted(node_index_t index) const override;
+
   virtual bool isNodeIsolated() const override;
 
   virtual bool isFailureDetectorRunning() const override;

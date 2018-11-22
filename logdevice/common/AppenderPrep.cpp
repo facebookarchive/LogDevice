@@ -496,6 +496,21 @@ bool AppenderPrep::isAlive(NodeID node) const {
   return result;
 }
 
+bool AppenderPrep::isBoycotted(NodeID node) const {
+  bool result =
+      Worker::onThisThread()->processor_->isNodeBoycotted(node.index());
+  if (result) {
+    RATELIMIT_INFO(
+        std::chrono::seconds(1),
+        5,
+        "Node %s is boycotted according to Failure Detector. Log:%lu",
+        node.toString().c_str(),
+        header_.logid.val_);
+  }
+
+  return result;
+}
+
 bool AppenderPrep::isIsolated() const {
   bool result = Worker::onThisThread()->processor_->isNodeIsolated();
   if (result) {
@@ -618,10 +633,10 @@ AppenderPrep::Decision AppenderPrep::shouldRedirect(NodeID seq_node,
     }
   }
 
-  // If `seq_node' is known to be alive, redirect to it (note that we err on the
-  // side of caution and consider all nodes alive if the failure detector is not
-  // used).
-  if (isAlive(seq_node)) {
+  // If `seq_node' is known to be alive and not boycotted, redirect to it (note
+  // that we err on the side of caution and consider all nodes alive if the
+  // failure detector is not used).
+  if (isAlive(seq_node) && !isBoycotted(seq_node)) {
     return Decision::REDIRECT;
   }
 
