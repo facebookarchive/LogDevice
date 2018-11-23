@@ -975,9 +975,13 @@ void ReplicatedStateMachine<T, D>::activateGracePeriodForSnapshotting() {
         // We always take a node regardless whether there are new deltas or not.
         rsm_info(rsm_type_, "Taking a new time-based snapshot");
         auto cb = [&](Status st) {
-          rsm_error(rsm_type_,
-                    "Could not take a time-based snapshot: %s",
-                    error_name(st));
+          if (st != E::OK) {
+            rsm_error(rsm_type_,
+                      "Could not take a time-based snapshot: %s",
+                      error_name(st));
+          } else {
+            rsm_info(rsm_type_, "Time based snapshot was successful");
+          }
         };
         snapshot(std::move(cb));
       } else {
