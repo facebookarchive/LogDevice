@@ -280,7 +280,7 @@ Tracks all in-memory metadata for logs on storage nodes (see "info log\_storage\
 | log\_removal\_time | long | See LogStorageState::log\_removal\_time\_. |
 | lce | long | Last clean epoch.  Updated when the sequencer notifies this storage node that it has performed recovery on an epoch. |
 | latest\_epoch | long | Latest seen epoch from the sequencer. |
-| latest\_epoch\_offset | long | Byte offset within the latest epoch |
+| latest\_epoch\_offset | string | Offsets within the latest epoch |
 | permanent\_errors | long | Set to true if a permanent error such as an IO error has been encountered.  When this is the case, expect readers to not be able to read this log on this storage shard. |
 
 ## logsconfig\_rsm
@@ -438,7 +438,7 @@ This table allows fetching information about individual record copies in the clu
 | last\_known\_good | int | Highest ESN in this record's epoch such that at the time this messagewas originally sent by a sequencer all records with this and lower ESNs in this epoch were known to the sequencer to be fully stored on R nodes. |
 | copyset | string | Copyset of the record. |
 | flags | string | Flags for that record.  See "logdevice/common/LocalLogStoreRecordFormat.h" to see the list of flags. |
-| offset\_within\_epoch | long | Byte offset of that record within the epoch. |
+| offset\_within\_epoch | string | Amount of data written to that record within the epoch. |
 | optional\_keys | string | Optional keys provided by the user.  See "AppendAttributes" in "logdevice/include/Record.h". |
 | is\_written\_by\_recovery | bool | Whether this record was replicated by the Log Recovery. |
 | payload | string | Payload in hex format. |
@@ -459,7 +459,7 @@ Dumps debugging information about the EpochRecordCache entries in each storage s
 | head\_esn | long | ESN of the head of the buffer. |
 | max\_esn | long | Largest ESN ever put in the cache. |
 | first\_lng | long | The first LNG the cache has ever seen since its creation. |
-| offset\_within\_epoch | long | Most recent value of the amount of data written in the given epoch as seen by this shard. |
+| offset\_within\_epoch | string | Most recent value of the amount of data written in the given epoch as seen by this shard. |
 | tail\_record\_lsn | long | LSN of the tail record of this epoch. |
 | tail\_record\_ts | long | Timestamp of the tail record of this epoch. |
 
@@ -509,7 +509,7 @@ This table dumps information about all the Sequencer objects in the cluster.  Se
 | preempted\_by | long | ID of the sequencer that preempted this sequencer (if any). |
 | draining | long | Epoch that is draining (if any).  Draining means that the sequencer stopped accepting new writes but is completing appends curretnly in flight. |
 | metadata\_log\_written | long | Whether the epoch metadata used by this sequencer has been written to the metadata log. |
-| last\_byte\_offset | string | Byte offset of the tail record. |
+| last\_byte\_offset | string | Offsets of the tail record. |
 
 ## settings
 Dumps the state of all settings for all nodes in the cluster.
