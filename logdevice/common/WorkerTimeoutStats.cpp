@@ -63,7 +63,7 @@ void WorkerTimeoutStats::onReply(const ShardID& from,
 
   const int64_t round_trip_time = msec_since(message_sent_timestamp);
   ld_check(round_trip_time >= 0);
-  const Latency round_trip_time_log = std::log(round_trip_time);
+  const Latency round_trip_time_log = std::log2(std::max(round_trip_time, 1L));
   auto histogram_iterator = histograms_.emplace(
       std::piecewise_construct,
       std::forward_as_tuple(std::get<0>(key)),
