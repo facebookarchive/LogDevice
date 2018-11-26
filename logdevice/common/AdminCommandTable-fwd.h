@@ -431,6 +431,13 @@ typedef AdminCommandTable<logid_t,                  /* Log ID */
                           >
     InfoLogStorageStateTable;
 
+typedef AdminCommandTable<node_index_t,              /* node_index */
+                          bool,                      /* is_boycotted */
+                          std::chrono::milliseconds, /* boycott_duration */
+                          std::chrono::milliseconds  /* boycott_star_time */
+                          >
+    InfoBoycottTable;
+
 typedef AdminCommandTable<uint32_t,                 /* shard */
                           logid_t,                  /* Log ID */
                           uint64_t,                 /* partition */

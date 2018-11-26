@@ -25,6 +25,7 @@
 #include "logdevice/server/admincommands/GossipBlacklist.h"
 #include "logdevice/server/admincommands/Info.h"
 #include "logdevice/server/admincommands/InfoAppendOutliers.h"
+#include "logdevice/server/admincommands/InfoBoycotts.h"
 #include "logdevice/server/admincommands/InfoCatchupQueues.h"
 #include "logdevice/server/admincommands/InfoClientReadStreams.h"
 #include "logdevice/server/admincommands/InfoConfig.h"
@@ -89,6 +90,7 @@ AdminCommandFactory::AdminCommandFactory() {
   selector_.add<commands::Info>("info");
   selector_.add<commands::InfoAppendOutliers>("info append_outliers");
   selector_.add<commands::InfoGossip>("info gossip");
+  selector_.add<commands::InfoBoycotts>("info boycotts");
   selector_.add<commands::InfoSST>("info sst");
   selector_.add<commands::InfoSockets>("info sockets");
   selector_.add<commands::InfoConfig>("info config");

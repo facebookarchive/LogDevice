@@ -12,6 +12,8 @@
 #include <random>
 #include <vector>
 
+#include <folly/Optional.h>
+
 #include "logdevice/common/DomainIsolationChecker.h"
 #include "logdevice/common/EventLoopHandle.h"
 #include "logdevice/common/NodeID.h"
@@ -206,6 +208,12 @@ class FailureDetector {
    * Returns whether the node is boycotted or not
    */
   bool isBoycotted(node_index_t node_index);
+
+  /*
+   * Returns the boycott object of the node if it's boycotted or folly::none
+   * if it's not.
+   */
+  folly::Optional<Boycott> getNodeBoycottObject(node_index_t node_index);
 
   /**
    * Thread safe

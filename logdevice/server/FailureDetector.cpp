@@ -1266,6 +1266,19 @@ bool FailureDetector::isBoycotted(node_index_t node_index) {
   return getBoycottTracker().isBoycotted(node_index);
 }
 
+folly::Optional<Boycott>
+FailureDetector::getNodeBoycottObject(node_index_t node_index) {
+  if (!getBoycottTracker().isBoycotted(node_index)) {
+    return folly::none;
+  }
+  const auto& boycotts = getBoycottTracker().getBoycottsForGossip();
+  auto it = boycotts.find(node_index);
+  if (it == boycotts.end()) {
+    return folly::none;
+  }
+  return it->second;
+}
+
 Socket* FailureDetector::getServerSocket(node_index_t idx) {
   return Worker::onThisThread()->sender().findServerSocket(idx);
 }

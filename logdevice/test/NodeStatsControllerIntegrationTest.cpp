@@ -43,6 +43,13 @@ struct Params {
   FIELD(double, remove_worst_percentage, 0.0)
   FIELD(unsigned int, send_worst_client_count, 1)
   FIELD(bool, observe_only, false)
+  FIELD(bool, use_adaptive_boycott_duration, false)
+  FIELD(std::chrono::milliseconds,
+        boycott_min_adaptive_duration,
+        std::chrono::seconds(10))
+  FIELD(std::chrono::milliseconds,
+        boycott_decrease_time_step,
+        std::chrono::seconds(30))
 #undef FIELD
 };
 
@@ -147,6 +154,13 @@ class NodeStatsControllerIntegrationTest
                       std::to_string(params.required_client_count))
             .setParam("--node-stats-send-worst-client-count",
                       std::to_string(params.send_worst_client_count))
+            .setParam("--node-stats-boycott-use-adaptive-duration",
+                      std::to_string(params.use_adaptive_boycott_duration))
+            .setParam("--node-stats-boycott-min-adaptive-duration",
+                      msString(params.boycott_min_adaptive_duration))
+            .setParam(
+                "--node-stats-boycott-adaptive-duration-decrease-time-step",
+                msString(params.boycott_decrease_time_step))
             // Use a relatively big relative margin to ensure the tests are not
             // flaky.
             .setParam("--node-stats-boycott-relative-margin", "0.5")
@@ -421,6 +435,23 @@ class NodeStatsControllerIntegrationTest
     waitUntilBoycottsOnAllNodes({outlier_node});
     appender.stop();
     then(client, lsn3);
+  }
+
+  std::chrono::milliseconds getBoycottDurationOfNode(node_index_t node_idx,
+                                                     node_index_t from_node) {
+    std::string command = folly::sformat("info boycotts --json {}", node_idx);
+    auto res = cluster->getNode(from_node).sendCommand(command);
+    std::vector<std::string> lines;
+    folly::split("\r\n", res, lines);
+    auto json = folly::parseJson(lines[0]);
+
+    // The format of this json:
+    // {"rows":[["2","1","10000", "123501200"], ...],"headers":["Node Index","Is
+    // Boycotted?","Boycott Duration", "Boycott Start Time"]} This is ugly and
+    // will break if the field ordering changes, there's no easy way to typesafe
+    // way parse an AdminCommandTable back.
+    auto duration = json["rows"][0][2].asInt();
+    return std::chrono::milliseconds(duration);
   }
 
   std::unique_ptr<Cluster> cluster;
@@ -889,6 +920,48 @@ TEST_P(NodeStatsControllerIntegrationTest,
         EXPECT_EQ(E::OK, status);
         EXPECT_NE(outlier_node, state.node.index());
       });
+}
+
+TEST_P(NodeStatsControllerIntegrationTest, AdaptiveBoycottDuration) {
+  unsigned int node_count = 5;
+  std::vector<node_index_t> outlier_nodes{2};
+
+  initializeCluster(
+      Params{}
+          .set_max_boycott_count(2)
+          .set_node_count(node_count)
+          .set_use_adaptive_boycott_duration(true)
+          .set_boycott_min_adaptive_duration(std::chrono::seconds(10))
+          // High enough time step to get exactly double the min adaptive
+          // duration
+          .set_boycott_decrease_time_step(std::chrono::hours(1)));
+
+  auto client = createClient();
+  setErrorInjection(client.get(), outlier_nodes, {0.5});
+
+  AppendThread appender;
+  appender.start(client.get(), node_count);
+
+  waitUntilBoycottsOnAllNodes(outlier_nodes);
+
+  EXPECT_EQ(std::chrono::seconds(10),
+            getBoycottDurationOfNode(/*node_index=*/2, /*from_node=*/3));
+
+  appender.stop();
+
+  setErrorInjection(client.get(), {}, {});
+  appender.start(client.get(), node_count);
+
+  waitUntilBoycottsOnAllNodes({}); // no boycotts anymore
+
+  appender.stop();
+  setErrorInjection(client.get(), outlier_nodes, {0.5});
+  appender.start(client.get(), node_count);
+
+  waitUntilBoycottsOnAllNodes(outlier_nodes);
+
+  EXPECT_EQ(std::chrono::seconds(20),
+            getBoycottDurationOfNode(/*node_index=*/2, /*from_node=*/3));
 }
 
 INSTANTIATE_TEST_CASE_P(NodeStatsControllerIntegrationTest,
