@@ -13,7 +13,7 @@
 
 #include "logdevice/common/ShardID.h"
 #include "logdevice/common/Sockaddr.h"
-#include "logdevice/common/Socket-fwd.h"
+#include "logdevice/common/SocketTypes.h"
 #include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/common/configuration/nodes/NodeAttributesConfig.h"
 #include "logdevice/common/configuration/nodes/NodeRole.h"

@@ -31,7 +31,7 @@
 #include "logdevice/common/RunState.h"
 #include "logdevice/common/SecurityInformation.h"
 #include "logdevice/common/Sockaddr.h"
-#include "logdevice/common/Socket-fwd.h"
+#include "logdevice/common/SocketTypes.h"
 #include "logdevice/common/WeakRefHolder.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/settings/Settings.h"

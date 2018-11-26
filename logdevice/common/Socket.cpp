@@ -65,28 +65,6 @@
 namespace facebook { namespace logdevice {
 using folly::SSLContext;
 
-const char* socketTypeToString(SocketType sock_type) {
-  switch (sock_type) {
-    case SocketType::DATA:
-      return "DATA";
-    case SocketType::GOSSIP:
-      return "GOSSIP";
-  }
-  return "";
-}
-
-const char* connectionTypeToString(ConnectionType conn_type) {
-  switch (conn_type) {
-    case ConnectionType::NONE:
-      return "NONE";
-    case ConnectionType::PLAIN:
-      return "PLAIN";
-    case ConnectionType::SSL:
-      return "SSL";
-  }
-  return "";
-}
-
 class SocketImpl {
  public:
   SocketImpl() {}

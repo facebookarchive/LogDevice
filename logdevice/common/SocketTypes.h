@@ -7,6 +7,8 @@
  */
 #pragma once
 
+#include <cstdint>
+
 namespace facebook { namespace logdevice {
 
 enum class SocketType : uint8_t { DATA, GOSSIP };
@@ -14,7 +16,5 @@ enum class ConnectionType : uint8_t { NONE, PLAIN, SSL };
 
 const char* socketTypeToString(SocketType sock_type);
 const char* connectionTypeToString(ConnectionType conn_type);
-
-class Socket;
 
 }} // namespace facebook::logdevice

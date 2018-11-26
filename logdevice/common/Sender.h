@@ -25,7 +25,7 @@
 #include "logdevice/common/PrincipalIdentity.h"
 #include "logdevice/common/Priority.h"
 #include "logdevice/common/ResourceBudget.h"
-#include "logdevice/common/Socket-fwd.h"
+#include "logdevice/common/SocketTypes.h"
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/WeakRefHolder.h"
 #include "logdevice/common/configuration/NodeLocation.h"

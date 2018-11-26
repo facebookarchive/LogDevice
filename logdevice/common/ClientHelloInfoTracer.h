@@ -14,7 +14,7 @@
 
 #include "logdevice/common/PrincipalIdentity.h"
 #include "logdevice/common/SampledTracer.h"
-#include "logdevice/common/Socket-fwd.h"
+#include "logdevice/common/SocketTypes.h"
 #include "logdevice/include/Err.h"
 #include "logdevice/include/types.h"
 
