@@ -54,7 +54,6 @@ class MockBoycottTracker : public BoycottTracker {
 TEST(BoycottTrackerTest, NoNodes) {
   MockBoycottTracker tracker;
   EXPECT_CALL(tracker, getMaxBoycottCount()).WillRepeatedly(Return(1));
-  EXPECT_CALL(tracker, getBoycottDuration()).WillRepeatedly(Return(5s));
 
   // make sure not to crash when no boycotts have been set
   tracker.calculateBoycotts(std::chrono::system_clock::now());
@@ -68,8 +67,8 @@ TEST(BoycottTrackerTest, Future) {
 
   MockBoycottTracker tracker;
   EXPECT_CALL(tracker, getMaxBoycottCount()).WillRepeatedly(Return(1));
-  tracker.updateReportedBoycotts({{1, now_ns - 10s}, {2, now_ns + 10s}});
-  EXPECT_CALL(tracker, getBoycottDuration()).WillRepeatedly(Return(15s));
+  tracker.updateReportedBoycotts(
+      {{1, now_ns - 10s, 15s}, {2, now_ns + 10s, 15s}});
 
   tracker.calculateBoycotts(now);
   EXPECT_TRUE(tracker.isBoycotted(1));
@@ -82,8 +81,8 @@ TEST(BoycottTrackerTest, UseOldest) {
 
   MockBoycottTracker tracker;
   EXPECT_CALL(tracker, getMaxBoycottCount()).WillRepeatedly(Return(1));
-  tracker.updateReportedBoycotts({{1, now_ns - 15s}, {2, now_ns - 5s}});
-  EXPECT_CALL(tracker, getBoycottDuration()).WillRepeatedly(Return(20s));
+  tracker.updateReportedBoycotts(
+      {{1, now_ns - 15s, 20s}, {2, now_ns - 5s, 20s}});
 
   tracker.calculateBoycotts(now);
   EXPECT_TRUE(tracker.isBoycotted(1));
@@ -96,15 +95,16 @@ TEST(BoycottTrackerTest, UpdateReportedBoycotts) {
 
   MockBoycottTracker tracker;
   EXPECT_CALL(tracker, getMaxBoycottCount()).WillRepeatedly(Return(2));
-  tracker.updateReportedBoycotts({{1, now_ns - 10s}, {2, now_ns - 10s}});
-  EXPECT_CALL(tracker, getBoycottDuration()).WillRepeatedly(Return(15s));
+  tracker.updateReportedBoycotts(
+      {{1, now_ns - 10s, 20s}, {2, now_ns - 10s, 20s}});
 
   tracker.calculateBoycotts(now);
   EXPECT_TRUE(tracker.isBoycotted(1));
   EXPECT_TRUE(tracker.isBoycotted(2));
 
   // don't update with older values
-  tracker.updateReportedBoycotts({{1, now_ns - 20s}, {2, now_ns - 20s}});
+  tracker.updateReportedBoycotts(
+      {{1, now_ns - 20s, 15s}, {2, now_ns - 20s, 15s}});
 
   tracker.calculateBoycotts(now);
   // if the values were updated, then these would be false because the duration
@@ -113,7 +113,8 @@ TEST(BoycottTrackerTest, UpdateReportedBoycotts) {
   EXPECT_TRUE(tracker.isBoycotted(2));
 
   // if new nodes are given, use those as well, even if they're older
-  tracker.updateReportedBoycotts({{3, now_ns - 10s}, {4, now_ns - 10s}});
+  tracker.updateReportedBoycotts(
+      {{3, now_ns - 10s, 15s}, {4, now_ns - 10s, 15s}});
 
   tracker.calculateBoycotts(now);
   EXPECT_FALSE(tracker.isBoycotted(1));
@@ -121,11 +122,12 @@ TEST(BoycottTrackerTest, UpdateReportedBoycotts) {
   EXPECT_TRUE(tracker.isBoycotted(3));
   EXPECT_TRUE(tracker.isBoycotted(4));
 
-  // both are newer, update
-  tracker.updateReportedBoycotts({{1, now_ns - 5s}, {2, now_ns - 5s}});
+  // N3 & N4 boycotts expire at now_ns + 5s. While N1 & N2 expire
+  // at now_ns + 10s. Let's expire N3 & N4 and update N1 & N2.
+  tracker.updateReportedBoycotts(
+      {{1, now_ns - 5s, 15s}, {2, now_ns - 5s, 15s}});
 
-  EXPECT_CALL(tracker, getBoycottDuration()).WillRepeatedly(Return(6s));
-  tracker.calculateBoycotts(now);
+  tracker.calculateBoycotts(now + 6s);
   EXPECT_TRUE(tracker.isBoycotted(1));
   EXPECT_TRUE(tracker.isBoycotted(2));
 }
@@ -136,14 +138,13 @@ TEST(BoycottTrackerTest, Reset) {
 
   MockBoycottTracker tracker;
   EXPECT_CALL(tracker, getMaxBoycottCount()).WillRepeatedly(Return(1));
-  EXPECT_CALL(tracker, getBoycottDuration()).WillRepeatedly(Return(30s));
 
-  tracker.updateReportedBoycotts({{1, now_ns - 20s, false}});
+  tracker.updateReportedBoycotts({{1, now_ns - 20s, 30s, false}});
 
   tracker.calculateBoycotts(now);
   EXPECT_TRUE(tracker.isBoycotted(1));
 
-  tracker.updateReportedBoycotts({{1, now_ns, true}});
+  tracker.updateReportedBoycotts({{1, now_ns, 30s, true}});
   tracker.calculateBoycotts(now);
   EXPECT_FALSE(tracker.isBoycotted(1));
 }
@@ -165,14 +166,14 @@ TEST(BoycottTrackerTest, BoycottsByThisNode) {
   EXPECT_FALSE(tracker.isBoycotted(2));
   // only forward as many nodes as this node may boycott
   EXPECT_THAT(values(tracker.getBoycottsForGossip()),
-              ElementsAre(Boycott{1, now_ns - 20s}));
+              ElementsAre(Boycott{1, now_ns - 20s, 30s}));
   EXPECT_EQ(1, tracker.getBoycottsForGossip().size());
 
-  tracker.updateReportedBoycotts({{3, now_ns - 5s}});
+  tracker.updateReportedBoycotts({{3, now_ns - 5s, 60s}});
   // forward the newly given value in upcoming gossips
-  EXPECT_THAT(
-      values(tracker.getBoycottsForGossip()),
-      UnorderedElementsAre(Boycott{1, now_ns - 20s}, Boycott{3, now_ns - 5s}));
+  EXPECT_THAT(values(tracker.getBoycottsForGossip()),
+              UnorderedElementsAre(
+                  Boycott{1, now_ns - 20s, 30s}, Boycott{3, now_ns - 5s, 60s}));
 
   tracker.calculateBoycotts(now);
   // still use oldest as the boycotted value
@@ -181,5 +182,5 @@ TEST(BoycottTrackerTest, BoycottsByThisNode) {
 
   // After having re-calculated, any non-active boycotts will be removed
   EXPECT_THAT(values(tracker.getBoycottsForGossip()),
-              UnorderedElementsAre(Boycott{1, now_ns - 20s}));
+              UnorderedElementsAre(Boycott{1, now_ns - 20s, 30s}));
 }

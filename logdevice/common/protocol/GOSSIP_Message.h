@@ -96,5 +96,7 @@ class GOSSIP_Message : public Message {
   void writeBoycottList(ProtocolWriter& writer) const;
   // reads the flattened matrices and un-flattens them
   void readBoycottList(ProtocolReader& reader);
+  // Gets the default boycotting duration from the settings
+  std::chrono::milliseconds getDefaultBoycottDuration() const;
 };
 }} // namespace facebook::logdevice

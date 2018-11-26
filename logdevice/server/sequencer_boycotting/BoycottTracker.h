@@ -105,11 +105,10 @@ class BoycottTracker {
   // should be boycotted
   void calculateBoycottsByThisNode(
       std::chrono::system_clock::time_point current_time,
-      unsigned int max_boycott_count,
-      std::chrono::milliseconds boycott_duration);
+      unsigned int max_boycott_count);
 
-  void removeExpiredBoycotts(std::chrono::system_clock::time_point current_time,
-                             std::chrono::milliseconds boycott_duration);
+  void
+  removeExpiredBoycotts(std::chrono::system_clock::time_point current_time);
 
   // removes any nodes that are not boycotted but that are still part of the
   // reported boycotts. Will keep resets and boycotts that are not yet in effect

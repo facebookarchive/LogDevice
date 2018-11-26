@@ -74,6 +74,9 @@ enum ProtocolVersion : uint16_t {
 
   GET_SEQ_STATE_REPLY_MESSAGE_SUPPORT_OFFSET_MAP, // = 88
 
+  // GOSSIP_Message has new data to support adaptive boycotting
+  ADAPTIVE_BOYCOTT_DURATION, // = 89
+
   // NOTE: insert new protocol versions here
 
   // Maximum version number of the protocol this version of LogDevice
@@ -107,6 +110,7 @@ static_assert(OFFSET_MAP_SUPPORT_IN_SEALED_MSG == 85, "");
 static_assert(CLEAN_MESSAGE_SUPPORT_OFFSET_MAP == 86, "");
 static_assert(RECORD_MESSAGE_SUPPORT_OFFSET_MAP == 87, "");
 static_assert(GET_SEQ_STATE_REPLY_MESSAGE_SUPPORT_OFFSET_MAP == 88, "");
+static_assert(ADAPTIVE_BOYCOTT_DURATION == 89, "");
 
 constexpr uint16_t MIN_PROTOCOL_SUPPORTED = PROTOCOL_VERSION_LOWER_BOUND + 1;
 constexpr uint16_t MAX_PROTOCOL_SUPPORTED = PROTOCOL_VERSION_UPPER_BOUND - 1;

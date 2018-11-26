@@ -23,12 +23,10 @@ namespace facebook { namespace logdevice {
 void BoycottTracker::calculateBoycotts(
     std::chrono::system_clock::time_point current_time) {
   const auto max_boycott_count = getMaxBoycottCount();
-  const auto boycott_duration = getBoycottDuration();
 
   // start by calculating the boycotts by this node, given the outliers set with
   // setLocalOutliers
-  calculateBoycottsByThisNode(
-      current_time, max_boycott_count, boycott_duration);
+  calculateBoycottsByThisNode(current_time, max_boycott_count);
 
   std::vector<Boycott> all_boycotts;
   all_boycotts.reserve(reported_boycotts_.size());
@@ -37,7 +35,7 @@ void BoycottTracker::calculateBoycotts(
 
   boycotted_nodes_.clear();
 
-  removeExpiredBoycotts(current_time, boycott_duration);
+  removeExpiredBoycotts(current_time);
 
   for (auto boycott_it : reported_boycotts_) {
     auto& boycott = boycott_it.second;
@@ -138,15 +136,15 @@ void BoycottTracker::resetBoycott(node_index_t node_index) {
 
 void BoycottTracker::calculateBoycottsByThisNode(
     std::chrono::system_clock::time_point current_time,
-    unsigned int max_boycott_count,
-    std::chrono::milliseconds boycott_duration) {
+    unsigned int max_boycott_count) {
   boycotts_by_this_node_.erase(
       std::remove_if(
           boycotts_by_this_node_.begin(),
           boycotts_by_this_node_.end(),
           [&](const Boycott& boycott) {
+            ld_check(boycott.boycott_duration.count() > 0);
             bool old_boycott =
-                boycott.boycott_in_effect_time + boycott_duration <
+                boycott.boycott_in_effect_time + boycott.boycott_duration <
                 current_time.time_since_epoch();
 
             const auto it = reported_boycotts_.find(boycott.node_index);
@@ -179,7 +177,8 @@ void BoycottTracker::calculateBoycottsByThisNode(
       // don't overwrite a boycott (it could then be endlessly refreshed and not
       // respect the boycott duration)
       if (it == reported_boycotts_.end()) {
-        Boycott boycott{cur_outlier.index(), boycott_time};
+        Boycott boycott{
+            cur_outlier.index(), boycott_time, this->getBoycottDuration()};
         boycotts_by_this_node_.emplace_back(boycott);
         reported_boycotts_[boycott.node_index] = boycott;
 
@@ -191,7 +190,7 @@ void BoycottTracker::calculateBoycottsByThisNode(
             std::make_unique<NodeStatsControllerTraceRequest>(
                 cur_outlier,
                 std::chrono::system_clock::time_point(boycott_time),
-                boycott_duration);
+                boycott.boycott_duration);
         this->postRequest(req); // ignoring the return value, since there is
                                 // nothing to do if posting fails
       }
@@ -206,8 +205,8 @@ void BoycottTracker::calculateBoycottsByThisNode(
   local_resets_.withULockPtr([&](auto locked_resets) {
     for (auto reset_node_idx : *locked_resets) {
       ld_info("Initiating reset for N%i", reset_node_idx);
-      reported_boycotts_[reset_node_idx] =
-          Boycott{reset_node_idx, boycott_time, true};
+      reported_boycotts_[reset_node_idx] = Boycott{
+          reset_node_idx, boycott_time, this->getBoycottDuration(), true};
     }
 
     locked_resets.moveFromUpgradeToWrite()->clear();
@@ -236,11 +235,12 @@ void BoycottTracker::removeUnusedBoycotts(
 }
 
 void BoycottTracker::removeExpiredBoycotts(
-    std::chrono::system_clock::time_point current_time,
-    std::chrono::milliseconds boycott_duration) {
+    std::chrono::system_clock::time_point current_time) {
   for (auto boycott_it = reported_boycotts_.cbegin();
        boycott_it != reported_boycotts_.cend();) {
-    if (boycott_it->second.boycott_in_effect_time + boycott_duration <
+    ld_check(boycott_it->second.boycott_duration.count() > 0);
+    if (boycott_it->second.boycott_in_effect_time +
+            boycott_it->second.boycott_duration <
         current_time.time_since_epoch()) {
       boycott_it = reported_boycotts_.erase(boycott_it);
     } else {

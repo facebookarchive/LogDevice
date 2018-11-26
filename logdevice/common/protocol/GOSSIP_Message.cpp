@@ -153,6 +153,10 @@ void GOSSIP_Message::writeBoycottList(ProtocolWriter& writer) const {
   for (auto& boycott : boycott_list_) {
     writer.write(boycott.node_index);
     writer.write(boycott.boycott_in_effect_time);
+    if (writer.proto() >=
+        Compatibility::ProtocolVersion::ADAPTIVE_BOYCOTT_DURATION) {
+      writer.write(boycott.boycott_duration);
+    }
     writer.write(boycott.reset);
   }
 }
@@ -165,7 +169,18 @@ void GOSSIP_Message::readBoycottList(ProtocolReader& reader) {
   for (auto& boycott : boycott_list_) {
     reader.read(&boycott.node_index);
     reader.read(&boycott.boycott_in_effect_time);
+    if (reader.proto() >=
+        Compatibility::ProtocolVersion::ADAPTIVE_BOYCOTT_DURATION) {
+      reader.read(&boycott.boycott_duration);
+    } else {
+      boycott.boycott_duration = getDefaultBoycottDuration();
+    }
     reader.read(&boycott.reset);
   }
 }
+
+std::chrono::milliseconds GOSSIP_Message::getDefaultBoycottDuration() const {
+  return Worker::settings().sequencer_boycotting.node_stats_boycott_duration;
+}
+
 }} // namespace facebook::logdevice

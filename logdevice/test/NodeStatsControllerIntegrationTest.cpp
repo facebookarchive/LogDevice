@@ -678,28 +678,6 @@ TEST_P(NodeStatsControllerIntegrationTest, Disable) {
   waitUntilBoycottsOnAllNodes({});
 }
 
-TEST_P(NodeStatsControllerIntegrationTest, DisableZeroDuration) {
-  unsigned int node_count = 5;
-  node_index_t outlier_node{3};
-
-  initializeCluster(Params{}
-                        .set_max_boycott_count(1)
-                        .set_node_count(node_count)
-                        .set_boycott_duration(std::chrono::hours{1}));
-
-  auto client = createClient();
-  setErrorInjection(client.get(), {outlier_node}, {0.5});
-
-  AppendThread appender;
-  appender.start(client.get(), node_count);
-
-  waitUntilBoycottsOnAllNodes({outlier_node});
-
-  updateSettings({{"node-stats-boycott-duration", "0s"}});
-
-  waitUntilBoycottsOnAllNodes({});
-}
-
 TEST_P(NodeStatsControllerIntegrationTest, DisableObserveOnly) {
   unsigned int node_count = 5;
   node_index_t outlier_node{3};

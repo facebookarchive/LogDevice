@@ -64,8 +64,8 @@ void serializeAndDeserializeTest(Params params) {
 
   boycott_list_t boycott_list;
   if (params.with_boycott) {
-    boycott_list.emplace_back(Boycott{1, 1s});
-    boycott_list.emplace_back(Boycott{2, 2s, true});
+    boycott_list.emplace_back(Boycott{1, 1s, 30s});
+    boycott_list.emplace_back(Boycott{2, 2s, 30s, true});
   }
 
   GOSSIP_Message msg(this_node,
@@ -132,7 +132,7 @@ TEST(GOSSIP_MessageTest, SerializeAndDeserialize) {
 }
 
 TEST(GOSSIP_MessageTest, SerializeAndDeserializeWithBoycott) {
-  Params params{Compatibility::MIN_PROTOCOL_SUPPORTED};
+  Params params{Compatibility::ADAPTIVE_BOYCOTT_DURATION};
   params.with_boycott = true;
 
   serializeAndDeserializeTest(params);

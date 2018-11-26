@@ -52,6 +52,8 @@ struct SequencerBoycottingSettings {
   // the amount of nodes that may be boycotted
   // 0 will ensure that no nodes are boycotted
   unsigned int node_stats_max_boycott_count;
+
+  // The default duration for which the boycott will last
   std::chrono::milliseconds node_stats_boycott_duration;
 
   // For how long should a node be an outlier before it gets boycotted
