@@ -374,7 +374,7 @@ AdminCommandTable::findIndexableConstraint(const QueryContext& ctx) {
       return std::make_pair(col, &constraint);
     }
   }
-  return nullptr;
+  return folly::none;
 }
 
 void AdminCommandTable::buildIndexForConstraint(Data& data,

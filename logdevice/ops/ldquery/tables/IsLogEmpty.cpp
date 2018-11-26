@@ -55,7 +55,7 @@ std::shared_ptr<TableData> IsLogEmpty::getData(QueryContext& ctx) {
       result->cols["log_id"].push_back(s(r.first.val_));
       result->cols["status"].push_back(s(error_name(r.second.status)));
       if (r.second.status != E::OK) {
-        result->cols["empty"].push_back(nullptr);
+        result->cols["empty"].push_back(folly::none);
       } else {
         result->cols["empty"].push_back(s(r.second.empty));
       }

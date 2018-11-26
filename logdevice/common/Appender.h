@@ -672,7 +672,7 @@ class Appender : public IntrusiveUnorderedMapHook {
   bool started_ = false;
 
   // Backlog duration (in seconds) configured for this log (used for tracing)
-  folly::Optional<std::chrono::seconds> backlog_duration_ = nullptr;
+  folly::Optional<std::chrono::seconds> backlog_duration_;
 
   // Indicate if we already successfully sent `replication_` copies of the
   // record during the current wave or a previous wave, and sent the APPENDED

@@ -430,9 +430,9 @@ TEST_F(EpochMetaDataTest, ZookeeperRecordZnodeBuffer) {
 
   // test again without node_id written
   rv = EpochStoreEpochMetaDataFormat::toLinearBuffer(
-      zk_record, zbuf, sizeof(zbuf) / sizeof(zbuf[0]), nullptr);
+      zk_record, zbuf, sizeof(zbuf) / sizeof(zbuf[0]), folly::none);
   expected_size =
-      EpochStoreEpochMetaDataFormat::sizeInLinearBuffer(zk_record, nullptr);
+      EpochStoreEpochMetaDataFormat::sizeInLinearBuffer(zk_record, folly::none);
   EXPECT_EQ(expected_size, rv);
 
   rv = EpochStoreEpochMetaDataFormat::fromLinearBuffer(zbuf,
@@ -477,9 +477,9 @@ TEST_F(EpochMetaDataTest, ZookeeperEpochStoreCornerCase) {
   EpochMetaData record_from_buffer;
   NodeID nid_from_buffer;
   int rv = EpochStoreEpochMetaDataFormat::toLinearBuffer(
-      zk_record, zbuf, sizeof(zbuf) / sizeof(zbuf[0]), nullptr);
+      zk_record, zbuf, sizeof(zbuf) / sizeof(zbuf[0]), folly::none);
   int expected_size =
-      EpochStoreEpochMetaDataFormat::sizeInLinearBuffer(zk_record, nullptr);
+      EpochStoreEpochMetaDataFormat::sizeInLinearBuffer(zk_record, folly::none);
   EXPECT_EQ(expected_size, rv);
   rv = EpochStoreEpochMetaDataFormat::fromLinearBuffer(zbuf,
                                                        rv,

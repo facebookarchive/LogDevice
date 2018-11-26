@@ -799,7 +799,7 @@ parseAttributes(const folly::dynamic& attrs,
         SINGLE_WRITER,
         interval_string.c_str());
     err = E::INVALID_CONFIG;
-    return nullptr;
+    return folly::none;
   }
 
   // folly::dynamic does not have a default constructor.
@@ -812,14 +812,14 @@ parseAttributes(const folly::dynamic& attrs,
              "Expected a list.",
              interval_string.c_str());
     err = E::INVALID_CONFIG;
-    return nullptr;
+    return folly::none;
   }
 
   Attribute<LogAttributes::ACLList> acls;
   // If the config contains a acls field, parse it.
   if (success && !parseLogACLs(acls_dynamic, ACLS, acls)) {
     // parseLogACLs takes cares of the error code and message
-    return nullptr;
+    return folly::none;
   }
 
   success = getArrayFromMap(attrs, ACLS_SHADOW, acls_dynamic, nullptr);
@@ -829,14 +829,14 @@ parseAttributes(const folly::dynamic& attrs,
              "Expected a list.",
              interval_string.c_str());
     err = E::INVALID_CONFIG;
-    return nullptr;
+    return folly::none;
   }
 
   Attribute<LogAttributes::ACLList> acls_shadow;
   // If the config contains a acls_shadow field, parse it.
   if (success && !parseLogACLs(acls_dynamic, ACLS_SHADOW, acls_shadow)) {
     // parseLogACLs takes cares of the error code and message
-    return nullptr;
+    return folly::none;
   }
 
   // folly::dynamic does not have a default constructor.
@@ -849,7 +849,7 @@ parseAttributes(const folly::dynamic& attrs,
              " in \"security_information\" is set to \"config\"",
              interval_string.c_str());
     err = E::INVALID_CONFIG;
-    return nullptr;
+    return folly::none;
   }
 
   // Permissions field is optional
@@ -858,27 +858,27 @@ parseAttributes(const folly::dynamic& attrs,
              PERMISSIONS,
              interval_string.c_str());
     err = E::INVALID_CONFIG;
-    return nullptr;
+    return folly::none;
   }
 
   Attribute<LogAttributes::PermissionsMap> permissions;
   // If the config contains a permissions field, parse it.
   if (success && !parseLogPermissions(permissions_dynamic, permissions)) {
     // parseLogPermissions takes cares of the error code and message
-    return nullptr;
+    return folly::none;
   }
 
   // parse the optional nodesetsize parameter
   Attribute<folly::Optional<int>> nodesetSize;
   if (!parseNodeSetSize(attrs, nodesetSize, interval_string)) {
-    return nullptr;
+    return folly::none;
   }
 
   // parse optional backlog and delivery_latency parameters
   Attribute<folly::Optional<std::chrono::seconds>> backlogDuration;
   if (!parseChronoValueOptAttribute(
           attrs, BACKLOG, "log(s): " + interval_string, backlogDuration)) {
-    return nullptr;
+    return folly::none;
   }
 
   Attribute<folly::Optional<std::chrono::milliseconds>> deliveryLatency;
@@ -890,7 +890,7 @@ parseAttributes(const folly::dynamic& attrs,
                        nullptr)) {
     deliveryLatency = latency;
   } else if (err != E::NOTFOUND) {
-    return nullptr;
+    return folly::none;
   }
 
   // sticky_copysets is optional, defaults to false
@@ -906,7 +906,7 @@ parseAttributes(const folly::dynamic& attrs,
         STICKY_COPYSETS,
         interval_string.c_str());
     err = E::INVALID_CONFIG;
-    return nullptr;
+    return folly::none;
   }
 
   // mutable_per_epoch_log_metadata_enabled is optional, defaults to true
@@ -925,7 +925,7 @@ parseAttributes(const folly::dynamic& attrs,
         MUTABLE_PER_EPOCH_LOG_METADATA_ENABLED,
         interval_string.c_str());
     err = E::INVALID_CONFIG;
-    return nullptr;
+    return folly::none;
   }
 
   // Optional, defaults to false.
@@ -940,7 +940,7 @@ parseAttributes(const folly::dynamic& attrs,
              SCD_ENABLED,
              interval_string.c_str());
     err = E::INVALID_CONFIG;
-    return nullptr;
+    return folly::none;
   }
 
   // Optional, defaults to false.
@@ -956,7 +956,7 @@ parseAttributes(const folly::dynamic& attrs,
              LOCAL_SCD_ENABLED,
              interval_string.c_str());
     err = E::INVALID_CONFIG;
-    return nullptr;
+    return folly::none;
   }
 
   Attribute<folly::Optional<std::string>> writeToken;
@@ -982,7 +982,7 @@ parseAttributes(const folly::dynamic& attrs,
              SEQUENCER_AFFINITY,
              interval_string.c_str());
     err = E::INVALID_CONFIG;
-    return nullptr;
+    return folly::none;
   }
 
   Attribute<bool> sequencerBatching;
@@ -997,7 +997,7 @@ parseAttributes(const folly::dynamic& attrs,
              SEQUENCER_BATCHING,
              interval_string.c_str());
     err = E::INVALID_CONFIG;
-    return nullptr;
+    return folly::none;
   }
 
   Attribute<std::chrono::milliseconds> sequencerBatchingTimeTrigger;
@@ -1009,7 +1009,7 @@ parseAttributes(const folly::dynamic& attrs,
                        nullptr)) {
     sequencerBatchingTimeTrigger = sequencerBatchingTimeTrigger_chrono;
   } else if (err != E::NOTFOUND) {
-    return nullptr;
+    return folly::none;
   }
 
   Attribute<ssize_t> sequencerBatchingSizeTrigger;
@@ -1025,7 +1025,7 @@ parseAttributes(const folly::dynamic& attrs,
              SEQUENCER_BATCHING_SIZE_TRIGGER,
              interval_string.c_str());
     err = E::INVALID_CONFIG;
-    return nullptr;
+    return folly::none;
   }
 
   Attribute<Compression> sequencerBatchingCompression;
@@ -1043,7 +1043,7 @@ parseAttributes(const folly::dynamic& attrs,
                interval_string.c_str(),
                sequencerBatchingCompression_string.c_str());
       err = E::INVALID_CONFIG;
-      return nullptr;
+      return folly::none;
     }
     sequencerBatchingCompression = compression;
   } else if (err != E::NOTFOUND) {
@@ -1052,7 +1052,7 @@ parseAttributes(const folly::dynamic& attrs,
              SEQUENCER_BATCHING_COMPRESSION,
              interval_string.c_str());
     err = E::INVALID_CONFIG;
-    return nullptr;
+    return folly::none;
   }
 
   Attribute<ssize_t> sequencerBatchingPassthruThreshold;
@@ -1069,14 +1069,14 @@ parseAttributes(const folly::dynamic& attrs,
              SEQUENCER_BATCHING_PASSTHRU_THRESHOLD,
              interval_string.c_str());
     err = E::INVALID_CONFIG;
-    return nullptr;
+    return folly::none;
   }
 
   Attribute<LogAttributes::Shadow> shadow;
   folly::dynamic shadow_dynamic = folly::dynamic::object();
   success = getObjectFromMap(attrs, SHADOW, shadow_dynamic, nullptr);
   if (success && !parseShadow(shadow_dynamic, shadow)) {
-    return nullptr;
+    return folly::none;
   }
 
   // Optional, defaults to false in logs/DefaultLogAttributes.h.
@@ -1091,7 +1091,7 @@ parseAttributes(const folly::dynamic& attrs,
              TAIL_OPTIMIZED,
              interval_string.c_str());
     err = E::INVALID_CONFIG;
-    return nullptr;
+    return folly::none;
   }
 
   // Adding fields that logdevice doesn't recognize
