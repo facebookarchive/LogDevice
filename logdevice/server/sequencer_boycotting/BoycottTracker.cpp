@@ -9,6 +9,7 @@
 #include "BoycottTracker.h"
 
 #include <algorithm>
+#include <chrono>
 #include <queue>
 #include <unordered_set>
 
@@ -172,17 +173,22 @@ void BoycottTracker::calculateBoycottsByThisNode(
              max_boycott_count;
          ++i) {
       const auto& cur_outlier = locked_outliers->at(i);
-      const auto it = reported_boycotts_.find(cur_outlier.index());
+      const auto& node_idx = cur_outlier.index();
+      const auto it = reported_boycotts_.find(node_idx);
 
       // don't overwrite a boycott (it could then be endlessly refreshed and not
       // respect the boycott duration)
       if (it == reported_boycotts_.end()) {
-        Boycott boycott{
-            cur_outlier.index(), boycott_time, this->getBoycottDuration()};
+        const auto& boycott_duration = this->isUsingBoycottAdaptiveDuration()
+            ? this->computeAdaptiveDuration(node_idx, false, current_time)
+            : this->getBoycottDuration();
+        Boycott boycott = Boycott{node_idx, boycott_time, boycott_duration};
         boycotts_by_this_node_.emplace_back(boycott);
         reported_boycotts_[boycott.node_index] = boycott;
 
-        ld_info("Decided to boycott %s", cur_outlier.toString().c_str());
+        ld_info("Decided to boycott %s for %ld milliseconds",
+                cur_outlier.toString().c_str(),
+                boycott.boycott_duration.count());
         WORKER_STAT_INCR(boycotts_by_controller_total);
         // Posting a request to NodeStatsController to trace the boycotting
         // information
@@ -205,8 +211,11 @@ void BoycottTracker::calculateBoycottsByThisNode(
   local_resets_.withULockPtr([&](auto locked_resets) {
     for (auto reset_node_idx : *locked_resets) {
       ld_info("Initiating reset for N%i", reset_node_idx);
-      reported_boycotts_[reset_node_idx] = Boycott{
-          reset_node_idx, boycott_time, this->getBoycottDuration(), true};
+      const auto& boycott_duration = this->isUsingBoycottAdaptiveDuration()
+          ? this->computeAdaptiveDuration(reset_node_idx, true, current_time)
+          : this->getBoycottDuration();
+      reported_boycotts_[reset_node_idx] =
+          Boycott{reset_node_idx, boycott_time, boycott_duration, true};
     }
 
     locked_resets.moveFromUpgradeToWrite()->clear();
@@ -268,6 +277,48 @@ unsigned int BoycottTracker::getMaxBoycottCount() const {
 
 std::chrono::milliseconds BoycottTracker::getBoycottDuration() const {
   return Worker::settings().sequencer_boycotting.node_stats_boycott_duration;
+}
+
+bool BoycottTracker::isUsingBoycottAdaptiveDuration() const {
+  return Worker::settings()
+      .sequencer_boycotting.node_stats_boycott_use_adaptive_duration;
+}
+
+BoycottAdaptiveDuration BoycottTracker::getDefaultBoycottDuration(
+    node_index_t node_idx,
+    BoycottAdaptiveDuration::TS now) const {
+  const auto& settings = Worker::settings().sequencer_boycotting;
+  return BoycottAdaptiveDuration(
+      node_idx,
+      settings.node_stats_boycott_min_adaptive_duration,
+      settings.node_stats_boycott_max_adaptive_duration,
+      settings.node_stats_boycott_adaptive_duration_decrease_rate,
+      settings.node_stats_boycott_adaptive_duration_decrease_time_step,
+      settings.node_stats_boycott_adaptive_duration_increase_factor,
+      settings.node_stats_boycott_min_adaptive_duration,
+      now);
+}
+
+std::chrono::milliseconds BoycottTracker::computeAdaptiveDuration(
+    node_index_t node_idx,
+    bool is_reset,
+    std::chrono::system_clock::time_point current_time) {
+  auto reported_it = reported_boycott_durations_.find(node_idx);
+  if (reported_it == reported_boycott_durations_.end()) {
+    reported_it =
+        reported_boycott_durations_
+            .emplace(
+                node_idx, getDefaultBoycottDuration(node_idx, current_time))
+            .first;
+  }
+  auto& boycott_duration = reported_it->second;
+  auto computed_duration = boycott_duration.getEffectiveDuration(current_time);
+  if (is_reset) {
+    boycott_duration.resetIssued(computed_duration, current_time);
+  } else {
+    boycott_duration.negativeFeedback(computed_duration, current_time);
+  }
+  return computed_duration;
 }
 
 int BoycottTracker::postRequest(std::unique_ptr<Request>& rq) {

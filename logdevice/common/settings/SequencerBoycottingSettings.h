@@ -87,6 +87,24 @@ struct SequencerBoycottingSettings {
   // if this value is true, the entire system for boycotting will continue to
   // work as expected, but it will no longer affect sequencer placement
   bool boycotts_observe_only;
+
+  // If this value is true, sequencer boycotting will use adaptive durations
+  // instead of the default fixed duration.
+  bool node_stats_boycott_use_adaptive_duration;
+
+  /* Adaptive Boycotting config variables */
+
+  // The minimum (and default) adaptive boycotting duration
+  std::chrono::milliseconds node_stats_boycott_min_adaptive_duration;
+  // The maximum adaptive boycotting duration
+  std::chrono::milliseconds node_stats_boycott_max_adaptive_duration;
+  // The multiplicative increase factor of the adaptive boycotting duration
+  int node_stats_boycott_adaptive_duration_increase_factor;
+  // The additive decrease rate of the adaptive boycotting duration
+  std::chrono::milliseconds node_stats_boycott_adaptive_duration_decrease_rate;
+  // The time step of the decrease of the adaptive boycotting duration
+  std::chrono::milliseconds
+      node_stats_boycott_adaptive_duration_decrease_time_step;
 };
 
 }} // namespace facebook::logdevice

@@ -15,6 +15,7 @@
 #include <folly/Synchronized.h>
 
 #include "logdevice/common/sequencer_boycotting/Boycott.h"
+#include "logdevice/common/sequencer_boycotting/BoycottAdaptiveDuration.h"
 
 /**
  * @file BoycottTracker is used to have a single place where boycott information
@@ -101,6 +102,22 @@ class BoycottTracker {
   virtual unsigned int getMaxBoycottCount() const;
   virtual std::chrono::milliseconds getBoycottDuration() const;
 
+  // Creates the default boycott duration object from the worker settings
+  virtual BoycottAdaptiveDuration
+  getDefaultBoycottDuration(node_index_t node_idx,
+                            BoycottAdaptiveDuration::TS now) const;
+
+  // Checks if adaptive duration is enabled in the settings
+  virtual bool isUsingBoycottAdaptiveDuration() const;
+
+  // Computes the boycott duration for a certain node based on the reported
+  // boycott durations. It can optionally apply negative feedback to this node
+  // and updates the reported durations.
+  std::chrono::milliseconds
+  computeAdaptiveDuration(node_index_t node_idx,
+                          bool apply_negative_feedback,
+                          std::chrono::system_clock::time_point current_time);
+
   // given the previous update to the local outliers, calculate which of these
   // should be boycotted
   void calculateBoycottsByThisNode(
@@ -119,6 +136,8 @@ class BoycottTracker {
 
   // set of boycotts that have been reported through gossip
   std::unordered_map<node_index_t, Boycott> reported_boycotts_;
+  std::unordered_map<node_index_t, BoycottAdaptiveDuration>
+      reported_boycott_durations_;
 
   std::unordered_map<node_index_t, Boycott> boycotted_nodes_;
   std::vector<Boycott> boycotts_by_this_node_{};

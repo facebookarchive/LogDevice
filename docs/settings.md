@@ -392,12 +392,18 @@ sidebar_label: Settings
 |   Name    |   Description   |  Default  |   Notes   |
 |-----------|-----------------|:---------:|-----------|
 | boycotts-observe-only | If true, the entire system of detecting append success ratio outliers and performing boycotts will continue to work as expected, with stats getting updated and boycotts propagating with gossip, but will no longer affect sequencer placement. Used to be able to observe how the feature works without committing. | false | **experimental** |
+| node-stats-boycott-adaptive-duration-decrease-rate | (experimental) the additive decrease rate of the adaptive boycottingduration | 1min | **experimental**, server&nbsp;only |
+| node-stats-boycott-adaptive-duration-decrease-time-step | (experimental) the time step of the decrease of the adaptive boycottingduration | 30s | **experimental**, server&nbsp;only |
+| node-stats-boycott-adaptive-duration-increase-factor | (experimental) the multiplicative increase factor of the adaptiveboycotting duration | 2 | **experimental**, server&nbsp;only |
 | node-stats-boycott-duration | How long a boycott should be active for. 0 will ensure that boycotts has no effect, but controller nodes will still report outliers | 0s | **experimental**, server&nbsp;only |
 | node-stats-boycott-grace-period | If a node is an consecutively deemed an outlier for this amount of time, allow it to be boycotted | 300s | **experimental**, server&nbsp;only |
+| node-stats-boycott-max-adaptive-duration | (experimental) The maximum adaptive boycotting duration | 24h | **experimental**, server&nbsp;only |
+| node-stats-boycott-min-adaptive-duration | (experimental) The minmum (and default) adaptive boycotting duration | 30min | **experimental**, server&nbsp;only |
 | node-stats-boycott-relative-margin | If this is set to 0.05, a node's append success ratio has to be 5% smaller than the average success ratio of all nodes in the cluster. While node-stats-boycott-sensitivity is an absolute threshold, this setting defines a sensitivity threshold relative to the average of all success ratios. Only used if node-stats-boycott-use-rmsd is true | 0.15 | **experimental**, server&nbsp;only |
 | node-stats-boycott-required-client-count | Require at least values from this many clients before a boycott may occur | 1 | **experimental**, server&nbsp;only |
 | node-stats-boycott-required-std-from-mean | A node has to have a success ratio lower than (mean - X * STD) to be considered an outlier. X being the value of node-stats-boycott-required-std-from-mean | 3 | **experimental**, server&nbsp;only |
 | node-stats-boycott-sensitivity | If node-stats-boycott-sensitivity is set to e.g. 0.05, then nodes with a success ratio at or above 95% will not be boycotted | 0 | **experimental**, server&nbsp;only |
+| node-stats-boycott-use-adaptive-duration | (experimental) Use the new adaptive boycotting durations instead of the fixed one | false | **experimental**, server&nbsp;only |
 | node-stats-boycott-use-rmsd | (experimental) Use a new outlier detection algorithm | false | **experimental**, server&nbsp;only |
 | node-stats-controller-aggregation-period | The period at which the controller nodes requests stats from all nodes in the cluster. Should be smaller than node-stats-retention-on-nodes | 30s | **experimental**, server&nbsp;only |
 | node-stats-controller-check-period | A node will check if it's a controller or not with the given period | 60s | **experimental**, server&nbsp;only |

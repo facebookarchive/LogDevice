@@ -11,6 +11,8 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include "logdevice/common/sequencer_boycotting/BoycottAdaptiveDuration.h"
+
 using namespace facebook::logdevice;
 using namespace std::literals::chrono_literals;
 using namespace ::testing;
@@ -38,6 +40,7 @@ class MockBoycottTracker : public BoycottTracker {
  public:
   MOCK_CONST_METHOD0(getMaxBoycottCount, unsigned int());
   MOCK_CONST_METHOD0(getBoycottDuration, std::chrono::milliseconds());
+  MOCK_CONST_METHOD0(isUsingBoycottAdaptiveDuration, bool());
 
   // don't care about spread time in tests
   std::chrono::milliseconds getBoycottSpreadTime() const override {
@@ -47,6 +50,19 @@ class MockBoycottTracker : public BoycottTracker {
   // not using the tracer in BoycottTracker tests
   int postRequest(std::unique_ptr<Request>&) override {
     return 0;
+  }
+
+  BoycottAdaptiveDuration
+  getDefaultBoycottDuration(node_index_t node_idx,
+                            BoycottAdaptiveDuration::TS now) const override {
+    return BoycottAdaptiveDuration(node_idx,
+                                   /*min_duration */ 30min,
+                                   /*max_duration */ 2h,
+                                   /*decrease_rate */ 1min,
+                                   /*decrease_time_step */ 30s,
+                                   /*increase_factor */ 2,
+                                   /*current_value */ 30min,
+                                   now);
   }
 };
 } // namespace
@@ -156,6 +172,8 @@ TEST(BoycottTrackerTest, BoycottsByThisNode) {
   MockBoycottTracker tracker;
   EXPECT_CALL(tracker, getMaxBoycottCount()).WillRepeatedly(Return(1));
   EXPECT_CALL(tracker, getBoycottDuration()).WillRepeatedly(Return(30s));
+  EXPECT_CALL(tracker, isUsingBoycottAdaptiveDuration())
+      .WillRepeatedly(Return(false));
 
   tracker.setLocalOutliers({NodeID{1}, NodeID{2}});
 
@@ -183,4 +201,70 @@ TEST(BoycottTrackerTest, BoycottsByThisNode) {
   // After having re-calculated, any non-active boycotts will be removed
   EXPECT_THAT(values(tracker.getBoycottsForGossip()),
               UnorderedElementsAre(Boycott{1, now_ns - 20s, 30s}));
+}
+
+TEST(BoycottTrackerTest, AdaptiveBoycottsByThisNode) {
+  const auto now = std::chrono::system_clock::now();
+  const auto now_ns = time_point_to_ns(now);
+
+  MockBoycottTracker tracker;
+  EXPECT_CALL(tracker, getMaxBoycottCount()).WillRepeatedly(Return(2));
+  EXPECT_CALL(tracker, isUsingBoycottAdaptiveDuration())
+      .WillRepeatedly(Return(true));
+
+  // Let's boycott nodes 1 & 2. Initially, they'll get boycotted for 30mins.
+  tracker.setLocalOutliers({NodeID{1}, NodeID{2}});
+  tracker.calculateBoycotts(now - 30min);
+
+  EXPECT_TRUE(tracker.isBoycotted(1));
+  EXPECT_TRUE(tracker.isBoycotted(2));
+
+  EXPECT_THAT(values(tracker.getBoycottsForGossip()),
+              UnorderedElementsAre(Boycott{1, now_ns - 30min, 30min},
+                                   Boycott{2, now_ns - 30min, 30min}));
+  EXPECT_EQ(2, tracker.getBoycottsForGossip().size());
+
+  tracker.updateReportedBoycotts({{3, now_ns, 60min}});
+
+  // forward the newly given value in upcoming gossips
+  EXPECT_THAT(values(tracker.getBoycottsForGossip()),
+              UnorderedElementsAre(Boycott{1, now_ns - 30min, 30min},
+                                   Boycott{2, now_ns - 30min, 30min},
+                                   Boycott{3, now_ns, 60min}));
+
+  tracker.calculateBoycotts(now);
+  // still use oldest as the boycotted value
+  EXPECT_TRUE(tracker.isBoycotted(1));
+  EXPECT_TRUE(tracker.isBoycotted(2));
+  EXPECT_FALSE(tracker.isBoycotted(3));
+
+  // At now + 1s, N1 & N2 boycotts will expire.
+  tracker.calculateBoycotts(now + 1s);
+  EXPECT_THAT(values(tracker.getBoycottsForGossip()),
+              UnorderedElementsAre(Boycott{3, now_ns, 60min}));
+
+  // N2 became an outlier again, it should be boycotted for longer.
+  tracker.setLocalOutliers({NodeID{2}});
+  tracker.calculateBoycotts(now + 31s);
+
+  EXPECT_THAT(values(tracker.getBoycottsForGossip()),
+              UnorderedElementsAre(
+                  Boycott{2, now_ns + 31s, 59min}, Boycott{3, now_ns, 60min}));
+
+  // Issue a reset for N2
+  tracker.resetBoycott(2);
+  tracker.calculateBoycotts(now + 61s);
+
+  EXPECT_THAT(values(tracker.getBoycottsForGossip()),
+              UnorderedElementsAre(Boycott{2, now_ns + 61s, 118min, true},
+                                   Boycott{3, now_ns, 60min}));
+
+  // Issue another reset for N2 to make sure that resets doesn't increase the
+  // duration.
+  tracker.resetBoycott(2);
+  tracker.calculateBoycotts(now + 91s);
+
+  EXPECT_THAT(values(tracker.getBoycottsForGossip()),
+              UnorderedElementsAre(Boycott{2, now_ns + 91s, 117min, true},
+                                   Boycott{3, now_ns, 60min}));
 }

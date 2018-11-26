@@ -170,5 +170,58 @@ void SequencerBoycottingSettings::defineSettings(SettingEasyInit& init) {
        "(experimental) Use a new outlier detection algorithm",
        SERVER | EXPERIMENTAL,
        SettingsCategory::SequencerBoycotting);
+
+  init(
+      "node-stats-boycott-use-adaptive-duration",
+      &node_stats_boycott_use_adaptive_duration,
+      "false",
+      nullptr,
+      "(experimental) Use the new adaptive boycotting durations instead of the "
+      "fixed one",
+      SERVER | EXPERIMENTAL,
+      SettingsCategory::SequencerBoycotting);
+
+  init("node-stats-boycott-min-adaptive-duration",
+       &node_stats_boycott_min_adaptive_duration,
+       "30min",
+       validate_positive<ssize_t>(),
+       "(experimental) The minmum (and default) adaptive boycotting duration",
+       SERVER | EXPERIMENTAL,
+       SettingsCategory::SequencerBoycotting);
+
+  init("node-stats-boycott-max-adaptive-duration",
+       &node_stats_boycott_max_adaptive_duration,
+       "24h",
+       validate_positive<ssize_t>(),
+       "(experimental) The maximum adaptive boycotting duration",
+       SERVER | EXPERIMENTAL,
+       SettingsCategory::SequencerBoycotting);
+
+  init("node-stats-boycott-adaptive-duration-increase-factor",
+       &node_stats_boycott_adaptive_duration_increase_factor,
+       "2",
+       validate_positive<ssize_t>(),
+       "(experimental) the multiplicative increase factor of the adaptive"
+       "boycotting duration",
+       SERVER | EXPERIMENTAL,
+       SettingsCategory::SequencerBoycotting);
+
+  init("node-stats-boycott-adaptive-duration-decrease-rate",
+       &node_stats_boycott_adaptive_duration_decrease_rate,
+       "1min",
+       validate_positive<ssize_t>(),
+       "(experimental) the additive decrease rate of the adaptive boycotting"
+       "duration",
+       SERVER | EXPERIMENTAL,
+       SettingsCategory::SequencerBoycotting);
+
+  init("node-stats-boycott-adaptive-duration-decrease-time-step",
+       &node_stats_boycott_adaptive_duration_decrease_time_step,
+       "30s",
+       validate_positive<ssize_t>(),
+       "(experimental) the time step of the decrease of the adaptive boycotting"
+       "duration",
+       SERVER | EXPERIMENTAL,
+       SettingsCategory::SequencerBoycotting);
 }
 }} // namespace facebook::logdevice
