@@ -58,11 +58,27 @@ class BoycottTracker {
   void updateReportedBoycotts(const std::vector<Boycott>& boycotts);
 
   /**
+   * Will update nodes in the internal structure with newer durations. It will
+   * also clean default durations.
+   *
+   * @params boycott_durations     The boycott_durations received in the gossip
+   */
+  void updateReportedBoycottDurations(
+      const std::vector<BoycottAdaptiveDuration>& boycott_durations,
+      std::chrono::system_clock::time_point now);
+
+  /**
    * @returns a map of the boycotts received in the gossip messages. If
    *          calculateBoycotts is called before getting the boycotts, any
    *          expired boycotts will have been removed
    */
   const std::unordered_map<node_index_t, Boycott>& getBoycottsForGossip() const;
+
+  /**
+   * @returns a map of the boycott durations to be used for the gossip message.
+   */
+  const std::unordered_map<node_index_t, BoycottAdaptiveDuration>&
+  getBoycottDurationsForGossip() const;
 
   /**
    * Re-calculates what nodes should be boycotted before returning the vector
@@ -126,6 +142,9 @@ class BoycottTracker {
 
   void
   removeExpiredBoycotts(std::chrono::system_clock::time_point current_time);
+
+  void removeDefaultBoycottDurations(
+      std::chrono::system_clock::time_point current_time);
 
   // removes any nodes that are not boycotted but that are still part of the
   // reported boycotts. Will keep resets and boycotts that are not yet in effect

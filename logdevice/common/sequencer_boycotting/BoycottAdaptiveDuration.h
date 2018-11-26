@@ -10,6 +10,8 @@
 #include <chrono>
 
 #include "logdevice/common/NodeID.h"
+#include "logdevice/common/protocol/ProtocolReader.h"
+#include "logdevice/common/protocol/ProtocolWriter.h"
 /**
  * @file An implementation to the multiplicative increase additive decrease
  * algorithm for the boycotting adaptive duration.
@@ -26,6 +28,7 @@ class BoycottAdaptiveDuration {
   using TS = std::chrono::time_point<std::chrono::system_clock,
                                      std::chrono::nanoseconds>;
 
+  BoycottAdaptiveDuration() {}
   BoycottAdaptiveDuration(node_index_t node_index,
                           std::chrono::milliseconds min_duration,
                           std::chrono::milliseconds max_duration,
@@ -39,7 +42,7 @@ class BoycottAdaptiveDuration {
 
   // Get the current effective duration after applying all the positive and
   // negative feedbacks
-  std::chrono::milliseconds getEffectiveDuration(TS now);
+  std::chrono::milliseconds getEffectiveDuration(TS now) const;
 
   // Apply a negative feedback on the current duration. This is called whenever
   // the node gets boycotted passing the duration and the time of
@@ -53,6 +56,19 @@ class BoycottAdaptiveDuration {
   node_index_t getNodeIndex() const {
     return node_index_;
   }
+
+  TS getValueTimestamp() const {
+    return value_timestamp_;
+  }
+
+  // Returns true if the current effective value is equal to the minimum value.
+  // This means that this node has the default duration and can be removed.
+  bool isDefault(TS now) const;
+
+  void serialize(ProtocolWriter& writer) const;
+  void deserialize(ProtocolReader& reader);
+
+  bool operator==(const BoycottAdaptiveDuration& other) const;
 
  private:
   node_index_t node_index_;

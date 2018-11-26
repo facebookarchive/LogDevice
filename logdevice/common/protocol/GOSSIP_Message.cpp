@@ -29,6 +29,7 @@ GOSSIP_Message::GOSSIP_Message(NodeID this_node,
                                failover_list_t failover_list,
                                suspect_matrix_t suspect_matrix,
                                boycott_list_t boycott_list,
+                               boycott_durations_list_t boycott_durations,
                                GOSSIP_Message::GOSSIP_flags_t flags,
                                uint64_t msg_id)
     : Message(MessageType::GOSSIP, TrafficClass::FAILURE_DETECTOR),
@@ -43,6 +44,7 @@ GOSSIP_Message::GOSSIP_Message(NodeID this_node,
       suspect_matrix_(std::move(suspect_matrix)),
       num_boycotts_(boycott_list.size()),
       boycott_list_(std::move(boycott_list)),
+      boycott_durations_list_(std::move(boycott_durations)),
       msg_id_(msg_id) {
   ld_check(gossip_list_.size() <=
            std::numeric_limits<decltype(num_nodes_)>::max());
@@ -76,6 +78,11 @@ void GOSSIP_Message::serialize(ProtocolWriter& writer) const {
   }
 
   writeBoycottList(writer);
+
+  if (writer.proto() >=
+      Compatibility::ProtocolVersion::ADAPTIVE_BOYCOTT_DURATION) {
+    writeBoycottDurations(writer);
+  }
   writeSuspectMatrix(writer);
 }
 
@@ -95,6 +102,11 @@ MessageReadResult GOSSIP_Message::deserialize(ProtocolReader& reader) {
   }
 
   msg->readBoycottList(reader);
+
+  if (reader.proto() >=
+      Compatibility::ProtocolVersion::ADAPTIVE_BOYCOTT_DURATION) {
+    msg->readBoycottDurations(reader);
+  }
 
   if (reader.ok() && reader.bytesRemaining() > 0) {
     msg->readSuspectMatrix(reader);
@@ -181,6 +193,24 @@ void GOSSIP_Message::readBoycottList(ProtocolReader& reader) {
 
 std::chrono::milliseconds GOSSIP_Message::getDefaultBoycottDuration() const {
   return Worker::settings().sequencer_boycotting.node_stats_boycott_duration;
+}
+
+// flattens the boycott durations and write them
+void GOSSIP_Message::writeBoycottDurations(ProtocolWriter& writer) const {
+  writer.write(boycott_durations_list_.size());
+  for (const auto& d : boycott_durations_list_) {
+    d.serialize(writer);
+  }
+}
+
+// reads the flattened boycott durations and unflatten them
+void GOSSIP_Message::readBoycottDurations(ProtocolReader& reader) {
+  size_t list_size;
+  reader.read(&list_size);
+  boycott_durations_list_.resize(list_size);
+  for (auto& d : boycott_durations_list_) {
+    d.deserialize(reader);
+  }
 }
 
 }} // namespace facebook::logdevice

@@ -268,3 +268,52 @@ TEST(BoycottTrackerTest, AdaptiveBoycottsByThisNode) {
               UnorderedElementsAre(Boycott{2, now_ns + 91s, 117min, true},
                                    Boycott{3, now_ns, 60min}));
 }
+
+TEST(BoycottTrackerTest, testReportedBoycottDurations) {
+  const auto now = std::chrono::system_clock::now();
+
+  MockBoycottTracker tracker;
+  EXPECT_CALL(tracker, getMaxBoycottCount()).WillRepeatedly(Return(2));
+  EXPECT_CALL(tracker, isUsingBoycottAdaptiveDuration())
+      .WillRepeatedly(Return(true));
+
+  // Let's boycott nodes 1 & 2. Initially, they'll get boycotted for 30mins.
+  tracker.setLocalOutliers({NodeID{1}, NodeID{2}});
+  tracker.calculateBoycotts(now - 30min);
+
+  EXPECT_THAT(values(tracker.getBoycottDurationsForGossip()),
+              UnorderedElementsAre(
+                  BoycottAdaptiveDuration(
+                      1, 30min, 2h, 1min, 30s, 2, 60min, now - 30min, 30min),
+                  BoycottAdaptiveDuration(
+                      2, 30min, 2h, 1min, 30s, 2, 60min, now - 30min, 30min)));
+  EXPECT_EQ(2, tracker.getBoycottDurationsForGossip().size());
+
+  tracker.updateReportedBoycottDurations(
+      {{1, 30min, 2h, 1min, 30s, 2, 60min, now - 40min, 30min},
+       {2, 30min, 2h, 1min, 30s, 2, 60min, now - 10min, 30min},
+       {3, 30min, 2h, 1min, 30s, 2, 60min, now - 10min, 30min}},
+      now);
+
+  // N3 should be added to the local list. N2 should be updated. N1 shouldn't
+  // change.
+  EXPECT_THAT(values(tracker.getBoycottDurationsForGossip()),
+              UnorderedElementsAre(
+                  BoycottAdaptiveDuration(
+                      1, 30min, 2h, 1min, 30s, 2, 60min, now - 30min, 30min),
+                  BoycottAdaptiveDuration(
+                      2, 30min, 2h, 1min, 30s, 2, 60min, now - 10min, 30min),
+                  BoycottAdaptiveDuration(
+                      3, 30min, 2h, 1min, 30s, 2, 60min, now - 10min, 30min)));
+
+  // Simulate a gossip message to trigger cleaning N1.
+  tracker.updateReportedBoycottDurations({}, now + 15min);
+
+  // N1 should have arrived to the default value by now and got removed.
+  EXPECT_THAT(values(tracker.getBoycottDurationsForGossip()),
+              UnorderedElementsAre(
+                  BoycottAdaptiveDuration(
+                      2, 30min, 2h, 1min, 30s, 2, 60min, now - 10min, 30min),
+                  BoycottAdaptiveDuration(
+                      3, 30min, 2h, 1min, 30s, 2, 60min, now - 10min, 30min)));
+}

@@ -11,6 +11,7 @@
 
 #include "logdevice/common/protocol/Message.h"
 #include "logdevice/common/sequencer_boycotting/Boycott.h"
+#include "logdevice/common/sequencer_boycotting/BoycottAdaptiveDuration.h"
 
 namespace facebook { namespace logdevice {
 
@@ -21,6 +22,7 @@ class GOSSIP_Message : public Message {
   using failover_list_t = std::vector<std::chrono::milliseconds>;
   using suspect_matrix_t = std::vector<std::vector<uint8_t>>;
   using boycott_list_t = std::vector<Boycott>;
+  using boycott_durations_list_t = std::vector<BoycottAdaptiveDuration>;
   using GOSSIP_flags_t = uint8_t;
 
   GOSSIP_Message()
@@ -36,6 +38,7 @@ class GOSSIP_Message : public Message {
                  failover_list_t failover_list,
                  suspect_matrix_t suspect_matrix,
                  boycott_list_t boycott_list,
+                 boycott_durations_list_t boycott_durations,
                  GOSSIP_flags_t flags = 0,
                  uint64_t msg_id = 0);
 
@@ -61,6 +64,9 @@ class GOSSIP_Message : public Message {
   // the amount of boycotts in the list
   uint8_t num_boycotts_;
   boycott_list_t boycott_list_;
+
+  // The adaptive boycott durations
+  boycott_durations_list_t boycott_durations_list_;
 
   // sequence number to match message when running onSent callback
   uint64_t msg_id_;
@@ -98,5 +104,10 @@ class GOSSIP_Message : public Message {
   void readBoycottList(ProtocolReader& reader);
   // Gets the default boycotting duration from the settings
   std::chrono::milliseconds getDefaultBoycottDuration() const;
+
+  // flattens the boycott durations and write them
+  void writeBoycottDurations(ProtocolWriter& writer) const;
+  // reads the flattened boycott durations and unflatten them
+  void readBoycottDurations(ProtocolReader& reader);
 };
 }} // namespace facebook::logdevice

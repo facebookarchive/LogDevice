@@ -105,9 +105,27 @@ void BoycottTracker::updateReportedBoycotts(
   }
 }
 
+void BoycottTracker::updateReportedBoycottDurations(
+    const std::vector<BoycottAdaptiveDuration>& boycott_durations,
+    std::chrono::system_clock::time_point now) {
+  for (const auto& duration : boycott_durations) {
+    const auto it = reported_boycott_durations_.find(duration.getNodeIndex());
+    if (it == reported_boycott_durations_.end() ||
+        it->second.getValueTimestamp() < duration.getValueTimestamp()) {
+      reported_boycott_durations_[duration.getNodeIndex()] = duration;
+    }
+  }
+  removeDefaultBoycottDurations(now);
+}
+
 const std::unordered_map<node_index_t, Boycott>&
 BoycottTracker::getBoycottsForGossip() const {
   return reported_boycotts_;
+}
+
+const std::unordered_map<node_index_t, BoycottAdaptiveDuration>&
+BoycottTracker::getBoycottDurationsForGossip() const {
+  return reported_boycott_durations_;
 }
 
 std::vector<node_index_t>
@@ -254,6 +272,18 @@ void BoycottTracker::removeExpiredBoycotts(
       boycott_it = reported_boycotts_.erase(boycott_it);
     } else {
       ++boycott_it;
+    }
+  }
+}
+
+void BoycottTracker::removeDefaultBoycottDurations(
+    std::chrono::system_clock::time_point current_time) {
+  for (auto it = reported_boycott_durations_.cbegin();
+       it != reported_boycott_durations_.cend();) {
+    if (it->second.isDefault(current_time)) {
+      it = reported_boycott_durations_.erase(it);
+    } else {
+      ++it;
     }
   }
 }

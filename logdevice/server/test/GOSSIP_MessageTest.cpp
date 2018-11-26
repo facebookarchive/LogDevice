@@ -16,6 +16,7 @@
 #include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/protocol/ProtocolReader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
+#include "logdevice/common/sequencer_boycotting/BoycottAdaptiveDuration.h"
 
 using namespace std::literals::chrono_literals;
 using namespace facebook::logdevice;
@@ -28,6 +29,7 @@ using gossip_ts_t = GOSSIP_Message::gossip_ts_t;
 using failover_list_t = GOSSIP_Message::failover_list_t;
 using suspect_matrix_t = GOSSIP_Message::suspect_matrix_t;
 using boycott_list_t = GOSSIP_Message::boycott_list_t;
+using boycott_durations_list_t = GOSSIP_Message::boycott_durations_list_t;
 using GOSSIP_flags_t = GOSSIP_Message::GOSSIP_flags_t;
 
 namespace {
@@ -68,6 +70,12 @@ void serializeAndDeserializeTest(Params params) {
     boycott_list.emplace_back(Boycott{2, 2s, 30s, true});
   }
 
+  boycott_durations_list_t boycott_durations;
+  if (params.with_boycott) {
+    boycott_durations.emplace_back(
+        1, 30min, 2h, 1min, 30s, 2, 60min, std::chrono::system_clock::now());
+  }
+
   GOSSIP_Message msg(this_node,
                      gossip_list,
                      instance_id,
@@ -76,6 +84,7 @@ void serializeAndDeserializeTest(Params params) {
                      failover_list,
                      suspect_matrix,
                      boycott_list,
+                     boycott_durations,
                      flags);
 
   EXPECT_EQ(this_node, msg.gossip_node_);
@@ -86,6 +95,7 @@ void serializeAndDeserializeTest(Params params) {
   EXPECT_EQ(failover_list, msg.failover_list_);
   EXPECT_EQ(suspect_matrix, msg.suspect_matrix_);
   EXPECT_EQ(boycott_list, msg.boycott_list_);
+  EXPECT_EQ(boycott_durations, msg.boycott_durations_list_);
   EXPECT_EQ(flags, msg.flags_);
 
   ProtocolWriter writer(msg.type_, evbuf.get(), params.proto);
@@ -110,6 +120,7 @@ void serializeAndDeserializeTest(Params params) {
   EXPECT_EQ(failover_list, deserialized_msg->failover_list_);
   EXPECT_EQ(suspect_matrix, deserialized_msg->suspect_matrix_);
   EXPECT_EQ(boycott_list, deserialized_msg->boycott_list_);
+  EXPECT_EQ(boycott_durations, deserialized_msg->boycott_durations_list_);
   EXPECT_EQ(flags, deserialized_msg->flags_);
 }
 } // namespace

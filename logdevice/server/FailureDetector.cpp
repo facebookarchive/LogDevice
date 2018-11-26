@@ -484,6 +484,15 @@ void FailureDetector::gossip() {
                  std::back_inserter(boycotts),
                  [](const auto& entry) { return entry.second; });
 
+  const auto boycott_durations_map =
+      getBoycottTracker().getBoycottDurationsForGossip();
+  std::vector<BoycottAdaptiveDuration> boycott_durations;
+  boycott_durations.reserve(boycott_durations_map.size());
+  std::transform(boycott_durations_map.cbegin(),
+                 boycott_durations_map.cend(),
+                 std::back_inserter(boycott_durations),
+                 [](const auto& entry) { return entry.second; });
+
   // bump the message sequence number
   ++current_msg_id_;
   int rv = sendGossipMessage(
@@ -496,6 +505,7 @@ void FailureDetector::gossip() {
                                        std::move(failover_list),
                                        std::move(suspect_matrix),
                                        std::move(boycotts),
+                                       std::move(boycott_durations),
                                        flags,
                                        current_msg_id_));
 
@@ -723,6 +733,8 @@ void FailureDetector::onGossipReceived(const GOSSIP_Message& msg) {
   }
 
   getBoycottTracker().updateReportedBoycotts(msg.boycott_list_);
+  getBoycottTracker().updateReportedBoycottDurations(
+      msg.boycott_durations_list_, std::chrono::system_clock::now());
 
   num_gossips_received_++;
   if (num_gossips_received_ <= settings_->min_gossips_for_stable_state) {

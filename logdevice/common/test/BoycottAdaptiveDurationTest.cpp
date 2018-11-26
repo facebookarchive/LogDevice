@@ -84,3 +84,15 @@ TEST(BoycottAdaptiveDurationTest, testResetIssued) {
   // The duration should start decreasing immediately after the reset
   EXPECT_EQ(59min, dur.getEffectiveDuration(now + 10min + 30s));
 }
+
+TEST(BoycottAdaptiveDurationTest, testIsDefault) {
+  auto now = std::chrono::system_clock::now();
+  auto dur = BoycottAdaptiveDuration(1, 30min, 2h, 1min, 30s, 2, 30min, now);
+
+  EXPECT_TRUE(dur.isDefault(now));
+
+  dur.negativeFeedback(30min, now);
+  EXPECT_FALSE(dur.isDefault(now));
+
+  EXPECT_TRUE(dur.isDefault(now + 30min + 30s * 30));
+}
