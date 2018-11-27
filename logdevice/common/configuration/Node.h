@@ -231,9 +231,6 @@ struct Node {
 
   // return a human-readable string for the location info
   std::string locationStr() const;
-
-  // return the corresponding sockaddr for the given socket type
-  const Sockaddr& getSockaddr(SocketType type, ConnectionType conntype) const;
 };
 
 using Nodes = std::unordered_map<node_index_t, Node>;

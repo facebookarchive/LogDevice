@@ -316,6 +316,14 @@ bool NodesConfigLegacyConverter::testWithServerConfig(
     return false;
   }
 
+  if (new_nodes_config->getMaxNodeIndex() != server_config.getMaxNodeIdx()) {
+    ld_error("Nodes config max node index mismatch after conversion! original: "
+             "%lu, new: %u.",
+             server_config.getMaxNodeIdx(),
+             new_nodes_config->getMaxNodeIndex());
+    return false;
+  }
+
   // check metadata shards
   std::unordered_set<node_index_t> meta_nodeset_orig(
       server_config.getMetaDataNodeIndices().begin(),

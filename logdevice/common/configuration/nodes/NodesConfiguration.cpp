@@ -67,7 +67,8 @@ NodesConfiguration::NodesConfiguration()
       metadata_logs_rep_(std::make_shared<const MetaDataLogsReplication>()),
       version_(MembershipVersion::EMPTY_VERSION),
       storage_hash_(0),
-      num_shards_(0) {
+      num_shards_(0),
+      max_node_index_(0) {
   ld_check(validate());
 }
 
@@ -317,9 +318,20 @@ shard_size_t NodesConfiguration::computeNumShards() const {
   return 0;
 }
 
+node_index_t NodesConfiguration::computeMaxNodeIndex() const {
+  node_index_t res = 0;
+  service_discovery_->forEachNode(
+      [&res](node_index_t nid, const NodeServiceDiscovery& /*unused*/) {
+        res = std::max(res, nid);
+        return 0;
+      });
+  return res;
+}
+
 void NodesConfiguration::recomputeConfigMetadata() {
   storage_hash_ = computeStorageNodesHash();
   num_shards_ = computeNumShards();
+  max_node_index_ = computeMaxNodeIndex();
 
   auto add_addr_index = [this](const std::vector<node_index_t>& nodes) {
     for (auto n : nodes) {
@@ -350,6 +362,34 @@ bool NodesConfiguration::operator==(const NodesConfiguration& rhs) const {
       last_change_timestamp_ == rhs.last_change_timestamp_ &&
       last_maintenance_ == rhs.last_maintenance_ &&
       last_change_context_ == rhs.last_change_context_;
+}
+
+const NodeServiceDiscovery*
+NodesConfiguration::getNodeServiceDiscovery(node_index_t node) const {
+  ld_check(service_discovery_ != nullptr);
+  return service_discovery_->getNodeAttributesPtr(node);
+}
+
+const StorageNodeAttribute*
+NodesConfiguration::getNodeStorageAttribute(node_index_t node) const {
+  const auto& storage_attrs = getStorageAttributes();
+  ld_check(storage_attrs != nullptr);
+  return storage_attrs->getNodeAttributesPtr(node);
+}
+
+node_gen_t NodesConfiguration::getNodeGeneration(node_index_t node) const {
+  const auto* node_attr = getNodeStorageAttribute(node);
+  return node_attr != nullptr ? node_attr->generation : 1;
+}
+
+const NodeServiceDiscovery*
+NodesConfiguration::getNodeServiceDiscovery(NodeID node) const {
+  const NodeServiceDiscovery* node_discovery =
+      getNodeServiceDiscovery(node.index());
+  if (node_discovery && getNodeGeneration(node.index()) == node.generation()) {
+    return node_discovery;
+  }
+  return nullptr;
 }
 
 }}}} // namespace facebook::logdevice::configuration::nodes

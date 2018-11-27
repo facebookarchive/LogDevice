@@ -202,6 +202,15 @@ void UnreleasedRecordDetectorTest::SetUp() {
   ASSERT_TRUE(configuration::parser::parseHostString(
       socketPath, node->address, "host"));
 
+  // do the same thing for NodesConfiguration
+  auto nodes_configuration =
+      config_->getServerConfig()->getNodesConfiguration();
+  ASSERT_NE(nullptr, nodes_configuration);
+  const auto* serv_disc = nodes_configuration->getNodeServiceDiscovery(0);
+  ASSERT_NE(nullptr, serv_disc);
+  const_cast<configuration::nodes::NodeServiceDiscovery*>(serv_disc)->address =
+      node->address;
+
   // create processor
   processor_ = ServerProcessor::create(
       /* audit log */ nullptr,

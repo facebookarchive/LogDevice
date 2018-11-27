@@ -81,6 +81,9 @@ struct NodeServiceDiscovery {
   }
 
   bool isValid() const;
+
+  // return the corresponding sockaddr for the given socket type
+  const Sockaddr& getSockaddr(SocketType type, ConnectionType conntype) const;
 };
 
 using ServiceDiscoveryConfig =

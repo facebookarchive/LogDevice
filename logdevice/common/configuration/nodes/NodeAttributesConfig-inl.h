@@ -45,6 +45,14 @@ NodeAttributesConfig<Attributes, Mutable>::getNodeAttributes(
 }
 
 template <typename Attributes, bool Mutable>
+const Attributes*
+NodeAttributesConfig<Attributes, Mutable>::getNodeAttributesPtr(
+    node_index_t node) const {
+  const auto nit = node_states_.find(node);
+  return nit == node_states_.cend() ? nullptr : &nit->second;
+}
+
+template <typename Attributes, bool Mutable>
 const Attributes& NodeAttributesConfig<Attributes, Mutable>::nodeAttributesAt(
     node_index_t node) const {
   ld_check(hasNode(node));

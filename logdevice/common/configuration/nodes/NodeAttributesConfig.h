@@ -57,6 +57,7 @@ class NodeAttributesConfig {
   void dcheckConsistency() const;
 
   std::pair<bool, Attributes> getNodeAttributes(node_index_t node) const;
+  const Attributes* getNodeAttributesPtr(node_index_t node) const;
 
   // caller must ensure that node exists in the configuration
   const Attributes& nodeAttributesAt(node_index_t node) const;
@@ -69,7 +70,26 @@ class NodeAttributesConfig {
     return node_states_.empty();
   }
 
+  size_t numNodes() const {
+    return node_states_.size();
+  }
+
   bool operator==(const NodeAttributesConfig& rhs) const;
+
+  /**
+   * Utility to iterate over all (nodes, attributes) pairs.
+   * @param func     int(node_index_t, const NodeServiceDiscovery&)
+   *                 return -1 to abort iteration, 0 to continue
+   */
+  template <typename Func>
+  int forEachNode(const Func& func) const {
+    for (const auto& kv : node_states_) {
+      if (func(kv.first, kv.second) != 0) {
+        return -1;
+      }
+    }
+    return 0;
+  }
 
  private:
   std::unordered_map<node_index_t, Attributes> node_states_;

@@ -2346,14 +2346,20 @@ std::string SocketDependencies::dumpQueuedMessages(Address addr) const {
 const Sockaddr& SocketDependencies::getNodeSockaddr(NodeID nid,
                                                     SocketType type,
                                                     ConnectionType conntype) {
-  std::shared_ptr<ServerConfig> cfg(Worker::getConfig()->serverConfig());
-  const Configuration::Node* node_cfg = cfg->getNode(nid);
+  const auto& nodes_configuration =
+      Worker::onThisThread()->getNodesConfiguration();
+  ld_check(nodes_configuration != nullptr);
 
-  if (node_cfg) {
+  // note: we don't check for generation here, if the generation has changed in
+  // the future, Sender will reset the connection
+  const auto* node_service_discovery =
+      nodes_configuration->getNodeServiceDiscovery(nid.index());
+
+  if (node_service_discovery) {
     if (type == SocketType::GOSSIP && !Worker::settings().send_to_gossip_port) {
-      return node_cfg->getSockaddr(SocketType::DATA, conntype);
+      return node_service_discovery->getSockaddr(SocketType::DATA, conntype);
     } else {
-      return node_cfg->getSockaddr(type, conntype);
+      return node_service_discovery->getSockaddr(type, conntype);
     }
   }
 

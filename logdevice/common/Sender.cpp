@@ -1517,8 +1517,9 @@ node_index_t Sender::getMyNodeIndex() {
 }
 
 void Sender::noteConfigurationChanged() {
-  const std::shared_ptr<ServerConfig> cfg(Worker::getConfig()->serverConfig());
-  const auto& nodes_cfg = cfg->getNodes();
+  const auto& nodes_configuration =
+      Worker::onThisThread()->getNodesConfiguration();
+  ld_check(nodes_configuration != nullptr);
 
   initMyLocation();
 
@@ -1532,11 +1533,14 @@ void Sender::noteConfigurationChanged() {
     ld_check(!s->peer_name_.isClientAddress());
     ld_check(s->peer_name_.id_.node_.index() == i);
 
-    auto it = nodes_cfg.find(i);
-    if (it != nodes_cfg.end()) {
-      const Sockaddr& newaddr =
-          it->second.getSockaddr(s->getSockType(), s->getConnType());
-      if (s->peer_name_.id_.node_.generation() == it->second.generation &&
+    const auto* node_service_discovery =
+        nodes_configuration->getNodeServiceDiscovery(i);
+
+    if (node_service_discovery != nullptr) {
+      node_gen_t generation = nodes_configuration->getNodeGeneration(i);
+      const Sockaddr& newaddr = node_service_discovery->getSockaddr(
+          s->getSockType(), s->getConnType());
+      if (s->peer_name_.id_.node_.generation() == generation &&
           s->peer_sockaddr_ == newaddr) {
         continue;
       } else {
@@ -1544,7 +1548,7 @@ void Sender::noteConfigurationChanged() {
                 "count is %d. New IP address is %s. Destroying old socket.",
                 Sender::describeConnection(Address(s->peer_name_.id_.node_))
                     .c_str(),
-                it->second.generation,
+                generation,
                 newaddr.toString().c_str());
       }
 
@@ -1553,14 +1557,14 @@ void Sender::noteConfigurationChanged() {
           "Node %s is no longer in cluster configuration. New cluster "
           "size is %zu. Destroying old socket.",
           Sender::describeConnection(Address(s->peer_name_.id_.node_)).c_str(),
-          nodes_cfg.size());
+          nodes_configuration->clusterSize());
     }
 
     s->close(E::NOTINCONFIG);
     s.reset();
   }
 
-  impl_->server_sockets_.resize(cfg->getMaxNodeIdx() + 1);
+  impl_->server_sockets_.resize(nodes_configuration->getMaxNodeIndex() + 1);
 }
 
 bool Sender::bytesPendingLimitReached() {

@@ -59,10 +59,21 @@ class NodesConfiguration {
   // create an empty nodes config
   explicit NodesConfiguration();
 
+  //////////////////////// Accessors ///////////////////////////
   const std::shared_ptr<const ServiceDiscoveryConfig>&
   getServiceDiscovery() const {
     return service_discovery_;
   }
+
+  // @return  cluster size as the number of nodes that have service discovery
+  // info. Note that some of the nodes may not be in the membership.
+  size_t clusterSize() const {
+    return service_discovery_->numNodes();
+  }
+
+  const NodeServiceDiscovery* getNodeServiceDiscovery(node_index_t node) const;
+  // note: return nullptr if generation number mismatches
+  const NodeServiceDiscovery* getNodeServiceDiscovery(NodeID node) const;
 
   const std::shared_ptr<const SequencerConfig>& getSequencerConfig() const {
     return sequencer_config_;
@@ -71,6 +82,18 @@ class NodesConfiguration {
   const std::shared_ptr<const StorageConfig>& getStorageConfig() const {
     return storage_config_;
   }
+
+  const std::shared_ptr<const StorageAttributeConfig>&
+  getStorageAttributes() const {
+    return storage_config_->getAttributes();
+  }
+
+  // return nullptr if node does not exist or does not have storage role
+  const StorageNodeAttribute* getNodeStorageAttribute(node_index_t node) const;
+
+  // note: return default generation 1 for nodes not having storage role or
+  // node not existed
+  node_gen_t getNodeGeneration(node_index_t node) const;
 
   const std::shared_ptr<const MetaDataLogsReplication>&
   getMetaDataLogsReplication() const {
@@ -107,6 +130,10 @@ class NodesConfiguration {
     return version_;
   }
 
+  node_index_t getMaxNodeIndex() const {
+    return max_node_index_;
+  }
+
   // TODO(T33035439): this should only be used in migration or emergency. Config
   // version bump should be automatically handled through Update.
   void setVersion(membership::MembershipVersion::Type version) {
@@ -138,6 +165,7 @@ class NodesConfiguration {
   // implemented. In the mean time, this member is used by state machines that
   // need to convert node_index_t values to ShardID values.
   shard_size_t num_shards_;
+  node_index_t max_node_index_;
 
   // mapping from node address to the index
   // TODO(T33035439): get rid of this on config sync revamp
@@ -149,6 +177,7 @@ class NodesConfiguration {
 
   uint64_t computeStorageNodesHash() const;
   shard_size_t computeNumShards() const;
+  node_index_t computeMaxNodeIndex() const;
 
   // recompute configuration metadata (e.g., storage_hash_, num_shards_, and
   // addr_to_index_) from each sub-configuration, note that version, timestamp,

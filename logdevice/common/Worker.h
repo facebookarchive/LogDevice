@@ -173,7 +173,10 @@ struct CheckImpactRequestMap {
 
 namespace configuration {
 class ZookeeperConfig;
+namespace nodes {
+class NodesConfiguration;
 }
+} // namespace configuration
 
 template <typename Duration>
 class ChronoExponentialBackoffAdaptiveVariable;
@@ -230,6 +233,12 @@ class Worker : public EventLoop {
    *         auto updated
    */
   std::shared_ptr<ServerConfig> getServerConfig() const;
+
+  /**
+   * @return  NodesConfiguraton object cached on this worker
+   */
+  const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
+  getNodesConfiguration() const;
 
   /**
    * @return logs configuration object cached on this Worker and

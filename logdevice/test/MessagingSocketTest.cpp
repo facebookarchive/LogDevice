@@ -45,7 +45,7 @@ class MessagingSocketTest : public IntegrationTestBase {};
 // The name of the cluster used in testing
 static const char* CLUSTER_NAME = "logdevice_test_MessagingSocketTest.cpp";
 static NodeID firstNodeID{0, 3}; // id of first node in config
-static NodeID badNodeID{0, 4};   // a node id that does not appear in
+static NodeID badNodeID{332, 3}; // a node id that does not appear in
                                  // config
 
 // Infrastructure that must be publicly visible to LogDevice code

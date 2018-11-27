@@ -51,6 +51,32 @@ bool NodeServiceDiscovery::isValid() const {
   return true;
 }
 
+const Sockaddr&
+NodeServiceDiscovery::getSockaddr(SocketType type,
+                                  ConnectionType conntype) const {
+  switch (type) {
+    case SocketType::GOSSIP:
+      return gossip_address;
+
+    case SocketType::DATA:
+      if (conntype == ConnectionType::SSL) {
+        if (!ssl_address.hasValue()) {
+          return Sockaddr::INVALID;
+        }
+        return ssl_address.value();
+      } else {
+        return address;
+      }
+
+    default:
+      RATELIMIT_CRITICAL(
+          std::chrono::seconds(1), 2, "Unexpected Socket Type:%d!", (int)type);
+      ld_check(false);
+  }
+
+  return Sockaddr::INVALID;
+}
+
 template <>
 bool ServiceDiscoveryConfig::attributeSpecificValidate() const {
   // check for address duplication in service discovery

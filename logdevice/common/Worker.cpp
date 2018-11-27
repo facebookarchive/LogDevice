@@ -248,6 +248,11 @@ std::shared_ptr<ServerConfig> Worker::getServerConfig() const {
   return config_->getServerConfig();
 }
 
+const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
+Worker::getNodesConfiguration() const {
+  return getServerConfig()->getNodesConfiguration();
+}
+
 std::shared_ptr<LogsConfig> Worker::getLogsConfig() const {
   ld_check((bool)config_);
   return config_->getLogsConfig();
