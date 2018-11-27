@@ -146,6 +146,7 @@ class IOFaultInjection {
   }
 
   std::vector<Settings> shard_settings_;
+  std::atomic<bool> enable_fault_injection_{false};
 };
 
 extern EnumMap<IOFaultInjection::FaultType, std::string> fault_type_names;

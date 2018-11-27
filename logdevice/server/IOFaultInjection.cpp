@@ -31,9 +31,10 @@ FaultType IOFaultInjection::getInjectedFault(shard_index_t shard_idx,
                                              IOType io_type,
                                              FaultTypeBitSet fault_types,
                                              DataType d_type) {
-#ifdef NDEBUG
-  return FaultType::NONE;
-#endif
+  if (!enable_fault_injection_.load(std::memory_order_relaxed)) {
+    return FaultType::NONE;
+  }
+
   using ReadHolder = folly::SharedMutex::ReadHolder;
   using WriteHolder = folly::SharedMutex::WriteHolder;
 
@@ -96,6 +97,7 @@ void IOFaultInjection::setFaultInjection(shard_index_t shard_idx,
   ld_check(shard_idx < shard_settings_.size());
   auto& settings = shard_settings_[shard_idx];
   WriteHolder guard(settings.mutex);
+  enable_fault_injection_.store(true, std::memory_order_relaxed);
   if (mode == InjectMode::OFF) {
     // Disable everything
     settings.copyFrom(Settings());

@@ -130,7 +130,7 @@ class InjectShardFault : public AdminCommand {
     // If this is a production build, require passing --force.
 #ifdef NDEBUG
     if (!force_) {
-      out_.write("inject: Production build. Injection disabled. "
+      out_.write("inject: Production build."
                  "Use --force to proceed anyway.\r\n");
       return;
     }
