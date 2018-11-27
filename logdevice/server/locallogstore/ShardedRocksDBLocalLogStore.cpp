@@ -115,7 +115,7 @@ ShardedRocksDBLocalLogStore::ShardedRocksDBLocalLogStore(
   std::shared_ptr<Configuration> config =
       updateable_config ? updateable_config->get() : nullptr;
 
-  env_ = std::make_unique<RocksDBEnv>(db_settings);
+  env_ = std::make_unique<RocksDBEnv>(db_settings, stats);
   {
     int num_bg_threads_lo = db_settings->num_bg_threads_lo;
     if (num_bg_threads_lo == -1) {

@@ -843,6 +843,10 @@ STAT_DEFINE(read_streams_batch_queue_microsec, SUM)
 
 STAT_DEFINE(wal_syncs, SUM)
 STAT_DEFINE(wal_sync_microsec, SUM)
+STAT_DEFINE(fsyncs, SUM)
+STAT_DEFINE(fsync_microsec, SUM)
+STAT_DEFINE(fdatasyncs, SUM)
+STAT_DEFINE(fdatasync_microsec, SUM)
 
 STAT_DEFINE(rebuilding_store_sent, SUM)
 STAT_DEFINE(rebuilding_amend_sent, SUM)

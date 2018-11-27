@@ -29,6 +29,8 @@
 
 namespace facebook { namespace logdevice {
 
+class StatsHolder;
+
 /**
  * A thin wrapper around default rocksdb::Env. Lowers IO priority of low-pri
  * background threads. The current rocksdb's implementation of
@@ -37,9 +39,11 @@ namespace facebook { namespace logdevice {
  */
 class RocksDBEnv : public rocksdb::EnvWrapper {
  public:
-  explicit RocksDBEnv(UpdateableSettings<RocksDBSettings> settings)
+  explicit RocksDBEnv(UpdateableSettings<RocksDBSettings> settings,
+                      StatsHolder* stats)
       : rocksdb::EnvWrapper(rocksdb::Env::Default()),
-        settings_(std::move(settings)) {}
+        settings_(std::move(settings)),
+        stats_(stats) {}
 
 #ifdef LOGDEVICED_ROCKSDB_UNSCHED_FUNCTION
   void Schedule(void (*function)(void* arg),
@@ -105,6 +109,7 @@ class RocksDBEnv : public rocksdb::EnvWrapper {
   std::mutex mutex_;
 
   UpdateableSettings<RocksDBSettings> settings_;
+  StatsHolder* stats_;
 
   static void callback(void* arg);
   static void callback_unschedule(void* arg);
@@ -159,12 +164,18 @@ class RocksDBRandomAccessFileWrapper : public rocksdb::RandomAccessFile {
 
 class RocksDBWritableFile : public rocksdb::WritableFileWrapper {
  public:
-  explicit RocksDBWritableFile(std::unique_ptr<rocksdb::WritableFile> file)
+  explicit RocksDBWritableFile(std::unique_ptr<rocksdb::WritableFile> file,
+                               StatsHolder* stats)
       : rocksdb::WritableFileWrapper(file.get()),
-        file_(std::move(std::move(file))) {}
+        file_(std::move(std::move(file))),
+        stats_(stats) {}
+
+  rocksdb::Status Sync() override;
+  rocksdb::Status Fsync() override;
 
  protected:
   std::unique_ptr<rocksdb::WritableFile> file_;
+  StatsHolder* stats_;
 };
 
 // Wrapper for tracing.
@@ -207,8 +218,9 @@ class RocksDBRandomAccessFile : public RocksDBRandomAccessFileWrapper {
 class RocksDBBackgroundSyncFile : public RocksDBWritableFile {
  public:
   explicit RocksDBBackgroundSyncFile(
-      std::unique_ptr<rocksdb::WritableFile> file)
-      : RocksDBWritableFile(std::move(file)) {
+      std::unique_ptr<rocksdb::WritableFile> file,
+      StatsHolder* stats)
+      : RocksDBWritableFile(std::move(file), stats) {
     thread_ =
         std::thread(std::bind(&RocksDBBackgroundSyncFile::ThreadRun, this));
   }

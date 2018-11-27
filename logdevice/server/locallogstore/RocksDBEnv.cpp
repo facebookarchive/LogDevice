@@ -13,6 +13,7 @@
 #include "logdevice/common/ThreadID.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/util.h"
 #include "logdevice/server/locallogstore/LocalLogStore.h"
 
@@ -138,11 +139,11 @@ RocksDBEnv::NewWritableFile(const std::string& f,
   if (!settings_->background_wal_sync ||
       f.substr(f.size() - std::min(f.size(), 4ul)) != ".log") {
     ld_debug("Opened writable file %s", f.c_str());
-    *r = std::move(file);
+    r->reset(new RocksDBWritableFile(std::move(file), stats_));
   } else {
     ld_debug("Opened writable file %s with background RangeSync() wrapper",
              f.c_str());
-    r->reset(new RocksDBBackgroundSyncFile(std::move(file)));
+    r->reset(new RocksDBBackgroundSyncFile(std::move(file), stats_));
   }
   return rocksdb::Status::OK();
 }
@@ -170,6 +171,31 @@ rocksdb::Status RocksDBEnv::DeleteFile(const std::string& fname) {
          fname.c_str());
 
   return status;
+}
+
+rocksdb::Status RocksDBWritableFile::Sync() {
+  auto time_start = std::chrono::steady_clock::now();
+  auto s = rocksdb::WritableFileWrapper::Sync();
+  auto time_end = std::chrono::steady_clock::now();
+  STAT_INCR(stats_, fdatasyncs);
+  STAT_ADD(stats_,
+           fdatasync_microsec,
+           std::chrono::duration_cast<std::chrono::microseconds>(time_end -
+                                                                 time_start)
+               .count());
+  return s;
+}
+rocksdb::Status RocksDBWritableFile::Fsync() {
+  auto time_start = std::chrono::steady_clock::now();
+  auto s = rocksdb::WritableFileWrapper::Fsync();
+  auto time_end = std::chrono::steady_clock::now();
+  STAT_INCR(stats_, fsyncs);
+  STAT_ADD(stats_,
+           fsync_microsec,
+           std::chrono::duration_cast<std::chrono::microseconds>(time_end -
+                                                                 time_start)
+               .count());
+  return s;
 }
 
 RocksDBRandomAccessFile::RocksDBReadTracer::RocksDBReadTracer(

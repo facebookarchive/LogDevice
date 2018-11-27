@@ -4105,7 +4105,7 @@ TEST_F(PartitionedRocksDBStoreTest, IOPrio) {
   CompactionFilter filter;
 
   auto customize_config = [&](RocksDBLogStoreConfig& cfg) {
-    env = std::make_unique<RocksDBEnv>(cfg.rocksdb_settings_);
+    env = std::make_unique<RocksDBEnv>(cfg.rocksdb_settings_, nullptr);
     cfg.options_.env = env.get();
     cfg.options_.env->SetBackgroundThreads(
         cfg.rocksdb_settings_->num_bg_threads_lo, rocksdb::Env::LOW);
@@ -5521,7 +5521,7 @@ TEST_F(PartitionedRocksDBStoreTest, DeleteRatelimit) {
   // SstFileManager, which ratelimits deletes, needs RocksDBEnv for OS
   // functionality like the filesystem
   if (!env_) {
-    env_ = std::make_unique<RocksDBEnv>(rocksdb_settings_);
+    env_ = std::make_unique<RocksDBEnv>(rocksdb_settings_, nullptr);
   }
 
   // Measure with fast settings.
