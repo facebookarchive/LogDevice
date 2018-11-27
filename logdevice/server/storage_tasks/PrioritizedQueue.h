@@ -23,7 +23,6 @@
 
 /**
  * @file  The priority queue implementation used by StorageThreadPool.
- *        Strict priority can be relaxed by providing a yield schedule
  *        that causes priorities to be periodically masked from consideration
  *        during read attempts of the queue.
  */
@@ -74,48 +73,14 @@ class PrioritizedQueue {
   void readQueueGuaranteedNonEmpty(T& out) {
     shared_lock<folly::SharedMutex> l(introspection_mutex_);
 
-    // Highest to lowest, yielding if required due to the yield schedule.
+    // Highest to lowest.
     for (int pri = NumPriorities - 1; pri >= 0; --pri) {
       if (queues_[pri].readIfNotEmpty(out)) {
         return;
       }
     }
 
-    // To get here, we probably yielded and skipped one or more priority levels
-    // that had an element, or another thread must have added a higher priority
-    // task after we examined the queue, and grabbed a lower one before we
-    // could. Do a reverse priority scan to find it since the intent of yielding
-    // is to allow lower priority items to be serviced.
-    //
-    // It's also possible that, after we checked a few high priority queues,
-    // another thread added a high priority task into one of those queues, which
-    // woke up another consumer, which consumed a low priority task.
-    //
-    // In this loop, becasue we scan in the opposite direction, we can get the
-    // opposite problem: new items addded at lower priorities after we scan
-    // them, then higher prioirty items removed before we can find them.  That
-    // is why we loop indefinitely.
-
-    for (int i = 0;; i++) {
-      for (int pri = 0; pri < NumPriorities; ++pri) {
-        if (queues_[pri].readIfNotEmpty(out)) {
-          return;
-        }
-      }
-
-      // stats_ can be nullptr in tests.
-      if (stats_) {
-        if (i == 0) {
-          STAT_INCR(stats_, prioritized_queue_cant_find_once);
-        } else if (i == 1) {
-          STAT_INCR(stats_, prioritized_queue_cant_find_twice);
-        } else {
-          STAT_INCR(stats_, prioritized_queue_cant_find_thrice_or_more);
-        }
-
-        STAT_SET(stats_, prioritized_queue_cant_find_max, i + 1);
-      }
-    }
+    ld_check(false);
   }
 
   // same as read(), but reads at the specified priority only
@@ -203,9 +168,6 @@ class PrioritizedQueue {
   }
 
  private:
-  // Fixed integer math scale factor for testing ratio of read attempts
-  // to yields for each priority class.
-  static constexpr int64_t YIELD_SCALE = 1000;
   std::vector<folly::MPMCQueue<T>> queues_;
 
   Semaphore sem_;

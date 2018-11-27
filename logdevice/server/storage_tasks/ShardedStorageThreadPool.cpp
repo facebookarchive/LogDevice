@@ -25,6 +25,7 @@ ShardedStorageThreadPool::ShardedStorageThreadPool(
     pools_.push_back(
         // may throw
         std::make_unique<StorageThreadPool>(shard_idx,
+                                            nshards,
                                             params,
                                             settings,
                                             store->getByIndex(shard_idx),

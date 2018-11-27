@@ -111,6 +111,7 @@ class StorageTask {
 
   /**
    * Called on a worker thread when the storage task is dropped under load.
+   * Don't post more storage tasks from inside this callback.
    */
   virtual void onDropped() = 0;
 

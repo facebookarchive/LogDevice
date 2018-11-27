@@ -7,6 +7,7 @@
  */
 #pragma once
 
+#include "logdevice/common/ResourceBudget.h"
 #include "logdevice/include/Err.h"
 #include "logdevice/server/locallogstore/WriteOps.h"
 #include "logdevice/server/storage_tasks/StorageTask.h"
@@ -134,5 +135,10 @@ class WriteStorageTask : public StorageTask {
   // synced.
   //
   bool synced_{false};
+
+  // Token from StorageThreadPool's memory_budget for this thread type.
+  // Used for tracking total memory usage by in-flight storage tasks of certain
+  // types.
+  ResourceBudget::Token memToken_;
 };
 }} // namespace facebook::logdevice

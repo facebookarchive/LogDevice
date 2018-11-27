@@ -830,6 +830,7 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
 
     storage_thread_pool_ = std::make_unique<StorageThreadPool>(
         /* shard_idx */ 0,
+        /* num_shards */ 1,
         params,
         UpdateableSettings<Settings>(settings_),
         store_.get(),

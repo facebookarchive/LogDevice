@@ -23,6 +23,8 @@ using namespace facebook::logdevice;
 using InterceptedTasks = std::vector<std::unique_ptr<ReadStorageTask>>;
 using LocalLogStoreReader::ReadPointer;
 
+namespace {
+
 const shard_index_t SHARD_IDX = 0;
 
 class TestAllServerReadStreams : public AllServerReadStreams {
@@ -43,6 +45,9 @@ class TestAllServerReadStreams : public AllServerReadStreams {
                              on_worker_thread) {
     dbg::assertOnData = true;
   }
+  ~TestAllServerReadStreams() {
+    EXPECT_FALSE(sendDelayedStorageTasksPending_);
+  }
 
   void sendStorageTask(std::unique_ptr<ReadStorageTask>&& task,
                        shard_index_t shard) override {
@@ -50,13 +55,26 @@ class TestAllServerReadStreams : public AllServerReadStreams {
     tasks_.push_back(std::move(task));
   }
 
+  void scheduleSendDelayedStorageTasks() override {
+    sendDelayedStorageTasksPending_ = true;
+  }
+
   InterceptedTasks& getTasks() {
     return tasks_;
   }
 
+  void fireSendDelayedStorageTasksTimer() {
+    ASSERT_TRUE(sendDelayedStorageTasksPending_);
+    sendDelayedStorageTasksPending_ = false;
+    sendDelayedReadStorageTasks();
+  }
+
  private:
   InterceptedTasks tasks_;
+  bool sendDelayedStorageTasksPending_ = false;
 };
+
+} // namespace
 
 /**
  * Test that AllServerReadStreams maintains the right subscriptions to RELEASE
@@ -276,6 +294,7 @@ TEST(AllServerReadStreams, ReadStorageTasksMemoryLimit) {
 
   // t3 comes back (it is dropped).
   streams.onReadTaskDropped(*t3);
+  streams.fireSendDelayedStorageTasksTimer();
   ASSERT_EQ(0, streams.getTasks().size());
   ASSERT_EQ(40, streams.getMemoryBudget().available());
 

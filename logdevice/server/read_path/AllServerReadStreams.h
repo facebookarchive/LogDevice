@@ -24,6 +24,7 @@
 #include "logdevice/common/ResourceBudget.h"
 #include "logdevice/common/ShardAuthoritativeStatusMap.h"
 #include "logdevice/common/SocketCallback.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/protocol/STARTED_Message.h"
 #include "logdevice/common/protocol/STOP_Message.h"
 #include "logdevice/common/protocol/WINDOW_Message.h"
@@ -365,7 +366,11 @@ class AllServerReadStreams : public ShardAuthoritativeStatusSubscriber {
   virtual void sendStorageTask(std::unique_ptr<ReadStorageTask>&& task,
                                shard_index_t shard);
 
- private:
+  // Starts a zero-delay timer to call sendDelayedStorageTasks() on the next
+  // event loop iteration.
+  virtual void scheduleSendDelayedStorageTasks();
+
+ protected:
   //
   // Main data structure containing ServerReadStream instances.  We use a
   // boost::multi_index to allow three access patterns:
@@ -536,6 +541,11 @@ class AllServerReadStreams : public ShardAuthoritativeStatusSubscriber {
     shard_index_t shard;
   };
   std::queue<QueuedTask> delayed_read_storage_tasks_;
+
+  // A zero-delay timer to post tasks from delayed_read_storage_tasks_ to
+  // storage threads after some tasks were dropped. We can't post them right
+  // away because it's not nice to post more tasks from onDropped() callback.
+  Timer send_delayed_storage_tasks_timer_;
 
   // Worker ID we are on, used to manage subscriptions for RELEASE messages.
   // In production, this is always equal to Worker::onThisThread()->idx_.  In

@@ -58,6 +58,9 @@ class PerWorkerStorageTaskQueue {
    *
    * This might immediately hand off the task to the storage thread pool or,
    * if there are already too many tasks in flight, buffer the task for later.
+   *
+   * If the queue is full, may synchronously call onDropped() on the given
+   * task and/or on other tasks in the queue.
    */
   void putTask(std::unique_ptr<StorageTask>&& task);
 

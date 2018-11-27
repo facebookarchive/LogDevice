@@ -12,6 +12,7 @@
 
 #include <folly/small_vector.h>
 
+#include "logdevice/common/ResourceBudget.h"
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/SimpleEnumMap.h"
 #include "logdevice/common/settings/Settings.h"
@@ -55,6 +56,7 @@ class StorageThreadPool {
    * @throws ConstructorFailed on failure
    */
   StorageThreadPool(shard_index_t shard_idx,
+                    size_t num_shards,
                     const Params& params,
                     UpdateableSettings<Settings> settings,
                     LocalLogStore* local_log_store,
@@ -165,6 +167,8 @@ class StorageThreadPool {
    */
   void join();
 
+  ResourceBudget& getMemoryBudget(StorageTask::ThreadType thread_type);
+
   /**
    * Fetches debug info on all pending storage tasks into the table provided
    */
@@ -192,15 +196,21 @@ class StorageThreadPool {
   const std::shared_ptr<TraceLogger> trace_logger_;
 
   struct PerTypeTaskQueue {
-    PerTypeTaskQueue(size_t size, StatsHolder* stats)
-        : queue(size, stats), write_queue(size, stats), tasks_to_drop(0) {}
+    PerTypeTaskQueue(size_t size, size_t memory_limit, StatsHolder* stats)
+        : queue(size, stats),
+          write_queue(size, stats),
+          tasks_to_drop(0),
+          memory_budget(memory_limit) {}
 
     // Task queue. Other threads write into it and our threads read from it.
     TaskQueue queue;
     // Separate queue for write batching
     WriteTaskQueue write_queue;
-    // How many tasks should be dropped?
+    // How many tasks should be dropped? Non-droppable tasks are not dropped but
+    // are counted as dropped, as far as this counter is concerned.
     std::atomic<int64_t> tasks_to_drop;
+
+    ResourceBudget memory_budget;
   };
 
   // If set, *Put{Task,Write} methods will immediately return (with err set
@@ -210,9 +220,13 @@ class StorageThreadPool {
   StatsHolder* stats_;
 
   shard_index_t shard_idx_;
+  size_t num_shards_;
 
   // Separate queue for each of the two types of storage threads.
   SimpleEnumMap<StorageTask::ThreadType, PerTypeTaskQueue> taskQueues_;
+
+  // This updates memory budgets whenever they change in settings.
+  UpdateableSettings<Settings>::SubscriptionHandle settings_subscription_;
 
   /**
    * Called when tasksToDrop_ was observed to be more than 0, suggesting that
@@ -221,7 +235,8 @@ class StorageThreadPool {
    * @return true if the task was actually dropped, false if not (another
    *         thread beat us to it)
    */
-  bool tryDropOneTask(std::unique_ptr<StorageTask>& task);
+  bool tryDropOneTask(std::unique_ptr<StorageTask>& task,
+                      std::map<StorageTaskType, int>& dropped_by_type);
 
   /**
    * Called only by the constructor.

@@ -93,6 +93,9 @@ STAT_DEFINE(rebuilding_ms_waiting_for_rereplication, SUM)
 // flight).
 STAT_DEFINE(rebuilding_ms_fully_occupied, SUM)
 
+STAT_DEFINE(append_stores_over_mem_limit, SUM)
+STAT_DEFINE(rebuilding_stores_over_mem_limit, SUM)
+
 /*
  * The following stats will not be reset by Stats::reset() and the 'reset'
  * admin command.

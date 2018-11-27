@@ -51,6 +51,8 @@ using InterceptedTasks = std::vector<std::unique_ptr<ReadStorageTask>>;
 using InterceptedMessages =
     std::vector<std::pair<std::unique_ptr<Message>, ClientID>>;
 
+namespace {
+
 const shard_index_t SHARD_IDX = 0;
 
 class TestAllServerReadStreams : public AllServerReadStreams {
@@ -65,6 +67,9 @@ class TestAllServerReadStreams : public AllServerReadStreams {
                              nullptr,
                              false),
         tasks_(tasks) {}
+  ~TestAllServerReadStreams() {
+    EXPECT_FALSE(sendDelayedStorageTasksPending_);
+  }
 
   void sendStorageTask(std::unique_ptr<ReadStorageTask>&& task,
                        shard_index_t shard) override {
@@ -72,13 +77,26 @@ class TestAllServerReadStreams : public AllServerReadStreams {
     tasks_->push_back(std::move(task));
   }
 
+  void scheduleSendDelayedStorageTasks() override {
+    sendDelayedStorageTasksPending_ = true;
+  }
+
   InterceptedTasks* getTasks() {
     return tasks_;
   }
 
+  void fireSendDelayedStorageTasksTimer() {
+    ASSERT_TRUE(sendDelayedStorageTasksPending_);
+    sendDelayedStorageTasksPending_ = false;
+    sendDelayedReadStorageTasks();
+  }
+
  private:
   InterceptedTasks* tasks_;
+  bool sendDelayedStorageTasksPending_ = false;
 };
+
+} // namespace
 
 class MockCatchupQueueDependencies;
 
@@ -1167,6 +1185,7 @@ TEST_F(CatchupQueueTest, StorageTaskDropped) {
   // Suppose the storage task is dropped.
   streams_.onReadTaskDropped(*dropped_task);
   dropped_task.reset();
+  streams_.fireSendDelayedStorageTasksTimer();
   ASSERT_EQ(0, tasks_.size());
 
   // Trigger the ping timer.

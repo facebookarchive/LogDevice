@@ -87,8 +87,10 @@ class ResourceBudget {
   bool acquire(uint64_t count = 1) {
     uint64_t prev = used_.load();
     do {
+      // Allow at least one allocation of the resource even if that allocation
+      // would exceed the limit specified.
       if (prev > std::numeric_limits<uint64_t>::max() - count ||
-          prev + count > limit_) {
+          (prev + count > limit_ && prev > 0)) {
         return false;
       }
     } while (!used_.compare_exchange_weak(prev, prev + count));
@@ -120,6 +122,15 @@ class ResourceBudget {
   // called with a lower limit
   int64_t available() const {
     return int64_t(limit_.load()) - used_.load();
+  }
+
+  // How much of the budget is currently used.
+  // Normally between 0 and 1, but may be greater than 1 if limit was decreased
+  // or if a single acquire() call was bigger than the limit.
+  double fractionUsed() const {
+    uint64_t limit = limit_.load();
+    uint64_t used = used_.load();
+    return 1. * used / limit;
   }
 
   void setLimit(uint64_t limit) {

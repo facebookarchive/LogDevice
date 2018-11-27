@@ -362,7 +362,15 @@ void AllServerReadStreams::onReadTaskDropped(ReadStorageTask& task) {
     // Client disconnected.
   }
   task.releaseRecords();
-  sendDelayedReadStorageTasks();
+  scheduleSendDelayedStorageTasks();
+}
+
+void AllServerReadStreams::scheduleSendDelayedStorageTasks() {
+  if (!send_delayed_storage_tasks_timer_.isAssigned()) {
+    send_delayed_storage_tasks_timer_.assign(
+        [this] { sendDelayedReadStorageTasks(); });
+  }
+  send_delayed_storage_tasks_timer_.activate(std::chrono::microseconds(0));
 }
 
 Message::Disposition

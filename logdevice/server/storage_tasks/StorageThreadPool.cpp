@@ -65,6 +65,7 @@ class StopExecStorageTask : public StorageTask {
 
 StorageThreadPool::StorageThreadPool(
     shard_index_t shard_idx,
+    size_t num_shards,
     const StorageThreadPool::Params& params,
     UpdateableSettings<Settings> settings,
     LocalLogStore* local_log_store,
@@ -83,12 +84,14 @@ StorageThreadPool::StorageThreadPool(
       trace_logger_(trace_logger),
       stats_(stats),
       shard_idx_(shard_idx),
+      num_shards_(num_shards),
       taskQueues_([&, task_queue_size]() {
         const auto actual_queue_sizes =
             computeActualQueueSizes(task_queue_size);
         for (int type = 0; type < (int)ThreadType::MAX; ++type) {
           const size_t size = actual_queue_sizes[type];
-          taskQueues_.emplace_back(size, stats);
+          taskQueues_.emplace_back(
+              size, std::numeric_limits<size_t>::max(), stats);
         }
       }) {
   ld_check(local_log_store != nullptr);
@@ -102,6 +105,14 @@ StorageThreadPool::StorageThreadPool(
                     (int)ThreadType::METADATA == 3,
                 "");
   static_assert((int)ThreadType::MAX == 4, "");
+
+  // Set memory budgets from settings.
+  settings_subscription_ = settings_.callAndSubscribeToUpdates([this] {
+    taskQueues_[ThreadType::FAST_TIME_SENSITIVE].memory_budget.setLimit(
+        settings_->append_stores_max_mem_bytes / num_shards_);
+    taskQueues_[ThreadType::FAST_STALLABLE].memory_budget.setLimit(
+        settings_->rebuilding_stores_max_mem_bytes / num_shards_);
+  });
 
   // Find an upper limit on the number of tasks in flight for this thread
   // pool, to size the syncing thread's queue
@@ -311,6 +322,7 @@ void StorageThreadPool::blockingPutTask(std::unique_ptr<StorageTask>&& task) {
 std::unique_ptr<StorageTask>
 StorageThreadPool::blockingGetTask(StorageTask::ThreadType type) {
   auto& task_queue = taskQueues_[getThreadType(type)];
+  std::map<StorageTaskType, int> dropped_by_type;
 
   while (true) {
     StorageTask* rawptr;
@@ -321,8 +333,17 @@ StorageThreadPool::blockingGetTask(StorageTask::ThreadType type) {
 
     // Check if we should drop the task.  Doing a load first to avoid an
     // std::atomic write in the common case when there is nothing to drop.
-    if (task_queue.tasks_to_drop.load() > 0 && tryDropOneTask(task)) {
+    if (task_queue.tasks_to_drop.load() > 0 &&
+        tryDropOneTask(task, dropped_by_type)) {
       continue;
+    }
+
+    if (!dropped_by_type.empty()) {
+      RATELIMIT_INFO(std::chrono::seconds(1),
+                     2,
+                     "Dropping storage tasks in shard %d: %s",
+                     (int)shard_idx_,
+                     toString(dropped_by_type).c_str());
     }
 
     STORAGE_TASK_STAT_INCR(stats_, type, storage_tasks_dequeued);
@@ -362,11 +383,9 @@ void StorageThreadPool::dropTaskQueue(StorageTask::ThreadType type) {
   }
 }
 
-bool StorageThreadPool::tryDropOneTask(std::unique_ptr<StorageTask>& task) {
-  if (!task->isDroppable()) {
-    return false;
-  }
-
+bool StorageThreadPool::tryDropOneTask(
+    std::unique_ptr<StorageTask>& task,
+    std::map<StorageTaskType, int>& dropped_by_type) {
   auto& task_queue = taskQueues_[getThreadType(*task)];
 
   // Try to acquire a ticket
@@ -378,6 +397,12 @@ bool StorageThreadPool::tryDropOneTask(std::unique_ptr<StorageTask>& task) {
     return false;
   }
 
+  if (!task->isDroppable()) {
+    // Don't drop the task but decrease tasks_to_drop.
+    return false;
+  }
+
+  ++dropped_by_type[task->getType()];
   StorageTaskResponse::sendDroppedToWorker(std::move(task));
   return true;
 }
@@ -406,6 +431,11 @@ StorageThreadPool::getThreadType(StorageTask::ThreadType type) const {
     type = StorageTask::ThreadType::SLOW;
   }
   return type;
+}
+
+ResourceBudget&
+StorageThreadPool::getMemoryBudget(StorageTask::ThreadType thread_type) {
+  return taskQueues_[thread_type].memory_budget;
 }
 
 void StorageThreadPool::getStorageTaskDebugInfo(InfoStorageTasksTable& table) {

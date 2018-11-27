@@ -7,6 +7,7 @@
  */
 #include "PerWorkerStorageTaskQueue.h"
 
+#include <map>
 #include <unistd.h>
 
 #include <folly/Memory.h>
@@ -111,13 +112,17 @@ void PerWorkerStorageTaskQueue::putTask(std::unique_ptr<StorageTask>&& task) {
            ->processor_->sharded_storage_thread_pool_->getByIndex(shard_idx_);
   task->setStorageThreadPool(pool);
 
+  auto type = task->getThreadType();
+
   // check to see if the underlying storage is accepting writes
   // if not, we abort early
   if (task->isWriteTask()) {
+    ld_assert(task->isDroppable());
+    WriteStorageTask* write = static_cast<WriteStorageTask*>(task.get());
+
     Status accepting = acceptingWrites();
     if (accepting != E::OK && accepting != E::LOW_ON_SPC) {
       ld_assert(dynamic_cast<WriteStorageTask*>(task.get()) != nullptr);
-      WriteStorageTask* write = static_cast<WriteStorageTask*>(task.get());
       ld_check_in(accepting, ({E::NOSPC, E::DISABLED, E::FAILED}));
 
       if (!isWriteExempt(write, accepting)) {
@@ -128,11 +133,30 @@ void PerWorkerStorageTaskQueue::putTask(std::unique_ptr<StorageTask>&& task) {
         return;
       }
     }
+
+    size_t payload_size = write->getPayloadSize();
+    if (payload_size > 0) {
+      auto token = pool->getMemoryBudget(type).acquireToken(payload_size);
+      if (!token.valid()) {
+        // The in-flight StoreStorageTask-s are using a lot of memory.
+        // Don't enqueue any more of them.
+        write->onDropped();
+        if (type == StorageTask::ThreadType::FAST_STALLABLE) {
+          PER_SHARD_STAT_INCR(
+              Worker::stats(), rebuilding_stores_over_mem_limit, shard_idx_);
+        } else {
+          PER_SHARD_STAT_INCR(
+              Worker::stats(), append_stores_over_mem_limit, shard_idx_);
+        }
+        task.reset();
+        return;
+      }
+      write->memToken_ = std::move(token);
+    }
   }
 
   WORKER_STAT_INCR(storage_tasks_queued);
 
-  auto type = task->getThreadType();
   if (canSendToStorageThread(*task)) {
     ld_spew("tasks_in_flight_ = %zu, sending immediately",
             taskBuffer_[(int)type].tasks_in_flight);
@@ -175,8 +199,14 @@ bool PerWorkerStorageTaskQueue::isOverloaded() const {
   // threads (those writing records from Appenders) here. In the future we may
   // also want to expose the state of the read path.
   auto& buffer = taskBuffer_[(int)StorageTask::ThreadType::FAST_TIME_SENSITIVE];
+  double mem_budget_used =
+      ServerWorker::onThisThread()
+          ->processor_->sharded_storage_thread_pool_->getByIndex(shard_idx_)
+          .getMemoryBudget(StorageTask::ThreadType::FAST_TIME_SENSITIVE)
+          .fractionUsed();
 
-  if (100 * buffer.size() > p * max_buffered_tasks_) {
+  if (100 * buffer.size() > p * max_buffered_tasks_ ||
+      100 * mem_budget_used > p) {
     return true; // too many buffered tasks
   }
 
@@ -237,7 +267,10 @@ void PerWorkerStorageTaskQueue::sendTaskToStorageThread(
 }
 
 void PerWorkerStorageTaskQueue::drop(StorageTask::ThreadType thread_type) {
-  auto do_queue = [=](std::queue<std::unique_ptr<StorageTask>>& queue,
+  std::vector<std::unique_ptr<StorageTask>> to_notify;
+  std::map<StorageTaskType, int> count_by_type;
+
+  auto do_queue = [&](std::queue<std::unique_ptr<StorageTask>>& queue,
                       bool notify) {
     WORKER_STORAGE_TASK_STAT_ADD(
         thread_type, storage_tasks_dropped, queue.size());
@@ -246,8 +279,9 @@ void PerWorkerStorageTaskQueue::drop(StorageTask::ThreadType thread_type) {
     while (!queue.empty()) {
       std::unique_ptr<StorageTask> task = std::move(queue.front());
       queue.pop();
+      ++count_by_type[task->getType()];
       if (notify) {
-        task->onDropped();
+        to_notify.push_back(std::move(task));
       }
     }
   };
@@ -258,6 +292,18 @@ void PerWorkerStorageTaskQueue::drop(StorageTask::ThreadType thread_type) {
     // Don't call onDropped() for undroppable tasks because their
     // implementations don't expect this method to be called.
     do_queue(taskBuffer_[(int)thread_type].non_droppable, false);
+  }
+
+  if (!count_by_type.empty()) {
+    RATELIMIT_INFO(std::chrono::seconds(1),
+                   2,
+                   "Dropping storage tasks in shard %d: %s",
+                   (int)shard_idx_,
+                   toString(count_by_type).c_str());
+  }
+
+  for (auto& task : to_notify) {
+    task->onDropped();
   }
 }
 

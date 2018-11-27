@@ -280,6 +280,7 @@ sidebar_label: Settings
 ## Resource management
 |   Name    |   Description   |  Default  |   Notes   |
 |-----------|-----------------|:---------:|-----------|
+| append-stores-max-mem-bytes | Maximum total size of in-flight StoreStorageTasks from appenders and recoveries. Evenly divided among shards. | 2G | server&nbsp;only |
 | eagerly-allocate-fdtable | enables an optimization to eagerly allocate the kernel fdtable at startup | false | requires&nbsp;restart, server&nbsp;only |
 | fd-limit | maximum number of file descriptors that the process can allocate (may require root priviliges). If equal to zero, do not set any limit. | 0 | requires&nbsp;restart, server&nbsp;only |
 | flow-groups-run-deadline | Maximum delay (plus one cycle of the event loop) between a request to run FlowGroups and Sender::runFlowGroups() executing. | 5ms |  |
@@ -293,10 +294,11 @@ sidebar_label: Settings
 | max-total-appenders-size-soft | Total size in bytes of running Appenders accross all workers after which we start taking measures to reduce the Appender residency time. | 524288000 | server&nbsp;only |
 | max-total-buffered-append-size | Total size in bytes of payloads buffered in BufferedWriters in sequencers for server-side batching and compression. Appends will be rejected when this threshold is significantly exceeded. | 1073741824 | server&nbsp;only |
 | num-reserved-fds | expected number of file descriptors to reserve for use by RocksDB files and server-to-server connections within the cluster. This number is subtracted from --fd-limit (if set) to obtain the maximum number of client TCP connections that the server will be willing to accept.  | 0 | requires&nbsp;restart, server&nbsp;only |
-| per-worker-storage-task-queue-size | max number of StorageTask instances to buffer in each Worker for each local log store shard | 16384 | requires&nbsp;restart, server&nbsp;only |
+| per-worker-storage-task-queue-size | max number of StorageTask instances to buffer in each Worker for each local log store shard | 1 | requires&nbsp;restart, server&nbsp;only |
 | queue-drop-overload-time | max time after worker's storage task queue is dropped before it stops being considered overloaded | 1s | server&nbsp;only |
 | queue-size-overload-percentage | percentage of per-worker-storage-task-queue-size that can be buffered before the queue is considered overloaded | 50 | server&nbsp;only |
 | read-storage-tasks-max-mem-bytes | Maximum amount of memory that can be allocated by read storage tasks. | 16106127360 | server&nbsp;only |
+| rebuilding-stores-max-mem-bytes | Maxumun total size of in-flight StoreStorageTasks from rebuilding. Evenly divided among shards. | 2G | server&nbsp;only |
 | rocksdb-low-ioprio | IO priority to request for low-pri rocksdb threads. This works only if current IO scheduler supports IO priorities.See man ioprio\_set for possible values. "any" or "" to keep the default.  | 3,0 | requires&nbsp;restart, server&nbsp;only |
 | rocksdb-stall-cache-ttl | How often to re-check whether we should stall low-pri writes | 100ms | server&nbsp;only |
 | slow-ioprio | IO priority to request for 'slow' storage threads. Storage threads in the 'slow' thread pool handle high-latency RocksDB IO requests,  primarily data reads. Not all kernel IO schedulers supports IO priorities.See man ioprio\_set for possible values."any" or "" to keep the default. | 3,0 | requires&nbsp;restart, server&nbsp;only |

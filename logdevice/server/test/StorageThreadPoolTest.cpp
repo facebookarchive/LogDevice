@@ -102,7 +102,7 @@ TEST(StorageThreadPoolTest, Basic) {
 
   TemporaryRocksDBStore store;
   auto pool = std::make_unique<StorageThreadPool>(
-      0, params, settings, &store, task_queue_slots);
+      0, 1, params, settings, &store, task_queue_slots);
 
   Semaphore sem;
   for (int i = 0; i < ntasks; ++i) {
@@ -157,7 +157,7 @@ TEST(StorageThreadPoolTest, SyncingShutdown) {
 
   TemporaryRocksDBStore store;
   auto pool = std::make_unique<StorageThreadPool>(
-      0, params, settings, &store, task_queue_slots);
+      0, 1, params, settings, &store, task_queue_slots);
 
   folly::Baton<> started;
   std::atomic<bool> executed(false);
@@ -187,6 +187,7 @@ TEST(StorageThreadPoolTest, DifferentPriorities) {
   Semaphore sem1;
   TemporaryRocksDBStore store;
   StorageThreadPool pool(0, // shard idx
+                         1, // num shards
                          params,
                          settings,
                          &store,
@@ -226,6 +227,7 @@ TEST(StorageThreadPoolTest, IOPrio) {
 
   TemporaryRocksDBStore store;
   StorageThreadPool pool(0, // shard idx
+                         1, // num shards
                          params,
                          settings,
                          &store,
@@ -302,6 +304,7 @@ TEST(StorageThreadPoolTest, BatchLimits) {
 
   TemporaryRocksDBStore store;
   StorageThreadPool pool(0, // shard idx
+                         1, // num shards
                          params,
                          settings,
                          &store,

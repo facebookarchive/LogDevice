@@ -666,6 +666,9 @@ struct Settings : public SettingsBundle {
   // Maximum amount of memory that can be allocated by read storage tasks.
   size_t read_storage_tasks_max_mem_bytes;
 
+  size_t append_stores_max_mem_bytes;
+  size_t rebuilding_stores_max_mem_bytes;
+
   // Path to LD SSL-certificate
   std::string ssl_cert_path;
 

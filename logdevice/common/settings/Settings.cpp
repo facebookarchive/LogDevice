@@ -850,7 +850,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        SettingsCategory::Network);
   init("per-worker-storage-task-queue-size",
        &per_worker_storage_task_queue_size,
-       "16384",
+       "1",
        parse_positive<ssize_t>(),
        "max number of StorageTask instances to buffer in each Worker for "
        "each local log store shard",
@@ -1450,8 +1450,24 @@ void Settings::defineSettings(SettingEasyInit& init) {
   init("read-storage-tasks-max-mem-bytes",
        &read_storage_tasks_max_mem_bytes,
        "16106127360", // 15GB
-       parse_positive<ssize_t>(),
+       parse_positive<size_t>(),
        "Maximum amount of memory that can be allocated by read storage tasks.",
+       SERVER,
+       SettingsCategory::ResourceManagement);
+  init("append-stores-max-mem-bytes",
+       &append_stores_max_mem_bytes,
+       "2G",
+       parse_positive<size_t>(),
+       "Maximum total size of in-flight StoreStorageTasks from appenders and "
+       "recoveries. Evenly divided among shards.",
+       SERVER,
+       SettingsCategory::ResourceManagement);
+  init("rebuilding-stores-max-mem-bytes",
+       &rebuilding_stores_max_mem_bytes,
+       "2G",
+       parse_positive<size_t>(),
+       "Maxumun total size of in-flight StoreStorageTasks from rebuilding. "
+       "Evenly divided among shards.",
        SERVER,
        SettingsCategory::ResourceManagement);
   init("initial-config-load-timeout",
