@@ -40,6 +40,7 @@ struct RebuildingSettings : public SettingsBundle {
   std::chrono::milliseconds local_window;
   bool local_window_uses_partition_boundary;
   std::chrono::milliseconds global_window;
+  std::chrono::milliseconds planner_scheduling_delay;
   size_t max_batch_bytes;
   std::chrono::milliseconds max_batch_time;
   size_t max_records_in_flight;

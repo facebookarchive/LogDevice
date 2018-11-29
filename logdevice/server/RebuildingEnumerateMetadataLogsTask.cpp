@@ -69,14 +69,16 @@ void RebuildingEnumerateMetadataLogsTask::onDone() {
   if (!ref_) {
     return;
   }
-  ref_->onMetaDataLogsStorageTaskDone(status_, std::move(result_));
+  shard_index_t shard_idx = storageThreadPool_->getShardIdx();
+  ref_->onMetaDataLogsStorageTaskDone(status_, shard_idx, std::move(result_));
 }
 
 void RebuildingEnumerateMetadataLogsTask::onDropped() {
   if (!ref_) {
     return;
   }
-  ref_->onMetaDataLogsStorageTaskDropped();
+  shard_index_t shard_idx = storageThreadPool_->getShardIdx();
+  ref_->onMetaDataLogsStorageTaskDropped(shard_idx);
 }
 
 }} // namespace facebook::logdevice

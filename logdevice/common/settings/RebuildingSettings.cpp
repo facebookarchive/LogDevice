@@ -65,6 +65,16 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
        "all the logs for every single shard (use with caution).",
        SERVER | DEPRECATED,
        SettingsCategory::Rebuilding);
+
+  init("planner-scheduling-delay",
+       &planner_scheduling_delay,
+       "1min",
+       validate_positive<ssize_t>(),
+       "Delay between a shard rebuilding plan request and its execution to "
+       "allow many shards to be grouped and planned together.",
+       SERVER,
+       SettingsCategory::Rebuilding);
+
   init("disable-rebuilding",
        &disable_rebuilding,
        "false",

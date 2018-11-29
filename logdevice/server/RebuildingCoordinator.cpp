@@ -753,20 +753,13 @@ void RebuildingCoordinator::restartForShard(uint32_t shard_idx,
   shard_state.globalWindowEnd = RecordTimestamp::min();
   trySlideGlobalWindow(shard_idx, set);
 
-  RebuildingPlanner::Options options{
+  RebuildingPlanner::Parameters params{
       .rebuild_metadata_logs =
           !rebuildUserLogsOnly_ && shouldRebuildMetadataLogs(shard_idx),
-      .rebuild_internal_logs = !rebuildUserLogsOnly_,
-      .min_timestamp = rsi->all_dirty_time_intervals.begin()->lower()};
+      .min_timestamp = rsi->all_dirty_time_intervals.begin()->lower(),
+      .version = shard_state.version};
 
-  shard_state.planningStartTime = SteadyTimestamp::now();
-  shard_state.planner = createRebuildingPlanner(shard_idx,
-                                                rsi->version,
-                                                options,
-                                                *shard_state.rebuildingSet,
-                                                rebuildingSettings_,
-                                                this);
-  shard_state.planner->start();
+  requestPlan(shard_idx, params, *shard_state.rebuildingSet);
 }
 
 void RebuildingCoordinator::normalizeTimeRanges(uint32_t shard_idx,
@@ -778,22 +771,90 @@ void RebuildingCoordinator::normalizeTimeRanges(uint32_t shard_idx,
   store.normalizeTimeRanges(rtis);
 }
 
-std::unique_ptr<RebuildingPlanner>
+void RebuildingCoordinator::requestPlan(shard_index_t shard_idx,
+                                        RebuildingPlanner::Parameters params,
+                                        RebuildingSet rebuilding_set) {
+  if (!requested_plans_) {
+    requested_plans_ = std::make_unique<RequestedPlans>();
+  }
+  ld_debug("Plan requested for shard_idx=%hu version=%s rebuilding_set=%s",
+           shard_idx,
+           lsn_to_string(params.version).c_str(),
+           rebuilding_set.describe().c_str());
+  requested_plans_->params[shard_idx] = params;
+  requested_plans_->rebuildingSets[shard_idx] = std::move(rebuilding_set);
+  activatePlanningTimer();
+}
+
+void RebuildingCoordinator::cancelRequestedPlans(shard_index_t shard_idx) {
+  if (requested_plans_) {
+    requested_plans_->params.erase(shard_idx);
+    requested_plans_->rebuildingSets.erase(shard_idx);
+  }
+}
+
+void RebuildingCoordinator::activatePlanningTimer() {
+  if (!planning_timer_) {
+    planning_timer_ = std::make_unique<LibeventTimer>(
+        Worker::onThisThread()->getEventBase(),
+        [self = this] { self->executePlanningRequests(); });
+  }
+  if (!planning_timer_->isActive()) {
+    planning_timer_->activate(rebuildingSettings_->planner_scheduling_delay);
+  }
+}
+
+void RebuildingCoordinator::executePlanningRequests() {
+  if (!requested_plans_) {
+    return; /* nothing to do */
+  }
+  auto params = std::move(requested_plans_->params);
+  auto rebuildingSets = std::move(requested_plans_->rebuildingSets);
+  requested_plans_.reset();
+
+  if (params.size() == 0) {
+    return; // nothing to do
+  }
+
+  auto planner = createRebuildingPlanner(params, rebuildingSets);
+
+  std::vector<std::string> params_str;
+  for (auto& kv : params) {
+    ld_check(rebuildingSets.count(kv.first));
+    auto& rb_set = rebuildingSets.at(kv.first);
+    params_str.push_back(
+        folly::sformat("[shard_idx:{}, version:{}, rebuilding_set:{}]",
+                       kv.first,
+                       lsn_to_string(kv.second.version),
+                       rb_set.describe()));
+  }
+  ld_debug("Executing the following planning requests: %s",
+           folly::join(", ", params_str).c_str());
+
+  for (auto& kv : params) {
+    auto shard = kv.first;
+    auto& shard_state = getShardState(shard);
+    if (shard_state.planner) {
+      shard_state.planner->abortShardIdx(shard);
+    }
+    shard_state.planningStartTime = SteadyTimestamp::now();
+    shard_state.planner = planner;
+  }
+  planner->start();
+}
+
+std::shared_ptr<RebuildingPlanner>
 RebuildingCoordinator::createRebuildingPlanner(
-    shard_index_t shard_idx,
-    lsn_t version,
-    RebuildingPlanner::Options options,
-    RebuildingSet rebuilding_set,
-    UpdateableSettings<RebuildingSettings> rebuilding_settings,
-    RebuildingPlanner::Listener* listener) {
-  return std::make_unique<RebuildingPlanner>(version,
-                                             shard_idx,
-                                             std::move(rebuilding_set),
-                                             rebuilding_settings,
-                                             config_,
-                                             options,
-                                             numShards(),
-                                             listener);
+    RebuildingPlanner::ParametersPerShard params,
+    RebuildingSets rebuildingSets) {
+  return std::make_shared<RebuildingPlanner>(
+      std::move(params),
+      std::move(rebuildingSets),
+      rebuildingSettings_,
+      config_,
+      numShards(),
+      /* rebuilding_internal_logs = */ !rebuildUserLogsOnly_,
+      this);
 }
 
 std::unique_ptr<ShardRebuildingInterface>
@@ -824,6 +885,7 @@ RebuildingCoordinator::createShardRebuilding(
 }
 
 void RebuildingCoordinator::abortShardRebuilding(uint32_t shard_idx) {
+  cancelRequestedPlans(shard_idx);
   auto it_shard = shardsRebuilding_.find(shard_idx);
   if (it_shard == shardsRebuilding_.end()) {
     // We are not rebuilding this shard.
@@ -837,6 +899,9 @@ void RebuildingCoordinator::abortShardRebuilding(uint32_t shard_idx) {
   }
 
   shard_state.shardRebuilding.reset();
+  if (shard_state.planner) {
+    shard_state.planner->abortShardIdx(shard_idx);
+  }
   shard_state.planner.reset();
   shard_state.logsWithPlan.clear();
   shard_state.waitingForMorePlans = 0;
@@ -979,7 +1044,7 @@ bool RebuildingCoordinator::shouldAcknowledgeRebuilding(
 void RebuildingCoordinator::onRetrievedPlanForLog(
     logid_t log,
     const uint32_t shard_idx,
-    RebuildingPlanner::LogPlan log_plan,
+    std::unique_ptr<RebuildingPlan> log_plan,
     bool is_authoritative,
     lsn_t version) {
   ld_assert(shardsRebuilding_.find(shard_idx) != shardsRebuilding_.end());
@@ -996,20 +1061,10 @@ void RebuildingCoordinator::onRetrievedPlanForLog(
 
   shard_state.isAuthoritative &= is_authoritative;
 
-  if (log_plan.empty()) {
-    // We don't need to rebuild this log because none of its epochs' nodesets
-    // intersect with the rebuliding set.
-  } else {
-    // TODO(T15517759): Because we are not using Flexible Log Sharding yet, all
-    // plans should be for `shard_idx`.
-    ld_check(log_plan.size() == 1);
-    auto it_plan = log_plan.find(shard_idx);
-    ld_check(it_plan != log_plan.end());
-    ld_check(it_plan->second);
-    ld_check(!it_plan->second->epochsToRead.empty());
+  ld_check(log_plan);
+  ld_check(!log_plan->epochsToRead.empty());
 
-    shard_state.logsWithPlan.emplace(log, std::move(it_plan->second));
-  }
+  shard_state.logsWithPlan.emplace(log, std::move(log_plan));
 }
 
 void RebuildingCoordinator::onLogsEnumerated(
@@ -1038,6 +1093,11 @@ void RebuildingCoordinator::onFinishedRetrievingPlans(uint32_t shard_idx,
   ld_check(version == shard_state.version);
   ld_check(shard_state.waitingForMorePlans);
   shard_state.waitingForMorePlans = 0;
+  shard_state.planner.reset();
+
+  ld_info("All plans for logs were retrieved for shard %u in version %s",
+          shard_idx,
+          lsn_to_string(version).c_str());
 
   // Remove logs that are not in config anymore.
   auto config = config_->get();

@@ -93,6 +93,7 @@ struct RebuildingSet {
 
   bool operator==(const RebuildingSet& other) const;
 };
+using RebuildingSets = std::unordered_map<shard_index_t, RebuildingSet>;
 
 class UpdateableConfig;
 class RebuildingPlan;

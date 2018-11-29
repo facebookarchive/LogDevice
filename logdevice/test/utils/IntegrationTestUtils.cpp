@@ -905,6 +905,7 @@ ParamMap Cluster::commandArgsForNode(node_index_t i, const Node& node) const {
         // everywhere.
         {"--allow-conditional-rebuilding-restarts", ParamValue{"true"}},
         {"--rebuilding-restarts-grace-period", ParamValue{"1ms"}},
+        {"--planner-scheduling-delay", ParamValue{"1s"}},
         // RebuildingTest does not expect this: #14697312
         {"--enable-self-initiated-rebuilding", ParamValue{"false"}},
         // disable failure detector because it delays sequencer startup

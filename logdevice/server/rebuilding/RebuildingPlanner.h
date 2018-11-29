@@ -81,9 +81,11 @@ namespace facebook { namespace logdevice {
 // Lives on the worker thread on which constructor was called.
 class RebuildingPlanner : public RebuildingLogEnumerator::Listener {
  public:
+  using EnumerationResults = RebuildingLogEnumerator::Results;
   using LogPlan =
       std::unordered_map<shard_index_t, std::unique_ptr<RebuildingPlan>>;
-  using Options = RebuildingLogEnumerator::Options;
+  using ParametersPerShard = RebuildingLogEnumerator::ParametersPerShard;
+  using Parameters = RebuildingLogEnumerator::Parameters;
 
   class Listener {
    public:
@@ -92,7 +94,7 @@ class RebuildingPlanner : public RebuildingLogEnumerator::Listener {
     // Called once we have rebuilding plan for a log.
     virtual void onRetrievedPlanForLog(logid_t log,
                                        uint32_t shard,
-                                       LogPlan log_plan,
+                                       std::unique_ptr<RebuildingPlan> log_plan,
                                        bool is_authoritative,
                                        lsn_t version) = 0;
 
@@ -108,30 +110,27 @@ class RebuildingPlanner : public RebuildingLogEnumerator::Listener {
     virtual void onFinishedRetrievingPlans(uint32_t shard, lsn_t version) = 0;
   };
 
-  RebuildingPlanner(lsn_t version,
-                    shard_index_t shard,
-                    RebuildingSet rebuilding_set,
+  RebuildingPlanner(ParametersPerShard parameters,
+                    RebuildingSets rebuilding_sets,
                     UpdateableSettings<RebuildingSettings> rebuilding_settings,
                     std::shared_ptr<UpdateableConfig> config,
-                    Options options,
-                    uint32_t num_shards,
+                    uint32_t max_num_shards,
+                    bool rebuild_internal_logs,
                     Listener* listener);
   virtual void start();
   virtual ~RebuildingPlanner();
 
-  /**
-   * Called when logs that should be rebuilt have been enumerated
-   */
   void onLogsEnumerated(
-      uint32_t shard_idx,
-      lsn_t version,
-      std::unordered_map<logid_t, RecordTimestamp> logs,
+      EnumerationResults results,
       std::chrono::milliseconds max_rebuild_by_retention_backlog) override;
+
+  void abortShardIdx(shard_index_t shard);
 
   size_t getNumRemainingLogs();
 
  private:
   friend class SyncSequencerRequestAdapter;
+  friend class RebuildingCoordinatorTest;
 
   // State maintained for each log as we are reading the metadata log to build a
   // plan for it.
@@ -139,18 +138,16 @@ class RebuildingPlanner : public RebuildingLogEnumerator::Listener {
     LogPlan plan;
     lsn_t until_lsn;
     NodeID seq;
-    bool isAuthoritative{true};
+    std::unordered_set<shard_index_t> non_auth_shards;
     std::unique_ptr<ExponentialBackoffTimer> timer;
   };
   std::unordered_map<logid_t, LogState, logid_t::Hash> log_states_;
 
-  lsn_t version_;
-  RebuildingSet rebuildingSet_;
+  ParametersPerShard parameters_;
+  RebuildingSets rebuildingSets_;
   UpdateableSettings<RebuildingSettings> rebuildingSettings_;
   Listener* listener_;
-  const uint32_t shard_;
   std::unique_ptr<RebuildingLogEnumerator> log_enumerator_;
-  std::unordered_map<logid_t, RecordTimestamp> next_timestamps_;
 
   // Used to ensure we have a callback called on this Worker thread when the
   // SyncSequencerRequest completes.
@@ -158,6 +155,7 @@ class RebuildingPlanner : public RebuildingLogEnumerator::Listener {
 
   size_t inFlight_{0};
   std::vector<logid_t> remaining_;
+  std::unordered_map<logid_t, RecordTimestamp, logid_t::Hash> next_timestamps_;
   int64_t last_reported_num_logs_to_plan_{0};
 
   // Looks at queue to see if some requests are ready to be sent.
@@ -191,10 +189,10 @@ class RebuildingPlanner : public RebuildingLogEnumerator::Listener {
    * Process metadata for the epoch interval [epoch_first, epoch_last] (all
    * inclusive).
    */
-  void processMetadataForEpochInterval(logid_t logid,
-                                       std::shared_ptr<EpochMetaData> metadata,
-                                       epoch_t epoch_first,
-                                       epoch_t epoch_last);
+  void computePlanForEpochInterval(logid_t logid,
+                                   std::shared_ptr<EpochMetaData> metadata,
+                                   epoch_t epoch_first,
+                                   epoch_t epoch_last);
 
   /**
    * Start a WaitForPurgesRequest to wait for purging to complete for all shards
@@ -206,6 +204,17 @@ class RebuildingPlanner : public RebuildingLogEnumerator::Listener {
    * Called when we completed the state machine for a log.
    */
   void onComplete(logid_t logid);
+
+  /**
+   * Tell shards to stop waiting for plans.
+   */
+  void notifyFinishedDeliveringPlans();
+
+  /**
+   * Returns a comma separated string with the description of the rebuilding
+   * sets for indices passed as argument.
+   */
+  std::string rebuildingSetsDescription(std::vector<shard_index_t>& shard_idxs);
 };
 
 }} // namespace facebook::logdevice

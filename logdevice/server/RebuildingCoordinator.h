@@ -134,7 +134,7 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
    */
   void onRetrievedPlanForLog(logid_t log,
                              uint32_t shard_idx,
-                             RebuildingPlanner::LogPlan log_plan,
+                             std::unique_ptr<RebuildingPlan> log_plan,
                              bool is_authoritative,
                              lsn_t version) override;
 
@@ -275,13 +275,15 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
 
   virtual node_index_t getMyNodeID();
 
-  virtual std::unique_ptr<RebuildingPlanner> createRebuildingPlanner(
-      shard_index_t shard_idx,
-      lsn_t version,
-      RebuildingPlanner::Options options,
-      RebuildingSet rebuilding_set,
-      UpdateableSettings<RebuildingSettings> rebuilding_settings,
-      RebuildingPlanner::Listener* listener);
+  void requestPlan(shard_index_t shard_idx,
+                   RebuildingPlanner::Parameters params,
+                   RebuildingSet rebuilding_set);
+  void cancelRequestedPlans(shard_index_t shard_idx);
+  void executePlanningRequests();
+
+  virtual std::shared_ptr<RebuildingPlanner>
+  createRebuildingPlanner(RebuildingPlanner::ParametersPerShard params,
+                          RebuildingSets rebuildingSets);
 
   virtual std::unique_ptr<ShardRebuildingInterface> createShardRebuilding(
       shard_index_t shard,
@@ -393,6 +395,8 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
   virtual void normalizeTimeRanges(uint32_t shard_idx,
                                    RecordTimeIntervals& rtis);
 
+  virtual void activatePlanningTimer();
+
  private:
   // Called when the rebuilding set changed. If `delta` != nullptr, only make
   // the necessary changes described by `delta`, otherwise, restart all
@@ -416,6 +420,14 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
   UpdateableSettings<RebuildingSettings> rebuildingSettings_;
 
   ShardedLocalLogStore* shardedStore_;
+
+  struct RequestedPlans {
+    RebuildingPlanner::ParametersPerShard params;
+    RebuildingSets rebuildingSets;
+  };
+
+  std::unique_ptr<RequestedPlans> requested_plans_;
+  std::unique_ptr<LibeventTimer> planning_timer_;
 
   /**
    * State maintained per shard.
@@ -443,7 +455,7 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
     // In order to determine which LSN to rebuild up to, this utility sends
     // GET_SEQ_STATE requests to sequencers until they give us all `untilLsn`s
     // and release all records up to it.
-    std::unique_ptr<RebuildingPlanner> planner;
+    std::shared_ptr<RebuildingPlanner> planner;
     SteadyTimestamp planningStartTime = SteadyTimestamp::max();
 
     int waitingForMorePlans{1};

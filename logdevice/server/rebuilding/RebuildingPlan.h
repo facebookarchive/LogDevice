@@ -66,7 +66,7 @@ class RebuildingPlan {
   epoch_ranges_t epochsToRead;
 
   // Smallest timestamp for which there should be anything to rebuild.
-  folly::Optional<RecordTimestamp> smallestTimestamp;
+  RecordTimestamp smallestTimestamp;
 
   // Node ID that runs sequencer for the epoch of untilLSN. Sent in STORE
   // messages to allow recipient storage nodes to update seals and do purging.

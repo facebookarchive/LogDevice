@@ -27,6 +27,16 @@ void RebuildingLogEnumerator::start() {
 
   uint32_t internalSkipped = 0;
   uint32_t dataSkipped = 0;
+
+  const auto use_legacy_mapping =
+      rebuilding_settings_->use_legacy_log_to_shard_mapping_in_rebuilding;
+
+  std::vector<bool> is_shard_present(max_num_shards_, false);
+  for (auto& p : parameters_) {
+    const auto shard_idx = p.first;
+    is_shard_present[shard_idx] = true;
+  }
+
   for (auto it = local_logs_config->logsBegin();
        it != local_logs_config->logsEnd();
        ++it) {
@@ -39,13 +49,13 @@ void RebuildingLogEnumerator::start() {
       continue;
     }
 
-    // Let's try and approximate the next timestamp for this log. If the log has
-    // no backlog configured, it is set to -inf. Otherwise, the next timestamp
-    // is the current timestamp minus the backlog value.
-    // Note that this value does not have to be precise. The goal here is to
-    // maximize the chances that the first time we read a batch for a log we
-    // will read some records instead of having the batch stop as soon as it
-    // encounters the first record.
+    // Let's try and approximate the next timestamp for this log. If the log
+    // has no retention/backlog configured, it is set to -inf. Otherwise, the
+    // next timestamp is the current timestamp minus the backlog value. Note
+    // that this value does not have to be precise. The goal here is to maximize
+    // the chances that the first time we read a batch for a log we will read
+    // some records instead of having the batch stop as soon as it encounters
+    // the first record.
     const auto& backlog =
         it->second.log_group->attrs().backlogDuration().value();
 
@@ -74,74 +84,107 @@ void RebuildingLogEnumerator::start() {
     if (backlog.hasValue()) {
       next_ts = cur_timestamp - backlog.value();
     }
-    // Don't start lower than the lower bound of a time-ranged rebuild.
-    next_ts.storeMax(min_timestamp_);
 
     // TODO: T31009131 stop using the getLegacyShardIndexForLog() function
     // altogether.
-    if (getLegacyShardIndexForLog(logid, num_shards_) == shard_idx_ ||
-        !rebuilding_settings_->use_legacy_log_to_shard_mapping_in_rebuilding) {
-      ld_assert(result_.find(logid) == result_.end());
-      result_.emplace(logid, next_ts);
+    int64_t dest_shard = getLegacyShardIndexForLog(logid, max_num_shards_);
+    if (use_legacy_mapping && !is_shard_present[dest_shard]) {
+      continue; // log does not belong to any shards being rebuilt
     }
+
+    results_.emplace(logid, next_ts);
   }
   ld_info("Enumerator skipped %d internal and %d data logs. Queued %ld logs "
           "for rebuild.",
           internalSkipped,
           dataSkipped,
-          result_.size());
-  if (rebuild_metadata_logs_) {
-    putStorageTask();
-  } else {
-    finalize();
+          results_.size());
+
+  /* figure out the metadata logs for shards that have requested them */
+  for (const auto& p : parameters_) {
+    auto shard_idx = p.first;
+    auto params = p.second;
+
+    if (params.rebuild_metadata_logs) {
+      shard_storage_tasks_remaining_.insert(shard_idx);
+      putStorageTask(shard_idx);
+    }
   }
+  maybeFinalize();
+  // `this` may be destroyed here.
 }
 
-void RebuildingLogEnumerator::putStorageTask() {
+void RebuildingLogEnumerator::putStorageTask(uint32_t shard_idx) {
   auto task = std::make_unique<RebuildingEnumerateMetadataLogsTask>(
-      ref_holder_.ref(), num_shards_);
+      ref_holder_.ref(), max_num_shards_);
   auto task_queue =
-      ServerWorker::onThisThread()->getStorageTaskQueueForShard(shard_idx_);
+      ServerWorker::onThisThread()->getStorageTaskQueueForShard(shard_idx);
   task_queue->putTask(std::move(task));
 }
 
 void RebuildingLogEnumerator::onMetaDataLogsStorageTaskDone(
     Status st,
+    uint32_t shard_idx,
     std::vector<logid_t> log_ids) {
-  if (st != E::OK) {
+  if (!shard_storage_tasks_remaining_.count(shard_idx)) {
+    return; // ignore
+  } else if (st != E::OK) {
+    const auto& params = parameters_.at(shard_idx);
     RATELIMIT_ERROR(std::chrono::seconds(10),
                     1,
                     "Unable to enumerate metadata logs for rebuilding on shard "
                     "%u, version %s: %s. Retrying...",
-                    shard_idx_,
-                    lsn_to_string(version_).c_str(),
+                    shard_idx,
+                    lsn_to_string(params.version).c_str(),
                     error_description(st));
-    putStorageTask();
-    return;
+    putStorageTask(shard_idx);
+  } else {
+    for (logid_t l : log_ids) {
+      results_.emplace(l, RecordTimestamp::min());
+    }
+    shard_storage_tasks_remaining_.erase(shard_idx);
+    maybeFinalize();
+    // `this` may be destroyed here.
   }
-  for (logid_t l : log_ids) {
-    result_.emplace(l, min_timestamp_);
-  }
-  finalize();
 }
 
-void RebuildingLogEnumerator::onMetaDataLogsStorageTaskDropped() {
+void RebuildingLogEnumerator::onMetaDataLogsStorageTaskDropped(
+    uint32_t shard_idx) {
   // Retrying
+  const auto& params = parameters_.at(shard_idx);
   RATELIMIT_WARNING(std::chrono::seconds(10),
                     1,
                     "Storage task for enumerating metadata logs dropped for "
                     "rebuilding on shard %u, version %s. Retrying...",
-                    shard_idx_,
-                    lsn_to_string(version_).c_str());
-  putStorageTask();
+                    shard_idx,
+                    lsn_to_string(params.version).c_str());
+  putStorageTask(shard_idx);
 }
 
-void RebuildingLogEnumerator::finalize() {
-  ld_check(!finalize_called_);
-  finalize_called_ = true;
+void RebuildingLogEnumerator::abortShardIdx(shard_index_t shard_idx) {
+  parameters_.erase(shard_idx);
+  shard_storage_tasks_remaining_.erase(shard_idx);
+  maybeFinalize();
+  // `this` may be destroyed here.
+}
 
-  callback_->onLogsEnumerated(
-      shard_idx_, version_, std::move(result_), maxBacklogDuration_);
+void RebuildingLogEnumerator::maybeFinalize() {
+  ld_check(!finalized_);
+
+  if (shard_storage_tasks_remaining_.size() > 0) {
+    std::string shards_remaining_str = "";
+    for (auto shard : shard_storage_tasks_remaining_) {
+      shards_remaining_str += " " + std::to_string(shard);
+    }
+    RATELIMIT_INFO(std::chrono::seconds(1),
+                   1,
+                   "Waiting storage tasks for shards: %s",
+                   shards_remaining_str.c_str());
+    return;
+  }
+
+  finalized_ = true;
+  callback_->onLogsEnumerated(std::move(results_), maxBacklogDuration_);
   // `this` may be destroyed here.
 }
 

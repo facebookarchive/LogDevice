@@ -181,6 +181,7 @@ static std::unordered_set<std::pair<logid_t, shard_index_t>>
     restart_timer_activated;
 static std::unordered_set<uint32_t> stall_timer_activated;
 static std::unordered_set<uint32_t> restart_scheduled;
+static bool planning_timer_activated{false};
 
 class MockedRebuildingCoordinator;
 
@@ -280,28 +281,29 @@ class MockedRebuildingCoordinator : public RebuildingCoordinator {
  public:
   class MockedRebuildingPlanner : public RebuildingPlanner {
    public:
-    MockedRebuildingPlanner(shard_index_t shard_idx,
-                            lsn_t version,
-                            RebuildingSet rebuilding_set,
-                            UpdateableSettings<RebuildingSettings> settings,
-                            std::shared_ptr<UpdateableConfig> config,
-                            RebuildingPlanner::Options options,
-                            uint32_t num_shards,
-                            Listener* listener,
-                            MockedRebuildingCoordinator* owner)
-        : RebuildingPlanner(version,
-                            shard_idx,
-                            std::move(rebuilding_set),
-                            std::move(settings),
+    MockedRebuildingPlanner(
+        ParametersPerShard parameters,
+        RebuildingSets rebuilding_sets,
+        UpdateableSettings<RebuildingSettings> rebuilding_settings,
+        std::shared_ptr<UpdateableConfig> config,
+        uint32_t max_num_shards,
+        bool rebuild_internal_logs,
+        Listener* listener,
+        MockedRebuildingCoordinator* owner)
+        : RebuildingPlanner(parameters,
+                            std::move(rebuilding_sets),
+                            std::move(rebuilding_settings),
                             std::move(config),
-                            options,
-                            num_shards,
+                            max_num_shards,
+                            rebuild_internal_logs,
                             listener),
-          shardIdx_(shard_idx),
-          version_(version),
+          params_(parameters),
           owner_(owner) {
-      EXPECT_EQ(0, owner_->rebuildingPlanners.count(shardIdx_));
-      owner_->rebuildingPlanners[shardIdx_] = this;
+      for (auto& kv : parameters) {
+        auto sidx = kv.first;
+        EXPECT_EQ(0, owner_->rebuildingPlanners.count(sidx));
+        owner_->rebuildingPlanners[sidx] = this;
+      }
     }
 
     void start() override {}
@@ -310,12 +312,14 @@ class MockedRebuildingCoordinator : public RebuildingCoordinator {
       if (!owner_) {
         return;
       }
-      EXPECT_EQ(this, owner_->rebuildingPlanners[shardIdx_]);
-      owner_->rebuildingPlanners.erase(shardIdx_);
+      for (auto& kv : params_) {
+        auto sidx = kv.first;
+        EXPECT_EQ(this, owner_->rebuildingPlanners[sidx]);
+        owner_->rebuildingPlanners.erase(sidx);
+      }
     }
 
-    shard_index_t shardIdx_;
-    lsn_t version_;
+    ParametersPerShard params_;
     MockedRebuildingCoordinator* owner_;
   };
 
@@ -368,22 +372,18 @@ class MockedRebuildingCoordinator : public RebuildingCoordinator {
     return my_node_id;
   }
 
-  std::unique_ptr<RebuildingPlanner> createRebuildingPlanner(
-      shard_index_t shard_idx,
-      lsn_t version,
-      RebuildingPlanner::Options options,
-      RebuildingSet rebuilding_set,
-      UpdateableSettings<RebuildingSettings> rebuilding_settings,
-      RebuildingPlanner::Listener* listener) override {
-    return std::make_unique<MockedRebuildingPlanner>(shard_idx,
-                                                     version,
-                                                     rebuilding_set,
-                                                     rebuilding_settings,
-                                                     config_,
-                                                     options,
-                                                     numShards(),
-                                                     listener,
-                                                     this);
+  std::shared_ptr<RebuildingPlanner>
+  createRebuildingPlanner(RebuildingPlanner::ParametersPerShard params,
+                          RebuildingSets rebuildingSets) override {
+    return std::make_shared<MockedRebuildingPlanner>(
+        std::move(params),
+        std::move(rebuildingSets),
+        rebuildingSettings_,
+        config_,
+        numShards(),
+        /* rebuilding_internal_logs = */ !rebuildUserLogsOnly_,
+        this,
+        this);
   }
 
   std::unique_ptr<ShardRebuildingInterface> createShardRebuilding(
@@ -467,6 +467,10 @@ class MockedRebuildingCoordinator : public RebuildingCoordinator {
   std::map<shard_index_t, MockedRebuildingPlanner*> rebuildingPlanners;
 
   std::map<shard_index_t, MockedShardRebuildingV1*> shardRebuildings;
+
+  void activatePlanningTimer() override {
+    planning_timer_activated = true;
+  }
 
  private:
   shard_size_t num_shards_;
@@ -562,6 +566,7 @@ class RebuildingCoordinatorTest : public ::testing::Test {
   void triggerScheduledRestarts() {
     for (shard_index_t s : restart_scheduled) {
       coordinator_->restartForShard(s, *rebuilding_set_);
+      coordinator_->executePlanningRequests();
     }
     restart_scheduled.clear();
   }
@@ -605,7 +610,8 @@ class RebuildingCoordinatorTest : public ::testing::Test {
       if (!planner) {
         ADD_FAILURE();
       } else {
-        EXPECT_EQ(version, planner->version_);
+        ASSERT_GT(planner->parameters_.count(shard_idx), 0);
+        EXPECT_EQ(version, planner->parameters_[shard_idx].version);
       }
     }
 
@@ -614,7 +620,6 @@ class RebuildingCoordinatorTest : public ::testing::Test {
       for (size_t i = log1; i <= num_logs; i += num_shards) {
         onRetrievedPlanForLog(i, shard_idx, until_lsn.value(), version);
       }
-      sendOutEmptyPlansForLogsOnDifferentShard(shard_idx, version);
       onFinishedRetrievingPlans(shard_idx);
     }
   }
@@ -771,23 +776,13 @@ class RebuildingCoordinatorTest : public ::testing::Test {
                              lsn_t until_lsn,
                              lsn_t version) {
     auto plan = std::make_unique<RebuildingPlan>(RecordTimestamp::min());
-    RebuildingPlanner::LogPlan log_plan;
     auto metadata = std::make_shared<EpochMetaData>(
         StorageSet{N0S1, N1S1, N2S1, N2S3, N3S1, N3S3, N4S1},
         ReplicationProperty(3, NodeLocationScope::NODE));
     plan->addEpochRange(EPOCH_MIN, EPOCH_MAX, std::move(metadata));
     plan->untilLSN = until_lsn;
-    log_plan[shard_idx] = std::move(plan);
     coordinator_->onRetrievedPlanForLog(
-        logid_t(log), shard_idx, std::move(log_plan), true, version);
-  }
-
-  void onRetrievedEmptyPlanForLog(logid_t::raw_type log,
-                                  shard_index_t shard_idx,
-                                  lsn_t version) {
-    RebuildingPlanner::LogPlan log_plan;
-    coordinator_->onRetrievedPlanForLog(
-        logid_t(log), shard_idx, std::move(log_plan), true, version);
+        logid_t(log), shard_idx, std::move(plan), true, version);
   }
 
   void onFinishedRetrievingPlans(shard_index_t shard_idx,
@@ -796,16 +791,6 @@ class RebuildingCoordinatorTest : public ::testing::Test {
       version = rebuilding_set_->getLastSeenLSN();
     }
     coordinator_->onFinishedRetrievingPlans(shard_idx, version);
-  }
-
-  void sendOutEmptyPlansForLogsOnDifferentShard(shard_index_t shard_idx,
-                                                lsn_t version) {
-    // we should have received empty plans for logs should not be on shard 1
-    for (int log = 1; log <= num_logs; ++log) {
-      if (getLegacyShardIndexForLog(logid_t(log), num_shards) != shard_idx) {
-        onRetrievedEmptyPlanForLog(log, shard_idx, version);
-      }
-    }
   }
 
   void noteConfigurationChanged() {
@@ -1421,7 +1406,6 @@ TEST_F(RebuildingCoordinatorTest, UntilLsn) {
   lsn_t v1 = onShardNeedsRebuild(1, 1, 0 /* flags */, folly::none);
   ASSERT_NO_STARTED();
 
-  sendOutEmptyPlansForLogsOnDifferentShard(1, v1);
   onRetrievedPlanForLog(3, 1, 1300, v1);
   onRetrievedPlanForLog(9, 1, 1400, v1);
   onRetrievedPlanForLog(1, 1, 1500, v1);
@@ -1701,7 +1685,6 @@ TEST_F(RebuildingCoordinatorTest, AbortOnLogRemoval) {
 
   ld_info("Requesting rebuilding of N4 shard 1.");
   lsn_t v2 = onShardNeedsRebuild(3, 1, 0 /* flags */, folly::none);
-  sendOutEmptyPlansForLogsOnDifferentShard(1, v2);
 
   // Simulate removal of log
   num_logs = 2;
@@ -1713,7 +1696,6 @@ TEST_F(RebuildingCoordinatorTest, AbortOnLogRemoval) {
   ASSERT_LOG_REBUILDING_ABORTED(3, 7);
 
   onRetrievedPlanForLog(1, 1, 100, 2);
-  onRetrievedEmptyPlanForLog(5, 1, 2);
   onFinishedRetrievingPlans(1, 2);
   auto set2 =
       RebuildingSet({{N3S1, RebuildingNodeInfo(RebuildingMode::RESTORE)}});

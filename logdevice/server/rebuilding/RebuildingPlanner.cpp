@@ -56,24 +56,32 @@ class SyncSequencerRequestAdapter : public SyncSequencerRequest {
 };
 
 RebuildingPlanner::RebuildingPlanner(
-    lsn_t version,
-    shard_index_t shard,
-    RebuildingSet rebuilding_set,
+    ParametersPerShard parameters,
+    RebuildingSets rebuilding_sets,
     UpdateableSettings<RebuildingSettings> rebuilding_settings,
     std::shared_ptr<UpdateableConfig> config,
-    Options options,
-    uint32_t num_shards,
+    uint32_t max_num_shards,
+    bool rebuild_internal_logs,
     Listener* listener)
-    : version_(version),
-      rebuildingSet_(std::move(rebuilding_set)),
+    : parameters_(std::move(parameters)),
+      rebuildingSets_(std::move(rebuilding_sets)),
       rebuildingSettings_(rebuilding_settings),
       listener_(listener),
-      shard_(shard),
       callbackHelper_(this) {
   ld_check(listener);
+  ld_check(rebuildingSets_.size() == parameters_.size());
+  for (auto& p : parameters_) {
+    auto shard = p.first;
+    ld_check(rebuildingSets_.count(shard));
+  }
 
-  log_enumerator_ = std::make_unique<RebuildingLogEnumerator>(
-      config, shard_, version, rebuilding_settings, options, num_shards, this);
+  log_enumerator_ =
+      std::make_unique<RebuildingLogEnumerator>(parameters_,
+                                                rebuild_internal_logs,
+                                                config,
+                                                rebuilding_settings,
+                                                max_num_shards,
+                                                this);
 }
 
 RebuildingPlanner::~RebuildingPlanner() {
@@ -90,39 +98,44 @@ void RebuildingPlanner::start() {
   log_enumerator_->start();
 }
 
-void RebuildingPlanner::onLogsEnumerated(
-    uint32_t shard_idx,
-    lsn_t version,
-    std::unordered_map<logid_t, RecordTimestamp> logs,
-    std::chrono::milliseconds max_rebuild_by_retention_backlog) {
-  ld_check(version == version_);
+void RebuildingPlanner::onLogsEnumerated(EnumerationResults results, std::chrono::milliseconds max_rebuild_by_retention_backlog) {
+  ld_check(remaining_.size() == 0);
+  log_enumerator_.reset();
 
-  listener_->onLogsEnumerated(
-      shard_, version_, max_rebuild_by_retention_backlog);
+  for (auto& p : parameters_) {
+    auto shard = p.first;
+    auto version = p.second.version;
+    listener_->onLogsEnumerated(
+        shard, version, max_rebuild_by_retention_backlog);
+  }
 
-  if (logs.empty()) {
-    // No logs to rebuild in this shard.
-    ld_info("There are no logs to rebuild in shard %u", shard_idx);
-    listener_->onFinishedRetrievingPlans(shard_, version_);
+  if (results.empty()) {
+    notifyFinishedDeliveringPlans();
     // `this` may be destroyed here.
     return;
   }
 
-  remaining_.reserve(logs.size());
-  for (auto& kv : logs) {
+  remaining_.reserve(results.size());
+  next_timestamps_ = std::move(results);
+  for (auto& kv : next_timestamps_) {
     remaining_.push_back(kv.first);
   }
-
-  next_timestamps_ = std::move(logs);
 
   // for tests
   std::sort(remaining_.begin(), remaining_.end());
 
-  ld_info("Starting rebuilding of shard %u with rebuilding set: %s",
-          shard_idx,
-          rebuildingSet_.describe().c_str());
+  for (auto& kv : parameters_) {
+    const auto& rebuildingSet = rebuildingSets_.find(kv.first);
+    ld_check(rebuildingSet != rebuildingSets_.end());
+    ld_info("Starting rebuilding of shard %u with version %s and rebuilding "
+            "set: %s",
+            kv.first,
+            lsn_to_string(kv.second.version).c_str(),
+            rebuildingSet->second.describe().c_str());
+  }
 
   maybeSendMoreRequests();
+  // `this` may be destroyed here.
 }
 
 void RebuildingPlanner::maybeSendMoreRequests() {
@@ -132,8 +145,8 @@ void RebuildingPlanner::maybeSendMoreRequests() {
     logid_t logid = remaining_.back();
     remaining_.pop_back();
 
-    sendSyncSequencerRequest(logid);
     ++inFlight_;
+    sendSyncSequencerRequest(logid);
   }
 
   /* bump stats */
@@ -144,9 +157,9 @@ void RebuildingPlanner::maybeSendMoreRequests() {
   last_reported_num_logs_to_plan_ = nLogsToPlan;
 
   if (nLogsToPlan == 0) {
-    listener_->onFinishedRetrievingPlans(shard_, version_);
-    // `this` may be destroyed here.
+    notifyFinishedDeliveringPlans();
   }
+  // `this` may be destroyed here.
 }
 
 void RebuildingPlanner::sendSyncSequencerRequest(logid_t logid) {
@@ -215,8 +228,8 @@ void RebuildingPlanner::onSyncSequencerComplete(
     std::shared_ptr<const EpochMetaDataMap> metadata_map) {
   LogState& log_state = log_states_[logid];
 
-  /* We are now going to process every interval for the epoch range
-   * [EPOCH_MIN,epoch_max] */
+  /* We are going over all epoch intervals provided by the `metadata_map` to
+   * compute a piece of the plan for the interval [EPOCH_MIN,epoch_max]. */
   epoch_t epoch_max = std::min(lsn_to_epoch(log_state.until_lsn), EPOCH_MAX);
 
   if (MetaDataLog::isMetaDataLog(logid)) {
@@ -231,8 +244,9 @@ void RebuildingPlanner::onSyncSequencerComplete(
         meta_storage_set,
         ReplicationProperty::fromLogAttributes(meta_log->attrs()));
     ld_check(metadata->isValid());
-    processMetadataForEpochInterval(
+    computePlanForEpochInterval(
         logid, std::move(metadata), EPOCH_MIN, epoch_max);
+    waitForPurges(logid);
   } else {
     ld_check(metadata_map != nullptr);
     epoch_t effective_until = metadata_map->getEffectiveUntil();
@@ -248,20 +262,18 @@ void RebuildingPlanner::onSyncSequencerComplete(
 
       if (epoch_first <= epoch_max) {
         // i.e. if we have an intersection.
-        processMetadataForEpochInterval(
-            logid,
-            std::make_shared<EpochMetaData>(metadata),
-            epoch_first,
-            std::min(epoch_last, epoch_max));
+        computePlanForEpochInterval(logid,
+                                    std::make_shared<EpochMetaData>(metadata),
+                                    epoch_first,
+                                    std::min(epoch_last, epoch_max));
       }
     }
+    waitForPurges(logid);
   }
 }
 
 std::vector<shard_index_t>
 RebuildingPlanner::findDonorShards(EpochMetaData& metadata) const {
-  std::vector<shard_index_t> donors;
-
   auto cfg = Worker::getConfig();
 
   // First, remove from the storage set any node that's no longer in the config.
@@ -276,19 +288,23 @@ RebuildingPlanner::findDonorShards(EpochMetaData& metadata) const {
                                }),
                 shards_.end());
   metadata.setShards(shards_);
-
   const StorageSet& shards = metadata.shards;
 
-  bool intersect = std::any_of(shards.begin(), shards.end(), [this](ShardID s) {
-    return rebuildingSet_.shards.find(s) != rebuildingSet_.shards.end();
-  });
-  if (!intersect) {
-    // The rebuilding set does not intersect with this storage set.
-    return donors;
+  /* Check if some shard on the StorageSet needs to be replicated */
+  bool needs_replication =
+      std::any_of(shards.begin(), shards.end(), [this](ShardID s) {
+        auto shard_idx = s.shard();
+        return rebuildingSets_.count(shard_idx) > 0 &&
+            rebuildingSets_.at(shard_idx).shards.count(s);
+      });
+  if (!needs_replication) {
+    return {};
   }
 
-  // For each donor shard on this node, check if it should be a donor for this
-  // EpochMetaData.
+  std::vector<shard_index_t> donors;
+
+  // Add to `donors` all indices of shards on this node that appear on the
+  // storage set for this epoch interval.
   node_index_t nid = cfg->serverConfig()->getMyNodeID().index();
   const auto node = cfg->serverConfig()->getNode(nid);
   ld_check(node);
@@ -305,7 +321,6 @@ RebuildingPlanner::findDonorShards(EpochMetaData& metadata) const {
 bool RebuildingPlanner::rebuildingIsAuthoritative(
     const EpochMetaData& metadata) const {
   auto cfg = Worker::getConfig()->serverConfig();
-  const auto& rebuilding_set = rebuildingSet_.shards;
 
   // Create a FailureDomainNodeSet where the attribute is whether or not the
   // node is rebuilding in RESTORE mode...
@@ -318,13 +333,18 @@ bool RebuildingPlanner::rebuildingIsAuthoritative(
   // declared UNRECOVERABLE) or are in the rebuilding set for a time-ranged
   // rebuild where we assume the node is back up and any data it is missing
   // is permanently lost.
-  for (auto& n : rebuilding_set) {
-    if (n.second.mode == RebuildingMode::RESTORE &&
-        n.second.dc_dirty_ranges.empty() &&
-        !rebuildingSet_.empty.count(n.first) && f.containsShard(n.first)) {
-      f.setShardAttribute(n.first, true);
+  for (auto& kv : rebuildingSets_) {
+    auto& rb_set = kv.second;
+    auto& rb_set_shards = rb_set.shards;
+    for (auto& n : rb_set_shards) {
+      if (n.second.mode == RebuildingMode::RESTORE &&
+          n.second.dc_dirty_ranges.empty() && !rb_set.empty.count(n.first) &&
+          f.containsShard(n.first)) {
+        f.setShardAttribute(n.first, true);
+      }
     }
   }
+
   // ... and check if we can replicate amongst such nodes, which would mean
   // rebuilding may miss some records and thus is not authoritative.
   if (f.canReplicate(true)) {
@@ -342,22 +362,26 @@ bool RebuildingPlanner::rebuildingSetTooBig(
   // storage shard can receive stores...
   FailureDomainNodeSet<bool> f(metadata.shards, cfg, metadata.replication);
   for (ShardID s : metadata.shards) {
-    auto kv = rebuildingSet_.shards.find(s);
-    // Assume shards that aren't rebuilding or are rebuilding just for some
-    // time ranges can receive data.
-    bool accepting_stores = kv == rebuildingSet_.shards.end() ||
-        !kv->second.dc_dirty_ranges.empty();
+    bool accepting_stores = true;
+
+    if (rebuildingSets_.count(s.shard())) {
+      auto& rss = rebuildingSets_.at(s.shard()).shards;
+      auto it = rss.find(s);
+      // Assume shards that aren't rebuilding or are rebuilding just for some
+      // time ranges can receive data.
+      accepting_stores =
+          (it == rss.end() || !it->second.dc_dirty_ranges.empty());
+    }
     f.setShardAttribute(s, accepting_stores);
   }
 
-  // ... and verify that we can replicate amongst them.  If we cannot
-  // replicate because too many shards are rebuilding, we should skip the
-  // epoch otherwise this state machine will stay stuck forever unless
-  // rebuilding is aborted.
+  // ... and verify that we can replicate amongst them.  If we cannot replicate
+  // because too many shards are rebuilding, we should skip the epoch otherwise
+  // this state machine will stay stuck until rebuilding is aborted.
   return !f.canReplicate(true);
 }
 
-void RebuildingPlanner::processMetadataForEpochInterval(
+void RebuildingPlanner::computePlanForEpochInterval(
     logid_t logid,
     std::shared_ptr<EpochMetaData> metadata,
     epoch_t epoch_first,
@@ -367,6 +391,14 @@ void RebuildingPlanner::processMetadataForEpochInterval(
   LogState& log_state = it->second;
 
   auto cfg = Worker::getConfig();
+
+  auto& shards = metadata->shards;
+  auto shard_idx = shards.begin()->shard();
+
+  // TODO: T15517759 remove the requirement below
+  ld_check(std::all_of(shards.begin(), shards.end(), [shard_idx](ShardID s) {
+    return s.shard() == shard_idx;
+  }));
 
   auto donors = findDonorShards(*metadata);
   if (!donors.empty()) {
@@ -381,9 +413,9 @@ void RebuildingPlanner::processMetadataForEpochInterval(
           epoch_first.val_,
           epoch_last.val_,
           logid.val_,
-          rebuildingSet_.describe().c_str(),
+          rebuildingSetsDescription(donors).c_str(),
           metadata->replication.toString().c_str());
-      log_state.isAuthoritative = false;
+      log_state.non_auth_shards.insert(donors.begin(), donors.end());
     } else {
       for (shard_index_t shard : donors) {
         if (!log_state.plan.count(shard)) {
@@ -401,16 +433,20 @@ void RebuildingPlanner::processMetadataForEpochInterval(
             epoch_first.val_,
             epoch_last.val_,
             logid.val_,
-            rebuildingSet_.describe().c_str());
-        log_state.isAuthoritative = false;
+            rebuildingSetsDescription(donors).c_str());
+        log_state.non_auth_shards.insert(donors.begin(), donors.end());
       }
     }
   }
+}
 
-  if (epoch_last >= std::min(lsn_to_epoch(log_state.until_lsn), EPOCH_MAX)) {
-    // This was the last epoch metadata.
-    waitForPurges(logid);
+std::string RebuildingPlanner::rebuildingSetsDescription(
+    std::vector<shard_index_t>& shard_idxs) {
+  std::vector<std::string> rbsets_descriptions;
+  for (auto sidx : shard_idxs) {
+    rbsets_descriptions.push_back(rebuildingSets_[sidx].describe());
   }
+  return folly::join(", ", rbsets_descriptions);
 }
 
 void RebuildingPlanner::waitForPurges(logid_t logid) {
@@ -430,6 +466,7 @@ void RebuildingPlanner::waitForPurges(logid_t logid) {
       // removed from the config), the full content of the log should be rebuilt
       // anyway.
       onComplete(logid);
+      // `this` may be destroyed here.
     });
   };
 
@@ -450,17 +487,17 @@ void RebuildingPlanner::waitForPurges(logid_t logid) {
 
   ld_check(log_state.seq.isNodeID());
 
-  folly::small_vector<shard_index_t> shards_to_purge;
-  shards_to_purge.reserve(log_state.plan.size());
+  folly::small_vector<shard_index_t> shards_to_wait;
+  shards_to_wait.reserve(log_state.plan.size());
   for (const auto& p : log_state.plan) {
-    shards_to_purge.push_back(p.first);
+    shards_to_wait.push_back(p.first);
   }
 
   std::unique_ptr<Request> rq =
       std::make_unique<WaitForPurgesRequest>(logid,
                                              log_state.seq,
                                              log_state.until_lsn,
-                                             std::move(shards_to_purge),
+                                             std::move(shards_to_wait),
                                              cb,
                                              rebuildingSettings_);
   ld_debug("Posting a new WaitForPurgesRequest(id:%" PRIu64 ") for "
@@ -481,10 +518,50 @@ void RebuildingPlanner::onComplete(logid_t logid) {
     p.second->untilLSN = log_state.until_lsn;
     p.second->sequencerNodeID = log_state.seq;
   }
-  listener_->onRetrievedPlanForLog(
-      logid, shard_, std::move(plan), log_state.isAuthoritative, version_);
+  for (auto& kv : plan) {
+    auto shard = kv.first;
+    auto plan_for_shard = std::move(kv.second);
+    if (!parameters_.count(shard)) {
+      continue; /* this shard was aborted */
+    }
+
+    /* correct smallest timestamp with parameters */
+    auto& st = plan_for_shard->smallestTimestamp;
+    auto mn_ts = parameters_[shard].min_timestamp;
+    st = std::max(st, mn_ts);
+
+    /* send plan */
+    listener_->onRetrievedPlanForLog(
+        logid,
+        shard,
+        std::move(plan_for_shard),
+        /* isAuthoritative = */ !log_state.non_auth_shards.count(shard),
+        parameters_[shard].version);
+  }
+  next_timestamps_.erase(logid);
   log_states_.erase(logid);
   maybeSendMoreRequests();
+  // `this` may be destroyed here.
+}
+
+void RebuildingPlanner::abortShardIdx(shard_index_t shard) {
+  parameters_.erase(shard);
+  rebuildingSets_.erase(shard);
+  if (log_enumerator_) {
+    log_enumerator_->abortShardIdx(shard);
+    // `this` may be destroyed here (if we manage to remove all shards)
+  }
+}
+
+void RebuildingPlanner::notifyFinishedDeliveringPlans() {
+  // move `parameters_` out of `this` because it might be destroyed
+  auto params = std::move(parameters_);
+  for (auto& kv : params) {
+    auto shard = kv.first;
+    auto version = kv.second.version;
+    listener_->onFinishedRetrievingPlans(shard, version);
+    // `this` may be destroyed here.
+  }
 }
 
 }} // namespace facebook::logdevice
