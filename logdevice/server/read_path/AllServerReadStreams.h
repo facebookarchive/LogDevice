@@ -399,10 +399,8 @@ class AllServerReadStreams : public ShardAuthoritativeStatusSubscriber {
   using shard_member = boost::multi_index::
       member<ServerReadStream, shard_index_t, &ServerReadStream::shard_>;
 
-  // Note: using a shared_ptr here because multi_index_container does not seem
-  // to support in place construct and ServerReadStream is non copyable.
   boost::multi_index::multi_index_container<
-      std::shared_ptr<ServerReadStream>,
+      ServerReadStream,
       boost::multi_index::indexed_by<
           // index by (log ID, client ID, read stream ID, shard)
           boost::multi_index::hashed_unique<
@@ -449,7 +447,7 @@ class AllServerReadStreams : public ShardAuthoritativeStatusSubscriber {
    */
   template <typename I>
   static constexpr ServerReadStream& deref(I& it) {
-    return const_cast<ServerReadStream&>(**it);
+    return const_cast<ServerReadStream&>(*it);
   }
 
   /**

@@ -81,10 +81,8 @@ AllServerReadStreams::insertOrGet(ClientID client_id,
       log_group_path = std::make_shared<std::string>(log_path.value());
     }
   }
-  auto stream = std::make_shared<ServerReadStream>(
+  const auto insert_result = streams_.emplace(
       read_stream_id, client_id, log_id, shard, stats_, log_group_path);
-
-  const auto insert_result = streams_.insert(std::move(stream));
 
   if (insert_result.second) {
     // We actually inserted ...
@@ -140,7 +138,7 @@ AllServerReadStreams::insertOrGet(ClientID client_id,
               false /* created_for_rebuilding */);
     }
   } else {
-    (*insert_result.first)->log_group_path_ = log_group_path;
+    deref(insert_result.first).log_group_path_ = log_group_path;
   }
 
   return std::make_pair(&deref(insert_result.first), insert_result.second);
@@ -179,7 +177,7 @@ void AllServerReadStreams::eraseAllForClient(ClientID client_id) {
   std::vector<std::pair<logid_t, shard_index_t>> erased;
   auto range = client_index.equal_range(client_id);
   for (auto it = range.first; it != range.second; ++it) {
-    erased.push_back(std::make_pair((*it)->log_id_, (*it)->shard_));
+    erased.push_back(std::make_pair(it->log_id_, it->shard_));
   }
 
   // Destroy the ServerReadStream instances
@@ -263,9 +261,9 @@ void AllServerReadStreams::invalidateIterators(ClientID client_id) {
   auto ttl = Worker::settings().iterator_cache_ttl;
 
   for (auto it = range.first; it != range.second; ++it) {
-    ld_check((*it)->iterator_cache_ && "IteratorCache not set");
+    ld_check(it->iterator_cache_ && "IteratorCache not set");
 
-    (*it)->iterator_cache_->invalidateIfUnused(now, ttl);
+    it->iterator_cache_->invalidateIfUnused(now, ttl);
   }
 }
 
@@ -593,7 +591,7 @@ void AllServerReadStreams::getReadStreamsDebugInfo(
   auto range = client_index.equal_range(client_id);
   std::string out;
   for (auto it = range.first; it != range.second; ++it) {
-    (*it)->getDebugInfo(table);
+    it->getDebugInfo(table);
   }
 }
 
@@ -604,14 +602,14 @@ void AllServerReadStreams::getReadStreamsDebugInfo(
   auto range = log_index.equal_range(log_id);
   std::string out;
   for (auto it = range.first; it != range.second; ++it) {
-    (*it)->getDebugInfo(table);
+    it->getDebugInfo(table);
   }
 }
 
 void AllServerReadStreams::getReadStreamsDebugInfo(
     InfoReadersTable& table) const {
-  for (const auto& stream : streams_) {
-    stream->getDebugInfo(table);
+  for (const ServerReadStream& stream : streams_) {
+    stream.getDebugInfo(table);
   }
 }
 
@@ -729,7 +727,7 @@ void AllServerReadStreams::evictRealTimeLog(logid_t logid) {
   // "equal_range' call.
   ld_check(range.first != range.second);
   for (auto it = range.first; it != range.second; ++it) {
-    auto recs{(*it)->giveReleasedRecords()};
+    auto recs = deref(it).giveReleasedRecords();
     STAT_ADD(stats_, real_time_record_buffer_eviction, recs.size());
     // The shared_ptr to ReleasedRecords will be destroyed here.
   }
@@ -873,7 +871,7 @@ void AllServerReadStreams::distributeNewlyReleasedRecords() {
         std::shared_ptr<ReleasedRecords> ptr{records.release()};
         auto range = streams_.get<LogIndex>().equal_range(ptr->logid_);
         for (auto it = range.first; it != range.second; ++it) {
-          (*it)->addReleasedRecords(ptr);
+          deref(it).addReleasedRecords(ptr);
         }
       });
 }
