@@ -43,6 +43,9 @@ class WorkerTimeoutStats {
       folly::MultiLevelTimeSeries<Latency, std::chrono::steady_clock>;
 
   WorkerTimeoutStats();
+
+  virtual ~WorkerTimeoutStats() = default;
+
   void onCopySent(Status status, const ShardID& to, const STORE_Header& header);
   void onReply(const ShardID& from, const STORE_Header& header);
   void clear();
@@ -52,6 +55,11 @@ class WorkerTimeoutStats {
 
   std::unordered_map<node_index_t, Histogram> histograms_;
   Histogram overall_;
+
+ protected:
+  virtual uint64_t getMinSamplesPerBucket() const {
+    return 30;
+  }
 
  private:
   void cleanup();

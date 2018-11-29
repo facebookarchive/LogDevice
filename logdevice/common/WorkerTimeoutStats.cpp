@@ -104,6 +104,10 @@ WorkerTimeoutStats::getEstimations(Levels level, int node) {
   const auto now = std::chrono::steady_clock::now();
   current_histogram->update(now);
 
+  if (current_histogram->count(level) < getMinSamplesPerBucket()) {
+    return folly::none;
+  }
+
   std::array<Latency, kQuantiles.size()> result;
   for (int i = 0; i < kQuantiles.size(); ++i) {
     result[i] = std::pow(
