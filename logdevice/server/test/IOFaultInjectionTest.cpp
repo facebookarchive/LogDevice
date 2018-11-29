@@ -169,10 +169,8 @@ TEST_P(IOFaultInjectionFixture, Test) {
                                        settings->latency());
   auto& inject_context = GetParam().inject_context;
   auto expectedFaultType = FaultType::NONE;
-#ifndef NDEBUG
-  // Faults should only be injected in dbg builds.
   expectedFaultType = GetParam().expectedFaultType;
-#endif
+
   EXPECT_EQ(
       expectedFaultType,
       io_fault_injection.getInjectedFault(inject_context.shard_idx,
