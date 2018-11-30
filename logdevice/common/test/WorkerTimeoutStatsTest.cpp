@@ -15,18 +15,19 @@ namespace facebook { namespace logdevice {
 
 using namespace std::chrono_literals;
 using namespace std::chrono;
+
+struct MockWorkerTimeoutStats : public WorkerTimeoutStats {
+  uint64_t getMinSamplesPerBucket() const override {
+    return 1;
+  }
+};
+
 // With balanced load, expect balanced assignment
 TEST(WorkerTimeoutStatsTest, DummyTest) {
-  WorkerTimeoutStats stats;
+  MockWorkerTimeoutStats stats;
   auto overall_result =
       stats.getEstimations(WorkerTimeoutStats::Levels::TEN_SECONDS);
-  ASSERT_EQ(overall_result.hasValue(), 1);
-
-  std::array<WorkerTimeoutStats::Latency, WorkerTimeoutStats::kQuantiles.size()>
-      canon_result = {{1, 1, 1, 1, 1, 1}};
-
-  // Initially all histograms are 0, so after 2^percentile we will get ones.
-  ASSERT_EQ(*overall_result, canon_result);
+  ASSERT_EQ(overall_result.hasValue(), false);
 
   ShardID shard_id{1, 1};
   STORE_Header store_hdr{};
@@ -37,11 +38,10 @@ TEST(WorkerTimeoutStatsTest, DummyTest) {
   stats.onReply(shard_id, store_hdr);
   auto result = stats.getEstimations(
       WorkerTimeoutStats::Levels::TEN_SECONDS, shard_id.node());
-  ASSERT_EQ(result.hasValue(), 0); // no histogram
+  ASSERT_EQ(result.hasValue(), false); // no histogram
   overall_result =
       stats.getEstimations(WorkerTimeoutStats::Levels::TEN_SECONDS);
-  ASSERT_EQ(overall_result.hasValue(), 1);
-  ASSERT_EQ(*overall_result, canon_result);
+  ASSERT_EQ(overall_result.hasValue(), false);
 
   auto st = steady_clock::now();
   stats.onCopySent(Status::OK, shard_id, store_hdr);
@@ -58,7 +58,7 @@ TEST(WorkerTimeoutStatsTest, DummyTest) {
 }
 
 TEST(WorkerTimeoutStatsTest, StressTest) {
-  WorkerTimeoutStats stats;
+  MockWorkerTimeoutStats stats;
 
   ShardID shard_id{1, 1};
   STORE_Header store_hdr{};
