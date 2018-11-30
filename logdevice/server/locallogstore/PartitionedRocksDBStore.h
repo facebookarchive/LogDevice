@@ -622,7 +622,7 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
 
   // Returns rocksdb handle of unpartitioned column family.
   rocksdb::ColumnFamilyHandle* getUnpartitionedCFHandle() const {
-    return unpartitioned_cf_.get();
+    return unpartitioned_cf_->get();
   }
 
   int isEmpty() const override;
@@ -1491,7 +1491,7 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
   RocksDBCFPtr metadata_cf_;
 
   // Column family for unpartitioned logs. See isLogPartitioned().
-  std::unique_ptr<rocksdb::ColumnFamilyHandle> unpartitioned_cf_;
+  RocksDBCFPtr unpartitioned_cf_;
 
   // Column family for persisting log snapshot blobs.
   std::unique_ptr<rocksdb::ColumnFamilyHandle> snapshots_cf_;

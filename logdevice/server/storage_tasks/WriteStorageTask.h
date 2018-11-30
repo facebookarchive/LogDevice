@@ -72,6 +72,22 @@ class WriteStorageTask : public StorageTask {
   FlushToken syncToken() const override;
 
   /**
+   * Assign memtable id that this write is associated with. The write will be
+   * persisted once all memtable with ids less than equal to this will be
+   * persisted. This is sent to entity that issued store in the store reply.
+   */
+  virtual void setSyncToken(FlushToken flush_token) {
+    // Make sure flush token is updated with a valid value just once because
+    // there is space for a single token in the reply. The protocol message
+    // needs to change if there are multiple tokens to be sent in the reply.
+    ld_check(flushToken_ == FlushToken_INVALID ||
+             flush_token == FlushToken_INVALID);
+    if (flushToken_ == FlushToken_INVALID) {
+      flushToken_ = flush_token;
+    }
+  }
+
+  /**
    * Returns the number of write ops wrapped by this WriteStorageTask.
    */
   virtual size_t getNumWriteOps() const = 0;

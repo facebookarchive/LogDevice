@@ -887,7 +887,7 @@ void PartitionedRocksDBStore::PartitionedAllLogsIterator::seek(
         pstore_,
         /* log_id */ folly::none,
         options_,
-        pstore_->unpartitioned_cf_.get());
+        pstore_->unpartitioned_cf_->get());
     if (stats) {
       stats->stop_reading_after = std::make_pair(
           logid_t(std::numeric_limits<logid_t::raw_type>::max()), LSN_MAX);

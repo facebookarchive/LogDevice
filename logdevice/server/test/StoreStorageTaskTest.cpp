@@ -144,8 +144,7 @@ class MockWriteBatchStorageTask : public WriteBatchStorageTask {
   void
   sendDroppedToWorker(std::unique_ptr<WriteStorageTask> /*task*/) override {}
 
-  int writeMulti(const std::vector<const WriteOp*>& /*unused*/,
-                 FlushToken& /*unused*/) override {
+  int writeMulti(const std::vector<const WriteOp*>& /*unused*/) override {
     return 0;
   }
 

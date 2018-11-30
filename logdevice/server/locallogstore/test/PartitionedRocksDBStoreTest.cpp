@@ -217,6 +217,16 @@ class TestPartitionedRocksDBStore : public PartitionedRocksDBStore {
     PartitionedRocksDBStore::adviseUnstallingLowPriWrites(never_stall);
   }
 
+  bool flushMetadataMemtables(bool wait = true) {
+    ld_check(!getSettings()->read_only);
+    ld_check(!immutable_.load());
+    auto options = rocksdb::FlushOptions();
+    options.wait = wait;
+    rocksdb::Status status = db_->Flush(options, getMetadataCFHandle());
+    enterFailSafeIfFailed(status, "Flush()");
+    return status.ok();
+  }
+
   std::mutex test_mutex_;
   State states_[(int)BackgroundThreadType::COUNT];
   std::future<void> compaction_stall_future_;
@@ -9008,4 +9018,27 @@ TEST_F(PartitionedRocksDBStoreTest, MemtableFlushNotifications) {
   put({TestRecord(logid_t(1), 2)});
   EXPECT_EQ(
       latest_partition->cf_->activeMemtableFlushToken(), maxFlushToken + 3);
+}
+
+// Add a few writes and make sure the partitions have correct dependencies.
+// Issue flushes so that metadata memtable gets updated and so does the
+// dependency in the partition.
+TEST_F(PartitionedRocksDBStoreTest, PartitionsDependencyTest) {
+  auto latest_partition = store_->getLatestPartition();
+  auto metadata_cf_holder = store_->getMetadataCFPtr();
+  auto rnd = [] { return folly::Random::rand64(); };
+  auto prev_metadata_flush_token = FlushToken_INVALID;
+  for (auto i = 1; i <= 1000; ++i) {
+    put({TestRecord(logid_t(1), i)});
+    auto dependency = latest_partition->cf_->dependentMemtableFlushToken();
+    EXPECT_NE(dependency, FlushToken_INVALID);
+    EXPECT_EQ(dependency, metadata_cf_holder->activeMemtableFlushToken());
+    EXPECT_TRUE(prev_metadata_flush_token == FlushToken_INVALID ||
+                prev_metadata_flush_token < dependency);
+    if (rnd() % 4 == 0) {
+      prev_metadata_flush_token =
+          metadata_cf_holder->activeMemtableFlushToken();
+      store_->flushMetadataMemtables();
+    }
+  }
 }

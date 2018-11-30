@@ -12,7 +12,7 @@
 #include <folly/Synchronized.h>
 #include <rocksdb/db.h>
 
-#include "logdevice/common/UpdateableSharedPtr.h"
+#include "logdevice/common/toString.h"
 #include "logdevice/common/types_internal.h"
 
 namespace facebook { namespace logdevice {
@@ -26,30 +26,74 @@ struct RocksDBColumnFamily {
   // Underlying column family handle.
   const std::unique_ptr<rocksdb::ColumnFamilyHandle> cf_;
 
-  // Tracks active and flushed memtables for this column family. For every
-  // flushed memtable, this tracks flush dependency between memtable of this
-  // column family and any dependent memtable of other column family that needs
-  // to be persisted before this column family's memtable.
+  // Writes by LogsDB into any column family update metadata column family as
+  // well. For correctness, it is necessary to persist metadata cf updates
+  // before corresponding writes in a column family. This data structure
+  // tracks current active memtable and metadata column family memtable which
+  // contains the corresponding updates. The flushing mechanism uses this data
+  // to figure out if metadata memtable needs to be flushed and flushes the
+  // memtables in the right order.
+  //
+  // Flusher needs to select memtables to flush and make sure the dependency
+  // does not change through the flushing activity. To ensure this, decisions to
+  // flush and invocation of rocksdb flush api is done from single thread. The
+  // rocksdb flush implementation marks current memtable as immutable and
+  // creates a new empty memtable and makes it active for the column family. It
+  // pushes the immutable memtable to background threads where they get
+  // persisted. In order to ensure depdency does not change, this entire
+  // procedure of marking immutable and switching needs to be done atomically
+  // for a memtable and it's metadata dependency. Also background threads need
+  // to make sure that metadata memtable need to persist first before dependent
+  // memtable. RocksDB satisfies this requirement by providing Flush api that
+  // accepts multiple column families and atomically switches memtables of all
+  // the column families under the db mutex. RocksDB background threads satisfy
+  // the requirement of flushing in order by supporting the atomic flush feature
+  // where all memtables that were atomically switched together are persisted as
+  // a single transaction.
+  //
+  // Each writer thread after finishing the write queries the current active
+  // metadata memtable and marks it as a dependency. There are multiple writer
+  // threads writing into same column family at a time. Decision to flush a
+  // column family is taken from a separate thread dedicated for running the
+  // flushing logic. Assume that MemtableTracker contains some metadata memtable
+  // dependency, which already flushed. A new write is initiated for the column
+  // family which updates active memtable and newly created metadata memtable.
+  // Before the new dependency can be register flusher threads decides to pick
+  // this column family for flushing and it queries the tracker for dependent
+  // memtable. Flusher will see that the metadata memtable was already flushed
+  // and this column family can be flushed solo. This is incorrect because
+  // active memtable contains data which is dependent on a later metadata
+  // memtable. To avoid this, when initiating write to a column family
+  // active_writers_count in Tracker is incremented and it is decremented when
+  // plugging in the metadata dependency. If flusher thread decides to flush a
+  // column family with non zero writers it gets FlushToken_MAX as the dependent
+  // memtable for the column family which indicates it to flush the latest
+  // metadata memtable anyway. beginWrite and endWrite methods mark the
+  // beginning and installation of dependency respectively.
   struct MemtableTracker {
     // Tracks column family's current memtable's FlushToken. This value is
-    // initialized when rocksdb creates a new memtable for the column family.
+    // initialized when rocksdb memtable for the column family dirtied for the
+    // first time.
     // This value is invalidated when the memtable for the column_family is
-    // flushed. When memtable is selected for flushing, this value along with
-    // the dependent memtable if any is pushed into memtables pending flush
-    // list.
+    // flushed.
     FlushToken active_memtable{FlushToken_INVALID};
 
-    // Tracks FlushToken of the memtable from different column family that will
-    // be flushed before active_memtable. This allows to retire dependent data
-    // in different column family before retiring this column family's data.
-    // This value is updated till it's decided to flush the active_memtable.
-    // Writes to the active_memtable lead to this value getting updated.
-    // On deciding to flush active_memtable, this value is frozen.
-    // Flushing logic will check if the dependent memtable is already flushed,
-    // if not it will issue a flush for the column family so that data in
-    // dependent_memtable gets persisted first. After this, active and dependent
-    // memtables are added to the memtables pending flush list.
+    // If valid contians metadata column family memtable. This memtable contain
+    // updates that need to be persisted before persisting active memtable of
+    // this column family.
     FlushToken dependent_memtable{FlushToken_INVALID};
+
+    // Number of writer threads operating within RocksDB for this column family.
+    // This informs the flush code that RocksDB operations are still in flight
+    // that may still dirty the metadata CF.
+    //
+    // This count and special value for dependent_memtable protects from a race
+    // where an incorrect memtable dependency would be recorded in the tracker
+    // when there are active writers writing into the column family. The exact
+    // scenario is described above. The pessimistic_metadata_memtable_flush stat
+    // counts number of time dependent memtable was flushed because of special
+    // value.
+    uint32_t active_writers_count{0};
 
     // Ideally I would like to have the column_family handle of the dependent
     // memtable here as well. Currently it's assumed that dependent column
@@ -61,10 +105,13 @@ struct RocksDBColumnFamily {
     // dependent column families and the corresponding memtables.
 
     // Tracks memtables that are currently being written out to persistent
-    // storage. Once we get the notification that the flush completed they
-    // will be removed from here. It's expected that the memtables are popped
-    // in the order that they were flushed. When flush completes, we check to
-    // make sure that the dependent memtable was also persisted.
+    // storage. This is used to assert that memtables are always flushed in
+    // order and metadata memtable dependency is persisted when flushed
+    // completed callback is invoked. Once we get the notification that the
+    // flush completed they will be removed from here. It's expected that the
+    // memtables are popped in the order that they were flushed. When flush
+    // completes, we check to make sure that the dependent memtable was also
+    // persisted.
     std::list<MemtableFlushDependency> memtables_being_flushed;
   };
 
@@ -110,35 +157,57 @@ struct RocksDBColumnFamily {
   void onMemTableDirtied(FlushToken new_memtable_flush_token) {
     tracker_.withWLock([&](auto& locked_dependencies) {
       ld_check(locked_dependencies.active_memtable == FlushToken_INVALID);
-      // Dependent memtable can be asserted to have FlushToken_INVALID and
-      // FlushToken_MAX.
-      // Consider the following :
-      // 1. Thread T1 initiates a write by marking dependent_memtable as
-      // FlushToken_MAX and successfully writes into the memtable.
-      // 2. Another thread T2 after write to memtable by T1 initiates flush of
-      // the memtable for some reason. Before switching the active memtable the
-      // dependent_memtable is marked as FlushToken_INVALID.
-      // 3. Now on T2 the new memtable will be allocated and let's assume for
-      // simplicity the first write happens on the same thread. This method is
-      // invoked on the first write.
-      // Now we can end up in following scenarios :
-      // 1. T1 has not updated the dependent memtable value, that means on
-      // invocation of this method it's still FlushToken_INVALID. T1 won't be
-      // able to update dependency anymore.
-      // 2. T2 writes before T1 can update dependency. In this case this method
-      // is called first and dependent_memtable value is still
-      // FlushToken_INVALID. T1 won't be able to update dependency anymore.
-      // 3. Another thread T3 can initiate write to the
-      // same column family after the memtable is switched but before this
-      // method gets called and it will mark the dependent value as
-      // FlushToken_MAX. ld_check_in(locked_dependencies.dependent_memtable,
-      // {FlushToken_INVALID, FlushToken_MAX});
+      // Dependent memtable cannot be asserted to have FlushToken_INVALID.
+      // Because, some other thread which just completed the write and its data
+      // was flushed in the previous memtable, can invoke endWrite before this
+      // method gets invoked. endWrite invocation will update the
+      // dependent_memtable from FlushToken_INVALID to a valid value.
       locked_dependencies.active_memtable = new_memtable_flush_token;
     });
   }
 
   FlushToken activeMemtableFlushToken() {
     return tracker_.rlock()->active_memtable;
+  }
+
+  FlushToken dependentMemtableFlushToken() {
+    auto dependent = FlushToken_MAX;
+    tracker_.withRLock([&dependent](auto& locked) {
+      if (locked.active_writers_count == 0) {
+        dependent = locked.dependent_memtable;
+      }
+    });
+    return dependent;
+  }
+
+  void updateMemtableDependency(const FlushToken& dependency) {
+    tracker_.withWLock([&dependency](auto& locked) {
+      locked.dependent_memtable = dependency;
+    });
+  }
+
+  // Beginning of a write to a column family, after this rocksDB api will be
+  // invoked.
+  // Checkout MemtableTracker comments.
+  void beginWrite() {
+    tracker_.withWLock([&](auto& locked) { ++locked.active_writers_count; });
+  }
+
+  // End of a write to a column family, just after returning call of rocksDB
+  // api. Returns active metadata memtable flushtoken.
+  // Checkout MemtableTracker comments.
+  FlushToken endWrite(FlushToken dependency) {
+    auto flush_token = FlushToken_INVALID;
+    tracker_.withWLock([&dependency, &flush_token](auto& locked) {
+      ld_check(locked.active_writers_count > 0);
+      --locked.active_writers_count;
+      auto& dependent_memtable = locked.dependent_memtable;
+      dependent_memtable = std::max(dependent_memtable, dependency);
+
+      flush_token = locked.active_memtable;
+    });
+
+    return flush_token;
   }
 };
 

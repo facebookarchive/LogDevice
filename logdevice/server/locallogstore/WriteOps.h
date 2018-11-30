@@ -77,6 +77,12 @@ class WriteOp {
     return FlushToken_INVALID;
   }
 
+  virtual void setFlushToken(FlushToken /* unused */) const {}
+
+  virtual FlushToken flushToken() const {
+    return FlushToken_INVALID;
+  }
+
   virtual std::string toString() const = 0;
 
   /**
@@ -221,6 +227,14 @@ struct PutWriteOp : public RecordWriteOp {
     sync_token_ = std::max(sync_token_, sync_token);
   }
 
+  FlushToken flushToken() const override {
+    return flush_token_;
+  }
+
+  void setFlushToken(FlushToken flush_token) const override {
+    flush_token_ = flush_token;
+  }
+
   Slice record_header;
   Slice data;
   // The node that is orchestrating this operation. This coordinator
@@ -242,6 +256,9 @@ struct PutWriteOp : public RecordWriteOp {
   // without impacting correctness.
   mutable Durability durability_;
   mutable FlushToken sync_token_;
+  // Flush token will value greater than or equal to that of the memtable that
+  // has the write.
+  mutable FlushToken flush_token_;
   bool is_rebuilding_;
 };
 

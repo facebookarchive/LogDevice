@@ -85,8 +85,7 @@ class WriteBatchStorageTask : public StorageTask {
   virtual folly::small_vector<std::unique_ptr<WriteStorageTask>, 4>
   tryGetWriteBatch(size_t max_count, size_t max_bytes);
   virtual std::unique_ptr<WriteStorageTask> tryGetWrite();
-  virtual int writeMulti(const std::vector<const WriteOp*>& write_ops,
-                         FlushToken& flushToken);
+  virtual int writeMulti(const std::vector<const WriteOp*>& write_ops);
   virtual void stallIfNeeded();
 };
 }} // namespace facebook::logdevice

@@ -506,7 +506,7 @@ PartitionedRocksDBStore::read(logid_t log_id,
     return std::make_unique<Iterator>(this, log_id, options);
   } else {
     return std::make_unique<RocksDBLocalLogStore::CSIWrapper>(
-        this, log_id, options, unpartitioned_cf_.get());
+        this, log_id, options, unpartitioned_cf_->get());
   }
 }
 
@@ -619,13 +619,12 @@ bool PartitionedRocksDBStore::open(
   partition_id_t latest_partition_id = PARTITION_INVALID;
   partition_id_t oldest_partition_id = PARTITION_MAX;
 
-  auto create_cf_holder =
-      [this](std::unique_ptr<rocksdb::ColumnFamilyHandle> h) {
-        auto cf_id = h->GetID();
-        auto cf_holder = std::make_shared<RocksDBColumnFamily>(h.release());
-        cf_accessor_.wlock()->insert(std::make_pair(cf_id, cf_holder));
-        return cf_holder;
-      };
+  auto create_cf_ptr = [this](std::unique_ptr<rocksdb::ColumnFamilyHandle> h) {
+    auto cf_id = h->GetID();
+    auto cf_ptr = std::make_shared<RocksDBColumnFamily>(h.release());
+    cf_accessor_.wlock()->insert(std::make_pair(cf_id, cf_ptr));
+    return cf_ptr;
+  };
 
   ld_check_eq(cf_descriptors.size(), cf_handles.size());
   for (size_t i = 0; i < cf_descriptors.size(); ++i) {
@@ -649,9 +648,9 @@ bool PartitionedRocksDBStore::open(
       }
       continue;
     } else if (desc.name == METADATA_CF_NAME) {
-      metadata_cf_ = create_cf_holder(std::move(cf_handles[i]));
+      metadata_cf_ = create_cf_ptr(std::move(cf_handles[i]));
     } else if (desc.name == UNPARTITIONED_CF_NAME) {
-      unpartitioned_cf_ = std::move(cf_handles[i]);
+      unpartitioned_cf_ = create_cf_ptr(std::move(cf_handles[i]));
     } else if (desc.name == SNAPSHOTS_CF_NAME) {
       snapshots_cf_ = std::move(cf_handles[i]);
     } else {
@@ -671,9 +670,9 @@ bool PartitionedRocksDBStore::open(
         }
       }
       // readPartitionTimestamps() will initialize starting_timestamp.
-      auto cf_holder = create_cf_holder(std::move(cf_handles[i]));
+      auto cf_ptr = create_cf_ptr(std::move(cf_handles[i]));
       PartitionPtr partition =
-          std::make_shared<Partition>(id, cf_holder, RecordTimestamp::min());
+          std::make_shared<Partition>(id, cf_ptr, RecordTimestamp::min());
       addPartitions({partition});
       latest_partition_id = id;
       oldest_partition_id = std::min(oldest_partition_id, id);
@@ -683,7 +682,7 @@ bool PartitionedRocksDBStore::open(
   // create the metadata column family unless it already exists
   if (!metadata_cf_ && !getSettings()->read_only) {
     metadata_cf_ =
-        create_cf_holder(createColumnFamily(METADATA_CF_NAME, meta_cf_options));
+        create_cf_ptr(createColumnFamily(METADATA_CF_NAME, meta_cf_options));
   }
   if (!metadata_cf_) {
     ld_error("Couldn't find/create metadata column family");
@@ -692,8 +691,8 @@ bool PartitionedRocksDBStore::open(
 
   // Column family for unpartitioned logs behaves like RocksDBLocalLogStore.
   if (!unpartitioned_cf_ && !getSettings()->read_only) {
-    unpartitioned_cf_ =
-        createColumnFamily(UNPARTITIONED_CF_NAME, rocksdb_config_.options_);
+    unpartitioned_cf_ = create_cf_ptr(
+        createColumnFamily(UNPARTITIONED_CF_NAME, rocksdb_config_.options_));
   }
   if (!unpartitioned_cf_) {
     ld_error("Couldn't find/create unpartitioned column family");
@@ -1003,21 +1002,20 @@ PartitionedRocksDBStore::createPartitionsImpl(
     }
   }
 
-  auto create_cf_holder =
-      [this](std::unique_ptr<rocksdb::ColumnFamilyHandle> h) {
-        auto cf_id = h->GetID();
-        auto cf_holder = std::make_shared<RocksDBColumnFamily>(h.release());
-        cf_accessor_.wlock()->insert(std::make_pair(cf_id, cf_holder));
-        return cf_holder;
-      };
+  auto create_cf_ptr = [this](std::unique_ptr<rocksdb::ColumnFamilyHandle> h) {
+    auto cf_id = h->GetID();
+    auto cf_ptr = std::make_shared<RocksDBColumnFamily>(h.release());
+    cf_accessor_.wlock()->insert(std::make_pair(cf_id, cf_ptr));
+    return cf_ptr;
+  };
 
   // Add the new partitions to the list.
   std::vector<PartitionPtr> new_partitions(count);
   ld_check_eq(starting_timestamps.size(), count);
   for (size_t i = 0; i < count; ++i) {
-    auto cf_holder = create_cf_holder(std::move(cfs[i]));
+    auto cf_ptr = create_cf_ptr(std::move(cfs[i]));
     new_partitions[i] = std::make_shared<Partition>(
-        first_id + i, cf_holder, starting_timestamps[i], pre_dirty_state);
+        first_id + i, cf_ptr, starting_timestamps[i], pre_dirty_state);
   }
   addPartitions(new_partitions);
 
@@ -2634,8 +2632,8 @@ int PartitionedRocksDBStore::writeMultiImpl(
   rocksdb::WriteBatch wal_batch;
   rocksdb::WriteBatch mem_batch;
   std::vector<const WriteOp*> writes;
-  // Decide to which partition to put/delete each record.
-  std::vector<rocksdb::ColumnFamilyHandle*> cf_handles;
+  // Collect column family pointers to which keys will be written or deleted.
+  std::vector<RocksDBCFPtr> cf_ptrs;
 
   // Record write operations that are being buffered in memory and thus
   // are leaving this RocksDB instance "dirty".
@@ -2656,7 +2654,7 @@ int PartitionedRocksDBStore::writeMultiImpl(
   const size_t expected_batch_size = writes_in.size();
 
   writes.reserve(expected_batch_size);
-  cf_handles.reserve(expected_batch_size);
+  cf_ptrs.reserve(expected_batch_size);
   dirty_ops.reserve(expected_batch_size);
 
   const bool skip_rebuilding = getRebuildingSettings()->read_only ==
@@ -2664,7 +2662,11 @@ int PartitionedRocksDBStore::writeMultiImpl(
 
   // Writes and clears rocksdb_batch. Used for flushing directory updates
   // between calls to getWritePartition() for the same log.
-  auto flush_batch = [&]() {
+  // Note: Partition timestamp updates can be flushed as part of this. Make sure
+  // writes only to metadata column family are flushed in here, data column
+  // family writes need to note down dependent metadata memtable and
+  // hence should not be included in this update.
+  auto flush_dir_updates = [&]() {
     rocksdb::WriteOptions rocksdb_options;
     for (auto* batch : {&wal_batch, &mem_batch}) {
       if (batch->Count()) {
@@ -2694,7 +2696,7 @@ int PartitionedRocksDBStore::writeMultiImpl(
       continue;
     }
 
-    rocksdb::ColumnFamilyHandle* cf_handle = nullptr;
+    RocksDBCFPtr cf_ptr;
     bool skip_op = false;
 
     switch (write->getType()) {
@@ -2718,7 +2720,7 @@ int PartitionedRocksDBStore::writeMultiImpl(
             // Fail and send an error to sequencer. The record was corrupted
             // or malformed by this or sequencer's node, likely due to bad
             // hardware or bug.
-            flush_batch();
+            flush_dir_updates();
             err = E::CHECKSUM_MISMATCH;
             return -1;
           } else if (getSettings()->test_corrupt_stores) {
@@ -2730,7 +2732,7 @@ int PartitionedRocksDBStore::writeMultiImpl(
                            lsn_to_string(op->lsn).c_str(),
                            hexdump_buf(op->record_header, 500).c_str(),
                            hexdump_buf(op->data, 500).c_str());
-            flush_batch();
+            flush_dir_updates();
             err = E::CHECKSUM_MISMATCH;
             return -1;
           }
@@ -2746,13 +2748,13 @@ int PartitionedRocksDBStore::writeMultiImpl(
           // than the maximum retention period for partitioned logs. These
           // partitions wouldn't maintain column family information).
           write->increaseDurabilityTo(Durability::ASYNC_WRITE);
-          cf_handle = unpartitioned_cf_.get();
+          cf_ptr = unpartitioned_cf_;
           unpartitioned_dirtied = true;
           break;
         }
 
         if (dir_updates_pending[op->log_id] > dir_updates_flushed) {
-          if (!flush_batch()) {
+          if (!flush_dir_updates()) {
             return -1;
           }
         }
@@ -2827,7 +2829,7 @@ int PartitionedRocksDBStore::writeMultiImpl(
             // If previous calls to getWritePartition() prepared some directory
             // updates, we must flush them to keep directory consistent with
             // LogState.
-            if (!flush_batch()) {
+            if (!flush_dir_updates()) {
               return -1;
             }
 
@@ -2875,7 +2877,7 @@ int PartitionedRocksDBStore::writeMultiImpl(
         // It indeed does when the writes arrive in order of increasing LSN.
         dir_updates_pending[op->log_id] = dir_updates_flushed + 1;
 
-        cf_handle = partition->cf_->get();
+        cf_ptr = partition->cf_;
 
         // Complain about suspicious writes.
         if (write->getType() != WriteType::PUT ||
@@ -2926,6 +2928,12 @@ int PartitionedRocksDBStore::writeMultiImpl(
 
           auto& rocksdb_batch =
               write->durability() <= Durability::MEMORY ? mem_batch : wal_batch;
+          // Write "custom logsdb directory", i.e. mapping
+          // (log_id, partition_id) => min_key.
+          // This goes into metadata column family. There's also per-record
+          // index written into the partition's column family by
+          // RocksDBWriter. These updates can be flushed before the actual data
+          // alongwith directory updates.
           const PutWriteOp* put_op = static_cast<const PutWriteOp*>(write);
           for (auto it = put_op->index_key_list.begin();
                it != put_op->index_key_list.end();
@@ -2959,13 +2967,25 @@ int PartitionedRocksDBStore::writeMultiImpl(
 
     if (!skip_op) {
       writes.push_back(write);
-      cf_handles.push_back(cf_handle);
+      cf_ptrs.push_back(cf_ptr);
     }
   }
 
-  ld_check_eq(writes.size(), cf_handles.size());
+  ld_check_eq(writes.size(), cf_ptrs.size());
   ld_check_eq(*min_target_partition_est, min_target_partition->id_);
   ld_check(!min_target_partition->is_dropped);
+
+  // Go over all holders and mark beginning of write on the partition.
+  std::vector<rocksdb::ColumnFamilyHandle*> cf_handles;
+  cf_handles.reserve(cf_ptrs.size());
+  for (auto& cf_ptr : cf_ptrs) {
+    if (cf_ptr != nullptr) {
+      cf_ptr->beginWrite();
+      cf_handles.push_back(cf_ptr->get());
+    } else {
+      cf_handles.push_back(nullptr);
+    }
+  }
 
   // Actually write the records to rocksdb.
   int rv = writer_->writeMulti(writes,
@@ -2980,9 +3000,17 @@ int PartitionedRocksDBStore::writeMultiImpl(
     return -1;
   }
 
-  auto flush_token = maxFlushToken();
+  auto metadata_cf_flush_token = metadata_cf_->activeMemtableFlushToken();
   auto timestamp_wal_flush_token = maxWALSyncToken();
   auto now = currentSteadyTime();
+
+  // Go over all the holders and mark that write finished on the partition.
+  for (auto& cf_ptr : cf_ptrs) {
+    if (cf_ptr == nullptr) {
+      continue;
+    }
+    cf_ptr->endWrite(metadata_cf_flush_token);
+  }
 
   // The rest of this method updates dirty state.
 
@@ -2998,7 +3026,7 @@ int PartitionedRocksDBStore::writeMultiImpl(
     min_partition_idle_time_.storeMin(now);
 
     if (unpartitioned_dirtied) {
-      unpartitioned_dirty_state_.noteDirtied(flush_token, now);
+      unpartitioned_dirty_state_.noteDirtied(maxFlushToken(), now);
     }
   }
 
@@ -3019,6 +3047,10 @@ int PartitionedRocksDBStore::writeMultiImpl(
         cf_lock = folly::SharedMutex::ReadHolder(op->partition->mutex_);
         cur_partition = op->partition;
       }
+
+      auto flush_token = cur_partition->cf_->activeMemtableFlushToken();
+
+      op->write_op->setFlushToken(flush_token);
 
       auto& dirty_state = cur_partition->dirty_state_;
       dirty_state.noteDirtied(flush_token, now);
@@ -3150,6 +3182,8 @@ int PartitionedRocksDBStore::writeMultiImpl(
       auto next_op = op;
       while (next_op != dirty_ops.end() && op->canMergeWith(*next_op)) {
         op = next_op++;
+        // Mark the flush token on the write_op for ops of same type.
+        op->write_op->setFlushToken(flush_token);
         op->write_op->increaseDurabilityTo(min_durability, min_sync_token);
       }
     }
@@ -3216,7 +3250,7 @@ int PartitionedRocksDBStore::writeMultiImpl(
   }
 
   ld_spew("------------- Write Batch End: FlushToken %jx --------------",
-          static_cast<uintmax_t>(flush_token));
+          static_cast<uintmax_t>(maxFlushToken()));
 
   return 0;
 }
@@ -5175,7 +5209,7 @@ uint64_t PartitionedRocksDBStore::getApproximateObsoleteBytes(
 }
 
 int PartitionedRocksDBStore::isEmpty() const {
-  int res = isCFEmpty(unpartitioned_cf_.get());
+  int res = isCFEmpty(unpartitioned_cf_->get());
   if (res != 1) {
     return res;
   }

@@ -75,6 +75,9 @@ STAT_DEFINE(num_metadata_memtable_flush_completed, SUM)
 STAT_DEFINE(num_memtables, SUM)
 // Cumulative sum of age for all memtables created.
 STAT_DEFINE(cumulative_memtable_age_ms, SUM)
+// Number of times metadata memtable was selected to be flushed because there
+// are active writers writing into a partition.
+STAT_DEFINE(pessimistic_metadata_memtable_flush, SUM)
 
 // Total number of chunks rebuilt, and total number of records and bytes in
 // them. V2 only.

@@ -122,11 +122,10 @@ void WriteBatchStorageTask::execute() {
     STAT_INCR(stats(), write_batches);
   }
 
-  FlushToken flushToken;
-
-  int rv = writeMulti(write_ops, flushToken);
+  int rv = writeMulti(write_ops);
   Status status = rv == 0 ? E::OK : err;
 
+  auto write_ops_iter = write_ops.begin();
   for (auto& write : writes) {
     if (!write) {
       continue;
@@ -143,9 +142,14 @@ void WriteBatchStorageTask::execute() {
         STAT_INCR(stats(), record_cache_store_not_cached);
       }
       if (write->durability() <= Durability::MEMORY) {
-        write->flushToken_ = flushToken;
+        for (auto i = 0; i < write->getNumWriteOps(); ++i) {
+          auto iter = *(write_ops_iter + i);
+          write->setSyncToken(iter->flushToken());
+        }
       }
     }
+
+    write_ops_iter += write->getNumWriteOps();
 
     if (write->durability() == Durability::SYNC_WRITE) {
       // Delay sending back to worker until the write is synced
@@ -217,15 +221,9 @@ void WriteBatchStorageTask::sendDroppedToWorker(
 }
 
 int WriteBatchStorageTask::writeMulti(
-    const std::vector<const WriteOp*>& write_ops,
-    FlushToken& flushToken) {
+    const std::vector<const WriteOp*>& write_ops) {
   auto& store = storageThreadPool_->getLocalLogStore();
-  flushToken = FlushToken_INVALID;
-  int rv = store.writeMulti(write_ops);
-  if (rv == 0) {
-    flushToken = store.maxFlushToken();
-  }
-  return rv;
+  return store.writeMulti(write_ops);
 }
 
 StatsHolder* WriteBatchStorageTask::stats() {
