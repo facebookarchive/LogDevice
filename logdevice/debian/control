@@ -1,0 +1,15 @@
+Source: logdevice
+Maintainer: Caleb Marchent <cmarchent@fb.com>
+Section: misc
+Priority: optional
+Standards-Version: 3.9.2
+Build-Depends: debhelper (>= 9), cmake, wget, git, g++, make, libboost-dev, libboost-python-dev, libboost-thread-dev, libboost-regex-dev, libboost-filesystem-dev, libboost-chrono-dev, libboost-system-dev, libboost-program-options-dev, libevent-dev, python3-dev, zlib1g-dev, libbz2-dev, liblz4-dev, libzookeeper-mt-dev, libsqlite3-dev, libssl-dev, libunwind-dev, libdwarf-dev, libelf-dev, libsnappy-dev, libgoogle-glog-dev, liblzma-dev, libdouble-conversion-dev, libicu-dev, libgflags-dev, libsparsehash-dev, libtbb-dev, libnuma-dev, libiberty-dev, libjemalloc-dev, python3, python3-pip, autoconf, autoconf-archive, automake, pkg-config, libtool, libboost-context-dev, libzstd1-dev, bison, flex, libmstch-dev, libkrb5-dev, libsodium-dev
+
+Package: logdevice
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, python3, libunwind8, libboost-filesystem1.65.1, libboost-program-options1.65.1, libboost-regex1.65.1, libboost-thread1.65.1, libssl1.1, libevent-2.1-6, libevent-openssl-2.1-6, libdouble-conversion1, libzookeeper-mt2, libgoogle-glog0v5, libjemalloc1, libsnappy1v5, libpython3.6, python3-pip, libboost-python1.65.1, libboost-context1.65.1
+X-Python3-Version: >= 3.6
+Description: A scalable distributed log storage system that offers durability,
+ high availability, and total order of records under failures. It is designed
+ for a variety of workloads including event streaming, replication pipelines,
+ transaction logs, and deferred work journals.
