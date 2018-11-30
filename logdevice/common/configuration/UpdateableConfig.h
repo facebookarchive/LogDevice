@@ -54,7 +54,7 @@ class UpdateableConfig : public configuration::UpdateableConfigBase {
   std::shared_ptr<Configuration> get() const {
     auto server_config = updateable_server_config_->get();
     auto logs_config = updateable_logs_config_->get();
-    auto zookeeper_config = updatable_zookeeper_config_->get();
+    auto zookeeper_config = updateable_zookeeper_config_->get();
     if (server_config == nullptr) {
       // we don't return configuration unless we have at least a ServerConfig
       return nullptr;
@@ -69,7 +69,7 @@ class UpdateableConfig : public configuration::UpdateableConfigBase {
     return updateable_logs_config_->get();
   }
   std::shared_ptr<ZookeeperConfig> getZookeeperConfig() const {
-    return updatable_zookeeper_config_->get();
+    return updateable_zookeeper_config_->get();
   }
   std::shared_ptr<configuration::LocalLogsConfig> getLocalLogsConfig() const;
   std::shared_ptr<UpdateableServerConfig> updateableServerConfig() const {
@@ -81,7 +81,7 @@ class UpdateableConfig : public configuration::UpdateableConfigBase {
   }
 
   std::shared_ptr<UpdateableZookeeperConfig> updateableZookeeperConfig() const {
-    return updatable_zookeeper_config_;
+    return updateable_zookeeper_config_;
   }
 
   /*
@@ -100,7 +100,7 @@ class UpdateableConfig : public configuration::UpdateableConfigBase {
  private:
   std::shared_ptr<UpdateableServerConfig> updateable_server_config_;
   std::shared_ptr<UpdateableLogsConfig> updateable_logs_config_;
-  std::shared_ptr<UpdateableZookeeperConfig> updatable_zookeeper_config_;
+  std::shared_ptr<UpdateableZookeeperConfig> updateable_zookeeper_config_;
 
   ConfigSubscriptionHandle server_config_subscription_;
   ConfigSubscriptionHandle logs_config_subscription_;
