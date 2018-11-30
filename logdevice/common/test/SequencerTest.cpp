@@ -399,12 +399,22 @@ void SequencerTest::removeLogFromConfig() {
   ld_check(rv);
   auto new_config = std::make_shared<Configuration>(
       config->serverConfig(), std::move(logs_config_changed));
-  updateable_config_->updateBaseConfig(new_config);
+  ld_check_eq(0,
+              updateable_config_->updateableLogsConfig()->update(
+                  new_config->logsConfig()));
+  ld_check_eq(0,
+              updateable_config_->updateableServerConfig()->update(
+                  new_config->serverConfig()));
 }
 
 void SequencerTest::restoreConfig() {
   if (original_config_ != nullptr) {
-    updateable_config_->updateBaseConfig(original_config_);
+    ld_check_eq(0,
+                updateable_config_->updateableLogsConfig()->update(
+                    original_config_->logsConfig()));
+    ld_check_eq(0,
+                updateable_config_->updateableServerConfig()->update(
+                    original_config_->serverConfig()));
   }
 }
 

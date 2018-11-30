@@ -17,9 +17,9 @@ UpdateableConfig::UpdateableConfig(
     std::shared_ptr<UpdateableServerConfig> updateable_server_config,
     std::shared_ptr<UpdateableLogsConfig> updateable_logs_config,
     std::shared_ptr<UpdateableZookeeperConfig> updateable_zookeeper_config)
-    : updateable_server_config_(updateable_server_config),
-      updateable_logs_config_(updateable_logs_config),
-      updateable_zookeeper_config_(updateable_zookeeper_config) {
+    : updateable_server_config_(std::move(updateable_server_config)),
+      updateable_logs_config_(std::move(updateable_logs_config)),
+      updateable_zookeeper_config_(std::move(updateable_zookeeper_config)) {
   if (updateable_logs_config_) {
     logs_config_subscription_ = updateable_logs_config_->subscribeToUpdates(
         std::bind(&UpdateableConfig::notify, this));

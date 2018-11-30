@@ -435,7 +435,12 @@ void EpochSequencerTest::setUp() {
   auto new_config = std::make_shared<Configuration>(
       updateable_config_->get()->serverConfig(), std::move(logs_config));
 
-  updateable_config_->updateBaseConfig(new_config);
+  ld_check_eq(0,
+              updateable_config_->updateableLogsConfig()->update(
+                  new_config->logsConfig()));
+  ld_check_eq(0,
+              updateable_config_->updateableServerConfig()->update(
+                  new_config->serverConfig()));
 
   // create copyset manager
   StorageSet shards{ShardID(0, 1), ShardID(1, 1)};

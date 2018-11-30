@@ -23,13 +23,10 @@ class LocalLogsConfig;
 }
 
 /**
- * UpdateableConfiguration is a proxy class for two independent
- * UpdateableConfigs (ServerConfig and LogsConfig).
+ * UpdateableConfiguration is a proxy class for independent UpdateableConfigs.
  *
- * The purpose of this is to to offer a shortcut to get a snapshot of the latest
- * known configs in both ServerConfig and LogsConfig. The returned object when
- * calling get() is `Configuration` which holds two shared_ptr to ServerConfig
- * and LogsConfig returned from the two underlying updateables.
+ * This class is more or less a wrapper and does not provide atomic reads or
+ * updates across multiple configs.
  */
 class UpdateableConfig : public configuration::UpdateableConfigBase {
  public:
@@ -82,17 +79,6 @@ class UpdateableConfig : public configuration::UpdateableConfigBase {
 
   std::shared_ptr<UpdateableZookeeperConfig> updateableZookeeperConfig() const {
     return updateable_zookeeper_config_;
-  }
-
-  /*
-   * [DEPRECATED] This should not be used anymore. This method is only there
-   * to make it easy for older code to work, it's recommended to only
-   * update the config object that you need and not update both at the same
-   * time using this method.
-   */
-  int updateBaseConfig(const std::shared_ptr<Configuration>& config) {
-    return updateable_logs_config_->update(config->logsConfig()) &&
-        updateable_server_config_->update(config->serverConfig());
   }
 
   static std::shared_ptr<UpdateableConfig> createEmpty();
