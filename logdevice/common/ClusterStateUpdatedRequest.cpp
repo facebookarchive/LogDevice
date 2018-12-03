@@ -17,17 +17,17 @@ namespace facebook { namespace logdevice {
 
 Request::Execution ClusterStateUpdatedRequest::execute() {
   Worker* worker = Worker::onThisThread();
-  auto config = worker->getConfig();
+  const auto& nodes_configuration = worker->getNodesConfiguration();
+  const auto& sd_config = nodes_configuration->getServiceDiscovery();
   auto cs = worker->getClusterState();
   ld_check(cs);
 
-  for (const auto& entry : config->serverConfig()->getNodes()) {
-    if (cs->getNodeState(entry.first) == ClusterState::NodeState::DEAD) {
-      NodeID nid(entry.first, entry.second.generation);
+  for (const auto& kv : *sd_config) {
+    if (cs->getNodeState(kv.first) == ClusterState::NodeState::DEAD) {
+      NodeID nid(kv.first, nodes_configuration->getNodeGeneration(kv.first));
       worker->sender().closeServerSocket(nid, E::PEER_UNAVAILABLE);
     }
   }
-
   return Execution::COMPLETE;
 }
 

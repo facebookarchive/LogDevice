@@ -56,9 +56,10 @@ CrossDomainCopySetSelector::CrossDomainCopySetSelector(
   // get the node location information for the local sequencer node (myself)
   local_domains_.fill(nullptr);
   const node_index_t my_index = cfg->getMyNodeID().index();
-  const ServerConfig::Node* my_node = cfg->getNode(my_index);
 
-  if (my_node == nullptr) {
+  const auto* my_sd =
+      cfg->getNodesConfiguration()->getNodeServiceDiscovery(my_index);
+  if (my_sd == nullptr) {
     ld_error("This sequencer node (index %hd) for log %lu is no "
              "longer in config!",
              my_index,
@@ -66,16 +67,16 @@ CrossDomainCopySetSelector::CrossDomainCopySetSelector(
     return;
   }
 
-  if (!my_node->location.hasValue()) {
+  if (!my_sd->location.hasValue()) {
     ld_error("This sequencer node %s for log %lu does not have location "
              "specified in config! Cannot exploit location locality to save "
              "cross-domain bandwith.",
-             my_node->address.toString().c_str(),
+             my_sd->address.toString().c_str(),
              logid_.val_);
     return;
   }
 
-  const Domain* domain = hierarchy_.searchSubdomain(my_node->location.value());
+  const Domain* domain = hierarchy_.searchSubdomain(my_sd->location.value());
   // _domain_ is the smallest location domain in the hierarchy that contains
   // the sequencer node, it must not be nullptr since the ROOT domain exists
   ld_check(domain != nullptr);

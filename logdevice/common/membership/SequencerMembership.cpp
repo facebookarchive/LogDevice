@@ -91,6 +91,12 @@ SequencerMembership::getNodeState(node_index_t node) const {
   return std::make_pair(true, nit->second);
 }
 
+const SequencerNodeState*
+SequencerMembership::getNodeStatePtr(node_index_t node) const {
+  const auto nit = node_states_.find(node);
+  return nit == node_states_.cend() ? nullptr : &nit->second;
+}
+
 void SequencerMembership::setNodeState(node_index_t node,
                                        SequencerNodeState state) {
   node_states_[node] = std::move(state);
@@ -247,6 +253,11 @@ std::vector<node_index_t> SequencerMembership::getMembershipNodes() const {
     res.push_back(kv.first);
   }
   return res;
+}
+
+bool SequencerMembership::isSequencingEnabled(node_index_t node) const {
+  const auto p = getNodeStatePtr(node);
+  return (p == nullptr) ? false : (p->weight > 0);
 }
 
 bool SequencerMembership::operator==(const SequencerMembership& rhs) const {

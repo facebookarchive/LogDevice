@@ -143,10 +143,11 @@ class SequencerMembership : public Membership {
    * Get the node state of a given sequencer node.
    *
    * @return   a pair of (exist, SequencerNodeState) in which _exist_ is true if
-   * the request node exists in the membership. In such case, its
+   *           the request node exists in the membership. In such case, its
    *           SequencerNodeState is also returned.
    */
   std::pair<bool, SequencerNodeState> getNodeState(node_index_t node) const;
+  const SequencerNodeState* getNodeStatePtr(node_index_t node) const;
 
   size_t numNodes() const {
     return node_states_.size();
@@ -155,6 +156,12 @@ class SequencerMembership : public Membership {
   bool hasNode(node_index_t node) const override {
     return node_states_.count(node) > 0;
   }
+
+  /**
+   * @return  true if node is in the membership and has a positive sequencer
+   *          weight.
+   */
+  bool isSequencingEnabled(node_index_t node) const;
 
   std::string toString() const;
 

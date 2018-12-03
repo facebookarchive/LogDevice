@@ -31,6 +31,10 @@ int MyNodeID::calculateFromTcpPort(const ServerConfig& config, NodeID& out) {
     freeifaddrs(ifaddr);
   };
 
+  const auto& nodes_configuration = config.getNodesConfiguration();
+  ld_check(nodes_configuration != nullptr);
+  const auto& sd_config = nodes_configuration->getServiceDiscovery();
+
   // Now compare each returned address to all hosts in the config.
   for (struct ifaddrs* ifa = ifaddr; ifa != nullptr; ifa = ifa->ifa_next) {
     // tun interface address can be null
@@ -47,9 +51,10 @@ int MyNodeID::calculateFromTcpPort(const ServerConfig& config, NodeID& out) {
     Sockaddr my_addr(ifa->ifa_addr);
     my_addr.setPort(my_port_);
 
-    for (const auto& it : config.getNodes()) {
-      if (it.second.address == my_addr) {
-        out = NodeID(it.first, it.second.generation);
+    for (const auto& kv : *sd_config) {
+      const node_index_t node = kv.first;
+      if (kv.second.address == my_addr) {
+        out = NodeID(node, nodes_configuration->getNodeGeneration(node));
         return 0;
       }
     }
@@ -61,10 +66,15 @@ int MyNodeID::calculateFromTcpPort(const ServerConfig& config, NodeID& out) {
 }
 
 int MyNodeID::calculateFromUnixSocket(const ServerConfig& config, NodeID& out) {
-  for (const auto& it : config.getNodes()) {
-    if (it.second.address.isUnixAddress() &&
-        it.second.address.getPath() == unix_socket_) {
-      out = NodeID(it.first, it.second.generation);
+  const auto& nodes_configuration = config.getNodesConfiguration();
+  ld_check(nodes_configuration != nullptr);
+  const auto& sd_config = nodes_configuration->getServiceDiscovery();
+
+  for (const auto& kv : *sd_config) {
+    const node_index_t nid = kv.first;
+    const configuration::nodes::NodeServiceDiscovery& sd = kv.second;
+    if (sd.address.isUnixAddress() && sd.address.getPath() == unix_socket_) {
+      out = NodeID(nid, nodes_configuration->getNodeGeneration(nid));
       return 0;
     }
   }

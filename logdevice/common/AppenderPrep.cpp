@@ -530,21 +530,15 @@ bool AppenderPrep::canActivateSequencers() const {
 }
 
 bool AppenderPrep::nodeInConfig(NodeID node) const {
-  auto config = Worker::onThisThread()->getConfig();
-  const auto* node_cfg = config->serverConfig()->getNode(node);
+  const auto nodes_configuration =
+      Worker::onThisThread()->getNodesConfiguration();
+  const auto& seq_membership = nodes_configuration->getSequencerMembership();
 
-  if (!node_cfg) {
+  if (!seq_membership->isSequencingEnabled(node.index())) {
     RATELIMIT_WARNING(std::chrono::seconds(1),
                       1,
-                      "Node %s is not in config",
-                      node.toString().c_str());
-    return false;
-  }
-
-  if (!node_cfg->isSequencingEnabled()) {
-    RATELIMIT_WARNING(std::chrono::seconds(1),
-                      1,
-                      "Node %s is not a sequencer node",
+                      "Node %s is not in sequencer membership or does not have "
+                      "a positive sequencer weight",
                       node.toString().c_str());
     return false;
   }

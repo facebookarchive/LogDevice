@@ -215,9 +215,8 @@ void DataSizeRequest::start(Status status) {
 }
 
 StorageSetAccessor::SendResult DataSizeRequest::sendTo(ShardID shard) {
-  auto config = getConfig();
-  auto n = config->getNode(shard.node());
-  if (!n) {
+  const auto& nodes_configuration = getConfig()->getNodesConfiguration();
+  if (!nodes_configuration->isNodeInServiceDiscoveryConfig(shard.node())) {
     ld_error("Cannot find node at index %u", shard.node());
     return StorageSetAccessor::SendResult::PERMANENT_ERROR;
   }

@@ -19,14 +19,8 @@ namespace facebook { namespace logdevice {
 static StorageSet
 getWritableShards(const StorageSet& ns,
                   const std::shared_ptr<ServerConfig> config) {
-  StorageSet res;
-  for (ShardID i : ns) {
-    const Configuration::Node* node_cfg = config->getNode(i.node());
-    if (node_cfg && node_cfg->isWritableStorageNode()) {
-      res.push_back(i);
-    }
-  }
-  return res;
+  return config->getNodesConfiguration()->getStorageMembership()->writerView(
+      ns);
 }
 
 std::unique_ptr<CopySetSelector>

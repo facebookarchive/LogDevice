@@ -17,17 +17,10 @@
 
 namespace facebook { namespace logdevice {
 
-// Returns a list of nonzero-weight nodes in nodeset.
-static StorageSet getEffectiveNodeSet(const StorageSet& full_nodeset,
-                                      const ServerConfig& cfg) {
-  StorageSet res;
-  for (ShardID i : full_nodeset) {
-    const Configuration::Node* node_cfg = cfg.getNode(i.node());
-    if (node_cfg && node_cfg->isWritableStorageNode()) {
-      res.push_back(i);
-    }
-  }
-  return res;
+static StorageSet
+getEffectiveNodeSet(const StorageSet& full_nodeset,
+                    const membership::StorageMembership& storage_membership) {
+  return storage_membership.writerView(full_nodeset);
 }
 
 CopySetManager::CopySetManager(std::unique_ptr<CopySetSelector> css,
@@ -56,12 +49,15 @@ void CopySetManager::disableCopySetShuffling() {
 
 bool CopySetManager::matchesConfig(const ServerConfig& cfg) {
   ld_check(!full_nodeset_.empty());
-  return effective_nodeset_ == getEffectiveNodeSet(full_nodeset_, cfg);
+  return effective_nodeset_ ==
+      getEffectiveNodeSet(full_nodeset_,
+                          *cfg.getNodesConfiguration()->getStorageMembership());
 }
 void CopySetManager::prepareConfigMatchCheck(StorageSet nodeset,
                                              const ServerConfig& cfg) {
   full_nodeset_ = std::move(nodeset);
-  effective_nodeset_ = getEffectiveNodeSet(full_nodeset_, cfg);
+  effective_nodeset_ = getEffectiveNodeSet(
+      full_nodeset_, *cfg.getNodesConfiguration()->getStorageMembership());
 }
 
 }} // namespace facebook::logdevice

@@ -153,7 +153,8 @@ bool ServerParameters::setConnectionLimits() {
   auto config = updateable_config_->get();
   std::shared_ptr<const Settings> settings = processor_settings_.get();
 
-  const size_t nodes = config->serverConfig()->getNodes().size();
+  const size_t nodes =
+      config->serverConfig()->getNodesConfiguration()->clusterSize();
   const size_t workers = settings->num_workers;
 
   const int available =

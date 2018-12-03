@@ -42,9 +42,11 @@ class InfoGossip : public AdminCommand {
       }
 
       auto conf = server_->getParameters()->getUpdateableConfig()->get();
+      const auto& nodes_configuration =
+          conf->serverConfig()->getNodesConfiguration();
 
       node_index_t lo = 0;
-      node_index_t hi = conf->serverConfig()->getMaxNodeIdx();
+      node_index_t hi = nodes_configuration->getMaxNodeIndex();
 
       if (node_idx_ != node_index_t(-1)) {
         if (node_idx_ > hi) {
@@ -55,9 +57,8 @@ class InfoGossip : public AdminCommand {
       }
 
       auto cs = server_->getProcessor()->cluster_state_.get();
-      auto config = conf->serverConfig();
       for (node_index_t idx = lo; idx <= hi; ++idx) {
-        if (config->getNode(idx) == nullptr) {
+        if (!nodes_configuration->isNodeInServiceDiscoveryConfig(idx)) {
           continue;
         }
         out_.printf("GOSSIP N%u %s %s %s\r\n",

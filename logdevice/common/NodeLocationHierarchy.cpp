@@ -24,11 +24,12 @@ NodeLocationHierarchy::Domain::Domain(NodeLocationScope scope, Domain* parent)
 NodeLocationHierarchy::NodeLocationHierarchy(std::shared_ptr<ServerConfig> cfg,
                                              const StorageSet& indices)
     : root_(NodeLocationScope::ROOT, nullptr) {
+  const auto& nodes_configuration = cfg->getNodesConfiguration();
   for (const ShardID i : indices) {
-    const ServerConfig::Node* node = cfg->getNode(i.node());
-    // only add storage nodes with location info provided
-    if (node && node->location.hasValue()) {
-      const auto& location = node->location.value();
+    const auto* node_sd =
+        nodes_configuration->getNodeServiceDiscovery(i.node());
+    if (node_sd && node_sd->location.hasValue()) {
+      const auto& location = node_sd->location.value();
       insertShardWithLocation(i, location);
     }
   }

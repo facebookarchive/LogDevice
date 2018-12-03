@@ -100,8 +100,12 @@ class DomainIsolationChecker {
   // is obtained from the failure detector.
   virtual bool isNodeAlive(node_index_t index) const;
 
-  // get cluster config
-  virtual std::shared_ptr<ServerConfig> getConfig() const;
+  // get cluster nodes configuration
+  virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const;
+
+  // get the node id of the node running this DomainIsolationChecker
+  virtual NodeID getMyNodeID() const;
 
   // get the current worker thread id
   virtual worker_id_t getThreadID() const;

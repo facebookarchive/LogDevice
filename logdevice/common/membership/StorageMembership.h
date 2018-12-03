@@ -237,6 +237,8 @@ class StorageMembership : public Membership {
     return node_states_.count(node) > 0;
   }
 
+  bool hasShard(ShardID shard) const;
+
   bool operator==(const StorageMembership& rhs) const;
 
  private:
@@ -245,6 +247,10 @@ class StorageMembership : public Membership {
     std::unordered_map<shard_index_t, ShardState> shard_states;
     size_t numShards() const {
       return shard_states.size();
+    }
+
+    bool hasShard(shard_index_t shard) const {
+      return shard_states.count(shard) > 0;
     }
 
     bool operator==(const NodeState& rhs) const {

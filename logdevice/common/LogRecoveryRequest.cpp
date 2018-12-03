@@ -823,8 +823,6 @@ void LogRecoveryRequest::sealLog() {
   ld_check(last_clean_epoch.val_ < next_epoch_.val_ - 1);
 
   auto config = Worker::onThisThread()->getConfig();
-  const auto& cluster_nodes = config->serverConfig()->getNodes();
-
   auto log = config->getLogGroupByIDShared(log_id_);
   if (!log) {
     // config has changed since the time this Sequencer was activated
@@ -847,15 +845,18 @@ void LogRecoveryRequest::sealLog() {
   seal_header_->last_clean_epoch = last_clean_epoch;
   ld_check(node_statuses_.empty());
 
+  const auto& nodes_configuration =
+      config->serverConfig()->getNodesConfiguration();
+  const auto& storage_membership = nodes_configuration->getStorageMembership();
+
   // send SEALs to nodes that belong to the union of all nodesets of
   // recovering epochs and are still present in cluster config
-  for (const ShardID& i : recovery_nodes_) {
-    auto it = cluster_nodes.find(i.node());
-    if (it != cluster_nodes.end() && it->second.isReadableStorageNode()) {
+  for (const ShardID& s : recovery_nodes_) {
+    if (storage_membership->shouldReadFromShard(s)) {
       auto insert_result =
           node_statuses_.emplace(std::piecewise_construct,
-                                 std::forward_as_tuple(i),
-                                 std::forward_as_tuple(this, i));
+                                 std::forward_as_tuple(s),
+                                 std::forward_as_tuple(this, s));
       ld_check(insert_result.second);
     }
   }
@@ -920,17 +921,16 @@ void LogRecoveryRequest::checkNodesForSeal() {
   ld_check(seal_header_ != nullptr);
   ld_check(seal_retry_handler_ != nullptr);
 
-  auto config = Worker::onThisThread()->getConfig();
-  const auto& cluster_nodes = config->serverConfig()->getNodes();
+  const auto& nodes_configuration =
+      Worker::onThisThread()->getNodesConfiguration();
+  const auto& storage_membership = nodes_configuration->getStorageMembership();
 
   for (const auto& kv : node_statuses_) {
     if (kv.second.state == NodeStatus::State::SEALED) {
       continue;
     }
     ShardID shard = kv.first;
-    auto it = cluster_nodes.find(shard.node());
-    if (it == cluster_nodes.end() || !it->second.isReadableStorageNode()) {
-      // TODO: handle cluster shrinking
+    if (!storage_membership->shouldReadFromShard(shard)) {
       continue;
     }
     seal_retry_handler_->activateTimer(shard);
@@ -1434,14 +1434,9 @@ void LogRecoveryRequest::onConnectionClosed(ShardID shard, Status status) {
 
   if (status == E::NOTINCONFIG) {
     // We were disconnected from a node because of the config change.
-
-    std::shared_ptr<const Configuration> config =
-        Worker::onThisThread()->getConfig();
-    const Configuration::Node* node_cfg =
-        config->serverConfig()->getNode(shard.node());
-
-    if (node_cfg == nullptr || !node_cfg->isReadableStorageNode()) {
-      // TODO: handle cluster shrinking (#4408213)
+    const auto& storage_membership =
+        Worker::onThisThread()->getNodesConfiguration()->getStorageMembership();
+    if (!storage_membership->shouldReadFromShard(shard)) {
       return;
     }
   }

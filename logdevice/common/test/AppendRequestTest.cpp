@@ -288,7 +288,7 @@ TEST_F(AppendRequestTest, SequencerAffinityTest) {
       TEST_CONFIG_FILE("sequencer_affinity_2nodes.conf")));
 
   cluster_state_ = std::make_unique<MockClusterState>(
-      config_->get()->serverConfig()->getNodes().size());
+      config_->get()->serverConfig()->getNodesConfiguration()->clusterSize());
 
   settings.use_sequencer_affinity = true;
   locator_ = std::make_unique<MockHashBasedSequencerLocator>(

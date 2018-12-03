@@ -120,9 +120,9 @@ Message::Disposition SEALED_Message::onReceived(const Address& from) {
     return Disposition::NORMAL;
   }
 
-  auto scfg = worker->getServerConfig();
-  auto* node = scfg->getNode(from.id_.node_.index());
-  if (!node || !node->isReadableStorageNode()) {
+  const auto& nodes_configuration = worker->getNodesConfiguration();
+  const node_index_t node = from.id_.node_.index();
+  if (!nodes_configuration->getStorageMembership()->hasNode(node)) {
     RATELIMIT_INFO(std::chrono::seconds(10),
                    10,
                    "Got a SEALED message for log %lu from %s but this node is "
@@ -132,7 +132,9 @@ Message::Disposition SEALED_Message::onReceived(const Address& from) {
     return Disposition::NORMAL;
   }
 
-  const shard_size_t n_shards = node->getNumShards();
+  const auto* node_attr = nodes_configuration->getNodeStorageAttribute(node);
+  ld_check(node_attr != nullptr);
+  const shard_size_t n_shards = node_attr->num_shards;
   ld_check(n_shards > 0); // We already checked we are a storage node.
   shard_index_t shard_idx = header_.shard;
   if (shard_idx >= n_shards) {

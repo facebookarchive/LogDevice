@@ -47,6 +47,8 @@ bool SequencerBackgroundActivator::processOneLog(ResourceBudget::Token token) {
   auto it = queue_.begin();
   auto log_id = logid_t(*it);
   auto config = Worker::onThisThread()->getConfig();
+  const auto& nodes_configuration =
+      Worker::onThisThread()->getNodesConfiguration();
 
   auto& all_seq = Worker::onThisThread()->processor_->allSequencers();
   auto seq = all_seq.findSequencer(log_id);
@@ -56,10 +58,11 @@ bool SequencerBackgroundActivator::processOneLog(ResourceBudget::Token token) {
     bumpCompletedStat();
     return true;
   }
-  const auto* node_cfg =
-      config->serverConfig()->getNode(config->serverConfig()->getMyNodeID());
-  assert(node_cfg);
-  bool is_sequencer_node = node_cfg->isSequencingEnabled();
+
+  const auto my_node_id = config->serverConfig()->getMyNodeID();
+  const bool is_sequencer_node =
+      nodes_configuration->getSequencerMembership()->isSequencingEnabled(
+          my_node_id.index());
 
   seq->noteConfigurationChanged(config, is_sequencer_node);
 

@@ -903,10 +903,6 @@ void AllSequencers::noteConfigurationChanged() {
     ld_check(map_.empty());
     return;
   }
-  const auto* node_cfg =
-      config->serverConfig()->getNode(config->serverConfig()->getMyNodeID());
-  ld_check(node_cfg);
-
   std::vector<logid_t> log_ids;
   {
     folly::stop_watch<std::chrono::milliseconds> watch;

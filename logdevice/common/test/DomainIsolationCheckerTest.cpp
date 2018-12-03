@@ -59,8 +59,13 @@ class MockDomainIsolationChecker : public DomainIsolationChecker {
     return test_->isNodeAlive(index);
   }
 
-  virtual std::shared_ptr<ServerConfig> getConfig() const override {
-    return test_->config_;
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const override {
+    return test_->config_->getNodesConfiguration();
+  }
+
+  NodeID getMyNodeID() const override {
+    return test_->config_->getMyNodeID();
   }
 
  private:

@@ -649,4 +649,12 @@ bool StorageMembership::operator==(const StorageMembership& rhs) const {
       metadata_shards_ == rhs.metadata_shards_;
 }
 
+bool StorageMembership::hasShard(ShardID shard) const {
+  const auto nit = node_states_.find(shard.node());
+  if (nit == node_states_.cend()) {
+    return false;
+  }
+  return nit->second.hasShard(shard.shard());
+}
+
 }}} // namespace facebook::logdevice::membership

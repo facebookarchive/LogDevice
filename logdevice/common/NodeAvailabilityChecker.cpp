@@ -25,12 +25,12 @@ NodeAvailabilityChecker::checkNode(NodeSetState* nodeset_state,
                                    bool ignore_nodeset_state,
                                    bool allow_unencrypted_connections) const {
   ld_check(destination_out != nullptr);
-  const std::shared_ptr<Configuration> cfg(getClusterConfig());
-  const Configuration::Node* node_cfg =
-      cfg->serverConfig()->getNode(shard.node());
-
-  // node is no longer in config
-  if (node_cfg == nullptr) {
+  const auto& storage_membership = getClusterConfig()
+                                       ->serverConfig()
+                                       ->getNodesConfiguration()
+                                       ->getStorageMembership();
+  if (!storage_membership->hasShard(shard)) {
+    // shard is no longer in the membership
     return NodeStatus::NOT_AVAILABLE;
   }
 

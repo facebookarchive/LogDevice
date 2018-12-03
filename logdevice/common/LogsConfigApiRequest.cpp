@@ -76,21 +76,25 @@ NodeID LogsConfigApiRequest::pickNode() {
     // return cached node
     return last_selected_node_;
   }
-  std::shared_ptr<ServerConfig> config = Worker::getConfig()->serverConfig();
+
+  const auto& nodes_configuration =
+      Worker::onThisThread()->getNodesConfiguration();
+  const auto& sd_config = nodes_configuration->getServiceDiscovery();
 
   ClusterState* cs = Worker::getClusterState();
   ld_check(cs);
 
   std::vector<NodeID> nodes;
   std::vector<double> weights;
+
   // considering only the nodes the failure detector thinks are alive and
   // exclude nodes that we have blacklisted.
-  for (const auto& it : config->getNodes()) {
-    auto& node = it.second;
-    NodeID node_id(it.first, node.generation);
+  for (const auto& kv : *sd_config) {
+    const node_index_t nid = kv.first;
+    NodeID node_id(nid, nodes_configuration->getNodeGeneration(nid));
     if (blacklisted_nodes_.find(node_id) == blacklisted_nodes_.end()) {
       nodes.push_back(node_id);
-      weights.push_back(cs->isNodeAlive(it.first) ? 1 : 0);
+      weights.push_back(cs->isNodeAlive(nid) ? 1 : 0);
     }
   }
 
@@ -112,9 +116,10 @@ bool LogsConfigApiRequest::blacklistSelectedNode() {
     blacklisted_nodes_.insert(last_selected_node_);
     last_selected_node_ = NodeID();
   }
-  std::shared_ptr<ServerConfig> config = Worker::getConfig()->serverConfig();
-  ld_check(config);
-  return blacklisted_nodes_.size() < config->getNodes().size();
+  const auto nodes_configuration =
+      Worker::onThisThread()->getNodesConfiguration();
+  ld_check(nodes_configuration);
+  return blacklisted_nodes_.size() < nodes_configuration->clusterSize();
 }
 
 void LogsConfigApiRequest::activateTimeoutTimer() {

@@ -24,11 +24,12 @@ void DomainIsolationChecker::init() {
 void DomainIsolationChecker::rebuildState() {
   ld_check(inited_on_ == getThreadID());
 
-  auto config = getConfig();
-  ld_check(config != nullptr);
-  const auto& cfg_nodes = config->getNodes();
-  const NodeID this_node = config->getMyNodeID();
-  ld_check(cfg_nodes.count(this_node.index()));
+  auto nodes_configuration = getNodesConfiguration();
+  ld_check(nodes_configuration != nullptr);
+  const auto& sd_config = nodes_configuration->getServiceDiscovery();
+
+  const NodeID this_node = getMyNodeID();
+  ld_check(sd_config->hasNode(this_node.index()));
 
   // disable detection when changing the internal state, all domains
   // are considered not isolated
@@ -36,14 +37,18 @@ void DomainIsolationChecker::rebuildState() {
   // reset all scopes to be not isolated
   scope_info_.fill(DomainInfo());
   nodes_.clear();
-  for (const auto& n : cfg_nodes) {
-    nodes_.insert(n.first);
+
+  for (const auto& kv : *sd_config) {
+    nodes_.insert(kv.first);
   }
+
   for (auto& e : isolated_scopes_) {
     e.store(false);
   }
 
-  if (!cfg_nodes.at(this_node.index()).location.hasValue()) {
+  const auto& my_location_optional =
+      sd_config->nodeAttributesAt(this_node.index()).location;
+  if (!my_location_optional.hasValue()) {
     ld_warning("This node (%s) does not have location information in config "
                "unable to detect domain isolation!",
                this_node.toString().c_str());
@@ -51,20 +56,19 @@ void DomainIsolationChecker::rebuildState() {
     return;
   }
 
-  const NodeLocation& this_location =
-      cfg_nodes.at(this_node.index()).location.value();
-  for (const auto& it : cfg_nodes) {
-    node_index_t index = it.first;
-    auto& node = it.second;
-    // we use a conservative approach so that nodes which do NOT have location
-    // info are treated as nodes _outside_ of the domain
-    if (!node.location.hasValue()) {
+  const NodeLocation& this_location = my_location_optional.value();
+  for (const auto& kv : *sd_config) {
+    const node_index_t index = kv.first;
+    const configuration::nodes::NodeServiceDiscovery& sd = kv.second;
+    // we use a conservative approach so that nodes which do NOT have
+    // location info are treated as nodes _outside_ of the domain
+    if (!sd.location.hasValue()) {
       ld_warning("Node %hd does not have location information in config. "
                  "Domain isolation detection may not be accurate!",
                  index);
       continue;
     }
-    const NodeLocation& location = node.location.value();
+    const NodeLocation& location = sd.location.value();
     for (NodeLocationScope scope = NodeLocationScope::NODE;
          scope < NodeLocationScope::ROOT;
          scope = NodeLocation::nextGreaterScope(scope)) {
@@ -85,9 +89,9 @@ void DomainIsolationChecker::rebuildState() {
 
   // rebuild the internal state from the current state of nodes in the
   // cluster by setting all current dead nodes
-  for (const auto& it : cfg_nodes) {
-    if (!isNodeAlive(it.first)) {
-      setNodeState(it.first, /*alive=*/false);
+  for (const auto nid : nodes_) {
+    if (!isNodeAlive(nid)) {
+      setNodeState(nid, /*alive=*/false);
     }
   }
 }
@@ -251,8 +255,13 @@ bool DomainIsolationChecker::isNodeAlive(node_index_t index) const {
   return cs->isNodeAlive(index);
 }
 
-std::shared_ptr<ServerConfig> DomainIsolationChecker::getConfig() const {
-  return Worker::getConfig()->serverConfig();
+std::shared_ptr<const configuration::nodes::NodesConfiguration>
+DomainIsolationChecker::getNodesConfiguration() const {
+  return Worker::onThisThread()->getNodesConfiguration();
+}
+
+NodeID DomainIsolationChecker::getMyNodeID() const {
+  return Worker::getConfig()->serverConfig()->getMyNodeID();
 }
 
 std::string DomainIsolationChecker::getDebugInfo() const {

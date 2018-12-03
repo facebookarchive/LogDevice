@@ -26,14 +26,19 @@ Request::Execution MemtableFlushedRequest::execute() {
 
 void MemtableFlushedRequest::broadcast() {
   auto config = getServerConfig();
-  const ServerConfig::Nodes& nodesConfig = config->getNodes();
-  for (const auto& n : nodesConfig) {
-    if (n.second.isReadableStorageNode() &&
-        n.first != config->getMyNodeID().index() &&
-        responsibleForNodesUpdates(n.first)) {
+
+  const auto& nodes_config = config->getNodesConfiguration();
+  const auto& storage_membership = nodes_config->getStorageMembership();
+
+  for (const node_index_t node : *storage_membership) {
+    // current flexible log sharding is not supported in rebuilding, so
+    // here we send to all storage node and let the recipent node do the
+    // message routing
+    if (node != config->getMyNodeID().index() &&
+        responsibleForNodesUpdates(node)) {
       MEMTABLE_FLUSHED_Header header(
           flushToken_, server_instance_id_, shard_idx_, node_index_);
-      NodeID nodeId(n.first, n.second.generation);
+      NodeID nodeId(node, nodes_config->getNodeGeneration(node));
       auto msg = std::make_unique<MEMTABLE_FLUSHED_Message>(header);
       int rv = sender_->sendMessage(std::move(msg), nodeId);
       if (rv != 0) {
