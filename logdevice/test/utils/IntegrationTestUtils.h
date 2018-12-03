@@ -853,6 +853,7 @@ class Cluster {
 
   /**
    * Update the config to bump the generation of node at position `index`.
+   * Also bump the node replacement counter.
    */
   int bumpGeneration(node_index_t index);
 
@@ -1001,6 +1002,25 @@ class Cluster {
     return writeConfig(getConfig()->getServerConfig().get(), logs_cfg);
   }
 
+  // see node_replacement_counters_ below
+  node_gen_t getNodeReplacementCounter(node_index_t node) const {
+    return node_replacement_counters_.count(node) > 0
+        ? node_replacement_counters_.at(node)
+        : 1;
+  }
+  void setNodeReplacementCounter(node_index_t node, node_gen_t rc) {
+    node_replacement_counters_[node] = rc;
+  }
+  void bumpNodeReplacementCounter(node_index_t node) {
+    ++node_replacement_counters_[node];
+  }
+  void setNodeReplacementCounters(std::map<node_index_t, node_gen_t> counters) {
+    node_replacement_counters_ = std::move(counters);
+  }
+
+  // require @param node must exist in the cluster
+  bool hasStorageRole(node_index_t node) const;
+
  private:
   // Private constructor.  Factory (friend class) is only caller.
   Cluster(std::string root_path,
@@ -1017,9 +1037,14 @@ class Cluster {
   // Directory where to store the data for a node (logs, db, sockets).
   static std::string getNodeDataPath(const std::string& root,
                                      node_index_t index,
-                                     int generation) {
+                                     int replacement_counter) {
     return root + "/N" + std::to_string(index) + ':' +
-        std::to_string(generation);
+        std::to_string(replacement_counter);
+  }
+
+  std::string getNodeDataPath(const std::string& root,
+                              node_index_t index) const {
+    return getNodeDataPath(root, index, getNodeReplacementCounter(index));
   }
 
   // Creates a Node instance for the specified config entry and starts the
@@ -1063,6 +1088,12 @@ class Cluster {
   std::unique_ptr<ClientSettings> client_settings_;
   // ordered map for convenience
   Nodes nodes_;
+
+  // keep track of node replacement events. for nodes with storage role, the
+  // counter should be in sync with the `generation' in its config. For nodes
+  // without storage role, counter is only used for tracking/directory keeping
+  // purpose but not reflected in the config
+  std::map<node_index_t, node_gen_t> node_replacement_counters_;
 
   // command line parameters, set by the Factory
   ParamMaps cmd_param_;

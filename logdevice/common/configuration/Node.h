@@ -131,6 +131,9 @@ struct Node {
    * dead.
    *
    * Note: default to 1 as generation <= 0 doesn't make sense.
+   * Note: we are in the middle of getting rid of `generation'. Currently
+   * generation should only be used in storage node replacement. For nodes
+   * w/o a storage role, their generation should always be set to 1.
    */
   int generation{1};
 

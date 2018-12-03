@@ -77,7 +77,6 @@ std::string defaultLogdevicedPath() {
 static const char* CHECKER_PATH = "bin/replication_checker_nofb";
 #endif
 
-
 using folly::test::TemporaryDirectory;
 namespace fs = boost::filesystem;
 
@@ -456,11 +455,13 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
   Configuration::Nodes nodes = source_config.serverConfig()->getNodes();
   const int nnodes = nodes.size();
   std::vector<node_index_t> node_ids(nnodes);
+  std::map<node_index_t, node_gen_t> replacement_counters;
 
   int j = 0;
   for (auto it : nodes) {
     ld_check(j < nnodes);
     node_ids[j++] = it.first;
+    replacement_counters[it.first] = it.second.generation;
   }
   ld_check(j == nnodes);
 
@@ -515,10 +516,12 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
     for (int i = 0; i < nnodes; ++i) {
       auto& node = nodes[node_ids[i]];
       addrs[i] = SockaddrPair::buildUnixSocketPair(
-          Cluster::getNodeDataPath(root_path, node_ids[i], node.generation),
+          Cluster::getNodeDataPath(
+              root_path, node_ids[i], replacement_counters[node_ids[i]]),
           false);
       ssl_addrs[i] = SockaddrPair::buildUnixSocketPair(
-          Cluster::getNodeDataPath(root_path, node_ids[i], node.generation),
+          Cluster::getNodeDataPath(
+              root_path, node_ids[i], replacement_counters[node_ids[i]]),
           true);
       node.address = addrs[i].protocol_addr_;
       node.gossip_address = addrs[i].gossip_addr_;
@@ -570,6 +573,7 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
   cluster->num_db_shards_ = num_db_shards_;
   cluster->rocksdb_type_ = rocksdb_type_;
   cluster->hash_based_sequencer_assignment_ = hash_based_sequencer_assignment_;
+  cluster->setNodeReplacementCounters(std::move(replacement_counters));
 
   if (cluster->rocksdb_type_ == RocksDBType::SINGLE) {
     cluster->setParam(
@@ -620,6 +624,7 @@ int Cluster::expand(std::vector<node_index_t> new_indices, bool start_nodes) {
   for (node_index_t idx : new_indices) {
     Configuration::Node node;
     node.generation = 1;
+    setNodeReplacementCounter(idx, 1);
 
     // Storage only node.
     node.addStorageRole(num_db_shards_);
@@ -653,11 +658,11 @@ int Cluster::expand(std::vector<node_index_t> new_indices, bool start_nodes) {
     for (int i = 0; i < new_indices.size(); ++i) {
       int idx = new_indices[i];
       addrs[i] = SockaddrPair::buildUnixSocketPair(
-          Cluster::getNodeDataPath(root_path_, idx, 1), false);
+          Cluster::getNodeDataPath(root_path_, idx), false);
       gossip_addrs[i] = SockaddrPair::buildGossipSocket(
-          Cluster::getNodeDataPath(root_path_, idx, 1));
+          Cluster::getNodeDataPath(root_path_, idx));
       ssl_addrs[i] = SockaddrPair::buildUnixSocketPair(
-          Cluster::getNodeDataPath(root_path_, idx, 1), true);
+          Cluster::getNodeDataPath(root_path_, idx), true);
     }
   }
 
@@ -831,8 +836,6 @@ std::unique_ptr<Node> Cluster::createNode(node_index_t index,
   std::shared_ptr<const Configuration> config = config_->get();
   ld_check(config != nullptr);
 
-  int generation = config->serverConfig()->getNode(index)->generation;
-
   std::unique_ptr<Node> node = std::make_unique<Node>();
   node->node_index_ = index;
   node->addrs_ = std::move(addrs);
@@ -843,7 +846,7 @@ std::unique_ptr<Node> Cluster::createNode(node_index_t index,
 
   // Data path will be something like
   // /tmp/logdevice/IntegrationTestUtils.MkkZyS/N0:1/
-  node->data_path_ = Cluster::getNodeDataPath(root_path_, index, generation);
+  node->data_path_ = Cluster::getNodeDataPath(root_path_, index);
   boost::filesystem::create_directories(node->data_path_);
 
   if (one_config_per_node_) {
@@ -859,7 +862,7 @@ std::unique_ptr<Node> Cluster::createNode(node_index_t index,
   ld_info("Node N%d:%d will be started on protocol_addr:%s"
           ", gossip_addr:%s, command_addr:%s (data in %s)",
           index,
-          generation,
+          getNodeReplacementCounter(index),
           node->addrs_.protocol_addr_.toString().c_str(),
           node->addrs_.gossip_addr_.toString().c_str(),
           node->addrs_.command_addr_.toString().c_str(),
@@ -1010,12 +1013,10 @@ void Cluster::partition(std::vector<std::set<int>> partitions) {
     for (auto& n : nodes) {
       if (p.find(n.first) == p.end()) {
         // node is outside the partition, update its address to unreachable
-        // unix socket and bump generation number (to trigger sender reload on
-        // config update)
+        // unix socket (to trigger sender reload on config update)
         std::string addr = "/nonexistent" + folly::to<std::string>(n.first);
         n.second.address = Sockaddr(addr);
         n.second.gossip_address = Sockaddr(addr);
-        n.second.generation++;
       }
     }
 
@@ -2201,8 +2202,12 @@ int Cluster::replace(node_index_t index, bool defer_start) {
   ld_check(!one_config_per_node_);
   ld_debug("replacing node %d", (int)index);
 
-  for (int outer_try = 0,
-           gen = config_->get()->serverConfig()->getNode(index)->generation + 1;
+  if (hasStorageRole(index)) {
+    ld_check(getNodeReplacementCounter(index) ==
+             config_->get()->serverConfig()->getNode(index)->generation);
+  }
+
+  for (int outer_try = 0, gen = getNodeReplacementCounter(index) + 1;
        outer_try < outer_tries_;
        ++outer_try, ++gen) {
     // Kill current node and erase its data
@@ -2238,7 +2243,14 @@ int Cluster::replace(node_index_t index, bool defer_start) {
     if (!no_ssl_address_) {
       nodes[index].ssl_address.assign(addrs[1].protocol_addr_);
     }
-    nodes[index].generation = gen;
+
+    if (hasStorageRole(index)) {
+      // only bump the config generation if the node has storage role
+      nodes[index].generation = gen;
+    }
+    // always bump the internal node replacement counter
+    setNodeReplacementCounter(index, gen);
+
     Configuration::NodesConfig nodes_config(std::move(nodes));
     auto config = config_->get();
     std::shared_ptr<ServerConfig> new_server_config =
@@ -2270,7 +2282,16 @@ int Cluster::bumpGeneration(node_index_t index) {
   // TODO: make it work with one config per nodes.
   ld_check(!one_config_per_node_);
   Configuration::Nodes nodes = config_->get()->serverConfig()->getNodes();
-  ++nodes.at(index).generation;
+  if (hasStorageRole(index)) {
+    // expect internal tracked replacemnt counter is in sync with configuration
+    ld_check(getNodeReplacementCounter(index) == nodes.at(index).generation);
+    // only bump configuration generation if the node has storage role
+    ++nodes.at(index).generation;
+  }
+
+  // always bump the internal node replacement counter
+  bumpNodeReplacementCounter(index);
+
   Configuration::NodesConfig nodes_config(std::move(nodes));
   auto config = config_->get();
   std::shared_ptr<ServerConfig> new_server_config =
@@ -2724,6 +2745,12 @@ std::string findBinary(const std::string& relative_path) {
 #else
   return findFile(relative_path, /* require_excutable */ true);
 #endif
+}
+
+bool Cluster::hasStorageRole(node_index_t node) const {
+  const Configuration::Nodes& nodes =
+      config_->get()->serverConfig()->getNodes();
+  return nodes.at(node).hasRole(configuration::NodeRole::STORAGE);
 }
 
 int Cluster::writeConfig(const ServerConfig* server_cfg,

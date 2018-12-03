@@ -37,6 +37,10 @@ struct StorageNodeAttribute {
    * generation) pair where the generation is less than what is in the
    * config, the system knows that the host referred to by the pair is
    * dead.
+   *
+   * Note: we are in the middle of getting rid of `generation'. Currently
+   * generation should only be used in storage node replacement. For nodes
+   * w/o a storage role, their generation should always be set to 1.
    */
   node_gen_t generation;
 

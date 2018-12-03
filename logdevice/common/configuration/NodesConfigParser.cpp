@@ -561,13 +561,17 @@ static bool parseRoles(const folly::dynamic& nodeMap,
     return false;
   }
 
-  /* Parse roles in config */
-  if (rolesList.empty()) {
+  auto get_node_index = [](const folly::dynamic& node_map) {
     node_index_t out_node_index = NODE_INDEX_INVALID;
     // Already parsed earlier. Should succeed here.
-    bool have_node_index = parseNodeID(nodeMap, out_node_index);
+    bool have_node_index = parseNodeID(node_map, out_node_index);
     ld_check(have_node_index);
-    ld_info("No roles configured for N%d", out_node_index);
+    return out_node_index;
+  };
+
+  /* Parse roles in config */
+  if (rolesList.empty()) {
+    ld_info("No roles configured for N%d", get_node_index(nodeMap));
     return true;
   }
 
@@ -587,6 +591,16 @@ static bool parseRoles(const folly::dynamic& nodeMap,
       err = E::INVALID_CONFIG;
       return false;
     }
+  }
+
+  if (!output.hasRole(configuration::NodeRole::STORAGE) &&
+      output.generation != 1) {
+    ld_error("Config validate failed: Node %d does not have storage role set "
+             "but has a generation %d > 1.",
+             get_node_index(nodeMap),
+             output.generation);
+    err = E::INVALID_CONFIG;
+    return false;
   }
 
   return true;

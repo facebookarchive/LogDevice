@@ -622,6 +622,10 @@ TEST(ConfigurationTest, InvalidRolesConfig) {
   config = Configuration::fromJsonFile(
       TEST_CONFIG_FILE("invalid_roles_not_array.conf"));
   EXPECT_EQ(err, E::INVALID_CONFIG);
+
+  config = Configuration::fromJsonFile(
+      TEST_CONFIG_FILE("invalid_generation_with_non_storage_role.conf"));
+  EXPECT_EQ(err, E::INVALID_CONFIG);
 }
 
 /**
