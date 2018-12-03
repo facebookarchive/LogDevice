@@ -459,12 +459,6 @@ class AppenderTest::MockAppender : public Appender {
   void cancelStoreTimer() override {
     test_->store_timer_active_ = false;
   }
-  void resetStoreTimer() override {
-    test_->store_timer_active_ = false;
-  }
-  void activateStoreTimer() override {
-    test_->store_timer_active_ = true;
-  }
   bool storeTimerIsActive() override {
     return test_->store_timer_active_;
   }
@@ -473,6 +467,9 @@ class AppenderTest::MockAppender : public Appender {
   }
   void activateRetryTimer() override {
     test_->retry_timer_active_ = true;
+  }
+  void activateStoreTimer(std::chrono::milliseconds) override {
+    test_->store_timer_active_ = true;
   }
   bool retryTimerIsActive() override {
     return test_->retry_timer_active_;
@@ -674,83 +671,6 @@ class AppenderTest::MockAppender : public Appender {
   AppenderTest* test_;
   static Payload dummyPayload; // something to pass to Apppender constructor,
                                // not used by the test
-};
-
-// A test request whose execute() method triggers an Appender
-// Currently, the execute() method is only useable for StoreTimeoutAdaptive.
-class AppenderTest::MockAppendRequest : public Request {
-  class MockAppender;
-  friend class MockAppender;
-
- public:
-  explicit MockAppendRequest(AppenderTest* appTest)
-      : Request(RequestType::TEST_REQUEST), appTest_(appTest) {}
-
-  // 'Body' of StoreTimeoutAdaptive test.
-  Request::Execution execute() override {
-    std::shared_ptr<Configuration> cfg = Worker::getConfig();
-    EXPECT_TRUE((bool)cfg);
-
-    EXPECT_NE(Worker::onThisThread(false), nullptr);
-
-    appTest_->updateConfig();
-    appTest_->first_candidate_idx_ = 0;
-    appTest_->start();
-
-    auto initial_delay = Worker::onThisThread()->adaptiveStoreDelay();
-
-    appTest_->checkStoreMsgAndTriggerOnSent(
-        E::OK, 1, {N0S0, N1S0, N2S0, N3S0, N4S0});
-    appTest_->checkNoStoreMsg();
-
-    // 2 nodes reply in time but the store timeout triggers.
-    appTest_->onStoredSent(E::OK, 1, {N0S0, N1S0});
-    appTest_->first_candidate_idx_ = 5;
-    appTest_->triggerTimeout();
-
-    auto& penalized_delay = Worker::onThisThread()->adaptiveStoreDelay();
-    auto penalized_delay_copy = penalized_delay;
-    EXPECT_GT(
-        penalized_delay.getCurrentValue(), initial_delay.getCurrentValue());
-
-    using namespace std::chrono_literals;
-    using TS = ExponentialBackoffAdaptiveVariable::TS;
-
-    // Underlying adaptive variable needs a first positive nudge
-    // to allow the possibility of delay decrease.
-    // First positive feedback does not change the delay value.
-    // Pretend fist positive feedback occurred 500ms,
-    // to ensure that the delta from a future positive feedback is noticeable.
-    auto beginning = TS::now() - 1s;
-    penalized_delay.positiveFeedback(beginning);
-
-    EXPECT_EQ(penalized_delay.getCurrentValue(),
-              penalized_delay_copy.getCurrentValue());
-
-    appTest_->checkStoreMsgAndTriggerOnSent(
-        E::OK, 2, {N5S0, N6S0, N7S0, N8S0, N0S0});
-    appTest_->checkNoStoreMsg();
-    // STORED is received from previous wave and discarded.
-    appTest_->onStoredSent(E::OK, 1, {N4S0, N3S0, N2S0});
-    appTest_->checkReplyHasNoValue();
-
-    // 3 nodes reply in time this time.
-    appTest_->onStoredSent(E::OK, 2, {N7S0, N5S0, N6S0});
-    appTest_->checkAppended(E::OK);
-    appTest_->checkDeleteMsg({N8S0, N0S0});
-    appTest_->checkRetired();
-    Appender::Reaper()(appTest_->appender_);
-    appTest_->checkReleaseMsg({N7S0, N5S0, N6S0});
-
-    auto delay_after_success = Worker::onThisThread()->adaptiveStoreDelay();
-    EXPECT_LT(delay_after_success.getCurrentValue(),
-              penalized_delay_copy.getCurrentValue());
-
-    return Execution::COMPLETE;
-  }
-
- private:
-  AppenderTest* appTest_;
 };
 
 void AppenderTest::start() {
@@ -1189,30 +1109,6 @@ TEST_F(AppenderTest, StoreTimeoutRelaxedGraylisting) {
   ASSERT_TRUE(retired_);
   Appender::Reaper()(appender_);
   CHECK_RELEASE_MSG(N0S0, N1S0, N2S0);
-}
-
-TEST_F(AppenderTest, StoreTimeoutAdaptive) {
-  pthread_t th;
-  settings_.enable_adaptive_store_timeout = true;
-
-  auto processor = make_test_processor(settings_);
-
-  std::unique_ptr<Request> rq =
-      std::make_unique<AppenderTest::MockAppendRequest>(this);
-
-  auto h = std::make_unique<EventLoopHandle>(new Worker(
-      processor.get(), worker_id_t(0), UpdateableConfig::createEmpty()));
-  h->start();
-
-  // The actual test functionality will be tested during request handling.
-  EXPECT_EQ(0, h->postRequest(rq));
-  EXPECT_EQ(nullptr, rq.get());
-
-  th = h->getThread();
-  ASSERT_FALSE(pthread_equal(pthread_self(), th));
-
-  // since no EventLoop is running on this thread
-  ASSERT_EQ(nullptr, Worker::onThisThread(/* enforce */ false));
 }
 
 // Check that a recipient is discarded by pickDestinations because the socket

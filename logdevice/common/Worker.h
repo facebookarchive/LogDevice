@@ -473,9 +473,6 @@ class Worker : public EventLoop {
   // appends during recovery.
   AppenderBuffer& previouslyRedirectedAppends() const;
 
-  ChronoExponentialBackoffAdaptiveVariable<std::chrono::milliseconds>&
-  adaptiveStoreDelay();
-
   // a map of all LogRecoveryRequests currently running (active) on this Worker
   LogRecoveryRequestMap& runningLogRecoveries() const;
 

@@ -93,15 +93,6 @@ class WorkerImpl {
                         w->immutable_settings_->num_workers),
         // TODO: Make this configurable
         previously_redirected_appends_(1024),
-
-        adaptive_store_delay_(
-            w->immutable_settings_->store_timeout.initial_delay,
-            w->immutable_settings_->store_timeout.initial_delay,
-            w->immutable_settings_->store_timeout.max_delay,
-            2,
-            1,
-            0),
-
         sslFetcher_(w->immutable_settings_->ssl_cert_path,
                     w->immutable_settings_->ssl_key_path,
                     w->immutable_settings_->ssl_ca_path,
@@ -140,8 +131,6 @@ class WorkerImpl {
   SyncSequencerRequestList runningSyncSequencerRequests_;
   AppenderBuffer appenderBuffer_;
   AppenderBuffer previously_redirected_appends_;
-  ChronoExponentialBackoffAdaptiveVariable<std::chrono::milliseconds>
-      adaptive_store_delay_;
   LogIDUniqueQueue recoveryQueueDataLog_;
   LogIDUniqueQueue recoveryQueueMetaDataLog_;
   AllClientReadStreams clientReadStreams_;
@@ -1086,11 +1075,6 @@ AppenderBuffer& Worker::appenderBuffer() const {
 
 AppenderBuffer& Worker::previouslyRedirectedAppends() const {
   return impl_->previously_redirected_appends_;
-}
-
-ChronoExponentialBackoffAdaptiveVariable<std::chrono::milliseconds>&
-Worker::adaptiveStoreDelay() {
-  return impl_->adaptive_store_delay_;
 }
 
 LogRecoveryRequestMap& Worker::runningLogRecoveries() const {

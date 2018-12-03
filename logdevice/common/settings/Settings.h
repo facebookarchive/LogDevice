@@ -182,10 +182,8 @@ struct Settings : public SettingsBundle {
   // to normal copyset selection behavior.
   bool disable_graylisting;
 
-  // Enable having a persistent, per-Worker variable that adaptively tunes
-  // store_timeout values based on
-  // * negative feedback (i.e,. timeouts cause an exponential increase), and
-  // * positive feedback (i.e., successes cause a linear decrease)
+  // Enable adaptive store timeouts. Which will use per worker histograms to
+  // estimate first wave timeout.
   bool enable_adaptive_store_timeout;
 
   // (client-only setting) When the client loses the connection to a server,

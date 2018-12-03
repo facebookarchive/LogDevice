@@ -718,7 +718,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        SettingsCategory::WritePath);
   init("store-timeout",
        &store_timeout,
-       "500ms..1min",
+       "10ms..1min",
        validate_positive<ssize_t>(),
        "timeout for attempts to store a record copy on a specific "
        "storage node. This value is used by sequencers only and is NOT the "
@@ -869,7 +869,8 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "false",
        nullptr, // no validation
        "decides whether to enable an adaptive store timeout",
-       SERVER | EXPERIMENTAL);
+       SERVER | EXPERIMENTAL,
+       SettingsCategory::WritePath);
   init("write-batch-size",
        &write_batch_size,
        "1024",

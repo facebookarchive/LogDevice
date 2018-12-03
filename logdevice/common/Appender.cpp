@@ -77,6 +77,7 @@ Appender::Appender(Worker* worker,
       tracer_(std::move(trace_logger)),
       created_on_(worker),
       full_appender_size_(full_appender_size),
+      timeout_(),
       seen_(seen_epoch),
       reply_to_(return_address),
       log_id_(log_id),
@@ -348,8 +349,14 @@ void Appender::sendDeferredSTORE(std::unique_ptr<STORE_Message> msg,
   }
 
   if ((rv != 0 || deferred_stores_ == 0) && !retryTimerIsActive()) {
-    store_timeout_set_ = true;
-    activateStoreTimer();
+    // This should never fire, because we can get here only from
+    // bwAvailCB which cannot be called without shard_ so the copyset has been
+    // selected and the store timeout has been set.
+    ld_check(timeout_.hasValue());
+
+    HISTOGRAM_ADD(
+        Worker::stats(), store_timeout, to_usec(timeout_.value()).count());
+    activateStoreTimer(timeout_.value());
   }
 }
 
@@ -473,7 +480,6 @@ int Appender::trySendingWavesOfStores(
           STAT_INCR(getStats(), metadata_log_appender_unable_pick_copyset);
         }
         return 0;
-        break;
       case CopySetSelector::Result::SUCCESS:
         break;
     }
@@ -488,9 +494,10 @@ int Appender::trySendingWavesOfStores(
     const int nsync =
         cfg_synced > 0 ? std::min(cfg_synced + cfg_extras, ncopies) : 0;
 
+    timeout_.assign(selectStoreTimeout(copyset, ncopies));
     store_hdr_.copyset_size = ncopies;
     store_hdr_.nsync = nsync;
-    store_hdr_.timeout_ms = store_timer_.getNextDelay().count();
+    store_hdr_.timeout_ms = to_msec(timeout_.value()).count();
 
     ld_debug("Appender %s is sending a STORE wave #%u of size %d",
              store_hdr_.rid.toString().c_str(),
@@ -673,7 +680,14 @@ int Appender::sendWave() {
     // on success or non-fatal error start a timer to send another
     // wave if we do not get enough replies before it expires
     store_timeout_set_ = true;
-    activateStoreTimer();
+
+    if (!timeout_.hasValue()) {
+      timeout_.assign(exponentialStoreTimeout());
+      ld_info("Copyset hasn't been selected, "
+              "backoff %ldms before trying again.",
+              to_msec(timeout_.value()).count());
+    }
+    activateStoreTimer(timeout_.value());
   }
 
   return rv;
@@ -1220,21 +1234,24 @@ void Appender::onTimeout() {
       // Separate rate limit for appenders that failed lots of waves.
       // These error messages are expected to be rare and important, don't want
       // them to drown in a flood of first-wave timeouts.
+
       RATELIMIT_INFO(
           std::chrono::seconds(1),
           10,
-          "Appender %s hit a STORE timeout(%lums), wave %u, recipient set: %s",
+          "Appender %s hit a STORE timeout(%sms), wave %u, recipient set: %s",
           store_hdr_.rid.toString().c_str(),
-          store_timer_.getCurrentDelay().count(),
+          timeout_.hasValue() ? std::to_string(timeout_.value().count()).c_str()
+                              : "<NO VALUE>",
           store_hdr_.wave,
           recipients_.dumpRecipientSet().c_str());
     } else {
       RATELIMIT_INFO(
           std::chrono::seconds(1),
           2,
-          "Appender %s hit a STORE timeout(%lums), wave %u, recipient set: %s",
+          "Appender %s hit a STORE timeout(%sms), wave %u, recipient set: %s",
           store_hdr_.rid.toString().c_str(),
-          store_timer_.getCurrentDelay().count(),
+          timeout_.hasValue() ? std::to_string(timeout_.value().count()).c_str()
+                              : "<NO VALUE>",
           store_hdr_.wave,
           recipients_.dumpRecipientSet().c_str());
     }
@@ -1287,13 +1304,6 @@ void Appender::onTimeout() {
                              NodeSetState::NotAvailableReason::SLOW);
       }
     }
-  }
-
-  // Adaptive timeout logic:
-  // Increase timeout exponentially as a result of the timeout.
-  if (getSettings().enable_adaptive_store_timeout &&
-      Worker::onThisThread(false) != nullptr) {
-    Worker::onThisThread()->adaptiveStoreDelay().negativeFeedback();
   }
 
   // There should not be any other timer active.
@@ -1952,21 +1962,13 @@ void Appender::onRecipientSucceeded(Recipient* recipient) {
   }
   sendReply(compose_lsn(store_hdr_.rid.epoch, store_hdr_.rid.esn), E::OK);
 
-  resetStoreTimer();
+  cancelStoreTimer();
   cancelRetryTimer();
 
   if (release_type_ != static_cast<ReleaseTypeRaw>(ReleaseType::INVALID)) {
     // Build the set of recipients to which we should send a RELEASE message
     // when this Apender is deleted by deleteIfDone().
     recipients_.getReleaseSet(release_);
-  }
-
-  // Adaptive timeout logic:
-  // Decrease timeout linearly as a result of the recipient's success.
-  if (getSettings().enable_adaptive_store_timeout &&
-      Worker::onThisThread(false) != nullptr) {
-    using TS = ExponentialBackoffAdaptiveVariable::TS;
-    Worker::onThisThread()->adaptiveStoreDelay().positiveFeedback(TS::now());
   }
 
   // We now have `replication_` copies of the record.
@@ -2016,7 +2018,8 @@ bool Appender::onRecipientFailed(Recipient* recipient,
     if (checkNodeSet()) {
       activateRetryTimer();
     } else {
-      activateStoreTimer();
+      ld_check(timeout_.hasValue());
+      activateStoreTimer(timeout_.value());
     }
     // We aborted the wave.
     return false;
@@ -2225,17 +2228,7 @@ void Appender::checkWorkerThread() {
 }
 
 void Appender::initStoreTimer() {
-  auto timeout = Worker::settings().store_timeout;
-  if (getSettings().enable_adaptive_store_timeout &&
-      Worker::onThisThread(false) != nullptr) {
-    // Adaptive timeout logic:
-    // Initialize timer using 'adaptive delay', which persists
-    // across multiple appenders executed on a Worker.
-    timeout.initial_delay =
-        Worker::onThisThread()->adaptiveStoreDelay().getCurrentValue();
-  }
-  store_timer_.assign(std::bind(&Appender::onTimeout, this), timeout);
-  store_timer_.setTimeoutMap(&Worker::onThisThread()->commonTimeouts());
+  store_timer_.assign(std::bind(&Appender::onTimeout, this));
 }
 
 void Appender::initRetryTimer() {
@@ -2245,27 +2238,27 @@ void Appender::initRetryTimer() {
 void Appender::cancelStoreTimer() {
   store_timer_.cancel();
 }
-void Appender::resetStoreTimer() {
-  store_timer_.reset();
-}
-void Appender::activateStoreTimer() {
-  store_timer_.activate();
-}
 void Appender::fireStoreTimer() {
-  store_timer_.fire();
+  store_timer_.activate(
+      std::chrono::microseconds(0), &Worker::onThisThread()->commonTimeouts());
 }
 bool Appender::storeTimerIsActive() {
   return store_timer_.isActive();
 }
+void Appender::activateStoreTimer(std::chrono::milliseconds delay) {
+  store_timer_.activate(delay);
+}
+
 void Appender::cancelRetryTimer() {
   retry_timer_.cancel();
+}
+
+bool Appender::retryTimerIsActive() {
+  return retry_timer_.isActive();
 }
 void Appender::activateRetryTimer() {
   retry_timer_.activate(
       std::chrono::microseconds(0), &Worker::onThisThread()->commonTimeouts());
-}
-bool Appender::retryTimerIsActive() {
-  return retry_timer_.isActive();
 }
 
 lsn_t Appender::getLastKnownGood() const {
@@ -2465,6 +2458,75 @@ void Appender::decideAmends(const StoreChainLink copyset[],
     // bit in `amendable_set'.
     *first_amendable_offset = COPYSET_SIZE_MAX;
   }
+}
+
+int64_t Appender::getStoreTimeoutMultiplier() const {
+  const int wave = store_hdr_.wave;
+  const int64_t multiplier = (INT64_C(1) << std::min(wave, 20));
+  return multiplier;
+}
+
+std::chrono::milliseconds Appender::exponentialStoreTimeout() const {
+  auto selected = getStoreTimeoutMultiplier();
+
+  if (Worker::onThisThread(false)) {
+    const auto& settings = Worker::settings().store_timeout;
+    selected = std::min(
+        selected * settings.initial_delay.count(), settings.max_delay.count());
+  }
+  return std::chrono::milliseconds(selected);
+}
+
+std::chrono::milliseconds
+Appender::selectStoreTimeout(const StoreChainLink copyset[], int size) const {
+  if (!Worker::onThisThread(false)) {
+    return exponentialStoreTimeout();
+  }
+
+  const auto& settings = Worker::settings();
+  const auto is_enabled = settings.enable_adaptive_store_timeout &&
+      settings.enable_store_histogram_calculations;
+
+  if (!is_enabled) {
+    return exponentialStoreTimeout();
+  }
+
+  const double initial = settings.store_timeout.initial_delay.count();
+  auto histogram_based_timeout = initial;
+
+  for (int i = 0; i < size; ++i) {
+    auto node = copyset[i].destination.node();
+    auto& stats = Worker::onThisThread()->getWorkerTimeoutStats();
+    auto estimations =
+        stats.getEstimations(WorkerTimeoutStats::Levels::TEN_SECONDS, node);
+
+    if (estimations.hasValue()) {
+      const auto percentile = WorkerTimeoutStats::QuantileIndexes::P99_99;
+      constexpr int factor = 2;
+      const auto estimation = factor * (*estimations)[percentile];
+      histogram_based_timeout = std::max(
+          histogram_based_timeout,
+          std::min(
+              static_cast<double>(settings.store_timeout.max_delay.count()),
+              std::max(initial, getStoreTimeoutMultiplier() * estimation)));
+    }
+  }
+
+  auto selected = std::chrono::milliseconds(
+      static_cast<int64_t>(histogram_based_timeout + 0.5));
+
+  RATELIMIT_DEBUG(std::chrono::seconds(1),
+                  1,
+                  "Store timeout based on histograms is %lf ms. "
+                  "Wave number is: %d and exponential multiplier is %lu. "
+                  "Selected %lu.",
+                  histogram_based_timeout,
+                  store_hdr_.wave,
+                  getStoreTimeoutMultiplier(),
+                  selected.count());
+
+  ld_check(selected.count() > 0);
+  return selected;
 }
 
 bool Appender::isNodeAlive(NodeID node) {

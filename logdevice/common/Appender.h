@@ -516,6 +516,22 @@ class Appender : public IntrusiveUnorderedMapHook {
   void sendReply(lsn_t lsn, Status st, NodeID redirect = NodeID());
 
   /**
+   * Select store timeout based on node response time statistics.
+   */
+  std::chrono::milliseconds selectStoreTimeout(const StoreChainLink copyset[],
+                                               int size) const;
+
+  /**
+   * Select store timeout in case we cannot select copy set and
+   * there is no way to select histogram based timeouts.
+   * Also, it's used when adaptive stores timeouts are disabled.
+   * It is simply initial_delay * 2 ^ {wave number - 1}.
+   */
+  std::chrono::milliseconds exponentialStoreTimeout() const;
+
+  int64_t getStoreTimeoutMultiplier() const;
+
+  /**
    * Only used in tests.  See Settings::hold_store_replies.
    */
   copyset_size_t repliesExpected() const {
@@ -643,8 +659,7 @@ class Appender : public IntrusiveUnorderedMapHook {
   virtual void initStoreTimer();
   virtual void initRetryTimer();
   virtual void cancelStoreTimer();
-  virtual void resetStoreTimer();
-  virtual void activateStoreTimer();
+  virtual void activateStoreTimer(std::chrono::milliseconds delay);
   virtual void fireStoreTimer();
   virtual bool storeTimerIsActive();
   virtual void cancelRetryTimer();
@@ -678,6 +693,8 @@ class Appender : public IntrusiveUnorderedMapHook {
   // record during the current wave or a previous wave, and sent the APPENDED
   // reply to the client.
   bool reply_sent_ = false;
+
+  folly::Optional<std::chrono::milliseconds> timeout_;
 
   // header to use when sending STORE messages to storage nodes
   // Includes among other things:
@@ -775,7 +792,7 @@ class Appender : public IntrusiveUnorderedMapHook {
 
   // timer for the STORE timeout
   // Note: in tests, this is left uninitialized.
-  ExponentialBackoffTimer store_timer_;
+  Timer store_timer_;
 
   // special timer, set up with a zero timeout, used to trigger another wave
   // of STOREs to be sent on the next iteration of the event loop

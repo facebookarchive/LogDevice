@@ -8,6 +8,7 @@
 
 #include "logdevice/common/WorkerTimeoutStats.h"
 
+#include <algorithm>
 #include <tuple>
 
 #include <folly/stats/TimeseriesHistogram-defs.h>
@@ -18,10 +19,10 @@ using namespace std::literals::chrono_literals;
 using namespace std::chrono;
 
 constexpr auto kMaxNumberOfOutgoingMessages = 10000;
-constexpr auto kBucketSize = 0.1;
+constexpr auto kBucketSize = 1;
 constexpr auto kMinBucketsLevel = 0;
 constexpr auto kMaxBucketsLevel = 20;
-constexpr auto kTimeBucketsNum = 50;
+constexpr auto kTimeBucketsNum = 10;
 constexpr std::initializer_list<std::chrono::steady_clock::duration> kLevels = {
     10s,
 };

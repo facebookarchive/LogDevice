@@ -28,6 +28,8 @@ class WorkerTimeoutStats {
   };
 
   using Latency = double;
+
+  enum QuantileIndexes { P50, P90, P95, P99, P99_9, P99_99, MAX };
   constexpr static std::array<double, 6> kQuantiles{50,
                                                     90,
                                                     95,

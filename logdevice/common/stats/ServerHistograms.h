@@ -24,6 +24,7 @@ struct ServerHistograms : public HistogramBundle {
     return {
         {"append_latency", &append_latency},
         {"write_to_read_latency", &write_to_read_latency},
+        {"store_timeout", &store_timeout},
         {"requests_queue_latency", &requests_queue_latency},
         {"gossip_queue_latency", &gossip_queue_latency},
         {"gossip_recv_latency", &gossip_recv_latency},
@@ -56,8 +57,9 @@ struct ServerHistograms : public HistogramBundle {
   // Latency of appends as seen by the sequencer
   LatencyHistogram append_latency;
 
-  // Write-to-read latency
   LatencyHistogram write_to_read_latency;
+
+  LatencyHistogram store_timeout;
 
   // Latency of posting a request
   LatencyHistogram requests_queue_latency;
