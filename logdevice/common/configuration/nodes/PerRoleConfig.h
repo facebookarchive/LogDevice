@@ -87,8 +87,7 @@ class PerRoleConfig {
     }
 
     // for each node in the membership, it must have a valid attribute
-    auto nodes = membership_->getMembershipNodes();
-    for (auto n : nodes) {
+    for (const node_index_t n : *membership_) {
       if (!attributes_->hasNode(n)) {
         RATELIMIT_ERROR(std::chrono::seconds(10),
                         5,
@@ -99,7 +98,6 @@ class PerRoleConfig {
         return false;
       }
     }
-
     return roleSpecificValidate();
   }
 

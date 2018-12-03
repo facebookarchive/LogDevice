@@ -76,23 +76,18 @@ class NodeAttributesConfig {
 
   bool operator==(const NodeAttributesConfig& rhs) const;
 
-  /**
-   * Utility to iterate over all (nodes, attributes) pairs.
-   * @param func     int(node_index_t, const NodeServiceDiscovery&)
-   *                 return -1 to abort iteration, 0 to continue
-   */
-  template <typename Func>
-  int forEachNode(const Func& func) const {
-    for (const auto& kv : node_states_) {
-      if (func(kv.first, kv.second) != 0) {
-        return -1;
-      }
-    }
-    return 0;
+  using MapType = std::unordered_map<node_index_t, Attributes>;
+  using const_iterator = typename MapType::const_iterator;
+
+  const_iterator begin() const {
+    return node_states_.cbegin();
+  }
+  const_iterator end() const {
+    return node_states_.cend();
   }
 
  private:
-  std::unordered_map<node_index_t, Attributes> node_states_;
+  MapType node_states_;
 
   void setNodeAttributes(node_index_t node, Attributes state);
   bool eraseNodeAttribute(node_index_t node);

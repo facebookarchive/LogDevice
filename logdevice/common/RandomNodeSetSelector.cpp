@@ -18,6 +18,7 @@
 #include <folly/String.h>
 
 #include "logdevice/common/commandline_util_chrono.h"
+#include "logdevice/common/configuration/nodes/utils.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/util.h"
 #include "logdevice/include/types.h"
@@ -37,11 +38,14 @@ std::unique_ptr<StorageSet> RandomNodeSetSelector::randomlySelectNodes(
   }
 
   auto candidates = std::make_unique<StorageSet>();
+  const auto& nodes_configuration =
+      config->serverConfig()->getNodesConfiguration();
+  ld_check(nodes_configuration != nullptr);
+  const auto& membership = nodes_configuration->getStorageMembership();
 
   for (const node_index_t i : eligible_nodes) {
-    const ServerConfig::Node* node = config->serverConfig()->getNode(i);
-    if (!node) {
-      // eligible_nodes should be picked from _config_
+    if (!membership->hasNode(i)) {
+      // eligible_nodes should be picked from the storage membership in config
       ld_check(false);
       return nullptr;
     }
@@ -52,14 +56,16 @@ std::unique_ptr<StorageSet> RandomNodeSetSelector::randomlySelectNodes(
       continue;
     }
 
-    if (!node->includeInNodesets()) {
+    const auto num_shards = nodes_configuration->getNumShards(i);
+    ld_check(num_shards > 0);
+    shard_index_t shard_idx = map_log_to_shard_(log_id, num_shards);
+    ShardID shard = ShardID(i, shard_idx);
+    if (!configuration::nodes::shouldIncludeInNodesetSelection(
+            *nodes_configuration, shard)) {
       continue;
     }
 
-    ld_check(node->getNumShards() > 0);
-    shard_index_t shard_idx = map_log_to_shard_(log_id, node->getNumShards());
-
-    candidates->push_back(ShardID(i, shard_idx));
+    candidates->push_back(shard);
   }
 
   if (candidates->size() < nodeset_size) {
@@ -80,18 +86,28 @@ std::unique_ptr<StorageSet> RandomNodeSetSelector::randomlySelectNodes(
 }
 
 storage_set_size_t RandomNodeSetSelector::getStorageSetSize(
-    logid_t,
+    logid_t log_id,
     const std::shared_ptr<Configuration>& cfg,
     folly::Optional<int> storage_set_size_target,
     ReplicationProperty replication,
     const Options* /*options*/) {
-  const auto& all_nodes = cfg->serverConfig()->getNodes();
   size_t storage_set_count = 0;
-  for (const auto& kv : all_nodes) {
-    if (kv.second.includeInNodesets()) {
+
+  const auto& nodes_configuration =
+      cfg->serverConfig()->getNodesConfiguration();
+  ld_check(nodes_configuration != nullptr);
+  const auto& membership = nodes_configuration->getStorageMembership();
+
+  for (const auto node : *membership) {
+    const auto num_shards = nodes_configuration->getNumShards(node);
+    ld_check(num_shards > 0);
+    ShardID shard = ShardID(node, map_log_to_shard_(log_id, num_shards));
+    if (configuration::nodes::shouldIncludeInNodesetSelection(
+            *nodes_configuration, shard)) {
       ++storage_set_count;
     }
-  }
+  };
+
   return std::min(std::max(storage_set_size_target.hasValue()
                                ? storage_set_size_target.value()
                                : storage_set_count,
@@ -122,7 +138,9 @@ RandomNodeSetSelector::getStorageSet(logid_t log_id,
     return std::make_tuple(Decision::FAILED, nullptr);
   }
 
-  const auto& all_nodes = cfg->serverConfig()->getNodes();
+  const auto& nodes_configuration =
+      cfg->serverConfig()->getNodesConfiguration();
+  ld_check(nodes_configuration != nullptr);
   const size_t nodeset_size = getStorageSetSize(log_id,
                                                 cfg,
                                                 *logcfg->attrs().nodeSetSize(),
@@ -130,10 +148,8 @@ RandomNodeSetSelector::getStorageSet(logid_t log_id,
                                                 options);
   ld_check(nodeset_size > 0);
 
-  std::vector<node_index_t> all_nodes_indices;
-  for (const auto& it : all_nodes) {
-    all_nodes_indices.push_back(it.first);
-  }
+  std::vector<node_index_t> all_nodes_indices =
+      nodes_configuration->getStorageNodes();
   std::sort(all_nodes_indices.begin(), all_nodes_indices.end());
   std::unique_ptr<StorageSet> candidates = randomlySelectNodes(
       log_id, cfg, all_nodes_indices, nodeset_size, options);
@@ -148,8 +164,9 @@ RandomNodeSetSelector::getStorageSet(logid_t log_id,
   // sort the nodeset
   std::sort(candidates->begin(), candidates->end());
 
+  // TODO T33035439: convert validStorageSet() to use the new NodesConfiguration
   if (!ServerConfig::validStorageSet(
-          all_nodes, *candidates, replication_property)) {
+          cfg->serverConfig()->getNodes(), *candidates, replication_property)) {
     ld_error("Invalid nodeset %s for log %lu, check nodes weights.",
              toString(*candidates).c_str(),
              log_id.val_);

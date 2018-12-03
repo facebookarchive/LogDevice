@@ -75,6 +75,10 @@ class NodesConfiguration {
   // note: return nullptr if generation number mismatches
   const NodeServiceDiscovery* getNodeServiceDiscovery(NodeID node) const;
 
+  bool isNodeInServiceDiscoveryConfig(node_index_t node) const {
+    return service_discovery_->hasNode(node);
+  }
+
   const std::shared_ptr<const SequencerConfig>& getSequencerConfig() const {
     return sequencer_config_;
   }
@@ -94,6 +98,8 @@ class NodesConfiguration {
   // note: return default generation 1 for nodes not having storage role or
   // node not existed
   node_gen_t getNodeGeneration(node_index_t node) const;
+  // return  0 if node is not a storage node
+  shard_size_t getNumShards(node_index_t node) const;
 
   const std::shared_ptr<const MetaDataLogsReplication>&
   getMetaDataLogsReplication() const {
@@ -108,6 +114,11 @@ class NodesConfiguration {
   const std::shared_ptr<const membership::StorageMembership>&
   getStorageMembership() const {
     return storage_config_->getMembership();
+  }
+
+  // @return  the list of storage nodes in the current storage membership
+  std::vector<node_index_t> getStorageNodes() const {
+    return getStorageMembership()->getMembershipNodes();
   }
 
   std::shared_ptr<const NodesConfiguration> applyUpdate(Update update) const;

@@ -39,4 +39,29 @@ constexpr Type MAINTENANCE_PROVISION{1};
 // (defined in common/configuration/Node.h) that requires a membership
 using MembershipType = configuration::nodes::NodeRole;
 
+// a simple wrapper for a const iterator of a map type that only
+// expose keys of the map
+template <typename Map>
+class ConstMapKeyIterator {
+ public:
+  using InnerIt = typename Map::const_iterator;
+  explicit ConstMapKeyIterator(InnerIt&& it) : it_(std::move(it)) {}
+  ConstMapKeyIterator& operator++() {
+    it_++;
+    return *this;
+  }
+  bool operator==(const ConstMapKeyIterator& rhs) const {
+    return it_ == rhs.it_;
+  }
+  bool operator!=(const ConstMapKeyIterator& rhs) const {
+    return !(*this == rhs);
+  }
+  typename Map::key_type operator*() {
+    return it_->first;
+  }
+
+ private:
+  InnerIt it_;
+};
+
 }}} // namespace facebook::logdevice::membership

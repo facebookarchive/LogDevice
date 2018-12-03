@@ -232,6 +232,13 @@ TEST_F(NodesConfigurationTest, ProvisionBasic) {
     EXPECT_EQ(n == 1 ? 1.0 : 7.0, result.second.weight);
   }
 
+  // test iterating membership nodes
+  std::set<node_index_t> seq_nodes;
+  for (node_index_t n : *seq_membership) {
+    seq_nodes.insert(n);
+  }
+  EXPECT_EQ(std::set<node_index_t>({1, 7}), seq_nodes);
+
   // check storage config
   auto storage_config = config->getStorageConfig();
   auto storage_membership = storage_config->getMembership();
@@ -250,6 +257,13 @@ TEST_F(NodesConfigurationTest, ProvisionBasic) {
     EXPECT_EQ(StorageStateFlags::NONE, result.second.flags);
     EXPECT_EQ(MembershipVersion::MIN_VERSION, result.second.since_version);
   }
+
+  // test iterating membership nodes
+  std::set<node_index_t> storage_nodes;
+  for (node_index_t n : *storage_membership) {
+    storage_nodes.insert(n);
+  }
+  EXPECT_EQ(std::set<node_index_t>({1, 2, 9}), storage_nodes);
 
   // check for metadata nodeset and replication properties
   auto metadata_rep = config->getMetaDataLogsReplication();

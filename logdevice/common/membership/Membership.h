@@ -7,6 +7,8 @@
  */
 #pragma once
 
+#include <folly/Function.h>
+
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/membership/types.h"

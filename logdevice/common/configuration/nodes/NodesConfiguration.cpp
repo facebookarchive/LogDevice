@@ -27,14 +27,13 @@ bool valid(C config) {
   return config != nullptr && config->validate();
 }
 
-bool serviceDiscoveryhasMembershipNodes(
-    const ServiceDiscoveryConfig& serv_conf,
-    const membership::Membership& membership) {
-  for (node_index_t node : membership.getMembershipNodes()) {
+template <typename M>
+bool serviceDiscoveryhasMembershipNodes(const ServiceDiscoveryConfig& serv_conf,
+                                        const M& membership) {
+  for (const node_index_t node : membership) {
     bool node_exist;
     NodeServiceDiscovery serv_discovery;
     std::tie(node_exist, serv_discovery) = serv_conf.getNodeAttributes(node);
-
     if (!node_exist) {
       RATELIMIT_ERROR(std::chrono::seconds(10),
                       5,
@@ -108,19 +107,18 @@ bool NodesConfiguration::validateConfigMetadata() const {
     }
   }
 
-  // TODO T15517759: check all storage nodes must have the same number
-  // of shards as the num_shards_
-  auto storage_nodes = getStorageMembership()->getMembershipNodes();
-  for (const auto n : storage_nodes) {
+  // check all storage nodes must have the same number of shards as the
+  // num_shards_
+  for (const node_index_t node : *getStorageMembership()) {
     const auto& storage_attr =
-        getStorageConfig()->getAttributes()->nodeAttributesAt(n);
+        getStorageConfig()->getAttributes()->nodeAttributesAt(node);
     if (storage_attr.num_shards != num_shards_) {
       RATELIMIT_ERROR(
           std::chrono::seconds(10),
           5,
           "validation failed! node %hu has num_shards attribute of %hd "
           "while num_shards for the config is %hd.",
-          n,
+          node,
           storage_attr.num_shards,
           num_shards_);
       err = E::INVALID_CONFIG;
@@ -307,12 +305,11 @@ uint64_t NodesConfiguration::computeStorageNodesHash() const {
 }
 
 shard_size_t NodesConfiguration::computeNumShards() const {
-  const auto& storage_mem = getStorageMembership();
-  auto storage_nodes = storage_mem->getMembershipNodes();
-  for (const auto n : storage_nodes) {
+  for (const node_index_t node : *getStorageMembership()) {
     const auto& storage_attr =
-        getStorageConfig()->getAttributes()->nodeAttributesAt(n);
+        getStorageConfig()->getAttributes()->nodeAttributesAt(node);
     ld_check(storage_attr.num_shards > 0);
+    // return as soon as we got one valid num_shards
     return storage_attr.num_shards;
   }
   return 0;
@@ -320,11 +317,9 @@ shard_size_t NodesConfiguration::computeNumShards() const {
 
 node_index_t NodesConfiguration::computeMaxNodeIndex() const {
   node_index_t res = 0;
-  service_discovery_->forEachNode(
-      [&res](node_index_t nid, const NodeServiceDiscovery& /*unused*/) {
-        res = std::max(res, nid);
-        return 0;
-      });
+  for (const auto& kv : *service_discovery_) {
+    res = std::max(res, kv.first);
+  }
   return res;
 }
 
@@ -333,16 +328,16 @@ void NodesConfiguration::recomputeConfigMetadata() {
   num_shards_ = computeNumShards();
   max_node_index_ = computeMaxNodeIndex();
 
-  auto add_addr_index = [this](const std::vector<node_index_t>& nodes) {
-    for (auto n : nodes) {
+  addr_to_index_.clear();
+
+  auto add_addr_index = [this](const auto& membership) {
+    for (const auto n : membership) {
       const auto& serv_disc = getServiceDiscovery()->nodeAttributesAt(n);
       addr_to_index_.insert(std::make_pair(serv_disc.address, n));
     }
   };
-
-  addr_to_index_.clear();
-  add_addr_index(getSequencerMembership()->getMembershipNodes());
-  add_addr_index(getStorageMembership()->getMembershipNodes());
+  add_addr_index(*getSequencerMembership());
+  add_addr_index(*getStorageMembership());
 }
 
 std::shared_ptr<const NodesConfiguration> NodesConfiguration::withVersion(
@@ -380,6 +375,11 @@ NodesConfiguration::getNodeStorageAttribute(node_index_t node) const {
 node_gen_t NodesConfiguration::getNodeGeneration(node_index_t node) const {
   const auto* node_attr = getNodeStorageAttribute(node);
   return node_attr != nullptr ? node_attr->generation : 1;
+}
+
+shard_size_t NodesConfiguration::getNumShards(node_index_t node) const {
+  const auto* node_attr = getNodeStorageAttribute(node);
+  return node_attr != nullptr ? node_attr->num_shards : 0;
 }
 
 const NodeServiceDiscovery*

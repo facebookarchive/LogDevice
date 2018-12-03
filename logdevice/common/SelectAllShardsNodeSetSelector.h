@@ -46,36 +46,27 @@ class SelectAllShardsNodeSetSelector : public NodeSetSelector {
     }
 
     auto indices = std::make_unique<StorageSet>();
-    for (const auto& it : cfg->serverConfig()->getNodes()) {
-      if ((!options || !options->exclude_nodes.count(it.first)) &&
-          it.second.isReadableStorageNode()) {
-        auto num_shards = it.second.getNumShards();
-        ld_check(num_shards > 0);
+    const auto& nodes_configuration =
+        cfg->serverConfig()->getNodesConfiguration();
+    ld_check(nodes_configuration != nullptr);
+    const auto& membership = nodes_configuration->getStorageMembership();
+    for (const auto node : *membership) {
+      if ((!options || !options->exclude_nodes.count(node))) {
+        auto num_shards = nodes_configuration->getNumShards(node);
         for (shard_index_t s = 0; s < num_shards; ++s) {
-          indices->push_back(ShardID(it.first, s));
+          ShardID shard(node, s);
+          if (membership->shouldReadFromShard(shard)) {
+            indices->push_back(shard);
+          }
         }
       }
     }
+
     std::sort(indices->begin(), indices->end());
     if (prev && *prev == *indices) {
       return std::make_tuple(Decision::KEEP, nullptr);
     }
     return std::make_tuple(Decision::NEEDS_CHANGE, std::move(indices));
-  }
-
-  storage_set_size_t
-  getStorageSetSize(logid_t /*log_id*/,
-                    const std::shared_ptr<Configuration>& cfg,
-                    folly::Optional<int> /*storage_set_size_target*/,
-                    ReplicationProperty /*replication*/,
-                    const Options* /*options*/ = nullptr) override {
-    storage_set_size_t count = 0;
-    for (const auto& it : cfg->serverConfig()->getNodes()) {
-      if (it.second.isReadableStorageNode()) {
-        count += it.second.getNumShards();
-      }
-    }
-    return count;
   }
 };
 

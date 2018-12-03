@@ -219,7 +219,7 @@ class StorageMembership : public Membership {
    */
   StorageSet getMetaDataStorageSet() const;
 
-  std::set<ShardID> getMetaDataShards() const {
+  const std::set<ShardID>& getMetaDataShards() const {
     return metadata_shards_;
   }
 
@@ -252,7 +252,8 @@ class StorageMembership : public Membership {
     }
   };
 
-  std::unordered_map<node_index_t, NodeState> node_states_;
+  using MapType = std::unordered_map<node_index_t, NodeState>;
+  MapType node_states_;
 
   // a separated index of storage shards whose MetaDataStorageState is not NONE
   std::set<ShardID> metadata_shards_;
@@ -266,6 +267,14 @@ class StorageMembership : public Membership {
   // remove the given _shard_ from the storage membership if the shard exists;
   // also update the metadata_shards_ index as needed.
   void eraseShardState(ShardID shard);
+
+ public:
+  ConstMapKeyIterator<MapType> begin() const {
+    return ConstMapKeyIterator<MapType>(node_states_.cbegin());
+  }
+  ConstMapKeyIterator<MapType> end() const {
+    return ConstMapKeyIterator<MapType>(node_states_.cend());
+  }
 
   friend class configuration::nodes::NodesConfigLegacyConverter;
   friend class MembershipCodecFlatBuffers;

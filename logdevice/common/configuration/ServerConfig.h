@@ -537,6 +537,11 @@ class ServerConfig {
   folly::dynamic toJson(const LogsConfig* with_logs = nullptr,
                         const ZookeeperConfig* with_zk = nullptr) const;
 
+  const std::unordered_map<Sockaddr, node_index_t, Sockaddr::Hash>&
+  getAddrToIndex() const {
+    return addrToIndex_;
+  }
+
  private:
   //
   // Allow only one way of constructing that the factories use.  Delete copy

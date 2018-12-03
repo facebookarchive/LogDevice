@@ -97,11 +97,10 @@ NodeSetState::getNotAvailableReason(ShardID shard) const {
 void NodeSetState::postHealthCheckRequest(ShardID shard,
                                           bool perform_space_based_retention) {
   Worker* worker = Worker::onThisThread();
-  const std::shared_ptr<const Configuration> config = worker->getConfig();
-  const auto& nodes_cfg = config->serverConfig()->getNodes();
-
-  // node is no longer in config
-  if (nodes_cfg.count(shard.node()) < 1) {
+  const auto& nodes_configuration = worker->getNodesConfiguration();
+  ld_check(nodes_configuration != nullptr);
+  if (!nodes_configuration->isNodeInServiceDiscoveryConfig(shard.node())) {
+    // node is no longer in config
     return;
   }
 

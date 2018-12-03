@@ -33,43 +33,43 @@ int RandomCrossDomainNodeSetSelector::buildDomainMap(
            sync_replication_scope < NodeLocationScope::ROOT);
 
   map->clear();
-  for (const auto& it : cfg->getNodes()) {
-    node_index_t i = it.first;
-    const Configuration::Node* node = &it.second;
-    ld_check(node != nullptr);
-    if (!node->location.hasValue()) {
+
+  const auto& nodes_configuration = cfg->getNodesConfiguration();
+  ld_check(nodes_configuration != nullptr);
+  const auto& membership = nodes_configuration->getStorageMembership();
+
+  for (node_index_t node : *membership) {
+    const auto* sd = nodes_configuration->getNodeServiceDiscovery(node);
+    ld_check(sd != nullptr);
+
+    // filter nodes excluded from @param options
+    if (options != nullptr && options->exclude_nodes.count(node)) {
+      // skip the node
+      continue;
+    }
+
+    if (!sd->location.hasValue()) {
       ld_error("Node %d (%s) does not have location information, cross-domain "
                "selection cannot continue.",
-               i,
-               node->address.toString().c_str());
+               node,
+               sd->address.toString().c_str());
       return -1;
     }
 
-    const NodeLocation& location = node->location.value();
+    const NodeLocation& location = sd->location.value();
     ld_check(!location.isEmpty());
     if (!location.scopeSpecified(sync_replication_scope)) {
       ld_error("Node %d (%s) does not have location scope %s specified in "
                "its location %s. Abort.",
-               i,
-               node->address.toString().c_str(),
+               node,
+               sd->address.toString().c_str(),
                NodeLocation::scopeNames()[sync_replication_scope].c_str(),
                location.toString().c_str());
       return -1;
     }
 
-    // filter nodes excluded from @param options
-    if (options != nullptr && options->exclude_nodes.count(i)) {
-      // skip the node
-      continue;
-    }
-
-    // filter non-storage nodes
-    if (!node->includeInNodesets()) {
-      continue;
-    }
-
     // use the domain name in the sync_replication_scope as the key
-    (*map)[location.getDomain(sync_replication_scope)].push_back(i);
+    (*map)[location.getDomain(sync_replication_scope)].push_back(node);
   }
 
   return 0;
@@ -321,9 +321,8 @@ RandomCrossDomainNodeSetSelector::getStorageSet(
   // the final nodeset does not satisfied the replication requirement in case
   // many nodes are of 0 weight. To prevent the loss of write availability,
   // fail the nodeset selection.
-  const auto& all_nodes = cfg->serverConfig()->getNodes();
   if (!ServerConfig::validStorageSet(
-          all_nodes, *result, replication_property)) {
+          cfg->serverConfig()->getNodes(), *result, replication_property)) {
     ld_error("Invalid nodeset %s for log %lu, check nodes weights.",
              toString(*result).c_str(),
              log_id.val_);

@@ -13,6 +13,8 @@
 
 #include <folly/Random.h>
 
+#include "logdevice/common/configuration/nodes/utils.h"
+
 namespace facebook { namespace logdevice {
 
 std::tuple<NodeSetSelector::Decision, std::unique_ptr<StorageSet>>
@@ -60,49 +62,58 @@ WeightAwareNodeSetSelector::getStorageSet(
   };
   std::map<std::string, Domain> domains;
 
-  for (const auto& it : cfg->serverConfig()->getNodes()) {
-    node_index_t i = it.first;
-    const Configuration::Node* node = &it.second;
-    assert(node != nullptr);
+  const auto& nodes_configuration =
+      cfg->serverConfig()->getNodesConfiguration();
+  ld_check(nodes_configuration != nullptr);
+  const auto& membership = nodes_configuration->getStorageMembership();
 
+  for (const auto node : *membership) {
     // Filter nodes excluded from `options`.
-    if (options != nullptr && options->exclude_nodes.count(i)) {
+    if (options != nullptr && options->exclude_nodes.count(node)) {
       continue;
     }
+
+    const auto num_shards = nodes_configuration->getNumShards(node);
+    ld_check(num_shards > 0);
+    shard_index_t shard_idx = mapLogToShard_(log_id, num_shards);
+    ShardID shard = ShardID(node, shard_idx);
+
     // Filter nodes that shouldn't be included in nodesets
-    if (!node->includeInNodesets()) {
+    if (!configuration::nodes::shouldIncludeInNodesetSelection(
+            *nodes_configuration, shard)) {
       continue;
     }
+
+    const auto* sd = nodes_configuration->getNodeServiceDiscovery(node);
+    ld_check(sd != nullptr);
 
     std::string location_str;
     if (replication_scope == NodeLocationScope::ROOT) {
       // All nodes are in the same replication domain.
     } else {
-      if (!node->location.hasValue()) {
+      if (!sd->location.hasValue()) {
         ld_error("Can't select nodeset because node %d (%s) does not have "
                  "location information",
-                 i,
-                 node->address.toString().c_str());
+                 node,
+                 sd->address.toString().c_str());
         return std::make_tuple(Decision::FAILED, nullptr);
       }
-      const NodeLocation& location = node->location.value();
+
+      const NodeLocation& location = sd->location.value();
       assert(!location.isEmpty());
       if (!location.scopeSpecified(replication_scope)) {
         ld_error("Can't select nodeset because location %s of node %d (%s) "
                  "doesn't have location for scope %s.",
                  location.toString().c_str(),
-                 i,
-                 node->address.toString().c_str(),
+                 node,
+                 sd->address.toString().c_str(),
                  NodeLocation::scopeNames()[replication_scope].c_str());
         return std::make_tuple(Decision::FAILED, nullptr);
       }
-      location_str = location.getDomain(replication_scope, i);
+      location_str = location.getDomain(replication_scope, node);
     }
 
-    assert(node->getNumShards() > 0);
-    shard_index_t shard_idx = mapLogToShard_(log_id, node->getNumShards());
-
-    ShardID current_shard_id = ShardID(i, shard_idx);
+    ShardID current_shard_id = shard;
     uint64_t curr_hash;
 
     // If consistent hashing is toggled, hash the log id along with the shard
@@ -159,9 +170,8 @@ WeightAwareNodeSetSelector::getStorageSet(
 
   // Check that we have enough nodes and domains to satisfy the replication
   // requirement.
-  const auto& all_nodes = cfg->serverConfig()->getNodes();
   if (!ServerConfig::validStorageSet(
-          all_nodes, *result, replication_property)) {
+          cfg->serverConfig()->getNodes(), *result, replication_property)) {
     ld_error("Not enough storage nodes to select nodeset for log %lu, "
              "replication: %s, selected: %s.",
              log_id.val_,

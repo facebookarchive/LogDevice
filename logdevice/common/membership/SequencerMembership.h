@@ -162,10 +162,18 @@ class SequencerMembership : public Membership {
     return node_states_.empty();
   }
 
+  using MapType = std::unordered_map<node_index_t, SequencerNodeState>;
+  ConstMapKeyIterator<MapType> begin() const {
+    return ConstMapKeyIterator<MapType>(node_states_.cbegin());
+  }
+  ConstMapKeyIterator<MapType> end() const {
+    return ConstMapKeyIterator<MapType>(node_states_.cend());
+  }
+
   bool operator==(const SequencerMembership& rhs) const;
 
  private:
-  std::unordered_map<node_index_t, SequencerNodeState> node_states_;
+  MapType node_states_;
 
   // update the sequencer node state of the given node; If _node_ doesn't exist
   // in membership, create an entry for it.
