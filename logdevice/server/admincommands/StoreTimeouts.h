@@ -144,13 +144,14 @@ class StoreTimeoutHistogram : public AdminCommand {
       std::vector<EstimatesFromWorker> result;
       result.reserve(timeout_stats.histograms_.size());
       for (auto& node_estimator : timeout_stats.histograms_) {
-        result.emplace_back(
-            std::make_tuple(timeout_stats
-                                .getEstimations(WorkerTimeoutStats::TEN_SECONDS,
-                                                node_estimator.first)
-                                .value(),
-                            worker->idx_,
-                            node_estimator.first));
+        auto estimate = timeout_stats.getEstimations(
+            WorkerTimeoutStats::TEN_SECONDS, node_estimator.first);
+        if (estimate.hasValue()) {
+          result.emplace_back(std::make_tuple(
+              estimate.value(), worker->idx_, node_estimator.first));
+        } else {
+          result.push_back(folly::none);
+        }
       }
 
       return result;
