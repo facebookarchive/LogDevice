@@ -127,7 +127,7 @@ void RemoteLogsConfig::getLogGroupByIDAsync(
     if (it != id_result_cache.end()) {
       // potential cache hit - check timestamp
       steady_clock::time_point tnow = steady_clock::now();
-      if (it->second.time_fetched - tnow <= max_data_age_) {
+      if (tnow - it->second.time_fetched <= max_data_age_) {
         // data not too old - return from cache
         auto log_sptr_copy = it->second.log;
         lock.unlock();
@@ -219,7 +219,7 @@ void RemoteLogsConfig::getLogRangeByNameAsync(
     if (it != name_result_cache.end()) {
       // potential cache hit - check timestamp
       steady_clock::time_point tnow = steady_clock::now();
-      if (it->second.time_fetched - tnow <= max_data_age_) {
+      if (tnow - it->second.time_fetched <= max_data_age_) {
         // data not too old - return from cache
         cb(E::OK, it->second.range);
         return;
@@ -302,7 +302,7 @@ bool RemoteLogsConfig::getLogRangesByNamespaceCached(
   }
 
   steady_clock::time_point tnow = steady_clock::now();
-  if (ns_it->second - tnow > max_data_age_) {
+  if (tnow - ns_it->second > max_data_age_) {
     // result too old
     return false;
   }
