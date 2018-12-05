@@ -36,7 +36,7 @@ class WorkerTimeoutStats {
                                                     99,
                                                     99.9,
                                                     99.99};
-
+  using Clock = std::chrono::steady_clock;
   using MessageKey = std::tuple<node_index_t, RecordID, uint32_t>;
   using Timepoint = std::chrono::time_point<std::chrono::steady_clock>;
   using Histogram =
@@ -48,20 +48,26 @@ class WorkerTimeoutStats {
 
   virtual ~WorkerTimeoutStats() = default;
 
-  void onCopySent(Status status, const ShardID& to, const STORE_Header& header);
-  void onReply(const ShardID& from, const STORE_Header& header);
+  void onCopySent(Status status,
+                  const ShardID& to,
+                  const STORE_Header& header,
+                  Clock::time_point now = Clock::now());
+  void onReply(const ShardID& from,
+               const STORE_Header& header,
+               Clock::time_point now = Clock::now());
+
   void clear();
 
   folly::Optional<std::array<Latency, WorkerTimeoutStats::kQuantiles.size()>>
-  getEstimations(Levels level, int node = -1);
+  getEstimations(Levels level,
+                 int node = -1,
+                 Clock::time_point now = Clock::now());
 
   std::unordered_map<node_index_t, Histogram> histograms_;
   Histogram overall_;
 
  protected:
-  virtual uint64_t getMinSamplesPerBucket() const {
-    return 30;
-  }
+  virtual uint64_t getMinSamplesPerBucket() const;
 
  private:
   void cleanup();

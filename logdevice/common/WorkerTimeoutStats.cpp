@@ -13,6 +13,7 @@
 
 #include <folly/stats/TimeseriesHistogram-defs.h>
 
+#include "logdevice/common/Worker.h"
 #include "logdevice/common/debug.h"
 
 using namespace std::literals::chrono_literals;
@@ -37,12 +38,12 @@ WorkerTimeoutStats::WorkerTimeoutStats()
 
 void WorkerTimeoutStats::onCopySent(Status status,
                                     const ShardID& to,
-                                    const STORE_Header& header) {
+                                    const STORE_Header& header,
+                                    Clock::time_point now) {
   if (status != Status::OK) {
     return;
   }
 
-  const auto now = std::chrono::steady_clock::now();
   cleanup();
   const auto key = std::make_tuple(to.node(), header.rid, header.wave);
   outgoing_messages_.emplace_back(key, now);
@@ -50,8 +51,8 @@ void WorkerTimeoutStats::onCopySent(Status status,
 }
 
 void WorkerTimeoutStats::onReply(const ShardID& from,
-                                 const STORE_Header& header) {
-  const auto now = std::chrono::steady_clock::now();
+                                 const STORE_Header& header,
+                                 Clock::time_point now) {
   const auto key = std::make_tuple(from.node(), header.rid, header.wave);
   auto it = lookup_table_.find(key);
   if (it == lookup_table_.end()) {
@@ -62,7 +63,7 @@ void WorkerTimeoutStats::onReply(const ShardID& from,
   outgoing_messages_.erase(it->second);
   lookup_table_.erase(it);
 
-  const int64_t round_trip_time = msec_since(message_sent_timestamp);
+  const int64_t round_trip_time = to_msec(now - message_sent_timestamp).count();
   ld_check(round_trip_time >= 0);
   const Latency round_trip_time_log = std::log2(std::max(round_trip_time, 1L));
   auto histogram_iterator = histograms_.emplace(
@@ -91,7 +92,9 @@ void WorkerTimeoutStats::cleanup() {
 
 folly::Optional<std::array<WorkerTimeoutStats::Latency,
                            WorkerTimeoutStats::kQuantiles.size()>>
-WorkerTimeoutStats::getEstimations(Levels level, int node) {
+WorkerTimeoutStats::getEstimations(Levels level,
+                                   int node,
+                                   Clock::time_point now) {
   Histogram* current_histogram = nullptr;
   if (node == -1) {
     current_histogram = &overall_;
@@ -102,7 +105,6 @@ WorkerTimeoutStats::getEstimations(Levels level, int node) {
     }
     current_histogram = &(it->second);
   }
-  const auto now = std::chrono::steady_clock::now();
   current_histogram->update(now);
 
   if (current_histogram->count(level) < getMinSamplesPerBucket()) {
@@ -122,6 +124,10 @@ void WorkerTimeoutStats::clear() {
   overall_.clear();
   outgoing_messages_.clear();
   lookup_table_.clear();
+}
+
+uint64_t WorkerTimeoutStats::getMinSamplesPerBucket() const {
+  return Worker::settings().store_histogram_min_samples_per_bucket;
 }
 
 constexpr std::array<double, 6> WorkerTimeoutStats::kQuantiles;

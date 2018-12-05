@@ -182,6 +182,16 @@ struct Settings : public SettingsBundle {
   // to normal copyset selection behavior.
   bool disable_graylisting;
 
+  // Disable the worker-local outlier based graylisting
+  bool disable_outlier_based_graylisting;
+
+  // The duration through which a node need to be consistently an outlier to get
+  // graylisted
+  std::chrono::seconds graylisting_grace_period;
+
+  // The interval at which the graylists are refreshed
+  std::chrono::seconds graylisting_refresh_interval;
+
   // Enable adaptive store timeouts. Which will use per worker histograms to
   // estimate first wave timeout.
   bool enable_adaptive_store_timeout;
@@ -867,6 +877,10 @@ struct Settings : public SettingsBundle {
   // If true, use the new version of timers which run on a different thread
   // and use HHWheelTimer backend.
   bool enable_store_histogram_calculations;
+
+  // How many stores should the store histogram wait for before reporting
+  // latency estimates.
+  size_t store_histogram_min_samples_per_bucket;
 
   // With config synchronization enabled, nodes on both ends of a connection
   // will synchronize their configs if there is a mismatch in the config

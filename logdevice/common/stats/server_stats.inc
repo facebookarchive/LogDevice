@@ -1157,6 +1157,11 @@ STAT_DEFINE(graylist_reset_on_threshold_reached, SUM)
 //    clear the existing graylist
 STAT_DEFINE(graylist_reset_on_disable, SUM)
 
+// 5. For the outlier based graylisting, we don't care about the reason of the
+//    reset. So this counter is incremented (per worker) if the graylist is
+//    cleared for any reason.
+STAT_DEFINE(graylist_reseted, SUM)
+
 // How many times does PrioritizedQueue scan all priorities but not find an
 // element, even though there should be one?
 STAT_DEFINE(prioritized_queue_cant_find_once, SUM)

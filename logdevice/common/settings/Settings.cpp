@@ -864,6 +864,29 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "in the write path",
        SERVER,
        SettingsCategory::WritePath);
+  init("disable-outlier-based-graylisting",
+       &disable_outlier_based_graylisting,
+       "true",
+       nullptr, // no validation
+       "setting this to true disables the outlier based graylisting nodes by "
+       "sequencers in the write path",
+       SERVER | EXPERIMENTAL,
+       SettingsCategory::WritePath);
+  init("graylisting-grace-period",
+       &graylisting_grace_period,
+       "300s",
+       nullptr, // no validation
+       "The duration through which a node need to be consistently an outlier to"
+       " get graylisted",
+       SERVER,
+       SettingsCategory::WritePath);
+  init("graylisting-refresh-interval",
+       &graylisting_refresh_interval,
+       "30s",
+       nullptr, // no validation
+       "The interval at which the graylists are refreshed",
+       SERVER,
+       SettingsCategory::WritePath);
   init("enable-adaptive-store-timeout",
        &enable_adaptive_store_timeout,
        "false",
@@ -2691,6 +2714,14 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "false",
        nullptr, // no validation
        "Enables estimation of store timeouts per worker per node.",
+       SERVER,
+       SettingsCategory::Core);
+  init("store-histogram-min-samples-per-bucket",
+       &store_histogram_min_samples_per_bucket,
+       "30",
+       parse_positive<size_t>(),
+       "How many stores should the store histogram wait for before reporting "
+       "latency estimates",
        SERVER,
        SettingsCategory::Core);
 
