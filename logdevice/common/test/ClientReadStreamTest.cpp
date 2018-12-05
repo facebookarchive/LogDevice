@@ -5625,6 +5625,7 @@ TEST_P(ClientReadStreamTest, NodeSaysItsRebuildingButEventLogSaysItsEmpty) {
 
   // No one has sent STARTED yet.
   ASSERT_FALSE(state_.connection_healthy);
+  EXPECT_TRUE(stall_grace_timer->isActive());
 
   ON_STARTED(filter_version_t{1}, N1);
   ASSERT_FALSE(state_.connection_healthy);
@@ -5634,8 +5635,10 @@ TEST_P(ClientReadStreamTest, NodeSaysItsRebuildingButEventLogSaysItsEmpty) {
   ASSERT_FALSE(state_.connection_healthy);
   ON_STARTED(filter_version_t{1}, N4);
   ASSERT_FALSE(state_.connection_healthy);
+  EXPECT_TRUE(stall_grace_timer->isActive());
   ON_STARTED(filter_version_t{1}, N5);
   ASSERT_TRUE(state_.connection_healthy);
+  EXPECT_FALSE(stall_grace_timer->isActive());
 
   // N0 is rebuilding according to event log.
   const lsn_t version = addToRebuildingSet(N0);
@@ -5666,6 +5669,7 @@ TEST_P(ClientReadStreamTest, NodeSaysItsRebuildingButEventLogSaysItsEmpty) {
   ON_STARTED(filter_version_t{2}, N4);
   ON_STARTED(filter_version_t{2}, N5);
   ASSERT_TRUE(state_.connection_healthy);
+  EXPECT_FALSE(stall_grace_timer->isActive());
 
   // Now... N0 responds STARTED(E::REBUILDING)
   ON_STARTED_REBUILDING(filter_version_t{2}, N0);
@@ -5677,20 +5681,15 @@ TEST_P(ClientReadStreamTest, NodeSaysItsRebuildingButEventLogSaysItsEmpty) {
   (*state_.on_close[N3])(E::PEER_CLOSED, Address(NodeID(N3.node())));
   ASSERT_TRUE(state_.connection_healthy);
 
-  // We also lose the connection to N0. For an instant the state is reset to
-  // fully authoritative, so the connection is marked as unhealthy...
+  // We also lose the connection to N0. It doesn't change anything because N0
+  // is AUTHORITATIVE_EMPTY.
   (*state_.on_close[N0])(E::PEER_CLOSED, Address(NodeID(0)));
-  ASSERT_TRUE(stall_grace_timer->isActive());
-  // simulate grace period expiring
-  stall_grace_timer->getCallback()();
-  ASSERT_FALSE(state_.connection_healthy);
+  EXPECT_TRUE(state_.connection_healthy);
+  EXPECT_FALSE(stall_grace_timer->isActive());
 
-  // ... but the reconnect timer is triggered for N0, which should cause another
-  // START message to be sent but more importantly applyShardStatus() should be
-  // called again, setting the node's authoritative status back to
-  // AUTHORITATIVE_EMPTY, meaning the connection becomes healthy again.
   reconnectTimerCallback(N0);
   ASSERT_TRUE(state_.connection_healthy);
+  EXPECT_FALSE(stall_grace_timer->isActive());
 }
 
 TEST_P(ClientReadStreamTest, EmptyNodeReconnectsAndSendsRecords) {

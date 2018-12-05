@@ -1969,16 +1969,6 @@ void ClientReadStream::onSettingsUpdated() {
   // `this` may be destroyed here.
 }
 
-void ClientReadStream::overrideShardStatus(ShardID shard,
-                                           AuthoritativeStatus status) {
-  auto it = storage_set_states_.find(shard);
-  if (it == storage_set_states_.end()) {
-    return;
-  }
-  setShardAuthoritativeStatus(it->second, status);
-  disposeIfDone();
-}
-
 void ClientReadStream::setShardAuthoritativeStatus(SenderState& state,
                                                    AuthoritativeStatus status) {
   auto prev_status = state.getAuthoritativeStatus();
@@ -1999,8 +1989,9 @@ void ClientReadStream::setShardAuthoritativeStatus(SenderState& state,
   }
 }
 
-void ClientReadStream::applyShardStatus(const std::string& context,
-                                        folly::Optional<SenderState*> state) {
+void ClientReadStream::applyShardStatus(const char* context,
+                                        folly::Optional<SenderState*> state,
+                                        bool try_make_progress) {
   const auto shard_status = deps_->getShardStatus();
 
   if (shard_status.getVersion() == LSN_INVALID) {
@@ -2025,7 +2016,7 @@ void ClientReadStream::applyShardStatus(const std::string& context,
     ld_debug("Applying shard status for %s "
              "(context: %s, prev_status: %s, status: %s)",
              state.getShardID().toString().c_str(),
-             context.c_str(),
+             context,
              toString(prev_status).c_str(),
              toString(status).c_str());
 
@@ -2065,7 +2056,7 @@ void ClientReadStream::applyShardStatus(const std::string& context,
                                    state.getShardID().toString().c_str(),
                                    toString(prev_status).c_str(),
                                    toString(status).c_str(),
-                                   context.c_str())
+                                   context)
                          .str());
     } else {
       ld_debug("Not rewinding despite the change of status of %s from %s to %s "
@@ -2073,7 +2064,7 @@ void ClientReadStream::applyShardStatus(const std::string& context,
                state.getShardID().toString().c_str(),
                toString(prev_status).c_str(),
                toString(status).c_str(),
-               context.c_str());
+               context);
     }
   };
 
@@ -2087,11 +2078,13 @@ void ClientReadStream::applyShardStatus(const std::string& context,
 
   // We call findGapsAndRecords() here in case the change of status causes
   // the gap detection to find a gap to deliver
-  if (current_metadata_) {
-    findGapsAndRecords();
+  if (try_make_progress) {
+    if (current_metadata_) {
+      findGapsAndRecords();
+    }
+    checkConsistency();
+    disposeIfDone();
   }
-  checkConsistency();
-  disposeIfDone();
 }
 
 void ClientReadStream::requestEpochMetaData(
@@ -2735,24 +2728,20 @@ void ClientReadStream::updateCurrentReadSet() {
   // Send START to the new shards.
   for (SenderState& state : added_shards) {
     sendStart(state.getShardID(), state);
+    // Apply authoritative status from event log. In particular, for a newly
+    // created ClientReadStream this does the initial propagation of
+    // authoritative status from Worker's authoritative status map to
+    // storage_set_states_.
+    // Use try_make_progress=false to make sure *this is not destroyed here.
+    // The caller of updateCurrentReadSet() will try to make progress right
+    // after.
+    applyShardStatus(
+        "updateCurrentReadSet", &state, /* try_make_progress */ false);
   }
   scd_->onWindowSlid(server_window_.high, filter_version_);
 }
 
 void ClientReadStream::onSocketClosed(SenderState& state, Status st) {
-  // If we lost the connection to a shard we were reading from, immediately
-  // consider it fully authoritative. This is important because it's possible
-  // that the shard's authoritative status was UNDERREPLICATION because the
-  // shard had replied STARTED(E::REBUILDING) and we want to reset that state
-  // once the connection is closed. The next time we try to reconnect to this
-  // shard, sendStart() will call applyShardStatus() which will set whatever
-  // AuthoritativeStatus is defined in
-  // Worker::shardStatusManager()::shard_status_.
-  if (state.getConnectionState() == ConnectionState::READING) {
-    setShardAuthoritativeStatus(
-        state, AuthoritativeStatus::FULLY_AUTHORITATIVE);
-  }
-
   onConnectionFailure(state, st);
 }
 
@@ -3945,10 +3934,12 @@ void ClientReadStream::rewind(const std::string& reason) {
   rewind_scheduled_ = false;
   rewind_reason_.clear();
 
-  // sendStart() calls ClientReadStream::checkConsistency() so let's call it
-  // after we set ClientReadStreamSenderState::known_down for all nodes.
   for (auto& it : storage_set_states_) {
     sendStart(it.second.getShardID(), it.second);
+    // Re-apply shard statuses from event log.
+    // Use try_make_progress=false because there's no progress to be made
+    // since we've just reset all sender states.
+    applyShardStatus("rewind", &it.second, /* try_make_progress */ false);
   }
   scd_->onWindowSlid(server_window_.high, filter_version_);
 }

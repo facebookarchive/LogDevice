@@ -166,6 +166,7 @@ operator()(Status st, const Address& /*name*/) {
   state_->filter_version.val_ = 0;
 
   state_->client_read_stream_->onSocketClosed(*state_, st);
+  // *this may be destroyed here.
 }
 
 }} // namespace facebook::logdevice

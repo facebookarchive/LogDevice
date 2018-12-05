@@ -132,15 +132,6 @@ void AllClientReadStreams::onShardStatusChanged() {
   });
 }
 
-void AllClientReadStreams::overrideShardStatus(ShardID shard,
-                                               AuthoritativeStatus status) {
-  // overrideShardStatus() may delete some ClientReadStream instances but
-  // forEachStream makes that safe.
-  forEachStream([=](ClientReadStream& read_stream) {
-    read_stream.overrideShardStatus(shard, status);
-  });
-}
-
 ClientReadStream* AllClientReadStreams::getStream(read_stream_id_t id) {
   auto it = streams_.find(id);
   if (it == streams_.end()) {

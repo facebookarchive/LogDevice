@@ -55,7 +55,6 @@
 #include "logdevice/server/admincommands/LogStorageStateCommand.h"
 #include "logdevice/server/admincommands/LogStoreTracing.h"
 #include "logdevice/server/admincommands/NewConnections.h"
-#include "logdevice/server/admincommands/OverrideNodeAuthoritativeStatus.h"
 #include "logdevice/server/admincommands/Partitions.h"
 #include "logdevice/server/admincommands/PauseOrUnpauseFileEpochStore.h"
 #include "logdevice/server/admincommands/PrintLogsDBDirectories.h"
@@ -207,9 +206,6 @@ AdminCommandFactory::AdminCommandFactory() {
   deprecated("logsdb set compact_partitions",
              "set rocksdb-partition-compactions-enabled");
   deprecated("compaction_ratelimit", "set rocksdb-compaction-ratelimit");
-
-  selector_.add<commands::OverrideNodeAuthoritativeStatus>(
-      "override_node_authoritative_status", Restriction::LOCALHOST_ONLY);
 
   selector_.add<commands::CreateCheckpoint>(
       "create_checkpoint", Restriction::LOCALHOST_ONLY);

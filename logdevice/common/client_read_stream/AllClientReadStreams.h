@@ -90,11 +90,6 @@ class AllClientReadStreams : public ShardAuthoritativeStatusSubscriber {
   void onShardStatusChanged() override;
 
   /**
-   * Override the authoritative status of a shard.
-   */
-  void overrideShardStatus(ShardID shard, AuthoritativeStatus status);
-
-  /**
    * Forces the map to get cleared and all read streams destroyed.
    */
   void clear() {

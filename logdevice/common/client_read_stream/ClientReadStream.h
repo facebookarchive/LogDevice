@@ -617,17 +617,6 @@ class ClientReadStream : boost::noncopyable {
                                    AuthoritativeStatus status);
 
   /**
-   * Called from an admin command to unblock this stream in the case the event
-   * log is unreadable.
-   * Note: calling this function may cause `this` to be deleted if this caused
-   * completion of the stream.
-   *
-   * @param shard  Shard for which we change the authoritative status.
-   * @param status New authoritative status.
-   */
-  void overrideShardStatus(ShardID shard, AuthoritativeStatus status);
-
-  /**
    * Looks at the current content of
    * Worker::shard_status_state::shard_status_map_ and updates shard
    * states accordingly.  Doesn't affect shards in READING state - rebuilding
@@ -637,10 +626,17 @@ class ClientReadStream : boost::noncopyable {
    * START message; the latter covers all cases when we're failing to contact a
    * shard and may want to proceed without it if it's rebuilding.
    *
+   * @param context  Human-readable string identifying the reason for this call.
    * @param state  The shard to update. If folly::none, update all shards.
+   * @param try_make_progress
+   *    If true, applyShardStatus() will call findGapsAndRecords() and
+   *    disposeIfDone(); this means *this can be destroyed.
+   *    If false, you need to call findGapsAndRecords() and disposeIfDone()
+   *    after applyShardStatus() before returning to event loop.
    */
-  void applyShardStatus(const std::string& context,
-                        folly::Optional<SenderState*> state = folly::none);
+  void applyShardStatus(const char* context,
+                        folly::Optional<SenderState*> state = folly::none,
+                        bool try_make_progress = true);
 
   /**
    * Called when the previous request of fetching epoch metadata has completed.
