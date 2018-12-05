@@ -225,8 +225,9 @@ void GetLogInfoRequest::onReplyFromNode(Status status,
 void GetLogInfoRequest::onClientTimeout() {
   RATELIMIT_ERROR(std::chrono::seconds(10),
                   2,
-                  "timed out (%ld ms)",
-                  client_timeout_.count());
+                  "timed out (%ld ms) waiting to hear from %s",
+                  client_timeout_.count(),
+                  shared_state_->node_id_.toString().c_str());
   // retrying with a random node
   attemptTargetNodeChange();
 }

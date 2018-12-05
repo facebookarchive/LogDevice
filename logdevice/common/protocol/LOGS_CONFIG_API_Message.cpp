@@ -115,8 +115,12 @@ class LogsConfigApiMessageServerSocketClosedCallback : public SocketCallback {
   explicit LogsConfigApiMessageServerSocketClosedCallback(ClientID cid)
       : cid_(cid) {}
 
-  void operator()(Status /*st*/, const Address& /*name*/) override {
+  void operator()(Status st, const Address& name) override {
     Worker::onThisThread()->configChangeSubscribers_.erase(cid_);
+    ld_info("LogsConfig subscription destroyed for RemoteLogsConfig client %s "
+            "due to peer socket closing with: %s",
+            name.toString().c_str(),
+            error_name(st));
     delete this;
   }
 

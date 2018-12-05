@@ -166,12 +166,33 @@ int GetLogInfoFromNodeRequest::sendOneMessage(NodeID to) {
   // us CONFIG_CHANGED messages to notify the client of config changes. If
   // that node dies, the client will keep running with an outdated config
   SocketCallback* onclose_to_use = nullptr;
+  ld_check(to == shared_state_->node_id_);
+
   if (!shared_state_->socket_callback_) {
     shared_state_->socket_callback_ =
         std::make_unique<GLISocketClosedCallback>();
     onclose_to_use = shared_state_->socket_callback_.get();
   }
-  return w->sender().sendMessage(std::move(msg), to, onclose_to_use);
+  int res = w->sender().sendMessage(std::move(msg), to, onclose_to_use);
+
+  if (onclose_to_use) {
+    if (res != 0) {
+      // We were not able to register this socket callback to the socket, let's
+      // make sure that we don't keep this in the shared_state_
+      shared_state_->socket_callback_ = nullptr;
+    } else if (!onclose_to_use->active()) {
+      RATELIMIT_CRITICAL(
+          std::chrono::seconds(1),
+          1,
+          "GetLogInfo SocketCallback (to %s) has not been registered, "
+          "this client might end up with stale LogsConfig. Destroying this "
+          "callback.",
+          to.toString().c_str());
+      shared_state_->socket_callback_ = nullptr;
+      ld_check(false);
+    }
+  }
+  return res;
 }
 
 void GetLogInfoFromNodeRequest::processChunk(std::string payload,
