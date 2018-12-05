@@ -28,9 +28,8 @@
               }
             });
         </script></nav></div><div class="container mainContainer"><div class="wrapper"><div class="post"><header class="postHeader"><h1 class="postHeaderTitle">Installation</h1></header><article><div><span><p>Follow these instructions to build LogDevice components including <code>logdeviced</code> (the LogDevice server), the client library, and <code>ldshell</code>, an administrative shell utility.</p>
-<p>At this time, the only supported platform is Ubuntu 18 LTS &quot;Bionic Beaver&quot;.</p>
+<p>At this time, the only supported platform is Ubuntu 18 LTS &quot;Bionic Beaver&quot;. Support for Fedora is experimental.</p>
 <h2><a class="anchor" aria-hidden="true" id="clone-the-repo-and-build-from-the-source"></a><a href="#clone-the-repo-and-build-from-the-source" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Clone the repo and build from the source</h2>
-<p>Support for Fedora is experimental.</p>
 <p><strong>Clone the LogDevice GitHub repository, including its submodules.</strong></p>
 <pre><code class="hljs css language-shell">git clone --recurse-submodules git://github.com/facebookincubator/LogDevice
 </code></pre>
@@ -61,8 +60,8 @@ cd LogDevice/_build
 <p><strong>Run make from <code>LogDevice/_build</code> directory.</strong></p>
 <pre><code class="hljs css language-shell">make -j $(nproc)
 </code></pre>
-<p>-j $(nproc) sets building concurrency equal to the number of processor cores.</p>
-<p>If the build does not complete successfully, for example, if you get an internal compiler error,
+<p><code>-j $(nproc)</code> sets building concurrency equal to the number of processor cores.</p>
+<p>If the build does not complete successfully, particularly if you get an internal compiler error,
 you may need to reduce the number of parallel jobs. In the above make command, try <code>make -j 4</code> or <code>make -j 2</code>.</p>
 <h2><a class="anchor" aria-hidden="true" id="output"></a><a href="#output" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Output</h2>
 <p>On successful completion, the build process creates the following binaries and libraries:</p>
@@ -72,7 +71,7 @@ you may need to reduce the number of parallel jobs. In the above make command, t
 <li><code>_build/bin/ld{write,cat,tail,trim}</code> -- simple utilities for writing into a log, reading from a log, tailing a log, and trimming a log.</li>
 <li><code>_build/bin/ld-dev-cluster</code> -- a test utility that configures and runs a test LogDevice cluster on the local machine</li>
 </ul>
-<p>To install these binaries and <a href="/docs/LDShell.html">LDShell</a> installed into your system, run:</p>
+<p>To install these binaries and <a href="/docs/LDShell.html">LDShell</a> into your system, run:</p>
 <pre><code class="hljs css language-shell">sudo make install
 </code></pre>
 <h2><a class="anchor" aria-hidden="true" id="debug-and-release-builds"></a><a href="#debug-and-release-builds" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Debug and release builds</h2>
@@ -100,13 +99,13 @@ for Node)</li>
 </ul>
 <p>Docusarus requires Node.js &gt;= 8.2 and Yarn &gt;= 1.5.</p>
 <ul>
-<li><code>cd LogDevice/website</code> (where 'LogDevice' is the root of your local LogDevice
+<li><code>cd LogDevice/website</code> (where <code>LogDevice</code> is the root of your local LogDevice
 source tree)</li>
-<li><code>yarn add docusaurus --dev</code> This will create LogDevice/website/node_modules
-directory with much Javascript. This may also update website/package.json with
+<li><code>yarn add docusaurus --dev</code> This creates the LogDevice/website/node_modules
+directory with much Javascript. It may also update website/package.json with
 the then-current version number of Docusaurus.</li>
 </ul>
-<p>To start a Node.js server and load the doc site in a new browser tab
+<p>To start a Node.js server and load the doc site in a new browser tab,
 <code>cd LogDevice/website</code> and run <code>yarn run start</code>. To stop the server,
 Ctrl+C the process.</p>
 <p>Most of the LogDevice documentation lives in <code>LogDevice/docs</code>. The API reference
