@@ -20,7 +20,7 @@
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/SequencerPlacement.h"
 #include "logdevice/common/Worker.h"
-#include "logdevice/common/admin/AdminServer.h"
+#include "logdevice/server/AdminServer.h"
 #include "logdevice/server/CommandListener.h"
 #include "logdevice/server/ConnectionListener.h"
 #include "logdevice/server/LogStoreMonitor.h"
