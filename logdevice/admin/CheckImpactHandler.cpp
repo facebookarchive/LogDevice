@@ -111,17 +111,15 @@ CheckImpactHandler::semifuture_checkImpact(
     p.setValue(std::move(response));
   };
 
-  auto updateable_settings = processor_->updateableServerSettings();
-
   std::unique_ptr<Request> rq = std::make_unique<CheckImpactRequest>(
       std::move(status_map),
       std::move(shards),
       target_storage_state,
       safety_margin,
       logs_to_check,
-      updateable_settings->safety_max_logs_in_flight,
+      updateable_server_settings_->safety_max_logs_in_flight,
       request->abort_on_negative_impact,
-      updateable_settings->safety_check_timeout,
+      updateable_server_settings_->safety_check_timeout,
       request->return_sample_size,
       CheckImpactRequest::workerType(processor_),
       std::move(cb));

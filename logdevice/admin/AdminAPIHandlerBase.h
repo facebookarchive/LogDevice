@@ -8,21 +8,44 @@
 #pragma once
 
 #include "logdevice/admin/if/gen-cpp2/AdminAPI.h"
+#include "logdevice/common/settings/UpdateableSettings.h"
+#include "logdevice/server/ServerSettings.h"
 
 namespace facebook { namespace logdevice {
-class ServerProcessor;
-class Server;
-namespace configuration {
-class Node;
-}
+class FailureDetector;
+class Processor;
+class ServerSettings;
+class SettingsUpdater;
+class ShardedRocksDBLocalLogStore;
+class StatsHolder;
 
 class AdminAPIHandlerBase : public virtual thrift::AdminAPISvIf {
- protected:
-  AdminAPIHandlerBase() = default;
-  explicit AdminAPIHandlerBase(Server* server);
+ public:
+  virtual void setFailureDetector(FailureDetector* failure_detector) {
+    failure_detector_ = failure_detector;
+  }
+
+  virtual void
+  setShardedRocksDBStore(ShardedRocksDBLocalLogStore* sharded_store) {
+    sharded_store_ = sharded_store;
+  }
 
  protected:
-  Server* ld_server_;
-  ServerProcessor* processor_;
+  AdminAPIHandlerBase() = default;
+  AdminAPIHandlerBase(
+      Processor* processor,
+      std::shared_ptr<SettingsUpdater> settings_updater,
+      UpdateableSettings<ServerSettings> updateable_server_settings,
+      StatsHolder* stats_holder);
+
+ protected:
+  Processor* processor_;
+  std::shared_ptr<SettingsUpdater> settings_updater_;
+  UpdateableSettings<ServerSettings> updateable_server_settings_;
+  StatsHolder* stats_holder_{nullptr};
+
+ public:
+  FailureDetector* failure_detector_{nullptr};
+  ShardedRocksDBLocalLogStore* sharded_store_{nullptr};
 };
 }} // namespace facebook::logdevice

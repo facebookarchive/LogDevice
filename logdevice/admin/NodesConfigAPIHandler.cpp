@@ -9,12 +9,12 @@
 #include "logdevice/admin/NodesConfigAPIHandler.h"
 
 #include "logdevice/admin/AdminAPIUtils.h"
+#include "logdevice/common/Processor.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/request_util.h"
 #include "logdevice/common/settings/SettingsUpdater.h"
 #include "logdevice/server/Server.h"
-#include "logdevice/server/ServerProcessor.h"
 
 using namespace facebook::logdevice;
 

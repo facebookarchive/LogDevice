@@ -420,7 +420,8 @@ Server::Server(ServerParameters* params, std::function<void()> stop_handler)
         repopulateRecordCaches() && initSequencers() && initFailureDetector() &&
         initSequencerPlacement() && initRebuildingCoordinator() &&
         initLogStoreMonitor() && initUnreleasedRecordDetector() &&
-        initLogsConfigManager() && initSettingsSubscriber())) {
+        initLogsConfigManager() && initSettingsSubscriber() &&
+        initAdminServer())) {
     _exit(EXIT_FAILURE);
   }
 }
@@ -632,21 +633,6 @@ bool Server::initProcessor() {
              static_cast<int>(err),
              error_description(err));
     return false;
-  }
-
-  if (params_->getServerSettings()->admin_enabled) {
-    auto adm_plugin =
-        params_->getPluginRegistry()->getSinglePlugin<AdminServerFactory>(
-            PluginType::ADMIN_SERVER_FACTORY);
-    if (adm_plugin) {
-      admin_server_handle_ = (*adm_plugin)(this);
-    } else {
-      ld_info("Not initializing Admin API, since there are no implementations "
-              "available.");
-    }
-  } else {
-    ld_info("Not initializing Admin API,"
-            " since admin-enabled server setting is set to false");
   }
   return true;
 }
@@ -918,6 +904,55 @@ bool Server::initSettingsSubscriber() {
   settings_subscription_handle_ =
       settings.subscribeToUpdates([&] { updateStatsSettings(); });
 
+  return true;
+}
+
+bool Server::initAdminServer() {
+  if (params_->getServerSettings()->admin_enabled) {
+    // Figure out the socket address for the admin server.
+    auto server_config = updateable_config_->getServerConfig();
+    ld_check(server_config);
+
+    // TODO: Don't get that information from my node section, use settings
+    // instead.
+    NodeID node_id = server_config->getMyNodeID();
+    const ServerConfig::Node* node_config = server_config->getNode(node_id);
+    ld_check(node_config);
+
+    folly::SocketAddress admin_address;
+    auto adm_plugin =
+        params_->getPluginRegistry()->getSinglePlugin<AdminServerFactory>(
+            PluginType::ADMIN_SERVER_FACTORY);
+    // If we have admin_address configured, let's use it.
+    // Otherwise, we pass an empty address, this will result in using the
+    // default port.
+    if (node_config->admin_address) {
+      admin_address = node_config->admin_address->getSocketAddress();
+    }
+    if (adm_plugin) {
+      admin_server_handle_ = (*adm_plugin)(admin_address,
+                                           processor_.get(),
+                                           params_->getSettingsUpdater(),
+                                           params_->getServerSettings(),
+                                           params_->getStats());
+      if (processor_->isFailureDetectorRunning() &&
+          processor_->failure_detector_) {
+        ld_info("FailureDetector is enabled, Admin API will return detailed "
+                "gossip information.");
+        admin_server_handle_->setFailureDetector(
+            processor_->failure_detector_.get());
+      }
+      if (sharded_store_) {
+        admin_server_handle_->setShardedRocksDBStore(sharded_store_.get());
+      }
+    } else {
+      ld_info("Not initializing Admin API, since there are no implementations "
+              "available.");
+    }
+  } else {
+    ld_info("Not initializing Admin API,"
+            " since admin-enabled server setting is set to false");
+  }
   return true;
 }
 

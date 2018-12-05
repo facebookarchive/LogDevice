@@ -18,14 +18,6 @@
 #include "logdevice/common/types_internal.h"
 
 namespace facebook { namespace logdevice {
-class ServerProcessor;
-class Server;
-namespace configuration {
-class Node;
-}
-}} // namespace facebook::logdevice
-
-namespace facebook { namespace logdevice {
 /**
  * This is the Admin API Handler class, here we expect to see all callback
  * functions for the admin thrift interface to be implemented.

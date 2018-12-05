@@ -272,6 +272,7 @@ class Server {
   bool initUnreleasedRecordDetector();
   bool initLogsConfigManager();
   bool initSettingsSubscriber();
+  bool initAdminServer();
 
   // Calls gracefulShutdown in separate thread and does _exit(EXIT_FAILURE)
   // if it takes longer than server_settings_->shutdown_timeout ms.

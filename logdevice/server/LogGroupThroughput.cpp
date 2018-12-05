@@ -14,6 +14,7 @@
 #include <boost/format.hpp>
 
 #include "logdevice/common/commandline_util_chrono.h"
+#include "logdevice/common/configuration/LogsConfig.h"
 
 namespace facebook { namespace logdevice {
 
@@ -88,26 +89,23 @@ AggregateMap doAggregate(StatsHolder* stats,
   return output;
 }
 
-Duration getMaxInterval(Server* server_, std::string time_series) {
-#define TIME_SERIES_DEFINE(name, strings, _, __) \
-  for (const std::string& str : strings) {       \
-    if (str == time_series) {                    \
-      return server_->getParameters()            \
-          ->getStats()                           \
-          ->params_.get()                        \
-          ->time_intervals_##name.back();        \
-    }                                            \
+Duration getMaxInterval(StatsHolder* stats_holder, std::string time_series) {
+#define TIME_SERIES_DEFINE(name, strings, _, __)                        \
+  for (const std::string& str : strings) {                              \
+    if (str == time_series) {                                           \
+      return stats_holder->params_.get()->time_intervals_##name.back(); \
+    }                                                                   \
   }
 #include "logdevice/common/stats/per_log_time_series.inc" // nolint
   ld_check(false);
   return Duration{};
 }
 
-bool verifyIntervals(Server* server,
+bool verifyIntervals(StatsHolder* stats_holder,
                      std::string time_series,
                      std::vector<Duration> query_intervals,
                      std::string& err) {
-  Duration max_interval = getMaxInterval(server, time_series);
+  Duration max_interval = getMaxInterval(stats_holder, time_series);
   using namespace std::chrono;
   for (auto interval : query_intervals) {
     if (interval > max_interval) {

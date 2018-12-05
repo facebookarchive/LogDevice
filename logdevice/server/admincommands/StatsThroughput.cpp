@@ -144,13 +144,13 @@ void StatsThroughput::getPositionalOptions(
 
 void StatsThroughput::run() {
   std::string msg;
-  if (!verifyIntervals(server_, time_series_, query_intervals_, msg)) {
+  StatsHolder* stats = server_->getParameters()->getStats();
+  if (!verifyIntervals(stats, time_series_, query_intervals_, msg)) {
     if (!msg.empty()) {
       out_.printf("%s\n", msg.c_str());
     }
     return;
   }
-  StatsHolder* stats = server_->getParameters()->getStats();
   if (stats) {
     AggregateMap agg = doAggregate(
         stats,

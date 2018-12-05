@@ -12,9 +12,10 @@
 #include <folly/stats/MultiLevelTimeSeries.h>
 
 #include "logdevice/common/stats/Stats.h"
-#include "logdevice/server/Server.h"
 
 namespace facebook { namespace logdevice {
+
+class LogsConfig;
 
 // Data type for rate calculations
 using RateType = double;
@@ -32,10 +33,10 @@ AggregateMap doAggregate(StatsHolder* stats,
                          const std::vector<Duration>& intervals,
                          std::shared_ptr<LogsConfig> logs_config);
 
-Duration getMaxInterval(Server* server_, std::string time_series);
+Duration getMaxInterval(StatsHolder* stats_holder, std::string time_series);
 
 // checks that no requested intervals are higher than getMaxInterval()
-bool verifyIntervals(Server* server,
+bool verifyIntervals(StatsHolder* stats_holder,
                      std::string time_series,
                      std::vector<Duration> query_intervals,
                      std::string& err);

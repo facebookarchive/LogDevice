@@ -79,11 +79,9 @@ void AdminAPIHandler::getReplicationInfo(thrift::ReplicationInfo& response) {
 void AdminAPIHandler::getSettings(
     thrift::SettingsResponse& response,
     std::unique_ptr<thrift::SettingsRequest> request) {
-  const auto& settings = ld_server_->getSettings();
-
   auto requested_settings = request->get_settings();
 
-  for (const auto& setting : settings.getState()) {
+  for (const auto& setting : settings_updater_->getState()) {
     // Filter settings by name (if provided)
     if (requested_settings != nullptr &&
         requested_settings->find(setting.first) == requested_settings->end()) {
@@ -91,7 +89,8 @@ void AdminAPIHandler::getSettings(
     }
 
     auto get = [&](SettingsUpdater::Source src) {
-      return settings.getValueFromSource(setting.first, src).value_or("");
+      return settings_updater_->getValueFromSource(setting.first, src)
+          .value_or("");
     };
     thrift::Setting s;
     s.currentValue = get(SettingsUpdater::Source::CURRENT);
@@ -133,11 +132,10 @@ folly::SemiFuture<folly::Unit> AdminAPIHandler::semifuture_takeLogTreeSnapshot(
     return future;
   }
 
-  auto logsconfig_worker_type =
-      LogsConfigManager::workerType(ld_server_->getProcessor());
+  auto logsconfig_worker_type = LogsConfigManager::workerType(processor_);
   auto logsconfig_owner_worker =
       worker_id_t{LogsConfigManager::getLogsConfigManagerWorkerIdx(
-          ld_server_->getProcessor()->getWorkerCount(logsconfig_worker_type))};
+          processor_->getWorkerCount(logsconfig_worker_type))};
   // Because thrift does not support u64, we encode it in a i64.
   uint64_t minimum_version = to_unsigned(min_version);
 
@@ -207,6 +205,12 @@ void AdminAPIHandler::getLogGroupThroughput(
     std::unique_ptr<thrift::LogGroupThroughputRequest> request) {
   ld_check(request != nullptr);
 
+  if (!stats_holder_) {
+    thrift::NotSupported err;
+    err.set_message(
+        "This admin server cannot provide per-log-throughtput stats");
+    throw err;
+  }
   auto operation =
       thrift::LogGroupOperation(thrift::LogGroupOperation::APPENDS);
   if (request->__isset.operation) {
@@ -228,44 +232,38 @@ void AdminAPIHandler::getLogGroupThroughput(
   }
 
   std::string msg;
-  if (!verifyIntervals(ld_server_, time_series, query_intervals, msg)) {
+  if (!verifyIntervals(stats_holder_, time_series, query_intervals, msg)) {
     thrift::InvalidRequest err;
     err.set_message(msg);
     throw err;
   }
 
-  StatsHolder* stats = ld_server_->getParameters()->getStats();
-  if (!stats) {
-    return;
-  } else {
-    AggregateMap agg = doAggregate(
-        stats,
-        time_series,
-        query_intervals,
-        ld_server_->getParameters()->getUpdateableConfig()->getLogsConfig());
+  AggregateMap agg = doAggregate(stats_holder_,
+                                 time_series,
+                                 query_intervals,
+                                 processor_->config_->getLogsConfig());
 
-    std::string req_log_group;
-    if (request->__isset.log_group_name) {
-      req_log_group = request->log_group_name;
+  std::string req_log_group;
+  if (request->__isset.log_group_name) {
+    req_log_group = request->log_group_name;
+  }
+
+  for (const auto& entry : agg) {
+    std::string log_group_name = folly::to<std::string>(entry.first);
+    if (!req_log_group.empty() && log_group_name != req_log_group) {
+      continue;
     }
 
-    for (const auto& entry : agg) {
-      std::string log_group_name = folly::to<std::string>(entry.first);
-      if (!req_log_group.empty() && log_group_name != req_log_group) {
-        continue;
-      }
+    thrift::LogGroupThroughput lg_throughput;
+    lg_throughput.operation = operation;
 
-      thrift::LogGroupThroughput lg_throughput;
-      lg_throughput.operation = operation;
-
-      const OneGroupResults& results = entry.second;
-      std::vector<int64_t> log_results;
-      for (auto result : results) {
-        log_results.push_back(int64_t(result));
-      }
-      lg_throughput.results = std::move(log_results);
-      response.throughput[log_group_name] = std::move(lg_throughput);
+    const OneGroupResults& results = entry.second;
+    std::vector<int64_t> log_results;
+    for (auto result : results) {
+      log_results.push_back(int64_t(result));
     }
+    lg_throughput.results = std::move(log_results);
+    response.throughput[log_group_name] = std::move(lg_throughput);
   }
 }
 }} // namespace facebook::logdevice

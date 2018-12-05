@@ -15,8 +15,6 @@
 #include "logdevice/common/types_internal.h"
 
 namespace facebook { namespace logdevice {
-class ServerProcessor;
-class Server;
 namespace configuration {
 class Node;
 }
@@ -24,6 +22,7 @@ class Node;
 class NodesStateAPIHandler : public virtual AdminAPIHandlerBase {
  public:
   virtual void
+  // See admin.thrift for documentation
   getNodesState(thrift::NodesStateResponse& out,
                 std::unique_ptr<thrift::NodesStateRequest> request) override;
 

@@ -8,11 +8,17 @@
 
 #include "logdevice/admin/AdminAPIHandlerBase.h"
 
-#include "logdevice/server/Server.h"
-#include "logdevice/server/ServerProcessor.h"
+#include "logdevice/server/ServerSettings.h"
 
 namespace facebook { namespace logdevice {
-AdminAPIHandlerBase::AdminAPIHandlerBase(Server* server)
-    : ld_server_(server), processor_(server->getServerProcessor()){};
 
+AdminAPIHandlerBase::AdminAPIHandlerBase(
+    Processor* processor,
+    std::shared_ptr<SettingsUpdater> settings_updater,
+    UpdateableSettings<ServerSettings> updateable_server_settings,
+    StatsHolder* stats_holder)
+    : processor_(processor),
+      settings_updater_(std::move(settings_updater)),
+      updateable_server_settings_(updateable_server_settings),
+      stats_holder_(stats_holder) {}
 }} // namespace facebook::logdevice

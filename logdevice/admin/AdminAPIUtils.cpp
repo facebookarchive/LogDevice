@@ -232,6 +232,9 @@ void fillNodeState(thrift::NodeState& out,
         break;
     }
 
+    // We can only detect that this node is isolated if we have a failure
+    // detector running. Note that A standalone admin server doesn't have a
+    // failure detector.
     if (failure_detector && failure_detector->isIsolated() &&
         node_index == my_node_index) {
       daemon_state = thrift::ServiceState::ISOLATED;

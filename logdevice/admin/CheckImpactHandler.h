@@ -18,6 +18,7 @@ namespace facebook { namespace logdevice {
 
 class CheckImpactHandler : public virtual AdminAPIHandlerBase {
  public:
+  // check admin.thrift for documentation
   virtual folly::SemiFuture<std::unique_ptr<thrift::CheckImpactResponse>>
   semifuture_checkImpact(
       std::unique_ptr<thrift::CheckImpactRequest> request) override;

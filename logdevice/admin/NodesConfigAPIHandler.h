@@ -15,15 +15,11 @@
 #include "logdevice/common/types_internal.h"
 
 namespace facebook { namespace logdevice {
-class ServerProcessor;
-class Server;
-namespace configuration {
-class Node;
-}
 
 class NodesConfigAPIHandler : public virtual AdminAPIHandlerBase {
  public:
   virtual void
+  // See admin.thrift for documentation
   getNodesConfig(thrift::NodesConfigResponse&,
                  std::unique_ptr<thrift::NodesFilter> filter) override;
 };
