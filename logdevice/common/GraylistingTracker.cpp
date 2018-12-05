@@ -32,6 +32,9 @@ GraylistingTracker::getGraylistedNodes() const {
 }
 
 void GraylistingTracker::start() {
+  if (timer_.isActive()) {
+    return;
+  }
   timer_.setCallback([this]() {
     updateGraylist(std::chrono::steady_clock::now());
     timer_.activate(Worker::settings().graylisting_refresh_interval);
@@ -44,6 +47,23 @@ void GraylistingTracker::stop() {
     return;
   }
   timer_.cancel();
+}
+
+bool GraylistingTracker::isRunning() const {
+  return timer_.isActive();
+}
+
+void GraylistingTracker::onSettingsUpdated() {
+  if (Worker::settings().disable_outlier_based_graylisting) {
+    if (isRunning()) {
+      stop();
+      resetGraylist();
+    }
+  } else {
+    if (!isRunning()) {
+      start();
+    }
+  }
 }
 
 void GraylistingTracker::resetGraylist() {

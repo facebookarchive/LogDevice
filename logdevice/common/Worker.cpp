@@ -38,6 +38,7 @@
 #include "logdevice/common/GetHeadAttributesRequest.h"
 #include "logdevice/common/GetLogInfoRequest.h"
 #include "logdevice/common/GetTrimPointRequest.h"
+#include "logdevice/common/GraylistingTracker.h"
 #include "logdevice/common/IsLogEmptyRequest.h"
 #include "logdevice/common/LogIDUniqueQueue.h"
 #include "logdevice/common/LogRecoveryRequest.h"
@@ -96,7 +97,9 @@ class WorkerImpl {
         sslFetcher_(w->immutable_settings_->ssl_cert_path,
                     w->immutable_settings_->ssl_key_path,
                     w->immutable_settings_->ssl_ca_path,
-                    w->immutable_settings_->ssl_cert_refresh_interval)
+                    w->immutable_settings_->ssl_cert_refresh_interval),
+
+        graylistingTracker_(std::make_unique<GraylistingTracker>())
 
   {
     const bool rv =
@@ -139,6 +142,7 @@ class WorkerImpl {
   CheckNodeHealthRequestSet pendingHealthChecks_;
   SSLFetcher sslFetcher_;
   std::unique_ptr<SequencerBackgroundActivator> sequencerBackgroundActivator_;
+  std::unique_ptr<GraylistingTracker> graylistingTracker_;
 };
 
 static std::string makeThreadName(Processor* processor,
@@ -342,6 +346,10 @@ void Worker::onSettingsUpdated() {
   if (!new_settings->enable_store_histogram_calculations) {
     getWorkerTimeoutStats().clear();
   }
+
+  if (impl_->graylistingTracker_) {
+    impl_->graylistingTracker_->onSettingsUpdated();
+  }
 }
 
 void Worker::initializeSubscriptions() {
@@ -432,6 +440,11 @@ void Worker::onThreadStarted() {
   initializeSubscriptions();
 
   clientReadStreams().registerForShardAuthoritativeStatusUpdates();
+
+  // Start the graylisting tracker
+  if (!settings().disable_outlier_based_graylisting) {
+    impl_->graylistingTracker_->start();
+  }
 
   // Initialize load reporting and start timer
   reportLoad();
@@ -1125,6 +1138,14 @@ SSLFetcher& Worker::sslFetcher() const {
 std::unique_ptr<SequencerBackgroundActivator>&
 Worker::sequencerBackgroundActivator() const {
   return impl_->sequencerBackgroundActivator_;
+}
+
+const std::unordered_set<node_index_t>& Worker::getGraylistedNodes() const {
+  return impl_->graylistingTracker_->getGraylistedNodes();
+}
+
+void Worker::resetGraylist()  {
+  return impl_->graylistingTracker_->resetGraylist();
 }
 
 std::string Worker::describeMyNode() {

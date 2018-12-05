@@ -52,6 +52,13 @@ class GraylistingTracker {
   // being returned from getGraylistedNodes unless reset() is called
   void stop();
 
+  // Check if the refresh timer is running or not
+  bool isRunning() const;
+
+  // Notifies the tracker when the settings change. Based on the change in the
+  // settings, the tracker can start or tear down itself
+  void onSettingsUpdated();
+
   // Clear the current cached graylist. Unless the timer is stopped, a new
   // graylist will be calculated in the next timer tick.
   void resetGraylist();

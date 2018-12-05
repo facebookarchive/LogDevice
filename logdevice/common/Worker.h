@@ -718,6 +718,9 @@ class Worker : public EventLoop {
     return *worker_timeout_stats_;
   }
 
+  const std::unordered_set<node_index_t>& getGraylistedNodes() const;
+  void resetGraylist();
+
  protected:
   virtual void onThreadStarted() override;
 
