@@ -34,9 +34,10 @@ class Processor;
 
 /* States of a node maintained by ClusterState */
 enum ClusterStateNodeState : uint8_t {
-  ALIVE = 0,
+  FULLY_STARTED = 0,
   DEAD = 1,
   FAILING_OVER = 2,
+  STARTING = 3,
 };
 /* Type of callbacks used for node state changes subscriptions */
 struct ClusterStateSubscriptionList {
@@ -65,12 +66,14 @@ class ClusterState {
 
   static const char* getNodeStateString(NodeState state) {
     switch (state) {
-      case ALIVE:
-        return "ALIVE";
+      case FULLY_STARTED:
+        return "FULLY_STARTED";
       case DEAD:
         return "DEAD";
       case FAILING_OVER:
         return "FAILING_OVER";
+      case STARTING:
+        return "STARTING";
     }
     return "UNKNOWN";
   }
@@ -83,8 +86,20 @@ class ClusterState {
 
   virtual ~ClusterState() {}
 
+  static inline bool isAliveState(NodeState state) {
+    return state == NodeState::FULLY_STARTED || state == NodeState::STARTING;
+  }
+
   bool isNodeAlive(node_index_t idx) const {
-    return getNodeState(idx) == NodeState::ALIVE;
+    return isAliveState(getNodeState(idx));
+  }
+
+  bool isNodeFullyStarted(node_index_t idx) const {
+    return getNodeState(idx) == NodeState::FULLY_STARTED;
+  }
+
+  bool isNodeStarting(node_index_t idx) const {
+    return getNodeState(idx) == NodeState::STARTING;
   }
 
   NodeState getNodeState(node_index_t idx) const {
@@ -98,6 +113,10 @@ class ClusterState {
       return node_state_list_[idx].load();
     }
     return NodeState::DEAD;
+  }
+
+  const char* getNodeStateAsStr(node_index_t idx) const {
+    return getNodeStateString(getNodeState(idx));
   }
 
   /**

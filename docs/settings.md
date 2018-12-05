@@ -162,7 +162,7 @@ sidebar_label: Settings
 | connection-retries | the number of TCP connection retries before giving up | 4 |  |
 | handshake-timeout | LogDevice protocol handshake timeout | 1s |  |
 | include-destination-on-handshake | Include the destination node ID in the LogDevice protocol handshake. If the actual node ID of the connection target does not match the intended destination ID, the connection is terminated. | true |  |
-| max-protocol | maximum version of LogDevice protocol that the server/client will accept | 89 |  |
+| max-protocol | maximum version of LogDevice protocol that the server/client will accept | 90 |  |
 | nagle | enable Nagle's algorithm on TCP sockets. Changing this setting on-the-fly will not apply it to existing sockets, only to newly created ones | false |  |
 | outbuf-kb | max output buffer size (userspace extension of socket sendbuf) in KB. Changing this setting on-the-fly will not apply it to existing sockets, only to newly created ones | 32768 |  |
 | outbytes-mb | per-thread limit on bytes pending in output evbuffers (in MB) | 512 |  |

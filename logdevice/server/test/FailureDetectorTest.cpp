@@ -86,6 +86,15 @@ class MockFailureDetector : public FailureDetector {
     return last_gossip_tick_time_;
   }
 
+  void setIsLogsConfigLoaded(bool val) {
+    report_logsconfig_loaded_.store(val);
+  }
+
+ protected:
+  bool isLogsConfigLoaded() override {
+    return report_logsconfig_loaded_.load();
+  }
+
  private:
   BoycottTracker& getBoycottTracker() override {
     return mock_tracker_;
@@ -94,6 +103,7 @@ class MockFailureDetector : public FailureDetector {
   MockBoycottTracker mock_tracker_;
   std::shared_ptr<ServerConfig> config_;
   std::unique_ptr<ClusterState> cluster_state_;
+  std::atomic<bool> report_logsconfig_loaded_{true};
 };
 
 }} // namespace facebook::logdevice
@@ -126,12 +136,24 @@ std::shared_ptr<ServerConfig> gen_config(size_t num_nodes,
 }
 
 std::pair<std::shared_ptr<ServerProcessor>, MockFailureDetector*>
-make_processor_with_detector(const Settings& main_settings,
-                             const ServerSettings& server_settings,
-                             std::shared_ptr<UpdateableConfig> config,
+make_processor_with_detector(node_index_t nid,
+                             size_t num_nodes,
                              const GossipSettings& gossip_settings) {
+  /* setup default settings */
+  ServerSettings server_settings = create_default_settings<ServerSettings>();
+  Settings main_settings = create_default_settings<Settings>();
+  main_settings.num_workers = 1;
+  main_settings.max_nodes = 1000;
+  main_settings.worker_request_pipe_capacity = 1000000;
+
+  /* make config for this index */
+  std::shared_ptr<UpdateableConfig> uconfig =
+      std::make_shared<UpdateableConfig>(std::make_shared<Configuration>(
+          gen_config(num_nodes, nid),
+          std::make_shared<configuration::LocalLogsConfig>()));
+
   auto p = make_test_server_processor(
-      main_settings, server_settings, gossip_settings, config);
+      main_settings, server_settings, gossip_settings, uconfig);
   p->setServerInstanceId(SystemTimestamp::now().toMilliseconds().count());
   std::unique_ptr<MockFailureDetector> d =
       std::make_unique<MockFailureDetector>(
@@ -204,6 +226,22 @@ void simulate_single(detector_list_t& detectors,
           steps);
 }
 
+std::tuple<std::vector<std::shared_ptr<ServerProcessor>>, detector_list_t>
+create_processors_and_detectors(size_t num_nodes,
+                                const GossipSettings& settings) {
+  std::vector<std::shared_ptr<ServerProcessor>> processors;
+  detector_list_t detectors;
+
+  for (node_index_t i = 0; i < num_nodes; ++i) {
+    std::shared_ptr<ServerProcessor> p;
+    MockFailureDetector* d;
+    std::tie(p, d) = make_processor_with_detector(i, num_nodes, settings);
+    processors.push_back(std::move(p));
+    detectors.push_back(d);
+  }
+  return std::make_tuple(std::move(processors), std::move(detectors));
+}
+
 // Runs a simulation featuring N nodes gossiping. For each 0 <= i < N/2,
 // i randomly selected nodes are marked as down. The rest of the cluster is
 // expected to detect that in a limited number of steps.
@@ -223,24 +261,9 @@ void simulate(size_t num_nodes, const GossipSettings& settings) {
 
     std::vector<std::shared_ptr<ServerProcessor>> processors;
     detector_list_t detectors;
-    Settings main_settings = create_default_settings<Settings>();
-    ServerSettings server_settings = create_default_settings<ServerSettings>();
-    main_settings.num_workers = 1;
-    main_settings.max_nodes = 1000;
-    main_settings.worker_request_pipe_capacity = 1000000;
 
-    for (node_index_t i = 0; i < num_nodes; ++i) {
-      std::shared_ptr<UpdateableConfig> uconfig =
-          std::make_shared<UpdateableConfig>(std::make_shared<Configuration>(
-              gen_config(num_nodes, i),
-              std::make_shared<configuration::LocalLogsConfig>()));
-      std::shared_ptr<ServerProcessor> p;
-      MockFailureDetector* d;
-      std::tie(p, d) = make_processor_with_detector(
-          main_settings, server_settings, uconfig, settings);
-      processors.push_back(std::move(p));
-      detectors.push_back(d);
-    }
+    std::tie(processors, detectors) =
+        create_processors_and_detectors(num_nodes, settings);
 
     simulate_single(detectors, dead);
     // Cleanly shutdown the processors since FailureDetector runs on
@@ -277,8 +300,14 @@ void gossip_round(MockFailureDetector* d1, MockFailureDetector* d2) {
   ASSERT_LT(0, d1->messages_.size());
   ASSERT_LT(0, d2->messages_.size());
 
-  d1->onGossipReceived(*d2->messages_[0].second);
-  d2->onGossipReceived(*d1->messages_[0].second);
+  /* drain all messages to get through broadcasts and get at least one actual
+   * gossip for this round */
+  for (auto& msg : d2->messages_) {
+    d1->onGossipReceived(*msg.second);
+  }
+  for (auto& msg : d1->messages_) {
+    d2->onGossipReceived(*msg.second);
+  }
 
   d1->messages_.clear();
   d2->messages_.clear();
@@ -300,7 +329,7 @@ void shutdown_processor(Processor* processor) {
 // Simulates a node requesting shard failover. Other nodes are expected to
 // immediately treat this node as unavailable, even if it's still gossiping.
 TEST(FailureDetector, Failover) {
-  const int nodes = 2;
+  const int num_nodes = 2;
 
   GossipSettings settings = create_default_settings<GossipSettings>();
   settings.failover_blacklist_threshold = 2;
@@ -309,64 +338,103 @@ TEST(FailureDetector, Failover) {
   settings.mode = GossipSettings::SelectionMode::ROUND_ROBIN;
   UpdateableSettings<GossipSettings> updateable(settings);
 
-  Settings main_settings = create_default_settings<Settings>();
-  ServerSettings server_settings = create_default_settings<ServerSettings>();
-  main_settings.num_workers = 1;
-  main_settings.max_nodes = 1000;
-  main_settings.worker_request_pipe_capacity = 1000000;
+  std::vector<std::shared_ptr<ServerProcessor>> processors;
+  detector_list_t detectors;
 
-  std::shared_ptr<UpdateableConfig> uconfig1 =
-      std::make_shared<UpdateableConfig>(std::make_shared<Configuration>(
-          gen_config(nodes, 0),
-          std::make_shared<configuration::LocalLogsConfig>()));
-  std::shared_ptr<UpdateableConfig> uconfig2 =
-      std::make_shared<UpdateableConfig>(std::make_shared<Configuration>(
-          gen_config(nodes, 1),
-          std::make_shared<configuration::LocalLogsConfig>()));
-  std::shared_ptr<Processor> p0, p1;
-  MockFailureDetector *d0, *d1;
-  std::tie(p0, d0) = make_processor_with_detector(
-      main_settings, server_settings, uconfig1, settings);
-  std::tie(p1, d1) = make_processor_with_detector(
-      main_settings, server_settings, uconfig2, settings);
+  std::tie(processors, detectors) =
+      create_processors_and_detectors(num_nodes, settings);
 
   // gossip until both nodes are aware that the other is alive
   for (int i = 0; i <= settings.min_gossips_for_stable_state; ++i) {
-    gossip_round(d0, d1);
+    gossip_round(detectors[0], detectors[1]);
   }
 
-  for (node_index_t idx = 0; idx < nodes; ++idx) {
-    EXPECT_TRUE(d0->isAlive(idx));
-    EXPECT_TRUE(d1->isAlive(idx));
+  for (node_index_t idx = 0; idx < num_nodes; ++idx) {
+    EXPECT_TRUE(detectors[0]->isAlive(idx));
+    EXPECT_TRUE(detectors[1]->isAlive(idx));
   }
 
-  d0->failover();
-  gossip_round(d0, d1);
+  detectors[0]->failover();
+  gossip_round(detectors[0], detectors[1]);
   // another round is needed to update gossip_list_
-  gossip_round(d0, d1);
+  gossip_round(detectors[0], detectors[1]);
 
-  EXPECT_TRUE(d0->isAlive(node_index_t(0)));
-  EXPECT_TRUE(d0->isAlive(node_index_t(1)));
-  EXPECT_FALSE(d1->isAlive(node_index_t(0)));
+  EXPECT_TRUE(detectors[0]->isAlive(node_index_t(0)));
+  EXPECT_TRUE(detectors[0]->isAlive(node_index_t(1)));
+  EXPECT_FALSE(detectors[1]->isAlive(node_index_t(0)));
 
   // "restart" the first node
-  shutdown_processor(p0.get());
-  std::tie(p0, d0) = make_processor_with_detector(
-      main_settings, server_settings, uconfig1, settings);
+  shutdown_processor(processors[0].get());
+  std::tie(processors[0], detectors[0]) =
+      make_processor_with_detector(0, num_nodes, settings);
 
-  gossip_round(d0, d1);
+  gossip_round(detectors[0], detectors[1]);
 
-  // One gossip is enough to bring d0 back to ALIVE in d1's view
-  EXPECT_TRUE(d1->isAlive(node_index_t(0)));
+  // One gossip is enough to bring detectors[0] back to ALIVE in detectors[1]'s
+  // view
+  EXPECT_TRUE(detectors[1]->isAlive(node_index_t(0)));
 
   // after minimum number of more rounds, N0 is back in the game
   for (int i = 0; i < settings.min_gossips_for_stable_state; ++i) {
-    gossip_round(d0, d1);
+    gossip_round(detectors[0], detectors[1]);
   }
-  EXPECT_TRUE(d0->isAlive(node_index_t(0)));
-  EXPECT_TRUE(d1->isAlive(node_index_t(0)));
-  shutdown_processor(p0.get());
-  shutdown_processor(p1.get());
+  EXPECT_TRUE(detectors[0]->isAlive(node_index_t(0)));
+  EXPECT_TRUE(detectors[1]->isAlive(node_index_t(0)));
+  shutdown_processor(processors[0].get());
+  shutdown_processor(processors[1].get());
+}
+
+// Simulates a node that is stuck not loading Logsconfig. It must be flagged
+// correctly as "STARTING".
+TEST(FailureDetector, Starting) {
+  const int num_nodes = 2;
+
+  GossipSettings settings = create_default_settings<GossipSettings>();
+  settings.failover_blacklist_threshold = 2;
+  settings.gossip_failure_threshold = 10;
+  settings.suspect_duration = std::chrono::milliseconds(0);
+  settings.mode = GossipSettings::SelectionMode::ROUND_ROBIN;
+  UpdateableSettings<GossipSettings> updateable(settings);
+
+  std::vector<std::shared_ptr<ServerProcessor>> processors;
+  detector_list_t detectors;
+
+  std::tie(processors, detectors) =
+      create_processors_and_detectors(num_nodes, settings);
+
+  detectors[0]->setIsLogsConfigLoaded(false);
+
+  // propagate state
+  for (int i = 0; i <= settings.min_gossips_for_stable_state; ++i) {
+    gossip_round(detectors[0], detectors[1]);
+  }
+
+  for (node_index_t idx = 0; idx < num_nodes; ++idx) {
+    EXPECT_TRUE(detectors[idx]->isAlive(0));
+    EXPECT_TRUE(detectors[idx]->getClusterState()->isNodeStarting(0));
+    EXPECT_TRUE(detectors[idx]->isAlive(1));
+    EXPECT_FALSE(detectors[idx]->getClusterState()->isNodeStarting(1));
+  }
+
+  detectors[0]->setIsLogsConfigLoaded(true);
+
+  for (int i = 0; i < 2; ++i) {
+    // we need at least two rounds because we only update the node state on the
+    // call to FailureDetector::gossip() after we get and up-to-date gossip
+    // message.
+    gossip_round(detectors[0], detectors[1]);
+  }
+
+  for (node_index_t idx = 0; idx < num_nodes; ++idx) {
+    EXPECT_TRUE(detectors[idx]->isAlive(0));
+    EXPECT_FALSE(detectors[idx]->getClusterState()->isNodeStarting(0));
+    EXPECT_TRUE(detectors[idx]->isAlive(1));
+    EXPECT_FALSE(detectors[idx]->getClusterState()->isNodeStarting(1));
+  }
+
+  for (node_index_t i = 0; i < num_nodes; ++i) {
+    shutdown_processor(processors[i].get());
+  }
 }
 
 TEST(FailureDetector, GossipRetry) {
@@ -376,58 +444,43 @@ TEST(FailureDetector, GossipRetry) {
   settings.suspect_duration = std::chrono::milliseconds(0);
   UpdateableSettings<GossipSettings> updateable(settings);
 
-  Settings main_settings = create_default_settings<Settings>();
-  ServerSettings server_settings = create_default_settings<ServerSettings>();
-  main_settings.num_workers = 1;
-  main_settings.max_nodes = 1000;
-  main_settings.worker_request_pipe_capacity = 1000000;
+  std::vector<std::shared_ptr<ServerProcessor>> processors;
+  detector_list_t detectors;
 
-  std::shared_ptr<UpdateableConfig> uconfig1 =
-      std::make_shared<UpdateableConfig>(std::make_shared<Configuration>(
-          gen_config(nodes, 0),
-          std::make_shared<configuration::LocalLogsConfig>()));
-  std::shared_ptr<UpdateableConfig> uconfig2 =
-      std::make_shared<UpdateableConfig>(std::make_shared<Configuration>(
-          gen_config(nodes, 1),
-          std::make_shared<configuration::LocalLogsConfig>()));
-  std::shared_ptr<Processor> p1, p2;
-  MockFailureDetector *d1, *d2;
-  std::tie(p1, d1) = make_processor_with_detector(
-      main_settings, server_settings, uconfig1, settings);
-  std::tie(p2, d2) = make_processor_with_detector(
-      main_settings, server_settings, uconfig2, settings);
+  std::tie(processors, detectors) =
+      create_processors_and_detectors(2, settings);
 
   // gossip until both nodes are aware that the other is alive
   for (int i = 0; i <= settings.min_gossips_for_stable_state; ++i) {
-    gossip_round(d1, d2);
+    gossip_round(detectors[0], detectors[1]);
   }
 
   for (node_index_t idx = 0; idx < nodes; ++idx) {
-    EXPECT_TRUE(d1->isAlive(idx));
-    EXPECT_TRUE(d2->isAlive(idx));
+    EXPECT_TRUE(detectors[0]->isAlive(idx));
+    EXPECT_TRUE(detectors[1]->isAlive(idx));
   }
 
   int n1, n2, n3;
 
   // gossip
-  d1->advanceTime();
+  detectors[0]->advanceTime();
   // get gossip intervals for N1
-  n1 = d1->getGossipIntervals(1);
+  n1 = detectors[0]->getGossipIntervals(1);
   // gossip again
-  d1->advanceTime();
+  detectors[0]->advanceTime();
   // get gossip intervals again
-  n2 = d1->getGossipIntervals(1);
+  n2 = detectors[0]->getGossipIntervals(1);
   // make sure that the gossip intervals did not change because not enough time
   // elapsed between the two gossips
   ASSERT_EQ(n1, n2);
 
-  SteadyTimestamp start = d1->getLastGossipTickTime();
+  SteadyTimestamp start = detectors[0]->getLastGossipTickTime();
   // keep gossiping again until the counter increases
   // if for some reason it doesn't happen due to a bug, the test will fail
   // with timeout
   do {
-    n3 = d1->getGossipIntervals(1);
-    d1->advanceTime();
+    n3 = detectors[0]->getGossipIntervals(1);
+    detectors[0]->advanceTime();
     sleep_until_safe(std::chrono::steady_clock::now() +
                      settings.gossip_interval / 10);
   } while (n3 == n2);
@@ -442,6 +495,6 @@ TEST(FailureDetector, GossipRetry) {
   // make sure only one gossip interval elapsed
   ASSERT_TRUE(end - start >= settings.gossip_interval);
   ASSERT_TRUE(end - start < 2 * settings.gossip_interval);
-  shutdown_processor(p1.get());
-  shutdown_processor(p2.get());
+  shutdown_processor(processors[0].get());
+  shutdown_processor(processors[1].get());
 }

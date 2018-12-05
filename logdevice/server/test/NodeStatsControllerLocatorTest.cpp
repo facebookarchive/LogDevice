@@ -59,7 +59,7 @@ TEST_F(NodeStatsControllerLocatorTest, MoreControllersThanNodes) {
 
   EXPECT_CALL(locator, getNodes()).WillRepeatedly(Return(nodes));
   EXPECT_CALL(locator, getNodeState(_))
-      .WillRepeatedly(Return(StateList{ALIVE}));
+      .WillRepeatedly(Return(StateList{FULLY_STARTED}));
   // best effort
   EXPECT_TRUE(locator.isController(N0, 2));
 }
@@ -68,7 +68,7 @@ TEST_F(NodeStatsControllerLocatorTest, SingleNode) {
   auto nodes = nodesWithLocations({"rg0.dc0.cl0.ro0.rk0"});
   EXPECT_CALL(locator, getNodes()).WillRepeatedly(Return(nodes));
   EXPECT_CALL(locator, getNodeState(_))
-      .WillRepeatedly(Return(StateList{ALIVE}));
+      .WillRepeatedly(Return(StateList{FULLY_STARTED}));
 
   EXPECT_TRUE(locator.isController(N0, 1));
 }
@@ -79,7 +79,8 @@ TEST_F(NodeStatsControllerLocatorTest, DifferentRack) {
   // two in the same rack, one in another
   EXPECT_CALL(locator, getNodes()).WillRepeatedly(Return(nodes));
   EXPECT_CALL(locator, getNodeState(_))
-      .WillRepeatedly(Return(StateList{ALIVE, ALIVE, ALIVE}));
+      .WillRepeatedly(
+          Return(StateList{FULLY_STARTED, FULLY_STARTED, FULLY_STARTED}));
 
   // any of the nodes in the first rack may be chosen
   EXPECT_TRUE(locator.isController(N0, 2) || locator.isController(N1, 2));
@@ -92,7 +93,8 @@ TEST_F(NodeStatsControllerLocatorTest, SameRack) {
       {"rg0.dc0.cl0.ro0.rk0", "rg0.dc0.cl0.ro0.rk0", "rg0.dc0.cl0.ro0.rk1"});
   EXPECT_CALL(locator, getNodes()).WillRepeatedly(Return(nodes));
   EXPECT_CALL(locator, getNodeState(_))
-      .WillRepeatedly(Return(StateList{ALIVE, ALIVE, ALIVE}));
+      .WillRepeatedly(
+          Return(StateList{FULLY_STARTED, FULLY_STARTED, FULLY_STARTED}));
 
   EXPECT_TRUE(locator.isController(N0, 3));
   EXPECT_TRUE(locator.isController(N1, 3));
@@ -105,7 +107,7 @@ TEST_F(NodeStatsControllerLocatorTest, DeadNode) {
   EXPECT_CALL(locator, getNodes()).WillRepeatedly(Return(nodes));
   // if a node is DEAD, pick another one, even if it's in the same rack
   EXPECT_CALL(locator, getNodeState(_))
-      .WillRepeatedly(Return(StateList{ALIVE, ALIVE, DEAD}));
+      .WillRepeatedly(Return(StateList{FULLY_STARTED, FULLY_STARTED, DEAD}));
   EXPECT_TRUE(locator.isController(N0, 2));
   EXPECT_TRUE(locator.isController(N1, 2));
 }
@@ -120,7 +122,7 @@ TEST_F(NodeStatsControllerLocatorTest, GapInIndex) {
   EXPECT_CALL(locator, getNodes()).WillRepeatedly(Return(nodes));
 
   EXPECT_CALL(locator, getNodeState(_))
-      .WillRepeatedly(Return(StateList{ALIVE, DEAD, ALIVE}));
+      .WillRepeatedly(Return(StateList{FULLY_STARTED, DEAD, FULLY_STARTED}));
 
   EXPECT_TRUE(locator.isController(N0, 2));
   EXPECT_TRUE(locator.isController(N2, 2));
@@ -135,7 +137,8 @@ TEST_F(NodeStatsControllerLocatorTest, WithoutLocation) {
   EXPECT_CALL(locator, getNodes()).WillRepeatedly(Return(nodes));
 
   EXPECT_CALL(locator, getNodeState(_))
-      .WillRepeatedly(Return(StateList{ALIVE, ALIVE, ALIVE}));
+      .WillRepeatedly(
+          Return(StateList{FULLY_STARTED, FULLY_STARTED, FULLY_STARTED}));
 
   // if only 2 are chosen, the one with location (and different rack) should be
   // chosen

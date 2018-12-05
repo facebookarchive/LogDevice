@@ -61,7 +61,7 @@ class NodeStateUpdatedRequest : public Request {
  private:
   worker_id_t worker_id_{-1};
   node_index_t node_id_{-1};
-  ClusterState::NodeState state_{ClusterState::NodeState::ALIVE};
+  ClusterState::NodeState state_{ClusterState::NodeState::FULLY_STARTED};
 };
 
 /**
@@ -110,7 +110,7 @@ node_index_t ClusterState::getFirstNodeAlive() const {
   folly::SharedMutex::ReadHolder read_lock(mutex_);
 
   for (node_index_t nid = 0; nid < cluster_size_; nid++) {
-    if (node_state_list_[nid].load() == NodeState::ALIVE) {
+    if (isNodeAlive(nid)) {
       return nid;
     }
   }
@@ -226,13 +226,14 @@ void ClusterState::resizeClusterState(size_t new_size, bool notifySubscribers) {
         new_list[i].store(node_state_list_[i].load());
       } else {
         /* If we have failure detector, mark new nodes as dead by default;
-         * the failure detector will then mark them alive as needed.
-         * Otherwise, treat nodes as alive by default,
+         * the failure detector will then change their state as needed.
+         * Otherwise, treat nodes as fully started by default,
          * so that HashBasedSequencerLocator can hash to an
          * actual node and not return E::NOTFOUND
          */
-        auto state = have_failure_detector ? ClusterState::NodeState::DEAD
-                                           : ClusterState::NodeState::ALIVE;
+        auto state = have_failure_detector
+            ? ClusterState::NodeState::DEAD
+            : ClusterState::NodeState::FULLY_STARTED;
         new_list[i].store(state);
         if (processor_ && notifySubscribers) {
           postUpdateToWorkers(i, state);

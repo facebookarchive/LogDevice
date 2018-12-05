@@ -204,7 +204,7 @@ void RebuildingSupervisor::onNodeStateChanged(node_index_t node_id,
     return;
   }
 
-  if (state != ClusterState::NodeState::ALIVE) {
+  if (!ClusterState::isAliveState(state)) {
     // here we also start the timer if the node if failing over (graceful
     // shutdown) because we don't know if the node is going to come back. but
     // if it does, then the timer will be cancelled.

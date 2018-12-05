@@ -1416,6 +1416,12 @@ class Node {
    */
   std::map<std::string, std::string> gossipInfo() const;
 
+  /**
+   * Issues an INFO GOSSIP command to collect information about whether the node
+   * is in starting state and display it.
+   */
+  std::map<std::string, bool> gossipStarting() const;
+
   /*
    * Sends "info gossip" to command port via nc.
    * Returns a map with one of the following state strings as value

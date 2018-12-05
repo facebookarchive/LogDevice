@@ -30,6 +30,7 @@ GOSSIP_Message::GOSSIP_Message(NodeID this_node,
                                suspect_matrix_t suspect_matrix,
                                boycott_list_t boycott_list,
                                boycott_durations_list_t boycott_durations,
+                               starting_list_t starting_list,
                                GOSSIP_Message::GOSSIP_flags_t flags,
                                uint64_t msg_id)
     : Message(MessageType::GOSSIP, TrafficClass::FAILURE_DETECTOR),
@@ -45,6 +46,8 @@ GOSSIP_Message::GOSSIP_Message(NodeID this_node,
       num_boycotts_(boycott_list.size()),
       boycott_list_(std::move(boycott_list)),
       boycott_durations_list_(std::move(boycott_durations)),
+      num_starting_(starting_list.size()),
+      starting_list_(starting_list),
       msg_id_(msg_id) {
   ld_check(gossip_list_.size() <=
            std::numeric_limits<decltype(num_nodes_)>::max());
@@ -64,15 +67,23 @@ Message::Disposition GOSSIP_Message::onReceived(const Address& /*from*/) {
 void GOSSIP_Message::serialize(ProtocolWriter& writer) const {
   ld_check(gossip_list_.size() == num_nodes_);
   ld_check(gossip_ts_.size() == num_nodes_);
+
+  auto flags = flags_;
+
+  if (writer.proto() < Compatibility::ProtocolVersion::STARTING_STATE_SUPPORT) {
+    /* remove starting list */
+    flags &= ~HAS_STARTING_LIST_FLAG;
+  }
+
   writer.write(num_nodes_);
   writer.write(gossip_node_);
-  writer.write(flags_);
+  writer.write(flags);
   writer.writeVector(gossip_list_);
   writer.write(instance_id_);
   writer.write(sent_time_);
   writer.writeVector(gossip_ts_);
 
-  if (flags_ & HAS_FAILOVER_LIST_FLAG) {
+  if (flags & HAS_FAILOVER_LIST_FLAG) {
     ld_check(failover_list_.size() == num_nodes_);
     writer.writeVector(failover_list_);
   }
@@ -83,6 +94,11 @@ void GOSSIP_Message::serialize(ProtocolWriter& writer) const {
       Compatibility::ProtocolVersion::ADAPTIVE_BOYCOTT_DURATION) {
     writeBoycottDurations(writer);
   }
+
+  if (flags & HAS_STARTING_LIST_FLAG) {
+    writeStartingList(writer);
+  }
+
   writeSuspectMatrix(writer);
 }
 
@@ -106,6 +122,10 @@ MessageReadResult GOSSIP_Message::deserialize(ProtocolReader& reader) {
   if (reader.proto() >=
       Compatibility::ProtocolVersion::ADAPTIVE_BOYCOTT_DURATION) {
     msg->readBoycottDurations(reader);
+  }
+
+  if (msg->flags_ & HAS_STARTING_LIST_FLAG) {
+    msg->readStartingList(reader);
   }
 
   if (reader.ok() && reader.bytesRemaining() > 0) {
@@ -210,6 +230,27 @@ void GOSSIP_Message::readBoycottDurations(ProtocolReader& reader) {
   boycott_durations_list_.resize(list_size);
   for (auto& d : boycott_durations_list_) {
     d.deserialize(reader);
+  }
+}
+
+void GOSSIP_Message::writeStartingList(ProtocolWriter& writer) const {
+  ld_check(starting_list_.size() == num_starting_);
+  writer.write(num_starting_);
+
+  for (auto& node : starting_list_) {
+    writer.write(node.index());
+  }
+}
+
+void GOSSIP_Message::readStartingList(ProtocolReader& reader) {
+  reader.read(&num_starting_);
+
+  starting_list_.resize(num_starting_);
+
+  for (auto& node_id : starting_list_) {
+    node_index_t nidx;
+    reader.read(&nidx);
+    node_id = NodeID(nidx);
   }
 }
 

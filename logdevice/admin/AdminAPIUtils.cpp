@@ -221,8 +221,11 @@ void fillNodeState(thrift::NodeState& out,
       case ClusterStateNodeState::DEAD:
         daemon_state = thrift::ServiceState::DEAD;
         break;
-      case ClusterStateNodeState::ALIVE:
+      case ClusterStateNodeState::FULLY_STARTED:
         daemon_state = thrift::ServiceState::ALIVE;
+        break;
+      case ClusterStateNodeState::STARTING:
+        daemon_state = thrift::ServiceState::STARTING_UP;
         break;
       case ClusterStateNodeState::FAILING_OVER:
         daemon_state = thrift::ServiceState::SHUTTING_DOWN;

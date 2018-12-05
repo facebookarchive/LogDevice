@@ -15,8 +15,11 @@
 #include <folly/Conv.h>
 #include <gtest/gtest.h>
 
+#include "logdevice/common/ConstructorFailed.h"
+#include "logdevice/common/NodeSetSelectorFactory.h"
 #include "logdevice/common/configuration/ConfigParser.h"
 #include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/common/configuration/InternalLogs.h"
 #include "logdevice/common/hash.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/test/TestUtil.h"
@@ -478,6 +481,129 @@ TEST_F(FailureDetectorIntegrationTest, GetClusterState) {
   cluster->getNode(3).kill();
   // send another append - no timeout should occur
   lsn = client->appendSync(logid_t(log_id), Payload("hello", 5));
+  ASSERT_NE(LSN_INVALID, lsn);
+}
+
+// we check whether we correctly detect starting state and if we recover after
+// internal logs become available again
+TEST_F(FailureDetectorIntegrationTest, StartingState) {
+  const int num_nodes = 10;
+
+  auto cluster_factory = IntegrationTestUtils::ClusterFactory();
+  Configuration::Log common_log =
+      cluster_factory.createDefaultLogConfig(num_nodes);
+  common_log.nodeSetSize = num_nodes;
+
+  Configuration::Log log_cfg_config =
+      cluster_factory.createDefaultLogConfig(num_nodes);
+  log_cfg_config.replicationFactor = 1;
+  log_cfg_config.nodeSetSize = 1;
+
+  auto cluster =
+      cluster_factory.enableLogsConfigManager()
+          .deferStart()
+          .setLogConfig(common_log)
+          .setInternalLogConfig("config_log_deltas", log_cfg_config)
+          .setInternalLogConfig("config_log_snapshots", log_cfg_config)
+          .enableSelfInitiatedRebuilding()
+          .useHashBasedSequencerAssignment(100, "10s")
+          .create(num_nodes);
+
+  ASSERT_EQ(0,
+            cluster->provisionEpochMetaData(
+                NodeSetSelectorFactory::create(
+                    NodeSetSelectorType::CONSISTENT_HASHING),
+                false));
+
+  /* here we obtain the only shard that has internal log records */
+  auto selector =
+      NodeSetSelectorFactory::create(NodeSetSelectorType::CONSISTENT_HASHING);
+  auto nodeset =
+      selector->getStorageSet(configuration::InternalLogs::CONFIG_LOG_DELTAS,
+                              cluster->getConfig()->get(),
+                              nullptr);
+  ASSERT_EQ(std::get<0>(nodeset), NodeSetSelector::Decision::NEEDS_CHANGE);
+  ASSERT_EQ(std::get<1>(nodeset)->size(), 1);
+  auto S = (*std::get<1>(nodeset))[0];
+
+  /* start everything but the node that holds logsconfig deltas */
+  for (auto& p : cluster->getNodes()) {
+    auto node = p.first;
+    if (node != S.node()) {
+      p.second->start();
+    }
+  }
+
+  wait_until(
+      folly::sformat("All cluster except N{} is STARTING", S.node()).c_str(),
+      [&]() {
+        for (node_index_t n = 0; n < num_nodes; ++n) {
+          if (n == S.node()) {
+            continue;
+          }
+          auto res = cluster->getNode(n).gossipStarting();
+          for (node_index_t nid = 0; nid < num_nodes; ++nid) {
+            if (nid == S.node()) {
+              continue;
+            }
+            auto key = folly::to<std::string>("N", nid);
+            if (res.find(key) == res.end() || !res[key]) {
+              return false;
+            }
+          }
+        }
+        return true;
+      });
+
+  /* we should not be able to create clients if we can't read internal logs */
+  std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
+  ASSERT_THROW(
+      cluster->createClient(
+          /*timeout=*/std::chrono::seconds{2}, std::move(client_settings)),
+      ConstructorFailed);
+
+  ld_info("Starting node N%d", S.node());
+  cluster->getNode(S.node()).start();
+
+  for (const auto& it : cluster->getNodes()) {
+    node_index_t idx = it.first;
+    cluster->waitUntilGossip(/* alive */ true, idx);
+  }
+
+  wait_until("Nobody is starting", [&]() {
+    for (node_index_t n = 0; n < num_nodes; ++n) {
+      auto res = cluster->getNode(n).gossipStarting();
+      for (node_index_t nid = 0; nid < num_nodes; ++nid) {
+        auto key = folly::to<std::string>("N", nid);
+        if (res.find(key) != res.end() && res[key]) {
+          return false;
+        }
+      }
+    }
+    return true;
+  });
+
+  cluster->waitForRecovery();
+
+  /* create client */
+  std::unique_ptr<ClientSettings> client_settings2(ClientSettings::create());
+  auto client = cluster->createIndependentClient(
+      this->testTimeout(), std::move(client_settings2));
+
+  /* we should be able to create log groups now */
+  auto log_group = client->makeLogGroupSync(
+      "/log1",
+      logid_range_t(logid_t(1), logid_t(2)),
+      client::LogAttributes().with_replicationFactor(2),
+      true);
+  ASSERT_NE(nullptr, log_group);
+
+  /* we need to wait our own version of LogsConfig catch up to the log_group we
+   * just created */
+  ASSERT_TRUE(client->syncLogsConfigVersion(log_group->version()));
+
+  /* and append */
+  auto lsn = client->appendSync(logid_t(1), Payload("hello", 5));
   ASSERT_NE(LSN_INVALID, lsn);
 }
 

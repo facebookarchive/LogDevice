@@ -1892,6 +1892,23 @@ std::map<std::string, std::string> Node::gossipInfo() const {
   return parse<std::string>(sendCommand("info gossip"), "GOSSIP");
 }
 
+std::map<std::string, bool> Node::gossipStarting() const {
+  std::map<std::string, bool> out;
+  auto cmd_result = sendCommand("info gossip --json");
+  cmd_result = cmd_result.substr(0, cmd_result.rfind("END"));
+  if (cmd_result == "") {
+    return out;
+  }
+
+  auto obj = folly::parseJson(cmd_result);
+  for (auto& state : obj["states"]) {
+    int is_starting = state["detector"]["starting"].getInt();
+    out[state["node_id"].getString()] =
+        (state["status"].getString() == "ALIVE" && is_starting);
+  }
+  return out;
+}
+
 std::map<std::string, bool> Node::gossipBoycottState() const {
   auto string_state = parseGossipBoycottState(sendCommand("info gossip"));
   std::map<std::string, bool> bool_state;

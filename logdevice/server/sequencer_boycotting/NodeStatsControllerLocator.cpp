@@ -151,7 +151,7 @@ NodeStatsControllerLocator::initialWeightVector(const StateList& states) const {
   weights.reserve(states.size());
 
   for (size_t i = 0; i < states.size(); ++i) {
-    weights.emplace_back(states[i] == ALIVE ? 1 : 0);
+    weights.emplace_back(ClusterState::isAliveState(states[i]) ? 1 : 0);
   }
 
   return weights;

@@ -117,6 +117,11 @@ class FailureDetector {
   std::string getStateString(node_index_t idx) const;
 
   /**
+   * Alternative to getStateString() that returns a Json instead.
+   */
+  folly::dynamic getStateJson(node_index_t idx) const;
+
+  /**
    * Returns a human-readable representation of the isolation status of
    * local failure domains in different scopes.
    */
@@ -230,6 +235,8 @@ class FailureDetector {
   void gossip();
 
   void cancelTimers();
+
+  virtual bool isLogsConfigLoaded();
 
  private:
   class InitRequest;
@@ -352,7 +359,10 @@ class FailureDetector {
 
   std::string flagsToString(GOSSIP_Message::GOSSIP_flags_t flags);
 
-  void updateDependencies(node_index_t idx, NodeState new_state, bool failover);
+  void updateDependencies(node_index_t idx,
+                          NodeState new_state,
+                          bool failover,
+                          bool starting);
 
   // A gossip list -- indicates how many gossip periods have passed before
   // hearing from each node (either directly or through a gossip message).
@@ -360,6 +370,9 @@ class FailureDetector {
 
   // instance ids(timestamps) of all nodes
   std::vector<std::chrono::milliseconds> gossip_ts_;
+
+  // Keep track of which nodes are in starting state
+  std::vector<bool> is_node_starting_;
 
   // Monotonically increasing instance ID of logdeviced
   // This is used to distinguish b/w server instances across restarts.
@@ -443,22 +456,34 @@ class FailureDetector {
 
   void broadcastWrapper(GOSSIP_Message::GOSSIP_flags_t flags);
 
+  bool broadcasted_i_am_starting{false};
+
   // Notify all cluster nodes that this node just came up.
-  // This is a best-effort message and sent only once.
+  // This is a best-effort message and sent at most twice:
+  // 1) once when FailureDetector starts;
+  // 2) once more if LogsConfig gets fully loaded afterwards.
   // gossip_list, failover_list and suspect matrix are not included.
   // All further messages will be sent every 'gossip-interval'
   // milli-seconds via gossip().
   void broadcastBringup() {
     startSuspectTimer();
-    broadcastWrapper(GOSSIP_Message::NODE_BRINGUP_FLAG);
+    bool am_i_starting = !isLogsConfigLoaded();
+    broadcastWrapper(
+        GOSSIP_Message::NODE_BRINGUP_FLAG |
+        (am_i_starting ? 0 : GOSSIP_Message::STARTING_STATE_FINISHED));
+    broadcasted_i_am_starting = am_i_starting;
   }
 
   void broadcastSuspectDurationFinished() {
     // clubbed with bringup flag for backward compatibility,
     // so that older code doesn't process this as a regular
     // gossip message.
-    broadcastWrapper(GOSSIP_Message::SUSPECT_STATE_FINISHED |
-                     GOSSIP_Message::NODE_BRINGUP_FLAG);
+    bool am_i_starting = !isLogsConfigLoaded();
+    broadcastWrapper(
+        GOSSIP_Message::SUSPECT_STATE_FINISHED |
+        GOSSIP_Message::NODE_BRINGUP_FLAG |
+        (am_i_starting ? 0 : GOSSIP_Message::STARTING_STATE_FINISHED));
+    broadcasted_i_am_starting = am_i_starting;
   }
 
   virtual Socket* getServerSocket(node_index_t idx);

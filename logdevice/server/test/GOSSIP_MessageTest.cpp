@@ -30,6 +30,7 @@ using failover_list_t = GOSSIP_Message::failover_list_t;
 using suspect_matrix_t = GOSSIP_Message::suspect_matrix_t;
 using boycott_list_t = GOSSIP_Message::boycott_list_t;
 using boycott_durations_list_t = GOSSIP_Message::boycott_durations_list_t;
+using starting_list_t = GOSSIP_Message::starting_list_t;
 using GOSSIP_flags_t = GOSSIP_Message::GOSSIP_flags_t;
 
 namespace {
@@ -40,6 +41,7 @@ struct Params {
   bool with_suspect = false;
   bool with_failover = false;
   bool with_boycott = false;
+  bool with_starting = false;
 };
 
 void serializeAndDeserializeTest(Params params) {
@@ -76,6 +78,12 @@ void serializeAndDeserializeTest(Params params) {
         1, 30min, 2h, 1min, 30s, 2, 60min, std::chrono::system_clock::now());
   }
 
+  starting_list_t starting_list;
+  if (params.with_starting) {
+    starting_list.emplace_back(0);
+    starting_list.emplace_back(1);
+  }
+
   GOSSIP_Message msg(this_node,
                      gossip_list,
                      instance_id,
@@ -85,6 +93,7 @@ void serializeAndDeserializeTest(Params params) {
                      suspect_matrix,
                      boycott_list,
                      boycott_durations,
+                     starting_list,
                      flags);
 
   EXPECT_EQ(this_node, msg.gossip_node_);
@@ -96,6 +105,7 @@ void serializeAndDeserializeTest(Params params) {
   EXPECT_EQ(suspect_matrix, msg.suspect_matrix_);
   EXPECT_EQ(boycott_list, msg.boycott_list_);
   EXPECT_EQ(boycott_durations, msg.boycott_durations_list_);
+  EXPECT_EQ(starting_list, msg.starting_list_);
   EXPECT_EQ(flags, msg.flags_);
 
   ProtocolWriter writer(msg.type_, evbuf.get(), params.proto);
@@ -145,6 +155,24 @@ TEST(GOSSIP_MessageTest, SerializeAndDeserialize) {
 TEST(GOSSIP_MessageTest, SerializeAndDeserializeWithBoycott) {
   Params params{Compatibility::ADAPTIVE_BOYCOTT_DURATION};
   params.with_boycott = true;
+
+  serializeAndDeserializeTest(params);
+
+  params.with_suspect = true;
+  serializeAndDeserializeTest(params);
+
+  params.with_suspect = false;
+  params.with_failover = true;
+  serializeAndDeserializeTest(params);
+
+  params.with_suspect = true;
+  params.with_failover = true;
+  serializeAndDeserializeTest(params);
+}
+
+TEST(GOSSIP_MessageTest, SerializeAndDeserializeWithStarting) {
+  Params params{Compatibility::ProtocolVersion::PROTOCOL_VERSION_LOWER_BOUND};
+  params.with_starting = true;
 
   serializeAndDeserializeTest(params);
 

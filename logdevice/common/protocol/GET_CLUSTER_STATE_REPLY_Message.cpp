@@ -42,7 +42,20 @@ GET_CLUSTER_STATE_REPLY_Message::deserialize(ProtocolReader& reader) {
 void GET_CLUSTER_STATE_REPLY_Message::serialize(ProtocolWriter& writer) const {
   writer.write(header_);
   if (header_.status == E::OK) {
-    writer.writeLengthPrefixedVector(nodes_state_);
+    auto nodes_state(nodes_state_);
+
+    if (writer.proto() <
+        Compatibility::ProtocolVersion::STARTING_STATE_SUPPORT) {
+      // make "starting state" become "fully started" if we don't have support
+      // for the starting state yet.
+      for (auto& state : nodes_state) {
+        if (state == ClusterStateNodeState::STARTING) {
+          state = ClusterStateNodeState::FULLY_STARTED;
+        }
+      }
+    }
+
+    writer.writeLengthPrefixedVector(nodes_state);
     writer.writeLengthPrefixedVector(boycotted_nodes_);
   }
 }

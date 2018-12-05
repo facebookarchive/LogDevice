@@ -283,9 +283,16 @@ void SequencerRouter::onRedirected(NodeID from, NodeID to, Status status) {
     if (cs) {
       if (status == E::REDIRECTED) {
         // in case of redirect (not preempted), we know the server has already
-        // checked that the node is in fact alive, so we can mark it as such,
-        // locally.
-        cs->setNodeState(to.index(), ClusterState::NodeState::ALIVE);
+        // checked that the node is in one of the alive states, so we
+        // can mark it as such, locally according to whether logid belongs to
+        // an internal log.
+        if (configuration::InternalLogs::isInternal(log_id_) &&
+            cs->getNodeState(to.index()) !=
+                ClusterState::NodeState::FULLY_STARTED) {
+          cs->setNodeState(to.index(), ClusterState::NodeState::STARTING);
+        } else {
+          cs->setNodeState(to.index(), ClusterState::NodeState::FULLY_STARTED);
+        }
       }
 
       // we received a redirect or prempted from this sequencer, this may mean

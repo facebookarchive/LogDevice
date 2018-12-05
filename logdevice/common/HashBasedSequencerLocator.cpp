@@ -8,6 +8,7 @@
 #include "HashBasedSequencerLocator.h"
 
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/configuration/InternalLogs.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/hash.h"
 
@@ -123,20 +124,36 @@ int HashBasedSequencerLocator::locateSequencer(
   // from the search (e.g. those that were determined to be unavailable) set to
   // zero.
 
+  auto can_we_route_to = [&sequencers, cs, should_consider_boycotts, log_id](
+                             uint64_t node, double w) {
+    if (w <= 0.0) {
+      return false;
+    } else if (!cs) {
+      return true;
+    } else {
+      bool is_internal_log = configuration::InternalLogs::isInternal(log_id);
+      bool is_node_ready =
+          cs->isNodeFullyStarted(sequencers->nodes[node].index()) ||
+          // Sequencers on nodes that are starting can operate on internal logs
+          // without logsconfig being fully loaded (logsconfig itself is an
+          // internal log).
+          (is_internal_log &&
+           cs->isNodeStarting(sequencers->nodes[node].index()));
+      return is_node_ready &&
+          (!should_consider_boycotts || !cs->isNodeBoycotted(node));
+    }
+  };
+
   bool found_in_location = false;
   uint64_t idx;
   if (sequencerAffinity && !sequencerAffinity->isEmpty()) {
     // trying to find sequencer according to location affinity
     auto weight_fn_with_loc = [sequencers,
-                               cs,
                                config,
                                sequencerAffinity,
-                               should_consider_boycotts](uint64_t node) {
+                               can_we_route_to](uint64_t node) {
       double w = sequencers->weights[node];
-      if (w > 0.0 &&
-          (!cs ||
-           (cs->isNodeAlive(sequencers->nodes[node].index()) &&
-            (!should_consider_boycotts || !cs->isNodeBoycotted(node))))) {
+      if (can_we_route_to(node, w)) {
         auto node_object = config->getNode(node);
         if (node_object) {
           auto location = node_object->location;
@@ -163,12 +180,9 @@ int HashBasedSequencerLocator::locateSequencer(
   }
   if (!found_in_location) {
     // trying to find sequencer regardless of location
-    auto weight_fn = [sequencers, cs, should_consider_boycotts](uint64_t node) {
+    auto weight_fn = [sequencers, can_we_route_to](uint64_t node) {
       double w = sequencers->weights[node];
-      if (w > 0.0 &&
-          (!cs ||
-           (cs->isNodeAlive(sequencers->nodes[node].index()) &&
-            (!should_consider_boycotts || !cs->isNodeBoycotted(node))))) {
+      if (can_we_route_to(node, w)) {
         return w;
       }
       return 0.0;

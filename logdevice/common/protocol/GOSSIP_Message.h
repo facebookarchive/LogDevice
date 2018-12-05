@@ -9,10 +9,10 @@
 
 #include <vector>
 
+#include "logdevice/common/NodeID.h"
 #include "logdevice/common/protocol/Message.h"
 #include "logdevice/common/sequencer_boycotting/Boycott.h"
 #include "logdevice/common/sequencer_boycotting/BoycottAdaptiveDuration.h"
-
 namespace facebook { namespace logdevice {
 
 class GOSSIP_Message : public Message {
@@ -23,13 +23,15 @@ class GOSSIP_Message : public Message {
   using suspect_matrix_t = std::vector<std::vector<uint8_t>>;
   using boycott_list_t = std::vector<Boycott>;
   using boycott_durations_list_t = std::vector<BoycottAdaptiveDuration>;
+  using starting_list_t = std::vector<NodeID>;
   using GOSSIP_flags_t = uint8_t;
 
   GOSSIP_Message()
       : Message(MessageType::GOSSIP, TrafficClass::FAILURE_DETECTOR),
         num_nodes_(0),
         flags_(0),
-        num_boycotts_(0) {}
+        num_boycotts_(0),
+        num_starting_(0) {}
   GOSSIP_Message(NodeID this_node,
                  gossip_list_t gossip_list,
                  std::chrono::milliseconds instance_id,
@@ -39,6 +41,7 @@ class GOSSIP_Message : public Message {
                  suspect_matrix_t suspect_matrix,
                  boycott_list_t boycott_list,
                  boycott_durations_list_t boycott_durations,
+                 starting_list_t starting_list,
                  GOSSIP_flags_t flags = 0,
                  uint64_t msg_id = 0);
 
@@ -68,6 +71,11 @@ class GOSSIP_Message : public Message {
   // The adaptive boycott durations
   boycott_durations_list_t boycott_durations_list_;
 
+  // The amount of nodes marked as "starting" (i.e. with logsconfig not fully
+  // loaded yet)
+  uint16_t num_starting_;
+  starting_list_t starting_list_;
+
   // sequence number to match message when running onSent callback
   uint64_t msg_id_;
 
@@ -91,6 +99,13 @@ class GOSSIP_Message : public Message {
   // receiver.
   static const GOSSIP_flags_t SUSPECT_STATE_FINISHED = 1 << 2;
 
+  // Node should not be considered as starting anymore (i.e. logsconfig should
+  // be fully loaded).
+  static const GOSSIP_flags_t STARTING_STATE_FINISHED = 1 << 3;
+
+  // Flag to indicate that we have a starting list
+  static const GOSSIP_flags_t HAS_STARTING_LIST_FLAG = 1 << 4;
+
  private:
   // helper method that writes the compact representation of the suspect matrix
   // to the given evbuffer
@@ -109,5 +124,8 @@ class GOSSIP_Message : public Message {
   void writeBoycottDurations(ProtocolWriter& writer) const;
   // reads the flattened boycott durations and unflatten them
   void readBoycottDurations(ProtocolReader& reader);
+
+  void writeStartingList(ProtocolWriter& writer) const;
+  void readStartingList(ProtocolReader& reader);
 };
 }} // namespace facebook::logdevice

@@ -93,9 +93,8 @@ void LogsConfigManager::onSettingsUpdated() {
 
   if (isEnabledInSettings()) {
     if (publish_timer_.isActive()) {
-      // LCM is already running and we have an active publish timer.:w
+      // LCM is already running and we have an active publish timer.
       ld_check(is_running_);
-      //
       // Let's see if the grace period has been updated, in this case we will
       // cancel and reactivate the timer.
       if (publish_grace_period_ != previous_grace_period) {
