@@ -12,11 +12,12 @@
 
 #include "folly/Function.h"
 #include "folly/Synchronized.h"
-#include "folly/io/async/HHWheelTimer.h"
+#include "folly/io/async/DelayedDestruction.h"
 
 namespace folly {
 class EventBase;
-}
+class HHWheelTimer;
+} // namespace folly
 
 namespace facebook { namespace logdevice {
 
@@ -38,7 +39,8 @@ class WheelTimer {
 
   constexpr int static kNumberOfThreads = 1;
 
-  folly::HHWheelTimer::UniquePtr wheel_timer_;
+  std::unique_ptr<folly::HHWheelTimer, folly::DelayedDestruction::Destructor>
+      wheel_timer_;
   std::atomic<folly::EventBase*> executor_{};
   std::thread timer_thread_;
 };

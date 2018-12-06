@@ -51,8 +51,7 @@ TEST(Timer, Test) {
     auto nfired = std::make_shared<std::atomic<int>>(0);
     auto tstart = steady_clock::now();
     auto assert_passed = [tstart](milliseconds ms) {
-      auto chrono_abs = [](auto d) { return d >= d.zero() ? d : -d; };
-      ASSERT_GE(chrono_abs(steady_clock::now() - tstart - ms), 10ms);
+      ASSERT_GE(steady_clock::now() - tstart, 0.95 * ms);
     };
 
     vec->emplace_back([nfired, assert_passed] {
@@ -77,31 +76,32 @@ TEST(Timer, Test) {
 
     vec->emplace_back([nfired, assert_passed] {
       ++*nfired;
-      assert_passed(100ms);
+      assert_passed(104ms);
     });
     vec->back().activate(100ms);
 
     vec->emplace_back([nfired, assert_passed] {
       ++*nfired;
-      assert_passed(100ms);
+      assert_passed(101ms);
     });
     vec->back().activate(10ms);
     vec->back().activate(100ms);
 
     vec->emplace_back([nfired, assert_passed] {
       ++*nfired;
-      assert_passed(100ms);
+      assert_passed(102ms);
     });
     vec->back().activate(microseconds(100000));
 
     vec->emplace_back([nfired, assert_passed] {
       ++*nfired;
-      assert_passed(100ms);
+      assert_passed(103ms);
     });
     vec->back().activate(duration_cast<microseconds>(duration<double>(0.1)));
 
-    Timer localTimerShouldBeCancelled([] { FAIL() << "timer not cancelled"; });
+    vec->emplace_back([] { FAIL() << "timer not cancelled"; });
     vec->back().activate(50ms);
+    vec->back().cancel();
 
     vec->emplace_back([nfired, promise] { promise->setValue(*nfired); });
     vec->back().activate(1s);

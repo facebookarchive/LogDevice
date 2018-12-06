@@ -9,13 +9,12 @@
 
 #include <chrono>
 
-#include <folly/ScopeGuard.h>
-#include <folly/futures/Future.h>
 #include <folly/futures/Promise.h>
 #include <gtest/gtest.h>
 
 using namespace facebook::logdevice;
 using namespace std::chrono_literals;
+using namespace std::chrono;
 
 TEST(WheelTimer, TimerCreation) {
   folly::Promise<folly::Unit> promise;

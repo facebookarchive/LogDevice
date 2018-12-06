@@ -55,6 +55,8 @@ Callback* createCallback(folly::Function<void()>&& callback) {
   return new Callback(std::move(callback));
 }
 
+constexpr auto kDefaultTickInterval = std::chrono::milliseconds(1);
+
 } // namespace
 
 WheelTimer::WheelTimer() {
@@ -64,7 +66,7 @@ WheelTimer::WheelTimer() {
   timer_thread_ = std::thread([this, promise = std::move(promise)]() mutable {
     executor_.store(folly::EventBaseManager::get()->getEventBase());
     wheel_timer_ = folly::HHWheelTimer::newTimer(
-        folly::EventBaseManager::get()->getEventBase());
+        folly::EventBaseManager::get()->getEventBase(), kDefaultTickInterval);
     promise.setValue();
     executor_.load()->loopForever();
   });
