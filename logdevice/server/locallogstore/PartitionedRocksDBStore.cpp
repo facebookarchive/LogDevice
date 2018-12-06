@@ -1936,16 +1936,11 @@ PartitionedRocksDBStore::updatePartitionTimestampsIfNeeded(
     PartitionPtr partition,
     RecordTimestamp new_timestamp,
     rocksdb::WriteBatch& rocksdb_batch) {
-  // Skip partition timestamp updates for bridge records that set
-  // the timestamp to 0. There is a small chance that the dirty
-  // rebuildng range after an unclean shutdown is too small because of
-  // this, but we don't have enough information to make a better
-  // estimate here. The alternative - using RecordTimestamp(0) - forces
-  // a rebuilding that starts from the beginning of all logs, which
-  // completely eliminates the benefit of doing a time ranged rebuild.
-  //
-  // TODO: Remove this once bridge records are always generated with
-  //       a valid/reasonable timestamp.
+  // Skip partition timestamp updates for records lacking a reasonable
+  // timestamp - for now the bridge records that use RecordTimestamp::zero().
+  // These records are promoted to the SYNC_WRITE durability class earlier
+  // in the write path, so correctness is maintained without attempting to
+  // use their timestamp for dirty range tracking.
   if (new_timestamp == RecordTimestamp::zero()) {
     return nullptr;
   }
@@ -2850,14 +2845,22 @@ int PartitionedRocksDBStore::writeMultiImpl(
           break;
         }
 
+        // Track dirty regions for all non-synchronous writes.
         if (write->getType() == WriteType::PUT &&
-            write->durability() == Durability::MEMORY) {
+            write->durability() < Durability::SYNC_WRITE) {
           const PutWriteOp* put_op = static_cast<const PutWriteOp*>(write);
 
-          if (!put_op->coordinator.hasValue()) {
+          if (timestamp == RecordTimestamp::zero()) {
+            // We cannot rely on dirty time range tracking to guarantee
+            // record durbility without valid timestamps (e.g. some
+            // instances of bridge records).  Promote to SYNC_WRITE.
+            put_op->increaseDurabilityTo(Durability::SYNC_WRITE);
+            STAT_INCR(stats_, sync_write_promotion_no_timestamp);
+          } else if (!put_op->coordinator.hasValue()) {
             // Recovery from MEMORY stores requires coordinator information.
-            // Revert to using the WAL if this isn't available.
-            put_op->increaseDurabilityTo(Durability::ASYNC_WRITE);
+            // Promote to a synchronous write if this isn't available.
+            put_op->increaseDurabilityTo(Durability::SYNC_WRITE);
+            STAT_INCR(stats_, sync_write_promotion_no_coordinator);
           } else {
             ld_spew("Partition %lu %s dirtied by N%d",
                     partition->id_,

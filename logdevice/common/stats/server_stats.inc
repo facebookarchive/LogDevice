@@ -759,6 +759,13 @@ STAT_DEFINE(partition_dirty_data_updated, SUM)
 STAT_DEFINE(partition_sync_write_promotion_for_timstamp, SUM)
 STAT_DEFINE(triggered_manual_memtable_flush, SUM)
 
+// A MEMORY or ASYNC_WRITE was promoted to a SYNC write due
+// to lacking a record timestamp.
+STAT_DEFINE(sync_write_promotion_no_timestamp, SUM)
+// A MEMORY or ASYNC_WRITE was promoted to a SYNC write due
+// to lacking coordinator (the node that issued the write) information.
+STAT_DEFINE(sync_write_promotion_no_coordinator, SUM)
+
 // Number of records that were stored in some partition other than the two most
 // recent ones. Expect high values during rebuilding.
 STAT_DEFINE(logsdb_writes_to_old_partitions, SUM)
