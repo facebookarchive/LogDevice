@@ -31,6 +31,7 @@
 #include "logdevice/server/admincommands/InfoConfig.h"
 #include "logdevice/server/admincommands/InfoEventLog.h"
 #include "logdevice/server/admincommands/InfoGossip.h"
+#include "logdevice/server/admincommands/InfoGraylist.h"
 #include "logdevice/server/admincommands/InfoIterators.h"
 #include "logdevice/server/admincommands/InfoLogsConfigRsm.h"
 #include "logdevice/server/admincommands/InfoLogsDBMetadata.h"
@@ -90,6 +91,7 @@ AdminCommandFactory::AdminCommandFactory() {
   selector_.add<commands::InfoAppendOutliers>("info append_outliers");
   selector_.add<commands::InfoGossip>("info gossip");
   selector_.add<commands::InfoBoycotts>("info boycotts");
+  selector_.add<commands::InfoGraylist>("info graylist");
   selector_.add<commands::InfoSST>("info sst");
   selector_.add<commands::InfoSockets>("info sockets");
   selector_.add<commands::InfoConfig>("info config");
