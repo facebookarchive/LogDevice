@@ -142,6 +142,10 @@ class AppenderTest : public ::testing::Test {
   // simulate checkConnection returning -1.
   std::unordered_map<NodeID, Status, NodeID::Hash> connection_states_;
 
+  // Values that will be returned by getGraylistedNodes in the availability
+  // checker.
+  std::unordered_set<node_index_t> graylisted_nodes_;
+
   // Used to mock LinearCopySetSelector::Iterator.
   int first_candidate_idx_{0};
 
@@ -248,6 +252,10 @@ class AppenderTest::TestCopySetSelectorDeps
 
     *our_name_at_peer = ClientID(1);
     return 0;
+  }
+
+  const std::unordered_set<node_index_t>& getGraylistedNodes() const override {
+    return test_->graylisted_nodes_;
   }
 
   std::chrono::steady_clock::time_point

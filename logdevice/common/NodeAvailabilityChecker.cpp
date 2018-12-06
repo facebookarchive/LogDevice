@@ -53,6 +53,11 @@ NodeAvailabilityChecker::checkNode(NodeSetState* nodeset_state,
     return NodeStatus::NOT_AVAILABLE;
   }
 
+  if (checkIsGraylisted(shard.node())) {
+    // Outlier based graylisting marked this node as graylisted
+    return NodeStatus::NOT_AVAILABLE;
+  }
+
   NodeID dest_nid(shard.node(), 0);
   ClientID our_name_at_peer;
 
@@ -144,6 +149,15 @@ bool NodeAvailabilityChecker::checkFailureDetector(node_index_t index) const {
   }
   return std::find(do_not_pick.begin(), do_not_pick.end(), index) ==
       do_not_pick.end();
+}
+
+bool NodeAvailabilityChecker::checkIsGraylisted(node_index_t index) const {
+  return getGraylistedNodes().count(index) != 0;
+}
+
+const std::unordered_set<node_index_t>&
+NodeAvailabilityChecker::getGraylistedNodes() const {
+  return Worker::onThisThread()->getGraylistedNodes();
 }
 
 std::shared_ptr<Configuration>

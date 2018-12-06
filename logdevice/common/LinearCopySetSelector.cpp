@@ -63,6 +63,10 @@ LinearCopySetSelector::select(copyset_size_t extras,
   if (ndest < replication_factor_) {
     nodeset_state_->resetGrayList(
         NodeSetState::GrayListResetReason::CANT_PICK_COPYSET);
+    auto worker = Worker::onThisThread(false);
+    if (worker) {
+      worker->resetGraylist();
+    }
     if (retry) {
       return select(extras,
                     copyset_out,
@@ -120,6 +124,11 @@ LinearCopySetSelector::augment(StoreChainLink inout_copyset[],
   if (ndest < replication_factor_ - existing_copyset_size) {
     nodeset_state_->resetGrayList(
         NodeSetState::GrayListResetReason::CANT_PICK_COPYSET);
+
+    auto worker = Worker::onThisThread(false);
+    if (worker) {
+      worker->resetGraylist();
+    }
     if (retry) {
       return augment(inout_copyset,
                      existing_copyset_size,

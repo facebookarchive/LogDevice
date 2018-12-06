@@ -686,6 +686,10 @@ WeightedCopySetSelector::select(copyset_size_t extras,
     if (retry) {
       nodeset_state_->resetGrayList(
           NodeSetState::GrayListResetReason::CANT_PICK_COPYSET);
+      auto worker = Worker::onThisThread(false);
+      if (worker) {
+        worker->resetGraylist();
+      }
       return select(extras,
                     copyset_out,
                     copyset_size_out,
@@ -1046,6 +1050,10 @@ WeightedCopySetSelector::augment(StoreChainLink inout_copyset[],
         inout_copyset_dup.begin(), inout_copyset_dup.end(), inout_copyset);
     nodeset_state_->resetGrayList(
         NodeSetState::GrayListResetReason::CANT_PICK_COPYSET);
+    auto worker = Worker::onThisThread(false);
+    if (worker) {
+      worker->resetGraylist();
+    }
 
     return augment(inout_copyset,
                    existing_copyset_size,

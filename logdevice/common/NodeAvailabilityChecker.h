@@ -79,6 +79,15 @@ class NodeAvailabilityChecker {
   //         false   node is dead in failure detector
   virtual bool checkFailureDetector(node_index_t index) const;
 
+  // check if the node with @param index is graylisted by the outlier based
+  // graylisting
+  // @return true    if the node is graylisted and the node should be considered
+  //                unavailable
+  //         false when the node is not graylisted
+  virtual bool checkIsGraylisted(node_index_t index) const;
+
+  virtual const std::unordered_set<node_index_t>& getGraylistedNodes() const;
+
   // get the Configuration of the cluster. override in tests
   virtual std::shared_ptr<Configuration> getClusterConfig() const;
 

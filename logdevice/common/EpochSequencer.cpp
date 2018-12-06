@@ -423,8 +423,14 @@ bool EpochSequencer::checkNodeSet() const {
   // If we are about to report failure, let's try to re-pick
   // the slow nodes as well
   if (total_unavailable_nodes > max_unavailable_nodes) {
+    // Clear graylists
     nodeset_state->resetGrayList(
         NodeSetState::GrayListResetReason::CANT_PICK_COPYSET);
+    auto worker = Worker::onThisThread(false);
+    if (worker) {
+      worker->resetGraylist();
+    }
+
     // Second try, includes gray listed nodes
     check_node_availability();
   } else if (nodeset_state->shouldClearGrayList()) {

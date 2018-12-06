@@ -134,6 +134,11 @@ CrossDomainCopySetSelector::select(copyset_size_t extras,
   if (nodes_selected < replication_factor_) {
     nodeset_state_->resetGrayList(
         NodeSetState::GrayListResetReason::CANT_PICK_COPYSET);
+    auto worker = Worker::onThisThread(false);
+    if (worker) {
+      worker->resetGraylist();
+    }
+
     if (retry) {
       return select(extras,
                     copyset_out,
@@ -686,6 +691,10 @@ CrossDomainCopySetSelector::augment(StoreChainLink inout_copyset[],
   if (copyset_size_new < replication_factor_) {
     nodeset_state_->resetGrayList(
         NodeSetState::GrayListResetReason::CANT_PICK_COPYSET);
+    auto worker = Worker::onThisThread(false);
+    if (worker) {
+      worker->resetGraylist();
+    }
     if (retry) {
       return augment(inout_copyset,
                      existing_copyset_size,
