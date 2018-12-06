@@ -305,6 +305,7 @@ void LogsConfigApiRequest::onError(Status status, std::string failure_reason) {
         "Connection failed/dropped to (%s) (%s), retrying another node.",
         last_selected_node_.toString().c_str(),
         error_name(status));
+    Worker::getClusterState()->refreshClusterStateAsync();
     if (!blacklistSelectedNode()) {
       done(status, 0, "No more servers left to try!");
     } else {
