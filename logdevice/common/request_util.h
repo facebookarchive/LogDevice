@@ -248,7 +248,7 @@ fulfill_on_worker(Processor* processor,
   folly::Promise<T> p; // will be moved to Request;
   auto future = p.getSemiFuture();
   const int nworkers = processor->getWorkerCount(worker_type);
-  if (nworkers <= 0) {
+  if (FOLLY_UNLIKELY(nworkers <= 0)) {
     // We don't have workers in this pool
     RATELIMIT_ERROR(std::chrono::seconds(1),
                     10,

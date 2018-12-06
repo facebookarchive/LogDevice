@@ -15,6 +15,7 @@
 #include "logdevice/common/configuration/ServerConfig.h"
 #include "logdevice/common/configuration/UpdateableConfigTmpl.h"
 #include "logdevice/common/configuration/ZookeeperConfig.h"
+#include "logdevice/common/configuration/nodes/NodesConfiguration.h"
 
 namespace facebook { namespace logdevice {
 
@@ -57,6 +58,11 @@ using facebook::logdevice::configuration::ZookeeperConfig;
 using UpdateableZookeeperConfig =
     configuration::UpdateableConfigTmpl<ZookeeperConfig,
                                         NoopOverrides<ZookeeperConfig>>;
+
+using configuration::nodes::NodesConfiguration;
+using UpdateableNodesConfiguration = configuration::UpdateableConfigTmpl<
+    const NodesConfiguration,
+    NoopOverrides<const NodesConfiguration>>;
 
 class Configuration {
  public:

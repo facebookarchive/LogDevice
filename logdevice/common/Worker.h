@@ -676,6 +676,8 @@ class Worker : public EventLoop {
   // This should be called whenever the LogsConfig gets updated.
   // Has to be called from the worker thread
   void onLogsConfigUpdated();
+  // placeholder for processing change notified by the NodesConfigurationManager
+  void onNodesConfigurationUpdated();
 
   // Sets currently running state. Verifies that we are on a worker and that the
   // current state is NONE

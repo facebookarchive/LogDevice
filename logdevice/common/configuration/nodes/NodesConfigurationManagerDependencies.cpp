@@ -53,6 +53,12 @@ Request::Execution NewConfigRequest::executeOnNCM(
   return Execution::COMPLETE;
 }
 
+Request::Execution ProcessingFinishedRequest::executeOnNCM(
+    std::shared_ptr<NodesConfigurationManager> FOLLY_NONNULL ncm_ptr) {
+  ncm_ptr->onProcessingFinished(std::move(config_));
+  return Execution::COMPLETE;
+}
+
 Dependencies::Dependencies(Processor* processor,
                            std::unique_ptr<NodesConfigurationStore> store)
     : processor_(processor), store_(std::move(store)) {

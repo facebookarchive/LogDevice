@@ -8,14 +8,18 @@
 
 #include "logdevice/common/configuration/nodes/NodesConfigurationManager.h"
 
+#include <chrono>
+
 #include <folly/Conv.h>
 #include <folly/json.h>
 #include <folly/synchronization/Baton.h>
 #include <gtest/gtest.h>
 
+#include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationCodecFlatBuffers.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationStore.h"
 #include "logdevice/common/configuration/nodes/ZookeeperNodesConfigurationStore.h"
+#include "logdevice/common/request_util.h"
 #include "logdevice/common/test/InMemNodesConfigurationStore.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/common/test/ZookeeperClientInMemory.h"
@@ -25,6 +29,7 @@ using namespace facebook::logdevice::configuration;
 using namespace facebook::logdevice::configuration::nodes;
 using namespace facebook::logdevice::configuration::nodes::ncm;
 using namespace facebook::logdevice::membership;
+using namespace std::chrono_literals;
 
 struct TestDeps : public Dependencies {
   using Dependencies::Dependencies;
@@ -69,9 +74,21 @@ TEST(NodesConfigurationManagerTest, basic) {
   // TODO: better testing after offering a subscription API
   while (m->getConfig() == nullptr ||
          m->getConfig()->getVersion() == kVersion) {
-    /* sleep override */ std::this_thread::sleep_for(
-        std::chrono::milliseconds(200));
+    /* sleep override */ std::this_thread::sleep_for(200ms);
   }
   auto p = m->getConfig();
   EXPECT_EQ(new_version, p->getVersion());
+
+  // verify each worker has the up-to-date config
+  auto verify_version = [new_version](folly::Promise<folly::Unit> p) {
+    auto nc = Worker::onThisThread()
+                  ->getUpdateableConfig()
+                  ->updateableNodesConfiguration();
+    EXPECT_TRUE(nc);
+    EXPECT_EQ(new_version, nc->get()->getVersion());
+    p.setValue();
+  };
+  auto futures =
+      fulfill_on_all_workers<folly::Unit>(processor.get(), verify_version);
+  folly::collectAllSemiFuture(futures).get();
 }

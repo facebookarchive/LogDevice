@@ -78,6 +78,21 @@ class NewConfigRequest : public NCMRequest {
   std::string new_config_;
 };
 
+class ProcessingFinishedRequest : public NCMRequest {
+ public:
+  template <typename... Args>
+  explicit ProcessingFinishedRequest(
+      std::shared_ptr<const NodesConfiguration> config,
+      Args&&... args)
+      : NCMRequest(std::forward<Args>(args)...), config_(std::move(config)) {}
+
+  Request::Execution executeOnNCM(
+      std::shared_ptr<NodesConfigurationManager> FOLLY_NONNULL) override;
+
+ private:
+  std::shared_ptr<const NodesConfiguration> config_;
+};
+
 // External dependencies for the NodesConfigurationManager. Dependencies is
 // owned by the state machine, thus it's safe to access it as long as the state
 // machine is alive.

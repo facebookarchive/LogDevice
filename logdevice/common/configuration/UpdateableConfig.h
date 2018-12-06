@@ -68,6 +68,9 @@ class UpdateableConfig : public configuration::UpdateableConfigBase {
   std::shared_ptr<ZookeeperConfig> getZookeeperConfig() const {
     return updateable_zookeeper_config_->get();
   }
+  std::shared_ptr<const NodesConfiguration> getNodesConfiguration() const {
+    return updateable_nodes_configuration_->get();
+  }
   std::shared_ptr<configuration::LocalLogsConfig> getLocalLogsConfig() const;
   std::shared_ptr<UpdateableServerConfig> updateableServerConfig() const {
     return updateable_server_config_;
@@ -81,12 +84,21 @@ class UpdateableConfig : public configuration::UpdateableConfigBase {
     return updateable_zookeeper_config_;
   }
 
+  std::shared_ptr<UpdateableNodesConfiguration>
+  updateableNodesConfiguration() const {
+    return updateable_nodes_configuration_;
+  }
+
   static std::shared_ptr<UpdateableConfig> createEmpty();
 
  private:
   std::shared_ptr<UpdateableServerConfig> updateable_server_config_;
   std::shared_ptr<UpdateableLogsConfig> updateable_logs_config_;
   std::shared_ptr<UpdateableZookeeperConfig> updateable_zookeeper_config_;
+  // Placeholder, pending separation of NodesConfig out of ServerConfig.
+  // Currently only interacts with NodesConfigurationManager and otherwise
+  // unused.
+  std::shared_ptr<UpdateableNodesConfiguration> updateable_nodes_configuration_;
 
   ConfigSubscriptionHandle server_config_subscription_;
   ConfigSubscriptionHandle logs_config_subscription_;

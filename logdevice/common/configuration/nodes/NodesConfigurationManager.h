@@ -112,24 +112,65 @@ class NodesConfigurationManager
   void initOnNCM();
   void startPollingFromStore();
 
-  // onNewConfig should only be called by NewConfigRequest. overwrite triggers
-  // the blind write option of the commit, useful for emergency tooling.
-  void onNewConfig(std::shared_ptr<const NodesConfiguration>,
-                   bool overwrite = false);
-  void onNewConfig(std::string, bool overwrite = false);
+  // onNewConfig should only be called by NewConfigRequest.
+  // TODO: implement overwrite (the blind write option) for emergency tooling.
+  void onNewConfig(std::shared_ptr<const NodesConfiguration>);
+  void onNewConfig(std::string);
+
+  // A new version of the config goes through the following phases:
+  //   S: staged, to be processed by the NCM
+  //   |
+  //   | maybeProcessStagedConfig()
+  //   v
+  //   P: pending, currently being processed by the NCM (e.g., propagated to
+  //      each Worker, waiting to hear back)
+  //   |
+  //   | onProcessingFinished()
+  //   v
+  //   L: locally processed, all Workers have acknowledged and processed this
+  //      version.
+  //
+  // For simplicity, we maintain the following invariants:
+  // (1) NCM only keeps the highest-versioned staged config, since later configs
+  // include the effects of previous configs, skipping config versions is
+  // acceptable. (2) NCM only allows one pending config at any given time.
+  // Hence, maybeProcessStagedConfig() only starts processing a staged config if
+  // there isn't an existing pending config.
+  //
+  // TODO: storage nodes need to persist the config after processing finished
+  // and before marking the config as locally processed, i.e., there is a
+  // separate phase between P and L.
+  //
+  // Must be called from the NCM context.
+  void maybeProcessStagedConfig();
+  // Must be called from the NCM context.
+  void onProcessingFinished(std::shared_ptr<const NodesConfiguration>);
+
+  // The following helper functions should only be called from the NCM context.
+  bool shouldStageVersion(membership::MembershipVersion::Type);
+  bool hasProcessedVersion(membership::MembershipVersion::Type);
 
   OperationMode mode_;
   std::unique_ptr<ncm::Dependencies> deps_{nullptr};
 
+  // The nodes config that is staged to be processed. Among all the staged nodes
+  // configs, we only keep the highest versioned one. All accesses happen in the
+  // NCM context.
+  std::shared_ptr<const NodesConfiguration> staged_nodes_config_{nullptr};
+  // The nodes config that the NCM is currently processing (propagating to every
+  // worker). All accesses happen in the NCM context.
+  std::shared_ptr<const NodesConfiguration> pending_nodes_config_{nullptr};
+
   // The locally processed and committed version of the NodesConfiguration, the
-  // version of which _strictly_ increases. All writes are done on the state
-  // machine thread, but reads may be from different threads.
+  // version of which _strictly_ increases. All writes are done in the state
+  // machine context, but reads may be from different threads.
   UpdateableSharedPtr<const NodesConfiguration, NCMTag> local_nodes_config_{
       nullptr};
 
   friend class ncm::NCMRequest;
   friend class ncm::Dependencies::InitRequest;
   friend class ncm::NewConfigRequest;
+  friend class ncm::ProcessingFinishedRequest;
 };
 
 }}}} // namespace facebook::logdevice::configuration::nodes

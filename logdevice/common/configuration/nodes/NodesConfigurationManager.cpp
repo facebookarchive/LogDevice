@@ -8,8 +8,10 @@
 
 #include "logdevice/common/configuration/nodes/NodesConfigurationManager.h"
 
+#include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationCodecFlatBuffers.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/request_util.h"
 
 using namespace facebook::logdevice::membership;
 
@@ -135,8 +137,7 @@ void NodesConfigurationManager::startPollingFromStore() {
   deps_->readFromStoreAndActivateTimer();
 }
 
-void NodesConfigurationManager::onNewConfig(std::string new_config,
-                                            bool overwrite) {
+void NodesConfigurationManager::onNewConfig(std::string new_config) {
   deps_->dcheckOnNCM();
 
   auto new_version_opt =
@@ -146,10 +147,8 @@ void NodesConfigurationManager::onNewConfig(std::string new_config,
     err = E::BADMSG;
     return;
   }
-  auto local_nodes_config_ptr = local_nodes_config_.get();
-  if (!overwrite && local_nodes_config_ptr &&
-      local_nodes_config_ptr->getVersion() >= new_version_opt.value()) {
-    // Early return
+  if (hasProcessedVersion(new_version_opt.value())) {
+    // Early return to avoid deserialization
     return;
   }
 
@@ -161,26 +160,108 @@ void NodesConfigurationManager::onNewConfig(std::string new_config,
     return;
   }
 
-  onNewConfig(std::move(parsed_config_ptr), overwrite);
+  onNewConfig(std::move(parsed_config_ptr));
 }
 
 void NodesConfigurationManager::onNewConfig(
-    std::shared_ptr<const NodesConfiguration> new_config,
-    bool overwrite) {
+    std::shared_ptr<const NodesConfiguration> new_config) {
   ld_check(new_config);
   deps_->dcheckOnNCM();
 
-  // Since all write access happen on the NCM work context, no need to
-  // synchronize here.
-  auto local_nodes_config_ptr = local_nodes_config_.get();
-  auto new_version = new_config->getVersion();
-  if (local_nodes_config_ptr == nullptr || overwrite ||
-      local_nodes_config_ptr->getVersion() < new_version) {
-    // TODO: currently, we just conditionally overwrite the in-memory copy;
-    // actual parsing / processing will be gradually added in follow up diffs.
-    local_nodes_config_.update(std::move(new_config));
-    ld_info("Updated config to version %lu...", new_version.val());
+  // Since all accesses to staged and pending configs happen in the NCM context,
+  // no need to synchronize here.
+  auto new_config_version = new_config->getVersion();
+  if (hasProcessedVersion(new_config_version) ||
+      !shouldStageVersion(new_config_version)) {
+    return;
   }
+  // Incoming config has a higher version, use it as the staged config
+  staged_nodes_config_ = std::move(new_config);
+  maybeProcessStagedConfig();
+}
+
+void NodesConfigurationManager::maybeProcessStagedConfig() {
+  deps_->dcheckOnNCM();
+
+  // nothing is staged or we're already processing a version
+  if (!staged_nodes_config_ || pending_nodes_config_) {
+    return;
+  }
+  ld_check(!hasProcessedVersion(staged_nodes_config_->getVersion()));
+
+  // process the staged one now.
+  pending_nodes_config_ = std::move(staged_nodes_config_);
+  auto futures = fulfill_on_all_workers<folly::Unit>(
+      deps_->processor_,
+      [config = pending_nodes_config_](folly::Promise<folly::Unit> p) {
+        Worker* w = Worker::onThisThread();
+        ld_debug("Processing config version %lu on Worker %d of pool %s",
+                 config->getVersion().val(),
+                 w->idx_.val(),
+                 workerTypeStr(w->worker_type_));
+
+        // TODO: perhaps return highest config version?
+        w->getUpdateableConfig()->updateableNodesConfiguration()->update(
+            config);
+        w->onNodesConfigurationUpdated();
+        p.setValue();
+      },
+      RequestType::NODES_CONFIGURATION_MANAGER,
+      /* with_retrying = */ true);
+
+  // If one of the worker is stuck, it will block us from making progress.
+  // This is probably OK since we would need to propagate new configs to every
+  // worker anyway, so there's little we could do in that case.
+  // TODO: handle / monitor worker config processing getting stuck, e.g., by
+  // timeout.
+  folly::collectAllSemiFuture(std::move(futures))
+      .toUnsafeFuture()
+      .thenTry([pending_nodes_config = pending_nodes_config_,
+                ncm_weak_ptr = weak_from_this()](auto&& t) mutable {
+        // The collective future will complete in the last finished worker
+        // thread. If the NCM is still alive, send a request to notify NCM
+        // context that we've processed the config update.
+        auto ncm = ncm_weak_ptr.lock();
+        ld_debug("processing complete for version %lu",
+                 pending_nodes_config->getVersion().val());
+        // Assume a worker never fails to process a new config.
+        ld_assert(t.hasValue());
+        if (ncm) {
+          auto req =
+              ncm->deps()->makeNCMRequest<ncm::ProcessingFinishedRequest>(
+                  std::move(pending_nodes_config));
+          ncm->deps()->processor_->postWithRetrying(req);
+        }
+      });
+}
+
+void NodesConfigurationManager::onProcessingFinished(
+    std::shared_ptr<const NodesConfiguration> new_config) {
+  deps_->dcheckOnNCM();
+  ld_check(new_config);
+
+  auto new_version = new_config->getVersion();
+  ld_check(pending_nodes_config_);
+  ld_check(new_version == pending_nodes_config_->getVersion());
+
+  ld_check(!hasProcessedVersion(new_version));
+  // Only the NCM thread is allowed to update local_nodes_config_
+  local_nodes_config_.update(std::move(pending_nodes_config_));
+  ld_info("Updated local nodes config to version %lu...", new_version.val());
+
+  maybeProcessStagedConfig();
+}
+
+bool NodesConfigurationManager::shouldStageVersion(
+    membership::MembershipVersion::Type version) {
+  return !staged_nodes_config_ || staged_nodes_config_->getVersion() < version;
+}
+
+bool NodesConfigurationManager::hasProcessedVersion(
+    membership::MembershipVersion::Type version) {
+  auto local_nodes_config_ptr = local_nodes_config_.get();
+  return local_nodes_config_ptr != nullptr &&
+      local_nodes_config_ptr->getVersion() >= version;
 }
 
 }}}} // namespace facebook::logdevice::configuration::nodes

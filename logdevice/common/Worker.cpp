@@ -293,6 +293,14 @@ void Worker::onServerConfigUpdated() {
   }
 }
 
+void Worker::onNodesConfigurationUpdated() {
+  if (folly::kIsDebug) {
+    ld_info("Worker %d (type %s) notified of NodesConfiguration update",
+            idx_.val(),
+            workerTypeStr(worker_type_));
+  }
+}
+
 namespace {
 class SettingsUpdatedRequest : public Request {
  public:
@@ -1144,7 +1152,7 @@ const std::unordered_set<node_index_t>& Worker::getGraylistedNodes() const {
   return impl_->graylistingTracker_->getGraylistedNodes();
 }
 
-void Worker::resetGraylist()  {
+void Worker::resetGraylist() {
   return impl_->graylistingTracker_->resetGraylist();
 }
 
