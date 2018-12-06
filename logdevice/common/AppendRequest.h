@@ -90,6 +90,35 @@ class AppendRequest : public AppendRequestBase,
                       timeout,
                       std::move(callback),
                       std::make_unique<SequencerRouter>(logid, this)) {}
+  /**
+   * Constructor used by clients to submit an original AppendRequest to a
+   * Processor.
+   *
+   * @param client  ClientBridge to make write token checks through, may be
+   *                nullptr if bypassWriteTokenCheck() is called
+   * @param logid   log to append the record to
+   * @param payload record payload which becomes owned by append request and
+   *                will automatically be released after calling callback.
+   * @param timeout cancel the request and report E::TIMEDOUT to client
+   *                if a reply is not received for this many milliseconds
+   * @param callback functor to call when a reply is received or on timeout
+   */
+  AppendRequest(ClientBridge* client,
+                logid_t logid,
+                AppendAttributes attrs,
+                std::string payload,
+                std::chrono::milliseconds timeout,
+                append_callback_t callback)
+      : AppendRequest(client,
+                      logid,
+                      std::move(attrs),
+                      Payload(),
+                      timeout,
+                      std::move(callback),
+                      std::make_unique<SequencerRouter>(logid, this)) {
+    string_payload_ = std::move(payload);
+    record_.payload = Payload(string_payload_.data(), string_payload_.size());
+  }
 
   ~AppendRequest() override;
 
@@ -141,17 +170,6 @@ class AppendRequest : public AppendRequestBase,
    *                        to TCP
    */
   void noReply(Status st, const Address& from, bool request_sent);
-
-  /**
-   * Sets an std::string payload to be used by this AppendRequest. This payload
-   * is owned by the request and will automatically be released after calling
-   * callback_.
-   */
-  void setStringPayload(std::string payload) {
-    string_payload_ = std::move(payload);
-
-    record_.payload = Payload(string_payload_.data(), string_payload_.size());
-  }
 
   /**
    * Forces the append to run on a specific Worker.  If not called or called

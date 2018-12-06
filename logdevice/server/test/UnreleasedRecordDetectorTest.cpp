@@ -397,10 +397,9 @@ TEST_F(UnreleasedRecordDetectorTest, TransientSequencerFailure) {
     auto append_req(std::make_unique<AppendRequest>(nullptr,
                                                     LOG_ID,
                                                     AppendAttributes(),
-                                                    Payload{},
+                                                    std::string("one"),
                                                     std::chrono::seconds(30),
                                                     append_callback));
-    append_req->setStringPayload("one");
     append_req->bypassWriteTokenCheck();
     std::unique_ptr<Request> req(std::move(append_req));
     EXPECT_EQ(0, processor_->blockingRequest(req));

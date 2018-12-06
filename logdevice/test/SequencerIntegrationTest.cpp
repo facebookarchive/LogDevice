@@ -486,11 +486,10 @@ TEST_F(SequencerIntegrationTest, SeenEpochReactivation) {
         : AppendRequest(nullptr,
                         logid_t(1),
                         AppendAttributes(),
-                        Payload(),
+                        std::move(payload),
                         timeout,
                         std::move(callback)),
           seen_epoch_(seen_epoch) {
-      setStringPayload(payload);
       bypassWriteTokenCheck();
     }
     epoch_t getSeenEpoch(logid_t /*log*/) const override {

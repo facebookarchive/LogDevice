@@ -284,8 +284,12 @@ int ClientImpl::append(logid_t logid,
                        AppendAttributes attrs,
                        worker_id_t target_worker,
                        std::unique_ptr<std::string> per_request_token) {
-  auto req = prepareRequest(
-      logid, payload, cb, attrs, target_worker, std::move(per_request_token));
+  auto req = prepareRequest(logid,
+                            payload,
+                            cb,
+                            std::move(attrs),
+                            target_worker,
+                            std::move(per_request_token));
   if (!req) {
     return -1;
   }
@@ -298,12 +302,15 @@ int ClientImpl::append(logid_t logid,
                        AppendAttributes attrs,
                        worker_id_t target_worker,
                        std::unique_ptr<std::string> per_request_token) {
-  auto req = prepareRequest(
-      logid, Payload(), cb, attrs, target_worker, std::move(per_request_token));
+  auto req = prepareRequest(logid,
+                            std::move(payload),
+                            cb,
+                            std::move(attrs),
+                            target_worker,
+                            std::move(per_request_token));
   if (!req) {
     return -1;
   }
-  req->setStringPayload(std::move(payload));
   return postAppend(std::move(req));
 }
 
@@ -2004,9 +2011,10 @@ size_t ClientImpl::getMaxPayloadSize() noexcept {
   return settings_->getSettings()->max_payload_size;
 }
 
+template <typename T>
 std::unique_ptr<AppendRequest>
 ClientImpl::prepareRequest(logid_t logid,
-                           const Payload& payload,
+                           T payload,
                            append_callback_t cb,
                            AppendAttributes attrs,
                            worker_id_t target_worker,
@@ -2019,7 +2027,7 @@ ClientImpl::prepareRequest(logid_t logid,
       bridge_.get(),
       logid,
       std::move(attrs),
-      payload,
+      std::move(payload),
       settings_->getSettings()->append_timeout.value_or(timeout_),
       std::move(cb));
 

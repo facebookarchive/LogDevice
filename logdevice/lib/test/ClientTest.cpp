@@ -217,3 +217,25 @@ TEST_F(ClientTest, NoAbortOnFailedCheck) {
   }
   EXPECT_EQ(!folly::kIsDebug, dbg::abortOnFailedCheck.load());
 }
+
+TEST_F(ClientTest, PayloadSizeLimitTest) {
+  std::string config_path =
+      std::string("file:") + TEST_CONFIG_FILE("sample_no_ssl.conf");
+  std::shared_ptr<Client> client = ClientFactory().create(config_path);
+  auto max_payload_size = client->getMaxPayloadSize();
+  std::string payload_string(max_payload_size + 1, '1');
+  Payload payload(payload_string.data(), payload_string.size());
+  append_callback_t callback = [](Status, const DataRecord&) {};
+  logid_t log_id(1);
+  EXPECT_EQ(-1, client->append(log_id, payload, callback));
+  EXPECT_EQ(E::TOOBIG, err);
+  EXPECT_EQ(-1, client->append(log_id, std::move(payload_string), callback));
+  EXPECT_EQ(E::TOOBIG, err);
+  // Testing large payload which always fails
+  payload_string.resize(128 * (1 << 20));
+  payload = Payload(payload_string.data(), payload_string.size());
+  EXPECT_EQ(-1, client->append(log_id, payload, callback));
+  EXPECT_EQ(E::TOOBIG, err);
+  EXPECT_EQ(-1, client->append(log_id, std::move(payload_string), callback));
+  EXPECT_EQ(E::TOOBIG, err);
+}

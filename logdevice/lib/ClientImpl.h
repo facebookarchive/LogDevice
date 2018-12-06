@@ -417,9 +417,10 @@ class ClientImpl : public Client,
 
   bool shouldE2ETrace();
 
+  template <typename T>
   std::unique_ptr<AppendRequest>
   prepareRequest(logid_t logid,
-                 const Payload& payload,
+                 T payload,
                  append_callback_t cb,
                  AppendAttributes attrs,
                  worker_id_t target_worker,
