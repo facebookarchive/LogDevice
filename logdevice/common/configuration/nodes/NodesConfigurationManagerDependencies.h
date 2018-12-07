@@ -86,8 +86,8 @@ class ProcessingFinishedRequest : public NCMRequest {
       Args&&... args)
       : NCMRequest(std::forward<Args>(args)...), config_(std::move(config)) {}
 
-  Request::Execution executeOnNCM(
-      std::shared_ptr<NodesConfigurationManager> FOLLY_NONNULL) override;
+  Request::Execution
+      executeOnNCM(std::shared_ptr<NodesConfigurationManager>) override;
 
  private:
   std::shared_ptr<const NodesConfiguration> config_;

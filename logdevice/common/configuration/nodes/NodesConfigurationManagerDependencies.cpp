@@ -54,7 +54,7 @@ Request::Execution NewConfigRequest::executeOnNCM(
 }
 
 Request::Execution ProcessingFinishedRequest::executeOnNCM(
-    std::shared_ptr<NodesConfigurationManager> FOLLY_NONNULL ncm_ptr) {
+    std::shared_ptr<NodesConfigurationManager> ncm_ptr) {
   ncm_ptr->onProcessingFinished(std::move(config_));
   return Execution::COMPLETE;
 }
