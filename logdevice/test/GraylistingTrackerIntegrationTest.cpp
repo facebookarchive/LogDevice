@@ -18,6 +18,8 @@ using namespace facebook::logdevice;
 using namespace facebook::logdevice::IntegrationTestUtils;
 using namespace std::literals::chrono_literals;
 
+using GraylistedNodes = std::unordered_set<node_index_t>;
+
 namespace {
 struct Params {
   bool disable_outlier_based_graylisting{false};
@@ -60,7 +62,8 @@ class AppendThread {
       append_threads_.emplace_back([=] {
         while (!stop_) {
           for (auto i = from_logid; i <= to_logid; i++) {
-            client->appendSync(logid_t{i}, ".");
+            client->append(logid_t{i}, ".", [](auto, const auto&) {});
+            std::this_thread::sleep_for(200ms);
           }
         }
       });
@@ -104,9 +107,10 @@ class GraylistingTrackerIntegrationTest : public IntegrationTestBase {
             .setParam("--gray-list-threshold",
                       std::to_string(params.graylisting_threshold))
             .setParam("--enable-sticky-copysets", "false")
+            .setParam("--num-workers", "2")
             /* put each node in a separate rack */
             .setNumRacks(5)
-            .setNumLogs(NUM_LOGS)
+            .setNumLogs(10)
             .create(5);
   }
 
@@ -136,9 +140,9 @@ class GraylistingTrackerIntegrationTest : public IntegrationTestBase {
     return ret;
   }
 
-  std::unordered_set<node_index_t> getGraylistedNodes(node_index_t from) {
+  GraylistedNodes getGraylistedNodes(node_index_t from) {
     auto graylist = getGraylistedNodesPerWorker(from);
-    std::unordered_set<node_index_t> ret;
+    GraylistedNodes ret;
     for (const auto& g : graylist) {
       ret.insert(g.second.begin(), g.second.end());
     }
@@ -146,27 +150,15 @@ class GraylistingTrackerIntegrationTest : public IntegrationTestBase {
   }
 
   bool
-  waitUntillGraylistedNodesEquals(node_index_t on_node,
-                                  std::unordered_set<node_index_t> graylist) {
-    auto set_to_string = [](std::unordered_set<node_index_t> set) {
-      std::string out = "{ ";
-      for (const auto& elem : set) {
-        out += std::to_string(elem) + " ";
-      }
-      out += "}";
-      return out;
-    };
-    auto reason = folly::sformat(
-        "Graylisted nodes on N{} are {}", on_node, set_to_string(graylist));
-    int status =
-        wait_until(reason.c_str(),
-                   [&]() { return getGraylistedNodes(on_node) == graylist; },
-                   std::chrono::steady_clock::now() + 30s);
-    return status == 0;
+  waitUntillGraylistOnNode(node_index_t on_node,
+                           std::string message,
+                           folly::Function<bool(GraylistedNodes)> predicate) {
+    return wait_until(message.c_str(),
+                      [&]() { return predicate(getGraylistedNodes(on_node)); },
+                      std::chrono::steady_clock::now() + 30s) == 0;
   }
 
   std::unique_ptr<Cluster> cluster;
-  constexpr static int NUM_LOGS = 10;
 };
 } // namespace
 
@@ -180,7 +172,10 @@ TEST_F(GraylistingTrackerIntegrationTest, HighLatencyGraylisted) {
       "all", "all", "all", "latency", false, folly::none, (500ms).count());
   appender.start(client.get(), 1, 10);
 
-  EXPECT_TRUE(waitUntillGraylistedNodesEquals(0, {3}));
+  EXPECT_TRUE(waitUntillGraylistOnNode(
+      0, "N3 is graylisted on N0", [&](GraylistedNodes nodes) {
+        return nodes.count(3) > 0;
+      }));
 }
 
 TEST_F(GraylistingTrackerIntegrationTest, GraylistingExpires) {
@@ -193,13 +188,19 @@ TEST_F(GraylistingTrackerIntegrationTest, GraylistingExpires) {
       "all", "all", "all", "latency", false, folly::none, (500ms).count());
   appender.start(client.get(), 1, 10);
 
-  EXPECT_TRUE(waitUntillGraylistedNodesEquals(0, {3}));
+  EXPECT_TRUE(waitUntillGraylistOnNode(
+      0, "N3 is graylisted on N0", [&](GraylistedNodes nodes) {
+        return nodes.count(3) > 0;
+      }));
 
   // Clear the shard failure
   cluster->getNode(3).injectShardFault(
       "all", "none", "none", "none", false, folly::none, folly::none);
 
-  EXPECT_TRUE(waitUntillGraylistedNodesEquals(0, {}));
+  EXPECT_TRUE(waitUntillGraylistOnNode(
+      0, "N3 is not graylisted anymore on N0", [&](GraylistedNodes nodes) {
+        return nodes.count(3) == 0;
+      }));
 }
 
 TEST_F(GraylistingTrackerIntegrationTest, DisablingGraylistWorks) {
@@ -212,12 +213,18 @@ TEST_F(GraylistingTrackerIntegrationTest, DisablingGraylistWorks) {
       "all", "all", "all", "latency", false, folly::none, (500ms).count());
   appender.start(client.get(), 1, 10);
 
-  EXPECT_TRUE(waitUntillGraylistedNodesEquals(0, {3}));
+  EXPECT_TRUE(waitUntillGraylistOnNode(
+      0, "N3 is graylisted on N0", [&](GraylistedNodes nodes) {
+        return nodes.count(3) > 0;
+      }));
 
   cluster->getNode(0).updateSetting(
       "disable-outlier-based-graylisting", "true");
 
-  EXPECT_TRUE(waitUntillGraylistedNodesEquals(0, {}));
+  EXPECT_TRUE(waitUntillGraylistOnNode(
+      0, "N0 has nothing in the graylist", [&](GraylistedNodes nodes) {
+        return nodes.size() == 0;
+      }));
 }
 
 TEST_F(GraylistingTrackerIntegrationTest, EnablingGraylistWorks) {
@@ -232,32 +239,39 @@ TEST_F(GraylistingTrackerIntegrationTest, EnablingGraylistWorks) {
       "all", "all", "all", "latency", false, folly::none, (500ms).count());
   appender.start(client.get(), 1, 10);
 
-  std::this_thread::sleep_for(30s);
+  EXPECT_FALSE(waitUntillGraylistOnNode(
+      0, "Nothing will get graylisted on N0", [&](GraylistedNodes nodes) {
+        return nodes.size() > 0;
+      }));
 
   EXPECT_EQ(0, getGraylistedNodes(0).size());
 
   cluster->getNode(0).updateSetting(
       "disable-outlier-based-graylisting", "false");
 
-  EXPECT_TRUE(waitUntillGraylistedNodesEquals(0, {3}));
+  EXPECT_TRUE(waitUntillGraylistOnNode(
+      0, "N3 is graylisted on N0", [&](GraylistedNodes nodes) {
+        return nodes.count(3) > 0;
+      }));
 }
 
 TEST_F(GraylistingTrackerIntegrationTest, NumGraylisted) {
   initializeCluster(Params{}.set_graylisting_duration(1h));
   auto client = cluster->createClient();
 
-  AppendThread appender;
   // Inject failure in some random node
   cluster->getNode(3).injectShardFault(
-      "all", "all", "all", "latency", false, folly::none, (500ms).count());
+      "all", "all", "all", "latency", false, folly::none, (100ms).count());
+  cluster->getNode(2).injectShardFault(
+      "all", "all", "all", "latency", false, folly::none, (100ms).count());
+
+  AppendThread appender;
   appender.start(client.get(), 1, 10);
 
-  // After 5 second, inject a failure in another node
-  std::this_thread::sleep_for(5s);
-  cluster->getNode(2).injectShardFault(
-      "all", "all", "all", "latency", false, folly::none, (500ms).count());
-
-  EXPECT_TRUE(waitUntillGraylistedNodesEquals(0, {2, 3}));
+  EXPECT_TRUE(waitUntillGraylistOnNode(
+      0, "N3 & N2 are graylisted on N0", [&](GraylistedNodes nodes) {
+        return nodes.count(3) > 0 && nodes.count(2) > 0;
+      }));
 
   // Only 1 node should get graylisted
   cluster->getNode(0).updateSetting("gray-list-threshold", "0.2");
@@ -284,11 +298,17 @@ TEST_F(GraylistingTrackerIntegrationTest, DisablingGraylistByNumNodes) {
       "all", "all", "all", "latency", false, folly::none, (500ms).count());
   appender.start(client.get(), 1, 10);
 
-  EXPECT_TRUE(waitUntillGraylistedNodesEquals(0, {3}));
+  EXPECT_TRUE(waitUntillGraylistOnNode(
+      0, "N3 is graylisted on N0", [&](GraylistedNodes nodes) {
+        return nodes.count(3) > 0;
+      }));
 
   cluster->getNode(0).updateSetting("gray-list-threshold", "0");
 
-  EXPECT_TRUE(waitUntillGraylistedNodesEquals(0, {}));
+  EXPECT_TRUE(waitUntillGraylistOnNode(
+      0, "N0 has nothing in the graylist", [&](GraylistedNodes nodes) {
+        return nodes.size() == 0;
+      }));
 }
 
 TEST_F(GraylistingTrackerIntegrationTest, NodeRecoversInGracePeriod) {
@@ -307,7 +327,8 @@ TEST_F(GraylistingTrackerIntegrationTest, NodeRecoversInGracePeriod) {
   cluster->getNode(3).injectShardFault(
       "all", "none", "none", "none", false, folly::none, folly::none);
 
-  std::this_thread::sleep_for(30s);
-
-  EXPECT_TRUE(waitUntillGraylistedNodesEquals(0, {}));
+  EXPECT_FALSE(waitUntillGraylistOnNode(
+      0, "N0 has nothing in the graylist", [&](GraylistedNodes nodes) {
+        return nodes.size() > 0;
+      }));
 }
