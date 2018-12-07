@@ -36,4 +36,6 @@ install(TARGETS logdevice_python
   COMPONENT runtime
   DESTINATION "${PYTHON_MODULE_INSTALL_PREFIX}/logdevice/")
 install(CODE
-  "file(WRITE \"$ENV{DESTDIR}${PYTHON_MODULE_INSTALL_PREFIX}/logdevice/__init__.py\" \"\")")
+  "file(WRITE
+    \"\$ENV\{DESTDIR\}${PYTHON_MODULE_INSTALL_PREFIX}/logdevice/__init__.py\"
+    \"\")")
