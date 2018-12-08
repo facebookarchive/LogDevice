@@ -385,6 +385,7 @@ class LogAttributes {
    *  - "rack: 3" means "replicate each record to at least 3 nodes in
    *    at least 3 different racks".
    *  - "rack: 3" with replicationFactor_ = 3 means the same thing.
+   * Order of elements doesn't matter.
    */
   Attribute<ScopeReplicationFactors> replicateAcross_;
   /**

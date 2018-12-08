@@ -400,6 +400,15 @@ static bool parseReplicateAcross(
     replication_factors.emplace_back(scope, r);
   }
 
+  // replication_factors is an std::vector formed from a json object.
+  // Order of iteration of a json object is undefined.
+  // Let's sort the vector to make parsing deterministic.
+  // Sort from bigger to smaller scopes, like
+  // ReplicationProperty::getDistinctReplicationFactors().
+  std::sort(replication_factors.begin(),
+            replication_factors.end(),
+            std::greater<std::pair<NodeLocationScope, int>>());
+
   replication_out = Attribute<LogAttributes::ScopeReplicationFactors>(
       std::move(replication_factors));
   return true;

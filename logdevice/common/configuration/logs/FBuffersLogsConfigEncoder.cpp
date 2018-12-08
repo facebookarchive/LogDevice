@@ -232,13 +232,9 @@ FBuffersLogsConfigCodec::fbuffers_serialize(
       builder.CreateVectorOfSortedTables(&attrs),
       perms.size() ? builder.CreateVectorOfSortedTables(&perms) : 0,
       extras.size() ? builder.CreateVectorOfSortedTables(&extras) : 0,
-      replicateAcross.size()
-          ? builder.CreateVectorOfSortedTables(&replicateAcross)
-          : 0,
-      acls.size() ? builder.CreateVector(&acls.front(), acls.size()) : 0,
-      aclsShadow.size()
-          ? builder.CreateVector(&aclsShadow.front(), aclsShadow.size())
-          : 0,
+      replicateAcross.size() ? builder.CreateVector(replicateAcross) : 0,
+      acls.size() ? builder.CreateVector(acls) : 0,
+      aclsShadow.size() ? builder.CreateVector(aclsShadow) : 0,
       attributes.shadow() ? shadow_item : 0);
 }
 
