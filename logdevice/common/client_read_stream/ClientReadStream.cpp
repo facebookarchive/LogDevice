@@ -653,8 +653,8 @@ void ClientReadStream::onStarted(ShardID from, const STARTED_Message& msg) {
     // read without this node. Worst case, this stream will stall until we
     // catch up reading the event log.
     RATELIMIT_WARNING(
-        std::chrono::seconds(1),
-        10,
+        std::chrono::seconds(10),
+        2,
         "Node %s sent a STARTED message for log %lu with "
         "E::REBUILDING but event log says the node is %s. "
         "Ignoring this reply. We will keep retrying until what the node says "
@@ -680,8 +680,8 @@ void ClientReadStream::onStarted(ShardID from, const STARTED_Message& msg) {
   if (status == E::OK && auth_status != AuthoritativeStatus::UNAVAILABLE &&
       auth_status != AuthoritativeStatus::FULLY_AUTHORITATIVE) {
     RATELIMIT_WARNING(
-        std::chrono::seconds(1),
-        10,
+        std::chrono::seconds(10),
+        2,
         "Shard %s sent a STARTED message for log %lu with status == "
         "E::OK but event log says the shard is %s. "
         "This stream is now considering this shard FULLY_AUTHORITATIVE.",
@@ -1981,7 +1981,6 @@ void ClientReadStream::setShardAuthoritativeStatus(SenderState& state,
   healthy_node_set_->setShardAuthoritativeStatus(shard, status);
   state.setAuthoritativeStatus(status);
 
-  setSenderGapState(state, GapState::NONE);
   connection_health_tracker_->recalculate();
 
   if (scd_) {
@@ -2704,14 +2703,6 @@ void ClientReadStream::updateCurrentReadSet() {
         shard_id, authoritative_state);
   }
 
-  // If SCD is active, updating the storage shards set may cause us to rewind.
-  // If that's the case, return early as the rewind will cause the new shards to
-  // be sent a START message.
-  if (scd_->updateStorageShardsSet(
-          read_set, config->serverConfig(), replication)) {
-    return;
-  }
-
   // If *no* START messages have been sent and some sockets to shards already
   // exist, pre-check protocol versions to avoid unnecessary rewinding when
   // servers are on an old version.
@@ -2725,18 +2716,33 @@ void ClientReadStream::updateCurrentReadSet() {
     }
   }
 
-  // Send START to the new shards.
+  // If SCD is active, updating the storage shards set may cause us to rewind.
+  // If that's the case, return early as the rewind will cause the new shards to
+  // be sent a START message.
+  scd_->updateStorageShardsSet(read_set, config->serverConfig(), replication);
+
+  // Apply authoritative status from event log. In particular, for a newly
+  // created ClientReadStream this does the initial propagation of
+  // authoritative status from Worker's authoritative status map to
+  // storage_set_states_.
   for (SenderState& state : added_shards) {
-    sendStart(state.getShardID(), state);
-    // Apply authoritative status from event log. In particular, for a newly
-    // created ClientReadStream this does the initial propagation of
-    // authoritative status from Worker's authoritative status map to
-    // storage_set_states_.
     // Use try_make_progress=false to make sure *this is not destroyed here.
     // The caller of updateCurrentReadSet() will try to make progress right
     // after.
-    applyShardStatus(
-        "updateCurrentReadSet", &state, /* try_make_progress */ false);
+    applyShardStatus("updateCurrentReadSet",
+                     &state,
+                     /* try_make_progress */ false);
+  }
+
+  // If either updateStorageShardsSet() or applyShardStatus() scheduled a
+  // rewind, no need to send START messages here as they'll be sent by rewind.
+  if (immediate_rewind_timer_->isActive()) {
+    return;
+  }
+
+  // Send START to the new shards.
+  for (SenderState& state : added_shards) {
+    sendStart(state.getShardID(), state);
   }
   scd_->onWindowSlid(server_window_.high, filter_version_);
 }
@@ -3884,9 +3890,32 @@ void ClientReadStream::rewind(const std::string& reason) {
     scd_->applyScheduledChanges();
   }
 
-  // applyScheduledChanges() may schedule a rewind again if it decides to switch
-  // over to all send all. Because we are about to rewind here, cancel that
-  // intent.
+  for (auto& it : storage_set_states_) {
+    it.second.blacklist_state = SenderState::BlacklistState::NONE;
+
+    // Re-apply shard statuses from event log.
+
+    // First reset connection state because applyShardStatus() skips shards
+    // in READING state.
+    it.second.setConnectionState(
+        ClientReadStreamSenderState::ConnectionState::CONNECTING);
+    // Use try_make_progress=false because there's no progress to be made
+    // since we're resetting all sender states.
+    applyShardStatus("rewind", &it.second, /* try_make_progress */ false);
+  }
+  if (scd_ && scd_->isActive()) {
+    for (const auto& shard_id : scd_->getShardsSlow()) {
+      storage_set_states_.at(shard_id).blacklist_state =
+          SenderState::BlacklistState::SLOW;
+    }
+    for (const auto& shard_id : scd_->getShardsDown()) {
+      storage_set_states_.at(shard_id).blacklist_state =
+          SenderState::BlacklistState::DOWN;
+    }
+  }
+
+  // applyScheduledChanges() or applyShardStatus() may schedule a rewind again.
+  // Because we are about to rewind here, cancel that intent.
   immediate_rewind_timer_->cancel();
 
   if (scd_ && scd_->isActive()) {
@@ -3914,20 +3943,6 @@ void ClientReadStream::rewind(const std::string& reason) {
 
   // Tell storage nodes to rewind and update their blacklist_state.
 
-  for (auto& it : storage_set_states_) {
-    it.second.blacklist_state = SenderState::BlacklistState::NONE;
-  }
-  if (scd_ && scd_->isActive()) {
-    for (const auto& shard_id : scd_->getShardsSlow()) {
-      storage_set_states_.at(shard_id).blacklist_state =
-          SenderState::BlacklistState::SLOW;
-    }
-    for (const auto& shard_id : scd_->getShardsDown()) {
-      storage_set_states_.at(shard_id).blacklist_state =
-          SenderState::BlacklistState::DOWN;
-    }
-  }
-
   // It is possible sendStart() will schedule another rewind so we clear this
   // flag before calling it in order to not override a possible intent to rewind
   // again.
@@ -3936,10 +3951,6 @@ void ClientReadStream::rewind(const std::string& reason) {
 
   for (auto& it : storage_set_states_) {
     sendStart(it.second.getShardID(), it.second);
-    // Re-apply shard statuses from event log.
-    // Use try_make_progress=false because there's no progress to be made
-    // since we've just reset all sender states.
-    applyShardStatus("rewind", &it.second, /* try_make_progress */ false);
   }
   scd_->onWindowSlid(server_window_.high, filter_version_);
 }

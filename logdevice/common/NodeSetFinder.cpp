@@ -331,8 +331,9 @@ void NodeSetFinder::onMetaDataLogReadTimeout() {
   ld_check(state_ == State::READ_METADATALOG);
   RATELIMIT_ERROR(std::chrono::seconds(10),
                   10,
-                  "Timed out (%ld ms) reading metadata log.",
-                  getStageTimeout(source_, state_, timeout_).count());
+                  "Timed out (%ld ms) reading metadata log of log %lu.",
+                  getStageTimeout(source_, state_, timeout_).count(),
+                  log_id_.val());
   finalize(E::TIMEDOUT);
 }
 
