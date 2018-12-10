@@ -217,7 +217,7 @@ static PrincipalIdentity checkAuthenticationData(const HelloHeader& hellohdr,
       return principal;
     }
 
-    int rv = w->sender().setPrincipal(from, std::move(principal));
+    int rv = w->sender().setPrincipal(from, principal);
     if (rv != 0) {
       ld_critical("INTERNAL ERROR: Could not set principal for HELLO Message "
                   "received from %s",
