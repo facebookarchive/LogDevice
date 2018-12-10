@@ -724,6 +724,9 @@ class Sequencer {
   std::pair<std::shared_ptr<EpochSequencer>, std::shared_ptr<EpochSequencer>>
   getEpochSequencers() const;
 
+  // this is called from admin command to deactivate the sequencer
+  void deactivateSequencer();
+
  protected:
   // create an EpochSequencer object for a given _epoch_ with _metadata_ for
   // replicaiton properties
@@ -879,7 +882,9 @@ class Sequencer {
     // The sequencer node is shutting down
     SHUTDOWN = 2,
     // The sequencer is isolated.
-    ISOLATED = 3
+    ISOLATED = 3,
+    // Deactivated by the admin command
+    DEACTIVATED_BY_ADMIN = 4
   };
   // Evict and destroy all managed epoch sequencers and put the sequencer into
   // UNAVAILABLE state

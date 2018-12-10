@@ -256,6 +256,9 @@ STAT_DEFINE(sequencer_unavailable_log_removed_from_config, SUM)
 // how many times a sequencer became unavailable because the node was isolated
 STAT_DEFINE(sequencer_unavailable_node_isolated, SUM)
 
+// how many times a sequencer became unavailable because admin command deactivated it
+STAT_DEFINE(sequencer_unavailable_admin_deactivated, SUM)
+
 // how many times a sequencer became unavailable because the node stopped being
 // a sequencer node
 STAT_DEFINE(sequencer_unavailable_not_sequencer_node, SUM)

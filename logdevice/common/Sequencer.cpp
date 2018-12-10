@@ -1363,6 +1363,10 @@ Sequencer::getEpochSequencers() const {
   return std::make_pair(seqs->current, seqs->draining);
 }
 
+void Sequencer::deactivateSequencer() {
+  setUnavailable(UnavailabilityReason::DEACTIVATED_BY_ADMIN);
+}
+
 bool Sequencer::checkNoRedirectUntil() const {
   return std::chrono::steady_clock::now().time_since_epoch() <
       no_redirect_until_.load();
@@ -1749,7 +1753,10 @@ void Sequencer::noteConfigurationChanged(std::shared_ptr<Configuration> cfg,
 void Sequencer::setUnavailable(UnavailabilityReason r) {
   // only drain if the node is not a sequencer node anymore; for other cases,
   // abort all appenders
-  bool drain = (r == UnavailabilityReason::NOT_A_SEQUENCER_NODE ? true : false);
+  bool drain = (r == UnavailabilityReason::NOT_A_SEQUENCER_NODE ||
+                        r == UnavailabilityReason::DEACTIVATED_BY_ADMIN
+                    ? true
+                    : false);
   State old_state;
   std::shared_ptr<EpochSequencers> seqs_before;
   {
@@ -1799,6 +1806,15 @@ void Sequencer::setUnavailable(UnavailabilityReason r) {
                         "because this node was isolated for %lu seconds.",
                         settings_->isolated_sequencer_ttl.count());
       STAT_INCR(stats_, sequencer_unavailable_node_isolated);
+      break;
+    case UnavailabilityReason::DEACTIVATED_BY_ADMIN:
+      RATELIMIT_WARNING(
+          std::chrono::seconds(1),
+          10,
+          "Transitioning sequencer into UNAVAILABLE state "
+          "because admin command invoked deactivation of log %lu.",
+          log_id_.val_);
+      STAT_INCR(stats_, sequencer_unavailable_admin_deactivated);
       break;
     case UnavailabilityReason::SHUTDOWN:
       break;

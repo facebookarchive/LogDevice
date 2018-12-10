@@ -178,6 +178,8 @@ AdminCommandFactory::AdminCommandFactory() {
       "traffic_shaping", Restriction::LOCALHOST_ONLY);
   selector_.add<commands::Up>("up", Restriction::LOCALHOST_ONLY);
   selector_.add<commands::Down>("down", Restriction::LOCALHOST_ONLY);
+  selector_.add<commands::DeactivateSequencer>(
+      "sequencer_stop", Restriction::LOCALHOST_ONLY);
   selector_.add<commands::CloseSocket>(
       "close_socket", Restriction::LOCALHOST_ONLY);
   selector_.add<commands::GossipBlacklist, bool>(
