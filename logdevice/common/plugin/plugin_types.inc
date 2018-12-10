@@ -51,5 +51,7 @@ PLUGIN_TYPE(HOT_TEXT_OPTIMIZER, 12, "HotTextOptimizer", false)
 PLUGIN_TYPE(ADMIN_SERVER_FACTORY, 13, "AdminServer factory", false)
 // See ZookeeperClientPlugin.h
 PLUGIN_TYPE(ZOOKEEPER_CLIENT_FACTORY, 14, "ZookeeperClient factory", false)
+// See Logger.h
+PLUGIN_TYPE(LOGGER, 15, "Logger plugin", false)
 
 #undef PLUGIN_TYPE

@@ -181,6 +181,22 @@ void ServerSettings::defineSettings(SettingEasyInit& init) {
      SERVER,
      SettingsCategory::Core)
 
+    ("external-loglevel", &external_loglevel, "error",
+     [](const std::string& val) {
+       dbg::Level level = dbg::parseLoglevel(val.c_str());
+       if (level == dbg::Level::NONE) {
+         char buf[1024];
+         snprintf(buf, sizeof(buf), "Invalid value for --external-loglevel: %s. "
+                  "Expected one of: critical, error, warning, notify, "
+                  "info, debug, spew", val.c_str());
+         throw boost::program_options::error(buf);
+       }
+       return level;
+     },
+     "One of the following: critical, error, warning, info, debug",
+     SERVER,
+     SettingsCategory::Core)
+
     ("loglevel-overrides", &loglevel_overrides, "",
      [](const std::string& val) {
       dbg::LogLevelMap loglevels;

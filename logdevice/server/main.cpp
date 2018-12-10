@@ -30,6 +30,7 @@
 #include "logdevice/common/debug.h"
 #include "logdevice/common/plugin/CommonBuiltinPlugins.h"
 #include "logdevice/common/plugin/HotTextOptimizerPlugin.h"
+#include "logdevice/common/plugin/Logger.h"
 #include "logdevice/common/plugin/PluginRegistry.h"
 #include "logdevice/common/plugin/StaticPluginLoader.h"
 #include "logdevice/common/settings/GossipSettings.h"
@@ -256,6 +257,7 @@ static void
 on_server_settings_changed(UpdateableSettings<ServerSettings> server_settings) {
   dbg::assertOnData = server_settings->assert_on_data;
   dbg::currentLevel = server_settings->loglevel;
+  dbg::externalLoggerLogLevel = server_settings->external_loglevel;
   ZookeeperClient::setDebugLevel(server_settings->loglevel);
 
   dbg::clearLogLevelOverrides();
@@ -286,6 +288,14 @@ int main(int argc, const char** argv) {
       PluginType::HOT_TEXT_OPTIMIZER);
   if (ht_plugin) {
     (*ht_plugin)();
+  }
+
+  {
+    std::shared_ptr<Logger> logger_plugin =
+        plugin_registry->getSinglePlugin<Logger>(PluginType::LOGGER);
+    if (logger_plugin) {
+      dbg::external_logger_plugin.swap(logger_plugin);
+    }
   }
 
   UpdateableSettings<ServerSettings> server_settings;

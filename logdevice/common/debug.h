@@ -20,7 +20,11 @@
 #include "logdevice/common/toString.h"
 #include "logdevice/include/debug.h"
 
-namespace facebook { namespace logdevice { namespace dbg {
+namespace facebook { namespace logdevice {
+
+class Logger;
+
+namespace dbg {
 
 /**
  * @file Internal LogDevice debug logging infrastructure.
@@ -205,6 +209,8 @@ Module* getModuleFromFile(const char* file);
 extern std::atomic<bool> abortOnFailedCheck;
 extern std::atomic<bool> abortOnFailedCatch;
 extern std::atomic<bool> assertOnData;
+extern std::atomic<Level> externalLoggerLogLevel;
+extern std::shared_ptr<facebook::logdevice::Logger> external_logger_plugin;
 
 //////////  Catch: Conditions that abort in debug, but return true / false in
 //////////  non-debug.
@@ -411,4 +417,5 @@ class DD_Assert_Trigger {
   }
 };
 
-}}} // namespace facebook::logdevice::dbg
+} // namespace dbg
+}} // namespace facebook::logdevice

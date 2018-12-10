@@ -28,6 +28,7 @@
 
 #include "logdevice/common/MPSCQueue.h"
 #include "logdevice/common/ThreadID.h"
+#include "logdevice/common/plugin/Logger.h"
 
 namespace facebook { namespace logdevice { namespace dbg {
 
@@ -46,6 +47,8 @@ auto const logLevelLetters =
 // see include/debug.h
 std::atomic<Level> currentLevel(Level::INFO);
 
+std::atomic<Level> externalLoggerLogLevel(Level::NONE);
+
 std::atomic<size_t> maxBufferedLogMsg(10000);
 
 // If this is true, a call to dd_assert() may trigger a call to assert(false)
@@ -56,6 +59,9 @@ std::atomic<bool> assertOnData(false);
 std::atomic<bool> abortOnFailedCheck{true};
 // If this is true, then when an ld_catch*() fails, we'll abort().
 std::atomic<bool> abortOnFailedCatch{folly::kIsDebug};
+
+// If it's available than we have linked logger plugin.
+std::shared_ptr<Logger> external_logger_plugin{nullptr};
 
 // see common/debug.h
 bump_error_counter_fn_t bumpErrorCounterFn = nullptr;
@@ -444,7 +450,6 @@ void log(const char* /*cluster*/,
                     file,
                     line,
                     function);
-
   ld_check(hdrlen > 0);
 
   if (hdrlen > sizeof(record)) {
@@ -468,8 +473,13 @@ void log(const char* /*cluster*/,
 
   va_end(ap);
 
-  // Write the message to logFD.
+  // Write to an external logger.
+  if (external_logger_plugin && level <= externalLoggerLogLevel) {
+    folly::StringPiece log_line(record, reclen);
+    external_logger_plugin->log(static_cast<int>(level), log_line);
+  }
 
+  // Write the message to logFD.
   auto before_write_time = std::chrono::steady_clock::now();
 
   const char* ptr = record;
