@@ -138,9 +138,9 @@ struct STORE_Header {
   // soft seals
   static const STORE_flags_t DRAINING = 1 << 10; //=1024
 
-  // Copyset directory entry should be written for this record.
-  // Record contains the starting LSN of the block or LSN_INVALID if this
-  // record is out-of-block.
+  // The record is part of a sticky copyset block.
+  // Record contains the starting LSN of the block, or LSN_INVALID if this
+  // record is out-of-block (equivalent to not having STICKY_COPYSET flag).
   static const STORE_flags_t STICKY_COPYSET = 1 << 11; //=2048
 
   // The message has information about how many bytes have been written to the
@@ -253,6 +253,8 @@ class STORE_Message : public Message {
    * @param payload           payload of the STORE message
    * @param appender_context  if true, double-check that the Appender still
    *                          exists before serializing over the wire
+   * @param write_sticky_copysets  used in tests to serialize() to run on a
+   *                               non-worker thread. TODO (#37280475): remove.
    */
   STORE_Message(const STORE_Header& header,
                 const StoreChainLink copyset[],
@@ -262,7 +264,8 @@ class STORE_Message : public Message {
                 std::map<KeyType, std::string> optional_keys,
                 std::shared_ptr<PayloadHolder> payload,
                 bool appender_context = false,
-                std::string e2e_tracing_context = "");
+                std::string e2e_tracing_context = "",
+                folly::Optional<bool> write_sticky_copysets = folly::none);
 
   // Movable but not copyable
   STORE_Message(STORE_Message&&) = default;
@@ -305,8 +308,7 @@ class STORE_Message : public Message {
     std::abort();
   }
   static Message::deserializer_t deserialize;
-  // Overload of deserialize that does not need to run in an EventLoop
-  // context
+  // Overload of deserialize that does not need to run on a Worker thread.
   static MessageReadResult deserialize(ProtocolReader&,
                                        size_t max_payload_inline);
 
@@ -426,11 +428,14 @@ class STORE_Message : public Message {
   // identities of all nodes on which this record is stored
   folly::small_vector<StoreChainLink, 6> copyset_;
 
-  // the starting LSN of the block to which the record belongs (issued by the
+  // The starting LSN of the block to which the record belongs (issued by the
   // sticky copyset selector), or LSN_INVALID if this is a single record.
-  // If the value is unassigned, copyset directory will not be written for this
-  // store
-  folly::Optional<lsn_t> block_starting_lsn_;
+  // This is essentially unused until block CSI is implemented.
+  lsn_t block_starting_lsn_ = LSN_INVALID;
+
+  // A temporary compatibility thing, see comment in serialize().
+  // TODO (#37280475): Remove.
+  folly::Optional<bool> write_sticky_copysets_;
 
   // The (optional) keys provided by the client in the append() operation.
   // See @Record.h for details

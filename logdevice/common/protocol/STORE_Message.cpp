@@ -46,13 +46,15 @@ STORE_Message::STORE_Message(const STORE_Header& header,
                              std::map<KeyType, std::string> optional_keys,
                              std::shared_ptr<PayloadHolder> payload,
                              bool appender_context,
-                             std::string e2e_tracing_context)
+                             std::string e2e_tracing_context,
+                             folly::Optional<bool> write_sticky_copysets)
     : Message(MessageType::STORE, calcTrafficClass(header)),
       header_(header),
       extra_(extra),
       appender_context_(appender_context),
       payload_(std::move(payload)),
       copyset_(header.copyset_size),
+      write_sticky_copysets_(write_sticky_copysets),
       optional_keys_(std::move(optional_keys)),
       my_pos_in_copyset_(-1),
       e2e_tracing_context_(std::move(e2e_tracing_context)) {
@@ -111,7 +113,6 @@ bool STORE_Message::cancelled() const {
   }
   return false;
 }
-
 void STORE_Message::serialize(ProtocolWriter& writer) const {
   // Assert that the expectation documented in the header file about
   // `first_amendable_offset' is satisfied.  This is not in the constructor
@@ -126,7 +127,44 @@ void STORE_Message::serialize(ProtocolWriter& writer) const {
   ld_check(!payload_ || payload_->valid());
 
   const auto proto = writer.proto();
-  writer.write(header_);
+
+  bool write_block_starting_lsn;
+  if (proto >=
+      Compatibility::ProtocolVersion::NO_BLOCK_STARTING_LSN_IN_STORE_MESSAGES) {
+    write_block_starting_lsn = header_.flags & STORE_Header::STICKY_COPYSET;
+    writer.write(header_);
+  } else {
+    // TODO (#37280475): This is a temporary measure for backwards
+    //                   compatibility. If you're reading this in Summer 2019
+    //                   or later, it's probably time to remove it.
+    // The meaning of STICKY_COPYSET flag was changed. It used to mean that the
+    // recipient should write CSI entry for the record. Now it just means that
+    // block_starting_lsn is serialized (otherwise it defaults to LSN_INVALID),
+    // and it's up to recipient to decide whether to write CSI or not.
+    // Moreover, now block_starting_lsn and STICKY_COPYSET don't matter at all,
+    // at least until block CSI is implemented, which is probably not soon.
+    //
+    // Since only the older versions care about STICKY_COPYSET flag, let's set
+    // the flag according to its old meaning, i.e. set it if CSI writing is
+    // enabled.
+    if (write_sticky_copysets_.hasValue()) {
+      write_block_starting_lsn = write_sticky_copysets_.value();
+    } else {
+      const auto& worker_settings = Worker::settings();
+      write_block_starting_lsn = worker_settings.write_copyset_index &&
+          worker_settings.write_sticky_copysets_deprecated;
+    }
+    if (write_block_starting_lsn ==
+        (bool)(header_.flags & STORE_Header::STICKY_COPYSET)) {
+      // The flag already matches, we're good.
+      writer.write(header_);
+    } else {
+      // Flip the flag to please the outdated recipient.
+      STORE_Header header_copy = header_;
+      header_copy.flags ^= STORE_Header::STICKY_COPYSET;
+      writer.write(header_copy);
+    }
+  }
 
   if (header_.flags & STORE_Header::RECOVERY) {
     writer.write(extra_.recovery_id);
@@ -155,8 +193,8 @@ void STORE_Message::serialize(ProtocolWriter& writer) const {
   writer.writeVector(copyset_);
   ld_check(header_.copyset_size == copyset_.size());
 
-  if (header_.flags & STORE_Header::STICKY_COPYSET) {
-    writer.write(block_starting_lsn_.value());
+  if (write_block_starting_lsn) {
+    writer.write(block_starting_lsn_);
   }
 
   if (header_.flags & STORE_Header::CUSTOM_KEY) {
@@ -241,12 +279,10 @@ MessageReadResult STORE_Message::deserialize(ProtocolReader& reader,
   reader.readVector(&copyset, hdr.copyset_size);
   ld_check(!reader.ok() || copyset.size() == hdr.copyset_size);
 
-  folly::Optional<lsn_t> block_starting_lsn;
+  lsn_t block_starting_lsn = LSN_INVALID;
   std::map<KeyType, std::string> optional_keys;
   if (hdr.flags & STORE_Header::STICKY_COPYSET) {
-    lsn_t lsn;
-    reader.read(&lsn);
-    block_starting_lsn.assign(lsn);
+    reader.read(&block_starting_lsn);
   }
 
   if (hdr.flags & STORE_Header::CUSTOM_KEY) {
@@ -282,10 +318,11 @@ MessageReadResult STORE_Message::deserialize(ProtocolReader& reader,
           /*zero_copy*/ payload_size > max_payload_inline));
 
   return reader.result([&] {
+    // No, you can't replace this with make_unique. The constructor is private.
     std::unique_ptr<STORE_Message> m(
         new STORE_Message(hdr, std::move(payload_holder)));
     m->copyset_ = std::move(copyset);
-    m->block_starting_lsn_ = std::move(block_starting_lsn);
+    m->block_starting_lsn_ = block_starting_lsn;
     m->extra_ = std::move(extra);
     m->optional_keys_ = std::move(optional_keys);
     m->e2e_tracing_context_ = std::move(tracing_context);
@@ -468,8 +505,12 @@ STORE_Message::checkIfPreempted(const RecordID& record_id,
 }
 
 void STORE_Message::setBlockStartingLSN(lsn_t lsn) {
-  block_starting_lsn_.assign(lsn);
-  header_.flags |= STORE_Header::STICKY_COPYSET;
+  block_starting_lsn_ = lsn;
+  if (lsn == LSN_INVALID) {
+    header_.flags &= ~STORE_Header::STICKY_COPYSET;
+  } else {
+    header_.flags |= STORE_Header::STICKY_COPYSET;
+  }
 }
 
 std::string StoreChainLink::toString() const {
@@ -549,8 +590,8 @@ STORE_Message::getDebugInfo() const {
   }
   add("payload_size", payload_ ? payload_->size() : 0);
   add("copyset", toString(copyset_));
-  if (block_starting_lsn_.hasValue()) {
-    add("block_starting_lsn", lsn_to_string(block_starting_lsn_.value()));
+  if (block_starting_lsn_ != LSN_INVALID) {
+    add("block_starting_lsn", lsn_to_string(block_starting_lsn_));
   }
   if (!optional_keys_.empty()) {
     folly::dynamic map{folly::dynamic::object()};

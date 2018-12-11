@@ -262,7 +262,7 @@ Slice formCopySetIndexEntry(uint32_t wave,
 
   // Writing single entry
   ld_check(block_starting_lsn.hasValue());
-  ld_check(block_starting_lsn.value() == LSN_INVALID);
+  ld_check_eq(block_starting_lsn.value(), LSN_INVALID);
   // TODO: block entry support (t9002309), will use the block starting lsn then
   size_t nbytes = sizeof(wave) + sizeof(flags) + sizeof(copyset_size) +
       copyset_size *

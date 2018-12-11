@@ -128,7 +128,12 @@ class MessageSerializationTest : public ::testing::Test {
     ASSERT_EQ(sent.header_.nsync, recv.header_.nsync);
     ASSERT_EQ(sent.header_.copyset_offset, recv.header_.copyset_offset);
     ASSERT_EQ(sent.header_.copyset_size, recv.header_.copyset_size);
-    ASSERT_EQ(sent.header_.flags, recv.header_.flags);
+    if (proto >= Compatibility::NO_BLOCK_STARTING_LSN_IN_STORE_MESSAGES) {
+      ASSERT_EQ(sent.header_.flags, recv.header_.flags);
+    } else {
+      ASSERT_EQ(sent.header_.flags | STORE_Header::STICKY_COPYSET,
+                recv.header_.flags);
+    }
     ASSERT_EQ(sent.header_.timeout_ms, recv.header_.timeout_ms);
     ASSERT_EQ(sent.header_.sequencer_node_id, recv.header_.sequencer_node_id);
     ASSERT_EQ(sent.extra_.recovery_id, recv.extra_.recovery_id);
@@ -390,7 +395,8 @@ struct TestStoreMessageFactory {
         std::make_shared<PayloadHolder>(
             Payload(payload_.data(), payload_.size()), PayloadHolder::UNOWNED),
         false,
-        e2e_tracing_context_);
+        e2e_tracing_context_,
+        /* write_sticky_copysets */ true);
   }
 
   template <typename IntType>
@@ -407,10 +413,14 @@ struct TestStoreMessageFactory {
   }
 
   std::string serialized(uint16_t proto) const {
+    auto flags = header_.flags;
+    if (proto < Compatibility::NO_BLOCK_STARTING_LSN_IN_STORE_MESSAGES) {
+      flags |= STORE_Header::STICKY_COPYSET;
+    }
     std::string rv = "CE0465BE038BE5C5E25152C7813ABC0F" // rid
                      "8EEC9DDEBF2549EB"                 // timestamp
                      "BBB8ECEB"                         // last_known_good
-        + hex(header_.wave) + hex(header_.flags) +
+        + hex(header_.wave) + hex(flags) +
         "010203"   // nsync, copyset offset and size
         "A521B4B9" // timeout_ms
         "54A58B50" // sequencer_node_id
@@ -432,6 +442,11 @@ struct TestStoreMessageFactory {
 
     // StoreChainLink
     rv += "010000000400008002000000050000800300000006000080";
+
+    if (flags & STORE_Header::STICKY_COPYSET) {
+      // Block starting LSN = LSN_INVALID.
+      rv += "0000000000000000";
+    }
 
     if (header_.flags & STORE_Header::CUSTOM_KEY) {
       // The protocol is:  1. Send number of keys. For here: "02".

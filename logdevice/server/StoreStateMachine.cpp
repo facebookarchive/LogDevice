@@ -628,16 +628,16 @@ void StoreStateMachine::storeAndForward() {
 
   const auto& worker_settings = Worker::settings();
 
-  // For internal logs, write CSI even if the STORE message didn't have
-  // STICKY_COPYSET flag. This makes enabling CSI operationally easier.
-  // Same deal if write_copyset_index is set
+  // Decide if we need to write a CSI entry.
+  // For internal logs, write CSI even if it's disabled in settings.
+  // This way if we want to enable CSI later we don't have to do any migration
+  // for internal logs.
   folly::Optional<lsn_t> block_starting_lsn;
   if ((worker_settings.write_copyset_index &&
        worker_settings.write_sticky_copysets_deprecated) ||
       MetaDataLog::isMetaDataLog(header.rid.logid) ||
       configuration::InternalLogs::isInternal(header.rid.logid)) {
-    block_starting_lsn.assign(
-        message_->block_starting_lsn_.value_or(LSN_INVALID));
+    block_starting_lsn.assign(message_->block_starting_lsn_);
   }
 
   // First create a storage task for the local log store.  The constructor
