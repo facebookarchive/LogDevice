@@ -19,5 +19,5 @@ config["legocastle_opts"] = {
     "alias": "logdevice-oss-linux",
     "oncall": "cmarchent",
     "build_name": "Open-source build for LogDevice",
-    "legocastle_os": "ubuntu_16.04",
+    "legocastle_os": "unstable",
 }
