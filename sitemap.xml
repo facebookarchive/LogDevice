@@ -9,6 +9,7 @@
 <url> <loc>https://logdevice.io/docs/Config.html</loc> <changefreq>hourly</changefreq> <priority>1.0</priority> <xhtml:link rel="alternate" hreflang="en" href="https://logdevice.io/docs/Config.html" /> </url>
 <url> <loc>https://logdevice.io/docs/API_Doxygen.html</loc> <changefreq>hourly</changefreq> <priority>1.0</priority> <xhtml:link rel="alternate" hreflang="en" href="https://logdevice.io/docs/API_Doxygen.html" /> </url>
 <url> <loc>https://logdevice.io/docs/FirstCluster.html</loc> <changefreq>hourly</changefreq> <priority>1.0</priority> <xhtml:link rel="alternate" hreflang="en" href="https://logdevice.io/docs/FirstCluster.html" /> </url>
+<url> <loc>https://logdevice.io/docs/Terminology.html</loc> <changefreq>hourly</changefreq> <priority>1.0</priority> <xhtml:link rel="alternate" hreflang="en" href="https://logdevice.io/docs/Terminology.html" /> </url>
 <url> <loc>https://logdevice.io/docs/Installation.html</loc> <changefreq>hourly</changefreq> <priority>1.0</priority> <xhtml:link rel="alternate" hreflang="en" href="https://logdevice.io/docs/Installation.html" /> </url>
 <url> <loc>https://logdevice.io/docs/LDQuery.html</loc> <changefreq>hourly</changefreq> <priority>1.0</priority> <xhtml:link rel="alternate" hreflang="en" href="https://logdevice.io/docs/LDQuery.html" /> </url>
 <url> <loc>https://logdevice.io/docs/LDShell.html</loc> <changefreq>hourly</changefreq> <priority>1.0</priority> <xhtml:link rel="alternate" hreflang="en" href="https://logdevice.io/docs/LDShell.html" /> </url>
