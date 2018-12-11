@@ -24,7 +24,12 @@ RocksDBMemTableRep::RocksDBMemTableRep(RocksDBMemTableRepFactory& factory,
 }
 
 RocksDBMemTableRep::~RocksDBMemTableRep() {
-  ld_debug("Destroyed MemTableRep(%p). ID:%ju", this, (uintmax_t)flush_token_);
+  ld_debug("Destroyed MemTableRep(%p). CF_ID %u ID:%ju",
+           this,
+           column_family_id_,
+           (uintmax_t)flush_token_);
+  // If a column family is dropped MarkFlushed does not get called and we will
+  // never move the flush token window. Calling unregister twice is fine.
   factory_->unregisterMemTableRep(*this);
 }
 
@@ -36,6 +41,14 @@ void RocksDBMemTableRep::Insert(rocksdb::KeyHandle handle) {
 void RocksDBMemTableRep::MarkReadOnly() {
   factory_->markMemtableRepImmutable(*this);
   mtr_->MarkReadOnly();
+}
+
+void RocksDBMemTableRep::MarkFlushed() {
+  ld_debug("Flushed MemTableRep(%p). CFID: %u ID:%ju",
+           this,
+           column_family_id_,
+           (uintmax_t)flush_token_);
+  factory_->unregisterMemTableRep(*this);
 }
 
 rocksdb::MemTableRep* RocksDBMemTableRepFactory::CreateMemTableRep(
@@ -107,6 +120,9 @@ void RocksDBMemTableRepFactory::markMemtableRepImmutable(
 }
 
 void RocksDBMemTableRepFactory::unregisterMemTableRep(RocksDBMemTableRep& mtr) {
+  // Make sure if there is need to unregister as the method is called twice in
+  // usual scenario. It is  called once for undirtied memtables and memtables of
+  // dropped column families.
   if (!mtr.links_.is_linked()) {
     return;
   }

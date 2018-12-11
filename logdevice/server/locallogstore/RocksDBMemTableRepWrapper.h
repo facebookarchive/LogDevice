@@ -37,6 +37,9 @@ class RocksDBMemTableRepWrapper : public rocksdb::MemTableRep {
   void MarkReadOnly() override {
     wrapped_->MarkReadOnly();
   }
+  void MarkFlushed() override {
+    wrapped_->MarkFlushed();
+  }
   void Get(const rocksdb::LookupKey& k,
            void* callback_args,
            bool (*callback_func)(void* arg, const char* entry)) override {

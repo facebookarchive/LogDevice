@@ -39,6 +39,8 @@ class RocksDBMemTableRep : public RocksDBMemTableRepWrapper {
 
   void MarkReadOnly() override;
 
+  void MarkFlushed() override;
+
  private:
   void ensureRegistered();
 
