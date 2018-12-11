@@ -69,6 +69,7 @@ struct CreateOp {
   std::string path_;
   std::string data_;
   std::vector<ACL> acl_;
+  // TODO: instead of exposing flags directly, add isEphemeral and isSequential
   int32_t flags_;
 };
 
