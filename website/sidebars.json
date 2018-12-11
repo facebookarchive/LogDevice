@@ -1,17 +1,18 @@
 {
   "docs": {
-      "Getting started": [
-          "Overview",
-          "Concepts",
-          "Installation",
-          "LocalCluster"
-      ],
-      "Configuration": [
-          "FirstCluster",
-          "Config",
-          "Settings",
-          "Logs"
-      ],
+    "Getting started": [
+        "Overview",
+        "Concepts",
+        "Terminology",
+        "Installation",
+        "LocalCluster"
+    ],
+    "Configuration": [
+        "FirstCluster",
+        "Config",
+        "Settings",
+        "Logs"
+    ],
       "Administration": [
           "LDShell",
           "LDQuery"
