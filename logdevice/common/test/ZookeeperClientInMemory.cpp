@@ -55,7 +55,7 @@ ZookeeperClientInMemory::ZookeeperClientInMemory(std::string quorum,
   }
   for (const auto& parent : parent_nodes) {
     // if this path already exists, does nothing
-    map_.emplace(parent, std::make_pair("", zk::Stat{}));
+    map_.emplace(parent, std::make_pair("", zk::Stat{.version_ = 0}));
   }
 
   alive_ = std::make_shared<std::atomic<bool>>(true);
@@ -120,10 +120,11 @@ int ZookeeperClientInMemory::getData(const char* znode_path,
 
   int rc;
   std::string value;
-  zk::Stat zk_stat{.version_ = 0};
+  zk::Stat zk_stat{};
   auto it = map_.find(znode_path);
   if (it == map_.end()) {
     rc = ZNONODE;
+    // zk_stat should be garbage data
   } else {
     rc = ZOK;
     value = it->second.first;
@@ -185,8 +186,8 @@ int ZookeeperClientInMemory::multiOp(int count,
       if (new_map.find(op.path) != new_map.end()) {
         return fill_result(ZNODEEXISTS);
       }
-      new_map[op.path] =
-          std::make_pair(std::string(op.data, op.datalen), zk::Stat{});
+      new_map[op.path] = std::make_pair(
+          std::string(op.data, op.datalen), zk::Stat{.version_ = 0});
     }
 
     std::swap(map_, new_map);
@@ -229,8 +230,21 @@ int ZookeeperClientInMemory::setData(std::string path,
                  context);
 }
 
-int ZookeeperClientInMemory::multiOp(std::vector<zk::Op>, multi_op_callback_t) {
-  throw std::runtime_error("unimplemented.");
+int ZookeeperClientInMemory::multiOp(std::vector<zk::Op> ops,
+                                     multi_op_callback_t cb) {
+  int count = ops.size();
+  if (count == 0) {
+    return ZOK;
+  }
+
+  auto p = std::make_unique<ZookeeperClient::MultiOpContext>(
+      std::move(ops), std::move(cb));
+  ZookeeperClient::MultiOpContext* context = p.release();
+  return multiOp(count,
+                 context->c_ops_.data(),
+                 context->c_results_.data(),
+                 &ZookeeperClient::multiOpCompletion,
+                 static_cast<const void*>(context));
 }
 
 }} // namespace facebook::logdevice

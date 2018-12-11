@@ -7,6 +7,8 @@
  */
 #include "logdevice/common/ZookeeperClientBase.h"
 
+using namespace facebook::logdevice::zk::detail;
+
 namespace facebook { namespace logdevice {
 
 /* static */ Status ZookeeperClientBase::toStatus(int zk_rc) {
@@ -48,6 +50,38 @@ namespace facebook { namespace logdevice {
                   "Unknown / unexpected Zookeeper error code %d",
                   zk_rc);
   return E::UNKNOWN;
+}
+
+/* static */ zk::Op
+ZookeeperClientBase::makeCreateOp(std::string path,
+                                  std::string data,
+                                  int32_t flags,
+                                  std::vector<zk::ACL> acl) {
+  zk::Op op;
+  op.op_ = CreateOp{std::move(path), std::move(data), flags, std::move(acl)};
+  return op;
+}
+
+/* static */ zk::Op ZookeeperClientBase::makeDeleteOp(std::string path,
+                                                      zk::version_t version) {
+  zk::Op op;
+  op.op_ = DeleteOp{std::move(path), version};
+  return op;
+}
+
+/* static */ zk::Op ZookeeperClientBase::makeSetOp(std::string path,
+                                                   std::string data,
+                                                   zk::version_t version) {
+  zk::Op op;
+  op.op_ = SetOp{std::move(path), std::move(data), version};
+  return op;
+}
+
+/* static */ zk::Op ZookeeperClientBase::makeCheckOp(std::string path,
+                                                     zk::version_t version) {
+  zk::Op op;
+  op.op_ = CheckOp{std::move(path), version};
+  return op;
 }
 
 }} // namespace facebook::logdevice

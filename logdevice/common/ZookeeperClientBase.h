@@ -14,6 +14,7 @@
 #include <unordered_set>
 
 #include <boost/noncopyable.hpp>
+#include <boost/variant.hpp>
 #include <folly/Function.h>
 #include <zookeeper/zookeeper.h>
 
@@ -52,18 +53,19 @@ inline std::vector<ACL> openACL_UNSAFE() {
   return rval;
 }
 
-class CreateOp {
- public:
+namespace detail {
+// Use the ZookeeperClientBase::makeXXXOp helper functions below instead of
+// directly constructing indificual Ops.
+struct CreateOp {
   explicit CreateOp(std::string path,
                     std::string data,
-                    int32_t flags = 0,
-                    std::vector<ACL> acl = openACL_UNSAFE())
+                    int32_t flags,
+                    std::vector<ACL> acl)
       : path_(std::move(path)),
         data_(std::move(data)),
         acl_(std::move(acl)),
         flags_(flags) {}
 
- protected:
   std::string path_;
   std::string data_;
   std::vector<ACL> acl_;
@@ -72,20 +74,18 @@ class CreateOp {
 
 class DeleteOp {
  public:
-  explicit DeleteOp(std::string path, version_t version = -1)
+  explicit DeleteOp(std::string path, version_t version)
       : path_(std::string(path)), version_(version) {}
 
- protected:
   std::string path_;
   version_t version_;
 };
 
 class SetOp {
  public:
-  explicit SetOp(std::string path, std::string data, version_t version = -1)
+  explicit SetOp(std::string path, std::string data, version_t version)
       : path_(path), data_(data), version_(version) {}
 
- protected:
   std::string path_;
   std::string data_;
   version_t version_;
@@ -93,35 +93,34 @@ class SetOp {
 
 class CheckOp {
  public:
-  explicit CheckOp(std::string path, version_t version = -1)
+  explicit CheckOp(std::string path, version_t version)
       : path_(path), version_(version) {}
 
- protected:
   std::string path_;
   version_t version_;
 };
 
-enum class OpType {
-  CREATE,
-  DELETE,
-  SET,
-  CHECK,
-};
+} // namespace detail
 
 struct Op {
-  OpType type_;
-  union {
-    CreateOp create_;
-    DeleteOp delete_;
-    SetOp set_;
-    CheckOp check_;
-  };
+  enum class Type { NONE = 0, CREATE = 1, DELETE = 2, SET = 3, CHECK = 4 };
+  Type getType() const {
+    return static_cast<Type>(op_.which());
+  }
+
+  // TODO: replace with std::variant
+  boost::variant<char,
+                 detail::CreateOp,
+                 detail::DeleteOp,
+                 detail::SetOp,
+                 detail::CheckOp>
+      op_;
 };
 
 struct OpResponse {
-  int rc_;
-  std::string value_;
-  Stat stat_;
+  int rc_{-0xbad};
+  std::string value_{};
+  Stat stat_{};
 };
 
 } // namespace zk
@@ -180,6 +179,16 @@ class ZookeeperClientBase : boost::noncopyable {
 
   // Converts a Zookeeper return code to LogDevice status
   static Status toStatus(int zk_rc);
+  // Helper functions for multiOp
+  static zk::Op makeCreateOp(std::string path,
+                             std::string data,
+                             int32_t flags = 0,
+                             std::vector<zk::ACL> acl = zk::openACL_UNSAFE());
+  static zk::Op makeDeleteOp(std::string path, zk::version_t version = -1);
+  static zk::Op makeSetOp(std::string path,
+                          std::string data,
+                          zk::version_t version = -1);
+  static zk::Op makeCheckOp(std::string path, zk::version_t version = -1);
 
   explicit ZookeeperClientBase() : quorum_() {}
 

@@ -74,6 +74,23 @@ void runBasicTests(std::unique_ptr<ZookeeperClientInMemory> z) {
 
   collectAll(std::move(fs)).wait();
 
+  // create
+  {
+    auto op1 = ZookeeperClientBase::makeCreateOp(kFoo, "initValue");
+    auto op2 = ZookeeperClientBase::makeCreateOp(kBar, "initValue");
+    folly::Baton<> b;
+    z->multiOp({std::move(op1), std::move(op2)},
+               [&b](int rc, std::vector<zk::OpResponse> responses) {
+                 EXPECT_EQ(ZOK, rc);
+                 EXPECT_EQ(2, responses.size());
+                 for (auto& r : responses) {
+                   EXPECT_EQ(ZOK, r.rc_);
+                 }
+                 b.post();
+               });
+    b.wait();
+  }
+
   // write to the znode
   Promise<Unit> p1;
   auto f1 = p1.getSemiFuture();
@@ -250,9 +267,7 @@ void runMultiThreadedTests(std::unique_ptr<ZookeeperClientInMemory> z) {
 
 TEST(ZookeeperClientInMemoryTest, basic) {
   runBasicTests(std::make_unique<ZookeeperClientInMemory>(
-      "unused",
-      ZookeeperClientInMemory::state_map_t{
-          {kFoo, {"initValue", zk::Stat{.version_ = 4}}}}));
+      "unused", ZookeeperClientInMemory::state_map_t{}));
 }
 
 TEST(ZookeeperClientInMemoryTest, basicMT) {

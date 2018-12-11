@@ -280,8 +280,146 @@ int ZookeeperClient::setData(std::string path,
                   context);
 }
 
-int ZookeeperClient::multiOp(std::vector<zk::Op>, multi_op_callback_t) {
-  throw std::runtime_error("unimplemented");
+/* static */ void ZookeeperClient::multiOpCompletion(int rc,
+                                                     const void* context) {
+  ld_check(context);
+  std::unique_ptr<MultiOpContext> ctx(
+      static_cast<MultiOpContext*>(const_cast<void*>(context)));
+  if (!ctx->cb_) {
+    return;
+  }
+  auto results =
+      ZookeeperClient::MultiOpContext::toOpResponses(ctx->c_results_);
+  ctx->cb_(rc, std::move(results));
+}
+
+int ZookeeperClient::multiOp(std::vector<zk::Op> ops, multi_op_callback_t cb) {
+  int count = ops.size();
+  if (count == 0) {
+    return ZOK;
+  }
+
+  auto p = std::make_unique<MultiOpContext>(std::move(ops), std::move(cb));
+  MultiOpContext* context = p.release();
+  return zoo_amulti(zh_.get().get(),
+                    count,
+                    context->c_ops_.data(),
+                    context->c_results_.data(),
+                    &ZookeeperClient::multiOpCompletion,
+                    static_cast<const void*>(context));
+}
+
+/* static */ zk::OpResponse ZookeeperClient::MultiOpContext::toOpResponse(
+    const zoo_op_result_t& op_result) {
+  zk::OpResponse r{};
+  r.rc_ = op_result.err;
+  if (op_result.value) {
+    r.value_ = std::string(op_result.value, op_result.valuelen);
+  }
+  if (op_result.stat) {
+    r.stat_ = zk::Stat{op_result.stat->version};
+  }
+  return r;
+}
+
+/* static */ std::vector<zk::OpResponse>
+ZookeeperClient::MultiOpContext::toOpResponses(
+    const folly::small_vector<zoo_op_result_t, kInlineOps>& op_results) {
+  std::vector<zk::OpResponse> results;
+  results.reserve(op_results.size());
+  std::transform(op_results.begin(),
+                 op_results.end(),
+                 std::back_inserter(results),
+                 toOpResponse);
+  return results;
+}
+
+void ZookeeperClient::MultiOpContext::addCCreateOp(const zk::Op& op,
+                                                   size_t index) {
+  zoo_op_t& c_op = c_ops_.at(index);
+  auto& create_op = boost::get<zk::detail::CreateOp>(op.op_);
+
+  auto& c_acl_vector = c_acl_vectors_.at(index);
+  c_acl_vector.count = create_op.acl_.size();
+
+  auto& c_acl_vector_data = c_acl_vector_data_.at(index);
+  c_acl_vector_data.reserve(create_op.acl_.size());
+  for (const zk::ACL& acl : create_op.acl_) {
+    // const_cast note: Zookeeper does not modify the scheme_ or id_.
+    // However the C struct Id contains char* instead of const char*.
+    c_acl_vector_data.emplace_back(
+        ::ACL{acl.perms_,
+              ::Id{.scheme = const_cast<char*>(acl.id_.scheme_.data()),
+                   .id = const_cast<char*>(acl.id_.id_.data())}});
+  }
+  c_acl_vector.data = c_acl_vector_data.data();
+
+  int max_znode_path_size =
+      create_op.path_.size() + (create_op.flags_ & ::ZOO_SEQUENCE) ? 10 : 0;
+  auto& c_path_buffer = c_path_buffers_.at(index);
+  c_path_buffer.resize(max_znode_path_size);
+
+  zoo_create_op_init(std::addressof(c_op),
+                     create_op.path_.data(),
+                     create_op.data_.data(),
+                     create_op.data_.size(),
+                     std::addressof(c_acl_vector),
+                     create_op.flags_,
+                     const_cast<char*>(c_path_buffer.data()),
+                     max_znode_path_size);
+}
+
+void ZookeeperClient::MultiOpContext::addCDeleteOp(const zk::Op& op,
+                                                   size_t index) {
+  zoo_op_t& c_op = c_ops_.at(index);
+  auto& delete_op = boost::get<zk::detail::DeleteOp>(op.op_);
+  zoo_delete_op_init(
+      std::addressof(c_op), delete_op.path_.data(), delete_op.version_);
+}
+
+void ZookeeperClient::MultiOpContext::addCSetOp(const zk::Op& op,
+                                                size_t index) {
+  zoo_op_t& c_op = c_ops_.at(index);
+  auto& set_op = boost::get<zk::detail::SetOp>(op.op_);
+  auto& c_stat = c_stats_.at(index);
+  zoo_set_op_init(std::addressof(c_op),
+                  set_op.path_.data(),
+                  set_op.data_.data(),
+                  set_op.data_.size(),
+                  set_op.version_,
+                  std::addressof(c_stat));
+}
+
+void ZookeeperClient::MultiOpContext::addCCheckOp(const zk::Op& op,
+                                                  size_t index) {
+  zoo_op_t& c_op = c_ops_.at(index);
+  auto& check_op = boost::get<zk::detail::CheckOp>(op.op_);
+  zoo_check_op_init(
+      std::addressof(c_op), check_op.path_.data(), check_op.version_);
+}
+
+void ZookeeperClient::MultiOpContext::addCOp(const zk::Op& op, size_t index) {
+  switch (op.getType()) {
+    case zk::Op::Type::CREATE: {
+      addCCreateOp(op, index);
+      break;
+    }
+    case zk::Op::Type::DELETE: {
+      addCDeleteOp(op, index);
+      break;
+    }
+    case zk::Op::Type::SET: {
+      addCSetOp(op, index);
+      break;
+    }
+    case zk::Op::Type::CHECK: {
+      addCCheckOp(op, index);
+      break;
+    }
+    case zk::Op::Type::NONE:
+    default:
+      ld_error("Zookeeper multi_op included NONE op.");
+  };
 }
 
 }} // namespace facebook::logdevice

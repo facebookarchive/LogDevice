@@ -14,6 +14,7 @@
 #include <unordered_set>
 
 #include <boost/noncopyable.hpp>
+#include <folly/small_vector.h>
 #include <zookeeper/zookeeper.h>
 
 #include "logdevice/common/UpdateableSharedPtr.h"
@@ -140,6 +141,60 @@ class ZookeeperClient : public ZookeeperClientBase {
   static void setDataCompletion(int rc,
                                 const struct Stat* stat,
                                 const void* context);
+  static void multiOpCompletion(int rc, const void* context);
+
+  struct MultiOpContext {
+    static constexpr size_t kInlineOps = 4;
+
+   public:
+    static zk::OpResponse toOpResponse(const zoo_op_result_t& op_result);
+    static std::vector<zk::OpResponse> toOpResponses(
+        const folly::small_vector<zoo_op_result_t, kInlineOps>& op_results);
+
+    explicit MultiOpContext(std::vector<zk::Op> ops, multi_op_callback_t cb)
+        : ops_(std::move(ops)),
+          cb_(std::move(cb)),
+          // Note: space efficiency here could be improved, but for simplicity,
+          // we resize everything even if some ops don't need some of these
+          // fields.
+          c_acl_vectors_(ops_.size()),
+          c_acl_vector_data_(ops_.size()),
+          c_path_buffers_(ops_.size()),
+          c_stats_(ops_.size()),
+          c_results_(ops_.size()) {
+      c_ops_.resize(ops_.size());
+      for (size_t i = 0; i < ops_.size(); ++i) {
+        addCOp(ops_.at(i), i);
+      }
+    }
+
+   private:
+    // The context object needs to stay in the same memory location so that the
+    // pointers captured by ZK remain valid, should not be moved or copied.
+    MultiOpContext(const MultiOpContext&) = delete;
+    MultiOpContext& operator=(const MultiOpContext&) = delete;
+    MultiOpContext(MultiOpContext&&) = delete;
+    MultiOpContext& operator=(MultiOpContext&&) = delete;
+
+    void addCCreateOp(const zk::Op& op, size_t index);
+    void addCDeleteOp(const zk::Op& op, size_t index);
+    void addCSetOp(const zk::Op& op, size_t index);
+    void addCCheckOp(const zk::Op& op, size_t index);
+    void addCOp(const zk::Op& op, size_t index);
+
+   public:
+    std::vector<zk::Op> ops_;
+    multi_op_callback_t cb_; // could be empty
+
+    folly::small_vector<::ACL_vector, kInlineOps> c_acl_vectors_;
+    folly::small_vector<folly::small_vector<::ACL, kInlineOps>, kInlineOps>
+        c_acl_vector_data_;
+    folly::small_vector<std::string, kInlineOps> c_path_buffers_;
+    folly::small_vector<struct ::Stat, kInlineOps> c_stats_;
+    folly::small_vector<zoo_op_t, kInlineOps> c_ops_;
+    folly::small_vector<zoo_op_result_t, kInlineOps> c_results_;
+  };
+
   friend class ZookeeperClientInMemory;
 };
 
