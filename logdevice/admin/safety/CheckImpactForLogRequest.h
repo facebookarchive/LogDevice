@@ -32,15 +32,7 @@ class ClientImpl;
 class CheckImpactForLogRequest : public Request {
  public:
   // callback function called when the operation is complete
-  // The epoch_t and StorageSet parameters are valid only if Status != E::OK
-  using Callback = folly::Function<void(
-      Status,
-      int, // impact result bit set
-      logid_t,
-      epoch_t,    // Which epoch in logid_t has failed the safety check
-      StorageSet, // The storage set that caused the failure (if st != E::OK)
-      ReplicationProperty // The replication property for the offending epoch
-      )>;
+  using Callback = folly::Function<void(Status, Impact::ImpactOnEpoch)>;
 
   /**
    * create a CheckImpactForLogRequest. CheckImpactForLogRequest verifies that
@@ -85,6 +77,7 @@ class CheckImpactForLogRequest : public Request {
                 int = Impact::ImpactResult::INVALID, // impact result bit set
                 epoch_t error_epoch = EPOCH_INVALID,
                 StorageSet storage_set = {},
+                Impact::StorageSetMetadata storage_set_metadata = {},
                 ReplicationProperty replication = ReplicationProperty());
 
   /*
@@ -127,6 +120,9 @@ class CheckImpactForLogRequest : public Request {
                              const ReplicationProperty& replication) const;
 
   bool isAlive(node_index_t index) const;
+
+  // Collect some metadata information about a storage set
+  Impact::StorageSetMetadata getStorageSetMetadata(const StorageSet&);
 
   /**
    * Verifies that it is possible to perform operations_

@@ -128,12 +128,7 @@ class CheckImpactRequest : public Request {
    */
   int requestInternalLogs();
   int requestSingleLog(logid_t log_id);
-  void onCheckImpactForLogResponse(Status st,
-                                   int impact_result,
-                                   logid_t log_id,
-                                   epoch_t error_epoch,
-                                   StorageSet storage_set,
-                                   ReplicationProperty replication);
+  void onCheckImpactForLogResponse(Status st, Impact::ImpactOnEpoch impact);
   // Starts the global timeout timer
   void activateTimeoutTimer();
   void onTimeout();

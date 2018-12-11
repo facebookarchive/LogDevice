@@ -34,6 +34,19 @@ logid_t InternalLogs::lookupByName(const std::string& name) {
   return it->second;
 }
 
+std::string InternalLogs::lookupByID(logid_t log_id) {
+  std::string out;
+  const auto& name_lookup = nameLookup();
+  auto it = std::find_if(name_lookup.begin(), name_lookup.end(), [&](auto&& p) {
+    return p.second == log_id;
+  });
+
+  if (it != name_lookup.end()) {
+    out = it->first;
+  }
+  return out;
+}
+
 InternalLogs::InternalLogs(std::string ns_delimiter)
     : ns_delimiter_(std::move(ns_delimiter)) {
   reset();

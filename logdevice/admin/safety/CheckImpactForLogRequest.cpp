@@ -107,6 +107,7 @@ void CheckImpactForLogRequest::checkMetadataNodeset() {
              Impact::ImpactResult::NONE,
              EPOCH_INVALID,
              {},
+             {},
              ReplicationProperty());
     return;
   }
@@ -132,25 +133,31 @@ void CheckImpactForLogRequest::checkMetadataNodeset() {
     ld_debug("It is safe to perform operations on metadata nodes");
   }
 
+  Impact::StorageSetMetadata storage_set_metadata =
+      getStorageSetMetadata(storage_set);
   complete(E::OK,
            impact_result,
            EPOCH_INVALID,
            std::move(storage_set),
+           std::move(storage_set_metadata),
            replication_property);
 }
 
-void CheckImpactForLogRequest::complete(Status st,
-                                        int impact_result,
-                                        epoch_t error_epoch,
-                                        StorageSet storage_set,
-                                        ReplicationProperty replication) {
+void CheckImpactForLogRequest::complete(
+    Status st,
+    int impact_result,
+    epoch_t error_epoch,
+    StorageSet storage_set,
+    Impact::StorageSetMetadata storage_set_metadata,
+    ReplicationProperty replication) {
   // call user provided callback
   callback_(st,
-            impact_result,
-            log_id_,
-            error_epoch,
-            std::move(storage_set),
-            std::move(replication));
+            Impact::ImpactOnEpoch(log_id_,
+                                  error_epoch,
+                                  std::move(storage_set),
+                                  std::move(storage_set_metadata),
+                                  std::move(replication),
+                                  impact_result));
 
   // destroy the request
   delete this;
@@ -171,6 +178,7 @@ void CheckImpactForLogRequest::fetchHistoricalMetadata() {
             complete(E::OK,
                      Impact::ImpactResult::NONE,
                      EPOCH_INVALID,
+                     {},
                      {},
                      ReplicationProperty());
             return;
@@ -195,6 +203,7 @@ void CheckImpactForLogRequest::fetchHistoricalMetadata() {
         complete(E::OK,
                  Impact::ImpactResult::NONE,
                  EPOCH_INVALID,
+                 {},
                  {},
                  ReplicationProperty());
       },
@@ -306,10 +315,13 @@ bool CheckImpactForLogRequest::onEpochMetaData(EpochMetaData metadata) {
     // TODO #22911589 check do we lose write availablility
   }
 
+  Impact::StorageSetMetadata storage_set_metadata =
+      getStorageSetMetadata(metadata.shards);
   complete(E::OK,
            impact_result,
            metadata.h.effective_since,
            std::move(metadata.shards),
+           std::move(storage_set_metadata),
            std::move(metadata.replication));
   return false;
 }
@@ -387,6 +399,21 @@ bool CheckImpactForLogRequest::checkReadAvailability(
       health_state == FmajorityResult::AUTHORITATIVE_INCOMPLETE;
 
   return res;
+}
+
+Impact::StorageSetMetadata
+CheckImpactForLogRequest::getStorageSetMetadata(const StorageSet& storage_set) {
+  auto config = Worker::onThisThread()->getConfiguration();
+  Impact::StorageSetMetadata out;
+  for (const auto& shard : storage_set) {
+    const auto& node = config->serverConfig()->getNode(shard.node());
+    out.push_back(Impact::StorageNodeMetadata{
+        .auth_status = shard_status_.getShardStatus(shard),
+        .is_alive = isAlive(shard.node()),
+        .storage_state = node->storage_attributes->state,
+        .location = node->location});
+  }
+  return out;
 }
 
 bool CheckImpactForLogRequest::isAlive(node_index_t index) const {

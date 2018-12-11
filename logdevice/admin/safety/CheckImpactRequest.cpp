@@ -103,20 +103,10 @@ Request::Execution CheckImpactRequest::start() {
 int CheckImpactRequest::requestSingleLog(logid_t log_id) {
   Worker* worker = Worker::onThisThread(true);
   auto ticket = metadata_check_callback_helper_.ticket();
-  auto cb = [ticket](Status st,
-                     int impact_result,
-                     logid_t completed_log_id,
-                     epoch_t error_epoch,
-                     StorageSet storage_set,
-                     ReplicationProperty replication) {
+  auto cb = [ticket](Status st, Impact::ImpactOnEpoch impact) {
     ticket.postCallbackRequest([=](CheckImpactRequest* rq) {
       if (rq) {
-        rq->onCheckImpactForLogResponse(st,
-                                        impact_result,
-                                        completed_log_id,
-                                        error_epoch,
-                                        storage_set,
-                                        std::move(replication));
+        rq->onCheckImpactForLogResponse(st, impact);
       }
     });
   };
@@ -262,19 +252,15 @@ void CheckImpactRequest::requestNextBatch() {
 
 void CheckImpactRequest::onCheckImpactForLogResponse(
     Status st,
-    int impact_result,
-    logid_t log_id,
-    epoch_t error_epoch,
-    StorageSet storage_set,
-    ReplicationProperty replication) {
-  ld_debug("Response from %zu: %s", log_id.val_, error_description(st));
+    Impact::ImpactOnEpoch impact) {
+  ld_debug("Response from %zu: %s", impact.log_id.val_, error_description(st));
   --in_flight_;
   ++logs_done_;
   // We will only submit new logs to be processed if the processing of this
   // current log is OK. In case of errors, we stop sending requests and we drain
   // what is in-flight already.
   // Treat as no-impact. We should submit more jobs in this case.
-  if (st != E::OK || impact_result > Impact::ImpactResult::NONE) {
+  if (st != E::OK || impact.impact_result > Impact::ImpactResult::NONE) {
     // We want to ensure that we do not submit further.
     abort_processing_ = abort_on_error_;
     st_ = st;
@@ -285,33 +271,34 @@ void CheckImpactRequest::onCheckImpactForLogResponse(
     // results and then we complete the request. This is so we can build a
     // sample of the logs that will be affected by this.
     // This is a metadata log
-    if (log_id == LOGID_INVALID) {
+    if (impact.log_id == LOGID_INVALID) {
       RATELIMIT_WARNING(
           std::chrono::seconds{5},
           1,
           "Operation is unsafe on the metadata log(s), status: %s, "
           "impact: %s.",
           error_name(st),
-          Impact::toStringImpactResult(impact_result).c_str());
+          Impact::toStringImpactResult(impact.impact_result).c_str());
     } else {
       RATELIMIT_WARNING(
           std::chrono::seconds{5},
           1,
           "Operation is unsafe on log %lu%s), status: %s, "
           "impact: %s.",
-          log_id.val_,
-          InternalLogs::isInternal(log_id) ? " *Internal Log*" : "",
+          impact.log_id.val_,
+          InternalLogs::isInternal(impact.log_id) ? " *Internal Log*" : "",
           error_name(st),
-          Impact::toStringImpactResult(impact_result).c_str());
+          Impact::toStringImpactResult(impact.impact_result).c_str());
     }
 
-    impact_result_all_ |= impact_result;
-    if (affected_logs_sample_.size() < error_sample_size_) {
-      affected_logs_sample_.push_back(Impact::ImpactOnEpoch(
-          log_id, error_epoch, storage_set, replication, impact_result));
-    }
-    if (log_id == LOGID_INVALID || state_ == State::CHECKING_INTERNAL_LOGS) {
+    impact_result_all_ |= impact.impact_result;
+    if (impact.log_id == LOGID_INVALID ||
+        InternalLogs::isInternal(impact.log_id)) {
       internal_logs_affected_ = true;
+    }
+
+    if (affected_logs_sample_.size() < error_sample_size_) {
+      affected_logs_sample_.push_back(std::move(impact));
     }
   }
 
@@ -349,12 +336,12 @@ void CheckImpactRequest::onCheckImpactForLogResponse(
 }
 
 void CheckImpactRequest::complete(Status st) {
-  double total_time = std::chrono::duration_cast<std::chrono::duration<double>>(
-                          std::chrono::steady_clock::now() - start_time_)
-                          .count();
-  ld_info("CheckImpactRequest completed with %s in %.1fs, %zu logs checked",
+  std::chrono::seconds total_time =
+      std::chrono::duration_cast<std::chrono::seconds>(
+          std::chrono::steady_clock::now() - start_time_);
+  ld_info("CheckImpactRequest completed with %s in %lds, %zu logs checked",
           error_name(st),
-          total_time,
+          total_time.count(),
           logs_done_);
 
   if (st != E::OK) {
@@ -365,7 +352,9 @@ void CheckImpactRequest::complete(Status st) {
     callback_(Impact(st,
                      impact_result_all_,
                      std::move(affected_logs_sample_),
-                     internal_logs_affected_));
+                     internal_logs_affected_,
+                     logs_done_,
+                     total_time));
   }
   callback_called_ = true;
   deleteThis();

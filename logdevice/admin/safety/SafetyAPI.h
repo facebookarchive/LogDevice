@@ -9,7 +9,10 @@
 
 #include <map>
 
+#include "logdevice/common/AuthoritativeStatus.h"
+#include "logdevice/common/ClusterState.h"
 #include "logdevice/common/ShardID.h"
+#include "logdevice/common/configuration/Node.h"
 #include "logdevice/common/configuration/ReplicationProperty.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Err.h"
@@ -22,6 +25,27 @@ using SafetyMargin = std::map<NodeLocationScope, int>;
 
 struct Impact {
   /**
+   * A data structure that holds extra information about the storage set that
+   * resemble the status at the time of the safety check.
+   */
+  struct StorageNodeMetadata {
+    AuthoritativeStatus auth_status;
+    bool is_alive;
+    configuration::StorageState storage_state;
+    folly::Optional<NodeLocation> location;
+    bool operator==(StorageNodeMetadata const& x) const {
+      return x.auth_status == auth_status && x.is_alive == is_alive &&
+          x.storage_state == storage_state && x.location == location;
+    }
+    bool operator!=(StorageNodeMetadata const& x) const {
+      return !(*this == x);
+    }
+  };
+
+  // For each index in the storage set, what was the cluster state and
+  using StorageSetMetadata = std::vector<Impact::StorageNodeMetadata>;
+
+  /**
    * A data structure that holds the operation impact on a specific epoch in a
    * log.
    */
@@ -29,18 +53,31 @@ struct Impact {
     logid_t log_id = LOGID_INVALID;
     epoch_t epoch = EPOCH_INVALID;
     StorageSet storage_set;
+    StorageSetMetadata storage_set_metadata;
     ReplicationProperty replication;
     int impact_result = ImpactResult::INVALID;
     ImpactOnEpoch(logid_t log_id,
                   epoch_t epoch,
                   StorageSet storage_set,
+                  StorageSetMetadata storage_set_metadata,
                   ReplicationProperty replication,
                   int impact_result)
         : log_id(log_id),
           epoch(epoch),
-          storage_set(storage_set),
+          storage_set(std::move(storage_set)),
+          storage_set_metadata(std::move(storage_set_metadata)),
           replication(std::move(replication)),
           impact_result(impact_result) {}
+    // Needed for the python bindings
+    bool operator==(ImpactOnEpoch const& x) const {
+      return x.log_id == log_id && x.epoch == epoch &&
+          x.storage_set == storage_set &&
+          x.storage_set_metadata == storage_set_metadata &&
+          x.replication == replication && x.impact_result == impact_result;
+    }
+    bool operator!=(ImpactOnEpoch const& x) const {
+      return !(*this == x);
+    }
   };
 
   enum ImpactResult {
@@ -69,12 +106,18 @@ struct Impact {
 
   // Whether metadata logs are also affected (ie the operations have impact on
   // the metadata nodeset or the internal logs).
-  bool internal_logs_affected;
+  bool internal_logs_affected = false;
+  // The total number of logs checked during this operation
+  size_t total_logs_checked{0};
+  // The total duration in seconds during this operation
+  std::chrono::seconds total_duration{0};
 
   Impact(Status status,
          int result,
          std::vector<ImpactOnEpoch> logs_affected = {},
-         bool internal_logs_affected = false);
+         bool internal_logs_affected = false,
+         size_t total_logs_checked = 0,
+         std::chrono::seconds total_duration = std::chrono::seconds(0));
 
   // A helper constructor that must only be used if status != E::OK
   explicit Impact(Status status);

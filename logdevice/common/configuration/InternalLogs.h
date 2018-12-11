@@ -46,6 +46,7 @@ class InternalLogs {
   using NameLookupMap = std::unordered_map<std::string, logid_t>;
   static const NameLookupMap& nameLookup();
   static logid_t lookupByName(const std::string& name);
+  static std::string lookupByID(logid_t);
 
   explicit InternalLogs(std::string ns_delimiter = "/");
   InternalLogs(InternalLogs&& other) = default;
