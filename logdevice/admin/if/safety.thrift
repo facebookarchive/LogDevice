@@ -66,13 +66,13 @@ struct CheckImpactRequest {
   /*
    * Which shards/nodes we would like to check state change against. Using the
    * ShardID data structure you can refer to individual shards or entire storage
-   * or sequencer nodes based on their address or index.
+   * or sequencer nodes based on their address or index. This can be empty if
+   * you would like to check what is the current state of the cluster.
    */
   1: required common.ShardSet shards,
   /*
-   * This can be unset ONLY if disable_sequencers is set to true. In this case
-   * we are only interested in checking for sequencing capacity constraints of
-   * the cluster. Alternatively, you can set target_storage_state to READ_WRITE.
+   * This can be unset ONLY if disable_sequencers is set to true or if the list
+   * of shards is empty.
    */
   2: optional nodes.ShardStorageState target_storage_state,
   /*
@@ -90,7 +90,10 @@ struct CheckImpactRequest {
   /*
    * Choose which log-ids to check for safety. Remember that we will always
    * check the metadata and internal logs. This is to ensure that no matter
-   * what, operations are safe to these critical logs.
+   * what, operations are safe to these critical logs. If this is unset, this
+   * will check all logs in the cluster. If it's set to an empty list, only
+   * internal and metadata logs will be checked (given that check_metadata_logs
+   * and/or check_internal_logs are set to true)
    */
   5: optional list<common.unsigned64> log_ids_to_check,
   /*
@@ -103,6 +106,8 @@ struct CheckImpactRequest {
    * want in return?
    */
   7: optional i32 return_sample_size = 50,
+  8: optional bool check_metadata_logs = true,
+  9: optional bool check_internal_logs = true,
 }
 
 struct CheckImpactResponse {

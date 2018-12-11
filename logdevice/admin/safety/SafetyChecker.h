@@ -21,6 +21,7 @@
 namespace facebook { namespace logdevice {
 
 class Processor;
+class ClusterState;
 
 class SafetyChecker {
  public:
@@ -56,16 +57,20 @@ class SafetyChecker {
    * (if 'logids_to_check' is empty then on all logs in the cluster)
    * if 'target_storage_state' is applied on specified shards
    */
-  Impact checkImpact(const ShardAuthoritativeStatusMap& status_map,
-                     const ShardSet& shards,
-                     configuration::StorageState target_storage_state,
-                     SafetyMargin safety_margin = SafetyMargin(),
-                     std::vector<logid_t> logids_to_check = {});
+  Impact
+  checkImpact(const ShardAuthoritativeStatusMap& status_map,
+              const ShardSet& shards,
+              configuration::StorageState target_storage_state,
+              SafetyMargin safety_margin = SafetyMargin(),
+              bool check_metadata_logs = true,
+              bool check_internal_logs = true,
+              folly::Optional<std::vector<logid_t>> logids_to_check = {});
 
   static std::string
   impactToString(const ShardSet& shards,
                  const ShardAuthoritativeStatusMap& shard_status,
-                 const Impact& impact);
+                 const Impact& impact,
+                 const ClusterState* cluster_state);
 
  private:
   Processor* processor_;

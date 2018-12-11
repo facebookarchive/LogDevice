@@ -46,27 +46,10 @@ CheckImpactHandler::semifuture_checkImpact(
   ShardSet shards =
       expandShardSet(request->get_shards(), server_config->getNodes());
 
-  if (shards.empty()) {
-    thrift::InvalidRequest ex;
-    ex.set_message("shards cannot be empty");
-    promise.setException(std::move(ex));
-    return promise.getSemiFuture();
-  }
-
   StorageState target_storage_state = StorageState::READ_WRITE;
   if (request->get_target_storage_state()) {
     target_storage_state =
         toLogDevice<StorageState>(*request->get_target_storage_state());
-  }
-
-  if (target_storage_state == StorageState::READ_WRITE) {
-    // TODO: Check if disable_sequencers is set and pass it to
-    // CheckImpactRequest when this is implemented.
-    thrift::InvalidRequest ex;
-    ex.set_message(
-        "target_storage_state must be set and it cannot be set to READ_WRITE");
-    promise.setException(std::move(ex));
-    return promise.getSemiFuture();
   }
 
   // Convert thrift::ReplicationProperty into logdevice's SafetyMargin
@@ -76,11 +59,21 @@ CheckImpactHandler::semifuture_checkImpact(
         toLogDevice<ReplicationProperty>(*request->get_safety_margin()));
   }
   // logids to check
-  std::vector<logid_t> logs_to_check;
+  folly::Optional<std::vector<logid_t>> logs_to_check;
   if (request->get_log_ids_to_check()) {
+    logs_to_check = std::vector<logid_t>();
     for (thrift::unsigned64 id : *request->get_log_ids_to_check()) {
-      logs_to_check.push_back(logid_t(to_unsigned(id)));
+      logs_to_check->push_back(logid_t(to_unsigned(id)));
     }
+  }
+
+  bool check_metadata_logs = true;
+  if (request->get_check_metadata_logs()) {
+    check_metadata_logs = *request->get_check_metadata_logs();
+  }
+  bool check_internal_logs = true;
+  if (request->get_check_internal_logs()) {
+    check_internal_logs = *request->get_check_internal_logs();
   }
 
   // It's important that we get the SemiFuture before we move the promise
@@ -116,6 +109,8 @@ CheckImpactHandler::semifuture_checkImpact(
       std::move(shards),
       target_storage_state,
       safety_margin,
+      check_metadata_logs,
+      check_internal_logs,
       logs_to_check,
       updateable_server_settings_->safety_max_logs_in_flight,
       request->abort_on_negative_impact,

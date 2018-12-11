@@ -7,29 +7,35 @@
  */
 #include "logdevice/admin/safety/CheckImpactRequest.h"
 
-#include "logdevice/admin/safety/CheckMetaDataLogRequest.h"
+#include "logdevice/admin/safety/CheckImpactForLogRequest.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Timer.h"
 
 using namespace facebook::logdevice::configuration;
 
 namespace facebook { namespace logdevice {
-CheckImpactRequest::CheckImpactRequest(ShardAuthoritativeStatusMap status_map,
-                                       ShardSet shards,
-                                       StorageState target_storage_state,
-                                       SafetyMargin safety_margin,
-                                       std::vector<logid_t> logids_to_check,
-                                       size_t max_in_flight,
-                                       bool abort_on_error,
-                                       std::chrono::milliseconds timeout,
-                                       size_t error_sample_size,
-                                       WorkerType worker_type,
-                                       Callback cb)
+CheckImpactRequest::CheckImpactRequest(
+    ShardAuthoritativeStatusMap status_map,
+    ShardSet shards,
+    configuration::StorageState target_storage_state,
+    SafetyMargin safety_margin,
+    bool check_metadata_logs,
+    bool check_internal_logs,
+    folly::Optional<std::vector<logid_t>> logids_to_check,
+    size_t max_in_flight,
+    bool abort_on_error,
+    std::chrono::milliseconds timeout,
+    size_t error_sample_size,
+    WorkerType worker_type,
+    Callback cb)
     : Request(RequestType::CHECK_IMPACT),
+      state_(State::CHECKING_INTERNAL_LOGS),
       status_map_(std::move(status_map)),
       shards_(std::move(shards)),
       target_storage_state_(target_storage_state),
       safety_margin_(safety_margin),
+      check_metadata_logs_(check_metadata_logs),
+      check_internal_logs_(check_internal_logs),
       logids_to_check_(std::move(logids_to_check)),
       max_in_flight_(max_in_flight),
       abort_on_error_(abort_on_error),
@@ -54,7 +60,7 @@ WorkerType CheckImpactRequest::getWorkerTypeAffinity() {
 }
 
 Request::Execution CheckImpactRequest::execute() {
-  if (target_storage_state_ == StorageState::READ_WRITE) {
+  if (!shards_.empty() && target_storage_state_ == StorageState::READ_WRITE) {
     callback_(Impact(E::INVALID_PARAM, Impact::ImpactResult::INVALID, {}));
     callback_called_ = true;
     return Request::Execution::COMPLETE;
@@ -77,30 +83,21 @@ Request::Execution CheckImpactRequest::execute() {
 Request::Execution CheckImpactRequest::start() {
   Worker* worker = Worker::onThisThread(true);
   start_time_ = std::chrono::steady_clock::now();
-  // LOGID_INVALID means that we want to check the metadata logs nodeset.
-  if (requestSingleLog(LOGID_INVALID) != 0) {
-    ld_warning("Failed to post a CheckMetadataLogRequest to check the metadata"
-               " log to the processor, aborting the safety check: %s",
-               error_description(err));
-    complete(err);
-    return Request::Execution::COMPLETE;
-  }
   std::shared_ptr<Configuration> cfg = worker->getConfiguration();
   const auto& local_logs_config = cfg->getLocalLogsConfig();
   // User-logs only
   const logsconfig::LogsConfigTree& log_tree =
       local_logs_config.getLogsConfigTree();
   const InternalLogs& internal_logs = local_logs_config.getInternalLogs();
-  // If no specific log-ids are requested, we check all logs.
-  if (logids_to_check_.empty()) {
+  // If no logids_to_check is none, we check all logs.
+  if (!logids_to_check_) {
+    logids_to_check_ = std::vector<logid_t>();
     for (auto it = log_tree.logsBegin(); it != log_tree.logsEnd(); ++it) {
-      logids_to_check_.push_back(logid_t(it->first));
+      logids_to_check_->push_back(logid_t(it->first));
     }
   }
-  // We process the internal logs first.
-  return requestAllInternalLogs(internal_logs) == 0
-      ? Request::Execution::CONTINUE
-      : Request::Execution::COMPLETE;
+
+  return process();
 }
 
 int CheckImpactRequest::requestSingleLog(logid_t log_id) {
@@ -114,12 +111,12 @@ int CheckImpactRequest::requestSingleLog(logid_t log_id) {
                      ReplicationProperty replication) {
     ticket.postCallbackRequest([=](CheckImpactRequest* rq) {
       if (rq) {
-        rq->onCheckMetadataLogResponse(st,
-                                       impact_result,
-                                       completed_log_id,
-                                       error_epoch,
-                                       storage_set,
-                                       std::move(replication));
+        rq->onCheckImpactForLogResponse(st,
+                                        impact_result,
+                                        completed_log_id,
+                                        error_epoch,
+                                        storage_set,
+                                        std::move(replication));
       }
     });
   };
@@ -130,15 +127,15 @@ int CheckImpactRequest::requestSingleLog(logid_t log_id) {
   } else {
     ld_debug("Checking Impact on log %lu", log_id.val_);
   }
-  auto req = std::make_unique<CheckMetaDataLogRequest>(log_id,
-                                                       per_log_timeout_,
-                                                       status_map_,
-                                                       shards_,
-                                                       target_storage_state_,
-                                                       safety_margin_,
-                                                       is_metadata,
-                                                       worker_type_,
-                                                       cb);
+  auto req = std::make_unique<CheckImpactForLogRequest>(log_id,
+                                                        per_log_timeout_,
+                                                        status_map_,
+                                                        shards_,
+                                                        target_storage_state_,
+                                                        safety_margin_,
+                                                        is_metadata,
+                                                        worker_type_,
+                                                        cb);
   if (read_epoch_metadata_from_sequencer_) {
     req->readEpochMetaDataFromSequencer();
   }
@@ -146,13 +143,22 @@ int CheckImpactRequest::requestSingleLog(logid_t log_id) {
   int rv = worker->processor_->postRequest(request);
   if (rv == 0) {
     in_flight_++;
+  } else if (is_metadata) {
+    ld_warning("Failed to post a CheckImpactForLogRequest to check the metadata"
+               " log to the processor, aborting the safety check: %s",
+               error_description(err));
   }
   return rv;
 }
 
-int CheckImpactRequest::requestAllInternalLogs(
-    const InternalLogs& internal_logs) {
-  // Internal Logs must always be checked
+int CheckImpactRequest::requestInternalLogs() {
+  Worker* worker = Worker::onThisThread(true);
+  int current_in_flight = in_flight_;
+  // Getting the configuration of the internal logs
+  std::shared_ptr<Configuration> cfg = worker->getConfiguration();
+  const auto& local_logs_config = cfg->getLocalLogsConfig();
+  const auto& internal_logs = local_logs_config.getInternalLogs();
+
   for (auto it = internal_logs.logsBegin(); it != internal_logs.logsEnd();
        ++it) {
     logid_t log_id = logid_t(it->first);
@@ -160,27 +166,75 @@ int CheckImpactRequest::requestAllInternalLogs(
     // to be checked.
     int rv = requestSingleLog(log_id);
     if (rv != 0) {
-      ld_warning("Failed to post a CheckMetadataLogRequest "
+      ld_warning("Failed to post a CheckImpactForLogRequest "
                  "(logid=%zu *Internal Log*) to check the metadata"
                  " to the processor, aborting the safety check: %s",
                  log_id.val(),
                  error_description(err));
-      complete(err);
       return -1;
     }
   }
-  // We add 1 to account for the metadata nodeset check.
-  ld_check(in_flight_ == internal_logs.size() + 1);
+  ld_check(in_flight_ == internal_logs.size() + current_in_flight);
   return 0;
+}
+
+Request::Execution CheckImpactRequest::process() {
+  switch (state_) {
+    case State::CHECKING_INTERNAL_LOGS:
+      if (check_metadata_logs_) {
+        // LOGID_INVALID means that we want to check the metadata logs nodeset.
+        if (requestSingleLog(LOGID_INVALID) != 0) {
+          complete(err);
+          return Request::Execution::COMPLETE;
+        }
+      } else {
+        ld_info("Not checking the metadata logs as per user request");
+      }
+
+      if (check_internal_logs_) {
+        // requestInternalLogs will log if it failed.
+        if (requestInternalLogs() != 0) {
+          complete(err);
+          return Request::Execution::COMPLETE;
+        }
+      } else {
+        ld_info("Not checking the internal logs as per user request");
+      }
+      // Do we have logs in-flight?
+      if (in_flight_ == 0) {
+        state_ = State::CHECKING_DATA_LOGS;
+        return process();
+      }
+      break;
+    case State::CHECKING_DATA_LOGS:
+      if (logids_to_check_->empty()) {
+        ld_info("No data logs has been checked as per user request");
+        complete(E::OK);
+        return Request::Execution::COMPLETE;
+      }
+      requestNextBatch();
+      // requestNextBatch has either failed or we don't have more work to do
+      if (in_flight_ == 0) {
+        complete(logids_to_check_->empty() ? E::OK : err);
+        return Request::Execution::COMPLETE;
+      }
+      break;
+    default:
+      ld_check(false);
+      complete(E::INTERNAL);
+      return Request::Execution::COMPLETE;
+  }
+  return Request::Execution::CONTINUE;
 }
 
 void CheckImpactRequest::requestNextBatch() {
   // We don't have enough in-flight requests to fill up the max_in_flight
   // budget. And we still have logs to check left.
+  //
   int submitted = 0;
-  while (!abort_processing_ && (in_flight_ < max_in_flight_) &&
-         !logids_to_check_.empty()) {
-    logid_t log_id = logids_to_check_.back();
+  while (logids_to_check_ && !abort_processing_ &&
+         (in_flight_ < max_in_flight_) && !logids_to_check_->empty()) {
+    logid_t log_id = logids_to_check_->back();
     int rv = requestSingleLog(log_id);
     if (rv != 0) {
       // We couldn't schedule this request. Will wait until the next batch
@@ -190,23 +244,23 @@ void CheckImpactRequest::requestNextBatch() {
       RATELIMIT_INFO(
           std::chrono::seconds{1},
           1,
-          "We cannot submit CheckMetadataLogRequest due to (%s). Deferring "
+          "We cannot submit CheckImpactForLogRequest due to (%s). Deferring "
           "this until we receive more responses from the in-flight requests.",
           error_description(err));
       // Stop here, there is no point of trying more.
       break;
     }
     // Pop it out of the vector since we successfully posted that one.
-    logids_to_check_.pop_back();
+    logids_to_check_->pop_back();
     submitted++;
   }
   RATELIMIT_INFO(std::chrono::seconds{5},
                  1,
-                 "Submitting a batch of %i logs to be processed",
+                 "Submitted a batch of %i logs to be processed",
                  submitted);
 }
 
-void CheckImpactRequest::onCheckMetadataLogResponse(
+void CheckImpactRequest::onCheckImpactForLogResponse(
     Status st,
     int impact_result,
     logid_t log_id,
@@ -222,9 +276,7 @@ void CheckImpactRequest::onCheckMetadataLogResponse(
   // Treat as no-impact. We should submit more jobs in this case.
   if (st != E::OK || impact_result > Impact::ImpactResult::NONE) {
     // We want to ensure that we do not submit further.
-    if (abort_on_error_) {
-      abort_processing_ = true;
-    }
+    abort_processing_ = abort_on_error_;
     st_ = st;
     // There is a negative impact on this log. Or we cannot establish this due
     // to an error.
@@ -242,14 +294,15 @@ void CheckImpactRequest::onCheckMetadataLogResponse(
           error_name(st),
           Impact::toStringImpactResult(impact_result).c_str());
     } else {
-      RATELIMIT_WARNING(std::chrono::seconds{5},
-                        1,
-                        "Operation is unsafe on log %lu%s), status: %s, "
-                        "impact: %s.",
-                        log_id.val_,
-                        internal_logs_complete_ ? "" : " *Internal Log*",
-                        error_name(st),
-                        Impact::toStringImpactResult(impact_result).c_str());
+      RATELIMIT_WARNING(
+          std::chrono::seconds{5},
+          1,
+          "Operation is unsafe on log %lu%s), status: %s, "
+          "impact: %s.",
+          log_id.val_,
+          InternalLogs::isInternal(log_id) ? " *Internal Log*" : "",
+          error_name(st),
+          Impact::toStringImpactResult(impact_result).c_str());
     }
 
     impact_result_all_ |= impact_result;
@@ -257,7 +310,7 @@ void CheckImpactRequest::onCheckMetadataLogResponse(
       affected_logs_sample_.push_back(Impact::ImpactOnEpoch(
           log_id, error_epoch, storage_set, replication, impact_result));
     }
-    if (log_id == LOGID_INVALID || !internal_logs_complete_) {
+    if (log_id == LOGID_INVALID || state_ == State::CHECKING_INTERNAL_LOGS) {
       internal_logs_affected_ = true;
     }
   }
@@ -267,45 +320,29 @@ void CheckImpactRequest::onCheckMetadataLogResponse(
            abort_processing_ ? "yes" : "no");
   // We need to figure whether we are going to request more logs to be checked
   // or not.
-  //
   // Let's start by checking if abort was requested
   if (abort_processing_) {
     if (in_flight_ == 0) {
       // All inflight requests completed, let's complete this request
       complete(st_);
     }
-    // We will wait untill we drain all in-flight requests
+    // We will wait until we drain all in-flight requests
     return;
   }
 
   // Did we finish the internal logs?
-  if (internal_logs_complete_) {
-    // Internal logs has been checked, we should request checks for normal
-    // logs.
-    requestNextBatch();
-  } else if (in_flight_ == 0) {
+  if (in_flight_ == 0 && state_ == State::CHECKING_INTERNAL_LOGS) {
     // All internal logs and metadata nodeset has been checked and passed
     // the safety check.
-    ld_info("InternalLogs has passed the safety check, checking the normal "
-            "logs next");
-    internal_logs_complete_ = true;
-    // request the first batch of the normal logs
-    requestNextBatch();
-  } else {
-    // Internal logs are incomplete yet, and we have inflight request. Let's
-    // just wait.
-    return;
-  }
-
-  // Did we fail to schedule requests?
-  if (in_flight_ == 0) {
-    if (logids_to_check_.empty()) {
+    ld_info("Internal logs and/or metadata logs has passed the safety check, "
+            "checking the data logs next");
+    state_ = State::CHECKING_DATA_LOGS;
+    // process the data logs
+    process();
+  } else if (in_flight_ == 0 && state_ == State::CHECKING_DATA_LOGS) {
+    if (logids_to_check_->empty()) {
       // We have processed everything.
       complete(st_);
-      return;
-    } else {
-      // err should be set by requestNextBatch()
-      complete(err);
       return;
     }
   }
@@ -357,9 +394,9 @@ void CheckImpactRequest::deleteThis() {
 
   auto& map = worker->runningCheckImpactRequests().map;
   auto it = map.find(id_);
-  ld_check(it != map.end());
-
-  map.erase(it); // destroys unique_ptr which owns this
+  if (it != map.end()) {
+    map.erase(it); // destroys unique_ptr which owns this
+  }
 }
 
 void CheckImpactRequest::activateTimeoutTimer() {
@@ -369,7 +406,7 @@ void CheckImpactRequest::activateTimeoutTimer() {
 
 void CheckImpactRequest::onTimeout() {
   ld_warning(
-      "Timeout waiting for %zu in-flight CheckMetaDataLogRequests to "
+      "Timeout waiting for %zu in-flight CheckImpactForLogRequests to "
       "complete. We have processed %lu logs. Timeout is (%lus). Consider "
       "increasing the timeout if you "
       "have many logs and we can't process all of them fast enough.",

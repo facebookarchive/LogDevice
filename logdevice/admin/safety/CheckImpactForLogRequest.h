@@ -29,7 +29,7 @@ namespace facebook { namespace logdevice {
 
 class ClientImpl;
 
-class CheckMetaDataLogRequest : public Request {
+class CheckImpactForLogRequest : public Request {
  public:
   // callback function called when the operation is complete
   // The epoch_t and StorageSet parameters are valid only if Status != E::OK
@@ -43,7 +43,7 @@ class CheckMetaDataLogRequest : public Request {
       )>;
 
   /**
-   * create a CheckMetaDataLogRequest. CheckMetaDataLogRequest verifies that
+   * create a CheckImpactForLogRequest. CheckImpactForLogRequest verifies that
    * it is safe to set the storage state to 'target_storage_state' for
    op_shards.
    * If it is data log (check_metadata=false) it reads corresponding metadata
@@ -66,17 +66,17 @@ class CheckMetaDataLogRequest : public Request {
    *  @param check_metadata  check metadata logs instead
    *  @param callback        callback to provide result of check
    */
-  CheckMetaDataLogRequest(logid_t log_id,
-                          std::chrono::milliseconds timeout,
-                          ShardAuthoritativeStatusMap shard_status,
-                          ShardSet op_shards,
-                          configuration::StorageState target_storage_state,
-                          SafetyMargin safety_margin,
-                          bool check_meta_nodeset,
-                          WorkerType worker_type_,
-                          Callback callback);
+  CheckImpactForLogRequest(logid_t log_id,
+                           std::chrono::milliseconds timeout,
+                           ShardAuthoritativeStatusMap shard_status,
+                           ShardSet op_shards,
+                           configuration::StorageState target_storage_state,
+                           SafetyMargin safety_margin,
+                           bool check_meta_nodeset,
+                           WorkerType worker_type_,
+                           Callback callback);
 
-  ~CheckMetaDataLogRequest() override;
+  ~CheckImpactForLogRequest() override;
 
   WorkerType getWorkerTypeAffinity() override;
 

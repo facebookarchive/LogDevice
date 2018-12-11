@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "CheckMetaDataLogRequest.h"
+#include "CheckImpactForLogRequest.h"
 
 #include "logdevice/common/ClusterState.h"
 #include "logdevice/common/Processor.h"
@@ -15,7 +15,7 @@
 using namespace facebook::logdevice::configuration;
 namespace facebook { namespace logdevice {
 
-CheckMetaDataLogRequest::CheckMetaDataLogRequest(
+CheckImpactForLogRequest::CheckImpactForLogRequest(
     logid_t log_id,
     std::chrono::milliseconds timeout,
     ShardAuthoritativeStatusMap shard_status,
@@ -25,7 +25,7 @@ CheckMetaDataLogRequest::CheckMetaDataLogRequest(
     bool check_metadata_nodeset,
     WorkerType worker_type,
     Callback callback)
-    : Request(RequestType::CHECK_METADATA_LOG),
+    : Request(RequestType::CHECK_IMPACT_FOR_LOG),
       log_id_(log_id),
       timeout_(timeout),
       shard_status_(std::move(shard_status)),
@@ -43,20 +43,20 @@ CheckMetaDataLogRequest::CheckMetaDataLogRequest(
   ld_check(callback_ != nullptr);
 }
 
-CheckMetaDataLogRequest::~CheckMetaDataLogRequest() {
+CheckImpactForLogRequest::~CheckImpactForLogRequest() {
   ld_check(current_worker_.val_ == -1 ||
            current_worker_ == Worker::onThisThread()->idx_);
 }
 
-WorkerType CheckMetaDataLogRequest::getWorkerTypeAffinity() {
+WorkerType CheckImpactForLogRequest::getWorkerTypeAffinity() {
   return worker_type_;
 }
 
-Request::Execution CheckMetaDataLogRequest::execute() {
+Request::Execution CheckImpactForLogRequest::execute() {
   if (check_metadata_nodeset_) {
     checkMetadataNodeset();
   } else {
-    ld_debug("CheckMetaDataLogRequest::execute for log %lu", log_id_.val_);
+    ld_debug("CheckImpactForLogRequest::execute for log %lu", log_id_.val_);
 
     // Worker thread on which the request is running
     current_worker_ = Worker::onThisThread()->idx_;
@@ -68,7 +68,7 @@ Request::Execution CheckMetaDataLogRequest::execute() {
 }
 
 std::tuple<bool, bool, NodeLocationScope>
-CheckMetaDataLogRequest::checkReadWriteAvailablity(
+CheckImpactForLogRequest::checkReadWriteAvailablity(
     const StorageSet& storage_set,
     const ReplicationProperty& replication_property) {
   bool safe_writes = true;
@@ -98,7 +98,7 @@ CheckMetaDataLogRequest::checkReadWriteAvailablity(
   return std::make_tuple(safe_reads, safe_writes, fail_scope);
 }
 
-void CheckMetaDataLogRequest::checkMetadataNodeset() {
+void CheckImpactForLogRequest::checkMetadataNodeset() {
   auto config = Worker::onThisThread()->getConfiguration();
   auto metadatalogs_config = config->serverConfig()->getMetaDataLogsConfig();
   auto metadatalog_group = config->serverConfig()->getMetaDataLogGroup();
@@ -139,11 +139,11 @@ void CheckMetaDataLogRequest::checkMetadataNodeset() {
            replication_property);
 }
 
-void CheckMetaDataLogRequest::complete(Status st,
-                                       int impact_result,
-                                       epoch_t error_epoch,
-                                       StorageSet storage_set,
-                                       ReplicationProperty replication) {
+void CheckImpactForLogRequest::complete(Status st,
+                                        int impact_result,
+                                        epoch_t error_epoch,
+                                        StorageSet storage_set,
+                                        ReplicationProperty replication) {
   // call user provided callback
   callback_(st,
             impact_result,
@@ -156,7 +156,7 @@ void CheckMetaDataLogRequest::complete(Status st,
   delete this;
 }
 
-void CheckMetaDataLogRequest::fetchHistoricalMetadata() {
+void CheckImpactForLogRequest::fetchHistoricalMetadata() {
   nodeset_finder_ = std::make_unique<NodeSetFinder>(
       log_id_,
       timeout_,
@@ -207,7 +207,7 @@ void CheckMetaDataLogRequest::fetchHistoricalMetadata() {
 
 // returns empty ReplicationProperty if is impossible to satisfy
 // resulting replication property
-ReplicationProperty CheckMetaDataLogRequest::extendReplicationWithSafetyMargin(
+ReplicationProperty CheckImpactForLogRequest::extendReplicationWithSafetyMargin(
     const ReplicationProperty& replication_base,
     bool add) const {
   ReplicationProperty replication_new(replication_base);
@@ -241,7 +241,7 @@ ReplicationProperty CheckMetaDataLogRequest::extendReplicationWithSafetyMargin(
   return replication_new;
 }
 
-bool CheckMetaDataLogRequest::onEpochMetaData(EpochMetaData metadata) {
+bool CheckImpactForLogRequest::onEpochMetaData(EpochMetaData metadata) {
   ld_check(Worker::onThisThread()->idx_ == current_worker_);
   ld_check(metadata.isValid());
   NodeLocationScope fail_scope;
@@ -314,7 +314,7 @@ bool CheckMetaDataLogRequest::onEpochMetaData(EpochMetaData metadata) {
   return false;
 }
 
-bool CheckMetaDataLogRequest::checkWriteAvailability(
+bool CheckImpactForLogRequest::checkWriteAvailability(
     const StorageSet& storage_set,
     const ReplicationProperty& replication,
     NodeLocationScope* fail_scope) const {
@@ -349,7 +349,7 @@ bool CheckMetaDataLogRequest::checkWriteAvailability(
   return available_node_set.canReplicate(true, fail_scope);
 }
 
-bool CheckMetaDataLogRequest::checkReadAvailability(
+bool CheckImpactForLogRequest::checkReadAvailability(
     const StorageSet& storage_set,
     const ReplicationProperty& replication) const {
   auto config = Worker::onThisThread()->getConfiguration();
@@ -389,7 +389,7 @@ bool CheckMetaDataLogRequest::checkReadAvailability(
   return res;
 }
 
-bool CheckMetaDataLogRequest::isAlive(node_index_t index) const {
+bool CheckImpactForLogRequest::isAlive(node_index_t index) const {
   auto* cluster_state = Worker::getClusterState();
   if (cluster_state) {
     return cluster_state->isNodeAlive(index);

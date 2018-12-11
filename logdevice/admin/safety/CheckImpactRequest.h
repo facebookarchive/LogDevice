@@ -39,18 +39,36 @@ class InternalLogs;
 class CheckImpactRequest : public Request {
  public:
   using Callback = folly::Function<void(Impact)>; // Result of the check
+  enum class State {
+    // The state machine is now checking the metadata and internal logs,
+    CHECKING_INTERNAL_LOGS,
+    // The state machine is now checking the data,
+    CHECKING_DATA_LOGS,
+  };
 
-  CheckImpactRequest(ShardAuthoritativeStatusMap status_map,
-                     ShardSet shards,
-                     configuration::StorageState target_storage_state,
-                     SafetyMargin safety_margin,
-                     std::vector<logid_t> logids_to_check,
-                     size_t max_in_flight,
-                     bool abort_on_error,
-                     std::chrono::milliseconds timeout,
-                     size_t error_sample_size,
-                     WorkerType worker_type,
-                     Callback cb);
+  CheckImpactRequest(
+      ShardAuthoritativeStatusMap status_map,
+      /* Can be empty, means check given current state of shards*/
+      ShardSet shards,
+      /* Can be READ_WRITE is shards is empty */
+      configuration::StorageState target_storage_state,
+      SafetyMargin safety_margin,
+      /* Do we check the metadata logs too? */
+      bool check_metadata_logs,
+      /* Do we check the interal logs (see InternalLogs.h)? */
+      bool check_internal_logs,
+      /*
+       * if folly::none we check all logs, if empty vector, we don't check any
+       * logs, unless check_metadata_logs and/or check_internal_logs is/are set.
+       */
+      folly::Optional<std::vector<logid_t>> logids_to_check,
+      size_t max_in_flight,
+      bool abort_on_error,
+      std::chrono::milliseconds timeout,
+      size_t error_sample_size,
+      WorkerType worker_type,
+      Callback cb);
+
   Request::Execution execute() override;
 
   /**
@@ -64,7 +82,8 @@ class CheckImpactRequest : public Request {
  private:
   /**
    * Kicks off the safety check. This works in the following fashion:
-   *   - We first submit a CheckMetaDataLogRequest to process the metadata logs.
+   *   - We first submit a CheckImpactForLogRequest to process the metadata
+   * logs.
    *   - Immediate after this, we submit the requests to validate the internal
    *   logs (small number of logs). Then we wait for responses to come in.
    *   - Once we validate that all internal logs are fine. We will submit a
@@ -74,6 +93,9 @@ class CheckImpactRequest : public Request {
    *   unless the processor is busy.
    */
   Request::Execution start();
+
+  // Runs the processing logic of this state machine
+  Request::Execution process();
   /**
    * Finalizes the request and destroy the object. This will ensure that the
    * callback is called.
@@ -86,7 +108,7 @@ class CheckImpactRequest : public Request {
    */
   void deleteThis();
   /**
-   * We send CheckMetaDataLogRequest requests in batches to avoid overloading
+   * We send CheckImpactForLogRequest requests in batches to avoid overloading
    * the worker(s) with load that can be deferred.
    *
    * This will fill up to the _max_in_flight_ number of requests in flight. It
@@ -101,28 +123,31 @@ class CheckImpactRequest : public Request {
   void requestNextBatch();
   /**
    * This will submit the internal logs for processing. If we failed to
-   * submit any logs in the first round, we will fail the whole safety
-   * check. Otherwise, we defer submitting the requests until we hear back
-   * from the in-flight request.
+   * submit any logs in one go, we will fail the whole safety
+   * check.
    */
-  int requestAllInternalLogs(const configuration::InternalLogs& internal_logs);
+  int requestInternalLogs();
   int requestSingleLog(logid_t log_id);
-  void onCheckMetadataLogResponse(Status st,
-                                  int impact_result,
-                                  logid_t log_id,
-                                  epoch_t error_epoch,
-                                  StorageSet storage_set,
-                                  ReplicationProperty replication);
+  void onCheckImpactForLogResponse(Status st,
+                                   int impact_result,
+                                   logid_t log_id,
+                                   epoch_t error_epoch,
+                                   StorageSet storage_set,
+                                   ReplicationProperty replication);
   // Starts the global timeout timer
   void activateTimeoutTimer();
   void onTimeout();
+
+  // What's the current state in the state machine
+  State state_;
 
   ShardAuthoritativeStatusMap status_map_;
   ShardSet shards_;
   configuration::StorageState target_storage_state_;
   SafetyMargin safety_margin_;
-  std::vector<logid_t> logids_to_check_;
-  bool internal_logs_complete_{false};
+  bool check_metadata_logs_;
+  bool check_internal_logs_;
+  folly::Optional<std::vector<logid_t>> logids_to_check_;
   size_t max_in_flight_{1000};
   size_t logs_done_{0};
 
