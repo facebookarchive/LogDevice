@@ -22,6 +22,8 @@ install(TARGETS logdevice_ldquery_python
   COMPONENT runtime
   DESTINATION "${PYTHON_MODULE_INSTALL_PREFIX}/logdevice/ldquery/internal")
 install(CODE
-  "file(WRITE \"${PYTHON_MODULE_INSTALL_PREFIX}/logdevice/ldquery/internal/__init__.py\" \"\")")
+  "file(WRITE
+    \"\$ENV\{DESTDIR\}${PYTHON_MODULE_INSTALL_PREFIX}/logdevice/ldquery/internal/__init__.py\"
+    \"\")")
 install(FILES lib.py __init__.py
         DESTINATION "${PYTHON_MODULE_INSTALL_PREFIX}/logdevice/ldquery")

@@ -156,7 +156,7 @@ bool ChunkRebuilding::onStored(const STORED_Header& header,
   return false;
 }
 
-static const char* const WARNING_ABOUT_REBUILDING_WITHOUT_WAL =
+static constexpr const char* const WARNING_ABOUT_REBUILDING_WITHOUT_WAL =
     "Looks like you're using rebuilding v2 with "
     "rebuild-store-durability=memory. This is not "
     "supported. If a node crashes during rebuilding, some "

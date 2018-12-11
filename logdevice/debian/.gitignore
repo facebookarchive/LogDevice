@@ -1,0 +1,5 @@
+.debhelper/
+debhelper-build-stamp
+files
+logdevice.substvars
+logdevice/

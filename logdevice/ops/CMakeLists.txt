@@ -7,5 +7,7 @@
 add_subdirectory(ldquery)
 add_subdirectory(admin_command_client)
 
-install(CODE "execute_process(COMMAND ${PYTHON_EXECUTABLE} setup.py install
-                              WORKING_DIRECTORY ${LOGDEVICE_DIR}/ops/)")
+if (NOT DEFINED NO_PYTHON)
+  install(CODE "execute_process(COMMAND ${PYTHON_EXECUTABLE} setup.py install
+                                WORKING_DIRECTORY ${LOGDEVICE_DIR}/ops/)")
+endif (NOT NO_PYTHON)

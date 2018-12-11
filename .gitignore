@@ -9,3 +9,8 @@ website/package-lock.json
 website/i18n/*
 !website/i18n/en.json
 website/yarn-error.log
+logdevice_*.deb
+logdevice_*.build
+logdevice_*.buildinfo
+logdevice_*.changes
+logdevice-dbgsym_*.ddeb

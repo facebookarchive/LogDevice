@@ -3,7 +3,6 @@
 #
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
-
 auto_sources(hfiles "*.h" RECURSE "${LOGDEVICE_PYTHON_CLIENT_DIR}")
 auto_sources(files "*.cpp" RECURSE "${LOGDEVICE_PYTHON_CLIENT_DIR}")
 
@@ -37,4 +36,6 @@ install(TARGETS logdevice_python
   COMPONENT runtime
   DESTINATION "${PYTHON_MODULE_INSTALL_PREFIX}/logdevice/")
 install(CODE
-  "file(WRITE \"${PYTHON_MODULE_INSTALL_PREFIX}/logdevice/__init__.py\" \"\")")
+  "file(WRITE
+    \"\$ENV\{DESTDIR\}${PYTHON_MODULE_INSTALL_PREFIX}/logdevice/__init__.py\"
+    \"\")")

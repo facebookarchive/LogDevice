@@ -1,0 +1,6 @@
+logdevice (0.1-1) UNRELEASED; urgency=medium
+
+  * Initial skeleton for Debian packaing
+    single package, excludes python bindings and unit tests. 
+
+ -- MAINTAINER <cmarchent@fb.com>  Fri, 30 Nov 2018 12:06:45 +0000
