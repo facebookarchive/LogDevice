@@ -352,7 +352,8 @@ bool CheckImpactForLogRequest::checkWriteAvailability(
     if (node && node->isWritableStorageNode()) {
       if (!op_shards_.count(shard)) {
         AuthoritativeStatus status = shard_status_.getShardStatus(shard);
-        if (status == AuthoritativeStatus::FULLY_AUTHORITATIVE) {
+        if (status == AuthoritativeStatus::FULLY_AUTHORITATIVE &&
+            isAlive(shard.node())) {
           available_node_set.setShardAttribute(shard, true);
         }
       }
