@@ -577,6 +577,7 @@ void AppendRequest::onReplyReceived(const APPENDED_Header& reply,
       }
       updateSeenEpoch(record_.logid, lsn_to_epoch(reply.lsn));
       FOLLY_FALLTHROUGH;
+    case E::TOOBIG:
     case E::BADPAYLOAD:
     case E::NOSPC:
     case E::OVERLOADED:
