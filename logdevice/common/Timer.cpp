@@ -10,8 +10,6 @@
 #include "logdevice/common/EventLoop.h"
 #include "logdevice/common/LibeventTimer.h"
 #include "logdevice/common/Processor.h"
-#include "logdevice/common/Request.h"
-#include "logdevice/common/RequestPump.h"
 #include "logdevice/common/WheelTimer.h"
 #include "logdevice/common/Worker.h"
 
@@ -20,20 +18,6 @@ namespace facebook { namespace logdevice {
 using namespace std::chrono;
 
 namespace {
-class CallbackRequest : public Request {
- public:
-  explicit CallbackRequest(folly::Function<void()>&& callback)
-      : callback_(std::move(callback)) {}
-
-  virtual Execution execute() override {
-    callback_();
-    return Execution::COMPLETE;
-  }
-
- private:
-  folly::Function<void()> callback_;
-};
-
 class LibEventTimerImpl : public TimerInterface, public LibeventTimer {
  public:
   LibEventTimerImpl();
@@ -103,8 +87,7 @@ class WheelTimerDispatchImpl : public TimerInterface {
   WheelTimerDispatchImpl& operator=(WheelTimerDispatchImpl&&) = delete;
   WheelTimerDispatchImpl& operator=(const WheelTimerDispatchImpl&) = delete;
 
-  decltype(auto) makeWheelTimerInternalExecutor(
-      const std::shared_ptr<RequestPump>& request_pump);
+  decltype(auto) makeWheelTimerInternalExecutor(Worker* worker);
 
   // always will be called on a timer creator thread
   std::function<void()> callback_;
@@ -112,18 +95,15 @@ class WheelTimerDispatchImpl : public TimerInterface {
   bool is_activated_{false};
 };
 
-decltype(auto) WheelTimerDispatchImpl::makeWheelTimerInternalExecutor(
-    const std::shared_ptr<RequestPump>& request_pump) {
-  return [timer = this, canceled = is_canceled_, request_pump]() mutable {
+decltype(auto)
+WheelTimerDispatchImpl::makeWheelTimerInternalExecutor(Worker* worker) {
+  return [timer = this, canceled = is_canceled_, worker]() mutable {
     if (!*canceled) {
-      std::unique_ptr<Request> request = std::make_unique<CallbackRequest>(
-          [canceled = std::move(canceled), timer]() {
-            if (!*canceled && timer->callback_) {
-              timer->callback_();
-            }
-          });
-
-      request_pump->forcePost(request);
+      worker->add([canceled = std::move(canceled), timer]() {
+        if (!*canceled && timer->callback_) {
+          timer->callback_();
+        }
+      });
     }
   };
 }
@@ -176,7 +156,7 @@ void WheelTimerDispatchImpl::activate(microseconds delay, TimeoutMap*) {
   auto worker = Worker::onThisThread();
 
   worker->processor_->getWheelTimer().createTimer(
-      makeWheelTimerInternalExecutor(worker->getRequestPump()),
+      makeWheelTimerInternalExecutor(worker),
       duration_cast<milliseconds>(delay));
 
   is_activated_ = true;

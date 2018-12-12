@@ -122,6 +122,10 @@ EventLoop::~EventLoop() {
   pthread_join(thread_, nullptr);
 }
 
+void EventLoop::add(folly::Function<void()> task) {
+  request_pump_->add(std::move(task));
+}
+
 void EventLoop::start() {
   start_sem_.post();
 }

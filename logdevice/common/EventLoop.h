@@ -15,6 +15,8 @@
 #include <semaphore.h>
 #include <unordered_map>
 
+#include <folly/Executor.h>
+
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/ThreadID.h"
 
@@ -33,7 +35,7 @@ namespace facebook { namespace logdevice {
 
 class RequestPump;
 
-class EventLoop {
+class EventLoop : folly::Executor {
  public:
   /**
    * Creates and starts the EventLoop's thread.  The thread does not
@@ -62,6 +64,10 @@ class EventLoop {
   struct event_base* getEventBase() {
     return base_.get();
   }
+
+  /// Enqueue a function to executed by this executor. This and all
+  /// variants must be threadsafe.
+  void add(folly::Function<void()>) override;
 
   /**
    * Provides shared ownership of the pump that the EventLoop will get
