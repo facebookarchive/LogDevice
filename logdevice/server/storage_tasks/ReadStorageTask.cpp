@@ -110,10 +110,10 @@ void ReadStorageTask::execute() {
 
   STAT_INCR(storageThreadPool_->stats(), num_in_flight_read_storage_tasks);
 
-
   if (stream_) { // Only read if the ServerReadStream still exists.
     if (options_.inject_latency) {
       folly::Baton<> baton;
+      auto& io_fault_injection = IOFaultInjection::instance();
       baton.try_wait_for(
           io_fault_injection.getLatencyToInject(stream_->shard_));
     }

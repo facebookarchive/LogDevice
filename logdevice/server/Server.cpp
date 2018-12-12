@@ -577,6 +577,7 @@ bool Server::initStore() {
           !ClusterMarkerChecker::check(*sharded_store_, *server_config_)) {
         return false;
       }
+      auto& io_fault_injection = IOFaultInjection::instance();
       io_fault_injection.init(sharded_store_->numShards());
       // Size the storage thread pool task queue to never fill up.
       size_t task_queue_size = local_settings->num_workers *

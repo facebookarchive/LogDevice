@@ -7,15 +7,26 @@
  */
 #include "IOFaultInjection.h"
 
+#include "folly/Singleton.h"
+
 namespace facebook { namespace logdevice {
 
-IOFaultInjection io_fault_injection;
+namespace {
+
+struct PrivateTag {};
+static folly::LeakySingleton<IOFaultInjection> ioFaultInjection;
+
+} // namespace
+
+IOFaultInjection& IOFaultInjection::instance() {
+  return ioFaultInjection.get();
+}
 
 using FaultType = IOFaultInjection::FaultType;
 
 void IOFaultInjection::init(shard_size_t nshards) {
   ld_check(nshards > 0);
-  shard_settings_ = std::vector<Settings>(nshards);
+  shard_settings_ = std::vector<folly::Synchronized<Settings>>(nshards);
 }
 
 bool IOFaultInjection::Settings::match(
@@ -35,34 +46,31 @@ FaultType IOFaultInjection::getInjectedFault(shard_index_t shard_idx,
     return FaultType::NONE;
   }
 
-  using ReadHolder = folly::SharedMutex::ReadHolder;
-  using WriteHolder = folly::SharedMutex::WriteHolder;
-
   if (shard_settings_.empty()) {
     // Should only be true in unit tests.
     return FaultType::NONE;
   }
 
   ld_check(shard_idx < shard_settings_.size());
-  auto& settings = shard_settings_[shard_idx];
-
-  if (settings.match(d_type, io_type, fault_types) &&
-      (settings.chance() == UINT32_MAX ||
-       folly::Random::rand32() < settings.chance())) {
-    switch (settings.mode()) {
+  auto settings = shard_settings_[shard_idx].rlock();
+  if (settings->match(d_type, io_type, fault_types) &&
+      (settings->chance() == UINT32_MAX ||
+       folly::Random::rand32() < settings->chance())) {
+    switch (settings->mode()) {
       case InjectMode::PERSISTENT: {
-        ReadHolder guard(settings.mutex);
-        if (settings.match(d_type, io_type, fault_types)) {
-          return settings.faultType();
+        if (settings->match(d_type, io_type, fault_types)) {
+          return settings->faultType();
         }
         break;
       }
       case InjectMode::SINGLE_SHOT: {
-        WriteHolder guard(settings.mutex);
-        if (settings.match(d_type, io_type, fault_types)) {
-          auto error = settings.faultType();
-          if (settings.mode() == InjectMode::SINGLE_SHOT) {
-            settings.copyFrom(Settings());
+        settings.unlock();
+        auto uSettings = shard_settings_[shard_idx].ulock();
+        if (uSettings->match(d_type, io_type, fault_types)) {
+          auto error = uSettings->faultType();
+          if (uSettings->mode() == InjectMode::SINGLE_SHOT) {
+            auto wSettings = uSettings.moveFromUpgradeToWrite();
+            *wSettings = Settings();
           }
           return error;
         }
@@ -85,7 +93,6 @@ void IOFaultInjection::setFaultInjection(shard_index_t shard_idx,
                                          InjectMode mode,
                                          double percent_chance,
                                          std::chrono::milliseconds latency) {
-  using WriteHolder = folly::SharedMutex::WriteHolder;
   uint32_t chance =
       std::min((double)UINT32_MAX, percent_chance / 100 * UINT32_MAX);
 
@@ -95,15 +102,13 @@ void IOFaultInjection::setFaultInjection(shard_index_t shard_idx,
   }
 
   ld_check(shard_idx < shard_settings_.size());
-  auto& settings = shard_settings_[shard_idx];
-  WriteHolder guard(settings.mutex);
+  auto settings = shard_settings_[shard_idx].wlock();
   enable_fault_injection_.store(true, std::memory_order_relaxed);
   if (mode == InjectMode::OFF) {
     // Disable everything
-    settings.copyFrom(Settings());
+    *settings = Settings();
   } else {
-    settings.copyFrom(
-        Settings(data_type, io_type, fault_type, mode, chance, latency));
+    *settings = Settings(data_type, io_type, fault_type, mode, chance, latency);
   }
 }
 
@@ -114,7 +119,7 @@ IOFaultInjection::getLatencyToInject(shard_index_t shard_idx) {
     return std::chrono::milliseconds(0);
   }
   ld_check(shard_idx < shard_settings_.size());
-  return shard_settings_[shard_idx].latency();
+  return shard_settings_[shard_idx]->latency();
 }
 
 template <>

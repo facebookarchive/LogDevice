@@ -165,6 +165,7 @@ class InjectShardFault : public AdminCommand {
     }
 
     for (; shard_idx <= shard_end_idx; ++shard_idx) {
+      auto& io_fault_injection = IOFaultInjection::instance();
       io_fault_injection.setFaultInjection(
           shard_idx,
           data_type_,

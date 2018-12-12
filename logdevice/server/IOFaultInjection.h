@@ -10,7 +10,7 @@
 #include <bitset>
 
 #include <folly/Random.h>
-#include <folly/SharedMutex.h>
+#include <folly/Synchronized.h>
 
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Err.h"
@@ -19,6 +19,7 @@ namespace facebook { namespace logdevice {
 
 class IOFaultInjection {
  public:
+  static IOFaultInjection& instance();
   enum class DataType {
     NONE,
     // User and metadata log data.
@@ -61,50 +62,35 @@ class IOFaultInjection {
           latency_(l) {}
 
     DataType dataType() const {
-      return load_relaxed(data_type_);
+      return data_type_;
     }
     IOType ioType() const {
-      return load_relaxed(io_type_);
+      return io_type_;
     }
     FaultType faultType() const {
-      return load_relaxed(fault_type_);
+      return fault_type_;
     }
     InjectMode mode() const {
-      return load_relaxed(mode_);
+      return mode_;
     }
     uint32_t chance() const {
-      return load_relaxed(chance_);
+      return chance_;
     }
     std::chrono::milliseconds latency() const {
-      return load_relaxed(latency_);
+      return latency_;
     }
 
     bool match(DataType data_type,
                IOType io_type,
                FaultTypeBitSet fault_types) const;
 
-    const Settings& copyFrom(const Settings& rhs) {
-      if (this != &rhs) {
-        copy_relaxed(data_type_, rhs.data_type_);
-        copy_relaxed(io_type_, rhs.io_type_);
-        copy_relaxed(fault_type_, rhs.fault_type_);
-        copy_relaxed(mode_, rhs.mode_);
-        copy_relaxed(chance_, rhs.chance_);
-        copy_relaxed(latency_, rhs.latency_);
-      }
-      return *this;
-    }
-
-    folly::SharedMutex mutex;
-
    private:
-    std::atomic<DataType> data_type_{DataType::NONE};
-    std::atomic<IOType> io_type_{IOType::NONE};
-    std::atomic<FaultType> fault_type_{FaultType::NONE};
-    std::atomic<InjectMode> mode_{InjectMode::OFF};
-    std::atomic<uint32_t> chance_{UINT32_MAX};
-    std::atomic<std::chrono::milliseconds> latency_{
-        std::chrono::milliseconds(0)};
+    DataType data_type_{DataType::NONE};
+    IOType io_type_{IOType::NONE};
+    FaultType fault_type_{FaultType::NONE};
+    InjectMode mode_{InjectMode::OFF};
+    uint32_t chance_{UINT32_MAX};
+    std::chrono::milliseconds latency_{std::chrono::milliseconds(0)};
   };
 
   // Configure fault injection to occur on one or all shards.
@@ -135,21 +121,9 @@ class IOFaultInjection {
   std::chrono::milliseconds getLatencyToInject(shard_index_t shard_idx);
 
  private:
-  template <typename T>
-  static void copy_relaxed(T& dst, const T& src) {
-    dst.store(src.load(std::memory_order_relaxed), std::memory_order_relaxed);
-  }
-
-  template <typename T>
-  static T load_relaxed(const std::atomic<T>& src) {
-    return src.load(std::memory_order_relaxed);
-  }
-
-  std::vector<Settings> shard_settings_;
+  std::vector<folly::Synchronized<Settings>> shard_settings_;
   std::atomic<bool> enable_fault_injection_{false};
 };
 
 extern EnumMap<IOFaultInjection::FaultType, std::string> fault_type_names;
-
-extern IOFaultInjection io_fault_injection;
 }} // namespace facebook::logdevice

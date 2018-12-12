@@ -142,6 +142,16 @@ const TestData kDataTypeDifferent{
     {faulty_shard_idx, IOType::READ, FaultType::LATENCY, DataType::METADATA},
     FaultType::NONE};
 
+const TestData kInjectModeSingleShot{
+    std::make_shared<Settings>(DataType::DATA,
+                               IOType::ALL,
+                               FaultType::IO_ERROR,
+                               InjectMode::SINGLE_SHOT,
+                               UINT32_MAX,
+                               kZeroMs),
+    {faulty_shard_idx, IOType::ALL, FaultType::IO_ERROR, DataType::DATA},
+    FaultType::IO_ERROR};
+
 struct IOFaultInjectionFixture : public TestWithParam<TestData> {};
 
 INSTANTIATE_TEST_CASE_P(IOFaultInjectionTest,
@@ -154,10 +164,12 @@ INSTANTIATE_TEST_CASE_P(IOFaultInjectionTest,
                                kFaultTypeOROperation,
                                kFaultTypeDifferent,
                                kFaultTypeNone,
-                               kDataTypeDifferent));
+                               kDataTypeDifferent,
+                               kInjectModeSingleShot));
 
 TEST_P(IOFaultInjectionFixture, Test) {
   auto& settings = GetParam().settings;
+  auto& io_fault_injection = IOFaultInjection::instance();
   io_fault_injection.init(shard_size);
 
   io_fault_injection.setFaultInjection(faulty_shard_idx,

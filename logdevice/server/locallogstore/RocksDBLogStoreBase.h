@@ -739,6 +739,7 @@ class RocksDBIterator {
 
     rocksdb::Status status;
     auto* rb_store = static_cast<const RocksDBLogStoreBase*>(store_);
+    auto& io_fault_injection = IOFaultInjection::instance();
     auto sim_error = io_fault_injection.getInjectedFault(
         store_->getShardIdx(),
         IOType::READ,

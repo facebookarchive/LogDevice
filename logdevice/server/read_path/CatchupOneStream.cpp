@@ -982,6 +982,7 @@ CatchupOneStream::startRead(WeakRef<CatchupQueue> catchup_queue,
                         max_record_bytes_queued,
                         first_record_any_size,
                         catchup_reason);
+  auto& io_fault_injection = IOFaultInjection::instance();
   auto fault =
       io_fault_injection.getInjectedFault(stream_->shard_,
                                           IOFaultInjection::IOType::READ,

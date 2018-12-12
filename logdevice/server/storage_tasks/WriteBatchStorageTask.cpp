@@ -45,7 +45,7 @@ void WriteBatchStorageTask::execute() {
   // Yield to higher-pri tasks if needed. Since this can take a few seconds
   // or even minutes, this is done before checking timeouts and preemption.
   stallIfNeeded();
-
+  auto& io_fault_injection = IOFaultInjection::instance();
   auto fault =
       io_fault_injection.getInjectedFault(reply_shard_idx_,
                                           IOFaultInjection::IOType::WRITE,

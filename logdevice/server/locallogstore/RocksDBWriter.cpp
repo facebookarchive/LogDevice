@@ -745,6 +745,7 @@ rocksdb::Status RocksDBWriter::writeBatch(const rocksdb::WriteOptions& options,
 
   rocksdb::Status status;
   shard_index_t shard_idx = store_->getShardIdx();
+  auto& io_fault_injection = IOFaultInjection::instance();
   auto fault = io_fault_injection.getInjectedFault(
       shard_idx, IOType::WRITE, FaultType::CORRUPTION | FaultType::IO_ERROR);
   if (fault != FaultType::NONE) {

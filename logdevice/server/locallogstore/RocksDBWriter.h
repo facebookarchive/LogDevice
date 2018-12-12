@@ -167,6 +167,7 @@ class RocksDBWriter {
 
     rocksdb::Status status;
     shard_index_t shard_idx = store->getShardIdx();
+    auto& io_fault_injection = IOFaultInjection::instance();
     auto fault = io_fault_injection.getInjectedFault(
         shard_idx,
         IOType::READ,
