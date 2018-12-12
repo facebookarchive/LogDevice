@@ -244,10 +244,12 @@ void CheckImpactRequest::requestNextBatch() {
     logids_to_check_->pop_back();
     submitted++;
   }
-  RATELIMIT_INFO(std::chrono::seconds{5},
-                 1,
-                 "Submitted a batch of %i logs to be processed",
-                 submitted);
+  if (submitted > 0) {
+    RATELIMIT_INFO(std::chrono::seconds{5},
+                   1,
+                   "Submitted a batch of %i logs to be processed",
+                   submitted);
+  }
 }
 
 void CheckImpactRequest::onCheckImpactForLogResponse(
@@ -331,6 +333,9 @@ void CheckImpactRequest::onCheckImpactForLogResponse(
       // We have processed everything.
       complete(st_);
       return;
+    } else {
+      // We still have logs to process
+      process();
     }
   }
 }
