@@ -146,22 +146,11 @@ FailureDetector::FailureDetector(UpdateableSettings<GossipSettings> settings,
   size_t max_nodes = processor->settings()->max_nodes;
 
   // Preallocating makes it easier to handle cluster expansion and shrinking.
-  auto new_list = new std::atomic<std::chrono::milliseconds>[max_nodes];
   auto current_time_ms = getCurrentTimeInMillis();
-  for (int i = 0; i < max_nodes; ++i) {
-    new_list[i].store(current_time_ms);
+  for (size_t i = 0; i < max_nodes; ++i) {
+    Node& node = nodes_[i];
+    node.last_suspected_at_ = current_time_ms;
   }
-  last_suspected_at_.reset(new_list);
-
-  // All nodes are initially marked as dead.
-  gossip_list_.assign(max_nodes, std::numeric_limits<uint32_t>::max());
-  gossip_ts_.assign(max_nodes, std::chrono::milliseconds::zero());
-  is_node_starting_.assign(max_nodes, false);
-  nodes_.assign(max_nodes, Node{NodeState::DEAD, false});
-
-  // none of the nodes requested failover yet
-  failover_list_.assign(max_nodes, std::chrono::milliseconds::zero());
-  suspect_matrix_.assign(max_nodes, std::vector<uint8_t>(max_nodes, 0));
 
   switch (settings_->mode) {
     case GossipSettings::SelectionMode::RANDOM:
@@ -181,8 +170,8 @@ FailureDetector::FailureDetector(UpdateableSettings<GossipSettings> settings,
       "Failure Detector starting with instance id: %lu", instance_id_.count());
 
   auto cs = processor->cluster_state_.get();
-  for (size_t i = 0; i < nodes_.size(); ++i) {
-    cs->setNodeState(i, ClusterState::NodeState::DEAD);
+  for (const auto& it : nodes_) {
+    cs->setNodeState(it.first, ClusterState::NodeState::DEAD);
   }
 
   if (attach) {
@@ -386,16 +375,16 @@ void FailureDetector::gossip() {
   auto config = getServerConfig();
   size_t size = config->getMaxNodeIdx() + 1;
 
-  if (size > gossip_list_.size()) {
+  // TODO: this will be eliminated after allowing nodes_ growing over max_node
+  if (size > nodes_.size()) {
     // ignore extra nodes if the size of the cluster exceeds max_nodes
     RATELIMIT_ERROR(std::chrono::minutes(1),
                     1,
                     "Number of nodes in the cluster exceeds the max_nodes "
                     "limit (%zu)",
-                    gossip_list_.size());
-    size = gossip_list_.size();
+                    nodes_.size());
+    size = nodes_.size();
   }
-
   std::lock_guard<std::mutex> lock(mutex_);
 
   NodeID dest = selector_->getNode(this);
@@ -410,21 +399,22 @@ void FailureDetector::gossip() {
   auto now = SteadyTimestamp::now();
   // bump other nodes' entry in gossip list if at least 1 gossip_interval passed
   if (now >= last_gossip_tick_time_ + settings_->gossip_interval) {
-    for (size_t i = 0; i < size; ++i) {
-      if (i != this_node.index()) {
+    for (auto& it : nodes_) {
+      if (it.first != this_node.index()) {
         // overflow handling
-        gossip_list_[i] = std::max(gossip_list_[i], gossip_list_[i] + 1);
+        uint32_t gl = it.second.gossip_;
+        it.second.gossip_ = std::max(gl, gl + 1);
       }
     }
     last_gossip_tick_time_ = now;
   }
-  // Refreshing own state
-  gossip_list_[this_node.index()] = 0;
-  gossip_ts_[this_node.index()] = instance_id_;
-  failover_list_[this_node.index()] =
+  // stayin' alive
+  Node& node(nodes_[this_node.index()]);
+  node.gossip_ = 0;
+  node.gossip_ts_ = instance_id_;
+  node.failover_ =
       failover_.load() ? instance_id_ : std::chrono::milliseconds::zero();
-  is_node_starting_[this_node.index()] = !isLogsConfigLoaded();
-
+  node.is_node_starting_ = !isLogsConfigLoaded();
   // Don't trigger other nodes' state transition until we receive min number
   // of gossips. The GCS reply is not same as a regular gossip, and therefore
   // doesn't contain gossip_list_ values. The default values of gossip_list_
@@ -460,35 +450,22 @@ void FailureDetector::gossip() {
     return;
   }
 
-  // construct a GOSSIP message and send it to dest
-  GOSSIP_Message::gossip_list_t gossip_list(
-      gossip_list_.begin(), gossip_list_.begin() + size);
-
-  /* TODO: t14673640: remove when no one sends matrices
-   * on an unconnected socket */
-  GOSSIP_Message::suspect_matrix_t suspect_matrix(0);
-
   GOSSIP_Message::GOSSIP_flags_t flags = 0;
-  GOSSIP_Message::gossip_ts_t gossip_ts_list(
-      gossip_ts_.begin(), gossip_ts_.begin() + size);
 
   // If at least one entry in the failover list is non-zero, include the
   // list in the message.
-  GOSSIP_Message::failover_list_t failover_list;
-  auto it =
-      std::max_element(failover_list_.begin(), failover_list_.begin() + size);
-  if (it != failover_list_.end() && *it > std::chrono::milliseconds::zero()) {
-    flags |= GOSSIP_Message::HAS_FAILOVER_LIST_FLAG;
-    failover_list.assign(failover_list_.begin(), failover_list_.begin() + size);
-  }
-
-  GOSSIP_Message::starting_list_t starting_list;
-  flags |= GOSSIP_Message::HAS_STARTING_LIST_FLAG;
-  for (node_index_t nid = 0; nid < is_node_starting_.size(); ++nid) {
-    if (is_node_starting_[nid]) {
-      starting_list.push_back(NodeID(nid));
+  // In GOSSIP protocol >= HASHMAP_SUPPORT_IN_GOSSIP, this wouldn't be necessary
+  // because failover list is sent through a list of GOSSIP_Node.
+  for (auto& it : nodes_) {
+    if (it.second.failover_ > std::chrono::milliseconds::zero()) {
+      flags |= GOSSIP_Message::HAS_FAILOVER_LIST_FLAG;
+      break;
     }
   }
+
+  // In GOSSIP protocol >= HASHMAP_SUPPORT_IN_GOSSIP, this wouldn't be necessary
+  // because starting list is sent through a list of GOSSIP_Node.
+  flags |= GOSSIP_Message::HAS_STARTING_LIST_FLAG;
 
   const auto boycott_map = getBoycottTracker().getBoycottsForGossip();
   std::vector<Boycott> boycotts;
@@ -508,20 +485,27 @@ void FailureDetector::gossip() {
                  std::back_inserter(boycott_durations),
                  [](const auto& entry) { return entry.second; });
 
+  GOSSIP_Message::node_list_t node_list;
+  for (auto& it : nodes_) {
+    GOSSIP_Node gnode;
+    gnode.node_id_ = it.first;
+    gnode.gossip_ = it.second.gossip_;
+    gnode.gossip_ts_ = it.second.gossip_ts_;
+    gnode.failover_ = it.second.failover_;
+    gnode.is_node_starting_ = it.second.is_node_starting_;
+    node_list.push_back(gnode);
+  }
+
   // bump the message sequence number
   ++current_msg_id_;
   int rv = sendGossipMessage(
       dest,
       std::make_unique<GOSSIP_Message>(this_node,
-                                       std::move(gossip_list),
+                                       std::move(node_list),
                                        instance_id_,
                                        getCurrentTimeInMillis(),
-                                       std::move(gossip_ts_list),
-                                       std::move(failover_list),
-                                       std::move(suspect_matrix),
                                        std::move(boycotts),
                                        std::move(boycott_durations),
-                                       std::move(starting_list),
                                        flags,
                                        current_msg_id_));
 
@@ -581,13 +565,11 @@ bool FailureDetector::processFlags(const GOSSIP_Message& msg) {
   node_index_t sender_idx = msg.gossip_node_.index();
   ld_check(my_idx != sender_idx);
 
-  if (sender_idx > gossip_list_.size() - 1) {
+  if (nodes_.find(sender_idx) == nodes_.end()) {
     RATELIMIT_ERROR(std::chrono::seconds(1),
                     1,
-                    "Sender (%s) is not present in our config, "
-                    "max_nodes limit:%zu",
-                    msg.gossip_node_.toString().c_str(),
-                    gossip_list_.size());
+                    "Sender (%s) is not present in our config",
+                    msg.gossip_node_.toString().c_str());
     return true;
   }
 
@@ -596,14 +578,14 @@ bool FailureDetector::processFlags(const GOSSIP_Message& msg) {
   }
 
   // marking sender alive
-  gossip_list_[sender_idx] = 0;
-  gossip_ts_[sender_idx] = msg.instance_id_;
-  failover_list_[sender_idx] = std::chrono::milliseconds::zero();
-  suspect_matrix_[my_idx][sender_idx] = 0;
-  bool is_starting = is_node_starting_[sender_idx] = !is_start_state_finished;
+  Node& sender_node(nodes_[sender_idx]);
+  sender_node.gossip_ = 0;
+  sender_node.gossip_ts_ = msg.instance_id_;
+  sender_node.failover_ = std::chrono::milliseconds::zero();
+  bool is_starting = sender_node.is_node_starting_ = !is_start_state_finished;
 
   if (is_suspect_state_finished) {
-    if (nodes_[sender_idx].state != NodeState::ALIVE) {
+    if (sender_node.state != NodeState::ALIVE) {
       updateDependencies(sender_idx,
                          NodeState::ALIVE,
                          /*failover*/ false,
@@ -614,9 +596,9 @@ bool FailureDetector::processFlags(const GOSSIP_Message& msg) {
               "(gossip: %u, instance-id: %lu, failover: %lu, starting: %u)",
               sender_idx,
               cs->getNodeStateAsStr(sender_idx),
-              gossip_list_[sender_idx],
-              gossip_ts_[sender_idx].count(),
-              failover_list_[sender_idx].count(),
+              sender_node.gossip_,
+              sender_node.gossip_ts_.count(),
+              sender_node.failover_.count(),
               is_starting);
     }
   } else if (is_node_bringup) {
@@ -652,7 +634,6 @@ FailureDetector::flagsToString(GOSSIP_Message::GOSSIP_flags_t flags) {
 void FailureDetector::onGossipReceived(const GOSSIP_Message& msg) {
   auto config = getServerConfig();
   node_index_t this_index = config->getMyNodeID().index();
-  auto max_nodes = gossip_list_.size();
 
   if (shouldDumpState()) {
     ld_info("Gossip message received from node %s, sent_time:%lums",
@@ -665,29 +646,30 @@ void FailureDetector::onGossipReceived(const GOSSIP_Message& msg) {
     return;
   }
 
-  size_t num_nodes = msg.num_nodes_;
-  if (num_nodes > gossip_list_.size()) {
+  size_t num_nodes = msg.node_list_.size();
+  if (num_nodes > nodes_.size()) {
     RATELIMIT_ERROR(std::chrono::minutes(1),
                     1,
                     "Number of nodes in the GOSSIP message (%zu) exceeds the "
                     "max_nodes limit (%zu)",
                     num_nodes,
-                    gossip_list_.size());
+                    nodes_.size());
 
-    num_nodes = gossip_list_.size();
+    num_nodes = nodes_.size();
   }
 
   node_index_t sender_idx = msg.gossip_node_.index();
   std::lock_guard<std::mutex> lock(mutex_);
 
-  if (sender_idx < num_nodes && gossip_ts_[sender_idx] > msg.instance_id_) {
+  if (sender_idx < num_nodes &&
+      nodes_[sender_idx].gossip_ts_ > msg.instance_id_) {
     RATELIMIT_WARNING(std::chrono::seconds(1),
                       5,
                       "Possible time-skew detected on %s, received a lower "
                       "instance id(%lu) from sender than already known(%lu)",
                       msg.gossip_node_.toString().c_str(),
                       msg.instance_id_.count(),
-                      gossip_ts_[sender_idx].count());
+                      nodes_[sender_idx].gossip_ts_.count());
     STAT_INCR(getStats(), gossips_rejected_instance_id);
     return;
   }
@@ -704,34 +686,22 @@ void FailureDetector::onGossipReceived(const GOSSIP_Message& msg) {
 
   const bool has_starting_list =
       msg.flags_ & GOSSIP_Message::HAS_STARTING_LIST_FLAG;
-  std::vector<bool> is_starting(max_nodes, false);
-  if (has_starting_list) {
-    for (auto node : msg.starting_list_) {
-      if (node.index() < 0 || node.index() >= max_nodes) {
-        RATELIMIT_WARNING(std::chrono::seconds{1},
-                          1,
-                          "Got gossip with invalid node idx on starting list: "
-                          "%u. Ignoring...",
-                          node.index());
-      } else {
-        is_starting[node.index()] = true;
-      }
-    }
-  }
 
-  for (size_t i = 0; i < num_nodes; ++i) {
+  for (auto node : msg.node_list_) {
+    size_t id = node.node_id_;
     // Don't modify this node's state based on gossip message.
-    if (i == this_index)
+    if (id == this_index) {
       continue;
+    }
 
-    if (has_failover_list && msg.failover_list_[i] > msg.gossip_ts_[i]) {
+    if (has_failover_list && node.failover_ > node.gossip_ts_) {
       RATELIMIT_CRITICAL(std::chrono::seconds(1),
                          10,
                          "Received invalid combination of Failover(%lu) and"
                          " Instance id(%lu) for N%zu from %s",
-                         msg.failover_list_[i].count(),
-                         msg.gossip_ts_[i].count(),
-                         i,
+                         node.failover_.count(),
+                         node.gossip_ts_.count(),
+                         id,
                          msg.gossip_node_.toString().c_str());
       ld_check(false);
       continue;
@@ -739,55 +709,42 @@ void FailureDetector::onGossipReceived(const GOSSIP_Message& msg) {
 
     // If the incoming Gossip message knows about an older instance of the
     // process running on Node Ni, then ignore this update.
-    if (gossip_ts_[i] > msg.gossip_ts_[i]) {
+    if (nodes_[id].gossip_ts_ > node.gossip_ts_) {
       ld_spew("Received a stale instance id from %s,"
               " for N%zu, our:%lu, received:%lu",
               msg.gossip_node_.toString().c_str(),
-              i,
-              gossip_ts_[i].count(),
-              msg.gossip_ts_[i].count());
+              id,
+              nodes_[id].gossip_ts_.count(),
+              node.gossip_ts_.count());
       continue;
-    } else if (gossip_ts_[i] < msg.gossip_ts_[i]) {
+    } else if (nodes_[id].gossip_ts_ < node.gossip_ts_) {
       // If the incoming Gossip message knows about a valid
       // newer instance of Node Ni, then copy everything
-      if (isValidInstanceId(msg.gossip_ts_[i], i)) {
-        gossip_list_[i] = msg.gossip_list_[i];
-        gossip_ts_[i] = msg.gossip_ts_[i];
-        failover_list_[i] = has_failover_list
-            ? msg.failover_list_[i]
+      if (isValidInstanceId(node.gossip_ts_, id)) {
+        nodes_[id].gossip_ = node.gossip_;
+        nodes_[id].gossip_ts_ = node.gossip_ts_;
+        nodes_[id].failover_ = has_failover_list
+            ? node.failover_
             : std::chrono::milliseconds::zero();
         if (has_starting_list) {
           // TODO: figure out what to do for compat
-          is_node_starting_[i] = is_starting[i];
+          nodes_[id].is_node_starting_ = node.is_node_starting_;
         }
-        to_update.push_back(i);
+        to_update.push_back(id);
       }
       continue;
     }
 
-    if (update_min(gossip_list_[i], msg.gossip_list_[i]) ||
-        i == msg.gossip_node_.index()) {
-      to_update.push_back(i);
+    if (update_min(nodes_[id].gossip_, node.gossip_) ||
+        id == msg.gossip_node_.index()) {
+      to_update.push_back(id);
     }
     if (has_starting_list) {
-      is_node_starting_[i] = is_node_starting_[i] && is_starting[i];
+      nodes_[id].is_node_starting_ =
+          nodes_[id].is_node_starting_ && node.is_node_starting_;
     }
     if (has_failover_list) {
-      failover_list_[i] = std::max(failover_list_[i], msg.failover_list_[i]);
-    }
-  }
-
-  // Merge suspect matrices. This is done by copying the row from the matrix
-  // included in the message if the other node has more up-to-date
-  // information: more precisely, row j of the matrix is copied from node
-  // N's suspect matrix only if j-th entry of N's gossip list is no greater
-  // than the corresponding entry in our own list (therefore, node N
-  // presumably has more recent info about the j-th node).
-  if (msg.suspect_matrix_.size() > 0) {
-    for (auto& idx : to_update) {
-      for (size_t j = 0; j < num_nodes; ++j) {
-        suspect_matrix_[idx][j] = msg.suspect_matrix_[idx][j];
-      }
+      nodes_[id].failover_ = std::max(nodes_[id].failover_, node.failover_);
     }
   }
 
@@ -808,7 +765,7 @@ void FailureDetector::startSuspectTimer() {
   auto config = getServerConfig();
   node_index_t my_idx = config->getMyNodeID().index();
 
-  gossip_list_[my_idx] = 0;
+  nodes_[my_idx].gossip_ = 0;
   updateNodeState(my_idx, false, true, false);
 
   suspect_timer_.assign([=] {
@@ -834,27 +791,10 @@ void FailureDetector::startGossiping() {
   gossip_timer_node_->timer->activate();
 }
 
-std::string
-FailureDetector::dumpSuspectMatrix(const GOSSIP_Message::suspect_matrix_t& sm) {
-  auto config = getServerConfig();
-  size_t n = std::min(sm.size(), config->getMaxNodeIdx() + 1);
-
-  std::string str = "[";
-  for (size_t i = 0; i < n; ++i) {
-    for (size_t j = 0; j < n; ++j) {
-      str += folly::to<std::string>(sm[i][j]);
-    }
-    str += (i + 1 < n ? ", " : "");
-  }
-  str += "]";
-
-  return str;
-}
-
 std::string FailureDetector::dumpGossipList(std::vector<uint32_t> list) {
   auto config = getServerConfig();
   auto& nodes = config->getNodes();
-  size_t n = std::min(gossip_list_.size(), config->getMaxNodeIdx() + 1);
+  size_t n = std::min(nodes_.size(), config->getMaxNodeIdx() + 1);
   n = std::min(n, list.size());
   std::string res;
 
@@ -871,10 +811,11 @@ std::string
 FailureDetector::dumpInstanceList(std::vector<std::chrono::milliseconds> list) {
   auto config = getServerConfig();
   auto& nodes = config->getNodes();
-  size_t n = std::min(gossip_list_.size(), config->getMaxNodeIdx() + 1);
+  size_t n = std::min(nodes_.size(), config->getMaxNodeIdx() + 1);
   n = std::min(n, list.size());
   std::string res;
 
+  // TODO: change into iterating on nodes_
   for (size_t i = 0; i < n; ++i) {
     NodeID node_id(i, nodes.count(i) ? nodes.at(i).generation : 0);
     res += node_id.toString() + " = " +
@@ -887,9 +828,10 @@ FailureDetector::dumpInstanceList(std::vector<std::chrono::milliseconds> list) {
 void FailureDetector::dumpFDState() {
   auto config = getServerConfig();
   auto& nodes = config->getNodes();
-  size_t n = std::min(gossip_list_.size(), config->getMaxNodeIdx() + 1);
+  size_t n = std::min(nodes_.size(), config->getMaxNodeIdx() + 1);
   std::string status_str;
 
+  // TODO: change into iterating on nodes_
   for (size_t i = 0; i < n; ++i) {
     NodeID node_id(i, nodes.count(i) ? nodes.at(i).generation : 0);
     status_str +=
@@ -899,15 +841,7 @@ void FailureDetector::dumpFDState() {
   const dbg::Level level = isTracingOn() ? dbg::Level::INFO : dbg::Level::SPEW;
   ld_log(
       level, "Failure Detector status for all nodes: %s", status_str.c_str());
-  ld_log(level,
-         "This node's Gossip List: %s",
-         dumpGossipList(gossip_list_).c_str());
-  ld_log(level,
-         "This node's Instance id list: %s",
-         dumpInstanceList(gossip_ts_).c_str());
-  ld_log(level,
-         "This node's Failover List: %s",
-         dumpInstanceList(failover_list_).c_str());
+  // TODO: add dump of gossip_list_, gossip_ts_, and failover_list_
 }
 
 void FailureDetector::cancelTimers() {
@@ -931,9 +865,6 @@ void FailureDetector::dumpGossipMessage(const GOSSIP_Message& msg) {
   ld_info("Failover List from %s [%s]",
           msg.gossip_node_.toString().c_str(),
           dumpInstanceList(msg.failover_list_).c_str());
-  ld_info("Starting List from %s %s",
-          msg.gossip_node_.toString().c_str(),
-          toString(msg.starting_list_).c_str());
   ld_info(
       "Flags from %s 0x%x", msg.gossip_node_.toString().c_str(), msg.flags_);
 }
@@ -954,19 +885,18 @@ void FailureDetector::detectFailures(node_index_t self, size_t n) {
   auto config = getServerConfig();
 
   ld_check(self < n);
-  ld_check(n <= gossip_list_.size());
-
-  // update this node's row of the suspect matrix
-  for (size_t i = 0; i < n; ++i) {
-    suspect_matrix_[self][i] = (gossip_list_[i] > threshold);
-  }
+  ld_check(n <= nodes_.size());
 
   size_t dead_cnt = 0;
   size_t effective_dead_cnt = 0;
   size_t cluster_size = config->getNodes().size();
   size_t effective_cluster_size = cluster_size;
   // Finally, update all the states
+  // TODO: iterate with non-contiguous, actual node-id?
   for (size_t j = 0; j < n; ++j) {
+    if (nodes_.find(j) == nodes_.end()) {
+      continue;
+    }
     if (j == self) {
       // don't transition yourself to DEAD
       updateNodeState(self, false /*dead*/, true /*self*/, false /*failover*/);
@@ -978,8 +908,8 @@ void FailureDetector::detectFailures(node_index_t self, size_t n) {
     // OR
     // Node 'j' is performing a graceful shutdown.
     // Mark it DEAD so no work ends up sent its way.
-    bool failover = (failover_list_[j] > std::chrono::milliseconds::zero());
-    bool dead = (gossip_list_[j] > threshold);
+    bool failover = (nodes_[j].failover_ > std::chrono::milliseconds::zero());
+    bool dead = (nodes_[j].gossip_ > threshold);
     if (dead) {
       // if the node is actually dead, clear the failover boolean, to make sure
       // we don't mistakenly transition from DEAD to FAILING_OVER in the
@@ -1043,6 +973,9 @@ void FailureDetector::updateDependencies(node_index_t idx,
                                          FailureDetector::NodeState new_state,
                                          bool failover,
                                          bool starting) {
+  if (nodes_.find(idx) == nodes_.end()) {
+    return;
+  }
   nodes_[idx].state = new_state;
   const bool is_dead = (new_state != NodeState::ALIVE);
   auto cs = getClusterState();
@@ -1072,11 +1005,15 @@ void FailureDetector::updateNodeState(node_index_t idx,
                                       bool dead,
                                       bool self,
                                       bool failover) {
+  if (nodes_.find(idx) == nodes_.end()) {
+    return;
+  }
+
   bool starting;
   if (self) {
     starting = !isLogsConfigLoaded();
   } else {
-    starting = is_node_starting_[idx];
+    starting = nodes_[idx].is_node_starting_;
   }
 
   NodeState current = nodes_[idx].state, next = NodeState::DEAD;
@@ -1091,7 +1028,7 @@ void FailureDetector::updateNodeState(node_index_t idx,
         // last_suspect_time to be reset.
         if (settings_->suspect_duration.count() > 0) {
           next = NodeState::SUSPECT;
-          last_suspected_at_[idx].store(current_time_ms);
+          nodes_[idx].last_suspected_at_.store(current_time_ms);
         } else {
           next = NodeState::ALIVE;
         }
@@ -1099,7 +1036,7 @@ void FailureDetector::updateNodeState(node_index_t idx,
       case SUSPECT:
         ld_check(suspect_duration.count() > 0);
         if (current_time_ms >
-            last_suspected_at_[idx].load() + suspect_duration) {
+            nodes_[idx].last_suspected_at_.load() + suspect_duration) {
           next = NodeState::ALIVE;
         }
         break;
@@ -1130,9 +1067,9 @@ void FailureDetector::updateNodeState(node_index_t idx,
             idx,
             getNodeStateString(current),
             getNodeStateString(next),
-            gossip_list_[idx],
-            gossip_ts_[idx].count(),
-            failover_list_[idx].count(),
+            nodes_[idx].gossip_,
+            nodes_[idx].gossip_ts_.count(),
+            nodes_[idx].failover_.count(),
             starting);
   }
 
@@ -1143,6 +1080,10 @@ void FailureDetector::updateNodeState(node_index_t idx,
 }
 
 bool FailureDetector::isValidDestination(node_index_t node_idx) {
+  if (nodes_.find(node_idx) == nodes_.end()) {
+    return false; // TODO: true or false?
+  }
+
   if (nodes_[node_idx].blacklisted) {
     // exclude blacklisted nodes
     return false;
@@ -1187,7 +1128,7 @@ const char* FailureDetector::getNodeStateString(NodeState state) const {
 }
 
 std::string FailureDetector::getStateString(node_index_t idx) const {
-  if (idx >= gossip_list_.size()) {
+  if (nodes_.find(idx) == nodes_.end()) {
     return "invalid node index";
   }
 
@@ -1198,29 +1139,29 @@ std::string FailureDetector::getStateString(node_index_t idx) const {
              sizeof(buf),
              "(gossip: %u, instance-id: %lu, failover: %lu, starting: %d, "
              "state: %s)",
-             gossip_list_[idx],
-             gossip_ts_[idx].count(),
-             failover_list_[idx].count(),
-             (int)is_node_starting_[idx],
-             getNodeStateString(nodes_[idx].state));
+             nodes_.at(idx).gossip_,
+             nodes_.at(idx).gossip_ts_.count(),
+             nodes_.at(idx).failover_.count(),
+             (int)nodes_.at(idx).is_node_starting_,
+             getNodeStateString(nodes_.at(idx).state));
   }
   return std::string(buf);
 }
 
 folly::dynamic FailureDetector::getStateJson(node_index_t idx) const {
   folly::dynamic obj = folly::dynamic::object;
-  if (idx >= gossip_list_.size()) {
+  if (nodes_.find(idx) == nodes_.end()) {
     obj["error"] = "invalid node index";
     return obj;
   }
 
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    obj["gossip"] = gossip_list_[idx];
-    obj["instance-id"] = gossip_ts_[idx].count();
-    obj["failover"] = failover_list_[idx].count();
-    obj["starting"] = (int)is_node_starting_[idx];
-    obj["state"] = getNodeStateString(nodes_[idx].state);
+    obj["gossip"] = nodes_.at(idx).gossip_;
+    obj["instance-id"] = nodes_.at(idx).gossip_ts_.count();
+    obj["failover"] = nodes_.at(idx).failover_.count();
+    obj["starting"] = (int)nodes_.at(idx).is_node_starting_;
+    obj["state"] = getNodeStateString(nodes_.at(idx).state);
   }
   return obj;
 }
@@ -1246,13 +1187,6 @@ void FailureDetector::broadcastWrapper(GOSSIP_Message::GOSSIP_flags_t flags) {
   node_index_t my_idx = config->getMyNodeID().index();
   NodeID dest;
 
-  /* mark nodes not in the config as DEAD in suspect matrix */
-  for (int j = nodes.size(); j < suspect_matrix_.size(); ++j) {
-    for (int i = 0; i < suspect_matrix_.size(); ++i) {
-      suspect_matrix_[i][j] = 1;
-    }
-  }
-
   std::string msg_type = flagsToString(flags);
   if (msg_type == "unknown") {
     RATELIMIT_ERROR(std::chrono::seconds(1), 1, "Invalid flags=%d", flags);
@@ -1260,8 +1194,7 @@ void FailureDetector::broadcastWrapper(GOSSIP_Message::GOSSIP_flags_t flags) {
   }
 
   ld_info("Broadcasting %s message.", msg_type.c_str());
-  gossip_list_[my_idx] = 0;
-
+  nodes_[my_idx].gossip_ = 0;
   for (const auto& it : nodes) {
     node_index_t idx = it.first;
     auto& node = it.second;
@@ -1270,7 +1203,7 @@ void FailureDetector::broadcastWrapper(GOSSIP_Message::GOSSIP_flags_t flags) {
     }
 
     auto gossip_msg = std::make_unique<GOSSIP_Message>();
-    gossip_msg->num_nodes_ = 0;
+    gossip_msg->node_list_.clear();
     gossip_msg->gossip_node_ = config->getMyNodeID();
     gossip_msg->flags_ |= flags;
     gossip_msg->instance_id_ = instance_id_;
@@ -1384,7 +1317,7 @@ Socket* FailureDetector::getServerSocket(node_index_t idx) {
 
 void FailureDetector::setBlacklisted(node_index_t idx, bool blacklisted) {
   std::lock_guard<std::mutex> lock(mutex_);
-  if (idx < nodes_.size()) {
+  if (nodes_.find(idx) != nodes_.end()) {
     nodes_[idx].blacklisted = blacklisted;
   }
 }
@@ -1392,8 +1325,8 @@ void FailureDetector::setBlacklisted(node_index_t idx, bool blacklisted) {
 bool FailureDetector::isBlacklisted(node_index_t idx) const {
   bool blacklisted = false;
   std::lock_guard<std::mutex> lock(mutex_);
-  if (idx < nodes_.size()) {
-    blacklisted = nodes_[idx].blacklisted;
+  if (nodes_.find(idx) != nodes_.end()) {
+    blacklisted = nodes_.at(idx).blacklisted;
   }
   return blacklisted;
 }
@@ -1414,6 +1347,11 @@ bool FailureDetector::isAlive(node_index_t idx) const {
     return false;
   }
 
+  if (nodes_.find(idx) == nodes_.end()) {
+    // TODO: how to handle this exception?
+    return false;
+  }
+
   /* If the current node's SUSPECT state has elapsed,
    * return ALIVE instead of DEAD.
    * FD Thread will soon transition us(this node) to ALIVE.
@@ -1421,7 +1359,8 @@ bool FailureDetector::isAlive(node_index_t idx) const {
   auto current_time_ms = getCurrentTimeInMillis();
   auto suspect_duration = settings_->suspect_duration;
   if (suspect_duration.count() > 0) {
-    if (current_time_ms > last_suspected_at_[idx].load() + suspect_duration) {
+    if (current_time_ms >
+        nodes_.at(idx).last_suspected_at_.load() + suspect_duration) {
       RATELIMIT_INFO(
           std::chrono::seconds(1),
           1,

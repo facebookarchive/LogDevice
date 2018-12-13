@@ -22,41 +22,23 @@
 namespace facebook { namespace logdevice {
 
 GOSSIP_Message::GOSSIP_Message(NodeID this_node,
-                               gossip_list_t gossip_list,
+                               node_list_t node_list,
                                std::chrono::milliseconds instance_id,
                                std::chrono::milliseconds sent_time,
-                               gossip_ts_t gossip_ts_list,
-                               failover_list_t failover_list,
-                               suspect_matrix_t suspect_matrix,
                                boycott_list_t boycott_list,
                                boycott_durations_list_t boycott_durations,
-                               starting_list_t starting_list,
                                GOSSIP_Message::GOSSIP_flags_t flags,
                                uint64_t msg_id)
     : Message(MessageType::GOSSIP, TrafficClass::FAILURE_DETECTOR),
-      num_nodes_(gossip_list.size()),
+      node_list_(std::move(node_list)),
       gossip_node_(this_node),
       flags_(flags),
-      gossip_list_(std::move(gossip_list)),
       instance_id_(instance_id),
       sent_time_(sent_time),
-      gossip_ts_(std::move(gossip_ts_list)),
-      failover_list_(failover_list),
-      suspect_matrix_(std::move(suspect_matrix)),
       num_boycotts_(boycott_list.size()),
       boycott_list_(std::move(boycott_list)),
       boycott_durations_list_(std::move(boycott_durations)),
-      num_starting_(starting_list.size()),
-      starting_list_(starting_list),
-      msg_id_(msg_id) {
-  ld_check(gossip_list_.size() <=
-           std::numeric_limits<decltype(num_nodes_)>::max());
-  ld_check(suspect_matrix_.size() == 0 ||
-           gossip_list_.size() == suspect_matrix_.size());
-  if (flags_ & HAS_FAILOVER_LIST_FLAG) {
-    ld_check(failover_list_.size() == gossip_list_.size());
-  }
-}
+      msg_id_(msg_id) {}
 
 Message::Disposition GOSSIP_Message::onReceived(const Address& /*from*/) {
   // Receipt handler lives in server/GOSSIP_onReceived.cpp; this should
@@ -65,27 +47,34 @@ Message::Disposition GOSSIP_Message::onReceived(const Address& /*from*/) {
 }
 
 void GOSSIP_Message::serialize(ProtocolWriter& writer) const {
-  ld_check(gossip_list_.size() == num_nodes_);
-  ld_check(gossip_ts_.size() == num_nodes_);
-
   auto flags = flags_;
 
   if (writer.proto() < Compatibility::ProtocolVersion::STARTING_STATE_SUPPORT) {
     /* remove starting list */
     flags &= ~HAS_STARTING_LIST_FLAG;
   }
-
-  writer.write(num_nodes_);
+  writer.write((uint16_t)node_list_.size());
   writer.write(gossip_node_);
   writer.write(flags);
-  writer.writeVector(gossip_list_);
+
+  if (writer.proto() <
+      Compatibility::ProtocolVersion::HASHMAP_SUPPORT_IN_GOSSIP) {
+    for (auto n : node_list_) {
+      writer.write(n.gossip_);
+    }
+  }
   writer.write(instance_id_);
   writer.write(sent_time_);
-  writer.writeVector(gossip_ts_);
-
-  if (flags & HAS_FAILOVER_LIST_FLAG) {
-    ld_check(failover_list_.size() == num_nodes_);
-    writer.writeVector(failover_list_);
+  if (writer.proto() <
+      Compatibility::ProtocolVersion::HASHMAP_SUPPORT_IN_GOSSIP) {
+    for (auto n : node_list_) {
+      writer.write(n.gossip_ts_);
+    }
+    if (flags & HAS_FAILOVER_LIST_FLAG) {
+      for (auto n : node_list_) {
+        writer.write(n.failover_);
+      }
+    }
   }
 
   writeBoycottList(writer);
@@ -95,26 +84,59 @@ void GOSSIP_Message::serialize(ProtocolWriter& writer) const {
     writeBoycottDurations(writer);
   }
 
-  if (flags & HAS_STARTING_LIST_FLAG) {
-    writeStartingList(writer);
+  if (writer.proto() <
+      Compatibility::ProtocolVersion::HASHMAP_SUPPORT_IN_GOSSIP) {
+    if (flags & HAS_STARTING_LIST_FLAG) {
+      // for backward compatibility
+      starting_list_t starting_list;
+      for (auto n : node_list_) {
+        if (n.is_node_starting_) {
+          starting_list.push_back(NodeID(n.node_id_));
+        }
+      }
+      writer.write((uint16_t)starting_list.size());
+      for (auto& node : starting_list) {
+        writer.write(node.index());
+      }
+    }
   }
-
-  writeSuspectMatrix(writer);
+  if (writer.proto() >=
+      Compatibility::ProtocolVersion::HASHMAP_SUPPORT_IN_GOSSIP) {
+    writer.writeVector(node_list_);
+  }
 }
 
 MessageReadResult GOSSIP_Message::deserialize(ProtocolReader& reader) {
   std::unique_ptr<GOSSIP_Message> msg(new GOSSIP_Message());
 
-  reader.read(&msg->num_nodes_);
+  gossip_list_t gossip_list;
+  gossip_ts_t gossip_ts;
+  failover_list_t failover_list;
+  std::unordered_set<node_index_t> is_starting;
+  uint16_t num_nodes;
+  uint16_t num_starting;
+
+  reader.read(&num_nodes);
   reader.read(&msg->gossip_node_);
   reader.read(&msg->flags_);
-  reader.readVector(&msg->gossip_list_, msg->num_nodes_);
+
+  if (reader.proto() <
+      Compatibility::ProtocolVersion::HASHMAP_SUPPORT_IN_GOSSIP) {
+    reader.readVector(&gossip_list, num_nodes);
+  }
   reader.read(&msg->instance_id_);
   reader.read(&msg->sent_time_);
-  reader.readVector(&msg->gossip_ts_, msg->num_nodes_);
 
-  if (reader.ok() && (msg->flags_ & HAS_FAILOVER_LIST_FLAG)) {
-    reader.readVector(&msg->failover_list_, msg->num_nodes_);
+  if (reader.proto() <
+      Compatibility::ProtocolVersion::HASHMAP_SUPPORT_IN_GOSSIP) {
+    reader.readVector(&gossip_ts, num_nodes);
+    if (reader.ok() && (msg->flags_ & HAS_FAILOVER_LIST_FLAG)) {
+      reader.readVector(&failover_list, num_nodes);
+    } else {
+      // dummy filling for backward compatibility
+      failover_list =
+          failover_list_t(num_nodes, std::chrono::milliseconds::zero());
+    }
   }
 
   msg->readBoycottList(reader);
@@ -124,52 +146,37 @@ MessageReadResult GOSSIP_Message::deserialize(ProtocolReader& reader) {
     msg->readBoycottDurations(reader);
   }
 
-  if (msg->flags_ & HAS_STARTING_LIST_FLAG) {
-    msg->readStartingList(reader);
+  if (reader.proto() <
+      Compatibility::ProtocolVersion::HASHMAP_SUPPORT_IN_GOSSIP) {
+    if (msg->flags_ & HAS_STARTING_LIST_FLAG) {
+      // for backward compatibility
+      reader.read(&num_starting);
+      for (uint16_t i = 0; i < num_starting; i++) {
+        node_index_t nidx;
+        reader.read(&nidx);
+        is_starting.insert(nidx);
+      }
+    }
   }
 
-  if (reader.ok() && reader.bytesRemaining() > 0) {
-    msg->readSuspectMatrix(reader);
+  if (reader.proto() >=
+      Compatibility::ProtocolVersion::HASHMAP_SUPPORT_IN_GOSSIP) {
+    reader.readVector(&msg->node_list_, num_nodes);
+  } else {
+    // In case of protocol before HASHMAP_SUPPORT_IN_GOSSIP,
+    // node_id_ always increases linearly
+    for (node_index_t i = 0; i < num_nodes; i++) {
+      GOSSIP_Node gnode;
+      gnode.node_id_ = i;
+      gnode.gossip_ = gossip_list[i];
+      gnode.gossip_ts_ = gossip_ts[i];
+      gnode.failover_ = failover_list[i];
+      gnode.is_node_starting_ = (is_starting.count(i) > 0) ? true : false;
+      msg->node_list_.push_back(gnode);
+    }
   }
 
   return reader.resultMsg(std::move(msg));
-}
-
-void GOSSIP_Message::writeSuspectMatrix(ProtocolWriter& writer) const {
-  if (!suspect_matrix_.size()) {
-    return;
-  }
-
-  // Since suspect matrix contains only {0, 1}, this method packs a single row
-  // of the matrix into row_chunks 32-bit integers.
-  // TODO (#4214621): size of the on-the-wire representation can be further
-  //                  reduced using varint encoding.
-  size_t row_chunks = (num_nodes_ + 31) / 32;
-  folly::small_vector<uint32_t, 2> row;
-  for (size_t i = 0; i < num_nodes_; ++i) {
-    row.assign(row_chunks, 0);
-    for (size_t j = 0; j < num_nodes_; ++j) {
-      if (suspect_matrix_[i][j]) {
-        row[j >> 5] |= (1UL << (j & 31));
-      }
-    }
-    writer.writeVector(row);
-  }
-}
-
-void GOSSIP_Message::readSuspectMatrix(ProtocolReader& reader) {
-  size_t row_chunks = (num_nodes_ + 31) / 32;
-
-  suspect_matrix_.resize(num_nodes_);
-
-  folly::small_vector<uint32_t, 2> row(row_chunks);
-  for (size_t i = 0; i < num_nodes_; ++i) {
-    reader.readVector(&row);
-    suspect_matrix_[i].resize(num_nodes_);
-    for (size_t j = 0; j < num_nodes_; ++j) {
-      suspect_matrix_[i][j] = ((row[j >> 5] >> (j & 31)) & 1);
-    }
-  }
 }
 
 void GOSSIP_Message::onSent(Status /*st*/, const Address& /*to*/) const {
@@ -230,27 +237,6 @@ void GOSSIP_Message::readBoycottDurations(ProtocolReader& reader) {
   boycott_durations_list_.resize(list_size);
   for (auto& d : boycott_durations_list_) {
     d.deserialize(reader);
-  }
-}
-
-void GOSSIP_Message::writeStartingList(ProtocolWriter& writer) const {
-  ld_check(starting_list_.size() == num_starting_);
-  writer.write(num_starting_);
-
-  for (auto& node : starting_list_) {
-    writer.write(node.index());
-  }
-}
-
-void GOSSIP_Message::readStartingList(ProtocolReader& reader) {
-  reader.read(&num_starting_);
-
-  starting_list_.resize(num_starting_);
-
-  for (auto& node_id : starting_list_) {
-    node_index_t nidx;
-    reader.read(&nidx);
-    node_id = NodeID(nidx);
   }
 }
 

@@ -15,12 +15,35 @@
 #include "logdevice/common/sequencer_boycotting/BoycottAdaptiveDuration.h"
 namespace facebook { namespace logdevice {
 
+class FailureDetector;
+
+struct GOSSIP_Node {
+  // Note: this is different from NodeID
+  size_t node_id_;
+
+  // How many gossip periods have passed before
+  // hearing from the node (either directly or through a gossip message).
+  uint32_t gossip_;
+
+  // Instance id(timestamps)
+  std::chrono::milliseconds gossip_ts_;
+
+  // Either of the following 2 values:
+  // a) 0 : the node is up b) the node's instance id(startup time in this
+  // case) : the node requested failover
+  std::chrono::milliseconds failover_;
+
+  // The node is in starting state?
+  bool is_node_starting_;
+};
+
 class GOSSIP_Message : public Message {
  public:
+  using node_list_t = std::vector<GOSSIP_Node>;
+  using node_id_list_t = std::vector<size_t>;
   using gossip_list_t = std::vector<uint32_t>;
   using gossip_ts_t = std::vector<std::chrono::milliseconds>;
   using failover_list_t = std::vector<std::chrono::milliseconds>;
-  using suspect_matrix_t = std::vector<std::vector<uint8_t>>;
   using boycott_list_t = std::vector<Boycott>;
   using boycott_durations_list_t = std::vector<BoycottAdaptiveDuration>;
   using starting_list_t = std::vector<NodeID>;
@@ -28,21 +51,15 @@ class GOSSIP_Message : public Message {
 
   GOSSIP_Message()
       : Message(MessageType::GOSSIP, TrafficClass::FAILURE_DETECTOR),
-        num_nodes_(0),
         flags_(0),
-        num_boycotts_(0),
-        num_starting_(0) {}
+        num_boycotts_(0) {}
   GOSSIP_Message(NodeID this_node,
-                 gossip_list_t gossip_list,
+                 node_list_t node_list,
                  std::chrono::milliseconds instance_id,
                  std::chrono::milliseconds sent_time,
-                 gossip_ts_t gossip_ts_list,
-                 failover_list_t failover_list,
-                 suspect_matrix_t suspect_matrix,
                  boycott_list_t boycott_list,
                  boycott_durations_list_t boycott_durations,
-                 starting_list_t starting_list,
-                 GOSSIP_flags_t flags = 0,
+                 GOSSIP_Message::GOSSIP_flags_t flags,
                  uint64_t msg_id = 0);
 
   void serialize(ProtocolWriter&) const override;
@@ -51,7 +68,7 @@ class GOSSIP_Message : public Message {
   Disposition onReceived(const Address& from) override;
   void onSent(Status st, const Address& to) const override;
 
-  uint16_t num_nodes_;
+  node_list_t node_list_;
   NodeID gossip_node_;
   GOSSIP_flags_t flags_;
 
@@ -62,7 +79,6 @@ class GOSSIP_Message : public Message {
   std::chrono::milliseconds sent_time_;
   gossip_ts_t gossip_ts_;
   failover_list_t failover_list_;
-  suspect_matrix_t suspect_matrix_;
 
   // the amount of boycotts in the list
   uint8_t num_boycotts_;
@@ -70,11 +86,6 @@ class GOSSIP_Message : public Message {
 
   // The adaptive boycott durations
   boycott_durations_list_t boycott_durations_list_;
-
-  // The amount of nodes marked as "starting" (i.e. with logsconfig not fully
-  // loaded yet)
-  uint16_t num_starting_;
-  starting_list_t starting_list_;
 
   // sequence number to match message when running onSent callback
   uint64_t msg_id_;

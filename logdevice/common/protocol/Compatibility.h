@@ -82,6 +82,8 @@ enum ProtocolVersion : uint16_t {
 
   // See comment in STORE_Message::serialize()
   NO_BLOCK_STARTING_LSN_IN_STORE_MESSAGES, // = 91
+  // GOSSIP_Message includes node_id_list_ to deliver hashmap
+  HASHMAP_SUPPORT_IN_GOSSIP, // = 92
 
   // NOTE: insert new protocol versions here
 
@@ -119,6 +121,7 @@ static_assert(GET_SEQ_STATE_REPLY_MESSAGE_SUPPORT_OFFSET_MAP == 88, "");
 static_assert(ADAPTIVE_BOYCOTT_DURATION == 89, "");
 static_assert(STARTING_STATE_SUPPORT == 90, "");
 static_assert(NO_BLOCK_STARTING_LSN_IN_STORE_MESSAGES == 91, "");
+static_assert(HASHMAP_SUPPORT_IN_GOSSIP == 92, "");
 
 constexpr uint16_t MIN_PROTOCOL_SUPPORTED = PROTOCOL_VERSION_LOWER_BOUND + 1;
 constexpr uint16_t MAX_PROTOCOL_SUPPORTED = PROTOCOL_VERSION_UPPER_BOUND - 1;

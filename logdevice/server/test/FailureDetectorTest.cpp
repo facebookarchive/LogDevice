@@ -79,7 +79,7 @@ class MockFailureDetector : public FailureDetector {
   std::vector<std::pair<NodeID, std::unique_ptr<GOSSIP_Message>>> messages_;
 
   int getGossipIntervals(node_index_t nid) {
-    return gossip_list_[nid];
+    return nodes_[nid].gossip_;
   }
 
   SteadyTimestamp getLastGossipTickTime() {

@@ -10,6 +10,7 @@
 #include <atomic>
 #include <memory>
 #include <random>
+#include <unordered_map>
 #include <vector>
 
 #include <folly/Optional.h>
@@ -270,12 +271,34 @@ class FailureDetector {
   struct Node {
     NodeState state;
     bool blacklisted;
-  };
 
-  // Time when a node was suspected to be ALIVE, and transitioned
-  // from DEAD to SUSPECT state
-  std::unique_ptr<std::atomic<std::chrono::milliseconds>[]> last_suspected_at_ {
-    nullptr
+    // Time when the node was suspected to be ALIVE, and transitioned
+    // from DEAD to SUSPECT state
+    std::atomic<std::chrono::milliseconds> last_suspected_at_{};
+
+    // How many gossip periods have passed before
+    // hearing from the node (either directly or through a gossip message).
+    uint32_t gossip_;
+
+    // Instance id(timestamps)
+    std::chrono::milliseconds gossip_ts_;
+
+    // Either of the following 2 values:
+    // a) 0 : the node is up b) the node's instance id(startup time in this
+    // case) : the node requested failover
+    std::chrono::milliseconds failover_;
+
+    // The node is in starting state?
+    bool is_node_starting_;
+
+    Node()
+        : state(NodeState::DEAD),
+          blacklisted(false),
+          last_suspected_at_(std::chrono::milliseconds::zero()),
+          gossip_(std::numeric_limits<uint32_t>::max()),
+          gossip_ts_(std::chrono::milliseconds::zero()),
+          failover_(std::chrono::milliseconds::zero()),
+          is_node_starting_(false) {}
   };
 
   // Used for restricting the logging of FD state and Gossip messages
@@ -332,9 +355,6 @@ class FailureDetector {
   // Returns the node state name. Used in dbg statements.
   const char* getNodeStateString(NodeState state) const;
 
-  // returns a human-readable representation of the suspect matrix
-  std::string dumpSuspectMatrix(const GOSSIP_Message::suspect_matrix_t& sm);
-
   // Dumps dead/suspect/alive status of all nodes in the cluster
   // as perceived by this node's Failure Detector.
   void dumpFDState();
@@ -364,33 +384,11 @@ class FailureDetector {
                           bool failover,
                           bool starting);
 
-  // A gossip list -- indicates how many gossip periods have passed before
-  // hearing from each node (either directly or through a gossip message).
-  std::vector<uint32_t> gossip_list_;
-
-  // instance ids(timestamps) of all nodes
-  std::vector<std::chrono::milliseconds> gossip_ts_;
-
-  // Keep track of which nodes are in starting state
-  std::vector<bool> is_node_starting_;
-
   // Monotonically increasing instance ID of logdeviced
   // This is used to distinguish b/w server instances across restarts.
   std::chrono::milliseconds instance_id_;
 
-  // Failover value of some node(Ni) contains either of the following 2 values:
-  // a) 0 : Ni is up
-  // b) Ni's instance id(startup time in this case) : Ni requested failover
-  std::vector<std::chrono::milliseconds> failover_list_;
-
-  // A suspect matrix. An entry (i, j) is 1 if node i suspects node j to be
-  // unavailable. Updated only from a dedicated worker thread.
-  std::vector<std::vector<uint8_t>> suspect_matrix_;
-
-  // Contains the current state for each node in the cluster, as well as the
-  // most recent time the node entered the suspect state.
-  std::vector<Node> nodes_;
-
+  std::unordered_map<size_t, Node> nodes_;
   // Set when performing a graceful failover. Causes a failure list to be
   // updated so other nodes are notified that they should treat this one as if
   // it's down.

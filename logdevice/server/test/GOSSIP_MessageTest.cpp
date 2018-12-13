@@ -24,13 +24,12 @@ using namespace facebook::logdevice;
 using unique_evbuffer =
     std::unique_ptr<struct evbuffer, std::function<void(struct evbuffer*)>>;
 
+using node_list_t = GOSSIP_Message::node_list_t;
 using gossip_list_t = GOSSIP_Message::gossip_list_t;
 using gossip_ts_t = GOSSIP_Message::gossip_ts_t;
 using failover_list_t = GOSSIP_Message::failover_list_t;
-using suspect_matrix_t = GOSSIP_Message::suspect_matrix_t;
 using boycott_list_t = GOSSIP_Message::boycott_list_t;
 using boycott_durations_list_t = GOSSIP_Message::boycott_durations_list_t;
-using starting_list_t = GOSSIP_Message::starting_list_t;
 using GOSSIP_flags_t = GOSSIP_Message::GOSSIP_flags_t;
 
 namespace {
@@ -49,8 +48,7 @@ void serializeAndDeserializeTest(Params params) {
     LD_EV(evbuffer_free)(ptr);
   });
   NodeID this_node{1};
-  gossip_list_t gossip_list{1, 2};
-  gossip_ts_t gossip_ts{5ms, 10ms};
+  node_list_t node_list{{0, 1, 5ms, 0ms, 0}, {1, 2, 10ms, 0ms, 1}};
   std::chrono::milliseconds instance_id{1};
   std::chrono::milliseconds sent_time{1};
 
@@ -58,12 +56,8 @@ void serializeAndDeserializeTest(Params params) {
   failover_list_t failover_list;
   if (params.with_failover) {
     flags = GOSSIP_Message::HAS_FAILOVER_LIST_FLAG;
-    failover_list = {1ms, 2ms};
-  }
-
-  suspect_matrix_t suspect_matrix;
-  if (params.with_suspect) {
-    suspect_matrix = {{1, 0}, {0, 1}};
+    node_list[0].failover_ = 1ms;
+    node_list[1].failover_ = 2ms;
   }
 
   boycott_list_t boycott_list;
@@ -78,34 +72,19 @@ void serializeAndDeserializeTest(Params params) {
         1, 30min, 2h, 1min, 30s, 2, 60min, std::chrono::system_clock::now());
   }
 
-  starting_list_t starting_list;
-  if (params.with_starting) {
-    starting_list.emplace_back(0);
-    starting_list.emplace_back(1);
-  }
-
   GOSSIP_Message msg(this_node,
-                     gossip_list,
+                     node_list,
                      instance_id,
                      sent_time,
-                     gossip_ts,
-                     failover_list,
-                     suspect_matrix,
                      boycott_list,
                      boycott_durations,
-                     starting_list,
                      flags);
 
   EXPECT_EQ(this_node, msg.gossip_node_);
-  EXPECT_EQ(gossip_list, msg.gossip_list_);
-  EXPECT_EQ(gossip_ts, msg.gossip_ts_);
   EXPECT_EQ(instance_id, msg.instance_id_);
   EXPECT_EQ(sent_time, msg.sent_time_);
-  EXPECT_EQ(failover_list, msg.failover_list_);
-  EXPECT_EQ(suspect_matrix, msg.suspect_matrix_);
   EXPECT_EQ(boycott_list, msg.boycott_list_);
   EXPECT_EQ(boycott_durations, msg.boycott_durations_list_);
-  EXPECT_EQ(starting_list, msg.starting_list_);
   EXPECT_EQ(flags, msg.flags_);
 
   ProtocolWriter writer(msg.type_, evbuf.get(), params.proto);
@@ -123,12 +102,8 @@ void serializeAndDeserializeTest(Params params) {
       static_cast<GOSSIP_Message*>(deserialized_msg_base.get());
 
   EXPECT_EQ(this_node, deserialized_msg->gossip_node_);
-  EXPECT_EQ(gossip_list, deserialized_msg->gossip_list_);
-  EXPECT_EQ(gossip_ts, deserialized_msg->gossip_ts_);
   EXPECT_EQ(instance_id, deserialized_msg->instance_id_);
   EXPECT_EQ(sent_time, deserialized_msg->sent_time_);
-  EXPECT_EQ(failover_list, deserialized_msg->failover_list_);
-  EXPECT_EQ(suspect_matrix, deserialized_msg->suspect_matrix_);
   EXPECT_EQ(boycott_list, deserialized_msg->boycott_list_);
   EXPECT_EQ(boycott_durations, deserialized_msg->boycott_durations_list_);
   EXPECT_EQ(flags, deserialized_msg->flags_);
