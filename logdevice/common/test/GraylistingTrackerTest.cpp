@@ -85,27 +85,35 @@ class MockGraylistingTracker : public GraylistingTracker {
     return 0.5;
   }
 
-  size_t getCalculatedMaxGraylistedNodes() const {
-    return getMaxGraylistedNodes();
-  }
-
-  configuration::Node buildNode() {
+  configuration::Node buildNode(std::string domain) {
     configuration::Node n;
     n.setRole(configuration::NodeRole::STORAGE);
     auto attr = std::make_unique<configuration::StorageNodeAttributes>();
     attr->state = configuration::StorageState::READ_WRITE;
     n.storage_attributes = std::move(attr);
+    NodeLocation loc;
+    loc.fromDomainString(domain);
+    n.location = std::move(loc);
     return n;
+  }
+
+  void addNode(node_index_t id, configuration::Node node) {
+    nodes_.emplace(id, node);
   }
 
  private:
   MockWorkerTimeoutStats stats_;
-  configuration::Nodes nodes_{{1, buildNode()},
-                              {2, buildNode()},
-                              {3, buildNode()},
-                              {4, buildNode()},
-                              {5, buildNode()},
-                              {6, buildNode()}};
+  configuration::Nodes nodes_{{1, buildNode("ash.2.08.k.z")},
+                              {2, buildNode("ash.2.08.k.z")},
+                              {3, buildNode("ash.2.08.k.z")},
+                              {4, buildNode("ash.2.08.k.z")},
+                              {5, buildNode("ash.2.08.k.z")},
+                              {6, buildNode("ash.2.08.k.z")}};
+
+  FRIEND_TEST(GraylistingTrackerTest, RoundRobinFlat);
+  FRIEND_TEST(GraylistingTrackerTest, MaxGraylistedNodes);
+  FRIEND_TEST(GraylistingTrackerTest, GroupLatencyPerRegion);
+  FRIEND_TEST(GraylistingTrackerTest, PerRegionOutlier);
 };
 
 TEST(GraylistingTrackerTest, OutlierGraylisted) {
@@ -128,7 +136,7 @@ TEST(GraylistingTrackerTest, MaxGraylistedNodes) {
   auto stats = buildWorkerStats({}, 0);
 
   MockGraylistingTracker tracker(std::move(stats));
-  EXPECT_EQ(3, tracker.getCalculatedMaxGraylistedNodes());
+  EXPECT_EQ(3, tracker.getMaxGraylistedNodes());
 }
 
 TEST(GraylistingTrackerTest, EjectOlderGraylists) {
@@ -265,4 +273,77 @@ TEST(GraylistingTrackerTest, ResetGraylist) {
 
   tracker.resetGraylist();
   EXPECT_EQ(0, tracker.getGraylistedNodes().size());
+}
+
+TEST(GraylistingTrackerTest, RoundRobinFlat) {
+  EXPECT_EQ((std::vector<node_index_t>{0, 1, 2}),
+            MockGraylistingTracker::roundRobinFlattenVector({{0, 1, 2}}, 3));
+  EXPECT_EQ((std::vector<node_index_t>{0, 1}),
+            MockGraylistingTracker::roundRobinFlattenVector({{0, 1, 2}}, 2));
+  EXPECT_EQ((std::vector<node_index_t>{}),
+            MockGraylistingTracker::roundRobinFlattenVector({{0, 1, 2}}, 0));
+  EXPECT_EQ((std::vector<node_index_t>{}),
+            MockGraylistingTracker::roundRobinFlattenVector({{}, {}, {}}, 4));
+  EXPECT_EQ((std::vector<node_index_t>{}),
+            MockGraylistingTracker::roundRobinFlattenVector({}, 4));
+  EXPECT_EQ((std::vector<node_index_t>{0, 3, 6, 1, 4}),
+            MockGraylistingTracker::roundRobinFlattenVector(
+                {{0, 1, 2}, {3, 4, 5}, {6, 7, 8}}, 5));
+  EXPECT_EQ((std::vector<node_index_t>{0, 6, 1, 7, 2}),
+            MockGraylistingTracker::roundRobinFlattenVector(
+                {{0, 1, 2}, {}, {6, 7, 8}}, 5));
+  EXPECT_EQ((std::vector<node_index_t>{0, 3, 6, 1, 7}),
+            MockGraylistingTracker::roundRobinFlattenVector(
+                {{0, 1, 2}, {3}, {6, 7, 8}}, 5));
+  EXPECT_EQ((std::vector<node_index_t>{0, 3, 6, 1, 4, 7, 2, 5, 8}),
+            MockGraylistingTracker::roundRobinFlattenVector(
+                {{0, 1, 2}, {3, 4, 5}, {6, 7, 8}}, 100));
+}
+
+TEST(GraylistingTrackerTest, GroupLatencyPerRegion) {
+  MockGraylistingTracker tracker(buildWorkerStats({}, 0));
+
+  tracker.addNode(101, tracker.buildNode("frc.2.08.k.z"));
+  tracker.addNode(102, tracker.buildNode("frc.3.08.k.z"));
+  tracker.addNode(103, tracker.buildNode("frc.3.09.k.z"));
+  tracker.addNode(104, tracker.buildNode("cln.5.09.k.z"));
+  tracker.addNode(105, tracker.buildNode(""));
+
+  auto got = tracker.groupLatenciesPerRegion({
+      {1, 0},
+      {2, 0},
+      {3, 0},
+      {101, 0},
+      {102, 0},
+      {103, 0},
+      {104, 0},
+      {105, 0},
+  });
+
+  MockGraylistingTracker::PerRegionLatencies expected{
+      {"", {{105, 0}}},
+      {"ash", {{1, 0}, {2, 0}, {3, 0}}},
+      {"cln", {{104, 0}}},
+      {"frc", {{101, 0}, {102, 0}, {103, 0}}},
+  };
+  EXPECT_EQ(expected, got);
+}
+
+TEST(GraylistingTrackerTest, PerRegionOutlier) {
+  MockGraylistingTracker tracker(buildWorkerStats({}, 0));
+
+  tracker.addNode(101, tracker.buildNode("frc.2.08.k.z"));
+  tracker.addNode(102, tracker.buildNode("frc.3.08.k.z"));
+  tracker.addNode(103, tracker.buildNode("frc.2.08.k.y"));
+  tracker.addNode(104, tracker.buildNode("cln.3.08.k.z"));
+
+  MockGraylistingTracker::PerRegionLatencies regional_outliers{
+      {"ash", {{1, 100}, {2, 10}, {3, 12}, {4, 13}, {5, 200}, {6, 300}}},
+      {"cln", {{104, 400}}},
+      {"frc", {{101, 100}, {102, 300}, {103, 120}}},
+  };
+
+  auto got = tracker.findOutlierNodes(regional_outliers);
+
+  EXPECT_EQ((std::vector<node_index_t>{6, 102, 5, 1}), got);
 }

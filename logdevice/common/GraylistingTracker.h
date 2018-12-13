@@ -24,9 +24,11 @@ namespace facebook { namespace logdevice {
  * The graylist is refreshed every *graylisting_refresh_interval* seconds.
  */
 class GraylistingTracker {
+ protected:
   using Timestamp = std::chrono::steady_clock::time_point;
   using Latencies =
       std::vector<std::pair<node_index_t, WorkerTimeoutStats::Latency>>;
+  using PerRegionLatencies = std::map<std::string, Latencies>;
 
  public:
   virtual ~GraylistingTracker() = default;
@@ -68,6 +70,16 @@ class GraylistingTracker {
   // the threshold flag and the number of nodes in the cluster.
   int64_t getMaxGraylistedNodes() const;
 
+  // Given a list of latencies of all nodes in the cluster, group them per
+  // region
+  PerRegionLatencies groupLatenciesPerRegion(Latencies latencies);
+
+  static std::vector<node_index_t>
+  roundRobinFlattenVector(const std::vector<std::vector<node_index_t>>& vectors,
+                          int64_t max_size);
+
+  std::vector<node_index_t> findOutlierNodes(PerRegionLatencies regions);
+
   virtual WorkerTimeoutStats& getWorkerTimeoutStats();
 
   // The duration through which a node need to be consistently an outlier to get
@@ -94,8 +106,12 @@ class GraylistingTracker {
 
   void updateActiveGraylist();
 
-  std::vector<node_index_t> findOutlierNodes(Timestamp now,
-                                             Latencies latencies);
+  // Finds outliers in a certain region and returns the node indexes of the
+  // outliers sorted descending according to their latency (highest latency
+  // first)
+  std::vector<node_index_t>
+  findSortedOutlierNodesPerRegion(Latencies latencies);
+
   // Based on the outliers, update the potential_graylist. Add new outliers
   // to the potential graylist and return the confirmed outliers.
   std::vector<node_index_t>

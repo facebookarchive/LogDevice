@@ -5,14 +5,14 @@
 #include "logdevice/common/OutlierDetection.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/ServerConfig.h"
+#include "logdevice/include/NodeLocationScope.h"
 
 namespace facebook { namespace logdevice {
 
 void GraylistingTracker::updateGraylist(Timestamp now) {
-  const auto& nodes = getNodes();
-
-  auto latencies = getLatencyEstimationForNodes(nodes);
-  auto outliers = findOutlierNodes(now, std::move(latencies));
+  auto latencies = getLatencyEstimationForNodes(getNodes());
+  auto regional_latencies = groupLatenciesPerRegion(std::move(latencies));
+  auto outliers = findOutlierNodes(std::move(regional_latencies));
   auto confirmed_outliers = updatePotentialGraylist(now, std::move(outliers));
 
   for (auto node : confirmed_outliers) {
@@ -114,7 +114,7 @@ std::vector<node_index_t> GraylistingTracker::updatePotentialGraylist(
 }
 
 std::vector<node_index_t>
-GraylistingTracker::findOutlierNodes(Timestamp now, Latencies latencies) {
+GraylistingTracker::findSortedOutlierNodesPerRegion(Latencies latencies) {
   auto outlier_pairs =
       OutlierDetection::findOutliers(OutlierDetection::Method::RMSD,
                                      std::move(latencies),
@@ -122,6 +122,13 @@ GraylistingTracker::findOutlierNodes(Timestamp now, Latencies latencies) {
                                      getMaxGraylistedNodes(),
                                      /* required_margin */ 0.75)
           .outliers;
+  using LatencySample = std::pair<node_index_t, WorkerTimeoutStats::Latency>;
+  std::sort(outlier_pairs.begin(),
+            outlier_pairs.end(),
+            [](const LatencySample& a, const LatencySample& b) {
+              return a.second > b.second;
+            });
+
   std::vector<node_index_t> outliers;
   outliers.reserve(outlier_pairs.size());
   std::transform(outlier_pairs.begin(),
@@ -129,6 +136,43 @@ GraylistingTracker::findOutlierNodes(Timestamp now, Latencies latencies) {
                  std::back_inserter(outliers),
                  [](auto x) { return x.first; });
   return outliers;
+}
+
+/* static */ std::vector<node_index_t>
+GraylistingTracker::roundRobinFlattenVector(
+    const std::vector<std::vector<node_index_t>>& vectors,
+    int64_t max_size) {
+  int64_t num_elements = 0;
+  for (const auto& vector : vectors) {
+    num_elements += static_cast<int64_t>(vector.size());
+  }
+
+  int result_size = std::min(max_size, num_elements);
+  std::vector<node_index_t> result;
+  result.reserve(result_size);
+  for (int idx = 0; result.size() < result_size; idx++) {
+    for (int i = 0; i < vectors.size() && result.size() < result_size; i++) {
+      auto& vector = vectors[i];
+      if (idx >= vector.size()) {
+        continue;
+      }
+      result.push_back(vector[idx]);
+    }
+  }
+  ld_assert(result.size() == result_size);
+  return result;
+}
+
+std::vector<node_index_t>
+GraylistingTracker::findOutlierNodes(PerRegionLatencies regions) {
+  std::vector<std::vector<node_index_t>> regional_outliers;
+  for (auto& region : regions) {
+    auto region_outliers =
+        findSortedOutlierNodesPerRegion(std::move(region.second));
+    regional_outliers.emplace_back(std::move(region_outliers));
+  }
+
+  return roundRobinFlattenVector(regional_outliers, getMaxGraylistedNodes());
 }
 
 const configuration::Nodes& GraylistingTracker::getNodes() const {
@@ -153,8 +197,8 @@ GraylistingTracker::Latencies GraylistingTracker::getLatencyEstimationForNodes(
     if (!latency.hasValue()) {
       continue;
     }
-    // TODO use  WorkerTimeoutStats::QuantileIndexes when D9216245 lands
-    latencies.emplace_back(node.first, latency.value()[2]);
+    latencies.emplace_back(
+        node.first, latency.value()[WorkerTimeoutStats::QuantileIndexes::P95]);
   }
   return latencies;
 }
@@ -214,6 +258,29 @@ GraylistingTracker::getSortedGraylistDeadlines(
   }
   std::sort(pairs.begin(), pairs.end());
   return pairs;
+}
+
+GraylistingTracker::PerRegionLatencies
+GraylistingTracker::groupLatenciesPerRegion(
+    GraylistingTracker::Latencies latencies) {
+  const auto& nodes = getNodes();
+
+  constexpr folly::StringPiece kUnknownRegion = "";
+
+  PerRegionLatencies per_region_latencies;
+  for (auto& node : latencies) {
+    const auto& node_cfg = nodes.at(node.first);
+    auto region =
+        node_cfg.location.hasValue() && !node_cfg.location.value().isEmpty()
+        ? node_cfg.location.value().getLabel(NodeLocationScope::REGION)
+        : kUnknownRegion.toString();
+    auto it = per_region_latencies.find(region);
+    if (it == per_region_latencies.end()) {
+      it = per_region_latencies.emplace(region, Latencies{}).first;
+    }
+    it->second.emplace_back(std::move(node));
+  }
+  return per_region_latencies;
 }
 
 }} // namespace facebook::logdevice
