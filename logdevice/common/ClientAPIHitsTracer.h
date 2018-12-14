@@ -63,6 +63,9 @@ class ClientAPIHitsTracer : public SampledTracer {
 
   void traceDataSize(int64_t msec_resp_time,
                      logid_t in_logid,
+                     std::chrono::milliseconds start_timestamp,
+                     std::chrono::milliseconds end_timestamp,
+                     DataSizeAccuracy in_accuracy,
                      Status out_status,
                      size_t out_size);
 

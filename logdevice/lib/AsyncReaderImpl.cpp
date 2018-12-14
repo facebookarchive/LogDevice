@@ -110,6 +110,10 @@ void AsyncReaderImpl::withoutPayload() {
   without_payload_ = true;
 }
 
+void AsyncReaderImpl::payloadHashOnly() {
+  payload_hash_only_ = true;
+}
+
 void AsyncReaderImpl::forceNoSingleCopyDelivery() {
   force_no_scd_ = true;
 }
@@ -326,6 +330,10 @@ int AsyncReaderImpl::startReading(logid_t log_id,
 
   if (without_payload_) {
     read_stream->setNoPayload();
+  }
+
+  if (payload_hash_only_) {
+    read_stream->addStartFlags(START_Header::PAYLOAD_HASH_ONLY);
   }
 
   if (force_no_scd_) {

@@ -28,6 +28,16 @@ inline std::string to_string(const FindKeyAccuracy& accuracy) {
   }
 }
 
+inline std::string to_string(const DataSizeAccuracy& accuracy) {
+  switch (accuracy) {
+    case DataSizeAccuracy::APPROXIMATE:
+      return "APPROXIMATE";
+    default:
+      ld_check(false);
+      return "";
+  }
+}
+
 #define API_HITS_STATUS_CASE(method, status)    \
   case E::status: {                             \
     WORKER_STAT_INCR(client.method##_##status); \
@@ -264,10 +274,14 @@ bool ClientAPIHitsTracer::assessIsLogEmptyFlappiness(Status st,
   }
 }
 
-void ClientAPIHitsTracer::traceDataSize(int64_t msec_resp_time,
-                                        logid_t in_logid,
-                                        Status out_status,
-                                        size_t out_size) {
+void ClientAPIHitsTracer::traceDataSize(
+    int64_t msec_resp_time,
+    logid_t in_logid,
+    std::chrono::milliseconds in_start_timestamp,
+    std::chrono::milliseconds in_end_timestamp,
+    DataSizeAccuracy in_accuracy,
+    Status out_status,
+    size_t out_size) {
   switch (out_status) {
     API_HITS_STATUS_CASE(data_size, OK)
     API_HITS_STATUS_CASE(data_size, TIMEDOUT)
@@ -285,6 +299,9 @@ void ClientAPIHitsTracer::traceDataSize(int64_t msec_resp_time,
     sample->addNormalValue("method", "dataSize");
     sample->addIntValue("response_time", msec_resp_time);
     sample->addNormalValue("input_log_id", std::to_string(in_logid.val()));
+    sample->addIntValue("input_start_timestamp", in_start_timestamp.count());
+    sample->addIntValue("input_end_timestamp", in_end_timestamp.count());
+    sample->addNormalValue("input_accuracy", to_string(in_accuracy));
     sample->addNormalValue("output_status", error_name(out_status));
     sample->addIntValue("output_size", out_size);
     return sample;

@@ -1615,13 +1615,24 @@ int ClientImpl::dataSize(logid_t logid,
                          std::chrono::milliseconds end,
                          DataSizeAccuracy accuracy,
                          data_size_callback_t cb) noexcept {
-  auto cb_wrapper = [cb, logid, start = SteadyClock::now()](
+  auto cb_wrapper = [cb,
+                     logid,
+                     start,
+                     end,
+                     accuracy,
+                     request_start_time = SteadyClock::now()](
                         Status st, size_t size) {
     // log response
     Worker* w = Worker::onThisThread();
     if (w) {
       w->processor_->api_hits_tracer_->traceDataSize(
-          msec_since(start), logid, st, size);
+          msec_since(request_start_time),
+          logid,
+          start,
+          end,
+          accuracy,
+          st,
+          size);
     }
     cb(st, size);
   };

@@ -41,6 +41,7 @@ class AsyncReaderImpl : public AsyncReader {
   int stopReading(logid_t log_id, std::function<void()> callback) override;
   int resumeReading(logid_t log_id) override;
   void withoutPayload() override;
+  void payloadHashOnly();
   void forceNoSingleCopyDelivery() override;
   int isConnectionHealthy(logid_t) const override;
   void doNotDecodeBufferedWrites() override;
@@ -92,6 +93,9 @@ class AsyncReaderImpl : public AsyncReader {
 
   // Indicates withoutPayload() was called
   bool without_payload_ = false;
+
+  // Indicates payloadHashOnly() was called
+  bool payload_hash_only_ = false;
 
   // Indicates forceNoSingleCopyDelivery() was called
   bool force_no_scd_ = false;
