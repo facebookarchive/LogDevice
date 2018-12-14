@@ -282,6 +282,11 @@ void EpochMetaData::deserialize(ProtocolReader& reader,
         h.flags,
         MetaDataLogRecordHeader::ALL_KNOWN_FLAGS,
         reader.getSource().hexDump().c_str());
+    // Let's not keep the flags around if we don't know what they mean.
+    // In particular, often an unknown flag means that an unknown field is set
+    // and serialized. We better not set such flag if we're not going to
+    // serialize the field.
+    h.flags &= MetaDataLogRecordHeader::ALL_KNOWN_FLAGS;
   }
 
   // check if we read the header successfully before moving on
