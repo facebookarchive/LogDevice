@@ -349,13 +349,11 @@ void Appender::sendDeferredSTORE(std::unique_ptr<STORE_Message> msg,
   }
 
   if ((rv != 0 || deferred_stores_ == 0) && !retryTimerIsActive()) {
-    // This should never fire, because we can get here only from
+    // This check should never fire, because we can get here only from
     // bwAvailCB which cannot be called without shard_ so the copyset has been
     // selected and the store timeout has been set.
     ld_check(timeout_.hasValue());
 
-    HISTOGRAM_ADD(
-        Worker::stats(), store_timeout, to_usec(timeout_.value()).count());
     activateStoreTimer(timeout_.value());
   }
 }
@@ -2246,6 +2244,8 @@ bool Appender::storeTimerIsActive() {
   return store_timer_.isActive();
 }
 void Appender::activateStoreTimer(std::chrono::milliseconds delay) {
+  HISTOGRAM_ADD(
+      Worker::stats(), store_timeouts, to_usec(timeout_.value()).count());
   store_timer_.activate(delay);
 }
 
