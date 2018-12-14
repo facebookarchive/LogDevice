@@ -1,9 +1,21 @@
 #!/usr/bin/make -f
 %:
-	dh $@ --parallel
+	dh $@ --with python-virtualenv --use-system-packages --parallel
 
 override_dh_auto_configure:
 	dh_auto_configure -- -DNO_PYTHON=TRUE
 
+# Run Cmake steps, need to do these manually, because dh_virtualenv overrides them
+logdevice_cmake:
+	dh_auto_build
+	dh_auto_install
+	dh_link /opt/venvs/logdevice/bin/ldshell /usr/bin/ldshell
+	dh_link /usr/lib/python3.6/dist-packages/logdevice /opt/venvs/logdevice/lib/python3.6/logdevice
+
+override_dh_virtualenv: logdevice_cmake
+	dh_virtualenv --python python3 --sourcedirectory=ops --pip-tool=pip3
+
 override_dh_auto_test:
 	# Unit tests surpressed, for time-being
+
+.PHONY: logdevice_cmake
