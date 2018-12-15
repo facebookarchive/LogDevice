@@ -64,6 +64,7 @@ class ReadStorageTask : public StorageTask {
                   LocalLogStore::ReadOptions options,
                   std::weak_ptr<LocalLogStore::ReadIterator> iterator,
                   bool is_tailer,
+                  StorageTaskType type,
                   Sockaddr client_address = Sockaddr());
 
   /**
@@ -92,6 +93,10 @@ class ReadStorageTask : public StorageTask {
 
   Priority getPriority() const override {
     return is_tailer_ ? Priority::HIGH : Priority::MID;
+  }
+
+  Principal getPrincipal() const override {
+    return is_tailer_ ? Principal::READ_TAIL : Principal::READ_BACKLOG;
   }
 
   // Used to track if the ServerReadStream for which this task is for has been

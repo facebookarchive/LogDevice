@@ -261,6 +261,10 @@ class CompactPartitionStorageTask : public StorageTask {
       : StorageTask(StorageTask::Type::COMPACT_PARTITION),
         partition_id_(partition_id) {}
 
+  Principal getPrincipal() const override {
+    return Principal::METADATA;
+  }
+
   void execute() override {
     auto partitioned_store = dynamic_cast<PartitionedRocksDBStore*>(
         &storageThreadPool_->getLocalLogStore());

@@ -40,6 +40,10 @@ class ReadLogRebuildingCheckpointTask : public StorageTask {
     return Priority::LOW;
   }
 
+  Principal getPrincipal() const override {
+    return Principal::METADATA;
+  }
+
   void execute() override;
   void onDone() override;
   void onDropped() override;
@@ -88,6 +92,10 @@ class WriteLogRebuildingCheckpointTask : public StorageTask {
   Priority getPriority() const override {
     // Rebuilding storage tasks should be lo-pri compared to client reads
     return Priority::LOW;
+  }
+
+  Principal getPrincipal() const override {
+    return Principal::METADATA;
   }
 
   void execute() override;

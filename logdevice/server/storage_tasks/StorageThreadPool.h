@@ -12,6 +12,7 @@
 
 #include <folly/small_vector.h>
 
+#include "logdevice/common/DRRScheduler.h"
 #include "logdevice/common/ResourceBudget.h"
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/SimpleEnumMap.h"
@@ -43,6 +44,9 @@ class StorageThreadPool {
   using TaskQueue =
       PrioritizedQueue<StorageTask*,
                        (size_t)StorageTask::Priority::NUM_PRIORITIES>;
+
+  using DRRTaskQueue = DRRScheduler<StorageTask, &StorageTask::schedulerQHook_>;
+
   struct TaskQueueParams {
     int nthreads = 0;
   };
@@ -65,6 +69,14 @@ class StorageThreadPool {
                     const std::shared_ptr<TraceLogger> trace_logger = nullptr);
 
   ~StorageThreadPool();
+
+  bool isShuttingDown() {
+    return shutting_down_.load();
+  }
+
+  bool shutdownComplete() {
+    return shutdown_complete_.load();
+  }
 
   LocalLogStore& getLocalLogStore() {
     return *local_log_store_;
@@ -100,6 +112,37 @@ class StorageThreadPool {
     return nthreads_fast_stallable_ > 0;
   }
 
+  // If true storage threads use DRR for IO scheduling on that queue.
+  bool useDRR() const {
+    return useDRR_;
+  }
+
+  void buildSchedulerPrincipals(std::vector<DRRPrincipal>& principals) {
+    principals.clear();
+    uint64_t numPrincipals = (uint64_t)StorageTask::Principal::NUM_PRINCIPALS;
+    principals.reserve(numPrincipals);
+    for (uint64_t i = 0; i < numPrincipals; i++) {
+      DRRPrincipal p;
+      p.name = toString((StorageTaskPrincipal)i);
+      p.share = settings_->storage_task_shares[i].share;
+      principals.emplace_back(p);
+    }
+  }
+
+  /*
+   * Credits the schduler with any unused cost from the previous request
+   * dequeued. See DRRScheduler.h for detailed comments. The net of it is that
+   * it should not be nailvely used for the bytes delta.
+   * TODO (T37204962).
+   */
+  void creditScheduler(uint32_t bytesUnused, StorageTaskPrincipal p) {
+    if (useDRR_) {
+      uint32_t principal = static_cast<uint32_t>(p);
+      taskQueues_[StorageTask::ThreadType::SLOW].drrQueue.returnCredit(
+          bytesUnused, principal);
+    }
+  }
+
   /**
    * Attempts to put a task onto the queue.  If it succeeds (there is room on
    * the queue), claims ownership of the task.
@@ -121,9 +164,9 @@ class StorageThreadPool {
 
   /**
    * Puts a task onto the queue, blocking until there is room for it.  Claims
-   * ownership of the task.
+   * ownership of the task. Return false if the pool is shutting down.
    */
-  void blockingPutTask(std::unique_ptr<StorageTask>&& task);
+  bool blockingPutTask(std::unique_ptr<StorageTask>&& task);
 
   /**
    * Gets a task from the queue, blocking if there are none.  Used by storage
@@ -181,6 +224,7 @@ class StorageThreadPool {
   const int nthreads_fast_stallable_;
   const int nthreads_fast_time_sensitive_;
   const int nthreads_metadata_;
+  const bool useDRR_;
 
   std::vector<std::unique_ptr<ExecStorageThread>> exec_threads_;
 
@@ -204,6 +248,9 @@ class StorageThreadPool {
 
     // Task queue. Other threads write into it and our threads read from it.
     TaskQueue queue;
+
+    // For reads only
+    DRRTaskQueue drrQueue;
     // Separate queue for write batching
     WriteTaskQueue write_queue;
     // How many tasks should be dropped? Non-droppable tasks are not dropped but
@@ -217,12 +264,14 @@ class StorageThreadPool {
   // to E::SHUTDOWN). Set by shutDown().
   std::atomic<bool> shutting_down_{false};
 
+  std::atomic<bool> shutdown_complete_{false};
+
   StatsHolder* stats_;
 
   shard_index_t shard_idx_;
   size_t num_shards_;
 
-  // Separate queue for each of the two types of storage threads.
+  // Separate queue for each type of storage thread.
   SimpleEnumMap<StorageTask::ThreadType, PerTypeTaskQueue> taskQueues_;
 
   // This updates memory budgets whenever they change in settings.

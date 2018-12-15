@@ -58,6 +58,10 @@ class GetHeadAttributesStorageTask : public StorageTask {
         status_(E::UNKNOWN),
         trim_point_timestamp_(std::chrono::milliseconds::max()) {}
 
+  Principal getPrincipal() const override {
+    return Principal::METADATA;
+  }
+
   void execute() override {
     LocalLogStore& store = storageThreadPool_->getLocalLogStore();
 

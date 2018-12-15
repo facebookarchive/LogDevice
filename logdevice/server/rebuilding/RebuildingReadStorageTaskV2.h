@@ -206,6 +206,10 @@ class RebuildingReadStorageTaskV2 : public StorageTask {
     return Priority::LOW;
   }
 
+  Principal getPrincipal() const override {
+    return Principal::REBUILD;
+  }
+
  protected:
   // Can be overridden in tests.
   virtual UpdateableSettings<Settings> getSettings();

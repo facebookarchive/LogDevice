@@ -65,6 +65,10 @@ class EpochOffsetStorageTask : public StorageTask {
     return ThreadType::SLOW;
   }
 
+  Principal getPrincipal() const override {
+    return Principal::METADATA;
+  }
+
   // Used to track if the ServerReadStream for which this task is for has been
   // destroyed.
   WeakRef<ServerReadStream> stream_;

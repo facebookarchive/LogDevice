@@ -29,6 +29,9 @@ class RecoverLogStateTask : public StorageTask {
   explicit RecoverLogStateTask(logid_t log_id)
       : StorageTask(StorageTask::Type::RECOVER_LOG_STATE), log_id_(log_id) {}
 
+  Principal getPrincipal() const override {
+    return Principal::METADATA;
+  }
   void execute() override;
   void onDone() override;
   void onDropped() override;

@@ -29,6 +29,51 @@ namespace facebook { namespace logdevice {
 using TrimPointUpdateMap = RocksDBCompactionFilter::TrimPointUpdateMap;
 using PerEpochLogMetadataTrimPointUpdateMap =
     RocksDBCompactionFilter::PerEpochLogMetadataTrimPointUpdateMap;
+using Reason = PartitionedRocksDBStore::PartitionToCompact::Reason;
+
+namespace {
+/*
+ * This storage task is used as a psuedo task so that compaction shares
+ * can also be scheduled from the common IO scheduler. It has a small
+ * disadvantage to other principals: the dequeueing thread move on to the
+ * next task right after dequeueing this one. So it potentially runs in
+ * parallel with other tasks when it is its turn, in effect getting a smaller
+ * share. But this effect is minor as most of the latency wil be queueing
+ * latency on the DRR queue.
+ */
+
+class CompactionThrottleStorageTask : public StorageTask {
+ public:
+  explicit CompactionThrottleStorageTask(StorageTaskType type, Semaphore& sem)
+      : StorageTask(type), sem_(sem) {}
+
+  ThreadType getThreadType() const override {
+    return ThreadType::SLOW;
+  }
+
+  Priority getPriority() const override {
+    return Priority::LOW;
+  }
+
+  Principal getPrincipal() const override {
+    return (type_ == StorageTaskType::COMPACTION_THROTTLE_RETENTION)
+        ? Principal::COMPACTION_RETENTION
+        : Principal::COMPACTION_PARTIAL;
+  }
+
+  void execute() override {
+    sem_.post();
+  }
+
+  void onDone() override {}
+  void onDropped() override {
+    ld_check(false);
+  }
+
+ private:
+  Semaphore& sem_;
+};
+} // namespace
 
 RocksDBCompactionFilter::Decision
 RocksDBCompactionFilter::filterImpl(const rocksdb::Slice& key,
@@ -53,7 +98,54 @@ RocksDBCompactionFilter::filterImpl(const rocksdb::Slice& key,
     }
   }
 
-  rate_limiter_.waitUntilAllowed(key.size() + value.size());
+  uint64_t bytesNeeded = key.size() + value.size();
+  if (storage_thread_pool_->useDRR() && context_ &&
+      (context_->reason == Reason::PARTIAL ||
+       context_->reason == Reason::RETENTION)) {
+    Semaphore sem;
+    StorageTaskType type = (context_->reason == Reason::RETENTION)
+        ? StorageTaskType::COMPACTION_THROTTLE_RETENTION
+        : StorageTaskType::COMPACTION_THROTTLE_PARTIAL;
+    // TODO (T37200690): better to reset drrBytesAllowd_ before every IO?
+    while (drrBytesAllowed_ < bytesNeeded) {
+      // Overallocate for the shutdown case.
+      uint64_t bytesGained = bytesNeeded - drrBytesAllowed_;
+      std::unique_ptr<CompactionThrottleStorageTask> task =
+          std::make_unique<CompactionThrottleStorageTask>(type, sem);
+      task->setStorageThreadPool(storage_thread_pool_);
+      task->enqueue_time_ = std::chrono::steady_clock::now();
+      bool ret = storage_thread_pool_->blockingPutTask(std::move(task));
+      if (ret) {
+        // If the threadpool is shutting down then we just want
+        // to complete the work here as fast and possible and
+        // return. But we want to wait for the threadpool shutdown
+        // to complete so that no one signals on the semaphore
+        // anymore and it's okay to unwind this stack. The order
+        // of shutdown is:
+        // 1. shut down is initiated by marking the shutting_down_ flag.
+        // 2. StorageThreadPool threads are joined and shutdown_complete_ flag
+        // is set.
+        // 3. We unwind from here.
+        // 4. localogstore is destroyed and then the StorageThreadPool is
+        // destroyed.
+        while (!storage_thread_pool_->shutdownComplete()) {
+          if ((sem.timedwait(std::chrono::seconds(2))) == 0) {
+            bytesGained = settings_->compaction_max_bytes_at_once;
+            break;
+          }
+        }
+      }
+      drrBytesAllowed_ += bytesGained;
+    }
+    drrBytesAllowed_ -= bytesNeeded;
+  }
+
+  // The throttler above is dynamically throttling wrt. to other
+  // storage tasks in the system. This mechanism predates it and
+  // was inserted to avoid VM stalls when compaction runs too fast.
+  // See T6806782 for context. TODO (T37200690): tracks any
+  // improvements to merge the two mechanisms.
+  rate_limiter_.waitUntilAllowed(bytesNeeded);
 
   if (PerEpochLogMetaKey::validAnyType(key.data(), key.size())) {
     // per epoch log metadata needs to be trimmed
@@ -479,6 +571,10 @@ class UpdateTrimPointsTask : public StorageTask {
       : StorageTask(StorageTask::Type::UPDATE_TRIM_POINTS),
         trim_points_(std::move(trim_points)),
         metadata_trim_points_(std::move(metadata_trim_points)) {}
+
+  Principal getPrincipal() const override {
+    return Principal::METADATA;
+  }
 
   void execute() override {
     // Update the trim points computed by this compaction.

@@ -77,6 +77,10 @@ class RebuildingReadStorageTask : public StorageTask {
     return Priority::LOW;
   }
 
+  Principal getPrincipal() const override {
+    return Principal::REBUILD;
+  }
+
   lsn_t restartVersion;
   folly::Optional<RecordTimestamp> seekTimestamp;
   LocalLogStoreReader::ReadContext readCtx;

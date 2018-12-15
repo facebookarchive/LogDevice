@@ -28,6 +28,10 @@ class DeleteLogMetadataStorageTask : public WriteStorageTask {
         write_op_(op),
         callback_(cb) {}
 
+  Principal getPrincipal() const override {
+    return Principal::METADATA;
+  }
+
   void onDone() override {
     callback_(E::OK);
   }

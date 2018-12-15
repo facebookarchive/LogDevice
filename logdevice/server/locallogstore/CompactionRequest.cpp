@@ -19,12 +19,20 @@
 namespace facebook { namespace logdevice {
 
 // storage task for performing manual compaction on LocalLogStores
+// This storage task is used for the entire compaction run and is
+// different from CompactionThrottleStorageTask, which is used
+// for throttling during the filtering process (by getting a share
+// for a fixed amount of filtering).
 class CompactionStorageTask : public StorageTask {
  public:
   CompactionStorageTask(int idx, std::function<void(Status)> callback)
       : StorageTask(StorageTask::Type::COMPACT_PARTITION),
         shard_idx_(idx),
         callback_(callback) {}
+
+  Principal getPrincipal() const override {
+    return Principal::METADATA;
+  }
 
   void execute() override {
     LocalLogStore& store = storageThreadPool_->getLocalLogStore();

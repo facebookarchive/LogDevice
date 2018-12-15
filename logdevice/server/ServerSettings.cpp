@@ -262,6 +262,7 @@ void ServerSettings::defineSettings(SettingEasyInit& init) {
      SERVER | CLI_ONLY | REQUIRES_RESTART,
      SettingsCategory::Configuration)
 
+
     ("storage-threads-per-shard-slow",
      &shard_storage_pool_params[(size_t)ThreadType::SLOW].nthreads,
      "2",

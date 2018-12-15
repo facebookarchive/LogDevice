@@ -46,6 +46,10 @@ class WriteShardRebuildingCompleteMetadataTask : public StorageTask {
         owner_(owner),
         version_(version) {}
 
+  Principal getPrincipal() const override {
+    return Principal::METADATA;
+  }
+
   void execute() override {
     auto& store = storageThreadPool_->getLocalLogStore();
     if (store.acceptingWrites() == E::DISABLED) {

@@ -73,6 +73,9 @@ class ReadLngTask final : public StorageTask {
   ThreadType getThreadType() const override {
     return ThreadType::SLOW;
   }
+  Principal getPrincipal() const override {
+    return Principal::METADATA;
+  }
 
  private:
   WeakRef<ServerReadStream> stream_;
@@ -1366,6 +1369,8 @@ void CatchupOneStream::readOnStorageThread(
   // All streams not identified as for low-priority backlog readers are
   // considered realtime (i.e. READ_TAIL and RECOVERY).
   bool is_tailer = (stream_->trafficClass() != TrafficClass::READ_BACKLOG);
+  StorageTaskType type = is_tailer ? StorageTask::Type::READ_TAIL
+                                   : StorageTask::Type::READ_BACKLOG;
   // Get worker. May be nullptr in unit tests.
   ServerWorker* w = ServerWorker::onThisThread(false);
   Sockaddr client_address;
@@ -1380,6 +1385,7 @@ void CatchupOneStream::readOnStorageThread(
                                                      options,
                                                      read_iterator,
                                                      is_tailer,
+                                                     type,
                                                      client_address);
 
   deps_.putStorageTask(std::move(task_uniq), stream_->shard_);

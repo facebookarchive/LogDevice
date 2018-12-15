@@ -58,6 +58,10 @@ class WriteTrimMetadataTask : public StorageTask {
         client_address_(std::move(client_address)),
         identity_(std::move(identity)) {}
 
+  Principal getPrincipal() const override {
+    return Principal::METADATA;
+  }
+
   void execute() override {
     LocalLogStore& store = storageThreadPool_->getLocalLogStore();
     LogStorageStateMap& map =

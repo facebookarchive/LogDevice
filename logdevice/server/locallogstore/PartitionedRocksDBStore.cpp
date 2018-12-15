@@ -4464,6 +4464,7 @@ void PartitionedRocksDBStore::performCompactionInternal(
         rocksdb_config_.options_.compaction_filter_factory.get());
 
     CompactionContext context;
+    context.reason = to_compact.reason;
     rocksdb::Status status;
 
     {
@@ -4621,6 +4622,7 @@ bool PartitionedRocksDBStore::performStronglyFilteredCompactionInternal(
 
   // 2.
   CompactionContext compaction_context;
+  compaction_context.reason = PartitionToCompact::Reason::RETENTION;
   compaction_context.logs_to_keep.emplace();
   size_t logs_seen = 0;
   PartitionDirectoryIterator iterator(*this);

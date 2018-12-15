@@ -67,6 +67,10 @@ class MergeMutablePerEpochLogMetadataTask final : public WriteStorageTask {
                   OffsetMap::fromLegacy(0) /* unknown epoch_size_map */),
         write_op_(rid.logid, rid.epoch, &metadata_) {}
 
+  Principal getPrincipal() const override {
+    return Principal::METADATA;
+  }
+
   void onDone() override {
     if (status_ == E::OK) {
       WORKER_STAT_INCR(mutable_per_epoch_log_metadata_writes);

@@ -27,6 +27,10 @@ class DeleteStorageTask : public WriteStorageTask {
   explicit DeleteStorageTask(const DeleteWriteOp& op)
       : WriteStorageTask(StorageTask::Type::DELETE), write_op_(op) {}
 
+  Principal getPrincipal() const override {
+    return Principal::METADATA;
+  }
+
   // All WriteStorageTask subclasses are processed the same way, we just
   // specify what to do when it's done.  In this case, nothing.
   void onDone() override {}

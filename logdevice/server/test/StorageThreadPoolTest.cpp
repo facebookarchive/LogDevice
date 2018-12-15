@@ -89,30 +89,40 @@ class MockWriteStorageTask : public WriteStorageTask {
 
 /**
  * Spins up storage thread pool, has it do some trivial tasks, verifies that
- * the pool can cleanly shut down.
+ * the pool can cleanly shut down. The seconds iteration drives the DRR
+ * scheduler code path.
  */
 TEST(StorageThreadPoolTest, Basic) {
-  UpdateableSettings<Settings> settings;
+  for (int testIter = 0; testIter < 2; testIter++) {
+    ld_info("starting test iter %d", testIter);
+    Settings init_settings = create_default_settings<Settings>();
+    if (testIter == 1) {
+      init_settings.storage_tasks_use_drr = true;
+    }
+    UpdateableSettings<Settings> settings(init_settings);
 
-  StorageThreadPool::Params params;
-  params[(size_t)StorageTaskThreadType::SLOW].nthreads = 4;
-  const int task_queue_slots = 16;
-  // Number of tasks intentionally more than task queue slots
-  const int ntasks = 3 * task_queue_slots;
+    StorageThreadPool::Params params;
+    params[(size_t)StorageTaskThreadType::SLOW].nthreads = 4;
+    const int task_queue_slots = 16;
+    // Number of tasks intentionally more than task queue slots
+    const int ntasks = 3 * task_queue_slots;
 
-  TemporaryRocksDBStore store;
-  auto pool = std::make_unique<StorageThreadPool>(
-      0, 1, params, settings, &store, task_queue_slots);
+    TemporaryRocksDBStore store;
+    auto pool = std::make_unique<StorageThreadPool>(
+        0, 1, params, settings, &store, task_queue_slots);
 
-  Semaphore sem;
-  for (int i = 0; i < ntasks; ++i) {
-    pool->blockingPutTask(std::make_unique<SimpleStorageTask>(&sem));
+    Semaphore sem;
+    for (int i = 0; i < ntasks; ++i) {
+      bool ret =
+          pool->blockingPutTask(std::make_unique<SimpleStorageTask>(&sem));
+      ASSERT_TRUE(ret);
+    }
+    // Wait until all tasks have finished
+    for (int i = 0; i < ntasks; ++i) {
+      sem.wait();
+    }
+    pool.reset();
   }
-  // Wait until all tasks have finished
-  for (int i = 0; i < ntasks; ++i) {
-    sem.wait();
-  }
-  pool.reset();
 }
 
 // A slow storage task that needs syncing should not be dropped on the floor
@@ -149,28 +159,36 @@ TEST(StorageThreadPoolTest, SyncingShutdown) {
     std::atomic<bool>* synced_;
   };
 
-  UpdateableSettings<Settings> settings; // default settings
+  for (int testIter = 0; testIter < 2; testIter++) {
+    ld_info("starting test iter %d", testIter);
+    Settings init_settings = create_default_settings<Settings>();
+    if (testIter == 1) {
+      init_settings.storage_tasks_use_drr = true;
+    }
+    UpdateableSettings<Settings> settings(init_settings);
 
-  StorageThreadPool::Params params;
-  params[(size_t)StorageTaskThreadType::SLOW].nthreads = 1;
-  const int task_queue_slots = 16;
+    StorageThreadPool::Params params;
+    params[(size_t)StorageTaskThreadType::SLOW].nthreads = 1;
+    const int task_queue_slots = 16;
 
-  TemporaryRocksDBStore store;
-  auto pool = std::make_unique<StorageThreadPool>(
-      0, 1, params, settings, &store, task_queue_slots);
+    TemporaryRocksDBStore store;
+    auto pool = std::make_unique<StorageThreadPool>(
+        0, 1, params, settings, &store, task_queue_slots);
 
-  folly::Baton<> started;
-  std::atomic<bool> executed(false);
-  std::atomic<bool> synced(false);
-  pool->blockingPutTask(
-      std::make_unique<SyncingTestTask>(&started, &executed, &synced));
-  started.wait();
-  // Shut down the pool.  Since the task has already started executing, it has
-  // to finish before the pool can shut down.
-  pool.reset();
+    folly::Baton<> started;
+    std::atomic<bool> executed(false);
+    std::atomic<bool> synced(false);
+    bool ret = pool->blockingPutTask(
+        std::make_unique<SyncingTestTask>(&started, &executed, &synced));
+    ASSERT_TRUE(ret);
+    started.wait();
+    // Shut down the pool.  Since the task has already started executing, it has
+    // to finish before the pool can shut down.
+    pool.reset();
 
-  ASSERT_TRUE(executed);
-  ASSERT_TRUE(synced);
+    ASSERT_TRUE(executed);
+    ASSERT_TRUE(synced);
+  }
 }
 
 // Creates a storage thread pool consisting of two threads, one for slow, and
@@ -178,7 +196,6 @@ TEST(StorageThreadPoolTest, SyncingShutdown) {
 // run at the same time.
 TEST(StorageThreadPoolTest, DifferentPriorities) {
   Alarm alarm(std::chrono::seconds(60));
-  UpdateableSettings<Settings> settings;
   StorageThreadPool::Params params;
   params[(size_t)StorageTaskThreadType::SLOW].nthreads = 1;
   params[(size_t)StorageTaskThreadType::FAST_TIME_SENSITIVE].nthreads = 1;
@@ -186,39 +203,47 @@ TEST(StorageThreadPoolTest, DifferentPriorities) {
   params[(size_t)StorageTaskThreadType::METADATA].nthreads = 1;
   Semaphore sem1;
   TemporaryRocksDBStore store;
-  StorageThreadPool pool(0, // shard idx
-                         1, // num shards
-                         params,
-                         settings,
-                         &store,
-                         16); // task queue size
 
-  const int ntasks = 10;
+  for (int testIter = 0; testIter < 2; testIter++) {
+    ld_info("starting test iter %d", testIter);
+    Settings init_settings = create_default_settings<Settings>();
+    if (testIter == 1) {
+      init_settings.storage_tasks_use_drr = true;
+    }
+    UpdateableSettings<Settings> settings(init_settings);
+    StorageThreadPool pool(0, // shard idx
+                           1, // num shards
+                           params,
+                           settings,
+                           &store,
+                           16); // task queue size
 
-  // Create several "slow" tasks that block (wait on a semaphore).
-  for (int i = 0; i < ntasks; ++i) {
+    const int ntasks = 10;
+
+    // Create several "slow" tasks that block (wait on a semaphore).
+    for (int i = 0; i < ntasks; ++i) {
+      auto task = std::make_unique<TestTask>(
+          StorageTask::ThreadType::SLOW, [&]() { sem1.wait(); });
+      ASSERT_EQ(0, pool.tryPutTask(std::move(task)));
+    }
+
+    // A fast "write" task ought to complete first because there's a dedicated
+    // thread eager to execute it.
+    Semaphore sem2;
     auto task = std::make_unique<TestTask>(
-        StorageTask::ThreadType::SLOW, [&]() { sem1.wait(); });
+        StorageTask::ThreadType::FAST_TIME_SENSITIVE, [&]() { sem2.post(); });
     ASSERT_EQ(0, pool.tryPutTask(std::move(task)));
-  }
 
-  // A fast "write" task ought to complete first because there's a dedicated
-  // thread eager to execute it.
-  Semaphore sem2;
-  auto task = std::make_unique<TestTask>(
-      StorageTask::ThreadType::FAST_TIME_SENSITIVE, [&]() { sem2.post(); });
-  ASSERT_EQ(0, pool.tryPutTask(std::move(task)));
-
-  sem2.wait();
-  for (int i = 0; i < ntasks; ++i) {
-    sem1.post();
+    sem2.wait();
+    for (int i = 0; i < ntasks; ++i) {
+      sem1.post();
+    }
   }
 }
 
 TEST(StorageThreadPoolTest, IOPrio) {
   Settings init_settings = create_default_settings<Settings>();
   init_settings.slow_ioprio = std::make_pair(2, 2);
-  UpdateableSettings<Settings> settings(init_settings);
   StorageThreadPool::Params params;
   params[(size_t)StorageTaskThreadType::SLOW].nthreads = 1;
   params[(size_t)StorageTaskThreadType::FAST_TIME_SENSITIVE].nthreads = 1;
@@ -226,108 +251,124 @@ TEST(StorageThreadPoolTest, IOPrio) {
   params[(size_t)StorageTaskThreadType::METADATA].nthreads = 1;
 
   TemporaryRocksDBStore store;
-  StorageThreadPool pool(0, // shard idx
-                         1, // num shards
-                         params,
-                         settings,
-                         &store,
-                         16); // task queue size
+  for (int testIter = 0; testIter < 2; testIter++) {
+    ld_info("starting test iter %d", testIter);
+    if (testIter == 1) {
+      init_settings.storage_tasks_use_drr = true;
+    }
+    UpdateableSettings<Settings> settings(init_settings);
 
-  std::pair<int, int> default_prio(-1, -1);
+    StorageThreadPool pool(0, // shard idx
+                           1, // num shards
+                           params,
+                           settings,
+                           &store,
+                           16); // task queue size
 
-  // Get default IO priority by creating a new thread and calling
-  // get_io_priority_of_this_thread() on it. It's better than calling
-  // get_io_priority_of_this_thread() on the main thread because other tests
-  // could have changed it.
-  std::thread([&default_prio] {
-    int rv = get_io_priority_of_this_thread(&default_prio);
-    EXPECT_EQ(0, rv);
-  })
-      .join();
+    std::pair<int, int> default_prio(-1, -1);
 
-  Semaphore sem;
-  auto task = std::make_unique<TestTask>(StorageTask::ThreadType::SLOW, [&]() {
-    std::pair<int, int> prio(-1, -1);
-    int rv = get_io_priority_of_this_thread(&prio);
-    EXPECT_EQ(0, rv);
-    EXPECT_EQ(std::make_pair(2, 2), prio);
-    sem.post();
-  });
-  ASSERT_EQ(0, pool.tryPutTask(std::move(task)));
+    // Get default IO priority by creating a new thread and calling
+    // get_io_priority_of_this_thread() on it. It's better than calling
+    // get_io_priority_of_this_thread() on the main thread because other tests
+    // could have changed it.
+    std::thread([&default_prio] {
+      int rv = get_io_priority_of_this_thread(&default_prio);
+      EXPECT_EQ(0, rv);
+    })
+        .join();
 
-  task = std::make_unique<TestTask>(
-      StorageTask::ThreadType::FAST_TIME_SENSITIVE, [&]() {
-        std::pair<int, int> prio(-1, -1);
-        int rv = get_io_priority_of_this_thread(&prio);
-        EXPECT_EQ(0, rv);
-        EXPECT_EQ(default_prio, prio);
-        sem.post();
-      });
-  ASSERT_EQ(0, pool.tryPutTask(std::move(task)));
+    Semaphore sem;
+    auto task =
+        std::make_unique<TestTask>(StorageTask::ThreadType::SLOW, [&]() {
+          std::pair<int, int> prio(-1, -1);
+          int rv = get_io_priority_of_this_thread(&prio);
+          EXPECT_EQ(0, rv);
+          EXPECT_EQ(std::make_pair(2, 2), prio);
+          sem.post();
+        });
+    ASSERT_EQ(0, pool.tryPutTask(std::move(task)));
 
-  task = std::make_unique<TestTask>(
-      StorageTask::ThreadType::FAST_STALLABLE, [&]() {
-        std::pair<int, int> prio(-1, -1);
-        int rv = get_io_priority_of_this_thread(&prio);
-        EXPECT_EQ(0, rv);
-        EXPECT_EQ(default_prio, prio);
-        sem.post();
-      });
-  ASSERT_EQ(0, pool.tryPutTask(std::move(task)));
+    task = std::make_unique<TestTask>(
+        StorageTask::ThreadType::FAST_TIME_SENSITIVE, [&]() {
+          std::pair<int, int> prio(-1, -1);
+          int rv = get_io_priority_of_this_thread(&prio);
+          EXPECT_EQ(0, rv);
+          EXPECT_EQ(default_prio, prio);
+          sem.post();
+        });
+    ASSERT_EQ(0, pool.tryPutTask(std::move(task)));
 
-  // metadata thread should have the same io priority as the slow thread
-  task = std::make_unique<TestTask>(StorageTask::ThreadType::METADATA, [&]() {
-    std::pair<int, int> prio(-1, -1);
-    int rv = get_io_priority_of_this_thread(&prio);
-    EXPECT_EQ(0, rv);
-    EXPECT_EQ(std::make_pair(2, 2), prio);
-    sem.post();
-  });
-  ASSERT_EQ(0, pool.tryPutTask(std::move(task)));
+    task = std::make_unique<TestTask>(
+        StorageTask::ThreadType::FAST_STALLABLE, [&]() {
+          std::pair<int, int> prio(-1, -1);
+          int rv = get_io_priority_of_this_thread(&prio);
+          EXPECT_EQ(0, rv);
+          EXPECT_EQ(default_prio, prio);
+          sem.post();
+        });
+    ASSERT_EQ(0, pool.tryPutTask(std::move(task)));
 
-  sem.wait();
-  sem.wait();
-  sem.wait();
-  sem.wait();
+    // metadata thread should have the same io priority as the slow thread
+    task = std::make_unique<TestTask>(StorageTask::ThreadType::METADATA, [&]() {
+      std::pair<int, int> prio(-1, -1);
+      int rv = get_io_priority_of_this_thread(&prio);
+      EXPECT_EQ(0, rv);
+      EXPECT_EQ(std::make_pair(2, 2), prio);
+      sem.post();
+    });
+    ASSERT_EQ(0, pool.tryPutTask(std::move(task)));
+
+    sem.wait();
+    sem.wait();
+    sem.wait();
+    sem.wait();
+  }
 }
 
 TEST(StorageThreadPoolTest, BatchLimits) {
   Settings init_settings = create_default_settings<Settings>();
-  UpdateableSettings<Settings> settings(init_settings);
   StorageThreadPool::Params params;
   params[(size_t)StorageTaskThreadType::SLOW].nthreads = 1;
   params[(size_t)StorageTaskThreadType::FAST_TIME_SENSITIVE].nthreads = 1;
   params[(size_t)StorageTaskThreadType::FAST_STALLABLE].nthreads = 1;
   params[(size_t)StorageTaskThreadType::METADATA].nthreads = 1;
-  auto limit = settings->write_batch_size;
-  auto byte_limit = settings->write_batch_bytes;
+  auto limit = init_settings.write_batch_size;
+  auto byte_limit = init_settings.write_batch_bytes;
 
   TemporaryRocksDBStore store;
-  StorageThreadPool pool(0, // shard idx
-                         1, // num shards
-                         params,
-                         settings,
-                         &store,
-                         limit + 1); // task queue size
+  for (int testIter = 0; testIter < 2; testIter++) {
+    ld_info("starting test iter %d", testIter);
+    if (testIter == 1) {
+      init_settings.storage_tasks_use_drr = true;
+    }
+    UpdateableSettings<Settings> settings(init_settings);
 
-  // Make sure byte_limit is respected
-  ASSERT_EQ(
-      0,
-      pool.tryPutWrite(std::make_unique<MockWriteStorageTask>(byte_limit - 1)));
-  ASSERT_EQ(0, pool.tryPutWrite(std::make_unique<MockWriteStorageTask>(2)));
-  ASSERT_EQ(0, pool.tryPutWrite(std::make_unique<MockWriteStorageTask>()));
-  auto ttype = MockWriteStorageTask::ThreadType::SLOW;
-  auto res = pool.tryGetWriteBatch(ttype, limit, byte_limit);
-  ASSERT_EQ(2, res.size());
+    StorageThreadPool pool(0, // shard idx
+                           1, // num shards
+                           params,
+                           settings,
+                           &store,
+                           limit + 1); // task queue size
 
-  // Make sure (task) limit is respected
-  for (auto i = 0; i < limit; i++) {
+    // Make sure byte_limit is respected
+    ASSERT_EQ(0,
+              pool.tryPutWrite(
+                  std::make_unique<MockWriteStorageTask>(byte_limit - 1)));
+    ASSERT_EQ(0, pool.tryPutWrite(std::make_unique<MockWriteStorageTask>(2)));
     ASSERT_EQ(0, pool.tryPutWrite(std::make_unique<MockWriteStorageTask>()));
-  }
-  res = pool.tryGetWriteBatch(ttype, limit, byte_limit);
-  ASSERT_EQ(limit, res.size());
+    auto ttype = MockWriteStorageTask::ThreadType::SLOW;
+    auto res = pool.tryGetWriteBatch(ttype, limit, byte_limit);
+    ASSERT_EQ(2, res.size());
 
-  // Make sure we get the rest of the queue even though neither limit reached
-  res = pool.tryGetWriteBatch(ttype, limit, byte_limit);
-  ASSERT_EQ(1, res.size());
+    // Make sure (task) limit is respected
+    for (auto i = 0; i < limit; i++) {
+      ASSERT_EQ(0, pool.tryPutWrite(std::make_unique<MockWriteStorageTask>()));
+    }
+    res = pool.tryGetWriteBatch(ttype, limit, byte_limit);
+    ASSERT_EQ(limit, res.size());
+
+    // Make sure we get the rest of the queue even though neither limit reached
+    res = pool.tryGetWriteBatch(ttype, limit, byte_limit);
+    ASSERT_EQ(1, res.size());
+  }
 }

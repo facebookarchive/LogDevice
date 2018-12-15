@@ -16,7 +16,22 @@
 // Tasks that have publish_stats == false will be aggregated together into one
 // bucket when publishing
 
+// The CompactPartitionStorageTask is concerned with compacting the entire
+// partition by calling into RocksDB.
+// The CompactionThrottleStorageTask-XXX's are used for throttling a given
+// compaction run, during the filtering process. A new task is submitted for
+// each X MB of filtering. This allows compaction to be scheduled along with
+// other storage tasks in the system and be throttled if necessary, by the
+// scheduler. The XXX suffix is because 'retention' and 'partial' are different
+// principals and so get different shares.
+
 STORAGE_TASK_TYPE(COMPACT_PARTITION, "CompactPartitionStorageTask", false)
+STORAGE_TASK_TYPE(COMPACTION_THROTTLE_RETENTION,
+                  "CompactionThrottleStorageTask-retention",
+                  true)
+STORAGE_TASK_TYPE(COMPACTION_THROTTLE_PARTIAL,
+                  "CompactionThrottleStorageTask-partial",
+                  true)
 STORAGE_TASK_TYPE(DELETE, "DeleteStorageTask", false)
 STORAGE_TASK_TYPE(DELETE_LOG_METADATA, "DeleteLogMetadataStorageTask", false)
 STORAGE_TASK_TYPE(DUMP_RELEASE_STATE, "DumpReleaseStateStorageTask", false)
@@ -30,7 +45,8 @@ STORAGE_TASK_TYPE(PURGE_DELETE_RECORDS, "PurgeDeleteRecordsStorageTask", true)
 STORAGE_TASK_TYPE(PURGE_READ_LAST_CLEAN, "PurgeReadLastCleanStorageTask", false)
 STORAGE_TASK_TYPE(PURGE_WRITE_EPOCH_RECOVERY_METADATA, "PurgeWriteEpochRecoveryMetadataStorageTask", false)
 STORAGE_TASK_TYPE(PURGE_WRITE_LAST_CLEAN, "PurgeWriteLastCleanStorageTask", false)
-STORAGE_TASK_TYPE(READ, "ReadStorageTask", true)
+STORAGE_TASK_TYPE(READ_TAIL, "ReadStorageTask-tailer", true)
+STORAGE_TASK_TYPE(READ_BACKLOG, "ReadStorageTask-backlog", true)
 STORAGE_TASK_TYPE(READ_LNG, "ReadLngStorageTask", false)
 STORAGE_TASK_TYPE(READ_LOG_REBUILDING_CHECKPOINT, "ReadLogRebuildingCheckpointStorageTask", false)
 STORAGE_TASK_TYPE(REBUILDING_AMEND_SELF, "AmendSelfStorageTask", false)
@@ -44,7 +60,7 @@ STORAGE_TASK_TYPE(RECOVER_SEAL, "RecoverSealStorageTask", false)
 STORAGE_TASK_TYPE(SEAL, "SealStorageTask", false)
 STORAGE_TASK_TYPE(SOFT_SEAL, "SoftSealStorageTask", false)
 STORAGE_TASK_TYPE(STOP_EXEC, "StopExecStorageTask", false)
-STORAGE_TASK_TYPE(STORE, "StoreStorageTask", false)
+STORAGE_TASK_TYPE(STORE, "StoreStorageTask", true)
 STORAGE_TASK_TYPE(UPDATE_PER_EPOCH_METADATA, "UpdatePerEpochLogMetadataStorageTask", false)
 STORAGE_TASK_TYPE(UPDATE_TRIM_POINTS, "UpdateTrimPointsStorageTask", true)
 STORAGE_TASK_TYPE(WRITE_BATCH, "WriteBatchStorageTask", true)

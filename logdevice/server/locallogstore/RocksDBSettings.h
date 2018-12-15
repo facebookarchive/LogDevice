@@ -368,6 +368,7 @@ class RocksDBSettings : public SettingsBundle {
   bool allow_fallocate;
   bool auto_create_shards;
   int max_open_files;
+  uint64_t compaction_max_bytes_at_once;
   uint64_t bytes_per_sync;
   uint64_t wal_bytes_per_sync;
   size_t compaction_readahead_size;

@@ -909,6 +909,33 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "unless write-batch-size is reached first",
        SERVER,
        SettingsCategory::Storage);
+  init("storage-tasks-use-drr",
+       &storage_tasks_use_drr,
+       "false",
+       nullptr,
+       "Use DRR for scheduling read IO's.",
+       SERVER | REQUIRES_RESTART,
+       SettingsCategory::Storage);
+  init("storage-tasks-drr-quanta",
+       &storage_tasks_drr_quanta,
+       "1",
+       parse_positive<uint64_t>(),
+       "Default quanta per-principal. 1 implies request based scheduling. "
+       "Use something like 1MB for byte based scheduling.",
+       SERVER,
+       SettingsCategory::Storage);
+
+#define STORAGE_TASK_PRINCIPAL(name, key, shareVal)                      \
+  init("storage-task-" #key "-share",                                    \
+       &storage_task_shares[(uint64_t)StorageTaskPrincipal::name].share, \
+       shareVal,                                                         \
+       parse_positive<uint64_t>(),                                       \
+       "The share for principal" #key "in the DRR scheduler.",           \
+       SERVER,                                                           \
+       SettingsCategory::Storage);
+#include "logdevice/common/storage_task_principals.inc"
+#undef STORAGE_TASK_PRINCIPAL
+
   init("max-server-read-streams",
        &max_server_read_streams,
        "150000",

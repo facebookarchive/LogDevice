@@ -64,4 +64,23 @@ std::string toString(const StorageTaskPriority& p) {
   return storageTaskPriorityNames[p];
 }
 
+StorageTaskPrincipalNames storageTaskPrincipalNames;
+
+template <>
+const std::string& StorageTaskPrincipalNames::invalidValue() {
+  static const std::string invalidName("unknown");
+  return invalidName;
+}
+
+template <>
+void StorageTaskPrincipalNames::setValues() {
+#define STORAGE_TASK_PRINCIPAL(name, class_name, share) \
+  set(StorageTaskPrincipal::name, #class_name);
+#include "logdevice/common/storage_task_principals.inc"
+}
+
+std::string toString(const StorageTaskPrincipal& p) {
+  return storageTaskPrincipalNames[p];
+}
+
 }} // namespace facebook::logdevice

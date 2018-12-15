@@ -59,6 +59,10 @@ class InfoRecordStorageTask : public StorageTask {
         table_(table),
         print_table_(print_table) {}
 
+  Principal getPrincipal() const override {
+    return Principal::METADATA;
+  }
+
   void execute() override {
     LocalLogStore::ReadOptions options("commands::InfoRecord");
     options.allow_blocking_io = true;

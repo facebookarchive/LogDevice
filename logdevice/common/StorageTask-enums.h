@@ -78,4 +78,22 @@ using StorageTaskPriorityNames =
 extern StorageTaskPriorityNames storageTaskPriorityNames;
 
 std::string toString(const StorageTaskPriority& p);
+
+// IO principals for storage tasks
+enum class StorageTaskPrincipal : uint8_t {
+#define STORAGE_TASK_PRINCIPAL(name, class_name, share) name,
+#include "logdevice/common/storage_task_principals.inc"
+  NUM_PRINCIPALS,
+  UNKNOWN
+};
+
+using StorageTaskPrincipalNames =
+    EnumMap<StorageTaskPrincipal,
+            std::string,
+            StorageTaskPrincipal::UNKNOWN,
+            static_cast<size_t>(StorageTaskPrincipal::NUM_PRINCIPALS)>;
+
+extern StorageTaskPrincipalNames storageTaskPrincipalNames;
+
+std::string toString(const StorageTaskPrincipal& p);
 }} // namespace facebook::logdevice

@@ -47,6 +47,10 @@ class RebuildingEnumerateMetadataLogsTask : public StorageTask {
     return Priority::LOW;
   }
 
+  Principal getPrincipal() const override {
+    return Principal::REBUILD;
+  }
+
   WeakRefHolder<RebuildingLogEnumerator>::Ref ref_;
   size_t num_shards_;
 

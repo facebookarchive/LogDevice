@@ -25,6 +25,10 @@ class DumpReleaseStateStorageTask : public StorageTask {
       : StorageTask(StorageTask::Type::DUMP_RELEASE_STATE),
         op_(std::move(states)) {}
 
+  Principal getPrincipal() const override {
+    return Principal::METADATA;
+  }
+
   void execute() override;
 
   void onDone() override {}

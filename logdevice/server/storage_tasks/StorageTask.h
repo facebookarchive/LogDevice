@@ -11,6 +11,7 @@
 #include <string>
 
 #include "logdevice/common/AdminCommandTable-fwd.h"
+#include "logdevice/common/DRRScheduler.h"
 #include "logdevice/common/StorageTask-enums.h"
 #include "logdevice/common/StorageTaskDebugInfo.h"
 #include "logdevice/common/Timestamp.h"
@@ -33,6 +34,7 @@ class StorageTask {
   using Type = StorageTaskType;
   using ThreadType = StorageTaskThreadType;
   using Priority = StorageTaskPriority;
+  using Principal = StorageTaskPrincipal;
 
   StorageTask() = delete;
   explicit StorageTask(Type type) : type_(type) {
@@ -141,6 +143,15 @@ class StorageTask {
   }
 
   /**
+   * Principal: context for the IO task.
+   */
+  virtual Principal getPrincipal() const {
+    // Tasks get the MISC principal by default.
+    // It has the lowest disk share.
+    return Principal::MISC;
+  }
+
+  /**
    * Can this storage task be dropped if the node is overloaded?
    *
    * Some tasks must not be dropped and have to be executed before normal tasks.
@@ -174,6 +185,14 @@ class StorageTask {
    */
   void setStorageThread(ExecStorageThread* ptr) {
     storageThread_ = ptr;
+  }
+
+  inline uint64_t reqSize() {
+    return reqSize_;
+  }
+
+  inline void reqSize(uint64_t reqSize) {
+    reqSize_ = reqSize;
   }
 
   /**
@@ -223,6 +242,16 @@ class StorageTask {
   folly::Optional<std::chrono::steady_clock::time_point> execution_start_time_;
   // Time this task execution was finished
   folly::Optional<std::chrono::steady_clock::time_point> execution_end_time_;
+
+  // This field is useful for IO scheduling. The default size of the task is 1.
+  // This implies request based scheduling as each request has the same size.
+  // Different Principals get different requests/sec. The caller may update the
+  // default size to the actual IO size in bytes. This will lead to throughput
+  // based scheduling: each principal will get bytes/sec proportional to their
+  // share.
+  uint32_t reqSize_{1};
+
+  folly::IntrusiveListHook schedulerQHook_;
 
  protected:
   Type type_ = Type::UNKNOWN;

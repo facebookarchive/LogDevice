@@ -42,6 +42,10 @@ class RecordCacheRepopulationTask : public StorageTask {
     return ThreadType::SLOW;
   }
 
+  Principal getPrincipal() const override {
+    return Principal::METADATA;
+  }
+
  private:
   const shard_index_t shard_idx_;
   // Status that will be sent to the caller to indicate the final result,

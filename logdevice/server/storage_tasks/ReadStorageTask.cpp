@@ -57,10 +57,9 @@ ReadStorageTask::ReadStorageTask(
     LocalLogStore::ReadOptions options,
     std::weak_ptr<LocalLogStore::ReadIterator> iterator,
     bool is_tailer,
+    StorageTaskType type,
     Sockaddr client_address)
-    :
-
-      StorageTask(StorageTask::Type::READ),
+    : StorageTask(type),
       stream_(std::move(stream)),
       catchup_queue_(std::move(catchup_queue)),
       server_read_stream_version_(server_read_stream_version),
@@ -143,7 +142,18 @@ void ReadStorageTask::execute() {
     // worker.
     status_ = status;
     records_ = std::move(callback.releaseRecords());
+
     total_bytes_ = callback.totalBytes();
+
+    /*
+     * TODO (T37204962).
+     * uint64_t origSize = reqSize();
+     * if (origSize > total_bytes_ && origSize >= 64 * 1024 &&
+     *  origSize - total_bytes_ >= 64 * 1024) {
+     *    uint64_t unusedBytes = origSize - total_bytes_;
+     *    storageThreadPool_->creditScheduler(unusedBytes, getPrincipal());
+     *    }
+     */
   }
 
   // Release memory for what we did not read.

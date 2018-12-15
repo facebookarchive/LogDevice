@@ -61,6 +61,10 @@ class FindKeyStorageTask : public StorageTask {
     return Priority::VERY_HIGH;
   }
 
+  Principal getPrincipal() const override {
+    return Principal::FINDKEY;
+  }
+
   // Workhorse of execute(), LocalLogStore passed from above for testability
   void executeImpl(const LocalLogStore& store, StatsHolder* stats = nullptr);
 

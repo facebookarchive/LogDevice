@@ -85,11 +85,19 @@ void ExecStorageThread::run() {
       logger.traceStorageTask(info);
     }
 
+    /*
+     * TODO (T37204962):
+       Update the IO scheduler with and reset the cost
+       pool_->creditSchedulert(task->bytesProcessed(), task->getPrincipal());
+       task->bytesProcessed(0);
+    */
+
     if (task->durability() == Durability::SYNC_WRITE) {
       pool_->enqueueForSync(std::move(task));
     } else {
       StorageTaskResponse::sendBackToWorker(std::move(task));
     }
   }
+  ld_info("ExecStorageThread exiting");
 }
 }} // namespace facebook::logdevice

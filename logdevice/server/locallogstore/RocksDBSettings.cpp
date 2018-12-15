@@ -879,7 +879,12 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        "the requested logs, so bloom filters only help for somewhat bursty "
        "write patterns - when only a subset of files in a partition contain a "
        "given log. However, even if appends to a log are steady, sticky "
-       "copysets may make the streams of STOREs to individual nodes bursty.",
+       "copysets may make the streams of STOREs to individual nodes bursty."
+       "Another scenario where bloomfilters can be effective is during "
+       "rebuilding. Rebuilding works a few logs at a time and if the "
+       "(older partition) memtables are frequently flushed due to memory "
+       "pressure then then they are likely to contain only a small number of "
+       "logs in them.",
        SERVER,
        SettingsCategory::RocksDB);
 
@@ -935,6 +940,20 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        "threshold; 0 means infinity",
        SERVER,
        SettingsCategory::LogsDB);
+
+  init(OPTNAME(compaction_max_bytes_at_once),
+       &compaction_max_bytes_at_once,
+       "1048576",
+       parse_nonnegative<ssize_t>(),
+       "This is the unit for IO scheduling for compaction. It's used only "
+       "if the DRR scheduler is being used. Each share received from the "
+       "scheduler allows compaction filtering to proceed with these many "
+       "bytes. If the scheduler is configured for request based scheduling "
+       "(current default) each principal is allowed X number of requests "
+       "based on its share and irrespective of the number of bytes for "
+       "processed for each request. In this case it'll be the above bytes.",
+       SERVER,
+       SettingsCategory::RocksDB);
 
   init(OPTNAME(bytes_per_sync),
        &bytes_per_sync,

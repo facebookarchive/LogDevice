@@ -14,6 +14,7 @@
 
 #include "logdevice/common/SCDCopysetReordering.h"
 #include "logdevice/common/Sockaddr.h"
+#include "logdevice/common/StorageTask-enums.h"
 #include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/common/protocol/MessageType.h"
 #include "logdevice/common/settings/ClientReadStreamFailureDetectorSettings.h"
@@ -47,6 +48,10 @@ struct hash<facebook::logdevice::MessageType> {
 } // namespace std
 
 namespace facebook { namespace logdevice {
+
+struct StorageTaskShare {
+  uint64_t share = 1;
+};
 
 struct Settings : public SettingsBundle {
   const char* getName() const override {
@@ -345,6 +350,16 @@ struct Settings : public SettingsBundle {
   // Minimum number of bytes for a storage thread to write in one batch
   //   unless write_batch_size is reached first.
   size_t write_batch_bytes;
+
+  // SLOW threadpool storage tasks go through the DRR scheduler.
+  bool storage_tasks_use_drr;
+
+  // Quanta for the DRR scheduler.
+  uint64_t storage_tasks_drr_quanta = 1;
+
+  // Shares for StorageTask principals.
+  std::array<StorageTaskShare, (uint64_t)StorageTaskPrincipal::NUM_PRINCIPALS>
+      storage_task_shares;
 
   // Maximum number of read streams clients can establish to the server, per
   // worker

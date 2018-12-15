@@ -79,6 +79,7 @@ StorageThreadPool::StorageThreadPool(
       nthreads_fast_time_sensitive_(
           params[(size_t)ThreadType::FAST_TIME_SENSITIVE].nthreads),
       nthreads_metadata_(params[(size_t)ThreadType::METADATA].nthreads),
+      useDRR_(settings->storage_tasks_use_drr),
       local_log_store_(local_log_store),
       processor_(nullptr),
       trace_logger_(trace_logger),
@@ -88,10 +89,20 @@ StorageThreadPool::StorageThreadPool(
       taskQueues_([&, task_queue_size]() {
         const auto actual_queue_sizes =
             computeActualQueueSizes(task_queue_size);
+
+        std::vector<DRRPrincipal> principals;
+        buildSchedulerPrincipals(principals);
+        // All ThreadType get both the DRR queue and the Priority queue.
+        // But DRR is implemented only for the SLOW ThreadType for now.
         for (int type = 0; type < (int)ThreadType::MAX; ++type) {
           const size_t size = actual_queue_sizes[type];
           taskQueues_.emplace_back(
               size, std::numeric_limits<size_t>::max(), stats);
+          const auto eType = static_cast<ThreadType>(type);
+          taskQueues_[eType].drrQueue.initShares(
+              storageTaskThreadTypeName(eType),
+              settings_->storage_tasks_drr_quanta,
+              principals);
         }
       }) {
   ld_check(local_log_store != nullptr);
@@ -112,6 +123,11 @@ StorageThreadPool::StorageThreadPool(
         settings_->append_stores_max_mem_bytes / num_shards_);
     taskQueues_[ThreadType::FAST_STALLABLE].memory_budget.setLimit(
         settings_->rebuilding_stores_max_mem_bytes / num_shards_);
+
+    std::vector<DRRPrincipal> principals;
+    buildSchedulerPrincipals(principals);
+    taskQueues_[ThreadType::SLOW].drrQueue.setShares(
+        settings_->storage_tasks_drr_quanta, principals);
   });
 
   // Find an upper limit on the number of tasks in flight for this thread
@@ -206,17 +222,23 @@ void StorageThreadPool::shutDown(bool persist_record_caches) {
       std::make_shared<std::atomic<int>>(total_num_threads);
   int stop_tasks_enqueued = 0;
 
-  auto do_stop = [&](PerTypeTaskQueue& task_queue, size_t nthreads) {
+  auto do_stop = [&](PerTypeTaskQueue& task_queue, size_t nthreads, bool drr) {
     // Ask storage threads to drop as many tasks as possible in case the queue
     // is backed up
-    const size_t ndrop = task_queue.queue.max_capacity();
+    const size_t ndrop =
+        std::max(task_queue.drrQueue.size(), task_queue.queue.max_capacity());
     task_queue.tasks_to_drop.store(ndrop);
 
     for (size_t i = 0; i < nthreads; ++i) {
       std::unique_ptr<StorageTask> task(new StopExecStorageTask(
           shard_idx_, remaining_threads, persist_record_caches));
       task->setStorageThreadPool(this);
-      task_queue.queue.blockingWrite(task.release());
+      if (drr) {
+        uint64_t principal = static_cast<uint64_t>(task->getPrincipal());
+        task_queue.drrQueue.enqueue(task.release(), principal);
+      } else {
+        task_queue.queue.blockingWrite(task.release());
+      }
       ++stop_tasks_enqueued;
     }
   };
@@ -231,12 +253,17 @@ void StorageThreadPool::shutDown(bool persist_record_caches) {
   } else {
     ld_info("Skipping persistence of record caches for shard %d", shard_idx_);
   }
-  do_stop(taskQueues_[StorageTask::ThreadType::SLOW], nthreads_slow_);
+
+  do_stop(taskQueues_[StorageTask::ThreadType::SLOW], nthreads_slow_, useDRR_);
   do_stop(taskQueues_[StorageTask::ThreadType::FAST_STALLABLE],
-          nthreads_fast_stallable_);
-  do_stop(taskQueues_[StorageTask::ThreadType::METADATA], nthreads_metadata_);
+          nthreads_fast_stallable_,
+          false);
+  do_stop(taskQueues_[StorageTask::ThreadType::METADATA],
+          nthreads_metadata_,
+          false);
   do_stop(taskQueues_[StorageTask::ThreadType::FAST_TIME_SENSITIVE],
-          nthreads_fast_time_sensitive_);
+          nthreads_fast_time_sensitive_,
+          false);
 
   // Unstall stalled low priority writes if they were stuck waiting for flushed
   // data to complete.
@@ -261,6 +288,7 @@ void StorageThreadPool::join() {
     ld_check(rv == 0);
     syncing_thread_.reset();
   }
+  shutdown_complete_.store(true);
 }
 
 int StorageThreadPool::tryPutTask(std::unique_ptr<StorageTask>&& task) {
@@ -271,10 +299,18 @@ int StorageThreadPool::tryPutTask(std::unique_ptr<StorageTask>&& task) {
 
   auto task_type = task->getType();
   auto thread_type = getThreadType(*task);
-  auto& queue = taskQueues_[thread_type].queue;
 
   task->setStorageThreadPool(this);
-  if (!queue.writeIfNotFull(task.get())) {
+
+  bool ret = true;
+  if (useDRR_ && (thread_type == StorageTask::ThreadType::SLOW)) {
+    uint64_t principal = static_cast<uint64_t>(task->getPrincipal());
+    taskQueues_[thread_type].drrQueue.enqueue(task.get(), principal);
+  } else {
+    ret = taskQueues_[thread_type].queue.writeIfNotFull(task.get());
+  }
+
+  if (!ret) {
     err = E::INTERNAL;
     return -1;
   }
@@ -304,19 +340,25 @@ int StorageThreadPool::tryPutWrite(std::unique_ptr<WriteStorageTask>&& task) {
   return 0;
 }
 
-void StorageThreadPool::blockingPutTask(std::unique_ptr<StorageTask>&& task) {
+bool StorageThreadPool::blockingPutTask(std::unique_ptr<StorageTask>&& task) {
   if (shutting_down_.load()) {
-    return;
+    err = E::SHUTDOWN;
+    return false;
   }
 
   auto task_type = task->getType();
   auto thread_type = getThreadType(*task);
-  auto& queue = taskQueues_[thread_type].queue;
 
   task->setStorageThreadPool(this);
-  queue.blockingWrite(task.release());
+  if (useDRR_ && (thread_type == StorageTask::ThreadType::SLOW)) {
+    uint64_t principal = static_cast<uint64_t>(task->getPrincipal());
+    taskQueues_[thread_type].drrQueue.enqueue(task.release(), principal);
+  } else {
+    taskQueues_[thread_type].queue.blockingWrite(task.release());
+  }
   STORAGE_TASK_STAT_INCR(stats_, thread_type, num_storage_tasks);
   STORAGE_TASK_TYPE_STAT_INCR(stats_, task_type, storage_tasks_posted);
+  return true;
 }
 
 std::unique_ptr<StorageTask>
@@ -326,7 +368,12 @@ StorageThreadPool::blockingGetTask(StorageTask::ThreadType type) {
 
   while (true) {
     StorageTask* rawptr;
-    task_queue.queue.blockingRead(rawptr);
+    if (useDRR_ && (type == StorageTask::ThreadType::SLOW)) {
+      rawptr = task_queue.drrQueue.blockingDequeue();
+    } else {
+      task_queue.queue.blockingRead(rawptr);
+    }
+
     std::unique_ptr<StorageTask> task(rawptr);
 
     STORAGE_TASK_STAT_DECR(stats_, type, num_storage_tasks);
@@ -374,7 +421,13 @@ void StorageThreadPool::enqueueForSync(std::unique_ptr<StorageTask> task) {
 
 void StorageThreadPool::dropTaskQueue(StorageTask::ThreadType type) {
   auto& task_queue = taskQueues_[getThreadType(type)];
-  ssize_t ntasks = task_queue.queue.size();
+  ssize_t ntasks;
+  if (useDRR_ && (type == StorageTask::ThreadType::SLOW)) {
+    ntasks = task_queue.drrQueue.size();
+  } else {
+    ntasks = task_queue.queue.size();
+  }
+
   if (ntasks > 0) {
     // Drop however many tasks there are currently in the queue.  This is
     // approximate (tasks are coming and going) but we don't need it to be
@@ -440,7 +493,7 @@ StorageThreadPool::getMemoryBudget(StorageTask::ThreadType thread_type) {
 
 void StorageThreadPool::getStorageTaskDebugInfo(InfoStorageTasksTable& table) {
   size_t seq_counter = 0;
-  auto cb = [&](StorageTask* task,
+  auto cb = [&](const StorageTask* task,
                 StorageTask::ThreadType /*thread_type*/,
                 bool is_write_queue) {
     using F = InfoStorageTasksTableFieldOffsets;
@@ -466,8 +519,13 @@ void StorageThreadPool::getStorageTaskDebugInfo(InfoStorageTasksTable& table) {
 
   for (int type = 0; type < (int)ThreadType::MAX; ++type) {
     const auto eType = static_cast<ThreadType>(type);
-    taskQueues_[eType].queue.introspect_contents(
-        std::bind(cb, std::placeholders::_1, eType, false));
+    if (useDRR_ && (eType == StorageTask::ThreadType::SLOW)) {
+      taskQueues_[eType].drrQueue.introspect_contents(
+          std::bind(cb, std::placeholders::_1, eType, false));
+    } else {
+      taskQueues_[eType].queue.introspect_contents(
+          std::bind(cb, std::placeholders::_1, eType, false));
+    }
     taskQueues_[eType].write_queue.introspect_contents(
         std::bind(cb, std::placeholders::_1, eType, true));
   }

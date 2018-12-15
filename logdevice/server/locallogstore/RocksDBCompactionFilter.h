@@ -19,6 +19,7 @@
 #include <folly/Optional.h>
 #include <rocksdb/compaction_filter.h>
 
+#include "PartitionedRocksDBStore.h"
 #include "logdevice/common/RateLimiter.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/include/types.h"
@@ -63,6 +64,7 @@ struct CompactionContext {
   // else.
   // Note that empty Optional and empty vector mean different (opposite) things.
   folly::Optional<std::vector<logid_t>> logs_to_keep;
+  PartitionedRocksDBStore::PartitionToCompact::Reason reason;
 };
 
 // When using a filter factory (as we do), RocksDB will use each filter on a
@@ -82,6 +84,7 @@ class RocksDBCompactionFilter : public rocksdb::CompactionFilter {
         context_(context),
         settings_(settings),
         rate_limiter_(settings->compaction_rate_limit_),
+        drrBytesAllowed_(0),
         force_no_skips_(settings->force_no_compaction_optimizations_) {
     ld_check(pool != nullptr);
   }
@@ -217,6 +220,8 @@ class RocksDBCompactionFilter : public rocksdb::CompactionFilter {
   size_t per_epoch_log_metadata_removed_ = 0;
 
   RateLimiter rate_limiter_;
+
+  uint64_t drrBytesAllowed_;
 
   // true if filterImpl() has never been called yet.
   bool first_record_ = true;

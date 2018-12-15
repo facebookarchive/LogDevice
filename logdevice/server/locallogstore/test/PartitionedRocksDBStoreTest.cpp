@@ -862,16 +862,19 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
   }
 
   void closeStore() {
+    // First shutdown the storage_thread_pool (which
+    // references local_log_store_ during shutdown.
     if (storage_thread_pool_) {
-      // Stop all threads first. store_ has to be destroyed before
-      // storage_thread_pool_, as it may still reference it.
       storage_thread_pool_->shutDown();
       storage_thread_pool_->join();
     }
 
+    // Then destroy store. It has to be destroyed before
+    // storage_thread_pool_, as it may still reference it.
     store_.reset();
-    storage_thread_pool_.reset();
     filter_factory_.reset();
+
+    storage_thread_pool_.reset();
     settings_updater_.reset();
     env_.reset();
   }
