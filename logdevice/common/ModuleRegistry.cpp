@@ -11,8 +11,6 @@
 
 #include <folly/Singleton.h>
 
-#include "logdevice/common/checks.h"
-
 namespace facebook { namespace logdevice {
 
 namespace {
@@ -46,8 +44,15 @@ Module* ModuleRegistry::createOrGet(const std::string& name) {
   auto it = map_.find(name);
   if (it != map_.end()) {
     Module* mod = it->second.get();
-    ld_check(mod);
-    ld_assert(name == mod->getName());
+
+    // Note that we can't use ld_check() and the like because they use
+    // ModuleRegistry.
+    if (!mod) {
+      assert(false);
+      std::abort();
+    }
+    assert(name == mod->getName());
+
     return mod;
   }
 
