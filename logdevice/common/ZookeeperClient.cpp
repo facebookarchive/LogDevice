@@ -226,7 +226,7 @@ void ZookeeperClient::getDataCompletion(int rc,
   }
 }
 
-int ZookeeperClient::getData(std::string path, data_callback_t cb) {
+void ZookeeperClient::getData(std::string path, data_callback_t cb) {
   // Use the callback function object as context, which must be freed in
   // completion. The callback could also be empty.
   const void* context = nullptr;
@@ -234,11 +234,18 @@ int ZookeeperClient::getData(std::string path, data_callback_t cb) {
     auto p = std::make_unique<data_callback_t>(std::move(cb));
     context = p.release();
   }
-  return zoo_aget(zh_.get().get(),
-                  path.data(),
-                  /* watch = */ 0,
-                  &ZookeeperClient::getDataCompletion,
-                  context);
+  int rc = zoo_aget(zh_.get().get(),
+                    path.data(),
+                    /* watch = */ 0,
+                    &ZookeeperClient::getDataCompletion,
+                    context);
+  if (rc != ZOK) {
+    getDataCompletion(rc,
+                      /* value = */ nullptr,
+                      /* value_len = */ 0,
+                      /* stat = */ nullptr,
+                      context);
+  }
 }
 
 /* static */ void ZookeeperClient::setDataCompletion(int rc,
@@ -260,10 +267,10 @@ int ZookeeperClient::getData(std::string path, data_callback_t cb) {
   }
 }
 
-int ZookeeperClient::setData(std::string path,
-                             std::string data,
-                             stat_callback_t cb,
-                             zk::version_t base_version) {
+void ZookeeperClient::setData(std::string path,
+                              std::string data,
+                              stat_callback_t cb,
+                              zk::version_t base_version) {
   // Use the callback function object as context, which must be freed in
   // completion. The callback could also be nullptr.
   const void* context = nullptr;
@@ -271,13 +278,16 @@ int ZookeeperClient::setData(std::string path,
     auto p = std::make_unique<stat_callback_t>(std::move(cb));
     context = p.release();
   }
-  return zoo_aset(zh_.get().get(),
-                  path.data(),
-                  data.data(),
-                  data.size(),
-                  base_version,
-                  &ZookeeperClient::setDataCompletion,
-                  context);
+  int rc = zoo_aset(zh_.get().get(),
+                    path.data(),
+                    data.data(),
+                    data.size(),
+                    base_version,
+                    &ZookeeperClient::setDataCompletion,
+                    context);
+  if (rc != ZOK) {
+    setDataCompletion(rc, /* stat = */ nullptr, context);
+  }
 }
 
 /* static */ void ZookeeperClient::multiOpCompletion(int rc,
@@ -293,20 +303,24 @@ int ZookeeperClient::setData(std::string path,
   ctx->cb_(rc, std::move(results));
 }
 
-int ZookeeperClient::multiOp(std::vector<zk::Op> ops, multi_op_callback_t cb) {
+void ZookeeperClient::multiOp(std::vector<zk::Op> ops, multi_op_callback_t cb) {
   int count = ops.size();
   if (count == 0) {
-    return ZOK;
+    cb(ZOK, {});
+    return;
   }
 
   auto p = std::make_unique<MultiOpContext>(std::move(ops), std::move(cb));
   MultiOpContext* context = p.release();
-  return zoo_amulti(zh_.get().get(),
-                    count,
-                    context->c_ops_.data(),
-                    context->c_results_.data(),
-                    &ZookeeperClient::multiOpCompletion,
-                    static_cast<const void*>(context));
+  int rc = zoo_amulti(zh_.get().get(),
+                      count,
+                      context->c_ops_.data(),
+                      context->c_results_.data(),
+                      &ZookeeperClient::multiOpCompletion,
+                      static_cast<const void*>(context));
+  if (rc != ZOK) {
+    multiOpCompletion(rc, static_cast<const void*>(context));
+  }
 }
 
 /* static */ zk::OpResponse ZookeeperClient::MultiOpContext::toOpResponse(

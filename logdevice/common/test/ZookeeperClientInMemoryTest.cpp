@@ -68,9 +68,9 @@ void runBasicTests(std::unique_ptr<ZookeeperClientInMemory> z) {
     EXPECT_EQ(ZNONODE, rc);
     p.setValue();
   };
-  EXPECT_EQ(ZOK, z->getData(kBar, std::move(cb)));
-  EXPECT_EQ(ZOK, z->getData(kBar, getDataCallback));
-  EXPECT_EQ(ZOK, z->getData(kBar, C::getDataCallback));
+  z->getData(kBar, std::move(cb));
+  z->getData(kBar, getDataCallback);
+  z->getData(kBar, C::getDataCallback);
 
   collectAll(std::move(fs)).wait();
 
@@ -95,92 +95,81 @@ void runBasicTests(std::unique_ptr<ZookeeperClientInMemory> z) {
   Promise<Unit> p1;
   auto f1 = p1.getSemiFuture();
   zk::version_t version = -1; // impossible value
-  EXPECT_EQ(
-      ZOK,
-      z->setData(kFoo,
-                 kBar,
-                 [p = std::move(p1), &version](int rc, zk::Stat stat) mutable {
-                   EXPECT_EQ(ZOK, rc);
-                   version = stat.version_;
-                   p.setValue();
-                 }));
+  z->setData(
+      kFoo, kBar, [p = std::move(p1), &version](int rc, zk::Stat stat) mutable {
+        EXPECT_EQ(ZOK, rc);
+        version = stat.version_;
+        p.setValue();
+      });
   std::move(f1).wait();
   EXPECT_GE(version, 0);
 
   // reads should now succeed
   Promise<Unit> p2;
   auto f2 = p2.getSemiFuture();
-  EXPECT_EQ(ZOK,
-            z->getData(kFoo,
-                       [p = std::move(p2), version](
-                           int rc, StringPiece value, zk::Stat stat) mutable {
-                         EXPECT_EQ(ZOK, rc);
-                         EXPECT_EQ(kBar, value);
-                         EXPECT_EQ(version, stat.version_);
-                         p.setValue();
-                       }));
+  z->getData(kFoo,
+             [p = std::move(p2), version](
+                 int rc, StringPiece value, zk::Stat stat) mutable {
+               EXPECT_EQ(ZOK, rc);
+               EXPECT_EQ(kBar, value);
+               EXPECT_EQ(version, stat.version_);
+               p.setValue();
+             });
   std::move(f2).wait();
 
   // conditional writes
   Promise<Unit> p3;
   auto f3 = p3.getSemiFuture();
 
-  EXPECT_EQ(ZOK,
-            z->setData(kFoo,
-                       "Should not update",
-                       [p = std::move(p3)](int rc, zk::Stat stat) mutable {
-                         EXPECT_EQ(ZBADVERSION, rc);
-                         p.setValue();
-                       },
-                       version + 100));
+  z->setData(kFoo,
+             "Should not update",
+             [p = std::move(p3)](int rc, zk::Stat) mutable {
+               EXPECT_EQ(ZBADVERSION, rc);
+               p.setValue();
+             },
+             version + 100);
   std::move(f3).wait();
 
   Promise<Unit> p4;
   auto f4 = p4.getSemiFuture();
   zk::version_t new_version = -1;
-  EXPECT_EQ(ZOK,
-            z->setData(kFoo,
-                       "Conditional update",
-                       [p = std::move(p4), &new_version](
-                           int rc, zk::Stat stat) mutable {
-                         EXPECT_EQ(ZOK, rc);
-                         new_version = stat.version_;
-                         p.setValue();
-                       },
-                       version));
+  z->setData(kFoo,
+             "Conditional update",
+             [p = std::move(p4), &new_version](int rc, zk::Stat stat) mutable {
+               EXPECT_EQ(ZOK, rc);
+               new_version = stat.version_;
+               p.setValue();
+             },
+             version);
   std::move(f4).wait();
   EXPECT_EQ(version + 1, new_version);
 
   Promise<Unit> p5;
   auto f5 = p5.getSemiFuture();
-  EXPECT_EQ(ZOK,
-            z->setData(kFoo,
-                       "Bad version",
-                       [p = std::move(p5), &new_version](
-                           int rc, zk::Stat stat) mutable {
-                         EXPECT_EQ(ZBADVERSION, rc);
-                         new_version = stat.version_;
-                         p.setValue();
-                       },
-                       version));
+  z->setData(kFoo,
+             "Bad version",
+             [p = std::move(p5), &new_version](int rc, zk::Stat stat) mutable {
+               EXPECT_EQ(ZBADVERSION, rc);
+               new_version = stat.version_;
+               p.setValue();
+             },
+             version);
   std::move(f5).wait();
 
   Promise<Unit> p6;
   auto f6 = p6.getSemiFuture();
-  EXPECT_EQ(ZOK,
-            z->setData(kFoo,
-                       "Blind write",
-                       [p = std::move(p6)](int rc, zk::Stat) mutable {
-                         EXPECT_EQ(ZOK, rc);
-                         p.setValue();
-                       },
-                       /* version = */ -1));
+  z->setData(kFoo,
+             "Blind write",
+             [p = std::move(p6)](int rc, zk::Stat) mutable {
+               EXPECT_EQ(ZOK, rc);
+               p.setValue();
+             },
+             /* base_version = */ -1);
   std::move(f6).wait();
 
   Promise<Unit> p7;
   auto f7 = p7.getSemiFuture();
-  EXPECT_EQ(
-      ZOK, z->setData(kFoo, "Another_blind_write", {}, /* version = */ -1));
+  z->setData(kFoo, "Another_blind_write", {}, /* base_version = */ -1);
   getDataRecursive(*z, std::move(p7), "Another_blind_write");
   std::move(f7).wait();
 }

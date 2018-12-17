@@ -68,13 +68,13 @@ class ZookeeperClientInMemory : public ZookeeperClientBase {
 
   //////// New API ////////
  public:
-  int getData(std::string path, data_callback_t cb) override;
-  int setData(std::string path,
-              std::string data,
-              stat_callback_t cb,
-              zk::version_t base_version = -1) override;
+  void getData(std::string path, data_callback_t cb) override;
+  void setData(std::string path,
+               std::string data,
+               stat_callback_t cb,
+               zk::version_t base_version = -1) override;
 
-  int multiOp(std::vector<zk::Op> ops, multi_op_callback_t cb) override;
+  void multiOp(std::vector<zk::Op> ops, multi_op_callback_t cb) override;
 };
 
 }} // namespace facebook::logdevice

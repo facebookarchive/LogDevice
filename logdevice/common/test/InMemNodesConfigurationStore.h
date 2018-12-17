@@ -18,14 +18,14 @@ class InMemNodesConfigurationStore : public NodesConfigurationStore {
  public:
   explicit InMemNodesConfigurationStore(extract_version_fn f)
       : configs_(), extract_fn_(std::move(f)) {}
-  int getConfig(std::string key, value_callback_t cb) const override;
+  void getConfig(std::string key, value_callback_t cb) const override;
 
   Status getConfigSync(std::string key, std::string* value_out) const override;
 
-  int updateConfig(std::string key,
-                   std::string value,
-                   folly::Optional<version_t> base_version,
-                   write_callback_t cb = {}) override;
+  void updateConfig(std::string key,
+                    std::string value,
+                    folly::Optional<version_t> base_version,
+                    write_callback_t cb = {}) override;
 
   Status updateConfigSync(std::string key,
                           std::string value,

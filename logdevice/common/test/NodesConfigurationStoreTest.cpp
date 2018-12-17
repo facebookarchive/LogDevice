@@ -48,10 +48,10 @@ void runBasicTests(std::unique_ptr<NodesConfigurationStore> store,
 
   if (initialWrite) {
     // no config stored yet
-    EXPECT_EQ(0, store->getConfig(kFoo, [&b](Status status, std::string) {
+    store->getConfig(kFoo, [&b](Status status, std::string) {
       EXPECT_EQ(Status::NOTFOUND, status);
       b.post();
-    }));
+    });
     checkAndResetBaton(b);
 
     EXPECT_EQ(Status::NOTFOUND, store->getConfigSync(kFoo, &value_out));
@@ -90,33 +90,28 @@ void runBasicTests(std::unique_ptr<NodesConfigurationStore> store,
                               &value_out));
   EXPECT_EQ(curr_version, version_out);
   EXPECT_EQ(TestEntry(12, "foo456"), TestEntry::fromSerialized(value_out));
-  EXPECT_EQ(0,
-            store->updateConfig(
-                kFoo,
-                TestEntry{next_version, "foo789"}.serialize(),
-                next_version,
-                [&b, curr_version](
-                    Status status, version_t version, std::string value) {
-                  EXPECT_EQ(Status::VERSION_MISMATCH, status);
-                  EXPECT_EQ(curr_version, version);
-                  EXPECT_EQ(TestEntry(12, "foo456"),
-                            TestEntry::fromSerialized(value));
-                  b.post();
-                }));
+  store->updateConfig(
+      kFoo,
+      TestEntry{next_version, "foo789"}.serialize(),
+      next_version,
+      [&b, curr_version](Status status, version_t version, std::string value) {
+        EXPECT_EQ(Status::VERSION_MISMATCH, status);
+        EXPECT_EQ(curr_version, version);
+        EXPECT_EQ(TestEntry(12, "foo456"), TestEntry::fromSerialized(value));
+        b.post();
+      });
   checkAndResetBaton(b);
 
   EXPECT_EQ(
       Status::OK,
       store->updateConfigSync(
           kFoo, TestEntry{next_version, "foo789"}.serialize(), curr_version));
-  EXPECT_EQ(0,
-            store->getConfig(
-                kFoo, [&b, next_version](Status status, std::string value) {
-                  EXPECT_EQ(Status::OK, status);
-                  EXPECT_EQ(TestEntry(next_version, "foo789"),
-                            TestEntry::fromSerialized(std::move(value)));
-                  b.post();
-                }));
+  store->getConfig(kFoo, [&b, next_version](Status status, std::string value) {
+    EXPECT_EQ(Status::OK, status);
+    EXPECT_EQ(TestEntry(next_version, "foo789"),
+              TestEntry::fromSerialized(std::move(value)));
+    b.post();
+  });
   checkAndResetBaton(b);
 }
 
@@ -141,7 +136,7 @@ void runMultiThreadedTests(std::unique_ptr<NodesConfigurationStore> store) {
     for (uint64_t k = 0; k < kIter; ++k) {
       version_t base_version{k};
       version_t next_version{k + 1};
-      int rv = store->updateConfig(
+      store->updateConfig(
           kFoo,
           TestEntry{next_version, "foo" + folly::to<std::string>(k + 1)}
               .serialize(),
@@ -160,13 +155,9 @@ void runMultiThreadedTests(std::unique_ptr<NodesConfigurationStore> store) {
             }
             b.post();
           });
-      if (rv == 0) {
-        // Note: if the check fails here, the thread dies but the test would
-        // keep hanging unfortunately.
-        checkAndResetBaton(b);
-      } else {
-        b.reset();
-      }
+      // Note: if the check fails here, the thread dies but the test would
+      // keep hanging unfortunately.
+      checkAndResetBaton(b);
     }
   };
   for (auto i = 0; i < kNumThreads; ++i) {

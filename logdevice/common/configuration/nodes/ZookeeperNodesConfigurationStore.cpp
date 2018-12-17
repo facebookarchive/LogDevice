@@ -21,7 +21,7 @@ namespace nodes {
 
 //////// ZookeeperNodesConfigurationStore ////////
 
-int ZookeeperNodesConfigurationStore::getConfig(
+void ZookeeperNodesConfigurationStore::getConfig(
     std::string key,
     value_callback_t callback) const {
   ZookeeperClientBase::data_callback_t completion =
@@ -29,13 +29,7 @@ int ZookeeperNodesConfigurationStore::getConfig(
         Status status = ZookeeperClientBase::toStatus(rc);
         cb(status, status == Status::OK ? std::move(value) : "");
       };
-  Status status = ZookeeperClientBase::toStatus(
-      zk_->getData(std::move(key), std::move(completion)));
-  if (status != Status::OK) {
-    err = status;
-    return -1;
-  }
-  return 0;
+  zk_->getData(std::move(key), std::move(completion));
 }
 
 Status
@@ -52,18 +46,13 @@ ZookeeperNodesConfigurationStore::getConfigSync(std::string key,
     b.post();
   };
 
-  int rc = getConfig(std::move(key), std::move(cb));
-  if (rc != 0) {
-    // err should have been set accordingly already
-    ld_assert(err != E::OK);
-    return err;
-  }
-
+  getConfig(std::move(key), std::move(cb));
   b.wait();
+
   return ret_status;
 }
 
-int ZookeeperNodesConfigurationStore::updateConfig(
+void ZookeeperNodesConfigurationStore::updateConfig(
     std::string key,
     std::string value,
     folly::Optional<version_t> base_version,
@@ -71,7 +60,8 @@ int ZookeeperNodesConfigurationStore::updateConfig(
   auto opt = (*extract_fn_)(value);
   if (!opt) {
     err = E::INVALID_PARAM;
-    return -1;
+    callback(E::INVALID_PARAM, version_t{}, "");
+    return;
   }
   version_t new_version = opt.value();
 
@@ -122,38 +112,16 @@ int ZookeeperNodesConfigurationStore::updateConfig(
                 // TODO: in case of a racing write, if we get VERSION_MISMATCH
                 // here, we don't have the version or value that prevented the
                 // update.
-                (*cb_ptr)(write_status, {}, "");
+                (*cb_ptr)(write_status, version_t{}, "");
               }
             };
-        int zk_rc = zk->setData(std::move(key),
-                                std::move(write_value),
-                                std::move(completion),
-                                zk_stat.version_);
-        Status write_status = ZookeeperClientBase::toStatus(zk_rc);
-        if (write_status != Status::OK) {
-          RATELIMIT_ERROR(
-              std::chrono::seconds(10),
-              5,
-              "UpdateConfig async call failed with ZK error code: %d",
-              zk_rc);
-
-          // TRICKY: since this is a "synchronous" error (i.e., one that
-          // prevents us from doing the RPC to ZK), we are not supposed to
-          // invoke the write_callback. However, since we are in the read
-          // callback already, there is no way of surfacing the error to the
-          // caller except to invoke the write_callback. Hopefully this happens
-          // rarely enough.
-          (*cb_ptr)(write_status, {}, "");
-        }
+        zk->setData(std::move(key),
+                    std::move(write_value),
+                    std::move(completion),
+                    zk_stat.version_);
       }; // read_cb
 
-  Status status = ZookeeperClientBase::toStatus(
-      zk_->getData(std::move(key), std::move(read_cb)));
-  if (status != Status::OK) {
-    err = status;
-    return -1;
-  }
-  return 0;
+  zk_->getData(std::move(key), std::move(read_cb));
 }
 
 Status ZookeeperNodesConfigurationStore::updateConfigSync(
@@ -175,14 +143,7 @@ Status ZookeeperNodesConfigurationStore::updateConfigSync(
         b.post();
       };
 
-  int rc = updateConfig(
-      std::move(key), std::move(value), base_version, std::move(cb));
-  if (rc != 0) {
-    // err should have been set accordingly already
-    ld_assert(err != E::OK);
-    return err;
-  }
-
+  updateConfig(std::move(key), std::move(value), base_version, std::move(cb));
   b.wait();
   return ret_status;
 }

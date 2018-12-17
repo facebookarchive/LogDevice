@@ -15,19 +15,11 @@ namespace nodes {
 
 //////// InMemNodesConfigurationStore ////////
 
-int InMemNodesConfigurationStore::getConfig(std::string key,
-                                            value_callback_t cb) const {
+void InMemNodesConfigurationStore::getConfig(std::string key,
+                                             value_callback_t cb) const {
   std::string value{};
   Status status = getConfigSync(std::move(key), &value);
-
-  if (status == Status::OK || status == Status::NOTFOUND ||
-      status == Status::ACCESS || status == Status::AGAIN) {
-    cb(status, value);
-    return 0;
-  }
-
-  err = status;
-  return -1;
+  cb(status, std::move(value));
 }
 
 Status
@@ -46,7 +38,7 @@ InMemNodesConfigurationStore::getConfigSync(std::string key,
   return Status::OK;
 }
 
-int InMemNodesConfigurationStore::updateConfig(
+void InMemNodesConfigurationStore::updateConfig(
     std::string key,
     std::string value,
     folly::Optional<version_t> base_version,
@@ -56,15 +48,7 @@ int InMemNodesConfigurationStore::updateConfig(
   Status status = updateConfigSync(
       std::move(key), std::move(value), base_version, &version, &value_out);
 
-  if (status == Status::OK || status == Status::NOTFOUND ||
-      status == Status::VERSION_MISMATCH || status == Status::ACCESS ||
-      status == Status::AGAIN) {
-    cb(status, version, std::move(value_out));
-    return 0;
-  }
-
-  err = status;
-  return -1;
+  cb(status, version, std::move(value_out));
 }
 
 Status InMemNodesConfigurationStore::updateConfigSync(

@@ -41,12 +41,12 @@ class ZookeeperNodesConfigurationStore : public NodesConfigurationStore {
   // store the extraction function and Zookeeper client as shared_ptr-s.
   ~ZookeeperNodesConfigurationStore() override {}
 
-  int getConfig(std::string key, value_callback_t cb) const override;
+  void getConfig(std::string key, value_callback_t cb) const override;
   Status getConfigSync(std::string key, std::string* value_out) const override;
-  int updateConfig(std::string key,
-                   std::string value,
-                   folly::Optional<version_t> base_version,
-                   write_callback_t cb = {}) override;
+  void updateConfig(std::string key,
+                    std::string value,
+                    folly::Optional<version_t> base_version,
+                    write_callback_t cb = {}) override;
   Status updateConfigSync(std::string key,
                           std::string value,
                           folly::Optional<version_t> base_version,

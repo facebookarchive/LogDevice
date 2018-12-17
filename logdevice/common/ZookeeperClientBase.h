@@ -193,13 +193,13 @@ class ZookeeperClientBase : boost::noncopyable {
 
   explicit ZookeeperClientBase() : quorum_() {}
 
-  virtual int getData(std::string path, data_callback_t cb) = 0;
-  virtual int setData(std::string path,
-                      std::string data,
-                      stat_callback_t cb,
-                      zk::version_t base_version = -1) = 0;
+  virtual void getData(std::string path, data_callback_t cb) = 0;
+  virtual void setData(std::string path,
+                       std::string data,
+                       stat_callback_t cb,
+                       zk::version_t base_version = -1) = 0;
 
-  virtual int multiOp(std::vector<zk::Op> ops, multi_op_callback_t cb) = 0;
+  virtual void multiOp(std::vector<zk::Op> ops, multi_op_callback_t cb) = 0;
 };
 
 // Factory type used to create ZookeeperClient instances utilizing

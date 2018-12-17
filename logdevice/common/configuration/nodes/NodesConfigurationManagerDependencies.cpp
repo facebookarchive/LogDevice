@@ -96,32 +96,25 @@ void Dependencies::init(NCMWeakPtr ncm) {
 void Dependencies::readFromStoreAndActivateTimer() {
   dcheckOnNCM();
   ld_assert(store_);
-  int rc = store_->getConfig(
-      kConfigKey, [ncm = ncm_](Status status, std::string value) {
-        // May not be on the NCM thread
-        auto ncm_ptr = ncm.lock();
-        if (!ncm_ptr) {
-          return;
-        }
-        if (status == Status::OK) {
-          auto deps = ncm_ptr->deps();
-          ld_assert(deps);
-          auto req = deps->makeNCMRequest<NewConfigRequest>(std::move(value));
-          deps->processor_->postWithRetrying(req);
-        } else {
-          RATELIMIT_ERROR(
-              std::chrono::seconds(10),
-              5,
-              "Reading from NodesConfigurationStore failed with error %s",
-              error_name(status));
-        }
-      });
-  if (rc != 0) {
-    RATELIMIT_ERROR(std::chrono::seconds(10),
-                    5,
-                    "Reading from NodesConfigurationStore failed with error %s",
-                    error_name(err));
-  }
+  store_->getConfig(kConfigKey, [ncm = ncm_](Status status, std::string value) {
+    // May not be on the NCM thread
+    auto ncm_ptr = ncm.lock();
+    if (!ncm_ptr) {
+      return;
+    }
+    if (status == Status::OK) {
+      auto deps = ncm_ptr->deps();
+      ld_assert(deps);
+      auto req = deps->makeNCMRequest<NewConfigRequest>(std::move(value));
+      deps->processor_->postWithRetrying(req);
+    } else {
+      RATELIMIT_ERROR(
+          std::chrono::seconds(10),
+          5,
+          "Reading from NodesConfigurationStore failed with error %s",
+          error_name(status));
+    }
+  });
 
   if (!timer_) {
     timer_ = std::make_unique<Timer>([ncm = ncm_]() {

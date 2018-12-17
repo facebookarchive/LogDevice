@@ -39,7 +39,7 @@ class NodesConfigurationStore {
 
   // Function that NodesConfigurationStore could call on stored values to
   // extract the corresponding membership version. If value is invalid, the
-  // function should return folly::none and set err accordingly.
+  // function should return folly::none.
   //
   // This function should be synchronous, relatively fast, and should not
   // consume the value string (folly::StringPiece does not take ownership of the
@@ -56,19 +56,13 @@ class NodesConfigurationStore {
    * @param key: key of the config
    * @param cb:
    *   callback void(Status, std::string value) that will be invoked with
-   *   status OK, NOTFOUND, ACCESS, or AGAIN. If status is OK, cb will be
-   *   invoked with the value. Otherwise, the value parameter is meaningless
-   *   (but default-constructed).
-   *
-   * @return
-   *   0 on success, callback will be invoked;
-   *   -1 on error, err will be set accordingly, possibly one of:
-   *     INVALID_PARAM
-   *     INVALID_CONFIG
+   *   status OK, NOTFOUND, ACCESS, INVALID_PARAM, INVALID_CONFIG, or AGAIN. If
+   *   status is OK, cb will be invoked with the value. Otherwise, the value
+   *   parameter is meaningless (but default-constructed).
    *
    * Note that the reads do not need to be linearizable with the writes.
    */
-  virtual int getConfig(std::string key, value_callback_t cb) const = 0;
+  virtual void getConfig(std::string key, value_callback_t cb) const = 0;
 
   /*
    * synchronous read
@@ -125,20 +119,11 @@ class NodesConfigurationStore {
    *   EMPTY_VERSION). Otherwise, the version and value parameter(s) are
    *   meaningless (default-constructed).
    *
-   *   Implementation note: because updateConfig performs a read-modify-write
-   *   operation, the write_callback_t should expect both synchronous statuses
-   *   as well as asynchonous statuses.
-   *
-   * @return
-   *   0 on success, callback will be invoked;
-   *   -1 on error, err will be set accordingly, possibly one of:
-   *     INVALID_PARAM
-   *     INVALID_CONFIG
    */
-  virtual int updateConfig(std::string key,
-                           std::string value,
-                           folly::Optional<version_t> base_version,
-                           write_callback_t cb = {}) = 0;
+  virtual void updateConfig(std::string key,
+                            std::string value,
+                            folly::Optional<version_t> base_version,
+                            write_callback_t cb = {}) = 0;
 
   /*
    * Synchronous updateConfig
