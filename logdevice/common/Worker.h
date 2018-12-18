@@ -712,6 +712,7 @@ class Worker : public EventLoop {
 
   void activateIsolationTimer();
 
+  // This ensures that ClusterState is refreshed periodically.
   void activateClusterStatePolling();
 
   void deactivateIsolationTimer();

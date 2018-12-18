@@ -246,6 +246,17 @@ class SettingsUpdater {
     return folly::none;
   }
 
+  static folly::Optional<std::string>
+  eitherClientOrServerOption(const SettingState& setting,
+                             const std::string& setting_name) {
+    if (!(setting.descriptor.flags & SettingFlag::CLIENT) &&
+        !(setting.descriptor.flags & SettingFlag::SERVER)) {
+      return folly::sformat(
+          "'{}' must be a client or server option.", setting_name);
+    }
+    return folly::none;
+  }
+
   /**
    * @param setting The setting to get the value of
    * @return Returns the setting value from the highest priority source,
