@@ -8,6 +8,9 @@
 #include "AdminServerSettings.h"
 
 #include "logdevice/common/commandline_util_chrono.h"
+#include "logdevice/common/settings/Validators.h"
+
+using namespace facebook::logdevice::setting_validators;
 
 namespace facebook { namespace logdevice {
 
@@ -16,6 +19,18 @@ void AdminServerSettings::defineSettings(SettingEasyInit& init) {
 
   // clang-format off
   init
+    ("admin-port", &admin_port, "6440", validate_port,
+     "TCP port on which the server listens to for admin commands, supports "
+     "commands over SSL",
+     SERVER | REQUIRES_RESTART,
+     SettingsCategory::AdminAPI)
+
+    ("admin-unix-socket", &admin_unix_socket, "", validate_unix_socket,
+     "Path to the unix domain socket the server will use to listen for admin "
+     "thrift interface",
+     SERVER | REQUIRES_RESTART,
+     SettingsCategory::AdminAPI)
+
     ("safety-check-max-logs-in-flight", &safety_max_logs_in_flight, "1000",
      [](int x) -> void {
        if (x <= 0) {

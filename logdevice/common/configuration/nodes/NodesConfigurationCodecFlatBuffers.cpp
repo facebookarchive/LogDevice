@@ -45,7 +45,6 @@ NodesConfigurationCodecFlatBuffers::serialize(
       b.CreateString(discovery.address.toString()),
       b.CreateString(discovery.gossip_address.toString()),
       serializeOptionalStrField(b, discovery.ssl_address),
-      serializeOptionalStrField(b, discovery.admin_address),
       serializeOptionalStrField(b, discovery.location),
       discovery.roles.to_ullong(),
       b.CreateString(discovery.hostname));
@@ -78,7 +77,6 @@ int NodesConfigurationCodecFlatBuffers::deserialize(
   PARSE_SOCK_FIELD(address, false);
   PARSE_SOCK_FIELD(gossip_address, false);
   PARSE_SOCK_FIELD(ssl_address, true);
-  PARSE_SOCK_FIELD(admin_address, true);
 
 #undef PARSE_SOCK_FIELD
 

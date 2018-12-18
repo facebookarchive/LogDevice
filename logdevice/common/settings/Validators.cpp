@@ -119,4 +119,31 @@ size_t parse_memory_budget::operator()(const char* name,
   return floor(percentage * getAvailableMemory() / 100.0);
 }
 
+void validate_unix_socket(const std::string& unix_socket) {
+  // We require unix domain socket paths to be absolute paths.
+  if (!unix_socket.empty() && unix_socket[0] != '/') {
+    char buf[4096];
+    snprintf(buf,
+             sizeof buf,
+             "invalid value for --unix-socket or --command-unix-socket: %s, "
+             "must start with '/'",
+             unix_socket.c_str());
+    throw boost::program_options::error(buf);
+  }
+}
+
+void validate_port(int port) {
+  const int MIN_PORT = 1, MAX_PORT = 65535;
+  if (port < MIN_PORT || port > MAX_PORT) {
+    char buf[4096];
+    snprintf(buf,
+             sizeof buf,
+             "invalid value for --port: %d, must be between %d and %d",
+             port,
+             MIN_PORT,
+             MAX_PORT);
+    throw boost::program_options::error(buf);
+  }
+}
+
 }}} // namespace facebook::logdevice::setting_validators

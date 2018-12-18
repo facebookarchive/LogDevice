@@ -34,10 +34,9 @@ static bool parseOneNode(const folly::dynamic&,
 static bool parseNodeID(const folly::dynamic&, node_index_t&);
 static bool parseGeneration(const folly::dynamic&, Configuration::Node&);
 static bool parseHostFields(const folly::dynamic&,
-                            Sockaddr&,                  /* host address */
-                            Sockaddr&,                  /* gossip address */
-                            folly::Optional<Sockaddr>&, /* ssl address */
-                            folly::Optional<Sockaddr>& /* admin address */);
+                            Sockaddr&, /* host address */
+                            Sockaddr&, /* gossip address */
+                            folly::Optional<Sockaddr>& /* ssl address */);
 static bool parseLocation(const folly::dynamic&, Configuration::Node&);
 static bool parseRoles(const folly::dynamic&, Configuration::Node&);
 using RoleParser = bool(const folly::dynamic&, Configuration::Node&);
@@ -194,8 +193,7 @@ static bool parseOneNode(const folly::dynamic& nodeMap,
   return parseHostFields(nodeMap,
                          output.address,
                          output.gossip_address,
-                         output.ssl_address,
-                         output.admin_address) &&
+                         output.ssl_address) &&
       parseLocation(nodeMap, output) && parseRoles(nodeMap, output) &&
       parseSettings(nodeMap, "settings", output.settings);
 }
@@ -272,13 +270,11 @@ bool parseHostString(const std::string& hostStr,
 static bool parseHostFields(const folly::dynamic& nodeMap,
                             Sockaddr& addr_out,
                             Sockaddr& gossip_addr_out,
-                            folly::Optional<Sockaddr>& ssl_addr_out,
-                            folly::Optional<Sockaddr>& admin_addr_out) {
+                            folly::Optional<Sockaddr>& ssl_addr_out) {
   std::string hostStr;
   std::string gossipAddressStr;
-  std::string adminStr;
   std::string sslHostStr;
-  int sslPort, gossipPort, adminPort;
+  int sslPort, gossipPort;
 
   if (!getStringFromMap(nodeMap, "host", hostStr)) {
     ld_error("missing \"host\" entry for node");
@@ -344,34 +340,6 @@ static bool parseHostFields(const folly::dynamic& nodeMap,
       return false;
     }
     ssl_addr_out.assign(addr_out.withPort(sslPort));
-  }
-
-  // Admin API address
-  if (!getIntFromMap<int>(nodeMap, "admin_port", adminPort)) {
-    adminPort = 0;
-  }
-  if (getStringFromMap(nodeMap, "admin_host", adminStr)) {
-    if (adminPort) {
-      ld_error("invalid \"admin_host\" entry for node: \"%s\", contains "
-               "both admin_host and admin_port",
-               hostStr.c_str());
-      err = E::INVALID_CONFIG;
-      return false;
-    }
-    Sockaddr adminAddress;
-    if (!parseHostString(adminStr, adminAddress, "admin_host")) {
-      // err set by parseHostString()
-      return false;
-    }
-    admin_addr_out.assign(adminAddress);
-  } else if (adminPort) {
-    if (addr_out.isUnixAddress()) {
-      ld_error("invalid \"admin_port\" entry for node: \"%s\", host address "
-               "is a unix socket which cannot be combined with a port",
-               hostStr.c_str());
-      return false;
-    }
-    admin_addr_out.assign(addr_out.withPort(adminPort));
   }
 
   return true;

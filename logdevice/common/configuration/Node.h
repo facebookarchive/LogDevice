@@ -114,12 +114,6 @@ struct Node {
   folly::Optional<Sockaddr> ssl_address;
 
   /**
-   * The IP (v4 or v6) Admin address, including port number,
-   * for Admin API communication.
-   */
-  folly::Optional<Sockaddr> admin_address;
-
-  /**
    * Generation number of this slot.  Hosts in a cluster are uniquely
    * identified by (index, generation) where index is into the array of
    * nodes.

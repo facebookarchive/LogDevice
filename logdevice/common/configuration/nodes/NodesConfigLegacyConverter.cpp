@@ -148,7 +148,6 @@ int NodesConfigLegacyConverter::toLegacyNodesConfig(
     node.address = serv.address;
     node.gossip_address = serv.gossip_address;
     node.ssl_address = serv.ssl_address;
-    node.admin_address = serv.admin_address;
     node.location = serv.location;
     node.roles = serv.roles;
   }
@@ -185,7 +184,6 @@ NodesConfigLegacyConverter::fromLegacyNodesConfig(
                                  {node.address,
                                   node.gossip_address,
                                   node.ssl_address,
-                                  node.admin_address,
                                   node.location,
                                   node.roles});
 

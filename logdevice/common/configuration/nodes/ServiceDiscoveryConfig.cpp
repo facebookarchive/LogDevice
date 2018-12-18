@@ -36,8 +36,7 @@ bool isOptionalFieldValid(const F& field, folly::StringPiece name) {
 bool NodeServiceDiscovery::isValid() const {
   if (!isFieldValid(address, "address") &&
       !isFieldValid(gossip_address, "gossip_address") &&
-      !isOptionalFieldValid(ssl_address, "ssl_address") &&
-      !isOptionalFieldValid(admin_address, "admin_address")) {
+      !isOptionalFieldValid(ssl_address, "ssl_address")) {
     return false;
   }
 

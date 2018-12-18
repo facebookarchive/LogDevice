@@ -24,7 +24,6 @@ table NodeServiceDiscovery {
   gossip_address: string;
   // empty string means the optional field is not provided
   ssl_address: string;
-  admin_address: string;
   location: string;
   roles: ulong;
   hostname: string;

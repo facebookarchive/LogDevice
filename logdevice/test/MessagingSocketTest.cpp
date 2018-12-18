@@ -157,8 +157,6 @@ static std::shared_ptr<UpdateableConfig> create_config(int ld_port) {
   node.address = Sockaddr("127.0.0.1", std::to_string(ld_port).c_str());
   node.gossip_address =
       Sockaddr("127.0.0.1", std::to_string(ld_port + 1).c_str());
-  node.admin_address =
-      Sockaddr("127.0.0.1", std::to_string(ld_port + 3).c_str());
   node.generation = 3;
   node.addStorageRole(/*num_shards*/ 2);
 

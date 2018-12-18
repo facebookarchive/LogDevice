@@ -45,7 +45,6 @@ class NodesConfigurationTest : public ::testing::Test {
     return NodeServiceDiscovery{Sockaddr(addr, 4440),
                                 Sockaddr(addr, 4441),
                                 /*ssl address*/ folly::none,
-                                /*admin address*/ folly::none,
                                 l,
                                 roles,
                                 "host" + std::to_string(n)};

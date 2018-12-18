@@ -314,7 +314,7 @@ int main(int argc, const char** argv) {
   settings_updater->registerSettings(gossip_settings);
   settings_updater->registerSettings(settings);
   settings_updater->registerSettings(rocksdb_settings);
-  settings_updater->registerSettings(rocksdb_settings);
+  settings_updater->registerSettings(admin_server_settings);
 
   plugin_registry->addOptions(settings_updater.get());
 

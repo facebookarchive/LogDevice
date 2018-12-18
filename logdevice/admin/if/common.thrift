@@ -97,10 +97,6 @@ struct Addresses {
    * The socket address for SSL (data) connections to the server.
    */
   2: optional SocketAddress ssl;
-  /**
-   * The socket address for the admin API.
-   */
-  3: optional SocketAddress admin;
 }
 
 /**

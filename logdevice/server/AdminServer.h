@@ -7,8 +7,6 @@
  */
 #pragma once
 
-#include <folly/SocketAddress.h>
-
 #include "logdevice/admin/settings/AdminServerSettings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/server/ServerSettings.h"
@@ -32,7 +30,6 @@ class AdminServer {
    * socket for the admin server.
    */
   AdminServer(
-      folly::SocketAddress address,
       Processor* processor,
       std::shared_ptr<SettingsUpdater> settings_updater,
       UpdateableSettings<ServerSettings> updateable_server_settings,

@@ -7,8 +7,6 @@
  */
 #pragma once
 
-#include <folly/SocketAddress.h>
-
 #include "logdevice/admin/settings/AdminServerSettings.h"
 #include "logdevice/common/plugin/Plugin.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
@@ -37,7 +35,6 @@ class AdminServerFactory : public Plugin {
    * there is no implementation available, the admin server will not be started.
    */
   virtual std::unique_ptr<AdminServer> operator()(
-      folly::SocketAddress admin_address,
       Processor* processor,
       std::shared_ptr<SettingsUpdater> settings_updater,
       UpdateableSettings<ServerSettings> updateable_server_settings,

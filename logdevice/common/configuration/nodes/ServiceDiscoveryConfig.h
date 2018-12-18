@@ -39,12 +39,6 @@ struct NodeServiceDiscovery {
   folly::Optional<Sockaddr> ssl_address;
 
   /**
-   * The IP (v4 or v6) Admin address, including port number,
-   * for Admin API communication.
-   */
-  folly::Optional<Sockaddr> admin_address;
-
-  /**
    * Location information of the node.
    */
   folly::Optional<NodeLocation> location;
@@ -75,9 +69,8 @@ struct NodeServiceDiscovery {
 
   bool operator==(const NodeServiceDiscovery& rhs) const {
     return address == rhs.address && gossip_address == rhs.gossip_address &&
-        ssl_address == rhs.ssl_address && admin_address == rhs.admin_address &&
-        location == rhs.location && roles == rhs.roles &&
-        hostname == rhs.hostname;
+        ssl_address == rhs.ssl_address && location == rhs.location &&
+        roles == rhs.roles && hostname == rhs.hostname;
   }
 
   bool isValid() const;

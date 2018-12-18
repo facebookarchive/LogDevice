@@ -923,19 +923,11 @@ bool Server::initAdminServer() {
     const ServerConfig::Node* node_config = server_config->getNode(node_id);
     ld_check(node_config);
 
-    folly::SocketAddress admin_address;
     auto adm_plugin =
         params_->getPluginRegistry()->getSinglePlugin<AdminServerFactory>(
             PluginType::ADMIN_SERVER_FACTORY);
-    // If we have admin_address configured, let's use it.
-    // Otherwise, we pass an empty address, this will result in using the
-    // default port.
-    if (node_config->admin_address) {
-      admin_address = node_config->admin_address->getSocketAddress();
-    }
     if (adm_plugin) {
-      admin_server_handle_ = (*adm_plugin)(admin_address,
-                                           processor_.get(),
+      admin_server_handle_ = (*adm_plugin)(processor_.get(),
                                            params_->getSettingsUpdater(),
                                            params_->getServerSettings(),
                                            params_->getAdminServerSettings(),

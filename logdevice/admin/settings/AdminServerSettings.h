@@ -25,6 +25,11 @@ struct AdminServerSettings : public SettingsBundle {
 
   // See cpp file for a documentation about these settings.
 
+  // If admin_unix_socket is set, we ignore the admin_port. This needs to be
+  // empty in order to use the IPv4/6 interface.
+  std::string admin_unix_socket;
+  int admin_port;
+
   int safety_max_logs_in_flight;
   std::chrono::milliseconds safety_check_timeout;
 

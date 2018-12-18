@@ -1302,6 +1302,11 @@ class Node {
   std::string sendCommand(const std::string& command, bool ssl = false) const;
 
   /**
+   * Returns the admin API address for this node
+   */
+  folly::SocketAddress getAdminAddress() const;
+
+  /**
    * Sends the provided admin command via the address of the interface with the
    * given name, and returns the result.
    */

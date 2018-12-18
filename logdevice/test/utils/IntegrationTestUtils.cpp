@@ -506,9 +506,6 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
       if (!no_ssl_address_) {
         node.ssl_address.assign(ssl_addrs[i].protocol_addr_);
       }
-
-      // Admin API Address
-      node.admin_address = addrs[i].admin_addr_;
     }
   } else {
     // This test uses unix domain sockets. These will be created in the
@@ -528,9 +525,6 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
       if (!no_ssl_address_) {
         node.ssl_address.assign(ssl_addrs[i].protocol_addr_);
       }
-
-      // Admin API Address
-      node.admin_address = addrs[i].admin_addr_;
     }
   }
 
@@ -673,9 +667,6 @@ int Cluster::expand(std::vector<node_index_t> new_indices, bool start_nodes) {
     if (!no_ssl_address_) {
       nodes[idx].ssl_address = ssl_addrs[i].protocol_addr_;
     }
-
-    // Admin API Addresses
-    nodes[idx].admin_address = addrs[i].admin_addr_;
   }
 
   Configuration::NodesConfig nodes_config(std::move(nodes));
@@ -884,13 +875,18 @@ ParamMap Cluster::commandArgsForNode(node_index_t i, const Node& node) const {
       ? std::make_pair("--command-unix-socket", ParamValue{c.getPath()})
       : std::make_pair("--command-port", ParamValue{std::to_string(c.port())});
 
+  const auto& admn = node.addrs_.admin_addr_;
+  auto admin_addr_param = admn.isUnixAddress()
+      ? std::make_pair("--admin-unix-socket", ParamValue{admn.getPath()})
+      : std::make_pair("--admin-port", ParamValue{std::to_string(admn.port())});
+
   // clang-format off
 
   // Construct the default parameters.
   ParamMaps default_param_map = {
     { ParamScope::ALL,
       {
-        protocol_addr_param, command_addr_param,
+        protocol_addr_param, command_addr_param, admin_addr_param,
         {"--config-path", ParamValue{"file:" + node.config_path_}},
         {"--epoch-store-path", ParamValue{epoch_store_path_}},
         // Poll for config updates more frequently in tests so that they
@@ -1163,6 +1159,10 @@ std::string Node::sendCommand(const std::string& command, bool ssl) const {
   ld_debug(
       "Received response to \"%s\": %s", command.c_str(), response.c_str());
   return response;
+}
+
+folly::SocketAddress Node::getAdminAddress() const {
+  return addrs_.admin_addr_.getSocketAddress();
 }
 
 std::string Node::sendIfaceCommand(const std::string& command,
