@@ -8,6 +8,7 @@
 #pragma once
 
 #include "logdevice/admin/if/gen-cpp2/AdminAPI.h"
+#include "logdevice/admin/settings/AdminServerSettings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/server/ServerSettings.h"
 
@@ -36,12 +37,14 @@ class AdminAPIHandlerBase : public virtual thrift::AdminAPISvIf {
       Processor* processor,
       std::shared_ptr<SettingsUpdater> settings_updater,
       UpdateableSettings<ServerSettings> updateable_server_settings,
+      UpdateableSettings<AdminServerSettings> updateable_admin_server_settings,
       StatsHolder* stats_holder);
 
  protected:
   Processor* processor_;
   std::shared_ptr<SettingsUpdater> settings_updater_;
   UpdateableSettings<ServerSettings> updateable_server_settings_;
+  UpdateableSettings<AdminServerSettings> updateable_admin_server_settings_;
   StatsHolder* stats_holder_{nullptr};
 
  public:

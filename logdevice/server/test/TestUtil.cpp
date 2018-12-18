@@ -8,6 +8,7 @@
 
 #include "TestUtil.h"
 
+#include "logdevice/admin/settings/AdminServerSettings.h"
 #include "logdevice/common/EventLoopHandle.h"
 #include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/SequencerLocator.h"
@@ -30,6 +31,7 @@ std::shared_ptr<ServerProcessor> make_test_server_processor(
     const Settings& settings,
     const ServerSettings& server_settings,
     const GossipSettings& gossip_settings,
+    const AdminServerSettings& admin_settings,
     std::shared_ptr<UpdateableConfig> config,
     ShardedStorageThreadPool* sharded_storage_thread_pool,
     StatsHolder* stats) {
@@ -41,6 +43,7 @@ std::shared_ptr<ServerProcessor> make_test_server_processor(
       sharded_storage_thread_pool,
       UpdateableSettings<ServerSettings>(server_settings),
       UpdateableSettings<GossipSettings>(gossip_settings),
+      UpdateableSettings<AdminServerSettings>(admin_settings),
       config,
       std::make_shared<NoopTraceLogger>(config),
       UpdateableSettings<Settings>(settings),
@@ -51,14 +54,35 @@ std::shared_ptr<ServerProcessor> make_test_server_processor(
 std::shared_ptr<ServerProcessor> make_test_server_processor(
     const Settings& settings,
     const ServerSettings& server_settings,
+    const GossipSettings& gossip_settings,
+    std::shared_ptr<UpdateableConfig> config,
+    ShardedStorageThreadPool* sharded_storage_thread_pool,
+    StatsHolder* stats) {
+  AdminServerSettings admin_settings(
+      create_default_settings<AdminServerSettings>());
+  return make_test_server_processor(settings,
+                                    server_settings,
+                                    gossip_settings,
+                                    admin_settings,
+                                    std::move(config),
+                                    sharded_storage_thread_pool,
+                                    stats);
+}
+
+std::shared_ptr<ServerProcessor> make_test_server_processor(
+    const Settings& settings,
+    const ServerSettings& server_settings,
     std::shared_ptr<UpdateableConfig> config,
     ShardedStorageThreadPool* sharded_storage_thread_pool,
     StatsHolder* stats) {
   GossipSettings gossip_settings(create_default_settings<GossipSettings>());
+  AdminServerSettings admin_settings(
+      create_default_settings<AdminServerSettings>());
   gossip_settings.enabled = false;
   return make_test_server_processor(settings,
                                     server_settings,
                                     gossip_settings,
+                                    admin_settings,
                                     std::move(config),
                                     sharded_storage_thread_pool,
                                     stats);

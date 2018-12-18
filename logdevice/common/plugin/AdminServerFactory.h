@@ -9,6 +9,7 @@
 
 #include <folly/SocketAddress.h>
 
+#include "logdevice/admin/settings/AdminServerSettings.h"
 #include "logdevice/common/plugin/Plugin.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/server/ServerSettings.h"
@@ -35,12 +36,13 @@ class AdminServerFactory : public Plugin {
    * Creates a new AdminServer instance that will be managed by the server. If
    * there is no implementation available, the admin server will not be started.
    */
-  virtual std::unique_ptr<AdminServer>
-  operator()(folly::SocketAddress admin_address,
-             Processor* processor,
-             std::shared_ptr<SettingsUpdater> settings_updater,
-             UpdateableSettings<ServerSettings> updateable_server_settings,
-             StatsHolder* stats_holder) = 0;
+  virtual std::unique_ptr<AdminServer> operator()(
+      folly::SocketAddress admin_address,
+      Processor* processor,
+      std::shared_ptr<SettingsUpdater> settings_updater,
+      UpdateableSettings<ServerSettings> updateable_server_settings,
+      UpdateableSettings<AdminServerSettings> updateable_admin_server_settings,
+      StatsHolder* stats_holder) = 0;
 };
 
 }} // namespace facebook::logdevice

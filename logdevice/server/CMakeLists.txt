@@ -19,6 +19,7 @@ add_library(logdevice_server STATIC ${hfiles} ${files})
 target_link_libraries(logdevice_server
   common
   ldclient_static
+  logdevice_admin_settings
   ${LOGDEVICE_EXTERNAL_DEPS})
 
 add_executable(logdeviced ${LOGDEVICE_SERVER_DIR}/main.cpp)
@@ -55,6 +56,7 @@ target_link_libraries(server_test
   common_test_util
   test_util
   logdevice_server
+  logdevice_admin_settings
   locallogstore_test_util
   ${LOGDEVICE_EXTERNAL_DEPS}
   ${GMOCK_LIBRARY}

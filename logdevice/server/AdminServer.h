@@ -9,6 +9,7 @@
 
 #include <folly/SocketAddress.h>
 
+#include "logdevice/admin/settings/AdminServerSettings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/server/ServerSettings.h"
 
@@ -30,11 +31,13 @@ class AdminServer {
    * The address defines the information needed to create a listening
    * socket for the admin server.
    */
-  AdminServer(folly::SocketAddress address,
-              Processor* processor,
-              std::shared_ptr<SettingsUpdater> settings_updater,
-              UpdateableSettings<ServerSettings> updateable_server_settings,
-              StatsHolder* stats_holder) {}
+  AdminServer(
+      folly::SocketAddress address,
+      Processor* processor,
+      std::shared_ptr<SettingsUpdater> settings_updater,
+      UpdateableSettings<ServerSettings> updateable_server_settings,
+      UpdateableSettings<AdminServerSettings> updateable_admin_server_settings,
+      StatsHolder* stats_holder) {}
   /**
    * will be called on server startup, the server startup will fail if this
    * returned false.

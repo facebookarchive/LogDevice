@@ -19,6 +19,7 @@
 #include <sys/prctl.h>
 #include <sys/resource.h>
 
+#include "logdevice/admin/settings/AdminServerSettings.h"
 #include "logdevice/common/BuildInfo.h"
 #include "logdevice/common/ConstructorFailed.h"
 #include "logdevice/common/NoopTraceLogger.h"
@@ -304,6 +305,7 @@ int main(int argc, const char** argv) {
   UpdateableSettings<GossipSettings> gossip_settings;
   UpdateableSettings<Settings> settings;
   UpdateableSettings<RocksDBSettings> rocksdb_settings;
+  UpdateableSettings<AdminServerSettings> admin_server_settings;
 
   auto settings_updater = std::make_shared<SettingsUpdater>();
   settings_updater->registerSettings(server_settings);
@@ -311,6 +313,7 @@ int main(int argc, const char** argv) {
   settings_updater->registerSettings(locallogstore_settings);
   settings_updater->registerSettings(gossip_settings);
   settings_updater->registerSettings(settings);
+  settings_updater->registerSettings(rocksdb_settings);
   settings_updater->registerSettings(rocksdb_settings);
 
   plugin_registry->addOptions(settings_updater.get());
@@ -409,6 +412,7 @@ int main(int argc, const char** argv) {
                                                 gossip_settings,
                                                 settings,
                                                 rocksdb_settings,
+                                                admin_server_settings,
                                                 plugin_registry);
   } catch (const ConstructorFailed&) {
     return 1;

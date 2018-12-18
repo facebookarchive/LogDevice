@@ -9,7 +9,15 @@ auto_sources(safety_hfiles "*.h" RECURSE
   "${LOGDEVICE_ADMIN_DIR}/safety")
 auto_sources(safety_files "*.cpp" RECURSE "${LOGDEVICE_ADMIN_DIR}/safety")
 
+auto_sources(admin_settings_hfiles "*.h" RECURSE
+  "${LOGDEVICE_ADMIN_DIR}/settings")
+auto_sources(admin_settings_files
+  "*.cpp" RECURSE "${LOGDEVICE_ADMIN_DIR}/settings")
+
 add_library(logdevice_safety_checker STATIC ${safety_hfiles} ${safety_files})
+
+add_library(logdevice_admin_settings STATIC ${admin_settings_hfiles}
+  ${admin_settings_files})
 
 
 add_subdirectory(if)
@@ -17,3 +25,4 @@ add_subdirectory(if)
 # TODO: Remove ldclient when we decouple safety_checker from
 # logdevice client library.
 add_dependencies(logdevice_safety_checker common ldclient logdevice_server)
+add_dependencies(logdevice_admin_settings common)

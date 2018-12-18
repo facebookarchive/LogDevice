@@ -10,6 +10,7 @@
 #include <atomic>
 #include <memory>
 
+#include "logdevice/admin/settings/AdminServerSettings.h"
 #include "logdevice/common/EventLoopHandle.h"
 #include "logdevice/common/PermissionChecker.h"
 #include "logdevice/common/PrincipalParser.h"
@@ -61,6 +62,7 @@ class ServerParameters {
       UpdateableSettings<GossipSettings> gossip_settings,
       UpdateableSettings<Settings> processor_settings,
       UpdateableSettings<RocksDBSettings> rocksdb_settings,
+      UpdateableSettings<AdminServerSettings> admin_server_settings,
       std::shared_ptr<PluginRegistry> plugin_registry);
   ~ServerParameters();
 
@@ -108,6 +110,10 @@ class ServerParameters {
     return rocksdb_settings_;
   }
 
+  const UpdateableSettings<AdminServerSettings> getAdminServerSettings() const {
+    return admin_server_settings_;
+  }
+
  private:
   std::shared_ptr<PluginRegistry> plugin_registry_;
   StatsHolder server_stats_;
@@ -118,6 +124,7 @@ class ServerParameters {
   UpdateableSettings<GossipSettings> gossip_settings_;
   UpdateableSettings<Settings> processor_settings_;
   UpdateableSettings<RocksDBSettings> rocksdb_settings_;
+  UpdateableSettings<AdminServerSettings> admin_server_settings_;
 
   bool storage_node_;
   size_t num_db_shards_{0}; // Set to zero if !storage_node_.

@@ -13,11 +13,21 @@
 
 namespace facebook { namespace logdevice {
 
+class AdminServerSettings;
 class UpdateableConfig;
 class ShardedStorageThreadPool;
 class StatsHolder;
 class ServerProcessor;
 class GossipSettings;
+
+std::shared_ptr<ServerProcessor> make_test_server_processor(
+    const Settings& settings,
+    const ServerSettings& server_settings,
+    const GossipSettings& gossip_settings,
+    const AdminServerSettings& admin_settings,
+    std::shared_ptr<UpdateableConfig> config = nullptr,
+    ShardedStorageThreadPool* sharded_storage_thread_pool = nullptr,
+    StatsHolder* stats = nullptr);
 
 std::shared_ptr<ServerProcessor> make_test_server_processor(
     const Settings& settings,

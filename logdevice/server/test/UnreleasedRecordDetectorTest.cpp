@@ -126,6 +126,8 @@ class UnreleasedRecordDetectorTest : public ::testing::Test {
   std::unique_ptr<UpdateableSettings<Settings>> usettings_;
   std::unique_ptr<UpdateableSettings<ServerSettings>> userver_settings_;
   std::unique_ptr<UpdateableSettings<GossipSettings>> ugossip_settings_;
+  std::unique_ptr<UpdateableSettings<AdminServerSettings>>
+      uadmin_server_settings_;
   std::shared_ptr<TemporaryShardedStore> sharded_store_;
   std::unique_ptr<ShardedStorageThreadPool> sharded_storage_thread_pool_;
   std::shared_ptr<UpdateableConfig> config_;
@@ -170,6 +172,12 @@ void UnreleasedRecordDetectorTest::SetUp() {
   gossip_settings.enabled = false;
   ugossip_settings_ = std::make_unique<UpdateableSettings<GossipSettings>>(
       std::move(gossip_settings));
+
+  AdminServerSettings admin_settings(
+      create_default_settings<AdminServerSettings>());
+  uadmin_server_settings_ =
+      std::make_unique<UpdateableSettings<AdminServerSettings>>(
+          std::move(admin_settings));
 
   // create temporary store and associated storage thread pool
   StorageThreadPool::Params params;
@@ -217,6 +225,7 @@ void UnreleasedRecordDetectorTest::SetUp() {
       sharded_storage_thread_pool_.get(),
       *userver_settings_,
       *ugossip_settings_,
+      *uadmin_server_settings_,
       config_,
       std::make_shared<NoopTraceLogger>(config_),
       *usettings_,

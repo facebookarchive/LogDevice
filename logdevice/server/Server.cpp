@@ -217,6 +217,7 @@ ServerParameters::ServerParameters(
     UpdateableSettings<GossipSettings> gossip_settings,
     UpdateableSettings<Settings> processor_settings,
     UpdateableSettings<RocksDBSettings> rocksdb_settings,
+    UpdateableSettings<AdminServerSettings> admin_server_settings,
     std::shared_ptr<PluginRegistry> plugin_registry)
     : plugin_registry_(std::move(plugin_registry)),
       server_stats_(StatsParams().setIsServer(true)),
@@ -226,7 +227,8 @@ ServerParameters::ServerParameters(
       locallogstore_settings_(std::move(locallogstore_settings)),
       gossip_settings_(std::move(gossip_settings)),
       processor_settings_(std::move(processor_settings)),
-      rocksdb_settings_(std::move(rocksdb_settings)) {
+      rocksdb_settings_(std::move(rocksdb_settings)),
+      admin_server_settings_(std::move(admin_server_settings)) {
   // Note: this won't work well if there are multiple Server instances in the
   // same process: only one of them will get its error counter bumped. Also,
   // there's a data race if the following two lines are run from multiple
@@ -608,6 +610,7 @@ bool Server::initProcessor() {
                                 sharded_storage_thread_pool_.get(),
                                 params_->getServerSettings(),
                                 params_->getGossipSettings(),
+                                params_->getAdminServerSettings(),
                                 updateable_config_,
                                 params_->getTraceLogger(),
                                 params_->getProcessorSettings(),
@@ -935,6 +938,7 @@ bool Server::initAdminServer() {
                                            processor_.get(),
                                            params_->getSettingsUpdater(),
                                            params_->getServerSettings(),
+                                           params_->getAdminServerSettings(),
                                            params_->getStats());
       if (processor_->isFailureDetectorRunning() &&
           processor_->failure_detector_) {

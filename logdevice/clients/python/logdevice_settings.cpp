@@ -7,6 +7,7 @@
  */
 #include <boost/python.hpp>
 
+#include "logdevice/admin/settings/AdminServerSettings.h"
 #include "logdevice/clients/python/util/util.h"
 #include "logdevice/common/settings/GossipSettings.h"
 #include "logdevice/common/settings/RebuildingSettings.h"
@@ -47,6 +48,7 @@ void validate_server_settings(boost::python::dict input) {
   UpdateableSettings<GossipSettings> gossip_settings;
   UpdateableSettings<Settings> settings;
   UpdateableSettings<RocksDBSettings> rocksdb_settings;
+  UpdateableSettings<AdminServerSettings> admin_server_settings;
 
   auto settings_updater = std::make_shared<SettingsUpdater>();
   settings_updater->registerSettings(server_settings);
@@ -55,6 +57,7 @@ void validate_server_settings(boost::python::dict input) {
   settings_updater->registerSettings(gossip_settings);
   settings_updater->registerSettings(settings);
   settings_updater->registerSettings(rocksdb_settings);
+  settings_updater->registerSettings(admin_server_settings);
 
   auto input_settings = dict_to_map(input);
   try {

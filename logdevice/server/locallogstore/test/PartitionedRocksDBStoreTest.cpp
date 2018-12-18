@@ -755,6 +755,8 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
         UpdateableSettings<ServerSettings>(
             create_default_settings<ServerSettings>()),
         std::move(ugossip_settings),
+        UpdateableSettings<AdminServerSettings>(
+            create_default_settings<AdminServerSettings>()),
         updateable_settings,
         true,
         300,
