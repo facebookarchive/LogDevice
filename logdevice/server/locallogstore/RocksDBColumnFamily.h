@@ -71,12 +71,17 @@ struct RocksDBColumnFamily {
   // metadata memtable anyway. beginWrite and endWrite methods mark the
   // beginning and installation of dependency respectively.
   struct MemtableTracker {
-    // Tracks column family's current memtable's FlushToken. This value is
+    // Tracks column family's most recent memtable's FlushToken. This value is
     // initialized when rocksdb memtable for the column family dirtied for the
-    // first time.
-    // This value is invalidated when the memtable for the column_family is
-    // flushed.
-    FlushToken active_memtable{FlushToken_INVALID};
+    // first time. dirty flag indicates whether the recent memtable is in memory
+    // and active or not.
+    FlushToken recent_memtable{FlushToken_INVALID};
+
+    // True if the recent_memtable is dirty and currently active. False if
+    // recent_memtable is immutable and currently getting flushed, or if the
+    // memtable is already flushed and new memtable for the column family was
+    // not dirtied.
+    bool dirty{false};
 
     // If valid contians metadata column family memtable. This memtable contain
     // updates that need to be persisted before persisting active memtable of
@@ -138,14 +143,16 @@ struct RocksDBColumnFamily {
   // invalid.
   void onFlushBegin() {
     tracker_.withWLock([&](auto& locked_dependencies) {
-      auto& active = locked_dependencies.active_memtable;
+      auto& dirty = locked_dependencies.dirty;
+      ld_check(dirty);
+      auto& active = locked_dependencies.recent_memtable;
       auto& dependent = locked_dependencies.dependent_memtable;
       auto& memtables_being_flushed =
           locked_dependencies.memtables_being_flushed;
       memtables_being_flushed.emplace_back(std::piecewise_construct,
                                            std::forward_as_tuple(active),
                                            std::forward_as_tuple(dependent));
-      active = FlushToken_INVALID;
+      dirty = false;
       dependent = FlushToken_INVALID;
     });
   }
@@ -156,18 +163,29 @@ struct RocksDBColumnFamily {
   // MemTable for the column family.
   void onMemTableDirtied(FlushToken new_memtable_flush_token) {
     tracker_.withWLock([&](auto& locked_dependencies) {
-      ld_check(locked_dependencies.active_memtable == FlushToken_INVALID);
+      ld_check(!locked_dependencies.dirty);
+      locked_dependencies.dirty = true;
       // Dependent memtable cannot be asserted to have FlushToken_INVALID.
       // Because, some other thread which just completed the write and its data
       // was flushed in the previous memtable, can invoke endWrite before this
       // method gets invoked. endWrite invocation will update the
       // dependent_memtable from FlushToken_INVALID to a valid value.
-      locked_dependencies.active_memtable = new_memtable_flush_token;
+      locked_dependencies.recent_memtable = new_memtable_flush_token;
     });
   }
 
   FlushToken activeMemtableFlushToken() {
-    return tracker_.rlock()->active_memtable;
+    auto active = FlushToken_INVALID;
+    tracker_.withRLock([&](auto& locked_dependencies) {
+      if (locked_dependencies.dirty) {
+        active = locked_dependencies.recent_memtable;
+      }
+    });
+    return active;
+  }
+
+  FlushToken getMostRecentMemtableFlushToken() {
+    return tracker_.rlock()->recent_memtable;
   }
 
   FlushToken dependentMemtableFlushToken() {
@@ -204,7 +222,7 @@ struct RocksDBColumnFamily {
       auto& dependent_memtable = locked.dependent_memtable;
       dependent_memtable = std::max(dependent_memtable, dependency);
 
-      flush_token = locked.active_memtable;
+      flush_token = locked.recent_memtable;
     });
 
     return flush_token;

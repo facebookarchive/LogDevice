@@ -3006,6 +3006,7 @@ int PartitionedRocksDBStore::writeMultiImpl(
   auto metadata_cf_flush_token = metadata_cf_->activeMemtableFlushToken();
   auto timestamp_wal_flush_token = maxWALSyncToken();
   auto now = currentSteadyTime();
+  auto max_flush_token = maxFlushToken();
 
   // Go over all the holders and mark that write finished on the partition.
   for (auto& cf_ptr : cf_ptrs) {
@@ -3029,7 +3030,7 @@ int PartitionedRocksDBStore::writeMultiImpl(
     min_partition_idle_time_.storeMin(now);
 
     if (unpartitioned_dirtied) {
-      unpartitioned_dirty_state_.noteDirtied(maxFlushToken(), now);
+      unpartitioned_dirty_state_.noteDirtied(max_flush_token, now);
     }
   }
 
@@ -3051,7 +3052,7 @@ int PartitionedRocksDBStore::writeMultiImpl(
         cur_partition = op->partition;
       }
 
-      auto flush_token = cur_partition->cf_->activeMemtableFlushToken();
+      auto flush_token = cur_partition->cf_->getMostRecentMemtableFlushToken();
 
       op->write_op->setFlushToken(flush_token);
 
@@ -3253,7 +3254,7 @@ int PartitionedRocksDBStore::writeMultiImpl(
   }
 
   ld_spew("------------- Write Batch End: FlushToken %jx --------------",
-          static_cast<uintmax_t>(maxFlushToken()));
+          static_cast<uintmax_t>(max_flush_token));
 
   return 0;
 }
