@@ -20,7 +20,6 @@
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/common/util.h"
 #include "logdevice/server/locallogstore/LocalLogStoreSettings.h"
-#include "logdevice/server/storage_tasks/StorageThreadPool.h"
 
 /**
  * @file Mains server settings.
@@ -29,6 +28,12 @@
 namespace facebook { namespace logdevice {
 
 struct ServerSettings : public SettingsBundle {
+  struct TaskQueueParams {
+    int nthreads = 0;
+  };
+  using StoragePoolParams =
+      std::array<TaskQueueParams, (size_t)StorageTaskThreadType::MAX>;
+
   const char* getName() const override {
     return "ServerSettings";
   }
@@ -53,8 +58,11 @@ struct ServerSettings : public SettingsBundle {
   std::string log_file;
   std::string config_path;
   std::string epoch_store_path;
-  StorageThreadPool::Params shard_storage_pool_params;
+  StoragePoolParams storage_pool_params;
   std::chrono::milliseconds shutdown_timeout;
+  // Interval between invoking syncs for delayable storage tasks.
+  // Ignored when undelayable task is being enqueued.
+  std::chrono::milliseconds storage_thread_delaying_sync_interval;
   int fd_limit;
   bool eagerly_allocate_fdtable;
   int num_reserved_fds;

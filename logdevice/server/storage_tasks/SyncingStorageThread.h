@@ -50,5 +50,14 @@ class SyncingStorageThread : public StorageThread {
 
  private:
   folly::MPMCQueue<std::unique_ptr<StorageTask>> queue_;
+  /**
+   * Flag to signal the thread that undelayable task has been enqueued.
+   */
+  bool sync_immediately_;
+  std::condition_variable delay_cv_;
+  /**
+   * Mutex for sync_immediately_ and delay_cv_
+   */
+  std::mutex delay_cv_mutex_;
 };
 }} // namespace facebook::logdevice

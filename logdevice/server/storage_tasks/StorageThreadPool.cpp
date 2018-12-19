@@ -66,13 +66,15 @@ class StopExecStorageTask : public StorageTask {
 StorageThreadPool::StorageThreadPool(
     shard_index_t shard_idx,
     size_t num_shards,
-    const StorageThreadPool::Params& params,
+    const ServerSettings::StoragePoolParams& params,
+    UpdateableSettings<ServerSettings> server_settings,
     UpdateableSettings<Settings> settings,
     LocalLogStore* local_log_store,
     size_t task_queue_size,
     StatsHolder* stats,
     const std::shared_ptr<TraceLogger> trace_logger)
-    : settings_(settings),
+    : server_settings_(server_settings),
+      settings_(settings),
       nthreads_slow_(params[(size_t)ThreadType::SLOW].nthreads),
       nthreads_fast_stallable_(
           params[(size_t)ThreadType::FAST_STALLABLE].nthreads),

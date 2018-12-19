@@ -13,7 +13,8 @@ namespace facebook { namespace logdevice {
 
 ShardedStorageThreadPool::ShardedStorageThreadPool(
     ShardedLocalLogStore* store,
-    const StorageThreadPool::Params& params,
+    const ServerSettings::StoragePoolParams& params,
+    UpdateableSettings<ServerSettings> server_settings,
     UpdateableSettings<Settings> settings,
     size_t task_queue_size,
     StatsHolder* stats,
@@ -27,6 +28,7 @@ ShardedStorageThreadPool::ShardedStorageThreadPool(
         std::make_unique<StorageThreadPool>(shard_idx,
                                             nshards,
                                             params,
+                                            server_settings,
                                             settings,
                                             store->getByIndex(shard_idx),
                                             task_queue_size,

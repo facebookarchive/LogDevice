@@ -49,6 +49,7 @@ using RocksDBKeyFormat::DataKey;
 using RocksDBKeyFormat::LogMetaKey;
 using RocksDBKeyFormat::PartitionDirectoryKey;
 using DirectoryEntry = PartitionedRocksDBStore::DirectoryEntry;
+using Params = ServerSettings::StoragePoolParams;
 
 // In milliseconds.
 const uint64_t SECOND = 1000ul;
@@ -573,6 +574,7 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
  public:
   PartitionedRocksDBStoreTest()
       : settings_(create_default_settings<Settings>()),
+        server_settings_(create_default_settings<ServerSettings>()),
         stats_(StatsParams().setIsServer(true)) {}
   virtual ~PartitionedRocksDBStoreTest() {}
 
@@ -837,13 +839,14 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
     store_ = std::make_unique<TestPartitionedRocksDBStore>(
         path_, std::move(log_store_config), config_.get(), &stats_, &time_);
 
-    StorageThreadPool::Params params;
+    Params params;
     params[(size_t)StorageTaskThreadType::SLOW].nthreads = 1;
 
     storage_thread_pool_ = std::make_unique<StorageThreadPool>(
         /* shard_idx */ 0,
         /* num_shards */ 1,
         params,
+        UpdateableSettings<ServerSettings>(server_settings_),
         UpdateableSettings<Settings>(settings_),
         store_.get(),
         1,
@@ -1444,6 +1447,7 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
   std::string path_;
 
   Settings settings_;
+  ServerSettings server_settings_;
 
   std::shared_ptr<Configuration> config_;
 

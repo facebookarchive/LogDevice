@@ -25,6 +25,7 @@
 #include "logdevice/server/test/TestUtil.h"
 
 using namespace facebook::logdevice;
+using Params = ServerSettings::StoragePoolParams;
 
 class FakeShardedLocalLogStore : public ShardedLocalLogStore {
   int numShards() const override {
@@ -92,16 +93,19 @@ TEST(StorageThreadPoolTest, QueueDrop) {
   UpdateableSettings<Settings> updateable_settings(settings);
   ServerSettings server_settings =
       create_default_settings<ServerSettings>(); // default settings
+  UpdateableSettings<ServerSettings> updateable_server_settings(
+      server_settings);
 
   FakeShardedLocalLogStore store;
 
   const int nstorage_threads = 8;
-  StorageThreadPool::Params params;
+  Params params;
   params[(size_t)StorageTaskThreadType::SLOW].nthreads = nstorage_threads;
   size_t shared_task_queue_size =
       settings.num_workers * settings.max_inflight_storage_tasks;
   ShardedStorageThreadPool sharded_pool(&store,
                                         params,
+                                        updateable_server_settings,
                                         updateable_settings,
                                         shared_task_queue_size,
                                         nullptr // stats
@@ -232,13 +236,16 @@ TEST(StorageThreadPoolTest, DontDropHighPriority) {
   UpdateableSettings<Settings> updateable_settings(settings);
   ServerSettings server_settings =
       create_default_settings<ServerSettings>(); // default settings
+  UpdateableSettings<ServerSettings> updateable_server_settings(
+      server_settings);
 
-  StorageThreadPool::Params params;
+  Params params;
   params[(size_t)StorageTaskThreadType::SLOW].nthreads = 1;
 
   FakeShardedLocalLogStore store;
   ShardedStorageThreadPool sharded_pool(&store,
                                         params,
+                                        updateable_server_settings,
                                         updateable_settings,
                                         100,    // shared task queue size
                                         nullptr // stats

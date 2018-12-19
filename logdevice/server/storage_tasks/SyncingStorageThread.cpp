@@ -21,7 +21,7 @@ namespace facebook { namespace logdevice {
 
 SyncingStorageThread::SyncingStorageThread(StorageThreadPool* pool,
                                            size_t queue_size)
-    : StorageThread(pool), queue_(queue_size) {}
+    : StorageThread(pool), queue_(queue_size), sync_immediately_(false) {}
 
 SyncingStorageThread::~SyncingStorageThread() {}
 
@@ -29,13 +29,21 @@ void SyncingStorageThread::enqueueForSync(std::unique_ptr<StorageTask> task) {
   // Tasks should be non-null so we can abuse null in stopProcessingTasks()
   ld_check(task);
 
+  const bool sync_immediately = !task->allowDelayingSync();
   if (!queue_.writeIfNotFull(std::move(task))) {
-    RATELIMIT_WARNING(
-        std::chrono::seconds(60),
-        1,
+    ld_catch(
+        false,
         "Failed to enqueue.  This should never happen if the queue is properly "
-        "sized.  Reverting to blockingWrite().");
+        "sized, including delaying sync for some tasks.  Reverting to "
+        "blockingWrite().");
     queue_.blockingWrite(std::move(task));
+  }
+  if (sync_immediately) {
+    {
+      std::lock_guard<std::mutex> lock(delay_cv_mutex_);
+      sync_immediately_ = true;
+    }
+    delay_cv_.notify_all();
   }
 }
 
@@ -75,11 +83,28 @@ void SyncingStorageThread::run() {
       got_task(std::move(task));
     }
 
-    // We got one task off the incoming queue, now pull as much as possible to
-    // sync in the same batch.  If the typical sync() time is `SYNC', most
-    // tasks will wait between 0 and 2*SYNC before we can confirm they got
-    // synced.  (The worst case is when a task comes in just as we started
-    // syncing a previous batch, so it has to wait for two syncs.)
+    // Delay some tasks until timeout occurs or undelayable task arrives.
+    if (!stop) {
+      const std::chrono::milliseconds interval =
+          pool_->getServerSettings()->storage_thread_delaying_sync_interval;
+      std::unique_lock<std::mutex> lock(delay_cv_mutex_);
+      delay_cv_.wait_for(lock, interval, [&]() { return sync_immediately_; });
+      // Usage of sync_immediately_ introduces race condition
+      // when we set it to false before signalling from enqueueForSync
+      // for the same undelayable task. Thus, next batch is going
+      // to be processed immediately. This should be rare and harmless.
+      sync_immediately_ = false;
+    }
+
+    // We got one task off the incoming queue, waited for timeout
+    // or undelayable task, now pull as much as possible to sync
+    // in the same batch. This should handle typical cases when a burst
+    // of delayable tasks arrive into empty queue.
+    // If the typical sync() time is `SYNC', most tasks will wait
+    // between 0 and DELAY + 2*SYNC before we can confirm
+    // they got synced.  (The worst case is when a task comes in just as
+    // we started syncing a previous batch, so it has to wait for two syncs
+    // plus delay interval)
     //
     // The `batch.size()' check guards against the theoretical possibility of
     // tasks coming in faster than we can drain them, although this should be

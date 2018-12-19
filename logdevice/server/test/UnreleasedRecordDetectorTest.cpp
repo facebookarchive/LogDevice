@@ -46,6 +46,7 @@
 #include "logdevice/include/Record.h"
 #include "logdevice/server/ConnectionListener.h"
 #include "logdevice/server/ServerProcessor.h"
+#include "logdevice/server/ServerSettings.h"
 #include "logdevice/server/locallogstore/LocalLogStore.h"
 #include "logdevice/server/locallogstore/test/TemporaryLogStore.h"
 #include "logdevice/server/read_path/LogStorageStateMap.h"
@@ -54,6 +55,8 @@
 #include "logdevice/test/utils/MetaDataProvisioner.h"
 
 namespace facebook { namespace logdevice {
+
+using Params = ServerSettings::StoragePoolParams;
 
 namespace {
 
@@ -180,7 +183,7 @@ void UnreleasedRecordDetectorTest::SetUp() {
           std::move(admin_settings));
 
   // create temporary store and associated storage thread pool
-  StorageThreadPool::Params params;
+  Params params;
   params[(size_t)StorageTaskThreadType::SLOW].nthreads = 1;
   params[(size_t)StorageTaskThreadType::FAST_TIME_SENSITIVE].nthreads = 1;
   params[(size_t)StorageTaskThreadType::FAST_STALLABLE].nthreads = 1;
@@ -189,6 +192,7 @@ void UnreleasedRecordDetectorTest::SetUp() {
   sharded_storage_thread_pool_ = std::make_unique<ShardedStorageThreadPool>(
       sharded_store_.get(),
       params,
+      *userver_settings_,
       *usettings_,
       NUM_WORKERS * NUM_INFLIGHT_STORAGE_TASKS,
       nullptr);

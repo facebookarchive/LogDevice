@@ -20,6 +20,7 @@
 #include "logdevice/server/storage_tasks/WriteStorageTask.h"
 
 using namespace facebook::logdevice;
+using Params = ServerSettings::StoragePoolParams;
 
 namespace {
 
@@ -100,8 +101,11 @@ TEST(StorageThreadPoolTest, Basic) {
       init_settings.storage_tasks_use_drr = true;
     }
     UpdateableSettings<Settings> settings(init_settings);
+    ServerSettings init_server_settings =
+        create_default_settings<ServerSettings>();
+    UpdateableSettings<ServerSettings> server_settings(init_server_settings);
 
-    StorageThreadPool::Params params;
+    Params params;
     params[(size_t)StorageTaskThreadType::SLOW].nthreads = 4;
     const int task_queue_slots = 16;
     // Number of tasks intentionally more than task queue slots
@@ -109,7 +113,7 @@ TEST(StorageThreadPoolTest, Basic) {
 
     TemporaryRocksDBStore store;
     auto pool = std::make_unique<StorageThreadPool>(
-        0, 1, params, settings, &store, task_queue_slots);
+        0, 1, params, server_settings, settings, &store, task_queue_slots);
 
     Semaphore sem;
     for (int i = 0; i < ntasks; ++i) {
@@ -166,14 +170,17 @@ TEST(StorageThreadPoolTest, SyncingShutdown) {
       init_settings.storage_tasks_use_drr = true;
     }
     UpdateableSettings<Settings> settings(init_settings);
+    ServerSettings init_server_settings =
+        create_default_settings<ServerSettings>();
+    UpdateableSettings<ServerSettings> server_settings(init_server_settings);
 
-    StorageThreadPool::Params params;
+    Params params;
     params[(size_t)StorageTaskThreadType::SLOW].nthreads = 1;
     const int task_queue_slots = 16;
 
     TemporaryRocksDBStore store;
     auto pool = std::make_unique<StorageThreadPool>(
-        0, 1, params, settings, &store, task_queue_slots);
+        0, 1, params, server_settings, settings, &store, task_queue_slots);
 
     folly::Baton<> started;
     std::atomic<bool> executed(false);
@@ -196,7 +203,7 @@ TEST(StorageThreadPoolTest, SyncingShutdown) {
 // run at the same time.
 TEST(StorageThreadPoolTest, DifferentPriorities) {
   Alarm alarm(std::chrono::seconds(60));
-  StorageThreadPool::Params params;
+  Params params;
   params[(size_t)StorageTaskThreadType::SLOW].nthreads = 1;
   params[(size_t)StorageTaskThreadType::FAST_TIME_SENSITIVE].nthreads = 1;
   params[(size_t)StorageTaskThreadType::FAST_STALLABLE].nthreads = 1;
@@ -211,9 +218,13 @@ TEST(StorageThreadPoolTest, DifferentPriorities) {
       init_settings.storage_tasks_use_drr = true;
     }
     UpdateableSettings<Settings> settings(init_settings);
+    ServerSettings init_server_settings =
+        create_default_settings<ServerSettings>();
+    UpdateableSettings<ServerSettings> server_settings(init_server_settings);
     StorageThreadPool pool(0, // shard idx
                            1, // num shards
                            params,
+                           server_settings,
                            settings,
                            &store,
                            16); // task queue size
@@ -244,7 +255,7 @@ TEST(StorageThreadPoolTest, DifferentPriorities) {
 TEST(StorageThreadPoolTest, IOPrio) {
   Settings init_settings = create_default_settings<Settings>();
   init_settings.slow_ioprio = std::make_pair(2, 2);
-  StorageThreadPool::Params params;
+  Params params;
   params[(size_t)StorageTaskThreadType::SLOW].nthreads = 1;
   params[(size_t)StorageTaskThreadType::FAST_TIME_SENSITIVE].nthreads = 1;
   params[(size_t)StorageTaskThreadType::FAST_STALLABLE].nthreads = 1;
@@ -257,10 +268,14 @@ TEST(StorageThreadPoolTest, IOPrio) {
       init_settings.storage_tasks_use_drr = true;
     }
     UpdateableSettings<Settings> settings(init_settings);
+    ServerSettings init_server_settings =
+        create_default_settings<ServerSettings>();
+    UpdateableSettings<ServerSettings> server_settings(init_server_settings);
 
     StorageThreadPool pool(0, // shard idx
                            1, // num shards
                            params,
+                           server_settings,
                            settings,
                            &store,
                            16); // task queue size
@@ -327,7 +342,7 @@ TEST(StorageThreadPoolTest, IOPrio) {
 
 TEST(StorageThreadPoolTest, BatchLimits) {
   Settings init_settings = create_default_settings<Settings>();
-  StorageThreadPool::Params params;
+  Params params;
   params[(size_t)StorageTaskThreadType::SLOW].nthreads = 1;
   params[(size_t)StorageTaskThreadType::FAST_TIME_SENSITIVE].nthreads = 1;
   params[(size_t)StorageTaskThreadType::FAST_STALLABLE].nthreads = 1;
@@ -342,10 +357,14 @@ TEST(StorageThreadPoolTest, BatchLimits) {
       init_settings.storage_tasks_use_drr = true;
     }
     UpdateableSettings<Settings> settings(init_settings);
+    ServerSettings init_server_settings =
+        create_default_settings<ServerSettings>();
+    UpdateableSettings<ServerSettings> server_settings(init_server_settings);
 
     StorageThreadPool pool(0, // shard idx
                            1, // num shards
                            params,
+                           server_settings,
                            settings,
                            &store,
                            limit + 1); // task queue size

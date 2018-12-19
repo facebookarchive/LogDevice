@@ -165,6 +165,57 @@ TEST_F(AppendIntegrationTest, AppendEchoClient) {
 }
 
 /**
+ * Sends 1000 appends to 1000 logs.
+ * Checks throttling in SyncStorageThread.
+ */
+TEST_F(AppendIntegrationTest, SyncStorageThreadThrottling) {
+  int rv;
+
+  const int NUM_REQUESTS_AND_LOGS = 1000;
+
+  auto cluster = IntegrationTestUtils::ClusterFactory()
+                     .setNumLogs(NUM_REQUESTS_AND_LOGS)
+                     .create(1);
+  // Make sure that sequencer won't reactivate.
+  cluster->waitForMetaDataLogWrites();
+
+  std::shared_ptr<Client> client = cluster->createClient();
+  ASSERT_TRUE((bool)client);
+
+  // For synchronisation with async appends
+  Semaphore async_append_sem;
+
+  for (int i = 0; i < NUM_REQUESTS_AND_LOGS; ++i) {
+    rv = client->append(
+        logid_t((i % NUM_REQUESTS_AND_LOGS) + 1),
+        "payload",
+        [&async_append_sem](Status st, const DataRecord& /* unused */) {
+          if (st != E::OK) {
+            EXPECT_EQ(E::OK, st);
+            ld_error(
+                "Async append failed with status %s", error_description(st));
+          }
+          async_append_sem.post();
+        });
+    EXPECT_EQ(0, rv);
+  }
+
+  for (int i = 0; i < NUM_REQUESTS_AND_LOGS; ++i) {
+    async_append_sem.wait();
+  }
+
+  std::map<std::string, int64_t> stats = cluster->getNode(0).stats();
+  // expectation values depend on chosen NUM_REQUESTS_AND_LOGS
+  // most syncs here come from sequencer activation
+  int fdatasync = stats["fdatasyncs"];
+  int wal_syncs = stats["wal_syncs"];
+  EXPECT_GT(fdatasync, 100);
+  EXPECT_LT(fdatasync, 250);
+  EXPECT_GT(wal_syncs, 100);
+  EXPECT_LT(wal_syncs, 250);
+}
+
+/**
  * Tests that sequencers that are caught flipping bits in payloads/checksums
  * are aborted, except if 35+ % of the cluster is dead.
  */

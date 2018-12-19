@@ -273,6 +273,9 @@ class PartitionedRocksDBStore::Partition::TimestampUpdateTask
   bool isDroppable() const override {
     return false;
   }
+  bool allowDelayingSync() const override {
+    return false;
+  }
 
   std::string toString() const {
     return std::string("Partition::TimestampUpdateTask:") +

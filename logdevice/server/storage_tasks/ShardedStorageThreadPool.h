@@ -37,7 +37,8 @@ class ShardedStorageThreadPool {
    */
   ShardedStorageThreadPool(
       ShardedLocalLogStore* store,
-      const StorageThreadPool::Params& params,
+      const ServerSettings::StoragePoolParams& params,
+      UpdateableSettings<ServerSettings> server_settings,
       UpdateableSettings<Settings> settings,
       size_t task_queue_size,
       StatsHolder* stats,

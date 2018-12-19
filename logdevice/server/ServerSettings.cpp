@@ -210,7 +210,7 @@ void ServerSettings::defineSettings(SettingEasyInit& init) {
 
 
     ("storage-threads-per-shard-slow",
-     &shard_storage_pool_params[(size_t)ThreadType::SLOW].nthreads,
+     &storage_pool_params[(size_t)ThreadType::SLOW].nthreads,
      "2",
      [](int val) {
       validate_storage_threads("storage-threads-per-shard-slow", val, 1);
@@ -223,7 +223,7 @@ void ServerSettings::defineSettings(SettingEasyInit& init) {
      SettingsCategory::Storage)
 
     ("storage-threads-per-shard-fast",
-     &shard_storage_pool_params[
+     &storage_pool_params[
        (size_t)ThreadType::FAST_TIME_SENSITIVE].nthreads,
      "2",
      [](int val) {
@@ -236,7 +236,7 @@ void ServerSettings::defineSettings(SettingEasyInit& init) {
      SettingsCategory::Storage)
 
     ("storage-threads-per-shard-fast-stallable",
-     &shard_storage_pool_params[(size_t)ThreadType::FAST_STALLABLE].nthreads,
+     &storage_pool_params[(size_t)ThreadType::FAST_STALLABLE].nthreads,
      "1",
      [](int val) {
        validate_storage_threads("storage-threads-per-shard-fast-stallable",
@@ -251,7 +251,7 @@ void ServerSettings::defineSettings(SettingEasyInit& init) {
      SettingsCategory::Storage)
 
     ("storage-threads-per-shard-metadata",
-     &shard_storage_pool_params[(size_t)ThreadType::METADATA].nthreads,
+     &storage_pool_params[(size_t)ThreadType::METADATA].nthreads,
      "2",
      [](int val) {
       validate_storage_threads("storage-threads-per-shard-metadata", val, 0);
@@ -263,7 +263,7 @@ void ServerSettings::defineSettings(SettingEasyInit& init) {
 
     // For backward compatibility
     ("storage-threads-per-shard",
-     &shard_storage_pool_params[(size_t)ThreadType::SLOW].nthreads,
+     &storage_pool_params[(size_t)ThreadType::SLOW].nthreads,
      "4",
      [](int val) {
       validate_storage_threads("storage-threads-per-shard", val, 1);
@@ -290,6 +290,15 @@ void ServerSettings::defineSettings(SettingEasyInit& init) {
      "changing this value.",
      SERVER,
      SettingsCategory::Core)
+
+    ("storage-thread-delaying-sync-interval",
+     &storage_thread_delaying_sync_interval,
+     "100ms",
+     validate_nonnegative<ssize_t>(),
+     "Interval between invoking syncs for delayable storage tasks. "
+     "Ignored when undelayable task is being enqueued.",
+     SERVER,
+     SettingsCategory::Storage)
 
     ("fd-limit", &fd_limit, "0",
      [](int val) -> void {

@@ -454,6 +454,7 @@ sidebar_label: Settings
 | storage-task-read-tail-share | The share for principalread-tailin the DRR scheduler. | 10 | server&nbsp;only |
 | storage-tasks-drr-quanta | Default quanta per-principal. 1 implies request based scheduling. Use something like 1MB for byte based scheduling. | 1 | server&nbsp;only |
 | storage-tasks-use-drr | Use DRR for scheduling read IO's. | false | requires&nbsp;restart, server&nbsp;only |
+| storage-thread-delaying-sync-interval | Interval between invoking syncs for delayable storage tasks. Ignored when undelayable task is being enqueued. | 100ms | server&nbsp;only |
 | storage-threads-per-shard-fast | size of the 'fast' storage thread pool, per shard. This storage thread pool executes storage tasks that write into RocksDB. Such tasks normally do not block on IO. If zero, slow threads will handle write tasks. | 2 | requires&nbsp;restart, server&nbsp;only |
 | storage-threads-per-shard-fast-stallable | size of the thread pool (per shard) executing low priority write tasks, such as writing rebuilding records into RocksDB. Measures are taken to not schedule low-priority writes on this thread pool when there is work for 'fast' threads. If zero, normal fast threads will handle low-pri write tasks | 1 | requires&nbsp;restart, server&nbsp;only |
 | storage-threads-per-shard-metadata | size of the storage thread pool for metadata writes, per shard. If zero, the 'slow' pool will handle metadata writing tasks.  | 2 | requires&nbsp;restart, server&nbsp;only |

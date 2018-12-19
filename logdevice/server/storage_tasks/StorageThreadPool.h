@@ -17,6 +17,7 @@
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/SimpleEnumMap.h"
 #include "logdevice/common/settings/Settings.h"
+#include "logdevice/server/ServerSettings.h"
 #include "logdevice/server/storage_tasks/PrioritizedQueue.h"
 #include "logdevice/server/storage_tasks/StorageTask.h"
 
@@ -47,12 +48,6 @@ class StorageThreadPool {
 
   using DRRTaskQueue = DRRScheduler<StorageTask, &StorageTask::schedulerQHook_>;
 
-  struct TaskQueueParams {
-    int nthreads = 0;
-  };
-  using Params =
-      std::array<TaskQueueParams, (size_t)StorageTaskThreadType::MAX>;
-
   /**
    * Creates the pool and starts all threads.  Does not claim ownership of the
    * local log store.
@@ -61,7 +56,8 @@ class StorageThreadPool {
    */
   StorageThreadPool(shard_index_t shard_idx,
                     size_t num_shards,
-                    const Params& params,
+                    const ServerSettings::StoragePoolParams& params,
+                    UpdateableSettings<ServerSettings> server_settings,
                     UpdateableSettings<Settings> settings,
                     LocalLogStore* local_log_store,
                     size_t task_queue_size,
@@ -80,6 +76,10 @@ class StorageThreadPool {
 
   LocalLogStore& getLocalLogStore() {
     return *local_log_store_;
+  }
+
+  const UpdateableSettings<ServerSettings> getServerSettings() {
+    return server_settings_;
   }
 
   const UpdateableSettings<Settings> getSettings() {
@@ -218,6 +218,7 @@ class StorageThreadPool {
   void getStorageTaskDebugInfo(InfoStorageTasksTable& table);
 
  private:
+  UpdateableSettings<ServerSettings> server_settings_;
   UpdateableSettings<Settings> settings_;
   // Number of storage threads of each type.
   const int nthreads_slow_;

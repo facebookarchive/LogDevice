@@ -165,6 +165,13 @@ class StorageTask {
   }
 
   /**
+   * Whether to allow delayed sync with LocalLogStore in SyncingStorageThread
+   */
+  virtual bool allowDelayingSync() const {
+    return true;
+  }
+
+  /**
    * Hook called on a storage thread when the task is dropped during a queue
    * drop.  Subclasses can override to perform extra processing.
    */

@@ -584,13 +584,14 @@ bool Server::initStore() {
       // Size the storage thread pool task queue to never fill up.
       size_t task_queue_size = local_settings->num_workers *
           local_settings->max_inflight_storage_tasks;
-      sharded_storage_thread_pool_.reset(new ShardedStorageThreadPool(
-          sharded_store_.get(),
-          server_settings_->shard_storage_pool_params,
-          params_->getProcessorSettings(),
-          task_queue_size,
-          params_->getStats(),
-          params_->getTraceLogger()));
+      sharded_storage_thread_pool_.reset(
+          new ShardedStorageThreadPool(sharded_store_.get(),
+                                       server_settings_->storage_pool_params,
+                                       server_settings_,
+                                       params_->getProcessorSettings(),
+                                       task_queue_size,
+                                       params_->getStats(),
+                                       params_->getTraceLogger()));
     } catch (const ConstructorFailed& ex) {
       ld_error("Failed to initialize local log store");
       return false;

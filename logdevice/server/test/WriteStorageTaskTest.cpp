@@ -28,6 +28,7 @@
 #include "logdevice/server/test/TestUtil.h"
 
 using namespace facebook::logdevice;
+using Params = ServerSettings::StoragePoolParams;
 
 class TestWriteRequest;
 
@@ -146,13 +147,16 @@ TEST(WriteStorageTaskTest, Simple) {
   // Make sure the Worker can buffer all writes
   settings.per_worker_storage_task_queue_size = nwrites;
   UpdateableSettings<Settings> updateable_settings(settings);
+  UpdateableSettings<ServerSettings> updateable_server_settings(
+      server_settings);
 
-  StorageThreadPool::Params params;
+  Params params;
   params[(size_t)StorageTaskThreadType::SLOW].nthreads = 1;
   ShardedStoreWrapper<TemporaryRocksDBStore> sharded_store;
   ShardedStorageThreadPool sharded_storage_thread_pool(
       &sharded_store,
       params,
+      updateable_server_settings,
       updateable_settings,
       nworkers * settings.max_inflight_storage_tasks,
       nullptr);
@@ -206,13 +210,20 @@ TEST(WriteStorageTaskTest, Simple) {
 // that it's out of space.
 TEST(WriteStorageTaskTest, MetadataLogNOSPC) {
   Settings settings = create_default_settings<Settings>();
-  ServerSettings server_settings = create_default_settings<ServerSettings>();
   UpdateableSettings<Settings> updateable_settings(settings);
+  ServerSettings server_settings = create_default_settings<ServerSettings>();
+  UpdateableSettings<ServerSettings> updateable_server_settings(
+      server_settings);
   ShardedStoreWrapper<OutOfSpaceRocksDBStore> sharded_store;
-  StorageThreadPool::Params params;
+  Params params;
   params[(size_t)StorageTaskThreadType::SLOW].nthreads = 1;
   ShardedStorageThreadPool sharded_storage_thread_pool(
-      &sharded_store, params, updateable_settings, 1000, nullptr);
+      &sharded_store,
+      params,
+      updateable_server_settings,
+      updateable_settings,
+      1000,
+      nullptr);
   auto processor = make_test_server_processor(
       settings, server_settings, nullptr, &sharded_storage_thread_pool);
 
