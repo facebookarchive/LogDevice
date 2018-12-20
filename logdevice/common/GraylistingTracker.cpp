@@ -68,6 +68,7 @@ void GraylistingTracker::onSettingsUpdated() {
 
 void GraylistingTracker::resetGraylist() {
   STAT_INCR(getStats(), graylist_reseted);
+  potential_graylist_.clear();
   graylist_deadlines_.clear();
   graylist_.clear();
 }
