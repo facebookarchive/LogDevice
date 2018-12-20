@@ -78,12 +78,16 @@ toString(StorageStateTransition transition) {
     GEN_STR(MARK_SHARD_UNRECOVERABLE)
     GEN_STR(PROVISION_SHARD)
     GEN_STR(PROVISION_METADATA_SHARD)
+    GEN_STR(OVERRIDE_STATE)
 #undef GEN_STR
     case StorageStateTransition::Count:
       return "invalid";
   }
   return "internal error";
 }
+
+static_assert(static_cast<size_t>(StorageStateTransition::Count) == 20,
+              "There are 20 state transitions in the design spec.");
 
 inline constexpr folly::StringPiece
 toString(SequencerMembershipTransition transition) {

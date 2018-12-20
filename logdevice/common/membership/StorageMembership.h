@@ -13,6 +13,8 @@
 #include <unordered_map>
 #include <utility>
 
+#include <folly/Optional.h>
+
 #include "logdevice/common/ShardID.h"
 #include "logdevice/common/membership/Membership.h"
 #include "logdevice/common/membership/StorageState.h"
@@ -56,6 +58,17 @@ struct ShardState {
 
     // identifier for the new maintenance requesting the state transition
     MaintenanceID::Type maintenance;
+
+    // see state_override below
+    struct StateOverride {
+      StorageState storage_state;
+      StorageStateFlags::Type flags;
+      MetaDataStorageState metadata_state;
+    };
+
+    // forcefully update the shard state. Used only in the OVERRIDE_STATE
+    // transition for emergency tools.
+    folly::Optional<StateOverride> state_override;
 
     bool isValid() const;
     std::string toString() const;

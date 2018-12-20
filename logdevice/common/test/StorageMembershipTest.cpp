@@ -37,33 +37,40 @@ namespace {
 
 constexpr MaintenanceID::Type DUMMY_MAINTENANCE{2333};
 
+using StateOverride = ShardState::Update::StateOverride;
+
 class StorageMembershipTest : public ::testing::Test {
  public:
-  static StorageMembership::Update
-  genUpdateOneShard(ShardID shard,
-                    uint64_t base_ver,
-                    StorageStateTransition transition,
-                    StateTransitionCondition conditions) {
+  static StorageMembership::Update genUpdateOneShard(
+      ShardID shard,
+      uint64_t base_ver,
+      StorageStateTransition transition,
+      StateTransitionCondition conditions,
+      folly::Optional<StateOverride> state_override = folly::none) {
     StorageMembership::Update res{MembershipVersion::Type(base_ver)};
     MaintenanceID::Type maintenance =
         (isProvisionShard(transition) ? MAINTENANCE_PROVISION
                                       : DUMMY_MAINTENANCE);
-    int rv = res.addShard(shard, {transition, conditions, maintenance});
+    int rv = res.addShard(
+        shard, {transition, conditions, maintenance, state_override});
     EXPECT_EQ(0, rv);
     return res;
   }
 
   // add a set of shards of the same transition into an existing update
-  static void addShards(StorageMembership::Update* update,
-                        const std::set<ShardID>& shards,
-                        StorageStateTransition transition,
-                        StateTransitionCondition conditions) {
+  static void
+  addShards(StorageMembership::Update* update,
+            const std::set<ShardID>& shards,
+            StorageStateTransition transition,
+            StateTransitionCondition conditions,
+            folly::Optional<StateOverride> state_override = folly::none) {
     ld_check(update != nullptr);
     MaintenanceID::Type maintenance =
         (isProvisionShard(transition) ? MAINTENANCE_PROVISION
                                       : DUMMY_MAINTENANCE);
     for (auto shard : shards) {
-      int rv = update->addShard(shard, {transition, conditions, maintenance});
+      int rv = update->addShard(
+          shard, {transition, conditions, maintenance, state_override});
       EXPECT_EQ(0, rv);
     }
   }
@@ -72,9 +79,10 @@ class StorageMembershipTest : public ::testing::Test {
   genUpdateShards(const std::set<ShardID>& shards,
                   uint64_t base_ver,
                   StorageStateTransition transition,
-                  StateTransitionCondition conditions) {
+                  StateTransitionCondition conditions,
+                  folly::Optional<StateOverride> state_override = folly::none) {
     StorageMembership::Update res{MembershipVersion::Type(base_ver)};
-    addShards(&res, shards, transition, conditions);
+    addShards(&res, shards, transition, conditions, state_override);
     return res;
   }
 
@@ -483,6 +491,63 @@ TEST_F(StorageMembershipTest, ForceFlag) {
                      StorageState::NONE_TO_RO,
                      MetaDataStorageState::NONE,
                      StorageStateFlags::NONE,
+                     2);
+  checkCodecSerialization(m);
+}
+
+TEST_F(StorageMembershipTest, StateOverride) {
+  StorageMembership m;
+  int rv;
+  // add one empty shard N1
+  rv = m.applyUpdate(genUpdateOneShard(N1,
+                                       EMPTY_VERSION.val(),
+                                       StorageStateTransition::ADD_EMPTY_SHARD,
+                                       Condition::NONE),
+                     &m);
+  ASSERT_EQ(0, rv);
+  ASSERT_EQ(1, m.getVersion().val());
+  ASSERT_SHARD_STATE(m,
+                     N1,
+                     StorageState::NONE,
+                     MetaDataStorageState::NONE,
+                     StorageStateFlags::NONE,
+                     1);
+
+  // invalid update, state_override not provided
+  rv = m.applyUpdate(
+      genUpdateOneShard(
+          N1, 1, StorageStateTransition::OVERRIDE_STATE, Condition::FORCE),
+      &m);
+  ASSERT_EQ(-1, rv);
+  ASSERT_EQ(E::INVALID_PARAM, err);
+
+  // not using the FORCE condition
+  StateOverride st_override{StorageState::READ_WRITE,
+                            StorageStateFlags::UNRECOVERABLE,
+                            MetaDataStorageState::METADATA};
+  rv = m.applyUpdate(genUpdateOneShard(N1,
+                                       1,
+                                       StorageStateTransition::OVERRIDE_STATE,
+                                       Condition::EMPTY_SHARD,
+                                       {st_override}),
+                     &m);
+  ASSERT_EQ(-1, rv);
+  ASSERT_EQ(E::CONDITION_MISMATCH, err);
+
+  // apply the override
+  rv = m.applyUpdate(genUpdateOneShard(N1,
+                                       1,
+                                       StorageStateTransition::OVERRIDE_STATE,
+                                       Condition::FORCE,
+                                       {st_override}),
+                     &m);
+  ASSERT_EQ(0, rv);
+  ASSERT_EQ(2, m.getVersion().val());
+  ASSERT_SHARD_STATE(m,
+                     N1,
+                     StorageState::READ_WRITE,
+                     MetaDataStorageState::METADATA,
+                     StorageStateFlags::UNRECOVERABLE,
                      2);
   checkCodecSerialization(m);
 }

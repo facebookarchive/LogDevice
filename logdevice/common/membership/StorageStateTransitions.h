@@ -106,11 +106,16 @@ enum class StorageStateTransition : uint8_t {
   // metadata storage state: NONE -> METADATA
   PROVISION_METADATA_SHARD,
 
+  // force to override the storage state of a shard to the provided target
+  // state, should only be used in emergency; always require the FORCE condition
+  // to be supplied
+  OVERRIDE_STATE,
+
   Count
 };
 
-static_assert(static_cast<size_t>(StorageStateTransition::Count) == 19,
-              "There are 19 state transitions in the design spec.");
+static_assert(static_cast<size_t>(StorageStateTransition::Count) == 20,
+              "There are 20 state transitions in the design spec.");
 
 /**
  * return    true if the transition is adding a new shard which is not part of
@@ -324,12 +329,17 @@ static constexpr std::array<
             Condition::NO_SELF_REPORT_MISSING_DATA |
             Condition::LOCAL_STORE_WRITABLE)),
 
+        // OVERRIDE_STATE (source/target state not applicable)
+        _t(StorageState::INVALID,
+           StorageState::INVALID,
+           // always require force condition
+           (Condition::FORCE)),
     }};
 
 #undef _t
 
-static_assert(TransitionTable.size() == 19,
-              "There are 19 state transitions in the design spec.");
+static_assert(TransitionTable.size() == 20,
+              "There are 20 state transitions in the design spec.");
 
 //// utility functions for accessing the transition table
 

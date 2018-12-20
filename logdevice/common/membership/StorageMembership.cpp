@@ -48,6 +48,17 @@ bool ShardState::Update::isValid() const {
     return false;
   }
 
+  if (transition == StorageStateTransition::OVERRIDE_STATE &&
+      !state_override.hasValue()) {
+    RATELIMIT_ERROR(
+        std::chrono::seconds(10),
+        5,
+        "Invalid transition %lu for update %s: state_override not provided.",
+        static_cast<size_t>(transition),
+        toString().c_str());
+    return false;
+  }
+
   return true;
 }
 
@@ -280,6 +291,18 @@ int ShardState::transition(const ShardState& current_state,
           return -1;
       }
       // metadata storage state keeps the same
+    } break;
+
+    case StorageStateTransition::OVERRIDE_STATE: {
+      // must have the force flag in conditions
+      ld_check(update.conditions & Condition::FORCE);
+      ld_check(update.state_override.hasValue());
+      const auto& state_override = update.state_override.value();
+
+      // blindly overwrite the shard state to the target overrid state
+      target_shard_state.storage_state = state_override.storage_state;
+      target_flags = state_override.flags;
+      target_metadata_state = state_override.metadata_state;
     } break;
 
     case StorageStateTransition::REMOVE_EMPTY_SHARD:
