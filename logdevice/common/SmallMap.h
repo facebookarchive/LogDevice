@@ -21,6 +21,7 @@ namespace facebook { namespace logdevice {
 // Comes in two flavors:
 //  * Ordered. The internal vector is kept sorted.
 //    Insert is O(n), search is O(log n) time.
+//    (More precisely, insert(x) takes O(number of keys greater than x) time.)
 //    Iterator iterates in order of increasing key.
 //    Supports lower_bound() and upper_bound().
 //  * Unordered. The internal vector is not sorted.
@@ -77,6 +78,14 @@ class BasicSmallMap {
   }
   iterator erase(const_iterator pos) {
     return vector_.erase(pos);
+  }
+  size_t erase(const Key& key) {
+    auto it = find(key);
+    if (it == end()) {
+      return 0;
+    }
+    erase(it);
+    return 1;
   }
 
   iterator begin() {
@@ -159,12 +168,19 @@ class BasicSmallMap {
 
   std::pair<iterator, bool> insert(value_type&& v) {
     if (Sorted) {
-      iterator it =
-          std::lower_bound(begin(), end(), v.first, LowerBoundCompare());
-      if (it != end() && it->first == v.first) {
-        return std::make_pair(it, false);
+      // Find the place for new key in the sorted vector.
+      // Do it from right to left to do inserts to the end in O(1) time.
+      for (int i = (int)vector_.size() - 1; i >= 0; --i) {
+        if (vector_[i].first <= v.first) {
+          if (vector_[i].first == v.first) {
+            return std::make_pair(begin() + i, false);
+          }
+          return std::make_pair(
+              vector_.insert(vector_.begin() + i + 1, std::move(v)), true);
+        }
       }
-      return std::make_pair(vector_.insert(it, std::move(v)), true);
+      return std::make_pair(
+          vector_.insert(vector_.begin(), std::move(v)), true);
     } else {
       iterator it = find(v.first);
       if (it != end()) {

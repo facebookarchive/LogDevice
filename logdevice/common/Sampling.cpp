@@ -101,6 +101,10 @@ double ProbabilityDistributionAdjustment::revert(size_t idx) {
   return w;
 }
 
+void ProbabilityDistributionAdjustment::clear() {
+  added_cumsum_.clear();
+}
+
 double ProbabilityDistributionAdjustment::totalAddedWeight() const {
   if (added_cumsum_.empty()) {
     return 0;
@@ -113,7 +117,7 @@ double ProbabilityDistributionAdjustment::totalAddedWeight() const {
 double AdjustedProbabilityDistribution::prefixSum(size_t count) const {
   double add = diff_ ? diff_->prefixSum(count) : 0.;
   double res = base_->prefixSum(count) + add;
-  ld_check(res >= -Sampling::EPSILON);
+  ld_check(res >= -Sampling::EPSILON * base_->totalWeight());
   return res;
 }
 

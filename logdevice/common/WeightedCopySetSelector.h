@@ -89,10 +89,27 @@ class WeightedCopySetSelector : public CopySetSelector {
   struct DomainAdjustment {
     ProbabilityDistributionAdjustment weights;
     SmallRecursiveUnorderedMap<size_t, DomainAdjustment> subdomains;
+
+    // Number of adjustments to `weights` since the last call to
+    // correctAccumulatedNumericalError().
+    int numerical_error_accumulated = 0;
+
     // true if this domain is a root of some detached subtree.
     // I.e. if you detach some domain X, only X gets is_detached=true, not
     // the whole subtree of X.
     bool is_detached = false;
+
+    // When a domain is detached/attached (e.g. a node goes down/up), its
+    // floating-point weight is subtracted/added to the corresponding
+    // (floating-point) element of `weights` of the parent domain(s).
+    // If this happens lots of times, numerical error can accumulate in the
+    // value of `weights` of the parent domains.
+    // This method, if called on a non-leaf domain, clears and reconstructs
+    // `weights` based on subdomains' weights.
+    // Called every once in a while (after a certain number of `weights`
+    // updates, counted by numerical_error_accumulated).
+    // @param domain  The Domain corresponding to this DomainAdjustment.
+    void correctAccumulatedNumericalError(const Domain* domain);
   };
 
   class AdjustedDomain {

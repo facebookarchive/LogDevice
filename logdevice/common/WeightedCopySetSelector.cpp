@@ -23,7 +23,7 @@ static constexpr int MAX_BLACKLISTING_ITERATIONS = 100;
 // is equal to x. In particular, if x is integer returns x.
 static copyset_size_t randomRound(double x, RNG& rng) {
   if (x < 0) {
-    ld_check(x >= -1e-9); // rounding error
+    ld_check(x >= -Sampling::EPSILON); // rounding error
     x = 0;
   }
   auto res = (int)floor(x + folly::Random::randDouble01(rng));
@@ -330,7 +330,8 @@ void WeightedCopySetSelector::optimizeWeightsForLocality(
     total_weight += p.second;
   }
 
-  if (total_sequencer_weight < 1e-9 || total_weight < 1e-9) {
+  if (total_sequencer_weight < Sampling::EPSILON ||
+      total_weight < Sampling::EPSILON) {
     RATELIMIT_WARNING(
         std::chrono::seconds(10),
         2,
@@ -370,8 +371,8 @@ void WeightedCopySetSelector::optimizeWeightsForLocality(
     //     and then accidentally added a single storage node to it.
     //     Better not to shift weight to this domain because such shift would
     //     be hard to counterbalance.
-    if (weight / total_weight < 1e-9 ||
-        sequencer_weight / total_sequencer_weight < 1e-9 ||
+    if (weight / total_weight < Sampling::EPSILON ||
+        sequencer_weight / total_sequencer_weight < Sampling::EPSILON ||
         sequencer_weight / total_sequencer_weight >
             10 * weight / total_weight) {
       shift = 0;
@@ -395,7 +396,8 @@ void WeightedCopySetSelector::optimizeWeightsForLocality(
     }
   }
 
-  if (total_weight_shift / total_weight / total_sequencer_weight < 1e-9) {
+  if (total_weight_shift / total_weight / total_sequencer_weight <
+      Sampling::EPSILON) {
     // None of the racks need weight adjustment. In particular, this path
     // is hit for "disaggregated" clusters: when all nodes are either
     // sequencer-only or storage-only.
@@ -417,14 +419,14 @@ void WeightedCopySetSelector::optimizeWeightsForLocality(
 
     double share = sequencer_weight * shift / total_weight_shift;
 
-    if (share < 1e-9) {
+    if (share < Sampling::EPSILON) {
       // No weight adjustment when sequencer is in this domain.
       continue;
     }
 
     double max_other_shift =
         shift == max_shifts.first ? max_shifts.second : max_shifts.first;
-    if (max_other_shift / total_weight < 1e-9) {
+    if (max_other_shift / total_weight < Sampling::EPSILON) {
       // This is the only domain eligible to run sequencers.
       // Make no weight adjustments.
       max_unbiased_coef = 0;
@@ -477,8 +479,8 @@ void WeightedCopySetSelector::optimizeWeightsForLocality(
   double new_total_weight = 0;
 
   for (auto& p : domain_target_weight) {
-    if (p.second <= Sampling::EPSILON) {
-      ld_check(p.second >= -1e-9);
+    if (p.second <= Sampling::EPSILON * total_weight) {
+      ld_check(p.second >= -Sampling::EPSILON * total_weight);
       // Zero weights must stay zero.
       continue;
     }
@@ -495,7 +497,8 @@ void WeightedCopySetSelector::optimizeWeightsForLocality(
 
     const double weight_margin = 1e-4;
     if (p.second / total_weight < weight_margin) {
-      if (p.second / total_weight < -1e-9) { // not a rounding error
+      if (p.second / total_weight <
+          -Sampling::EPSILON) { // not a rounding error
         // This should be impossible given that we picked `coef` specifically
         // to avoid negative weights.
         RATELIMIT_ERROR(
@@ -517,7 +520,8 @@ void WeightedCopySetSelector::optimizeWeightsForLocality(
   }
 
   // Our adjustments are not expected to change total weight.
-  if (fabs(new_total_weight - total_weight) / total_weight > 1e-9) {
+  if (fabs(new_total_weight - total_weight) / total_weight >
+      Sampling::EPSILON) {
     RATELIMIT_ERROR(
         std::chrono::seconds(10),
         2,
@@ -648,6 +652,7 @@ WeightedCopySetSelector::select(copyset_size_t extras,
   // Need to make a copy in case we'll detach local domain - don't want to
   // cache that.
   AdjustedHierarchy hierarchy = cache.adjusted_hierarchy.value();
+  const double total_weight = hierarchy_.root.weights.totalWeight();
 
   bool biased = false;
   copyset_chain_t copyset_chain(replication_);
@@ -750,7 +755,8 @@ WeightedCopySetSelector::select(copyset_size_t extras,
     // Select copyset.
 
     double outside_weight = hierarchy.getRoot().getWeights().totalWeight();
-    if (secondary_replication_ > 1 && outside_weight <= Sampling::EPSILON) {
+    if (secondary_replication_ > 1 &&
+        outside_weight <= Sampling::EPSILON * total_weight) {
       return ret = retry_or_complain_on_too_many_unavailable();
     }
 
@@ -1378,7 +1384,8 @@ size_t WeightedCopySetSelector::selectCrossDomain(size_t num_domains,
       // One of the initially picked domains. We already took all nodes from it.
       continue;
     }
-    if (domain.getWeights().weight(subdomain_idx) < Sampling::EPSILON) {
+    if (domain.getWeights().weight(subdomain_idx) <
+        Sampling::EPSILON * hierarchy_.root.weights.totalWeight()) {
       // Nothing pickable here.
       continue;
     }
@@ -1476,12 +1483,35 @@ bool WeightedCopySetSelector::AdjustedHierarchy::setDomainDetached(
   if (level == 0) {
     return false; // Not much point in detaching the root.
   }
+  const double total_weight = base_->root.weights.totalWeight();
 
-  folly::small_vector<std::pair<DomainAdjustment*, size_t>, 4> to_adjust;
+  // The part of the tree that we'll need to update is the path from our domain
+  // to its lowest detached ancestor. If none of the ancestors are detached, to
+  // the root. to_adjust is the list of edges on that path, ordered from bigger
+  // to smaller domains.
+  folly::small_vector<std::tuple<const Domain*, DomainAdjustment*, size_t>, 4>
+      to_adjust;
+
+  // If we're detaching our domain, all weights on that path need to be
+  // decreased by the weight of our domain; if we're attaching - increased.
+  // weight_delta is the signed value that needs to be added to each weight on
+  // the path (so it's negative iff detach is true).
+  double weight_delta = 1e200;
+
+  // If some domain's weight (adjustment) became zero, we should remove
+  // that domain from the tree (of adjustments) to keep the tree small and
+  // efficient. More precisely, we maintain the invariant that a
+  // DomainAdjustment exists in the tree iff it has at least one detached
+  // descendant, or if it's itself detached. If we're re-attaching a domain with
+  // no detached descendants, we should remove it from the tree, and potentially
+  // remove some of its ancestors as well (a suffix of to_adjust).
+  // In this case `removed` is set to true.
+  bool removed = false;
+
   const Domain* domain = &base_->root;
   DomainAdjustment* adj = &root_diff_;
-  double weight_delta = 1e200;
-  for (size_t i = 0; i < level; ++i) {
+  // Go from root to our grandparent, creating missing domains along the way.
+  for (size_t i = 0; i + 1 < level; ++i) {
     if (adj->is_detached) {
       // If our domain is inside a detached subtree, only update weights within
       // this subtree.
@@ -1489,81 +1519,145 @@ bool WeightedCopySetSelector::AdjustedHierarchy::setDomainDetached(
     }
 
     size_t idx = path[i];
+    to_adjust.emplace_back(domain, adj, idx);
+    domain = &domain->subdomains[idx];
+    adj = &adj->subdomains[idx];
+  }
 
-    if (i + 1 == level) {
-      if (domain->subdomains.empty()) {
-        // We're disabling/enabling a node.
+  // Look at our parent.
 
-        if (detach) {
-          // If we're disabling a node, subtract its current (adjusted)
-          // weight from its weight and weight of all its ancestor domains.
-          weight_delta =
-              -AdjustedProbabilityDistribution(&domain->weights, &adj->weights)
-                   .weight(idx);
-          to_adjust.emplace_back(adj, idx);
-        } else {
-          // If we're enabling a node, revert its current weight adjustment
-          // and subtract the same adjustment from weight of all its ancestors.
-          weight_delta = -adj->weights.revert(idx);
-        }
+  size_t idx = path[level - 1];
 
-        if (fabs(weight_delta) <= Sampling::EPSILON) {
-          return false;
-        }
-      } else {
-        // We're detaching/attaching a domain.
+  if (adj->is_detached) {
+    to_adjust.clear();
+  }
+
+  if (domain->subdomains.empty()) {
+    // We're disabling/enabling a node.
+
+    bool is_detached = adj->weights.isWeightUpdated(idx);
+    if (is_detached == detach) {
+      return false;
+    }
+
+    if (detach) {
+      // If we're disabling a node, subtract its current (adjusted)
+      // weight from its weight and weight of all its ancestor domains.
+      weight_delta =
+          -AdjustedProbabilityDistribution(&domain->weights, &adj->weights)
+               .weight(idx);
+      to_adjust.emplace_back(domain, adj, idx);
+    } else {
+      // If we're enabling a node, revert its current weight adjustment
+      // and subtract the same adjustment from weight of all its ancestors.
+      weight_delta = -adj->weights.revert(idx);
+      // If there are no detached nodes left in this domain, remove it from
+      // the parent domain.
+      removed = adj->weights.numUpdatedWeights() == 0;
+    }
+  } else {
+    // We're detaching/attaching a non-leaf domain.
 
 #ifndef NDEBUG // assert some consistency of weights
-        double w =
-            AdjustedProbabilityDistribution(&domain->weights, &adj->weights)
-                .weight(idx);
-        if (adj->subdomains[idx].is_detached) {
-          // Detached domain must have zero weight in parent.
-          ld_check(fabs(w) < 1e-8);
-        } else {
-          // Non-detached domain must have weight equal to sum of weights of
-          // its children.
-          double w2 =
-              AdjustedProbabilityDistribution(&domain->subdomains[idx].weights,
-                                              &adj->subdomains[idx].weights)
-                  .totalWeight();
-          ld_check(fabs(w - w2) < 1e-8);
-        }
+    double w = AdjustedProbabilityDistribution(&domain->weights, &adj->weights)
+                   .weight(idx);
+    if (adj->subdomains[idx].is_detached) {
+      // Detached domain must have zero weight in parent.
+      ld_check(fabs(w) < Sampling::EPSILON * total_weight);
+    } else {
+      // Non-detached domain must have weight equal to sum of weights of
+      // its children.
+      double w2 =
+          AdjustedProbabilityDistribution(
+              &domain->subdomains[idx].weights, &adj->subdomains[idx].weights)
+              .totalWeight();
+      ld_check(fabs(w - w2) < Sampling::EPSILON * total_weight);
+    }
 #endif
 
-        to_adjust.emplace_back(adj, idx);
-        domain = &domain->subdomains[idx];
-        adj = &adj->subdomains[idx];
+    to_adjust.emplace_back(domain, adj, idx);
 
-        if (adj->is_detached == detach) {
-          return false;
-        }
-        adj->is_detached = detach;
+    // Go to the domain we're detaching/attaching.
+    domain = &domain->subdomains[idx];
+    adj = &adj->subdomains[idx];
 
-        weight_delta =
-            AdjustedProbabilityDistribution(&domain->weights, &adj->weights)
-                .totalWeight();
-        if (detach) {
-          // If we're detaching this subtree, subtract its weight from all
-          // ancestors, if attaching - add.
-          weight_delta *= -1;
-        }
-      }
-    } else {
-      to_adjust.emplace_back(adj, idx);
-      domain = &domain->subdomains[idx];
-      adj = &adj->subdomains[idx];
+    if (adj->is_detached == detach) {
+      return false;
+    }
+    adj->is_detached = detach;
+
+    weight_delta =
+        AdjustedProbabilityDistribution(&domain->weights, &adj->weights)
+            .totalWeight();
+    if (detach) {
+      // If we're detaching this subtree, subtract its weight from all
+      // ancestors, if attaching - add.
+      weight_delta = -weight_delta;
+    }
+    if (!detach && adj->subdomains.empty()) {
+      // We're reattaching a domain that doesn't have any weight adjustments
+      // in its whole subtree. Remove the domain from the tree of adjustments.
+      removed = true;
     }
   }
 
-  ld_check(weight_delta < 1e150); // must be assigned on last iteration of loop
-  if (fabs(weight_delta) > Sampling::EPSILON) {
-    for (const auto& p : to_adjust) {
-      p.first->weights.addWeight(p.second, weight_delta);
+  ld_check(weight_delta < 1e150); // must have been assigned
+
+  // Update the weights of ancestor domains, from smaller to bigger.
+  std::reverse(to_adjust.begin(), to_adjust.end());
+  bool correcting_accumulated_error = false;
+  for (const auto& tup : to_adjust) {
+    std::tie(domain, adj, idx) = tup;
+    if (removed) {
+      double former_weight = adj->weights.revert(idx);
+      ld_check(fabs(former_weight + weight_delta) <
+               Sampling::EPSILON * total_weight);
+      size_t erased = adj->subdomains.erase(idx);
+      ld_check(erased);
+      removed = adj->subdomains.empty();
+    } else {
+      adj->weights.addWeight(idx, weight_delta);
+    }
+
+    // If this domain's `weights` went through a lot of incremental adjustments,
+    // refresh them for better floating point precision.
+    if (!removed &&
+        (correcting_accumulated_error ||
+         ++adj->numerical_error_accumulated > 100)) {
+      adj->correctAccumulatedNumericalError(domain);
+      correcting_accumulated_error = true;
+      adj->numerical_error_accumulated = 0;
     }
   }
 
   return true;
+}
+
+void WeightedCopySetSelector::DomainAdjustment::
+    correctAccumulatedNumericalError(const Domain* domain) {
+  if (domain->subdomains.empty()) {
+    // Leaf.
+    return;
+  }
+  ld_check_eq(weights.numUpdatedWeights(), subdomains.size());
+
+  double former_total_weight = weights.totalAddedWeight();
+  weights.clear();
+  for (auto& p : subdomains) {
+    double w;
+    if (p.second.is_detached) {
+      w = -domain->weights.weight(p.first);
+    } else {
+      w = p.second.weights.totalAddedWeight();
+    }
+
+    // This insert takes O(1) time because we're inserting in order of
+    // increasing key.
+    weights.addWeight(p.first, w);
+  }
+  double new_total_weight = weights.totalAddedWeight();
+  ld_check(fabs(new_total_weight - former_total_weight) <=
+           Sampling::EPSILON * domain->weights.totalWeight());
 }
 
 std::string WeightedCopySetSelector::Domain::toString() const {

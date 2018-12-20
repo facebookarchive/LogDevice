@@ -49,6 +49,18 @@ enum class Result {
   IMPOSSIBLE,
 };
 
+// An arbitrary threshold for comparing floating-point numbers for equality.
+//
+// A note on usage of EPSILON in Sampling and WeightedCopySetSelector:
+// We want the algorithms to be insensitive to scale of the input numbers.
+// E.g. if you multiply weights of all nodes by a trillion (e.g. switch from
+// expressing weights in terabytes to bytes), it shouldn't change the behavior
+// of copyset selector.
+// To achieve that, we use EPSILON as the threshold for either for _relative_
+// difference between numbers, or for difference normalized by total weight
+// or something like that. E.g. maybe instead of `fabs(x - y) < EPSILON` you'd
+// do `fabs(x / y - 1) < EPSILON` if y is never close to zero, or maybe
+// `fabs(x - y) < total_weight_of_nodes_in_the_cluster * EPSILON`
 constexpr double EPSILON = 1e-9;
 
 // The sampling functions are templated by the probability distribution
@@ -137,6 +149,11 @@ class ProbabilityDistribution {
 
   double totalWeight() const;
 
+  // See totalUnadjustedWeight() in AdjustedProbabilityDistribution.
+  double totalUnadjustedWeight() const {
+    return totalWeight();
+  }
+
   std::string toString() const;
 
  private:
@@ -172,12 +189,19 @@ class ProbabilityDistributionAdjustment {
   size_t numUpdatedWeights() const {
     return added_cumsum_.size();
   }
+  // True if the weight at given index was adjusted, i.e. if addWeight() has
+  // been called and revert() hasn't.
+  bool isWeightUpdated(size_t idx) {
+    return added_cumsum_.count(idx) != 0;
+  }
 
   // O(numUpdatedWeights()). `delta` can be negative.
   void addWeight(size_t idx, double delta);
   // O(numUpdatedWeights()).
   // Returns the added weight that this idx used to have.
   double revert(size_t idx);
+
+  void clear();
 
   // O(log numUpdatedWeights()).
   double prefixSum(size_t count) const;
@@ -213,6 +237,19 @@ class AdjustedProbabilityDistribution {
   // O(1).
   double totalWeight() const;
 
+  // Total weight before applying adjustments.
+  // Used as a scaling factor when comparing adjusted weights to zero
+  // using EPSILON.
+  // Example: when sampling from adjusted distribution {1 - 0.99, 2 - 0}, it
+  // makes sense to consider the first 0.01 weight "nonzero", but when sampling
+  // from {1e12 - (1e12-0.01), 2e12}, the first 0.01 weight is probably
+  // a rounding error and should be considered zero.
+  // Unadjusted weight is better for this purpose because it works even if all
+  // weights are adjusted to zero and all adjusted weights are rounding error.
+  double totalUnadjustedWeight() const {
+    return base_->totalWeight();
+  }
+
   std::string toString() const;
 
  private:
@@ -241,14 +278,15 @@ Sampling::Result sampleOne(const D& distribution, size_t* out_idx, RNG& rng) {
   double sum_begin = distribution.prefixSum(0);
   double sum_end = distribution.prefixSum(size);
   double total_weight = sum_end - sum_begin;
-  ld_check(total_weight >= -EPSILON);
-  if (total_weight <= EPSILON) {
+  const double scaled_epsilon = EPSILON * distribution.totalUnadjustedWeight();
+  ld_check(total_weight >= -scaled_epsilon);
+  if (total_weight <= scaled_epsilon) {
     return Result::IMPOSSIBLE;
   }
   ld_check(size > 0);
   double point = sum_begin + total_weight * folly::Random::randDouble01(rng);
   size_t x = distribution.findPrefixBySum(point);
-  if (x < size && distribution.weight(x) > EPSILON) {
+  if (x < size && distribution.weight(x) > scaled_epsilon) {
     // The most likely case.
     *out_idx = x;
     return Result::OK;
@@ -256,7 +294,7 @@ Sampling::Result sampleOne(const D& distribution, size_t* out_idx, RNG& rng) {
   // We've hit some zero-weight item, presumably because of rounding errors.
   // Let's find a positive-weight item to return.
   for (size_t steps = 0; steps < size; ++steps) {
-    if (distribution.weight((x + steps) % size) > EPSILON) {
+    if (distribution.weight((x + steps) % size) > scaled_epsilon) {
       *out_idx = x;
       return Result::OK;
     }
@@ -302,9 +340,10 @@ Sampling::Result sampleMulti(const D& distribution,
   double sum_begin = distribution.prefixSum(0);
   double sum_end = distribution.prefixSum(size);
   double total_weight = sum_end - sum_begin;
+  double scaled_epsilon = EPSILON * distribution.totalUnadjustedWeight();
 
-  ld_check(total_weight >= -EPSILON);
-  if (total_weight <= EPSILON) {
+  ld_check(total_weight >= -scaled_epsilon);
+  if (total_weight <= scaled_epsilon) {
     return Result::IMPOSSIBLE;
   }
   ld_check(size != 0);
@@ -324,8 +363,8 @@ Sampling::Result sampleMulti(const D& distribution,
     }
 
     double weight = distribution.weight(x);
-    if (weight <= EPSILON) {
-      ld_check(weight >= -EPSILON);
+    if (weight <= scaled_epsilon) {
+      ld_check(weight >= -scaled_epsilon);
       continue;
     }
 
@@ -338,7 +377,7 @@ Sampling::Result sampleMulti(const D& distribution,
 
     if (mode == Mode::AT_LEAST_ONCE) {
       double cur_sum = distribution.prefixSum(x);
-      if (cur_sum - prev_sum > EPSILON) {
+      if (cur_sum - prev_sum > scaled_epsilon) {
         // Missed some item.
         missed = true;
       }
@@ -349,7 +388,7 @@ Sampling::Result sampleMulti(const D& distribution,
     prev_x = x;
   }
 
-  if (mode == Mode::AT_LEAST_ONCE && sum_end - prev_sum > EPSILON) {
+  if (mode == Mode::AT_LEAST_ONCE && sum_end - prev_sum > scaled_epsilon) {
     missed = true;
   }
 
@@ -369,14 +408,14 @@ Sampling::Result sampleMulti(const D& distribution,
     bool found_underweight = false;
     for (size_t x = 0; x < size; ++x) {
       double weight = distribution.weight(x);
-      if (weight <= EPSILON) {
-        ld_check(weight >= -EPSILON);
+      if (weight <= scaled_epsilon) {
+        ld_check(weight >= -scaled_epsilon);
         continue;
       }
       if (out_size == count) {
         return Result::IMPOSSIBLE;
       }
-      if (weight < step - EPSILON) {
+      if (weight < step - scaled_epsilon) {
         if (out_over_or_underweight) {
           *out_over_or_underweight = static_cast<T>(x);
         }
@@ -411,8 +450,8 @@ Sampling::Result sampleMulti(const D& distribution,
     for (size_t step_idx = 0; step_idx < size && out_size < count; ++step_idx) {
       size_t x = (offset + step_idx) % size;
       double weight = distribution.weight(x);
-      if (weight <= EPSILON) {
-        assert(weight >= -EPSILON);
+      if (weight <= scaled_epsilon) {
+        assert(weight >= -scaled_epsilon);
         continue;
       }
       if (mode == Mode::AT_MOST_ONCE && was_picked(x)) {
