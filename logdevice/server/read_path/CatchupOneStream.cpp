@@ -22,6 +22,7 @@
 #include "logdevice/common/Metadata.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/ServerRecordFilter.h"
+#include "logdevice/common/configuration/InternalLogs.h"
 #include "logdevice/common/protocol/GAP_Message.h"
 #include "logdevice/common/protocol/RECORD_Message.h"
 #include "logdevice/common/protocol/STARTED_Message.h"
@@ -66,12 +67,17 @@ class ReadLngTask final : public StorageTask {
   ReadLngTask(ServerReadStream* stream,
               WeakRef<CatchupQueue> catchup_queue,
               epoch_t epoch,
-              StatsHolder* stats);
+              StatsHolder* stats,
+              ThreadType thread_type,
+              Priority priority);
   void execute() override;
   void onDone() override;
   void onDropped() override;
   ThreadType getThreadType() const override {
-    return ThreadType::SLOW;
+    return thread_type_;
+  }
+  Priority getPriority() const override {
+    return priority_;
   }
   Principal getPrincipal() const override {
     return Principal::METADATA;
@@ -81,6 +87,8 @@ class ReadLngTask final : public StorageTask {
   WeakRef<ServerReadStream> stream_;
   WeakRef<CatchupQueue> catchup_queue_;
   StatsHolder* const stats_;
+  ThreadType thread_type_;
+  Priority priority_;
   const epoch_t epoch_;
   Status status_;
   lsn_t last_known_good_;
@@ -532,8 +540,12 @@ OffsetMap ReadingCallback::getEpochOffsets(epoch_t record_epoch,
       // Proceed to reading on storage thread.
     }
 
-    auto task = std::make_unique<EpochOffsetStorageTask>(
-        stream_->createRef(), stream_->log_id_, record_epoch);
+    auto prio = catchup_->getPriorityForStorageTasks();
+    auto task = std::make_unique<EpochOffsetStorageTask>(stream_->createRef(),
+                                                         stream_->log_id_,
+                                                         record_epoch,
+                                                         std::get<1>(prio),
+                                                         std::get<2>(prio));
 
     stream_->epoch_task_in_flight = true;
     ServerWorker::onThisThread()
@@ -1366,17 +1378,13 @@ void CatchupOneStream::readOnStorageThread(
     read_iterator = stream_->iterator_cache_->createOrGet(options);
   }
 
-  // All streams not identified as for low-priority backlog readers are
-  // considered realtime (i.e. READ_TAIL and RECOVERY).
-  bool is_tailer = (stream_->trafficClass() != TrafficClass::READ_BACKLOG);
-  StorageTaskType type = is_tailer ? StorageTask::Type::READ_TAIL
-                                   : StorageTask::Type::READ_BACKLOG;
   // Get worker. May be nullptr in unit tests.
   ServerWorker* w = ServerWorker::onThisThread(false);
   Sockaddr client_address;
   if (w) {
     client_address = w->sender().getSockaddr(Address(stream_->client_id_));
   }
+  auto prio = getPriorityForStorageTasks();
   auto task_uniq = std::make_unique<ReadStorageTask>(stream_->createRef(),
                                                      std::move(catchup_queue),
                                                      stream_->version_,
@@ -1384,8 +1392,10 @@ void CatchupOneStream::readOnStorageThread(
                                                      read_ctx,
                                                      options,
                                                      read_iterator,
-                                                     is_tailer,
-                                                     type,
+                                                     std::get<0>(prio),
+                                                     std::get<1>(prio),
+                                                     std::get<2>(prio),
+                                                     std::get<3>(prio),
                                                      client_address);
 
   deps_.putStorageTask(std::move(task_uniq), stream_->shard_);
@@ -1880,6 +1890,51 @@ CatchupOneStream::createReadContext(lsn_t last_released_lsn,
   return read_ctx;
 }
 
+std::tuple<StorageTaskType,
+           StorageTaskThreadType,
+           StorageTaskPriority,
+           StorageTaskPrincipal>
+CatchupOneStream::getPriorityForStorageTasks() {
+  bool metadata = MetaDataLog::isMetaDataLog(stream_->log_id_) ||
+      configuration::InternalLogs::isInternal(stream_->log_id_);
+  bool internal = stream_->is_internal_;
+  bool tail = stream_->trafficClass() != TrafficClass::READ_BACKLOG;
+
+  StorageTaskType type;
+  StorageTaskPriority priority;
+  StorageTaskPrincipal principal;
+  if (metadata) {
+    if (internal) {
+      return std::make_tuple(StorageTaskType::READ_METADATA_INTERNAL,
+                             StorageTaskThreadType::DEFAULT,
+                             StorageTaskPriority::HIGH,
+                             StorageTaskPrincipal::READ_INTERNAL);
+    } else {
+      return std::make_tuple(StorageTaskType::READ_METADATA_NORMAL,
+                             StorageTaskThreadType::DEFAULT,
+                             StorageTaskPriority::MID,
+                             StorageTaskPrincipal::READ_TAIL);
+    }
+  } else {
+    if (internal) {
+      return std::make_tuple(StorageTaskType::READ_INTERNAL,
+                             StorageTaskThreadType::SLOW,
+                             StorageTaskPriority::VERY_HIGH,
+                             StorageTaskPrincipal::READ_INTERNAL);
+    } else if (tail) {
+      return std::make_tuple(StorageTaskType::READ_TAIL,
+                             StorageTaskThreadType::SLOW,
+                             StorageTaskPriority::HIGH,
+                             StorageTaskPrincipal::READ_TAIL);
+    } else {
+      return std::make_tuple(StorageTaskType::READ_BACKLOG,
+                             StorageTaskThreadType::SLOW,
+                             StorageTaskPriority::MID,
+                             StorageTaskPrincipal::READ_BACKLOG);
+    }
+  }
+}
+
 int CatchupOneStream::readLastKnownGood(WeakRef<CatchupQueue> catchup_queue,
                                         bool allow_storage_task) {
   ServerReadStream& stream = *stream_;
@@ -1996,9 +2051,14 @@ int CatchupOneStream::readLastKnownGood(WeakRef<CatchupQueue> catchup_queue,
       if (allow_storage_task) {
         ld_check(!stream.storage_task_in_flight_);
         stream.storage_task_in_flight_ = true;
+        auto prio = getPriorityForStorageTasks();
         w->getStorageTaskQueueForShard(stream.shard_)
-            ->putTask(std::make_unique<ReadLngTask>(
-                stream_, std::move(catchup_queue), epoch, stats));
+            ->putTask(std::make_unique<ReadLngTask>(stream_,
+                                                    std::move(catchup_queue),
+                                                    epoch,
+                                                    stats,
+                                                    std::get<1>(prio),
+                                                    std::get<2>(prio)));
       }
       return -1;
   }
@@ -2009,11 +2069,15 @@ namespace {
 ReadLngTask::ReadLngTask(ServerReadStream* stream,
                          WeakRef<CatchupQueue> catchup_queue,
                          epoch_t epoch,
-                         StatsHolder* stats)
+                         StatsHolder* stats,
+                         ThreadType thread_type,
+                         Priority priority)
     : StorageTask(StorageTask::Type::READ_LNG),
       stream_(stream->createRef()),
       catchup_queue_(std::move(catchup_queue)),
       stats_(stats),
+      thread_type_(thread_type),
+      priority_(priority),
       epoch_(epoch),
       status_(E::UNKNOWN),
       last_known_good_(LSN_INVALID) {}

@@ -401,7 +401,15 @@ class ServerReadStream : boost::noncopyable {
    * In this case GetSeqStateRequest should be send to get epoch_offset without
    * blocking reading.
    */
-  bool include_byte_offset_;
+  bool include_byte_offset_ = false;
+
+  /**
+   * true if the reader is a logdevice server. This means the stream is probably
+   * important for the cluster to work properly - e.g. it may be a recovery
+   * digest stream, or a server tailing event log, or a server reading config
+   * log on startup. Such streams are prioritized over others.
+   */
+  bool is_internal_ = false;
 
   /**
    * Indicate that EpochOffsetTask was sent and still in process.
@@ -513,6 +521,12 @@ class ServerReadStream : boost::noncopyable {
   bool local_scd_enabled_;
 
   /**
+   * Set to true if this ServerReadStream sees itself in the known down list,
+   * which indicates that the client thinks the shard is down or too slow.
+   */
+  bool self_in_known_down_ = false;
+
+  /**
    * Copyset reordering approach to use in SCD, specified by the client.  See
    * SCDCopysetReordering.h and LocalLogStoreReader.{h,cpp} for details.
    */
@@ -529,12 +543,6 @@ class ServerReadStream : boost::noncopyable {
    * Only used if scd_enabled_ is set to true.
    */
   small_shardset_t known_down_;
-
-  /**
-   * Set to true if this ServerReadStream sees itself in the known down list,
-   * which indicates that the client thinks the shard is down or too slow.
-   */
-  bool self_in_known_down_ = false;
 
   // ServerReadStream are destroyed in Worker::finishWorkAndCloseSockets()
   std::vector<std::shared_ptr<ReleasedRecords>> released_records_;

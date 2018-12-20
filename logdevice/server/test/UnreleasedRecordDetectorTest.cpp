@@ -187,7 +187,7 @@ void UnreleasedRecordDetectorTest::SetUp() {
   params[(size_t)StorageTaskThreadType::SLOW].nthreads = 1;
   params[(size_t)StorageTaskThreadType::FAST_TIME_SENSITIVE].nthreads = 1;
   params[(size_t)StorageTaskThreadType::FAST_STALLABLE].nthreads = 1;
-  params[(size_t)StorageTaskThreadType::METADATA].nthreads = 1;
+  params[(size_t)StorageTaskThreadType::DEFAULT].nthreads = 1;
   sharded_store_ = std::make_shared<TemporaryShardedStore>();
   sharded_storage_thread_pool_ = std::make_unique<ShardedStorageThreadPool>(
       sharded_store_.get(),

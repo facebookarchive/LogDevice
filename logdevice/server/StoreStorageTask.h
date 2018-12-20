@@ -82,10 +82,6 @@ class StoreStorageTask : public WriteStorageTask {
                        : ThreadType::FAST_TIME_SENSITIVE;
   }
 
-  Priority getPriority() const override {
-    return Priority::HIGH;
-  }
-
   size_t getPayloadSize() const override;
 
   size_t getNumWriteOps() const override;

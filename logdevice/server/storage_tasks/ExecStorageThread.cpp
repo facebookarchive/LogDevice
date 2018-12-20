@@ -28,7 +28,7 @@ void ExecStorageThread::run() {
   auto settings = pool_->getSettings().get();
   // both slow and metadata threads are using the lower io priority
   if ((thread_type_ == StorageTask::ThreadType::SLOW ||
-       thread_type_ == StorageTask::ThreadType::METADATA) &&
+       thread_type_ == StorageTask::ThreadType::DEFAULT) &&
       settings->slow_ioprio.hasValue()) {
     set_io_priority_of_this_thread(settings->slow_ioprio.value());
   }

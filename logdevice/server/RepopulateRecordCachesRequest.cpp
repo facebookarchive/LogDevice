@@ -64,8 +64,9 @@ Request::Execution RepopulateRecordCachesRequest::execute() {
       continue;
     }
 
-    auto task = std::unique_ptr<StorageTask>(new RecordCacheRepopulationTask(
-        shard_idx, ref_holder_.ref(), repopulate_record_caches_));
+    std::unique_ptr<StorageTask> task =
+        std::make_unique<RecordCacheRepopulationTask>(
+            shard_idx, ref_holder_.ref(), repopulate_record_caches_);
     w->getStorageTaskQueueForShard(shard_idx)->putTask(std::move(task));
   }
 

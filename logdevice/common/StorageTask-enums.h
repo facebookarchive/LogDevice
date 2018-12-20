@@ -38,8 +38,7 @@ std::string toString(const StorageTaskType& x);
 // StorageTask.
 enum class StorageTaskThreadType : uint8_t {
   // These threads execute tasks that may take longer to complete (because
-  // they need to do disk I/O, for example), such as reads, findtime, or
-  // synced writes
+  // they need to do disk I/O, for example), such as reads and findtime.
   SLOW = 0,
   // Threads which execute low-priority writes. If the total write
   // rate is higher than the disk can sustain, these threads get stalled
@@ -55,7 +54,7 @@ enum class StorageTaskThreadType : uint8_t {
   // These threads execute mostly metadata operations (w/ few execeptions of
   // data operations related to log recovery), which are usually of
   // higher priority than tasks in SLOW threads.
-  METADATA = 3,
+  DEFAULT = 3,
   MAX
 };
 

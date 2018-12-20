@@ -136,7 +136,7 @@ void ServerWorker::subclassWorkFinished() {
     q->drop(StorageTask::ThreadType::SLOW);
     q->drop(StorageTask::ThreadType::FAST_STALLABLE);
     q->drop(StorageTask::ThreadType::FAST_TIME_SENSITIVE);
-    q->drop(StorageTask::ThreadType::METADATA);
+    q->drop(StorageTask::ThreadType::DEFAULT);
   }
 }
 

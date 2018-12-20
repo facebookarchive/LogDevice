@@ -20,7 +20,6 @@ namespace facebook { namespace logdevice {
 // maximum allowed number of storage threads to run
 #define STORAGE_THREADS_MAX 10000
 
-
 static void validate_storage_threads(const char* name, int value, int min) {
   if (value < min || value > STORAGE_THREADS_MAX) {
     char buf[1024];
@@ -250,18 +249,19 @@ void ServerSettings::defineSettings(SettingEasyInit& init) {
      SERVER | REQUIRES_RESTART,
      SettingsCategory::Storage)
 
-    ("storage-threads-per-shard-metadata",
-     &storage_pool_params[(size_t)ThreadType::METADATA].nthreads,
+    ("storage-threads-per-shard-default",
+     &storage_pool_params[(size_t)ThreadType::DEFAULT].nthreads,
      "2",
      [](int val) {
-      validate_storage_threads("storage-threads-per-shard-metadata", val, 0);
+       validate_storage_threads("storage-threads-per-shard-default", val, 0);
      },
-     "size of the storage thread pool for metadata writes, per shard. "
-     "If zero, the 'slow' pool will handle metadata writing tasks. ",
+     "size of the storage thread pool for small client requests and metadata "
+     "operations, per shard. If zero, the 'slow' pool will be used for such "
+     "tasks. ",
      SERVER | REQUIRES_RESTART,
      SettingsCategory::Storage)
 
-    // For backward compatibility
+     // For backward compatibility
     ("storage-threads-per-shard",
      &storage_pool_params[(size_t)ThreadType::SLOW].nthreads,
      "4",

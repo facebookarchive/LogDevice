@@ -34,8 +34,8 @@ class RecoverSealTask : public StorageTask {
   void onDone() override;
   void onDropped() override;
 
-  ThreadType getThreadType() const override {
-    return ThreadType::METADATA;
+  Priority getPriority() const override {
+    return Priority::HIGH;
   }
 
  private:

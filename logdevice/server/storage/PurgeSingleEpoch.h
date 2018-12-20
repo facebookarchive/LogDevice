@@ -146,8 +146,8 @@ class PurgeDeleteRecordsStorageTask : public StorageTask {
                    TraceLogger* logger);
   void onDone() override;
   void onDropped() override;
-  ThreadType getThreadType() const override {
-    return ThreadType::METADATA;
+  Priority getPriority() const override {
+    return Priority::HIGH;
   }
 
   Durability durability() const override {
@@ -189,8 +189,8 @@ class PurgeWriteEpochRecoveryMetadataStorageTask : public StorageTask {
   void executeImpl(LocalLogStore& store);
   void onDone() override;
   void onDropped() override;
-  ThreadType getThreadType() const override {
-    return ThreadType::METADATA;
+  Priority getPriority() const override {
+    return Priority::HIGH;
   }
 
  private:

@@ -30,6 +30,10 @@ class CompactionStorageTask : public StorageTask {
         shard_idx_(idx),
         callback_(callback) {}
 
+  ThreadType getThreadType() const override {
+    return ThreadType::SLOW;
+  }
+
   Principal getPrincipal() const override {
     return Principal::METADATA;
   }

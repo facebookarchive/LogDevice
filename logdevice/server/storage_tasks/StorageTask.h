@@ -130,8 +130,7 @@ class StorageTask {
    * Threads of what type should run this task?
    */
   virtual ThreadType getThreadType() const {
-    // all tasks execute on slow threads by default
-    return ThreadType::SLOW;
+    return ThreadType::DEFAULT;
   }
 
   /**
@@ -291,8 +290,8 @@ class StorageTask {
       case StorageTask::ThreadType::SLOW:                       \
         STAT_ADD((stats), prefix##_slow, (val));                \
         break;                                                  \
-      case StorageTask::ThreadType::METADATA:                   \
-        STAT_ADD((stats), prefix##_metadata, (val));            \
+      case StorageTask::ThreadType::DEFAULT:                    \
+        STAT_ADD((stats), prefix##_default, (val));             \
         break;                                                  \
       case StorageTask::ThreadType::MAX:                        \
         ld_check(false);                                        \

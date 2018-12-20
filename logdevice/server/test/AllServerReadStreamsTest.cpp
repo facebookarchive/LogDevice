@@ -240,8 +240,10 @@ TEST(AllServerReadStreams, ReadStorageTasksMemoryLimit) {
         read_ctx,
         options,
         it,
-        /* is_tailer */ false,
-        StorageTask::Type::READ_BACKLOG);
+        StorageTaskType::READ_TAIL,
+        StorageTaskThreadType::SLOW,
+        StorageTaskPriority::MID,
+        StorageTaskPrincipal::READ_TAIL);
     task->total_bytes_ = bytes;
     return task;
   };

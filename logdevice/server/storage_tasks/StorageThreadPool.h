@@ -224,7 +224,7 @@ class StorageThreadPool {
   const int nthreads_slow_;
   const int nthreads_fast_stallable_;
   const int nthreads_fast_time_sensitive_;
-  const int nthreads_metadata_;
+  const int nthreads_default_;
   const bool useDRR_;
 
   std::vector<std::unique_ptr<ExecStorageThread>> exec_threads_;

@@ -329,7 +329,8 @@ int LogStorageState::recover(std::chrono::microseconds interval,
 
   // If we haven't yet tried to read from the local log store, try that.
   if (recover_from_store && !recover_log_state_task_in_flight_.exchange(true)) {
-    std::unique_ptr<StorageTask> task(new RecoverLogStateTask(log_id_));
+    std::unique_ptr<StorageTask> task =
+        std::make_unique<RecoverLogStateTask>(log_id_);
     w->getStorageTaskQueueForShard(shard_)->putTask(std::move(task));
   }
 
@@ -353,8 +354,8 @@ int LogStorageState::recoverSeal(seal_callback_t callback) {
     return -1;
   }
 
-  std::unique_ptr<StorageTask> task(
-      new RecoverSealTask(log_id_, std::move(callback)));
+  std::unique_ptr<StorageTask> task =
+      std::make_unique<RecoverSealTask>(log_id_, std::move(callback));
   ServerWorker::onThisThread()->getStorageTaskQueueForShard(shard_)->putTask(
       std::move(task));
 

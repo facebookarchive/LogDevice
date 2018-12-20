@@ -36,6 +36,12 @@ class RecoverLogStateTask : public StorageTask {
   void onDone() override;
   void onDropped() override;
 
+  Priority getPriority() const override {
+    // There can be at most one of these tasks per log per server process's
+    // lifetime.
+    return Priority::HIGH;
+  }
+
   // We can't afford to lose these tasks (and there's nothing better than to
   // retry internally), mark them non-droppable.  We don't expect to have many
   // of these in the steady state; O(1) per log per process.

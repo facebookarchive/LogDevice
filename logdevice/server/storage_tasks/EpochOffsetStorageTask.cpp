@@ -24,11 +24,15 @@ namespace facebook { namespace logdevice {
 
 EpochOffsetStorageTask::EpochOffsetStorageTask(WeakRef<ServerReadStream> stream,
                                                logid_t log_id,
-                                               epoch_t epoch)
+                                               epoch_t epoch,
+                                               ThreadType thread_type,
+                                               Priority priority)
     : StorageTask(StorageTask::Type::EPOCH_OFFSET),
       stream_(std::move(stream)),
       log_id_(log_id),
-      epoch_(epoch) {
+      epoch_(epoch),
+      thread_type_(thread_type),
+      priority_(priority) {
   ld_check(stream_);
 }
 

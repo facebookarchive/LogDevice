@@ -35,8 +35,8 @@ const char* storageTaskThreadTypeName(StorageTaskThreadType type) {
       return "fast_time_sensitive";
     case ThreadType::FAST_STALLABLE:
       return "fast_stallable";
-    case ThreadType::METADATA:
-      return "meta";
+    case ThreadType::DEFAULT:
+      return "default";
     case ThreadType::SLOW:
       return "slow";
     case ThreadType::MAX:

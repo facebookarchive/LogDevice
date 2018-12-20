@@ -56,8 +56,10 @@ ReadStorageTask::ReadStorageTask(
     LocalLogStoreReader::ReadContext read_ctx,
     LocalLogStore::ReadOptions options,
     std::weak_ptr<LocalLogStore::ReadIterator> iterator,
-    bool is_tailer,
     StorageTaskType type,
+    ThreadType thread_type,
+    Priority priority,
+    Principal principal,
     Sockaddr client_address)
     : StorageTask(type),
       stream_(std::move(stream)),
@@ -67,7 +69,9 @@ ReadStorageTask::ReadStorageTask(
       read_ctx_(read_ctx),
       options_(options),
       iterator_from_cache_(iterator),
-      is_tailer_(is_tailer) {
+      thread_type_(thread_type),
+      priority_(priority),
+      principal_(principal) {
   ld_check(stream_);
   auto stream_ptr = stream_.get();
   ld_check(stream_ptr);

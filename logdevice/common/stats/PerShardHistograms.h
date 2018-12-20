@@ -66,9 +66,9 @@ struct PerShardHistograms : public PerShardHistogramBundle {
         {"slow_storage_thread_queue_time",
          &storage_threads_queue_time[static_cast<int>(
              StorageTaskThreadType::SLOW)]},
-        {"metadata_storage_thread_queue_time",
+        {"default_storage_thread_queue_time",
          &storage_threads_queue_time[static_cast<int>(
-             StorageTaskThreadType::METADATA)]},
+             StorageTaskThreadType::DEFAULT)]},
 
     // Execution and queueing latencies for storage tasks.
     // See Stats::enumerate() to see how these are published

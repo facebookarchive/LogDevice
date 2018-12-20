@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "logdevice/common/ClientID.h"
+#include "logdevice/common/OffsetMap.h"
 #include "logdevice/common/ResourceBudget.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Err.h"
@@ -20,7 +21,6 @@
 #include "logdevice/server/read_path/LocalLogStoreReader.h"
 #include "logdevice/server/read_path/ServerReadStream.h"
 #include "logdevice/server/storage_tasks/StorageTask.h"
-#include "logdevice/common/OffsetMap.h"
 
 namespace facebook { namespace logdevice {
 
@@ -49,7 +49,9 @@ class EpochOffsetStorageTask : public StorageTask {
    */
   explicit EpochOffsetStorageTask(WeakRef<ServerReadStream> stream,
                                   logid_t log_id,
-                                  epoch_t epoch);
+                                  epoch_t epoch,
+                                  ThreadType thread_type,
+                                  Priority priority);
 
   void execute() override;
 
@@ -60,9 +62,10 @@ class EpochOffsetStorageTask : public StorageTask {
   void releaseRecords();
 
   ThreadType getThreadType() const override {
-    // Read tasks may take a while to execute, so they shouldn't block fast
-    // write operations.
-    return ThreadType::SLOW;
+    return thread_type_;
+  }
+  Priority getPriority() const override {
+    return priority_;
   }
 
   Principal getPrincipal() const override {
@@ -74,6 +77,8 @@ class EpochOffsetStorageTask : public StorageTask {
   WeakRef<ServerReadStream> stream_;
   logid_t log_id_;
   epoch_t epoch_;
+  ThreadType thread_type_;
+  Priority priority_;
 
   Status status_{E::UNKNOWN};
   OffsetMap result_offsets_;

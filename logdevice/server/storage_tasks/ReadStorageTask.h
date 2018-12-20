@@ -50,9 +50,6 @@ class ReadStorageTask : public StorageTask {
    * @param iterator                   Iterator object to be passed to
    *                                   LocalLogStoreReader::read(). If nullptr,
    *                                   a new iterator object will be created.
-   * @param is_tailer                  True if this is a ReadStorageTask for
-   *                                   tailing reads, i.e. it should get higher
-   *                                   priority
    * @param client_address             Address of the client who initiated this
    *                                   read.
    */
@@ -63,8 +60,10 @@ class ReadStorageTask : public StorageTask {
                   LocalLogStoreReader::ReadContext read_ctx,
                   LocalLogStore::ReadOptions options,
                   std::weak_ptr<LocalLogStore::ReadIterator> iterator,
-                  bool is_tailer,
                   StorageTaskType type,
+                  ThreadType thread_type,
+                  Priority priority,
+                  Principal principal,
                   Sockaddr client_address = Sockaddr());
 
   /**
@@ -88,15 +87,15 @@ class ReadStorageTask : public StorageTask {
   ThreadType getThreadType() const override {
     // Read tasks may take a while to execute, so they shouldn't block fast
     // write operations.
-    return ThreadType::SLOW;
+    return thread_type_;
   }
 
   Priority getPriority() const override {
-    return is_tailer_ ? Priority::HIGH : Priority::MID;
+    return priority_;
   }
 
   Principal getPrincipal() const override {
-    return is_tailer_ ? Principal::READ_TAIL : Principal::READ_BACKLOG;
+    return principal_;
   }
 
   // Used to track if the ServerReadStream for which this task is for has been
@@ -130,8 +129,9 @@ class ReadStorageTask : public StorageTask {
   // Used for stats.
   size_t total_bytes_{0};
 
-  // Used to determine the task's priority
-  const bool is_tailer_;
+  ThreadType thread_type_;
+  Priority priority_;
+  Principal principal_;
 
  private:
   void getDebugInfoDetailed(StorageTaskDebugInfo&) const override;

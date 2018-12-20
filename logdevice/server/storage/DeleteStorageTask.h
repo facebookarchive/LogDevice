@@ -27,6 +27,9 @@ class DeleteStorageTask : public WriteStorageTask {
   explicit DeleteStorageTask(const DeleteWriteOp& op)
       : WriteStorageTask(StorageTask::Type::DELETE), write_op_(op) {}
 
+  ThreadType getThreadType() const override {
+    return ThreadType::FAST_TIME_SENSITIVE;
+  }
   Principal getPrincipal() const override {
     return Principal::METADATA;
   }

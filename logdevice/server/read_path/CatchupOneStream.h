@@ -9,6 +9,7 @@
 
 #include <string>
 
+#include "logdevice/common/StorageTask-enums.h"
 #include "logdevice/common/WeakRefHolder.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/EnumMap.h"
@@ -287,6 +288,12 @@ class CatchupOneStream {
                     size_t max_record_bytes_queued,
                     bool first_record_any_size,
                     CatchupEventTrigger catchup_reason);
+
+  std::tuple<StorageTaskType,
+             StorageTaskThreadType,
+             StorageTaskPriority,
+             StorageTaskPrincipal>
+  getPriorityForStorageTasks();
 
   /**
    * Read last known good.

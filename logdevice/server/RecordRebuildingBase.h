@@ -166,9 +166,6 @@ class RecordRebuildingBase : public RecordRebuildingInterface {
     ThreadType getThreadType() const override {
       return ThreadType::FAST_STALLABLE;
     }
-    Priority getPriority() const override {
-      return Priority::LOW;
-    }
     size_t getNumWriteOps() const override {
       return 1;
     }

@@ -94,12 +94,8 @@ class SealStorageTask : public StorageTask {
   void onDone() override;
   void onDropped() override;
 
-  ThreadType getThreadType() const override {
-    // Note that other than metadata access, SealStorageTask can actually
-    // read data key space (i.e., getLastKnownGood()) in case of a record
-    // cache miss. However, we still put it into the metadata thread because
-    // it is a crucial part of log recovery, which affects delivery latency.
-    return ThreadType::METADATA;
+  Priority getPriority() const override {
+    return Priority::HIGH;
   }
 
   // Public for tests

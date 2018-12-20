@@ -80,7 +80,7 @@ StorageThreadPool::StorageThreadPool(
           params[(size_t)ThreadType::FAST_STALLABLE].nthreads),
       nthreads_fast_time_sensitive_(
           params[(size_t)ThreadType::FAST_TIME_SENSITIVE].nthreads),
-      nthreads_metadata_(params[(size_t)ThreadType::METADATA].nthreads),
+      nthreads_default_(params[(size_t)ThreadType::DEFAULT].nthreads),
       useDRR_(settings->storage_tasks_use_drr),
       local_log_store_(local_log_store),
       processor_(nullptr),
@@ -115,7 +115,7 @@ StorageThreadPool::StorageThreadPool(
   static_assert((int)ThreadType::SLOW == 0 &&
                     (int)ThreadType::FAST_STALLABLE == 1 &&
                     (int)ThreadType::FAST_TIME_SENSITIVE == 2 &&
-                    (int)ThreadType::METADATA == 3,
+                    (int)ThreadType::DEFAULT == 3,
                 "");
   static_assert((int)ThreadType::MAX == 4, "");
 
@@ -193,13 +193,13 @@ StorageThreadPool::computeActualQueueSizes(size_t task_queue_size) const {
     // Could be 0 but MPMCQueue doesn't consider it a valid size.
     actual_queue_sizes[(int)ThreadType::FAST_TIME_SENSITIVE] = 1;
   }
-  if (nthreads_metadata_ == 0) {
+  if (nthreads_default_ == 0) {
     actual_queue_sizes[(int)ThreadType::SLOW] +=
-        actual_queue_sizes[(int)ThreadType::METADATA];
+        actual_queue_sizes[(int)ThreadType::DEFAULT];
     // Since we're not configured to run with this type of threads,
     // their queue will be unused. Make it as small as possible.
     // Could be 0 but MPMCQueue doesn't consider it a valid size.
-    actual_queue_sizes[(int)ThreadType::METADATA] = 1;
+    actual_queue_sizes[(int)ThreadType::DEFAULT] = 1;
   }
   return actual_queue_sizes;
 }
@@ -219,7 +219,7 @@ void StorageThreadPool::shutDown(bool persist_record_caches) {
   }
 
   int total_num_threads = nthreads_slow_ + nthreads_fast_stallable_ +
-      nthreads_metadata_ + nthreads_fast_time_sensitive_;
+      nthreads_default_ + nthreads_fast_time_sensitive_;
   auto remaining_threads =
       std::make_shared<std::atomic<int>>(total_num_threads);
   int stop_tasks_enqueued = 0;
@@ -232,8 +232,8 @@ void StorageThreadPool::shutDown(bool persist_record_caches) {
     task_queue.tasks_to_drop.store(ndrop);
 
     for (size_t i = 0; i < nthreads; ++i) {
-      std::unique_ptr<StorageTask> task(new StopExecStorageTask(
-          shard_idx_, remaining_threads, persist_record_caches));
+      std::unique_ptr<StorageTask> task = std::make_unique<StopExecStorageTask>(
+          shard_idx_, remaining_threads, persist_record_caches);
       task->setStorageThreadPool(this);
       if (drr) {
         uint64_t principal = static_cast<uint64_t>(task->getPrincipal());
@@ -260,9 +260,8 @@ void StorageThreadPool::shutDown(bool persist_record_caches) {
   do_stop(taskQueues_[StorageTask::ThreadType::FAST_STALLABLE],
           nthreads_fast_stallable_,
           false);
-  do_stop(taskQueues_[StorageTask::ThreadType::METADATA],
-          nthreads_metadata_,
-          false);
+  do_stop(
+      taskQueues_[StorageTask::ThreadType::DEFAULT], nthreads_default_, false);
   do_stop(taskQueues_[StorageTask::ThreadType::FAST_TIME_SENSITIVE],
           nthreads_fast_time_sensitive_,
           false);
@@ -482,7 +481,7 @@ StorageThreadPool::getThreadType(StorageTask::ThreadType type) const {
       nthreads_fast_time_sensitive_ == 0) {
     type = StorageTask::ThreadType::SLOW;
   }
-  if (type == StorageTask::ThreadType::METADATA && nthreads_metadata_ == 0) {
+  if (type == StorageTask::ThreadType::DEFAULT && nthreads_default_ == 0) {
     type = StorageTask::ThreadType::SLOW;
   }
   return type;

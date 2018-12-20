@@ -341,8 +341,8 @@ class PurgeReadLastCleanTask : public StorageTask {
   void executeImpl(LocalLogStore& store);
   void onDone() override;
   void onDropped() override;
-  ThreadType getThreadType() const override {
-    return ThreadType::METADATA;
+  Priority getPriority() const override {
+    return Priority::HIGH;
   }
 
  private:
@@ -370,8 +370,8 @@ class PurgeWriteLastCleanTask : public StorageTask {
   }
   void onDone() override;
   void onDropped() override;
-  ThreadType getThreadType() const override {
-    return ThreadType::METADATA;
+  Priority getPriority() const override {
+    return Priority::HIGH;
   }
 
  private:

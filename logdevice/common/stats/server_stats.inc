@@ -388,12 +388,12 @@ STAT_DEFINE(storage_tasks_queued, SUM)
 STAT_DEFINE(storage_tasks_dropped_fast_time_sensitive, SUM)
 STAT_DEFINE(storage_tasks_dropped_fast_stallable, SUM)
 STAT_DEFINE(storage_tasks_dropped_slow, SUM)
-STAT_DEFINE(storage_tasks_dropped_metadata, SUM)
+STAT_DEFINE(storage_tasks_dropped_default, SUM)
 // Number of storage tasks picked up by storage threads
 STAT_DEFINE(storage_tasks_dequeued_fast_time_sensitive, SUM)
 STAT_DEFINE(storage_tasks_dequeued_fast_stallable, SUM)
 STAT_DEFINE(storage_tasks_dequeued_slow, SUM)
-STAT_DEFINE(storage_tasks_dequeued_metadata, SUM)
+STAT_DEFINE(storage_tasks_dequeued_default, SUM)
 
 // Number of failures forwarding a message in the delivery chain
 STAT_DEFINE(store_forwarding_failed, SUM)
@@ -1084,7 +1084,7 @@ STAT_DEFINE(max_external_connections, MAX)
 STAT_DEFINE(num_storage_tasks_fast_time_sensitive, SUM)
 STAT_DEFINE(num_storage_tasks_fast_stallable, SUM)
 STAT_DEFINE(num_storage_tasks_slow, SUM)
-STAT_DEFINE(num_storage_tasks_metadata, SUM)
+STAT_DEFINE(num_storage_tasks_default, SUM)
 // Total size of evbuffer pending bytes accross all workers
 STAT_DEFINE(evbuffer_total_size, SUM)
 // Max evbuffer size accross all workers
@@ -1103,7 +1103,7 @@ STAT_DEFINE(rebuilding_waiting_for_recoverable_shards, MAX)
 STAT_DEFINE(storage_task_buffer_size_fast_time_sensitive, SUM)
 STAT_DEFINE(storage_task_buffer_size_fast_stallable, SUM)
 STAT_DEFINE(storage_task_buffer_size_slow, SUM)
-STAT_DEFINE(storage_task_buffer_size_metadata, SUM)
+STAT_DEFINE(storage_task_buffer_size_default, SUM)
 // Total number of appenders
 STAT_DEFINE(num_appenders, SUM)
 // Total size of appenders along with their append messages and payloads

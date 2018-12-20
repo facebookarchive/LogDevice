@@ -207,7 +207,7 @@ TEST(StorageThreadPoolTest, DifferentPriorities) {
   params[(size_t)StorageTaskThreadType::SLOW].nthreads = 1;
   params[(size_t)StorageTaskThreadType::FAST_TIME_SENSITIVE].nthreads = 1;
   params[(size_t)StorageTaskThreadType::FAST_STALLABLE].nthreads = 1;
-  params[(size_t)StorageTaskThreadType::METADATA].nthreads = 1;
+  params[(size_t)StorageTaskThreadType::DEFAULT].nthreads = 1;
   Semaphore sem1;
   TemporaryRocksDBStore store;
 
@@ -259,7 +259,7 @@ TEST(StorageThreadPoolTest, IOPrio) {
   params[(size_t)StorageTaskThreadType::SLOW].nthreads = 1;
   params[(size_t)StorageTaskThreadType::FAST_TIME_SENSITIVE].nthreads = 1;
   params[(size_t)StorageTaskThreadType::FAST_STALLABLE].nthreads = 1;
-  params[(size_t)StorageTaskThreadType::METADATA].nthreads = 1;
+  params[(size_t)StorageTaskThreadType::DEFAULT].nthreads = 1;
 
   TemporaryRocksDBStore store;
   for (int testIter = 0; testIter < 2; testIter++) {
@@ -323,8 +323,8 @@ TEST(StorageThreadPoolTest, IOPrio) {
         });
     ASSERT_EQ(0, pool.tryPutTask(std::move(task)));
 
-    // metadata thread should have the same io priority as the slow thread
-    task = std::make_unique<TestTask>(StorageTask::ThreadType::METADATA, [&]() {
+    // default thread should have the same io priority as the slow thread
+    task = std::make_unique<TestTask>(StorageTask::ThreadType::DEFAULT, [&]() {
       std::pair<int, int> prio(-1, -1);
       int rv = get_io_priority_of_this_thread(&prio);
       EXPECT_EQ(0, rv);
@@ -346,7 +346,7 @@ TEST(StorageThreadPoolTest, BatchLimits) {
   params[(size_t)StorageTaskThreadType::SLOW].nthreads = 1;
   params[(size_t)StorageTaskThreadType::FAST_TIME_SENSITIVE].nthreads = 1;
   params[(size_t)StorageTaskThreadType::FAST_STALLABLE].nthreads = 1;
-  params[(size_t)StorageTaskThreadType::METADATA].nthreads = 1;
+  params[(size_t)StorageTaskThreadType::DEFAULT].nthreads = 1;
   auto limit = init_settings.write_batch_size;
   auto byte_limit = init_settings.write_batch_bytes;
 
