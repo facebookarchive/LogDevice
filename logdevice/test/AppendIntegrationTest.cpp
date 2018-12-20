@@ -207,11 +207,12 @@ TEST_F(AppendIntegrationTest, SyncStorageThreadThrottling) {
   std::map<std::string, int64_t> stats = cluster->getNode(0).stats();
   // expectation values depend on chosen NUM_REQUESTS_AND_LOGS
   // most syncs here come from sequencer activation
+  // note opt mode also affects these numbers i.e. buck with @mode/opt
   int fdatasync = stats["fdatasyncs"];
   int wal_syncs = stats["wal_syncs"];
-  EXPECT_GT(fdatasync, 100);
+  EXPECT_GT(fdatasync, 30);
   EXPECT_LT(fdatasync, 250);
-  EXPECT_GT(wal_syncs, 100);
+  EXPECT_GT(wal_syncs, 30);
   EXPECT_LT(wal_syncs, 250);
 }
 
