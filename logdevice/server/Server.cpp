@@ -534,6 +534,12 @@ bool Server::initListeners() {
                 " since gossip-enabled is not set.");
       } else {
         ld_info("Initializing a gossip listener.");
+        if (params_->getProcessorSettings().get()->ssl_on_gossip_port &&
+            !validateSSLCertificatesExist(
+                params_->getProcessorSettings().get())) {
+          // validateSSLCertificatesExist() should output the error
+          return false;
+        }
         gossip_listener_handle_ = initListener<ConnectionListener>(
             gossip_port,
             gossip_unix_socket,

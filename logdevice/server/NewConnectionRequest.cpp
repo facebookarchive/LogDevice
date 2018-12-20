@@ -16,6 +16,13 @@ namespace facebook { namespace logdevice {
 Request::Execution NewConnectionRequest::execute() {
   Worker* w = Worker::onThisThread();
   ld_check(w != nullptr);
+  std::shared_ptr<const Settings> settings =
+      std::make_shared<const Settings>(w->settings());
+
+  if (sock_type_ == SocketType::GOSSIP && settings->ssl_on_gossip_port) {
+    conntype_ = ConnectionType::SSL;
+  }
+
   int rv = w->sender().addClient(
       fd_, client_addr_, std::move(conn_token_), sock_type_, conntype_);
 

@@ -1032,8 +1032,7 @@ Socket* Sender::initServerSocket(NodeID nid,
         Worker* w = Worker::onThisThread();
         ld_check(w->worker_type_ == WorkerType::FAILURE_DETECTOR);
         if (w->settings().send_to_gossip_port) {
-          // disable ssl for connection to the gossip port
-          use_ssl = false;
+          use_ssl = w->settings().ssl_on_gossip_port;
         }
       }
 

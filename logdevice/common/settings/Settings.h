@@ -257,6 +257,16 @@ struct Settings : public SettingsBundle {
   // gossip port of the receiving server(which now listens on gossip port).
   bool send_to_gossip_port;
 
+  // Enabling this option will caused the gossip port to accept only SSL
+  // connections. This is currently set to false by default. The reason for
+  // adding this option is to allow smooth upgrades while transitioning from
+  // plaintext gossip port to SSL enabled gossip port. While transitioning:
+  // 1. We will keep ssl_on_gossip_port = false, and send_to_gossip_port = false
+  // 2. Then once all gossip messages are being routed through the data port,
+  //    we will set ssl_on_gossip_port = true
+  // 3. And finally set send_to_gossip_port = true
+  bool ssl_on_gossip_port;
+
   // (sequencer-only setting) Limit on the number of nodes in the cluster. Used
   // to size some of the data structures Sequencer uses.
   size_t max_nodes;

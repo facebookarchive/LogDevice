@@ -691,6 +691,17 @@ void Settings::defineSettings(SettingEasyInit& init) {
       "failure detection.",
       SERVER | DEPRECATED,
       SettingsCategory::FailureDetector);
+  init("ssl-on-gossip-port",
+       &ssl_on_gossip_port,
+       "false",
+       nullptr,
+       "If true, gossip port will reject all plaintext connections. Only SSL "
+       "connections will be accepted. WARNING: Any change to this setting "
+       "should only be performed while send-to-gossip-port = false, in order "
+       "to avoid failure detection issues while the setting change propagates "
+       "through the cluster.",
+       SERVER,
+       SettingsCategory::Security);
   init("max-nodes",
        &max_nodes,
        "512",
