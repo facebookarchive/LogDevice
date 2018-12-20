@@ -111,6 +111,9 @@ void ShardRebuildingV2::sendStorageTaskIfNeeded() {
     return;
   }
 
+  if (readContext_->iterator != nullptr) {
+    cancelIteratorInvalidationTimer();
+  }
   storageTaskInFlight_ = true;
   putStorageTask();
 }
@@ -120,6 +123,26 @@ void ShardRebuildingV2::putStorageTask() {
   auto task_queue =
       ServerWorker::onThisThread()->getStorageTaskQueueForShard(shard_);
   task_queue->putTask(std::move(task));
+}
+
+void ShardRebuildingV2::activateIteratorInvalidationTimer() {
+  if (iteratorInvalidationTimer_ == nullptr) {
+    iteratorInvalidationTimer_ =
+        std::make_unique<Timer>([this] { invalidateIterator(); });
+  }
+  iteratorInvalidationTimer_->activate(Worker::settings().iterator_cache_ttl);
+}
+
+void ShardRebuildingV2::cancelIteratorInvalidationTimer() {
+  ld_check(iteratorInvalidationTimer_ != nullptr);
+  iteratorInvalidationTimer_->cancel();
+}
+
+void ShardRebuildingV2::invalidateIterator() {
+  ld_info("Invalidating rebuilding iterator in shard %u", shard_);
+  ld_check(!storageTaskInFlight_);
+  ld_check(readContext_->iterator != nullptr);
+  readContext_->iterator->invalidate();
 }
 
 void ShardRebuildingV2::onReadTaskDone(
@@ -133,6 +156,9 @@ void ShardRebuildingV2::onReadTaskDone(
   storageTaskInFlight_ = false;
   ++readTasksDone_;
   nextLocation_ = readContext_->nextLocation;
+  if (readContext_->iterator != nullptr) {
+    activateIteratorInvalidationTimer();
+  }
   tryMakeProgress();
 }
 

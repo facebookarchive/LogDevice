@@ -4278,22 +4278,22 @@ int PartitionedRocksDBStore::trimLogsBasedOnTime(
 
     lsn_t existing_trim_point = LSN_INVALID;
     LogStorageState* log_state = state_map.insertOrGet(log_id, getShardIdx());
-    if (log_state != nullptr) {
-      if (!log_state->getTrimPoint().hasValue()) {
-        // If the trim point is not known yet, just read it from metadata CF.
-        TrimMetadata meta{LSN_INVALID};
-        int rv = readLogMetadata(log_id, &meta);
-        if (rv == 0 || err == E::NOTFOUND) {
-          log_state->updateTrimPoint(meta.trim_point_);
-        } else {
-          enterFailSafeMode("PartitionedRocksDBStore::trimLogsBasedOnTime()",
-                            "Failed to read TrimMetadata");
-          log_state->notePermanentError(
-              "Reading trim point (in trimLogsBasedOnTime)");
-        }
+    ld_check(log_state != nullptr);
+
+    if (!log_state->getTrimPoint().hasValue()) {
+      // If the trim point is not known yet, just read it from metadata CF.
+      TrimMetadata meta{LSN_INVALID};
+      int rv = readLogMetadata(log_id, &meta);
+      if (rv == 0 || err == E::NOTFOUND) {
+        log_state->updateTrimPoint(meta.trim_point_);
+      } else {
+        enterFailSafeMode("PartitionedRocksDBStore::trimLogsBasedOnTime()",
+                          "Failed to read TrimMetadata");
+        log_state->notePermanentError(
+            "Reading trim point (in trimLogsBasedOnTime)");
       }
-      existing_trim_point = log_state->getTrimPoint().value();
     }
+    existing_trim_point = log_state->getTrimPoint().value();
 
     // Iterate over partitions.
 

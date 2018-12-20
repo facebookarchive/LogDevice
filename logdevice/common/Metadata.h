@@ -229,7 +229,7 @@ class TrimMetadata final : public ComparableLogMetadata {
     return trim_point_ < meta->trim_point_;
   }
 
-  lsn_t trim_point_;
+  lsn_t trim_point_ = LSN_INVALID;
 };
 
 class SealMetadata : public ComparableLogMetadata {

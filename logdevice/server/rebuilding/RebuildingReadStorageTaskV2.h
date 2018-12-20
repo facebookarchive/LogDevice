@@ -28,6 +28,7 @@ class RebuildingReadStorageTaskV2 : public StorageTask {
       explicit LogState(RebuildingPlan p) : plan(std::move(p)) {}
 
       RebuildingPlan plan;
+      lsn_t trimPoint = LSN_INVALID;
 
       lsn_t lastSeenLSN = LSN_INVALID;
 
@@ -219,6 +220,17 @@ class RebuildingReadStorageTaskV2 : public StorageTask {
   virtual std::unique_ptr<LocalLogStore::AllLogsIterator>
   createIterator(const LocalLogStore::ReadOptions& opts,
                  const std::vector<logid_t>& logs);
+  // Gets trim points from LogStorageState-s or from rocksdb and puts them in
+  // LogState-s. This is done once at the start of rebuilding.
+  // Returns false if there was an error.
+  virtual bool fetchTrimPoints(Context* context);
+  // Copies trim point from LogStorageState to log_state.
+  // This is done periodically during rebuilding, to make sure rebuilding
+  // doesn't do unnecessary work if it falls behind trim points.
+  // Separate from fetchTrimPoints() to make sure it can't fail.
+  virtual void updateTrimPoint(logid_t log,
+                               Context* context,
+                               Context::LogState* log_state);
 
  private:
   std::weak_ptr<Context> context_;
@@ -240,7 +252,8 @@ class RebuildingReadStorageTaskV2 : public StorageTask {
 
   // Makes sure that log_state->currentEpochMetadata covers `lsn`.
   // Returns false if `lsn` is not covered by RebuildingPlan and should be
-  // skipped.
+  // skipped; in this case currentEpochRange is set to a range of epochs that is
+  // not covered by RebuildingPlan.
   // If `create_replication_scheme` is true, also creates
   // log_state->currentReplication if it's null.
   bool lookUpEpochMetadata(logid_t log,

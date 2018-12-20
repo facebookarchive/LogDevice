@@ -42,6 +42,11 @@ void RebuildingReadStorageTaskV2::execute() {
   STAT_INCR(stats, read_streams_num_ops_rebuilding);
 
   if (context->iterator == nullptr) {
+    if (!fetchTrimPoints(context.get())) {
+      context->persistentError = true;
+      return;
+    }
+
     LocalLogStore::ReadOptions opts(
         "RebuildingReadStorageTaskV2", /* rebuilding */ true);
     opts.fill_cache = false;
@@ -65,13 +70,19 @@ void RebuildingReadStorageTaskV2::execute() {
 
   LocalLogStore::ReadStats read_stats;
   read_stats.max_bytes_to_read = context->rebuildingSettings->max_batch_bytes;
-  read_stats.read_start_time = std::chrono::steady_clock::now();
   read_stats.max_execution_time = context->rebuildingSettings->max_batch_time;
+  // Count iterator initialization and trim point fetching towards the
+  // execution time limit.
+  read_stats.read_start_time = start_time;
 
   size_t records_in_result = 0;
   size_t bytes_in_result = 0;
 
   SCOPE_EXIT {
+    if (context->persistentError || context->reachedEnd) {
+      context->iterator.reset();
+    }
+
     if (context->persistentError) {
       // No point delivering records if rebuilding is going to stall now.
       result_.clear();
@@ -350,10 +361,6 @@ bool RebuildingReadStorageTaskV2::lookUpEpochMetadata(
     Context* context,
     Context::LogState* log_state,
     bool create_replication_scheme) {
-  if (lsn > log_state->plan.untilLSN) {
-    return false;
-  }
-
   epoch_t epoch = lsn_to_epoch(lsn);
   if (epoch < log_state->currentEpochRange.first ||
       epoch >= log_state->currentEpochRange.second) {
@@ -454,6 +461,51 @@ RebuildingReadStorageTaskV2::createIterator(
   return storageThreadPool_->getLocalLogStore().readAllLogs(opts, logs);
 }
 
+bool RebuildingReadStorageTaskV2::fetchTrimPoints(Context* context) {
+  LogStorageStateMap& log_state_map =
+      storageThreadPool_->getProcessor().getLogStorageStateMap();
+  for (auto& p : context->logs) {
+    LogStorageState* s =
+        log_state_map.insertOrGet(p.first, context->myShardID.shard());
+    ld_check(s != nullptr);
+    folly::Optional<lsn_t> t = s->getTrimPoint();
+    if (t.hasValue()) {
+      // Got trim point in memory.
+      p.second.trimPoint = t.value();
+      continue;
+    }
+
+    // Need to load trim point from rocksdb.
+    TrimMetadata meta{LSN_INVALID};
+    int rv =
+        storageThreadPool_->getLocalLogStore().readLogMetadata(p.first, &meta);
+    if (rv == 0 || err == E::NOTFOUND) {
+      s->updateTrimPoint(meta.trim_point_);
+      p.second.trimPoint = meta.trim_point_;
+    } else {
+      storageThreadPool_->getLocalLogStore().enterFailSafeMode(
+          "RebuildingReadStorageTaskV2::fetchTrimPoints()",
+          "Failed to read TrimMetadata");
+      s->notePermanentError(
+          "Reading trim point (in RebuildingReadStorageTaskV2)");
+      return false;
+    }
+  }
+  return true;
+}
+void RebuildingReadStorageTaskV2::updateTrimPoint(
+    logid_t log,
+    Context* context,
+    Context::LogState* log_state) {
+  LogStorageStateMap& log_state_map =
+      storageThreadPool_->getProcessor().getLogStorageStateMap();
+  LogStorageState* s = log_state_map.find(log, context->myShardID.shard());
+  ld_check(s != nullptr); // fetchTrimPoints() should have created it
+  folly::Optional<lsn_t> t = s->getTrimPoint();
+  ld_check(t.hasValue()); // fetchTrimPoints() should have set it
+  log_state->trimPoint = t.value();
+}
+
 RebuildingReadStorageTaskV2::Filter::Filter(RebuildingReadStorageTaskV2* task,
                                             Context* context)
     : LocalLogStoreReadFilter(), task(task), context(context) {
@@ -530,6 +582,12 @@ bool RebuildingReadStorageTaskV2::Filter::shouldProcessRecordRange(
     return false;
   }
 
+  task->updateTrimPoint(log, context, currentLogState);
+  if (max_lsn <= currentLogState->trimPoint ||
+      min_lsn > currentLogState->plan.untilLSN) {
+    return false;
+  }
+
   // Find the epoch range covering min_lsn.
   bool first_epoch_good =
       task->lookUpEpochMetadata(log,
@@ -577,6 +635,11 @@ operator()(logid_t log,
 
   if (!lookUpLogState(log)) {
     noteRecordFiltered(FilteredReason::EPOCH_RANGE, late);
+    return false;
+  }
+
+  if (lsn <= currentLogState->trimPoint ||
+      lsn > currentLogState->plan.untilLSN) {
     return false;
   }
 

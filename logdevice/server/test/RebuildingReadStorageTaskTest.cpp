@@ -58,6 +58,12 @@ class RebuildingReadStorageTaskTest : public ::testing::Test {
                    const std::vector<logid_t>& logs) override {
       return test->store->readAllLogs(opts, logs);
     }
+    bool fetchTrimPoints(Context* context) override {
+      return true;
+    }
+    void updateTrimPoint(logid_t log,
+                         Context* context,
+                         Context::LogState* log_state) override {}
     StatsHolder* getStats() override {
       return &test->stats;
     }
@@ -368,8 +374,12 @@ TEST_F(RebuildingReadStorageTaskTest, Basic) {
     }
     EXPECT_EQ(0, chunks.size());
     ++empty_batches;
+    // Invalidate iterator after first batch.
+    if (empty_batches == 1) {
+      c->iterator->invalidate();
+    }
   }
-  EXPECT_GT(empty_batches, 0);
+  EXPECT_GE(empty_batches, 2);
   EXPECT_EQ(std::vector<ChunkDescription>({{L4, mklsn(1, 100000)}}),
             convertChunks(chunks));
 

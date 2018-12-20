@@ -109,6 +109,12 @@ class ShardRebuildingV2 : public ShardRebuildingInterface {
   size_t chunkRebuildingRecordsInFlight_ = 0;
   size_t chunkRebuildingBytesInFlight_ = 0;
 
+  // If iterator doesn't get seeked for some time, this timer fires and
+  // invalidates it. For rocksdb-based LocalLogStore implementations the
+  // invalidation prevents the iterator from pinning old versions of
+  // data indefinitely.
+  std::unique_ptr<Timer> iteratorInvalidationTimer_;
+
   WorkerCallbackHelper<ShardRebuildingV2> callbackHelper_;
 
   static std::atomic<log_rebuilding_id_t::raw_type> nextChunkID_;
@@ -121,6 +127,10 @@ class ShardRebuildingV2 : public ShardRebuildingInterface {
   void sendStorageTaskIfNeeded();
   void startSomeChunkRebuildingsIfNeeded();
   void finalizeIfNeeded();
+
+  void invalidateIterator();
+  virtual void activateIteratorInvalidationTimer();
+  virtual void cancelIteratorInvalidationTimer();
 
   void tryMakeProgress() {
     startSomeChunkRebuildingsIfNeeded();

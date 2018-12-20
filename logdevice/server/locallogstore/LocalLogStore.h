@@ -279,6 +279,7 @@ class LocalLogStore : boost::noncopyable {
     ReadIterator(ReadIterator&&) noexcept = delete;
     ReadIterator& operator=(ReadIterator&&) = delete;
 
+    // Doesn't do blocking IO, ok to call from worker threads.
     ~ReadIterator() override {}
 
    protected:
@@ -347,7 +348,8 @@ class LocalLogStore : boost::noncopyable {
     // Resets the iterator to an unseeked state, unpinning all the data.
     // Almost equivalent to destroying the iterator and creating a new one.
     // The only difference is that invalidate() doesn't refresh iterator's view
-    // of the data.
+    // of the data (e.g. iterator's copy of logsdb directory).
+    // Doesn't do blocking IO, ok to call from worker threads.
     virtual void invalidate() = 0;
 
     // Not copyable or movable
@@ -355,6 +357,7 @@ class LocalLogStore : boost::noncopyable {
     AllLogsIterator(const AllLogsIterator&) = delete;
     AllLogsIterator& operator=(const AllLogsIterator&) = delete;
 
+    // Doesn't do blocking IO, ok to call from worker threads.
     virtual ~AllLogsIterator() = default;
   };
 

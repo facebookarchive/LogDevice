@@ -28,6 +28,7 @@ class MockedShardRebuilding : public ShardRebuildingV2,
 
   StatsHolder stats;
   bool taskInFlight = false;
+  bool iteratorInvalidationTimerActive = false;
   bool waitingForGlobalWindow = false;
   bool completed = false;
 
@@ -96,6 +97,12 @@ class MockedShardRebuilding : public ShardRebuildingV2,
     return &stats;
   }
   void createAndActivateProfilingTimer() override {}
+  void activateIteratorInvalidationTimer() override {
+    iteratorInvalidationTimerActive = true;
+  }
+  void cancelIteratorInvalidationTimer() override {
+    iteratorInvalidationTimerActive = false;
+  }
   node_index_t getMyNodeIndex() override {
     return MY_NODE_IDX;
   }
