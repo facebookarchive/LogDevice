@@ -210,7 +210,8 @@ class ShardRebuildingInterface {
   start(std::unordered_map<logid_t, std::unique_ptr<RebuildingPlan>> plan) = 0;
 
   // Notification that other donors made enough progress to allow us to advance
-  // the global window to the given point.
+  // the global window to the given point. Note that the window can move
+  // backwards (if window size setting was changed at runtime).
   // Can be called before start().
   virtual void advanceGlobalWindow(RecordTimestamp new_window_end) = 0;
 

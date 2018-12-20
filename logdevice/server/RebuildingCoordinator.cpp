@@ -15,6 +15,7 @@
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/request_util.h"
 #include "logdevice/server/RebuildingSupervisor.h"
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/ServerWorker.h"
@@ -220,12 +221,32 @@ void RebuildingCoordinator::startOnWorkerThread() {
 
   subscribeToEventLogIfNeeded();
 
+  rebuildingSettingsSubscription_ = rebuildingSettings_.subscribeToUpdates(
+      [this, processor = w->processor_, worker_id = my_worker_id_] {
+        // Forward the call back to RebuildingCoordinator's worker thread.
+        std::unique_ptr<Request> rq = std::make_unique<FuncRequest>(
+            my_worker_id_, WorkerType::GENERAL, RequestType::MISC, [this] {
+              // Note that RebuildingCoordinator can't have been destroyed
+              // because we're running on a worker thread, and worker threads
+              // are destroyed before RebuildingCoordinator.
+              noteRebuildingSettingsChanged();
+            });
+        // Note that, even during server shutdown, at this point processor can't
+        // have been destroyed because RebuildingCoordinator::shutdown()
+        // unsubscribes, and it happens before processor is destroyed.
+        int rv = processor->postImportant(rq);
+        if (rv != 0) {
+          ld_check_eq(err, E::SHUTDOWN);
+        }
+      });
+
   nonAuthoratitiveRebuildingChecker_ =
       std::make_unique<NonAuthoritativeRebuildingChecker>(
           rebuildingSettings_, event_log_, myNodeId_);
 }
 
 void RebuildingCoordinator::shutdown() {
+  rebuildingSettingsSubscription_.unsubscribe();
   scheduledRestarts_.clear();
   handle_.reset();
   shardsRebuilding_.clear();
@@ -245,6 +266,17 @@ void RebuildingCoordinator::noteConfigurationChanged() {
     if (shard_state.shardRebuilding != nullptr) {
       shard_state.shardRebuilding->noteConfigurationChanged();
     }
+  }
+}
+
+void RebuildingCoordinator::noteRebuildingSettingsChanged() {
+  for (auto& s : shardsRebuilding_) {
+    // If global window size was decreased (e.g. global window got enabled) we
+    // may want to write a SHARD_DONOR_PROGRESS event for some shards.
+    notifyShardDonorProgress(s.first, s.second.myProgress, s.second.version);
+    // If global window size was increased (e.g. global window got disabled) we
+    // may want to advance global window end.
+    trySlideGlobalWindow(s.first, event_log_->getCurrentRebuildingSet());
   }
 }
 
@@ -444,8 +476,7 @@ void RebuildingCoordinator::trySlideGlobalWindow(
     const EventLogRebuildingSet& set) {
   auto& shard_state = getShardState(shard);
 
-  if (!shard_state.participating ||
-      shard_state.globalWindowEnd == RecordTimestamp::max()) {
+  if (!shard_state.participating) {
     return;
   }
 
@@ -480,18 +511,21 @@ void RebuildingCoordinator::trySlideGlobalWindow(
     new_global_window_end = min_next_timestamp + global_window;
   }
 
-  ld_check(new_global_window_end >= shard_state.globalWindowEnd);
-  if (new_global_window_end <= shard_state.globalWindowEnd) {
+  if (new_global_window_end == shard_state.globalWindowEnd) {
     // The global window is not slid.
+    // Note that if the window size setting is decreased at runtime we _do_
+    // decrease the window end. This allows enabling global window on the fly.
     return;
   }
 
   RecordTimestamp old_window_end = shard_state.globalWindowEnd;
   shard_state.globalWindowEnd = new_global_window_end;
-  ld_info("Moving global window to %s for shard %u and rebuilding set %s",
-          format_time(shard_state.globalWindowEnd).c_str(),
-          shard,
-          shard_state.rebuildingSet->describe().c_str());
+  ld_info(
+      "Moving global window from %s to %s for shard %u and rebuilding set %s",
+      format_time(old_window_end).c_str(),
+      format_time(shard_state.globalWindowEnd).c_str(),
+      shard,
+      shard_state.rebuildingSet->describe().c_str());
   PER_SHARD_STAT_SET(getStats(),
                      rebuilding_global_window_end,
                      shard,
@@ -744,8 +778,8 @@ void RebuildingCoordinator::restartForShard(uint32_t shard_idx,
   }
 
   if (!rsi->donor_progress.count(myNodeId_)) {
-    // I am not a donor node for this rebuilding, do not create LogRebuilding
-    // state machines. Our job is just to wait for all donors to notify they
+    // I am not a donor node for this rebuilding, do not create ShardRebuilding
+    // state machine. Our job is just to wait for all donors to notify they
     // finished to rebuild the shard so that we can acknowledge our shard was
     // rebuilt.
     return;
@@ -755,6 +789,8 @@ void RebuildingCoordinator::restartForShard(uint32_t shard_idx,
 
   shard_state.participating = true;
   shard_state.globalWindowEnd = RecordTimestamp::min();
+  shard_state.myProgress = RecordTimestamp::min();
+  shard_state.lastReportedProgress = RecordTimestamp::min();
   trySlideGlobalWindow(shard_idx, set);
 
   RebuildingPlanner::Parameters params{
@@ -1524,20 +1560,37 @@ void RebuildingCoordinator::notifyAckMyShardRebuilt(uint32_t shard,
 void RebuildingCoordinator::notifyShardDonorProgress(uint32_t shard,
                                                      RecordTimestamp next_ts,
                                                      lsn_t version) {
-  if (rebuildingSettings_->global_window == RecordTimestamp::duration::max()) {
-    // Don't bother sending SHARD_DONOR_PROGRESS if we are not using a global
-    // window.
-    // This will probably cause rebuilding to get stuck if global window
-    // is enabled while a rebuilding is running.
+  auto it_shard = shardsRebuilding_.find(shard);
+  ld_check(it_shard != shardsRebuilding_.end());
+  auto& shard_state = it_shard->second;
+  std::chrono::milliseconds window_size = rebuildingSettings_->global_window;
+
+  // Note that we can't return early if next_ts == myProgress, because
+  // window size setting may have been decreased.
+  shard_state.myProgress = std::max(shard_state.myProgress, next_ts);
+
+  // To avoid flooding the event log, report progress only if we moved by
+  // at least 1/3 of global window size since previous report.
+  std::chrono::milliseconds threshold = window_size / 3;
+  // timestamp_to_slide_window = lastReportedProgress + threshold,
+  // but avoiding overflow. (No you can't swap threshold and
+  // lastReportedProgress because lastReportedProgress can be negative.)
+  RecordTimestamp timestamp_to_slide_window{
+      threshold +
+      std::min(std::chrono::milliseconds::max() - threshold,
+               shard_state.lastReportedProgress.toMilliseconds())};
+
+  if (shard_state.myProgress <= timestamp_to_slide_window) {
     return;
   }
 
-  // TODO (#T24665001): Only write an event if next_ts moved sufficiently far
-  // forward, and add "IfNeeded" to this method's name. In particular, don't
-  // write if next_ts moved back, which is possible with rebuilding v2.
+  shard_state.lastReportedProgress = shard_state.myProgress;
 
   auto event = std::make_unique<SHARD_DONOR_PROGRESS_Event>(
-      myNodeId_, shard, next_ts.toMilliseconds().count(), version);
+      myNodeId_,
+      shard,
+      shard_state.myProgress.toMilliseconds().count(),
+      version);
   writer_->writeEvent(std::move(event));
 }
 

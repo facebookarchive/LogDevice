@@ -88,6 +88,11 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
    */
   void noteConfigurationChanged() override;
 
+  /**
+   * Called when RebuildingSettings is updated.
+   */
+  void noteRebuildingSettingsChanged();
+
   ~RebuildingCoordinator() override;
 
   /**
@@ -418,6 +423,8 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
   worker_id_t my_worker_id_ = WORKER_ID_INVALID;
 
   UpdateableSettings<RebuildingSettings> rebuildingSettings_;
+  UpdateableSettings<RebuildingSettings>::SubscriptionHandle
+      rebuildingSettingsSubscription_;
 
   ShardedLocalLogStore* shardedStore_;
 
@@ -466,6 +473,11 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
 
     // End of the global timestamp window for this shard.
     RecordTimestamp globalWindowEnd = RecordTimestamp::min();
+    // How far rebuilding has progressed on this node. This gets reported in
+    // SHARD_DONOR_PROGRESS messages periodically.
+    RecordTimestamp myProgress = RecordTimestamp::min();
+    // Last SHARD_DONOR_PROGRESS message we've written out.
+    RecordTimestamp lastReportedProgress = RecordTimestamp::min();
 
     // Set of nodes that we are rebuilding this shard for.
     std::shared_ptr<const RebuildingSet> rebuildingSet;
