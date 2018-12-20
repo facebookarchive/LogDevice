@@ -542,7 +542,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        validate_positive<ssize_t>(),
        "Maximum duration of Sender::runFlowGroups() before yielding to the "
        "event loop.",
-       SERVER | CLIENT,
+       SERVER,
        SettingsCategory::ResourceManagement);
   init("flow-groups-run-deadline",
        &flow_groups_run_deadline,
@@ -550,7 +550,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        validate_positive<ssize_t>(),
        "Maximum delay (plus one cycle of the event loop) between "
        "a request to run FlowGroups and Sender::runFlowGroups() executing.",
-       SERVER | CLIENT,
+       SERVER,
        SettingsCategory::ResourceManagement);
   init("read-messages",
        &incoming_messages_max_per_socket,

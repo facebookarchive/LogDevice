@@ -288,8 +288,8 @@ sidebar_label: Settings
 | append-stores-max-mem-bytes | Maximum total size of in-flight StoreStorageTasks from appenders and recoveries. Evenly divided among shards. | 2G | server&nbsp;only |
 | eagerly-allocate-fdtable | enables an optimization to eagerly allocate the kernel fdtable at startup | false | requires&nbsp;restart, server&nbsp;only |
 | fd-limit | maximum number of file descriptors that the process can allocate (may require root priviliges). If equal to zero, do not set any limit. | 0 | requires&nbsp;restart, server&nbsp;only |
-| flow-groups-run-deadline | Maximum delay (plus one cycle of the event loop) between a request to run FlowGroups and Sender::runFlowGroups() executing. | 5ms |  |
-| flow-groups-run-yield-interval | Maximum duration of Sender::runFlowGroups() before yielding to the event loop. | 2ms |  |
+| flow-groups-run-deadline | Maximum delay (plus one cycle of the event loop) between a request to run FlowGroups and Sender::runFlowGroups() executing. | 5ms | server&nbsp;only |
+| flow-groups-run-yield-interval | Maximum duration of Sender::runFlowGroups() before yielding to the event loop. | 2ms | server&nbsp;only |
 | lock-memory | On startup, call mlockall() to lock the text segment (executable code) of logdeviced in RAM. | false | requires&nbsp;restart, server&nbsp;only |
 | max-inflight-storage-tasks | max number of StorageTask instances that one worker thread may have in flight to each database shard | 4096 | requires&nbsp;restart, server&nbsp;only |
 | max-payload-size | The maximum payload size that will be accepted by the client library or the server. Can't be larger than 33554432 bytes. | 1048576 |  |
