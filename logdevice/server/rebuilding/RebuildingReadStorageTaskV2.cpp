@@ -235,12 +235,14 @@ void RebuildingReadStorageTaskV2::execute() {
       continue;
     }
 
-    // Chunk needs to contain records for the same log with consecutive LSNs,
-    // same copyset and same block ID.
-    // The consecutive LSN requirement is not necessary currently,
-    // but may be useful in future for donor-driven rebuilding without WAL.
-    start_new_chunk |= lsn > log_state->lastSeenLSN + 1 ||
-        log_state->currentBlockID != chunk->blockID;
+    if (!start_new_chunk) {
+      // Chunk needs to contain records for the same log with consecutive LSNs,
+      // same copyset and same block ID.
+      // The consecutive LSN requirement is not necessary currently,
+      // but may be useful in future for donor-driven rebuilding without WAL.
+      start_new_chunk |= lsn > log_state->lastSeenLSN + 1 ||
+          log_state->currentBlockID != chunk->blockID;
+    }
     log_state->lastSeenLSN = lsn;
 
     // Create new chunk if needed.
@@ -715,8 +717,15 @@ operator()(logid_t log,
           RATELIMIT_INFO(
               std::chrono::seconds(10),
               1,
-              "Time range in operator() doesn't match time range in "
-              "shouldProcessTimeRange(). Suspicious. Please check the code.");
+              "Time range in operator() (log %lu lsn %s ts [%s, %s]) doesn't "
+              "match time range in shouldProcessTimeRange() ([%s, %s]). "
+              "Suspicious. Please check the code.",
+              log.val(),
+              lsn_to_string(lsn).c_str(),
+              min_ts.toString().c_str(),
+              max_ts.toString().c_str(),
+              timeRangeCache.minTs.toString().c_str(),
+              timeRangeCache.maxTs.toString().c_str());
         }
 
         if (!intersects) {

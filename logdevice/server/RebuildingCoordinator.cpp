@@ -225,7 +225,10 @@ void RebuildingCoordinator::startOnWorkerThread() {
       [this, processor = w->processor_, worker_id = my_worker_id_] {
         // Forward the call back to RebuildingCoordinator's worker thread.
         std::unique_ptr<Request> rq = std::make_unique<FuncRequest>(
-            my_worker_id_, WorkerType::GENERAL, RequestType::MISC, [this] {
+            my_worker_id_,
+            WorkerType::GENERAL,
+            RequestType::REBUILDING_COORDINATOR_SETTINGS_UPDATED,
+            [this] {
               // Note that RebuildingCoordinator can't have been destroyed
               // because we're running on a worker thread, and worker threads
               // are destroyed before RebuildingCoordinator.
@@ -1564,6 +1567,11 @@ void RebuildingCoordinator::notifyShardDonorProgress(uint32_t shard,
   ld_check(it_shard != shardsRebuilding_.end());
   auto& shard_state = it_shard->second;
   std::chrono::milliseconds window_size = rebuildingSettings_->global_window;
+
+  if (window_size == std::chrono::milliseconds::max()) {
+    // Global window is disabled, no need to write SHARD_DONOR_PROGRESS.
+    return;
+  }
 
   // Note that we can't return early if next_ts == myProgress, because
   // window size setting may have been decreased.

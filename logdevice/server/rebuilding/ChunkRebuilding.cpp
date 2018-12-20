@@ -156,18 +156,12 @@ bool ChunkRebuilding::onStored(const STORED_Header& header,
   return false;
 }
 
-static constexpr const char* const WARNING_ABOUT_REBUILDING_WITHOUT_WAL =
-    "Looks like you're using rebuilding v2 with "
-    "rebuild-store-durability=memory. This is not "
-    "supported. If a node crashes during rebuilding, some "
-    "records will end up underreplicated.";
-
 void ChunkRebuilding::onAllStoresReceived(
     lsn_t lsn,
     std::unique_ptr<FlushTokenMap> flushTokenMap) {
   if (!flushTokenMap->empty()) {
-    RATELIMIT_CRITICAL(
-        std::chrono::seconds(10), 10, WARNING_ABOUT_REBUILDING_WITHOUT_WAL);
+    // TODO (#24665001): Wait for flushes. For now, setting
+    // rebuild-store-durability=memory just loses memtables on crash.
   }
   ld_check(numInFlight_ > 0);
   ssize_t idx = data_->findLSN(lsn);
@@ -199,8 +193,7 @@ void ChunkRebuilding::onAllAmendsReceived(
     lsn_t lsn,
     std::unique_ptr<FlushTokenMap> flushTokenMap) {
   if (!flushTokenMap->empty()) {
-    RATELIMIT_CRITICAL(
-        std::chrono::seconds(10), 10, WARNING_ABOUT_REBUILDING_WITHOUT_WAL);
+    // TODO (#24665001): Wait for flushes.
   }
   onAmendDone(lsn);
 }

@@ -668,6 +668,7 @@ void AllServerReadStreams::sendDelayedReadStorageTasks() {
 void AllServerReadStreams::putStorageTask(
     std::unique_ptr<ReadStorageTask>&& task,
     shard_index_t shard) {
+  ld_check(task);
   if (!delayed_read_storage_tasks_.empty() || !tryAcquireMemoryForTask(task)) {
     // We cannot send this task immediately because there are already delayed
     // tasks or there is not enough memory left.
