@@ -230,7 +230,8 @@ TEST_F(MetaDataLogsIntegrationTest, CorruptedMetaDataWithOnDemandLogsConfig) {
   count = reader->read(1, &records, &gap);
   ASSERT_EQ(0, count);
   auto client = std::dynamic_pointer_cast<ClientImpl>(client_orig);
-  ASSERT_GT(client->stats()->aggregate().client.metadata_log_error_BADMSG, 0);
+  ASSERT_GT(
+      client->stats()->aggregate().metadata_log_read_failed_corruption, 0);
 
   // Reading metadata from epoch store
   cluster->stop();
@@ -357,7 +358,7 @@ TEST_F(MetaDataLogsIntegrationTest, EmptyNodeSetMetaData) {
   ASSERT_EQ(0, count);
   auto client_impl = std::dynamic_pointer_cast<ClientImpl>(client);
   ASSERT_EQ(
-      0, client_impl->stats()->aggregate().client.metadata_log_error_BADMSG);
+      0, client_impl->stats()->aggregate().metadata_log_read_failed_corruption);
 
   // Writing another metadata record
   cluster->stop();

@@ -187,16 +187,14 @@ class MetaDataLogReader {
   MetaDataLogReader(logid_t log_id,
                     epoch_t epoch_start,
                     epoch_t epoch_end,
-                    Callback cb,
-                    bool accept_notfound = false)
+                    Callback cb)
       : log_id_(log_id),
         epoch_start_(epoch_start),
         epoch_end_(epoch_end),
         epoch_to_deliver_(epoch_start_),
         mode_(Mode::IGNORE_LAST_RELEASED),
         rsid_(READ_STREAM_ID_INVALID),
-        metadata_cb_(std::move(cb)),
-        accept_notfound_(accept_notfound) {
+        metadata_cb_(std::move(cb)) {
     ld_check(log_id_ != LOGID_INVALID);
     // must fetch epoch metadata for a data log
     ld_check(!MetaDataLog::isMetaDataLog(log_id_));
@@ -210,13 +208,8 @@ class MetaDataLogReader {
   MetaDataLogReader(logid_t log_id,
                     epoch_t epoch,
                     Callback cb,
-                    Mode mode = Mode::IGNORE_LAST_RELEASED,
-                    bool accept_notfound = false)
-      : MetaDataLogReader(log_id,
-                          epoch,
-                          epoch,
-                          std::move(cb),
-                          accept_notfound) {
+                    Mode mode = Mode::IGNORE_LAST_RELEASED)
+      : MetaDataLogReader(log_id, epoch, epoch, std::move(cb)) {
     // explicitly set mode_ in constructor body since it is not allowed to
     // have extra mem-initializers with delegating constructor
     mode_ = mode;
@@ -229,6 +222,11 @@ class MetaDataLogReader {
   // conclude MetaDataLogReader. It will stop processing records/gaps, and
   // metadata callback will no longer be called
   virtual void finalize();
+
+  // Don't print a warning and don't bump stat if result is NOTFOUND.
+  void dontWarnIfNotFound() {
+    warn_if_notfound_ = false;
+  }
 
   // callback functions for the internal ClientReadStream
   void onDataRecord(std::unique_ptr<DataRecord>);
@@ -288,8 +286,8 @@ class MetaDataLogReader {
   // callback function that delivers epoch metadata information
   Callback metadata_cb_;
 
-  // Whether to refrain from bumping stats when a metadata log is not found
-  bool accept_notfound_{false};
+  // Print a warning and bump a stat if result is NOTFOUND.
+  bool warn_if_notfound_ = true;
 
   // if true, the reader is actively running. Otherwise, it is
   // either not started or concluded

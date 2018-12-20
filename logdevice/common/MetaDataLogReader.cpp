@@ -121,13 +121,13 @@ void MetaDataLogReader::onDataRecord(std::unique_ptr<DataRecord> record) {
     // we encountered a malformed record, which may indicate potential loss
     // of metadata for any epoch larger than last_read_epoch, set the
     // bad_epoch_ flag and return
-    ld_critical("Encountered a metadata log %lu record for log %lu with "
-                "timestamp %s which does not have valid epoch metadata in "
-                "payload! last valid metadata epoch read: %u",
-                record->logid.val_,
-                log_id_.val_,
-                format_time(record->attrs.timestamp).c_str(),
-                last_read_epoch.val_);
+    ld_error("Encountered a metadata log %lu record for log %lu with "
+             "timestamp %s which does not have valid epoch metadata in "
+             "payload! last valid metadata epoch read: %u",
+             record->logid.val_,
+             log_id_.val_,
+             format_time(record->attrs.timestamp).c_str(),
+             last_read_epoch.val_);
     bad_epoch_ = true;
     error_reason_ = E::BADMSG;
     offending_lsns_.insert(metadata_read_lsn);
@@ -137,13 +137,13 @@ void MetaDataLogReader::onDataRecord(std::unique_ptr<DataRecord> record) {
   ld_check(metadata_read->isValid());
   const epoch_t epoch_read = metadata_read->h.epoch;
   if (last_read_epoch > epoch_read) {
-    ld_critical("Metadata log %lu records for log %lu have metadata epochs "
-                "out-of-order! current %u, already got %u. Check the utility "
-                "that writes metadata log!",
-                record->logid.val_,
-                log_id_.val_,
-                epoch_read.val_,
-                last_read_epoch.val_);
+    ld_error("Metadata log %lu records for log %lu have metadata epochs "
+             "out-of-order! current %u, already got %u. Check the utility "
+             "that writes metadata log!",
+             record->logid.val_,
+             log_id_.val_,
+             epoch_read.val_,
+             last_read_epoch.val_);
     bad_epoch_ = true;
     error_reason_ = E::BADMSG;
     offending_lsns_.insert(metadata_read_lsn);
@@ -160,14 +160,14 @@ void MetaDataLogReader::onDataRecord(std::unique_ptr<DataRecord> record) {
              last_read_epoch.val_);
     ld_check(metadata_);
     if (*metadata_ != *metadata_read) {
-      ld_critical("Got metadata log %lu records for log %lu with the same "
-                  "epoch %u but different metadata! Check the utility that "
-                  "writes metadata log! Current: %s, got: %s",
-                  record->logid.val_,
-                  log_id_.val_,
-                  metadata_->h.epoch.val_,
-                  metadata_->toString().c_str(),
-                  metadata_read->toString().c_str());
+      ld_error("Got metadata log %lu records for log %lu with the same "
+               "epoch %u but different metadata! Check the utility that "
+               "writes metadata log! Current: %s, got: %s",
+               record->logid.val_,
+               log_id_.val_,
+               metadata_->h.epoch.val_,
+               metadata_->toString().c_str(),
+               metadata_read->toString().c_str());
       bad_epoch_ = true;
       error_reason_ = E::BADMSG;
       offending_lsns_.insert(metadata_read_lsn);
@@ -214,13 +214,13 @@ void MetaDataLogReader::onGapRecord(const GapRecord& gap) {
           static_cast<int>(gap.type));
 
   if (gap.type == GapType::DATALOSS) {
-    ld_critical("DataLoss reported for metadata log %lu of log %lu, "
-                "range [%s,%s], last valid metadata epoch read: %u",
-                gap.logid.val_,
-                log_id_.val_,
-                lsn_to_string(gap.lo).c_str(),
-                lsn_to_string(gap.hi).c_str(),
-                lastReadEpoch().val_);
+    ld_error("DataLoss reported for metadata log %lu of log %lu, "
+             "range [%s,%s], last valid metadata epoch read: %u",
+             gap.logid.val_,
+             log_id_.val_,
+             lsn_to_string(gap.lo).c_str(),
+             lsn_to_string(gap.hi).c_str(),
+             lastReadEpoch().val_);
     bad_epoch_ = true;
     error_reason_ = E::BADMSG;
   }
@@ -332,16 +332,33 @@ void MetaDataLogReader::deliverMetaData(Status st,
             metadata_->h.epoch.val_,
             until.val_,
             metadata_->toString().c_str());
-  } else if (st != E::NOTFOUND || !accept_notfound_) {
-    RATELIMIT_ERROR(std::chrono::seconds(10),
-                    10,
-                    "Failed to get metadata for epoch %u for log %lu: %s ",
-                    epoch_to_deliver_.val_,
-                    log_id_.val_,
-                    error_name(st));
-    STAT_INCR(getStats(), metadata_log_read_failed);
+  } else if (st != E::NOTFOUND || warn_if_notfound_) {
     LOG_STAT_INCR(
         getStats(), getClusterConfig(), log_id_, metadata_log_read_failed);
+
+    if (st == E::BADMSG) {
+      STAT_INCR(getStats(), metadata_log_read_failed_corruption);
+    } else {
+      STAT_INCR(getStats(), metadata_log_read_failed_other);
+    }
+
+    if (st == E::NOTFOUND) {
+      RATELIMIT_INFO(std::chrono::seconds(10),
+                     2,
+                     "No metadata for epoch %u of log %lu in metadata log %lu. "
+                     "Maybe the log is new and hasn't been fully provisioned "
+                     "yet. This should be rare.",
+                     epoch_to_deliver_.val(),
+                     log_id_.val(),
+                     MetaDataLog::metaDataLogID(log_id_).val());
+    } else {
+      RATELIMIT_ERROR(std::chrono::seconds(10),
+                      10,
+                      "Failed to get metadata for epoch %u for log %lu: %s ",
+                      epoch_to_deliver_.val_,
+                      log_id_.val_,
+                      error_name(st));
+    }
   }
 
   if (metadata_cb_) {

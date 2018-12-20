@@ -79,16 +79,14 @@ class TestMetaDataLogReader : public MetaDataLogReader {
   TestMetaDataLogReader(logid_t log_id,
                         epoch_t start,
                         MetaDataLogReader::Mode mode =
-                            MetaDataLogReader::Mode::IGNORE_LAST_RELEASED,
-                        bool accept_notfound = false)
+                            MetaDataLogReader::Mode::IGNORE_LAST_RELEASED)
       : MetaDataLogReader(log_id,
                           start,
                           std::bind(&TestMetaDataLogReader::onMetaDataCallback,
                                     this,
                                     std::placeholders::_1,
                                     std::placeholders::_2),
-                          mode,
-                          accept_notfound),
+                          mode),
         stats_(StatsParams().setIsServer(false)) {
     initConfig();
   }
@@ -201,22 +199,7 @@ TEST(MetaDataLogReaderTest, EmptyMetaData) {
       GapRecord(META_LOGID, GapType::BRIDGE, lsn(0, 1), LSN_MAX - 1));
   ASSERT_RESULT_ERROR(reader, epoch_t(1), epoch_t(1), LAST, E::NOTFOUND);
   ASSERT_TRUE(reader.finalized_);
-  ASSERT_EQ(reader.getStats()->aggregate().metadata_log_read_failed, 1);
-}
-
-// copypasta of EmptyMetaData but checking that accept_notfound causes reader
-// to refrain from bumping metadata_log_read_failed stat
-TEST(MetaDataLogReaderTest, AcceptNotFound) {
-  TestMetaDataLogReader reader(NORMAL_LOGID,
-                               epoch_t(1),
-                               MetaDataLogReader::Mode::IGNORE_LAST_RELEASED,
-                               /*accept_notfound=*/true);
-  reader.start();
-  reader.onGapRecord(
-      GapRecord(META_LOGID, GapType::BRIDGE, lsn(0, 1), LSN_MAX - 1));
-  ASSERT_RESULT_ERROR(reader, epoch_t(1), epoch_t(1), LAST, E::NOTFOUND);
-  ASSERT_TRUE(reader.finalized_);
-  ASSERT_EQ(reader.getStats()->aggregate().metadata_log_read_failed, 0);
+  ASSERT_EQ(reader.getStats()->aggregate().metadata_log_read_failed_other, 1);
 }
 
 // common sequence of metadata records used for tests

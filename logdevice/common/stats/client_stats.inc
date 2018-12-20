@@ -117,8 +117,6 @@ STAT_DEFINE(metadata_log_gap_ACCESS, SUM)
 STAT_DEFINE(metadata_log_gap_NOTINCONFIG, SUM)
 STAT_DEFINE(metadata_log_gap_FILTERED_OUT, SUM)
 STAT_DEFINE(metadata_log_error_NOTFOUND, SUM)
-STAT_DEFINE(metadata_log_error_BADMSG, SUM)
-STAT_DEFINE(metadata_log_error_other, SUM)
 
 // GetClusterStateRequest stats
 STAT_DEFINE(get_cluster_state_started, SUM)

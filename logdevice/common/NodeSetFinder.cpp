@@ -192,11 +192,10 @@ void NodeSetFinder::readFromMetaDataLog() {
     onMetaDataLogRecord(st, std::move(result));
   };
   meta_reader_ = std::make_unique<MetaDataLogReader>(
-      log_id_,
-      EPOCH_MIN,
-      EPOCH_MAX,
-      cb_wrapper,
-      /*accept_notfound=*/metadata_log_empty_mode_);
+      log_id_, EPOCH_MIN, EPOCH_MAX, cb_wrapper);
+  if (metadata_log_empty_mode_) {
+    meta_reader_->dontWarnIfNotFound();
+  }
   meta_reader_->start();
 }
 
@@ -229,11 +228,6 @@ void NodeSetFinder::onMetaDataLogRecord(Status st,
                     log_id_.val_,
                     error_description(st));
     if (st != E::ACCESS) {
-      if (st == E::BADMSG) {
-        WORKER_STAT_INCR(client.metadata_log_error_BADMSG);
-      } else {
-        WORKER_STAT_INCR(client.metadata_log_error_other);
-      }
       st = E::FAILED;
     }
     finalize(st);

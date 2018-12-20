@@ -559,12 +559,20 @@ void LogRecoveryRequest::onEpochMetaData(Status st,
     //     (with replicationFactorHistorical) but may be undesirable when the
     //     size of the cluster is large.
     // Currently option (1) is used.
-    ld_critical("Fetch epoch metadata for epoch %u of log %lu FAILED: %s. "
-                "Expect bad metadata until epoch %u",
-                epoch.val_,
-                log_id_.val_,
-                error_description(st),
-                until.val_);
+
+    RATELIMIT_ERROR(std::chrono::seconds(10),
+                    10,
+                    "Failed to fetch metadata for epoch %u of log %lu: %s. "
+                    "No metadata until epoch %u. Will retry.",
+                    epoch.val_,
+                    log_id_.val_,
+                    error_description(st),
+                    until.val_);
+    if (st == E::NOTFOUND) {
+      // In recovery, empty metadata log indicates data loss, corruption or bug.
+      // MetaDataLogReader doesn't treat NOTFOUND as error, so let's escalate.
+      WORKER_STAT_INCR(metadata_log_read_failed_corruption);
+    }
 
     epoch_metadata_finalized_ = true;
     complete(st);
