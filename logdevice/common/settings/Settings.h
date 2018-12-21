@@ -1016,6 +1016,10 @@ struct Settings : public SettingsBundle {
   // The storage durability contract to use for rebuilding stores.
   Durability rebuild_store_durability;
 
+  // Don't wait for flush callbacks during rebuilding.
+  // TODO: T38362945
+  bool rebuilding_dont_wait_for_flush_callbacks;
+
   // If true, send a normal STORE with full payload, rather than a STORE
   // with the AMEND flag, when updating the copyset of nodes that already
   // have a copy of the record. This option is used by integration tests to

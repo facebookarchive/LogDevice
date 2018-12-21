@@ -444,6 +444,10 @@ void RecordRebuildingBase::onStored(const STORED_Header& header,
                                     log_rebuilding_id_t rebuilding_id,
                                     ServerInstanceId server_instance_id,
                                     FlushToken flush_token) {
+  if (getSettings().rebuilding_dont_wait_for_flush_callbacks) {
+    flush_token = FlushToken_INVALID;
+  }
+
   ld_spew("got STORED for %lu%s from %s with status %s",
           owner_->getLogID().val_,
           lsn_to_string(lsn_).c_str(),
@@ -800,6 +804,10 @@ void RecordRebuildingBase::AmendSelfStorageTask::onDoneOrDropped(
   RecordRebuildingBase* r = ref_.get();
   ld_check(r);
   ld_check(r->getLsn() == lsn);
+
+  if (r->getSettings().rebuilding_dont_wait_for_flush_callbacks) {
+    flushToken_ = FlushToken_INVALID;
+  }
 
   if (r->getRestartVersion() != restartVersion) {
     RATELIMIT_INFO(

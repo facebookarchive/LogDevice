@@ -5901,6 +5901,11 @@ operator()(LocalLogStore* store, FlushToken token) const {
   auto serverInstanceId = processor->getServerInstanceId();
   uint32_t shardIdx = store->getShardIdx();
 
+  // Don't send flush notifications if donors do not rely on them.
+  if (processor->settings()->rebuilding_dont_wait_for_flush_callbacks) {
+    return;
+  }
+
   // Do not send memtable flush notification if the rebuild store durability
   // is anything greater than MEMORY. This is a temporary solution to disable
   // sending a MEMTABLE_FLUSHED update when not using REBUILDING without WAL.

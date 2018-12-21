@@ -2287,6 +2287,18 @@ void Settings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::Rebuilding);
 
+  init("rebuilding-dont-wait-for-flush-callbacks",
+       &rebuilding_dont_wait_for_flush_callbacks,
+       "false",
+       nullptr, // no validation
+       "Regardless of the value of 'rebuild-store-durability', assume "
+       "any successfully completed store is durable without waiting for "
+       "flush notifications. NOTE: Use of this setting will lead to silent "
+       "under-replication when 'rebuild-store-durability' is set to 'MEMORY'. "
+       "Use for testing and I/O characterization only.",
+       SERVER | REQUIRES_RESTART,
+       SettingsCategory::Rebuilding);
+
   init("rebuild-without-amends",
        &rebuild_without_amends,
        "false",
