@@ -117,7 +117,7 @@ std::string ShardAuthoritativeStatusMap::describe() const {
 
 bool ShardAuthoritativeStatusMap::
 operator==(const ShardAuthoritativeStatusMap& other) const {
-  return shards_ == other.shards_;
+  return version_ == other.version_ && shards_ == other.shards_;
 }
 
 bool ShardAuthoritativeStatusMap::
@@ -142,10 +142,18 @@ Request::Execution UpdateShardAuthoritativeMapRequest::execute() {
 
 void UpdateShardAuthoritativeMapRequest::broadcastToAllWorkers(
     const ShardAuthoritativeStatusMap& map) {
-  if (Worker::onThisThread()
+  const ShardAuthoritativeStatusMap& current_map =
+      Worker::onThisThread()
           ->shardStatusManager()
-          .getShardAuthoritativeStatusMap()
-          .getVersion() >= map.getVersion()) {
+          .getShardAuthoritativeStatusMap();
+  // Check if this worker already has either a more up to date version or
+  // exactly the same map. Note that equal version doesn't necessarily mean
+  // equal map because of authoritative_status_overrides setting.
+  // Also note that the O(n)-time current_map == map comparison shouldn't slow
+  // things down noticeably because it's amortized by other O(n)-time things
+  // that the caller of this method does. In particular, it takes O(n) time to
+  // construct (or copy, or deserialize) `map` in the first place.
+  if (current_map.getVersion() > map.getVersion() || (current_map == map)) {
     // This worker already has a more up to date version. Do not broadcast as
     // it is likely that all workers were already updated by another
     // UpdateShardAuthoritativeMapRequest.

@@ -1492,7 +1492,7 @@ int Sequencer::sendReleases(lsn_t lsn,
       h.shard = shard.shard();
       if (sender.sendMessage(
               std::make_unique<RELEASE_Message>(h), shard.asNodeID()) != 0) {
-        RATELIMIT_WARNING(
+        RATELIMIT_DEBUG(
             std::chrono::seconds(1),
             1,
             "Failed to send a RELEASE message for record %s to %s: %s",

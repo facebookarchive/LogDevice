@@ -358,6 +358,10 @@ void Worker::onSettingsUpdated() {
   if (impl_->graylistingTracker_) {
     impl_->graylistingTracker_->onSettingsUpdated();
   }
+
+  if (event_log_) {
+    event_log_->onSettingsUpdated();
+  }
 }
 
 void Worker::initializeSubscriptions() {

@@ -8,6 +8,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 namespace facebook { namespace logdevice {
 
@@ -48,5 +49,10 @@ enum class AuthoritativeStatus : uint8_t {
 
 std::string toString(const AuthoritativeStatus& st);
 std::string toShortString(const AuthoritativeStatus& st);
+std::vector<std::string> allAuthoritativeStatusStrings();
+// Accepts both long and short names. Case sensitive.
+// Returns false if there's no such status.
+bool parseAuthoritativeStatus(const std::string& s,
+                              AuthoritativeStatus& out_status);
 
 }} // namespace facebook::logdevice

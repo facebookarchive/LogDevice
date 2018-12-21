@@ -96,6 +96,11 @@ class EventLogStateMachine
    */
   void noteConfigurationChanged();
 
+  /**
+   * Called when settings have changed.
+   */
+  void onSettingsUpdated();
+
   static int serializeDelta(const EventLogRecord& delta,
                             void* buf,
                             size_t buf_size);

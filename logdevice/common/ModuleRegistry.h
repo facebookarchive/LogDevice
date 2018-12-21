@@ -27,12 +27,12 @@ class Module {
   explicit Module(std::string name)
       : name_(name), log_level_(dbg::Level::NONE) {}
 
-  void resetLogLevel() {
-    log_level_.store(dbg::Level::NONE);
+  dbg::Level resetLogLevel() {
+    return log_level_.exchange(dbg::Level::NONE);
   }
 
-  void setLogLevel(dbg::Level level) {
-    log_level_.store(level);
+  dbg::Level setLogLevel(dbg::Level level) {
+    return log_level_.exchange(level);
   }
 
   dbg::Level getLogLevel() const {
@@ -40,7 +40,7 @@ class Module {
     return (level == dbg::Level::NONE) ? dbg::currentLevel.load() : level;
   }
 
-  std::string getName() const {
+  const std::string& getName() const {
     return name_;
   }
 

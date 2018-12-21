@@ -260,11 +260,7 @@ on_server_settings_changed(UpdateableSettings<ServerSettings> server_settings) {
   dbg::currentLevel = server_settings->loglevel;
   dbg::externalLoggerLogLevel = server_settings->external_loglevel;
   ZookeeperClient::setDebugLevel(server_settings->loglevel);
-
-  dbg::clearLogLevelOverrides();
-  if (!server_settings->loglevel_overrides.empty()) {
-    dbg::setLogLevelOverrides(server_settings->loglevel_overrides);
-  }
+  dbg::setLogLevelOverrides(server_settings->loglevel_overrides);
 
   // If `unmap_caches' is true, install our coredump handler.  If false
   // restore the default handler.

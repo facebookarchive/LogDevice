@@ -86,7 +86,6 @@ LogsConfigManager::LogsConfigManager(
 }
 
 void LogsConfigManager::onSettingsUpdated() {
-  ld_info("Settings has been updated, refreshing LogsConfigManager");
   auto previous_grace_period = publish_grace_period_;
   publish_grace_period_ =
       Worker::onThisThread(true)->settings().logsconfig_manager_grace_period;
@@ -95,6 +94,7 @@ void LogsConfigManager::onSettingsUpdated() {
     if (publish_timer_.isActive()) {
       // LCM is already running and we have an active publish timer.
       ld_check(is_running_);
+
       // Let's see if the grace period has been updated, in this case we will
       // cancel and reactivate the timer.
       if (publish_grace_period_ != previous_grace_period) {
@@ -105,18 +105,16 @@ void LogsConfigManager::onSettingsUpdated() {
         cancelPublishTimer();
         activatePublishTimer();
       }
+    } else {
+      start();
     }
-    ld_info("LogsConfigManager is enabled in settings");
-    start();
   } else {
-    ld_info("LogsConfigManager is disabled in settings");
     stop();
   }
 }
 
 void LogsConfigManager::start() {
   if (is_running_) {
-    ld_info("LogsConfigManager is already running, start() will do nothing");
     return;
   }
   ld_info("Starting LogsConfig Manager RSM");

@@ -189,6 +189,7 @@ sidebar_label: Settings
 ## Read path
 |   Name    |   Description   |  Default  |   Notes   |
 |-----------|-----------------|:---------:|-----------|
+| authoritative-status-overrides | Force the given authoritative statuses for the given shards. Comma-separated list of overrides, each override of form 'N<node>S<shard>:<status>' or 'N<node>S<shard1>-<shard2>:<status>'. E.g. 'N7:S0-15:UNDERREPLICATION,N8:S2:UNDERREPLICATION' will set status of shards 0-15 of node 7 and shard 2 of node 8 to UNDERREPLICATION. This is useful for recovering from situations where internal logs or metadata logs are unreadable because too many nodes are unavailable or lost their data. In such situation, use this setting to temporarily override the state of shards that are unavailable (not running logdeviced) to UNDERREPLICATION, then, optionally, write SHARD\_UNRECOVERABLE events for the same shards to event log. |  | server&nbsp;only |
 | client-epoch-metadata-cache-size | maximum number of entries in the client-side epoch metadata cache. Set it to 0 to disable the epoch metadata cache. | 50000 | requires&nbsp;restart, client&nbsp;only |
 | client-initial-redelivery-delay | Initial delay to use when reader application rejects a record or gap | 1s |  |
 | client-is-log-empty-grace-period | After receiving responses to an isLogEmpty() request from an f-majority of nodes, wait up to this long for more nodes to chime in if there is not yet consensus. | 5s | **experimental**, client&nbsp;only |

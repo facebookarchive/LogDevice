@@ -54,6 +54,13 @@ void StandaloneAdminServer::start() {
 
 )" << std::endl;
   ld_info("Starting Standalone Admin Server");
+
+#ifdef NDEBUG
+  ld_info("asserts off (NDEBUG set)");
+#else
+  ld_info("asserts on (NDEBUG not set)");
+#endif
+
   ld_info("Config path: %s", server_settings_->config_path.c_str());
   std::string socket_addr;
   if (!admin_settings_->admin_unix_socket.empty()) {
@@ -261,16 +268,7 @@ void StandaloneAdminServer::onSettingsUpdate() {
   dbg::currentLevel = server_settings_->loglevel;
   dbg::externalLoggerLogLevel = server_settings_->external_loglevel;
   ZookeeperClient::setDebugLevel(server_settings_->loglevel);
-
-  dbg::clearLogLevelOverrides();
-  if (!server_settings_->loglevel_overrides.empty()) {
-    dbg::setLogLevelOverrides(server_settings_->loglevel_overrides);
-  }
-#ifdef NDEBUG
-  ld_info("asserts off (NDEBUG set)");
-#else
-  ld_info("asserts on (NDEBUG not set)");
-#endif
+  dbg::setLogLevelOverrides(server_settings_->loglevel_overrides);
 }
 
 bool StandaloneAdminServer::onConfigUpdate(ServerConfig& config) {

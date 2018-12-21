@@ -8,6 +8,8 @@
 #include "logdevice/common/protocol/SHARD_STATUS_UPDATE_Message.h"
 
 #include "logdevice/common/Sender.h"
+#include "logdevice/common/Worker.h"
+#include "logdevice/common/configuration/ServerConfig.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/ProtocolReader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
@@ -38,6 +40,15 @@ SHARD_STATUS_UPDATE_Message::deserialize(ProtocolReader& reader) {
 
 Message::Disposition
 SHARD_STATUS_UPDATE_Message::onReceived(const Address& from) {
+  if (Worker::onThisThread()->getServerConfig()->hasMyNodeID()) {
+    RATELIMIT_ERROR(
+        std::chrono::seconds(10),
+        2,
+        "Server got SHARD_STATUS_UPDATE message. This is unexpected. Messages "
+        "of this type are supposed to be sent to clients only. Ignoring.");
+    return Disposition::NORMAL;
+  }
+
   ld_debug("SHARD_STATUS_UPDATE message from %s: %s",
            Sender::describeConnection(from).c_str(),
            shard_status_.describe().c_str());

@@ -281,6 +281,10 @@ void EventLogStateMachine::updateWorkerShardStatusMap() {
   auto config = Worker::getConfig()->serverConfig();
   auto map = getState().toShardStatusMap(config->getNodes());
 
+  for (const auto& p : Worker::settings().authoritative_status_overrides) {
+    map.setShardStatus(p.first.node(), p.first.shard(), p.second);
+  }
+
   if (map != last_broadcast_map_) {
     UpdateShardAuthoritativeMapRequest::broadcastToAllWorkers(map);
     last_broadcast_map_ = std::move(map);
@@ -353,6 +357,11 @@ void EventLogStateMachine::noteConfigurationChanged() {
   if (getState().canTrimEventLog(*server_config)) {
     trimNotSnapshotted(getState().getLastSeenLSN());
   }
+}
+
+void EventLogStateMachine::onSettingsUpdated() {
+  // In case shard status overrides have changed.
+  updateWorkerShardStatusMap();
 }
 
 void EventLogStateMachine::snapshot(std::function<void(Status st)> cb) {

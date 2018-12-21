@@ -52,7 +52,7 @@ class InfoSettings : public AdminCommand {
                             "From Config",
                             "From Admin Cmd");
 
-    const auto& settings = server_->getSettings();
+    const SettingsUpdater& settings = server_->getSettings();
     for (const auto& setting : settings.getState()) {
       auto& set = setting.second;
       auto get = [&](SettingsUpdater::Source src) {

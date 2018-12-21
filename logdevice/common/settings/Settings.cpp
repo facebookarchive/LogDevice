@@ -328,6 +328,71 @@ Compression parse_compression(const std::string& value) {
   return compression;
 }
 
+std::unordered_map<ShardID, AuthoritativeStatus>
+parse_authoritative_status_overrides(const std::string& value) {
+  std::unordered_map<ShardID, AuthoritativeStatus> res;
+  std::vector<std::string> tokens;
+  folly::split(',', value, tokens, true);
+  for (const std::string& tok : tokens) {
+    bool ok = false;
+    do { // while (false)
+      // tok format: "N7:S2-5:UNDERREPLICATION" or "N7:S2:UNDERREPLICATION"
+      std::string node_str;
+      std::string shard_str;
+      std::string status_str;
+      if (!folly::split(':', tok, node_str, shard_str, status_str)) {
+        break;
+      }
+      AuthoritativeStatus status;
+      if (node_str.empty() || shard_str.empty() || node_str[0] != 'N' ||
+          shard_str[0] != 'S' ||
+          !parseAuthoritativeStatus(status_str, status)) {
+        break;
+      }
+      node_str.erase(node_str.begin());
+      shard_str.erase(shard_str.begin());
+      try {
+        std::vector<std::string> shard_tok;
+        folly::split('-', shard_str, shard_tok);
+        if (shard_tok.empty() || shard_tok.size() > 2) {
+          break;
+        }
+        int min_shard = std::stoi(shard_tok[0]);
+        int max_shard =
+            shard_tok.size() == 2 ? std::stoi(shard_tok[1]) : min_shard;
+        if (max_shard < min_shard || min_shard < 0 || max_shard >= MAX_SHARDS) {
+          break;
+        }
+        int node = std::stoi(node_str);
+        if (node < 0 || node > (int)std::numeric_limits<shard_index_t>::max()) {
+          break;
+        }
+        for (int shard = min_shard; shard <= max_shard; ++shard) {
+          ShardID shard_id((node_index_t)node, (shard_index_t)shard);
+          auto ins = res.emplace(shard_id, status);
+          if (!ins.second) {
+            throw boost::program_options::error(
+                "Duplicate authoritative status override for " +
+                shard_id.toString());
+          }
+        }
+        ok = true;
+      } catch (const std::logic_error&) {
+        break;
+      }
+    } while (false);
+
+    if (!ok) {
+      throw boost::program_options::error(
+          "Invalid authoritative status override: " + tok +
+          "; expected N<number>:S<number>[-<number>]:<status>, where status is "
+          "one of: " +
+          toString(allAuthoritativeStatusStrings()));
+    }
+  }
+  return res;
+}
+
 void Settings::defineSettings(SettingEasyInit& init) {
   using namespace SettingFlag;
 
@@ -2762,6 +2827,24 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "latency estimates",
        SERVER,
        SettingsCategory::Core);
+  init(
+      "authoritative-status-overrides",
+      &authoritative_status_overrides,
+      "",
+      parse_authoritative_status_overrides,
+      "Force the given authoritative statuses for the given shards. "
+      "Comma-separated list of overrides, each override of form "
+      "'N<node>S<shard>:<status>' or 'N<node>S<shard1>-<shard2>:<status>'. "
+      "E.g. 'N7:S0-15:UNDERREPLICATION,N8:S2:UNDERREPLICATION' will set status "
+      "of shards 0-15 of node 7 and shard 2 of node 8 to UNDERREPLICATION. "
+      "This is useful for recovering from situations where internal logs or "
+      "metadata logs are unreadable because too many nodes are unavailable or "
+      "lost their data. In such situation, use this setting to temporarily "
+      "override the state of shards that are unavailable (not running "
+      "logdeviced) to UNDERREPLICATION, then, optionally, write "
+      "SHARD_UNRECOVERABLE events for the same shards to event log.",
+      SERVER,
+      SettingsCategory::ReadPath);
 
   sequencer_boycotting.defineSettings(init);
 }

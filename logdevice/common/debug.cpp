@@ -238,24 +238,57 @@ static const char* component_to_file(const char* component) {
   return file;
 }
 
-void setLogLevelOverrides(const LogLevelMap& map) {
-  auto& reg = ModuleRegistry::instance();
-  for (auto it : map) {
+static void setLogLevelOverrideImpl(Module& mod, Level level) {
+  Level was = mod.setLogLevel(level);
+  if (was == level) {
+    return;
+  }
+  if (was == Level::NONE) {
     ld_info("Overriding log level for module '%s' to %s (current: %s)",
-            it.first.c_str(),
-            logLevelNames[(size_t)it.second],
+            mod.getName().c_str(),
+            logLevelNames[(size_t)level],
             logLevelNames[(size_t)currentLevel.load()]);
-    Module* mod = reg.createOrGet(it.first);
-    mod->setLogLevel(it.second);
+  } else if (level == Level::NONE) {
+    ld_info("Removing log level override %s for module '%s' (current: %s)",
+            logLevelNames[(size_t)was],
+            mod.getName().c_str(),
+            logLevelNames[(size_t)currentLevel.load()]);
+  } else {
+    ld_info("Changing log level override for module '%s' from %s to %s "
+            "(current: %s)",
+            mod.getName().c_str(),
+            logLevelNames[(size_t)was],
+            logLevelNames[(size_t)level],
+            logLevelNames[(size_t)currentLevel.load()]);
+  }
+}
+
+void addLogLevelOverrides(const LogLevelMap& map) {
+  auto& reg = ModuleRegistry::instance();
+  for (const auto& it : map) {
+    setLogLevelOverrideImpl(*reg.createOrGet(it.first), it.second);
+  }
+}
+
+void setLogLevelOverrides(LogLevelMap map) {
+  auto& reg = ModuleRegistry::instance();
+  reg.applyToAll([&](Module& mod) {
+    auto it = map.find(mod.getName());
+    if (it == map.end()) {
+      setLogLevelOverrideImpl(mod, Level::NONE);
+    } else {
+      setLogLevelOverrideImpl(mod, it->second);
+      map.erase(it);
+    }
+  });
+
+  for (const auto& it : map) {
+    setLogLevelOverrideImpl(*reg.createOrGet(it.first), it.second);
   }
 }
 
 void clearLogLevelOverrides() {
-  ld_info("Clearing all log level overrides (current: %s)",
-          logLevelNames[(size_t)currentLevel.load()]);
-
-  auto& reg = ModuleRegistry::instance();
-  reg.applyToAll([](Module& mod) { mod.resetLogLevel(); });
+  setLogLevelOverrides({});
 }
 
 Module* getModuleFromFile(const char* file) {
@@ -269,9 +302,9 @@ void enableNonblockingPipe() {
     return;
   }
 
-  // Add O_NONBLOCK flag. Note that it only works if fd is a pipe. If fd points
-  // to a file, this flag has no effect, and write() can still block waiting
-  // for writeback.
+  // Add O_NONBLOCK flag. Note that it only works if fd is a pipe. If fd
+  // points to a file, this flag has no effect, and write() can still block
+  // waiting for writeback.
 
   int flags = fcntl(fd, F_GETFL);
   if (flags < 0) {
@@ -641,5 +674,4 @@ void parseLoglevelOption(const std::string& value) {
 void parseAssertOnDataOption(bool value) {
   assertOnData = value;
 }
-
 }}} // namespace facebook::logdevice::dbg

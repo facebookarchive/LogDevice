@@ -134,12 +134,19 @@ int getFD();
 using LogLevelMap = std::unordered_map<std::string, Level>;
 
 /**
- * set log level of specific modules (source file)
+ * Set log level of specific modules (source file), without removing existing
+ * overrides in other modules.
  */
-void setLogLevelOverrides(const LogLevelMap& map);
+void addLogLevelOverrides(const LogLevelMap& map);
 
 /**
- * reset log level overrides
+ * Set log level of specific modules (source file) and remove log level
+ * overrides in all other modules.
+ */
+void setLogLevelOverrides(LogLevelMap map);
+
+/**
+ * Remove all log level overrides. Same as setLogLevelOverrides({}).
  */
 void clearLogLevelOverrides();
 

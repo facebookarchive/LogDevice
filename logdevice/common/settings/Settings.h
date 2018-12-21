@@ -12,6 +12,7 @@
 
 #include <folly/Optional.h>
 
+#include "logdevice/common/AuthoritativeStatus.h"
 #include "logdevice/common/SCDCopysetReordering.h"
 #include "logdevice/common/Sockaddr.h"
 #include "logdevice/common/StorageTask-enums.h"
@@ -1169,6 +1170,9 @@ struct Settings : public SettingsBundle {
   // TODO: set default to false (or remove option) when 2.35 is deployed
   // everywhere.
   bool read_streams_use_metadata_log_only;
+
+  std::unordered_map<ShardID, AuthoritativeStatus>
+      authoritative_status_overrides;
 
  private:
   // Only UpdateableSettings can create this bundle to ensure defaults are
