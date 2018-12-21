@@ -89,7 +89,7 @@ ShardAuthoritativeStatus::getData(QueryContext& /*ctx*/) {
   auto ld_client = ld_ctx_->getClient();
 
   EventLogRebuildingSet set;
-  const int rv = EventLogUtils::getRebuildingSet(*ld_client, set, false);
+  const int rv = EventLogUtils::getRebuildingSet(*ld_client, set);
   if (rv != 0) {
     std::string failure_reason = "Cannot read event log: ";
     failure_reason += error_description(err);

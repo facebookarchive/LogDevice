@@ -18,25 +18,45 @@ using PrintEventCallback =
     std::function<void(const DataRecord&, EventLogRecord&)>;
 
 /**
- * Retrieve a EventLogRebuildingSet by reading the event log.
+ * Tail event log, calling `cb` after every EventLogRebuildingSet update.
+ * Stop when one of:
+ *  - `cb` returns false,
+ *  - `stop_at_tail` is true, and we reached the tail LSN of event log,
+ *  - `stop_on_signal` is true, and we got a SIGTERM or SIGINT.
+ *
  * @param client Client to use to read the event log
- * @param set    Set to be filled with data read from the event log
- * @param tail   If true, register for the SIGTERM and SIGINT signals and read
- *               the event log forever until the process receives SIGTERM or
- *               SIGINT. If false, this function guarantees that it will return
- *               after it read all records appended to the event log prior to
- *               the call being made.
+ * @param set    Set to be filled with the final state after all tailing is
+ *               done. Can be nullptr.
+ * @param cb     Callback to call after each update. Return true to continue
+ *               reading, false to stop. Stopping is not immediate: we may
+ *               process a few more updates (and call `cb` for them) after
+ *               `cb` returns false.
+ * @param timeout  Give up and return -1 after this many milliseconds.
+ * @param stop_at_tail  If true, fetch tail LSN before reading and only read up
+ *                      to that LSN.
+ * @param stop_on_signal   If true, register for the SIGTERM and SIGINT signals
+ *                         and stop reading until the process receives SIGTERM
+ *                         or SIGINT.
  *
  * @return 0 on success or -1 and err is set to:
- *         - E::NOTFOUND if there is no event log configured in the cluster;
- *         - Any error code returned by Client::getTailLSNSync() if we could not
- *           retrieved the tail LSN of the event log;
- *         - Any error code returned by Reader::startReading() if we could not
- *           read the event log.
+ *         - E::TIMEDOUT if no stopping condition was reached within `timeout`
  */
-int getRebuildingSet(Client& client,
-                     EventLogRebuildingSet& set,
-                     bool tail = false);
+int tailEventLog(
+    Client& client,
+    EventLogRebuildingSet* set,
+    std::function<bool(const EventLogRebuildingSet& set,
+                       const EventLogRecord*,
+                       lsn_t)> cb,
+    std::chrono::milliseconds timeout = std::chrono::milliseconds::max(),
+    bool stop_at_tail = false,
+    bool stop_on_signal = false);
+
+/**
+ * Retrieve a EventLogRebuildingSet by reading the event log up to current tail.
+ * See tailEventLog() for description of parameters and return value.
+ * `client`'s timeout is used as timeout for reading the event log.
+ */
+int getRebuildingSet(Client& client, EventLogRebuildingSet& set);
 
 /**
  * @param client     Client to use to read the event log

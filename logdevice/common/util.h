@@ -27,6 +27,7 @@
 
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/ShardID.h"
+#include "logdevice/common/chrono_util.h"
 #include "logdevice/common/toString.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Record.h"
@@ -514,38 +515,6 @@ void removeDuplicates(std::vector<T>* out_objects) {
   std::sort(out_objects->begin(), out_objects->end());
   out_objects->erase(std::unique(out_objects->begin(), out_objects->end()),
                      out_objects->end());
-}
-
-/* Useful converted for chrono durations */
-
-template <typename T>
-std::chrono::microseconds to_usec(const T& value) {
-  return std::chrono::duration_cast<std::chrono::microseconds>(value);
-}
-
-template <typename T>
-std::chrono::milliseconds to_msec(const T& value) {
-  return std::chrono::duration_cast<std::chrono::milliseconds>(value);
-}
-
-template <typename T>
-std::chrono::seconds to_sec(const T& value) {
-  return std::chrono::duration_cast<std::chrono::seconds>(value);
-}
-
-template <typename TimePoint>
-int64_t usec_since(const TimePoint& start) {
-  return to_usec(TimePoint::clock::now() - start).count();
-}
-
-template <typename TimePoint>
-int64_t msec_since(const TimePoint& start) {
-  return to_msec(TimePoint::clock::now() - start).count();
-}
-
-template <typename TimePoint>
-int64_t sec_since(const TimePoint& start) {
-  return to_sec(TimePoint::clock::now() - start).count();
 }
 
 // Erases a single element of the vector by swapping it with the last element

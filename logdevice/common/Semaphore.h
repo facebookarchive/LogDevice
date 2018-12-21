@@ -13,6 +13,7 @@
 #include <semaphore.h>
 
 #include "logdevice/common/checks.h"
+#include "logdevice/common/chrono_util.h"
 #include "logdevice/include/Err.h"
 
 namespace facebook { namespace logdevice {
@@ -103,7 +104,8 @@ class Semaphore {
   }
 
   int timedwait(std::chrono::milliseconds timeout, bool ignore_eintr = true) {
-    return timedwait(std::chrono::system_clock::now() + timeout, ignore_eintr);
+    return timedwait(
+        truncated_add(std::chrono::system_clock::now(), timeout), ignore_eintr);
   }
 
   void post() {

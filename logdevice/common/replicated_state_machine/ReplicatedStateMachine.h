@@ -265,12 +265,12 @@ class ReplicatedStateMachine {
   /**
    * Block until this state machine completes either because someone called
    * stop() or the stopAtTail() option was provided and the state machine
-   * wreached the tail.
+   * reached the tail.
    *
    * This method is thread safe.
    *
    * @return true if this state machine finished reading, false if this method
-   * returned because of an interrupt or the timeout expired.
+   * returned because the timeout expired.
    */
   bool wait(std::chrono::milliseconds timeout);
 
@@ -331,6 +331,7 @@ class ReplicatedStateMachine {
    * Register a callback to be called each time the state changes.
    * @param cb Callback to be called. The callback provides the new state and
    * its version.
+   * Note: calling stop() from inside the callback is not supported.
    *
    * @return Handle to be used for unsubscribing. Destroying that handle
    * automaticall unsubscribes.

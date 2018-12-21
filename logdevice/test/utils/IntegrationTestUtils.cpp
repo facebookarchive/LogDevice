@@ -2662,7 +2662,7 @@ lsn_t waitUntilShardsHaveEventLogState(std::shared_ptr<Client> client,
                                        std::vector<ShardID> shards,
                                        std::set<AuthoritativeStatus> st,
                                        bool wait_for_rebuilding) {
-  std::string reason = "waiting for shards ";
+  std::string reason = "shards ";
   for (int i = 0; i < shards.size(); ++i) {
     if (i > 0) {
       reason += ",";
@@ -2683,27 +2683,36 @@ lsn_t waitUntilShardsHaveEventLogState(std::shared_ptr<Client> client,
     reason += "}";
   }
 
+  ld_info("Waiting for %s", reason.c_str());
+  auto start_time = SteadyTimestamp::now();
+
   lsn_t last_update = LSN_INVALID;
 
-  wait_until(reason.c_str(), [&]() {
-    EventLogRebuildingSet set;
-    const int rv = EventLogUtils::getRebuildingSet(*client, set);
-    if (rv != 0) {
-      return false;
-    }
-    for (const ShardID& shard : shards) {
-      std::vector<node_index_t> donors_remaining;
-      const auto status = set.getShardAuthoritativeStatus(
-          shard.node(), shard.shard(), donors_remaining);
-      if (!st.count(status) ||
-          (wait_for_rebuilding && !donors_remaining.empty())) {
+  int rv = EventLogUtils::tailEventLog(
+      *client,
+      nullptr,
+      [&](const EventLogRebuildingSet& set, const EventLogRecord*, lsn_t) {
+        for (const ShardID& shard : shards) {
+          std::vector<node_index_t> donors_remaining;
+          const auto status = set.getShardAuthoritativeStatus(
+              shard.node(), shard.shard(), donors_remaining);
+          if (!st.count(status) ||
+              (wait_for_rebuilding && !donors_remaining.empty())) {
+            return true;
+          }
+        }
+        last_update = set.getLastUpdate();
         return false;
-      }
-    }
-    last_update = set.getLastUpdate();
-    return true;
-  });
+      });
 
+  auto seconds_waited =
+      std::chrono::duration_cast<std::chrono::duration<double>>(
+          SteadyTimestamp::now() - start_time);
+  ld_info("Finished waiting for %s (%.3fs)",
+          reason.c_str(),
+          seconds_waited.count());
+
+  ld_check(rv == 0);
   return last_update;
 }
 

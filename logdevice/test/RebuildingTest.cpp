@@ -380,23 +380,22 @@ class RebuildingTest : public IntegrationTestBase,
           cluster.getNode(node).start();
           cluster.getNode(node).waitUntilStarted();
 
-          wait_until("self initiated rebuild", [&]() {
-            EventLogRebuildingSet polled_set;
-            const int rv = EventLogUtils::getRebuildingSet(*client, polled_set);
-            if (rv != 0) {
-              return false;
-            }
-            return polled_set.getLastUpdate() > base_set.getLastUpdate();
-          });
+          ld_info("Waiting for self-initiated rebuild");
+          EventLogUtils::tailEventLog(*client,
+                                      nullptr,
+                                      [&](const EventLogRebuildingSet& set,
+                                          const EventLogRecord*,
+                                          lsn_t) {
+                                        return set.getLastUpdate() <=
+                                            base_set.getLastUpdate();
+                                      });
 
-          wait_until("empty rebuilding set", [&]() {
-            EventLogRebuildingSet polled_set;
-            const int rv = EventLogUtils::getRebuildingSet(*client, polled_set);
-            if (rv != 0) {
-              return false;
-            }
-            return polled_set.empty();
-          });
+          ld_info("Waiting for empty rebuilding set");
+          EventLogUtils::tailEventLog(*client,
+                                      nullptr,
+                                      [&](const EventLogRebuildingSet& set,
+                                          const EventLogRecord*,
+                                          lsn_t) { return !set.empty(); });
           break;
       }
 
@@ -672,6 +671,7 @@ TEST_P(RebuildingTest, RebuildingWithNoAmends) {
                      .setParam("--gap-grace-period", "10ms")
                      // fall back to non-authoritative quickly
                      .setParam("--event-log-grace-period", "10ms")
+                     .setParam("--rebuilding-restarts-grace-period", "1ms")
                      .setParam("--rebuild-without-amends", "true")
                      .setNumLogs(42)
                      .create(9); // 1 sequencer node + 8 storage nodes
@@ -1407,11 +1407,26 @@ TEST_P(RebuildingTest, NodeRebuildingInRelocateModeRemovedFromConfig) {
   // AUTHORITATIVE_EMPTY but is not in the config anymore. Readers don't care
   // since the node is not in the config, they treat it as if it was
   // AUTHORITATIVE_EMPTY.
-  IntegrationTestUtils::waitUntilShardsHaveEventLogState(
-      client,
-      {ShardID(5, 0), ShardID(5, 1), ShardID(5, 2)},
-      AuthoritativeStatus::FULLY_AUTHORITATIVE,
-      true);
+  //
+  // Since the transition from AUTHORITATIVE_EMPTY to FULLY_AUTHORITATIVE
+  // happens by trimming the log, event log tailer inside
+  // waitUntilShardsHaveEventLogState won't notice it, so we have to do polling
+  // instead of tailing.
+  wait_until("N5 becomes FULLY_AUTHORITATIVE", [&] {
+    ShardAuthoritativeStatusMap m;
+    int rv = cluster->getShardAuthoritativeStatusMap(m);
+    EXPECT_EQ(rv, 0) << err;
+    if (rv != 0) {
+      return false;
+    }
+    for (shard_index_t s = 0; s < 3; ++s) {
+      if (m.getShardStatus(ShardID(5, s)) !=
+          AuthoritativeStatus::FULLY_AUTHORITATIVE) {
+        return false;
+      }
+    }
+    return true;
+  });
 }
 
 // A node is removed from the config while it is rebuilding.
@@ -1824,6 +1839,10 @@ TEST_P(RebuildingTest, MiniRebuildingIsAuthoritative) {
   folly::Optional<lsn_t> batch_start;
   dirtyNodes(*cluster, *client, node_set, /*shard*/ 0, batch_start);
 
+  EventLogRebuildingSet base_set;
+  ASSERT_EQ(EventLogUtils::getRebuildingSet(*client, base_set), 0);
+  ASSERT_TRUE(base_set.empty());
+
   // Kill all nodes
   for (auto node : node_set) {
     cluster->getNode(node).kill();
@@ -1834,24 +1853,20 @@ TEST_P(RebuildingTest, MiniRebuildingIsAuthoritative) {
     cluster->getNode(node).start();
   }
 
-  EventLogRebuildingSet base_set;
-  wait_until("self initiated rebuild", [&]() {
-    EventLogRebuildingSet polled_set;
-    const int rv = EventLogUtils::getRebuildingSet(*client, polled_set);
-    if (rv != 0) {
-      return false;
-    }
-    return polled_set.getLastUpdate() > base_set.getLastUpdate();
-  });
-
-  wait_until("empty rebuilding set", [&]() {
-    EventLogRebuildingSet polled_set;
-    const int rv = EventLogUtils::getRebuildingSet(*client, polled_set);
-    if (rv != 0) {
-      return false;
-    }
-    return polled_set.empty();
-  });
+  ld_info("Waiting for self-initiated rebuild");
+  EventLogUtils::tailEventLog(
+      *client,
+      nullptr,
+      [&](const EventLogRebuildingSet& set, const EventLogRecord*, lsn_t) {
+        return set.getLastUpdate() <= base_set.getLastUpdate();
+      });
+  ld_info("Waiting for empty rebuilding set");
+  EventLogUtils::tailEventLog(
+      *client,
+      nullptr,
+      [&](const EventLogRebuildingSet& set, const EventLogRecord*, lsn_t) {
+        return !set.empty();
+      });
 }
 
 // We shouldn't have to explicitly mark dirty-nodes unrecoverable
@@ -1935,14 +1950,13 @@ TEST_P(RebuildingTest, MiniRebuildingAlwaysNonRecoverable) {
     cluster->getNode(node).start();
   }
 
-  wait_until("self initiated rebuild", [&]() {
-    EventLogRebuildingSet polled_set;
-    const int rv = EventLogUtils::getRebuildingSet(*client, polled_set);
-    if (rv != 0) {
-      return false;
-    }
-    return polled_set.getLastUpdate() > base_set.getLastUpdate();
-  });
+  ld_info("Waiting for self-initiated rebuild");
+  EventLogUtils::tailEventLog(
+      *client,
+      nullptr,
+      [&](const EventLogRebuildingSet& set, const EventLogRecord*, lsn_t) {
+        return set.getLastUpdate() <= base_set.getLastUpdate();
+      });
 
   // Should still have write availability. Write some records.
   ld_info("Writing.");
@@ -2016,15 +2030,13 @@ TEST_P(RebuildingTest, MiniRebuildingAlwaysNonRecoverable) {
   waitUntilShardsHaveEventLogState(
       client, to_rebuild, AuthoritativeStatus::FULLY_AUTHORITATIVE, true);
 
-  wait_until("empty rebuilding set", [&]() {
-    EventLogRebuildingSet polled_set;
-    const int rv = EventLogUtils::getRebuildingSet(*client, polled_set);
-    if (rv != 0) {
-      return false;
-    }
-    ld_error("RebuildingSet now %s", polled_set.toString().c_str());
-    return polled_set.empty();
-  });
+  ld_info("Waiting for empty rebuilding set");
+  EventLogUtils::tailEventLog(
+      *client,
+      nullptr,
+      [&](const EventLogRebuildingSet& set, const EventLogRecord*, lsn_t) {
+        return !set.empty();
+      });
 }
 
 TEST_P(RebuildingTest, RebuildingWithDifferentDurabilities) {
@@ -2043,6 +2055,7 @@ TEST_P(RebuildingTest, RebuildingWithDifferentDurabilities) {
   event_log_config.rangeName = "event_log";
   event_log_config.maxWritesInFlight = 30;
 
+  ld_info("Creating cluster");
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .apply(commonSetup())
                      .setParam("--rebuild-store-durability", "async_write")
@@ -2052,7 +2065,9 @@ TEST_P(RebuildingTest, RebuildingWithDifferentDurabilities) {
                      .create(5);
 
   // Write some records
+  ld_info("Creating client");
   auto client = cluster->createClient();
+  ld_info("Writing records");
   for (int i = 1; i <= 1000; ++i) {
     std::string data("data" + std::to_string(i));
     lsn_t lsn = client->appendSync(LOG_ID, Payload(data.data(), data.size()));
@@ -2061,24 +2076,33 @@ TEST_P(RebuildingTest, RebuildingWithDifferentDurabilities) {
     ASSERT_NE(LSN_INVALID, lsn);
   }
 
+  ld_info("Waiting for recovery");
   cluster->waitForRecovery();
 
+  ld_info("Changing settings");
   cluster->getNode(2).sendCommand("set rebuild-store-durability memory");
   cluster->getNode(3).sendCommand("set rebuild-store-durability memory");
 
+  ld_info("Shutting down N1");
   EXPECT_EQ(0, cluster->getNode(1).shutdown());
+  ld_info("Wiping N1");
   auto shard_path = path_for_node_shard(*cluster, node_index_t(1), 0);
   for (fs::directory_iterator end_dir_it, it(shard_path); it != end_dir_it;
        ++it) {
     fs::remove_all(it->path());
   }
+  ld_info("Bumping generation");
   ASSERT_EQ(0, cluster->bumpGeneration(1));
+  ld_info("Starting N1");
   cluster->getNode(1).start();
   cluster->getNode(1).waitUntilStarted();
 
+  ld_info("Requesting rebuilding");
   ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, 1, 0));
 
+  ld_info("Waiting for rebuilding");
   cluster->getNode(1).waitUntilAllShardsFullyAuthoritative(client);
+  ld_info("Waiting for metadata log writes");
   cluster->waitForMetaDataLogWrites();
   // there is a known issue where purging deletes records that gets surfaced in
   // tests with sequencer-written metadata, which is why we skip checking
@@ -2087,6 +2111,7 @@ TEST_P(RebuildingTest, RebuildingWithDifferentDurabilities) {
       "--dont-count-bridge-records",
   };
   // Verify that everything is correctly replicated.
+  ld_info("Running checker");
   ASSERT_EQ(0, cluster->checkConsistency(check_args));
 }
 
@@ -2564,7 +2589,9 @@ TEST_P(RebuildingTest, ReplicationCheckerDuringRebuilding) {
 // Case: shards come back wiped.
 TEST_P(RebuildingTest, DisableDataLogRebuildShardsWiped) {
   // FIXME: Need to add a mix of retentions.
-  std::chrono::seconds maxBacklogDuration(30);
+  std::chrono::seconds maxBacklogDuration(20);
+
+  ld_info("Creating cluster");
 
   Configuration::Log log_config;
   log_config.replicationFactor = 3;
@@ -2586,11 +2613,12 @@ TEST_P(RebuildingTest, DisableDataLogRebuildShardsWiped) {
           .apply(commonSetup())
           .setParam("--rebuild-store-durability", "async_write")
           .setParam("--disable-data-log-rebuilding", "true")
+          .setParam("--rebuilding-restarts-grace-period", "1ms")
           .setLogConfig(log_config)
           .setEventLogConfig(event_log_config)
           .eventLogMode(
               IntegrationTestUtils::ClusterFactory::EventLogMode::SNAPSHOTTED)
-          .setNumLogs(42)
+          .setNumLogs(10)
           .create(7);
 
   // Run two iterations of each test to make sure that
@@ -2599,21 +2627,25 @@ TEST_P(RebuildingTest, DisableDataLogRebuildShardsWiped) {
   int id = 1;
   int maxIters = 2;
   for (int iter = 0; iter < maxIters; iter++) {
-    int numRecords = 1000;
+    int numRecords = 100;
 
     // Write some records
+    ld_info("Writing records");
     auto client = cluster->createClient();
     while (numRecords--) {
       std::string data("data" + std::to_string(id++));
-      lsn_t lsn = client->appendSync(LOG_ID, Payload(data.data(), data.size()));
+      lsn_t lsn = client->appendSync(
+          logid_t(numRecords % 10 + 1), Payload(data.data(), data.size()));
       /* sleep override */
       std::this_thread::sleep_for(std::chrono::milliseconds(1));
       ASSERT_NE(LSN_INVALID, lsn);
     }
 
+    ld_info("Waiting for recovery");
     cluster->waitForRecovery();
 
     // Wipe some of the shards.
+    ld_info("Wiping shards and restarting nodes");
     int nodeToFail = 1;
     EXPECT_EQ(0, cluster->getNode(nodeToFail).shutdown());
     cluster->getNode(nodeToFail).wipeShard(0);
@@ -2623,11 +2655,13 @@ TEST_P(RebuildingTest, DisableDataLogRebuildShardsWiped) {
     cluster->getNode(nodeToFail).waitUntilStarted();
 
     // Ask to rebuild the shards.
+    ld_info("Requesting rebuilding");
     ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, nodeToFail, 0));
     std::this_thread::sleep_for(std::chrono::seconds(1));
     ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, nodeToFail, 1));
 
     // Wait a little and fail the same shard on another node
+    ld_info("Waiting, wiping more shards, restarting nodes");
     nodeToFail = 4;
     std::this_thread::sleep_for(std::chrono::seconds(1));
     EXPECT_EQ(0, cluster->getNode(nodeToFail).shutdown());
@@ -2642,25 +2676,30 @@ TEST_P(RebuildingTest, DisableDataLogRebuildShardsWiped) {
     auto tstart = RecordTimestamp::now().toSeconds();
 
     // Ask to rebuild the shards.
+    ld_info("Requesting rebuilding");
     ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, nodeToFail, 0));
     std::this_thread::sleep_for(std::chrono::seconds(1));
     ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, nodeToFail, 1));
 
     // Wait a little and restart one of the other nodes. We want to
     // make sure that donor restarts don't impact the expected outcome.
+    ld_info("Waiting and restarting nodes");
     nodeToFail = 2;
     std::this_thread::sleep_for(std::chrono::seconds(1));
     EXPECT_EQ(0, cluster->getNode(nodeToFail).shutdown());
     cluster->getNode(nodeToFail).start();
     cluster->getNode(nodeToFail).waitUntilStarted();
 
+    ld_info("Waiting for fully authoritative");
     cluster->getNode(1).waitUntilAllShardsFullyAuthoritative(client);
     cluster->getNode(4).waitUntilAllShardsFullyAuthoritative(client);
 
     // The failed shards must be FA only after all its original data expired.
     auto elapsed = RecordTimestamp::now().toSeconds() - tstart;
-    ASSERT_LT(maxBacklogDuration.count(), elapsed.count());
+    ASSERT_LE(maxBacklogDuration.count(), elapsed.count());
   }
+
+  ld_info("All done");
 }
 
 // Case: shards come back good.

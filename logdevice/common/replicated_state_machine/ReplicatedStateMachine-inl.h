@@ -64,7 +64,7 @@ bool ReplicatedStateMachine<T, D>::wait(std::chrono::milliseconds timeout) {
   if (rv == 0) {
     return true;
   } else {
-    ld_check(errno == EINTR || err == E::TIMEDOUT);
+    ld_check(err == E::TIMEDOUT);
     return false;
   }
 }

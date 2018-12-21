@@ -25,9 +25,16 @@
 
 namespace facebook { namespace logdevice { namespace EventLogUtils {
 
-bool aborted = false;
+std::atomic<bool> stop_requested_by_signal{false};
 
-int getRebuildingSet(Client& client, EventLogRebuildingSet& set, bool tail) {
+int tailEventLog(
+    Client& client,
+    EventLogRebuildingSet* set,
+    std::function<
+        bool(const EventLogRebuildingSet&, const EventLogRecord*, lsn_t)> cb,
+    std::chrono::milliseconds timeout,
+    bool stop_at_tail,
+    bool stop_on_signal) {
   ClientImpl* client_impl = dynamic_cast<ClientImpl*>(&client);
   ld_check(client_impl);
 
@@ -40,12 +47,13 @@ int getRebuildingSet(Client& client, EventLogRebuildingSet& set, bool tail) {
   auto event_log =
       std::make_unique<EventLogStateMachine>(client_settings->getSettings());
 
-  if (!tail) {
+  if (stop_at_tail) {
     event_log->stopAtTail();
-  } else {
+  }
+  if (stop_on_signal) {
     // The user can stop reading by sending SIGTERM or SIGINT
     struct sigaction sa;
-    sa.sa_handler = [](int /* sig */) { aborted = true; };
+    sa.sa_handler = [](int /* sig */) { stop_requested_by_signal.store(true); };
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = 0;
     int rv = sigaction(SIGTERM, &sa, nullptr);
@@ -54,36 +62,70 @@ int getRebuildingSet(Client& client, EventLogRebuildingSet& set, bool tail) {
     ld_check(rv == 0);
   }
 
+  std::atomic<bool> stop_requested_by_cb{false};
+  auto subscription = event_log->subscribe([&](const EventLogRebuildingSet& s,
+                                               const EventLogRecord* delta,
+                                               lsn_t version) {
+    if (!cb(s, delta, version)) {
+      // Ask the main thread to post a StopReplicatedStateMachineRequest.
+      // Note that we can't directly call stop() here (because ClientReadStream
+      // doesn't like it), and can't directly post
+      // StopReplicatedStateMachineRequest here (because main thread also posts
+      // the request when getting a signal, and duplicate
+      // StopReplicatedStateMachineRequest-s are not allowed).
+      stop_requested_by_cb.store(true);
+    }
+  });
+
   std::unique_ptr<Request> rq = std::make_unique<
       StartReplicatedStateMachineRequest<EventLogStateMachine>>(
       event_log.get());
   client_impl->getProcessor().postWithRetrying(rq);
 
-  bool sent_abort = false;
+  bool timed_out = false;
+  bool stopped = false;
+  SteadyTimestamp start_time = SteadyTimestamp::now();
   while (true) {
-    if (event_log->wait(client_impl->getTimeout())) {
-      // EventLogStateMachine reached the tail or was successfully aborted or
-      // timed out.
+    if (event_log->wait(std::chrono::milliseconds(10))) {
+      // EventLogStateMachine reached the tail.
+      stopped = true;
       break;
-    } else if ((aborted || (err == E::TIMEDOUT && !tail)) && !sent_abort) {
-      // if we are tailing and the user aborted with a signal or we are not
-      // tailing and wait() timed out, then send a stop request and give up.
-      std::unique_ptr<Request> req = std::make_unique<
-          StopReplicatedStateMachineRequest<EventLogStateMachine>>(
-          event_log.get());
-      client_impl->getProcessor().postWithRetrying(req);
-      sent_abort = true;
+    }
+
+    if (stop_requested_by_signal.load() || stop_requested_by_cb.load()) {
+      break;
+    }
+
+    if (std::chrono::duration_cast<std::chrono::milliseconds>(
+            SteadyTimestamp::now() - start_time) >= timeout) {
+      timed_out = true;
+      break;
     }
   }
 
-  set = event_log->getCurrentRebuildingSet();
-  if (err == E::TIMEDOUT) {
+  if (!stopped) {
+    // If timeout expired or reading was aborted by callback or signal, send
+    // a stop request.
+    std::unique_ptr<Request> req = std::make_unique<
+        StopReplicatedStateMachineRequest<EventLogStateMachine>>(
+        event_log.get());
+    client_impl->getProcessor().postWithRetrying(req);
+    // Wait for the stop request to come through.
+    bool rv = event_log->wait(std::chrono::milliseconds::max());
+    ld_check(rv);
+  }
+  subscription.reset();
+
+  if (set != nullptr) {
+    *set = event_log->getCurrentRebuildingSet();
+  }
+  if (timed_out) {
     RATELIMIT_ERROR(
         std::chrono::seconds(1),
         1,
         "Timed out(%lums) while fetching EventLog rebuilding set: %s",
-        client_impl->getTimeout().count(),
-        set.toString().c_str());
+        timeout.count(),
+        event_log->getCurrentRebuildingSet().toString().c_str());
   }
 
   Semaphore destroy_sem;
@@ -92,9 +134,24 @@ int getRebuildingSet(Client& client, EventLogRebuildingSet& set, bool tail) {
       event_log.release(), [&destroy_sem]() { destroy_sem.post(); });
   client_impl->getProcessor().postWithRetrying(req);
   destroy_sem.wait();
-  // if we are not tailing, and got a timed out, we return an error to
-  // the caller. any other case is considered a success.
-  return (sent_abort && !tail) ? -1 : 0;
+  if (timed_out) {
+    err = E::TIMEDOUT;
+    return -1;
+  }
+  return 0;
+}
+
+int getRebuildingSet(Client& client, EventLogRebuildingSet& set) {
+  ClientImpl* client_impl = dynamic_cast<ClientImpl*>(&client);
+  ld_check(client_impl);
+  return tailEventLog(
+      client,
+      &set,
+      [](const EventLogRebuildingSet&, const EventLogRecord*, lsn_t) {
+        return true;
+      },
+      client_impl->getTimeout(),
+      /* stop_at_tail */ true);
 }
 
 int getShardAuthoritativeStatusMap(Client& client,
@@ -166,8 +223,8 @@ bool canWipeShardsWithoutCausingDataLoss(
     }
 
     // If we can replicate on the set of nodes known as underreplicated
-    // according to replication factor and failure domain properties, this means
-    // wiping (nid, shard) would cause data loss.
+    // according to replication factor and failure domain properties, this
+    // means wiping (nid, shard) would cause data loss.
     const bool wipe_would_cause_dataloss =
         failure_domain_info.canReplicate(true);
 
@@ -218,5 +275,4 @@ Status trim(Client& client, std::chrono::milliseconds timestamp) {
   sem.wait();
   return res;
 }
-
 }}} // namespace facebook::logdevice::EventLogUtils

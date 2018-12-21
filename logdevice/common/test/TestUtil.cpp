@@ -264,21 +264,28 @@ int wait_until(const char* reason,
   }
 
   while (1) {
+    auto now = std::chrono::steady_clock::now();
+    auto seconds_waited =
+        std::chrono::duration_cast<std::chrono::duration<double>>(now - start);
+
     if (cond()) {
-      ld_info("Finished waiting until: %s", reason);
+      ld_info(
+          "Finished waiting until: %s (%.3fs)", reason, seconds_waited.count());
       return 0;
     }
 
-    auto now = std::chrono::steady_clock::now();
     if (now > deadline) {
-      ld_info("Timed out when waiting until: %s", reason);
+      ld_info("Timed out when waiting until: %s (%.3fs)",
+              reason,
+              seconds_waited.count());
       return -1;
     }
     if (now - last_logged >= std::chrono::seconds(5)) {
       if (reason != nullptr) {
-        ld_info("Still waiting until: %s", reason);
+        ld_info(
+            "Still waiting until: %s (%.3fs)", reason, seconds_waited.count());
       } else {
-        ld_info("Still waiting");
+        ld_info("Still waiting (%.3fs)", seconds_waited.count());
       }
       last_logged = now;
     }
