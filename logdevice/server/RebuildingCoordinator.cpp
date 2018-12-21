@@ -249,12 +249,15 @@ void RebuildingCoordinator::startOnWorkerThread() {
 }
 
 void RebuildingCoordinator::shutdown() {
+  // Among other things, make sure to destroy/cancel all timers here.
+  // Otherwise the destructor will try to cancel the timer from a wrong thread.
   rebuildingSettingsSubscription_.unsubscribe();
   scheduledRestarts_.clear();
   handle_.reset();
   shardsRebuilding_.clear();
   writer_.reset();
   nonAuthoratitiveRebuildingChecker_.reset();
+  planning_timer_.reset();
   shuttingDown_ = true;
 }
 
