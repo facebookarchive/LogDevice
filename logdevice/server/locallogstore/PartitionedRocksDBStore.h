@@ -413,10 +413,6 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
   int writeMulti(const std::vector<const WriteOp*>& writes,
                  const WriteOptions& write_options) override;
 
-  void onBytesWritten(size_t written) override {
-    bytes_written_since_flush_.fetch_add(written);
-  }
-
   int writeStoreMetadata(const StoreMetadata& metadata,
                          const WriteOptions& write_options) override;
 
@@ -1024,11 +1020,13 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
       SteadyTimestamp latest_dirty_time;
     };
 
-    FlushEvaluator(uint64_t total_active_memory_trigger,
+    FlushEvaluator(int shard_idx,
+                   uint64_t total_active_memory_trigger,
                    uint64_t max_memtable_size_trigger,
                    uint64_t total_active_low_watermark,
                    std::shared_ptr<const RocksDBSettings> settings)
-        : total_active_memory_trigger_(total_active_memory_trigger),
+        : shard_idx_(shard_idx),
+          total_active_memory_trigger_(total_active_memory_trigger),
           max_memtable_size_trigger_(max_memtable_size_trigger),
           total_active_low_watermark_(total_active_low_watermark),
           settings_(std::move(settings)) {
@@ -1099,6 +1097,7 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
     }
 
    private:
+    const int shard_idx_;
     // Memory limits
     const uint64_t total_active_memory_trigger_;
     const uint64_t max_memtable_size_trigger_;
@@ -1680,13 +1679,6 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
   FlushToken last_broadcast_flush_{FlushToken_INVALID};
   std::atomic<bool> cleaner_pass_requested_{false};
 
-  // For implementing an amount written flush trigger.
-  std::atomic<uint64_t> bytes_written_since_flush_{0};
-  // For restricting manual MemTable flushes to a maximum frequency.
-  SteadyTimestamp last_flush_time_{currentSteadyTime()};
-  // For time triggered manual MemTable flush policies.
-  SteadyTimestamp min_partition_idle_time_{SteadyTimestamp::max()};
-
   // Set to valid partition ids if rebuilding has yet to restore data in one
   // or more partitions that were dirty at the time of an un-safe shutdown.
   std::atomic<partition_id_t> min_under_replicated_partition_{PARTITION_MAX};
@@ -1722,8 +1714,6 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
   // similarly to init(): background threads use virtual methods,
   // so they need to be destroyed before the subclass is destroyed.
   void joinBackgroundThreads();
-
-  virtual bool shouldFlushMemtables();
 
   // Decides if it's time to create new partition. It's time when current
   // latest partition is either too old or has too many L0 files.

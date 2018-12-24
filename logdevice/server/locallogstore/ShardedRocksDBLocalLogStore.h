@@ -13,6 +13,7 @@
 #include <boost/filesystem.hpp>
 #include <rocksdb/env.h>
 
+#include "logdevice/common/SingleEvent.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/settings/RebuildingSettings.h"
@@ -146,6 +147,9 @@ class ShardedRocksDBLocalLogStore : public ShardedLocalLogStore {
 
   void onSettingsUpdated();
 
+  // Shutdown event to indicate that the sharded store is closing down.
+  SingleEvent shutdown_event_;
+
   StatsHolder* stats_;
 
   // Shards that use FailingLocalLogStore because they failed to open DB.
@@ -178,6 +182,11 @@ class ShardedRocksDBLocalLogStore : public ShardedLocalLogStore {
 
   // Indicating if shards are partitioned
   const bool partitioned_;
+
+  // Background thread that is responsible to initiate flush of write buffer of
+  // all shards.
+  void flusherThreadBody();
+  std::thread flusher_thread_;
 };
 
 }} // namespace facebook::logdevice

@@ -81,11 +81,11 @@ void RocksDBMemTableRepFactory::registerMemTableRep(RocksDBMemTableRep& mtr) {
           store_->getStatsHolder(), num_memtables, store_->getShardIdx());
       auto owner = store_->getColumnFamilyPtr(mtr.column_family_id_);
       ld_debug("Registering MemTableRep(%p). FlushToken:%ju, CF_ID:%u"
-               " owner ptr is %s",
+               ", owner:(%p)",
                &mtr,
                (uintmax_t)mtr.flush_token_,
                mtr.column_family_id_,
-               owner != nullptr ? "non-null" : "null");
+               owner.get());
 
       if (!owner) {
         return;

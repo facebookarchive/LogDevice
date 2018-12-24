@@ -564,9 +564,11 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
                std::to_string(val.count()) + "ms given.");
          }
        },
-       "How often a background thread will flush buffered writes if either the "
-       "data age, partition idle, or data amount triggers indicate a flush "
-       "should occur. 0 disables all manual flushes",
+       "Deprecated after introduction of ld_manged_flushes. Checkout "
+       "rocksdb-flush-trigger-check-interval to control time interval between "
+       "flush trigger checks. How often a background thread will flush "
+       "buffered writes if either the data age, partition idle, or data amount "
+       "triggers indicate a flush should occur. 0 disables all manual flushes.",
        SERVER,
        SettingsCategory::RocksDB);
 
@@ -823,7 +825,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        "starts a new block when --rocksdb-block-size is reached. 'each_log', "
        "in addition to what 'default' does, starts a new block when log ID "
        "changes. 'each_copyset', in addition to what 'each_log' does, starts a "
-       "new block when copyset changes. Both 'each_*' don't start a new block "
+       "new block when copyset changes. Both 'each_' don't start a new block "
        "if current block is smaller than --rocksdb-min-block-size. 'each_log' "
        "should be safe to use in all cases. 'each_copyset' should only be used "
        "when sticky copysets are enabled with --enable-sticky-copysets "
@@ -1298,7 +1300,9 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        "Soft limit on the total size of memtables per shard; when exceeded, "
        "oldest memtables will automatically be flushed. This may soon be "
        "superseded by a more global --rocksdb-memtable-size-per-node limit "
-       "that should be set to <num_shards> * what you'd set this to. ",
+       "that should be set to <num_shards> * what you'd set this to. If you "
+       "set this logdevice will no longer manage any flushes and all "
+       "responsibility of flushing memtable is taken by rocksdb.",
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
@@ -1316,6 +1320,24 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART | EXPERIMENTAL,
        SettingsCategory::RocksDB);
 
+  init(OPTNAME(memtable_size_low_watermark_percent),
+       &memtable_size_low_watermark_percent,
+       "60",
+       parse_positive<size_t>(),
+       "low_watermark_percent is some percent of "
+       "memtable_size_per_node and indicates the target consumption to reach "
+       "if total consumption goes above memtable_size_per_node. Like "
+       "memtable_size_per_node, low_watermark is sharded and individually "
+       "applied to every shard. The difference between memtable_size_per_node "
+       "and low_watermark should roughly match the size of metadata memtable "
+       "while flusher thread was sleeping. Flushing extra has a big plus, "
+       "metadata memtable flushes usually are few hundred KB or low MB value, "
+       "and if difference between low_watermark and memtable_size_per_node is "
+       "in order of tens of MB that makes dependent metadata memtable flushes "
+       "almost free.",
+       SERVER | REQUIRES_RESTART,
+       SettingsCategory::RocksDB);
+
   init(OPTNAME(ld_managed_flushes),
        &ld_managed_flushes,
        "false",
@@ -1330,6 +1352,28 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        "necessary to have db-write-buffer-size "
        "set to zero.",
        SERVER | REQUIRES_RESTART,
+       SettingsCategory::RocksDB);
+
+  init(OPTNAME(flush_trigger_check_interval),
+       &flush_trigger_check_interval,
+       "200ms",
+       [](std::chrono::milliseconds val) {
+         if (val.count() < 0) {
+           throw boost::program_options::error(
+               "value of --rocksdb-flush-trigger-check-interval must be "
+               "non-negative; " +
+               std::to_string(val.count()) + "ms given.");
+         }
+       },
+       "How often a flusher thread will go over all shard looking for "
+       "memtables to flush. Flusher thread is responsible for deciding to "
+       "flush memtables on various triggers like data age, idle time and size. "
+       "If flushes are managed by logdevice, flusher thread is responsible for "
+       "persisting any data on the system. This setting is tuned based on 3 "
+       "things: memory size on node, write throughput node can support, and "
+       "how fast data can be persisted. 0 disables all manual flushes done in "
+       "tests to disable all flushes in the system.",
+       SERVER,
        SettingsCategory::RocksDB);
 
   init(OPTNAME(arena_block_size),

@@ -34,11 +34,18 @@ using IntegrationTestUtils::waitUntilShardsHaveEventLogState;
 
 namespace fs = boost::filesystem;
 
-enum class Mode {
+enum class DurabilityMode {
   V1_WITH_WAL,
   V1_WITHOUT_WAL,
   V2_WITH_WAL,
   // V2 doesn't support disabling wal.
+};
+
+enum class FlushMode { ROCKSDB, LD };
+
+struct TestMode {
+  DurabilityMode m;
+  FlushMode f;
 };
 
 const logid_t LOG_ID(1);
@@ -186,7 +193,7 @@ static fs::path path_for_node_shard(IntegrationTestUtils::Cluster& cluster,
 }
 
 class RebuildingTest : public IntegrationTestBase,
-                       public ::testing::WithParamInterface<Mode> {
+                       public ::testing::WithParamInterface<TestMode> {
  protected:
   enum class NodeFailureMode { REPLACE, KILL };
 
@@ -195,6 +202,7 @@ class RebuildingTest : public IntegrationTestBase,
     // TODO enableMessageErrorInjection() once CatchupQueue properly
     //      handles streams waiting for log recoveries that have timed out.
     return [this](IntegrationTestUtils::ClusterFactory& cluster) {
+      auto test_param = GetParam();
       cluster
           // there is a known issue where purging deletes records that gets
           // surfaced in tests with sequencer-written metadata. See t13850978
@@ -214,11 +222,13 @@ class RebuildingTest : public IntegrationTestBase,
           .setParam("--rocksdb-min-manual-flush-interval", "200ms")
           .setParam("--rocksdb-partition-hi-pri-check-period", "50ms")
           .setParam("--rebuilding-store-timeout", "6s..10s")
+          .setParam("--rebuild-store-durability",
+                    test_param.m == DurabilityMode::V1_WITHOUT_WAL
+                        ? "memory"
+                        : "async_write")
           .setParam(
-              "--rebuild-store-durability",
-              GetParam() == Mode::V1_WITHOUT_WAL ? "memory" : "async_write")
-          .setParam("--rebuilding-v2",
-                    GetParam() == Mode::V2_WITH_WAL ? "true" : "false")
+              "--rebuilding-v2",
+              test_param.m == DurabilityMode::V2_WITH_WAL ? "true" : "false")
           // When rebuilding Without WAL, destruction of memtable is used as
           // proxy for memtable being flushed to stable storage. Iterators can
           // pin a memtable preventing its destruction. Low ttl in tests ensures
@@ -227,7 +237,9 @@ class RebuildingTest : public IntegrationTestBase,
           .setParam("--iterator-cache-ttl", "1s")
           .setParam("--rocksdb-partitioned", "true")
           .setNumDBShards(NUM_DB_SHARDS)
-          .useDefaultTrafficShapingConfig(false);
+          .useDefaultTrafficShapingConfig(false)
+          .setParam("--rocksdb-ld-managed-flushes",
+                    test_param.f == FlushMode::LD ? "true" : "false");
     };
   }
 
@@ -2869,11 +2881,16 @@ TEST_P(RebuildingTest, DisableDataLogRebuildNodeFailed) {
   }
 }
 
+std::vector<TestMode> test_params{
+    {DurabilityMode::V1_WITH_WAL, FlushMode::ROCKSDB},
+    {DurabilityMode::V1_WITH_WAL, FlushMode::LD},
+    {DurabilityMode::V1_WITHOUT_WAL, FlushMode::ROCKSDB},
+    {DurabilityMode::V1_WITHOUT_WAL, FlushMode::LD},
+    {DurabilityMode::V2_WITH_WAL, FlushMode::ROCKSDB},
+    {DurabilityMode::V2_WITH_WAL, FlushMode::LD}};
 INSTANTIATE_TEST_CASE_P(RebuildingTest,
                         RebuildingTest,
-                        ::testing::Values(Mode::V1_WITH_WAL,
-                                          Mode::V1_WITHOUT_WAL,
-                                          Mode::V2_WITH_WAL));
+                        ::testing::ValuesIn(test_params));
 
 // TODO(#8570293): write at test where we use a cross-domain copyset selector.
 // TODO(#8570293): once we support rebuilding with extras, write a test.

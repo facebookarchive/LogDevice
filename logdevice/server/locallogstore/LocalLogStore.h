@@ -1045,6 +1045,7 @@ class LocalLogStore : boost::noncopyable {
   }
 
   struct WriteBufStats {
+    Status err{E::OK};
     // Memory held in buffers that are active and accepting writes.
     uint64_t active_memory_usage{0};
     // Memory held in buffers that are immutable and yet to persist.
@@ -1082,8 +1083,7 @@ class LocalLogStore : boost::noncopyable {
   scheduleWriteBufFlush(uint64_t /* total_active_flush_trigger */,
                         uint64_t /* max_buffer_flush_trigger */,
                         uint64_t /* total_active_low_watermark */) {
-    err = E::NOTSUPPORTED;
-    return WriteBufStats();
+    return WriteBufStats{E::NOTSUPPORTED, 0, 0, 0};
   }
 
   /**

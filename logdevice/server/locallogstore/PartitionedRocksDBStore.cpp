@@ -2393,59 +2393,6 @@ bool PartitionedRocksDBStore::shouldCreatePartition() {
   return false;
 }
 
-bool PartitionedRocksDBStore::shouldFlushMemtables() {
-  auto now = currentSteadyTime();
-  auto haveUnflushedData = [this, now]() {
-    return oldestUnflushedDataTimestamp() < now;
-  };
-  auto manualFlushAllowed = [this, now]() {
-    return getSettings()->min_manual_flush_interval.count() > 0 &&
-        (now - last_flush_time_) > getSettings()->min_manual_flush_interval;
-  };
-  auto writeThresholdTriggered = [this]() {
-    return getSettings()->bytes_written_since_flush_trigger > 0 &&
-        bytes_written_since_flush_.load() >
-        getSettings()->bytes_written_since_flush_trigger;
-  };
-  auto oldDataThresholdTriggered = [this, now]() {
-    return getSettings()->partition_data_age_flush_trigger.count() > 0 &&
-        (now - oldestUnflushedDataTimestamp()) >
-        getSettings()->partition_data_age_flush_trigger;
-  };
-  auto idleThresholdTriggered = [this, now]() {
-    // The scan isn't free, so only perform it to verify that we
-    // actually have experienced an idle timeout.
-    if (getSettings()->partition_idle_flush_trigger.count() <= 0 ||
-        (now - min_partition_idle_time_) <
-            (getSettings()->partition_idle_flush_trigger)) {
-      return false;
-    }
-
-    auto process_dirty_state = [this](DirtyState& ds) {
-      if (ds.latest_dirty_time != SteadyTimestamp::min()) {
-        min_partition_idle_time_.storeMin(ds.latest_dirty_time);
-      }
-    };
-
-    min_partition_idle_time_ = SteadyTimestamp::max();
-
-    // Prevent partition drops for simplicity.
-    std::lock_guard<std::mutex> drop_lock(oldest_partition_mutex_);
-    process_dirty_state(unpartitioned_dirty_state_);
-    auto partitions = getPartitionList();
-    for (auto& partition : *partitions) {
-      process_dirty_state(partition->dirty_state_);
-    };
-
-    return (now - min_partition_idle_time_) >
-        getSettings()->partition_idle_flush_trigger;
-  };
-
-  return haveUnflushedData() && manualFlushAllowed() &&
-      (writeThresholdTriggered() || oldDataThresholdTriggered() ||
-       idleThresholdTriggered());
-}
-
 int PartitionedRocksDBStore::writeMulti(
     const std::vector<const WriteOp*>& writes_in,
     const WriteOptions& options) {
@@ -3026,7 +2973,6 @@ int PartitionedRocksDBStore::writeMultiImpl(
   if (unpartitioned_dirtied || !dirty_ops.empty()) {
     // Start tracking data idleness if we aren't already doing
     // so due to an earlier write.
-    min_partition_idle_time_.storeMin(now);
 
     if (unpartitioned_dirtied) {
       unpartitioned_dirty_state_.noteDirtied(max_flush_token, now);
@@ -3535,19 +3481,11 @@ bool PartitionedRocksDBStore::cleanDirtyState(DirtyState& ds,
   ld_check(!immutable_.load());
   bool data_retired = ds.noteMemtableFlushed(
       flushed_up_through, oldestUnflushedDataTimestamp(), currentSteadyTime());
-  // Only count dirty partitions.
-  if (ds.latest_dirty_time != SteadyTimestamp::min()) {
-    min_partition_idle_time_.storeMin(ds.latest_dirty_time);
-  }
-
   return data_retired;
 }
 
 void PartitionedRocksDBStore::updateDirtyState(FlushToken flushed_up_through) {
   STAT_INCR(stats_, partition_cleaner_scans);
-
-  // Recalculate during the clean scan.
-  min_partition_idle_time_ = SteadyTimestamp::max();
 
   // Prevent partition drops for simplicity.
   std::lock_guard<std::mutex> drop_lock(oldest_partition_mutex_);
@@ -5447,6 +5385,10 @@ bool PartitionedRocksDBStore::flushMemtable(RocksDBCFPtr& cf, bool wait) {
   ld_check(!immutable_.load());
   auto options = rocksdb::FlushOptions();
   options.wait = wait;
+  // Introduce write stalls if there are memtables that are
+  // getting flushed, as we don't want active memtable to grow very large
+  // and cause OOM.
+  options.allow_write_stall = true;
   rocksdb::Status status = db_->Flush(options, cf->get());
   enterFailSafeIfFailed(status, "Flush()");
   return status.ok();
@@ -5460,6 +5402,10 @@ int PartitionedRocksDBStore::flushUnpartitionedMemtables(bool wait) {
   ld_check(!getSettings()->read_only);
   ld_check(!immutable_.load());
   auto options = rocksdb::FlushOptions();
+  // Introduce write stalls if there are memtables that are
+  // getting flushed, as we don't want active memtable to grow very large
+  // and cause OOM.
+  options.allow_write_stall = true;
   options.wait = wait;
   std::lock_guard<std::mutex> snapshots_lock(snapshots_cf_lock_);
   auto snapshots_cf = snapshots_cf_ ? snapshots_cf_->get() : nullptr;
@@ -5478,9 +5424,6 @@ int PartitionedRocksDBStore::flushUnpartitionedMemtables(bool wait) {
 }
 
 int PartitionedRocksDBStore::flushAllMemtables(bool wait) {
-  bytes_written_since_flush_.store(0);
-  last_flush_time_ = currentSteadyTime();
-
   if (latest_.get()) {
     auto partitions = getPartitionList();
     for (PartitionPtr partition : *partitions) {
@@ -5549,26 +5492,6 @@ void PartitionedRocksDBStore::hiPriBackgroundThreadRun() {
 
     if (shouldCreatePartition()) {
       createPartition();
-    }
-
-    if (shouldFlushMemtables() && !isFlushInProgress()) {
-      ld_debug("Shard %d: Triggering Flush with %jd bytes written: "
-               "max data age %s, max time idle %s, last flushed %s ago.",
-               getShardIdx(),
-               (uintmax_t)bytes_written_since_flush_.load(),
-               format_time_since(oldestUnflushedDataTimestamp()).c_str(),
-               format_time_since(min_partition_idle_time_).c_str(),
-               format_time_since(last_flush_time_).c_str());
-      STAT_INCR(stats_, triggered_manual_memtable_flush);
-      flushAllMemtables(/*wait*/ false);
-    } else {
-      ld_spew("Shard %d: NOT Triggering Flush with %jd bytes written: "
-              "max data age %s, max time idle %s, last flushed %s ago.",
-              getShardIdx(),
-              (uintmax_t)bytes_written_since_flush_.load(),
-              format_time_since(oldestUnflushedDataTimestamp()).c_str(),
-              format_time_since(min_partition_idle_time_).c_str(),
-              format_time_since(last_flush_time_).c_str());
     }
 
     if (last_broadcast_flush_ < flushedUpThrough()) {
@@ -5986,13 +5909,15 @@ LocalLogStore::WriteBufStats PartitionedRocksDBStore::scheduleWriteBufFlush(
     uint64_t max_buffer_flush_trigger,
     uint64_t total_active_low_watermark) {
   if (shutdown_event_.signaled()) {
-    err = E::SHUTDOWN;
-    return LocalLogStore::WriteBufStats();
+    auto buf_stats = LocalLogStore::WriteBufStats();
+    buf_stats.err = E::SHUTDOWN;
+    return buf_stats;
   }
   folly::stop_watch<std::chrono::milliseconds> watch;
   SteadyTimestamp now = currentSteadyTime();
   auto partitions = partitions_.getVersion();
-  FlushEvaluator evaluator(total_active_flush_trigger,
+  FlushEvaluator evaluator(getShardIdx(),
+                           total_active_flush_trigger,
                            max_buffer_flush_trigger,
                            total_active_low_watermark,
                            getSettings());
@@ -6002,23 +5927,26 @@ LocalLogStore::WriteBufStats PartitionedRocksDBStore::scheduleWriteBufFlush(
                                           getMemTableStats(metadata_cf_->get()),
                                           SteadyTimestamp::now()};
 
-  FlushEvaluator::CFData unpartitioned_cf_data = {
-      unpartitioned_cf_,
-      getMemTableStats(unpartitioned_cf_->get()),
-      SteadyTimestamp::now()};
-  if (unpartitioned_cf_data.cf->first_dirtied_time_ != SteadyTimestamp::min() &&
-      unpartitioned_cf_data.stats.active_memtable_size > 0) {
-    non_zero_size_cf.push_back(std::move(unpartitioned_cf_data));
+  if (unpartitioned_cf_->first_dirtied_time_ != SteadyTimestamp::min()) {
+    FlushEvaluator::CFData unpartitioned_cf_data = {
+        unpartitioned_cf_,
+        getMemTableStats(unpartitioned_cf_->get()),
+        SteadyTimestamp::now()};
+    if (unpartitioned_cf_data.stats.active_memtable_size > 0) {
+      non_zero_size_cf.push_back(std::move(unpartitioned_cf_data));
+    }
   }
 
   for (auto& partition : *partitions) {
     auto& ds = partition->dirty_state_;
-    FlushEvaluator::CFData cf_data = {partition->cf_,
-                                      getMemTableStats(partition->cf_->get()),
-                                      ds.latest_dirty_time};
-    if (cf_data.cf->first_dirtied_time_ != SteadyTimestamp::min() &&
-        cf_data.stats.active_memtable_size > 0) {
-      non_zero_size_cf.push_back(std::move(cf_data));
+    auto& cf = partition->cf_;
+    if (cf->first_dirtied_time_ != SteadyTimestamp::min()) {
+      FlushEvaluator::CFData cf_data = {partition->cf_,
+                                        getMemTableStats(partition->cf_->get()),
+                                        ds.latest_dirty_time};
+      if (cf_data.stats.active_memtable_size > 0) {
+        non_zero_size_cf.push_back(std::move(cf_data));
+      }
     }
   }
 
@@ -6047,12 +5975,14 @@ LocalLogStore::WriteBufStats PartitionedRocksDBStore::scheduleWriteBufFlush(
                    partitions->size());
   }
 
+  STAT_ADD(stats_, triggered_manual_memtable_flush, !to_flush.empty());
   return evaluator.getBufStats();
 }
 
 std::vector<CFData> FlushEvaluator::pickCFsToFlush(SteadyTimestamp now,
                                                    CFData& metadata_cf_data,
                                                    std::vector<CFData>& input) {
+  auto ld_managed_flushes = settings_->ld_managed_flushes;
   std::vector<CFData> out;
 
   // Total memory picked for flushing.
@@ -6100,6 +6030,11 @@ std::vector<CFData> FlushEvaluator::pickCFsToFlush(SteadyTimestamp now,
     out.push_back(metadata_cf_data);
   };
 
+  auto memLimitThresholdTriggered = [&ld_managed_flushes,
+                                     this](uint64_t usage) {
+    return ld_managed_flushes && usage >= max_memtable_size_trigger_;
+  };
+
   auto update_buf_stats = [&cur_active_memory_usage,
                            this](RocksDBMemTableStats& stats) {
     cur_active_memory_usage += stats.active_memtable_size;
@@ -6109,8 +6044,7 @@ std::vector<CFData> FlushEvaluator::pickCFsToFlush(SteadyTimestamp now,
 
   update_buf_stats(metadata_cf_data.stats);
 
-  if (metadata_cf_data.stats.active_memtable_size >=
-      max_memtable_size_trigger_) {
+  if (memLimitThresholdTriggered(metadata_cf_data.stats.active_memtable_size)) {
     pick_metadata_cf();
     ++max_memtable_thres_triggered;
   }
@@ -6141,7 +6075,7 @@ std::vector<CFData> FlushEvaluator::pickCFsToFlush(SteadyTimestamp now,
           (now - latest_dirty_time) > settings_->partition_idle_flush_trigger;
     };
 
-    if (stats.active_memtable_size >= max_memtable_size_trigger_) {
+    if (memLimitThresholdTriggered(stats.active_memtable_size)) {
       max_memtable_thres_triggered++;
       pick_cf(cf_data);
     } else if (oldDataThresholdTriggered()) {
@@ -6155,13 +6089,13 @@ std::vector<CFData> FlushEvaluator::pickCFsToFlush(SteadyTimestamp now,
     }
   }
 
-  // Set target amount of memory to flush.
-  if (cur_active_memory_usage > total_active_memory_trigger_) {
-    target = cur_active_memory_usage - amount_picked;
-    if (target > total_active_low_watermark_) {
-      target -= total_active_low_watermark_;
-    } else {
-      target = 0;
+  // Recalculate target to reach using unpicked column families.
+  target = 0;
+  if (ld_managed_flushes &&
+      cur_active_memory_usage > total_active_memory_trigger_) {
+    auto diff = cur_active_memory_usage - amount_picked;
+    if (diff > total_active_low_watermark_) {
+      target = diff - total_active_low_watermark_;
     }
   }
 
@@ -6244,11 +6178,12 @@ std::vector<CFData> FlushEvaluator::pickCFsToFlush(SteadyTimestamp now,
       }
     }
     cfs_picked << " ]";
-    ld_debug("Total memory usage: %lu(active), "
+    ld_debug("Shard: %d, Total memory usage: %lu(active), "
              "%lu(unflushed), amount picked %lu, num picked %lu, num "
              "candidates %lu,  metadata %lu(active), metadata cf picked %d, "
              "min:%.3fKB, max:%.3fMB, avg:%.3fMB, cf list :%s. Reason :idle: "
              "%lu, age: %lu, maxsize: %lu",
+             shard_idx_,
              cur_active_memory_usage,
              buf_stats_.memory_being_flushed,
              amount_picked,

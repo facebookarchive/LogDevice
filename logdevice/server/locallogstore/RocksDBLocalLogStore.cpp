@@ -250,7 +250,8 @@ LocalLogStore::WriteBufStats RocksDBLocalLogStore::scheduleWriteBufFlush(
     flushAllMemtables(/* wait */ false);
   }
 
-  LocalLogStore::WriteBufStats buf_stats{stats.active_memtable_size,
+  LocalLogStore::WriteBufStats buf_stats{E::OK,
+                                         stats.active_memtable_size,
                                          stats.immutable_memtable_size,
                                          stats.pinned_memtable_size};
   return buf_stats;

@@ -161,9 +161,6 @@ class RocksDBLogStoreBase : public LocalLogStore {
     return shard_idx_;
   }
 
-  // Called after RocksDBWriter writes data to rocksdb.
-  virtual void onBytesWritten(size_t) {}
-
   // fsync the rocksdb WAL so that it's contents are guaranteed to
   // survive a system crash.
   int syncWAL();

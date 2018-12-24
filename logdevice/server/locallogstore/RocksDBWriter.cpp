@@ -846,8 +846,6 @@ rocksdb::Status RocksDBWriter::writeBatch(const rocksdb::WriteOptions& options,
     PER_SHARD_STAT_INCR(store_->getStatsHolder(),
                         local_logstore_failed_writes,
                         store_->getShardIdx());
-  } else {
-    store_->onBytesWritten(batch->GetDataSize());
   }
 
   return status;

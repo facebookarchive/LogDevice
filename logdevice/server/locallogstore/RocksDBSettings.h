@@ -331,6 +331,9 @@ class RocksDBSettings : public SettingsBundle {
   // Total size limit for all memtables in the system.
   size_t memtable_size_per_node;
 
+  // See .cpp
+  size_t memtable_size_low_watermark_percent;
+
   // Enable or disable management of memtable flushing within logdevice.
   bool ld_managed_flushes;
 

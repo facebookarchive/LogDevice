@@ -155,11 +155,14 @@ struct RocksDBColumnFamily {
       ld_check(dirty);
       auto& active = locked_dependencies.recent_memtable;
       auto& dependent = locked_dependencies.dependent_memtable;
+      /* TODO : T38379675 Uncomment after implementing MarkFlushed for
+       * memtablerep.
       auto& memtables_being_flushed =
           locked_dependencies.memtables_being_flushed;
       memtables_being_flushed.emplace_back(std::piecewise_construct,
                                            std::forward_as_tuple(active),
                                            std::forward_as_tuple(dependent));
+      */
       dirty = false;
       dependent = FlushToken_INVALID;
     });

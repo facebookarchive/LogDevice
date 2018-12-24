@@ -274,15 +274,25 @@ ShardedRocksDBLocalLogStore::ShardedRocksDBLocalLogStore(
     throw ConstructorFailed();
   }
   printDiskShardMapping();
+
+  // Start the flusher thread.
+  flusher_thread_ = std::thread([&]() { flusherThreadBody(); });
 }
 
 ShardedRocksDBLocalLogStore::~ShardedRocksDBLocalLogStore() {
+  shutdown_event_.signal();
+
   for (shard_index_t shard_idx : failing_log_store_shards_) {
     PER_SHARD_STAT_DECR(stats_, failing_log_stores, shard_idx);
   }
 
   // Unsubscribe from settings update before destroying shards.
   rocksdb_settings_handle_.unsubscribe();
+
+  // Join flusher thread before destroying shards.
+  if (flusher_thread_.joinable()) {
+    flusher_thread_.join();
+  }
 
   // destroy each RocksDBLocalLogStore instance in a separate thread
   std::vector<std::thread> threads;
@@ -760,6 +770,81 @@ void ShardedRocksDBLocalLogStore::onSettingsUpdated() {
     }
     rocksdb_shard->onSettingsUpdated(db_settings_.get());
   }
+}
+
+void ShardedRocksDBLocalLogStore::flusherThreadBody() {
+  std::string name = "ld:srv:db-flush";
+  ld_check_le(name.size(), 15);
+  ThreadID::set(ThreadID::Type::ROCKSDB, name);
+  SteadyTimestamp next_flush_time{SteadyTimestamp::now() +
+                                  db_settings_->flush_trigger_check_interval};
+  if (db_settings_->flush_trigger_check_interval.count() == 0) {
+    // The system does not want to persist any data. Usually in tests.
+    ld_warning(
+        "System is coming up without flusher thread. No memtable flushes "
+        "will be initiated from logdevice.");
+    return;
+  }
+  auto shutdown = false;
+  do {
+    auto now = SteadyTimestamp::now();
+    if (next_flush_time > now) {
+      shutdown_event_.waitFor(next_flush_time - now);
+    } else {
+      next_flush_time = now;
+    }
+
+    if (shutdown_event_.signaled()) {
+      break;
+    }
+    uint64_t total_active_memory_flush_trigger =
+        db_settings_->memtable_size_per_node;
+    uint64_t per_shard_active_flush_trigger =
+        total_active_memory_flush_trigger / shards_.size();
+    uint64_t per_shard_active_low_watermark =
+        (db_settings_->memtable_size_low_watermark_percent / 100.0) *
+        total_active_memory_flush_trigger / shards_.size();
+    if (per_shard_active_flush_trigger <= per_shard_active_low_watermark) {
+      RATELIMIT_WARNING(
+          std::chrono::minutes{10},
+          1,
+          "per shard low_watermark %lu is greater than per shard budget "
+          "%lu. Using shard budget as the low watermark.",
+          per_shard_active_low_watermark,
+          per_shard_active_flush_trigger);
+      per_shard_active_low_watermark = per_shard_active_flush_trigger;
+    }
+    uint64_t max_memtable_size_trigger = db_settings_->write_buffer_size;
+
+    next_flush_time =
+        SteadyTimestamp::now() + db_settings_->flush_trigger_check_interval;
+
+    std::stringstream ss;
+    ss << "[ ";
+    for (auto i = 0; i < shards_.size(); ++i) {
+      auto buf_stats =
+          shards_[i]->scheduleWriteBufFlush(per_shard_active_flush_trigger,
+                                            max_memtable_size_trigger,
+                                            per_shard_active_low_watermark);
+      if (buf_stats.err == E::SHUTDOWN) {
+        shutdown = true;
+        break;
+      } else {
+        ss << folly::sformat(
+            "Shard {}: usage active:{}MB, unflushed:{}MB, pinned:{}MB",
+            i,
+            buf_stats.active_memory_usage / 1e6,
+            buf_stats.memory_being_flushed / 1e6,
+            buf_stats.pinned_buffer_usage / 1e6);
+        if (i + 1 < shards_.size()) {
+          ss << ", ";
+        }
+      }
+    }
+    ss << " ]";
+    RATELIMIT_DEBUG(
+        std::chrono::seconds{5}, 1, "Per shard usage: %s", ss.str().c_str());
+  } while (!shutdown);
 }
 
 }} // namespace facebook::logdevice
