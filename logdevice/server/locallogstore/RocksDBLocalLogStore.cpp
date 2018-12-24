@@ -236,6 +236,26 @@ int RocksDBLocalLogStore::findKey(logid_t log_id,
   return search.execute(lo, hi);
 }
 
+LocalLogStore::WriteBufStats RocksDBLocalLogStore::scheduleWriteBufFlush(
+    uint64_t total_active_flush_trigger,
+    uint64_t max_buffer_flush_trigger,
+    uint64_t /* total_active_low_watermark */) {
+  RocksDBMemTableStats stats = getMemTableStats(db_->DefaultColumnFamily());
+  // This is an example implementation only.
+  if (stats.active_memtable_size + stats.immutable_memtable_size >
+          total_active_flush_trigger ||
+      stats.active_memtable_size > max_buffer_flush_trigger) {
+    stats.immutable_memtable_size += stats.active_memtable_size;
+    stats.active_memtable_size = 0;
+    flushAllMemtables(/* wait */ false);
+  }
+
+  LocalLogStore::WriteBufStats buf_stats{stats.active_memtable_size,
+                                         stats.immutable_memtable_size,
+                                         stats.pinned_memtable_size};
+  return buf_stats;
+}
+
 // Accounting operations for RocksDB Seek()/SeekForPrev()/Next()/Prev()
 // operations
 #define ROCKSDB_COUNT_STAT(name, amount) \

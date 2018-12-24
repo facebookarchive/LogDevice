@@ -365,6 +365,11 @@ class RocksDBLocalLogStore : public RocksDBLogStoreBase {
               bool approximate = false,
               bool allow_blocking_io = true) const override;
 
+  LocalLogStore::WriteBufStats
+  scheduleWriteBufFlush(uint64_t total_active_flush_trigger,
+                        uint64_t max_buffer_flush_trigger,
+                        uint64_t total_active_low_watermark) override;
+
  private:
   // timestamp of the last attempted/completed manual compaction,
   // initialized to be duration::min() meaning it was never scheduled

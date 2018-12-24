@@ -187,6 +187,15 @@ int TemporaryLogStore::findKey(logid_t log_id,
       log_id, std::move(key), lo, hi, approximate, allow_blocking_io);
 }
 
+LocalLogStore::WriteBufStats
+TemporaryLogStore::scheduleWriteBufFlush(uint64_t total_active_flush_trigger,
+                                         uint64_t max_buffer_flush_trigger,
+                                         uint64_t total_active_low_watermark) {
+  return db_->scheduleWriteBufFlush(total_active_flush_trigger,
+                                    max_buffer_flush_trigger,
+                                    total_active_low_watermark);
+}
+
 Status TemporaryLogStore::acceptingWrites() const {
   return db_->acceptingWrites();
 }

@@ -103,10 +103,33 @@ void RocksDBLogStoreBase::registerListener(rocksdb::Options& options) {
 }
 
 void RocksDBLogStoreBase::installMemTableRep() {
-  mtr_factory_ = std::make_shared<RocksDBMemTableRepFactory>(
-      *this,
-      std::make_unique<rocksdb::SkipListFactory>(
-          getSettings()->skip_list_lookahead));
+  auto create_memtable_factory = [this]() {
+    mtr_factory_ = std::make_shared<RocksDBMemTableRepFactory>(
+        this,
+        std::make_unique<rocksdb::SkipListFactory>(
+            getSettings()->skip_list_lookahead));
+  };
+
+  if (!rocksdb_config_.options_.memtable_factory) {
+    create_memtable_factory();
+  } else {
+    // In tests someone might want to override the memtable factory
+    // implementation. Allowing to do that.
+    mtr_factory_ = std::dynamic_pointer_cast<RocksDBMemTableRepFactory>(
+        rocksdb_config_.options_.memtable_factory);
+    if (!mtr_factory_) {
+      if (rocksdb_config_.options_.memtable_factory != nullptr) {
+        ld_warning(
+            "MemTable Factory needs to inherit from RocksDBMemTableRepFactory, "
+            "ignoring value passed in and creating a new factory of known "
+            "type.");
+      }
+      create_memtable_factory();
+    } else {
+      mtr_factory_->setStore(this);
+    }
+  }
+
   rocksdb_config_.options_.memtable_factory =
       rocksdb_config_.metadata_options_.memtable_factory = mtr_factory_;
 }
@@ -212,10 +235,7 @@ int RocksDBLogStoreBase::readAllLogSnapshotBlobsImpl(
     LogSnapshotBlobType snapshots_type,
     LogSnapshotBlobCallback callback,
     rocksdb::ColumnFamilyHandle* snapshots_cf) {
-  if (!snapshots_cf) {
-    ld_info("Snapshots column family does not exist");
-    return 0;
-  }
+  ld_check(snapshots_cf);
 
   auto it = newIterator(getDefaultReadOptions(), snapshots_cf);
   LogSnapshotBlobKey seek_target(snapshots_type, LOGID_INVALID);

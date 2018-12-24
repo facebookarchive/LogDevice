@@ -12,6 +12,7 @@
 #include <folly/Synchronized.h>
 #include <rocksdb/db.h>
 
+#include "logdevice/common/Timestamp.h"
 #include "logdevice/common/toString.h"
 #include "logdevice/common/types_internal.h"
 
@@ -127,6 +128,10 @@ struct RocksDBColumnFamily {
   // from these two contexts can race and hence the synchronized access.
   folly::Synchronized<MemtableTracker> tracker_;
 
+  // Time when data was inserted for the first time in the current active
+  // memtable. If current active memtable is empty, min().
+  AtomicSteadyTimestamp first_dirtied_time_{SteadyTimestamp::min()};
+
   RocksDBColumnFamily(rocksdb::ColumnFamilyHandle* cf) : cf_(cf) {}
 
   uint32_t getID() {
@@ -142,6 +147,9 @@ struct RocksDBColumnFamily {
   // the active and dependent memtables to the queue and mark the values as
   // invalid.
   void onFlushBegin() {
+    // Clear first dirtied time to mark that data for this column family was
+    // flushed.
+    first_dirtied_time_ = SteadyTimestamp::min();
     tracker_.withWLock([&](auto& locked_dependencies) {
       auto& dirty = locked_dependencies.dirty;
       ld_check(dirty);
@@ -162,6 +170,9 @@ struct RocksDBColumnFamily {
   // belongs to the newly allocated MemTable which is now serving as the active
   // MemTable for the column family.
   void onMemTableDirtied(FlushToken new_memtable_flush_token) {
+    // This gets called when memtable is dirtied for the first time.
+    // Note down the first dirtied time here.
+    first_dirtied_time_ = SteadyTimestamp::now();
     tracker_.withWLock([&](auto& locked_dependencies) {
       ld_check(!locked_dependencies.dirty);
       locked_dependencies.dirty = true;

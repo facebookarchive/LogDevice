@@ -53,6 +53,8 @@ using RocksDBKeyFormat::PartitionDirectoryKey;
 using RocksDBKeyFormat::PartitionMetaKey;
 using RocksDBKeyFormat::PerEpochLogMetaKey;
 using DirectoryEntry = PartitionedRocksDBStore::DirectoryEntry;
+using FlushEvaluator = PartitionedRocksDBStore::FlushEvaluator;
+using CFData = FlushEvaluator::CFData;
 
 const char* PartitionedRocksDBStore::METADATA_CF_NAME = "metadata";
 const char* PartitionedRocksDBStore::UNPARTITIONED_CF_NAME = "unpartitioned";
@@ -520,8 +522,16 @@ PartitionedRocksDBStore::readAllLogs(
   return std::make_unique<PartitionedAllLogsIterator>(this, options, logs);
 }
 
-std::unique_ptr<rocksdb::ColumnFamilyHandle>
-PartitionedRocksDBStore::createColumnFamily(
+RocksDBCFPtr PartitionedRocksDBStore::wrapAndRegisterCF(
+    std::unique_ptr<rocksdb::ColumnFamilyHandle> handle) {
+  ld_check(handle);
+  auto cf_id = handle->GetID();
+  auto cf_ptr = std::make_shared<RocksDBColumnFamily>(handle.release());
+  cf_accessor_.wlock()->insert(std::make_pair(cf_id, cf_ptr));
+  return cf_ptr;
+}
+
+RocksDBCFPtr PartitionedRocksDBStore::createColumnFamily(
     std::string name,
     const rocksdb::ColumnFamilyOptions& options) {
   ld_check(!getSettings()->read_only);
@@ -537,7 +547,8 @@ PartitionedRocksDBStore::createColumnFamily(
     enterFailSafeIfFailed(status, "CreateColumnFamily()");
     return nullptr;
   }
-  return std::unique_ptr<rocksdb::ColumnFamilyHandle>(handle);
+  return wrapAndRegisterCF(
+      std::unique_ptr<rocksdb::ColumnFamilyHandle>(handle));
 }
 std::vector<std::unique_ptr<rocksdb::ColumnFamilyHandle>>
 PartitionedRocksDBStore::createColumnFamilies(
@@ -622,13 +633,6 @@ bool PartitionedRocksDBStore::open(
   partition_id_t latest_partition_id = PARTITION_INVALID;
   partition_id_t oldest_partition_id = PARTITION_MAX;
 
-  auto create_cf_ptr = [this](std::unique_ptr<rocksdb::ColumnFamilyHandle> h) {
-    auto cf_id = h->GetID();
-    auto cf_ptr = std::make_shared<RocksDBColumnFamily>(h.release());
-    cf_accessor_.wlock()->insert(std::make_pair(cf_id, cf_ptr));
-    return cf_ptr;
-  };
-
   ld_check_eq(cf_descriptors.size(), cf_handles.size());
   for (size_t i = 0; i < cf_descriptors.size(); ++i) {
     auto& desc = cf_descriptors[i];
@@ -651,11 +655,11 @@ bool PartitionedRocksDBStore::open(
       }
       continue;
     } else if (desc.name == METADATA_CF_NAME) {
-      metadata_cf_ = create_cf_ptr(std::move(cf_handles[i]));
+      metadata_cf_ = wrapAndRegisterCF(std::move(cf_handles[i]));
     } else if (desc.name == UNPARTITIONED_CF_NAME) {
-      unpartitioned_cf_ = create_cf_ptr(std::move(cf_handles[i]));
+      unpartitioned_cf_ = wrapAndRegisterCF(std::move(cf_handles[i]));
     } else if (desc.name == SNAPSHOTS_CF_NAME) {
-      snapshots_cf_ = std::move(cf_handles[i]);
+      snapshots_cf_ = wrapAndRegisterCF(std::move(cf_handles[i]));
     } else {
       auto id = PartitionedDBKeyFormat::getIdFromCFName(desc.name);
       ld_check_gt(id, latest_partition_id);
@@ -673,7 +677,7 @@ bool PartitionedRocksDBStore::open(
         }
       }
       // readPartitionTimestamps() will initialize starting_timestamp.
-      auto cf_ptr = create_cf_ptr(std::move(cf_handles[i]));
+      auto cf_ptr = wrapAndRegisterCF(std::move(cf_handles[i]));
       PartitionPtr partition =
           std::make_shared<Partition>(id, cf_ptr, RecordTimestamp::min());
       addPartitions({partition});
@@ -684,8 +688,7 @@ bool PartitionedRocksDBStore::open(
 
   // create the metadata column family unless it already exists
   if (!metadata_cf_ && !getSettings()->read_only) {
-    metadata_cf_ =
-        create_cf_ptr(createColumnFamily(METADATA_CF_NAME, meta_cf_options));
+    metadata_cf_ = createColumnFamily(METADATA_CF_NAME, meta_cf_options);
   }
   if (!metadata_cf_) {
     ld_error("Couldn't find/create metadata column family");
@@ -694,8 +697,8 @@ bool PartitionedRocksDBStore::open(
 
   // Column family for unpartitioned logs behaves like RocksDBLocalLogStore.
   if (!unpartitioned_cf_ && !getSettings()->read_only) {
-    unpartitioned_cf_ = create_cf_ptr(
-        createColumnFamily(UNPARTITIONED_CF_NAME, rocksdb_config_.options_));
+    unpartitioned_cf_ =
+        createColumnFamily(UNPARTITIONED_CF_NAME, rocksdb_config_.options_);
   }
   if (!unpartitioned_cf_) {
     ld_error("Couldn't find/create unpartitioned column family");
@@ -1005,18 +1008,11 @@ PartitionedRocksDBStore::createPartitionsImpl(
     }
   }
 
-  auto create_cf_ptr = [this](std::unique_ptr<rocksdb::ColumnFamilyHandle> h) {
-    auto cf_id = h->GetID();
-    auto cf_ptr = std::make_shared<RocksDBColumnFamily>(h.release());
-    cf_accessor_.wlock()->insert(std::make_pair(cf_id, cf_ptr));
-    return cf_ptr;
-  };
-
   // Add the new partitions to the list.
   std::vector<PartitionPtr> new_partitions(count);
   ld_check_eq(starting_timestamps.size(), count);
   for (size_t i = 0; i < count; ++i) {
-    auto cf_ptr = create_cf_ptr(std::move(cfs[i]));
+    auto cf_ptr = wrapAndRegisterCF(std::move(cfs[i]));
     new_partitions[i] = std::make_shared<Partition>(
         first_id + i, cf_ptr, starting_timestamps[i], pre_dirty_state);
   }
@@ -2323,7 +2319,7 @@ bool PartitionedRocksDBStore::flushPartitionAndDependencies(
 
   FlushToken flushed_through = partition->dirty_state_.max_flush_token;
 
-  if (!flushMemtables(partition, /*wait*/ true)) {
+  if (!flushMemtable(partition, /*wait*/ true)) {
     return false;
   }
 
@@ -3057,6 +3053,8 @@ int PartitionedRocksDBStore::writeMultiImpl(
 
       auto flush_token = cur_partition->cf_->getMostRecentMemtableFlushToken();
 
+      // Mark the flush token on which the writers should depend to check
+      // whether data is retired.
       op->write_op->setFlushToken(flush_token);
 
       auto& dirty_state = cur_partition->dirty_state_;
@@ -3312,7 +3310,11 @@ int PartitionedRocksDBStore::readAllLogSnapshotBlobs(
     LogSnapshotBlobType type,
     LogSnapshotBlobCallback callback) {
   std::lock_guard<std::mutex> snapshots_lock(snapshots_cf_lock_);
-  return readAllLogSnapshotBlobsImpl(type, callback, snapshots_cf_.get());
+  if (!snapshots_cf_) {
+    ld_info("Snapshots column family does not exist");
+    return 0;
+  }
+  return readAllLogSnapshotBlobsImpl(type, callback, snapshots_cf_->get());
 }
 
 int PartitionedRocksDBStore::writeLogSnapshotBlobs(
@@ -3333,8 +3335,14 @@ int PartitionedRocksDBStore::writeLogSnapshotBlobs(
     }
   }
 
-  return writer_->writeLogSnapshotBlobs(
-      snapshots_cf_.get(), snapshots_type, snapshots);
+  auto s = writer_->writeLogSnapshotBlobs(
+      snapshots_cf_->get(), snapshots_type, snapshots);
+
+  if (s == 0 && !flushMemtable(snapshots_cf_, /* wait */ false)) {
+    return -1;
+  }
+
+  return s;
 }
 
 int PartitionedRocksDBStore::deleteAllLogSnapshotBlobs() {
@@ -3349,7 +3357,7 @@ int PartitionedRocksDBStore::deleteAllLogSnapshotBlobs() {
     return 0;
   }
 
-  auto status = db_->DropColumnFamily(snapshots_cf_.get());
+  auto status = db_->DropColumnFamily(snapshots_cf_->get());
   snapshots_cf_.reset();
   return status.ok() ? 0 : -1;
 }
@@ -4604,7 +4612,7 @@ bool PartitionedRocksDBStore::performStronglyFilteredCompactionInternal(
   // But first flush the memtable if there is one. Not really necessary but
   // convenient for tests and consistent with what rocksdb::DB::CompactRange()
   // does.
-  if (!flushMemtables(partition)) {
+  if (!flushMemtable(partition)) {
     ld_error(
         "Won't compact partition %lu because flush failed", partition->id_);
     return false;
@@ -5434,15 +5442,18 @@ void PartitionedRocksDBStore::listLogs(
   }
 }
 
-bool PartitionedRocksDBStore::flushMemtables(PartitionPtr partition,
-                                             bool wait) {
+bool PartitionedRocksDBStore::flushMemtable(RocksDBCFPtr& cf, bool wait) {
   ld_check(!getSettings()->read_only);
   ld_check(!immutable_.load());
   auto options = rocksdb::FlushOptions();
   options.wait = wait;
-  rocksdb::Status status = db_->Flush(options, partition->cf_->get());
+  rocksdb::Status status = db_->Flush(options, cf->get());
   enterFailSafeIfFailed(status, "Flush()");
   return status.ok();
+}
+
+bool PartitionedRocksDBStore::flushMemtable(PartitionPtr partition, bool wait) {
+  return flushMemtable(partition->cf_, wait);
 }
 
 int PartitionedRocksDBStore::flushUnpartitionedMemtables(bool wait) {
@@ -5451,9 +5462,9 @@ int PartitionedRocksDBStore::flushUnpartitionedMemtables(bool wait) {
   auto options = rocksdb::FlushOptions();
   options.wait = wait;
   std::lock_guard<std::mutex> snapshots_lock(snapshots_cf_lock_);
-  for (auto* cf : {getMetadataCFHandle(),
-                   getUnpartitionedCFHandle(),
-                   snapshots_cf_.get()}) {
+  auto snapshots_cf = snapshots_cf_ ? snapshots_cf_->get() : nullptr;
+  for (auto* cf :
+       {getMetadataCFHandle(), getUnpartitionedCFHandle(), snapshots_cf}) {
     if (cf) {
       rocksdb::Status status = db_->Flush(options, cf);
       if (!status.ok()) {
@@ -5473,7 +5484,7 @@ int PartitionedRocksDBStore::flushAllMemtables(bool wait) {
   if (latest_.get()) {
     auto partitions = getPartitionList();
     for (PartitionPtr partition : *partitions) {
-      if (!flushMemtables(partition, wait)) {
+      if (!flushMemtable(partition, wait)) {
         err = E::LOCAL_LOG_STORE_WRITE;
         return -1;
       }
@@ -5968,6 +5979,294 @@ uint64_t PartitionedRocksDBStore::getTotalTrashSize() {
   return options->sst_file_manager != nullptr
       ? options->sst_file_manager->GetTotalTrashSize()
       : 0;
+}
+
+LocalLogStore::WriteBufStats PartitionedRocksDBStore::scheduleWriteBufFlush(
+    uint64_t total_active_flush_trigger,
+    uint64_t max_buffer_flush_trigger,
+    uint64_t total_active_low_watermark) {
+  if (shutdown_event_.signaled()) {
+    err = E::SHUTDOWN;
+    return LocalLogStore::WriteBufStats();
+  }
+  folly::stop_watch<std::chrono::milliseconds> watch;
+  SteadyTimestamp now = currentSteadyTime();
+  auto partitions = partitions_.getVersion();
+  FlushEvaluator evaluator(total_active_flush_trigger,
+                           max_buffer_flush_trigger,
+                           total_active_low_watermark,
+                           getSettings());
+
+  std::vector<FlushEvaluator::CFData> non_zero_size_cf;
+  FlushEvaluator::CFData metadata_cf_data{metadata_cf_,
+                                          getMemTableStats(metadata_cf_->get()),
+                                          SteadyTimestamp::now()};
+
+  FlushEvaluator::CFData unpartitioned_cf_data = {
+      unpartitioned_cf_,
+      getMemTableStats(unpartitioned_cf_->get()),
+      SteadyTimestamp::now()};
+  if (unpartitioned_cf_data.cf->first_dirtied_time_ != SteadyTimestamp::min() &&
+      unpartitioned_cf_data.stats.active_memtable_size > 0) {
+    non_zero_size_cf.push_back(std::move(unpartitioned_cf_data));
+  }
+
+  for (auto& partition : *partitions) {
+    auto& ds = partition->dirty_state_;
+    FlushEvaluator::CFData cf_data = {partition->cf_,
+                                      getMemTableStats(partition->cf_->get()),
+                                      ds.latest_dirty_time};
+    if (cf_data.cf->first_dirtied_time_ != SteadyTimestamp::min() &&
+        cf_data.stats.active_memtable_size > 0) {
+      non_zero_size_cf.push_back(std::move(cf_data));
+    }
+  }
+
+  auto to_flush =
+      evaluator.pickCFsToFlush(now, metadata_cf_data, non_zero_size_cf);
+  auto evaluate_time = watch.elapsed();
+
+  for (auto& cf_data : to_flush) {
+    flushMemtable(cf_data.cf, /* wait */ false);
+  }
+
+  auto end = watch.lap();
+  if (end.count() > 5) {
+    auto flush_time = end - evaluate_time;
+    RATELIMIT_INFO(std::chrono::seconds(10),
+                   1,
+                   "Shard:%d: Evaluating flush was slow, total %ldms: "
+                   "evaluation time %ldms: flush time "
+                   "%ldms :input %lu: out %lu: npartitions: %lu",
+                   getShardIdx(),
+                   end.count(),
+                   evaluate_time.count(),
+                   flush_time.count(),
+                   1 + non_zero_size_cf.size(),
+                   to_flush.size(),
+                   partitions->size());
+  }
+
+  return evaluator.getBufStats();
+}
+
+std::vector<CFData> FlushEvaluator::pickCFsToFlush(SteadyTimestamp now,
+                                                   CFData& metadata_cf_data,
+                                                   std::vector<CFData>& input) {
+  std::vector<CFData> out;
+
+  // Total memory picked for flushing.
+  uint64_t amount_picked = 0;
+  uint64_t cur_active_memory_usage = 0;
+
+  // Amount of memory to flush to reach target memory consumption.
+  uint64_t target = 0;
+
+  uint64_t idle_thres_triggered = 0;
+  uint64_t old_data_thres_triggered = 0;
+  uint64_t max_memtable_thres_triggered = 0;
+
+  // This indicates if there is need to flush metadata memtable.
+  auto metadata_memtable_dependency = FlushToken_INVALID;
+  // There is need to flush metadata memtable if :
+  // 1. memtable size is above max_memtable_size threshold.
+  // 2. data cf memtable which depends on metadata memtable is getting flushed.
+  // 3. memtable needs to be flushed to reach target memory consumption.
+  bool metadata_cf_picked = false;
+
+  auto pick_cf = [&](CFData& cf_data) {
+    auto& cf = cf_data.cf;
+    auto& mem_stats = cf_data.stats;
+    metadata_memtable_dependency = !metadata_cf_picked
+        ? std::max(
+              metadata_memtable_dependency, cf->dependentMemtableFlushToken())
+        : FlushToken_INVALID;
+    amount_picked += mem_stats.active_memtable_size;
+    target = target > mem_stats.active_memtable_size
+        ? target - mem_stats.active_memtable_size
+        : 0;
+    out.push_back(std::move(cf_data));
+  };
+
+  auto pick_metadata_cf = [&] {
+    ld_check(!metadata_cf_picked);
+    metadata_cf_picked = true;
+    auto& mem_stats = metadata_cf_data.stats;
+    amount_picked += mem_stats.active_memtable_size;
+    target = target > mem_stats.active_memtable_size
+        ? target - mem_stats.active_memtable_size
+        : 0;
+    // Avoid move for metadata cf as it is used everywhere.
+    out.push_back(metadata_cf_data);
+  };
+
+  auto update_buf_stats = [&cur_active_memory_usage,
+                           this](RocksDBMemTableStats& stats) {
+    cur_active_memory_usage += stats.active_memtable_size;
+    buf_stats_.memory_being_flushed += stats.immutable_memtable_size;
+    buf_stats_.pinned_buffer_usage += stats.pinned_memtable_size;
+  };
+
+  update_buf_stats(metadata_cf_data.stats);
+
+  if (metadata_cf_data.stats.active_memtable_size >=
+      max_memtable_size_trigger_) {
+    pick_metadata_cf();
+    ++max_memtable_thres_triggered;
+  }
+
+  std::vector<CFData> unpicked_cf;
+  // Select all oversized memtables, idle memtable and memtables with old data
+  // first so that other memtables are allowed to stay in memory for some more
+  // time.
+  // Update aggregate memory usage stats.
+  for (auto& cf_data : input) {
+    auto& stats = cf_data.stats;
+    ld_check_ne(stats.active_memtable_size, 0);
+
+    update_buf_stats(stats);
+
+    auto oldDataThresholdTriggered = [&] {
+      auto& cf = cf_data.cf;
+      return settings_->partition_data_age_flush_trigger.count() > 0 &&
+          (now - cf->first_dirtied_time_) >
+          settings_->partition_data_age_flush_trigger;
+    };
+
+    auto idleThresholdTriggered = [&] {
+      auto& latest_dirty_time = cf_data.latest_dirty_time;
+      return (settings_->partition_idle_flush_trigger.count() > 0) &&
+          (latest_dirty_time != SteadyTimestamp::min()) &&
+          (now > latest_dirty_time) &&
+          (now - latest_dirty_time) > settings_->partition_idle_flush_trigger;
+    };
+
+    if (stats.active_memtable_size >= max_memtable_size_trigger_) {
+      max_memtable_thres_triggered++;
+      pick_cf(cf_data);
+    } else if (oldDataThresholdTriggered()) {
+      old_data_thres_triggered++;
+      pick_cf(cf_data);
+    } else if (idleThresholdTriggered()) {
+      idle_thres_triggered++;
+      pick_cf(cf_data);
+    } else {
+      unpicked_cf.push_back(std::move(cf_data));
+    }
+  }
+
+  // Set target amount of memory to flush.
+  if (cur_active_memory_usage > total_active_memory_trigger_) {
+    target = cur_active_memory_usage - amount_picked;
+    if (target > total_active_low_watermark_) {
+      target -= total_active_low_watermark_;
+    } else {
+      target = 0;
+    }
+  }
+
+  if (target > 0) {
+    // Recent two cfs with non-zero active memory usage are considered newer.
+    // Consider all the others older and sort input in ascending order of data
+    // age in cf.
+    if (unpicked_cf.size() > 3) {
+      std::sort(unpicked_cf.begin(),
+                unpicked_cf.end() - 2,
+                [](const CFData& a, const CFData& b) {
+                  return a.cf->first_dirtied_time_ <= b.cf->first_dirtied_time_;
+                });
+    }
+
+    // Arrange the last two cf in descending order according to their
+    // memory usage.
+    if (unpicked_cf.size() >= 2) {
+      auto& latest = unpicked_cf.back();
+      auto& penultimate = *(unpicked_cf.rbegin() + 1);
+      if (latest.stats.active_memtable_size >
+          penultimate.stats.active_memtable_size) {
+        std::swap(latest, penultimate);
+      }
+    }
+
+    // Selects all cf to reach the target memory budget.
+    // CFs are already sorted in the correct order.
+    for (auto i = 0; i < unpicked_cf.size() && target > 0; ++i) {
+      pick_cf(unpicked_cf[i]);
+    }
+  }
+
+  // Check if there is need to flush metadata cf.
+  // If metadata cf is getting flushed activeMemtableFlushToken will return
+  // FlushToken_INVALID or return a token greater than
+  // metadata_memtable_dependency, this allows picked
+  // data cf's to be flushed without metadata cf. This flush req can
+  // complete writing out sst files before the dependent inflight metadata cf
+  // completes the flush. RocksDB still makes sure that metadata cf flush
+  // information gets committed in manifest before data cf flush which initiated
+  // later. Each flush request gets its own sequencer number and the data is
+  // committed in manifest in that sequencer number order.
+  auto active_metadata_token = metadata_cf_data.cf->activeMemtableFlushToken();
+  ld_check(active_metadata_token == FlushToken_INVALID ||
+           active_metadata_token >= metadata_memtable_dependency ||
+           metadata_memtable_dependency == FlushToken_MAX);
+  auto isMetadataCFFlushNeeded = [&] {
+    auto valid_token =
+        !metadata_cf_picked && active_metadata_token != FlushToken_INVALID;
+    return valid_token &&
+        (metadata_memtable_dependency == FlushToken_MAX ||
+         active_metadata_token == metadata_memtable_dependency || target > 0);
+  };
+
+  if (isMetadataCFFlushNeeded()) {
+    pick_metadata_cf();
+    // Make sure metadata cf is first in the list of column families to flush.
+    ld_check(out.size() >= 1);
+    std::swap(out.front(), out.back());
+    ld_check(target == 0);
+  }
+
+  ld_check(cur_active_memory_usage >= amount_picked);
+  buf_stats_.active_memory_usage = cur_active_memory_usage - amount_picked;
+
+  ld_check((out.size() == 0) == (amount_picked == 0));
+  if (amount_picked > 0) {
+    uint64_t min_size = std::numeric_limits<uint64_t>::max();
+    uint64_t max_size = 0;
+    std::stringstream cfs_picked;
+    cfs_picked << "[ ";
+    auto num_picked = out.size();
+    for (auto i = 0; i < num_picked; ++i) {
+      min_size = std::min(min_size, out[i].stats.active_memtable_size);
+      max_size = std::max(max_size, out[i].stats.active_memtable_size);
+      cfs_picked << out[i].cf->get()->GetName();
+      if (i + 1 < num_picked) {
+        cfs_picked << ", ";
+      }
+    }
+    cfs_picked << " ]";
+    ld_debug("Total memory usage: %lu(active), "
+             "%lu(unflushed), amount picked %lu, num picked %lu, num "
+             "candidates %lu,  metadata %lu(active), metadata cf picked %d, "
+             "min:%.3fKB, max:%.3fMB, avg:%.3fMB, cf list :%s. Reason :idle: "
+             "%lu, age: %lu, maxsize: %lu",
+             cur_active_memory_usage,
+             buf_stats_.memory_being_flushed,
+             amount_picked,
+             num_picked,
+             input.size(),
+             metadata_cf_data.stats.active_memtable_size,
+             metadata_cf_picked,
+             min_size / 1e3,
+             max_size / 1e6,
+             amount_picked / 1e6 / out.size(),
+             cfs_picked.str().c_str(),
+             idle_thres_triggered,
+             old_data_thres_triggered,
+             max_memtable_thres_triggered);
+  }
+
+  buf_stats_.memory_being_flushed += amount_picked;
+  return out;
 }
 
 }} // namespace facebook::logdevice

@@ -36,6 +36,7 @@
 #include "logdevice/server/locallogstore/RocksDBEnv.h"
 #include "logdevice/server/locallogstore/RocksDBKeyFormat.h"
 #include "logdevice/server/locallogstore/RocksDBListener.h"
+#include "logdevice/server/locallogstore/RocksDBMemTableRep.h"
 #include "logdevice/server/locallogstore/RocksDBWriterMergeOperator.h"
 #include "logdevice/server/locallogstore/WriteOps.h"
 #include "logdevice/server/locallogstore/test/TemporaryLogStore.h"
@@ -555,6 +556,52 @@ class TestReadFilter : public LocalLogStore::ReadFilter {
   RecordTimestamp prev_max_ts = RecordTimestamp::max();
 };
 
+class TestRocksDBMemTableRep : public RocksDBMemTableRep {
+ public:
+  TestRocksDBMemTableRep(RocksDBMemTableRepFactory& factory,
+                         std::unique_ptr<rocksdb::MemTableRep> wrapped,
+                         rocksdb::Allocator* allocator,
+                         uint32_t cf_id)
+      : RocksDBMemTableRep(factory, std::move(wrapped), allocator, cf_id) {}
+
+  rocksdb::KeyHandle Allocate(const size_t len, char** buf) override {
+    if (allocate_forwarder) {
+      rocksdb::KeyHandle handle =
+          allocate_forwarder(column_family_id_, len, buf);
+      if (handle) {
+        return handle;
+      }
+    }
+    return RocksDBMemTableRep::Allocate(len, buf);
+  }
+
+  static std::function<
+      rocksdb::KeyHandle(uint32_t cf_id, const size_t len, char** buf)>
+      allocate_forwarder;
+};
+
+std::function<rocksdb::KeyHandle(uint32_t cf_id, const size_t len, char** buf)>
+    TestRocksDBMemTableRep::allocate_forwarder = nullptr;
+
+class TestRocksDBMemTableRepFactory : public RocksDBMemTableRepFactory {
+ public:
+  explicit TestRocksDBMemTableRepFactory(
+      std::unique_ptr<MemTableRepFactory> factory)
+      : RocksDBMemTableRepFactory(nullptr, std::move(factory)) {}
+
+  rocksdb::MemTableRep*
+  CreateMemTableRep(const rocksdb::MemTableRep::KeyComparator& cmp,
+                    rocksdb::Allocator* mta,
+                    const rocksdb::SliceTransform* st,
+                    rocksdb::Logger* logger,
+                    uint32_t cf_id) override {
+    std::unique_ptr<rocksdb::MemTableRep> wrapped_mtr(
+        mtr_factory_->CreateMemTableRep(cmp, mta, st, logger, cf_id));
+    return new TestRocksDBMemTableRep(
+        *this, std::move(wrapped_mtr), mta, cf_id);
+  }
+};
+
 std::ostream& operator<<(std::ostream& o, const TestReadFilter::Call& c) {
   using Type = TestReadFilter::Call::Type;
   switch (c.type) {
@@ -836,6 +883,13 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
         &time_, log_store_config.rocksdb_settings_);
     log_store_config.options_.compaction_filter_factory = filter_factory_;
 
+    mtr_factory_ = std::make_shared<TestRocksDBMemTableRepFactory>(
+        std::make_unique<rocksdb::SkipListFactory>(
+            rocksdb_settings_->skip_list_lookahead));
+
+    log_store_config.options_.memtable_factory =
+        log_store_config.metadata_options_.memtable_factory = mtr_factory_;
+
     store_ = std::make_unique<TestPartitionedRocksDBStore>(
         path_, std::move(log_store_config), config_.get(), &stats_, &time_);
 
@@ -874,6 +928,7 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
       storage_thread_pool_->join();
     }
 
+    mtr_factory_.reset();
     // Then destroy store. It has to be destroyed before
     // storage_thread_pool_, as it may still reference it.
     store_.reset();
@@ -1461,6 +1516,9 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
   std::unique_ptr<TestPartitionedRocksDBStore> store_;
   // to remain in scope for store_ destructor when sst_file_manager used
   std::unique_ptr<RocksDBEnv> env_;
+
+  // dummy factory that allows to peek into allocation deallocation etc.
+  std::shared_ptr<TestRocksDBMemTableRepFactory> mtr_factory_;
 
   // Fake current time.
   SystemTimestamp time_{std::chrono::milliseconds(BASE_TIME)};
@@ -5093,7 +5151,7 @@ TEST_F(PartitionedRocksDBStoreTest, ObsoleteDataEstimate) {
 
   // Looks like rocksdb doesn't use user properties collector for sst files
   // written by WAL recovery, so we have to flush explicitly.
-  EXPECT_TRUE(store_->flushMemtables(store_->getPartitionList()->get(ID0)));
+  EXPECT_TRUE(store_->flushMemtable(store_->getPartitionList()->get(ID0)));
 
   time_ =
       SystemTimestamp(std::chrono::milliseconds(BASE_TIME + DAY + HOUR / 2));
@@ -5189,7 +5247,7 @@ TEST_F(PartitionedRocksDBStoreTest, TestGracePeriod) {
   // P0 has records for log 300 only
   time_ = SystemTimestamp(std::chrono::milliseconds(BASE_TIME));
   put({TestRecord(logid_t(300), 1, time_.toMilliseconds().count())});
-  EXPECT_TRUE(store_->flushMemtables(store_->getPartitionList()->get(ID0)));
+  EXPECT_TRUE(store_->flushMemtable(store_->getPartitionList()->get(ID0)));
 
   // P1 has records for logs 300,301,302
   time_ = SystemTimestamp(std::chrono::milliseconds(BASE_TIME + 15 * MINUTE));
@@ -5197,7 +5255,7 @@ TEST_F(PartitionedRocksDBStoreTest, TestGracePeriod) {
   put({TestRecord(logid_t(300), 2, time_.toMilliseconds().count())});
   put({TestRecord(logid_t(301), 1, time_.toMilliseconds().count())});
   put({TestRecord(logid_t(302), 1, time_.toMilliseconds().count())});
-  EXPECT_TRUE(store_->flushMemtables(store_->getPartitionList()->get(ID0 + 1)));
+  EXPECT_TRUE(store_->flushMemtable(store_->getPartitionList()->get(ID0 + 1)));
 
   // P2 has records for log 300,301,302
   time_ = SystemTimestamp(std::chrono::milliseconds(BASE_TIME + 30 * MINUTE));
@@ -5205,7 +5263,7 @@ TEST_F(PartitionedRocksDBStoreTest, TestGracePeriod) {
   put({TestRecord(logid_t(300), 3, time_.toMilliseconds().count())});
   put({TestRecord(logid_t(301), 2, time_.toMilliseconds().count())});
   put({TestRecord(logid_t(302), 2, time_.toMilliseconds().count())});
-  EXPECT_TRUE(store_->flushMemtables(store_->getPartitionList()->get(ID0 + 2)));
+  EXPECT_TRUE(store_->flushMemtable(store_->getPartitionList()->get(ID0 + 2)));
 
   time_ = SystemTimestamp(std::chrono::milliseconds(BASE_TIME + 45 * MINUTE));
   store_->createPartition(); // latest partition, 4th(P3)
@@ -5336,13 +5394,13 @@ TEST_F(PartitionedRocksDBStoreTest, ApplySpaceBasedRetentionPerDisk) {
   // Partition 0.
   time_ = SystemTimestamp(std::chrono::milliseconds(BASE_TIME));
   write_1mb();
-  EXPECT_TRUE(store_->flushMemtables(store_->getPartitionList()->get(ID0)));
+  EXPECT_TRUE(store_->flushMemtable(store_->getPartitionList()->get(ID0)));
 
   // Partition 1.
   time_ = SystemTimestamp(std::chrono::milliseconds(BASE_TIME + HOUR / 2));
   store_->createPartition();
   time_ = SystemTimestamp(std::chrono::milliseconds(BASE_TIME + HOUR));
-  EXPECT_TRUE(store_->flushMemtables(store_->getPartitionList()->get(ID0 + 1)));
+  EXPECT_TRUE(store_->flushMemtable(store_->getPartitionList()->get(ID0 + 1)));
 
   ASSERT_TRUE(store_->getPartitionList()->get(ID0));
   ASSERT_TRUE(store_->getPartitionList()->get(ID0 + 1));
@@ -5429,7 +5487,7 @@ TEST_F(PartitionedRocksDBStoreTest, DeleteRatelimit) {
                       std::string(record_size, 'x'))});
     }
     ASSERT_TRUE(
-        store_->flushMemtables(store_->getPartitionList()->get(currentID)));
+        store_->flushMemtable(store_->getPartitionList()->get(currentID)));
     ASSERT_TRUE(store_->getPartitionList()->get(currentID));
     store_->createPartition();
     currentID++;
@@ -9020,7 +9078,7 @@ TEST_F(PartitionedRocksDBStoreTest, MemtableFlushNotifications) {
       latest_partition->cf_->activeMemtableFlushToken(), maxFlushToken + 2);
   // Force flush out the existing memtable. Write another record and it should
   // create a new memtable for the latest partition. Verify that is the case.
-  store_->flushMemtables(latest_partition);
+  store_->flushMemtable(latest_partition);
   // Active memtable flush token is reset when a memtable is flushed.
   EXPECT_EQ(
       latest_partition->cf_->activeMemtableFlushToken(), FlushToken_INVALID);
@@ -9050,4 +9108,586 @@ TEST_F(PartitionedRocksDBStoreTest, PartitionsDependencyTest) {
       store_->flushMetadataMemtables();
     }
   }
+}
+
+// Makes sure memory stats returned for active memtable reach a given target
+// usage. Target usage should not include partitions that will be flushed
+// because of max memtable trigger. Memory usage of all other partitions will
+// sum to target usage.  This class also randomizes the flush trigger according
+// to given discrete distribution amongst set of triggers.
+class MemTableStatsGenerator {
+ public:
+  using Partition = PartitionedRocksDBStore::Partition;
+  using PartitionPtr = PartitionedRocksDBStore::PartitionPtr;
+  using RocksDBMemTableStats = PartitionedRocksDBStore::RocksDBMemTableStats;
+  using CFData = PartitionedRocksDBStore::FlushEvaluator::CFData;
+  using PartitionList = PartitionedRocksDBStore::PartitionList;
+  enum class FlushTrigger : int {
+    NONE,
+    ZERO_SIZE,
+    ABOVE_MAX_SIZE,
+    IDLE,
+    OLD_DATA
+  };
+
+  MemTableStatsGenerator(
+      SystemTimestamp start_time,
+      uint64_t num_partitions,
+      std::vector<uint8_t> trigger_pc,
+      uint64_t max_memtable_size,
+      uint64_t target_usage,
+      folly::Function<void(PartitionPtr, RocksDBMemTableStats)> cb = nullptr)
+      : start_ts_(start_time),
+        num_partitions_(num_partitions),
+        max_memtable_size_(max_memtable_size),
+        total_non_max_usage_(target_usage),
+        cb_(std::move(cb)) {
+    ld_check(trigger_pc.size() == 5);
+    auto total = 0;
+    auto partition_account = 0;
+    // Distribution of triggers according to given percentages within all
+    // partitions.
+    for (auto val : trigger_pc) {
+      total += val;
+      int num_partitions_with_trigger = num_partitions_ * (val / 100.0);
+      partition_account += num_partitions_with_trigger;
+      trigger_values_.push_back(num_partitions_with_trigger);
+    }
+
+    ld_check(total == 100);
+    ld_check(partition_account <= num_partitions_);
+    if (partition_account < num_partitions_) {
+      trigger_values_[rng_() % trigger_values_.size()] +=
+          num_partitions_ - partition_account;
+    }
+  }
+
+  // Randomly select a trigger and get the necessary final distribution.
+  FlushTrigger getTrigger() {
+    std::vector<uint8_t> possible_triggers;
+    for (int i = 0; i < trigger_values_.size(); ++i) {
+      if (trigger_values_[i] > 0) {
+        possible_triggers.push_back(i);
+      }
+    }
+    ld_check(possible_triggers.size() > 0);
+
+    auto selected = possible_triggers[rng_() % possible_triggers.size()];
+    trigger_values_[selected]--;
+    return static_cast<FlushTrigger>(selected);
+  }
+
+  RocksDBMemTableStats getMemTableStats(PartitionPtr partition) {
+    auto avg_non_max_memtable_size = total_non_max_usage_ / num_partitions_;
+    auto active_memtable_size = 0;
+
+    ld_debug(
+        "avg:%lu rolled:%ld", avg_non_max_memtable_size, rolled_over_usage_);
+    if (partition_num_ == 0 && rng_() % 2) {
+      // For first partition to go beyond average and some fudge factor this
+      // makes it unbiased.
+      active_memtable_size =
+          avg_non_max_memtable_size + rng_() % avg_non_max_memtable_size;
+    } else if (partition_num_ + 1 == num_partitions_) {
+      // Transfer everything to last partition.
+      ld_check(rolled_over_usage_ >= 0 ||
+               avg_non_max_memtable_size >= -1 * rolled_over_usage_);
+      active_memtable_size = avg_non_max_memtable_size + rolled_over_usage_;
+    } else {
+      active_memtable_size =
+          rng_() % (avg_non_max_memtable_size + rolled_over_usage_);
+    }
+
+    ++partition_num_;
+    auto immutable_memtable_size = rng_() % avg_non_max_memtable_size;
+    RocksDBMemTableStats stats{static_cast<uint64_t>(active_memtable_size),
+                               immutable_memtable_size,
+                               0};
+
+    FlushTrigger result = getTrigger();
+    switch (result) {
+      case FlushTrigger::NONE:
+      case FlushTrigger::IDLE:
+      case FlushTrigger::OLD_DATA: {
+        auto& mem_size = stats.active_memtable_size;
+        // Make sure the size is non-zero.
+        mem_size = mem_size == 0 ? 1 : mem_size;
+        // Randomize the dirtied time for partitions.
+        auto new_dirtied_time = start_ts_ + std::chrono::minutes{rng_() % 15};
+        partition->cf_->first_dirtied_time_ =
+            SteadyTimestamp(new_dirtied_time.time_since_epoch());
+      } break;
+      case FlushTrigger::ABOVE_MAX_SIZE:
+        stats.active_memtable_size = max_memtable_size_;
+        break;
+      case FlushTrigger::ZERO_SIZE:
+        stats.active_memtable_size = active_memtable_size = 0;
+        break;
+    }
+
+    if (result != FlushTrigger::ABOVE_MAX_SIZE) {
+      // In this case memtable_size is fixed and does not account towards
+      // total_non_max_usage_.
+      if (active_memtable_size < avg_non_max_memtable_size) {
+        rolled_over_usage_ += avg_non_max_memtable_size - active_memtable_size;
+      } else {
+        rolled_over_usage_ -= active_memtable_size - avg_non_max_memtable_size;
+      }
+    }
+
+    ld_info("FlushTrigger result:%d active:%lu imm:%lu avg:%lu rolled:%ld",
+            result,
+            stats.active_memtable_size,
+            stats.immutable_memtable_size,
+            avg_non_max_memtable_size,
+            rolled_over_usage_);
+
+    if (cb_) {
+      cb_(partition, stats);
+    }
+
+    return stats;
+  }
+
+  std::vector<CFData> genStatsList(PartitionList& partitions) {
+    std::vector<CFData> cf_data;
+    cf_data.reserve(partitions->size());
+    for (auto& p : *partitions) {
+      p->cf_->first_dirtied_time_ = SteadyTimestamp::now();
+      CFData cf = {p->cf_, getMemTableStats(p), SteadyTimestamp::now()};
+      cf_data.push_back(std::move(cf));
+    }
+    return cf_data;
+  }
+
+  CFData genMetadataStats(RocksDBCFPtr& cf) {
+    cf->first_dirtied_time_ = SteadyTimestamp::now();
+    return {cf, RocksDBMemTableStats(), SteadyTimestamp::now()};
+  }
+
+  // Used to create idle partitions.
+  SystemTimestamp start_ts_;
+  // Number of times getMemTableStats will be called.
+  uint64_t num_partitions_;
+  // Discrete distribution. Helps in distribution flush triggers.
+  // Eg: { 50, 20, 20, 5, 5},
+  // 50 % memtables should be of type NONE.
+  // 20 % memtables should be zero sized.
+  // 20 % memtables should be above max memtable size.
+  // 5 % memtables satisfy idle trigger.
+  // 5 % memtables satisfy old data age trigger.
+  std::vector<uint32_t> trigger_values_;
+  folly::ThreadLocalPRNG rng_;
+  // Max memtable size usually close half of entire store budget.
+  // It should be way greater than total
+  uint64_t max_memtable_size_;
+  // Total usage of memtables which are less than max_memtable_size.
+  // This value plus number of memtables above max_memtable_size gives value of
+  // total_memory_usage before flush.
+  uint64_t total_non_max_usage_;
+  // Usage for non max memtables which was used extra or unused from previous
+  // iteration.
+  int64_t rolled_over_usage_{0};
+  // Counts which partition is getting processed currently.
+  uint64_t partition_num_{0};
+  // Allows tests to get the stats returned to evaluator.
+  folly::Function<void(PartitionPtr, RocksDBMemTableStats)> cb_;
+};
+
+TEST_F(PartitionedRocksDBStoreTest, PartitionFlushSimpleTests) {
+  updateSetting("rocksdb-partition-data-age-flush-trigger", "0");
+  updateSetting("rocksdb-partition-idle-flush-trigger", "0");
+  using FlushEvaluator = PartitionedRocksDBStore::FlushEvaluator;
+  using CFData = FlushEvaluator::CFData;
+  auto max_memtable_size = 200;
+  auto target = 100;
+  auto total_budget = 100;
+  // Mark the partition as dirtied so that it is selected for flushing.
+  auto latest_partition = store_->getLatestPartition();
+  latest_partition->cf_->first_dirtied_time_ = SteadyTimestamp::now();
+
+  auto get_candidates_and_evaluate = [this](MemTableStatsGenerator& generator,
+                                            FlushEvaluator& evaluator) {
+    auto partitions = store_->getPartitionList();
+    auto metadata_cf = store_->getMetadataCFPtr();
+    auto flush_candidates = generator.genStatsList(partitions);
+    CFData metadata_cf_data = generator.genMetadataStats(metadata_cf);
+    return evaluator.pickCFsToFlush(
+        store_->currentSteadyTime(), metadata_cf_data, flush_candidates);
+  };
+
+  auto partitions = store_->getPartitionList();
+  auto cf_id = partitions->get(ID0)->cf_->getID();
+  ASSERT_EQ(partitions->size(), 1u);
+  // Single partition of non-zero size but below total store budget hence no
+  // partitions should be selected for flush.
+  {
+    MemTableStatsGenerator generator(time_,
+                                     1,
+                                     {100, 0, 0, 0, 0},
+                                     max_memtable_size,
+                                     50u /*should be less than total_budget */);
+    FlushEvaluator evaluator(
+        total_budget, max_memtable_size, total_budget, store_->getSettings());
+    auto cf_data = get_candidates_and_evaluate(generator, evaluator);
+    auto buf_stats = evaluator.getBufStats();
+    ASSERT_TRUE(cf_data.empty());
+    ASSERT_LT(0u, buf_stats.active_memory_usage);
+  }
+
+  // Single partition less than max memtable size selected because usage is
+  // beyond total limit.
+  {
+    MemTableStatsGenerator generator(
+        time_, 1, {100, 0, 0, 0, 0}, max_memtable_size, 150u /* target */);
+    FlushEvaluator evaluator(
+        total_budget, max_memtable_size, total_budget, store_->getSettings());
+    auto cf_data = get_candidates_and_evaluate(generator, evaluator);
+    auto buf_stats = evaluator.getBufStats();
+    ASSERT_FALSE(cf_data.empty());
+    ASSERT_EQ(cf_id, cf_data[0].cf->getID());
+    ASSERT_EQ(0u, buf_stats.active_memory_usage);
+    ASSERT_LT(0u, buf_stats.memory_being_flushed);
+  }
+
+  // Single partition above max_memtable_size is selected for flushing.
+  {
+    MemTableStatsGenerator generator(
+        time_, 1, {0, 0, 100, 0, 0}, max_memtable_size, target);
+    FlushEvaluator evaluator(
+        total_budget, max_memtable_size, total_budget, store_->getSettings());
+    auto cf_data = get_candidates_and_evaluate(generator, evaluator);
+    auto buf_stats = evaluator.getBufStats();
+    ASSERT_FALSE(cf_data.empty());
+    ASSERT_EQ(cf_id, cf_data[0].cf->getID());
+    ASSERT_EQ(0u, buf_stats.active_memory_usage);
+    ASSERT_LT(0u, buf_stats.memory_being_flushed);
+  }
+}
+
+// Latest two partitions have different policy compared to other older
+// partitions. Run simple tests for them.
+TEST_F(PartitionedRocksDBStoreTest, FlushLatestPartitionsTest) {
+  updateSetting("rocksdb-partition-data-age-flush-trigger", "0");
+  updateSetting("rocksdb-partition-idle-flush-trigger", "0");
+  using PartitionPtr = PartitionedRocksDBStore::PartitionPtr;
+  using RocksDBMemTableStats = PartitionedRocksDBStore::RocksDBMemTableStats;
+  using FlushEvaluator = PartitionedRocksDBStore::FlushEvaluator;
+  using CFData = FlushEvaluator::CFData;
+  auto max_memtable_size = 150;
+  auto target = 100;
+  auto total_budget = 200;
+  // Mark the partition as dirtied so that it is selected for flushing.
+  auto latest_partition = store_->getLatestPartition();
+  latest_partition->cf_->first_dirtied_time_ = SteadyTimestamp::now();
+  // Create another partition so that we have two partitions for the test.
+  latest_partition = store_->createPartition();
+  latest_partition->cf_->first_dirtied_time_ = SteadyTimestamp::now();
+  ASSERT_EQ(2u, store_->getPartitionList()->size());
+  auto get_candidates_and_evaluate = [this](MemTableStatsGenerator& generator,
+                                            FlushEvaluator& evaluator) {
+    auto partitions = store_->getPartitionList();
+    auto metadata_cf = store_->getMetadataCFPtr();
+    auto flush_candidates = generator.genStatsList(partitions);
+    CFData metadata_cf_data = generator.genMetadataStats(metadata_cf);
+    return evaluator.pickCFsToFlush(
+        store_->currentSteadyTime(), metadata_cf_data, flush_candidates);
+  };
+  // Simple test with non-zero memtable size for partition but none of them get
+  // selected for flush because memory budget is way higher than sum of size of
+  // the memtables.
+  {
+    MemTableStatsGenerator generator(
+        time_, 2, {100, 0, 0, 0, 0}, max_memtable_size, target);
+    FlushEvaluator evaluator(
+        total_budget, max_memtable_size, total_budget, store_->getSettings());
+    auto cf_data = get_candidates_and_evaluate(generator, evaluator);
+    ASSERT_TRUE(cf_data.empty());
+  }
+
+  // Test where all latest partitions have memtable size greater than
+  // max_allowed leading to flush.
+  {
+    MemTableStatsGenerator generator(
+        time_, 2, {0, 0, 100, 0, 0}, max_memtable_size, target);
+    FlushEvaluator evaluator(
+        total_budget, max_memtable_size, total_budget, store_->getSettings());
+    auto cf_data = get_candidates_and_evaluate(generator, evaluator);
+    auto buf_stats = evaluator.getBufStats();
+    ASSERT_FALSE(cf_data.empty());
+    ASSERT_EQ(2u, cf_data.size());
+    ASSERT_LT(0u, buf_stats.memory_being_flushed);
+    ASSERT_EQ(0u, buf_stats.active_memory_usage);
+  }
+
+  // Test where single partition of two latest partition is selected for
+  // flushing.
+  {
+    auto total_budget_override = 100;
+    auto partition_flushed = 0;
+    RocksDBMemTableStats max_stats;
+    // Current policy selects maximum partition of the two.
+    auto cb = [&partition_flushed, &max_stats](
+                  PartitionPtr partition, RocksDBMemTableStats stats) {
+      if (stats.active_memtable_size > max_stats.active_memtable_size) {
+        max_stats = stats;
+        partition_flushed = partition->cf_->getID();
+      }
+    };
+
+    MemTableStatsGenerator generator(
+        time_,
+        2,
+        {100, 0, 0, 0, 0},
+        max_memtable_size,
+        total_budget_override +
+            10, // Setting this to total_budget will create two
+                // memtables with one of them bigger than other.
+        std::move(cb));
+    FlushEvaluator evaluator(total_budget_override,
+                             max_memtable_size,
+                             total_budget_override,
+                             store_->getSettings());
+    auto cf_data = get_candidates_and_evaluate(generator, evaluator);
+    auto buf_stats = evaluator.getBufStats();
+    ASSERT_FALSE(cf_data.empty());
+    ASSERT_EQ(1u, cf_data.size());
+    ASSERT_EQ(partition_flushed, cf_data[0].cf->getID());
+    ASSERT_NE(0u, buf_stats.memory_being_flushed);
+    ASSERT_GE(buf_stats.memory_being_flushed, max_stats.active_memtable_size);
+  }
+
+  // Test where all partitions of two latest partition are selected for
+  // flushing.
+  {
+    auto total_budget_override = 100;
+    auto partition_flushed = 0;
+    RocksDBMemTableStats max_stats;
+    // Current policy selects maximum partition of the two.
+    auto cb = [&partition_flushed, &max_stats](
+                  PartitionPtr partition, RocksDBMemTableStats stats) {
+      if (stats.active_memtable_size > max_stats.active_memtable_size) {
+        max_stats = stats;
+        partition_flushed = partition->cf_->getID();
+      }
+    };
+
+    MemTableStatsGenerator generator(time_,
+                                     2,
+                                     {100, 0, 0, 0, 0},
+                                     max_memtable_size,
+                                     total_budget_override + 10,
+                                     std::move(cb));
+    FlushEvaluator evaluator(
+        total_budget_override,
+        max_memtable_size,
+        0, // Setting target to zero so that all partitions are selected.
+        store_->getSettings());
+    auto cf_data = get_candidates_and_evaluate(generator, evaluator);
+    ASSERT_FALSE(cf_data.empty());
+    ASSERT_EQ(2u, cf_data.size());
+    ASSERT_EQ(partition_flushed, cf_data[0].cf->getID());
+  }
+}
+
+// Work with four 4 partitions and select the right partitions to flush.
+TEST_F(PartitionedRocksDBStoreTest,
+       PickFlushCandidatesFromOldAndNewPartitions) {
+  updateSetting("rocksdb-partition-data-age-flush-trigger", "0");
+  updateSetting("rocksdb-partition-idle-flush-trigger", "0");
+  using PartitionPtr = PartitionedRocksDBStore::PartitionPtr;
+  using RocksDBMemTableStats = PartitionedRocksDBStore::RocksDBMemTableStats;
+  using FlushEvaluator = PartitionedRocksDBStore::FlushEvaluator;
+  using CFData = FlushEvaluator::CFData;
+  auto max_memtable_size = 150;
+  auto target = 100;
+  auto total_budget = 200;
+  auto partition = store_->getLatestPartition();
+  // Mark the partition as dirtied so that it is selected for flushing.
+  partition->cf_->first_dirtied_time_ = SteadyTimestamp::now();
+  auto create_partition = [this]() {
+    auto part = store_->createPartition();
+    // Mark the partition as dirtied so that it is selected for flushing.
+    part->cf_->first_dirtied_time_ = SteadyTimestamp::now();
+  };
+
+  auto get_candidates_and_evaluate = [this](MemTableStatsGenerator& generator,
+                                            FlushEvaluator& evaluator) {
+    auto partitions = store_->getPartitionList();
+    auto metadata_cf = store_->getMetadataCFPtr();
+    auto flush_candidates = generator.genStatsList(partitions);
+    CFData metadata_cf_data = generator.genMetadataStats(metadata_cf);
+    return evaluator.pickCFsToFlush(
+        store_->currentSteadyTime(), metadata_cf_data, flush_candidates);
+  };
+  // Create another partition so that we have more than two partitions for the
+  // test.
+  create_partition();
+  create_partition();
+  create_partition();
+  auto partitions = store_->getPartitionList();
+  ASSERT_EQ(4u, partitions->size());
+
+  // Test with few partitions at max_memtable_size.
+  {
+    MemTableStatsGenerator generator(
+        time_, 4, {25, 0, 75, 0, 0}, max_memtable_size, target);
+    FlushEvaluator evaluator(
+        total_budget, max_memtable_size, total_budget, store_->getSettings());
+    auto cf_data = get_candidates_and_evaluate(generator, evaluator);
+    ASSERT_FALSE(cf_data.empty());
+    // Atleast 1 partition should be selected for flushing.
+    ASSERT_LE(1u, cf_data.size());
+  }
+
+  // Test in multiple partitions selected for flush. The partitions with oldest
+  // data is selected amongst older partition.
+  {
+    // 2 of 4 are considered old partitions.
+    auto partition_counter = 2;
+    SteadyTimestamp min_dirtied_time{SteadyTimestamp::max()};
+    SteadyTimestamp second_min{SteadyTimestamp::min()};
+    auto cb = [&partition_counter, &min_dirtied_time, &second_min](
+                  PartitionPtr partition, RocksDBMemTableStats /* stats */) {
+      if (partition_counter > 0) {
+        partition_counter--;
+        min_dirtied_time.storeMin(partition->cf_->first_dirtied_time_);
+        second_min.storeMax(partition->cf_->first_dirtied_time_);
+      }
+    };
+    MemTableStatsGenerator generator(
+        time_, 4, {100, 0, 0, 0, 0}, 1000, total_budget + 10, std::move(cb));
+    FlushEvaluator evaluator(
+        total_budget, 1000, total_budget / 2, store_->getSettings());
+    auto cf_data = get_candidates_and_evaluate(generator, evaluator);
+    ASSERT_FALSE(cf_data.empty());
+    ASSERT_TRUE(min_dirtied_time == cf_data[0].cf->first_dirtied_time_);
+    if (cf_data.size() > 1) {
+      ASSERT_TRUE(second_min == cf_data[1].cf->first_dirtied_time_);
+    }
+  }
+}
+
+// Make sure metadata cf is picked up correctly for flushing.
+TEST_F(PartitionedRocksDBStoreTest, PickMetadataCFForFlush) {
+  updateSetting("rocksdb-partition-data-age-flush-trigger", "0");
+  updateSetting("rocksdb-partition-idle-flush-trigger", "0");
+  using FlushEvaluator = PartitionedRocksDBStore::FlushEvaluator;
+  using CFData = FlushEvaluator::CFData;
+  using RocksDBMemTableStats = PartitionedRocksDBStore::RocksDBMemTableStats;
+  uint64_t max_memtable_size =
+      100000; // Too huge that this should not come in question.
+  auto latest_partition = store_->getLatestPartition();
+  auto latest_cf_id = latest_partition->cf_->getID();
+  auto metadata_cf_holder = store_->getMetadataCFPtr();
+  auto metadata_cf_id = metadata_cf_holder->getID();
+  std::string data(100, 'a');
+  put({TestRecord(logid_t(1), 1, 0, data)});
+  CFData metadata_cf_data{metadata_cf_holder,
+                          store_->getMemTableStats(metadata_cf_holder->get()),
+                          SteadyTimestamp::now()};
+  {
+    std::vector<CFData> partition_data{
+        {latest_partition->cf_,
+         store_->getMemTableStats(latest_partition->cf_->get()),
+         SteadyTimestamp::now()}};
+    // Single write should mark metadata cf dependent and should be selected
+    // when flushing data cf.
+    FlushEvaluator evaluator(0, max_memtable_size, 0, store_->getSettings());
+    auto cf_data = evaluator.pickCFsToFlush(
+        store_->currentSteadyTime(), metadata_cf_data, partition_data);
+    ASSERT_FALSE(cf_data.empty());
+    ASSERT_EQ(cf_data.size(), 2u);
+    ASSERT_EQ(cf_data[0].cf->getID(), metadata_cf_id);
+    ASSERT_EQ(cf_data[1].cf->getID(), latest_cf_id);
+  }
+  {
+    std::vector<CFData> partition_data{
+        {latest_partition->cf_,
+         store_->getMemTableStats(latest_partition->cf_->get()),
+         SteadyTimestamp::now()}};
+    // Flush metadata cf and after that data cf is no longer dependent. Make
+    // sure this is the case. The data cf still should be selected for flushing
+    store_->flushMetadataMemtables();
+    metadata_cf_data.stats =
+        store_->getMemTableStats(metadata_cf_holder->get());
+    FlushEvaluator evaluator(0, max_memtable_size, 0, store_->getSettings());
+    auto cf_data = evaluator.pickCFsToFlush(
+        store_->currentSteadyTime(), metadata_cf_data, partition_data);
+    ASSERT_FALSE(cf_data.empty());
+    ASSERT_EQ(1u, cf_data.size());
+    ASSERT_EQ(cf_data[0].cf->getID(), latest_cf_id);
+  }
+  {
+    std::vector<CFData> partition_data{
+        {latest_partition->cf_,
+         store_->getMemTableStats(latest_partition->cf_->get()),
+         SteadyTimestamp::now()}};
+    // Select metadata column family even though there is nothing else to flush.
+    metadata_cf_data.stats = RocksDBMemTableStats{
+        max_memtable_size + 1, max_memtable_size, max_memtable_size};
+    FlushEvaluator evaluator(10000000, // Make sure total budget is huge.
+                             max_memtable_size,
+                             10000000, // Make sure target is huge.
+                             store_->getSettings());
+    auto cf_data = evaluator.pickCFsToFlush(
+        store_->currentSteadyTime(), metadata_cf_data, partition_data);
+    ASSERT_FALSE(cf_data.empty());
+    ASSERT_EQ(1u, cf_data.size());
+    ASSERT_EQ(cf_data[0].cf->getID(), metadata_cf_id);
+  }
+}
+
+// Write into the latest partition and flush the write buf.
+TEST_F(PartitionedRocksDBStoreTest, FlushWriteBufTest) {
+  updateSetting("rocksdb-partition-data-age-flush-trigger", "0");
+  updateSetting("rocksdb-partition-idle-flush-trigger", "0");
+  auto latest_partition = store_->getLatestPartition();
+  latest_partition->cf_->first_dirtied_time_ = SteadyTimestamp::now();
+  auto metadata_cf_holder = store_->getMetadataCFPtr();
+  auto stats_before = store_->getMemTableStats(latest_partition->cf_->get());
+  std::string data(100, 'a');
+  for (auto i = 1; i <= 1000; ++i) {
+    put({TestRecord(logid_t(1), i, 0, data)});
+    stats_before.active_memtable_size += data.size();
+  }
+  auto dependency = latest_partition->cf_->dependentMemtableFlushToken();
+  EXPECT_NE(dependency, FlushToken_INVALID);
+  EXPECT_EQ(dependency, metadata_cf_holder->activeMemtableFlushToken());
+  auto stats =
+      store_->scheduleWriteBufFlush(0 /*total_active_flush_trigger*/,
+                                    20 * 1024, /*max_buffer_flush_trigger*/
+                                    0);        /*total_active_low_watermark*/
+  ASSERT_EQ(0u, stats.active_memory_usage);
+  ASSERT_GE(stats.memory_being_flushed, stats_before.active_memtable_size);
+  ASSERT_EQ(
+      latest_partition->cf_->activeMemtableFlushToken(), FlushToken_INVALID);
+  ASSERT_EQ(metadata_cf_holder->activeMemtableFlushToken(), FlushToken_INVALID);
+  ASSERT_EQ(
+      latest_partition->cf_->dependentMemtableFlushToken(), FlushToken_INVALID);
+}
+
+TEST_F(PartitionedRocksDBStoreTest, RocksDBMemTableStatsTest) {
+  auto latest_partition = store_->getLatestPartition();
+  auto metadata_cf_holder = store_->getMetadataCFPtr();
+  auto metadata_stats = store_->getMemTableStats(metadata_cf_holder->get());
+  std::atomic<uint64_t> total_usage_{0};
+  TestRocksDBMemTableRep::allocate_forwarder =
+      [&total_usage_, id = latest_partition->cf_->getID()](
+          uint32_t cf_id, const size_t len, char** /* buf */) {
+        if (cf_id == id) {
+          total_usage_ += len;
+        }
+        return nullptr;
+      };
+  std::string data(10, 'a');
+  for (auto i = 1; i <= 400; ++i) {
+    put({TestRecord(logid_t(1), i, BASE_TIME, data)});
+  }
+  auto stats_after = store_->getMemTableStats(latest_partition->cf_->get());
+  auto metadata_stats_after =
+      store_->getMemTableStats(metadata_cf_holder->get());
+  ASSERT_LE(total_usage_, stats_after.active_memtable_size);
+  ASSERT_LE(metadata_stats.active_memtable_size,
+            metadata_stats_after.active_memtable_size);
 }

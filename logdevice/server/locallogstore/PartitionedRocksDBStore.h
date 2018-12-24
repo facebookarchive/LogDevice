@@ -486,6 +486,23 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
               bool approximate = false,
               bool allow_blocking_io = true) const override;
 
+  // Picks and flushes memtables of all column families in this store according
+  // to the current flush policy. The implementation makes sure that total
+  // active memtable memory consumption does not go beyond
+  // total_active_flush_trigger. If it does go beyond the trigger, it flushes
+  // memory such that the total consumption becomes less than or equal to
+  // total_active_low_watermark. It also makes sure none of the
+  // memtable go beyond max_buffer_flush_trigger.
+  // It also selects memtables which contain old data or have been idle for a
+  // while.
+  // @return WriteBufStats which provides active memory usage after initiating
+  // flush, amount of memory currently being flushed and amount of pinned
+  // memory.
+  LocalLogStore::WriteBufStats
+  scheduleWriteBufFlush(uint64_t total_active_flush_trigger,
+                        uint64_t max_buffer_flush_trigger,
+                        uint64_t total_active_low_watermark) override;
+
   // Starts a new partition.
   // Used in tests, and is exposed through an admin command.
   // @return the new partition or nullptr in case of error.
@@ -691,9 +708,13 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
         !configuration::InternalLogs::isInternal(log_id);
   }
 
-  // Tells rocksdb to flush all memtables of given partition and optionally
-  // wait for the flush to finish.
-  bool flushMemtables(PartitionPtr partition, bool wait = true);
+  // Tells rocksdb to flush the active memtable of given column family and
+  // optionally waits for the flush to finish.
+  bool flushMemtable(RocksDBCFPtr& cf, bool wait = true);
+
+  // Wrapper for the above api that accepts partition instead of raw column
+  // family handle.
+  bool flushMemtable(PartitionPtr partition, bool wait = true);
 
   // Flush MemTables associated with unpartitioned column families.
   int flushUnpartitionedMemtables(bool wait = true);
@@ -992,7 +1013,100 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
     std::unique_ptr<Deps> deps_;
   };
 
-  // Drop partitions up to `partition` on the next iteration of background
+  // Class evaluates and returns partitions that are most suitable for
+  // flushing.
+  class FlushEvaluator {
+   public:
+    // CFData used as input to evaluator to select column families to flush.
+    struct CFData {
+      RocksDBCFPtr cf;
+      RocksDBMemTableStats stats;
+      SteadyTimestamp latest_dirty_time;
+    };
+
+    FlushEvaluator(uint64_t total_active_memory_trigger,
+                   uint64_t max_memtable_size_trigger,
+                   uint64_t total_active_low_watermark,
+                   std::shared_ptr<const RocksDBSettings> settings)
+        : total_active_memory_trigger_(total_active_memory_trigger),
+          max_memtable_size_trigger_(max_memtable_size_trigger),
+          total_active_low_watermark_(total_active_low_watermark),
+          settings_(std::move(settings)) {
+      ld_check(total_active_memory_trigger >= total_active_low_watermark);
+    }
+
+    ~FlushEvaluator() {}
+
+    // Picks the column families to flush according to current policy. To try a
+    // different policy someone can mark this method as virtual and extend this
+    // class.
+    // Current policy description:
+    // API expects all input CFData to have some dirty data. The input vector
+    // needs to be sorted in order of column family creation time. The policy
+    // consider the families at lower index in the array as low priority, hence
+    // if a column family memtable needs to stay in memory longer it needs to be
+    // located more towards the end of the array.
+    // 1. Divide the cf in two classes. One is for older cf and
+    // other is for younger cf.
+    // 2. Memory needs to be flushed if total active memory usage goes beyond
+    // trigger. Find how much memory has to be flushed by calculating the
+    // difference between active memory usage and low watermark. If none
+    // then we are looking for other triggers like idle, old data and max
+    // memtable size.
+    // 3. Selection amongst old cfs is done by sorting cf's in ascending order
+    // of first dirtied time. Here we priortize flushing by oldest data first.
+    // 4. Go over the sorted elements in order till we reach low watermark
+    // memory usage.  If there are cf with memtables over max size, add them to
+    // flush candidates regardless.
+    // 5. After processing , if the target memory usage is unreached
+    // start processing latest cf's. Process the latest partititons
+    // ordered by biggest memtable first. Add flush candidates
+    // till either we reach target usage or we run out of cf to process.
+    // Again if there are cf above max memtable size then add them to
+    // flush candidates regardless.
+    // 6. It can happen that low watermark size is not reached as nothing can be
+    // selected that fits the criteria. Higher layers take decision about
+    // whether there is a need to stall writes.
+    //
+    // Other things we tried in past that didn't help:
+    // * Flush the biggest memtable instead of the oldest. If you keep doing
+    // that, you end up with lots of small active memtables occupying most of
+    // the memory budget but never getting flushed.
+    // * For deciding when to flush, look at the total size of not just active
+    // memtables but all memtables, including memtables that are being flushed
+    // (let's call them "immutable" from now on) and memtables that were flushed
+    // but are pinned by iterators (let's call them "pinned"). If there are
+    // enough pinned memtables to get us over threshold even with no active
+    // memtables, we start flushing like crazy, making things even worse.
+    // * Same but don't count pinned memtables, only active and immutable. Has
+    // the same problem.
+    // * Same but only flush if total size of active memtables is at least half
+    // the threshold. This works ok, but doesn't seem to much advantage over
+    // just looking at active memtables only. Worst-case memory usage seems to
+    // be 2x the threshold in both cases (worst case for the active+immutable
+    // approach is: start empty, write up to threshold, start a flush, write up
+    // to half threshold, start another flush, write almost up to half threshold
+    // before first flush completes). Worst steady-state memory usage seems 25%
+    // better. We decided it's not worth the trouble for now.
+    //
+    // Returns true if the metadata cf needs to be flushed along with the
+    // cf.
+    std::vector<CFData> pickCFsToFlush(SteadyTimestamp now,
+                                       CFData& metadata,
+                                       std::vector<CFData>& candidates);
+    LocalLogStore::WriteBufStats getBufStats() {
+      return buf_stats_;
+    }
+
+   private:
+    // Memory limits
+    const uint64_t total_active_memory_trigger_;
+    const uint64_t max_memtable_size_trigger_;
+    const uint64_t total_active_low_watermark_;
+    std::shared_ptr<const RocksDBSettings> settings_;
+    LocalLogStore::WriteBufStats buf_stats_;
+  };
+
   // thread.
   void setSpaceBasedTrimLimit(partition_id_t partition) {
     atomic_fetch_max(space_based_trim_limit, partition);
@@ -1160,11 +1274,15 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
   // inconsistent with data in partitions.
   bool finishInterruptedDrops();
 
+  // Helper method to wrap the newly created or recovered column family handle
+  // to RocksDBCFPtr.
+  RocksDBCFPtr
+  wrapAndRegisterCF(std::unique_ptr<rocksdb::ColumnFamilyHandle> handle);
+
   // Helper method which creates a new column family with the given name.
   // Returns a handle to the column family or nullptr on failure.
-  std::unique_ptr<rocksdb::ColumnFamilyHandle>
-  createColumnFamily(std::string name,
-                     const rocksdb::ColumnFamilyOptions& options);
+  RocksDBCFPtr createColumnFamily(std::string name,
+                                  const rocksdb::ColumnFamilyOptions& options);
 
   // Helper method which bulk creates column families with given names
   // Returns a vector of handles to created column families or empty vector on
@@ -1494,7 +1612,7 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
   RocksDBCFPtr unpartitioned_cf_;
 
   // Column family for persisting log snapshot blobs.
-  std::unique_ptr<rocksdb::ColumnFamilyHandle> snapshots_cf_;
+  RocksDBCFPtr snapshots_cf_;
   // Used to keep the snapshots CF from being created/deleted while we're
   // trying to flush it.
   std::mutex snapshots_cf_lock_;

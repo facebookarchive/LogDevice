@@ -123,6 +123,40 @@ class RocksDBLogStoreBase : public LocalLogStore {
     return res;
   }
 
+  struct RocksDBMemTableStats {
+    // Size of current active and unflushed memtable.
+    uint64_t active_memtable_size{0};
+    // Size of immutable memtables scheduled for flush.
+    uint64_t immutable_memtable_size{0};
+    // Size of immutable memtables pinned in memory.
+    uint64_t pinned_memtable_size{0};
+  };
+
+  // Fetches memtable memory usage for a column family
+  RocksDBMemTableStats getMemTableStats(rocksdb::ColumnFamilyHandle* cf) {
+    RocksDBMemTableStats stats;
+    db_->GetIntProperty(cf,
+                        rocksdb::DB::Properties::kCurSizeActiveMemTable,
+                        &stats.active_memtable_size);
+    uint64_t aggregated_flushed_stat = 0;
+    db_->GetIntProperty(cf,
+                        rocksdb::DB::Properties::kCurSizeAllMemTables,
+                        &aggregated_flushed_stat);
+    stats.immutable_memtable_size =
+        aggregated_flushed_stat > stats.active_memtable_size
+        ? aggregated_flushed_stat - stats.active_memtable_size
+        : 0;
+    uint64_t aggregated_memtable_stat = 0;
+    db_->GetIntProperty(cf,
+                        rocksdb::DB::Properties::kSizeAllMemTables,
+                        &aggregated_memtable_stat);
+    stats.pinned_memtable_size =
+        aggregated_memtable_stat > aggregated_flushed_stat
+        ? aggregated_memtable_stat - aggregated_flushed_stat
+        : 0;
+    return stats;
+  }
+
   int getShardIdx() const override {
     return shard_idx_;
   }

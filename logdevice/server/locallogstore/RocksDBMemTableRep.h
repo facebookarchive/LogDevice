@@ -41,7 +41,7 @@ class RocksDBMemTableRep : public RocksDBMemTableRepWrapper {
 
   void MarkFlushed() override;
 
- private:
+ protected:
   void ensureRegistered();
 
   // Used to track MemTableReps on a per-MemTableRepFactory basis.
@@ -62,10 +62,10 @@ class RocksDBMemTableRepFactory : public RocksDBMemTableRepFactoryWrapper {
       folly::IntrusiveList<RocksDBMemTableRep, &RocksDBMemTableRep::links_>;
 
  public:
-  RocksDBMemTableRepFactory(RocksDBLogStoreBase& store,
+  RocksDBMemTableRepFactory(RocksDBLogStoreBase* store,
                             std::unique_ptr<MemTableRepFactory> factory)
       : RocksDBMemTableRepFactoryWrapper(factory.get()),
-        store_(&store),
+        store_(store),
         name_("logdevice::RocksDBMemTableRepFactory"),
         mtr_factory_(std::move(factory)) {
     using namespace std::string_literals;
@@ -114,7 +114,13 @@ class RocksDBMemTableRepFactory : public RocksDBMemTableRepFactoryWrapper {
     return oldest_dirtied_time_;
   }
 
- private:
+  // Allow to assign store for factory created before store, in case of unit
+  // tests.
+  void setStore(RocksDBLogStoreBase* store) {
+    store_ = store;
+  }
+
+ protected:
   std::atomic<FlushToken> next_flush_token_{1};
   std::atomic<FlushToken> flushed_up_through_{FlushToken_INVALID};
   AtomicSteadyTimestamp oldest_dirtied_time_{SteadyTimestamp::max()};
