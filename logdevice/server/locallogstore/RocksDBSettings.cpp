@@ -1316,6 +1316,22 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART | EXPERIMENTAL,
        SettingsCategory::RocksDB);
 
+  init(OPTNAME(ld_managed_flushes),
+       &ld_managed_flushes,
+       "false",
+       nullptr,
+       "By default, decision about when and what memtables to flush is taken "
+       "by rocksdb using it's internal policy. This boolean overrides that "
+       "behavior and stops rocksdb from taking any flush decisions. When set "
+       "all decisions about flushing are taken by logdevice. It uses "
+       "rocksdb-memtable-size-per-node and rocksdb-write-buffer-size settings "
+       "to decide if it's necessary to flush memtables. Also in order to "
+       "enable rocksdb-memtable-size-per-node can be maximum of 32GB. It is "
+       "necessary to have db-write-buffer-size "
+       "set to zero.",
+       SERVER | REQUIRES_RESTART,
+       SettingsCategory::RocksDB);
+
   init(OPTNAME(arena_block_size),
        &arena_block_size,
        "4194304",
@@ -1350,7 +1366,12 @@ rocksdb::Options RocksDBSettings::toRocksDBOptions() const {
   options.max_write_buffer_number = max_write_buffer_number;
   options.num_levels = num_levels;
   options.target_file_size_base = target_file_size_base;
-  options.write_buffer_size = write_buffer_size;
+  // For LD managed flushes we set memory limit for the node and memtable within
+  // rocksdb to a very high value. By doing this we disable flushes initiated
+  // within rocksdb.
+  options.write_buffer_size = partitioned && ld_managed_flushes
+      ? INFINITE_MEMORY_LIMIT
+      : write_buffer_size;
   options.max_total_wal_size = max_total_wal_size;
   options.db_write_buffer_size = db_write_buffer_size;
   options.arena_block_size = arena_block_size;

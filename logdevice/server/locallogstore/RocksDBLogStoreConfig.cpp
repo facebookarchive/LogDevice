@@ -193,13 +193,41 @@ RocksDBLogStoreConfig::RocksDBLogStoreConfig(
     }
 #endif
 
+    // LD managed flushes.
+    // Make sure RocksDBSettings::INFINITE_MEMORY_LIMIT value is sufficiently
+    // large.
+    auto can_ld_manage_flushes = RocksDBSettings::INFINITE_MEMORY_LIMIT >=
+        2 * rocksdb_settings_->memtable_size_per_node;
+
+    // db_write_buffer_size should be zero for logdevice to manage flushes.
     // Until the new (per-node) setting is used everywhere, don't override old
     // (per-shard) setting if a custom value was set
+    can_ld_manage_flushes &= rocksdb_settings_->db_write_buffer_size == 0;
+
+    // Finally check if ld_managed_flushes is disabled or not.
+    can_ld_manage_flushes &= rocksdb_settings_->ld_managed_flushes;
+
+    auto node_mem_limit = RocksDBSettings::INFINITE_MEMORY_LIMIT;
+    // Rollback settings before creating or recovering rocksdb instance.
+    if (!can_ld_manage_flushes) {
+      // TODO Set stat indicating shard cannot come up with ld_managed_flushes.
+      options_.write_buffer_size = rocksdb_settings_->write_buffer_size;
+      node_mem_limit = rocksdb_settings_->memtable_size_per_node;
+      if (rocksdb_settings_->ld_managed_flushes) {
+        ld_error("Cannot manage flushing memtable within logdevice because, %s",
+                 rocksdb_settings_->db_write_buffer_size != 0
+                     ? "db_write_buffer_size is non-zero"
+                     : "infinite memory limit value should be atleast twice of "
+                       "per node limit.");
+      } else {
+        ld_info("LD not managing flushing of memtables to sst.");
+      }
+    }
+
     if (rocksdb_settings_->db_write_buffer_size == 0) {
       // Enforces total size of DB write buffers per node, not shard
       options_.write_buffer_manager =
-          std::make_shared<rocksdb::WriteBufferManager>(
-              rocksdb_settings_->memtable_size_per_node);
+          std::make_shared<rocksdb::WriteBufferManager>(node_mem_limit);
     }
   }
 }

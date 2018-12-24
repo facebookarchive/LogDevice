@@ -326,6 +326,26 @@ class RocksDBSettings : public SettingsBundle {
   // as corrupted.
   bool test_corrupt_stores{false};
 
+  // Various settings related to the rocksdb flush policy.
+
+  // Total size limit for all memtables in the system.
+  size_t memtable_size_per_node;
+
+  // Enable or disable management of memtable flushing within logdevice.
+  bool ld_managed_flushes;
+
+  // When ld manages flushes, memory limit for the node and memtable
+  // within rocksdb set to a very high value. rocksdb should never be
+  // able to reach those limits and initiate a flush. This limit is a
+  // constant set to 64GB which is max memtable size supported by rocksdb.
+  // Memtable and per node limits are expected to be
+  // atleast half of this value. If the current settings do not satisfy this we
+  // fallback to rocksdb managing the flushes.
+  static constexpr size_t INFINITE_MEMORY_LIMIT{1ull << 36};
+
+  // See .cpp
+  std::chrono::milliseconds flush_trigger_check_interval;
+
 #ifdef LOGDEVICED_ROCKSDB_INSERT_HINT
   // Enable rocksdb insert hint optimization with data/metadata keys. May reduce
   // CPU usage for inserting keys into rocksdb and incur small memory overhead.
@@ -386,7 +406,6 @@ class RocksDBSettings : public SettingsBundle {
   size_t write_buffer_size;
   uint64_t max_total_wal_size;
   size_t db_write_buffer_size;
-  size_t memtable_size_per_node;
   size_t arena_block_size;
   unsigned int uc_min_merge_width;
   unsigned int uc_max_merge_width;
