@@ -19,6 +19,8 @@ STAT_DEFINE(storage_tasks_executed, SUM)
 // Number of microseconds spent in storage threads on executing this type of
 // storage tasks
 STAT_DEFINE(storage_thread_usec, SUM)
+// Number of microseconds spent by task in the storage (scheduler) queue.
+STAT_DEFINE(storage_q_usec, SUM)
 
 #undef STAT_DEFINE
 #undef RESETTING_STATS

@@ -58,10 +58,14 @@ void ExecStorageThread::run() {
     auto usec = SystemTimestamp(execution_end_time - execution_start_time)
                     .toMicroseconds()
                     .count();
+
+    // Node avg. stats.
     STORAGE_TASK_TYPE_STAT_INCR(
         pool_->stats(), task->getType(), storage_tasks_executed);
     STORAGE_TASK_TYPE_STAT_ADD(
         pool_->stats(), task->getType(), storage_thread_usec, usec);
+    STORAGE_TASK_TYPE_STAT_ADD(
+        pool_->stats(), task->getType(), storage_q_usec, queueing_usec);
 
     // Maintaining stats for execution latency.
     if (task->reply_shard_idx_ != -1) {
