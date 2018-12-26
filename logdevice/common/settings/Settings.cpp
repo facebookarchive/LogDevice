@@ -1006,7 +1006,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        &storage_task_shares[(uint64_t)StorageTaskPrincipal::name].share, \
        shareVal,                                                         \
        parse_positive<uint64_t>(),                                       \
-       "The share for principal" #key "in the DRR scheduler.",           \
+       "The share for principal " #key " in the DRR scheduler.",         \
        SERVER,                                                           \
        SettingsCategory::Storage);
 #include "logdevice/common/storage_task_principals.inc"

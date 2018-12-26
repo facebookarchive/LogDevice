@@ -450,15 +450,15 @@ sidebar_label: Settings
 | max-in-flight-monitor-requests | maximum number of in-flight monitoring requests (e.g. manual compaction) posted by the monitoring thread | 1 | requires&nbsp;restart, server&nbsp;only |
 | max-queued-monitor-requests | max number of log store monitor requests buffered in the monitoring thread queue | 32 | requires&nbsp;restart, server&nbsp;only |
 | rocksdb-auto-create-shards | Auto-create shard data directories if they do not exist | false | requires&nbsp;restart, server&nbsp;only |
-| storage-task-read-backlog-share | The share for principalread-backlogin the DRR scheduler. | 5 | server&nbsp;only |
-| storage-task-read-compaction-partial-share | The share for principalread-compaction-partialin the DRR scheduler. | 1 | server&nbsp;only |
-| storage-task-read-compaction-retention-share | The share for principalread-compaction-retentionin the DRR scheduler. | 3 | server&nbsp;only |
-| storage-task-read-findkey-share | The share for principalread-findkeyin the DRR scheduler. | 10 | server&nbsp;only |
-| storage-task-read-internal-share | The share for principalread-internalin the DRR scheduler. | 10 | server&nbsp;only |
-| storage-task-read-metadata-share | The share for principalread-metadatain the DRR scheduler. | 10 | server&nbsp;only |
-| storage-task-read-misc-share | The share for principalread-miscin the DRR scheduler. | 1 | server&nbsp;only |
-| storage-task-read-rebuild-share | The share for principalread-rebuildin the DRR scheduler. | 3 | server&nbsp;only |
-| storage-task-read-tail-share | The share for principalread-tailin the DRR scheduler. | 8 | server&nbsp;only |
+| storage-task-read-backlog-share | The share for principal read-backlog in the DRR scheduler. | 5 | server&nbsp;only |
+| storage-task-read-compaction-partial-share | The share for principal read-compaction-partial in the DRR scheduler. | 1 | server&nbsp;only |
+| storage-task-read-compaction-retention-share | The share for principal read-compaction-retention in the DRR scheduler. | 3 | server&nbsp;only |
+| storage-task-read-findkey-share | The share for principal read-findkey in the DRR scheduler. | 10 | server&nbsp;only |
+| storage-task-read-internal-share | The share for principal read-internal in the DRR scheduler. | 10 | server&nbsp;only |
+| storage-task-read-metadata-share | The share for principal read-metadata in the DRR scheduler. | 10 | server&nbsp;only |
+| storage-task-read-misc-share | The share for principal read-misc in the DRR scheduler. | 1 | server&nbsp;only |
+| storage-task-read-rebuild-share | The share for principal read-rebuild in the DRR scheduler. | 3 | server&nbsp;only |
+| storage-task-read-tail-share | The share for principal read-tail in the DRR scheduler. | 8 | server&nbsp;only |
 | storage-tasks-drr-quanta | Default quanta per-principal. 1 implies request based scheduling. Use something like 1MB for byte based scheduling. | 1 | server&nbsp;only |
 | storage-tasks-use-drr | Use DRR for scheduling read IO's. | false | requires&nbsp;restart, server&nbsp;only |
 | storage-thread-delaying-sync-interval | Interval between invoking syncs for delayable storage tasks. Ignored when undelayable task is being enqueued. | 100ms | server&nbsp;only |
