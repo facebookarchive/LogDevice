@@ -36,6 +36,8 @@ sidebar_label: Settings
 | logsconfig-max-delta-bytes | How many bytes of deltas to keep in the logsconfig deltas log before we snapshot it. | 10485760 | server&nbsp;only |
 | logsconfig-max-delta-records | How many delta records to keep in the logsconfig deltas log before we snapshot it. | 4000 | server&nbsp;only |
 | logsconfig-snapshotting-period | Controls time based snapshotting. New logsconfig snapshot will be created after this period if there are new log configuration deltas | 1h | server&nbsp;only |
+| maintenance-log-snapshotting | Allow the maintenance log to be snapshotted onto a snapshot log. This requires the maintenance log group to contain two logs, the first one being the snapshot log and the second one being the delta log. | true | requires&nbsp;restart, server&nbsp;only |
+| maintenance-log-snapshotting-period | Controls time based snapshotting. New maintenancelog snapshot will be created after this period if there are new deltas | 1h | server&nbsp;only |
 | max-sequencer-background-activations-in-flight | Max number of concurrent background sequencer activations to run. Background sequencer activations perform log metadata changes (reprovisioning) when the configuration attributes of a log change. | 20 | server&nbsp;only |
 | on-demand-logs-config | Set this to true if you want the client to get log configuration on demand from the server when log configuration is not included in the main config file. | false | requires&nbsp;restart, client&nbsp;only |
 | on-demand-logs-config-retry-delay | When a client's attempt to get log configuration information from server on demand fails, the client waits this much before retrying. | 5ms..1s | client&nbsp;only |

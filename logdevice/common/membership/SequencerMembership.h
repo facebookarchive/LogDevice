@@ -59,6 +59,10 @@ struct SequencerNodeState {
     return weight == rhs.weight && active_maintenance == rhs.active_maintenance;
   }
 
+  bool operator!=(const SequencerNodeState& rhs) const {
+    return !(*this == rhs);
+  }
+
   // Describe the update that can apply to SequencerNodeState
   struct Update {
     SequencerMembershipTransition transition;

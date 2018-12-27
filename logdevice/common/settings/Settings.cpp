@@ -2260,6 +2260,26 @@ void Settings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::Rebuilding);
 
+  init("maintenance-log-snapshotting",
+       &maintenance_log_snapshotting,
+       "true",
+       nullptr,
+       "Allow the maintenance log to be snapshotted onto a snapshot log. This "
+       "requires the maintenance log group to contain two logs, the first one "
+       "being "
+       "the snapshot log and the second one being the delta log.",
+       SERVER | REQUIRES_RESTART,
+       SettingsCategory::Configuration);
+
+  init("maintenance-log-snapshotting-period",
+       &maintenance_log_snapshotting_period,
+       "1h",
+       validate_positive<ssize_t>(),
+       "Controls time based snapshotting. New maintenancelog snapshot will be "
+       "created after this period if there are new deltas",
+       SERVER,
+       SettingsCategory::Configuration);
+
   init(
       "append-store-durability",
       &append_store_durability,

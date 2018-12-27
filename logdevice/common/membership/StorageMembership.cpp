@@ -378,6 +378,17 @@ StorageMembership::getShardState(ShardID shard) const {
   return std::make_pair(true, sit->second);
 }
 
+std::unordered_map<shard_index_t, ShardState>
+StorageMembership::getShardStates(node_index_t node) const {
+  std::unordered_map<shard_index_t, ShardState> result;
+  const auto nit = node_states_.find(node);
+  if (nit == node_states_.cend()) {
+    return result;
+  }
+
+  return nit->second.shard_states;
+}
+
 void StorageMembership::setShardState(ShardID shard, ShardState state) {
   // caller must ensure that the given state is valid
   ld_check(state.isValid());
@@ -665,6 +676,10 @@ StorageSet StorageMembership::readerViewMetaData() const {
 StorageSet StorageMembership::getMetaDataStorageSet() const {
   return storageset_filter(
       metadata_shards_, [](ShardID shard) { return true; });
+}
+
+bool StorageMembership::isInMetadataStorageSet(ShardID shard) const {
+  return metadata_shards_.count(shard);
 }
 
 bool StorageMembership::operator==(const StorageMembership& rhs) const {

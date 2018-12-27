@@ -203,6 +203,15 @@ class StorageMembership : public Membership {
   std::pair<bool, ShardState> getShardState(ShardID shard) const;
 
   /**
+   * Get the shard states of a given node
+   *
+   * @return a map of shard_index to ShardState. If node is not part
+   *         of membership, an enmpty map is returned.
+   */
+  std::unordered_map<shard_index_t, ShardState>
+  getShardStates(node_index_t node) const;
+
+  /**
    * Check if writers and readers have access to a given shard. See the
    * definition of canWriteTo() and shouldReadFrom() in StorageState.h.
    */
@@ -235,6 +244,8 @@ class StorageMembership : public Membership {
   const std::set<ShardID>& getMetaDataShards() const {
     return metadata_shards_;
   }
+
+  bool isInMetadataStorageSet(ShardID shard) const;
 
   size_t numNodes() const {
     return node_states_.size();
