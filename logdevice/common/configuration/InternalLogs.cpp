@@ -17,12 +17,17 @@ constexpr logid_t InternalLogs::CONFIG_LOG_SNAPSHOTS;
 constexpr logid_t InternalLogs::CONFIG_LOG_DELTAS;
 constexpr logid_t InternalLogs::EVENT_LOG_SNAPSHOTS;
 constexpr logid_t InternalLogs::EVENT_LOG_DELTAS;
+constexpr logid_t InternalLogs::MAINTENANCE_LOG_DELTAS;
+constexpr logid_t InternalLogs::MAINTENANCE_LOG_SNAPSHOTS;
 
 const InternalLogs::NameLookupMap& InternalLogs::nameLookup() {
-  static NameLookupMap inst = {{"config_log_snapshots", CONFIG_LOG_SNAPSHOTS},
-                               {"config_log_deltas", CONFIG_LOG_DELTAS},
-                               {"event_log_snapshots", EVENT_LOG_SNAPSHOTS},
-                               {"event_log_deltas", EVENT_LOG_DELTAS}};
+  static NameLookupMap inst = {
+      {"config_log_snapshots", CONFIG_LOG_SNAPSHOTS},
+      {"config_log_deltas", CONFIG_LOG_DELTAS},
+      {"event_log_snapshots", EVENT_LOG_SNAPSHOTS},
+      {"event_log_deltas", EVENT_LOG_DELTAS},
+      {"maintenance_log_deltas", MAINTENANCE_LOG_DELTAS},
+      {"maintenance_log_snapshots", MAINTENANCE_LOG_SNAPSHOTS}};
   return inst;
 }
 

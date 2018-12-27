@@ -109,8 +109,8 @@ enum ShardDataHealth {
 
 /**
  * ShardOperationalState defines the operational state of a shard. There is a
- * clear priority of these maintenance states, `DRAINED` > `MAY_DISAPPEAR`. If 
- * both target maintenances are set on a shard, DRAINED maintenance will always 
+ * clear priority of these maintenance states, `DRAINED` > `MAY_DISAPPEAR`. If
+ * both target maintenances are set on a shard, DRAINED maintenance will always
  * win.
  */
 enum ShardOperationalState {
@@ -136,6 +136,13 @@ enum ShardOperationalState {
    */
   MAY_DISAPPEAR = 2,
   /**
+   * The shard has been fully drained. It does not contain any data
+   * (ShardDataHealth == EMPTY). It's safe to remove this shard from the
+   * cluster. Drained also means that this node is not in the metadata nodeset
+   * anymore.
+   */
+  DRAINED = 3,
+  /**
    * The shard is broken (has I/O errors) and has been marked as (needs rebuilding)
    * by the RebuildingSupervisor. In this case, the shard is temporarily disabled
    * until it comes back with either its data intact (at which rebuilding will be
@@ -143,15 +150,8 @@ enum ShardOperationalState {
    * back to ENABLED or whatever the next logical maintenance in the pending
    * maintenance list is.
    */
-  DOWN = 3,
+  DOWN = 4,
   /**
-   * The shard has been fully drained. It does not contain any data
-   * (ShardDataHealth == EMPTY). It's safe to remove this shard from the
-   * cluster. Drained also means that this node is not in the metadata nodeset
-   * anymore.
-   */
-  DRAINED = 4,
-  /** 
    * Transitional States
    * Draining is a transitional state at which the shard is in the process of
    * becoming DRAINED. This means that data relocation or rebuilding should be

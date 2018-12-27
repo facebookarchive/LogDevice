@@ -42,6 +42,8 @@ class InternalLogs {
   static constexpr logid_t CONFIG_LOG_DELTAS{4611686018427387901};
   static constexpr logid_t EVENT_LOG_SNAPSHOTS{4611686018427387902};
   static constexpr logid_t EVENT_LOG_DELTAS{4611686018427387903};
+  static constexpr logid_t MAINTENANCE_LOG_SNAPSHOTS{4611686018427387904};
+  static constexpr logid_t MAINTENANCE_LOG_DELTAS{4611686018427387905};
 
   using NameLookupMap = std::unordered_map<std::string, logid_t>;
   static const NameLookupMap& nameLookup();
