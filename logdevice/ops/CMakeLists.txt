@@ -10,4 +10,4 @@ add_subdirectory(admin_command_client)
 if (NOT DEFINED NO_PYTHON)
   install(CODE "execute_process(COMMAND ${PYTHON_EXECUTABLE} setup.py install
                                 WORKING_DIRECTORY ${LOGDEVICE_DIR}/ops/)")
-endif (NOT NO_PYTHON)
+endif (NOT DEFINED NO_PYTHON)
