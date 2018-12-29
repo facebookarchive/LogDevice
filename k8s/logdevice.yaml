@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: logdevice
+  labels:
+    app: logdevice
+spec:
+  clusterIP: None
+  selector:
+    app: logdevice
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: logdevice
+spec:
+  serviceName: "logdevice"
+  replicas: 4
+  selector:
+    matchLabels:
+      app: logdevice
+  template:
+    metadata:
+      labels:
+        app: logdevice
+    spec:
+      containers:
+      - name: logdevice
+        image: "mohamedbassem/logdevice:startup"
+        ports:
+        - containerPort: 4440
+        - containerPort: 4441
+        imagePullPolicy: Always
+        env:
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: POD_NAME_PREFIX
+            value: "logdevice-"
+          - name: POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
