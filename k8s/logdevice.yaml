@@ -42,3 +42,15 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: status.podIP
+        volumeMounts:
+        - name: shard0
+          mountPath: /data/logdevice/shard0
+  volumeClaimTemplates:
+  - metadata:
+      name: shard0
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: "do-block-storage"
+      resources:
+        requests:
+          storage: 50Gi

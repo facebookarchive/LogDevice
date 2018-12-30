@@ -102,8 +102,7 @@ class LogdeviceStarter:
             self.zk.set(CONFIG_PATH, serialized)
     
     def prepare_logdevice_directories(self):
-        os.makedirs("/data/logdevice")
-        os.makedirs("/data/logdevice/shard0")
+        # Assumes that pod spec mounts the volume at /data/logdevice/shard0
         with open("/data/logdevice/NSHARDS", "w") as f:
             f.write("1")
 
