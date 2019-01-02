@@ -63,28 +63,35 @@ struct TestTask : public StorageTask {
 
 class MockWriteStorageTask : public WriteStorageTask {
  public:
-  explicit MockWriteStorageTask(size_t mock_payload_size = 0)
-      : WriteStorageTask(StorageTask::Type::UNKNOWN) {
+  explicit MockWriteStorageTask(ThreadType thread_type,
+                                size_t mock_payload_size = 0)
+      : WriteStorageTask(StorageTask::Type::UNKNOWN),
+        thread_type_(thread_type) {
     payload_size_ = mock_payload_size;
   }
 
-  virtual size_t getPayloadSize() const override {
+  size_t getPayloadSize() const override {
     return payload_size_;
   }
 
-  virtual void onDone() override {}
+  ThreadType getThreadType() const override {
+    return thread_type_;
+  }
 
-  virtual void onDropped() override{};
+  void onDone() override {}
 
-  virtual size_t getNumWriteOps() const override {
+  void onDropped() override {}
+
+  size_t getNumWriteOps() const override {
     return 0;
   }
 
-  virtual size_t getWriteOps(const WriteOp**, size_t) const override {
+  size_t getWriteOps(const WriteOp**, size_t) const override {
     return 0;
   }
 
  private:
+  ThreadType thread_type_;
   size_t payload_size_;
 };
 
@@ -369,19 +376,23 @@ TEST(StorageThreadPoolTest, BatchLimits) {
                            &store,
                            limit + 1); // task queue size
 
+    auto ttype = MockWriteStorageTask::ThreadType::SLOW;
+
     // Make sure byte_limit is respected
     ASSERT_EQ(0,
-              pool.tryPutWrite(
-                  std::make_unique<MockWriteStorageTask>(byte_limit - 1)));
-    ASSERT_EQ(0, pool.tryPutWrite(std::make_unique<MockWriteStorageTask>(2)));
-    ASSERT_EQ(0, pool.tryPutWrite(std::make_unique<MockWriteStorageTask>()));
-    auto ttype = MockWriteStorageTask::ThreadType::SLOW;
+              pool.tryPutWrite(std::make_unique<MockWriteStorageTask>(
+                  ttype, byte_limit - 1)));
+    ASSERT_EQ(
+        0, pool.tryPutWrite(std::make_unique<MockWriteStorageTask>(ttype, 2)));
+    ASSERT_EQ(
+        0, pool.tryPutWrite(std::make_unique<MockWriteStorageTask>(ttype)));
     auto res = pool.tryGetWriteBatch(ttype, limit, byte_limit);
     ASSERT_EQ(2, res.size());
 
     // Make sure (task) limit is respected
     for (auto i = 0; i < limit; i++) {
-      ASSERT_EQ(0, pool.tryPutWrite(std::make_unique<MockWriteStorageTask>()));
+      ASSERT_EQ(
+          0, pool.tryPutWrite(std::make_unique<MockWriteStorageTask>(ttype)));
     }
     res = pool.tryGetWriteBatch(ttype, limit, byte_limit);
     ASSERT_EQ(limit, res.size());
