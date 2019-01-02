@@ -38,6 +38,9 @@ void WatchDogThread::detectStalls() {
   std::vector<std::string> stalled_worker_names;
   processor_->applyToWorkerPool(
       [&](Worker& w) {
+        if (!w.isAcceptingWork()) {
+          return;
+        }
         int idx = w.idx_.val_;
         ld_check(idx < events_called_.size());
 
@@ -90,15 +93,17 @@ void WatchDogThread::detectStalls() {
           processor_->getPluginRegistry()->getSinglePlugin<BacktraceRunner>(
               PluginType::BACKTRACE_RUNNER);
       if (plugin != nullptr) {
-        for (size_t i = 0;
-             (i < stalled_worker_pids.size()) && (bt_ratelimiter_.isAllowed());
+        for (size_t i = 0; (i < stalled_worker_pids.size()) &&
+             (bt_ratelimiter_.isAllowed()) && !processor_->isShuttingDown();
              ++i) {
           ld_info("bt of %s(pid=%d)",
                   stalled_worker_names[i].c_str(),
                   stalled_worker_pids[i]);
           plugin->printBacktraceOnStall(stalled_worker_pids[i]);
         }
-        plugin->printKernelStacktrace();
+        if (!processor_->isShuttingDown()) {
+          plugin->printKernelStacktrace();
+        }
       }
     }
 
