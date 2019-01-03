@@ -9,6 +9,7 @@
 
 #include <chrono>
 
+#include "logdevice/common/ExponentialBackoffAdaptiveVariable.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/Timer.h"
 #include "logdevice/common/WorkerTimeoutStats.h"
@@ -29,6 +30,8 @@ class GraylistingTracker {
   using Latencies =
       std::vector<std::pair<node_index_t, WorkerTimeoutStats::Latency>>;
   using PerRegionLatencies = std::map<std::string, Latencies>;
+  using ChronoExponentialBackoff =
+      ChronoExponentialBackoffAdaptiveVariable<std::chrono::seconds>;
 
  public:
   virtual ~GraylistingTracker() = default;
@@ -80,13 +83,19 @@ class GraylistingTracker {
 
   std::vector<node_index_t> findOutlierNodes(PerRegionLatencies regions);
 
+  const std::unordered_map<node_index_t, Timestamp>&
+  getGraylistDeadlines() const;
+
   virtual WorkerTimeoutStats& getWorkerTimeoutStats();
 
   // The duration through which a node need to be consistently an outlier to get
   // graylisted
   virtual std::chrono::seconds getGracePeriod() const;
 
-  // The duration of an active graylist
+  // Max duration of an active graylist
+  virtual std::chrono::seconds getMaxGraylistingDuration() const;
+
+  // Min duration of an active graylist
   virtual std::chrono::seconds getGraylistingDuration() const;
 
   // The percentage of the nodes that are allowed to be graylisted
@@ -98,6 +107,10 @@ class GraylistingTracker {
   virtual StatsHolder* getStats();
 
  private:
+  // Update and get duration of an active graylist for node
+  virtual std::chrono::seconds getUpdatedGraylistingDuration(node_index_t node,
+                                                             Timestamp now);
+
   // Removes expired graylisted nodes from the graylist_deadlines_ map
   void removeExpiredGraylistedNodes(Timestamp now);
 
@@ -111,6 +124,13 @@ class GraylistingTracker {
   // first)
   std::vector<node_index_t>
   findSortedOutlierNodesPerRegion(Latencies latencies);
+
+  // Create backoff variable if not exists
+  void createGraylistingBackoff(node_index_t node);
+
+  std::chrono::seconds positiveFeedbackAndGet(node_index_t node, Timestamp now);
+
+  void negativeFeedback(node_index_t node);
 
   // Based on the outliers, update the potential_graylist. Add new outliers
   // to the potential graylist and return the confirmed outliers.
@@ -126,6 +146,13 @@ class GraylistingTracker {
 
   // A map determines the timestamp until which the node is graylisted
   std::unordered_map<node_index_t, Timestamp> graylist_deadlines_;
+
+  // Determines per-node exponential backoffs
+  // to calculate timestamps for graylist_deadlines_
+  // Contains only nodes that have been in graylist at least once
+  // Backoff variable is only created when node added to actual graylist
+  std::unordered_map<node_index_t, std::unique_ptr<ChronoExponentialBackoff>>
+      graylist_backoffs_;
 
   // The active graylisted nodes cached as they will be called frequently
   // from the appenders

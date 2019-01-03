@@ -845,11 +845,14 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "600s",
        validate_positive<ssize_t>(),
        "After a sequencer's request to store a record copy on a storage node "
-       "times out that sequencer will graylist that node for this time "
-       "interval. "
+       "times out that sequencer will graylist that node for at least this "
+       "time interval. "
        "The sequencer will not pick graylisted nodes for copysets unless "
        "--gray-list-threshold is reached or no valid copyset can be selected "
-       "from nodeset nodes not yet graylisted",
+       "from nodeset nodes not yet graylisted. "
+       "For outlier-based graylisting increases exponentially for each "
+       "new graylisting up until 10x of this value and decreases "
+       "at linear rate down to this value when not graylisted",
        SERVER,
        SettingsCategory::WritePath);
   init("check-node-health-request-timeout",

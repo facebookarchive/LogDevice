@@ -16,9 +16,8 @@ void GraylistingTracker::updateGraylist(Timestamp now) {
   auto confirmed_outliers = updatePotentialGraylist(now, std::move(outliers));
 
   for (auto node : confirmed_outliers) {
-    if (graylist_deadlines_.count(node) == 0) {
-      graylist_deadlines_[node] = now + getGraylistingDuration();
-    }
+    graylist_deadlines_.emplace(
+        node, now + getUpdatedGraylistingDuration(node, now));
   }
 
   removeExpiredGraylistedNodes(now);
@@ -70,17 +69,38 @@ void GraylistingTracker::resetGraylist() {
   STAT_INCR(getStats(), graylist_reseted);
   potential_graylist_.clear();
   graylist_deadlines_.clear();
+  graylist_backoffs_.clear();
   graylist_.clear();
+}
+
+const std::unordered_map<node_index_t, GraylistingTracker::Timestamp>&
+GraylistingTracker::getGraylistDeadlines() const {
+  return graylist_deadlines_;
 }
 
 WorkerTimeoutStats& GraylistingTracker::getWorkerTimeoutStats() {
   return Worker::onThisThread()->getWorkerTimeoutStats();
 }
 
+std::chrono::seconds
+GraylistingTracker::positiveFeedbackAndGet(node_index_t node, Timestamp now) {
+  ld_assert(graylist_backoffs_.count(node) == 1);
+  graylist_backoffs_[node]->positiveFeedback(
+      std::chrono::time_point_cast<std::chrono::milliseconds>(now));
+  return graylist_backoffs_[node]->getCurrentValue();
+}
+
+void GraylistingTracker::negativeFeedback(node_index_t node) {
+  ld_assert(graylist_backoffs_.count(node) == 1);
+  graylist_backoffs_[node]->negativeFeedback();
+}
+
 void GraylistingTracker::removeExpiredGraylistedNodes(Timestamp now) {
   auto it = graylist_deadlines_.begin();
   while (it != graylist_deadlines_.end()) {
     if (it->second <= now) {
+      // calculate positive feedback only when not in graylist
+      positiveFeedbackAndGet(it->first, now);
       it = graylist_deadlines_.erase(it);
     } else {
       it++;
@@ -184,8 +204,34 @@ std::chrono::seconds GraylistingTracker::getGracePeriod() const {
   return Worker::settings().graylisting_grace_period;
 }
 
+void GraylistingTracker::createGraylistingBackoff(node_index_t node) {
+  if (graylist_backoffs_.count(node) == 0) {
+    auto initial_and_min_cap = getGraylistingDuration();
+    auto backoff_ptr =
+        std::make_unique<ChronoExponentialBackoff>(initial_and_min_cap,
+                                                   initial_and_min_cap,
+                                                   getMaxGraylistingDuration(),
+                                                   /* multiplier */ 2.0,
+                                                   /* decrease_rate */ 1.0,
+                                                   /* fuzz_factor */ 0.0);
+    graylist_backoffs_[node] = std::move(backoff_ptr);
+  }
+}
+
+std::chrono::seconds GraylistingTracker::getMaxGraylistingDuration() const {
+  return getGraylistingDuration() * 10;
+}
+
 std::chrono::seconds GraylistingTracker::getGraylistingDuration() const {
   return Worker::settings().slow_node_retry_interval;
+}
+
+std::chrono::seconds
+GraylistingTracker::getUpdatedGraylistingDuration(node_index_t node,
+                                                  Timestamp now) {
+  createGraylistingBackoff(node);
+
+  return positiveFeedbackAndGet(node, now);
 }
 
 GraylistingTracker::Latencies GraylistingTracker::getLatencyEstimationForNodes(
@@ -215,13 +261,12 @@ void GraylistingTracker::updateActiveGraylist() {
   graylist_deadlines_.clear();
 
   for (int i = 0; i < new_graylist_size; i++) {
-    auto idx = pairs.size() - 1 - i;
-    ld_assert(idx < pairs.size());
-    auto& pair = pairs[pairs.size() - 1 - i];
-
-    graylist_deadlines_[pair.second] = pair.first;
-    graylist_.insert(pair.second);
-    if (old_graylist.count(pair.second) == 0) {
+    auto& pair = pairs[i];
+    auto node = pair.second;
+    graylist_deadlines_[node] = pair.first;
+    graylist_.insert(node);
+    if (old_graylist.count(node) == 0) {
+      negativeFeedback(node); // only if node wasn't in previous graylist
       STAT_INCR(getStats(), graylist_shard_added);
     }
   }
@@ -257,7 +302,7 @@ GraylistingTracker::getSortedGraylistDeadlines(
   for (const auto& node : deadlines) {
     pairs.emplace_back(node.second, node.first);
   }
-  std::sort(pairs.begin(), pairs.end());
+  std::sort(pairs.begin(), pairs.end(), std::greater<>());
   return pairs;
 }
 

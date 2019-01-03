@@ -74,7 +74,7 @@ class MockGraylistingTracker : public GraylistingTracker {
   }
 
   std::chrono::seconds getGracePeriod() const override {
-    return 5s;
+    return 5s; // min ok duration
   }
 
   std::chrono::seconds getGraylistingDuration() const override {
@@ -114,6 +114,7 @@ class MockGraylistingTracker : public GraylistingTracker {
   FRIEND_TEST(GraylistingTrackerTest, MaxGraylistedNodes);
   FRIEND_TEST(GraylistingTrackerTest, GroupLatencyPerRegion);
   FRIEND_TEST(GraylistingTrackerTest, PerRegionOutlier);
+  FRIEND_TEST(GraylistingTrackerTest, MultiplicativeIncreaseAdditiveDecrease);
 };
 
 TEST(GraylistingTrackerTest, OutlierGraylisted) {
@@ -172,6 +173,76 @@ TEST(GraylistingTrackerTest, EjectOlderGraylists) {
   // N3 will get ejected because it's the oldest
   tracker.updateGraylist(now + 30s);
   EXPECT_THAT(tracker.getGraylistedNodes(), UnorderedElementsAre(2, 4, 5));
+}
+
+TEST(GraylistingTrackerTest, MultiplicativeIncreaseAdditiveDecrease) {
+  auto stats = buildWorkerStats({{1, 20ms},
+                                 {2, 20ms},
+                                 {3, 500ms},  // Outlier
+                                 {4, 500ms},  // Outlier
+                                 {5, 500ms}}, // Outlier
+                                10);
+  auto now = std::chrono::steady_clock::now();
+
+  MockGraylistingTracker tracker(std::move(stats));
+
+  tracker.updateGraylist(now);
+  EXPECT_EQ(0, tracker.getGraylistedNodes().size());
+
+  // start graylist
+  tracker.updateGraylist(now + 6s);
+  EXPECT_THAT(tracker.getGraylistedNodes(), UnorderedElementsAre(3, 4, 5));
+  auto deadlines = tracker.getGraylistDeadlines();
+  for (int i = 3; i <= 5; ++i) {
+    EXPECT_EQ(deadlines[i], now + 66s);
+  }
+
+  // end graylist
+  tracker.updateGraylist(now + 65s);
+  EXPECT_THAT(tracker.getGraylistedNodes(), UnorderedElementsAre(3, 4, 5));
+
+  // new grace
+  tracker.updateGraylist(now + 66s);
+  EXPECT_EQ(0, tracker.getGraylistedNodes().size());
+
+  // new grace end
+  tracker.updateGraylist(now + 71s);
+  deadlines = tracker.getGraylistDeadlines();
+  EXPECT_THAT(tracker.getGraylistedNodes(), UnorderedElementsAre(3, 4, 5));
+  for (int i = 3; i <= 5; ++i) {
+    // 120s = 2*60s is exponential increase
+    // 120s - 5s is  decrease for 5s grace
+    EXPECT_EQ(deadlines[i], now + 71s + (120s - 5s)); // 186s
+  }
+
+  // set no outliers, wait for additive decrease up until min value
+  stats = buildWorkerStats(
+      {{1, 20ms}, {2, 20ms}, {3, 20ms}, {4, 20ms}, {5, 20ms}}, 10);
+  tracker.setStats(stats);
+  tracker.updateGraylist(now + 187s);
+  EXPECT_EQ(0, tracker.getGraylistedNodes().size());
+  // wait
+  tracker.updateGraylist(now + 499s);
+  EXPECT_EQ(0, tracker.getGraylistedNodes().size());
+
+  // New set of outliers
+  stats = buildWorkerStats({{1, 500ms}, // Outlier
+                            {2, 500ms}, // Outlier
+                            {3, 500ms}, // Outlier
+                            {4, 20ms},
+                            {5, 20ms}},
+                           10);
+
+  tracker.setStats(stats);
+  tracker.updateGraylist(now + 500s);
+  EXPECT_EQ(0, tracker.getGraylistedNodes().size());
+  tracker.updateGraylist(now + 506s);
+  EXPECT_THAT(tracker.getGraylistedNodes(), UnorderedElementsAre(1, 2, 3));
+  // deadlines go back to min 60s
+  deadlines = tracker.getGraylistDeadlines();
+  for (int i = 1; i <= 3; ++i) {
+    EXPECT_EQ(deadlines[i], now + 506s + 60s);
+  }
 }
 
 TEST(GraylistingTrackerTest, FixedPotentialOutlier) {

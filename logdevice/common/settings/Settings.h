@@ -300,8 +300,10 @@ struct Settings : public SettingsBundle {
   // an outstanding probe from the same node in nodeset
   std::chrono::seconds node_health_check_retry_interval;
 
-  // Time interval for which a storage node will not be considered a candidate
-  // for picking copyset, as it was slow in replying to a STORE message
+  // Min time interval for which a storage node will not be considered
+  // a candidate for picking copyset, as it was slow in replying
+  // to a STORE message. Internally increases exponentially up to 10x
+  // of this value, decreases additively
   std::chrono::seconds slow_node_retry_interval;
 
   // Time interval after which a CheckNodeHealthRequest is considered as
