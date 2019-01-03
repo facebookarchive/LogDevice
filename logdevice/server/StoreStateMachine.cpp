@@ -86,18 +86,32 @@ Message::Disposition StoreStateMachine::onReceived(STORE_Message* msg,
     payload_size -= (msg->header_.flags & STORE_Header::CHECKSUM_64BIT) ? 8 : 4;
   }
 
-  WORKER_STAT_ADD(store_synced, (msg->header_.flags & STORE_Header::SYNC) > 0);
-  WORKER_STAT_ADD(
-      store_received_amend, (msg->header_.flags & STORE_Header::AMEND) > 0);
-  WORKER_TRAFFIC_CLASS_STAT_INCR(msg->tc_, store_received);
-  WORKER_TRAFFIC_CLASS_STAT_ADD(msg->tc_, store_payload_bytes, payload_size);
-
-  const ShardedStorageThreadPool* sharded_pool =
-      worker->processor_->sharded_storage_thread_pool_;
-
   ld_check(msg->header_.copyset_offset < msg->copyset_.size());
   const shard_index_t shard_idx =
       msg->copyset_[msg->header_.copyset_offset].destination.shard();
+  const bool rebuilding = msg->header_.flags & STORE_Header::REBUILDING;
+
+  StatsHolder* stats = Worker::stats();
+  if (msg->header_.flags & STORE_Header::SYNC) {
+    STAT_INCR(stats, store_synced);
+  }
+  if (msg->header_.flags & STORE_Header::AMEND) {
+    STAT_INCR(stats, store_received_amend);
+  }
+  TRAFFIC_CLASS_STAT_INCR(stats, msg->tc_, store_received);
+  TRAFFIC_CLASS_STAT_ADD(stats, msg->tc_, store_payload_bytes, payload_size);
+  if (rebuilding) {
+    PER_SHARD_STAT_INCR(stats, rebuilding_stores_received, shard_idx);
+    PER_SHARD_STAT_ADD(
+        stats, rebuilding_stores_received_bytes, shard_idx, payload_size);
+  } else {
+    PER_SHARD_STAT_INCR(stats, append_stores_received, shard_idx);
+    PER_SHARD_STAT_ADD(
+        stats, append_stores_received_bytes, shard_idx, payload_size);
+  }
+
+  const ShardedStorageThreadPool* sharded_pool =
+      worker->processor_->sharded_storage_thread_pool_;
 
   ShardID rebuilding_node;
   if (validateCopyset(
@@ -244,7 +258,6 @@ Message::Disposition StoreStateMachine::onReceived(STORE_Message* msg,
     requested_sync = true;
   }
 
-  const bool rebuilding = msg->header_.flags & STORE_Header::REBUILDING;
   Durability default_durability = rebuilding
       ? Worker::settings().rebuild_store_durability
       : Worker::settings().append_store_durability;

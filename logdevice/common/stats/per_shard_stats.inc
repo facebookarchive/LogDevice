@@ -99,6 +99,14 @@ STAT_DEFINE(rebuilding_ms_fully_occupied, SUM)
 STAT_DEFINE(append_stores_over_mem_limit, SUM)
 STAT_DEFINE(rebuilding_stores_over_mem_limit, SUM)
 
+// Number and total size of STORE messages received by this shard.
+// Separate for STOREs sent by appenders and rebuilding. STOREs from other
+// sources, e.g. recovery, are counted as append.
+STAT_DEFINE(append_stores_received, SUM)
+STAT_DEFINE(append_stores_received_bytes, SUM)
+STAT_DEFINE(rebuilding_stores_received, SUM)
+STAT_DEFINE(rebuilding_stores_received_bytes, SUM)
+
 /*
  * The following stats will not be reset by Stats::reset() and the 'reset'
  * admin command.
