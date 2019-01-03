@@ -1021,25 +1021,25 @@ void Server::shutdownWithTimeout() {
 
   // perform all work in a separate thread so that we can specify a timeout
   std::thread thread([&]() {
-    ThreadID::set(ThreadID::Type::UTILITY, "ld:shutdown");
-    gracefulShutdown();
-
-    {
-      std::lock_guard<std::mutex> lock(mutex);
-      done = true;
-    }
-    cv.notify_one();
-  });
-
-  {
+    ThreadID::set(ThreadID::Type::UTILITY, "ld:shtdwn-timer");
     std::unique_lock<std::mutex> lock(mutex);
-    if (!cv.wait_for(
-            lock, server_settings_->shutdown_timeout, [&]() { return done; })) {
+    if (!done && !cv.wait_for(lock, server_settings_->shutdown_timeout, [&]() {
+          return done;
+        })) {
       ld_warning("Timeout expired while waiting for shutdown to complete");
       fflush(stdout);
       // Make sure to dump a core to make it easier to investigate.
       std::abort();
     }
+  });
+
+  {
+    gracefulShutdown();
+    {
+      std::lock_guard<std::mutex> lock(mutex);
+      done = true;
+    }
+    cv.notify_one();
   }
 
   thread.join();
