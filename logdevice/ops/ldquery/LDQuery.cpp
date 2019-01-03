@@ -24,6 +24,7 @@
 #include "tables/ClusterStateTable.h"
 #include "tables/EpochStore.h"
 #include "tables/EventLog.h"
+#include "tables/Graylist.h"
 #include "tables/HistoricalMetadata.h"
 #include "tables/Info.h"
 #include "tables/InfoConfig.h"
@@ -152,6 +153,7 @@ LDQuery::LDQuery(std::string config_path,
   table_registry_.registerTable<tables::LogsDBDirectory>(ctx_);
   table_registry_.registerTable<tables::EpochStore>(ctx_);
   table_registry_.registerTable<tables::EventLog>(ctx_);
+  table_registry_.registerTable<tables::Graylist>(ctx_);
   table_registry_.registerTable<tables::HistoricalMetadata>(ctx_);
   table_registry_.registerTable<tables::HistoricalMetadataLegacy>(ctx_);
   table_registry_.registerTable<tables::Info>(ctx_);
