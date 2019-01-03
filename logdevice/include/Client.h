@@ -335,7 +335,7 @@ class Client {
    *       same Client object on the same thread are guaranteed to receive
    *       sequence numbers in the order the append() calls were made. That is,
    *       if both appends succeed, the sequence number assigned to the record
-   *       sent earler will be smaller than the sequence number assigned to
+   *       sent earlier will be smaller than the sequence number assigned to
    *       the later record.
    *
    *       This is not always true for a pair of append() calls on the same
