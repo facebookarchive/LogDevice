@@ -28,6 +28,7 @@ class TrafficShaper::RunFlowGroupsRequest : public Request {
       : Request(RequestType::TRAFFIC_SHAPER_RUN_FLOW_GROUPS) {}
   Execution execute() override {
     auto w = Worker::onThisThread();
+    w->sender().updateFlowGroupRunRequestedTime(enqueue_time_);
     w->sender().runFlowGroups(Sender::RunType::REPLENISH);
     return Request::Execution::COMPLETE;
   }

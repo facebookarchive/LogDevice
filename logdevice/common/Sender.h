@@ -782,6 +782,8 @@ class Sender : public SenderBase {
 
   void forAllClientSockets(std::function<void(Socket&)> fn);
 
+  void updateFlowGroupRunRequestedTime(SteadyTimestamp enqueue_time);
+
  private:
   // Pimpl
   friend class SenderImpl;
@@ -798,12 +800,6 @@ class Sender : public SenderBase {
   // the event loop by signalling the completed_messages_available_ event.
   CompletionQueue completed_messages_;
   struct event* completed_messages_available_;
-
-  // Event signalled when there is demand for priority queue bandwidth.
-  // When activated, this low priority event will be serviced once the
-  // event loop goes idle for normal priority events. This allows demand
-  // from multiple priorities to be aggregated before servicing.
-  struct event* flow_groups_run_requested_;
 
   // Backup event for flow_groups_run_requested_ when the Worker is saturated.
   // When this timer event fires, the flow group run is scheduled at normal
@@ -976,13 +972,6 @@ class Sender : public SenderBase {
    *               processing the current message
    */
   bool injectTrafficShapingEvent(FlowGroup&, Priority);
-
-  /**
-   * Trigger the flow_groups_run_requested_ event if the given socket's
-   * flow_group_ says its priority queue can run.  Call after pushing a
-   * callback.
-   */
-  void maybeScheduleRunFlowGroups(FlowGroup&);
 
   /**
    * calls processSocketsToClose()

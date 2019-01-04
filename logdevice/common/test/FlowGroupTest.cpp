@@ -170,7 +170,7 @@ TEST_F(FlowGroupTest, FlowGroupBandwidthCaps) {
   auto send_msg = [this](size_t msg_size, bool expect_success) {
     // Pretend to send a message of msg_size.
     auto msg = std::make_unique<VarLengthTestMessage>(
-        Compatibility::MAX_PROTOCOL_SUPPORTED, msg_size, TrafficClass::REBUILD);
+        Compatibility::MAX_PROTOCOL_SUPPORTED, msg_size, TrafficClass::APPEND);
     auto e = socket_->registerMessage(std::move(msg));
     if (expect_success) {
       // Messages unimpeeded by traffic shaping aren't interesting to us.
@@ -184,35 +184,35 @@ TEST_F(FlowGroupTest, FlowGroupBandwidthCaps) {
     }
   };
 
-  // Limit the rebuild traffic to a max of 11KB.
-  const int64_t BACKGROUND_BUCKET_SIZE = 10000;
-  update.policy.set(Priority::BACKGROUND,
-                    /*burst*/ BACKGROUND_BUCKET_SIZE,
-                    /*guaranteed_bps*/ BACKGROUND_BUCKET_SIZE,
-                    /*max_bps*/ BACKGROUND_BUCKET_SIZE + 1000);
+  // Limit the append traffic to a max of 11KB.
+  const int64_t CLIENT_HIGH_BUCKET_SIZE = 10000;
+  update.policy.set(Priority::CLIENT_HIGH,
+                    /*burst*/ CLIENT_HIGH_BUCKET_SIZE,
+                    /*guaranteed_bps*/ CLIENT_HIGH_BUCKET_SIZE,
+                    /*max_bps*/ CLIENT_HIGH_BUCKET_SIZE + 1000);
   // Ensure the PQ bucket has plenty to give.
   update.policy.set(Priority::NUM_PRIORITIES,
-                    /*burst*/ 3 * BACKGROUND_BUCKET_SIZE,
-                    /*guaranteed_bps*/ 3 * BACKGROUND_BUCKET_SIZE,
-                    /*max_bps*/ 3 * BACKGROUND_BUCKET_SIZE);
+                    /*burst*/ 3 * CLIENT_HIGH_BUCKET_SIZE,
+                    /*guaranteed_bps*/ 3 * CLIENT_HIGH_BUCKET_SIZE,
+                    /*max_bps*/ 3 * CLIENT_HIGH_BUCKET_SIZE);
   resetMeter(0);
   flow_group.applyUpdate(update);
-  ASSERT_EQ(flow_group.debt(Priority::BACKGROUND), 0);
+  ASSERT_EQ(flow_group.debt(Priority::CLIENT_HIGH), 0);
 
-  // At this point, we should have BACKGROUND_BUCKET_SIZE budget to use
+  // At this point, we should have CLIENT_HIGH_BUCKET_SIZE budget to use
   // directly, and an extra 1000 we can borrow from the priorityq.
   // (depositBudget has already been reduced by filling the bucket
-  // with BACKGROUND_BUCKET_SIZE during applyUpdate()).
-  ASSERT_EQ(flow_group.depositBudget(Priority::BACKGROUND), 1000);
+  // with CLIENT_HIGH_BUCKET_SIZE during applyUpdate()).
+  ASSERT_EQ(flow_group.depositBudget(Priority::CLIENT_HIGH), 1000);
 
-  // Sending the first BACKGROUND_BUCKET_SIZE shouldn't incur any debt.
-  for (size_t bytes_remaining = BACKGROUND_BUCKET_SIZE;
+  // Sending the first CLIENT_HIGH_BUCKET_SIZE shouldn't incur any debt.
+  for (size_t bytes_remaining = CLIENT_HIGH_BUCKET_SIZE;
        bytes_remaining > sizeof(ProtocolHeader);) {
-    auto msg_size = std::min((size_t)BACKGROUND_BUCKET_SIZE / 10,
+    auto msg_size = std::min((size_t)CLIENT_HIGH_BUCKET_SIZE / 10,
                              bytes_remaining - sizeof(ProtocolHeader));
     send_msg(msg_size, /*expect_success*/ true);
     bytes_remaining -= msg_size + sizeof(ProtocolHeader);
-    ASSERT_EQ(flow_group.debt(Priority::BACKGROUND), 0);
+    ASSERT_EQ(flow_group.debt(Priority::CLIENT_HIGH), 0);
   }
 
   // The next message can only be sent once BW is transferred from the
@@ -220,24 +220,41 @@ TEST_F(FlowGroupTest, FlowGroupBandwidthCaps) {
   // is able to pay for all of this message, our debt level should stay
   // at 0.
   send_msg(/*msg_size*/ 500, /*expect_success*/ false);
+  ASSERT_EQ(flow_group.debt(Priority::CLIENT_HIGH), 0);
+  ASSERT_TRUE(flow_group.level(Priority::CLIENT_HIGH) < sizeof(ProtocolHeader));
+
+  // Credits in priorityq bucket can used by other buckets only in the next
+  // iteration of traffic shaper run. Create a fake update that will not deposit
+  // anything new to append bucket or priorityq but will lead to transfer of
+  // tokens from priorityq bucket to append traffic bucket.
+  FlowGroupsUpdate::GroupEntry force_transfer_update;
+  force_transfer_update.policy.set(
+      Priority::CLIENT_HIGH,
+      /*burst*/ CLIENT_HIGH_BUCKET_SIZE,
+      /*guaranteed_bps*/ 0,
+      /*max_bps*/ flow_group.depositBudget(Priority::CLIENT_HIGH));
+  force_transfer_update.policy.set(Priority::NUM_PRIORITIES,
+                                   /*burst*/ 3 * CLIENT_HIGH_BUCKET_SIZE,
+                                   /*guaranteed_bps*/ 0,
+                                   /*max_bps*/ 0);
+
+  force_transfer_update.policy.setEnabled(true);
+  flow_group.applyUpdate(force_transfer_update);
   ASSERT_EQ(flow_group.debt(Priority::BACKGROUND), 0);
   run();
   flushOutputEvBuffer();
   CHECK_ON_SENT(MessageType::GET_SEQ_STATE, E::OK);
-  ASSERT_EQ(flow_group.debt(Priority::BACKGROUND), 0);
+  ASSERT_EQ(flow_group.debt(Priority::CLIENT_HIGH), 0);
 
   // This next message will take us over our max. We allow it to be sent
   // using BW budget from the priorityq bucket, but we'll be left with a
   // debt since the max_bps limit has prevented the PQ bucket from
   // paying for the full message.
-  send_msg(/*msg_size*/ 1000, /*expect_success*/ false);
-  ASSERT_EQ(flow_group.debt(Priority::BACKGROUND), 0);
-  run();
-  flushOutputEvBuffer();
-  CHECK_ON_SENT(MessageType::GET_SEQ_STATE, E::OK);
-  ASSERT_TRUE(flow_group.debt(Priority::BACKGROUND) > 0);
+  send_msg(/*msg_size*/ 1000, /*expect_success*/ true);
+  ASSERT_TRUE(flow_group.debt(Priority::CLIENT_HIGH) > 0);
 
-  // A message queued now will not be sent, even after a flow group run.
+  // A message queued now will not be sent, even after a flow group run because
+  // there are insufficient credits in the bucket.
   send_msg(/*msg_size*/ 50, /*expect_success*/ false);
   run();
   // Nothing sent.
@@ -249,7 +266,7 @@ TEST_F(FlowGroupTest, FlowGroupBandwidthCaps) {
   run();
   flushOutputEvBuffer();
   CHECK_ON_SENT(MessageType::GET_SEQ_STATE, E::OK);
-  ASSERT_EQ(flow_group.debt(Priority::BACKGROUND), 0);
+  ASSERT_EQ(flow_group.debt(Priority::CLIENT_HIGH), 0);
 }
 
 TEST_F(FlowGroupTest, FlowMeterFill) {

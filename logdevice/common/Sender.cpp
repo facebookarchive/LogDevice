@@ -158,12 +158,6 @@ Sender::Sender(struct event_base* base,
                            EV_WRITE | EV_PERSIST,
                            EventHandler<Sender::onCompletedMessagesAvailable>,
                            this)),
-      flow_groups_run_requested_(
-          LD_EV(event_new)(base,
-                           -1,
-                           EV_WRITE | EV_PERSIST,
-                           EventHandler<Sender::onFlowGroupsRunRequested>,
-                           this)),
       flow_groups_run_deadline_exceeded_(
           LD_EV(event_new)(base,
                            -1,
@@ -191,15 +185,6 @@ Sender::Sender(struct event_base* base,
     throw ConstructorFailed();
   }
 
-  if (!flow_groups_run_requested_) { // unlikely
-    ld_error("Failed to create 'flow groups run requested' event for "
-             "a Sender");
-    err = E::NOMEM;
-    throw ConstructorFailed();
-  }
-  LD_EV(event_priority_set)
-  (flow_groups_run_requested_, EventLoop::PRIORITY_LOW);
-
   if (!flow_groups_run_deadline_exceeded_) { // unlikely
     ld_error("Failed to create 'flow groups run deadline exceeded' event for "
              "a Sender");
@@ -214,7 +199,6 @@ Sender::~Sender() {
   deliverCompletedMessages();
   LD_EV(event_free)(sockets_to_close_available_);
   LD_EV(event_free)(completed_messages_available_);
-  LD_EV(event_free)(flow_groups_run_requested_);
   LD_EV(event_free)(flow_groups_run_deadline_exceeded_);
 }
 
@@ -457,7 +441,6 @@ bool Sender::canSendToImpl(const Address& addr,
   std::unique_lock<std::mutex> lock(impl_->flow_meters_mutex_);
   if (!sock->flow_group_.canDrain(p)) {
     sock->flow_group_.push(on_bw_avail, p);
-    maybeScheduleRunFlowGroups(sock->flow_group_);
     err = E::CBREGISTERED;
     FLOW_GROUP_STAT_INCR(Worker::stats(), sock->flow_group_, cbregistered);
     return false;
@@ -576,7 +559,6 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
     FLOW_GROUP_MSG_STAT_INCR(
         Worker::stats(), sock.flow_group_, &envelope->message(), deferred);
     sock.flow_group_.push(*envelope);
-    maybeScheduleRunFlowGroups(sock.flow_group_);
     return 0;
   }
 
@@ -589,7 +571,6 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
   FLOW_GROUP_STAT_INCR(Worker::stats(), sock.flow_group_, cbregistered);
   sock.flow_group_.push(*on_bw_avail, msg->priority());
   sock.pushOnBWAvailableCallback(*on_bw_avail);
-  maybeScheduleRunFlowGroups(sock.flow_group_);
   err = E::CBREGISTERED;
   return -1;
 }
@@ -640,8 +621,11 @@ void Sender::setPeerShuttingDown(NodeID node_id) {
   }
 }
 
+void Sender::updateFlowGroupRunRequestedTime(SteadyTimestamp enqueue_time) {
+  flow_groups_run_requested_time_ = enqueue_time;
+}
+
 void Sender::runFlowGroups(RunType /*rt*/) {
-  LD_EV(event_del)(flow_groups_run_requested_);
   evtimer_del(flow_groups_run_deadline_exceeded_);
 
   if (flow_groups_run_requested_time_ != SteadyTimestamp()) {
@@ -650,7 +634,7 @@ void Sender::runFlowGroups(RunType /*rt*/) {
     HISTOGRAM_ADD(Worker::stats(),
                   flow_groups_run_event_loop_delay,
                   queue_latency.count());
-    flow_groups_run_requested_time_ = SteadyTimestamp();
+    updateFlowGroupRunRequestedTime(SteadyTimestamp());
   }
 
   auto run_start_time = SteadyTimestamp::now();
@@ -670,7 +654,7 @@ void Sender::runFlowGroups(RunType /*rt*/) {
     if (exceeded_deadline) {
       // Run again after yielding to the event loop.
       STAT_INCR(Worker::stats(), flow_groups_run_deadline_exceeded);
-      flow_groups_run_requested_time_ = SteadyTimestamp::now();
+      updateFlowGroupRunRequestedTime(SteadyTimestamp::now());
       evtimer_add(flow_groups_run_deadline_exceeded_,
                   EventLoop::onThisThread()->zero_timeout_);
       break;
@@ -1637,21 +1621,6 @@ std::unique_ptr<SocketProxy> Sender::getSocketProxy(const ClientID cid) const {
   }
 
   return pos->second.getSocketProxy();
-}
-
-void Sender::maybeScheduleRunFlowGroups(FlowGroup& flow_group) {
-  if (flow_group.canRunPriorityQ() &&
-      flow_groups_run_requested_time_ == SteadyTimestamp()) {
-    flow_groups_run_requested_time_ = SteadyTimestamp::now();
-    // Activate low priority event which will aggregate demand until the
-    // worker becomes idle.
-    LD_EV(event_active)(flow_groups_run_requested_, EV_WRITE, 0);
-    // Schedule deadline timer as a fail safe in case the Worker is
-    // saturated and never becomes idle.
-    Worker* w = Worker::onThisThread();
-    evtimer_add(flow_groups_run_deadline_exceeded_,
-                w->getCommonTimeout(w->settings().flow_groups_run_deadline));
-  }
 }
 
 void Sender::forAllClientSockets(std::function<void(Socket&)> fn) {

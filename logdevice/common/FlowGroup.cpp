@@ -40,14 +40,7 @@ bool FlowGroup::applyUpdate(FlowGroupsUpdate::GroupEntry& update,
   auto meter_it = meter_.entries.begin();
   Priority p = Priority::MAX;
   for (auto& entry : update.overflow_entries) {
-    bool priorityq_was_blocked;
-    if (p == Priority::INVALID) {
-      priorityq_was_blocked = !meter_it->canDrain() && !priorityq_.empty();
-    } else {
-      priorityq_was_blocked =
-          (!priorityq_.isEnabled(p) || !meter_it->canDrain()) &&
-          !priorityq_.empty(p);
-    }
+    auto priorityq_was_blocked = !meter_it->canDrain() && !priorityq_.empty();
 
     meter_it->resetDepositBudget(policy_it->max_bw);
 
@@ -105,7 +98,7 @@ bool FlowGroup::applyUpdate(FlowGroupsUpdate::GroupEntry& update,
     // traffic class will reduce the contention.
     if (p != Priority::INVALID) {
       auto requested_amount = policy_it->capacity - meter_it->level();
-      transferCreditFromPriorityQClass(p, requested_amount, stats);
+      transferCredit(PRIORITYQ_PRIORITY, p, requested_amount);
     }
 
     ld_check_ge(policy_it->capacity, meter_it->level());
@@ -153,56 +146,7 @@ bool FlowGroup::run(std::mutex& flow_meters_mutex,
     priorityq_.enable(p, meter_entry.canFill());
   }
 
-  // Consume all remaining priority scheduled bandwidth.
-  while (!priorityq_.enabledEmpty() && canRunPriorityQ() &&
-         !run_limits_exceeded()) {
-    auto& cb = priorityq_.enabledFront();
-    if (debt(cb.priority()) > 0) {
-      std::unique_lock<std::mutex> lock(flow_meters_mutex);
-      transferCredit(PRIORITYQ_PRIORITY, cb.priority(), debt(cb.priority()));
-      // Cancelling debt just resets the meter to 0. We
-      // still need priority queue bandwidth to release a
-      // message. Verify that the priority queue still has
-      // bandwidth available after cancelling this debt.
-      // This ensures we honor our contract to callbacks
-      // that at least one message transmission will
-      // succeed.
-      continue;
-    }
-
-    auto& meter = meter_.entries[asInt(cb.priority())];
-    if (!meter.canDrain() && !meter.canFill()) {
-      // The traffic shaping daemon paid off all debt
-      // (consuming deposit budget), but there isn't enough
-      // deposit budget to allow a transfer.  Exclude this
-      // priority from priority queue bandwidth.
-      //
-      // NOTE: The canDrain() and canFill() tests are safe
-      //       to perform without a lock because the traffic
-      //       shaper thread can only add more bandwidth credit,
-      //       never take it away, and will always issue another
-      //       FlowGroup::run() if a priority level transitions
-      //       to becoming runnable.
-      priorityq_.enable(cb.priority(), false);
-      continue;
-    }
-
-    // Allow the callback to use priorityq bandwidth for
-    // any message at or above it's registered priority.
-    priorityq_tap_priority_ = cb.priority();
-
-    issueCallback(cb, flow_meters_mutex);
-  }
-
-  // Allow MAX priority messages to consume priorityq bandwidth
-  // witout delay during normal operation.
-  priorityq_tap_priority_ = Priority::MAX;
-
-  // If there is more work to do and there is capacity available to dispatch
-  // work, run again at the end of the next event loop.
-  //
-  // NOTE: We have unrestricted capacity if traffic shaping is disabled.
-  return !priorityq_.enabledEmpty() && (!enabled_ || canRunPriorityQ());
+  return run_limits_exceeded();
 }
 
 }} // namespace facebook::logdevice

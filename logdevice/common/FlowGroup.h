@@ -37,8 +37,15 @@ namespace facebook { namespace logdevice {
  *        dictates the maximum burst and guaranteed bandwidth allocation
  *        for messages of each priority level. The policy also allows the
  *        definition of a bandwidth pool which will be shared amongst
- *        priority levels, but consumed in priority order as messages
- *        are dispatched at the end of each EventLoop run.
+ *        priority levels. This additional bandwidth is distributed in
+ *        priority order to priority levels that can still accept additional
+ *        credit after receiving their guaranteed bandwidth allocation.  Access
+ *        to the shared pool is limited by the maximum bandwidth limit policy
+ *        setting for every priority level. This value, which must be greater
+ *        than or equal to the guaranteed bandwidth setting, specifies the upper
+ *        bound of bandwidth credit from any source (guaranteed bandwidth and
+ *        transfers from the shared pool) that can be deposited into each
+ *        priority level.
  *
  *        FlowGroups receive policy change notifications and their periodic
  *        bandwidth allotment via a FlowGroupsUpdate. FlowGroupsUpdates are
@@ -147,27 +154,7 @@ class FlowGroup {
    */
   bool canDrain(Priority p) const {
     return !wouldCutInLine(p) &&
-        (!enabled() || meter_.entries[asInt(p)].canDrain() ||
-         canDrainFromPriorityQ(p));
-  }
-
-  /**
-   * Return true if sufficient bandwidth exists in the PriorityQ bucket
-   * to allow a message to be sent at the given priority level.
-   *
-   * We can drain from the PriorityQ if access for this priority level
-   * has been granted, and there is enough bandwidth in the PQ bucket
-   * to pay off any debt and still have some left over (the sum of the
-   * two buckets is positive).
-   */
-  bool canDrainFromPriorityQ(Priority p) const {
-    return priorityq_tap_priority_ >= p &&
-        (meter_.priorityQEntry().level() + meter_.entries[asInt(p)].level()) >
-        0;
-  }
-
-  bool canRunPriorityQ() const {
-    return meter_.priorityQEntry().canDrain();
+        (!enabled() || meter_.entries[asInt(p)].canDrain());
   }
 
   size_t debt(Priority p) const {
@@ -194,7 +181,7 @@ class FlowGroup {
     scope_ = s;
     sender_ = sender;
 
-    // The FlowGroups for NODE and ROOT scopes are automaically
+    // The FlowGroups for NODE and ROOT scopes are automatically
     // configured. The configuration of ROOT guarantees that all Sockets
     // can be assigned to a configured FlowGroup even when no FlowGroups
     // are explicitly defined in the configuration. The configuration
@@ -247,7 +234,7 @@ class FlowGroup {
     ld_check(p < Priority::NUM_PRIORITIES);
     cb.setAffiliation(this, p);
     priorityq_.push(cb);
-    // As soon as a callback resorts to deferring a message, revert
+    // As soon as a sender resorts to deferring a message, revert
     // wouldCutInLine() to its normal mode of operation. We can't
     // allow a future bandwidth delivery by the TrafficShaper to
     // cause the callback to inadvertantly send a message out of order.
@@ -302,7 +289,7 @@ class FlowGroup {
   }
 
   /**
-   * Return true if allowing a new message to be trasmitted at the given
+   * Return true if allowing a new message to be transmitted at the given
    * priority level would violate the FIFO guarantee that we provide to
    * state machines.
    *
@@ -310,7 +297,7 @@ class FlowGroup {
    * bandwidth becoming available (the meter is refilled or the policy for
    * this FlowGroup is disabled) and an explicit run down of callbacks that
    * are registered waiting for bandwidth. Return true if this thread is a
-   * late comers and servicing it would cut the line of already queued waiters.
+   * late comer and servicing it would cut the line of already queued waiters.
    *
    * NOTE: This check must be made regardless of the enabled status of the
    *       flow group so that message are not delivered out of order during
@@ -346,33 +333,6 @@ class FlowGroup {
       return drainSuccess();
     }
 
-    // If out of priority specific bandwidth, allow tapping of the
-    // priorityq bucket's bandwidth if the tap is configured to allow
-    // this (i.e. we're in the context of running the priority queue
-    // or p == PRIORITY::MAX).
-    // By default when sending, only messages belonging to bucket "MAX" can tap
-    // into the priority queue bucket. Other priority classes can use the
-    // credits from priority queue bucket only during background run of flow
-    // groups. This run is scheduled by traffic shaper as a usual priority
-    // request or it's scheduled as part of send if there are no credits in the
-    // bucket to send message. In case of latter, the scheduled event is lower
-    // priority event so that it allows to accumulate as many requests as
-    // possible before distributing the priority queue bucket credits to all
-    // messages in the message priority order. Checkout Priority.h for
-    // priorities and order of priority.
-    if (priorityq_tap_priority_ >= p) {
-      size_t transfer_amount = meter.debt() + e.cost();
-      transferCredit(PRIORITYQ_PRIORITY, e.priority(), transfer_amount);
-      if (meter.drain(e.cost())) {
-        return drainSuccess();
-      }
-    }
-
-    // We expect this drain to succeed if it was from the first send
-    // attempt from a callback, and the callback issued a message with a
-    // priority at or above (lower number) than the priority used for the
-    // callback (which is the priorityq tap priority level).
-    ld_check(!assert_can_drain_ || p > priorityq_tap_priority_);
     return false;
   }
 
@@ -396,25 +356,6 @@ class FlowGroup {
     if (!sink_entry.canFill()) {
       priorityq_.enable(sink, false);
     }
-  }
-
-  /**
-   * Transfer the specified amount of credit from priority q class to 'sink'
-   * FlowMeter. This method is invoked from traffic shaper thread to fill up the
-   * sink class as much as possible using the credits from priority q class.
-   */
-  void transferCreditFromPriorityQClass(Priority sink,
-                                        size_t amount,
-                                        StatsHolder* stats = nullptr) {
-    auto& source_entry = meter_.entries[asInt(PRIORITYQ_PRIORITY)];
-    auto& sink_entry = meter_.entries[asInt(sink)];
-    auto initialSourceLevel = source_entry.level();
-    source_entry.transferCredit(sink_entry, amount);
-    FLOW_GROUP_PRIORITY_STAT_ADD(stats,
-                                 scope_,
-                                 sink,
-                                 bwtransferred,
-                                 initialSourceLevel - source_entry.level());
   }
 
   /**
@@ -447,11 +388,6 @@ class FlowGroup {
 
   // The scope of connections being managed by this FlowGroup.
   NodeLocationScope scope_ = NodeLocationScope::ROOT;
-
-  // Requests for bandwidth at this or higher priorities can debit
-  // the priorityq meter if their own meter does not have sufficient
-  // credit to allow a drain to occur.
-  Priority priorityq_tap_priority_ = Priority::MAX;
 
   // If true, this flow group appears in the config and thus can be associated
   // with new connections.

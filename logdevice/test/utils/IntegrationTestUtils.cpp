@@ -390,7 +390,7 @@ std::unique_ptr<Cluster> ClusterFactory::create(int nnodes) {
     // Provide 0 capacity for client normal so that it must always be
     // deferred to a priority queue run.
     root_fgp.set(Priority::CLIENT_NORMAL,
-                 /*Burst Bytes*/ 0,
+                 /*Burst Bytes*/ 10000,
                  /*Guaranteed Bps*/ 0,
                  /*Max Bps*/ 1000000);
     root_fgp.set(Priority::CLIENT_LOW,

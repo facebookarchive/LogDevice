@@ -22,10 +22,9 @@ namespace facebook { namespace logdevice {
  *        This debt must be repaid before messages will again be released.
  *
  *        Debt is paid off by per-priority level bandwidth allocations that
- *        arrive via FlowGroupUpdates, and when a message reaches the top of
- *        the priority queue and debt is canceled by transferring credit from
- *        the priority queue's FlowMeter::Entry to the entry for the message's
- *        priority.
+ *        arrive via FlowGroupUpdates. During FlowGroupUpdates, credits are also
+ *        transferred from priority queue's FlowMeter::Entry to per-priority
+ *        FlowMeter::Entries in the defined priority order.
  *
  *        Releasing messages larger than the configured burst size will
  *        mean a transient violation of the burst size policy. We rely on
