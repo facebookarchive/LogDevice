@@ -48,6 +48,17 @@ Message::Disposition GOSSIP_Message::onReceived(const Address& /*from*/) {
 
 void GOSSIP_Message::serialize(ProtocolWriter& writer) const {
   auto flags = flags_;
+  node_list_t sorted_node_list;
+
+  if (writer.proto() <
+      Compatibility::ProtocolVersion::HASHMAP_SUPPORT_IN_GOSSIP) {
+    // Old nodes expect nodes are fully in order
+    // TODO: If deleting nodes from node_list_ is allowed later, not all node_id
+    // may exist. In that case, dummy nodes need to be inserted in node_list_ to
+    // assure all node_id exist between 0 and max.
+    sorted_node_list = node_list_;
+    std::sort(sorted_node_list.begin(), sorted_node_list.end());
+  }
 
   if (writer.proto() < Compatibility::ProtocolVersion::STARTING_STATE_SUPPORT) {
     /* remove starting list */
@@ -59,7 +70,7 @@ void GOSSIP_Message::serialize(ProtocolWriter& writer) const {
 
   if (writer.proto() <
       Compatibility::ProtocolVersion::HASHMAP_SUPPORT_IN_GOSSIP) {
-    for (auto n : node_list_) {
+    for (auto n : sorted_node_list) {
       writer.write(n.gossip_);
     }
   }
@@ -67,11 +78,11 @@ void GOSSIP_Message::serialize(ProtocolWriter& writer) const {
   writer.write(sent_time_);
   if (writer.proto() <
       Compatibility::ProtocolVersion::HASHMAP_SUPPORT_IN_GOSSIP) {
-    for (auto n : node_list_) {
+    for (auto n : sorted_node_list) {
       writer.write(n.gossip_ts_);
     }
     if (flags & HAS_FAILOVER_LIST_FLAG) {
-      for (auto n : node_list_) {
+      for (auto n : sorted_node_list) {
         writer.write(n.failover_);
       }
     }
@@ -89,7 +100,7 @@ void GOSSIP_Message::serialize(ProtocolWriter& writer) const {
     if (flags & HAS_STARTING_LIST_FLAG) {
       // for backward compatibility
       starting_list_t starting_list;
-      for (auto n : node_list_) {
+      for (auto n : sorted_node_list) {
         if (n.is_node_starting_) {
           starting_list.push_back(NodeID(n.node_id_));
         }

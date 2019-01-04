@@ -35,6 +35,10 @@ struct GOSSIP_Node {
 
   // The node is in starting state?
   bool is_node_starting_;
+
+  bool operator<(const GOSSIP_Node& a) const {
+    return node_id_ < a.node_id_;
+  }
 };
 
 class GOSSIP_Message : public Message {
