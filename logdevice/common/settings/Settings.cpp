@@ -2091,22 +2091,23 @@ void Settings::defineSettings(SettingEasyInit& init) {
        nullptr,
        "Allow logsconfig to be snapsthotted onto a snapshot log.",
        SERVER | DEPRECATED,
-       SettingsCategory::Configuration)(
-      "disable-logsconfig-trimming",
-      &disable_logsconfig_trimming,
-      "false",
-      nullptr,
-      "Disable the trimming of logsconfig delta log. Used for testing only.",
-      SERVER,
-      SettingsCategory::Testing)(
-      "logsconfig-max-delta-records",
-      &logsconfig_max_delta_records,
-      "4000",
-      nullptr,
-      "How many delta records to keep in the logsconfig deltas log before we "
-      "snapshot it.",
-      SERVER,
-      SettingsCategory::Configuration)(
+       SettingsCategory::Configuration);
+  init("disable-logsconfig-trimming",
+       &disable_logsconfig_trimming,
+       "false",
+       nullptr,
+       "Disable the trimming of logsconfig delta log. Used for testing only.",
+       SERVER,
+       SettingsCategory::Testing);
+  init("logsconfig-max-delta-records",
+       &logsconfig_max_delta_records,
+       "4000",
+       nullptr,
+       "How many delta records to keep in the logsconfig deltas log before we "
+       "snapshot it.",
+       SERVER,
+       SettingsCategory::Configuration);
+  init(
       "logsconfig-max-delta-bytes",
       &logsconfig_max_delta_bytes,
       "10485760",
