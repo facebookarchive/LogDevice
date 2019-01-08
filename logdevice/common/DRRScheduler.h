@@ -185,18 +185,22 @@ class DRRScheduler {
       return;
     }
     std::unique_lock<std::mutex> lock(mutex_);
+    if (quanta_ != quanta) {
+      ld_info("resetting quanta from %ld to %ld", quanta_, quanta);
+    }
     quanta_ = quanta;
-    ld_info("resetting quanta from %ld to %ld", quanta_, quanta);
 
     uint64_t ind = 0;
     for (const auto& p : principals) {
       DRRQueue* q = queues_[ind].get();
       ld_check(p.name.compare(q->stats_.principal.name) == 0);
       if (p.share) {
-        ld_info("resetting share for principal %s from %ld to %ld",
-                p.name.c_str(),
-                q->stats_.principal.share,
-                p.share);
+        if (q->stats_.principal.share != p.share) {
+          ld_info("resetting share for principal %s from %ld to %ld",
+                  p.name.c_str(),
+                  q->stats_.principal.share,
+                  p.share);
+        }
         q->stats_.principal.share = p.share;
       } else {
         ld_info("failed to reset share for principal %s from %ld to %ld",
