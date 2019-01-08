@@ -236,7 +236,7 @@ sidebar_label: Settings
 | event-log-max-delta-bytes | How many bytes of deltas to keep in the event log before we snapshot it. | 10485760 | server&nbsp;only |
 | event-log-max-delta-records | How many delta records to keep in the event log before we snapshot it. | 100 | server&nbsp;only |
 | event-log-retention | How long to keep a history of snapshots and deltas for the event log. Unused if the event log has never been snapshotted or if event log trimming is disabled with disable-event-log-trimming. | 14d | server&nbsp;only |
-| event-log-snapshot-compression | Use ZSTD compression to compress event log snapshots | false |  |
+| event-log-snapshot-compression | Use ZSTD compression to compress event log snapshots | true |  |
 | event-log-snapshotting | Allow the event log to be snapshotted onto a snapshot log. This requires the event log group to contain two logs, the first one being the snapshot log and the second one being the delta log. | true | requires&nbsp;restart |
 | eventlog-snapshotting-period | Controls time based snapshotting. New eventlog snapshot will be created after this period if there are new deltas | 1h | server&nbsp;only |
 | max-log-rebuilding-size-mb | Maximum amount of memory that can be consumed by a single LogRebuilding state machine | 5 | server&nbsp;only |

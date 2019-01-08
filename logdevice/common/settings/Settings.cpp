@@ -2220,7 +2220,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
 
   init("event-log-snapshot-compression",
        &event_log_snapshot_compression,
-       "false",
+       "true",
        nullptr,
        "Use ZSTD compression to compress event log snapshots",
        SERVER | CLIENT,
