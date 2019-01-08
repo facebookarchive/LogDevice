@@ -9,6 +9,7 @@
 #include "logdevice/common/protocol/GOSSIP_Message.h"
 
 #include <chrono>
+#include <string>
 
 #include <gtest/gtest.h>
 
@@ -37,18 +38,39 @@ struct Params {
   explicit Params(uint16_t proto) : proto(proto) {}
 
   uint16_t proto;
-  bool with_suspect = false;
   bool with_failover = false;
   bool with_boycott = false;
   bool with_starting = false;
+  std::string expected;
 };
+void checkGOSSIP_Node(const GOSSIP_Node& left, const GOSSIP_Node& right) {
+  EXPECT_EQ(left.node_id_, right.node_id_);
+  EXPECT_EQ(left.gossip_, right.gossip_);
+  EXPECT_EQ(left.gossip_ts_, right.gossip_ts_);
+  EXPECT_EQ(left.failover_, right.failover_);
+  EXPECT_EQ(left.is_node_starting_, right.is_node_starting_);
+};
+
+void checkNodeList(const node_list_t& left, const node_list_t& right) {
+  EXPECT_EQ(left.size(), right.size());
+  if (left.size() != right.size()) {
+    return;
+  }
+  auto lit = left.begin();
+  auto rit = right.begin();
+  while (lit != left.end() && rit != right.end()) {
+    checkGOSSIP_Node(*lit, *rit);
+    ++lit;
+    ++rit;
+  }
+}
 
 void serializeAndDeserializeTest(Params params) {
   unique_evbuffer evbuf(LD_EV(evbuffer_new)(), [](auto ptr) {
     LD_EV(evbuffer_free)(ptr);
   });
   NodeID this_node{1};
-  node_list_t node_list{{0, 1, 5ms, 0ms, 0}, {1, 2, 10ms, 0ms, 1}};
+  node_list_t node_list{{0, 1, 5ms, 0ms, 0}, {1, 2, 10ms, 0ms, 0}};
   std::chrono::milliseconds instance_id{1};
   std::chrono::milliseconds sent_time{1};
 
@@ -60,6 +82,11 @@ void serializeAndDeserializeTest(Params params) {
     node_list[1].failover_ = 2ms;
   }
 
+  if (params.with_starting) {
+    node_list[1].is_node_starting_ = true;
+    flags |= GOSSIP_Message::HAS_STARTING_LIST_FLAG;
+  }
+
   boycott_list_t boycott_list;
   if (params.with_boycott) {
     boycott_list.emplace_back(Boycott{1, 1s, 30s});
@@ -69,7 +96,7 @@ void serializeAndDeserializeTest(Params params) {
   boycott_durations_list_t boycott_durations;
   if (params.with_boycott) {
     boycott_durations.emplace_back(
-        1, 30min, 2h, 1min, 30s, 2, 60min, std::chrono::system_clock::now());
+        1, 30min, 2h, 1min, 30s, 2, 60min, BoycottAdaptiveDuration::TS(1000h));
   }
 
   GOSSIP_Message msg(this_node,
@@ -86,12 +113,17 @@ void serializeAndDeserializeTest(Params params) {
   EXPECT_EQ(boycott_list, msg.boycott_list_);
   EXPECT_EQ(boycott_durations, msg.boycott_durations_list_);
   EXPECT_EQ(flags, msg.flags_);
+  checkNodeList(node_list, msg.node_list_);
 
   ProtocolWriter writer(msg.type_, evbuf.get(), params.proto);
   msg.serialize(writer);
   auto write_count = writer.result();
 
   ASSERT_GT(write_count, 0);
+  size_t size = LD_EV(evbuffer_get_length)(evbuf.get());
+  unsigned char* serialized = LD_EV(evbuffer_pullup)(evbuf.get(), -1);
+  std::string serialized_hex = hexdump_buf(serialized, size);
+  EXPECT_EQ(params.expected, serialized_hex);
 
   ProtocolReader reader(msg.type_, evbuf.get(), write_count, params.proto);
   std::unique_ptr<Message> deserialized_msg_base =
@@ -100,65 +132,67 @@ void serializeAndDeserializeTest(Params params) {
 
   auto deserialized_msg =
       static_cast<GOSSIP_Message*>(deserialized_msg_base.get());
-
+  if (params.proto < Compatibility::ProtocolVersion::STARTING_STATE_SUPPORT) {
+    flags &= ~GOSSIP_Message::HAS_STARTING_LIST_FLAG;
+    node_list[1].is_node_starting_ = false;
+  }
   EXPECT_EQ(this_node, deserialized_msg->gossip_node_);
   EXPECT_EQ(instance_id, deserialized_msg->instance_id_);
   EXPECT_EQ(sent_time, deserialized_msg->sent_time_);
   EXPECT_EQ(boycott_list, deserialized_msg->boycott_list_);
   EXPECT_EQ(boycott_durations, deserialized_msg->boycott_durations_list_);
   EXPECT_EQ(flags, deserialized_msg->flags_);
+  checkNodeList(node_list, deserialized_msg->node_list_);
 }
 } // namespace
 
 TEST(GOSSIP_MessageTest, SerializeAndDeserialize) {
   // last protocol before boycott info
   Params params{Compatibility::MIN_PROTOCOL_SUPPORTED};
+  params.expected =
+      "020000000100000100000002000000010000000000000001000000000000000500000000"
+      "0000000A0000000000000000";
   serializeAndDeserializeTest(params);
 
-  params.with_suspect = true;
-  serializeAndDeserializeTest(params);
-
-  params.with_suspect = false;
   params.with_failover = true;
-  serializeAndDeserializeTest(params);
-
-  params.with_suspect = true;
-  params.with_failover = true;
+  params.expected =
+      "020000000100010100000002000000010000000000000001000000000000000500000000"
+      "0000000A000000000000000100000000000000020000000000000000";
   serializeAndDeserializeTest(params);
 }
 
 TEST(GOSSIP_MessageTest, SerializeAndDeserializeWithBoycott) {
   Params params{Compatibility::ADAPTIVE_BOYCOTT_DURATION};
   params.with_boycott = true;
-
+  params.expected =
+      "020000000100000100000002000000010000000000000001000000000000000500000000"
+      "0000000A0000000000000002010000CA9A3B000000003075000000000000000200009435"
+      "77000000003075000000000000010100000000000000010040771B000000000000DD6D00"
+      "0000000060EA00000000000030750000000000000200000080EE36000000000000003151"
+      "2ECA0C000000000000000000";
   serializeAndDeserializeTest(params);
 
-  params.with_suspect = true;
-  serializeAndDeserializeTest(params);
-
-  params.with_suspect = false;
   params.with_failover = true;
-  serializeAndDeserializeTest(params);
-
-  params.with_suspect = true;
-  params.with_failover = true;
+  params.expected =
+      "020000000100010100000002000000010000000000000001000000000000000500000000"
+      "0000000A000000000000000100000000000000020000000000000002010000CA9A3B0000"
+      "000030750000000000000002000094357700000000307500000000000001010000000000"
+      "0000010040771B000000000000DD6D000000000060EA0000000000003075000000000000"
+      "0200000080EE360000000000000031512ECA0C000000000000000000";
   serializeAndDeserializeTest(params);
 }
 
 TEST(GOSSIP_MessageTest, SerializeAndDeserializeWithStarting) {
   Params params{Compatibility::ProtocolVersion::PROTOCOL_VERSION_LOWER_BOUND};
   params.with_starting = true;
-
+  params.expected =
+      "020000000100000100000002000000010000000000000001000000000000000500000000"
+      "0000000A0000000000000000";
   serializeAndDeserializeTest(params);
 
-  params.with_suspect = true;
-  serializeAndDeserializeTest(params);
-
-  params.with_suspect = false;
   params.with_failover = true;
-  serializeAndDeserializeTest(params);
-
-  params.with_suspect = true;
-  params.with_failover = true;
+  params.expected =
+      "020000000100010100000002000000010000000000000001000000000000000500000000"
+      "0000000A000000000000000100000000000000020000000000000000";
   serializeAndDeserializeTest(params);
 }
