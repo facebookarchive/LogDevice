@@ -31,6 +31,9 @@ CMD /bin/bash
 # The production image
 FROM ubuntu:bionic
 
+# ldshell _requires_ utf-8
+ENV LANG C.UTF-8
+
 # Copy LogDevice development tools
 COPY --from=builder /build/bin/ld* \
                   /build/bin/logdeviced /usr/local/bin/
