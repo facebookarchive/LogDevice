@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 
 #include "logdevice/common/settings/SettingsUpdater.h"
+#include "logdevice/common/test/MockTimer.h"
 #include "logdevice/server/rebuilding/ShardRebuildingV2.h"
 
 namespace facebook { namespace logdevice {
@@ -28,7 +29,6 @@ class MockedShardRebuilding : public ShardRebuildingV2,
 
   StatsHolder stats;
   bool taskInFlight = false;
-  bool iteratorInvalidationTimerActive = false;
   bool waitingForGlobalWindow = false;
   bool completed = false;
 
@@ -96,12 +96,12 @@ class MockedShardRebuilding : public ShardRebuildingV2,
   StatsHolder* getStats() override {
     return &stats;
   }
-  void createAndActivateProfilingTimer() override {}
-  void activateIteratorInvalidationTimer() override {
-    iteratorInvalidationTimerActive = true;
+  std::unique_ptr<TimerInterface>
+  createTimer(std::function<void()> cb) override {
+    return std::make_unique<MockTimer>(cb);
   }
-  void cancelIteratorInvalidationTimer() override {
-    iteratorInvalidationTimerActive = false;
+  std::chrono::milliseconds getIteratorTTL() override {
+    return std::chrono::seconds(20);
   }
   node_index_t getMyNodeIndex() override {
     return MY_NODE_IDX;

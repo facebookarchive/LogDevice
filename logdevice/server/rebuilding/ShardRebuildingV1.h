@@ -46,6 +46,8 @@ class ShardRebuildingV1 : public ShardRebuildingInterface {
    */
   void noteConfigurationChanged() override;
 
+  void noteRebuildingSettingsChanged() override {}
+
   /**
    * Called by a LogRebuilding state machine when it completed.
    */

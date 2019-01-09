@@ -24,12 +24,13 @@ namespace facebook { namespace logdevice {
  *
  *       Thread safe (except for assignment operator).
  *
- *       There are 3 main ways to use it:
+ *       There are 4 main ways to use it:
  *        1. Whenever you want to do an operation, call isAllowed(). If it
  *           returns true, go ahead and do it, otherwise try again later.
- *           Possible problems are that it's not clear how much later to retry,
- *           and if there are many state machines using the same RateLimiter,
- *           the total amount of retries may be high.
+ *           RateLimiter can provide a hint for how much later to try if you
+ *           pass non-null time_until_allowed and zero max_delay - but beware
+ *           of thundering herd; strongly not recommended when the RateLimiter
+ *           is shared among multiple state machines.
  *        2. Whenever you want to do an operation, call waitUntilAllowed(), then
  *           do the operation. waitUntilAllowed() will block the current thread,
  *           so it only makes sense if the thread doesn't have anything
@@ -37,6 +38,16 @@ namespace facebook { namespace logdevice {
  *        3. Whenever you want to do an operation, call isAllowed() with
  *           non-null time_until_allowed, wait for the returned amount of time,
  *           then do the operation. This is the most flexible mode.
+ *        4. If you only know the cost of each operation after the operation
+ *           completes, you can separate rate limiting from reporting the cost:
+ *           call isAllowed() with zero cost (or some prior estimate), use
+ *           any of the ways 1-3 above to wait until the operation is allowed,
+ *           do the operation, then report the cost by calling
+ *           isAllowed(cost, &unused) and ignoring its return value.
+ *           Alternatively, you can combine the cost-reporting isAllowed() call
+ *           with the next permission-requesting isAllowed() by just remembering
+ *           the cost of previous operation and passing it to isAllowed() for
+ *           the next operation.
  *
  *       The main limitations are:
  *        a. You need to know the cost of the operation in advance.
@@ -126,6 +137,36 @@ class RateLimiterBase {
     return *this;
   }
 
+  // Updates the rate limit and burst limit. Not thread safe: can't be called
+  // concurrently with another update(), isAllowed() or other methods.
+  // Unlike operator=(), update() doesn't reset the state (doesn't replenish
+  // the water level).
+  void update(const RateLimiterBase& rhs) {
+    if (limit_per_second != rhs.limit_per_second) {
+      // The rate of flow of water into our bucket has changed.
+      // If water level is negative, adjust next_allowed_time to reflect the
+      // change.
+      const auto now = Deps::currentTime();
+      auto next = TimePoint(next_allowed_time.load());
+      if (next > now) {
+        if (limit_per_second <= 0. || rhs.limit_per_second <= 0.) {
+          next_allowed_time.store(now.time_since_epoch());
+        } else {
+          auto remaining = next - now;
+          remaining = decltype(remaining)(
+              static_cast<int64_t>(1. * limit_per_second /
+                                   rhs.limit_per_second * remaining.count()));
+          next_allowed_time.store((now + remaining).time_since_epoch());
+        }
+      }
+    }
+    limit_per_second = rhs.limit_per_second;
+    burst_limit = rhs.burst_limit;
+  }
+  void update(rate_limit_t limit) {
+    update(RateLimiterBase(limit));
+  }
+
   // If the operation of the given cost is allowed right now, pays the cost
   // and returns true. Otherwise:
   //  * If `time_until_allowed` is nullptr, returns false and doesn't change
@@ -133,26 +174,27 @@ class RateLimiterBase {
   //  * If `time_until_allowed` is not nullptr, calculates how long we'd have
   //    to wait until the operation becomes allowed. If the result is greater
   //    than max_delay, returns false and doesn't change state. Otherwise
-  //    assigns the required delay to `*time_until_allowed`,
   //    *pays the cost right away* and returns true; in this case you should
   //    wait for `*time_until_allowed`, then do the operation WITHOUT calling
-  //    isAllowed() again.
+  //    isAllowed() again. *time_until_allowed gets assigned in either case.
   // @return  Whether the reservation was made. If true, the operation of cost
   //          `cost` is allowed to proceed, either immediately
   //          (if `time_until_allowed` is nullptr) or after
   //          a delay of `*time_until_allowed`. Note that in this case you
-  //          DON"T need to call isAllowed() again after the delay.
+  //          DON'T need to call isAllowed() again after the delay.
   //          If false, the RateLimiter's state is left unchanged.
   bool isAllowed(size_t cost = 1,
                  Duration* time_until_allowed = nullptr,
                  Duration max_delay = Duration::max()) {
     if (limit_per_second == -1.) {
+      // Unlimited.
       if (time_until_allowed != nullptr) {
         *time_until_allowed = Duration::zero();
       }
       return true;
     }
     if (limit_per_second == 0.) {
+      // Stalled.
       if (time_until_allowed) {
         *time_until_allowed = Duration::max();
       }
@@ -175,6 +217,9 @@ class RateLimiterBase {
         res = Duration(0);
       } else if (time_until_allowed == nullptr || res > max_delay) {
         // Waiting is needed, but we're not allowed to wait for this long.
+        if (time_until_allowed != nullptr) {
+          *time_until_allowed = res;
+        }
         return false;
       }
       new_next = std::max(TimePoint(next), now - burst_limit) + time_cost;

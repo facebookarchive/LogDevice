@@ -90,6 +90,9 @@ STAT_DEFINE(bytes_rebuilt, SUM)
 STAT_DEFINE(rebuilding_ms_stalled, SUM)
 // Time spent without any RecordRebuilding-s in flight.
 STAT_DEFINE(rebuilding_ms_waiting_for_read, SUM)
+// Time spent without any RecordRebuilding-s in flight and with rate limiter
+// saying we're not allowed to read right now.
+STAT_DEFINE(rebuilding_ms_rate_limited, SUM)
 // Time spent without a read storage task in flight.
 STAT_DEFINE(rebuilding_ms_waiting_for_rereplication, SUM)
 // The remaining time (i.e. with both read task and RecordRebuilding-s in

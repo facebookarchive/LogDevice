@@ -59,6 +59,7 @@ void ShardRebuildingV2::start(
     std::unordered_map<logid_t, std::unique_ptr<RebuildingPlan>> plan) {
   numLogs_ = plan.size();
   startTime_ = SteadyTimestamp::now();
+  readRateLimiter_ = RateLimiter(rebuildingSettings_->rate_limit);
   readContext_ = std::make_shared<RebuildingReadStorageTaskV2::Context>();
   readContext_->onDone = [this, this_ref = callbackHelper_.getHolder().ref()](
                              std::vector<std::unique_ptr<ChunkData>> chunks) {
@@ -78,7 +79,14 @@ void ShardRebuildingV2::start(
     ld_check(ins.second);
   }
 
-  createAndActivateProfilingTimer();
+  delayedReadTimer_ = createTimer([this] { tryMakeProgress(); });
+  iteratorInvalidationTimer_ = createTimer([this] { invalidateIterator(); });
+  profilingTimer_ = createTimer([this] {
+    profilingTimer_->activate(PROFILING_TIMER_PERIOD);
+    flushCurrentStateTime();
+  });
+
+  profilingTimer_->activate(PROFILING_TIMER_PERIOD);
 
   tryMakeProgress();
 }
@@ -93,10 +101,6 @@ void ShardRebuildingV2::advanceGlobalWindow(RecordTimestamp new_window_end) {
 }
 
 void ShardRebuildingV2::sendStorageTaskIfNeeded() {
-  if (rebuildingSettings_->test_stall_rebuilding) {
-    return;
-  }
-
   const size_t read_batch_size = rebuildingSettings_->max_batch_bytes;
   // Hard code max size of readBuffer_ as 3x max read batch size.
   // This could be a separate setting, but that doesn't seem very useful.
@@ -107,12 +111,26 @@ void ShardRebuildingV2::sendStorageTaskIfNeeded() {
   // reasonably full.
   if (completed_ || storageTaskInFlight_ || readContext_->reachedEnd ||
       readContext_->persistentError ||
-      bytesInReadBuffer_ + read_batch_size > max_read_buffer_size) {
+      bytesInReadBuffer_ + read_batch_size > max_read_buffer_size ||
+      rebuildingSettings_->test_stall_rebuilding) {
+    return;
+  }
+
+  // Consult rate limiter. Use zero cost for now. We'll tell rate limiter the
+  // actual cost in bytes once the storage task is done.
+  std::chrono::steady_clock::duration to_wait;
+  bool allowed = readRateLimiter_.isAllowed(
+      0, &to_wait, std::chrono::steady_clock::duration::zero());
+  if (!allowed) {
+    if (to_wait != std::chrono::steady_clock::duration::max()) {
+      delayedReadTimer_->activate(
+          std::chrono::duration_cast<std::chrono::microseconds>(to_wait));
+    }
     return;
   }
 
   if (readContext_->iterator != nullptr) {
-    cancelIteratorInvalidationTimer();
+    iteratorInvalidationTimer_->cancel();
   }
   storageTaskInFlight_ = true;
   putStorageTask();
@@ -125,17 +143,13 @@ void ShardRebuildingV2::putStorageTask() {
   task_queue->putTask(std::move(task));
 }
 
-void ShardRebuildingV2::activateIteratorInvalidationTimer() {
-  if (iteratorInvalidationTimer_ == nullptr) {
-    iteratorInvalidationTimer_ =
-        std::make_unique<Timer>([this] { invalidateIterator(); });
-  }
-  iteratorInvalidationTimer_->activate(Worker::settings().iterator_cache_ttl);
+std::chrono::milliseconds ShardRebuildingV2::getIteratorTTL() {
+  return Worker::settings().iterator_cache_ttl;
 }
 
-void ShardRebuildingV2::cancelIteratorInvalidationTimer() {
-  ld_check(iteratorInvalidationTimer_ != nullptr);
-  iteratorInvalidationTimer_->cancel();
+std::unique_ptr<TimerInterface>
+ShardRebuildingV2::createTimer(std::function<void()> cb) {
+  return std::make_unique<Timer>(cb);
 }
 
 void ShardRebuildingV2::invalidateIterator() {
@@ -147,6 +161,10 @@ void ShardRebuildingV2::invalidateIterator() {
 
 void ShardRebuildingV2::onReadTaskDone(
     std::vector<std::unique_ptr<ChunkData>> chunks) {
+  // Report the cost of this read task to rate limiter.
+  std::chrono::steady_clock::duration unused;
+  readRateLimiter_.isAllowed(readContext_->bytesRead, &unused);
+
   for (auto& c : chunks) {
     bytesInReadBuffer_ += c->totalBytes();
   }
@@ -157,7 +175,7 @@ void ShardRebuildingV2::onReadTaskDone(
   ++readTasksDone_;
   nextLocation_ = readContext_->nextLocation;
   if (readContext_->iterator != nullptr) {
-    activateIteratorInvalidationTimer();
+    iteratorInvalidationTimer_->activate(getIteratorTTL());
   }
   tryMakeProgress();
 }
@@ -303,10 +321,22 @@ void ShardRebuildingV2::finalizeIfNeeded() {
   listener_->onShardRebuildingComplete(shard_);
 }
 
+void ShardRebuildingV2::tryMakeProgress() {
+  startSomeChunkRebuildingsIfNeeded();
+  sendStorageTaskIfNeeded();
+  updateProfilingState();
+  finalizeIfNeeded();
+}
+
 void ShardRebuildingV2::noteConfigurationChanged() {
   // No need to do anything even when logs are removed from config.
   // Neither RebuildingReadStorageTaskV2 nor ChunkRebuilding require the log to
   // be in config.
+}
+
+void ShardRebuildingV2::noteRebuildingSettingsChanged() {
+  readRateLimiter_.update(rebuildingSettings_->rate_limit);
+  tryMakeProgress();
 }
 
 void ShardRebuildingV2::getDebugInfo(InfoRebuildingShardsTable& table) const {
@@ -359,6 +389,7 @@ ShardRebuildingV2::profilingStateNames() {
   static SimpleEnumMap<ProfilingState, std::string> s_names(
       {{ProfilingState::FULLY_OCCUPIED, "fully_occupied"},
        {ProfilingState::WAITING_FOR_READ, "waiting_for_read"},
+       {ProfilingState::RATE_LIMITED, "rate_limited"},
        {ProfilingState::WAITING_FOR_REREPLICATION, "waiting_for_rereplication"},
        {ProfilingState::STALLED, "stalled"}});
   return s_names;
@@ -385,6 +416,7 @@ void ShardRebuildingV2::flushCurrentStateTime() {
     break;
     S(FULLY_OCCUPIED, fully_occupied)
     S(WAITING_FOR_READ, waiting_for_read)
+    S(RATE_LIMITED, rate_limited)
     S(WAITING_FOR_REREPLICATION, waiting_for_rereplication)
     S(STALLED, stalled)
 #undef S
@@ -395,8 +427,13 @@ void ShardRebuildingV2::flushCurrentStateTime() {
 void ShardRebuildingV2::updateProfilingState() {
   ProfilingState new_state;
   if (chunkRebuildings_.empty()) {
-    new_state = storageTaskInFlight_ ? ProfilingState::WAITING_FOR_READ
-                                     : ProfilingState::STALLED;
+    if (storageTaskInFlight_) {
+      new_state = ProfilingState::WAITING_FOR_READ;
+    } else if (readBuffer_.empty()) {
+      new_state = ProfilingState::RATE_LIMITED;
+    } else {
+      new_state = ProfilingState::STALLED;
+    }
   } else {
     new_state = storageTaskInFlight_
         ? ProfilingState::FULLY_OCCUPIED
@@ -432,14 +469,6 @@ void ShardRebuildingV2::updateProfilingState() {
     flushCurrentStateTime();
     profilingState_ = new_state;
   }
-}
-
-void ShardRebuildingV2::createAndActivateProfilingTimer() {
-  profilingTimer_ = std::make_unique<Timer>([this] {
-    profilingTimer_->activate(PROFILING_TIMER_PERIOD);
-    flushCurrentStateTime();
-  });
-  profilingTimer_->activate(PROFILING_TIMER_PERIOD);
 }
 
 std::string ShardRebuildingV2::describeTimeByState() const {

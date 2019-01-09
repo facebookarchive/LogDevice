@@ -79,6 +79,9 @@ void RebuildingReadStorageTaskV2::execute() {
   size_t bytes_in_result = 0;
 
   SCOPE_EXIT {
+    context->bytesRead =
+        read_stats.read_record_bytes + read_stats.read_csi_bytes;
+
     if (context->persistentError || context->reachedEnd) {
       context->iterator.reset();
     }

@@ -277,6 +277,10 @@ void RebuildingCoordinator::noteConfigurationChanged() {
 
 void RebuildingCoordinator::noteRebuildingSettingsChanged() {
   for (auto& s : shardsRebuilding_) {
+    if (s.second.shardRebuilding != nullptr) {
+      s.second.shardRebuilding->noteRebuildingSettingsChanged();
+    }
+
     // If global window size was decreased (e.g. global window got enabled) we
     // may want to write a SHARD_DONOR_PROGRESS event for some shards.
     notifyShardDonorProgress(s.first, s.second.myProgress, s.second.version);

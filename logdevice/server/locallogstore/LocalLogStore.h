@@ -214,7 +214,7 @@ class LocalLogStore : boost::noncopyable {
    *    state() == AT_RECORD, or
    * 2) iterator reached a position where it cannot read the data:
    *    state() == ERROR or WOULDBLOCK or AT_END, or
-   * 3) one of the limits in IteratorStats was hit. In this case
+   * 3) one of the limits in ReadStats was hit. In this case
    *    state() == LIMIT_REACHED and ReadStats::readLimitReached().
    * Note that a scenario is possible where despite exceeding the byte read
    * limit, the iterator points to a record that passes the filter - so, it

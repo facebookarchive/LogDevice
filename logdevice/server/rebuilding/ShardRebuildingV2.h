@@ -8,6 +8,7 @@
 #pragma once
 
 #include "logdevice/common/Processor.h"
+#include "logdevice/common/RateLimiter.h"
 #include "logdevice/common/RebuildingTypes.h"
 #include "logdevice/common/SimpleEnumMap.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
@@ -32,6 +33,7 @@ class ShardRebuildingV2 : public ShardRebuildingInterface {
       override;
   void advanceGlobalWindow(RecordTimestamp new_window_end) override;
   void noteConfigurationChanged() override;
+  void noteRebuildingSettingsChanged() override;
 
   void onReadTaskDone(std::vector<std::unique_ptr<ChunkData>> chunks);
   void onChunkRebuildingDone(log_rebuilding_id_t chunk_id,
@@ -48,11 +50,13 @@ class ShardRebuildingV2 : public ShardRebuildingInterface {
 
  protected:
   // The following may be overridden by tests.
-
   virtual StatsHolder* getStats();
   virtual node_index_t getMyNodeIndex();
   virtual worker_id_t startChunkRebuilding(std::unique_ptr<ChunkData> chunk,
                                            log_rebuilding_id_t chunk_id);
+  virtual std::chrono::milliseconds getIteratorTTL();
+  virtual void putStorageTask();
+  virtual std::unique_ptr<TimerInterface> createTimer(std::function<void()> cb);
 
  protected:
   // Key in the ordered map of in-flight chunk rebuildings.
@@ -94,6 +98,10 @@ class ShardRebuildingV2 : public ShardRebuildingInterface {
   // When a storage task is in flight, we're not allowed to access the context.
   std::shared_ptr<RebuildingReadStorageTaskV2::Context> readContext_;
 
+  RateLimiter readRateLimiter_;
+  // The timer is used when readRateLimiter_ tells us to wait before reading.
+  std::unique_ptr<TimerInterface> delayedReadTimer_;
+
   // Records we've read but haven't started ChunkRebuilding yet.
   std::deque<std::unique_ptr<ChunkData>> readBuffer_;
   size_t bytesInReadBuffer_ = 0;
@@ -113,7 +121,7 @@ class ShardRebuildingV2 : public ShardRebuildingInterface {
   // invalidates it. For rocksdb-based LocalLogStore implementations the
   // invalidation prevents the iterator from pinning old versions of
   // data indefinitely.
-  std::unique_ptr<Timer> iteratorInvalidationTimer_;
+  std::unique_ptr<TimerInterface> iteratorInvalidationTimer_;
 
   WorkerCallbackHelper<ShardRebuildingV2> callbackHelper_;
 
@@ -122,22 +130,13 @@ class ShardRebuildingV2 : public ShardRebuildingInterface {
   // Posts requests to abort state machines listed in chunkRebuildings_.
   void abortChunkRebuildings();
 
-  virtual void putStorageTask();
-
   void sendStorageTaskIfNeeded();
   void startSomeChunkRebuildingsIfNeeded();
   void finalizeIfNeeded();
 
   void invalidateIterator();
-  virtual void activateIteratorInvalidationTimer();
-  virtual void cancelIteratorInvalidationTimer();
 
-  void tryMakeProgress() {
-    startSomeChunkRebuildingsIfNeeded();
-    sendStorageTaskIfNeeded();
-    updateProfilingState();
-    finalizeIfNeeded();
-  }
+  void tryMakeProgress();
 
   // Stuff below is for instrumentation and stats.
 
@@ -149,6 +148,8 @@ class ShardRebuildingV2 : public ShardRebuildingInterface {
     FULLY_OCCUPIED,
     // There's a read storage task in flight but no ChunkRebuildings in flight.
     WAITING_FOR_READ,
+    // Waiting for rate limiter to allow us to send a read storage task.
+    RATE_LIMITED,
     // There are ChunkRebuildings in flight but no read task (because read
     // buffer is full, i.e. ChunkRebuildings can't keep up with reads).
     WAITING_FOR_REREPLICATION,
@@ -180,13 +181,12 @@ class ShardRebuildingV2 : public ShardRebuildingInterface {
   std::shared_ptr<LocalLogStore::AllLogsIterator::Location> nextLocation_;
   // Calls flushCurrentStateTime() every minute, to make sure we're publishing
   // accurate time spent in each state even when state doesn't change often.
-  std::unique_ptr<Timer> profilingTimer_;
+  std::unique_ptr<TimerInterface> profilingTimer_;
 
   // Advances currentStateStartTime_ to current time, updating totalTimeByState_
   // and stats as needed.
   void flushCurrentStateTime();
   void updateProfilingState();
-  virtual void createAndActivateProfilingTimer();
   std::string describeTimeByState() const;
 };
 

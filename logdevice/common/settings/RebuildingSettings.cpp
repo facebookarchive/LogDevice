@@ -506,6 +506,33 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
        "in production yet.",
        SERVER,
        SettingsCategory::Rebuilding);
+  init("rebuilding-rate-limit",
+       &rate_limit,
+       "unlimited",
+       [](const std::string& val) -> rate_limit_t {
+         rate_limit_t res;
+         int rv = parse_rate_limit(val.c_str(), &res);
+         if (rv != 0) {
+           throw boost::program_options::error(
+               "Invalid value(" + val +
+               ") for --rebuilding-rate-limit."
+               "Expected format is <count>/<duration><unit>, e.g. 5M/1s, or "
+               "'unlimited'");
+         }
+         return res;
+       },
+       "Rebuilding V2 only. Limit on how fast rebuilding reads, in bytes per "
+       "unit of time, per shard. Example: 5M/1s will make rebuilding read at "
+       "most one megabyte per second in each shard. Note that it counts "
+       "pre-filtering bytes; if rebuilding has high read amplification "
+       "(e.g. if copyset index is disabled or is not very effective because "
+       "records are small), much fewer bytes per second will actually get "
+       "re-replicated. Also note that this setting doesn't affect batch size; "
+       "e.g. if --rebuilding-max-batch-bytes=10M and "
+       "--rebuilding-rate-limit=1M/1s, rebuilding will probably read a 10 MB "
+       "batch every 10 seconds.",
+       SERVER,
+       SettingsCategory::Rebuilding);
 }
 
 }} // namespace facebook::logdevice

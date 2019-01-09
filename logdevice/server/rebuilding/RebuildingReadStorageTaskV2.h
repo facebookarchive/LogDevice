@@ -94,6 +94,9 @@ class RebuildingReadStorageTaskV2 : public StorageTask {
     // If we encounter too many invalid records, stall rebuilding just in case.
     size_t numMalformedRecordsSeen{0};
 
+    // Bytes read (including CSI, filtered out records and and other overhead)
+    // by the last storage task.
+    size_t bytesRead = 0;
     // true if we're finished reading.
     bool reachedEnd = false;
     // true if we're not going to be able to read everything we need.

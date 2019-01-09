@@ -216,6 +216,7 @@ class ShardRebuildingInterface {
   virtual void advanceGlobalWindow(RecordTimestamp new_window_end) = 0;
 
   virtual void noteConfigurationChanged() = 0;
+  virtual void noteRebuildingSettingsChanged() = 0;
 
   // Fills the current row of @param table with debug information about the
   // state of rebuilding for this shard. Used by admin commands.
