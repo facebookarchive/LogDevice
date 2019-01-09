@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "Configuration.h"
+#include "logdevice/common/configuration/Configuration.h"
 
 #include <boost/filesystem.hpp>
 #include <folly/synchronization/Baton.h>

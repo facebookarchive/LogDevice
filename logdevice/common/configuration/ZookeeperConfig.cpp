@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "ZookeeperConfig.h"
+#include "logdevice/common/configuration/ZookeeperConfig.h"
 
 #include "logdevice/common/commandline_util_chrono.h"
 #include "logdevice/common/configuration/ParsingHelpers.h"

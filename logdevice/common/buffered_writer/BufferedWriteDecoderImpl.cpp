@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "BufferedWriteDecoderImpl.h"
+#include "logdevice/common/buffered_writer/BufferedWriteDecoderImpl.h"
 
 #include <lz4.h>
 #include <zstd.h>

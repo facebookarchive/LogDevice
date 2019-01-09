@@ -18,8 +18,8 @@
 #include <folly/Optional.h>
 #include <folly/hash/Hash.h>
 
-#include "Context.h"
 #include "logdevice/include/Client.h"
+#include "logdevice/ops/ldquery/Context.h"
 
 /**
  * @file Table is the base class for virtual tables. Each virtual table must

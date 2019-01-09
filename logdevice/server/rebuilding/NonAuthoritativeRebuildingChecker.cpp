@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "NonAuthoritativeRebuildingChecker.h"
+#include "logdevice/server/rebuilding/NonAuthoritativeRebuildingChecker.h"
 
 #include "logdevice/common/Request.h"
 

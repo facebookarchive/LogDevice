@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "NodeStatsControllerLocator.h"
+#include "logdevice/server/sequencer_boycotting/NodeStatsControllerLocator.h"
 
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/ServerConfig.h"

@@ -5,17 +5,17 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "LDQuery.h"
+#include "logdevice/ops/ldquery/LDQuery.h"
 
 #include <cctype>
 #include <chrono>
 
-#include "Context.h"
-#include "Table.h"
-#include "TableRegistry.h"
-#include "VirtualTable.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/ops/ldquery/Context.h"
 #include "logdevice/ops/ldquery/Errors.h"
+#include "logdevice/ops/ldquery/Table.h"
+#include "logdevice/ops/ldquery/TableRegistry.h"
+#include "logdevice/ops/ldquery/VirtualTable.h"
 #include "tables/AppendOutliers.h"
 #include "tables/AppendThroughput.h"
 #include "tables/CatchupQueues.h"

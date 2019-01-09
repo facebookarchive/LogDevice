@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "ClientReadStreamOrderedMapBuffer.h"
+#include "logdevice/common/client_read_stream/ClientReadStreamOrderedMapBuffer.h"
 
 #include "logdevice/common/DataRecordOwnsPayload.h"
 #include "logdevice/common/Timer.h"

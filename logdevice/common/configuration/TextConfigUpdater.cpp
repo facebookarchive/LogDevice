@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "TextConfigUpdater.h"
+#include "logdevice/common/configuration/TextConfigUpdater.h"
 
 #include <boost/filesystem.hpp>
 #include <folly/compression/Compression.h>

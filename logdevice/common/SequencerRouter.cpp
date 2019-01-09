@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "SequencerRouter.h"
+#include "logdevice/common/SequencerRouter.h"
 
 #include "logdevice/common/MetaDataLog.h"
 #include "logdevice/common/Processor.h"

@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "AppendErrorInjector.h"
+#include "logdevice/lib/AppendErrorInjector.h"
 
 #include <folly/Random.h>
 

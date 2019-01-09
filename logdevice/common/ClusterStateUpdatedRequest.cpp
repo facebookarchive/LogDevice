@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "ClusterStateUpdatedRequest.h"
+#include "logdevice/common/ClusterStateUpdatedRequest.h"
 
 #include "logdevice/common/ClusterState.h"
 #include "logdevice/common/Processor.h"

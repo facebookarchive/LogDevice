@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "LogsConfig.h"
+#include "logdevice/common/configuration/LogsConfig.h"
 
 #include <folly/dynamic.h>
 #include <folly/json.h>

@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "InternalAppendRequest.h"
+#include "logdevice/common/InternalAppendRequest.h"
 
 #include "logdevice/common/AppenderPrep.h"
 #include "logdevice/common/MetaDataLogWriter.h"

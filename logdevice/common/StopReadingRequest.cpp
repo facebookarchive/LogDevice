@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "StopReadingRequest.h"
+#include "logdevice/common/StopReadingRequest.h"
 
 #include "logdevice/common/DataRecordOwnsPayload.h"
 #include "logdevice/common/Semaphore.h"

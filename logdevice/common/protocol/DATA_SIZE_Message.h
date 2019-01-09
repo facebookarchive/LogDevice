@@ -7,8 +7,8 @@
  */
 #pragma once
 
-#include "FixedSizeMessage.h"
 #include "logdevice/common/Request.h"
+#include "logdevice/common/protocol/FixedSizeMessage.h"
 #include "logdevice/include/types.h"
 
 namespace facebook { namespace logdevice {

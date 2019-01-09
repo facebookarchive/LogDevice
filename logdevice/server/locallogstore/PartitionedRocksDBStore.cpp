@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "PartitionedRocksDBStore.h"
+#include "logdevice/server/locallogstore/PartitionedRocksDBStore.h"
 
 #include <algorithm>
 #include <chrono>
@@ -23,9 +23,6 @@
 #include <rocksdb/merge_operator.h>
 #include <rocksdb/sst_file_manager.h>
 
-#include "PartitionedRocksDBStoreFindKey.h"
-#include "PartitionedRocksDBStoreFindTime.h"
-#include "PartitionedRocksDBStoreIterators.h"
 #include "logdevice/common/ConstructorFailed.h"
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
 #include "logdevice/common/MetaDataLog.h"
@@ -36,6 +33,9 @@
 #include "logdevice/common/util.h"
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/locallogstore/MemtableFlushedRequest.h"
+#include "logdevice/server/locallogstore/PartitionedRocksDBStoreFindKey.h"
+#include "logdevice/server/locallogstore/PartitionedRocksDBStoreFindTime.h"
+#include "logdevice/server/locallogstore/PartitionedRocksDBStoreIterators.h"
 #include "logdevice/server/locallogstore/RocksDBCompactionFilter.h"
 #include "logdevice/server/locallogstore/RocksDBEnv.h"
 #include "logdevice/server/locallogstore/RocksDBKeyFormat.h"

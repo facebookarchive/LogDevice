@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "Checksum.h"
+#include "logdevice/common/Checksum.h"
 
 #include <folly/hash/Checksum.h>
 #include <folly/hash/Hash.h>

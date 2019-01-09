@@ -7,7 +7,7 @@
  */
 #define __STDC_FORMAT_MACROS // pull in PRIu64 etc
 
-#include "ClientReadStream.h"
+#include "logdevice/common/client_read_stream/ClientReadStream.h"
 
 #include <algorithm>
 #include <chrono>

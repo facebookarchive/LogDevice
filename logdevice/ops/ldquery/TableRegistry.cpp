@@ -5,11 +5,11 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "TableRegistry.h"
+#include "logdevice/ops/ldquery/TableRegistry.h"
 
 #include <unordered_map>
 
-#include "VirtualTable.h"
+#include "logdevice/ops/ldquery/VirtualTable.h"
 
 namespace facebook { namespace logdevice { namespace ldquery {
 

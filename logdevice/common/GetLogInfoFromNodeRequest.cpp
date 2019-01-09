@@ -8,7 +8,6 @@
 #include <folly/Memory.h>
 #include <folly/Random.h>
 
-#include "GetLogInfoRequest.h"
 #include "logdevice/common/EventLoop.h"
 #include "logdevice/common/GetLogInfoRequest.h"
 #include "logdevice/common/Processor.h"

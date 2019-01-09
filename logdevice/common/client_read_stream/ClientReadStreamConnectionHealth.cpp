@@ -6,9 +6,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "ClientReadStreamConnectionHealth.h"
+#include "logdevice/common/client_read_stream/ClientReadStreamConnectionHealth.h"
 
-#include "ClientReadStream.h"
 #include "logdevice/common/BackoffTimer.h"
 #include "logdevice/common/ClientStalledReadTracer.h"
 #include "logdevice/common/EpochMetaDataUpdater.h"
@@ -17,6 +16,7 @@
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Timer.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/client_read_stream/ClientReadStream.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/settings/Settings.h"

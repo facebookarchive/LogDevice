@@ -7,7 +7,7 @@
  */
 #pragma once
 
-#include "PartitionedRocksDBStore.h"
+#include "logdevice/server/locallogstore/PartitionedRocksDBStore.h"
 
 namespace facebook { namespace logdevice {
 

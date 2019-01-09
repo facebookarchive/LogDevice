@@ -7,8 +7,8 @@
  */
 #include <iostream>
 
-#include "LDQuery.h"
 #include "logdevice/common/util.h"
+#include "logdevice/ops/ldquery/LDQuery.h"
 
 using facebook::logdevice::markdown_sanitize;
 using std::cout;

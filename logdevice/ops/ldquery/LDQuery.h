@@ -12,7 +12,7 @@
 #include <string>
 #include <vector>
 
-#include "TableRegistry.h"
+#include "logdevice/ops/ldquery/TableRegistry.h"
 
 namespace facebook { namespace logdevice { namespace ldquery {
 

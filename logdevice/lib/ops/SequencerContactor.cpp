@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "SequencerContactor.h"
+#include "logdevice/lib/ops/SequencerContactor.h"
 
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/request_util.h"

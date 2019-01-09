@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 #define __STDC_FORMAT_MACROS
-#include "CommandListener.h"
+#include "logdevice/server/CommandListener.h"
 
 #include <pthread.h>
 

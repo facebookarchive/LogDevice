@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "WINDOW_Message.h"
+#include "logdevice/common/protocol/WINDOW_Message.h"
 
 #include <cstdlib>
 

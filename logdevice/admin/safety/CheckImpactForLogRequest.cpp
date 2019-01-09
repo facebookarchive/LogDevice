@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "CheckImpactForLogRequest.h"
+#include "logdevice/admin/safety/CheckImpactForLogRequest.h"
 
 #include "logdevice/common/ClusterState.h"
 #include "logdevice/common/Processor.h"

@@ -8,11 +8,11 @@
 #pragma once
 
 #include <chrono>
+#include <ctime>
 #include <functional>
 #include <unordered_map>
 
-#include "event2/event.h"
-#include "time.h"
+#include <event2/event.h>
 
 namespace facebook { namespace logdevice {
 

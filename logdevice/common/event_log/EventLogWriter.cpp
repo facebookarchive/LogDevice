@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "EventLogWriter.h"
+#include "logdevice/common/event_log/EventLogWriter.h"
 
 #include <chrono>
 #include <functional>

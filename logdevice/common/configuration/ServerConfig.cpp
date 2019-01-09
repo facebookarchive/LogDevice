@@ -7,7 +7,7 @@
  */
 #define __STDC_FORMAT_MACROS // pull in PRId64 etc
 
-#include "ServerConfig.h"
+#include "logdevice/common/configuration/ServerConfig.h"
 
 #include <algorithm>
 #include <cinttypes>

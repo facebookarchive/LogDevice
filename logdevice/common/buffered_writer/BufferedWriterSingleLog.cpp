@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "BufferedWriterSingleLog.h"
+#include "logdevice/common/buffered_writer/BufferedWriterSingleLog.h"
 
 #include <chrono>
 #include <lz4.h>

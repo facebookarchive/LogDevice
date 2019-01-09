@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 #define __STDC_FORMAT_MACROS // pull in PRId64 etc
-#include "EpochOffsetStorageTask.h"
+#include "logdevice/server/storage_tasks/EpochOffsetStorageTask.h"
 
 #include <memory>
 

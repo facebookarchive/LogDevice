@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "ParsingHelpers.h"
+#include "logdevice/common/configuration/ParsingHelpers.h"
 
 #include <algorithm>
 #include <fcntl.h>

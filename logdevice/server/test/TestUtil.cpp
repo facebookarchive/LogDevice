@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "TestUtil.h"
+#include "logdevice/server/test/TestUtil.h"
 
 #include "logdevice/admin/settings/AdminServerSettings.h"
 #include "logdevice/common/EventLoopHandle.h"

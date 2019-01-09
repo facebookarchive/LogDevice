@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "NODE_STATS_REPLY_onReceived.h"
+#include "logdevice/lib/NODE_STATS_REPLY_onReceived.h"
 
 #include "logdevice/common/Address.h"
 #include "logdevice/common/Sender.h"

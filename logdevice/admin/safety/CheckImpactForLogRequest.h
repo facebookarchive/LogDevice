@@ -10,7 +10,7 @@
 #include <chrono>
 #include <memory>
 
-#include "SafetyAPI.h"
+#include "logdevice/admin/safety/SafetyAPI.h"
 #include "logdevice/common/EpochMetaData.h"
 #include "logdevice/common/FailureDomainNodeSet.h"
 #include "logdevice/common/NodeSetFinder.h"

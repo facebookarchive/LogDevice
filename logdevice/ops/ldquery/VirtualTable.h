@@ -12,9 +12,9 @@
 
 #include <folly/Conv.h>
 
-#include "Table.h"
-#include "TableRegistry.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/ops/ldquery/Table.h"
+#include "logdevice/ops/ldquery/TableRegistry.h"
 
 namespace facebook { namespace logdevice { namespace ldquery {
 

@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "ServerConfigSource.h"
+#include "logdevice/common/ServerConfigSource.h"
 
 #include "logdevice/common/ConfigurationFetchRequest.h"
 #include "logdevice/common/NoopTraceLogger.h"

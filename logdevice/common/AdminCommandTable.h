@@ -172,4 +172,4 @@ class AdminCommandTable {
 
 }} // namespace facebook::logdevice
 
-#include "AdminCommandTable-inl.h"
+#include "logdevice/common/AdminCommandTable-inl.h"

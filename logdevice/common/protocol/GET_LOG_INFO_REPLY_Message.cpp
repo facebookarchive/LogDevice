@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "GET_LOG_INFO_REPLY_Message.h"
+#include "logdevice/common/protocol/GET_LOG_INFO_REPLY_Message.h"
 
 #include "logdevice/common/GetLogInfoRequest.h"
 #include "logdevice/common/Sender.h"

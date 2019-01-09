@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "PartitionedRocksDBStoreIterators.h"
+#include "logdevice/server/locallogstore/PartitionedRocksDBStoreIterators.h"
 
 #include "logdevice/common/debug.h"
 #include "logdevice/server/locallogstore/RocksDBKeyFormat.h"

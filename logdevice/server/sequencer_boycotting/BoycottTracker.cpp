@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "BoycottTracker.h"
+#include "logdevice/server/sequencer_boycotting/BoycottTracker.h"
 
 #include <algorithm>
 #include <chrono>

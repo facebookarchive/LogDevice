@@ -5,15 +5,15 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "Table.h"
+#include "logdevice/ops/ldquery/Table.h"
 
 #include <folly/Conv.h>
 #include <folly/Format.h>
 
-#include "Errors.h"
-#include "Utils.h"
 #include "logdevice/common/MetaDataLog.h"
 #include "logdevice/common/util.h"
+#include "logdevice/ops/ldquery/Errors.h"
+#include "logdevice/ops/ldquery/Utils.h"
 
 namespace facebook { namespace logdevice { namespace ldquery {
 

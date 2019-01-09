@@ -19,11 +19,11 @@
 #include <folly/Random.h>
 #include <folly/SharedMutex.h>
 
-#include "VerificationDataStructures.h"
 #include "logdevice/common/toString.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Client.h"
 #include "logdevice/include/types.h"
+#include "logdevice/lib/verifier/VerificationDataStructures.h"
 
 namespace facebook { namespace logdevice {
 

@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 #define __STDC_FORMAT_MACROS
-#include "APPENDED_Message.h"
+#include "logdevice/common/protocol/APPENDED_Message.h"
 
 #include <cstdint>
 

@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "SequencerMetaDataLogManager.h"
+#include "logdevice/common/SequencerMetaDataLogManager.h"
 
 #include "logdevice/common/EpochSequencer.h"
 #include "logdevice/common/MetaDataLogWriter.h"

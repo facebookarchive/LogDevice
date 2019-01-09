@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "SequencerBoycottingSettings.h"
+#include "logdevice/common/settings/SequencerBoycottingSettings.h"
 
 #include "logdevice/common/commandline_util_chrono.h"
 

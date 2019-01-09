@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "LifoEventSem.h"
+#include "logdevice/common/LifoEventSem.h"
 
 #include <folly/Exception.h>
 #include <folly/portability/Sockets.h>

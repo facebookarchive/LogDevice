@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "LogErrorTracker.h"
+#include "logdevice/replication_checker/LogErrorTracker.h"
 
 #include <array>
 #include <sstream>

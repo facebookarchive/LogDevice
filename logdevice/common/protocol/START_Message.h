@@ -10,11 +10,11 @@
 #include <folly/Optional.h>
 #include <folly/small_vector.h>
 
-#include "FixedSizeMessage.h"
 #include "logdevice/common/CopySet.h"
 #include "logdevice/common/ReadStreamAttributes.h"
 #include "logdevice/common/SCDCopysetReordering.h"
 #include "logdevice/common/ShardID.h"
+#include "logdevice/common/protocol/FixedSizeMessage.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Record.h"
 #include "logdevice/include/types.h"

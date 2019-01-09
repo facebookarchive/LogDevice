@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "DELETE_LOG_METADATA_onReceived.h"
+#include "logdevice/server/DELETE_LOG_METADATA_onReceived.h"
 
 #include <cstring>
 #include <memory>

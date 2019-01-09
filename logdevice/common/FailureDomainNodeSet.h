@@ -393,4 +393,4 @@ class FailureDomainNodeSet {
 
 }} // namespace facebook::logdevice
 
-#include "FailureDomainNodeSet-inl.h"
+#include "logdevice/common/FailureDomainNodeSet-inl.h"

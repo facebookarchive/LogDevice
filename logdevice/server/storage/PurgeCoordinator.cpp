@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "PurgeCoordinator.h"
+#include "logdevice/server/storage/PurgeCoordinator.h"
 
 #include "logdevice/common/Metadata.h"
 #include "logdevice/common/RecordID.h"

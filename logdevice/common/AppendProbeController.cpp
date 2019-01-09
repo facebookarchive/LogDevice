@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "AppendProbeController.h"
+#include "logdevice/common/AppendProbeController.h"
 
 #include "logdevice/common/debug.h"
 #include "logdevice/common/settings/Settings.h"

@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "MembershipCodecFlatBuffers.h"
+#include "logdevice/common/membership/MembershipCodecFlatBuffers.h"
 
 #include "logdevice/common/debug.h"
 #include "logdevice/include/Err.h"

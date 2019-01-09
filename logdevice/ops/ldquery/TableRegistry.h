@@ -12,7 +12,7 @@
 
 #include <folly/Memory.h>
 
-#include "Table.h"
+#include "logdevice/ops/ldquery/Table.h"
 
 namespace facebook { namespace logdevice { namespace ldquery {
 

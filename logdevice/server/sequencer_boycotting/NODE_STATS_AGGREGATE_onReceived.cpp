@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "NODE_STATS_AGGREGATE_onReceived.h"
+#include "logdevice/server/sequencer_boycotting/NODE_STATS_AGGREGATE_onReceived.h"
 
 #include "logdevice/common/Address.h"
 #include "logdevice/common/Sender.h"

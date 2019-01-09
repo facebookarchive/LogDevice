@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "ProtocolWriter.h"
+#include "logdevice/common/protocol/ProtocolWriter.h"
 
 #include "event2/buffer.h"
 #include "event2/event.h"

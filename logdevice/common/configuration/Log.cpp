@@ -7,7 +7,7 @@
  */
 #define __STDC_FORMAT_MACROS // pull in PRId64 etc
 
-#include "Log.h"
+#include "logdevice/common/configuration/Log.h"
 
 #include <tuple>
 

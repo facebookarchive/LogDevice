@@ -19,10 +19,10 @@
 #include <folly/Optional.h>
 #include <rocksdb/compaction_filter.h>
 
-#include "PartitionedRocksDBStore.h"
 #include "logdevice/common/RateLimiter.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/include/types.h"
+#include "logdevice/server/locallogstore/PartitionedRocksDBStore.h"
 #include "logdevice/server/locallogstore/RocksDBSettings.h"
 #include "logdevice/server/storage/LocalLogStoreUtils.h"
 

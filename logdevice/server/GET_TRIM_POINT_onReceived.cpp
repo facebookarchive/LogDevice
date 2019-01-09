@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "GET_TRIM_POINT_onReceived.h"
+#include "logdevice/server/GET_TRIM_POINT_onReceived.h"
 
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/configuration/Configuration.h"

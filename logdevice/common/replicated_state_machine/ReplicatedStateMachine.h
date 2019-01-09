@@ -923,4 +923,4 @@ class WriteDeltaRequest : public Request {
 };
 }} // namespace facebook::logdevice
 
-#include "ReplicatedStateMachine-inl.h"
+#include "logdevice/common/replicated_state_machine/ReplicatedStateMachine-inl.h"

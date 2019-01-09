@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "SealStorageTask.h"
+#include "logdevice/server/storage/SealStorageTask.h"
 
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
 #include "logdevice/common/Worker.h"

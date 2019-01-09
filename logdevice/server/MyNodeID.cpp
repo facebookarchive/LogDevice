@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "MyNodeID.h"
+#include "logdevice/server/MyNodeID.h"
 
 #include <cerrno>
 #include <cstring>

@@ -7,7 +7,7 @@
  */
 #pragma once
 
-#include "Message.h"
+#include "logdevice/common/protocol/Message.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/types.h"
 

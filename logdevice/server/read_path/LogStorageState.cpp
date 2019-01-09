@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 #define __STDC_FORMAT_MACROS
-#include "LogStorageState.h"
+#include "logdevice/server/read_path/LogStorageState.h"
 
 #include <limits>
 

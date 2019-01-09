@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "PerClientNodeStatsAggregator.h"
+#include "logdevice/server/sequencer_boycotting/PerClientNodeStatsAggregator.h"
 
 #include "logdevice/common/ClientID.h"
 #include "logdevice/common/Worker.h"

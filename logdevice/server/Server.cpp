@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "Server.h"
+#include "logdevice/server/Server.h"
 
 #include "logdevice/common/ConfigInit.h"
 #include "logdevice/common/ConstructorFailed.h"

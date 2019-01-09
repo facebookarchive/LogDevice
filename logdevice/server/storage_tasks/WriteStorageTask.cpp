@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "WriteStorageTask.h"
+#include "logdevice/server/storage_tasks/WriteStorageTask.h"
 
 #include <algorithm>
 

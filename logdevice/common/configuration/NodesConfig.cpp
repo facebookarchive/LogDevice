@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "NodesConfig.h"
+#include "logdevice/common/configuration/NodesConfig.h"
 
 #include <folly/hash/SpookyHashV2.h>
 

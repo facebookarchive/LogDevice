@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 #define __STDC_FORMAT_MACROS // pull in PRIu64 etc
-#include "LocalLogStoreRecordFormat.h"
+#include "logdevice/common/LocalLogStoreRecordFormat.h"
 
 #include <folly/Range.h>
 #include <folly/Varint.h>

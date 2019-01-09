@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "ServerProcessor.h"
+#include "logdevice/server/ServerProcessor.h"
 
 #include "logdevice/common/EventLoopHandle.h"
 #include "logdevice/common/UpdateableSecurityInfo.h"

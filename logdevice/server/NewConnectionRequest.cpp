@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "NewConnectionRequest.h"
+#include "logdevice/server/NewConnectionRequest.h"
 
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Worker.h"

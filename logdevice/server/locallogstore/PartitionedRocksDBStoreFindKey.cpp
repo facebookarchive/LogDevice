@@ -5,10 +5,10 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "PartitionedRocksDBStoreFindKey.h"
+#include "logdevice/server/locallogstore/PartitionedRocksDBStoreFindKey.h"
 
-#include "RocksDBKeyFormat.h"
-#include "RocksDBLocalLogStore.h"
+#include "logdevice/server/locallogstore/RocksDBKeyFormat.h"
+#include "logdevice/server/locallogstore/RocksDBLocalLogStore.h"
 
 namespace facebook { namespace logdevice {
 
