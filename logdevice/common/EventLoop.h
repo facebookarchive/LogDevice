@@ -35,7 +35,7 @@ namespace facebook { namespace logdevice {
 
 class RequestPump;
 
-class EventLoop : folly::Executor {
+class EventLoop : public folly::Executor {
  public:
   /**
    * Creates and starts the EventLoop's thread.  The thread does not
