@@ -213,17 +213,29 @@ ClusterFactory& ClusterFactory::enableMessageErrorInjection() {
 }
 
 ClusterFactory&
-ClusterFactory::setInternalLogConfig(const std::string& name,
-                                     Configuration::Log log_config) {
-  logsconfig::LogAttributes attrs;
-  log_config.toLogAttributes(&attrs);
-  auto log_group_node = internal_logs_.insert(name, attrs);
-  ld_check(log_group_node);
+ClusterFactory::setConfigLogAttributes(logsconfig::LogAttributes attrs) {
+  setInternalLogAttributes("config_log_deltas", attrs);
+  setInternalLogAttributes("config_log_snapshots", attrs);
+  return *this;
+}
+
+ClusterFactory&
+ClusterFactory::setEventLogAttributes(logsconfig::LogAttributes attrs) {
+  setInternalLogAttributes("event_log_deltas", attrs);
+  setInternalLogAttributes("event_log_snapshots", attrs);
   return *this;
 }
 
 ClusterFactory& ClusterFactory::enableLogsConfigManager() {
   enable_logsconfig_manager_ = true;
+  return *this;
+}
+
+ClusterFactory&
+ClusterFactory::setEventLogConfig(Configuration::Log log_config) {
+  logsconfig::LogAttributes log_attrs;
+  log_config.toLogAttributes(&log_attrs);
+  setInternalLogAttributes("event_log_deltas", log_attrs);
   return *this;
 }
 
@@ -331,42 +343,44 @@ std::unique_ptr<Cluster> ClusterFactory::create(int nnodes) {
   }
 
   // Generic log configuration for internal logs
-  Configuration::Log internal_log_config = createLogConfigStub(nstorage_nodes);
-  internal_log_config.extraCopies = 0;
+  logsconfig::LogAttributes internal_log_attrs;
+  createLogConfigStub(nstorage_nodes).toLogAttributes(&internal_log_attrs);
+  internal_log_attrs.set_extraCopies(0);
 
   // Internal logs shouldn't have a lower replication factor than data logs
   if (log_config_.hasValue() &&
-      log_config_.value().replicationFactor >
-          internal_log_config.replicationFactor) {
-    internal_log_config.replicationFactor =
-        log_config_.value().replicationFactor;
+      log_config_.value().replicationFactor.hasValue() &&
+      log_config_.value().replicationFactor.value() >
+          internal_log_attrs.replicationFactor().value()) {
+    internal_log_attrs.set_replicationFactor(
+        log_config_.value().replicationFactor.value());
   }
   if (internal_logs_replication_factor_ > 0) {
-    internal_log_config.replicationFactor = internal_logs_replication_factor_;
+    internal_log_attrs.set_replicationFactor(internal_logs_replication_factor_);
   }
 
   // configure the delta and snapshot logs if the user did not do so already.
   if (event_log_mode_ != EventLogMode::NONE &&
       !internal_logs_.logExists(
           configuration::InternalLogs::EVENT_LOG_DELTAS)) {
-    setInternalLogConfig("event_log_deltas", internal_log_config);
+    setInternalLogAttributes("event_log_deltas", internal_log_attrs);
   }
   if (event_log_mode_ == EventLogMode::SNAPSHOTTED &&
       !internal_logs_.logExists(
           configuration::InternalLogs::EVENT_LOG_SNAPSHOTS)) {
-    setInternalLogConfig("event_log_snapshots", internal_log_config);
+    setInternalLogAttributes("event_log_snapshots", internal_log_attrs);
   }
 
   // configure the delta and snapshot logs for logsconfig
   // if the user did not do so already.
   if (!internal_logs_.logExists(
           configuration::InternalLogs::CONFIG_LOG_DELTAS)) {
-    setInternalLogConfig("config_log_deltas", internal_log_config);
+    setInternalLogAttributes("config_log_deltas", internal_log_attrs);
   }
 
   if (!internal_logs_.logExists(
           configuration::InternalLogs::CONFIG_LOG_SNAPSHOTS)) {
-    setInternalLogConfig("config_log_snapshots", internal_log_config);
+    setInternalLogAttributes("config_log_snapshots", internal_log_attrs);
   }
 
   // Have all connections assigned to the ROOT scope and use the same
@@ -2524,6 +2538,12 @@ std::string ClusterFactory::actualServerBinary() const {
   std::string relative_to_build_out =
       server_binary_.value_or(defaultLogdevicedPath());
   return findBinary(relative_to_build_out);
+}
+
+void ClusterFactory::setInternalLogAttributes(const std::string& name,
+                                              logsconfig::LogAttributes attrs) {
+  auto log_group_node = internal_logs_.insert(name, attrs);
+  ld_check(log_group_node);
 }
 
 static void noop_signal_handler(int) {}

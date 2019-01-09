@@ -217,10 +217,14 @@ class ClusterFactory {
   }
 
   /**
-   * Set the configuration of an internal log.
+   * Set the attributes for the internal config log.
    */
-  ClusterFactory& setInternalLogConfig(const std::string& name,
-                                       Configuration::Log log_config);
+  ClusterFactory& setConfigLogAttributes(logsconfig::LogAttributes attrs);
+
+  /**
+   * Set the attributes for the internal event log.
+   */
+  ClusterFactory& setEventLogAttributes(logsconfig::LogAttributes attrs);
 
   /**
    * Enables LogsConfigManager for clusters. Strongly recommend also calling
@@ -232,10 +236,12 @@ class ClusterFactory {
    */
   ClusterFactory& enableLogsConfigManager();
 
-  ClusterFactory& setEventLogConfig(Configuration::Log log_config) {
-    setInternalLogConfig("event_log_deltas", log_config);
-    return *this;
-  }
+  /**
+   * Sets configuration for the internal log "event_log_deltas".
+   * NOTE: Unlike setEventLogAttributes, does not set configuration for
+   * "event_log_snapshots".
+   */
+  ClusterFactory& setEventLogConfig(Configuration::Log log_config);
 
   /**
    * Sets the metadata log config to use for logs when using the simple factory
@@ -637,6 +643,10 @@ class ClusterFactory {
   // - setServerBinary() override
   // - a default path
   std::string actualServerBinary() const;
+
+  // Set the attributes of an internal log.
+  void setInternalLogAttributes(const std::string& name,
+                                logsconfig::LogAttributes attrs);
 };
 
 struct SockaddrPair {

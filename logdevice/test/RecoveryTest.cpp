@@ -327,14 +327,13 @@ void RecoveryTest::init() {
 
   // Use replication factor 3 for config-log-deltas
   // log if there are enough nodes.
-  Configuration::Log config_deltas;
-  config_deltas.maxWritesInFlight = 256;
-  config_deltas.rangeName = "config_log_deltas";
-  config_deltas.singleWriter = false;
-  config_deltas.replicationFactor = std::min(nodes_ - (nodes_ > 1), 3ul);
-  config_deltas.extraCopies = 0;
-  config_deltas.syncedCopies = 0;
-  config_deltas.syncReplicationScope = sync_replication_scope_;
+  logsconfig::LogAttributes config_attrs;
+  config_attrs.set_maxWritesInFlight(256);
+  config_attrs.set_singleWriter(false);
+  config_attrs.set_replicationFactor(std::min(nodes_ - (nodes_ > 1), 3ul));
+  config_attrs.set_extraCopies(0);
+  config_attrs.set_syncedCopies(0);
+  config_attrs.set_syncReplicationScope(sync_replication_scope_);
 
   auto factory =
       IntegrationTestUtils::ClusterFactory()
@@ -343,8 +342,7 @@ void RecoveryTest::init() {
           .enableMessageErrorInjection()
           .setLogConfig(log)
           .setEventLogConfig(event_log)
-          .setInternalLogConfig("config_log_deltas", config_deltas)
-          .setInternalLogConfig("config_log_snapshots", config_deltas)
+          .setConfigLogAttributes(config_attrs)
           .deferStart()
           .setParam("--byte-offsets")
           // we'll be using fake unrealistic timestamps;

@@ -2022,6 +2022,9 @@ TEST_F(SequencerIntegrationTest, WeightChangeToZero) {
   log_config.replicationFactor = 1;
   log_config.extraCopies = 0;
 
+  logsconfig::LogAttributes log_attrs;
+  log_config.toLogAttributes(&log_attrs);
+
   Configuration::MetaDataLogsConfig meta_config =
       createMetaDataLogsConfig(/*nodeset=*/{1}, /*replication=*/1);
 
@@ -2034,10 +2037,8 @@ TEST_F(SequencerIntegrationTest, WeightChangeToZero) {
                      .doPreProvisionEpochMetaData()
                      .setNumLogs(1)
                      .setLogConfig(log_config)
-                     .setInternalLogConfig("event_log_deltas", log_config)
-                     .setInternalLogConfig("event_log_snapshots", log_config)
-                     .setInternalLogConfig("config_log_deltas", log_config)
-                     .setInternalLogConfig("config_log_snapshots", log_config)
+                     .setEventLogAttributes(log_attrs)
+                     .setConfigLogAttributes(log_attrs)
                      .setMetaDataLogsConfig(meta_config)
                      .create(3);
   std::shared_ptr<Client> client = cluster->createClient();
@@ -2101,6 +2102,9 @@ TEST_F(SequencerIntegrationTest, SequencerMetaDataManagerNullptrCrash) {
   log_config.replicationFactor = 1;
   log_config.extraCopies = 0;
 
+  logsconfig::LogAttributes log_attrs;
+  log_config.toLogAttributes(&log_attrs);
+
   Configuration::MetaDataLogsConfig meta_config =
       createMetaDataLogsConfig(/*nodeset=*/{1}, /*replication=*/1);
 
@@ -2113,10 +2117,8 @@ TEST_F(SequencerIntegrationTest, SequencerMetaDataManagerNullptrCrash) {
                      .setNumLogs(num_logs)
                      .useHashBasedSequencerAssignment(100, "10s")
                      .setLogConfig(log_config)
-                     .setInternalLogConfig("event_log_deltas", log_config)
-                     .setInternalLogConfig("event_log_snapshots", log_config)
-                     .setInternalLogConfig("config_log_deltas", log_config)
-                     .setInternalLogConfig("config_log_snapshots", log_config)
+                     .setEventLogAttributes(log_attrs)
+                     .setConfigLogAttributes(log_attrs)
                      .setMetaDataLogsConfig(meta_config)
                      .create(3);
   std::shared_ptr<Client> client = cluster->createClient();
@@ -2462,6 +2464,9 @@ TEST_F(SequencerIntegrationTest, MetaDataLogSequencerReactToWeightChanges) {
   log_config.replicationFactor = 2;
   log_config.extraCopies = 0;
 
+  logsconfig::LogAttributes log_attrs;
+  log_config.toLogAttributes(&log_attrs);
+
   const int NNODES = 5;
   Configuration::Nodes nodes;
   for (node_index_t i = 0; i < NNODES; ++i) {
@@ -2488,10 +2493,8 @@ TEST_F(SequencerIntegrationTest, MetaDataLogSequencerReactToWeightChanges) {
           .setNumLogs(1)
           .useHashBasedSequencerAssignment(100, "10s")
           .setLogConfig(log_config)
-          .setInternalLogConfig("event_log_deltas", log_config)
-          .setInternalLogConfig("event_log_snapshots", log_config)
-          .setInternalLogConfig("config_log_deltas", log_config)
-          .setInternalLogConfig("config_log_snapshots", log_config)
+          .setEventLogAttributes(log_attrs)
+          .setConfigLogAttributes(log_attrs)
           .setMetaDataLogsConfig(meta_config)
           .create(NNODES);
   std::shared_ptr<Client> client = cluster->createClient();
@@ -2571,6 +2574,9 @@ TEST_F(SequencerIntegrationTest, SequencerReadTrimPointTest) {
   log_config.extraCopies = 0;
   log_config.nodeSetSize = 4;
 
+  logsconfig::LogAttributes log_attrs;
+  log_config.toLogAttributes(&log_attrs);
+
   const int NNODES = 6;
   Configuration::Nodes nodes;
   for (node_index_t i = 0; i < NNODES; ++i) {
@@ -2591,10 +2597,8 @@ TEST_F(SequencerIntegrationTest, SequencerReadTrimPointTest) {
                      .setNumLogs(1)
                      .useHashBasedSequencerAssignment()
                      .setLogConfig(log_config)
-                     .setInternalLogConfig("event_log_deltas", log_config)
-                     .setInternalLogConfig("event_log_snapshots", log_config)
-                     .setInternalLogConfig("config_log_deltas", log_config)
-                     .setInternalLogConfig("config_log_snapshots", log_config)
+                     .setEventLogAttributes(log_attrs)
+                     .setConfigLogAttributes(log_attrs)
                      .create(NNODES);
   std::shared_ptr<Client> client = cluster->createClient();
 
@@ -2662,6 +2666,9 @@ TEST_F(SequencerIntegrationTest, MetaDataWritePreempted) {
   log_config.replicationFactor = 1;
   log_config.extraCopies = 0;
 
+  logsconfig::LogAttributes log_attrs;
+  log_config.toLogAttributes(&log_attrs);
+
   Configuration::MetaDataLogsConfig meta_config =
       createMetaDataLogsConfig(/*nodeset=*/{1}, /*replication=*/1);
 
@@ -2672,10 +2679,8 @@ TEST_F(SequencerIntegrationTest, MetaDataWritePreempted) {
                      .deferStart()
                      .setNumDBShards(1)
                      .setParam("--reactivation-limit", "1000/1s")
-                     .setInternalLogConfig("event_log_deltas", log_config)
-                     .setInternalLogConfig("event_log_snapshots", log_config)
-                     .setInternalLogConfig("config_log_deltas", log_config)
-                     .setInternalLogConfig("config_log_snapshots", log_config)
+                     .setEventLogAttributes(log_attrs)
+                     .setConfigLogAttributes(log_attrs)
                      .setMetaDataLogsConfig(meta_config)
                      .create(3);
 

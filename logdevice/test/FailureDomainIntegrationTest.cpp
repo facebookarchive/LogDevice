@@ -71,6 +71,9 @@ TEST_F(FailureDomainIntegrationTest, TolerateRegionFailure) {
   // cross-region replication
   log_config.syncReplicationScope = NodeLocationScope::REGION;
 
+  logsconfig::LogAttributes internal_log_attrs;
+  log_config.toLogAttributes(&internal_log_attrs);
+
   // metadata logs are replicated cross-region as well
   // this nodeset, with replication = 2, enforces cross-region replication
   Configuration::MetaDataLogsConfig meta_config = createMetaDataLogsConfig(
@@ -84,8 +87,7 @@ TEST_F(FailureDomainIntegrationTest, TolerateRegionFailure) {
           .setMetaDataLogsConfig(meta_config)
           .eventLogMode(
               IntegrationTestUtils::ClusterFactory::EventLogMode::NONE)
-          .setInternalLogConfig("config_log_deltas", log_config)
-          .setInternalLogConfig("config_log_snapshots", log_config)
+          .setConfigLogAttributes(internal_log_attrs)
           .create(nodes.size());
 
   cluster->waitForMetaDataLogWrites();

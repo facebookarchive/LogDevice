@@ -48,13 +48,13 @@ void write_test_records(std::shared_ptr<Client> client,
   }
 }
 
-Configuration::Log createLog() {
-  Configuration::Log log;
-  log.singleWriter = false;
-  log.replicationFactor = 3;
-  log.extraCopies = 0;
-  log.syncedCopies = 0;
-  return log;
+logsconfig::LogAttributes createInternalLogAttributes() {
+  logsconfig::LogAttributes attrs;
+  attrs.set_singleWriter(false);
+  attrs.set_replicationFactor(3);
+  attrs.set_extraCopies(0);
+  attrs.set_syncedCopies(0);
+  return attrs;
 }
 
 TEST_F(SafetyAPIIntegrationTest, DrainWithExpand) {
@@ -262,14 +262,15 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithEventLogNotReadable) {
   logcfg.rangeName = "test_range";
   logcfg.replicationFactor = 2;
 
+  const auto internal_log_attrs = createInternalLogAttributes();
+
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .setNumLogs(1)
                      // switches on gossip
                      .useHashBasedSequencerAssignment()
                      .setNumDBShards(num_shards)
                      .setLogConfig(logcfg)
-                     .setInternalLogConfig("event_log_deltas", createLog())
-                     .setInternalLogConfig("event_log_snapshots", createLog())
+                     .setEventLogAttributes(internal_log_attrs)
                      .create(num_nodes);
 
   for (const auto& it : cluster->getNodes()) {
@@ -338,6 +339,8 @@ TEST_F(SafetyAPIIntegrationTest, DisableReads) {
   logcfg.rangeName = "test_range";
   logcfg.replicationFactor = 3;
 
+  const auto internal_log_attrs = createInternalLogAttributes();
+
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .setNumLogs(2)
                      .setNodes(nodes)
@@ -345,10 +348,8 @@ TEST_F(SafetyAPIIntegrationTest, DisableReads) {
                      .useHashBasedSequencerAssignment()
                      .setNumDBShards(num_shards)
                      .setLogConfig(logcfg)
-                     .setInternalLogConfig("event_log_deltas", createLog())
-                     .setInternalLogConfig("event_log_snapshots", createLog())
-                     .setInternalLogConfig("config_log_deltas", createLog())
-                     .setInternalLogConfig("config_log_snapshots", createLog())
+                     .setEventLogAttributes(internal_log_attrs)
+                     .setConfigLogAttributes(internal_log_attrs)
                      .create(num_nodes);
 
   for (const auto& it : cluster->getNodes()) {
@@ -443,6 +444,8 @@ TEST_F(SafetyAPIIntegrationTest, SafetyMargin) {
   logcfg.rangeName = "test_range";
   logcfg.replicationFactor = 3;
 
+  const auto internal_log_attrs = createInternalLogAttributes();
+
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .setNumLogs(1)
                      .setNodes(nodes)
@@ -450,10 +453,8 @@ TEST_F(SafetyAPIIntegrationTest, SafetyMargin) {
                      .useHashBasedSequencerAssignment()
                      .setNumDBShards(num_shards)
                      .setLogConfig(logcfg)
-                     .setInternalLogConfig("event_log_deltas", createLog())
-                     .setInternalLogConfig("event_log_snapshots", createLog())
-                     .setInternalLogConfig("config_log_deltas", createLog())
-                     .setInternalLogConfig("config_log_snapshots", createLog())
+                     .setEventLogAttributes(internal_log_attrs)
+                     .setConfigLogAttributes(internal_log_attrs)
                      .create(num_nodes);
 
   for (const auto& it : cluster->getNodes()) {

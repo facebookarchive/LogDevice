@@ -30,15 +30,14 @@ class ParametrizedLogsConfigIntegrationTest
 };
 
 TEST_P(ParametrizedLogsConfigIntegrationTest, ConnectionHandling) {
-  Configuration::Log log;
-  log.singleWriter = false;
-  log.replicationFactor = 3;
-  log.extraCopies = 0;
-  log.syncedCopies = 0;
+  logsconfig::LogAttributes internal_log_attrs;
+  internal_log_attrs.set_singleWriter(false);
+  internal_log_attrs.set_replicationFactor(3);
+  internal_log_attrs.set_extraCopies(0);
+  internal_log_attrs.set_syncedCopies(0);
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .enableLogsConfigManager()
-                     .setInternalLogConfig("config_log_deltas", log)
-                     .setInternalLogConfig("config_log_snapshots", log)
+                     .setConfigLogAttributes(internal_log_attrs)
                      .create(5);
 
   std::unique_ptr<ClientSettings> settings(ClientSettings::create());

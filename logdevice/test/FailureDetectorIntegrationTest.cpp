@@ -494,20 +494,17 @@ TEST_F(FailureDetectorIntegrationTest, StartingState) {
       cluster_factory.createDefaultLogConfig(num_nodes);
   common_log.nodeSetSize = num_nodes;
 
-  Configuration::Log log_cfg_config =
-      cluster_factory.createDefaultLogConfig(num_nodes);
-  log_cfg_config.replicationFactor = 1;
-  log_cfg_config.nodeSetSize = 1;
+  logsconfig::LogAttributes internal_log_attrs;
+  internal_log_attrs.set_replicationFactor(1);
+  internal_log_attrs.set_nodeSetSize(1);
 
-  auto cluster =
-      cluster_factory.enableLogsConfigManager()
-          .deferStart()
-          .setLogConfig(common_log)
-          .setInternalLogConfig("config_log_deltas", log_cfg_config)
-          .setInternalLogConfig("config_log_snapshots", log_cfg_config)
-          .enableSelfInitiatedRebuilding()
-          .useHashBasedSequencerAssignment(100, "10s")
-          .create(num_nodes);
+  auto cluster = cluster_factory.enableLogsConfigManager()
+                     .deferStart()
+                     .setLogConfig(common_log)
+                     .setConfigLogAttributes(internal_log_attrs)
+                     .enableSelfInitiatedRebuilding()
+                     .useHashBasedSequencerAssignment(100, "10s")
+                     .create(num_nodes);
 
   ASSERT_EQ(0,
             cluster->provisionEpochMetaData(
