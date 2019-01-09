@@ -80,8 +80,7 @@ class NodesConfigurationStore {
    *   INVALID_PARAM
    *   INVALID_CONFIG
    */
-  virtual Status getConfigSync(std::string key,
-                               std::string* value_out) const = 0;
+  virtual Status getConfigSync(std::string key, std::string* value_out) const;
 
   /*
    * NodesConfigurationStore provides strict conditional update semantics--it
@@ -152,7 +151,7 @@ class NodesConfigurationStore {
                                   std::string value,
                                   folly::Optional<version_t> base_version,
                                   version_t* version_out = nullptr,
-                                  std::string* value_out = nullptr) = 0;
+                                  std::string* value_out = nullptr);
 
   // TODO: add subscription API
 };

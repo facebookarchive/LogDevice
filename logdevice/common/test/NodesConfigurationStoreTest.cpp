@@ -13,11 +13,14 @@
 #include <ostream>
 
 #include <folly/Conv.h>
+#include <folly/experimental/TestUtil.h>
 #include <folly/synchronization/Baton.h>
 #include <gtest/gtest.h>
 
 #include "logdevice/common/configuration/nodes/ZookeeperNodesConfigurationStore.h"
+#include "logdevice/common/test/FileBasedNodesConfigurationStore.h"
 #include "logdevice/common/test/InMemNodesConfigurationStore.h"
+#include "logdevice/common/test/TestUtil.h"
 #include "logdevice/common/test/ZookeeperClientInMemory.h"
 
 using namespace facebook::logdevice;
@@ -31,6 +34,24 @@ namespace {
 const std::string kFoo{"/foo"};
 const std::string kBar{"/bar"};
 std::unique_ptr<NodesConfigurationStore> store{nullptr};
+
+class NodesConfigurationStoreTest : public ::testing::Test {
+ public:
+  // temporary dir for file baesd store test
+  std::unique_ptr<folly::test::TemporaryDirectory> temp_dir_;
+
+  explicit NodesConfigurationStoreTest()
+      : temp_dir_(createTemporaryDir("NodesConfigurationStoreTest",
+                                     /*keep_data*/ false)) {
+    ld_check(temp_dir_ != nullptr);
+  }
+
+  std::unique_ptr<NodesConfigurationStore>
+  createFileBasedStore(NodesConfigurationStore::extract_version_fn f) {
+    return std::make_unique<FileBasedNodesConfigurationStore>(
+        temp_dir_->path().string(), std::move(f));
+  }
+};
 
 void checkAndResetBaton(folly::Baton<>& b) {
   using namespace std::chrono_literals;
@@ -215,4 +236,12 @@ TEST(NodesConfigurationStore, zk_basicMT) {
            {TestEntry{0, "initValue"}.serialize(), zk::Stat{.version_ = 4}}}});
   runMultiThreadedTests(std::make_unique<ZookeeperNodesConfigurationStore>(
       TestEntry::extractVersionFn, std::move(z)));
+}
+
+TEST_F(NodesConfigurationStoreTest, file_basic) {
+  runBasicTests(createFileBasedStore(TestEntry::extractVersionFn));
+}
+
+TEST_F(NodesConfigurationStoreTest, file_basicMT) {
+  runMultiThreadedTests(createFileBasedStore(TestEntry::extractVersionFn));
 }

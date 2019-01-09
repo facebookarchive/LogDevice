@@ -32,26 +32,6 @@ void ZookeeperNodesConfigurationStore::getConfig(
   zk_->getData(std::move(key), std::move(completion));
 }
 
-Status
-ZookeeperNodesConfigurationStore::getConfigSync(std::string key,
-                                                std::string* value_out) const {
-  folly::Baton<> b;
-  Status ret_status = Status::OK;
-  value_callback_t cb = [&b, &ret_status, value_out](
-                            Status status, std::string value) {
-    set_if_not_null(&ret_status, status);
-    if (status == Status::OK) {
-      set_if_not_null(value_out, std::move(value));
-    }
-    b.post();
-  };
-
-  getConfig(std::move(key), std::move(cb));
-  b.wait();
-
-  return ret_status;
-}
-
 void ZookeeperNodesConfigurationStore::updateConfig(
     std::string key,
     std::string value,
@@ -122,30 +102,6 @@ void ZookeeperNodesConfigurationStore::updateConfig(
       }; // read_cb
 
   zk_->getData(std::move(key), std::move(read_cb));
-}
-
-Status ZookeeperNodesConfigurationStore::updateConfigSync(
-    std::string key,
-    std::string value,
-    folly::Optional<version_t> base_version,
-    version_t* version_out,
-    std::string* value_out) {
-  folly::Baton<> b;
-  Status ret_status = Status::OK;
-  write_callback_t cb =
-      [&b, &ret_status, version_out, value_out](
-          Status status, version_t current_version, std::string current_value) {
-        set_if_not_null(&ret_status, status);
-        if (status == Status::OK || status == Status::VERSION_MISMATCH) {
-          set_if_not_null(version_out, current_version);
-          set_if_not_null(value_out, std::move(current_value));
-        }
-        b.post();
-      };
-
-  updateConfig(std::move(key), std::move(value), base_version, std::move(cb));
-  b.wait();
-  return ret_status;
 }
 
 }}}} // namespace facebook::logdevice::configuration::nodes
