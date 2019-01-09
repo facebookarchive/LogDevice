@@ -129,6 +129,15 @@ Dump debug information about the EventLogStateMachine objects running on nodes i
 | delta\_log\_healthy | bool | Whether the ClientReadStream state machine used to read the delta log reports itself as healthy, ie it has enough healthy connections to the storage nodes in the delta log's storage set such that it should be able to not miss any delta. |
 | propagated\_version | lsn | Version of the last state that was fully propagated to all state machines (in particular, to RebuildingCoordinator). |
 
+## graylist
+Provides information on graylisted storage nodes per worker per node. This works only for the outlier based graylisting.
+
+|   Column   |   Type   |   Description   |
+|------------|:--------:|-----------------|
+| node\_id | int | Node ID this row is for. |
+| worker\_id | int | The id of the worker running on the node. |
+| graylisted\_node\_index | int | The graylisted node ID |
+
 ## historical\_metadata
 This table contains information about historical epoch metadata for all logs.  While the "epoch\_store" table provides information about the current epoch metadata of all logs, this table provides a history of that metadata for epoch ranges since the epoch of the first record that is not trimmed.
 
