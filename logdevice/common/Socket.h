@@ -78,12 +78,38 @@ class Worker;
 
 // Defined later in this file.
 class SocketDependencies;
-
-class Socket {
+/**
+ * adding multiple classes here which will get renamed/refactored throguh a
+ * a stack of diffs to separate different logical component which are now alloc
+ * inside socket
+ */
+/**
+ * Will be used as a stable interface of supported stuff by basic socket
+ * our current socket knows too much about traffic shaping. SocketBase will note
+ * SocketBase will be renamed to Socket once current socket gets cleand up
+ */
+class SocketBase {};
+/*
+ * temporary container for all traffic shapping related stuff from socket
+ */
+class TrafficShappingSocket : public SocketBase {
  public:
   using PendingQueue = PriorityQueue<Envelope, &Envelope::socket_links_>;
   using EnvelopeQueue = CostQueue<Envelope, &Envelope::socket_links_>;
+};
+/**
+ * this will we a wrapper around our socket which knows about protocol and
+ * serialization
+ */
+class Connection {};
+/**
+ * this gets an open socket and negotiates connection to decouple code and
+ * remove special handling of messages before/after protocol negotiation
+ */
+class ConnectionNegotiator {};
 
+class Socket : public TrafficShappingSocket {
+ public:
   /**
    * Constructs a new Socket, to be connected to a LogDevice
    * server. The calling thread must be a Worker thread.
