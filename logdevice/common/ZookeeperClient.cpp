@@ -11,6 +11,10 @@
 #include <cstdio>
 #include <new>
 
+#include <boost/filesystem.hpp>
+#include <folly/futures/Future.h>
+#include <folly/futures/helpers.h>
+
 #include "logdevice/common/ConstructorFailed.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/include/Err.h"
@@ -290,6 +294,89 @@ void ZookeeperClient::setData(std::string path,
   }
 }
 
+/* static */ void
+ZookeeperClient::setCACL(const std::vector<zk::ACL>& src,
+                         ::ACL_vector* c_acl_vector,
+                         c_acl_vector_data_t* c_acl_vector_data) {
+  ld_check(c_acl_vector);
+  ld_check(c_acl_vector_data);
+  c_acl_vector->count = src.size();
+  c_acl_vector_data->reserve(src.size());
+  for (const zk::ACL& acl : src) {
+    // const_cast note: Zookeeper does not modify the scheme_ or id_.
+    // However the C struct Id contains char* instead of const char*.
+    c_acl_vector_data->emplace_back(
+        ::ACL{acl.perms_,
+              ::Id{.scheme = const_cast<char*>(acl.id_.scheme_.data()),
+                   .id = const_cast<char*>(acl.id_.id_.data())}});
+  }
+  c_acl_vector->data = c_acl_vector_data->data();
+}
+
+/* static */ int ZookeeperClient::preparePathBuffer(const std::string& path,
+                                                    int32_t flags,
+                                                    std::string* path_buffer) {
+  ld_check(path_buffer);
+  // The resulting path could include a 10-digit sequence number (which could
+  // overflow, resulting in <path>-2147483647). Hence we reserve 11 bytes. 1
+  // extra for '\0'.
+  //
+  // Technically if the path_buffer is not sufficiently long, the returned path
+  // will be truncated and no error would ensue. It's unlikely to be helpful to
+  // return a truncated znode path to the user though, hence we reserve enough
+  // space here.
+  size_t max_znode_path_size =
+      path.size() + ((flags & ::ZOO_SEQUENCE) ? 11 : 0) + 1;
+  ld_check_le(max_znode_path_size, std::numeric_limits<int>::max());
+  path_buffer->resize(max_znode_path_size);
+  return static_cast<int>(max_znode_path_size);
+}
+
+/* static */ void ZookeeperClient::createCompletion(int rc,
+                                                    const char* path,
+                                                    const void* context) {
+  if (!context) {
+    return;
+  }
+
+  std::unique_ptr<CreateContext> ctx(
+      static_cast<CreateContext*>(const_cast<void*>(context)));
+  if (!ctx->cb_) {
+    return;
+  }
+
+  if (rc == ZOK) {
+    ctx->cb_(rc, std::string(path));
+  } else {
+    ctx->cb_(rc, "");
+  }
+}
+
+void ZookeeperClient::create(std::string path,
+                             std::string data,
+                             create_callback_t cb,
+                             std::vector<zk::ACL> acl,
+                             int32_t flags) {
+  // All ancestors exist / were created, now create the leaf node
+  auto p = std::make_unique<CreateContext>(std::move(cb), std::move(acl));
+  setCACL(p->acl_,
+          std::addressof(p->c_acl_vector_),
+          std::addressof(p->c_acl_vector_data_));
+  preparePathBuffer(path, flags, std::addressof(p->path_buffer_));
+  CreateContext* context = p.release();
+  int rc = zoo_acreate(zh_.get().get(),
+                       path.data(),
+                       /* value = */ data.data(),
+                       /* valuelen = */ data.size(),
+                       std::addressof(p->c_acl_vector_),
+                       flags,
+                       &ZookeeperClient::createCompletion,
+                       static_cast<const void*>(context));
+  if (rc != ZOK) {
+    createCompletion(rc, /* path = */ "", static_cast<const void*>(context));
+  }
+}
+
 /* static */ void ZookeeperClient::multiOpCompletion(int rc,
                                                      const void* context) {
   ld_check(context);
@@ -354,24 +441,14 @@ void ZookeeperClient::MultiOpContext::addCCreateOp(const zk::Op& op,
   auto& create_op = boost::get<zk::detail::CreateOp>(op.op_);
 
   auto& c_acl_vector = c_acl_vectors_.at(index);
-  c_acl_vector.count = create_op.acl_.size();
-
   auto& c_acl_vector_data = c_acl_vector_data_.at(index);
-  c_acl_vector_data.reserve(create_op.acl_.size());
-  for (const zk::ACL& acl : create_op.acl_) {
-    // const_cast note: Zookeeper does not modify the scheme_ or id_.
-    // However the C struct Id contains char* instead of const char*.
-    c_acl_vector_data.emplace_back(
-        ::ACL{acl.perms_,
-              ::Id{.scheme = const_cast<char*>(acl.id_.scheme_.data()),
-                   .id = const_cast<char*>(acl.id_.id_.data())}});
-  }
-  c_acl_vector.data = c_acl_vector_data.data();
+  setCACL(create_op.acl_,
+          std::addressof(c_acl_vector),
+          std::addressof(c_acl_vector_data));
 
-  int max_znode_path_size =
-      create_op.path_.size() + (create_op.flags_ & ::ZOO_SEQUENCE) ? 10 : 0;
-  auto& c_path_buffer = c_path_buffers_.at(index);
-  c_path_buffer.resize(max_znode_path_size);
+  auto& path_buffer = path_buffers_.at(index);
+  int max_znode_path_size = preparePathBuffer(
+      create_op.path_, create_op.flags_, std::addressof(path_buffer));
 
   zoo_create_op_init(std::addressof(c_op),
                      create_op.path_.data(),
@@ -379,7 +456,7 @@ void ZookeeperClient::MultiOpContext::addCCreateOp(const zk::Op& op,
                      create_op.data_.size(),
                      std::addressof(c_acl_vector),
                      create_op.flags_,
-                     const_cast<char*>(c_path_buffer.data()),
+                     const_cast<char*>(path_buffer.data()),
                      max_znode_path_size);
 }
 
@@ -434,6 +511,102 @@ void ZookeeperClient::MultiOpContext::addCOp(const zk::Op& op, size_t index) {
     default:
       ld_error("Zookeeper multi_op included NONE op.");
   };
+}
+
+/* static */ std::vector<std::string>
+ZookeeperClient::getAncestorPaths(const std::string& path) {
+  std::vector<std::string> ancestor_paths;
+  std::string path_string;
+  boost::filesystem::path fp{path};
+
+  fp = fp.parent_path();
+  while (!fp.empty() && ((path_string = fp.string()) != "/")) {
+    ancestor_paths.emplace_back(path_string);
+    fp = fp.parent_path();
+  }
+  return ancestor_paths;
+}
+
+/* static */ int ZookeeperClient::aggregateCreateAncestorResults(
+    folly::Try<std::vector<folly::Try<CreateResult>>>&& t) {
+  auto handle_exception = [](folly::exception_wrapper& ew) {
+    RATELIMIT_ERROR(std::chrono::seconds(10),
+                    5,
+                    "Unexpected error from Zookeeper createWithAncestors: %s",
+                    ew.what().c_str());
+  };
+  if (FOLLY_UNLIKELY(t.hasException())) {
+    handle_exception(t.exception());
+    return ZAPIERROR;
+  }
+  auto results = std::move(t).value();
+  for (auto& r : results) {
+    if (FOLLY_UNLIKELY(r.hasException())) {
+      handle_exception(r.exception());
+      return ZAPIERROR;
+    }
+    // success: znode created or the ancestor znode already exists
+    if ((r->rc_ != ZOK && r->rc_ != ZNODEEXISTS)) {
+      return r->rc_;
+    }
+  }
+  return ZOK;
+}
+
+void ZookeeperClient::createWithAncestors(std::string path,
+                                          std::string data,
+                                          create_callback_t cb,
+                                          std::vector<zk::ACL> acl,
+                                          int32_t flags) {
+  auto ancestor_paths = getAncestorPaths(path);
+
+  std::vector<folly::SemiFuture<CreateResult>> futures;
+  futures.reserve(ancestor_paths.size());
+  std::transform(
+      ancestor_paths.rbegin(),
+      ancestor_paths.rend(),
+      std::back_inserter(futures),
+      [this, acl](std::string& ancestor_path) mutable {
+        auto promise = std::make_unique<folly::Promise<CreateResult>>();
+        auto fut = promise->getSemiFuture();
+        this->create(
+            ancestor_path,
+            /* data = */ "",
+            [promise = std::move(promise)](int rc, std::string resulting_path) {
+              CreateResult res;
+              res.rc_ = rc;
+              res.path_ = (rc == ZOK) ? std::move(resulting_path) : "";
+              promise->setValue(std::move(res));
+            },
+            std::move(acl),
+            /* flags = */ 0);
+        return fut;
+      });
+
+  folly::collectAllSemiFuture(std::move(futures))
+      .toUnsafeFuture()
+      .thenTry(
+          [this,
+           path = std::move(path),
+           data = std::move(data),
+           cb = std::move(cb),
+           acl = std::move(acl),
+           flags](
+              folly::Try<std::vector<folly::Try<CreateResult>>>&& t) mutable {
+            int rc = aggregateCreateAncestorResults(std::move(t));
+            if (rc != ZOK) {
+              if (cb) {
+                cb(rc, /* path = */ "");
+              }
+              return;
+            }
+
+            this->create(std::move(path),
+                         std::move(data),
+                         std::move(cb),
+                         std::move(acl),
+                         flags);
+          });
 }
 
 }} // namespace facebook::logdevice

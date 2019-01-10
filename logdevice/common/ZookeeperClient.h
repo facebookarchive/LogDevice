@@ -14,6 +14,7 @@
 #include <unordered_set>
 
 #include <boost/noncopyable.hpp>
+#include <folly/futures/Future.h>
 #include <folly/small_vector.h>
 #include <zookeeper/zookeeper.h>
 
@@ -129,10 +130,23 @@ class ZookeeperClient : public ZookeeperClientBase {
                std::string data,
                stat_callback_t cb,
                zk::version_t base_version) override;
+  void create(std::string path,
+              std::string data,
+              create_callback_t cb,
+              std::vector<zk::ACL> acl = zk::openACL_UNSAFE(),
+              int32_t flags = 0) override;
 
   void multiOp(std::vector<zk::Op> ops, multi_op_callback_t cb) override;
 
+  void createWithAncestors(std::string path,
+                           std::string data,
+                           create_callback_t cb,
+                           std::vector<zk::ACL> acl = zk::openACL_UNSAFE(),
+                           int32_t flags = 0) override;
+
  private:
+  using c_acl_vector_data_t = folly::small_vector<::ACL, 4>;
+
   static void getDataCompletion(int rc,
                                 const char* value,
                                 int value_len,
@@ -141,7 +155,48 @@ class ZookeeperClient : public ZookeeperClientBase {
   static void setDataCompletion(int rc,
                                 const struct Stat* stat,
                                 const void* context);
+  static void createCompletion(int rc, const char* value, const void* context);
   static void multiOpCompletion(int rc, const void* context);
+
+  static void setCACL(const std::vector<zk::ACL>& src,
+                      ::ACL_vector* c_acl_vector,
+                      c_acl_vector_data_t* c_acl_vector_data);
+  static int preparePathBuffer(const std::string& path,
+                               int32_t flags,
+                               std::string* path_buffer);
+
+  struct CreateResult {
+    int rc_;
+    std::string path_;
+  };
+  struct CreateContext {
+    explicit CreateContext(create_callback_t cb, std::vector<zk::ACL> acl)
+        : cb_(std::move(cb)), acl_(std::move(acl)) {}
+
+    create_callback_t cb_;
+    std::vector<zk::ACL> acl_;
+    ::ACL_vector c_acl_vector_{};
+    c_acl_vector_data_t c_acl_vector_data_{};
+    std::string path_buffer_{};
+  };
+
+  // Helpers for createWithAncestors
+
+  // Returns a stack of znode paths, which are all ancestors of the target path
+  // (i.e., the input param). The immediate parent znode is at the bottom of the
+  // stack (front of the vector). The vector does not contain the target path
+  // itself.
+  //
+  // E.g., if path is /a/b/c/d/e/f, the returned vector would be:
+  //   /a/b/c/d/e, /a/b/c/d,  ...,  /a
+  //   front         ...            back
+  static std::vector<std::string> getAncestorPaths(const std::string& path);
+  // Returns a Zookeeper rc. Considers create ancestors successful and returns
+  // ZOK if every ancestor either already exists or was created. Returns
+  // ZAPIERROR if any of the Try-s contains an exception. (These would be
+  // Future-related exceptions since there are no exceptions in C.)
+  static int aggregateCreateAncestorResults(
+      folly::Try<std::vector<folly::Try<CreateResult>>>&& t);
 
   struct MultiOpContext {
     static constexpr size_t kInlineOps = 4;
@@ -159,7 +214,7 @@ class ZookeeperClient : public ZookeeperClientBase {
           // fields.
           c_acl_vectors_(ops_.size()),
           c_acl_vector_data_(ops_.size()),
-          c_path_buffers_(ops_.size()),
+          path_buffers_(ops_.size()),
           c_stats_(ops_.size()),
           c_results_(ops_.size()) {
       c_ops_.resize(ops_.size());
@@ -187,13 +242,12 @@ class ZookeeperClient : public ZookeeperClientBase {
     multi_op_callback_t cb_; // could be empty
 
     folly::small_vector<::ACL_vector, kInlineOps> c_acl_vectors_;
-    folly::small_vector<folly::small_vector<::ACL, kInlineOps>, kInlineOps>
-        c_acl_vector_data_;
-    folly::small_vector<std::string, kInlineOps> c_path_buffers_;
+    folly::small_vector<c_acl_vector_data_t, kInlineOps> c_acl_vector_data_;
+    folly::small_vector<std::string, kInlineOps> path_buffers_;
     folly::small_vector<struct ::Stat, kInlineOps> c_stats_;
     folly::small_vector<zoo_op_t, kInlineOps> c_ops_;
     folly::small_vector<zoo_op_result_t, kInlineOps> c_results_;
-  };
+  }; // MultiOpContext
 
   friend class ZookeeperClientInMemory;
 };

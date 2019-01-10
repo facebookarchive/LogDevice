@@ -89,6 +89,13 @@ void runBasicTests(std::unique_ptr<ZookeeperClientInMemory> z) {
                  b.post();
                });
     b.wait();
+    b.reset();
+
+    z->create(kFoo + kBar, "abc", [&b](int rc, std::string) {
+      EXPECT_EQ(ZOK, rc);
+      b.post();
+    });
+    b.wait();
   }
 
   // write to the znode
@@ -264,4 +271,53 @@ TEST(ZookeeperClientInMemoryTest, basicMT) {
       "unused",
       ZookeeperClientInMemory::state_map_t{
           {kFoo, {"initValue", zk::Stat{.version_ = 4}}}}));
+}
+
+TEST(ZookeeperClientInMemoryTest, recipes) {
+  auto z = std::make_unique<ZookeeperClientInMemory>(
+      "unused", ZookeeperClientInMemory::state_map_t{});
+  folly::Baton<> b;
+  z->createWithAncestors("/", "zz", [&b](int rc, std::string) {
+    EXPECT_EQ(ZNODEEXISTS, rc);
+    b.post();
+  });
+  b.wait();
+  b.reset();
+
+  z->create("/foo/bar/baz", "zz", [&b](int rc, std::string) {
+    // should fail since parent znode does not exist
+    EXPECT_EQ(ZNONODE, rc);
+    b.post();
+  });
+  b.wait();
+  b.reset();
+
+  z->createWithAncestors("/foo/bar/baz", "zz", [&b](int rc, std::string) {
+    EXPECT_EQ(ZOK, rc);
+    b.post();
+  });
+  b.wait();
+  b.reset();
+
+  z->createWithAncestors("/foo", "zz", [&b](int rc, std::string) {
+    EXPECT_EQ(ZNODEEXISTS, rc);
+    b.post();
+  });
+  b.wait();
+  b.reset();
+
+  z->createWithAncestors("", "zz", [&b](int rc, std::string) {
+    EXPECT_EQ(ZOK, rc);
+    b.post();
+  });
+  b.wait();
+  b.reset();
+
+  z->createWithAncestors(
+      "/foo/bar/baz/a/b/c/d/e", "abc", [&b](int rc, std::string) {
+        EXPECT_EQ(ZOK, rc);
+        b.post();
+      });
+  b.wait();
+  b.reset();
 }

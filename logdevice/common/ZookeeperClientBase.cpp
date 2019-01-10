@@ -36,6 +36,7 @@ namespace facebook { namespace logdevice {
       return E::SHUTDOWN;
 
     case ZBADARGUMENTS:
+    case ZNOCHILDRENFOREPHEMERALS:
       return E::INTERNAL;
     case ZMARSHALLINGERROR:
       return E::SYSLIMIT;

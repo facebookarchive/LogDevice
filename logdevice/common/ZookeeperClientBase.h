@@ -158,7 +158,7 @@ class ZookeeperClientBase : boost::noncopyable {
                       void_completion_t,
                       const void* data) = 0;
 
-  virtual ~ZookeeperClientBase(){};
+  virtual ~ZookeeperClientBase() {}
 
  protected:
   const std::string quorum_; // see @param quorum in the constructor
@@ -198,8 +198,39 @@ class ZookeeperClientBase : boost::noncopyable {
                        std::string data,
                        stat_callback_t cb,
                        zk::version_t base_version = -1) = 0;
+  virtual void create(std::string path,
+                      std::string data,
+                      create_callback_t cb,
+                      std::vector<zk::ACL> acl = zk::openACL_UNSAFE(),
+                      int32_t flags = 0) = 0;
 
+  // Transactionally (atomically) perform multiple create / delete / set / check
+  // operations, mostly used for read-modify-write. Unlikely to be what you
+  // want.
   virtual void multiOp(std::vector<zk::Op> ops, multi_op_callback_t cb) = 0;
+
+  //////// RECIPES ////////
+  // The following methods are implemented on top of the Zookeeper primitives
+  // and may consist of multiple ZK operations / RPCs / transactions and thus
+  // may not obey the ordering guarantees one normally expects from Zookeeper.
+
+  // createWithAncestors creates the parent nodes as needed. E.g.,
+  // createWithAncestors("/a/b/c", ...) will create znodes "/a" and "/a/b" if
+  // they did not exist. The callback will be invoked with the created path of
+  // the leaf znode ("/a/b/c").
+  //
+  // The ancestor znodes will be created using the same ACL as the leaf node.
+  // The ancestors will NOT be created with any flags.
+  //
+  // The create callback is guaranteed to be invoked. The user must guarantee
+  // that the ZookeeperClientBase object is alive until then (e.g., by capturing
+  // a shared pointer in the callback).
+  virtual void
+  createWithAncestors(std::string path,
+                      std::string data,
+                      create_callback_t cb,
+                      std::vector<zk::ACL> acl = zk::openACL_UNSAFE(),
+                      int32_t flags = 0) = 0;
 };
 
 // Factory type used to create ZookeeperClient instances utilizing

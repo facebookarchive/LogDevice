@@ -32,6 +32,7 @@ add_library(common_test_util
   )
 
 target_link_libraries(common_test_util
+  common
   ${LOGDEVICE_EXTERNAL_DEPS}
   ${GMOCK_LIBRARY}
   ${GTEST_LIBRARY}

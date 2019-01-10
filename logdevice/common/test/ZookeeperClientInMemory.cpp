@@ -12,6 +12,7 @@
 #include <vector>
 
 #include <boost/filesystem.hpp>
+#include <folly/futures/helpers.h>
 
 #include "logdevice/common/debug.h"
 
@@ -47,6 +48,8 @@ namespace facebook { namespace logdevice {
 ZookeeperClientInMemory::ZookeeperClientInMemory(std::string quorum,
                                                  state_map_t map)
     : ZookeeperClientBase(quorum), map_(std::move(map)) {
+  // The root znode always exists
+  map_.emplace("/", std::make_pair("", zk::Stat{.version_ = 0}));
   // Creating parents for all the nodes in the map
   std::set<std::string> parent_nodes;
   for (const auto& node : map_) {
@@ -240,6 +243,28 @@ void ZookeeperClientInMemory::setData(std::string path,
   }
 }
 
+void ZookeeperClientInMemory::create(std::string path,
+                                     std::string data,
+                                     create_callback_t cb,
+                                     std::vector<zk::ACL> acl,
+                                     int32_t flags) {
+  auto op = ZookeeperClientBase::makeCreateOp(
+      std::move(path), std::move(data), flags, std::move(acl));
+  multiOp({std::move(op)},
+          [cb = std::move(cb)](
+              int rc, std::vector<zk::OpResponse> responses) mutable {
+            ld_check_eq(1, responses.size());
+            if (!cb) {
+              return;
+            }
+            if (rc == ZOK) {
+              cb(rc, std::move(responses.front().value_));
+            } else {
+              cb(rc, "");
+            }
+          });
+}
+
 void ZookeeperClientInMemory::multiOp(std::vector<zk::Op> ops,
                                       multi_op_callback_t cb) {
   int count = ops.size();
@@ -261,4 +286,60 @@ void ZookeeperClientInMemory::multiOp(std::vector<zk::Op> ops,
   }
 }
 
+void ZookeeperClientInMemory::createWithAncestors(std::string path,
+                                                  std::string data,
+                                                  create_callback_t cb,
+                                                  std::vector<zk::ACL> acl,
+                                                  int32_t flags) {
+  auto ancestor_paths = ZookeeperClient::getAncestorPaths(path);
+
+  std::vector<folly::SemiFuture<ZookeeperClient::CreateResult>> futures;
+  futures.reserve(ancestor_paths.size());
+  std::transform(
+      ancestor_paths.rbegin(),
+      ancestor_paths.rend(),
+      std::back_inserter(futures),
+      [this, acl](std::string& ancestor_path) {
+        auto promise =
+            std::make_unique<folly::Promise<ZookeeperClient::CreateResult>>();
+        auto fut = promise->getSemiFuture();
+        this->create(
+            ancestor_path,
+            /* data = */ "",
+            [promise = std::move(promise)](int rc, std::string resulting_path) {
+              ZookeeperClient::CreateResult res;
+              res.rc_ = rc;
+              if (rc == ZOK) {
+                res.path_ = std::move(resulting_path);
+              }
+              promise->setValue(std::move(res));
+            },
+            acl,
+            /* flags = */ 0);
+        return fut;
+      });
+
+  folly::collectAllSemiFuture(std::move(futures))
+      .toUnsafeFuture()
+      .thenTry([this,
+                path = std::move(path),
+                data = std::move(data),
+                cb = std::move(cb),
+                acl = std::move(acl),
+                flags](auto&& t) mutable {
+        int rc = ZookeeperClient::aggregateCreateAncestorResults(std::move(t));
+        if (rc != ZOK) {
+          if (cb) {
+            cb(rc, /* path = */ "");
+          }
+          return;
+        }
+
+        this->create(std::move(path),
+                     std::move(data),
+                     std::move(cb),
+                     std::move(acl),
+                     flags);
+      });
+}
 }} // namespace facebook::logdevice

@@ -73,8 +73,18 @@ class ZookeeperClientInMemory : public ZookeeperClientBase {
                std::string data,
                stat_callback_t cb,
                zk::version_t base_version = -1) override;
-
+  void create(std::string path,
+              std::string data,
+              create_callback_t cb,
+              std::vector<zk::ACL> acl = zk::openACL_UNSAFE(),
+              int32_t flags = 0) override;
   void multiOp(std::vector<zk::Op> ops, multi_op_callback_t cb) override;
+
+  void createWithAncestors(std::string path,
+                           std::string data,
+                           create_callback_t cb,
+                           std::vector<zk::ACL> acl = zk::openACL_UNSAFE(),
+                           int32_t flags = 0) override;
 };
 
 }} // namespace facebook::logdevice
