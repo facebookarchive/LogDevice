@@ -61,8 +61,7 @@ class DisconnectedClientCallback : public SocketCallback {
 
 class SenderImpl {
  public:
-  SenderImpl(Sender& /*sender*/,
-             size_t max_node_idx,
+  SenderImpl(size_t max_node_idx,
              int32_t /*num_workers*/,
              ClientIdxAllocator* client_id_allocator)
       : server_sockets_(max_node_idx + 1),
@@ -142,10 +141,7 @@ Sender::Sender(struct event_base* base,
                size_t max_node_idx,
                int32_t num_workers,
                ClientIdxAllocator* client_id_allocator)
-    : impl_(new SenderImpl(*this,
-                           max_node_idx,
-                           num_workers,
-                           client_id_allocator)),
+    : impl_(new SenderImpl(max_node_idx, num_workers, client_id_allocator)),
       sockets_to_close_available_(
           LD_EV(event_new)(base,
                            -1,
