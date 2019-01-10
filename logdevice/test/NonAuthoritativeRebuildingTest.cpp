@@ -94,6 +94,9 @@ class NonAuthoritativeRebuildingTest
     // We want more randomness in the placement of records.
     log_config.stickyCopySets = false;
 
+    logsconfig::LogAttributes event_log_attrs;
+    log_config.toLogAttributes(&event_log_attrs);
+
     // Place metadata logs on the first 6 nodes in the cluster.
     // Tests may kill an entire rack, but they should not touch the other nodes
     // in the metadata nodeset to affect metadata logs' availability.
@@ -123,7 +126,7 @@ class NonAuthoritativeRebuildingTest
             .setNumRacks(3)
             .useHashBasedSequencerAssignment()
             .setLogConfig(log_config)
-            .setEventLogConfig(log_config)
+            .setEventLogDeltaAttributes(event_log_attrs)
             .setMetaDataLogsConfig(meta_config)
             .setNumLogs(1)
             .deferStart()

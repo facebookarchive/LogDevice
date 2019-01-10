@@ -550,12 +550,13 @@ int main(int argc, const char* argv[]) {
 
   factory.setLogConfig(log);
 
-  Configuration::Log event_log = log;
-  event_log.backlogDuration = folly::none;
-  event_log.replicationFactor = options::nodeset_size == -1
-      ? std::min(5, (options::nnodes + 1) / 2)
-      : std::min(5, (options::nodeset_size + 1) / 2);
-  factory.setEventLogConfig(event_log);
+  logsconfig::LogAttributes event_log_attrs;
+  event_log_attrs.set_backlogDuration(folly::none);
+  event_log_attrs.set_replicationFactor(
+      options::nodeset_size == -1
+          ? std::min(5, (options::nnodes + 1) / 2)
+          : std::min(5, (options::nodeset_size + 1) / 2));
+  factory.setEventLogAttributes(event_log_attrs);
 
   if (!options::root.empty()) {
     factory.setRootPath(options::root);

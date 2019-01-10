@@ -51,12 +51,11 @@ static void commonSetup(IntegrationTestUtils::ClusterFactory& cluster) {
   log_config.syncedCopies = 0;
   log_config.maxWritesInFlight = MAX_IN_FLIGHT;
 
-  Configuration::Log event_log = log_config;
-  event_log.replicationFactor = std::min(4, NUM_NODES - 1);
-  event_log.rangeName = "my-event-log";
-  event_log.extraCopies = 0;
-  event_log.syncedCopies = 0;
-  event_log.maxWritesInFlight = 100;
+  logsconfig::LogAttributes event_log_attrs;
+  event_log_attrs.set_replicationFactor(std::min(4, NUM_NODES - 1));
+  event_log_attrs.set_extraCopies(0);
+  event_log_attrs.set_syncedCopies(0);
+  event_log_attrs.set_maxWritesInFlight(100);
 
   Configuration::MetaDataLogsConfig meta_config;
   {
@@ -89,7 +88,7 @@ static void commonSetup(IntegrationTestUtils::ClusterFactory& cluster) {
       .setParam("--store-timeout", "30s")
       .setNumDBShards(1)
       .setLogConfig(log_config)
-      .setEventLogConfig(event_log)
+      .setEventLogAttributes(event_log_attrs)
       .setMetaDataLogsConfig(meta_config)
       .setNumLogs(NUM_LOGS);
 }

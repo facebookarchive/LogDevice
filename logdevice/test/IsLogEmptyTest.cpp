@@ -91,12 +91,11 @@ void IsLogEmptyTest::commonSetup(
   log_config.syncedCopies = 0;
   log_config.maxWritesInFlight = 250;
 
-  Configuration::Log event_log = log_config;
-  event_log.replicationFactor = std::min(num_nodes - 1, 2);
-  event_log.rangeName = "my-event-log";
-  event_log.extraCopies = 0;
-  event_log.syncedCopies = 0;
-  event_log.maxWritesInFlight = 250;
+  logsconfig::LogAttributes event_log_attrs;
+  event_log_attrs.set_replicationFactor(std::min(num_nodes - 1, 2));
+  event_log_attrs.set_extraCopies(0);
+  event_log_attrs.set_syncedCopies(0);
+  event_log_attrs.set_maxWritesInFlight(250);
 
   Configuration::MetaDataLogsConfig meta_config;
   {
@@ -123,7 +122,7 @@ void IsLogEmptyTest::commonSetup(
       .setParam("--store-timeout", "30s")
       .setNumDBShards(1)
       .setLogConfig(log_config)
-      .setEventLogConfig(event_log)
+      .setEventLogAttributes(event_log_attrs)
       .setMetaDataLogsConfig(meta_config)
       .setNumLogs(num_logs);
 }

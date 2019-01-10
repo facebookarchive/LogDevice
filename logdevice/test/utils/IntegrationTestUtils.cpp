@@ -226,16 +226,14 @@ ClusterFactory::setEventLogAttributes(logsconfig::LogAttributes attrs) {
   return *this;
 }
 
-ClusterFactory& ClusterFactory::enableLogsConfigManager() {
-  enable_logsconfig_manager_ = true;
+ClusterFactory&
+ClusterFactory::setEventLogDeltaAttributes(logsconfig::LogAttributes attrs) {
+  setInternalLogAttributes("event_log_deltas", attrs);
   return *this;
 }
 
-ClusterFactory&
-ClusterFactory::setEventLogConfig(Configuration::Log log_config) {
-  logsconfig::LogAttributes log_attrs;
-  log_config.toLogAttributes(&log_attrs);
-  setInternalLogAttributes("event_log_deltas", log_attrs);
+ClusterFactory& ClusterFactory::enableLogsConfigManager() {
+  enable_logsconfig_manager_ = true;
   return *this;
 }
 

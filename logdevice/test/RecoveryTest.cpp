@@ -316,14 +316,13 @@ void RecoveryTest::init() {
   log.tailOptimized = tail_optimized_;
 
   // Use replication factor 3 for event log if there are enough nodes.
-  Configuration::Log event_log;
-  event_log.maxWritesInFlight = 256;
-  event_log.rangeName = "event-log";
-  event_log.singleWriter = false;
-  event_log.replicationFactor = std::min(nodes_ - (nodes_ > 1), 3ul);
-  event_log.extraCopies = 0;
-  event_log.syncedCopies = 0;
-  event_log.syncReplicationScope = sync_replication_scope_;
+  logsconfig::LogAttributes event_log_attrs;
+  event_log_attrs.set_maxWritesInFlight(256);
+  event_log_attrs.set_singleWriter(false);
+  event_log_attrs.set_replicationFactor(std::min(nodes_ - (nodes_ > 1), 3ul));
+  event_log_attrs.set_extraCopies(0);
+  event_log_attrs.set_syncedCopies(0);
+  event_log_attrs.set_syncReplicationScope(sync_replication_scope_);
 
   // Use replication factor 3 for config-log-deltas
   // log if there are enough nodes.
@@ -341,7 +340,7 @@ void RecoveryTest::init() {
           .setRocksDBType(IntegrationTestUtils::RocksDBType::PARTITIONED)
           .enableMessageErrorInjection()
           .setLogConfig(log)
-          .setEventLogConfig(event_log)
+          .setEventLogDeltaAttributes(event_log_attrs)
           .setConfigLogAttributes(config_attrs)
           .deferStart()
           .setParam("--byte-offsets")

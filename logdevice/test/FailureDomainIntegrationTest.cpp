@@ -415,10 +415,9 @@ TEST_F(FailureDomainIntegrationTest, ThreeRackReplication) {
                   .with_nodeSetSize(8)
                   .with_scdEnabled(true)))
           .setMetaDataLogsConfig(meta_logs_config)
-          .setEventLogConfig(*Configuration::Log::fromLogAttributes(
-              "internal logs",
+          .setEventLogAttributes(
               logsconfig::LogAttributes().with_replicateAcross(
-                  {{NodeLocationScope::RACK, 4}})))
+                  {{NodeLocationScope::RACK, 4}}))
           .setRocksDBType(IntegrationTestUtils::RocksDBType::PARTITIONED)
           .useHashBasedSequencerAssignment()
           .setParam("--enable-sticky-copysets", "false")

@@ -341,13 +341,12 @@ TEST_F(RebuildingSupervisorIntegrationTest, IsolatedRack) {
   int num_shards = 2;
   int num_racks = 3;
 
-  Configuration::Log event_log;
-  event_log.replicationFactor = 2;
-  event_log.rangeName = "my-event-log";
-  event_log.extraCopies = 0;
-  event_log.syncedCopies = 0;
-  event_log.singleWriter = false;
-  event_log.syncReplicationScope = NodeLocationScope::RACK;
+  logsconfig::LogAttributes event_log_attrs;
+  event_log_attrs.set_replicationFactor(2);
+  event_log_attrs.set_extraCopies(0);
+  event_log_attrs.set_syncedCopies(0);
+  event_log_attrs.set_singleWriter(false);
+  event_log_attrs.set_syncReplicationScope(NodeLocationScope::RACK);
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .enableSelfInitiatedRebuilding("1s")
@@ -359,7 +358,7 @@ TEST_F(RebuildingSupervisorIntegrationTest, IsolatedRack) {
                      .useHashBasedSequencerAssignment()
                      .setNumDBShards(num_shards)
                      .setNumRacks(num_racks)
-                     .setEventLogConfig(event_log)
+                     .setEventLogAttributes(event_log_attrs)
                      .oneConfigPerNode()
                      .deferStart()
                      .create(num_nodes);
@@ -436,13 +435,12 @@ TEST_F(RebuildingSupervisorIntegrationTest, s143309) {
   int num_shards = 2;
   int num_racks = 3;
 
-  Configuration::Log event_log;
-  event_log.replicationFactor = 2;
-  event_log.rangeName = "my-event-log";
-  event_log.extraCopies = 0;
-  event_log.syncedCopies = 0;
-  event_log.singleWriter = false;
-  event_log.syncReplicationScope = NodeLocationScope::RACK;
+  logsconfig::LogAttributes event_log_attrs;
+  event_log_attrs.set_replicationFactor(2);
+  event_log_attrs.set_extraCopies(0);
+  event_log_attrs.set_syncedCopies(0);
+  event_log_attrs.set_singleWriter(false);
+  event_log_attrs.set_syncReplicationScope(NodeLocationScope::RACK);
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .setParam("--event-log-grace-period", "1ms")
@@ -454,7 +452,7 @@ TEST_F(RebuildingSupervisorIntegrationTest, s143309) {
                      .useHashBasedSequencerAssignment(100, "2s")
                      .setNumDBShards(num_shards)
                      .setNumRacks(num_racks)
-                     .setEventLogConfig(event_log)
+                     .setEventLogAttributes(event_log_attrs)
                      .oneConfigPerNode()
                      .create(num_nodes);
 
@@ -584,13 +582,12 @@ TEST_F(RebuildingSupervisorIntegrationTest, NodeRebuildingThreshold) {
     nodes_config[i] = std::move(node);
   }
 
-  Configuration::Log event_log;
-  event_log.replicationFactor = 3;
-  event_log.rangeName = "my-event-log";
-  event_log.extraCopies = 0;
-  event_log.syncedCopies = 0;
-  event_log.singleWriter = false;
-  event_log.syncReplicationScope = NodeLocationScope::NODE;
+  logsconfig::LogAttributes event_log_attrs;
+  event_log_attrs.set_replicationFactor(3);
+  event_log_attrs.set_extraCopies(0);
+  event_log_attrs.set_syncedCopies(0);
+  event_log_attrs.set_singleWriter(false);
+  event_log_attrs.set_syncReplicationScope(NodeLocationScope::NODE);
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
@@ -603,7 +600,7 @@ TEST_F(RebuildingSupervisorIntegrationTest, NodeRebuildingThreshold) {
           .setParam("--disable-event-log-trimming", "true")
           .useHashBasedSequencerAssignment()
           .setNodes(nodes_config)
-          .setEventLogConfig(event_log)
+          .setEventLogAttributes(event_log_attrs)
           .deferStart()
           .create(num_nodes);
 
@@ -696,13 +693,12 @@ TEST_F(RebuildingSupervisorIntegrationTest,
     nodes_config[i] = std::move(node);
   }
 
-  Configuration::Log event_log;
-  event_log.replicationFactor = 3;
-  event_log.rangeName = "my-event-log";
-  event_log.extraCopies = 0;
-  event_log.syncedCopies = 0;
-  event_log.singleWriter = false;
-  event_log.syncReplicationScope = NodeLocationScope::NODE;
+  logsconfig::LogAttributes event_log_attrs;
+  event_log_attrs.set_replicationFactor(3);
+  event_log_attrs.set_extraCopies(0);
+  event_log_attrs.set_syncedCopies(0);
+  event_log_attrs.set_singleWriter(false);
+  event_log_attrs.set_syncReplicationScope(NodeLocationScope::NODE);
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
@@ -715,7 +711,7 @@ TEST_F(RebuildingSupervisorIntegrationTest,
           .setParam("--disable-event-log-trimming", "true")
           .useHashBasedSequencerAssignment()
           .setNodes(nodes_config)
-          .setEventLogConfig(event_log)
+          .setEventLogAttributes(event_log_attrs)
           .deferStart()
           .create(num_nodes);
 
@@ -774,13 +770,12 @@ TEST_F(RebuildingSupervisorIntegrationTest,
     nodes_config[i] = std::move(node);
   }
 
-  Configuration::Log event_log;
-  event_log.replicationFactor = 3;
-  event_log.rangeName = "my-event-log";
-  event_log.extraCopies = 0;
-  event_log.syncedCopies = 0;
-  event_log.singleWriter = false;
-  event_log.syncReplicationScope = NodeLocationScope::NODE;
+  logsconfig::LogAttributes event_log_attrs;
+  event_log_attrs.set_replicationFactor(3);
+  event_log_attrs.set_extraCopies(0);
+  event_log_attrs.set_syncedCopies(0);
+  event_log_attrs.set_singleWriter(false);
+  event_log_attrs.set_syncReplicationScope(NodeLocationScope::NODE);
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
@@ -793,7 +788,7 @@ TEST_F(RebuildingSupervisorIntegrationTest,
           .setParam("--disable-event-log-trimming", "true")
           .useHashBasedSequencerAssignment()
           .setNodes(nodes_config)
-          .setEventLogConfig(event_log)
+          .setEventLogAttributes(event_log_attrs)
           .deferStart()
           .create(num_nodes);
 
@@ -936,13 +931,12 @@ TEST_F(RebuildingSupervisorIntegrationTest, RebuildingTriggerQueueThreshold) {
     nodes_config[i] = std::move(node);
   }
 
-  Configuration::Log event_log;
-  event_log.replicationFactor = 3;
-  event_log.rangeName = "my-event-log";
-  event_log.extraCopies = 0;
-  event_log.syncedCopies = 0;
-  event_log.singleWriter = false;
-  event_log.syncReplicationScope = NodeLocationScope::NODE;
+  logsconfig::LogAttributes event_log_attrs;
+  event_log_attrs.set_replicationFactor(3);
+  event_log_attrs.set_extraCopies(0);
+  event_log_attrs.set_syncedCopies(0);
+  event_log_attrs.set_singleWriter(false);
+  event_log_attrs.set_syncReplicationScope(NodeLocationScope::NODE);
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
@@ -955,7 +949,7 @@ TEST_F(RebuildingSupervisorIntegrationTest, RebuildingTriggerQueueThreshold) {
           .setParam("--disable-event-log-trimming", "true")
           .useHashBasedSequencerAssignment()
           .setNodes(nodes_config)
-          .setEventLogConfig(event_log)
+          .setEventLogAttributes(event_log_attrs)
           .deferStart()
           .create(num_nodes);
 
@@ -1052,13 +1046,12 @@ TEST_F(RebuildingSupervisorIntegrationTest,
     nodes_config[i] = std::move(node);
   }
 
-  Configuration::Log event_log;
-  event_log.replicationFactor = 3;
-  event_log.rangeName = "my-event-log";
-  event_log.extraCopies = 0;
-  event_log.syncedCopies = 0;
-  event_log.singleWriter = false;
-  event_log.syncReplicationScope = NodeLocationScope::NODE;
+  logsconfig::LogAttributes event_log_attrs;
+  event_log_attrs.set_replicationFactor(3);
+  event_log_attrs.set_extraCopies(0);
+  event_log_attrs.set_syncedCopies(0);
+  event_log_attrs.set_singleWriter(false);
+  event_log_attrs.set_syncReplicationScope(NodeLocationScope::NODE);
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
@@ -1071,7 +1064,7 @@ TEST_F(RebuildingSupervisorIntegrationTest,
           .setParam("--disable-event-log-trimming", "true")
           .useHashBasedSequencerAssignment()
           .setNodes(nodes_config)
-          .setEventLogConfig(event_log)
+          .setEventLogAttributes(event_log_attrs)
           .deferStart()
           .create(num_nodes);
 

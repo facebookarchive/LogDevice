@@ -51,7 +51,7 @@ struct TestMode {
 const logid_t LOG_ID(1);
 const int NUM_DB_SHARDS = 3;
 
-static Configuration::Log logConfig(int replication) {
+Configuration::Log logConfig(int replication) {
   Configuration::Log log_config;
   log_config.replicationFactor = replication;
   log_config.rangeName = "mylog";
@@ -59,6 +59,12 @@ static Configuration::Log logConfig(int replication) {
   log_config.syncedCopies = 0;
   log_config.maxWritesInFlight = 300;
   return log_config;
+}
+
+logsconfig::LogAttributes eventLogAttributes(int replication) {
+  logsconfig::LogAttributes attrs;
+  logConfig(replication).toLogAttributes(&attrs);
+  return attrs;
 }
 
 void writeRecords(Client& client,
@@ -264,13 +270,13 @@ class RebuildingTest : public IntegrationTestBase,
     log_config.maxWritesInFlight = 30;
     log_config.stickyCopySets = true;
 
-    Configuration::Log event_log = log_config;
-    event_log.rangeName = "event-log";
+    logsconfig::LogAttributes event_log_attrs;
+    log_config.toLogAttributes(&event_log_attrs);
 
     return IntegrationTestUtils::ClusterFactory()
         .apply(commonSetup())
         .setLogConfig(log_config)
-        .setEventLogConfig(event_log)
+        .setEventLogAttributes(event_log_attrs)
         .setParam("--disable-event-log-trimming", trim ? "false" : "true")
         .setParam("--byte-offsets")
         .setParam("--event-log-max-delta-records", "5")
@@ -516,17 +522,13 @@ TEST_P(RebuildingTest, OnlineDiskRepair) {
   log_config.syncedCopies = 0;
   log_config.maxWritesInFlight = 30;
 
-  Configuration::Log event_log = log_config;
-  event_log.replicationFactor = 3;
-  event_log.rangeName = "my-event-log";
-  event_log.extraCopies = 0;
-  event_log.syncedCopies = 0;
-  event_log.maxWritesInFlight = 30;
+  logsconfig::LogAttributes event_log_attrs;
+  log_config.toLogAttributes(&event_log_attrs);
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .apply(commonSetup())
                      .setLogConfig(log_config)
-                     .setEventLogConfig(event_log)
+                     .setEventLogAttributes(event_log_attrs)
                      .setNumDBShards(3)
                      .setNumLogs(1)
                      .create(5);
@@ -624,16 +626,13 @@ TEST_P(RebuildingTest, AllNodesRebuildingSameShard) {
   log_config.syncedCopies = 0;
   log_config.maxWritesInFlight = 30;
 
-  Configuration::Log event_log = log_config;
-  event_log.replicationFactor = 3;
-  event_log.rangeName = "my-event-log";
-  event_log.extraCopies = 0;
-  event_log.syncedCopies = 0;
-  event_log.maxWritesInFlight = 30;
+  logsconfig::LogAttributes event_log_attrs;
+  log_config.toLogAttributes(&event_log_attrs);
+
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .apply(commonSetup())
                      .setLogConfig(log_config)
-                     .setEventLogConfig(event_log)
+                     .setEventLogAttributes(event_log_attrs)
                      .setNumLogs(42)
                      .create(5);
   cluster->waitForRecovery();
@@ -677,7 +676,7 @@ TEST_P(RebuildingTest, RebuildingWithNoAmends) {
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .apply(commonSetup())
                      .setLogConfig(logConfig(3))
-                     .setEventLogConfig(logConfig(5))
+                     .setEventLogAttributes(eventLogAttributes(5))
                      .setMetaDataLogsConfig(meta_config)
                      // read quickly when nodes are down
                      .setParam("--gap-grace-period", "10ms")
@@ -755,7 +754,7 @@ TEST_P(RebuildingTest, RecoveryWhenManyNodesAreRebuilding) {
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .apply(commonSetup())
                      .setLogConfig(logConfig(3))
-                     .setEventLogConfig(logConfig(5))
+                     .setEventLogAttributes(eventLogAttributes(5))
                      .setMetaDataLogsConfig(meta_config)
                      // read quickly when nodes are down
                      .setParam("--gap-grace-period", "10ms")
@@ -867,17 +866,13 @@ TEST_P(RebuildingTest, ClusterExpandedWhileRebuilding) {
   log_config.syncedCopies = 0;
   log_config.maxWritesInFlight = 30;
 
-  Configuration::Log event_log = log_config;
-  event_log.replicationFactor = 3;
-  event_log.rangeName = "my-event-log";
-  event_log.extraCopies = 0;
-  event_log.syncedCopies = 0;
-  event_log.maxWritesInFlight = 30;
+  logsconfig::LogAttributes event_log_attrs;
+  log_config.toLogAttributes(&event_log_attrs);
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .apply(commonSetup())
                      .setLogConfig(log_config)
-                     .setEventLogConfig(event_log)
+                     .setEventLogAttributes(event_log_attrs)
                      .setNumLogs(1)
                      .create(6);
 
@@ -948,16 +943,13 @@ TEST_P(RebuildingTest, ClusterExpandedWhileRebuilding2) {
   log_config.syncedCopies = 0;
   log_config.maxWritesInFlight = 30;
 
-  Configuration::Log event_log = log_config;
-  event_log.replicationFactor = 3;
-  event_log.rangeName = "my-event-log";
-  event_log.extraCopies = 0;
-  event_log.syncedCopies = 0;
-  event_log.maxWritesInFlight = 30;
+  logsconfig::LogAttributes event_log_attrs;
+  log_config.toLogAttributes(&event_log_attrs);
+
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .apply(commonSetup())
                      .setLogConfig(log_config)
-                     .setEventLogConfig(event_log)
+                     .setEventLogAttributes(event_log_attrs)
                      .setNumLogs(1)
                      .create(6);
 
@@ -1015,12 +1007,8 @@ TEST_P(RebuildingTest, DonorNodeRemovedFromConfigDuringRestoreRebuilding) {
   log_config.syncedCopies = 0;
   log_config.maxWritesInFlight = 30;
 
-  Configuration::Log event_log = log_config;
-  event_log.replicationFactor = 3;
-  event_log.rangeName = "my-event-log";
-  event_log.extraCopies = 0;
-  event_log.syncedCopies = 0;
-  event_log.maxWritesInFlight = 30;
+  logsconfig::LogAttributes event_log_attrs;
+  log_config.toLogAttributes(&event_log_attrs);
   // Ensure metadata logs are not stored on the node we are about to remove from
   // the cluster.
 
@@ -1032,7 +1020,7 @@ TEST_P(RebuildingTest, DonorNodeRemovedFromConfigDuringRestoreRebuilding) {
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .apply(commonSetup())
                      .setLogConfig(log_config)
-                     .setEventLogConfig(event_log)
+                     .setEventLogAttributes(event_log_attrs)
                      .setNumLogs(1)
                      .setMetaDataLogsConfig(meta_config)
                      .create(6);
@@ -1077,12 +1065,9 @@ TEST_P(RebuildingTest, NodeComesBackAfterRebuildingIsComplete) {
   log_config.syncedCopies = 0;
   log_config.maxWritesInFlight = 30;
 
-  Configuration::Log event_log = log_config;
-  event_log.replicationFactor = 4;
-  event_log.rangeName = "my-event-log";
-  event_log.extraCopies = 0;
-  event_log.syncedCopies = 0;
-  event_log.maxWritesInFlight = 30;
+  logsconfig::LogAttributes event_log_attrs;
+  log_config.toLogAttributes(&event_log_attrs);
+  event_log_attrs.set_replicationFactor(4);
 
   Configuration::MetaDataLogsConfig meta_config =
       createMetaDataLogsConfig({1, 2, 3, 4}, 3, NodeLocationScope::NODE);
@@ -1092,7 +1077,7 @@ TEST_P(RebuildingTest, NodeComesBackAfterRebuildingIsComplete) {
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .apply(commonSetup())
                      .setLogConfig(log_config)
-                     .setEventLogConfig(event_log)
+                     .setEventLogAttributes(event_log_attrs)
                      .setParam("--disable-event-log-trimming", "true")
                      .setNumLogs(1)
                      .setMetaDataLogsConfig(meta_config)
@@ -1124,6 +1109,9 @@ TEST_P(RebuildingTest, ShardAckFromNodeAlreadyRebuilt) {
   log_config.syncedCopies = 0;
   log_config.maxWritesInFlight = 30;
 
+  logsconfig::LogAttributes log_attrs;
+  log_config.toLogAttributes(&log_attrs);
+
   // Ensure metadata logs are not stored on the node we are about to remove from
   // the cluster.
   Configuration::MetaDataLogsConfig meta_config =
@@ -1134,7 +1122,7 @@ TEST_P(RebuildingTest, ShardAckFromNodeAlreadyRebuilt) {
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .apply(commonSetup())
                      .setLogConfig(log_config)
-                     .setEventLogConfig(log_config)
+                     .setEventLogAttributes(log_attrs)
                      .setNumLogs(1)
                      .setMetaDataLogsConfig(meta_config)
                      .create(6);
@@ -1198,6 +1186,9 @@ TEST_P(RebuildingTest, NodeDrain) {
   log_config.syncedCopies = 0;
   log_config.maxWritesInFlight = 30;
 
+  logsconfig::LogAttributes log_attrs;
+  log_config.toLogAttributes(&log_attrs);
+
   // Ensure metadata logs are not stored on the node we are about to remove from
   // the cluster.
   Configuration::MetaDataLogsConfig meta_config =
@@ -1208,7 +1199,7 @@ TEST_P(RebuildingTest, NodeDrain) {
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .apply(commonSetup())
                      .setLogConfig(log_config)
-                     .setEventLogConfig(log_config)
+                     .setEventLogAttributes(log_attrs)
                      .setNumLogs(1)
                      .setMetaDataLogsConfig(meta_config)
                      .create(6);
@@ -1245,6 +1236,9 @@ TEST_P(RebuildingTest, NodeDrainCanceled) {
   log_config.syncedCopies = 0;
   log_config.maxWritesInFlight = 30;
 
+  logsconfig::LogAttributes log_attrs;
+  log_config.toLogAttributes(&log_attrs);
+
   // Ensure metadata logs are not stored on the node we are about to remove from
   // the cluster.
   Configuration::MetaDataLogsConfig meta_config =
@@ -1255,7 +1249,7 @@ TEST_P(RebuildingTest, NodeDrainCanceled) {
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .apply(commonSetup())
                      .setLogConfig(log_config)
-                     .setEventLogConfig(log_config)
+                     .setEventLogAttributes(log_attrs)
                      .setNumLogs(1)
                      .setMetaDataLogsConfig(meta_config)
                      .create(6);
@@ -1309,6 +1303,9 @@ TEST_P(RebuildingTest, NodeDiesAfterDrain) {
   log_config.syncedCopies = 0;
   log_config.maxWritesInFlight = 30;
 
+  logsconfig::LogAttributes log_attrs;
+  log_config.toLogAttributes(&log_attrs);
+
   // Ensure metadata logs are not stored on the node we are about to remove from
   // the cluster.
   Configuration::MetaDataLogsConfig meta_config =
@@ -1319,7 +1316,7 @@ TEST_P(RebuildingTest, NodeDiesAfterDrain) {
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .apply(commonSetup())
                      .setLogConfig(log_config)
-                     .setEventLogConfig(log_config)
+                     .setEventLogAttributes(log_attrs)
                      .setNumLogs(1)
                      .setMetaDataLogsConfig(meta_config)
                      .create(6);
@@ -1365,6 +1362,9 @@ TEST_P(RebuildingTest, NodeRebuildingInRelocateModeRemovedFromConfig) {
   log_config.syncedCopies = 0;
   log_config.maxWritesInFlight = 30;
 
+  logsconfig::LogAttributes log_attrs;
+  log_config.toLogAttributes(&log_attrs);
+
   // Ensure metadata logs are not stored on the node we are about to remove from
   // the cluster.
   Configuration::MetaDataLogsConfig meta_config =
@@ -1375,7 +1375,7 @@ TEST_P(RebuildingTest, NodeRebuildingInRelocateModeRemovedFromConfig) {
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .apply(commonSetup())
                      .setLogConfig(log_config)
-                     .setEventLogConfig(log_config)
+                     .setEventLogAttributes(log_attrs)
                      .setNumLogs(1)
                      .setMetaDataLogsConfig(meta_config)
                      .create(6);
@@ -1451,12 +1451,8 @@ TEST_P(RebuildingTest, RebuildingNodeRemovedFromConfig) {
   log_config.syncedCopies = 0;
   log_config.maxWritesInFlight = 30;
 
-  Configuration::Log event_log = log_config;
-  event_log.replicationFactor = 3;
-  event_log.rangeName = "my-event-log";
-  event_log.extraCopies = 0;
-  event_log.syncedCopies = 0;
-  event_log.maxWritesInFlight = 30;
+  logsconfig::LogAttributes log_attrs;
+  log_config.toLogAttributes(&log_attrs);
 
   // Ensure metadata logs are not stored on the node we are about to remove from
   // the cluster.
@@ -1468,7 +1464,7 @@ TEST_P(RebuildingTest, RebuildingNodeRemovedFromConfig) {
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .apply(commonSetup())
                      .setLogConfig(log_config)
-                     .setEventLogConfig(event_log)
+                     .setEventLogAttributes(log_attrs)
                      .setNumLogs(1)
                      .setMetaDataLogsConfig(meta_config)
                      .create(6);
@@ -1504,12 +1500,8 @@ TEST_P(RebuildingTest, RebuildingNodeRemovedFromConfigButNotAlone) {
   log_config.syncedCopies = 0;
   log_config.maxWritesInFlight = 30;
 
-  Configuration::Log event_log = log_config;
-  event_log.replicationFactor = 3;
-  event_log.rangeName = "my-event-log";
-  event_log.extraCopies = 0;
-  event_log.syncedCopies = 0;
-  event_log.maxWritesInFlight = 30;
+  logsconfig::LogAttributes log_attrs;
+  log_config.toLogAttributes(&log_attrs);
 
   // Ensure metadata logs are not stored on the node we are about to remove from
   // the cluster.
@@ -1521,7 +1513,7 @@ TEST_P(RebuildingTest, RebuildingNodeRemovedFromConfigButNotAlone) {
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .apply(commonSetup())
                      .setLogConfig(log_config)
-                     .setEventLogConfig(event_log)
+                     .setEventLogAttributes(log_attrs)
                      .setNumLogs(1)
                      .setMetaDataLogsConfig(meta_config)
                      .create(7);
@@ -1572,18 +1564,16 @@ TEST_P(RebuildingTest, FMajorityInRebuildingSet) {
   log_config.maxWritesInFlight = 30;
   log_config.backlogDuration = std::chrono::hours{6};
 
-  Configuration::Log event_log = log_config;
-  event_log.replicationFactor = 3;
-  event_log.rangeName = "my-event-log";
-  event_log.extraCopies = 0;
-  event_log.syncedCopies = 0;
-  event_log.maxWritesInFlight = 30;
-  event_log.backlogDuration.clear();
+  logsconfig::LogAttributes event_log_attrs;
+  event_log_attrs.set_replicationFactor(3);
+  event_log_attrs.set_extraCopies(0);
+  event_log_attrs.set_syncedCopies(0);
+  event_log_attrs.set_maxWritesInFlight(30);
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .apply(commonSetup())
                      .setLogConfig(log_config)
-                     .setEventLogConfig(event_log)
+                     .setEventLogAttributes(event_log_attrs)
                      .setNumLogs(42)
                      .create(6);
 
@@ -1646,17 +1636,16 @@ TEST_P(RebuildingTest, LocalWindow) {
   log_config.maxWritesInFlight = 30;
   log_config.backlogDuration = std::chrono::hours{6};
 
-  Configuration::Log event_log_config;
-  event_log_config.replicationFactor = 3;
-  event_log_config.extraCopies = 0;
-  event_log_config.syncedCopies = 0;
-  event_log_config.rangeName = "event_log";
-  event_log_config.maxWritesInFlight = 30;
+  logsconfig::LogAttributes event_log_attrs;
+  event_log_attrs.set_replicationFactor(3);
+  event_log_attrs.set_extraCopies(0);
+  event_log_attrs.set_syncedCopies(0);
+  event_log_attrs.set_maxWritesInFlight(30);
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .apply(commonSetup())
                      .setLogConfig(log_config)
-                     .setEventLogConfig(event_log_config)
+                     .setEventLogAttributes(event_log_attrs)
                      .setNumLogs(42)
                      .create(5);
 
@@ -1706,17 +1695,16 @@ TEST_P(RebuildingTest, LocalAndGlobalWindow) {
   log_config.maxWritesInFlight = 30;
   log_config.backlogDuration = std::chrono::hours{6};
 
-  Configuration::Log event_log_config;
-  event_log_config.replicationFactor = 3;
-  event_log_config.extraCopies = 0;
-  event_log_config.rangeName = "event-log";
-  event_log_config.syncedCopies = 0;
-  event_log_config.maxWritesInFlight = 30;
+  logsconfig::LogAttributes event_log_attrs;
+  event_log_attrs.set_replicationFactor(3);
+  event_log_attrs.set_extraCopies(0);
+  event_log_attrs.set_syncedCopies(0);
+  event_log_attrs.set_maxWritesInFlight(30);
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .apply(commonSetup())
                      .setLogConfig(log_config)
-                     .setEventLogConfig(event_log_config)
+                     .setEventLogAttributes(event_log_attrs)
                      .setParam("--rebuilding-local-window", "5ms")
                      .setParam("--rebuilding-global-window", "30ms")
                      .setNumLogs(42)
@@ -1811,12 +1799,8 @@ TEST_P(RebuildingTest, MiniRebuildingIsAuthoritative) {
   log_config.syncedCopies = 0;
   log_config.maxWritesInFlight = 30;
 
-  Configuration::Log event_log = log_config;
-  event_log.replicationFactor = 3;
-  event_log.rangeName = "my-event-log";
-  event_log.extraCopies = 0;
-  event_log.syncedCopies = 0;
-  event_log.maxWritesInFlight = 30;
+  logsconfig::LogAttributes log_attrs;
+  log_config.toLogAttributes(&log_attrs);
 
   NodeSetIndices node_set(5);
   std::iota(node_set.begin(), node_set.end(), 0);
@@ -1824,7 +1808,7 @@ TEST_P(RebuildingTest, MiniRebuildingIsAuthoritative) {
       IntegrationTestUtils::ClusterFactory()
           .apply(commonSetup())
           .setLogConfig(log_config)
-          .setEventLogConfig(event_log)
+          .setEventLogAttributes(log_attrs)
           .setParam("--append-store-durability", "memory")
           // Set min flush trigger intervals and partition duration high
           // so that only the test is creating/retiring partitions.
@@ -1896,7 +1880,7 @@ TEST_P(RebuildingTest, MiniRebuildingAlwaysNonRecoverable) {
       IntegrationTestUtils::ClusterFactory()
           .apply(commonSetup())
           .setLogConfig(logConfig(3))
-          .setEventLogConfig(logConfig(5))
+          .setEventLogAttributes(eventLogAttributes(5))
           .setParam("--rebuild-store-durability", "async_write")
           .setMetaDataLogsConfig(meta_config)
           // read quickly when nodes are down
@@ -2060,19 +2044,18 @@ TEST_P(RebuildingTest, RebuildingWithDifferentDurabilities) {
   log_config.maxWritesInFlight = 30;
   log_config.backlogDuration = std::chrono::hours{6};
 
-  Configuration::Log event_log_config;
-  event_log_config.replicationFactor = 3;
-  event_log_config.extraCopies = 0;
-  event_log_config.syncedCopies = 0;
-  event_log_config.rangeName = "event_log";
-  event_log_config.maxWritesInFlight = 30;
+  logsconfig::LogAttributes event_log_attrs;
+  event_log_attrs.set_replicationFactor(3);
+  event_log_attrs.set_extraCopies(0);
+  event_log_attrs.set_syncedCopies(0);
+  event_log_attrs.set_maxWritesInFlight(30);
 
   ld_info("Creating cluster");
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .apply(commonSetup())
                      .setParam("--rebuild-store-durability", "async_write")
                      .setLogConfig(log_config)
-                     .setEventLogConfig(event_log_config)
+                     .setEventLogAttributes(event_log_attrs)
                      .setNumLogs(42)
                      .create(5);
 
@@ -2218,12 +2201,8 @@ TEST_P(RebuildingTest, UnderReplicatedRegions) {
   log_config.syncedCopies = 0;
   log_config.maxWritesInFlight = 30;
 
-  Configuration::Log event_log = log_config;
-  event_log.replicationFactor = 3;
-  event_log.rangeName = "my-event-log";
-  event_log.extraCopies = 0;
-  event_log.syncedCopies = 0;
-  event_log.maxWritesInFlight = 30;
+  logsconfig::LogAttributes log_attrs;
+  log_config.toLogAttributes(&log_attrs);
 
   NodeSetIndices node_set(5);
   std::iota(node_set.begin(), node_set.end(), 0);
@@ -2231,7 +2210,7 @@ TEST_P(RebuildingTest, UnderReplicatedRegions) {
       IntegrationTestUtils::ClusterFactory()
           .apply(commonSetup())
           .setLogConfig(log_config)
-          .setEventLogConfig(event_log)
+          .setEventLogAttributes(log_attrs)
           .setParam("--append-store-durability", "memory")
           // Set min flush trigger intervals and partition duration high
           // so that only the test is creating/retiring partitions.
@@ -2312,12 +2291,11 @@ TEST_P(RebuildingTest, SkipEverything) {
   log_config.syncedCopies = 0;
   log_config.maxWritesInFlight = 1000;
 
-  Configuration::Log event_log = log_config;
-  event_log.replicationFactor = 2;
-  event_log.rangeName = "ev";
-  event_log.extraCopies = 0;
-  event_log.syncedCopies = 0;
-  event_log.maxWritesInFlight = 30;
+  logsconfig::LogAttributes event_log_attrs;
+  event_log_attrs.set_replicationFactor(2);
+  event_log_attrs.set_extraCopies(0);
+  event_log_attrs.set_syncedCopies(0);
+  event_log_attrs.set_maxWritesInFlight(30);
 
   Configuration::MetaDataLogsConfig meta_config = createMetaDataLogsConfig(
       /*nodeset=*/{0, 1},
@@ -2338,7 +2316,7 @@ TEST_P(RebuildingTest, SkipEverything) {
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .apply(commonSetup())
                      .setLogConfig(log_config)
-                     .setEventLogConfig(event_log)
+                     .setEventLogAttributes(event_log_attrs)
                      .setMetaDataLogsConfig(meta_config)
                      .setNodes(nodes)
                      .setNumDBShards(1)
@@ -2613,12 +2591,11 @@ TEST_P(RebuildingTest, DisableDataLogRebuildShardsWiped) {
   log_config.maxWritesInFlight = 30;
   log_config.backlogDuration = maxBacklogDuration;
 
-  Configuration::Log event_log_config;
-  event_log_config.replicationFactor = 3;
-  event_log_config.extraCopies = 0;
-  event_log_config.syncedCopies = 0;
-  event_log_config.rangeName = "event_log";
-  event_log_config.maxWritesInFlight = 30;
+  logsconfig::LogAttributes event_log_attrs;
+  event_log_attrs.set_replicationFactor(3);
+  event_log_attrs.set_extraCopies(0);
+  event_log_attrs.set_syncedCopies(0);
+  event_log_attrs.set_maxWritesInFlight(30);
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
@@ -2627,7 +2604,7 @@ TEST_P(RebuildingTest, DisableDataLogRebuildShardsWiped) {
           .setParam("--disable-data-log-rebuilding", "true")
           .setParam("--rebuilding-restarts-grace-period", "1ms")
           .setLogConfig(log_config)
-          .setEventLogConfig(event_log_config)
+          .setEventLogAttributes(event_log_attrs)
           .eventLogMode(
               IntegrationTestUtils::ClusterFactory::EventLogMode::SNAPSHOTTED)
           .setNumLogs(10)
@@ -2726,12 +2703,11 @@ TEST_P(RebuildingTest, DisableDataLogRebuildShardsAborted) {
   log_config.maxWritesInFlight = 30;
   log_config.backlogDuration = maxBacklogDuration;
 
-  Configuration::Log event_log_config;
-  event_log_config.replicationFactor = 3;
-  event_log_config.extraCopies = 0;
-  event_log_config.syncedCopies = 0;
-  event_log_config.rangeName = "event_log";
-  event_log_config.maxWritesInFlight = 60;
+  logsconfig::LogAttributes event_log_attrs;
+  event_log_attrs.set_replicationFactor(3);
+  event_log_attrs.set_extraCopies(0);
+  event_log_attrs.set_syncedCopies(0);
+  event_log_attrs.set_maxWritesInFlight(60);
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
@@ -2739,7 +2715,7 @@ TEST_P(RebuildingTest, DisableDataLogRebuildShardsAborted) {
           .setParam("--rebuild-store-durability", "async_write")
           .setParam("--disable-data-log-rebuilding", "true")
           .setLogConfig(log_config)
-          .setEventLogConfig(event_log_config)
+          .setEventLogAttributes(event_log_attrs)
           .eventLogMode(
               IntegrationTestUtils::ClusterFactory::EventLogMode::SNAPSHOTTED)
           .setNumLogs(42)
@@ -2812,12 +2788,11 @@ TEST_P(RebuildingTest, DisableDataLogRebuildNodeFailed) {
   log_config.maxWritesInFlight = 30;
   log_config.backlogDuration = maxBacklogDuration;
 
-  Configuration::Log event_log_config;
-  event_log_config.replicationFactor = 3;
-  event_log_config.extraCopies = 0;
-  event_log_config.syncedCopies = 0;
-  event_log_config.rangeName = "event_log";
-  event_log_config.maxWritesInFlight = 30;
+  logsconfig::LogAttributes event_log_attrs;
+  event_log_attrs.set_replicationFactor(3);
+  event_log_attrs.set_extraCopies(0);
+  event_log_attrs.set_syncedCopies(0);
+  event_log_attrs.set_maxWritesInFlight(30);
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
@@ -2825,7 +2800,7 @@ TEST_P(RebuildingTest, DisableDataLogRebuildNodeFailed) {
           .setParam("--rebuild-store-durability", "async_write")
           .setParam("--disable-data-log-rebuilding", "true")
           .setLogConfig(log_config)
-          .setEventLogConfig(event_log_config)
+          .setEventLogAttributes(event_log_attrs)
           .eventLogMode(
               IntegrationTestUtils::ClusterFactory::EventLogMode::SNAPSHOTTED)
           .setNumLogs(42)

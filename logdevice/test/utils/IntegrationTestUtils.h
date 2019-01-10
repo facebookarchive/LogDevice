@@ -187,7 +187,7 @@ class ClusterFactory {
    * auto cluster = IntegrationTestUtils::ClusterFactory()
    *  .apply(commonOptions)
    *  .setLogConfig(log_config)
-   *  .setEventLogConfig(log_config)
+   *  .setEventLogAttributes(log_attrs)
    *  .setNumLogs(1)
    *  .create(nnodes);
    */
@@ -227,6 +227,13 @@ class ClusterFactory {
   ClusterFactory& setEventLogAttributes(logsconfig::LogAttributes attrs);
 
   /**
+   * Set the attributes for the internal event log delta.
+   * NOTE: unlike setEventLogAttributes() above, does not set attributes
+   * for the "event_log_snapshots" log.
+   */
+  ClusterFactory& setEventLogDeltaAttributes(logsconfig::LogAttributes attrs);
+
+  /**
    * Enables LogsConfigManager for clusters. Strongly recommend also calling
    * useHashBasedSequencerAssignment(), especially if creating log groups or
    * directories after startup, since that will:
@@ -235,13 +242,6 @@ class ClusterFactory {
    * c) wait for all nodes to be marked as ALIVE via gossip
    */
   ClusterFactory& enableLogsConfigManager();
-
-  /**
-   * Sets configuration for the internal log "event_log_deltas".
-   * NOTE: Unlike setEventLogAttributes, does not set configuration for
-   * "event_log_snapshots".
-   */
-  ClusterFactory& setEventLogConfig(Configuration::Log log_config);
 
   /**
    * Sets the metadata log config to use for logs when using the simple factory
