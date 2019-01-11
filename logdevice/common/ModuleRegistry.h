@@ -71,7 +71,8 @@ class ModuleRegistry final {
   Module* createOrGet(const std::string& name);
 
   /*
-   * Executes given callback on all modules in the map
+   * Executes given callback on all modules in the map, with the mutex locked.
+   * `visitor` must not do any calls to ModuleRegistry or they will deadlock
    */
   void applyToAll(const std::function<void(Module&)>& visitor);
 

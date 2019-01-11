@@ -272,15 +272,26 @@ void addLogLevelOverrides(const LogLevelMap& map) {
 
 void setLogLevelOverrides(LogLevelMap map) {
   auto& reg = ModuleRegistry::instance();
+  std::vector<std::pair<Module*, Level>> changes;
   reg.applyToAll([&](Module& mod) {
     auto it = map.find(mod.getName());
+
+    // Can't call setLogLevelOverrideImpl() from here because we're holding
+    // ModuleRegistry's mutex, and setLogLevelOverrideImpl()'s ld_info() calls
+    // will try to grab that mutex too. Instead, enqueue the needed change and
+    // execute it after releasing the mutex. It is safe to do so because
+    // modules are never destroyed and removed from the registry.
     if (it == map.end()) {
-      setLogLevelOverrideImpl(mod, Level::NONE);
+      changes.emplace_back(&mod, Level::NONE);
     } else {
-      setLogLevelOverrideImpl(mod, it->second);
+      changes.emplace_back(&mod, it->second);
       map.erase(it);
     }
   });
+
+  for (const auto& p : changes) {
+    setLogLevelOverrideImpl(*p.first, p.second);
+  }
 
   for (const auto& it : map) {
     setLogLevelOverrideImpl(*reg.createOrGet(it.first), it.second);
