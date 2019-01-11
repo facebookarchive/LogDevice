@@ -272,7 +272,7 @@ enum ServiceState {
    * This node is isolated from the rest of the cluster. This state means that
    * the node that reported the response is also isolated.
    */
-  ISOLATED = 4,
+  // ISOLATED = 4, // NOT SUPPORTED
   /**
    * Node is down
    */

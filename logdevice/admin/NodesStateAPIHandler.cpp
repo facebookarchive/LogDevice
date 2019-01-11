@@ -12,7 +12,6 @@
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/event_log/EventLogRebuildingSet.h"
-#include "logdevice/server/FailureDetector.h"
 #include "logdevice/server/Server.h"
 
 using namespace facebook::logdevice;
@@ -34,14 +33,11 @@ void NodesStateAPIHandler::toNodeState(thrift::NodeState& out,
   }
   auto server_config = processor_->config_->getServerConfig();
   const ClusterState* cluster_state = processor_->cluster_state_.get();
-  node_index_t my_node_index = server_config->getMyNodeID().index();
   // We have the node, let's fill the data that we have into NodeState
   fillNodeState(out,
-                my_node_index,
                 index,
                 node,
                 rebuilding_set.get(),
-                failure_detector_,
                 cluster_state);
 }
 

@@ -202,11 +202,9 @@ void fillSocketAddress(thrift::SocketAddress& out, const Sockaddr& addr) {
 }
 
 void fillNodeState(thrift::NodeState& out,
-                   node_index_t my_node_index,
                    node_index_t node_index,
                    const Node& node,
                    const EventLogRebuildingSet* rebuilding_set,
-                   const FailureDetector* failure_detector,
                    const ClusterState* cluster_state) {
   out.set_node_index(node_index);
 
@@ -225,14 +223,6 @@ void fillNodeState(thrift::NodeState& out,
       case ClusterStateNodeState::FAILING_OVER:
         daemon_state = thrift::ServiceState::SHUTTING_DOWN;
         break;
-    }
-
-    // We can only detect that this node is isolated if we have a failure
-    // detector running. Note that A standalone admin server doesn't have a
-    // failure detector.
-    if (failure_detector && failure_detector->isIsolated() &&
-        node_index == my_node_index) {
-      daemon_state = thrift::ServiceState::ISOLATED;
     }
     out.set_daemon_state(daemon_state);
   }

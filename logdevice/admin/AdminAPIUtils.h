@@ -46,11 +46,9 @@ thrift::ShardDataHealth toShardDataHealth(AuthoritativeStatus auth_status,
                                           bool has_dirty_ranges);
 
 void fillNodeState(thrift::NodeState& out,
-                   node_index_t my_node_index,
                    node_index_t node_index,
                    const configuration::Node& node,
                    const EventLogRebuildingSet* rebuilding_set,
-                   const FailureDetector* failure_detector,
                    const ClusterState* cluster_state);
 
 ShardID resolveShardOrNode(const thrift::ShardID& shard,

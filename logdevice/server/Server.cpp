@@ -939,13 +939,6 @@ bool Server::initAdminServer() {
                                            params_->getServerSettings(),
                                            params_->getAdminServerSettings(),
                                            params_->getStats());
-      if (processor_->isFailureDetectorRunning() &&
-          processor_->failure_detector_) {
-        ld_info("FailureDetector is enabled, Admin API will return detailed "
-                "gossip information.");
-        admin_server_handle_->setFailureDetector(
-            processor_->failure_detector_.get());
-      }
       if (sharded_store_) {
         admin_server_handle_->setShardedRocksDBStore(sharded_store_.get());
       }

@@ -13,7 +13,6 @@
 #include "logdevice/server/ServerSettings.h"
 
 namespace facebook { namespace logdevice {
-class FailureDetector;
 class Processor;
 class ServerSettings;
 class SettingsUpdater;
@@ -22,10 +21,6 @@ class StatsHolder;
 
 class AdminAPIHandlerBase : public virtual thrift::AdminAPISvIf {
  public:
-  virtual void setFailureDetector(FailureDetector* failure_detector) {
-    failure_detector_ = failure_detector;
-  }
-
   virtual void
   setShardedRocksDBStore(ShardedRocksDBLocalLogStore* sharded_store) {
     sharded_store_ = sharded_store;
@@ -48,7 +43,6 @@ class AdminAPIHandlerBase : public virtual thrift::AdminAPISvIf {
   StatsHolder* stats_holder_{nullptr};
 
  public:
-  FailureDetector* failure_detector_{nullptr};
   ShardedRocksDBLocalLogStore* sharded_store_{nullptr};
 };
 }} // namespace facebook::logdevice

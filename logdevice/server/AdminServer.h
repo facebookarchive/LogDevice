@@ -13,7 +13,6 @@
 
 namespace facebook { namespace logdevice {
 
-class FailureDetector;
 class Processor;
 class SettingsUpdater;
 class ShardedRocksDBLocalLogStore;
@@ -48,14 +47,6 @@ class AdminServer {
   virtual void stop() = 0;
   virtual ~AdminServer() {}
 
-  /**
-   * Ownership information:
-   *  FailureDetector is owned by the ServerProcessor, we only hold a pointer to
-   *  it here, we always destroy the admin server before we shutdown the
-   *  processor, thus ensuring that FailureDetector lifetime is longer than
-   *  AdminServer.
-   */
-  virtual void setFailureDetector(FailureDetector* failure_detector) = 0;
   virtual void
   setShardedRocksDBStore(ShardedRocksDBLocalLogStore* sharded_store) = 0;
 };
