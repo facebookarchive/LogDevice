@@ -788,6 +788,7 @@ TEST_F(LogsConfigIntegrationTest, SetAttributesLogGroupClash) {
                            logid_range_t(logid_t(1), logid_t(1)),
                            client::LogAttributes().with_replicationFactor(2),
                            false);
+  ASSERT_EQ(E::ID_CLASH, err);
 
   for (int node_index = 0; node_index < node_count; ++node_index) {
     IntegrationTestUtils::Node& node = cluster->getNode(node_index);
