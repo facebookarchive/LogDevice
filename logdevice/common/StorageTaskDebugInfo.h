@@ -49,7 +49,6 @@ struct StorageTaskDebugInfo {
   std::string durability;
   // Thread-specific information
   folly::Optional<bool> is_write_queue;
-  folly::Optional<size_t> sequence_number;
   // Task-specific information
   folly::Optional<logid_t> log_id;
   folly::Optional<lsn_t> lsn;

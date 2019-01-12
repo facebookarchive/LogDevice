@@ -24,7 +24,13 @@ class SlowStorageTasksTracer : SampledTracer {
  public:
   explicit SlowStorageTasksTracer(std::shared_ptr<TraceLogger> logger);
 
-  void traceStorageTask(const StorageTaskDebugInfo&);
+  void traceStorageTask(std::function<StorageTaskDebugInfo()> builder,
+                        double execution_time_ms);
+
+  folly::Optional<double> getDefaultSamplePercentage() const override {
+    // By default send a sample every 100 seconds of execution time.
+    return .001; // 100% / 100e3
+  }
 };
 
 }} // namespace facebook::logdevice

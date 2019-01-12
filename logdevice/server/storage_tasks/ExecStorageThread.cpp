@@ -33,6 +33,8 @@ void ExecStorageThread::run() {
     set_io_priority_of_this_thread(settings->slow_ioprio.value());
   }
 
+  SlowStorageTasksTracer slow_task_tracer{pool_->getTraceLogger()};
+
   while (shouldProcessTasks_) {
     std::unique_ptr<StorageTask> task = pool_->blockingGetTask(thread_type_);
     task->setStorageThread(this);
@@ -78,16 +80,16 @@ void ExecStorageThread::run() {
       }
     }
 
-    // If we are running on a slow thread, post samples to Scuba
-    if (task->getThreadType() == StorageTask::ThreadType::SLOW) {
-      SlowStorageTasksTracer logger{pool_->getTraceLogger()};
-      StorageTaskDebugInfo info = task->getDebugInfo();
-      info.execution_start_time =
-          toSystemTimestamp(execution_start_time).toMilliseconds();
-      info.execution_end_time =
-          toSystemTimestamp(execution_end_time).toMilliseconds();
-      logger.traceStorageTask(info);
-    }
+    slow_task_tracer.traceStorageTask(
+        [&] {
+          StorageTaskDebugInfo info = task->getDebugInfo();
+          info.execution_start_time =
+              toSystemTimestamp(execution_start_time).toMilliseconds();
+          info.execution_end_time =
+              toSystemTimestamp(execution_end_time).toMilliseconds();
+          return info;
+        },
+        /* execution_time_ms */ usec / 1000);
 
     /*
      * TODO (T37204962):

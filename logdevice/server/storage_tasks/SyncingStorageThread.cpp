@@ -10,6 +10,7 @@
 #include <chrono>
 #include <deque>
 
+#include "logdevice/common/SlowStorageTasksTracer.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/server/locallogstore/LocalLogStore.h"
@@ -52,6 +53,9 @@ void SyncingStorageThread::stopProcessingTasks() {
 }
 
 void SyncingStorageThread::run() {
+  pool_->getLocalLogStore().onStorageThreadStarted();
+  SlowStorageTasksTracer slow_task_tracer{pool_->getTraceLogger()};
+
   std::deque<std::unique_ptr<StorageTask>> batch;
   bool stop = false;
   auto got_task = [&](std::unique_ptr<StorageTask> task) {
@@ -116,17 +120,37 @@ void SyncingStorageThread::run() {
 
     if (!batch.empty()) {
       using namespace std::chrono;
-      auto t1 = steady_clock::now();
+      auto start_time = steady_clock::now();
       int rv = pool_->getLocalLogStore().sync(Durability::ASYNC_WRITE);
+      auto end_time = steady_clock::now();
       if (rv != 0) {
         // Handling this properly would require expanding the StorageTask
         // interface further to allow this failure.  Seems unlikely?
         RATELIMIT_ERROR(std::chrono::seconds(60), 1, "Sync failed!?");
       }
+
+      uint64_t duration_ms =
+          duration_cast<milliseconds>(end_time - start_time).count();
       ld_debug("Shard %d: Synced %zu tasks in %ld ms",
                pool_->getLocalLogStore().getShardIdx(),
                batch.size(),
-               duration_cast<milliseconds>(steady_clock::now() - t1).count());
+               duration_ms);
+      slow_task_tracer.traceStorageTask(
+          [&] {
+            StorageTaskDebugInfo info(
+                pool_->getShardIdx(),
+                /* priority */ "syncing",
+                /* thread_type */ "syncing",
+                /* task_type */ "sync(" + toString(batch[0]->getType()) + ")",
+                toSystemTimestamp(batch[0]->enqueue_time_).toMilliseconds(),
+                durability_to_string(batch[0]->durability()));
+            info.execution_start_time =
+                toSystemTimestamp(start_time).toMilliseconds();
+            info.execution_end_time =
+                toSystemTimestamp(end_time).toMilliseconds();
+            return info;
+          },
+          duration_ms);
 
       for (auto& ptr : batch) {
         if (ptr) {

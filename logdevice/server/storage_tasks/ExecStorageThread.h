@@ -15,8 +15,6 @@
 
 namespace facebook { namespace logdevice {
 
-class TraceLogger;
-
 /**
  * @file Repeatedly pulls tasks from the StorageThreadPool's task queue and
  * executes them.
@@ -60,9 +58,6 @@ class ExecStorageThread : public StorageThread {
 
   // Index within the StorageThreadPool (used just for naming)
   int idx_;
-
-  // Trace logger
-  std::shared_ptr<TraceLogger> trace_logger_;
 
   bool shouldProcessTasks_ = true;
 };

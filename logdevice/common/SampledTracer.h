@@ -33,16 +33,54 @@ class SampledTracer {
   virtual ~SampledTracer(){};
 
  protected:
+  // @param force
+  //   If true, force publishing the sample regardless of the sampling rate.
+  // @param weight_multiplier
+  //   Relative probability of logging this sample. Use it to log more
+  //   important events more often.
+  //   Should be >= 1 most of the time. E.g. duration in ms is ok, but duration
+  //   in seconds is too small. At the same time, avoid making it bigger than
+  //   necessary, because sampling is, potentially confusingly, insensitive to
+  //   sample percentage changes above 1/weight_multiplier; see comment inside.
+  //
+  //   Example usages:
+  //    * If a sample represents a potentially slow operation, you may want to
+  //      set weight_multiplier to operation's execution time in milliseconds.
+  //      This would make the exported data representative of how most of the
+  //      time is spent rather than what the most frequent operations look like.
+  //    * Set weight_multiplier to record's size in kilobytes.
+  //      This would log more samples for bigger records, which may be useful
+  //      e.g. if you're interested in space usage and most of the space is
+  //      used by rare big records.
   template <typename BuilderFn /*should return a std::unique_ptr<TraceSample>*/>
-  bool publish(const char* table, BuilderFn&& builder, bool force = false) {
+  bool publish(const char* table,
+               BuilderFn&& builder,
+               bool force = false,
+               double weight_multiplier = 1) {
     if (logger_) {
       // flipping the coin
-      bool isLogging = (force || shouldLog(table));
-      if (isLogging) {
-        std::unique_ptr<TraceSample> sample = builder();
-        logger_->pushSample(table, sampleRate(table), std::move(sample));
+      // Clamp multiplier to make sure we don't reject any samples when
+      // percentage() is set to 100.
+      weight_multiplier = std::max(1.0, weight_multiplier);
+      // Probability of logging this sample.
+      // Note that weight_multiplier may make it greater than 100%, which makes
+      // the responce to percentage() nonlinear; e.g. if weight_multiplier is
+      // record's size in bytes, and most records are ~1 KB in size,
+      // decreasing percentage from 100% to 0.1% will have almost no effect on
+      // the actual logging rate, but decreasing it below 0.1% will decrease
+      // the logging rate almost proportionally.
+      double pct = std::min(100.0, percentage(table) * weight_multiplier);
+      if (force) {
+        pct = 100;
       }
-      return isLogging;
+      bool should_log = folly::Random::randDouble(0, 100) < pct;
+      if (should_log) {
+        std::unique_ptr<TraceSample> sample = builder();
+        uint32_t sample_rate = (uint32_t)std::lround(std::min(
+            (double)std::numeric_limits<uint32_t>::max(), 100.0 / pct));
+        logger_->pushSample(table, sample_rate, std::move(sample));
+      }
+      return should_log;
     }
     return false;
   }
@@ -50,14 +88,6 @@ class SampledTracer {
   const std::shared_ptr<TraceLogger> logger_;
 
  private:
-  inline bool shouldLog(const char* table) {
-    return folly::Random::randDouble(0, 100) < percentage(table);
-  }
-
-  double sampleRate(const char* table) const {
-    return std::round(1 / (percentage(table) / 100.0));
-  }
-
   double percentage(const char* table) const {
     // if there's no logger, it makes no sense to sample
     if (!logger_) {

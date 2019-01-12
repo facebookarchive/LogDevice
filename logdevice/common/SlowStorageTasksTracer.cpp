@@ -18,8 +18,10 @@ SlowStorageTasksTracer::SlowStorageTasksTracer(
     : SampledTracer(std::move(logger)) {}
 
 void SlowStorageTasksTracer::traceStorageTask(
-    const StorageTaskDebugInfo& info) {
+    std::function<StorageTaskDebugInfo()> builder,
+    double execution_time_ms) {
   auto sample_builder = [&]() {
+    auto info = builder();
     auto sample = std::make_unique<TraceSample>();
 
     sample->addIntValue("shard_id", info.shard_id);
@@ -61,7 +63,10 @@ void SlowStorageTasksTracer::traceStorageTask(
     return sample;
   };
 
-  publish(SLOW_STORAGE_TASKS_TRACER, sample_builder);
+  publish(SLOW_STORAGE_TASKS_TRACER,
+          sample_builder,
+          /* force */ false,
+          execution_time_ms);
 }
 
 }} // namespace facebook::logdevice
