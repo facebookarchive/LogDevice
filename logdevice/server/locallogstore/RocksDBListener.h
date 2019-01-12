@@ -37,33 +37,11 @@ class RocksDBListener : public rocksdb::EventListener {
   RocksDBListener(StatsHolder* stats, size_t shard)
       : stats_(stats), shard_(shard) {}
 
-  void OnFlushCompleted(rocksdb::DB* db,
-                        const rocksdb::FlushJobInfo& flush_job_info) override;
-  void OnCompactionCompleted(rocksdb::DB* db,
-                             const rocksdb::CompactionJobInfo& ci) override;
   void OnTableFileCreated(const rocksdb::TableFileCreationInfo& info) override;
 
  private:
   StatsHolder* stats_;
   const size_t shard_;
-
-  // TableFileCreationInfo is passed from OnTableFileCreated() callback to
-  // flush and compaction callbacks through this queue. This is based on
-  // the following assumptions:
-  // - all file creation callbacks corresponding to a flush/compaction job
-  //   are called before the flush/compaction callback,
-  // - they are called on the same thread,
-  // - jobs on the same thread don't interleave.
-  folly::ThreadLocal<std::queue<rocksdb::TableFileCreationInfo>>
-      recently_created_files_;
-
-  static bool isDataCF(const std::string& cf_name);
-
-  void
-  onJobCompleted(const std::string& cf_name,
-                 const std::vector<std::string>& paths,
-                 PerShardHistograms::size_histogram_t& file_size_hist,
-                 PerShardHistograms::size_histogram_t& log_run_length_hist);
 };
 
 class RocksDBTablePropertiesCollector

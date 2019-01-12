@@ -23,99 +23,50 @@ using namespace RocksDBKeyFormat;
 static const char* LOGS_OF_SIZE_PREFIX = "ld.logs_of_size.";
 static const char* BYTES_WITH_RETENTION_PREFIX = "ld.bytes_with_retention.";
 
-void RocksDBListener::OnFlushCompleted(
-    rocksdb::DB* /*db*/,
-    const rocksdb::FlushJobInfo& flush_job_info) {
-  ld_check(stats_);
-  PER_SHARD_STAT_INCR(stats_, num_memtable_flush_completed, shard_);
-  if (!isDataCF(flush_job_info.cf_name)) {
-    PER_SHARD_STAT_INCR(stats_, num_metadata_memtable_flush_completed, shard_);
-    return;
-  }
-  ld_check(stats_);
-  onJobCompleted(flush_job_info.cf_name,
-                 {flush_job_info.file_path},
-                 stats_->get().per_shard_histograms->flushed_file_size,
-                 stats_->get().per_shard_histograms->flushed_log_run_length);
-}
-
-void RocksDBListener::OnCompactionCompleted(
-    rocksdb::DB* /*db*/,
-    const rocksdb::CompactionJobInfo& ci) {
-  if (!isDataCF(ci.cf_name)) {
-    return;
-  }
-  if (!ci.status.ok()) {
-    return;
-  }
-  ld_check(stats_);
-  onJobCompleted(ci.cf_name,
-                 ci.output_files,
-                 stats_->get().per_shard_histograms->compacted_file_size,
-                 stats_->get().per_shard_histograms->compacted_log_run_length);
-}
-
-bool RocksDBListener::isDataCF(const std::string& cf_name) {
-  return cf_name != "metadata";
-}
-
-void RocksDBListener::onJobCompleted(
-    const std::string& cf_name,
-    const std::vector<std::string>& paths,
-    PerShardHistograms::size_histogram_t& file_size_hist,
-    PerShardHistograms::size_histogram_t& log_run_length_hist) {
-  std::set<std::string> path_set(paths.begin(), paths.end());
-  for (; !recently_created_files_->empty(); recently_created_files_->pop()) {
-    const auto& info = recently_created_files_->front();
-    if (info.cf_name != cf_name || !path_set.count(info.file_path)) {
-      RATELIMIT_INFO(
-          std::chrono::seconds(10),
-          1,
-          "RocksDB told us that it created sst file %s but didn't call a "
-          "corresponding flush/compaction callback right after. Maybe column "
-          "family %s was dropped during flush/compaction. This should be rare.",
-          info.file_path.c_str(),
-          info.cf_name.c_str());
-      continue;
-    }
-    ld_check(path_set.count(info.file_path));
-    path_set.erase(info.file_path);
-    file_size_hist.add(shard_, info.file_size);
-    if (auto out_hist = log_run_length_hist.get(shard_)) {
-      out_hist->merge(
-          SizeHistogram(info.table_properties.user_collected_properties,
-                        LOGS_OF_SIZE_PREFIX));
-    }
-  }
-  if (!path_set.empty()) {
-    RATELIMIT_WARNING(
-        std::chrono::seconds(10),
-        1,
-        "Flush/compaction callback called for files %s without corresponding "
-        "callbacks for creation of these files. Something's probably changed "
-        "in how rocksdb calls into Listener, please investigate.",
-        toString(path_set).c_str());
-  }
-}
-
 void RocksDBListener::OnTableFileCreated(
     const rocksdb::TableFileCreationInfo& info) {
+  ld_check(stats_);
+
   if (info.file_path == "(nil)") {
     // This happens when compaction's output is empty, so compaction doesn't
     // produce a file. In this case rocksdb calls OnTableFileCreated() anyway,
     // but the corresponding OnCompactionCompleted() call has empty list of
     // output files.
+    // Let's ignore such compactions.
     return;
   }
-  recently_created_files_->push(info);
-  if (recently_created_files_->size() > 1000) {
-    RATELIMIT_WARNING(
-        std::chrono::seconds(10),
-        1,
-        "Lots of sst files were created without corresponding flush/compaction "
-        "callbacks being called. Something's probably changed in how rocksdb "
-        "calls into Listener, please investigate.");
-    recently_created_files_->pop();
+  if (info.cf_name == "metadata") {
+    if (info.reason == rocksdb::TableFileCreationReason::kFlush) {
+      PER_SHARD_STAT_INCR(
+          stats_, num_metadata_memtable_flush_completed, shard_);
+    }
+    // We're not interested in other stats for metadata flushes/compactions
+    // for now.
+    return;
+  }
+
+  PerShardHistograms::size_histogram_t* file_size_hist = nullptr;
+  PerShardHistograms::size_histogram_t* log_run_length_hist = nullptr;
+
+  if (info.reason == rocksdb::TableFileCreationReason::kFlush) {
+    PER_SHARD_STAT_INCR(stats_, num_memtable_flush_completed, shard_);
+
+    file_size_hist = &stats_->get().per_shard_histograms->flushed_file_size;
+    log_run_length_hist =
+        &stats_->get().per_shard_histograms->flushed_log_run_length;
+  } else if (info.reason == rocksdb::TableFileCreationReason::kCompaction) {
+    file_size_hist = &stats_->get().per_shard_histograms->compacted_file_size;
+    log_run_length_hist =
+        &stats_->get().per_shard_histograms->compacted_log_run_length;
+  }
+
+  if (file_size_hist != nullptr) {
+    file_size_hist->add(shard_, info.file_size);
+    if (auto out_hist = log_run_length_hist->get(shard_)) {
+      out_hist->merge(
+          SizeHistogram(info.table_properties.user_collected_properties,
+                        LOGS_OF_SIZE_PREFIX));
+    }
   }
 }
 
