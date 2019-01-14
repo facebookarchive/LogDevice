@@ -22,7 +22,7 @@ set_target_properties(common
 file(GLOB test_hfiles "${LOGDEVICE_COMMON_DIR}/test/*.h")
 file(GLOB test_files "${LOGDEVICE_COMMON_DIR}/test/*.cpp")
 
-add_library(common_test_util
+add_library(common_test_util STATIC
   "test/TestUtil.h"
   "test/TestUtil.cpp"
   "test/NodeSetTestUtil.h"
