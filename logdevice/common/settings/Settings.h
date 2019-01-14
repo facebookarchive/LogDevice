@@ -50,6 +50,8 @@ struct hash<facebook::logdevice::MessageType> {
 
 namespace facebook { namespace logdevice {
 
+dbg::Level parse_log_level(const std::string& val);
+
 struct StorageTaskShare {
   uint64_t share = 1;
 };

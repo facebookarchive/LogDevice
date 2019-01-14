@@ -218,19 +218,19 @@ static SockaddrSet parse_sockaddrs(const std::string& val) {
   return {elements, anonymous_unix_socket_present};
 }
 
-static dbg::Level parse_log_level(const std::string& val) {
-  dbg::Level level = dbg::parseLoglevel(val.c_str());
-  if (level == dbg::Level::NONE) {
+dbg::Level parse_log_level(const std::string& val) {
+  const auto level = dbg::tryParseLoglevel(val.c_str());
+  if (!level.hasValue()) {
     std::array<char, 1024> buf;
     snprintf(buf.data(),
              buf.size(),
              "Invalid value for --loglevel: %s. "
              "Expected one of: critical, error, warning, notify, "
-             "info, debug, spew",
+             "info, debug, spew, none",
              val.c_str());
     throw boost::program_options::error(std::string(buf.data()));
   }
-  return level;
+  return level.value();
 }
 
 static int parse_scd_copyset_reordering(const std::string& val) {

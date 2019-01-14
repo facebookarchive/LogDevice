@@ -644,6 +644,7 @@ void ld_check_fail_impl(CheckType type,
   }
 }
 
+// @deprecated because it doesn't parse dbg::Level::NONE, use tryParseLoglevel
 Level parseLoglevel(const char* value) {
   static_assert((unsigned)Level::NONE == 0, "dbg::Level::NONE must be 0");
   for (unsigned i = 0; i < sizeof(logLevelNames) / sizeof(logLevelNames[0]);
@@ -654,6 +655,16 @@ Level parseLoglevel(const char* value) {
   }
 
   return Level::NONE;
+}
+
+folly::Optional<Level> tryParseLoglevel(const char* value) {
+  static_assert((unsigned)Level::NONE == 0, "dbg::Level::NONE must be 0");
+  for (int i = 0; i < logLevelNames.size(); ++i) {
+    if (strcmp(value, logLevelNames[i]) == 0) {
+      return static_cast<Level>(i);
+    }
+  }
+  return folly::none;
 }
 
 const char* loglevelToString(Level loglevel) {

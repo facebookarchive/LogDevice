@@ -13,6 +13,7 @@
 #include <unordered_map>
 
 #include <folly/Likely.h>
+#include <folly/Optional.h>
 
 #include "logdevice/common/EBRateLimiter.h"
 #include "logdevice/common/ModuleRegistry.h"
@@ -87,6 +88,8 @@ void logDefer(const char* cluster,
  * is invalid.
  */
 Level parseLoglevel(const char* value);
+
+folly::Optional<Level> tryParseLoglevel(const char* value);
 
 /**
  * Returns a string description of @param loglevel (one of "critical", "error",

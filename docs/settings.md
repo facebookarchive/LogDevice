@@ -56,10 +56,10 @@ sidebar_label: Settings
 | command-port | TCP port on which the server listens to for admin commands, supports commands over SSL | 5440 | requires&nbsp;restart, server&nbsp;only |
 | enable-hh-wheel-backed-timers | Enables the new version of timers which run on a different threadand use HHWheelTimer backend. | true | requires&nbsp;restart |
 | enable-store-histograms-calculations | Enables estimation of store timeouts per worker per node. | false | server&nbsp;only |
-| external-loglevel | One of the following: critical, error, warning, info, debug | error | server&nbsp;only |
+| external-loglevel | One of the following: critical, error, warning, info, debug, none | critical | server&nbsp;only |
 | findkey-timeout | Findkey API call timeout. If omitted the client timeout will be used. |  | client&nbsp;only |
 | log-file | write server error log to specified file instead of stderr |  | server&nbsp;only |
-| loglevel | One of the following: critical, error, warning, info, debug | info | server&nbsp;only |
+| loglevel | One of the following: critical, error, warning, info, debug, none | info | server&nbsp;only |
 | logsconfig-timeout | Timeout for LogsConfig API requests. If omitted the client timeout will be used. |  | client&nbsp;only |
 | max-nodes | maximum number of nodes in the cluster. Used for sizing data structures of the failure detector. | 512 | requires&nbsp;restart, server&nbsp;only |
 | meta-api-timeout | Timeout for trims/isLogEmpty/tailLSN/datasize API/etc. If omitted the client timeout will be used. |  | client&nbsp;only |

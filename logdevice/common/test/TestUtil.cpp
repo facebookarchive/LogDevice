@@ -355,11 +355,7 @@ folly::Optional<dbg::Level> getLogLevelFromEnv() {
   if (env == nullptr) {
     return folly::none;
   }
-  auto lvl = dbg::parseLoglevel(env);
-  if (lvl == dbg::Level::NONE) {
-    return folly::none;
-  }
-  return lvl;
+  return dbg::tryParseLoglevel(env);
 }
 
 std::chrono::milliseconds getDefaultTestTimeout() {
