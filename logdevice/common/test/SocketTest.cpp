@@ -106,6 +106,14 @@ TEST_F(ServerSocketTest, Handshake) {
   EXPECT_TRUE(handshaken());
 }
 
+TEST_F(ClientSocketTest, GetDscp) {
+  int rv = socket_->connect();
+  ASSERT_EQ(0, rv);
+
+  socket_->setDSCP(4);
+  EXPECT_EQ(4 << 2, SocketTest::getDscp());
+}
+
 // Verify that PEER CLOSED on server socket is translated to
 // E::SHUTDOWN when peer_shuttingdown flag is set.
 TEST_F(ClientSocketTest, PeerShutdown) {

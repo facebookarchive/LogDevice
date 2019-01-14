@@ -967,6 +967,12 @@ struct Settings : public SettingsBundle {
   // Use ZSTD compression to compress event log snapshots.
   bool event_log_snapshot_compression;
 
+  // Default DSCP value for server sockets at the Sender.
+  uint8_t server_dscp_default;
+
+  // Default DSCP value for client sockets at the Sender.
+  uint8_t client_dscp_default;
+
   // Disable trimming the event log.
   bool disable_event_log_trimming;
 

@@ -2116,6 +2116,23 @@ TEST(ConfigurationTest, InternalLogCorrect) {
   ASSERT_NE(nullptr, config->serverConfig());
 }
 
+TEST(ConfigurationTest, DefaultDscp) {
+  std::shared_ptr<Configuration> config(
+      Configuration::fromJsonFile(TEST_CONFIG_FILE("dscp_default.conf")));
+  ASSERT_NE(nullptr, config);
+  ASSERT_NE(nullptr, config->serverConfig());
+  const std::string server_default_dscp = config->serverConfig()
+                                              ->getServerSettingsConfig()
+                                              .find("server-default-dscp")
+                                              ->second;
+  EXPECT_STREQ("34", server_default_dscp.c_str());
+  const std::string client_default_dscp = config->serverConfig()
+                                              ->getClientSettingsConfig()
+                                              .find("client-default-dscp")
+                                              ->second;
+  EXPECT_STREQ("45", client_default_dscp.c_str());
+}
+
 TEST(ConfigurationTest, MetaDataLogsConfig) {
   auto get_config =
       [](std::string metadata_log_fields) -> std::unique_ptr<Configuration> {

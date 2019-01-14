@@ -243,7 +243,8 @@ Socket::Socket(int fd,
                         &tcp_rcvbuf_size_,
                         // This is only used if conntype_ == SSL, tells libevent
                         // we are in a server context
-                        BUFFEREVENT_SSL_ACCEPTING);
+                        BUFFEREVENT_SSL_ACCEPTING,
+                        getSettings().client_dscp_default);
   if (!bev_) {
     throw ConstructorFailed(); // err is already set
   }
@@ -319,7 +320,8 @@ struct bufferevent* Socket::newBufferevent(int sfd,
                                            sa_family_t sa_family,
                                            size_t* sndbuf_size_out,
                                            size_t* rcvbuf_size_out,
-                                           bufferevent_ssl_state ssl_state) {
+                                           bufferevent_ssl_state ssl_state,
+                                           const uint8_t default_dcsp) {
   int rv;
 
   ld_check(sa_family == AF_INET || sa_family == AF_INET6 ||
@@ -358,8 +360,12 @@ struct bufferevent* Socket::newBufferevent(int sfd,
 
   int tcp_sndbuf_size = 0, tcp_rcvbuf_size = 0;
 
-  deps_->configureSocket(
-      !peer_sockaddr_.isUnixAddress(), sfd, &tcp_sndbuf_size, &tcp_rcvbuf_size);
+  deps_->configureSocket(!peer_sockaddr_.isUnixAddress(),
+                         sfd,
+                         &tcp_sndbuf_size,
+                         &tcp_rcvbuf_size,
+                         sa_family,
+                         default_dcsp);
 
   if (isSSL()) {
     ld_check(!ssl_context_);
@@ -496,6 +502,10 @@ int Socket::connect() {
 }
 
 int Socket::doConnectAttempt() {
+  const uint8_t default_dscp = peer_name_.isClientAddress()
+      ? getSettings().client_dscp_default
+      : getSettings().server_dscp_default;
+
   ld_check(!connected_);
   ld_check(!bev_);
   bev_ = newBufferevent(-1,
@@ -504,7 +514,8 @@ int Socket::doConnectAttempt() {
                         &tcp_rcvbuf_size_,
                         // This is only used if conntype_ == SSL, tells libevent
                         // we are in a client context
-                        BUFFEREVENT_SSL_CONNECTING);
+                        BUFFEREVENT_SSL_CONNECTING,
+                        default_dscp);
 
   if (!bev_) {
     return -1; // err is already set
@@ -947,21 +958,7 @@ void Socket::onConnectAttemptTimeout() {
 
 void Socket::setDSCP(uint8_t dscp) {
   int rc = 0;
-
-  switch (peer_sockaddr_.family()) {
-    case AF_INET: {
-      int ip_tos = dscp << 2;
-      rc = setsockopt(fd_, IPPROTO_IP, IP_TOS, &ip_tos, sizeof(ip_tos));
-      break;
-    }
-    case AF_INET6: {
-      int tclass = dscp << 2;
-      rc = setsockopt(fd_, IPPROTO_IPV6, IPV6_TCLASS, &tclass, sizeof(tclass));
-      break;
-    }
-    default:
-      break;
-  }
+  rc = deps_->setDSCP(fd_, peer_sockaddr_.family(), dscp);
 
   // DSCP is used for external traffic shaping. Allow the connection to
   // continue to operate, but warn about the failure.
@@ -2590,7 +2587,9 @@ NodeID SocketDependencies::getMyNodeID() {
 void SocketDependencies::configureSocket(bool is_tcp,
                                          int fd,
                                          int* snd_out,
-                                         int* rcv_out) {
+                                         int* rcv_out,
+                                         sa_family_t sa_family,
+                                         const uint8_t default_dscp) {
   int sndbuf_size, rcvbuf_size;
   int rv;
   socklen_t optlen;
@@ -2713,6 +2712,33 @@ void SocketDependencies::configureSocket(bool is_tcp,
     }
   }
 #endif
+  rv = setDSCP(fd, sa_family, default_dscp);
+  if (rv != 0) {
+    ld_error(
+        "DSCP(%x) configuration failed: %s", default_dscp, strerror(errno));
+  }
+}
+
+int SocketDependencies::setDSCP(int fd,
+                                sa_family_t sa_family,
+                                const uint8_t default_dscp) {
+  int rv = 0;
+  switch (sa_family) {
+    case AF_INET: {
+      int ip_tos = default_dscp << 2;
+      rv = setsockopt(fd, IPPROTO_IP, IP_TOS, &ip_tos, sizeof(ip_tos));
+      break;
+    }
+    case AF_INET6: {
+      int tclass = default_dscp << 2;
+      rv = setsockopt(fd, IPPROTO_IPV6, IPV6_TCLASS, &tclass, sizeof(tclass));
+      break;
+    }
+    default:
+      rv = 0;
+      break;
+  }
+  return rv;
 }
 
 ResourceBudget& SocketDependencies::getConnBudgetExternal() {

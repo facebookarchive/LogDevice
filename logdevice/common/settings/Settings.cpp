@@ -2226,6 +2226,24 @@ void Settings::defineSettings(SettingEasyInit& init) {
        SERVER | CLIENT,
        SettingsCategory::Rebuilding);
 
+  init("server-default-dscp",
+       &server_dscp_default,
+       "0",
+       parse_validate_range<uint8_t>(0, 63),
+       "Use default DSCP to setup to server sockets at Sender."
+       "Range was defined by https://tools.ietf.org/html/rfc4594#section-1.4.4",
+       SERVER | REQUIRES_RESTART,
+       SettingsCategory::Configuration);
+
+  init("client-default-dscp",
+       &client_dscp_default,
+       "0",
+       parse_validate_range<uint8_t>(0, 63),
+       "Use default DSCP to setup to client sockets at Sender."
+       "Range was defined by https://tools.ietf.org/html/rfc4594#section-1.4.4",
+       CLIENT | REQUIRES_RESTART,
+       SettingsCategory::Configuration);
+
   init("disable-event-log-trimming",
        &disable_event_log_trimming,
        "false",

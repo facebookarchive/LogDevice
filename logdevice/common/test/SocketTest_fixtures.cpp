@@ -8,6 +8,9 @@
 
 #include "logdevice/common/test/SocketTest_fixtures.h"
 
+#include <sys/socket.h>
+#include <sys/types.h>
+
 namespace facebook { namespace logdevice {
 
 const Settings& TestSocketDependencies::getSettings() const {
@@ -231,7 +234,9 @@ NodeID TestSocketDependencies::getDestinationNodeID() {
 void TestSocketDependencies::configureSocket(bool /*is_tcp*/,
                                              int /*fd*/,
                                              int* /*snd_out*/,
-                                             int* /*rcv_out*/) {}
+                                             int* /*rcv_out*/,
+                                             sa_family_t /*sa_family*/,
+                                             const uint8_t /*default_dscp*/) {}
 
 ResourceBudget& TestSocketDependencies::getConnBudgetExternal() {
   return owner_->conn_budget_external_;
@@ -264,6 +269,29 @@ bool TestSocketDependencies::authenticationEnabled() {
 void TestSocketDependencies::onStartedRunning(RunState /*state*/) {}
 
 void TestSocketDependencies::onStoppedRunning(RunState /*prev_state*/) {}
+
+//
+
+int SocketTest::getDscp() {
+  int dscp = 0;
+  unsigned int dscplen = sizeof(dscp);
+  int rc = 0;
+  switch (socket_->peer_sockaddr_.family()) {
+    case AF_INET: {
+      rc = getsockopt(socket_->fd_, IPPROTO_IP, IP_TOS, &dscp, &dscplen);
+      break;
+    }
+    case AF_INET6: {
+      rc = getsockopt(socket_->fd_, IPPROTO_IPV6, IPV6_TCLASS, &dscp, &dscplen);
+      break;
+    }
+    default:
+      EXPECT_FALSE(
+          "Please implement this if you add some other socket family support");
+  }
+  EXPECT_EQ(0, rc);
+  return dscp;
+}
 
 FlowGroupTest::FlowGroupTest() {
   flow_group.setScope(nullptr, NodeLocationScope::ROOT);

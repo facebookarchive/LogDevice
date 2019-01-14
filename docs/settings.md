@@ -28,6 +28,7 @@ sidebar_label: Settings
 |-----------|-----------------|:---------:|-----------|
 | check-metadata-log-empty-timeout | Timeout for request that verifies that a metadata log does not already exist for a log that is presumed new and whose metadata provisioning has been initiated by a sequencer activation | 300s | server&nbsp;only |
 | client-config-fetch-allowed | If true, servers will be allowed to fetch configs from the client side of a connection during config synchronization. | true | server&nbsp;only |
+| client-default-dscp | Use default DSCP to setup to client sockets at Sender.Range was defined by https://tools.ietf.org/html/rfc4594#section-1.4.4 | 0 | requires&nbsp;restart, client&nbsp;only |
 | config-path | location of the cluster config file to use. Format: [file:]<path-to-config-file> or configerator:<configerator-path> |  | CLI&nbsp;only, requires&nbsp;restart, server&nbsp;only |
 | enable-logsconfig-manager | If true, logdeviced will load the logs configuration from the internal replicated storage and will ignore the logs section in the config file. This also enables the remote management API for logs config. | true |  |
 | file-config-update-interval | interval at which to poll config file for changes (if reading config from file on disk | 10000ms |  |
@@ -46,6 +47,7 @@ sidebar_label: Settings
 | sequencer-epoch-store-write-retry-delay | The retry delay for sequencer writing log metadata into the epoch store during log reconfiguration. | 5s..1min-2x | server&nbsp;only |
 | sequencer-historical-metadata-retry-delay | The retry delay for sequencer reading metadata log for historical epoch metadata during log reconfiguration. | 5s..1min-2x | server&nbsp;only |
 | sequencer-metadata-log-write-retry-delay | The retry delay for sequencer writing into its own metadata log during log reconfiguration. | 500ms..30s-2x | server&nbsp;only |
+| server-default-dscp | Use default DSCP to setup to server sockets at Sender.Range was defined by https://tools.ietf.org/html/rfc4594#section-1.4.4 | 0 | requires&nbsp;restart, server&nbsp;only |
 | zk-config-polling-interval | polling and retry interval for Zookeeper config source | 1000ms | CLI&nbsp;only |
 
 ## Core settings

@@ -110,7 +110,9 @@ class TestSocketDependencies : public SocketDependencies {
   virtual void configureSocket(bool is_tcp,
                                int fd,
                                int* snd_out,
-                               int* rcv_out) override;
+                               int* rcv_out,
+                               sa_family_t sa_family,
+                               const uint8_t default_dscp) override;
   virtual ResourceBudget& getConnBudgetExternal() override;
   virtual std::string getClusterName() override;
   virtual const std::string& getHELLOCredentials() override;
@@ -285,6 +287,8 @@ class SocketTest : public ::testing::Test {
   bool handshaken() const {
     return socket_->handshaken_;
   }
+
+  int getDscp();
 
   const int client_id_{1};
   const uint16_t max_proto_ = Compatibility::MAX_PROTOCOL_SUPPORTED;

@@ -784,7 +784,8 @@ class Socket : public TrafficShappingSocket {
                                      sa_family_t sa_family,
                                      size_t* sndbuf_size_out,
                                      size_t* rcvbuf_size_out,
-                                     bufferevent_ssl_state ssl_state);
+                                     bufferevent_ssl_state ssl_state,
+                                     const uint8_t default_dcsp);
 
   /**
    * Set bev_ read watermarks so that a read callback is triggered as
@@ -1200,7 +1201,15 @@ class SocketDependencies {
   virtual Message::Disposition onReceived(Message* msg, const Address& from);
   virtual void processDeferredMessageCompletions();
   virtual NodeID getMyNodeID();
-  virtual void configureSocket(bool is_tcp, int fd, int* snd_out, int* rcv_out);
+  virtual void configureSocket(bool is_tcp,
+                               int fd,
+                               int* snd_out,
+                               int* rcv_out,
+                               sa_family_t sa_family,
+                               const uint8_t default_dscp);
+  virtual int setDSCP(int fd,
+                      sa_family_t sa_family,
+                      const uint8_t default_dscp);
   virtual ResourceBudget& getConnBudgetExternal();
   virtual std::string getClusterName();
   virtual ServerInstanceId getServerInstanceId();
