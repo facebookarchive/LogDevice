@@ -408,7 +408,7 @@ CheckImpactForLogRequest::getStorageSetMetadata(const StorageSet& storage_set) {
   Impact::StorageSetMetadata out;
   for (const auto& shard : storage_set) {
     const auto& node = config->serverConfig()->getNode(shard.node());
-    out.push_back(Impact::StorageNodeMetadata{
+    out.push_back(Impact::ShardMetadata{
         .auth_status = shard_status_.getShardStatus(shard),
         .is_alive = isAlive(shard.node()),
         .storage_state = node->storage_attributes->state,

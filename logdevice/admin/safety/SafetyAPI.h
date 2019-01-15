@@ -28,22 +28,22 @@ struct Impact {
    * A data structure that holds extra information about the storage set that
    * resemble the status at the time of the safety check.
    */
-  struct StorageNodeMetadata {
+  struct ShardMetadata {
     AuthoritativeStatus auth_status;
     bool is_alive;
     configuration::StorageState storage_state;
     folly::Optional<NodeLocation> location;
-    bool operator==(StorageNodeMetadata const& x) const {
+    bool operator==(ShardMetadata const& x) const {
       return x.auth_status == auth_status && x.is_alive == is_alive &&
           x.storage_state == storage_state && x.location == location;
     }
-    bool operator!=(StorageNodeMetadata const& x) const {
+    bool operator!=(ShardMetadata const& x) const {
       return !(*this == x);
     }
   };
 
   // For each index in the storage set, what was the cluster state and
-  using StorageSetMetadata = std::vector<Impact::StorageNodeMetadata>;
+  using StorageSetMetadata = std::vector<Impact::ShardMetadata>;
 
   /**
    * A data structure that holds the operation impact on a specific epoch in a
