@@ -101,7 +101,7 @@
 <tr><td>log-file</td><td>write server error log to specified file instead of stderr</td><td style="text-align:center"></td><td>server only</td></tr>
 <tr><td>loglevel</td><td>One of the following: critical, error, warning, info, debug, none</td><td style="text-align:center">info</td><td>server only</td></tr>
 <tr><td>logsconfig-timeout</td><td>Timeout for LogsConfig API requests. If omitted the client timeout will be used.</td><td style="text-align:center"></td><td>client only</td></tr>
-<tr><td>max-nodes</td><td>maximum number of nodes in the cluster. Used for sizing data structures of the failure detector.</td><td style="text-align:center">512</td><td>requires restart, server only</td></tr>
+<tr><td>max-nodes</td><td>Number of preallocated nodes in the cluster. Used for sizing data structures of the failure detector.</td><td style="text-align:center">512</td><td>requires restart, server only</td></tr>
 <tr><td>meta-api-timeout</td><td>Timeout for trims/isLogEmpty/tailLSN/datasize API/etc. If omitted the client timeout will be used.</td><td style="text-align:center"></td><td>client only</td></tr>
 <tr><td>my-location</td><td>{client-only setting}. Specifies the location of the machine running the client. Used for determining whether to use SSL based on --ssl-boundary. Also used in local SCD reading. Format: &quot;{region}.{dc}.{cluster}.{row}.{rack}&quot;.</td><td style="text-align:center"></td><td>requires restart, client only</td></tr>
 <tr><td>port</td><td>TCP port on which the server listens for non-SSL clients</td><td style="text-align:center">16111</td><td>CLI only, requires restart, server only</td></tr>
