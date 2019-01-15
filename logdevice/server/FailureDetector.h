@@ -244,6 +244,8 @@ class FailureDetector {
   class RandomSelector;
   class RoundRobinSelector;
 
+  std::chrono::milliseconds initial_time_ms_;
+
   Timer cs_timer_;
   bool waiting_for_cluster_state_{true};
 
@@ -407,6 +409,7 @@ class FailureDetector {
   // this lock since it's only ever used from a gossip thread and an admin
   // thread when dumping the state of the failure detector.
   mutable std::mutex mutex_;
+  mutable folly::SharedMutex nodes_mutex_;
 
   // failure detection threshold and other settings
   UpdateableSettings<GossipSettings> settings_;

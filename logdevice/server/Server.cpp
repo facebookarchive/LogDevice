@@ -82,14 +82,10 @@ static void bumpErrorCounter(dbg::Level level) {
 
 // verifies that the number of nodes in the cluster is at most max_nodes
 bool ServerParameters::validateNodes(ServerConfig& config) {
-  if (config.getMaxNodeIdx() + 1 > processor_settings_->max_nodes) {
-    ld_error("Invalid config: max node index (%zu) exceeds "
-             "max_nodes (%zu)",
-             config.getMaxNodeIdx(),
-             processor_settings_->max_nodes);
+  // Previously, this funciton checks if config.getMaxNodeIdx() exceeds
+  // max_nodes. Now this always returns true because number of nodes can
+  // exceed max_nodes.
 
-    return false;
-  }
   return true;
 }
 

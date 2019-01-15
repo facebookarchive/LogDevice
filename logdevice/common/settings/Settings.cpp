@@ -771,7 +771,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        &max_nodes,
        "512",
        parse_positive<ssize_t>(),
-       "maximum number of nodes in the cluster. Used for sizing "
+       "Number of preallocated nodes in the cluster. Used for sizing "
        "data structures of the failure detector.",
        SERVER | REQUIRES_RESTART,
        SettingsCategory::Core);

@@ -146,10 +146,10 @@ FailureDetector::FailureDetector(UpdateableSettings<GossipSettings> settings,
   size_t max_nodes = processor->settings()->max_nodes;
 
   // Preallocating makes it easier to handle cluster expansion and shrinking.
-  auto current_time_ms = getCurrentTimeInMillis();
+  initial_time_ms_ = getCurrentTimeInMillis();
   for (size_t i = 0; i < max_nodes; ++i) {
     Node& node = nodes_[i];
-    node.last_suspected_at_ = current_time_ms;
+    node.last_suspected_at_ = initial_time_ms_;
   }
 
   switch (settings_->mode) {
@@ -374,17 +374,6 @@ void FailureDetector::noteConfigurationChanged() {
 void FailureDetector::gossip() {
   auto config = getServerConfig();
   size_t size = config->getMaxNodeIdx() + 1;
-
-  // TODO: this will be eliminated after allowing nodes_ growing over max_node
-  if (size > nodes_.size()) {
-    // ignore extra nodes if the size of the cluster exceeds max_nodes
-    RATELIMIT_ERROR(std::chrono::minutes(1),
-                    1,
-                    "Number of nodes in the cluster exceeds the max_nodes "
-                    "limit (%zu)",
-                    nodes_.size());
-    size = nodes_.size();
-  }
   std::lock_guard<std::mutex> lock(mutex_);
 
   NodeID dest = selector_->getNode(this);
@@ -408,6 +397,9 @@ void FailureDetector::gossip() {
     }
     last_gossip_tick_time_ = now;
   }
+
+  folly::SharedMutex::ReadHolder read_lock(nodes_mutex_);
+
   // stayin' alive
   Node& node(nodes_[this_node.index()]);
   node.gossip_ = 0;
@@ -536,6 +528,8 @@ bool update_min(T& x, const T val) {
 } // namespace
 
 bool FailureDetector::processFlags(const GOSSIP_Message& msg) {
+  // This is called after locking nodes_mutex_ read lock
+
   const bool is_node_bringup =
       bool(msg.flags_ & GOSSIP_Message::NODE_BRINGUP_FLAG);
   const bool is_suspect_state_finished =
@@ -566,6 +560,7 @@ bool FailureDetector::processFlags(const GOSSIP_Message& msg) {
   ld_check(my_idx != sender_idx);
 
   if (nodes_.find(sender_idx) == nodes_.end()) {
+    // This does not occur because this is checked before calling the function
     RATELIMIT_ERROR(std::chrono::seconds(1),
                     1,
                     "Sender (%s) is not present in our config",
@@ -646,23 +641,21 @@ void FailureDetector::onGossipReceived(const GOSSIP_Message& msg) {
     return;
   }
 
-  size_t num_nodes = msg.node_list_.size();
-  if (num_nodes > nodes_.size()) {
-    RATELIMIT_ERROR(std::chrono::minutes(1),
-                    1,
-                    "Number of nodes in the GOSSIP message (%zu) exceeds the "
-                    "max_nodes limit (%zu)",
-                    num_nodes,
-                    nodes_.size());
-
-    num_nodes = nodes_.size();
-  }
-
   node_index_t sender_idx = msg.gossip_node_.index();
   std::lock_guard<std::mutex> lock(mutex_);
+  folly::SharedMutex::ReadHolder read_lock(nodes_mutex_);
 
-  if (sender_idx < num_nodes &&
-      nodes_[sender_idx].gossip_ts_ > msg.instance_id_) {
+  if (nodes_.find(sender_idx) == nodes_.end()) {
+    read_lock.unlock();
+    folly::SharedMutex::WriteHolder write_lock(nodes_mutex_);
+    if (nodes_.find(sender_idx) == nodes_.end()) {
+      Node& new_node = nodes_[sender_idx];
+      new_node.last_suspected_at_ = initial_time_ms_;
+    }
+    read_lock = folly::SharedMutex::ReadHolder(std::move(write_lock));
+  }
+
+  if (nodes_[sender_idx].gossip_ts_ > msg.instance_id_) {
     RATELIMIT_WARNING(std::chrono::seconds(1),
                       5,
                       "Possible time-skew detected on %s, received a lower "
@@ -689,6 +682,17 @@ void FailureDetector::onGossipReceived(const GOSSIP_Message& msg) {
 
   for (auto node : msg.node_list_) {
     size_t id = node.node_id_;
+
+    if (nodes_.find(id) == nodes_.end()) {
+      read_lock.unlock();
+      folly::SharedMutex::WriteHolder write_lock(nodes_mutex_);
+      if (nodes_.find(id) == nodes_.end()) {
+        Node& new_node = nodes_[sender_idx];
+        new_node.last_suspected_at_ = initial_time_ms_;
+      }
+      read_lock = folly::SharedMutex::ReadHolder(std::move(write_lock));
+    }
+
     // Don't modify this node's state based on gossip message.
     if (id == this_index) {
       continue;
@@ -765,6 +769,7 @@ void FailureDetector::startSuspectTimer() {
   auto config = getServerConfig();
   node_index_t my_idx = config->getMyNodeID().index();
 
+  folly::SharedMutex::ReadHolder read_lock(nodes_mutex_);
   nodes_[my_idx].gossip_ = 0;
   updateNodeState(my_idx, false, true, false);
 
@@ -794,11 +799,12 @@ void FailureDetector::startGossiping() {
 std::string FailureDetector::dumpGossipList(std::vector<uint32_t> list) {
   auto config = getServerConfig();
   auto& nodes = config->getNodes();
-  size_t n = std::min(nodes_.size(), config->getMaxNodeIdx() + 1);
+  size_t n = config->getMaxNodeIdx() + 1;
   n = std::min(n, list.size());
   std::string res;
 
   for (size_t i = 0; i < n; ++i) {
+    // TODO: any chance nodes.at(i) does not exist?
     NodeID node_id(i, nodes.count(i) ? nodes.at(i).generation : 0);
     res += node_id.toString() + " = " + folly::to<std::string>(list[i]) +
         (i < n - 1 ? ", " : "");
@@ -811,12 +817,12 @@ std::string
 FailureDetector::dumpInstanceList(std::vector<std::chrono::milliseconds> list) {
   auto config = getServerConfig();
   auto& nodes = config->getNodes();
-  size_t n = std::min(nodes_.size(), config->getMaxNodeIdx() + 1);
+  size_t n = config->getMaxNodeIdx() + 1;
   n = std::min(n, list.size());
   std::string res;
 
-  // TODO: change into iterating on nodes_
   for (size_t i = 0; i < n; ++i) {
+    // TODO: any chance nodes.at(i) does not exist?
     NodeID node_id(i, nodes.count(i) ? nodes.at(i).generation : 0);
     res += node_id.toString() + " = " +
         folly::to<std::string>(list[i].count()) + (i < n - 1 ? ", " : "");
@@ -828,11 +834,11 @@ FailureDetector::dumpInstanceList(std::vector<std::chrono::milliseconds> list) {
 void FailureDetector::dumpFDState() {
   auto config = getServerConfig();
   auto& nodes = config->getNodes();
-  size_t n = std::min(nodes_.size(), config->getMaxNodeIdx() + 1);
+  size_t n = config->getMaxNodeIdx() + 1;
   std::string status_str;
 
-  // TODO: change into iterating on nodes_
   for (size_t i = 0; i < n; ++i) {
+    // TODO: any chance nodes.at(i) does not exist?
     NodeID node_id(i, nodes.count(i) ? nodes.at(i).generation : 0);
     status_str +=
         node_id.toString() + "(" + getNodeStateString(nodes_[i].state) + "), ";
@@ -881,35 +887,31 @@ void FailureDetector::getClusterDeadNodeStats(size_t* effective_dead_cnt,
 }
 
 void FailureDetector::detectFailures(node_index_t self, size_t n) {
+  // This is called after locking nodes_mutex_ read lock
+
   const int threshold = settings_->gossip_failure_threshold;
   auto config = getServerConfig();
-
-  ld_check(self < n);
-  ld_check(n <= nodes_.size());
 
   size_t dead_cnt = 0;
   size_t effective_dead_cnt = 0;
   size_t cluster_size = config->getNodes().size();
   size_t effective_cluster_size = cluster_size;
+
   // Finally, update all the states
-  // TODO: iterate with non-contiguous, actual node-id?
-  for (size_t j = 0; j < n; ++j) {
-    if (nodes_.find(j) == nodes_.end()) {
-      continue;
-    }
-    if (j == self) {
+  for (auto& it : nodes_) {
+    if (it.first == self) {
       // don't transition yourself to DEAD
       updateNodeState(self, false /*dead*/, true /*self*/, false /*failover*/);
       continue;
     }
 
-    // Node 'j' is likely dead if this node and
+    // Node 'it' is likely dead if this node and
     // other nodes haven't heard from it in a long time
     // OR
-    // Node 'j' is performing a graceful shutdown.
+    // Node 'it' is performing a graceful shutdown.
     // Mark it DEAD so no work ends up sent its way.
-    bool failover = (nodes_[j].failover_ > std::chrono::milliseconds::zero());
-    bool dead = (nodes_[j].gossip_ > threshold);
+    bool failover = (it.second.failover_ > std::chrono::milliseconds::zero());
+    bool dead = (it.second.gossip_ > threshold);
     if (dead) {
       // if the node is actually dead, clear the failover boolean, to make sure
       // we don't mistakenly transition from DEAD to FAILING_OVER in the
@@ -924,12 +926,12 @@ void FailureDetector::detectFailures(node_index_t self, size_t n) {
       dead = failover;
     }
 
-    updateNodeState(j, dead, false, failover);
+    updateNodeState(it.first, dead, false, failover);
 
     // re-check node's state as it may be suspect, in which case it is still
     // considered dead
-    dead = (nodes_[j].state != NodeState::ALIVE);
-    auto node = config->getNode(j);
+    dead = (it.second.state != NodeState::ALIVE);
+    auto node = config->getNode(it.first);
     if (node != nullptr) {
       if (node->isDisabled()) {
         // It is disabled. Do not count it towards the effective cluster
@@ -973,6 +975,7 @@ void FailureDetector::updateDependencies(node_index_t idx,
                                          FailureDetector::NodeState new_state,
                                          bool failover,
                                          bool starting) {
+  // This is called after locking nodes_mutex_ read lock
   if (nodes_.find(idx) == nodes_.end()) {
     return;
   }
@@ -1005,6 +1008,7 @@ void FailureDetector::updateNodeState(node_index_t idx,
                                       bool dead,
                                       bool self,
                                       bool failover) {
+  // This is called after locking nodes_mutex_ read lock
   if (nodes_.find(idx) == nodes_.end()) {
     return;
   }
@@ -1080,8 +1084,10 @@ void FailureDetector::updateNodeState(node_index_t idx,
 }
 
 bool FailureDetector::isValidDestination(node_index_t node_idx) {
+  folly::SharedMutex::ReadHolder read_lock(nodes_mutex_);
+
   if (nodes_.find(node_idx) == nodes_.end()) {
-    return false; // TODO: true or false?
+    return false;
   }
 
   if (nodes_[node_idx].blacklisted) {
@@ -1128,13 +1134,15 @@ const char* FailureDetector::getNodeStateString(NodeState state) const {
 }
 
 std::string FailureDetector::getStateString(node_index_t idx) const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  folly::SharedMutex::ReadHolder read_lock(nodes_mutex_);
+
   if (nodes_.find(idx) == nodes_.end()) {
     return "invalid node index";
   }
 
   char buf[1024];
   {
-    std::lock_guard<std::mutex> lock(mutex_);
     snprintf(buf,
              sizeof(buf),
              "(gossip: %u, instance-id: %lu, failover: %lu, starting: %d, "
@@ -1150,13 +1158,15 @@ std::string FailureDetector::getStateString(node_index_t idx) const {
 
 folly::dynamic FailureDetector::getStateJson(node_index_t idx) const {
   folly::dynamic obj = folly::dynamic::object;
+  std::lock_guard<std::mutex> lock(mutex_);
+  folly::SharedMutex::ReadHolder read_lock(nodes_mutex_);
+
   if (nodes_.find(idx) == nodes_.end()) {
     obj["error"] = "invalid node index";
     return obj;
   }
 
   {
-    std::lock_guard<std::mutex> lock(mutex_);
     obj["gossip"] = nodes_.at(idx).gossip_;
     obj["instance-id"] = nodes_.at(idx).gossip_ts_.count();
     obj["failover"] = nodes_.at(idx).failover_.count();
@@ -1194,7 +1204,6 @@ void FailureDetector::broadcastWrapper(GOSSIP_Message::GOSSIP_flags_t flags) {
   }
 
   ld_info("Broadcasting %s message.", msg_type.c_str());
-  nodes_[my_idx].gossip_ = 0;
   for (const auto& it : nodes) {
     node_index_t idx = it.first;
     auto& node = it.second;
@@ -1224,6 +1233,8 @@ void FailureDetector::broadcastWrapper(GOSSIP_Message::GOSSIP_flags_t flags) {
               error_description(err));
     }
   }
+  folly::SharedMutex::ReadHolder read_lock(nodes_mutex_);
+  nodes_[my_idx].gossip_ = 0;
 }
 
 int FailureDetector::sendGossipMessage(NodeID node,
@@ -1317,6 +1328,7 @@ Socket* FailureDetector::getServerSocket(node_index_t idx) {
 
 void FailureDetector::setBlacklisted(node_index_t idx, bool blacklisted) {
   std::lock_guard<std::mutex> lock(mutex_);
+  folly::SharedMutex::ReadHolder read_lock(nodes_mutex_);
   if (nodes_.find(idx) != nodes_.end()) {
     nodes_[idx].blacklisted = blacklisted;
   }
@@ -1325,6 +1337,7 @@ void FailureDetector::setBlacklisted(node_index_t idx, bool blacklisted) {
 bool FailureDetector::isBlacklisted(node_index_t idx) const {
   bool blacklisted = false;
   std::lock_guard<std::mutex> lock(mutex_);
+  folly::SharedMutex::ReadHolder read_lock(nodes_mutex_);
   if (nodes_.find(idx) != nodes_.end()) {
     blacklisted = nodes_.at(idx).blacklisted;
   }
@@ -1347,6 +1360,7 @@ bool FailureDetector::isAlive(node_index_t idx) const {
     return false;
   }
 
+  folly::SharedMutex::ReadHolder read_lock(nodes_mutex_);
   if (nodes_.find(idx) == nodes_.end()) {
     // TODO: how to handle this exception?
     return false;

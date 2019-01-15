@@ -63,7 +63,7 @@ sidebar_label: Settings
 | log-file | write server error log to specified file instead of stderr |  | server&nbsp;only |
 | loglevel | One of the following: critical, error, warning, info, debug, none | info | server&nbsp;only |
 | logsconfig-timeout | Timeout for LogsConfig API requests. If omitted the client timeout will be used. |  | client&nbsp;only |
-| max-nodes | maximum number of nodes in the cluster. Used for sizing data structures of the failure detector. | 512 | requires&nbsp;restart, server&nbsp;only |
+| max-nodes | Number of preallocated nodes in the cluster. Used for sizing data structures of the failure detector. | 512 | requires&nbsp;restart, server&nbsp;only |
 | meta-api-timeout | Timeout for trims/isLogEmpty/tailLSN/datasize API/etc. If omitted the client timeout will be used. |  | client&nbsp;only |
 | my-location | {client-only setting}. Specifies the location of the machine running the client. Used for determining whether to use SSL based on --ssl-boundary. Also used in local SCD reading. Format: "{region}.{dc}.{cluster}.{row}.{rack}". |  | requires&nbsp;restart, client&nbsp;only |
 | port | TCP port on which the server listens for non-SSL clients | 16111 | CLI&nbsp;only, requires&nbsp;restart, server&nbsp;only |
