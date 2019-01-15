@@ -343,8 +343,7 @@ class FailureDetector {
 
   bool isValidInstanceId(std::chrono::milliseconds id, node_index_t idx);
 
-  // Detects which nodes are down based on the data in gossip_list_ and
-  // suspect_matrix_.
+  // Detects which nodes are down based on the data in gossip_list_
   void detectFailures(node_index_t self, size_t n);
 
   // Executes a state transition and updates the dead list; `dead' is used to
@@ -463,7 +462,7 @@ class FailureDetector {
   // This is a best-effort message and sent at most twice:
   // 1) once when FailureDetector starts;
   // 2) once more if LogsConfig gets fully loaded afterwards.
-  // gossip_list, failover_list and suspect matrix are not included.
+  // gossip_list and failover_list are not included.
   // All further messages will be sent every 'gossip-interval'
   // milli-seconds via gossip().
   void broadcastBringup() {
