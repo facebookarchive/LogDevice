@@ -14,6 +14,7 @@
 
 #include "logdevice/common/ConfigInit.h"
 #include "logdevice/common/NoopTraceLogger.h"
+#include "logdevice/common/WheelTimer.h"
 #include "logdevice/common/ZookeeperClient.h"
 #include "logdevice/common/configuration/logs/LogsConfigManager.h"
 #include "logdevice/common/event_log/EventLogStateMachine.h"
@@ -176,12 +177,11 @@ void StandaloneAdminServer::initAdminServer() {
 
 void StandaloneAdminServer::initClusterStateRefresher() {
   if (processor_ && processor_->cluster_state_) {
-    ld_info("Triggering an initial refresh of ClusterState");
     processor_->cluster_state_->refreshClusterStateAsync();
+    processor_->getWheelTimer().createTimer(
+        [&]() { this->initClusterStateRefresher(); },
+        settings_->cluster_state_refresh_interval);
   }
-  // TODO: Create a polling timer to refresh cluster state, or move the
-  // (currently-broken) per-worker one to processor
-  // processor_->activateClusterStatePolling();
 }
 
 void StandaloneAdminServer::initStatsCollection() {
