@@ -292,7 +292,7 @@ WeightedCopySetSelectorTest::select(std::vector<ShardID>& out,
   bool expect_chain = true;
   for (StoreChainLink cl : cs) {
     ShardID shard = cl.destination;
-    auto status = deps_.getNodeStatus(shard);
+    auto status = deps_.getNodeStatus(shard.asNodeID());
     EXPECT_NE(NodeStatus::NOT_AVAILABLE, status);
     expect_chain &= status == NodeStatus::AVAILABLE;
     out.push_back(shard);

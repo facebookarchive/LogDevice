@@ -21,37 +21,36 @@ class TestCopySetSelectorDeps : public CopySetSelectorDependencies,
                        StoreChainLink* destination_out,
                        bool /*ignore_nodeset_state*/,
                        bool /*allow_unencrypted_conections*/) const override {
-    auto status = getNodeStatus(shard);
-    if (status != NodeAvailabilityChecker::NodeStatus::NOT_AVAILABLE) {
-      *destination_out = {shard, ClientID()};
+    auto entry = getNodeEntry(shard.asNodeID());
+    if (entry.status_ != NodeAvailabilityChecker::NodeStatus::NOT_AVAILABLE) {
+      *destination_out = {shard, entry.client_id_};
     }
 
-    return status;
+    return entry.status_;
   }
 
   const NodeAvailabilityChecker* getNodeAvailability() const override {
     return this;
   }
 
-  void setNodeStatus(ShardID shard,
-                     NodeAvailabilityChecker::NodeStatus status) {
-    node_status_[shard] = status;
+  NodeAvailabilityChecker::NodeStatus getNodeStatus(NodeID node) const {
+    return getNodeEntry(node).status_;
   }
 
-  NodeAvailabilityChecker::NodeStatus getNodeStatus(ShardID shard) const {
-    return node_status_.count(shard)
-        ? node_status_.at(shard)
-        : NodeAvailabilityChecker::NodeStatus::AVAILABLE;
+  void setNodeStatus(ShardID shard,
+                     NodeAvailabilityChecker::NodeStatus status,
+                     ClientID client_id) {
+    node_status_[shard.asNodeID()] = {status, client_id};
   }
 
   bool isAvailable(ShardID shard) const {
-    return getNodeStatus(shard) !=
+    return getNodeStatus(shard.asNodeID()) !=
         NodeAvailabilityChecker::NodeStatus::NOT_AVAILABLE;
   }
 
   size_t countUnavailable(const StorageSet& shards) const {
     return std::count_if(shards.begin(), shards.end(), [&](ShardID shard) {
-      return getNodeStatus(shard) ==
+      return getNodeStatus(shard.asNodeID()) ==
           NodeAvailabilityChecker::NodeStatus::NOT_AVAILABLE;
     });
   }
@@ -59,15 +58,32 @@ class TestCopySetSelectorDeps : public CopySetSelectorDependencies,
   void setNotAvailableNodes(const StorageSet& nodes) {
     node_status_.clear();
     for (ShardID shard : nodes) {
-      node_status_[shard] = NodeAvailabilityChecker::NodeStatus::NOT_AVAILABLE;
+      node_status_[shard.asNodeID()] = {
+          NodeAvailabilityChecker::NodeStatus::NOT_AVAILABLE,
+          ClientID::INVALID,
+          Status::OK};
     }
   }
 
- private:
+ protected:
+  struct Entry {
+    NodeAvailabilityChecker::NodeStatus status_;
+    ClientID client_id_{ClientID::INVALID};
+    // injected connection errors, if any
+    Status connection_state_{Status::OK};
+  };
+
+  Entry getNodeEntry(NodeID node) const {
+    auto it = node_status_.find(node);
+    return it != node_status_.end()
+        ? it->second
+        : Entry{NodeAvailabilityChecker::NodeStatus::AVAILABLE,
+                ClientID::MIN,
+                Status::OK};
+  }
+
   // For nodes that are not in the map status is AVAILABLE.
-  std::
-      unordered_map<ShardID, NodeAvailabilityChecker::NodeStatus, ShardID::Hash>
-          node_status_;
+  std::unordered_map<NodeID, Entry, NodeID::Hash> node_status_;
 };
 
 }} // namespace facebook::logdevice

@@ -1108,7 +1108,7 @@ TEST_F(CopySetSelectorTest, StickyCopySetManager) {
   res.copyset[1] = {N7, ClientID()};
   res.copyset[2] = {N8, ClientID()};
   underlying_result_queue_.push(res);
-  deps_.setNodeStatus(N3, NodeStatus::NOT_AVAILABLE);
+  deps_.setNodeStatus(N3, NodeStatus::NOT_AVAILABLE, ClientID::MIN);
 
   ld_info("Selecting copyset 4");
   csm_state_ = copyset_manager_->createState();
@@ -1127,7 +1127,7 @@ TEST_F(CopySetSelectorTest, StickyCopySetManager) {
   res.copyset[1] = {N6, ClientID()};
   res.copyset[2] = {N7, ClientID()};
   underlying_result_queue_.push(res);
-  deps_.setNodeStatus(N8, NodeStatus::NOT_AVAILABLE);
+  deps_.setNodeStatus(N8, NodeStatus::NOT_AVAILABLE, ClientID::MIN);
 
   ld_info("Selecting copyset 5");
   selectCopySet();
@@ -1145,7 +1145,7 @@ TEST_F(CopySetSelectorTest, StickyCopySetManager) {
   res.rv = CopySetSelector::Result::FAILED;
   underlying_result_queue_.push(res);
 
-  deps_.setNodeStatus(N6, NodeStatus::NOT_AVAILABLE);
+  deps_.setNodeStatus(N6, NodeStatus::NOT_AVAILABLE, ClientID::MIN);
 
   ld_info("Selecting copyset 6");
   csm_state_->reset();

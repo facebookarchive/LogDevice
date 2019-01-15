@@ -30,6 +30,7 @@
 #include "logdevice/common/protocol/RELEASE_Message.h"
 #include "logdevice/common/protocol/STORED_Message.h"
 #include "logdevice/common/protocol/STORE_Message.h"
+#include "logdevice/common/test/CopySetSelectorTestUtil.h"
 #include "logdevice/common/test/TestUtil.h"
 
 namespace facebook { namespace logdevice {
@@ -138,10 +139,6 @@ class AppenderTest : public ::testing::Test {
   std::unordered_map<ShardID, NodeSetState::NotAvailableReason, ShardID::Hash>
       not_available_nodes_;
 
-  // Values that should be returned by checkConnection. Can be set by tests to
-  // simulate checkConnection returning -1.
-  std::unordered_map<NodeID, Status, NodeID::Hash> connection_states_;
-
   // Values that will be returned by getGraylistedNodes in the availability
   // checker.
   std::unordered_set<node_index_t> graylisted_nodes_;
@@ -235,22 +232,44 @@ class AppenderTest : public ::testing::Test {
 };
 
 class AppenderTest::TestCopySetSelectorDeps
-    : public CopySetSelectorDependencies,
-      public NodeAvailabilityChecker {
+    : public logdevice::TestCopySetSelectorDeps {
  public:
   explicit TestCopySetSelectorDeps(AppenderTest* test) : test_(test) {}
+
+  NodeStatus checkNode(NodeSetState* nodeset_state,
+                       ShardID shard,
+                       StoreChainLink* destination_out,
+                       bool ignore_nodeset_state,
+                       bool allow_unencrypted_connections) const override {
+    return NodeAvailabilityChecker::checkNode(nodeset_state,
+                                              shard,
+                                              destination_out,
+                                              ignore_nodeset_state,
+                                              allow_unencrypted_connections);
+  }
+
+  void setConnectionError(NodeID node, Status error) {
+    node_status_[node].connection_state_ = error;
+  }
 
  private:
   int checkConnection(NodeID nid,
                       ClientID* our_name_at_peer,
                       bool) const override {
-    auto it = test_->connection_states_.find(nid);
-    if (it != test_->connection_states_.end()) {
-      err = it->second;
+    auto it = node_status_.find(nid);
+    if (it != node_status_.end() &&
+        it->second.connection_state_ != Status::OK) {
+      err = it->second.connection_state_;
+      LOG(INFO) << "check connection error: " << nid.toString() << " " << err;
       return -1;
     }
 
-    *our_name_at_peer = ClientID(1);
+    if (it == node_status_.end()) {
+      *our_name_at_peer = ClientID::MIN;
+    } else {
+      *our_name_at_peer = it->second.client_id_;
+    }
+    LOG(INFO) << "check connection: " << our_name_at_peer->toString();
     return 0;
   }
 
@@ -822,7 +841,7 @@ void AppenderTest::checkStoreMsg(uint32_t expected_wave,
   {                                                                            \
     for (auto shard : {__VA_ARGS__}) {                                         \
       auto it = store_msgs_.find(shard);                                       \
-      ASSERT_NE(store_msgs_.end(), it);                                        \
+      ASSERT_NE(store_msgs_.end(), it) << shard.toString();                    \
       ASSERT_EQ(expected_wave, getHeader(it->second.get()).wave);              \
       ASSERT_EQ(                                                               \
           draining_,                                                           \
@@ -982,15 +1001,6 @@ void AppenderTest::onStoredSent(Status status,
     }                                    \
   }
 
-// Set the connection state of several nodes
-// `error` is the err Appender will get next time it calls checkConnection().
-#define SET_CONNECTION_ERROR(error, ...)            \
-  {                                                 \
-    for (auto shard : {__VA_ARGS__}) {              \
-      connection_states_[shard.asNodeID()] = error; \
-    }                                               \
-  }
-
 TEST_F(AppenderTest, Simple) {
   updateConfig();
   first_candidate_idx_ = 0;
@@ -1126,7 +1136,9 @@ TEST_F(AppenderTest, SocketBufferLimit) {
   first_candidate_idx_ = 0;
   // Simulate the socket for N1S0, N2S0 having reached its buffer limits.
   // It should not be picked by pickDestination.
-  SET_CONNECTION_ERROR(E::NOBUFS, N1S0, N2S0);
+  for (auto shard : {N1S0, N2S0}) {
+    deps_->setConnectionError(shard.asNodeID(), E::NOBUFS);
+  }
   start();
   CHECK_STORE_MSG_AND_TRIGGER_ON_SENT(E::OK, 1, N0S0, N3S0, N4S0, N5S0, N6S0);
   CHECK_NO_STORE_MSG();
