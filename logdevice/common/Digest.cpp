@@ -345,14 +345,7 @@ int Digest::recomputeOffsetsWithinEpoch(
   }
 
   if (!offsets_within_epoch.value().isValid()) {
-    RATELIMIT_ERROR(
-        std::chrono::seconds(10),
-        10,
-        "last known good esn logid:%lu e%un%u's OffsetMap is invalid",
-        log_id_.val_,
-        epoch_.val_,
-        last_known_good.val_);
-    // abort correct OffsetMap
+    // Last Known Good's OffsetMap is invalid. There is nothing we can do.
     return -1;
   }
 
