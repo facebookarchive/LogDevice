@@ -708,12 +708,7 @@ class Logs:
             cprint("Log group '{}' has been updated!".format(path))
 
         except LogDeviceError as e:
-            cprint(
-                "Cannot update range for '{}'. {}: {}".format(
-                    path, e.args[1], e.args[3]
-                ),
-                "red",
-            )
+            cprint("Cannot update range for '{}': {}".format(path, e), "red")
 
     @command
     @argument(
