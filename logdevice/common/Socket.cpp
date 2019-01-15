@@ -1924,9 +1924,10 @@ int Socket::receiveMessage() {
 
         case E::BADMSG:
           ld_error("PROTOCOL ERROR: message of type %s received from peer "
-                   "%s has invalid format",
+                   "%s has invalid format. proto_:%hu",
                    messageTypeNames[recv_message_ph_.type].c_str(),
-                   deps_->describeConnection(peer_name_).c_str());
+                   deps_->describeConnection(peer_name_).c_str(),
+                   proto_);
           err = E::BADMSG;
           return -1;
 
