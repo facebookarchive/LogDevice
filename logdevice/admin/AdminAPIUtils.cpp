@@ -105,23 +105,6 @@ void forFilteredNodes(const configuration::Nodes& nodes,
   }
 }
 
-thrift::ShardDataHealth toShardDataHealth(AuthoritativeStatus auth_status,
-                                          bool has_dirty_ranges) {
-  switch (auth_status) {
-    case AuthoritativeStatus::FULLY_AUTHORITATIVE:
-      return has_dirty_ranges ? thrift::ShardDataHealth::LOST_REGIONS
-                              : thrift::ShardDataHealth::HEALTHY;
-    case AuthoritativeStatus::UNDERREPLICATION:
-      return thrift::ShardDataHealth::LOST_ALL;
-    case AuthoritativeStatus::AUTHORITATIVE_EMPTY:
-      return thrift::ShardDataHealth::EMPTY;
-    case AuthoritativeStatus::UNAVAILABLE:
-      return thrift::ShardDataHealth::UNAVAILABLE;
-    default:
-      return thrift::ShardDataHealth::UNKNOWN;
-  }
-}
-
 thrift::ShardOperationalState
 toShardOperationalState(StorageState storage_state,
                         const EventLogRebuildingSet::NodeInfo* node_info) {

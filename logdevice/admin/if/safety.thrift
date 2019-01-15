@@ -39,6 +39,19 @@ enum OperationImpact {
 }
 
 /**
+ * A data structure representing human readable information about a
+ * specific shard
+ */
+struct ShardMetadata {
+  1: nodes.ShardDataHealth data_health,
+  2: bool is_alive,
+  3: nodes.ShardStorageState storage_state,
+  4: optional string location,
+}
+
+typedef list<ShardMetadata> StorageSetMetadata
+
+/**
  * A data structure that describe the operation impact on a specific epoch in a
  * log.
  */
@@ -60,6 +73,11 @@ struct ImpactOnEpoch {
    */
   4: required common.ReplicationProperty replication,
   5: required list<OperationImpact> impact,
+  /**
+   * Extra information about the storage set to help visualize the impact
+   * to the user.
+   */
+  6: optional StorageSetMetadata storage_set_metadata,
 }
 
 struct CheckImpactRequest {

@@ -39,10 +39,10 @@ template <>
 thrift::ShardID toThrift(const ShardID& shard);
 
 template <>
-thrift::StorageSet toThrift(const StorageSet& storage_set);
+thrift::LocationScope toThrift(const NodeLocationScope& input);
 
 template <>
-thrift::LocationScope toThrift(const NodeLocationScope& input);
+thrift::ShardMetadata toThrift(const Impact::ShardMetadata& input);
 
 template <>
 thrift::ReplicationProperty toThrift(const ReplicationProperty& replication);
@@ -65,4 +65,18 @@ NodeLocationScope toLogDevice(const thrift::LocationScope& input);
 
 template <>
 ReplicationProperty toLogDevice(const thrift::ReplicationProperty& input);
+
+thrift::ShardDataHealth toShardDataHealth(AuthoritativeStatus auth_status,
+                                          bool has_dirty_ranges);
+
+// If we can convert Type A => B then we should be able to convert
+// std::vector<A> to std::vector<B>
+template <typename ThriftType, typename LDType>
+std::vector<ThriftType> toThrift(const std::vector<LDType>& input) {
+  std::vector<ThriftType> output;
+  for (const auto& it : input) {
+    output.push_back(toThrift<ThriftType>(it));
+  }
+  return output;
+}
 }} // namespace facebook::logdevice

@@ -42,9 +42,6 @@ void fillNodeConfig(thrift::NodeConfig& out,
 
 void fillSocketAddress(thrift::SocketAddress& out, const Sockaddr& addr);
 
-thrift::ShardDataHealth toShardDataHealth(AuthoritativeStatus auth_status,
-                                          bool has_dirty_ranges);
-
 void fillNodeState(thrift::NodeState& out,
                    node_index_t node_index,
                    const configuration::Node& node,

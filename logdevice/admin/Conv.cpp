@@ -132,15 +132,6 @@ thrift::ShardID toThrift(const ShardID& shard) {
 }
 
 template <>
-thrift::StorageSet toThrift(const StorageSet& storage_set) {
-  thrift::StorageSet output;
-  for (const auto& shard : storage_set) {
-    output.push_back(toThrift<thrift::ShardID>(shard));
-  }
-  return output;
-}
-
-template <>
 thrift::ReplicationProperty toThrift(const ReplicationProperty& replication) {
   thrift::ReplicationProperty output;
   for (const auto& scope_replication :
@@ -157,11 +148,46 @@ thrift::ImpactOnEpoch toThrift(const Impact::ImpactOnEpoch& epoch) {
   thrift::ImpactOnEpoch output;
   output.set_epoch(static_cast<int64_t>(epoch.epoch.val_));
   output.set_log_id(static_cast<int64_t>(epoch.log_id.val_));
-  output.set_storage_set(toThrift<thrift::StorageSet>(epoch.storage_set));
+  output.set_storage_set(toThrift<thrift::ShardID>(epoch.storage_set));
   output.set_replication(
       toThrift<thrift::ReplicationProperty>(epoch.replication));
   output.set_impact(
       toThrift<std::vector<thrift::OperationImpact>>(epoch.impact_result));
+  output.set_storage_set_metadata(
+      toThrift<thrift::ShardMetadata>(epoch.storage_set_metadata));
   return output;
 }
+
+thrift::ShardDataHealth toShardDataHealth(AuthoritativeStatus auth_status,
+                                          bool has_dirty_ranges) {
+  switch (auth_status) {
+    case AuthoritativeStatus::FULLY_AUTHORITATIVE:
+      return has_dirty_ranges ? thrift::ShardDataHealth::LOST_REGIONS
+                              : thrift::ShardDataHealth::HEALTHY;
+    case AuthoritativeStatus::UNDERREPLICATION:
+      return thrift::ShardDataHealth::LOST_ALL;
+    case AuthoritativeStatus::AUTHORITATIVE_EMPTY:
+      return thrift::ShardDataHealth::EMPTY;
+    case AuthoritativeStatus::UNAVAILABLE:
+      return thrift::ShardDataHealth::UNAVAILABLE;
+    default:
+      return thrift::ShardDataHealth::UNKNOWN;
+  }
+}
+
+template <>
+thrift::ShardMetadata toThrift(const Impact::ShardMetadata& input) {
+  thrift::ShardMetadata output;
+  output.set_data_health(
+      toShardDataHealth(input.auth_status, /* has_dirty_ranges= */ false));
+  output.set_is_alive(input.is_alive);
+  output.set_storage_state(
+      toThrift<thrift::ShardStorageState>(input.storage_state));
+  if (input.location) {
+    output.set_location(input.location->toString());
+  }
+
+  return output;
+}
+
 }} // namespace facebook::logdevice
