@@ -133,18 +133,33 @@ void TrimRSMRequest::snapshotFindTimeCallback(Status st, lsn_t lsn) {
     return true;
   };
 
-  auto done_callback = [&](logid_t) {
+  auto done_callback = [this, lsn](logid_t) {
     if (!last_seen_snapshot_) {
-      // We did not read any snapshot, there is nothing to trim.
-      rsm_info(rsm_type_,
-               "There are no snapshots with a timestamp older than %s.",
-               format_time(min_timestamp_).c_str());
-      completeAndDeleteThis(E::OK);
-      return;
+      if (trim_everything_) {
+        rsm_info(rsm_type_,
+                 "Trimming up to next_lsn=%s; trim_everything=true",
+                 lsn_to_string(lsn).c_str());
+        last_seen_snapshot_ =
+            std::make_unique<DataRecord>(snapshot_log_id_, Payload(), lsn);
+      } else {
+        // We did not read any snapshot, there is nothing to trim.
+        rsm_info(rsm_type_,
+                 "There are no snapshots with a timestamp older than %s.",
+                 format_time(min_timestamp_).c_str());
+        completeAndDeleteThis(E::OK);
+        return;
+      }
     }
 
-    onGotLastSnapshotToKeep();
+    trimSnapshotLog();
   };
+
+  // If we want to trim everything, there is no point in starting a readstream
+  // for the latest snapshot. We can trim up to next_lsn
+  if (trim_everything_) {
+    done_callback(logid_t(0));
+    return;
+  }
 
   rsm_info(rsm_type_,
            "Creating a read stream to read snapshot log %lu up to lsn %s",
@@ -190,7 +205,7 @@ void TrimRSMRequest::snapshotFindTimeCallback(Status st, lsn_t lsn) {
   w->clientReadStreams().insertAndStart(std::move(read_stream));
 }
 
-void TrimRSMRequest::onGotLastSnapshotToKeep() {
+void TrimRSMRequest::trimSnapshotLog() {
   ld_check(last_seen_snapshot_);
   min_snapshot_lsn_ = last_seen_snapshot_->attrs.lsn;
   if (trim_everything_) {
@@ -204,6 +219,7 @@ void TrimRSMRequest::onGotLastSnapshotToKeep() {
     completeAndDeleteThis(err);
     return;
   }
+
   if (min_snapshot_version_ == LSN_OLDEST) {
     // Snapshot has version LSN_OLDEST, nothing more to do.
     completeAndDeleteThis(E::OK);
