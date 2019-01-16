@@ -286,6 +286,46 @@ void ZookeeperClientInMemory::multiOp(std::vector<zk::Op> ops,
   }
 }
 
+int ZookeeperClientInMemory::mockSync(const char* /* unused */,
+                                      string_completion_t completion,
+                                      const void* context) {
+  // Pretend to take the lock to get linearizability
+  std::lock_guard<std::mutex> guard(mutex_);
+
+  int rc = ZOK;
+  std::shared_ptr<std::atomic<bool>> alive = alive_;
+
+  std::thread callback([rc, context, completion, alive]() {
+    /* sleep override */
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    if (alive.get()->load()) {
+      completion(rc, nullptr, context);
+    } else {
+      completion(ZCLOSING, nullptr, context);
+    }
+  });
+  // reuse the callbacks for getData
+  callbacksGetData_.push_back(std::move(callback));
+  return ZOK;
+}
+
+void ZookeeperClientInMemory::sync(sync_callback_t cb) {
+  // sync() should be a no-op for the in memory implementation, but to get test
+  // coverage on ZookeeperClient::syncCompletion, we still pretend to do an RPC.
+
+  // Use the callback function object as context, which must be freed in
+  // completion. The callback could also be empty.
+  const void* context = nullptr;
+  if (cb) {
+    auto p = std::make_unique<sync_callback_t>(std::move(cb));
+    context = p.release();
+  }
+  int rc = mockSync("/", &ZookeeperClient::syncCompletion, context);
+  if (rc != ZOK) {
+    ZookeeperClient::syncCompletion(rc, /* value = */ nullptr, context);
+  }
+}
+
 void ZookeeperClientInMemory::createWithAncestors(std::string path,
                                                   std::string data,
                                                   create_callback_t cb,

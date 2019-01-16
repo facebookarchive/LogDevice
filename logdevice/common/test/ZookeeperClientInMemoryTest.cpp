@@ -172,6 +172,22 @@ void runBasicTests(std::unique_ptr<ZookeeperClientInMemory> z) {
                p.setValue();
              },
              /* base_version = */ -1);
+  {
+    // Doesn't test functionality of sync, just that the call wrapper works.
+    Promise<Unit> p;
+    auto f = p.getSemiFuture();
+    z->sync([&z, p = std::move(p)](int sync_rc) mutable {
+      EXPECT_EQ(ZOK, sync_rc);
+      z->getData(
+          kFoo,
+          [p = std::move(p)](int read_rc, std::string value, zk::Stat) mutable {
+            EXPECT_EQ(ZOK, read_rc);
+            EXPECT_EQ("Blind write", value);
+            p.setValue();
+          });
+    });
+    std::move(f).wait();
+  }
   std::move(f6).wait();
 
   Promise<Unit> p7;

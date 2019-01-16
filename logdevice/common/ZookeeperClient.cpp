@@ -410,6 +410,37 @@ void ZookeeperClient::multiOp(std::vector<zk::Op> ops, multi_op_callback_t cb) {
   }
 }
 
+/* static */ void ZookeeperClient::syncCompletion(int rc,
+                                                  const char* /* unused */,
+                                                  const void* context) {
+  if (!context) {
+    return;
+  }
+  auto callback = std::unique_ptr<sync_callback_t>(const_cast<sync_callback_t*>(
+      reinterpret_cast<const sync_callback_t*>(context)));
+  ld_check(callback);
+  // callback shouldn't be empty
+  ld_check(*callback);
+  (*callback)(rc);
+}
+
+void ZookeeperClient::sync(sync_callback_t cb) {
+  // Use the callback function object as context, which must be freed in
+  // completion. The callback could also be nullptr.
+  const void* context = nullptr;
+  if (cb) {
+    auto p = std::make_unique<sync_callback_t>(std::move(cb));
+    context = static_cast<const void*>(p.release());
+  }
+  int rc = zoo_async(zh_.get().get(),
+                     "/", // bogus
+                     &ZookeeperClient::syncCompletion,
+                     context);
+  if (rc != ZOK) {
+    syncCompletion(rc, /* value */ nullptr, context);
+  }
+}
+
 /* static */ zk::OpResponse ZookeeperClient::MultiOpContext::toOpResponse(
     const zoo_op_result_t& op_result) {
   zk::OpResponse r{};

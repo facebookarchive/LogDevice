@@ -137,6 +137,7 @@ class ZookeeperClient : public ZookeeperClientBase {
               int32_t flags = 0) override;
 
   void multiOp(std::vector<zk::Op> ops, multi_op_callback_t cb) override;
+  void sync(sync_callback_t cb) override;
 
   void createWithAncestors(std::string path,
                            std::string data,
@@ -157,6 +158,7 @@ class ZookeeperClient : public ZookeeperClientBase {
                                 const void* context);
   static void createCompletion(int rc, const char* value, const void* context);
   static void multiOpCompletion(int rc, const void* context);
+  static void syncCompletion(int rc, const char* value, const void* context);
 
   static void setCACL(const std::vector<zk::ACL>& src,
                       ::ACL_vector* c_acl_vector,

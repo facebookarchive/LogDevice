@@ -177,6 +177,7 @@ class ZookeeperClientBase : boost::noncopyable {
   using create_callback_t = folly::Function<void(int, std::string)>;
   using multi_op_callback_t =
       folly::Function<void(int, std::vector<zk::OpResponse>)>;
+  using sync_callback_t = folly::Function<void(int)>;
 
   // Converts a Zookeeper return code to LogDevice status
   static Status toStatus(int zk_rc);
@@ -208,6 +209,12 @@ class ZookeeperClientBase : boost::noncopyable {
   // operations, mostly used for read-modify-write. Unlikely to be what you
   // want.
   virtual void multiOp(std::vector<zk::Op> ops, multi_op_callback_t cb) = 0;
+
+  // Flush leader channel, used before a read to force linearizability; should
+  // only be used sparingly.
+  //
+  // If you do not know what this API does, you probably do not need it.
+  virtual void sync(sync_callback_t cb) = 0;
 
   //////// RECIPES ////////
   // The following methods are implemented on top of the Zookeeper primitives
