@@ -392,6 +392,15 @@ int shell(Cluster& cluster) {
               << " --replicate-across \"node: " << std::min(2, nstorage_nodes)
               << "\" test_logs" << std::endl
               << std::endl;
+
+    std::cout << "\033[1;31mTo view existing log ranges: ";
+    if (options::nlogs > 0) {
+      std::cout << "(We've already created one for you)";
+    }
+    std::cout << "\033[1;0m" << std::endl;
+    std::cout << "\tldshell -c " << cluster.getConfigPath() << " logs show"
+              << std::endl
+              << std::endl;
   }
 
 #ifdef FB_BUILD_PATHS
@@ -509,6 +518,7 @@ int main(int argc, const char* argv[]) {
 
   IntegrationTestUtils::ClusterFactory factory;
   factory.setNumLogs(options::nlogs);
+  factory.setNumLogsConfigManagerLogs(options::nlogs);
   factory.useDefaultTrafficShapingConfig(options::traffic_shaping);
   if (options::hash_sequencer_placement) {
     factory.useHashBasedSequencerAssignment();

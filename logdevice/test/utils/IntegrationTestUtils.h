@@ -29,6 +29,7 @@
 #include "logdevice/common/event_log/EventLogRecord.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/include/ClientSettings.h"
+#include "logdevice/include/LogsConfigTypes.h"
 #include "logdevice/include/types.h"
 #include "logdevice/test/utils/MetaDataProvisioner.h"
 #include "logdevice/test/utils/port_selection.h"
@@ -257,10 +258,21 @@ class ClusterFactory {
 
   /**
    * Sets the number of logs in the config.  Logs will be numbered 1 through
-   * `n'.
+   * `n'. Ignored when LogsConfigManager is enabled, use
+   * setNumLogsConfigManagerLogs instead.
    */
   ClusterFactory& setNumLogs(int n) {
     num_logs_ = n;
+    return *this;
+  }
+
+  /**
+   * Sets that number of logs that needs to be created if LogsConfigManager is
+   * enabled. It's created by client API calls after after bootstraping the
+   * cluster. It's ignored when `defer_start_` is true.
+   */
+  ClusterFactory& setNumLogsConfigManagerLogs(int n) {
+    num_logs_config_manager_logs_ = n;
     return *this;
   }
 
@@ -600,6 +612,8 @@ class ClusterFactory {
   // How many logs in the config
   int num_logs_ = 2;
 
+  int num_logs_config_manager_logs_ = 0;
+
   // Number of shards for each storage node
   int num_db_shards_ = 2;
 
@@ -647,6 +661,14 @@ class ClusterFactory {
   // Set the attributes of an internal log.
   void setInternalLogAttributes(const std::string& name,
                                 logsconfig::LogAttributes attrs);
+
+  /**
+   * Uses either the provided log_config_ or creates a new default one to
+   * create a new logs config manager based log group. It requires that the
+   * cluster is up and running.
+   */
+  std::unique_ptr<client::LogGroup>
+  createLogsConfigManagerLogs(std::unique_ptr<Cluster>& cluster);
 };
 
 struct SockaddrPair {

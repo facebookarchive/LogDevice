@@ -605,7 +605,35 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
     return nullptr;
   }
 
+  if (num_logs_config_manager_logs_ > 0) {
+    auto log_group = createLogsConfigManagerLogs(cluster);
+    if (log_group == nullptr) {
+      ld_error("Failed to create the default logs config manager logs.");
+    }
+  }
+
   return cluster;
+}
+
+std::unique_ptr<client::LogGroup>
+ClusterFactory::createLogsConfigManagerLogs(std::unique_ptr<Cluster>& cluster) {
+  auto nodes = cluster->getConfig()->getServerConfig()->getNodes();
+  int num_storage_nodes = 0;
+  for (const auto& node : nodes) {
+    if (node.second.isReadableStorageNode()) {
+      num_storage_nodes++;
+    }
+  }
+  Configuration::Log log = log_config_.hasValue()
+      ? log_config_.value()
+      : createDefaultLogConfig(num_storage_nodes);
+
+  logsconfig::LogAttributes attrs;
+  log.toLogAttributes(&attrs);
+  return cluster->createClient()->makeLogGroupSync(
+      "/test_logs",
+      logid_range_t(logid_t(1), logid_t(num_logs_config_manager_logs_)),
+      attrs);
 }
 
 int Cluster::expand(std::vector<node_index_t> new_indices, bool start_nodes) {
