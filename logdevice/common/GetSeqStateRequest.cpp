@@ -41,8 +41,8 @@ GetSeqStateRequest::getContextString(GetSeqStateRequest::Context ctx) {
       return "get-trimpoint";
     case GetSeqStateRequest::Context::GET_TAIL_LSN:
       return "get-tail-lsn";
-    case GetSeqStateRequest::Context::REBUILDING_SEQ_ACTIVATOR:
-      return "rebuilding-seq-activator";
+    case GetSeqStateRequest::Context::REBUILDING_PLANNER:
+      return "rebuilding-planner";
     case GetSeqStateRequest::Context::SYNC_SEQUENCER:
       return "sync-sequencer";
     case GetSeqStateRequest::Context::GET_TAIL_ATTRIBUTES:
@@ -99,8 +99,8 @@ void GetSeqStateRequest::bumpContextStatsAllAttempts(
     case GetSeqStateRequest::Context::GET_TAIL_LSN:
       WORKER_STAT_INCR(get_seq_state_attempts_context_get_tail_lsn);
       break;
-    case GetSeqStateRequest::Context::REBUILDING_SEQ_ACTIVATOR:
-      WORKER_STAT_INCR(get_seq_state_attempts_context_rebuilding_seq_activator);
+    case GetSeqStateRequest::Context::REBUILDING_PLANNER:
+      WORKER_STAT_INCR(get_seq_state_attempts_context_rebuilding_planner);
       break;
     case GetSeqStateRequest::Context::SYNC_SEQUENCER:
       WORKER_STAT_INCR(get_seq_state_attempts_context_sync_sequencer);
@@ -164,8 +164,8 @@ void GetSeqStateRequest::bumpContextStats(GetSeqStateRequest::Context ctx) {
     case Context::GET_TAIL_LSN:
       WORKER_STAT_INCR(get_seq_state_unique_context_get_tail_lsn);
       break;
-    case Context::REBUILDING_SEQ_ACTIVATOR:
-      WORKER_STAT_INCR(get_seq_state_unique_context_rebuilding_seq_activator);
+    case Context::REBUILDING_PLANNER:
+      WORKER_STAT_INCR(get_seq_state_unique_context_rebuilding_planner);
       break;
     case Context::SYNC_SEQUENCER:
       WORKER_STAT_INCR(get_seq_state_unique_context_sync_sequencer);

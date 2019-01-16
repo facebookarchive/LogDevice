@@ -123,7 +123,7 @@ class GetSeqStateRequest : public Request, public SequencerRouter::Handler {
 
     // Other contexts
     GET_TAIL_LSN,
-    REBUILDING_SEQ_ACTIVATOR,
+    REBUILDING_PLANNER,
     SYNC_SEQUENCER,
     GET_TAIL_ATTRIBUTES,
     UNRELEASED_RECORD,

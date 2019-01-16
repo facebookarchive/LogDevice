@@ -34,7 +34,7 @@ class SyncSequencerRequestAdapter : public SyncSequencerRequest {
                      : 0), // Include historical epoch metadata for non-metadata
                            // logs.
             cb,
-            GetSeqStateRequest::Context::REBUILDING_SEQ_ACTIVATOR),
+            GetSeqStateRequest::Context::REBUILDING_PLANNER),
         ref_(std::move(ref)),
         logid_(logid) {
     // If log is not in config, stop SyncSequencerRequest and skip rebuilding
