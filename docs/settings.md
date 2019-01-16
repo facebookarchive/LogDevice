@@ -352,7 +352,7 @@ sidebar_label: Settings
 | rocksdb-level0-slowdown-writes-trigger | start throttling writers at this many L0 files. This applies to the unpartitioned and metadata column families only, not to LogsDB data partitions. | 25 | requires&nbsp;restart, server&nbsp;only |
 | rocksdb-level0-stop-writes-trigger | stop accepting writes (block writers) at this many L0 files. This applies to the unpartitioned and metadata column families only, not to LogsDB data partitions. | 30 | requires&nbsp;restart, server&nbsp;only |
 | rocksdb-max-background-compactions | Maximum number of concurrent rocksdb-initiated background compactions per shard. Note that this value is not important since most compactions are not "background" as far as rocksdb is concerned. They're done from \_logsdb\_ thread and are limited to one per shard at a time, regardless of this option. | 2 | requires&nbsp;restart, server&nbsp;only |
-| rocksdb-max-background-flushes | maximum number of concurrent background memtable flushes per shard. Flushes run on the rocksdb hipri thread pool | 15 | requires&nbsp;restart, server&nbsp;only |
+| rocksdb-max-background-flushes | maximum number of concurrent background memtable flushes per shard. Flushes run on the rocksdb hipri thread pool | 1 | requires&nbsp;restart, server&nbsp;only |
 | rocksdb-max-bytes-for-level-base | maximum combined data size for L1 | 10G | requires&nbsp;restart, server&nbsp;only |
 | rocksdb-max-bytes-for-level-multiplier | L\_n -> L\_n+1 data size multiplier | 8 | requires&nbsp;restart, server&nbsp;only |
 | rocksdb-max-open-files | maximum number of concurrently open RocksDB files; -1 for unlimited | 10000 | requires&nbsp;restart, server&nbsp;only |

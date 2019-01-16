@@ -1182,7 +1182,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
 
   init(OPTNAME(max_background_flushes),
        &max_background_flushes,
-       "15",
+       "1",
        parse_positive<ssize_t>(),
        "maximum number of concurrent background memtable flushes per shard. "
        "Flushes run on the rocksdb hipri thread pool",
