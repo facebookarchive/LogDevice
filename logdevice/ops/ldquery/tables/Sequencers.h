@@ -32,7 +32,7 @@ class Sequencers : public AdminCommandTable {
     return {
         {"log_id", DataType::LOGID, "Log ID this sequencer is for."},
         {"metadata_log_id",
-         DataType::LOGID,
+         DataType::TEXT,
          "ID of the corresponding metadata log."},
         {"state",
          DataType::TEXT,
