@@ -68,8 +68,7 @@ static void commonSetup(IntegrationTestUtils::ClusterFactory& cluster) {
   meta_config.sequencers_write_metadata_logs = true;
   meta_config.sequencers_provision_epoch_store = true;
 
-  cluster.setRocksDBType(IntegrationTestUtils::RocksDBType::PARTITIONED)
-      .setParam("--rocksdb-partition-duration", "900s")
+  cluster.setParam("--rocksdb-partition-duration", "900s")
       .setParam("--rocksdb-partition-timestamp-granularity", "0ms")
       .setParam("--rocksdb-new-partition-timestamp-margin", "0ms")
       // Make sure memtables are lost on crash

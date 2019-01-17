@@ -428,7 +428,6 @@ TEST_F(TrimIntegrationTest, LogDoesntExist) {
 TEST_F(TrimIntegrationTest, TrimPointsAreUpdatedWhenPartitionIsDropped) {
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
-          .setRocksDBType(IntegrationTestUtils::RocksDBType::PARTITIONED)
           .setNumDBShards(1)
           .setParam("--rocksdb-new-partition-timestamp-margin", "0s")
           .create(1);

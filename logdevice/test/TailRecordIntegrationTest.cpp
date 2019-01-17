@@ -65,15 +65,12 @@ void TailRecordIntegrationTest::init() {
   log.replicationFactor = replication_;
   log.tailOptimized = tail_optimized_;
 
-  auto factory =
-      IntegrationTestUtils::ClusterFactory()
-          // use logsdb to support record cache persistence
-          .setRocksDBType(IntegrationTestUtils::RocksDBType::PARTITIONED)
-          .setLogConfig(log)
-          .deferStart()
-          .setParam("--reactivation-limit", "100/1s")
-          // enable byte offsets
-          .setParam("--byte-offsets");
+  auto factory = IntegrationTestUtils::ClusterFactory()
+                     .setLogConfig(log)
+                     .deferStart()
+                     .setParam("--reactivation-limit", "100/1s")
+                     // enable byte offsets
+                     .setParam("--byte-offsets");
 
   cluster_ = factory.create(nodes_);
 

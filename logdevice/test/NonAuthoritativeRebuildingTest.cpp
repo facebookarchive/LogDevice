@@ -109,28 +109,26 @@ class NonAuthoritativeRebuildingTest
     std::shared_ptr<NodeSetSelector> selector =
         NodeSetSelectorFactory::create(NodeSetSelectorType::RANDOM_CROSSDOMAIN);
 
-    cluster_ =
-        IntegrationTestUtils::ClusterFactory()
-            .setRocksDBType(IntegrationTestUtils::RocksDBType::PARTITIONED)
-            .setParam("--file-config-update-interval", "10ms")
-            .setParam("--disable-rebuilding", "false")
-            // A rebuilding node responds to STOREs with E::DISABLED. Setting
-            // this to 0s makes it so that the sequencer does not wait for a
-            // while before trying to store to that node again, otherwise the
-            // test would timeout.
-            .setParam("--disabled-retry-interval", "0s")
-            .setParam("--seq-state-backoff-time", "10ms..1s")
-            .setParam("--sticky-copysets-block-max-time", "1ms")
-            .setParam("--rebuilding-v2", GetParam() ? "true" : "false")
-            .setNumDBShards(1)
-            .setNumRacks(3)
-            .useHashBasedSequencerAssignment()
-            .setLogConfig(log_config)
-            .setEventLogDeltaAttributes(event_log_attrs)
-            .setMetaDataLogsConfig(meta_config)
-            .setNumLogs(1)
-            .deferStart()
-            .create(12);
+    cluster_ = IntegrationTestUtils::ClusterFactory()
+                   .setParam("--file-config-update-interval", "10ms")
+                   .setParam("--disable-rebuilding", "false")
+                   // A rebuilding node responds to STOREs with E::DISABLED.
+                   // Setting this to 0s makes it so that the sequencer does not
+                   // wait for a while before trying to store to that node
+                   // again, otherwise the test would timeout.
+                   .setParam("--disabled-retry-interval", "0s")
+                   .setParam("--seq-state-backoff-time", "10ms..1s")
+                   .setParam("--sticky-copysets-block-max-time", "1ms")
+                   .setParam("--rebuilding-v2", GetParam() ? "true" : "false")
+                   .setNumDBShards(1)
+                   .setNumRacks(3)
+                   .useHashBasedSequencerAssignment()
+                   .setLogConfig(log_config)
+                   .setEventLogDeltaAttributes(event_log_attrs)
+                   .setMetaDataLogsConfig(meta_config)
+                   .setNumLogs(1)
+                   .deferStart()
+                   .create(12);
 
     // Tests are going to work on this log.
     {

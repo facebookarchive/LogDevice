@@ -214,7 +214,6 @@ class RebuildingTest : public IntegrationTestBase,
           // surfaced in tests with sequencer-written metadata. See t13850978
           .doPreProvisionEpochMetaData()
           .doNotLetSequencersProvisionEpochMetaData()
-          .setRocksDBType(IntegrationTestUtils::RocksDBType::PARTITIONED)
           .setParam("--file-config-update-interval", "10ms")
           .setParam("--disable-rebuilding", "false")
           // A rebuilding node responds to STOREs with E::DISABLED. Setting this

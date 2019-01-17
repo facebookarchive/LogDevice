@@ -337,7 +337,6 @@ void RecoveryTest::init() {
   auto factory =
       IntegrationTestUtils::ClusterFactory()
           // use logsdb to support record cache persistence
-          .setRocksDBType(IntegrationTestUtils::RocksDBType::PARTITIONED)
           .enableMessageErrorInjection()
           .setLogConfig(log)
           .setEventLogDeltaAttributes(event_log_attrs)

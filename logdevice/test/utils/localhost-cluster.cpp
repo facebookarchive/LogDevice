@@ -206,18 +206,28 @@ static void add_params(IntegrationTestUtils::ClusterFactory& factory,
                        const ParamScope scope) {
   for (const std::string& param : params) {
     size_t pos = param.find('=');
-    // NOTE: some params are special-cased, when IntegrationTestUtils needs to
-    // know about them (not enough to pass them through to the server process)
     if (pos == std::string::npos) {
-      if (param == "rocksdb-partitioned") {
-        factory.setRocksDBType(IntegrationTestUtils::RocksDBType::PARTITIONED);
-      } else {
-        factory.setParam("--" + param, scope);
-      }
+      factory.setParam("--" + param, scope);
     } else {
       std::string key = param.substr(0, pos);
       std::string value = param.substr(pos + 1);
-      factory.setParam("--" + key, value, scope);
+
+      // NOTE: some params are special-cased, when IntegrationTestUtils needs to
+      // know about them (not enough to pass them through to the server process)
+      if (key == "rocksdb-partitioned") {
+        if (lowerCase(value) == "true" || value == "1") {
+          factory.setRocksDBType(
+              IntegrationTestUtils::RocksDBType::PARTITIONED);
+        } else if (lowerCase(value) == "false" || value == "0") {
+          factory.setRocksDBType(IntegrationTestUtils::RocksDBType::SINGLE);
+        } else {
+          std::cerr << "unexpected value " << value
+                    << " of --rocksdb-partitioned" << std::endl;
+          exit(1);
+        }
+      } else {
+        factory.setParam("--" + key, value, scope);
+      }
     }
   }
 }

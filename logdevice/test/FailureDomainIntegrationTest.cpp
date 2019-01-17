@@ -418,7 +418,6 @@ TEST_F(FailureDomainIntegrationTest, ThreeRackReplication) {
           .setEventLogAttributes(
               logsconfig::LogAttributes().with_replicateAcross(
                   {{NodeLocationScope::RACK, 4}}))
-          .setRocksDBType(IntegrationTestUtils::RocksDBType::PARTITIONED)
           .useHashBasedSequencerAssignment()
           .setParam("--enable-sticky-copysets", "false")
           .setParam("--rocksdb-use-copyset-index", "false")

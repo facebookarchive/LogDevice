@@ -74,10 +74,7 @@ TEST_F(FindTimeIntegrationTest, FindTimeZeroTrim) {
 }
 
 TEST_F(FindTimeIntegrationTest, FindTimeZeroTrimApproximate) {
-  auto cluster =
-      IntegrationTestUtils::ClusterFactory()
-          .setRocksDBType(IntegrationTestUtils::RocksDBType::PARTITIONED)
-          .create(2);
+  auto cluster = IntegrationTestUtils::ClusterFactory().create(2);
   std::shared_ptr<Client> client = cluster->createClient();
 
   cluster->waitForRecovery();
@@ -124,7 +121,6 @@ TEST_F(FindTimeIntegrationTest, FindTimeMaxEntireLogTrimmed) {
 TEST_F(FindTimeIntegrationTest, FindTimeMaxEntireLogTrimmedAllowSmallerLsn) {
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
-          .setRocksDBType(IntegrationTestUtils::RocksDBType::PARTITIONED)
           .doPreProvisionEpochMetaData() // to avoid breaking LSN math due to
                                          // seq reactivations
           .create(1);

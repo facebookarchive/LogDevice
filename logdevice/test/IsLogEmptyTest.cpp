@@ -108,8 +108,7 @@ void IsLogEmptyTest::commonSetup(
   meta_config.sequencers_write_metadata_logs = true;
   meta_config.sequencers_provision_epoch_store = true;
 
-  cluster.setRocksDBType(IntegrationTestUtils::RocksDBType::PARTITIONED)
-      .setParam("--rocksdb-partition-duration", "900s")
+  cluster.setParam("--rocksdb-partition-duration", "900s")
       .setParam("--rocksdb-partition-timestamp-granularity", "0ms")
       // Use bridge records, which previously tricked isLogEmpty
       .setParam("--bridge-record-in-empty-epoch", "true")
