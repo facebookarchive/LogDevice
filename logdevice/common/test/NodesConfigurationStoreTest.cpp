@@ -31,8 +31,6 @@ using namespace facebook::logdevice::membership;
 using version_t = NodesConfigurationStore::version_t;
 
 namespace {
-const std::string kFoo{"/foo"};
-const std::string kBar{"/bar"};
 std::unique_ptr<NodesConfigurationStore> store{nullptr};
 
 class NodesConfigurationStoreTest : public ::testing::Test {
@@ -69,30 +67,28 @@ void runBasicTests(std::unique_ptr<NodesConfigurationStore> store,
 
   if (initialWrite) {
     // no config stored yet
-    store->getConfig(kFoo, [&b](Status status, std::string) {
+    store->getConfig([&b](Status status, std::string) {
       EXPECT_EQ(Status::NOTFOUND, status);
       b.post();
     });
     checkAndResetBaton(b);
 
-    EXPECT_EQ(Status::NOTFOUND, store->getConfigSync(kFoo, &value_out));
+    EXPECT_EQ(Status::NOTFOUND, store->getConfigSync(&value_out));
 
     // initial write
     EXPECT_EQ(Status::OK,
               store->updateConfigSync(
-                  kFoo, TestEntry{10, "foo123"}.serialize(), folly::none));
+                  TestEntry{10, "foo123"}.serialize(), folly::none));
 
-    EXPECT_EQ(Status::OK, store->getConfigSync(kFoo, &value_out));
+    EXPECT_EQ(Status::OK, store->getConfigSync(&value_out));
     EXPECT_EQ(TestEntry(10, "foo123"), TestEntry::fromSerialized(value_out));
   }
-
-  EXPECT_EQ(Status::NOTFOUND, store->getConfigSync(kBar, &value_out));
 
   // update: blind overwrite
   EXPECT_EQ(Status::OK,
             store->updateConfigSync(
-                kFoo, TestEntry{12, "foo456"}.serialize(), folly::none));
-  EXPECT_EQ(Status::OK, store->getConfigSync(kFoo, &value_out));
+                TestEntry{12, "foo456"}.serialize(), folly::none));
+  EXPECT_EQ(Status::OK, store->getConfigSync(&value_out));
   auto e = TestEntry::fromSerialized(value_out);
   EXPECT_EQ(TestEntry(12, "foo456"), e);
 
@@ -104,15 +100,14 @@ void runBasicTests(std::unique_ptr<NodesConfigurationStore> store,
   value_out = "";
   EXPECT_EQ(
       Status::VERSION_MISMATCH,
-      store->updateConfigSync(kFoo,
-                              TestEntry{next_version, "foo789"}.serialize(),
+      store->updateConfigSync(TestEntry{next_version, "foo789"}.serialize(),
                               prev_version,
                               &version_out,
                               &value_out));
   EXPECT_EQ(curr_version, version_out);
   EXPECT_EQ(TestEntry(12, "foo456"), TestEntry::fromSerialized(value_out));
   store->updateConfig(
-      kFoo,
+
       TestEntry{next_version, "foo789"}.serialize(),
       next_version,
       [&b, curr_version](Status status, version_t version, std::string value) {
@@ -123,11 +118,10 @@ void runBasicTests(std::unique_ptr<NodesConfigurationStore> store,
       });
   checkAndResetBaton(b);
 
-  EXPECT_EQ(
-      Status::OK,
-      store->updateConfigSync(
-          kFoo, TestEntry{next_version, "foo789"}.serialize(), curr_version));
-  store->getConfig(kFoo, [&b, next_version](Status status, std::string value) {
+  EXPECT_EQ(Status::OK,
+            store->updateConfigSync(
+                TestEntry{next_version, "foo789"}.serialize(), curr_version));
+  store->getConfig([&b, next_version](Status status, std::string value) {
     EXPECT_EQ(Status::OK, status);
     EXPECT_EQ(TestEntry(next_version, "foo789"),
               TestEntry::fromSerialized(std::move(value)));
@@ -158,7 +152,7 @@ void runMultiThreadedTests(std::unique_ptr<NodesConfigurationStore> store) {
       version_t base_version{k};
       version_t next_version{k + 1};
       store->updateConfig(
-          kFoo,
+
           TestEntry{next_version, "foo" + folly::to<std::string>(k + 1)}
               .serialize(),
           base_version,
@@ -186,9 +180,9 @@ void runMultiThreadedTests(std::unique_ptr<NodesConfigurationStore> store) {
   }
 
   // write version 0 (i.e., ~provision)
-  ASSERT_EQ(Status::OK,
-            store->updateConfigSync(
-                kFoo, TestEntry{0, "foobar"}.serialize(), folly::none));
+  ASSERT_EQ(
+      Status::OK,
+      store->updateConfigSync(TestEntry{0, "foobar"}.serialize(), folly::none));
 
   {
     std::lock_guard<std::mutex> g{m};
@@ -200,7 +194,7 @@ void runMultiThreadedTests(std::unique_ptr<NodesConfigurationStore> store) {
   }
 
   std::string value_out;
-  EXPECT_EQ(Status::OK, store->getConfigSync(kFoo, &value_out));
+  EXPECT_EQ(Status::OK, store->getConfigSync(&value_out));
   EXPECT_EQ(TestEntry(kIter, "foo" + folly::to<std::string>(kIter)),
             TestEntry::fromSerialized(std::move(value_out)));
   EXPECT_EQ(kIter, successCnt.load());
@@ -221,7 +215,7 @@ TEST(NodesConfigurationStore, zk_basic) {
   auto z = std::make_shared<ZookeeperClientInMemory>(
       "unused quorum",
       ZookeeperClientInMemory::state_map_t{
-          {kFoo,
+          {ZookeeperNodesConfigurationStore::kConfigKey,
            {TestEntry{0, "initValue"}.serialize(), zk::Stat{.version_ = 4}}}});
   runBasicTests(std::make_unique<ZookeeperNodesConfigurationStore>(
                     TestEntry::extractVersionFn, std::move(z)),
@@ -232,7 +226,7 @@ TEST(NodesConfigurationStore, zk_basicMT) {
   auto z = std::make_shared<ZookeeperClientInMemory>(
       "unused quorum",
       ZookeeperClientInMemory::state_map_t{
-          {kFoo,
+          {ZookeeperNodesConfigurationStore::kConfigKey,
            {TestEntry{0, "initValue"}.serialize(), zk::Stat{.version_ = 4}}}});
   runMultiThreadedTests(std::make_unique<ZookeeperNodesConfigurationStore>(
       TestEntry::extractVersionFn, std::move(z)));

@@ -6,10 +6,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "logdevice/common/test/FileBasedNodesConfigurationStore.h"
+#include "logdevice/common/test/FileBasedVersionedConfigStore.h"
 
 #include <shared_mutex>
 
+#include <boost/filesystem.hpp>
 #include <folly/File.h>
 #include <folly/FileUtil.h>
 #include <folly/Singleton.h>
@@ -19,10 +20,9 @@
 #include "logdevice/common/debug.h"
 #include "logdevice/common/util.h"
 
-namespace facebook { namespace logdevice { namespace configuration {
-namespace nodes {
+namespace facebook { namespace logdevice {
 
-FileBasedNodesConfigurationStore::FileBasedNodesConfigurationStore(
+FileBasedVersionedConfigStore::FileBasedVersionedConfigStore(
     std::string root_path,
     extract_version_fn f)
     : root_path_(std::move(root_path)),
@@ -32,14 +32,14 @@ FileBasedNodesConfigurationStore::FileBasedNodesConfigurationStore(
   for (auto i = 0; i < NUM_THREADS; ++i) {
     task_threads_.emplace_back([this] { threadMain(); });
   }
-  ld_info("FileBasedNodesConfigurationStore threads started.");
+  ld_info("FileBasedVersionedConfigStore threads started.");
 }
 
-FileBasedNodesConfigurationStore::~FileBasedNodesConfigurationStore() {
+FileBasedVersionedConfigStore::~FileBasedVersionedConfigStore() {
   // Assumptions:
   // 1) destructor should only be called on one thread;
   // 2) when destructor is called, there should be no thread context still
-  //    calling FileBasedNodesConfigurationStore public functions
+  //    calling FileBasedVersionedConfigStore public functions
   bool shutting_down = shutdown_.exchange(true);
   ld_check(!shutting_down);
   // enqueue the termination task for each worker
@@ -49,10 +49,10 @@ FileBasedNodesConfigurationStore::~FileBasedNodesConfigurationStore() {
   for (auto& t : task_threads_) {
     t.join();
   }
-  ld_info("FileBasedNodesConfigurationStore threads stopped.");
+  ld_info("FileBasedVersionedConfigStore threads stopped.");
 }
 
-void FileBasedNodesConfigurationStore::threadMain() {
+void FileBasedVersionedConfigStore::threadMain() {
   ThreadID::set(ThreadID::Type::UTILITY, "ld:file-ncs");
   while (true) {
     folly::Function<void()> task;
@@ -66,9 +66,8 @@ void FileBasedNodesConfigurationStore::threadMain() {
   }
 }
 
-void FileBasedNodesConfigurationStore::getConfigImpl(
-    std::string key,
-    value_callback_t cb) const {
+void FileBasedVersionedConfigStore::getConfigImpl(std::string key,
+                                                  value_callback_t cb) const {
   if (shutdown_.load()) {
     cb(E::SHUTDOWN, "");
     return;
@@ -76,8 +75,9 @@ void FileBasedNodesConfigurationStore::getConfigImpl(
 
   folly::File lock_file;
   try {
-    lock_file =
-        folly::File(getLockFilePath(key), O_RDWR | O_CREAT | O_CLOEXEC, 0700);
+    auto lock_path = getLockFilePath(key);
+    createDirectoriesOfFile(lock_path);
+    lock_file = folly::File(lock_path, O_RDWR | O_CREAT | O_CLOEXEC, 0700);
   } catch (const std::exception& ex) {
     ld_error("Failed to create lockfile %s: %s",
              getLockFilePath(key).c_str(),
@@ -112,7 +112,7 @@ void FileBasedNodesConfigurationStore::getConfigImpl(
   cb(E::OK, std::move(value));
 }
 
-void FileBasedNodesConfigurationStore::updateConfigImpl(
+void FileBasedVersionedConfigStore::updateConfigImpl(
     std::string key,
     std::string value,
     folly::Optional<version_t> base_version,
@@ -137,7 +137,9 @@ void FileBasedNodesConfigurationStore::updateConfigImpl(
 
   folly::File lock_file;
   try {
-    lock_file = folly::File(getLockFilePath(key), O_RDWR | O_CREAT);
+    auto lock_path = getLockFilePath(key);
+    createDirectoriesOfFile(lock_path);
+    lock_file = folly::File(lock_path, O_RDWR | O_CREAT);
   } catch (const std::exception& ex) {
     ld_error("Failed to create lockfile %s: %s",
              getLockFilePath(key).c_str(),
@@ -153,6 +155,7 @@ void FileBasedNodesConfigurationStore::updateConfigImpl(
   try {
     // open file in read-only but with on-demand creation, for writes, we will
     // open the file again if needed
+    createDirectoriesOfFile(data_file_path);
     data_file = folly::File(data_file_path, O_RDONLY | O_CREAT, 0600);
   } catch (const std::exception& ex) {
     ld_error("Failed to open or create data file %s: %s",
@@ -215,8 +218,8 @@ void FileBasedNodesConfigurationStore::updateConfigImpl(
   cb(E::OK, new_version, "");
 }
 
-void FileBasedNodesConfigurationStore::getConfig(std::string key,
-                                                 value_callback_t cb) const {
+void FileBasedVersionedConfigStore::getConfig(std::string key,
+                                              value_callback_t cb) const {
   if (shutdown_.load()) {
     cb(E::SHUTDOWN, {});
     return;
@@ -233,7 +236,7 @@ void FileBasedNodesConfigurationStore::getConfig(std::string key,
   }
 }
 
-void FileBasedNodesConfigurationStore::updateConfig(
+void FileBasedVersionedConfigStore::updateConfig(
     std::string key,
     std::string value,
     folly::Optional<version_t> base_version,
@@ -261,4 +264,10 @@ void FileBasedNodesConfigurationStore::updateConfig(
   }
 }
 
-}}}} // namespace facebook::logdevice::configuration::nodes
+void FileBasedVersionedConfigStore::createDirectoriesOfFile(
+    const std::string& file) {
+  boost::filesystem::path p(file);
+  boost::filesystem::create_directories(p.parent_path());
+}
+
+}} // namespace facebook::logdevice

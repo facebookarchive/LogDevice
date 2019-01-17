@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "logdevice/common/configuration/nodes/NodesConfigurationStore.h"
+#include "logdevice/common/VersionedConfigStore.h"
 
 #include <chrono>
 
@@ -16,11 +16,10 @@
 #include "logdevice/common/util.h"
 #include "logdevice/include/Err.h"
 
-namespace facebook { namespace logdevice { namespace configuration {
-namespace nodes {
+namespace facebook { namespace logdevice {
 
-Status NodesConfigurationStore::getConfigSync(std::string key,
-                                              std::string* value_out) const {
+Status VersionedConfigStore::getConfigSync(std::string key,
+                                           std::string* value_out) const {
   folly::Baton<> b;
   Status ret_status = Status::OK;
   value_callback_t cb = [&b, &ret_status, value_out](
@@ -38,12 +37,12 @@ Status NodesConfigurationStore::getConfigSync(std::string key,
   return ret_status;
 }
 
-Status NodesConfigurationStore::updateConfigSync(
-    std::string key,
-    std::string value,
-    folly::Optional<version_t> base_version,
-    version_t* version_out,
-    std::string* value_out) {
+Status
+VersionedConfigStore::updateConfigSync(std::string key,
+                                       std::string value,
+                                       folly::Optional<version_t> base_version,
+                                       version_t* version_out,
+                                       std::string* value_out) {
   folly::Baton<> b;
   Status ret_status = Status::OK;
   write_callback_t cb =
@@ -62,4 +61,4 @@ Status NodesConfigurationStore::updateConfigSync(
   return ret_status;
 }
 
-}}}} // namespace facebook::logdevice::configuration::nodes
+}} // namespace facebook::logdevice

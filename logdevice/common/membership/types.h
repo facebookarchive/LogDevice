@@ -8,6 +8,7 @@
 #pragma once
 
 #include "logdevice/common/configuration/nodes/NodeRole.h"
+#include "logdevice/common/types_internal.h"
 #include "logdevice/include/types.h"
 
 namespace facebook { namespace logdevice { namespace membership {
@@ -15,7 +16,7 @@ namespace facebook { namespace logdevice { namespace membership {
 // membership state is versioned and any changes will cause a version
 // bumps to the membership.
 namespace MembershipVersion {
-LOGDEVICE_STRONG_TYPEDEF(uint64_t, Type);
+using Type = vcs_config_version_t;
 
 // initial state of the membership, which is an empty set. The state is still
 // considered as valid but will never get published to subscribers

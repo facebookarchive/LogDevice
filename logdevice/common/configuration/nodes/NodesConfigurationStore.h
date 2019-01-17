@@ -7,152 +7,98 @@
  */
 #pragma once
 
+#include <type_traits>
 #include <unordered_map>
 
 #include <folly/Function.h>
 #include <folly/Optional.h>
 #include <folly/Synchronized.h>
 
-#include "logdevice/common/membership/StorageMembership.h"
+#include "logdevice/common/VersionedConfigStore.h"
 #include "logdevice/include/Err.h"
+#include "logdevice/include/types.h"
 
 namespace facebook { namespace logdevice { namespace configuration {
 namespace nodes {
 
 // Backing data source of NodesConfig, used both by the LogDevice server and by
-// tooling. Exposes a key-value API, owned and accessed by the
-// NodesConfigurationManager singleton.
+// tooling. This is mostly owned and accessed by the NodesConfigurationManager
+// singleton. This is just an API, implementations include
+// VersionedNodesConfigurationStore and ServerBasedNodesConfigurationStore.
 class NodesConfigurationStore {
  public:
-  using version_t = membership::MembershipVersion::Type;
+  using version_t = VersionedConfigStore::version_t;
+  using value_callback_t = VersionedConfigStore::value_callback_t;
+  using write_callback_t = VersionedConfigStore::write_callback_t;
+  using extract_version_fn = VersionedConfigStore::extract_version_fn;
 
-  // The status codes may be one of the following if the callback is invoked:
-  //   OK
-  //   NOTFOUND: key not found, corresponds to ZNONODE
-  //   VERSION_MISMATCH: corresponds to ZBADVERSION
-  //   ACCESS: permission denied, corresponds to ZNOAUTH
-  //   AGAIN: transient errors (including connection closed ZCONNECTIONLOSS,
-  //          timed out ZOPERATIONTIMEOUT, throttled ZWRITETHROTTLE)
-  using value_callback_t = folly::Function<void(Status, std::string)>;
-  using write_callback_t =
-      folly::Function<void(Status, version_t, std::string)>;
+  virtual ~NodesConfigurationStore() = default;
 
-  // Function that NodesConfigurationStore could call on stored values to
-  // extract the corresponding membership version. If value is invalid, the
-  // function should return folly::none.
-  //
-  // This function should be synchronous, relatively fast, and should not
-  // consume the value string (folly::StringPiece does not take ownership of the
-  // string).
-  using extract_version_fn =
-      folly::Function<folly::Optional<version_t>(folly::StringPiece) const>;
+  // Read the documentation of VersionedConfigStore::getConfig.
+  virtual void getConfig(value_callback_t cb) const = 0;
 
-  explicit NodesConfigurationStore() {}
-  virtual ~NodesConfigurationStore() {}
+  // Read the documentation of VersionedConfigStore::getConfigSync.
+  virtual Status getConfigSync(std::string* value_out) const = 0;
 
-  /*
-   * read
-   *
-   * @param key: key of the config
-   * @param cb:
-   *   callback void(Status, std::string value) that will be invoked with
-   *   status OK, NOTFOUND, ACCESS, INVALID_PARAM, INVALID_CONFIG, or AGAIN. If
-   *   status is OK, cb will be invoked with the value. Otherwise, the value
-   *   parameter is meaningless (but default-constructed).
-   *
-   * Note that the reads do not need to be linearizable with the writes.
-   */
-  virtual void getConfig(std::string key, value_callback_t cb) const = 0;
-
-  /*
-   * synchronous read
-   *
-   * @param key: key of the config
-   * @param value_out: the config (string)
-   *   If the status is OK, value will be set to the returned config. Otherwise,
-   *   it will be untouched.
-   *
-   * @return status is one of:
-   *   OK // == 0
-   *   NOTFOUND
-   *   ACCESS
-   *   AGAIN
-   *   INVALID_PARAM
-   *   INVALID_CONFIG
-   */
-  virtual Status getConfigSync(std::string key, std::string* value_out) const;
-
-  /*
-   * NodesConfigurationStore provides strict conditional update semantics--it
-   * will only update the value for a key if the base_version matches the latest
-   * version in the store.
-   *
-   * @param key: key of the config
-   * @param value:
-   *   value to be stored. Note that the callsite need not guarantee the
-   *   validity of the underlying buffer till callback is invoked.
-   * @param base_version:
-   *   base_version == folly::none =>
-   *     overwrites the corresponding config for key with value, regardless of
-   *     its current version. Also used for the initial config.
-   *     Implementation note: this is different from the Zookeeper setData call,
-   *     which would complain ZNONODE if the znode has not already been created.
-   *   base_version.hasValue() =>
-   *     strict conditional update: only update the config when the existing
-   *     version matches base_version.
-   * @param cb:
-   *   callback void(Status, version_t, std::string value) that will be invoked
-   *   if the status is one of:
-   *     OK
-   *     NOTFOUND // only possible when base_version.hasValue()
-   *     VERSION_MISMATCH
-   *     ACCESS
-   *     AGAIN
-   *     BADMSG // see implementation notes below
-   *     INVALID_PARAM // see implementation notes below
-   *     INVALID_CONFIG // see implementation notes below
-   *   If status is OK, cb will be invoked with the version of the newly written
-   *   config. If status is VERSION_MISMATCH, cb will be invoked with the
-   *   version that caused the mismatch as well as the existing config, if
-   *   available (i.e., always check in the callback whether version is
-   *   EMPTY_VERSION). Otherwise, the version and value parameter(s) are
-   *   meaningless (default-constructed).
-   *
-   */
-  virtual void updateConfig(std::string key,
-                            std::string value,
+  // Read the documentation of VersionedConfigStore::updateConfig.
+  virtual void updateConfig(std::string value,
                             folly::Optional<version_t> base_version,
                             write_callback_t cb = {}) = 0;
 
-  /*
-   * Synchronous updateConfig
-   *
-   * See params for updateConfig()
-   *
-   * @param version_out:
-   *   If not nullptr and status is OK or VERSION_MISMATCH, *version_out
-   *   will be set to the version of the newly written config or the version
-   *   that caused the mismatch, respectively. Otherwise, *version_out is
-   *   untouched.
-   * @param value_out:
-   *   If not nullptr and status is VERSION_MISMATCH, *value_out will be set to
-   *   the existing config. Otherwise, *value_out is untouched.
-   * @return status: status will be one of:
-   *   OK // == 0
-   *   NOTFOUND // only possible when base_version.hasValue()
-   *   VERSION_MISMATCH
-   *   ACCESS
-   *   AGAIN
-   *   BADMSG
-   *   INVALID_PARAM
-   *   INVALID_CONFIG
-   */
-  virtual Status updateConfigSync(std::string key,
-                                  std::string value,
+  // Read the documentation of VersionedConfigStore::updateConfigSync.
+  virtual Status updateConfigSync(std::string value,
                                   folly::Optional<version_t> base_version,
                                   version_t* version_out = nullptr,
-                                  std::string* value_out = nullptr);
-
-  // TODO: add subscription API
+                                  std::string* value_out = nullptr) = 0;
 };
+
+// A NodesConfigurationStore implementation that's backed by a
+// VersionedConfigStore.
+template <class T>
+class VersionedNodesConfigurationStore : public NodesConfigurationStore {
+  static_assert(std::is_base_of<VersionedConfigStore, T>::value,
+                "The generic type should be a VersionedConfigStore");
+
+ public:
+  static constexpr const auto kConfigKey = "/ncm/config";
+
+  template <typename... Args>
+  VersionedNodesConfigurationStore(Args&&... args)
+      : store_(std::make_unique<T>(std::forward<Args>(args)...)) {}
+
+  virtual ~VersionedNodesConfigurationStore() = default;
+
+  virtual void getConfig(value_callback_t cb) const override {
+    store_->getConfig(kConfigKey, std::move(cb));
+  }
+
+  virtual Status getConfigSync(std::string* value_out) const override {
+    return store_->getConfigSync(kConfigKey, value_out);
+  }
+
+  virtual void updateConfig(std::string value,
+                            folly::Optional<version_t> base_version,
+                            write_callback_t cb = {}) override {
+    store_->updateConfig(
+        kConfigKey, std::move(value), std::move(base_version), std::move(cb));
+  }
+
+  virtual Status updateConfigSync(std::string value,
+                                  folly::Optional<version_t> base_version,
+                                  version_t* version_out = nullptr,
+                                  std::string* value_out = nullptr) override {
+    return store_->updateConfigSync(kConfigKey,
+                                    std::move(value),
+                                    std::move(base_version),
+                                    version_out,
+                                    value_out);
+  }
+
+ private:
+  std::unique_ptr<T> store_;
+};
+
+template <class T>
+constexpr const char* const VersionedNodesConfigurationStore<T>::kConfigKey;
+
 }}}} // namespace facebook::logdevice::configuration::nodes

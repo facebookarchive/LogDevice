@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "logdevice/common/configuration/nodes/ZookeeperNodesConfigurationStore.h"
+#include "logdevice/common/ZookeeperVersionedConfigStore.h"
 
 #include <chrono>
 
@@ -16,14 +16,12 @@
 #include "logdevice/common/util.h"
 #include "logdevice/include/Err.h"
 
-namespace facebook { namespace logdevice { namespace configuration {
-namespace nodes {
+namespace facebook { namespace logdevice {
 
-//////// ZookeeperNodesConfigurationStore ////////
+//////// ZookeeperVersionedConfigStore ////////
 
-void ZookeeperNodesConfigurationStore::getConfig(
-    std::string key,
-    value_callback_t callback) const {
+void ZookeeperVersionedConfigStore::getConfig(std::string key,
+                                              value_callback_t callback) const {
   ZookeeperClientBase::data_callback_t completion =
       [cb = std::move(callback)](int rc, std::string value, zk::Stat) mutable {
         Status status = ZookeeperClientBase::toStatus(rc);
@@ -32,7 +30,7 @@ void ZookeeperNodesConfigurationStore::getConfig(
   zk_->getData(std::move(key), std::move(completion));
 }
 
-void ZookeeperNodesConfigurationStore::updateConfig(
+void ZookeeperVersionedConfigStore::updateConfig(
     std::string key,
     std::string value,
     folly::Optional<version_t> base_version,
@@ -104,4 +102,4 @@ void ZookeeperNodesConfigurationStore::updateConfig(
   zk_->getData(std::move(key), std::move(read_cb));
 }
 
-}}}} // namespace facebook::logdevice::configuration::nodes
+}} // namespace facebook::logdevice

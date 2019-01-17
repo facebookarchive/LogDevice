@@ -111,9 +111,6 @@ class Dependencies {
   // dcheck that we are in the proper NCM work context
   void dcheckOnNCM() const;
 
- protected:
-  static constexpr const auto kConfigKey = "/ncm/config";
-
  private:
   // Convenience method to reduce boilerplate: only necessary to specify the
   // custom arguments

@@ -6,25 +6,23 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "logdevice/common/test/InMemNodesConfigurationStore.h"
+#include "logdevice/common/test/InMemVersionedConfigStore.h"
 
 #include "logdevice/common/util.h"
 
-namespace facebook { namespace logdevice { namespace configuration {
-namespace nodes {
+namespace facebook { namespace logdevice {
 
-//////// InMemNodesConfigurationStore ////////
+//////// InMemVersionedConfigStore ////////
 
-void InMemNodesConfigurationStore::getConfig(std::string key,
-                                             value_callback_t cb) const {
+void InMemVersionedConfigStore::getConfig(std::string key,
+                                          value_callback_t cb) const {
   std::string value{};
   Status status = getConfigSync(std::move(key), &value);
   cb(status, std::move(value));
 }
 
-Status
-InMemNodesConfigurationStore::getConfigSync(std::string key,
-                                            std::string* value_out) const {
+Status InMemVersionedConfigStore::getConfigSync(std::string key,
+                                                std::string* value_out) const {
   {
     auto lockedConfigs = configs_.rlock();
     auto it = lockedConfigs->find(key);
@@ -38,7 +36,7 @@ InMemNodesConfigurationStore::getConfigSync(std::string key,
   return Status::OK;
 }
 
-void InMemNodesConfigurationStore::updateConfig(
+void InMemVersionedConfigStore::updateConfig(
     std::string key,
     std::string value,
     folly::Optional<version_t> base_version,
@@ -51,7 +49,7 @@ void InMemNodesConfigurationStore::updateConfig(
   cb(status, version, std::move(value_out));
 }
 
-Status InMemNodesConfigurationStore::updateConfigSync(
+Status InMemVersionedConfigStore::updateConfigSync(
     std::string key,
     std::string value,
     folly::Optional<version_t> base_version,
@@ -96,7 +94,7 @@ Status InMemNodesConfigurationStore::updateConfigSync(
 /* static */ constexpr const folly::StringPiece TestEntry::kValue;
 /* static */ constexpr const folly::StringPiece TestEntry::kVersion;
 
-/* static */ NodesConfigurationStore::version_t
+/* static */ VersionedConfigStore::version_t
 TestEntry::extractVersionFn(folly::StringPiece buf) {
   return TestEntry::fromSerialized(buf).version();
 }
@@ -114,4 +112,4 @@ std::string TestEntry::serialize() const {
       kVersion, folly::to<std::string>(version_.val()));
   return folly::toJson(d);
 }
-}}}} // namespace facebook::logdevice::configuration::nodes
+}} // namespace facebook::logdevice

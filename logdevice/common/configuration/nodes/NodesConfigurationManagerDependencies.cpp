@@ -83,8 +83,6 @@ void Dependencies::dcheckOnNCM() const {
   ld_assert(current_worker->worker_type_ == worker_type_);
 }
 
-/* static */ constexpr const char* Dependencies::kConfigKey;
-
 void Dependencies::init(NCMWeakPtr ncm) {
   ld_assert(ncm.lock());
   ncm_ = ncm;
@@ -96,7 +94,7 @@ void Dependencies::init(NCMWeakPtr ncm) {
 void Dependencies::readFromStoreAndActivateTimer() {
   dcheckOnNCM();
   ld_assert(store_);
-  store_->getConfig(kConfigKey, [ncm = ncm_](Status status, std::string value) {
+  store_->getConfig([ncm = ncm_](Status status, std::string value) {
     // May not be on the NCM thread
     auto ncm_ptr = ncm.lock();
     if (!ncm_ptr) {

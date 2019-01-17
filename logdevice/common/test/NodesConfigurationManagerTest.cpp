@@ -33,7 +33,6 @@ using namespace std::chrono_literals;
 
 struct TestDeps : public Dependencies {
   using Dependencies::Dependencies;
-  using Dependencies::kConfigKey;
   ~TestDeps() override {}
 };
 
@@ -45,7 +44,7 @@ TEST(NodesConfigurationManagerTest, basic) {
   auto z = std::make_shared<ZookeeperClientInMemory>(
       "unused quorum",
       ZookeeperClientInMemory::state_map_t{
-          {TestDeps::kConfigKey,
+          {ZookeeperNodesConfigurationStore::kConfigKey,
            {NodesConfigurationCodecFlatBuffers::serialize(initial_config),
             zk::Stat{.version_ = 4}}}});
   auto store = std::make_unique<ZookeeperNodesConfigurationStore>(
@@ -67,7 +66,7 @@ TEST(NodesConfigurationManagerTest, basic) {
   EXPECT_TRUE(new_config.validate());
 
   // fire and forget
-  z->setData(TestDeps::kConfigKey,
+  z->setData(ZookeeperNodesConfigurationStore::kConfigKey,
              NodesConfigurationCodecFlatBuffers::serialize(new_config),
              /* cb = */ {});
 
