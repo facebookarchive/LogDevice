@@ -254,17 +254,32 @@ void fillNodeState(thrift::NodeState& out,
   }
 }
 
-ShardID resolveShardOrNode(const thrift::ShardID& shard,
-                           const configuration::Nodes& nodes) {
+ShardSet resolveShardOrNode(const thrift::ShardID& shard,
+                            const configuration::Nodes& nodes) {
+  ShardSet output;
+
   shard_index_t shard_index = (shard.shard_index < 0) ? -1 : shard.shard_index;
+  shard_size_t num_shards = 1;
   node_index_t node_index = -1;
   if (shard.get_node().get_node_index()) {
     node_index = *shard.get_node().get_node_index();
+    if (node_index >= nodes.size()) {
+      // We didn't find the node.
+      thrift::InvalidRequest err;
+      err.set_message(
+          folly::format(
+              "Node with index '{}' was not found in the nodes config.",
+              node_index)
+              .str());
+      throw err;
+    }
+    num_shards = nodes.at(node_index).getNumShards();
   } else if (shard.get_node().get_address()) {
     // resolve the node index from the nodes configuration.
     for (const auto& it : nodes) {
       if (match_by_address(it.second, shard.get_node().get_address())) {
         node_index = it.first;
+        num_shards = it.second.getNumShards();
         break;
       }
     }
@@ -282,15 +297,22 @@ ShardID resolveShardOrNode(const thrift::ShardID& shard,
                     "address or node index");
     throw err;
   }
-
-  return ShardID(node_index, shard_index);
+  if (shard_index == -1) {
+    for (int i = 0; i < num_shards; i++) {
+      output.emplace(ShardID(node_index, i));
+    }
+  } else {
+    output.emplace(ShardID(node_index, shard_index));
+  }
+  return output;
 }
 
 ShardSet expandShardSet(const thrift::ShardSet& thrift_shards,
                         const configuration::Nodes& nodes) {
   ShardSet output;
   for (const auto& it : thrift_shards) {
-    output.insert(resolveShardOrNode(it, nodes));
+    ShardSet expanded = resolveShardOrNode(it, nodes);
+    output.merge(expanded);
   }
   return output;
 }

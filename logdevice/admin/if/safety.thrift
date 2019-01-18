@@ -142,4 +142,12 @@ struct CheckImpactResponse {
    * A sample of the affected epochs by this operation.
    */
   3: optional list<ImpactOnEpoch> logs_affected,
+  /**
+   * The total time spent on this check in seconds.
+   */
+  4: optional i32 total_duration,
+  /**
+   * The total number of logs checked by the server.
+   */
+  5: optional i32 total_logs_checked,
 }

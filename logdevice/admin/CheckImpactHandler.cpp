@@ -46,6 +46,8 @@ CheckImpactHandler::semifuture_checkImpact(
   ShardSet shards =
       expandShardSet(request->get_shards(), server_config->getNodes());
 
+  ld_info("SHARDS: %s", toString(shards).c_str());
+
   StorageState target_storage_state = StorageState::READ_WRITE;
   if (request->get_target_storage_state()) {
     target_storage_state =
@@ -101,6 +103,8 @@ CheckImpactHandler::semifuture_checkImpact(
         toThrift<std::vector<thrift::OperationImpact>>(impact.result));
     response->set_internal_logs_affected(impact.internal_logs_affected);
     response->set_logs_affected(std::move(logs_affected));
+    response->set_total_duration(impact.total_duration.count());
+    response->set_total_logs_checked(impact.total_logs_checked);
     p.setValue(std::move(response));
   };
 

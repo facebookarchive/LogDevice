@@ -48,8 +48,8 @@ void fillNodeState(thrift::NodeState& out,
                    const EventLogRebuildingSet* rebuilding_set,
                    const ClusterState* cluster_state);
 
-ShardID resolveShardOrNode(const thrift::ShardID& shard,
-                           const configuration::Nodes& nodes);
+ShardSet resolveShardOrNode(const thrift::ShardID& shard,
+                            const configuration::Nodes& nodes);
 /**
  * Expands a thrift ShardSet structure into logdevice equivalent. This looks up
  * the nodes via address if specified in the input.
