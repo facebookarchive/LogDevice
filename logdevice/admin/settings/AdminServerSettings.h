@@ -32,6 +32,7 @@ struct AdminServerSettings : public SettingsBundle {
 
   int safety_max_logs_in_flight;
   std::chrono::milliseconds safety_check_timeout;
+  bool read_metadata_from_sequencers;
 
  private:
   // Only UpdateableSettings can create this bundle.

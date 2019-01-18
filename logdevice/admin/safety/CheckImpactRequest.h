@@ -66,6 +66,7 @@ class CheckImpactRequest : public Request {
       bool abort_on_error,
       std::chrono::milliseconds timeout,
       size_t error_sample_size,
+      bool read_epoch_metadata_from_sequencer,
       WorkerType worker_type,
       Callback cb);
 

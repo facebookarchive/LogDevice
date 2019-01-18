@@ -9,6 +9,7 @@ sidebar_label: Settings
 |-----------|-----------------|:---------:|-----------|
 | admin-port | TCP port on which the server listens to for admin commands, supports commands over SSL | 6440 | requires&nbsp;restart, server&nbsp;only |
 | admin-unix-socket | Path to the unix domain socket the server will use to listen for admin thrift interface |  | requires&nbsp;restart, server&nbsp;only |
+| read-metadata-from-sequencers | Safety checker to read the metadata of logs directly from sequencers. | true | server&nbsp;only |
 | safety-check-max-logs-in-flight | The number of concurrent logs that we runs checks against during execution of the CheckImpact operation either internally during a maintenance or through the Admin API's checkImpact() call | 1000 | server&nbsp;only |
 | safety-check-timeout | The total time the safety check should take to run. This is the time that the CheckImpact operation need to take to scan all logs along with all the historical metadata to ensure than a maintenance is safe | 10min | server&nbsp;only |
 

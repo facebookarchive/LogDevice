@@ -76,6 +76,7 @@ Impact SafetyChecker::checkImpact(
                                            abort_on_error_,
                                            timeout_,
                                            error_sample_size_,
+                                           read_epoch_metadata_from_sequencer_,
                                            worker_type,
                                            cb);
   int rv = processor_->postRequest(request);

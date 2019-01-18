@@ -58,6 +58,12 @@ void AdminServerSettings::defineSettings(SettingEasyInit& init) {
      "the historical metadata to ensure than a maintenance is safe",
      SERVER,
      SettingsCategory::AdminAPI)
+
+    ("read-metadata-from-sequencers", &read_metadata_from_sequencers, "true",
+     nullptr,
+     "Safety checker to read the metadata of logs directly from sequencers.",
+     SERVER,
+     SettingsCategory::AdminAPI)
     ;
   // clang-format on
 };

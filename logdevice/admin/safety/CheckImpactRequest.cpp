@@ -26,6 +26,7 @@ CheckImpactRequest::CheckImpactRequest(
     bool abort_on_error,
     std::chrono::milliseconds timeout,
     size_t error_sample_size,
+    bool read_epoch_metadata_from_sequencer,
     WorkerType worker_type,
     Callback cb)
     : Request(RequestType::CHECK_IMPACT),
@@ -42,6 +43,7 @@ CheckImpactRequest::CheckImpactRequest(
       timeout_(timeout),
       per_log_timeout_(timeout / 2),
       error_sample_size_(error_sample_size),
+      read_epoch_metadata_from_sequencer_(read_epoch_metadata_from_sequencer),
       worker_type_(worker_type),
       callback_(std::move(cb)),
       metadata_check_callback_helper_(this) {}

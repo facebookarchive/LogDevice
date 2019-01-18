@@ -120,6 +120,7 @@ CheckImpactHandler::semifuture_checkImpact(
       request->abort_on_negative_impact,
       updateable_admin_server_settings_->safety_check_timeout,
       request->return_sample_size,
+      updateable_admin_server_settings_->read_metadata_from_sequencers,
       CheckImpactRequest::workerType(processor_),
       std::move(cb));
   int rv = processor_->postRequest(rq);
