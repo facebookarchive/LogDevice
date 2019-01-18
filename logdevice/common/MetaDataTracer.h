@@ -35,7 +35,8 @@ class MetaDataTracer {
     // metadata log records written
     WRITE_METADATA_LOG,
     // clearing the written bit in epoch store
-    CLEAR_WRITTEN_BIT
+    CLEAR_WRITTEN_BIT,
+    UPDATE_NODESET_PARAMS,
   };
   explicit MetaDataTracer(std::shared_ptr<TraceLogger> logger,
                           logid_t log_id,
@@ -74,6 +75,8 @@ class MetaDataTracer {
         return "WRITE_METADATA_LOG";
       case Action::CLEAR_WRITTEN_BIT:
         return "CLEAR_WRITTEN_BIT";
+      case Action::UPDATE_NODESET_PARAMS:
+        return "UPDATE_NODESET_PARAMS";
       case Action::NONE:
         ld_check(false);
         return "";

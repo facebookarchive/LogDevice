@@ -159,10 +159,12 @@ class MockAllSequencers : public AllSequencers {
                                            epoch_t /*epoch*/,
                                            bool /*bypass_recovery*/) override {}
 
-  int getEpochMetaData(logid_t logid,
-                       std::shared_ptr<Configuration> /*cfg*/,
-                       folly::Optional<epoch_t> /*acceptable_activation_epoch*/,
-                       bool /*provision_if_empty*/) override {
+  int getEpochMetaData(
+      logid_t logid,
+      std::shared_ptr<Configuration> /*cfg*/,
+      folly::Optional<epoch_t> /*acceptable_activation_epoch*/,
+      bool /*provision_if_empty*/,
+      std::shared_ptr<EpochMetaData> /* new_metadata */) override {
     ++test_->logs_state_.at(logid).metadata_requests;
     return test_->metadata_req_ok_ ? 0 : -1;
   }

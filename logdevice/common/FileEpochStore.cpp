@@ -291,12 +291,10 @@ int FileEpochStore::createOrUpdateMetaData(
       log_id, updater, &tracer, config_->get(), write_node_id);
   int rv = updateEpochStore(log_id, "seq", file_updater);
   tracer.trace(rv == 0 ? E::OK : err);
-  auto metadata =
-      updater->getCompletionMetaData(file_updater.metadata_out_.get());
   postCompletionMetaData(std::move(cf),
                          (rv == 0 ? E::OK : err),
                          log_id,
-                         std::move(metadata),
+                         std::move(file_updater.metadata_out_),
                          std::move(file_updater.meta_props_out_));
   return 0;
 }

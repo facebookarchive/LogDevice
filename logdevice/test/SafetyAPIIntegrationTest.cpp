@@ -32,7 +32,6 @@ class SafetyAPIIntegrationTest : public IntegrationTestBase {
  protected:
   void SetUp() override {
     IntegrationTestBase::SetUp();
-    dbg::currentLevel = dbg::Level::DEBUG;
   }
 };
 

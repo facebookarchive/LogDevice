@@ -48,12 +48,12 @@ int MetaDataProvisioner::provisionEpochMetaDataForLog(
 
   return provisionEpochMetaDataForLog(
       log_id,
-      std::make_shared<EpochMetaDataUpdater>(config,
-                                             std::move(selector),
-                                             use_storage_set_format,
-                                             provision_if_empty,
-                                             update_if_exists,
-                                             force_update),
+      std::make_shared<CustomEpochMetaDataUpdater>(config,
+                                                   std::move(selector),
+                                                   use_storage_set_format,
+                                                   provision_if_empty,
+                                                   update_if_exists,
+                                                   force_update),
       write_metadata_log);
 }
 

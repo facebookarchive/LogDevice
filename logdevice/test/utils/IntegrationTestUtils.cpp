@@ -2238,7 +2238,7 @@ void Cluster::setStartingEpoch(logid_t log_id,
                         std::unique_ptr<EpochStoreMetaProperties>) {
           ld_assert_eq(E::OK, status);
           ld_assert(info != nullptr);
-          ld_assert_eq(e, info->h.epoch);
+          ld_assert_eq(e.val() + 1, info->h.epoch.val());
           semaphore.post();
         },
         MetaDataTracer());

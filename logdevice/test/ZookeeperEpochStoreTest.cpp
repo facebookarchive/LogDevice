@@ -416,8 +416,11 @@ class UpdateMetaDataRequest : public Request {
           nodeset_selector_->setStorageSet(next_storage_set);
           int rv2 = epochstore_->createOrUpdateMetaData(
               logid_,
-              std::make_shared<EpochMetaDataUpdater>(
-                  config_, nodeset_selector_, true, true),
+              std::make_shared<CustomEpochMetaDataUpdater>(
+                  config_,
+                  nodeset_selector_,
+                  /* use_storage_set_format */ true,
+                  /* provision_if_empty */ true),
               [base_info, next_storage_set, this](
                   Status st2,
                   logid_t lid2,
@@ -429,16 +432,17 @@ class UpdateMetaDataRequest : public Request {
                 EXPECT_EQ(posted_to_, Worker::onThisThread()->idx_);
                 ASSERT_NE(nullptr, next_info);
                 EXPECT_TRUE(next_info->isValid());
-                EXPECT_EQ(base_info.h.epoch.val_ + 1, next_info->h.epoch.val_);
+                EXPECT_EQ(base_info.h.epoch.val_, next_info->h.epoch.val_);
                 EXPECT_EQ(base_info.replication.toString(),
                           next_info->replication.toString());
-                EXPECT_EQ(next_info->h.epoch, next_info->h.effective_since);
+                EXPECT_EQ(next_info->h.epoch.val(),
+                          next_info->h.effective_since.val());
                 EXPECT_EQ(next_storage_set, next_info->shards);
                 // same nodes
                 EpochMetaData prev_info(*next_info);
                 int rv3 = epochstore_->createOrUpdateMetaData(
                     logid_,
-                    std::make_shared<EpochMetaDataUpdater>(
+                    std::make_shared<CustomEpochMetaDataUpdater>(
                         config_, nodeset_selector_, true),
                     [prev_info, this](Status st3,
                                       logid_t /* logid */,

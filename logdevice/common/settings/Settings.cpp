@@ -2530,16 +2530,14 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "(reprovisioning) when the configuration attributes of a log change.",
        SERVER,
        SettingsCategory::Configuration);
-  init(
-      "sequencer-background-activation-retry-interval",
-      &sequencer_background_activation_retry_interval,
-      "10ms",
-      nullptr, // no validation
-      "Retry interval on failures (or retries due to running the queue for too "
-      "long while processing background sequencer activations for "
-      "reprovisioning.",
-      SERVER,
-      SettingsCategory::Configuration);
+  init("sequencer-background-activation-retry-interval",
+       &sequencer_background_activation_retry_interval,
+       "500ms",
+       nullptr, // no validation
+       "Retry interval on failures while processing background sequencer "
+       "activations for reprovisioning.",
+       SERVER,
+       SettingsCategory::Configuration);
   init(
       "use-sequencer-affinity",
       &use_sequencer_affinity,

@@ -2305,6 +2305,8 @@ TEST_P(RebuildingTest, SkipEverything) {
       /*nodeset=*/{0, 1},
       /*replication=*/2,
       NodeLocationScope::NODE);
+  meta_config.sequencers_provision_epoch_store = false;
+  meta_config.sequencers_write_metadata_logs = false;
 
   Configuration::Nodes nodes(3);
   for (int i = 0; i < 3; ++i) {

@@ -58,11 +58,10 @@ class EpochMetaDataZRQ : public ZookeeperEpochStoreRequest {
         return NextStep::FAILED;
       }
       if (node_id.isNodeID()) {
-        if (!completion_meta_properties_) {
-          completion_meta_properties_ =
-              folly::make_unique<EpochStoreMetaProperties>();
+        if (!meta_properties_) {
+          meta_properties_ = folly::make_unique<EpochStoreMetaProperties>();
         }
-        completion_meta_properties_->last_writer_node_id.assign(node_id);
+        meta_properties_->last_writer_node_id.assign(node_id);
       }
 
       ld_assert(
@@ -104,9 +103,6 @@ class EpochMetaDataZRQ : public ZookeeperEpochStoreRequest {
       metadata_ = std::move(metadata);
       ld_check(result == EpochMetaData::UpdateResult::FAILED ||
                metadata_->isValid());
-      completion_metadata_ = updater_->getCompletionMetaData(metadata_.get());
-      ld_check(result == EpochMetaData::UpdateResult::FAILED ||
-               completion_metadata_->isValid());
     }
     return next_step;
   }
@@ -127,8 +123,8 @@ class EpochMetaDataZRQ : public ZookeeperEpochStoreRequest {
             worker_idx_,
             st,
             logid_,
-            std::move(completion_metadata_),
-            std::move(completion_meta_properties_)));
+            std::move(metadata_),
+            std::move(meta_properties_)));
   }
 
   // see ZookeeperEpochStoreRequest.h
@@ -153,8 +149,8 @@ class EpochMetaDataZRQ : public ZookeeperEpochStoreRequest {
         }
         break;
       case EpochStore::WriteNodeID::KEEP_LAST:
-        if (completion_meta_properties_) {
-          node_id_to_write = completion_meta_properties_->last_writer_node_id;
+        if (meta_properties_) {
+          node_id_to_write = meta_properties_->last_writer_node_id;
         }
         break;
       case EpochStore::WriteNodeID::NO:
@@ -175,11 +171,8 @@ class EpochMetaDataZRQ : public ZookeeperEpochStoreRequest {
   // last.
   std::unique_ptr<EpochMetaData> metadata_;
 
-  // metadata that will be passed to the CF
-  std::unique_ptr<EpochMetaData> completion_metadata_;
-
   // MetaProperties that will be passed to the CF
-  std::unique_ptr<EpochStoreMetaProperties> completion_meta_properties_;
+  std::unique_ptr<EpochStoreMetaProperties> meta_properties_;
 
   MetaDataTracer tracer_;
 

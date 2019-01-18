@@ -270,10 +270,21 @@ STAT_DEFINE(graceful_reactivation_result_deferred, SUM)
 // how many graceful reactivation completion procedure is started
 STAT_DEFINE(graceful_reactivation_completion_started, SUM)
 
-// how many background sequencer reactivations were scheduled
+// How many times a sequencer scheduled to check whether a reactivation or
+// epoch metadata update is needed. The difference between this and the next
+// stat is the number of outstanding checks and reactivations.
 STAT_DEFINE(background_sequencer_reactivations_scheduled, SUM)
-// how many background sequencer reactivations were completed
+// How many times such check was performed. If a check said that reactivation is
+// needed, this is bumped when reactivation completes.
 STAT_DEFINE(background_sequencer_reactivations_completed, SUM)
+
+// How many sequencers we reactivated in order to update epoch metadata
+// (nodeset, replication factor etc).
+STAT_DEFINE(sequencer_reactivations_for_metadata_update, SUM)
+// How many times we updated epoch metadata without reactivating sequencer.
+// This happens when nodes config changes in a way that might change the nodeset
+// but actually doesn't.
+STAT_DEFINE(metadata_updates_without_sequencer_reactivation, SUM)
 
 //// Per-epoch sequencers
 

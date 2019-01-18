@@ -600,7 +600,7 @@ Sequencer::updateMetaDataMap(epoch_t epoch, const EpochMetaData& metadata) {
 
     if (last_metadata_entry.h.effective_since == metadata.h.effective_since) {
       // the new epoch is essentially using the same epoch metadata
-      if (!last_metadata_entry.isSubstantiallyIdentical(metadata)) {
+      if (!last_metadata_entry.identicalInMetaDataLog(metadata)) {
         RATELIMIT_CRITICAL(std::chrono::seconds(10),
                            10,
                            "Sequencer for log %lu has gotten metadata for "
@@ -796,6 +796,16 @@ bool Sequencer::onHistoricalMetaData(
   return false;
 }
 
+bool Sequencer::setNodeSetParamsInCurrentEpoch(
+    epoch_t epoch,
+    EpochMetaData::NodeSetParams params) {
+  auto current = getCurrentEpochSequencer();
+  if (!current || current->getEpoch() != epoch) {
+    return false;
+  }
+  return current->setNodeSetParams(params);
+}
+
 void Sequencer::clearMetaDataMapImpl() {
   metadata_map_.update(nullptr);
 }
@@ -886,7 +896,7 @@ RunAppenderStatus Sequencer::runAppender(Appender* appender) {
   }
 
   // note that we do not check the preemption status here: it is checked
-  // in AppenderPref before calling this function
+  // in AppenderPrep before calling this function
   std::shared_ptr<EpochSequencer> current = getCurrentEpochSequencer();
   if (current == nullptr) {
     const bool activating = (getState() == State::ACTIVATING);

@@ -57,18 +57,10 @@ class RandomCrossDomainNodeSetSelector : public RandomNodeSetSelector {
       RandomNodeSetSelector::MapLogToShardFn map_log_to_shard)
       : RandomNodeSetSelector(map_log_to_shard) {}
 
-  std::tuple<Decision, std::unique_ptr<StorageSet>>
-  getStorageSet(logid_t log_id,
-                const std::shared_ptr<Configuration>& cfg,
-                const StorageSet* prev,
-                const Options* options = nullptr) override;
-
-  storage_set_size_t
-  getStorageSetSize(logid_t log_id,
-                    const std::shared_ptr<Configuration>& cfg,
-                    folly::Optional<int> storage_set_size_target,
-                    ReplicationProperty replication,
-                    const Options* options = nullptr) override;
+  Result getStorageSet(logid_t log_id,
+                       const Configuration* cfg,
+                       const EpochMetaData* prev,
+                       const Options* options = nullptr) override;
 
  private:
   using DomainMap = std::map<std::string, NodeSetIndices>;
@@ -79,13 +71,13 @@ class RandomCrossDomainNodeSetSelector : public RandomNodeSetSelector {
   // log_id for logging if it is supplied
   storage_set_size_t
   getStorageSetSizeImpl(logid_t log_id,
-                        const std::shared_ptr<Configuration>& cfg,
+                        const Configuration* cfg,
                         folly::Optional<int> target,
                         NodeLocationScope sync_replication_scope,
                         int replication_factor,
                         DomainMap* domain_map,
                         const Options* options);
-  static int buildDomainMap(const std::shared_ptr<ServerConfig>& cfg,
+  static int buildDomainMap(const ServerConfig* cfg,
                             NodeLocationScope sync_replication_scope,
                             const Options* options,
                             DomainMap* map);

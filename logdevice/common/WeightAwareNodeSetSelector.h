@@ -25,11 +25,10 @@ class WeightAwareNodeSetSelector : public NodeSetSelector {
                                       bool hash_flag)
       : mapLogToShard_(map_log_to_shard), consistentHashing_(hash_flag) {}
 
-  std::tuple<Decision, std::unique_ptr<StorageSet>>
-  getStorageSet(logid_t log_id,
-                const std::shared_ptr<Configuration>& cfg,
-                const StorageSet* prev,
-                const Options* options = nullptr) override;
+  Result getStorageSet(logid_t log_id,
+                       const Configuration* cfg,
+                       const EpochMetaData* prev,
+                       const Options* options = nullptr) override;
 
  private:
   MapLogToShardFn mapLogToShard_;

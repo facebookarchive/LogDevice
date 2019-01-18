@@ -253,6 +253,16 @@ class Sequencer {
       epoch_t request_epoch,
       std::shared_ptr<const EpochMetaDataMap::Map> historical_metadata);
 
+  /**
+   * If epoch of the current sequencer is equal to the the given epoch,
+   * updates nodeset_params in the sequencer's EpochMetadata
+   * (EpochSequencer::setNodeSetParams()).
+   * @return  true if the change was made, false if the epoch is not current or
+   *          if params already had this value.
+   */
+  bool setNodeSetParamsInCurrentEpoch(epoch_t epoch,
+                                      EpochMetaData::NodeSetParams params);
+
   ////////////////////// Appender //////////////////////////
 
   /**

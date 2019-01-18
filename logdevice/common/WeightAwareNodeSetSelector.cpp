@@ -17,18 +17,34 @@
 
 namespace facebook { namespace logdevice {
 
-std::tuple<NodeSetSelector::Decision, std::unique_ptr<StorageSet>>
-WeightAwareNodeSetSelector::getStorageSet(
-    logid_t log_id,
-    const std::shared_ptr<Configuration>& cfg,
-    const StorageSet* prev,
-    const Options* options) {
+NodeSetSelector::Result
+WeightAwareNodeSetSelector::getStorageSet(logid_t log_id,
+                                          const Configuration* cfg,
+                                          const EpochMetaData* prev,
+                                          const Options* options) {
+  Result res;
+  res.decision = Decision::FAILED;
+
   auto logcfg = cfg->getLogGroupByIDShared(log_id);
   if (!logcfg) {
-    return std::make_tuple(Decision::FAILED, nullptr);
+    return res;
   }
+
   ReplicationProperty replication_property =
       ReplicationProperty::fromLogAttributes(logcfg->attrs());
+  int target_size = logcfg->attrs().nodeSetSize().value().value_or(
+      std::numeric_limits<int>::max());
+
+  res.signature = folly::hash::hash_128_to_64(
+      15345803578954886993ul, // random salt
+      folly::hash::hash_128_to_64(
+          cfg->serverConfig()->getStorageNodesConfigHash(),
+          (uint64_t)target_size));
+  if (prev != nullptr && prev->nodeset_params.signature == res.signature &&
+      prev->replication == replication_property) {
+    res.decision = Decision::KEEP;
+    return res;
+  }
 
   // Nodeset will span all domains of this scope.
   NodeLocationScope replication_scope;
@@ -49,9 +65,6 @@ WeightAwareNodeSetSelector::getStorageSet(
     min_nodes_per_domain =
         replication_factors.back().second - replication_factors[0].second + 1;
   }
-
-  int target_size = logcfg->attrs().nodeSetSize().value().value_or(
-      std::numeric_limits<int>::max());
 
   struct Domain {
     int num_picked = 0;
@@ -96,7 +109,7 @@ WeightAwareNodeSetSelector::getStorageSet(
                  "location information",
                  node,
                  sd->address.toString().c_str());
-        return std::make_tuple(Decision::FAILED, nullptr);
+        return res;
       }
 
       const NodeLocation& location = sd->location.value();
@@ -108,7 +121,7 @@ WeightAwareNodeSetSelector::getStorageSet(
                  node,
                  sd->address.toString().c_str(),
                  NodeLocation::scopeNames()[replication_scope].c_str());
-        return std::make_tuple(Decision::FAILED, nullptr);
+        return res;
       }
       location_str = location.getDomain(replication_scope, node);
     }
@@ -149,42 +162,42 @@ WeightAwareNodeSetSelector::getStorageSet(
     queue.push(d);
   }
 
-  auto result = std::make_unique<StorageSet>();
   while (!queue.empty()) {
     Domain* d = queue.top();
     queue.pop();
     assert(d->num_picked != d->node_hashes.size());
     if (d->num_picked >= min_nodes_per_domain &&
-        result->size() >= target_size) {
+        res.storage_set.size() >= target_size) {
       // The nodeset is big enough and has enough nodes from each domain.
       break;
     }
-    result->push_back(d->node_hashes[d->num_picked++].second);
+    res.storage_set.push_back(d->node_hashes[d->num_picked++].second);
     if (d->num_picked != d->node_hashes.size()) {
       queue.push(d);
     }
   }
 
   // Sort the output.
-  std::sort(result->begin(), result->end());
+  std::sort(res.storage_set.begin(), res.storage_set.end());
 
   // Check that we have enough nodes and domains to satisfy the replication
   // requirement.
-  if (!ServerConfig::validStorageSet(
-          cfg->serverConfig()->getNodes(), *result, replication_property)) {
+  if (!ServerConfig::validStorageSet(cfg->serverConfig()->getNodes(),
+                                     res.storage_set,
+                                     replication_property)) {
     ld_error("Not enough storage nodes to select nodeset for log %lu, "
              "replication: %s, selected: %s.",
              log_id.val_,
              replication_property.toString().c_str(),
-             toString(*result).c_str());
-    return std::make_tuple(Decision::FAILED, nullptr);
+             toString(res.storage_set).c_str());
+    res.decision = Decision::FAILED;
+    return res;
   }
 
-  if (prev && *prev == *result) {
-    return std::make_tuple(Decision::KEEP, nullptr);
-  }
-
-  return std::make_tuple(Decision::NEEDS_CHANGE, std::move(result));
+  res.decision = (prev && prev->shards == res.storage_set)
+      ? Decision::KEEP
+      : Decision::NEEDS_CHANGE;
+  return res;
 }
 
 }} // namespace facebook::logdevice

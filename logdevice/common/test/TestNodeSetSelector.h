@@ -32,26 +32,18 @@ class TestNodeSetSelector : public NodeSetSelector {
   }
 
   // must be called after setStorageSet();
-  std::tuple<Decision, std::unique_ptr<StorageSet>> getStorageSet(
-      logid_t /*log_id*/,
-      const std::shared_ptr<Configuration>& /*cfg*/,
-      const StorageSet* prev,
-      const Options* /*options*/ = nullptr /* ignored */
-      ) override {
+  Result getStorageSet(logid_t /*log_id*/,
+                       const Configuration* /*cfg*/,
+                       const EpochMetaData* prev,
+                       const Options* /*options*/ = nullptr /* ignored */
+                       ) override {
     ld_check(!storage_set_.empty());
-    if (prev && storage_set_ == *prev) {
-      return std::make_tuple(Decision::KEEP, nullptr);
-    }
-    return std::make_tuple(
-        Decision::NEEDS_CHANGE, std::make_unique<StorageSet>(storage_set_));
-  }
-
-  storage_set_size_t getStorageSetSize(logid_t,
-                                       const std::shared_ptr<Configuration>&,
-                                       folly::Optional<int>,
-                                       ReplicationProperty,
-                                       const Options* /*options*/) override {
-    return storage_set_.size();
+    Result res;
+    res.storage_set = storage_set_;
+    res.decision = (prev && prev->shards == res.storage_set)
+        ? Decision::KEEP
+        : Decision::NEEDS_CHANGE;
+    return res;
   }
 
  private:

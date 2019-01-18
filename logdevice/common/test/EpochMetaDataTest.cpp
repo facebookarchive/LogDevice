@@ -64,11 +64,14 @@ class EpochMetaDataTest : public ::testing::Test {
       sync_replication_scope = NodeLocationScope::NODE;
     }
     ld_check(sync_replication_scope.value() != NodeLocationScope::ROOT);
-    return EpochMetaData(
-        std::move(storage_set),
+    EpochMetaData meta(
+        storage_set,
         ReplicationProperty(replication_factor, sync_replication_scope.value()),
         epoch_t(epoch),
         epoch_t(effective_since));
+    meta.nodeset_params.target_nodeset_size = storage_set.size();
+    meta.nodeset_params.signature = 0;
+    return meta;
   }
 };
 
@@ -154,7 +157,7 @@ TEST_F(EpochMetaDataTest, MetaDataLogWritten) {
   ASSERT_TRUE(cfg);
   ASSERT_NE(nullptr, cfg.get());
   auto selector = std::make_shared<TestNodeSetSelector>();
-  EpochMetaDataUpdater updater(cfg, selector, true);
+  CustomEpochMetaDataUpdater updater(cfg, selector, true);
   selector->setStorageSet(StorageSet{N1, N2, N3});
   rv = updater(LOGID, valid_info, /* MetaDataTracer */ nullptr);
   EXPECT_EQ(EpochMetaData::UpdateResult::UPDATED, rv);
@@ -236,12 +239,21 @@ TEST_F(EpochMetaDataTest, BackwardCompatibility) {
     if (extra_flags & MetaDataLogRecordHeader::HAS_WEIGHTS) {
       weights = {11, 15, 13, 14, 12};
     }
-    if (extra_flags & MetaDataLogRecordHeader::HAS_NODESCONFIG_HASH) {
+    if (extra_flags & MetaDataLogRecordHeader::HAS_NODESET_SIGNATURE) {
       auto config =
           Configuration::fromJsonFile(TEST_CONFIG_FILE(TEST_CLUSTER ".conf"));
-      ld_check(info2.nodesconfig_hash.hasValue());
       EXPECT_EQ(config->serverConfig()->getStorageNodesConfigHash(),
-                info2.nodesconfig_hash.value());
+                info2.nodeset_params.signature);
+    } else {
+      EXPECT_EQ(0, info2.nodeset_params.signature);
+    }
+    if (extra_flags &
+        MetaDataLogRecordHeader::HAS_TARGET_NODESET_SIZE_AND_SEED) {
+      EXPECT_EQ(0x42, info2.nodeset_params.target_nodeset_size);
+      EXPECT_EQ(0xABCDEFEDCBA01234ul, info2.nodeset_params.seed);
+    } else {
+      EXPECT_EQ(0, info2.nodeset_params.target_nodeset_size);
+      EXPECT_EQ(0, info2.nodeset_params.seed);
     }
 
     EXPECT_EQ(v, info2.h.version);
@@ -373,12 +385,17 @@ TEST_F(EpochMetaDataTest, BackwardCompatibility) {
               MetaDataLogRecordHeader::HAS_REPLICATION_PROPERTY);
   }
 
-  // nodesconfig hash
+  // config hash
   auto config =
       Configuration::fromJsonFile(TEST_CONFIG_FILE(TEST_CLUSTER ".conf"));
   uint64_t cfg_hash = config->serverConfig()->getStorageNodesConfigHash();
 
-  info.nodesconfig_hash.assign(cfg_hash);
+  // In real code signature usually isn't equal to storage nodes config hash.
+  // Instead it's produced by NodeSetSelector and depends on nodeset selector
+  // type. But for this test we can use any signature value, so we're using
+  // a plain storage nodes config hash to also make sure hash function didn't
+  // change.
+  info.nodeset_params.signature = cfg_hash;
   ld_check(info.isValid());
   std::string hash_string = "6214F5912227DA6A"; // if you changed the test
                                                 // config, update this hash
@@ -399,7 +416,32 @@ TEST_F(EpochMetaDataTest, BackwardCompatibility) {
           2,
           MetaDataLogRecordHeader::HAS_WEIGHTS |
               MetaDataLogRecordHeader::HAS_REPLICATION_PROPERTY |
-              MetaDataLogRecordHeader::HAS_NODESCONFIG_HASH);
+              MetaDataLogRecordHeader::HAS_NODESET_SIGNATURE);
+  }
+
+  // target nodeset size and seed
+  info.nodeset_params.target_nodeset_size = 0x42;
+  info.nodeset_params.seed = 0xABCDEFEDCBA01234ul;
+  ld_check(info.isValid());
+
+  str = info.toStringPayload();
+  EXPECT_EQ("02000000030000000200000005000405BA00000006000700080009000A00000000"
+            "00000026400000000000002E400000000000002A400000000000002C4000000000"
+            "0000284003000000050000000200000001000000030000000000000004000000" +
+                hash_string + "42003412A0CBEDEFCDAB",
+            hexdump_buf(str.data(), str.size()));
+
+  {
+    EpochMetaData info2;
+    int rv = info2.fromPayload(
+        Payload(str.data(), str.size()), logid_t(1), *cfg->serverConfig());
+    EXPECT_EQ(0, rv);
+    check(info2,
+          2,
+          MetaDataLogRecordHeader::HAS_WEIGHTS |
+              MetaDataLogRecordHeader::HAS_REPLICATION_PROPERTY |
+              MetaDataLogRecordHeader::HAS_NODESET_SIGNATURE |
+              MetaDataLogRecordHeader::HAS_TARGET_NODESET_SIZE_AND_SEED);
   }
 }
 
@@ -501,10 +543,11 @@ TEST_F(EpochMetaDataTest, EpochMetaDataUpdaterTest) {
   LogsConfig::LogAttributes& attrs =
       const_cast<LogsConfig::LogAttributes&>(logcfg->attrs());
   auto selector = std::make_shared<TestNodeSetSelector>();
-  EpochMetaDataUpdater updater(cfg, selector, true);
+  CustomEpochMetaDataUpdater updater(cfg, selector, true);
 
-  auto zk_record = std::make_unique<EpochMetaData>(genValidEpochMetaData(
-      logcfg->attrs().syncReplicationScope().asOptional()));
+  EpochMetaData original_meta = genValidEpochMetaData(
+      logcfg->attrs().syncReplicationScope().asOptional());
+  auto zk_record = std::make_unique<EpochMetaData>(original_meta);
   auto rv =
       updater(logid_t(9999),
               zk_record,
@@ -514,9 +557,8 @@ TEST_F(EpochMetaDataTest, EpochMetaDataUpdaterTest) {
   selector->setStorageSet(StorageSet{N3, N4, N5});
   rv = updater(logid_t(2), zk_record, /* MetaDataTracer */ nullptr);
   EXPECT_EQ(EpochMetaData::UpdateResult::UNCHANGED, rv);
-  EXPECT_EQ(genValidEpochMetaData(
-                logcfg->attrs().syncReplicationScope().asOptional()),
-            *zk_record);
+  EXPECT_EQ(original_meta, *zk_record);
+  EXPECT_EQ(original_meta.toString(), zk_record->toString());
 
   // change replication factor, expect metadata to be updated
   attrs.set_replicationFactor(1);
@@ -561,11 +603,11 @@ TEST_F(EpochMetaDataTest, EpochMetaDataUpdaterTest) {
   EXPECT_EQ(new_storage_set, zk_record->shards);
 
   // test metadata initial provision
-  EpochMetaDataUpdater provisioning_updater(cfg,
-                                            selector,
-                                            true,
-                                            true /* provision_if_empty */,
-                                            false /* update_if_exists */);
+  CustomEpochMetaDataUpdater provisioning_updater(cfg,
+                                                  selector,
+                                                  true,
+                                                  true /* provision_if_empty */,
+                                                  false /* update_if_exists */);
   zk_record.reset();
   StorageSet shards{N1, N2, N3};
   attrs.set_replicationFactor(2);
@@ -601,7 +643,7 @@ TEST_F(EpochMetaDataTest, EpochMetaDataUpdateToNextEpochTest) {
   ++cmp.h.epoch.val_;
   EXPECT_EQ(cmp, *zk_record);
 
-  EpochMetaDataUpdateToNextEpoch updater_conditional(cfg, cmp.h.epoch);
+  EpochMetaDataUpdateToNextEpoch updater_conditional(cfg, nullptr, cmp.h.epoch);
 
   rv = updater_conditional(logid_t(2), zk_record, /* MetaDataTracer */ nullptr);
   EXPECT_EQ(EpochMetaData::UpdateResult::UPDATED, rv);

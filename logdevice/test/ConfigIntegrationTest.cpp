@@ -556,12 +556,12 @@ TEST_F(ConfigIntegrationTest, NumLogsConfiguredStat) {
     // provision epoch metadata in epoch store for the new log
     std::shared_ptr<NodeSetSelector> selector =
         NodeSetSelectorFactory::create(NodeSetSelectorType::SELECT_ALL);
-    auto provisioner =
-        std::make_shared<EpochMetaDataUpdater>(new_config,
-                                               selector,
-                                               true,
-                                               true /* provision_if_empty */,
-                                               false /* update_if_exists */);
+    auto provisioner = std::make_shared<CustomEpochMetaDataUpdater>(
+        new_config,
+        selector,
+        true,
+        true /* provision_if_empty */,
+        false /* update_if_exists */);
     (*provisioner)(EXTRA_LOG_ID, metadata, /* MetaDataTracer */ nullptr);
     auto epoch_store = cluster->createEpochStore();
     int rv = static_cast<FileEpochStore*>(epoch_store.get())

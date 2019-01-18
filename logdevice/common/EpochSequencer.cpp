@@ -321,6 +321,23 @@ bool EpochSequencer::setMetaDataWritten() {
   return res;
 }
 
+bool EpochSequencer::setNodeSetParams(
+    const EpochMetaData::NodeSetParams& params) {
+  auto current_metadata = metadata_.get();
+  ld_check(current_metadata->writtenInMetaDataLog());
+  if (current_metadata->nodeset_params == params) {
+    return false;
+  }
+
+  auto new_metadata = std::make_shared<EpochMetaData>(*current_metadata);
+  ld_check(new_metadata->h.epoch == current_metadata->h.epoch);
+  new_metadata->nodeset_params = params;
+  bool res = metadata_.compare_and_swap(current_metadata, new_metadata);
+  // Caller makes sure that these updates don't race against each other.
+  ld_check(res);
+  return res;
+}
+
 void EpochSequencer::createOrUpdateCopySetManager(
     const std::shared_ptr<Configuration>& cfg,
     const Settings& settings) {

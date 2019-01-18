@@ -10,7 +10,6 @@
 #include <folly/Memory.h>
 
 #include "logdevice/common/LegacyLogToShard.h"
-#include "logdevice/common/NodeSetSelectorUtils.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/ProtocolReader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
@@ -78,26 +77,27 @@ bool EpochMetaData::isEmpty() const {
   return *this == EpochMetaData();
 }
 
-bool EpochMetaData::isSubstantiallyIdentical(const EpochMetaData& rhs) const {
+bool EpochMetaData::identicalInMetaDataLog(const EpochMetaData& rhs) const {
   static_assert(sizeof(h) == 20, "MetaDataLogRecordHeader size changed");
 
   // flags to ignore:
-  // - wire flags only used for serialization: HAS_REPLICATION_PROPERTY and
-  //   HAS_WEIGHTS
+  // - wire flags only used for serialization: HAS_*
   // - only used to indicate written status: WRITTEN_IN_METADATALOG
   const epoch_metadata_flags_t flags_mask =
       MetaDataLogRecordHeader::ALL_KNOWN_FLAGS &
       ~MetaDataLogRecordHeader::HAS_REPLICATION_PROPERTY &
       ~MetaDataLogRecordHeader::HAS_WEIGHTS &
-      ~MetaDataLogRecordHeader::WRITTEN_IN_METADATALOG;
+      ~MetaDataLogRecordHeader::WRITTEN_IN_METADATALOG &
+      ~MetaDataLogRecordHeader::HAS_NODESET_SIGNATURE &
+      ~MetaDataLogRecordHeader::HAS_TARGET_NODESET_SIZE_AND_SEED;
 
+  // ignore epoch and nodeset_params
   return h.version == rhs.h.version &&
       h.effective_since == rhs.h.effective_since &&
       h.nodeset_size == rhs.h.nodeset_size &&
       (h.flags & flags_mask) == (rhs.h.flags & flags_mask) &&
       shards == rhs.shards && weights == rhs.weights &&
-      replication == rhs.replication &&
-      nodesconfig_hash == rhs.nodesconfig_hash;
+      replication == rhs.replication;
 }
 
 bool EpochMetaData::operator!=(const EpochMetaData& rhs) const {
@@ -105,8 +105,9 @@ bool EpochMetaData::operator!=(const EpochMetaData& rhs) const {
 }
 
 bool EpochMetaData::operator==(const EpochMetaData& rhs) const {
-  return h.epoch == rhs.h.epoch && isSubstantiallyIdentical(rhs) &&
-      writtenInMetaDataLog() == rhs.writtenInMetaDataLog();
+  return h.epoch == rhs.h.epoch && identicalInMetaDataLog(rhs) &&
+      writtenInMetaDataLog() == rhs.writtenInMetaDataLog() &&
+      nodeset_params == rhs.nodeset_params;
 }
 
 bool EpochMetaData::disabled() const {
@@ -119,112 +120,6 @@ bool EpochMetaData::writtenInMetaDataLog() const {
 
 int EpochMetaData::sizeInPayload() const {
   return toPayload(nullptr, 0);
-}
-
-namespace {
-bool nodesetContainsInvalidNodes(logid_t log_id,
-                                 const StorageSet& shards,
-                                 ServerConfig& cfg) {
-  for (auto shard : shards) {
-    auto node = cfg.getNode(shard.node());
-    if (!node || !node->isReadableStorageNode() ||
-        node->storage_attributes->exclude_from_nodesets) {
-      RATELIMIT_INFO(std::chrono::seconds(10),
-                     10,
-                     "Node %d is in the nodeset for log %lu, but is not a "
-                     "storage node or a node that should be included in the "
-                     "nodesets according to the config",
-                     shard.node(),
-                     log_id.val());
-      return true;
-    }
-  }
-  return false;
-}
-} // namespace
-
-bool EpochMetaData::matchesConfig(logid_t log_id,
-                                  const std::shared_ptr<Configuration>& cfg,
-                                  bool output_errors) const {
-  dbg::Level debug_level = output_errors ? dbg::Level::ERROR : dbg::Level::SPEW;
-  if (!validWithConfig(log_id, cfg)) {
-    return false;
-  }
-  const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
-      cfg->getLogGroupByIDShared(log_id);
-  if (!logcfg) {
-    ld_log(debug_level, "No log config for log %lu", log_id.val_);
-    return false;
-  }
-  ReplicationProperty replication_in_cfg =
-      ReplicationProperty::fromLogAttributes(logcfg->attrs());
-
-  // TODO: this doesn't verify the nodeset size if there is none set in the
-  // config. Should something be done about this?
-  nodeset_size_t expected_nodeset_size = get_real_nodeset_size(
-      cfg->serverConfig()->getMetaDataLogsConfig().nodeset_selector_type,
-      log_id,
-      cfg,
-      logcfg->attrs().nodeSetSize().value(),
-      replication_in_cfg);
-  if (logcfg->attrs().nodeSetSize().value().hasValue() &&
-      (h.nodeset_size != expected_nodeset_size)) {
-    ld_log(debug_level,
-           "Nodeset size mismatch for log %lu, epoch metadata: %d, expected "
-           "nodeset size from configuration: %d",
-           log_id.val(),
-           h.nodeset_size,
-           expected_nodeset_size);
-    return false;
-  }
-
-  if (replication != replication_in_cfg) {
-    ld_log(debug_level,
-           "Replication property mismatch for log %lu, epoch metadata: %s, "
-           "configured: %s",
-           log_id.val(),
-           replication.toString().c_str(),
-           replication_in_cfg.toString().c_str());
-    return false;
-  }
-
-  if (disabled()) {
-    // this log is disabled, but is in the config. Should be reprovisioned
-    ld_log(debug_level,
-           "log %lu disabled in epoch metadata, but present in config",
-           log_id.val());
-    return false;
-  }
-
-  if (!nodesconfig_hash.hasValue()) {
-    // config hash is expected, but not written
-    ld_log(debug_level, "Config hash not written for log %lu", log_id.val());
-    return false;
-  }
-  if (nodesetContainsInvalidNodes(log_id, shards, *cfg->serverConfig())) {
-    // we want to change a nodeset if it contains nodes that aren't in the
-    // config anymore
-    ld_log(debug_level,
-           "Nodeset contains invalid nodes for log %lu",
-           log_id.val());
-    return false;
-  }
-  if (nodesconfig_hash.hasValue() &&
-      cfg->serverConfig()->getStorageNodesConfigHash() !=
-          nodesconfig_hash.value()) {
-    // metadata has been generated from a different config
-    ld_log(
-        debug_level,
-        "Metadata generated from a different config than the one supplied for "
-        "log %lu. Metadata generated from nodes config with this hash: %lu. "
-        "Current nodes config hash: %lu",
-        log_id.val(),
-        nodesconfig_hash.value(),
-        cfg->serverConfig()->getStorageNodesConfigHash());
-    return false;
-  }
-
-  return true;
 }
 
 void EpochMetaData::deserialize(ProtocolReader& reader,
@@ -274,11 +169,10 @@ void EpochMetaData::deserialize(ProtocolReader& reader,
         std::chrono::seconds(10),
         10,
         "Epoch metadata has unsupported flags. Proceeding with "
-        "deserialization, "
-        "assuming that this is metadata from the future, and that the people "
-        "of "
-        "the future have designed the new format to be forward compatible. "
-        "All flags: %u, supported flags: %u. Full payload: %s",
+        "deserialization, assuming that this is metadata from the future, and "
+        "that the people of the future have designed the new format to be "
+        "forward compatible. All flags: %u, supported flags: %u. "
+        "Full payload: %s",
         h.flags,
         MetaDataLogRecordHeader::ALL_KNOWN_FLAGS,
         reader.getSource().hexDump().c_str());
@@ -342,17 +236,40 @@ void EpochMetaData::deserialize(ProtocolReader& reader,
         h.replication_factor_DO_NOT_USE, h.sync_replication_scope_DO_NOT_USE);
   }
 
-  if (h.flags & MetaDataLogRecordHeader::HAS_NODESCONFIG_HASH) {
-    uint64_t hash;
-    reader.read(&hash);
-    nodesconfig_hash.assign(hash);
+  if (h.flags & MetaDataLogRecordHeader::HAS_NODESET_SIGNATURE) {
+    reader.read(&nodeset_params.signature);
   } else {
-    nodesconfig_hash.clear();
+    nodeset_params.signature = 0;
+  }
+
+  if (h.flags & MetaDataLogRecordHeader::HAS_TARGET_NODESET_SIZE_AND_SEED) {
+    CHECK_READER();
+    if (reader.bytesRemaining() == 0 ||
+        (expected_size.hasValue() &&
+         reader.bytesRead() - bytes_read_before_deserialize ==
+             expected_size.value())) {
+      // This is a hack to work around what D13463100 fixes.
+      // Remove this around summer 2019 or later (when D13463100 has been in
+      // production for some time).
+      //
+      // An older version of the code (without D13463100) could deserialize an
+      // EpochMetaData with HAS_TARGET_NODESET_SIZE_AND_SEED flag without
+      // knowing what the flag means, then serialize that EpochMetaData with
+      // the flag set but without the actual target_nodeset_size and seed.
+      nodeset_params.target_nodeset_size = 0;
+      nodeset_params.seed = 0;
+    } else {
+      reader.read(&nodeset_params.target_nodeset_size);
+      reader.read(&nodeset_params.seed);
+    }
+  } else {
+    nodeset_params.target_nodeset_size = 0;
+    nodeset_params.seed = 0;
   }
 
   CHECK_READER();
-  // note that if reader.error(), reader.bytesRemaining() will be zero
-  // check trailing bytes if expected_size is set
+  // Check trailing bytes if expected_size is set.
+  // Note that if reader.error(), reader.bytesRemaining() will be zero.
   if (expected_size.hasValue()) {
     const size_t bytes_consumed =
         reader.bytesRead() - bytes_read_before_deserialize;
@@ -470,11 +387,17 @@ void EpochMetaData::serialize(ProtocolWriter& writer) const {
     new_h.flags |= MetaDataLogRecordHeader::HAS_WEIGHTS;
   }
 
-  if (!nodesconfig_hash.hasValue()) {
-    new_h.flags &= ~MetaDataLogRecordHeader::HAS_NODESCONFIG_HASH;
+  if (nodeset_params.signature == 0) {
+    new_h.flags &= ~MetaDataLogRecordHeader::HAS_NODESET_SIGNATURE;
   } else {
     ld_check(h.version >= 2);
-    new_h.flags |= MetaDataLogRecordHeader::HAS_NODESCONFIG_HASH;
+    new_h.flags |= MetaDataLogRecordHeader::HAS_NODESET_SIGNATURE;
+  }
+
+  if (nodeset_params.target_nodeset_size == 0 && nodeset_params.seed == 0) {
+    new_h.flags &= ~MetaDataLogRecordHeader::HAS_TARGET_NODESET_SIZE_AND_SEED;
+  } else {
+    new_h.flags |= MetaDataLogRecordHeader::HAS_TARGET_NODESET_SIZE_AND_SEED;
   }
 
   // preserve the format with the header version by _only_ copying the portion
@@ -508,9 +431,13 @@ void EpochMetaData::serialize(ProtocolWriter& writer) const {
     }
   }
 
-  if (new_h.flags & MetaDataLogRecordHeader::HAS_NODESCONFIG_HASH) {
-    ld_check(nodesconfig_hash.hasValue());
-    writer.write(&nodesconfig_hash.value(), sizeof(uint64_t));
+  if (new_h.flags & MetaDataLogRecordHeader::HAS_NODESET_SIGNATURE) {
+    writer.write(nodeset_params.signature);
+  }
+
+  if (new_h.flags & MetaDataLogRecordHeader::HAS_TARGET_NODESET_SIZE_AND_SEED) {
+    writer.write(nodeset_params.target_nodeset_size);
+    writer.write(nodeset_params.seed);
   }
 }
 
@@ -542,9 +469,10 @@ std::string EpochMetaData::toStringPayload() const {
 
 std::string EpochMetaData::toString() const {
   std::string out = "[E:" + std::to_string(h.epoch.val_) +
-      " S:" + std::to_string(h.effective_since.val_) +
+      " since:" + std::to_string(h.effective_since.val_) +
       " R:" + replication.toString() + " V:" + std::to_string(h.version) +
-      " FL:" + flagsToString(h.flags) +
+      " flags:" + flagsToString(h.flags) +
+      " params:" + nodeset_params.toString() +
       " N:" + facebook::logdevice::toString(shards) +
       " W:" + facebook::logdevice::toString(weights) + "]";
   if (!isValid()) {
@@ -569,8 +497,9 @@ std::string EpochMetaData::flagsToString(epoch_metadata_flags_t flags) {
   FLAG(DISABLED)
   FLAG(HAS_WEIGHTS)
   FLAG(HAS_REPLICATION_PROPERTY)
-  FLAG(HAS_NODESCONFIG_HASH)
+  FLAG(HAS_NODESET_SIGNATURE)
   FLAG(HAS_STORAGE_SET)
+  FLAG(HAS_TARGET_NODESET_SIZE_AND_SEED)
 
 #undef FLAG
 
@@ -623,6 +552,21 @@ EpochMetaData::storageSetToNodeset(const StorageSet& storage_set) {
     nodeset.push_back(shard.node());
   }
   return nodeset;
+}
+
+bool EpochMetaData::NodeSetParams::operator==(const NodeSetParams& rhs) const {
+  return std::tie(signature, target_nodeset_size, seed) ==
+      std::tie(rhs.signature, rhs.target_nodeset_size, rhs.seed);
+}
+bool EpochMetaData::NodeSetParams::operator!=(const NodeSetParams& rhs) const {
+  return !(*this == rhs);
+}
+
+std::string EpochMetaData::NodeSetParams::toString() const {
+  std::stringstream ss;
+  ss << "{target:" << target_nodeset_size << " seed:" << seed
+     << " signature:" << std::hex << signature << std::dec << "}";
+  return ss.str();
 }
 
 }} // namespace facebook::logdevice

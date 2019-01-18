@@ -54,23 +54,18 @@ static void verify_result(NodeSetSelector* selector,
 
   ld_check(iteration > 0);
   for (size_t i = 0; i < iteration; ++i) {
-    std::unique_ptr<StorageSet> new_storage_set;
-    NodeSetSelector::Decision decision;
-    std::tie(decision, new_storage_set) =
-        selector->getStorageSet(logid, config, nullptr, options);
-
-    ASSERT_EQ(expected_decision, decision);
-    if (decision != Decision::NEEDS_CHANGE) {
-      ASSERT_EQ(nullptr, new_storage_set);
+    auto res = selector->getStorageSet(logid, config.get(), nullptr, options);
+    ASSERT_EQ(expected_decision, res.decision);
+    if (res.decision != Decision::NEEDS_CHANGE) {
       continue;
     }
 
-    ASSERT_NE(nullptr, new_storage_set);
+    ASSERT_FALSE(res.storage_set.empty());
 
     // perform basic checks
     // nodes in nodeset must be unique and in increasing order
-    ASSERT_TRUE(std::is_sorted(new_storage_set->begin(),
-                               new_storage_set->end(),
+    ASSERT_TRUE(std::is_sorted(res.storage_set.begin(),
+                               res.storage_set.end(),
                                std::less_equal<ShardID>()));
 
     // must comply with the config
@@ -81,31 +76,25 @@ static void verify_result(NodeSetSelector* selector,
     const auto& all_nodes = config->serverConfig()->getNodes();
     ASSERT_TRUE(ServerConfig::validStorageSet(
         all_nodes,
-        *new_storage_set,
+        res.storage_set,
         ReplicationProperty::fromLogAttributes(attrs)));
 
     int nodeset_size = attrs.nodeSetSize().value().value_or(all_nodes.size());
     ReplicationProperty replication =
         ReplicationProperty::fromLogAttributes(attrs);
-    auto predicted_size = selector->getStorageSetSize(
-        logid, config, nodeset_size, replication, options);
-    EXPECT_EQ(new_storage_set->size(), predicted_size);
 
-    if (!options || options->exclude_nodes.size() == 0) {
-      // Verifying that it passes checks in EpochMetaData as well
-      EpochMetaData epoch_metadata(
-          *new_storage_set,
-          ReplicationProperty::fromLogAttributes(attrs),
-          epoch_t(1),
-          epoch_t(1));
-      epoch_metadata.nodesconfig_hash.assign(
-          config->serverConfig()->getStorageNodesConfigHash());
-      epoch_metadata.h.flags |= MetaDataLogRecordHeader::HAS_NODESCONFIG_HASH;
-      EXPECT_EQ(true, epoch_metadata.matchesConfig(logid, config));
-    }
+    // Run nodeset selector on its own output and check that it doesn't want
+    // to change nodeset again.
+    EpochMetaData meta(
+        res.storage_set, ReplicationProperty::fromLogAttributes(attrs));
+    meta.weights = res.weights;
+    meta.nodeset_params.signature = res.signature;
+    auto res2 = selector->getStorageSet(logid, config.get(), &meta, options);
+    EXPECT_EQ(Decision::KEEP, res2.decision);
+    EXPECT_EQ(res.signature, res2.signature);
 
     // perform the user provided check
-    verify(new_storage_set.get());
+    verify(&res.storage_set);
   }
 }
 
@@ -119,39 +108,38 @@ compare_nodesets(NodeSetSelector* selector,
                  std::map<ShardID, size_t>& old_distribution,
                  std::map<ShardID, size_t>& new_distribution,
                  const NodeSetSelector::Options* options = nullptr) {
-  std::unique_ptr<StorageSet> old_storage_set;
-  std::unique_ptr<StorageSet> new_storage_set;
-  NodeSetSelector::Decision old_decision;
-  NodeSetSelector::Decision new_decision;
-  std::tie(old_decision, old_storage_set) =
-      selector->getStorageSet(logid, config1, nullptr, options);
+  auto old_res =
+      selector->getStorageSet(logid, config1.get(), nullptr, options);
+  auto new_res =
+      selector->getStorageSet(logid, config2.get(), nullptr, options);
 
-  std::tie(new_decision, new_storage_set) =
-      selector->getStorageSet(logid, config2, nullptr, options);
-
-  assert(std::is_sorted(old_storage_set->begin(), old_storage_set->end()));
-  assert(std::is_sorted(new_storage_set->begin(), new_storage_set->end()));
+  ld_check(old_res.decision == Decision::NEEDS_CHANGE);
+  ld_check(new_res.decision == Decision::NEEDS_CHANGE);
+  ld_check(
+      std::is_sorted(old_res.storage_set.begin(), old_res.storage_set.end()));
+  ld_check(
+      std::is_sorted(new_res.storage_set.begin(), new_res.storage_set.end()));
 
   std::vector<ShardID> common_nodes(
-      std::min(old_storage_set->size(), new_storage_set->size()));
+      std::min(old_res.storage_set.size(), new_res.storage_set.size()));
   std::vector<ShardID>::iterator node_it =
-      std::set_intersection(old_storage_set->begin(),
-                            old_storage_set->end(),
-                            new_storage_set->begin(),
-                            new_storage_set->end(),
+      std::set_intersection(old_res.storage_set.begin(),
+                            old_res.storage_set.end(),
+                            new_res.storage_set.begin(),
+                            new_res.storage_set.end(),
                             common_nodes.begin());
   common_nodes.resize(node_it - common_nodes.begin());
 
-  for (ShardID current_shard_id : *old_storage_set) {
+  for (ShardID current_shard_id : old_res.storage_set) {
     old_distribution[current_shard_id]++;
   }
 
-  for (ShardID current_shard_id : *new_storage_set) {
+  for (ShardID current_shard_id : new_res.storage_set) {
     new_distribution[current_shard_id]++;
   }
 
-  return std::make_pair(old_storage_set->size() - common_nodes.size(),
-                        new_storage_set->size() - common_nodes.size());
+  return std::make_pair(old_res.storage_set.size() - common_nodes.size(),
+                        new_res.storage_set.size() - common_nodes.size());
 }
 
 TEST(RandomCrossDomainNodeSetSelectorTest, RackAssignment) {

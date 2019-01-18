@@ -17,9 +17,9 @@
 #include "logdevice/common/MetaDataLog.h"
 #include "logdevice/common/NodeSetSelectorFactory.h"
 #include "logdevice/common/NoopTraceLogger.h"
+#include "logdevice/common/Processor.h"
 #include "logdevice/common/Sequencer.h"
 #include "logdevice/common/StaticSequencerLocator.h"
-#include "logdevice/common/Processor.h"
 #include "logdevice/common/metadata_log/TrimMetaDataLogRequest.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/include/Client.h"
@@ -444,7 +444,7 @@ TEST_F(MetaDataLogsIntegrationTest, MetaDataLogAppendWithStaleSequencerEpoch) {
           ASSERT_EQ(E::OK, status);
           ASSERT_EQ(LOG_ID, log_id);
           ASSERT_NE(nullptr, info);
-          ASSERT_EQ(e, info->h.epoch);
+          ASSERT_EQ(e.val() + 1, info->h.epoch.val());
           metadata = std::move(info);
           semaphore.post();
         },
@@ -456,7 +456,8 @@ TEST_F(MetaDataLogsIntegrationTest, MetaDataLogAppendWithStaleSequencerEpoch) {
 
   // at this time the data sequencer is still running at epoch 2
   // but the metadata to be written has its epoch of epoch 4 in payload
-  ASSERT_EQ(epoch_t(4), metadata->h.epoch);
+  ASSERT_EQ(epoch_t(5), metadata->h.epoch);
+  --metadata->h.epoch.val_;
 
   // now append the metadata record, it should cause the data sequencer to
   // reactivate to epoch 5 before appending the metadata log record

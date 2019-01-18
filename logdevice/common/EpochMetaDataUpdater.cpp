@@ -14,33 +14,48 @@
 
 namespace facebook { namespace logdevice {
 
-EpochMetaData::UpdateResult EpochMetaDataUpdater::
+using UpdateResult = EpochMetaData::UpdateResult;
+
+EpochMetaData::UpdateResult CustomEpochMetaDataUpdater::
 operator()(logid_t log_id,
            std::unique_ptr<EpochMetaData>& info,
            MetaDataTracer* tracer) {
-  return generateNewMetaData(log_id,
+  UpdateResult res =
+      updateMetaDataIfNeeded(log_id,
                              info,
-                             config_,
-                             nodeset_selector_,
-                             tracer,
+                             *config_,
+                             /* target_nodeset_size */ folly::none,
+                             /* nodeset_seed */ folly::none,
+                             nodeset_selector_.get(),
                              use_storage_set_format_,
                              provision_if_empty_,
                              update_if_exists_,
                              force_update_);
+  if (res == UpdateResult::CREATED || res == UpdateResult::UPDATED) {
+    if (tracer) {
+      tracer->setAction(MetaDataTracer::Action::PROVISION_METADATA);
+      tracer->setNewMetaData(*info);
+    }
+  } else {
+    ld_check(res == UpdateResult::UNCHANGED || res == UpdateResult::FAILED);
+  }
+  return res;
 }
 
-EpochMetaData::UpdateResult EpochMetaDataUpdaterBase::generateNewMetaData(
-    logid_t log_id,
-    std::unique_ptr<EpochMetaData>& info,
-    std::shared_ptr<Configuration> config,
-    std::shared_ptr<NodeSetSelector> nodeset_selector,
-    MetaDataTracer* tracer,
-    bool use_storage_set_format,
-    bool provision_if_empty,
-    bool update_if_exists,
-    bool force_update) {
+EpochMetaData::UpdateResult
+updateMetaDataIfNeeded(logid_t log_id,
+                       std::unique_ptr<EpochMetaData>& info,
+                       const Configuration& config,
+                       folly::Optional<nodeset_size_t> target_nodeset_size,
+                       folly::Optional<uint64_t> nodeset_seed,
+                       NodeSetSelector* nodeset_selector,
+                       bool use_storage_set_format,
+                       bool provision_if_empty,
+                       bool update_if_exists,
+                       bool force_update,
+                       bool* out_only_nodeset_params_changed) {
   const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
-      config->getLogGroupByIDShared(log_id);
+      config.getLogGroupByIDShared(log_id);
   if (!logcfg) {
     err = E::NOTFOUND;
     return EpochMetaData::UpdateResult::FAILED;
@@ -48,11 +63,8 @@ EpochMetaData::UpdateResult EpochMetaDataUpdaterBase::generateNewMetaData(
 
   // If the given metadata is empty, provision it with an initial metadata
   // Otherwise, update the metadata given
-  const bool metadata_needs_provisioning = !info || info->isEmpty();
-  EpochMetaData::UpdateResult success_res = info
-      ? EpochMetaData::UpdateResult::UPDATED
-      : EpochMetaData::UpdateResult::CREATED;
-  if (metadata_needs_provisioning && !provision_if_empty) {
+  const bool prev_metadata_exists = info && !info->isEmpty();
+  if (!prev_metadata_exists && !provision_if_empty) {
     RATELIMIT_INFO(std::chrono::seconds(10),
                    10,
                    "Metadata not found for log %lu",
@@ -60,67 +72,104 @@ EpochMetaData::UpdateResult EpochMetaDataUpdaterBase::generateNewMetaData(
     err = E::EMPTY;
     return EpochMetaData::UpdateResult::FAILED;
   }
-  if (!metadata_needs_provisioning && !update_if_exists) {
+  if (prev_metadata_exists && !update_if_exists) {
     ld_error("Metadata already provisioned for log %lu", log_id.val_);
     err = E::EXISTS;
     return EpochMetaData::UpdateResult::FAILED;
   }
-  if (!info) {
-    info = std::make_unique<EpochMetaData>();
+
+  const EpochMetaData::UpdateResult success_res = info
+      ? EpochMetaData::UpdateResult::UPDATED
+      : EpochMetaData::UpdateResult::CREATED;
+
+  ReplicationProperty replication =
+      ReplicationProperty::fromLogAttributes(logcfg->attrs());
+  epoch_metadata_version::type metadata_version =
+      epoch_metadata_version::versionToWrite(config.serverConfig());
+
+  if (!target_nodeset_size.hasValue()) {
+    if (prev_metadata_exists && info->nodeset_params.target_nodeset_size != 0) {
+      target_nodeset_size = info->nodeset_params.target_nodeset_size;
+    } else {
+      target_nodeset_size = logcfg->attrs().nodeSetSize().value().value_or(
+          std::numeric_limits<int>::max());
+    }
   }
-  const StorageSet* old_storage_set =
-      metadata_needs_provisioning ? nullptr : &info->shards;
-  std::unique_ptr<StorageSet> new_storage_set;
-  NodeSetSelector::Decision decision;
-  NodeSetSelector::Options selector_options;
+  if (!nodeset_seed.hasValue()) {
+    if (prev_metadata_exists) {
+      nodeset_seed = info->nodeset_params.seed;
+    } else {
+      nodeset_seed = 0;
+    }
+  }
 
-  std::tie(decision, new_storage_set) = nodeset_selector->getStorageSet(
-      log_id, config, old_storage_set, &selector_options);
+  // Select a nodeset.
+  std::unique_ptr<NodeSetSelector> nodeset_selector_ptr;
+  if (!nodeset_selector) {
+    NodeSetSelectorType nodeset_selector_type =
+        config.serverConfig()->getMetaDataLogsConfig().nodeset_selector_type;
+    ld_check(nodeset_selector_type != NodeSetSelectorType::INVALID);
+    nodeset_selector_ptr =
+        NodeSetSelectorFactory::create(nodeset_selector_type);
+    nodeset_selector = nodeset_selector_ptr.get();
+    ld_check(nodeset_selector != nullptr);
+  }
+  auto selected = nodeset_selector->getStorageSet(
+      log_id, &config, prev_metadata_exists ? info.get() : nullptr, nullptr);
 
-  switch (decision) {
+  bool only_nodeset_params_changed = false;
+
+  switch (selected.decision) {
     case NodeSetSelector::Decision::FAILED:
       ld_error("NodeSetSelector failed to generate new nodeset for log "
-               "%lu: %s",
-               log_id.val_,
-               error_name(err));
-      // coalesce errs set by nodeset selector to E::FAILED and propagate to
-      // the epoch store
+               "%lu",
+               log_id.val_);
       err = E::FAILED;
       return EpochMetaData::UpdateResult::FAILED;
     case NodeSetSelector::Decision::KEEP:
-      if (metadata_needs_provisioning) {
+      if (!prev_metadata_exists) {
         ld_critical("INTERNAL ERROR: NodeSet selector returned Decision::KEEP "
                     "for an invalid epoch metadata that needs to be "
                     "provisioned! logid: %lu",
                     log_id.val_);
-        // should be enforced by the nodeset selector
+        // Should be enforced by the nodeset selector.
         ld_check(false);
         err = E::INTERNAL;
         return EpochMetaData::UpdateResult::FAILED;
       }
 
-      if (!force_update &&
-          (ReplicationProperty::fromLogAttributes(logcfg->attrs()) ==
-           info->replication) &&
-          !info->disabled()) {
-        // keep the existing metadata only when:
-        // 1) no change in the nodeset for the log, and
-        // 2) replication property stays the same,
-        // 3) existing metadata is not disabled, and
-        // 4) force_update flag wasn't set
-        return EpochMetaData::UpdateResult::UNCHANGED;
+      // Keep the existing metadata only when:
+      // 1) no change in the nodeset for the log, and
+      // 2) replication property stays the same, and
+      // 3) force_update flag wasn't set, and
+      // 4) existing metadata is not disabled, and
+      // 5) metadata_version is up-to-date, and
+      // 6) nodeset_params stay the same.
+      if (!force_update && info->replication == replication &&
+          !info->disabled() && info->h.version >= metadata_version) {
+        if (target_nodeset_size.value() ==
+                info->nodeset_params.target_nodeset_size &&
+            nodeset_seed.value() == info->nodeset_params.seed &&
+            selected.signature == info->nodeset_params.signature) {
+          return EpochMetaData::UpdateResult::UNCHANGED;
+        } else {
+          // Only need to update nodeset params.
+          // No need to reset effective_since and write a metadata log record.
+          only_nodeset_params_changed = true;
+        }
       }
       break;
     case NodeSetSelector::Decision::NEEDS_CHANGE:
       break;
   }
 
-  epoch_metadata_version::type metadata_version =
-      epoch_metadata_version::versionToWrite(config->serverConfig());
+  if (info == nullptr) {
+    info = std::make_unique<EpochMetaData>();
+  }
 
-  if (metadata_needs_provisioning) {
-    if (new_storage_set == nullptr) {
-      ld_critical("INTERNAL ERROR: NodeSet selector returned nullptr nodeset "
+  if (!prev_metadata_exists) {
+    if (selected.storage_set.empty()) {
+      ld_critical("INTERNAL ERROR: NodeSet selector returned empty nodeset "
                   "for log %lu whose epoch metadata needs to be provisioned!",
                   log_id.val_);
       // should be enforced by the nodeset selector
@@ -133,31 +182,29 @@ EpochMetaData::UpdateResult EpochMetaDataUpdaterBase::generateNewMetaData(
     info->h.epoch = info->h.effective_since = EPOCH_MIN;
     // use the configured `metadata_version'
     info->h.version = metadata_version;
-  } else {
+  } else if (!only_nodeset_params_changed) {
     // epoch remains the same
     // update effective_since to be the same as epoch
     info->h.effective_since = epoch_t(info->h.epoch.val_);
   }
-  // update replication property
-  info->replication = ReplicationProperty::fromLogAttributes(logcfg->attrs());
+
+  info->replication = replication;
 
   // update the version to metadata_version if applicable
   if (info->h.version < metadata_version) {
     info->h.version = metadata_version;
   }
 
-  // update the nodeset
-  if (new_storage_set) {
-    info->setShards(*new_storage_set);
+  // update nodeset and nodeset_params
+  info->nodeset_params.signature = selected.signature;
+  info->nodeset_params.target_nodeset_size = target_nodeset_size.value();
+  info->nodeset_params.seed = nodeset_seed.value();
+  if (selected.decision == NodeSetSelector::Decision::NEEDS_CHANGE) {
+    ld_check(!only_nodeset_params_changed);
+    info->setShards(selected.storage_set);
+    info->weights = selected.weights;
   }
 
-  info->nodesconfig_hash.assign(
-      config->serverConfig()->getStorageNodesConfigHash());
-  info->h.flags |= MetaDataLogRecordHeader::HAS_NODESCONFIG_HASH;
-
-  // since this is a newly generated metadata, by default it is not yet written
-  // to the metadata log
-  info->h.flags &= ~MetaDataLogRecordHeader::WRITTEN_IN_METADATALOG;
   // clear the DISABLED flag as well
   info->h.flags &= ~MetaDataLogRecordHeader::DISABLED;
 
@@ -168,7 +215,13 @@ EpochMetaData::UpdateResult EpochMetaDataUpdaterBase::generateNewMetaData(
     info->h.flags &= ~MetaDataLogRecordHeader::HAS_STORAGE_SET;
   }
 
-  ld_check(!info->writtenInMetaDataLog());
+  if (!only_nodeset_params_changed) {
+    // since this is a newly generated metadata, by default it is not yet
+    // written to the metadata log
+    info->h.flags &= ~MetaDataLogRecordHeader::WRITTEN_IN_METADATALOG;
+    ld_check(!info->writtenInMetaDataLog());
+  }
+
   ld_check(!info->disabled());
 
   if (!info->isValid()) {
@@ -182,24 +235,11 @@ EpochMetaData::UpdateResult EpochMetaDataUpdaterBase::generateNewMetaData(
     return EpochMetaData::UpdateResult::FAILED;
   }
 
-  if (!info->matchesConfig(log_id, config, /* output_errors */ true)) {
-    ld_critical("INTERNAL ERROR: Updated epoch metadata is inconsistent with "
-                "config for log %lu: %s",
-                log_id.val_,
-                info->toString().c_str());
-    // nodeset selector should enforce that epoch metadata is
-    // consistent with the configuration
-    ld_check(false);
-    // However, since metadata is valid, we allow sequencer activation here
-    // anyway
+  if (out_only_nodeset_params_changed) {
+    *out_only_nodeset_params_changed = only_nodeset_params_changed;
   }
 
-  if (tracer) {
-    tracer->setAction(MetaDataTracer::Action::PROVISION_METADATA);
-    tracer->setNewMetaData(*info);
-  }
-
-  return success_res; // UPDATED or CREATED
+  return success_res;
 }
 
 Status EpochMetaDataUpdateToNextEpoch::canEpochBeBumpedWithoutProvisioning(
@@ -241,7 +281,7 @@ bool EpochMetaDataUpdateToNextEpoch::canSequencerProvision() {
   return res;
 }
 
-EpochMetaData::UpdateResult EpochMetaDataUpdateToNextEpoch::
+UpdateResult EpochMetaDataUpdateToNextEpoch::
 operator()(logid_t log_id,
            std::unique_ptr<EpochMetaData>& info,
            MetaDataTracer* tracer) {
@@ -249,13 +289,30 @@ operator()(logid_t log_id,
   if (log_id <= LOGID_INVALID || log_id > LOGID_MAX) {
     err = E::INVALID_PARAM;
     ld_check(false);
-    return EpochMetaData::UpdateResult::FAILED;
+    return UpdateResult::FAILED;
   }
   if (info && !info->isValid()) {
     ld_error("Attempt to bump epoch for log %lu but the epoch store content is "
              "invalid!",
              log_id.val_);
     err = E::FAILED;
+    return UpdateResult::FAILED;
+  }
+
+  // Do this check early to report preemption even if other stopping conditions
+  // are hit (e.g. not written to metadata log).
+  // Note that `info` comes from epoch store, so it contains the _next_ epoch,
+  // i.e. the epoch the newly activated sequencer is going to get.
+  if (acceptable_activation_epoch_.hasValue() &&
+      acceptable_activation_epoch_.value() !=
+          (info ? info->h.epoch : EPOCH_MIN)) {
+    RATELIMIT_INFO(std::chrono::seconds(10),
+                   2,
+                   "Aborting metadata update because epoch changed in epoch "
+                   "store: wanted %u, got %u",
+                   acceptable_activation_epoch_.value().val(),
+                   info ? info->h.epoch.val() : EPOCH_MIN.val());
+    err = E::ABORTED;
     return EpochMetaData::UpdateResult::FAILED;
   }
 
@@ -263,14 +320,14 @@ operator()(logid_t log_id,
   // provisioning metadata. If it is, sequencers should also be responsible for
   // writing metadata logs, and the written bit should be enabled in the
   // metadata.
-  bool can_provision = canSequencerProvision();
+  bool provisioning_enabled = canSequencerProvision();
   Status can_activate_without_provisioning =
       canEpochBeBumpedWithoutProvisioning(log_id,
                                           info,
                                           /*tolerate_notfound=*/true);
-  if (!can_provision && (can_activate_without_provisioning != E::OK)) {
+  if (!provisioning_enabled && (can_activate_without_provisioning != E::OK)) {
     err = can_activate_without_provisioning;
-    return EpochMetaData::UpdateResult::FAILED;
+    return UpdateResult::FAILED;
   }
 
   if (info && info->h.epoch == EPOCH_MAX) {
@@ -279,59 +336,73 @@ operator()(logid_t log_id,
     // to the epoch store. This should be OK since it is unlikely logs are
     // running out of epochs.
     err = E::TOOBIG;
-    return EpochMetaData::UpdateResult::FAILED;
+    return UpdateResult::FAILED;
   }
 
   // default result is updated, could be changed to CREATED or FAILED by the
   // updater if sequencers provision logs
-  EpochMetaData::UpdateResult res = EpochMetaData::UpdateResult::UPDATED;
-  if (can_provision) {
-    ld_check(config_);
-    bool provisioning_required = !info || !info->matchesConfig(log_id, config_);
-    // We cannot re-provision metadata if we have valid metadata that has not
-    // been written to the metadata logs
+  UpdateResult res = UpdateResult::UPDATED;
+
+  if (updated_metadata_ != nullptr) {
+    // New metadata was provided to us from outside.
+    // Check the conditions and use it.
+    if (!info || info->isEmpty() || info->disabled() ||
+        !info->writtenInMetaDataLog()) {
+      RATELIMIT_ERROR(
+          std::chrono::seconds(10),
+          2,
+          "Epoch store has invalid metadata or no WRITTEN_IN_METADATA_LOG flag "
+          "for log %lu, while we have a running sequencer that thinks that "
+          "metadata is written to metadata log. This is unexpected. Aborting "
+          "metadata update. Tried to update to %s, epoch store has %s",
+          log_id.val(),
+          updated_metadata_->toString().c_str(),
+          info ? info->toString().c_str() : "null");
+      err = E::FAILED;
+      return UpdateResult::FAILED;
+    }
+
+    // acceptable_activation_epoch_ (assigned in constructor) must have taken
+    // care of that.
+    ld_check(info->h.epoch == updated_metadata_->h.epoch);
+
+    *info = *updated_metadata_;
+    if (tracer) {
+      tracer->setAction(MetaDataTracer::Action::PROVISION_METADATA);
+    }
+  } else {
+    // Update or provision metadata if needed.
     bool provisioning_allowed = !info || info->isEmpty() || info->disabled() ||
         info->writtenInMetaDataLog();
-    if (provisioning_required && provisioning_allowed) {
-      NodeSetSelectorType nodeset_selector_type = config_->serverConfig()
-                                                      ->getMetaDataLogsConfig()
-                                                      .nodeset_selector_type;
-      ld_check(nodeset_selector_type != NodeSetSelectorType::INVALID);
-      auto nodeset_selector =
-          NodeSetSelectorFactory::create(nodeset_selector_type);
-      res = generateNewMetaData(log_id,
-                                info,
-                                config_,
-                                std::move(nodeset_selector),
-                                tracer,
-                                use_storage_set_format_,
-                                provision_if_empty_,
-                                true /* update_if_exists */,
-                                true /* force_udpate */);
-      // If we detected changes are required, they should happen
-      ld_check(res != EpochMetaData::UpdateResult::UNCHANGED);
-      if (res == EpochMetaData::UpdateResult::FAILED) {
+
+    if (provisioning_enabled && provisioning_allowed) {
+      ld_check(config_);
+      res = updateMetaDataIfNeeded(log_id,
+                                   info,
+                                   *config_,
+                                   folly::none,
+                                   folly::none,
+                                   /* nodeset_selector */ nullptr,
+                                   use_storage_set_format_,
+                                   provision_if_empty_);
+      if (res == UpdateResult::FAILED) {
         return res;
       }
+      if (res == UpdateResult::UNCHANGED) {
+        // We're going to bump epoch even if nodeset doesn't need changing.
+        res = UpdateResult::UPDATED;
+      } else if (tracer) {
+        tracer->setAction(MetaDataTracer::Action::PROVISION_METADATA);
+      }
     } else {
-      // TODO: (T15881519) reluctant sequencer activation. We want to activate
-      // the sequencer with the old metadata until it manages to write it to the
-      // metadata log, then reactivate whenever that succeeds with the new
-      // metadata
+      // We didn't consider updating the nodeset, either because nodeset
+      // updating is turned off or because the current nodeset is not written to
+      // metadata log yet. If it's the latter, we'll re-check it after metadata
+      // is written.
       ld_assert(canEpochBeBumpedWithoutProvisioning(log_id, info) == E::OK);
     }
   }
   ld_check(info && info->isValid());
-
-  // Note that the following check is done before incrementing the epoch. This
-  // is because we store the _next_ epoch in epoch store, but here we want to
-  // check against the epoch with which this sequencer will be activated (i.e.
-  // the one we have read from ZK)
-  if (acceptable_activation_epoch_.hasValue() &&
-      acceptable_activation_epoch_.value() != info->h.epoch) {
-    err = E::ABORTED;
-    return EpochMetaData::UpdateResult::FAILED;
-  }
 
   ++info->h.epoch.val_;
   if (info->h.epoch <= EPOCH_MIN) {
@@ -339,25 +410,14 @@ operator()(logid_t log_id,
                 "should be >= 2",
                 info->h.epoch.val());
     ld_check(false);
-    return EpochMetaData::UpdateResult::FAILED;
+    return UpdateResult::FAILED;
   }
   ld_check(info->isValid());
-  // Updating metadata in tracer
+
   if (tracer) {
     tracer->setNewMetaData(*info);
   }
-  return res;
-}
 
-std::unique_ptr<EpochMetaData>
-EpochMetaDataUpdateToNextEpoch::getCompletionMetaData(
-    const EpochMetaData* src) {
-  if (!src) {
-    return nullptr;
-  }
-  auto res = std::make_unique<EpochMetaData>(*src);
-  ld_check(res->h.epoch > EPOCH_MIN);
-  --res->h.epoch.val_;
   return res;
 }
 
@@ -387,7 +447,7 @@ operator()(logid_t log_id,
 
   if (compare_equality_) {
     // comparing everything except the epoch field
-    if (!compare_equality_->isSubstantiallyIdentical(*info)) {
+    if (!compare_equality_->identicalInMetaDataLog(*info)) {
       ld_error("Attempt to mark EpochMetaData for log %lu as written in "
                "metadata log but metadata in epoch store (%s) differs from the "
                "one that was written (%s).",
@@ -402,6 +462,54 @@ operator()(logid_t log_id,
   info->h.flags |= MetaDataLogRecordHeader::WRITTEN_IN_METADATALOG;
   if (tracer) {
     tracer->setAction(MetaDataTracer::Action::SET_WRITTEN_BIT);
+    tracer->setNewMetaData(*info);
+  }
+  return EpochMetaData::UpdateResult::UPDATED;
+}
+
+EpochMetaData::UpdateResult EpochMetaDataUpdateNodeSetParams::
+operator()(logid_t log_id,
+           std::unique_ptr<EpochMetaData>& info,
+           MetaDataTracer* tracer) {
+  if (!info || info->isEmpty() || !info->isValid() ||
+      info->h.epoch == EPOCH_INVALID) {
+    ld_error(
+        "Attempt to update nodeset params in epoch store for log %lu epoch %u "
+        "but the metadata is missing or invalid in the epoch store.",
+        log_id.val(),
+        required_epoch_.val());
+    err = E::FAILED;
+    return EpochMetaData::UpdateResult::FAILED;
+  }
+
+  if (info->h.epoch != required_epoch_) {
+    RATELIMIT_INFO(std::chrono::seconds(10),
+                   2,
+                   "Not updating nodeset params for log %lu epoch %u to %s "
+                   "because epoch was increased to %u.",
+                   log_id.val(),
+                   required_epoch_.val(),
+                   new_params_.toString().c_str(),
+                   info->h.epoch.val());
+    err = E::ABORTED;
+    return EpochMetaData::UpdateResult::FAILED;
+  }
+
+  if (info->nodeset_params == new_params_) {
+    RATELIMIT_INFO(
+        std::chrono::seconds(10),
+        2,
+        "Not updating nodeset params for log %lu epoch %u to %s because it "
+        "already has this value.",
+        log_id.val(),
+        required_epoch_.val(),
+        new_params_.toString().c_str());
+    return EpochMetaData::UpdateResult::UNCHANGED;
+  }
+
+  info->nodeset_params = new_params_;
+  if (tracer) {
+    tracer->setAction(MetaDataTracer::Action::UPDATE_NODESET_PARAMS);
     tracer->setNewMetaData(*info);
   }
   return EpochMetaData::UpdateResult::UPDATED;

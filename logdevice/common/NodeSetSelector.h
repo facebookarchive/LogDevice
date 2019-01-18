@@ -26,12 +26,18 @@ namespace facebook { namespace logdevice {
  *        nodesets for a log based on cluster configuration.
  */
 
+class Configuration;
+class EpochMetaData;
+
 class NodeSetSelector {
  public:
   enum class Decision : uint8_t {
-    KEEP = 0,     // nodeset is the same as the previous one
-    NEEDS_CHANGE, // nodeset needs to be updated
-    FAILED,       // failed to determine new nodeset for the log
+    // Nodeset is the same as previous one, but signature may be different.
+    KEEP = 0,
+    // Nodeset needs to be updated.
+    NEEDS_CHANGE,
+    // Failed to determine new nodeset for the log.
+    FAILED,
   };
 
   /**
@@ -44,54 +50,54 @@ class NodeSetSelector {
     std::unordered_set<node_index_t> exclude_nodes;
   };
 
+  struct Result {
+    Decision decision;
+
+    // Below fields have the same meaning as in EpochMetaData.
+    // See comments in EpochMetaData.h for documentation.
+    // signature needs to be filled out even if decision is KEEP.
+
+    // Nodeset selector implementation may choose to not use signature and
+    // decide whether a change is needed based on contents of the config and
+    // nodeset itself.
+    uint64_t signature = 0;
+    StorageSet storage_set;
+    std::vector<double> weights;
+  };
+
   /**
-   * Determine the latest nodeset for a given log
+   * Determine if nodeset needs to be updated, and if it is, generate the new
+   * nodeset.
    *
    * @param  log_id   logid of the log
-   * @param  cfg      Configuration used to generate the nodeset
+   * @param  cfg      Cluster configuration. In particular, contains the list of
+   *                  nodes and log attributes.
    * @param  prev     Previous nodeset, used to determine whether an update is
-   *                  needed, can be nullptr indicating the information is not
-   *                  available
+   *                  needed. Can be nullptr indicating the information is not
+   *                  available. If nullptr, Result::decision must not be KEEP.
    * @param  options  Additional options used for selection
    *
-   * @return  a pair of <Status, std::unique_ptr<StorageSet>>, containing
-   *          1) decision of the computation
-   *          2) the new nodeset, only valid when 1) is Status::NEEDS_CHANGE,
-   *             otherwise nullptr
+   * Currently it is required that getStorageSet() never requests an update
+   * twice in a row. I.e. if you call getStorageSet(), then convert the returned
+   * result into EpochMetaData, then call getStorageSet() again on that
+   * EpochMetaData with the same arguments, the result will be Decision::KEEP.
+   * This is usually achieved in one of two ways:
+   *   1. Make nodeset selector deterministic, and make it return KEEP if the
+   *      newly generated nodeset is equal to the previous one.
+   *   2. Use `signature`. Set signature to a hash of the parts of input that
+   *      potentially affect the nodeset, e.g. nodes config, target nodeset
+   *      size, seed, nodeset selector type. When selecting a nodeset, first
+   *      calculate the hash of the current inputs and compare it to signature
+   *      of the existing nodeset. If it matches, don't generate a new nodeset
+   *      and return KEEP.
+   * Note that deterministic nodeset selectors may still want to use signature
+   * as an optimization, to avoid generating new nodeset if nothing changed in
+   * the input.
    */
-  virtual std::tuple<Decision, std::unique_ptr<StorageSet>>
-  getStorageSet(logid_t log_id,
-                const std::shared_ptr<Configuration>& cfg,
-                const StorageSet* prev,
-                const Options* options = nullptr) = 0;
-
-  // The size of the generated storage set can be different from the one
-  // specified in the config. E.g. if the nodeset size in config is smaller
-  // than replication factor or bigger than cluster size, it'll be clamped.
-  // This method returns the size of the nodeset that would generated
-  // by getStorageSet().
-  // Note that the existence of this method implies that all NodeSetSelector
-  // implementations must use a deterministic nodeset size. It's not a problem
-  // for the currently existing nodeset selectors, but may turn out to be too
-  // constraining in future.
-  //
-  // If the config makes it impossible to pick a valid nodeset, returns 0.
-  //
-  // Parameters `storage_set_size_target` and `replication` are there just for
-  // convenience; the same values can be obtained from LogAttributes using
-  // `cfg` and `log_id`.
-  virtual storage_set_size_t
-  getStorageSetSize(logid_t log_id,
-                    const std::shared_ptr<Configuration>& cfg,
-                    folly::Optional<int> /* storage_set_size_target */,
-                    ReplicationProperty /* replication */,
-                    const Options* options = nullptr) {
-    // The default implementation just selects a storage set and returns its
-    // size. Subclasses can override this with something more efficient.
-    auto s = getStorageSet(log_id, cfg, nullptr, options);
-    return std::get<0>(s) == Decision::NEEDS_CHANGE ? std::get<1>(s)->size()
-                                                    : 0ul;
-  }
+  virtual Result getStorageSet(logid_t log_id,
+                               const Configuration* cfg,
+                               const EpochMetaData* prev,
+                               const Options* options = nullptr) = 0;
 
   virtual ~NodeSetSelector() {}
 };

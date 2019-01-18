@@ -22,7 +22,6 @@
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/RecipientSet.h"
 #include "logdevice/common/SequencerBackgroundActivator.h"
-#include "logdevice/common/SequencerEnqueueReactivationRequest.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
 #include "logdevice/common/debug.h"
@@ -96,7 +95,8 @@ int AllSequencers::activateSequencer(
     logid_t logid,
     Sequencer::ActivationPred pred,
     folly::Optional<epoch_t> acceptable_activation_epoch,
-    bool check_metadata_log_before_provisioning) {
+    bool check_metadata_log_before_provisioning,
+    std::shared_ptr<EpochMetaData> new_metadata) {
   // sequencer that we end up activating. This may be one in the map,
   // or one that we create.
   std::shared_ptr<Sequencer> seq;
@@ -142,11 +142,13 @@ int AllSequencers::activateSequencer(
       [this,
        acceptable_activation_epoch,
        cfg,
-       check_metadata_log_before_provisioning](logid_t data_logid) -> int {
+       check_metadata_log_before_provisioning,
+       new_metadata](logid_t data_logid) -> int {
         return getEpochMetaData(data_logid,
                                 cfg,
                                 acceptable_activation_epoch,
-                                check_metadata_log_before_provisioning);
+                                check_metadata_log_before_provisioning,
+                                new_metadata);
       },
       pred);
 }
@@ -155,7 +157,8 @@ int AllSequencers::getEpochMetaData(
     logid_t logid,
     std::shared_ptr<Configuration> cfg,
     folly::Optional<epoch_t> acceptable_activation_epoch,
-    bool check_metadata_log_before_provisioning) {
+    bool check_metadata_log_before_provisioning,
+    std::shared_ptr<EpochMetaData> new_metadata) {
   ld_check(epoch_store_);
   MetaDataTracer tracer(processor_->getTraceLogger(),
                         logid,
@@ -171,6 +174,7 @@ int AllSequencers::getEpochMetaData(
       logid,
       std::make_shared<EpochMetaDataUpdateToNextEpoch>(
           cfg,
+          new_metadata,
           acceptable_activation_epoch,
           settings_->epoch_metadata_use_new_storage_set_format,
           /*provision_if_empty=*/!check_metadata_log_before_provisioning),
@@ -358,9 +362,6 @@ void AllSequencers::notifyWorkerActivationCompletion(logid_t logid, Status st) {
             MetaDataLog::metaDataLogID(c_logid), c_st);
       }
     }
-    if (w->sequencerBackgroundActivator()) {
-      w->sequencerBackgroundActivator()->notifyCompletion(c_logid, c_st);
-    }
   };
 
   // Post an ActivationCompletionRequest to all workers
@@ -379,6 +380,10 @@ void AllSequencers::notifyWorkerActivationCompletion(logid_t logid, Status st) {
       ld_check(false);
     }
   }
+
+  // Notify SequencerBackgroundActivator.
+  SequencerBackgroundActivator::requestNotifyCompletion(
+      worker->processor_, logid, st);
 }
 
 void AllSequencers::onEpochMetaDataFromEpochStore(
@@ -544,38 +549,12 @@ void AllSequencers::onEpochMetaDataFromEpochStore(
       break;
 
     case E::ABORTED:
-      if (meta_props && meta_props->last_writer_node_id.hasValue() &&
-          meta_props->last_writer_node_id.value() !=
-              cfg->serverConfig()->getMyNodeID() &&
-          info) {
-        // The local sequencer is preempted by another node
-        if (info->h.epoch == EPOCH_INVALID) {
-          dd_assert(
-              false,
-              "Epoch in the epoch store is invalid for log %lu even though a "
-              "sequencer is running on %s",
-              logid.val(),
-              meta_props->last_writer_node_id->toString().c_str());
-          break;
-        }
-        epoch_t preemption_epoch = info->h.epoch;
-        seq->notePreempted(
-            preemption_epoch, meta_props->last_writer_node_id.value());
-        RATELIMIT_INFO(
-            std::chrono::seconds(10),
-            10,
-            "Preempting for log %lu with preemption epoch %u after detecting a "
-            "newer sequencer exists from the epoch store",
-            logid.val(),
-            preemption_epoch.val());
-      } else {
-        RATELIMIT_INFO(
-            std::chrono::seconds(10),
-            10,
-            "Not reactivating sequencer for log %lu, since it's not the "
-            "most current sequencer for that log",
-            logid.val());
-      }
+      ld_check(info != nullptr);
+      notePreemption(logid,
+                     info->h.epoch,
+                     meta_props.get(),
+                     seq.get(),
+                     "reactivating sequencer");
       break;
     case E::INTERNAL:
       RATELIMIT_ERROR(std::chrono::seconds(1),
@@ -613,6 +592,41 @@ void AllSequencers::onEpochMetaDataFromEpochStore(
   }
 
   onActivationFailed(logid, st, seq.get(), permanent);
+}
+
+void AllSequencers::notePreemption(logid_t logid,
+                                   epoch_t preemption_epoch,
+                                   const EpochStore::MetaProperties* meta_props,
+                                   Sequencer* seq,
+                                   const char* context) {
+  ld_check(seq != nullptr);
+  if (!meta_props || !meta_props->last_writer_node_id.hasValue()) {
+    RATELIMIT_WARNING(
+        std::chrono::seconds(10),
+        2,
+        "Epoch store has higher epoch than our current sequencer for log %lu, "
+        "but doesn't have new sequencer's node ID. Ignoring the preemption. "
+        "Context: %s",
+        logid.val(),
+        context);
+    return;
+  }
+  if (meta_props->last_writer_node_id.value() ==
+      updateable_config_->get()->serverConfig()->getMyNodeID()) {
+    // Sequencer was reactivated on this node.
+    return;
+  }
+
+  seq->notePreempted(preemption_epoch, meta_props->last_writer_node_id.value());
+
+  RATELIMIT_INFO(std::chrono::seconds(10),
+                 10,
+                 "Preempting for log %lu with preemption epoch %u "
+                 "after detecting a "
+                 "newer sequencer exists from the epoch store. Context: %s",
+                 logid.val(),
+                 preemption_epoch.val(),
+                 context);
 }
 
 /*static*/
@@ -818,82 +832,18 @@ void AllSequencers::nextEpochCF(
     logid_t logid,
     std::unique_ptr<EpochMetaData> info,
     std::unique_ptr<EpochStoreMetaProperties> meta_properties) {
+  if (info && st == E::OK) {
+    // `info` is the EpochMetaData that was written to epoch store.
+    // `info->epoch` is the _next_ epoch to be assigned.
+    // The epoch of this newly activated sequencer is less by one.
+    // Let's decrement it.
+    ld_check(info->h.epoch > EPOCH_MIN);
+    --info->h.epoch.val_;
+  }
+
   Worker* worker = Worker::onThisThread();
   worker->processor_->allSequencers().onEpochMetaDataFromEpochStore(
       st, logid, std::move(info), std::move(meta_properties));
-}
-
-/*static*/
-bool AllSequencers::sequencerShouldReprovisionMetaData(
-    const Sequencer& seq,
-    std::shared_ptr<Configuration> config) {
-  if (!config->serverConfig()->sequencersProvisionEpochStore()) {
-    return false;
-  }
-
-  const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
-      config->getLogGroupByIDShared(seq.getLogID());
-  if (!logcfg) {
-    // no need to reprovision non-existent logs
-    return false;
-  }
-
-  if (seq.getState() != Sequencer::State::ACTIVE) {
-    return false;
-  }
-  auto info = seq.getCurrentMetaData();
-  ld_check(info);
-  if (!info->writtenInMetaDataLog()) {
-    // We can't reprovision metadata before it's written into the metadata log
-    return false;
-  }
-
-  // Reprovision if metadata does not match the config, leave existing metadata
-  // in place otherwise
-  return !info->matchesConfig(seq.getLogID(), config);
-}
-
-/*static*/
-bool AllSequencers::sequencerShouldReactivate(
-    const Sequencer& seq,
-    std::shared_ptr<Configuration> config) {
-  if (sequencerShouldReprovisionMetaData(seq, config)) {
-    return true;
-  }
-
-  auto state = seq.getState();
-  size_t current_window_size = seq.getMaxWindowSize();
-  if (state != Sequencer::State::ACTIVE || current_window_size == 0) {
-    // only reactivate if sequencer is in ACTIVE state and has a valid epoch
-    // window size
-    return false;
-  }
-
-  const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
-      config->getLogGroupByIDShared(seq.getLogID());
-  if (!logcfg) {
-    // logid no longer in config, do not reactivate
-    return false;
-  }
-
-  // schedule a background activation if sequencer window size has changed in
-  // config
-  bool needs_reactivate =
-      (current_window_size != logcfg->attrs().maxWritesInFlight().value());
-
-  if (needs_reactivate) {
-    RATELIMIT_INFO(std::chrono::seconds(10),
-                   10,
-                   "Reactivating sequencer for log %lu running epoch %u "
-                   "since its window size has changed to %d in the config, "
-                   "original: %lu.",
-                   seq.getLogID().val_,
-                   seq.getCurrentEpoch().val_,
-                   logcfg->attrs().maxWritesInFlight().value(),
-                   current_window_size);
-  }
-
-  return needs_reactivate;
 }
 
 void AllSequencers::noteConfigurationChanged() {
@@ -914,10 +864,8 @@ void AllSequencers::noteConfigurationChanged() {
     ld_info("Acquiring lock for sequencer map took %lums", lock_ms);
   }
   if (!log_ids.empty()) {
-    std::unique_ptr<Request> rq =
-        std::make_unique<SequencerEnqueueReactivationRequest>(
-            std::move(log_ids));
-    processor_->postImportant(rq);
+    SequencerBackgroundActivator::requestSchedule(
+        processor_, std::move(log_ids));
   }
 }
 

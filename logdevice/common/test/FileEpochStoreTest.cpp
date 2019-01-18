@@ -72,11 +72,12 @@ class FileEpochStoreTest : public ::testing::Test {
         temp_dir_->path().string(), cluster_config_->updateableServerConfig());
 
     int rv = store_->provisionMetaDataLogs(
-        std::make_shared<EpochMetaDataUpdater>(config,
-                                               std::move(selector),
-                                               true,
-                                               true /* provision_if_empty */,
-                                               false /* update_if_exists */),
+        std::make_shared<CustomEpochMetaDataUpdater>(
+            config,
+            std::move(selector),
+            true,
+            true /* provision_if_empty */,
+            false /* update_if_exists */),
         config);
     ASSERT_EQ(0, rv);
   }
@@ -100,7 +101,7 @@ TEST_F(FileEpochStoreTest, NextEpochWithMetaData) {
         ASSERT_EQ(E::OK, status);
         ASSERT_NE(nullptr, info);
         EXPECT_TRUE(info->isValid());
-        EXPECT_EQ(EPOCH_MIN, info->h.epoch);
+        EXPECT_EQ(2, info->h.epoch.val());
       },
       MetaDataTracer());
   store_->createOrUpdateMetaData(
@@ -112,7 +113,7 @@ TEST_F(FileEpochStoreTest, NextEpochWithMetaData) {
          std::unique_ptr<EpochStoreMetaProperties>) {
         ASSERT_EQ(E::OK, status);
         ASSERT_NE(nullptr, info);
-        EXPECT_EQ(epoch_t(EPOCH_MIN.val_ + 1), info->h.epoch);
+        EXPECT_EQ(3, info->h.epoch.val());
       },
       MetaDataTracer());
 }
@@ -136,7 +137,7 @@ TEST_F(FileEpochStoreTest, UpdateMetaData) {
       MetaDataTracer());
 
   auto selector = std::make_shared<TestNodeSetSelector>();
-  auto updater = std::make_shared<EpochMetaDataUpdater>(
+  auto updater = std::make_shared<CustomEpochMetaDataUpdater>(
       cluster_config_->get(), selector, true, true);
   // change to a different storage_set
   shards = shards == StorageSet{N1, N2, N3} ? StorageSet{N2, N3, N4}

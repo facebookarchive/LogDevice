@@ -159,7 +159,7 @@ void MetaDataLogReader::onDataRecord(std::unique_ptr<DataRecord> record) {
              log_id_.val_,
              last_read_epoch.val_);
     ld_check(metadata_);
-    if (*metadata_ != *metadata_read) {
+    if (!metadata_->identicalInMetaDataLog(*metadata_read)) {
       ld_error("Got metadata log %lu records for log %lu with the same "
                "epoch %u but different metadata! Check the utility that "
                "writes metadata log! Current: %s, got: %s",

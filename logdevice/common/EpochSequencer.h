@@ -15,6 +15,7 @@
 #include <folly/concurrency/AtomicSharedPtr.h>
 
 #include "logdevice/common/Appender.h"
+#include "logdevice/common/EpochMetaData.h"
 #include "logdevice/common/SlidingWindowSingleEpoch.h"
 #include "logdevice/common/UpdateableSharedPtr.h"
 #include "logdevice/common/settings/Settings.h"
@@ -34,8 +35,6 @@ namespace facebook { namespace logdevice {
  *        TODO 7467469: add description on Appender life cyle management and
  *        explain reference counting of EpochSequencer object.
  */
-
-class EpochMetaData;
 
 class Processor;
 class Sequencer;
@@ -312,12 +311,26 @@ class EpochSequencer : public std::enable_shared_from_this<EpochSequencer> {
   }
 
   /**
-   * Apply the WRITTEN_IN_METADATALOG flag to metadata stored. This should be
-   * the only function that can change metadata_.
+   * Apply the WRITTEN_IN_METADATALOG flag to metadata stored.
    *
    * @return     true if the flag is set, false if the flag is already set
    */
   bool setMetaDataWritten();
+
+  /**
+   * Update nodeset_params in EpochMetaData to the given value. This happens if
+   * a config change triggers a nodeset update, but the new nodeset
+   * is identical to the current one, so instead of reactivating
+   * sequencer we apply the non-significant EpochMetaData update in-place.
+   *
+   * Requires metadata written flag to be set.
+   * Requires external synchronization: two calls to this method aren't allowed
+   * to overlap.
+   *
+   * @return  true if the change was made, false if the params already has this
+   *          value.
+   */
+  bool setNodeSetParams(const EpochMetaData::NodeSetParams& params);
 
   /**
    * Expose draining_target_ for unit tests, which is the LSN of last accepted
@@ -399,7 +412,13 @@ class EpochSequencer : public std::enable_shared_from_this<EpochSequencer> {
   // epoch in which the sequencer is issuing LSNs
   const epoch_t epoch_;
 
-  // EpochMetaData for epoch_, used for Appender replication
+  // EpochMetaData for epoch_, used for Appender replication.
+  // Can be updated, but only in "non-substantial" and simple ways:
+  //  1. setMetaDataWritten() sets WRITTEN_IN_METADATALOG flag. Idempotent.
+  //  2. setNodeSetParams() updates nodeset_params. Done only
+  //     when WRITTEN_IN_METADATALOG flag is set. External synchronization
+  //     ensures that two calls can't overlap.
+  // Updates are done by making a copy and atomically updating the pointer.
   UpdateableSharedPtr<const EpochMetaData> metadata_;
 
   // copyset manager for the epoch

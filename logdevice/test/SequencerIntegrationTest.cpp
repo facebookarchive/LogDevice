@@ -1168,8 +1168,6 @@ TEST_F(SequencerIntegrationTest, AutoLogProvisioningEpochStorePreemption) {
   // Test that the sequencer gets preempted when it detects that a newer
   // sequencer is running in the tier
 
-  dbg::currentLevel = dbg::Level::DEBUG;
-
   Configuration::Nodes nodes;
   size_t num_nodes = 5;
   // 2 sequencer nodes and 3 storage nodes

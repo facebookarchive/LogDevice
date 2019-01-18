@@ -10,8 +10,8 @@
 #include <cstring>
 #include <vector>
 
-#include "logdevice/common/NodeID.h"
 #include "logdevice/common/SerializableData.h"
+#include "logdevice/common/ShardID.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/EpochMetaDataVersion.h"
 #include "logdevice/common/configuration/NodeLocation.h"
@@ -78,18 +78,22 @@ struct MetaDataLogRecordHeader {
   // this only affects deserialization.
   static const epoch_metadata_flags_t HAS_REPLICATION_PROPERTY = 1u << 4; // 16
 
-  // if set, the serialized epoch metadata contains the NodesConfig hash;
-  // don't use this flag directly, it's only used by EpochMetaData
+  // If set, the serialized epoch metadata contains NodeSetParams::signature.
+  // Don't use this flag directly, it's only used by EpochMetaData
   // serialization/deserialization methods.
-  static const epoch_metadata_flags_t HAS_NODESCONFIG_HASH = 1u << 5; // 32
+  static const epoch_metadata_flags_t HAS_NODESET_SIGNATURE = 1u << 5; // 32
 
   // if set, the serialized epoch metadata contains a StorageSet instead of
   // NodeSetIndices.
   static const epoch_metadata_flags_t HAS_STORAGE_SET = 1u << 6; // 64
 
+  static const epoch_metadata_flags_t HAS_TARGET_NODESET_SIZE_AND_SEED = 1u
+      << 7; // 128
+
   static const epoch_metadata_flags_t ALL_KNOWN_FLAGS = WRITTEN_IN_METADATALOG |
-      DISABLED | HAS_WEIGHTS | HAS_REPLICATION_PROPERTY | HAS_NODESCONFIG_HASH |
-      HAS_STORAGE_SET;
+      DISABLED | HAS_WEIGHTS | HAS_REPLICATION_PROPERTY |
+      HAS_NODESET_SIGNATURE | HAS_STORAGE_SET |
+      HAS_TARGET_NODESET_SIZE_AND_SEED;
 
   // return the actual header size in payload for different versions
   static size_t headerSize(epoch_metadata_version::type version) {
@@ -122,6 +126,48 @@ struct MetaDataLogRecordHeader {
 // input parameters.
 class EpochMetaData {
  public:
+  // Information about how the current nodeset was generated. Used for deciding
+  // when nodeset needs updating and for generating new nodeset.
+  // Can be changed without bumping epoch or reactivating sequencer, as
+  // long as other parts of EpochMetaData remain the same.
+  struct NodeSetParams {
+    // A value produced by nodeset selector to identify the nodeset.
+    // Can be used for determining whether nodeset needs to be changed.
+    // Calculating and using (or not using) the signature is up to
+    // NodeSetSelector implementations.
+    // Usually it's either zero (if nodeset selector doesn't use signatures)
+    // or equal to a hash of nodeset selector's inputs (such as nodes config
+    // and target nodeset size).
+    // See comments in NodeSetSelector.h for details.
+    //
+    // Note: Signature is only really needed for nondeterministic or slow
+    // nodeset selectors. It may be worth considering making all nodeset
+    // selectors deterministic and getting rid of this field. Note that any
+    // nodeset selector can be easily made deterministic by seeding its RNG with
+    // the log ID.
+    uint64_t signature = 0;
+
+    // What was the target nodeset size when selecting the nodeset in this
+    // EpochMetaData. It can be different from the actual `shards.size()`,
+    // e.g. if some nodes were unwritable and we picked more writable nodes to
+    // compensate, or if we needed more nodes to reach minimum required
+    // number of nodes per rack, or if there were fewer nodes in config than
+    // requested nodeset size.
+    // Used for avoiding nodeset resizing if the change in target size is small.
+    // Zero means that the EpochMetaData was produced by an older version of
+    // the code that didn't support this feature.
+    nodeset_size_t target_nodeset_size = 0;
+
+    // Random seed used for generating nodeset. Used for forcing deterministic
+    // nodeset selectors to randomize nodeset.
+    uint64_t seed = 0;
+
+    bool operator==(const NodeSetParams& rhs) const;
+    bool operator!=(const NodeSetParams& rhs) const;
+
+    std::string toString() const;
+  };
+
   // init epoch metadata to the empty state
   explicit EpochMetaData()
       : h{0, EPOCH_INVALID, EPOCH_INVALID, 0, 0, NodeLocationScope::NODE, 0} {}
@@ -156,16 +202,6 @@ class EpochMetaData {
   // logs config and that the nodeset is valid with a given nodes config.
   bool validWithConfig(logid_t logid,
                        const std::shared_ptr<Configuration>& cfg) const;
-
-  // check if the metadata matches the given cluster configuration @cfg for a
-  // particular @logid. In addition to running validConfig() above, this
-  // verifies that all the parameters in the EpochMetaData that are sourced from
-  // configuration match - the replication factor, the nodeset selector, nodeset
-  // size, etc. If output_errors is `true`, outputs mismatches with level
-  // dbg::Level::ERROR, otherwise SPEW
-  bool matchesConfig(logid_t logid,
-                     const std::shared_ptr<Configuration>& cfg,
-                     bool output_errors = false) const;
 
   // reset to empty state
   void reset();
@@ -229,9 +265,12 @@ class EpochMetaData {
   // check if epoch metadata is _exactly_ the same as @param rhs
   bool operator==(const EpochMetaData& rhs) const;
 
-  // checks if epoch metadata is the same as @param rhs, except for the current
-  // epoch
-  bool isSubstantiallyIdentical(const EpochMetaData& rhs) const;
+  // Checks if epoch metadata is the same as @param rhs, except for current
+  // epoch, WRITTEN_IN_METADATA_LOG flag and nodeset_params.
+  // These fields are not needed in metadata logs. They're only written there
+  // to keep the serialization format the same between epoch store and metadata
+  // logs.
+  bool identicalInMetaDataLog(const EpochMetaData& rhs) const;
 
   bool operator!=(const EpochMetaData& rhs) const;
 
@@ -250,9 +289,7 @@ class EpochMetaData {
   // selection). Otherwise size must be equal to h.nodeset_size.
   std::vector<double> weights;
 
-  // Hash of the nodes config which was used to generate the nodeset. Used for
-  // detecting when the nodeset doesn't match the config anymore
-  folly::Optional<uint64_t> nodesconfig_hash;
+  NodeSetParams nodeset_params;
 
  public:
   enum class UpdateResult : uint8_t {
@@ -294,18 +331,6 @@ class EpochMetaData {
                            logid_t,
                            std::unique_ptr<EpochMetaData>,
                            std::unique_ptr<EpochStoreMetaProperties>)>;
-
-    // Called to fetch metadata for the EpochStore completion function. This
-    // implementation just returns the same metadata that was written. Primary
-    // use is to pass different metadata values to the CF from the ones that
-    // were written to the epoch store for sequencer activation
-    virtual std::unique_ptr<EpochMetaData>
-    getCompletionMetaData(const EpochMetaData* written_metadata) {
-      if (!written_metadata) {
-        return nullptr;
-      }
-      return std::make_unique<EpochMetaData>(*written_metadata);
-    }
 
     virtual ~Updater() {}
   };

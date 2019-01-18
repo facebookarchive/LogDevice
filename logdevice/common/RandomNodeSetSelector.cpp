@@ -27,12 +27,12 @@ namespace facebook { namespace logdevice {
 
 // randomly select a nodeset of size @nodeset_size from a pool of candidate
 // nodes @eligible_nodes
-std::unique_ptr<StorageSet> RandomNodeSetSelector::randomlySelectNodes(
-    logid_t log_id,
-    const std::shared_ptr<Configuration>& config,
-    const NodeSetIndices& eligible_nodes,
-    size_t nodeset_size,
-    const Options* options) {
+std::unique_ptr<StorageSet>
+RandomNodeSetSelector::randomlySelectNodes(logid_t log_id,
+                                           const Configuration* config,
+                                           const NodeSetIndices& eligible_nodes,
+                                           size_t nodeset_size,
+                                           const Options* options) {
   if (nodeset_size > eligible_nodes.size()) {
     return nullptr;
   }
@@ -87,7 +87,7 @@ std::unique_ptr<StorageSet> RandomNodeSetSelector::randomlySelectNodes(
 
 storage_set_size_t RandomNodeSetSelector::getStorageSetSize(
     logid_t log_id,
-    const std::shared_ptr<Configuration>& cfg,
+    const Configuration* cfg,
     folly::Optional<int> storage_set_size_target,
     ReplicationProperty replication,
     const Options* /*options*/) {
@@ -115,15 +115,16 @@ storage_set_size_t RandomNodeSetSelector::getStorageSetSize(
                   storage_set_count);
 }
 
-std::tuple<NodeSetSelector::Decision, std::unique_ptr<StorageSet>>
+NodeSetSelector::Result
 RandomNodeSetSelector::getStorageSet(logid_t log_id,
-                                     const std::shared_ptr<Configuration>& cfg,
-                                     const StorageSet* prev,
+                                     const Configuration* cfg,
+                                     const EpochMetaData* prev,
                                      const Options* options) {
+  Result res;
   auto logcfg = cfg->getLogGroupByIDShared(log_id);
   if (!logcfg) {
-    err = E::NOTFOUND;
-    return std::make_tuple(Decision::FAILED, nullptr);
+    res.decision = Decision::FAILED;
+    return res;
   }
 
   auto replication_property =
@@ -135,7 +136,8 @@ RandomNodeSetSelector::getStorageSet(logid_t log_id,
              "does not support cross-domain replication %s.",
              log_id.val_,
              replication_property.toString().c_str());
-    return std::make_tuple(Decision::FAILED, nullptr);
+    res.decision = Decision::FAILED;
+    return res;
   }
 
   const auto& nodes_configuration =
@@ -148,6 +150,17 @@ RandomNodeSetSelector::getStorageSet(logid_t log_id,
                                                 options);
   ld_check(nodeset_size > 0);
 
+  res.signature = folly::hash::hash_128_to_64(
+      10245847200296991963ul,
+      folly::hash::hash_128_to_64(
+          cfg->serverConfig()->getStorageNodesConfigHash(),
+          (uint64_t)logcfg->attrs().nodeSetSize().value().value()));
+  if (prev != nullptr && prev->nodeset_params.signature == res.signature &&
+      prev->replication == replication_property) {
+    res.decision = Decision::KEEP;
+    return res;
+  }
+
   std::vector<node_index_t> all_nodes_indices =
       nodes_configuration->getStorageNodes();
   std::sort(all_nodes_indices.begin(), all_nodes_indices.end());
@@ -158,7 +171,8 @@ RandomNodeSetSelector::getStorageSet(logid_t log_id,
     // We select from the entire cluster, a valid configuration should
     // guarantee that we have enough eligible nodes to pick. However,
     // with excluded shards in @param options, this is still possible
-    return std::make_tuple(Decision::FAILED, nullptr);
+    res.decision = Decision::FAILED;
+    return res;
   }
 
   // sort the nodeset
@@ -170,13 +184,15 @@ RandomNodeSetSelector::getStorageSet(logid_t log_id,
     ld_error("Invalid nodeset %s for log %lu, check nodes weights.",
              toString(*candidates).c_str(),
              log_id.val_);
-    return std::make_tuple(Decision::FAILED, nullptr);
+    res.decision = Decision::FAILED;
+    return res;
   }
 
-  if (prev && *prev == *candidates) {
-    return std::make_tuple(Decision::KEEP, nullptr);
-  }
-  return std::make_tuple(Decision::NEEDS_CHANGE, std::move(candidates));
+  res.storage_set = *candidates;
+  res.decision = (prev && prev->shards == res.storage_set)
+      ? Decision::KEEP
+      : Decision::NEEDS_CHANGE;
+  return res;
 }
 
 }} // namespace facebook::logdevice

@@ -147,7 +147,7 @@ void NodeSetTest::updateMetaDataInEpochStore(logid_t log) {
       static_cast<FileEpochStore*>(epoch_store.get())
           ->createOrUpdateMetaData(
               log,
-              std::make_shared<EpochMetaDataUpdater>(
+              std::make_shared<CustomEpochMetaDataUpdater>(
                   config,
                   selector,
                   true,

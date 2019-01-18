@@ -115,9 +115,26 @@ class AllSequencers {
    *              Only to be overridden from activateAllSequencers.
    *
    * @param acceptable_activation_epoch
-   *    If this is set, sequencer can activate only in the specified epoch.
+   *    If this is set, sequencer is only allowed to activate into the specified
+   *    epoch. If `epoch` in epoch store is already higher than that, don't
+   *    update epoch store and abort the activation.
    *    If the new epoch is different, completion function will be called with
    *    E::ABORTED as a transient error
+   *
+   * @param new_metadata
+   *    If not null, update metadata to this value. If null, we'll ask nodeset
+   *    selector instead.
+   *
+   *    Used by background jobs that reconfigure the epoch metadata
+   *    (e.g., nodeset) of the log. `new_metadata` is the result of the
+   *    reconfiguration. Currently the reconfiguration is coupled with Sequencer
+   *    activation so that sequencer can 1) get the next epoch number;
+   *    and 2) reconfigure the log epoch metadata to `new_metadata` in a single
+   *    epoch store transaction.
+   *    Note: must be used together with `acceptable_activation_epoch` to ensure
+   *    the reconfiguration transaction is conditional based on the currently
+   *    observed epoch metadata. new_metadata->epoch must be equal
+   *    to acceptable_activation_epoch.
    *
    * @return  0 if the map now has a Sequencer object for logid in ACTIVATING
    *          state, otherwise -1 with err set to
@@ -138,7 +155,8 @@ class AllSequencers {
       logid_t logid,
       Sequencer::ActivationPred pred,
       folly::Optional<epoch_t> acceptable_activation_epoch = folly::none,
-      bool check_metadata_log_before_provisioning = true);
+      bool check_metadata_log_before_provisioning = true,
+      std::shared_ptr<EpochMetaData> new_metadata = nullptr);
 
   /**
    * Similar to calling activateSequencer() with unconditional predicate,
@@ -318,15 +336,16 @@ class AllSequencers {
    */
   virtual void notifyWorkerActivationCompletion(logid_t logid, Status st);
 
-  /**
-   * Static method to check whether a given sequencer instance should be
-   * reactivated because of:
-   *   1) metadata need to get provisioned (see
-   *      sequencerShouldReprovisionMetaData()); or
-   *   2) log attribute in configuration changed (e.g., sequencer window size)
-   */
-  static bool sequencerShouldReactivate(const Sequencer& seq,
-                                        std::shared_ptr<Configuration> config);
+  // Called when we the epoch in epoch store is higher than expected
+  // (see acceptable_activation_epoch in activateSequencer()).
+  // It usually means that a sequencer was activated elsewhere, and our
+  // sequencer should move into preempted state.
+  void
+  notePreemption(logid_t logid,
+                 epoch_t preemption_epoch,
+                 const EpochStore::MetaProperties* properties_in_epoch_store,
+                 Sequencer* seq,
+                 const char* context);
 
   Processor* getProcessor() {
     return processor_;
@@ -362,7 +381,8 @@ class AllSequencers {
   getEpochMetaData(logid_t logid,
                    std::shared_ptr<Configuration> cfg,
                    folly::Optional<epoch_t> acceptable_activation_epoch,
-                   bool check_metadata_log_before_provisioning = true);
+                   bool check_metadata_log_before_provisioning = true,
+                   std::shared_ptr<EpochMetaData> new_metadata = nullptr);
 
   virtual StatsHolder* getStats() const;
 
@@ -420,12 +440,6 @@ class AllSequencers {
   static void metadataLogEmptyResultCF(Status st, logid_t logid);
 
   virtual void startMetadataLogEmptyCheck(logid_t logid);
-
-  // static method to check whether a given sequencer instance should be
-  // reactivated to reprovision its metadata given the current configuration.
-  static bool
-  sequencerShouldReprovisionMetaData(const Sequencer& seq,
-                                     std::shared_ptr<Configuration> config);
 
   static const size_t MAP_SIZE_MAX = (size_t)INT_MAX;
 };

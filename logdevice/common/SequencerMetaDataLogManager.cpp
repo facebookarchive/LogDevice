@@ -11,6 +11,7 @@
 #include "logdevice/common/MetaDataLogWriter.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Sequencer.h"
+#include "logdevice/common/SequencerBackgroundActivator.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/WriteMetaDataLogRequest.h"
 
@@ -87,7 +88,7 @@ void SequencerMetaDataLogManager::considerWritingMetaDataLogRecord(
       ld_check(current_metadata != nullptr);
 
       // comparing metadata except for the epoch field
-      if (!es_metadata->isSubstantiallyIdentical(*current_metadata)) {
+      if (!es_metadata->identicalInMetaDataLog(*current_metadata)) {
         // current metadata is different from what we wrote, not modifying
         ld_info("Metadata mismatch for log %lu, epoch store: %s, "
                 "current: %s.",
@@ -105,6 +106,14 @@ void SequencerMetaDataLogManager::considerWritingMetaDataLogRecord(
         ld_info(
             "Failed to modify metadata for log %lu", owner_->getLogID().val());
       }
+
+      // If config (e.g. nodeset_size) was changed, SequencerBackgroundActivator
+      // may want to update sequencer's nodeset. It didn't have a chance to do
+      // that up until now, because the previous nodeset needs to be written to
+      // metadata log before we can switch to a new nodeset.
+      // Tell SequencerBackgroundActivator to check if update is needed.
+      SequencerBackgroundActivator::requestSchedule(
+          Worker::onThisThread()->processor_, {owner_->getLogID()});
     }
 
     uint32_t expected_effective_since = es_metadata->h.effective_since.val();

@@ -24,7 +24,7 @@
 namespace facebook { namespace logdevice {
 
 int RandomCrossDomainNodeSetSelector::buildDomainMap(
-    const std::shared_ptr<ServerConfig>& cfg,
+    const ServerConfig* cfg,
     NodeLocationScope sync_replication_scope,
     const Options* options,
     DomainMap* map) {
@@ -83,25 +83,9 @@ RandomCrossDomainNodeSetSelector::convertReplicationProperty(
       replication.getDistinctReplicationFactors()[0].first);
 }
 
-storage_set_size_t RandomCrossDomainNodeSetSelector::getStorageSetSize(
-    logid_t log_id,
-    const std::shared_ptr<Configuration>& cfg,
-    folly::Optional<int> storage_set_size_target,
-    ReplicationProperty replication_property,
-    const Options* options) {
-  auto replication = convertReplicationProperty(replication_property);
-  return getStorageSetSizeImpl(log_id,
-                               cfg,
-                               storage_set_size_target,
-                               replication.sync_replication_scope,
-                               replication.replication_factor,
-                               nullptr /* domain_map */,
-                               options);
-}
-
 storage_set_size_t RandomCrossDomainNodeSetSelector::getStorageSetSizeImpl(
     logid_t log_id,
-    const std::shared_ptr<Configuration>& cfg,
+    const Configuration* cfg,
     folly::Optional<int> storage_set_size_target,
     NodeLocationScope sync_replication_scope,
     int replication_factor,
@@ -122,9 +106,10 @@ storage_set_size_t RandomCrossDomainNodeSetSelector::getStorageSetSizeImpl(
   DomainMap local_domain_map;
   if (!domain_map) {
     domain_map = &local_domain_map;
-    if (buildDomainMap(
-            cfg->serverConfig(), sync_replication_scope, options, domain_map) !=
-        0) {
+    if (buildDomainMap(cfg->serverConfig().get(),
+                       sync_replication_scope,
+                       options,
+                       domain_map) != 0) {
       err = E::FAILED;
       return 0;
     }
@@ -222,16 +207,16 @@ storage_set_size_t RandomCrossDomainNodeSetSelector::getStorageSetSizeImpl(
   return best_nodeset_size;
 }
 
-std::tuple<NodeSetSelector::Decision, std::unique_ptr<StorageSet>>
-RandomCrossDomainNodeSetSelector::getStorageSet(
-    logid_t log_id,
-    const std::shared_ptr<Configuration>& cfg,
-    const StorageSet* prev,
-    const Options* options) {
+NodeSetSelector::Result
+RandomCrossDomainNodeSetSelector::getStorageSet(logid_t log_id,
+                                                const Configuration* cfg,
+                                                const EpochMetaData* prev,
+                                                const Options* options) {
+  Result res;
   auto logcfg = cfg->getLogGroupByIDShared(log_id);
   if (!logcfg) {
-    err = E::NOTFOUND;
-    return std::make_tuple(Decision::FAILED, nullptr);
+    res.decision = Decision::FAILED;
+    return res;
   }
 
   ReplicationProperty replication_property =
@@ -253,16 +238,29 @@ RandomCrossDomainNodeSetSelector::getStorageSet(
         log_id.val_,
         NodeLocation::scopeNames()[replication.sync_replication_scope].c_str(),
         replication_property.toString().c_str());
-    return std::make_tuple(Decision::FAILED, nullptr);
+    res.decision = Decision::FAILED;
+    return res;
+  }
+
+  res.signature = folly::hash::hash_128_to_64(
+      7671706570762175929ul,
+      folly::hash::hash_128_to_64(
+          cfg->serverConfig()->getStorageNodesConfigHash(),
+          (uint64_t)logcfg->attrs().nodeSetSize().value().value()));
+  if (prev != nullptr && prev->nodeset_params.signature == res.signature &&
+      prev->replication == replication_property) {
+    res.decision = Decision::KEEP;
+    return res;
   }
 
   // TODO: cache the domain_map if it becomes performance bottleneck
   DomainMap domain_map;
-  if (buildDomainMap(cfg->serverConfig(),
+  if (buildDomainMap(cfg->serverConfig().get(),
                      replication.sync_replication_scope,
                      options,
                      &domain_map) != 0) {
-    return std::make_tuple(Decision::FAILED, nullptr);
+    res.decision = Decision::FAILED;
+    return res;
   }
 
   size_t nodeset_size =
@@ -278,7 +276,6 @@ RandomCrossDomainNodeSetSelector::getStorageSet(
   ld_check(num_domains > 0);
 
   const size_t nodes_per_domain = nodeset_size / num_domains;
-  auto result = std::make_unique<StorageSet>();
 
   for (const auto& kv : domain_map) {
     const auto& domain_nodes = kv.second;
@@ -291,7 +288,8 @@ RandomCrossDomainNodeSetSelector::getStorageSet(
                log_id.val_,
                nodeset_size,
                num_domains);
-      return std::make_tuple(Decision::FAILED, nullptr);
+      res.decision = Decision::FAILED;
+      return res;
     }
 
     // 1. when selecting nodes from a domain, we still prefer positive weight
@@ -305,35 +303,37 @@ RandomCrossDomainNodeSetSelector::getStorageSet(
     if (selected_nodes == nullptr) {
       ld_error(
           "Not enough positive weight nodes in domain %s", kv.first.c_str());
-      return std::make_tuple(Decision::FAILED, nullptr);
+      res.decision = Decision::FAILED;
+      return res;
     }
 
     ld_check(selected_nodes->size() == nodes_per_domain);
-    result->reserve(result->size() + selected_nodes->size());
-    result->insert(
-        result->end(), selected_nodes->begin(), selected_nodes->end());
+    res.storage_set.reserve(res.storage_set.size() + selected_nodes->size());
+    res.storage_set.insert(
+        res.storage_set.end(), selected_nodes->begin(), selected_nodes->end());
   }
 
-  ld_check(result->size() == nodeset_size);
-  std::sort(result->begin(), result->end());
+  ld_check(res.storage_set.size() == nodeset_size);
+  std::sort(res.storage_set.begin(), res.storage_set.end());
 
   // as we do not consider weight in nodeset selection, it is possible that
   // the final nodeset does not satisfied the replication requirement in case
   // many nodes are of 0 weight. To prevent the loss of write availability,
   // fail the nodeset selection.
-  if (!ServerConfig::validStorageSet(
-          cfg->serverConfig()->getNodes(), *result, replication_property)) {
+  if (!ServerConfig::validStorageSet(cfg->serverConfig()->getNodes(),
+                                     res.storage_set,
+                                     replication_property)) {
     ld_error("Invalid nodeset %s for log %lu, check nodes weights.",
-             toString(*result).c_str(),
+             toString(res.storage_set).c_str(),
              log_id.val_);
-    return std::make_tuple(Decision::FAILED, nullptr);
+    res.decision = Decision::FAILED;
+    return res;
   }
 
-  if (prev && *prev == *result) {
-    return std::make_tuple(Decision::KEEP, nullptr);
-  }
-
-  return std::make_tuple(Decision::NEEDS_CHANGE, std::move(result));
+  res.decision = (prev && prev->shards == res.storage_set)
+      ? Decision::KEEP
+      : Decision::NEEDS_CHANGE;
+  return res;
 }
 
 }} // namespace facebook::logdevice
