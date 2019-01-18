@@ -9,6 +9,7 @@ include "common/fb303/if/fb303.thrift"
 include "common.thrift"
 include "exceptions.thrift"
 include "logtree.thrift"
+include "maintenance.thrift"
 include "nodes.thrift"
 include "safety.thrift"
 include "settings.thrift"
@@ -39,6 +40,72 @@ service AdminAPI extends fb303.FacebookService {
    */
    nodes.NodesStateResponse getNodesState(1: nodes.NodesStateRequest request) throws
       (1: exceptions.NodeNotReady notready);
+
+  /*
+   * Lists the current maintenance list for nodes that match the NodesFilter.
+   */
+  maintenance.GetMaintenancesResult getMaintenances(1: nodes.NodesFilter
+      filter) throws
+      (1: exceptions.NodeNotReady notready,
+       2: exceptions.Redirect not_master,
+       3: exceptions.InvalidRequest invalid_request,
+       4: exceptions.OperationError error);
+
+  /*
+   * Perform a maintenance on one or more nodes/shards declaratively. The
+   * operation is accepted only if no other maintenance with different target
+   * is set by the same user for _any_ of the shards/nodes passed.
+   * Otherwise the MaintenanceClash exception is thrown.
+   * Applying the same maintenance target by the same user will return the
+   * existing maintenance progress.
+   * Accepting the maintenance does not guarantee that the maintenance will be
+   * executed successfully. There are two methods to monitor progress of
+   * maintenance:
+   *   - Either by calling the same applyMaintenance with the same arguments (or
+   *   you can request for a subset of the shards) and inspecting the
+   *   ApplyMaintenanceResponse object.
+   *   - By using the getNodesState to inspect the states for particular nodes
+   *   or shards.
+   */
+  maintenance.ApplyMaintenanceResponse applyMaintenance(1:
+      maintenance.ApplyMaintenanceRequest request) throws
+      (1: exceptions.NodeNotReady notready,
+       2: exceptions.Redirect not_master,
+       3: exceptions.InvalidRequest invalid_request,
+       4: exceptions.MaintenanceClash clash,
+       5: exceptions.OperationError operation_error);
+
+  /*
+   * Cancels a maintenance that has been scheduled or executed on one or more
+   * shards/nodes. If the removed maintenance is the current active
+   * maintenance, the MaintenanceManager will trigger a transition to
+   * move the current active to the next logical maintenance, or trigger a
+   * transition to ENABLE the shard/sequencer if no pending maintenances are
+   * pending.
+   *
+   * Removing a maintenance that doesn't exist for one or more of the
+   * shards is a no-op.
+   */
+  maintenance.RemoveMaintenanceResponse removeMaintenance(1:
+      maintenance.RemoveMaintenanceRequest filter) throws
+      (1: exceptions.NodeNotReady notready,
+       2: exceptions.Redirect not_master,
+       3: exceptions.InvalidRequest invalid_request,
+       4: exceptions.OperationError operation_error);
+
+  /*
+   * Call this if rebuilding is currently blocked because we have too many
+   * donors. Calling this will unblock rebuilding by declaring that we have
+   * PERMANENTLY LOST DATA and LogDevice will unblock readers waiting for these
+   * data.
+   * Note that this is a _very_ dangerous operation. You should ONLY use it if
+   * you know that you cannot restore the lost shards/nodes by any means.
+   */
+  maintenance.UnblockRebuildingResponse unblockRebuilding(1:
+      maintenance.UnblockRebuildingRequest request) throws
+    (1: exceptions.NodeNotReady notready,
+     2: exceptions.InvalidRequest invalid_request,
+     3: exceptions.OperationError operation_error);
 
   /**
    * Safety check an operation.

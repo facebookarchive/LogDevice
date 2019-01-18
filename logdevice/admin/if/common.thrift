@@ -11,7 +11,9 @@ namespace py3 logdevice.admin
 namespace php LogDevice
 namespace wiki LogDevice.Common
 
-// Because thrift doesn't have a u64.
+/*
+ * Because thrift doesn't have a u64.
+ */
 typedef i64 /* (cpp.type = "std::uint64_t") */ unsigned64
 
 // *** Cluster Topology

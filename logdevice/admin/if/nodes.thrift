@@ -109,9 +109,10 @@ enum ShardDataHealth {
 
 /**
  * ShardOperationalState defines the operational state of a shard. There is a
- * clear priority of these maintenance states, `DRAINED` > `MAY_DISAPPEAR`. If
- * both target maintenances are set on a shard, DRAINED maintenance will always
- * win.
+ * clear priority of these maintenance states, `DOWN` > `DRAINED` >
+ * `MAY_DISAPPEAR`.
+ * If both target maintenances are set on a shard, DRAINED maintenance will
+ * always win.
  */
 enum ShardOperationalState {
   UNKNOWN = 0,
@@ -212,8 +213,6 @@ struct ShardState {
    * active_maintenance for information about the active transition
    */
   3: required ShardOperationalState current_operational_state,
-  // 4: optional ShardMaintenanceState active_maintenance,
-  // 5: optional list<ShardMaintenanceState> pending_maintenances,
 }
 
 /**
@@ -241,7 +240,6 @@ enum SequencingState {
 struct SequencerState {
   1: required SequencingState state,
   2: optional common.Timestamp sequencer_state_last_updated,
-  // TODO: Add Maintenance
 }
 
 /**

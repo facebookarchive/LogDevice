@@ -49,3 +49,18 @@ exception OperationError {
 exception InvalidRequest {
   1: string message,
 }
+
+/*
+ * There is maintenance already set by the same user for different targets
+ */
+exception MaintenanceClash {
+  1: string message,
+}
+
+/*
+ * The operation cannot be performed on this node, use the advise supplioed in
+ * the redirect_to_node and retry the request
+ */
+exception Redirect {
+  1: common.NodeID redirect_to_node,
+}

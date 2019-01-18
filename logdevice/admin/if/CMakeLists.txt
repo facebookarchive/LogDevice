@@ -19,6 +19,7 @@ foreach(THRIFT_SOURCE
         logtree
         nodes
         safety
+        maintenance
 )
   thrift_generate(
     ${THRIFT_SOURCE}
@@ -50,4 +51,5 @@ add_dependencies(admin-cpp2-target
                  exceptions-cpp2-target
                  logtree-cpp2-target
                  safety-cpp2-target
+                 maintenance-cpp2-target
                  settings-cpp2-target)
