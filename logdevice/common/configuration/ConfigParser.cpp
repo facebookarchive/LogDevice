@@ -276,8 +276,10 @@ bool parseMetaDataLog(const folly::dynamic& clusterMap,
     return false;
   }
 
-  // nodeset_selector_type is optional, default value should be weight-aware
-  ld_check(output.nodeset_selector_type == NodeSetSelectorType::WEIGHT_AWARE);
+  // nodeset_selector_type is optional, default value should be
+  // consistent-hashing
+  ld_check(output.nodeset_selector_type ==
+           NodeSetSelectorType::CONSISTENT_HASHING);
   std::string nodeset_selector_type_str;
 
   bool success = getStringFromMap(

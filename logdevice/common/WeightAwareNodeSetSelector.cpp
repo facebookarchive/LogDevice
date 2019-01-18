@@ -66,12 +66,21 @@ WeightAwareNodeSetSelector::getStorageSet(logid_t log_id,
         replication_factors.back().second - replication_factors[0].second + 1;
   }
 
+  struct CandidateNode {
+    uint64_t shard_id_hash;
+    ShardID shard_id;
+    bool is_writable;
+  };
+
   struct Domain {
     int num_picked = 0;
+    int num_picked_writable = 0;
+
     uint64_t priority;
 
-    // A sorted vector of hashes of nodes.
-    std::vector<std::pair<uint64_t, ShardID>> node_hashes;
+    // The list of nodes sorted by hash.
+    // To pick a node, we pop one from the back.
+    std::vector<CandidateNode> nodes;
   };
   std::map<std::string, Domain> domains;
 
@@ -126,8 +135,9 @@ WeightAwareNodeSetSelector::getStorageSet(logid_t log_id,
       location_str = location.getDomain(replication_scope, node);
     }
 
-    ShardID current_shard_id = shard;
-    uint64_t curr_hash;
+    CandidateNode n;
+    n.shard_id = shard;
+    n.is_writable = membership->canWriteToShard(shard);
 
     // If consistent hashing is toggled, hash the log id along with the shard
     // ID, thereby allowing us to create a unique, deterministic ranking of
@@ -135,47 +145,122 @@ WeightAwareNodeSetSelector::getStorageSet(logid_t log_id,
     // number, which is equivalent to randomly sorting the Shard ID's for
     // each log.
     if (consistentHashing_) {
-      curr_hash = folly::hash::hash_128_to_64(
-          log_id.val(), ShardID::Hash()(current_shard_id));
+      n.shard_id_hash = folly::hash::hash_128_to_64(
+          log_id.val(), ShardID::Hash()(n.shard_id));
     } else {
-      curr_hash = folly::Random::rand64();
+      n.shard_id_hash = folly::Random::rand64();
     }
-    domains[location_str].node_hashes.push_back(
-        std::make_pair(curr_hash, current_shard_id));
+    domains[location_str].nodes.push_back(n);
   }
-
-  // Form the nodeset by repeatedly taking a random unpicked node from the
-  // domain with the smallest number of picked nodes. If there's a tie, take a
-  // random domain. This way the nodeset is distrinuted across domains as evenly
-  // as possible.
-  auto cmp = [](Domain* a, Domain* b) {
-    return std::tie(a->num_picked, a->priority) >
-        std::tie(b->num_picked, b->priority);
-  };
-  std::priority_queue<Domain*, std::vector<Domain*>, decltype(cmp)> queue(cmp);
 
   for (auto& kv : domains) {
     Domain* d = &kv.second;
     d->priority = consistentHashing_ ? folly::hash::fnv64(kv.first)
                                      : folly::Random::rand64();
-    std::sort(d->node_hashes.begin(), d->node_hashes.end());
-    queue.push(d);
+    std::sort(d->nodes.begin(),
+              d->nodes.end(),
+              [](const CandidateNode& a, const CandidateNode& b) {
+                // Sort in order of decreasing hash, so that we pick nodes with
+                // smaller hash first (for historical reasons).
+                return std::tie(a.shard_id_hash, a.shard_id) >
+                    std::tie(b.shard_id_hash, b.shard_id);
+              });
   }
 
-  while (!queue.empty()) {
-    Domain* d = queue.top();
-    queue.pop();
-    assert(d->num_picked != d->node_hashes.size());
-    if (d->num_picked >= min_nodes_per_domain &&
-        res.storage_set.size() >= target_size) {
-      // The nodeset is big enough and has enough nodes from each domain.
-      break;
+  // Form the nodeset by repeatedly popping entries from the shuffled node list
+  // of the domain with the smallest number of picked nodes. If there's a tie,
+  // take a random domain. This way the nodeset is distributed across domains as
+  // evenly as possible. Keep picking nodes until the nodeset is "good", i.e.
+  // big enough and has enough nodes in each available domain.
+  //
+  // There's a subtlety about whether or not to allow picking temporarily
+  // disabled ("unwritable") nodes. On the one hand, we want to pick disabled
+  // nodes because, if a full domain gets temporarily disabled and then comes
+  // back, we want the domain to be included in historical nodesets, so that it
+  // can receive writes from rebuilding and recovery. On the other hand, if lots
+  // of nodes are disabled, we don't want to end up with a nodeset that consists
+  // mostly of unwritable nodes and doesn't have enough writable nodes to
+  // replicate new records.
+  //
+  // So we do a bit of both: we build a nodeset that is "good" is we count
+  // only writable nodes and also "good" if we count both writable and
+  // unwritable nodes. Moreover, the writable part of the nodeset has the same
+  // distribution as if the unwritable nodes didn't exist; this ensures that
+  // the data is evenly distributed among the writable nodes. The resulting
+  // nodeset is at most twice as big as it would be without this whole trick.
+  //
+  // This is done by building the nodeset in two stages:
+  //  1. Allow picking both writable and unwritable nodes. Pick nodes until
+  //     the nodeset is "good".
+  //  2. Continue picking nodes but allow picking only writable nodes, and
+  //     change the comparator to pick domain with the smallest number of
+  //     _writable_ nodes picked so far. Do it until the writable part of the
+  //     nodeset is good.
+  //
+  // Note that, although the data distribution is correct for the current state
+  // of the nodes, it may become biased when the unwritable nodes become
+  // writable again. Consider this example. Replication factor is 1, nodeset
+  // size is 1, there are 2 nodes: N0 is writable, N1 is unwritable.
+  // We'll select nodeset {N0} for ~half the logs, {N0, N1} for the other ~half.
+  // When N1 becomes writable, it'll receive only 25% of writes.
+
+  auto select_nodes = [&](bool only_writable) {
+    auto cmp = [&](Domain* a, Domain* b) {
+      return std::tie(only_writable ? a->num_picked_writable : a->num_picked,
+                      a->priority) >
+          std::tie(only_writable ? b->num_picked_writable : b->num_picked,
+                   b->priority);
+    };
+    std::priority_queue<Domain*, std::vector<Domain*>, decltype(cmp)> queue(
+        cmp);
+
+    // Initialize queue.
+    size_t result_size = 0;
+    for (auto& kv : domains) {
+      Domain* d = &kv.second;
+      result_size += only_writable ? d->num_picked_writable : d->num_picked;
+      if (!d->nodes.empty()) {
+        queue.push(d);
+      }
     }
-    res.storage_set.push_back(d->node_hashes[d->num_picked++].second);
-    if (d->num_picked != d->node_hashes.size()) {
-      queue.push(d);
+
+    // Pick the nodes.
+    while (!queue.empty()) {
+      Domain* d = queue.top();
+      queue.pop();
+      assert(!d->nodes.empty());
+      int picked_in_domain =
+          only_writable ? d->num_picked_writable : d->num_picked;
+      if (picked_in_domain >= min_nodes_per_domain &&
+          result_size >= target_size) {
+        // The nodeset is big enough and has enough nodes from each domain.
+        break;
+      }
+      if (only_writable) {
+        // Skip unwritable nodes.
+        while (!d->nodes.empty() && !d->nodes.back().is_writable) {
+          d->nodes.pop_back();
+        }
+        if (d->nodes.empty()) {
+          continue;
+        }
+      }
+      ++d->num_picked;
+      if (d->nodes.back().is_writable) {
+        ++d->num_picked_writable;
+      }
+      res.storage_set.push_back(d->nodes.back().shard_id);
+      d->nodes.pop_back();
+      ++result_size;
+
+      if (!d->nodes.empty()) {
+        queue.push(d);
+      }
     }
-  }
+  };
+
+  select_nodes(false);
+  select_nodes(true);
 
   // Sort the output.
   std::sort(res.storage_set.begin(), res.storage_set.end());

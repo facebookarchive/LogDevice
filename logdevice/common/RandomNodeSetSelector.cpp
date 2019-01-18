@@ -61,7 +61,8 @@ RandomNodeSetSelector::randomlySelectNodes(logid_t log_id,
     shard_index_t shard_idx = map_log_to_shard_(log_id, num_shards);
     ShardID shard = ShardID(i, shard_idx);
     if (!configuration::nodes::shouldIncludeInNodesetSelection(
-            *nodes_configuration, shard)) {
+            *nodes_configuration, shard) ||
+        !membership->canWriteToShard(shard)) {
       continue;
     }
 
@@ -103,7 +104,8 @@ storage_set_size_t RandomNodeSetSelector::getStorageSetSize(
     ld_check(num_shards > 0);
     ShardID shard = ShardID(node, map_log_to_shard_(log_id, num_shards));
     if (configuration::nodes::shouldIncludeInNodesetSelection(
-            *nodes_configuration, shard)) {
+            *nodes_configuration, shard) &&
+        membership->canWriteToShard(shard)) {
       ++storage_set_count;
     }
   };

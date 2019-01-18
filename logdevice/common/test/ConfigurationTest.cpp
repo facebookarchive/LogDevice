@@ -2204,8 +2204,8 @@ TEST(ConfigurationTest, MetaDataLogsConfig) {
     ASSERT_NE(cfg, nullptr);
     auto& ml_config = cfg->serverConfig()->getMetaDataLogsConfig();
     ASSERT_FALSE(ml_config.metadata_version_to_write.hasValue());
-    EXPECT_EQ(
-        NodeSetSelectorType::WEIGHT_AWARE, ml_config.nodeset_selector_type);
+    EXPECT_EQ(NodeSetSelectorType::CONSISTENT_HASHING,
+              ml_config.nodeset_selector_type);
     ASSERT_EQ(epoch_metadata_version::CURRENT,
               epoch_metadata_version::versionToWrite(cfg->serverConfig()));
   }
@@ -2216,8 +2216,8 @@ TEST(ConfigurationTest, MetaDataLogsConfig) {
     ASSERT_TRUE(ml_config.metadata_version_to_write.hasValue());
     ASSERT_EQ(1, ml_config.metadata_version_to_write.value());
     ASSERT_EQ(1, epoch_metadata_version::versionToWrite(cfg->serverConfig()));
-    EXPECT_EQ(
-        NodeSetSelectorType::WEIGHT_AWARE, ml_config.nodeset_selector_type);
+    EXPECT_EQ(NodeSetSelectorType::CONSISTENT_HASHING,
+              ml_config.nodeset_selector_type);
   }
   {
     auto cfg = get_config("\"nodeset_selector\": \"random-crossdomain\"");

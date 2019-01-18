@@ -299,7 +299,7 @@ bool ServerConfig::validStorageSet(const Nodes& cluster_nodes,
     return false;
   }
 
-  // attribute is weither weight > 0
+  // attribute is whether the node is writable
   FailureDomainNodeSet<bool> failure_domain(
       storage_set, cluster_nodes, replication);
 

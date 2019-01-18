@@ -439,17 +439,19 @@ TEST(RandomCrossDomainNodeSetSelectorTest, NodeExclusion) {
 }
 
 void basic_test(NodeSetSelectorType ns_type) {
-  // 22-node cluster with nodes from 5 different racks
+  // 25-node cluster with nodes from 6 different racks, 1 of them unwritable
   Nodes nodes;
-  std::vector<int> rack_sizes = {1, 5, 5, 6, 5};
+  std::vector<int> rack_sizes = {1, 5, 5, 6, 5, 3};
   addWeightedNodes(&nodes, rack_sizes[0], 1, "region0.datacenter1.01.a.a", 1);
   addWeightedNodes(&nodes, rack_sizes[1], 1, "region0.datacenter2.01.a.a", 5);
-  // Only 2 out 5 nodes are storage nodes.
+  // Only 2 out of 5 nodes are writable.
   addWeightedNodes(&nodes, rack_sizes[2], 1, "region0.datacenter1.01.a.b", 2);
   addWeightedNodes(&nodes, rack_sizes[3], 1, "region1.datacenter1.02.a.a", 6);
   addWeightedNodes(&nodes, rack_sizes[4], 1, "region1.datacenter1.02.a.b", 5);
+  // Unwritable rack. Should still be picked in nodesets.
+  addWeightedNodes(&nodes, rack_sizes[5], 1, "region1.datacenter1.02.a.c", 0);
 
-  ASSERT_EQ(22, nodes.size());
+  ASSERT_EQ(25, nodes.size());
 
   Configuration::NodesConfig nodes_config(std::move(nodes));
 
@@ -490,6 +492,18 @@ void basic_test(NodeSetSelectorType ns_type) {
 
   auto selector = NodeSetSelectorFactory::create(ns_type);
 
+  auto keep_only_writable = [&](StorageSet ss) -> StorageSet {
+    StorageSet res;
+    for (ShardID s : ss) {
+      const configuration::Node* n = config->serverConfig()->getNode(s.node());
+      ld_check(n != nullptr);
+      if (n->isWritableStorageNode()) {
+        res.push_back(s);
+      }
+    }
+    return res;
+  };
+
   auto nodes_per_domain = [&](StorageSet ss) -> std::vector<int> {
     std::vector<int> count(rack_sizes.size());
     size_t rack = 0;
@@ -517,41 +531,59 @@ void basic_test(NodeSetSelectorType ns_type) {
                 logid_t(1),
                 Decision::NEEDS_CHANGE,
                 [&](StorageSet* ss) {
-                  auto count = nodes_per_domain(*ss);
-                  EXPECT_EQ(14, ss->size());
-                  EXPECT_EQ(1, count[0]);
-                  EXPECT_EQ(2, count[2]);
-                  EXPECT_GE(count[1], 3);
-                  EXPECT_GE(count[3], 3);
-                  EXPECT_GE(count[4], 3);
-                  EXPECT_LE(count[1], 4);
-                  EXPECT_LE(count[3], 4);
-                  EXPECT_LE(count[4], 4);
+                  {
+                    StorageSet w = keep_only_writable(*ss);
+                    EXPECT_EQ(14, w.size());
+                    auto count = nodes_per_domain(w);
+                    EXPECT_EQ(1, count[0]);
+                    EXPECT_EQ(2, count[2]);
+                    EXPECT_EQ(0, count[5]);
+                    EXPECT_GE(count[1], 3);
+                    EXPECT_GE(count[3], 3);
+                    EXPECT_GE(count[4], 3);
+                    EXPECT_LE(count[1], 4);
+                    EXPECT_LE(count[3], 4);
+                    EXPECT_LE(count[4], 4);
+                  }
+                  {
+                    EXPECT_GE(ss->size(), 16);
+                    EXPECT_LE(ss->size(), 20);
+                    auto count = nodes_per_domain(*ss);
+                    EXPECT_GE(count[5], 2);
+                    EXPECT_LE(count[5], 3);
+                  }
                 });
 
-  verify_result(selector.get(),
-                config,
-                logid_t(2),
-                Decision::NEEDS_CHANGE,
-                [&](StorageSet* ss) {
-                  auto count = nodes_per_domain(*ss);
-                  EXPECT_EQ(12, ss->size());
-                  EXPECT_EQ(std::vector<int>({1, 3, 2, 3, 3}), count);
-                });
+  verify_result(
+      selector.get(),
+      config,
+      logid_t(2),
+      Decision::NEEDS_CHANGE,
+      [&](StorageSet* ss) {
+        auto count = nodes_per_domain(*ss);
+        EXPECT_GE(ss->size(), 16);
+        EXPECT_LE(ss->size(), 18);
+        EXPECT_EQ(
+            std::vector<int>({1, 3, (int)ss->size() - 13, 3, 3, 3}), count);
+      });
 
   verify_result(selector.get(),
                 config,
                 logid_t(3),
                 Decision::NEEDS_CHANGE,
-                [&](StorageSet* ss) { EXPECT_EQ(4, ss->size()); });
+                [&](StorageSet* ss) {
+                  EXPECT_EQ(4, keep_only_writable(*ss).size());
+                  EXPECT_GE(ss->size(), 4);
+                  EXPECT_LE(ss->size(), 10);
+                });
 
   verify_result(selector.get(),
                 config,
                 logid_t(4),
                 Decision::NEEDS_CHANGE,
                 [&](StorageSet* ss) {
-                  // Should select all 19 storage nodes.
-                  EXPECT_EQ(19, ss->size());
+                  // Should select all 25 nodes.
+                  EXPECT_EQ(25, ss->size());
                 });
 
   verify_result(selector.get(),
@@ -559,30 +591,51 @@ void basic_test(NodeSetSelectorType ns_type) {
                 logid_t(5),
                 Decision::NEEDS_CHANGE,
                 [&](StorageSet* ss) {
-                  EXPECT_EQ(6, ss->size());
-                  // Should cover all 5 racks.
+                  StorageSet w = keep_only_writable(*ss);
+                  EXPECT_EQ(6, w.size());
+                  EXPECT_GE(ss->size(), 7);
+                  EXPECT_LE(ss->size(), 9);
+                  // Should cover all 6 racks.
                   const auto& all_nodes = config->serverConfig()->getNodes();
                   std::set<std::string> racks;
+                  std::set<std::string> writable_racks;
                   for (auto s : *ss) {
-                    racks.insert(all_nodes.at(s.node()).location->getDomain(
-                        NodeLocationScope::RACK));
+                    const configuration::Node& n = all_nodes.at(s.node());
+                    std::string rack =
+                        n.location->getDomain(NodeLocationScope::RACK);
+                    racks.insert(rack);
+                    if (n.isWritableStorageNode()) {
+                      writable_racks.insert(rack);
+                    }
                   }
-                  EXPECT_EQ(5, racks.size()) << toString(racks);
+                  EXPECT_EQ(5, writable_racks.size()) << toString(racks);
+                  EXPECT_EQ(6, racks.size()) << toString(racks);
                 });
 
   // Exclude a rack in options.
   NodeSetSelector::Options options;
   options.exclude_nodes = {1, 2, 3, 4, 5};
-  verify_result(selector.get(),
-                config,
-                logid_t(2),
-                Decision::NEEDS_CHANGE,
-                [&](StorageSet* ss) {
-                  auto count = nodes_per_domain(*ss);
-                  EXPECT_EQ(9, ss->size());
-                  EXPECT_EQ(std::vector<int>({1, 0, 2, 3, 3}), count);
-                },
-                &options);
+  verify_result(
+      selector.get(),
+      config,
+      logid_t(2),
+      Decision::NEEDS_CHANGE,
+      [&](StorageSet* ss) {
+        {
+          StorageSet w = keep_only_writable(*ss);
+          EXPECT_EQ(9, w.size());
+          auto count = nodes_per_domain(w);
+          EXPECT_EQ(std::vector<int>({1, 0, 2, 3, 3, 0}), count);
+        }
+        {
+          auto count = nodes_per_domain(*ss);
+          EXPECT_GE(ss->size(), 13);
+          EXPECT_LE(ss->size(), 15);
+          EXPECT_EQ(
+              std::vector<int>({1, 0, (int)ss->size() - 10, 3, 3, 3}), count);
+        }
+      },
+      &options);
 }
 
 TEST(WeightAwareNodeSetSelectorTest, ExcludeFromNodesets) {
@@ -731,4 +784,53 @@ TEST(ConsistentHashingWeightAwareNodeSetSelectorTest, AddNode) {
 
   EXPECT_EQ(new_totalremoved, new_totaladded);
   EXPECT_LE(new_totalremoved, 5000);
+}
+
+TEST(ConsistentHashingWeightAwareNodeSetSelectorTest, DisabledNodes) {
+  Nodes nodes;
+  addWeightedNodes(&nodes, 3, 1, "a.a.a.a.rack0", 3);
+  addWeightedNodes(&nodes, 3, 1, "a.a.a.a.rack1", 3);
+  addWeightedNodes(&nodes, 5, 1, "a.a.a.a.rack2", 5);
+  ASSERT_EQ(11, nodes.size());
+
+  for (node_index_t node_id : {0, 1, 2, 3}) {
+    nodes[node_id].storage_attributes->state =
+        (node_id % 2) ? StorageState::DISABLED : StorageState::READ_ONLY;
+  }
+
+  Configuration::NodesConfig nodes_config(std::move(nodes));
+
+  auto logs_config = std::make_shared<LocalLogsConfig>();
+  addLog(logs_config.get(),
+         logid_t(1),
+         ReplicationProperty(
+             {{NodeLocationScope::RACK, 2}, {NodeLocationScope::NODE, 3}}),
+         0,
+         6 /* nodeset_size */);
+
+  auto config = std::make_shared<Configuration>(
+      ServerConfig::fromDataTest(
+          "nodeset_selector_test", std::move(nodes_config)),
+      std::move(logs_config));
+
+  auto selector =
+      NodeSetSelectorFactory::create(NodeSetSelectorType::CONSISTENT_HASHING);
+
+  auto res =
+      selector->getStorageSet(logid_t(1), config.get(), nullptr, nullptr);
+  ASSERT_EQ(Decision::NEEDS_CHANGE, res.decision);
+
+  std::array<int, 3> per_domain{};
+  std::array<int, 3> per_domain_writable{};
+  for (ShardID s : res.storage_set) {
+    int d = std::min(2, s.node() / 3);
+    ++per_domain[d];
+    if (s.node() > 3) {
+      ++per_domain_writable[d];
+    }
+  }
+
+  EXPECT_EQ(2, per_domain[0]);
+  EXPECT_EQ(2, per_domain_writable[1]);
+  EXPECT_EQ(4, per_domain[2]);
 }

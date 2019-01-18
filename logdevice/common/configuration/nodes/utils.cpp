@@ -13,8 +13,8 @@ namespace nodes {
 bool shouldIncludeInNodesetSelection(const NodesConfiguration& nodes_config,
                                      ShardID shard) {
   // if `shard' is in membership then it must have an attribute
-  // defined, thus direct deference is used
-  return nodes_config.getStorageMembership()->canWriteToShard(shard) &&
+  // defined, thus direct dereference is used
+  return nodes_config.getStorageMembership()->hasShard(shard) &&
       !nodes_config.getNodeStorageAttribute(shard.node())
            ->exclude_from_nodesets;
 }

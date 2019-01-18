@@ -711,9 +711,6 @@ static bool parseStorageState(const folly::dynamic& nodeMap,
   storage->state = storage_state.value();
   storage->capacity = storage_capacity.value_or(1);
 
-  // Transitionary setting until we move everything to auto log provisioning at
-  // which point read-only storage state will mean a node has to be excluded
-  // from the nodesets
   if (!getBoolFromMap(
           nodeMap, "exclude_from_nodesets", storage->exclude_from_nodesets)) {
     if (err != E::NOTFOUND) {

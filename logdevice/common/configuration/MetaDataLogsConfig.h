@@ -78,8 +78,9 @@ struct MetaDataLogsConfig {
     }
   }
 
-  // The default nodeset selector type is WEIGHT_AWARE.
-  NodeSetSelectorType nodeset_selector_type = NodeSetSelectorType::WEIGHT_AWARE;
+  // The default nodeset selector type is CONSISTENT_HASHING.
+  NodeSetSelectorType nodeset_selector_type =
+      NodeSetSelectorType::CONSISTENT_HASHING;
 
   // Version of metadata that should be written by the nodes to the epoch store.
   // This can be used to ensure backwards compatibility when upgrading a cluster

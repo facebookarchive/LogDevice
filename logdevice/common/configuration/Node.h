@@ -33,12 +33,18 @@ enum class StorageState {
   // This storage node can currently serve reads and accept writes
   READ_WRITE = 0,
 
-  // This storage node can currently serve reads, but not writes from
-  // clients.  Recovery writes and rebuilding writes (unless excluded by
-  // its membership in the rebuilding set) are allowed.
+  // This storage node can currently serve reads, but not writes.
+  // Recovery writes are still allowed.
+  // The node is still eligible to be included in nodesets, unless
+  // exclude_from_nodesets is set. With the exception of "random[-v2]" and
+  // "random-crossdomain[-v2]" nodeset selector types, which for historical
+  // reasons don't pick read-only nodes.
   READ_ONLY,
 
-  // Storage operations are completely disabled on this node.
+  // Storage operations are completely disabled on this node, and the node
+  // doesn't have any useful data to send to readers.
+  // The node is still included in nodesets, unless exclude_from_nodesets
+  // is set.
   DISABLED
 };
 
@@ -167,7 +173,7 @@ struct Node {
     }
   }
   bool includeInNodesets() const {
-    return isWritableStorageNode() &&
+    return hasRole(NodeRole::STORAGE) &&
         !storage_attributes->exclude_from_nodesets;
   }
   bool isSequencingEnabled() const {
