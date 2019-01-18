@@ -51,6 +51,9 @@ TableColumns EpochStore::getColumns() const {
       {"replication",
        DataType::TEXT,
        "Current replication property of the log."},
+      {"storage_set_size",
+       DataType::BIGINT,
+       "Number of shards in storage_set."},
       {"storage_set",
        DataType::TEXT,
        "Set of shards that may have data records for the log in epochs "
@@ -59,6 +62,17 @@ TableColumns EpochStore::getColumns() const {
        DataType::TEXT,
        "Internal flags.  See \"logdevice/common/EpochMetaData.h\" for the "
        "description of each flag."},
+      {"nodeset_signature",
+       DataType::BIGINT,
+       "Hash of the parts of config that potentially affect the nodeset."},
+      {"target_nodeset_size",
+       DataType::BIGINT,
+       "Storage set size that was requested from NodeSetSelector. Can be "
+       "different from storage_set_size for various reasons, see "
+       "EpochMetaData.h"},
+      {"nodeset_seed",
+       DataType::BIGINT,
+       "Random seed used when selecting nodeset."},
       {"lce",
        DataType::BIGINT,
        "Last epoch considered clean for this log.  Under normal conditions, "
@@ -145,8 +159,13 @@ std::shared_ptr<TableData> EpochStore::getData(QueryContext& ctx) {
       result->set("since", s(m->h.effective_since.val_));
       result->set("epoch", s(m->h.epoch.val_));
       result->set("replication", m->replication.toString());
+      result->set("storage_set_size", s(m->shards.size()));
       result->set("storage_set", toString(m->shards));
       result->set("flags", EpochMetaData::flagsToString(m->h.flags));
+      result->set("nodeset_signature", s(m->nodeset_params.signature));
+      result->set(
+          "target_nodeset_size", s(m->nodeset_params.target_nodeset_size));
+      result->set("nodeset_seed", s(m->nodeset_params.seed));
     }
     result->set("lce", s(lce.val_));
     result->set("meta_lce", s(meta_lce.val_));
@@ -202,7 +221,7 @@ std::shared_ptr<TableData> EpochStore::getData(QueryContext& ctx) {
                              logs,
                              callback,
                              LogMetaDataFetcher::Type::EPOCH_STORE_ONLY);
-  fetcher.setMaxInFlight(1000);
+  fetcher.setMaxInFlight(10000);
   fetcher.start();
   sem.wait();
 

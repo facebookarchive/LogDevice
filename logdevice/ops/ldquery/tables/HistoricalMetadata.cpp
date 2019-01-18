@@ -48,6 +48,9 @@ TableColumns HistoricalMetadataTableBase::getColumns() const {
       {"replication",
        DataType::TEXT,
        "Replication property for records in epochs [\"since\", \"epoch\"]."},
+      {"storage_set_size",
+       DataType::BIGINT,
+       "Number of shards in storage_set."},
       {"storage_set",
        DataType::TEXT,
        "Set of shards that may have data records for the log in epochs "
@@ -95,6 +98,7 @@ HistoricalMetadataTableBase::getDataImpl(QueryContext& ctx, bool legacy) {
       result->set("since", s(m->h.effective_since.val_));
       result->set("epoch", s(m->h.epoch.val_));
       result->set("replication", m->replication.toString());
+      result->set("storage_set_size", s(m->shards.size()));
       result->set("storage_set", toString(m->shards));
       result->set("flags", EpochMetaData::flagsToString(m->h.flags));
     }
@@ -164,7 +168,7 @@ HistoricalMetadataTableBase::getDataImpl(QueryContext& ctx, bool legacy) {
 
   // we allow more parallelism for getting metadata from sequencer since
   // it costs less
-  fetcher.setMaxInFlight(legacy ? 100 : 1000);
+  fetcher.setMaxInFlight(legacy ? 1000 : 10000);
   fetcher.start();
   sem.wait();
 
