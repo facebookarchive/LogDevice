@@ -1950,7 +1950,12 @@ TEST_P(RebuildingTest, MiniRebuildingAlwaysNonRecoverable) {
       *client,
       nullptr,
       [&](const EventLogRebuildingSet& set, const EventLogRecord*, lsn_t) {
-        return set.getLastUpdate() <= base_set.getLastUpdate();
+        for (node_index_t node : dirty_node_set) {
+          if (set.getNodeInfo(node, /*shard*/ 0) == nullptr) {
+            return true;
+          }
+        }
+        return false;
       });
 
   // Should still have write availability. Write some records.
