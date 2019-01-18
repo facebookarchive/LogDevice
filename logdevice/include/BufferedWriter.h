@@ -18,7 +18,8 @@
 namespace facebook { namespace logdevice {
 
 /**
- * @file Utility class for buffering and batching appends on the client.
+ * @file BufferedWriter.h
+ * @brief Utility class for buffering and batching appends on the client.
  *
  * The regular Client::append() immediately sends the record to LogDevice.
  * Because of the per-append cost of processing inside LogDevice, sending many
@@ -33,8 +34,12 @@ namespace facebook { namespace logdevice {
  * interface to notify the application when an append has completed.  Because
  * BufferedWriter is meant for high-throughput writing, the callback interface
  * does not use std::function but a slightly more complicated setup: the
- * application provides a single subclass of AppendCallback and an optional
- * piece of context (void*) for each append.
+ * application provides a single subclass of AppendCallback when it creates
+ * BufferedWriter.
+ *
+ * When it calls BufferedWriter::append(), the application may, optionally,
+ * provide a pointer to a piece of context. This pointer is included,
+ * along with the payload, in the ContextSet vector at callback.
  *
  * Applications are expected to configure the latency tradeoff via
  * Options::time_trigger.  For example, a value of 1 second means that
@@ -69,23 +74,23 @@ class BufferedWriter {
      * Called when a batch of records for the same log was successfully
      * appended.
      *
-     * Payload strings (available in `contexts') are no longer needed within
+     * Payload strings (in the ContextSet vector) are no longer needed within
      * BufferedWriter so the application is free to steal them.  All of the
      * records share the same LSN and timestamp, available in `attrs'.
      */
     virtual void onSuccess(logid_t /*log_id*/,
-                           ContextSet /*contexts*/,
+                           ContextSet /*contexts_and_payloads*/,
                            const DataRecordAttributes& /*attrs*/) {}
     /**
      * Called when a batch of records for the same log failed to be appended,
      * and BufferedWriter exhausted all retries it was configured to do (if
      * any).
      *
-     * Payload strings (available in `contexts') are no longer needed within
+     * Payload strings (in the ContextSet vector) are no longer needed within
      * BufferedWriter so the application is free to steal them.
      */
     virtual void onFailure(logid_t /*log_id*/,
-                           ContextSet /*contexts*/,
+                           ContextSet /*contexts_and_payloads*/,
                            Status /*status*/) {}
 
     enum class RetryDecision { ALLOW, DENY };
@@ -99,7 +104,7 @@ class BufferedWriter {
      * will instead invoke onFailure() shortly after.
      */
     virtual RetryDecision onRetry(logid_t /*log_id*/,
-                                  const ContextSet& /*contexts*/,
+                                  const ContextSet& /*contexts_and_payloads*/,
                                   Status /*status*/) {
       return RetryDecision::ALLOW;
     }
