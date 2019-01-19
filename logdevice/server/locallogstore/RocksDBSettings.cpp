@@ -32,62 +32,10 @@ using namespace facebook::logdevice::setting_validators;
 
 namespace facebook { namespace logdevice {
 
-// common prefix of all command-line options that configure rocksdb
-static const char* rocksdb_option_prefix = "rocksdb";
-
-// add "uc-" prefix to universal compaction options
-static const char* universal_compaction_opt_prefix = "uc";
-
-/**
- * Convert the name of a rocksdb::Options field into the name of a
- * command-line option that configures that field. The conversion consists
- * od adding a rocksdb- prefix and replacing all underscores with dashes
- * to conform to LD command line options conventions.
- *
- * @param field_name   name of rocksdb::Options field as a string
- * @param buf          output buffer. This should be large enough to contain
- *                     the "rocksdb-" prefix, field_name, and the terminating
- *                     NUL.
- * @param buflen       output buffer length
- * @return NUL-terminated option name in buf
- */
-static const char* rocksdbOptionName(const char* field_name,
-                                     char* buf,
-                                     size_t buflen) {
-  if (strncmp(field_name, "uc_", strlen("uc_")) == 0) {
-    snprintf(buf,
-             buflen,
-             "%s-%s-%s",
-             rocksdb_option_prefix,
-             universal_compaction_opt_prefix,
-             field_name + strlen("uc_"));
-  } else {
-    snprintf(buf, buflen, "%s-%s", rocksdb_option_prefix, field_name);
-  }
-
-  for (char* p = buf; *p; p++) {
-    if (*p == '_') {
-      *p = '-';
-    }
-  }
-
-  return buf;
-}
-
-#define OPTNAME_impl(field, len) \
-  rocksdbOptionName(field, (char*)alloca(len), len)
-#define OPTNAME(field)                                           \
-  OPTNAME_impl(#field,                                           \
-               strlen(rocksdb_option_prefix) + 1 +               \
-                   strlen(universal_compaction_opt_prefix) + 1 + \
-                   strlen(#field) + 1)
-
 void RocksDBSettings::defineSettings(SettingEasyInit& init) {
   using namespace SettingFlag;
 
-  init
-
-      (OPTNAME(compaction_style),
+  init("rocksdb-compaction-style",
        &compaction_style,
        "universal",
        [](const std::string& val) {
@@ -97,8 +45,9 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
            return rocksdb::kCompactionStyleLevel;
          } else {
            throw boost::program_options::error(
-               "invalid value '" + val + "'for option --" +
-               OPTNAME(compaction_style) + ". Expected 'universal' or 'level'");
+               "invalid value '" + val +
+               "'for option --rocksdb-compaction-style. Expected 'universal' "
+               "or 'level'");
          }
        },
        "compaction style: 'universal' (default) or 'level'; if using 'level', "
@@ -106,7 +55,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(compression_type),
+  init("rocksdb-compression-type",
        &compression,
        "none",
        [](const std::string& val) {
@@ -127,9 +76,9 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
          } else if (val == "zstd") {
            return rocksdb::kZSTD;
          } else {
-           throw boost::program_options::error("invalid value '" + val +
-                                               "' for option --" +
-                                               OPTNAME(compression_type));
+           throw boost::program_options::error(
+               "invalid value '" + val +
+               "' for option --rocksdb-compression-type");
          }
        },
        "compression algorithm: 'snappy' (default), 'none', 'zlib', 'bzip2', "
@@ -137,7 +86,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(enable_statistics),
+  init("rocksdb-enable-statistics",
        &statistics,
        "true",
        nullptr,
@@ -145,7 +94,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(compaction_access_sequential),
+  init("rocksdb-compaction-access-sequential",
        &compaction_access_sequential,
        "true",
        nullptr,
@@ -155,7 +104,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SettingsCategory::RocksDB);
 
   init(
-      OPTNAME(compaction_ratelimit),
+      "rocksdb-compaction-ratelimit",
       &compaction_rate_limit_,
       "30M/1s",
       [](const std::string& val) {
@@ -180,7 +129,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
       SERVER,
       SettingsCategory::RocksDB);
 
-  init(OPTNAME(sst_delete_bytes_per_sec),
+  init("rocksdb-sst-delete-bytes-per-sec",
        &sst_delete_bytes_per_sec,
        "0",
        nullptr,
@@ -189,7 +138,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(advise_random_on_open),
+  init("rocksdb-advise-random-on-open",
        &advise_random_on_open,
        "false",
        nullptr,
@@ -198,7 +147,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(update_stats_on_db_open),
+  init("rocksdb-update-stats-on-db-open",
        &update_stats_on_db_open,
        "false",
        nullptr,
@@ -208,7 +157,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(cache_index),
+  init("rocksdb-cache-index",
        &cache_index_,
        "false",
        nullptr,
@@ -217,7 +166,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(force_no_compaction_optimizations),
+  init("rocksdb-force-no-compaction-optimizations",
        &force_no_compaction_optimizations_,
        "false",
        nullptr,
@@ -229,7 +178,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | DEPRECATED,
        SettingsCategory::RocksDB);
 #ifdef LOGDEVICED_ROCKSDB_INSERT_HINT
-  init(OPTNAME(enable_insert_hint),
+  init("rocksdb-enable-insert-hint",
        &enable_insert_hint_,
        "true",
        nullptr,
@@ -240,7 +189,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
 #endif
 
 #ifdef LOGDEVICED_ROCKSDB_CACHE_INDEX_HIGH_PRI
-  init(OPTNAME(cache_index_with_high_priority),
+  init("rocksdb-cache-index-with-high-priority",
        &cache_index_with_high_priority_,
        "false",
        nullptr,
@@ -249,7 +198,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(cache_high_pri_pool_ratio),
+  init("rocksdb-cache-high-pri-pool-ratio",
        &cache_high_pri_pool_ratio_,
        "0.0",
        [](double val) {
@@ -266,7 +215,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
 #endif
 
 #ifdef LOGDEVICED_ROCKSDB_READ_AMP_STATS
-  init(OPTNAME(read_amp_bytes_per_bit),
+  init("rocksdb-read-amp-bytes-per-bit",
        &read_amp_bytes_per_bit_,
        "32",
        nullptr,
@@ -277,7 +226,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SettingsCategory::RocksDB);
 #endif
 
-  init(OPTNAME(partitioned),
+  init("rocksdb-partitioned",
        &partitioned,
        "true",
        nullptr,
@@ -286,7 +235,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART | DEPRECATED,
        SettingsCategory::LogsDB);
 
-  init(OPTNAME(partition_compactions_enabled),
+  init("rocksdb-partition-compactions-enabled",
        &partition_compactions_enabled,
        "true",
        nullptr,
@@ -294,7 +243,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::LogsDB);
 
-  init(OPTNAME(partition_compaction_schedule),
+  init("rocksdb-partition-compaction-schedule",
        &partition_compaction_schedule,
        "auto",
        [](const std::string& val) -> folly::Optional<compaction_schedule_t> {
@@ -316,7 +265,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::LogsDB);
 
-  init(OPTNAME(proactive_compaction_enabled),
+  init("rocksdb-proactive-compaction-enabled",
        &proactive_compaction_enabled,
        "false",
        nullptr,
@@ -326,7 +275,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::LogsDB);
 
-  init(OPTNAME(disable_iterate_upper_bound),
+  init("rocksdb-disable-iterate-upper-bound",
        &disable_iterate_upper_bound,
        "false",
        nullptr,
@@ -334,7 +283,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(partition_duration),
+  init("rocksdb-partition-duration",
        &partition_duration_,
        "15min",
        [](std::chrono::seconds val) {
@@ -349,7 +298,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::LogsDB);
 
-  init(OPTNAME(unconfigured_log_trimming_grace_period),
+  init("rocksdb-unconfigured-log-trimming-grace-period",
        &unconfigured_log_trimming_grace_period_,
        "4d",
        [](std::chrono::seconds val) {
@@ -366,7 +315,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::LogsDB);
 
-  init(OPTNAME(partition_file_limit),
+  init("rocksdb-partition-file-limit",
        &partition_file_limit_,
        "200",
        nullptr,
@@ -375,7 +324,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::LogsDB);
 
-  init(OPTNAME(partition_partial_compaction_file_num_threshold),
+  init("rocksdb-partition-partial-compaction-file-num-threshold",
        &partition_partial_compaction_file_num_threshold_,
        "10",
        [](size_t val) {
@@ -391,7 +340,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::LogsDB);
 
-  init(OPTNAME(partition_partial_compaction_max_files),
+  init("rocksdb-partition-partial-compaction-max-files",
        &partition_partial_compaction_max_files_,
        "100",
        nullptr,
@@ -399,7 +348,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::LogsDB);
 
-  init(OPTNAME(partition_partial_compaction_file_size_threshold),
+  init("rocksdb-partition-partial-compaction-file-size-threshold",
        &partition_partial_compaction_file_size_threshold_,
        "50000000",
        nullptr,
@@ -409,7 +358,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::LogsDB);
 
-  init(OPTNAME(partition_partial_compaction_max_file_size),
+  init("rocksdb-partition-partial-compaction-max-file-size",
        &partition_partial_compaction_max_file_size_,
        "0",
        nullptr,
@@ -419,7 +368,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::LogsDB);
 
-  init(OPTNAME(partition_partial_compaction_largest_file_share),
+  init("rocksdb-partition-partial-compaction-largest-file-share",
        &partition_partial_compaction_largest_file_share_,
        "0.7",
        [](double val) {
@@ -436,7 +385,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::LogsDB);
 
-  init(OPTNAME(partition_partial_compaction_max_num_per_loop),
+  init("rocksdb-partition-partial-compaction-max-num-per-loop",
        &partition_partial_compaction_max_num_per_loop_,
        "4",
        nullptr,
@@ -446,7 +395,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::LogsDB);
 
-  init(OPTNAME(partition_partial_compaction_stall_trigger),
+  init("rocksdb-partition-partial-compaction-stall-trigger",
        &partition_partial_compaction_stall_trigger_,
        "50",
        nullptr,
@@ -456,7 +405,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SettingsCategory::LogsDB);
 
   init(
-      OPTNAME(partition_count_soft_limit),
+      "rocksdb-partition-count-soft-limit",
       &partition_count_soft_limit_,
       "2000",
       [](size_t val) {
@@ -476,7 +425,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
       SERVER,
       SettingsCategory::LogsDB);
 
-  init(OPTNAME(partition_timestamp_granularity),
+  init("rocksdb-partition-timestamp-granularity",
        &partition_timestamp_granularity_,
        "5s",
        [](std::chrono::milliseconds val) {
@@ -492,7 +441,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::LogsDB);
 
-  init(OPTNAME(new_partition_timestamp_margin),
+  init("rocksdb-new-partition-timestamp-margin",
        &new_partition_timestamp_margin_,
        "10s",
        [](std::chrono::milliseconds val) {
@@ -513,7 +462,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::LogsDB);
 
-  init(OPTNAME(partition_hi_pri_check_period),
+  init("rocksdb-partition-hi-pri-check-period",
        &partition_hi_pri_check_period_,
        "2s",
        [](std::chrono::milliseconds val) {
@@ -529,7 +478,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::LogsDB);
 
-  init(OPTNAME(partition_lo_pri_check_period),
+  init("rocksdb-partition-lo-pri-check-period",
        &partition_lo_pri_check_period_,
        "30s",
        [](std::chrono::milliseconds val) {
@@ -546,7 +495,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::LogsDB);
 
-  init(OPTNAME(prepended_partition_min_lifetime),
+  init("rocksdb-prepended-partition-min-lifetime",
        &prepended_partition_min_lifetime_,
        "300s",
        nullptr,
@@ -554,7 +503,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::LogsDB);
 
-  init(OPTNAME(min_manual_flush_interval),
+  init("rocksdb-min-manual-flush-interval",
        &min_manual_flush_interval,
        "120s",
        [](std::chrono::milliseconds val) {
@@ -576,7 +525,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
   //   This may be too big for rebuilding without WAL. When enabling
   //   rebuilding without WAL consider tweaking this option and/or skipping
   //   this trigger when WAL-less rebuilding is disabled.
-  init(OPTNAME(partition_data_age_flush_trigger),
+  init("rocksdb-partition-data-age-flush-trigger",
        &partition_data_age_flush_trigger,
        "600s",
        [](std::chrono::milliseconds val) {
@@ -593,7 +542,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SettingsCategory::RocksDB);
 
   init(
-      OPTNAME(partition_idle_flush_trigger),
+      "rocksdb-partition-idle-flush-trigger",
       &partition_idle_flush_trigger,
       "300s",
       [](std::chrono::milliseconds val) {
@@ -609,7 +558,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
       SERVER,
       SettingsCategory::RocksDB);
 
-  init(OPTNAME(partition_redirty_grace_period),
+  init("rocksdb-partition-redirty-grace-period",
        &partition_redirty_grace_period,
        "5s",
        [](std::chrono::milliseconds val) {
@@ -626,7 +575,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::LogsDB);
 
-  init(OPTNAME(metadata_compaction_period),
+  init("rocksdb-metadata-compaction-period",
        &metadata_compaction_period,
        "1h",
        [](std::chrono::milliseconds val) {
@@ -650,7 +599,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::LogsDB);
 
-  init(OPTNAME(directory_consistency_check_period),
+  init("rocksdb-directory-consistency-check-period",
        &directory_consistency_check_period,
        "5min",
        [](std::chrono::milliseconds val) {
@@ -666,7 +615,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::LogsDB);
 
-  init(OPTNAME(free_disk_space_threshold_low),
+  init("rocksdb-free-disk-space-threshold-low",
        &free_disk_space_threshold_low,
        "0",
        [](const double& val) {
@@ -684,7 +633,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::LogsDB);
 
-  init(OPTNAME(sbr_force),
+  init("rocksdb-sbr-force",
        &sbr_force,
        "false",
        nullptr,
@@ -694,7 +643,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | EXPERIMENTAL,
        SettingsCategory::LogsDB);
 
-  init(OPTNAME(verify_checksum_during_store),
+  init("rocksdb-verify-checksum-during-store",
        &verify_checksum_during_store,
        "true",
        nullptr,
@@ -703,7 +652,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::LogsDB);
 
-  init(OPTNAME(low_ioprio),
+  init("rocksdb-low-ioprio",
        &low_ioprio,
        "3,0",
        [](const std::string& val) -> folly::Optional<std::pair<int, int>> {
@@ -722,7 +671,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::ResourceManagement);
 
-  init(OPTNAME(worker_blocking_io_threshold),
+  init("rocksdb-worker-blocking-io-threshold",
        &worker_blocking_io_threshold_,
        "10ms",
        nullptr,
@@ -731,7 +680,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::LogsDB);
 
-  init(OPTNAME(stall_cache_ttl),
+  init("rocksdb-stall-cache-ttl",
        &stall_cache_ttl_,
        "100ms",
        [](std::chrono::milliseconds val) {
@@ -745,7 +694,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::ResourceManagement);
 
-  init(OPTNAME(allow_fallocate),
+  init("rocksdb-allow-fallocate",
        &allow_fallocate,
        "true",
        nullptr,
@@ -753,7 +702,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(auto_create_shards),
+  init("rocksdb-auto-create-shards",
        &auto_create_shards,
        "false",
        nullptr,
@@ -761,7 +710,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::Storage);
 
-  init(OPTNAME(background_wal_sync),
+  init("rocksdb-background-wal-sync",
        &background_wal_sync,
        "true",
        nullptr,
@@ -770,7 +719,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::LogsDB);
 
-  init(OPTNAME(use_copyset_index),
+  init("rocksdb-use-copyset-index",
        &use_copyset_index,
        "true",
        nullptr,
@@ -787,7 +736,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::LogsDB);
 
-  init(OPTNAME(read_find_time_index),
+  init("rocksdb-read-find-time-index",
        &read_find_time_index,
        "false",
        nullptr,
@@ -796,7 +745,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::LogsDB);
 
-  init(OPTNAME(read_only),
+  init("rocksdb-read-only",
        &read_only,
        "false",
        nullptr,
@@ -804,7 +753,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::LogsDB);
 
-  init(OPTNAME(flush_block_policy),
+  init("rocksdb-flush-block-policy",
        &flush_block_policy_,
        "each_log",
        [](const std::string& val) {
@@ -816,9 +765,9 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
            return RocksDBSettings::FlushBlockPolicyType::EACH_COPYSET;
          } else {
            throw boost::program_options::error(
-               "invalid value '" + val + "'for option --" +
-               OPTNAME(flush_block_policy) +
-               ". Expected 'default', 'each_log' or 'each_copyset'");
+               "invalid value '" + val +
+               "'for option --rocksdb-flush-block-policy. Expected 'default', "
+               "'each_log' or 'each_copyset'");
          }
        },
        "Controls how RocksDB splits SST file data into blocks. 'default' "
@@ -833,7 +782,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(track_iterator_versions),
+  init("rocksdb-track-iterator-versions",
        &track_iterator_versions,
        "false",
        nullptr,
@@ -841,7 +790,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::LogsDB);
 
-  init(OPTNAME(test_corrupt_stores),
+  init("rocksdb-test-corrupt-stores",
        &test_corrupt_stores,
        "false",
        nullptr,
@@ -850,15 +799,16 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::Testing);
 
-  init(OPTNAME(bloom_bits_per_key),
+  init("rocksdb-bloom-bits-per-key",
        &bloom_bits_per_key_,
 #ifdef LOGDEVICED_ROCKSDB_BLOOM_UNBROKEN
        "10",
        [](int val) {
          if (val < 0) {
            throw boost::program_options::error(
-               "invalid value '" + std::to_string(val) + "'for option --" +
-               OPTNAME(bloom_bits_per_key) + ". Expected nonnegative value.");
+               "invalid value '" + std::to_string(val) +
+               "'for option --rocksdb-bloom-bits-per-key. Expected nonnegative "
+               "value.");
          }
        },
 #else
@@ -867,8 +817,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
          if (val != 0) {
            throw boost::program_options::error(
                "bloom filters are broken in this version of rocksdb. Please "
-               "use --" +
-               std::string(OPTNAME(bloom_bits_per_key)) + "=0.");
+               "use --rocksdb-bloom-bits-per-key=0.");
          }
        },
 #endif
@@ -890,16 +839,16 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(metadata_bloom_bits_per_key),
+  init("rocksdb-metadata-bloom-bits-per-key",
        &metadata_bloom_bits_per_key_,
        "0",
 #ifdef LOGDEVICED_ROCKSDB_BLOOM_UNBROKEN
        [](int val) {
          if (val < 0) {
            throw boost::program_options::error(
-               "invalid value '" + std::to_string(val) + "'for option --" +
-               OPTNAME(metadata_bloom_bits_per_key) +
-               ". Expected nonnegative value.");
+               "invalid value '" + std::to_string(val) +
+               "'for option --rocksdb-metadata-bloom-bits-per-key. Expected "
+               "nonnegative value.");
          }
        },
 #else
@@ -907,8 +856,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
          if (val != 0) {
            throw boost::program_options::error(
                "bloom filters are broken in this version of rocksdb. Please "
-               "use --" +
-               std::string(OPTNAME(metadata_bloom_bits_per_key)) + "=0.");
+               "use --rocksdb-metadata-bloom-bits-per-key=0.");
          }
        },
 #endif
@@ -920,7 +868,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(bloom_block_based),
+  init("rocksdb-bloom-block-based",
        &bloom_block_based_,
        "false",
        nullptr,
@@ -934,7 +882,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(partition_size_limit),
+  init("rocksdb-partition-size-limit",
        &partition_size_limit_,
        "6G",
        parse_nonnegative<ssize_t>(),
@@ -943,7 +891,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::LogsDB);
 
-  init(OPTNAME(compaction_max_bytes_at_once),
+  init("rocksdb-compaction-max-bytes-at-once",
        &compaction_max_bytes_at_once,
        "1048576",
        parse_nonnegative<ssize_t>(),
@@ -957,7 +905,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(bytes_per_sync),
+  init("rocksdb-bytes-per-sync",
        &bytes_per_sync,
        "1048576",
        parse_nonnegative<ssize_t>(),
@@ -967,7 +915,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(wal_bytes_per_sync),
+  init("rocksdb-wal-bytes-per-sync",
        &wal_bytes_per_sync,
        "1M",
        parse_nonnegative<ssize_t>(),
@@ -976,7 +924,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(bytes_written_since_flush_trigger),
+  init("rocksdb-bytes-written-since-flush-trigger",
        &bytes_written_since_flush_trigger,
        "0",
        parse_nonnegative<ssize_t>(),
@@ -985,7 +933,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(block_size),
+  init("rocksdb-block-size",
        &block_size_,
        "500K",
        parse_positive<ssize_t>(),
@@ -995,7 +943,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(metadata_block_size),
+  init("rocksdb-metadata-block-size",
        &metadata_block_size_,
        "0",
        parse_nonnegative<ssize_t>(),
@@ -1005,7 +953,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(min_block_size),
+  init("rocksdb-min-block-size",
        &min_block_size_,
        "16384",
        parse_positive<ssize_t>(),
@@ -1015,7 +963,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(cache_size),
+  init("rocksdb-cache-size",
        &cache_size_,
        "10G",
        parse_memory_budget(),
@@ -1023,7 +971,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(cache_numshardbits),
+  init("rocksdb-cache-numshardbits",
        &cache_numshardbits_,
        "4",
        parse_positive<ssize_t>(),
@@ -1033,7 +981,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(metadata_cache_size),
+  init("rocksdb-metadata-cache-size",
        &metadata_cache_size_,
        "1G",
        parse_positive<ssize_t>(),
@@ -1041,7 +989,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(metadata_cache_numshardbits),
+  init("rocksdb-metadata-cache-numshardbits",
        &metadata_cache_numshardbits_,
        "4",
        parse_nonnegative<ssize_t>(),
@@ -1051,7 +999,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(compressed_cache_size),
+  init("rocksdb-compressed-cache-size",
        &compressed_cache_size_,
        "0",
        parse_nonnegative<ssize_t>(),
@@ -1059,7 +1007,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(compressed_cache_numshardbits),
+  init("rocksdb-compressed-cache-numshardbits",
        &compressed_cache_numshardbits_,
        "0",
        parse_nonnegative<ssize_t>(),
@@ -1069,7 +1017,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(num_bg_threads_lo),
+  init("rocksdb-num-bg-threads-lo",
        &num_bg_threads_lo,
        "-1",
        parse_validate_lower_bound<ssize_t>(-1),
@@ -1079,7 +1027,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(num_bg_threads_hi),
+  init("rocksdb-num-bg-threads-hi",
        &num_bg_threads_hi,
        "-1",
        parse_validate_lower_bound<ssize_t>(-1),
@@ -1089,7 +1037,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(num_metadata_locks),
+  init("rocksdb-num-metadata-locks",
        &num_metadata_locks,
        "256",
        parse_positive<ssize_t>(),
@@ -1097,7 +1045,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::LogsDB);
 
-  init(OPTNAME(skip_list_lookahead),
+  init("rocksdb-skip-list-lookahead",
        &skip_list_lookahead,
        "3",
        parse_nonnegative<ssize_t>(),
@@ -1106,7 +1054,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(max_open_files),
+  init("rocksdb-max-open-files",
        &max_open_files,
        "10000",
        parse_validate_lower_bound<ssize_t>(-1),
@@ -1114,7 +1062,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(index_block_restart_interval),
+  init("rocksdb-index-block-restart-interval",
        &index_block_restart_interval,
        "16",
        parse_positive<ssize_t>(),
@@ -1124,7 +1072,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(compaction_readahead_size),
+  init("rocksdb-compaction-readahead-size",
        &compaction_readahead_size,
 #ifdef LOGDEVICED_ROCKSDB_HAS_FILTER_V2
        "4096",
@@ -1138,7 +1086,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(level0_file_num_compaction_trigger),
+  init("rocksdb-level0-file-num-compaction-trigger",
        &level0_file_num_compaction_trigger,
        "10",
        parse_positive<ssize_t>(),
@@ -1148,7 +1096,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(level0_slowdown_writes_trigger),
+  init("rocksdb-level0-slowdown-writes-trigger",
        &level0_slowdown_writes_trigger,
        "25",
        parse_positive<ssize_t>(),
@@ -1158,7 +1106,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(level0_stop_writes_trigger),
+  init("rocksdb-level0-stop-writes-trigger",
        &level0_stop_writes_trigger,
        "30",
        parse_positive<ssize_t>(),
@@ -1168,7 +1116,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(max_background_compactions),
+  init("rocksdb-max-background-compactions",
        &max_background_compactions,
        "2",
        parse_positive<ssize_t>(),
@@ -1180,7 +1128,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(max_background_flushes),
+  init("rocksdb-max-background-flushes",
        &max_background_flushes,
        "1",
        parse_positive<ssize_t>(),
@@ -1189,7 +1137,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(max_bytes_for_level_base),
+  init("rocksdb-max-bytes-for-level-base",
        &max_bytes_for_level_base,
        "10G",
        parse_positive<ssize_t>(),
@@ -1197,7 +1145,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(max_bytes_for_level_multiplier),
+  init("rocksdb-max-bytes-for-level-multiplier",
        &max_bytes_for_level_multiplier,
        "8",
        parse_positive<ssize_t>(),
@@ -1205,7 +1153,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(max_write_buffer_number),
+  init("rocksdb-max-write-buffer-number",
        &max_write_buffer_number,
        "2",
        parse_positive<ssize_t>(),
@@ -1213,7 +1161,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(num_levels),
+  init("rocksdb-num-levels",
        &num_levels,
        "1",
        parse_positive<ssize_t>(),
@@ -1221,7 +1169,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(target_file_size_base),
+  init("rocksdb-target-file-size-base",
        &target_file_size_base,
        "67108864",
        parse_positive<ssize_t>(),
@@ -1229,7 +1177,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(uc_min_merge_width),
+  init("rocksdb-uc-min-merge-width",
        &uc_min_merge_width,
        "2",
        parse_positive<ssize_t>(),
@@ -1237,7 +1185,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(uc_max_merge_width),
+  init("rocksdb-uc-max-merge-width",
        &uc_max_merge_width,
        std::to_string(UINT_MAX).c_str(),
        parse_positive<ssize_t>(),
@@ -1245,7 +1193,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(uc_max_size_amplification_percent),
+  init("rocksdb-uc-max-size-amplification-percent",
        &uc_max_size_amplification_percent,
        "200",
        parse_positive<ssize_t>(),
@@ -1253,7 +1201,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(uc_size_ratio),
+  init("rocksdb-uc-size-ratio",
        &uc_size_ratio,
        "1M",
        parse_positive<ssize_t>(),
@@ -1264,7 +1212,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SettingsCategory::RocksDB);
 
   init(
-      OPTNAME(write_buffer_size),
+      "rocksdb-write-buffer-size",
       &write_buffer_size,
       "100G", // >> memtable-size-per-node to make this irrelevant
       parse_memory_budget(),
@@ -1287,7 +1235,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART | DEPRECATED,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(db_write_buffer_size),
+  init("rocksdb-db-write-buffer-size",
        &db_write_buffer_size,
        "0",
        [](const char* name, const std::string& value) {
@@ -1306,7 +1254,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(memtable_size_per_node),
+  init("rocksdb-memtable-size-per-node",
        &memtable_size_per_node,
        "10G", // RocksDB targets 7/8 of this to avoid exceeding it
        parse_memory_budget(),
@@ -1320,7 +1268,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART | EXPERIMENTAL,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(memtable_size_low_watermark_percent),
+  init("rocksdb-memtable-size-low-watermark-percent",
        &memtable_size_low_watermark_percent,
        "60",
        parse_positive<size_t>(),
@@ -1338,7 +1286,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(ld_managed_flushes),
+  init("rocksdb-ld-managed-flushes",
        &ld_managed_flushes,
        "false",
        nullptr,
@@ -1354,7 +1302,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(flush_trigger_check_interval),
+  init("rocksdb-flush-trigger-check-interval",
        &flush_trigger_check_interval,
        "200ms",
        [](std::chrono::milliseconds val) {
@@ -1376,7 +1324,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::RocksDB);
 
-  init(OPTNAME(arena_block_size),
+  init("rocksdb-arena-block-size",
        &arena_block_size,
        "4194304",
        parse_positive<ssize_t>(),
