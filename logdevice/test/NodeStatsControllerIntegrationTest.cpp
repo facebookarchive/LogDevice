@@ -50,6 +50,10 @@ struct Params {
   FIELD(std::chrono::milliseconds,
         boycott_decrease_time_step,
         std::chrono::seconds(30))
+  FIELD(std::chrono::milliseconds,
+        gossip_interval,
+        std::chrono::milliseconds(10))
+  FIELD(int, gossip_threshold, 30)
 #undef FIELD
 };
 
@@ -170,7 +174,9 @@ class NodeStatsControllerIntegrationTest
             /* will lazily assign sequencers and enable gossip */
             .useHashBasedSequencerAssignment()
             /* speed up gossips */
-            .setParam("--gossip-interval", "10ms")
+            .setParam("--gossip-interval", msString(params.gossip_interval))
+            .setParam(
+                "--gossip-threshold", std::to_string(params.gossip_threshold))
             /* put each node in a separate rack */
             .setNumRacks(params.node_count)
             /* Can't currently create 0 logs, create 1 and then overwrite it */
@@ -397,7 +403,9 @@ class NodeStatsControllerIntegrationTest
     initializeCluster(Params{}
                           .set_max_boycott_count(1)
                           .set_boycott_duration(std::chrono::seconds{10})
-                          .set_node_count(node_count));
+                          .set_node_count(node_count)
+                          .set_gossip_interval(std::chrono::milliseconds(1000))
+                          .set_gossip_threshold(10));
 
     auto client = cluster->createClient();
 
@@ -405,19 +413,23 @@ class NodeStatsControllerIntegrationTest
     EXPECT_NE(LSN_INVALID, lsn1);
     auto epoch1 = lsn_to_epoch(lsn1);
 
-    // Suspend the node
-    cluster->getNode(outlier_node).suspend();
+    // Shutdown the node
+    cluster->getNode(outlier_node).shutdown();
     cluster->waitUntilGossip(/* alive */ false, outlier_node);
 
+    // Let's get a new client to force a fresh cluster state
+    client = cluster->createClient();
     lsn_t lsn2 = client->appendSync(log_id, "HI");
     EXPECT_NE(LSN_INVALID, lsn2);
     auto epoch2 = lsn_to_epoch(lsn2);
     EXPECT_GE(epoch2, epoch1);
 
-    // Renable the node, and make sure it preempts the secondary
-    cluster->getNode(outlier_node).resume();
+    // Restart the node, and make sure it preempts the secondary
+    cluster->getNode(outlier_node).restart();
+    cluster->getNode(outlier_node).waitUntilAvailable();
     cluster->waitUntilGossip(/* alive */ true, outlier_node);
 
+    client = cluster->createClient();
     lsn_t lsn3 = client->appendSync(log_id, "HI");
     EXPECT_NE(LSN_INVALID, lsn3);
     auto epoch3 = lsn_to_epoch(lsn3);
