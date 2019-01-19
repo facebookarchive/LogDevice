@@ -31,7 +31,12 @@ class Client;
 class ClientFactory {
  public:
   /**
-   * The method that actually creates a Client instance
+   * The method that actually creates a Client instance.
+   *
+   * The shared_ptr is shared between the caller of create() and all instances
+   * of Reader and AsyncReader for this client. The Client is shut down when
+   * all Reader and AsyncReader objects, as well as all copies of the shared_ptr
+   * returned from create() are destroyed.
    *
    * @param config_url     a URL that identifies at a LogDevice configuration
    *                       resource (such as a file) describing the LogDevice
