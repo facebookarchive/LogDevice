@@ -406,9 +406,13 @@ void PartitionedRocksDBStore::init(const Configuration* config) {
 
   ld_spew("Found %zd column families", column_families.size());
 
-  if (!(open(column_families, meta_cf_options, config) && readDirectories() &&
-        (getSettings()->read_only || finishInterruptedDrops()))) {
+  if (!open(column_families, meta_cf_options, config) || !readDirectories()) {
     throw ConstructorFailed();
+  }
+  if (!getSettings()->read_only) {
+    if (!finishInterruptedDrops() || !convertDataKeyFormat()) {
+      throw ConstructorFailed();
+    }
   }
 
   if (!getSettings()->read_only) {
@@ -1362,6 +1366,126 @@ bool PartitionedRocksDBStore::finishInterruptedDrops() {
     cleanUpPartitionMetadataAfterDrop(oldest_partition_id_);
   }
 
+  return true;
+}
+
+// Read all unpartitioned records and convert from old to new DataKey format.
+// Unpartitioned data should be small enough that we can afford doing it on
+// every startup. Partitioned data has short enough retention that we don't
+// need to proactively convert it like this.
+bool PartitionedRocksDBStore::convertDataKeyFormat() {
+  ld_check(unpartitioned_cf_);
+  auto start_time = std::chrono::steady_clock::now();
+  size_t records_read = 0;
+  size_t records_written = 0;
+  size_t bytes_read = 0;
+  size_t bytes_written = 0;
+
+  rocksdb::WriteBatch batch;
+  auto flush_batch = [this, &batch]() {
+    if (batch.Count() == 0) {
+      return true;
+    }
+    rocksdb::WriteOptions options;
+    auto status = writer_->writeBatch(options, &batch);
+    if (!status.ok()) {
+      ld_error(
+          "Failed to write converted records: %s", status.ToString().c_str());
+      return false;
+    }
+    batch.Clear();
+    return true;
+  };
+
+  auto options = getDefaultReadOptions();
+  auto it = newIterator(options, unpartitioned_cf_->get());
+  RocksDBKeyFormat::DataKey min_key(logid_t(0), lsn_t(0));
+  rocksdb::Slice min_key_slice = min_key.sliceForWriting();
+  for (it.Seek(min_key_slice); it.status().ok() && it.Valid() &&
+       reinterpret_cast<const char*>(it.key().data())[0] ==
+           RocksDBKeyFormat::DataKey::HEADER;
+       it.Next()) {
+    rocksdb::Slice key = it.key();
+    rocksdb::Slice value = it.value();
+    ++records_read;
+    bytes_read += key.size() + value.size();
+    if (!RocksDBKeyFormat::DataKey::valid(key.data(), key.size())) {
+      ld_error(
+          "Invalid DataKey: %s", hexdump_buf(key.data(), key.size()).c_str());
+      continue;
+    }
+    if (RocksDBKeyFormat::DataKey::isInNewFormat(key.data(), key.size())) {
+      // Common case: already in new format.
+      continue;
+    }
+
+    // Convert: delete old key and write (merge) new one.
+    rocksdb::Status status;
+    status = batch.Delete(unpartitioned_cf_->get(), key);
+    if (!status.ok()) {
+      ld_error("Failed to add a Delete to a WriteBatch: %s",
+               status.ToString().c_str());
+      return false;
+    }
+    logid_t log = RocksDBKeyFormat::DataKey::getLogID(key.data());
+    lsn_t lsn = RocksDBKeyFormat::DataKey::getLSN(key.data());
+    RocksDBKeyFormat::DataKey new_key(log, lsn);
+    rocksdb::Slice new_key_slice = new_key.sliceForWriting();
+    ld_check(RocksDBKeyFormat::DataKey::isInNewFormat(
+        new_key_slice.data(), new_key_slice.size()));
+    // Prepend RocksDBWriterMergeOperator::DATA_MERGE_HEADER to the value
+    // to make it a merge operand.
+    rocksdb::Slice new_value_parts[2] = {rocksdb::Slice("d", 1), value};
+    // If both old-format and new-format keys exist, we merge the old-format
+    // value into the new-format one, as if the old-format value was written
+    // later. The opposite would make more sense, but it doesn't matter much
+    // because normally all unpartitioned keys will be in the same format.
+    status = batch.Merge(unpartitioned_cf_->get(),
+                         rocksdb::SliceParts(&new_key_slice, 1),
+                         rocksdb::SliceParts(&new_value_parts[0], 2));
+    if (!status.ok()) {
+      ld_error("Failed to add a Merge to a WriteBatch: %s",
+               status.ToString().c_str());
+      return false;
+    }
+
+    ++records_written;
+    bytes_written += key.size() + value.size();
+
+    if (batch.GetDataSize() > 1e8) {
+      // The write batch got big, flush it. It's ok to write while iterating
+      // because the iterator uses a snapshot.
+      if (!flush_batch()) {
+        return false;
+      }
+    }
+  }
+  if (!it.status().ok()) {
+    ld_error("Got rocksdb error: %s", it.status().ToString().c_str());
+    return false;
+  }
+  if (!flush_batch()) {
+    return false;
+  }
+
+  if (records_written != 0) {
+    auto status = db_->SyncWAL();
+    if (!status.ok()) {
+      ld_error("Failed to sync WAL: %s", status.ToString().c_str());
+      return false;
+    }
+  }
+
+  auto end_time = std::chrono::steady_clock::now();
+  ld_info("DataKey format conversion took %.3fs. Read %lu records, %lu bytes. "
+          "Wrote %lu records, %lu bytes.",
+          std::chrono::duration_cast<std::chrono::duration<double>>(end_time -
+                                                                    start_time)
+              .count(),
+          records_read,
+          bytes_read,
+          records_written,
+          bytes_written);
   return true;
 }
 

@@ -392,7 +392,7 @@ void PartitionedRocksDBStore::Iterator::moveUntilValid(bool forward,
     return (getLSN() > current_.max_lsn_);
   };
 
-  // seekForPrev() and seekToLast() already take orphaned records
+  // seekForPrev() already takes orphaned records
   // into account. prev() can only be applied when iterator is
   // already positioned on a valid record.
   ld_assert(forward || data_iterator_->state() != IteratorState::AT_RECORD ||

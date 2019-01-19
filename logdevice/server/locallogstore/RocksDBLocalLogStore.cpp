@@ -30,6 +30,7 @@
 #include "logdevice/server/locallogstore/IteratorSearch.h"
 #include "logdevice/server/locallogstore/RocksDBEnv.h"
 #include "logdevice/server/locallogstore/RocksDBKeyFormat.h"
+#include "logdevice/server/locallogstore/RocksDBWriterMergeOperator.h"
 #include "logdevice/server/locallogstore/WriteOps.h"
 
 namespace facebook { namespace logdevice {
@@ -431,6 +432,29 @@ class RocksDBLocalLogStore::CSIWrapper::DataIterator
   rocksdb::ReadOptions rocks_options_;
 
   folly::Optional<RocksDBIterator> iterator_;
+
+  // TODO (#10357210):
+  //   merged_value_ and handleKeyFormatMigration() are a temporary
+  //   compatibility measure. Remove them after migrating to new rocksdb key
+  //   format. Remove the #include of RocksDBWriterMergeOperator.h too.
+
+  // If not empty, getRecord() returns this string instead of iterator_'s value.
+  std::string merged_value_;
+
+  // Called after moving iterator forward.
+  // If the current LSN has both an old-format and a new-format key, merges the
+  // values for these keys together, into merged_value_.
+  // There are some correctness caveats:
+  //  - For performance, the merging is only done if the new-format record is
+  //    an amend. If it's a full record, we just use that record without looking
+  //    for an old-format record. In particular, if you downgrade to a version
+  //    that writes in the old format, that version sometimes won't be able to
+  //    amend records.
+  //  - The merging is only done when moving iterator forward. seekForPrev()
+  //    and prev() will just return the first value they see. This should be
+  //    ok because backwards iteration is only used for finding LNG (which is
+  //    immutable) and tail record (which is not very important).
+  void handleKeyFormatMigration();
 };
 
 RocksDBLocalLogStore::CSIWrapper::CSIWrapper(
@@ -1307,16 +1331,22 @@ Location RocksDBLocalLogStore::CSIWrapper::DataIterator::getLocation() const {
 
 Slice RocksDBLocalLogStore::CSIWrapper::DataIterator::getRecord() const {
   ld_check(state() == IteratorState::AT_RECORD);
+  if (!merged_value_.empty()) {
+    return facebook::logdevice::Slice(
+        merged_value_.data(), merged_value_.size());
+  }
   rocksdb::Slice slice = iterator_->value();
   return facebook::logdevice::Slice(slice.data(), slice.size());
 }
 
 void RocksDBLocalLogStore::CSIWrapper::DataIterator::seek(Location loc,
                                                           Direction dir) {
+  merged_value_.clear();
   createIteratorIfNeeded();
   DataKey key(loc.log_id, loc.lsn);
   if (dir == Direction::FORWARD) {
     ROCKSDB_ACCOUNTED_SEEK(iterator_, key.sliceForForwardSeek(), record);
+    handleKeyFormatMigration();
   } else {
     ROCKSDB_ACCOUNTED_SEEK_FOR_PREV(
         iterator_, key.sliceForBackwardSeek(), record);
@@ -1327,11 +1357,102 @@ void RocksDBLocalLogStore::CSIWrapper::DataIterator::seek(Location loc,
 }
 
 void RocksDBLocalLogStore::CSIWrapper::DataIterator::step(Direction dir) {
+  merged_value_.clear();
   ld_assert(state() == IteratorState::AT_RECORD);
   if (dir == Direction::FORWARD) {
     ROCKSDB_ACCOUNTED_NEXT(iterator_, record);
+    handleKeyFormatMigration();
   } else {
     ROCKSDB_ACCOUNTED_PREV(iterator_, record);
+  }
+}
+
+void RocksDBLocalLogStore::CSIWrapper::DataIterator::
+    handleKeyFormatMigration() {
+  ld_check(iterator_.hasValue());
+  while (true) {
+    // If we're standing on a dangling amend in new format, step forward and
+    // see if the next key has the same lsn. If it does, merge the two together.
+    // Note that the new-format key is a prefix of old-format key and therefore
+    // always comes immediately before the old-format key.
+    // If we encounter any error, just stop. The outer code will independently
+    // notice and handle it.
+
+    if (!iterator_->status().ok() || !iterator_->Valid()) {
+      break;
+    }
+
+    rocksdb::Slice key = iterator_->key();
+    if (!DataKey::valid(key.data(), key.size()) ||
+        !DataKey::isInNewFormat(key.data(), key.size())) {
+      break;
+    }
+
+    logid_t log = DataKey::getLogID(key.data());
+    lsn_t lsn = DataKey::getLSN(key.data());
+
+    if (parent_->log_id_.hasValue() && log != parent_->log_id_.value()) {
+      break;
+    }
+
+    rocksdb::Slice value = iterator_->value();
+    facebook::logdevice::Slice slice(value.data(), value.size());
+    LocalLogStoreRecordFormat::flags_t flags;
+    int rv = LocalLogStoreRecordFormat::parseFlags(slice, &flags);
+    if (rv != 0 || !(flags & LocalLogStoreRecordFormat::FLAG_AMEND)) {
+      // Common case: we've got a full record (not amend) in new format.
+      break;
+    }
+
+    // Alright, we've got a dangling amend in new format.
+    STAT_INCR(getStatsHolder(), data_key_format_migration_steps);
+
+    // Save the amend.
+    std::string amend_str(slice.size + 1, '\0');
+    amend_str[0] = RocksDBWriterMergeOperator::DATA_MERGE_HEADER;
+    memcpy(&amend_str[1], slice.data, slice.size);
+
+    // Step forward and check if we're still on record and still on same lsn.
+    ROCKSDB_ACCOUNTED_NEXT(iterator_, record);
+    if (!iterator_->status().ok() || !iterator_->Valid()) {
+      break;
+    }
+    key = iterator_->key();
+    if (!DataKey::valid(key.data(), key.size())) {
+      break;
+    }
+    if (DataKey::getLogID(key.data()) != log ||
+        DataKey::getLSN(key.data()) != lsn) {
+      // Fell through to the next record. Let's keep going.
+      continue;
+    }
+
+    // Alright, we've got two values for the same LSN.
+    // Merge them, the same way rocksdb would merge values for the same key.
+    STAT_INCR(getStatsHolder(), data_key_format_migration_merges);
+    RocksDBWriterMergeOperator merge_op(parent_->getShardIdx());
+    std::vector<rocksdb::Slice> operands = {
+        rocksdb::Slice(amend_str.data(), amend_str.size())};
+    value = iterator_->value();
+    rocksdb::MergeOperator::MergeOperationInput input(
+        key, &value, operands, nullptr);
+    rocksdb::Slice existing_operand(nullptr, 0);
+    rocksdb::MergeOperator::MergeOperationOutput output(
+        merged_value_, existing_operand);
+    bool ok = merge_op.FullMergeV2(input, &output);
+    if (!ok) {
+      // Weird. Let's just stop here. The merge operator has logged the error.
+      merged_value_.clear();
+    } else {
+      // We applied the new-format amend to the old-format record.
+      // Convert merge operator's output to string and we're done.
+      ld_check_ne(existing_operand.empty(), merged_value_.empty());
+      ld_check_eq(existing_operand.empty(), existing_operand.data() == nullptr);
+      if (merged_value_.empty()) {
+        merged_value_ = existing_operand.ToString();
+      }
+    }
+    break;
   }
 }
 

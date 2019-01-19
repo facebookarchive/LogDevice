@@ -1273,6 +1273,12 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
   // inconsistent with data in partitions.
   bool finishInterruptedDrops();
 
+  // TODO (#10357210): remove when migration is complete.
+  // Called by the constructor.
+  // Reads all records in unpartitioned column family and converts them from
+  // old to new DataKey format if needed.
+  bool convertDataKeyFormat();
+
   // Helper method to wrap the newly created or recovered column family handle
   // to RocksDBCFPtr.
   RocksDBCFPtr

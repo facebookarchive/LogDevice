@@ -732,6 +732,10 @@ ITERATOR_OP_STATS(record_next)
 ITERATOR_OP_STATS(record_prev)
 ////////////////////////////////////////////////////////////////////////////////
 
+// TODO (#10357210): remove
+STAT_DEFINE(data_key_format_migration_steps, SUM)
+STAT_DEFINE(data_key_format_migration_merges, SUM)
+
 // Number of calls to LocalLogStoreReader::read()
 STAT_DEFINE(read_streams_num_ops, SUM)
 STAT_DEFINE(read_streams_num_ops_rebuilding, SUM)

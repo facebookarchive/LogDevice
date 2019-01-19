@@ -140,6 +140,10 @@ class DataKey {
     return offsetof(DataKey, wave_DEPRECATED_);
   }
 
+  static bool isInNewFormat(const void* blob, size_t size) {
+    return size == offsetof(DataKey, wave_DEPRECATED_);
+  }
+
   /**
    * Extracts the log ID from a memory segment that is a DataKey.
    */

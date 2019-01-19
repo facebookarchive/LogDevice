@@ -641,6 +641,7 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
     uint64_t timestamp;
     Durability durability = Durability::ASYNC_WRITE;
     bool index = false;
+    bool is_amend = false;
     std::map<KeyType, std::string> optional_keys;
     std::string additional_payload;
 
@@ -719,6 +720,10 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
       if (key.hasValue()) {
         optional_keys.insert(std::make_pair(KeyType::FINDKEY, key.value()));
       }
+    }
+    TestRecord& amend() {
+      is_amend = true;
+      return *this;
     }
     bool operator<(const TestRecord& rhs) const {
       return std::tie(logid, lsn) < std::tie(rhs.logid, rhs.lsn);
@@ -1073,7 +1078,8 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
   // easily checked.
   void put(std::vector<TestRecord> ops,
            std::vector<StoreChainLink> csi_copyset = {},
-           bool assert_write_fail = false) {
+           bool assert_write_fail = false,
+           DataKeyFormat key_format = DataKeyFormat::DEFAULT) {
     std::vector<PutWriteOp> put_write_ops(ops.size());
     std::vector<DeleteWriteOp> delete_write_ops(ops.size());
     std::vector<const WriteOp*> op_ptrs(ops.size());
@@ -1083,6 +1089,10 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
     std::vector<std::string> copyset_index_entries(ops.size());
     if (csi_copyset.empty()) {
       csi_copyset = formCopySet();
+    }
+
+    if (key_format != DataKeyFormat::DEFAULT) {
+      have_old_data_key_format_ = true;
     }
 
     for (size_t i = 0; i < ops.size(); ++i) {
@@ -1097,9 +1107,11 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
         if (!ops[i].additional_payload.empty()) {
           no_additional_payloads_ = false;
         }
-        payloads[i] =
-            formTestPayload(ops[i].logid, ops[i].lsn, ops[i].timestamp) +
-            ops[i].additional_payload;
+        if (!ops[i].is_amend) {
+          payloads[i] =
+              formTestPayload(ops[i].logid, ops[i].lsn, ops[i].timestamp) +
+              ops[i].additional_payload;
+        }
 
         STORE_Header hdr =
             formStoreHeader(ops[i].timestamp, csi_copyset.size());
@@ -1113,9 +1125,12 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
             hdr.flags |= STORE_Header::WRITTEN_BY_RECOVERY;
             break;
         }
+        if (ops[i].is_amend) {
+          hdr.flags |= STORE_Header::AMEND;
+        }
         Slice header = formRecordHeader(
             headers[i], hdr, csi_copyset.data(), ops[i].optional_keys);
-        Slice payload(&payloads[i][0], payloads[i].size());
+        Slice payload(payloads[i].data(), payloads[i].size());
         Slice csi_entry = LocalLogStoreRecordFormat::formCopySetIndexEntry(
             hdr,
             STORE_Extra(),
@@ -1136,6 +1151,7 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
                        {},
                        ops[i].durability,
                        ops[i].store_type == TestRecord::StoreType::REBUILD);
+        put_write_ops[i].TEST_data_key_format = key_format;
 
         if (ops[i].index) {
           uint64_t timestamp_big_endian = htobe64(ops[i].timestamp);
@@ -1186,10 +1202,11 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
   void verifyRecord(logid_t log, lsn_t lsn, Slice record) {
     std::chrono::milliseconds timestamp;
     Payload payload;
+    LocalLogStoreRecordFormat::flags_t flags;
     int rv = LocalLogStoreRecordFormat::parse(record,
                                               &timestamp,
                                               nullptr,
-                                              nullptr,
+                                              &flags,
                                               nullptr,
                                               nullptr,
                                               nullptr,
@@ -1204,13 +1221,18 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
       EXPECT_EQ((uint64_t)timestamp.count(), FUTURE + lsn * 2);
     }
 
-    std::string expected_payload =
-        formTestPayload(log, lsn, (uint64_t)timestamp.count());
-    if (no_additional_payloads_) {
-      EXPECT_EQ(expected_payload, payload.toString());
+    bool is_amend = flags & LocalLogStoreRecordFormat::FLAG_AMEND;
+    if (is_amend) {
+      EXPECT_EQ(0, payload.size());
     } else {
-      EXPECT_EQ(expected_payload,
-                payload.toString().substr(0, expected_payload.size()));
+      std::string expected_payload =
+          formTestPayload(log, lsn, (uint64_t)timestamp.count());
+      if (no_additional_payloads_) {
+        EXPECT_EQ(expected_payload, payload.toString());
+      } else {
+        EXPECT_EQ(expected_payload,
+                  payload.toString().substr(0, expected_payload.size()));
+      }
     }
   }
 
@@ -1314,7 +1336,9 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
       std::unique_ptr<rocksdb::Iterator> it(db->NewIterator(
           RocksDBLogStoreBase::getDefaultReadOptions(), cf_handles[i].get()));
       for (it->Seek(first_key_slice); it->Valid(); it->Next()) {
-        EXPECT_EQ(DataKey::sizeForWriting(), it->key().size());
+        if (!have_old_data_key_format_) {
+          EXPECT_EQ(DataKey::sizeForWriting(), it->key().size());
+        }
         EXPECT_TRUE(DataKey::valid(it->key().data(), it->key().size()));
         EXPECT_EQ(1, extractWave(*it));
 
@@ -1534,6 +1558,12 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
   // do additional checks. Automatically set to false when a record with
   // non-default timestamp is written.
   bool timestamps_are_lsns_ = true;
+
+  // There may be amends without corresponding full records.
+  bool have_dangling_amends_ = false;
+
+  // There may be DataKey-s in old format.
+  bool have_old_data_key_format_ = false;
 
   // If true, payloads consist of just log ID, LSN and timestamp.
   bool no_additional_payloads_ = true;
@@ -9749,4 +9779,137 @@ TEST_F(PartitionedRocksDBStoreTest, RocksDBMemTableStatsTest) {
   ASSERT_LE(total_usage_, stats_after.active_memtable_size);
   ASSERT_LE(metadata_stats.active_memtable_size,
             metadata_stats_after.active_memtable_size);
+}
+
+TEST_F(PartitionedRocksDBStoreTest, DataKeyFormatConversion) {
+  // Cases tested in each log:
+  //  * Full record in old format: lsn 10.
+  //  * Full record in new format: lsn 15.
+  //  * Full record in old format + amend in new format: lsn 20.
+  //  * Full record in new format + amend in old format: lsn 25.
+  //  * Amend in old format: lsn 30.
+  //  * Amend in new format: lsn 35.
+  //  * Amend in old format + amend in new format: lsn 40.
+
+  have_dangling_amends_ = true;
+  logid_t data_log(1);
+  logid_t meta_log = MetaDataLog::metaDataLogID(data_log);
+  std::vector<StoreChainLink> old_format_cs = {
+      StoreChainLink{ShardID(19, 0), ClientID::INVALID}};
+  std::vector<StoreChainLink> new_format_cs = {
+      StoreChainLink{ShardID(42, 0), ClientID::INVALID}};
+
+  for (logid_t log : {data_log, meta_log}) {
+    // Records in old format.
+    put({TestRecord(log, 10),
+         TestRecord(log, 20),
+         TestRecord(log, 25).amend(),
+         TestRecord(log, 30).amend(),
+         TestRecord(log, 40).amend()},
+        old_format_cs,
+        false,
+        DataKeyFormat::OLD);
+    // Records in new format.
+    put({TestRecord(log, 15),
+         TestRecord(log, 20).amend(),
+         TestRecord(log, 25),
+         TestRecord(log, 35).amend(),
+         TestRecord(log, 40).amend()},
+        new_format_cs,
+        false,
+        DataKeyFormat::NEW);
+  }
+
+  auto stats = stats_.aggregate();
+  EXPECT_EQ(0, stats.data_key_format_migration_steps);
+  EXPECT_EQ(0, stats.data_key_format_migration_merges);
+
+  auto check_record =
+      [&](LocalLogStore::ReadIterator& it, lsn_t lsn, bool new_cs) {
+        SCOPED_TRACE(std::to_string(lsn));
+        ASSERT_EQ(lsn, it.getLSN());
+        Slice record = it.getRecord();
+        LocalLogStoreRecordFormat::flags_t flags;
+        copyset_size_t cs_size;
+        std::array<ShardID, COPYSET_SIZE_MAX> copyset;
+        int rv = LocalLogStoreRecordFormat::parse(record,
+                                                  nullptr,
+                                                  nullptr,
+                                                  &flags,
+                                                  nullptr,
+                                                  &cs_size,
+                                                  &copyset[0],
+                                                  copyset.size(),
+                                                  nullptr,
+                                                  nullptr,
+                                                  nullptr,
+                                                  THIS_SHARD);
+        ASSERT_EQ(0, rv);
+        ASSERT_EQ(1, cs_size);
+        if (new_cs) {
+          EXPECT_EQ(new_format_cs[0].destination, copyset[0]);
+        } else {
+          EXPECT_EQ(old_format_cs[0].destination, copyset[0]);
+        }
+      };
+
+  auto check = [&](logid_t log, bool converted = false) {
+    SCOPED_TRACE(std::to_string(log.val()));
+    auto it = store_->read(
+        log,
+        LocalLogStore::ReadOptions(
+            "PartitionedRocksDBStoreTest.DataKeyFormatConversion"));
+
+    it->seek(5);
+    ASSERT_EQ(IteratorState::AT_RECORD, it->state());
+    check_record(*it, 10, false);
+
+    it->next();
+    ASSERT_EQ(IteratorState::AT_RECORD, it->state());
+    check_record(*it, 15, true);
+
+    it->next();
+    ASSERT_EQ(IteratorState::AT_RECORD, it->state());
+    check_record(*it, 20, !converted);
+
+    it->next();
+    ASSERT_EQ(IteratorState::AT_RECORD, it->state());
+    check_record(*it, 25, !converted);
+
+    it->next();
+    EXPECT_EQ(IteratorState::AT_END, it->state());
+  };
+
+  {
+    SCOPED_TRACE("called from here");
+    check(data_log);
+    check(meta_log);
+  }
+
+  stats = stats_.aggregate();
+  EXPECT_EQ(6, stats.data_key_format_migration_steps);
+  EXPECT_EQ(4, stats.data_key_format_migration_merges);
+
+  auto data = readAndCheck();
+  EXPECT_EQ(std::vector<lsn_t>({10, 15, 20, 20, 25, 25, 30, 35, 40, 40}),
+            data.at(0).at(data_log).records);
+  openStore();
+
+  stats = stats_.aggregate();
+  EXPECT_EQ(6, stats.data_key_format_migration_steps);
+  EXPECT_EQ(4, stats.data_key_format_migration_merges);
+
+  {
+    SCOPED_TRACE("called from here");
+    check(data_log);
+    check(meta_log, true);
+  }
+
+  stats = stats_.aggregate();
+  EXPECT_EQ(12, stats.data_key_format_migration_steps);
+  EXPECT_EQ(6, stats.data_key_format_migration_merges);
+
+  data = readAndCheck();
+  EXPECT_EQ(std::vector<lsn_t>({10, 15, 20, 20, 25, 25, 30, 35, 40, 40}),
+            data.at(0).at(data_log).records);
 }
