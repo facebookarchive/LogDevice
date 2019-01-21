@@ -386,6 +386,14 @@ bool CheckImpactForLogRequest::checkReadAvailability(
 
     if (node && node->isReadableStorageNode()) {
       AuthoritativeStatus status = shard_status_.getShardStatus(shard);
+      if (shard_status_.shardIsTimeRangeRebuilding(
+              shard.node(), shard.shard())) {
+        // The shard has time-range rebuilding, we will lean on the safe-side
+        // and mark this shard as UNAVAILABLE instead of FULLY_AUTHORITATIVE to
+        // ensure we block operations that _may_ cause the mini-rebuilding to
+        // stall.
+        status = AuthoritativeStatus::UNAVAILABLE;
+      }
       available_node_set.setShardAuthoritativeStatus(shard, status);
       if ((!op_shards_.count(shard)) && isAlive(shard.node())) {
         available_node_set.setShardAttribute(shard, true);
