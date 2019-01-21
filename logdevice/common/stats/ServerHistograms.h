@@ -23,6 +23,7 @@ struct ServerHistograms : public HistogramBundle {
   HistogramBundle::MapType getMap() override {
     return {
         {"append_latency", &append_latency},
+        {"store_bw_wait_latency", &store_bw_wait_latency},
         {"write_to_read_latency", &write_to_read_latency},
         {"store_timeouts", &store_timeouts},
         {"requests_queue_latency", &requests_queue_latency},
@@ -58,6 +59,8 @@ struct ServerHistograms : public HistogramBundle {
   LatencyHistogram append_latency;
 
   LatencyHistogram write_to_read_latency;
+
+  LatencyHistogram store_bw_wait_latency;
 
   LatencyHistogram store_timeouts;
 

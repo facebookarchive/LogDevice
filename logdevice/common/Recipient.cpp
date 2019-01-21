@@ -9,6 +9,8 @@
 
 #include "logdevice/common/Appender.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/stats/ServerHistograms.h"
+#include "logdevice/common/stats/Stats.h"
 
 namespace facebook { namespace logdevice {
 
@@ -26,6 +28,9 @@ void Recipient::SocketClosedCallback::activate() {
 
 void Recipient::ResendStoreCallback::operator()(FlowGroup&, std::mutex&) {
   ld_check(msg_);
+  ld_check(set_message_ts_.time_since_epoch().count());
+  HISTOGRAM_ADD(
+      Worker::stats(), store_bw_wait_latency, usec_since(set_message_ts_));
   appender_->sendDeferredSTORE(std::move(msg_), shard_);
 }
 

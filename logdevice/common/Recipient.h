@@ -59,7 +59,9 @@ class Recipient {
   class ResendStoreCallback : public BWAvailableCallback {
    public:
     ResendStoreCallback(Appender& a, Recipient& r)
-        : appender_(&a), shard_(r.getShardID()) {}
+        : appender_(&a),
+          shard_(r.getShardID()),
+          set_message_ts_(std::chrono::milliseconds(0)) {}
 
     Appender* appender() const {
       return appender_;
@@ -73,18 +75,20 @@ class Recipient {
       BWAvailableCallback::swap(other);
       std::swap(shard_, other.shard_);
       msg_.swap(other.msg_);
-
+      std::swap(set_message_ts_, other.set_message_ts_);
       ld_check(appender_ == other.appender_);
     }
 
     void setMessage(std::unique_ptr<STORE_Message> msg) {
       msg_ = std::move(msg);
+      set_message_ts_ = std::chrono::steady_clock::now();
     }
 
    private:
     Appender* appender_;
     ShardID shard_;
     std::unique_ptr<STORE_Message> msg_;
+    std::chrono::steady_clock::time_point set_message_ts_;
   };
 
   enum class State : uint8_t {
