@@ -42,7 +42,6 @@ struct Params {
   FIELD(unsigned int, required_client_count, 1)
   FIELD(double, remove_worst_percentage, 0.0)
   FIELD(unsigned int, send_worst_client_count, 1)
-  FIELD(bool, observe_only, false)
   FIELD(bool, use_adaptive_boycott_duration, false)
   FIELD(std::chrono::milliseconds,
         boycott_min_adaptive_duration,
@@ -168,8 +167,6 @@ class NodeStatsControllerIntegrationTest
             // Use a relatively big relative margin to ensure the tests are not
             // flaky.
             .setParam("--node-stats-boycott-relative-margin", "0.5")
-            .setParam("--boycotts-observe-only",
-                      params.observe_only ? "true" : "false")
             .setParam("--use-sequencer-affinity", "true")
             /* will lazily assign sequencers and enable gossip */
             .useHashBasedSequencerAssignment()
@@ -719,50 +716,6 @@ TEST_P(NodeStatsControllerIntegrationTest, Disable) {
   updateSettings({{"node-stats-max-boycott-count", "0"}});
 
   waitUntilBoycottsOnAllNodes({});
-}
-
-TEST_P(NodeStatsControllerIntegrationTest, DisableObserveOnly) {
-  unsigned int node_count = 5;
-  node_index_t outlier_node{3};
-
-  initializeCluster(Params{}
-                        .set_max_boycott_count(1)
-                        .set_node_count(node_count)
-                        .set_observe_only(false)
-                        .set_boycott_duration(std::chrono::hours{1}));
-
-  auto client = createClient();
-  setErrorInjection(client.get(), {outlier_node}, {0.5});
-
-  EXPECT_EQ(outlier_node,
-            getSequencerForLog(client.get(), getDefaultLog(outlier_node)));
-
-  AppendThread appender;
-  appender.start(client.get(), node_count);
-
-  waitUntilBoycottsOnAllNodes({outlier_node});
-
-  EXPECT_NE(outlier_node,
-            getSequencerForLog(client.get(), getDefaultLog(outlier_node)));
-
-  updateSettings({{"boycotts-observe-only", "true"}});
-
-  wait_until("Sequencer is back to normal", [&] {
-    return outlier_node ==
-        getSequencerForLog(client.get(), getDefaultLog(outlier_node));
-  });
-
-  // all the nodes should still consider the node boycotted, but it should not
-  // affect sequencer placement
-  EXPECT_TRUE(std::all_of(
-      cluster->getNodes().begin(),
-      cluster->getNodes().end(),
-      [&](auto& node_entry) {
-        auto boycotts = node_entry.second->gossipBoycottState();
-        auto boycott_count = node_entry.second->stats()["boycotts_seen"];
-        return boycotts["N" + std::to_string(outlier_node)] == true &&
-            boycott_count == 1;
-      }));
 }
 
 TEST_P(NodeStatsControllerIntegrationTest, NoisyTest) {

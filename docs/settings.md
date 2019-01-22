@@ -411,7 +411,6 @@ sidebar_label: Settings
 ## Sequencer boycotting
 |   Name    |   Description   |  Default  |   Notes   |
 |-----------|-----------------|:---------:|-----------|
-| boycotts-observe-only | If true, the entire system of detecting append success ratio outliers and performing boycotts will continue to work as expected, with stats getting updated and boycotts propagating with gossip, but will no longer affect sequencer placement. Used to be able to observe how the feature works without committing. | false | **experimental** |
 | node-stats-boycott-adaptive-duration-decrease-rate | (experimental) the additive decrease rate of the adaptive boycottingduration | 1min | **experimental**, server&nbsp;only |
 | node-stats-boycott-adaptive-duration-decrease-time-step | (experimental) the time step of the decrease of the adaptive boycottingduration | 30s | **experimental**, server&nbsp;only |
 | node-stats-boycott-adaptive-duration-increase-factor | (experimental) the multiplicative increase factor of the adaptiveboycotting duration | 2 | **experimental**, server&nbsp;only |

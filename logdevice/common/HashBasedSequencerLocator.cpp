@@ -57,15 +57,8 @@ void HashBasedSequencerLocator::locateContinuation(
   auto cs = getClusterState();
   ld_check(cs);
   NodeID res;
-  bool should_consider_boycotts =
-      !getSettings().sequencer_boycotting.boycotts_observe_only;
-  auto rv = locateSequencer(log_id,
-                            config.get(),
-                            log_attrs,
-                            cs,
-                            &res,
-                            should_consider_boycotts,
-                            sequencers);
+  auto rv =
+      locateSequencer(log_id, config.get(), log_attrs, cs, &res, sequencers);
   if (rv == 0) {
     cf(E::OK, log_id, res);
   } else {
@@ -78,8 +71,7 @@ node_index_t HashBasedSequencerLocator::getPrimarySequencerNode(
     const ServerConfig* config,
     const logsconfig::LogAttributes* log_attrs) {
   NodeID res;
-  auto rv = locateSequencer(
-      log_id, config, log_attrs, /* cs */ nullptr, &res, /* boycotts */ false);
+  auto rv = locateSequencer(log_id, config, log_attrs, /* cs */ nullptr, &res);
   if (rv == 0) {
     return res.index();
   } else {
@@ -94,7 +86,6 @@ int HashBasedSequencerLocator::locateSequencer(
     const logsconfig::LogAttributes* log_attrs,
     ClusterState* cs,
     NodeID* out_sequencer,
-    bool should_consider_boycotts,
     const ServerConfig::SequencersConfig* sequencers) {
   ld_check(config != nullptr);
   ld_check(out_sequencer != nullptr);
@@ -124,8 +115,7 @@ int HashBasedSequencerLocator::locateSequencer(
   // from the search (e.g. those that were determined to be unavailable) set to
   // zero.
 
-  auto can_we_route_to = [&sequencers, cs, should_consider_boycotts, log_id](
-                             uint64_t node, double w) {
+  auto can_we_route_to = [&sequencers, cs, log_id](uint64_t node, double w) {
     if (w <= 0.0) {
       return false;
     } else if (!cs) {
@@ -139,8 +129,7 @@ int HashBasedSequencerLocator::locateSequencer(
           // internal log).
           (is_internal_log &&
            cs->isNodeStarting(sequencers->nodes[node].index()));
-      return is_node_ready &&
-          (!should_consider_boycotts || !cs->isNodeBoycotted(node));
+      return is_node_ready && !cs->isNodeBoycotted(node);
     }
   };
 

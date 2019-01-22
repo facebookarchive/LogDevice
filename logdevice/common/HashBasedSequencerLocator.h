@@ -65,7 +65,6 @@ class HashBasedSequencerLocator : public SequencerLocator {
       const logsconfig::LogAttributes* log_attrs, // if null, no affinity
       ClusterState* cs, // if null, all nodes considered available
       NodeID* out_sequencer,
-      bool should_consider_boycotts,
       const ServerConfig::SequencersConfig* sequencers = nullptr);
 
   bool isAllowedToCache() const override;

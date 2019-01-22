@@ -84,10 +84,6 @@ struct SequencerBoycottingSettings {
   // (experimental) Use RMSD for outlier detection in sequencer boycotting.
   bool node_stats_boycott_use_rmsd;
 
-  // if this value is true, the entire system for boycotting will continue to
-  // work as expected, but it will no longer affect sequencer placement
-  bool boycotts_observe_only;
-
   // If this value is true, sequencer boycotting will use adaptive durations
   // instead of the default fixed duration.
   bool node_stats_boycott_use_adaptive_duration;

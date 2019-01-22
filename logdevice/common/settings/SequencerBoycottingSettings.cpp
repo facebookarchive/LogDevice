@@ -152,17 +152,6 @@ void SequencerBoycottingSettings::defineSettings(SettingEasyInit& init) {
        "maximum of node-count * node-stats-send-worst-client-count",
        SERVER | EXPERIMENTAL,
        SettingsCategory::SequencerBoycotting);
-  init("boycotts-observe-only",
-       &boycotts_observe_only,
-       "false",
-       nullptr,
-       "If true, the entire system of detecting append success ratio outliers "
-       "and performing boycotts will continue to work as expected, with stats "
-       "getting updated and boycotts propagating with gossip, but will no "
-       "longer affect sequencer placement. Used to be able to observe how the "
-       "feature works without committing.",
-       SERVER | CLIENT | EXPERIMENTAL,
-       SettingsCategory::SequencerBoycotting);
   init("node-stats-boycott-use-rmsd",
        &node_stats_boycott_use_rmsd,
        "false",
