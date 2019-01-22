@@ -71,7 +71,10 @@ class AppendThread {
   }
 
   void stop() {
-    stop_ = true;
+    if (stop_.exchange(true)) {
+      // It's already stopped.
+      return;
+    }
     for (auto& t : append_threads_) {
       t.join();
     }
@@ -152,10 +155,11 @@ class GraylistingTrackerIntegrationTest : public IntegrationTestBase {
   bool
   waitUntillGraylistOnNode(node_index_t on_node,
                            std::string message,
-                           folly::Function<bool(GraylistedNodes)> predicate) {
+                           folly::Function<bool(GraylistedNodes)> predicate,
+                           std::chrono::seconds duration = 30s) {
     return wait_until(message.c_str(),
                       [&]() { return predicate(getGraylistedNodes(on_node)); },
-                      std::chrono::steady_clock::now() + 30s) == 0;
+                      std::chrono::steady_clock::now() + duration) == 0;
   }
 
   std::unique_ptr<Cluster> cluster;
@@ -313,7 +317,7 @@ TEST_F(GraylistingTrackerIntegrationTest, DisablingGraylistByNumNodes) {
 
 TEST_F(GraylistingTrackerIntegrationTest, NodeRecoversInGracePeriod) {
   initializeCluster(
-      Params{}.set_graylisting_duration(1h).set_graylisting_grace_period(30s));
+      Params{}.set_graylisting_duration(1h).set_graylisting_grace_period(60s));
   auto client = cluster->createClient();
 
   AppendThread appender;
@@ -323,12 +327,11 @@ TEST_F(GraylistingTrackerIntegrationTest, NodeRecoversInGracePeriod) {
   appender.start(client.get(), 1, 10);
 
   std::this_thread::sleep_for(10s);
-
-  cluster->getNode(3).injectShardFault(
-      "all", "none", "none", "none", false, folly::none, folly::none);
+  appender.stop();
 
   EXPECT_FALSE(waitUntillGraylistOnNode(
-      0, "N0 has nothing in the graylist", [&](GraylistedNodes nodes) {
-        return nodes.size() > 0;
-      }));
+      0,
+      "N0 has nothing in the graylist",
+      [&](GraylistedNodes nodes) { return nodes.size() > 0; },
+      60s));
 }
