@@ -57,6 +57,10 @@
 #include "logdevice/replication_checker/LogErrorTracker.h"
 #include "logdevice/replication_checker/ReplicationCheckerSettings.h"
 
+// Signal handlers.
+void print_stats_signal(int);
+void print_stats_and_die_signal(int);
+
 using namespace facebook::logdevice;
 using namespace facebook::logdevice::configuration;
 using namespace facebook::logdevice::MetaDataLog;
@@ -97,6 +101,7 @@ std::vector<LogCheckRequest> logs_to_check;
 
 std::chrono::steady_clock::time_point start_time;
 size_t logs_to_check_initial_count;
+std::atomic<size_t> num_failures_to_stop{0};
 
 class PerWorkerCoordinatorRequest;
 std::vector<std::unique_ptr<PerWorkerCoordinatorRequest>> worker_coordinators;
@@ -400,6 +405,13 @@ void maybeReportRecord(logid_t log,
       copy["shard"] = formatShardIDWithAuthoritativeness(it.first, auths);
       dynamic[lsn_s]["copies"].push_back(std::move(copy));
     }
+  }
+  // Too many failures, killing the process.
+  if (checker_settings->stop_after_num_errors > 0 &&
+      num_failures_to_stop.fetch_sub(1) == 0) {
+    ld_info("Ran into %lu errors. Shutting down replication checker.",
+            checker_settings->stop_after_num_errors);
+    print_stats_and_die_signal(0);
   }
 }
 
@@ -1948,11 +1960,16 @@ int main(int argc, const char** argv) {
 
   setup_dump_state_trigger();
 
+  num_failures_to_stop.store(checker_settings->stop_after_num_errors);
+
   ld_info("will check %lu logs, %lu logs at a time on each of the %d worker "
-          "threads",
+          "threads %s",
           logs_to_check.size(),
           checker_settings->logs_in_flight_per_worker,
-          processor->getWorkerCount(WorkerType::GENERAL));
+          processor->getWorkerCount(WorkerType::GENERAL),
+          folly::sformat(
+              ". will stop process on {} errors", num_failures_to_stop.load())
+              .c_str());
 
   auto perf_stats = std::make_shared<PerfStats>();
   perf_stats->total_logs = logs_to_check.size();

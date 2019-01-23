@@ -179,6 +179,14 @@ void ReplicationCheckerSettings::defineSettings(SettingEasyInit& init) {
        nullptr,
        "Logdevice client timeout",
        CLIENT);
+  init("stop-after-num-errors",
+       &stop_after_num_errors,
+       "0",
+       nullptr,
+       "Stop checker process and bail after reporting these many number of "
+       "errors. This allows quick failure of tests instead of spending a lot "
+       "of time continuing and failing later.",
+       CLIENT);
 }
 
 }} // namespace facebook::logdevice

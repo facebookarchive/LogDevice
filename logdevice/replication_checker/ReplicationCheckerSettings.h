@@ -51,6 +51,8 @@ class ReplicationCheckerSettings : public SettingsBundle {
   bool enable_noisy_errors;
   RecordLevelError dont_fail_on_errors;
   ReportErrorsMode report_errors;
+  // See .cpp
+  size_t stop_after_num_errors;
 
  private:
   std::string dont_fail_on_tmp_;
