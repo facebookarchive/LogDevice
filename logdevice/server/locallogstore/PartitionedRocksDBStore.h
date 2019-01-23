@@ -1279,11 +1279,6 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
   // old to new DataKey format if needed.
   bool convertDataKeyFormat();
 
-  // Helper method to wrap the newly created or recovered column family handle
-  // to RocksDBCFPtr.
-  RocksDBCFPtr
-  wrapAndRegisterCF(std::unique_ptr<rocksdb::ColumnFamilyHandle> handle);
-
   // Helper method which creates a new column family with the given name.
   // Returns a handle to the column family or nullptr on failure.
   RocksDBCFPtr createColumnFamily(std::string name,
