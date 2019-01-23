@@ -29,7 +29,7 @@ inline uint16_t get_initial_ttl(size_t group_size, size_t num_groups) {
 ClientReadersFlowTracer::ClientReadersFlowTracer(
     std::shared_ptr<TraceLogger> logger,
     ClientReadStream* owner)
-    : SampledTracer(std::move(logger)), owner_(owner) {
+    : SampledTracer(std::move(logger)), ref_holder_(this), owner_(owner) {
   timer_ = std::make_unique<Timer>([this] { onTimerTriggered(); });
 
   // update settings
@@ -134,14 +134,14 @@ void ClientReadersFlowTracer::sendSyncSequencerRequest() {
   auto ssr = std::make_unique<SyncSequencerRequest>(
       owner_->log_id_,
       SyncSequencerRequest::INCLUDE_TAIL_ATTRIBUTES,
-      [weak_ptr = std::weak_ptr<ClientReadersFlowTracer>(shared_from_this())](
+      [weak_ref = ref_holder_.ref()](
           Status st,
           NodeID seq_node,
           lsn_t next_lsn,
           std::unique_ptr<LogTailAttributes> attrs,
           std::shared_ptr<const EpochMetaDataMap> /*unused*/,
           std::shared_ptr<TailRecord> /*unused*/) {
-        if (auto ptr = weak_ptr.lock()) {
+        if (auto ptr = weak_ref.get()) {
           ptr->onSyncSequencerRequestResponse(
               st, seq_node, next_lsn, std::move(attrs));
         }

@@ -41,10 +41,10 @@ class PermissionChecker {
   /**
    * Queries the permission store to determine if the provided Principal can
    * perform the specified ACTION on the logid. Result is supplied to callback
-   * function. Check could be performed on calling thread or if is potentially
-   * expensive, executed in background thread. In any case callback is executed
-   * on the original thread.
-   *
+   * function.
+   * Must be called from a worker thread. The callback is called either
+   * synchronously inside the isAllowed() call or later on the same worker
+   * thread.
    *
    * @param action      The action to be performed by the principal
    * @param principal   The principal containing the identity of the client

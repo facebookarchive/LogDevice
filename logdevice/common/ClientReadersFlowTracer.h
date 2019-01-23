@@ -13,11 +13,14 @@
 
 #include "logdevice/common/OffsetMap.h"
 #include "logdevice/common/SampledTracer.h"
+#include "logdevice/common/WeakRefHolder.h"
 #include "logdevice/common/settings/Settings.h"
 
 /**
  * @file ClientReadersFlowTracer keeps track of a ClientReadStream reading
  * performance, submitting counters and sampled traces for monitoring.
+ * Lives on the same worker thread as the corresponding ClientReadStream.
+ * Not thread safe.
  */
 
 namespace facebook { namespace logdevice {
@@ -28,9 +31,7 @@ struct LogTailAttributes;
 
 constexpr auto READERS_FLOW_TRACER = "readers_flow_tracer";
 
-class ClientReadersFlowTracer
-    : public std::enable_shared_from_this<ClientReadersFlowTracer>,
-      public SampledTracer {
+class ClientReadersFlowTracer : public SampledTracer {
  public:
   using SystemClock = std::chrono::system_clock;
   using TimePoint = SystemClock::time_point;
@@ -95,6 +96,8 @@ class ClientReadersFlowTracer
   void updateTimeLagging(Status st = E::OK);
   void updateIsClientReading();
   void maybeBumpStats(bool force_healthy = false);
+
+  WeakRefHolder<ClientReadersFlowTracer> ref_holder_;
 
   std::chrono::milliseconds tracer_period_;
 

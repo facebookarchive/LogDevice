@@ -356,7 +356,7 @@ void ClientReadStream::start() {
           log_id_) // Don't create tracer for metadata logs to avoid issues in
                    // SyncSequencerRequest.
   ) {
-    readers_flow_tracer_ = std::make_shared<ClientReadersFlowTracer>(
+    readers_flow_tracer_ = std::make_unique<ClientReadersFlowTracer>(
         Worker::onThisThread()->getTraceLogger(), this);
   }
 

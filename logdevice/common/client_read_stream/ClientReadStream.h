@@ -1454,7 +1454,7 @@ class ClientReadStream : boost::noncopyable {
   // a Sampled tracelogger for tracing reads
   std::unique_ptr<ClientReadTracer> read_tracer_;
   // a Throttled tracelogger for tracing tailer reads
-  std::shared_ptr<ClientReadersFlowTracer> readers_flow_tracer_;
+  std::unique_ptr<ClientReadersFlowTracer> readers_flow_tracer_;
   // a Throttled tracelogger for tracing events
   std::unique_ptr<ClientReadStreamTracer> events_tracer_;
 

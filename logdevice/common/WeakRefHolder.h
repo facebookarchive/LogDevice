@@ -77,23 +77,13 @@ class WeakRefHolder {
    public:
     explicit Ref(std::weak_ptr<T> ptr) : ptr_(std::move(ptr)) {}
     Ref() {} // Create an invalid ref
-    T* get() {
+    T* get() const {
       return ptr_.lock().get();
     }
-    T* operator->() {
+    T* operator->() const {
       return get();
     }
-    T& operator*() {
-      ld_assert(get());
-      return *get();
-    }
-    const T* get() const {
-      return ptr_.lock().get();
-    }
-    const T* operator->() const {
-      return get();
-    }
-    const T& operator*() const {
+    T& operator*() const {
       ld_assert(get());
       return *get();
     }
