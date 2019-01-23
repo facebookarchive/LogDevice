@@ -13,15 +13,17 @@ namespace facebook { namespace logdevice { namespace ClusterMarkerChecker {
 
 /**
  * Check that the given shard has the cluster marker. If the cluster is present,
- * verify that it matches the expected value. If the cluster marker is not
- * present, write it.
+ * verify that it matches the expected value.
+ * If the cluster marker is not present and needs to be written,
+ * assigns it to *out_to_write.
  *
  * @return true if the marker was present with the expected value or if it was
  *              not present and we were able to successfully write it.
  */
 static bool checkShard(LocalLogStore* store,
                        shard_index_t shard,
-                       const std::string& prefix) {
+                       const std::string& prefix,
+                       folly::Optional<ClusterMarkerMetadata>* out_to_write) {
   // If the store is in an error state, exempt it from the requirement
   if (store->acceptingWrites() == E::DISABLED) {
     return true;
@@ -63,13 +65,7 @@ static bool checkShard(LocalLogStore* store,
     }
 
     meta.marker_ = marker;
-
-    LocalLogStore::WriteOptions options;
-    if (store->writeStoreMetadata(meta, options) != 0 ||
-        store->sync(Durability::ASYNC_WRITE) != 0) {
-      ld_critical("Cannot write cluster marker for shard %u", shard);
-      return false;
-    }
+    *out_to_write = meta;
   }
 
   return true;
@@ -80,9 +76,37 @@ bool check(ShardedLocalLogStore& sharded_store, ServerConfig& config) {
       std::to_string(config.getMyNodeID().index()) + ":shard";
 
   bool all_good = true;
+  std::vector<std::pair<shard_index_t, ClusterMarkerMetadata>> to_write_shards;
   for (shard_index_t shard = 0; shard < sharded_store.numShards(); ++shard) {
     LocalLogStore* store = sharded_store.getByIndex(shard);
-    all_good &= checkShard(store, shard, prefix);
+    folly::Optional<ClusterMarkerMetadata> to_write;
+    all_good &= checkShard(store, shard, prefix, &to_write);
+    if (to_write.hasValue())
+      to_write_shards.emplace_back(shard, to_write.value());
+  }
+
+  if (!all_good) {
+    return false;
+  }
+
+  // Only write the missing cluster markers if all shards passed the check.
+  // Otherwise we may get into the following awkward situation.
+  // Suppose there are two shards: 0 and 1. Shard 1 was wiped (e.g. disk was
+  // replaced), and at the same time the two shards were swapped (because of an
+  // operational error). If the loop above writes the marker, we would end
+  // up with two shards having a marker saying "shard 0". If it doesn't, we'd
+  // end up with shard 0 having no marker and shard 1 having marker
+  // that says "shard 0" - from which it's obvious what happened.
+  for (auto p : to_write_shards) {
+    shard_index_t shard = p.first;
+    const ClusterMarkerMetadata& meta = p.second;
+    LocalLogStore* store = sharded_store.getByIndex(shard);
+    LocalLogStore::WriteOptions options;
+    if (store->writeStoreMetadata(meta, options) != 0 ||
+        store->sync(Durability::ASYNC_WRITE) != 0) {
+      ld_critical("Cannot write cluster marker for shard %u", shard);
+      return false;
+    }
   }
 
   return all_good;
