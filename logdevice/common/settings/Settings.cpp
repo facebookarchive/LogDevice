@@ -558,7 +558,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        SettingsCategory::ReadPath);
   init("max-record-read-execution-time",
        &max_record_read_execution_time,
-       "max", // likely fixed by D6679900, need to be tested more (t24433367).
+       "1s",
        validate_positive<ssize_t>(),
        "Maximum execution time for reading records. 'max' means no limit.",
        SERVER | EXPERIMENTAL,

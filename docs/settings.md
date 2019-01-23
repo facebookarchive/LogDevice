@@ -301,7 +301,7 @@ sidebar_label: Settings
 | lock-memory | On startup, call mlockall() to lock the text segment (executable code) of logdeviced in RAM. | false | requires&nbsp;restart, server&nbsp;only |
 | max-inflight-storage-tasks | max number of StorageTask instances that one worker thread may have in flight to each database shard | 4096 | requires&nbsp;restart, server&nbsp;only |
 | max-payload-size | The maximum payload size that will be accepted by the client library or the server. Can't be larger than 33554432 bytes. | 1048576 |  |
-| max-record-read-execution-time | Maximum execution time for reading records. 'max' means no limit. | max | **experimental**, server&nbsp;only |
+| max-record-read-execution-time | Maximum execution time for reading records. 'max' means no limit. | 1s | **experimental**, server&nbsp;only |
 | max-server-read-streams | max number of read streams clients can establish to the server, per worker | 150000 | server&nbsp;only |
 | max-total-appenders-size-hard | Total size in bytes of running Appenders accross all workers after which we start rejecting new appends. | 629145600 | server&nbsp;only |
 | max-total-appenders-size-soft | Total size in bytes of running Appenders accross all workers after which we start taking measures to reduce the Appender residency time. | 524288000 | server&nbsp;only |
