@@ -896,10 +896,12 @@ TEST_P(NodeStatsControllerIntegrationTest, AdaptiveBoycottDuration) {
           .set_max_boycott_count(2)
           .set_node_count(node_count)
           .set_use_adaptive_boycott_duration(true)
-          .set_boycott_min_adaptive_duration(std::chrono::seconds(10))
+          .set_boycott_min_adaptive_duration(std::chrono::seconds(20))
           // High enough time step to get exactly double the min adaptive
           // duration
-          .set_boycott_decrease_time_step(std::chrono::hours(1)));
+          .set_boycott_decrease_time_step(std::chrono::hours(1))
+          .set_gossip_interval(std::chrono::milliseconds(1000))
+          .set_gossip_threshold(10));
 
   auto client = createClient();
   setErrorInjection(client.get(), outlier_nodes, {0.5});
@@ -909,8 +911,8 @@ TEST_P(NodeStatsControllerIntegrationTest, AdaptiveBoycottDuration) {
 
   waitUntilBoycottsOnAllNodes(outlier_nodes);
 
-  EXPECT_EQ(std::chrono::seconds(10),
-            getBoycottDurationOfNode(/*node_index=*/2, /*from_node=*/3));
+  auto initial_duration =
+      getBoycottDurationOfNode(/*node_idx=*/2, /*from_node=*/3);
 
   appender.stop();
 
@@ -925,8 +927,10 @@ TEST_P(NodeStatsControllerIntegrationTest, AdaptiveBoycottDuration) {
 
   waitUntilBoycottsOnAllNodes(outlier_nodes);
 
-  EXPECT_EQ(std::chrono::seconds(20),
-            getBoycottDurationOfNode(/*node_index=*/2, /*from_node=*/3));
+  // Expect that the boycott duration is at least double the last boycott
+  // duration
+  EXPECT_GE(getBoycottDurationOfNode(/*node_idx=*/2, /*from_node=*/3),
+            initial_duration * 2);
 }
 
 INSTANTIATE_TEST_CASE_P(NodeStatsControllerIntegrationTest,

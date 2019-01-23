@@ -269,6 +269,7 @@ void BoycottTracker::removeExpiredBoycotts(
     if (boycott_it->second.boycott_in_effect_time +
             boycott_it->second.boycott_duration <
         current_time.time_since_epoch()) {
+      ld_info("Boycott expired for N%i", boycott_it->first);
       boycott_it = reported_boycotts_.erase(boycott_it);
     } else {
       ++boycott_it;
