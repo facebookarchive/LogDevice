@@ -249,28 +249,34 @@ bool ClientAPIHitsTracer::assessIsLogEmptyFlappiness(Status st,
                                                      bool empty) {
   if (st != E::OK && st != E::PARTIAL) {
     return false;
-  } else if (is_log_empty_record_.count(logid)) {
-    auto& rec = is_log_empty_record_[logid];
-    /* transition */
-    switch (rec.step) {
-      case 0:
-        if (rec.prev_val && !empty) {
-          rec.step = 1;
-        }
-        break;
-      case 1:
-        if (!rec.prev_val && empty) {
-          is_log_empty_record_.erase(logid);
-          return true;
-        }
-        break;
-    }
-
-    rec.prev_val = empty ? 1 : 0;
-    return false;
   } else {
-    is_log_empty_record_[logid] = {.step = 0, .prev_val = empty ? 1u : 0};
-    return false;
+    auto result = false;
+    is_log_empty_record_.withWLock([&](auto& records) {
+      if (records.count(logid)) {
+        auto& rec = records[logid];
+        /* transition */
+        switch (rec.step) {
+          case 0:
+            if (rec.prev_val && !empty) {
+              rec.step = 1;
+            }
+            break;
+          case 1:
+            if (!rec.prev_val && empty) {
+              records.erase(logid);
+              result = true;
+              return;
+            }
+            break;
+        }
+        rec.prev_val = empty ? 1 : 0;
+        return;
+      } else {
+        records[logid] = {.step = 0, .prev_val = empty ? 1u : 0};
+        return;
+      }
+    });
+    return result;
   }
 }
 

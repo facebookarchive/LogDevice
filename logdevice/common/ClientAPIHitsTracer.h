@@ -11,6 +11,7 @@
 #include <memory>
 #include <string>
 
+#include "folly/Synchronized.h"
 #include "logdevice/common/SampledTracer.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/include/Client.h"
@@ -86,7 +87,9 @@ class ClientAPIHitsTracer : public SampledTracer {
     unsigned int step : 1;
     unsigned int prev_val : 1;
   };
-  std::unordered_map<logid_t, FlappinessRecord, logid_t::Hash>
+
+  folly::Synchronized<
+      std::unordered_map<logid_t, FlappinessRecord, logid_t::Hash>>
       is_log_empty_record_;
 };
 
