@@ -1398,7 +1398,7 @@ bool PartitionedRocksDBStore::convertDataKeyFormat() {
   };
 
   auto options = getDefaultReadOptions();
-  auto it = newIterator(options, unpartitioned_cf_.get());
+  auto it = newIterator(options, unpartitioned_cf_->get());
   RocksDBKeyFormat::DataKey min_key(logid_t(0), lsn_t(0));
   rocksdb::Slice min_key_slice = min_key.sliceForWriting();
   for (it.Seek(min_key_slice); it.status().ok() && it.Valid() &&
@@ -1421,7 +1421,7 @@ bool PartitionedRocksDBStore::convertDataKeyFormat() {
 
     // Convert: delete old key and write (merge) new one.
     rocksdb::Status status;
-    status = batch.Delete(unpartitioned_cf_.get(), key);
+    status = batch.Delete(unpartitioned_cf_->get(), key);
     if (!status.ok()) {
       ld_error("Failed to add a Delete to a WriteBatch: %s",
                status.ToString().c_str());
@@ -1440,7 +1440,7 @@ bool PartitionedRocksDBStore::convertDataKeyFormat() {
     // value into the new-format one, as if the old-format value was written
     // later. The opposite would make more sense, but it doesn't matter much
     // because normally all unpartitioned keys will be in the same format.
-    status = batch.Merge(unpartitioned_cf_.get(),
+    status = batch.Merge(unpartitioned_cf_->get(),
                          rocksdb::SliceParts(&new_key_slice, 1),
                          rocksdb::SliceParts(&new_value_parts[0], 2));
     if (!status.ok()) {
