@@ -160,8 +160,6 @@ class DRRScheduler {
   void initShares(std::string name,
                   uint64_t quanta,
                   std::vector<DRRPrincipal> principals) {
-    ld_info(
-        "Initializing scheduler-name: %s, quanta: %ld", name.c_str(), quanta);
     name_ = name;
     // Initialize all the internal DRR queues
     quanta_ = quanta;
@@ -171,7 +169,6 @@ class DRRScheduler {
 
     for (const auto& p : principals) {
       ld_check(p.share);
-      ld_info("share for principal %s = %ld", p.name.c_str(), p.share);
       queues_.emplace_back(std::make_shared<DRRQueue>(p, quanta));
     }
   }
