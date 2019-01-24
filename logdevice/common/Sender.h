@@ -448,6 +448,15 @@ class Sender : public SenderBase {
   int closeClientSocket(ClientID cid, Status reason);
 
   /**
+   * Close all client sockets. Used for TESTING.
+   *
+   * @param reason Reason for closing the sockets
+   *
+   * @return number of sockets closed
+   */
+  int closeAllClientSockets(Status reason);
+
+  /**
    * Close all server and clients sockets. Called in
    * case of shutdown as part of force abort procedure if sockets are taking too
    * long to drain all the messages in the output buffer.

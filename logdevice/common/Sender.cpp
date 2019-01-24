@@ -774,6 +774,21 @@ std::pair<uint32_t, uint32_t> Sender::closeAllSockets() {
   return sockets_closed;
 }
 
+int Sender::closeAllClientSockets(Status reason) {
+  ld_check(onMyWorker());
+
+  int sockets_closed = 0;
+
+  for (auto& entry : impl_->client_sockets_) {
+    if (!entry.second.isClosed()) {
+      sockets_closed++;
+      entry.second.close(reason);
+    }
+  }
+
+  return sockets_closed;
+}
+
 bool Sender::isClosed() {
   // Go over all sockets at shutdown to find pending work. This could help in
   // figuring which sockets are slow in draining buffers.

@@ -66,7 +66,7 @@ void GetLogInfoRequest::changeTargetNode(std::unique_lock<std::mutex>& lock) {
   const auto new_node =
       RandomNodeSelector::getAliveNode(*config, cluster_state, exclude);
   shared_state_->node_id_ = new_node;
-  shared_state_->socket_callback_.reset();
+  shared_state_->socket_callback_->deactivate();
   ld_info("Changing GetLogInfoRequest target node to %s",
           new_node.toString().c_str());
   shared_state_->change_node_id_ = false;

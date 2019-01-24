@@ -24,7 +24,7 @@ struct GetLogInfoRequestSharedState {
   NodeID node_id_;
 
   // callback that will be called when the socket to the target node closes
-  std::shared_ptr<SocketCallback> socket_callback_;
+  std::unique_ptr<SocketCallback> socket_callback_;
 
   // Worker ID that will process GetLogInfoRequests
   worker_id_t worker_id_{-1};
@@ -50,6 +50,8 @@ struct GetLogInfoRequestSharedState {
   // saturating the client workers with target node changes in a rare case
   // when all nodes are unavailable to the client.
   RateLimiter rate_limiter_{rate_limit_t(3, std::chrono::seconds(3))};
+
+  GetLogInfoRequestSharedState();
 
   // This is called before reloading the config due to connection failures.
   // If this method returns false, the config reload has already been

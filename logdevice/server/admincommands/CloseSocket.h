@@ -21,6 +21,7 @@ class CloseSocket : public AdminCommand {
   WorkerType worker_type_ = WorkerType::MAX;
   worker_id_t worker_id_ = WORKER_ID_INVALID;
   Address address_;
+  bool all_clients_{false};
 
  public:
   using AdminCommand::AdminCommand;
@@ -29,7 +30,7 @@ class CloseSocket : public AdminCommand {
       boost::program_options::options_description& out_options) override {
     out_options.add_options()(
         "address",
-        boost::program_options::value<std::string>()->required()->notifier(
+        boost::program_options::value<std::string>()->notifier(
             [this](const std::string& s) {
               try {
                 do { // while (false)
@@ -78,7 +79,9 @@ class CloseSocket : public AdminCommand {
                   "Unexpected address format: \"%s\". Accepted formats: N12, "
                   "C42, "
                   "WG3:N12, WG3:C42.");
-            }));
+            }))("all-clients",
+                boost::program_options::value<bool>(&all_clients_)
+                    ->default_value(false));
   }
   void getPositionalOptions(
       boost::program_options::positional_options_description& out_options)
@@ -86,13 +89,17 @@ class CloseSocket : public AdminCommand {
     out_options.add("address", 1);
   }
   std::string getUsage() override {
-    return "close_socket [W<type><id>:](N<node_id>|C<client_id>)";
+    return "close_socket [--all-clients] "
+           "[W<type><id>:](N<node_id>|C<client_id>)";
   }
 
   void run() override {
     auto cb = [&] {
       Sender& sender = Worker::onThisThread()->sender();
       int rv;
+      if (all_clients_) {
+        return sender.closeAllClientSockets(E::PEER_CLOSED);
+      }
       if (address_.isClientAddress()) {
         rv = sender.closeClientSocket(address_.asClientID(), E::PEER_CLOSED);
       } else {

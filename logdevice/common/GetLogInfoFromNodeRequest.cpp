@@ -98,49 +98,6 @@ void GetLogInfoFromNodeRequest::onMessageSent(NodeID to, Status status) {
   }
 }
 
-namespace {
-// This is the callback to be called whenever the socket that we use for
-// config change notifications is closed.
-class GLISocketClosedCallback : public SocketCallback {
- public:
-  explicit GLISocketClosedCallback() {}
-
-  void operator()(Status st, const Address& name) override {
-    RATELIMIT_WARNING(std::chrono::seconds(10),
-                      1,
-                      "Closed socket to GetLogInfoRequest target node %s with "
-                      "reason %s",
-                      name.toString().c_str(),
-                      error_description(st));
-    if (Worker::onThisThread()->shuttingDown()) {
-      // if we're shutting down, no point in reloading the config
-      return;
-    }
-    Worker* worker = Worker::onThisThread();
-    auto& map = worker->runningGetLogInfo().per_node_map;
-    if (map.size() == 0) {
-      // There are no GetLogInfoFromNodeRequests running, just reload the
-      // config
-      Worker::onThisThread()
-          ->getUpdateableConfig()
-          ->updateableLogsConfig()
-          ->invalidate();
-      return;
-    }
-    auto it = map.begin();
-    while (it != map.end()) {
-      // calling finalize() will erase the request from the map, thus
-      // invalidating the current iterator, so we have to fetch the next one
-      // beforehand.
-      auto next_it = std::next(it);
-      // defer the config reload to individual GetLogInfoRequest retries
-      it->second->finalize(E::FAILED);
-      it = next_it;
-    }
-  }
-};
-} // namespace
-
 int GetLogInfoFromNodeRequest::sendOneMessage(NodeID to) {
   GetLogInfoRequest* parent = findParent();
   if (!parent) {
@@ -166,30 +123,22 @@ int GetLogInfoFromNodeRequest::sendOneMessage(NodeID to) {
   // that node dies, the client will keep running with an outdated config
   SocketCallback* onclose_to_use = nullptr;
   ld_check(to == shared_state_->node_id_);
-
-  if (!shared_state_->socket_callback_) {
-    shared_state_->socket_callback_ =
-        std::make_unique<GLISocketClosedCallback>();
+  ld_check(shared_state_->socket_callback_);
+  if (!shared_state_->socket_callback_->active()) {
+    // only register the onclose callback if it isn't already
     onclose_to_use = shared_state_->socket_callback_.get();
   }
   int res = w->sender().sendMessage(std::move(msg), to, onclose_to_use);
 
-  if (onclose_to_use) {
-    if (res != 0) {
-      // We were not able to register this socket callback to the socket, let's
-      // make sure that we don't keep this in the shared_state_
-      shared_state_->socket_callback_ = nullptr;
-    } else if (!onclose_to_use->active()) {
-      RATELIMIT_CRITICAL(
-          std::chrono::seconds(1),
-          1,
-          "GetLogInfo SocketCallback (to %s) has not been registered, "
-          "this client might end up with stale LogsConfig. Destroying this "
-          "callback.",
-          to.toString().c_str());
-      shared_state_->socket_callback_ = nullptr;
-      ld_check(false);
-    }
+  if (res == 0 && !shared_state_->socket_callback_->active()) {
+    RATELIMIT_CRITICAL(
+        std::chrono::seconds(1),
+        1,
+        "GetLogInfo SocketCallback (to %s) has not been registered, "
+        "this client might end up with stale LogsConfig. Destroying this "
+        "callback.",
+        to.toString().c_str());
+    ld_check(false);
   }
   return res;
 }

@@ -372,6 +372,70 @@ TEST_F(ConfigIntegrationTest, RemoteLogsConfigWithLogsConfigManagerTest) {
   ASSERT_EQ(3, log_cfg->attrs().replicationFactor().value());
 }
 
+TEST_F(ConfigIntegrationTest,
+       RemoteLogsConfigWithSubscriptionAndConnectionFailedTest) {
+  auto cluster = IntegrationTestUtils::ClusterFactory()
+                     .useTcp()
+                     .setParam("--file-config-update-interval", "10ms")
+                     .create(2);
+
+  // Copying the config for the client so that it's not affected when we update
+  // the server config
+  std::string client_config_path(cluster->getConfigPath() + "_client");
+  boost::filesystem::copy_file(cluster->getConfigPath(), client_config_path);
+
+  auto client = ClientFactory()
+                    .setSetting("file-config-update-interval", "10ms")
+                    .setSetting("on-demand-logs-config", "true")
+                    .setTimeout(testTimeout())
+                    .create(client_config_path);
+
+  ASSERT_TRUE((bool)client);
+
+  // Fetching by ID
+  ld_info("Fetching by ID");
+  auto range = client->getLogRangeByName("/ns/test_logs");
+  ASSERT_EQ(range.first.val(), 1);
+  ASSERT_EQ(range.second.val(), 2);
+
+  ld_info("Waiting for config change");
+  Semaphore config_change_sem;
+  auto handle = client->subscribeToConfigUpdates([&]() {
+    ld_info("Posting to config_change_sem");
+    config_change_sem.post();
+  });
+
+  // close all client sockets on both nodes. This should trigger the onclose
+  // callback for the GetLogInfoRequest socket
+  for (auto& node : cluster->getNodes()) {
+    node.second->sendCommand("close_socket --all-clients=true");
+  }
+
+  // Waiting for the client to get notified due to config invalidation
+  config_change_sem.wait();
+  // only the logs config should have changed. check that the callback didn't
+  // get called twice
+  ASSERT_EQ(0, config_change_sem.value());
+
+  // Fetching ID again to cause connection to be re-established (config cache
+  // should have been wiped by invalidation of the remote logs config)
+  range = client->getLogRangeByName("/ns/test_logs");
+  ASSERT_EQ(range.first.val(), 1);
+  ASSERT_EQ(range.second.val(), 2);
+
+  // close all client sockets again
+  for (auto& node : cluster->getNodes()) {
+    node.second->sendCommand("close_socket --all-clients=true");
+  }
+
+  // Make sure that the onclose callback is again executed.
+  // Waiting for the client to get notified due to config invalidation
+  config_change_sem.wait();
+  // only the logs config should have changed. check that the callback didn't
+  // get called twice
+  ASSERT_EQ(0, config_change_sem.value());
+}
+
 TEST_F(ConfigIntegrationTest, ClientConfigSubscription) {
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
