@@ -214,7 +214,7 @@ void AdminAPIHandler::getLogGroupThroughput(
   auto operation =
       thrift::LogGroupOperation(thrift::LogGroupOperation::APPENDS);
   if (request->__isset.operation) {
-    operation = request->operation;
+    operation = request->operation_ref().value_unchecked();
   }
 
   using apache::thrift::util::enumName;
@@ -222,7 +222,7 @@ void AdminAPIHandler::getLogGroupThroughput(
 
   std::vector<Duration> query_intervals;
   if (request->__isset.time_period) {
-    auto time_period = request->time_period;
+    auto time_period = request->time_period_ref().value_unchecked();
     for (const auto t : time_period) {
       query_intervals.push_back(std::chrono::seconds(t));
     }
@@ -245,7 +245,7 @@ void AdminAPIHandler::getLogGroupThroughput(
 
   std::string req_log_group;
   if (request->__isset.log_group_name) {
-    req_log_group = request->log_group_name;
+    req_log_group = request->log_group_name_ref().value_unchecked();
   }
 
   for (const auto& entry : agg) {

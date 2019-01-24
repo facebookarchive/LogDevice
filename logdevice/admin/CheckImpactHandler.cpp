@@ -117,9 +117,9 @@ CheckImpactHandler::semifuture_checkImpact(
       check_internal_logs,
       logs_to_check,
       updateable_admin_server_settings_->safety_max_logs_in_flight,
-      request->abort_on_negative_impact,
+      request->abort_on_negative_impact_ref().value_unchecked(),
       updateable_admin_server_settings_->safety_check_timeout,
-      request->return_sample_size,
+      request->return_sample_size_ref().value_unchecked(),
       updateable_admin_server_settings_->read_metadata_from_sequencers,
       CheckImpactRequest::workerType(processor_),
       std::move(cb));
