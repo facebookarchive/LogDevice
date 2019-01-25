@@ -100,8 +100,12 @@ EpochStore is the data store that contains epoch-related metadata for all the lo
 | since | long | Epoch since which the metadata ("replication", "storage\_set", "flags") are in effect. |
 | epoch | long | Next epoch to be assigned to a sequencer. |
 | replication | string | Current replication property of the log. |
+| storage\_set\_size | long | Number of shards in storage\_set. |
 | storage\_set | string | Set of shards that may have data records for the log in epochs ["since", "epoch" - 1]. |
 | flags | string | Internal flags.  See "logdevice/common/EpochMetaData.h" for the description of each flag. |
+| nodeset\_signature | long | Hash of the parts of config that potentially affect the nodeset. |
+| target\_nodeset\_size | long | Storage set size that was requested from NodeSetSelector. Can be different from storage\_set\_size for various reasons, see EpochMetaData.h |
+| nodeset\_seed | long | Random seed used when selecting nodeset. |
 | lce | long | Last epoch considered clean for this log.  Under normal conditions, this is equal to "epoch" - 2.   If this value is smaller, this means that the current sequencer needs to run the Log Recovery procedure on epochs ["lce" + 1, "epoch" - 2] and readers will be unable to read data in these epochs until they are cleaned. |
 | meta\_lce | long | Same as "lce" but for the metadata log of this data log. |
 | written\_by | string | Id of the last node in the cluster that updated the epoch store for that log. |
@@ -148,6 +152,7 @@ This table contains information about historical epoch metadata for all logs.  W
 | since | long | Epoch since which the metadata ("replication", "storage\_set", "flags") are in effect. |
 | epoch | long | Epoch up to which the metadata is in effect. |
 | replication | string | Replication property for records in epochs ["since", "epoch"]. |
+| storage\_set\_size | long | Number of shards in storage\_set. |
 | storage\_set | string | Set of shards that may have data records for the log in epochs ["since", "epoch"]. |
 | flags | string | Internal flags.  See "logdevice/common/EpochMetaData.h" for the description of each flag. |
 
@@ -161,6 +166,7 @@ Same as "historical\_metadata", but retrieves the metadata less efficiently by r
 | since | long | Epoch since which the metadata ("replication", "storage\_set", "flags") are in effect. |
 | epoch | long | Epoch up to which the metadata is in effect. |
 | replication | string | Replication property for records in epochs ["since", "epoch"]. |
+| storage\_set\_size | long | Number of shards in storage\_set. |
 | storage\_set | string | Set of shards that may have data records for the log in epochs ["since", "epoch"]. |
 | flags | string | Internal flags.  See "logdevice/common/EpochMetaData.h" for the description of each flag. |
 | lsn | lsn | LSN of the metadata log record that contains this metadata |
@@ -503,7 +509,7 @@ This table dumps information about all the Sequencer objects in the cluster.  Se
 |------------|:--------:|-----------------|
 | node\_id | int | Node ID this row is for. |
 | log\_id | log_id | Log ID this sequencer is for. |
-| metadata\_log\_id | log_id | ID of the corresponding metadata log. |
+| metadata\_log\_id | string | ID of the corresponding metadata log. |
 | state | string | State of the sequencer.  Can be one of: "UNAVAILABLE" (Sequencer has not yet gotten a valid epoch metadata with an epoch number), "ACTIVATING" (Sequencer is in the process of getting an epoch number and retrieving metadata from the epoch store), "ACTIVE" (Sequencer is able to replicate), "PREEMPTED" (Sequencer has been preempted by another sequencer "preempted\_by", appends to this node will be redirected to it), "PERMANENT\_ERROR" (Permanent process-wide error such as running out of ephemera ports). |
 | epoch | long | Epoch of the sequencer. |
 | next\_lsn | lsn | Next LSN to be issued to a record by this sequencer. |
