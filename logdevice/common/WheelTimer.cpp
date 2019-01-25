@@ -13,7 +13,6 @@
 #include <folly/futures/Future.h>
 #include <folly/futures/Promise.h>
 #include <folly/io/async/EventBase.h>
-#include <folly/io/async/EventBaseManager.h>
 #include <folly/synchronization/LifoSem.h>
 
 #include "logdevice/common/debug.h"
@@ -59,34 +58,31 @@ constexpr auto kDefaultTickInterval = std::chrono::milliseconds(1);
 
 } // namespace
 
-WheelTimer::WheelTimer() {
+WheelTimer::WheelTimer()
+    : executor_(std::make_unique<folly::EventBase>()),
+      wheel_timer_(folly::HHWheelTimer::newTimer(executor_.get(),
+                                                 kDefaultTickInterval)) {
   folly::Promise<folly::Unit> promise;
   auto ready = promise.getSemiFuture();
-
   timer_thread_ = std::thread([this, promise = std::move(promise)]() mutable {
-    executor_.store(folly::EventBaseManager::get()->getEventBase());
-    wheel_timer_ = folly::HHWheelTimer::newTimer(
-        folly::EventBaseManager::get()->getEventBase(), kDefaultTickInterval);
     promise.setValue();
-    executor_.load()->loopForever();
+    executor_->loopForever();
   });
 
   ready.wait();
 }
 
 WheelTimer::~WheelTimer() {
-  executor_.load()->terminateLoopSoon();
+  executor_->terminateLoopSoon();
   timer_thread_.join();
 }
 
 void WheelTimer::createTimer(folly::Function<void()>&& callback,
                              std::chrono::milliseconds timeout) {
   timeout = std::chrono::milliseconds(std::min(timeout.count(), kMaxTimeoutMs));
-  executor_.load()->add(
-      [callback = std::move(callback), timeout, this]() mutable {
-        wheel_timer_->scheduleTimeout(
-            createCallback(std::move(callback)), timeout);
-      });
+  executor_->add([callback = std::move(callback), timeout, this]() mutable {
+    wheel_timer_->scheduleTimeout(createCallback(std::move(callback)), timeout);
+  });
 }
 
 }} // namespace facebook::logdevice

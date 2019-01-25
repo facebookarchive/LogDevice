@@ -39,9 +39,9 @@ class WheelTimer {
 
   constexpr int static kNumberOfThreads = 1;
 
+  std::unique_ptr<folly::EventBase> executor_;
   std::unique_ptr<folly::HHWheelTimer, folly::DelayedDestruction::Destructor>
       wheel_timer_;
-  std::atomic<folly::EventBase*> executor_{};
   std::thread timer_thread_;
 };
 
