@@ -206,8 +206,23 @@ Configuration::loadFromString(const std::string& server,
                               const std::string& logs) {
   std::shared_ptr<ServerConfig> server_config;
   std::shared_ptr<LocalLogsConfig> logs_config;
-  server_config = ServerConfig::fromJson(server);
+  std::shared_ptr<ZookeeperConfig> zookeeper_config;
+
+  auto parsed = parseJson(server);
+  if (!parsed.isObject()) {
+    return nullptr;
+  }
+
+  server_config = ServerConfig::fromJson(parsed);
   if (server_config) {
+    auto zookeeper = parsed.find("zookeeper");
+    if (zookeeper != parsed.items().end()) {
+      zookeeper_config = ZookeeperConfig::fromJson(zookeeper->second);
+      if (!zookeeper_config) {
+        return nullptr;
+      }
+    }
+
     logs_config = LocalLogsConfig::fromJson(server,
                                             *server_config,
                                             [&](const char*, std::string* out) {
@@ -216,7 +231,8 @@ Configuration::loadFromString(const std::string& server,
                                             },
                                             ConfigParserOptions());
     if (logs_config && logs_config->isValid(*server_config)) {
-      return std::make_unique<Configuration>(server_config, logs_config);
+      return std::make_unique<Configuration>(
+          server_config, logs_config, zookeeper_config);
     }
   }
   return nullptr;

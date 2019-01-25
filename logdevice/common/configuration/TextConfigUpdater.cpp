@@ -493,8 +493,7 @@ bool TextConfigUpdaterImpl::compareZookeeperConfig(
   } else {
     // Zookeeper config has no versioning for now, so we cannot compare newer vs
     // older
-    return old_config->getQuorumString() == new_config->getQuorumString() &&
-        old_config->getSessionTimeout() == new_config->getSessionTimeout();
+    return *old_config == *new_config;
   }
 }
 

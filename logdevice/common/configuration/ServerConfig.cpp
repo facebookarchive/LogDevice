@@ -672,18 +672,7 @@ folly::dynamic ServerConfig::toJson(const LogsConfig* with_logs,
   }
 
   if (with_zk) {
-    auto& quorum = with_zk->getQuorum();
-    if (!quorum.empty()) {
-      folly::dynamic quorum_out = folly::dynamic::array;
-      for (const Sockaddr& addr : quorum) {
-        quorum_out.push_back(addr.toString());
-      }
-      std::string timeout_str =
-          std::to_string(with_zk->getSessionTimeout().count()) + "ms";
-      folly::dynamic zookeeper = folly::dynamic::object()("quorum", quorum_out)(
-          "timeout", timeout_str);
-      json_all["zookeeper"] = zookeeper;
-    }
+    json_all["zookeeper"] = with_zk->toFollyDynamic();
   }
 
   // insert custom fields
