@@ -640,8 +640,11 @@ class LogChecker : public std::enable_shared_from_this<LogChecker> {
     }
 
     auto callback_ticket = callbackHelper_.ticket();
+    // Invoke findtime to get the starting lsn for read. FindTime does not work
+    // for metadata logs. Hence, read them completely hoping that they are quick
+    // to read.
     if (checker_settings->read_starting_point.count() > 0 &&
-        did_findtime_ == false) {
+        !MetaDataLog::isMetaDataLog(log_id_) && did_findtime_ == false) {
       auto timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
           std::chrono::system_clock::now().time_since_epoch() -
           checker_settings->read_starting_point);
