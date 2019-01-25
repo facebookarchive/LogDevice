@@ -1,0 +1,89 @@
+# Overview
+
+``fbcode_builder` is a tool to give your project easy open-source continuous
+integration builds that work both with Legocastle and with Travis+Docker.
+
+For external builds, we use Docker, since provides an easy-to-use CLI and
+quick iteration when debugging or updating your build.  See README.docker
+for tips and security caveats.
+
+For internal open-source builds, we generate Legocastle jobs that run on
+Ubuntu-ish `lego-linux` hosts.
+
+IMPORTANT: Keep `fbcode_builder` Python 2.6 compatible, since Legocastle
+runs this code using the system Python, and it would be a big hassle to
+XARify it.   We also aspire to being compatible with Python 3.x as we'd
+like end-users to be able use tools based on these modules to build our
+projects, too.
+
+
+# Running Legocastle builds manually
+
+For any project with an `fbcode_builder_config.py`, run this from its directory
+for an explanation of how to start a Legocastle build job:
+
+  ~/fbcode/opensource/fbcode_builder/facebook_make_legocastle_job.py --help
+
+(Check this dex for an overview of Legocastle:
+ https://our.intern.facebook.com/intern/dex/sandcastle/legocastle/)
+
+
+# Automatically triggering Legocastle builds
+
+In order to automatically trigger a legocastle build for your project on diffs
+that affect your project, add an `OSSProject` definition for your project in
+this file:
+
+  fbsource/tools/non-buck-target-determinator/defs/oss_fbcode_builder.py
+
+You should also update the `oss_fbcode_builder.t` file in the same directory
+to add a test that verifies your project will be triggered correctly when
+files that affect it are modified.
+
+For more information about this determinator script, see the following wiki:
+https://our.intern.facebook.com/intern/wiki/Fbsource/non-buck-target-determinator
+
+
+# Setting up a new project with `fbcode_builder`
+
+To set it up for your project, follow Proxygen's easy example in D4441467,
+or take a look at Bistro for a fancier one.  You will need these pieces:
+
+- Add `FBCodeBuilderTrait` to your FBShipItConfig.  This does a lot -- check
+  its docblock.
+
+  You might want to add some `fbcode_builder` and `github_hashes` paths to
+  your ShipIt test as well, see `BistroTest`.
+
+  NB: `github_hashes` is only populated for dependencies that opt into TagIt.
+
+- A short build config: `bistro/public_tld/build/fbcode_builder_config.py
+
+- Update the oss_fbcode_builder.py NBTD script as described above to
+  automatically kick off builds for your projects on diffs affecting your code.
+
+- You might make an analog of `bistro/public_tld/build/README.md` for
+  newcomers to your project.
+
+- Once your diff lands and a new version of shipit is deployed, your project's
+  shipit chronos job may start failing. When this happens, there are a couple of
+  options you can try to get your git repo back to a sane state.
+
+    1. run `php ~/fbcode/opensource/shipit/bin/shipit_[project_name].php --create-fixup-patch  --destination-use-ssh`
+       This generates a patch file and outputs directions on how to apply the
+       patch to your repo and manually push the resulting commit to github.
+       I'd recommend trying this first as it is the most straightforward. There
+       seem to be some cases, however, where this too will fail, in that case
+       move to the next option.
+
+    2. Checkout fbsource SHA1 hash that is already on github, that way, Github
+      does not lose any of the history. then run:
+
+      `~/fbcode/opensource/fbcode_builder/facebook_fake_github_from_fbsource.sh $(hg root) project_name`
+
+       This will generate the directory structure we likely want on github. You
+       can then recursively copy all these files into your github repo
+       (don't forget the hidden files, notably '.travis.yml'). Now that you have
+       the diff you want in your local repo, make a commit. You can then run
+       `diff -r -x .git fake-repo github-repo` to check if you've restored
+       synchronization correctly before you `git push`.
