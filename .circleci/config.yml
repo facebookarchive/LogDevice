@@ -74,7 +74,7 @@ jobs:
       - run: apt-get install -y ca-certificates doxygen $(cat logdevice/build_tools/ubuntu.deps)
       - run: git reset --hard HEAD
       - attach_workspace:
-          at: _build
+          at: .
       - run:
           name: Unit Tests
           working_directory: _build
