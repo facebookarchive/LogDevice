@@ -15,7 +15,7 @@ jobs:
     steps:
       - checkout
       - run: apt-get update
-      - run: apt-get install -y ca-certificates doxygen xsltproc $(cat logdevice/build_tools/ubuntu.deps)
+      - run: apt-get install -y ca-certificates doxygen $(cat logdevice/build_tools/ubuntu.deps)
       - run: git reset --hard HEAD
       - run: git submodule sync
       - run: git submodule update --init
@@ -26,18 +26,6 @@ jobs:
             cd _build
             cmake ../logdevice/
             make -j 8
-      - run:
-          name: Unit Tests
-          working_directory: _build
-          command: |
-            mkdir -p ../gtest_results/unit_tests
-            make ARGS="-j 8 --output-on-failure --no-compress-output -T Test" test
-      - run:
-          name: Collect results
-          working_directory: _build
-          command: |
-            xsltproc ../.circleci/conv.xsl Testing/*/Test.xml > ../gtest_results/unit_tests/results.xml
-          when: always
       - run:
           name: Generate Documentation
           working_directory: _build
@@ -51,12 +39,7 @@ jobs:
           paths:
             - website
             - docs
-      - store_artifacts:
-          path: gtest_results
-          when: always
-      - store_test_results:
-          path: gtest_results
-          when: always
+            - _build
   deploy-website:
     docker:
       - image: circleci/node:8.12.0  # Use LTS version of Node.js
@@ -75,6 +58,35 @@ jobs:
             echo "machine github.com login docusaurus-bot password $GITHUB_TOKEN" > ~/.netrc
             # Install Docusaurus and publish the website
             cd website && yarn install && GIT_USER=docusaurus-bot yarn publish-gh-pages
+  unittests:
+    docker:
+      - image: ubuntu:bionic
+    resource_class: xlarge
+    steps:
+      - checkout
+      - run: apt-get update
+      - run: apt-get install -y ca-certificates doxygen $(cat logdevice/build_tools/ubuntu.deps)
+      - run: git reset --hard HEAD
+      - attach_workspace:
+          at: .
+      - run:
+          name: Unit Tests
+          working_directory: _build
+          command: |
+            mkdir -p ../gtest_results/unit_tests
+            make ARGS="-j 8 --output-on-failure --no-compress-output -T Test" test
+      - run:
+          name: Collect results
+          working_directory: _build
+          command: |
+            xsltproc ../.circleci/conv.xsl Testing/*/Test.xml > ../gtest_results/unit_tests/results.xml
+          when: always
+      - store_artifacts:
+          path: gtest_results
+          when: always
+      - store_test_results:
+          path: gtest_results
+          when: always
 
 workflows:
   version: 2
@@ -82,6 +94,10 @@ workflows:
     jobs:
       - build:
           filters: *filter-ignore-gh-pages
+      - unittests:
+          filters: *filter-ignore-gh-pages
+          requires:
+            - build
       - deploy-website:
           filters: *filter-only-master
           requires:
