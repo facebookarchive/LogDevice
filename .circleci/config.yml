@@ -95,7 +95,7 @@ workflows:
       - build:
           filters: *filter-ignore-gh-pages
       - unittests:
-          filters: *filter-only-master
+          filters: *filter-ignore-gh-pages
           requires:
             - build
       - deploy-website:
