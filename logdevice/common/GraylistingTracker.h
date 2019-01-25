@@ -95,6 +95,10 @@ class GraylistingTracker {
   // Max duration of an active graylist
   virtual std::chrono::seconds getMaxGraylistingDuration() const;
 
+  // The duration through which a recently ungraylisted node will be monitored
+  // and graylisted as soon as it becomes an outlier
+  virtual std::chrono::seconds getMonitoredPeriod() const;
+
   // Min duration of an active graylist
   virtual std::chrono::seconds getGraylistingDuration() const;
 
@@ -113,6 +117,9 @@ class GraylistingTracker {
 
   // Removes expired graylisted nodes from the graylist_deadlines_ map
   void removeExpiredGraylistedNodes(Timestamp now);
+
+  // Removes expired monitored nodes from the monitored_outliers_ map
+  void removeExpiredMonitoredNodes(Timestamp now);
 
   // Get the latency estimation for each node in the cluster
   Latencies getLatencyEstimationForNodes(const configuration::Nodes& nodes);
@@ -143,6 +150,9 @@ class GraylistingTracker {
 
   // A map determines when a node started being a potential graylisted
   std::unordered_map<node_index_t, Timestamp> potential_graylist_;
+
+  // A map determines when a node started being monitored after ungreylisting
+  std::unordered_map<node_index_t, Timestamp> monitored_outliers_;
 
   // A map determines the timestamp until which the node is graylisted
   std::unordered_map<node_index_t, Timestamp> graylist_deadlines_;

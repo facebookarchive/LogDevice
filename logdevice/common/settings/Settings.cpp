@@ -959,6 +959,14 @@ void Settings::defineSettings(SettingEasyInit& init) {
        " get graylisted",
        SERVER,
        SettingsCategory::WritePath);
+  init("graylisting-monitored-period",
+       &graylisting_monitored_period,
+       "120s",
+       nullptr, // no validation
+       "The duration through which a recently ungraylisted node will be "
+       "monitored and graylisted as soon as it becomes an outlier",
+       SERVER,
+       SettingsCategory::WritePath);
   init("graylisting-refresh-interval",
        &graylisting_refresh_interval,
        "30s",

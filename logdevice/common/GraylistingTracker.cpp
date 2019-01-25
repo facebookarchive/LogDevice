@@ -13,6 +13,9 @@ void GraylistingTracker::updateGraylist(Timestamp now) {
   auto latencies = getLatencyEstimationForNodes(getNodes());
   auto regional_latencies = groupLatenciesPerRegion(std::move(latencies));
   auto outliers = findOutlierNodes(std::move(regional_latencies));
+
+  // if the monitoring time is over the node will get its grace period
+  removeExpiredMonitoredNodes(now);
   auto confirmed_outliers = updatePotentialGraylist(now, std::move(outliers));
 
   for (auto node : confirmed_outliers) {
@@ -101,7 +104,22 @@ void GraylistingTracker::removeExpiredGraylistedNodes(Timestamp now) {
     if (it->second <= now) {
       // calculate positive feedback only when not in graylist
       positiveFeedbackAndGet(it->first, now);
+
+      // set the node and time starting from which it will be monitored
+      monitored_outliers_[it->first] = now;
       it = graylist_deadlines_.erase(it);
+    } else {
+      it++;
+    }
+  }
+}
+
+void GraylistingTracker::removeExpiredMonitoredNodes(Timestamp now) {
+  auto monitored_period = getMonitoredPeriod();
+  auto it = monitored_outliers_.begin();
+  while (it != monitored_outliers_.end()) {
+    if (it->second + monitored_period < now) {
+      it = monitored_outliers_.erase(it);
     } else {
       it++;
     }
@@ -125,6 +143,8 @@ std::vector<node_index_t> GraylistingTracker::updatePotentialGraylist(
     }
 
     if (now - ts > grace_period) {
+      confirmed_outliers.emplace_back(node);
+    } else if (monitored_outliers_.count(node) != 0) {
       confirmed_outliers.emplace_back(node);
     } else {
       new_potential[node] = ts;
@@ -232,6 +252,10 @@ GraylistingTracker::getUpdatedGraylistingDuration(node_index_t node,
   createGraylistingBackoff(node);
 
   return positiveFeedbackAndGet(node, now);
+}
+
+std::chrono::seconds GraylistingTracker::getMonitoredPeriod() const {
+  return Worker::settings().graylisting_monitored_period;
 }
 
 GraylistingTracker::Latencies GraylistingTracker::getLatencyEstimationForNodes(

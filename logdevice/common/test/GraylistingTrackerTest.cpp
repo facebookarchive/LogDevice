@@ -77,6 +77,10 @@ class MockGraylistingTracker : public GraylistingTracker {
     return 5s; // min ok duration
   }
 
+  std::chrono::seconds getMonitoredPeriod() const override {
+    return 3s;
+  }
+
   std::chrono::seconds getGraylistingDuration() const override {
     return 60s;
   }
@@ -130,6 +134,84 @@ TEST(GraylistingTrackerTest, OutlierGraylisted) {
   EXPECT_EQ(0, tracker.getGraylistedNodes().size());
 
   tracker.updateGraylist(now + 10s);
+  EXPECT_THAT(tracker.getGraylistedNodes(), UnorderedElementsAre(3));
+}
+
+TEST(GraylistingTrackerTest, MonitoredGraylisted) {
+  auto stats = buildWorkerStats({{1, 20ms},
+                                 {2, 20ms},
+                                 {3, 500ms}, // Outlier
+                                 {4, 20ms}},
+                                10);
+  auto now = std::chrono::steady_clock::now();
+
+  MockGraylistingTracker tracker(std::move(stats));
+  tracker.updateGraylist(now);
+  EXPECT_EQ(0, tracker.getGraylistedNodes().size());
+
+  tracker.updateGraylist(now + 10s);
+  EXPECT_THAT(tracker.getGraylistedNodes(), UnorderedElementsAre(3));
+
+  stats = buildWorkerStats({{1, 20ms},
+                            {2, 20ms},
+                            {3, 20ms}, // Behaves ok
+                            {4, 20ms}},
+                           10);
+  tracker.setStats(std::move(stats));
+
+  // node become ok and we observe that after graylist + grace period
+  tracker.updateGraylist(now + 10s + 60s + 1s);
+  EXPECT_EQ(0, tracker.getGraylistedNodes().size());
+
+  // Node misbehaves during monitoring period and before grace period
+  stats = buildWorkerStats({{1, 20ms},
+                            {2, 20ms},
+                            {3, 500ms}, // Outlier
+                            {4, 20ms}},
+                           10);
+  tracker.setStats(std::move(stats));
+  tracker.updateGraylist(now + 10s + 60s + 2s);
+  EXPECT_THAT(tracker.getGraylistedNodes(), UnorderedElementsAre(3));
+}
+
+TEST(GraylistingTrackerTest, MonitoredGraylistedExpire) {
+  auto stats = buildWorkerStats({{1, 20ms},
+                                 {2, 20ms},
+                                 {3, 500ms}, // Outlier
+                                 {4, 20ms}},
+                                10);
+  auto now = std::chrono::steady_clock::now();
+
+  MockGraylistingTracker tracker(std::move(stats));
+  tracker.updateGraylist(now);
+  EXPECT_EQ(0, tracker.getGraylistedNodes().size());
+
+  tracker.updateGraylist(now + 10s);
+  EXPECT_THAT(tracker.getGraylistedNodes(), UnorderedElementsAre(3));
+
+  stats = buildWorkerStats({{1, 20ms},
+                            {2, 20ms},
+                            {3, 20ms}, // Behaves ok
+                            {4, 20ms}},
+                           10);
+  tracker.setStats(std::move(stats));
+
+  // node become ok and we observe that after graylist + grace period
+  tracker.updateGraylist(now + 10s + 60s + 1s);
+  EXPECT_EQ(0, tracker.getGraylistedNodes().size());
+
+  // Node misbehaves after monitoring period and before grace period
+  stats = buildWorkerStats({{1, 20ms},
+                            {2, 20ms},
+                            {3, 500ms}, // Outlier
+                            {4, 20ms}},
+                           10);
+  tracker.setStats(std::move(stats));
+  tracker.updateGraylist(now + 10s + 60s + 5s);
+  EXPECT_EQ(0, tracker.getGraylistedNodes().size());
+
+  // Nodes keep misbehaving until after the grace period.
+  tracker.updateGraylist(now + 10s + 60s + 11s);
   EXPECT_THAT(tracker.getGraylistedNodes(), UnorderedElementsAre(3));
 }
 
@@ -285,6 +367,10 @@ TEST(GraylistingTrackerTest, ExpiredGraylists) {
   tracker.updateGraylist(now);
   tracker.updateGraylist(now + 10s);
   EXPECT_EQ(1, tracker.getGraylistedNodes().size());
+
+  stats = buildWorkerStats(
+      {{1, 20ms}, {2, 20ms}, {3, 20ms}, {4, 20ms}, {5, 20ms}}, 10);
+  tracker.setStats(std::move(stats));
 
   tracker.updateGraylist(now + 20s);
   EXPECT_EQ(1, tracker.getGraylistedNodes().size());

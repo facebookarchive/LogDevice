@@ -197,6 +197,10 @@ struct Settings : public SettingsBundle {
   // graylisted
   std::chrono::seconds graylisting_grace_period;
 
+  // The duration through which a recently ungraylisted node will be monitored
+  // and graylisted as soon as it becomes an outlier
+  std::chrono::seconds graylisting_monitored_period;
+
   // The interval at which the graylists are refreshed
   std::chrono::seconds graylisting_refresh_interval;
 
