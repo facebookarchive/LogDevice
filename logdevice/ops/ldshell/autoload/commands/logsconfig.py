@@ -212,6 +212,51 @@ _attributes = [
         ),
     ),
     argument(
+        "sequencer_batching",
+        type=bool,
+        description=dedent(
+            """
+               Accumulate appends from clients and batch them together to
+               create fewer records in the system.
+             """
+        ),
+    ),
+    argument(
+        "sequencer_batching_size_trigger",
+        type=int,
+        description=dedent(
+            """
+               Sequencer batching (if used) flushes buffered appends for a log when
+               the
+               total amount of buffered uncompressed data reaches this many bytes (if
+               positive).
+             """
+        ),
+    ),
+    argument(
+        "sequencer_batching_compression",
+        type=str,
+        description=dedent(
+            """
+               Compression setting for sequencer batching (if used). It can be
+               'none' for no compression; 'zstd' for ZSTD; 'lz4' for LZ4; or lz4_hc for
+               LZ4 High Compression. The default is ZSTD.
+             """
+        ),
+    ),
+    argument(
+        "sequencer_batching_passthru_threshold",
+        type=int,
+        description=dedent(
+            """
+               Sequencer batching (if used) will pass through any appends with payload
+               size over this threshold (if positive).  This saves us a compression
+               round trip when a large batch comes in from BufferedWriter and the
+               benefit of batching and recompressing would be small.
+             """
+        ),
+    ),
+    argument(
         "extra_attributes",
         type=typing.Mapping[str, str],
         aliases=["extras"],

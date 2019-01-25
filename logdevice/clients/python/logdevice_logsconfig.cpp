@@ -52,6 +52,11 @@ constexpr auto logs_config_recognized_attributes = {
     STICKY_COPYSETS,
     MUTABLE_PER_EPOCH_LOG_METADATA_ENABLED,
     SEQUENCER_AFFINITY,
+    SEQUENCER_BATCHING,
+    SEQUENCER_BATCHING_TIME_TRIGGER,
+    SEQUENCER_BATCHING_SIZE_TRIGGER,
+    SEQUENCER_BATCHING_COMPRESSION,
+    SEQUENCER_BATCHING_PASSTHRU_THRESHOLD,
     SHADOW,
     TAIL_OPTIMIZED,
     EXTRAS};
@@ -90,6 +95,19 @@ parse_replicate_across_or_throw(const dict& rf_dict) {
   });
 
   return replicate_across;
+}
+
+static Compression parse_compression_or_throw(std::string key) {
+  std::transform(key.begin(), key.end(), key.begin(), ::tolower);
+  Compression c;
+  if (parseCompression(key.c_str(), &c) == -1) {
+    throw_python_exception(
+        PyExc_ValueError, str("Invalid compression: '" + key + "'"));
+    ld_check(false);
+    return Compression::NONE;
+  } else {
+    return c;
+  }
 }
 
 LogAttributes::PermissionsMap
@@ -263,6 +281,28 @@ dict LogAttributes_to_dict(const LogAttributes& attrs) {
       SEQUENCER_AFFINITY,
       output);
 
+  add_log_attribute<bool, bool>(attrs.sequencerBatching(),
+                                [](auto attr) { return attr.value(); },
+                                SEQUENCER_BATCHING,
+                                output);
+
+  add_log_attribute<ssize_t, ssize_t>(attrs.sequencerBatchingSizeTrigger(),
+                                      [](auto attr) { return attr.value(); },
+                                      SEQUENCER_BATCHING_SIZE_TRIGGER,
+                                      output);
+
+  add_log_attribute<Compression, std::string>(
+      attrs.sequencerBatchingCompression(),
+      [](auto attr) { return compressionToString(attr.value()); },
+      SEQUENCER_BATCHING_COMPRESSION,
+      output);
+
+  add_log_attribute<ssize_t, ssize_t>(
+      attrs.sequencerBatchingPassthruThreshold(),
+      [](auto attr) { return attr.value(); },
+      SEQUENCER_BATCHING_PASSTHRU_THRESHOLD,
+      output);
+
   add_log_attribute<logdevice::NodeLocationScope, std::string>(
       attrs.syncReplicationScope(),
       [](auto attr) { return NodeLocation::scopeNames()[attr.value()]; },
@@ -427,6 +467,22 @@ LogAttributes dict_to_LogAttributes(const dict& attrs) {
         std::string v = extract_string(value, SEQUENCER_AFFINITY);
         log_attributes = log_attributes.with_sequencerAffinity(v);
       }
+    } else if (key_string == SEQUENCER_BATCHING) {
+      bool v = convert_or_throw<bool>(value, SEQUENCER_BATCHING);
+      log_attributes = log_attributes.with_sequencerBatching(v);
+    } else if (key_string == SEQUENCER_BATCHING_SIZE_TRIGGER) {
+      ssize_t v =
+          convert_or_throw<ssize_t>(value, SEQUENCER_BATCHING_SIZE_TRIGGER);
+      log_attributes = log_attributes.with_sequencerBatchingSizeTrigger(v);
+    } else if (key_string == SEQUENCER_BATCHING_COMPRESSION) {
+      std::string v = extract_string(value, SEQUENCER_BATCHING_COMPRESSION);
+      Compression c = parse_compression_or_throw(v);
+      log_attributes = log_attributes.with_sequencerBatchingCompression(c);
+    } else if (key_string == SEQUENCER_BATCHING_PASSTHRU_THRESHOLD) {
+      ssize_t v = convert_or_throw<ssize_t>(
+          value, SEQUENCER_BATCHING_PASSTHRU_THRESHOLD);
+      log_attributes =
+          log_attributes.with_sequencerBatchingPassthruThreshold(v);
     } else if (key_string == SYNC_REPLICATION_SCOPE) {
       std::string v = extract_string(value, SYNC_REPLICATION_SCOPE);
       NodeLocationScope scope = parse_location_scope_or_throw(v);
