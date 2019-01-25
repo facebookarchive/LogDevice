@@ -411,7 +411,6 @@ void ClientReadStreamFailureDetector::scheduleExpiryTimer(TS now) {
 
   // Schedule the call to `removeExpiredOutliers`.
   std::chrono::milliseconds delta = TS(next_expiry - now).toMilliseconds();
-  ld_check(delta.count() >= 0);
   delta = std::max(std::chrono::milliseconds{0}, delta) +
       std::chrono::milliseconds{50};
   activateExpiryTimer(delta);
