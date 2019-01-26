@@ -13,10 +13,10 @@
 #include "folly/Function.h"
 #include "folly/Synchronized.h"
 #include "folly/io/async/DelayedDestruction.h"
+#include "folly/io/async/HHWheelTimer-fwd.h"
 
 namespace folly {
 class EventBase;
-class HHWheelTimer;
 } // namespace folly
 
 namespace facebook { namespace logdevice {
