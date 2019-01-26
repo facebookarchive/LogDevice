@@ -223,6 +223,22 @@ class Worker : public EventLoop {
   }
 
   /**
+   * @return struct event_base of the EventLoop associated with this worker.
+   * Deprecated. It is advised that new code should not use this.
+   */
+  struct event_base* getEventBase() {
+    return EventLoop::getEventBase();
+  }
+
+  /**
+   * @return Thread id of thread that executes work given to this worker.
+   * Deprecated. new code should not use this.
+   */
+  int getThreadId() {
+    return EventLoop::getThreadId();
+  }
+
+  /**
    * @return cluster configuration object cached on this Worker and
    *         auto updated
    */

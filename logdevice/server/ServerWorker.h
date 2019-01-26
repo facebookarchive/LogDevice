@@ -47,8 +47,9 @@ class ServerWorker : public Worker {
    * assert false (when enforce is true) and/or return nullptr.
    */
   static ServerWorker* onThisThread(bool enforce = true) {
-    if (ThreadID::getType() == ThreadID::SERVER_WORKER) {
-      return checked_downcast<ServerWorker*>(EventLoop::onThisThread());
+    if (ThreadID::getType() == ThreadID::SERVER_WORKER ||
+        ThreadID::getType() == ThreadID::CPU_EXEC) {
+      return checked_downcast<ServerWorker*>(Worker::onThisThread());
     }
     if (enforce) {
       // Not on a server worker == assert failure

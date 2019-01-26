@@ -25,6 +25,7 @@ class ThreadID {
     UNKNOWN = 0,        // Default type that will be returned if nothing was set
     SERVER_WORKER,      // Worker threads (server context)
     CLIENT_WORKER,      // Worker threads (client context)
+    CPU_EXEC,           // Threads belonging to CPUExecThreadPool
     UNKNOWN_WORKER,     // Worker threads (unknown context, only in tests)
     UNKNOWN_EVENT_LOOP, // EventLoop threads that are not Worker's
                         // (only in tests and tools)
@@ -43,7 +44,7 @@ class ThreadID {
 
   static bool isWorker() {
     return type_ == Type::SERVER_WORKER || type_ == Type::CLIENT_WORKER ||
-        type_ == Type::UNKNOWN_WORKER;
+        type_ == Type::UNKNOWN_WORKER || type_ == CPU_EXEC;
   }
   static bool isEventLoop() {
     return isWorker() || type_ == Type::UNKNOWN_EVENT_LOOP;

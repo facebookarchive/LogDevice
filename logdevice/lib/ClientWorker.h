@@ -34,8 +34,9 @@ class ClientWorker : public Worker {
    * assert false (when enforce is true) and/or return nullptr.
    */
   static ClientWorker* onThisThread(bool enforce = true) {
-    if (ThreadID::getType() == ThreadID::CLIENT_WORKER) {
-      return checked_downcast<ClientWorker*>(EventLoop::onThisThread());
+    if (ThreadID::getType() == ThreadID::CLIENT_WORKER ||
+        ThreadID::getType() == ThreadID::CPU_EXEC) {
+      return checked_downcast<ClientWorker*>(Worker::onThisThread());
     }
     if (enforce) {
       // Not on a client worker == assert failure
