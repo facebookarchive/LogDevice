@@ -1167,32 +1167,47 @@ int Socket::serializeMessageWithoutChecksum(const Message& msg,
 }
 
 // Serialization steps:
-//  1. ProtocolWriter allocates a temp evbuffer and uses that in its
-//     constructor
+//  1. ProtocolWriter allocates 2 temporary evbuffers(payload_evbuf and
+//     header_evbuf), one is for accepting serialized payload and the other for
+//     storing the ProtocolHeader(with checksum). The payload_evbuf is used
+//     in its constructor.
 //  2. message.serialize() writes serialized version of the message
-//     to the ProtocolWriter, which internally writes to temp evbuffer.
-//  3. Checksum is computed on temp evbuffer and a ProtocolHeader
-//     is generated. This ProtocolHeader is then written into output evbuffer.
-//  4. Move temp evbuffer contents into output evbuffer (after the
-//     ProtocolHeader)
+//     to ProtocolWriter, which internally writes it to payload_evbuf.
+//  3. Checksum is computed on payload_evbuf and a ProtocolHeader
+//     is generated. This ProtocolHeader is then written into header_evbuf.
+//  4. header_evbuf is pulled into payload_evbuf to avoid fragmentation, which
+//     otherwise causes 2 packets to be sent out over the network, thereby
+//     causing CPU regression.
+//  5. This combined temporary evbuffer is then moved into outbuf w/o any extra
+//     copy
 int Socket::serializeMessageWithChecksum(const Message& msg,
                                          size_t msglen,
                                          struct evbuffer* outbuf) {
-  struct evbuffer* cksum_evbuf = nullptr;
+  struct evbuffer* payload_evbuf = LD_EV(evbuffer_new)();
+  struct evbuffer* header_evbuf = LD_EV(evbuffer_new)();
+  if (!payload_evbuf || !header_evbuf) {
+    err = E::NOMEM;
+    close(err);
+    return -1;
+  }
+
   SCOPE_EXIT {
-    if (cksum_evbuf) {
-      LD_EV(evbuffer_free)(cksum_evbuf);
-      cksum_evbuf = nullptr;
+    if (payload_evbuf) {
+      LD_EV(evbuffer_free)(payload_evbuf);
+      payload_evbuf = nullptr;
+    }
+    if (header_evbuf) {
+      LD_EV(evbuffer_free)(header_evbuf);
+      header_evbuf = nullptr;
     }
   };
 
   ProtocolHeader protohdr;
   protohdr.len = msglen;
   protohdr.type = msg.type_;
-  cksum_evbuf = LD_EV(evbuffer_new)();
 
-  // 1. Serialize the message into checksum buffer
-  ProtocolWriter writer(msg.type_, cksum_evbuf, proto_);
+  // 1. Serialize the message into payload evbuffer
+  ProtocolWriter writer(msg.type_, payload_evbuf, proto_);
   msg.serialize(writer);
   ssize_t bodylen = writer.result();
   if (bodylen <= 0) { // unlikely
@@ -1214,25 +1229,57 @@ int Socket::serializeMessageWithChecksum(const Message& msg,
     protohdr.cksum += 1;
   }
 
-  // 3. Add proto header to evbuffer
+  // 3. Add proto header to header evbuffer
   size_t protohdr_bytes = ProtocolHeader::bytesNeeded(msg.type_, proto_);
-  if (LD_EV(evbuffer_add)(outbuf, &protohdr, protohdr_bytes) != 0) {
+  if (LD_EV(evbuffer_add)(header_evbuf, &protohdr, protohdr_bytes) != 0) {
     // unlikely
     RATELIMIT_CRITICAL(
         std::chrono::seconds(1),
         2,
-        "INTERNAL ERROR: Failed to add ProtocolHeader to output evbuffer");
+        "INTERNAL ERROR: Failed to add ProtocolHeader to evbuffer, msg type:%s",
+        messageTypeNames[msg.type_].c_str());
     ld_check(0);
     err = E::INTERNAL;
     close(err);
     return -1;
   }
 
-  // 4. Move the serialized message from cksum buffer to outbuf
-  if (outbuf && cksum_evbuf) {
+  // 4. Combine header_evbuf and payload_evbuf. The pullup call may require
+  //    a copy.
+  LD_EV(evbuffer_prepend_buffer)(payload_evbuf, header_evbuf);
+  size_t msg_evbuf_size = LD_EV(evbuffer_get_length)(payload_evbuf);
+  unsigned char* pullup_result =
+      LD_EV(evbuffer_pullup)(payload_evbuf, msg_evbuf_size);
+  if (!pullup_result) {
+    RATELIMIT_CRITICAL(
+        std::chrono::seconds(1),
+        2,
+        "INTERNAL ERROR: Failed during evbuffer_pullup, size:%zu, msg type:%s",
+        msg_evbuf_size,
+        messageTypeNames[msg.type_].c_str());
+    err = E::INTERNAL;
+    close(err);
+    return -1;
+  }
+
+  // 5. Finally move the whole serialized message from payload_evbuf to outbuf
+  if (outbuf) {
     // This moves all data b/w evbuffers without memory copy
-    int rv = LD_EV(evbuffer_add_buffer)(outbuf, cksum_evbuf);
-    ld_check(rv == 0);
+    int rv = LD_EV(evbuffer_add_buffer)(outbuf, payload_evbuf);
+    if (rv) {
+      size_t outbuf_size = LD_EV(evbuffer_get_length)(outbuf);
+      RATELIMIT_CRITICAL(
+          std::chrono::seconds(1),
+          2,
+          "INTERNAL ERROR: Failed to move payload_evbuf to outbuf, evbuf size "
+          "(msg:%zu, outbuf:%zu), msg type:%s",
+          msg_evbuf_size,
+          outbuf_size,
+          messageTypeNames[msg.type_].c_str());
+      err = E::INTERNAL;
+      close(err);
+      return -1;
+    }
   }
 
   ld_check(bodylen + protohdr_bytes == protohdr.len);
@@ -1249,7 +1296,7 @@ int Socket::serializeMessage(std::unique_ptr<Envelope>&& envelope,
       buffered_output_ ? buffered_output_ : deps_->getOutput(bev_);
   ld_check(outbuf);
 
-  bool compute_checksum = !buffered_output_ &&
+  bool compute_checksum =
       ProtocolHeader::needChecksumInHeader(msg.type_, proto_) &&
       isChecksummingEnabled(msg.type_);
 
