@@ -141,6 +141,10 @@ class NodesConfiguration {
     return version_;
   }
 
+  std::chrono::milliseconds getLastChangeTimestamp() const {
+    return std::chrono::milliseconds(last_change_timestamp_);
+  }
+
   node_index_t getMaxNodeIndex() const {
     return max_node_index_;
   }
@@ -182,7 +186,9 @@ class NodesConfiguration {
   // TODO(T33035439): get rid of this on config sync revamp
   std::unordered_map<Sockaddr, node_index_t, Sockaddr::Hash> addr_to_index_;
 
+  // Unix timestamp in milliseconds.
   uint64_t last_change_timestamp_;
+
   membership::MaintenanceID::Type last_maintenance_;
   std::string last_change_context_;
 

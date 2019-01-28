@@ -17,7 +17,11 @@ namespace facebook { namespace logdevice {
  */
 
 struct CONFIG_FETCH_Header {
-  enum class ConfigType : uint8_t { MAIN_CONFIG = 0, LOGS_CONFIG = 1 };
+  enum class ConfigType : uint8_t {
+    MAIN_CONFIG = 0,
+    LOGS_CONFIG = 1,
+    NODES_CONFIGURATION = 2
+  };
 
   CONFIG_FETCH_Header() = default;
   CONFIG_FETCH_Header(request_id_t rid, ConfigType config_type)
@@ -56,6 +60,11 @@ class CONFIG_FETCH_Message : public Message {
   }
 
   bool isCallerWaitingForCallback() const;
+
+ private:
+  Disposition handleMainConfigRequest(const Address& from);
+  Disposition handleLogsConfigRequest(const Address& from);
+  Disposition handleNodesConfigurationRequest(const Address& from);
 
  private:
   CONFIG_FETCH_Header header_;

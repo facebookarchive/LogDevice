@@ -52,7 +52,7 @@ void CONFIG_CHANGED_Header::serialize(ProtocolWriter& writer) const {
   if (writer.proto() < Compatibility::ProtocolVersion::RID_IN_CONFIG_MESSAGES) {
     CONFIG_CHANGED_Header_DEPRECATED old_hdr{
         modified_time,
-        version,
+        getServerConfigVersion(),
         server_origin,
         static_cast<CONFIG_CHANGED_Header_DEPRECATED::ConfigType>(config_type),
         static_cast<CONFIG_CHANGED_Header_DEPRECATED::Action>(action),
@@ -63,11 +63,11 @@ void CONFIG_CHANGED_Header::serialize(ProtocolWriter& writer) const {
     writer.write(status);
     writer.write(rid);
     writer.write(modified_time);
-    writer.write(version);
     writer.write(server_origin);
     writer.write(config_type);
     writer.write(action);
     writer.write(hash);
+    writer.write(version);
   }
 }
 
@@ -92,20 +92,20 @@ CONFIG_CHANGED_Header::deserialize(ProtocolReader& reader) {
     Status status;
     request_id_t rid;
     uint64_t modified_time;
-    config_version_t version;
     NodeID server_origin;
     ConfigType config_type;
     Action action;
     std::array<char, 10> hash;
+    uint64_t version;
 
     reader.read(&status);
     reader.read(&rid);
     reader.read(&modified_time);
-    reader.read(&version);
     reader.read(&server_origin);
     reader.read(&config_type);
     reader.read(&action);
     reader.read(&hash);
+    reader.read(&version);
 
     header = CONFIG_CHANGED_Header{status,
                                    rid,
@@ -135,6 +135,15 @@ void CONFIG_CHANGED_Message::serialize(ProtocolWriter& writer) const {
     writer.write(size);
     writer.writeVector(config_str_);
   }
+}
+
+config_version_t CONFIG_CHANGED_Header::getServerConfigVersion() const {
+  ld_check(version <= std::numeric_limits<uint32_t>::max());
+  return config_version_t(version);
+}
+
+vcs_config_version_t CONFIG_CHANGED_Header::getVCSConfigVersion() const {
+  return vcs_config_version_t(version);
 }
 
 MessageReadResult CONFIG_CHANGED_Message::deserialize(ProtocolReader& reader) {
@@ -250,10 +259,11 @@ CONFIG_CHANGED_Message::handleUpdateAction(const Address& from) {
   // already contains the most recent config.
   // Note we don't care if the update succeeded. if it failed, it means that
   // either we have the most recent config, or we are waiting for it.
-  updateable_server_config->updateLastKnownVersion(header_.version);
+  updateable_server_config->updateLastKnownVersion(
+      header_.getServerConfigVersion());
 
   // Now check if we already have the latest config
-  if (header_.version <= current_server_config->getVersion()) {
+  if (header_.getServerConfigVersion() <= current_server_config->getVersion()) {
     // Config version is already up to date, so we ignore the update
     WORKER_STAT_INCR(config_changed_ignored_uptodate);
     ld_debug("CONFIG_CHANGED_Message from %s ignored",
@@ -265,7 +275,8 @@ CONFIG_CHANGED_Message::handleUpdateAction(const Address& from) {
   // At this point, if that condition fails, it means that we are already
   // processing a previously received CONFIG_CHANGED, but haven't updated the
   // config yet. We can ignore this message to avoid wasting resources.
-  if (!updateable_server_config->updateLastReceivedVersion(header_.version)) {
+  if (!updateable_server_config->updateLastReceivedVersion(
+          header_.getServerConfigVersion())) {
     // A CONFIG_UPDATE message for the same version or more recent, has already
     // been received.
     WORKER_STAT_INCR(config_changed_ignored_update_in_progress);
@@ -333,10 +344,11 @@ CONFIG_CHANGED_Message::handleUpdateAction(const Address& from) {
   updateable_server_config->update(std::move(server_config));
   WORKER_STAT_INCR(config_changed_update);
   ld_info("Config updated to version %u by CONFIG_CHANGED_Message from %s",
-          header_.version.val(),
+          header_.getServerConfigVersion().val(),
           Sender::describeConnection(from).c_str());
 
-  worker->sender().setPeerConfigVersion(from, *this, header_.version);
+  worker->sender().setPeerConfigVersion(
+      from, *this, header_.getServerConfigVersion());
 
   return Disposition::NORMAL;
 }

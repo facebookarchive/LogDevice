@@ -19,7 +19,11 @@ namespace facebook { namespace logdevice {
  */
 
 struct CONFIG_CHANGED_Header {
-  enum class ConfigType : uint8_t { MAIN_CONFIG = 0, LOGS_CONFIG = 1 };
+  enum class ConfigType : uint8_t {
+    MAIN_CONFIG = 0,
+    LOGS_CONFIG = 1,
+    NODES_CONFIGURATION = 2
+  };
   enum class Action : uint8_t {
     // Used by RemoteLogsConfig to signal that current config should be
     // invalidated
@@ -38,17 +42,47 @@ struct CONFIG_CHANGED_Header {
   explicit CONFIG_CHANGED_Header(Status status,
                                  request_id_t rid,
                                  uint64_t modified_time,
-                                 config_version_t version,
+                                 uint64_t version,
                                  NodeID server_origin,
                                  ConfigType config_type,
                                  Action action)
       : status(status),
         rid(rid),
         modified_time(modified_time),
-        version(version),
         server_origin(server_origin),
         config_type(config_type),
-        action(action) {}
+        action(action),
+        version(version) {}
+
+  explicit CONFIG_CHANGED_Header(Status status,
+                                 request_id_t rid,
+                                 uint64_t modified_time,
+                                 config_version_t version,
+                                 NodeID server_origin,
+                                 ConfigType config_type,
+                                 Action action)
+      : CONFIG_CHANGED_Header(status,
+                              rid,
+                              modified_time,
+                              version.val(),
+                              server_origin,
+                              config_type,
+                              action) {}
+
+  explicit CONFIG_CHANGED_Header(Status status,
+                                 request_id_t rid,
+                                 uint64_t modified_time,
+                                 vcs_config_version_t version,
+                                 NodeID server_origin,
+                                 ConfigType config_type,
+                                 Action action)
+      : CONFIG_CHANGED_Header(status,
+                              rid,
+                              modified_time,
+                              version.val(),
+                              server_origin,
+                              config_type,
+                              action) {}
 
   explicit CONFIG_CHANGED_Header(uint64_t modified_time,
                                  config_version_t version,
@@ -56,19 +90,22 @@ struct CONFIG_CHANGED_Header {
                                  ConfigType config_type,
                                  Action action)
       : modified_time(modified_time),
-        version(version),
         server_origin(server_origin),
         config_type(config_type),
-        action(action) {}
+        action(action),
+        version(version.val()) {}
 
   static CONFIG_CHANGED_Header deserialize(ProtocolReader& reader);
 
   void serialize(ProtocolWriter& writer) const;
 
+  config_version_t getServerConfigVersion() const;
+  vcs_config_version_t getVCSConfigVersion() const;
+
   Status status{Status::OK};
   request_id_t rid{REQUEST_ID_INVALID};
   uint64_t modified_time;
-  config_version_t version;
+
   // Used to determine whether the config in the message body can be trusted.
   // If the config was originally sent from a server, it will have a valid
   // server_origin. Otherwise, it will be invalid.
@@ -76,11 +113,12 @@ struct CONFIG_CHANGED_Header {
   ConfigType config_type;
   Action action;
   char hash[10] = {0};
+  uint64_t version;
 
 } __attribute__((__packed__));
 
-static_assert(sizeof(CONFIG_CHANGED_Header) == 38,
-              "CONFIG_CHANGED_Header is expected to be 38 bytes");
+static_assert(sizeof(CONFIG_CHANGED_Header) == 42,
+              "CONFIG_CHANGED_Header is expected to be 42 bytes");
 
 class CONFIG_CHANGED_Message : public Message {
  public:

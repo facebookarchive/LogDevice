@@ -12,6 +12,7 @@
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationCodecFlatBuffers.h"
 #include "logdevice/common/protocol/CONFIG_CHANGED_Message.h"
 
 namespace facebook { namespace logdevice {
@@ -61,25 +62,24 @@ Message::Disposition CONFIG_FETCH_Message::onReceived(const Address& from) {
   ld_info("CONFIG_FETCH received from %s",
           Sender::describeConnection(from).c_str());
 
-  Worker* worker = Worker::onThisThread();
-  auto send_response = [&](std::unique_ptr<CONFIG_CHANGED_Message> msg) {
-    int rv = worker->sender().sendMessage(std::move(msg), from);
-    if (rv != 0) {
-      ld_error("Sending CONFIG_CHANGED_Message to %s failed with error %s",
-               from.toString().c_str(),
-               error_description(err));
-    }
-  };
-
-  if (header_.config_type == CONFIG_FETCH_Header::ConfigType::LOGS_CONFIG) {
-    ld_error("CONFIG_FETCH for logs config is currently not supported.");
-    err = E::BADMSG;
-    auto bad_msg =
-        std::make_unique<CONFIG_CHANGED_Message>(CONFIG_CHANGED_Header(err));
-    send_response(std::move(bad_msg));
-    return Disposition::ERROR;
+  switch (header_.config_type) {
+    case CONFIG_FETCH_Header::ConfigType::LOGS_CONFIG:
+      return handleLogsConfigRequest(from);
+    case CONFIG_FETCH_Header::ConfigType::MAIN_CONFIG:
+      return handleMainConfigRequest(from);
+    case CONFIG_FETCH_Header::ConfigType::NODES_CONFIGURATION:
+      return handleNodesConfigurationRequest(from);
   }
 
+  ld_error("Received a CONFIG_FETCH message with an unknown ConfigType: %u. "
+           "Ignoring it.",
+           static_cast<uint8_t>(header_.config_type));
+  return Disposition::ERROR;
+}
+
+Message::Disposition
+CONFIG_FETCH_Message::handleMainConfigRequest(const Address& from) {
+  auto worker = Worker::onThisThread();
   auto config = worker->getConfig();
   auto server_config = config->serverConfig();
   auto zk_config = config->zookeeperConfig();
@@ -105,7 +105,62 @@ Message::Disposition CONFIG_FETCH_Message::onReceived(const Address& from) {
       std::make_unique<CONFIG_CHANGED_Message>(
           hdr, server_config->toString(nullptr, zk_config.get(), true));
 
-  send_response(std::move(msg));
+  int rv = worker->sender().sendMessage(std::move(msg), from);
+  if (rv != 0) {
+    ld_error("Sending CONFIG_CHANGED_Message to %s failed with error %s",
+             from.toString().c_str(),
+             error_description(err));
+  }
+  return Disposition::NORMAL;
+}
+
+Message::Disposition
+CONFIG_FETCH_Message::handleLogsConfigRequest(const Address& from) {
+  ld_error("CONFIG_FETCH for logs config is currently not supported.");
+  err = E::BADMSG;
+  auto bad_msg =
+      std::make_unique<CONFIG_CHANGED_Message>(CONFIG_CHANGED_Header(err));
+
+  int rv =
+      Worker::onThisThread()->sender().sendMessage(std::move(bad_msg), from);
+  if (rv != 0) {
+    ld_error("Sending CONFIG_CHANGED_Message to %s failed with error %s",
+             from.toString().c_str(),
+             error_description(err));
+  }
+  return Disposition::ERROR;
+}
+
+Message::Disposition
+CONFIG_FETCH_Message::handleNodesConfigurationRequest(const Address& from) {
+  auto worker = Worker::onThisThread();
+  auto config = worker->getNodesConfiguration();
+  auto serialized =
+      configuration::nodes::NodesConfigurationCodecFlatBuffers::serialize(
+          *config, {/*compression=*/true});
+  if (serialized == "" && err != Status::OK) {
+    ld_error("Failed to serialize the NodesConfiguration with error %s",
+             error_description(err));
+    return Disposition::NORMAL;
+  }
+  CONFIG_CHANGED_Header hdr{
+      Status::OK,
+      header_.rid,
+      static_cast<uint64_t>(config->getLastChangeTimestamp().count()),
+      config->getVersion(),
+      worker->getServerConfig()->getMyNodeID(),
+      CONFIG_CHANGED_Header::ConfigType::NODES_CONFIGURATION,
+      isCallerWaitingForCallback() ? CONFIG_CHANGED_Header::Action::CALLBACK
+                                   : CONFIG_CHANGED_Header::Action::UPDATE};
+  std::unique_ptr<CONFIG_CHANGED_Message> msg =
+      std::make_unique<CONFIG_CHANGED_Message>(hdr, serialized);
+
+  int rv = worker->sender().sendMessage(std::move(msg), from);
+  if (rv != 0) {
+    ld_error("Sending CONFIG_CHANGED_Message to %s failed with error %s",
+             from.toString().c_str(),
+             error_description(err));
+  }
   return Disposition::NORMAL;
 }
 
