@@ -363,7 +363,7 @@ int Sender::notifyPeerConfigUpdated(Socket& sock) {
         server_config->getMainConfigMetadata();
 
     // Send a CONFIG_CHANGED message to update the main config on the peer
-    CONFIG_CHANGED_Header hdr = {
+    CONFIG_CHANGED_Header hdr{
         static_cast<uint64_t>(metadata.modified_time.count()),
         config_version,
         server_config->getServerOrigin(),

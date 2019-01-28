@@ -39,6 +39,7 @@ struct CONFIG_CHANGED_Header_DEPRECATED {
   ConfigType config_type;
   Action action;
   char hash[10];
+  char padding[4] = {0};
 };
 static_assert(sizeof(CONFIG_CHANGED_Header_DEPRECATED) == 32,
               "CONFIG_CHANGED_Header_DEPRECATED is expected to be 32 bytes");
@@ -58,6 +59,8 @@ void CONFIG_CHANGED_Header::serialize(ProtocolWriter& writer) const {
     std::copy(std::begin(hash), std::end(hash), std::begin(old_hdr.hash));
     writer.write(old_hdr);
   } else {
+    writer.write(status);
+    writer.write(rid);
     writer.write(modified_time);
     writer.write(version);
     writer.write(server_origin);
@@ -78,15 +81,15 @@ CONFIG_CHANGED_Header::deserialize(ProtocolReader& reader) {
         old_hdr.version,
         old_hdr.server_origin,
         static_cast<CONFIG_CHANGED_Header::ConfigType>(old_hdr.config_type),
-        static_cast<CONFIG_CHANGED_Header::Action>(old_hdr.action),
-        {}};
+        static_cast<CONFIG_CHANGED_Header::Action>(old_hdr.action)};
     std::copy(std::begin(old_hdr.hash),
               std::end(old_hdr.hash),
               std::begin(header.hash));
   } else {
     // Can't directly read into the struct as it's packed and the linter
     // complains. We need to use temp variables;
-
+    Status status;
+    request_id_t rid;
     uint64_t modified_time;
     config_version_t version;
     NodeID server_origin;
@@ -94,6 +97,8 @@ CONFIG_CHANGED_Header::deserialize(ProtocolReader& reader) {
     Action action;
     std::array<char, 10> hash;
 
+    reader.read(&status);
+    reader.read(&rid);
     reader.read(&modified_time);
     reader.read(&version);
     reader.read(&server_origin);
@@ -101,8 +106,13 @@ CONFIG_CHANGED_Header::deserialize(ProtocolReader& reader) {
     reader.read(&action);
     reader.read(&hash);
 
-    header = CONFIG_CHANGED_Header{
-        modified_time, version, server_origin, config_type, action, {}};
+    header = CONFIG_CHANGED_Header{status,
+                                   rid,
+                                   modified_time,
+                                   version,
+                                   server_origin,
+                                   config_type,
+                                   action};
     std::copy(std::begin(hash), std::end(hash), std::begin(header.hash));
   }
   return header;

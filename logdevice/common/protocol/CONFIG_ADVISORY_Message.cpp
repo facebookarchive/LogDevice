@@ -39,8 +39,7 @@ Message::Disposition CONFIG_ADVISORY_Message::onReceived(const Address& from) {
     if (Worker::settings().client_config_fetch_allowed) {
       ld_info("Fetching new config from %s",
               Sender::describeConnection(from).c_str());
-      CONFIG_FETCH_Header header = {
-          CONFIG_FETCH_Header::ConfigType::MAIN_CONFIG};
+      CONFIG_FETCH_Header header{CONFIG_FETCH_Header::ConfigType::MAIN_CONFIG};
       int rv = sender.sendMessage(
           std::make_unique<CONFIG_FETCH_Message>(header), from);
       if (rv != 0) {

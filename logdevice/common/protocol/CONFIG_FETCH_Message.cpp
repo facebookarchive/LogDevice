@@ -17,14 +17,26 @@
 namespace facebook { namespace logdevice {
 
 void CONFIG_FETCH_Header::serialize(ProtocolWriter& writer) const {
+  if (writer.proto() >=
+      Compatibility::ProtocolVersion::RID_IN_CONFIG_MESSAGES) {
+    writer.write(rid);
+  }
   writer.write(config_type);
 }
 
 CONFIG_FETCH_Header CONFIG_FETCH_Header::deserialize(ProtocolReader& reader) {
+  request_id_t rid;
   CONFIG_FETCH_Header::ConfigType config_type;
+
+  if (reader.proto() >=
+      Compatibility::ProtocolVersion::RID_IN_CONFIG_MESSAGES) {
+    reader.read(&rid);
+  }
+
   reader.read(&config_type);
 
   return CONFIG_FETCH_Header{
+      rid,
       config_type,
   };
 }
@@ -48,6 +60,7 @@ Message::Disposition CONFIG_FETCH_Message::onReceived(const Address& from) {
   if (header_.config_type == CONFIG_FETCH_Header::ConfigType::LOGS_CONFIG) {
     ld_error("CONFIG_FETCH for logs config is currently not supported.");
     err = E::BADMSG;
+    // TODO send a response here in the next diff.
     return Disposition::ERROR;
   }
 
@@ -58,7 +71,9 @@ Message::Disposition CONFIG_FETCH_Message::onReceived(const Address& from) {
 
   ServerConfig::ConfigMetadata metadata =
       server_config->getMainConfigMetadata();
-  CONFIG_CHANGED_Header hdr = {
+  CONFIG_CHANGED_Header hdr{
+      Status::OK,
+      header_.rid,
       static_cast<uint64_t>(metadata.modified_time.count()),
       server_config->getVersion(),
       server_config->getServerOrigin(),

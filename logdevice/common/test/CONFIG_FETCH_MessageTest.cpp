@@ -12,6 +12,7 @@
 
 #include <gtest/gtest.h>
 
+#include "logdevice/common/protocol/Compatibility.h"
 #include "logdevice/common/protocol/FixedSizeMessage.h"
 #include "logdevice/common/protocol/ProtocolReader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
@@ -30,7 +31,30 @@ std::unique_ptr<T> tryRead(std::string data, uint16_t proto_version) {
 }
 
 TEST(CONFIG_FETCH_MessageTest, SerializeAndDeserialize) {
-  CONFIG_FETCH_Header header{CONFIG_FETCH_Header::ConfigType::LOGS_CONFIG};
+  CONFIG_FETCH_Header header{
+      request_id_t(3), CONFIG_FETCH_Header::ConfigType::LOGS_CONFIG};
+  CONFIG_FETCH_Message msg{header};
+
+  EXPECT_EQ(CONFIG_FETCH_Header::ConfigType::LOGS_CONFIG,
+            msg.getHeader().config_type);
+
+  std::string dest;
+  ProtocolWriter writer(
+      &dest, "", Compatibility::ProtocolVersion::RID_IN_CONFIG_MESSAGES);
+  msg.serialize(writer);
+  ASSERT_GT(writer.result(), 0);
+
+  auto deserialized_msg = tryRead<CONFIG_FETCH_Message>(
+      dest, Compatibility::ProtocolVersion::RID_IN_CONFIG_MESSAGES);
+
+  EXPECT_EQ(request_id_t(3), deserialized_msg->getHeader().rid);
+  EXPECT_EQ(CONFIG_FETCH_Header::ConfigType::LOGS_CONFIG,
+            deserialized_msg->getHeader().config_type);
+}
+
+TEST(CONFIG_FETCH_MessageTest, LegacySerializeAndDeserialize) {
+  CONFIG_FETCH_Header header{
+      request_id_t(3), CONFIG_FETCH_Header::ConfigType::LOGS_CONFIG};
   CONFIG_FETCH_Message msg{header};
 
   EXPECT_EQ(CONFIG_FETCH_Header::ConfigType::LOGS_CONFIG,
@@ -42,65 +66,13 @@ TEST(CONFIG_FETCH_MessageTest, SerializeAndDeserialize) {
   msg.serialize(writer);
   ASSERT_GT(writer.result(), 0);
 
-  auto deserialized_msg = tryRead<CONFIG_FETCH_Message>(
-      dest, Compatibility::ProtocolVersion::PROTOCOL_VERSION_LOWER_BOUND);
-
-  EXPECT_EQ(CONFIG_FETCH_Header::ConfigType::LOGS_CONFIG,
-            deserialized_msg->getHeader().config_type);
-}
-
-// Test Backward comptability with FixedSizeMessage
-// TODO Add a static assert in the next diff to remove this with the cleanup of
-// the Comptability.h file.
-struct LegacyCONFIG_FETCH_Header {
-  enum class ConfigType : uint8_t { MAIN_CONFIG = 0, LOGS_CONFIG = 1 };
-  ConfigType config_type;
-};
-using LegacyCONFIG_FETCH_Message = FixedSizeMessage<LegacyCONFIG_FETCH_Header,
-                                                    MessageType::CONFIG_FETCH,
-                                                    TrafficClass::RECOVERY>;
-template <>
-Message::Disposition LegacyCONFIG_FETCH_Message::onReceived(const Address&) {
-  return Disposition::NORMAL;
-}
-
-TEST(CONFIG_FETCH_MessageTest, SerializeLegacyDeserializeNew) {
-  LegacyCONFIG_FETCH_Header header{
-      LegacyCONFIG_FETCH_Header::ConfigType::LOGS_CONFIG};
-  LegacyCONFIG_FETCH_Message msg{header};
-
-  EXPECT_EQ(LegacyCONFIG_FETCH_Header::ConfigType::LOGS_CONFIG,
-            msg.getHeader().config_type);
-
-  std::string dest;
-  ProtocolWriter writer(
-      &dest, "", Compatibility::ProtocolVersion::PROTOCOL_VERSION_LOWER_BOUND);
-  msg.serialize(writer);
-  ASSERT_GT(writer.result(), 0);
+  // Backward comptability test using a hex older than
+  // ProtocolVersion::RID_IN_CONFIG_MESSAGES.
+  EXPECT_EQ(std::string("01"), hexdump_buf(Slice::fromString(dest)));
 
   auto deserialized_msg = tryRead<CONFIG_FETCH_Message>(
       dest, Compatibility::ProtocolVersion::PROTOCOL_VERSION_LOWER_BOUND);
 
   EXPECT_EQ(CONFIG_FETCH_Header::ConfigType::LOGS_CONFIG,
-            deserialized_msg->getHeader().config_type);
-}
-
-TEST(CONFIG_FETCH_MessageTest, SerializeNewDeserializeLegacy) {
-  CONFIG_FETCH_Header header{CONFIG_FETCH_Header::ConfigType::LOGS_CONFIG};
-  CONFIG_FETCH_Message msg{header};
-
-  EXPECT_EQ(CONFIG_FETCH_Header::ConfigType::LOGS_CONFIG,
-            msg.getHeader().config_type);
-
-  std::string dest;
-  ProtocolWriter writer(
-      &dest, "", Compatibility::ProtocolVersion::PROTOCOL_VERSION_LOWER_BOUND);
-  msg.serialize(writer);
-  ASSERT_GT(writer.result(), 0);
-
-  auto deserialized_msg = tryRead<LegacyCONFIG_FETCH_Message>(
-      dest, Compatibility::ProtocolVersion::PROTOCOL_VERSION_LOWER_BOUND);
-
-  EXPECT_EQ(LegacyCONFIG_FETCH_Header::ConfigType::LOGS_CONFIG,
             deserialized_msg->getHeader().config_type);
 }

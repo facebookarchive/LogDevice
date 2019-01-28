@@ -18,14 +18,22 @@ namespace facebook { namespace logdevice {
 
 struct CONFIG_FETCH_Header {
   enum class ConfigType : uint8_t { MAIN_CONFIG = 0, LOGS_CONFIG = 1 };
-  ConfigType config_type;
+
+  CONFIG_FETCH_Header() = default;
+  CONFIG_FETCH_Header(request_id_t rid, ConfigType config_type)
+      : rid(rid), config_type(config_type) {}
+  explicit CONFIG_FETCH_Header(ConfigType config_type)
+      : rid(REQUEST_ID_INVALID), config_type(config_type) {}
 
   void serialize(ProtocolWriter&) const;
   static CONFIG_FETCH_Header deserialize(ProtocolReader& reader);
+
+  request_id_t rid{REQUEST_ID_INVALID};
+  ConfigType config_type;
 } __attribute__((__packed__));
 
-static_assert(sizeof(CONFIG_FETCH_Header) == 1,
-              "CONFIG_FETCH_Header is expected to be 1 byte");
+static_assert(sizeof(CONFIG_FETCH_Header) == 9,
+              "CONFIG_FETCH_Header is expected to be 9 byte");
 
 class CONFIG_FETCH_Message : public Message {
  public:

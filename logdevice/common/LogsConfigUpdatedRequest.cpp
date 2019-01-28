@@ -30,11 +30,11 @@ Request::Execution LogsConfigUpdatedRequest::execute() {
 
   for (auto it = clients_to_notify_.begin(); it != clients_to_notify_.end();
        ++it) {
-    CONFIG_CHANGED_Header hdr = {0,
-                                 CONFIG_VERSION_INVALID,
-                                 NodeID(),
-                                 CONFIG_CHANGED_Header::ConfigType::LOGS_CONFIG,
-                                 CONFIG_CHANGED_Header::Action::RELOAD};
+    CONFIG_CHANGED_Header hdr{0,
+                              CONFIG_VERSION_INVALID,
+                              NodeID(),
+                              CONFIG_CHANGED_Header::ConfigType::LOGS_CONFIG,
+                              CONFIG_CHANGED_Header::Action::RELOAD};
     auto msg = std::make_unique<CONFIG_CHANGED_Message>(hdr);
     int rv = worker->sender().sendMessage(std::move(msg), *it);
     if (rv != 0) {

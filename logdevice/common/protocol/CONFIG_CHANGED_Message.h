@@ -28,10 +28,42 @@ struct CONFIG_CHANGED_Header {
     UPDATE = 1
   };
 
+  CONFIG_CHANGED_Header() = default;
+
+  explicit CONFIG_CHANGED_Header(Status status) : status(status) {}
+
+  explicit CONFIG_CHANGED_Header(Status status,
+                                 request_id_t rid,
+                                 uint64_t modified_time,
+                                 config_version_t version,
+                                 NodeID server_origin,
+                                 ConfigType config_type,
+                                 Action action)
+      : status(status),
+        rid(rid),
+        modified_time(modified_time),
+        version(version),
+        server_origin(server_origin),
+        config_type(config_type),
+        action(action) {}
+
+  explicit CONFIG_CHANGED_Header(uint64_t modified_time,
+                                 config_version_t version,
+                                 NodeID server_origin,
+                                 ConfigType config_type,
+                                 Action action)
+      : modified_time(modified_time),
+        version(version),
+        server_origin(server_origin),
+        config_type(config_type),
+        action(action) {}
+
   static CONFIG_CHANGED_Header deserialize(ProtocolReader& reader);
 
   void serialize(ProtocolWriter& writer) const;
 
+  Status status{Status::OK};
+  request_id_t rid{REQUEST_ID_INVALID};
   uint64_t modified_time;
   config_version_t version;
   // Used to determine whether the config in the message body can be trusted.
@@ -40,12 +72,12 @@ struct CONFIG_CHANGED_Header {
   NodeID server_origin;
   ConfigType config_type;
   Action action;
-  char hash[10];
+  char hash[10] = {0};
 
 } __attribute__((__packed__));
 
-static_assert(sizeof(CONFIG_CHANGED_Header) == 28,
-              "CONFIG_CHANGED_Header is expected to be 28 bytes");
+static_assert(sizeof(CONFIG_CHANGED_Header) == 38,
+              "CONFIG_CHANGED_Header is expected to be 38 bytes");
 
 class CONFIG_CHANGED_Message : public Message {
  public:
@@ -69,6 +101,10 @@ class CONFIG_CHANGED_Message : public Message {
 
   const CONFIG_CHANGED_Header& getHeader() const {
     return header_;
+  }
+
+  const std::string& getConfigStr() const {
+    return config_str_;
   }
 
  private:

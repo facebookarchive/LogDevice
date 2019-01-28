@@ -15,7 +15,7 @@
 namespace facebook { namespace logdevice {
 
 Request::Execution ConfigurationFetchRequest::execute() {
-  CONFIG_FETCH_Header hdr = {config_type_};
+  CONFIG_FETCH_Header hdr = {id_, config_type_};
   std::unique_ptr<Message> msg = std::make_unique<CONFIG_FETCH_Message>(hdr);
   int rv =
       Worker::onThisThread()->sender().sendMessage(std::move(msg), node_id_);
