@@ -11,6 +11,9 @@
 
 namespace facebook { namespace logdevice {
 
+class Configuration;
+class CONFIG_CHANGED_Message;
+
 /**
  * @file Used to fetch a config from another host. Receiver should send a
  *       CONFIG_CHANGED message in response.
@@ -24,10 +27,13 @@ struct CONFIG_FETCH_Header {
   };
 
   CONFIG_FETCH_Header() = default;
-  CONFIG_FETCH_Header(request_id_t rid, ConfigType config_type)
-      : rid(rid), config_type(config_type) {}
-  explicit CONFIG_FETCH_Header(ConfigType config_type)
-      : rid(REQUEST_ID_INVALID), config_type(config_type) {}
+  CONFIG_FETCH_Header(request_id_t rid,
+                      ConfigType config_type,
+                      uint64_t my_version = 0)
+      : rid(rid), my_version(my_version), config_type(config_type) {}
+
+  explicit CONFIG_FETCH_Header(ConfigType config_type, uint64_t my_version = 0)
+      : CONFIG_FETCH_Header(REQUEST_ID_INVALID, config_type, my_version) {}
 
   void serialize(ProtocolWriter&) const;
   static CONFIG_FETCH_Header deserialize(ProtocolReader& reader);
@@ -36,11 +42,17 @@ struct CONFIG_FETCH_Header {
   // interested in the reply so the response action should be CALLBACK.
   // Otherwise, the caller is only interested in the side effects.
   request_id_t rid{REQUEST_ID_INVALID};
+
+  // Used to do conditionall fetch. If the version of config being fetched is
+  // smaller than or equal this version, the CONFIG_CHANGED response will have
+  // a UPTODATE status. If it's set to zero (default), a config will always be
+  // sent.
+  uint64_t my_version;
   ConfigType config_type;
 } __attribute__((__packed__));
 
-static_assert(sizeof(CONFIG_FETCH_Header) == 9,
-              "CONFIG_FETCH_Header is expected to be 9 byte");
+static_assert(sizeof(CONFIG_FETCH_Header) == 17,
+              "CONFIG_FETCH_Header is expected to be 17 byte");
 
 class CONFIG_FETCH_Message : public Message {
  public:
@@ -49,6 +61,8 @@ class CONFIG_FETCH_Message : public Message {
   explicit CONFIG_FETCH_Message(const CONFIG_FETCH_Header& header)
       : Message(MessageType::CONFIG_FETCH, TrafficClass::RECOVERY),
         header_(header) {}
+
+  virtual ~CONFIG_FETCH_Message() override {}
 
   void serialize(ProtocolWriter&) const override;
   static Message::deserializer_t deserialize;
@@ -60,6 +74,12 @@ class CONFIG_FETCH_Message : public Message {
   }
 
   bool isCallerWaitingForCallback() const;
+
+ protected:
+  // To be overridden in tests
+  virtual std::shared_ptr<Configuration> getConfig();
+  virtual int sendMessage(std::unique_ptr<CONFIG_CHANGED_Message> msg,
+                          const Address& to);
 
  private:
   Disposition handleMainConfigRequest(const Address& from);

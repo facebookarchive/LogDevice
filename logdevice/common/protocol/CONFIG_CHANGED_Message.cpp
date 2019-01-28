@@ -263,7 +263,8 @@ CONFIG_CHANGED_Message::handleUpdateAction(const Address& from) {
       header_.getServerConfigVersion());
 
   // Now check if we already have the latest config
-  if (header_.getServerConfigVersion() <= current_server_config->getVersion()) {
+  if (header_.status == Status::UPTODATE ||
+      header_.getServerConfigVersion() <= current_server_config->getVersion()) {
     // Config version is already up to date, so we ignore the update
     WORKER_STAT_INCR(config_changed_ignored_uptodate);
     ld_debug("CONFIG_CHANGED_Message from %s ignored",

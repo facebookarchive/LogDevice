@@ -21,17 +21,20 @@ void CONFIG_FETCH_Header::serialize(ProtocolWriter& writer) const {
   if (writer.proto() >=
       Compatibility::ProtocolVersion::RID_IN_CONFIG_MESSAGES) {
     writer.write(rid);
+    writer.write(my_version);
   }
   writer.write(config_type);
 }
 
 CONFIG_FETCH_Header CONFIG_FETCH_Header::deserialize(ProtocolReader& reader) {
   request_id_t rid;
+  uint64_t my_version = 0;
   CONFIG_FETCH_Header::ConfigType config_type;
 
   if (reader.proto() >=
       Compatibility::ProtocolVersion::RID_IN_CONFIG_MESSAGES) {
     reader.read(&rid);
+    reader.read(&my_version);
   }
 
   reader.read(&config_type);
@@ -39,6 +42,7 @@ CONFIG_FETCH_Header CONFIG_FETCH_Header::deserialize(ProtocolReader& reader) {
   return CONFIG_FETCH_Header{
       rid,
       config_type,
+      my_version,
   };
 }
 
@@ -79,8 +83,7 @@ Message::Disposition CONFIG_FETCH_Message::onReceived(const Address& from) {
 
 Message::Disposition
 CONFIG_FETCH_Message::handleMainConfigRequest(const Address& from) {
-  auto worker = Worker::onThisThread();
-  auto config = worker->getConfig();
+  auto config = getConfig();
   auto server_config = config->serverConfig();
   auto zk_config = config->zookeeperConfig();
 
@@ -97,15 +100,21 @@ CONFIG_FETCH_Message::handleMainConfigRequest(const Address& from) {
                                    : CONFIG_CHANGED_Header::Action::UPDATE};
   metadata.hash.copy(hdr.hash, sizeof hdr.hash);
 
-  // We still send the Zookeeper section for backwards compatibility on
-  // older servers, but on newer servers this is ignored
-  // Clients already ignore / don't use the Zookeeper section
-  // TODO deprecate in T32793726
-  std::unique_ptr<CONFIG_CHANGED_Message> msg =
-      std::make_unique<CONFIG_CHANGED_Message>(
-          hdr, server_config->toString(nullptr, zk_config.get(), true));
+  std::unique_ptr<CONFIG_CHANGED_Message> msg;
+  if (server_config->getVersion().val() <= header_.my_version) {
+    // The requester already have an up to date version.
+    hdr.status = Status::UPTODATE;
+    msg = std::make_unique<CONFIG_CHANGED_Message>(hdr, "");
+  } else {
+    // We still send the Zookeeper section for backwards compatibility on
+    // older servers, but on newer servers this is ignored
+    // Clients already ignore / don't use the Zookeeper section
+    // TODO deprecate in T32793726
+    msg = std::make_unique<CONFIG_CHANGED_Message>(
+        hdr, server_config->toString(nullptr, zk_config.get(), true));
+  }
 
-  int rv = worker->sender().sendMessage(std::move(msg), from);
+  int rv = sendMessage(std::move(msg), from);
   if (rv != 0) {
     ld_error("Sending CONFIG_CHANGED_Message to %s failed with error %s",
              from.toString().c_str(),
@@ -121,8 +130,7 @@ CONFIG_FETCH_Message::handleLogsConfigRequest(const Address& from) {
   auto bad_msg =
       std::make_unique<CONFIG_CHANGED_Message>(CONFIG_CHANGED_Header(err));
 
-  int rv =
-      Worker::onThisThread()->sender().sendMessage(std::move(bad_msg), from);
+  int rv = sendMessage(std::move(bad_msg), from);
   if (rv != 0) {
     ld_error("Sending CONFIG_CHANGED_Message to %s failed with error %s",
              from.toString().c_str(),
@@ -133,35 +141,53 @@ CONFIG_FETCH_Message::handleLogsConfigRequest(const Address& from) {
 
 Message::Disposition
 CONFIG_FETCH_Message::handleNodesConfigurationRequest(const Address& from) {
-  auto worker = Worker::onThisThread();
-  auto config = worker->getNodesConfiguration();
-  auto serialized =
-      configuration::nodes::NodesConfigurationCodecFlatBuffers::serialize(
-          *config, {/*compression=*/true});
-  if (serialized == "" && err != Status::OK) {
-    ld_error("Failed to serialize the NodesConfiguration with error %s",
-             error_description(err));
-    return Disposition::NORMAL;
-  }
+  auto config = getConfig();
+  auto nodes_cfg = config->serverConfig()->getNodesConfiguration();
+
   CONFIG_CHANGED_Header hdr{
       Status::OK,
       header_.rid,
-      static_cast<uint64_t>(config->getLastChangeTimestamp().count()),
-      config->getVersion(),
-      worker->getServerConfig()->getMyNodeID(),
+      static_cast<uint64_t>(nodes_cfg->getLastChangeTimestamp().count()),
+      nodes_cfg->getVersion(),
+      config->serverConfig()->getMyNodeID(),
       CONFIG_CHANGED_Header::ConfigType::NODES_CONFIGURATION,
       isCallerWaitingForCallback() ? CONFIG_CHANGED_Header::Action::CALLBACK
                                    : CONFIG_CHANGED_Header::Action::UPDATE};
-  std::unique_ptr<CONFIG_CHANGED_Message> msg =
-      std::make_unique<CONFIG_CHANGED_Message>(hdr, serialized);
 
-  int rv = worker->sender().sendMessage(std::move(msg), from);
+  std::unique_ptr<CONFIG_CHANGED_Message> msg;
+  if (nodes_cfg->getVersion().val() <= header_.my_version) {
+    // The requester already have an up to date version.
+    hdr.status = Status::UPTODATE;
+    msg = std::make_unique<CONFIG_CHANGED_Message>(hdr, "");
+  } else {
+    auto serialized =
+        configuration::nodes::NodesConfigurationCodecFlatBuffers::serialize(
+            *nodes_cfg, {/*compression=*/true});
+    if (serialized == "" && err != Status::OK) {
+      ld_error("Failed to serialize the NodesConfiguration with error %s",
+               error_description(err));
+      return Disposition::NORMAL;
+    }
+    msg = std::make_unique<CONFIG_CHANGED_Message>(hdr, serialized);
+  }
+
+  int rv = sendMessage(std::move(msg), from);
   if (rv != 0) {
     ld_error("Sending CONFIG_CHANGED_Message to %s failed with error %s",
              from.toString().c_str(),
              error_description(err));
   }
   return Disposition::NORMAL;
+}
+
+std::shared_ptr<Configuration> CONFIG_FETCH_Message::getConfig() {
+  return Worker::onThisThread()->getConfig();
+}
+
+int CONFIG_FETCH_Message::sendMessage(
+    std::unique_ptr<CONFIG_CHANGED_Message> msg,
+    const Address& to) {
+  return Worker::onThisThread()->sender().sendMessage(std::move(msg), to);
 }
 
 }} // namespace facebook::logdevice
