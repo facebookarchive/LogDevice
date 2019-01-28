@@ -138,7 +138,8 @@ bool ServerConfigSource::fetch(const std::string& host) {
   }
 
   std::unique_ptr<Request> fetch_request =
-      std::make_unique<ConfigurationFetchRequest>(node_id);
+      std::make_unique<ConfigurationFetchRequest>(
+          node_id, ConfigurationFetchRequest::ConfigType::MAIN_CONFIG);
   rv = processor_->postRequest(fetch_request);
   if (rv != 0) {
     ld_error("Unable to request config from server");

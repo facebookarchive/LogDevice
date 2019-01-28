@@ -27,6 +27,7 @@
 #include "logdevice/common/CheckSealRequest.h"
 #include "logdevice/common/ClientIdxAllocator.h"
 #include "logdevice/common/ClusterState.h"
+#include "logdevice/common/ConfigurationFetchRequest.h"
 #include "logdevice/common/CopySetManager.h"
 #include "logdevice/common/DataSizeRequest.h"
 #include "logdevice/common/EventLoopHandle.h"
@@ -126,6 +127,7 @@ class WorkerImpl {
   TimeoutMap commonTimeouts_;
   AppendRequestMap runningAppends_;
   CheckSealRequestMap runningCheckSeals_;
+  ConfigurationFetchRequestMap runningConfigurationFetches_;
   GetSeqStateRequestMap runningGetSeqState_;
   AppenderMap activeAppenders_;
   GetLogInfoRequestMaps runningGetLogInfo_;
@@ -525,6 +527,13 @@ void Worker::finishWorkAndCloseSockets() {
     ld_info("Aborted %lu get-trim-point requests", c);
   }
 
+  // abort configuration-fetch requests
+  if (!runningConfigurationFetches().map.empty()) {
+    c = runningConfigurationFetches().map.size();
+    runningConfigurationFetches().map.clear();
+    ld_info("Aborted %lu configuration-fetch requests", c);
+  }
+
   // Kick off the following async sequence:
   //  1) wait for requestsPending() to become zero
   //  2) tear down state machines such as read streams
@@ -683,6 +692,7 @@ bool Worker::requestsPending() const {
   PROCESS(runningTrimRequests().map, "trim requests");
   PROCESS(runningLogRebuildings().map, "log rebuildings");
   PROCESS(runningSyncSequencerRequests().getList(), "sync sequencer requests");
+  PROCESS(runningConfigurationFetches().map, "configuration fetch requests");
 #undef PROCESS
 
   if (counts.empty()) {
@@ -1080,6 +1090,10 @@ AppendRequestMap& Worker::runningAppends() const {
 
 CheckSealRequestMap& Worker::runningCheckSeals() const {
   return impl_->runningCheckSeals_;
+}
+
+ConfigurationFetchRequestMap& Worker::runningConfigurationFetches() const {
+  return impl_->runningConfigurationFetches_;
 }
 
 GetSeqStateRequestMap& Worker::runningGetSeqState() const {

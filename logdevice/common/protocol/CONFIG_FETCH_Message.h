@@ -28,6 +28,9 @@ struct CONFIG_FETCH_Header {
   void serialize(ProtocolWriter&) const;
   static CONFIG_FETCH_Header deserialize(ProtocolReader& reader);
 
+  // If the request ID is set, it means that whoever sent this message is
+  // interested in the reply so the response action should be CALLBACK.
+  // Otherwise, the caller is only interested in the side effects.
   request_id_t rid{REQUEST_ID_INVALID};
   ConfigType config_type;
 } __attribute__((__packed__));
@@ -51,6 +54,8 @@ class CONFIG_FETCH_Message : public Message {
   const CONFIG_FETCH_Header& getHeader() const {
     return header_;
   }
+
+  bool isCallerWaitingForCallback() const;
 
  private:
   CONFIG_FETCH_Header header_;

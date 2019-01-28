@@ -53,18 +53,33 @@ MessageReadResult CONFIG_FETCH_Message::deserialize(ProtocolReader& reader) {
   });
 }
 
+bool CONFIG_FETCH_Message::isCallerWaitingForCallback() const {
+  return header_.rid != REQUEST_ID_INVALID;
+}
+
 Message::Disposition CONFIG_FETCH_Message::onReceived(const Address& from) {
   ld_info("CONFIG_FETCH received from %s",
           Sender::describeConnection(from).c_str());
 
+  Worker* worker = Worker::onThisThread();
+  auto send_response = [&](std::unique_ptr<CONFIG_CHANGED_Message> msg) {
+    int rv = worker->sender().sendMessage(std::move(msg), from);
+    if (rv != 0) {
+      ld_error("Sending CONFIG_CHANGED_Message to %s failed with error %s",
+               from.toString().c_str(),
+               error_description(err));
+    }
+  };
+
   if (header_.config_type == CONFIG_FETCH_Header::ConfigType::LOGS_CONFIG) {
     ld_error("CONFIG_FETCH for logs config is currently not supported.");
     err = E::BADMSG;
-    // TODO send a response here in the next diff.
+    auto bad_msg =
+        std::make_unique<CONFIG_CHANGED_Message>(CONFIG_CHANGED_Header(err));
+    send_response(std::move(bad_msg));
     return Disposition::ERROR;
   }
 
-  Worker* worker = Worker::onThisThread();
   auto config = worker->getConfig();
   auto server_config = config->serverConfig();
   auto zk_config = config->zookeeperConfig();
@@ -78,7 +93,8 @@ Message::Disposition CONFIG_FETCH_Message::onReceived(const Address& from) {
       server_config->getVersion(),
       server_config->getServerOrigin(),
       CONFIG_CHANGED_Header::ConfigType::MAIN_CONFIG,
-      CONFIG_CHANGED_Header::Action::UPDATE};
+      isCallerWaitingForCallback() ? CONFIG_CHANGED_Header::Action::CALLBACK
+                                   : CONFIG_CHANGED_Header::Action::UPDATE};
   metadata.hash.copy(hdr.hash, sizeof hdr.hash);
 
   // We still send the Zookeeper section for backwards compatibility on
@@ -89,12 +105,7 @@ Message::Disposition CONFIG_FETCH_Message::onReceived(const Address& from) {
       std::make_unique<CONFIG_CHANGED_Message>(
           hdr, server_config->toString(nullptr, zk_config.get(), true));
 
-  int rv = worker->sender().sendMessage(std::move(msg), from);
-  if (rv != 0) {
-    ld_error("Sending CONFIG_CHANGED_Message to %s failed with error %s",
-             from.toString().c_str(),
-             error_description(err));
-  }
+  send_response(std::move(msg));
   return Disposition::NORMAL;
 }
 

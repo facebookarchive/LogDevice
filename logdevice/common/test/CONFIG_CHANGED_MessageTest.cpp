@@ -20,6 +20,7 @@ using namespace facebook::logdevice;
 
 void serializeAndDeserialize(
     uint64_t proto_version,
+    CONFIG_CHANGED_Header::Action action,
     folly::Optional<std::string> expected_hex = folly::none) {
   CONFIG_CHANGED_Header hdr{Status::BADMSG,
                             request_id_t(3),
@@ -27,7 +28,7 @@ void serializeAndDeserialize(
                             config_version_t(4321),
                             NodeID(10, 2),
                             CONFIG_CHANGED_Header::ConfigType::MAIN_CONFIG,
-                            CONFIG_CHANGED_Header::Action::UPDATE};
+                            action};
   std::string hash = "testhash";
   hash.copy(hdr.hash, hash.size());
 
@@ -38,7 +39,7 @@ void serializeAndDeserialize(
   EXPECT_EQ(NodeID(10, 2), msg.getHeader().server_origin);
   EXPECT_EQ(CONFIG_CHANGED_Header::ConfigType::MAIN_CONFIG,
             msg.getHeader().config_type);
-  EXPECT_EQ(CONFIG_CHANGED_Header::Action::UPDATE, msg.getHeader().action);
+  EXPECT_EQ(action, msg.getHeader().action);
   EXPECT_EQ(0, hash.compare(0, hash.size(), std::string(msg.getHeader().hash)));
   EXPECT_EQ("test", msg.getConfigStr());
 
@@ -73,20 +74,43 @@ void serializeAndDeserialize(
   EXPECT_EQ(NodeID(10, 2), deserialized_header.server_origin);
   EXPECT_EQ(CONFIG_CHANGED_Header::ConfigType::MAIN_CONFIG,
             deserialized_header.config_type);
-  EXPECT_EQ(CONFIG_CHANGED_Header::Action::UPDATE, deserialized_header.action);
+  EXPECT_EQ(action, deserialized_header.action);
   EXPECT_EQ(
       0, hash.compare(0, hash.size(), std::string(deserialized_header.hash)));
-  EXPECT_EQ("test", deserialized_msg->getConfigStr());
+  if (proto_version < Compatibility::ProtocolVersion::RID_IN_CONFIG_MESSAGES &&
+      action == CONFIG_CHANGED_Header::Action::RELOAD) {
+    EXPECT_EQ("", deserialized_msg->getConfigStr());
+  } else {
+    EXPECT_EQ("test", deserialized_msg->getConfigStr());
+  }
 }
 
 TEST(CONFIG_CHANGED_MessageTest, SerializationAndDeserialization) {
   serializeAndDeserialize(
-      Compatibility::ProtocolVersion::RID_IN_CONFIG_MESSAGES);
+      Compatibility::ProtocolVersion::RID_IN_CONFIG_MESSAGES,
+      CONFIG_CHANGED_Header::Action::UPDATE);
 }
 
-TEST(CONFIG_CHANGED_MessageTest, LegacySerialization) {
+TEST(CONFIG_CHANGED_MessageTest, LegacySerializationActionUpdate) {
   serializeAndDeserialize(
       Compatibility::ProtocolVersion::PROTOCOL_VERSION_LOWER_BOUND,
+      CONFIG_CHANGED_Header::Action::UPDATE,
       std::string("D204000000000000E110000002000A000001746573746861736800000000"
                   "00000400000074657374"));
+}
+
+TEST(CONFIG_CHANGED_MessageTest, LegacySerializationActionReload) {
+  // Legacy serialization doesn't serialize the body except if it's of action
+  // UPDATE. The behavior got changed in version > RID_IN_CONFIG_MESSAGES
+  serializeAndDeserialize(
+      Compatibility::ProtocolVersion::PROTOCOL_VERSION_LOWER_BOUND,
+      CONFIG_CHANGED_Header::Action::RELOAD,
+      std::string(
+          "D204000000000000E110000002000A0000007465737468617368000000000000"));
+}
+
+TEST(CONFIG_CHANGED_MessageTest, LegacySerializationActionCallback) {
+  serializeAndDeserialize(
+      Compatibility::ProtocolVersion::RID_IN_CONFIG_MESSAGES,
+      CONFIG_CHANGED_Header::Action::CALLBACK);
 }

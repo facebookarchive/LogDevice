@@ -12,6 +12,7 @@
 
 #include <folly/compression/Compression.h>
 
+#include "logdevice/common/ConfigurationFetchRequest.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Socket.h"
 #include "logdevice/common/Worker.h"
@@ -121,9 +122,15 @@ CONFIG_CHANGED_Header::deserialize(ProtocolReader& reader) {
 void CONFIG_CHANGED_Message::serialize(ProtocolWriter& writer) const {
   header_.serialize(writer);
 
-  if (header_.action == CONFIG_CHANGED_Header::Action::UPDATE) {
-    ld_check(config_str_.size() <=
-             Message::MAX_LEN - sizeof(header_) - sizeof(config_str_size_t));
+  if (writer.proto() < Compatibility::ProtocolVersion::RID_IN_CONFIG_MESSAGES) {
+    if (header_.action == CONFIG_CHANGED_Header::Action::UPDATE) {
+      ld_check(config_str_.size() <=
+               Message::MAX_LEN - sizeof(header_) - sizeof(config_str_size_t));
+      config_str_size_t size = config_str_.size();
+      writer.write(size);
+      writer.writeVector(config_str_);
+    }
+  } else {
     config_str_size_t size = config_str_.size();
     writer.write(size);
     writer.writeVector(config_str_);
@@ -133,8 +140,16 @@ void CONFIG_CHANGED_Message::serialize(ProtocolWriter& writer) const {
 MessageReadResult CONFIG_CHANGED_Message::deserialize(ProtocolReader& reader) {
   CONFIG_CHANGED_Header hdr = CONFIG_CHANGED_Header::deserialize(reader);
   std::string config_str;
-  if (hdr.action == CONFIG_CHANGED_Header::Action::UPDATE) {
-    config_str_size_t size = 0;
+
+  if (reader.proto() < Compatibility::ProtocolVersion::RID_IN_CONFIG_MESSAGES) {
+    if (hdr.action == CONFIG_CHANGED_Header::Action::UPDATE) {
+      config_str_size_t size = 0;
+      reader.read(&size);
+      config_str.resize(size);
+      reader.read(const_cast<char*>(config_str.data()), config_str.size());
+    }
+  } else {
+    config_str_size_t size;
     reader.read(&size);
     config_str.resize(size);
     reader.read(const_cast<char*>(config_str.data()), config_str.size());
@@ -149,48 +164,76 @@ Message::Disposition CONFIG_CHANGED_Message::onReceived(const Address& from) {
                  "CONFIG_CHANGED received from %s",
                  Sender::describeConnection(from).c_str());
 
-  Worker* worker = Worker::onThisThread();
-  if (header_.action == CONFIG_CHANGED_Header::Action::RELOAD) {
-    // this should only happen if we're using RemoteLogsConfig
-    auto logs_config = worker->getLogsConfig();
-    if (logs_config->isLocal()) {
-      RATELIMIT_ERROR(std::chrono::seconds(10),
-                      10,
-                      "Received CONFIG_CHANGED with RELOAD action from %s "
-                      "but the LogsConfig is local!",
-                      from.toString().c_str());
-      return Disposition::NORMAL;
-    }
-    if (from.isClientAddress()) {
-      RATELIMIT_CRITICAL(std::chrono::seconds(10),
-                         10,
-                         "Received CONFIG_CHANGED with RELOAD action from %s "
-                         "but should only be sent by servers",
-                         from.toString().c_str());
-      return Disposition::NORMAL;
-    }
-    if (!logs_config->useConfigChangedMessageFrom(from.asNodeID())) {
-      // this is a stale reply - we don't care about this node's view of the
-      // config anymore
-      return Disposition::NORMAL;
-    }
+  switch (header_.action) {
+    case CONFIG_CHANGED_Header::Action::CALLBACK:
+      return handleCallbackAction(from);
+    case CONFIG_CHANGED_Header::Action::RELOAD:
+      return handleReloadAction(from);
+    case CONFIG_CHANGED_Header::Action::UPDATE:
+      return handleUpdateAction(from);
+    default:
+      ld_error("Invalid CONFIG_CHANGED_header_::Action received");
+      err = E::BADMSG;
+      return Disposition::ERROR;
+  }
+}
 
-    int rv =
-        worker->getUpdateableConfig()->updateableLogsConfig()->invalidate();
-    if (rv != 0) {
-      ld_error("Config reload failed with error %s", error_description(err));
-      return Disposition::NORMAL;
-    }
-    WORKER_STAT_INCR(config_changed_reload);
+Message::Disposition
+CONFIG_CHANGED_Message::handleCallbackAction(const Address& from) {
+  Worker* worker = Worker::onThisThread();
+  auto& map = worker->runningConfigurationFetches().map;
+  auto it = map.find(header_.rid);
+  if (it == map.end()) {
+    RATELIMIT_INFO(std::chrono::seconds(10),
+                   10,
+                   "CONFIG_CHANGED of action CALLBACK received from %s "
+                   "but couldn't find the corresponding request. Ignoring.",
+                   Sender::describeConnection(from).c_str());
+    return Disposition::NORMAL;
+  }
+  it->second->onReply(header_, config_str_);
+  return Disposition::NORMAL;
+}
+
+Message::Disposition
+CONFIG_CHANGED_Message::handleReloadAction(const Address& from) {
+  Worker* worker = Worker::onThisThread();
+  // this should only happen if we're using RemoteLogsConfig
+  auto logs_config = worker->getLogsConfig();
+  if (logs_config->isLocal()) {
+    RATELIMIT_ERROR(std::chrono::seconds(10),
+                    10,
+                    "Received CONFIG_CHANGED with RELOAD action from %s "
+                    "but the LogsConfig is local!",
+                    from.toString().c_str());
+    return Disposition::NORMAL;
+  }
+  if (from.isClientAddress()) {
+    RATELIMIT_CRITICAL(std::chrono::seconds(10),
+                       10,
+                       "Received CONFIG_CHANGED with RELOAD action from %s "
+                       "but should only be sent by servers",
+                       from.toString().c_str());
+    return Disposition::NORMAL;
+  }
+  if (!logs_config->useConfigChangedMessageFrom(from.asNodeID())) {
+    // this is a stale reply - we don't care about this node's view of the
+    // config anymore
     return Disposition::NORMAL;
   }
 
-  if (header_.action != CONFIG_CHANGED_Header::Action::UPDATE) {
-    ld_error("Invalid CONFIG_CHANGED_header_::Action received");
-    err = E::BADMSG;
-    return Disposition::ERROR;
+  int rv = worker->getUpdateableConfig()->updateableLogsConfig()->invalidate();
+  if (rv != 0) {
+    ld_error("Config reload failed with error %s", error_description(err));
+    return Disposition::NORMAL;
   }
+  WORKER_STAT_INCR(config_changed_reload);
+  return Disposition::NORMAL;
+}
 
+Message::Disposition
+CONFIG_CHANGED_Message::handleUpdateAction(const Address& from) {
+  Worker* worker = Worker::onThisThread();
   if (header_.config_type != CONFIG_CHANGED_Header::ConfigType::MAIN_CONFIG) {
     ld_error("Only CONFIG_CHANGED_header_::ConfigType::MAIN_CONFIG is "
              "supported for CONFIG_CHANGED updates");

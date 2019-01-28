@@ -141,6 +141,7 @@ struct AppendRequestMap;
 struct AppenderMap;
 struct CheckNodeHealthRequestSet;
 struct CheckSealRequestMap;
+struct ConfigurationFetchRequestMap;
 struct ClusterStateSubscriptionList;
 struct DataSizeRequestMap;
 struct ExponentialBackoffTimerNode;
@@ -451,6 +452,8 @@ class Worker : public EventLoop {
 
   // a map of all currently running CheckSealRequest
   CheckSealRequestMap& runningCheckSeals() const;
+
+  ConfigurationFetchRequestMap& runningConfigurationFetches() const;
 
   // a map of all currently running GetSeqStateRequests
   GetSeqStateRequestMap& runningGetSeqState() const;

@@ -25,7 +25,10 @@ struct CONFIG_CHANGED_Header {
     // invalidated
     RELOAD = 0,
     // Used by config synchronization to provide the new config
-    UPDATE = 1
+    UPDATE = 1,
+    // Used when there's some request that's waiting for this response.
+    // rid should never be invalid in this case
+    CALLBACK = 2,
   };
 
   CONFIG_CHANGED_Header() = default;
@@ -106,6 +109,11 @@ class CONFIG_CHANGED_Message : public Message {
   const std::string& getConfigStr() const {
     return config_str_;
   }
+
+ private:
+  Disposition handleCallbackAction(const Address& from);
+  Disposition handleReloadAction(const Address& from);
+  Disposition handleUpdateAction(const Address& from);
 
  private:
   CONFIG_CHANGED_Header header_;
