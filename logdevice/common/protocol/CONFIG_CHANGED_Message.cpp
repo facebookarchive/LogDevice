@@ -7,6 +7,9 @@
  */
 #include "logdevice/common/protocol/CONFIG_CHANGED_Message.h"
 
+#include <algorithm>
+#include <iterator>
+
 #include <folly/compression/Compression.h>
 
 #include "logdevice/common/Sender.h"
@@ -15,16 +18,98 @@
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/ServerConfig.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/protocol/Compatibility.h"
 #include "logdevice/common/protocol/ProtocolReader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
 #include "logdevice/common/stats/Stats.h"
 
 namespace facebook { namespace logdevice {
 
+// TODO: Remove this when the min protocol version is >=
+// Comptability::ProtocolVersion::RID_IN_CONFIG_MESSAGES.
+// It's deprecated because the struct is not packed making it super hard to
+// extend it or add new fields.
+namespace {
+struct CONFIG_CHANGED_Header_DEPRECATED {
+  enum class ConfigType : uint8_t { MAIN_CONFIG = 0, LOGS_CONFIG = 1 };
+  enum class Action : uint8_t { RELOAD = 0, UPDATE = 1 };
+  uint64_t modified_time;
+  config_version_t version;
+  NodeID server_origin;
+  ConfigType config_type;
+  Action action;
+  char hash[10];
+};
+static_assert(sizeof(CONFIG_CHANGED_Header_DEPRECATED) == 32,
+              "CONFIG_CHANGED_Header_DEPRECATED is expected to be 32 bytes");
+} // namespace
+
 using config_str_size_t = uint32_t;
 
+void CONFIG_CHANGED_Header::serialize(ProtocolWriter& writer) const {
+  if (writer.proto() < Compatibility::ProtocolVersion::RID_IN_CONFIG_MESSAGES) {
+    CONFIG_CHANGED_Header_DEPRECATED old_hdr{
+        modified_time,
+        version,
+        server_origin,
+        static_cast<CONFIG_CHANGED_Header_DEPRECATED::ConfigType>(config_type),
+        static_cast<CONFIG_CHANGED_Header_DEPRECATED::Action>(action),
+        {}};
+    std::copy(std::begin(hash), std::end(hash), std::begin(old_hdr.hash));
+    writer.write(old_hdr);
+  } else {
+    writer.write(modified_time);
+    writer.write(version);
+    writer.write(server_origin);
+    writer.write(config_type);
+    writer.write(action);
+    writer.write(hash);
+  }
+}
+
+CONFIG_CHANGED_Header
+CONFIG_CHANGED_Header::deserialize(ProtocolReader& reader) {
+  CONFIG_CHANGED_Header header;
+  if (reader.proto() < Compatibility::ProtocolVersion::RID_IN_CONFIG_MESSAGES) {
+    CONFIG_CHANGED_Header_DEPRECATED old_hdr;
+    reader.read(&old_hdr);
+    header = CONFIG_CHANGED_Header{
+        old_hdr.modified_time,
+        old_hdr.version,
+        old_hdr.server_origin,
+        static_cast<CONFIG_CHANGED_Header::ConfigType>(old_hdr.config_type),
+        static_cast<CONFIG_CHANGED_Header::Action>(old_hdr.action),
+        {}};
+    std::copy(std::begin(old_hdr.hash),
+              std::end(old_hdr.hash),
+              std::begin(header.hash));
+  } else {
+    // Can't directly read into the struct as it's packed and the linter
+    // complains. We need to use temp variables;
+
+    uint64_t modified_time;
+    config_version_t version;
+    NodeID server_origin;
+    ConfigType config_type;
+    Action action;
+    std::array<char, 10> hash;
+
+    reader.read(&modified_time);
+    reader.read(&version);
+    reader.read(&server_origin);
+    reader.read(&config_type);
+    reader.read(&action);
+    reader.read(&hash);
+
+    header = CONFIG_CHANGED_Header{
+        modified_time, version, server_origin, config_type, action, {}};
+    std::copy(std::begin(hash), std::end(hash), std::begin(header.hash));
+  }
+  return header;
+}
+
 void CONFIG_CHANGED_Message::serialize(ProtocolWriter& writer) const {
-  writer.write(header_);
+  header_.serialize(writer);
 
   if (header_.action == CONFIG_CHANGED_Header::Action::UPDATE) {
     ld_check(config_str_.size() <=
@@ -36,8 +121,7 @@ void CONFIG_CHANGED_Message::serialize(ProtocolWriter& writer) const {
 }
 
 MessageReadResult CONFIG_CHANGED_Message::deserialize(ProtocolReader& reader) {
-  CONFIG_CHANGED_Header hdr;
-  reader.read(&hdr);
+  CONFIG_CHANGED_Header hdr = CONFIG_CHANGED_Header::deserialize(reader);
   std::string config_str;
   if (hdr.action == CONFIG_CHANGED_Header::Action::UPDATE) {
     config_str_size_t size = 0;

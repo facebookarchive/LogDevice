@@ -27,6 +27,11 @@ struct CONFIG_CHANGED_Header {
     // Used by config synchronization to provide the new config
     UPDATE = 1
   };
+
+  static CONFIG_CHANGED_Header deserialize(ProtocolReader& reader);
+
+  void serialize(ProtocolWriter& writer) const;
+
   uint64_t modified_time;
   config_version_t version;
   // Used to determine whether the config in the message body can be trusted.
@@ -36,10 +41,11 @@ struct CONFIG_CHANGED_Header {
   ConfigType config_type;
   Action action;
   char hash[10];
-};
 
-static_assert(sizeof(CONFIG_CHANGED_Header) == 32,
-              "CONFIG_CHANGED_Header is expected to be 32 bytes");
+} __attribute__((__packed__));
+
+static_assert(sizeof(CONFIG_CHANGED_Header) == 28,
+              "CONFIG_CHANGED_Header is expected to be 28 bytes");
 
 class CONFIG_CHANGED_Message : public Message {
  public:
@@ -60,6 +66,10 @@ class CONFIG_CHANGED_Message : public Message {
   static Message::deserializer_t deserialize;
 
   Disposition onReceived(const Address& from) override;
+
+  const CONFIG_CHANGED_Header& getHeader() const {
+    return header_;
+  }
 
  private:
   CONFIG_CHANGED_Header header_;

@@ -85,6 +85,9 @@ enum ProtocolVersion : uint16_t {
   // GOSSIP_Message includes node_id_list_ to deliver hashmap
   HASHMAP_SUPPORT_IN_GOSSIP, // = 92
 
+  // Adds an optional request ID to CONFIG_FETCH & CONFIG_CHANGED messages
+  RID_IN_CONFIG_MESSAGES, // = 93
+
   // NOTE: insert new protocol versions here
 
   // Maximum version number of the protocol this version of LogDevice
@@ -122,6 +125,7 @@ static_assert(ADAPTIVE_BOYCOTT_DURATION == 89, "");
 static_assert(STARTING_STATE_SUPPORT == 90, "");
 static_assert(NO_BLOCK_STARTING_LSN_IN_STORE_MESSAGES == 91, "");
 static_assert(HASHMAP_SUPPORT_IN_GOSSIP == 92, "");
+static_assert(RID_IN_CONFIG_MESSAGES == 93, "");
 
 constexpr uint16_t MIN_PROTOCOL_SUPPORTED = PROTOCOL_VERSION_LOWER_BOUND + 1;
 constexpr uint16_t MAX_PROTOCOL_SUPPORTED = PROTOCOL_VERSION_UPPER_BOUND - 1;

@@ -16,7 +16,31 @@
 
 namespace facebook { namespace logdevice {
 
-template <>
+void CONFIG_FETCH_Header::serialize(ProtocolWriter& writer) const {
+  writer.write(config_type);
+}
+
+CONFIG_FETCH_Header CONFIG_FETCH_Header::deserialize(ProtocolReader& reader) {
+  CONFIG_FETCH_Header::ConfigType config_type;
+  reader.read(&config_type);
+
+  return CONFIG_FETCH_Header{
+      config_type,
+  };
+}
+
+void CONFIG_FETCH_Message::serialize(ProtocolWriter& writer) const {
+  header_.serialize(writer);
+}
+
+MessageReadResult CONFIG_FETCH_Message::deserialize(ProtocolReader& reader) {
+  CONFIG_FETCH_Message message;
+  message.header_ = CONFIG_FETCH_Header::deserialize(reader);
+  return reader.result([message = std::move(message)] {
+    return new CONFIG_FETCH_Message(message);
+  });
+}
+
 Message::Disposition CONFIG_FETCH_Message::onReceived(const Address& from) {
   ld_info("CONFIG_FETCH received from %s",
           Sender::describeConnection(from).c_str());
