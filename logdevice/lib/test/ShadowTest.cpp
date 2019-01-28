@@ -48,13 +48,15 @@ static const std::array<TestLogData, kTestDataLen> kTestData{
 
 class MockShadowClientFactory : public ShadowClientFactory {
  public:
-  explicit MockShadowClientFactory(std::string origin_name)
-      : ShadowClientFactory(origin_name, nullptr) {}
+  explicit MockShadowClientFactory(std::string origin_name,
+                                   UpdateableSettings<Settings> client_settings)
+      : ShadowClientFactory(origin_name, nullptr, client_settings) {}
   ~MockShadowClientFactory() = default;
 
   void start(std::chrono::milliseconds) override {}
   void shutdown() override {}
-  int createAsync(const Shadow::Attrs& /*attrs*/) override {
+  int createAsync(const Shadow::Attrs& /*attrs*/,
+                  bool /* is_a_retry */) override {
     return 0;
   }
 };
@@ -66,9 +68,10 @@ class MockShadow : public Shadow {
              UpdateableSettings<Settings> client_settings)
       : Shadow(origin_name,
                std::move(origin_config),
-               std::move(client_settings),
+               client_settings,
                nullptr,
-               std::make_unique<MockShadowClientFactory>(origin_name)) {}
+               std::make_unique<MockShadowClientFactory>(origin_name,
+                                                         client_settings)) {}
 
   bool isReset() {
     return !last_used_range_.hasValue() && range_cache_.empty() &&

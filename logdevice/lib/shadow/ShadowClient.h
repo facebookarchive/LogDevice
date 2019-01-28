@@ -37,7 +37,9 @@ class ShadowClient;
 
 class ShadowClientFactory {
  public:
-  ShadowClientFactory(std::string origin_name, StatsHolder* stats);
+  ShadowClientFactory(std::string origin_name,
+                      StatsHolder* stats,
+                      UpdateableSettings<Settings> client_settings);
 
   virtual ~ShadowClientFactory();
 
@@ -59,11 +61,19 @@ class ShadowClientFactory {
 
   /**
    * Creates shadow client on background thread for given destination cluster,
-   * only if not already existing or being created.
+   * only if not already existing or being created. The is_a_retry flag
+   * indicates that we are retrying because an append failed because the client
+   * does not already exist. In this case the entry is added to a retry map and
+   * is retried just once after a fixed period. All failed appends in that
+   * period can call createAsync() with the is_a_retry flag and they will be
+   * deduped if already existing in the map. The entry is removed from the map
+   * regardless of whether retry fails or succeeds. And it gets added back to
+   * the map if another append fails. This way we only retry entries that are
+   * actively needed and causing append failures.
    *
    * @return 0 on success, -1 on failure with err set
    */
-  virtual int createAsync(const Shadow::Attrs& attrs);
+  virtual int createAsync(const Shadow::Attrs& attrs, bool is_a_retry);
 
   /**
    * Called when shadowing disabled, to free resources. Will first shutdown if
@@ -78,6 +88,7 @@ class ShadowClientFactory {
 
   const std::string origin_name_;
   StatsHolder* const stats_;
+  UpdateableSettings<Settings> client_settings_;
   std::chrono::milliseconds client_timeout_{0};
 
   // Stores clients used for shadowing, key is shadow destination
@@ -88,8 +99,10 @@ class ShadowClientFactory {
   // Handles initializing clients on background thread
   std::thread client_init_thread_;
   std::queue<Shadow::Attrs> client_init_queue_;
+  std::queue<Shadow::Attrs> client_init_retry_queue_;
   Mutex client_init_mutex_;
   std::condition_variable client_init_cv_;
+  std::unordered_map<std::string, Shadow::Attrs> retry_map_;
   bool shutdown_ = false;
 };
 

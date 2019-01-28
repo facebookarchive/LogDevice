@@ -2471,6 +2471,19 @@ void Settings::defineSettings(SettingEasyInit& init) {
        CLIENT,
        SettingsCategory::Monitoring);
 
+  init("shadow-client-creation-retry-interval",
+       &shadow_client_creation_retry_interval,
+       "60s",
+       validate_nonnegative<ssize_t>(),
+       "Failed shadow appends because shadow client was not available, "
+       "enqueue a client recreation request. The retry mechanism retries "
+       "the enqueued attempt after these many seconds. See ShadowClient.cpp "
+       "for a detailed explanation. 0 disables the retry feature. 1 silently "
+       "drops all client creations so that they only get created from the "
+       "retry path.",
+       CLIENT,
+       SettingsCategory::WritePath);
+
   init("shadow-client-timeout",
        &shadow_client_timeout,
        "30s",

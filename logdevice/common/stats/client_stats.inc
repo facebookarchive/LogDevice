@@ -139,11 +139,14 @@ STAT_DEFINE(logsconfig_start_timeout, SUM)
 
 // Traffic shadowing stats
 STAT_DEFINE(shadow_client_init_failed, SUM)
+STAT_DEFINE(shadow_client_init_retry_failed, SUM)
+STAT_DEFINE(shadow_client_init_retry_success, SUM)
 STAT_DEFINE(shadow_payload_alloc_failed, SUM)
 STAT_DEFINE(shadow_append_attempt, SUM)
 STAT_DEFINE(shadow_append_success, SUM)
 STAT_DEFINE(shadow_append_failed, SUM)
 STAT_DEFINE(shadow_client_not_loaded, SUM)
+STAT_DEFINE(shadow_client_load_retry, SUM)
 
 // API hits stats
 //findtime

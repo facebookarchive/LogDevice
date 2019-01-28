@@ -200,6 +200,10 @@ TEST_F(ShadowIntegrationTest, ShadowTraffic) {
   makeCluster();
   connectShadowCluster();
 
+  // A small value forces all shadow client creations to go through
+  // the retry path.
+  client_settings_->set("shadow-client-creation-retry-interval", "1s");
+
   // Keep appending until shadow ratio is approximately right or test times out
   // This is best approach since no way to know when shadow client is loaded
   // Better way to do this?

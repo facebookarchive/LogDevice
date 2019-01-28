@@ -26,7 +26,9 @@ Shadow::Shadow(std::string origin_name,
              origin_config,
              client_settings,
              stats,
-             std::make_unique<ShadowClientFactory>(origin_name, stats)) {}
+             std::make_unique<ShadowClientFactory>(origin_name,
+                                                   stats,
+                                                   client_settings)) {}
 
 Shadow::Shadow(std::string origin_name,
                std::shared_ptr<UpdateableConfig> origin_config,
@@ -68,6 +70,9 @@ int Shadow::appendShadow(const AppendRequest& req) {
       shadow_factory_->get(shadow_attrs->destination());
   if (shadow_client == nullptr) {
     STAT_INCR(stats_, client.shadow_client_not_loaded);
+    if (client_settings_->shadow_client_creation_retry_interval.count()) {
+      shadow_factory_->createAsync(shadow_attrs, true /*is_a_retry*/);
+    }
     err = E::SHADOW_LOADING;
     return -1;
   }
@@ -183,7 +188,7 @@ void Shadow::updateLogGroup(
   if (shadow_attrs.hasValue()) {
     const auto& shadow_info =
         shadow_map_[range] = {group->name(), shadow_attrs.value(), 0.0};
-    shadow_factory_->createAsync(shadow_info.attrs);
+    shadow_factory_->createAsync(shadow_info.attrs, false /* is_a_retry */);
     ld_info(LD_SHADOW_PREFIX
             "Updated log group '%s' with shadow dest='%s' and ratio=%f",
             shadow_info.path.c_str(),

@@ -1094,6 +1094,10 @@ struct Settings : public SettingsBundle {
   // Defaults to false, allows clients to opt-in to traffic shadowing
   bool traffic_shadow_enabled;
 
+  // If there is a request to retry shadow client creation then it is retried
+  // after these many seconds. See ShadowClient.cpp for details.
+  std::chrono::seconds shadow_client_creation_retry_interval;
+
   // See .cpp
   std::chrono::milliseconds shadow_client_timeout;
 

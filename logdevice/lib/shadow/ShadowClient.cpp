@@ -19,9 +19,13 @@ using namespace std::chrono_literals;
 
 namespace facebook { namespace logdevice {
 
-ShadowClientFactory::ShadowClientFactory(std::string origin_name,
-                                         StatsHolder* stats)
-    : origin_name_(origin_name), stats_(stats) {}
+ShadowClientFactory::ShadowClientFactory(
+    std::string origin_name,
+    StatsHolder* stats,
+    UpdateableSettings<Settings> client_settings)
+    : origin_name_(origin_name),
+      stats_(stats),
+      client_settings_(client_settings) {}
 
 ShadowClientFactory::~ShadowClientFactory() {
   shutdown();
@@ -56,11 +60,25 @@ ShadowClientFactory::get(const std::string& destination) const {
   }
 }
 
-int ShadowClientFactory::createAsync(const Shadow::Attrs& attrs) {
+int ShadowClientFactory::createAsync(const Shadow::Attrs& attrs,
+                                     bool is_a_retry) {
   std::unique_lock<Mutex> client_init_lock(client_init_mutex_);
-  client_init_queue_.push(attrs);
-  client_init_lock.unlock();
-  client_init_cv_.notify_one();
+  if (is_a_retry) {
+    // If an append failed because we had failed to create the shadow
+    // client then it enqueues a request to retry the creation. The
+    // request is kept in a map for shadow_client_creation_retry_interval
+    // seconds and then retried.
+    // All duplicate requests in this interval are deduped by the map.
+    // The request is thrown away after one retry so that only actively
+    // failing shadow attempts are retried and not (somehow) stale entries.
+    if ((retry_map_.find(attrs->destination()) == retry_map_.end())) {
+      retry_map_[attrs->destination()] = attrs;
+    }
+  } else {
+    client_init_queue_.push(attrs);
+    client_init_lock.unlock();
+    client_init_cv_.notify_one();
+  }
   return 0;
 }
 
@@ -70,29 +88,58 @@ void ShadowClientFactory::reset() {
   std::unique_lock<Mutex> client_init_lock(client_init_mutex_);
   // std::queue<Shadow::Attrs>().swap(client_init_queue_);
   client_init_queue_ = std::queue<Shadow::Attrs>{};
+  client_init_retry_queue_ = std::queue<Shadow::Attrs>{};
 }
 
 void ShadowClientFactory::clientInitThreadMain() {
   ThreadID::set(ThreadID::UTILITY, "shadow:U0");
   ld_debug(LD_SHADOW_PREFIX "Started client initialization thread");
+  SteadyTimestamp lastRetry = SteadyTimestamp::now();
   while (true) {
+    auto retryPeriod = client_settings_->shadow_client_creation_retry_interval;
     std::unique_lock<Mutex> client_init_lock(client_init_mutex_);
-    while (client_init_queue_.empty() && !shutdown_) {
-      client_init_cv_.wait(client_init_lock);
+    while (client_init_queue_.empty() && client_init_retry_queue_.empty() &&
+           !shutdown_) {
+      client_init_cv_.wait_for(client_init_lock, retryPeriod);
+
+      // If it's time to retry then move the retry entries to the main queue
+      auto waiting = std::chrono::duration_cast<std::chrono::seconds>(
+          SteadyTimestamp::now() - lastRetry);
+      if (waiting >= retryPeriod) {
+        lastRetry = SteadyTimestamp::now();
+        std::unordered_map<std::string, Shadow::Attrs>::iterator it =
+            retry_map_.begin();
+        while (it != retry_map_.end()) {
+          client_init_retry_queue_.push(it->second);
+          it = retry_map_.erase(it);
+          STAT_INCR(stats_, client.shadow_client_load_retry);
+        }
+      }
     }
     if (shutdown_) {
       break;
     }
 
-    Shadow::Attrs attrs = client_init_queue_.front();
-    client_init_queue_.pop();
+    Shadow::Attrs attrs;
+    bool retry = false;
+    if (!client_init_queue_.empty()) {
+      attrs = client_init_queue_.front();
+      client_init_queue_.pop();
+    } else {
+      attrs = client_init_retry_queue_.front();
+      client_init_retry_queue_.pop();
+      retry = true;
+    }
     client_init_lock.unlock();
 
     // Only one thread will be writing to the map
     const std::string& destination = attrs->destination();
     bool found = client_map_.withRLock(
         [&](const auto& map) { return map.find(destination) != map.end(); });
-    if (found) {
+
+    // A small retry period implies a test. In the test mode we
+    // only allow the retry path to create the client.
+    if (found || (!retry && retryPeriod.count() == 1)) {
       continue;
     }
 
@@ -103,7 +150,11 @@ void ShadowClientFactory::clientInitThreadMain() {
         ShadowClient::create(origin_name_, attrs, client_timeout_, stats_);
     if (shadow_client == nullptr) {
       // TODO scuba detailed stats T20416930 about which shadow and error code
-      STAT_INCR(stats_, client.shadow_client_init_failed);
+      if (retry) {
+        STAT_INCR(stats_, client.shadow_client_init_retry_failed);
+      } else {
+        STAT_INCR(stats_, client.shadow_client_init_failed);
+      }
       ld_error(LD_SHADOW_PREFIX
                "Failed to initialize shadow client for '%s' with error '%s'",
                destination.c_str(),
@@ -113,6 +164,9 @@ void ShadowClientFactory::clientInitThreadMain() {
     ld_debug(
         LD_SHADOW_PREFIX "Client for '%s' initialized", destination.c_str());
     client_map_.withWLock([&](auto& map) { map[destination] = shadow_client; });
+    if (retry) {
+      STAT_INCR(stats_, client.shadow_client_init_retry_success);
+    }
   }
   ld_debug(LD_SHADOW_PREFIX "Client initialization thread finished");
 }
