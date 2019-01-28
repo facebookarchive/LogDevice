@@ -138,7 +138,7 @@ Public Member Functions</h2></td></tr>
 </table>
 </div><div class="memdoc">
 <p>Called when a batch of records for the same log failed to be appended, and <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer.html">BufferedWriter</a> exhausted all retries it was configured to do (if any).</p>
-<p>Payload strings (available in `contexts') are no longer needed within <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer.html">BufferedWriter</a> so the application is free to steal them. </p>
+<p>Payload strings (in the ContextSet vector) are no longer needed within <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer.html">BufferedWriter</a> so the application is free to steal them. </p>
 
 </div>
 </div>
@@ -226,7 +226,7 @@ Public Member Functions</h2></td></tr>
 </table>
 </div><div class="memdoc">
 <p>Called when a batch of records for the same log was successfully appended.</p>
-<p>Payload strings (available in `contexts') are no longer needed within <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer.html">BufferedWriter</a> so the application is free to steal them. All of the records share the same LSN and timestamp, available in `attrs'. </p>
+<p>Payload strings (in the ContextSet vector) are no longer needed within <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer.html">BufferedWriter</a> so the application is free to steal them. All of the records share the same LSN and timestamp, available in `attrs'. </p>
 
 </div>
 </div>
