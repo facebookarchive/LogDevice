@@ -123,7 +123,7 @@ Status SealStorageTask::executeImpl(LocalLogStore& store,
       // this could be the retries from the sequencer, so consider it as
       // success
       ld_check(seal_metadata.seal_.epoch == seal_.epoch);
-      dd_assert(seal_metadata.seal_.seq_node == seal_.seq_node,
+      dd_assert(seal_metadata.seal_.seq_node.index() == seal_.seq_node.index(),
                 "Seal of log %lu with same epoch (%u) but different seq_node "
                 "(%s != %s).",
                 log_id_.val(),
