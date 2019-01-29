@@ -1,7 +1,4 @@
 ---
-id: Terminology
-title: Terminology
-sidebar_label: Terminology
 ---
 _acknowledge (a record)._ A record is acknowledged to the writer when it is durably stored, according to the replication policy for that log.
 

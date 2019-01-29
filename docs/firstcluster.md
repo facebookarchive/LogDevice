@@ -207,7 +207,7 @@ sudo -u logdevice nohup /usr/local/bin/logdeviced --config-path zk:10.0.0.1:2181
 ```
 
 ## 9. Check it's running
-`ldshell` is a utility to introspect and mutate the state of LogDevice. One of its most powerful commands is `query`, which allows you to run SQL `SELECT` queries against [various virtual SQL tables](ldquery.md) that expose the state of the cluster and some of its internals. The following command queries the `info` table which will show you the start time of the nodes that are up, their pids and a couple more fields: 
+`ldshell` is a utility to introspect and mutate the state of LogDevice. One of its most powerful commands is `query`, which allows you to run SQL `SELECT` queries against [various virtual SQL tables](ldquery.md) that expose the state of the cluster and some of its internals. The following command queries the `info` table which will show you the start time of the nodes that are up, their pids and a couple more fields:
 ```sh
 # export the config path (change the Zookeeper quorum to yours here) so it's available for subsequent commands
 export LOGDEVICE_CONFIG=zk:10.0.0.1:2181,10.0.0.2:2181,10.0.0.3:2181/logdevice_test.conf
@@ -234,4 +234,4 @@ This command will run the tailer for log 1. If you did the write above, it shoul
 ```
 
 ## All done!
-Congratulations! Now you have a running LogDevice cluster! You can now read the [Introduction to the API](api.md) to learn how to use it.
+Congratulations! Now you have a running LogDevice cluster! You can now read the [Introduction to the API](API_Introduction.md) to learn how to use it.

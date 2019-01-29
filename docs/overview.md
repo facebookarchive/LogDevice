@@ -47,7 +47,7 @@ space. Here are some examples of workloads supported by LogDevice:
 
 To learn more about LogDevice start with an explanation of its
 [concepts and architecture](concepts.md) and an overview of its
-[API](api.md).
+[API](API_Introduction.md).
 
 The [installation guide](installation.md) explains how to obtain the
 source code and build LogDevice components including the logdeviced
@@ -55,7 +55,7 @@ server, the client library, and the administrative shell utility called
 `ldshell`.
 
 Once you have built LogDevice you can try it out by running a
-LogDevice cluster [locally](localcluster.md) on a single machine. 
+LogDevice cluster [locally](localcluster.md) on a single machine.
 
 ## Administration
 

@@ -1,5 +1,4 @@
 ---
-id: API_Intro
 title: LogDevice API
 sidebar_label: Introduction
 ---
