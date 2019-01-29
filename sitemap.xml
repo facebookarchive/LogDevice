@@ -4,12 +4,11 @@
 <url> <loc>https://logdevice.io/index.html</loc> <changefreq>weekly</changefreq> <priority>0.5</priority> <xhtml:link rel="alternate" hreflang="en" href="https://logdevice.io/en/index.html" /> </url>
 <url> <loc>https://logdevice.io/users.html</loc> <changefreq>weekly</changefreq> <priority>0.5</priority> <xhtml:link rel="alternate" hreflang="en" href="https://logdevice.io/en/users.html" /> </url>
 <url> <loc>https://logdevice.io/blog/2018/09/12/open-sourcing-announcement.html</loc> <changefreq>weekly</changefreq> <priority>0.3</priority> </url>
-<url> <loc>https://logdevice.io/docs/API_Intro.html</loc> <changefreq>hourly</changefreq> <priority>1.0</priority> <xhtml:link rel="alternate" hreflang="en" href="https://logdevice.io/docs/API_Intro.html" /> </url>
+<url> <loc>https://logdevice.io/docs/API_Introduction.html</loc> <changefreq>hourly</changefreq> <priority>1.0</priority> <xhtml:link rel="alternate" hreflang="en" href="https://logdevice.io/docs/API_Introduction.html" /> </url>
 <url> <loc>https://logdevice.io/docs/Concepts.html</loc> <changefreq>hourly</changefreq> <priority>1.0</priority> <xhtml:link rel="alternate" hreflang="en" href="https://logdevice.io/docs/Concepts.html" /> </url>
 <url> <loc>https://logdevice.io/docs/Config.html</loc> <changefreq>hourly</changefreq> <priority>1.0</priority> <xhtml:link rel="alternate" hreflang="en" href="https://logdevice.io/docs/Config.html" /> </url>
 <url> <loc>https://logdevice.io/docs/API_Doxygen.html</loc> <changefreq>hourly</changefreq> <priority>1.0</priority> <xhtml:link rel="alternate" hreflang="en" href="https://logdevice.io/docs/API_Doxygen.html" /> </url>
 <url> <loc>https://logdevice.io/docs/FirstCluster.html</loc> <changefreq>hourly</changefreq> <priority>1.0</priority> <xhtml:link rel="alternate" hreflang="en" href="https://logdevice.io/docs/FirstCluster.html" /> </url>
-<url> <loc>https://logdevice.io/docs/Terminology.html</loc> <changefreq>hourly</changefreq> <priority>1.0</priority> <xhtml:link rel="alternate" hreflang="en" href="https://logdevice.io/docs/Terminology.html" /> </url>
 <url> <loc>https://logdevice.io/docs/Installation.html</loc> <changefreq>hourly</changefreq> <priority>1.0</priority> <xhtml:link rel="alternate" hreflang="en" href="https://logdevice.io/docs/Installation.html" /> </url>
 <url> <loc>https://logdevice.io/docs/LDQuery.html</loc> <changefreq>hourly</changefreq> <priority>1.0</priority> <xhtml:link rel="alternate" hreflang="en" href="https://logdevice.io/docs/LDQuery.html" /> </url>
 <url> <loc>https://logdevice.io/docs/LDShell.html</loc> <changefreq>hourly</changefreq> <priority>1.0</priority> <xhtml:link rel="alternate" hreflang="en" href="https://logdevice.io/docs/LDShell.html" /> </url>
@@ -17,5 +16,6 @@
 <url> <loc>https://logdevice.io/docs/Logs.html</loc> <changefreq>hourly</changefreq> <priority>1.0</priority> <xhtml:link rel="alternate" hreflang="en" href="https://logdevice.io/docs/Logs.html" /> </url>
 <url> <loc>https://logdevice.io/docs/Overview.html</loc> <changefreq>hourly</changefreq> <priority>1.0</priority> <xhtml:link rel="alternate" hreflang="en" href="https://logdevice.io/docs/Overview.html" /> </url>
 <url> <loc>https://logdevice.io/docs/Settings.html</loc> <changefreq>hourly</changefreq> <priority>1.0</priority> <xhtml:link rel="alternate" hreflang="en" href="https://logdevice.io/docs/Settings.html" /> </url>
+<url> <loc>https://logdevice.io/docs/Terminology.html</loc> <changefreq>hourly</changefreq> <priority>1.0</priority> <xhtml:link rel="alternate" hreflang="en" href="https://logdevice.io/docs/Terminology.html" /> </url>
 <url> <loc>https://logdevice.io/docs/WritingPlugins.html</loc> <changefreq>hourly</changefreq> <priority>1.0</priority> <xhtml:link rel="alternate" hreflang="en" href="https://logdevice.io/docs/WritingPlugins.html" /> </url>
 </urlset>
