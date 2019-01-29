@@ -4521,14 +4521,18 @@ TEST_F(PartitionedRocksDBStoreTest, PartialCompactionEvaluator) {
       : public PartitionedRocksDBStore::PartialCompactionEvaluator::Deps {
    public:
     explicit PartitionGenerator(std::vector<std::vector<size_t>> sizes) {
+      size_t partNum = sizes.size();
       for (size_t i = 0; i < sizes.size(); ++i) {
         // setting CF pointers to numeric values to reference it later
         auto cf_holder = std::make_shared<RocksDBColumnFamily>(
             reinterpret_cast<rocksdb::ColumnFamilyHandle*>(i));
+
+        // Space out partitions by 6 hours
+        RecordTimestamp creation_time =
+            RecordTimestamp::now() - std::chrono::hours(6 * partNum);
+        partNum--;
         partitions_.emplace_back(new PartitionedRocksDBStore::Partition(
-            i,
-            cf_holder,
-            RecordTimestamp(std::chrono::milliseconds(BASE_TIME))));
+            i, cf_holder, creation_time));
         rocksdb::ColumnFamilyMetaData cf_metadata;
         std::vector<rocksdb::SstFileMetaData> l0_files;
         for (size_t j = 0; j < sizes[i].size(); ++j) {
@@ -4581,13 +4585,16 @@ TEST_F(PartitionedRocksDBStoreTest, PartialCompactionEvaluator) {
     auto part_gen = std::make_unique<PartitionGenerator>(std::move(sizes));
     auto partitions = part_gen->getPartitions();
     size_t num_partitions = partitions.size();
+    std::chrono::hours old_age_threshold = std::chrono::hours{24};
     PartitionedRocksDBStore::PartialCompactionEvaluator evaluator(
         std::move(partitions),
-        3,   /* min files */
-        10,  /* max files */
-        100, /* max_avg_file_size */
-        200, /* max_file_size */
-        0.5, /* max_largest_file_share */
+        old_age_threshold, /* age threhold for considered as old partition */
+        5,                 /* min files old */
+        3,                 /* min files recent */
+        10,                /* max files */
+        100,               /* max_avg_file_size */
+        200,               /* max_file_size */
+        0.5,               /* max_largest_file_share */
         std::move(part_gen));
     std::vector<PartitionedRocksDBStore::PartitionToCompact> to_compact;
     evaluator.evaluateAll(&to_compact, max_results);
@@ -4609,9 +4616,9 @@ TEST_F(PartitionedRocksDBStoreTest, PartialCompactionEvaluator) {
 
   t_result results = run_test(
       {
-          {10, 10, 10},
-          {5, 5, 5},
-          {20, 5, 5},
+          {10, 10, 10}, // 21 hours old
+          {5, 5, 5},    // 14 hours old
+          {20, 5, 5},   // 7 hours old
       },
       3);
   // the last 2 partitions are not evaluated
@@ -4620,49 +4627,73 @@ TEST_F(PartitionedRocksDBStoreTest, PartialCompactionEvaluator) {
 
   results = run_test(
       {
-          {10, 10, 10},
+          {10, 10, 10, 10, 10}, // 28 hours old
           {5, 5, 5},
           {20, 5, 5},
           {30, 5, 5},
       },
       3);
   // the first 2 partitions are evaluated, both should be compacted
-  expected_results = {{1, {0, 1, 2}}, {0, {0, 1, 2}}};
+  expected_results = {{0, {0, 1, 2, 3, 4}}, {1, {0, 1, 2}}};
   ASSERT_EQ(expected_results, results);
 
   results = run_test(
       {
-          {10, 10, 10},
+          {10, 10, 10}, // 28 hours old
+          {5, 5, 5},
+          {20, 5, 5},
+          {30, 5, 5},
+      },
+      3);
+  // the first 2 partitions are evaluated, first is not compacted because
+  // it does not meet the min file threshold for old partitions.
+  expected_results = {{1, {0, 1, 2}}};
+  ASSERT_EQ(expected_results, results);
+
+  results = run_test(
+      {
+          {10, 10, 10, 10, 10},
           {5, 5, 5},
           {20, 5, 5},
           {30, 5, 5},
       },
       1);
-  // same, but 1 result max
-  expected_results = {{1, {0, 1, 2}}};
+  // First two evaluated, but 1 result max
+  expected_results = {{0, {0, 1, 2, 3, 4}}};
   ASSERT_EQ(expected_results, results);
 
-  results =
-      run_test({{10, 10, 10}, {5, 5, 5}, {20, 5, 5}, {30, 5, 5}, {}, {}}, 3);
+  results = run_test({{10, 10, 10, 10, 10},
+                      {
+                          5,
+                          5,
+                          5,
+                      },
+                      {20, 5, 5},
+                      {30, 5, 5},
+                      {},
+                      {}},
+                     3);
   // partitions 2 and 3 should not be compacted, because largest file is larger
-  // than 50% of total file size
-  expected_results = {{1, {0, 1, 2}}, {0, {0, 1, 2}}};
+  // than 50% of total file size. 1 is not compacted because it does not meet
+  // the min files threshold for old partitions.
+  expected_results = {{0, {0, 1, 2, 3, 4}}};
   ASSERT_EQ(expected_results, results);
 
-  results = run_test({{300, 200, 200}, {200, 100, 100}, {}, {}}, 3);
+  results = run_test({{300, 200, 200, 200, 200}, {200, 100, 100}, {}, {}}, 3);
   // nothing should be compacted, because the files are too large
   expected_results = {};
   ASSERT_EQ(expected_results, results);
 
   results = run_test(
-      {{50, 50, 50, 50, 50, 50, 50},  // all should be compacted
-       {50, 50, 50, 150, 60, 50, 50}, // all should be compacted
-       {50, 50, 50, 250, 60, 50, 50}, // should be compacted in 2 groups of 3
-       {50, 50, 160, 50, 50},         // all should be compacted
-       {50, 50, 200, 50, 50},         // none should be compacted
+      {{50, 50, 50, 50, 50, 50, 50},                  // all should be compacted
+       {50, 50, 50, 150, 60, 50, 50},                 // all should be compacted
+       {50, 50, 50, 10, 10, 250, 60, 50, 50, 10, 10}, // should be compacted in
+                                                      // 2 groups of 5
+       {50, 50, 160, 50, 50},                         // all should be compacted
+       {50, 50, 200, 50, 50},               // none should be compacted
        {150, 50, 50, 50, 160, 50, 50, 150}, // files 1-6 should be compacted
-       {150, 50, 50, 50, 160, 50, 150},     // files 1-3 should be compacted
        {50, 50, 200, 50, 50},               // all should be compacted
+       {150, 50, 50, 50, 160, 50, 150},     // files 1-3 should be compacted
        {},
        {}},
       3);
@@ -4673,27 +4704,28 @@ TEST_F(PartitionedRocksDBStoreTest, PartialCompactionEvaluator) {
       {5, {1, 2, 3, 4, 5, 6}},
   };
   results = run_test(
-      {{50, 50, 50, 50, 50, 50, 50},  // all should be compacted
-       {50, 50, 50, 150, 65, 50, 50}, // all should be compacted
-       {50, 50, 50, 250, 65, 50, 50}, // should be compacted in 2 groups of 3
-       {50, 50, 160, 50, 50},         // all should be compacted
-       {50, 50, 250, 50, 50},         // none should be compacted
+      {{50, 50, 50, 50, 50, 50, 50},                  // all should be compacted
+       {50, 50, 50, 150, 65, 50, 50},                 // all should be compacted
+       {50, 50, 50, 50, 50, 250, 65, 50, 50, 50, 50}, // should be compacted in
+                                                      // 2 groups of 5
+       {50, 50, 160, 50, 50},                         // all should be compacted
+       {50, 50, 250, 50, 50},               // none should be compacted
        {150, 50, 50, 50, 160, 50, 50, 150}, // files 1-6 should be compacted
-       {150, 50, 50, 50, 160, 50, 150},     // files 1-3 should be compacted
        {50, 50, 200, 50, 50},               // all should be compacted
+       {150, 50, 50, 50, 160, 50, 150},     // files 1-3 should be compacted
        {},
        {}},
       10);
   // all
   expected_results = {
       {0, {0, 1, 2, 3, 4, 5, 6}},
+      {2, {0, 1, 2, 3, 4}},
+      {2, {6, 7, 8, 9, 10}},
       {1, {0, 1, 2, 3, 4, 5, 6}},
       {5, {1, 2, 3, 4, 5, 6}},
-      {2, {0, 1, 2}},
-      {6, {1, 2, 3}},
+      {7, {1, 2, 3}},
       {3, {0, 1, 2, 3, 4}},
-      {2, {4, 5, 6}},
-      {7, {0, 1, 2, 3, 4}},
+      {6, {0, 1, 2, 3, 4}},
   };
   ASSERT_EQ(expected_results, results);
 
@@ -7276,7 +7308,8 @@ TEST_F(PartitionedRocksDBStoreTest, PartialCompactionStallTrigger) {
   // Any partition with 3 or more files will be eligible for partial
   // compactions. If there are two or more such partitions, low-pri writers will
   // be stalled.
-  s["rocksdb-partition-partial-compaction-file-num-threshold"] = "3";
+  s["rocksdb-partition-partial-compaction-file-num-threshold-old"] = "3";
+  s["rocksdb-partition-partial-compaction-file-num-threshold-recent"] = "3";
   s["rocksdb-partition-partial-compaction-file-size-threshold"] = "10000000000";
   s["rocksdb-partition-partial-compaction-largest-file-share"] = "1.0";
   s["rocksdb-partition-partial-compaction-stall-trigger"] = "2";

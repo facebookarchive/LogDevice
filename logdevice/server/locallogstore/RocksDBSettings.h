@@ -130,7 +130,7 @@ class RocksDBSettings : public SettingsBundle {
   // (trimming is implemented by dropping complete partitions) and will be
   // disabled: all records are stored in level 0. Therefore, write amplification
   // is minimal in this mode. However, this mode is not a best fit when logs
-  // have different renention policies, as dropping a partition is not possible
+  // have different retention policies, as dropping a partition is not possible
   // until all log strands within it have been marked as trimmed.
   bool partitioned;
 
@@ -165,9 +165,21 @@ class RocksDBSettings : public SettingsBundle {
   // that is no longer in the config.
   std::chrono::seconds unconfigured_log_trimming_grace_period_;
 
+  // A partitions is considered old if it is older than the these
+  // many hours, otherwise it is considered recent. The file num
+  // threshold for partial compaction is appropriately applied
+  // based on age.
+  std::chrono::hours partition_partial_compaction_old_age_threshold_;
+
   // Consider a partition for partial compaction if it has at least this many
   // files of size lower than partition_partial_compaction_file_size_threshold_.
-  size_t partition_partial_compaction_file_num_threshold_;
+  // and the age of the partitions is greater than 1 day.
+  size_t partition_partial_compaction_file_num_threshold_old_;
+
+  // Consider a partition for partial compaction if it has at least this many
+  // files of size lower than partition_partial_compaction_file_size_threshold_.
+  // and the age of the partitions is less than 1 day.
+  size_t partition_partial_compaction_file_num_threshold_recent_;
 
   // Max files to compact in one partial compaction.
   size_t partition_partial_compaction_max_files_;

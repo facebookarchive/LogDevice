@@ -925,24 +925,34 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
 
     PartialCompactionEvaluator(
         std::vector<PartitionedRocksDBStore::PartitionPtr> partitions,
-        size_t min_files,
+        std::chrono::hours old_age_hours,
+        size_t min_files_old,
+        size_t min_files_recent,
         size_t max_files,
         size_t max_avg_file_size,
         size_t max_file_size,
         double max_largest_file_share,
         std::unique_ptr<Deps> deps)
         : partitions_(std::move(partitions)),
-          min_files_(min_files),
+          old_age_hours_(old_age_hours),
+          min_files_old_(min_files_old),
+          min_files_recent_(min_files_recent),
           max_files_(max_files),
           max_avg_file_size_(max_avg_file_size),
           max_file_size_(max_file_size),
           max_largest_file_share_(max_largest_file_share),
           deps_(std::move(deps)) {
-      if (min_files_ < 2) {
+      if (min_files_recent_ < 2) {
         ld_error("Invalid arg passed to PartialCompactionEvaluator: "
-                 "min_files == %lu",
-                 min_files_);
-        min_files_ = 2;
+                 "min_files_recent == %lu",
+                 min_files_recent_);
+        min_files_recent_ = 2;
+      }
+      if (min_files_old_ < 2) {
+        ld_error("Invalid arg passed to PartialCompactionEvaluator: "
+                 "min_files_old == %lu",
+                 min_files_old_);
+        min_files_old_ = 2;
       }
     }
 
@@ -988,8 +998,14 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
     // partitions to request metadata for
     std::vector<PartitionPtr> partitions_;
 
-    // Minimum number of files in one compaction
-    size_t min_files_;
+    // Age threshold in hours when a partition is considered old.
+    std::chrono::hours old_age_hours_;
+
+    // Minimum number of files in one compaction for a old partition.
+    size_t min_files_old_;
+
+    // Minimum number of files in one compaction for a recent partition.
+    size_t min_files_recent_;
 
     // Maximum number of files in one compaction
     size_t max_files_;

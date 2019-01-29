@@ -324,19 +324,59 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::LogsDB);
 
-  init("rocksdb-partition-partial-compaction-file-num-threshold",
-       &partition_partial_compaction_file_num_threshold_,
+  init("rocksdb-partition-partial-compaction-old-age-threshold",
+       &partition_partial_compaction_old_age_threshold_,
+       "24h",
+       [](std::chrono::hours val) {
+         if (val.count() < 0) {
+           throw boost::program_options::error(
+               "value of "
+               "--rocksdb-partition-partial-compaction-old-age-threshold must "
+               "be "
+               "non-negative; " +
+               std::to_string(val.count()) + "hrs given.");
+         }
+       },
+       "A partition is considered 'old' from the perspective of partial "
+       "compaction if it is older than the above hours. Otherwise it is "
+       "considered a recent partition. Old and recent partitions have "
+       "different thresholds: "
+       "partition_partial_compaction_file_num_threshold_old "
+       "and partition_partial_compaction_file_num_threshold_recent, when being "
+       "considered for partial compaction.",
+       SERVER,
+       SettingsCategory::LogsDB);
+
+  init("rocksdb-partition-partial-compaction-file-num-threshold-old",
+       &partition_partial_compaction_file_num_threshold_old_,
        "10",
        [](size_t val) {
          if (val < 2) {
            throw boost::program_options::error(
                "value of "
-               "--rocksdb-partition-partial-compaction-file-num-threshold must "
-               "be larger than 1");
+               "--rocksdb-partition-partial-compaction-file-num-threshold-old "
+               "must be larger than 1");
          }
        },
        "don't consider file ranges for partial compactions (used during "
-       "rebuilding) that are shorter than this",
+       "rebuilding) that are shorter than this for old partitions (>1d old).",
+       SERVER,
+       SettingsCategory::LogsDB);
+
+  init("rocksdb-partition-partial-compaction-file-num-threshold-recent",
+       &partition_partial_compaction_file_num_threshold_recent_,
+       "10",
+       [](size_t val) {
+         if (val < 2) {
+           throw boost::program_options::error(
+               "value of "
+               "--rocksdb-partition-partial-compaction-file-num-threshold-"
+               "recent must be larger than 1");
+         }
+       },
+       "don't consider file ranges for partial compactions (used during "
+       "rebuilding) that are shorter than this, for recent partitions (<1d "
+       "old).",
        SERVER,
        SettingsCategory::LogsDB);
 

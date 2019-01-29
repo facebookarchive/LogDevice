@@ -3879,11 +3879,18 @@ bool PartitionedRocksDBStore::PartialCompactionEvaluator::evaluateAll(
   // First we make a list of all file ranges it makes sense to compact in
   // every partition.
   for (size_t i = 0; i < partitions_.size(); ++i) {
-    // The last two partitions are likely to be in use. Rather than partially
+    std::chrono::hours age_hours = RecordTimestamp::now().toHours() -
+        partitions_[i]->starting_timestamp.toHours();
+    // There are 3 cases here:
+    // 1. The last two partitions are likely to be in use. Rather than partially
     // compacting them now, it's better to wait and give them a chance to
-    // accumulate more small files. But if there are already lots of files,
-    // let's compact now.
-    bool only_if_lots_of_files = i + 2 >= partitions_.size();
+    // accumulate more small files: new_partition
+    // 2. Older partitions (e.g., >= 1 day old) are less likley to be in the
+    // read path and so can be compacted at a higher threshold.
+    // 3. But if the partition is recent (e.g., < 1 day old) then use a lower
+    // threshold for num-files to compact: recent_partition.
+    bool new_partition = i + 2 >= partitions_.size();
+    bool recent_partition = age_hours.count() < old_age_hours_.count();
 
     auto metadata = std::make_shared<rocksdb::ColumnFamilyMetaData>();
     deps_->getColumnFamilyMetaData(partitions_[i]->cf_->get(), metadata.get());
@@ -3892,13 +3899,15 @@ bool PartitionedRocksDBStore::PartialCompactionEvaluator::evaluateAll(
     auto& level0 = metadata->levels[0];
 
     // TODO: optimize this
-    for (size_t start_idx = 0; start_idx + min_files_ <= level0.files.size();
+    size_t min_num = min_files_old_;
+    if (new_partition) {
+      min_num = std::max(min_num, (size_t)(max_files_ * 0.7));
+    } else if (recent_partition) {
+      min_num = min_files_recent_;
+    }
+    for (size_t start_idx = 0; start_idx + min_num <= level0.files.size();
          ++start_idx) {
       size_t max_num = std::min(max_files_, level0.files.size() - start_idx);
-      size_t min_num = min_files_;
-      if (only_if_lots_of_files) {
-        min_num = std::max(min_num, (size_t)(max_files_ * 0.7));
-      }
       evaluate(metadata, i, start_idx, min_num, max_num);
     }
   }
@@ -4033,7 +4042,9 @@ bool PartitionedRocksDBStore::getPartitionsForPartialCompaction(
 
   PartialCompactionEvaluator evaluator(
       std::vector<PartitionPtr>(partitions->begin(), partitions->end()),
-      settings->partition_partial_compaction_file_num_threshold_,
+      settings->partition_partial_compaction_old_age_threshold_,
+      settings->partition_partial_compaction_file_num_threshold_old_,
+      settings->partition_partial_compaction_file_num_threshold_recent_,
       settings->partition_partial_compaction_max_files_,
       settings->partition_partial_compaction_file_size_threshold_,
       settings->partition_partial_compaction_max_file_size_ > 0
