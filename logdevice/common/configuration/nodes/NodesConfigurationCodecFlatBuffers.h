@@ -86,7 +86,7 @@ class NodesConfigurationCodecFlatBuffers {
    */
   static void serialize(const NodesConfiguration& nodes_config,
                         ProtocolWriter& writer,
-                        SerializeOptions options = {false});
+                        SerializeOptions options = {true});
 
   /**
    * @param  evbuffer_zero_copy  if true, use evbuffer zero copy to get the
@@ -103,7 +103,7 @@ class NodesConfigurationCodecFlatBuffers {
   // convenience wrappers for serialization / deserialization with linear buffer
   // such as strings
   static std::string serialize(const NodesConfiguration& nodes_config,
-                               SerializeOptions options = {false});
+                               SerializeOptions options = {true});
 
   static std::shared_ptr<const NodesConfiguration> deserialize(void* buffer,
                                                                size_t size);
