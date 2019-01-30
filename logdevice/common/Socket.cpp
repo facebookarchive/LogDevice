@@ -849,6 +849,7 @@ void Socket::onError(short direction, int socket_errno) {
     return;
   }
 
+  bool ssl_error_reported = false;
   if (isSSL()) {
     unsigned long ssl_err = 0;
     char ssl_err_string[120];
@@ -856,24 +857,44 @@ void Socket::onError(short direction, int socket_errno) {
       ERR_error_string_n(ssl_err, ssl_err_string, sizeof(ssl_err_string));
       RATELIMIT_ERROR(
           std::chrono::seconds(10), 10, "SSL error: %s", ssl_err_string);
+      ssl_error_reported = true;
     }
   }
 
   if (connected_) {
-    const bool severe = socket_errno != ECONNRESET && socket_errno != ETIMEDOUT;
+    // OpenSSL/libevent error reporting is weird and maybe broken.
+    // (Note: make sure to not confuse "SSL_get_error" and "ERR_get_error".)
+    // The way openssl reports errors is that you check SSL_get_error(),
+    // and if it reports an error, the details supposedly can be found either
+    // through ERR_get_error() (for ssl-specific errors) or through
+    // errno (for socket errors).
+    // But sometimes neither ERR_get_error() nor errno have anything;
+    // in particular, I've seen SSL_do_handshake() return -1, then
+    // SSL_get_error() return SSL_ERROR_SYSCALL, then ERR_get_error() return 0,
+    // and errno = 0.
+    // This may deserve an investigation, but for now let's just say
+    // "OpenSSL didn't report any details about the error".
+    // (Note that bufferevent_get_openssl_error() just propagates errors
+    // reported by ERR_get_error().)
+    const bool severe = socket_errno != ECONNRESET &&
+        socket_errno != ETIMEDOUT && !ssl_error_reported;
     ld_log(severe ? facebook::logdevice::dbg::Level::ERROR
                   : facebook::logdevice::dbg::Level::WARNING,
-           "Got an error on socket connected to %s while %s. "
-           "errno=%d (%s)",
+           "Got an error on socket connected to %s while %s%s. %s",
            deps_->describeConnection(peer_name_).c_str(),
            (direction & BEV_EVENT_WRITING) ? "writing" : "reading",
-           socket_errno,
-           strerror(socket_errno));
+           expecting_ssl_handshake_ ? " (during SSL handshake)" : "",
+           errno != 0 ? ("errno=" + std::to_string(socket_errno) + " (" +
+                         strerror(socket_errno) + ")")
+                            .c_str()
+                      : ssl_error_reported
+                   ? "See SSL errors above."
+                   : "OpenSSL didn't report any details about the error.");
   } else {
     ld_check(!peer_name_.isClientAddress());
     connect_throttle_.connectFailed();
     RATELIMIT_LEVEL(
-        errno == ECONNREFUSED ? dbg::Level::DEBUG : dbg::Level::WARNING,
+        socket_errno == ECONNREFUSED ? dbg::Level::DEBUG : dbg::Level::WARNING,
         std::chrono::seconds(10),
         10,
         "Failed to connect to node %s. errno=%d (%s)",
@@ -947,7 +968,7 @@ void Socket::onConnectAttemptTimeout() {
       ld_warning("Connect attempt #%lu failed (peer:%s), err=%s",
                  retries_so_far_ + 1,
                  deps_->describeConnection(peer_name_).c_str(),
-                 strerror(errno));
+                 error_name(err));
       onConnectTimeout();
     } else {
       STAT_INCR(deps_->getStats(), connection_retries);
