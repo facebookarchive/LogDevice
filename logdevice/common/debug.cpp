@@ -412,7 +412,7 @@ void useCallback(logging_fn_t fn) {
   customLogFn = fn;
 }
 
-void log(const char* /*cluster*/,
+void log(const char* cluster,
          const char* component,
          const char* function,
          const int line,
@@ -520,7 +520,7 @@ void log(const char* /*cluster*/,
   // Write to an external logger.
   if (external_logger_plugin && level <= externalLoggerLogLevel) {
     folly::StringPiece log_line(record, reclen);
-    external_logger_plugin->log(static_cast<int>(level), log_line);
+    external_logger_plugin->log(cluster, static_cast<int>(level), log_line);
   }
 
   // Write the message to logFD.

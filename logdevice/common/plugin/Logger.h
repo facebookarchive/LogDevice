@@ -19,7 +19,9 @@ class Logger : public Plugin {
     return PluginType::LOGGER;
   }
 
-  virtual void log(int level, const folly::StringPiece line) const {}
+  virtual void log(const char* cluster_name,
+                   int level,
+                   const folly::StringPiece line) const {}
 };
 
 }} // namespace facebook::logdevice
