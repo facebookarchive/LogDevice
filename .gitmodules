@@ -1,7 +1,7 @@
 [submodule "logdevice/external/rocksdb"]
 	path = logdevice/external/rocksdb
 	url = https://github.com/facebook/rocksdb/
-	branch = 5.17.fb
+	branch = 5.18.fb
 [submodule "logdevice/external/folly"]
 	path = logdevice/external/folly
 	url = https://github.com/facebook/folly/
