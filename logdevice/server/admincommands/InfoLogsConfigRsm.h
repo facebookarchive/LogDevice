@@ -60,7 +60,8 @@ class InfoLogsConfigRsm : public AdminCommand {
     auto tables = run_on_all_workers(server_->getProcessor(), [&]() {
       InfoReplicatedStateMachineTable t(table);
       Worker* w = Worker::onThisThread();
-      if (w->logsconfig_manager_) {
+      if (w->logsconfig_manager_ &&
+          w->logsconfig_manager_->getStateMachine() != nullptr) {
         w->logsconfig_manager_->getStateMachine()->getDebugInfo(t);
       }
       return t;

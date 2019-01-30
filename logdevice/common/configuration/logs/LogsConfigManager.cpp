@@ -79,11 +79,7 @@ LogsConfigManager::LogsConfigManager(
     : settings_(std::move(updateable_settings)),
       updateable_config_(std::move(updateable_config)),
       lcm_worker_type_(lcm_worker_type),
-      is_writable_(is_writable) {
-  auto updateable_server_config = updateable_config_->updateableServerConfig();
-  state_machine_ = std::make_unique<LogsConfigStateMachine>(
-      settings_, updateable_server_config, is_writable_);
-}
+      is_writable_(is_writable) {}
 
 void LogsConfigManager::onSettingsUpdated() {
   auto previous_grace_period = publish_grace_period_;
@@ -149,6 +145,10 @@ void LogsConfigManager::start() {
     STAT_INCR(getStats(), logsconfig_manager_received_update);
     activatePublishTimer();
   };
+  auto updateable_server_config = updateable_config_->updateableServerConfig();
+  state_machine_ = std::make_unique<LogsConfigStateMachine>(
+      settings_, updateable_server_config, is_writable_);
+
   config_updates_handle_ = state_machine_->subscribe(cb);
   // Used to know whether the LogsConfig Manager is STARTED or not.
   ld_info("Starting LogsConfig Replicated State Machine");

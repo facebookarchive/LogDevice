@@ -795,3 +795,43 @@ TEST_F(LogsConfigIntegrationTest, SetAttributesLogGroupClash) {
     ASSERT_TRUE(node.isRunning());
   }
 }
+
+TEST_F(LogsConfigIntegrationTest, DisableEnableWorkflow) {
+  auto cluster = IntegrationTestUtils::ClusterFactory()
+                     .enableLogsConfigManager()
+                     .setParam("--file-config-update-interval", "10ms")
+                     .deferStart()
+                     .create(3);
+  // provision internal logs
+  ASSERT_EQ(0, cluster->provisionEpochMetaData(nullptr, true));
+  cluster->start();
+
+  std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
+  client_settings->set("on-demand-logs-config", "false");
+  std::shared_ptr<Client> client = cluster->createIndependentClient(
+      DEFAULT_TEST_TIMEOUT, std::move(client_settings));
+  ASSERT_NE(nullptr, client->makeDirectorySync("/my_logs1"));
+
+  auto update_lcm_config = [&](bool value) {
+    auto config = cluster->getConfig();
+    auto json = config->getServerConfig()->withIncrementedVersion()->toJson(
+        config->getLogsConfig().get(), config->getZookeeperConfig().get());
+    json["server_settings"]["enable-logsconfig-manager"] =
+        json["client_settings"]["enable-logsconfig-manager"] =
+            value ? "true" : "false";
+    json["logs"] = value ? folly::dynamic::array() : nullptr;
+    auto new_server_config = ServerConfig::fromJson(json);
+    cluster->writeConfig(
+        new_server_config.get(), config->getLogsConfig().get(), true);
+  };
+
+  update_lcm_config(false);
+  std::this_thread::sleep_for(std::chrono::seconds(10));
+  update_lcm_config(true);
+  std::this_thread::sleep_for(std::chrono::seconds(10));
+
+  err = Status::OK;
+  auto dir = client->makeDirectorySync("/my_logs2");
+  EXPECT_EQ(Status::OK, err);
+  ASSERT_NE(nullptr, dir);
+}

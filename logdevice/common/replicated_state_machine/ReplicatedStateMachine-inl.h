@@ -547,11 +547,12 @@ bool ReplicatedStateMachine<T, D>::onDeltaRecord(
     if (rv != 0) {
       rsm_info(rsm_type_,
                "Could not apply delta record with lsn=%s ts=%s on base with "
-               "version %s: %s",
+               "version %s: %s, %s",
                lsn_to_string(record->attrs.lsn).c_str(),
                format_time(record->attrs.timestamp).c_str(),
                lsn_to_string(version_).c_str(),
-               error_name(err));
+               error_name(err),
+               failure_reason.c_str());
       st = err;
     } else {
       rsm_info(rsm_type_,
