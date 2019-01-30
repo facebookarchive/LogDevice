@@ -453,5 +453,10 @@ typedef AdminCommandTable<logid_t,     /* Log ID */
                           std::string  /* details */
                           >
     DataSizeTable;
+typedef AdminCommandTable<std::string, /* lag range */
+                          uint64_t,    /* throughput */
+                          float        /* percent of backlog throughput */
+                          >
+    LagBucketTable;
 
 }} // namespace facebook::logdevice
