@@ -952,6 +952,16 @@ size_t Sequencer::getMaxWindowSize() const {
   return current == nullptr ? 0 : current->getMaxWindowSize();
 }
 
+folly::Optional<EpochSequencerImmutableOptions>
+Sequencer::getEpochSequencerOptions() const {
+  auto current = getCurrentEpochSequencer();
+  if (current == nullptr) {
+    return folly::none;
+  } else {
+    return current->getImmutableOptions();
+  }
+}
+
 std::chrono::milliseconds Sequencer::getTimeSinceLastAppend() const {
   auto t = last_append_.load();
   if (t.count() == 0) {
@@ -1331,26 +1341,12 @@ Sequencer::createEpochSequencer(epoch_t epoch,
     return nullptr;
   }
 
-  // refresh extras_ and synced_
-  extras_.store(logcfg->attrs().extraCopies().value());
-  synced_.store(logcfg->attrs().syncedCopies().value());
-
-  // Calculating 2^esn_bits - 1 in a shift-safe manner.  Asserts should be
-  // ensured by Settings parser.
   auto local_settings = settings_.get();
-  const size_t ESN_T_BITS = 8 * sizeof(esn_t::raw_type);
-  ld_check(local_settings->esn_bits > 0);
-  ld_check(local_settings->esn_bits <= ESN_T_BITS);
-  const esn_t esn_max(~esn_t::raw_type(0) >>
-                      (ESN_T_BITS - local_settings->esn_bits));
+  EpochSequencerImmutableOptions immutable_options(
+      logcfg->attrs(), *local_settings);
 
   auto epoch_seq = std::make_shared<EpochSequencer>(
-      log_id_,
-      epoch,
-      std::move(metadata),
-      logcfg->attrs().maxWritesInFlight().value(),
-      esn_max,
-      this);
+      log_id_, epoch, std::move(metadata), immutable_options, this);
 
   // initialize copyset manager for the epoch
   epoch_seq->createOrUpdateCopySetManager(cfg, *local_settings);
@@ -1744,9 +1740,6 @@ void Sequencer::noteConfigurationChanged(std::shared_ptr<Configuration> cfg,
     // This node is not a sequencer node anymore
     setUnavailable(UnavailabilityReason::NOT_A_SEQUENCER_NODE);
   }
-
-  extras_.store(log->attrs().extraCopies().value());
-  synced_.store(log->attrs().syncedCopies().value());
 
   // If nodes were added or removed in config, update nodeset and
   // copyset selector for both current and draining epochs (if any)

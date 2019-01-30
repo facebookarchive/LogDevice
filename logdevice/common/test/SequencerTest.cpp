@@ -154,14 +154,12 @@ class MockEpochSequencer : public EpochSequencer {
                      logid_t log_id,
                      epoch_t epoch,
                      std::unique_ptr<EpochMetaData> metadata,
-                     int window_size,
-                     esn_t esn_max,
+                     const EpochSequencerImmutableOptions& immutable_options,
                      Sequencer* parent)
       : EpochSequencer(log_id,
                        epoch,
                        std::move(metadata),
-                       window_size,
-                       esn_max,
+                       immutable_options,
                        parent),
         test_(test) {}
 
@@ -275,13 +273,11 @@ class MockSequencer : public Sequencer {
   std::shared_ptr<EpochSequencer>
   createEpochSequencer(epoch_t epoch,
                        std::unique_ptr<EpochMetaData> metadata) override {
-    return std::make_shared<MockEpochSequencer>(test_,
-                                                test_->LOG_ID,
-                                                epoch,
-                                                std::move(metadata),
-                                                test_->window_size_,
-                                                test_->esn_max_,
-                                                this);
+    EpochSequencerImmutableOptions opts;
+    opts.window_size = test_->window_size_;
+    opts.esn_max = test_->esn_max_;
+    return std::make_shared<MockEpochSequencer>(
+        test_, test_->LOG_ID, epoch, std::move(metadata), opts, this);
   }
 
   void startDrainingTimer(epoch_t draining) override {

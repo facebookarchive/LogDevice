@@ -28,20 +28,57 @@
 
 namespace facebook { namespace logdevice {
 
-EpochSequencer::EpochSequencer(logid_t log_id,
-                               epoch_t epoch,
-                               std::unique_ptr<EpochMetaData> metadata,
-                               int window_size,
-                               esn_t esn_max,
-                               Sequencer* parent)
+EpochSequencer::EpochSequencer(
+    logid_t log_id,
+    epoch_t epoch,
+    std::unique_ptr<EpochMetaData> metadata,
+    const EpochSequencerImmutableOptions& immutable_options,
+    Sequencer* parent)
     : parent_(parent),
       log_id_(log_id),
       epoch_(epoch),
+      immutable_options_(immutable_options),
       metadata_(std::shared_ptr<EpochMetaData>(std::move(metadata))),
       state_(State::ACTIVE),
-      window_(epoch, window_size, esn_max),
+      window_(epoch,
+              immutable_options_.window_size,
+              immutable_options_.esn_max),
       lng_(compose_lsn(epoch, ESN_INVALID)),
       last_reaped_(compose_lsn(epoch, ESN_INVALID)) {}
+
+bool EpochSequencerImmutableOptions::
+operator==(const EpochSequencerImmutableOptions& rhs) {
+  static_assert(sizeof(EpochSequencerImmutableOptions) == 12,
+                "Don't forget to update operator==() when adding fields.");
+  auto tup = [](const EpochSequencerImmutableOptions& o) {
+    return std::make_tuple(
+        o.extra_copies, o.synced_copies, o.window_size, o.esn_max);
+  };
+  return tup(*this) == tup(rhs);
+}
+bool EpochSequencerImmutableOptions::
+operator!=(const EpochSequencerImmutableOptions& rhs) {
+  return !(*this == rhs);
+}
+std::string EpochSequencerImmutableOptions::toString() const {
+  return folly::sformat("extras: {}, synced: {}, window: {}, esn_max: {}",
+                        extra_copies,
+                        synced_copies,
+                        window_size,
+                        esn_max.val());
+}
+
+EpochSequencerImmutableOptions::EpochSequencerImmutableOptions(
+    const logsconfig::LogAttributes& log_attrs,
+    const Settings& settings) {
+  extra_copies = log_attrs.extraCopies().value();
+  synced_copies = log_attrs.syncedCopies().value();
+  window_size = log_attrs.maxWritesInFlight().value();
+  const size_t ESN_T_BITS = 8 * sizeof(esn_t::raw_type);
+  ld_check(settings.esn_bits > 0);
+  ld_check(settings.esn_bits <= ESN_T_BITS);
+  esn_max = esn_t(~esn_t::raw_type(0) >> (ESN_T_BITS - settings.esn_bits));
+}
 
 RunAppenderStatus EpochSequencer::runAppender(Appender* appender) {
   if (!appender || appender->started()) {
@@ -528,14 +565,6 @@ void EpochSequencer::schedulePeriodicReleases() {
 
 const Settings& EpochSequencer::getSettings() const {
   return Worker::settings();
-}
-
-copyset_size_t EpochSequencer::getExtras() const {
-  return parent_ != nullptr ? parent_->getExtras() : 0;
-}
-
-copyset_size_t EpochSequencer::getSynced() const {
-  return parent_ != nullptr ? parent_->getSynced() : 0;
 }
 
 Processor* EpochSequencer::getProcessor() const {

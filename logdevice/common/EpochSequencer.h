@@ -40,6 +40,24 @@ class Processor;
 class Sequencer;
 class TailRecord;
 
+// Settings and log attributes affecting sequencer that EpochSequencer doesn't
+// update on the fly. When these change, sequencer needs to be reactivated.
+struct EpochSequencerImmutableOptions {
+  copyset_size_t extra_copies = 0;
+  copyset_size_t synced_copies = 0;
+  int window_size = SLIDING_WINDOW_MIN_CAPACITY;
+  esn_t esn_max = ESN_MAX;
+
+  EpochSequencerImmutableOptions() = default;
+  EpochSequencerImmutableOptions(const logsconfig::LogAttributes& log_attrs,
+                                 const Settings& settings);
+
+  bool operator==(const EpochSequencerImmutableOptions& rhs);
+  bool operator!=(const EpochSequencerImmutableOptions& rhs);
+
+  std::string toString() const;
+};
+
 class EpochSequencer : public std::enable_shared_from_this<EpochSequencer> {
  public:
   /**
@@ -107,8 +125,7 @@ class EpochSequencer : public std::enable_shared_from_this<EpochSequencer> {
   EpochSequencer(logid_t log_id,
                  epoch_t epoch,
                  std::unique_ptr<EpochMetaData> metadata,
-                 int window_size,
-                 esn_t esn_max,
+                 const EpochSequencerImmutableOptions& immutable_options,
                  Sequencer* parent);
 
   virtual ~EpochSequencer() {}
@@ -296,6 +313,10 @@ class EpochSequencer : public std::enable_shared_from_this<EpochSequencer> {
     return epoch_;
   }
 
+  const EpochSequencerImmutableOptions& getImmutableOptions() const {
+    return immutable_options_;
+  }
+
   /**
    * @return EpochMetaData associated with the epoch, used to create the
    *         EpochSequencer.
@@ -367,9 +388,6 @@ class EpochSequencer : public std::enable_shared_from_this<EpochSequencer> {
    * ususally through the same function name.
    */
 
-  copyset_size_t getExtras() const;
-  copyset_size_t getSynced() const;
-
   virtual void noteAppenderPreempted(epoch_t epoch, NodeID preempted_by);
 
   virtual NodeID checkIfPreempted(epoch_t epoch) const;
@@ -411,6 +429,8 @@ class EpochSequencer : public std::enable_shared_from_this<EpochSequencer> {
 
   // epoch in which the sequencer is issuing LSNs
   const epoch_t epoch_;
+
+  const EpochSequencerImmutableOptions immutable_options_;
 
   // EpochMetaData for epoch_, used for Appender replication.
   // Can be updated, but only in "non-substantial" and simple ways:

@@ -35,6 +35,7 @@ class AllSequencers;
 class Configuration;
 class CopySetManager;
 class EpochSequencer;
+struct EpochSequencerImmutableOptions;
 struct ExponentialBackoffTimerNode;
 class MetaDataLogWriter;
 class PeriodicReleases;
@@ -562,6 +563,13 @@ class Sequencer {
   size_t getMaxWindowSize() const;
 
   /**
+   * Returns the ImmitableOptions of the current epoch sequencer.
+   * If there's no epoch sequencer, returns false.
+   */
+  folly::Optional<EpochSequencerImmutableOptions>
+  getEpochSequencerOptions() const;
+
+  /**
    * @return  Last known good LSN of current epoch. LSN_INVALID if there is
    *          no valid current epoch. see EpochSequencer::getLastKnownGood().
    */
@@ -632,13 +640,6 @@ class Sequencer {
    *          TODO T23464964: address this problem
    */
   std::shared_ptr<const EpochMetaDataMap> getMetaDataMap() const;
-
-  copyset_size_t getExtras() const {
-    return extras_.load();
-  }
-  copyset_size_t getSynced() const {
-    return synced_.load();
-  }
 
   ///////////// offsets and tail attributes ///////////////////
 
@@ -841,15 +842,6 @@ class Sequencer {
   // initiated by the current epoch is completed
   UpdateableSharedPtr<const TailRecord> tail_record_previous_epoch_;
   UpdateableSharedPtr<const RecoveredLSNs> recovered_lsns_;
-
-  // Number of extra recipients in addition to replication factor to select
-  // for an append without waiting. Can be changed at any time, e.g., by
-  // a command thread.
-  std::atomic<copyset_size_t> extras_{0};
-
-  // Number of copies that must be reported synced by storage nodes before a
-  // record is considered fully stored. Capped by replication factor.
-  std::atomic<copyset_size_t> synced_{0};
 
   // Preemption and redirects
 

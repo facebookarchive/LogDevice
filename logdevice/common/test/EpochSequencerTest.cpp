@@ -135,14 +135,12 @@ class MockEpochSequencer : public EpochSequencer {
                      logid_t log_id,
                      epoch_t epoch,
                      std::unique_ptr<EpochMetaData> metadata,
-                     int window_size,
-                     esn_t esn_max,
+                     const EpochSequencerImmutableOptions& immutable_options,
                      Sequencer* parent)
       : EpochSequencer(log_id,
                        epoch,
                        std::move(metadata),
-                       window_size,
-                       esn_max,
+                       immutable_options,
                        parent),
         test_(test) {
     ++test_->stats.epoch_created;
@@ -347,12 +345,6 @@ class MockAppender : public Appender {
   bool canSendToImpl(const Address&, TrafficClass, BWAvailableCallback&) {
     return true;
   }
-  copyset_size_t getExtras() const override {
-    return 0;
-  }
-  copyset_size_t getSynced() const override {
-    return 0;
-  }
 
   bool checkNodeSet() const override {
     return true;
@@ -464,12 +456,14 @@ void EpochSequencerTest::setUp() {
 
 std::shared_ptr<EpochSequencer>
 EpochSequencerTest::createEpochSequencer(epoch_t epoch) {
+  EpochSequencerImmutableOptions opts;
+  opts.window_size = window_size_;
+  opts.esn_max = esn_max_;
   return std::make_shared<MockEpochSequencer>(this,
                                               LOG_ID,
                                               epoch,
                                               std::make_unique<EpochMetaData>(),
-                                              window_size_,
-                                              esn_max_,
+                                              opts,
                                               /*sequencer=*/nullptr);
 }
 

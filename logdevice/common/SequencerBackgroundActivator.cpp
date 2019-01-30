@@ -9,6 +9,7 @@
 
 #include "logdevice/common/AllSequencers.h"
 #include "logdevice/common/EpochMetaDataUpdater.h"
+#include "logdevice/common/EpochSequencer.h"
 #include "logdevice/common/MetaDataLog.h"
 #include "logdevice/common/MetaDataLogWriter.h"
 #include "logdevice/common/NodeSetSelectorFactory.h"
@@ -148,7 +149,6 @@ int SequencerBackgroundActivator::reprovisionOrReactivateIfNeeded(
   bool need_epoch_metadata_update = false;
   std::unique_ptr<EpochMetaData> new_metadata;
 
-  size_t current_window_size = seq->getMaxWindowSize();
   epoch_t current_epoch = epoch_metadata->h.epoch;
   ld_check(current_epoch != EPOCH_INVALID);
 
@@ -158,17 +158,25 @@ int SequencerBackgroundActivator::reprovisionOrReactivateIfNeeded(
     return -1;
   }
 
-  if (current_window_size != 0 &&
-      current_window_size != logcfg->attrs().maxWritesInFlight().value()) {
+  folly::Optional<EpochSequencerImmutableOptions> current_options =
+      seq->getEpochSequencerOptions();
+  if (!current_options.hasValue()) {
+    err = E::NOSEQUENCER;
+    return -1;
+  }
+  EpochSequencerImmutableOptions new_options(
+      logcfg->attrs(), Worker::settings());
+
+  if (new_options != current_options.value()) {
     need_reactivation = true;
     RATELIMIT_INFO(std::chrono::seconds(10),
                    10,
                    "Reactivating sequencer for log %lu epoch %u "
-                   "because window size changed from %lu to %d.",
+                   "because options changed from %s to %s.",
                    logid.val(),
                    current_epoch.val(),
-                   current_window_size,
-                   logcfg->attrs().maxWritesInFlight().value());
+                   current_options.value().toString().c_str(),
+                   new_options.toString().c_str());
   }
 
   do { // while (false)

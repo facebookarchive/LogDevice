@@ -2275,11 +2275,11 @@ NodeLocationScope Appender::getCurrentBiggestReplicationScope() const {
 }
 
 copyset_size_t Appender::getExtras() const {
-  return epoch_sequencer_->getExtras();
+  return epoch_sequencer_->getImmutableOptions().extra_copies;
 }
 
 copyset_size_t Appender::getSynced() const {
-  return epoch_sequencer_->getSynced();
+  return epoch_sequencer_->getImmutableOptions().synced_copies;
 }
 
 std::shared_ptr<CopySetManager> Appender::getCopySetManager() const {

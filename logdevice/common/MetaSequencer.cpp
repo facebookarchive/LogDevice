@@ -27,8 +27,7 @@ MetaSequencer::createEpochSequencer(epoch_t epoch,
       std::make_shared<MetaEpochSequencer>(getLogID(),
                                            epoch,
                                            std::move(metadata),
-                                           SLIDING_WINDOW_MIN_CAPACITY,
-                                           ESN_MAX,
+                                           EpochSequencerImmutableOptions(),
                                            this);
   epoch_seq->createOrUpdateCopySetManager(getClusterConfig(), settings());
   ld_check(epoch_seq->getCopySetManager() != nullptr);

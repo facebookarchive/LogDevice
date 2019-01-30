@@ -38,14 +38,12 @@ class MockEpochSequencer : public EpochSequencer {
                      logid_t log_id,
                      epoch_t epoch,
                      std::unique_ptr<EpochMetaData> metadata,
-                     int window_size,
-                     esn_t esn_max,
+                     EpochSequencerImmutableOptions immutable_options,
                      Sequencer* parent)
       : EpochSequencer(log_id,
                        epoch,
                        std::move(metadata),
-                       window_size,
-                       esn_max,
+                       immutable_options,
                        parent),
         test_(test) {}
 
@@ -402,8 +400,10 @@ std::shared_ptr<Configuration> MockSequencer::getClusterConfig() const {
 std::shared_ptr<EpochSequencer>
 MockSequencer::createEpochSequencer(epoch_t epoch,
                                     std::unique_ptr<EpochMetaData> metadata) {
+  EpochSequencerImmutableOptions opts;
+  opts.window_size = 128;
   return std::make_shared<MockEpochSequencer>(
-      test_, getLogID(), epoch, std::move(metadata), 128, ESN_MAX, this);
+      test_, getLogID(), epoch, std::move(metadata), opts, this);
 }
 
 const Settings& MockEpochSequencer::getSettings() const {
