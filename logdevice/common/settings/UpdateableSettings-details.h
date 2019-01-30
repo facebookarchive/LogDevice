@@ -91,7 +91,10 @@ std::function<void(T)> bind_function(std::function<void(T)> fn, const char*) {
 template <typename T>
 std::function<void(T)> bind_function(std::function<void(const char*, T)> fn,
                                      const char* name) {
-  return std::bind(fn, name, std::placeholders::_1);
+  // `name` may be a temporary. Copy it into an std::string captured by value.
+  return [fn, name_str = std::string(name)](T t) {
+    return fn(name_str.c_str(), t);
+  };
 }
 template <typename T>
 std::function<T(const std::string&)>
@@ -102,7 +105,9 @@ template <typename T>
 std::function<T(const std::string&)>
 bind_function(std::function<T(const char*, const std::string&)> fn,
               const char* name) {
-  return std::bind(fn, name, std::placeholders::_1);
+  return [fn, name_str = std::string(name)](const std::string& val) {
+    return fn(name_str.c_str(), val);
+  };
 }
 template <typename T>
 std::function<void(T)> bind_function(std::nullptr_t, const char* /*name*/) {
