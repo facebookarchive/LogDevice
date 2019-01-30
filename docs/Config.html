@@ -75,53 +75,53 @@ The same file can be used to create a client, for which it is passed in the cons
 </ul>
 <p>Both of these have a delta and and snapshot log. Their log ranges are hard-coded, but their replication can be <a href="/docs/Logs.html">configured dynamically</a>.
 Since a lot of LogDevice internals depend on these logs, you want higher fault-tolerance than normal data logs.</p>
-<pre><code class="hljs"><span class="hljs-string">"internal_logs"</span>: {
-    <span class="hljs-string">"config_log_deltas"</span>: {
-        <span class="hljs-string">"extra_copies"</span>: <span class="hljs-number">0</span>,
-        <span class="hljs-string">"max_writes_in_flight"</span>: <span class="hljs-number">2000</span>,
-        <span class="hljs-string">"nodeset_size"</span>: <span class="hljs-number">20</span>,
-        <span class="hljs-string">"replicate_across"</span>: {
-            <span class="hljs-string">"node"</span>: <span class="hljs-number">6</span>,
-            <span class="hljs-string">"rack"</span>: <span class="hljs-number">3</span>
-        },
-        <span class="hljs-string">"scd_enabled"</span>: false,
-        <span class="hljs-string">"synced_copies"</span>: <span class="hljs-number">0</span>
-    },
-    <span class="hljs-string">"config_log_snapshots"</span>: {
-        <span class="hljs-string">"extra_copies"</span>: <span class="hljs-number">0</span>,
-        <span class="hljs-string">"max_writes_in_flight"</span>: <span class="hljs-number">2000</span>,
-        <span class="hljs-string">"nodeset_size"</span>: <span class="hljs-number">20</span>,
-        <span class="hljs-string">"replicate_across"</span>: {
-            <span class="hljs-string">"node"</span>: <span class="hljs-number">6</span>,
-            <span class="hljs-string">"rack"</span>: <span class="hljs-number">3</span>
-        },
-        <span class="hljs-string">"scd_enabled"</span>: false,
-        <span class="hljs-string">"synced_copies"</span>: <span class="hljs-number">0</span>
-    },
-    <span class="hljs-string">"event_log_deltas"</span>: {
-        <span class="hljs-string">"extra_copies"</span>: <span class="hljs-number">0</span>,
-        <span class="hljs-string">"max_writes_in_flight"</span>: <span class="hljs-number">2000</span>,
-        <span class="hljs-string">"nodeset_size"</span>: <span class="hljs-number">20</span>,
-        <span class="hljs-string">"replicate_across"</span>: {
-            <span class="hljs-string">"node"</span>: <span class="hljs-number">6</span>,
-            <span class="hljs-string">"rack"</span>: <span class="hljs-number">3</span>
-        },
-        <span class="hljs-string">"scd_enabled"</span>: false,
-        <span class="hljs-string">"synced_copies"</span>: <span class="hljs-number">0</span>
-    },
-    <span class="hljs-string">"event_log_snapshots"</span>: {
-        <span class="hljs-string">"extra_copies"</span>: <span class="hljs-number">0</span>,
-        <span class="hljs-string">"max_writes_in_flight"</span>: <span class="hljs-number">2000</span>,
-        <span class="hljs-string">"nodeset_size"</span>: <span class="hljs-number">20</span>,
-        <span class="hljs-string">"replicate_across"</span>: {
-        <span class="hljs-string">"replicate_across"</span>: {
-            <span class="hljs-string">"node"</span>: <span class="hljs-number">6</span>,
-            <span class="hljs-string">"rack"</span>: <span class="hljs-number">3</span>
-        },
-        <span class="hljs-string">"scd_enabled"</span>: false,
-        <span class="hljs-string">"synced_copies"</span>: <span class="hljs-number">0</span>
-    }
-},
+<pre><code class="hljs"><span class="hljs-attr">"internal_logs":</span> <span class="hljs-string">{</span>
+<span class="hljs-attr">    "config_log_deltas":</span> <span class="hljs-string">{</span>
+<span class="hljs-attr">        "extra_copies":</span> <span class="hljs-number">0</span><span class="hljs-string">,</span>
+<span class="hljs-attr">        "max_writes_in_flight":</span> <span class="hljs-number">2000</span><span class="hljs-string">,</span>
+<span class="hljs-attr">        "nodeset_size":</span> <span class="hljs-number">20</span><span class="hljs-string">,</span>
+<span class="hljs-attr">        "replicate_across":</span> <span class="hljs-string">{</span>
+<span class="hljs-attr">            "node":</span> <span class="hljs-number">6</span><span class="hljs-string">,</span>
+<span class="hljs-attr">            "rack":</span> <span class="hljs-number">3</span>
+        <span class="hljs-string">},</span>
+<span class="hljs-attr">        "scd_enabled":</span> <span class="hljs-literal">false</span><span class="hljs-string">,</span>
+<span class="hljs-attr">        "synced_copies":</span> <span class="hljs-number">0</span>
+    <span class="hljs-string">},</span>
+<span class="hljs-attr">    "config_log_snapshots":</span> <span class="hljs-string">{</span>
+<span class="hljs-attr">        "extra_copies":</span> <span class="hljs-number">0</span><span class="hljs-string">,</span>
+<span class="hljs-attr">        "max_writes_in_flight":</span> <span class="hljs-number">2000</span><span class="hljs-string">,</span>
+<span class="hljs-attr">        "nodeset_size":</span> <span class="hljs-number">20</span><span class="hljs-string">,</span>
+<span class="hljs-attr">        "replicate_across":</span> <span class="hljs-string">{</span>
+<span class="hljs-attr">            "node":</span> <span class="hljs-number">6</span><span class="hljs-string">,</span>
+<span class="hljs-attr">            "rack":</span> <span class="hljs-number">3</span>
+        <span class="hljs-string">},</span>
+<span class="hljs-attr">        "scd_enabled":</span> <span class="hljs-literal">false</span><span class="hljs-string">,</span>
+<span class="hljs-attr">        "synced_copies":</span> <span class="hljs-number">0</span>
+    <span class="hljs-string">},</span>
+<span class="hljs-attr">    "event_log_deltas":</span> <span class="hljs-string">{</span>
+<span class="hljs-attr">        "extra_copies":</span> <span class="hljs-number">0</span><span class="hljs-string">,</span>
+<span class="hljs-attr">        "max_writes_in_flight":</span> <span class="hljs-number">2000</span><span class="hljs-string">,</span>
+<span class="hljs-attr">        "nodeset_size":</span> <span class="hljs-number">20</span><span class="hljs-string">,</span>
+<span class="hljs-attr">        "replicate_across":</span> <span class="hljs-string">{</span>
+<span class="hljs-attr">            "node":</span> <span class="hljs-number">6</span><span class="hljs-string">,</span>
+<span class="hljs-attr">            "rack":</span> <span class="hljs-number">3</span>
+        <span class="hljs-string">},</span>
+<span class="hljs-attr">        "scd_enabled":</span> <span class="hljs-literal">false</span><span class="hljs-string">,</span>
+<span class="hljs-attr">        "synced_copies":</span> <span class="hljs-number">0</span>
+    <span class="hljs-string">},</span>
+<span class="hljs-attr">    "event_log_snapshots":</span> <span class="hljs-string">{</span>
+<span class="hljs-attr">        "extra_copies":</span> <span class="hljs-number">0</span><span class="hljs-string">,</span>
+<span class="hljs-attr">        "max_writes_in_flight":</span> <span class="hljs-number">2000</span><span class="hljs-string">,</span>
+<span class="hljs-attr">        "nodeset_size":</span> <span class="hljs-number">20</span><span class="hljs-string">,</span>
+<span class="hljs-attr">        "replicate_across":</span> <span class="hljs-string">{</span>
+<span class="hljs-attr">        "replicate_across":</span> <span class="hljs-string">{</span>
+<span class="hljs-attr">            "node":</span> <span class="hljs-number">6</span><span class="hljs-string">,</span>
+<span class="hljs-attr">            "rack":</span> <span class="hljs-number">3</span>
+        <span class="hljs-string">},</span>
+<span class="hljs-attr">        "scd_enabled":</span> <span class="hljs-literal">false</span><span class="hljs-string">,</span>
+<span class="hljs-attr">        "synced_copies":</span> <span class="hljs-number">0</span>
+    <span class="hljs-string">}</span>
+<span class="hljs-string">},</span>
 </code></pre>
 <h2><a class="anchor" aria-hidden="true" id="metadata-logs-metadata-logs"></a><a href="#metadata-logs-metadata-logs" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Metadata logs (<code>metadata logs</code>)</h2>
 <p>Metadata log configuration requires an explicit nodeset. This nodeset is crucial to the system and should always be read and write available. Metadata nodeset can be changed as long as a subset of the nodes is still maintained and data is overreplicated manually, but this is generally a dangerous operation.</p>
