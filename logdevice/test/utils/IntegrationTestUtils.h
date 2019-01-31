@@ -1306,7 +1306,11 @@ class Node {
                        std::chrono::steady_clock::time_point::max());
 
   /**
-   * Wait until the node have read the event log up to @param sync_lsn.
+   * Wait until the node have read the event log up to @param sync_lsn and
+   * propagated it to all workers.
+   * Note that the propagation is delayed by --event-log-grace-period, so if
+   * you're using this method you probably want to decrease
+   * --event-log-grace-period.
    */
   int waitUntilEventLogSynced(lsn_t sync_lsn,
                               std::chrono::steady_clock::time_point deadline =

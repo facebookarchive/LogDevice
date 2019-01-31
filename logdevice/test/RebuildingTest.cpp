@@ -244,7 +244,8 @@ class RebuildingTest : public IntegrationTestBase,
           .setNumDBShards(NUM_DB_SHARDS)
           .useDefaultTrafficShapingConfig(false)
           .setParam("--rocksdb-ld-managed-flushes",
-                    test_param.f == FlushMode::LD ? "true" : "false");
+                    test_param.f == FlushMode::LD ? "true" : "false")
+          .setParam("--event-log-grace-period", "10ms");
     };
   }
 
@@ -679,8 +680,6 @@ TEST_P(RebuildingTest, RebuildingWithNoAmends) {
                      .setMetaDataLogsConfig(meta_config)
                      // read quickly when nodes are down
                      .setParam("--gap-grace-period", "10ms")
-                     // fall back to non-authoritative quickly
-                     .setParam("--event-log-grace-period", "10ms")
                      .setParam("--rebuilding-restarts-grace-period", "1ms")
                      .setParam("--rebuild-without-amends", "true")
                      .setNumLogs(42)
@@ -757,8 +756,6 @@ TEST_P(RebuildingTest, RecoveryWhenManyNodesAreRebuilding) {
                      .setMetaDataLogsConfig(meta_config)
                      // read quickly when nodes are down
                      .setParam("--gap-grace-period", "10ms")
-                     // fall back to non-authoritative quickly
-                     .setParam("--event-log-grace-period", "10ms")
                      .setNumLogs(42)
                      .create(9); // 1 sequencer node + 8 storage nodes
 
@@ -1884,8 +1881,6 @@ TEST_P(RebuildingTest, MiniRebuildingAlwaysNonRecoverable) {
           .setMetaDataLogsConfig(meta_config)
           // read quickly when nodes are down
           .setParam("--gap-grace-period", "10ms")
-          // fall back to non-authoritative quickly
-          .setParam("--event-log-grace-period", "10ms")
           .setNumLogs(42)
           // Enable appends without the WAL.
           .setParam("--append-store-durability", "memory")
@@ -2373,15 +2368,14 @@ TEST_P(RebuildingTest, SkipEverything) {
 
 TEST_P(RebuildingTest, DerivedStats) {
   ld_info("Creating cluster");
-  auto cluster =
-      IntegrationTestUtils::ClusterFactory()
-          .apply(commonSetup())
-          .setNumDBShards(1)
-          .useHashBasedSequencerAssignment()
-          .setInternalLogsReplicationFactor(3)
-          // A hack to prevent self-initiated rebuilding of empty shards.
-          .setParam("--event-log-grace-period", "120s")
-          .create(5);
+  auto cluster = IntegrationTestUtils::ClusterFactory()
+                     .apply(commonSetup())
+                     .setNumDBShards(1)
+                     .useHashBasedSequencerAssignment()
+                     .setInternalLogsReplicationFactor(3)
+                     // Prevent self-initiated rebuilding of empty shards.
+                     .setParam("--enable-self-initiated-rebuilding", "false")
+                     .create(5);
 
   auto stats = cluster->getNode(1).stats();
   EXPECT_EQ(0, stats["shards_waiting_for_non_started_restore"]);

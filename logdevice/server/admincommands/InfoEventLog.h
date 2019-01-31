@@ -57,21 +57,24 @@ class InfoEventLog : public AdminCommand {
                                           "Delta log healthy",
                                           "Propagated version");
 
+    std::atomic<lsn_t> min_propagated_version{LSN_MAX};
+
     auto tables = run_on_all_workers(server_->getProcessor(), [&]() {
       InfoReplicatedStateMachineTable t(table);
       Worker* w = Worker::onThisThread();
+
+      // Set "Propagated version" to the minimum version across all workers'
+      // ShardAuthoritativeStatusManager-s.
+      atomic_fetch_min(min_propagated_version,
+                       w->shardStatusManager()
+                           .getShardAuthoritativeStatusMap()
+                           .getVersion());
+
       if (w->event_log_) {
         w->event_log_->getDebugInfo(t);
 
-        // Set "Propagated version". If we have a RebuildingCoordinator, take
-        // it from there. Otherwise (i.e. if we're a sequencer-only node or if
-        // rebuilding is disabled) just use the same version as in "Version"
-        // column.
         ld_check_eq(w->rebuilding_coordinator_ != nullptr,
                     server_->getRebuildingCoordinator() != nullptr);
-        t.set<14>(w->rebuilding_coordinator_
-                      ? w->rebuilding_coordinator_->getLastSeenEventLogVersion()
-                      : w->event_log_->getVersion());
       }
       return t;
     });
@@ -81,6 +84,8 @@ class InfoEventLog : public AdminCommand {
     }
 
     ld_check_eq(1ul, table.numRows());
+    ld_check(min_propagated_version.load() < LSN_MAX);
+    table.set<14>(min_propagated_version.load());
     json_ ? table.printJson(out_) : table.printRowVertically(0, out_);
   }
 };
