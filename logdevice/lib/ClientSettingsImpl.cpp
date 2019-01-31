@@ -12,6 +12,7 @@
 #include <boost/program_options.hpp>
 
 #include "logdevice/common/debug.h"
+#include "logdevice/common/plugin/DefaultSettingsProvider.h"
 #include "logdevice/include/Err.h"
 #include "logdevice/lib/ClientPluginHelper.h"
 
@@ -21,15 +22,23 @@ namespace facebook { namespace logdevice {
 // ClientSettings Implementation
 //
 
-ClientSettingsImpl::ClientSettingsImpl()
-    // By default be paranoid and don't crash the process on failed assert.
-    : settings_(
-          {{"abort-on-failed-check", folly::kIsDebug ? "true" : "false"}}) {
+ClientSettingsImpl::ClientSettingsImpl() : settings_() {
+  plugin_registry_ =
+      std::make_shared<PluginRegistry>(getClientPluginProviders());
+
+  std::shared_ptr<DefaultSettingsProvider> plugin =
+      plugin_registry_->getSinglePlugin<DefaultSettingsProvider>(
+          PluginType::DEFAULT_SETTINGS_PROVIDER);
+  if (plugin) {
+    auto defaults_override = plugin->getDefaultSettingsOverride();
+    if (!defaults_override.empty()) {
+      settings_ = UpdateableSettings<Settings>(defaults_override);
+    }
+  }
+
   settings_updater_ = std::make_shared<SettingsUpdater>();
   settings_updater_->registerSettings(settings_);
 
-  plugin_registry_ =
-      std::make_shared<PluginRegistry>(getClientPluginProviders());
   plugin_registry_->addOptions(settings_updater_.get());
 }
 

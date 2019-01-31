@@ -14,7 +14,6 @@
 #include "logdevice/common/ConfigInit.h"
 #include "logdevice/common/checks.h"
 #include "logdevice/common/configuration/ParsingHelpers.h"
-#include "logdevice/common/plugin/LocationProvider.h"
 #include "logdevice/common/protocol/HELLO_Message.h"
 #include "logdevice/common/settings/SSLSettingValidation.h"
 #include "logdevice/lib/ClientImpl.h"
@@ -125,19 +124,6 @@ std::shared_ptr<Client> ClientFactory::create(std::string config_url) noexcept {
   if (!applySettingOverrides(*settings_updater)) {
     err = E::INVALID_PARAM;
     return nullptr;
-  }
-
-  std::shared_ptr<LocationProvider> location_plugin =
-      plugin_registry->getSinglePlugin<LocationProvider>(
-          PluginType::LOCATION_PROVIDER);
-  std::string plugin_location =
-      location_plugin ? location_plugin->getMyLocation() : "";
-  auto location = impl_settings->get("my-location");
-  std::string location_str = location.hasValue() ? location.value() : "";
-  if (location_str.empty() && !plugin_location.empty()) {
-    // if my-location was not specified, set the value to what the plugin
-    // provides.
-    impl_settings->set("my-location", plugin_location.c_str());
   }
 
   auto update_settings = [settings_updater](ServerConfig& config) -> bool {

@@ -53,5 +53,7 @@ PLUGIN_TYPE(ADMIN_SERVER_FACTORY, 13, "AdminServer factory", false)
 PLUGIN_TYPE(ZOOKEEPER_CLIENT_FACTORY, 14, "ZookeeperClient factory", false)
 // See Logger.h
 PLUGIN_TYPE(LOGGER, 15, "Logger plugin", false)
+// See DefaultSettingsProvider.h
+PLUGIN_TYPE(DEFAULT_SETTINGS_PROVIDER, 16, "Default settings provider", false)
 
 #undef PLUGIN_TYPE

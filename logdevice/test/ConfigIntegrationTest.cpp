@@ -1236,3 +1236,24 @@ TEST_F(ConfigIntegrationTest, InvalidConfigClientCreationTest2) {
   ASSERT_EQ(nullptr, client);
   ASSERT_EQ(E::INVALID_CONFIG, err);
 }
+
+TEST_F(ConfigIntegrationTest, SslClientCertUnsetByDefault) {
+  std::string client_config_path = TEST_CONFIG_FILE("sample_no_ssl.conf");
+  auto client = ClientFactory().create(client_config_path);
+  ASSERT_NE(nullptr, client);
+
+  ClientImpl* client_impl = dynamic_cast<ClientImpl*>(client.get());
+  ClientSettings& settings = client_impl->settings();
+
+  auto certval = settings.get("ssl-cert-path");
+  ASSERT_TRUE(certval.hasValue());
+  ASSERT_EQ(certval.value(), "");
+
+  auto keyval = settings.get("ssl-key-path");
+  ASSERT_TRUE(keyval.hasValue());
+  ASSERT_EQ(keyval.value(), "");
+
+  auto loadval = settings.get("ssl-load-client-cert");
+  ASSERT_TRUE(loadval.hasValue());
+  ASSERT_EQ(loadval.value(), "false");
+}
