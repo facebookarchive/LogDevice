@@ -44,7 +44,7 @@ class Callback : public folly::HHWheelTimer::Callback {
   explicit Callback(folly::Function<void()>&& callback)
       : callback_(std::move(callback)) {}
 
-  ~Callback() = default;
+  ~Callback() override = default;
 
   std::atomic<bool> canceled_{false};
   folly::Function<void()> callback_;
@@ -58,10 +58,9 @@ constexpr auto kDefaultTickInterval = std::chrono::milliseconds(1);
 
 } // namespace
 
-WheelTimer::WheelTimer()
-    : executor_(std::make_unique<folly::EventBase>()),
-      wheel_timer_(folly::HHWheelTimer::newTimer(executor_.get(),
-                                                 kDefaultTickInterval)) {
+WheelTimer::WheelTimer() : executor_(std::make_unique<folly::EventBase>()) {
+  wheel_timer_ =
+      folly::HHWheelTimer::newTimer(executor_.get(), kDefaultTickInterval);
   folly::Promise<folly::Unit> promise;
   auto ready = promise.getSemiFuture();
   timer_thread_ = std::thread([this, promise = std::move(promise)]() mutable {
@@ -73,14 +72,19 @@ WheelTimer::WheelTimer()
 }
 
 WheelTimer::~WheelTimer() {
+  shutdown_.store(true);
   executor_->terminateLoopSoon();
   timer_thread_.join();
 }
 
 void WheelTimer::createTimer(folly::Function<void()>&& callback,
                              std::chrono::milliseconds timeout) {
+  if (shutdown_.load()) {
+    return;
+  }
+
   timeout = std::chrono::milliseconds(std::min(timeout.count(), kMaxTimeoutMs));
-  executor_->add([callback = std::move(callback), timeout, this]() mutable {
+  executor_->add([callback = std::move(callback), this, timeout]() mutable {
     wheel_timer_->scheduleTimeout(createCallback(std::move(callback)), timeout);
   });
 }

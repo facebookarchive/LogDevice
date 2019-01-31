@@ -7,6 +7,7 @@
  */
 #include "logdevice/common/WheelTimer.h"
 
+#include <atomic>
 #include <chrono>
 
 #include <folly/futures/Promise.h>
@@ -24,4 +25,21 @@ TEST(WheelTimer, TimerCreation) {
       [promise = std::move(promise)]() mutable { promise.setValue(); }, 10ms);
 
   ASSERT_EQ(std::move(future).wait(1s), true);
+}
+
+TEST(WheelTimer, Polling) {
+  std::atomic<int> tries{0};
+  folly::Function<void()> creator;
+  {
+    WheelTimer wheel;
+    creator = [&tries, &wheel, &creator] {
+      // i.e some call here
+      tries++;
+      wheel.createTimer([&creator] { creator(); }, 10ms);
+    };
+    creator();
+    while (tries < 10) {
+      std::this_thread::yield();
+    }
+  }
 }

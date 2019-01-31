@@ -7,6 +7,7 @@
  */
 #pragma once
 
+#include <atomic>
 #include <chrono>
 #include <memory>
 
@@ -39,9 +40,12 @@ class WheelTimer {
 
   constexpr int static kNumberOfThreads = 1;
 
-  std::unique_ptr<folly::EventBase> executor_;
+  std::atomic<bool> shutdown_{false};
   std::unique_ptr<folly::HHWheelTimer, folly::DelayedDestruction::Destructor>
       wheel_timer_;
+  // executor_ should be destroyed before wheel_timer_, because it will dispatch
+  // pending messages, which can access wheel_timer_.
+  std::unique_ptr<folly::EventBase> executor_;
   std::thread timer_thread_;
 };
 
