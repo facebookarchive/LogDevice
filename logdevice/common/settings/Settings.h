@@ -774,6 +774,10 @@ struct Settings : public SettingsBundle {
   // TODO (t13314297): this setting is not modified anywhere
   std::chrono::milliseconds configuration_update_retry_interval{5000};
 
+  // The timeout of the Server Based Nodes Configuration Store's
+  // NODES_CONFIGURATION config fetch request.
+  std::chrono::milliseconds server_based_nodes_configuration_store_timeout;
+
   // Flag indicating whether tcp keep alive should be on.
   bool use_tcp_keep_alive;
 

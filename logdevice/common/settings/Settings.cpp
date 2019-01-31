@@ -1785,6 +1785,14 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "Default log namespace to use on the client.",
        CLIENT | DEPRECATED,
        SettingsCategory::Configuration);
+  init("server-based-nodes-configuration-store-timeout",
+       &server_based_nodes_configuration_store_timeout,
+       "60s",
+       validate_nonnegative<ssize_t>(),
+       "The timeout of the Server Based Nodes Configuration Store's "
+       "NODES_CONFIGURATION config fetch request.",
+       CLIENT | SERVER,
+       SettingsCategory::Configuration);
   init("use-tcp-keep-alive",
        &use_tcp_keep_alive,
        "true",
