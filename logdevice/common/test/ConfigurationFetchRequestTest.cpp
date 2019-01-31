@@ -22,6 +22,7 @@ using namespace facebook::logdevice;
 using namespace std::literals::chrono_literals;
 
 class MockConfigurationFetchRequest : public ConfigurationFetchRequest {
+ public:
   using ConfigurationFetchRequest::ConfigurationFetchRequest;
 
   virtual int sendMessageTo(std::unique_ptr<facebook::logdevice::Message> msg,
@@ -35,6 +36,15 @@ class MockConfigurationFetchRequest : public ConfigurationFetchRequest {
 
   MOCK_METHOD0(deleteThis, void());
   MOCK_METHOD0(cancelTimeoutTimer, void());
+
+  void unMockNonSendFunctions() {
+    ON_CALL(*this, deleteThis()).WillByDefault(Invoke([this]() {
+      ConfigurationFetchRequest::deleteThis();
+    }));
+    ON_CALL(*this, cancelTimeoutTimer()).WillByDefault(Invoke([this]() {
+      ConfigurationFetchRequest::cancelTimeoutTimer();
+    }));
+  }
 
   FRIEND_TEST(ConfigurationFetchRequestTest, SuccessScenarioWithCallback);
   FRIEND_TEST(ConfigurationFetchRequestTest, FailureScenarioWithCallback);
@@ -181,7 +191,7 @@ TEST(ConfigurationFetchRequestTest, GetThreadAffinity) {
 TEST(ConfigurationFetchRequestTest, TimeoutTimer) {
   bool cb_called = false;
 
-  std::unique_ptr<Request> rq = std::make_unique<ConfigurationFetchRequest>(
+  auto mrq = std::make_unique<MockConfigurationFetchRequest>(
       NodeID(2, 0),
       ConfigurationFetchRequest::ConfigType::LOGS_CONFIG,
       [&](Status status, CONFIG_CHANGED_Header, std::string) {
@@ -191,12 +201,15 @@ TEST(ConfigurationFetchRequestTest, TimeoutTimer) {
       },
       worker_id_t(1),
       200ms);
+  mrq->unMockNonSendFunctions();
 
   auto updatable_config =
       std::make_shared<UpdateableConfig>(createSimpleConfig(3, 0));
   Settings settings = create_default_settings<Settings>();
   settings.num_workers = 3;
   auto processor = make_test_processor(settings, std::move(updatable_config));
+
+  std::unique_ptr<Request> rq = std::move(mrq);
   processor->postRequest(rq);
 
   /* sleep override */ std::this_thread::sleep_for(300ms);
@@ -213,14 +226,16 @@ TEST(ConfigurationFetchRequestTest, TimeoutTimer) {
 }
 
 TEST(ConfigurationFetchRequestTest, NoCallbackObjectDestruction) {
-  std::unique_ptr<Request> rq = std::make_unique<ConfigurationFetchRequest>(
+  auto mrq = std::make_unique<MockConfigurationFetchRequest>(
       NodeID(2, 0), ConfigurationFetchRequest::ConfigType::LOGS_CONFIG);
+  mrq->unMockNonSendFunctions();
 
   auto updatable_config =
       std::make_shared<UpdateableConfig>(createSimpleConfig(3, 0));
   Settings settings = create_default_settings<Settings>();
   settings.num_workers = 3;
   auto processor = make_test_processor(settings, std::move(updatable_config));
+  std::unique_ptr<Request> rq = std::move(mrq);
   processor->blockingRequest(rq);
 
   // Make sure that the object gets destructed afterwards
