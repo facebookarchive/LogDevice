@@ -120,6 +120,8 @@ EventLoop::~EventLoop() {
   start_sem_.post();
 
   pthread_join(thread_, nullptr);
+  // Shutdown drains all the work contexts before invoking this destructor.
+  ld_check(num_references_.load() == 0);
 }
 
 void EventLoop::add(folly::Function<void()> task) {

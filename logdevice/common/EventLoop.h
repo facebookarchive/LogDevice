@@ -140,6 +140,20 @@ class EventLoop : public folly::Executor {
   // called on this EventLoop's thread before starting the event loop
   virtual void onThreadStarted() {}
 
+  bool keepAliveAcquire() override {
+    if (shutting_down_.load()) {
+      return false;
+    }
+
+    num_references_++;
+    return true;
+  }
+
+  void keepAliveRelease() override {
+    auto prev = num_references_.fetch_sub(1);
+    ld_assert(prev > 0);
+  }
+
  private:
   ThreadID::Type thread_type_;
   std::string thread_name_;
@@ -179,6 +193,10 @@ class EventLoop : public folly::Executor {
   // the event base in its constructor without worrying that the worker thread
   // is concurrently using it.
   Semaphore start_sem_;
+
+  // Counter to keep track of number of work contexts that depend on the
+  // eventloop.
+  std::atomic<size_t> num_references_{0};
 };
 
 }} // namespace facebook::logdevice

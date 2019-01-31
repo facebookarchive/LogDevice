@@ -11,7 +11,7 @@ namespace facebook { namespace logdevice {
 
 NetworkWorkContext::NetworkWorkContext(EventLoop& eventLoop,
                                        work_context_id_t id)
-    : WorkContext(eventLoop, id), eventLoop_(eventLoop) {}
+    : WorkContext(getKeepAliveToken(&eventLoop), id), eventLoop_(eventLoop) {}
 
 EventLoop& NetworkWorkContext::getEventLoop() {
   return eventLoop_;

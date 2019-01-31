@@ -7,15 +7,22 @@
  */
 #include "logdevice/common/work_model/WorkContext.h"
 
+#include "logdevice/common/debug.h"
+
 namespace facebook { namespace logdevice {
 
 const WorkContext::work_context_id_t WorkContext::kAnonymousId;
 
-WorkContext::WorkContext(folly::Executor& executor, work_context_id_t id)
-    : executor_(executor), id_(id) {}
+WorkContext::~WorkContext() {
+  ld_check(num_references_.load() == 0);
+}
+
+WorkContext::WorkContext(WorkContext::KeepAlive executor_keep_alive,
+                         work_context_id_t id)
+    : executor_(std::move(executor_keep_alive)), id_(id) {}
 
 void WorkContext::add(folly::Func func) {
-  executor_.add(std::move(func));
+  executor_->add(std::move(func));
 }
 
 WorkContext::work_context_id_t WorkContext::getId() const {
@@ -25,4 +32,14 @@ WorkContext::work_context_id_t WorkContext::getId() const {
 bool WorkContext::anonymous() const {
   return id_ == kAnonymousId;
 }
+
+bool WorkContext::keepAliveAcquire() {
+  num_references_++;
+  return true;
+}
+
+void WorkContext::keepAliveRelease() {
+  num_references_.fetch_sub(1);
+}
+
 }} // namespace facebook::logdevice

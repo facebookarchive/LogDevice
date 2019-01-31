@@ -7,26 +7,42 @@
  */
 #pragma once
 
+#include <atomic>
+
 #include <folly/Executor.h>
 
 namespace facebook { namespace logdevice {
 
 class WorkContext : public folly::Executor {
  public:
-  typedef uint64_t work_context_id_t;
+  using work_context_id_t = uint64_t;
   static constexpr work_context_id_t kAnonymousId{0};
-  explicit WorkContext(Executor& executor, work_context_id_t id = kAnonymousId);
+  using KeepAlive = folly::Executor::KeepAlive<folly::Executor>;
+  explicit WorkContext(KeepAlive executor_keep_alive,
+                       work_context_id_t id = kAnonymousId);
   WorkContext(const WorkContext&) = delete;
   WorkContext& operator=(const WorkContext&) = delete;
-  virtual ~WorkContext() {}
+  ~WorkContext() override;
 
   virtual void add(folly::Func func) override;
   work_context_id_t getId() const;
   bool anonymous() const;
 
+ protected:
+  bool keepAliveAcquire() override;
+  void keepAliveRelease() override;
+  /**
+   * KeepAlive of underlying executor that executes added work. This keep alive
+   * token provides a way to access the executor and also prevents it from going
+   * out of scope.
+   */
+  KeepAlive executor_;
+
  private:
-  Executor& executor_;
   work_context_id_t id_;
+
+  // Number of clients that hold a reference to this work context.
+  std::atomic<size_t> num_references_{0};
 };
 
 }} // namespace facebook::logdevice
