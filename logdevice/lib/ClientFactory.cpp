@@ -12,8 +12,10 @@
 #include <boost/uuid/uuid_io.hpp>
 
 #include "logdevice/common/ConfigInit.h"
+#include "logdevice/common/NodesConfigurationInit.h"
 #include "logdevice/common/checks.h"
 #include "logdevice/common/configuration/ParsingHelpers.h"
+#include "logdevice/common/configuration/nodes/ServerBasedNodesConfigurationStore.h"
 #include "logdevice/common/protocol/HELLO_Message.h"
 #include "logdevice/common/settings/SSLSettingValidation.h"
 #include "logdevice/lib/ClientImpl.h"
@@ -172,6 +174,20 @@ std::shared_ptr<Client> ClientFactory::create(std::string config_url) noexcept {
                               options);
   if (rv != 0) {
     return nullptr;
+  }
+
+  // Init Nodes Configuration
+  auto nodes_configuration_seed =
+      impl_settings->getSettings()->nodes_configuration_seed_servers;
+  if (!nodes_configuration_seed.empty()) {
+    auto server_nodes_cfg_store = std::make_unique<
+        configuration::nodes::ServerBasedNodesConfigurationStore>();
+    NodesConfigurationInit nodes_cfg_init(std::move(server_nodes_cfg_store));
+    int success = nodes_cfg_init.init(
+        config->updateableNodesConfiguration(), nodes_configuration_seed);
+    if (!success) {
+      return nullptr;
+    }
   }
 
   if (!validateSSLSettings(

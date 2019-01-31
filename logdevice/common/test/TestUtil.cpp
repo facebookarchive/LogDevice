@@ -155,6 +155,7 @@ ServerConfig::NodesConfig createSimpleNodesConfig(size_t nnodes) {
   for (size_t i = 0; i < nnodes; ++i) {
     auto& node = nodes[i];
     node.address = Sockaddr("::1", folly::to<std::string>(4440 + i));
+    node.gossip_address = Sockaddr("::1", folly::to<std::string>(5440 + i));
     node.generation = 1;
     node.addSequencerRole();
     node.addStorageRole(/*num_shards*/ 2);

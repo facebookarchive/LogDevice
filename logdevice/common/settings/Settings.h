@@ -778,6 +778,13 @@ struct Settings : public SettingsBundle {
   // NODES_CONFIGURATION config fetch request.
   std::chrono::milliseconds server_based_nodes_configuration_store_timeout;
 
+  // The seed string that will be used to fetch the initial nodes configuration
+  // It can be in the form string:<server1>,<server2>,etc. Or you can provide an
+  // smc tier via "smc:<smc_tier>". If it's empty, NCM client bootstrapping is
+  // not used.
+  // TODO finalize the format of the string the config string.
+  std::string nodes_configuration_seed_servers;
+
   // Flag indicating whether tcp keep alive should be on.
   bool use_tcp_keep_alive;
 

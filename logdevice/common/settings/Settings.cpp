@@ -1793,6 +1793,16 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "NODES_CONFIGURATION config fetch request.",
        CLIENT | SERVER,
        SettingsCategory::Configuration);
+  init("nodes-configuration-seed-servers",
+       &nodes_configuration_seed_servers,
+       "",
+       nullptr, // no validation
+       "The seed string that will be used to fetch the initial nodes "
+       "configuration // It can be in the form string:<server1>,<server2>,etc. "
+       "Or you can provide an smc tier via 'smc:<smc_tier>'. If it's empty, "
+       "NCM client bootstraping is not used.",
+       CLIENT,
+       SettingsCategory::Configuration);
   init("use-tcp-keep-alive",
        &use_tcp_keep_alive,
        "true",
