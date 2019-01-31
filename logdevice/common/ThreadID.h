@@ -32,6 +32,7 @@ class ThreadID {
     STORAGE,            // Storage threads
     ROCKSDB,            // RocksDB threads
     UTILITY,            // LogDevice utility threads
+    WHEEL_TIMER,        // WheelTimer class
   };
 
   /**

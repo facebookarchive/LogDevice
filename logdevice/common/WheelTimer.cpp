@@ -15,6 +15,7 @@
 #include <folly/io/async/EventBase.h>
 #include <folly/synchronization/LifoSem.h>
 
+#include "logdevice/common/ThreadID.h"
 #include "logdevice/common/debug.h"
 
 namespace facebook { namespace logdevice {
@@ -58,6 +59,7 @@ WheelTimer::WheelTimer() : executor_(std::make_unique<folly::EventBase>()) {
   folly::Promise<folly::Unit> promise;
   auto ready = promise.getSemiFuture();
   timer_thread_ = std::thread([this, promise = std::move(promise)]() mutable {
+    ThreadID::set(ThreadID::Type::WHEEL_TIMER, "ld:wheel_timer");
     promise.setValue();
     executor_->loopForever();
   });
