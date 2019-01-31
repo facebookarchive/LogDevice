@@ -27,16 +27,12 @@ class Callback : public folly::HHWheelTimer::Callback {
  public:
   friend Callback* createCallback(folly::Function<void()>&& callback);
 
-  virtual void timeoutExpired() noexcept override {
-    if (canceled_.load()) {
-      return;
-    }
-
+  void timeoutExpired() noexcept override {
     callback_();
     delete this;
   }
 
-  virtual void callbackCanceled() noexcept override {
+  void callbackCanceled() noexcept override {
     delete this;
   }
 
@@ -45,8 +41,6 @@ class Callback : public folly::HHWheelTimer::Callback {
       : callback_(std::move(callback)) {}
 
   ~Callback() override = default;
-
-  std::atomic<bool> canceled_{false};
   folly::Function<void()> callback_;
 };
 
