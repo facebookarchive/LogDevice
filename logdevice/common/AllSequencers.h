@@ -109,6 +109,8 @@ class AllSequencers {
    * @param pred  Activation predicate of the Sequencer object, will be
    *              evaluated under the internal state mutex of the Sequencer.
    *              see Sequencer::startActivation()
+   * @param reason
+   *    A human-readable description of why the sequencer is being activated.
    * @param check_metadata_log_before_provisioning
    *              Verify metadata log being empty before provisioning the log
    *              to epoch store if not already there.
@@ -153,6 +155,7 @@ class AllSequencers {
    */
   int activateSequencer(
       logid_t logid,
+      const std::string& reason,
       Sequencer::ActivationPred pred,
       folly::Optional<epoch_t> acceptable_activation_epoch = folly::none,
       bool check_metadata_log_before_provisioning = true,
@@ -169,6 +172,7 @@ class AllSequencers {
    */
   int activateSequencerIfNotActive(
       logid_t logid,
+      const std::string& reason,
       bool check_metadata_log_before_provisioning = true);
 
   /**
@@ -187,6 +191,7 @@ class AllSequencers {
    *                 NOSEQUENCER   if sequencer does not exist in the map
    */
   int reactivateIf(logid_t logid,
+                   const std::string& reason,
                    Sequencer::ActivationPred pred,
                    bool only_consecutive_epoch = false);
 
@@ -194,7 +199,7 @@ class AllSequencers {
    * Reactivate a Sequencer for a new epoch. The same as calling reactivateIf()
    * with unconditional predicates.
    */
-  int reactivateSequencer(logid_t logid);
+  int reactivateSequencer(logid_t logid, const std::string& reason);
 
   /**
    * Called when epoch metadata is gotten from epoch store for a previous
@@ -219,6 +224,7 @@ class AllSequencers {
   virtual void
   onEpochMetaDataFromEpochStore(Status st,
                                 logid_t logid,
+                                const std::string& activation_reason,
                                 std::unique_ptr<EpochMetaData> info,
                                 std::unique_ptr<EpochStoreMetaProperties>);
 
@@ -233,7 +239,10 @@ class AllSequencers {
    * was found NOT empty, there is inconsistency between epoch store and
    * metadata log. In that case, fails the sequencer activation.
    */
-  virtual void onMetadataLogEmptyCheckResult(Status st, logid_t logid);
+  virtual void
+  onMetadataLogEmptyCheckResult(Status st,
+                                logid_t logid,
+                                const std::string& activation_reason);
 
   /**
    * Fails an ongoing sequencer activation on behalf of
@@ -298,7 +307,8 @@ class AllSequencers {
    *     NOBUFS   if the maximum number of logs has been exceeded
    *     INTERNAL if something went terribly wrong
    */
-  int activateAllSequencers(std::chrono::milliseconds timeout);
+  int activateAllSequencers(std::chrono::milliseconds timeout,
+                            const std::string& reason);
 
   /**
    * This method called after node has spent some time in isolation and
@@ -379,6 +389,7 @@ class AllSequencers {
    */
   virtual int
   getEpochMetaData(logid_t logid,
+                   const std::string& activation_reason,
                    std::shared_ptr<Configuration> cfg,
                    folly::Optional<epoch_t> acceptable_activation_epoch,
                    bool check_metadata_log_before_provisioning = true,
@@ -429,17 +440,8 @@ class AllSequencers {
                           epoch_t epoch,
                           bool bypass_recovery);
 
-  // static wrapper around onEpochMetaDataFromEpochStore(), used as the callback
-  // function of EpochStore::createOrUpdateMetaData()
-  static void
-  nextEpochCF(Status st,
-              logid_t logid,
-              std::unique_ptr<EpochMetaData> info,
-              std::unique_ptr<EpochStoreMetaProperties> meta_properties);
-
-  static void metadataLogEmptyResultCF(Status st, logid_t logid);
-
-  virtual void startMetadataLogEmptyCheck(logid_t logid);
+  virtual void startMetadataLogEmptyCheck(logid_t logid,
+                                          const std::string& activation_reason);
 
   static const size_t MAP_SIZE_MAX = (size_t)INT_MAX;
 };

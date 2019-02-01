@@ -48,7 +48,9 @@ class Up : public AdminCommand {
     }
 
     int rv = server_->getProcessor()->allSequencers().activateSequencer(
-        logid_t(logid_), [](const Sequencer&) { return true; });
+        logid_t(logid_), "admin command", [](const Sequencer&) {
+          return true;
+        });
 
     if (rv == 0) {
       out_.printf("Started sequencer activation for log %lu\r\n", logid_);

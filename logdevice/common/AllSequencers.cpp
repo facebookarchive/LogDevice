@@ -93,6 +93,7 @@ std::shared_ptr<Sequencer> AllSequencers::findSequencer(logid_t logid) {
 
 int AllSequencers::activateSequencer(
     logid_t logid,
+    const std::string& reason,
     Sequencer::ActivationPred pred,
     folly::Optional<epoch_t> acceptable_activation_epoch,
     bool check_metadata_log_before_provisioning,
@@ -140,11 +141,13 @@ int AllSequencers::activateSequencer(
   return seq->startActivation(
       // metadata function
       [this,
+       reason,
        acceptable_activation_epoch,
        cfg,
        check_metadata_log_before_provisioning,
        new_metadata](logid_t data_logid) -> int {
         return getEpochMetaData(data_logid,
+                                reason,
                                 cfg,
                                 acceptable_activation_epoch,
                                 check_metadata_log_before_provisioning,
@@ -155,6 +158,7 @@ int AllSequencers::activateSequencer(
 
 int AllSequencers::getEpochMetaData(
     logid_t logid,
+    const std::string& activation_reason,
     std::shared_ptr<Configuration> cfg,
     folly::Optional<epoch_t> acceptable_activation_epoch,
     bool check_metadata_log_before_provisioning,
@@ -163,6 +167,18 @@ int AllSequencers::getEpochMetaData(
   MetaDataTracer tracer(processor_->getTraceLogger(),
                         logid,
                         MetaDataTracer::Action::SEQUENCER_ACTIVATION);
+
+  auto cb = [this, activation_reason](
+                Status st,
+                logid_t _logid,
+                std::unique_ptr<EpochMetaData> info,
+                std::unique_ptr<EpochStoreMetaProperties> meta_properties) {
+    onEpochMetaDataFromEpochStore(st,
+                                  _logid,
+                                  activation_reason,
+                                  std::move(info),
+                                  std::move(meta_properties));
+  };
 
   // To verify metadata log being empty before provisioning the log, simply
   // prevent provisioning the log in the epoch store here. It will be triggered
@@ -178,7 +194,7 @@ int AllSequencers::getEpochMetaData(
           acceptable_activation_epoch,
           settings_->epoch_metadata_use_new_storage_set_format,
           /*provision_if_empty=*/!check_metadata_log_before_provisioning),
-      nextEpochCF,
+      cb,
       std::move(tracer),
       EpochStore::WriteNodeID::MY);
   if (rv != 0) {
@@ -208,9 +224,11 @@ int AllSequencers::getEpochMetaData(
 
 int AllSequencers::activateSequencerIfNotActive(
     logid_t logid,
+    const std::string& reason,
     bool check_metadata_log_before_provisioning) {
   int rv =
       activateSequencer(logid,
+                        reason,
                         [](const Sequencer& seq) {
                           return seq.getState() != Sequencer::State::ACTIVE;
                         },
@@ -223,6 +241,7 @@ int AllSequencers::activateSequencerIfNotActive(
 }
 
 int AllSequencers::reactivateIf(logid_t logid,
+                                const std::string& reason,
                                 Sequencer::ActivationPred pred,
                                 bool only_consecutive_epoch) {
   ld_check(!MetaDataLog::isMetaDataLog(logid));
@@ -247,15 +266,18 @@ int AllSequencers::reactivateIf(logid_t logid,
     }
   }
 
-  return activateSequencer(logid, std::move(pred), acceptable_activation_epoch);
+  return activateSequencer(
+      logid, reason, std::move(pred), acceptable_activation_epoch);
 }
 
-int AllSequencers::reactivateSequencer(logid_t logid) {
+int AllSequencers::reactivateSequencer(logid_t logid,
+                                       const std::string& reason) {
   // reactivate unconditionally
-  return reactivateIf(logid, [](const Sequencer&) { return true; });
+  return reactivateIf(logid, reason, [](const Sequencer&) { return true; });
 }
 
-int AllSequencers::activateAllSequencers(std::chrono::milliseconds timeout) {
+int AllSequencers::activateAllSequencers(std::chrono::milliseconds timeout,
+                                         const std::string& reason) {
   using std::chrono::steady_clock;
 
   std::shared_ptr<Configuration> cfg = updateable_config_->get();
@@ -271,7 +293,7 @@ int AllSequencers::activateAllSequencers(std::chrono::milliseconds timeout) {
     // Can't verify with metadata log since this is done before listeners are
     // started; allow provisioning log to epoch store if it's found empty
     int rv = activateSequencerIfNotActive(
-        logid, /*check_metadata_log_before_provisioning=*/false);
+        logid, reason, /*check_metadata_log_before_provisioning=*/false);
     if (rv != 0) {
       switch (err) {
         case E::EXISTS:
@@ -389,8 +411,19 @@ void AllSequencers::notifyWorkerActivationCompletion(logid_t logid, Status st) {
 void AllSequencers::onEpochMetaDataFromEpochStore(
     Status st,
     logid_t logid,
+    const std::string& activation_reason,
     std::unique_ptr<EpochMetaData> info,
     std::unique_ptr<EpochStoreMetaProperties> meta_props) {
+  if (info && st == E::OK) {
+    // `info` is the EpochMetaData that was written to epoch store.
+    // `info->epoch` is the _next_ epoch to be assigned.
+    // The epoch of this newly activated sequencer is less by one.
+    // Let's decrement it.
+    // (EpochMetaDataUpdateToNextEpoch made sure that it's at least 2.)
+    ld_check(info->h.epoch > EPOCH_MIN);
+    --info->h.epoch.val_;
+  }
+
   std::shared_ptr<Configuration> cfg = updateable_config_->get();
   ld_check(cfg != nullptr);
 
@@ -445,9 +478,10 @@ void AllSequencers::onEpochMetaDataFromEpochStore(
       // 1) epoch; 2) nodeset; 3) replication property;
       result = seq->completeActivationWithMetaData(epoch, cfg, std::move(info));
       if (result != ActivateResult::FAILED) {
-        ld_info("Activated a sequencer for log %lu with epoch %u, "
+        ld_info("Activated a sequencer for log %lu (reason: %s) with epoch %u, "
                 "metadata: %s. Activation Result: %s.",
                 logid.val_,
+                activation_reason.c_str(),
                 epoch.val_,
                 metadata_str.c_str(),
                 Sequencer::activateResultToString(result));
@@ -458,50 +492,60 @@ void AllSequencers::onEpochMetaDataFromEpochStore(
 
     case E::NOTFOUND:
       if (!cfg->serverConfig()->sequencersProvisionEpochStore()) {
-        RATELIMIT_ERROR(std::chrono::seconds(10),
-                        100,
-                        "Attempt to activate a sequencer for log %lu failed "
-                        "because that log id is not provisioned in the epoch "
-                        "store.",
-                        logid.val_);
+        RATELIMIT_ERROR(
+            std::chrono::seconds(10),
+            100,
+            "Attempt to activate a sequencer for log %lu (reason: %s) failed "
+            "because that log id is not provisioned in the epoch "
+            "store.",
+            logid.val_,
+            activation_reason.c_str());
         break;
       }
 
       // Epoch store is empty. Start request to verify that metadata log is too,
       // and if so, start a new request to epoch store, this time allowing it
       // to provision an empty log.
-      startMetadataLogEmptyCheck(logid);
+      startMetadataLogEmptyCheck(logid, activation_reason);
       return;
     case E::ACCESS:
-      RATELIMIT_ERROR(std::chrono::seconds(10),
-                      1,
-                      "Attempt to activate a sequencer for log %lu failed "
-                      "because epoch store denied access",
-                      logid.val_);
+      RATELIMIT_ERROR(
+          std::chrono::seconds(10),
+          1,
+          "Attempt to activate a sequencer for log %lu (reason: %s) failed "
+          "because epoch store denied access",
+          logid.val_,
+          activation_reason.c_str());
       break;
 
     case E::CONNFAILED:
-      RATELIMIT_ERROR(std::chrono::seconds(1),
-                      1,
-                      "Attempt to activate a sequencer for log %lu failed "
-                      "because connection to epoch store was lost or "
-                      "timeout expired",
-                      logid.val_);
+      RATELIMIT_ERROR(
+          std::chrono::seconds(1),
+          1,
+          "Attempt to activate a sequencer for log %lu (reason: %s) failed "
+          "because connection to epoch store was lost or "
+          "timeout expired",
+          logid.val_,
+          activation_reason.c_str());
       break;
 
     case E::SHUTDOWN:
-      RATELIMIT_ERROR(std::chrono::seconds(1),
-                      1,
-                      "Attempt to activate a sequencer for log %lu failed "
-                      "because connection to epoch store was closed",
-                      logid.val_);
+      RATELIMIT_ERROR(
+          std::chrono::seconds(1),
+          1,
+          "Attempt to activate a sequencer for log %lu (reason: %s) failed "
+          "because connection to epoch store was closed",
+          logid.val_,
+          activation_reason.c_str());
       break;
 
     case E::AGAIN:
-      ld_warning("Attempt to activate a sequencer for log %lu failed because "
+      ld_warning("Attempt to activate a sequencer for log %lu (reason: %s) "
+                 "failed because "
                  "some other logdeviced simultaneously tried to increment "
                  "epoch for that log and we lost the race.",
-                 logid.val_);
+                 logid.val_,
+                 activation_reason.c_str());
       break;
 
     case E::BADMSG:
@@ -516,13 +560,14 @@ void AllSequencers::onEpochMetaDataFromEpochStore(
     case E::DISABLED:
       // the epoch metadata is marked as disabled. This happens when the log
       // is considered not to exist but not yet removed from the config
-      RATELIMIT_ERROR(
-          std::chrono::seconds(10),
-          100,
-          "Cannot activate sequencer for log %lu: metadata received from "
-          "the epoch store indicates that the log is disabled, run "
-          "metadata-utility provision again!",
-          logid.val_);
+      RATELIMIT_ERROR(std::chrono::seconds(10),
+                      100,
+                      "Cannot activate sequencer for log %lu (reason: %s): "
+                      "metadata received from "
+                      "the epoch store indicates that the log is disabled, run "
+                      "metadata-utility provision again!",
+                      logid.val_,
+                      activation_reason.c_str());
       break;
 
     case E::EMPTY:
@@ -539,7 +584,7 @@ void AllSequencers::onEpochMetaDataFromEpochStore(
       // Epoch store is empty for this log. Start request to verify that
       // metadata log is too, and if so, start a new request to epoch store,
       // this time allowing it to provision an empty log.
-      startMetadataLogEmptyCheck(logid);
+      startMetadataLogEmptyCheck(logid, activation_reason);
       return;
     case E::EXISTS:
       RATELIMIT_ERROR(std::chrono::seconds(10),
@@ -629,13 +674,10 @@ void AllSequencers::notePreemption(logid_t logid,
                  context);
 }
 
-/*static*/
-void AllSequencers::metadataLogEmptyResultCF(Status st, logid_t logid) {
-  Worker* worker = Worker::onThisThread();
-  worker->processor_->allSequencers().onMetadataLogEmptyCheckResult(st, logid);
-}
-
-void AllSequencers::onMetadataLogEmptyCheckResult(Status st, logid_t logid) {
+void AllSequencers::onMetadataLogEmptyCheckResult(
+    Status st,
+    logid_t logid,
+    const std::string& activation_reason) {
   switch (st) {
     case E::NOTFOUND:
       // We already knew that the epoch store was empty for this log; now we
@@ -645,6 +687,7 @@ void AllSequencers::onMetadataLogEmptyCheckResult(Status st, logid_t logid) {
       {
         int rv =
             getEpochMetaData(logid,
+                             activation_reason,
                              updateable_config_->get(),
                              epoch_t(1),
                              /*check_metadata_log_before_provisioning=*/false);
@@ -736,9 +779,13 @@ void AllSequencers::onActivationFailed(logid_t logid,
   STAT_INCR(getStats(), sequencer_activation_failures);
 }
 
-void AllSequencers::startMetadataLogEmptyCheck(logid_t logid) {
+void AllSequencers::startMetadataLogEmptyCheck(
+    logid_t logid,
+    const std::string& activation_reason) {
   std::unique_ptr<Request> rq = std::make_unique<CheckMetadataLogEmptyRequest>(
-      logid, metadataLogEmptyResultCF);
+      logid, [this, activation_reason](Status st, logid_t _logid) {
+        onMetadataLogEmptyCheckResult(st, _logid, activation_reason);
+      });
   processor_->postImportant(rq);
 }
 
@@ -824,26 +871,6 @@ void AllSequencers::notifyMetaDataLogWriterOnActivation(Sequencer* seq,
       meta_writer->recoverMetaDataLog();
     }
   }
-}
-
-/*static*/
-void AllSequencers::nextEpochCF(
-    Status st,
-    logid_t logid,
-    std::unique_ptr<EpochMetaData> info,
-    std::unique_ptr<EpochStoreMetaProperties> meta_properties) {
-  if (info && st == E::OK) {
-    // `info` is the EpochMetaData that was written to epoch store.
-    // `info->epoch` is the _next_ epoch to be assigned.
-    // The epoch of this newly activated sequencer is less by one.
-    // Let's decrement it.
-    ld_check(info->h.epoch > EPOCH_MIN);
-    --info->h.epoch.val_;
-  }
-
-  Worker* worker = Worker::onThisThread();
-  worker->processor_->allSequencers().onEpochMetaDataFromEpochStore(
-      st, logid, std::move(info), std::move(meta_properties));
 }
 
 void AllSequencers::noteConfigurationChanged() {

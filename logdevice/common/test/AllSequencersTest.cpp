@@ -69,7 +69,7 @@ class AllSequencersTest : public ::testing::Test {
     return std::make_unique<EpochMetaData>(
         StorageSet{ShardID(1, 0)},
         ReplicationProperty(1, NodeLocationScope::NODE),
-        epoch,
+        epoch_t(epoch.val() + 1),
         epoch);
   }
   std::shared_ptr<Configuration> getConfig() const {
@@ -161,6 +161,7 @@ class MockAllSequencers : public AllSequencers {
 
   int getEpochMetaData(
       logid_t logid,
+      const std::string& /* activation_reason */,
       std::shared_ptr<Configuration> /*cfg*/,
       folly::Optional<epoch_t> /*acceptable_activation_epoch*/,
       bool /*provision_if_empty*/,
@@ -176,33 +177,43 @@ class MockAllSequencers : public AllSequencers {
   void notifyWorkerActivationCompletion(logid_t /*logid*/,
                                         Status /*st*/) override {}
 
-  void startMetadataLogEmptyCheck(logid_t logid) override {
+  void
+  startMetadataLogEmptyCheck(logid_t logid,
+                             const std::string& activation_reason) override {
     onMetadataLogEmptyCheckResult(
-        test_->metadata_log_empty_ ? E::NOTFOUND : E::NOTEMPTY, logid);
+        test_->metadata_log_empty_ ? E::NOTFOUND : E::NOTEMPTY,
+        logid,
+        activation_reason);
   }
 
   void onEpochMetaDataFromEpochStore(
       Status st,
       logid_t logid,
+      const std::string& activation_reason,
       std::unique_ptr<EpochMetaData> info,
       std::unique_ptr<EpochStoreMetaProperties> meta_props) override {
     if (st == E::EMPTY) {
-      startMetadataLogEmptyCheck(logid);
+      startMetadataLogEmptyCheck(logid, activation_reason);
     } else {
       AllSequencers::onEpochMetaDataFromEpochStore(
-          st, logid, std::move(info), std::move(meta_props));
+          st, logid, activation_reason, std::move(info), std::move(meta_props));
     }
   }
 
-  void onMetadataLogEmptyCheckResult(Status st, logid_t logid) override {
+  void
+  onMetadataLogEmptyCheckResult(Status st,
+                                logid_t logid,
+                                const std::string& activation_reason) override {
     if (st == E::NOTFOUND) {
       onEpochMetaDataFromEpochStore(
           E::OK,
           logid,
+          activation_reason,
           test_->genMetaData(test_->empty_epoch_store_update_result_.load()),
           nullptr);
     } else {
-      AllSequencers::onMetadataLogEmptyCheckResult(st, logid);
+      AllSequencers::onMetadataLogEmptyCheckResult(
+          st, logid, activation_reason);
     }
   }
 
@@ -242,7 +253,7 @@ TEST_F(AllSequencersTest, ActivateSequencers) {
     ASSERT_EQ(0, getMetaDataRequests(logid));
     auto pred = [](const Sequencer&) { return true; };
     // activate sequencer for log 1
-    int rv = all_seqs_->activateSequencer(logid, pred);
+    int rv = all_seqs_->activateSequencer(logid, "test", pred);
     ASSERT_EQ(0, rv);
     ASSERT_EQ(1, getMetaDataRequests(logid));
 
@@ -255,33 +266,33 @@ TEST_F(AllSequencersTest, ActivateSequencers) {
 
     // while in ACTIVATING, sequencer cannot be activated, and E::INPROGRESS
     // will be returned
-    rv = all_seqs_->activateSequencer(logid, pred);
+    rv = all_seqs_->activateSequencer(logid, "test", pred);
     ASSERT_EQ(-1, rv);
     ASSERT_EQ(E::INPROGRESS, err);
     // reactivate sequencer returns 0 according to the public function def
-    rv = all_seqs_->reactivateSequencer(logid);
+    rv = all_seqs_->reactivateSequencer(logid, "test");
     ASSERT_EQ(0, rv);
     ASSERT_EQ(1, getMetaDataRequests(logid));
     // simulate epoch metadata is gotten from epoch store
     all_seqs_->onEpochMetaDataFromEpochStore(
-        E::OK, logid, genMetaData(epoch_t(2)), nullptr);
+        E::OK, logid, "test", genMetaData(epoch_t(2)), nullptr);
     // sequencer should be successfully activated to ACTIVE state
     ASSERT_EQ(Sequencer::State::ACTIVE, seq->getState());
     // recovery should have been started
     ASSERT_EQ(1, getLogRecoveries(logid));
     // sequencer should be running in epoch 2
     ASSERT_EQ(epoch_t(2), seq->getCurrentEpoch());
-    rv = all_seqs_->activateSequencerIfNotActive(logid);
+    rv = all_seqs_->activateSequencerIfNotActive(logid, "test");
     ASSERT_EQ(-1, rv);
     ASSERT_EQ(E::EXISTS, err);
 
     // try to reactivate the sequencer, should be successful this time
-    rv = all_seqs_->reactivateSequencer(logid);
+    rv = all_seqs_->reactivateSequencer(logid, "test");
     ASSERT_EQ(0, rv);
     ASSERT_EQ(2, getMetaDataRequests(logid));
     ASSERT_EQ(Sequencer::State::ACTIVATING, seq->getState());
     all_seqs_->onEpochMetaDataFromEpochStore(
-        E::OK, logid, genMetaData(epoch_t(6)), nullptr);
+        E::OK, logid, "test", genMetaData(epoch_t(6)), nullptr);
     ASSERT_EQ(Sequencer::State::ACTIVE, seq->getState());
     // epoch 2 should be gracefully drained
     ASSERT_EQ(1, getLogRecoveries(logid));
@@ -294,7 +305,7 @@ TEST_F(AllSequencersTest, ActivateErrors) {
   setUp();
   auto pred = [](const Sequencer&) { return true; };
   // activate a sequencer not in config
-  int rv = all_seqs_->activateSequencer(logid_t(77998), pred);
+  int rv = all_seqs_->activateSequencer(logid_t(77998), "test", pred);
   ASSERT_EQ(-1, rv);
   ASSERT_EQ(E::NOTFOUND, err);
 
@@ -304,7 +315,7 @@ TEST_F(AllSequencersTest, ActivateErrors) {
 
   // failed the metadata request
   metadata_req_ok_ = false;
-  rv = all_seqs_->activateSequencer(logid, pred);
+  rv = all_seqs_->activateSequencer(logid, "test", pred);
   ASSERT_EQ(-1, rv);
   ASSERT_EQ(E::FAILED, err);
   ASSERT_EQ(1, getMetaDataRequests(logid));
@@ -314,27 +325,28 @@ TEST_F(AllSequencersTest, ActivateErrors) {
   ASSERT_EQ(Sequencer::State::UNAVAILABLE, seq->getState());
   // do it again, this time fails asynchonously
   metadata_req_ok_ = true;
-  rv = all_seqs_->activateSequencer(logid, pred);
+  rv = all_seqs_->activateSequencer(logid, "test", pred);
   ASSERT_EQ(0, rv);
   ASSERT_EQ(2, getMetaDataRequests(logid));
   // simulate that we lost the race in epoch store
-  all_seqs_->onEpochMetaDataFromEpochStore(E::AGAIN, logid, nullptr, nullptr);
+  all_seqs_->onEpochMetaDataFromEpochStore(
+      E::AGAIN, logid, "test", nullptr, nullptr);
   ASSERT_EQ(Sequencer::State::UNAVAILABLE, seq->getState());
   ASSERT_EQ(0, getLogRecoveries(logid));
   ASSERT_EQ(0, getDrainingCompletions(logid));
   // perform a successful activation to epoch 3
-  rv = all_seqs_->activateSequencer(logid, pred);
+  rv = all_seqs_->activateSequencer(logid, "test", pred);
   ASSERT_EQ(0, rv);
   ASSERT_EQ(3, getMetaDataRequests(logid));
   all_seqs_->onEpochMetaDataFromEpochStore(
-      E::OK, logid, genMetaData(epoch_t(3)), nullptr);
+      E::OK, logid, "test", genMetaData(epoch_t(3)), nullptr);
   // sequencer should be successfully activated to ACTIVE state
   ASSERT_EQ(Sequencer::State::ACTIVE, seq->getState());
   ASSERT_EQ(epoch_t(3), seq->getCurrentEpoch());
   ASSERT_EQ(1, getLogRecoveries(logid));
   // failed synchonrously with pred
   rv = all_seqs_->activateSequencer(
-      logid, [](const Sequencer&) { return false; });
+      logid, "test", [](const Sequencer&) { return false; });
   ASSERT_EQ(-1, rv);
   ASSERT_EQ(E::ABORTED, err);
   // In Seqeuncer::startActivation(), pred is evaluated **before** calling
@@ -344,19 +356,20 @@ TEST_F(AllSequencersTest, ActivateErrors) {
   ASSERT_EQ(Sequencer::State::ACTIVE, seq->getState());
   ASSERT_EQ(epoch_t(3), seq->getCurrentEpoch());
   // reactivate again but encounted permanent error
-  rv = all_seqs_->activateSequencer(logid, pred);
+  rv = all_seqs_->activateSequencer(logid, "test", pred);
   ASSERT_EQ(0, rv);
   ASSERT_EQ(4, getMetaDataRequests(logid));
   // simulate that we lost the race in epoch store
-  all_seqs_->onEpochMetaDataFromEpochStore(E::TOOBIG, logid, nullptr, nullptr);
+  all_seqs_->onEpochMetaDataFromEpochStore(
+      E::TOOBIG, logid, "test", nullptr, nullptr);
   ASSERT_EQ(Sequencer::State::PERMANENT_ERROR, seq->getState());
   ASSERT_EQ(1, getLogRecoveries(logid));
   ASSERT_EQ(0, getDrainingCompletions(logid));
   // activate again will get E::SYSLIMIT
-  rv = all_seqs_->activateSequencer(logid, pred);
+  rv = all_seqs_->activateSequencer(logid, "test", pred);
   ASSERT_EQ(-1, rv);
   ASSERT_EQ(E::SYSLIMIT, err);
-  rv = all_seqs_->reactivateSequencer(logid);
+  rv = all_seqs_->reactivateSequencer(logid, "test");
   ASSERT_EQ(-1, rv);
   ASSERT_EQ(E::SYSLIMIT, err);
 }
@@ -370,7 +383,7 @@ TEST_F(AllSequencersTest, ActivateWithEpochStoreWiped) {
     ASSERT_EQ(0, getMetaDataRequests(logid));
 
     metadata_req_ok_ = true;
-    int rv = all_seqs_->activateSequencer(logid, pred);
+    int rv = all_seqs_->activateSequencer(logid, "test", pred);
     ASSERT_EQ(0, rv);
     ASSERT_EQ(1, getMetaDataRequests(logid));
     // the sequencer object should be created and in ACTIVATING state
@@ -383,7 +396,8 @@ TEST_F(AllSequencersTest, ActivateWithEpochStoreWiped) {
 
     // simulate that the epoch store is empty, which should start check of
     // whether metadata log is empty as well
-    all_seqs_->onEpochMetaDataFromEpochStore(E::EMPTY, logid, nullptr, nullptr);
+    all_seqs_->onEpochMetaDataFromEpochStore(
+        E::EMPTY, logid, "test", nullptr, nullptr);
     auto stats = stats_.aggregate();
     if (i == 1) {
       // both epoch store and metadata log were empty - all good!
@@ -410,14 +424,14 @@ TEST_F(AllSequencersTest, ParallelActivations) {
     threads.emplace_back([&]() {
       auto pred = [](const Sequencer&) { return true; };
       for (int j = 0; j < 10; ++j) {
-        int rv = all_seqs_->activateSequencer(logid, pred);
+        int rv = all_seqs_->activateSequencer(logid, "test", pred);
         EXPECT_TRUE(rv == 0 || err == E::INPROGRESS);
         /* sleep override */
         std::this_thread::sleep_for(
             std::chrono::milliseconds(folly::Random::rand64(10) + 1));
         if (rv == 0) {
           all_seqs_->onEpochMetaDataFromEpochStore(
-              E::OK, logid, genMetaData(epoch_t(epoch++)), nullptr);
+              E::OK, logid, "test", genMetaData(epoch_t(epoch++)), nullptr);
         } else {
           in_progress++;
         }

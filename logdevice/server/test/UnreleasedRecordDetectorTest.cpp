@@ -276,7 +276,8 @@ void UnreleasedRecordDetectorTest::SetUp() {
 
   // activate and wait for sequencer
   rv = wait_until("sequencer becomes active", [this] {
-    return processor_->allSequencers().activateSequencerIfNotActive(LOG_ID) &&
+    return processor_->allSequencers().activateSequencerIfNotActive(
+               LOG_ID, "test") &&
         err == E::EXISTS;
   });
   ASSERT_EQ(0, rv);

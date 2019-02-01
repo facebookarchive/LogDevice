@@ -228,9 +228,11 @@ GET_SEQ_STATE_Message::getSequencer(logid_t datalog_id,
         Sender::describeConnection(from).c_str());
 
     if (!sequencer_out) {
-      rv = seqmap.activateSequencer(datalog_id, seq_activation_pred);
+      rv = seqmap.activateSequencer(
+          datalog_id, "GET_SEQ_STATE", seq_activation_pred);
     } else {
-      rv = seqmap.reactivateIf(datalog_id, seq_activation_pred);
+      rv = seqmap.reactivateIf(
+          datalog_id, "GET_SEQ_STATE (reactivation)", seq_activation_pred);
     }
   } else {
     cur_epoch = sequencer_out->getCurrentEpoch();
@@ -294,7 +296,9 @@ GET_SEQ_STATE_Message::getSequencer(logid_t datalog_id,
           STAT_INCR(stats(), get_seq_state_reactivate_if_preempted);
         }
         rv = seqmap.reactivateIf(
-            datalog_id, [](const Sequencer& seq) { return seq.isPreempted(); });
+            datalog_id, "GET_SEQ_STATE (preempted)", [](const Sequencer& seq) {
+              return seq.isPreempted();
+            });
       } else {
         status = E::PREEMPTED;
         WORKER_STAT_INCR(get_seq_state_redirect);

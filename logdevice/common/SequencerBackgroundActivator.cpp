@@ -317,6 +317,7 @@ int SequencerBackgroundActivator::reprovisionOrReactivateIfNeeded(
     WORKER_STAT_INCR(sequencer_reactivations_for_metadata_update);
     int rv = all_seq.activateSequencer(
         logid,
+        "background reconfiguration",
         [](const Sequencer&) { return true; },
         /* acceptable_activation_epoch */ epoch_t(current_epoch.val() + 1),
         /* check_metadata_log_before_provisioning */ false,

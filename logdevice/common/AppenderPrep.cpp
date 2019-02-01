@@ -670,9 +670,9 @@ int AppenderPrep::activateSequencer(logid_t log_id,
                  cur_epoch.val_,
                  Sender::describeConnection(from_).c_str());
   if (sequencer) {
-    rv = seqmap.reactivateIf(log_id, pred);
+    rv = seqmap.reactivateIf(log_id, "append (reactivation)", pred);
   } else {
-    rv = seqmap.activateSequencer(log_id, pred);
+    rv = seqmap.activateSequencer(log_id, "append", pred);
   }
 
   E saved_err = err;

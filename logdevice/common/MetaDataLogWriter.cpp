@@ -472,7 +472,8 @@ void MetaDataLogWriter::onWriteMetaDataRecordDone(Status st,
                    log_id.val_,
                    current_epoch_.load());
     STAT_INCR(Worker::stats(), sequencer_activations_metadata_record_written);
-    w->processor_->allSequencers().reactivateSequencer(log_id);
+    w->processor_->allSequencers().reactivateSequencer(
+        log_id, "wrote to metadata log");
     // start a timer on this worker to ensure the parent sequencer eventually
     // activates to a higer epoch
     ExponentialBackoffTimerNode* node =
@@ -543,7 +544,8 @@ void MetaDataLogWriter::checkActivation(logid_t log_id,
                  ", epoch_now:%u",
                  log_id.val_,
                  epoch_now.val_);
-  worker->processor_->allSequencers().reactivateSequencer(log_id);
+  worker->processor_->allSequencers().reactivateSequencer(
+      log_id, "wrote to metadata log (retry)");
   node->timer->activate();
 }
 

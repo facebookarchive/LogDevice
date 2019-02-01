@@ -25,12 +25,19 @@ class StaticSequencerPlacement : public SequencerPlacement {
  public:
   explicit StaticSequencerPlacement(Processor* processor) {
     ld_check(processor != nullptr);
+    auto start_time = std::chrono::steady_clock::now();
     int rv = processor->allSequencers().activateAllSequencers(
-        std::chrono::seconds(10));
+        std::chrono::seconds(10), "static sequencer placement");
     if (rv != 0) {
       ld_error("Failed to activate sequencers for all logs: err = %s",
                error_name(err));
       throw ConstructorFailed();
+    } else {
+      auto end_time = std::chrono::steady_clock::now();
+      ld_info("Activated sequencers for all logs in %.3fs.",
+              std::chrono::duration_cast<std::chrono::duration<double>>(
+                  end_time - start_time)
+                  .count());
     }
   }
 };
