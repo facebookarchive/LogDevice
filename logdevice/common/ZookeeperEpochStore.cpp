@@ -29,9 +29,6 @@ namespace fs = boost::filesystem;
 
 namespace facebook { namespace logdevice {
 
-using MultiOpState = ZookeeperEpochStore::MultiOpState;
-using CreateRootsState = ZookeeperEpochStore::CreateRootsState;
-
 ZookeeperEpochStore::ZookeeperEpochStore(
     std::string cluster_name,
     Processor* processor,
@@ -93,6 +90,7 @@ void ZookeeperEpochStore::postCompletion(
     ld_check(false);
   }
 }
+
 void ZookeeperEpochStore::postCompletion(
     std::unique_ptr<EpochStore::CompletionLCERequest>&& completion) const {
   int rv;
@@ -192,160 +190,93 @@ std::string ZookeeperEpochStore::znodePathForLog(logid_t logid) const {
   return rootPath() + "/" + std::to_string(logid.val_);
 }
 
-// state for ZK multi-ops.
-class ZookeeperEpochStore::MultiOpState {
- public:
-  explicit MultiOpState(
-      std::unique_ptr<ZookeeperEpochStoreRequest> rq = nullptr)
-      : zrq(std::move(rq)) {}
-
-  // Adds a CREATE operation to the list, copies all inputs
-  void addCreateOp(std::string path, std::string value) {
-    operations_.push_back(
-        ZookeeperClientBase::makeCreateOp(std::move(path), std::move(value)));
-  }
-
-  // Runs a multi-op contained in this struct on the given client instance.
-  // The given completion function will be called with the given `data`
-  // argument. Typically `data` will contain a reference to this struct to
-  // retrieve the results of individual operations (or retry them).
-  // If this returns 0, this instance of MultiOpState should not be destroyed
-  // until the supplied completion function is called.
-  void runMultiOp(ZookeeperClientBase& zkclient,
-                  void_completion_t cf,
-                  const void* data) {
-    ld_check(!operations_.empty());
-    auto cb = [this, cf, data](int rc, std::vector<zk::OpResponse> results) {
-      op_results_ = std::move(results);
-      cf(rc, data);
-    };
-    zkclient.multiOp(std::move(operations_), std::move(cb));
-  }
-
-  // request that drove the multi-op (optional)
-  std::unique_ptr<ZookeeperEpochStoreRequest> zrq;
-
-  // Returns results of individual sub-operations
-  const std::vector<zk::OpResponse>& getResults() {
-    return op_results_;
-  }
-
- private:
-  // ZK multi-op structs
-  std::vector<zk::Op> operations_;
-
-  // individual sub-operations results will be stored here
-  std::vector<zk::OpResponse> op_results_;
-};
-
-// State for a series of operations to create root znodes that can be started
-// after znode creation operations for logs failed with ZNONODE, indicating the
-// parent didn't exist
-class ZookeeperEpochStore::CreateRootsState {
- public:
-  CreateRootsState(std::unique_ptr<MultiOpState> mos, std::string root_path)
-      : deferred_multi_op_state_(std::move(mos)) {
-    // Enumerating all the parents that may need to be created
-    fs::path path(root_path);
-    while (!path.empty() && path.string() != "/") {
-      paths_to_create_.push(path.string());
-      path = path.parent_path();
-    }
-  }
-
-  // Takes one path from the list and schedules the creation operation on that.
-  // If this method returns 0, the CreateRootsState machine is now self-owned.
-  // If it returns anything else, the ownership is still with the caller
-  void run() {
-    ld_check(!paths_to_create_.empty());
-    ZookeeperEpochStore* store = deferred_multi_op_state_->zrq->store_;
-    auto client = store->getZookeeperClient();
-
-    // All operations are scheduled one-by-one. but the multi-op API is used
-    // in order to minimize the number of ZK APIs used (we already use the
-    // multi-op API to create multiple znodes when provisioning a log).
-    current_op_ = std::make_unique<MultiOpState>();
-    current_op_->addCreateOp(getNextPathToCreate(), "");
-    ld_spew("Scheduling creation of %s", getNextPathToCreate().c_str());
-    current_op_->runMultiOp(*client, multiOpCF, this);
-  }
-
-  // This gets called as the completion function for every parent znode's
-  // creation
-  static void multiOpCF(int rc, const void* data) {
-    std::unique_ptr<CreateRootsState> state(
-        reinterpret_cast<CreateRootsState*>(const_cast<void*>(data)));
-    auto st = zkCfStatus(rc, LOGID_INVALID);
-    ld_check(!state->paths_to_create_.empty());
-    if (st == E::OK) {
-      ld_info("Created root znode %s successfully",
-              state->getNextPathToCreate().c_str());
-    } else {
-      ld_spew("Creation of root znode %s completed with rv %d, ld error %s",
-              state->getNextPathToCreate().c_str(),
-              rc,
-              error_name(st));
-    }
-    // If the path already exists or has just been created, continue
-    if (st == E::OK || st == E::EXISTS) {
-      state->paths_to_create_.pop();
-      if (!state->paths_to_create_.empty()) {
-        // More paths to create
-        state->run();
-        // The state machine is now self-owned
-        state.release();
-        return;
-      }
-    }
-    ZookeeperEpochStore::createRootZnodesCF(std::move(state), rc);
-  }
-
-  const std::string& getNextPathToCreate() {
-    return paths_to_create_.top();
-  }
-
-  // This is the operation that was deferred until creation of the root znodes
-  // is completed. This class doesn't act on it until all the root znodes are
-  // created (or something fails).
-  std::unique_ptr<MultiOpState> deferred_multi_op_state_;
-
- private:
-  // The list of paths to be created
-  std::stack<std::string> paths_to_create_;
-
-  // Currently running operation
-  std::unique_ptr<MultiOpState> current_op_;
-};
-
 void ZookeeperEpochStore::provisionLogZnodes(
     std::unique_ptr<ZookeeperEpochStoreRequest> zrq,
-    const std::string& sequencer_znode_value) {
-  ld_check(!sequencer_znode_value.empty());
+    std::string znode_value) {
+  ld_check(!znode_value.empty());
 
-  logid_t log_id = zrq->logid_;
-  std::string logroot = znodePathForLog(log_id);
+  std::string logroot = znodePathForLog(zrq->logid_);
 
-  // State contains results of sub-requests of the multi-op and the ZRQ that
-  // drives this
-  auto state = std::make_unique<MultiOpState>(std::move(zrq));
-
+  std::vector<zk::Op> ops;
   // Creating root znode for this log
-  state->addCreateOp(logroot, "");
-
+  ops.emplace_back(ZookeeperClientBase::makeCreateOp(logroot, ""));
   // Creating the epoch metadata znode with the supplied znode_value
-  state->addCreateOp(
-      logroot + "/" + EpochMetaDataZRQ::znodeName, sequencer_znode_value);
-
+  ops.emplace_back(ZookeeperClientBase::makeCreateOp(
+      logroot + "/" + EpochMetaDataZRQ::znodeName, znode_value));
   // Creating empty lce/metadata_lce nodes
-  state->addCreateOp(logroot + "/" + LastCleanEpochZRQ::znodeNameDataLog, "");
-  state->addCreateOp(
-      logroot + "/" + LastCleanEpochZRQ::znodeNameMetaDataLog, "");
+  ops.emplace_back(ZookeeperClientBase::makeCreateOp(
+      logroot + "/" + LastCleanEpochZRQ::znodeNameDataLog, ""));
+  ops.emplace_back(ZookeeperClientBase::makeCreateOp(
+      logroot + "/" + LastCleanEpochZRQ::znodeNameMetaDataLog, ""));
+
+  auto cb = [this, znode_value = std::move(znode_value), zrq = std::move(zrq)](
+                int rc, std::vector<zk::OpResponse> results) mutable {
+    StatsHolder* stats_holder = processor_->stats_;
+    Status st = zkCfStatus(rc, zrq->logid_, stats_holder);
+    if (st == E::OK) {
+      // If everything worked well, then each individual operation should've
+      // went through fine as well
+      for (const auto& res : results) {
+        ld_check(zkCfStatus(res.rc_, zrq->logid_, stats_holder) == E::OK);
+      }
+    } else if (st == E::NOTFOUND) {
+      // znode creation operation failed because the root znode was not found.
+      if (settings_->zk_create_root_znodes) {
+        RATELIMIT_INFO(std::chrono::seconds(1),
+                       1,
+                       "Root znode doesn't exist, creating it.");
+
+        // Creating root znodes using createWithAncestors and retrying the logs
+        // provisioning upon success.
+        auto rootcb = [this,
+                       znode_value = std::move(znode_value),
+                       zrq = std::move(zrq)](
+                          int rootrc, std::string rootpath) mutable {
+          auto rootst = zkCfStatus(rootrc, LOGID_INVALID);
+          if (rootst == E::OK) {
+            ld_info("Created root znode %s successfully", rootpath.c_str());
+          } else {
+            ld_spew(
+                "Creation of root znode %s completed with rv %d, ld error %s",
+                rootpath.c_str(),
+                rootrc,
+                error_name(rootst));
+          }
+          // If the path already exists or has just been created, continue
+          if (rootst == E::OK || rootst == E::EXISTS) {
+            // retrying the original multi-op
+            provisionLogZnodes(std::move(zrq), std::move(znode_value));
+          } else {
+            RATELIMIT_ERROR(std::chrono::seconds(10),
+                            10,
+                            "Unable to create root znode %s: ZK "
+                            "error %d, LD error %s",
+                            rootpath.c_str(),
+                            rootrc,
+                            error_description(rootst));
+            postRequestCompletion(rootrc, std::move(zrq));
+          }
+        };
+        std::shared_ptr<ZookeeperClientBase> zkclient = zkclient_.get();
+        zkclient->createWithAncestors(rootPath(), "", std::move(rootcb));
+        // not calling postRequestCompletion, since the request will be retried
+        // and hopefully will succeed afterwards
+        return;
+      } else {
+        RATELIMIT_ERROR(
+            std::chrono::seconds(1),
+            1,
+            "Root znode doesn't exist! It has to be created by external "
+            "tooling if `zk-create-root-znodes` is set to `false`");
+      }
+    }
+
+    // post completion to do the actual work
+    postRequestCompletion(rc, std::move(zrq));
+  };
 
   std::shared_ptr<ZookeeperClientBase> zkclient = zkclient_.get();
-
-  state->runMultiOp(*zkclient, zkLogMultiCreateCF, state.get());
-  // zkLogMultiCreateCF() should take care of this
-  state.release();
+  zkclient->multiOp(std::move(ops), std::move(cb));
 }
 
 void ZookeeperEpochStore::onGetZnodeComplete(
@@ -475,94 +406,6 @@ void ZookeeperEpochStore::postRequestCompletion(
     // E::SHUTDOWN code if the ZookeeperClient is being destroyed due to
     // zookeeper quorum change, but the EpochStore is still there.
   }
-}
-
-void ZookeeperEpochStore::zkLogMultiCreateCF(int rc, const void* data) {
-  std::unique_ptr<MultiOpState> state{
-      reinterpret_cast<MultiOpState*>(const_cast<void*>(data))};
-  ld_check(state->zrq);
-  ZookeeperEpochStore* self = state->zrq->store_;
-  ld_check(self);
-
-  StatsHolder* stats_holder = self->processor_->stats_;
-  Status st = zkCfStatus(rc, state->zrq->logid_, stats_holder);
-  if (st == E::OK) {
-    // If everything worked well, then each individual operation should've went
-    // through fine as well
-    for (const auto& res : state->getResults()) {
-      ld_check(zkCfStatus(res.rc_, state->zrq->logid_, stats_holder) == E::OK);
-    }
-  } else if (st == E::NOTFOUND) {
-    // znode creation operation failed because the root znode was not found.
-    if (self->settings_->zk_create_root_znodes) {
-      RATELIMIT_INFO(
-          std::chrono::seconds(1), 1, "Root znode doesn't exist, creating it.");
-
-      // Creating root znodes via a series of create operations (since some
-      // parent znodes may be present and others may be missing). Passing
-      // `state` here since the original operation should be retried after root
-      // znodes have been created.
-      self->createRootZnodes(std::move(state));
-
-      // not calling zkSetCF, since the request will be retried and hopefully
-      // will succeed afterwards
-      return;
-    } else {
-      RATELIMIT_ERROR(
-          std::chrono::seconds(1),
-          1,
-          "Root znode doesn't exist! It hast to be created by external tooling "
-          "if `zk-create-root-znodes` is set to `false`");
-    }
-  }
-
-  // post completion to do the actual work
-  self->postRequestCompletion(rc, std::move(state->zrq));
-}
-
-void ZookeeperEpochStore::createRootZnodes(
-    std::unique_ptr<MultiOpState> multi_op_state) {
-  ld_check(multi_op_state);
-  ld_check(multi_op_state->zrq);
-
-  auto create_root_state =
-      std::make_unique<CreateRootsState>(std::move(multi_op_state), rootPath());
-
-  create_root_state->run();
-  // The state machine now owns itself
-  create_root_state.release();
-}
-
-void ZookeeperEpochStore::createRootZnodesCF(
-    std::unique_ptr<CreateRootsState> state,
-    int rc) {
-  auto st = zkCfStatus(rc, LOGID_INVALID);
-  if (st != E::OK && st != E::EXISTS) {
-    RATELIMIT_ERROR(std::chrono::seconds(10),
-                    10,
-                    "Unable to create root znode %s: ZK "
-                    "error %d, LD error %s",
-                    state->getNextPathToCreate().c_str(),
-                    rc,
-                    error_description(st));
-    ZookeeperEpochStore* store = state->deferred_multi_op_state_->zrq->store_;
-    store->postRequestCompletion(
-        rc, std::move(state->deferred_multi_op_state_->zrq));
-    return;
-  }
-  // All root znodes should've been created by now, retrying the original
-  // multi-op
-  std::unique_ptr<MultiOpState> multi_op_state =
-      std::move(state->deferred_multi_op_state_);
-  ld_check(multi_op_state);
-  ld_check(multi_op_state->zrq);
-
-  auto store = multi_op_state->zrq->store_;
-  ld_check(store);
-  auto client = store->getZookeeperClient();
-  multi_op_state->runMultiOp(*client, zkLogMultiCreateCF, multi_op_state.get());
-  // zkLogMultiCreateCF() should take care of this
-  multi_op_state.release();
 }
 
 int ZookeeperEpochStore::runRequest(

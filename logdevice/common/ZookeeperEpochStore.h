@@ -39,9 +39,6 @@ class ZookeeperEpochStoreRequest;
 
 class ZookeeperEpochStore : public EpochStore, boost::noncopyable {
  public:
-  class MultiOpState;
-  class CreateRootsState;
-
   /**
    * @param   cluster_name  name of LD cluster this epoch store services
    * @param   processor     parent processor for current ZookeeperEpochStore
@@ -120,14 +117,6 @@ class ZookeeperEpochStore : public EpochStore, boost::noncopyable {
     return shutting_down_;
   }
 
-  /**
-   * Completion function for the  state machine that creates root znodes (its
-   * state is stored in CreateRootsState). Public since it's called from
-   * CreateRootsState
-   */
-  static void createRootZnodesCF(std::unique_ptr<CreateRootsState> state,
-                                 int rc);
-
   Status zkOpStatus(int rc, logid_t logid, const char* op) const;
 
   const UpdateableSettings<Settings>& getSettings() {
@@ -190,14 +179,6 @@ class ZookeeperEpochStore : public EpochStore, boost::noncopyable {
                              std::unique_ptr<ZookeeperEpochStoreRequest> zrq);
 
   /**
-   * The Zookeeper completion function for the zoo_amulti() call that is called
-   * to create multiple znodes for a particular log. ZK client will call it on
-   * Zookeeper client's own thread when a reply for the multi-op arrives, or
-   * when the session times out. See Zookeeper docs for void_completion_t.
-   */
-  static void zkLogMultiCreateCF(int rc, const void* data);
-
-  /**
    * The callback executed when a znode has been fetched.
    */
   void onGetZnodeComplete(int rc,
@@ -210,15 +191,7 @@ class ZookeeperEpochStore : public EpochStore, boost::noncopyable {
    * a zookeeper multiOp.
    */
   void provisionLogZnodes(std::unique_ptr<ZookeeperEpochStoreRequest> zrq,
-                          const std::string& sequencer_znode_value);
-
-  /**
-   * Creates root znodes if creation of znodes for an individual log_id
-   * (the operation in the supplied argument) failed with ZNONODE.
-   * Retries the original multi-op after the creation of parent znodes has
-   * been completed.
-   */
-  void createRootZnodes(std::unique_ptr<MultiOpState> multi_op_state);
+                          std::string znode_value);
 };
 
 }} // namespace facebook::logdevice
