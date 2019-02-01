@@ -22,8 +22,6 @@ class LibEventTimerImpl : public TimerInterface, public LibeventTimer {
  public:
   LibEventTimerImpl();
 
-  explicit LibEventTimerImpl(std::function<void()> callback);
-
   virtual void assign(std::function<void()> callback) override;
 
   virtual void activate(std::chrono::microseconds delay,
@@ -113,9 +111,6 @@ WheelTimerDispatchImpl::makeWheelTimerInternalExecutor(Worker* worker) {
 // Sometimes the worker is unavailable i.e. in tests and we cannot assign.
 LibEventTimerImpl::LibEventTimerImpl() : LibeventTimer() {}
 
-LibEventTimerImpl::LibEventTimerImpl(std::function<void()> callback)
-    : LibeventTimer(EventLoop::onThisThread()->getEventBase(), callback) {}
-
 void LibEventTimerImpl::assign(std::function<void()> callback) {
   assign(EventLoop::onThisThread()->getEventBase(), callback);
 }
@@ -169,7 +164,7 @@ WheelTimerDispatchImpl::~WheelTimerDispatchImpl() {
 Timer::Timer() {}
 
 Timer::Timer(std::function<void()> callback) {
-  getTimerImpl().setCallback(callback);
+  getTimerImpl().assign(callback);
 }
 
 TimerInterface& Timer::getTimerImpl() const {
