@@ -201,18 +201,8 @@ class ZookeeperEpochStore::MultiOpState {
 
   // Adds a CREATE operation to the list, copies all inputs
   void addCreateOp(std::string path, const char* content, size_t len) {
-    path_buffers_.push_back(std::move(path));
-    value_buffers_.emplace_back(content, len);
-    operations_.emplace_back();
-
-    zoo_create_op_init(&operations_.back(),
-                       path_buffers_.back().c_str(),
-                       value_buffers_.back().data(),
-                       value_buffers_.back().size(),
-                       &ZOO_OPEN_ACL_UNSAFE,
-                       0,       // flags
-                       nullptr, // path_buffer
-                       0);      // path_buffer_len
+    operations_.push_back(ZookeeperClientBase::makeCreateOp(
+        std::move(path), std::string(content, len)));
   }
 
   // Runs a multi-op contained in this struct on the given client instance.
@@ -221,40 +211,31 @@ class ZookeeperEpochStore::MultiOpState {
   // retrieve the results of individual operations (or retry them).
   // If this returns 0, this instance of MultiOpState should not be destroyed
   // until the supplied completion function is called.
-  int runMultiOp(ZookeeperClientBase& zkclient,
-                 void_completion_t cf,
-                 const void* data) {
+  void runMultiOp(ZookeeperClientBase& zkclient,
+                  void_completion_t cf,
+                  const void* data) {
     ld_check(!operations_.empty());
-    // result buffer size should match the operation count
-    op_results_.clear();
-    op_results_.resize(operations_.size());
-
-    return zkclient.multiOp(
-        operations_.size(), operations_.data(), op_results_.data(), cf, data);
+    auto cb = [this, cf, data](int rc, std::vector<zk::OpResponse> results) {
+      op_results_ = std::move(results);
+      cf(rc, data);
+    };
+    zkclient.multiOp(std::move(operations_), std::move(cb));
   }
 
   // request that drove the multi-op (optional)
   std::unique_ptr<ZookeeperEpochStoreRequest> zrq;
 
   // Returns results of individual sub-operations
-  const folly::small_vector<zoo_op_result_t, 4>& getResults() {
+  const std::vector<zk::OpResponse>& getResults() {
     return op_results_;
   }
 
  private:
-  // paths are not copied by zoo_create_op_init(), and will only be copied by
-  // the zoo_amulti() call
-  folly::small_vector<std::string, 4> path_buffers_;
-
-  // values are not copied by zoo_create_op_init(), and will only be copied by
-  // the zoo_amulti() call
-  folly::small_vector<std::string, 4> value_buffers_;
-
   // ZK multi-op structs
-  folly::small_vector<zoo_op_t, 4> operations_;
+  std::vector<zk::Op> operations_;
 
   // individual sub-operations results will be stored here
-  folly::small_vector<zoo_op_result_t, 4> op_results_;
+  std::vector<zk::OpResponse> op_results_;
 };
 
 // State for a series of operations to create root znodes that can be started
@@ -275,7 +256,7 @@ class ZookeeperEpochStore::CreateRootsState {
   // Takes one path from the list and schedules the creation operation on that.
   // If this method returns 0, the CreateRootsState machine is now self-owned.
   // If it returns anything else, the ownership is still with the caller
-  int run() {
+  void run() {
     ld_check(!paths_to_create_.empty());
     ZookeeperEpochStore* store = deferred_multi_op_state_->zrq->store_;
     auto client = store->getZookeeperClient();
@@ -286,12 +267,7 @@ class ZookeeperEpochStore::CreateRootsState {
     current_op_ = std::make_unique<MultiOpState>();
     current_op_->addCreateOp(getNextPathToCreate(), "", 0);
     ld_spew("Scheduling creation of %s", getNextPathToCreate().c_str());
-    int rc = current_op_->runMultiOp(*client, multiOpCF, this);
-    if (rc != 0) {
-      // This will output errors to the log
-      store->zkOpStatus(rc, LOGID_INVALID, "create_roots");
-    }
-    return rc;
+    current_op_->runMultiOp(*client, multiOpCF, this);
   }
 
   // This gets called as the completion function for every parent znode's
@@ -315,17 +291,10 @@ class ZookeeperEpochStore::CreateRootsState {
       state->paths_to_create_.pop();
       if (!state->paths_to_create_.empty()) {
         // More paths to create
-        rc = state->run();
-        if (rc == 0) {
-          // The state machine is now self-owned
-          state.release();
-          return;
-        }
-        // if we couldn't schedule the next request, run() is supposed to
-        // output the error. At this point we can override the error code (to
-        // return the one previously received by the original API call) and
-        // fall through to createRootZnodesCF()
-        rc = ZNONODE;
+        state->run();
+        // The state machine is now self-owned
+        state.release();
+        return;
       }
     }
     ZookeeperEpochStore::createRootZnodesCF(std::move(state), rc);
@@ -379,18 +348,10 @@ Status ZookeeperEpochStore::provisionLogZnodes(
 
   std::shared_ptr<ZookeeperClientBase> zkclient = self->zkclient_.get();
 
-  int rv = state->runMultiOp(*zkclient, zkLogMultiCreateCF, state.get());
-
-  Status st = self->zkOpStatus(rv, log_id, "zoo_amulti");
-  if (st == E::OK) {
-    // zkLogMultiCreateCF() should take care of this
-    state.release();
-  } else {
-    // Failed to start request. Returning zrq to the caller, `state` should
-    // self-destroy
-    zrq = std::move(state->zrq);
-  }
-  return st;
+  state->runMultiOp(*zkclient, zkLogMultiCreateCF, state.get());
+  // zkLogMultiCreateCF() should take care of this
+  state.release();
+  return E::OK;
 }
 
 void ZookeeperEpochStore::zkGetCF(
@@ -553,7 +514,7 @@ void ZookeeperEpochStore::zkLogMultiCreateCF(int rc, const void* data) {
     // If everything worked well, then each individual operation should've went
     // through fine as well
     for (const auto& res : state->getResults()) {
-      ld_check(zkCfStatus(res.err, state->zrq->logid_, stats_holder) == E::OK);
+      ld_check(zkCfStatus(res.rc_, state->zrq->logid_, stats_holder) == E::OK);
     }
   } else if (st == E::NOTFOUND) {
     // znode creation operation failed because the root znode was not found.
@@ -592,15 +553,7 @@ void ZookeeperEpochStore::createRootZnodes(
   auto create_root_state =
       std::make_unique<CreateRootsState>(std::move(multi_op_state), rootPath());
 
-  int rc = create_root_state->run();
-  if (rc != 0) {
-    // run() should output the actual error, but here we are calling a CF where
-    // the set of expected errors is different from those we expect from running
-    // a request. Returning ZNONODE - the original code that the API returned
-    // before root znode creation was started.
-    createRootZnodesCF(std::move(create_root_state), ZNONODE);
-    return;
-  }
+  create_root_state->run();
   // The state machine now owns itself
   create_root_state.release();
 }
@@ -626,23 +579,13 @@ void ZookeeperEpochStore::createRootZnodesCF(
       std::move(state->deferred_multi_op_state_);
   ld_check(multi_op_state);
   ld_check(multi_op_state->zrq);
-  logid_t log_id = multi_op_state->zrq->logid_;
 
   auto store = multi_op_state->zrq->store_;
   ld_check(store);
   auto client = store->getZookeeperClient();
-  int rv = multi_op_state->runMultiOp(
-      *client, zkLogMultiCreateCF, multi_op_state.get());
-
-  Status op_st = store->zkOpStatus(rv, log_id, "zoo_amulti_after_root_created");
-  if (op_st == E::OK) {
-    // zkLogMultiCreateCF() should take care of this
-    multi_op_state.release();
-  } else {
-    // Failed to start request. Calling the request's CF with the original error
-    // of ZNONODE
-    zkSetCF(ZNONODE, nullptr, multi_op_state->zrq.release());
-  }
+  multi_op_state->runMultiOp(*client, zkLogMultiCreateCF, multi_op_state.get());
+  // zkLogMultiCreateCF() should take care of this
+  multi_op_state.release();
 }
 
 int ZookeeperEpochStore::runRequest(
