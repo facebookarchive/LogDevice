@@ -115,26 +115,30 @@ void ZookeeperEpochStore::postCompletion(
   }
 }
 
-Status ZookeeperEpochStore::zkOpStatus(int rc,
-                                       logid_t logid,
-                                       const char* op) const {
-  int zstate; // zookeeper session state
-
+Status ZookeeperEpochStore::completionStatus(int rc, logid_t logid) {
   std::shared_ptr<ZookeeperClientBase> zkclient = zkclient_.get();
   // Special handling for cases where additional information would be helpful
-  if (rc == ZBADARGUMENTS) {
+  if (rc == ZRUNTIMEINCONSISTENCY) {
+    RATELIMIT_CRITICAL(
+        std::chrono::seconds(10),
+        10,
+        "Got status code %s from Zookeeper completion function for log %lu.",
+        zerror(rc),
+        logid.val_);
+    STAT_INCR(
+        processor_->stats_, zookeeper_epoch_store_internal_inconsistency_error);
+    return E::FAILED;
+  } else if (rc == ZBADARGUMENTS) {
     RATELIMIT_ERROR(std::chrono::seconds(1),
                     1,
-                    "%s() reported "
-                    "ZBADARGUMENTS. logid was %lu.",
-                    op,
+                    "Zookeeper reported ZBADARGUMENTS. logid was %lu.",
                     logid.val_);
     ld_assert(false);
     return E::INTERNAL;
   } else if (rc == ZINVALIDSTATE) {
     // Note: state() returns the current state of the session and does not
     // necessarily reflect that state at the time of error
-    zstate = zkclient->state();
+    int zstate = zkclient->state();
     // ZOO_ constants are C const ints, can't switch()
     if (zstate == ZOO_EXPIRED_SESSION_STATE) {
       return E::NOTCONN;
@@ -150,22 +154,6 @@ Status ZookeeperEpochStore::zkOpStatus(int rc,
           ZookeeperClient::stateString(zstate).c_str());
       return E::FAILED;
     }
-  }
-
-  return ZookeeperClientBase::toStatus(rc);
-}
-
-static Status zkCfStatus(int rc, logid_t logid, StatsHolder* stats = nullptr) {
-  // Special handling for cases where additional information would be helpful
-  if (rc == ZRUNTIMEINCONSISTENCY) {
-    RATELIMIT_CRITICAL(
-        std::chrono::seconds(10),
-        10,
-        "Got status code %s from Zookeeper completion function for log %lu.",
-        zerror(rc),
-        logid.val_);
-    STAT_INCR(stats, zookeeper_epoch_store_internal_inconsistency_error);
-    return E::FAILED;
   }
 
   Status status = ZookeeperClientBase::toStatus(rc);
@@ -211,13 +199,12 @@ void ZookeeperEpochStore::provisionLogZnodes(
 
   auto cb = [this, znode_value = std::move(znode_value), zrq = std::move(zrq)](
                 int rc, std::vector<zk::OpResponse> results) mutable {
-    StatsHolder* stats_holder = processor_->stats_;
-    Status st = zkCfStatus(rc, zrq->logid_, stats_holder);
+    Status st = completionStatus(rc, zrq->logid_);
     if (st == E::OK) {
       // If everything worked well, then each individual operation should've
       // went through fine as well
       for (const auto& res : results) {
-        ld_check(zkCfStatus(res.rc_, zrq->logid_, stats_holder) == E::OK);
+        ld_check(completionStatus(res.rc_, zrq->logid_) == E::OK);
       }
     } else if (st == E::NOTFOUND) {
       // znode creation operation failed because the root znode was not found.
@@ -232,7 +219,7 @@ void ZookeeperEpochStore::provisionLogZnodes(
                        znode_value = std::move(znode_value),
                        zrq = std::move(zrq)](
                           int rootrc, std::string rootpath) mutable {
-          auto rootst = zkCfStatus(rootrc, LOGID_INVALID);
+          auto rootst = completionStatus(rootrc, LOGID_INVALID);
           if (rootst == E::OK) {
             ld_info("Created root znode %s successfully", rootpath.c_str());
           } else {
@@ -288,11 +275,9 @@ void ZookeeperEpochStore::onGetZnodeComplete(
   bool do_provision = false;
   ld_check(zrq);
 
-  StatsHolder* stats_holder = processor_->stats_;
-
   const char* value_for_zrq = value_from_zk.data();
 
-  Status st = zkCfStatus(rc, zrq->logid_, stats_holder);
+  Status st = completionStatus(rc, zrq->logid_);
   if (st != E::OK && st != E::NOTFOUND) {
     goto err;
   }
@@ -395,8 +380,7 @@ done:
 void ZookeeperEpochStore::postRequestCompletion(
     int rc,
     std::unique_ptr<ZookeeperEpochStoreRequest> zrq) {
-  StatsHolder* stats_holder = processor_->stats_;
-  Status st = zkCfStatus(rc, zrq->logid_, stats_holder);
+  Status st = completionStatus(rc, zrq->logid_);
 
   if (st != E::SHUTDOWN || !zrq->epoch_store_shutting_down_->load()) {
     zrq->postCompletion(st);
