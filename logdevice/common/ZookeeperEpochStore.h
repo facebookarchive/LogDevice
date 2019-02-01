@@ -203,10 +203,9 @@ class ZookeeperEpochStore : public EpochStore, boost::noncopyable {
    * docs for data_completion_t.
    */
   static void zkGetCF(int rc,
-                      const char* value,
-                      int value_len,
-                      const struct ::Stat* stat,
-                      const void* data);
+                      std::string value,
+                      const zk::Stat& stat,
+                      std::unique_ptr<ZookeeperEpochStoreRequest> zrq);
 
   /**
    * Provisions znodes for a log that a particular zrq runs on. Calls

@@ -393,20 +393,18 @@ Status ZookeeperEpochStore::provisionLogZnodes(
   return st;
 }
 
-void ZookeeperEpochStore::zkGetCF(int rc,
-                                  const char* value_from_zk,
-                                  int value_len_from_zk,
-                                  const struct ::Stat* stat,
-                                  const void* data) {
+void ZookeeperEpochStore::zkGetCF(
+    int rc,
+    std::string value_from_zk,
+    const zk::Stat& stat,
+    std::unique_ptr<ZookeeperEpochStoreRequest> zrq) {
   ZookeeperEpochStoreRequest::NextStep next_step;
   bool do_provision = false;
-  std::unique_ptr<ZookeeperEpochStoreRequest> zrq{
-      reinterpret_cast<ZookeeperEpochStoreRequest*>(const_cast<void*>(data))};
   ld_check(zrq);
 
   StatsHolder* stats_holder = zrq->store_->processor_->stats_;
 
-  const char* value_for_zrq = value_from_zk;
+  const char* value_for_zrq = value_from_zk.data();
 
   Status st = zkCfStatus(rc, zrq->logid_, stats_holder);
   if (st != E::OK && st != E::NOTFOUND) {
@@ -418,7 +416,7 @@ void ZookeeperEpochStore::zkGetCF(int rc,
     value_for_zrq = nullptr;
   }
 
-  next_step = zrq->onGotZnodeValue(value_for_zrq, value_len_from_zk);
+  next_step = zrq->onGotZnodeValue(value_for_zrq, value_from_zk.size());
   switch (next_step) {
     case ZookeeperEpochStoreRequest::NextStep::PROVISION:
       // continue with creation of new znodes
@@ -482,7 +480,7 @@ void ZookeeperEpochStore::zkGetCF(int rc,
     } else {
       std::string znode_path = zrq->getZnodePath();
       // setData() below succeeds only if the current version number of
-      // znode at znode_path matches stat->version that the znode had
+      // znode at znode_path matches the version that the znode had
       // when we read its value. Zookeeper atomically increments the version
       // number of znode on every write to that znode. If the versions do not
       // match zkSetCf() will be called with status ZBADVERSION. This ensures
@@ -493,7 +491,7 @@ void ZookeeperEpochStore::zkGetCF(int rc,
       zkclient->setData(znode_path,
                         std::string(znode_value, znode_value_size),
                         std::move(cb),
-                        stat->version);
+                        stat.version_);
       zrq.release();
       return;
     }
@@ -652,19 +650,13 @@ int ZookeeperEpochStore::runRequest(
   ld_check(zrq);
 
   std::string znode_path = zrq->getZnodePath();
-  const logid_t logid = zrq->logid_;
-
   std::shared_ptr<ZookeeperClientBase> zkclient = zkclient_.get();
-  int rv = zkclient->getData(
-      znode_path.c_str(), &ZookeeperEpochStore::zkGetCF, zrq.get());
-
-  Status st = zkOpStatus(rv, logid, "zoo_aget");
-  if (st == E::OK) {
-    zrq.release(); // now owned by Zookeeper client library
-    return 0;
-  }
-  err = st;
-  return -1;
+  auto cb = [req = std::move(zrq)](
+                int rc, std::string value, zk::Stat stat) mutable {
+    zkGetCF(rc, std::move(value), stat, std::move(req));
+  };
+  zkclient->getData(znode_path, std::move(cb));
+  return 0;
 }
 
 void ZookeeperEpochStore::onConfigUpdate() {
