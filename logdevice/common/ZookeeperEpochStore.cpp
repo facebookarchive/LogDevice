@@ -398,7 +398,6 @@ void ZookeeperEpochStore::zkGetCF(int rc,
                                   int value_len_from_zk,
                                   const struct ::Stat* stat,
                                   const void* data) {
-  int rv;
   ZookeeperEpochStoreRequest::NextStep next_step;
   bool do_provision = false;
   std::unique_ptr<ZookeeperEpochStoreRequest> zrq{
@@ -489,19 +488,14 @@ void ZookeeperEpochStore::zkGetCF(int rc,
       // match zkSetCf() will be called with status ZBADVERSION. This ensures
       // that if our read-modify-write of znode_path succeeds, it was atomic.
       std::shared_ptr<ZookeeperClientBase> zkclient = self->zkclient_.get();
-      logid_t log_id = zrq->logid_;
-      rv = zkclient->setData(znode_path.c_str(),
-                             znode_value,
-                             znode_value_size,
-                             stat->version,
-                             zkSetCF,
-                             zrq.get());
-
-      st = self->zkOpStatus(rv, log_id, "zoo_aset");
-      if (st == E::OK) {
-        zrq.release();
-        return;
-      }
+      auto cb = [req = zrq.get()](
+                    int res, zk::Stat) { zkSetCF(res, nullptr, req); };
+      zkclient->setData(znode_path,
+                        std::string(znode_value, znode_value_size),
+                        std::move(cb),
+                        stat->version);
+      zrq.release();
+      return;
     }
     ld_check(st != E::OK);
     ld_check(zrq);
