@@ -183,12 +183,11 @@ class ZookeeperEpochStore : public EpochStore, boost::noncopyable {
   void onConfigUpdate();
 
   /**
-   * The Zookeeper completion function for the zoo_aset() call. ZK
-   * client will call it on Zookeeper client's own thread when a reply
-   * for the set() arrives, or when the session times out. See
-   * Zookeeper docs for stat_completion_t.
+   * Schedules a request on the Processor after a Zookeeper modification
+   * completes.
    */
-  static void zkSetCF(int rc, const struct ::Stat* stat, const void* data);
+  void postRequestCompletion(int rc,
+                             std::unique_ptr<ZookeeperEpochStoreRequest> zrq);
 
   /**
    * The Zookeeper completion function for the zoo_amulti() call that is called
@@ -199,21 +198,19 @@ class ZookeeperEpochStore : public EpochStore, boost::noncopyable {
   static void zkLogMultiCreateCF(int rc, const void* data);
 
   /**
-   * The Zookeeper completion function for the zoo_aget() call. See Zookeeper
-   * docs for data_completion_t.
+   * The callback executed when a znode has been fetched.
    */
-  static void zkGetCF(int rc,
-                      std::string value,
-                      const zk::Stat& stat,
-                      std::unique_ptr<ZookeeperEpochStoreRequest> zrq);
+  void onGetZnodeComplete(int rc,
+                          std::string value,
+                          const zk::Stat& stat,
+                          std::unique_ptr<ZookeeperEpochStoreRequest> zrq);
 
   /**
-   * Provisions znodes for a log that a particular zrq runs on. Calls
-   * zoo_amulti() which will call back into zkMultiCF() on completion.
+   * Provisions znodes for a log that a particular zrq runs on. Executes
+   * a zookeeper multiOp.
    */
-  Status provisionLogZnodes(std::unique_ptr<ZookeeperEpochStoreRequest>& zrq,
-                            const char* sequencer_znode_value,
-                            int sequencer_znode_value_size);
+  void provisionLogZnodes(std::unique_ptr<ZookeeperEpochStoreRequest> zrq,
+                          const std::string& sequencer_znode_value);
 
   /**
    * Creates root znodes if creation of znodes for an individual log_id

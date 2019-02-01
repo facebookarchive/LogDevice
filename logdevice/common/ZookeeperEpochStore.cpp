@@ -200,9 +200,9 @@ class ZookeeperEpochStore::MultiOpState {
       : zrq(std::move(rq)) {}
 
   // Adds a CREATE operation to the list, copies all inputs
-  void addCreateOp(std::string path, const char* content, size_t len) {
-    operations_.push_back(ZookeeperClientBase::makeCreateOp(
-        std::move(path), std::string(content, len)));
+  void addCreateOp(std::string path, std::string value) {
+    operations_.push_back(
+        ZookeeperClientBase::makeCreateOp(std::move(path), std::move(value)));
   }
 
   // Runs a multi-op contained in this struct on the given client instance.
@@ -265,7 +265,7 @@ class ZookeeperEpochStore::CreateRootsState {
     // in order to minimize the number of ZK APIs used (we already use the
     // multi-op API to create multiple znodes when provisioning a log).
     current_op_ = std::make_unique<MultiOpState>();
-    current_op_->addCreateOp(getNextPathToCreate(), "", 0);
+    current_op_->addCreateOp(getNextPathToCreate(), "");
     ld_spew("Scheduling creation of %s", getNextPathToCreate().c_str());
     current_op_->runMultiOp(*client, multiOpCF, this);
   }
@@ -317,44 +317,38 @@ class ZookeeperEpochStore::CreateRootsState {
   std::unique_ptr<MultiOpState> current_op_;
 };
 
-Status ZookeeperEpochStore::provisionLogZnodes(
-    std::unique_ptr<ZookeeperEpochStoreRequest>& zrq,
-    const char* sequencer_znode_value,
-    int sequencer_znode_value_size) {
-  ld_check(sequencer_znode_value);
-  ld_check(sequencer_znode_value_size > 0);
-  const ZookeeperEpochStore* self = zrq->store_;
+void ZookeeperEpochStore::provisionLogZnodes(
+    std::unique_ptr<ZookeeperEpochStoreRequest> zrq,
+    const std::string& sequencer_znode_value) {
+  ld_check(!sequencer_znode_value.empty());
 
   logid_t log_id = zrq->logid_;
-  std::string logroot = self->znodePathForLog(log_id);
+  std::string logroot = znodePathForLog(log_id);
 
   // State contains results of sub-requests of the multi-op and the ZRQ that
   // drives this
   auto state = std::make_unique<MultiOpState>(std::move(zrq));
 
   // Creating root znode for this log
-  state->addCreateOp(logroot, "", 0);
+  state->addCreateOp(logroot, "");
 
   // Creating the epoch metadata znode with the supplied znode_value
-  state->addCreateOp(logroot + "/" + EpochMetaDataZRQ::znodeName,
-                     sequencer_znode_value,
-                     sequencer_znode_value_size);
+  state->addCreateOp(
+      logroot + "/" + EpochMetaDataZRQ::znodeName, sequencer_znode_value);
 
   // Creating empty lce/metadata_lce nodes
+  state->addCreateOp(logroot + "/" + LastCleanEpochZRQ::znodeNameDataLog, "");
   state->addCreateOp(
-      logroot + "/" + LastCleanEpochZRQ::znodeNameDataLog, "", 0);
-  state->addCreateOp(
-      logroot + "/" + LastCleanEpochZRQ::znodeNameMetaDataLog, "", 0);
+      logroot + "/" + LastCleanEpochZRQ::znodeNameMetaDataLog, "");
 
-  std::shared_ptr<ZookeeperClientBase> zkclient = self->zkclient_.get();
+  std::shared_ptr<ZookeeperClientBase> zkclient = zkclient_.get();
 
   state->runMultiOp(*zkclient, zkLogMultiCreateCF, state.get());
   // zkLogMultiCreateCF() should take care of this
   state.release();
-  return E::OK;
 }
 
-void ZookeeperEpochStore::zkGetCF(
+void ZookeeperEpochStore::onGetZnodeComplete(
     int rc,
     std::string value_from_zk,
     const zk::Stat& stat,
@@ -363,7 +357,7 @@ void ZookeeperEpochStore::zkGetCF(
   bool do_provision = false;
   ld_check(zrq);
 
-  StatsHolder* stats_holder = zrq->store_->processor_->stats_;
+  StatsHolder* stats_holder = processor_->stats_;
 
   const char* value_for_zrq = value_from_zk.data();
 
@@ -429,15 +423,10 @@ void ZookeeperEpochStore::zkGetCF(
       goto err;
     }
 
-    st = E::INTERNAL;
-    ZookeeperEpochStore* self = const_cast<ZookeeperEpochStore*>(zrq->store_);
+    std::string znode_value_str(znode_value, znode_value_size);
     if (do_provision) {
-      st = self->provisionLogZnodes(zrq, znode_value, znode_value_size);
-      if (st == E::OK) {
-        // zrq should've been captured by provisionLogZnodes() if all went OK
-        ld_check(zrq == nullptr);
-        return;
-      }
+      provisionLogZnodes(std::move(zrq), std::move(znode_value_str));
+      return;
     } else {
       std::string znode_path = zrq->getZnodePath();
       // setData() below succeeds only if the current version number of
@@ -446,25 +435,15 @@ void ZookeeperEpochStore::zkGetCF(
       // number of znode on every write to that znode. If the versions do not
       // match zkSetCf() will be called with status ZBADVERSION. This ensures
       // that if our read-modify-write of znode_path succeeds, it was atomic.
-      std::shared_ptr<ZookeeperClientBase> zkclient = self->zkclient_.get();
-      auto cb = [req = zrq.get()](
-                    int res, zk::Stat) { zkSetCF(res, nullptr, req); };
-      zkclient->setData(znode_path,
-                        std::string(znode_value, znode_value_size),
+      std::shared_ptr<ZookeeperClientBase> zkclient = zkclient_.get();
+      auto cb = [this, req = std::move(zrq)](int res, zk::Stat) mutable {
+        postRequestCompletion(res, std::move(req));
+      };
+      zkclient->setData(std::move(znode_path),
+                        std::move(znode_value_str),
                         std::move(cb),
                         stat.version_);
-      zrq.release();
       return;
-    }
-    ld_check(st != E::OK);
-    ld_check(zrq);
-    switch (st) {
-      case E::NOTCONN:
-      case E::SYSLIMIT:
-        st = E::CONNFAILED;
-        break;
-      default:
-        break;
     }
   }
 
@@ -482,13 +461,10 @@ done:
   }
 }
 
-void ZookeeperEpochStore::zkSetCF(int rc,
-                                  const struct ::Stat* /*stat*/,
-                                  const void* data) {
-  std::unique_ptr<ZookeeperEpochStoreRequest> zrq{
-      reinterpret_cast<ZookeeperEpochStoreRequest*>(const_cast<void*>(data))};
-
-  StatsHolder* stats_holder = zrq->store_->processor_->stats_;
+void ZookeeperEpochStore::postRequestCompletion(
+    int rc,
+    std::unique_ptr<ZookeeperEpochStoreRequest> zrq) {
+  StatsHolder* stats_holder = processor_->stats_;
   Status st = zkCfStatus(rc, zrq->logid_, stats_holder);
 
   if (st != E::SHUTDOWN || !zrq->epoch_store_shutting_down_->load()) {
@@ -526,8 +502,7 @@ void ZookeeperEpochStore::zkLogMultiCreateCF(int rc, const void* data) {
       // parent znodes may be present and others may be missing). Passing
       // `state` here since the original operation should be retried after root
       // znodes have been created.
-      ZookeeperEpochStore* store = state->zrq->store_;
-      store->createRootZnodes(std::move(state));
+      self->createRootZnodes(std::move(state));
 
       // not calling zkSetCF, since the request will be retried and hopefully
       // will succeed afterwards
@@ -541,8 +516,8 @@ void ZookeeperEpochStore::zkLogMultiCreateCF(int rc, const void* data) {
     }
   }
 
-  // deferring to zkSetCf to do the actual work
-  zkSetCF(rc, nullptr, state->zrq.release());
+  // post completion to do the actual work
+  self->postRequestCompletion(rc, std::move(state->zrq));
 }
 
 void ZookeeperEpochStore::createRootZnodes(
@@ -570,7 +545,9 @@ void ZookeeperEpochStore::createRootZnodesCF(
                     state->getNextPathToCreate().c_str(),
                     rc,
                     error_description(st));
-    zkSetCF(rc, nullptr, state->deferred_multi_op_state_->zrq.release());
+    ZookeeperEpochStore* store = state->deferred_multi_op_state_->zrq->store_;
+    store->postRequestCompletion(
+        rc, std::move(state->deferred_multi_op_state_->zrq));
     return;
   }
   // All root znodes should've been created by now, retrying the original
@@ -594,9 +571,9 @@ int ZookeeperEpochStore::runRequest(
 
   std::string znode_path = zrq->getZnodePath();
   std::shared_ptr<ZookeeperClientBase> zkclient = zkclient_.get();
-  auto cb = [req = std::move(zrq)](
+  auto cb = [this, req = std::move(zrq)](
                 int rc, std::string value, zk::Stat stat) mutable {
-    zkGetCF(rc, std::move(value), stat, std::move(req));
+    onGetZnodeComplete(rc, std::move(value), stat, std::move(req));
   };
   zkclient->getData(znode_path, std::move(cb));
   return 0;
