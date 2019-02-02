@@ -704,7 +704,7 @@ Static Public Member Functions</h2></td></tr>
 </table>
 </div><div class="memdoc">
 <p>NOTE: this is currently a dummy API that will always return 0; please refrain from using other than for testing.</p>
-<p>A non-blocking version of <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a2a04ef35610e51a47c3160e3e3b452bf">findTimeSync()</a>. Calllback will be called with one of the error codes mentioned regarding return in findTimeSync, with the addition of E::OK for successful requests.</p>
+<p>A non-blocking version of <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a2c058bc9b12472e46ce95d77f32a0b2c">dataSizeSync()</a>. Calllback will be called with one of the error codes mentioned regarding return in dataSizeSync, with the addition of E::OK for successful requests.</p>
 <dl class="section return"><dt>Returns</dt><dd>If the request was successfully submitted for processing, returns 0. In that case, the supplied callback is guaranteed to be called at a later time with the outcome of the request. See <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a2c058bc9b12472e46ce95d77f32a0b2c">dataSizeSync()</a> for documentation of possible results. Otherwise, returns -1 with the error:<ul>
 <li>E::NOBUFS: Too many requests were pending to be delivered to Workers. </li>
 </ul>
