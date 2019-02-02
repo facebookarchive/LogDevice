@@ -97,7 +97,8 @@ to the heap-allocated plugin instance and export it, e.g., like this:</p>
   <span class="hljs-keyword">return</span> <span class="hljs-keyword">new</span> MySpecialPlugin();
 }
 </code></pre>
-<p>You may need to specify some additional linker options in order to make sure
+<p>You may need to specify some additional linker options (probably
+<code>--export-dynamic-symbol=logdevice_plugin</code>) in order to make sure
 that this unused symbol isn't dropped when linking.</p>
 <p>If you would like to export several plugins,  combine them into a
 <code>PluginProvider</code>-derived plugin (a special type that provides other plugins) and
