@@ -162,7 +162,8 @@ ShardedRocksDBLocalLogStore::ShardedRocksDBLocalLogStore(
     fs::path shard_path = shard_paths_[shard_idx];
     ld_check(!shard_path.empty());
     futures.push_back(std::async(std::launch::async, [=]() {
-      ThreadID::set(ThreadID::UTILITY, "ld:open-rocksdb");
+      ThreadID::set(
+          ThreadID::UTILITY, folly::sformat("ld:open-rocks{}", shard_idx));
 
       // Make a copy of RocksDBLogStoreConfig for this shard.
       RocksDBLogStoreConfig shard_config = rocksdb_config_;
@@ -298,7 +299,8 @@ ShardedRocksDBLocalLogStore::~ShardedRocksDBLocalLogStore() {
   std::vector<std::thread> threads;
   for (size_t i = 0; i < numShards(); ++i) {
     threads.emplace_back([this, i]() {
-      ThreadID::set(ThreadID::Type::UTILITY, "ld:stop-rocksdb");
+      ThreadID::set(
+          ThreadID::Type::UTILITY, folly::sformat("ld:stop-rocks{}", i));
       ld_debug("Destroying RocksDB shard %zd", i);
       shards_[i].reset();
       ld_info("Destroyed RocksDB shard %zd", i);
