@@ -743,9 +743,9 @@ class Client {
    * NOTE: this is currently a dummy API that will always return 0;
    * please refrain from using other than for testing.
    *
-   * A non-blocking version of findTimeSync().
+   * A non-blocking version of dataSizeSync().
    * Calllback will be called with one of the error codes mentioned regarding
-   * return in findTimeSync, with the addition of E::OK for successful
+   * return in dataSizeSync, with the addition of E::OK for successful
    * requests.
    *
    * @return If the request was successfully submitted for processing, returns
