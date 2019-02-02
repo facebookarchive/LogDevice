@@ -60,7 +60,8 @@ logdevice_plugin() {
 }
 ```
 
-You may need to specify some additional linker options in order to make sure
+You may need to specify some additional linker options (probably
+`--export-dynamic-symbol=logdevice_plugin`) in order to make sure
 that this unused symbol isn't dropped when linking.
 
 If you would like to export several plugins,  combine them into a
@@ -116,11 +117,11 @@ client)?
 * is rebuilding going on in the cluster?
 
 For a full list of counters and their descriptions, refer to `.inc` files under
-[`common/stats/`](https://github.com/facebookincubator/LogDevice/blob/master/logdevice/common/stats/). 
+[`common/stats/`](https://github.com/facebookincubator/LogDevice/blob/master/logdevice/common/stats/).
 
 The plugin should be a factory which creates an object that implements the
 `StatsPublisher` interface (see
-[`common/StatsPublisher.h`](https://github.com/facebookincubator/LogDevice/blob/master/logdevice/common/StatsPublisher.h)). 
+[`common/StatsPublisher.h`](https://github.com/facebookincubator/LogDevice/blob/master/logdevice/common/StatsPublisher.h)).
 
 Publishing stats is based on a push model . Roughly every
 `stats-collection-interval` (see [list of settings](settings.md)),
@@ -188,7 +189,7 @@ configuration file and notifying LogDevice when it changes. You can consult
 `FileConfigSource` and `ZookeeperConfigSource` as reference implementations.
 
 The plugin is a factory that creates an object that implements the
-`ConfigSource` interface (see 
+`ConfigSource` interface (see
 [`common/ConfigSource.h`](https://github.com/facebookincubator/LogDevice/blob/master/logdevice/common/ConfigSource.h))
 
 ## Build Info

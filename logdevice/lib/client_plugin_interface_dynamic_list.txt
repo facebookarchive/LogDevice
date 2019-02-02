@@ -1,6 +1,0 @@
-{
-  extern "C" {
-    logdevice_client_plugin;
-    logdevice_plugin;
-  };
-};
