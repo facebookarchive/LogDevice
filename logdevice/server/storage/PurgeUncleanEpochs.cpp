@@ -453,11 +453,14 @@ void PurgeUncleanEpochs::onGetEpochRecoveryMetadataComplete(
     if (!epoch_info_->count(epoch) && erm.first == E::EMPTY) {
       // The epoch is empty locally and status received is also
       // empty. There is nothing to purge.
-      ld_info("Nothing to purge. Epoch is empty locally and "
-              "EpochRecoveryMetadata consensus is also EMPTY for log: %lu,"
-              "epoch:%u",
-              log_id_.val_,
-              epoch);
+      RATELIMIT_INFO(
+          std::chrono::seconds(1),
+          1,
+          "Nothing to purge. Epoch is empty locally and "
+          "EpochRecoveryMetadata consensus is also EMPTY for log: %lu,"
+          "epoch:%u",
+          log_id_.val_,
+          epoch);
       continue;
     }
 
