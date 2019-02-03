@@ -9,5 +9,5 @@ CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
 **/__pycache__/
-**.pyc
+**/*.pyc
 *.egg-info
