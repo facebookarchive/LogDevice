@@ -101,7 +101,7 @@ class NodesConfigurationCodecFlatBuffers {
   deserialize(ProtocolReader& reader, bool evbuffer_zero_copy = false);
 
   // convenience wrappers for serialization / deserialization with linear buffer
-  // such as strings
+  // such as strings. If a serialization error occurs, returns an empty string.
   static std::string serialize(const NodesConfiguration& nodes_config,
                                SerializeOptions options = {true});
 
@@ -110,7 +110,9 @@ class NodesConfigurationCodecFlatBuffers {
   static std::shared_ptr<const NodesConfiguration>
   deserialize(folly::StringPiece buf);
 
-  // try to extract the nodes configuration version from a data blob
+  // try to extract the nodes configuration version from a data blob. An empty
+  // string is considered equivalent to a (default-constructed)
+  // NodesConfiguration with EMPTY_VERSION.
   static folly::Optional<membership::MembershipVersion::Type>
   extractConfigVersion(folly::StringPiece serialized_data);
 

@@ -67,15 +67,28 @@ class NCMRequest : public Request {
 class NewConfigRequest : public NCMRequest {
  public:
   template <typename... Args>
-  explicit NewConfigRequest(std::string new_config, Args&&... args)
+  explicit NewConfigRequest(std::string serialized_new_config, Args&&... args)
       : NCMRequest(std::forward<Args>(args)...),
-        new_config_(std::move(new_config)) {}
+        serialized_(true),
+        serialized_new_config_(std::move(serialized_new_config)),
+        new_config_ptr_(nullptr) {}
+
+  template <typename... Args>
+  explicit NewConfigRequest(
+      std::shared_ptr<const NodesConfiguration> new_config_ptr,
+      Args&&... args)
+      : NCMRequest(std::forward<Args>(args)...),
+        serialized_(false),
+        serialized_new_config_(),
+        new_config_ptr_(std::move(new_config_ptr)) {}
 
   Request::Execution
       executeOnNCM(std::shared_ptr<NodesConfigurationManager>) override;
 
  private:
-  std::string new_config_;
+  bool serialized_;
+  std::string serialized_new_config_;
+  std::shared_ptr<const NodesConfiguration> new_config_ptr_;
 };
 
 class ProcessingFinishedRequest : public NCMRequest {
@@ -91,6 +104,24 @@ class ProcessingFinishedRequest : public NCMRequest {
 
  private:
   std::shared_ptr<const NodesConfiguration> config_;
+};
+
+class UpdateRequest : public NCMRequest {
+ public:
+  template <typename... Args>
+  explicit UpdateRequest(std::vector<NodesConfiguration::Update> updates,
+                         NodesConfigurationAPI::CompletionCb callback,
+                         Args&&... args)
+      : NCMRequest(std::forward<Args>(args)...),
+        updates_(std::move(updates)),
+        callback_(std::move(callback)) {}
+
+  Request::Execution
+      executeOnNCM(std::shared_ptr<NodesConfigurationManager>) override;
+
+ private:
+  std::vector<NodesConfiguration::Update> updates_;
+  NodesConfigurationAPI::CompletionCb callback_;
 };
 
 // External dependencies for the NodesConfigurationManager. Dependencies is
@@ -119,6 +150,9 @@ class Dependencies {
     return std::make_unique<Req>(
         std::forward<Args>(args)..., worker_type_, worker_id_, ncm_);
   }
+
+  void postNewConfigRequest(std::string);
+  void postNewConfigRequest(std::shared_ptr<const NodesConfiguration>);
 
   class InitRequest : public NCMRequest {
    public:

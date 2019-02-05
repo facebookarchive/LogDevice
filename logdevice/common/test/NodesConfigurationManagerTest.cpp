@@ -21,6 +21,7 @@
 #include "logdevice/common/configuration/nodes/ZookeeperNodesConfigurationStore.h"
 #include "logdevice/common/request_util.h"
 #include "logdevice/common/test/InMemNodesConfigurationStore.h"
+#include "logdevice/common/test/NodesConfigurationTestUtil.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/common/test/ZookeeperClientInMemory.h"
 
@@ -36,58 +37,120 @@ struct TestDeps : public Dependencies {
   ~TestDeps() override {}
 };
 
-TEST(NodesConfigurationManagerTest, basic) {
-  constexpr MembershipVersion::Type kVersion{102};
-  NodesConfiguration initial_config;
-  initial_config.setVersion(kVersion);
-  EXPECT_TRUE(initial_config.validate());
-  auto z = std::make_shared<ZookeeperClientInMemory>(
-      "unused quorum",
-      ZookeeperClientInMemory::state_map_t{
-          {ZookeeperNodesConfigurationStore::kConfigKey,
-           {NodesConfigurationCodecFlatBuffers::serialize(initial_config),
-            zk::Stat{.version_ = 4}}}});
-  auto store = std::make_unique<ZookeeperNodesConfigurationStore>(
-      NodesConfigurationCodecFlatBuffers::extractConfigVersion, z);
+namespace {
+constexpr const MembershipVersion::Type kVersion{102};
+constexpr const MembershipVersion::Type kNewVersion =
+    MembershipVersion::Type{kVersion.val() + 1};
 
-  Settings settings = create_default_settings<Settings>();
-  settings.num_workers = 3;
-  auto processor = make_test_processor(settings);
+NodesConfiguration
+makeDummyNodesConfiguration(MembershipVersion::Type version) {
+  NodesConfiguration config;
+  config.setVersion(version);
+  EXPECT_TRUE(config.validate());
+  EXPECT_EQ(version, config.getVersion());
+  return config;
+}
+} // namespace
 
-  auto deps = std::make_unique<TestDeps>(processor.get(), std::move(store));
-  auto m = NodesConfigurationManager::create(
-      NodesConfigurationManager::OperationMode::forTooling(), std::move(deps));
-  m->init();
+class NodesConfigurationManagerTest : public ::testing::Test {
+ public:
+  void SetUp() override {
+    NodesConfiguration initial_config;
+    initial_config.setVersion(MembershipVersion::EMPTY_VERSION);
+    EXPECT_TRUE(initial_config.validate());
+    z_ = std::make_shared<ZookeeperClientInMemory>(
+        "unused quorum",
+        ZookeeperClientInMemory::state_map_t{
+            {ZookeeperNodesConfigurationStore::kConfigKey,
+             {"", zk::Stat{.version_ = 4}}}});
+    auto store = std::make_unique<ZookeeperNodesConfigurationStore>(
+        NodesConfigurationCodecFlatBuffers::extractConfigVersion, z_);
 
-  auto new_version = MembershipVersion::Type{kVersion.val() + 1};
+    Settings settings = create_default_settings<Settings>();
+    settings.num_workers = 3;
+    processor_ = make_test_processor(settings);
 
-  NodesConfiguration new_config;
-  new_config.setVersion(new_version);
-  EXPECT_TRUE(new_config.validate());
-
-  // fire and forget
-  z->setData(ZookeeperNodesConfigurationStore::kConfigKey,
-             NodesConfigurationCodecFlatBuffers::serialize(new_config),
-             /* cb = */ {});
-
-  // TODO: better testing after offering a subscription API
-  while (m->getConfig() == nullptr ||
-         m->getConfig()->getVersion() == kVersion) {
-    /* sleep override */ std::this_thread::sleep_for(200ms);
+    auto deps = std::make_unique<TestDeps>(processor_.get(), std::move(store));
+    ncm_ = NodesConfigurationManager::create(
+        NodesConfigurationManager::OperationMode::forTooling(),
+        std::move(deps));
+    ncm_->init();
+    ncm_->upgradeToProposer();
   }
-  auto p = m->getConfig();
-  EXPECT_EQ(new_version, p->getVersion());
+
+  //////// Helper functions ////////
+  void writeNewVersionToZK(MembershipVersion::Type new_version) {
+    auto new_config = std::make_shared<const NodesConfiguration>(
+        makeDummyNodesConfiguration(new_version));
+    writeNewConfigToZK(std::move(new_config));
+  }
+
+  void
+  writeNewConfigToZK(std::shared_ptr<const NodesConfiguration> new_config) {
+    // fire and forget
+    z_->setData(ZookeeperNodesConfigurationStore::kConfigKey,
+                NodesConfigurationCodecFlatBuffers::serialize(*new_config),
+                /* cb = */ {});
+  }
+
+  void waitTillNCMReceives(MembershipVersion::Type new_version) {
+    // TODO: better testing after offering a subscription API
+    while (ncm_->getConfig() == nullptr ||
+           ncm_->getConfig()->getVersion() != new_version) {
+      /* sleep override */ std::this_thread::sleep_for(200ms);
+    }
+    auto p = ncm_->getConfig();
+    EXPECT_EQ(new_version, p->getVersion());
+  }
+
+  std::shared_ptr<Processor> processor_;
+  std::shared_ptr<ZookeeperClientBase> z_;
+  std::shared_ptr<NodesConfigurationManager> ncm_;
+};
+
+TEST_F(NodesConfigurationManagerTest, basic) {
+  writeNewVersionToZK(kNewVersion);
+  waitTillNCMReceives(kNewVersion);
 
   // verify each worker has the up-to-date config
-  auto verify_version = [new_version](folly::Promise<folly::Unit> p) {
+  auto verify_version = [](folly::Promise<folly::Unit> p) {
     auto nc = Worker::onThisThread()
                   ->getUpdateableConfig()
                   ->updateableNodesConfiguration();
     EXPECT_TRUE(nc);
-    EXPECT_EQ(new_version, nc->get()->getVersion());
+    EXPECT_EQ(kNewVersion, nc->get()->getVersion());
     p.setValue();
   };
   auto futures =
-      fulfill_on_all_workers<folly::Unit>(processor.get(), verify_version);
+      fulfill_on_all_workers<folly::Unit>(processor_.get(), verify_version);
   folly::collectAllSemiFuture(futures).get();
+}
+
+TEST_F(NodesConfigurationManagerTest, update) {
+  {
+    // initial provision: the znode is originally empty, which we treat as
+    // EMPTY_VERSION
+    auto update = initialProvisionUpdate();
+    ncm_->update(std::move(update),
+                 [](Status status, std::shared_ptr<const NodesConfiguration>) {
+                   ASSERT_EQ(Status::OK, status);
+                 });
+    waitTillNCMReceives(
+        MembershipVersion::Type{MembershipVersion::EMPTY_VERSION.val() + 1});
+  }
+  auto provisioned_config = ncm_->getConfig();
+  writeNewConfigToZK(provisioned_config->withVersion(kVersion));
+  waitTillNCMReceives(kVersion);
+  {
+    // add new node
+    NodesConfiguration::Update update = addNewNodeUpdate();
+    ncm_->update(
+        std::move(update),
+        [](Status status,
+           std::shared_ptr<const NodesConfiguration> new_config) mutable {
+          EXPECT_EQ(Status::OK, status);
+          EXPECT_EQ(kNewVersion, new_config->getVersion());
+        });
+    waitTillNCMReceives(kNewVersion);
+  }
 }

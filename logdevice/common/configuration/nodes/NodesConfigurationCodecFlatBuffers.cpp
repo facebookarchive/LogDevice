@@ -471,6 +471,10 @@ void NodesConfigurationCodecFlatBuffers::serialize(
 std::shared_ptr<const NodesConfiguration>
 NodesConfigurationCodecFlatBuffers::deserialize(ProtocolReader& reader,
                                                 bool evbuffer_zero_copy) {
+  if (reader.ok() && reader.bytesRemaining() == 0) {
+    return std::make_shared<const NodesConfiguration>();
+  }
+
 #define CHECK_READER()  \
   if (reader.error()) { \
     err = E::BADMSG;    \
@@ -588,6 +592,10 @@ NodesConfigurationCodecFlatBuffers::deserialize(folly::StringPiece buf) {
 folly::Optional<membership::MembershipVersion::Type>
 NodesConfigurationCodecFlatBuffers::extractConfigVersion(
     folly::StringPiece serialized_data) {
+  if (serialized_data.empty()) {
+    return membership::MembershipVersion::EMPTY_VERSION;
+  }
+
   if (serialized_data.size() < sizeof(Header)) {
     RATELIMIT_ERROR(std::chrono::seconds(5),
                     1,

@@ -47,7 +47,7 @@ class NodesConfigurationManager
     bool isValid() const;
 
    protected:
-    static OperationMode upgradeToProposer(OperationMode current_mode);
+    void upgradeToProposer();
 
    private:
     using Flags = uint16_t;
@@ -68,6 +68,8 @@ class NodesConfigurationManager
     bool onlyHasFlags(Flags flags) const;
 
     Flags mode_{0};
+
+    friend class NodesConfigurationManager;
   }; // OperationMode
 
   template <typename... Args>
@@ -89,11 +91,13 @@ class NodesConfigurationManager
   ~NodesConfigurationManager() override {}
 
   void init();
+  void upgradeToProposer();
 
   //////// PROPOSER ////////
-  int update(NodesConfiguration::Update, CompletionCb) override {
-    throw std::runtime_error("unimplemented.");
-  }
+  void update(NodesConfiguration::Update, CompletionCb) override;
+  void update(std::vector<nodes::NodesConfiguration::Update> updates,
+              CompletionCb callback) override;
+
   int overwrite(std::shared_ptr<const NodesConfiguration>,
                 CompletionCb) override {
     throw std::runtime_error("unimplemented.");
@@ -116,6 +120,13 @@ class NodesConfigurationManager
   // TODO: implement overwrite (the blind write option) for emergency tooling.
   void onNewConfig(std::shared_ptr<const NodesConfiguration>);
   void onNewConfig(std::string);
+
+  // returns the highest-versioned config known to NCM, which may be
+  // unprocessed. Could return a config with EMPTY_VERSION, but never returns
+  // nullptr.
+  std::shared_ptr<const NodesConfiguration> getLatestKnownConfig() const;
+  void onUpdateRequest(std::vector<nodes::NodesConfiguration::Update> updates,
+                       CompletionCb callback);
 
   // A new version of the config goes through the following phases:
   //   S: staged, to be processed by the NCM
@@ -171,6 +182,7 @@ class NodesConfigurationManager
   friend class ncm::Dependencies::InitRequest;
   friend class ncm::NewConfigRequest;
   friend class ncm::ProcessingFinishedRequest;
+  friend class ncm::UpdateRequest;
 };
 
 }}}} // namespace facebook::logdevice::configuration::nodes

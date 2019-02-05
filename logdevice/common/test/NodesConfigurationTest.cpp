@@ -14,6 +14,7 @@
 #include "logdevice/common/configuration/nodes/NodesConfigLegacyConverter.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationCodecFlatBuffers.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/test/NodesConfigurationTestUtil.h"
 #include "logdevice/common/test/TestUtil.h"
 
 namespace {
@@ -25,31 +26,8 @@ using namespace facebook::logdevice::membership::MembershipVersion;
 using namespace facebook::logdevice::membership::MaintenanceID;
 using RoleSet = NodeServiceDiscovery::RoleSet;
 
-constexpr MaintenanceID::Type DUMMY_MAINTENANCE{2333};
-
 class NodesConfigurationTest : public ::testing::Test {
  public:
-  static constexpr NodeServiceDiscovery::RoleSet seq_role{1};
-  static constexpr NodeServiceDiscovery::RoleSet storage_role{2};
-  static constexpr NodeServiceDiscovery::RoleSet both_role{3};
-
-  static NodeServiceDiscovery genDiscovery(node_index_t n,
-                                           RoleSet roles,
-                                           std::string location) {
-    folly::Optional<NodeLocation> l;
-    if (!location.empty()) {
-      l = NodeLocation();
-      l.value().fromDomainString(location);
-    }
-    std::string addr = folly::sformat("127.0.0.{}", n);
-    return NodeServiceDiscovery{Sockaddr(addr, 4440),
-                                Sockaddr(addr, 4441),
-                                /*ssl address*/ folly::none,
-                                l,
-                                roles,
-                                "host" + std::to_string(n)};
-  }
-
   inline void checkCodecSerialization(const NodesConfiguration& c) {
     {
       flatbuffers::FlatBufferBuilder builder;
@@ -94,110 +72,16 @@ class NodesConfigurationTest : public ::testing::Test {
   }
 };
 
-constexpr NodeServiceDiscovery::RoleSet NodesConfigurationTest::seq_role;
-constexpr NodeServiceDiscovery::RoleSet NodesConfigurationTest::storage_role;
-constexpr NodeServiceDiscovery::RoleSet NodesConfigurationTest::both_role;
-
 TEST_F(NodesConfigurationTest, EmptyNodesConfigValid) {
+  // "" as a serialized NC is considered equivalent to a config with an
+  // EMPTY_VERSION
+  auto config = NodesConfigurationCodecFlatBuffers::deserialize("");
+  ASSERT_NE(nullptr, config);
+  EXPECT_EQ(MembershipVersion::EMPTY_VERSION, config->getVersion());
+
   ASSERT_TRUE(NodesConfiguration().validate());
   ASSERT_EQ(EMPTY_VERSION, NodesConfiguration().getVersion());
   checkCodecSerialization(NodesConfiguration());
-}
-
-// provision a LD nodes config with:
-// 1) four nodes N1, N2, N7, N9
-// 2) N1 and N7 have sequencer role; while N1, N2 and N9 have storage role;
-// 3) N2 and N9 are metadata storage nodes, metadata logs replicaton is
-//    (rack, 2)
-std::shared_ptr<const NodesConfiguration> provisionNodes() {
-  auto config = std::make_shared<const NodesConfiguration>();
-  NodesConfiguration::Update update;
-
-  // 1. provision service discovery config
-  update.service_discovery_update =
-      std::make_unique<ServiceDiscoveryConfig::Update>();
-
-  std::map<node_index_t, RoleSet> role_map = {
-      {1, NodesConfigurationTest::both_role},
-      {2, NodesConfigurationTest::storage_role},
-      {7, NodesConfigurationTest::seq_role},
-      {9, NodesConfigurationTest::storage_role}};
-
-  for (node_index_t n : NodeSetIndices({1, 2, 7, 9})) {
-    update.service_discovery_update->addNode(
-        n,
-        ServiceDiscoveryConfig::NodeUpdate{
-            ServiceDiscoveryConfig::UpdateType::PROVISION,
-            std::make_unique<NodeServiceDiscovery>(
-                NodesConfigurationTest::genDiscovery(
-                    n,
-                    role_map[n],
-                    n % 2 == 0 ? "aa.bb.cc.dd.ee" : "aa.bb.cc.dd.ff"))});
-  }
-  // 2. provision sequencer config
-  update.sequencer_config_update = std::make_unique<SequencerConfig::Update>();
-  update.sequencer_config_update->membership_update =
-      std::make_unique<SequencerMembership::Update>(
-          MembershipVersion::EMPTY_VERSION);
-  update.sequencer_config_update->attributes_update =
-      std::make_unique<SequencerAttributeConfig::Update>();
-
-  for (node_index_t n : NodeSetIndices({1, 7})) {
-    update.sequencer_config_update->membership_update->addNode(
-        n,
-        {SequencerMembershipTransition::ADD_NODE,
-         n == 1 ? 1.0 : 7.0,
-         MaintenanceID::MAINTENANCE_PROVISION});
-
-    update.sequencer_config_update->attributes_update->addNode(
-        n,
-        {SequencerAttributeConfig::UpdateType::PROVISION,
-         std::make_unique<SequencerNodeAttribute>()});
-  }
-
-  // 3. provision storage config
-  update.storage_config_update = std::make_unique<StorageConfig::Update>();
-  update.storage_config_update->membership_update =
-      std::make_unique<StorageMembership::Update>(
-          MembershipVersion::EMPTY_VERSION);
-  update.storage_config_update->attributes_update =
-      std::make_unique<StorageAttributeConfig::Update>();
-
-  for (node_index_t n : NodeSetIndices({1, 2, 9})) {
-    update.storage_config_update->membership_update->addShard(
-        ShardID(n, 0),
-        {n == 1 ? StorageStateTransition::PROVISION_SHARD
-                : StorageStateTransition::PROVISION_METADATA_SHARD,
-         (Condition::EMPTY_SHARD | Condition::LOCAL_STORE_READABLE |
-          Condition::NO_SELF_REPORT_MISSING_DATA |
-          Condition::LOCAL_STORE_WRITABLE),
-         MaintenanceID::MAINTENANCE_PROVISION});
-
-    update.storage_config_update->attributes_update->addNode(
-        n,
-        {StorageAttributeConfig::UpdateType::PROVISION,
-         std::make_unique<StorageNodeAttribute>(
-             StorageNodeAttribute{/*capacity=*/256.0,
-                                  /*num_shards*/ 1,
-                                  /*generation*/ 1,
-                                  /*exclude_from_nodesets*/ false})});
-  }
-
-  // 4. provisoin metadata logs replication
-  update.metadata_logs_rep_update =
-      std::make_unique<MetaDataLogsReplication::Update>(
-          MembershipVersion::EMPTY_VERSION);
-  update.metadata_logs_rep_update->replication.assign(
-      {{NodeLocationScope::RACK, 2}});
-
-  // 5. fill other update metadata
-  update.maintenance = MaintenanceID::MAINTENANCE_PROVISION;
-  update.context = "initial provision";
-
-  // finally perform the update
-  auto new_config = config->applyUpdate(std::move(update));
-  EXPECT_NE(nullptr, new_config);
-  return new_config;
 }
 
 TEST_F(NodesConfigurationTest, ProvisionBasic) {
@@ -291,8 +175,7 @@ TEST_F(NodesConfigurationTest, ChangingServiceDiscoveryAfterProvision) {
       ServiceDiscoveryConfig::NodeUpdate{
           ServiceDiscoveryConfig::UpdateType::RESET,
           std::make_unique<NodeServiceDiscovery>(
-              NodesConfigurationTest::genDiscovery(
-                  2, both_role, "aa.bb.cc.dd.ee"))});
+              genDiscovery(2, both_role, "aa.bb.cc.dd.ee"))});
   auto new_config = config->applyUpdate(std::move(update));
   EXPECT_EQ(nullptr, new_config);
   EXPECT_EQ(E::INVALID_PARAM, err);
@@ -306,8 +189,7 @@ TEST_F(NodesConfigurationTest, ChangingServiceDiscoveryAfterProvision) {
       ServiceDiscoveryConfig::NodeUpdate{
           ServiceDiscoveryConfig::UpdateType::PROVISION,
           std::make_unique<NodeServiceDiscovery>(
-              NodesConfigurationTest::genDiscovery(
-                  9, both_role, "aa.bb.cc.dd.ee"))});
+              genDiscovery(9, both_role, "aa.bb.cc.dd.ee"))});
   new_config = config->applyUpdate(std::move(update2));
   EXPECT_EQ(nullptr, new_config);
   EXPECT_EQ(E::EXISTS, err);
@@ -425,8 +307,7 @@ TEST_F(NodesConfigurationTest, AddingNodeWithoutServiceDiscoveryOrAttribute) {
         ServiceDiscoveryConfig::NodeUpdate{
             ServiceDiscoveryConfig::UpdateType::PROVISION,
             std::make_unique<NodeServiceDiscovery>(
-                NodesConfigurationTest::genDiscovery(
-                    17, both_role, "aa.bb.cc.dd.ee"))});
+                genDiscovery(17, both_role, "aa.bb.cc.dd.ee"))});
     update.storage_config_update = std::make_unique<StorageConfig::Update>();
     update.storage_config_update->membership_update =
         std::make_unique<StorageMembership::Update>(
@@ -443,35 +324,7 @@ TEST_F(NodesConfigurationTest, AddingNodeWithoutServiceDiscoveryOrAttribute) {
   {
     // with service discovery and attributes, membership addition
     // should be successful
-    NodesConfiguration::Update update;
-    update.service_discovery_update =
-        std::make_unique<ServiceDiscoveryConfig::Update>();
-    update.service_discovery_update->addNode(
-        17,
-        ServiceDiscoveryConfig::NodeUpdate{
-            ServiceDiscoveryConfig::UpdateType::PROVISION,
-            std::make_unique<NodeServiceDiscovery>(
-                NodesConfigurationTest::genDiscovery(
-                    17, both_role, "aa.bb.cc.dd.ee"))});
-    update.storage_config_update = std::make_unique<StorageConfig::Update>();
-    update.storage_config_update->attributes_update =
-        std::make_unique<StorageAttributeConfig::Update>();
-    update.storage_config_update->attributes_update->addNode(
-        17,
-        {StorageAttributeConfig::UpdateType::PROVISION,
-         std::make_unique<StorageNodeAttribute>(
-             StorageNodeAttribute{/*capacity=*/256.0,
-                                  /*num_shards*/ 1,
-                                  /*generation*/ 1,
-                                  /*exclude_from_nodesets*/ false})});
-    update.storage_config_update->membership_update =
-        std::make_unique<StorageMembership::Update>(
-            MembershipVersion::MIN_VERSION);
-    update.storage_config_update->membership_update->addShard(
-        ShardID(17, 0),
-        {StorageStateTransition::ADD_EMPTY_SHARD,
-         Condition::FORCE,
-         DUMMY_MAINTENANCE});
+    NodesConfiguration::Update update = addNewNodeUpdate();
     auto new_config = config->applyUpdate(std::move(update));
     EXPECT_NE(nullptr, new_config);
     EXPECT_TRUE(new_config->getStorageConfig()->getMembership()->hasNode(17));
@@ -560,10 +413,11 @@ TEST_F(NodesConfigurationTest, LegacyConversion1) {
   checkCodecSerialization(*converted_nodes_config);
 }
 
-TEST_F(NodesConfigurationTest, ExtractVersionError) {
+TEST_F(NodesConfigurationTest, ExtractVersion) {
   auto version =
       NodesConfigurationCodecFlatBuffers::extractConfigVersion(std::string());
-  ASSERT_FALSE(version.hasValue());
+  ASSERT_TRUE(version.hasValue());
+  EXPECT_EQ(EMPTY_VERSION, version.value());
   version = NodesConfigurationCodecFlatBuffers::extractConfigVersion(
       std::string("123"));
   ASSERT_FALSE(version.hasValue());

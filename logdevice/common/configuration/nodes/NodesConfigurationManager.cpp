@@ -49,10 +49,8 @@ OperationMode::forNodeRoles(NodeServiceDiscovery::RoleSet roles) {
   return mode;
 }
 
-/* static */ OperationMode
-OperationMode::upgradeToProposer(OperationMode current_mode) {
-  current_mode.setFlags(kIsProposer);
-  return current_mode;
+void OperationMode::upgradeToProposer() {
+  setFlags(kIsProposer);
 }
 
 bool OperationMode::isClient() const {
@@ -128,6 +126,37 @@ void NodesConfigurationManager::init() {
   deps_->init(wp);
 }
 
+void NodesConfigurationManager::upgradeToProposer() {
+  // TODO; this is done separately from init because a storage node should only
+  // be upgraded to a proposer after it sees itself as not-NONE in the
+  // membership config.
+  //
+  // For now we manually set this in tests
+  mode_.upgradeToProposer();
+}
+
+void NodesConfigurationManager::update(NodesConfiguration::Update update,
+                                       CompletionCb callback) {
+  std::vector<NodesConfiguration::Update> updates;
+  updates.emplace_back(std::move(update));
+  // this-> needed here for name resolution of "update"
+  this->update(std::move(updates), std::move(callback));
+}
+
+void NodesConfigurationManager::update(
+    std::vector<NodesConfiguration::Update> updates,
+    CompletionCb callback) {
+  // ensure we are allowed to propose updates
+  if (!mode_.isProposer()) {
+    callback(E::ACCESS, nullptr);
+    return;
+  }
+
+  std::unique_ptr<Request> req = deps()->makeNCMRequest<ncm::UpdateRequest>(
+      std::move(updates), std::move(callback));
+  deps()->processor_->postWithRetrying(req);
+}
+
 void NodesConfigurationManager::initOnNCM() {
   deps_->dcheckOnNCM();
   startPollingFromStore();
@@ -178,6 +207,119 @@ void NodesConfigurationManager::onNewConfig(
   // Incoming config has a higher version, use it as the staged config
   staged_nodes_config_ = std::move(new_config);
   maybeProcessStagedConfig();
+}
+
+namespace {
+std::shared_ptr<const NodesConfiguration>
+max(const std::shared_ptr<const NodesConfiguration>& lhs,
+    const std::shared_ptr<const NodesConfiguration>& rhs) {
+  if (!lhs) {
+    return rhs;
+  }
+  if (!rhs) {
+    return lhs;
+  }
+  return (lhs->getVersion() > rhs->getVersion()) ? lhs : rhs;
+}
+} // namespace
+
+std::shared_ptr<const NodesConfiguration>
+NodesConfigurationManager::getLatestKnownConfig() const {
+  auto c = max(getConfig(), pending_nodes_config_);
+  c = max(c, staged_nodes_config_);
+  if (!c) {
+    c = std::make_shared<const NodesConfiguration>();
+  }
+  return c;
+}
+
+void NodesConfigurationManager::onUpdateRequest(
+    std::vector<NodesConfiguration::Update> updates,
+    CompletionCb callback) {
+  deps_->dcheckOnNCM();
+
+  // ensure we are allowed to propose updates
+  if (!mode_.isProposer()) {
+    callback(E::ACCESS, nullptr);
+    return;
+  }
+
+  auto current_config = getLatestKnownConfig();
+  ld_assert(current_config);
+  auto current_version = current_config->getVersion();
+  auto new_config = std::move(current_config);
+  for (auto& u : updates) {
+    // TODO: it'd be more efficient to push down the batch update logic into
+    // NodesConfiguration
+    new_config = new_config->applyUpdate(std::move(u));
+    if (!new_config) {
+      // TODO: better visibility into why particular updates failed
+      callback(err, nullptr);
+      return;
+    }
+  }
+  // applyUpdate() bumps the version each time. Even though the protocol can
+  // allow gaps in the version numbers, it's simpler to try to keep it
+  // continuous.
+  new_config = new_config->withVersion(
+      membership::MembershipVersion::Type{current_version.val() + 1});
+  auto serialized = NodesConfigurationCodecFlatBuffers::serialize(*new_config);
+  if (serialized.empty()) {
+    callback(err, nullptr);
+    return;
+  }
+
+  deps()->store_->updateConfig(
+      std::move(serialized),
+      /* base_version = */ current_version,
+      [callback = std::move(callback),
+       new_config = std::move(new_config),
+       ncm = weak_from_this()](
+          Status status,
+          NodesConfigurationStore::version_t stored_version,
+          std::string stored_data) mutable {
+        // In NCS callback thread
+        auto notify_ncm_of_new_config =
+            [ncm = std::move(ncm)](std::shared_ptr<const NodesConfiguration>
+                                       new_config_ptr) mutable {
+              auto ncm_ptr = ncm.lock();
+              if (!ncm_ptr) {
+                // NCM shut down, no need to notify it
+                return;
+              }
+              ncm_ptr->deps()->postNewConfigRequest(std::move(new_config_ptr));
+            };
+
+        // If we know which version / what config prevented the update:
+        if (status == E::VERSION_MISMATCH &&
+            stored_version != membership::MembershipVersion::EMPTY_VERSION) {
+          if (folly::kIsDebug) {
+            auto extracted_version_opt =
+                NodesConfigurationCodecFlatBuffers::extractConfigVersion(
+                    stored_data);
+            ld_assert(extracted_version_opt.hasValue());
+            ld_assert_eq(stored_version, extracted_version_opt.value());
+            ld_assert_gt(stored_version, new_config->getVersion());
+          }
+          auto stored_config = NodesConfigurationCodecFlatBuffers::deserialize(
+              std::move(stored_data));
+          ld_assert(stored_config);
+          notify_ncm_of_new_config(stored_config);
+          callback(E::VERSION_MISMATCH, std::move(stored_config));
+          return;
+        }
+
+        if (status != E::OK) {
+          // TODO: we could add retries here for E::AGAIN and
+          // E::VERSION_MISMATCH
+          callback(status, nullptr);
+          return;
+        }
+
+        ld_check_eq(stored_version, new_config->getVersion());
+        notify_ncm_of_new_config(new_config);
+        callback(E::OK, std::move(new_config));
+      });
 }
 
 void NodesConfigurationManager::maybeProcessStagedConfig() {

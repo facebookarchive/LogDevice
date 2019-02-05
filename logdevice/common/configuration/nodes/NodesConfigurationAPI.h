@@ -23,8 +23,12 @@ class NodesConfigurationAPI {
   virtual std::shared_ptr<const nodes::NodesConfiguration>
   getConfig() const = 0;
 
-  virtual int update(nodes::NodesConfiguration::Update update,
-                     CompletionCb callback) = 0;
+  virtual void update(nodes::NodesConfiguration::Update update,
+                      CompletionCb callback) = 0;
+
+  // batched updates
+  virtual void update(std::vector<nodes::NodesConfiguration::Update> updates,
+                      CompletionCb callback) = 0;
 
   // unconditionally overwrite the configuration with the provided config.
   // used in emergency

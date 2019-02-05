@@ -40,22 +40,31 @@ Request::Execution NCMRequest::execute() {
 
 Request::Execution Dependencies::InitRequest::executeOnNCM(
     std::shared_ptr<NodesConfigurationManager> ncm_ptr) {
-  ld_check(ncm_ptr);
   ncm_ptr->initOnNCM();
   return Execution::COMPLETE;
 }
 
 Request::Execution NewConfigRequest::executeOnNCM(
     std::shared_ptr<NodesConfigurationManager> ncm_ptr) {
-  ld_check(ncm_ptr);
-  ncm_ptr->onNewConfig(std::move(new_config_));
-
+  if (serialized_) {
+    ld_assert_eq(nullptr, new_config_ptr_);
+    ncm_ptr->onNewConfig(std::move(serialized_new_config_));
+  } else {
+    ld_assert_eq("", serialized_new_config_);
+    ncm_ptr->onNewConfig(std::move(new_config_ptr_));
+  }
   return Execution::COMPLETE;
 }
 
 Request::Execution ProcessingFinishedRequest::executeOnNCM(
     std::shared_ptr<NodesConfigurationManager> ncm_ptr) {
   ncm_ptr->onProcessingFinished(std::move(config_));
+  return Execution::COMPLETE;
+}
+
+Request::Execution UpdateRequest::executeOnNCM(
+    std::shared_ptr<NodesConfigurationManager> ncm_ptr) {
+  ncm_ptr->onUpdateRequest(std::move(updates_), std::move(callback_));
   return Execution::COMPLETE;
 }
 
@@ -91,6 +100,18 @@ void Dependencies::init(NCMWeakPtr ncm) {
   processor_->postWithRetrying(req);
 }
 
+void Dependencies::postNewConfigRequest(std::string serialized_new_config) {
+  // TODO: move all deserialization to a background worker thread
+  auto req = makeNCMRequest<NewConfigRequest>(std::move(serialized_new_config));
+  processor_->postWithRetrying(req);
+}
+
+void Dependencies::postNewConfigRequest(
+    std::shared_ptr<const NodesConfiguration> new_config) {
+  auto req = makeNCMRequest<NewConfigRequest>(std::move(new_config));
+  processor_->postWithRetrying(req);
+}
+
 void Dependencies::readFromStoreAndActivateTimer() {
   dcheckOnNCM();
   ld_assert(store_);
@@ -103,8 +124,7 @@ void Dependencies::readFromStoreAndActivateTimer() {
     if (status == Status::OK) {
       auto deps = ncm_ptr->deps();
       ld_assert(deps);
-      auto req = deps->makeNCMRequest<NewConfigRequest>(std::move(value));
-      deps->processor_->postWithRetrying(req);
+      deps->postNewConfigRequest(std::move(value));
     } else {
       RATELIMIT_ERROR(
           std::chrono::seconds(10),
