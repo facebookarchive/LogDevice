@@ -240,15 +240,10 @@ NodesConfiguration::applyUpdate(NodesConfiguration::Update update) const {
   }
 
   // 6) bump the config version and updates the configuration metadata
-  new_config->version_ = MembershipVersion::Type(version_.val() + 1);
+  new_config->touch(std::move(update.context));
   // update storage_hash, num_shards and addr_to_index
   new_config->recomputeConfigMetadata();
-  new_config->last_change_timestamp_ =
-      std::chrono::duration_cast<std::chrono::milliseconds>(
-          std::chrono::system_clock::now().time_since_epoch())
-          .count();
   new_config->last_maintenance_ = update.maintenance;
-  new_config->last_change_context_ = std::move(update.context);
 
   // 7) Finally check the validaity of the new config, for example
   // consistency b/w service discovery, membership and metadata logs
@@ -323,6 +318,14 @@ node_index_t NodesConfiguration::computeMaxNodeIndex() const {
   return res;
 }
 
+void NodesConfiguration::touch(std::string context) {
+  version_ = MembershipVersion::Type(version_.val() + 1);
+  last_change_timestamp_ = SystemTimestamp{std::chrono::system_clock::now()}
+                               .toMilliseconds()
+                               .count();
+  last_change_context_ = std::move(context);
+}
+
 void NodesConfiguration::recomputeConfigMetadata() {
   storage_hash_ = computeStorageNodesHash();
   num_shards_ = computeNumShards();
@@ -338,6 +341,22 @@ void NodesConfiguration::recomputeConfigMetadata() {
   };
   add_addr_index(*getSequencerMembership());
   add_addr_index(*getStorageMembership());
+}
+
+std::shared_ptr<const NodesConfiguration>
+NodesConfiguration::withIncrementedVersionAndTimestamp(
+    folly::Optional<membership::MembershipVersion::Type> new_version,
+    std::string context) const {
+  if (new_version.hasValue() && new_version.value() <= version_) {
+    return nullptr;
+  }
+
+  auto new_config = std::make_shared<NodesConfiguration>(*this);
+  new_config->touch(std::move(context));
+  if (new_version.hasValue()) {
+    new_config->setVersion(new_version.value());
+  }
+  return new_config;
 }
 
 std::shared_ptr<const NodesConfiguration> NodesConfiguration::withVersion(

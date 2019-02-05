@@ -146,6 +146,7 @@ TEST(CONFIG_FETCH_MessageTest, OnReceivedNodesConfiguration) {
           static_cast<uint64_t>(config->serverConfig()
                                     ->getNodesConfiguration()
                                     ->getLastChangeTimestamp()
+                                    .time_since_epoch()
                                     .count()),
           1,
           NodeID(2, 1),
@@ -183,6 +184,7 @@ TEST(CONFIG_FETCH_MessageTest, OnReceivedNodesConfigurationConditional) {
           static_cast<uint64_t>(config->serverConfig()
                                     ->getNodesConfiguration()
                                     ->getLastChangeTimestamp()
+                                    .time_since_epoch()
                                     .count()),
           1,
           NodeID(2, 1),

@@ -393,6 +393,28 @@ TEST_F(NodesConfigurationTest, RoleConflict) {
   }
 }
 
+TEST_F(NodesConfigurationTest, touch) {
+  NodesConfiguration c{};
+  ASSERT_TRUE(c.validate());
+  EXPECT_EQ(EMPTY_VERSION, c.getVersion());
+  auto c2 = c.withIncrementedVersionAndTimestamp();
+  EXPECT_NE(nullptr, c2);
+  EXPECT_GT(c2->getVersion(), EMPTY_VERSION);
+
+  MembershipVersion::Type new_version{123};
+  auto prev_ts = c2->getLastChangeTimestamp();
+  /* sleep override */ std::this_thread::sleep_for(
+      std::chrono::milliseconds(2));
+  auto c3 = c2->withIncrementedVersionAndTimestamp(new_version);
+  EXPECT_NE(nullptr, c3);
+  EXPECT_EQ(new_version, c3->getVersion());
+  auto now_ts = c3->getLastChangeTimestamp();
+  EXPECT_GT(now_ts, prev_ts);
+
+  auto c4 = c3->withIncrementedVersionAndTimestamp(new_version);
+  EXPECT_EQ(nullptr, c4);
+}
+
 ///////////// Legacy Format conversion //////////////
 
 TEST_F(NodesConfigurationTest, LegacyConversion1) {

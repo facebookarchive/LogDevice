@@ -147,7 +147,8 @@ CONFIG_FETCH_Message::handleNodesConfigurationRequest(const Address& from) {
   CONFIG_CHANGED_Header hdr{
       Status::OK,
       header_.rid,
-      static_cast<uint64_t>(nodes_cfg->getLastChangeTimestamp().count()),
+      static_cast<uint64_t>(
+          nodes_cfg->getLastChangeTimestamp().time_since_epoch().count()),
       nodes_cfg->getVersion(),
       config->serverConfig()->getMyNodeID(),
       CONFIG_CHANGED_Header::ConfigType::NODES_CONFIGURATION,

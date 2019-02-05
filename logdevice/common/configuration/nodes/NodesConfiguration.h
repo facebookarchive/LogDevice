@@ -7,6 +7,7 @@
  */
 #pragma once
 
+#include "logdevice/common/Timestamp.h"
 #include "logdevice/common/configuration/nodes/MetaDataLogsReplication.h"
 #include "logdevice/common/configuration/nodes/SequencerConfig.h"
 #include "logdevice/common/configuration/nodes/ServiceDiscoveryConfig.h"
@@ -141,8 +142,10 @@ class NodesConfiguration {
     return version_;
   }
 
-  std::chrono::milliseconds getLastChangeTimestamp() const {
-    return std::chrono::milliseconds(last_change_timestamp_);
+  SystemTimestamp getLastChangeTimestamp() const {
+    using namespace std::chrono;
+    system_clock::duration dur(last_change_timestamp_);
+    return system_clock::time_point{dur};
   }
 
   node_index_t getMaxNodeIndex() const {
@@ -154,6 +157,19 @@ class NodesConfiguration {
   void setVersion(membership::MembershipVersion::Type version) {
     version_ = version;
   }
+
+  // returns a new config with an incremented version and touch the
+  // last_change_timestamp_.
+  //
+  // @param new_version should either be folly::none, in which case the new
+  // version will be the current version + 1, or be strictly greater than the
+  // current version.
+  //
+  // @return the new config or nullptr if the new_version is <= current version
+  std::shared_ptr<const NodesConfiguration> withIncrementedVersionAndTimestamp(
+      folly::Optional<membership::MembershipVersion::Type> new_version =
+          folly::none,
+      std::string context = "manual touch") const;
 
   std::shared_ptr<const NodesConfiguration>
   withVersion(membership::MembershipVersion::Type version) const;
@@ -200,6 +216,9 @@ class NodesConfiguration {
   // addr_to_index_) from each sub-configuration, note that version, timestamp,
   // etc are not reset in this function
   void recomputeConfigMetadata();
+
+  // Increments config version, sets last_change_timestamp_ and context
+  void touch(std::string context);
 
   friend class NodesConfigLegacyConverter;
   friend class NodesConfigurationCodecFlatBuffers;
