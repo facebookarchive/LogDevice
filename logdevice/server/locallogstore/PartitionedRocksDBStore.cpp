@@ -863,11 +863,12 @@ bool PartitionedRocksDBStore::open(
     const size_t limit = getSettings()->partition_count_soft_limit_;
     const size_t existing = partitions_.getVersion()->size();
     const RecordTimestamp now = currentTime();
-    size_t num_to_create =
-        (now - latest->starting_timestamp) / partition_duration;
+    size_t num_to_create = now <= latest->starting_timestamp
+        ? 0ul
+        : (now - latest->starting_timestamp) / partition_duration;
     RecordTimestamp first_new_timestamp =
         latest->starting_timestamp + partition_duration;
-    if (existing + num_to_create > limit) {
+    if (num_to_create != 0 && existing + num_to_create > limit) {
       ld_check_gt(limit, 0);
       // Create at least one.
       size_t reduced_num_to_create = limit - std::min(limit - 1, existing);
