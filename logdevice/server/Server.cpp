@@ -720,13 +720,17 @@ bool Server::initSequencers() {
   } else {
     ld_info("Initializing ZookeeperEpochStore");
     try {
+      std::shared_ptr<ZookeeperClientFactory> zookeeper_client_factory =
+          processor_->getPluginRegistry()
+              ->getSinglePlugin<ZookeeperClientFactory>(
+                  PluginType::ZOOKEEPER_CLIENT_FACTORY);
       epoch_store = std::make_unique<ZookeeperEpochStore>(
           server_config_->getClusterName(),
           processor_.get(),
           updateable_config_->updateableZookeeperConfig(),
           updateable_config_->updateableServerConfig(),
           processor_->updateableSettings(),
-          zkFactoryProd);
+          zookeeper_client_factory);
     } catch (const ConstructorFailed&) {
       ld_error("Failed to construct ZookeeperEpochStore: %s",
                error_description(err));

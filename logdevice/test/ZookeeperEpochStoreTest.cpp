@@ -59,16 +59,15 @@ class ZookeeperEpochStoreTest : public ::testing::Test {
 
     auto znodes = getPrefillZnodes();
 
+    std::shared_ptr<ZookeeperClientFactory> zookeeper_client_factory =
+        std::make_shared<ZookeeperClientInMemoryFactory>(znodes);
     epochstore = std::make_unique<ZookeeperEpochStore>(
         TEST_CLUSTER,
         processor.get(),
         config->updateableZookeeperConfig(),
         config->updateableServerConfig(),
         processor->updateableSettings(),
-        [znodes](const ZookeeperConfig& config) {
-          return std::make_unique<ZookeeperClientInMemory>(
-              config.getQuorumString(), znodes);
-        });
+        zookeeper_client_factory);
 
     dbg::assertOnData = true;
   }

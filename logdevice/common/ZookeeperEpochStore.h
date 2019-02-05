@@ -23,6 +23,7 @@
 #include "logdevice/common/UpdateableSharedPtr.h"
 #include "logdevice/common/ZookeeperClientBase.h"
 #include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/common/plugin/ZookeeperClientFactory.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/include/ConfigSubscriptionHandle.h"
@@ -55,7 +56,7 @@ class ZookeeperEpochStore : public EpochStore, boost::noncopyable {
       const std::shared_ptr<UpdateableZookeeperConfig>& zk_config,
       const std::shared_ptr<UpdateableServerConfig>& server_config,
       UpdateableSettings<Settings> settings,
-      ZKFactory zkFactory);
+      std::shared_ptr<ZookeeperClientFactory> zkFactory);
 
   ~ZookeeperEpochStore() override;
 
@@ -152,7 +153,7 @@ class ZookeeperEpochStore : public EpochStore, boost::noncopyable {
   folly::Optional<ConfigSubscriptionHandle> config_subscription_;
 
   // ZookeeperClientFactory to create ZookeeperClient
-  ZKFactory zkFactory_;
+  std::shared_ptr<ZookeeperClientFactory> zkFactory_;
 
   /**
    * Run a zoo_aget() on a znode, optionally followed by a modify and a

@@ -22,6 +22,8 @@
 #include "logdevice/common/configuration/ReplicationProperty.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/plugin/PluginRegistry.h"
+#include "logdevice/common/plugin/ZookeeperClientFactory.h"
 #include "logdevice/lib/ClientImpl.h"
 #include "logdevice/lib/ops/LogMetaDataFetcher.h"
 #include "logdevice/ops/ldquery/Errors.h"
@@ -127,13 +129,18 @@ std::shared_ptr<TableData> EpochStore::getData(QueryContext& ctx) {
   } else {
     try {
       auto upd_config = client_impl->getConfig();
+      auto& processor = client_impl->getProcessor();
+      std::shared_ptr<ZookeeperClientFactory> zookeeper_client_factory =
+          processor.getPluginRegistry()
+              ->getSinglePlugin<ZookeeperClientFactory>(
+                  PluginType::ZOOKEEPER_CLIENT_FACTORY);
       epoch_store = std::make_shared<ZookeeperEpochStore>(
           config->serverConfig()->getClusterName(),
-          &(client_impl->getProcessor()),
+          &processor,
           upd_config->updateableZookeeperConfig(),
           upd_config->updateableServerConfig(),
-          client_impl->getProcessor().updateableSettings(),
-          zkFactoryProd);
+          processor.updateableSettings(),
+          zookeeper_client_factory);
     } catch (const ConstructorFailed&) {
       std::string error =
           folly::format("Failed to construct a Zookeeper client for [{}]: {}",

@@ -13,6 +13,9 @@
 #include <zookeeper/zookeeper.h>
 
 #include "logdevice/common/ZookeeperClient.h"
+#include "logdevice/common/configuration/ZookeeperConfig.h"
+#include "logdevice/common/plugin/PluginRegistry.h"
+#include "logdevice/common/plugin/ZookeeperClientFactory.h"
 
 namespace facebook { namespace logdevice {
 
@@ -91,6 +94,30 @@ class ZookeeperClientInMemory : public ZookeeperClientBase {
   int mockSync(const char* znode_path,
                string_completion_t completion,
                const void* context);
+};
+
+class ZookeeperClientInMemoryFactory : public ZookeeperClientFactory {
+ public:
+  explicit ZookeeperClientInMemoryFactory(
+      ZookeeperClientInMemory::state_map_t znodes)
+      : znodes_(znodes) {}
+
+  std::string identifier() const override {
+    return "in-memory-zk";
+  }
+
+  std::string displayName() const override {
+    return "In Memory ZK";
+  }
+
+  std::unique_ptr<ZookeeperClientBase>
+  getClient(const configuration::ZookeeperConfig& config) override {
+    return std::make_unique<ZookeeperClientInMemory>(
+        config.getQuorumString(), znodes_);
+  }
+
+ private:
+  ZookeeperClientInMemory::state_map_t znodes_;
 };
 
 }} // namespace facebook::logdevice

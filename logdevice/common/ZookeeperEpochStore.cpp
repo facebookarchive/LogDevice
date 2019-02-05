@@ -35,20 +35,20 @@ ZookeeperEpochStore::ZookeeperEpochStore(
     const std::shared_ptr<UpdateableZookeeperConfig>& zk_config,
     const std::shared_ptr<UpdateableServerConfig>& server_config,
     UpdateableSettings<Settings> settings,
-    ZKFactory zkFactory)
+    std::shared_ptr<ZookeeperClientFactory> zkFactory)
     : processor_(processor),
       cluster_name_(cluster_name),
       zk_config_(zk_config),
       server_config_(server_config),
       settings_(settings),
       shutting_down_(std::make_shared<std::atomic<bool>>(false)),
-      zkFactory_(std::move(zkFactory)) {
+      zkFactory_(zkFactory) {
   ld_check(!cluster_name.empty() &&
            cluster_name.length() <
                configuration::ZookeeperConfig::MAX_CLUSTER_NAME);
 
-  std::shared_ptr<ZookeeperClientBase> zkclient =
-      zkFactory_(*zk_config_->get());
+  auto cfg = zk_config_->get();
+  std::shared_ptr<ZookeeperClientBase> zkclient = zkFactory_->getClient(*cfg);
 
   if (!zkclient) {
     throw ConstructorFailed();
@@ -424,7 +424,7 @@ void ZookeeperEpochStore::onConfigUpdate() {
 
   ld_info("Zookeeper quorum changed, reconnecting: %s", quorum.c_str());
 
-  std::shared_ptr<ZookeeperClientBase> zkclient = zkFactory_(*cfg);
+  std::shared_ptr<ZookeeperClientBase> zkclient = zkFactory_->getClient(*cfg);
 
   if (!zkclient) {
     ld_error("Zookeeper reconnect failed: %s", error_description(err));
