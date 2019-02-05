@@ -30,7 +30,9 @@ namespace facebook { namespace logdevice {
 enum class GapType {
   UNKNOWN = 0,      // default gap type; used by storage nodes when they don't
                     // have enough information to determine gap type
-  BRIDGE = 1,       // a "bridge" that completes an epoch
+  BRIDGE = 1,       // a "bridge" that completes an epoch. This is benign and
+                    // could be a result of sequencer failover or log
+                    // reconfiguration. There is no data loss.
   HOLE = 2,         // a hole in the numbering sequence that appeared due
                     // to a sequencer crash. No acknowledged records were lost.
   DATALOSS = 3,     // all records in the gap were permanently lost
