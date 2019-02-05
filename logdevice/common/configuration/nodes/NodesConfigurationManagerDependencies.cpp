@@ -11,6 +11,7 @@
 #include <folly/Conv.h>
 #include <folly/json.h>
 
+#include "logdevice/common/configuration/nodes/NodesConfigurationCodecFlatBuffers.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationManager.h"
 #include "logdevice/common/debug.h"
 
@@ -90,6 +91,91 @@ void Dependencies::dcheckOnNCM() const {
   ld_assert(current_worker);
   ld_assert_eq(current_worker->idx_, worker_id_);
   ld_assert(current_worker->worker_type_ == worker_type_);
+}
+
+void Dependencies::overwrite(std::shared_ptr<const NodesConfiguration> config,
+                             NodesConfigurationAPI::CompletionCb callback) {
+  // may be on a different thread; keep ncm alive while we use store_
+  auto ncm_ptr = ncm_.lock();
+  if (!ncm_ptr) {
+    callback(E::SHUTDOWN, nullptr);
+    return;
+  }
+
+  std::string serialized_initial_config =
+      NodesConfigurationCodecFlatBuffers::serialize(*config);
+  if (serialized_initial_config.empty()) {
+    // Even an empty NC would have a non empty serialization due to fields in
+    // the header
+    callback(err, nullptr);
+    return;
+  }
+
+  store_->getConfig([ncm = ncm_,
+                     callback = std::move(callback),
+                     config = std::move(config),
+                     serialized_initial_config =
+                         std::move(serialized_initial_config)](
+                        Status status, std::string current_serialized) mutable {
+    if (status != E::OK) {
+      callback(status, nullptr);
+      return;
+    }
+
+    // may be on a different thread
+    auto ncm_ptr = ncm.lock();
+    if (!ncm_ptr) {
+      callback(E::SHUTDOWN, nullptr);
+      return;
+    }
+
+    auto current_version_opt =
+        NodesConfigurationCodecFlatBuffers::extractConfigVersion(
+            current_serialized);
+    if (current_version_opt.hasValue()) {
+      auto current_version = current_version_opt.value();
+      if (current_version >= config->getVersion()) {
+        auto current_config = NodesConfigurationCodecFlatBuffers::deserialize(
+            std::move(current_serialized));
+        callback(E::VERSION_MISMATCH, std::move(current_config));
+        return;
+      }
+    } else {
+      // If current_version_opt == folly::none but the current_serialized config
+      // is not empty, the stored value in NCS is corrupt / we cannot interpret
+      // the value (which may be the reason we needed to call overwrite() in the
+      // first place). Emergency tooling now has little choice other than to
+      // discard what's in NCS and blindly update the config (i.e., using
+      // folly::none as base_version).
+      RATELIMIT_CRITICAL(std::chrono::seconds(5),
+                         10,
+                         "Cannot extract version from config in NCS, "
+                         "overwriting with version %lu",
+                         config->getVersion().val());
+    }
+
+    ncm_ptr->deps()->store_->updateConfig(
+        std::move(serialized_initial_config),
+        /* base_version = */ current_version_opt,
+        [config = std::move(config), callback = std::move(callback), ncm = ncm](
+            Status update_status,
+            NodesConfigurationStore::version_t version,
+            std::string value) mutable {
+          std::shared_ptr<const NodesConfiguration> ret_config = nullptr;
+          if (update_status == Status::OK) {
+            ld_assert_eq(version, config->getVersion());
+            ret_config = std::move(config);
+          }
+          if (update_status == E::VERSION_MISMATCH && !value.empty()) {
+            ret_config = NodesConfigurationCodecFlatBuffers::deserialize(
+                std::move(value));
+            ld_assert(ret_config);
+            ld_assert_eq(version, ret_config->getVersion());
+          }
+
+          callback(update_status, std::move(ret_config));
+        }); // updateConfig
+  });       // getConfig
 }
 
 void Dependencies::init(NCMWeakPtr ncm) {

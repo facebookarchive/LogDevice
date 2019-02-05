@@ -154,3 +154,57 @@ TEST_F(NodesConfigurationManagerTest, update) {
     waitTillNCMReceives(kNewVersion);
   }
 }
+
+TEST_F(NodesConfigurationManagerTest, overwrite) {
+  {
+    // ensure we can overwrite the initial empty znode
+    auto initial_config = makeDummyNodesConfiguration(kVersion);
+    folly::Baton<> b;
+    ncm_->overwrite(
+        std::make_shared<const NodesConfiguration>(initial_config),
+        [&b](Status status, std::shared_ptr<const NodesConfiguration> config) {
+          ASSERT_EQ(E::OK, status);
+          EXPECT_TRUE(config);
+          EXPECT_EQ(kVersion, config->getVersion());
+          b.post();
+        });
+    waitTillNCMReceives(kVersion);
+    b.wait();
+  }
+  writeNewVersionToZK(kNewVersion);
+  waitTillNCMReceives(kNewVersion);
+
+  {
+    // ensure that we cannot roll back version
+    auto rollback_version = MembershipVersion::Type{kVersion.val() - 4};
+    auto rollback_config = makeDummyNodesConfiguration(rollback_version);
+
+    folly::Baton<> b;
+    ncm_->overwrite(
+        std::make_shared<const NodesConfiguration>(std::move(rollback_config)),
+        [&b](Status status, std::shared_ptr<const NodesConfiguration> config) {
+          EXPECT_EQ(E::VERSION_MISMATCH, status);
+          EXPECT_TRUE(config);
+          EXPECT_EQ(kNewVersion, config->getVersion());
+          b.post();
+        });
+    b.wait();
+    EXPECT_EQ(kNewVersion, ncm_->getConfig()->getVersion());
+  }
+
+  {
+    // ensure we could roll forward versions
+    auto forward_version = MembershipVersion::Type{kVersion.val() + 9999};
+    auto forward_config = makeDummyNodesConfiguration(forward_version);
+    folly::Baton<> b;
+    ncm_->overwrite(
+        std::make_shared<const NodesConfiguration>(forward_config),
+        [&b](Status status, std::shared_ptr<const NodesConfiguration>) {
+          EXPECT_EQ(Status::OK, status);
+          ld_info("Overwrite successful.");
+          b.post();
+        });
+    waitTillNCMReceives(forward_version);
+    b.wait();
+  }
+}

@@ -32,7 +32,7 @@ class NodesConfigurationAPI {
 
   // unconditionally overwrite the configuration with the provided config.
   // used in emergency
-  virtual int
+  virtual void
   overwrite(std::shared_ptr<const nodes::NodesConfiguration> configuration,
             CompletionCb callback) = 0;
 

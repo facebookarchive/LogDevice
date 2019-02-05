@@ -142,6 +142,9 @@ class Dependencies {
   // dcheck that we are in the proper NCM work context
   void dcheckOnNCM() const;
 
+  void overwrite(std::shared_ptr<const NodesConfiguration> configuration,
+                 NodesConfigurationAPI::CompletionCb callback);
+
  private:
   // Convenience method to reduce boilerplate: only necessary to specify the
   // custom arguments

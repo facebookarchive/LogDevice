@@ -98,10 +98,18 @@ class NodesConfigurationManager
   void update(std::vector<nodes::NodesConfiguration::Update> updates,
               CompletionCb callback) override;
 
-  int overwrite(std::shared_ptr<const NodesConfiguration>,
-                CompletionCb) override {
-    throw std::runtime_error("unimplemented.");
-  }
+  // For emergency tooling; can be invoked from any thread.
+  //
+  // Implementation notes:
+  //
+  // The implementation of overwrite() does not go through the state machine, so
+  // that it'd be suitable to use even if the NCM is having issues.
+  //
+  // For now, the operation may fail if the version number of the configuration
+  // is not high enough (invoking the callback with E::VERSION_MISMATCH). In the
+  // future, NCM will encapsulate this complexity.
+  void overwrite(std::shared_ptr<const NodesConfiguration> configuration,
+                 CompletionCb callback) override;
 
   //////// OBSERVER ////////
   std::shared_ptr<const NodesConfiguration> getConfig() const override {

@@ -157,6 +157,18 @@ void NodesConfigurationManager::update(
   deps()->processor_->postWithRetrying(req);
 }
 
+void NodesConfigurationManager::overwrite(
+    std::shared_ptr<const NodesConfiguration> configuration,
+    CompletionCb callback) {
+  // ensure we are allowed to overwrite
+  if (!mode_.isTooling()) {
+    callback(E::ACCESS, nullptr);
+    return;
+  }
+
+  deps()->overwrite(std::move(configuration), std::move(callback));
+}
+
 void NodesConfigurationManager::initOnNCM() {
   deps_->dcheckOnNCM();
   startPollingFromStore();
