@@ -286,7 +286,9 @@ void RebuildingCoordinator::noteRebuildingSettingsChanged() {
     notifyShardDonorProgress(s.first, s.second.myProgress, s.second.version);
     // If global window size was increased (e.g. global window got disabled) we
     // may want to advance global window end.
-    trySlideGlobalWindow(s.first, event_log_->getCurrentRebuildingSet());
+    if (!restartIsScheduledForShard(s.first)) {
+      trySlideGlobalWindow(s.first, event_log_->getCurrentRebuildingSet());
+    }
   }
 }
 
