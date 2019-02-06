@@ -128,6 +128,14 @@ void runBasicTests(std::unique_ptr<NodesConfigurationStore> store,
     b.post();
   });
   checkAndResetBaton(b);
+
+  store->getLatestConfig([&b, next_version](Status status, std::string value) {
+    EXPECT_EQ(Status::OK, status);
+    EXPECT_EQ(TestEntry(next_version, "foo789"),
+              TestEntry::fromSerialized(std::move(value)));
+    b.post();
+  });
+  checkAndResetBaton(b);
 }
 
 void runMultiThreadedTests(std::unique_ptr<NodesConfigurationStore> store) {

@@ -187,6 +187,7 @@ class NodesConfigurationManager
       nullptr};
 
   friend class ncm::NCMRequest;
+  friend class ncm::Dependencies::Dependencies;
   friend class ncm::Dependencies::InitRequest;
   friend class ncm::NewConfigRequest;
   friend class ncm::ProcessingFinishedRequest;

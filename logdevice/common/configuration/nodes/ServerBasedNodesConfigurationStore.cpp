@@ -50,6 +50,11 @@ Status ServerBasedNodesConfigurationStore::getConfigSync(
   return Status::NOTSUPPORTED;
 }
 
+void ServerBasedNodesConfigurationStore::getLatestConfig(
+    value_callback_t /* callback */) const {
+  throw std::runtime_error("unsupported");
+}
+
 void ServerBasedNodesConfigurationStore::updateConfig(
     std::string /* value */,
     folly::Optional<version_t> /* base_version */,

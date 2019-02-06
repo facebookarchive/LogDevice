@@ -38,6 +38,11 @@ class ZookeeperVersionedConfigStore : public VersionedConfigStore {
   ~ZookeeperVersionedConfigStore() override {}
 
   void getConfig(std::string key, value_callback_t cb) const override;
+
+  // Does a linearizable read to zookeeper by doing a sync() call first and
+  // then the actual read.
+  void getLatestConfig(std::string key, value_callback_t cb) const override;
+
   void updateConfig(std::string key,
                     std::string value,
                     folly::Optional<version_t> base_version,

@@ -13,6 +13,7 @@
 #include <folly/Conv.h>
 #include <folly/json.h>
 #include <folly/synchronization/Baton.h>
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include "logdevice/common/Worker.h"
@@ -21,6 +22,7 @@
 #include "logdevice/common/configuration/nodes/ZookeeperNodesConfigurationStore.h"
 #include "logdevice/common/request_util.h"
 #include "logdevice/common/test/InMemNodesConfigurationStore.h"
+#include "logdevice/common/test/MockNodesConfigurationStore.h"
 #include "logdevice/common/test/NodesConfigurationTestUtil.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/common/test/ZookeeperClientInMemory.h"
@@ -31,6 +33,10 @@ using namespace facebook::logdevice::configuration::nodes;
 using namespace facebook::logdevice::configuration::nodes::ncm;
 using namespace facebook::logdevice::membership;
 using namespace std::chrono_literals;
+
+using ::testing::_;
+using ::testing::Invoke;
+using ::testing::Return;
 
 struct TestDeps : public Dependencies {
   using Dependencies::Dependencies;
@@ -206,5 +212,62 @@ TEST_F(NodesConfigurationManagerTest, overwrite) {
         });
     waitTillNCMReceives(forward_version);
     b.wait();
+  }
+}
+
+TEST_F(NodesConfigurationManagerTest, LinearizableReadOnStartup) {
+  constexpr MembershipVersion::Type kVersion{102};
+
+  NodesConfiguration initial_config;
+  initial_config.setVersion(kVersion);
+  EXPECT_TRUE(initial_config.validate());
+  std::string config =
+      NodesConfigurationCodecFlatBuffers::serialize(initial_config);
+
+  Settings settings = create_default_settings<Settings>();
+  settings.num_workers = 3;
+
+  {
+    // This is a `forTooling` NCM. It doesn't need to do a linearizable read
+    // at startup.
+    auto processor = make_test_processor(settings);
+    auto store = std::make_unique<MockNodesConfigurationStore>();
+    EXPECT_CALL(*store, getConfig_(_)).Times(1).WillOnce(Invoke([&](auto& cb) {
+      cb(Status::OK, config);
+    }));
+    EXPECT_CALL(*store, getLatestConfig_(testing::_)).Times(0);
+    auto deps = std::make_unique<TestDeps>(processor.get(), std::move(store));
+    auto m = NodesConfigurationManager::create(
+        NodesConfigurationManager::OperationMode::forTooling(),
+        std::move(deps));
+    m->init();
+    EXPECT_EQ(0,
+              wait_until(
+                  "Config is fetched",
+                  [&m]() { return m->getConfig() != nullptr; },
+                  std::chrono::steady_clock::now() + std::chrono::seconds(10)));
+  }
+
+  {
+    // This is a storage node NCM. It must do a linearizable read on startup.
+    auto processor = make_test_processor(settings);
+    auto store = std::make_unique<MockNodesConfigurationStore>();
+    EXPECT_CALL(*store, getConfig_(_)).Times(0);
+    EXPECT_CALL(*store, getLatestConfig_(_))
+        .Times(1)
+        .WillOnce(Invoke([&](auto& cb) { cb(Status::OK, config); }));
+    auto deps = std::make_unique<TestDeps>(processor.get(), std::move(store));
+
+    NodeServiceDiscovery::RoleSet roles;
+    roles.set(static_cast<size_t>(configuration::NodeRole::STORAGE));
+    auto m = NodesConfigurationManager::create(
+        NodesConfigurationManager::OperationMode::forNodeRoles(roles),
+        std::move(deps));
+    m->init();
+    EXPECT_EQ(0,
+              wait_until(
+                  "Config is fetched",
+                  [&m]() { return m->getConfig() != nullptr; },
+                  std::chrono::steady_clock::now() + std::chrono::seconds(10)));
   }
 }

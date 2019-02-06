@@ -165,6 +165,12 @@ class Dependencies {
   };
 
   void init(NCMWeakPtr);
+
+  // Returns true when we should fetch the latest config from the store.
+  // NCM needs to ensure that the locally committed config version never
+  // decreases, even across restarts. Currently we achieve this by doing a
+  // strongly consistent read when storage node starts up.
+  bool shouldDoConsistentConfigFetch();
   void readFromStoreAndActivateTimer();
 
   NCMWeakPtr ncm_{};

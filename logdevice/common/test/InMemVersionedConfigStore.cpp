@@ -36,6 +36,11 @@ Status InMemVersionedConfigStore::getConfigSync(std::string key,
   return Status::OK;
 }
 
+void InMemVersionedConfigStore::getLatestConfig(std::string key,
+                                                value_callback_t cb) const {
+  getConfig(std::move(key), std::move(cb));
+}
+
 void InMemVersionedConfigStore::updateConfig(
     std::string key,
     std::string value,

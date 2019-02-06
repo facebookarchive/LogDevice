@@ -80,6 +80,19 @@ class VersionedConfigStore {
   virtual Status getConfigSync(std::string key, std::string* value_out) const;
 
   /*
+   * strongly consistent read. Ensures that the returned config reflects any
+   * config updates that completed before this method is invoked.
+   *
+   * NOTE: This has higher chance of failing than getConfig as it favors
+   * consistency over availability. Unless you can't tolerate stale configs, you
+   * should use getConfig instead. It's also more expensive. This function is
+   * meant to be used sparingly.
+   *
+   * Same params as getConfig.
+   */
+  virtual void getLatestConfig(std::string key, value_callback_t cb) const = 0;
+
+  /*
    * VersionedConfigStore provides strict conditional update semantics--it
    * will only update the value for a key if the base_version matches the latest
    * version in the store.

@@ -198,10 +198,17 @@ void Dependencies::postNewConfigRequest(
   processor_->postWithRetrying(req);
 }
 
+bool Dependencies::shouldDoConsistentConfigFetch() {
+  auto ncm = ncm_.lock();
+  ld_assert(ncm);
+  return ncm->mode_.isStorageMember() && ncm->getConfig() == nullptr;
+}
+
 void Dependencies::readFromStoreAndActivateTimer() {
   dcheckOnNCM();
   ld_assert(store_);
-  store_->getConfig([ncm = ncm_](Status status, std::string value) {
+
+  auto data_cb = [ncm = ncm_](Status status, std::string value) {
     // May not be on the NCM thread
     auto ncm_ptr = ncm.lock();
     if (!ncm_ptr) {
@@ -218,7 +225,12 @@ void Dependencies::readFromStoreAndActivateTimer() {
           "Reading from NodesConfigurationStore failed with error %s",
           error_name(status));
     }
-  });
+  };
+  if (shouldDoConsistentConfigFetch()) {
+    store_->getLatestConfig(std::move(data_cb));
+  } else {
+    store_->getConfig(std::move(data_cb));
+  }
 
   if (!timer_) {
     timer_ = std::make_unique<Timer>([ncm = ncm_]() {

@@ -40,6 +40,9 @@ class NodesConfigurationStore {
   // Read the documentation of VersionedConfigStore::getConfigSync.
   virtual Status getConfigSync(std::string* value_out) const = 0;
 
+  // Read the documentation of VersionedConfigStore::getLatestConfig.
+  virtual void getLatestConfig(value_callback_t cb) const = 0;
+
   // Read the documentation of VersionedConfigStore::updateConfig.
   virtual void updateConfig(std::string value,
                             folly::Optional<version_t> base_version,
@@ -74,6 +77,10 @@ class VersionedNodesConfigurationStore : public NodesConfigurationStore {
 
   virtual Status getConfigSync(std::string* value_out) const override {
     return store_->getConfigSync(kConfigKey, value_out);
+  }
+
+  virtual void getLatestConfig(value_callback_t cb) const override {
+    store_->getLatestConfig(kConfigKey, std::move(cb));
   }
 
   virtual void updateConfig(std::string value,

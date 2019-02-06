@@ -21,6 +21,8 @@ class InMemVersionedConfigStore : public VersionedConfigStore {
 
   Status getConfigSync(std::string key, std::string* value_out) const override;
 
+  void getLatestConfig(std::string key, value_callback_t cb) const override;
+
   void updateConfig(std::string key,
                     std::string value,
                     folly::Optional<version_t> base_version,

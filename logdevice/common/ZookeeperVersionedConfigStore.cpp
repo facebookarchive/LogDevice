@@ -30,6 +30,28 @@ void ZookeeperVersionedConfigStore::getConfig(std::string key,
   zk_->getData(std::move(key), std::move(completion));
 }
 
+void ZookeeperVersionedConfigStore::getLatestConfig(
+    std::string key,
+    value_callback_t callback) const {
+  auto sync_cb = [cb = std::move(callback), key = std::move(key), zk = zk_](
+                     int sync_rc) mutable {
+    if (sync_rc != ZOK) {
+      cb(ZookeeperClientBase::toStatus(sync_rc), "");
+      return;
+    }
+    auto read_cb = [cb = std::move(cb)](
+                       int read_rc, std::string value, zk::Stat) mutable {
+      Status status = ZookeeperClientBase::toStatus(read_rc);
+      cb(status, status == Status::OK ? std::move(value) : "");
+    };
+    // TODO: we must ensure the ZK session for the sync and that for the read
+    // remain the same, i.e., if the zk client reconnects in between, we should
+    // error out and retry the operation.
+    zk->getData(std::move(key), std::move(read_cb));
+  };
+  zk_->sync(std::move(sync_cb));
+}
+
 void ZookeeperVersionedConfigStore::updateConfig(
     std::string key,
     std::string value,
@@ -101,5 +123,4 @@ void ZookeeperVersionedConfigStore::updateConfig(
 
   zk_->getData(std::move(key), std::move(read_cb));
 }
-
 }} // namespace facebook::logdevice

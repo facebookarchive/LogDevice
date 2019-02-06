@@ -236,6 +236,17 @@ void FileBasedVersionedConfigStore::getConfig(std::string key,
   }
 }
 
+void FileBasedVersionedConfigStore::getLatestConfig(std::string key,
+                                                    value_callback_t cb) const {
+  static_assert(
+      NUM_THREADS == 1,
+      "getLatestConfig depends on the FileBasedVersionedConfigStore to be "
+      "single threaded to provide the linearizability. If this ever going to "
+      "change, please make sure that the linearizability gurantees are still "
+      "respected in the new model.");
+  getConfig(std::move(key), std::move(cb));
+}
+
 void FileBasedVersionedConfigStore::updateConfig(
     std::string key,
     std::string value,
