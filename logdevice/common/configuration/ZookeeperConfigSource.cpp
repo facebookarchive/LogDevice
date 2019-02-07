@@ -190,37 +190,22 @@ int ZookeeperConfigSource::requestZnode(const std::string& quorum,
   std::shared_ptr<zhandle_t> zh = zkclient->getHandle();
   // Callbacks bind to `this'; destructor disarms all callbacks so this is
   // safe.
-  int rv;
   if (with_data) {
-    rv = zoo_aget(zh.get(),
-                  path.c_str(),
-                  0, // no watch
-                  dataCompletionCallback,
-                  ctx.get());
+    zkclient->getData(
+        path, [ctx = ctx.release()](int rc, std::string value, zk::Stat stat) {
+          struct ::Stat st;
+          st.version = stat.version_;
+          dataCompletionCallback(rc, value.c_str(), value.length(), &st, ctx);
+        });
+
   } else {
-    rv = zoo_aexists(zh.get(),
-                     path.c_str(),
-                     0, // no watch,
-                     statCompletionCallback,
-                     ctx.get());
+    zkclient->exists(path, [ctx = ctx.release()](int rc, zk::Stat stat) {
+      struct ::Stat st;
+      st.version = stat.version_;
+      statCompletionCallback(rc, &st, ctx);
+    });
   }
-  if (rv != 0) {
-    ld_error("%s(%s) failed with status %d",
-             with_data ? "zoo_aget" : "zoo_aexists",
-             path.c_str(),
-             rv);
-    if (rv == ZBADARGUMENTS) {
-      // Caller error, no point in retrying
-      err = E::INVALID_PARAM;
-      return -1;
-    } else {
-      // Some other failure, retry later
-      bgThread().requestWithDelay(std::move(ctx));
-      return 0;
-    }
-  }
-  // Owned by the inflight requests now
-  ctx.release();
+
   return 0;
 }
 
@@ -259,6 +244,15 @@ void ZookeeperConfigSource::dataCompletionCallback(int rc,
     std::lock_guard<std::mutex> guard(self->mutex_);
     context->list_hook.unlink(); // from `requests_in_flight_'
   };
+
+  if (rc == ZBADARGUMENTS) {
+    err = E::INVALID_PARAM;
+    ld_critical(
+        "getData() call to Zookeeper failed: %s", error_description(err));
+    Output out;
+    self->async_cb_->onAsyncGet(self, context->quorum, err, out);
+    return;
+  }
 
   if (rc != 0) {
     RATELIMIT_ERROR(
@@ -309,6 +303,13 @@ void ZookeeperConfigSource::statCompletionCallback(int rc,
     delivered_version = folly::get_default(
         self->delivered_versions_, context->quorum + context->path, -1);
   };
+
+  if (rc == ZBADARGUMENTS) {
+    err = E::INVALID_PARAM;
+    ld_critical(
+        "exists() call to Zookeeper failed: %s", error_description(err));
+    return;
+  }
 
   if (rc != 0) {
     RATELIMIT_ERROR(
