@@ -803,7 +803,8 @@ void PartitionedRocksDBStore::Iterator::seekToPartitionBeforeOrAfter(
 PartitionedRocksDBStore::PartitionedAllLogsIterator::PartitionedAllLogsIterator(
     const PartitionedRocksDBStore* pstore,
     const LocalLogStore::ReadOptions& options,
-    const folly::Optional<std::vector<logid_t>>& logs)
+    const folly::Optional<std::unordered_map<logid_t, std::pair<lsn_t, lsn_t>>>&
+        logs)
     : pstore_(pstore),
       options_(options),
       last_partition_id_(pstore->getLatestPartition()->id_),
@@ -818,7 +819,12 @@ PartitionedRocksDBStore::PartitionedAllLogsIterator::PartitionedAllLogsIterator(
 
   if (filter_using_directory_) {
     if (!logs.value().empty()) {
-      pstore_->getLogsDBDirectories({}, logs.value(), directory_);
+      std::vector<logid_t> log_ids;
+      log_ids.reserve(logs->size());
+      for (const auto& kv : logs.value()) {
+        log_ids.push_back(kv.first);
+      }
+      pstore_->getLogsDBDirectories({}, log_ids, directory_);
     }
     // Sort by tuple (partition, log, lsn).
     std::sort(directory_.begin(),
@@ -828,6 +834,17 @@ PartitionedRocksDBStore::PartitionedAllLogsIterator::PartitionedAllLogsIterator(
                            lhs.second.id, lhs.first, lhs.second.first_lsn) <
                     std::tie(rhs.second.id, rhs.first, rhs.second.first_lsn);
               });
+    // Remove entries outside the requested LSN ranges.
+    directory_.erase(std::remove_if(directory_.begin(),
+                                    directory_.end(),
+                                    [&](const LogDirectoryEntry& e) {
+                                      std::pair<lsn_t, lsn_t> range =
+                                          logs.value().at(e.first);
+                                      return e.second.first_lsn >
+                                          range.second ||
+                                          e.second.max_lsn < range.first;
+                                    }),
+                     directory_.end());
   }
 
   buildProgressLookupTable();
@@ -1156,49 +1173,46 @@ bool PartitionedRocksDBStore::PartitionedAllLogsIterator::tracingEnabled()
 void PartitionedRocksDBStore::PartitionedAllLogsIterator::
     buildProgressLookupTable() {
   ld_check(progress_lookup_.empty());
-  auto partitions = pstore_->getPartitionList();
-  auto unpartitioned_cf = pstore_->getUnpartitionedCFHandle();
-
-  std::vector<std::pair<partition_id_t, size_t>> sizes;
-  sizes.reserve(partitions->size() + 1);
-  sizes.emplace_back(PARTITION_INVALID,
-                     pstore_->getApproximatePartitionSize(unpartitioned_cf));
-  for (auto p : *partitions) {
-    sizes.emplace_back(
-        p->id_, pstore_->getApproximatePartitionSize(p->cf_->get()));
-  }
-  ld_check(std::is_sorted(sizes.begin(), sizes.end()));
-
-  size_t sum = 0;
-  for (auto s : sizes) {
-    sum += s.second;
+  if (!filter_using_directory_) {
+    // Progress estimation not implemented for this case.
+    // Note: it would be easy to implement, based on partition ID and partition
+    // sizes, but it's not needed.
+    return;
   }
 
-  size_t sum_so_far = 0;
-  for (auto s : sizes) {
-    progress_lookup_[s.first] = sum_so_far * 1.0 / sum;
-    sum_so_far += s.second;
+  // progress_lookup_[i] is the total size in directory entries 0..i-1,
+  // plus size of unpartitioned CF.
+  progress_lookup_.resize(directory_.size());
+  uint64_t sum_so_far =
+      pstore_->getApproximatePartitionSize(pstore_->getUnpartitionedCFHandle());
+  for (size_t i = 0; i < directory_.size(); ++i) {
+    progress_lookup_.at(i) = sum_so_far;
+    sum_so_far += directory_[i].second.approximate_size_bytes;
   }
-  ld_check_eq(sum_so_far, sum);
+
+  if (sum_so_far != 0) {
+    for (double& x : progress_lookup_) {
+      x /= sum_so_far;
+    }
+  }
 }
 
 double
 PartitionedRocksDBStore::PartitionedAllLogsIterator::getProgress() const {
+  if (!filter_using_directory_) {
+    // Not implemented.
+    return -1;
+  }
   IteratorState s = state();
   if (s == IteratorState::AT_END) {
     return 1;
   }
-  partition_id_t key =
-      current_partition_ ? current_partition_->id_ : PARTITION_INVALID;
-  auto it = progress_lookup_.find(key);
-  if (it == progress_lookup_.end()) {
-    // We're in unexpected partition. This is possible if we're not fitering
-    // using directory, and partitions were prepended after we build
-    // progress_lookup_ but before we seeked to first partition.
-    // In this case the progress is basically zero.
+  if (current_partition_ == nullptr) {
     return 0;
   }
-  return it->second;
+  size_t i = current_entry_ - directory_.begin();
+  ld_check_lt(i, directory_.size());
+  return progress_lookup_.at(i);
 }
 
 // ==== PartitionDirectoryIterator ====

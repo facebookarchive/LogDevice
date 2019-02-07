@@ -406,7 +406,9 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
 
   std::unique_ptr<LocalLogStore::AllLogsIterator>
   readAllLogs(const LocalLogStore::ReadOptions&,
-              const folly::Optional<std::vector<logid_t>>& logs) const override;
+              const folly::Optional<
+                  std::unordered_map<logid_t, std::pair<lsn_t, lsn_t>>>& logs)
+      const override;
 
   // See LocalLogStore.h for details.
 

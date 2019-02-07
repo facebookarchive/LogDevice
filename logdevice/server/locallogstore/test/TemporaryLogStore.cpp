@@ -77,7 +77,8 @@ TemporaryLogStore::read(logid_t log_id,
 
 std::unique_ptr<LocalLogStore::AllLogsIterator> TemporaryLogStore::readAllLogs(
     const LocalLogStore::ReadOptions& options,
-    const folly::Optional<std::vector<logid_t>>& logs) const {
+    const folly::Optional<std::unordered_map<logid_t, std::pair<lsn_t, lsn_t>>>&
+        logs) const {
   return db_->readAllLogs(options, logs);
 }
 

@@ -148,7 +148,8 @@ RocksDBLocalLogStore::read(logid_t log_id,
 std::unique_ptr<LocalLogStore::AllLogsIterator>
 RocksDBLocalLogStore::readAllLogs(
     const LocalLogStore::ReadOptions& options_in,
-    const folly::Optional<std::vector<logid_t>>&) const {
+    const folly::Optional<
+        std::unordered_map<logid_t, std::pair<lsn_t, lsn_t>>>&) const {
   return std::make_unique<AllLogsIteratorImpl>(
       std::make_unique<CSIWrapper>(this, folly::none, options_in, nullptr));
 }

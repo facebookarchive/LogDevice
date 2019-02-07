@@ -276,9 +276,11 @@ class PartitionedRocksDBStore::PartitionedAllLogsIterator
     }
   };
 
-  PartitionedAllLogsIterator(const PartitionedRocksDBStore* pstore,
-                             const LocalLogStore::ReadOptions& options,
-                             const folly::Optional<std::vector<logid_t>>& logs);
+  PartitionedAllLogsIterator(
+      const PartitionedRocksDBStore* pstore,
+      const LocalLogStore::ReadOptions& options,
+      const folly::Optional<
+          std::unordered_map<logid_t, std::pair<lsn_t, lsn_t>>>& logs);
 
   IteratorState state() const override;
 
@@ -286,6 +288,8 @@ class PartitionedRocksDBStore::PartitionedAllLogsIterator
   lsn_t getLSN() const override;
   Slice getRecord() const override;
   std::unique_ptr<Location> getLocation() const override;
+  // Only supported if filter_using_directory_ is true (i.e. if `logs` parameter
+  // was passed to constructor).
   double getProgress() const override;
 
   void seek(const Location& location,
@@ -333,11 +337,11 @@ class PartitionedRocksDBStore::PartitionedAllLogsIterator
   // that were created after the rebuilding started.
   const partition_id_t last_partition_id_;
 
-  // Used by getProgress(). If the iterator is in partition p,
-  // getProgress() reports progress_lookup_[p].
-  // Precalculated based on partition sizes when creating iterator.
-  // Key PARTITION_INVALID refers to unpartitioned column family.
-  std::unordered_map<partition_id_t, double> progress_lookup_;
+  // Used by getProgress(). Same length as directory_. If the iterator is
+  // on directory entry i, getProgress() reports progress_lookup_[i].
+  // Precalculated based on data size estimates in directory.
+  // If filter_using_directory_, progress estimation is not supported.
+  std::vector<double> progress_lookup_;
 
   // If true, we'll keep a copy of logsdb directory and call
   // ReadFilter::shouldProcessRecordRange() based on it.

@@ -299,7 +299,9 @@ class RocksDBLocalLogStore : public RocksDBLogStoreBase {
 
   std::unique_ptr<AllLogsIterator>
   readAllLogs(const LocalLogStore::ReadOptions& options_in,
-              const folly::Optional<std::vector<logid_t>>& logs) const override;
+              const folly::Optional<
+                  std::unordered_map<logid_t, std::pair<lsn_t, lsn_t>>>& logs)
+      const override;
 
   int readLogMetadata(logid_t log_id, LogMetadata* metadata) override {
     return writer_->readLogMetadata(log_id,

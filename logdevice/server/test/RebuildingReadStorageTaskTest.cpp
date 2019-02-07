@@ -53,9 +53,10 @@ class RebuildingReadStorageTaskTest : public ::testing::Test {
     std::shared_ptr<UpdateableConfig> getConfig() override {
       return test->config;
     }
-    std::unique_ptr<LocalLogStore::AllLogsIterator>
-    createIterator(const LocalLogStore::ReadOptions& opts,
-                   const std::vector<logid_t>& logs) override {
+    std::unique_ptr<LocalLogStore::AllLogsIterator> createIterator(
+        const LocalLogStore::ReadOptions& opts,
+        const std::unordered_map<logid_t, std::pair<lsn_t, lsn_t>>& logs)
+        override {
       return test->store->readAllLogs(opts, logs);
     }
     bool fetchTrimPoints(Context* context) override {

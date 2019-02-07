@@ -52,10 +52,10 @@ void RebuildingReadStorageTaskV2::execute() {
     opts.fill_cache = false;
     opts.allow_copyset_index = true;
 
-    std::vector<logid_t> logs;
-    logs.reserve(context->logs.size());
+    std::unordered_map<logid_t, std::pair<lsn_t, lsn_t>> logs;
     for (const auto& p : context->logs) {
-      logs.push_back(p.first);
+      logs[p.first] =
+          std::make_pair(p.second.trimPoint + 1, p.second.plan.untilLSN);
     }
 
     context->iterator = createIterator(opts, logs);
@@ -464,7 +464,7 @@ StatsHolder* RebuildingReadStorageTaskV2::getStats() {
 std::unique_ptr<LocalLogStore::AllLogsIterator>
 RebuildingReadStorageTaskV2::createIterator(
     const LocalLogStore::ReadOptions& opts,
-    const std::vector<logid_t>& logs) {
+    const std::unordered_map<logid_t, std::pair<lsn_t, lsn_t>>& logs) {
   return storageThreadPool_->getLocalLogStore().readAllLogs(opts, logs);
 }
 

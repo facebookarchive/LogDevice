@@ -700,21 +700,23 @@ class LocalLogStore : boost::noncopyable {
    * Creates a new AllLogsIterator.
    * May wait for blocking IO, don't call from worker threads.
    * @param logs
-   *    If not folly::none, read only the given logs and use
-   *    shouldProcessRecordRange() to filter out groups of records.
+   *    If not folly::none, read only the given LSN ranges of the given logs
+   *    and use shouldProcessRecordRange() to filter out groups of records.
    *    Current implementation has some limitations:
    *     1. If `logs` is not folly::none, all calls to seek() and next()
    *        require non-null `filter` and `stats` arguments.
    *     2. Nonempty `logs` may make readAllLogs() call somewhat slow because it
    *        makes a copy of the logsdb directory, locking per-log mutexes along
    *        the way.
-   *     3. The non-partitioned implementation of LocalLogStore ignores `logs`
-   *        argument and reads everything. Use ReadFilter to filter out records
+   *     3. The set of logs and LSN ranges are just a hint. The iterator may
+   *        still return records for logs that are not on the list or for LSNs
+   *        that are outside the range. Use ReadFilter to filter out records
    *        of undesired logs.
    */
   virtual std::unique_ptr<AllLogsIterator>
   readAllLogs(const ReadOptions& options,
-              const folly::Optional<std::vector<logid_t>>& logs =
+              const folly::Optional<
+                  std::unordered_map<logid_t, std::pair<lsn_t, lsn_t>>>& logs =
                   folly::none) const = 0;
 
   /**

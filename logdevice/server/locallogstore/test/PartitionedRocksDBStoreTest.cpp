@@ -8069,7 +8069,8 @@ TEST_F(PartitionedRocksDBStoreTest, AllLogsIter) {
   }
 
   ld_info("Reading an empty subset of logs filtering out all metadata records");
-  it = store_->readAllLogs(read_options, std::vector<logid_t>({}));
+  it = store_->readAllLogs(
+      read_options, std::unordered_map<logid_t, std::pair<lsn_t, lsn_t>>({}));
   filter.records.clear();
   filter.time_ranges = {C::FULL_TIME_RANGE};
   it->seek(*it->minLocation(), &filter, &stats);
@@ -8114,7 +8115,10 @@ TEST_F(PartitionedRocksDBStoreTest, AllLogsIter) {
   filter.history.clear();
 
   ld_info("Reading a subset of logs and no metadata records");
-  it = store_->readAllLogs(read_options, std::vector<logid_t>({log1, log2}));
+  it = store_->readAllLogs(
+      read_options,
+      std::unordered_map<logid_t, std::pair<lsn_t, lsn_t>>(
+          {{log1, {LSN_INVALID, LSN_MAX}}, {log2, {LSN_INVALID, LSN_MAX}}}));
   filter.time_ranges = {10, 210};
   filter.record_ranges = {std::make_pair(log1, 100), std::make_pair(log2, 200)};
   filter.records = {1, 23};
@@ -8213,7 +8217,10 @@ TEST_F(PartitionedRocksDBStoreTest, AllLogsIter) {
   filter.history.clear();
 
   ld_info("Now filter out the record");
-  it = store_->readAllLogs(read_options, std::vector<logid_t>({log2, log3}));
+  it = store_->readAllLogs(
+      read_options,
+      std::unordered_map<logid_t, std::pair<lsn_t, lsn_t>>(
+          {{log2, {LSN_INVALID, LSN_MAX}}, {log3, {LSN_INVALID, LSN_MAX}}}));
   filter.time_ranges = {210};
   filter.record_ranges = {std::make_pair(log2, 200)};
   filter.records = {};
@@ -8247,7 +8254,10 @@ TEST_F(PartitionedRocksDBStoreTest, AllLogsIter) {
   filter.history.clear();
 
   ld_info("Now filter out the log");
-  it = store_->readAllLogs(read_options, std::vector<logid_t>({log1, log3}));
+  it = store_->readAllLogs(
+      read_options,
+      std::unordered_map<logid_t, std::pair<lsn_t, lsn_t>>(
+          {{log1, {LSN_INVALID, LSN_MAX}}, {log3, {LSN_INVALID, LSN_MAX}}}));
   filter.time_ranges = {310};
   filter.record_ranges = {std::make_pair(log3, 100)};
   it->seek(*mid_location, &filter, &stats);
@@ -8260,7 +8270,10 @@ TEST_F(PartitionedRocksDBStoreTest, AllLogsIter) {
   filter.history.clear();
 
   ld_info("Seeking to a filtered out record");
-  it = store_->readAllLogs(read_options, std::vector<logid_t>({log1, log2}));
+  it = store_->readAllLogs(
+      read_options,
+      std::unordered_map<logid_t, std::pair<lsn_t, lsn_t>>(
+          {{log1, {LSN_INVALID, LSN_MAX}}, {log2, {LSN_INVALID, LSN_MAX}}}));
   filter.time_ranges = {210};
   filter.record_ranges = {std::make_pair(log2, 200)};
   it->seek(*location_21, &filter, &stats);
@@ -8275,7 +8288,9 @@ TEST_F(PartitionedRocksDBStoreTest, AllLogsIter) {
   filter.history.clear();
 
   ld_info("Stepping to a newly written record");
-  it = store_->readAllLogs(read_options, std::vector<logid_t>({log3}));
+  it = store_->readAllLogs(read_options,
+                           std::unordered_map<logid_t, std::pair<lsn_t, lsn_t>>(
+                               {{log3, {LSN_INVALID, LSN_MAX}}}));
   filter.time_ranges = {310};
   filter.record_ranges = {std::make_pair(log3, 100)};
   write(log3, 200, 32);
@@ -8288,7 +8303,10 @@ TEST_F(PartitionedRocksDBStoreTest, AllLogsIter) {
   filter.history.clear();
 
   ld_info("End of log and byte limit hit simultaneously.");
-  it = store_->readAllLogs(read_options, std::vector<logid_t>({log1, log2}));
+  it = store_->readAllLogs(
+      read_options,
+      std::unordered_map<logid_t, std::pair<lsn_t, lsn_t>>(
+          {{log1, {LSN_INVALID, LSN_MAX}}, {log2, {LSN_INVALID, LSN_MAX}}}));
   filter.time_ranges = {210};
   filter.record_ranges = {std::make_pair(log1, 300), std::make_pair(log2, 200)};
   filter.records = {21, 23};
