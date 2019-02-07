@@ -11,7 +11,9 @@
 #include <functional>
 #include <vector>
 
-namespace facebook { namespace logdevice { namespace hashing {
+namespace facebook { namespace logdevice {
+
+namespace hashing {
 
 // Consistent hash function. Maps a given key into {0, ..., buckets-1} and has
 // a property that, as buckets increases, only a fraction of keys will be
@@ -37,4 +39,13 @@ inline uint64_t weighted_ch(uint64_t key, const std::vector<double>& weights) {
   });
 }
 
-}}} // namespace facebook::logdevice::hashing
+} // namespace hashing
+
+// Hash a tuple of 64-bit numbers using a chain of folly::hash_128_to_64() calls
+// (with special cases for empty and single-element tuples, see code).
+// This is different from folly::hash::hash_combine(), which also applies
+// std::hash() to each argument, which makes it unnecessarily slower and
+// dependent on the implementation of standard library.
+uint64_t hash_tuple(std::initializer_list<uint64_t> il);
+
+}} // namespace facebook::logdevice

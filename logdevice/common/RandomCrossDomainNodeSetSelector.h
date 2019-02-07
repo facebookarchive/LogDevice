@@ -59,6 +59,8 @@ class RandomCrossDomainNodeSetSelector : public RandomNodeSetSelector {
 
   Result getStorageSet(logid_t log_id,
                        const Configuration* cfg,
+                       nodeset_size_t target_nodeset_size,
+                       uint64_t seed,
                        const EpochMetaData* prev,
                        const Options* options = nullptr) override;
 
@@ -72,7 +74,7 @@ class RandomCrossDomainNodeSetSelector : public RandomNodeSetSelector {
   storage_set_size_t
   getStorageSetSizeImpl(logid_t log_id,
                         const Configuration* cfg,
-                        folly::Optional<int> target,
+                        nodeset_size_t target_nodeset_size,
                         NodeLocationScope sync_replication_scope,
                         int replication_factor,
                         DomainMap* domain_map,

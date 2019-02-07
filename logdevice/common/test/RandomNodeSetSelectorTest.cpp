@@ -43,18 +43,33 @@ static inline void addWeightedNodes(ServerConfig::Nodes* nodes,
                   num_non_zw_nodes);
 }
 
-static void verify_result(NodeSetSelector* selector,
-                          std::shared_ptr<Configuration>& config,
-                          logid_t logid,
-                          Decision expected_decision,
-                          verify_func_t verify,
-                          const NodeSetSelector::Options* options = nullptr,
-                          size_t iteration = 10) {
+static void
+verify_result(NodeSetSelector* selector,
+              std::shared_ptr<Configuration>& config,
+              logid_t logid,
+              Decision expected_decision,
+              verify_func_t verify,
+              const NodeSetSelector::Options* options = nullptr,
+              size_t iteration = 10,
+              folly::Optional<nodeset_size_t> target_size = folly::none) {
   SCOPED_TRACE("log " + toString(logid.val_));
+
+  if (!target_size.hasValue()) {
+    const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
+        config->getLogGroupByIDShared(logid);
+    ASSERT_NE(nullptr, logcfg);
+    target_size =
+        logcfg->attrs().nodeSetSize().value().value_or(NODESET_SIZE_MAX);
+  }
 
   ld_check(iteration > 0);
   for (size_t i = 0; i < iteration; ++i) {
-    auto res = selector->getStorageSet(logid, config.get(), nullptr, options);
+    auto res = selector->getStorageSet(logid,
+                                       config.get(),
+                                       target_size.value(),
+                                       /* seed */ 0,
+                                       nullptr,
+                                       options);
     ASSERT_EQ(expected_decision, res.decision);
     if (res.decision != Decision::NEEDS_CHANGE) {
       continue;
@@ -79,17 +94,14 @@ static void verify_result(NodeSetSelector* selector,
         res.storage_set,
         ReplicationProperty::fromLogAttributes(attrs)));
 
-    int nodeset_size = attrs.nodeSetSize().value().value_or(all_nodes.size());
-    ReplicationProperty replication =
-        ReplicationProperty::fromLogAttributes(attrs);
-
     // Run nodeset selector on its own output and check that it doesn't want
     // to change nodeset again.
     EpochMetaData meta(
         res.storage_set, ReplicationProperty::fromLogAttributes(attrs));
     meta.weights = res.weights;
     meta.nodeset_params.signature = res.signature;
-    auto res2 = selector->getStorageSet(logid, config.get(), &meta, options);
+    auto res2 = selector->getStorageSet(
+        logid, config.get(), target_size.value(), 0, &meta, options);
     EXPECT_EQ(Decision::KEEP, res2.decision);
     EXPECT_EQ(res.signature, res2.signature);
 
@@ -108,10 +120,26 @@ compare_nodesets(NodeSetSelector* selector,
                  std::map<ShardID, size_t>& old_distribution,
                  std::map<ShardID, size_t>& new_distribution,
                  const NodeSetSelector::Options* options = nullptr) {
-  auto old_res =
-      selector->getStorageSet(logid, config1.get(), nullptr, options);
-  auto new_res =
-      selector->getStorageSet(logid, config2.get(), nullptr, options);
+  auto old_res = selector->getStorageSet(logid,
+                                         config1.get(),
+                                         config1->getLogGroupByIDShared(logid)
+                                             ->attrs()
+                                             .nodeSetSize()
+                                             .value()
+                                             .value_or(NODESET_SIZE_MAX),
+                                         0,
+                                         nullptr,
+                                         options);
+  auto new_res = selector->getStorageSet(logid,
+                                         config2.get(),
+                                         config1->getLogGroupByIDShared(logid)
+                                             ->attrs()
+                                             .nodeSetSize()
+                                             .value()
+                                             .value_or(NODESET_SIZE_MAX),
+                                         0,
+                                         nullptr,
+                                         options);
 
   ld_check(old_res.decision == Decision::NEEDS_CHANGE);
   ld_check(new_res.decision == Decision::NEEDS_CHANGE);
@@ -817,7 +845,7 @@ TEST(ConsistentHashingWeightAwareNodeSetSelectorTest, DisabledNodes) {
       NodeSetSelectorFactory::create(NodeSetSelectorType::CONSISTENT_HASHING);
 
   auto res =
-      selector->getStorageSet(logid_t(1), config.get(), nullptr, nullptr);
+      selector->getStorageSet(logid_t(1), config.get(), 6, 0, nullptr, nullptr);
   ASSERT_EQ(Decision::NEEDS_CHANGE, res.decision);
 
   std::array<int, 3> per_domain{};
@@ -833,4 +861,79 @@ TEST(ConsistentHashingWeightAwareNodeSetSelectorTest, DisabledNodes) {
   EXPECT_EQ(2, per_domain[0]);
   EXPECT_EQ(2, per_domain_writable[1]);
   EXPECT_EQ(4, per_domain[2]);
+}
+
+TEST(ConsistentHashingWeightAwareNodeSetSelectorTest, Seed) {
+  Nodes nodes;
+  addWeightedNodes(&nodes, 3, 1, "a.a.a.a.rack0", 3);
+  addWeightedNodes(&nodes, 3, 1, "a.a.a.a.rack1", 3);
+  addWeightedNodes(&nodes, 3, 1, "a.a.a.a.rack2", 3);
+  ASSERT_EQ(9, nodes.size());
+
+  Configuration::NodesConfig nodes_config(std::move(nodes));
+  ReplicationProperty replication(
+      {{NodeLocationScope::RACK, 2}, {NodeLocationScope::NODE, 2}});
+
+  auto logs_config = std::make_shared<LocalLogsConfig>();
+  addLog(logs_config.get(),
+         logid_t(1),
+         replication,
+         0,
+         3 /* nodeset_size (unused) */);
+
+  auto config = std::make_shared<Configuration>(
+      ServerConfig::fromDataTest(
+          "nodeset_selector_test", std::move(nodes_config)),
+      std::move(logs_config));
+
+  auto selector =
+      NodeSetSelectorFactory::create(NodeSetSelectorType::CONSISTENT_HASHING);
+
+  auto res = selector->getStorageSet(logid_t(1),
+                                     config.get(),
+                                     /* target_nodeset_size */ 5,
+                                     /* seed */ 0,
+                                     nullptr,
+                                     nullptr);
+  ASSERT_EQ(Decision::NEEDS_CHANGE, res.decision);
+  ASSERT_EQ(5, res.storage_set.size());
+
+  EpochMetaData meta(res.storage_set, replication);
+  meta.nodeset_params.signature = res.signature;
+  auto res2 =
+      selector->getStorageSet(logid_t(1), config.get(), 5, 0, &meta, nullptr);
+  EXPECT_EQ(Decision::KEEP, res2.decision);
+  EXPECT_EQ(res.signature, res2.signature);
+
+  // Change seed and check that nodeset selector wants to change nodeset.
+  // There's a small chance that it happens to pick the same one, but since
+  // everything is deterministic, it it passes once it passes always.
+  // If you changed the nodeset selector's logic, and this fails, maybe you
+  // just got unlucky and need to set a different seed here.
+  auto res3 =
+      selector->getStorageSet(logid_t(1), config.get(), 5, 1, &meta, nullptr);
+  EXPECT_EQ(Decision::NEEDS_CHANGE, res3.decision);
+  EXPECT_NE(res3.signature, res2.signature);
+  ASSERT_EQ(5, res3.storage_set.size());
+
+  meta.shards = res3.storage_set;
+  meta.nodeset_params.signature = res3.signature;
+  auto res4 =
+      selector->getStorageSet(logid_t(1), config.get(), 5, 1, &meta, nullptr);
+  EXPECT_EQ(Decision::KEEP, res4.decision);
+  EXPECT_EQ(res3.signature, res4.signature);
+
+  // Change target nodeset size and check that nodeset changes.
+  auto res5 =
+      selector->getStorageSet(logid_t(1), config.get(), 6, 1, &meta, nullptr);
+  EXPECT_EQ(Decision::NEEDS_CHANGE, res5.decision);
+  EXPECT_NE(res5.signature, res4.signature);
+  ASSERT_EQ(6, res5.storage_set.size());
+
+  meta.shards = res5.storage_set;
+  meta.nodeset_params.signature = res5.signature;
+  auto res6 =
+      selector->getStorageSet(logid_t(1), config.get(), 6, 1, &meta, nullptr);
+  EXPECT_EQ(Decision::KEEP, res6.decision);
+  EXPECT_EQ(res5.signature, res6.signature);
 }

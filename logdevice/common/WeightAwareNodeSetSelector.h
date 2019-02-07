@@ -40,6 +40,8 @@ class WeightAwareNodeSetSelector : public NodeSetSelector {
 
   Result getStorageSet(logid_t log_id,
                        const Configuration* cfg,
+                       nodeset_size_t target_nodeset_size,
+                       uint64_t seed,
                        const EpochMetaData* prev,
                        const Options* options = nullptr) override;
 

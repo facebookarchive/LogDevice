@@ -19,6 +19,7 @@
 
 #include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/hash.h"
 #include "logdevice/include/types.h"
 
 namespace facebook { namespace logdevice {
@@ -86,22 +87,12 @@ RandomCrossDomainNodeSetSelector::convertReplicationProperty(
 storage_set_size_t RandomCrossDomainNodeSetSelector::getStorageSetSizeImpl(
     logid_t log_id,
     const Configuration* cfg,
-    folly::Optional<int> storage_set_size_target,
+    nodeset_size_t target_nodeset_size,
     NodeLocationScope sync_replication_scope,
     int replication_factor,
     DomainMap* domain_map,
     const Options* options) {
-  if (sync_replication_scope == NodeLocationScope::NODE) {
-    ld_debug("Log %lu is not configured to use cross-domain replication, "
-             "fallback to random nodeset selection instead.",
-             log_id.val_);
-    return RandomNodeSetSelector::getStorageSetSize(
-        log_id,
-        cfg,
-        storage_set_size_target,
-        ReplicationProperty({{NodeLocationScope::NODE, replication_factor}}),
-        options);
-  }
+  ld_check(sync_replication_scope != NodeLocationScope::NODE);
 
   DomainMap local_domain_map;
   if (!domain_map) {
@@ -127,9 +118,7 @@ storage_set_size_t RandomCrossDomainNodeSetSelector::getStorageSetSizeImpl(
       min_domain_size = std::min(min_domain_size, domain.second.size());
     }
     const size_t num_domains = domain_map->size();
-    size_t nodeset_size = storage_set_size_target.hasValue()
-        ? storage_set_size_target.value()
-        : cluster_size;
+    size_t nodeset_size = target_nodeset_size;
     if (nodeset_size % num_domains != 0 || nodeset_size < replication_factor ||
         nodeset_size > cluster_size ||
         nodeset_size > min_domain_size * num_domains) {
@@ -207,11 +196,13 @@ storage_set_size_t RandomCrossDomainNodeSetSelector::getStorageSetSizeImpl(
   return best_nodeset_size;
 }
 
-NodeSetSelector::Result
-RandomCrossDomainNodeSetSelector::getStorageSet(logid_t log_id,
-                                                const Configuration* cfg,
-                                                const EpochMetaData* prev,
-                                                const Options* options) {
+NodeSetSelector::Result RandomCrossDomainNodeSetSelector::getStorageSet(
+    logid_t log_id,
+    const Configuration* cfg,
+    nodeset_size_t target_nodeset_size,
+    uint64_t seed,
+    const EpochMetaData* prev,
+    const Options* options) {
   Result res;
   auto logcfg = cfg->getLogGroupByIDShared(log_id);
   if (!logcfg) {
@@ -227,7 +218,8 @@ RandomCrossDomainNodeSetSelector::getStorageSet(logid_t log_id,
     ld_debug("Log %lu is not configured to use cross-domain replication, "
              "fallback to random nodeset selection instead.",
              log_id.val_);
-    return RandomNodeSetSelector::getStorageSet(log_id, cfg, prev, options);
+    return RandomNodeSetSelector::getStorageSet(
+        log_id, cfg, target_nodeset_size, seed, prev, options);
   }
 
   if (replication.sync_replication_scope >= NodeLocationScope::ROOT) {
@@ -242,11 +234,10 @@ RandomCrossDomainNodeSetSelector::getStorageSet(logid_t log_id,
     return res;
   }
 
-  res.signature = folly::hash::hash_128_to_64(
-      7671706570762175929ul,
-      folly::hash::hash_128_to_64(
-          cfg->serverConfig()->getStorageNodesConfigHash(),
-          (uint64_t)logcfg->attrs().nodeSetSize().value().value()));
+  res.signature = hash_tuple({7671706570762175929ul,
+                              seed,
+                              cfg->serverConfig()->getStorageNodesConfigHash(),
+                              target_nodeset_size});
   if (prev != nullptr && prev->nodeset_params.signature == res.signature &&
       prev->replication == replication_property) {
     res.decision = Decision::KEEP;
@@ -266,7 +257,7 @@ RandomCrossDomainNodeSetSelector::getStorageSet(logid_t log_id,
   size_t nodeset_size =
       getStorageSetSizeImpl(log_id,
                             cfg,
-                            *logcfg->attrs().nodeSetSize(),
+                            target_nodeset_size,
                             replication.sync_replication_scope,
                             replication.replication_factor,
                             &domain_map, // can be modified
@@ -335,5 +326,4 @@ RandomCrossDomainNodeSetSelector::getStorageSet(logid_t log_id,
       : Decision::NEEDS_CHANGE;
   return res;
 }
-
 }} // namespace facebook::logdevice

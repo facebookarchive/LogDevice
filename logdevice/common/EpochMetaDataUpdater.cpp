@@ -91,8 +91,8 @@ updateMetaDataIfNeeded(logid_t log_id,
     if (prev_metadata_exists && info->nodeset_params.target_nodeset_size != 0) {
       target_nodeset_size = info->nodeset_params.target_nodeset_size;
     } else {
-      target_nodeset_size = logcfg->attrs().nodeSetSize().value().value_or(
-          std::numeric_limits<int>::max());
+      target_nodeset_size =
+          logcfg->attrs().nodeSetSize().value().value_or(NODESET_SIZE_MAX);
     }
   }
   if (!nodeset_seed.hasValue()) {
@@ -115,7 +115,12 @@ updateMetaDataIfNeeded(logid_t log_id,
     ld_check(nodeset_selector != nullptr);
   }
   auto selected = nodeset_selector->getStorageSet(
-      log_id, &config, prev_metadata_exists ? info.get() : nullptr, nullptr);
+      log_id,
+      &config,
+      target_nodeset_size.value(),
+      nodeset_seed.value(),
+      prev_metadata_exists ? info.get() : nullptr,
+      nullptr);
 
   bool only_nodeset_params_changed = false;
 

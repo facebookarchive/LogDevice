@@ -36,15 +36,10 @@ class RandomNodeSetSelector : public NodeSetSelector {
 
   Result getStorageSet(logid_t log_id,
                        const Configuration* cfg,
+                       nodeset_size_t target_nodeset_size,
+                       uint64_t seed,
                        const EpochMetaData* prev,
                        const Options* options = nullptr) override;
-
-  storage_set_size_t
-  getStorageSetSize(logid_t log_id,
-                    const Configuration* cfg,
-                    folly::Optional<int> storage_set_size_target,
-                    ReplicationProperty replication,
-                    const Options* options = nullptr);
 
  protected:
   // randomly select a nodeset of size @nodeset_size from a pool of candidate
@@ -59,6 +54,12 @@ class RandomNodeSetSelector : public NodeSetSelector {
  private:
   std::default_random_engine rnd_;
   MapLogToShardFn map_log_to_shard_;
+
+  storage_set_size_t getStorageSetSize(logid_t log_id,
+                                       const Configuration* cfg,
+                                       nodeset_size_t target_nodeset_size,
+                                       ReplicationProperty replication,
+                                       const Options* options = nullptr);
 };
 
 }} // namespace facebook::logdevice

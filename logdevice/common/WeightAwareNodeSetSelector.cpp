@@ -14,12 +14,15 @@
 #include <folly/Random.h>
 
 #include "logdevice/common/configuration/nodes/utils.h"
+#include "logdevice/common/hash.h"
 
 namespace facebook { namespace logdevice {
 
 NodeSetSelector::Result
 WeightAwareNodeSetSelector::getStorageSet(logid_t log_id,
                                           const Configuration* cfg,
+                                          nodeset_size_t target_nodeset_size,
+                                          uint64_t seed,
                                           const EpochMetaData* prev,
                                           const Options* options) {
   Result res;
@@ -32,14 +35,11 @@ WeightAwareNodeSetSelector::getStorageSet(logid_t log_id,
 
   ReplicationProperty replication_property =
       ReplicationProperty::fromLogAttributes(logcfg->attrs());
-  int target_size = logcfg->attrs().nodeSetSize().value().value_or(
-      std::numeric_limits<int>::max());
 
-  res.signature = folly::hash::hash_128_to_64(
-      15345803578954886993ul, // random salt
-      folly::hash::hash_128_to_64(
-          cfg->serverConfig()->getStorageNodesConfigHash(),
-          (uint64_t)target_size));
+  res.signature = hash_tuple({15345803578954886993ul, // random salt
+                              seed,
+                              cfg->serverConfig()->getStorageNodesConfigHash(),
+                              target_nodeset_size});
   if (prev != nullptr && prev->nodeset_params.signature == res.signature &&
       prev->replication == replication_property) {
     res.decision = Decision::KEEP;
@@ -145,8 +145,8 @@ WeightAwareNodeSetSelector::getStorageSet(logid_t log_id,
     // number, which is equivalent to randomly sorting the Shard ID's for
     // each log.
     if (consistentHashing_) {
-      n.shard_id_hash = folly::hash::hash_128_to_64(
-          log_id.val(), ShardID::Hash()(n.shard_id));
+      n.shard_id_hash =
+          hash_tuple({seed, log_id.val(), ShardID::Hash()(n.shard_id)});
     } else {
       n.shard_id_hash = folly::Random::rand64();
     }
@@ -155,8 +155,9 @@ WeightAwareNodeSetSelector::getStorageSet(logid_t log_id,
 
   for (auto& kv : domains) {
     Domain* d = &kv.second;
-    d->priority = consistentHashing_ ? folly::hash::fnv64(kv.first)
-                                     : folly::Random::rand64();
+    d->priority = consistentHashing_
+        ? hash_tuple({seed, folly::hash::fnv64(kv.first)})
+        : folly::Random::rand64();
     std::sort(d->nodes.begin(),
               d->nodes.end(),
               [](const CandidateNode& a, const CandidateNode& b) {
@@ -232,8 +233,24 @@ WeightAwareNodeSetSelector::getStorageSet(logid_t log_id,
       int picked_in_domain =
           only_writable ? d->num_picked_writable : d->num_picked;
       if (picked_in_domain >= min_nodes_per_domain &&
-          result_size >= target_size) {
+          result_size >= target_nodeset_size) {
         // The nodeset is big enough and has enough nodes from each domain.
+        break;
+      }
+      if (res.storage_set.size() >= NODESET_SIZE_MAX) {
+        // Nodeset is not allowed to grow any bigger.
+        RATELIMIT_INFO(std::chrono::seconds(10),
+                       2,
+                       "Hit max allowed nodeset size %d when selecting nodeset "
+                       "for log %lu. Truncating the nodeset.",
+                       (int)NODESET_SIZE_MAX,
+                       log_id.val());
+        break;
+      }
+      if (!only_writable && res.storage_set.size() >= NODESET_SIZE_MAX / 2) {
+        // We're in the first stage but are already getting close to the max
+        // allowed nodeset size. Skip to the second stage early to make sure
+        // we pick enough writable nodes.
         break;
       }
       if (only_writable) {
@@ -261,6 +278,8 @@ WeightAwareNodeSetSelector::getStorageSet(logid_t log_id,
 
   select_nodes(false);
   select_nodes(true);
+
+  ld_check(res.storage_set.size() <= NODESET_SIZE_MAX);
 
   // Sort the output.
   std::sort(res.storage_set.begin(), res.storage_set.end());

@@ -137,6 +137,11 @@ const size_t COPYSET_SIZE_MAX = 127;
 static_assert(COPYSET_SIZE_MAX - 1 <= std::numeric_limits<copyset_off_t>::max(),
               "COPYSET_SIZE_MAX and copyset_off_t are incompatible");
 
+// Maximum number of nodes in a log's nodeset. Currently it can't be greater
+// than COPYSET_SIZE_MAX because recovery sometimes wants to use the entire
+// nodeset as a copyset.
+const nodeset_size_t NODESET_SIZE_MAX = COPYSET_SIZE_MAX;
+
 /**
  * Type used to identify a NodesetState object
  */

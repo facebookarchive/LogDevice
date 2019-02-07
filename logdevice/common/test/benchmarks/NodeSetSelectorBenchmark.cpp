@@ -44,7 +44,6 @@ static void do_benchmark(NodeSetSelectorType type, unsigned iterations) {
     log.rangeName = "NodeSetSelectorBenchmark";
     log.replicateAcross = {
         {NodeLocationScope::RACK, 2}, {NodeLocationScope::NODE, 3}};
-    log.nodeSetSize = 20;
     logs_config->insert(
         boost::icl::right_open_interval<logid_t::raw_type>(1, 2), log);
 
@@ -56,8 +55,8 @@ static void do_benchmark(NodeSetSelectorType type, unsigned iterations) {
 
   for (unsigned i = 0; i < iterations; ++i) {
     auto selector = NodeSetSelectorFactory::create(type);
-    auto res =
-        selector->getStorageSet(logid_t(1), config.get(), nullptr, nullptr);
+    auto res = selector->getStorageSet(
+        logid_t(1), config.get(), 20, 0, nullptr, nullptr);
     ld_check(res.decision == NodeSetSelector::Decision::NEEDS_CHANGE);
   }
 }

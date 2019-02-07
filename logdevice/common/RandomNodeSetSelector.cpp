@@ -20,6 +20,7 @@
 #include "logdevice/common/commandline_util_chrono.h"
 #include "logdevice/common/configuration/nodes/utils.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/hash.h"
 #include "logdevice/common/util.h"
 #include "logdevice/include/types.h"
 
@@ -86,12 +87,12 @@ RandomNodeSetSelector::randomlySelectNodes(logid_t log_id,
   return candidates;
 }
 
-storage_set_size_t RandomNodeSetSelector::getStorageSetSize(
-    logid_t log_id,
-    const Configuration* cfg,
-    folly::Optional<int> storage_set_size_target,
-    ReplicationProperty replication,
-    const Options* /*options*/) {
+storage_set_size_t
+RandomNodeSetSelector::getStorageSetSize(logid_t log_id,
+                                         const Configuration* cfg,
+                                         nodeset_size_t target_nodeset_size,
+                                         ReplicationProperty replication,
+                                         const Options* /*options*/) {
   size_t storage_set_count = 0;
 
   const auto& nodes_configuration =
@@ -110,16 +111,17 @@ storage_set_size_t RandomNodeSetSelector::getStorageSetSize(
     }
   };
 
-  return std::min(std::max(storage_set_size_target.hasValue()
-                               ? storage_set_size_target.value()
-                               : storage_set_count,
-                           size_t(replication.getReplicationFactor())),
-                  storage_set_count);
+  return std::min(
+      std::max(static_cast<size_t>(target_nodeset_size),
+               static_cast<size_t>(replication.getReplicationFactor())),
+      storage_set_count);
 }
 
 NodeSetSelector::Result
 RandomNodeSetSelector::getStorageSet(logid_t log_id,
                                      const Configuration* cfg,
+                                     nodeset_size_t target_nodeset_size,
+                                     uint64_t seed,
                                      const EpochMetaData* prev,
                                      const Options* options) {
   Result res;
@@ -145,18 +147,14 @@ RandomNodeSetSelector::getStorageSet(logid_t log_id,
   const auto& nodes_configuration =
       cfg->serverConfig()->getNodesConfiguration();
   ld_check(nodes_configuration != nullptr);
-  const size_t nodeset_size = getStorageSetSize(log_id,
-                                                cfg,
-                                                *logcfg->attrs().nodeSetSize(),
-                                                replication_property,
-                                                options);
+  const size_t nodeset_size = getStorageSetSize(
+      log_id, cfg, target_nodeset_size, replication_property, options);
   ld_check(nodeset_size > 0);
 
-  res.signature = folly::hash::hash_128_to_64(
-      10245847200296991963ul,
-      folly::hash::hash_128_to_64(
-          cfg->serverConfig()->getStorageNodesConfigHash(),
-          (uint64_t)logcfg->attrs().nodeSetSize().value().value()));
+  res.signature = hash_tuple({10245847200296991963ul,
+                              seed,
+                              cfg->serverConfig()->getStorageNodesConfigHash(),
+                              nodeset_size});
   if (prev != nullptr && prev->nodeset_params.signature == res.signature &&
       prev->replication == replication_property) {
     res.decision = Decision::KEEP;

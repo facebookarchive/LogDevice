@@ -14,7 +14,9 @@
 
 #include "logdevice/common/checks.h"
 
-namespace facebook { namespace logdevice { namespace hashing {
+namespace facebook { namespace logdevice {
+
+namespace hashing {
 
 uint64_t ch(uint64_t key, uint64_t buckets) {
   // John Lamping, Eric Veach.
@@ -89,4 +91,14 @@ uint64_t weighted_ch(uint64_t key,
   return 0;
 }
 
-}}} // namespace facebook::logdevice::hashing
+} // namespace hashing
+
+uint64_t hash_tuple(std::initializer_list<uint64_t> il) {
+  uint64_t res = 12011301104159517958ul;
+  for (auto it = il.begin(); it != il.end(); ++it) {
+    res = folly::hash::hash_128_to_64(res, *it);
+  }
+  return res;
+}
+
+}} // namespace facebook::logdevice
