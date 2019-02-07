@@ -286,6 +286,14 @@ STAT_DEFINE(sequencer_reactivations_for_metadata_update, SUM)
 // but actually doesn't.
 STAT_DEFINE(metadata_updates_without_sequencer_reactivation, SUM)
 
+// How many times SequencerBackgroundActivator changed nodeset size based on
+// throughput. May be overestimated because the adjustment transaction can fail
+// if current sequencer is active but stale.
+STAT_DEFINE(nodeset_adjustments_done, SUM)
+// How many times SequencerBackgroundActivator considered changing nodeset size
+// based on throughput but decided against it.
+STAT_DEFINE(nodeset_adjustments_skipped, SUM)
+
 //// Per-epoch sequencers
 
 // number of times that sequencer did not finish draining an epoch within the

@@ -8,11 +8,14 @@
 #pragma once
 
 #include <memory>
-#include <unordered_set>
+#include <queue>
+#include <unordered_map>
 
+#include "logdevice/common/NodeID.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/ResourceBudget.h"
 #include "logdevice/common/Timer.h"
+#include "logdevice/common/types_internal.h"
 #include "logdevice/include/Err.h"
 #include "logdevice/include/types.h"
 
@@ -24,12 +27,11 @@ namespace facebook { namespace logdevice {
  */
 
 class AllSequencers;
-class Processor;
 class Sequencer;
 
 class SequencerBackgroundActivator {
  public:
-  SequencerBackgroundActivator() {}
+  SequencerBackgroundActivator();
 
   static WorkerType getWorkerType(Processor* processor) {
     // This returns either WorkerType::BACKGROUND or WorkerType::GENERAL based
@@ -52,6 +54,8 @@ class SequencerBackgroundActivator {
   // Called when a sequencer activation completes, successfully or not.
   void notifyCompletion(logid_t log, Status st);
 
+  void onSettingsUpdated();
+
   // Posts a request to call schedule() from the correct thread.
   static void requestSchedule(Processor* processor, std::vector<logid_t> logs);
 
@@ -61,13 +65,48 @@ class SequencerBackgroundActivator {
                                       Status st);
 
  private:
+  struct NodesetAdjustment {
+    // The adjustment is conditional on latest sequencer having this epoch.
+    // If epoch store turns out to have epoch greater than that, we
+    // forget about this adjustment attempt as if it never happened - this
+    // usually means that current sequencer is on some other node, and that node
+    // is responsible for nodeset adjustments.
+    epoch_t epoch;
+
+    folly::Optional<nodeset_size_t> new_size;
+    folly::Optional<uint64_t> new_seed;
+  };
+
+  struct LogState {
+    // If a reactivation is in progress, this token is holding a unit of the
+    // in-flight reactivations budget.
+    ResourceBudget::Token token;
+
+    // True if this log is in queue_.
+    bool in_queue = false;
+
+    folly::Optional<NodesetAdjustment> pending_adjustment;
+
+    // Fires every nodeset_adjustment_period to consider changing nodeset size
+    // based on log's throughput.
+    // For simplicity, this timer is always spinning for all logs in logs_,
+    // regardless of whether there's an active sequencer or not.
+    Timer nodeset_adjustment_timer;
+  };
+
   // internal method that checks that SequencerBackgroundActivator methods are
   // running on the right thread
   void checkWorkerAsserts();
 
   // Processes the given log. Returns false if it failed and needs to be
   // retried.
-  bool processOneLog(logid_t log_id, ResourceBudget::Token& token);
+  bool processOneLog(logid_t log_id,
+                     LogState& state,
+                     ResourceBudget::Token& token);
+
+  // Called every nodeset_adjustment_period for each log. Updates
+  // target_nodeset_size and nodeset_seed if needed.
+  void maybeAdjustNodesetSize(logid_t log_id, LogState& state);
 
   // Does the actual useful work.
   // Checks if the current sequencer's epoch metadata (nodeset, replication
@@ -88,6 +127,7 @@ class SequencerBackgroundActivator {
   // The caller shouldn't retry on the following errors:
   // NOSEQUENCER, INPROGRESS, NOTFOUND, SYSLIMIT, INTERNAL, TOOBIG.
   int reprovisionOrReactivateIfNeeded(logid_t logid,
+                                      LogState& state,
                                       std::shared_ptr<Sequencer> seq);
 
   // processes the queue if there are pending requests and the number of
@@ -98,6 +138,9 @@ class SequencerBackgroundActivator {
   // uses sequencer_background_activation_retry_interval setting.
   void activateQueueProcessingTimer(
       folly::Optional<std::chrono::microseconds> timeout);
+
+  // Initializes nodeset_adjustment_timer. Call this after inserting into logs_.
+  void activateNodesetAdjustmentTimerIfNeeded(logid_t log_id, LogState& state);
 
   // deactivates the timer for queue processing
   void deactivateQueueProcessingTimer();
@@ -110,15 +153,19 @@ class SequencerBackgroundActivator {
   // bumpCompletedStat() should balance out.
   void bumpCompletedStat(uint64_t val = 1);
 
-  // Queue of log_ids to process. Avoiding use of an std::queue here for
-  // deduplication purposes
-  std::unordered_set<logid_t::raw_type> queue_;
+  std::unordered_map<logid_t, LogState, logid_t::Hash> logs_;
+
+  // Queue of log_ids to process.
+  std::queue<logid_t> queue_;
 
   // timer for retrying processing the queue later in case of failures
   Timer retry_timer_;
 
-  // limiter on the number of activations
+  // limiter on the number of concurrent activations
   std::unique_ptr<ResourceBudget> budget_;
+
+  // Last seen nodeset_adjustment_period from settings.
+  std::chrono::milliseconds nodeset_adjustment_period_;
 };
 
 }} // namespace facebook::logdevice

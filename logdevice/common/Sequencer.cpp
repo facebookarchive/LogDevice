@@ -24,6 +24,7 @@
 #include "logdevice/common/NodeSetFinder.h"
 #include "logdevice/common/PeriodicReleases.h"
 #include "logdevice/common/Processor.h"
+#include "logdevice/common/SequencerBackgroundActivator.h"
 #include "logdevice/common/Socket.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/Configuration.h"
@@ -208,8 +209,14 @@ ActivateResult Sequencer::completeActivationWithMetaData(
         updateMetaDataMap(epoch, *getCurrentEpochSequencer()->getMetaData());
 
     // 3. update current_epoch_, move the Sequencer to ACTIVE state
-    current_epoch_.store(epoch.val_);
+    auto prev_epoch = current_epoch_.exchange(epoch.val_);
     setState(State::ACTIVE);
+
+    if (prev_epoch != epoch.val() - 1) {
+      // If sequencer for previous epoch was on a different node, we don't know
+      // what the append rate was up until now. Tell that to rate estimator.
+      append_rate_estimator_.clear(SteadyTimestamp::now());
+    }
   }
 
   // 4. at this point, new appends are likely to be routed to the newly created
@@ -906,9 +913,11 @@ RunAppenderStatus Sequencer::runAppender(Appender* appender) {
 
   // we are going to run the Appender through `current'
   const epoch_t epoch = current->getEpoch();
-  atomic_fetch_max(last_append_,
-                   std::chrono::duration_cast<std::chrono::milliseconds>(
-                       std::chrono::steady_clock::now().time_since_epoch()));
+  SteadyTimestamp now = SteadyTimestamp::now();
+  atomic_fetch_max(last_append_, now.toMilliseconds());
+
+  append_rate_estimator_.addValue(
+      appender->getPayload()->size(), getRateEstimatorWindowSize(), now);
 
   ld_check(epoch != EPOCH_INVALID);
   if (appender->isStale(epoch)) {
@@ -1840,6 +1849,12 @@ void Sequencer::setUnavailable(UnavailabilityReason r) {
       seqs_before->current->startDestruction();
     }
   }
+
+  // Tell sequencer activator that this sequencer is not activating anymore.
+  if (parent_ != nullptr) {
+    SequencerBackgroundActivator::requestNotifyCompletion(
+        parent_->getProcessor(), log_id_, E::ABORTED);
+  }
 }
 
 void Sequencer::shutdown() {
@@ -1927,6 +1942,20 @@ OffsetMap Sequencer::getEpochOffsetMap() const {
 
   ld_check(!previous_tail->containOffsetWithinEpoch());
   return previous_tail->offsets_map_;
+}
+
+std::pair<int64_t, std::chrono::milliseconds>
+Sequencer::appendRateEstimate() const {
+  return append_rate_estimator_.getRate(
+      getRateEstimatorWindowSize(), SteadyTimestamp::now());
+}
+
+std::chrono::milliseconds Sequencer::getRateEstimatorWindowSize() const {
+  std::chrono::milliseconds window = settings_->nodeset_adjustment_period;
+  if (window.count() <= 0) {
+    window = std::chrono::hours(1);
+  }
+  return window;
 }
 
 }} // namespace facebook::logdevice

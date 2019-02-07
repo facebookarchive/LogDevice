@@ -99,7 +99,12 @@ WheelTimerDispatchImpl::makeWheelTimerInternalExecutor(Worker* worker) {
     if (!*canceled) {
       worker->add([canceled = std::move(canceled), timer]() {
         if (!*canceled && timer->callback_) {
-          timer->callback_();
+          // Make a local copy of callback to make sure it's not destroyed
+          // while it's running, in particular if it calls setCallback().
+          std::function<void()> cb = timer->callback_;
+
+          cb();
+          // `timer` might have been destroyed.
         }
       });
     }

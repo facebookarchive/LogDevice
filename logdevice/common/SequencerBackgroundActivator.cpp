@@ -18,6 +18,10 @@
 
 namespace facebook { namespace logdevice {
 
+SequencerBackgroundActivator::SequencerBackgroundActivator()
+    : nodeset_adjustment_period_(Worker::settings().nodeset_adjustment_period) {
+}
+
 void SequencerBackgroundActivator::checkWorkerAsserts() {
   Worker* w = Worker::onThisThread();
   ld_check(w);
@@ -35,17 +39,21 @@ void SequencerBackgroundActivator::schedule(std::vector<logid_t> log_ids) {
     // metadata log sequencers don't interact via EpochStore, hence using this
     // state machine to activate them won't work
     ld_check(!MetaDataLog::isMetaDataLog(log_id));
-    auto res = queue_.insert(log_id.val());
-    if (res.second) {
-      // new element inserted
-      ++num_scheduled;
+    LogState& state = logs_[log_id];
+    activateNodesetAdjustmentTimerIfNeeded(log_id, state);
+    if (state.in_queue) {
+      continue;
     }
+    state.in_queue = true;
+    queue_.push(log_id);
+    ++num_scheduled;
   }
   bumpScheduledStat(num_scheduled);
   maybeProcessQueue();
 }
 
 bool SequencerBackgroundActivator::processOneLog(logid_t log_id,
+                                                 LogState& state,
                                                  ResourceBudget::Token& token) {
   auto config = Worker::onThisThread()->getConfig();
   const auto& nodes_configuration =
@@ -55,11 +63,18 @@ bool SequencerBackgroundActivator::processOneLog(logid_t log_id,
   auto seq = all_seq.findSequencer(log_id);
 
   if (!seq) {
-    // No sequencer for that log, we're done with this one
+    // No sequencer for that log, nothing to do.
+
+    // Assert that we didn't have any work in flight for this log.
+    // It should be impossible becase we never start work if sequencer doesn't
+    // exist, and sequencers are never removed from AllSequencers.
+    ld_check(!state.token.valid());
+    state.token.release();
+
     return true;
   }
 
-  if (seq->background_activation_token_.valid()) {
+  if (state.token.valid()) {
     // Something's already in flight for this log. Don't do anything for now.
     // We'll be notified and run the check again when it completes.
     return true;
@@ -78,7 +93,7 @@ bool SequencerBackgroundActivator::processOneLog(logid_t log_id,
     return true;
   }
 
-  int rv = reprovisionOrReactivateIfNeeded(log_id, seq);
+  int rv = reprovisionOrReactivateIfNeeded(log_id, state, seq);
   if (rv == -1) {
     if (err == E::UPTODATE) {
       // No updates needed.
@@ -101,13 +116,15 @@ bool SequencerBackgroundActivator::processOneLog(logid_t log_id,
   }
 
   // Reprovisioning in flight, moving token into the sequencer.
-  ld_check(!seq->background_activation_token_.valid());
-  seq->background_activation_token_ = std::move(token);
+  ld_check(!state.token.valid());
+  state.token = std::move(token);
+  ld_check(state.token.valid());
   return true;
 }
 
 int SequencerBackgroundActivator::reprovisionOrReactivateIfNeeded(
     logid_t logid,
+    LogState& state,
     std::shared_ptr<Sequencer> seq) {
   ld_check(!MetaDataLog::isMetaDataLog(logid));
   ld_check(seq != nullptr);
@@ -122,11 +139,11 @@ int SequencerBackgroundActivator::reprovisionOrReactivateIfNeeded(
   // sequencer always has epoch metadata if it's active, but there's a race
   // condition - maybe we grabbed state, then reactivation happened, then we
   // grabbed metadata.
-  auto state = seq->getState();
+  auto seq_state = seq->getState();
   auto epoch_metadata = seq->getCurrentMetaData();
-  if (state != Sequencer::State::ACTIVE || epoch_metadata == nullptr) {
-    err =
-        state == Sequencer::State::ACTIVATING ? E::INPROGRESS : E::NOSEQUENCER;
+  if (seq_state != Sequencer::State::ACTIVE || epoch_metadata == nullptr) {
+    err = seq_state == Sequencer::State::ACTIVATING ? E::INPROGRESS
+                                                    : E::NOSEQUENCER;
     return -1;
   }
   if (epoch_metadata->isEmpty() || epoch_metadata->disabled()) {
@@ -193,6 +210,26 @@ int SequencerBackgroundActivator::reprovisionOrReactivateIfNeeded(
       return -1;
     }
 
+    // See if we need to change nodeset size or seed.
+    folly::Optional<nodeset_size_t> target_nodeset_size;
+    folly::Optional<uint64_t> nodeset_seed;
+    if (nodeset_adjustment_period_.count() <= 0) {
+      // Nodeset adjustments are disabled.
+      // Revert nodeset size to its unadjusted value.
+      target_nodeset_size =
+          logcfg->attrs().nodeSetSize().value().value_or(NODESET_SIZE_MAX);
+      nodeset_seed.clear();
+    } else if (state.pending_adjustment.hasValue()) {
+      if (state.pending_adjustment->epoch == current_epoch) {
+        // An adjustment is pending. Try to apply it.
+        target_nodeset_size = state.pending_adjustment->new_size;
+        nodeset_seed = state.pending_adjustment->new_seed;
+      } else {
+        // A scheduled adjustment is outdated.
+        state.pending_adjustment.clear();
+      }
+    }
+
     bool use_new_storage_set_format =
         Worker::settings().epoch_metadata_use_new_storage_set_format;
 
@@ -207,18 +244,18 @@ int SequencerBackgroundActivator::reprovisionOrReactivateIfNeeded(
     ld_check(epoch_metadata->h.epoch < EPOCH_MAX);
     ++new_metadata->h.epoch.val_;
 
-    EpochMetaData::UpdateResult res = updateMetaDataIfNeeded(
-        logid,
-        new_metadata,
-        *config,
-        /* target_nodeset_size */ folly::none, // TODO (#37918513): use
-        /* nodeset_seed */ folly::none,        // TODO (#37918513): use
-        /* nodeset_selector */ nullptr,
-        use_new_storage_set_format,
-        /* provision_if_empty */ false,
-        /* update_if_exists */ true,
-        /* force_update */ false,
-        &only_nodeset_params_changed);
+    EpochMetaData::UpdateResult res =
+        updateMetaDataIfNeeded(logid,
+                               new_metadata,
+                               *config,
+                               target_nodeset_size,
+                               nodeset_seed,
+                               /* nodeset_selector */ nullptr,
+                               use_new_storage_set_format,
+                               /* provision_if_empty */ false,
+                               /* update_if_exists */ true,
+                               /* force_update */ false,
+                               &only_nodeset_params_changed);
     if (res == EpochMetaData::UpdateResult::FAILED) {
       RATELIMIT_ERROR(
           std::chrono::seconds(10),
@@ -267,18 +304,17 @@ int SequencerBackgroundActivator::reprovisionOrReactivateIfNeeded(
     {
       auto another_metadata = std::make_unique<EpochMetaData>(*new_metadata);
       bool another_only_params;
-      auto another_res = updateMetaDataIfNeeded(
-          logid,
-          another_metadata,
-          *config,
-          /* target_nodeset_size */ folly::none, // TODO (#37918513): use
-          /* nodeset_seed */ folly::none,        // TODO (#37918513): use
-          /* nodeset_selector */ nullptr,
-          use_new_storage_set_format,
-          false,
-          true,
-          false,
-          &another_only_params);
+      auto another_res = updateMetaDataIfNeeded(logid,
+                                                another_metadata,
+                                                *config,
+                                                target_nodeset_size,
+                                                nodeset_seed,
+                                                /* nodeset_selector */ nullptr,
+                                                use_new_storage_set_format,
+                                                false,
+                                                true,
+                                                false,
+                                                &another_only_params);
       // The first check is redundant but provides a better error message.
       if (!ld_catch(
               another_res != EpochMetaData::UpdateResult::FAILED,
@@ -291,12 +327,9 @@ int SequencerBackgroundActivator::reprovisionOrReactivateIfNeeded(
               new_metadata->toString().c_str()) ||
           !ld_catch(another_res == EpochMetaData::UpdateResult::UNCHANGED,
                     "updateMetaDataIfNeeded() wants to update metadata twice "
-                    "in a row. "
-                    "This should be impossible. Log: %lu, epoch: %u, old "
-                    "metadata: %s, "
-                    "new metadata: %s, yet another metadata: %s, first result: "
-                    "%d %d, "
-                    "second result: %d %d",
+                    "in a row. This should be impossible. Log: %lu, epoch: %u, "
+                    "old metadata: %s, new metadata: %s, yet another metadata: "
+                    "%s, first result: %d %d, second result: %d %d",
                     logid.val(),
                     current_epoch.val(),
                     epoch_metadata->toString().c_str(),
@@ -417,23 +450,21 @@ void SequencerBackgroundActivator::notifyCompletion(logid_t logid,
     // We don't reactivate metadata logs.
     return;
   }
-  auto seq =
-      Worker::onThisThread()->processor_->allSequencers().findSequencer(logid);
-  if (!seq) {
-    // we don't care about this activation
-    return;
-  }
+  LogState& state = logs_[logid];
+  activateNodesetAdjustmentTimerIfNeeded(logid, state);
 
   // If the operation that just completed was triggered by us, reclaim the
   // in-flight slot we assigned to it.
-  bool had_token = seq->background_activation_token_.valid();
-  if (had_token) {
-    seq->background_activation_token_.release();
-  }
+  bool had_token = state.token.valid();
+  state.token.release();
 
   // Schedule a re-check for the log, in case config was updated while sequencer
   // activation was in flight. Re-checking is cheap when no changes are needed.
-  auto inserted = queue_.insert(logid.val()).second;
+  bool inserted = !state.in_queue;
+  if (inserted) {
+    state.in_queue = true;
+    queue_.push(logid);
+  }
 
   if (had_token && !inserted) {
     bumpCompletedStat();
@@ -471,24 +502,32 @@ void SequencerBackgroundActivator::maybeProcessQueue() {
     made_progress = true;
 
     ld_check(!queue_.empty());
-    auto it = queue_.begin();
-    logid_t log_id(*it);
+    logid_t log_id = queue_.front();
+    LogState& state = logs_.at(log_id); // LogState must exist
+    ld_check(state.in_queue);
 
     auto token = budget_->acquireToken();
     ld_check(token.valid());
-    if (processOneLog(log_id, token)) {
-      queue_.erase(it);
+    bool ok = processOneLog(log_id, state, token);
+    ld_check(!queue_.empty() && queue_.front() == log_id);
+    ld_check(state.in_queue);
+    queue_.pop();
+
+    if (ok) {
+      state.in_queue = false;
 
       if (token) {
-        // The token hasn't been moved into the sequencer, presumably because
+        // The token hasn't been moved into the LogState, presumably because
         // nothing needs to be done for this log.
         token.release();
         // Since we're releasing the token, we have to bump the stat.
         bumpCompletedStat();
       }
     } else {
-      // Failed processing a sequencer. There's no point in retrying
-      // immediately, so instead do it on a timer.
+      // Failed processing a sequencer.
+      // Move the failed log to the back of the queue.
+      queue_.push(log_id);
+      // There's no point in retrying immediately, so instead do it on a timer.
       activateQueueProcessingTimer(folly::none);
       break;
     }
@@ -552,6 +591,159 @@ class SequencerBackgroundActivatorRequest : public Request {
 };
 
 } // namespace
+
+void SequencerBackgroundActivator::activateNodesetAdjustmentTimerIfNeeded(
+    logid_t log_id,
+    LogState& state) {
+  if (nodeset_adjustment_period_.count() <= 0 ||
+      state.nodeset_adjustment_timer.isActive()) {
+    return;
+  }
+
+  if (!state.nodeset_adjustment_timer.isAssigned()) {
+    state.nodeset_adjustment_timer.assign([this, log_id, &state] {
+      maybeAdjustNodesetSize(log_id, state);
+      ld_check(nodeset_adjustment_period_.count() > 0);
+      state.nodeset_adjustment_timer.activate(nodeset_adjustment_period_);
+    });
+  }
+
+  // Randomly stagger logs so their timers don't fire all at the same time.
+  auto first_delay =
+      to_usec(folly::Random::randDouble01() * nodeset_adjustment_period_);
+  state.nodeset_adjustment_timer.activate(first_delay);
+}
+
+void SequencerBackgroundActivator::onSettingsUpdated() {
+  auto new_period = Worker::settings().nodeset_adjustment_period;
+  if (new_period == nodeset_adjustment_period_) {
+    return;
+  }
+  nodeset_adjustment_period_ = new_period;
+  for (auto& kv : logs_) {
+    kv.second.nodeset_adjustment_timer.cancel();
+    if (nodeset_adjustment_period_.count() <= 0) {
+      // Nodeset adjusting was disabled.
+      // May need to revert nodeset size back to its unadjusted value.
+      kv.second.pending_adjustment.clear();
+      schedule({kv.first});
+    } else {
+      // Activate timer using the new period.
+      activateNodesetAdjustmentTimerIfNeeded(kv.first, kv.second);
+    }
+  }
+}
+
+void SequencerBackgroundActivator::maybeAdjustNodesetSize(logid_t log_id,
+                                                          LogState& state) {
+  auto& all_seq = Worker::onThisThread()->processor_->allSequencers();
+  auto seq = all_seq.findSequencer(log_id);
+  if (!seq || seq->getState() != Sequencer::State::ACTIVE) {
+    // Sequencer not active.
+    return;
+  }
+  auto epoch_metadata = seq->getCurrentMetaData();
+  if (!epoch_metadata) {
+    return;
+  }
+
+  std::shared_ptr<Configuration> config = Worker::onThisThread()->getConfig();
+  const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
+      config->getLogGroupByIDShared(log_id);
+  if (!logcfg) {
+    // Log no longer in config.
+    return;
+  }
+
+  NodesetAdjustment adj;
+  adj.epoch = epoch_metadata->h.epoch;
+
+  double min_factor = Worker::settings().nodeset_size_adjustment_min_factor;
+  if (min_factor == 0) {
+    // Settings tell us to randomize nodeset.
+    adj.new_seed = folly::Random::rand64();
+
+    ld_info("Randomizing nodeset of log %lu epoch %u. New seed: %lu.",
+            log_id.val(),
+            adj.epoch.val(),
+            adj.new_seed.value());
+  }
+
+  do { // while (false)
+    auto est = seq->appendRateEstimate();
+    if (est.second < Worker::settings().nodeset_adjustment_min_window) {
+      // The sequencer hasn't collected enough stats yet.
+      break;
+    }
+
+    folly::Optional<std::chrono::seconds> backlog =
+        logcfg->attrs().backlogDuration().value();
+    if (!backlog.hasValue()) {
+      // The log has infinite retention.
+      break;
+    }
+
+    nodeset_size_t min_nodeset_size =
+        logcfg->attrs().nodeSetSize().value().value_or(NODESET_SIZE_MAX);
+
+    double append_rate = 1. * est.first / to_sec_double(est.second);
+    double total_data_size = append_rate * to_sec_double(backlog.value()) *
+        ReplicationProperty::fromLogAttributes(logcfg->attrs())
+            .getReplicationFactor();
+    size_t unclamped_new_size = std::lround(
+        total_data_size /
+        Worker::settings().nodeset_adjustment_target_bytes_per_shard);
+    nodeset_size_t new_size =
+        (nodeset_size_t)std::min(unclamped_new_size, (size_t)NODESET_SIZE_MAX);
+    new_size = std::max(new_size, min_nodeset_size);
+
+    // Let's also clamp new_size with total number of storage nodes in the
+    // cluster, if that number is readily available.
+    if (config->serverConfig()->getNodesConfig().hasNodesConfiguration()) {
+      // Um, yeah, this is a chain of 7 calls to get from Worker to the number
+      // of storage nodes. We at logdevice excel at keeping things simple.
+      size_t num_storage_nodes = config->serverConfig()
+                                     ->getNodesConfig()
+                                     .getNodesConfiguration()
+                                     ->getStorageConfig()
+                                     ->getMembership()
+                                     ->numNodes();
+
+      new_size = std::min(new_size, (nodeset_size_t)num_storage_nodes);
+    }
+
+    nodeset_size_t old_size = std::max(
+        (nodeset_size_t)1, epoch_metadata->nodeset_params.target_nodeset_size);
+    double factor =
+        1. * std::max(new_size, old_size) / std::min(new_size, old_size);
+    if (factor >= min_factor && new_size != old_size) {
+      adj.new_size = new_size;
+
+      ld_info("Adjusting nodeset size of log %lu epoch %u from %d (actual %lu) "
+              "to %d (clamped from %lu). Throughput: %.3f KB/s in %.3f hours, "
+              "estimated data size: %.3f GB.",
+              log_id.val(),
+              adj.epoch.val(),
+              (int)old_size,
+              epoch_metadata->shards.size(),
+              (int)new_size,
+              unclamped_new_size,
+              append_rate / 1e3,
+              to_sec_double(est.second) / 3600,
+              total_data_size / 1e9);
+    }
+  } while (false);
+
+  if (adj.new_size.hasValue() || adj.new_seed.hasValue()) {
+    // Instead of applying the adjustment right here, put it in the LogState
+    // and enqueue, to make sure it goes through the ResourceBudget.
+    state.pending_adjustment = adj;
+    schedule({log_id});
+    WORKER_STAT_INCR(nodeset_adjustments_done);
+  } else {
+    WORKER_STAT_INCR(nodeset_adjustments_skipped);
+  }
+}
 
 void SequencerBackgroundActivator::requestSchedule(Processor* processor,
                                                    std::vector<logid_t> logs) {

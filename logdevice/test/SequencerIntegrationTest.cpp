@@ -2713,3 +2713,120 @@ TEST_F(SequencerIntegrationTest, MetaDataWritePreempted) {
   int preempted_epoch = folly::to<int>(seq_info["Preempted epoch"]);
   ASSERT_GE(8, preempted_epoch);
 }
+
+TEST_F(SequencerIntegrationTest, NodeSetAdjustment) {
+  Configuration::Log log_config =
+      IntegrationTestUtils::ClusterFactory::createDefaultLogConfig(1);
+  log_config.backlogDuration = std::chrono::minutes(1);
+  log_config.nodeSetSize = 1;
+
+  // N0 sequencer, N1, N2 storage nodes
+  auto cluster =
+      IntegrationTestUtils::ClusterFactory()
+          .setNumLogs(1)
+          .setLogConfig(log_config)
+          .setNumDBShards(1)
+          .setParam("--nodeset-adjustment-period", "2s")
+          .setParam("--nodeset-adjustment-min-window", "1s")
+          .setParam("--nodeset-size-adjustment-min-factor", "0")
+          .setParam("--nodeset-adjustment-target-bytes-per-shard", "1M")
+          .create(3);
+
+  // Make sure a sequencer is active.
+  ld_info("Appending first record");
+  std::shared_ptr<Client> client = cluster->createClient();
+  lsn_t lsn1 = client->appendSync(logid_t(1), std::string("pikachu"));
+  ASSERT_NE(LSN_INVALID, lsn1);
+  ld_info("Got lsn %s", lsn_to_string(lsn1).c_str());
+
+  ld_info("Sleeping");
+  /* sleep override */
+  std::this_thread::sleep_for(std::chrono::seconds(10));
+
+  std::map<std::string, int64_t> stats;
+
+  auto print_stats = [&] {
+    ld_info("Adjustments done: %ld, skipped: %ld, reactivations: %ld, "
+            "non-reactivations: %ld",
+            stats.at("nodeset_adjustments_done"),
+            stats.at("nodeset_adjustments_skipped"),
+            stats.at("sequencer_reactivations_for_metadata_update"),
+            stats.at("metadata_updates_without_sequencer_reactivation"));
+  };
+
+  // Nodesets of log 1 and internal logs should be randomized every second.
+  ld_info("Checking stats");
+  stats = cluster->getNode(0).stats();
+  EXPECT_GE(stats.at("nodeset_adjustments_done"), 2);
+  EXPECT_LE(stats.at("nodeset_adjustments_done"), 40);
+  EXPECT_EQ(0, stats.at("nodeset_adjustments_skipped"));
+  print_stats();
+
+  // Stop randomizing nodesets, only resize based on throughput now.
+  ld_info("Disabling randomization");
+  cluster->getNode(0).updateSetting(
+      "nodeset-size-adjustment-min-factor", "1.1");
+  stats = cluster->getNode(0).stats();
+  int64_t adjustments_before = stats.at("nodeset_adjustments_done");
+  print_stats();
+
+  ld_info("Sleeping");
+  /* sleep override */
+  std::this_thread::sleep_for(std::chrono::seconds(10));
+
+  // No logs have enough throughput to increase nodeset size from 1 to 2.
+  ld_info("Checking stats");
+  stats = cluster->getNode(0).stats();
+  EXPECT_EQ(adjustments_before, stats.at("nodeset_adjustments_done"));
+  EXPECT_GE(stats.at("nodeset_adjustments_skipped"), 2);
+  EXPECT_LE(stats.at("nodeset_adjustments_skipped"), 40);
+  print_stats();
+
+  // Append to log 1 at 100 KB/s for a few seconds.
+  // This should trigger an increase in nodeset size: 100 KB/s * 1 min > 2 MB.
+  auto t = std::chrono::steady_clock::now();
+  lsn_t lsn2 = LSN_INVALID;
+  for (int i = 0; i < 50; ++i) {
+    if (i % 10 == 0) {
+      ld_info("Doing appends");
+    }
+    sleep_until_safe(t);
+    lsn_t lsn = client->appendSync(logid_t(1), std::string(10000, '.'));
+    EXPECT_NE(LSN_INVALID, lsn);
+
+    if (lsn != LSN_INVALID) {
+      // Should all be in same epoch.
+      if (lsn2 == LSN_INVALID) {
+        ld_info("First lsn: %s", lsn_to_string(lsn).c_str());
+      }
+      lsn2 = lsn;
+    }
+
+    t += std::chrono::milliseconds(100);
+  }
+  ld_info("Last lsn: %s", lsn_to_string(lsn2).c_str());
+
+  // Nodeset size of log 1 should have been increased from 1 to 2.
+  ld_info("Checking stats");
+  stats = cluster->getNode(0).stats();
+  EXPECT_EQ(adjustments_before + 1, stats.at("nodeset_adjustments_done"));
+  print_stats();
+
+  ld_info("Sleeping");
+  /* sleep override */
+  std::this_thread::sleep_for(std::chrono::seconds(6));
+
+  // After some time of zero throughput nodeset size is decreased back to 1.
+  ld_info("Checking stats");
+  stats = cluster->getNode(0).stats();
+  EXPECT_EQ(adjustments_before + 2, stats.at("nodeset_adjustments_done"));
+  print_stats();
+
+  // Check that the nodeset resizings bumped epoch.
+  ld_info("Appending last record");
+  lsn_t lsn3 = client->appendSync(logid_t(1), "bye");
+  EXPECT_NE(LSN_INVALID, lsn3);
+  EXPECT_GE(lsn_to_epoch(lsn3).val(), lsn_to_epoch(lsn2).val() + 1);
+  EXPECT_GE(lsn_to_epoch(lsn3).val(), lsn_to_epoch(lsn1).val() + 2);
+  ld_info("Got lsn %s", lsn_to_string(lsn3).c_str());
+}

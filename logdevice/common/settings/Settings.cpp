@@ -2937,6 +2937,65 @@ void Settings::defineSettings(SettingEasyInit& init) {
       SERVER,
       SettingsCategory::ReadPath);
 
+  init("nodeset-adjustment-period",
+       &nodeset_adjustment_period,
+       "6h",
+       validate_nonnegative<ssize_t>(),
+       "If not zero, nodeset size for each log will be periodically adjusted "
+       "based on logs's measured throughput. This settings controls how often "
+       "such adjustments will be considered. The nodeset size is chosen "
+       "proportionally to throughput, replication factor and backlog duration. "
+       "The nodeset_size log attribute acts as the minimim allowed nodeset "
+       "size, used for low-throughput logs and logs with infinite backlog "
+       "duration. If --nodeset-adjustment-period is changed from nonzero to "
+       "zero, all adjusted nodesets get immediately updated back to normal "
+       "size.",
+       SERVER,
+       SettingsCategory::Sequencer);
+
+  init("nodeset-adjustment-target-bytes-per-shard",
+       &nodeset_adjustment_target_bytes_per_shard,
+       "10G",
+       parse_nonnegative<size_t>(),
+       "When automatic nodeset size adjustment is enabled, "
+       "(--nodeset-adjustment-period), this setting controls the size of the "
+       "chosen nodesets. The size is chosen so that each log takes around this "
+       "much space on each shard. More precisely, "
+       "`nodeset_size = append_bytes_per_sec * backlog_duration * "
+       "replication_factor / nodeset_adjustment_target_bytes_per_shard`. "
+       "Appropriate value for this setting is around 0.1% - 1% of disk size.",
+       SERVER,
+       SettingsCategory::Sequencer);
+
+  init("nodeset-size-adjustment-min-factor",
+       &nodeset_size_adjustment_min_factor,
+       "2",
+       validate_nonnegative<double>(),
+       "When automatic nodeset size adjustment is enabled, we skip adjustments "
+       "that are smaller than this factor. E.g. if this setting is set to 2, "
+       "we won't bother updating nodeset if its size would increase or "
+       "decrease by less than a factor of 2. If set to 0, nodesets will be "
+       "unconditionally updated every --nodeset-adjustment-period, and will "
+       "also be randomized each time, as opposed to using consistent hashing.",
+       SERVER,
+       SettingsCategory::Sequencer);
+
+  init("nodeset-adjustment-min-window",
+       &nodeset_adjustment_min_window,
+       "1h",
+       validate_positive<ssize_t>(),
+       "When automatic nodeset size adjustment is enabled, only do the "
+       "adjustment if we've got append throughput information for at least this"
+       "period of time. More details: we choose nodeset size based on log's "
+       "average append throughput in a moving window of "
+       "size --nodeset-adjustment-period. The average is maintained by the "
+       "sequencer. If the sequencer was activated recently, we may not have a "
+       "good estimate of log's append throughput. This setting says how long "
+       "to wait after sequencer activation before allowing adjusting nodeset "
+       "size based on that sequencer's throughput.",
+       SERVER,
+       SettingsCategory::Sequencer);
+
   sequencer_boycotting.defineSettings(init);
 }
 }} // namespace facebook::logdevice

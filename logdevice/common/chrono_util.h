@@ -33,6 +33,13 @@ std::chrono::seconds to_sec(const T& value) {
   return std::chrono::duration_cast<std::chrono::seconds>(value);
 }
 
+template <typename T>
+double to_sec_double(const T& value) {
+  // The default unit of chrono::duration is seconds.
+  return std::chrono::duration_cast<std::chrono::duration<double>>(value)
+      .count();
+}
+
 template <typename TimePoint>
 int64_t usec_since(const TimePoint& start) {
   return to_usec(TimePoint::clock::now() - start).count();

@@ -18,6 +18,7 @@
 
 #include "logdevice/common/Appender.h"
 #include "logdevice/common/EpochMetaDataMap.h"
+#include "logdevice/common/RateEstimator.h"
 #include "logdevice/common/RateLimiter.h"
 #include "logdevice/common/ResourceBudget.h"
 #include "logdevice/common/Seal.h"
@@ -702,10 +703,13 @@ class Sequencer {
     return *settings_.get();
   }
 
-  // Token for ResourceBudget instance in SequencerBackgroundActivator. It's
-  // fine for it to not be atomic, as SequencerBackgroundActivator only runs
-  // on one worker thread
-  ResourceBudget::Token background_activation_token_;
+  // Returns average append throughput in some window.
+  // More precisely, returns pair p meaning that during the last p.second
+  // milliseconds we've got p.first bytes of payloads.
+  // Size of the time window is approximately Settings.nodeset_adjustment_period
+  // but can be smaller or greater if the setting changed recently or if the
+  // sequencer was only recently activated.
+  std::pair<int64_t, std::chrono::milliseconds> appendRateEstimate() const;
 
   // timer callback for the epoch draining timer
   static void onDrainingTimerExpired(logid_t log_id,
@@ -780,6 +784,7 @@ class Sequencer {
 
   StatsHolder* const stats_;
 
+  // nullptr for metadata logs and in unit tests.
   AllSequencers* const parent_;
 
   // current state of this Sequencer, initialized to UNAVAILABLE
@@ -837,6 +842,9 @@ class Sequencer {
   // be stored directly as it isn't trivially copyable).
   std::atomic<std::chrono::milliseconds> last_append_{
       std::chrono::milliseconds(0)};
+
+  // Estimates rate of appends (in bytes/s). Used for adjusting nodeset size.
+  RateEstimator append_rate_estimator_;
 
   // tail record of the previous epoch, only populated when log recovery
   // initiated by the current epoch is completed
@@ -925,6 +933,10 @@ class Sequencer {
   // sequencer.
   folly::Optional<RunAppenderStatus>
   handleAppendWithLSNBeforeRedirect(Appender*);
+
+  // What window size to use when using append_rate_estimator_.
+  std::chrono::milliseconds getRateEstimatorWindowSize() const;
+
   // locate the Sequencer object given a logid
   static std::shared_ptr<Sequencer> findSequencer(logid_t log_id);
 

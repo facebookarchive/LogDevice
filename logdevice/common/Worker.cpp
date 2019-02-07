@@ -364,6 +364,10 @@ void Worker::onSettingsUpdated() {
   if (event_log_) {
     event_log_->onSettingsUpdated();
   }
+
+  if (impl_->sequencerBackgroundActivator_) {
+    impl_->sequencerBackgroundActivator_->onSettingsUpdated();
+  }
 }
 
 void Worker::initializeSubscriptions() {

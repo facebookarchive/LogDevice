@@ -1202,6 +1202,11 @@ struct Settings : public SettingsBundle {
 
   SequencerBoycottingSettings sequencer_boycotting;
 
+  std::chrono::milliseconds nodeset_adjustment_period;
+  size_t nodeset_adjustment_target_bytes_per_shard;
+  double nodeset_size_adjustment_min_factor;
+  std::chrono::milliseconds nodeset_adjustment_min_window;
+
   // Use metadata logs in NodeSetFinder if true, otherwise use sequencers
   // (metadata logs v2) and fallback to metadata logs if needed.
   // TODO: set default to false (or remove option) when 2.35 is deployed
