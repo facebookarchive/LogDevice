@@ -126,6 +126,7 @@ class ZookeeperClient : public ZookeeperClientBase {
   //////// New API ////////
  public:
   void getData(std::string path, data_callback_t cb) override;
+  void exists(std::string path, stat_callback_t cb) override;
   void setData(std::string path,
                std::string data,
                stat_callback_t cb,
@@ -156,6 +157,9 @@ class ZookeeperClient : public ZookeeperClientBase {
   static void setDataCompletion(int rc,
                                 const struct Stat* stat,
                                 const void* context);
+  static void existsCompletion(int rc,
+                               const struct Stat* stat,
+                               const void* context);
   static void createCompletion(int rc, const char* value, const void* context);
   static void multiOpCompletion(int rc, const void* context);
   static void syncCompletion(int rc, const char* value, const void* context);

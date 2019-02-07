@@ -151,6 +151,38 @@ int ZookeeperClientInMemory::getData(const char* znode_path,
   return ZOK;
 }
 
+int ZookeeperClientInMemory::exists(const char* znode_path,
+                                    stat_completion_t completion,
+                                    const void* data) {
+  std::lock_guard<std::mutex> guard(mutex_);
+
+  int rc;
+  zk::Stat zk_stat{};
+  auto it = map_.find(znode_path);
+  if (it == map_.end()) {
+    rc = ZNONODE;
+  } else {
+    rc = ZOK;
+    zk_stat = it->second.second;
+  }
+
+  std::shared_ptr<std::atomic<bool>> alive = alive_;
+
+  std::thread callback([rc, zk_stat, data, completion, alive]() {
+    Stat stat;
+    stat.version = zk_stat.version_;
+    /* sleep override */
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    if (alive.get()->load()) {
+      completion(rc, &stat, data);
+    } else {
+      completion(ZCLOSING, &stat, data);
+    }
+  });
+  callbacksGetData_.push_back(std::move(callback));
+  return ZOK;
+}
+
 int ZookeeperClientInMemory::multiOp(int count,
                                      const zoo_op_t* ops,
                                      zoo_op_result_t* results,
@@ -174,23 +206,35 @@ int ZookeeperClientInMemory::multiOp(int count,
     // operation within the same batch succeeds or not
     state_map_t new_map = map_;
 
-    // Checking the input and verifying that none of the nodes exist
     for (int i = 0; i < count; ++i) {
-      if (ops[i].type != ZOO_CREATE_OP) {
+      if (ops[i].type == ZOO_CREATE_OP) {
+        // Checking the input and verifying that the node exist
+        const auto& op = ops[i].create_op;
+        if (!mapContainsParents(new_map, op.path)) {
+          return fill_result(ZNONODE);
+        }
+        if (new_map.find(op.path) != new_map.end()) {
+          return fill_result(ZNODEEXISTS);
+        }
+        new_map[op.path] = std::make_pair(
+            std::string(op.data, op.datalen), zk::Stat{.version_ = 0});
+
+      } else if (ops[i].type == ZOO_DELETE_OP) {
+        const auto& op = ops[i].delete_op;
+        if (!mapContainsParents(new_map, op.path)) {
+          return fill_result(ZNONODE);
+        }
+        if (new_map.find(op.path) != new_map.end()) {
+          new_map.erase(op.path);
+        } else {
+          return fill_result(ZNONODE);
+        }
+      } else {
         // no other ops supported currently
-        ld_critical("Only create operations supported in multi-ops");
+        ld_critical("Only create/delete operations supported in multi-ops");
         ld_check(false);
         return -1;
       }
-      const auto& op = ops[i].create_op;
-      if (!mapContainsParents(new_map, op.path)) {
-        return fill_result(ZNONODE);
-      }
-      if (new_map.find(op.path) != new_map.end()) {
-        return fill_result(ZNODEEXISTS);
-      }
-      new_map[op.path] = std::make_pair(
-          std::string(op.data, op.datalen), zk::Stat{.version_ = 0});
     }
 
     std::swap(map_, new_map);
@@ -218,6 +262,20 @@ void ZookeeperClientInMemory::getData(std::string path, data_callback_t cb) {
                                        /* value_len = */ 0,
                                        /* stat = */ nullptr,
                                        context);
+  }
+}
+
+void ZookeeperClientInMemory::exists(std::string path, stat_callback_t cb) {
+  const void* context = nullptr;
+  if (cb) {
+    auto p = std::make_unique<stat_callback_t>(std::move(cb));
+    context = p.release();
+  }
+  int rc = exists(path.data(), &ZookeeperClient::existsCompletion, context);
+  if (rc != ZOK) {
+    ZookeeperClient::existsCompletion(rc,
+                                      /* stat = */ nullptr,
+                                      context);
   }
 }
 

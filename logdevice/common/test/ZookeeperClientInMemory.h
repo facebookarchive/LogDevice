@@ -50,6 +50,10 @@ class ZookeeperClientInMemory : public ZookeeperClientBase {
               data_completion_t completion,
               const void* data) override;
 
+  int exists(const char* znode_path,
+             stat_completion_t completion,
+             const void* data);
+
   int multiOp(int count,
               const zoo_op_t* ops,
               zoo_op_result_t* results,
@@ -72,6 +76,7 @@ class ZookeeperClientInMemory : public ZookeeperClientBase {
   //////// New API ////////
  public:
   void getData(std::string path, data_callback_t cb) override;
+  void exists(std::string path, stat_callback_t cb) override;
   void setData(std::string path,
                std::string data,
                stat_callback_t cb,

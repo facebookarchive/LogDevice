@@ -252,6 +252,43 @@ void ZookeeperClient::getData(std::string path, data_callback_t cb) {
   }
 }
 
+/* static */ void ZookeeperClient::existsCompletion(int rc,
+                                                    const struct Stat* stat,
+                                                    const void* context) {
+  if (!context) {
+    return;
+  }
+  auto callback = std::unique_ptr<stat_callback_t>(const_cast<stat_callback_t*>(
+      reinterpret_cast<const stat_callback_t*>(context)));
+  ld_check(callback);
+  // callback shouldn't be empty
+  ld_check(*callback);
+  if (rc == ZOK) {
+    ld_check(stat);
+    (*callback)(rc, zk::Stat{stat->version});
+  } else {
+    (*callback)(rc, {});
+  }
+}
+
+void ZookeeperClient::exists(std::string path, stat_callback_t cb) {
+  const void* context = nullptr;
+  if (cb) {
+    auto p = std::make_unique<stat_callback_t>(std::move(cb));
+    context = p.release();
+  }
+  int rc = zoo_aexists(zh_.get().get(),
+                       path.data(),
+                       /* watch = */ 0,
+                       &ZookeeperClient::existsCompletion,
+                       context);
+  if (rc != ZOK) {
+    existsCompletion(rc,
+                     /* stat = */ nullptr,
+                     context);
+  }
+}
+
 /* static */ void ZookeeperClient::setDataCompletion(int rc,
                                                      const struct Stat* stat,
                                                      const void* context) {

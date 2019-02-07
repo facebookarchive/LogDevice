@@ -195,6 +195,36 @@ void runBasicTests(std::unique_ptr<ZookeeperClientInMemory> z) {
   z->setData(kFoo, "Another_blind_write", {}, /* base_version = */ -1);
   getDataRecursive(*z, std::move(p7), "Another_blind_write");
   std::move(f7).wait();
+
+  // Lookup kFoo, and validate that exists() returns ZOK
+  Promise<Unit> p8;
+  auto f8 = p8.getSemiFuture();
+  z->exists(kFoo, [p = std::move(p8)](int rc, zk::Stat /* unused */) mutable {
+    EXPECT_EQ(ZOK, rc);
+    p.setValue();
+  });
+  std::move(f8).wait();
+
+  // Delete kFoo
+  folly::Baton<> b;
+  std::vector<zk::Op> ops = {
+      ZookeeperClientBase::makeDeleteOp(kFoo, /* version */ -1)};
+  z->multiOp(
+      std::move(ops), [&b](int rc, std::vector<zk::OpResponse> responses) {
+        EXPECT_EQ(ZOK, rc);
+        EXPECT_EQ(ZOK, responses.at(0).rc_);
+        b.post();
+      });
+  b.wait();
+
+  // Lookup kFoo, and validate that exists() returns ZNONODE
+  Promise<Unit> p9;
+  auto f9 = p9.getSemiFuture();
+  z->exists(kFoo, [p = std::move(p9)](int rc, zk::Stat /* unused */) mutable {
+    EXPECT_EQ(ZNONODE, rc);
+    p.setValue();
+  });
+  std::move(f9).wait();
 }
 
 void runMultiThreadedTests(std::unique_ptr<ZookeeperClientInMemory> z) {

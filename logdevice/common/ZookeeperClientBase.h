@@ -195,6 +195,7 @@ class ZookeeperClientBase : boost::noncopyable {
   explicit ZookeeperClientBase() : quorum_() {}
 
   virtual void getData(std::string path, data_callback_t cb) = 0;
+  virtual void exists(std::string path, stat_callback_t cb) = 0;
   virtual void setData(std::string path,
                        std::string data,
                        stat_callback_t cb,
