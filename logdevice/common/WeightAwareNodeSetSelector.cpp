@@ -37,6 +37,7 @@ WeightAwareNodeSetSelector::getStorageSet(logid_t log_id,
       ReplicationProperty::fromLogAttributes(logcfg->attrs());
 
   res.signature = hash_tuple({15345803578954886993ul, // random salt
+                              consistentHashing_,
                               seed,
                               cfg->serverConfig()->getStorageNodesConfigHash(),
                               target_nodeset_size});
@@ -156,7 +157,7 @@ WeightAwareNodeSetSelector::getStorageSet(logid_t log_id,
   for (auto& kv : domains) {
     Domain* d = &kv.second;
     d->priority = consistentHashing_
-        ? hash_tuple({seed, folly::hash::fnv64(kv.first)})
+        ? hash_tuple({seed, log_id.val(), folly::hash::fnv64(kv.first)})
         : folly::Random::rand64();
     std::sort(d->nodes.begin(),
               d->nodes.end(),
