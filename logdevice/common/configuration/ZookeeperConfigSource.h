@@ -20,6 +20,7 @@
 #include <zookeeper/zookeeper.h>
 
 #include "logdevice/common/ConfigSource.h"
+#include "logdevice/common/plugin/ZookeeperClientFactory.h"
 
 /**
  * @file Config source that gets configs from Zookeeper.  It can talk to
@@ -29,6 +30,7 @@
 namespace facebook { namespace logdevice {
 
 class ZookeeperClient;
+class PluginRegistry;
 
 class ZookeeperConfigSource : public ConfigSource {
  public:
@@ -45,7 +47,12 @@ class ZookeeperConfigSource : public ConfigSource {
 
   Status getConfig(const std::string& quorum_path, Output* out) override;
 
-  explicit ZookeeperConfigSource(std::chrono::milliseconds retry_delay);
+  explicit ZookeeperConfigSource(
+      std::chrono::milliseconds retry_delay,
+      std::shared_ptr<ZookeeperClientFactory> zookeeper_client_factory);
+  explicit ZookeeperConfigSource(
+      std::shared_ptr<ZookeeperClientFactory> zookeeper_client_factory);
+  ZookeeperConfigSource() = delete;
   ~ZookeeperConfigSource() override;
 
  private:
@@ -62,6 +69,8 @@ class ZookeeperConfigSource : public ConfigSource {
   // Keyed by quorum + path, used by polling to determine when a znode has
   // changed and the contents should be refetched
   std::unordered_map<std::string, int64_t> delivered_versions_;
+
+  std::shared_ptr<ZookeeperClientFactory> zookeeper_client_factory_;
 
   // Track all inflight requests, to delete any outstanding ones in the
   // destructor.

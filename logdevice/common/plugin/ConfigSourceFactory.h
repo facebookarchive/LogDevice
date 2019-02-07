@@ -20,6 +20,7 @@ namespace facebook { namespace logdevice {
  */
 
 class ConfigSource;
+class PluginRegistry;
 
 class ConfigSourceFactory : public Plugin {
  public:
@@ -32,7 +33,8 @@ class ConfigSourceFactory : public Plugin {
    * with the TextConfigUpdater.  Invoked by the server/client before fetching
    * the config.
    */
-  virtual std::vector<std::unique_ptr<ConfigSource>> operator()() = 0;
+  virtual std::vector<std::unique_ptr<ConfigSource>>
+  operator()(std::shared_ptr<PluginRegistry> plugin_registry) = 0;
 };
 
 }} // namespace facebook::logdevice

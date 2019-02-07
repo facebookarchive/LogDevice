@@ -48,7 +48,8 @@ class BuiltinConfigSourceFactory : public ConfigSourceFactory {
     return "built-in";
   }
 
-  std::vector<std::unique_ptr<ConfigSource>> operator()() override;
+  std::vector<std::unique_ptr<ConfigSource>>
+  operator()(std::shared_ptr<PluginRegistry> plugin_registry) override;
   void addOptions(SettingsUpdater* updater) override;
 
  private:

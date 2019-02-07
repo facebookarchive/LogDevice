@@ -20,11 +20,15 @@ using namespace facebook::logdevice::setting_validators;
 namespace facebook { namespace logdevice {
 
 std::vector<std::unique_ptr<ConfigSource>> BuiltinConfigSourceFactory::
-operator()() {
+operator()(std::shared_ptr<PluginRegistry> plugin_registry) {
+  std::shared_ptr<ZookeeperClientFactory> zookeeper_client_factory =
+      plugin_registry->getSinglePlugin<ZookeeperClientFactory>(
+          PluginType::ZOOKEEPER_CLIENT_FACTORY);
   std::vector<std::unique_ptr<ConfigSource>> res;
   res.push_back(std::make_unique<FileConfigSource>(settings_));
   res.push_back(std::make_unique<ZookeeperConfigSource>(
-      settings_->zk_config_polling_interval));
+      settings_->zk_config_polling_interval,
+      std::move(zookeeper_client_factory)));
   res.push_back(std::make_unique<ServerConfigSource>());
   return res;
 }

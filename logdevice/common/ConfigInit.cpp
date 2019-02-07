@@ -30,7 +30,7 @@ int ConfigInit::attach(const std::string& source,
   auto factories = plugin_registry->getMultiPlugin<ConfigSourceFactory>(
       PluginType::CONFIG_SOURCE_FACTORY);
   for (const auto& f : factories) {
-    std::vector<std::unique_ptr<ConfigSource>> sources = (*f)();
+    std::vector<std::unique_ptr<ConfigSource>> sources = (*f)(plugin_registry);
     for (auto& src : sources) {
       updater->registerSource(std::move(src));
     }

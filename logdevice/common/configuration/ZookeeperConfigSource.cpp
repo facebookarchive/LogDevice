@@ -152,8 +152,10 @@ class ZookeeperConfigSource::BackgroundThread {
 };
 
 ZookeeperConfigSource::ZookeeperConfigSource(
-    std::chrono::milliseconds polling_delay)
-    : polling_delay_(polling_delay) {}
+    std::chrono::milliseconds polling_delay,
+    std::shared_ptr<ZookeeperClientFactory> zookeeper_client_factory)
+    : polling_delay_(polling_delay),
+      zookeeper_client_factory_(std::move(zookeeper_client_factory)) {}
 
 Status ZookeeperConfigSource::getConfig(const std::string& quorum_path,
                                         Output* /* out */) {
