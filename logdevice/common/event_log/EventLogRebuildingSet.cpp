@@ -1126,6 +1126,28 @@ EventLogRebuildingSet::getNodeInfo(node_index_t node, uint32_t shard) const {
   return &shard_info.nodes_.find(node)->second;
 }
 
+bool EventLogRebuildingSet::isDonor(node_index_t node, uint32_t shard) const {
+  auto shards_it = shards_.find(shard);
+  if (shards_it == shards_.end()) {
+    return false;
+  }
+  const RebuildingShardInfo& shard_info = shards_it->second;
+  if (shard_info.donor_progress.count(node)) {
+    // It's a donor, and it hasn't completed yet.
+    return true;
+  }
+
+  for (auto& kv : shard_info.nodes_) {
+    const NodeInfo& node_info = kv.second;
+    ld_check(!node_info.donors_remaining.count(node)); // would return above
+    if (node_info.donors_complete.count(node)) {
+      // It's a donor, and it's done with its donorship.
+      return true;
+    }
+  }
+  return false;
+}
+
 bool EventLogRebuildingSet::canTrimEventLog(const ServerConfig& cfg) const {
   for (const auto& shard : shards_) {
     for (const auto& node : shard.second.nodes_) {

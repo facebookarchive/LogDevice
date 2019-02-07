@@ -876,31 +876,50 @@ class PerShardStatToken {
 
   PerShardStatToken(StatsHolder* stats,
                     StatsCounter PerShardStats::*stat,
-                    shard_index_t shard_idx) {
-    assign(stats, stat, shard_idx);
+                    shard_index_t shard_idx,
+                    int64_t added_value = 1) {
+    assign(stats, stat, shard_idx, added_value);
   }
 
   void reset() {
     if (!stats_) {
+      shard_idx_ = -1;
       return;
     }
-    --(stats_->get().per_shard_stats->get(shard_idx_)->*stat_);
+    ld_check(shard_idx_ != -1);
+    (stats_->get().per_shard_stats->get(shard_idx_)->*stat_) -= added_value_;
     stats_ = nullptr;
+    shard_idx_ = -1;
   }
 
   void assign(StatsHolder* stats,
               StatsCounter PerShardStats::*stat,
-              shard_index_t shard_idx) {
+              shard_index_t shard_idx,
+              int64_t added_value = 1) {
+    ld_check(shard_idx != -1);
     reset();
     stats_ = stats;
     stat_ = stat;
     shard_idx_ = shard_idx;
+    added_value_ = added_value;
     if (!stats_ || !stats_->get().per_shard_stats ||
         !stats_->get().per_shard_stats->get(shard_idx_)) {
       stats_ = nullptr;
       return;
     }
-    ++(stats_->get().per_shard_stats->get(shard_idx_)->*stat_);
+    (stats_->get().per_shard_stats->get(shard_idx_)->*stat_) += added_value_;
+  }
+
+  void setValue(int64_t new_added_value) {
+    // Assert that assign() was called. Note that in tests assign() may be
+    // called with null stats_, so we check shard_idx_ instead.
+    ld_check(shard_idx_ != -1);
+
+    if (stats_ != nullptr && new_added_value != added_value_) {
+      (stats_->get().per_shard_stats->get(shard_idx_)->*stat_) +=
+          new_added_value - added_value_;
+      added_value_ = new_added_value;
+    }
   }
 
   ~PerShardStatToken() {
@@ -914,22 +933,32 @@ class PerShardStatToken {
     stats_ = rhs.stats_;
     stat_ = rhs.stat_;
     shard_idx_ = rhs.shard_idx_;
+    added_value_ = rhs.added_value_;
     rhs.stats_ = nullptr;
+    rhs.shard_idx_ = -1;
   }
 
   PerShardStatToken& operator=(PerShardStatToken&& rhs) /* may throw */ {
+    if (&rhs == this) {
+      return *this;
+    }
     reset();
     stats_ = rhs.stats_;
     stat_ = rhs.stat_;
     shard_idx_ = rhs.shard_idx_;
+    added_value_ = rhs.added_value_;
     rhs.stats_ = nullptr;
+    rhs.shard_idx_ = -1;
     return *this;
   }
 
  private:
   StatsHolder* stats_ = nullptr;
   StatsCounter PerShardStats::*stat_;
-  shard_index_t shard_idx_;
+  int64_t added_value_ = 0;
+  // -1 if not assigned (assign() wasn't called since the last reset() call).
+  // May be assigned even if stats_ is nullptr.
+  shard_index_t shard_idx_ = -1;
 };
 
 #define STAT_ADD(stats_struct, name, val)  \

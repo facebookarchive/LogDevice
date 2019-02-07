@@ -141,6 +141,12 @@ STAT_DEFINE(full_restore_set_contains_myself, SUM)
 // mini-rebuilding to restore the replication factor.
 STAT_DEFINE(shard_dirty, SUM)
 
+// What fraction of rebuilding is complete, between 1 and 10^6.
+// 0 if there's no rebuilding, or if we're not a donor, or if not supported.
+// Set from RebuildingCoordinator's thread.
+// ("ppm" stands for parts per million.)
+STAT_DEFINE(rebuilding_progress_ppm, SUM)
+
 // Derived stats (see Stats::deriveStats()).
 
 STAT_DEFINE(shards_waiting_for_non_started_restore, SUM)

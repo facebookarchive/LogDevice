@@ -185,7 +185,8 @@ void ShardRebuildingV1::someLogMadeProgress() {
       ld_check(wakeupQueue_.sizeInsideWindow() == 0);
 
       RecordTimestamp next_ts = wakeupQueue_.nextTimestamp();
-      listener_->notifyShardDonorProgress(shard_, next_ts, rebuildingVersion_);
+      listener_->notifyShardDonorProgress(
+          shard_, next_ts, rebuildingVersion_, -1);
       trySlideLocalWindow();
     }
   }

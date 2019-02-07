@@ -235,6 +235,10 @@ class EventLogRebuildingSet {
     return node_info->mode;
   }
 
+  // Returns true if the given node is participating or did participate as
+  // a donor in the currently active rebuilding in the given shard.
+  bool isDonor(node_index_t node, uint32_t shard) const;
+
   /**
    * Inform of a new record in the event log.
    * @param lsn       Lsn of the record (used for logging);

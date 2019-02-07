@@ -406,7 +406,8 @@ class MockedRebuildingCoordinator : public RebuildingCoordinator {
 
   void notifyShardDonorProgress(uint32_t shard,
                                 RecordTimestamp ts,
-                                lsn_t version) override {
+                                lsn_t version,
+                                double progress_estimate) override {
     ld_info(
         "Next timestamp for shard %u is %s", shard, format_time(ts).c_str());
     received.donor_progress.push_back(DonorProgress{shard, ts, version});

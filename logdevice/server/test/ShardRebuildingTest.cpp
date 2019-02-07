@@ -126,7 +126,8 @@ class MockedShardRebuilding : public ShardRebuildingV2,
 
   void notifyShardDonorProgress(uint32_t shard,
                                 RecordTimestamp next_ts,
-                                lsn_t version) override {
+                                lsn_t version,
+                                double progress_estimate) override {
     EXPECT_EQ(shard, SHARD_IDX);
     EXPECT_EQ(version, REBUILDING_VERSION);
     donorProgress.push_back(next_ts);

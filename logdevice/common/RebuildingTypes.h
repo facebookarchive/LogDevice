@@ -191,11 +191,14 @@ class ShardRebuildingInterface {
   // Interface for the owner of a ShardRebuilding instance.
   // Gets notified when ShardRebuilding completes and when it makes enough
   // progress to notify other donors through event log.
+  // RebuildingCoordinator if the only implementation of this interface outside
+  // tests; see comments there for documentation of the methods' arguments.
   struct Listener {
     virtual void onShardRebuildingComplete(uint32_t shard_idx) = 0;
     virtual void notifyShardDonorProgress(uint32_t shard,
                                           RecordTimestamp next_ts,
-                                          lsn_t version) = 0;
+                                          lsn_t version,
+                                          double progress_estimate) = 0;
     virtual ~Listener() = default;
   };
 

@@ -239,10 +239,13 @@ void ShardRebuildingV2::startSomeChunkRebuildingsIfNeeded() {
     listener_->notifyShardDonorProgress(
         shard_,
         chunkRebuildings_.begin()->first.oldestTimestamp,
-        rebuildingVersion_);
+        rebuildingVersion_,
+        readingProgress_);
   } else if (!readBuffer_.empty()) {
-    listener_->notifyShardDonorProgress(
-        shard_, readBuffer_.front()->oldestTimestamp, rebuildingVersion_);
+    listener_->notifyShardDonorProgress(shard_,
+                                        readBuffer_.front()->oldestTimestamp,
+                                        rebuildingVersion_,
+                                        readingProgress_);
   }
 }
 

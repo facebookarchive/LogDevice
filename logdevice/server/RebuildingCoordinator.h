@@ -121,10 +121,14 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
    * @param ts       Timestamp of the next record to be rebuilt.
    * @param version  LSN of the last SHARD_NEEDS_REBUILD event log record that
    *                 was taken into account for rebuilding this shard.
+   * @param progress_estimate  A number between 0 and 1 estimating the
+   *                 fraction of work done so far. Exported as a stat.
+   *                 -1 if not available; in this case stat is left unchanged.
    */
   void notifyShardDonorProgress(uint32_t shard,
                                 RecordTimestamp next_ts,
-                                lsn_t version) override;
+                                lsn_t version,
+                                double progress_estimate) override;
 
   /*
    * Called when RebuildingPlanner completes for a log.
@@ -487,11 +491,11 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
     // the shard but is destroyed after we acknowledged that all donors rebuilt
     // it.
     bool rebuildingSetContainsMyself{false};
-    // RAII helper to decrease stat rebuilding_set_contains_myself when
-    // ShardState is destroyed.
+    // RAII helpers to decrease stats when ShardState is destroyed.
     PerShardStatToken rebuildingSetContainsMyselfStat;
     PerShardStatToken restoreSetContainsMyselfStat;
     PerShardStatToken waitingForUndrainStat;
+    PerShardStatToken progressStat;
 
     // true iff our node is a donor for this rebuilding and hasn't finished
     // rebuilding yet. When all LogRebuildings finish, this is set to false

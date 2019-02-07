@@ -283,7 +283,8 @@ void RebuildingCoordinator::noteRebuildingSettingsChanged() {
 
     // If global window size was decreased (e.g. global window got enabled) we
     // may want to write a SHARD_DONOR_PROGRESS event for some shards.
-    notifyShardDonorProgress(s.first, s.second.myProgress, s.second.version);
+    notifyShardDonorProgress(
+        s.first, s.second.myProgress, s.second.version, -1);
     // If global window size was increased (e.g. global window got disabled) we
     // may want to advance global window end.
     if (!restartIsScheduledForShard(s.first)) {
@@ -476,6 +477,7 @@ void RebuildingCoordinator::notifyShardRebuiltCB(uint32_t shard_idx) {
   shard_state.planner.reset();
   shard_state.logsWithPlan.clear();
   shard_state.participating = false;
+  shard_state.progressStat.setValue((int64_t)1e6);
 
   shard_state.max_rebuild_by_retention_backlog =
       std::chrono::milliseconds::zero();
@@ -666,7 +668,9 @@ void RebuildingCoordinator::restartForShard(uint32_t shard_idx,
 
   const auto* rsi = set.getForShardOffset(shard_idx);
   if (rsi == nullptr) {
-    // There is nothing to restart.
+    // The shard is not in rebuilding set anymore, presumably because
+    // the rebuilding was acked. Remove the shard's state.
+    shardsRebuilding_.erase(shard_idx);
     return;
   }
 
@@ -710,6 +714,8 @@ void RebuildingCoordinator::restartForShard(uint32_t shard_idx,
   shard_state.version = rsi->version;
   shard_state.rebuilding_started_ts =
       set.getLastSeenShardNeedsRebuildTS(shard_idx);
+  shard_state.progressStat.assign(
+      getStats(), &PerShardStats::rebuilding_progress_ppm, shard_idx, 0);
 
   // Install a delay timer to support the feature to skip rebuilding data logs.
   // If the setting is enabled, the timer just delays the SHARD_IS_REBUILT
@@ -790,10 +796,19 @@ void RebuildingCoordinator::restartForShard(uint32_t shard_idx,
   }
 
   if (!rsi->donor_progress.count(myNodeId_)) {
-    // I am not a donor node for this rebuilding, do not create ShardRebuilding
-    // state machine. Our job is just to wait for all donors to notify they
-    // finished to rebuild the shard so that we can acknowledge our shard was
-    // rebuilt.
+    // I am not a donor node for this rebuilding, either because I'm in
+    // rebuilding set or because I've already finished the rebuilding.
+    // Do not create ShardRebuilding state machine. Our job is just to wait for
+    // all donors to notify they finished to rebuild the shard so that we can
+    // acknowledge our shard was rebuilt.
+
+    if (set.isDonor(myNodeId_, shard_idx)) {
+      // I used to be a donor but now I'm done. Report 100% progress.
+      shard_state.progressStat.setValue((int64_t)1e6);
+    } else {
+      // I'm not a donor. Report "N/A" progress.
+      shard_state.progressStat.setValue(0);
+    }
     return;
   }
 
@@ -803,6 +818,7 @@ void RebuildingCoordinator::restartForShard(uint32_t shard_idx,
   shard_state.globalWindowEnd = RecordTimestamp::min();
   shard_state.myProgress = RecordTimestamp::min();
   shard_state.lastReportedProgress = RecordTimestamp::min();
+  shard_state.progressStat.setValue(1);
   trySlideGlobalWindow(shard_idx, set);
 
   RebuildingPlanner::Parameters params{
@@ -1020,6 +1036,7 @@ void RebuildingCoordinator::onShardIsRebuilt(node_index_t donor_node_idx,
     // TODO (#13606244): This is not fully correct, probably better to use
     //                   local checkpoint instead.
     abortShardRebuilding(shard_idx);
+    shard_state.progressStat.setValue((int64_t)1e6);
   }
 
   if (shouldAcknowledgeRebuilding(shard_idx, set)) {
@@ -1338,6 +1355,13 @@ void RebuildingCoordinator::onUpdate(const EventLogRebuildingSet& set,
     for (auto& shard : set.getRebuildingShards()) {
       scheduleRestartForShard(shard.first);
     }
+    // Also schedule restarts (actually aborts) for shards that disappeared
+    // from rebuilding set, presumably because they were acked.
+    for (auto& kv : shardsRebuilding_) {
+      if (set.getForShardOffset(kv.first) == nullptr) {
+        scheduleRestartForShard(kv.first);
+      }
+    }
     return;
   }
   switch (delta->getType()) {
@@ -1571,11 +1595,17 @@ void RebuildingCoordinator::notifyAckMyShardRebuilt(uint32_t shard,
 
 void RebuildingCoordinator::notifyShardDonorProgress(uint32_t shard,
                                                      RecordTimestamp next_ts,
-                                                     lsn_t version) {
+                                                     lsn_t version,
+                                                     double progress_estimate) {
   auto it_shard = shardsRebuilding_.find(shard);
   ld_check(it_shard != shardsRebuilding_.end());
   auto& shard_state = it_shard->second;
   std::chrono::milliseconds window_size = rebuildingSettings_->global_window;
+
+  if (progress_estimate > 0) {
+    shard_state.progressStat.setValue(
+        std::max(1l, (int64_t)ceil(progress_estimate * 1e6)));
+  }
 
   if (window_size == std::chrono::milliseconds::max()) {
     // Global window is disabled, no need to write SHARD_DONOR_PROGRESS.
