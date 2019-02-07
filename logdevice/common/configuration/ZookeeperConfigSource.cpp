@@ -28,6 +28,7 @@
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/TextConfigUpdater.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/plugin/ZookeeperClientFactory.h"
 #include "logdevice/include/Err.h"
 
 namespace facebook { namespace logdevice {
@@ -153,9 +154,11 @@ class ZookeeperConfigSource::BackgroundThread {
 
 ZookeeperConfigSource::ZookeeperConfigSource(
     std::chrono::milliseconds polling_delay,
-    std::shared_ptr<ZookeeperClientFactory> zookeeper_client_factory)
+    std::shared_ptr<ZookeeperClientFactory> zookeeper_client_factory,
+    std::string uri_scheme)
     : polling_delay_(polling_delay),
-      zookeeper_client_factory_(std::move(zookeeper_client_factory)) {}
+      zookeeper_client_factory_(std::move(zookeeper_client_factory)),
+      uri_scheme_(uri_scheme) {}
 
 Status ZookeeperConfigSource::getConfig(const std::string& quorum_path,
                                         Output* /* out */) {
@@ -177,7 +180,7 @@ Status ZookeeperConfigSource::getConfig(const std::string& quorum_path,
 int ZookeeperConfigSource::requestZnode(const std::string& quorum,
                                         const std::string& path,
                                         const bool with_data) {
-  ZookeeperClient* zkclient = getClient(quorum);
+  ZookeeperClientBase* zkclient = getClient(quorum);
   if (zkclient == nullptr) {
     return -1;
   }
@@ -189,7 +192,6 @@ int ZookeeperConfigSource::requestZnode(const std::string& quorum,
     requests_in_flight_.push_back(*ctx);
   }
 
-  std::shared_ptr<zhandle_t> zh = zkclient->getHandle();
   // Callbacks bind to `this'; destructor disarms all callbacks so this is
   // safe.
   if (with_data) {
@@ -211,14 +213,17 @@ int ZookeeperConfigSource::requestZnode(const std::string& quorum,
   return 0;
 }
 
-ZookeeperClient* ZookeeperConfigSource::getClient(const std::string& quorum) {
+ZookeeperClientBase*
+ZookeeperConfigSource::getClient(const std::string& quorum) {
+  ZookeeperConfig zkcfg(
+      quorum, uri_scheme_, std::chrono::seconds(ZK_SESSION_TIMEOUT_SEC));
+
   std::lock_guard<std::mutex> guard(mutex_);
   auto it = zkclients_.find(quorum);
   if (it == zkclients_.end()) {
     try {
       auto insert_result = zkclients_.emplace(
-          quorum,
-          std::make_unique<ZookeeperClient>(quorum, std::chrono::seconds(10)));
+          quorum, zookeeper_client_factory_->getClient(zkcfg));
       it = insert_result.first;
     } catch (const ConstructorFailed&) {
       ld_info("ZookeeperClient constructor failed with %s", error_name(err));

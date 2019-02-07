@@ -20,6 +20,7 @@
 #include <zookeeper/zookeeper.h>
 
 #include "logdevice/common/ConfigSource.h"
+#include "logdevice/common/configuration/ZookeeperConfig.h"
 #include "logdevice/common/plugin/ZookeeperClientFactory.h"
 
 /**
@@ -29,8 +30,7 @@
 
 namespace facebook { namespace logdevice {
 
-class ZookeeperClient;
-class PluginRegistry;
+class ZookeeperClientBase;
 
 class ZookeeperConfigSource : public ConfigSource {
  public:
@@ -49,18 +49,21 @@ class ZookeeperConfigSource : public ConfigSource {
 
   explicit ZookeeperConfigSource(
       std::chrono::milliseconds retry_delay,
-      std::shared_ptr<ZookeeperClientFactory> zookeeper_client_factory);
+      std::shared_ptr<ZookeeperClientFactory> zookeeper_client_factory,
+      std::string uri_scheme = configuration::ZookeeperConfig::URI_SCHEME_IP);
   explicit ZookeeperConfigSource(
-      std::shared_ptr<ZookeeperClientFactory> zookeeper_client_factory);
+      std::shared_ptr<ZookeeperClientFactory> zookeeper_client_factory,
+      std::string uri_scheme = configuration::ZookeeperConfig::URI_SCHEME_IP);
   ZookeeperConfigSource() = delete;
   ~ZookeeperConfigSource() override;
 
  private:
-  // Protects all data structures, ensures we only run one callback at a time
-  // in case we're running with multithreaded Zookeeper.
+  // Protects all data structures, ensures we only run one callback at a
+  // time in case we're running with multithreaded Zookeeper.
   std::mutex mutex_;
   // Owns the Zookeeper connections (keyed by quorum string)
-  std::unordered_map<std::string, std::unique_ptr<ZookeeperClient>> zkclients_;
+  std::unordered_map<std::string, std::unique_ptr<ZookeeperClientBase>>
+      zkclients_;
   // Background thread for polling and retrying.
   const std::chrono::milliseconds polling_delay_;
   class BackgroundThread;
@@ -71,6 +74,10 @@ class ZookeeperConfigSource : public ConfigSource {
   std::unordered_map<std::string, int64_t> delivered_versions_;
 
   std::shared_ptr<ZookeeperClientFactory> zookeeper_client_factory_;
+
+  // URI Scheme, default value is "ip"
+  std::string uri_scheme_;
+  const int ZK_SESSION_TIMEOUT_SEC = 10;
 
   // Track all inflight requests, to delete any outstanding ones in the
   // destructor.
@@ -97,7 +104,7 @@ class ZookeeperConfigSource : public ConfigSource {
   folly::IntrusiveList<RequestContext, &RequestContext::list_hook>
       requests_in_flight_;
 
-  ZookeeperClient* getClient(const std::string& quorum);
+  ZookeeperClientBase* getClient(const std::string& quorum);
   // Kicks off a zoo_aget() or zoo_aexists() (depending on `with_data')
   // request for the specified quorum+path
   int requestZnode(const std::string& quorum,
@@ -112,8 +119,8 @@ class ZookeeperConfigSource : public ConfigSource {
                                      const struct ::Stat* stat,
                                      const void* context_void);
 
-  // Accessor for `bg_thread_' with lazy initialization.  Mutex should not be
-  // held.
+  // Accessor for `bg_thread_' with lazy initialization.  Mutex should not
+  // be held.
   BackgroundThread& bgThread();
 };
 
