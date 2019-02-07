@@ -2510,12 +2510,47 @@ void Settings::defineSettings(SettingEasyInit& init) {
        CLIENT,
        SettingsCategory::Monitoring);
 
+  init("enable-nodes-configuration-manager",
+       &enable_nodes_configuration_manager,
+       "false", // defaults to false
+       nullptr, // no custom validation necessary
+       "If set, NodesConfigurationManager and its workflow will be enabled.",
+       CLIENT | SERVER | REQUIRES_RESTART,
+       SettingsCategory::Configuration);
+
+  init("admin-client-capabilities",
+       &admin_client_capabilities,
+       "false", // defaults to false
+       nullptr, // no custom validation necessary
+       "If set, the client will have the capabilities for administrative "
+       "operations such as changing NodesConfiguration. Usually used by "
+       "emergency tooling. Beware that admin clients use a different "
+       "NodesConfigurationStore that may not support a large fan-out, so "
+       "this settings shouldn't be applied to large number of clients "
+       "(e.g., through client_settings in settings config).",
+       CLIENT,
+       SettingsCategory::Configuration);
+
+  init("nodes-configuration-store-file-path",
+       &nodes_configuration_store_file_path,
+       "", // defaults to empty
+       nullptr,
+       "If set, the source of truth of nodes configuration used by NCM will be "
+       "from the files specified by the following paths instead of the default "
+       "(zookeeper) store. Only effective when "
+       "--enable-nodes-configuration-manager=true; Used by "
+       "integration testing.",
+       CLIENT | SERVER | REQUIRES_RESTART,
+       SettingsCategory::Testing);
+
   init("shadow-client",
        &shadow_client,
        "false",
        nullptr,
-       "Indicates if the Client object being created is a shadow client, i.e. "
-       "a client used specifically to perform traffic shadowing. This setting "
+       "Indicates if the Client object being created is a shadow client, "
+       "i.e. "
+       "a client used specifically to perform traffic shadowing. This "
+       "setting "
        "allows the client constructor to disable initialization for members "
        "that may not be necessary for shadow clients.",
        CLIENT | INTERNAL_ONLY);

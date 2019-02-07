@@ -17,8 +17,8 @@
 #include <folly/synchronization/Baton.h>
 #include <gtest/gtest.h>
 
+#include "logdevice/common/configuration/nodes/FileBasedNodesConfigurationStore.h"
 #include "logdevice/common/configuration/nodes/ZookeeperNodesConfigurationStore.h"
-#include "logdevice/common/test/FileBasedNodesConfigurationStore.h"
 #include "logdevice/common/test/InMemNodesConfigurationStore.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/common/test/ZookeeperClientInMemory.h"

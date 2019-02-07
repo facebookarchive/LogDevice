@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "logdevice/common/test/FileBasedVersionedConfigStore.h"
+#include "logdevice/common/FileBasedVersionedConfigStore.h"
 
 #include <shared_mutex>
 

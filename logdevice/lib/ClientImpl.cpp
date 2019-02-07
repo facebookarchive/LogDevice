@@ -45,6 +45,7 @@
 #include "logdevice/common/configuration/logs/LogsConfigManager.h"
 #include "logdevice/common/configuration/logs/LogsConfigStateMachine.h"
 #include "logdevice/common/configuration/logs/LogsConfigTree.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationManagerFactory.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/plugin/TraceLoggerFactory.h"
 #include "logdevice/common/settings/Settings.h"
@@ -66,6 +67,10 @@ using std::chrono::duration;
 using std::chrono::steady_clock;
 
 namespace facebook { namespace logdevice {
+
+using NodesConfigurationManager =
+    configuration::nodes::NodesConfigurationManager;
+using NCSType = configuration::nodes::NodesConfigurationStoreFactory::NCSType;
 
 class ClientBridgeImpl : public ClientBridge {
  public:
@@ -194,6 +199,24 @@ ClientImpl::ClientImpl(std::string cluster_name,
                                        plugin_registry_,
                                        credentials_,
                                        csid_);
+
+  if (settings->enable_nodes_configuration_manager) {
+    // create and initialize NodesConfigurationManager (NCM) and attach it to
+    // the Processor
+
+    // TODO: get NCS from NodesConfigurationInit instead
+    auto ncm = configuration::nodes::NodesConfigurationManagerFactory::create(
+        processor_.get(), /*store=*/nullptr, /*server_roles*/ folly::none);
+    if (ncm == nullptr) {
+      ld_critical(
+          "Unable to create NodesConfigurationManager during Client creation!");
+      throw ConstructorFailed();
+    }
+
+    // TODO: initialize NCM with an initial NodesConfiguraiton from NCInit
+    ncm->init();
+    processor_->setNodesConfigurationManager(std::move(ncm));
+  }
 
   if (!LogsConfigManager::createAndAttach(
           *processor_, false /* is_writable */)) {
@@ -2016,6 +2039,15 @@ void ClientImpl::publishEvent(Severity sev,
 
 Processor& ClientImpl::getProcessor() const {
   return *processor_;
+}
+
+configuration::NodesConfigurationAPI* ClientImpl::getNodesConfigurationAPI() {
+  return processor_->getNodesConfigurationManager();
+}
+
+configuration::nodes::NodesConfigurationManager*
+ClientImpl::getNodesConfigurationManager() {
+  return processor_->getNodesConfigurationManager();
 }
 
 size_t ClientImpl::getMaxPayloadSize() noexcept {

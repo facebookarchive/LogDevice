@@ -41,6 +41,7 @@
 #include "logdevice/common/WorkerLoadBalancing.h"
 #include "logdevice/common/ZeroCopiedRecordDisposal.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationManager.h"
 #include "logdevice/common/event_log/EventLogRebuildingSet.h"
 #include "logdevice/common/plugin/CommonBuiltinPlugins.h"
 #include "logdevice/common/plugin/SequencerLocatorFactory.h"
@@ -435,6 +436,16 @@ void Processor::markShardClean(uint32_t shard_idx) {
     // The shard wasn't already marked as clean.
     PER_SHARD_STAT_DECR(stats_, shard_dirty, shard_idx);
   }
+}
+
+void Processor::setNodesConfigurationManager(
+    std::shared_ptr<configuration::nodes::NodesConfigurationManager> ncm) {
+  ncm_ = std::move(ncm);
+}
+
+configuration::nodes::NodesConfigurationManager*
+Processor::getNodesConfigurationManager() {
+  return ncm_.get();
 }
 
 const std::shared_ptr<TraceLogger> Processor::getTraceLogger() const {

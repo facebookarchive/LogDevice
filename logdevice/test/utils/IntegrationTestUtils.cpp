@@ -90,6 +90,7 @@ Cluster::Cluster(std::string root_path,
                  std::unique_ptr<TemporaryDirectory> root_pin,
                  std::string config_path,
                  std::string epoch_store_path,
+                 std::string ncs_path,
                  std::string server_binary,
                  std::string cluster_name,
                  bool enable_logsconfig_manager,
@@ -100,6 +101,7 @@ Cluster::Cluster(std::string root_path,
       root_pin_(std::move(root_pin)),
       config_path_(std::move(config_path)),
       epoch_store_path_(std::move(epoch_store_path)),
+      ncs_path_(std::move(ncs_path)),
       server_binary_(std::move(server_binary)),
       cluster_name_(std::move(cluster_name)),
       enable_logsconfig_manager_(enable_logsconfig_manager),
@@ -491,6 +493,9 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
   std::string epoch_store_path = root_path + "/epoch_store";
   mkdir(epoch_store_path.c_str(), 0777);
 
+  std::string ncs_path = root_path + "/nc_store";
+  mkdir(ncs_path.c_str(), 0777);
+
   // Each node in the cluster has a SockaddrPair object that defines with tcp
   // port or unix domain socket it uses for its protocol port and command port.
   std::vector<SockaddrPair> addrs(nnodes);
@@ -561,6 +566,7 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
                   std::move(root_pin),
                   config_path,
                   epoch_store_path,
+                  ncs_path,
                   actual_server_binary,
                   cluster_name_,
                   enable_logsconfig_manager_,
@@ -929,6 +935,7 @@ ParamMap Cluster::commandArgsForNode(node_index_t i, const Node& node) const {
         protocol_addr_param, command_addr_param, admin_addr_param,
         {"--config-path", ParamValue{"file:" + node.config_path_}},
         {"--epoch-store-path", ParamValue{epoch_store_path_}},
+        {"--nodes-configuration-store-file-path", ParamValue{ncs_path_}},
         // Poll for config updates more frequently in tests so that they
         // progress faster
         {"--file-config-update-interval", ParamValue{"100ms"}},
@@ -991,6 +998,9 @@ ParamMap Cluster::commandArgsForNode(node_index_t i, const Node& node) const {
     default_param_map[ParamScope::ALL]
       ["--enable-logsconfig-manager"] = ParamValue{"false"};
   }
+
+  default_param_map[ParamScope::ALL]["--enable-nodes-configuration-manager"] = (
+      enable_ncm_ ? ParamValue{"true"} : ParamValue{"false"});
 
   if (!no_ssl_address_) {
     default_param_map[ParamScope::ALL]["--ssl-ca-path"] =

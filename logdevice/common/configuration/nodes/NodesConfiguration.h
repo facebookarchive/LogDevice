@@ -176,6 +176,9 @@ class NodesConfiguration {
 
   bool operator==(const NodesConfiguration& rhs) const;
 
+  // same as == operator but with config timestamp ignored
+  bool equalWithTimestampIgnored(const NodesConfiguration& rhs) const;
+
  private:
   std::shared_ptr<const ServiceDiscoveryConfig> service_discovery_;
   std::shared_ptr<const SequencerConfig> sequencer_config_;

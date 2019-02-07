@@ -1115,6 +1115,19 @@ struct Settings : public SettingsBundle {
   // Defaults to false, should only be set by traffic shadowing framework
   bool shadow_client;
 
+  // enable NodesConfigurationManager on clients and servers
+  bool enable_nodes_configuration_manager;
+
+  // if set, the client will be used for administrative operations such as
+  // emergency tooling, and it can propose changes to LD metadata such as
+  // NodesConfiguration
+  bool admin_client_capabilities;
+
+  // If set, the source of truth of nodes configuration will be from the files
+  // specified by the following paths instead of the default (zookeeper) store.
+  // Used by integration testing.
+  std::string nodes_configuration_store_file_path;
+
   // If true, sequencer routing will first try to find a sequencer in the
   // location given by sequencerAffinity before looking elsewhere.
   bool use_sequencer_affinity;

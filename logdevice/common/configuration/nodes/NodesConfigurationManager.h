@@ -35,6 +35,7 @@ class NodesConfigurationManager
 
     // self roles
     bool isClient() const;
+    bool isClientOnly() const;
     bool isTooling() const;
     bool isStorageMember() const;
     bool isSequencer() const;
@@ -52,13 +53,13 @@ class NodesConfigurationManager
    private:
     using Flags = uint16_t;
 
-    constexpr static const Flags kIsProposer = static_cast<Flags>(1 << 0);
-    constexpr static const Flags kIsCoordinator = static_cast<Flags>(1 << 1);
+    constexpr static const Flags kIsProposer = static_cast<Flags>(1u << 0);
+    constexpr static const Flags kIsCoordinator = static_cast<Flags>(1u << 1);
 
-    constexpr static const Flags kIsClient = static_cast<Flags>(1 << 2);
-    constexpr static const Flags kIsTooling = static_cast<Flags>(1 << 3);
-    constexpr static const Flags kIsStorageMember = static_cast<Flags>(1 << 4);
-    constexpr static const Flags kIsSequencer = static_cast<Flags>(1 << 5);
+    constexpr static const Flags kIsClient = static_cast<Flags>(1u << 2);
+    constexpr static const Flags kIsTooling = static_cast<Flags>(1u << 3);
+    constexpr static const Flags kIsStorageMember = static_cast<Flags>(1u << 4);
+    constexpr static const Flags kIsSequencer = static_cast<Flags>(1u << 5);
 
     // Only use the static methods to construct OperationMode
     explicit OperationMode() : mode_{0} {}

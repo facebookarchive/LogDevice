@@ -30,6 +30,14 @@
 
 namespace facebook { namespace logdevice {
 
+namespace configuration {
+class NodesConfigurationAPI;
+namespace nodes {
+class NodesConfigurationStore;
+class NodesConfigurationManager;
+} // namespace nodes
+} // namespace configuration
+
 class AppendRequest;
 class ClientAPIHitsTracer;
 class ClientBridgeImpl;
@@ -370,6 +378,10 @@ class ClientImpl : public Client,
   StatsHolder* stats() const {
     return stats_.get();
   }
+
+  configuration::NodesConfigurationAPI* getNodesConfigurationAPI();
+  configuration::nodes::NodesConfigurationManager*
+  getNodesConfigurationManager();
 
   read_stream_id_t issueReadStreamID();
 

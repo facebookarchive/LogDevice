@@ -32,6 +32,10 @@
 
 namespace facebook { namespace logdevice {
 
+namespace configuration { namespace nodes {
+class NodesConfigurationManager;
+}} // namespace configuration::nodes
+
 /**
  * @file a Processor is a pool of Worker threads running libevent 2.x
  *       event loops that collectively process Requests.
@@ -409,6 +413,21 @@ class Processor : public folly::enable_shared_from_this<Processor> {
     return false;
   }
 
+  /**
+   * Set the NodesConfigurationManager instance by having Processor owns its
+   * reference. Should only be called once immediately after Processor creation.
+   */
+  void setNodesConfigurationManager(
+      std::shared_ptr<configuration::nodes::NodesConfigurationManager> ncm);
+
+  /**
+   * Get the NodesConfigurationManager instance that implements
+   * NodesConfigurationAPI. When NCM is enabled in settings, should always
+   * return a valid pointer after Processor init workflow in client/server.
+   */
+  configuration::nodes::NodesConfigurationManager*
+  getNodesConfigurationManager();
+
   const std::shared_ptr<TraceLogger> getTraceLogger() const;
 
   std::shared_ptr<UpdateableConfig> config_;
@@ -438,6 +457,8 @@ class Processor : public folly::enable_shared_from_this<Processor> {
 
   // Maintains state of nodes in the cluster
   std::unique_ptr<ClusterState> cluster_state_;
+
+  std::shared_ptr<configuration::nodes::NodesConfigurationManager> ncm_;
 
   // Tracks append success and failures on the client, controlling the sending
   // of probes to save bandwidth

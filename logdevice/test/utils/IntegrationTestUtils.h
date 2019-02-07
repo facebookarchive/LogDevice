@@ -565,6 +565,7 @@ class ClusterFactory {
   folly::Optional<Configuration::Nodes> node_configs_;
   folly::Optional<Configuration::MetaDataLogsConfig> meta_config_;
   bool enable_logsconfig_manager_ = false;
+  bool enable_ncm_ = true;
   bool one_config_per_node_{false};
 
   configuration::InternalLogs internal_logs_;
@@ -769,6 +770,10 @@ class Cluster {
 
   std::string getConfigPath() const {
     return config_path_;
+  }
+
+  std::string getNCSPath() const {
+    return ncs_path_;
   }
 
   /**
@@ -1059,6 +1064,7 @@ class Cluster {
           std::unique_ptr<folly::test::TemporaryDirectory> root_pin,
           std::string config_path,
           std::string epoch_store_path,
+          std::string ncs_path,
           std::string server_binary,
           std::string cluster_name,
           bool enable_logsconfig_manager,
@@ -1111,9 +1117,12 @@ class Cluster {
   std::unique_ptr<folly::test::TemporaryDirectory> root_pin_;
   std::string config_path_;
   std::string epoch_store_path_;
+  // path for the file-based nodes configuration store
+  std::string ncs_path_;
   std::string server_binary_;
   std::string cluster_name_;
   bool enable_logsconfig_manager_ = false;
+  bool enable_ncm_ = true;
   bool one_config_per_node_ = false;
   std::shared_ptr<UpdateableConfig> config_;
   FileConfigSource* config_source_;

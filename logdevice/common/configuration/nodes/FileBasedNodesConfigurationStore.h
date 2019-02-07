@@ -7,8 +7,8 @@
  */
 #pragma once
 
+#include "logdevice/common/FileBasedVersionedConfigStore.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationStore.h"
-#include "logdevice/common/test/FileBasedVersionedConfigStore.h"
 
 namespace facebook { namespace logdevice { namespace configuration {
 namespace nodes {

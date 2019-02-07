@@ -29,7 +29,9 @@ using OperationMode = NodesConfigurationManager::OperationMode;
 
 /* static */ OperationMode OperationMode::forTooling() {
   OperationMode mode;
-  mode.setFlags(kIsTooling);
+  // we allow emgergency/oncall toolings to make changes to
+  // nodes configuration
+  mode.setFlags(kIsTooling | kIsProposer);
   ld_assert(mode.isValid());
   return mode;
 }
@@ -55,6 +57,10 @@ void OperationMode::upgradeToProposer() {
 
 bool OperationMode::isClient() const {
   return hasFlags(kIsClient);
+}
+
+bool OperationMode::isClientOnly() const {
+  return onlyHasFlags(kIsClient);
 }
 
 bool OperationMode::isTooling() const {
