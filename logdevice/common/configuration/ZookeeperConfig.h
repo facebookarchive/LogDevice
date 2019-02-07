@@ -46,6 +46,15 @@ class ZookeeperConfig {
         quorum_string_(std::move(quorum_string)),
         zookeeper_properties_(std::move(properties)) {}
 
+  ZookeeperConfig(std::string quorum_string,
+                  std::string uri_scheme,
+                  std::chrono::milliseconds session_timeout,
+                  folly::dynamic properties = folly::dynamic::object)
+      : session_timeout_(session_timeout),
+        uri_scheme_(uri_scheme),
+        quorum_string_(quorum_string),
+        zookeeper_properties_(std::move(properties)) {}
+
   /**
    * @return A comma-separated list of ip:ports of the ZK servers
    */
