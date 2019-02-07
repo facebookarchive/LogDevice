@@ -218,8 +218,7 @@ void NodesConfigurationManager::onNewConfig(
   // Since all accesses to staged and pending configs happen in the NCM context,
   // no need to synchronize here.
   auto new_config_version = new_config->getVersion();
-  if (hasProcessedVersion(new_config_version) ||
-      !shouldStageVersion(new_config_version)) {
+  if (!shouldStageVersion(new_config_version)) {
     return;
   }
   // Incoming config has a higher version, use it as the staged config
@@ -414,7 +413,15 @@ void NodesConfigurationManager::onProcessingFinished(
 
 bool NodesConfigurationManager::shouldStageVersion(
     membership::MembershipVersion::Type version) {
-  return !staged_nodes_config_ || staged_nodes_config_->getVersion() < version;
+  return (!staged_nodes_config_ ||
+          staged_nodes_config_->getVersion() < version) &&
+      !isProcessingVersion(version) && !hasProcessedVersion(version);
+}
+
+bool NodesConfigurationManager::isProcessingVersion(
+    membership::MembershipVersion::Type version) {
+  return pending_nodes_config_ &&
+      pending_nodes_config_->getVersion() == version;
 }
 
 bool NodesConfigurationManager::hasProcessedVersion(
