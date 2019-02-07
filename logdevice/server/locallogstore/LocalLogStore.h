@@ -331,6 +331,15 @@ class LocalLogStore : boost::noncopyable {
     // Requires: state() == AT_RECORD.
     virtual Slice getRecord() const = 0;
 
+    // Approximately what fraction of data we went through, assuming that we're
+    // reading from the beginning to the end (from minLocation() and until
+    // state() becomes AT_END). Between 0 and 1.
+    // -1 means progress estimation is not supported.
+    // state() must be one of: LIMIT_REACHED, AT_RECORD, AT_END.
+    virtual double getProgress() const {
+      return -1;
+    }
+
     // The filtering works the same way as in ReadIterator; see comment above.
     virtual void seek(const Location& location,
                       ReadFilter* filter = nullptr,

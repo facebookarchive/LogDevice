@@ -174,6 +174,8 @@ void ShardRebuildingV2::onReadTaskDone(
   storageTaskInFlight_ = false;
   ++readTasksDone_;
   nextLocation_ = readContext_->nextLocation;
+  readingProgressTimestamp_ = readContext_->progressTimestamp;
+  readingProgress_ = readContext_->progress;
   if (readContext_->iterator != nullptr) {
     iteratorInvalidationTimer_->activate(getIteratorTTL());
   }
@@ -340,7 +342,7 @@ void ShardRebuildingV2::noteRebuildingSettingsChanged() {
 }
 
 void ShardRebuildingV2::getDebugInfo(InfoRebuildingShardsTable& table) const {
-  // Timestamp of the oldest running ChunkRebuilding.
+  // Some measure of how far we have progressed, in terms of record timestamps.
   // TODO (#24665001):
   //   This doesn't match the current column name is "local_window_end".
   //   When rebuilding v2 becomes the default, rename the column.
@@ -349,6 +351,8 @@ void ShardRebuildingV2::getDebugInfo(InfoRebuildingShardsTable& table) const {
         chunkRebuildings_.begin()->first.oldestTimestamp.toMilliseconds());
   } else if (!readBuffer_.empty()) {
     table.set<4>(readBuffer_.front()->oldestTimestamp.toMilliseconds());
+  } else {
+    table.set<4>(readingProgressTimestamp_.toMilliseconds());
   }
   // Total memory used.
   table.set<9>(bytesInReadBuffer_ + chunkRebuildingBytesInFlight_);
@@ -366,6 +370,7 @@ void ShardRebuildingV2::getDebugInfo(InfoRebuildingShardsTable& table) const {
   if (nextLocation_ != nullptr) {
     table.set<19>(nextLocation_->toString());
   }
+  table.set<20>(readingProgress_);
 }
 
 std::function<void(InfoRebuildingLogsTable&)>

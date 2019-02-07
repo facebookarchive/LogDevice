@@ -5234,11 +5234,18 @@ void PartitionedRocksDBStore::performCompaction(partition_id_t partition) {
 }
 
 uint64_t PartitionedRocksDBStore::getApproximatePartitionSize(
-    rocksdb::ColumnFamilyHandle* cf) {
+    rocksdb::ColumnFamilyHandle* cf) const {
   // No keys start with a 255 byte.
   rocksdb::Range key_range(rocksdb::Slice("", 0), rocksdb::Slice("\xff", 1));
   uint64_t size;
-  db_->GetApproximateSizes(cf, &key_range, 1, &size);
+
+  // rocksdb::DB::GetApproximateSizes() is not const. I'm not sure whether or
+  // not there's a good reason for that. Let's const_cast and keep
+  // getApproximatePartitionSize() const. Otherwise we would have to make many
+  // PartitionedRocksDBStore pointers non-const just because of this method.
+  const_cast<rocksdb::DB*>(db_.get())->GetApproximateSizes(
+      cf, &key_range, 1, &size);
+
   return size;
 }
 

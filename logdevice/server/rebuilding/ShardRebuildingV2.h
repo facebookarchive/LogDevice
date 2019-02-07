@@ -183,6 +183,16 @@ class ShardRebuildingV2 : public ShardRebuildingInterface {
   // accurate time spent in each state even when state doesn't change often.
   std::unique_ptr<TimerInterface> profilingTimer_;
 
+  // How far the iterator has read, approximately.
+  // Note that this may not correspond to any record.
+  // In particular, if we're filtering out very long ranges of data, this
+  // iterator will show progress of the filtering, while any record-based
+  // indicators would stand still until we find a record that passes filter.
+  RecordTimestamp readingProgressTimestamp_ = RecordTimestamp::min();
+  // Value between 0 and 1 indicating approximately what fraction of the data
+  // we have read. -1 means not supported.
+  double readingProgress_ = 0;
+
   // Advances currentStateStartTime_ to current time, updating totalTimeByState_
   // and stats as needed.
   void flushCurrentStateTime();

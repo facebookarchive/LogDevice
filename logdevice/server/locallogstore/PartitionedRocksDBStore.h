@@ -611,7 +611,7 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
   void performMetadataCompaction();
 
   // Size in bytes of column family data.
-  uint64_t getApproximatePartitionSize(rocksdb::ColumnFamilyHandle* cf);
+  uint64_t getApproximatePartitionSize(rocksdb::ColumnFamilyHandle* cf) const;
 
   // Number of level 0 files in column family. -1 if something
   // went wrong.

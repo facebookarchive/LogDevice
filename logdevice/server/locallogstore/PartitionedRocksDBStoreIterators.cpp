@@ -829,6 +829,8 @@ PartitionedRocksDBStore::PartitionedAllLogsIterator::PartitionedAllLogsIterator(
                     std::tie(rhs.second.id, rhs.first, rhs.second.first_lsn);
               });
   }
+
+  buildProgressLookupTable();
 }
 
 IteratorState
@@ -1149,6 +1151,54 @@ PartitionedRocksDBStore::PartitionedAllLogsIterator::getStore() const {
 bool PartitionedRocksDBStore::PartitionedAllLogsIterator::tracingEnabled()
     const {
   return false;
+}
+
+void PartitionedRocksDBStore::PartitionedAllLogsIterator::
+    buildProgressLookupTable() {
+  ld_check(progress_lookup_.empty());
+  auto partitions = pstore_->getPartitionList();
+  auto unpartitioned_cf = pstore_->getUnpartitionedCFHandle();
+
+  std::vector<std::pair<partition_id_t, size_t>> sizes;
+  sizes.reserve(partitions->size() + 1);
+  sizes.emplace_back(PARTITION_INVALID,
+                     pstore_->getApproximatePartitionSize(unpartitioned_cf));
+  for (auto p : *partitions) {
+    sizes.emplace_back(
+        p->id_, pstore_->getApproximatePartitionSize(p->cf_->get()));
+  }
+  ld_check(std::is_sorted(sizes.begin(), sizes.end()));
+
+  size_t sum = 0;
+  for (auto s : sizes) {
+    sum += s.second;
+  }
+
+  size_t sum_so_far = 0;
+  for (auto s : sizes) {
+    progress_lookup_[s.first] = sum_so_far * 1.0 / sum;
+    sum_so_far += s.second;
+  }
+  ld_check_eq(sum_so_far, sum);
+}
+
+double
+PartitionedRocksDBStore::PartitionedAllLogsIterator::getProgress() const {
+  IteratorState s = state();
+  if (s == IteratorState::AT_END) {
+    return 1;
+  }
+  partition_id_t key =
+      current_partition_ ? current_partition_->id_ : PARTITION_INVALID;
+  auto it = progress_lookup_.find(key);
+  if (it == progress_lookup_.end()) {
+    // We're in unexpected partition. This is possible if we're not fitering
+    // using directory, and partitions were prepended after we build
+    // progress_lookup_ but before we seeked to first partition.
+    // In this case the progress is basically zero.
+    return 0;
+  }
+  return it->second;
 }
 
 // ==== PartitionDirectoryIterator ====

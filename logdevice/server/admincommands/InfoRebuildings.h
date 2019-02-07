@@ -57,7 +57,8 @@ class InfoRebuildingShards : public AdminCommand {
                                     "Persistent error",             // 16
                                     "Read buffer bytes",            // 17
                                     "Records in flight",            // 18
-                                    "Read pointer");                // 19
+                                    "Read pointer",                 // 19
+                                    "Progress");                    // 20
 
     auto tables =
         run_on_workers(server->getProcessor(), {0}, WorkerType::GENERAL, [&]() {

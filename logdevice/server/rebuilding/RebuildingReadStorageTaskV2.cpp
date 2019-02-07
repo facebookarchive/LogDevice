@@ -290,11 +290,13 @@ void RebuildingReadStorageTaskV2::execute() {
       context->nextLocation =
           std::shared_ptr<LocalLogStore::AllLogsIterator::Location>(
               iterator->getLocation());
+      context->progress = iterator->getProgress();
       break;
     case IteratorState::AT_END:
       context->reachedEnd = true;
       context->iterator.reset();
       context->nextLocation.reset();
+      context->progress = 1;
       break;
     case IteratorState::WOULDBLOCK:
     case IteratorState::MAX:
@@ -535,6 +537,10 @@ bool RebuildingReadStorageTaskV2::Filter::shouldProcessTimeRange(
     }
     // Be conservative.
     return true;
+  }
+
+  if (min != RecordTimestamp::min()) {
+    context->progressTimestamp = min;
   }
 
   cache.minTs = min;

@@ -141,7 +141,8 @@ typedef AdminCommandTable<uint32_t,                  /* Shard id */
                           bool,        /* Persistent error */
                           uint64_t,    /* Read buffer bytes */
                           uint64_t,    /* Records in flight */
-                          std::string  /* Read pointer */
+                          std::string, /* Read pointer */
+                          double       /* Progress */
                           >
     InfoRebuildingShardsTable;
 

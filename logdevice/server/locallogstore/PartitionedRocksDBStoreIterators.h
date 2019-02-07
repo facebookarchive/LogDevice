@@ -286,6 +286,7 @@ class PartitionedRocksDBStore::PartitionedAllLogsIterator
   lsn_t getLSN() const override;
   Slice getRecord() const override;
   std::unique_ptr<Location> getLocation() const override;
+  double getProgress() const override;
 
   void seek(const Location& location,
             ReadFilter* filter = nullptr,
@@ -319,6 +320,9 @@ class PartitionedRocksDBStore::PartitionedAllLogsIterator
                           ReadFilter* filter,
                           ReadStats* stats);
 
+  // Fills out progress_lookup_. Called once in constructor.
+  void buildProgressLookupTable();
+
   using LogDirectoryEntry = std::pair<logid_t, DirectoryEntry>;
 
   const PartitionedRocksDBStore* pstore_;
@@ -328,6 +332,12 @@ class PartitionedRocksDBStore::PartitionedAllLogsIterator
   // optimization to prevent rebuilding from unnecessarily reading partitions
   // that were created after the rebuilding started.
   const partition_id_t last_partition_id_;
+
+  // Used by getProgress(). If the iterator is in partition p,
+  // getProgress() reports progress_lookup_[p].
+  // Precalculated based on partition sizes when creating iterator.
+  // Key PARTITION_INVALID refers to unpartitioned column family.
+  std::unordered_map<partition_id_t, double> progress_lookup_;
 
   // If true, we'll keep a copy of logsdb directory and call
   // ReadFilter::shouldProcessRecordRange() based on it.

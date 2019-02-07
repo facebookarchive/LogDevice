@@ -115,6 +115,10 @@ class ShardRebuildings : public AdminCommandTable {
         {"read_pointer",
          DataType::TEXT,
          "How far we have read: partition, log ID, LSN. V2 only."},
+        {"progress",
+         DataType::REAL,
+         "Approximately what fraction of the work is done, between 0 and 1. "
+         "-1 if the implementation doesn't support progress estimation."},
     };
   }
   std::string getCommandToSend(QueryContext& /*ctx*/) const override {

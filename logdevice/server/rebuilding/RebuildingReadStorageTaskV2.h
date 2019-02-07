@@ -94,6 +94,14 @@ class RebuildingReadStorageTaskV2 : public StorageTask {
     // If we encounter too many invalid records, stall rebuilding just in case.
     size_t numMalformedRecordsSeen{0};
 
+    // Up to what timestamp we have read, approximately. This is not necessarily
+    // timestamp of any record, and this is updated even when we're filtering
+    // out all the records.
+    RecordTimestamp progressTimestamp = RecordTimestamp::min();
+    // What fraction of data we have read, approximately. Between 0 and 1.
+    // -1 if not supported.
+    double progress = 0;
+
     // Bytes read (including CSI, filtered out records and and other overhead)
     // by the last storage task.
     size_t bytesRead = 0;
