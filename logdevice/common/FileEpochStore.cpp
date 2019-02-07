@@ -394,7 +394,7 @@ void FileEpochStore::postCompletionMetaData(
           std::move(meta_properties));
 
   int rv = processor_->postWithRetrying(rq);
-  if (rv != 0) {
+  if (rv != 0 && err != E::SHUTDOWN) {
     RATELIMIT_ERROR(std::chrono::seconds(1),
                     1,
                     "Got an unexpected status code %s from "
