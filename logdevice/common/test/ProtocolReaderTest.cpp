@@ -27,10 +27,10 @@ class ProtocolReaderTest : public ::testing::Test {
     evbufs_.clear();
   }
 
-  ProtocolReader
-  createWithBytes(const void* data,
-                  const size_t size,
-                  uint16_t proto = Compatibility::MAX_PROTOCOL_SUPPORTED) {
+  ProtocolReader createWithBytes(
+      const void* data,
+      const size_t size,
+      folly::Optional<uint16_t> proto = Compatibility::MAX_PROTOCOL_SUPPORTED) {
     evbuffer* evbuf = LD_EV(evbuffer_new)();
     evbufs_.push_back(evbuf);
     int rv = LD_EV(evbuffer_add)(evbuf, data, size);
@@ -177,4 +177,31 @@ TEST_F(ProtocolReaderTest, Proto) {
     ASSERT_EQ(0x0, b);
     ASSERT_EQ(1, reader.bytesRemaining());
   }
+}
+
+TEST_F(ProtocolReaderTest, ProtoInField) {
+  const uint8_t input_bytes[] = {0x01};
+  ProtocolReader reader =
+      createWithBytes(input_bytes, sizeof(input_bytes), folly::none);
+
+  ASSERT_FALSE(reader.isProtoSet());
+  {
+    uint8_t b = 0;
+    reader.readVersion(&b);
+    ASSERT_EQ(0x1, b);
+    ASSERT_EQ(0x1, reader.proto());
+    ASSERT_TRUE(reader.isProtoSet());
+  }
+}
+
+TEST_F(ProtocolReaderTest, ProtoMustBeSetToRead) {
+  const uint8_t input_bytes[] = {0xfa, 0xce};
+  ProtocolReader reader =
+      createWithBytes(input_bytes, sizeof(input_bytes), folly::none);
+
+  uint16_t val = 0;
+  ASSERT_FALSE(reader.isProtoSet());
+  reader.read(&val);
+  ASSERT_NE(0xfaceu, val);
+  ASSERT_EQ(reader.status(), E::PROTO);
 }

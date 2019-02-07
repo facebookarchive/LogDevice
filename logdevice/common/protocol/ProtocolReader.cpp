@@ -153,7 +153,7 @@ class LinearBufferSource : public ProtocolReader::Source {
 
 ProtocolReader::ProtocolReader(std::unique_ptr<Source> src,
                                std::string context,
-                               uint16_t proto)
+                               folly::Optional<uint16_t> proto)
     : src_(std::move(src)),
       context_(std::move(context)),
       proto_(std::move(proto)),
@@ -164,15 +164,17 @@ ProtocolReader::ProtocolReader(std::unique_ptr<Source> src,
 ProtocolReader::ProtocolReader(MessageType type,
                                struct evbuffer* src,
                                size_t to_read,
-                               uint16_t proto)
+                               folly::Optional<uint16_t> proto)
     : ProtocolReader(std::make_unique<EvbufferSource>(src, to_read),
                      messageTypeNames[type].c_str(),
-                     proto) {}
+                     std::move(proto)) {}
 
-ProtocolReader::ProtocolReader(Slice src, std::string context, uint16_t proto)
+ProtocolReader::ProtocolReader(Slice src,
+                               std::string context,
+                               folly::Optional<uint16_t> proto)
     : ProtocolReader(std::make_unique<LinearBufferSource>(src),
                      std::move(context),
-                     proto) {}
+                     std::move(proto)) {}
 
 template <typename Fn>
 void ProtocolReader::readImplCb(size_t to_read, Fn&& fn) {
@@ -205,7 +207,7 @@ void ProtocolReader::readImpl(void* out, size_t to_read) {
 }
 
 void ProtocolReader::readEvbuffer(evbuffer* out, size_t to_read) {
-  if (ok() && proto_ >= proto_gate_) {
+  if (ok() && isProtoVersionAllowed()) {
     readImplCb(
         to_read, [&] { return src_->readEvbuffer(out, to_read, nread_); });
   }

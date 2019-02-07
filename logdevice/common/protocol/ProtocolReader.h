@@ -121,12 +121,38 @@ class ProtocolReader {
   }
 
   /**
+   * Reads protocol version from field and sets version.
+   */
+  template <typename T>
+  void readVersion(T* val) {
+    static_assert(
+        std::is_integral<T>::value,
+        "Field that is meant to be a version must be of an integral type.");
+
+    if (proto_.hasValue()) {
+      setError(E::PROTO);
+      return;
+    }
+
+    proto_ = 0;
+    read(val);
+
+    if (!error()) {
+      if (*val < 0 || *val > std::numeric_limits<uint16_t>::max()) {
+        setError(E::PROTO);
+      } else {
+        proto_ = *val;
+      }
+    }
+  }
+
+  /**
    * Reads the specified number of bytes into `out'.
    *
    * No-op if the reader has previously encountered an error.
    */
   void read(void* out, size_t to_read) {
-    if (proto_ < proto_gate_) {
+    if (!isProtoVersionAllowed()) {
       // No zeroing out in this case, as caller may have set an alternate
       // (non-zero) default for old protocols
     } else if (error()) {
@@ -174,7 +200,7 @@ class ProtocolReader {
   void readVector(Vector* out, size_t n) {
     // Pre-check `proto_gate_' to avoid resize() causing a side effect on an
     // old protocol
-    if (proto_ >= proto_gate_) {
+    if (isProtoVersionAllowed()) {
       checkReadableBytes(n * sizeof(typename Vector::value_type));
       if (ok() && n > 0) {
         out->resize(n);
@@ -191,7 +217,7 @@ class ProtocolReader {
    */
   template <typename Vector>
   void readVectorOfSerializable(Vector* out, size_t n) {
-    if (proto_ >= proto_gate_) {
+    if (isProtoVersionAllowed()) {
       out->resize(n);
       for (auto& o : *out) {
         o.deserialize(*this, false);
@@ -309,8 +335,21 @@ class ProtocolReader {
     return errorResult();
   }
 
+  bool isProtoSet() const {
+    return proto_.hasValue();
+  }
   uint16_t proto() const {
-    return proto_;
+    ld_assert(proto_.hasValue());
+    return proto_.value();
+  }
+  bool isProtoVersionAllowed() {
+    if (!proto_.hasValue()) {
+      setError(E::PROTO); // protocol version must be set
+      return false;
+    } else if (proto_.value() < proto_gate_) {
+      return false;
+    }
+    return true;
   }
   Status status() const {
     return status_;
@@ -348,21 +387,23 @@ class ProtocolReader {
 
   ProtocolReader(std::unique_ptr<Source> src,
                  std::string context,
-                 uint16_t proto);
+                 folly::Optional<uint16_t> proto = folly::none);
 
   ProtocolReader(MessageType type,
                  struct evbuffer* src,
                  size_t to_read,
-                 uint16_t proto);
+                 folly::Optional<uint16_t> proto = folly::none);
 
-  ProtocolReader(Slice src, std::string context, uint16_t proto);
+  ProtocolReader(Slice src,
+                 std::string context,
+                 folly::Optional<uint16_t> proto = folly::none);
 
  private:
   std::unique_ptr<Source> src_;
   const std::string context_;
 
   // Socket protocol
-  uint16_t proto_;
+  folly::Optional<uint16_t> proto_;
 
   size_t src_left_;
   size_t nread_ = 0;

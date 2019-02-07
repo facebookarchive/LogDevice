@@ -7,6 +7,8 @@
  */
 #pragma once
 
+#include "logdevice/common/SerializableData.h"
+#include "logdevice/common/Worker.h"
 #include "logdevice/include/Err.h"
 #include "logdevice/include/Record.h"
 #include "logdevice/include/types.h"
@@ -14,12 +16,27 @@
 namespace facebook { namespace logdevice {
 
 // Header of a snapshot record.
-struct RSMSnapshotHeader {
+struct RSMSnapshotHeader : public SerializableData {
+  enum Version { BASE_VERSION = 0 };
+
   uint32_t format_version; // unused, might be handy in the future.
   uint32_t flags;          // unused, might be handy in the future.
   uint64_t byte_offset;    // byte offset of last considered delta.
   uint64_t offset;         // offset of last considered delta.
   lsn_t base_version;      // version of last applied delta.
+
+  RSMSnapshotHeader() = default;
+
+  RSMSnapshotHeader(uint32_t format_version,
+                    uint32_t flags,
+                    uint64_t byte_offset,
+                    uint64_t offset,
+                    lsn_t base_version)
+      : format_version(format_version),
+        flags(flags),
+        byte_offset(byte_offset),
+        offset(offset),
+        base_version(base_version) {}
 
   // If this flag is set, use ZSTD to compress / decompress the snapshot
   // payload.
@@ -36,6 +53,11 @@ struct RSMSnapshotHeader {
    */
   static int deserialize(Payload payload, RSMSnapshotHeader& out);
 
+  void
+  deserialize(ProtocolReader& reader,
+              bool evbuffer_zero_copy,
+              folly::Optional<size_t> expected_size = folly::none) override;
+
   /**
    * Serialize a RSMSnapshotHeader onto a payload.
    *
@@ -48,11 +70,14 @@ struct RSMSnapshotHeader {
   static int serialize(const RSMSnapshotHeader& hdr,
                        void* payload,
                        size_t buf_size);
-};
 
-// Prefer a static assert rather than using __attribute__((__packed__)) to
-// prevent inadvertent creation of unaligned fields that trigger undefined
-// behavior.
-static_assert(sizeof(RSMSnapshotHeader) == 32, "wrong expected size");
+  void serialize(ProtocolWriter& writer) const override;
+
+  const char* name() const override {
+    return "RSMSnapshotHeader";
+  }
+
+  bool operator==(const RSMSnapshotHeader&) const;
+};
 
 }} // namespace facebook::logdevice

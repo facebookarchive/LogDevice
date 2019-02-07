@@ -193,7 +193,7 @@ class StringBufferDestination : public LinearBufferDestinationBase {
 
 ProtocolWriter::ProtocolWriter(std::unique_ptr<Destination> dest,
                                std::string context,
-                               uint16_t proto)
+                               folly::Optional<uint16_t> proto)
     : dest_(std::move(dest)),
       context_(std::move(context)),
       proto_(std::move(proto)) {
@@ -202,19 +202,21 @@ ProtocolWriter::ProtocolWriter(std::unique_ptr<Destination> dest,
 
 ProtocolWriter::ProtocolWriter(MessageType type,
                                struct evbuffer* dest,
-                               uint16_t proto)
+                               folly::Optional<uint16_t> proto)
     : ProtocolWriter(std::make_unique<EvbufferDestination>(dest),
                      messageTypeNames[type].c_str(),
                      proto) {}
 
-ProtocolWriter::ProtocolWriter(Slice dest, std::string context, uint16_t proto)
+ProtocolWriter::ProtocolWriter(Slice dest,
+                               std::string context,
+                               folly::Optional<uint16_t> proto)
     : ProtocolWriter(std::make_unique<LinearBufferDestination>(dest),
                      std::move(context),
-                     proto) {}
+                     std::move(proto)) {}
 
 ProtocolWriter::ProtocolWriter(std::string* dest,
                                std::string context,
-                               uint16_t proto,
+                               folly::Optional<uint16_t> proto,
                                folly::Optional<size_t> max_size)
     : ProtocolWriter(std::make_unique<StringBufferDestination>(
                          dest,
@@ -245,7 +247,7 @@ void ProtocolWriter::writeImpl(const void* data, size_t nbytes) {
 }
 
 void ProtocolWriter::writeEvbuffer(evbuffer* data) {
-  if (proto_ < proto_gate_) {
+  if (!isProtoVersionAllowed()) {
     return;
   }
 
@@ -257,7 +259,7 @@ void ProtocolWriter::writeEvbuffer(evbuffer* data) {
 }
 
 void ProtocolWriter::writeWithoutCopy(const void* data, size_t nbytes) {
-  if (proto_ < proto_gate_) {
+  if (!isProtoVersionAllowed()) {
     return;
   }
   if (!dest_->isNull() && ok()) {

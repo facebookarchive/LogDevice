@@ -7,33 +7,55 @@
  */
 #include "logdevice/common/replicated_state_machine/RSMSnapshotHeader.h"
 
+#include "logdevice/common/Worker.h"
+#include "logdevice/common/protocol/ProtocolReader.h"
+#include "logdevice/common/protocol/ProtocolWriter.h"
+
 namespace facebook { namespace logdevice {
-
-int RSMSnapshotHeader::deserialize(Payload payload, RSMSnapshotHeader& out) {
-  if (payload.size() < sizeof(out)) {
-    err = E::BADMSG;
-    return -1;
-  }
-
-  const uint8_t* ptr = reinterpret_cast<const uint8_t*>(payload.data());
-  memcpy(&out, ptr, sizeof(out));
-
-  return sizeof(out);
-}
 
 int RSMSnapshotHeader::serialize(const RSMSnapshotHeader& hdr,
                                  void* payload,
                                  size_t size) {
-  if (payload) {
-    if (size < sizeof(hdr)) {
-      err = E::NOBUFS;
-      return -1;
-    }
-    uint8_t* ptr = reinterpret_cast<uint8_t*>(payload);
-    memcpy(ptr, &hdr, sizeof(hdr));
-  }
+  ProtocolWriter writer({payload, size}, "RSMSnapshotHeader::serialize");
+  hdr.serialize(writer);
+  return writer.result();
+}
 
-  return sizeof(hdr);
+int RSMSnapshotHeader::deserialize(Payload payload, RSMSnapshotHeader& out) {
+  ProtocolReader reader(
+      {payload.data(), payload.size()}, "RSMSnapshotHeader::deserialize");
+  out.deserialize(reader, /*zero_copy=*/false);
+
+  if (reader.error()) {
+    err = reader.status();
+    return -1;
+  } else {
+    return reader.bytesRead();
+  }
+}
+
+void RSMSnapshotHeader::deserialize(ProtocolReader& reader,
+                                    bool /* unused */,
+                                    folly::Optional<size_t> /* unused */) {
+  reader.readVersion(&format_version);
+  reader.read(&flags);
+  reader.read(&byte_offset);
+  reader.read(&offset);
+  reader.read(&base_version);
+}
+
+void RSMSnapshotHeader::serialize(ProtocolWriter& writer) const {
+  writer.writeVersion(format_version);
+  writer.write(flags);
+  writer.write(byte_offset);
+  writer.write(offset);
+  writer.write(base_version);
+}
+
+bool RSMSnapshotHeader::operator==(const RSMSnapshotHeader& out) const {
+  return format_version == out.format_version && flags == out.flags &&
+      byte_offset == out.byte_offset && offset == out.offset &&
+      base_version == out.base_version;
 }
 
 }} // namespace facebook::logdevice

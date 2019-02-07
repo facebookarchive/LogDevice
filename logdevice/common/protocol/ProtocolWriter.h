@@ -105,12 +105,32 @@ class ProtocolWriter {
   }
 
   /**
+   * Sets protocol version (or checks if set proto version is correct) and
+   * proceeds with write() if everything checks out.
+   */
+  template <typename T>
+  void writeVersion(const T& val) {
+    static_assert(
+        std::is_integral<T>::value,
+        "Field that is meant to be a version must be of an integral type.");
+
+    if (proto_.hasValue() && proto_.value() != val) {
+      setError(E::PROTO);
+    } else if (val < 0 || val > std::numeric_limits<uint16_t>::max()) {
+      setError(E::PROTO);
+    } else {
+      proto_ = val;
+      write(val);
+    }
+  }
+
+  /**
    * Writes the specified range into the socket.
    *
    * No-op if the writer has previously encountered an error.
    */
   void write(const void* data, size_t nbytes) {
-    if (proto_ < proto_gate_) {
+    if (!isProtoVersionAllowed()) {
       return;
     }
 
@@ -157,7 +177,7 @@ class ProtocolWriter {
    */
   template <typename Vector>
   void writeVectorOfSerializable(const Vector& v) {
-    if (proto_ < proto_gate_) {
+    if (!isProtoVersionAllowed()) {
       return;
     }
     for (const auto& e : v) {
@@ -214,8 +234,20 @@ class ProtocolWriter {
   }
 
   uint16_t proto() const {
-    return proto_;
+    ld_assert(proto_.hasValue());
+    return proto_.value();
   }
+
+  bool isProtoVersionAllowed() {
+    if (!proto_.hasValue()) {
+      setError(E::PROTO); // protocol version must be set
+      return false;
+    } else if (proto_.value() < proto_gate_) {
+      return false;
+    }
+    return true;
+  }
+
   Status status() const {
     return status_;
   }
@@ -231,13 +263,15 @@ class ProtocolWriter {
 
   ProtocolWriter(std::unique_ptr<Destination> dest,
                  std::string context,
-                 uint16_t proto);
+                 folly::Optional<uint16_t> proto = folly::none);
 
   ProtocolWriter(MessageType type,
                  struct evbuffer* dest, // may be null
-                 uint16_t proto);
+                 folly::Optional<uint16_t> proto = folly::none);
 
-  ProtocolWriter(Slice dest, std::string context, uint16_t proto);
+  ProtocolWriter(Slice dest,
+                 std::string context,
+                 folly::Optional<uint16_t> proto = folly::none);
 
   // Use a std::string (@param dest) as destination. ProtocolWriter::write()
   // will resize the string with potential allocations. Users can also
@@ -246,7 +280,7 @@ class ProtocolWriter {
   // ProtocolWriter
   ProtocolWriter(std::string* dest,
                  std::string context,
-                 uint16_t proto,
+                 folly::Optional<uint16_t> proto = folly::none,
                  folly::Optional<size_t> max_size = folly::none);
 
  private:
@@ -255,7 +289,7 @@ class ProtocolWriter {
 
   size_t nwritten_ = 0;
   // Socket protocol
-  uint16_t proto_;
+  folly::Optional<uint16_t> proto_;
   // Protocol gate; write calls are ignored if `proto_' < `proto_gate_'
   uint16_t proto_gate_ = 0;
   Status status_ = E::OK;
