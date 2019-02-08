@@ -52,7 +52,7 @@ class Envelope : public BWAvailableCallback {
 
   // Used to track an Envelope on various queued in the Socket as
   // an Envelope is transmitted.
-  folly::IntrusiveListHook socket_links_;
+  folly::IntrusiveListHook links_;
 
   // BWAailableCallback Implementation.
   void operator()(FlowGroup& fg, std::mutex& flow_meters_mutex) override;

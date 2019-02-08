@@ -15,6 +15,7 @@
 #include <folly/lang/Bits.h>
 
 #include "logdevice/common/CostQueue.h"
+#include "logdevice/common/FlowMeter.h"
 #include "logdevice/common/Priority.h"
 #include "logdevice/common/checks.h"
 
@@ -115,7 +116,7 @@ class PriorityQueue : boost::noncopyable {
 
   /**
    * Remove and apply function callback on items enqueued with a priority
-   * at or below max_trimable_priority until at least to_cut amount of cost
+   * at or below max_trimable_priority until at least 'to_cut' amount of cost
    * has been removed from the queue.
    *
    * @returns true  if to_cut is 0, or sufficent low priority elements were
@@ -126,6 +127,14 @@ class PriorityQueue : boost::noncopyable {
   bool trim(Priority max_trimable_priority,
             uint64_t to_cut,
             std::function<void(T&)> = nullptr);
+
+  void setType(FlowGroupType type) {
+    type_ = type;
+  }
+
+  FlowGroupType getType() {
+    return type_;
+  }
 
  private:
   using Queue = CostQueueBase<T, ListHook>;
@@ -144,6 +153,8 @@ class PriorityQueue : boost::noncopyable {
 
   // One CostQueue "bucket" per-priority level.
   CostQueues queues_;
+
+  FlowGroupType type_{FlowGroupType::NONE};
 
   static_assert(asInt(Priority::NUM_PRIORITIES) <
                     sizeof(unsigned long) * CHAR_BIT,

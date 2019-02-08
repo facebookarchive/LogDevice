@@ -68,7 +68,7 @@ class BWAvailableCallback {
     std::swap(flow_group_, other.flow_group_);
     std::swap(priority_, other.priority_);
     flow_group_links_.swap_nodes(other.flow_group_links_);
-    socket_links_.swap_nodes(other.socket_links_);
+    links_.swap_nodes(other.links_);
   }
 
   /**
@@ -106,7 +106,7 @@ class BWAvailableCallback {
 
   // The callback is also tracked by the Socket so that it can be cleaned
   // up when a socket is closed.
-  folly::IntrusiveListHook socket_links_;
+  folly::IntrusiveListHook links_;
 
   Priority priority_;
 };

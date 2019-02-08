@@ -65,6 +65,18 @@ namespace facebook { namespace logdevice {
 
 class FlowGroupsUpdate {
  public:
+  FlowGroupsUpdate(size_t num_scopes, FlowGroupType type) {
+    type_ = type;
+    group_entries.resize(num_scopes);
+    for (auto& ge : group_entries) {
+      ge.policy.setType(type);
+    }
+  }
+
+  FlowGroupType getType() {
+    return type_;
+  }
+
   struct GroupEntry {
     /**
      * OverflowEntries record the bandwidth that cannot be placed
@@ -112,7 +124,8 @@ class FlowGroupsUpdate {
         overflow_entries;
   };
 
-  std::array<GroupEntry, NodeLocation::NUM_ALL_SCOPES> group_entries;
+  FlowGroupType type_{FlowGroupType::NONE};
+  std::vector<GroupEntry> group_entries;
 };
 
 class FlowGroup {
@@ -204,6 +217,16 @@ class FlowGroup {
 
   void configure(bool configured) {
     configured_ = configured;
+  }
+
+  FlowGroupType getType() {
+    return type_;
+  }
+
+  void setType(FlowGroupType type) {
+    type_ = type;
+    meter_.setType(type);
+    priorityq_.setType(type);
   }
 
   /**
@@ -407,6 +430,8 @@ class FlowGroup {
   // variable is set to true when we issue a callback and reset to false
   // either after the first message is sent or the callback completes.
   bool assert_can_drain_ = false;
+
+  FlowGroupType type_{FlowGroupType::NONE};
 };
 
 }} // namespace facebook::logdevice

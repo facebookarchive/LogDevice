@@ -94,8 +94,8 @@ class SocketBase {};
  */
 class TrafficShappingSocket : public SocketBase {
  public:
-  using PendingQueue = PriorityQueue<Envelope, &Envelope::socket_links_>;
-  using EnvelopeQueue = CostQueue<Envelope, &Envelope::socket_links_>;
+  using PendingQueue = PriorityQueue<Envelope, &Envelope::links_>;
+  using EnvelopeQueue = CostQueue<Envelope, &Envelope::links_>;
 };
 /**
  * this will we a wrapper around our socket which knows about protocol and

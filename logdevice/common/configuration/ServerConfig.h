@@ -62,6 +62,7 @@ class ServerConfig {
   using SequencersConfig = facebook::logdevice::configuration::SequencersConfig;
   using TraceLoggerConfig =
       facebook::logdevice::configuration::TraceLoggerConfig;
+  using ShapingConfig = facebook::logdevice::configuration::ShapingConfig;
   using TrafficShapingConfig =
       facebook::logdevice::configuration::TrafficShapingConfig;
   using SettingsConfig = std::unordered_map<std::string, std::string>;
@@ -490,6 +491,10 @@ class ServerConfig {
    */
   const TrafficShapingConfig& getTrafficShapingConfig() const {
     return trafficShapingConfig_;
+  }
+
+  const ShapingConfig* getTrafficShapingConfigPtr() const {
+    return &trafficShapingConfig_;
   }
 
   /**

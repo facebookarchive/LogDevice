@@ -58,7 +58,7 @@ class TrafficShaper {
   std::mutex mainLoopWaitMutex_;
 
   std::chrono::microseconds updateInterval_{1000};
-  FlowGroupsUpdate update_;
+  std::unique_ptr<FlowGroupsUpdate> nw_update_;
 
   // comes last to ensure unsubscription before rest of destruction
   ConfigSubscriptionHandle config_update_sub_;
@@ -77,6 +77,10 @@ class TrafficShaper {
    */
   void mainLoop();
 
+  bool dispatchUpdateCommon(const configuration::ShapingConfig* shaping_config,
+                            int nworkers,
+                            FlowGroupsUpdate& update,
+                            StatsHolder* stats);
   /**
    * Construct and release a FlowGroupsUpdate to each worker.
    *
@@ -84,7 +88,7 @@ class TrafficShaper {
    *         false  All FlowGroups are disabled, so the TrafficShaping
    *                thread can sleep until a configuration change occurs.
    */
-  bool dispatchUpdate();
+  bool dispatchUpdateNw();
 
   void setIntervalImpl(const decltype(updateInterval_)& interval);
 };

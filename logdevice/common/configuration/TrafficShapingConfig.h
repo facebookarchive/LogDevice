@@ -9,17 +9,11 @@
 
 #include <array>
 
-#include "logdevice/common/configuration/FlowGroupPolicy.h"
-#include "logdevice/common/configuration/NodeLocation.h"
-#include "logdevice/common/configuration/TrafficClass.h"
-
-namespace folly {
-struct dynamic;
-}
+#include "logdevice/common/configuration/ShapingConfig.h"
 
 namespace facebook { namespace logdevice { namespace configuration {
 
-struct TrafficShapingConfig {
+struct TrafficShapingConfig : public ShapingConfig {
   TrafficShapingConfig();
 
   bool configured(NodeLocationScope scope) const {
@@ -29,7 +23,6 @@ struct TrafficShapingConfig {
   folly::dynamic toFollyDynamic() const;
 
   TrafficClass default_read_traffic_class = TrafficClass::READ_BACKLOG;
-  std::array<FlowGroupPolicy, NodeLocation::NUM_ALL_SCOPES> flowGroupPolicies;
 };
 
 }}} // namespace facebook::logdevice::configuration

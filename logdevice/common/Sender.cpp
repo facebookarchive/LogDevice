@@ -25,6 +25,7 @@
 #include "logdevice/common/FlowGroup.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/ResourceBudget.h"
+#include "logdevice/common/ShapingContainer.h"
 #include "logdevice/common/Sockaddr.h"
 #include "logdevice/common/Socket.h"
 #include "logdevice/common/SocketCallback.h"
@@ -90,23 +91,6 @@ class SenderImpl {
   // clients, keyed by 32-bit client ids. This map is empty on clients.
   std::unordered_map<ClientID, Socket, ClientID::Hash> client_sockets_;
 
-  // Traffic Shaping
-  std::array<FlowGroup, NodeLocation::NUM_ALL_SCOPES> flow_groups_;
-  // Provides mutual exclusion between application of flow group updates
-  // by the TrafficShaper thread and normal packet transmission on this
-  // Sender.
-  //
-  // Note: Flow group updates only modify the FlowMeters within FlowGroups
-  //       and perform thread safe tests to see if FlowGroups need to
-  //       be run. For this reason, the flow_meters_mutex_ does not
-  //       need to be held during operations that remove elements from
-  //       a FlowGroup's priority queue. Operations such as trim or
-  //       the cleanup of queued messages when a Socket is closed take
-  //       advantage of this property to avoid having to reach up into
-  //       the Sender to acquire this lock which, in many error paths,
-  //       is already held.
-  std::mutex flow_meters_mutex_;
-
   ClientIdxAllocator* client_id_allocator_;
 };
 
@@ -153,17 +137,16 @@ Sender::Sender(struct event_base* base,
                            -1,
                            EV_WRITE | EV_PERSIST,
                            EventHandler<Sender::onCompletedMessagesAvailable>,
-                           this)),
-      flow_groups_run_deadline_exceeded_(
-          LD_EV(event_new)(base,
-                           -1,
-                           0,
-                           EventHandler<Sender::onFlowGroupsRunRequested>,
                            this)) {
+  nw_shaping_container_ = std::make_unique<ShapingContainer>(
+      static_cast<size_t>(NodeLocationScope::ROOT) + 1,
+      base,
+      &tsc,
+      FlowGroupType::NETWORK);
+
   auto scope = NodeLocationScope::NODE;
-  for (auto& fg : impl_->flow_groups_) {
+  for (auto& fg : nw_shaping_container_->flow_groups_) {
     fg.setScope(this, scope);
-    fg.configure(tsc.configured(scope));
     scope = NodeLocation::nextGreaterScope(scope);
   }
 
@@ -181,12 +164,6 @@ Sender::Sender(struct event_base* base,
     throw ConstructorFailed();
   }
 
-  if (!flow_groups_run_deadline_exceeded_) { // unlikely
-    ld_error("Failed to create 'flow groups run deadline exceeded' event for "
-             "a Sender");
-    err = E::NOMEM;
-    throw ConstructorFailed();
-  }
   ld_check(num_workers != 0);
   ld_check(max_node_idx < std::numeric_limits<node_index_t>::max());
 }
@@ -195,17 +172,11 @@ Sender::~Sender() {
   deliverCompletedMessages();
   LD_EV(event_free)(sockets_to_close_available_);
   LD_EV(event_free)(completed_messages_available_);
-  LD_EV(event_free)(flow_groups_run_deadline_exceeded_);
 }
 
 void Sender::onCompletedMessagesAvailable(void* arg, short) {
   Sender* self = reinterpret_cast<Sender*>(arg);
   self->deliverCompletedMessages();
-}
-
-void Sender::onFlowGroupsRunRequested(void* arg, short) {
-  Sender* self = reinterpret_cast<Sender*>(arg);
-  self->runFlowGroups(RunType::EVENTLOOP);
 }
 
 bool Sender::onMyWorker() const {
@@ -242,7 +213,7 @@ int Sender::addClient(int fd,
         ? NodeLocationScope::ROOT
         : NodeLocationScope::REGION;
 
-    auto& flow_group = selectFlowGroup(flow_group_scope);
+    auto& flow_group = nw_shaping_container_->selectFlowGroup(flow_group_scope);
     auto res = impl_->client_sockets_.emplace(
         std::piecewise_construct,
         std::forward_as_tuple(client_name),
@@ -434,7 +405,7 @@ bool Sender::canSendToImpl(const Address& addr,
 
   // Lock to prevent race between registering for bandwidth and
   // a bandwidth deposit from the TrafficShaper.
-  std::unique_lock<std::mutex> lock(impl_->flow_meters_mutex_);
+  std::unique_lock<std::mutex> lock(nw_shaping_container_->flow_meters_mutex_);
   if (!sock->flow_group_.canDrain(p)) {
     sock->flow_group_.push(on_bw_avail, p);
     err = E::CBREGISTERED;
@@ -534,7 +505,7 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
     sock.pushOnCloseCallback(*onclose);
   }
 
-  std::unique_lock<std::mutex> lock(impl_->flow_meters_mutex_);
+  std::unique_lock<std::mutex> lock(nw_shaping_container_->flow_meters_mutex_);
   if (!injectTrafficShapingEvent(sock.flow_group_, envelope->priority()) &&
       sock.flow_group_.drain(*envelope)) {
     lock.unlock();
@@ -615,65 +586,6 @@ void Sender::setPeerShuttingDown(NodeID node_id) {
   if (socket != nullptr) {
     socket->setPeerShuttingDown();
   }
-}
-
-void Sender::updateFlowGroupRunRequestedTime(SteadyTimestamp enqueue_time) {
-  flow_groups_run_requested_time_ = enqueue_time;
-}
-
-void Sender::runFlowGroups(RunType /*rt*/) {
-  evtimer_del(flow_groups_run_deadline_exceeded_);
-
-  if (flow_groups_run_requested_time_ != SteadyTimestamp()) {
-    auto queue_latency = std::chrono::duration_cast<std::chrono::microseconds>(
-        SteadyTimestamp::now() - flow_groups_run_requested_time_);
-    HISTOGRAM_ADD(Worker::stats(),
-                  flow_groups_run_event_loop_delay,
-                  queue_latency.count());
-    updateFlowGroupRunRequestedTime(SteadyTimestamp());
-  }
-
-  auto run_start_time = SteadyTimestamp::now();
-  auto run_deadline =
-      run_start_time + Worker::settings().flow_groups_run_yield_interval;
-  bool exceeded_deadline = false;
-
-  // Shuffle FlowGroups so that all get a chance to run even if
-  // only a subset take the majority of the allowed runtime.
-  folly::small_vector<int, NodeLocation::NUM_ALL_SCOPES> fg_ids(
-      impl_->flow_groups_.size());
-  std::iota(fg_ids.begin(), fg_ids.end(), 0);
-  std::shuffle(fg_ids.begin(), fg_ids.end(), folly::ThreadLocalPRNG());
-  for (auto idx : fg_ids) {
-    exceeded_deadline =
-        impl_->flow_groups_[idx].run(impl_->flow_meters_mutex_, run_deadline);
-    if (exceeded_deadline) {
-      // Run again after yielding to the event loop.
-      STAT_INCR(Worker::stats(), flow_groups_run_deadline_exceeded);
-      updateFlowGroupRunRequestedTime(SteadyTimestamp::now());
-      evtimer_add(flow_groups_run_deadline_exceeded_,
-                  EventLoop::onThisThread()->zero_timeout_);
-      break;
-    }
-  }
-
-  HISTOGRAM_ADD(Worker::stats(),
-                flow_groups_run_time,
-                std::chrono::duration_cast<std::chrono::microseconds>(
-                    SteadyTimestamp::now() - run_start_time)
-                    .count());
-}
-
-bool Sender::applyFlowGroupsUpdate(FlowGroupsUpdate& update,
-                                   StatsHolder* stats) {
-  std::unique_lock<std::mutex> lock(impl_->flow_meters_mutex_);
-  bool run = false;
-  for (size_t i = 0; i < NodeLocation::NUM_ALL_SCOPES; ++i) {
-    if (impl_->flow_groups_[i].applyUpdate(update.group_entries[i], stats)) {
-      run = true;
-    }
-  }
-  return run;
 }
 
 int Sender::registerOnSocketClosed(const Address& addr, SocketCallback& cb) {
@@ -1022,7 +934,8 @@ Socket* Sender::initServerSocket(NodeID nid,
         useSSLWith(nid, &cross_boundary, &ssl_authentication);
 
     try {
-      auto& flow_group = selectFlowGroup(flow_group_scope);
+      auto& flow_group =
+          nw_shaping_container_->selectFlowGroup(flow_group_scope);
       if (sock_type == SocketType::GOSSIP) {
         Worker* w = Worker::onThisThread();
         ld_check(w->worker_type_ == WorkerType::FAILURE_DETECTOR);
@@ -1053,19 +966,6 @@ Socket* Sender::initServerSocket(NodeID nid,
 
   ld_check(s != nullptr);
   return s.get();
-}
-
-FlowGroup& Sender::selectFlowGroup(NodeLocationScope starting_scope) {
-  // Search for a configured FlowGroup with the smallest scope.
-  // Note: Scope NODE and ROOT are always configured (defaulting to
-  //       disabled -- i.e. no limits). So this search will always
-  //       succeed even if in a cluster without any FlowGroups
-  //       enforcing a policy.
-  while (starting_scope < NodeLocationScope::ROOT &&
-         !impl_->flow_groups_[static_cast<int>(starting_scope)].configured()) {
-    starting_scope = NodeLocation::nextGreaterScope(starting_scope);
-  }
-  return impl_->flow_groups_[static_cast<int>(starting_scope)];
 }
 
 Sockaddr Sender::getSockaddr(const Address& addr) {

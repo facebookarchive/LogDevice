@@ -18,7 +18,7 @@ void BWAvailableCallback::deactivate() {
     ld_check(flow_group_ != nullptr);
     flow_group_->erase(*this);
   }
-  socket_links_.unlink();
+  links_.unlink();
 }
 
 void BWAvailableCallback::setAffiliation(FlowGroup* fg, Priority p) {

@@ -75,7 +75,7 @@ class SocketImpl {
   // an intrusive list of the pending bandwidth available callbacks for
   // state machines waiting to run on this socket. These callbacks must
   // be cleaned up when the socket is closed.
-  folly::IntrusiveList<BWAvailableCallback, &BWAvailableCallback::socket_links_>
+  folly::IntrusiveList<BWAvailableCallback, &BWAvailableCallback::links_>
       pending_bw_cbs_;
 };
 
@@ -819,7 +819,7 @@ void Socket::onSent(std::unique_ptr<Envelope> e,
   // destroyed. This is to guarantee that onSent() code and the methods
   // it calls do not try to access a partially destroyed Worker, with some
   // members already destroyed and free'd.
-  ld_check(!e->socket_links_.is_linked());
+  ld_check(!e->links_.is_linked());
 
   if (reason == Status::OK) {
     FLOW_GROUP_MSG_STAT_INCR(
@@ -1085,7 +1085,7 @@ void Socket::close(Status reason) {
   moved_queues.emplace_back(std::move(sendq_));
   folly::IntrusiveList<SocketCallback, &SocketCallback::listHook_>
       on_close_moved = std::move(impl_->on_close_);
-  folly::IntrusiveList<BWAvailableCallback, &BWAvailableCallback::socket_links_>
+  folly::IntrusiveList<BWAvailableCallback, &BWAvailableCallback::links_>
       pending_bw_cbs_moved = std::move(impl_->pending_bw_cbs_);
 
   ld_check(pendingq_.empty());
@@ -1530,7 +1530,7 @@ Envelope* Socket::registerMessage(std::unique_ptr<Message>&& msg) {
 
 void Socket::releaseMessage(Envelope& envelope) {
   // This envelope should be in the pendingq_.
-  ld_check(envelope.socket_links_.is_linked());
+  ld_check(envelope.links_.is_linked());
 
   // If this envelope was registered as a deferred callback on this
   // socket's FlowGroup, the code releasing the envelope should
@@ -1548,7 +1548,7 @@ void Socket::releaseMessage(Envelope& envelope) {
 
 std::unique_ptr<Message> Socket::discardEnvelope(Envelope& envelope) {
   // This envelope should be in the pendingq_.
-  ld_check(envelope.socket_links_.is_linked());
+  ld_check(envelope.links_.is_linked());
 
   deps_->noteBytesDrained(envelope.cost());
 
@@ -2180,7 +2180,7 @@ int Socket::pushOnCloseCallback(SocketCallback& cb) {
 }
 
 int Socket::pushOnBWAvailableCallback(BWAvailableCallback& cb) {
-  if (cb.socket_links_.is_linked()) {
+  if (cb.links_.is_linked()) {
     RATELIMIT_CRITICAL(std::chrono::seconds(1),
                        10,
                        "INTERNAL ERROR: attempt to push an active "

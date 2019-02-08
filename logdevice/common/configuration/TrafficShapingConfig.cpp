@@ -15,6 +15,10 @@
 namespace facebook { namespace logdevice { namespace configuration {
 
 TrafficShapingConfig::TrafficShapingConfig() {
+  flowGroupPolicies.resize(NodeLocation::NUM_ALL_SCOPES);
+  for (auto& fgp : flowGroupPolicies) {
+    fgp.setType(FlowGroupType::NETWORK);
+  }
   flowGroupPolicies[static_cast<size_t>(NodeLocationScope::NODE)].setConfigured(
       true);
   flowGroupPolicies[static_cast<size_t>(NodeLocationScope::ROOT)].setConfigured(

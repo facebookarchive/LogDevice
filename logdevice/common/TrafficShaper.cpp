@@ -13,6 +13,7 @@
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/Sender.h"
+#include "logdevice/common/ShapingContainer.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
@@ -28,14 +29,19 @@ class TrafficShaper::RunFlowGroupsRequest : public Request {
       : Request(RequestType::TRAFFIC_SHAPER_RUN_FLOW_GROUPS) {}
   Execution execute() override {
     auto w = Worker::onThisThread();
-    w->sender().updateFlowGroupRunRequestedTime(enqueue_time_);
-    w->sender().runFlowGroups(Sender::RunType::REPLENISH);
+    w->sender().getNwShapingContainer()->updateFlowGroupRunRequestedTime(
+        enqueue_time_);
+    w->sender().getNwShapingContainer()->runFlowGroups(
+        ShapingContainer::RunType::REPLENISH);
     return Request::Execution::COMPLETE;
   }
 };
 
 TrafficShaper::TrafficShaper(Processor* processor, StatsHolder* stats)
     : processor_(processor), stats_(stats) {
+  nw_update_ = std::make_unique<FlowGroupsUpdate>(
+      static_cast<size_t>(NodeLocationScope::ROOT) + 1, FlowGroupType::NETWORK);
+
   if (processor_->getAllWorkersCount() != 0) {
     mainLoopThread_ = std::thread(&TrafficShaper::mainLoop, this);
 
@@ -79,7 +85,7 @@ void TrafficShaper::mainLoop() {
   std::unique_lock<std::mutex> cv_lock(mainLoopWaitMutex_);
   while (!mainLoopStop_.load()) {
     HISTOGRAM_ADD(stats_, traffic_shaper_bw_dispatch, usec_since(next_run));
-    bool timed_sleep = dispatchUpdate();
+    bool timed_sleep = dispatchUpdateNw();
     auto now = std::chrono::steady_clock::now();
     next_run += updateInterval_;
     if (now < next_run) {
@@ -102,6 +108,7 @@ void TrafficShaper::mainLoop() {
     if (now > next_limits_publication_) {
       auto config = processor_->config_->updateableServerConfig()->get();
       const auto& shaping_config = config->getTrafficShapingConfig();
+
       auto scope = NodeLocationScope::NODE;
       for (auto& policy : shaping_config.flowGroupPolicies) {
         auto value = 0;
@@ -136,22 +143,22 @@ void TrafficShaper::mainLoop() {
   }
 }
 
-bool TrafficShaper::dispatchUpdate() {
+bool TrafficShaper::dispatchUpdateCommon(
+    const configuration::ShapingConfig* shaping_config,
+    int nworkers,
+    FlowGroupsUpdate& update,
+    StatsHolder* stats) {
   bool future_updates_required = false;
-
-  auto config = processor_->config_->updateableServerConfig()->get();
-  auto& shaping_config = config->getTrafficShapingConfig();
-  auto policy_it = shaping_config.flowGroupPolicies.begin();
+  auto policy_it = shaping_config->flowGroupPolicies.begin();
   auto scope = NodeLocationScope::NODE;
-  for (auto& ge : update_.group_entries) {
+  for (auto& ge : update.group_entries) {
     if (policy_it->trafficShapingEnabled()) {
       future_updates_required = true;
     }
 
     // The policy or interval may change at any time via the admin
     // interface, so normalize on each update.
-    ge.policy =
-        policy_it->normalize(processor_->getAllWorkersCount(), updateInterval_);
+    ge.policy = policy_it->normalize(nworkers, updateInterval_);
 
     // Any overflow from the last run that couldn't be used in the
     // priority queue buckets indicates that the priority queues have
@@ -161,6 +168,7 @@ bool TrafficShaper::dispatchUpdate() {
     pq_overflow_entry.last_overflow = 0;
 
     Priority p = Priority::MAX;
+
     for (auto& overflow_entry : ge.overflow_entries) {
       // Excess bandwidth that couldn't be consumed during a second
       // first-fit pass on the buckets for a priority level across
@@ -169,7 +177,7 @@ bool TrafficShaper::dispatchUpdate() {
 
       if (p <= Priority::NUM_PRIORITIES) {
         FLOW_GROUP_PRIORITY_STAT_ADD(
-            stats_, scope, p, bwdiscarded, overflow_entry.last_overflow);
+            stats, scope, p, bwdiscarded, overflow_entry.last_overflow);
       }
 
       // Take the current overflow and make it available for next
@@ -183,9 +191,20 @@ bool TrafficShaper::dispatchUpdate() {
     scope = NodeLocationScope(static_cast<int>(scope) + 1);
   }
 
+  return future_updates_required;
+}
+
+bool TrafficShaper::dispatchUpdateNw() {
+  auto config = processor_->config_->updateableServerConfig()->get();
+  const configuration::ShapingConfig* shaping_config;
+  shaping_config = config->getTrafficShapingConfigPtr();
+  bool future_updates_required = dispatchUpdateCommon(
+      shaping_config, processor_->getAllWorkersCount(), *nw_update_, stats_);
+
   processor_->applyToWorkers(
       [&](Worker& w) {
-        if (w.sender().applyFlowGroupsUpdate(update_, stats_)) {
+        if (w.sender().getNwShapingContainer()->applyFlowGroupsUpdate(
+                *nw_update_, stats_)) {
           std::unique_ptr<Request> run_req =
               std::make_unique<RunFlowGroupsRequest>();
           processor_->postRequest(run_req, w.worker_type_, w.idx_.val());

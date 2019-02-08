@@ -47,6 +47,7 @@ class ClientIdxAllocator;
 class FlowGroup;
 class FlowGroupsUpdate;
 class SenderImpl;
+class ShapingContainer;
 class Sockaddr;
 class Socket;
 class SocketCallback;
@@ -281,7 +282,7 @@ class SenderBase {
  * Sender APIs through the Sender associated with the current
  * thread's worker.
  *
- * For classes that can only be tested by modifing Sender
+ * For classes that can only be tested by modifying Sender
  * behavior, a SenderProxy is instantiated and used for all
  * Sender API calls. During normal operation, the SenderProxy
  * will forward to the standard Sender owned by the current
@@ -336,8 +337,6 @@ class SenderTestProxy : public SenderProxy {
  */
 class Sender : public SenderBase {
  public:
-  enum class RunType { REPLENISH, EVENTLOOP };
-
   /**
    * @param node_count   the number of nodes in cluster configuration at the
    *                     time this Sender was created
@@ -390,19 +389,9 @@ class Sender : public SenderBase {
    */
   void deliverCompletedMessages();
 
-  /**
-   * Dispatch messages from all flow groups until they either are
-   * empty or have exhausted their bandwidth credit.
-   */
-  void runFlowGroups(RunType);
-
-  /**
-   * Apply a policy update and bandwidth credit increment to all
-   * FlowGroups.
-   *
-   * @return true if an update makes a FlowGroup runnable.
-   */
-  bool applyFlowGroupsUpdate(FlowGroupsUpdate&, StatsHolder*);
+  ShapingContainer* getNwShapingContainer() {
+    return nw_shaping_container_.get();
+  }
 
   /**
    * If addr identifies a Socket managed by this Sender, pushes cb
@@ -791,9 +780,10 @@ class Sender : public SenderBase {
 
   void forAllClientSockets(std::function<void(Socket&)> fn);
 
-  void updateFlowGroupRunRequestedTime(SteadyTimestamp enqueue_time);
-
  private:
+  // Network Traffic Shaping
+  std::unique_ptr<ShapingContainer> nw_shaping_container_;
+
   // Pimpl
   friend class SenderImpl;
   std::unique_ptr<SenderImpl> impl_;
@@ -809,13 +799,6 @@ class Sender : public SenderBase {
   // the event loop by signalling the completed_messages_available_ event.
   CompletionQueue completed_messages_;
   struct event* completed_messages_available_;
-
-  // Backup event for flow_groups_run_requested_ when the Worker is saturated.
-  // When this timer event fires, the flow group run is scheduled at normal
-  // priority and is serviced in FIFO order with all other events.
-  struct event* flow_groups_run_deadline_exceeded_;
-
-  SteadyTimestamp flow_groups_run_requested_time_;
 
   // current number of bytes in all output buffers combined
   size_t bytes_pending_ = 0;
@@ -936,12 +919,6 @@ class Sender : public SenderBase {
   std::unique_ptr<Socket>* FOLLY_NULLABLE findSocketSlot(const NodeID& addr);
 
   /**
-   * Find the most appropriate FlowGroup for a socket at or above
-   * starting_scope.
-   */
-  FlowGroup& selectFlowGroup(NodeLocationScope starting_scope);
-
-  /**
    * @return true iff called on the thread that is running this Sender's
    *         Worker. Used in asserts.
    */
@@ -988,8 +965,6 @@ class Sender : public SenderBase {
   static void onSocketsToCloseAvailable(void* arg, short);
 
   static void onCompletedMessagesAvailable(void* self, short);
-
-  static void onFlowGroupsRunRequested(void* self, short);
 };
 
 }} // namespace facebook::logdevice

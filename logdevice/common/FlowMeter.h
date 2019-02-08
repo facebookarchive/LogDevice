@@ -9,7 +9,16 @@
 
 #include <algorithm>
 
+#include "logdevice/common/Priority.h"
+#include "logdevice/common/checks.h"
+
 namespace facebook { namespace logdevice {
+
+enum class FlowGroupType {
+  NONE,
+  NETWORK,
+  READS,
+};
 
 /**
  * @file  A FlowMeter holds the currently available bandwidth credit for
@@ -162,6 +171,14 @@ class FlowMeter {
       level_ = level;
     }
 
+    FlowGroupType getType() const {
+      return type_;
+    }
+
+    void setType(FlowGroupType type) {
+      type_ = type;
+    }
+
    private:
     // Current bucket capacity.
     int64_t level_ = 0;
@@ -169,7 +186,20 @@ class FlowMeter {
     // Max number of bytes that can be added to the bucket until the next
     // bandwidth deposit by the traffic shaper.
     int64_t deposit_budget_ = INT64_MAX;
+
+    FlowGroupType type_{FlowGroupType::NONE};
   };
+
+  FlowGroupType getType() {
+    return type_;
+  }
+
+  void setType(FlowGroupType type) {
+    type_ = type;
+    for (auto& e : entries) {
+      e.setType(type);
+    }
+  }
 
   /**
    * Convenience functions for accessing the meter entry for the
@@ -188,6 +218,8 @@ class FlowMeter {
   // state for bandwidth shared between priorities that is allocated
   // in priority order after each run of the EventLoop.
   std::array<Entry, asInt(Priority::NUM_PRIORITIES) + 1> entries;
+
+  FlowGroupType type_{FlowGroupType::NONE};
 };
 
 }} // namespace facebook::logdevice

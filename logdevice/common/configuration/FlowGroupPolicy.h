@@ -10,6 +10,7 @@
 #include <array>
 #include <chrono>
 
+#include "logdevice/common/FlowMeter.h"
 #include "logdevice/common/Priority.h"
 #include "logdevice/common/configuration/NodeLocation.h"
 
@@ -33,7 +34,7 @@ class FlowGroupPolicy {
 
     // NOTE: FlowGroupMeters can go negative (into debt). This is required
     //       in order to support messages that are larger than the "leaky
-    //       bucket size". To eliminate the chance of subtle bugs introducted
+    //       bucket size". To eliminate the chance of subtle bugs introduced
     //       through mixed signed/unsigned operations, even values like the
     //       budget values below that can never be negative are expressed
     //       using signed integers.
@@ -64,6 +65,10 @@ class FlowGroupPolicy {
 
   void setEnabled(bool enable) {
     traffic_shaping_enabled_ = enable;
+  }
+
+  void setType(FlowGroupType type) {
+    type_ = type;
   }
 
   void set(Priority p,
@@ -106,6 +111,7 @@ class FlowGroupPolicy {
  private:
   bool configured_ = false;
   bool traffic_shaping_enabled_ = false;
+  FlowGroupType type_{FlowGroupType::NONE};
 };
 
 }} // namespace facebook::logdevice
