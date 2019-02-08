@@ -32,7 +32,7 @@
 using namespace facebook::logdevice;
 
 // Null context for appenders that don't need one
-constexpr BufferedWriter::AppendCallback::Context NULL_CONTEXT(0);
+constexpr BufferedWriter::AppendCallback::Context NULL_CONTEXT(nullptr);
 using Compression = BufferedWriter::Options::Compression;
 
 /**
