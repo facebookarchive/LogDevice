@@ -127,8 +127,8 @@ class FlowMeter {
      * causing source to go into debt.
      * Return value indicates whether entire requested amount was transferred.
      */
-    bool transferCredit(Entry& bwSink, size_t requested_amount) {
-      int64_t transfer_amount = requested_amount;
+    bool transferCredit(Entry& bwSink, int64_t requested_amount) {
+      auto transfer_amount = requested_amount;
       transfer_amount = std::min(transfer_amount, level_);
       transfer_amount = std::min(transfer_amount, bwSink.deposit_budget_);
       if (transfer_amount > 0) {
