@@ -27,6 +27,8 @@ add_library(common_test_util STATIC
   "test/TestUtil.cpp"
   "test/NodeSetTestUtil.h"
   "test/NodeSetTestUtil.cpp"
+  "test/NodesConfigurationTestUtil.h"
+  "test/NodesConfigurationTestUtil.cpp"
   "test/ZookeeperClientInMemory.cpp"
   "test/ZookeeperClientInMemory.h"
   )
