@@ -585,6 +585,7 @@ Show debugging information about the ShardRebuilding state machines (see "logdev
 | read\_buffer\_bytes | long | Bytes of records that we've read but haven't started re-replicating yet. V2 only. |
 | records\_in\_flight | long | Number of records that are being re-replicated right now. V2 only. |
 | read\_pointer | string | How far we have read: partition, log ID, LSN. V2 only. |
+| progress | real | Approximately what fraction of the work is done, between 0 and 1. -1 if the implementation doesn't support progress estimation. |
 
 ## shards
 Show information about all shards in a cluster.
