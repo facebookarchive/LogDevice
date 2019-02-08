@@ -96,6 +96,8 @@ class ClientReadersFlowTracer : public SampledTracer {
   void updateTimeLagging(Status st = E::OK);
   void updateIsClientReading();
   void maybeBumpStats(bool force_healthy = false);
+  double calculateSamplingWeight();
+  bool readerIsUnhealthy();
 
   WeakRefHolder<ClientReadersFlowTracer> ref_holder_;
 

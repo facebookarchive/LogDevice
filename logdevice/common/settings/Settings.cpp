@@ -1128,6 +1128,14 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "disable feature.",
        CLIENT,
        SettingsCategory::Monitoring);
+  init("client-readers-flow-tracer-unhealthy-publish-weight",
+       &client_readers_flow_tracer_unhealthy_publish_weight,
+       "5.0",
+       validate_positive<ssize_t>(),
+       "Weight given to traces of unhealthy readers when publishing samples "
+       "(for improved debuggability).",
+       CLIENT,
+       SettingsCategory::Monitoring);
   init("client-readers-flow-tracer-lagging-metric-num-sample-groups",
        &client_readers_flow_tracer_lagging_metric_num_sample_groups,
        "3",
@@ -1135,7 +1143,8 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "Maximum number of samples that are kept by ClientReadersFlowTracer for "
        "computing relative reading speed in relation to writing speed. See "
        "client_readers_flow_tracer_lagging_slope_threshold.",
-       CLIENT);
+       CLIENT,
+       SettingsCategory::Monitoring);
   init("client-readers-flow-tracer-lagging-metric-sample-group-size",
        &client_readers_flow_tracer_lagging_metric_sample_group_size,
        "20",
@@ -1143,7 +1152,8 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "Number of samples in ClientReadersFlowTracer that are aggregated and "
        "recorded as one entry. See "
        "client-readers-flow-tracer-lagging-metric-sample-group-size.",
-       CLIENT);
+       CLIENT,
+       SettingsCategory::Monitoring);
   init(
       "client-readers-flow-tracer-lagging-slope-threshold",
       &client_readers_flow_tracer_lagging_slope_threshold,
@@ -1153,7 +1163,8 @@ void Settings::defineSettings(SettingEasyInit& init) {
       "considered lagging (rate given as variation of time lag per time unit). "
       "If the desired read ratio needs to be x\% of the write ratio, set this "
       "threshold to be (1 - x / 100).",
-      CLIENT);
+      CLIENT,
+      SettingsCategory::Monitoring);
   init("client-test-force-stats",
        &client_test_force_stats,
        "false",

@@ -555,6 +555,10 @@ struct Settings : public SettingsBundle {
   // table. Set it to 0 to disable feature.
   std::chrono::milliseconds client_readers_flow_tracer_period;
 
+  // (client-only setting) Weight given to traces of unhealthy readers when
+  // publishing samples (for improved debuggability).
+  double client_readers_flow_tracer_unhealthy_publish_weight;
+
   // (client-only setting) Number of sample groups to maintain for the lagging
   // metric.
   size_t client_readers_flow_tracer_lagging_metric_num_sample_groups;

@@ -142,7 +142,11 @@ sidebar_label: Settings
 ## Monitoring
 |   Name    |   Description   |  Default  |   Notes   |
 |-----------|-----------------|:---------:|-----------|
+| client-readers-flow-tracer-lagging-metric-num-sample-groups | Maximum number of samples that are kept by ClientReadersFlowTracer for computing relative reading speed in relation to writing speed. See client\_readers\_flow\_tracer\_lagging\_slope\_threshold. | 3 | client&nbsp;only |
+| client-readers-flow-tracer-lagging-metric-sample-group-size | Number of samples in ClientReadersFlowTracer that are aggregated and recorded as one entry. See client-readers-flow-tracer-lagging-metric-sample-group-size. | 20 | client&nbsp;only |
+| client-readers-flow-tracer-lagging-slope-threshold | If a reader's lag increase at at least this rate, the reader is considered lagging (rate given as variation of time lag per time unit). If the desired read ratio needs to be x% of the write ratio, set this threshold to be (1 - x / 100). | -0.3 | client&nbsp;only |
 | client-readers-flow-tracer-period | Period for logging in logdevice\_readers\_flow scuba table and for triggering certain sampling actions for monitoring. Set it to 0 to disable feature. | 0s | client&nbsp;only |
+| client-readers-flow-tracer-unhealthy-publish-weight | Weight given to traces of unhealthy readers when publishing samples (for improved debuggability). | 5.0 | client&nbsp;only |
 | disable-trace-logger | If disabled, NoopTraceLogger will be used, otherwise FBTraceLogger is used | false | requires&nbsp;restart |
 | message-tracing-log-level | For messages that pass the message tracing filters, emit a log line at this level. One of: critical, error, warning, notify, info, debug, spew | info |  |
 | message-tracing-peers | Emit a log line for each sent/received message to/from the specified address(es). Separate different addresses with a comma, prefix unix socket paths with 'unix://'. An empty unix path will match all unix paths |  |  |
@@ -528,9 +532,6 @@ sidebar_label: Settings
 ## Uncategorized
 |   Name    |   Description   |  Default  |   Notes   |
 |-----------|-----------------|:---------:|-----------|
-| client-readers-flow-tracer-lagging-metric-num-sample-groups | Maximum number of samples that are kept by ClientReadersFlowTracer for computing relative reading speed in relation to writing speed. See client\_readers\_flow\_tracer\_lagging\_slope\_threshold. | 3 | client&nbsp;only |
-| client-readers-flow-tracer-lagging-metric-sample-group-size | Number of samples in ClientReadersFlowTracer that are aggregated and recorded as one entry. See client-readers-flow-tracer-lagging-metric-sample-group-size. | 20 | client&nbsp;only |
-| client-readers-flow-tracer-lagging-slope-threshold | If a reader's lag increase at at least this rate, the reader is considered lagging (rate given as variation of time lag per time unit). If the desired read ratio needs to be x% of the write ratio, set this threshold to be (1 - x / 100). | -0.3 | client&nbsp;only |
 | rebuilding-max-batch-time | Max amount of time rebuilding read storage task is allowed to take before yielding to other storage tasks. Only supported by rebuilding V2 (partition by partition). "max" for unlimited. | 1000ms | server&nbsp;only |
 | rebuilding-max-malformed-records-to-tolerate | Controls how rebuilding donors handle unexpected values in local log store (e.g. caused by bugs, forward incompatibility, or other processes writing unexpected things to rocksdb directly).If rebuilding encounters invalid records, it skips them and logs warnings. But if it encounters at least this many of them in the same log, it freaks out, logs a critical error and stalls indefinitely. The rest of the server keeps trying to run normally, to the extent to which you can run normally when you can't parse most of the records in the DB. | 1000 | requires&nbsp;restart, server&nbsp;only |
 | sync-metadata-log-writes | If set, storage nodes will wait for wal sync of metadata log writes before sending the STORED ack. | true | server&nbsp;only |

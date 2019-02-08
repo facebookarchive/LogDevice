@@ -97,7 +97,23 @@ void ClientReadersFlowTracer::traceReaderFlow(size_t num_bytes_read,
   };
   last_num_bytes_read_ = num_bytes_read;
   last_num_records_read_ = num_records_read;
-  publish(READERS_FLOW_TRACER, sample_builder);
+  publish(READERS_FLOW_TRACER,
+          sample_builder,
+          /*force=*/false,
+          calculateSamplingWeight());
+}
+
+double ClientReadersFlowTracer::calculateSamplingWeight() {
+  if (readerIsUnhealthy()) {
+    return Worker::settings()
+        .client_readers_flow_tracer_unhealthy_publish_weight;
+  } else {
+    return 1.0; /* default weight */
+  }
+}
+
+bool ClientReadersFlowTracer::readerIsUnhealthy() {
+  return last_reported_state_ != State::HEALTHY;
 }
 
 void ClientReadersFlowTracer::onSettingsUpdated() {
