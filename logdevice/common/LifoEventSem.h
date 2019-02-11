@@ -7,6 +7,7 @@
  */
 #pragma once
 
+#include <boost/noncopyable.hpp>
 #include <folly/Memory.h>
 #include <folly/ScopeGuard.h>
 #include <folly/synchronization/LifoSem.h>
