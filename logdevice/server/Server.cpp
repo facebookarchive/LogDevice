@@ -1066,10 +1066,7 @@ void Server::updateStatsSettings() {
 
     stats->params_.update(std::make_shared<StatsParams>(std::move(params)));
     stats->runForEach([&](auto& stats) {
-      for (auto& thread_stats :
-           stats.synchronizedCopy(&Stats::per_client_node_stats)) {
-        thread_stats.second->updateRetentionTime(retention_time);
-      }
+      stats.per_client_node_stats.wlock()->updateRetentionTime(retention_time);
     });
   }
 }

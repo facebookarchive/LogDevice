@@ -5,7 +5,6 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-
 #include "logdevice/server/sequencer_boycotting/PerClientNodeStatsAggregator.h"
 
 #include "logdevice/common/ClientID.h"
@@ -118,89 +117,56 @@ PerClientNodeStatsAggregator::fromRawStats(unsigned int period_count) const {
   const auto time_intervals =
       getTimeIntervals(period_count, getAggregationPeriod(), now);
 
-  PerClientCounts per_client_node_stats;
+  std::vector<
+      std::pair<uint32_t,
+                std::vector<PerClientNodeTimeSeriesStats::ClientNodeValue>>>
+      period_stats;
   getStats()->runForEach([&](auto& thread_stats) {
-    for (auto& per_client_stats :
-         thread_stats.synchronizedCopy(&Stats::per_client_node_stats)) {
-      auto client_map_it =
-          per_client_node_stats
-              .emplace(std::make_pair(
-                  per_client_stats.first,
-                  NodeMap<std::vector<BucketedNodeStats::ClientNodeStats>>{}))
-              .first;
-
-      per_client_stats.second->updateCurrentTime(now);
-
-      for (int period_index = 0; period_index < period_count; ++period_index) {
-        const auto& interval = time_intervals[period_index];
-
-        // sum over success
-        this->perNodeSumForPeriod(
-            period_index,
-            period_count,
-            per_client_stats.second->sumAppendSuccess(
-                interval.first, interval.second),
-            [](BucketedNodeStats::ClientNodeStats& node_stats) -> uint32_t& {
-              return node_stats.successes;
-            },
-            client_map_it->second);
-
-        // sum over fails
-        this->perNodeSumForPeriod(
-            period_index,
-            period_count,
-            per_client_stats.second->sumAppendFail(
-                interval.first, interval.second),
-            [](BucketedNodeStats::ClientNodeStats& node_stats) -> uint32_t& {
-              return node_stats.fails;
-            },
-            client_map_it->second);
-      }
+    thread_stats.per_client_node_stats.wlock()->updateCurrentTime(now);
+    for (int period_index = 0; period_index < period_count; ++period_index) {
+      const auto& interval = time_intervals[period_index];
+      auto stats = thread_stats.per_client_node_stats.rlock()->sum(
+          interval.first, interval.second);
+      period_stats.emplace_back(std::make_pair(period_index, std::move(stats)));
     }
   });
+
+  PerClientCounts per_client_node_stats;
+  for (const auto& period_stats_pair : period_stats) {
+    auto period_idx = period_stats_pair.first;
+    for (const auto& bucket : period_stats_pair.second) {
+      auto clients_it = per_client_node_stats.find(bucket.client_id);
+      auto& nodes_map = clients_it == per_client_node_stats.end()
+          ? per_client_node_stats
+                .emplace(std::make_pair(
+                    bucket.client_id, NodeMap<std::vector<PeriodStatsPair>>{}))
+                .first->second
+          : clients_it->second;
+      auto nodes_it = nodes_map.find(bucket.node_id);
+      auto& node_stats = nodes_it == nodes_map.end()
+          ? nodes_map
+                .emplace(std::make_pair(
+                    bucket.node_id, std::vector<PeriodStatsPair>{}))
+                .first->second
+          : nodes_it->second;
+      node_stats.emplace_back(
+          std::make_pair(period_idx,
+                         BucketedNodeStats::ClientNodeStats{
+                             bucket.value.successes, bucket.value.failures}));
+    }
+  }
 
   return per_client_node_stats;
 }
 
-void PerClientNodeStatsAggregator::perNodeSumForPeriod(
-    int period_index,
-    int period_count,
-    const NodeMap<uint32_t>& append_counts,
-    std::function<uint32_t&(BucketedNodeStats::ClientNodeStats&)>
-        stats_variable_getter,
-    /*mutable*/
-    NodeMap<std::vector<BucketedNodeStats::ClientNodeStats>>& node_stats)
-    const {
-  for (auto& per_node_appends : append_counts) {
-    const auto node = per_node_appends.first;
-
-    auto node_stats_entry = node_stats.find(node);
-    if (node_stats_entry == node_stats.end()) {
-      node_stats_entry =
-          node_stats
-              .emplace(std::make_pair(
-                  per_node_appends.first,
-                  std::vector<BucketedNodeStats::ClientNodeStats>(
-                      period_count)))
-              .first;
-    }
-
-    auto& append_count = per_node_appends.second;
-
-    stats_variable_getter(node_stats_entry->second.at(period_index)) +=
-        append_count;
-  }
-}
-
-PerClientNodeStatsAggregator::NodeMap<unsigned int>
+PerClientNodeStatsAggregator::NodeMap<uint32_t>
 PerClientNodeStatsAggregator::getNodes(const PerClientCounts& counts) const {
-  NodeMap<unsigned int> nodes;
-  unsigned int node_idx = 0;
+  NodeMap<uint32_t> nodes;
+  uint32_t node_idx = 0;
   for (const auto& client_entry : counts) {
     for (const auto& node_entry : client_entry.second) {
       if (!nodes.count(node_entry.first)) {
-        nodes.emplace(node_entry.first, node_idx);
-        ++node_idx;
+        nodes.emplace(node_entry.first, node_idx++);
       }
     }
   }
@@ -208,21 +174,18 @@ PerClientNodeStatsAggregator::getNodes(const PerClientCounts& counts) const {
 }
 
 boost::multi_array<BucketedNodeStats::ClientNodeStats, 3>
-PerClientNodeStatsAggregator::getAllCounts(
-    const PerClientCounts& counts,
-    const NodeMap<unsigned int>& node_idxs,
-    unsigned int period_count) const {
+PerClientNodeStatsAggregator::getAllCounts(const PerClientCounts& counts,
+                                           const NodeMap<uint32_t>& node_idxs,
+                                           uint32_t period_count) const {
   boost::multi_array<BucketedNodeStats::ClientNodeStats, 3> all_counts(
       boost::extents[node_idxs.size()][period_count][counts.size()]);
 
-  unsigned int client_idx = 0;
+  uint32_t client_idx = 0;
   for (const auto& client_entry : counts) {
     for (const auto& node_entry : client_entry.second) {
-      unsigned int period_idx = 0;
-      for (const auto& bucket : node_entry.second) {
-        all_counts[node_idxs.at(node_entry.first)][period_idx][client_idx] =
-            bucket;
-        ++period_idx;
+      for (const auto& period_bucket : node_entry.second) {
+        all_counts[node_idxs.at(node_entry.first)][period_bucket.first]
+                  [client_idx] = period_bucket.second;
       }
     }
     ++client_idx;

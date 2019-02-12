@@ -59,8 +59,7 @@ TEST(PerClientNodeStatsAggregatorTest, AggregateSimple) {
 
   auto holder_ptr = aggregator.getStats();
 
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client, AppendSuccess, stats_about, 100);
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client, AppendFail, stats_about, 100);
+  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client, stats_about, 100, 100);
 
   EXPECT_EQ(received_stats, aggregator.aggregate(1));
 }
@@ -92,13 +91,9 @@ TEST(PerClientNodeStatsAggregatorTest, AggregateMultipleClients) {
 
   auto holder_ptr = aggregator.getStats();
 
-  PER_CLIENT_NODE_STAT_ADD(
-      holder_ptr, client_1, AppendSuccess, stats_about, 100);
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_1, AppendFail, stats_about, 100);
+  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_1, stats_about, 100, 100);
 
-  PER_CLIENT_NODE_STAT_ADD(
-      holder_ptr, client_2, AppendSuccess, stats_about, 100);
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_2, AppendFail, stats_about, 100);
+  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_2, stats_about, 100, 100);
 
   EXPECT_EQ(received_stats, aggregator.aggregate(1));
 }
@@ -112,11 +107,9 @@ TEST(PerClientNodeStatsAggregatorTest, AggregateMultipleNodesSingleClient) {
 
   auto holder_ptr = aggregator.getStats();
 
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client, AppendSuccess, node_1, 200);
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client, AppendFail, node_1, 50);
+  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client, node_1, 200, 50);
 
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client, AppendSuccess, node_2, 100);
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client, AppendFail, node_2, 25);
+  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client, node_2, 100, 25);
 
   auto result = aggregator.aggregate(1);
   EXPECT_THAT(result.node_ids, UnorderedElementsAre(node_1, node_2));
@@ -139,17 +132,13 @@ TEST(PerClientNodeStatsAggregatorTest, AggregateMultipleNodesMultipleClients) {
 
   auto holder_ptr = aggregator.getStats();
 
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_1, AppendSuccess, node_1, 100);
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_1, AppendFail, node_1, 10);
+  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_1, node_1, 100, 10);
 
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_1, AppendSuccess, node_2, 200);
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_1, AppendFail, node_2, 20);
+  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_1, node_2, 200, 20);
 
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_2, AppendSuccess, node_1, 300);
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_2, AppendFail, node_1, 30);
+  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_2, node_1, 300, 30);
 
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_2, AppendSuccess, node_2, 400);
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_2, AppendFail, node_2, 40);
+  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_2, node_2, 400, 40);
 
   auto result = aggregator.aggregate(1);
   EXPECT_THAT(result.node_ids, UnorderedElementsAre(node_1, node_2));
@@ -184,18 +173,7 @@ TEST(PerClientNodeStatsAggregatorTest, AggregateMultipleBuckets) {
   (*expected.summed_counts)[0][1].successes = 200;
   (*expected.summed_counts)[0][1].fails = 150;
 
-  auto client_stats =
-      aggregator.getStats()->get().per_client_node_stats.withWLock(
-          [&](auto& per_client_node_stats) {
-            return per_client_node_stats
-                .emplace(std::make_pair(
-                    client,
-                    std::make_shared<PerClientNodeTimeSeriesStats>(
-                        aggregator.getStats()
-                            ->params_.get()
-                            ->node_stats_retention_time_on_nodes)))
-                .first->second;
-          });
+  auto& client_stats = aggregator.getStats()->get().per_client_node_stats;
 
   const auto now = std::chrono::steady_clock::now();
   // set the time to 150% the bucket time ago
@@ -205,12 +183,10 @@ TEST(PerClientNodeStatsAggregatorTest, AggregateMultipleBuckets) {
           static_cast<long>(1.5 * aggregation_period.count())};
 
   // should be placed in the second bucket
-  client_stats->addAppendSuccess(node, 200, bucket_1_time);
-  client_stats->addAppendFail(node, 150, bucket_1_time);
+  client_stats.wlock()->append(client, node, 200, 150, bucket_1_time);
 
   // first bucket
-  client_stats->addAppendSuccess(node, 100, now);
-  client_stats->addAppendFail(node, 50, now);
+  client_stats.wlock()->append(client, node, 100, 50, now);
 
   EXPECT_EQ(expected, aggregator.aggregate(2));
 }
@@ -224,8 +200,7 @@ TEST(PerClientNodeStatsAggregatorTest, AggregateWithOnlyWorst) {
 
   auto holder_ptr = aggregator.getStats();
 
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client, AppendSuccess, stats_about, 100);
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client, AppendFail, stats_about, 50);
+  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client, stats_about, 100, 50);
 
   auto result = aggregator.aggregate(1);
   EXPECT_THAT(result.node_ids, ElementsAre(stats_about));
@@ -247,13 +222,10 @@ TEST(PerClientNodeStatsAggregatorTest, AggregateWithWorstAndSum) {
 
   auto holder_ptr = aggregator.getStats();
 
-  PER_CLIENT_NODE_STAT_ADD(
-      holder_ptr, client1, AppendSuccess, stats_about, 100);
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client1, AppendFail, stats_about, 50);
+  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client1, stats_about, 100, 50);
 
   // client 2 is obviously worse
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client2, AppendSuccess, stats_about, 25);
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client2, AppendFail, stats_about, 200);
+  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client2, stats_about, 25, 200);
 
   auto result = aggregator.aggregate(1);
   EXPECT_THAT(result.node_ids, ElementsAre(stats_about));
@@ -275,13 +247,9 @@ TEST(PerClientNodeStatsAggregatorTest, AggregateWithManyWorst) {
 
   auto holder_ptr = aggregator.getStats();
 
-  PER_CLIENT_NODE_STAT_ADD(
-      holder_ptr, client1, AppendSuccess, stats_about, 100);
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client1, AppendFail, stats_about, 50);
+  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client1, stats_about, 100, 50);
 
-  PER_CLIENT_NODE_STAT_ADD(
-      holder_ptr, client2, AppendSuccess, stats_about, 200);
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client2, AppendFail, stats_about, 25);
+  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client2, stats_about, 200, 25);
 
   auto result = aggregator.aggregate(1);
   EXPECT_THAT(result.node_ids, ElementsAre(stats_about));
@@ -307,8 +275,7 @@ TEST(PerClientNodeStatsAggregatorTest, AggregateWithMoreWorstThanClients) {
 
   auto holder_ptr = aggregator.getStats();
 
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client, AppendSuccess, stats_about, 100);
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client, AppendFail, stats_about, 50);
+  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client, stats_about, 100, 50);
 
   auto result = aggregator.aggregate(1);
   EXPECT_THAT(result.node_ids, ElementsAre(stats_about));
@@ -333,19 +300,7 @@ TEST(PerClientNodeStatsAggregatorTest, AggregateWithWorstAndSumBuckets) {
   NodeID node{1};
   ClientID client1{1}, client2{2};
 
-  auto client_stats = [&](ClientID client) {
-    return aggregator.getStats()->get().per_client_node_stats.withWLock(
-        [&](auto& per_client_node_stats) {
-          return per_client_node_stats
-              .emplace(
-                  std::make_pair(client,
-                                 std::make_shared<PerClientNodeTimeSeriesStats>(
-                                     aggregator.getStats()
-                                         ->params_.get()
-                                         ->node_stats_retention_time_on_nodes)))
-              .first->second;
-        });
-  };
+  auto& client_stats = aggregator.getStats()->get().per_client_node_stats;
 
   const auto now = std::chrono::steady_clock::now();
   // set the time to 150% the bucket time ago
@@ -360,18 +315,14 @@ TEST(PerClientNodeStatsAggregatorTest, AggregateWithWorstAndSumBuckets) {
    */
 
   // should be placed in the second (oldest) bucket
-  client_stats(client1)->addAppendSuccess(node, 200, bucket_1_time);
-  client_stats(client1)->addAppendFail(node, 50, bucket_1_time);
+  client_stats.wlock()->append(client1, node, 200, 50, bucket_1_time);
 
-  client_stats(client2)->addAppendSuccess(node, 50, bucket_1_time);
-  client_stats(client2)->addAppendFail(node, 200, bucket_1_time);
+  client_stats.wlock()->append(client2, node, 50, 200, bucket_1_time);
 
   // first bucket
-  client_stats(client1)->addAppendSuccess(node, 50, now);
-  client_stats(client1)->addAppendFail(node, 100, now);
+  client_stats.wlock()->append(client1, node, 50, 100, now);
 
-  client_stats(client2)->addAppendSuccess(node, 100, now);
-  client_stats(client2)->addAppendFail(node, 50, now);
+  client_stats.wlock()->append(client2, node, 100, 50, now);
 
   auto result = aggregator.aggregate(2);
   EXPECT_THAT(result.node_ids, ElementsAre(node));

@@ -24,8 +24,9 @@ class PerClientNodeStatsAggregator {
   using ClientMap = std::unordered_map<ClientID, T, ClientID::Hash>;
   template <class T>
   using NodeMap = std::unordered_map<NodeID, T, NodeID::Hash>;
-  using PerClientCounts =
-      ClientMap<NodeMap<std::vector<BucketedNodeStats::ClientNodeStats>>>;
+  using PeriodStatsPair =
+      std::pair<uint32_t, BucketedNodeStats::ClientNodeStats>;
+  using PerClientCounts = ClientMap<NodeMap<std::vector<PeriodStatsPair>>>;
 
  public:
   virtual ~PerClientNodeStatsAggregator() = default;
@@ -70,28 +71,6 @@ class PerClientNodeStatsAggregator {
       const boost::detail::multi_array::
           const_sub_array<BucketedNodeStats::ClientNodeStats, 1>& row,
       unsigned int client_count) const;
-
-  /**
-   * Adds the per-node append count to each node in the node_stats map and the
-   * totals map, for the given period.
-   *
-   * @params period_index          The bucket to which the count is added
-   * @params period_count          The amount of periods that are tracked
-   * @params append_counts         Contains the counts for each node
-   * @params stats_variable_getter A function that gets the field of the
-   *                               stats that should be incremeneted
-   * @params node_stats            Write to this map with the counts from
-   *                               append_counts
-   */
-  void perNodeSumForPeriod(
-      int period_index,
-      int period_count,
-      const NodeMap<uint32_t>& append_counts,
-      std::function<uint32_t&(BucketedNodeStats::ClientNodeStats&)>
-          stats_variable_getter,
-      /*mutable*/
-      NodeMap<std::vector<BucketedNodeStats::ClientNodeStats>>& node_stats)
-      const;
 
   /**
    * @returns A map of all tracked nodes, mapped to their index in the matrix

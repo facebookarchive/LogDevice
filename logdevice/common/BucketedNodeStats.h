@@ -24,6 +24,21 @@ struct BucketedNodeStats {
     uint32_t successes{0};
     uint32_t fails{0};
 
+    explicit ClientNodeStats() noexcept {}
+
+    ClientNodeStats(std::initializer_list<uint32_t> list) {
+      if (list.size() != 2) {
+        return;
+      }
+
+      auto it = list.begin();
+      successes = *it++;
+      fails = *it;
+    }
+
+    explicit ClientNodeStats(uint32_t successes, uint32_t fails) noexcept
+        : successes{successes}, fails{fails} {}
+
     bool operator==(const ClientNodeStats& other) const {
       return successes == other.successes && fails == other.fails;
     }

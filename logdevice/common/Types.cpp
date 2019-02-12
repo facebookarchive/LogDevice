@@ -20,6 +20,10 @@ bool operator==(const ClientID& a, const ClientID& b) {
   return a.getIdx() == b.getIdx();
 }
 
+bool operator!=(const ClientID& a, const ClientID& b) {
+  return a.getIdx() != b.getIdx();
+}
+
 bool operator<(const ClientID& a, const ClientID& b) {
   return a.getIdx() < b.getIdx();
 }

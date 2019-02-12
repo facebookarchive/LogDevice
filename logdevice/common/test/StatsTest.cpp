@@ -462,25 +462,18 @@ TEST(StatsTest, StatsParamsUpdateAcrossThread) {
  * It loops over all threads, clients, and nodes, and sums the stats together
  * into the above mentioned maps
  */
-#define PER_CLIENT_NODE_STAT_COLLECT()                                       \
-  std::unordered_map<NodeID, uint32_t, NodeID::Hash> append_success;         \
-  std::unordered_map<NodeID, uint32_t, NodeID::Hash> append_fail;            \
-                                                                             \
-  const auto now = std::chrono::steady_clock::now();                         \
-  holder.runForEach([&](Stats& stats) {                                      \
-    for (auto& client_map_entry :                                            \
-         stats.synchronizedCopy(&Stats::per_client_node_stats)) {            \
-      client_map_entry.second->updateCurrentTime(now);                       \
-      for (auto& node_map_entry :                                            \
-           *(client_map_entry.second->getAppendSuccessMap()->rlock())) {     \
-        append_success[node_map_entry.first] += node_map_entry.second.sum(); \
-      }                                                                      \
-                                                                             \
-      for (auto& node_map_entry :                                            \
-           *(client_map_entry.second->getAppendFailMap()->rlock())) {        \
-        append_fail[node_map_entry.first] += node_map_entry.second.sum();    \
-      }                                                                      \
-    }                                                                        \
+#define PER_CLIENT_NODE_STAT_COLLECT()                               \
+  std::unordered_map<NodeID, uint32_t, NodeID::Hash> append_success; \
+  std::unordered_map<NodeID, uint32_t, NodeID::Hash> append_fail;    \
+                                                                     \
+  const auto now = std::chrono::steady_clock::now();                 \
+  holder.runForEach([&](Stats& stats) {                              \
+    stats.per_client_node_stats.wlock()->updateCurrentTime(now);     \
+    auto total = stats.per_client_node_stats.rlock()->sum();         \
+    for (auto& bucket : total) {                                     \
+      append_success[bucket.node_id] += bucket.value.successes;      \
+      append_fail[bucket.node_id] += bucket.value.failures;          \
+    }                                                                \
   });
 
 TEST(StatsTest, PerClientNodeTimeSeriesStats_SingleClientSimple) {
@@ -492,8 +485,7 @@ TEST(StatsTest, PerClientNodeTimeSeriesStats_SingleClientSimple) {
 
   auto holder_ptr = &holder;
 
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_id, AppendSuccess, node_id, 10);
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_id, AppendFail, node_id, 5);
+  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_id, node_id, 10, 5);
 
   PER_CLIENT_NODE_STAT_COLLECT();
 
@@ -511,9 +503,9 @@ TEST(StatsTest, PerClientNodeTimeSeriesStats_SingleClientAppendMany) {
 
   auto holder_ptr = &holder;
 
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_id, AppendSuccess, node_id, 10);
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_id, AppendSuccess, node_id, 50);
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_id, AppendSuccess, node_id, 2000);
+  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_id, node_id, 10, 0);
+  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_id, node_id, 50, 0);
+  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_id, node_id, 2000, 0);
 
   PER_CLIENT_NODE_STAT_COLLECT();
 
@@ -529,11 +521,9 @@ TEST(StatsTest, PerClientNodeTimeSeriesStats_ManyNodes) {
 
   auto holder_ptr = &holder;
 
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_id, AppendSuccess, node_id_1, 10);
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_id, AppendFail, node_id_1, 100);
+  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_id, node_id_1, 10, 100);
 
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_id, AppendSuccess, node_id_2, 20);
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_id, AppendFail, node_id_2, 200);
+  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_id, node_id_2, 20, 200);
 
   PER_CLIENT_NODE_STAT_COLLECT();
 
@@ -553,11 +543,9 @@ TEST(StatsTest, PerClientNodeTimeSeriesStats_ManyClients) {
 
   auto holder_ptr = &holder;
 
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_id_1, AppendSuccess, node_id, 10);
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_id_1, AppendFail, node_id, 100);
+  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_id_1, node_id, 10, 100);
 
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_id_2, AppendSuccess, node_id, 20);
-  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_id_2, AppendFail, node_id, 200);
+  PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_id_2, node_id, 20, 200);
 
   PER_CLIENT_NODE_STAT_COLLECT();
 
@@ -591,28 +579,16 @@ TEST(StatsTest, PerClientNodeTimeSeriesStats_ManyThreads) {
     threads.emplace_back([&]() {
       for (int j = 0; j < per_thread_count; ++j) {
         // client 1, node 1
-        PER_CLIENT_NODE_STAT_ADD(
-            holder_ptr, client_id_1, AppendSuccess, node_id_1, 10);
-        PER_CLIENT_NODE_STAT_ADD(
-            holder_ptr, client_id_1, AppendFail, node_id_1, 5);
+        PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_id_1, node_id_1, 10, 5);
 
         // client 1, node 2
-        PER_CLIENT_NODE_STAT_ADD(
-            holder_ptr, client_id_1, AppendSuccess, node_id_2, 10);
-        PER_CLIENT_NODE_STAT_ADD(
-            holder_ptr, client_id_1, AppendFail, node_id_2, 5);
+        PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_id_1, node_id_2, 10, 5);
 
         // client 2, node 1
-        PER_CLIENT_NODE_STAT_ADD(
-            holder_ptr, client_id_2, AppendSuccess, node_id_1, 10);
-        PER_CLIENT_NODE_STAT_ADD(
-            holder_ptr, client_id_2, AppendFail, node_id_1, 5);
+        PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_id_2, node_id_1, 10, 5);
 
         // client 2, node 2
-        PER_CLIENT_NODE_STAT_ADD(
-            holder_ptr, client_id_2, AppendSuccess, node_id_2, 10);
-        PER_CLIENT_NODE_STAT_ADD(
-            holder_ptr, client_id_2, AppendFail, node_id_2, 5);
+        PER_CLIENT_NODE_STAT_ADD(holder_ptr, client_id_2, node_id_2, 10, 5);
       }
 
       sem1.post();
@@ -646,50 +622,39 @@ TEST(StatsTest, PerClientNodeTimeSeriesStats_ManyThreads) {
 
 TEST(StatsTest, PerClientNodeTimeSeries_UpdateAggregationTime) {
   std::chrono::seconds initial_retention_time{10};
+  ClientID client_id{1};
   NodeID node_id{1};
   PerClientNodeTimeSeriesStats per_client_stats(initial_retention_time);
 
   // add values to create an time series for that node, to be able to check that
   // the retention time gets updated
-  per_client_stats.addAppendSuccess(node_id, 1);
-  per_client_stats.addAppendFail(node_id, 1);
+  per_client_stats.append(client_id, node_id, 1, 1);
 
   // check initial retention time
   EXPECT_EQ(initial_retention_time, per_client_stats.retentionTime());
-  EXPECT_EQ(
-      initial_retention_time,
-      per_client_stats.getAppendSuccessMap()->rlock()->at(node_id).duration());
-  EXPECT_EQ(
-      initial_retention_time,
-      per_client_stats.getAppendFailMap()->rlock()->at(node_id).duration());
+  EXPECT_EQ(initial_retention_time, per_client_stats.timeseries()->duration());
 
   std::chrono::seconds updated_retention_time{50};
   per_client_stats.updateRetentionTime(updated_retention_time);
 
   // check update retention time
   EXPECT_EQ(updated_retention_time, per_client_stats.retentionTime());
-  EXPECT_EQ(
-      updated_retention_time,
-      per_client_stats.getAppendSuccessMap()->rlock()->at(node_id).duration());
-  EXPECT_EQ(
-      updated_retention_time,
-      per_client_stats.getAppendFailMap()->rlock()->at(node_id).duration());
+  EXPECT_EQ(updated_retention_time, per_client_stats.timeseries()->duration());
 }
 
 // if latest_timepoint - earliest_timepoint > retention_time
 // caused a crash earlier, make sure to catch this case
 TEST(StatsTest, PerClientNodeTimeSeries_UpdateAggregationTimeDecreaseDuration) {
   const auto initial_retention_time = std::chrono::seconds{50};
+  ClientID client_id{1};
   NodeID node_id{1};
   PerClientNodeTimeSeriesStats per_client_stats(initial_retention_time);
 
   const auto now = std::chrono::steady_clock::now();
 
-  per_client_stats.addAppendSuccess(node_id, 1, now - std::chrono::seconds{25});
-  per_client_stats.addAppendFail(node_id, 1, now - std::chrono::seconds{25});
-
-  per_client_stats.addAppendSuccess(node_id, 1, now);
-  per_client_stats.addAppendFail(node_id, 1, now);
+  per_client_stats.append(
+      client_id, node_id, 1, 1, now - std::chrono::seconds{25});
+  per_client_stats.append(client_id, node_id, 1, 1, now);
 
   // less than latest_timepoint - earliest_timepoint
   const auto updated_retention_time = std::chrono::seconds{10};
@@ -697,12 +662,7 @@ TEST(StatsTest, PerClientNodeTimeSeries_UpdateAggregationTimeDecreaseDuration) {
 
   // check update retention time
   EXPECT_EQ(updated_retention_time, per_client_stats.retentionTime());
-  EXPECT_EQ(
-      updated_retention_time,
-      per_client_stats.getAppendSuccessMap()->rlock()->at(node_id).duration());
-  EXPECT_EQ(
-      updated_retention_time,
-      per_client_stats.getAppendFailMap()->rlock()->at(node_id).duration());
+  EXPECT_EQ(updated_retention_time, per_client_stats.timeseries()->duration());
 }
 
 // benchmarks for a few different stats implementations (only multithreaded

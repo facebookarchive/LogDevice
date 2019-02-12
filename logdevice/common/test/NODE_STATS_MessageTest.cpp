@@ -145,23 +145,17 @@ TEST(NODE_STATS_MessageTest, OnReceivedStoresStats) {
    */
   auto sum_per_node = [&](auto getter_fn) {
     std::unordered_map<NodeID, uint32_t, NodeID::Hash> sum_map;
-    auto per_client_stats =
-        msg.stats_holder.get().per_client_node_stats.rlock();
-    for (auto client_entry : *per_client_stats) {
-      auto per_node_stats = getter_fn(client_entry.second)->rlock();
-      for (auto node_entry : *per_node_stats) {
-        // sum over all time
-        sum_map[node_entry.first] = node_entry.second.sum();
-      }
+    auto buckets = msg.stats_holder.get().per_client_node_stats.rlock()->sum();
+    for (const auto& bucket : buckets) {
+      sum_map[bucket.node_id] += getter_fn(bucket.value);
     }
+
     return sum_map;
   };
 
   auto successes =
-      sum_per_node([](auto& stats) { return stats->getAppendSuccessMap(); });
-
-  auto fails =
-      sum_per_node([](auto& stats) { return stats->getAppendFailMap(); });
+      sum_per_node([](const auto& value) { return value.successes; });
+  auto fails = sum_per_node([](const auto& value) { return value.failures; });
 
   EXPECT_EQ(success_count_node_1, successes[ids[0]]);
   EXPECT_EQ(success_count_node_2, successes[ids[1]]);

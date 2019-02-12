@@ -79,6 +79,8 @@ struct ClientID {
 
 bool operator==(const ClientID& a, const ClientID& b);
 
+bool operator!=(const ClientID& a, const ClientID& b);
+
 bool operator<(const ClientID& a, const ClientID& b);
 
 }} // namespace facebook::logdevice

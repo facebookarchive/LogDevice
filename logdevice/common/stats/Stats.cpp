@@ -8,10 +8,12 @@
 #include "logdevice/common/stats/Stats.h"
 
 #include <algorithm>
+#include <cmath>
 #include <utility>
 #include <vector>
 
 #include <boost/algorithm/string/predicate.hpp>
+#include <folly/Conv.h>
 #include <folly/Synchronized.h>
 #include <folly/stats/BucketedTimeSeries-defs.h>
 #include <folly/stats/BucketedTimeSeries.h>
@@ -243,7 +245,10 @@ void PerStorageTaskTypeStats::reset() {
 }
 
 Stats::Stats(const FastUpdateableSharedPtr<StatsParams>* params)
-    : params(params), worker_id(-1) {
+    : per_client_node_stats(PerClientNodeTimeSeriesStats{
+          params->get()->node_stats_retention_time_on_nodes}),
+      params(params),
+      worker_id(-1) {
   if (params->get()->is_server) {
     server_histograms = std::make_unique<ServerHistograms>();
     per_shard_histograms = std::make_unique<PerShardHistograms>();
@@ -419,6 +424,8 @@ void Stats::reset() {
   if (per_shard_stats) {
     per_shard_stats->reset();
   }
+
+  per_client_node_stats.wlock()->reset();
 
   client.histograms->clear();
 }
@@ -940,81 +947,77 @@ PerNodeTimeSeriesStats::getAppendFail() const {
   return append_fail_.get();
 }
 
-const int PerClientNodeTimeSeriesStats::NUM_BUCKETS{30};
-
+using ClientNodeTimeSeriesMap =
+    TimeSeriesMap<PerClientNodeTimeSeriesStats::Key,
+                  PerClientNodeTimeSeriesStats::Value,
+                  PerClientNodeTimeSeriesStats::Key::Hash>;
 PerClientNodeTimeSeriesStats::PerClientNodeTimeSeriesStats(
     std::chrono::milliseconds retention_time)
     : retention_time_(retention_time),
-      append_success_(std::make_unique<SyncedNodeMap<TimeSeries>>()),
-      append_fail_(std::make_unique<SyncedNodeMap<TimeSeries>>()) {}
+      timeseries_(std::make_unique<TimeSeries>(30, retention_time)) {}
 
-void PerClientNodeTimeSeriesStats::addAppendSuccess(NodeID node,
-                                                    uint32_t count,
-                                                    TimePoint time_of_append) {
-  addAppend(append_success_.get(), std::move(node), count, time_of_append);
+PerClientNodeTimeSeriesStats::TimeSeries*
+PerClientNodeTimeSeriesStats::timeseries() const {
+  return timeseries_.get();
 }
 
-void PerClientNodeTimeSeriesStats::addAppendFail(NodeID node,
-                                                 uint32_t count,
-                                                 TimePoint time_of_append) {
-  addAppend(append_fail_.get(), std::move(node), count, time_of_append);
+void PerClientNodeTimeSeriesStats::append(ClientID client,
+                                          NodeID node,
+                                          uint32_t successes,
+                                          uint32_t failures,
+                                          TimePoint time) {
+  timeseries_->addValue(
+      time,
+      ClientNodeTimeSeriesMap(
+          PerClientNodeTimeSeriesStats::Key{client, node},
+          PerClientNodeTimeSeriesStats::Value{successes, failures}));
 }
 
-void PerClientNodeTimeSeriesStats::addAppend(SyncedNodeMap<TimeSeries>* map,
-                                             NodeID&& node,
-                                             uint32_t count,
-                                             TimePoint time_of_append) {
-  // see in the definition why a wlock is acquired
-  auto locked_map = map->wlock();
-  TimeSeries* time_series;
+void PerClientNodeTimeSeriesStats::reset() {
+  timeseries_->clear();
+}
 
-  auto it = locked_map->find(node);
-  if (it == locked_map->end()) {
-    time_series = &locked_map
-                       ->emplace(std::make_pair<NodeID, TimeSeries>(
-                           std::forward<NodeID>(node),
-                           TimeSeries(NUM_BUCKETS, retention_time_)))
-                       .first->second;
-  } else {
-    time_series = &it->second;
+bool operator==(const PerClientNodeTimeSeriesStats::Value& lhs,
+                const PerClientNodeTimeSeriesStats::Value& rhs) {
+  return lhs.successes == rhs.successes && lhs.failures == rhs.failures;
+}
+
+bool operator==(const PerClientNodeTimeSeriesStats::Key& a,
+                const PerClientNodeTimeSeriesStats::Key& b) {
+  return a.client_id == b.client_id && a.node_id == b.node_id;
+}
+
+bool operator!=(const PerClientNodeTimeSeriesStats::Key& a,
+                const PerClientNodeTimeSeriesStats::Key& b) {
+  return a.client_id != b.client_id || a.node_id != b.node_id;
+}
+
+using ClientNodeValue = PerClientNodeTimeSeriesStats::ClientNodeValue;
+std::vector<ClientNodeValue>
+PerClientNodeTimeSeriesStats::sum(TimePoint from, TimePoint to) const {
+  auto total = timeseries_->sum(from, to);
+  return processStats(total);
+}
+
+std::vector<ClientNodeValue> PerClientNodeTimeSeriesStats::sum() const {
+  auto total = timeseries_->sum();
+  return processStats(total);
+}
+
+std::vector<ClientNodeValue> PerClientNodeTimeSeriesStats::processStats(
+    const ClientNodeTimeSeriesMap& total) const {
+  const auto& map = total.data();
+  std::vector<ClientNodeValue> result{};
+  for (const auto& p : map) {
+    result.emplace_back(
+        ClientNodeValue{p.first.client_id, p.first.node_id, p.second});
   }
 
-  time_series->addValue(time_of_append, count);
-}
-
-PerClientNodeTimeSeriesStats::NodeMap<uint32_t>
-PerClientNodeTimeSeriesStats::sumAppendSuccess(TimePoint from, TimePoint to) {
-  return sumAppend(append_success_.get(), std::move(from), std::move(to));
-}
-
-PerClientNodeTimeSeriesStats::NodeMap<uint32_t>
-PerClientNodeTimeSeriesStats::sumAppendFail(TimePoint from, TimePoint to) {
-  return sumAppend(append_fail_.get(), std::move(from), std::move(to));
-}
-
-PerClientNodeTimeSeriesStats::NodeMap<uint32_t>
-PerClientNodeTimeSeriesStats::sumAppend(SyncedNodeMap<TimeSeries>* map,
-                                        const TimePoint& from,
-                                        const TimePoint& to) {
-  return map->withRLock([&](auto& locked_map) {
-    NodeMap<uint32_t> final_map;
-    for (auto& entry : locked_map) {
-      auto& time_series = entry.second;
-      final_map[entry.first] = time_series.sum(from, to);
-    }
-    return final_map;
-  });
+  return result;
 }
 
 void PerClientNodeTimeSeriesStats::updateCurrentTime(TimePoint current_time) {
-  const auto update = [current_time](auto& locked_map) {
-    for (auto& entry : locked_map) {
-      entry.second.update(current_time);
-    }
-  };
-
-  append_success_->withWLock(update);
-  append_fail_->withWLock(update);
+  timeseries_->update(current_time);
 }
 
 void PerClientNodeTimeSeriesStats::updateRetentionTime(
@@ -1024,34 +1027,14 @@ void PerClientNodeTimeSeriesStats::updateRetentionTime(
   }
 
   this->retention_time_ = retention_time;
-
   const auto now = std::chrono::steady_clock::now();
-
-  const auto update_retention = [&](auto& map) {
-    for (auto& entry : map) {
-      entry.second = newTimeSeriesWithUpdatedRetentionTime(
-          entry.second, retention_time, now);
-    }
-  };
-
-  append_success_->withWLock(update_retention);
-  append_fail_->withWLock(update_retention);
+  auto new_timeseries = std::make_unique<TimeSeries>(
+      newTimeSeriesWithUpdatedRetentionTime(*timeseries_, retention_time, now));
+  timeseries_.swap(new_timeseries);
 }
 
 std::chrono::milliseconds PerClientNodeTimeSeriesStats::retentionTime() const {
   return retention_time_;
-}
-
-const PerClientNodeTimeSeriesStats::SyncedNodeMap<
-    PerClientNodeTimeSeriesStats::TimeSeries>*
-PerClientNodeTimeSeriesStats::getAppendSuccessMap() const {
-  return append_success_.get();
-}
-
-const PerClientNodeTimeSeriesStats::SyncedNodeMap<
-    PerClientNodeTimeSeriesStats::TimeSeries>*
-PerClientNodeTimeSeriesStats::getAppendFailMap() const {
-  return append_fail_.get();
 }
 
 namespace {
@@ -1061,8 +1044,8 @@ namespace {
 //  - per_shard_stats.inc,
 //  - per_traffic_class_stats.inc.
 // The uniqueness is needed to prevent totals for per-something stats from
-// having the same name as a non-per-something stat (see enumerate() for totals
-// logic).
+// having the same name as a non-per-something stat (see enumerate() for
+// totals logic).
 enum class StatsUniquenessCheck {
 #define STAT_DEFINE(c, _) c,
 #include "logdevice/common/stats/common_stats.inc" // nolint
@@ -1074,5 +1057,4 @@ enum class StatsUniquenessCheck {
 #include "logdevice/common/stats/per_traffic_class_stats.inc" // nolint
 };
 } // namespace
-
 }} // namespace facebook::logdevice

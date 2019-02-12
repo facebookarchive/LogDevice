@@ -95,10 +95,9 @@ void NODE_STATS_Message::storeReceivedStats(ClientID from) {
                        .c_str())) {
       continue;
     }
+
     PER_CLIENT_NODE_STAT_ADD(
-        stats, from, AppendSuccess, ids_[i], append_successes_[i]);
-    PER_CLIENT_NODE_STAT_ADD(
-        stats, from, AppendFail, ids_[i], append_fails_[i]);
+        stats, from, ids_[i], append_successes_[i], append_fails_[i]);
   }
 }
 
