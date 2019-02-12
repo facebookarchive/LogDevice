@@ -107,15 +107,15 @@ TEST_F(AppendProbeIntegrationTest, SlidingWindowFull) {
   const int NAPPENDS = 5000;
   const int PAYLOAD_SIZE = 300;
   const int NTHREADS = 16;
-  Configuration::Log log_config =
-      IntegrationTestUtils::ClusterFactory::createDefaultLogConfig(1);
-  log_config.maxWritesInFlight = 2;
+  logsconfig::LogAttributes log_attrs =
+      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(1);
+  log_attrs.set_maxWritesInFlight(2);
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
           .doPreProvisionEpochMetaData() // not to throw off append counters
                                          // inside test_impl()
           .enableMessageErrorInjection()
-          .setLogConfig(log_config)
+          .setLogAttributes(log_attrs)
           .create(1);
   test_impl(*cluster, NAPPENDS, PAYLOAD_SIZE, NTHREADS);
 }
@@ -126,13 +126,13 @@ TEST_F(AppendProbeIntegrationTest, MaxTotalAppendersSize) {
   const int NAPPENDS = 5000;
   const int PAYLOAD_SIZE = 300;
   const int NTHREADS = 16;
-  Configuration::Log log_config =
-      IntegrationTestUtils::ClusterFactory::createDefaultLogConfig(1);
-  log_config.maxWritesInFlight = NAPPENDS;
+  logsconfig::LogAttributes log_attrs =
+      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(1);
+  log_attrs.set_maxWritesInFlight(NAPPENDS);
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
           .enableMessageErrorInjection()
-          .setLogConfig(log_config)
+          .setLogAttributes(log_attrs)
           .setParam("--max-total-appenders-size-hard",
                     std::to_string(2 * (PAYLOAD_SIZE + sizeof(Appender) + 8)))
           // Limit currently gets divided across workers, set 1 worker to

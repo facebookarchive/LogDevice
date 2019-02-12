@@ -755,43 +755,42 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
     // 7-day retention for logs 300-399,
     // Infinite retention for logs 400-409.
     auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
-    Configuration::Log log_config;
+    logsconfig::LogAttributes log_attrs;
 
-    log_config.backlogDuration = std::chrono::seconds(3600 * 24 * 1);
-    log_config.replicationFactor = 3;
-    log_config.rangeName = "lg1";
+    log_attrs.set_backlogDuration(std::chrono::seconds(3600 * 24 * 1));
+    log_attrs.set_replicationFactor(3);
     logs_config->insert(
-        boost::icl::right_open_interval<logid_t::raw_type>(1, 100), log_config);
-    log_config.backlogDuration = std::chrono::seconds(3600 * 24 * 2);
-    log_config.rangeName = "lg2";
+        boost::icl::right_open_interval<logid_t::raw_type>(1, 100),
+        "lg1",
+        log_attrs);
+    log_attrs.set_backlogDuration(std::chrono::seconds(3600 * 24 * 2));
     logs_config->insert(
         boost::icl::right_open_interval<logid_t::raw_type>(100, 200),
-        log_config);
-    log_config.backlogDuration = std::chrono::seconds(3600 * 24 * 3);
-    log_config.rangeName = "lg3";
+        "lg2",
+        log_attrs);
+    log_attrs.set_backlogDuration(std::chrono::seconds(3600 * 24 * 3));
     logs_config->insert(
         boost::icl::right_open_interval<logid_t::raw_type>(200, 300),
-        log_config);
+        "lg3",
+        log_attrs);
 
-    log_config.backlogDuration = std::chrono::seconds(3600 * 24 * 7);
-    log_config.rangeName = "logs_can_disappear";
+    log_attrs.set_backlogDuration(std::chrono::seconds(3600 * 24 * 7));
     logs_config->insert(
         boost::icl::right_open_interval<logid_t::raw_type>(300, 400),
-        log_config);
+        "logs_can_disappear",
+        log_attrs);
 
-    log_config.backlogDuration = folly::none;
-    log_config.rangeName = "infinite_retention";
+    log_attrs.set_backlogDuration(folly::none);
     logs_config->insert(
         boost::icl::right_open_interval<logid_t::raw_type>(400, 410),
-        log_config);
+        "infinite_retention",
+        log_attrs);
 
     // Event log.
-    log_config.backlogDuration = folly::none;
-    log_config.replicationFactor = 3;
+    log_attrs.set_backlogDuration(folly::none);
+    log_attrs.set_replicationFactor(3);
     configuration::InternalLogs internal_logs;
-    logsconfig::LogAttributes attrs;
-    log_config.toLogAttributes(&attrs);
-    ld_check(internal_logs.insert("event_log_deltas", attrs));
+    ld_check(internal_logs.insert("event_log_deltas", log_attrs));
 
     logs_config->setInternalLogsConfig(internal_logs);
     auto updateable_config = UpdateableConfig::createEmpty();

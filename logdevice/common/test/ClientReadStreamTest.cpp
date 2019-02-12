@@ -539,22 +539,18 @@ class ClientReadStreamTest
       }
     }
 
-    Configuration::Log log{};
-    log.rangeName = "log";
-    log.replicationFactor = replication_factor_;
-    log.syncReplicationScope = sync_replication_scope_;
-    log.scdEnabled = scd_enabled_;
-
-    if (sequencer_window_size_.hasValue()) {
-      log.maxWritesInFlight = sequencer_window_size_.value();
-    }
-    sequencer_window_size_ = log.maxWritesInFlight;
+    logsconfig::LogAttributes log_attrs;
+    log_attrs.set_replicationFactor(replication_factor_);
+    log_attrs.set_syncReplicationScope(sync_replication_scope_);
+    log_attrs.set_scdEnabled(scd_enabled_);
+    log_attrs.set_maxWritesInFlight(sequencer_window_size_);
 
     Configuration::NodesConfig nodes_config(std::move(nodes));
     auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
     logs_config->insert(boost::icl::right_open_interval<logid_t::raw_type>(
                             LOG_ID.val_, LOG_ID.val_ + 1),
-                        log);
+                        "log",
+                        log_attrs);
 
     // metadata stored on all nodes with max replication factor 3
     Configuration::MetaDataLogsConfig meta_config = createMetaDataLogsConfig(
@@ -719,7 +715,7 @@ class ClientReadStreamTest
   double flow_control_threshold_ = 0.5;
   size_t replication_factor_ = 1;
   NodeLocationScope sync_replication_scope_ = NodeLocationScope::NODE;
-  folly::Optional<int> sequencer_window_size_;
+  int sequencer_window_size_ = 2;
 
   size_t buffer_size_ = 1;
   bool require_full_read_set_ = false;
@@ -1803,7 +1799,7 @@ TEST_P(ClientReadStreamTest, GapAtWindowBegin) {
   state_.shards.resize(1);
   start_lsn_ = lsn(1, 1);
   start();
-  lsn_t gap_hi = lsn(1, sequencer_window_size_.value() + 1);
+  lsn_t gap_hi = lsn(1, sequencer_window_size_ + 1);
 
   onGap(N0, mockGap(N0, lsn(1, 1), gap_hi, GapReason::NO_RECORDS));
 
@@ -2203,7 +2199,7 @@ TEST_P(ClientReadStreamTest, PartialNodeset) {
   replication_factor_ = 2; // f-majority is 3
   start();
 
-  lsn_t first_lsn = lsn(1, sequencer_window_size_.value() + 1);
+  lsn_t first_lsn = lsn(1, sequencer_window_size_ + 1);
 
   onDataRecord(N0, mockRecord(first_lsn + 2));
   onDataRecord(N1, mockRecord(first_lsn + 3));

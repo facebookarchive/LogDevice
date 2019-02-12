@@ -146,11 +146,13 @@ class LocalLogsConfig : public LogsConfig {
   // [DEPRECATED] used only in test cases
   std::shared_ptr<logsconfig::LogGroupNode> insert(
       const boost::icl::right_open_interval<logid_t::raw_type>& logid_interval,
-      Log entry);
+      const std::string& name,
+      LogAttributes attrs);
 
   // [DEPRECATED] exists only till Log is removed
   std::shared_ptr<logsconfig::LogGroupNode> insert(logid_t::raw_type logid,
-                                                   Log entry);
+                                                   const std::string& name,
+                                                   LogAttributes attrs);
   // adds a new namespace in the tree
   DirectoryNode* insertNamespace(DirectoryNode* parent,
                                  const std::string& name,

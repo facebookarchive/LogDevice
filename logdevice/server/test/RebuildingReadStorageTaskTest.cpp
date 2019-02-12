@@ -79,31 +79,28 @@ class RebuildingReadStorageTaskTest : public ::testing::Test {
     NodeSetTestUtil::addNodes(&nodes, /* nodes */ 10, /* shards */ 2, "....");
 
     auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
-    Configuration::Log log_config;
+    logsconfig::LogAttributes log_attrs;
     // Logs 1..10, replication factor 3.
-    log_config.backlogDuration = std::chrono::seconds(3600 * 24 * 1);
-    log_config.replicationFactor = 3;
-    log_config.rangeName = "lg1";
+    log_attrs.set_backlogDuration(std::chrono::seconds(3600 * 24 * 1));
+    log_attrs.set_replicationFactor(3);
     logs_config->insert(
-        boost::icl::right_open_interval<logid_t::raw_type>(1, 10), log_config);
+        boost::icl::right_open_interval<logid_t::raw_type>(1, 10),
+        "lg1",
+        log_attrs);
     // Event log, replication factor 3.
-    log_config.backlogDuration = folly::none;
-    log_config.replicationFactor = 3;
-    log_config.rangeName = "event_log_deltas";
+    log_attrs.set_backlogDuration(folly::none);
+    log_attrs.set_replicationFactor(3);
     configuration::InternalLogs internal_logs;
-    logsconfig::LogAttributes attrs;
-    log_config.toLogAttributes(&attrs);
-    ld_check(internal_logs.insert("event_log_deltas", attrs));
-    logs_config->setInternalLogsConfig(internal_logs);
+    ld_check(internal_logs.insert("event_log_deltas", log_attrs));
     logs_config->setInternalLogsConfig(internal_logs);
     logs_config->markAsFullyLoaded();
     // Metadata logs, nodeset 5..9, replication factor 3.
     configuration::MetaDataLogsConfig meta_logs_config;
     meta_logs_config.metadata_nodes = {5, 6, 7, 8, 9};
-    log_config.rangeName = "metadata logs";
-    log_config.toLogAttributes(&attrs);
-    meta_logs_config.setMetadataLogGroup(logsconfig::LogGroupNode(
-        "metadata logs", attrs, logid_range_t(LOGID_INVALID, LOGID_INVALID)));
+    meta_logs_config.setMetadataLogGroup(
+        logsconfig::LogGroupNode("metadata logs",
+                                 log_attrs,
+                                 logid_range_t(LOGID_INVALID, LOGID_INVALID)));
 
     auto server_config = std::shared_ptr<ServerConfig>(
         ServerConfig::fromDataTest("RebuildingReadStorageTaskTest",

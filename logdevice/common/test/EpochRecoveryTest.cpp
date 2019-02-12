@@ -307,15 +307,16 @@ void EpochRecoveryTest::initConfig() {
     }
   }
 
-  Configuration::Log log{};
-  log.rangeName = "log";
+  logsconfig::LogAttributes log_attrs;
   // we won't use these
-  log.replicationFactor = 2;
+  log_attrs.set_replicationFactor(2);
   Configuration::NodesConfig nodes_config(std::move(nodes));
   auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
   logs_config->insert(boost::icl::right_open_interval<logid_t::raw_type>(
                           LOG_ID.val_, LOG_ID.val_ + 1),
-                      log);
+                      "log",
+                      log_attrs);
+
   // metadata stored on all nodes with max replication factor 3
   Configuration::MetaDataLogsConfig meta_config =
       createMetaDataLogsConfig(nodes_config, nodes_config.getNodes().size(), 3);

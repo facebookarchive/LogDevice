@@ -727,15 +727,15 @@ void AppenderTest::updateConfig() {
     node.addSequencerRole();
   }
 
-  Configuration::Log log{};
-  log.replicationFactor = replication_;
-  log.rangeName = "mylog";
+  logsconfig::LogAttributes log_attrs;
+  log_attrs.set_replicationFactor(replication_);
 
   Configuration::NodesConfig nodes_config(nodes);
   auto logs_config = std::make_unique<configuration::LocalLogsConfig>();
   logs_config->insert(boost::icl::right_open_interval<logid_t::raw_type>(
                           LOG_ID.val_, LOG_ID.val_ + 1),
-                      log);
+                      "mylog",
+                      log_attrs);
 
   // metadata stored on all nodes with max replication factor 3
   Configuration::MetaDataLogsConfig meta_config =

@@ -62,17 +62,13 @@ TEST_F(FailureDomainIntegrationTest, TolerateRegionFailure) {
   const logid_t logid(2);
   Configuration::Nodes nodes = createFailureDomainNodes();
 
-  Configuration::Log log_config;
-  log_config.replicationFactor = 2;
-  log_config.rangeName = "mylog";
-  log_config.extraCopies = 0;
-  log_config.syncedCopies = 0;
-  log_config.maxWritesInFlight = 2048;
+  logsconfig::LogAttributes log_attrs;
+  log_attrs.set_replicationFactor(2);
+  log_attrs.set_extraCopies(0);
+  log_attrs.set_syncedCopies(0);
+  log_attrs.set_maxWritesInFlight(2048);
   // cross-region replication
-  log_config.syncReplicationScope = NodeLocationScope::REGION;
-
-  logsconfig::LogAttributes internal_log_attrs;
-  log_config.toLogAttributes(&internal_log_attrs);
+  log_attrs.set_syncReplicationScope(NodeLocationScope::REGION);
 
   // metadata logs are replicated cross-region as well
   // this nodeset, with replication = 2, enforces cross-region replication
@@ -83,11 +79,12 @@ TEST_F(FailureDomainIntegrationTest, TolerateRegionFailure) {
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
           .setNodes(nodes)
-          .setLogConfig(log_config)
+          .setLogGroupName("mylog")
+          .setLogAttributes(log_attrs)
           .setMetaDataLogsConfig(meta_config)
           .eventLogMode(
               IntegrationTestUtils::ClusterFactory::EventLogMode::NONE)
-          .setConfigLogAttributes(internal_log_attrs)
+          .setConfigLogAttributes(log_attrs)
           .create(nodes.size());
 
   cluster->waitForMetaDataLogWrites();
@@ -179,14 +176,13 @@ TEST_F(FailureDomainIntegrationTest, ReadHealthWithFailureDomain) {
   const logid_t LOG_ID(1);
   Configuration::Nodes nodes = createFailureDomainNodes();
 
-  Configuration::Log log_config;
-  log_config.rangeName = "mylog";
-  log_config.replicationFactor = 2;
-  log_config.extraCopies = 0;
-  log_config.syncedCopies = 0;
-  log_config.maxWritesInFlight = 256;
+  logsconfig::LogAttributes log_attrs;
+  log_attrs.set_replicationFactor(2);
+  log_attrs.set_extraCopies(0);
+  log_attrs.set_syncedCopies(0);
+  log_attrs.set_maxWritesInFlight(256);
   // cross-region replication
-  log_config.syncReplicationScope = NodeLocationScope::REGION;
+  log_attrs.set_syncReplicationScope(NodeLocationScope::REGION);
 
   Configuration::MetaDataLogsConfig meta_config =
       createMetaDataLogsConfig({0, 1, 3}, 2, NodeLocationScope::REGION);
@@ -194,7 +190,8 @@ TEST_F(FailureDomainIntegrationTest, ReadHealthWithFailureDomain) {
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .setNodes(nodes)
-                     .setLogConfig(log_config)
+                     .setLogGroupName("mylog")
+                     .setLogAttributes(log_attrs)
                      .setMetaDataLogsConfig(meta_config)
                      .create(nodes.size());
 
@@ -259,15 +256,14 @@ TEST_F(FailureDomainIntegrationTest,
     node.addSequencerRole();
   }
 
-  Configuration::Log log_config;
-  log_config.replicationFactor = 2;
-  log_config.extraCopies = 0;
-  log_config.rangeName = "mylog";
-  log_config.syncedCopies = 0;
-  log_config.maxWritesInFlight = 2048;
+  logsconfig::LogAttributes log_attrs;
+  log_attrs.set_replicationFactor(2);
+  log_attrs.set_extraCopies(0);
+  log_attrs.set_syncedCopies(0);
+  log_attrs.set_maxWritesInFlight(2048);
   // cross-region replication
-  log_config.syncReplicationScope = NodeLocationScope::REGION;
-  log_config.nodeSetSize.assign(3); // 3 regions
+  log_attrs.set_syncReplicationScope(NodeLocationScope::REGION);
+  log_attrs.set_nodeSetSize(3); // 3 regions
 
   // metadata logs are replicated cross-region as well
   // this nodeset, with replication = 2, enforces cross-region replication
@@ -277,7 +273,8 @@ TEST_F(FailureDomainIntegrationTest,
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
           .setNodes(nodes)
-          .setLogConfig(log_config)
+          .setLogGroupName("mylog")
+          .setLogAttributes(log_attrs)
           .setMetaDataLogsConfig(meta_config)
           // TODO(#8466255): remove.
           .eventLogMode(
@@ -405,23 +402,22 @@ TEST_F(FailureDomainIntegrationTest, ThreeRackReplication) {
   meta_logs_config.sequencers_write_metadata_logs = true;
   meta_logs_config.sequencers_provision_epoch_store = true;
 
-  auto cluster =
-      IntegrationTestUtils::ClusterFactory()
-          .setNodes(nodes_cfg)
-          .setLogConfig(*Configuration::Log::fromLogAttributes(
-              "test logs",
-              logsconfig::LogAttributes()
-                  .with_replicateAcross({{NodeLocationScope::RACK, 3}})
-                  .with_nodeSetSize(8)
-                  .with_scdEnabled(true)))
-          .setMetaDataLogsConfig(meta_logs_config)
-          .setEventLogAttributes(
-              logsconfig::LogAttributes().with_replicateAcross(
-                  {{NodeLocationScope::RACK, 4}}))
-          .useHashBasedSequencerAssignment()
-          .setParam("--enable-sticky-copysets", "false")
-          .setParam("--rocksdb-use-copyset-index", "false")
-          .create(0);
+  auto cluster = IntegrationTestUtils::ClusterFactory()
+                     .setNodes(nodes_cfg)
+                     .setLogGroupName("test_logs")
+                     .setLogAttributes(logsconfig::LogAttributes()
+                                           .with_replicateAcross(
+                                               {{NodeLocationScope::RACK, 3}})
+                                           .with_nodeSetSize(8)
+                                           .with_scdEnabled(true))
+                     .setMetaDataLogsConfig(meta_logs_config)
+                     .setEventLogAttributes(
+                         logsconfig::LogAttributes().with_replicateAcross(
+                             {{NodeLocationScope::RACK, 4}}))
+                     .useHashBasedSequencerAssignment()
+                     .setParam("--enable-sticky-copysets", "false")
+                     .setParam("--rocksdb-use-copyset-index", "false")
+                     .create(0);
 
   const std::chrono::seconds client_timeout(3);
   auto client = cluster->createClient(client_timeout);

@@ -40,12 +40,13 @@ static void do_benchmark(NodeSetSelectorType type, unsigned iterations) {
     Configuration::NodesConfig nodes_config(std::move(nodes));
 
     auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
-    configuration::Log log;
-    log.rangeName = "NodeSetSelectorBenchmark";
-    log.replicateAcross = {
-        {NodeLocationScope::RACK, 2}, {NodeLocationScope::NODE, 3}};
+    logsconfig::LogAttributes log_attrs;
+    log_attrs.set_replicateAcross(
+        {{NodeLocationScope::RACK, 2}, {NodeLocationScope::NODE, 3}});
     logs_config->insert(
-        boost::icl::right_open_interval<logid_t::raw_type>(1, 2), log);
+        boost::icl::right_open_interval<logid_t::raw_type>(1, 2),
+        "NodeSetSelectorBenchmark",
+        log_attrs);
 
     config = std::make_shared<Configuration>(
         ServerConfig::fromDataTest(

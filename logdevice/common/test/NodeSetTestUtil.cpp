@@ -72,17 +72,17 @@ void addLog(configuration::LocalLogsConfig* logs_config,
   // log must not already exist
   ld_check(logs_config->getLogMap().find(logid.val_) ==
            logs_config->getLogMap().end());
-  LogsConfig::Log log;
-  log.maxWritesInFlight = 256;
-  log.replicationFactor = replication.getReplicationFactor();
-  log.rangeName = folly::to<std::string>(logid.val());
-  log.extraCopies = extras;
-  log.nodeSetSize = nodeset_size;
-  log.backlogDuration = backlog;
-  log.replicateAcross = replication.getDistinctReplicationFactors();
+  logsconfig::LogAttributes log_attrs;
+  log_attrs.set_maxWritesInFlight(256);
+  log_attrs.set_replicationFactor(replication.getReplicationFactor());
+  log_attrs.set_extraCopies(extras);
+  log_attrs.set_nodeSetSize(nodeset_size);
+  log_attrs.set_backlogDuration(backlog);
+  log_attrs.set_replicateAcross(replication.getDistinctReplicationFactors());
   boost::icl::right_open_interval<logid_t::raw_type> logid_interval(
       logid.val_, logid.val_ + 1);
-  logs_config->insert(logid_interval, log);
+  logs_config->insert(
+      logid_interval, folly::to<std::string>(logid.val()), log_attrs);
 }
 
 }}} // namespace facebook::logdevice::NodeSetTestUtil

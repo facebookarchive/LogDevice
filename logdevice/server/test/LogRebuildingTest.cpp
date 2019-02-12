@@ -439,14 +439,13 @@ class LogRebuildingTest : public ::testing::Test {
 
     auto logs_config = std::make_unique<configuration::LocalLogsConfig>();
 
-    Configuration::Log log{};
-    log.replicationFactor = 3;
-    log.rangeName = "mylogs";
-    log.scdEnabled = true;
-
+    logsconfig::LogAttributes log_attrs;
+    log_attrs.set_replicationFactor(3);
+    log_attrs.set_scdEnabled(true);
     logs_config->insert(boost::icl::right_open_interval<logid_t::raw_type>(
                             kLogID.val_, kLogID.val_ + 1),
-                        log);
+                        "mylogs",
+                        log_attrs);
 
     Configuration::NodesConfig nodes_config(std::move(nodes));
     Configuration::MetaDataLogsConfig meta_config = createMetaDataLogsConfig(

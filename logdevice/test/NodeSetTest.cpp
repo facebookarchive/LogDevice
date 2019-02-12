@@ -101,17 +101,17 @@ class NodeSetTest : public IntegrationTestBase {
 void NodeSetTest::init() {
   ld_check(replication_ <= nodes_);
 
-  Configuration::Log log;
-  log.rangeName = "test_log";
-  log.maxWritesInFlight = 256;
-  log.singleWriter = false;
-  log.replicationFactor = replication_;
-  log.extraCopies = extra_;
-  log.syncedCopies = synced_;
+  logsconfig::LogAttributes log_attrs;
+  log_attrs.set_maxWritesInFlight(256);
+  log_attrs.set_singleWriter(false);
+  log_attrs.set_replicationFactor(replication_);
+  log_attrs.set_extraCopies(extra_);
+  log_attrs.set_syncedCopies(synced_);
 
   auto factory = IntegrationTestUtils::ClusterFactory()
                      .enableMessageErrorInjection()
-                     .setLogConfig(log)
+                     .setLogGroupName("test_log")
+                     .setLogAttributes(log_attrs)
                      .setNumLogs(NLOGS) // only need 1 log
                      .deferStart()
                      .doNotLetSequencersProvisionEpochMetaData()
@@ -852,13 +852,12 @@ TEST_F(NodeSetTest, RebuildMultipleEpochs) {
 }
 
 TEST_F(NodeSetTest, EpochMetaDataCache) {
-  Configuration::Log log;
-  log.maxWritesInFlight = 256;
-  log.rangeName = "my-logs";
-  log.singleWriter = false;
-  log.replicationFactor = replication_;
-  log.extraCopies = extra_;
-  log.syncedCopies = synced_;
+  logsconfig::LogAttributes log_attrs;
+  log_attrs.set_maxWritesInFlight(256);
+  log_attrs.set_singleWriter(false);
+  log_attrs.set_replicationFactor(replication_);
+  log_attrs.set_extraCopies(extra_);
+  log_attrs.set_syncedCopies(synced_);
 
   // we have a specific setup:
   // node 0: sequencer
@@ -875,7 +874,8 @@ TEST_F(NodeSetTest, EpochMetaDataCache) {
 
   auto factory = IntegrationTestUtils::ClusterFactory()
                      .enableMessageErrorInjection()
-                     .setLogConfig(log)
+                     .setLogGroupName("my-logs")
+                     .setLogAttributes(log_attrs)
                      .setMetaDataLogsConfig(meta_config)
                      .setNumLogs(NLOGS) // only need 1 log
                      .deferStart()

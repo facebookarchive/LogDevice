@@ -583,18 +583,18 @@ TEST_F(ConfigIntegrationTest, ConfigSyncMethodFailure) {
 }
 
 TEST_F(ConfigIntegrationTest, NumLogsConfiguredStat) {
-  Configuration::Log log_config;
-  log_config.rangeName = "test_range";
-  log_config.replicationFactor = 2;
-  log_config.extraCopies = 0;
-  log_config.syncedCopies = 0;
-  log_config.maxWritesInFlight = 100;
+  logsconfig::LogAttributes log_attrs;
+  log_attrs.set_replicationFactor(2);
+  log_attrs.set_extraCopies(0);
+  log_attrs.set_syncedCopies(0);
+  log_attrs.set_maxWritesInFlight(100);
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
           .setParam("--file-config-update-interval", "10ms")
           .setParam("--num-workers", "8")
-          .setLogConfig(log_config)
+          .setLogGroupName("test_range")
+          .setLogAttributes(log_attrs)
           // TODO(#8466255): remove.
           .eventLogMode(
               IntegrationTestUtils::ClusterFactory::EventLogMode::NONE)
@@ -612,8 +612,7 @@ TEST_F(ConfigIntegrationTest, NumLogsConfiguredStat) {
     std::shared_ptr<Configuration> current_config = cluster->getConfig()->get();
     auto new_logs_config = current_config->localLogsConfig()->copyLocal();
     auto logs_config = current_config->localLogsConfig();
-    log_config.rangeName = "test_range_2";
-    new_logs_config->insert(EXTRA_LOG_ID.val_, log_config);
+    new_logs_config->insert(EXTRA_LOG_ID.val_, "test_range_2", log_attrs);
     auto new_config = std::make_shared<Configuration>(
         current_config->serverConfig(), std::move(new_logs_config));
 
@@ -641,7 +640,7 @@ TEST_F(ConfigIntegrationTest, NumLogsConfiguredStat) {
   {
     boost::icl::right_open_interval<logid_t::raw_type> logid_interval(1, 2);
     auto new_logs_config = std::make_unique<configuration::LocalLogsConfig>();
-    new_logs_config->insert(logid_interval, log_config);
+    new_logs_config->insert(logid_interval, "test_range_3", log_attrs);
     cluster->writeLogsConfig(new_logs_config.get());
     cluster->waitForConfigUpdate();
     stats = cluster->getNode(0).stats();
@@ -1085,10 +1084,10 @@ TEST_F(ConfigIntegrationTest, MetaDataLog) {
   std::shared_ptr<configuration::LocalLogsConfig> logs_config =
       checked_downcast<std::unique_ptr<configuration::LocalLogsConfig>>(
           cluster_config->localLogsConfig()->copy());
-  Configuration::Log log;
-  log.rangeName = "test_log_log";
-  log.replicationFactor = 3;
-  logs_config->insert(LOG_ID.val_, log);
+
+  logsconfig::LogAttributes log_attrs;
+  log_attrs.set_replicationFactor(3);
+  logs_config->insert(LOG_ID.val_, "test_log_log", log_attrs);
 
   auto client_config = std::make_shared<UpdateableConfig>();
   client_config->updateableServerConfig()->update(

@@ -44,12 +44,11 @@ static NodeSetIndices getFullNodeSet() {
 }
 
 static void commonSetup(IntegrationTestUtils::ClusterFactory& cluster) {
-  Configuration::Log log_config;
-  log_config.replicationFactor = std::min(3, NUM_NODES - 1);
-  log_config.rangeName = "my-test-log";
-  log_config.extraCopies = 0;
-  log_config.syncedCopies = 0;
-  log_config.maxWritesInFlight = MAX_IN_FLIGHT;
+  logsconfig::LogAttributes log_attrs;
+  log_attrs.set_replicationFactor(std::min(3, NUM_NODES - 1));
+  log_attrs.set_extraCopies(0);
+  log_attrs.set_syncedCopies(0);
+  log_attrs.set_maxWritesInFlight(MAX_IN_FLIGHT);
 
   logsconfig::LogAttributes event_log_attrs;
   event_log_attrs.set_replicationFactor(std::min(4, NUM_NODES - 1));
@@ -86,7 +85,8 @@ static void commonSetup(IntegrationTestUtils::ClusterFactory& cluster) {
       // stress testing, since each wave will dump the dataSize counter.
       .setParam("--store-timeout", "30s")
       .setNumDBShards(1)
-      .setLogConfig(log_config)
+      .setLogAttributes(log_attrs)
+      .setLogGroupName("my-test-log")
       .setEventLogAttributes(event_log_attrs)
       .setMetaDataLogsConfig(meta_config)
       .setNumLogs(NUM_LOGS);

@@ -167,12 +167,13 @@ class MockFindKeyRequest : public FindKeyRequest {
     Configuration::MetaDataLogsConfig meta_config = createMetaDataLogsConfig(
         nodes_config, nodes_config.getNodes().size(), 3);
 
-    Configuration::Log log{};
-    log.replicationFactor = 3;
-    log.rangeName = "mylog";
+    logsconfig::LogAttributes log_attrs;
+    log_attrs.set_replicationFactor(3);
     auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
     logs_config->insert(
-        boost::icl::right_open_interval<logid_t::raw_type>(1, 2), log);
+        boost::icl::right_open_interval<logid_t::raw_type>(1, 2),
+        "mylog",
+        log_attrs);
     config_ = ServerConfig::fromDataTest(
         __FILE__, std::move(nodes_config), std::move(meta_config));
 
@@ -199,12 +200,13 @@ class MockFindKeyRequest : public FindKeyRequest {
     Configuration::MetaDataLogsConfig meta_config = createMetaDataLogsConfig(
         nodes_config, nodes_config.getNodes().size(), 3);
 
-    Configuration::Log log{};
-    log.replicationFactor = 3;
-    log.rangeName = "mylog";
+    logsconfig::LogAttributes log_attrs;
+    log_attrs.set_replicationFactor(3);
     auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
     logs_config->insert(
-        boost::icl::right_open_interval<logid_t::raw_type>(1, 2), log);
+        boost::icl::right_open_interval<logid_t::raw_type>(1, 2),
+        "mylog",
+        log_attrs);
     config_ = ServerConfig::fromDataTest(
         __FILE__, std::move(nodes_config), std::move(meta_config));
 

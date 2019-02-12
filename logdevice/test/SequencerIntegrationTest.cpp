@@ -730,14 +730,15 @@ std::unique_ptr<IntegrationTestUtils::Cluster> createClusterFromNodes(
     nodes[i].addStorageRole(/*num_shards*/ 2);
   }
 
-  Configuration::Log logcfg =
-      IntegrationTestUtils::ClusterFactory::createDefaultLogConfig(num_nodes);
-  logcfg.replicationFactor = num_nodes - 1;
-  logcfg.extraCopies = 1;
+  logsconfig::LogAttributes log_attrs =
+      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(
+          num_nodes);
+  log_attrs.set_replicationFactor(num_nodes - 1);
+  log_attrs.set_extraCopies(1);
 
   auto factory = IntegrationTestUtils::ClusterFactory()
                      .setNodes(nodes)
-                     .setLogConfig(logcfg)
+                     .setLogAttributes(log_attrs)
                      .doPreProvisionEpochMetaData() // to ensure all records
                                                     // fall into expected epochs
                      .useHashBasedSequencerAssignment(100, "10s")
@@ -933,16 +934,16 @@ TEST_F(SequencerIntegrationTest, AutoLogProvisioning) {
     nodes[i].addStorageRole(/*num_shards*/ 1);
   }
 
-  Configuration::Log logcfg;
-  logcfg.rangeName = "test_range";
-  logcfg.replicationFactor = 2;
-  logcfg.nodeSetSize.assign(10);
+  logsconfig::LogAttributes log_attrs;
+  log_attrs.set_replicationFactor(2);
+  log_attrs.set_nodeSetSize(10);
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .setNodes(nodes)
                      .useHashBasedSequencerAssignment(100, "10s")
                      .enableMessageErrorInjection()
-                     .setLogConfig(logcfg)
+                     .setLogGroupName("test_range")
+                     .setLogAttributes(log_attrs)
                      .create(3);
 
   for (const auto& it : nodes) {
@@ -1181,16 +1182,16 @@ TEST_F(SequencerIntegrationTest, AutoLogProvisioningEpochStorePreemption) {
     }
   }
 
-  Configuration::Log logcfg;
-  logcfg.rangeName = "test_range";
-  logcfg.replicationFactor = 2;
-  logcfg.nodeSetSize.assign(10);
+  logsconfig::LogAttributes log_attrs;
+  log_attrs.set_replicationFactor(2);
+  log_attrs.set_nodeSetSize(10);
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .setNodes(nodes)
                      .useHashBasedSequencerAssignment(100, "10s")
                      .enableMessageErrorInjection()
-                     .setLogConfig(logcfg)
+                     .setLogGroupName("test_range")
+                     .setLogAttributes(log_attrs)
                      .create(num_nodes);
 
   for (const auto& it : nodes) {
@@ -1714,15 +1715,16 @@ TEST_F(SequencerIntegrationTest, DISABLED_SilentDuplicatesCancelled) {
     node.addSequencerRole();
   }
 
-  Configuration::Log logcfg =
-      IntegrationTestUtils::ClusterFactory::createDefaultLogConfig(num_nodes);
+  logsconfig::LogAttributes log_attrs =
+      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(
+          num_nodes);
   // This test relies on a replication factor of 2. Set it explicitly here.
-  logcfg.replicationFactor = 2;
+  log_attrs.set_replicationFactor(2);
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
           .setNodes(nodes)
-          .setLogConfig(logcfg)
+          .setLogAttributes(log_attrs)
           .useHashBasedSequencerAssignment(100, "10s")
           .enableMessageErrorInjection()
           .setParam("--sticky-copysets-block-size", "1")
@@ -1867,15 +1869,16 @@ TEST_F(SequencerIntegrationTest, SilentDuplicatesBypassed) {
     node.addSequencerRole();
   }
 
-  Configuration::Log logcfg =
-      IntegrationTestUtils::ClusterFactory::createDefaultLogConfig(num_nodes);
+  logsconfig::LogAttributes log_attrs =
+      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(
+          num_nodes);
   // This test relies on a replication factor of 2. Set it explicitly here.
-  logcfg.replicationFactor = 2;
+  log_attrs.set_replicationFactor(2);
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
           .setNodes(nodes)
-          .setLogConfig(logcfg)
+          .setLogAttributes(log_attrs)
           .useHashBasedSequencerAssignment(100, "10s")
           .enableMessageErrorInjection()
           .setParam("--sticky-copysets-block-size", "1")
@@ -1936,13 +1939,14 @@ TEST_F(SequencerIntegrationTest, AbortEpoch) {
   // starting epoch after initial provisioning
   const epoch_t starting_epoch = epoch_t(2);
 
-  Configuration::Log logcfg =
-      IntegrationTestUtils::ClusterFactory::createDefaultLogConfig(num_nodes);
-  logcfg.replicationFactor = 3;
-  logcfg.maxWritesInFlight = window_size;
+  logsconfig::LogAttributes log_attrs =
+      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(
+          num_nodes);
+  log_attrs.set_replicationFactor(3);
+  log_attrs.set_maxWritesInFlight(window_size);
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .setLogConfig(logcfg)
+                     .setLogAttributes(log_attrs)
                      .setParam("--epoch-draining-timeout",
                                "3s",
                                IntegrationTestUtils::ParamScope::SEQUENCER)
@@ -2014,14 +2018,11 @@ TEST_F(SequencerIntegrationTest, AbortEpoch) {
 // test changing weight to 0 for a storage node would make sequencer stops
 // sending writes to the node
 TEST_F(SequencerIntegrationTest, WeightChangeToZero) {
-  Configuration::Log log_config =
-      IntegrationTestUtils::ClusterFactory::createDefaultLogConfig(2);
-  log_config.maxWritesInFlight = 1024;
-  log_config.replicationFactor = 1;
-  log_config.extraCopies = 0;
-
-  logsconfig::LogAttributes log_attrs;
-  log_config.toLogAttributes(&log_attrs);
+  logsconfig::LogAttributes log_attrs =
+      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(2);
+  log_attrs.set_maxWritesInFlight(1024);
+  log_attrs.set_replicationFactor(1);
+  log_attrs.set_extraCopies(0);
 
   Configuration::MetaDataLogsConfig meta_config =
       createMetaDataLogsConfig(/*nodeset=*/{1}, /*replication=*/1);
@@ -2034,7 +2035,7 @@ TEST_F(SequencerIntegrationTest, WeightChangeToZero) {
                      .setParam("--sticky-copysets-block-size", "1")
                      .doPreProvisionEpochMetaData()
                      .setNumLogs(1)
-                     .setLogConfig(log_config)
+                     .setLogAttributes(log_attrs)
                      .setEventLogAttributes(log_attrs)
                      .setConfigLogAttributes(log_attrs)
                      .setMetaDataLogsConfig(meta_config)
@@ -2094,14 +2095,11 @@ TEST_F(SequencerIntegrationTest, WeightChangeToZero) {
 // metadata and write to the metadata logs, while the config changes to disable
 // that sequencer.
 TEST_F(SequencerIntegrationTest, SequencerMetaDataManagerNullptrCrash) {
-  Configuration::Log log_config =
-      IntegrationTestUtils::ClusterFactory::createDefaultLogConfig(2);
-  log_config.maxWritesInFlight = 1024;
-  log_config.replicationFactor = 1;
-  log_config.extraCopies = 0;
-
-  logsconfig::LogAttributes log_attrs;
-  log_config.toLogAttributes(&log_attrs);
+  logsconfig::LogAttributes log_attrs =
+      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(2);
+  log_attrs.set_maxWritesInFlight(1024);
+  log_attrs.set_replicationFactor(1);
+  log_attrs.set_extraCopies(0);
 
   Configuration::MetaDataLogsConfig meta_config =
       createMetaDataLogsConfig(/*nodeset=*/{1}, /*replication=*/1);
@@ -2114,7 +2112,7 @@ TEST_F(SequencerIntegrationTest, SequencerMetaDataManagerNullptrCrash) {
                      .doPreProvisionEpochMetaData()
                      .setNumLogs(num_logs)
                      .useHashBasedSequencerAssignment(100, "10s")
-                     .setLogConfig(log_config)
+                     .setLogAttributes(log_attrs)
                      .setEventLogAttributes(log_attrs)
                      .setConfigLogAttributes(log_attrs)
                      .setMetaDataLogsConfig(meta_config)
@@ -2166,15 +2164,15 @@ TEST_F(SequencerIntegrationTest, LogRemovalStressTest) {
     node.addStorageRole();
   }
 
-  Configuration::Log logcfg;
-  logcfg.rangeName = "test_range";
-  logcfg.replicationFactor = 2;
-  logcfg.nodeSetSize.assign(3);
+  logsconfig::LogAttributes log_attrs;
+  log_attrs.set_replicationFactor(2);
+  log_attrs.set_nodeSetSize(3);
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .setNodes(nodes)
                      .useHashBasedSequencerAssignment(100, "10s")
                      .enableMessageErrorInjection()
-                     .setLogConfig(logcfg)
+                     .setLogGroupName("test_range")
+                     .setLogAttributes(log_attrs)
                      .create(num_nodes);
   for (const auto& it : nodes) {
     node_index_t idx = it.first;
@@ -2305,15 +2303,16 @@ TEST_F(SequencerIntegrationTest, DynamicallyChangingWindowSize) {
     node.addStorageRole();
   }
 
-  Configuration::Log logcfg =
-      IntegrationTestUtils::ClusterFactory::createDefaultLogConfig(num_nodes);
+  logsconfig::LogAttributes log_attrs =
+      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(
+          num_nodes);
   // window size is initially 200
-  logcfg.maxWritesInFlight = 200;
+  log_attrs.set_maxWritesInFlight(200);
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .setNodes(nodes)
                      .useHashBasedSequencerAssignment(100, "10s")
                      .enableMessageErrorInjection()
-                     .setLogConfig(logcfg)
+                     .setLogAttributes(log_attrs)
                      .setNumLogs(299)
                      .create(num_nodes);
 
@@ -2396,11 +2395,9 @@ TEST_F(SequencerIntegrationTest, SequencerZeroWeightWhileAppendsPending) {
                                /*max_replication=*/3,
                                NodeLocationScope::NODE);
 
-  Configuration::Log log_config{};
-  log_config.maxWritesInFlight = 256;
-  log_config.replicationFactor = 3;
-  log_config.rangeName = "ns/test_logs";
-
+  logsconfig::LogAttributes log_attrs;
+  log_attrs.set_maxWritesInFlight(256);
+  log_attrs.set_replicationFactor(3);
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
           .doPreProvisionEpochMetaData() // prevents spurious sequencer
@@ -2408,7 +2405,8 @@ TEST_F(SequencerIntegrationTest, SequencerZeroWeightWhileAppendsPending) {
                                          // writes
           .setNodes(nodes)
           .setMetaDataLogsConfig(meta_config)
-          .setLogConfig(log_config)
+          .setLogGroupName("ns/test_logs")
+          .setLogAttributes(log_attrs)
           .useHashBasedSequencerAssignment(100, "10s")
           .deferStart()
           .create(nodes.size());
@@ -2456,14 +2454,11 @@ TEST_F(SequencerIntegrationTest, SequencerZeroWeightWhileAppendsPending) {
 // test that existing metadata sequencer can react to weight changes in
 // metadata nodeset for completing metadata appends eventually
 TEST_F(SequencerIntegrationTest, MetaDataLogSequencerReactToWeightChanges) {
-  Configuration::Log log_config =
-      IntegrationTestUtils::ClusterFactory::createDefaultLogConfig(2);
-  log_config.maxWritesInFlight = 1024;
-  log_config.replicationFactor = 2;
-  log_config.extraCopies = 0;
-
-  logsconfig::LogAttributes log_attrs;
-  log_config.toLogAttributes(&log_attrs);
+  logsconfig::LogAttributes log_attrs =
+      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(2);
+  log_attrs.set_maxWritesInFlight(1024);
+  log_attrs.set_replicationFactor(2);
+  log_attrs.set_extraCopies(0);
 
   const int NNODES = 5;
   Configuration::Nodes nodes;
@@ -2490,7 +2485,7 @@ TEST_F(SequencerIntegrationTest, MetaDataLogSequencerReactToWeightChanges) {
           .setNodes(nodes)
           .setNumLogs(1)
           .useHashBasedSequencerAssignment(100, "10s")
-          .setLogConfig(log_config)
+          .setLogAttributes(log_attrs)
           .setEventLogAttributes(log_attrs)
           .setConfigLogAttributes(log_attrs)
           .setMetaDataLogsConfig(meta_config)
@@ -2565,15 +2560,12 @@ TEST_F(SequencerIntegrationTest, MetaDataLogSequencerReactToWeightChanges) {
 
 // Test that sequencer can get the trim point from storage nodes
 TEST_F(SequencerIntegrationTest, SequencerReadTrimPointTest) {
-  Configuration::Log log_config =
-      IntegrationTestUtils::ClusterFactory::createDefaultLogConfig(2);
-  log_config.maxWritesInFlight = 1024;
-  log_config.replicationFactor = 2;
-  log_config.extraCopies = 0;
-  log_config.nodeSetSize = 4;
-
-  logsconfig::LogAttributes log_attrs;
-  log_config.toLogAttributes(&log_attrs);
+  logsconfig::LogAttributes log_attrs =
+      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(2);
+  log_attrs.set_maxWritesInFlight(1024);
+  log_attrs.set_replicationFactor(2);
+  log_attrs.set_extraCopies(0);
+  log_attrs.set_nodeSetSize(4);
 
   const int NNODES = 6;
   Configuration::Nodes nodes;
@@ -2594,7 +2586,7 @@ TEST_F(SequencerIntegrationTest, SequencerReadTrimPointTest) {
                      .setNodes(nodes)
                      .setNumLogs(1)
                      .useHashBasedSequencerAssignment()
-                     .setLogConfig(log_config)
+                     .setLogAttributes(log_attrs)
                      .setEventLogAttributes(log_attrs)
                      .setConfigLogAttributes(log_attrs)
                      .create(NNODES);
@@ -2658,14 +2650,11 @@ TEST_F(SequencerIntegrationTest, SequencerReadTrimPointTest) {
 
 // test that preemption while writing to metadata logs, doesn't cause ping-pong
 TEST_F(SequencerIntegrationTest, MetaDataWritePreempted) {
-  Configuration::Log log_config =
-      IntegrationTestUtils::ClusterFactory::createDefaultLogConfig(2);
-  log_config.maxWritesInFlight = 1024;
-  log_config.replicationFactor = 1;
-  log_config.extraCopies = 0;
-
-  logsconfig::LogAttributes log_attrs;
-  log_config.toLogAttributes(&log_attrs);
+  logsconfig::LogAttributes log_attrs =
+      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(2);
+  log_attrs.set_maxWritesInFlight(1024);
+  log_attrs.set_replicationFactor(1);
+  log_attrs.set_extraCopies(0);
 
   Configuration::MetaDataLogsConfig meta_config =
       createMetaDataLogsConfig(/*nodeset=*/{1}, /*replication=*/1);
@@ -2673,7 +2662,7 @@ TEST_F(SequencerIntegrationTest, MetaDataWritePreempted) {
   // N0 sequencer, N1, N2 storage node
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .setNumLogs(1)
-                     .setLogConfig(log_config)
+                     .setLogAttributes(log_attrs)
                      .deferStart()
                      .setNumDBShards(1)
                      .setParam("--reactivation-limit", "1000/1s")
@@ -2715,16 +2704,16 @@ TEST_F(SequencerIntegrationTest, MetaDataWritePreempted) {
 }
 
 TEST_F(SequencerIntegrationTest, NodeSetAdjustment) {
-  Configuration::Log log_config =
-      IntegrationTestUtils::ClusterFactory::createDefaultLogConfig(1);
-  log_config.backlogDuration = std::chrono::minutes(1);
-  log_config.nodeSetSize = 1;
+  logsconfig::LogAttributes log_attrs =
+      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(1);
+  log_attrs.set_backlogDuration(std::chrono::seconds(60));
+  log_attrs.set_nodeSetSize(1);
 
   // N0 sequencer, N1, N2 storage nodes
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
           .setNumLogs(1)
-          .setLogConfig(log_config)
+          .setLogAttributes(log_attrs)
           .setNumDBShards(1)
           .setParam("--nodeset-adjustment-period", "2s")
           .setParam("--nodeset-adjustment-min-window", "1s")

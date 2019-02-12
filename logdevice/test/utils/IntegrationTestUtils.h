@@ -89,18 +89,6 @@ namespace test {
 struct ServerInfo;
 }
 
-namespace logsconfig {
-class EditableLogGroupNode : public LogGroupNode {
- public:
-  void setName(const std::string& name) {
-    name_ = name;
-  }
-  void setAttributes(const LogAttributes& attrs) {
-    attrs_ = attrs;
-  }
-};
-} // namespace logsconfig
-
 namespace IntegrationTestUtils {
 
 class Cluster;
@@ -187,7 +175,7 @@ class ClusterFactory {
    *
    * auto cluster = IntegrationTestUtils::ClusterFactory()
    *  .apply(commonOptions)
-   *  .setLogConfig(log_config)
+   *  .setLogAttributes(log_attrs)
    *  .setEventLogAttributes(log_attrs)
    *  .setNumLogs(1)
    *  .create(nnodes);
@@ -208,12 +196,12 @@ class ClusterFactory {
   }
 
   /**
-   * Sets the log config to use for logs when using the simple factory
-   * create(nnodes).  If this is never called, a default log config will be
-   * used with reasonable replication parameters depending on nnodes.
+   * Sets the default log attributes to use for logs when using the simple
+   * factory create(nnodes).  If this is never called, a default log config will
+   * be used with reasonable replication parameters depending on nnodes.
    */
-  ClusterFactory& setLogConfig(Configuration::Log log_config) {
-    log_config_ = log_config;
+  ClusterFactory& setLogAttributes(logsconfig::LogAttributes log_attributes) {
+    log_attributes_ = log_attributes;
     return *this;
   }
 
@@ -553,15 +541,21 @@ class ClusterFactory {
     return *this;
   }
 
+  ClusterFactory& setLogGroupName(const std::string& name) {
+    log_group_name_ = name;
+    return *this;
+  }
+
   /**
-   * Generates a default log config (replication, extras) based on the cluster
-   * size.  This is used internally if setLogConfig() is not called.  Exposed
-   * so that the logic can be reused.
+   * Generates a default log attribute (replication, extras) based on the
+   * cluster size.  This is used internally if setLogAttributes() is not called.
+   * Exposed so that the logic can be reused.
    */
-  static Configuration::Log createDefaultLogConfig(int nstorage_nodes);
+  static logsconfig::LogAttributes
+  createDefaultLogAttributes(int nstorage_nodes);
 
  private:
-  folly::Optional<Configuration::Log> log_config_;
+  folly::Optional<logsconfig::LogAttributes> log_attributes_;
   folly::Optional<Configuration::Nodes> node_configs_;
   folly::Optional<Configuration::MetaDataLogsConfig> meta_config_;
   bool enable_logsconfig_manager_ = false;
@@ -639,6 +633,8 @@ class ClusterFactory {
 
   std::string cluster_name_ = "integration_test";
 
+  std::string log_group_name_ = "/ns/test_logs";
+
   // See setLogLevel().
   dbg::Level default_log_level_ =
       getLogLevelFromEnv().value_or(dbg::Level::INFO);
@@ -649,7 +645,7 @@ class ClusterFactory {
   // Helper method, one attempt in create(), repeated up to outer_tries_ times
   std::unique_ptr<Cluster> createOneTry(const Configuration& config);
 
-  static Configuration::Log createLogConfigStub(int nstorage_nodes);
+  static logsconfig::LogAttributes createLogAttributesStub(int nstorage_nodes);
 
   // Figures out the full path to the server binary, considering in order of
   // precedence:

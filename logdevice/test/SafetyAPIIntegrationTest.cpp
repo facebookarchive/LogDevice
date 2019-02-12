@@ -68,9 +68,8 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithExpand) {
     nodes[i].addStorageRole(num_shards);
   }
 
-  Configuration::Log logcfg;
-  logcfg.rangeName = "test_range";
-  logcfg.replicationFactor = 2;
+  logsconfig::LogAttributes log_attrs;
+  log_attrs.set_replicationFactor(2);
 
   auto meta_configs =
       createMetaDataLogsConfig({0, 2}, 2, NodeLocationScope::NODE);
@@ -82,7 +81,8 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithExpand) {
                      .useHashBasedSequencerAssignment()
                      .setNumDBShards(num_shards)
                      .setMetaDataLogsConfig(meta_configs)
-                     .setLogConfig(logcfg)
+                     .setLogGroupName("test_range")
+                     .setLogAttributes(log_attrs)
                      .create(num_nodes);
 
   for (const auto& it : cluster->getNodes()) {
@@ -187,9 +187,8 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithSetWeight) {
     nodes[i].addStorageRole(num_shards);
   }
 
-  Configuration::Log logcfg;
-  logcfg.rangeName = "test_range";
-  logcfg.replicationFactor = 2;
+  logsconfig::LogAttributes log_attrs;
+  log_attrs.set_replicationFactor(2);
 
   auto meta_configs =
       createMetaDataLogsConfig({0, 1, 2, 3, 4}, 2, NodeLocationScope::NODE);
@@ -200,7 +199,8 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithSetWeight) {
                      // switches on gossip
                      .useHashBasedSequencerAssignment()
                      .setNumDBShards(num_shards)
-                     .setLogConfig(logcfg)
+                     .setLogGroupName("test_range")
+                     .setLogAttributes(log_attrs)
                      .setMetaDataLogsConfig(meta_configs)
                      .create(num_nodes);
 
@@ -257,9 +257,8 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithEventLogNotReadable) {
   const size_t num_nodes = 5;
   const size_t num_shards = 2;
 
-  Configuration::Log logcfg;
-  logcfg.rangeName = "test_range";
-  logcfg.replicationFactor = 2;
+  logsconfig::LogAttributes log_attrs;
+  log_attrs.set_replicationFactor(2);
 
   const auto internal_log_attrs = createInternalLogAttributes();
 
@@ -268,7 +267,8 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithEventLogNotReadable) {
                      // switches on gossip
                      .useHashBasedSequencerAssignment()
                      .setNumDBShards(num_shards)
-                     .setLogConfig(logcfg)
+                     .setLogGroupName("test_range")
+                     .setLogAttributes(log_attrs)
                      .setEventLogAttributes(internal_log_attrs)
                      .create(num_nodes);
 
@@ -334,9 +334,8 @@ TEST_F(SafetyAPIIntegrationTest, DisableReads) {
     nodes[i].addStorageRole(num_shards);
   }
 
-  Configuration::Log logcfg;
-  logcfg.rangeName = "test_range";
-  logcfg.replicationFactor = 3;
+  logsconfig::LogAttributes log_attrs;
+  log_attrs.set_replicationFactor(3);
 
   const auto internal_log_attrs = createInternalLogAttributes();
 
@@ -346,7 +345,8 @@ TEST_F(SafetyAPIIntegrationTest, DisableReads) {
                      // switches on gossip
                      .useHashBasedSequencerAssignment()
                      .setNumDBShards(num_shards)
-                     .setLogConfig(logcfg)
+                     .setLogGroupName("test_range")
+                     .setLogAttributes(log_attrs)
                      .setEventLogAttributes(internal_log_attrs)
                      .setConfigLogAttributes(internal_log_attrs)
                      .create(num_nodes);
@@ -439,9 +439,8 @@ TEST_F(SafetyAPIIntegrationTest, SafetyMargin) {
     nodes[i].addStorageRole(num_shards);
   }
 
-  Configuration::Log logcfg;
-  logcfg.rangeName = "test_range";
-  logcfg.replicationFactor = 3;
+  logsconfig::LogAttributes log_attrs;
+  log_attrs.set_replicationFactor(3);
 
   const auto internal_log_attrs = createInternalLogAttributes();
 
@@ -451,7 +450,8 @@ TEST_F(SafetyAPIIntegrationTest, SafetyMargin) {
                      // switches on gossip
                      .useHashBasedSequencerAssignment()
                      .setNumDBShards(num_shards)
-                     .setLogConfig(logcfg)
+                     .setLogGroupName("test_range")
+                     .setLogAttributes(log_attrs)
                      .setEventLogAttributes(internal_log_attrs)
                      .setConfigLogAttributes(internal_log_attrs)
                      .create(num_nodes);

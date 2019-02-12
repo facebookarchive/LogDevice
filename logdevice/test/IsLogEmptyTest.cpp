@@ -84,12 +84,11 @@ NodeSetIndices IsLogEmptyTest::getFullNodeSet() {
 
 void IsLogEmptyTest::commonSetup(
     IntegrationTestUtils::ClusterFactory& cluster) {
-  Configuration::Log log_config;
-  log_config.replicationFactor = std::min(num_nodes - 1, 2);
-  log_config.rangeName = "my-test-log";
-  log_config.extraCopies = 0;
-  log_config.syncedCopies = 0;
-  log_config.maxWritesInFlight = 250;
+  logsconfig::LogAttributes log_attrs;
+  log_attrs.set_replicationFactor(std::min(num_nodes - 1, 2));
+  log_attrs.set_extraCopies(0);
+  log_attrs.set_syncedCopies(0);
+  log_attrs.set_maxWritesInFlight(250);
 
   logsconfig::LogAttributes event_log_attrs;
   event_log_attrs.set_replicationFactor(std::min(num_nodes - 1, 2));
@@ -120,7 +119,8 @@ void IsLogEmptyTest::commonSetup(
       // Make sure no appends time out.
       .setParam("--store-timeout", "30s")
       .setNumDBShards(1)
-      .setLogConfig(log_config)
+      .setLogGroupName("my_test_logs")
+      .setLogAttributes(log_attrs)
       .setEventLogAttributes(event_log_attrs)
       .setMetaDataLogsConfig(meta_config)
       .setNumLogs(num_logs);

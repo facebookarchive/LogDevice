@@ -98,13 +98,13 @@ class APPEND_MessageTest : public ::testing::Test {
     node.addStorageRole();
     Configuration::NodesConfig nodes({{0, std::move(node)}});
 
-    Configuration::Log log{};
-    log.replicationFactor = 1;
-    log.rangeName = "test_log";
+    logsconfig::LogAttributes log_attrs;
+    log_attrs.set_replicationFactor(1);
     auto logs_config = std::make_unique<configuration::LocalLogsConfig>();
     logs_config->insert(boost::icl::right_open_interval<logid_t::raw_type>(
                             TEST_LOG.val_, TEST_LOG.val_ + 1),
-                        log);
+                        "test_log",
+                        log_attrs);
 
     // Disabling auto log provisioning
     configuration::MetaDataLogsConfig ml_config;

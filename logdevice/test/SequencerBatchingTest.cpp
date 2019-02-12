@@ -249,8 +249,9 @@ TEST_F(SequencerBatchingTest, DISABLED_RollingRestart) {
           .useHashBasedSequencerAssignment()
           .enableMessageErrorInjection()
           .setParam("--sequencer-batching")
-          .setLogConfig(
-              IntegrationTestUtils::ClusterFactory::createDefaultLogConfig(1))
+          .setLogAttributes(
+              IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(
+                  1))
           .setNodes(nodes)
           .setNumLogs(NLOGS)
           .create(nodes.size());

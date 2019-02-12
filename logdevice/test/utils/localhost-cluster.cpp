@@ -539,27 +539,28 @@ int main(int argc, const char* argv[]) {
     factory.allowExistingMetaData();
   }
 
-  Configuration::Log log = factory.createDefaultLogConfig(options::nnodes);
+  logsconfig::LogAttributes log_attrs =
+      factory.createDefaultLogAttributes(options::nnodes);
+  if (!options::range_name.empty()) {
+    factory.setLogGroupName(options::range_name);
+  }
   if (options::replication != -1) {
-    log.replicationFactor = options::replication;
+    log_attrs.set_replicationFactor(options::replication);
   }
   if (options::extra_copies != -1) {
-    log.extraCopies = options::extra_copies;
+    log_attrs.set_extraCopies(options::extra_copies);
   }
   if (options::synced_copies != -1) {
-    log.syncedCopies = options::synced_copies;
+    log_attrs.set_syncedCopies(options::synced_copies);
   }
   if (options::backlog.count() >= 0) {
-    log.backlogDuration = options::backlog;
+    log_attrs.set_backlogDuration(options::backlog);
   }
   if (options::scd_enabled) {
-    log.scdEnabled = true;
-  }
-  if (!options::range_name.empty()) {
-    log.rangeName = options::range_name;
+    log_attrs.set_scdEnabled(true);
   }
   if (options::nodeset_size != -1) {
-    log.nodeSetSize = options::nodeset_size;
+    log_attrs.set_nodeSetSize(options::nodeset_size);
   }
   if (options::use_tcp) {
     factory.useTcp();
@@ -568,7 +569,7 @@ int main(int argc, const char* argv[]) {
     factory.noSSLAddress();
   }
 
-  factory.setLogConfig(log);
+  factory.setLogAttributes(log_attrs);
 
   logsconfig::LogAttributes event_log_attrs;
   event_log_attrs.set_backlogDuration(folly::none);

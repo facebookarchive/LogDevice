@@ -22,18 +22,18 @@ class ClientReadStreamFailureDetectorIntegrationTest
     : public IntegrationTestBase {};
 
 TEST_F(ClientReadStreamFailureDetectorIntegrationTest, Simple) {
-  Configuration::Log log_config;
-  log_config.rangeName = "my-logs";
-  log_config.replicationFactor = 3;
-  log_config.extraCopies = 0;
-  log_config.syncedCopies = 0;
-  log_config.maxWritesInFlight = 256;
-  log_config.scdEnabled = true;
+  logsconfig::LogAttributes log_attrs;
+  log_attrs.set_replicationFactor(3);
+  log_attrs.set_extraCopies(0);
+  log_attrs.set_syncedCopies(0);
+  log_attrs.set_maxWritesInFlight(256);
+  log_attrs.set_scdEnabled(true);
 
   const logid_t LOG_ID(1);
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .setLogConfig(log_config)
+                     .setLogGroupName("my-logs")
+                     .setLogAttributes(log_attrs)
                      // Disable sticky copysets to increase scatter width of the
                      // data during the test, which will help guarantee that
                      // some records are replicated on the node we will be pick

@@ -33,16 +33,16 @@ TEST_F(RecordCacheIntegrationTest, RecordCacheHitForNewAppends) {
   const int NNODES = 2;
   const int NLOGS = 1;
 
-  Configuration::Log log_config =
-      IntegrationTestUtils::ClusterFactory::createDefaultLogConfig(2);
-  log_config.maxWritesInFlight = 1024;
-  log_config.replicationFactor = 2;
-  log_config.extraCopies = 0;
+  logsconfig::LogAttributes log_attrs =
+      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(2);
+  log_attrs.set_maxWritesInFlight(1024);
+  log_attrs.set_replicationFactor(2);
+  log_attrs.set_extraCopies(0);
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .setParam("--enable-record-cache", "true")
                      .setNumLogs(NLOGS)
-                     .setLogConfig(log_config)
+                     .setLogAttributes(log_attrs)
                      .useHashBasedSequencerAssignment()
                      .create(NNODES);
 

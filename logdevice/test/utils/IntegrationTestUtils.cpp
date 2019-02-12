@@ -157,27 +157,28 @@ static std::unique_ptr<TemporaryDirectory> create_temporary_root_dir() {
   return createTemporaryDir("IntegrationTestUtils");
 }
 
-Configuration::Log ClusterFactory::createLogConfigStub(int nstorage_nodes) {
-  Configuration::Log log;
-  log.maxWritesInFlight = 256;
-  log.singleWriter = false;
+logsconfig::LogAttributes
+ClusterFactory::createLogAttributesStub(int nstorage_nodes) {
+  logsconfig::LogAttributes attrs;
+  attrs.set_maxWritesInFlight(256);
+  attrs.set_singleWriter(false);
   switch (nstorage_nodes) {
     case 1:
-      log.replicationFactor = 1;
-      log.extraCopies = 0;
-      log.syncedCopies = 0;
+      attrs.set_replicationFactor(1);
+      attrs.set_extraCopies(0);
+      attrs.set_syncedCopies(0);
       break;
     case 2:
-      log.replicationFactor = 2;
-      log.extraCopies = 0;
-      log.syncedCopies = 0;
+      attrs.set_replicationFactor(2);
+      attrs.set_extraCopies(0);
+      attrs.set_syncedCopies(0);
       break;
     default:
-      log.replicationFactor = 2;
-      log.extraCopies = 0;
-      log.syncedCopies = 0;
+      attrs.set_replicationFactor(2);
+      attrs.set_extraCopies(0);
+      attrs.set_syncedCopies(0);
   }
-  return log;
+  return attrs;
 }
 
 ClusterFactory& ClusterFactory::enableMessageErrorInjection() {
@@ -239,10 +240,9 @@ ClusterFactory& ClusterFactory::enableLogsConfigManager() {
   return *this;
 }
 
-Configuration::Log ClusterFactory::createDefaultLogConfig(int nstorage_nodes) {
-  Configuration::Log log = createLogConfigStub(nstorage_nodes);
-  log.rangeName = "ns/test_logs";
-  return log;
+logsconfig::LogAttributes
+ClusterFactory::createDefaultLogAttributes(int nstorage_nodes) {
+  return createLogAttributesStub(nstorage_nodes);
 }
 
 std::unique_ptr<Cluster> ClusterFactory::create(int nnodes) {
@@ -307,20 +307,20 @@ std::unique_ptr<Cluster> ClusterFactory::create(int nnodes) {
         return kv.second.isReadableStorageNode();
       });
 
-  Configuration::Log log0;
-  if (log_config_.hasValue()) {
+  logsconfig::LogAttributes log0;
+  if (log_attributes_.hasValue()) {
     // Caller supplied log config, use that.
-    log0 = log_config_.value();
+    log0 = log_attributes_.value();
   } else {
     // Create a default log config with replication parameters that make sense
     // for a cluster of a given size.
-    log0 = createDefaultLogConfig(nstorage_nodes);
+    log0 = createDefaultLogAttributes(nstorage_nodes);
   }
 
   boost::icl::right_open_interval<logid_t::raw_type> logid_interval(
       1, num_logs_ + 1);
   auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
-  logs_config->insert(logid_interval, log0);
+  logs_config->insert(logid_interval, log_group_name_, log0);
   logs_config->markAsFullyLoaded();
 
   Configuration::NodesConfig nodes_config(std::move(nodes));
@@ -343,17 +343,17 @@ std::unique_ptr<Cluster> ClusterFactory::create(int nnodes) {
   }
 
   // Generic log configuration for internal logs
-  logsconfig::LogAttributes internal_log_attrs;
-  createLogConfigStub(nstorage_nodes).toLogAttributes(&internal_log_attrs);
+  logsconfig::LogAttributes internal_log_attrs =
+      createLogAttributesStub(nstorage_nodes);
   internal_log_attrs.set_extraCopies(0);
 
   // Internal logs shouldn't have a lower replication factor than data logs
-  if (log_config_.hasValue() &&
-      log_config_.value().replicationFactor.hasValue() &&
-      log_config_.value().replicationFactor.value() >
+  if (log_attributes_.hasValue() &&
+      log_attributes_.value().replicationFactor().hasValue() &&
+      log_attributes_.value().replicationFactor().value() >
           internal_log_attrs.replicationFactor().value()) {
     internal_log_attrs.set_replicationFactor(
-        log_config_.value().replicationFactor.value());
+        log_attributes_.value().replicationFactor().value());
   }
   if (internal_logs_replication_factor_ > 0) {
     internal_log_attrs.set_replicationFactor(internal_logs_replication_factor_);
@@ -630,12 +630,10 @@ ClusterFactory::createLogsConfigManagerLogs(std::unique_ptr<Cluster>& cluster) {
       num_storage_nodes++;
     }
   }
-  Configuration::Log log = log_config_.hasValue()
-      ? log_config_.value()
-      : createDefaultLogConfig(num_storage_nodes);
+  logsconfig::LogAttributes attrs = log_attributes_.hasValue()
+      ? log_attributes_.value()
+      : createDefaultLogAttributes(num_storage_nodes);
 
-  logsconfig::LogAttributes attrs;
-  log.toLogAttributes(&attrs);
   return cluster->createClient()->makeLogGroupSync(
       "/test_logs",
       logid_range_t(logid_t(1), logid_t(num_logs_config_manager_logs_)),

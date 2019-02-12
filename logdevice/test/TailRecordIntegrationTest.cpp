@@ -60,13 +60,13 @@ void TailRecordIntegrationTest::init() {
           tail_optimized_ ? "YES" : "NO",
           checksum_bits_);
 
-  Configuration::Log log;
-  log.rangeName = "tail-record-test";
-  log.replicationFactor = replication_;
-  log.tailOptimized = tail_optimized_;
+  logsconfig::LogAttributes log_attrs;
+  log_attrs.set_replicationFactor(replication_);
+  log_attrs.set_tailOptimized(tail_optimized_);
 
   auto factory = IntegrationTestUtils::ClusterFactory()
-                     .setLogConfig(log)
+                     .setLogGroupName("tail-record-test")
+                     .setLogAttributes(log_attrs)
                      .deferStart()
                      .setParam("--reactivation-limit", "100/1s")
                      // enable byte offsets

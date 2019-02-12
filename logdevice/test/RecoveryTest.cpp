@@ -304,16 +304,15 @@ void RecoveryTest::init() {
     use_record_cache_ = false;
   }
 
-  Configuration::Log log;
-  log.maxWritesInFlight = max_writes_in_flight_;
-  log.singleWriter = false;
-  log.rangeName = "my-log-group";
-  log.replicationFactor = replication_;
-  log.extraCopies = extra_;
-  log.syncedCopies = synced_;
-  log.syncReplicationScope = sync_replication_scope_;
-  log.stickyCopySets = true;
-  log.tailOptimized = tail_optimized_;
+  logsconfig::LogAttributes log_attrs;
+  log_attrs.set_maxWritesInFlight(max_writes_in_flight_);
+  log_attrs.set_singleWriter(false);
+  log_attrs.set_replicationFactor(replication_);
+  log_attrs.set_extraCopies(extra_);
+  log_attrs.set_syncedCopies(synced_);
+  log_attrs.set_syncReplicationScope(sync_replication_scope_);
+  log_attrs.set_stickyCopySets(true);
+  log_attrs.set_tailOptimized(tail_optimized_);
 
   // Use replication factor 3 for event log if there are enough nodes.
   logsconfig::LogAttributes event_log_attrs;
@@ -334,24 +333,24 @@ void RecoveryTest::init() {
   config_attrs.set_syncedCopies(0);
   config_attrs.set_syncReplicationScope(sync_replication_scope_);
 
-  auto factory =
-      IntegrationTestUtils::ClusterFactory()
-          // use logsdb to support record cache persistence
-          .enableMessageErrorInjection()
-          .setLogConfig(log)
-          .setEventLogDeltaAttributes(event_log_attrs)
-          .setConfigLogAttributes(config_attrs)
-          .deferStart()
-          .setParam("--byte-offsets")
-          // we'll be using fake unrealistic timestamps;
-          // tell logsdb to not worry about it
-          .setParam("--rocksdb-partition-duration", "0s")
-          // purge quickly when nodes are down
-          .setParam("--gap-grace-period", "10ms")
-          // allow 1000 reactivations per seconds
-          .setParam("--reactivation-limit", "1000/1s")
-          // fall back to non-authoritative quickly
-          .setParam("--event-log-grace-period", "10ms");
+  auto factory = IntegrationTestUtils::ClusterFactory()
+                     // use logsdb to support record cache persistence
+                     .enableMessageErrorInjection()
+                     .setLogGroupName("my-log-group")
+                     .setLogAttributes(log_attrs)
+                     .setEventLogDeltaAttributes(event_log_attrs)
+                     .setConfigLogAttributes(config_attrs)
+                     .deferStart()
+                     .setParam("--byte-offsets")
+                     // we'll be using fake unrealistic timestamps;
+                     // tell logsdb to not worry about it
+                     .setParam("--rocksdb-partition-duration", "0s")
+                     // purge quickly when nodes are down
+                     .setParam("--gap-grace-period", "10ms")
+                     // allow 1000 reactivations per seconds
+                     .setParam("--reactivation-limit", "1000/1s")
+                     // fall back to non-authoritative quickly
+                     .setParam("--event-log-grace-period", "10ms");
 
   if (enable_rebuilding_) {
     factory.setParam("--disable-rebuilding", "false");

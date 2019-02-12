@@ -228,19 +228,19 @@ TEST_F(TrimIntegrationTest, AutoLegacy) {
   const int NNODES = 2;
   const logid_t LOG_ID(1);
 
-  Configuration::Log log_config;
-  log_config.replicationFactor = 1;
-  log_config.rangeName = "my-log-range";
-  log_config.extraCopies = 0;
-  log_config.syncedCopies = 0;
-  log_config.backlogDuration = std::chrono::seconds(2);
-  log_config.maxWritesInFlight = NRECORDS;
+  logsconfig::LogAttributes log_attrs;
+  log_attrs.set_replicationFactor(1);
+  log_attrs.set_extraCopies(0);
+  log_attrs.set_syncedCopies(0);
+  log_attrs.set_backlogDuration(std::chrono::seconds(2));
+  log_attrs.set_maxWritesInFlight(NRECORDS);
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
           .doPreProvisionEpochMetaData() // to prevent read_records_no_gaps from
                                          // failing below
-          .setLogConfig(log_config)
+          .setLogGroupName("my-log-range")
+          .setLogAttributes(log_attrs)
           .setRocksDBType(IntegrationTestUtils::RocksDBType::SINGLE)
           .create(NNODES);
 
@@ -307,19 +307,19 @@ TEST_F(TrimIntegrationTest, Auto) {
   const int NNODES = 2;
   const logid_t LOG_ID(1);
 
-  Configuration::Log log_config;
-  log_config.replicationFactor = 1;
-  log_config.rangeName = "my-log-range";
-  log_config.extraCopies = 0;
-  log_config.syncedCopies = 0;
-  log_config.backlogDuration = std::chrono::seconds(2);
-  log_config.maxWritesInFlight = NRECORDS;
+  logsconfig::LogAttributes log_attrs;
+  log_attrs.set_replicationFactor(1);
+  log_attrs.set_extraCopies(0);
+  log_attrs.set_syncedCopies(0);
+  log_attrs.set_backlogDuration(std::chrono::seconds(2));
+  log_attrs.set_maxWritesInFlight(NRECORDS);
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
           .doPreProvisionEpochMetaData() // to prevent read_records_no_gaps from
                                          // failing below
-          .setLogConfig(log_config)
+          .setLogGroupName("my-log-range")
+          .setLogAttributes(log_attrs)
           .setParam("--rocksdb-partition-lo-pri-check-period", "1s")
           .setNumDBShards(1)
           .create(NNODES);
@@ -426,11 +426,10 @@ TEST_F(TrimIntegrationTest, LogDoesntExist) {
 // Write some data to partitioned store. Drop the oldest partition.
 // Read the records. Check that only TRIM gaps are reported.
 TEST_F(TrimIntegrationTest, TrimPointsAreUpdatedWhenPartitionIsDropped) {
-  auto cluster =
-      IntegrationTestUtils::ClusterFactory()
-          .setNumDBShards(1)
-          .setParam("--rocksdb-new-partition-timestamp-margin", "0s")
-          .create(1);
+  auto cluster = IntegrationTestUtils::ClusterFactory()
+                     .setNumDBShards(1)
+                     .setParam("--rocksdb-new-partition-timestamp-margin", "0s")
+                     .create(1);
   // This ensures that all appends go into the same epoch.
   // It's still not 100% guaranteed though, but seems good enough in practice
   // to avoid all flakiness.

@@ -252,13 +252,12 @@ TEST_F(FailureDetectorIntegrationTest, ResetStoreTimerAfterIsolation) {
     location.fromDomainString(domain_string);
     node.location = location;
   }
-  Configuration::Log log_config;
-  log_config.rangeName = "mylogs";
-  log_config.replicationFactor = 2;
-  log_config.extraCopies = 0;
-  log_config.syncedCopies = 0;
-  log_config.maxWritesInFlight = 100;
-  log_config.syncReplicationScope = NodeLocationScope::REGION;
+  logsconfig::LogAttributes log_attrs;
+  log_attrs.set_replicationFactor(2);
+  log_attrs.set_extraCopies(0);
+  log_attrs.set_syncedCopies(0);
+  log_attrs.set_maxWritesInFlight(100);
+  log_attrs.set_syncReplicationScope(NodeLocationScope::REGION);
   int num_logs = 100;
 
   // metadata logs are replicated cross-region as well
@@ -269,7 +268,8 @@ TEST_F(FailureDetectorIntegrationTest, ResetStoreTimerAfterIsolation) {
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
           .setNodes(nodes)
-          .setLogConfig(log_config)
+          .setLogGroupName("mylogs")
+          .setLogAttributes(log_attrs)
           .setNumLogs(num_logs)
           .setMetaDataLogsConfig(std::move(meta_config))
           .useHashBasedSequencerAssignment() // enable failure detector
@@ -490,9 +490,9 @@ TEST_F(FailureDetectorIntegrationTest, StartingState) {
   const int num_nodes = 10;
 
   auto cluster_factory = IntegrationTestUtils::ClusterFactory();
-  Configuration::Log common_log =
-      cluster_factory.createDefaultLogConfig(num_nodes);
-  common_log.nodeSetSize = num_nodes;
+  logsconfig::LogAttributes log_attrs =
+      cluster_factory.createDefaultLogAttributes(num_nodes);
+  log_attrs.set_nodeSetSize(num_nodes);
 
   logsconfig::LogAttributes internal_log_attrs;
   internal_log_attrs.set_replicationFactor(1);
@@ -500,7 +500,7 @@ TEST_F(FailureDetectorIntegrationTest, StartingState) {
 
   auto cluster = cluster_factory.enableLogsConfigManager()
                      .deferStart()
-                     .setLogConfig(common_log)
+                     .setLogAttributes(log_attrs)
                      .setConfigLogAttributes(internal_log_attrs)
                      .enableSelfInitiatedRebuilding()
                      .useHashBasedSequencerAssignment(100, "10s")

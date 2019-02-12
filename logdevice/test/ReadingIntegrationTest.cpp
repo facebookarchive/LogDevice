@@ -348,16 +348,17 @@ TEST_P(ReadingIntegrationTest, ReaderTest) {
 // Thin end-to-end test for single copy delivery,
 // where copyset shuffling is seeded using the client's session info
 TEST_P(ReadingIntegrationTest, SeededSCDReaderTest) {
-  Configuration::Log log_config;
-  log_config.rangeName = "my-logs";
-  log_config.replicationFactor = 2;
-  log_config.extraCopies = 0;
-  log_config.syncedCopies = 0;
-  log_config.maxWritesInFlight = 256;
-  // Enabling SCD
-  log_config.scdEnabled = true;
+  logsconfig::LogAttributes log_attrs;
+  log_attrs.set_replicationFactor(2);
+  log_attrs.set_extraCopies(0);
+  log_attrs.set_syncedCopies(0);
+  log_attrs.set_maxWritesInFlight(256);
+  log_attrs.set_scdEnabled(true);
 
-  auto cluster = clusterFactory().setLogConfig(log_config).create(5);
+  auto cluster = clusterFactory()
+                     .setLogGroupName("my-logs")
+                     .setLogAttributes(log_attrs)
+                     .create(5);
 
   std::unique_ptr<facebook::logdevice::ClientSettings> client_settings(
       facebook::logdevice::ClientSettings::create());
@@ -612,13 +613,15 @@ TEST_P(ReadingIntegrationTest, PurgingSmokeTest) {
 // enough of the cluster goes down that we expect service interruption.
 TEST_P(ReadingIntegrationTest, ReadHealth) {
   // Make sure replication factor is 2
-  Configuration::Log log_config;
-  log_config.rangeName = "my-logs";
-  log_config.replicationFactor = 2;
-  log_config.extraCopies = 0;
-  log_config.syncedCopies = 0;
-  log_config.maxWritesInFlight = 256;
-  auto cluster = clusterFactory().setLogConfig(log_config).create(5);
+  logsconfig::LogAttributes log_attrs;
+  log_attrs.set_replicationFactor(2);
+  log_attrs.set_extraCopies(0);
+  log_attrs.set_syncedCopies(0);
+  log_attrs.set_maxWritesInFlight(256);
+  auto cluster = clusterFactory()
+                     .setLogGroupName("my-logs")
+                     .setLogAttributes(log_attrs)
+                     .create(5);
   std::shared_ptr<Client> client = cluster->createClient();
   std::shared_ptr<const Configuration> config = cluster->getConfig()->get();
   std::unique_ptr<Reader> reader = client->createReader(1);
@@ -667,13 +670,15 @@ TEST_P(ReadingIntegrationTest, ReadHealth) {
 // Appropriate callbacks should be triggered at the right time.
 TEST_P(ReadingIntegrationTest, HealthChangeCallback) {
   // Make sure replication factor is 2
-  Configuration::Log log_config;
-  log_config.rangeName = "my-logs";
-  log_config.replicationFactor = 2;
-  log_config.extraCopies = 0;
-  log_config.syncedCopies = 0;
-  log_config.maxWritesInFlight = 256;
-  auto cluster = clusterFactory().setLogConfig(log_config).create(5);
+  logsconfig::LogAttributes log_attrs;
+  log_attrs.set_replicationFactor(2);
+  log_attrs.set_extraCopies(0);
+  log_attrs.set_syncedCopies(0);
+  log_attrs.set_maxWritesInFlight(256);
+  auto cluster = clusterFactory()
+                     .setLogGroupName("my-logs")
+                     .setLogAttributes(log_attrs)
+                     .create(5);
   std::shared_ptr<Client> client = cluster->createClient();
   std::shared_ptr<const Configuration> config = cluster->getConfig()->get();
   std::unique_ptr<AsyncReader> async_reader = client->createAsyncReader();
@@ -1002,18 +1007,18 @@ TEST_P(ReadingIntegrationTest, LogTailAttributes) {
 // the reader so it can do SCD failover.
 #ifndef NDEBUG // This test requires fault injection.
 TEST_P(ReadingIntegrationTest, PurgingStuck) {
-  Configuration::Log log_config;
-  log_config.rangeName = "my-logs";
-  log_config.replicationFactor = 2;
-  log_config.extraCopies = 0;
-  log_config.syncedCopies = 0;
-  log_config.maxWritesInFlight = 256;
-  log_config.scdEnabled = true;
+  logsconfig::LogAttributes log_attrs;
+  log_attrs.set_replicationFactor(2);
+  log_attrs.set_extraCopies(0);
+  log_attrs.set_syncedCopies(0);
+  log_attrs.set_maxWritesInFlight(256);
+  log_attrs.set_scdEnabled(true);
 
   const logid_t LOG_ID(1);
 
   auto cluster = clusterFactory()
-                     .setLogConfig(log_config)
+                     .setLogGroupName("my-logs")
+                     .setLogAttributes(log_attrs)
                      // Guarantees we write all over the place during the test.
                      .setParam("--sticky-copysets-block-size", "1")
                      .create(5);

@@ -238,14 +238,14 @@ bool LocalLogsConfig::replaceLogGroup(const std::string& path,
 }
 
 std::shared_ptr<logsconfig::LogGroupNode>
-LocalLogsConfig::insert(logid_t::raw_type logid, Log entry) {
+LocalLogsConfig::insert(logid_t::raw_type logid,
+                        const std::string& name,
+                        LogAttributes attrs) {
   ld_check(config_tree_ != nullptr);
   was_modified_in_place_.store(true);
-  LogAttributes attrs;
-  entry.toLogAttributes(&attrs);
   std::string failure_reason;
   auto ret =
-      config_tree_->addLogGroup(entry.rangeName,
+      config_tree_->addLogGroup(name,
                                 logid_range_t(logid_t(logid), logid_t(logid)),
                                 std::move(attrs),
                                 false /* overwrite */,
@@ -260,14 +260,13 @@ LocalLogsConfig::insert(logid_t::raw_type logid, Log entry) {
 
 std::shared_ptr<logsconfig::LogGroupNode> LocalLogsConfig::insert(
     const boost::icl::right_open_interval<logid_t::raw_type>& logid_interval,
-    Log entry) {
+    const std::string& name,
+    LogAttributes attrs) {
   ld_check(config_tree_ != nullptr);
   was_modified_in_place_.store(true);
-  LogAttributes attrs;
-  entry.toLogAttributes(&attrs);
   std::string failure_reason;
   auto added_group = config_tree_->addLogGroup(
-      entry.rangeName,
+      name,
       logid_range_t(
           logid_t(logid_interval.lower()), logid_t(logid_interval.upper() - 1)),
       std::move(attrs),
@@ -275,7 +274,7 @@ std::shared_ptr<logsconfig::LogGroupNode> LocalLogsConfig::insert(
       failure_reason);
   if (!added_group) {
     ld_warning("LogGroup %s was not added because %s, %s",
-               entry.rangeName.c_str(),
+               name.c_str(),
                error_name(err),
                failure_reason.c_str());
   }

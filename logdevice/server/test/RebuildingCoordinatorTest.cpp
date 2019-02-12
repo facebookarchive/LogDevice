@@ -535,20 +535,18 @@ class RebuildingCoordinatorTest : public ::testing::Test {
 
     auto logs_config = std::make_unique<configuration::LocalLogsConfig>();
 
-    Configuration::Log log{};
-    log.replicationFactor = 3;
-    log.rangeName = "mylogs";
-    log.scdEnabled = true;
+    logsconfig::LogAttributes log_attrs;
+    log_attrs.set_replicationFactor(3);
+    log_attrs.set_scdEnabled(true);
 
     logs_config->insert(
         boost::icl::right_open_interval<logid_t::raw_type>(1, num_logs + 1),
-        log);
+        "mylogs",
+        log_attrs);
 
     // Event log.
     configuration::InternalLogs internal_logs;
-    logsconfig::LogAttributes attrs;
-    log.toLogAttributes(&attrs);
-    const auto log_group = internal_logs.insert("event_log_deltas", attrs);
+    const auto log_group = internal_logs.insert("event_log_deltas", log_attrs);
     ld_check(log_group);
 
     Configuration::NodesConfig nodes_config(std::move(nodes));
