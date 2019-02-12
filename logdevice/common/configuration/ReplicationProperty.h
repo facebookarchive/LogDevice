@@ -20,9 +20,6 @@ namespace facebook { namespace logdevice {
 namespace logsconfig {
 class LogAttributes;
 }
-namespace configuration {
-struct Log;
-}
 
 class ReplicationProperty {
  public:
@@ -79,10 +76,6 @@ class ReplicationProperty {
 
   static ReplicationProperty
   fromLogAttributes(const logsconfig::LogAttributes& log);
-
-  // configuration::Log is deprecated in favor of logsconfig::LogAttributes.
-  // This method will go away soon.
-  static ReplicationProperty fromLogConfig(const configuration::Log& log);
 
   // Returns 0 if log attributes define a valid replication property.
   // Otherwise sets *out_error to a human-readable error string and returns -1.

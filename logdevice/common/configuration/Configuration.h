@@ -66,7 +66,6 @@ using UpdateableNodesConfiguration = configuration::UpdateableConfigTmpl<
 
 class Configuration {
  public:
-  using Log = facebook::logdevice::configuration::Log;
   using LogAttributes = facebook::logdevice::logsconfig::LogAttributes;
   using Node = facebook::logdevice::configuration::Node;
   using NodeRole = facebook::logdevice::configuration::NodeRole;

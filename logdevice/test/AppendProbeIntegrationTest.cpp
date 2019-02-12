@@ -13,9 +13,9 @@
 #include <gtest/gtest.h>
 
 #include "logdevice/common/Appender.h"
-#include "logdevice/common/configuration/Log.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/include/Client.h"
+#include "logdevice/include/LogAttributes.h"
 #include "logdevice/lib/ClientImpl.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"

@@ -22,7 +22,6 @@
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/Sockaddr.h"
 #include "logdevice/common/configuration/InternalLogs.h"
-#include "logdevice/common/configuration/Log.h"
 #include "logdevice/common/configuration/LogsConfig.h"
 #include "logdevice/common/configuration/MetaDataLogsConfig.h"
 #include "logdevice/common/configuration/Node.h"
@@ -36,6 +35,7 @@
 #include "logdevice/common/configuration/nodes/NodesConfiguration.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Err.h"
+#include "logdevice/include/LogAttributes.h"
 #include "logdevice/include/types.h"
 
 /**

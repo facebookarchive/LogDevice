@@ -11,10 +11,10 @@
 #include <mutex>
 
 #include "logdevice/common/configuration/InternalLogs.h"
-#include "logdevice/common/configuration/Log.h"
 #include "logdevice/common/configuration/logs/LogsConfigTree.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Err.h"
+#include "logdevice/include/LogAttributes.h"
 #include "logdevice/include/types.h"
 
 /**
@@ -33,7 +33,6 @@ class LogGroupNode;
 
 class LogsConfig {
  public:
-  using Log = facebook::logdevice::configuration::Log;
   using LogGroupInDirectory =
       facebook::logdevice::logsconfig::LogGroupInDirectory;
   using LogGroupNode = facebook::logdevice::logsconfig::LogGroupNode;

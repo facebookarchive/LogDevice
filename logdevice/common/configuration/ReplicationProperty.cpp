@@ -7,7 +7,6 @@
  */
 #include "logdevice/common/configuration/ReplicationProperty.h"
 
-#include "logdevice/common/configuration/Log.h"
 #include "logdevice/include/Err.h"
 #include "logdevice/include/LogAttributes.h"
 
@@ -44,12 +43,6 @@ ReplicationProperty::fromLogAttributes(const logsconfig::LogAttributes& log) {
                     log.syncReplicationScope().asOptional(),
                     log.replicateAcross().asOptional().value_or(
                         logsconfig::LogAttributes::ScopeReplicationFactors()));
-}
-
-ReplicationProperty
-ReplicationProperty::fromLogConfig(const configuration::Log& log) {
-  return fromConfig(
-      log.replicationFactor, log.syncReplicationScope, log.replicateAcross);
 }
 
 int ReplicationProperty::validateLogAttributes(

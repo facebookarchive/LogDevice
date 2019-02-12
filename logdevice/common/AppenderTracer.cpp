@@ -15,7 +15,6 @@
 #include "logdevice/common/Request.h"
 #include "logdevice/common/SampledTracer.h"
 #include "logdevice/common/TraceLogger.h"
-#include "logdevice/common/configuration/Log.h"
 #include "logdevice/common/types_internal.h"
 
 namespace facebook { namespace logdevice {

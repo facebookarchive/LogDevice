@@ -11,7 +11,6 @@
 #include <memory>
 #include <string>
 
-#include "logdevice/common/configuration/Log.h"
 #include "logdevice/common/configuration/logs/LogsConfigDeltaTypes.h"
 
 namespace facebook { namespace logdevice {

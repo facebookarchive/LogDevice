@@ -12,7 +12,7 @@
 #include <string>
 
 #include "logdevice/common/RebuildingTypes.h"
-#include "logdevice/common/configuration/Log.h"
+#include "logdevice/include/LogAttributes.h"
 
 namespace facebook { namespace logdevice {
 

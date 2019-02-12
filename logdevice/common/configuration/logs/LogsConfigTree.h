@@ -18,8 +18,8 @@
 #include <folly/Memory.h>
 #include <folly/Optional.h>
 #include <folly/String.h>
+#include <folly/dynamic.h>
 
-#include "logdevice/common/configuration/Log.h"
 #include "logdevice/common/configuration/ReplicationProperty.h"
 #include "logdevice/common/configuration/logs/CodecType.h"
 #include "logdevice/common/configuration/logs/DefaultLogAttributes.h"
@@ -350,7 +350,6 @@ class LogGroupNode : public LogsConfigTreeNode {
 // A structure that holds a log group with its parent directory
 // mainly used when you query the tree for a log group by ID
 struct LogGroupInDirectory {
-  using Log = facebook::logdevice::configuration::Log;
   LogGroupInDirectory() : log_group(nullptr), parent(nullptr) {}
   LogGroupInDirectory(const std::shared_ptr<LogGroupNode> group,
                       const DirectoryNode* dir)

@@ -12,8 +12,8 @@
 #include "logdevice/common/NodeSetSelectorType.h"
 #include "logdevice/common/ShardID.h"
 #include "logdevice/common/configuration/EpochMetaDataVersion.h"
-#include "logdevice/common/configuration/Log.h"
 #include "logdevice/common/configuration/logs/LogsConfigTree.h"
+#include "logdevice/include/LogAttributes.h"
 
 namespace facebook { namespace logdevice { namespace logsconfig {
 class LogGroupNode;

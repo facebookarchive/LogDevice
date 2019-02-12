@@ -12,7 +12,6 @@
 
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/configuration/Configuration.h"
-#include "logdevice/common/configuration/Log.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/event_log/EventLogRebuildingSet.h"
 #include "logdevice/common/protocol/RELEASE_Message.h"

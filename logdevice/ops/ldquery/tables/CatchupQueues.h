@@ -52,7 +52,7 @@ class CatchupQueues : public AdminCommandTable {
          "amount of time before dequeuing the stream for processing. This "
          "happens if the log is configured with the \"delivery_latency\" "
          " option, which enables better batching of reads when tailing.  "
-         "See \"deliveryLatency\" logdevice/common/configuration/Log.h."},
+         "See \"deliveryLatency\" logdevice/include/LogAttributes.h."},
         {"record_bytes_queued",
          DataType::BIGINT,
          "(CatchupQueue also does accounting of how many bytes are enqueued in "

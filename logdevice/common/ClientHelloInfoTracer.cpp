@@ -14,7 +14,7 @@
 #include <folly/String.h>
 
 #include "logdevice/common/Sockaddr.h"
-#include "logdevice/common/configuration/Log.h"
+#include "logdevice/include/LogAttributes.h"
 
 namespace facebook { namespace logdevice {
 

@@ -36,13 +36,4 @@ bool parseInternalLogs(const folly::dynamic& clusterMap,
 bool validateNodeCount(const ServerConfig& nodes_cfg,
                        const LocalLogsConfig* logs_cfg_ptr);
 
-/**
- * Given the replication factor (the only required field in metadata logs
- * config), synced_copies and its synchonous replication scope, return a
- * Log object with default configuration for metadata logs.
- */
-Log genDefaultMetaDataLogsConfig(int replication_factor,
-                                 int syncd_copies,
-                                 NodeLocationScope sync_replication_scope);
-
 }}}} // namespace facebook::logdevice::configuration::parser
