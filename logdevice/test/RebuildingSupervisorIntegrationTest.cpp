@@ -1127,20 +1127,24 @@ TEST_F(RebuildingSupervisorIntegrationTest,
   ASSERT_EQ(0, stats["shard_rebuilding_triggered"]);
   // Check that the rebuilding supervisor entered throttling mode.
   ASSERT_EQ(1, stats["rebuilding_supervisor_throttled"]);
+  auto prev_shard_rebuilding_not_triggered =
+      stats["shard_rebuilding_not_triggered_nodealive"];
 
   // Now start N0. This should cancel the rebuilding trigger, and casue the
   // rebuilding supervisor to exit throttling mode.
   cluster->getNode(0).start();
 
-  // Rebuilding supervisor should not trigger rebuilding for N3 becasue
-  // the leader is now N0.
-  wait_until("rebuilding blocked",
-             [&]() {
-               // Check N1
-               auto tmp_stats = cluster->getNode(1).stats();
-               return tmp_stats["shard_rebuilding_triggered"] > 0;
-             },
-             std::chrono::steady_clock::now() + std::chrono::seconds(6));
+  // Wait until N1 sees N0 as alive and cancels the
+  // trigger for N0. At that point it should have
+  // also exited throttling mode and given up on
+  // triggering N3's rebuilding since it is no
+  // longer the leader
+  wait_until("Cancel trigger", [&]() {
+    // Check N1
+    auto tmp_stats = cluster->getNode(1).stats();
+    return tmp_stats["shard_rebuilding_not_triggered_nodealive"] ==
+        prev_shard_rebuilding_not_triggered + 1;
+  });
 
   stats = cluster->getNode(1).stats();
   // Check that the rebuilding supervisor exited throttling mode.
