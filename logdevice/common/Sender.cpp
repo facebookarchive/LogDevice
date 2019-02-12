@@ -846,10 +846,14 @@ bool Sender::useSSLWith(NodeID nid,
 }
 
 void Sender::processSocketsToClose() {
-  for (auto& s : impl_->sockets_to_close_) {
+  // Move the vector in order to avoid re-entrant calls into
+  // Sender while closing a socket that might modify it (pushing another
+  // socket to close) and invalidating the iterator.
+  std::vector<std::pair<std::unique_ptr<Socket>, Status>> sockets_to_close;
+  sockets_to_close.swap(impl_->sockets_to_close_);
+  for (auto& s : sockets_to_close) {
     s.first->close(s.second);
   }
-  impl_->sockets_to_close_.clear();
 }
 
 bool Sender::injectTrafficShapingEvent(FlowGroup& fg, Priority p) {
