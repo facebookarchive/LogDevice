@@ -394,15 +394,22 @@ TEST_F(NodesConfigurationTest, RoleConflict) {
 }
 
 TEST_F(NodesConfigurationTest, touch) {
+  SystemTimestamp lb = SystemTimestamp::now();
+
   NodesConfiguration c{};
   ASSERT_TRUE(c.validate());
   EXPECT_EQ(EMPTY_VERSION, c.getVersion());
   auto c2 = c.withIncrementedVersionAndTimestamp();
   EXPECT_NE(nullptr, c2);
   EXPECT_GT(c2->getVersion(), EMPTY_VERSION);
+  SystemTimestamp ub = SystemTimestamp::now();
 
   MembershipVersion::Type new_version{123};
   auto prev_ts = c2->getLastChangeTimestamp();
+  // We only keep ms granularity
+  EXPECT_GE(prev_ts.toMilliseconds(), lb.toMilliseconds());
+  EXPECT_GE(ub.toMilliseconds(), prev_ts.toMilliseconds());
+
   /* sleep override */ std::this_thread::sleep_for(
       std::chrono::milliseconds(2));
   auto c3 = c2->withIncrementedVersionAndTimestamp(new_version);

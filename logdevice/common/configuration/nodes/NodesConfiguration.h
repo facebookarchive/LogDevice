@@ -144,7 +144,8 @@ class NodesConfiguration {
 
   SystemTimestamp getLastChangeTimestamp() const {
     using namespace std::chrono;
-    system_clock::duration dur(last_change_timestamp_);
+    auto dur = std::chrono::duration_cast<system_clock::duration>(
+        std::chrono::milliseconds{last_change_timestamp_});
     return system_clock::time_point{dur};
   }
 
