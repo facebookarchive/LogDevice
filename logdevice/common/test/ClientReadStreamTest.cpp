@@ -142,8 +142,6 @@ struct GapMessage {
 };
 
 const logid_t LOG_ID(1);
-const int SHARD_IDX(0);
-const size_t NUM_SHARDS(1);
 const lsn_t LSN_MIN(compose_lsn(EPOCH_MIN, ESN_MIN));
 
 namespace {
@@ -5272,7 +5270,6 @@ TEST_P(ClientReadStreamTest, HealthWhenMixNodesRebuildingAndInRepair) {
   ASSERT_TRUE(stall_grace_timer->isActive());
   ASSERT_TRUE((bool)stall_grace_timer->getCallback());
 
-  lsn_t buffer_max = calc_buffer_max(start_lsn_, buffer_size_);
   ASSERT_START_MESSAGES(start_lsn_,
                         until_lsn_,
                         calc_buffer_max(start_lsn_, buffer_size_),
@@ -5413,7 +5410,6 @@ TEST_P(ClientReadStreamTest, TwoNodesInRepairCanMakeProgress) {
   // replying STARTED later than N0.
   overrideConnectionStates(ConnectionState::START_SENT);
 
-  lsn_t buffer_max = calc_buffer_max(start_lsn_, buffer_size_);
   ASSERT_START_MESSAGES(start_lsn_,
                         until_lsn_,
                         calc_buffer_max(start_lsn_, buffer_size_),
@@ -5524,7 +5520,6 @@ TEST_P(ClientReadStreamTest, NodeSaysItsRebuildingButEventLogSaysItsNot) {
   // replying STARTED later than N0.
   overrideConnectionStates(ConnectionState::START_SENT);
 
-  lsn_t buffer_max = calc_buffer_max(start_lsn_, buffer_size_);
   ASSERT_START_MESSAGES(start_lsn_,
                         until_lsn_,
                         calc_buffer_max(start_lsn_, buffer_size_),
@@ -5605,7 +5600,6 @@ TEST_P(ClientReadStreamTest, NodeSaysItsRebuildingButEventLogSaysItsEmpty) {
   // replying STARTED later than N0.
   overrideConnectionStates(ConnectionState::START_SENT);
 
-  lsn_t buffer_max = calc_buffer_max(start_lsn_, buffer_size_);
   ASSERT_START_MESSAGES(start_lsn_,
                         until_lsn_,
                         calc_buffer_max(start_lsn_, buffer_size_),
@@ -5701,7 +5695,6 @@ TEST_P(ClientReadStreamTest, EmptyNodeReconnectsAndSendsRecords) {
   // replying STARTED later than N0.
   overrideConnectionStates(ConnectionState::START_SENT);
 
-  lsn_t buffer_max = calc_buffer_max(start_lsn_, buffer_size_);
   ASSERT_START_MESSAGES(start_lsn_,
                         until_lsn_,
                         calc_buffer_max(start_lsn_, buffer_size_),

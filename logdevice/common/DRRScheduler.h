@@ -213,11 +213,6 @@ class DRRScheduler {
    * Return current stats and reset the local values.
    */
   void getAndResetStats(DRRStatsSnapshot& stats) {
-    double reqs = 0;
-    double bytes = 0;
-    double totalReqs = 0;
-    double totalBytes = 0;
-
     stats.perfStats.clear();
     stats.perfStats.reserve(queues_.size());
 

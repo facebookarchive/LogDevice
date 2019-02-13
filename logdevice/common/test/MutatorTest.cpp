@@ -340,7 +340,6 @@ MUTATED_Header MutatorTest::createMutatedHeader(Status status, Seal seal) {
     STORE_Message* message = dynamic_cast<STORE_Message*>(&_msg);          \
     ASSERT_NE(nullptr, message);                                           \
     const auto& header = (message)->getHeader();                           \
-    const auto& extra = (message)->getExtra();                             \
     const auto& copyset = (message)->getCopyset();                         \
     ASSERT_EQ(store_header_.rid, header.rid);                              \
     ASSERT_EQ(store_header_.timestamp, header.timestamp);                  \

@@ -48,7 +48,7 @@ TEST(MPSCQueueTest, Stress) {
 
   std::vector<int64_t> seen;
   seen.reserve(N);
-  for (const auto& th : producers) {
+  for (size_t i = 0; i < producers.size(); ++i) {
     producer_start_sem.post();
   }
 

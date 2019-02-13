@@ -150,8 +150,6 @@ TEST(LogAttributesTest, EqualityTest) {
 TEST(LogsConfigTreeTest, ImmutabilityTest) {
   auto defaults = DefaultLogAttributes();
   std::unique_ptr<LogsConfigTree> tree = LogsConfigTree::create();
-  auto dir1 = tree->addDirectory(
-      tree->root(), "super_logs", LogAttributes().with_replicationFactor(10));
   auto dir2 = tree->addDirectory(
       tree->root(),
       "normal_logs",
@@ -175,8 +173,6 @@ TEST(LogsConfigTreeTest, ImmutabilityTest) {
 TEST(LogsConfigTreeTest, TestSnapshottingPerformance) {
   auto defaults = DefaultLogAttributes();
   std::unique_ptr<LogsConfigTree> tree = LogsConfigTree::create();
-  auto dir1 = tree->addDirectory(
-      tree->root(), "super_logs", LogAttributes().with_replicationFactor(10));
   auto start1 = std::chrono::high_resolution_clock::now();
   auto start2 = start1;
   for (int i = 1; i <= 500000; i++) {
@@ -213,7 +209,6 @@ TEST(LogsConfigTreeTest, TestSnapshottingPerformance) {
 TEST(LogsConfigTreeTest, TestFindDirectory) {
   std::unique_ptr<LogsConfigTree> tree = LogsConfigTree::create();
   auto dir1 = tree->addDirectory(tree->root(), "dir1");
-  auto dir2 = tree->addDirectory(tree->root(), "dir2");
   tree->addDirectory(dir1, "dir1_1");
   tree->addDirectory(dir1, "dir1_2");
 

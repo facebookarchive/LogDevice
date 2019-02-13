@@ -31,12 +31,7 @@ using S = NodeLocationScope;
 
 namespace {
 
-constexpr std::chrono::milliseconds
 /* implicit */
-operator"" _ms(unsigned long long val) {
-  return std::chrono::milliseconds(val);
-}
-
 class NodeSetFinderTest : public ::testing::Test {
  public:
   dbg::Level log_level_ = dbg::Level::DEBUG;

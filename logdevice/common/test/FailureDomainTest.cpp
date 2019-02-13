@@ -902,7 +902,7 @@ TEST_F(FailureDomainTest, T30067676) {
 
   const auto state = RecoveryNode::State::DIGESTED;
   auto ret = failure_set_->isFmajority(
-      [state](TestAttr node_state) { return node_state >= TestAttr(state); });
+      [](TestAttr node_state) { return node_state >= TestAttr(state); });
 
   ASSERT_EQ(FmajorityResult::AUTHORITATIVE_INCOMPLETE, ret);
 }

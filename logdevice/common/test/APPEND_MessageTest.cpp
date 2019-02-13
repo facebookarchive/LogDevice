@@ -116,7 +116,6 @@ class APPEND_MessageTest : public ::testing::Test {
 
     settings_.enable_sticky_copysets = true;
 
-    rate_limit_t dummy_limit(1, std::chrono::seconds(1));
     sequencer_ = std::make_shared<MockSequencer>(
         this, TEST_LOG, UpdateableSettings<Settings>(settings_));
 
@@ -132,7 +131,7 @@ class APPEND_MessageTest : public ::testing::Test {
         ReplicationProperty({{NodeLocationScope::NODE, 1}}));
     metadata->h.epoch = metadata->h.effective_since = epoch;
 
-    sequencer_->startActivation([this](logid_t) { return 0; });
+    sequencer_->startActivation([](logid_t) { return 0; });
     sequencer_->completeActivationWithMetaData(
         epoch, config_, std::move(metadata));
 

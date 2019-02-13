@@ -476,7 +476,6 @@ TEST_F(GetEpochRecoveryMetadataRequestTest, SingleEmpty) {
         AuthoritativeStatus::AUTHORITATIVE_EMPTY);
   }
   request->execute();
-  int i = 0;
   // Node\Epoch
   //    Epoch 1   Epoch 2
   // 0  NOTREADY  NOTREADY

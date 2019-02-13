@@ -300,7 +300,6 @@ TEST(SlidingWindowTest, EsnExhaustion) {
       srand48_r(time(0), &rnd);
 
       Stats* stats = &g_stats[thread_id];
-      bool out_of_esns = false; // this thread got an E::TOOBIG from grow()
 
       std::queue<Item> active;
 

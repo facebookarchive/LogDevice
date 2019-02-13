@@ -124,7 +124,6 @@ int CountingRequest::payload_sum;
  * Verifies that request was processed.
  */
 TEST(MessagingTest, Worker) {
-  int rv;
   pthread_t th;
 
   auto processor = make_test_processor(create_default_settings<Settings>());

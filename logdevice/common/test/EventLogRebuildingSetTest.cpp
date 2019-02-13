@@ -23,7 +23,6 @@
 
 namespace facebook { namespace logdevice {
 
-static const logid_t kEventLogId{42};
 static const size_t kNumNodes{5};
 static const size_t kNumShards{2};
 
@@ -109,7 +108,6 @@ class EventLogRebuildingSetTest : public ::testing::Test {
 
 TEST_F(EventLogRebuildingSetTest, Simple) {
   EventLogRebuildingSet set;
-  auto& shards = set.getRebuildingShards();
 
   // N1 starts rebuilding
   EVENT(set, SHARD_NEEDS_REBUILD, node_index_t{1}, uint32_t{0}, "", "", 0);
@@ -149,7 +147,6 @@ TEST_F(EventLogRebuildingSetTest, Simple) {
 
 TEST_F(EventLogRebuildingSetTest, Simple2) {
   EventLogRebuildingSet set;
-  auto& shards = set.getRebuildingShards();
 
   // N1 starts rebuilding
   EVENT(set, SHARD_NEEDS_REBUILD, node_index_t{1}, uint32_t{0}, "", "", 0);
@@ -218,7 +215,6 @@ TEST_F(EventLogRebuildingSetTest, Simple2) {
 
 TEST_F(EventLogRebuildingSetTest, Simple3) {
   EventLogRebuildingSet set;
-  auto& shards = set.getRebuildingShards();
 
   // N3 starts rebuilding
   EVENT(set, SHARD_NEEDS_REBUILD, node_index_t{3}, uint32_t{0}, "", "", 0);
@@ -321,7 +317,6 @@ TEST_F(EventLogRebuildingSetTest, Simple3) {
 
 TEST_F(EventLogRebuildingSetTest, Simple4) {
   EventLogRebuildingSet set;
-  auto& shards = set.getRebuildingShards();
 
   // N0 starts rebuilding
   EVENT(set, SHARD_NEEDS_REBUILD, node_index_t{0}, uint32_t{0}, "", "", 0);
@@ -352,7 +347,6 @@ TEST_F(EventLogRebuildingSetTest, Simple4) {
 
 TEST_F(EventLogRebuildingSetTest, Simple5) {
   EventLogRebuildingSet set;
-  auto& shards = set.getRebuildingShards();
 
   // N0 starts rebuilding
   EVENT(set, SHARD_NEEDS_REBUILD, node_index_t{0}, uint32_t{0}, "", "", 0);
@@ -383,7 +377,6 @@ TEST_F(EventLogRebuildingSetTest, Simple5) {
 
 TEST_F(EventLogRebuildingSetTest, Simple6) {
   EventLogRebuildingSet set;
-  auto& shards = set.getRebuildingShards();
 
   EVENT(set, SHARD_NEEDS_REBUILD, node_index_t{0}, uint32_t{0}, "", "", 0);
   EVENT(set, SHARD_UNRECOVERABLE, node_index_t{0}, uint32_t{0});
@@ -400,7 +393,6 @@ TEST_F(EventLogRebuildingSetTest, Simple6) {
 
 TEST_F(EventLogRebuildingSetTest, Simple7) {
   EventLogRebuildingSet set;
-  auto& shards = set.getRebuildingShards();
 
   EVENT(set, SHARD_NEEDS_REBUILD, node_index_t{0}, uint32_t{0}, "", "", 0);
   EVENT(set, SHARD_NEEDS_REBUILD, node_index_t{1}, uint32_t{0}, "", "", 0);
@@ -416,7 +408,6 @@ TEST_F(EventLogRebuildingSetTest, Simple7) {
 
 TEST_F(EventLogRebuildingSetTest, Simple8) {
   EventLogRebuildingSet set;
-  auto& shards = set.getRebuildingShards();
 
   EVENT(set, SHARD_NEEDS_REBUILD, node_index_t{0}, uint32_t{0}, "", "", 0);
   ASSERT_SHARD_STATUS(set, node_index_t{0}, uint32_t{0}, UNAVAILABLE);
@@ -444,7 +435,6 @@ TEST_F(EventLogRebuildingSetTest, Simple8) {
 
 TEST_F(EventLogRebuildingSetTest, Abort) {
   EventLogRebuildingSet set;
-  auto& shards = set.getRebuildingShards();
 
   EVENT(set, SHARD_NEEDS_REBUILD, node_index_t{0}, uint32_t{0}, "", "", 0);
   EVENT(set, SHARD_NEEDS_REBUILD, node_index_t{1}, uint32_t{0}, "", "", 0);
@@ -487,7 +477,6 @@ TEST_F(EventLogRebuildingSetTest, Abort) {
 
 TEST_F(EventLogRebuildingSetTest, Relocate) {
   EventLogRebuildingSet set;
-  auto& shards = set.getRebuildingShards();
 
   // N1 is marked for draining in relocate mode
   EVENT(
@@ -527,7 +516,6 @@ TEST_F(EventLogRebuildingSetTest, Relocate) {
 
 TEST_F(EventLogRebuildingSetTest, DirtyRanges) {
   EventLogRebuildingSet set;
-  auto& shards = set.getRebuildingShards();
   auto now = RecordTimestamp::now();
   auto dirtyStart = RecordTimestamp(now - std::chrono::minutes(10));
   auto dirtyEnd = RecordTimestamp(now - std::chrono::minutes(5));
@@ -556,7 +544,6 @@ TEST_F(EventLogRebuildingSetTest, DirtyRanges) {
 
 TEST_F(EventLogRebuildingSetTest, MiniRebuildingRemovedAfterAck) {
   EventLogRebuildingSet set;
-  auto& shards = set.getRebuildingShards();
   auto now = RecordTimestamp::now();
   auto dirtyStart = RecordTimestamp(now - std::chrono::minutes(10));
   auto dirtyEnd = RecordTimestamp(now - std::chrono::minutes(5));
@@ -592,7 +579,6 @@ TEST_F(EventLogRebuildingSetTest, MiniRebuildingRemovedAfterAck) {
 
 TEST_F(EventLogRebuildingSetTest, DowngradeToMiniRebuilding) {
   EventLogRebuildingSet set;
-  auto& shards = set.getRebuildingShards();
   auto now = RecordTimestamp::now();
   auto dirtyStart = RecordTimestamp(now - std::chrono::minutes(10));
   auto dirtyEnd = RecordTimestamp(now - std::chrono::minutes(5));

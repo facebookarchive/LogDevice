@@ -71,7 +71,6 @@ class DigestTest : public ::testing::Test {
     addNodes(&nodes, 2, 1, "rg2.dc0.cl0.ro0.rk1", 1); // 7-8
     addNodes(&nodes, 2, 1, "....", 1);                // 9-10
 
-    const size_t nodeset_size = nodes.size();
     Configuration::NodesConfig nodes_config(std::move(nodes));
 
     config_ =
@@ -701,7 +700,6 @@ TEST_F(DigestTest, recomputeOffsetWithinEpoch) {
            payload_size_map * 2);
 
   // number for the recovery epoch, just used for creating tailRecord
-  epoch_t epoch = epoch_t(2);
   lng_ = esn_t(2);
 
   // record after lng_ or tail_record may have the wrong byteoffset number

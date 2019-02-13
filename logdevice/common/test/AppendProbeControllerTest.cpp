@@ -88,7 +88,7 @@ TEST(AppendProbeControllerTest, MultiThreadedStressTest) {
   const duration<double> TEST_DURATION(0.2);
   const seconds RECOVERY_INTERVAL(1);
   const int NNODES = 10;
-  auto random_node = [NNODES]() {
+  auto random_node = [] {
     node_index_t node_index = folly::Random::rand32(1, NNODES + 1);
     return NodeID(node_index, 1);
   };

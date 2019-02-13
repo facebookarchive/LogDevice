@@ -282,7 +282,7 @@ TEST(LogsConfigCodecTest, LogsConfigTreeCodecTest) {
                           .with_shadow(shadow);
   auto child2 = tree->addDirectory("/dir2", false, child2_attrs);
 
-  auto child2_2 = tree->addDirectory(
+  tree->addDirectory(
       "/dir2/dir2_2", false, LogAttributes().with_scdEnabled(true));
 
   tree->addLogGroup(child2, "log1", logid_range_t{logid_t(15), logid_t(66)});
@@ -389,7 +389,7 @@ TEST(LogsConfigCodecTest, LogsConfigTreeCodecTest2) {
       false,
       LogAttributes().with_replicationFactor(24).with_scdEnabled(true));
 
-  auto child2_2 = tree->addDirectory(
+  tree->addDirectory(
       "/dir2/dir2_2", false, LogAttributes().with_scdEnabled(true));
 
   tree->addLogGroup(child2, "log1", logid_range_t{logid_t(15), logid_t(66)});
@@ -548,7 +548,7 @@ TEST(LogsConfigCodecTest, SerializeDirectory) {
       false,
       LogAttributes().with_replicationFactor(24).with_scdEnabled(true));
 
-  auto child2_2 = tree->addDirectory(
+  tree->addDirectory(
       "/dir2/dir2_2", false, LogAttributes().with_scdEnabled(true));
 
   tree->addLogGroup(child2, "log1", logid_range_t{logid_t(15), logid_t(66)});

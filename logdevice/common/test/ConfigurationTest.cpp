@@ -93,7 +93,6 @@ makeConfigForLayoutTest(int range_start,
   },
 }
 )config";
-  char buf[4096] = "";
   std::string props = "";
   if (!layouts.empty()) {
     for (auto it : layouts) {

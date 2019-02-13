@@ -328,14 +328,12 @@ TEST(RandomNodeSetSelector, ImpreciseNodeSetSize) {
   auto selector =
       NodeSetSelectorFactory::create(NodeSetSelectorType::RANDOM_CROSSDOMAIN);
 
-  const Configuration& cfg = *config;
-
   auto check_ns_size = [&](logid_t log_id, size_t expected_actual_size) {
     verify_result(selector.get(),
                   config,
                   log_id,
                   Decision::NEEDS_CHANGE,
-                  [expected_actual_size, &cfg](StorageSet* storage_set) {
+                  [expected_actual_size](StorageSet* storage_set) {
                     ld_check(storage_set != nullptr);
                     ASSERT_EQ(expected_actual_size, storage_set->size());
                   });
@@ -695,8 +693,6 @@ TEST(WeightAwareNodeSetSelectorTest, ExcludeFromNodesets) {
 
   auto selector =
       NodeSetSelectorFactory::create(NodeSetSelectorType::WEIGHT_AWARE);
-
-  const Configuration& cfg = *config;
 
   verify_result(selector.get(),
                 config,

@@ -317,8 +317,6 @@ TEST_F(CheckNodeHealthRequestTest, DuplicateHealthCheckTest) {
                                                    logid_t(1),
                                                    storage_set_state_->id_,
                                                    std::chrono::seconds{10});
-  auto req_id_1 = req->id_;
-
   EXPECT_EQ(Request::Execution::CONTINUE, req->execute());
   req.release();
   EXPECT_EQ(NodeSetState::NotAvailableReason::PROBING,
@@ -404,8 +402,6 @@ TEST_F(CheckNodeHealthRequestTest, ConnectionClosedWithPendingProbeTest) {
                                                    logid_t(1),
                                                    storage_set_state_->id_,
                                                    std::chrono::seconds{10});
-  auto req_id = req->id_;
-
   EXPECT_EQ(Request::Execution::CONTINUE, req->execute());
   req.release();
   EXPECT_EQ(NodeSetState::NotAvailableReason::PROBING,

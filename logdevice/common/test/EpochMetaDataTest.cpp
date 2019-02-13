@@ -630,8 +630,6 @@ TEST_F(EpochMetaDataTest, EpochMetaDataUpdateToNextEpochTest) {
   ASSERT_NE(nullptr, cfg.get()->serverConfig());
   ASSERT_NE(nullptr, cfg.get()->logsConfig());
   auto logcfg = cfg->getLogGroupByIDShared(logid_t(2));
-  LogsConfig::LogAttributes& attrs =
-      const_cast<LogsConfig::LogAttributes&>(logcfg->attrs());
   EpochMetaDataUpdateToNextEpoch updater(cfg);
 
   auto zk_record = std::make_unique<EpochMetaData>(genValidEpochMetaData(
@@ -744,7 +742,6 @@ TEST_F(EpochMetaDataTest, EpochMetaDataMapBasic) {
 
 TEST_F(EpochMetaDataTest, UnionStorageSet) {
   auto cfg = parseConfig();
-  const logid_t logid = logid_t(1);
   std::map<epoch_t, EpochMetaData> epochs;
   epochs[epoch_t(7)] = genValidEpochMetaData(NODE, 7, 7, {N1, N2}, 2);
   epochs[epoch_t(10)] = genValidEpochMetaData(RACK, 10, 10, {N2, N3}, 2);
@@ -800,7 +797,6 @@ TEST_F(EpochMetaDataTest, UnionStorageSet) {
 
 TEST_F(EpochMetaDataTest, ExtendMap) {
   auto cfg = parseConfig();
-  const logid_t logid = logid_t(1);
   std::map<epoch_t, EpochMetaData> epochs;
   epochs[epoch_t(7)] = genValidEpochMetaData(NODE, 7, 7, {N1, N2}, 2);
   epochs[epoch_t(10)] = genValidEpochMetaData(RACK, 10, 10, {N2, N3}, 2);

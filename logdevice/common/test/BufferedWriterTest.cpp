@@ -234,7 +234,7 @@ class TestCallback : public BufferedWriter::AppendCallback {
                  Status status) override {
     std::lock_guard<std::mutex> guard(mutex_);
     last_time = std::chrono::steady_clock::now();
-    for (auto& _ : contexts) {
+    for (size_t i = 0; i < contexts.size(); ++i) {
       failures.insert(status);
       sem.post();
     }

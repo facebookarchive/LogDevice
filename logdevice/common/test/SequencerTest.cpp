@@ -728,7 +728,7 @@ TEST_F(SequencerTest, ActivationFailures) {
   setUp();
   int rv;
   ASSERT_EQ(Sequencer::State::UNAVAILABLE, sequencer_->getState());
-  rv = sequencer_->startActivation([this](logid_t) { return -1; });
+  rv = sequencer_->startActivation([](logid_t) { return -1; });
   ASSERT_EQ(-1, rv);
   ASSERT_EQ(E::FAILED, err);
   // sequencer should be put back in unavailable state
@@ -947,7 +947,7 @@ TEST_F(SequencerTest, MaxTotalAppendersSizeHard) {
     int rv =
         sequencer_->startActivation([this](logid_t) { return getMetaData(); });
     EXPECT_EQ(0, rv);
-    auto result = completeActivation(3);
+    completeActivation(3);
     EXPECT_EQ(epoch_t(3), sequencer_->getCurrentEpoch());
     EXPECT_EQ(Sequencer::State::ACTIVE, sequencer_->getState());
     sequencer_->onRecoveryCompleted(
