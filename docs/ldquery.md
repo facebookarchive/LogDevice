@@ -36,8 +36,7 @@ CatchupQueue is a state machine that manages all the read streams of one client 
 | client | string | Id of the client. |
 | queued\_total | long | Number of read streams queued in that CatchupQueue (ie read streams that are not caught up). |
 | queued\_immediate | long | Number of read streams that are not queued with a delay, see "queue\_delayed". |
-| queued\_delayed | long | (Number of read streams that are queued with a delay.  When these read streams are queued, CatchupQueue waits for a configured amount of time before dequeuing the stream for processing. This happens if the l
-og is configured with the "delivery\_latency"  option, which enables better batching of reads when tailing.  See "deliveryLatency" logdevice/include/LogAttributes.h. |
+| queued\_delayed | long | (Number of read streams that are queued with a delay.  When these read streams are queued, CatchupQueue waits for a configured amount of time before dequeuing the stream for processing. This happens if the log is configured with the "delivery\_latency"  option, which enables better batching of reads when tailing.  See "deliveryLatency" logdevice/include/LogAttributes.h. |
 | record\_bytes\_queued | long | (CatchupQueue also does accounting of how many bytes are enqueued in the socket's output evbuffer. CatchupQueue wakes up several read streams until the buffer reaches the limit set by the option --output-max-records-kb (see logdevice/common/Settings.h). |
 | storage\_task\_in\_flight | int | Each read stream is processed one by one.  When a read stream is processed, it will first try to read some records from the worker thread if there are some records that can be read from RocksDB's block cache. When all records that could be read from the worker thread were read, and if there are more records that can be read, the read stream will issue a storage task to read such records in a slow storage thread.  This flag indicates whether or not there is such a storage task currently in flight. |
 | ping\_timer\_active | int | Ping timer is a timer that is used to ensure we eventually try to schedule more reads under certain conditions.  This column indicates whether the timer is currently active. |
@@ -680,3 +679,4 @@ List the currently running SyncSequencerRequests on that cluster.  See "logdevic
 | until\_lsn | lsn | Next LSN retrieved from the sequencer. |
 | last\_released\_lsn | lsn | Last released LSN retrieved from the sequencer. |
 | last\_status | string | Status of the last GetSeqStateRequest performed by SyncSequencerRequest. |
+
