@@ -22,26 +22,26 @@ class LibEventTimerImpl : public TimerInterface, public LibeventTimer {
  public:
   LibEventTimerImpl();
 
-  virtual void assign(std::function<void()> callback) override;
+  void assign(std::function<void()> callback) override;
 
-  virtual void activate(std::chrono::microseconds delay,
-                        TimeoutMap* timeout_map = nullptr) override {
+  void activate(std::chrono::microseconds delay,
+                TimeoutMap* timeout_map = nullptr) override {
     LibeventTimer::activate(delay, timeout_map);
   }
 
-  virtual void cancel() override {
+  void cancel() override {
     LibeventTimer::cancel();
   }
 
-  virtual bool isActive() const override {
+  bool isActive() const override {
     return LibeventTimer::isActive();
   }
 
-  virtual void setCallback(std::function<void()> callback) override {
+  void setCallback(std::function<void()> callback) override {
     LibeventTimer::setCallback(callback);
   }
 
-  virtual bool isAssigned() const override {
+  bool isAssigned() const override {
     return LibeventTimer::isAssigned();
   }
 
@@ -60,22 +60,22 @@ class WheelTimerDispatchImpl : public TimerInterface {
 
   explicit WheelTimerDispatchImpl(std::function<void()> callback);
 
-  virtual void activate(std::chrono::microseconds delay,
-                        TimeoutMap* timeout_map = nullptr) override;
+  void activate(std::chrono::microseconds delay,
+                TimeoutMap* timeout_map = nullptr) override;
 
-  virtual void cancel() override;
+  void cancel() override;
 
-  virtual bool isActive() const override;
+  bool isActive() const override;
 
-  virtual void setCallback(std::function<void()> callback) override;
+  void setCallback(std::function<void()> callback) override;
 
-  virtual void assign(std::function<void()> callback) override {
+  void assign(std::function<void()> callback) override {
     setCallback(callback);
   }
 
-  virtual ~WheelTimerDispatchImpl();
+  ~WheelTimerDispatchImpl() override;
 
-  virtual bool isAssigned() const override {
+  bool isAssigned() const override {
     return !!callback_;
   }
 

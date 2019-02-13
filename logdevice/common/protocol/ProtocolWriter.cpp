@@ -83,7 +83,7 @@ class EvbufferDestination : public ProtocolWriter::Destination {
 
   explicit EvbufferDestination(evbuffer* dest) : dest_evbuf_(dest) {}
 
-  ~EvbufferDestination() {}
+  ~EvbufferDestination() override {}
 
  private:
   struct evbuffer* const dest_evbuf_;

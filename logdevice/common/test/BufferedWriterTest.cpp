@@ -50,7 +50,7 @@ class ProcessorTestProxy : public ProcessorProxy {
   ProcessorTestProxy(Processor* p, size_t numAppendsBeforePosting)
       : ProcessorProxy(p), numAppendsBeforePosting_(numAppendsBeforePosting) {}
 
-  virtual int postWithRetrying(std::unique_ptr<Request>& rq) override {
+  int postWithRetrying(std::unique_ptr<Request>& rq) override {
     auto cbsr = dynamic_cast<BufferedWriterSingleLog::ContinueBlobSendRequest*>(
         rq.get());
 

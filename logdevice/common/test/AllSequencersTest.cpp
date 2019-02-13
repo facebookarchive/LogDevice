@@ -95,7 +95,7 @@ class MockSequencer : public Sequencer {
       : Sequencer(logid, test->updateable_settings_, &test->stats_),
         test_(test) {}
 
-  ~MockSequencer() {}
+  ~MockSequencer() override {}
 
   std::shared_ptr<Configuration> getClusterConfig() const override {
     return test_->getConfig();
@@ -142,7 +142,7 @@ class MockAllSequencers : public AllSequencers {
                       test->updateable_settings_),
         test_(test) {}
 
-  ~MockAllSequencers() {}
+  ~MockAllSequencers() override {}
 
   std::shared_ptr<Sequencer>
   createSequencer(logid_t logid,

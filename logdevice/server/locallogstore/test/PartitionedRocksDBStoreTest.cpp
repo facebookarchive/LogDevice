@@ -623,7 +623,7 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
       : settings_(create_default_settings<Settings>()),
         server_settings_(create_default_settings<ServerSettings>()),
         stats_(StatsParams().setIsServer(true)) {}
-  virtual ~PartitionedRocksDBStoreTest() {}
+  ~PartitionedRocksDBStoreTest() override {}
 
  protected:
   struct TestRecord {

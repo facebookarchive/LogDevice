@@ -67,7 +67,7 @@ class TestAllServerReadStreams : public AllServerReadStreams {
                              nullptr,
                              false),
         tasks_(tasks) {}
-  ~TestAllServerReadStreams() {
+  ~TestAllServerReadStreams() override {
     EXPECT_FALSE(sendDelayedStorageTasksPending_);
   }
 
@@ -121,7 +121,7 @@ class CatchupQueueTest : public ::testing::Test {
     resetCatchupQueue();
   }
 
-  ~CatchupQueueTest() {
+  ~CatchupQueueTest() override {
     streams_.clear();
   }
 
@@ -410,9 +410,9 @@ class MockCatchupQueueDependencies : public CatchupQueueDependencies {
     return 0;
   }
 
-  virtual Status read(LocalLogStore::ReadIterator* /*read_iterator*/,
-                      LocalLogStoreReader::Callback& callback,
-                      LocalLogStoreReader::ReadContext* /*read_ctx*/) override {
+  Status read(LocalLogStore::ReadIterator* /*read_iterator*/,
+              LocalLogStoreReader::Callback& callback,
+              LocalLogStoreReader::ReadContext* /*read_ctx*/) override {
     test_.n_non_blocking_read_attempts_++;
 
     if (test_.read_return_status_ == E::CBREGISTERED) {

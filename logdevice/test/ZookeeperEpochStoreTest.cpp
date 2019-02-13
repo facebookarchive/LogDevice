@@ -108,7 +108,7 @@ class ZookeeperEpochStoreTest : public ::testing::Test {
 
 class ZookeeperEpochStoreTestEmpty : public ZookeeperEpochStoreTest {
  public:
-  virtual ZookeeperClientInMemory::state_map_t getPrefillZnodes() override {
+  ZookeeperClientInMemory::state_map_t getPrefillZnodes() override {
     return {};
   }
 };

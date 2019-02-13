@@ -51,7 +51,7 @@ class MockShadowClientFactory : public ShadowClientFactory {
   explicit MockShadowClientFactory(std::string origin_name,
                                    UpdateableSettings<Settings> client_settings)
       : ShadowClientFactory(origin_name, nullptr, client_settings) {}
-  ~MockShadowClientFactory() = default;
+  ~MockShadowClientFactory() override = default;
 
   void start(std::chrono::milliseconds) override {}
   void shutdown() override {}

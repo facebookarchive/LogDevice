@@ -25,7 +25,7 @@ class MockNodeStatsController : public NodeStatsController {
     ON_CALL(*this, getRetentionTime()).WillByDefault(Return(0s));
     ON_CALL(*this, getAggregationPeriod()).WillByDefault(Return(30s));
   }
-  virtual ~MockNodeStatsController() = default;
+  ~MockNodeStatsController() override = default;
 
   MOCK_METHOD0(activateAggregationTimer, void());
   MOCK_METHOD0(sendCollectStatsMessage, void());
@@ -37,7 +37,7 @@ class MockNodeStatsController : public NodeStatsController {
   MOCK_CONST_METHOD0(getAggregationPeriod, std::chrono::milliseconds());
   MOCK_CONST_METHOD0(getNodes, const configuration::Nodes&());
 
-  virtual size_t getMaxNodeIndex() const override {
+  size_t getMaxNodeIndex() const override {
     return max_node_index_;
   }
 

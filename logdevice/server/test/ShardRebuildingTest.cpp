@@ -86,7 +86,7 @@ class MockedShardRebuilding : public ShardRebuildingV2,
                           /* listener */ this),
         stats(StatsParams().setIsServer(true)) {}
 
-  ~MockedShardRebuilding() {
+  ~MockedShardRebuilding() override {
     // Make sure ~ShardRebuilding doesn't try to post any
     // AbortChunkRebuildingRequest-s to Processor, since we don't have a
     // Processor.

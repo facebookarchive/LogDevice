@@ -90,7 +90,7 @@ class AppenderTest : public ::testing::Test {
     dbg::assertOnData = true;
   }
 
-  ~AppenderTest() {
+  ~AppenderTest() override {
     // Without this, Appender asserts about aborting during shutdown if it
     // hasn't already been reaped, but not all tests feel like bringing the
     // Appender to completion

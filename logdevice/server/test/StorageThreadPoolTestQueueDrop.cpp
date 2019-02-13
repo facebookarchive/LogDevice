@@ -185,7 +185,7 @@ class PrioritizableStorageTask : public StorageTask {
         droppable_(droppable),
         drop_cb_(std::move(drop_cb)),
         destroy_cb_(std::move(destroy_cb)) {}
-  ~PrioritizableStorageTask() {
+  ~PrioritizableStorageTask() override {
     destroy_cb_();
   }
 

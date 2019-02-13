@@ -169,14 +169,14 @@ class MockRecordRebuildingAmend : public RecordRebuildingAmend {
                               rebuildingWave),
         settings_(settings) {}
 
-  virtual void start(bool) override;
+  void start(bool) override;
 
   const Settings& getSettings() const override {
     return settings_;
   }
 
   Settings& settings_;
-  ~MockRecordRebuildingAmend();
+  ~MockRecordRebuildingAmend() override;
 };
 
 struct ReceivedMessages {
@@ -240,15 +240,15 @@ class MockLogRebuilding : public LogRebuilding {
     return kMyNodeID;
   }
 
-  virtual const Settings& getSettings() const override {
+  const Settings& getSettings() const override {
     return settings_;
   }
 
-  virtual ServerInstanceId getServerInstanceId() const override {
+  ServerInstanceId getServerInstanceId() const override {
     return SERVER_INSTANCE_ID;
   }
 
-  virtual void notifyComplete() override {
+  void notifyComplete() override {
     received.notifyCompleteWasCalled = true;
   }
 
@@ -258,11 +258,11 @@ class MockLogRebuilding : public LogRebuilding {
     received.notifyWindowEndWasCalled = true;
   }
 
-  virtual void notifyLogRebuildingSize() override {
+  void notifyLogRebuildingSize() override {
     received.notifyLogRebuildingSizeWasCalled = true;
   }
 
-  virtual void notifyReachedUntilLsn() override {
+  void notifyReachedUntilLsn() override {
     received.notifyReachedUntilLsnWasCalled = true;
   }
 
@@ -281,7 +281,7 @@ class MockLogRebuilding : public LogRebuilding {
                                                sequencer_node_id);
   }
 
-  virtual std::unique_ptr<RecordRebuildingStore> createRecordRebuildingStore(
+  std::unique_ptr<RecordRebuildingStore> createRecordRebuildingStore(
       size_t block_id,
       RawRecord record,
       std::shared_ptr<ReplicationScheme> replication) override {
@@ -291,7 +291,7 @@ class MockLogRebuilding : public LogRebuilding {
         block_id, std::move(record), this, replication, lsn, settings_);
   }
 
-  virtual std::unique_ptr<RecordRebuildingAmend>
+  std::unique_ptr<RecordRebuildingAmend>
   createRecordRebuildingAmend(RecordRebuildingAmendState rras) override {
     received.createRecordRebuildingAmends.push_back(rras.lsn_);
     return std::make_unique<MockRecordRebuildingAmend>(rras.lsn_,
@@ -318,50 +318,49 @@ class MockLogRebuilding : public LogRebuilding {
     return nullptr;
   }
 
-  virtual std::unique_ptr<Timer> createStallTimer() override {
+  std::unique_ptr<Timer> createStallTimer() override {
     stallTimerCreated = true;
     return nullptr;
   }
 
-  virtual std::unique_ptr<Timer>
-  createNotifyRebuildingCoordinatorTimer() override {
+  std::unique_ptr<Timer> createNotifyRebuildingCoordinatorTimer() override {
     notifyRebuildingCoordinatorTimerCreated = true;
     return nullptr;
   }
 
-  virtual std::unique_ptr<Timer> createReadNewBatchTimer() override {
+  std::unique_ptr<Timer> createReadNewBatchTimer() override {
     readNewBatchTimerCreated = true;
     return nullptr;
   }
 
-  virtual void activateReadNewBatchTimer() override {
+  void activateReadNewBatchTimer() override {
     ASSERT_TRUE(readNewBatchTimerCreated);
     received.readNewBatchTimerWasActivated = true;
     fireReadNewBatchTimer();
     return;
   }
 
-  virtual void activateNotifyRebuildingCoordinatorTimer() override {
+  void activateNotifyRebuildingCoordinatorTimer() override {
     ASSERT_TRUE(notifyRebuildingCoordinatorTimerCreated);
     ASSERT_FALSE(notifyRebuildingCoordinatorTimerActive);
     notifyRebuildingCoordinatorTimerActive = true;
     return;
   }
 
-  virtual void activateStallTimer() override {
+  void activateStallTimer() override {
     ASSERT_TRUE(stallTimerCreated);
     ASSERT_FALSE(stallTimerActive);
     stallTimerActive = true;
     return;
   }
 
-  virtual void cancelStallTimer() override {
+  void cancelStallTimer() override {
     ASSERT_TRUE(stallTimerActive);
     stallTimerActive = false;
     return;
   }
 
-  virtual bool isStallTimerActive() override {
+  bool isStallTimerActive() override {
     return stallTimerActive;
   }
 
@@ -381,7 +380,7 @@ class MockLogRebuilding : public LogRebuilding {
     notifyRebuildingCoordinator();
   }
 
-  virtual size_t getMaxBlockSize() override {
+  size_t getMaxBlockSize() override {
     return 64 * 1024 * 1024;
   }
 

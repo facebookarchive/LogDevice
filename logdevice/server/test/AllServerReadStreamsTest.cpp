@@ -45,7 +45,7 @@ class TestAllServerReadStreams : public AllServerReadStreams {
                              on_worker_thread) {
     dbg::assertOnData = true;
   }
-  ~TestAllServerReadStreams() {
+  ~TestAllServerReadStreams() override {
     EXPECT_FALSE(sendDelayedStorageTasksPending_);
   }
 

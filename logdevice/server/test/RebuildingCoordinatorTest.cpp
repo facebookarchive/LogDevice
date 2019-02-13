@@ -239,8 +239,7 @@ class MockedShardRebuildingV1 : public ShardRebuildingV1 {
     received.abort.push_back(logid);
   }
 
-  virtual void sendRestartLogRebuildingRequest(int /*unused*/,
-                                               logid_t logid) override {
+  void sendRestartLogRebuildingRequest(int /*unused*/, logid_t logid) override {
     ld_info("Restarting rebuilding of log %lu on shard %u", logid.val_, shard_);
     received.restart.push_back(logid);
   }

@@ -92,12 +92,12 @@ TEST(CONFIG_FETCH_MessageTest, LegacySerializeAndDeserialize) {
 struct CONFIG_FETCH_MessageMock : public CONFIG_FETCH_Message {
   using CONFIG_FETCH_Message::CONFIG_FETCH_Message;
 
-  virtual std::shared_ptr<Configuration> getConfig() override {
+  std::shared_ptr<Configuration> getConfig() override {
     return config;
   }
 
-  virtual int sendMessage(std::unique_ptr<CONFIG_CHANGED_Message> msg,
-                          const Address& to) override {
+  int sendMessage(std::unique_ptr<CONFIG_CHANGED_Message> msg,
+                  const Address& to) override {
     return sendMessage_(msg, to);
   }
 
