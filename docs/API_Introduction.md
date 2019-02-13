@@ -11,11 +11,11 @@ To communicate with a LogDevice cluster, use the C++ client library.
 To interact with a LogDevice cluster, create an instance of the `logdevice::Client` class.
 A `logdevice::Client` object represents a connection to a specific LogDevice cluster.
 Some of the actions that you can take with a `Client` object are:
-* appending records to logs.
-* creating `logdevice::Reader` objects that are used to read records from logs.
-* mapping timestamps (which are required record attributes) to the sequence number (LSN) of the
+* Appending records to logs.
+* Creating `logdevice::Reader` objects that are used to read records from logs.
+* Mapping timestamps (which are required record attributes) to the sequence number (LSN) of the
 closest record in the log.
-* trimming logs all the way to a specified LSN.
+* Trimming logs all the way to a specified LSN.
 
 You only need one instance of the class in order to interact with the cluster. It
 will spawn several worker threads to enable it to scale. All `Client` methods are thread-safe.
@@ -39,60 +39,22 @@ Generally speaking, using the asynchronous methods scales better, as you can sch
 outstanding requests to LogDevice without blocking your threads of execution.
 
 If you use asynchronous methods, keep in mind that:
-* the given callback functions are called on an unspecified LogDevice
+* The given callback functions are called on an unspecified LogDevice
 client worker thread.
-* the callback function has to complete quickly. If it takes a long time to
+* The callback function has to complete quickly. If it takes a long time to
 complete, it will block the LogDevice client worker thread, which may delay the
 execution of any other pending requests.
 
 ## Writing Records
 
-For asynchronous writes, consider using `Client::append` for lowest latency, or `BufferedWriter::append` for greater throughput.
-
-### Vanilla low-latency writes
-
-To write data asynchronously to LogDevice, call `append()` on the `Client` instance,
-passing a std::function callback.
-The callback is invoked when the append completes, whether it is successful or not.
-```c++
-
-void append_callback(facebook::logdevice::Status st,
-             const facebook::logdevice::DataRecord& r) {
-  std::cout << "Append result: ";
-  if (st == facebook::logdevice::E::OK){
-    std::cout << "succeeded, record appended to log " << r.logid.val()
-              << ", LSN " << facebook::logdevice::lsn_to_string(r.attrs.lsn);
-  } else {
-    std::cout << "failed with error: "
-              << facebook::logdevice::error_description(st);
-  }
-  std::cout << std::endl;
-}
-// ...
-
-facebook::logdevice::logid_t logid(1);
-std::string payload("data");
-
-int rv = client->append(logid, payload, &append_callback);
-if (rv != 0) {
-  std::cout << "Failed to enqueue append to log " << logid.val() << ": "
-      << facebook::logdevice::error_description(facebook::logdevice::err);
-}
-```
-
-Each record in this writing flow is assigned a unique sequence number (LSN).
-
-See `examples/write.cpp` in the source tree for a complete example of how to use the `append()` API.
-
-### Buffered writes for higher throughput
-
-The `BufferedWriter` interface provides another way to write data asynchronously.
-
 When writing to the cluster, you can optimize for latency or for throughput.
 `Client::append()` sends the record to the cluster immediately, and each record is assigned its own LSN.
 Because there is a cost to process each append inside LogDevice,
-sending many small records can limit throughput. If you want to optimize for throughput,
-you can buffer writes on the client.
+sending many small records limits throughput.
+Unless you definitely do not want LogDevice to perform batching, or if you want
+to have the lowest latency possible, use `BufferedWriter::append()`.
+
+### Buffered writes for higher throughput (Preferred)
 
 `BufferedWriter` maintains buffers of unsent writes for each log on the client.
 It sends each batch of writes to LogDevice to be stored as one larger record with one LSN.
@@ -189,26 +151,64 @@ options.time_trigger = std::chrono::milliseconds(1000);
 See `examples/buffered_writer.cpp` in the source tree for an example of how to
 use the `BufferedWriter` API.
 
+### Unbatched writes
+
+To write data with the lowest possible latency, call `append()` on the `Client` instance,
+passing a std::function callback.
+The callback is invoked when the append completes, whether it is successful or not.
+```c++
+
+void append_callback(facebook::logdevice::Status st,
+             const facebook::logdevice::DataRecord& r) {
+  std::cout << "Append result: ";
+  if (st == facebook::logdevice::E::OK){
+    std::cout << "succeeded, record appended to log " << r.logid.val()
+              << ", LSN " << facebook::logdevice::lsn_to_string(r.attrs.lsn);
+  } else {
+    std::cout << "failed with error: "
+              << facebook::logdevice::error_description(st);
+  }
+  std::cout << std::endl;
+}
+// ...
+
+facebook::logdevice::logid_t logid(1);
+std::string payload("data");
+
+int rv = client->append(logid, payload, &append_callback);
+if (rv != 0) {
+  std::cout << "Failed to enqueue append to log " << logid.val() << ": "
+      << facebook::logdevice::error_description(facebook::logdevice::err);
+}
+```
+
+Each record in this writing flow is assigned a unique sequence number (LSN).
+
+See `examples/write.cpp` in the source tree for a complete example of how to use the `append()` API.
+
 
 ## Reading from LogDevice
 
-The read API implemented by class `logdevice::Reader` follows the non-durable
-subscription model. A single `Reader` object can be used to create and manage
+The read API implemented by the `logdevice::Reader` and `logdevice::AsyncReader` classes follows the non-durable
+subscription model. A single `Reader` or `AsyncReader` object can be used to create and manage
 multiple read streams. Those are roughly equivalent to POSIX file descriptors —
 read points in a specific file.
 
-The difference between the `logdevice::Reader`
-and POSIX read models is that the `Reader::read()` method returns records for
-all active read streams on that `Reader` object, which often belong to many
+The difference between the `logdevice`
+and POSIX read models is that the `read()` method returns records for
+all active read streams on that `Reader` or `AsyncReader` object, which often belong to many
 different logs. The records are passed to the application as they arrive from
 the LogDevice cluster and become available. In contrast, the POSIX `read()`
 call on a file descriptor returns data from that one file only.
 
-In addition to records, the `Reader::read()` method may also report a number of
+In addition to records, the `read()` method may also report a number of
 gaps. A gap describes a range of LSNs with some sort of an exceptional
-condition. Common gap types include TRIM (records in the range are older than
-the trim point), DATALOSS (records in the range appear to be permanently lost),
-and ACCESS (the reader does not have permissions to read the log).
+condition. Common gap types include:
+* TRIM - records in the range are older than
+the trim point.
+* BRIDGE - a bridge that completes an epoch. This could be the result of a sequencer failover or log reconfiguration, but no data was lost.
+* DATALOSS - records in the range appear to be permanently lost.
+* ACCESS - the reader does not have permissions to read the log.
 
 The `Reader::stopReading()` method may be used to indicate that the client is no
 longer interested in receiving records for the specified log.
@@ -225,11 +225,11 @@ record they read in a persistent key-value store.
 ### Reading using the `Reader` class
 
 To read from LogDevice using the `Reader` class:
-1. create a `Reader` instance by calling the `createReader()` method on the
-`Client` instance
-2. call `startReading()` on it for each log
-3. call the `read()` method on the reader whenever your application is ready to
-consume records
+1. Create a `Reader` instance by calling the `createReader()` method on the
+`Client` instance.
+2. Call `startReading()` on it for each log.
+3. Call the `read()` method on the reader whenever your application is ready to
+consume records.
 
 Check out `examples/tail.cpp` and `examples/cat.cpp` in the source tree for sample code.
 
@@ -390,9 +390,9 @@ if (rv != 0) {
 ## Trimming data from logs
 
 You can configure LogDevice to trim data automatically:
-* based on time (see `backlog` attribute in [log configuration](log_configuration.md))
-* based on available storage space (see `rocksdb-free-disk-space-threshold-low` and
-`sbr-node-threshold` in [settings](settings.md))
+* Based on time (see `backlog` attribute in [log configuration](log_configuration.md)).
+* Based on available storage space (see `rocksdb-free-disk-space-threshold-low` and
+`sbr-node-threshold` in [settings](settings.md)).
 
 A client can also trim data explicitly. See the `trim()` and `trimSync()` methods in
 the `Client` class.
