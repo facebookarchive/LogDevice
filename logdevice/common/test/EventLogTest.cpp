@@ -137,7 +137,7 @@ class MockEventLogStateMachine : public EventLogStateMachine {
   }
   void getDeltaLogTailLSN() override;
   void getSnapshotLogTailLSN() override;
-  virtual read_stream_id_t createBasicReadStream(
+  read_stream_id_t createBasicReadStream(
       logid_t /*logid*/,
       lsn_t /*start_lsn*/,
       lsn_t /*until_lsn*/,
@@ -186,7 +186,7 @@ class EventLogTest : public ::testing::TestWithParam<bool> {
     config_ = buildConfig();
   }
 
-  virtual void SetUp() {
+  void SetUp() override {
     settings_ = UpdateableSettings<Settings>();
     settings_updater_ = std::make_unique<SettingsUpdater>();
     settings_updater_->registerSettings(settings_);

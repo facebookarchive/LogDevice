@@ -422,7 +422,7 @@ lsn_t calc_buffer_max(lsn_t start, size_t buffer_size) {
 class ClientReadStreamTest
     : public ::testing::TestWithParam<ClientReadStreamBufferType> {
  public:
-  virtual void SetUp() {
+  void SetUp() override {
     dbg::currentLevel = dbg::Level::SPEW;
     dbg::assertOnData = true;
     state_ = TestState();

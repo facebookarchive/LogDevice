@@ -61,11 +61,11 @@ class MockGraylistingTracker : public GraylistingTracker {
   explicit MockGraylistingTracker(MockWorkerTimeoutStats stats)
       : stats_(std::move(stats)) {}
 
-  virtual WorkerTimeoutStats& getWorkerTimeoutStats() override {
+  WorkerTimeoutStats& getWorkerTimeoutStats() override {
     return stats_;
   }
 
-  virtual const configuration::Nodes& getNodes() const override {
+  const configuration::Nodes& getNodes() const override {
     return nodes_;
   }
 

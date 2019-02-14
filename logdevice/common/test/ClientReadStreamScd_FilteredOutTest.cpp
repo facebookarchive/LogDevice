@@ -74,7 +74,7 @@ class ClientReadStreamScd_FilteredOutTest : public ::testing::Test {
     assert_equal_shardset(expected_current_down, filtered_out.getShardsDown());
     assert_equal_shardset(expected_current_slow, filtered_out.getShardsSlow());
   }
-  virtual ~ClientReadStreamScd_FilteredOutTest() {}
+  ~ClientReadStreamScd_FilteredOutTest() override {}
 
  protected:
   FilteredOut filtered_out;

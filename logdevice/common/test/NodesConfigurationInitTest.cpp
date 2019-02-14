@@ -20,11 +20,11 @@ using namespace facebook::logdevice;
 using namespace facebook::logdevice::configuration::nodes;
 
 struct MockNodesConfigurationInit : public NodesConfigurationInit {
-  virtual ~MockNodesConfigurationInit() override = default;
+  ~MockNodesConfigurationInit() override = default;
 
   using NodesConfigurationInit::NodesConfigurationInit;
 
-  virtual void injectExtraSettings(Settings& settings) const override {
+  void injectExtraSettings(Settings& settings) const override {
     settings.enable_initial_get_cluster_state = false;
   }
 

@@ -87,7 +87,7 @@ class ClientReadStreamFailureDetectorTest : public ::testing::Test {
   using TS = ClientReadStreamFailureDetector::TS;
   using TimePoint = TS::TimePoint;
 
-  virtual void SetUp() override {
+  void SetUp() override {
     ClientReadStreamFailureDetectorSettings settings;
     settings.moving_avg_duration = std::chrono::seconds{10};
     settings.required_margin = 1.0;

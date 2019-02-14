@@ -25,8 +25,8 @@ class MockConfigurationFetchRequest : public ConfigurationFetchRequest {
  public:
   using ConfigurationFetchRequest::ConfigurationFetchRequest;
 
-  virtual int sendMessageTo(std::unique_ptr<facebook::logdevice::Message> msg,
-                            NodeID to) override {
+  int sendMessageTo(std::unique_ptr<facebook::logdevice::Message> msg,
+                    NodeID to) override {
     return sendMessageTo_(msg, to);
   }
 

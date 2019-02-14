@@ -38,7 +38,7 @@ struct Collector {
 class ClientReadStreamBufferTest
     : public ::testing::TestWithParam<ClientReadStreamBufferType> {
  public:
-  virtual void SetUp() {
+  void SetUp() override {
     if (GetParam() == ClientReadStreamBufferType::CIRCULAR) {
       buf = std::make_unique<ClientReadStreamCircularBuffer>(10, 100);
     } else {

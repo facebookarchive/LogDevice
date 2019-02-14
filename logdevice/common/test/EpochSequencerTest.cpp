@@ -44,7 +44,7 @@ class EpochSequencerTest : public ::testing::Test {
  public:
   explicit EpochSequencerTest();
 
-  ~EpochSequencerTest() {
+  ~EpochSequencerTest() override {
     es_.reset();
     sequencers_.update(nullptr);
     processor_.reset();
@@ -146,7 +146,7 @@ class MockEpochSequencer : public EpochSequencer {
     ++test_->stats.epoch_created;
   }
 
-  ~MockEpochSequencer() {
+  ~MockEpochSequencer() override {
     ++test_->stats.epoch_destroyed;
     ld_debug("epoch sequencer of epoch %u destroyed.", getEpoch().val_);
   }
@@ -228,7 +228,7 @@ class MockAppender : public Appender {
     ++test_->stats.appender_created;
   }
 
-  virtual ~MockAppender() {
+  ~MockAppender() override {
     epoch_sequencer_.reset();
     ++test_->stats.appender_destroyed;
     ld_debug("Appender %s destroyed.", getStoreHeader().rid.toString().c_str());

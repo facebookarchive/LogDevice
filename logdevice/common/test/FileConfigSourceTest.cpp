@@ -57,7 +57,7 @@ static void wait_for_config_update(FileConfigSourceThread* thread) {
 }
 
 class FileConfigSourceTest : public ::testing::Test {
-  virtual void SetUp() override {
+  void SetUp() override {
     dbg::assertOnData = true;
   }
 };

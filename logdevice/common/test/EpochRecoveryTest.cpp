@@ -107,7 +107,7 @@ class EpochRecoveryTest : public ::testing::Test {
   bool finished_{false};
 
   explicit EpochRecoveryTest();
-  ~EpochRecoveryTest() {}
+  ~EpochRecoveryTest() override {}
 
   void initConfig();
   void setUp();

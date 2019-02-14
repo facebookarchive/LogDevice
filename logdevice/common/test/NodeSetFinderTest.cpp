@@ -67,7 +67,7 @@ class NodeSetFinderTest : public ::testing::Test {
   }
 
   explicit NodeSetFinderTest() {}
-  ~NodeSetFinderTest() {}
+  ~NodeSetFinderTest() override {}
 
   void setUp();
 };

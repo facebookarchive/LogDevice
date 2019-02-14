@@ -65,7 +65,7 @@ class SequencerTest : public ::testing::Test {
   folly::Optional<epoch_t> request_epoch_reading_metadata_;
 
   explicit SequencerTest();
-  ~SequencerTest();
+  ~SequencerTest() override;
 
   void setUp();
   std::unique_ptr<MockAppender> createAppender(size_t size = 0);
@@ -163,7 +163,7 @@ class MockEpochSequencer : public EpochSequencer {
                        parent),
         test_(test) {}
 
-  ~MockEpochSequencer() {
+  ~MockEpochSequencer() override {
     ld_debug("epoch sequencer of epoch %u destroyed.", getEpoch().val_);
   }
 
@@ -202,7 +202,7 @@ class MockAppender : public Appender {
             size),
         test_(test) {}
 
-  virtual ~MockAppender() {
+  ~MockAppender() override {
     epoch_sequencer_.reset();
   }
 
@@ -262,7 +262,7 @@ class MockSequencer : public Sequencer {
       : Sequencer(test->LOG_ID, test->updateable_settings_, &test->stats_),
         test_(test) {}
 
-  ~MockSequencer() {}
+  ~MockSequencer() override {}
 
   std::shared_ptr<Configuration> getClusterConfig() const override {
     return test_->getConfig();

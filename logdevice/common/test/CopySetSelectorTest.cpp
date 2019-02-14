@@ -199,7 +199,7 @@ class MockStickyCopySetManager : public StickyCopySetManager {
   class SubSelector : public CopySetSelector {
    public:
     class State : public CopySetSelector::State {
-      virtual void reset() override {}
+      void reset() override {}
     };
 
     explicit SubSelector(CopySetSelectorTest* test) : test_(test) {}
