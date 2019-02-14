@@ -9,11 +9,15 @@
 
 #include "logdevice/admin/settings/AdminServerSettings.h"
 #include "logdevice/clients/python/util/util.h"
+#include "logdevice/common/plugin/CommonBuiltinPlugins.h"
+#include "logdevice/common/plugin/PluginRegistry.h"
+#include "logdevice/common/plugin/StaticPluginLoader.h"
 #include "logdevice/common/settings/GossipSettings.h"
 #include "logdevice/common/settings/RebuildingSettings.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/settings/SettingsUpdater.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
+#include "logdevice/lib/ClientPluginHelper.h"
 #include "logdevice/server/ServerSettings.h"
 #include "logdevice/server/locallogstore/LocalLogStoreSettings.h"
 #include "logdevice/server/locallogstore/RocksDBSettings.h"
@@ -59,6 +63,11 @@ void validate_server_settings(boost::python::dict input) {
   settings_updater->registerSettings(rocksdb_settings);
   settings_updater->registerSettings(admin_server_settings);
 
+  std::shared_ptr<PluginRegistry> plugin_registry =
+      std::make_shared<PluginRegistry>(
+          createPluginVector<StaticPluginLoader, BuiltinPluginProvider>());
+  plugin_registry->addOptions(settings_updater.get());
+
   auto input_settings = dict_to_map(input);
   try {
     settings_updater->validateFromConfig(input_settings, SettingFlag::SERVER);
@@ -80,6 +89,10 @@ void validate_client_settings(boost::python::dict input) {
   settings_updater->registerSettings(rebuilding_settings);
   settings_updater->registerSettings(gossip_settings);
   settings_updater->registerSettings(settings);
+
+  std::shared_ptr<PluginRegistry> plugin_registry =
+      std::make_shared<PluginRegistry>(getClientPluginProviders());
+  plugin_registry->addOptions(settings_updater.get());
 
   auto input_settings = dict_to_map(input);
   try {
