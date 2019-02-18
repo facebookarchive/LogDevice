@@ -93,10 +93,12 @@ class Timer;
  *         slid.
  *
  *      8. Removing shards from the shards down list.
- *         Each time the window is slid, ClientReadStream calls
- *         scheduleRewindIfshardsBackUp() which looks for storage shards in the
- *         shards down list that have been sending records. If such shards are
- *         found, they are removed from the list and the streams are rewound.
+ *         When a shard sends a record, ClientReadStream calls
+ *         scheduleRewindIfShardBackUp() which checks if the shard is in the
+ *         shards down list but has been sending records not in an
+ *         under-replicated region. If that's the case, a rewind is scheduled to
+ *         remove the shard from the shards down list.
+ *
  *      9. Removing shards from the shards slow list.
  *         Shards will be removed from the slow shards list if we need to add
  *         another shard to the filtered out list, and we can't do that without
@@ -181,11 +183,11 @@ class ClientReadStreamScd : public boost::noncopyable {
   bool checkNeedsFailoverToAllSendAll();
 
   /**
-   * Check if some shards that were in the shards down list have been sending
-   * data. If that's the case, remove these shards from the shards down list and
-   * schedule a rewind.
+   * Check if the given shard was in the shards down list and has been sending
+   * data. If that's the case, remove it from the shards down list and schedule
+   * a rewind.
    */
-  void scheduleRewindIfShardsBackUp();
+  void scheduleRewindIfShardBackUp(ClientReadStreamSenderState& state);
 
   // Called whenever a window is slid.
   void onWindowSlid(lsn_t hi, filter_version_t filter_version);

@@ -255,9 +255,16 @@ bool ClientReadStreamScd::FilteredOut::applyDeferredChanges() {
   }
 
   for (const auto& shard : new_shards_slow_) {
-    temp_shards_slow.push_back(shard);
-    temp_all_shards.push_back(shard);
+    // It is possible both ClientReadStream and ClientReadStreamFailureDetector
+    // decide to mark the same shard down and slow at the same time. Make sure
+    // marking a shard down takes precedence.
+    if (std::find(temp_shards_down.begin(), temp_shards_down.end(), shard) ==
+        temp_shards_down.end()) {
+      temp_shards_slow.push_back(shard);
+      temp_all_shards.push_back(shard);
+    }
   }
+
   auto equal = [](small_shardset_t l, small_shardset_t r) {
     std::sort(l.begin(), l.end());
     std::sort(r.begin(), r.end());
@@ -443,55 +450,38 @@ bool ClientReadStreamScd::checkNeedsFailoverToAllSendAll() {
     // cleared and only afterwards failover to ALL_SEND_ALL if we are still
     // not making progress. However doing this requires more bookkeeping, and
     // this is a possible optimization to consider in the future..
-    RATELIMIT_INFO(std::chrono::seconds(10),
-                   1,
-                   "Failing over to ALL_SEND_ALL mode for log %lu because "
-                   "all storage shards are either in the filtered out list or "
-                   "sent a gap/record with lsn > next_lsn_to_deliver_. "
-                   "Shards down list = {%s}. Shards slow list = {%s}. %s",
-                   owner_->log_id_.val_,
-                   toString(getShardsDown()).c_str(),
-                   toString(getShardsSlow()).c_str(),
-                   owner_->getDebugInfoStr().c_str());
-    scheduleRewindToMode(Mode::ALL_SEND_ALL,
-                         "Failing over to ALL_SEND_ALL: next record not found");
+    std::string reason =
+        folly::format(
+            "All storage shards are either in the filtered out list or "
+            "sent a gap/record with lsn > next_lsn_to_deliver_. "
+            "Shards down list = {}. Shards slow list = {}. {}",
+            toString(getShardsDown()).c_str(),
+            toString(getShardsSlow()).c_str(),
+            owner_->getDebugInfoStr().c_str())
+            .str();
+    scheduleRewindToMode(Mode::ALL_SEND_ALL, reason);
     return true;
   }
 
   return false;
 }
 
-void ClientReadStreamScd::scheduleRewindIfShardsBackUp() {
+void ClientReadStreamScd::scheduleRewindIfShardBackUp(
+    ClientReadStreamSenderState& state) {
   ld_check(isActive());
-
-  bool rewind = false;
-
-  for (auto down : getShardsDown()) {
-    auto it = owner_->storage_set_states_.find(down);
-    if (it == owner_->storage_set_states_.end()) {
-      RATELIMIT_INFO(std::chrono::seconds(1),
-                     1,
-                     "Internal error. Shard %s is found in the known down list "
-                     "but does not belong to the storage set.",
-                     down.toString().c_str());
-      ld_check(false);
-      continue;
-    }
-    // if the node has delivered a record and caught up to next_lsn_to_deliver_
-    // during the last window, and believes its records are intact, allow it to
-    // participate in SCD.
-    if (it->second.max_data_record_lsn != 0 && it->second.getNextLsn() != 0 &&
-        !it->second.under_replicated) {
+  // if the node has delivered a record and caught up to next_lsn_to_deliver_
+  // during the last window, and believes its records are intact, allow it to
+  // participate in SCD.
+  if (state.max_data_record_lsn != 0 && state.getNextLsn() != 0 &&
+      !state.under_replicated) {
+    if (filtered_out_.deferredRemoveShardDown(state.getShardID())) {
       ld_debug(
           "%s started delivering records or exited an under replicated region",
-          down.toString().c_str());
-      filtered_out_.deferredRemoveShardDown(down);
-      rewind = true;
+          state.getShardID().toString().c_str());
+      owner_->scheduleRewind(
+          folly::format("{} no longer down", state.getShardID().toString())
+              .str());
     }
-  }
-
-  if (rewind) {
-    owner_->scheduleRewind("Shards no longer down");
   }
 }
 

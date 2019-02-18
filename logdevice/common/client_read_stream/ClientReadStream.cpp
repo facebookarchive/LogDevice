@@ -34,6 +34,7 @@
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Socket.h"
 #include "logdevice/common/SocketCallback.h"
+#include "logdevice/common/Timestamp.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/client_read_stream/AllClientReadStreams.h"
 #include "logdevice/common/client_read_stream/ClientReadStreamBuffer.h"
@@ -333,8 +334,7 @@ void ClientReadStream::start() {
   ld_check(!started_);
   started_ = true;
 
-  immediate_rewind_timer_ =
-      deps_->createTimer([this] { rewind(rewind_reason_); });
+  rewind_scheduler_ = std::make_unique<RewindScheduler>(this);
 
   gap_tracer_ = std::make_unique<ClientGapTracer>(
       Worker::onThisThread(false) ? Worker::onThisThread()->getTraceLogger()
@@ -972,8 +972,8 @@ void ClientReadStream::onDataRecord(
   // Now decide what to do with the record.
   if (lsn < next_lsn_to_deliver_) {
     // Ignore (1a)
-    ld_debug("Discarded record from %s for log %lu due to SCD rewind: "
-             "lsn %s < next_lsn_to_deliver_ %s",
+    ld_debug("Discarded record from %s for log %lu with lsn %s < "
+             "next_lsn_to_deliver_ %s",
              shard.toString().c_str(),
              log_id_.val_,
              lsn_to_string(lsn).c_str(),
@@ -1016,6 +1016,12 @@ void ClientReadStream::onDataRecord(
     updateGapState(
         lsn < LSN_MAX ? lsn + 1 : LSN_MAX, sender_state, under_replicated);
     findGapsAndRecords();
+  }
+
+  // This may be a shard that was blacklisted, in that case a rewind will be
+  // scheduled.
+  if (scd_->isActive()) {
+    scd_->scheduleRewindIfShardBackUp(sender_state);
   }
 
   // This function should leave everything in a consistent state.
@@ -1515,7 +1521,7 @@ int ClientReadStream::handleEpochBegin(lsn_t epoch_begin) {
 
 ClientReadStream::ProgressDecision
 ClientReadStream::checkFMajority(bool grace_period_expired) const {
-  if (rewind_scheduled_) {
+  if (rewind_scheduler_->isScheduled()) {
     // We do not allow running the gap detection algorithm while a rewind is
     // scheduled as that rewind may have been scheduled because the
     // authoritative status of a node changed, and issuing a gap right now is
@@ -2736,7 +2742,7 @@ void ClientReadStream::updateCurrentReadSet() {
 
   // If either updateStorageShardsSet() or applyShardStatus() scheduled a
   // rewind, no need to send START messages here as they'll be sent by rewind.
-  if (immediate_rewind_timer_->isActive()) {
+  if (rewind_scheduler_->isScheduled()) {
     return;
   }
 
@@ -3520,10 +3526,6 @@ bool ClientReadStream::slideSenderWindows() {
     }
   }
 
-  if (scd_->isActive()) {
-    scd_->scheduleRewindIfShardsBackUp();
-  }
-
   updateWindowSize();
   calcWindowHigh();
   calcNextLSNToSlideWindow();
@@ -3833,20 +3835,10 @@ void ClientReadStream::handleStartPROTONOSUPPORT(ShardID shard_id) {
 
 void ClientReadStream::scheduleRewind(std::string reason) {
   ld_check(!reason.empty());
-
-  if (rewind_scheduled_) {
-    // rewind is already scheduled. concatenate the reasons to not overwrite
-    // the original one.
-    rewind_reason_ += "\n" + reason;
-  } else {
-    rewind_reason_ = std::move(reason);
-    rewind_scheduled_ = true;
-    immediate_rewind_timer_->activate(
-        std::chrono::microseconds(0), deps_->getCommonTimeouts());
-  }
+  rewind_scheduler_->schedule(deps_->getCommonTimeouts(), std::move(reason));
 }
 
-void ClientReadStream::rewind(const std::string& reason) {
+void ClientReadStream::rewind(std::string reason) {
   // Clear the buffer and reset gap parameters.
 
   events_tracer_->traceEvent(log_id_,
@@ -3916,7 +3908,7 @@ void ClientReadStream::rewind(const std::string& reason) {
 
   // applyScheduledChanges() or applyShardStatus() may schedule a rewind again.
   // Because we are about to rewind here, cancel that intent.
-  immediate_rewind_timer_->cancel();
+  rewind_scheduler_->cancel();
 
   if (scd_ && scd_->isActive()) {
     RATELIMIT_INFO(std::chrono::seconds(1),
@@ -3942,13 +3934,7 @@ void ClientReadStream::rewind(const std::string& reason) {
                  getDebugInfoStr().c_str());
 
   // Tell storage nodes to rewind and update their blacklist_state.
-
-  // It is possible sendStart() will schedule another rewind so we clear this
-  // flag before calling it in order to not override a possible intent to rewind
-  // again.
-  rewind_scheduled_ = false;
-  rewind_reason_.clear();
-
+  // It is possible sendStart() will schedule another rewind.
   for (auto& it : storage_set_states_) {
     sendStart(it.second.getShardID(), it.second);
   }

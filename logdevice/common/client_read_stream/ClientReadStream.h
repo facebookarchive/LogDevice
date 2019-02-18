@@ -17,6 +17,7 @@
 
 #include "logdevice/common/AdminCommandTable-fwd.h"
 #include "logdevice/common/DataRecordOwnsPayload.h"
+#include "logdevice/common/ExponentialBackoffAdaptiveVariable.h"
 #include "logdevice/common/FailureDomainNodeSet.h"
 #include "logdevice/common/MetaDataLogReader.h"
 #include "logdevice/common/NodeID.h"
@@ -25,6 +26,7 @@
 #include "logdevice/common/ShardID.h"
 #include "logdevice/common/Timer.h"
 #include "logdevice/common/client_read_stream/ClientReadStreamSenderState.h"
+#include "logdevice/common/client_read_stream/RewindScheduler.h"
 #include "logdevice/common/protocol/GAP_Message.h"
 #include "logdevice/common/protocol/START_Message.h"
 #include "logdevice/common/protocol/WINDOW_Message.h"
@@ -1164,7 +1166,7 @@ class ClientReadStream : boost::noncopyable {
   void handleStartPROTONOSUPPORT(ShardID);
 
   /**
-   * Schedule rewinding this stream in the next iteration of the event loop.
+   * Schedule a rewind of this stream.
    */
   void scheduleRewind(std::string reason);
 
@@ -1172,14 +1174,14 @@ class ClientReadStream : boost::noncopyable {
    * @return true if a rewind has been scheduled.
    */
   bool rewindScheduled() const {
-    return rewind_scheduled_;
+    return rewind_scheduler_->isScheduled();
   }
 
   /**
    * Clear buffer_ and ask storage nodes to rewind to next_lsn_to_deliver_
    * by sending them a new START message.
    */
-  void rewind(const std::string& reason);
+  void rewind(std::string reason);
 
   /**
    * Called to set gap state to be FILTERED_OUT from start_lsn to end_lsn.
@@ -1548,12 +1550,21 @@ class ClientReadStream : boost::noncopyable {
   // The timestamp when last record was received by client
   std::chrono::milliseconds last_received_ts_{0};
 
-  // @see scheduleRewind().
-  std::unique_ptr<Timer> immediate_rewind_timer_;
+  // When a rewind is scheduled, how long to wait until it is actually done.
+  // This delay is adaptive. It increases multiplicatively and decreases
+  // linearly over time. This is a protection against too many rewinds which
+  // hurts read amplification.
+  ChronoExponentialBackoffAdaptiveVariable<std::chrono::milliseconds>
+      rewind_timer_delay_{/*initial=*/std::chrono::milliseconds{1},
+                          /*min=*/std::chrono::milliseconds{1},
+                          /*max=*/std::chrono::seconds{10},
+                          /*multiplier=*/2,
+                          /*decrease_rate=*/100,
+                          /*fuzz_factor=*/0};
 
   // @see scheduleRewind().
-  bool rewind_scheduled_ = false;
-  std::string rewind_reason_;
+  std::unique_ptr<RewindScheduler> rewind_scheduler_;
+
   ReadStreamAttributes attrs_ = ReadStreamAttributes();
 
   friend class ClientReadStreamTest;
@@ -1561,6 +1572,7 @@ class ClientReadStream : boost::noncopyable {
   friend class ClientReadStreamSenderState;
   friend class ClientReadersFlowTracer;
   friend class ClientReadStreamConnectionHealth;
+  friend class RewindScheduler;
 };
 
 }} // namespace facebook::logdevice

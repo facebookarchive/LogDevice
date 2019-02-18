@@ -2813,8 +2813,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "detection algorithm. For instance, if set to 3.0, only consider an "
        "outlier a shard that is 300% slower than the others. The required "
        "margin is adaptive and may increase or decrease but will be capped "
-       "at "
-       "a minimum defined by this setting.",
+       "at a minimum defined by this setting.",
        CLIENT,
        SettingsCategory::ReaderFailover);
 
@@ -2823,10 +2822,8 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "0.25",
        nullptr,
        "Rate at which we decrease the required margin when we are "
-       "healthy. "
-       "If the value is 0.25 for instance, we will reduce the required "
-       "margin by"
-       " 0.25 for every second spent reading.",
+       "healthy. If the value is 0.25 for instance, we will reduce the "
+       "required margin by 0.25 for every second spent reading.",
        CLIENT,
        SettingsCategory::ReaderFailover);
 
