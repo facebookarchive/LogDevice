@@ -11,6 +11,7 @@
 #include <folly/compression/Compression.h>
 #include <folly/hash/SpookyHashV2.h>
 
+#include "logdevice/common/ConfigSourceLocationParser.h"
 #include "logdevice/common/configuration/ParsingHelpers.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/settings/SettingsUpdater.h"
@@ -19,7 +20,6 @@
 using namespace facebook::logdevice::configuration;
 namespace facebook { namespace logdevice {
 
-static const char* LOCATION_SCHEME_DELIMITER = ":";
 // This assumes all sources use '/' for path delimiters which won't
 // necessarily be universally true.  Refactor as needed.
 static const char PATH_DELIMITER = '/';
@@ -41,7 +41,7 @@ int TextConfigUpdaterImpl::load(
   config_parser_options_ = options;
 
   std::tie(main_config_state_.source, main_config_state_.path) =
-      parseLocation(location);
+      ConfigSourceLocationParser::parse(sources_, location);
   if (main_config_state_.source == nullptr) {
     err = E::INVALID_PARAM;
     return -1;
@@ -275,41 +275,14 @@ void TextConfigUpdaterImpl::update(bool force_reload_logsconfig) {
 }
 
 std::pair<ConfigSource*, std::string>
-TextConfigUpdaterImpl::parseLocation(const std::string& location) {
-  size_t pos = location.find(LOCATION_SCHEME_DELIMITER);
-  std::string scheme, path;
-  if (pos == std::string::npos) {
-    scheme = "";
-    path = location;
-  } else {
-    scheme = location.substr(0, pos);
-    path = location.substr(pos + strlen(LOCATION_SCHEME_DELIMITER));
-  }
-
-  // Look for an appropriate source
-  for (const auto& source : sources_) {
-    for (const std::string& source_scheme : source->getSchemes()) {
-      if (source_scheme == scheme) {
-        // Success!  This source is registered for the location's scheme.
-        return std::make_pair(source.get(), std::move(path));
-      }
-    }
-  }
-
-  ld_error("Unable to read config \"%s\": no config source is registered "
-           "for scheme \"%s\"",
-           location.c_str(),
-           scheme.c_str());
-  return std::make_pair(nullptr, std::string());
-}
-
-std::pair<ConfigSource*, std::string>
 TextConfigUpdaterImpl::parseMaybeRelativeLocation(const std::string& location,
                                                   ConfigSource* ref_source,
                                                   const std::string& ref_path) {
-  if (location.find(LOCATION_SCHEME_DELIMITER) != std::string::npos) {
+  if (location.find(
+          ConfigSourceLocationParser::kLocationSchemeDelimiter.toString()) !=
+      std::string::npos) {
     // Scheme explicitly specified in location, parse as absolute
-    return parseLocation(location);
+    return ConfigSourceLocationParser::parse(sources_, location);
   }
 
   std::string full_path;
