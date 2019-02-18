@@ -20,8 +20,8 @@ namespace facebook { namespace logdevice {
  * interacts with a class of storage (e.g. files, Zookeeper etc) to fetch
  * config contents as needed.
  *
- * See also `TextConfigUpdater', the class that orchestrates config
- * fetching and parsing; `ConfigSource' instances get registered there.
+ * This is used in `TextConfigUpdater` for fetching ServerConfig and in
+ * `NodesConfigurationInit` to parse server seed.
  */
 class ConfigSource {
  public:
@@ -49,8 +49,10 @@ class ConfigSource {
   };
 
   /**
-   * Invoked by `TextConfigUpdater' to request config text (JSON) to be
-   * fetched.  The `path' parameter does not include the scheme.
+   * Invoked to request config to be fetched. The `path' parameter does not
+   * include the scheme. The fetched data can be in any format depending on the
+   * content of the path and the usecase. For example, for `TextConfigUpdater`
+   * usecase it's usually a plain JSON or a gzipped JSON.
    *
    * If possible, the source should start tracking the path for changes on a
    * separate thread, and invoke `parent_->onAsyncGet()' whenever the config

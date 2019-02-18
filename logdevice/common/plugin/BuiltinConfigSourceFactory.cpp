@@ -8,6 +8,7 @@
 
 #include "logdevice/common/plugin/BuiltinConfigSourceFactory.h"
 
+#include "logdevice/common/DataConfigSource.h"
 #include "logdevice/common/FileConfigSource.h"
 #include "logdevice/common/ServerConfigSource.h"
 #include "logdevice/common/commandline_util_chrono.h"
@@ -26,6 +27,7 @@ operator()(std::shared_ptr<PluginRegistry> plugin_registry) {
           PluginType::ZOOKEEPER_CLIENT_FACTORY);
   std::vector<std::unique_ptr<ConfigSource>> res;
   res.push_back(std::make_unique<FileConfigSource>(settings_));
+  res.push_back(std::make_unique<DataConfigSource>());
   res.push_back(std::make_unique<ZookeeperConfigSource>(
       settings_->zk_config_polling_interval,
       std::move(zookeeper_client_factory)));
