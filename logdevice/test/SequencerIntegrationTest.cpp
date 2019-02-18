@@ -191,6 +191,11 @@ TEST_F(SequencerIntegrationTest, SequencerIsolation) {
     return cluster->getNode(node_idx).sequencerInfo(logid_t(1))["State"] ==
         "UNAVAILABLE";
   });
+
+  auto reply = cluster->getNode(node_idx).upDown(logid_t(1));
+  ASSERT_TRUE(
+      reply.find("Node is isolated. Sequencer activation is suspended\r\n") ==
+      0);
 }
 
 // Creates a cluster consisting of multiple sequencer nodes. Kills a node

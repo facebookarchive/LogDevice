@@ -102,7 +102,8 @@ bool SequencerBackgroundActivator::processOneLog(logid_t log_id,
 
     // Reprovisioning could not be started, but may still be necessary.
     bool should_retry = err == E::FAILED || err == E::NOBUFS ||
-        err == E::TOOMANY || err == E::NOTCONN || err == E::ACCESS;
+        err == E::TOOMANY || err == E::NOTCONN || err == E::ACCESS ||
+        err == E::ISOLATED;
     if (err != E::INPROGRESS && err != E::NOSEQUENCER) {
       RATELIMIT_INFO(std::chrono::seconds(10),
                      2,
@@ -362,7 +363,8 @@ int SequencerBackgroundActivator::reprovisionOrReactivateIfNeeded(
                     E::INPROGRESS,
                     E::FAILED,
                     E::TOOMANY,
-                    E::SYSLIMIT}));
+                    E::SYSLIMIT,
+                    E::ISOLATED}));
     }
     return rv;
   }

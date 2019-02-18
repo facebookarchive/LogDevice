@@ -17,12 +17,14 @@
 #include "logdevice/common/Appender.h"
 #include "logdevice/common/EpochSequencer.h"
 #include "logdevice/common/LogRecoveryRequest.h"
+#include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Sequencer.h"
 #include "logdevice/common/Timer.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/plugin/CommonBuiltinPlugins.h"
 #include "logdevice/common/request_util.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/stats/Stats.h"
@@ -33,6 +35,7 @@ using namespace facebook::logdevice;
 namespace {
 
 class MockAllSequencers;
+struct MockProcessor;
 
 class AllSequencersTest : public ::testing::Test {
  public:
@@ -43,6 +46,7 @@ class AllSequencersTest : public ::testing::Test {
   UpdateableSettings<Settings> updateable_settings_;
   StatsHolder stats_;
   std::shared_ptr<UpdateableConfig> updateable_config_;
+  std::unique_ptr<MockProcessor> processor_;
   std::unique_ptr<AllSequencers> all_seqs_;
 
   struct LogState {
@@ -134,10 +138,28 @@ class MockSequencer : public Sequencer {
   AllSequencersTest* const test_;
 };
 
+struct MockProcessor : public Processor {
+  explicit MockProcessor(AllSequencersTest* test)
+      : Processor(test->updateable_config_,
+                  std::make_shared<NoopTraceLogger>(test->updateable_config_),
+                  test->updateable_settings_,
+                  &test->stats_,
+                  std::make_shared<PluginRegistry>(
+                      createAugmentedCommonBuiltinPluginVector<>())) {}
+
+  ~MockProcessor() override {}
+
+  virtual bool isNodeIsolated() const override {
+    return isNodeIsolated_;
+  }
+
+  bool isNodeIsolated_{false};
+};
+
 class MockAllSequencers : public AllSequencers {
  public:
-  explicit MockAllSequencers(AllSequencersTest* test)
-      : AllSequencers(nullptr,
+  explicit MockAllSequencers(AllSequencersTest* test, MockProcessor* processor)
+      : AllSequencers(processor,
                       test->updateable_config_,
                       test->updateable_settings_),
         test_(test) {}
@@ -241,7 +263,8 @@ void AllSequencersTest::setUp() {
     logs_state_[logid];
   }
 
-  all_seqs_ = std::make_unique<MockAllSequencers>(this);
+  processor_ = std::make_unique<MockProcessor>(this);
+  all_seqs_ = std::make_unique<MockAllSequencers>(this, processor_.get());
 }
 
 TEST_F(AllSequencersTest, ActivateSequencers) {
@@ -344,6 +367,14 @@ TEST_F(AllSequencersTest, ActivateErrors) {
   ASSERT_EQ(Sequencer::State::ACTIVE, seq->getState());
   ASSERT_EQ(epoch_t(3), seq->getCurrentEpoch());
   ASSERT_EQ(1, getLogRecoveries(logid));
+
+  // simualte node is isolated
+  processor_->isNodeIsolated_ = true;
+  rv = all_seqs_->activateSequencer(logid, "test", pred);
+  ASSERT_EQ(-1, rv);
+  ASSERT_EQ(E::ISOLATED, err);
+  processor_->isNodeIsolated_ = false;
+
   // failed synchonrously with pred
   rv = all_seqs_->activateSequencer(
       logid, "test", [](const Sequencer&) { return false; });

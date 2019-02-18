@@ -341,6 +341,7 @@ GET_SEQ_STATE_Message::getSequencer(logid_t datalog_id,
       case E::ABORTED:
         // EXISTS and ABORTED treated as E::OK
         break;
+      case E::ISOLATED:
       case E::NOTFOUND:
       case E::SYSLIMIT:
       case E::NOBUFS:

@@ -1888,6 +1888,10 @@ void Node::startRecovery(logid_t logid) const {
                ", result success\r\nEND\r\n");
 }
 
+std::string Node::upDown(const logid_t logid) const {
+  return sendCommand("up " + std::to_string(logid.val_));
+}
+
 std::map<std::string, std::string> Node::sequencerInfo(logid_t log_id) const {
   const std::string command =
       "info sequencers " + std::to_string(log_id.val_) + " --json";

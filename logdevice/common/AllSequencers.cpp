@@ -115,6 +115,12 @@ int AllSequencers::activateSequencer(
     return -1;
   }
 
+  // if node is isolated we should't activate a sequencer
+  if (processor_->isNodeIsolated()) {
+    err = E::ISOLATED;
+    return -1;
+  }
+
   folly::SharedMutex::UpgradeHolder map_lock(map_mutex_);
   auto it = map_.find(logid.val_);
   if (it != map_.end()) {
@@ -310,6 +316,9 @@ int AllSequencers::activateAllSequencers(std::chrono::milliseconds timeout,
           ld_error("Failed to activate a sequencer for log %lu because maximum "
                    "number of sequencers has been reached",
                    logid.val_);
+          return -1;
+        case E::ISOLATED:
+          ld_error("Node is isolated, sequencer activation is suspended");
           return -1;
         default:
           ld_error(

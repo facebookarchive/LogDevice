@@ -81,6 +81,9 @@ class Up : public AdminCommand {
       case E::SYSLIMIT:
         out_.printf("Sequencer for log %lu is in ERROR state\r\n", logid_);
         break;
+      case E::ISOLATED:
+        out_.printf("Node is isolated. Sequencer activation is suspended\r\n");
+        break;
       default:
         out_.printf("Unexpected status code %s from "
                     "AllSequencers::activateSequencer()\r\n",

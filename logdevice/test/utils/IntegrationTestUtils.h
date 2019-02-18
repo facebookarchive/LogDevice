@@ -1397,6 +1397,13 @@ class Node {
   std::map<std::string, std::string> logState(logid_t log_id) const;
 
   /**
+   * Issues a UP DOWN command to activate a sequencer for a given log_id on a
+   * particular node
+   * Returns a rsponse as a string
+   */
+  std::string upDown(const logid_t log_id) const;
+
+  /**
    * Issues an INFO SEQUENCER command to the node's command port and collects
    * the results in a map.
    * Returns an empty map if there is no sequencer for the log.
