@@ -403,9 +403,7 @@ bool Sender::canSendToImpl(const Address& addr,
 
   Priority p = PriorityMap::fromTrafficClass()[tc];
 
-  // Lock to prevent race between registering for bandwidth and
-  // a bandwidth deposit from the TrafficShaper.
-  std::unique_lock<std::mutex> lock(nw_shaping_container_->flow_meters_mutex_);
+  auto lock = nw_shaping_container_->lock();
   if (!sock->flow_group_.canDrain(p)) {
     sock->flow_group_.push(on_bw_avail, p);
     err = E::CBREGISTERED;
@@ -505,7 +503,7 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
     sock.pushOnCloseCallback(*onclose);
   }
 
-  std::unique_lock<std::mutex> lock(nw_shaping_container_->flow_meters_mutex_);
+  auto lock = nw_shaping_container_->lock();
   if (!injectTrafficShapingEvent(sock.flow_group_, envelope->priority()) &&
       sock.flow_group_.drain(*envelope)) {
     lock.unlock();

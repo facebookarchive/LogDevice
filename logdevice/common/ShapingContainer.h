@@ -83,6 +83,12 @@ class ShapingContainer {
     LD_EV(event_free)(flow_groups_run_deadline_exceeded_);
   }
 
+  // Lock to prevent race between worker threads and TrafficShaper thread
+  // trying to debit/credit bandwidth into FlowGroups
+  std::unique_lock<std::mutex> lock() {
+    return std::unique_lock<std::mutex>(flow_meters_mutex_);
+  }
+
   /**
    * Apply a policy update and bandwidth credit increment to all
    * FlowGroups.
