@@ -20,6 +20,8 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 project(${PACKAGE_NAME} CXX)
 
+option(PORTABLE "build a portable binary" OFF)
+
 enable_testing()
 # gtest_discover_tests was introduced in cmake 3.10
 if(${CMAKE_VERSION} VERSION_EQUAL "3.10" OR ${CMAKE_VERSION} VERSION_GREATER "3.10")
