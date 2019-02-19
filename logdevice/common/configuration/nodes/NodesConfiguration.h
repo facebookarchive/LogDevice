@@ -159,17 +159,29 @@ class NodesConfiguration {
     version_ = version;
   }
 
+  // For testing purposes:
+  //
   // returns a new config with an incremented version and touch the
   // last_change_timestamp_.
   //
-  // @param new_version should either be folly::none, in which case the new
+  // @param new_nc_version should either be folly::none, in which case the new
   // version will be the current version + 1, or be strictly greater than the
   // current version.
   //
-  // @return the new config or nullptr if the new_version is <= current version
+  // @param new_sequencer_membership_version and new_storage_membership_version
+  // work similarly. Note that one can bump the NC version without bumping the
+  // underlying membership versions; however, bumping the membership versions
+  // will also bump the NC version.
+  //
+  // @return the new config or nullptr if (any one of the supplied)
+  // new_version(s) is <= (the corresponding) current version
   std::shared_ptr<const NodesConfiguration> withIncrementedVersionAndTimestamp(
-      folly::Optional<membership::MembershipVersion::Type> new_version =
+      folly::Optional<membership::MembershipVersion::Type> new_nc_version =
           folly::none,
+      folly::Optional<membership::MembershipVersion::Type>
+          new_sequencer_membership_version = folly::none,
+      folly::Optional<membership::MembershipVersion::Type>
+          new_storage_membership_version = folly::none,
       std::string context = "manual touch") const;
 
   std::shared_ptr<const NodesConfiguration>

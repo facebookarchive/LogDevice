@@ -11,6 +11,7 @@
 
 #include "logdevice/common/configuration/nodes/NodeRole.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/membership/types.h"
 #include "logdevice/common/util.h"
 #include "logdevice/include/Err.h"
 
@@ -151,6 +152,17 @@ class PerRoleConfig {
   bool operator==(const PerRoleConfig& rhs) const {
     return compare_obj_ptrs(membership_, rhs.membership_) &&
         compare_obj_ptrs(attributes_, rhs.attributes_);
+  }
+
+  std::shared_ptr<const PerRoleConfig> withIncrementedVersion(
+      folly::Optional<membership::MembershipVersion::Type> new_version) const {
+    ld_check(membership_);
+    auto new_config = std::make_shared<PerRoleConfig>(*this);
+    new_config->membership_ = membership_->withIncrementedVersion(new_version);
+    if (!new_config->membership_) {
+      return nullptr;
+    }
+    return new_config;
   }
 
  private:

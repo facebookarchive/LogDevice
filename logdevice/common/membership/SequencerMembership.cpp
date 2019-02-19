@@ -264,4 +264,17 @@ bool SequencerMembership::operator==(const SequencerMembership& rhs) const {
   return version_ == rhs.getVersion() && node_states_ == rhs.node_states_;
 }
 
+std::shared_ptr<const SequencerMembership>
+SequencerMembership::withIncrementedVersion(
+    folly::Optional<membership::MembershipVersion::Type> new_version) const {
+  auto new_membership = std::make_shared<SequencerMembership>(*this);
+  auto new_membership_version =
+      new_version.value_or(MembershipVersion::Type{version_.val() + 1});
+  if (new_membership_version <= version_) {
+    return nullptr;
+  }
+  new_membership->version_ = new_membership_version;
+  return new_membership;
+}
+
 }}} // namespace facebook::logdevice::membership

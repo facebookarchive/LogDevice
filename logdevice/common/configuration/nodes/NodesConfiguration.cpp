@@ -345,17 +345,44 @@ void NodesConfiguration::recomputeConfigMetadata() {
 
 std::shared_ptr<const NodesConfiguration>
 NodesConfiguration::withIncrementedVersionAndTimestamp(
-    folly::Optional<membership::MembershipVersion::Type> new_version,
+    folly::Optional<membership::MembershipVersion::Type> new_nc_version,
+    folly::Optional<membership::MembershipVersion::Type>
+        new_sequencer_membership_version,
+    folly::Optional<membership::MembershipVersion::Type>
+        new_storage_membership_version,
     std::string context) const {
-  if (new_version.hasValue() && new_version.value() <= version_) {
+  if (new_nc_version.hasValue() && new_nc_version.value() <= version_) {
     return nullptr;
   }
 
   auto new_config = std::make_shared<NodesConfiguration>(*this);
   new_config->touch(std::move(context));
-  if (new_version.hasValue()) {
-    new_config->setVersion(new_version.value());
+  if (new_nc_version.hasValue()) {
+    new_config->setVersion(new_nc_version.value());
   }
+
+  // We also check the invariant that nc_version >=
+  // max(sequencer_config_version, storage_config_version)
+  if (sequencer_config_) {
+    new_config->sequencer_config_ = sequencer_config_->withIncrementedVersion(
+        new_sequencer_membership_version);
+    if (!new_config->sequencer_config_) {
+      return nullptr;
+    }
+    ld_check_ge(new_config->getVersion(),
+                new_config->sequencer_config_->getMembership()->getVersion());
+  }
+
+  if (storage_config_) {
+    new_config->storage_config_ =
+        storage_config_->withIncrementedVersion(new_storage_membership_version);
+    if (!new_config->storage_config_) {
+      return nullptr;
+    }
+    ld_check_ge(new_config->getVersion(),
+                new_config->storage_config_->getMembership()->getVersion());
+  }
+
   return new_config;
 }
 

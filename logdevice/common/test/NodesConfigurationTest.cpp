@@ -396,12 +396,21 @@ TEST_F(NodesConfigurationTest, RoleConflict) {
 TEST_F(NodesConfigurationTest, touch) {
   SystemTimestamp lb = SystemTimestamp::now();
 
-  NodesConfiguration c{};
+  auto ptr = provisionNodes();
+  const auto& c = *ptr;
   ASSERT_TRUE(c.validate());
-  EXPECT_EQ(EMPTY_VERSION, c.getVersion());
-  auto c2 = c.withIncrementedVersionAndTimestamp();
+  auto v1 = c.getVersion();
+  EXPECT_LT(EMPTY_VERSION, v1);
+  auto c2 = c.withIncrementedVersionAndTimestamp(
+      /* new_nc_version = */ MembershipVersion::Type{67},
+      /* new_sequencer_membership_version = */ MembershipVersion::Type{12},
+      /* new_storage_membership_version = */ MembershipVersion::Type{67});
   EXPECT_NE(nullptr, c2);
-  EXPECT_GT(c2->getVersion(), EMPTY_VERSION);
+  EXPECT_EQ(c2->getVersion(), MembershipVersion::Type{67});
+  EXPECT_EQ(
+      MembershipVersion::Type{12}, c2->getSequencerMembership()->getVersion());
+  EXPECT_EQ(
+      MembershipVersion::Type{67}, c2->getStorageMembership()->getVersion());
   SystemTimestamp ub = SystemTimestamp::now();
 
   MembershipVersion::Type new_version{123};
@@ -418,7 +427,19 @@ TEST_F(NodesConfigurationTest, touch) {
   auto now_ts = c3->getLastChangeTimestamp();
   EXPECT_GT(now_ts, prev_ts);
 
+  // if supplied new version is not higher, bump would fail
   auto c4 = c3->withIncrementedVersionAndTimestamp(new_version);
+  EXPECT_EQ(nullptr, c4);
+  c4 = c3->withIncrementedVersionAndTimestamp(
+      /* new_nc_version = */ folly::none,
+      /* new_sequencer_membership_version = */
+      MembershipVersion::EMPTY_VERSION);
+  EXPECT_EQ(nullptr, c4);
+  c4 = c3->withIncrementedVersionAndTimestamp(
+      /* new_nc_version = */ folly::none,
+      /* new_sequencer_membership_version = */ folly::none,
+      /* new_storage_membership_version = */
+      MembershipVersion::Type{67});
   EXPECT_EQ(nullptr, c4);
 }
 

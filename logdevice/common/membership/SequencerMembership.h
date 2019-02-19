@@ -183,6 +183,17 @@ class SequencerMembership : public Membership {
 
   bool operator==(const SequencerMembership& rhs) const;
 
+  // Should only be used for testing.
+  //
+  // returns a new config with an incremented version; or a nullptr if
+  // new_version <= current_version
+  //
+  // @param new_version should either be folly::none, in which case the new
+  // version will be the current version + 1, or be strictly greater than the
+  // current version.
+  std::shared_ptr<const SequencerMembership> withIncrementedVersion(
+      folly::Optional<membership::MembershipVersion::Type> new_version) const;
+
  private:
   MapType node_states_;
 

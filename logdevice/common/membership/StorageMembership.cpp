@@ -687,6 +687,19 @@ bool StorageMembership::operator==(const StorageMembership& rhs) const {
       metadata_shards_ == rhs.metadata_shards_;
 }
 
+std::shared_ptr<const StorageMembership>
+StorageMembership::withIncrementedVersion(
+    folly::Optional<membership::MembershipVersion::Type> new_version) const {
+  auto new_membership = std::make_shared<StorageMembership>(*this);
+  auto new_membership_version =
+      new_version.value_or(MembershipVersion::Type{version_.val() + 1});
+  if (new_membership_version <= version_) {
+    return nullptr;
+  }
+  new_membership->version_ = new_membership_version;
+  return new_membership;
+}
+
 bool StorageMembership::hasShard(ShardID shard) const {
   const auto nit = node_states_.find(shard.node());
   if (nit == node_states_.cend()) {
