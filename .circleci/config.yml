@@ -94,7 +94,7 @@ jobs:
     steps:
       - checkout
       - run: apt-get update
-      - run: apt-get install -y ca-certificates docker.io $(cat logdevice/build_tools/ubuntu.deps)
+      - run: apt-get install -y ca-certificates docker.io
       - run: git reset --hard HEAD
       - attach_workspace:
           at: .
