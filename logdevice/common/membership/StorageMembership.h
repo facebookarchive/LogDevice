@@ -64,6 +64,11 @@ struct ShardState {
       StorageState storage_state;
       StorageStateFlags::Type flags;
       MetaDataStorageState metadata_state;
+
+      bool operator==(const StateOverride& rhs) const {
+        return storage_state == rhs.storage_state && flags == rhs.flags &&
+            metadata_state == rhs.metadata_state;
+      }
     };
 
     // forcefully update the shard state. Used only in the OVERRIDE_STATE
@@ -72,6 +77,12 @@ struct ShardState {
 
     bool isValid() const;
     std::string toString() const;
+
+    bool operator==(const Update& rhs) const {
+      return transition == rhs.transition && conditions == rhs.conditions &&
+          maintenance == rhs.maintenance &&
+          state_override == rhs.state_override;
+    }
   };
 
   // return true if the shard state is a legitimate shard state of
@@ -152,6 +163,11 @@ class StorageMembership : public Membership {
     }
 
     std::string toString() const override;
+
+    bool operator==(const Update& rhs) const {
+      return base_version == rhs.base_version &&
+          shard_updates == rhs.shard_updates;
+    }
   };
 
   /**

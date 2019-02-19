@@ -23,8 +23,8 @@ genDiscovery(node_index_t n,
              std::string location);
 
 // provision a LD nodes config with:
-// 1) four nodes N1, N2, N7, N9
-// 2) N1 and N7 have sequencer role; while N1, N2 and N9 have storage role;
+// 1) nodes N1, N2, N7, N9, N11, N13
+// 2) N1 and N7 have sequencer role; N1, N2, N9, N11, N13 have storage role;
 // 3) N2 and N9 are metadata storage nodes, metadata logs replicaton is
 //    (rack, 2)
 configuration::nodes::NodesConfiguration::Update initialProvisionUpdate();
@@ -32,7 +32,17 @@ configuration::nodes::NodesConfiguration::Update initialProvisionUpdate();
 std::shared_ptr<const configuration::nodes::NodesConfiguration>
 provisionNodes();
 
-// add new node 17
-configuration::nodes::NodesConfiguration::Update addNewNodeUpdate();
+// provision new nodes N17
+configuration::nodes::NodesConfiguration::Update
+addNewNodeUpdate(membership::MembershipVersion::Type base_version =
+                     membership::MembershipVersion::MIN_VERSION);
+
+// start enabling read on N17
+configuration::nodes::NodesConfiguration::Update
+enablingReadUpdate(membership::MembershipVersion::Type base_version);
+
+// start disabling writes on N11 and N13
+configuration::nodes::NodesConfiguration::Update
+disablingWriteUpdate(membership::MembershipVersion::Type base_version);
 
 }} // namespace facebook::logdevice

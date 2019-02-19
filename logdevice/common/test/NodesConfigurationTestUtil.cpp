@@ -20,6 +20,7 @@ const configuration::nodes::NodeServiceDiscovery::RoleSet storage_role{2};
 const configuration::nodes::NodeServiceDiscovery::RoleSet both_role{3};
 
 const membership::MaintenanceID::Type DUMMY_MAINTENANCE{2333};
+const membership::MaintenanceID::Type DUMMY_MAINTENANCE2{2334};
 
 NodeServiceDiscovery genDiscovery(node_index_t n,
                                   RoleSet roles,
@@ -39,16 +40,20 @@ NodeServiceDiscovery genDiscovery(node_index_t n,
 }
 
 NodesConfiguration::Update initialProvisionUpdate() {
-  NodesConfiguration::Update update;
+  NodesConfiguration::Update update{};
 
   // 1. provision service discovery config
   update.service_discovery_update =
       std::make_unique<ServiceDiscoveryConfig::Update>();
 
-  std::map<node_index_t, RoleSet> role_map = {
-      {1, both_role}, {2, storage_role}, {7, seq_role}, {9, storage_role}};
+  std::map<node_index_t, RoleSet> role_map = {{1, both_role},
+                                              {2, storage_role},
+                                              {7, seq_role},
+                                              {9, storage_role},
+                                              {11, storage_role},
+                                              {13, storage_role}};
 
-  for (node_index_t n : NodeSetIndices({1, 2, 7, 9})) {
+  for (node_index_t n : NodeSetIndices({1, 2, 7, 9, 11, 13})) {
     update.service_discovery_update->addNode(
         n,
         ServiceDiscoveryConfig::NodeUpdate{
@@ -87,11 +92,11 @@ NodesConfiguration::Update initialProvisionUpdate() {
   update.storage_config_update->attributes_update =
       std::make_unique<StorageAttributeConfig::Update>();
 
-  for (node_index_t n : NodeSetIndices({1, 2, 9})) {
+  for (node_index_t n : NodeSetIndices({1, 2, 9, 11, 13})) {
     update.storage_config_update->membership_update->addShard(
         ShardID(n, 0),
-        {n == 1 ? StorageStateTransition::PROVISION_SHARD
-                : StorageStateTransition::PROVISION_METADATA_SHARD,
+        {n == 2 || n == 9 ? StorageStateTransition::PROVISION_METADATA_SHARD
+                          : StorageStateTransition::PROVISION_SHARD,
          (Condition::EMPTY_SHARD | Condition::LOCAL_STORE_READABLE |
           Condition::NO_SELF_REPORT_MISSING_DATA |
           Condition::LOCAL_STORE_WRITABLE),
@@ -122,11 +127,6 @@ NodesConfiguration::Update initialProvisionUpdate() {
   return update;
 }
 
-// provision a LD nodes config with:
-// 1) four nodes N1, N2, N7, N9
-// 2) N1 and N7 have sequencer role; while N1, N2 and N9 have storage role;
-// 3) N2 and N9 are metadata storage nodes, metadata logs replicaton is
-//    (rack, 2)
 std::shared_ptr<const configuration::nodes::NodesConfiguration>
 provisionNodes() {
   auto config = std::make_shared<const NodesConfiguration>();
@@ -137,8 +137,9 @@ provisionNodes() {
   return new_config;
 }
 
-NodesConfiguration::Update addNewNodeUpdate() {
-  NodesConfiguration::Update update;
+NodesConfiguration::Update
+addNewNodeUpdate(MembershipVersion::Type base_version) {
+  NodesConfiguration::Update update{};
   update.service_discovery_update =
       std::make_unique<ServiceDiscoveryConfig::Update>();
   update.service_discovery_update->addNode(
@@ -159,8 +160,7 @@ NodesConfiguration::Update addNewNodeUpdate() {
                                 /*generation*/ 1,
                                 /*exclude_from_nodesets*/ false})});
   update.storage_config_update->membership_update =
-      std::make_unique<StorageMembership::Update>(
-          MembershipVersion::MIN_VERSION);
+      std::make_unique<StorageMembership::Update>(base_version);
   update.storage_config_update->membership_update->addShard(
       ShardID(17, 0),
       {StorageStateTransition::ADD_EMPTY_SHARD,
@@ -169,4 +169,41 @@ NodesConfiguration::Update addNewNodeUpdate() {
        /* state_override = */ folly::none});
   return update;
 }
+
+NodesConfiguration::Update
+enablingReadUpdate(MembershipVersion::Type base_version) {
+  NodesConfiguration::Update update{};
+  update.storage_config_update = std::make_unique<StorageConfig::Update>();
+  update.storage_config_update->membership_update =
+      std::make_unique<StorageMembership::Update>(base_version);
+
+  update.storage_config_update->membership_update->addShard(
+      ShardID{17, 0},
+      {StorageStateTransition::ENABLING_READ,
+       Condition::EMPTY_SHARD | Condition::LOCAL_STORE_READABLE |
+           Condition::NO_SELF_REPORT_MISSING_DATA |
+           Condition::CAUGHT_UP_LOCAL_CONFIG,
+       DUMMY_MAINTENANCE2,
+       /* state_override = */ folly::none});
+  return update;
+}
+
+configuration::nodes::NodesConfiguration::Update
+disablingWriteUpdate(membership::MembershipVersion::Type base_version) {
+  NodesConfiguration::Update update{};
+  update.storage_config_update = std::make_unique<StorageConfig::Update>();
+  update.storage_config_update->membership_update =
+      std::make_unique<StorageMembership::Update>(base_version);
+
+  for (node_index_t n : NodeSetIndices({11, 13})) {
+    update.storage_config_update->membership_update->addShard(
+        ShardID{n, 0},
+        {StorageStateTransition::DISABLING_WRITE,
+         Condition::WRITE_AVAILABILITY_CHECK | Condition::CAPACITY_CHECK,
+         DUMMY_MAINTENANCE2,
+         /* state_override = */ folly::none});
+  }
+  return update;
+}
+
 }} // namespace facebook::logdevice

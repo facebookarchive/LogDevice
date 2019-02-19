@@ -146,7 +146,7 @@ TEST_F(NodesConfigurationTest, ProvisionBasic) {
   for (node_index_t n : *storage_membership) {
     storage_nodes.insert(n);
   }
-  EXPECT_EQ(std::set<node_index_t>({1, 2, 9}), storage_nodes);
+  EXPECT_EQ(std::set<node_index_t>({1, 2, 9, 11, 13}), storage_nodes);
 
   // check for metadata nodeset and replication properties
   auto metadata_rep = config->getMetaDataLogsReplication();
