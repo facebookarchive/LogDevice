@@ -22,7 +22,7 @@ include(ExternalProject)
 ExternalProject_Add(rocksdb
     SOURCE_DIR "${ROCKSDB_ROOT_DIR}"
     DOWNLOAD_COMMAND ""
-    CMAKE_ARGS -DUSE_RTTI=1
+    CMAKE_ARGS -DUSE_RTTI=1 -DPORTABLE=${PORTABLE}
     INSTALL_COMMAND ""
     )
 
