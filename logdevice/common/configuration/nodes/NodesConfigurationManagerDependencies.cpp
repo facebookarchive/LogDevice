@@ -11,9 +11,13 @@
 #include <folly/Conv.h>
 #include <folly/json.h>
 
+#include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationCodecFlatBuffers.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationManager.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/stats/ClientHistograms.h"
+#include "logdevice/common/stats/ServerHistograms.h"
+#include "logdevice/common/stats/Stats.h"
 
 using namespace facebook::logdevice::membership;
 
@@ -246,6 +250,28 @@ void Dependencies::readFromStoreAndActivateTimer() {
 
   // TODO: make this interval configurable
   timer_->activate(std::chrono::seconds(3));
+}
+
+StatsHolder* FOLLY_NULLABLE Dependencies::getStats() {
+  if (Worker::onThisThread(false)) {
+    return Worker::stats();
+  } else {
+    return nullptr;
+  }
+}
+
+void Dependencies::reportPropagationLatency(
+    const std::shared_ptr<const NodesConfiguration>& config) {
+  auto propagation_latency = msec_since(config->getLastChangeTimestamp());
+  if (processor_->settings()->server) {
+    HISTOGRAM_ADD(getStats(),
+                  nodes_config_manager_propagation_latency,
+                  propagation_latency);
+  } else {
+    CLIENT_HISTOGRAM_ADD(getStats(),
+                         nodes_config_manager_propagation_latency,
+                         propagation_latency);
+  }
 }
 
 }}}}} // namespace facebook::logdevice::configuration::nodes::ncm

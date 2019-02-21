@@ -12,6 +12,7 @@
 #include "logdevice/common/configuration/nodes/NodesConfigurationCodecFlatBuffers.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/request_util.h"
+#include "logdevice/common/stats/Stats.h"
 
 using namespace facebook::logdevice::membership;
 
@@ -157,7 +158,7 @@ void NodesConfigurationManager::update(
     callback(E::ACCESS, nullptr);
     return;
   }
-
+  STAT_INCR(deps_->getStats(), nodes_config_manager_updates_requested);
   std::unique_ptr<Request> req = deps()->makeNCMRequest<ncm::UpdateRequest>(
       std::move(updates), std::move(callback));
   deps()->processor_->postWithRetrying(req);
@@ -172,12 +173,14 @@ void NodesConfigurationManager::overwrite(
     return;
   }
 
+  STAT_INCR(deps_->getStats(), nodes_config_manager_overwrites_requested);
   deps()->overwrite(std::move(configuration), std::move(callback));
 }
 
 void NodesConfigurationManager::initOnNCM() {
   deps_->dcheckOnNCM();
   startPollingFromStore();
+  STAT_SET(deps_->getStats(), nodes_config_manager_started, 1);
 }
 
 void NodesConfigurationManager::startPollingFromStore() {
@@ -186,11 +189,13 @@ void NodesConfigurationManager::startPollingFromStore() {
 
 void NodesConfigurationManager::onNewConfig(std::string new_config) {
   deps_->dcheckOnNCM();
+  STAT_INCR(deps_->getStats(), nodes_config_manager_config_received);
 
   auto new_version_opt =
       NodesConfigurationCodecFlatBuffers::extractConfigVersion(new_config);
   if (!new_version_opt) {
     // Invalid serialized blob.
+    STAT_INCR(deps()->getStats(), nodes_config_manager_serialization_errors);
     err = E::BADMSG;
     return;
   }
@@ -203,10 +208,10 @@ void NodesConfigurationManager::onNewConfig(std::string new_config) {
       NodesConfigurationCodecFlatBuffers::deserialize(new_config);
   if (!parsed_config_ptr) {
     // err is set by deserialize()
-    // TODO: Add and bump stats for deserialization error
+    STAT_INCR(deps()->getStats(), nodes_config_manager_serialization_errors);
     return;
   }
-
+  deps_->reportPropagationLatency(parsed_config_ptr);
   onNewConfig(std::move(parsed_config_ptr));
 }
 
@@ -223,6 +228,9 @@ void NodesConfigurationManager::onNewConfig(
   }
   // Incoming config has a higher version, use it as the staged config
   staged_nodes_config_ = std::move(new_config);
+  STAT_SET(deps_->getStats(),
+           nodes_config_manager_staged_version,
+           staged_nodes_config_->getVersion().val());
   maybeProcessStagedConfig();
 }
 
@@ -350,6 +358,9 @@ void NodesConfigurationManager::maybeProcessStagedConfig() {
 
   // process the staged one now.
   pending_nodes_config_ = std::move(staged_nodes_config_);
+  STAT_SET(deps_->getStats(),
+           nodes_config_manager_pending_version,
+           pending_nodes_config_->getVersion().val());
   auto futures = fulfill_on_all_workers<folly::Unit>(
       deps_->processor_,
       [config = pending_nodes_config_](folly::Promise<folly::Unit> p) {
@@ -407,6 +418,10 @@ void NodesConfigurationManager::onProcessingFinished(
   // Only the NCM thread is allowed to update local_nodes_config_
   local_nodes_config_.update(std::move(pending_nodes_config_));
   ld_info("Updated local nodes config to version %lu...", new_version.val());
+  STAT_INCR(deps_->getStats(), nodes_config_manager_config_published);
+  STAT_SET(deps_->getStats(),
+           nodes_config_manager_published_version,
+           local_nodes_config_.get()->getVersion().val());
 
   maybeProcessStagedConfig();
 }

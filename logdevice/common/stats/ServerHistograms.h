@@ -43,6 +43,8 @@ struct ServerHistograms : public HistogramBundle {
         {"logsconfig_manager_delta_apply_latency",
          &logsconfig_manager_delta_apply_latency},
         {"background_thread_duration", &background_thread_duration},
+        {"nodes_config_manager_propagation_latency",
+         &nodes_config_manager_propagation_latency},
 #define REQUEST_TYPE(name)              \
   {"request_execution_duration." #name, \
    &request_execution_duration[int(RequestType::name)]},
@@ -112,6 +114,10 @@ struct ServerHistograms : public HistogramBundle {
   LatencyHistogram logsconfig_manager_delta_apply_latency;
 
   LatencyHistogram background_thread_duration;
+
+  // How long did it take between when the config is published and when it
+  // was received on the server in msec.
+  LatencyHistogram nodes_config_manager_propagation_latency;
 
   std::array<LatencyHistogram, static_cast<int>(RequestType::MAX)>
       request_execution_duration;

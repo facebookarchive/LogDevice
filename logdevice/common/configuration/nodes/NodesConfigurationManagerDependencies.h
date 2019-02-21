@@ -173,6 +173,10 @@ class Dependencies {
   bool shouldDoConsistentConfigFetch();
   void readFromStoreAndActivateTimer();
 
+  StatsHolder* getStats();
+  void
+  reportPropagationLatency(const std::shared_ptr<const NodesConfiguration>&);
+
   NCMWeakPtr ncm_{};
   // Worker / thread pinning in the current work execution model
   Processor* processor_{nullptr};
