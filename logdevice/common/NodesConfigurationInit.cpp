@@ -8,6 +8,7 @@
 
 #include "logdevice/common/NodesConfigurationInit.h"
 
+#include "logdevice/common/ConfigSourceLocationParser.h"
 #include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/configuration/Node.h"
@@ -21,10 +22,16 @@ namespace facebook { namespace logdevice {
 
 bool NodesConfigurationInit::init(
     std::shared_ptr<UpdateableNodesConfiguration> nodes_configuration_config,
+    std::shared_ptr<PluginRegistry> plugin_registry,
     const std::string& server_seed_str) {
   ld_info("Trying to fetch the NodesConfiguration using the server seed: %s",
           server_seed_str.c_str());
-  auto host_list = parseAndFetchHostList(server_seed_str);
+  std::vector<std::string> host_list;
+  auto success =
+      parseAndFetchHostList(plugin_registry, server_seed_str, &host_list);
+  if (!success) {
+    return false;
+  }
   if (host_list.empty()) {
     ld_error(
         "There are no seed servers to bootstrap the nodes configuration from");
@@ -66,11 +73,62 @@ bool NodesConfigurationInit::init(
   return promise.getSemiFuture().get();
 }
 
-std::vector<std::string> NodesConfigurationInit::parseAndFetchHostList(
-    const std::string& server_seed) const {
-  std::vector<std::string> hosts;
-  folly::split(",", server_seed, hosts);
-  return hosts;
+bool NodesConfigurationInit::parseAndFetchHostList(
+    std::shared_ptr<PluginRegistry> plugin_registry,
+    const std::string& server_seed,
+    std::vector<std::string>* addrs) const {
+  // Get all the config sources
+  // TODO(T40741918): Only create the sources matching the seed's scheme.
+  std::vector<std::unique_ptr<ConfigSource>> sources;
+  auto factories = plugin_registry->getMultiPlugin<ConfigSourceFactory>(
+      PluginType::CONFIG_SOURCE_FACTORY);
+  for (const auto& f : factories) {
+    std::vector<std::unique_ptr<ConfigSource>> srcs = (*f)(plugin_registry);
+    for (auto& src : srcs) {
+      sources.push_back(std::move(src));
+    }
+  }
+
+  // Determine which ConfigSource to use.
+  auto src = ConfigSourceLocationParser::parse(sources, server_seed);
+  if (src.first == nullptr) {
+    return false;
+  }
+  auto& source = src.first;
+  auto& path = src.second;
+
+  // Prepare the async callback in case the config is not ready immediately.
+  folly::Promise<std::pair<Status, ConfigSource::Output>> promise;
+  HostListFetchCallback::hostlist_cb_t cb = [&](Status status,
+                                                ConfigSource::Output out) {
+    promise.setValue(std::make_pair(status, out));
+  };
+  HostListFetchCallback host_cb;
+  host_cb.cb_ = std::move(cb);
+  source->setAsyncCallback(&host_cb);
+
+  // Fetch the host list
+  std::string config_str;
+  ConfigSource::Output out;
+  auto status = source->getConfig(path, &out);
+  if (status == Status::NOTREADY) {
+    // Block waiting for it.
+    std::tie(status, out) = promise.getSemiFuture().get();
+  }
+
+  if (status == Status::OK) {
+    config_str = out.contents;
+  } else {
+    ld_error("Failed to fetch the host list with Status: %s",
+             error_description(status));
+    return false;
+  }
+
+  ld_info(
+      "Using %s as the NodesConfiguration servers seed", config_str.c_str());
+
+  folly::split(",", config_str, *addrs);
+  return true;
 }
 
 std::shared_ptr<UpdateableConfig>

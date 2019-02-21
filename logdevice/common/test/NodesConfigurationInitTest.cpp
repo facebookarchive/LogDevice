@@ -70,7 +70,8 @@ TEST(NodesConfigurationInitTest, InitTest) {
 
   MockNodesConfigurationInit init(std::move(store));
   auto fetched_node_config = std::make_shared<UpdateableNodesConfiguration>();
-  int success = init.init(fetched_node_config, "10.0.0.2:4440");
+  int success = init.init(
+      fetched_node_config, make_test_plugin_registry(), "data:10.0.0.2:4440");
   EXPECT_TRUE(success);
   ASSERT_NE(nullptr, fetched_node_config->get());
   EXPECT_EQ(vcs_config_version_t(2), fetched_node_config->get()->getVersion());

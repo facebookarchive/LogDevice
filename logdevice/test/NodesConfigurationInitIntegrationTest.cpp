@@ -38,7 +38,7 @@ TEST_F(NodesConfigurationInitIntegrationTest, SuccessScenario) {
 
   {
     // With NCM client bootstrapping
-    auto seed_addr = get_protocol_addr(0);
+    auto seed_addr = "data:" + get_protocol_addr(0);
     auto settings = std::unique_ptr<ClientSettings>(ClientSettings::create());
     settings->set("nodes-configuration-seed-servers", seed_addr);
 
@@ -59,7 +59,8 @@ TEST_F(NodesConfigurationInitIntegrationTest, SeedDown) {
   auto cluster = buildCluster();
   cluster->shutdownNodes({0});
 
-  auto seed_addr = cluster->getNode(0).addrs_.protocol_addr_.toString();
+  auto seed_addr =
+      "data:" + cluster->getNode(0).addrs_.protocol_addr_.toString();
   auto settings = std::unique_ptr<ClientSettings>(ClientSettings::create());
   settings->set("nodes-configuration-seed-servers", seed_addr);
 

@@ -7,9 +7,11 @@
  */
 #pragma once
 
+#include "logdevice/common/ConfigSource.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationStore.h"
+#include "logdevice/common/plugin/PluginRegistry.h"
 #include "logdevice/common/settings/Settings.h"
 
 namespace facebook { namespace logdevice {
@@ -24,6 +26,19 @@ class Processor;
  * it initializes its own dummy processor to fetch the configuration.
  */
 class NodesConfigurationInit {
+  struct HostListFetchCallback : public ConfigSource::AsyncCallback {
+    using hostlist_cb_t = folly::Function<void(Status, ConfigSource::Output)>;
+
+    virtual void onAsyncGet(ConfigSource* /* source */,
+                            const std::string& /* path */,
+                            Status status,
+                            ConfigSource::Output output) override {
+      cb_(status, std::move(output));
+    }
+
+    hostlist_cb_t cb_;
+  };
+
  public:
   explicit NodesConfigurationInit(
       std::shared_ptr<configuration::nodes::NodesConfigurationStore> store)
@@ -49,6 +64,7 @@ class NodesConfigurationInit {
    */
   bool
   init(std::shared_ptr<UpdateableNodesConfiguration> nodes_configuration_config,
+       std::shared_ptr<PluginRegistry> plugin_registry,
        const std::string& server_seed_str);
 
  protected:
@@ -58,11 +74,11 @@ class NodesConfigurationInit {
   // Used by the unit tests to inject extra settings to the created processor
   virtual void injectExtraSettings(Settings&) const {}
 
- private:
-  // Takes a comma separated list of host/port pair and splits them.
-  // TODO Support differet seeds (e.g. SMC) using plugins.
-  std::vector<std::string> parseAndFetchHostList(const std::string& seed) const;
+  bool parseAndFetchHostList(std::shared_ptr<PluginRegistry> plugin_registry,
+                             const std::string& seed,
+                             std::vector<std::string>* addrs) const;
 
+ private:
   std::shared_ptr<Processor>
   buildDummyProcessor(std::shared_ptr<UpdateableConfig> config) const;
 

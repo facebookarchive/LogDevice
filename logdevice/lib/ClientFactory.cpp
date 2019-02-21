@@ -185,8 +185,9 @@ std::shared_ptr<Client> ClientFactory::create(std::string config_url) noexcept {
             *config->get(), *impl_settings->getSettings().get());
 
     NodesConfigurationInit nodes_cfg_init(std::move(server_nodes_cfg_store));
-    int success = nodes_cfg_init.init(
-        config->updateableNodesConfiguration(), nodes_configuration_seed);
+    int success = nodes_cfg_init.init(config->updateableNodesConfiguration(),
+                                      plugin_registry,
+                                      nodes_configuration_seed);
     if (!success) {
       return nullptr;
     }
