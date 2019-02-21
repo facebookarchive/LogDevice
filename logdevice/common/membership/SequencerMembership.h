@@ -45,11 +45,11 @@ struct SequencerNodeState {
    * sequencers for relative to other nodes in the cluster.  A value of
    * zero means sequencing is disabled on this node.
    */
-  double weight;
+  double weight{0.0};
 
   // identifier for the maintenance event that correspond to the
   // current node state. Used by the maintenance state machine
-  MaintenanceID::Type active_maintenance;
+  MaintenanceID::Type active_maintenance{MaintenanceID::MAINTENANCE_NONE};
 
   std::string toString() const;
 
@@ -65,13 +65,14 @@ struct SequencerNodeState {
 
   // Describe the update that can apply to SequencerNodeState
   struct Update {
-    SequencerMembershipTransition transition;
+    SequencerMembershipTransition transition{
+        SequencerMembershipTransition::Count};
 
     // set the weight for adding new node or resetting an existing node
-    double weight;
+    double weight{0.0};
 
     // identifier for the new maintenance requesting the state transition
-    MaintenanceID::Type maintenance;
+    MaintenanceID::Type maintenance{MaintenanceID::MAINTENANCE_NONE};
 
     bool isValid() const;
     std::string toString() const;
@@ -86,10 +87,10 @@ class SequencerMembership : public Membership {
 
     // each sequencer membership update is strictly conditioned on a base
     // membership version of which the update can only be applied
-    MembershipVersion::Type base_version;
+    MembershipVersion::Type base_version{MembershipVersion::EMPTY_VERSION};
 
     // a batch of per-node updates
-    NodeMap node_updates;
+    NodeMap node_updates{};
 
     int addNode(node_index_t node, SequencerNodeState::Update update) {
       auto res = node_updates.emplace(node, std::move(update));
@@ -195,7 +196,7 @@ class SequencerMembership : public Membership {
       folly::Optional<membership::MembershipVersion::Type> new_version) const;
 
  private:
-  MapType node_states_;
+  MapType node_states_{};
 
   // update the sequencer node state of the given node; If _node_ doesn't exist
   // in membership, create an entry for it.

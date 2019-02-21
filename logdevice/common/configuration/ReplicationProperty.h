@@ -26,8 +26,8 @@ class ReplicationProperty {
   using ScopeReplication = std::pair<NodeLocationScope, int>;
 
   struct OldRepresentation {
-    copyset_size_t replication_factor;
-    NodeLocationScope sync_replication_scope;
+    copyset_size_t replication_factor{};
+    NodeLocationScope sync_replication_scope{NodeLocationScope::INVALID};
 
     OldRepresentation() = default;
     OldRepresentation(copyset_size_t r, NodeLocationScope s)

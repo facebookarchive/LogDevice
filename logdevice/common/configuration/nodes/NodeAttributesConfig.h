@@ -26,8 +26,8 @@ class NodeAttributesConfig {
   enum class UpdateType { PROVISION = 0, REMOVE, RESET };
 
   struct NodeUpdate {
-    UpdateType transition;
-    std::unique_ptr<Attributes> attributes;
+    UpdateType transition{};
+    std::unique_ptr<Attributes> attributes{nullptr};
 
     bool isValid() const;
   };
@@ -87,7 +87,7 @@ class NodeAttributesConfig {
   }
 
  private:
-  MapType node_states_;
+  MapType node_states_{};
 
   void setNodeAttributes(node_index_t node, Attributes state);
   bool eraseNodeAttribute(node_index_t node);

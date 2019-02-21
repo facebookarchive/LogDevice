@@ -27,8 +27,8 @@ struct NodeServiceDiscovery {
   /**
    * The IP (v4 or v6) address, including port number.
    */
-  Sockaddr address;
-  Sockaddr gossip_address;
+  Sockaddr address{};
+  Sockaddr gossip_address{};
 
   /**
    * The IP (v4 or v6) address, including port number, for SSL communication.
@@ -36,24 +36,24 @@ struct NodeServiceDiscovery {
    * port. We need both address and ssl_address, so the server could serve
    * both non-SSL and SSL clients.
    */
-  folly::Optional<Sockaddr> ssl_address;
+  folly::Optional<Sockaddr> ssl_address{};
 
   /**
    * Location information of the node.
    */
-  folly::Optional<NodeLocation> location;
+  folly::Optional<NodeLocation> location{};
 
   /**
    * Bitmap storing node roles
    */
-  RoleSet roles;
+  RoleSet roles{};
 
   /**
    * A hostname string for the node. Currently we require it to be immutable.
    * Currently logdeviced doesn't use it but some tooling does so we set it in
    * prod. But this can be omitted (as an empty string) in tests.
    */
-  std::string hostname;
+  std::string hostname{};
 
   bool hasRole(NodeRole role) const {
     auto id = static_cast<size_t>(role);

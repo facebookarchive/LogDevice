@@ -45,13 +45,16 @@ namespace nodes {
 class NodesConfiguration {
  public:
   struct Update {
-    std::unique_ptr<ServiceDiscoveryConfig::Update> service_discovery_update;
-    std::unique_ptr<SequencerConfig::Update> sequencer_config_update;
-    std::unique_ptr<StorageConfig::Update> storage_config_update;
-    std::unique_ptr<MetaDataLogsReplication::Update> metadata_logs_rep_update;
+    std::unique_ptr<ServiceDiscoveryConfig::Update> service_discovery_update{
+        nullptr};
+    std::unique_ptr<SequencerConfig::Update> sequencer_config_update{nullptr};
+    std::unique_ptr<StorageConfig::Update> storage_config_update{nullptr};
+    std::unique_ptr<MetaDataLogsReplication::Update> metadata_logs_rep_update{
+        nullptr};
 
-    membership::MaintenanceID::Type maintenance;
-    std::string context;
+    membership::MaintenanceID::Type maintenance{
+        membership::MaintenanceID::MAINTENANCE_NONE};
+    std::string context{};
 
     bool isValid() const;
     bool hasAllUpdates() const;
@@ -193,36 +196,38 @@ class NodesConfiguration {
   bool equalWithTimestampIgnored(const NodesConfiguration& rhs) const;
 
  private:
-  std::shared_ptr<const ServiceDiscoveryConfig> service_discovery_;
-  std::shared_ptr<const SequencerConfig> sequencer_config_;
-  std::shared_ptr<const StorageConfig> storage_config_;
-  std::shared_ptr<const MetaDataLogsReplication> metadata_logs_rep_;
+  std::shared_ptr<const ServiceDiscoveryConfig> service_discovery_{nullptr};
+  std::shared_ptr<const SequencerConfig> sequencer_config_{nullptr};
+  std::shared_ptr<const StorageConfig> storage_config_{nullptr};
+  std::shared_ptr<const MetaDataLogsReplication> metadata_logs_rep_{nullptr};
 
   ///// configuration metadata
 
   // provide a total order of config updates. However, we do not use this
   // version for synchronoization or any correctness purpose. Instead we use the
   // version in Membership for each role
-  membership::MembershipVersion::Type version_;
-  uint64_t storage_hash_;
+  membership::MembershipVersion::Type version_{
+      membership::MembershipVersion::EMPTY_VERSION};
+  uint64_t storage_hash_{};
 
   // TODO(T15517759): NodesConfigParser currently verifies that all nodes in the
   // config have the same amount of shards, which is also stored here. This
   // member will be removed when the Flexible Log Sharding project is fully
   // implemented. In the mean time, this member is used by state machines that
   // need to convert node_index_t values to ShardID values.
-  shard_size_t num_shards_;
-  node_index_t max_node_index_;
+  shard_size_t num_shards_{};
+  node_index_t max_node_index_{};
 
   // mapping from node address to the index
   // TODO(T33035439): get rid of this on config sync revamp
-  std::unordered_map<Sockaddr, node_index_t, Sockaddr::Hash> addr_to_index_;
+  std::unordered_map<Sockaddr, node_index_t, Sockaddr::Hash> addr_to_index_{};
 
   // Unix timestamp in milliseconds.
-  uint64_t last_change_timestamp_;
+  uint64_t last_change_timestamp_{0};
 
-  membership::MaintenanceID::Type last_maintenance_;
-  std::string last_change_context_;
+  membership::MaintenanceID::Type last_maintenance_{
+      membership::MaintenanceID::MAINTENANCE_NONE};
+  std::string last_change_context_{};
 
   uint64_t computeStorageNodesHash() const;
   shard_size_t computeNumShards() const;

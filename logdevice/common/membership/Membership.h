@@ -87,7 +87,7 @@ class Membership {
   }
 
  protected:
-  MembershipVersion::Type version_;
+  MembershipVersion::Type version_{MembershipVersion::EMPTY_VERSION};
 
   friend class configuration::nodes::NodesConfigLegacyConverter;
   friend class MembershipCodecFlatBuffers;

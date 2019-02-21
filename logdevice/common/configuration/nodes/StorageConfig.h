@@ -20,12 +20,12 @@ struct StorageNodeAttribute {
    * A positive value indicating how much store traffic this node will
    * receive relative to other nodes in the cluster.
    */
-  double capacity;
+  double capacity{0.0};
 
   /**
    * Number of storage shards on this node.
    */
-  shard_size_t num_shards;
+  shard_size_t num_shards{};
 
   /**
    * Generation number of this slot.  Hosts in a cluster are uniquely
@@ -42,7 +42,7 @@ struct StorageNodeAttribute {
    * generation should only be used in storage node replacement. For nodes
    * w/o a storage role, their generation should always be set to 1.
    */
-  node_gen_t generation;
+  node_gen_t generation{};
 
   /**
    * If true, the node will not be selected into any newly generated nodesets

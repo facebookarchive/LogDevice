@@ -118,7 +118,7 @@ TEST_F(SequencerMembershipTest, EmptySequencerMembershipValid) {
 }
 
 TEST_F(SequencerMembershipTest, NodeLifeCycle) {
-  SequencerMembership m;
+  SequencerMembership m{};
   // add one node N1 with weight 0.5
   int rv =
       m.applyUpdate(genUpdateOneNode(node_index_t(1),
@@ -171,7 +171,7 @@ TEST_F(SequencerMembershipTest, NodeLifeCycle) {
 
 // test various invalid transitions
 TEST_F(SequencerMembershipTest, InvalidTransitions) {
-  SequencerMembership m;
+  SequencerMembership m{};
   int rv;
   // add one node N1
   rv = m.applyUpdate(genUpdateOneNode(node_index_t(1),
@@ -221,12 +221,12 @@ TEST_F(SequencerMembershipTest, InvalidTransitions) {
 
 TEST_F(SequencerMembershipTest, CodecEmptyMembership) {
   // serialize and deserialize an empty membership
-  SequencerMembership m;
+  SequencerMembership m{};
   checkCodecSerialization(m);
 }
 
 TEST_F(SequencerMembershipTest, CodecBasic) {
-  SequencerMembership m;
+  SequencerMembership m{};
   int rv;
   rv = m.applyUpdate(
       genUpdateNodes({node_index_t(5), node_index_t(6), node_index_t(7)},

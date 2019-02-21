@@ -16,8 +16,9 @@ namespace nodes {
 class MetaDataLogsReplication {
  public:
   struct Update {
-    membership::MembershipVersion::Type base_version;
-    ReplicationProperty replication;
+    membership::MembershipVersion::Type base_version{
+        membership::MembershipVersion::EMPTY_VERSION};
+    ReplicationProperty replication{};
     explicit Update(membership::MembershipVersion::Type base)
         : base_version(base), replication() {}
     bool isValid() const;
@@ -43,8 +44,9 @@ class MetaDataLogsReplication {
   }
 
  private:
-  membership::MembershipVersion::Type version_;
-  ReplicationProperty replication_;
+  membership::MembershipVersion::Type version_{
+      membership::MembershipVersion::EMPTY_VERSION};
+  ReplicationProperty replication_{};
 
   friend class NodesConfigLegacyConverter;
   friend class NodesConfigurationCodecFlatBuffers;

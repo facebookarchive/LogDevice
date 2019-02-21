@@ -165,7 +165,7 @@ TEST_F(NodesConfigurationTest, ProvisionBasic) {
 TEST_F(NodesConfigurationTest, ChangingServiceDiscoveryAfterProvision) {
   auto config = provisionNodes();
   ASSERT_TRUE(config->validate());
-  NodesConfiguration::Update update;
+  NodesConfiguration::Update update{};
 
   // resetting the service discovery for node 2
   update.service_discovery_update =
@@ -199,7 +199,7 @@ TEST_F(NodesConfigurationTest, RemovingServiceDiscovery) {
   auto config = provisionNodes();
   ASSERT_TRUE(config->validate());
   {
-    NodesConfiguration::Update update;
+    NodesConfiguration::Update update{};
     // remove service discovery for a node that doesn't exist
     update.service_discovery_update =
         std::make_unique<ServiceDiscoveryConfig::Update>();
@@ -213,7 +213,7 @@ TEST_F(NodesConfigurationTest, RemovingServiceDiscovery) {
   }
   // remove service discovery for a node still in membership
   for (node_index_t n : NodeSetIndices({1, 7, 9})) {
-    NodesConfiguration::Update update;
+    NodesConfiguration::Update update{};
     update.service_discovery_update =
         std::make_unique<ServiceDiscoveryConfig::Update>();
     update.service_discovery_update->addNode(
@@ -227,7 +227,7 @@ TEST_F(NodesConfigurationTest, RemovingServiceDiscovery) {
   // remove N7 from sequencer membership, then it should be OK
   // to remove its service discovery info
   {
-    NodesConfiguration::Update update;
+    NodesConfiguration::Update update{};
     // remove service discovery for a node that doesn't exist
     update.service_discovery_update =
         std::make_unique<ServiceDiscoveryConfig::Update>();
@@ -253,7 +253,7 @@ TEST_F(NodesConfigurationTest, RemovingServiceDiscovery) {
 TEST_F(NodesConfigurationTest, ChangingAttributes) {
   auto config = provisionNodes();
   ASSERT_TRUE(config->validate());
-  NodesConfiguration::Update update;
+  NodesConfiguration::Update update{};
 
   // resetting the node attributes for node 2
   update.storage_config_update = std::make_unique<StorageConfig::Update>();
@@ -282,7 +282,7 @@ TEST_F(NodesConfigurationTest, AddingNodeWithoutServiceDiscoveryOrAttribute) {
   auto config = provisionNodes();
   ASSERT_TRUE(config->validate());
   {
-    NodesConfiguration::Update update;
+    NodesConfiguration::Update update{};
     update.storage_config_update = std::make_unique<StorageConfig::Update>();
     update.storage_config_update->membership_update =
         std::make_unique<StorageMembership::Update>(
@@ -299,7 +299,7 @@ TEST_F(NodesConfigurationTest, AddingNodeWithoutServiceDiscoveryOrAttribute) {
   {
     // with service discovery added but not attributes, membership addition
     // should still fail
-    NodesConfiguration::Update update;
+    NodesConfiguration::Update update{};
     update.service_discovery_update =
         std::make_unique<ServiceDiscoveryConfig::Update>();
     update.service_discovery_update->addNode(
@@ -340,7 +340,7 @@ TEST_F(NodesConfigurationTest, RoleConflict) {
   {
     // node 7 is provisioned to be sequencer-only. try adding it to the storage
     // membership with attribute provided.
-    NodesConfiguration::Update update;
+    NodesConfiguration::Update update{};
     update.storage_config_update = std::make_unique<StorageConfig::Update>();
     update.storage_config_update->membership_update =
         std::make_unique<StorageMembership::Update>(
@@ -367,7 +367,7 @@ TEST_F(NodesConfigurationTest, RoleConflict) {
   {
     // node 2 is provisioned to be storage-only. try adding it to the sequencer
     // membership.
-    NodesConfiguration::Update update;
+    NodesConfiguration::Update update{};
     update.sequencer_config_update =
         std::make_unique<SequencerConfig::Update>();
     update.sequencer_config_update->membership_update =

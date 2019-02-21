@@ -184,7 +184,7 @@ TEST_F(StorageMembershipTest, EmptyStorageMembershipValid) {
 
 // go through the life cycle of a shard with all successful transitions
 TEST_F(StorageMembershipTest, ShardLifeCycle) {
-  StorageMembership m;
+  StorageMembership m{};
   // add one empty shard N1
   int rv =
       m.applyUpdate(genUpdateOneShard(N1,
@@ -387,7 +387,7 @@ TEST_F(StorageMembershipTest, ShardLifeCycle) {
 
 // test various invalid transitions
 TEST_F(StorageMembershipTest, InvalidTransitions) {
-  StorageMembership m;
+  StorageMembership m{};
   int rv;
   // add one empty shard N1
   rv = m.applyUpdate(genUpdateOneShard(N1,
@@ -459,7 +459,7 @@ TEST_F(StorageMembershipTest, InvalidTransitions) {
 
 // test that the force flag can override condition checks
 TEST_F(StorageMembershipTest, ForceFlag) {
-  StorageMembership m;
+  StorageMembership m{};
   int rv;
   // add one empty shard N1
   rv = m.applyUpdate(genUpdateOneShard(N1,
@@ -496,7 +496,7 @@ TEST_F(StorageMembershipTest, ForceFlag) {
 }
 
 TEST_F(StorageMembershipTest, StateOverride) {
-  StorageMembership m;
+  StorageMembership m{};
   int rv;
   // add one empty shard N1
   rv = m.applyUpdate(genUpdateOneShard(N1,
@@ -554,7 +554,7 @@ TEST_F(StorageMembershipTest, StateOverride) {
 
 // test the behavior of marking shard as unrecoverable
 TEST_F(StorageMembershipTest, UNRECOVERABLE) {
-  StorageMembership m;
+  StorageMembership m{};
   int rv;
   // add one empty shard N1
   rv = m.applyUpdate(genUpdateOneShard(N1,
@@ -621,7 +621,7 @@ TEST_F(StorageMembershipTest, UNRECOVERABLE) {
 
 // test that behavior of manipulating metadata storage shards
 TEST_F(StorageMembershipTest, MetaDataShards) {
-  StorageMembership m;
+  StorageMembership m{};
   int rv;
   // add two regualr shards N1, N3, and one metadata shard N2
   auto update =
@@ -870,7 +870,7 @@ TEST_F(StorageMembershipTest, InvalidProvisionUpdate) {
                               MaintenanceID::Type(50)};
   ASSERT_FALSE(invalid2.isValid());
 
-  StorageMembership m;
+  StorageMembership m{};
   // add one shard so that membership is not empty anymore
   int rv =
       m.applyUpdate(genUpdateOneShard(N1,
@@ -905,7 +905,7 @@ TEST_F(StorageMembershipTest, InvalidProvisionUpdate) {
 }
 
 TEST_F(StorageMembershipTest, ProvisionTransition) {
-  StorageMembership m;
+  StorageMembership m{};
   int rv;
   // provision m with three regular shard N1, N2, N4 and one metadata shard N3
   auto update = genUpdateShards(
@@ -988,12 +988,12 @@ TEST_F(StorageMembershipTest, ProvisionTransition) {
 
 TEST_F(StorageMembershipTest, CodecEmptyMembership) {
   // serialize and deserialize an empty membership
-  StorageMembership m;
+  StorageMembership m{};
   checkCodecSerialization(m);
 }
 
 TEST_F(StorageMembershipTest, CodecBasic) {
-  StorageMembership m;
+  StorageMembership m{};
   int rv;
   auto update = genUpdateShards({N5, N6, N7},
                                 EMPTY_VERSION.val(),

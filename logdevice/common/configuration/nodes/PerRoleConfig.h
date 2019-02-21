@@ -39,8 +39,10 @@ template <NodeRole Role, typename MembershipConfig, typename AttributesConfig>
 class PerRoleConfig {
  public:
   struct Update {
-    std::unique_ptr<typename MembershipConfig::Update> membership_update;
-    std::unique_ptr<typename AttributesConfig::Update> attributes_update;
+    std::unique_ptr<typename MembershipConfig::Update> membership_update{
+        nullptr};
+    std::unique_ptr<typename AttributesConfig::Update> attributes_update{
+        nullptr};
 
     bool isValid() const {
       if (membership_update == nullptr && attributes_update == nullptr) {
@@ -166,8 +168,8 @@ class PerRoleConfig {
   }
 
  private:
-  std::shared_ptr<const MembershipConfig> membership_;
-  std::shared_ptr<const AttributesConfig> attributes_;
+  std::shared_ptr<const MembershipConfig> membership_{nullptr};
+  std::shared_ptr<const AttributesConfig> attributes_{nullptr};
 
   friend class NodesConfigLegacyConverter;
   friend class NodesConfigurationCodecFlatBuffers;

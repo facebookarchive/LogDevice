@@ -50,7 +50,7 @@ constexpr const MembershipVersion::Type kNewVersion =
 
 NodesConfiguration
 makeDummyNodesConfiguration(MembershipVersion::Type version) {
-  NodesConfiguration config;
+  NodesConfiguration config{};
   config.setVersion(version);
   EXPECT_TRUE(config.validate());
   EXPECT_EQ(version, config.getVersion());
@@ -61,7 +61,7 @@ makeDummyNodesConfiguration(MembershipVersion::Type version) {
 class NodesConfigurationManagerTest : public ::testing::Test {
  public:
   void SetUp() override {
-    NodesConfiguration initial_config;
+    NodesConfiguration initial_config{};
     initial_config.setVersion(MembershipVersion::EMPTY_VERSION);
     EXPECT_TRUE(initial_config.validate());
     z_ = std::make_shared<ZookeeperClientInMemory>(
@@ -218,7 +218,7 @@ TEST_F(NodesConfigurationManagerTest, overwrite) {
 TEST_F(NodesConfigurationManagerTest, LinearizableReadOnStartup) {
   constexpr MembershipVersion::Type kVersion{102};
 
-  NodesConfiguration initial_config;
+  NodesConfiguration initial_config{};
   initial_config.setVersion(kVersion);
   EXPECT_TRUE(initial_config.validate());
   std::string config =

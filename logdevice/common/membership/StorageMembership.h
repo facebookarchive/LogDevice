@@ -34,30 +34,30 @@ namespace facebook { namespace logdevice { namespace membership {
 
 // Describe the per-shard state of a storage membership
 struct ShardState {
-  StorageState storage_state;
+  StorageState storage_state{StorageState::INVALID};
 
-  StorageStateFlags::Type flags;
+  StorageStateFlags::Type flags{StorageStateFlags::NONE};
 
-  MetaDataStorageState metadata_state;
+  MetaDataStorageState metadata_state{MetaDataStorageState::INVALID};
 
   // identifier for the maintenance event that correspond to the
   // current shard state. Used by the maintenance state machine
-  MaintenanceID::Type active_maintenance;
+  MaintenanceID::Type active_maintenance{MaintenanceID::MAINTENANCE_NONE};
 
   // storage membership version since which the ShardState is
   // effective for the shard
-  MembershipVersion::Type since_version;
+  MembershipVersion::Type since_version{MembershipVersion::EMPTY_VERSION};
 
   // Describe the update that can apply to the ShardState
   struct Update {
-    StorageStateTransition transition;
+    StorageStateTransition transition{StorageStateTransition::Count};
 
     // collection of condition checks done, provided by the proposor of
     // the update
-    StateTransitionCondition conditions;
+    StateTransitionCondition conditions{Condition::NONE};
 
     // identifier for the new maintenance requesting the state transition
-    MaintenanceID::Type maintenance;
+    MaintenanceID::Type maintenance{MaintenanceID::MAINTENANCE_NONE};
 
     // see state_override below
     struct StateOverride {
@@ -73,7 +73,7 @@ struct ShardState {
 
     // forcefully update the shard state. Used only in the OVERRIDE_STATE
     // transition for emergency tools.
-    folly::Optional<StateOverride> state_override;
+    folly::Optional<StateOverride> state_override{};
 
     bool isValid() const;
     std::string toString() const;
@@ -141,10 +141,10 @@ class StorageMembership : public Membership {
 
     // each storage membership update is strictly conditioned on a base
     // membership version of which the update can only be applied
-    MembershipVersion::Type base_version;
+    MembershipVersion::Type base_version{MembershipVersion::EMPTY_VERSION};
 
     // a batch of per-shard updates
-    ShardMap shard_updates;
+    ShardMap shard_updates{};
 
     explicit Update(MembershipVersion::Type base) : base_version(base) {}
 
@@ -295,7 +295,7 @@ class StorageMembership : public Membership {
  private:
   class NodeState {
    public:
-    std::unordered_map<shard_index_t, ShardState> shard_states;
+    std::unordered_map<shard_index_t, ShardState> shard_states{};
     size_t numShards() const {
       return shard_states.size();
     }
@@ -310,10 +310,10 @@ class StorageMembership : public Membership {
   };
 
   using MapType = std::unordered_map<node_index_t, NodeState>;
-  MapType node_states_;
+  MapType node_states_{};
 
   // a separated index of storage shards whose MetaDataStorageState is not NONE
-  std::set<ShardID> metadata_shards_;
+  std::set<ShardID> metadata_shards_{};
 
   // update the shard state of the given _shard_; also update the
   // metadata_shards_ index as needed. If _shard_ doesn't exist in
