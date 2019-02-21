@@ -304,11 +304,7 @@ bool ReplicatedStateMachine<T, D>::processSnapshot(
     last_snapshot_version_ = header.base_version;
     delta_log_byte_offset_ = header.byte_offset;
     delta_log_offset_ = header.offset;
-
     snapshot_log_timestamp_ = record->attrs.timestamp;
-    // activate snapshotting timer
-    // if it is already active, it will be reset
-    activateGracePeriodForSnapshotting();
 
     if (sync_state_ == SyncState::TAILING || deliver_while_replaying_) {
       notifySubscribers();
@@ -403,6 +399,7 @@ void ReplicatedStateMachine<T, D>::onBaseSnapshotRetrieved() {
   rsm_info(rsm_type_,
            "Base snapshot has version %s",
            lsn_to_string(version_).c_str());
+  activateGracePeriodForSnapshotting();
   gotInitialState(*data_);
   sync_state_ = SyncState::SYNC_DELTAS;
   getDeltaLogTailLSN();
