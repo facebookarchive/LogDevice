@@ -80,4 +80,97 @@ NodeID RandomNodeSelector::getNode(const ServerConfig& cfg, NodeID exclude) {
   const auto& nodes = cfg.getNodes();
   return selectNodeIdHelper(nodes, exclude);
 }
+
+namespace {
+
+using NodeSourceSet = RandomNodeSelector::NodeSourceSet;
+
+// randomly pick n nodes from candidates and insert them to @param out. if
+// candidates does not have n nodes, pick all of them.
+// @return number of nodes picked
+size_t randomlySelectNodes(std::vector<node_index_t> candidates,
+                           size_t n,
+                           NodeSourceSet* out) {
+  ld_check(n > 0);
+  ld_check(out != nullptr);
+
+  if (candidates.size() <= n) {
+    out->insert(candidates.begin(), candidates.end());
+    return candidates.size();
+  }
+
+  std::shuffle(candidates.begin(), candidates.end(), folly::ThreadLocalPRNG());
+  out->insert(candidates.begin(), candidates.begin() + n);
+  return n;
+}
+
+std::vector<node_index_t> filterCandidates(const NodeSourceSet& candidates,
+                                           const NodeSourceSet& existing,
+                                           const NodeSourceSet& blacklist,
+                                           const NodeSourceSet& graylist,
+                                           ClusterState* cluster_state_filter) {
+  std::vector<node_index_t> filtered_candidates;
+  for (const auto n : candidates) {
+    if (existing.count(n) == 0 && blacklist.count(n) == 0 &&
+        graylist.count(n) == 0 &&
+        (cluster_state_filter == nullptr ||
+         cluster_state_filter->isNodeAlive(n))) {
+      filtered_candidates.push_back(n);
+    }
+  }
+  return filtered_candidates;
+}
+
+template <typename US>
+US unorderedSetIntersection(const US& A, const US& B) {
+  US result;
+  for (const auto n : A) {
+    if (B.count(n) > 0) {
+      result.insert(n);
+    }
+  }
+  return result;
+}
+
+} // namespace
+
+/*static*/
+RandomNodeSelector::NodeSourceSet
+RandomNodeSelector::select(const NodeSourceSet& candidates,
+                           const NodeSourceSet& existing,
+                           const NodeSourceSet& blacklist,
+                           const NodeSourceSet& graylist,
+                           size_t num_required,
+                           size_t num_extras,
+                           ClusterState* cluster_state_filter) {
+  NodeSourceSet result;
+  std::vector<node_index_t> filtered_candidates = filterCandidates(
+      candidates, existing, blacklist, graylist, cluster_state_filter);
+  const size_t target = num_required + num_extras;
+  size_t selected =
+      randomlySelectNodes(std::move(filtered_candidates), target, &result);
+  ld_check(selected == result.size());
+  ld_check(selected <= target);
+  if (selected == target) {
+    return result;
+  }
+  // needs to pick more nodes from the graylist and candidate intersection
+  filtered_candidates =
+      filterCandidates(unorderedSetIntersection(graylist, candidates),
+                       existing,
+                       blacklist,
+                       {},
+                       cluster_state_filter);
+  randomlySelectNodes(
+      std::move(filtered_candidates), target - selected, &result);
+
+  if (result.size() < num_required) {
+    // selection failed
+    return {};
+  }
+
+  ld_check(result.size() <= target);
+  return result;
+}
+
 }} // namespace facebook::logdevice

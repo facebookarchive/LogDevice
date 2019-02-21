@@ -7,6 +7,8 @@
  */
 #pragma once
 
+#include <folly/container/F14Set.h>
+
 #include "logdevice/common/ClusterState.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/configuration/ServerConfig.h"
@@ -35,5 +37,23 @@ class RandomNodeSelector {
   static NodeID getAliveNode(const ServerConfig& cfg,
                              ClusterState* filter,
                              NodeID exclude);
+
+  using NodeSourceSet = folly::F14FastSet<node_index_t>;
+
+  /**
+   * See ObjectPoller::SourceSelectionFunc in ObjectPoller.h for params and
+   * returns.
+   *
+   * @param cluster_state_filter    when provided (!=nullptr), do not select
+   *                                nodes that are considered dead according
+   *                                to the filter.
+   */
+  static NodeSourceSet select(const NodeSourceSet& candidates,
+                              const NodeSourceSet& existing,
+                              const NodeSourceSet& blacklist,
+                              const NodeSourceSet& graylist,
+                              size_t num_required,
+                              size_t num_extras,
+                              ClusterState* cluster_state_filter = nullptr);
 };
 }} // namespace facebook::logdevice
