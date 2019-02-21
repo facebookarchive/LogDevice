@@ -109,6 +109,9 @@ EventLoop::EventLoop(std::string thread_name, ThreadID::Type thread_type)
 }
 
 EventLoop::~EventLoop() {
+  // Shutdown drains all the work contexts before invoking this destructor.
+  ld_check(num_references_.load() == 0);
+
   if (running_) {
     // start() was already invoked, it's EventLoopHandle's responsibility to
     // destroy the object now (by stopping the event loop)
@@ -120,8 +123,6 @@ EventLoop::~EventLoop() {
   start_sem_.post();
 
   pthread_join(thread_, nullptr);
-  // Shutdown drains all the work contexts before invoking this destructor.
-  ld_check(num_references_.load() == 0);
 }
 
 void EventLoop::add(folly::Function<void()> task) {

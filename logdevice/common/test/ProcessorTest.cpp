@@ -237,3 +237,39 @@ TEST_F(ProcessorTest, UseEventLoopDirectly) {
   sem2.wait();
   EXPECT_EQ(0, sem2.value());
 }
+
+TEST_F(ProcessorTest, EventLoopKeepAliveTest) {
+  {
+    ASSERT_DEATH(
+        {
+          auto ev_loop = std::make_unique<EventLoop>();
+          auto keep_alive = folly::getKeepAliveToken(ev_loop.get());
+          ev_loop.reset();
+        },
+        "");
+  }
+  {
+    auto ev_loop = std::make_unique<EventLoop>();
+    auto keep_alive = folly::getKeepAliveToken(ev_loop.get());
+    keep_alive.reset();
+  }
+  {
+    ASSERT_DEATH(
+        {
+          auto ev_loop = new EventLoop();
+          auto handle = std::make_unique<EventLoopHandle>(ev_loop, 1, 1);
+          handle->start();
+          auto keep_alive = folly::getKeepAliveToken(ev_loop);
+          handle.reset();
+        },
+        "");
+  }
+  {
+    auto ev_loop = new EventLoop();
+    auto handle = std::make_unique<EventLoopHandle>(ev_loop, 1, 1);
+    handle->start();
+    auto keep_alive = folly::getKeepAliveToken(ev_loop);
+    keep_alive.reset();
+    handle.reset();
+  }
+}
