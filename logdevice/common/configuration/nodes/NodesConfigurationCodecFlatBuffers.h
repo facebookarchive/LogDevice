@@ -85,6 +85,12 @@ class NodesConfigurationCodecFlatBuffers {
   static folly::Optional<membership::MembershipVersion::Type>
   extractConfigVersion(folly::StringPiece serialized_data);
 
+  // Uses the verifer to verify that the passed Slice is correctly formatted and
+  // returns a pointer to the root table of type T.
+  // Returns a nullptr if the verification fails.
+  template <class T>
+  static const T* verifyAndGetRoot(Slice data_blob);
+
  private:
   GEN_SERIALIZATION_OBJECT(NodeServiceDiscovery)
   GEN_SERIALIZATION_OBJECT(SequencerNodeAttribute)

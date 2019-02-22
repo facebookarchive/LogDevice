@@ -417,9 +417,10 @@ NodesConfigurationCodecFlatBuffers::deserialize(
   return result;
 }
 
-namespace {
 template <class T>
-const T* verifyAndGetPointer(Slice data_blob) {
+const T* NodesConfigurationCodecFlatBuffers::verifyAndGetRoot(Slice data_blob) {
+  static_assert(std::is_base_of<flatbuffers::Table, T>::value,
+                "The generic type should be a FBS table");
   auto verifier =
       flatbuffers::Verifier(static_cast<const uint8_t*>(data_blob.data),
                             data_blob.size,
@@ -433,7 +434,6 @@ const T* verifyAndGetPointer(Slice data_blob) {
   }
   return flatbuffers::GetRoot<T>(data_blob.data);
 }
-} // namespace
 
 /*static*/
 void NodesConfigurationCodecFlatBuffers::serialize(
@@ -493,7 +493,7 @@ NodesConfigurationCodecFlatBuffers::deserialize(Slice wrapper_blob) {
   if (wrapper_blob.size == 0) {
     return std::make_shared<const NodesConfiguration>();
   }
-  auto wrapper_ptr = verifyAndGetPointer<
+  auto wrapper_ptr = verifyAndGetRoot<
       configuration::nodes::flat_buffer_codec::NodesConfigurationWrapper>(
       wrapper_blob);
   if (wrapper_ptr == nullptr) {
@@ -543,7 +543,7 @@ NodesConfigurationCodecFlatBuffers::deserialize(Slice wrapper_blob) {
     data_blob = Slice{buffer.get(), uncompressed_size};
   }
 
-  auto config_ptr = verifyAndGetPointer<
+  auto config_ptr = verifyAndGetRoot<
       configuration::nodes::flat_buffer_codec::NodesConfiguration>(data_blob);
   return NodesConfigurationCodecFlatBuffers::deserialize(config_ptr);
 }
@@ -575,7 +575,7 @@ NodesConfigurationCodecFlatBuffers::extractConfigVersion(
   if (serialized_data.empty()) {
     return membership::MembershipVersion::EMPTY_VERSION;
   }
-  auto wrapper_ptr = verifyAndGetPointer<
+  auto wrapper_ptr = verifyAndGetRoot<
       configuration::nodes::flat_buffer_codec::NodesConfigurationWrapper>(
       Slice{serialized_data.data(), serialized_data.size()});
   if (wrapper_ptr == nullptr) {
