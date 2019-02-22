@@ -513,7 +513,7 @@ sidebar_label: Settings
 | loglevel-overrides | Comma-separated list of <module>:<loglevel>. eg: Server.cpp:debug,Sequencer.cpp:notify |  | server&nbsp;only |
 | msg-error-injection-chance | percentage chance of a forced message error on a Socket. Used to exercise error handling paths. | 0 | requires&nbsp;restart, server&nbsp;only |
 | msg-error-injection-status | status that should be returned for a simulated message transmission error | NOBUFS | requires&nbsp;restart |
-| nodes-configuration-store-file-path | If set, the source of truth of nodes configuration used by NCM will be from the files specified by the following paths instead of the default (zookeeper) store. Only effective when --enable-nodes-configuration-manager=true; Used by integration testing. |  | requires&nbsp;restart |
+| nodes-configuration-file-store-dir | If set, the source of truth of nodes configuration will be under this dir instead of the default (zookeeper) store. Only effective when --enable-nodes-configuration-manager=true; Used by integration testing. |  | requires&nbsp;restart |
 | rebuild-without-amends | During rebuilding, send a normal STORE rather than a STORE with the AMEND flag, when updating the copyset of nodes that already have a copy of the record. This option is used by integration tests to fully divorce append content from records touched by rebuilding. | false | server&nbsp;only |
 | rebuilding-read-only | Rebuilding is read-only (for testing only). Use on-donor if rebuilding should not send STORE messages, or on-recipient if these should be sent but discarded by the recipient (LogsDB only) | none | server&nbsp;only |
 | rebuilding-retry-timeout | Delay before a record rebuilding retries a failed operation | 5s..30s | server&nbsp;only |

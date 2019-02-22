@@ -192,7 +192,7 @@ typename std::result_of<Func()>::type run_on_worker(Processor* processor,
   auto res =
       run_on_workers(processor, {worker_id}, worker_type, std::move(cb), true);
   ld_check(res.size() == 1);
-  return res[0];
+  return std::move(res[0]);
 }
 
 /**

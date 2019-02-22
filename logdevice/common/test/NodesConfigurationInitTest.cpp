@@ -64,7 +64,7 @@ TEST(NodesConfigurationInitTest, InitTest) {
 
   // Write it to the InMemoryStore
   auto store = std::make_unique<InMemNodesConfigurationStore>(
-      [](folly::StringPiece) { return vcs_config_version_t(2); });
+      "/foo", [](folly::StringPiece) { return vcs_config_version_t(2); });
   auto status = store->updateConfigSync(serialized, folly::none);
   EXPECT_EQ(Status::OK, status);
 

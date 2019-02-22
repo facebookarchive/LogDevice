@@ -311,6 +311,14 @@ class ClusterFactory {
   }
 
   /**
+   * If called, nodes configuration store won't be provisioned.
+   */
+  ClusterFactory& doNotPreProvisionNodesConfigurationStore() {
+    provision_nodes_configuration_store_ = false;
+    return *this;
+  }
+
+  /**
    * By default, epoch store metadata is provisioned and metadata logs are
    * written by sequencers. If this method is called, sequencers will be
    * precluded from writing metadata. Note that this will have no effect if
@@ -582,6 +590,9 @@ class ClusterFactory {
   // Provision the inital epoch metadata in epoch store and storage nodes
   // that store metadata
   bool provision_epoch_metadata_ = false;
+
+  // Provision the inital nodes configuration store
+  bool provision_nodes_configuration_store_ = true;
 
   // Whether to let sequencers provision metadata
   bool let_sequencers_provision_metadata_ = true;
@@ -875,6 +886,14 @@ class Cluster {
   int provisionEpochMetaData(
       std::shared_ptr<NodeSetSelector> selector = nullptr,
       bool allow_existing_metadata = false);
+
+  /**
+   * Provision the initial nodes configuration store.
+   * @param nodes_configuration                  the initial config to write
+   * @return          0 for success, -1 for failure
+   */
+  int provisionNodesConfigurationStore(
+      std::shared_ptr<NodesConfiguration> config = nullptr);
 
   /**
    * Replaces the node at the specified index.  Kills the current process if

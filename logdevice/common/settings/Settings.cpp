@@ -2542,13 +2542,12 @@ void Settings::defineSettings(SettingEasyInit& init) {
        CLIENT,
        SettingsCategory::Configuration);
 
-  init("nodes-configuration-store-file-path",
-       &nodes_configuration_store_file_path,
+  init("nodes-configuration-file-store-dir",
+       &nodes_configuration_file_store_dir,
        "", // defaults to empty
        nullptr,
-       "If set, the source of truth of nodes configuration used by NCM will be "
-       "from the files specified by the following paths instead of the default "
-       "(zookeeper) store. Only effective when "
+       "If set, the source of truth of nodes configuration will be under this "
+       "dir instead of the default (zookeeper) store. Only effective when "
        "--enable-nodes-configuration-manager=true; Used by "
        "integration testing.",
        CLIENT | SERVER | REQUIRES_RESTART,

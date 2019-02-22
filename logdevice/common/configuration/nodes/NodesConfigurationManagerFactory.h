@@ -27,14 +27,17 @@ class NodesConfigurationStoreFactory {
   struct Params {
     NCSType type;
 
-    // used when type == NCSType::File, NCS will be created as
+    // used when type == NCSType::Zookeeper, NCS will be created as
     // ZookeeperNodesConfigurationStore with the specified zookeeper config
     std::shared_ptr<configuration::ZookeeperConfig> zk_config;
 
-    // used when type == NCSType::File, NCS will be created as
-    // FileBasedNodesConfiguratinStore under the specified path.
-    // Used in integration test only.
-    std::string file_store_path;
+    // used when type == NCSType::File
+    std::string file_store_root_dir;
+
+    // The path under-which the config itself will be stored. This is used by
+    // all the NCSes as the key to the fetches/updates. The NCS itself can
+    // prepend a root_path to this path if needed.
+    std::string path;
 
     bool isValid() const;
   };
@@ -48,6 +51,9 @@ class NodesConfigurationStoreFactory {
    */
   static std::unique_ptr<NodesConfigurationStore>
   create(const Configuration& config, const Settings& settings) noexcept;
+
+  static std::string getDefaultConfigStorePath(NCSType type,
+                                               const std::string& cluster_name);
 };
 
 class NodesConfigurationManagerFactory {

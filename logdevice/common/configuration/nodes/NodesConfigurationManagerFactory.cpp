@@ -8,6 +8,7 @@
 
 #include "logdevice/common/configuration/nodes/NodesConfigurationManagerFactory.h"
 
+#include <boost/filesystem.hpp>
 #include <folly/Conv.h>
 
 #include "logdevice/common/ZookeeperClientFactoryProd.h"
@@ -26,9 +27,9 @@ namespace nodes {
 bool NodesConfigurationStoreFactory::Params::isValid() const {
   switch (type) {
     case NCSType::Zookeeper:
-      return zk_config != nullptr;
+      return zk_config != nullptr && !path.empty();
     case NCSType::File:
-      return !file_store_path.empty();
+      return !file_store_root_dir.empty() && !path.empty();
     case NCSType::Server:
       return true;
   }
@@ -61,13 +62,16 @@ NodesConfigurationStoreFactory::create(Params params) noexcept {
         return nullptr;
       }
       return std::make_unique<ZookeeperNodesConfigurationStore>(
+          params.path,
           NodesConfigurationCodecFlatBuffers::extractConfigVersion,
           std::move(zkclient));
     }
-    case NCSType::File:
+    case NCSType::File: {
       return std::make_unique<FileBasedNodesConfigurationStore>(
-          params.file_store_path,
+          params.path /* filename */,
+          params.file_store_root_dir /* parent_Dir */,
           NodesConfigurationCodecFlatBuffers::extractConfigVersion);
+    }
     case NCSType::Server:
       return std::make_unique<ServerBasedNodesConfigurationStore>();
   }
@@ -83,10 +87,13 @@ NodesConfigurationStoreFactory::create(const Configuration& config,
   configuration::nodes::NodesConfigurationStoreFactory::Params ncs_params;
   const bool is_server = settings.server;
 
-  if (!settings.nodes_configuration_store_file_path.empty()) {
+  if (!settings.nodes_configuration_file_store_dir.empty()) {
     // use file based store if its path is given
     ncs_params.type = NCSType::File;
-    ncs_params.file_store_path = settings.nodes_configuration_store_file_path;
+    ncs_params.file_store_root_dir =
+        settings.nodes_configuration_file_store_dir;
+    ncs_params.path = getDefaultConfigStorePath(
+        NCSType::File, config.serverConfig()->getClusterName());
   } else {
     if (!is_server && !settings.admin_client_capabilities) {
       // for clients without admin capabilities (observer only client),
@@ -95,10 +102,30 @@ NodesConfigurationStoreFactory::create(const Configuration& config,
     } else {
       ncs_params.type = NCSType::Zookeeper;
       ncs_params.zk_config = config.zookeeperConfig();
+      ncs_params.path = getDefaultConfigStorePath(
+          NCSType::Zookeeper, config.serverConfig()->getClusterName());
     }
   }
   ld_assert(ncs_params.isValid());
   return create(std::move(ncs_params));
+}
+
+std::string NodesConfigurationStoreFactory::getDefaultConfigStorePath(
+    NCSType type,
+    const std::string& cluster_name) {
+  switch (type) {
+    case NCSType::Zookeeper:
+      return folly::sformat("/logdevice/{}/ncm/config", cluster_name);
+    case NCSType::File:
+      return "ncm_config";
+    case NCSType::Server:
+      // ServerBasedNodesConfigurationStore doesn't require a path.
+      ld_check(false);
+      return "";
+  }
+  /* Unreachable */
+  ld_check(false);
+  return "";
 }
 
 /*static*/

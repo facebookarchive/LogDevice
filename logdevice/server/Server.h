@@ -33,6 +33,9 @@ namespace facebook { namespace logdevice {
 
 class LogStoreMonitor;
 class MyNodeID;
+namespace configuration { namespace nodes {
+class NodesConfigurationStore;
+}} // namespace configuration::nodes
 class PluginRegistry;
 class Processor;
 class RebuildingCoordinator;
@@ -151,6 +154,8 @@ class ServerParameters {
   bool validateNodes(ServerConfig& config);
   bool updateMyNodeId(ServerConfig& config);
   bool updateConfigSettings(ServerConfig& config);
+
+  bool initNodesConfiguration();
 };
 
 /**

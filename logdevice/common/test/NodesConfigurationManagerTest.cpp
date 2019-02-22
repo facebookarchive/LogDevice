@@ -47,6 +47,7 @@ namespace {
 constexpr const MembershipVersion::Type kVersion{102};
 constexpr const MembershipVersion::Type kNewVersion =
     MembershipVersion::Type{kVersion.val() + 1};
+const std::string kConfigKey{"/foo"};
 
 NodesConfiguration
 makeDummyNodesConfiguration(MembershipVersion::Type version) {
@@ -67,10 +68,11 @@ class NodesConfigurationManagerTest : public ::testing::Test {
     z_ = std::make_shared<ZookeeperClientInMemory>(
         "unused quorum",
         ZookeeperClientInMemory::state_map_t{
-            {ZookeeperNodesConfigurationStore::kConfigKey,
-             {"", zk::Stat{.version_ = 4}}}});
+            {kConfigKey, {"", zk::Stat{.version_ = 4}}}});
     auto store = std::make_unique<ZookeeperNodesConfigurationStore>(
-        NodesConfigurationCodecFlatBuffers::extractConfigVersion, z_);
+        kConfigKey,
+        NodesConfigurationCodecFlatBuffers::extractConfigVersion,
+        z_);
 
     Settings settings = create_default_settings<Settings>();
     settings.num_workers = 3;
@@ -94,7 +96,7 @@ class NodesConfigurationManagerTest : public ::testing::Test {
   void
   writeNewConfigToZK(std::shared_ptr<const NodesConfiguration> new_config) {
     // fire and forget
-    z_->setData(ZookeeperNodesConfigurationStore::kConfigKey,
+    z_->setData(kConfigKey,
                 NodesConfigurationCodecFlatBuffers::serialize(*new_config),
                 /* cb = */ {});
   }

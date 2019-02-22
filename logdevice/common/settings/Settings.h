@@ -1127,10 +1127,9 @@ struct Settings : public SettingsBundle {
   // NodesConfiguration
   bool admin_client_capabilities;
 
-  // If set, the source of truth of nodes configuration will be from the files
-  // specified by the following paths instead of the default (zookeeper) store.
-  // Used by integration testing.
-  std::string nodes_configuration_store_file_path;
+  // If set, the source of truth of nodes configuration will be under this dir
+  //  instead of the default (zookeeper) store. Used by integration testing.
+  std::string nodes_configuration_file_store_dir;
 
   // If true, sequencer routing will first try to find a sequencer in the
   // location given by sequencerAffinity before looking elsewhere.

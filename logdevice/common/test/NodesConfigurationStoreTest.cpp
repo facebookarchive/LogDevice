@@ -33,6 +33,8 @@ using version_t = NodesConfigurationStore::version_t;
 namespace {
 std::unique_ptr<NodesConfigurationStore> store{nullptr};
 
+const std::string kConfigKey{"/foo"};
+
 class NodesConfigurationStoreTest : public ::testing::Test {
  public:
   // temporary dir for file baesd store test
@@ -47,7 +49,7 @@ class NodesConfigurationStoreTest : public ::testing::Test {
   std::unique_ptr<NodesConfigurationStore>
   createFileBasedStore(NodesConfigurationStore::extract_version_fn f) {
     return std::make_unique<FileBasedNodesConfigurationStore>(
-        temp_dir_->path().string(), std::move(f));
+        kConfigKey, temp_dir_->path().string(), std::move(f));
   }
 };
 
@@ -211,22 +213,22 @@ void runMultiThreadedTests(std::unique_ptr<NodesConfigurationStore> store) {
 
 TEST(NodesConfigurationStore, basic) {
   runBasicTests(std::make_unique<InMemNodesConfigurationStore>(
-      TestEntry::extractVersionFn));
+      kConfigKey, TestEntry::extractVersionFn));
 }
 
 TEST(NodesConfigurationStore, basicMT) {
   runMultiThreadedTests(std::make_unique<InMemNodesConfigurationStore>(
-      TestEntry::extractVersionFn));
+      kConfigKey, TestEntry::extractVersionFn));
 }
 
 TEST(NodesConfigurationStore, zk_basic) {
   auto z = std::make_shared<ZookeeperClientInMemory>(
       "unused quorum",
       ZookeeperClientInMemory::state_map_t{
-          {ZookeeperNodesConfigurationStore::kConfigKey,
+          {kConfigKey,
            {TestEntry{0, "initValue"}.serialize(), zk::Stat{.version_ = 4}}}});
   runBasicTests(std::make_unique<ZookeeperNodesConfigurationStore>(
-                    TestEntry::extractVersionFn, std::move(z)),
+                    kConfigKey, TestEntry::extractVersionFn, std::move(z)),
                 /* initialWrite = */ false);
 }
 
@@ -234,10 +236,10 @@ TEST(NodesConfigurationStore, zk_basicMT) {
   auto z = std::make_shared<ZookeeperClientInMemory>(
       "unused quorum",
       ZookeeperClientInMemory::state_map_t{
-          {ZookeeperNodesConfigurationStore::kConfigKey,
+          {kConfigKey,
            {TestEntry{0, "initValue"}.serialize(), zk::Stat{.version_ = 4}}}});
   runMultiThreadedTests(std::make_unique<ZookeeperNodesConfigurationStore>(
-      TestEntry::extractVersionFn, std::move(z)));
+      kConfigKey, TestEntry::extractVersionFn, std::move(z)));
 }
 
 TEST_F(NodesConfigurationStoreTest, file_basic) {

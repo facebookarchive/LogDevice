@@ -38,6 +38,9 @@
 #include "logdevice/common/configuration/InternalLogs.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
 #include "logdevice/common/configuration/TextConfigUpdater.h"
+#include "logdevice/common/configuration/nodes/NodesConfigLegacyConverter.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationCodecFlatBuffers.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationManagerFactory.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/event_log/EventLogRebuildingSet.h"
 #include "logdevice/common/plugin/PluginRegistry.h"
@@ -496,8 +499,9 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
   std::string ncs_path = root_path + "/nc_store";
   mkdir(ncs_path.c_str(), 0777);
 
-  // Each node in the cluster has a SockaddrPair object that defines with tcp
-  // port or unix domain socket it uses for its protocol port and command port.
+  // Each node in the cluster has a SockaddrPair object that defines with
+  // tcp port or unix domain socket it uses for its protocol port and
+  // command port.
   std::vector<SockaddrPair> addrs(nnodes);
   std::vector<SockaddrPair> ssl_addrs(nnodes);
 
@@ -603,6 +607,15 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
   if (provision_epoch_metadata_) {
     if (cluster->provisionEpochMetaData(
             provision_nodeset_selector_, allow_existing_metadata_) != 0) {
+      return nullptr;
+    }
+  }
+
+  if (provision_nodes_configuration_store_) {
+    // TODO pass the actual nodes configuration here, instead of an empty one.
+    if (cluster->provisionNodesConfigurationStore(
+            std::make_shared<configuration::nodes::NodesConfiguration>()) !=
+        0) {
       return nullptr;
     }
   }
@@ -865,6 +878,27 @@ int Cluster::provisionEpochMetaData(std::shared_ptr<NodeSetSelector> selector,
   return rv;
 }
 
+int Cluster::provisionNodesConfigurationStore(
+    std::shared_ptr<NodesConfiguration> config) {
+  using namespace logdevice::configuration::nodes;
+  NodesConfigurationStoreFactory::Params params;
+  params.type = NodesConfigurationStoreFactory::NCSType::File;
+  params.file_store_root_dir = ncs_path_;
+  params.path = NodesConfigurationStoreFactory::getDefaultConfigStorePath(
+      NodesConfigurationStoreFactory::NCSType::File, cluster_name_);
+
+  auto store = NodesConfigurationStoreFactory::create(std::move(params));
+  if (store == nullptr) {
+    return -1;
+  }
+  auto serialized = NodesConfigurationCodecFlatBuffers::serialize(*config);
+  if (serialized.empty()) {
+    return -1;
+  }
+  store->updateConfigSync(std::move(serialized), folly::none);
+  return 0;
+}
+
 std::unique_ptr<Node> Cluster::createNode(node_index_t index,
                                           SockaddrPair addrs,
                                           SockaddrPair ssl_addrs) const {
@@ -933,7 +967,7 @@ ParamMap Cluster::commandArgsForNode(node_index_t i, const Node& node) const {
         protocol_addr_param, command_addr_param, admin_addr_param,
         {"--config-path", ParamValue{"file:" + node.config_path_}},
         {"--epoch-store-path", ParamValue{epoch_store_path_}},
-        {"--nodes-configuration-store-file-path", ParamValue{ncs_path_}},
+        {"--nodes-configuration-file-store-dir", ParamValue{ncs_path_}},
         // Poll for config updates more frequently in tests so that they
         // progress faster
         {"--file-config-update-interval", ParamValue{"100ms"}},

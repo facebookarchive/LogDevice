@@ -14,6 +14,7 @@
 #include "logdevice/common/FileEpochStore.h"
 #include "logdevice/common/MetaDataLogWriter.h"
 #include "logdevice/common/NodeSetSelectorFactory.h"
+#include "logdevice/common/NodesConfigurationInit.h"
 #include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/SequencerLocator.h"
 #include "logdevice/common/SequencerPlacement.h"
@@ -27,6 +28,9 @@
 #include "logdevice/common/configuration/Node.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/configuration/logs/LogsConfigManager.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationCodecFlatBuffers.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationManagerFactory.h"
+#include "logdevice/common/configuration/nodes/ZookeeperNodesConfigurationStore.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/event_log/EventLogStateMachine.h"
 #include "logdevice/common/plugin/AdminServerFactory.h"
@@ -283,6 +287,12 @@ ServerParameters::ServerParameters(
     }
   }
 
+  if (processor_settings_->enable_nodes_configuration_manager) {
+    if (!initNodesConfiguration()) {
+      throw ConstructorFailed();
+    }
+  }
+
   if (updateable_logs_config->get() == nullptr) {
     // Initialize logdevice with an empty LogsConfig that only contains the
     // internal logs and is marked as not fully loaded.
@@ -369,6 +379,16 @@ bool ServerParameters::isReadableStorageNode() const {
 
 size_t ServerParameters::getNumDBShards() const {
   return num_db_shards_;
+}
+
+bool ServerParameters::initNodesConfiguration() {
+  using namespace facebook::logdevice::configuration::nodes;
+
+  auto store = NodesConfigurationStoreFactory::create(
+      *updateable_config_->get(), *getProcessorSettings().get());
+  NodesConfigurationInit config_init(std::move(store));
+  return config_init.initWithoutProcessor(
+      updateable_config_->updateableNodesConfiguration());
 }
 
 bool ServerParameters::isSequencingEnabled() const {

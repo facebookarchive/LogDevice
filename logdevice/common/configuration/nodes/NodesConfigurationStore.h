@@ -63,49 +63,50 @@ class VersionedNodesConfigurationStore : public NodesConfigurationStore {
                 "The generic type should be a VersionedConfigStore");
 
  public:
-  static constexpr const auto kConfigKey = "/ncm/config";
-
   template <typename... Args>
-  VersionedNodesConfigurationStore(Args&&... args)
-      : store_(std::make_unique<T>(std::forward<Args>(args)...)) {}
+  VersionedNodesConfigurationStore(std::string path, Args&&... args)
+      : store_(std::make_unique<T>(std::forward<Args>(args)...)),
+        path_(std::move(path)) {}
 
   virtual ~VersionedNodesConfigurationStore() = default;
 
   virtual void getConfig(value_callback_t cb) const override {
-    store_->getConfig(kConfigKey, std::move(cb));
+    store_->getConfig(path_, std::move(cb));
   }
 
   virtual Status getConfigSync(std::string* value_out) const override {
-    return store_->getConfigSync(kConfigKey, value_out);
+    return store_->getConfigSync(path_, value_out);
   }
 
   virtual void getLatestConfig(value_callback_t cb) const override {
-    store_->getLatestConfig(kConfigKey, std::move(cb));
+    store_->getLatestConfig(path_, std::move(cb));
   }
 
   virtual void updateConfig(std::string value,
                             folly::Optional<version_t> base_version,
                             write_callback_t cb = {}) override {
     store_->updateConfig(
-        kConfigKey, std::move(value), std::move(base_version), std::move(cb));
+        path_, std::move(value), std::move(base_version), std::move(cb));
   }
 
   virtual Status updateConfigSync(std::string value,
                                   folly::Optional<version_t> base_version,
                                   version_t* version_out = nullptr,
                                   std::string* value_out = nullptr) override {
-    return store_->updateConfigSync(kConfigKey,
+    return store_->updateConfigSync(path_,
                                     std::move(value),
                                     std::move(base_version),
                                     version_out,
                                     value_out);
   }
 
+  const std::string& getPath() {
+    return path_;
+  }
+
  private:
   std::unique_ptr<T> store_;
+  const std::string path_;
 };
-
-template <class T>
-constexpr const char* const VersionedNodesConfigurationStore<T>::kConfigKey;
 
 }}}} // namespace facebook::logdevice::configuration::nodes

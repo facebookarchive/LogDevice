@@ -41,7 +41,7 @@ createAdminClientSettings(std::string ncs_path) {
   EXPECT_EQ(
       0, client_settings->set("enable-nodes-configuration-manager", "true"));
   EXPECT_EQ(
-      0, client_settings->set("nodes-configuration-store-file-path", ncs_path));
+      0, client_settings->set("nodes-configuration-file-store-dir", ncs_path));
   return client_settings;
 }
 
@@ -71,14 +71,16 @@ TEST_F(NCMIntegrationTest, ToolingClientBasic) {
                });
   b.wait();
 
-  wait_until("admin_client1 gets the new NC",
-             [&]() { return getNCAPI(admin_client1)->getConfig() != nullptr; });
+  wait_until("admin_client1 gets the new NC", [&]() {
+    return getNCAPI(admin_client1)->getConfig()->getVersion().val() > 0;
+  });
 
   auto nc_client1 = getNCAPI(admin_client1)->getConfig();
   ASSERT_TRUE(nc_expected->equalWithTimestampIgnored(*nc_client1));
 
-  wait_until("admin_client2 gets the new NC",
-             [&]() { return getNCAPI(admin_client2)->getConfig() != nullptr; });
+  wait_until("admin_client2 gets the new NC", [&]() {
+    return getNCAPI(admin_client2)->getConfig()->getVersion().val() > 0;
+  });
 
   auto nc_client2 = getNCAPI(admin_client2)->getConfig();
   ASSERT_TRUE(nc_expected->equalWithTimestampIgnored(*nc_client2));

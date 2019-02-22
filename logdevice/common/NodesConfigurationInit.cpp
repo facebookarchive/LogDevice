@@ -44,33 +44,16 @@ bool NodesConfigurationInit::init(
   }
   auto processor = buildDummyProcessor(std::move(dummy_config));
 
-  folly::Promise<bool> promise;
-  auto config_cb = [&](Status status, std::string config) {
-    if (status == Status::OK) {
-      auto nc = parseNodesConfiguration(config);
-      if (nc == nullptr) {
-        ld_error("Failed to parse the nodes configuration");
-        promise.setValue(false);
-        return;
-      }
-      ld_info(
-          "Got a NodesConfiguration of version: %lu", nc->getVersion().val());
-      nodes_configuration_config->update(std::move(nc));
-      promise.setValue(true);
-    } else {
-      ld_error("Failed to get the NodesConfiguration with Status: %s",
-               error_description(status));
-      promise.setValue(false);
-    }
-  };
-  auto& store = store_;
-  run_on_worker(processor.get(), 0, [&config_cb, &store]() {
-    // TODO Override the timeout of the store with the time we have left to
-    // do the config fetch.
-    store->getConfig(std::move(config_cb));
-    return 0;
-  });
-  return promise.getSemiFuture().get();
+  return run_on_worker(
+             processor.get(),
+             0,
+             [&]() { return executeGetConfig(nodes_configuration_config); })
+      .get();
+}
+
+bool NodesConfigurationInit::initWithoutProcessor(
+    std::shared_ptr<UpdateableNodesConfiguration> nodes_configuration_config) {
+  return executeGetConfig(std::move(nodes_configuration_config)).get();
 }
 
 bool NodesConfigurationInit::parseAndFetchHostList(
@@ -183,10 +166,43 @@ std::shared_ptr<Processor> NodesConfigurationInit::buildDummyProcessor(
 }
 
 std::shared_ptr<const configuration::nodes::NodesConfiguration>
-NodesConfigurationInit::parseNodesConfiguration(
-    const std::string& config) const {
+NodesConfigurationInit::parseNodesConfiguration(const std::string& config) {
   return configuration::nodes::NodesConfigurationCodecFlatBuffers::deserialize(
       config);
+}
+
+folly::SemiFuture<bool> NodesConfigurationInit::executeGetConfig(
+    std::shared_ptr<UpdateableNodesConfiguration> nodes_configuration_config) {
+  folly::Promise<bool> promise;
+  auto future = promise.getSemiFuture();
+  auto config_cb = [nodes_configuration_config =
+                        std::move(nodes_configuration_config),
+                    promise = std::move(promise)](
+                       Status status, std::string config) mutable {
+    if (status == Status::OK) {
+      auto nc = parseNodesConfiguration(config);
+      if (nc == nullptr) {
+        ld_error("Failed to parse the nodes configuration");
+        promise.setValue(false);
+        return;
+      }
+      ld_info(
+          "Got a NodesConfiguration of version: %lu", nc->getVersion().val());
+      nodes_configuration_config->update(std::move(nc));
+      promise.setValue(true);
+    } else {
+      ld_error("Failed to get the NodesConfiguration with Status: %s",
+               error_description(status));
+      promise.setValue(false);
+    }
+  };
+
+  // TODO Override the timeout of the store with the time we have left to
+  // do the config fetch.
+  // TODO Make this config fetch more robust by adding retries and timeouts.
+  // TODO For servers this should be `getLatestConfig`.
+  store_->getConfig(std::move(config_cb));
+  return future;
 }
 
 }} // namespace facebook::logdevice

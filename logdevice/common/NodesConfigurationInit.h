@@ -7,6 +7,8 @@
  */
 #pragma once
 
+#include <folly/futures/Future.h>
+
 #include "logdevice/common/ConfigSource.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
@@ -40,6 +42,7 @@ class NodesConfigurationInit {
   };
 
  public:
+  // TODO add a bootstrapping timeout
   explicit NodesConfigurationInit(
       std::shared_ptr<configuration::nodes::NodesConfigurationStore> store)
       : store_(std::move(store)) {}
@@ -67,6 +70,22 @@ class NodesConfigurationInit {
        std::shared_ptr<PluginRegistry> plugin_registry,
        const std::string& server_seed_str);
 
+  /**
+   * Updates the passed updatable `nodes_configuration_config` with the
+   * NodesConfiguration fetched using the following process:
+   * 1. We invoke getConfig on the passed store.
+   * 2. We synchronously wait for the config to be fetched and parsed.
+   * 3. When the config is successfully parsed, we update the
+   * UpdateableNodesConfiguration.
+   *
+   * NOTE: This requires a NodesConfigurationStore that doesn't depend on a
+   * processor.
+   *
+   * @return true on success, false otherwise.
+   */
+  bool initWithoutProcessor(
+      std::shared_ptr<UpdateableNodesConfiguration> nodes_configuration_config);
+
  protected:
   std::shared_ptr<UpdateableConfig>
   buildDummyServerConfig(const std::vector<std::string>& host_list) const;
@@ -82,8 +101,11 @@ class NodesConfigurationInit {
   std::shared_ptr<Processor>
   buildDummyProcessor(std::shared_ptr<UpdateableConfig> config) const;
 
-  std::shared_ptr<const configuration::nodes::NodesConfiguration>
-  parseNodesConfiguration(const std::string& config) const;
+  static std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  parseNodesConfiguration(const std::string& config);
+
+  folly::SemiFuture<bool> executeGetConfig(
+      std::shared_ptr<UpdateableNodesConfiguration> nodes_configuration_config);
 
  private:
   std::shared_ptr<configuration::nodes::NodesConfigurationStore> store_;
