@@ -52,6 +52,13 @@ STAT_DEFINE(config_changed_ignored_update_in_progress, SUM)
 // CONFIG_CHANGED_Messages.
 STAT_DEFINE(config_changed_update, SUM)
 
+// Number of times nodes configuration polling gets a success result
+STAT_DEFINE(nodes_configuration_polling_success, SUM)
+// Number of times nodes configuration polling gets a PARTIAL result
+STAT_DEFINE(nodes_configuration_polling_partial, SUM)
+// Number of times nodes configuration polling gets a failure result
+STAT_DEFINE(nodes_configuration_polling_failed, SUM)
+
 // Set to 1 once the node received valid config. It also resets to 0 if a bad
 // config is received, so this is really the validity of the most recent config
 // received.

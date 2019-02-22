@@ -102,6 +102,13 @@ class NodesConfiguration {
   // note: return default generation 1 for nodes not having storage role or
   // node not existed
   node_gen_t getNodeGeneration(node_index_t node) const;
+
+  // note: does not check if node exists in the config. If not exists,
+  // NodeID(node, 1) will be returned
+  NodeID getNodeID(node_index_t node) const {
+    return NodeID(node, getNodeGeneration(node));
+  }
+
   // return  0 if node is not a storage node
   shard_size_t getNumShards(node_index_t node) const;
 

@@ -43,19 +43,26 @@ class ConfigurationFetchRequest : public Request {
   using config_cb_t = folly::Function<
       void(Status status, CONFIG_CHANGED_Header header, std::string config)>;
 
-  ConfigurationFetchRequest(NodeID node_id, ConfigType config_type)
-      : Request(RequestType::CONFIGURATION_FETCH),
-        node_id_(node_id),
-        config_type_(config_type) {}
-
-  ConfigurationFetchRequest(NodeID node_id,
-                            ConfigType config_type,
-                            config_cb_t cb,
-                            worker_id_t cb_worker_id,
-                            std::chrono::milliseconds timeout)
+  ConfigurationFetchRequest(
+      NodeID node_id,
+      ConfigType config_type,
+      folly::Optional<uint64_t> conditional_poll_version = folly::none)
       : Request(RequestType::CONFIGURATION_FETCH),
         node_id_(node_id),
         config_type_(config_type),
+        conditional_poll_version_(conditional_poll_version) {}
+
+  ConfigurationFetchRequest(
+      NodeID node_id,
+      ConfigType config_type,
+      config_cb_t cb,
+      worker_id_t cb_worker_id,
+      std::chrono::milliseconds timeout,
+      folly::Optional<uint64_t> conditional_poll_version = folly::none)
+      : Request(RequestType::CONFIGURATION_FETCH),
+        node_id_(node_id),
+        config_type_(config_type),
+        conditional_poll_version_(conditional_poll_version),
         cb_(std::move(cb)),
         cb_worker_id_(cb_worker_id),
         timeout_(timeout) {}
@@ -94,6 +101,7 @@ class ConfigurationFetchRequest : public Request {
  private:
   NodeID node_id_;
   CONFIG_FETCH_Header::ConfigType config_type_;
+  const folly::Optional<uint64_t> conditional_poll_version_;
 
   // A callback to be called when the config is ready.
   config_cb_t cb_{};
@@ -101,6 +109,7 @@ class ConfigurationFetchRequest : public Request {
   // An optional to worker_id to execute the request on. If the worker ID is
   // WORKER_ID_INVALID, the request is executed on a random worker.
   worker_id_t cb_worker_id_{WORKER_ID_INVALID};
+
   Timer timeout_timer_;
 
   // This is a timeout for how long we should wait for the callback to be
