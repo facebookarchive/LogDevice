@@ -168,7 +168,7 @@ class NodesConfigurationManager
 
   // The following helper functions should only be called from the NCM context.
   bool shouldStageVersion(membership::MembershipVersion::Type);
-  bool isProcessingVersion(membership::MembershipVersion::Type);
+  bool isProcessingEqualOrHigherVersion(membership::MembershipVersion::Type);
   bool hasProcessedVersion(membership::MembershipVersion::Type);
 
   OperationMode mode_;

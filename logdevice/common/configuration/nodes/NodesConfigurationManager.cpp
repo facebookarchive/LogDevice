@@ -226,6 +226,8 @@ void NodesConfigurationManager::onNewConfig(
   if (!shouldStageVersion(new_config_version)) {
     return;
   }
+  ld_debug("Staging nodes configuration of version %lu....",
+           new_config_version.val());
   // Incoming config has a higher version, use it as the staged config
   staged_nodes_config_ = std::move(new_config);
   STAT_SET(deps_->getStats(),
@@ -354,6 +356,8 @@ void NodesConfigurationManager::maybeProcessStagedConfig() {
   if (!staged_nodes_config_ || pending_nodes_config_) {
     return;
   }
+  ld_debug("Processing staged nodes configuration of version %lu.",
+           staged_nodes_config_->getVersion().val());
   ld_check(!hasProcessedVersion(staged_nodes_config_->getVersion()));
 
   // process the staged one now.
@@ -430,13 +434,14 @@ bool NodesConfigurationManager::shouldStageVersion(
     membership::MembershipVersion::Type version) {
   return (!staged_nodes_config_ ||
           staged_nodes_config_->getVersion() < version) &&
-      !isProcessingVersion(version) && !hasProcessedVersion(version);
+      !isProcessingEqualOrHigherVersion(version) &&
+      !hasProcessedVersion(version);
 }
 
-bool NodesConfigurationManager::isProcessingVersion(
+bool NodesConfigurationManager::isProcessingEqualOrHigherVersion(
     membership::MembershipVersion::Type version) {
   return pending_nodes_config_ &&
-      pending_nodes_config_->getVersion() == version;
+      pending_nodes_config_->getVersion() >= version;
 }
 
 bool NodesConfigurationManager::hasProcessedVersion(
