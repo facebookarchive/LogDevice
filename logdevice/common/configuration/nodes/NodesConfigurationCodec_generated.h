@@ -43,6 +43,10 @@ struct MetaDataLogsReplication;
 
 struct NodesConfiguration;
 
+struct NodesConfigurationHeader;
+
+struct NodesConfigurationWrapper;
+
 MANUALLY_ALIGNED_STRUCT(1) ScopeReplication FLATBUFFERS_FINAL_CLASS {
  private:
   uint8_t scope_;
@@ -683,6 +687,106 @@ inline flatbuffers::Offset<NodesConfiguration> CreateNodesConfigurationDirect(fl
     uint64_t last_maintenance = 0,
     const char *last_context = nullptr) {
   return CreateNodesConfiguration(_fbb, proto_version, version, service_discovery, sequencer_config, storage_config, metadata_logs_rep, last_timestamp, last_maintenance, last_context ? _fbb.CreateString(last_context) : 0);
+}
+
+struct NodesConfigurationHeader FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+  enum {
+    VT_PROTO_VERSION = 4,
+    VT_CONFIG_VERSION = 6,
+    VT_IS_COMPRESSED = 8
+  };
+  uint32_t proto_version() const { return GetField<uint32_t>(VT_PROTO_VERSION, 0); }
+  uint64_t config_version() const { return GetField<uint64_t>(VT_CONFIG_VERSION, 0); }
+  bool is_compressed() const { return GetField<uint8_t>(VT_IS_COMPRESSED, 0) != 0; }
+  bool Verify(flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<uint32_t>(verifier, VT_PROTO_VERSION) &&
+           VerifyField<uint64_t>(verifier, VT_CONFIG_VERSION) &&
+           VerifyField<uint8_t>(verifier, VT_IS_COMPRESSED) &&
+           verifier.EndTable();
+  }
+};
+
+struct NodesConfigurationHeaderBuilder {
+  flatbuffers::FlatBufferBuilder &fbb_;
+  flatbuffers::uoffset_t start_;
+  void add_proto_version(uint32_t proto_version) { fbb_.AddElement<uint32_t>(NodesConfigurationHeader::VT_PROTO_VERSION, proto_version, 0); }
+  void add_config_version(uint64_t config_version) { fbb_.AddElement<uint64_t>(NodesConfigurationHeader::VT_CONFIG_VERSION, config_version, 0); }
+  void add_is_compressed(bool is_compressed) { fbb_.AddElement<uint8_t>(NodesConfigurationHeader::VT_IS_COMPRESSED, static_cast<uint8_t>(is_compressed), 0); }
+  NodesConfigurationHeaderBuilder(flatbuffers::FlatBufferBuilder &_fbb) : fbb_(_fbb) { start_ = fbb_.StartTable(); }
+  NodesConfigurationHeaderBuilder &operator=(const NodesConfigurationHeaderBuilder &);
+  flatbuffers::Offset<NodesConfigurationHeader> Finish() {
+    auto o = flatbuffers::Offset<NodesConfigurationHeader>(fbb_.EndTable(start_, 3));
+    return o;
+  }
+};
+
+inline flatbuffers::Offset<NodesConfigurationHeader> CreateNodesConfigurationHeader(flatbuffers::FlatBufferBuilder &_fbb,
+    uint32_t proto_version = 0,
+    uint64_t config_version = 0,
+    bool is_compressed = false) {
+  NodesConfigurationHeaderBuilder builder_(_fbb);
+  builder_.add_config_version(config_version);
+  builder_.add_proto_version(proto_version);
+  builder_.add_is_compressed(is_compressed);
+  return builder_.Finish();
+}
+
+struct NodesConfigurationWrapper FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+  enum {
+    VT_HEADER = 4,
+    VT_SERIALIZED_CONFIG = 6
+  };
+  const NodesConfigurationHeader *header() const { return GetPointer<const NodesConfigurationHeader *>(VT_HEADER); }
+  const flatbuffers::Vector<uint8_t> *serialized_config() const { return GetPointer<const flatbuffers::Vector<uint8_t> *>(VT_SERIALIZED_CONFIG); }
+  bool Verify(flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<flatbuffers::uoffset_t>(verifier, VT_HEADER) &&
+           verifier.VerifyTable(header()) &&
+           VerifyField<flatbuffers::uoffset_t>(verifier, VT_SERIALIZED_CONFIG) &&
+           verifier.Verify(serialized_config()) &&
+           verifier.EndTable();
+  }
+};
+
+struct NodesConfigurationWrapperBuilder {
+  flatbuffers::FlatBufferBuilder &fbb_;
+  flatbuffers::uoffset_t start_;
+  void add_header(flatbuffers::Offset<NodesConfigurationHeader> header) { fbb_.AddOffset(NodesConfigurationWrapper::VT_HEADER, header); }
+  void add_serialized_config(flatbuffers::Offset<flatbuffers::Vector<uint8_t>> serialized_config) { fbb_.AddOffset(NodesConfigurationWrapper::VT_SERIALIZED_CONFIG, serialized_config); }
+  NodesConfigurationWrapperBuilder(flatbuffers::FlatBufferBuilder &_fbb) : fbb_(_fbb) { start_ = fbb_.StartTable(); }
+  NodesConfigurationWrapperBuilder &operator=(const NodesConfigurationWrapperBuilder &);
+  flatbuffers::Offset<NodesConfigurationWrapper> Finish() {
+    auto o = flatbuffers::Offset<NodesConfigurationWrapper>(fbb_.EndTable(start_, 2));
+    return o;
+  }
+};
+
+inline flatbuffers::Offset<NodesConfigurationWrapper> CreateNodesConfigurationWrapper(flatbuffers::FlatBufferBuilder &_fbb,
+    flatbuffers::Offset<NodesConfigurationHeader> header = 0,
+    flatbuffers::Offset<flatbuffers::Vector<uint8_t>> serialized_config = 0) {
+  NodesConfigurationWrapperBuilder builder_(_fbb);
+  builder_.add_serialized_config(serialized_config);
+  builder_.add_header(header);
+  return builder_.Finish();
+}
+
+inline flatbuffers::Offset<NodesConfigurationWrapper> CreateNodesConfigurationWrapperDirect(flatbuffers::FlatBufferBuilder &_fbb,
+    flatbuffers::Offset<NodesConfigurationHeader> header = 0,
+    const std::vector<uint8_t> *serialized_config = nullptr) {
+  return CreateNodesConfigurationWrapper(_fbb, header, serialized_config ? _fbb.CreateVector<uint8_t>(*serialized_config) : 0);
+}
+
+inline const facebook::logdevice::configuration::nodes::flat_buffer_codec::NodesConfigurationWrapper *GetNodesConfigurationWrapper(const void *buf) {
+  return flatbuffers::GetRoot<facebook::logdevice::configuration::nodes::flat_buffer_codec::NodesConfigurationWrapper>(buf);
+}
+
+inline bool VerifyNodesConfigurationWrapperBuffer(flatbuffers::Verifier &verifier) {
+  return verifier.VerifyBuffer<facebook::logdevice::configuration::nodes::flat_buffer_codec::NodesConfigurationWrapper>(nullptr);
+}
+
+inline void FinishNodesConfigurationWrapperBuffer(flatbuffers::FlatBufferBuilder &fbb, flatbuffers::Offset<facebook::logdevice::configuration::nodes::flat_buffer_codec::NodesConfigurationWrapper> root) {
+  fbb.Finish(root);
 }
 
 }  // namespace flat_buffer_codec

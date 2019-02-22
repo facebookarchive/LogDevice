@@ -9,7 +9,6 @@
 
 #include <zstd.h>
 
-#include "logdevice/common/PayloadHolder.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/membership/MembershipCodecFlatBuffers.h"
 #include "logdevice/common/protocol/ProtocolReader.h"
@@ -418,6 +417,24 @@ NodesConfigurationCodecFlatBuffers::deserialize(
   return result;
 }
 
+namespace {
+template <class T>
+const T* verifyAndGetPointer(Slice data_blob) {
+  auto verifier =
+      flatbuffers::Verifier(static_cast<const uint8_t*>(data_blob.data),
+                            data_blob.size,
+                            128, /* max verification depth */
+                            10000000 /* max number of tables to be verified */);
+  bool res = verifier.VerifyBuffer<T>(nullptr);
+  if (!res) {
+    RATELIMIT_ERROR(std::chrono::seconds(5), 1, "Buffer verification failed!");
+    err = E::BADMSG;
+    return nullptr;
+  }
+  return flatbuffers::GetRoot<T>(data_blob.data);
+}
+} // namespace
+
 /*static*/
 void NodesConfigurationCodecFlatBuffers::serialize(
     const NodesConfiguration& nodes_config,
@@ -428,14 +445,9 @@ void NodesConfigurationCodecFlatBuffers::serialize(
   builder.Finish(config);
 
   Slice data_blob{builder.GetBufferPointer(), builder.GetSize()};
-  Header header{CURRENT_PROTO_VERSION,
-                0,
-                nodes_config.getVersion().val(),
-                data_blob.size};
 
   std::unique_ptr<uint8_t[]> buffer;
   if (options.compression) {
-    header.flags |= Header::COMPRESSED;
     size_t compressed_size_upperbound = ZSTD_compressBound(data_blob.size);
     buffer = std::make_unique<uint8_t[]>(compressed_size_upperbound);
     size_t compressed_size =
@@ -457,66 +469,55 @@ void NodesConfigurationCodecFlatBuffers::serialize(
     ld_check(compressed_size <= compressed_size_upperbound);
     // revise the data_blob to point to the compressed blob instead
     data_blob = Slice{buffer.get(), compressed_size};
-    // revise the blob size in header as well
-    header.blob_size = compressed_size;
   }
 
-  // write the fixed size header
-  writer.write(header);
-  // write the data blob
-  writer.write(data_blob.data, data_blob.size);
+  flatbuffers::FlatBufferBuilder wrapper_builder;
+  auto wrapper_header = flat_buffer_codec::CreateNodesConfigurationHeader(
+      wrapper_builder,
+      CURRENT_PROTO_VERSION,
+      nodes_config.getVersion().val(),
+      options.compression);
+  auto wrapper = flat_buffer_codec::CreateNodesConfigurationWrapper(
+      wrapper_builder,
+      wrapper_header,
+      wrapper_builder.CreateVector(
+          static_cast<const uint8_t*>(data_blob.data), data_blob.size));
+  wrapper_builder.Finish(wrapper);
+
+  writer.write(wrapper_builder.GetBufferPointer(), wrapper_builder.GetSize());
 }
 
 /*static*/
 std::shared_ptr<const NodesConfiguration>
-NodesConfigurationCodecFlatBuffers::deserialize(ProtocolReader& reader,
-                                                bool evbuffer_zero_copy) {
-  if (reader.ok() && reader.bytesRemaining() == 0) {
+NodesConfigurationCodecFlatBuffers::deserialize(Slice wrapper_blob) {
+  if (wrapper_blob.size == 0) {
     return std::make_shared<const NodesConfiguration>();
   }
-
-#define CHECK_READER()  \
-  if (reader.error()) { \
-    err = E::BADMSG;    \
-    return nullptr;     \
+  auto wrapper_ptr = verifyAndGetPointer<
+      configuration::nodes::flat_buffer_codec::NodesConfigurationWrapper>(
+      wrapper_blob);
+  if (wrapper_ptr == nullptr) {
+    return nullptr;
   }
 
-  // read the fix-sized header
-  Header header;
-  reader.read(&header);
-  CHECK_READER();
-
-  if (header.proto_version > CURRENT_PROTO_VERSION) {
+  if (wrapper_ptr->header()->proto_version() > CURRENT_PROTO_VERSION) {
     RATELIMIT_ERROR(
         std::chrono::seconds(10),
         5,
         "Received codec protocol version %u is larger than current "
         "codec protocol version %u. There might be incompatible data, "
         "aborting deserialization",
-        header.proto_version,
+        wrapper_ptr->header()->proto_version(),
         CURRENT_PROTO_VERSION);
     err = E::NOTSUPPORTED;
     return nullptr;
   }
 
-  if (header.blob_size == 0) {
-    err = E::BADMSG;
-    return nullptr;
-  }
-
-  Slice data_blob;
   std::unique_ptr<uint8_t[]> buffer;
+  const auto& serialized_config = wrapper_ptr->serialized_config();
+  Slice data_blob{serialized_config->data(), serialized_config->size()};
 
-  // read the data blob
-  auto ph =
-      PayloadHolder::deserialize(reader, header.blob_size, evbuffer_zero_copy);
-  CHECK_READER();
-#undef CHECK_READER
-  ld_check(ph.valid());
-  // this also linearize the buffer
-  data_blob = Slice(ph.getPayload());
-
-  if (header.flags & Header::COMPRESSED) {
+  if (wrapper_ptr->header()->is_compressed()) {
     size_t uncompressed_size =
         ZSTD_getDecompressedSize(data_blob.data, data_blob.size);
     if (uncompressed_size == 0) {
@@ -542,22 +543,8 @@ NodesConfigurationCodecFlatBuffers::deserialize(ProtocolReader& reader,
     data_blob = Slice{buffer.get(), uncompressed_size};
   }
 
-  auto verifier =
-      flatbuffers::Verifier(static_cast<const uint8_t*>(data_blob.data),
-                            data_blob.size,
-                            128, /* max verification depth */
-                            10000000 /* max number of tables to be verified */);
-  bool res =
-      verifier.VerifyBuffer<flat_buffer_codec::NodesConfiguration>(nullptr);
-  if (!res) {
-    RATELIMIT_ERROR(std::chrono::seconds(5), 1, "Buffer verification failed!");
-    err = E::BADMSG;
-    return nullptr;
-  }
-
-  auto config_ptr = flatbuffers::GetRoot<
-      configuration::nodes::flat_buffer_codec::NodesConfiguration>(
-      data_blob.data);
+  auto config_ptr = verifyAndGetPointer<
+      configuration::nodes::flat_buffer_codec::NodesConfiguration>(data_blob);
   return NodesConfigurationCodecFlatBuffers::deserialize(config_ptr);
 }
 
@@ -577,15 +564,8 @@ std::string NodesConfigurationCodecFlatBuffers::serialize(
 
 /*static*/
 std::shared_ptr<const NodesConfiguration>
-NodesConfigurationCodecFlatBuffers::deserialize(void* buffer, size_t size) {
-  ProtocolReader reader(Slice{buffer, size}, "NodesConfiguraton", 0);
-  return deserialize(reader, false);
-}
-
-/*static*/
-std::shared_ptr<const NodesConfiguration>
 NodesConfigurationCodecFlatBuffers::deserialize(folly::StringPiece buf) {
-  return deserialize((void*)buf.data(), buf.size());
+  return deserialize(Slice(buf.data(), buf.size()));
 }
 
 /*static*/
@@ -595,20 +575,17 @@ NodesConfigurationCodecFlatBuffers::extractConfigVersion(
   if (serialized_data.empty()) {
     return membership::MembershipVersion::EMPTY_VERSION;
   }
-
-  if (serialized_data.size() < sizeof(Header)) {
-    RATELIMIT_ERROR(std::chrono::seconds(5),
-                    1,
-                    "Failed to extract configuration version: blob size %lu is "
-                    "smaller than the codec header size %lu.",
-                    serialized_data.size(),
-                    sizeof(Header));
+  auto wrapper_ptr = verifyAndGetPointer<
+      configuration::nodes::flat_buffer_codec::NodesConfigurationWrapper>(
+      Slice{serialized_data.data(), serialized_data.size()});
+  if (wrapper_ptr == nullptr) {
+    RATELIMIT_ERROR(
+        std::chrono::seconds(5), 1, "Failed to extract configuration version");
     return folly::none;
   }
 
-  const Header* header_ptr =
-      reinterpret_cast<const Header*>(serialized_data.data());
-  return membership::MembershipVersion::Type(header_ptr->config_version);
+  return membership::MembershipVersion::Type(
+      wrapper_ptr->header()->config_version());
 }
 
 }}}} // namespace facebook::logdevice::configuration::nodes

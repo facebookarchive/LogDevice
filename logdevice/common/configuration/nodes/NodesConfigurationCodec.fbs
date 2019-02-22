@@ -104,3 +104,17 @@ table NodesConfiguration {
   last_maintenance: ulong;
   last_context: string;
 }
+
+
+table NodesConfigurationHeader {
+  proto_version: uint;
+  config_version: ulong;
+  is_compressed: bool;
+}
+
+table NodesConfigurationWrapper {
+  header: NodesConfigurationHeader;
+  serialized_config: [ubyte];
+}
+
+root_type NodesConfigurationWrapper;

@@ -53,24 +53,6 @@ class NodesConfigurationCodecFlatBuffers {
 
   ////////// serialization to linear buffer ///////////
 
-  struct Header {
-    using flags_t = uint32_t;
-    using blob_size_t = uint64_t;
-
-    ProtocolVersion proto_version;
-    flags_t flags;
-    uint64_t config_version;
-    // size of the data blob after the fixed sized header
-    blob_size_t blob_size;
-
-    // if set, the data blob is compressed and will be decompressed during
-    // deserialization. currently only ZSTD is used.
-    static const flags_t COMPRESSED = 1u << 0;
-  };
-
-  static_assert(sizeof(Header) == 24,
-                "NodesConfigurationCodecFlatBuffers::Header is not packed.");
-
   struct SerializeOptions {
     // use zstd to compress the configuration data blob
     bool compression;
@@ -88,25 +70,12 @@ class NodesConfigurationCodecFlatBuffers {
                         ProtocolWriter& writer,
                         SerializeOptions options = {true});
 
-  /**
-   * @param  evbuffer_zero_copy  if true, use evbuffer zero copy to get the
-   *                             payload. Must be reading from evbuffer.
-   *
-   * @return  a shared ptr of the deserialized config is returned. But if there
-   *          is an error on deserialization, nullptr is returned and
-   *          @param reader should enter error state (i.e., reader.error() ==
-   *          true).
-   */
-  static std::shared_ptr<const NodesConfiguration>
-  deserialize(ProtocolReader& reader, bool evbuffer_zero_copy = false);
-
   // convenience wrappers for serialization / deserialization with linear buffer
   // such as strings. If a serialization error occurs, returns an empty string.
   static std::string serialize(const NodesConfiguration& nodes_config,
                                SerializeOptions options = {true});
 
-  static std::shared_ptr<const NodesConfiguration> deserialize(void* buffer,
-                                                               size_t size);
+  static std::shared_ptr<const NodesConfiguration> deserialize(Slice buf);
   static std::shared_ptr<const NodesConfiguration>
   deserialize(folly::StringPiece buf);
 

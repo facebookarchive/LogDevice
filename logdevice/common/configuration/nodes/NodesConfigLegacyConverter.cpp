@@ -404,8 +404,8 @@ bool NodesConfigLegacyConverter::testSerialization(
       config_str.size());
 
   auto deserialization_start_time = std::chrono::steady_clock::now();
-  auto deseriazed_config = NodesConfigurationCodecFlatBuffers::deserialize(
-      (void*)config_str.data(), config_str.size());
+  auto deseriazed_config =
+      NodesConfigurationCodecFlatBuffers::deserialize(config_str);
   auto deserialization_end_time = std::chrono::steady_clock::now();
 
   ld_info("Deserialization took %lu usec with compression %s for config with "

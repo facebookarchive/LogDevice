@@ -52,22 +52,23 @@ class NodesConfigurationTest : public ::testing::Test {
     }
     {
       // also test serialization with linear buffers
-      bool compress = folly::Random::rand64(2) == 0;
-      ld_info("Compression: %s", compress ? "enabled" : "disabled");
-      std::string str_buf =
-          NodesConfigurationCodecFlatBuffers::serialize(c, {compress});
-      ASSERT_FALSE(str_buf.empty());
-      ld_info("Serialized config blob has %lu bytes", str_buf.size());
+      for (auto compress : {false, true}) {
+        ld_info("Compression: %s", compress ? "enabled" : "disabled");
+        std::string str_buf =
+            NodesConfigurationCodecFlatBuffers::serialize(c, {compress});
+        ASSERT_FALSE(str_buf.empty());
+        ld_info("Serialized config blob has %lu bytes", str_buf.size());
 
-      auto version =
-          NodesConfigurationCodecFlatBuffers::extractConfigVersion(str_buf);
-      ASSERT_TRUE(version.hasValue());
-      ASSERT_EQ(c.getVersion(), version.value());
+        auto version =
+            NodesConfigurationCodecFlatBuffers::extractConfigVersion(str_buf);
+        ASSERT_TRUE(version.hasValue());
+        ASSERT_EQ(c.getVersion(), version.value());
 
-      auto c_deserialized2 = NodesConfigurationCodecFlatBuffers::deserialize(
-          (void*)str_buf.data(), str_buf.size());
-      ASSERT_NE(nullptr, c_deserialized2);
-      ASSERT_EQ(c, *c_deserialized2);
+        auto c_deserialized2 =
+            NodesConfigurationCodecFlatBuffers::deserialize(str_buf);
+        ASSERT_NE(nullptr, c_deserialized2);
+        ASSERT_EQ(c, *c_deserialized2);
+      }
     }
   }
 };
