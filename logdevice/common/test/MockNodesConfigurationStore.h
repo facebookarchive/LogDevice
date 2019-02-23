@@ -44,5 +44,7 @@ class MockNodesConfigurationStore : public NodesConfigurationStore {
                       folly::Optional<version_t> base_version,
                       version_t* version_out,
                       std::string* value_out));
+
+  MOCK_METHOD0(shutdown, void());
 };
 }}}} // namespace facebook::logdevice::configuration::nodes

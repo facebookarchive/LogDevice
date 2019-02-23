@@ -65,14 +65,15 @@ class NodesConfigurationManagerTest : public ::testing::Test {
     NodesConfiguration initial_config{};
     initial_config.setVersion(MembershipVersion::EMPTY_VERSION);
     EXPECT_TRUE(initial_config.validate());
-    z_ = std::make_shared<ZookeeperClientInMemory>(
+    auto z = std::make_unique<ZookeeperClientInMemory>(
         "unused quorum",
         ZookeeperClientInMemory::state_map_t{
             {kConfigKey, {"", zk::Stat{.version_ = 4}}}});
+    z_ = z.get();
     auto store = std::make_unique<ZookeeperNodesConfigurationStore>(
         kConfigKey,
         NodesConfigurationCodecFlatBuffers::extractConfigVersion,
-        z_);
+        std::move(z));
 
     Settings settings = create_default_settings<Settings>();
     settings.num_workers = 3;
@@ -112,7 +113,7 @@ class NodesConfigurationManagerTest : public ::testing::Test {
   }
 
   std::shared_ptr<Processor> processor_;
-  std::shared_ptr<ZookeeperClientBase> z_;
+  ZookeeperClientBase* z_;
   std::shared_ptr<NodesConfigurationManager> ncm_;
 };
 

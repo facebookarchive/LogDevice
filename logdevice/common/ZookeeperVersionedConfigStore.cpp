@@ -22,6 +22,15 @@ namespace facebook { namespace logdevice {
 
 void ZookeeperVersionedConfigStore::getConfig(std::string key,
                                               value_callback_t callback) const {
+  auto locked_ptr = shutdown_completed_.tryRLock();
+  if (shutdownSignaled()) {
+    callback(E::SHUTDOWN, "");
+    return;
+  }
+  // If shutdown was not signaled, we should not have failed to acquire the lock
+  // and shutdown_completed should be false.
+  ld_assert(locked_ptr && !*locked_ptr);
+
   ZookeeperClientBase::data_callback_t completion =
       [cb = std::move(callback)](int rc, std::string value, zk::Stat) mutable {
         Status status = ZookeeperClientBase::toStatus(rc);
@@ -33,8 +42,25 @@ void ZookeeperVersionedConfigStore::getConfig(std::string key,
 void ZookeeperVersionedConfigStore::getLatestConfig(
     std::string key,
     value_callback_t callback) const {
-  auto sync_cb = [cb = std::move(callback), key = std::move(key), zk = zk_](
+  auto locked_ptr = shutdown_completed_.tryRLock();
+  if (shutdownSignaled()) {
+    callback(E::SHUTDOWN, "");
+    return;
+  }
+  ld_assert(locked_ptr && !*locked_ptr);
+
+  auto sync_cb = [this, cb = std::move(callback), key = std::move(key)](
                      int sync_rc) mutable {
+    auto locked_p = this->shutdown_completed_.tryRLock();
+    // (1) try acquiring rlock failed || (2) shutdown_completed == true
+    if (!locked_p || *locked_p) {
+      // (2) should not happen based on our assumption of ZK dtor behavior.
+      ld_assert(!*locked_p);
+      ld_assert(this->shutdownSignaled());
+      cb(E::SHUTDOWN, "");
+      return;
+    }
+
     if (sync_rc != ZOK) {
       cb(ZookeeperClientBase::toStatus(sync_rc), "");
       return;
@@ -47,7 +73,7 @@ void ZookeeperVersionedConfigStore::getLatestConfig(
     // TODO: we must ensure the ZK session for the sync and that for the read
     // remain the same, i.e., if the zk client reconnects in between, we should
     // error out and retry the operation.
-    zk->getData(std::move(key), std::move(read_cb));
+    this->zk_->getData(std::move(key), std::move(read_cb));
   };
   zk_->sync(std::move(sync_cb));
 }
@@ -57,6 +83,13 @@ void ZookeeperVersionedConfigStore::updateConfig(
     std::string value,
     folly::Optional<version_t> base_version,
     write_callback_t callback) {
+  auto locked_ptr = shutdown_completed_.tryRLock();
+  if (shutdownSignaled()) {
+    callback(E::SHUTDOWN, version_t{}, "");
+    return;
+  }
+  ld_assert(locked_ptr && !*locked_ptr);
+
   auto opt = (*extract_fn_)(value);
   if (!opt) {
     err = E::INVALID_PARAM;
@@ -67,14 +100,24 @@ void ZookeeperVersionedConfigStore::updateConfig(
 
   // naive implementation of read-modify-write
   ZookeeperClientBase::data_callback_t read_cb =
-      [extract_fn = extract_fn_,
-       zk = zk_,
+      [this,
+       extract_fn = extract_fn_,
        key,
        write_value = std::move(value),
        base_version,
        new_version,
        write_callback = std::move(callback)](
           int rc, std::string current_value, zk::Stat zk_stat) mutable {
+        auto locked_p = this->shutdown_completed_.tryRLock();
+        // (1) try acquiring rlock failed || (2) shutdown_completed == true
+        if (!locked_p || *locked_p) {
+          // (2) should not happen based on our assumption of ZK dtor behavior.
+          ld_assert(!*locked_p);
+          ld_assert(this->shutdownSignaled());
+          write_callback(E::SHUTDOWN, version_t{}, "");
+          return;
+        }
+
         if (rc != ZOK) {
           // TODO: handle ZNONODE (create one);
           write_callback(ZookeeperClientBase::toStatus(rc), {}, "");
@@ -115,12 +158,30 @@ void ZookeeperVersionedConfigStore::updateConfig(
                 (*cb_ptr)(write_status, version_t{}, "");
               }
             };
-        zk->setData(std::move(key),
-                    std::move(write_value),
-                    std::move(completion),
-                    zk_stat.version_);
+        this->zk_->setData(std::move(key),
+                           std::move(write_value),
+                           std::move(completion),
+                           zk_stat.version_);
       }; // read_cb
 
   zk_->getData(std::move(key), std::move(read_cb));
 }
+
+void ZookeeperVersionedConfigStore::shutdown() {
+  shutdown_signaled_.store(true);
+  {
+    // acquire wlock which will wait for all readers (i.e., in-flight callbacks)
+    // to finish, essentially the "join" for ZK-VCS.
+    shutdown_completed_.withWLock([this](bool& completed) {
+      // let go of the ZookeeperClient instance
+      this->zk_ = nullptr;
+      completed = true;
+    });
+  }
+}
+
+bool ZookeeperVersionedConfigStore::shutdownSignaled() const {
+  return shutdown_signaled_.load();
+}
+
 }} // namespace facebook::logdevice

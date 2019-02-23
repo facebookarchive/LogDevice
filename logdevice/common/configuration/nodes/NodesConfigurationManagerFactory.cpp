@@ -55,8 +55,7 @@ NodesConfigurationStoreFactory::create(Params params) noexcept {
 
   switch (params.type) {
     case NCSType::Zookeeper: {
-      std::shared_ptr<ZookeeperClientBase> zkclient =
-          zkFactoryProd(*params.zk_config);
+      auto zkclient = zkFactoryProd(*params.zk_config);
       if (zkclient == nullptr) {
         ld_error("Unable to create the zookeeper client for NCS!");
         return nullptr;

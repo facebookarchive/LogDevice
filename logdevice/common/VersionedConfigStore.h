@@ -53,9 +53,9 @@ class VersionedConfigStore {
    * @param key: key of the config
    * @param cb:
    *   callback void(Status, std::string value) that will be invoked with
-   *   status OK, NOTFOUND, ACCESS, INVALID_PARAM, INVALID_CONFIG, or AGAIN. If
-   *   status is OK, cb will be invoked with the value. Otherwise, the value
-   *   parameter is meaningless (but default-constructed).
+   *   status OK, NOTFOUND, ACCESS, INVALID_PARAM, INVALID_CONFIG, AGAIN, or
+   *   SHUTDOWN. If status is OK, cb will be invoked with the value. Otherwise,
+   *   the value parameter is meaningless (but default-constructed).
    *
    * Note that the reads do not need to be linearizable with the writes.
    */
@@ -76,6 +76,7 @@ class VersionedConfigStore {
    *   AGAIN
    *   INVALID_PARAM
    *   INVALID_CONFIG
+   *   SHUTDOWN
    */
   virtual Status getConfigSync(std::string key, std::string* value_out) const;
 
@@ -121,6 +122,7 @@ class VersionedConfigStore {
    *     BADMSG // see implementation notes below
    *     INVALID_PARAM // see implementation notes below
    *     INVALID_CONFIG // see implementation notes below
+   *     SHUTDOWN
    *   If status is OK, cb will be invoked with the version of the newly written
    *   config. If status is VERSION_MISMATCH, cb will be invoked with the
    *   version that caused the mismatch as well as the existing config, if
@@ -156,12 +158,31 @@ class VersionedConfigStore {
    *   BADMSG
    *   INVALID_PARAM
    *   INVALID_CONFIG
+   *   SHUTDOWN
    */
   virtual Status updateConfigSync(std::string key,
                                   std::string value,
                                   folly::Optional<version_t> base_version,
                                   version_t* version_out = nullptr,
                                   std::string* value_out = nullptr);
+
+  /*
+   * After shutdown returns, VCS will guarantee (1) not to accept new read/write
+   * requests; (2) no more outstanding user-supplied callbacks will be invoked,
+   * (e.g., either by invoking all outstanding callbacks with E::SHUTDOWN, or by
+   * joining / destroying all the threads / EventBases the VCS has spawned.)
+   *
+   * This method may block, so it should be called on the main / Processor
+   * shutdown thread to avoid deadlocks. It should only be called once.
+   *
+   * Reads and writes (from other threads) to VCS during shutdown (or started
+   * before shutdown) will either complete normally or complete with E::SHUTDOWN
+   * (depending on shutdown progress). (This means no additional synchronization
+   * between the shutdown thread and VCS user thread(s) is necessary.)
+   *
+   * VCS methods should not be called _after shutdown() returns_.
+   */
+  virtual void shutdown() = 0;
 
   // TODO: add subscription API
 };

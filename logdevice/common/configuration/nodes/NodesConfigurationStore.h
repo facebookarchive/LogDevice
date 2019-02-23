@@ -53,6 +53,9 @@ class NodesConfigurationStore {
                                   folly::Optional<version_t> base_version,
                                   version_t* version_out = nullptr,
                                   std::string* value_out = nullptr) = 0;
+
+  // Read the documentation of VersionedConfigStore::shutdown.
+  virtual void shutdown() = 0;
 };
 
 // A NodesConfigurationStore implementation that's backed by a
@@ -102,6 +105,10 @@ class VersionedNodesConfigurationStore : public NodesConfigurationStore {
 
   const std::string& getPath() {
     return path_;
+  }
+
+  void shutdown() override {
+    store_->shutdown();
   }
 
  private:

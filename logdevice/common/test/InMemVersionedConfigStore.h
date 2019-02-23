@@ -34,6 +34,8 @@ class InMemVersionedConfigStore : public VersionedConfigStore {
                           version_t* version_out = nullptr,
                           std::string* value_out = nullptr) override;
 
+  void shutdown() override;
+
  private:
   // TODO: switch to a more efficient map; avoid copying mapped_type; more
   // granular synchronization.

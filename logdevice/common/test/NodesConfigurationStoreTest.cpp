@@ -222,7 +222,7 @@ TEST(NodesConfigurationStore, basicMT) {
 }
 
 TEST(NodesConfigurationStore, zk_basic) {
-  auto z = std::make_shared<ZookeeperClientInMemory>(
+  auto z = std::make_unique<ZookeeperClientInMemory>(
       "unused quorum",
       ZookeeperClientInMemory::state_map_t{
           {kConfigKey,
@@ -233,7 +233,7 @@ TEST(NodesConfigurationStore, zk_basic) {
 }
 
 TEST(NodesConfigurationStore, zk_basicMT) {
-  auto z = std::make_shared<ZookeeperClientInMemory>(
+  auto z = std::make_unique<ZookeeperClientInMemory>(
       "unused quorum",
       ZookeeperClientInMemory::state_map_t{
           {kConfigKey,

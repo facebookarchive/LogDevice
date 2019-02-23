@@ -35,6 +35,10 @@ FileBasedVersionedConfigStore::FileBasedVersionedConfigStore(
   ld_info("FileBasedVersionedConfigStore threads started.");
 }
 
+void FileBasedVersionedConfigStore::shutdown() {
+  throw std::runtime_error("unimplemented");
+}
+
 FileBasedVersionedConfigStore::~FileBasedVersionedConfigStore() {
   // Assumptions:
   // 1) destructor should only be called on one thread;

@@ -46,5 +46,7 @@ class ServerBasedNodesConfigurationStore : public NodesConfigurationStore {
                                   folly::Optional<version_t> base_version,
                                   version_t* version_out = nullptr,
                                   std::string* value_out = nullptr) override;
+
+  virtual void shutdown() override;
 };
 }}}} // namespace facebook::logdevice::configuration::nodes

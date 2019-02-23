@@ -96,6 +96,10 @@ Status InMemVersionedConfigStore::updateConfigSync(
   return Status::OK;
 }
 
+void InMemVersionedConfigStore::shutdown() {
+  throw std::runtime_error("unimplemented");
+}
+
 /* static */ constexpr const folly::StringPiece TestEntry::kValue;
 /* static */ constexpr const folly::StringPiece TestEntry::kVersion;
 

@@ -36,6 +36,8 @@ class FileBasedVersionedConfigStore : public VersionedConfigStore {
                     folly::Optional<version_t> base_version,
                     write_callback_t cb = {}) override;
 
+  void shutdown() override;
+
  private:
   const std::string root_path_;
   extract_version_fn extract_fn_;

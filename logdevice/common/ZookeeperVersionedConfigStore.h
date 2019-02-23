@@ -22,10 +22,12 @@ class ZookeeperVersionedConfigStore : public VersionedConfigStore {
  public:
   explicit ZookeeperVersionedConfigStore(
       extract_version_fn extract_fn,
-      std::shared_ptr<ZookeeperClientBase> zk)
+      std::unique_ptr<ZookeeperClientBase> zk)
       : extract_fn_(
             std::make_shared<extract_version_fn>(std::move(extract_fn))),
-        zk_(std::move(zk)) {
+        zk_(std::move(zk)),
+        shutdown_signaled_(false),
+        shutdown_completed_(false) {
     ld_check(extract_fn_ != nullptr);
     ld_check(zk_ != nullptr);
   }
@@ -48,8 +50,19 @@ class ZookeeperVersionedConfigStore : public VersionedConfigStore {
                     folly::Optional<version_t> base_version,
                     write_callback_t cb = {}) override;
 
+  // IMPORTANT: assumes shutdown is called from a different thread from ZK
+  // client's EventBase / thread.
+  void shutdown() override;
+  bool shutdownSignaled() const;
+
  private:
   const std::shared_ptr<const extract_version_fn> extract_fn_;
-  std::shared_ptr<ZookeeperClientBase> zk_;
+  std::unique_ptr<ZookeeperClientBase> zk_;
+
+  std::atomic<bool> shutdown_signaled_;
+  // Only safe to access `this` (for zk_) if tryRLock succeeds, since after
+  // shutdown completes, zk_ will be set to nullptr and we assume zk_ dtor will
+  // clean up all callbacks.
+  folly::Synchronized<bool> shutdown_completed_;
 };
 }} // namespace facebook::logdevice

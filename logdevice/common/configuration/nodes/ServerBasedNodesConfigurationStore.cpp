@@ -70,4 +70,8 @@ Status ServerBasedNodesConfigurationStore::updateConfigSync(
   throw std::runtime_error("unsupported");
 }
 
+void ServerBasedNodesConfigurationStore::shutdown() {
+  throw std::runtime_error("unsupported");
+}
+
 }}}} // namespace facebook::logdevice::configuration::nodes
