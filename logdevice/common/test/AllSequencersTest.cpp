@@ -149,7 +149,7 @@ struct MockProcessor : public Processor {
 
   ~MockProcessor() override {}
 
-  virtual bool isNodeIsolated() const override {
+  bool isNodeIsolated() const override {
     return isNodeIsolated_;
   }
 
