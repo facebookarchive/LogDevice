@@ -43,7 +43,7 @@ class FileBasedVersionedConfigStore : public VersionedConfigStore {
   extract_version_fn extract_fn_;
 
   // task thread for async tasks
-  std::atomic<bool> shutdown_{false};
+  std::atomic<bool> shutdown_signaled_{false};
   mutable folly::MPMCQueue<folly::Function<void()>> task_queue_;
   std::vector<std::thread> task_threads_;
 
@@ -63,6 +63,9 @@ class FileBasedVersionedConfigStore : public VersionedConfigStore {
   std::string getLockFilePath(const std::string& key) const {
     return root_path_ + "/" + key + ".lock__";
   }
+
+  // finish all inflight requests (with E::SHUTDOWN), join the task_threads_.
+  void stopAndJoin();
 
   // Creates the intermediate directories of the path of a file if they
   // don't exist, no errors if they do. Same logic as "mkdir -p".

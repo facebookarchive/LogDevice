@@ -35,17 +35,7 @@ FileBasedVersionedConfigStore::FileBasedVersionedConfigStore(
   ld_info("FileBasedVersionedConfigStore threads started.");
 }
 
-void FileBasedVersionedConfigStore::shutdown() {
-  throw std::runtime_error("unimplemented");
-}
-
-FileBasedVersionedConfigStore::~FileBasedVersionedConfigStore() {
-  // Assumptions:
-  // 1) destructor should only be called on one thread;
-  // 2) when destructor is called, there should be no thread context still
-  //    calling FileBasedVersionedConfigStore public functions
-  bool shutting_down = shutdown_.exchange(true);
-  ld_check(!shutting_down);
+void FileBasedVersionedConfigStore::stopAndJoin() {
   // enqueue the termination task for each worker
   for (auto i = 0; i < NUM_THREADS; ++i) {
     task_queue_.blockingWrite(folly::Function<void()>());
@@ -56,6 +46,21 @@ FileBasedVersionedConfigStore::~FileBasedVersionedConfigStore() {
   ld_info("FileBasedVersionedConfigStore threads stopped.");
 }
 
+void FileBasedVersionedConfigStore::shutdown() {
+  // Assumptions:
+  // 1) shutdown should only be called on one thread;
+  // 2) when shutdown is called, there should be no thread context still
+  //    calling FileBasedVersionedConfigStore public functions
+  bool has_shutdown = shutdown_signaled_.exchange(true);
+  if (!has_shutdown) {
+    stopAndJoin();
+  }
+}
+
+FileBasedVersionedConfigStore::~FileBasedVersionedConfigStore() {
+  shutdown();
+}
+
 void FileBasedVersionedConfigStore::threadMain() {
   ThreadID::set(ThreadID::Type::UTILITY, "ld:file-ncs");
   while (true) {
@@ -63,7 +68,7 @@ void FileBasedVersionedConfigStore::threadMain() {
     task_queue_.blockingRead(task);
     if (!task) {
       // store is shutting down
-      ld_check(shutdown_.load());
+      ld_check(shutdown_signaled_.load());
       return;
     }
     task();
@@ -72,7 +77,7 @@ void FileBasedVersionedConfigStore::threadMain() {
 
 void FileBasedVersionedConfigStore::getConfigImpl(std::string key,
                                                   value_callback_t cb) const {
-  if (shutdown_.load()) {
+  if (shutdown_signaled_.load()) {
     cb(E::SHUTDOWN, "");
     return;
   }
@@ -121,7 +126,7 @@ void FileBasedVersionedConfigStore::updateConfigImpl(
     std::string value,
     folly::Optional<version_t> base_version,
     write_callback_t cb) {
-  if (shutdown_.load()) {
+  if (shutdown_signaled_.load()) {
     cb(E::SHUTDOWN, {}, "");
     return;
   }
@@ -224,7 +229,7 @@ void FileBasedVersionedConfigStore::updateConfigImpl(
 
 void FileBasedVersionedConfigStore::getConfig(std::string key,
                                               value_callback_t cb) const {
-  if (shutdown_.load()) {
+  if (shutdown_signaled_.load()) {
     cb(E::SHUTDOWN, {});
     return;
   }
@@ -256,7 +261,7 @@ void FileBasedVersionedConfigStore::updateConfig(
     std::string value,
     folly::Optional<version_t> base_version,
     write_callback_t cb) {
-  if (shutdown_.load()) {
+  if (shutdown_signaled_.load()) {
     cb(E::SHUTDOWN, {}, "");
     return;
   }
