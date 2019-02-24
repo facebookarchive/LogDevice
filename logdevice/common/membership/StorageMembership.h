@@ -20,7 +20,12 @@
 #include "logdevice/common/membership/StorageState.h"
 #include "logdevice/common/membership/StorageStateTransitions.h"
 
-namespace facebook { namespace logdevice { namespace membership {
+namespace facebook { namespace logdevice {
+namespace configuration { namespace nodes {
+class ShardStateTracker;
+}} // namespace configuration::nodes
+
+namespace membership {
 
 /**
  * @file Storage membership describes the collection of storage shards in
@@ -334,7 +339,9 @@ class StorageMembership : public Membership {
   }
 
   friend class configuration::nodes::NodesConfigLegacyConverter;
+  friend class configuration::nodes::ShardStateTracker;
   friend class MembershipCodecFlatBuffers;
 };
 
-}}} // namespace facebook::logdevice::membership
+} // namespace membership
+}} // namespace facebook::logdevice
