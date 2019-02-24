@@ -24,6 +24,11 @@ namespace nodes {
 
 void ServerBasedNodesConfigurationStore::getConfig(
     value_callback_t callback) const {
+  if (shutdown_signaled_.load()) {
+    callback(E::SHUTDOWN, "");
+    return;
+  }
+
   auto worker = Worker::onThisThread();
   auto server_config = worker->getServerConfig();
 
@@ -71,7 +76,10 @@ Status ServerBasedNodesConfigurationStore::updateConfigSync(
 }
 
 void ServerBasedNodesConfigurationStore::shutdown() {
-  throw std::runtime_error("unsupported");
+  shutdown_signaled_.store(true);
+  // ServerBased NCS runs on the Processor, we assume the Processor::shutdown()
+  // will finish the remaining requests and join the worker threads after
+  // signaling NCM / NCS shutdown.
 }
 
 }}}} // namespace facebook::logdevice::configuration::nodes
