@@ -7,9 +7,9 @@
  */
 #pragma once
 
+#include "logdevice/common/DistributedRequest.h"
 #include "logdevice/common/NodeSetAccessor.h"
 #include "logdevice/common/NodeSetFinder.h"
-#include "logdevice/common/Request.h"
 #include "logdevice/common/RequestType.h"
 #include "logdevice/common/ShardAuthoritativeStatusMap.h"
 #include "logdevice/common/Timer.h"
@@ -44,6 +44,15 @@ namespace facebook { namespace logdevice {
 
 class GetHeadAttributesRequest;
 
+/**
+ * Additionally adds access to the request object.
+ * See get_head_attributes_callback_t for more details
+ */
+typedef std::function<void(const GetHeadAttributesRequest&,
+                           Status status,
+                           std::unique_ptr<LogHeadAttributes>)>
+    get_head_attributes_callback_ex_t;
+
 // Wrapper instead of typedef to allow forward-declaring in Worker.h
 struct GetHeadAttributesRequestMap {
   std::unordered_map<request_id_t,
@@ -52,16 +61,28 @@ struct GetHeadAttributesRequestMap {
       map;
 };
 
-class GetHeadAttributesRequest : public Request,
+class GetHeadAttributesRequest : public DistributedRequest,
                                  public ShardAuthoritativeStatusSubscriber {
  public:
   GetHeadAttributesRequest(logid_t log_id,
                            std::chrono::milliseconds client_timeout,
-                           get_head_attributes_callback_t callback)
-      : Request(RequestType::GET_HEAD_ATTRIBUTES),
+                           get_head_attributes_callback_ex_t callback)
+      : DistributedRequest(RequestType::GET_HEAD_ATTRIBUTES),
         log_id_(log_id),
         client_timeout_(client_timeout),
         callback_(callback) {}
+
+  GetHeadAttributesRequest(logid_t log_id,
+                           std::chrono::milliseconds client_timeout,
+                           get_head_attributes_callback_t callback)
+      : GetHeadAttributesRequest(
+            log_id,
+            client_timeout,
+            [callback](const GetHeadAttributesRequest&,
+                       Status status,
+                       std::unique_ptr<LogHeadAttributes> attrs) {
+              callback(status, std::move(attrs));
+            }) {}
 
   Execution execute() override;
 
@@ -121,11 +142,10 @@ class GetHeadAttributesRequest : public Request,
  private:
   const logid_t log_id_;
   const std::chrono::milliseconds client_timeout_;
-  const get_head_attributes_callback_t callback_;
+  const get_head_attributes_callback_ex_t callback_;
 
   std::unique_ptr<Timer> client_timeout_timer_{nullptr};
   std::unique_ptr<NodeSetFinder> nodeset_finder_{nullptr};
-  std::unique_ptr<StorageSetAccessor> nodeset_accessor_{nullptr};
 
  protected: // overridden in unit tests
   // Make sure to call the client callback exactly once

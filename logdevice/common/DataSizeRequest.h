@@ -7,9 +7,9 @@
  */
 #pragma once
 
+#include "logdevice/common/DistributedRequest.h"
 #include "logdevice/common/NodeSetAccessor.h"
 #include "logdevice/common/NodeSetFinder.h"
-#include "logdevice/common/Request.h"
 #include "logdevice/common/RequestType.h"
 #include "logdevice/common/ShardAuthoritativeStatusMap.h"
 #include "logdevice/common/configuration/Configuration.h"
@@ -55,6 +55,13 @@ namespace facebook { namespace logdevice {
 
 class DataSizeRequest;
 
+/**
+ * Additionally adds access to the request object.
+ * See data_size_callback_t for more details
+ */
+typedef std::function<void(const DataSizeRequest&, Status status, size_t size)>
+    data_size_callback_ex_t;
+
 // Wrapper instead of typedef to allow forward-declaring in Worker.h
 struct DataSizeRequestMap {
   std::unordered_map<request_id_t,
@@ -66,21 +73,37 @@ struct DataSizeRequestMap {
 static_assert(static_cast<int>(DataSizeAccuracy::COUNT) == 1,
               "Some values of DataSizeAccuracy not supported!");
 
-class DataSizeRequest : public Request,
+class DataSizeRequest : public DistributedRequest,
                         public ShardAuthoritativeStatusSubscriber {
  public:
   DataSizeRequest(logid_t log_id,
                   std::chrono::milliseconds start,
                   std::chrono::milliseconds end,
                   DataSizeAccuracy /*accuracy*/,
-                  data_size_callback_t callback,
+                  data_size_callback_ex_t callback,
                   std::chrono::milliseconds client_timeout)
-      : Request(RequestType::DATA_SIZE),
+      : DistributedRequest(RequestType::DATA_SIZE),
         log_id_(log_id),
         start_(start),
         end_(end),
         client_timeout_(client_timeout),
         callback_(callback) {}
+
+  DataSizeRequest(logid_t log_id,
+                  std::chrono::milliseconds start,
+                  std::chrono::milliseconds end,
+                  DataSizeAccuracy accuracy,
+                  data_size_callback_t callback,
+                  std::chrono::milliseconds client_timeout)
+      : DataSizeRequest(
+            log_id,
+            start,
+            end,
+            accuracy,
+            [callback](const DataSizeRequest&, Status st, size_t size) {
+              callback(st, size);
+            },
+            client_timeout) {}
 
   void setWorkerThread(worker_id_t worker) {
     worker_ = worker;
@@ -131,7 +154,6 @@ class DataSizeRequest : public Request,
   static const shard_status_t SHARD_IS_REBUILDING = 1u << 2;
   using FailureDomain = FailureDomainNodeSet<shard_status_t>;
 
-  std::unique_ptr<StorageSetAccessor> nodeset_accessor_{nullptr};
   std::unique_ptr<FailureDomain> failure_domain_;
   bool completion_cond_called_ = false;
 
@@ -174,7 +196,7 @@ class DataSizeRequest : public Request,
   const std::chrono::milliseconds start_;
   const std::chrono::milliseconds end_;
   const std::chrono::milliseconds client_timeout_;
-  const data_size_callback_t callback_;
+  const data_size_callback_ex_t callback_;
   size_t data_size_ = 0;
 
   int replication_factor_ = 0;

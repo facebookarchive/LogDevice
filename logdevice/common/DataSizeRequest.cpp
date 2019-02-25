@@ -279,15 +279,15 @@ void DataSizeRequest::finalize(Status status, bool delete_this) {
 
     if (num_responses == 0) {
       // We found ourselves in a dead end during start
-      callback_(E::FAILED, 0);
+      callback_(*this, E::FAILED, 0);
     } else {
       size_t avg_size = result_size / double(num_responses);
       size_t final_estimate =
           round(avg_size * double(failure_domain_->numShards()));
-      callback_(status, final_estimate);
+      callback_(*this, status, final_estimate);
     }
   } else {
-    callback_(status, 0);
+    callback_(*this, status, 0);
   }
 
   if (delete_this) {
@@ -307,7 +307,7 @@ DataSizeRequest::~DataSizeRequest() {
     // request is still processing
     ld_check(worker->shuttingDown());
     ld_warning("DataSizeRequest destroyed while still processing");
-    callback_(E::SHUTDOWN, 0);
+    callback_(*this, E::SHUTDOWN, 0);
   }
 }
 

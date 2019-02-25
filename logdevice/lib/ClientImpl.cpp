@@ -1374,12 +1374,13 @@ int ClientImpl::trim(logid_t logid,
                      lsn_t lsn,
                      std::unique_ptr<std::string> per_request_token,
                      trim_callback_t cb) noexcept {
-  auto cb_wrapper = [logid, lsn, cb, start = SteadyClock::now()](Status st) {
+  auto cb_wrapper = [logid, lsn, cb, start = SteadyClock::now()](
+                        const TrimRequest& req, Status st) {
     // log response
     Worker* w = Worker::onThisThread();
     if (w) {
       w->processor_->api_hits_tracer_->traceTrim(
-          msec_since(start), logid, lsn, st);
+          msec_since(start), logid, lsn, req.getFailedShards(st), st);
     }
     cb(st);
   };
@@ -1466,11 +1467,17 @@ int ClientImpl::findTime(logid_t logid,
                          FindKeyAccuracy accuracy) noexcept {
   auto cb_wrapper =
       [cb, logid, timestamp, accuracy, start = SteadyClock::now()](
-          Status st, lsn_t result) {
+          const FindKeyRequest& req, Status st, lsn_t result) {
         Worker* w = Worker::onThisThread();
         if (w) {
           w->processor_->api_hits_tracer_->traceFindTime(
-              msec_since(start), logid, timestamp, accuracy, st, result);
+              msec_since(start),
+              logid,
+              timestamp,
+              accuracy,
+              req.getFailedShards(st),
+              st,
+              result);
         }
         cb(st, result);
       };
@@ -1481,7 +1488,7 @@ int ClientImpl::findTime(logid_t logid,
       folly::none,
       settings_->getSettings()->findkey_timeout.value_or(timeout_),
       cb_wrapper,
-      find_key_callback_t(),
+      find_key_callback_ex_t(),
       accuracy);
   return processor_->postRequest(req);
 }
@@ -1507,17 +1514,19 @@ int ClientImpl::findKey(logid_t logid,
                         find_key_callback_t cb,
                         FindKeyAccuracy accuracy) noexcept {
   auto cb_wrapper = [cb, logid, key, accuracy, start = SteadyClock::now()](
-                        FindKeyResult result) {
+                        const FindKeyRequest& req, FindKeyResult result) {
     // log response
     Worker* w = Worker::onThisThread();
     if (w) {
-      w->processor_->api_hits_tracer_->traceFindKey(msec_since(start),
-                                                    logid,
-                                                    key,
-                                                    accuracy,
-                                                    result.status,
-                                                    result.lo,
-                                                    result.hi);
+      w->processor_->api_hits_tracer_->traceFindKey(
+          msec_since(start),
+          logid,
+          key,
+          accuracy,
+          req.getFailedShards(result.status),
+          result.status,
+          result.lo,
+          result.hi);
     }
     cb(result);
   };
@@ -1526,7 +1535,7 @@ int ClientImpl::findKey(logid_t logid,
       std::chrono::milliseconds(0),
       std::move(key),
       settings_->getSettings()->findkey_timeout.value_or(timeout_),
-      find_time_callback_t(),
+      find_time_callback_ex_t(),
       cb_wrapper,
       accuracy);
   return processor_->postRequest(req);
@@ -1574,12 +1583,12 @@ int ClientImpl::isLogEmptySync(logid_t logid, bool* empty) noexcept {
 
 int ClientImpl::isLogEmpty(logid_t logid, is_empty_callback_t cb) noexcept {
   auto cb_wrapper = [cb, logid, start = SteadyClock::now()](
-                        Status st, bool empty) {
+                        const IsLogEmptyRequest& req, Status st, bool empty) {
     // log response
     Worker* w = Worker::onThisThread();
     if (w) {
       w->processor_->api_hits_tracer_->traceIsLogEmpty(
-          msec_since(start), logid, st, empty);
+          msec_since(start), logid, req.getFailedShards(st), st, empty);
     }
     cb(st, empty);
   };
@@ -1644,7 +1653,7 @@ int ClientImpl::dataSize(logid_t logid,
                      end,
                      accuracy,
                      request_start_time = SteadyClock::now()](
-                        Status st, size_t size) {
+                        const DataSizeRequest& req, Status st, size_t size) {
     // log response
     Worker* w = Worker::onThisThread();
     if (w) {
@@ -1654,6 +1663,7 @@ int ClientImpl::dataSize(logid_t logid,
           start,
           end,
           accuracy,
+          req.getFailedShards(st),
           st,
           size);
     }
@@ -1959,13 +1969,18 @@ ClientImpl::getHeadAttributesSync(logid_t logid) noexcept {
 int ClientImpl::getHeadAttributes(logid_t logid,
                                   get_head_attributes_callback_t cb) noexcept {
   auto cb_wrapper = [logid, cb, start = SteadyClock::now()](
+                        const GetHeadAttributesRequest& req,
                         Status st,
                         std::unique_ptr<LogHeadAttributes> head_attributes) {
     // log response
     Worker* w = Worker::onThisThread();
     if (w) {
       w->processor_->api_hits_tracer_->traceGetHeadAttributes(
-          msec_since(start), logid, st, head_attributes.get());
+          msec_since(start),
+          logid,
+          req.getFailedShards(st),
+          st,
+          head_attributes.get());
     }
     cb(st, std::move(head_attributes));
   };

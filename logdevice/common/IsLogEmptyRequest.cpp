@@ -338,7 +338,7 @@ void IsLogEmptyRequest::finalize(Status status, bool empty, bool delete_this) {
       ld_check(false);
       status = E::FAILED;
   }
-  callback_(status, empty);
+  callback_(*this, status, empty);
   if (delete_this) {
     deleteThis();
   }
@@ -356,7 +356,7 @@ IsLogEmptyRequest::~IsLogEmptyRequest() {
     // request is still processing
     ld_check(worker->shuttingDown());
     ld_warning("IsLogEmptyRequest destroyed while still processing");
-    callback_(E::SHUTDOWN, false);
+    callback_(*this, E::SHUTDOWN, false);
   }
 }
 

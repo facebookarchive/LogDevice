@@ -41,15 +41,6 @@
 
 namespace facebook { namespace logdevice {
 
-struct StatusHasher {
-  size_t operator()(Status status) const {
-    return static_cast<size_t>(status);
-  }
-};
-
-using FailedShardsMap =
-    std::unordered_map<Status, std::vector<ShardID>, StatusHasher>;
-
 class Timer;
 
 class StorageSetAccessor {

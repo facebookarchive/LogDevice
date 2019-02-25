@@ -7,6 +7,8 @@
  */
 #include "logdevice/common/ClientAPIHitsTracer.h"
 
+#include <ostream>
+
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/stats/ClientHistograms.h"
 #include "logdevice/common/stats/Stats.h"
@@ -38,6 +40,30 @@ inline std::string to_string(const DataSizeAccuracy& accuracy) {
   }
 }
 
+std::ostream& operator<<(std::ostream& os, const ShardID& rhs) {
+  os << rhs.toString();
+  return os;
+}
+
+std::map<std::string, std::string>
+failed_shards_to_string_map(FailedShardsMap&& failed_shards) {
+  std::map<std::string, std::string> result;
+  for (const auto& p : failed_shards) {
+    std::ostringstream oss;
+    const auto& vec = p.second;
+    if (!vec.empty()) {
+      std::copy(vec.cbegin(),
+                vec.cend() - 1,
+                std::ostream_iterator<ShardID>(oss, ","));
+      oss << vec.back();
+    }
+
+    result[error_name(p.first)] = oss.str();
+  }
+
+  return result;
+}
+
 #define API_HITS_STATUS_CASE(method, status)    \
   case E::status: {                             \
     WORKER_STAT_INCR(client.method##_##status); \
@@ -51,6 +77,7 @@ void ClientAPIHitsTracer::traceFindTime(int64_t msec_resp_time,
                                         logid_t in_logid,
                                         std::chrono::milliseconds in_timestamp,
                                         FindKeyAccuracy in_accuracy,
+                                        FailedShardsMap&& failed_shards,
                                         Status out_status,
                                         lsn_t out_lsn) {
   CLIENT_HISTOGRAM_ADD(Worker::stats(), findtime_latency, msec_resp_time);
@@ -64,7 +91,7 @@ void ClientAPIHitsTracer::traceFindTime(int64_t msec_resp_time,
     API_HITS_STATUS_CASE(findtime, SHUTDOWN)
     API_HITS_DEFAULT(findtime)
   }
-  auto sample_builder = [=]() -> std::unique_ptr<TraceSample> {
+  auto sample_builder = [=, &failed_shards]() -> std::unique_ptr<TraceSample> {
     auto sample = std::make_unique<TraceSample>();
     sample->addNormalValue("method", "findTime");
     sample->addIntValue("response_time", msec_resp_time);
@@ -73,6 +100,8 @@ void ClientAPIHitsTracer::traceFindTime(int64_t msec_resp_time,
     sample->addNormalValue("input_accuracy", to_string(in_accuracy));
     sample->addNormalValue("output_status", error_name(out_status));
     sample->addNormalValue("output_lsn", lsn_to_string(out_lsn));
+    sample->addMapValue(
+        "failed_shards", failed_shards_to_string_map(std::move(failed_shards)));
     return sample;
   };
   publish(API_HITS_TRACER, sample_builder);
@@ -82,6 +111,7 @@ void ClientAPIHitsTracer::traceFindKey(int64_t msec_resp_time,
                                        logid_t in_logid,
                                        std::string in_key,
                                        FindKeyAccuracy in_accuracy,
+                                       FailedShardsMap&& failed_shards,
                                        Status out_status,
                                        lsn_t out_lsn_lo,
                                        lsn_t out_lsn_hi) {
@@ -96,7 +126,7 @@ void ClientAPIHitsTracer::traceFindKey(int64_t msec_resp_time,
     API_HITS_STATUS_CASE(findkey, SHUTDOWN)
     API_HITS_DEFAULT(findkey)
   }
-  auto sample_builder = [=]() -> std::unique_ptr<TraceSample> {
+  auto sample_builder = [=, &failed_shards]() -> std::unique_ptr<TraceSample> {
     auto sample = std::make_unique<TraceSample>();
     sample->addNormalValue("method", "findKey");
     sample->addIntValue("response_time", msec_resp_time);
@@ -106,6 +136,9 @@ void ClientAPIHitsTracer::traceFindKey(int64_t msec_resp_time,
     sample->addNormalValue("output_status", error_name(out_status));
     sample->addNormalValue("output_lsn_lo", lsn_to_string(out_lsn_lo));
     sample->addNormalValue("output_lsn_hi", lsn_to_string(out_lsn_hi));
+    sample->addMapValue(
+        "failed_shards", failed_shards_to_string_map(std::move(failed_shards)));
+
     return sample;
   };
   publish(API_HITS_TRACER, sample_builder);
@@ -151,6 +184,7 @@ void ClientAPIHitsTracer::traceGetTailAttributes(
 void ClientAPIHitsTracer::traceGetHeadAttributes(
     int64_t msec_resp_time,
     logid_t in_logid,
+    FailedShardsMap&& failed_shards,
     Status out_status,
     LogHeadAttributes* out_log_head_attributes) {
   CLIENT_HISTOGRAM_ADD(
@@ -169,7 +203,8 @@ void ClientAPIHitsTracer::traceGetHeadAttributes(
                          out_status,
                          out_log_head_attributes = out_log_head_attributes
                              ? out_log_head_attributes->toString()
-                             : "<nullptr>"]() -> std::unique_ptr<TraceSample> {
+                             : "<nullptr>",
+                         &failed_shards]() -> std::unique_ptr<TraceSample> {
     auto sample = std::make_unique<TraceSample>();
     sample->addNormalValue("method", "getHeadAttributes");
     sample->addIntValue("response_time", msec_resp_time);
@@ -177,6 +212,8 @@ void ClientAPIHitsTracer::traceGetHeadAttributes(
     sample->addNormalValue("output_status", error_name(out_status));
     sample->addNormalValue(
         "output_log_head_attributes", out_log_head_attributes);
+    sample->addMapValue(
+        "failed_shards", failed_shards_to_string_map(std::move(failed_shards)));
     return sample;
   };
   publish(API_HITS_TRACER, sample_builder);
@@ -212,6 +249,7 @@ void ClientAPIHitsTracer::traceGetTailLSN(int64_t msec_resp_time,
 
 void ClientAPIHitsTracer::traceIsLogEmpty(int64_t msec_resp_time,
                                           logid_t in_logid,
+                                          FailedShardsMap&& failed_shards,
                                           Status out_status,
                                           bool out_bool) {
   bool is_flappy = assessIsLogEmptyFlappiness(out_status, in_logid, out_bool);
@@ -231,7 +269,7 @@ void ClientAPIHitsTracer::traceIsLogEmpty(int64_t msec_resp_time,
   if (is_flappy) {
     WORKER_STAT_INCR(client.is_log_empty_flappy);
   }
-  auto sample_builder = [=]() -> std::unique_ptr<TraceSample> {
+  auto sample_builder = [=, &failed_shards]() -> std::unique_ptr<TraceSample> {
     auto sample = std::make_unique<TraceSample>();
     sample->addNormalValue("method", "isLogEmpty");
     sample->addIntValue("response_time", msec_resp_time);
@@ -239,6 +277,8 @@ void ClientAPIHitsTracer::traceIsLogEmpty(int64_t msec_resp_time,
     sample->addNormalValue("output_status", error_name(out_status));
     sample->addIntValue("output_bool", out_bool);
     sample->addIntValue("is_log_empty_flappy", is_flappy);
+    sample->addMapValue(
+        "failed_shards", failed_shards_to_string_map(std::move(failed_shards)));
     return sample;
   };
   publish(API_HITS_TRACER, sample_builder, /*force = */ is_flappy);
@@ -286,6 +326,7 @@ void ClientAPIHitsTracer::traceDataSize(
     std::chrono::milliseconds in_start_timestamp,
     std::chrono::milliseconds in_end_timestamp,
     DataSizeAccuracy in_accuracy,
+    FailedShardsMap&& failed_shards,
     Status out_status,
     size_t out_size) {
   switch (out_status) {
@@ -300,7 +341,7 @@ void ClientAPIHitsTracer::traceDataSize(
     API_HITS_STATUS_CASE(data_size, INTERNAL)
     API_HITS_DEFAULT(data_size)
   }
-  auto sample_builder = [=]() -> std::unique_ptr<TraceSample> {
+  auto sample_builder = [=, &failed_shards]() -> std::unique_ptr<TraceSample> {
     auto sample = std::make_unique<TraceSample>();
     sample->addNormalValue("method", "dataSize");
     sample->addIntValue("response_time", msec_resp_time);
@@ -310,6 +351,8 @@ void ClientAPIHitsTracer::traceDataSize(
     sample->addNormalValue("input_accuracy", to_string(in_accuracy));
     sample->addNormalValue("output_status", error_name(out_status));
     sample->addIntValue("output_size", out_size);
+    sample->addMapValue(
+        "failed_shards", failed_shards_to_string_map(std::move(failed_shards)));
     return sample;
   };
   publish(API_HITS_TRACER, sample_builder);
@@ -318,6 +361,7 @@ void ClientAPIHitsTracer::traceDataSize(
 void ClientAPIHitsTracer::traceTrim(int64_t msec_resp_time,
                                     logid_t in_logid,
                                     lsn_t in_lsn,
+                                    FailedShardsMap&& failed_shards,
                                     Status out_status) {
   CLIENT_HISTOGRAM_ADD(Worker::stats(), trim_latency, msec_resp_time);
   switch (out_status) {
@@ -330,13 +374,15 @@ void ClientAPIHitsTracer::traceTrim(int64_t msec_resp_time,
     API_HITS_STATUS_CASE(trim, NOTFOUND)
     API_HITS_DEFAULT(trim)
   }
-  auto sample_builder = [=]() -> std::unique_ptr<TraceSample> {
+  auto sample_builder = [=, &failed_shards]() -> std::unique_ptr<TraceSample> {
     auto sample = std::make_unique<TraceSample>();
     sample->addNormalValue("method", "trim");
     sample->addIntValue("response_time", msec_resp_time);
     sample->addNormalValue("input_log_id", std::to_string(in_logid.val()));
     sample->addNormalValue("input_lsn", lsn_to_string(in_lsn));
     sample->addNormalValue("output_status", error_name(out_status));
+    sample->addMapValue(
+        "failed_shards", failed_shards_to_string_map(std::move(failed_shards)));
     return sample;
   };
   publish(API_HITS_TRACER, sample_builder);

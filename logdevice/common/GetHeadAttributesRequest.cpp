@@ -151,7 +151,8 @@ StorageSetAccessor::SendResult GetHeadAttributesRequest::sendTo(ShardID shard) {
 void GetHeadAttributesRequest::finalize(Status status, bool delete_this) {
   ld_check(!callback_called_);
   callback_called_ = true;
-  callback_(status,
+  callback_(*this,
+            status,
             std::make_unique<LogHeadAttributes>(
                 LogHeadAttributes{trim_point_, trim_point_timestamp_}));
   if (delete_this) {
@@ -171,8 +172,9 @@ GetHeadAttributesRequest::~GetHeadAttributesRequest() {
     // request is still processing
     ld_check(worker->shuttingDown());
     ld_warning("GetHeadAttributesRequest destroyed while still processing");
-    callback_(
-        E::SHUTDOWN, std::make_unique<LogHeadAttributes>(LogHeadAttributes()));
+    callback_(*this,
+              E::SHUTDOWN,
+              std::make_unique<LogHeadAttributes>(LogHeadAttributes()));
   }
 }
 

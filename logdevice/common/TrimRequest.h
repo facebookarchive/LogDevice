@@ -13,10 +13,10 @@
 #include <unordered_map>
 
 #include "logdevice/common/ClientBridge.h"
+#include "logdevice/common/DistributedRequest.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/NodeSetAccessor.h"
 #include "logdevice/common/NodeSetFinder.h"
-#include "logdevice/common/Request.h"
 #include "logdevice/common/RequestType.h"
 #include "logdevice/common/SocketCallback.h"
 #include "logdevice/common/Timer.h"
@@ -26,25 +26,44 @@
 
 namespace facebook { namespace logdevice {
 
+class TrimRequest;
+/**
+ * Additionally adds access to the request object.
+ * See trim_callback_t for more details
+ */
+typedef std::function<void(const TrimRequest&, Status)> trim_callback_ex_t;
+
 /**
  * @file TrimRequest is a client request responsible for broadcasting the
  *       TRIM message to all storage nodes.
  */
 
-class TrimRequest : public Request {
+class TrimRequest : public DistributedRequest {
  public:
   TrimRequest(ClientBridge* client,
               logid_t log_id,
               lsn_t trim_point,
               std::chrono::milliseconds client_timeout,
-              trim_callback_t callback)
-      : Request(RequestType::TRIM),
+              trim_callback_ex_t callback)
+      : DistributedRequest(RequestType::TRIM),
         client_(client),
         log_id_(log_id),
         trim_point_(trim_point),
         client_timeout_(client_timeout),
         callback_(callback),
         callback_helper_(this) {}
+
+  TrimRequest(ClientBridge* client,
+              logid_t log_id,
+              lsn_t trim_point,
+              std::chrono::milliseconds client_timeout,
+              trim_callback_t callback)
+      : TrimRequest(client,
+                    log_id,
+                    trim_point,
+                    client_timeout,
+                    [callback](const TrimRequest&, Status s) { callback(s); }) {
+  }
 
   ~TrimRequest() override;
 
@@ -145,7 +164,7 @@ class TrimRequest : public Request {
   logid_t log_id_;
   lsn_t trim_point_;
   const std::chrono::milliseconds client_timeout_;
-  trim_callback_t callback_;
+  trim_callback_ex_t callback_;
   std::unique_ptr<std::string> per_request_token_;
   WorkerCallbackHelper<TrimRequest> callback_helper_;
 
@@ -156,7 +175,6 @@ class TrimRequest : public Request {
   bool bypass_tail_lsn_check_ = false;
 
   std::unique_ptr<NodeSetFinder> nodeset_finder_{nullptr};
-  std::unique_ptr<StorageSetAccessor> storage_set_accessor_{nullptr};
 };
 
 // Wrapper instead of typedef to allow forward-declaring in Worker.h

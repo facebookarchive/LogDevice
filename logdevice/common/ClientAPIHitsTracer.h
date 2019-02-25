@@ -31,6 +31,7 @@ class ClientAPIHitsTracer : public SampledTracer {
                      logid_t in_logid,
                      std::chrono::milliseconds in_timestamp,
                      FindKeyAccuracy in_accuracy,
+                     FailedShardsMap&& failed_shards,
                      Status out_status,
                      lsn_t out_lsn = LSN_INVALID);
 
@@ -38,6 +39,7 @@ class ClientAPIHitsTracer : public SampledTracer {
                     logid_t in_logid,
                     std::string in_key,
                     FindKeyAccuracy in_accuracy,
+                    FailedShardsMap&& failed_shards,
                     Status out_status,
                     lsn_t out_lsn_lo = LSN_INVALID,
                     lsn_t out_lsn_hi = LSN_INVALID);
@@ -49,6 +51,7 @@ class ClientAPIHitsTracer : public SampledTracer {
 
   void traceGetHeadAttributes(int64_t msec_resp_time,
                               logid_t in_logid,
+                              FailedShardsMap&& failed_shards,
                               Status out_status,
                               LogHeadAttributes* out_log_head_attributes);
 
@@ -59,6 +62,7 @@ class ClientAPIHitsTracer : public SampledTracer {
 
   void traceIsLogEmpty(int64_t msec_resp_time,
                        logid_t in_logid,
+                       FailedShardsMap&& failed_shards,
                        Status out_status,
                        bool out_bool);
 
@@ -67,12 +71,14 @@ class ClientAPIHitsTracer : public SampledTracer {
                      std::chrono::milliseconds start_timestamp,
                      std::chrono::milliseconds end_timestamp,
                      DataSizeAccuracy in_accuracy,
+                     FailedShardsMap&& failed_shards,
                      Status out_status,
                      size_t out_size);
 
   void traceTrim(int64_t msec_resp_time,
                  logid_t in_logid,
                  lsn_t in_lsn,
+                 FailedShardsMap&& failed_shards,
                  Status out_status);
 
  private:

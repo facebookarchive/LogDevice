@@ -7,9 +7,9 @@
  */
 #pragma once
 
+#include "logdevice/common/DistributedRequest.h"
 #include "logdevice/common/NodeSetAccessor.h"
 #include "logdevice/common/NodeSetFinder.h"
-#include "logdevice/common/Request.h"
 #include "logdevice/common/RequestType.h"
 #include "logdevice/common/ShardAuthoritativeStatusMap.h"
 #include "logdevice/common/configuration/Configuration.h"
@@ -75,6 +75,13 @@ namespace facebook { namespace logdevice {
 
 class IsLogEmptyRequest;
 
+/**
+ * Additionally adds access to the request object.
+ * See is_empty_callback_t for more details
+ */
+typedef std::function<void(const IsLogEmptyRequest&, Status status, bool empty)>
+    is_empty_callback_ex_t;
+
 // Wrapper instead of typedef to allow forward-declaring in Worker.h
 struct IsLogEmptyRequestMap {
   std::unordered_map<request_id_t,
@@ -83,7 +90,7 @@ struct IsLogEmptyRequestMap {
       map;
 };
 
-class IsLogEmptyRequest : public Request,
+class IsLogEmptyRequest : public DistributedRequest,
                           public ShardAuthoritativeStatusSubscriber {
  public:
   // NodeSetAccessor takes a range of allowed wave timeouts, which is the
@@ -98,14 +105,27 @@ class IsLogEmptyRequest : public Request,
 
   IsLogEmptyRequest(logid_t log_id,
                     std::chrono::milliseconds client_timeout,
-                    is_empty_callback_t callback,
+                    is_empty_callback_ex_t callback,
                     std::chrono::milliseconds grace_period =
                         std::chrono::milliseconds::zero())
-      : Request(RequestType::IS_LOG_EMPTY),
+      : DistributedRequest(RequestType::IS_LOG_EMPTY),
         log_id_(log_id),
         client_timeout_(client_timeout),
         callback_(callback),
         grace_period_(grace_period) {}
+
+  IsLogEmptyRequest(logid_t log_id,
+                    std::chrono::milliseconds client_timeout,
+                    is_empty_callback_t callback,
+                    std::chrono::milliseconds grace_period =
+                        std::chrono::milliseconds::zero())
+      : IsLogEmptyRequest(
+            log_id,
+            client_timeout,
+            [callback](const IsLogEmptyRequest&, Status status, bool empty) {
+              callback(status, empty);
+            },
+            grace_period) {}
 
   void setWorkerThread(worker_id_t worker) {
     worker_ = worker;
@@ -155,7 +175,6 @@ class IsLogEmptyRequest : public Request,
   static const shard_status_t SHARD_IS_REBUILDING = 1u << 3;
   using FailureDomain = FailureDomainNodeSet<shard_status_t>;
 
-  std::unique_ptr<StorageSetAccessor> nodeset_accessor_{nullptr};
   std::unique_ptr<FailureDomain> failure_domain_;
   bool completion_cond_called_ = false;
 
@@ -199,7 +218,7 @@ class IsLogEmptyRequest : public Request,
  private:
   const logid_t log_id_;
   const std::chrono::milliseconds client_timeout_;
-  const is_empty_callback_t callback_;
+  const is_empty_callback_ex_t callback_;
   const std::chrono::milliseconds grace_period_;
 
   worker_id_t worker_ = worker_id_t(-1);

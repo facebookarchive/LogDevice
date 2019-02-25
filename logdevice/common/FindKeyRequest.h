@@ -14,10 +14,10 @@
 #include <unordered_set>
 #include <vector>
 
+#include "logdevice/common/DistributedRequest.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/NodeSetAccessor.h"
 #include "logdevice/common/NodeSetFinder.h"
-#include "logdevice/common/Request.h"
 #include "logdevice/common/RequestType.h"
 #include "logdevice/common/Timer.h"
 #include "logdevice/common/configuration/ServerConfig.h"
@@ -93,6 +93,20 @@ namespace facebook { namespace logdevice {
 class FindKeyRequest;
 struct Settings;
 
+/**
+ * Additionally adds access to the request object.
+ * See find_time_callback_t for more details
+ */
+typedef std::function<void(const FindKeyRequest& req, Status, lsn_t result)>
+    find_time_callback_ex_t;
+
+/**
+ * Additionally adds access to the request object.
+ * See find_key_callback_t for more details
+ */
+typedef std::function<void(const FindKeyRequest& req, FindKeyResult)>
+    find_key_callback_ex_t;
+
 // Wrapper instead of typedef to allow forward-declaring in Worker.h
 struct FindKeyRequestMap {
   std::unordered_map<request_id_t,
@@ -101,17 +115,17 @@ struct FindKeyRequestMap {
       map;
 };
 
-class FindKeyRequest : public Request,
+class FindKeyRequest : public DistributedRequest,
                        public ShardAuthoritativeStatusSubscriber {
  public:
   FindKeyRequest(logid_t log_id,
                  std::chrono::milliseconds timestamp,
                  folly::Optional<std::string> key,
                  std::chrono::milliseconds client_timeout,
-                 find_time_callback_t callback,
-                 find_key_callback_t callback_key,
+                 find_time_callback_ex_t callback,
+                 find_key_callback_ex_t callback_key,
                  FindKeyAccuracy accuracy)
-      : Request(RequestType::FIND_KEY),
+      : DistributedRequest(RequestType::FIND_KEY),
         log_id_(log_id),
         timestamp_(timestamp),
         key_(std::move(key)),
@@ -120,6 +134,26 @@ class FindKeyRequest : public Request,
         callback_key_(callback_key),
         accuracy_(accuracy),
         running_timer_timeout_(client_timeout) {}
+
+  FindKeyRequest(logid_t log_id,
+                 std::chrono::milliseconds timestamp,
+                 folly::Optional<std::string> key,
+                 std::chrono::milliseconds client_timeout,
+                 find_time_callback_t callback,
+                 find_key_callback_t callback_key,
+                 FindKeyAccuracy accuracy)
+      : FindKeyRequest(
+            log_id,
+            timestamp,
+            key,
+            client_timeout,
+            [callback](const FindKeyRequest&, Status st, lsn_t result) {
+              callback(st, result);
+            },
+            [callback_key](const FindKeyRequest&, FindKeyResult res) {
+              callback_key(res);
+            },
+            accuracy) {}
 
   Execution execute() override;
 
@@ -186,8 +220,8 @@ class FindKeyRequest : public Request,
   const std::chrono::milliseconds timestamp_;
   const folly::Optional<std::string> key_;
   const std::chrono::milliseconds client_timeout_;
-  const find_time_callback_t callback_;
-  const find_key_callback_t callback_key_;
+  const find_time_callback_ex_t callback_;
+  const find_key_callback_ex_t callback_key_;
   const FindKeyAccuracy accuracy_;
 
   std::chrono::milliseconds running_timer_timeout_;
@@ -218,7 +252,6 @@ class FindKeyRequest : public Request,
 
  protected:
   std::unique_ptr<NodeSetFinder> nodeset_finder_;
-  std::unique_ptr<StorageSetAccessor> nodeset_accessor_{nullptr};
 };
 
 }} // namespace facebook::logdevice

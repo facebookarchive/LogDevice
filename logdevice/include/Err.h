@@ -28,8 +28,15 @@ enum class E : std::uint16_t {
   MAX
 };
 
-typedef E Status; // a longer, more descriptive alias to use in function
-                  // declarations.
+// a longer, more descriptive alias to use in function declarations
+typedef E Status;
+
+// hasher to allow Status to be used as a key in an unordered_map
+struct StatusHasher {
+  size_t operator()(Status status) const {
+    return static_cast<size_t>(status);
+  }
+};
 
 // a (name, description) record for an error code
 struct ErrorCodeInfo {

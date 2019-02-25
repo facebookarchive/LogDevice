@@ -44,11 +44,11 @@ TrimRequest::~TrimRequest() {
   if (callback_) {
     if (worker->shuttingDown()) {
       // Request was aborted because the worker is shutting down.
-      callback_(E::SHUTDOWN);
+      callback_(*this, E::SHUTDOWN);
     } else {
       // Request was aborted because `this` was destroyed before it could
       // finish.
-      callback_(E::ABORTED);
+      callback_(*this, E::ABORTED);
     }
     callback_ = nullptr;
   }
@@ -272,7 +272,7 @@ void TrimRequest::onReply(ShardID from, Status status) {
       break;
   }
 
-  storage_set_accessor_->onShardAccessed(from, {res, status});
+  nodeset_accessor_->onShardAccessed(from, {res, status});
 }
 
 void TrimRequest::onMessageSent(ShardID to, Status status) {
@@ -286,17 +286,17 @@ void TrimRequest::onMessageSent(ShardID to, Status status) {
                       10,
                       "TRIM is not supported by the server at %s",
                       to.toString().c_str());
-      storage_set_accessor_->onShardAccessed(
+      nodeset_accessor_->onShardAccessed(
           to, {StorageSetAccessor::Result::PERMANENT_ERROR, status});
     } else {
-      storage_set_accessor_->onShardAccessed(
+      nodeset_accessor_->onShardAccessed(
           to, {StorageSetAccessor::Result::TRANSIENT_ERROR, status});
     }
   }
 }
 
 void TrimRequest::finalize(Status status) {
-  callback_(status);
+  callback_(*this, status);
   callback_ = nullptr;
   deleteThis();
 }
@@ -375,12 +375,12 @@ void TrimRequest::initStorageSetAccessor() {
     finalize(st);
   };
 
-  storage_set_accessor_ =
+  nodeset_accessor_ =
       makeStorageSetAccessor(config, shards, minRep, shard_access, completion);
-  storage_set_accessor_->successIfAllShardsAccessed();
+  nodeset_accessor_->successIfAllShardsAccessed();
 
-  ld_check(storage_set_accessor_ != nullptr);
-  storage_set_accessor_->start();
+  ld_check(nodeset_accessor_ != nullptr);
+  nodeset_accessor_->start();
 }
 
 std::unique_ptr<StorageSetAccessor> TrimRequest::makeStorageSetAccessor(

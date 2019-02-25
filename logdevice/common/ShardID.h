@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 
 #include <folly/hash/Hash.h>
@@ -16,6 +17,7 @@
 
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/types_internal.h"
+#include "logdevice/include/Err.h"
 
 namespace facebook { namespace logdevice {
 
@@ -101,6 +103,8 @@ using shardset_custsz_t = folly::small_vector<ShardID, inline_>;
  */
 typedef shardset_custsz_t<> small_shardset_t;
 
+using FailedShardsMap =
+    std::unordered_map<Status, std::vector<ShardID>, StatusHasher>;
 }} // namespace facebook::logdevice
 
 // Specialize std::hash<ShardID> to allow things like

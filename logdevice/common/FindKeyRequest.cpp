@@ -156,12 +156,12 @@ void FindKeyRequest::finalize(Status status, bool delete_this) {
     // somewhat accurate result to the application.  Otherwise, return
     // LSN_INVALID.
     lsn_t result_lsn = !lsn_invalid ? result_lo_ + 1 : LSN_INVALID;
-    callback_(status, result_lsn);
+    callback_(*this, status, result_lsn);
   } else {
     lsn_t result_lo = lsn_invalid ? LSN_INVALID : result_lo_;
     lsn_t result_hi = lsn_invalid ? LSN_INVALID : result_hi_;
     FindKeyResult result = {status, result_lo, result_hi};
-    callback_key_(result);
+    callback_key_(*this, result);
   }
 
   if (status != E::OK && nodeset_accessor_) {
