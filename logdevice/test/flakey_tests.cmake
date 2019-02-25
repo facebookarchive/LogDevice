@@ -7,5 +7,6 @@
 # Integration tests disabled as faulty or flakey; removed from test
 # list to ensure result of CI run gives a clear signal
 set_tests_properties(
+  "ServerBasedNodesConfigurationStoreTest.SuccessScenario"
   "SequencerIntegrationTest.MetaDataWritePreempted"
   PROPERTIES DISABLED TRUE)
