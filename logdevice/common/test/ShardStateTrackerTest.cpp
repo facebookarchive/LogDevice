@@ -65,9 +65,16 @@ TEST(ShardStateTrackerTest, basic) {
   ASSERT_TRUE(nc->validate());
   t.onNewConfig(nc);
 
-  SystemTimestamp ts2 = SystemTimestamp::now();
+  SystemTimestamp ts1 = SystemTimestamp::now();
+  // NodesConfiguration::applyUpdate takes the current timestamp as the
+  // last_change_timestamp. sleeping here is a lazy way to similate a config at
+  // a higher time without bumping its version.
+  /* sleep override */
+  std::this_thread::sleep_for(std::chrono::milliseconds(2));
+
   auto nc2 = nc->applyUpdate(addNewNodeUpdate());
   ASSERT_TRUE(nc2->validate());
+  auto ts2 = nc2->getLastChangeTimestamp();
   t.onNewConfig(nc2);
   {
     // nc2 has no shards in intermediary states
@@ -78,7 +85,7 @@ TEST(ShardStateTrackerTest, basic) {
   auto nc3 = nc2->applyUpdate(enablingReadUpdate(nc2->getVersion()));
   ASSERT_TRUE(nc3->validate());
   auto ts3 = nc3->getLastChangeTimestamp();
-  ASSERT_GT(ts3, ts2);
+  ASSERT_GE(ts3, ts2);
   t.onNewConfig(nc3);
 
   auto verify_n17_enabling_read = [](std::shared_ptr<const NodesConfiguration>
@@ -119,13 +126,10 @@ TEST(ShardStateTrackerTest, basic) {
   }
   {
     // using an old ts will return no shards in intermediary states
-    auto update_opt = t.extractNCUpdate(ts2);
+    auto update_opt = t.extractNCUpdate(ts1);
     EXPECT_FALSE(update_opt.hasValue());
   }
 
-  // NodesConfiguration::applyUpdate takes the current timestamp as the
-  // last_change_timestamp. sleeping here is a lazy way to similate a config at
-  // a higher time without bumping its version.
   /* sleep override */
   std::this_thread::sleep_for(std::chrono::milliseconds(2));
 
