@@ -80,7 +80,7 @@ class MockGetHeadAttributesRequest : public GetHeadAttributesRequest {
   void deleteThis() override {}
 
   StorageSetAccessor::SendResult sendTo(ShardID) override {
-    return StorageSetAccessor::SendResult::SUCCESS;
+    return {StorageSetAccessor::Result::SUCCESS, Status::OK};
   }
 
   std::unique_ptr<StorageSetAccessor> makeStorageSetAccessor(

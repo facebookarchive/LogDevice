@@ -140,7 +140,7 @@ class MockDataSizeRequest : public DataSizeRequest {
   void deleteThis() override {}
 
   StorageSetAccessor::SendResult sendTo(ShardID) override {
-    return StorageSetAccessor::SendResult::SUCCESS;
+    return {StorageSetAccessor::Result::SUCCESS, Status::OK};
   }
 
   std::unique_ptr<StorageSetAccessor> makeStorageSetAccessor(

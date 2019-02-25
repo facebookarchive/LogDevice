@@ -258,7 +258,7 @@ GetEpochRecoveryMetadataRequest::sendGetEpochRecoveryMetadataRequest(
                    10,
                    "Try to send to node %u which is no longer in config",
                    shard.node());
-    return StorageSetAccessor::SendResult::PERMANENT_ERROR;
+    return {StorageSetAccessor::Result::PERMANENT_ERROR, Status::NOTFOUND};
   }
 
   NodeID send_to(shard.node());
@@ -275,14 +275,14 @@ GetEpochRecoveryMetadataRequest::sendGetEpochRecoveryMetadataRequest(
   int rv = sender_->sendMessage(std::move(msg), send_to);
 
   if (rv == 0) {
-    return StorageSetAccessor::SendResult::SUCCESS;
+    return {StorageSetAccessor::Result::SUCCESS, Status::OK};
   }
 
   switch (err) {
     // permanent errors
     case E::SHUTDOWN:
     case E::INTERNAL:
-      return StorageSetAccessor::SendResult::PERMANENT_ERROR;
+      return {StorageSetAccessor::Result::PERMANENT_ERROR, err};
 
     case E::PROTONOSUPPORT:
       RATELIMIT_ERROR(std::chrono::seconds(10),
@@ -293,7 +293,7 @@ GetEpochRecoveryMetadataRequest::sendGetEpochRecoveryMetadataRequest(
       // If the messgae was for a range of epochs and the socket does
       // not support this message, abort the operation
       if (isRangeRequest()) {
-        return StorageSetAccessor::SendResult::ABORT;
+        return {StorageSetAccessor::Result::ABORT, err};
       }
       break;
     // all other errors are considered transient
@@ -301,7 +301,7 @@ GetEpochRecoveryMetadataRequest::sendGetEpochRecoveryMetadataRequest(
       break;
   }
 
-  return StorageSetAccessor::SendResult::TRANSIENT_ERROR;
+  return {StorageSetAccessor::Result::TRANSIENT_ERROR, err};
 }
 
 /*static*/
@@ -332,7 +332,7 @@ void GetEpochRecoveryMetadataRequest::onSent(ShardID to, Status st) {
   }
 
   ld_check(storage_set_accessor_ != nullptr);
-  auto result = StorageSetAccessor::AccessResult::TRANSIENT_ERROR;
+  auto result = StorageSetAccessor::Result::TRANSIENT_ERROR;
   if (st != E::OK) {
     if (isRangeRequest() && st == E::PROTONOSUPPORT) {
       RATELIMIT_ERROR(std::chrono::seconds(10),
@@ -340,11 +340,11 @@ void GetEpochRecoveryMetadataRequest::onSent(ShardID to, Status st) {
                       "GET_EPOCH_RECOVERY_METADATA_Message for range of epochs"
                       "not supported by the recipient server at %s",
                       to.toString().c_str());
-      result = StorageSetAccessor::AccessResult::ABORT;
+      result = StorageSetAccessor::Result::ABORT;
     }
 
     // all error conditions are considered as transient error
-    storage_set_accessor_->onShardAccessed(to, result);
+    storage_set_accessor_->onShardAccessed(to, {result, st});
   }
 }
 
@@ -366,8 +366,8 @@ void GetEpochRecoveryMetadataRequest::onReply(
 
   ld_check(storage_set_accessor_ != nullptr);
   ld_check(nodes_responded_ != nullptr);
-  StorageSetAccessor::AccessResult result =
-      StorageSetAccessor::AccessResult::SUCCESS;
+  StorageSetAccessor::AccessResult result = {
+      StorageSetAccessor::Result::SUCCESS, Status::OK};
   if (status != E::AGAIN) {
     nodes_responded_->setShardAttribute(from, true);
   }
@@ -392,18 +392,18 @@ void GetEpochRecoveryMetadataRequest::onReply(
       break;
 
     case E::NOTSTORAGE:
-      result = StorageSetAccessor::AccessResult::PERMANENT_ERROR;
+      result = {StorageSetAccessor::Result::PERMANENT_ERROR, status};
       break;
 
     case E::NOTREADY: // epoch not clean
-      result = StorageSetAccessor::AccessResult::TRANSIENT_ERROR;
+      result = {StorageSetAccessor::Result::TRANSIENT_ERROR, status};
       // The CopySetSelector within the StorageSetAccessor could
       // sometimes select the node trying to do purging itself to
       // send GET_EPOCH_RECOVERY_METADATA message and it will always
       // return NOTREADY. In that case, mark the node as in error
       // so that it does not get picked again
       if (ShardID(getMyNodeID().index(), shard_) == from) {
-        result = StorageSetAccessor::AccessResult::PERMANENT_ERROR;
+        result = {StorageSetAccessor::Result::PERMANENT_ERROR, status};
       }
       break;
     case E::REBUILDING: // remote node in rebuilding
@@ -423,7 +423,7 @@ void GetEpochRecoveryMetadataRequest::onReply(
                      start_.val_,
                      purge_to_.val_,
                      error_name(status));
-      result = StorageSetAccessor::AccessResult::TRANSIENT_ERROR;
+      result = {StorageSetAccessor::Result::TRANSIENT_ERROR, status};
       break;
   }
 
@@ -449,6 +449,7 @@ GetEpochRecoveryMetadataRequest::processResponse(
   ld_check(epochRecoveryStateMap);
 
   bool allSuccess = true;
+  auto last_failure = Status::OK;
 
   for (auto& entry : *epochRecoveryStateMap) {
     auto epoch = entry.first;
@@ -474,14 +475,18 @@ GetEpochRecoveryMetadataRequest::processResponse(
         success = true;
         break;
       default:
+        last_failure = response.first;
         success = false;
         break;
     }
     allSuccess = allSuccess && success;
   }
 
-  return allSuccess ? StorageSetAccessor::AccessResult::SUCCESS
-                    : StorageSetAccessor::AccessResult::TRANSIENT_ERROR;
+  return allSuccess
+      ? StorageSetAccessor::AccessResult{StorageSetAccessor::Result::SUCCESS,
+                                         Status::OK}
+      : StorageSetAccessor::AccessResult{
+            StorageSetAccessor::Result::TRANSIENT_ERROR, last_failure};
 }
 
 bool GetEpochRecoveryMetadataRequest::checkIfDone() {

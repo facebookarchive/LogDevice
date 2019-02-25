@@ -167,6 +167,7 @@ class NodeSetAccessorTest : public ::testing::Test {
 
   std::unique_ptr<StorageSetAccessor> accessor_;
 
+  using Result = StorageSetAccessor::Result;
   using SendResult = StorageSetAccessor::SendResult;
   using AccessResult = StorageSetAccessor::AccessResult;
 
@@ -299,7 +300,7 @@ void NodeSetAccessorTest::setUp() {
   }
 
   for (auto idx : nodeset_) {
-    send_result_[idx] = StorageSetAccessor::SendResult::SUCCESS;
+    send_result_[idx] = {StorageSetAccessor::Result::SUCCESS, Status::UNKNOWN};
   }
 
   copyset_selector_ = std::unique_ptr<CopySetSelector>(new TestCopySetSelector(
@@ -317,18 +318,18 @@ void NodeSetAccessorTest::setUp() {
     wave_shards_.clear();                                               \
   } while (0)
 
-#define accessNodes(result, ...)                   \
-  do {                                             \
-    for (auto shard : StorageSet{__VA_ARGS__}) {   \
-      accessor_->onShardAccessed(shard, (result)); \
-    }                                              \
+#define accessNodes(result, ...)                 \
+  do {                                           \
+    for (auto shard : StorageSet{__VA_ARGS__}) { \
+      accessor_->onShardAccessed(shard, result); \
+    }                                            \
   } while (0)
 
-#define accessNodesWithWave(wave, result, ...)             \
-  do {                                                     \
-    for (auto shard : StorageSet{__VA_ARGS__}) {           \
-      accessor_->onShardAccessed(shard, (result), (wave)); \
-    }                                                      \
+#define accessNodesWithWave(wave, result, status, ...)             \
+  do {                                                             \
+    for (auto shard : StorageSet{__VA_ARGS__}) {                   \
+      accessor_->onShardAccessed(shard, {result, status}, (wave)); \
+    }                                                              \
   } while (0)
 
 #define setSendResult(result, ...)                             \
@@ -338,6 +339,75 @@ void NodeSetAccessorTest::setUp() {
       send_result_[shard] = (result);                          \
     }                                                          \
   } while (0)
+
+template <typename T>
+bool contains(std::vector<T> vector, T element) {
+  return std::find(vector.cbegin(), vector.cend(), element) != vector.cend();
+}
+
+TEST_F(NodeSetAccessorTest, GetFailedShards) {
+  replication_ = 3;
+  extras_ = 1;
+  sync_replication_scope_ = NodeLocationScope::REGION;
+  property_ = StorageSetAccessor::Property::FMAJORITY;
+  nodeset_ = StorageSet{N0, N1, N2, N3, N4, N5, N6, N7};
+  setUp();
+  accessor_->start();
+
+  // the first wave should send to all nodes
+  verifyWave(N0, N1, N2, N3, N4, N5, N6, N7);
+  ASSERT_TRUE(getWaveTimer()->isActive());
+
+  auto suc_result = AccessResult{Result::SUCCESS, Status::OK};
+  auto rebuilding_result =
+      AccessResult{Result::TRANSIENT_ERROR, Status::REBUILDING};
+  auto failed_result = AccessResult{Result::PERMANENT_ERROR, Status::FAILED};
+  accessNodes(suc_result, N0, N1);
+  accessNodes(rebuilding_result, N2, N3);
+  accessNodes(failed_result, N4, N5);
+
+  // get all shards
+  const auto& all_shards_map =
+      accessor_->getFailedShards([](Status) -> bool { return true; });
+  ASSERT_EQ(4, all_shards_map.size());
+
+  const auto& ok_shards = all_shards_map.at(Status::OK);
+  ASSERT_EQ(2, ok_shards.size());
+  ASSERT_TRUE(contains(ok_shards, N0));
+  ASSERT_TRUE(contains(ok_shards, N1));
+
+  const auto& unknown_shards = all_shards_map.at(Status::UNKNOWN);
+  ASSERT_EQ(2, unknown_shards.size());
+  ASSERT_TRUE(contains(unknown_shards, N6));
+  ASSERT_TRUE(contains(unknown_shards, N7));
+
+  const auto& rebuilding_shards = all_shards_map.at(Status::REBUILDING);
+  ASSERT_EQ(2, rebuilding_shards.size());
+  ASSERT_TRUE(contains(rebuilding_shards, N2));
+  ASSERT_TRUE(contains(rebuilding_shards, N3));
+
+  const auto& failed_shards = all_shards_map.at(Status::FAILED);
+  ASSERT_EQ(2, failed_shards.size());
+  ASSERT_TRUE(contains(failed_shards, N4));
+  ASSERT_TRUE(contains(failed_shards, N5));
+
+  // get failed only
+  const auto& failed_shards_map =
+      accessor_->getFailedShards([](Status status) -> bool {
+        return status != Status::OK && status != Status::UNKNOWN;
+      });
+  ASSERT_EQ(2, failed_shards_map.size());
+  const auto& failed_rebuilding_shards =
+      failed_shards_map.at(Status::REBUILDING);
+  ASSERT_EQ(2, failed_rebuilding_shards.size());
+  ASSERT_TRUE(contains(failed_rebuilding_shards, N2));
+  ASSERT_TRUE(contains(failed_rebuilding_shards, N3));
+
+  const auto& failed_failed_shards = failed_shards_map.at(Status::FAILED);
+  ASSERT_EQ(2, failed_failed_shards.size());
+  ASSERT_TRUE(contains(failed_failed_shards, N4));
+  ASSERT_TRUE(contains(failed_failed_shards, N5));
+}
 
 TEST_F(NodeSetAccessorTest, BasicFmajority) {
   replication_ = 3;
@@ -351,9 +421,10 @@ TEST_F(NodeSetAccessorTest, BasicFmajority) {
   // the first wave should send to all nodes
   verifyWave(N0, N1, N2, N3, N4, N5, N6, N7);
   ASSERT_TRUE(getWaveTimer()->isActive());
-  accessNodes(AccessResult::SUCCESS, N0, N1, N2, N3, N4);
+  auto result = AccessResult{Result::SUCCESS, Status::OK};
+  accessNodes(result, N0, N1, N2, N3, N4);
   ASSERT_EQ(E::UNKNOWN, final_status_);
-  accessNodes(AccessResult::SUCCESS, N5);
+  accessNodes(result, N5);
   // we got all regions except one
   ASSERT_EQ(E::OK, final_status_);
 }
@@ -378,9 +449,10 @@ TEST_F(NodeSetAccessorTest, Failure) {
   setUp();
   accessor_->start();
   verifyWave(N0, N1, N2, N3, N4, N5, N6, N7);
-  accessNodes(AccessResult::PERMANENT_ERROR, N1, N2);
+  auto result = AccessResult{Result::PERMANENT_ERROR, Status::FAILED};
+  accessNodes(result, N1, N2);
   ASSERT_EQ(E::UNKNOWN, final_status_);
-  accessNodes(AccessResult::PERMANENT_ERROR, N5);
+  accessNodes(result, N5);
   ASSERT_EQ(E::FAILED, final_status_);
 }
 
@@ -392,7 +464,8 @@ TEST_F(NodeSetAccessorTest, SendFailureFirstWave) {
   nodeset_ = StorageSet{N0, N1, N2, N3, N4, N5, N6, N7};
 
   setUp();
-  setSendResult(SendResult::PERMANENT_ERROR, N0, N5, N7);
+  auto result = SendResult{Result::PERMANENT_ERROR, Status::FAILED};
+  setSendResult(result, N0, N5, N7);
   accessor_->start();
 
   // should immediately fail since enough nodes failed to send permanently
@@ -422,21 +495,26 @@ TEST_F(NodeSetAccessorTest, RetryNewWave) {
 
   setUp();
   // node 0
-  setSendResult(SendResult::PERMANENT_ERROR, N0);
+  auto result = SendResult{Result::PERMANENT_ERROR, Status::FAILED};
+  setSendResult(result, N0);
   accessor_->start();
   // should send to the rest of the nodes
   verifyWave(N0, N3, N4, N5, N6, N7);
-  accessNodes(AccessResult::SUCCESS, N3, N6);
-  accessNodes(AccessResult::TRANSIENT_ERROR, N4);
-  accessNodes(AccessResult::PERMANENT_ERROR, N7);
+  result = {Result::SUCCESS, Status::OK};
+  accessNodes(result, N3, N6);
+  result = {Result::TRANSIENT_ERROR, Status::FAILED};
+  accessNodes(result, N4);
+  result = {Result::PERMANENT_ERROR, Status::FAILED};
+  accessNodes(result, N7);
   ASSERT_EQ(E::UNKNOWN, final_status_);
 
   // trigger the next wave
   getWaveTimer()->trigger();
   verifyWave(N4, N5);
-  accessNodes(AccessResult::SUCCESS, N4);
+  result = {Result::SUCCESS, Status::OK};
+  accessNodes(result, N4);
   ASSERT_EQ(E::UNKNOWN, final_status_);
-  accessNodes(AccessResult::SUCCESS, N5);
+  accessNodes(result, N5);
   ASSERT_EQ(E::OK, final_status_);
 }
 
@@ -451,7 +529,8 @@ TEST_F(NodeSetAccessorTest, BasicReplication) {
 
   getCopySetSelector()->setResult({N0, N1, N2});
   accessor_->start();
-  accessNodes(AccessResult::SUCCESS, N0, N1, N2);
+  auto result = AccessResult{Result::SUCCESS, Status::OK};
+  accessNodes(result, N0, N1, N2);
 
   ASSERT_EQ(E::OK, final_status_);
 }
@@ -465,11 +544,12 @@ TEST_F(NodeSetAccessorTest, BlacklistNodes) {
 
   setUp();
 
-  setSendResult(SendResult::PERMANENT_ERROR, N0);
+  auto result = AccessResult{Result::PERMANENT_ERROR, Status::FAILED};
+  setSendResult(result, N0);
   getCopySetSelector()->setResult({N0, N1, N2});
   accessor_->start();
 
-  accessNodes(AccessResult::PERMANENT_ERROR, N1);
+  accessNodes(result, N1);
   // 0 and 1 should be disabled on the NodeSet
   ASSERT_NE(std::chrono::steady_clock::time_point::min(),
             getNodeSetState()->getNotAvailableUntil(N0));
@@ -478,13 +558,14 @@ TEST_F(NodeSetAccessorTest, BlacklistNodes) {
   ASSERT_EQ(std::chrono::steady_clock::time_point::min(),
             getNodeSetState()->getNotAvailableUntil(N5));
 
-  accessNodes(AccessResult::SUCCESS, N2);
+  result = AccessResult{Result::SUCCESS, Status::OK};
+  accessNodes(result, N2);
   ASSERT_EQ(E::UNKNOWN, final_status_);
 
   // trigger the next wave
   getCopySetSelector()->setResult({N2, N5, N7});
   getWaveTimer()->trigger();
-  accessNodes(AccessResult::SUCCESS, N5, N7);
+  accessNodes(result, N5, N7);
   ASSERT_EQ(E::OK, final_status_);
 }
 
@@ -519,7 +600,8 @@ TEST_F(NodeSetAccessorTest, ExtraPreference) {
   auto not_sent = getNotSentNodes();
   ASSERT_EQ(1, not_sent.size());
 
-  accessNodes(AccessResult::TRANSIENT_ERROR, N2);
+  auto result = AccessResult{Result::TRANSIENT_ERROR, Status::FAILED};
+  accessNodes(result, N2);
   getCopySetSelector()->setResult({}, CopySetSelector::Result::FAILED);
   getWaveTimer()->trigger();
 
@@ -536,12 +618,14 @@ TEST_F(NodeSetAccessorTest, AnyNode) {
   nodeset_ = StorageSet{N0, N1, N2, N3, N4, N5, N6, N7};
 
   setUp();
-  setSendResult(SendResult::PERMANENT_ERROR, N0);
+  auto result = AccessResult{Result::PERMANENT_ERROR, Status::FAILED};
+  setSendResult(result, N0);
   getCopySetSelector()->setResult({N0, N1, N2});
   accessor_->start();
   ASSERT_EQ(4, wave_shards_.size());
-  accessNodes(AccessResult::PERMANENT_ERROR, N1);
-  accessNodes(AccessResult::SUCCESS, N2);
+  accessNodes(result, N1);
+  result = AccessResult{Result::SUCCESS, Status::OK};
+  accessNodes(result, N2);
   ASSERT_EQ(E::OK, final_status_);
 }
 
@@ -553,24 +637,28 @@ TEST_F(NodeSetAccessorTest, AnyNodeFailed) {
   nodeset_ = StorageSet{N0, N1, N2, N3, N4, N5, N6, N7};
 
   setUp();
-  setSendResult(SendResult::PERMANENT_ERROR, N0);
-  setSendResult(SendResult::PERMANENT_ERROR, N1);
-  setSendResult(SendResult::PERMANENT_ERROR, N2);
+  auto send_result = SendResult{Result::PERMANENT_ERROR, Status::FAILED};
+  setSendResult(send_result, N0);
+  setSendResult(send_result, N1);
+  setSendResult(send_result, N2);
   getCopySetSelector()->setResult({N2, N4, N7});
   accessor_->start();
   ASSERT_EQ(8, wave_shards_.size());
   wave_shards_.clear();
-  accessNodes(AccessResult::PERMANENT_ERROR, N3);
-  accessNodes(AccessResult::PERMANENT_ERROR, N4);
-  accessNodes(AccessResult::PERMANENT_ERROR, N6);
-  accessNodes(AccessResult::PERMANENT_ERROR, N7);
+  auto access_result = AccessResult{Result::PERMANENT_ERROR, Status::FAILED};
+  accessNodes(access_result, N3);
+  accessNodes(access_result, N4);
+  accessNodes(access_result, N6);
+  accessNodes(access_result, N7);
   ASSERT_EQ(E::UNKNOWN, final_status_);
-  accessNodes(AccessResult::TRANSIENT_ERROR, N5);
+  access_result = AccessResult{Result::TRANSIENT_ERROR, Status::FAILED};
+  accessNodes(access_result, N5);
   ASSERT_EQ(E::UNKNOWN, final_status_);
   getCopySetSelector()->setResult({}, CopySetSelector::Result::FAILED);
   getWaveTimer()->trigger();
   verifyWave(N5);
-  accessNodes(AccessResult::PERMANENT_ERROR, N5);
+  access_result = AccessResult{Result::PERMANENT_ERROR, Status::FAILED};
+  accessNodes(access_result, N5);
   ASSERT_EQ(E::FAILED, final_status_);
 }
 
@@ -586,7 +674,8 @@ TEST_F(NodeSetAccessorTest, BasicAuthoritativeStatusAwareFmajority) {
   // the first wave should send to all nodes
   verifyWave(N0, N1, N2, N3, N4, N5, N6, N7);
   ASSERT_TRUE(getWaveTimer()->isActive());
-  accessNodes(AccessResult::SUCCESS, N0, N1, N2, N3, N4);
+  auto result = AccessResult{Result::SUCCESS, Status::OK};
+  accessNodes(result, N0, N1, N2, N3, N4);
   ASSERT_EQ(E::UNKNOWN, final_status_);
   // node 5 become authoritative empty
   accessor_->setShardAuthoritativeStatus(
@@ -607,7 +696,8 @@ TEST_F(NodeSetAccessorTest, NonAuthoritativeFmajority) {
   // the first wave should send to all nodes
   verifyWave(N0, N1, N2, N3, N4, N5, N6, N7);
   ASSERT_TRUE(getWaveTimer()->isActive());
-  accessNodes(AccessResult::SUCCESS, N0, N2, N4, N5, N7);
+  auto result = AccessResult{Result::SUCCESS, Status::OK};
+  accessNodes(result, N0, N2, N4, N5, N7);
   ASSERT_EQ(E::UNKNOWN, final_status_);
   accessor_->setShardAuthoritativeStatus(
       N1, AuthoritativeStatus::UNDERREPLICATION);
@@ -649,11 +739,12 @@ TEST_F(NodeSetAccessorTest, RequiredNodeBasic) {
   // {2, 3, 7} already satisfy the replication requirement, however
   // StorageSetAccessor should not conclude w/ success until all required
   // nodes are successfully accessed.
-  accessNodes(AccessResult::SUCCESS, N2, N3, N7);
+  auto result = AccessResult{Result::SUCCESS, Status::OK};
+  accessNodes(result, N2, N3, N7);
   ASSERT_EQ(E::UNKNOWN, final_status_);
-  accessNodes(AccessResult::SUCCESS, N4);
+  accessNodes(result, N4);
   ASSERT_EQ(E::UNKNOWN, final_status_);
-  accessNodes(AccessResult::SUCCESS, N5);
+  accessNodes(result, N5);
   ASSERT_EQ(E::OK, final_status_);
 }
 
@@ -669,7 +760,8 @@ TEST_F(NodeSetAccessorTest, RequiredNodeFailure) {
 
   setUp();
 
-  setSendResult(SendResult::PERMANENT_ERROR, N2);
+  auto result = SendResult{Result::PERMANENT_ERROR, Status::FAILED};
+  setSendResult(result, N2);
   getCopySetSelector()->setResult({N2, N0, N7});
   accessor_->start();
   ASSERT_EQ(E::FAILED, final_status_);
@@ -693,7 +785,8 @@ TEST_F(NodeSetAccessorTest, SuccessIfAllNodeAccessed) {
 
   // should pick 4 extra nodes
   verifyWave(N1, N2, N3, N4);
-  accessNodes(AccessResult::SUCCESS, N1, N2, N3, N4);
+  auto result = AccessResult{Result::SUCCESS, Status::OK};
+  accessNodes(result, N1, N2, N3, N4);
   ASSERT_EQ(E::OK, final_status_);
 }
 
@@ -707,15 +800,16 @@ TEST_F(NodeSetAccessorTest, requireStrictWaves) {
 
   setUp();
   // node 0
-  setSendResult(SendResult::PERMANENT_ERROR, N0);
+  auto send_result = SendResult{Result::PERMANENT_ERROR, Status::FAILED};
+  setSendResult(send_result, N0);
   accessor_->start();
   // should send to the rest of the nodes
   verifyWave(N0, N3, N4, N5, N6, N7);
   // this is wave 1
   ASSERT_EQ(1, wave_info_.wave);
 
-  accessNodesWithWave(/*wave*/ 1, AccessResult::SUCCESS, N3, N6, N7);
-  accessNodesWithWave(/*wave*/ 1, AccessResult::TRANSIENT_ERROR, N4);
+  accessNodesWithWave(/*wave*/ 1, Result::SUCCESS, Status::OK, N3, N6, N7);
+  accessNodesWithWave(/*wave*/ 1, Result::TRANSIENT_ERROR, Status::FAILED, N4);
   ASSERT_EQ(E::UNKNOWN, final_status_);
   ASSERT_TRUE(getWaveTimer()->isActive());
 
@@ -729,15 +823,15 @@ TEST_F(NodeSetAccessorTest, requireStrictWaves) {
   // this is wave 2
   ASSERT_EQ(2, wave_info_.wave);
 
-  accessNodesWithWave(/*wave*/ 2, AccessResult::SUCCESS, N3, N4, N7);
+  accessNodesWithWave(/*wave*/ 2, Result::SUCCESS, Status::OK, N3, N4, N7);
   ASSERT_EQ(E::UNKNOWN, final_status_);
 
   // results from the previous wave should be ignored
-  accessNodesWithWave(/*wave*/ 1, AccessResult::SUCCESS, N5);
+  accessNodesWithWave(/*wave*/ 1, Result::SUCCESS, Status::OK, N5);
   ASSERT_EQ(E::UNKNOWN, final_status_);
 
   // N5 succeeds in wave 2, operation complete
-  accessNodesWithWave(/*wave*/ 2, AccessResult::SUCCESS, N5);
+  accessNodesWithWave(/*wave*/ 2, Result::SUCCESS, Status::OK, N5);
   ASSERT_EQ(E::OK, final_status_);
 }
 
@@ -759,7 +853,7 @@ TEST_F(NodeSetAccessorTest, requireStrictWavesReplication) {
   // this is wave 1
   ASSERT_EQ(1, wave_info_.wave);
 
-  accessNodesWithWave(1, AccessResult::SUCCESS, N2, N3, N4, N5);
+  accessNodesWithWave(1, Result::SUCCESS, Status::OK, N2, N3, N4, N5);
   ASSERT_EQ(E::UNKNOWN, final_status_);
   ASSERT_TRUE(getWaveTimer()->isActive());
 
@@ -772,14 +866,14 @@ TEST_F(NodeSetAccessorTest, requireStrictWavesReplication) {
   // this is wave 2
   ASSERT_EQ(2, wave_info_.wave);
 
-  accessNodesWithWave(2, AccessResult::SUCCESS, N1, N3, N5, N7);
+  accessNodesWithWave(2, Result::SUCCESS, Status::OK, N1, N3, N5, N7);
   ASSERT_EQ(E::UNKNOWN, final_status_);
 
-  accessNodesWithWave(1, AccessResult::SUCCESS, N0);
+  accessNodesWithWave(1, Result::SUCCESS, Status::OK, N0);
   ASSERT_EQ(E::UNKNOWN, final_status_);
   ASSERT_TRUE(getWaveTimer()->isActive());
 
-  accessNodesWithWave(2, AccessResult::SUCCESS, N0);
+  accessNodesWithWave(2, Result::SUCCESS, Status::OK, N0);
   ASSERT_EQ(E::OK, final_status_);
 }
 
@@ -831,7 +925,8 @@ TEST_F(NodeSetAccessorTest, ReproT22867933) {
   accessor_->start();
   verifyWave(N0, N1);
 
-  accessNodes(AccessResult::SUCCESS, N0);
+  auto result = AccessResult{Result::SUCCESS, Status::OK};
+  accessNodes(result, N0);
   getCopySetSelector()->setResult({}, CopySetSelector::Result::FAILED);
   getWaveTimer()->trigger();
 

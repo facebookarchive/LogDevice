@@ -218,7 +218,7 @@ StorageSetAccessor::SendResult DataSizeRequest::sendTo(ShardID shard) {
   const auto& nodes_configuration = getConfig()->getNodesConfiguration();
   if (!nodes_configuration->isNodeInServiceDiscoveryConfig(shard.node())) {
     ld_error("Cannot find node at index %u", shard.node());
-    return StorageSetAccessor::SendResult::PERMANENT_ERROR;
+    return {StorageSetAccessor::Result::PERMANENT_ERROR, Status::NOTFOUND};
   }
 
   NodeID to(shard.node());
@@ -231,13 +231,13 @@ StorageSetAccessor::SendResult DataSizeRequest::sendTo(ShardID shard) {
                       10,
                       "DATA_SIZE is not supported by the server at %s",
                       Sender::describeConnection(to).c_str());
-      return StorageSetAccessor::SendResult::PERMANENT_ERROR;
+      return {StorageSetAccessor::Result::PERMANENT_ERROR, err};
     } else {
-      return StorageSetAccessor::SendResult::TRANSIENT_ERROR;
+      return {StorageSetAccessor::Result::TRANSIENT_ERROR, err};
     }
   }
 
-  return StorageSetAccessor::SendResult::SUCCESS;
+  return {StorageSetAccessor::Result::SUCCESS, Status::OK};
 }
 
 void DataSizeRequest::finalize(Status status, bool delete_this) {
@@ -319,10 +319,10 @@ void DataSizeRequest::onMessageSent(ShardID to, Status status) {
                       "DATA_SIZE is not supported by the server for shard %s",
                       to.toString().c_str());
       nodeset_accessor_->onShardAccessed(
-          to, StorageSetAccessor::AccessResult::PERMANENT_ERROR);
+          to, {StorageSetAccessor::Result::PERMANENT_ERROR, status});
     } else {
       nodeset_accessor_->onShardAccessed(
-          to, StorageSetAccessor::AccessResult::TRANSIENT_ERROR);
+          to, {StorageSetAccessor::Result::TRANSIENT_ERROR, status});
     }
   }
 }
@@ -372,8 +372,7 @@ void DataSizeRequest::onReply(ShardID from, Status status, size_t size) {
     return;
   }
 
-  StorageSetAccessor::AccessResult res =
-      StorageSetAccessor::AccessResult::SUCCESS;
+  auto res = StorageSetAccessor::Result::SUCCESS;
 
   switch (status) {
     case E::OK:
@@ -394,11 +393,11 @@ void DataSizeRequest::onReply(ShardID from, Status status, size_t size) {
                       10,
                       "shard %s is rebuilding.",
                       from.toString().c_str());
-      res = StorageSetAccessor::AccessResult::TRANSIENT_ERROR;
+      res = StorageSetAccessor::Result::TRANSIENT_ERROR;
       break;
 
     case E::AGAIN:
-      res = StorageSetAccessor::AccessResult::TRANSIENT_ERROR;
+      res = StorageSetAccessor::Result::TRANSIENT_ERROR;
       break;
 
     case E::SHUTDOWN:
@@ -406,7 +405,7 @@ void DataSizeRequest::onReply(ShardID from, Status status, size_t size) {
     case E::FAILED:
     case E::NOTSUPPORTED:
     case E::NOTSUPPORTEDLOG:
-      res = StorageSetAccessor::AccessResult::PERMANENT_ERROR;
+      res = StorageSetAccessor::Result::PERMANENT_ERROR;
       {
         // Note that we shouldn't expect a response from this node; no need to
         // keep any previous shard status we might have stored as attribute.
@@ -426,11 +425,11 @@ void DataSizeRequest::onReply(ShardID from, Status status, size_t size) {
           from.toString().c_str(),
           error_description(status),
           log_id_.val());
-      res = StorageSetAccessor::AccessResult::PERMANENT_ERROR;
+      res = StorageSetAccessor::Result::PERMANENT_ERROR;
       break;
   }
 
-  nodeset_accessor_->onShardAccessed(from, res);
+  nodeset_accessor_->onShardAccessed(from, {res, status});
 }
 
 void DataSizeRequest::deleteThis() {

@@ -7,6 +7,7 @@
  */
 #include "logdevice/common/NodeSetAccessor.h"
 
+#include <folly/Hash.h>
 #include <folly/Memory.h>
 #include <folly/Random.h>
 
@@ -93,7 +94,7 @@ void StorageSetAccessor::start() {
 
   // initially failure domain, set all nodes to state NOT_SENT
   for (auto shard : epoch_metadata_.shards) {
-    setShardState(shard, ShardState::NOT_SENT);
+    setShardState(shard, ShardState::NOT_SENT, Status::UNKNOWN);
   }
 
   if (timeout_ > std::chrono::milliseconds::zero()) {
@@ -293,7 +294,7 @@ void StorageSetAccessor::sendWave() {
     // in previous waves
     StorageSet prev_success_nodes = getShardsInState(ShardState::SUCCESS);
     for (ShardID n : prev_success_nodes) {
-      setShardState(n, ShardState::NOT_SENT);
+      setShardState(n, ShardState::NOT_SENT, Status::UNKNOWN);
     }
   }
 
@@ -326,19 +327,20 @@ void StorageSetAccessor::sendWave() {
 #endif
 
   for (auto index : wave_shards) {
-    auto result = accessShard(index, wave_info);
+    auto result_status = accessShard(index, wave_info);
+    auto result = result_status.result;
     switch (result) {
-      case AccessResult::SUCCESS:
+      case Result::SUCCESS:
         nodes_sent++;
         break;
-      case AccessResult::TRANSIENT_ERROR:
+      case Result::TRANSIENT_ERROR:
         break;
-      case AccessResult::PERMANENT_ERROR:
+      case Result::PERMANENT_ERROR:
         if (checkIfDone()) {
           return;
         }
         break;
-      case AccessResult::ABORT:
+      case Result::ABORT:
         complete(E::ABORTED);
         return;
     }
@@ -375,26 +377,28 @@ StorageSetAccessor::accessShard(ShardID shard, const WaveInfo& wave_info) {
            st.state != ShardState::PERMANENT_ERROR);
 
   ld_check(!finished_);
-  AccessResult result = shard_func_(shard, wave_info);
+  AccessResult access_result = shard_func_(shard, wave_info);
+  auto result = access_result.result;
+  auto status = access_result.status;
   switch (result) {
-    case AccessResult::SUCCESS:
-      setShardState(shard, ShardState::INPROGRESS);
-      return result;
-    case AccessResult::TRANSIENT_ERROR:
-      setShardState(shard, ShardState::TRANSIENT_ERROR);
-      return result;
-    case AccessResult::PERMANENT_ERROR:
-    case AccessResult::ABORT:
+    case Result::SUCCESS:
+      setShardState(shard, ShardState::INPROGRESS, status);
+      return access_result;
+    case Result::TRANSIENT_ERROR:
+      setShardState(shard, ShardState::TRANSIENT_ERROR, status);
+      return access_result;
+    case Result::PERMANENT_ERROR:
+    case Result::ABORT:
       disableShard(shard);
-      setShardState(shard, ShardState::PERMANENT_ERROR);
-      return result;
+      setShardState(shard, ShardState::PERMANENT_ERROR, status);
+      return access_result;
   }
 
   ld_error(
       "INTERNAL ERROR: Got unrecognized enum value %d", to_integral(result));
   ld_check(false);
-  setShardState(shard, ShardState::NOT_SENT);
-  return result;
+  setShardState(shard, ShardState::NOT_SENT, status);
+  return access_result;
 }
 
 bool StorageSetAccessor::checkIfDone() {
@@ -576,7 +580,7 @@ void StorageSetAccessor::onShardAccessed(ShardID shard,
                    "but the reply belongs to a previous wave %u, current "
                    "wave %u. Ignoring.",
                    shard.toString().c_str(),
-                   resultString(result),
+                   resultString(result.result),
                    log_id_.val_,
                    wave,
                    wave_);
@@ -591,7 +595,7 @@ void StorageSetAccessor::onShardAccessed(ShardID shard,
                        "Accessed shard %s with result %s but the shard is not "
                        "in the storage set of log %lu.",
                        shard.toString().c_str(),
-                       resultString(result),
+                       resultString(result.result),
                        log_id_.val_);
     // shard must have a state if it is in the given storage set, which should
     // be ensured by the caller
@@ -605,7 +609,7 @@ void StorageSetAccessor::onShardAccessed(ShardID shard,
                    "Accessed shard %s with result %s for log %lu but the shard "
                    "has already been successfully accessed.",
                    shard.toString().c_str(),
-                   resultString(result),
+                   resultString(result.result),
                    log_id_.val_);
     return;
   }
@@ -616,29 +620,52 @@ void StorageSetAccessor::onShardAccessed(ShardID shard,
                    "Accessed shard %s with result %s for log %lu but the "
                    "shard is in state %s rather than INPROGRESS.",
                    shard.toString().c_str(),
-                   resultString(result),
+                   resultString(result.result),
                    log_id_.val_,
                    stateString(st.state));
     // still proceeds
   }
 
-  switch (result) {
-    case AccessResult::SUCCESS:
-      setShardState(shard, ShardState::SUCCESS);
+  switch (result.result) {
+    case Result::SUCCESS:
+      setShardState(shard, ShardState::SUCCESS, result.status);
       break;
-    case AccessResult::TRANSIENT_ERROR:
-      setShardState(shard, ShardState::TRANSIENT_ERROR);
+    case Result::TRANSIENT_ERROR:
+      setShardState(shard, ShardState::TRANSIENT_ERROR, result.status);
       break;
-    case AccessResult::ABORT:
-    case AccessResult::PERMANENT_ERROR:
+    case Result::ABORT:
+    case Result::PERMANENT_ERROR:
       // blacklist shard in the storage set state, this shard will never be
       // picked again
-      setShardState(shard, ShardState::PERMANENT_ERROR);
+      setShardState(shard, ShardState::PERMANENT_ERROR, result.status);
       disableShard(shard);
       break;
   }
 
   checkIfDone();
+}
+
+FailedShardsMap StorageSetAccessor::getFailedShards(
+    std::function<bool(Status)> fail_predicate) const {
+  FailedShardsMap result;
+  for (ShardID shard : epoch_metadata_.shards) {
+    ShardStatus status;
+    if (failure_domain_.getShardAttribute(shard, &status) == 0) {
+      if (!fail_predicate(status.status)) {
+        continue;
+      }
+
+      auto shards_it = result.find(status.status);
+      auto& shards = shards_it == result.end()
+          ? result
+                .emplace(std::make_pair(status.status, std::vector<ShardID>{}))
+                .first->second
+          : shards_it->second;
+      shards.push_back(shard);
+    }
+  }
+
+  return result;
 }
 
 bool StorageSetAccessor::setShardAuthoritativeStatusImpl(
@@ -667,7 +694,7 @@ bool StorageSetAccessor::setShardAuthoritativeStatusImpl(
   // On authoritative status changes, always reset the node to NOT_SENT, and
   // remove the blacklisting (if any), the node can be picked again in the
   // next wave
-  setShardState(shard, ShardState::NOT_SENT);
+  setShardState(shard, ShardState::NOT_SENT, Status::UNKNOWN);
   enableShard(shard);
   return true;
 }
@@ -776,9 +803,11 @@ bool StorageSetAccessor::isRequired(ShardID node) const {
   return required_shards_.count(node) > 0;
 }
 
-void StorageSetAccessor::setShardState(ShardID shard, ShardState state) {
+void StorageSetAccessor::setShardState(ShardID shard,
+                                       ShardState state,
+                                       Status status) {
   failure_domain_.setShardAttribute(
-      shard, ShardStatus{state, isRequired(shard)});
+      shard, ShardStatus{state, isRequired(shard), status});
 }
 
 void StorageSetAccessor::applyShardStatus() {
@@ -808,8 +837,9 @@ void StorageSetAccessor::printShardStatus() {
 
     if (st_attr_status.state != ShardState::SUCCESS) {
       result += shard.toString() + " = " +
-          logdevice::toShortString(st).c_str() + "(" +
-          getShardState(st_attr_status.state).c_str() + "); ";
+          logdevice::toShortString(st).c_str() +
+          "(state=" + getShardState(st_attr_status.state).c_str() +
+          ", status=" + error_name(st_attr_status.status) + "); ";
     }
   }
 
@@ -838,7 +868,8 @@ std::string StorageSetAccessor::getDebugInfo() const {
       ss << ", ";
     }
     first = false;
-    ss << shard.toString() << ": " << getShardState(s.state);
+    ss << shard.toString() << ": state=" << getShardState(s.state)
+       << ", status=" << error_name(s.status);
   }
   ss << "}";
   return ss.str();

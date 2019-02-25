@@ -239,8 +239,7 @@ void TrimRequest::onReply(ShardID from, Status status) {
            from.toString().c_str(),
            error_name(status));
 
-  StorageSetAccessor::AccessResult res =
-      StorageSetAccessor::AccessResult::SUCCESS;
+  auto res = StorageSetAccessor::Result::SUCCESS;
 
   switch (status) {
     case E::NOTSTORAGE:
@@ -255,25 +254,25 @@ void TrimRequest::onReply(ShardID from, Status status) {
                         "Failure while trimming from %s with status %s.",
                         from.toString().c_str(),
                         error_name(status));
-      res = StorageSetAccessor::AccessResult::PERMANENT_ERROR;
+      res = StorageSetAccessor::Result::PERMANENT_ERROR;
       break;
     case E::ACCESS:
       finalize(E::ACCESS);
       return;
     case E::AGAIN:
     case E::SHUTDOWN:
-      res = StorageSetAccessor::AccessResult::TRANSIENT_ERROR;
+      res = StorageSetAccessor::Result::TRANSIENT_ERROR;
       break;
     default:
       ld_error("Received TRIMMED_Message message from %s with "
                "unexpected status %s",
                from.toString().c_str(),
                error_name(status));
-      res = StorageSetAccessor::AccessResult::PERMANENT_ERROR;
+      res = StorageSetAccessor::Result::PERMANENT_ERROR;
       break;
   }
 
-  storage_set_accessor_->onShardAccessed(from, res);
+  storage_set_accessor_->onShardAccessed(from, {res, status});
 }
 
 void TrimRequest::onMessageSent(ShardID to, Status status) {
@@ -288,10 +287,10 @@ void TrimRequest::onMessageSent(ShardID to, Status status) {
                       "TRIM is not supported by the server at %s",
                       to.toString().c_str());
       storage_set_accessor_->onShardAccessed(
-          to, StorageSetAccessor::AccessResult::PERMANENT_ERROR);
+          to, {StorageSetAccessor::Result::PERMANENT_ERROR, status});
     } else {
       storage_set_accessor_->onShardAccessed(
-          to, StorageSetAccessor::AccessResult::TRANSIENT_ERROR);
+          to, {StorageSetAccessor::Result::TRANSIENT_ERROR, status});
     }
   }
 }
@@ -314,7 +313,7 @@ StorageSetAccessor::SendResult TrimRequest::sendTo(ShardID shard) {
   auto n = config->getNode(shard.node());
   if (!n) {
     ld_error("Cannot find node at index %u", shard.node());
-    return StorageSetAccessor::SendResult::PERMANENT_ERROR;
+    return {StorageSetAccessor::Result::PERMANENT_ERROR, Status::NOTFOUND};
   }
 
   if (sendOneMessage(shard) != 0) {
@@ -323,12 +322,12 @@ StorageSetAccessor::SendResult TrimRequest::sendTo(ShardID shard) {
                       10,
                       "TRIM is not supported by the server at %s",
                       shard.toString().c_str());
-      return StorageSetAccessor::SendResult::PERMANENT_ERROR;
+      return {StorageSetAccessor::Result::PERMANENT_ERROR, err};
     } else {
-      return StorageSetAccessor::SendResult::TRANSIENT_ERROR;
+      return {StorageSetAccessor::Result::TRANSIENT_ERROR, err};
     }
   }
-  return StorageSetAccessor::SendResult::SUCCESS;
+  return {StorageSetAccessor::Result::SUCCESS, err};
 }
 
 void TrimRequest::deleteThis() {

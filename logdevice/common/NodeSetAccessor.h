@@ -41,6 +41,15 @@
 
 namespace facebook { namespace logdevice {
 
+struct StatusHasher {
+  size_t operator()(Status status) const {
+    return static_cast<size_t>(status);
+  }
+};
+
+using FailedShardsMap =
+    std::unordered_map<Status, std::vector<ShardID>, StatusHasher>;
+
 class Timer;
 
 class StorageSetAccessor {
@@ -59,10 +68,15 @@ class StorageSetAccessor {
     ABORT
   };
 
+  struct ResultStatus {
+    Result result;
+    Status status;
+  };
+
   // type of result of sending the access message to a node in the node set
-  using SendResult = Result;
+  using SendResult = ResultStatus;
   // type of result of the reply from a node in the node set
-  using AccessResult = Result;
+  using AccessResult = ResultStatus;
 
   // information about the how a node is accessed with other nodes in a wave
   struct WaveInfo {
@@ -295,6 +309,9 @@ class StorageSetAccessor {
   virtual void setGracePeriod(std::chrono::milliseconds grace_period,
                               CompletionCondition completion_cond);
 
+  FailedShardsMap
+  getFailedShards(std::function<bool(Status)> failure_status_predicate) const;
+
  protected:
   virtual std::unique_ptr<Timer> createJobTimer(std::function<void()> callback);
   virtual std::unique_ptr<Timer>
@@ -355,14 +372,18 @@ class StorageSetAccessor {
     ShardState state;
     // is it imperative that we successfully access this node
     bool required;
+    // detail status, can be used for debugging and logging
+    Status status;
 
     struct Hash {
       size_t operator()(const ShardStatus& status) const {
-        return ((size_t)status.required << 32) | (size_t)status.state;
+        return ((size_t)status.required << 32) | (size_t)status.state |
+            (size_t)status.status;
       }
     };
     bool operator==(const ShardStatus& rhs) const {
-      return state == rhs.state && required == rhs.required;
+      return state == rhs.state && required == rhs.required &&
+          status == rhs.status;
     }
   };
 
@@ -459,7 +480,9 @@ class StorageSetAccessor {
   bool isRequired(ShardID shard) const;
 
   // utility function for changing the state of a node
-  void setShardState(ShardID shard, ShardState state);
+  void setShardState(ShardID shard,
+                     ShardState state,
+                     Status detail_status = Status::UNKNOWN);
 
   static const char* resultString(Result result);
   static const char* stateString(ShardState state);

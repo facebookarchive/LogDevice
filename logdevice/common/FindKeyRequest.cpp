@@ -106,7 +106,7 @@ StorageSetAccessor::SendResult FindKeyRequest::sendTo(ShardID shard) {
                     10,
                     "Cannot find node at index %u",
                     shard.node());
-    return StorageSetAccessor::SendResult::PERMANENT_ERROR;
+    return {StorageSetAccessor::Result::PERMANENT_ERROR, Status::NOTFOUND};
   }
 
   FINDKEY_flags_t flags = 0;
@@ -130,12 +130,12 @@ StorageSetAccessor::SendResult FindKeyRequest::sendTo(ShardID shard) {
                       10,
                       "FINDKEY is not supported by the server at %s",
                       shard.toString().c_str());
-      return StorageSetAccessor::SendResult::PERMANENT_ERROR;
+      return {StorageSetAccessor::Result::PERMANENT_ERROR, err};
     } else {
-      return StorageSetAccessor::SendResult::TRANSIENT_ERROR;
+      return {StorageSetAccessor::Result::TRANSIENT_ERROR, err};
     }
   }
-  return StorageSetAccessor::SendResult::SUCCESS;
+  return {StorageSetAccessor::Result::SUCCESS, err};
 }
 
 int FindKeyRequest::sendOneMessage(const FINDKEY_Header& header, ShardID to) {
@@ -197,10 +197,10 @@ void FindKeyRequest::onMessageSent(ShardID to, Status status) {
                       "FINDKEY is not supported by the server at %s",
                       to.toString().c_str());
       nodeset_accessor_->onShardAccessed(
-          to, StorageSetAccessor::AccessResult::PERMANENT_ERROR);
+          to, {StorageSetAccessor::Result::PERMANENT_ERROR, status});
     } else {
       nodeset_accessor_->onShardAccessed(
-          to, StorageSetAccessor::AccessResult::TRANSIENT_ERROR);
+          to, {StorageSetAccessor::Result::TRANSIENT_ERROR, status});
     }
   }
 }
@@ -212,8 +212,7 @@ void FindKeyRequest::onReply(ShardID from, Status status, lsn_t lo, lsn_t hi) {
            lsn_to_string(lo).c_str(),
            lsn_to_string(hi).c_str());
 
-  StorageSetAccessor::AccessResult res =
-      StorageSetAccessor::AccessResult::SUCCESS;
+  auto res = StorageSetAccessor::Result::SUCCESS;
 
   switch (status) {
     case E::OK:
@@ -226,7 +225,7 @@ void FindKeyRequest::onReply(ShardID from, Status status, lsn_t lo, lsn_t hi) {
             from.toString().c_str(),
             lsn_to_string(lo).c_str(),
             lsn_to_string(hi).c_str());
-        res = StorageSetAccessor::AccessResult::PERMANENT_ERROR;
+        res = StorageSetAccessor::Result::PERMANENT_ERROR;
         break;
       }
 
@@ -246,15 +245,15 @@ void FindKeyRequest::onReply(ShardID from, Status status, lsn_t lo, lsn_t hi) {
     case E::NOTSTORAGE:
     case E::REBUILDING:
     case E::TIMEDOUT:
-      res = StorageSetAccessor::AccessResult::TRANSIENT_ERROR;
+      res = StorageSetAccessor::Result::TRANSIENT_ERROR;
       break;
 
     case E::AGAIN:
-      res = StorageSetAccessor::AccessResult::TRANSIENT_ERROR;
+      res = StorageSetAccessor::Result::TRANSIENT_ERROR;
       break;
 
     case E::FAILED:
-      res = StorageSetAccessor::AccessResult::PERMANENT_ERROR;
+      res = StorageSetAccessor::Result::PERMANENT_ERROR;
       break;
 
     default:
@@ -264,12 +263,12 @@ void FindKeyRequest::onReply(ShardID from, Status status, lsn_t lo, lsn_t hi) {
                       "status %s",
                       from.toString().c_str(),
                       error_description(status));
-      res = StorageSetAccessor::AccessResult::PERMANENT_ERROR;
+      res = StorageSetAccessor::Result::PERMANENT_ERROR;
       break;
   }
 
   ld_check(nodeset_accessor_);
-  nodeset_accessor_->onShardAccessed(from, res);
+  nodeset_accessor_->onShardAccessed(from, {res, status});
 
   return;
 }

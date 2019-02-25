@@ -216,7 +216,7 @@ Mutator::sendSTORE(ShardID shard,
   }
 
   if (rv == 0 || err == E::CBREGISTERED) {
-    return StorageSetAccessor::SendResult::SUCCESS;
+    return {StorageSetAccessor::Result::SUCCESS, Status::OK};
   }
 
   RATELIMIT_INFO(std::chrono::seconds(1),
@@ -232,12 +232,12 @@ Mutator::sendSTORE(ShardID shard,
     // notify EpochRecovery.
     shard_not_in_config_ = shard;
     mutation_status_ = E::NOTINCONFIG;
-    return StorageSetAccessor::SendResult::PERMANENT_ERROR;
+    return {StorageSetAccessor::Result::PERMANENT_ERROR, err};
   }
 
   // consider all other error cases transient error and the node can
   // be retried later if needed
-  return StorageSetAccessor::SendResult::TRANSIENT_ERROR;
+  return {StorageSetAccessor::Result::TRANSIENT_ERROR, err};
 }
 
 void Mutator::onStored(ShardID from, const MUTATED_Header& header) {
@@ -267,7 +267,7 @@ void Mutator::onStored(ShardID from, const MUTATED_Header& header) {
 
     // node successfully stored
     nodeset_accessor_->onShardAccessed(
-        from, StorageSetAccessor::AccessResult::SUCCESS, current_wave_);
+        from, {StorageSetAccessor::Result::SUCCESS, st}, current_wave_);
   } else if (st == E::PREEMPTED) {
     mutation_status_ = st;
     if (header.seal.valid()) {
@@ -285,7 +285,7 @@ void Mutator::onStored(ShardID from, const MUTATED_Header& header) {
   } else {
     // consider all other error case as transient error
     nodeset_accessor_->onShardAccessed(
-        from, StorageSetAccessor::AccessResult::TRANSIENT_ERROR, current_wave_);
+        from, {StorageSetAccessor::Result::TRANSIENT_ERROR, st}, current_wave_);
   }
 }
 
@@ -309,7 +309,7 @@ void Mutator::onMessageSent(ShardID to, Status st, const STORE_Header& header) {
     // We failed to send a message to the destination. consider this as a
     // transient error and retries may get scheduled
     nodeset_accessor_->onShardAccessed(
-        to, StorageSetAccessor::AccessResult::TRANSIENT_ERROR, header.wave);
+        to, {StorageSetAccessor::Result::TRANSIENT_ERROR, st}, header.wave);
   }
 }
 
@@ -331,13 +331,13 @@ void Mutator::onConnectionClosed(ShardID to, Status status) {
     mutation_status_ = E::NOTINCONFIG;
 
     nodeset_accessor_->onShardAccessed(
-        to, StorageSetAccessor::AccessResult::PERMANENT_ERROR);
+        to, {StorageSetAccessor::Result::PERMANENT_ERROR, status});
     return;
   }
 
   // all other situations are considered as transient error
   nodeset_accessor_->onShardAccessed(
-      to, StorageSetAccessor::AccessResult::TRANSIENT_ERROR);
+      to, {StorageSetAccessor::Result::TRANSIENT_ERROR, status});
 }
 
 void Mutator::onStorageSetAccessorComplete(Status status) {
@@ -433,7 +433,7 @@ void Mutator::sendDeferredSTORE(ShardID shard,
     shard_not_in_config_ = shard;
     mutation_status_ = E::NOTINCONFIG;
     nodeset_accessor_->onShardAccessed(
-        shard, StorageSetAccessor::AccessResult::PERMANENT_ERROR);
+        shard, {StorageSetAccessor::Result::PERMANENT_ERROR, err});
     return;
   }
 
@@ -455,7 +455,7 @@ void Mutator::sendDeferredSTORE(ShardID shard,
   }
 
   nodeset_accessor_->onShardAccessed(
-      shard, StorageSetAccessor::AccessResult::TRANSIENT_ERROR);
+      shard, {StorageSetAccessor::Result::TRANSIENT_ERROR, err});
 }
 
 void Mutator::SocketClosedCallback::operator()(Status st, const Address& addr) {

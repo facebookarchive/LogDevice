@@ -125,7 +125,7 @@ StorageSetAccessor::SendResult GetHeadAttributesRequest::sendTo(ShardID shard) {
   auto n = config->getNode(shard.node());
   if (!n) {
     ld_error("Cannot find node at index %u", shard.node());
-    return StorageSetAccessor::SendResult::PERMANENT_ERROR;
+    return {StorageSetAccessor::Result::PERMANENT_ERROR, Status::NOTFOUND};
   }
 
   NodeID to(shard.node());
@@ -139,13 +139,13 @@ StorageSetAccessor::SendResult GetHeadAttributesRequest::sendTo(ShardID shard) {
                       "GET_HEAD_ATTRIBUTES is not supported by the server at "
                       "%s",
                       shard.toString().c_str());
-      return StorageSetAccessor::SendResult::PERMANENT_ERROR;
+      return {StorageSetAccessor::Result::PERMANENT_ERROR, err};
     } else {
-      return StorageSetAccessor::SendResult::TRANSIENT_ERROR;
+      return {StorageSetAccessor::Result::TRANSIENT_ERROR, err};
     }
   }
 
-  return StorageSetAccessor::SendResult::SUCCESS;
+  return {StorageSetAccessor::Result::SUCCESS, err};
 }
 
 void GetHeadAttributesRequest::finalize(Status status, bool delete_this) {
@@ -185,10 +185,10 @@ void GetHeadAttributesRequest::onMessageSent(ShardID to, Status status) {
                       "of shard %s",
                       to.toString().c_str());
       nodeset_accessor_->onShardAccessed(
-          to, StorageSetAccessor::AccessResult::PERMANENT_ERROR);
+          to, {StorageSetAccessor::Result::PERMANENT_ERROR, status});
     } else {
       nodeset_accessor_->onShardAccessed(
-          to, StorageSetAccessor::AccessResult::TRANSIENT_ERROR);
+          to, {StorageSetAccessor::Result::TRANSIENT_ERROR, status});
     }
   }
 }
@@ -203,8 +203,7 @@ void GetHeadAttributesRequest::onReply(ShardID from,
            lsn_to_string(attributes.trim_point).c_str(),
            attributes.trim_point_timestamp.count());
 
-  StorageSetAccessor::AccessResult res =
-      StorageSetAccessor::AccessResult::SUCCESS;
+  auto res = StorageSetAccessor::Result::SUCCESS;
 
   // See GET_HEAD_ATTRIBUTES_REPLY_Header doc block for possible statuses
   // explanation.
@@ -223,7 +222,7 @@ void GetHeadAttributesRequest::onReply(ShardID from,
                         "with status %s.",
                         from.toString().c_str(),
                         error_name(status));
-      res = StorageSetAccessor::AccessResult::TRANSIENT_ERROR;
+      res = StorageSetAccessor::Result::TRANSIENT_ERROR;
       break;
 
     case E::NOTSTORAGE:
@@ -235,7 +234,7 @@ void GetHeadAttributesRequest::onReply(ShardID from,
                         "with status %s.",
                         from.toString().c_str(),
                         error_name(status));
-      res = StorageSetAccessor::AccessResult::PERMANENT_ERROR;
+      res = StorageSetAccessor::Result::PERMANENT_ERROR;
       break;
 
     default:
@@ -243,11 +242,11 @@ void GetHeadAttributesRequest::onReply(ShardID from,
                "unexpected status %s",
                from.toString().c_str(),
                error_name(status));
-      res = StorageSetAccessor::AccessResult::PERMANENT_ERROR;
+      res = StorageSetAccessor::Result::PERMANENT_ERROR;
       break;
   }
 
-  nodeset_accessor_->onShardAccessed(from, res);
+  nodeset_accessor_->onShardAccessed(from, {res, status});
 }
 
 void GetHeadAttributesRequest::onClientTimeout() {
