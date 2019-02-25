@@ -188,10 +188,8 @@ Module* getModuleFromFile(const char* file);
   do {                                                                      \
     const facebook::logdevice::dbg::Level _level = (level);                 \
     facebook::logdevice::dbg::noteError(_level);                            \
-    static facebook::logdevice::Module* _module = nullptr;                  \
-    if (_module == nullptr) {                                               \
-      _module = facebook::logdevice::dbg::getModuleFromFile((file));        \
-    }                                                                       \
+    static facebook::logdevice::Module* _module =                           \
+        facebook::logdevice::dbg::getModuleFromFile((file));                \
     if (_level <= _module->getLogLevel()) {                                 \
       ld_emit_logline((file), (function), (line), (_level), (fmt), ##args); \
     }                                                                       \
