@@ -788,17 +788,16 @@ class Sender : public SenderBase {
   friend class SenderImpl;
   std::unique_ptr<SenderImpl> impl_;
 
-  struct event* sockets_to_close_available_;
-
   // ids of disconnected sockets to be erased from .client_sockets_
   std::forward_list<ClientID> disconnected_clients_;
 
   // To avoid re-entering Sender::sendMessage() when low priority messages
   // are trimmed from a FlowGroup's priority queue, trimmed messages are
   // accumulated in a deferred completion queue and then processed from
-  // the event loop by signalling the completed_messages_available_ event.
+  // the event loop.
   CompletionQueue completed_messages_;
-  struct event* completed_messages_available_;
+
+  std::atomic<bool> delivering_completed_messages_{false};
 
   // current number of bytes in all output buffers combined
   size_t bytes_pending_ = 0;
@@ -958,11 +957,6 @@ class Sender : public SenderBase {
    *               processing the current message
    */
   bool injectTrafficShapingEvent(FlowGroup&, Priority);
-
-  /**
-   * calls processSocketsToClose()
-   */
-  static void onSocketsToCloseAvailable(void* arg, short);
 
   static void onCompletedMessagesAvailable(void* self, short);
 };

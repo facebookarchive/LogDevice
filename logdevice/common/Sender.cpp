@@ -21,7 +21,6 @@
 #include "event2/event.h"
 #include "logdevice/common/ClientIdxAllocator.h"
 #include "logdevice/common/ConstructorFailed.h"
-#include "logdevice/common/EventHandler.h"
 #include "logdevice/common/FlowGroup.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/ResourceBudget.h"
@@ -82,11 +81,6 @@ class SenderImpl {
   // The rate of reconnection attempts is controlled by a ConnectionThrottle.
   std::vector<std::unique_ptr<Socket>> server_sockets_;
 
-  // Sockets get moved here from server_sockets_ to be closed. The
-  // sockets_to_close_available_ event should be signalled when this vector is
-  // not empty.
-  std::vector<std::pair<std::unique_ptr<Socket>, Status>> sockets_to_close_;
-
   // a map of all Sockets wrapping connections that were accepted from
   // clients, keyed by 32-bit client ids. This map is empty on clients.
   std::unordered_map<ClientID, Socket, ClientID::Hash> client_sockets_;
@@ -125,19 +119,7 @@ Sender::Sender(struct event_base* base,
                size_t max_node_idx,
                int32_t num_workers,
                ClientIdxAllocator* client_id_allocator)
-    : impl_(new SenderImpl(max_node_idx, num_workers, client_id_allocator)),
-      sockets_to_close_available_(
-          LD_EV(event_new)(base,
-                           -1,
-                           EV_WRITE | EV_PERSIST,
-                           EventHandler<Sender::onSocketsToCloseAvailable>,
-                           this)),
-      completed_messages_available_(
-          LD_EV(event_new)(base,
-                           -1,
-                           EV_WRITE | EV_PERSIST,
-                           EventHandler<Sender::onCompletedMessagesAvailable>,
-                           this)) {
+    : impl_(new SenderImpl(max_node_idx, num_workers, client_id_allocator)) {
   nw_shaping_container_ = std::make_unique<ShapingContainer>(
       static_cast<size_t>(NodeLocationScope::ROOT) + 1,
       base,
@@ -150,28 +132,12 @@ Sender::Sender(struct event_base* base,
     scope = NodeLocation::nextGreaterScope(scope);
   }
 
-  if (!sockets_to_close_available_) { // unlikely
-    ld_error("Failed to create 'sockets to close available' event for "
-             "a Sender");
-    err = E::NOMEM;
-    throw ConstructorFailed();
-  }
-
-  if (!completed_messages_available_) { // unlikely
-    ld_error("Failed to create 'completed messages available' event for "
-             "a Sender");
-    err = E::NOMEM;
-    throw ConstructorFailed();
-  }
-
   ld_check(num_workers != 0);
   ld_check(max_node_idx < std::numeric_limits<node_index_t>::max());
 }
 
 Sender::~Sender() {
   deliverCompletedMessages();
-  LD_EV(event_free)(sockets_to_close_available_);
-  LD_EV(event_free)(completed_messages_available_);
 }
 
 void Sender::onCompletedMessagesAvailable(void* arg, short) {
@@ -843,17 +809,6 @@ bool Sender::useSSLWith(NodeID nid,
   return cross_boundary || authentication;
 }
 
-void Sender::processSocketsToClose() {
-  // Move the vector in order to avoid re-entrant calls into
-  // Sender while closing a socket that might modify it (pushing another
-  // socket to close) and invalidating the iterator.
-  std::vector<std::pair<std::unique_ptr<Socket>, Status>> sockets_to_close;
-  sockets_to_close.swap(impl_->sockets_to_close_);
-  for (auto& s : sockets_to_close) {
-    s.first->close(s.second);
-  }
-}
-
 bool Sender::injectTrafficShapingEvent(FlowGroup& fg, Priority p) {
   double chance_percent =
       Worker::settings().message_error_injection_chance_percent;
@@ -867,11 +822,6 @@ bool Sender::injectTrafficShapingEvent(FlowGroup& fg, Priority p) {
     return true;
   }
   return false;
-}
-
-void Sender::onSocketsToCloseAvailable(void* arg, short) {
-  Sender* self = reinterpret_cast<Sender*>(arg);
-  self->processSocketsToClose();
 }
 
 Socket* Sender::initServerSocket(NodeID nid,
@@ -901,8 +851,8 @@ Socket* Sender::initServerSocket(NodeID nid,
       // We have a plaintext connection, but now we need an encrypted one.
       // Scheduling this socket to be closed and moving it out of
       // server_sockets_ to initialize an SSL connection in its place.
-      impl_->sockets_to_close_.push_back({std::move(s), E::SSLREQUIRED});
-      LD_EV(event_active)(sockets_to_close_available_, EV_WRITE, 0);
+      Worker::onThisThread()->add(
+          [s = std::move(s)] { s->close(E::SSLREQUIRED); });
       ld_check(!s);
     }
   }
@@ -1474,7 +1424,12 @@ void Sender::queueMessageCompletion(std::unique_ptr<Message> msg,
                                     const SteadyTimestamp t) {
   auto mc = std::make_unique<MessageCompletion>(std::move(msg), to, s, t);
   completed_messages_.push_back(*mc.release());
-  LD_EV(event_active)(completed_messages_available_, EV_WRITE, 0);
+  if (!delivering_completed_messages_.exchange(true)) {
+    Worker::onThisThread()->add([this] {
+      delivering_completed_messages_.store(false);
+      deliverCompletedMessages();
+    });
+  }
 }
 
 std::string Sender::dumpQueuedMessages(Address addr) const {
