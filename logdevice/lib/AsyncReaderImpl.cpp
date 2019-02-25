@@ -163,8 +163,10 @@ void AsyncReaderImpl::getBytesBuffered(std::function<void(size_t)> callback) {
             --req.leftovers;
 
             if (req.leftovers == 0) {
-              callback(req.dataSoFar);
+              auto dataSoFar = req.dataSoFar;
               pending->requestsPerCall.erase(reqId);
+              lock.unlock();
+              callback(dataSoFar);
             }
           }
         });
