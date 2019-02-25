@@ -73,16 +73,9 @@ class NodesConfigurationTest : public ::testing::Test {
   }
 };
 
-TEST_F(NodesConfigurationTest, EmptyNodesConfigValid) {
-  // "" as a serialized NC is considered equivalent to a config with an
-  // EMPTY_VERSION
+TEST_F(NodesConfigurationTest, EmptyNodesConfigStringInValid) {
   auto config = NodesConfigurationCodecFlatBuffers::deserialize("");
-  ASSERT_NE(nullptr, config);
-  EXPECT_EQ(MembershipVersion::EMPTY_VERSION, config->getVersion());
-
-  ASSERT_TRUE(NodesConfiguration().validate());
-  ASSERT_EQ(EMPTY_VERSION, NodesConfiguration().getVersion());
-  checkCodecSerialization(NodesConfiguration());
+  ASSERT_EQ(nullptr, config);
 }
 
 TEST_F(NodesConfigurationTest, ProvisionBasic) {
@@ -464,12 +457,14 @@ TEST_F(NodesConfigurationTest, LegacyConversion1) {
   checkCodecSerialization(*converted_nodes_config);
 }
 
-TEST_F(NodesConfigurationTest, ExtractVersion) {
+TEST_F(NodesConfigurationTest, ExtractVersionErrorEmptyString) {
   auto version =
       NodesConfigurationCodecFlatBuffers::extractConfigVersion(std::string());
-  ASSERT_TRUE(version.hasValue());
-  EXPECT_EQ(EMPTY_VERSION, version.value());
-  version = NodesConfigurationCodecFlatBuffers::extractConfigVersion(
+  ASSERT_FALSE(version.hasValue());
+}
+
+TEST_F(NodesConfigurationTest, ExtractVersionError) {
+  auto version = NodesConfigurationCodecFlatBuffers::extractConfigVersion(
       std::string("123"));
   ASSERT_FALSE(version.hasValue());
 }

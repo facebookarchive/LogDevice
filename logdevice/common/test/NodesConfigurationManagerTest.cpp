@@ -68,7 +68,9 @@ class NodesConfigurationManagerTest : public ::testing::Test {
     auto z = std::make_unique<ZookeeperClientInMemory>(
         "unused quorum",
         ZookeeperClientInMemory::state_map_t{
-            {kConfigKey, {"", zk::Stat{.version_ = 4}}}});
+            {kConfigKey,
+             {NodesConfigurationCodecFlatBuffers::serialize(initial_config),
+              zk::Stat{.version_ = 4}}}});
     z_ = z.get();
     auto store = std::make_unique<ZookeeperNodesConfigurationStore>(
         kConfigKey,
@@ -136,6 +138,7 @@ TEST_F(NodesConfigurationManagerTest, basic) {
 }
 
 TEST_F(NodesConfigurationManagerTest, update) {
+  waitTillNCMReceives(MembershipVersion::EMPTY_VERSION);
   {
     // initial provision: the znode is originally empty, which we treat as
     // EMPTY_VERSION

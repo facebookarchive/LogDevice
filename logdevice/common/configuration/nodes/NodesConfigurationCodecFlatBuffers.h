@@ -61,7 +61,6 @@ class NodesConfigurationCodecFlatBuffers {
   /**
    * Serializes the object into the buffer handled by ProtocoWriter.
    *
-   *
    * @return  nothing is returned. But if there is an error on serialization,
    *          @param writer should enter error state (i.e., writer.error()
    *          == true).
@@ -79,9 +78,7 @@ class NodesConfigurationCodecFlatBuffers {
   static std::shared_ptr<const NodesConfiguration>
   deserialize(folly::StringPiece buf);
 
-  // try to extract the nodes configuration version from a data blob. An empty
-  // string is considered equivalent to a (default-constructed)
-  // NodesConfiguration with EMPTY_VERSION.
+  // try to extract the nodes configuration version from a data blob.
   static folly::Optional<membership::MembershipVersion::Type>
   extractConfigVersion(folly::StringPiece serialized_data);
 

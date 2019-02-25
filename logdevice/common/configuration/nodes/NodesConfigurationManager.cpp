@@ -319,7 +319,8 @@ void NodesConfigurationManager::onUpdateRequest(
 
         // If we know which version / what config prevented the update:
         if (status == E::VERSION_MISMATCH &&
-            stored_version != membership::MembershipVersion::EMPTY_VERSION) {
+            stored_version != membership::MembershipVersion::EMPTY_VERSION &&
+            !stored_data.empty()) {
           if (folly::kIsDebug) {
             auto extracted_version_opt =
                 NodesConfigurationCodecFlatBuffers::extractConfigVersion(

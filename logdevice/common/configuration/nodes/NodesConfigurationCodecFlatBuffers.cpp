@@ -490,9 +490,6 @@ void NodesConfigurationCodecFlatBuffers::serialize(
 /*static*/
 std::shared_ptr<const NodesConfiguration>
 NodesConfigurationCodecFlatBuffers::deserialize(Slice wrapper_blob) {
-  if (wrapper_blob.size == 0) {
-    return std::make_shared<const NodesConfiguration>();
-  }
   auto wrapper_ptr = verifyAndGetRoot<
       configuration::nodes::flat_buffer_codec::NodesConfigurationWrapper>(
       wrapper_blob);
@@ -573,7 +570,7 @@ folly::Optional<membership::MembershipVersion::Type>
 NodesConfigurationCodecFlatBuffers::extractConfigVersion(
     folly::StringPiece serialized_data) {
   if (serialized_data.empty()) {
-    return membership::MembershipVersion::EMPTY_VERSION;
+    return folly::none;
   }
   auto wrapper_ptr = verifyAndGetRoot<
       configuration::nodes::flat_buffer_codec::NodesConfigurationWrapper>(
