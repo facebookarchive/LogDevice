@@ -7,11 +7,28 @@
  */
 #include "logdevice/common/FlowGroup.h"
 
+#include <folly/Random.h>
+
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Socket.h"
 #include "logdevice/common/Worker.h"
 
 namespace facebook { namespace logdevice {
+
+bool FlowGroup::injectTrafficShapingEvent(Priority p) {
+  double chance_percent =
+      Worker::settings().message_error_injection_chance_percent;
+  if (chance_percent != 0 &&
+      Worker::settings().message_error_injection_status == E::CBREGISTERED &&
+      !isRunningBacklog() && configured() && enabled() &&
+      folly::Random::randDouble(0, 100.0) <= chance_percent) {
+    // Empty the meter so that all subsequent messages see a shortage
+    // until more bandwdith is added.
+    resetMeter(p);
+    return true;
+  }
+  return false;
+}
 
 bool FlowGroup::applyUpdate(FlowGroupsUpdate::GroupEntry& update,
                             StatsHolder* stats) {

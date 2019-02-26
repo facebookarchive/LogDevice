@@ -240,6 +240,12 @@ class FlowGroup {
   }
 
   /**
+   * @return  true iff bandwidth should be considered exhausted while
+   *               processing the current message
+   */
+  bool injectTrafficShapingEvent(Priority);
+
+  /**
    * Discard all accumulated capacity from a Meter.
    *
    * Currently only used during testing where injected traffic shaping

@@ -952,12 +952,6 @@ class Sender : public SenderBase {
    */
   void processSocketsToClose();
 
-  /**
-   * @return  true iff bandwidth should be considered exhausted while
-   *               processing the current message
-   */
-  bool injectTrafficShapingEvent(FlowGroup&, Priority);
-
   static void onCompletedMessagesAvailable(void* self, short);
 };
 

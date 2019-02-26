@@ -470,7 +470,7 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
   }
 
   auto lock = nw_shaping_container_->lock();
-  if (!injectTrafficShapingEvent(sock.flow_group_, envelope->priority()) &&
+  if (!sock.flow_group_.injectTrafficShapingEvent(envelope->priority()) &&
       sock.flow_group_.drain(*envelope)) {
     lock.unlock();
     FLOW_GROUP_STAT_INCR(Worker::stats(), sock.flow_group_, direct_dispatched);
@@ -807,21 +807,6 @@ bool Sender::useSSLWith(NodeID nid,
   }
 
   return cross_boundary || authentication;
-}
-
-bool Sender::injectTrafficShapingEvent(FlowGroup& fg, Priority p) {
-  double chance_percent =
-      Worker::settings().message_error_injection_chance_percent;
-  if (chance_percent != 0 &&
-      Worker::settings().message_error_injection_status == E::CBREGISTERED &&
-      !fg.isRunningBacklog() && fg.configured() && fg.enabled() &&
-      folly::Random::randDouble(0, 100.0) <= chance_percent) {
-    // Empty the meter so that all subsequent messages see a shortage
-    // until more bandwdith is added.
-    fg.resetMeter(p);
-    return true;
-  }
-  return false;
 }
 
 Socket* Sender::initServerSocket(NodeID nid,
