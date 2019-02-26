@@ -259,6 +259,8 @@ class IsLogEmptyRequest : public DistributedRequest,
                     ReplicationProperty replication) {
     return std::make_unique<FailureDomain>(shards, config, replication);
   }
+
+  void completion(Status st);
 };
 
 }} // namespace facebook::logdevice

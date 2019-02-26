@@ -91,58 +91,7 @@ void IsLogEmptyRequest::initStorageSetAccessor() {
       };
 
   StorageSetAccessor::CompletionFunc completion = [this](Status st) {
-    ld_check_in(st, ({E::OK, E::TIMEDOUT, E::FAILED}));
-    std::string shard_states = "";
-
-    if (nodeset_accessor_) {
-      shard_states = nodeset_accessor_->allShardsStateSummary();
-    }
-
-    if (st == E::TIMEDOUT) {
-      // Hit the client timeout before seeing an f-majority of responses.
-      RATELIMIT_WARNING(std::chrono::seconds(1),
-                        10,
-                        "timed out (%ld ms) waiting for storage nodes, "
-                        "assuming that log %lu is not empty. Shard states: "
-                        "[%s]",
-                        client_timeout_.count(),
-                        log_id_.val(),
-                        shard_states.c_str());
-      ld_check(!completion_cond_called_);
-      finalize(E::TIMEDOUT, false);
-    } else if (st == E::OK) {
-      // We'll get here if an f-majority of the nodes responded, and either
-      // 1) we hit the client or grace period timeout before the result was
-      //    clear, or
-      // 2) completion_cond allowed the NodeSetAccessor to terminate because
-      //    we've got an empty f-majority, or
-      // 3) completion_cond allowed the NodeSetAccessor to terminate because
-      //    we've reached a dead end.
-      ld_check(completion_cond_called_);
-
-      if (!completion_cond_allowed_termination_) {
-        RATELIMIT_INFO(std::chrono::seconds(10),
-                       10,
-                       "Saw an f-majority of responses but got no consensus "
-                       "despite waiting for a %lu ms grace period or "
-                       "the %lu ms client timeout running out; considering "
-                       "log %lu non-empty (partial result). Shard states: "
-                       "[%s]",
-                       grace_period_.count(),
-                       client_timeout_.count(),
-                       log_id_.val(),
-                       shard_states.c_str());
-        finalize(E::PARTIAL, false);
-      } else if (haveEmptyFMajority()) {
-        finalize(E::OK, true);
-      } else {
-        ld_check(haveDeadEnd());
-        finalize(E::PARTIAL, false);
-      }
-    } else {
-      ld_check_eq(st, E::FAILED);
-      finalize(st, false);
-    }
+    this->completion(st);
   };
 
   StorageSetAccessor::CompletionCondition completion_cond = [this]() {
@@ -189,17 +138,15 @@ void IsLogEmptyRequest::onShardStatusChanged(bool initialize) {
     // consider a dead end for this particular use case that NodeSetAccessor
     // doesn't do.
     if (!haveFmajorityOfResponses() && haveDeadEnd()) {
-      Status result_st = haveOnlyRebuildingFailures() ? E::PARTIAL : E::FAILED;
       RATELIMIT_INFO(std::chrono::seconds(10),
                      2,
                      "After a change in shard status, we hit a dead end -- we "
                      "won't get an accurate answer right now. Considering log "
-                     "%lu non-empty and finishing with status %s. Shard "
-                     "statuses: %s",
+                     "%lu non-empty. Shard statuses according to request's "
+                     "FailureDomain: [%s]",
                      log_id_.val(),
-                     error_name(result_st),
                      nodeset_accessor_->allShardsStateSummary().c_str());
-      finalize(result_st, false);
+      completion(E::FAILED); // this will correctly decide the final status
     } else {
       // NodeSetAccessor won't be ready when we initialize this request's
       // failure domain, but will update itself when we start it.
@@ -368,8 +315,9 @@ void IsLogEmptyRequest::onMessageSent(ShardID to, Status status) {
                       "IS_LOG_EMPTY is not supported by the server for "
                       "shard %s",
                       to.toString().c_str());
-      nodeset_accessor_->onShardAccessed(
-          to, {StorageSetAccessor::Result::PERMANENT_ERROR, status});
+      // Let this be handled as if we received the below reply. The shard will
+      // not be asked again, and we will check if we've hit a dead end.
+      onReply(to, E::NOTSUPPORTED, false);
     } else {
       nodeset_accessor_->onShardAccessed(
           to, {StorageSetAccessor::Result::TRANSIENT_ERROR, status});
@@ -438,17 +386,17 @@ void IsLogEmptyRequest::onReply(ShardID from, Status status, bool is_empty) {
            error_name(status),
            is_empty ? "TRUE" : "FALSE");
 
-  if (!failure_domain_->containsShard(from)) {
+  shard_status_t shard_st;
+  int rv = failure_domain_->getShardAttribute(from, &shard_st);
+
+  if (rv != 0) {
     RATELIMIT_ERROR(std::chrono::seconds(10),
                     10,
                     "Shard %s not known, ignoring",
                     from.toString().c_str());
+    ld_check(!failure_domain_->containsShard(from));
     return;
   }
-
-  shard_status_t shard_st;
-  int rv = failure_domain_->getShardAttribute(from, &shard_st);
-  ld_check_eq(rv, 0);
 
   if (shard_st & SHARD_HAS_RESULT && status != E::OK) {
     ld_debug("Got reply from %s with status %s, but we already have a healthy "
@@ -480,9 +428,13 @@ void IsLogEmptyRequest::onReply(ShardID from, Status status, bool is_empty) {
     case E::REBUILDING:
       RATELIMIT_DEBUG(std::chrono::seconds(1),
                       10,
-                      "shard %s is rebuilding.",
+                      "Shard %s is rebuilding.",
                       from.toString().c_str());
-      res = StorageSetAccessor::Result::TRANSIENT_ERROR;
+
+      // Even if this is mini-rebuilding, treat it the same, i.e. don't count
+      // on it to finish within the duration of this request.
+      failure_domain_->setShardAttribute(from, shard_st | SHARD_IS_REBUILDING);
+      res = StorageSetAccessor::Result::PERMANENT_ERROR;
       break;
 
     case E::AGAIN:
@@ -511,7 +463,15 @@ void IsLogEmptyRequest::onReply(ShardID from, Status status, bool is_empty) {
       break;
   }
 
-  nodeset_accessor_->onShardAccessed(from, {res, status});
+  if (!haveFmajorityOfResponses() && haveDeadEnd()) {
+    // We've hit a dead end, before even hearing from an f-majority of the
+    // nodes. Since the NodeSetAccessor only understands responses, but doesn't
+    // understand our additional requirements for reaching consensus, it can
+    // miss this case under certain conditions.
+    completion(E::FAILED); // this will correctly decide the final status
+  } else {
+    nodeset_accessor_->onShardAccessed(from, {res, status});
+  }
 }
 
 void IsLogEmptyRequest::deleteThis() {
@@ -522,6 +482,69 @@ void IsLogEmptyRequest::deleteThis() {
   ld_check(it != map.end());
 
   map.erase(it); // destroys unique_ptr which owns this
+}
+
+void IsLogEmptyRequest::completion(Status st) {
+  ld_check_in(st, ({E::OK, E::TIMEDOUT, E::FAILED}));
+
+  std::string shard_states = "";
+
+  if (nodeset_accessor_) {
+    shard_states = nodeset_accessor_->allShardsStateSummary();
+  }
+
+  if (st == E::TIMEDOUT) {
+    // Hit the client timeout before seeing an f-majority of responses.
+    RATELIMIT_WARNING(std::chrono::seconds(1),
+                      10,
+                      "timed out (%ld ms) waiting for storage nodes, "
+                      "assuming that log %lu is not empty. Shard states: %s",
+                      client_timeout_.count(),
+                      log_id_.val(),
+                      shard_states.c_str());
+    ld_check(!completion_cond_called_);
+    finalize(E::TIMEDOUT, false);
+  } else if (st == E::OK) {
+    // We'll get here if an f-majority of the nodes responded, and either
+    // 1) we hit the client or grace period timeout before the result was
+    //    clear, or
+    // 2) completion_cond allowed the NodeSetAccessor to terminate because
+    //    we've got an empty f-majority, or
+    // 3) completion_cond allowed the NodeSetAccessor to terminate because
+    //    we've reached a dead end.
+    ld_check(completion_cond_called_);
+
+    if (!completion_cond_allowed_termination_) {
+      RATELIMIT_INFO(std::chrono::seconds(10),
+                     10,
+                     "Saw an f-majority of responses but got no consensus "
+                     "despite waiting for a %lu ms grace period or "
+                     "the %lu ms client timeout running out; considering "
+                     "log %lu non-empty (partial result). Shard states: %s",
+                     grace_period_.count(),
+                     client_timeout_.count(),
+                     log_id_.val(),
+                     shard_states.c_str());
+
+      finalize(E::PARTIAL, false);
+    } else if (haveEmptyFMajority()) {
+      finalize(E::OK, true);
+    } else {
+      ld_check(haveDeadEnd());
+      finalize(E::PARTIAL, false);
+    }
+  } else {
+    // We'll get here if
+    // 1) Too many nodes couldn't answer, and NodeSetAccessor decided that this
+    //    was a fitting final status.
+    // 2) We hit a dead end before even hearing from an f-majority -- either
+    //    due to a shard's authoritative status changing, or getting an
+    //    E::REBUILDING response.
+    // In either case, use FAILED unless all the failures were just rebuilding;
+    // then use PARTIAL.
+    ld_check_eq(st, E::FAILED);
+    finalize(haveOnlyRebuildingFailures() ? E::PARTIAL : E::FAILED, false);
+  }
 }
 
 }} // namespace facebook::logdevice

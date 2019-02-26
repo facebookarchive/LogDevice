@@ -802,14 +802,11 @@ TEST(IsLogEmptyRequestTest, BasicTransientError) {
   cb.assertNotCalled();
   req.onReply(node(5), E::OK, true);
   cb.assertNotCalled();
+  ASSERT_FALSE(req.completionConditionCalled());
+  ASSERT_FALSE(req.isMockGracePeriodTimerActive());
   req.onReply(node(2), E::OK, false);
-  cb.assertNotCalled();
-  req.onReply(node(3), E::OK, true);
-  cb.assertNotCalled();
   ASSERT_TRUE(req.completionConditionCalled());
   ASSERT_TRUE(req.isMockGracePeriodTimerActive());
-  // Node replies again that it is in rebuilding
-  req.onReply(node(4), E::REBUILDING, false);
   cb.assertNotCalled();
   req.mockGracePeriodTimedout();
   cb.assertCalled(E::PARTIAL, false);
@@ -1004,13 +1001,8 @@ TEST(IsLogEmptyRequestTest, AllUnavailableOnStart) {
 
 // Verify that we're correctly handling the case where some permanent error
 // causes finalizing from onMessageSent.
-TEST(IsLogEmptyRequestTest, LegacyNodeCausesDeadEnd) {
+TEST(IsLogEmptyRequestTest, LegacyNodeCausesDeadEnd1) {
   Callback cb;
-  // Have a bunch of nodes be underreplicated from the start
-  for (int i = 0; i < 3; i++) {
-    changeShardStartingAuthStatus(
-        node(i), AuthoritativeStatus::UNDERREPLICATION);
-  }
   MockIsLogEmptyRequest req(6,
                             ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                             cb,
@@ -1018,8 +1010,50 @@ TEST(IsLogEmptyRequestTest, LegacyNodeCausesDeadEnd) {
   ASSERT_TRUE(req.isMockJobTimerActive());
   ASSERT_FALSE(req.isMockGracePeriodTimerActive());
   ASSERT_FALSE(req.completionConditionCalled());
+  req.mockShardStatusChanged(node(0), AuthoritativeStatus::UNDERREPLICATION);
   cb.assertNotCalled();
-  req.onMessageSent(node(5), E::PROTONOSUPPORT);
+  req.onReply(node(1), E::OK, true);
+  cb.assertNotCalled();
+  req.onReply(node(2), E::OK, true);
+  cb.assertNotCalled();
+  req.onReply(node(0), E::REBUILDING, false);
+  cb.assertNotCalled();
+  req.onReply(node(3), E::OK, false);
+  cb.assertNotCalled();
+  req.onMessageSent(node(4), E::PROTONOSUPPORT);
+  ASSERT_FALSE(req.isMockGracePeriodTimerActive());
+  ASSERT_FALSE(req.completionConditionCalled());
+  // Just 5 remain, so we can't reach consensus. Should reach a dead end, and
+  // since the above is a non-rebuilding error, it should finish with 'FAILED'.
+  cb.assertCalled(E::FAILED, false);
+}
+
+// Have some node fail due to not supporting this request type; reach dead end
+// by non-empty node making consensus impossible.
+TEST(IsLogEmptyRequestTest, LegacyNodeThenDeadEnd) {
+  Callback cb;
+  MockIsLogEmptyRequest req(6,
+                            ReplicationProperty({{NodeLocationScope::NODE, 3}}),
+                            cb,
+                            /*grace_period=*/std::chrono::milliseconds(500));
+  ASSERT_TRUE(req.isMockJobTimerActive());
+  ASSERT_FALSE(req.isMockGracePeriodTimerActive());
+  ASSERT_FALSE(req.completionConditionCalled());
+  req.mockShardStatusChanged(node(0), AuthoritativeStatus::UNDERREPLICATION);
+  cb.assertNotCalled();
+  req.onReply(node(1), E::OK, true);
+  cb.assertNotCalled();
+  req.onReply(node(2), E::OK, true);
+  cb.assertNotCalled();
+  req.onReply(node(0), E::REBUILDING, false);
+  cb.assertNotCalled();
+  req.onMessageSent(node(4), E::PROTONOSUPPORT);
+  cb.assertNotCalled();
+  req.onReply(node(3), E::OK, false);
+  ASSERT_FALSE(req.isMockGracePeriodTimerActive());
+  ASSERT_FALSE(req.completionConditionCalled());
+  // Just 5 remain, so we can't reach consensus. Should reach a dead end, and
+  // since the above is a non-rebuilding error, it should finish with 'FAILED'.
   cb.assertCalled(E::FAILED, false);
 }
 
@@ -1051,8 +1085,6 @@ TEST(IsLogEmptyRequestTest, EarlyDeadEndFailed1) {
 
 TEST(IsLogEmptyRequestTest, EarlyDeadEndFailed2) {
   Callback cb;
-  // Have N0 be underreplicated from the start
-  changeShardStartingAuthStatus(node(0), AuthoritativeStatus::UNDERREPLICATION);
   MockIsLogEmptyRequest req(6,
                             ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                             cb,
@@ -1060,20 +1092,16 @@ TEST(IsLogEmptyRequestTest, EarlyDeadEndFailed2) {
   ASSERT_TRUE(req.isMockJobTimerActive());
   ASSERT_FALSE(req.isMockGracePeriodTimerActive());
   ASSERT_FALSE(req.completionConditionCalled());
+  req.mockShardStatusChanged(node(0), AuthoritativeStatus::UNDERREPLICATION);
   cb.assertNotCalled();
   req.onReply(node(5), E::SHUTDOWN, false);
   cb.assertNotCalled();
+  // One more node in mini-rebuilding will cause us to hit a dead end, and
+  // since this is before getting responses from an f-majority of the nodes,
+  // and some failures were not due to rebuilding, the result should be FAILED.
   req.onReply(node(4), E::REBUILDING, false);
-  // We don't check for dead end when receiving the above response, but if we
-  // get two shard authoritative status updates indicating that rebuilding is
-  // still going on, we should finish with E::FAILED at this point since we had
-  // one node that was not rebuilding (shutting down).
-  cb.assertNotCalled();
-  req.onReply(node(1), E::REBUILDING, false);
-  cb.assertNotCalled();
-  req.mockShardStatusChanged(node(4), AuthoritativeStatus::UNAVAILABLE);
-  cb.assertNotCalled();
-  req.mockShardStatusChanged(node(1), AuthoritativeStatus::UNAVAILABLE);
+  ASSERT_FALSE(req.isMockGracePeriodTimerActive());
+  ASSERT_FALSE(req.completionConditionCalled());
   cb.assertCalled(E::FAILED, false);
 }
 
@@ -1250,6 +1278,113 @@ TEST(IsLogEmptyRequestTest, WaveTimeoutInterval) {
       std::chrono::milliseconds(10000));
   ASSERT_EQ(interval.lo.count(), 1000);
   ASSERT_EQ(interval.hi.count(), 10000);
+}
+
+// Make sure that when too many nodes are unable to respond due to mini
+// rebuilding being slow or stuck, we quit early with PARTIAL result, rather
+// than retrying until timeout.
+TEST(IsLogEmptyRequestTest, StuckMiniRebuilding) {
+  Callback cb;
+  MockIsLogEmptyRequest req(
+      6, ReplicationProperty({{NodeLocationScope::NODE, 3}}), cb);
+  ASSERT_TRUE(req.isMockJobTimerActive());
+  ASSERT_FALSE(req.isMockGracePeriodTimerActive());
+  req.onReply(node(0), E::OK, true);
+  cb.assertNotCalled();
+  req.onReply(node(4), E::REBUILDING, false);
+  cb.assertNotCalled();
+  req.onReply(node(2), E::REBUILDING, false);
+  cb.assertNotCalled();
+
+  // Make the last node say it is in mini rebuilding. This should make us hit a
+  // dead end and end the request with a partial result.
+  req.onReply(node(3), E::REBUILDING, false);
+  ASSERT_FALSE(req.completionConditionCalled());
+  ASSERT_FALSE(req.isMockGracePeriodTimerActive());
+  // Should be counted a dead end, and finish with a partial result.
+  cb.assertCalled(E::PARTIAL, false);
+}
+
+// Two nodes with stuck mini-rebuilding, one unresponsive node.
+TEST(IsLogEmptyRequestTest, StuckMiniRebuildingAndOneSlowNode) {
+  Callback cb;
+  MockIsLogEmptyRequest req(
+      20, ReplicationProperty({{NodeLocationScope::NODE, 3}}), cb);
+  ASSERT_TRUE(req.isMockJobTimerActive());
+  ASSERT_FALSE(req.isMockGracePeriodTimerActive());
+  req.onReply(node(0), E::OK, true);
+  cb.assertNotCalled();
+  req.onReply(node(1), E::REBUILDING, false);
+  cb.assertNotCalled();
+  for (int i = 2; i < 18; i++) {
+    req.onReply(node(i), E::OK, true);
+    cb.assertNotCalled();
+  }
+  req.onReply(node(18), E::REBUILDING, false);
+  cb.assertNotCalled();
+  ASSERT_FALSE(req.completionConditionCalled());
+  ASSERT_FALSE(req.isMockGracePeriodTimerActive());
+
+  // Hit timeout while waiting for the last node, which is unresponsive for
+  // some reason.
+  req.mockJobTimeout();
+  cb.assertCalled(E::TIMEDOUT, false);
+}
+
+// A node finishes mini-rebuilding, makes us reach empty f-majority.
+TEST(IsLogEmptyRequestTest, MiniRebuildingFinishesEmpty) {
+  Callback cb;
+  MockIsLogEmptyRequest req(
+      6, ReplicationProperty({{NodeLocationScope::NODE, 3}}), cb);
+  ASSERT_TRUE(req.isMockJobTimerActive());
+  ASSERT_FALSE(req.isMockGracePeriodTimerActive());
+  req.onReply(node(0), E::OK, true);
+  cb.assertNotCalled();
+  req.onReply(node(1), E::REBUILDING, false);
+  cb.assertNotCalled();
+  req.onReply(node(2), E::REBUILDING, false);
+  cb.assertNotCalled();
+  req.onReply(node(3), E::OK, true);
+  cb.assertNotCalled();
+  req.onReply(node(4), E::OK, true);
+  cb.assertNotCalled();
+
+  // Now we're just one more 'empty' away from an empty f-majority. Let's
+  // imagine that N2's mini-rebuilding finishes, and it now tells us it doesn't
+  // have any records for this log.
+  req.onReply(node(2), E::OK, true);
+  ASSERT_TRUE(req.completionConditionCalled());
+  ASSERT_FALSE(req.isMockGracePeriodTimerActive());
+  // Should be counted a dead end, and finish with a partial result.
+  cb.assertCalled(E::OK, true);
+}
+
+// A node finishes mini-rebuilding, makes us reach non-empty copyset.
+TEST(IsLogEmptyRequestTest, MiniRebuildingFinishesNonEmpty) {
+  Callback cb;
+  MockIsLogEmptyRequest req(
+      6, ReplicationProperty({{NodeLocationScope::NODE, 3}}), cb);
+  ASSERT_TRUE(req.isMockJobTimerActive());
+  ASSERT_FALSE(req.isMockGracePeriodTimerActive());
+  req.onReply(node(0), E::OK, false);
+  cb.assertNotCalled();
+  req.onReply(node(1), E::REBUILDING, false);
+  cb.assertNotCalled();
+  req.onReply(node(2), E::REBUILDING, false);
+  cb.assertNotCalled();
+  req.onReply(node(3), E::OK, false);
+  cb.assertNotCalled();
+  req.onReply(node(4), E::OK, true);
+  cb.assertNotCalled();
+
+  // Now we're just one more 'empty' away from an empty f-majority. Let's
+  // imagine that N2's mini-rebuilding finishes, and it now tells us it doesn't
+  // have any records for this log.
+  req.onReply(node(2), E::OK, false);
+  ASSERT_FALSE(req.completionConditionCalled());
+  ASSERT_FALSE(req.isMockGracePeriodTimerActive());
+  // Should be counted a dead end, and finish with a partial result.
+  cb.assertCalled(E::OK, false);
 }
 
 } // namespace
