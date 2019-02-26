@@ -2529,6 +2529,24 @@ void Settings::defineSettings(SettingEasyInit& init) {
        CLIENT | SERVER | REQUIRES_RESTART,
        SettingsCategory::Configuration);
 
+  init("nodes-configuration-manager-store-polling-interval",
+       &nodes_configuration_manager_store_polling_interval,
+       "3s",
+       validate_positive<ssize_t>(),
+       "Polling interval of NodesConfigurationManager to "
+       "NodesConfigurationStore to read NodesConfiguration",
+       CLIENT | SERVER,
+       SettingsCategory::Configuration);
+
+  init("nodes-configuration-manager-intermediary-shard-state-timeout",
+       &nodes_configuration_manager_intermediary_shard_state_timeout,
+       "180s", // 3 minutes
+       validate_positive<ssize_t>(),
+       "Timeout for proposing the transition for a shard from an intermediary "
+       "state to its 'destination' state",
+       CLIENT | SERVER, // available on the clients for tooling
+       SettingsCategory::Configuration);
+
   init("admin-client-capabilities",
        &admin_client_capabilities,
        "false", // defaults to false

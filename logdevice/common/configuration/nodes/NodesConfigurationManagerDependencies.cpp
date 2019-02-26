@@ -281,8 +281,14 @@ void Dependencies::readFromStoreAndActivateTimer() {
     });
   }
 
-  // TODO: make this interval configurable
-  timer_->activate(std::chrono::seconds(3));
+  auto polling_interval =
+      processor_->settings()
+          ->nodes_configuration_manager_store_polling_interval;
+  auto jittered_timeout =
+      std::chrono::duration_cast<std::chrono::milliseconds>(polling_interval) *
+      (1 + folly::Random::randDouble(0, 0.1));
+  timer_->activate(
+      std::chrono::duration_cast<std::chrono::microseconds>(jittered_timeout));
 }
 
 StatsHolder* FOLLY_NULLABLE Dependencies::getStats() {

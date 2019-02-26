@@ -1122,6 +1122,15 @@ struct Settings : public SettingsBundle {
   // enable NodesConfigurationManager on clients and servers
   bool enable_nodes_configuration_manager;
 
+  // Polling interval of NodesConfigurationManager to NodesConfigurationStore
+  // to read NodesConfiguration
+  std::chrono::seconds nodes_configuration_manager_store_polling_interval;
+
+  // Timeout for proposing the transition for a shard from an intermediary state
+  // to its 'destination' state
+  std::chrono::seconds
+      nodes_configuration_manager_intermediary_shard_state_timeout;
+
   // if set, the client will be used for administrative operations such as
   // emergency tooling, and it can propose changes to LD metadata such as
   // NodesConfiguration
