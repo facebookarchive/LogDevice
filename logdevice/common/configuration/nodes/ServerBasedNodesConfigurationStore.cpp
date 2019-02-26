@@ -78,7 +78,7 @@ Status ServerBasedNodesConfigurationStore::updateConfigSync(
 void ServerBasedNodesConfigurationStore::shutdown() {
   shutdown_signaled_.store(true);
   // ServerBased NCS runs on the Processor, we assume the Processor::shutdown()
-  // will finish the remaining requests and join the worker threads after
+  // will cancel the remaining requests and join the worker threads after
   // signaling NCM / NCS shutdown.
 }
 

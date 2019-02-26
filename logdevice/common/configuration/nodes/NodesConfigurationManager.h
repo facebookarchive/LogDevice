@@ -7,6 +7,8 @@
  */
 #pragma once
 
+#include <folly/synchronization/Baton.h>
+
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationAPI.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationManagerDependencies.h"
@@ -94,6 +96,11 @@ class NodesConfigurationManager
   void init();
   void upgradeToProposer();
 
+  // Called by the owning Processor on its own shutdown. Guarantees that all
+  // other threads and eventbases spawn from the NCM will be joined and that
+  // upon return, NCM will not accept new user calls.
+  void shutdown();
+
   //////// PROPOSER ////////
   void update(NodesConfiguration::Update, CompletionCb) override;
   void update(std::vector<nodes::NodesConfiguration::Update> updates,
@@ -124,6 +131,7 @@ class NodesConfigurationManager
  private:
   void initOnNCM();
   void startPollingFromStore();
+  bool shutdownSignaled() const;
 
   // onNewConfig should only be called by NewConfigRequest.
   // TODO: implement overwrite (the blind write option) for emergency tooling.
@@ -187,6 +195,8 @@ class NodesConfigurationManager
   // machine context, but reads may be from different threads.
   UpdateableSharedPtr<const NodesConfiguration, NCMTag> local_nodes_config_{
       nullptr};
+  std::atomic<bool> shutdown_signaled_{false};
+  folly::Baton<> shutdown_completed_;
 
   friend class ncm::NCMRequest;
   friend class ncm::Dependencies::Dependencies;

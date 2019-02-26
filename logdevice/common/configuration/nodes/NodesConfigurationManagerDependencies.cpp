@@ -49,6 +49,13 @@ Request::Execution Dependencies::InitRequest::executeOnNCM(
   return Execution::COMPLETE;
 }
 
+Request::Execution Dependencies::ShutdownRequest::executeOnNCM(
+    std::shared_ptr<NodesConfigurationManager> ncm_ptr) {
+  ncm_ptr->deps()->cancelTimer();
+  ncm_ptr->shutdown_completed_.post();
+  return Execution::COMPLETE;
+}
+
 Request::Execution NewConfigRequest::executeOnNCM(
     std::shared_ptr<NodesConfigurationManager> ncm_ptr) {
   if (serialized_) {
@@ -190,6 +197,24 @@ void Dependencies::init(NCMWeakPtr ncm) {
   processor_->postWithRetrying(req);
 }
 
+void Dependencies::shutdown() {
+  shutdown_signaled_.store(true);
+  store_->shutdown();
+  auto req = makeNCMRequest<ShutdownRequest>();
+  processor_->postWithRetrying(req);
+}
+
+bool Dependencies::shutdownSignaled() const {
+  return shutdown_signaled_.load();
+}
+
+void Dependencies::cancelTimer() {
+  dcheckOnNCM();
+  if (timer_) {
+    timer_->cancel();
+  }
+}
+
 void Dependencies::postNewConfigRequest(std::string serialized_new_config) {
   // TODO: move all deserialization to a background worker thread
   auto req = makeNCMRequest<NewConfigRequest>(std::move(serialized_new_config));
@@ -210,6 +235,11 @@ bool Dependencies::shouldDoConsistentConfigFetch() {
 
 void Dependencies::readFromStoreAndActivateTimer() {
   dcheckOnNCM();
+
+  if (shutdownSignaled()) {
+    return;
+  }
+
   ld_assert(store_);
 
   auto data_cb = [ncm = ncm_](Status status, std::string value) {
@@ -242,6 +272,9 @@ void Dependencies::readFromStoreAndActivateTimer() {
       // machine, but this assumption will change.
       auto ncm_ptr = ncm.lock();
       if (!ncm_ptr) {
+        return;
+      }
+      if (ncm_ptr->shutdownSignaled()) {
         return;
       }
       ncm_ptr->deps()->readFromStoreAndActivateTimer();

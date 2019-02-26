@@ -488,6 +488,10 @@ void Processor::shutdown() {
     impl_->allSequencers_->shutdown();
   }
 
+  if (ncm_) {
+    ncm_->shutdown();
+  }
+
   // Tell all Workers to shut down and terminate their threads. This
   // also alters WorkerHandles so that further attempts to post
   // requests through them fail with E::SHUTDOWN.

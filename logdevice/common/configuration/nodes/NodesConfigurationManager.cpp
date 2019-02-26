@@ -128,6 +128,9 @@ NodesConfigurationManager::NodesConfigurationManager(
 }
 
 void NodesConfigurationManager::init() {
+  if (shutdownSignaled()) {
+    return;
+  }
   auto wp = weak_from_this();
   ld_check(wp.lock() != nullptr);
   deps_->init(wp);
@@ -142,8 +145,25 @@ void NodesConfigurationManager::upgradeToProposer() {
   mode_.upgradeToProposer();
 }
 
+void NodesConfigurationManager::shutdown() {
+  shutdown_signaled_.store(true);
+  deps_->shutdown();
+  // Since the Processor doesn't complete pending requests when joining the
+  // worker threads, we wait for the ShutdownRequest to execute before
+  // returning.
+  shutdown_completed_.wait();
+}
+
+bool NodesConfigurationManager::shutdownSignaled() const {
+  return shutdown_signaled_.load();
+}
+
 void NodesConfigurationManager::update(NodesConfiguration::Update update,
                                        CompletionCb callback) {
+  if (shutdownSignaled()) {
+    callback(E::SHUTDOWN, nullptr);
+    return;
+  }
   std::vector<NodesConfiguration::Update> updates;
   updates.emplace_back(std::move(update));
   // this-> needed here for name resolution of "update"
@@ -153,6 +173,11 @@ void NodesConfigurationManager::update(NodesConfiguration::Update update,
 void NodesConfigurationManager::update(
     std::vector<NodesConfiguration::Update> updates,
     CompletionCb callback) {
+  if (shutdownSignaled()) {
+    callback(E::SHUTDOWN, nullptr);
+    return;
+  }
+
   // ensure we are allowed to propose updates
   if (!mode_.isProposer()) {
     callback(E::ACCESS, nullptr);
@@ -167,6 +192,11 @@ void NodesConfigurationManager::update(
 void NodesConfigurationManager::overwrite(
     std::shared_ptr<const NodesConfiguration> configuration,
     CompletionCb callback) {
+  if (shutdownSignaled()) {
+    callback(E::SHUTDOWN, nullptr);
+    return;
+  }
+
   // ensure we are allowed to overwrite
   if (!mode_.isTooling()) {
     callback(E::ACCESS, nullptr);
@@ -190,6 +220,9 @@ void NodesConfigurationManager::startPollingFromStore() {
 void NodesConfigurationManager::onNewConfig(std::string new_config) {
   deps_->dcheckOnNCM();
   STAT_INCR(deps_->getStats(), nodes_config_manager_config_received);
+  if (shutdownSignaled()) {
+    return;
+  }
 
   auto new_version_opt =
       NodesConfigurationCodecFlatBuffers::extractConfigVersion(new_config);
@@ -219,6 +252,9 @@ void NodesConfigurationManager::onNewConfig(
     std::shared_ptr<const NodesConfiguration> new_config) {
   ld_check(new_config);
   deps_->dcheckOnNCM();
+  if (shutdownSignaled()) {
+    return;
+  }
 
   // Since all accesses to staged and pending configs happen in the NCM context,
   // no need to synchronize here.

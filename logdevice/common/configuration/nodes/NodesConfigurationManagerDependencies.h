@@ -164,7 +164,19 @@ class Dependencies {
         executeOnNCM(std::shared_ptr<NodesConfigurationManager>) override;
   };
 
+  class ShutdownRequest : public NCMRequest {
+   public:
+    using NCMRequest::NCMRequest;
+    Request::Execution
+        executeOnNCM(std::shared_ptr<NodesConfigurationManager>) override;
+  };
+
   void init(NCMWeakPtr);
+  void shutdown();
+  bool shutdownSignaled() const;
+
+  // should be called in NCM context
+  void cancelTimer();
 
   // Returns true when we should fetch the latest config from the store.
   // NCM needs to ensure that the locally committed config version never
@@ -187,6 +199,7 @@ class Dependencies {
   std::unique_ptr<NodesConfigurationStore> store_{nullptr};
   // Timer for periodically polling from store_
   std::unique_ptr<Timer> timer_;
+  std::atomic<bool> shutdown_signaled_{false};
 
   friend class nodes::NodesConfigurationManager;
 };
