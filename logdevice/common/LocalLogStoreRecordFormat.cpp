@@ -31,7 +31,6 @@ constexpr size_t minLogStoreBlobSize() {
 
 uint32_t getRecordWaveOrRecoveryEpoch(const STORE_Header& header,
                                       const STORE_Extra& extra) {
-  // TODO 11866467: deprecate STORE_Header::RECOVERY
   return (((header.flags & STORE_Header::RECOVERY ||
             header.flags & STORE_Header::WRITTEN_BY_RECOVERY)) &&
           (extra.recovery_epoch != EPOCH_INVALID))

@@ -115,8 +115,12 @@ struct STORE_Header {
   // sealed the log.  When the recipient does its preemption check on
   // the STORE, it must use that epoch number instead of rid.epoch.
 
-  // TODO 11866467: currently serve the same purpose as WRITTEN_BY_RECOVERY.
-  // This is going to be deprecated, stop using this flag.
+  // Indicates that this STORE message was sent by recovery, and the wave is
+  // repurposed to be the `sequencer epoch' of the log recovery.
+  // Not to be confused with WRITTEN_BY_RECOVERY, which means that this record
+  // was *at some point* written by recovery, but the current STORE message
+  // is not necessarily from recovery.
+  // Mutually exclusive with REBUILDING.
   static const STORE_flags_t RECOVERY = 1 << 5; //=32
 
   // The record being stored is a plug for a hole in the numbering sequence.
@@ -147,10 +151,12 @@ struct STORE_Header {
   // epoch so far.
   static const STORE_flags_t OFFSET_WITHIN_EPOCH = 1 << 12; //=4096
 
-  // the record is written or overwritten by epoch recovery and the wave is
-  // repurposed to be the `sequencer epoch' of the log recovery
-  // TODO 11866467: currently serve the same purpose as RECOVERY. Will
-  // eventually replace the RECOVERY flag.
+  // The record is written or overwritten by epoch recovery. Not to be confused
+  // with RECOVERY. WRITTEN_BY_RECOVERY means that the record was at some point
+  // written by recovery, but the current STORE message doesn't necessarily
+  // originate from recovery. The current STORE message is either from recovery
+  // (in which case RECOVERY flag is set too) or from rebuilding (REBUILDING
+  // flag set) which passed the flag through from its local log store.
   static const STORE_flags_t WRITTEN_BY_RECOVERY = 1 << 13; //=8192
 
   // The message contains a custom key provided by the client for this record.

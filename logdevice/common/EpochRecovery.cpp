@@ -785,7 +785,6 @@ bool EpochRecovery::mutateEpoch(const std::set<ShardID>& mutation_set,
     ld_check(cur_esn <= ESN_MAX.val_);
     cur = esn_t(static_cast<esn_t::raw_type>(cur_esn));
 
-    // TODO 11866467: deprecate STORE_Header::RECOVERY
     // TODO T31241526: add support for checksums
     STORE_flags_t mutation_flags =
         (STORE_Header::RECOVERY | STORE_Header::WRITTEN_BY_RECOVERY |
