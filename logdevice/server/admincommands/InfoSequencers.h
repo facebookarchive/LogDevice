@@ -14,6 +14,7 @@
 #include "logdevice/common/AllSequencers.h"
 #include "logdevice/common/MetaDataLogWriter.h"
 #include "logdevice/common/Processor.h"
+#include "logdevice/common/SequencerBackgroundActivator.h"
 #include "logdevice/server/AdminCommand.h"
 
 namespace facebook { namespace logdevice { namespace commands {
@@ -37,7 +38,10 @@ typedef AdminCommandTable<logid_t,                  // data log id
                           epoch_t,      // draining epoch
                           bool,         // metadata log written
                           admin_command_table::LSN, // trim point
-                          std::string               // last byte offset
+                          std::string,              // last byte offset
+                          double,                   // bytes per second
+                          double, // throughput window (seconds)
+                          double  // seconds until nodeset adjustment
                           >
     InfoSequencersTable;
 
@@ -116,7 +120,10 @@ class InfoSequencers : public AdminCommand {
     return res;
   }
 
-  void dumpSequencer(InfoSequencersTable& table, const Sequencer& seq) {
+  void dumpSequencer(
+      InfoSequencersTable& table,
+      const Sequencer& seq,
+      const SequencerBackgroundActivator::LogDebugInfo* bg_activator_info) {
     auto last_append = seq.getTimeSinceLastAppend();
     MetaDataLogWriter* meta_writer = seq.getMetaDataLogWriter();
 
@@ -158,6 +165,20 @@ class InfoSequencers : public AdminCommand {
       bo = tailRecord->offsets_map_;
     }
     table.set<17>(bo.toString());
+
+    std::pair<int64_t, std::chrono::milliseconds> rate =
+        seq.appendRateEstimate();
+    table.set<18>(rate.first * 1e3 / rate.second.count());
+    table.set<19>(rate.second.count() / 1e3);
+
+    if (bg_activator_info != nullptr &&
+        bg_activator_info->next_nodeset_adjustment_time !=
+            std::chrono::steady_clock::time_point::max()) {
+      table.set<20>(std::chrono::duration_cast<std::chrono::duration<double>>(
+                        bg_activator_info->next_nodeset_adjustment_time -
+                        std::chrono::steady_clock::now())
+                        .count());
+    }
   }
 
   void run() override {
@@ -179,25 +200,47 @@ class InfoSequencers : public AdminCommand {
                               "Draining epoch",
                               "Metadata log written",
                               "Trim point",
-                              "Last Byte Offset");
+                              "Last Byte Offset",
+                              "Bytes per second",
+                              "Throughput window (seconds)",
+                              "Seconds until nodeset adjustment");
+
+    std::vector<std::shared_ptr<Sequencer>> sequencers;
 
     if (logid_t(logid_) != LOGID_INVALID) {
       // MetaData log and Data log have the same sequencer.
       const logid_t datalog_id = MetaDataLog::dataLogID(logid_t(logid_));
-      std::shared_ptr<const Sequencer> seq =
+      std::shared_ptr<Sequencer> seq =
           server_->getProcessor()->allSequencers().findSequencer(datalog_id);
       if (seq == nullptr) {
         if (!json_) {
           out_.printf("Cannot find sequencer for log %lu\r\n", logid_);
         }
       } else {
-        dumpSequencer(table, *seq);
+        sequencers.push_back(seq);
       }
     } else {
-      for (const auto& seq :
-           server_->getProcessor()->allSequencers().accessAll()) {
-        dumpSequencer(table, seq);
-      }
+      sequencers = server_->getProcessor()->allSequencers().getAll();
+    }
+
+    std::vector<logid_t> logids(sequencers.size());
+    for (size_t i = 0; i < sequencers.size(); ++i) {
+      ld_check(sequencers[i]);
+      logids[i] = sequencers[i]->getLogID();
+    }
+
+    auto bg_activator_info =
+        SequencerBackgroundActivator::requestGetLogsDebugInfo(
+            server_->getProcessor(), logids);
+    if (!bg_activator_info.empty()) {
+      ld_check_eq(bg_activator_info.size(), sequencers.size());
+    }
+
+    for (size_t i = 0; i < sequencers.size(); ++i) {
+      dumpSequencer(
+          table,
+          *sequencers[i],
+          i < bg_activator_info.size() ? &bg_activator_info[i] : nullptr);
     }
 
     json_ ? table.printJson(out_) : table.print(out_);

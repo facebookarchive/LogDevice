@@ -409,11 +409,25 @@ int Processor::postRequest(std::unique_ptr<Request>& rq) {
       rq, rq->getWorkerTypeAffinity(), getTargetThreadForRequest(rq));
 }
 
+int Processor::blockingRequestImpl(std::unique_ptr<Request>& rq, bool force) {
+  Semaphore sem;
+  rq->setClientBlockedSemaphore(&sem);
+
+  int rv = force ? postImportant(rq) : postRequest(rq);
+  if (rv != 0) {
+    rq->setClientBlockedSemaphore(nullptr);
+    return rv;
+  }
+
+  sem.wait();
+  return 0;
+}
+
 int Processor::blockingRequest(std::unique_ptr<Request>& rq) {
-  return impl_
-      ->workers_[static_cast<uint8_t>(rq->getWorkerTypeAffinity())]
-                [getTargetThreadForRequest(rq)]
-      ->blockingRequest(rq);
+  return blockingRequestImpl(rq, false);
+}
+int Processor::blockingRequestImportant(std::unique_ptr<Request>& rq) {
+  return blockingRequestImpl(rq, true);
 }
 
 bool Processor::isDataMissingFromShard(uint32_t shard_idx) {

@@ -94,7 +94,21 @@ class Sequencers : public AdminCommandTable {
          "Whether the epoch metadata used by this sequencer has been written "
          "to the metadata log."},
         // TODO (T36984535) : deprecate column last_byte_offset
-        {"last_byte_offset", DataType::TEXT, "Offsets of the tail record."}};
+        {"last_byte_offset", DataType::TEXT, "Offsets of the tail record."},
+        {"bytes_per_second",
+         DataType::REAL,
+         "Append throughput averaged over the last throughput_window_seconds "
+         "seconds."},
+        {"throughput_window_seconds",
+         DataType::REAL,
+         "Time window over which append throughput estimate bytes_per_second "
+         "was obtained."},
+        {"seconds_until_nodeset_adjustment",
+         DataType::REAL,
+         "Time until the next potential nodeset size adjustment or nodeset "
+         "randomization. Zero if nodeset adjustment is disabled or if "
+         "the sequencer reactivation is in progress."},
+    };
   }
   std::string getCommandToSend(QueryContext& ctx) const override {
     logid_t logid;

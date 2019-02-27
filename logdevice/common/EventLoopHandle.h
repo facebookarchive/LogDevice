@@ -158,9 +158,7 @@ class EventLoopHandle {
 
     int rv = postRequest(rq);
     if (rv != 0) {
-      // Request destructor posts to the semaphore so destroy it first while
-      // the semaphore still exists
-      rq.reset();
+      rq->setClientBlockedSemaphore(nullptr);
       return rv;
     }
 

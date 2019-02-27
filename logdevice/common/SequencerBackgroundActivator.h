@@ -64,6 +64,24 @@ class SequencerBackgroundActivator {
                                       logid_t log,
                                       Status st);
 
+  struct LogDebugInfo {
+    std::chrono::steady_clock::time_point next_nodeset_adjustment_time =
+        std::chrono::steady_clock::time_point::max();
+  };
+
+  // Looks up information about the given logs. The returned list has the same
+  // length and is in the same order as `logs`.
+  // Must be called from the correct worker thread.
+  std::vector<LogDebugInfo> getLogsDebugInfo(const std::vector<logid_t>& logs);
+
+  // A wrapper around getLogsDebugInfo() that forwards the request to the
+  // correct worker thread, waits for it, and forwards the result back.
+  // Must be called from a non-worker thread.
+  // Returns empty vector if the processor is being shut down.
+  static std::vector<LogDebugInfo>
+  requestGetLogsDebugInfo(Processor* processor,
+                          const std::vector<logid_t>& logs);
+
  private:
   struct NodesetAdjustment {
     // The adjustment is conditional on latest sequencer having this epoch.
@@ -92,6 +110,10 @@ class SequencerBackgroundActivator {
     // For simplicity, this timer is always spinning for all logs in logs_,
     // regardless of whether there's an active sequencer or not.
     Timer nodeset_adjustment_timer;
+    // If nodeset_adjustment_timer is active, this is the time point when it'll
+    // fire. Used for debugging.
+    std::chrono::steady_clock::time_point next_nodeset_adjustment_time =
+        std::chrono::steady_clock::time_point::max();
   };
 
   // internal method that checks that SequencerBackgroundActivator methods are

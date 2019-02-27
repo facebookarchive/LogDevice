@@ -321,6 +321,11 @@ class AllSequencers {
    */
   Accessor accessAll();
 
+  /**
+   * Returns the list of all Sequencer objects.
+   */
+  std::vector<std::shared_ptr<Sequencer>> getAll();
+
   Processor* getProcessor() const {
     return processor_;
   }

@@ -925,6 +925,15 @@ AllSequencers::Accessor::Iterator AllSequencers::Accessor::end() {
   return Iterator(owner_->map_.end());
 }
 
+std::vector<std::shared_ptr<Sequencer>> AllSequencers::getAll() {
+  std::vector<std::shared_ptr<Sequencer>> out;
+  folly::SharedMutex::ReadHolder map_lock(map_mutex_);
+  for (auto& p : map_) {
+    out.push_back(p.second);
+  }
+  return out;
+}
+
 std::shared_ptr<Sequencer>
 AllSequencers::createSequencer(logid_t logid,
                                UpdateableSettings<Settings> settings) {

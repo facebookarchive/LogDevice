@@ -149,6 +149,8 @@ class Processor : public folly::enable_shared_from_this<Processor> {
                int target_thread,
                bool force);
 
+  int blockingRequestImpl(std::unique_ptr<Request>& rq, bool force);
+
   /**
    * Decides which thread to send a request to.
    */
@@ -280,9 +282,10 @@ class Processor : public folly::enable_shared_from_this<Processor> {
   /**
    * Runs a Request on one of the Workers, waiting for it to finish.
    *
-   * For parameters and return values, see postRequest().
+   * For parameters and return values, see postRequest()/postImportant().
    */
   int blockingRequest(std::unique_ptr<Request>& rq);
+  int blockingRequestImportant(std::unique_ptr<Request>& rq);
 
   /**
    * Similar to postRequest() but proceeds regardless of how many requests are

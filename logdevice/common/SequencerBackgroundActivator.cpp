@@ -601,11 +601,12 @@ void SequencerBackgroundActivator::activateNodesetAdjustmentTimerIfNeeded(
       state.nodeset_adjustment_timer.isActive()) {
     return;
   }
-
   if (!state.nodeset_adjustment_timer.isAssigned()) {
     state.nodeset_adjustment_timer.assign([this, log_id, &state] {
       maybeAdjustNodesetSize(log_id, state);
       ld_check(nodeset_adjustment_period_.count() > 0);
+      state.next_nodeset_adjustment_time =
+          std::chrono::steady_clock::now() + nodeset_adjustment_period_;
       state.nodeset_adjustment_timer.activate(nodeset_adjustment_period_);
     });
   }
@@ -613,6 +614,8 @@ void SequencerBackgroundActivator::activateNodesetAdjustmentTimerIfNeeded(
   // Randomly stagger logs so their timers don't fire all at the same time.
   auto first_delay =
       to_usec(folly::Random::randDouble01() * nodeset_adjustment_period_);
+  state.next_nodeset_adjustment_time =
+      std::chrono::steady_clock::now() + first_delay;
   state.nodeset_adjustment_timer.activate(first_delay);
 }
 
@@ -623,6 +626,8 @@ void SequencerBackgroundActivator::onSettingsUpdated() {
   }
   nodeset_adjustment_period_ = new_period;
   for (auto& kv : logs_) {
+    kv.second.next_nodeset_adjustment_time =
+        std::chrono::steady_clock::time_point::max();
     kv.second.nodeset_adjustment_timer.cancel();
     if (nodeset_adjustment_period_.count() <= 0) {
       // Nodeset adjusting was disabled.
@@ -747,6 +752,28 @@ void SequencerBackgroundActivator::maybeAdjustNodesetSize(logid_t log_id,
   }
 }
 
+std::vector<SequencerBackgroundActivator::LogDebugInfo>
+SequencerBackgroundActivator::getLogsDebugInfo(
+    const std::vector<logid_t>& logs) {
+  std::vector<LogDebugInfo> out;
+  out.reserve(logs.size());
+  for (logid_t log : logs) {
+    out.emplace_back();
+    LogDebugInfo& info = out.back();
+    auto it = logs_.find(log);
+    if (it == logs_.end()) {
+      // If log is not found, leave a default LogDebugInfo.
+      continue;
+    }
+
+    const LogState& state = it->second;
+    if (!state.token.valid() && state.nodeset_adjustment_timer.isActive()) {
+      info.next_nodeset_adjustment_time = state.next_nodeset_adjustment_time;
+    }
+  }
+  return out;
+}
+
 void SequencerBackgroundActivator::requestSchedule(Processor* processor,
                                                    std::vector<logid_t> logs) {
   ld_check(!logs.empty());
@@ -770,6 +797,21 @@ void SequencerBackgroundActivator::requestNotifyCompletion(Processor* processor,
           });
   int rv = processor->postImportant(rq);
   ld_check(rv == 0 || err == E::SHUTDOWN);
+}
+
+std::vector<SequencerBackgroundActivator::LogDebugInfo>
+SequencerBackgroundActivator::requestGetLogsDebugInfo(
+    Processor* processor,
+    const std::vector<logid_t>& logs) {
+  std::vector<LogDebugInfo> out;
+  std::unique_ptr<Request> rq =
+      std::make_unique<SequencerBackgroundActivatorRequest>(
+          processor, [&logs, &out](SequencerBackgroundActivator& act) {
+            out = act.getLogsDebugInfo(logs);
+          });
+  int rv = processor->blockingRequestImportant(rq);
+  ld_check(rv == 0 || err == E::SHUTDOWN);
+  return out;
 }
 
 }} // namespace facebook::logdevice
