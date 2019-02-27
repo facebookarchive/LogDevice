@@ -260,7 +260,10 @@ Stats::Stats(const FastUpdateableSharedPtr<StatsParams>* params)
     case StatsParams::StatsSet::LDBENCH_WORKER:
       ldbench = std::make_unique<LDBenchStats>();
       break;
-    default:
+    case StatsParams::StatsSet::CHARACTERIZE_LOAD:
+      characterize_load = std::make_unique<CharacterizeLoadStats>();
+      break;
+    case StatsParams::StatsSet::DEFAULT:
       break;
   }
 }
@@ -304,6 +307,14 @@ void Stats::aggregate(Stats const& other, StatsAggOptional agg_override) {
       StatsAgg::agg, agg_override, ldbench->name, other.ldbench->name);
 #include "logdevice/common/stats/ldbench_worker_stats.inc" // nolint
       break;
+    case StatsParams::StatsSet::CHARACTERIZE_LOAD:
+#define STAT_DEFINE(name, agg)           \
+  aggregateStat(StatsAgg::agg,           \
+                agg_override,            \
+                characterize_load->name, \
+                other.characterize_load->name);
+#include "logdevice/common/stats/characterize_load_stats.inc" // nolint
+      break;
   } // let compiler check that all enum values are handled.
 }
 
@@ -327,6 +338,12 @@ void Stats::aggregateForDestroyedThread(Stats const& other) {
 #define STAT_DEFINE(name, agg) \
   aggregateStat(StatsAgg::agg, ldbench->name, other.ldbench->name);
 #include "logdevice/common/stats/ldbench_worker_stats.inc" // nolint
+      break;
+    case StatsParams::StatsSet::CHARACTERIZE_LOAD:
+#define STAT_DEFINE(name, agg) \
+  aggregateStat(               \
+      StatsAgg::agg, characterize_load->name, other.characterize_load->name);
+#include "logdevice/common/stats/characterize_load_stats.inc" // nolint
       break;
   } // let compiler check that all enum values are handled.
 }
@@ -466,6 +483,10 @@ void Stats::reset() {
 #define STAT_DEFINE(name, _) ldbench->name = {};
 #include "logdevice/common/stats/ldbench_worker_stats.inc" // nolint
       break;
+    case StatsParams::StatsSet::CHARACTERIZE_LOAD:
+#define STAT_DEFINE(name, _) characterize_load->name = {};
+#include "logdevice/common/stats/characterize_load_stats.inc" // nolint
+      break;
   } // let compiler check that all enum values are handled.
 }
 
@@ -520,6 +541,10 @@ void Stats::enumerate(EnumerationCallbacks* cb, bool list_all) const {
     case StatsParams::StatsSet::LDBENCH_WORKER:
 #define STAT_DEFINE(s, _) cb->stat(#s, ldbench->s);
 #include "logdevice/common/stats/ldbench_worker_stats.inc" // nolint
+      return; // nothing more to do here
+    case StatsParams::StatsSet::CHARACTERIZE_LOAD:
+#define STAT_DEFINE(s, _) cb->stat(#s, characterize_load->s);
+#include "logdevice/common/stats/characterize_load_stats.inc" // nolint
       return; // nothing more to do here
     case StatsParams::StatsSet::DEFAULT:
       break;

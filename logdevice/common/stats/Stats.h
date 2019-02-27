@@ -586,8 +586,7 @@ struct StatsParams {
 
   // Used to initialize StatsHolder objects for custom stats, hooked into the
   // client by entities that wrap it, such as LDBench workers.
-  // DEFAULT means server/client as indicated by is_server.
-  enum class StatsSet { DEFAULT = 0, LDBENCH_WORKER };
+  enum class StatsSet { DEFAULT = 0, LDBENCH_WORKER, CHARACTERIZE_LOAD };
   StatsSet stats_set{StatsSet::DEFAULT};
 
   std::string getStatsSetName() const {
@@ -597,6 +596,8 @@ struct StatsParams {
       switch (stats_set) {
         case StatsSet::LDBENCH_WORKER:
           return "ldbench";
+        case StatsSet::CHARACTERIZE_LOAD:
+          return "characterize_load";
         case StatsSet::DEFAULT:
           return "client";
       } // let compiler check that all enum values are handled.
@@ -914,8 +915,24 @@ struct Stats final {
     LDBenchStats& operator=(LDBenchStats&&) noexcept = default;
   };
 
-  // Initialized only if necessary.
+  struct CharacterizeLoadStats {
+#define STAT_DEFINE(name, _) StatsCounter name{};
+#include "logdevice/common/stats/characterize_load_stats.inc" // nolint
+
+    CharacterizeLoadStats() = default;
+    ~CharacterizeLoadStats() = default;
+
+    CharacterizeLoadStats(const CharacterizeLoadStats&) = delete;
+    CharacterizeLoadStats& operator=(const CharacterizeLoadStats&) = delete;
+
+    CharacterizeLoadStats(CharacterizeLoadStats&&) noexcept = default;
+    CharacterizeLoadStats& operator=(CharacterizeLoadStats&&) noexcept =
+        default;
+  };
+
+  // Lazily initialized.
   std::unique_ptr<LDBenchStats> ldbench{nullptr};
+  std::unique_ptr<CharacterizeLoadStats> characterize_load{nullptr};
 
   const FastUpdateableSharedPtr<StatsParams>* params;
 
