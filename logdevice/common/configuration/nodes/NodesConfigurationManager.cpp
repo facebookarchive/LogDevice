@@ -211,6 +211,19 @@ void NodesConfigurationManager::initOnNCM() {
   deps_->dcheckOnNCM();
   startPollingFromStore();
   STAT_SET(deps_->getStats(), nodes_config_manager_started, 1);
+
+  const auto initial_nc = deps()->processor_->config_->getNodesConfiguration();
+  if (initial_nc != nullptr) {
+    onNewConfig(std::move(initial_nc));
+  } else {
+    // Currently this should only happen in tests as our boostrapping workflow
+    // should always ensure the Processor has a valid NodesConfiguration before
+    // initializing NCM. In the future we will require a valid NC for Processor
+    // construction and will turn this into a ld_check.
+    ld_warning("NodesConfigurationManager initialized without a valid "
+               "NodesConfiguration in its Processor context. This should "
+               "only happen in tests.");
+  }
 }
 
 void NodesConfigurationManager::startPollingFromStore() {
