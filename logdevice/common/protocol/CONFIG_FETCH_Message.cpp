@@ -142,7 +142,7 @@ CONFIG_FETCH_Message::handleLogsConfigRequest(const Address& from) {
 Message::Disposition
 CONFIG_FETCH_Message::handleNodesConfigurationRequest(const Address& from) {
   auto config = getConfig();
-  auto nodes_cfg = config->serverConfig()->getNodesConfiguration();
+  auto nodes_cfg = getNodesConfiguration();
 
   CONFIG_CHANGED_Header hdr{
       Status::OK,
@@ -183,6 +183,12 @@ CONFIG_FETCH_Message::handleNodesConfigurationRequest(const Address& from) {
 
 std::shared_ptr<Configuration> CONFIG_FETCH_Message::getConfig() {
   return Worker::onThisThread()->getConfig();
+}
+
+std::shared_ptr<const configuration::nodes::NodesConfiguration>
+CONFIG_FETCH_Message::getNodesConfiguration() {
+  // always use the NCM based NC
+  return Worker::onThisThread()->getNodesConfigurationFromNCMSource();
 }
 
 int CONFIG_FETCH_Message::sendMessage(

@@ -63,7 +63,13 @@ NodesConfiguration::Update buildSimpleUpdate() {
 }
 
 TEST_F(NCMIntegrationTest, ToolingClientBasic) {
-  auto cluster = IntegrationTestUtils::ClusterFactory().create(3);
+  // use 1s NCM polling interval to get the update faster
+  auto cluster =
+      IntegrationTestUtils::ClusterFactory()
+          .setParam("--nodes-configuration-manager-store-polling-interval",
+                    "1s",
+                    IntegrationTestUtils::ParamScope::ALL)
+          .create(3);
 
   std::shared_ptr<Client> admin_client1 = cluster->createClient(
       testTimeout(), createAdminClientSettings(cluster->getNCSPath()));

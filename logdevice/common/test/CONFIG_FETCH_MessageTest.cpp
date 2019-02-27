@@ -96,6 +96,11 @@ struct CONFIG_FETCH_MessageMock : public CONFIG_FETCH_Message {
     return config;
   }
 
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() override {
+    return config->serverConfig()->getNodesConfiguration();
+  }
+
   int sendMessage(std::unique_ptr<CONFIG_CHANGED_Message> msg,
                   const Address& to) override {
     return sendMessage_(msg, to);

@@ -11,6 +11,10 @@
 
 namespace facebook { namespace logdevice {
 
+namespace configuration { namespace nodes {
+class NodesConfiguration;
+}} // namespace configuration::nodes
+
 class Configuration;
 class CONFIG_CHANGED_Message;
 
@@ -78,6 +82,9 @@ class CONFIG_FETCH_Message : public Message {
  protected:
   // To be overridden in tests
   virtual std::shared_ptr<Configuration> getConfig();
+  virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration();
+
   virtual int sendMessage(std::unique_ptr<CONFIG_CHANGED_Message> msg,
                           const Address& to);
 
