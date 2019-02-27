@@ -12,6 +12,7 @@
 
 #include "logdevice/common/ConfigurationFetchRequest.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationCodecFlatBuffers.h"
 #include "logdevice/common/protocol/CONFIG_CHANGED_Message.h"
 #include "logdevice/common/protocol/MessageDispatch.h"
 #include "logdevice/common/request_util.h"
@@ -27,14 +28,21 @@ TEST(ServerBasedNodesConfigurationStoreTest, SuccessScenario) {
       std::make_shared<UpdateableConfig>(createSimpleConfig(3, 0));
   updatable_config->getServerConfig()->setMyNodeID(NodeID(0, 1));
   Settings settings = create_default_settings<Settings>();
-  settings.num_workers = 3;
+  settings.num_workers = 5;
   auto processor = make_test_processor(settings, std::move(updatable_config));
+  auto nc = processor->config_->getServerConfig()->getNodesConfiguration();
+  const std::string nc_str =
+      NodesConfigurationCodecFlatBuffers::serialize(*nc, {false});
+  auto nc_bumped = nc->withIncrementedVersionAndTimestamp();
+  const std::string nc_str_bumped =
+      NodesConfigurationCodecFlatBuffers::serialize(*nc_bumped, {false});
 
   folly::Baton<> b;
 
-  auto cb = [&b](Status status, std::string config) {
+  auto cb = [&b, &nc_str_bumped](Status status, std::string config) {
     EXPECT_EQ(Status::OK, status);
-    EXPECT_EQ("{config}", config);
+    // should return the config with higher config version
+    EXPECT_EQ(nc_str_bumped, config);
     b.post();
   };
 
@@ -52,32 +60,40 @@ TEST(ServerBasedNodesConfigurationStoreTest, SuccessScenario) {
   /* sleep override */ std::this_thread::sleep_for(
       std::chrono::milliseconds(100));
 
-  // Simulate a CONFIG_CHANGED received
+  // Simulate two CONFIG_CHANGED received based on an atomic counter
+  // 0: send nc_str. 1: send nc_bumped. 2+: no-op
+  std::atomic<int> counter{0};
   auto futures = fulfill_on_worker_pool<folly::Unit>(
-      processor.get(), WorkerType::GENERAL, [](folly::Promise<folly::Unit> p) {
+      processor.get(),
+      WorkerType::GENERAL,
+      [&nc_str, &nc_str_bumped, &counter](folly::Promise<folly::Unit> p) {
         auto worker = Worker::onThisThread();
         auto& map = worker->runningConfigurationFetches().map;
-        if (map.size() == 0) {
-          // That's not the worker on which the request ran.
-          return;
+        for (const auto& kv : map) {
+          auto c = counter.fetch_add(1);
+          if (c <= 1) {
+            auto rid = kv.first;
+            CONFIG_CHANGED_Header hdr{
+                Status::OK,
+                rid,
+                1234,
+                1,
+                NodeID(2, 1),
+                CONFIG_CHANGED_Header::ConfigType::NODES_CONFIGURATION,
+                CONFIG_CHANGED_Header::Action::CALLBACK};
+            std::unique_ptr<facebook::logdevice::Message> msg =
+                std::make_unique<CONFIG_CHANGED_Message>(
+                    hdr, c == 0 ? nc_str : nc_str_bumped);
+            worker->message_dispatch_->onReceived(
+                msg.get(), Address(NodeID(2, 1)));
+          }
         }
-        ASSERT_EQ(1, map.size());
-        auto rid = map.begin()->first;
-
-        CONFIG_CHANGED_Header hdr{
-            Status::OK,
-            rid,
-            1234,
-            1,
-            NodeID(2, 1),
-            CONFIG_CHANGED_Header::ConfigType::NODES_CONFIGURATION,
-            CONFIG_CHANGED_Header::Action::CALLBACK};
-        std::unique_ptr<facebook::logdevice::Message> msg =
-            std::make_unique<CONFIG_CHANGED_Message>(hdr, "{config}");
-        worker->message_dispatch_->onReceived(msg.get(), Address(NodeID(2, 1)));
         p.setValue();
       });
   folly::collectAll(futures).get();
+
+  // there should only be 2 config fetched requests
+  EXPECT_EQ(2, counter.load());
 
   // Wait until the getConfig callback is called which has the test
   // expectations.

@@ -87,8 +87,8 @@ class NodesConfigurationInit {
       std::shared_ptr<UpdateableNodesConfiguration> nodes_configuration_config);
 
  protected:
-  std::shared_ptr<UpdateableConfig>
-  buildDummyServerConfig(const std::vector<std::string>& host_list) const;
+  std::shared_ptr<UpdateableConfig> buildBootstrappingServerConfig(
+      const std::vector<std::string>& host_list) const;
 
   // Used by the unit tests to inject extra settings to the created processor
   virtual void injectExtraSettings(Settings&) const {}
@@ -99,7 +99,7 @@ class NodesConfigurationInit {
 
  private:
   std::shared_ptr<Processor>
-  buildDummyProcessor(std::shared_ptr<UpdateableConfig> config) const;
+  buildBootstrappingProcessor(std::shared_ptr<UpdateableConfig> config) const;
 
   static std::shared_ptr<const configuration::nodes::NodesConfiguration>
   parseNodesConfiguration(const std::string& config);

@@ -33,6 +33,7 @@
 namespace facebook { namespace logdevice {
 
 namespace configuration { namespace nodes {
+class NodesConfiguration;
 class NodesConfigurationManager;
 }} // namespace configuration::nodes
 
@@ -422,6 +423,12 @@ class Processor : public folly::enable_shared_from_this<Processor> {
    */
   void setNodesConfigurationManager(
       std::shared_ptr<configuration::nodes::NodesConfigurationManager> ncm);
+  /**
+   * Get the NodesConfiguration updated by NodesConfigurationManager.
+   * Note: only used during NCM migration period, will be removed later
+   */
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfigurationFromNCMSource() const;
 
   /**
    * Get the NodesConfigurationManager instance that implements

@@ -9,10 +9,16 @@
 
 #include <folly/Optional.h>
 
+#include "logdevice/common/NodesConfigurationPoller.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationStore.h"
 
-namespace facebook { namespace logdevice { namespace configuration {
-namespace nodes {
+namespace facebook { namespace logdevice {
+
+class NodesConfigurationPoller;
+class Processor;
+struct Settings;
+
+namespace configuration { namespace nodes {
 
 // An implementation of a NodesConfigurationStore where the NodesConfiguration
 // is fetched from random servers in the cluster.
@@ -53,5 +59,13 @@ class ServerBasedNodesConfigurationStore : public NodesConfigurationStore {
 
  private:
   std::atomic<bool> shutdown_signaled_{false};
+
+  // helper utility to generate a polling option based on processor
+  // settings and existing nodes configuration
+  static NodesConfigurationPoller::Poller::Options genPollerOptions(
+      NodesConfigurationPoller::Poller::Mode mode,
+      const Settings& settings,
+      const configuration::nodes::NodesConfiguration& nodes_configuration);
 };
-}}}} // namespace facebook::logdevice::configuration::nodes
+}} // namespace configuration::nodes
+}} // namespace facebook::logdevice

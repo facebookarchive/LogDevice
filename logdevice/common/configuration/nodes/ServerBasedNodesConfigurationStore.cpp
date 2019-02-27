@@ -12,15 +12,80 @@
 
 #include <folly/synchronization/Baton.h>
 
-#include "logdevice/common/ConfigurationFetchRequest.h"
+#include "logdevice/common/FireAndForgetRequest.h"
 #include "logdevice/common/Processor.h"
-#include "logdevice/common/RandomNodeSelector.h"
+#include "logdevice/common/Worker.h"
+#include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationCodecFlatBuffers.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/util.h"
 #include "logdevice/include/Err.h"
 
 namespace facebook { namespace logdevice { namespace configuration {
 namespace nodes {
+
+class NodesConfigurationOneTimePollRequest : public FireAndForgetRequest {
+ public:
+  NodesConfigurationOneTimePollRequest(
+      NodesConfigurationPoller::Poller::Options options,
+      NodesConfigurationStore::value_callback_t cb)
+      : FireAndForgetRequest(RequestType::NODES_CONFIGURATION_ONETIME_POLL),
+        options_(std::move(options)),
+        cb_(std::move(cb)) {}
+
+  void executionBody() override {
+    poller_ = std::make_unique<NodesConfigurationPoller>(
+        std::move(options_),
+        NodesConfigurationCodecFlatBuffers::extractConfigVersion,
+        [this](Status st,
+               NodesConfigurationPoller::Poller::RoundID /*round*/,
+               folly::Optional<std::string> config_str) {
+          onPollerCallback(st, std::move(config_str));
+        });
+    poller_->start();
+  }
+
+  void onPollerCallback(Status st, folly::Optional<std::string> config_str) {
+    if (st == Status::PARTIAL) {
+      // consider a PARTIAL response as success
+      RATELIMIT_INFO(std::chrono::seconds(10),
+                     2,
+                     "NodesConfiguration polling got a partial response.");
+      st = Status::OK;
+    }
+    cb_(st, config_str.value_or(""));
+    destroy();
+  }
+
+ private:
+  NodesConfigurationPoller::Poller::Options options_;
+  NodesConfigurationStore::value_callback_t cb_;
+  std::unique_ptr<NodesConfigurationPoller> poller_;
+};
+
+/*static*/
+NodesConfigurationPoller::Poller::Options
+ServerBasedNodesConfigurationStore::genPollerOptions(
+    NodesConfigurationPoller::Poller::Mode mode,
+    const Settings& settings,
+    const configuration::nodes::NodesConfiguration& nodes_configuration) {
+  NodesConfigurationPoller::Poller::Options options;
+  options.mode = mode;
+  // cap the required response for each round by the cluster size
+  options.round_timeout =
+      settings.server_based_nodes_configuration_store_timeout;
+  options.num_responses_required_round = std::min(
+      settings.server_based_nodes_configuration_store_polling_responses,
+      nodes_configuration.clusterSize());
+  options.extras_request_each_wave =
+      settings.server_based_nodes_configuration_store_polling_extra_requests;
+  options.wave_timeout =
+      settings.server_based_nodes_configuration_polling_wave_timeout;
+
+  // TODO: support customize polling round internal, graylist / blacklist ttl,
+  // etc
+  return options;
+}
 
 void ServerBasedNodesConfigurationStore::getConfig(
     value_callback_t callback) const {
@@ -30,23 +95,17 @@ void ServerBasedNodesConfigurationStore::getConfig(
   }
 
   auto worker = Worker::onThisThread();
-  auto server_config = worker->getServerConfig();
-
-  // If I'm a server, exclude me from the node selection
-  auto my_node_id =
-      server_config->hasMyNodeID() ? server_config->getMyNodeID() : NodeID();
-
-  std::unique_ptr<Request> rq = std::make_unique<ConfigurationFetchRequest>(
-      // TODO implement a better node selection mechanism and a retry mechanism.
-      RandomNodeSelector::getNode(*server_config, /* exclude= */ my_node_id),
-      ConfigurationFetchRequest::ConfigType::NODES_CONFIGURATION,
-      [cb{std::move(callback)}](
-          Status status,
-          CONFIG_CHANGED_Header /* header */,
-          std::string config) mutable { cb(status, std::move(config)); },
-      /* NCM doesn't care where the callback is going to get exectued. */
-      WORKER_ID_INVALID,
-      worker->settings().server_based_nodes_configuration_store_timeout);
+  // TODO: genPollerOptions is currently using the NodesConfiguration from the
+  // ServerConfig, later this will be switched to use the NodesConfiguration
+  // maintained by NCM, and we need to make sure such NC is always available,
+  // even in the special bootstrapping processor
+  std::unique_ptr<Request> rq =
+      std::make_unique<NodesConfigurationOneTimePollRequest>(
+          genPollerOptions(NodesConfigurationPoller::Poller::Mode::ONE_TIME,
+                           *worker->processor_->settings(),
+                           *worker->processor_->config_->getServerConfig()
+                                ->getNodesConfiguration()),
+          std::move(callback));
   worker->processor_->postRequest(rq);
 }
 

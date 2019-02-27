@@ -258,6 +258,13 @@ class Worker : public EventLoop {
   getNodesConfiguration() const;
 
   /**
+   * get the NodesConfiguration updated by NodesConfigurationManager.
+   * Note: only used during NCM migration period, will be removed later
+   */
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfigurationFromNCMSource() const;
+
+  /**
    * @return logs configuration object cached on this Worker and
    *         auto updated
    */

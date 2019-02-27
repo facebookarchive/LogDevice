@@ -53,8 +53,11 @@ sidebar_label: Settings
 | sequencer-epoch-store-write-retry-delay | The retry delay for sequencer writing log metadata into the epoch store during log reconfiguration. | 5s..1min-2x | server&nbsp;only |
 | sequencer-historical-metadata-retry-delay | The retry delay for sequencer reading metadata log for historical epoch metadata during log reconfiguration. | 5s..1min-2x | server&nbsp;only |
 | sequencer-metadata-log-write-retry-delay | The retry delay for sequencer writing into its own metadata log during log reconfiguration. | 500ms..30s-2x | server&nbsp;only |
-| server-based-nodes-configuration-store-timeout | The timeout of the Server Based Nodes Configuration Store's NODES\_CONFIGURATION config fetch request. | 60s |  |
+| server-based-nodes-configuration-polling-wave-timeout | timeout settings for server based Nodes Configuration Store's multi-wavebackoff retry behavior | 500ms..10s |  |
+| server-based-nodes-configuration-store-polling-responses | how many successful responses for server based Nodes Configuration Storepolling to wait for each round | 2 |  |
+| server-based-nodes-configuration-store-timeout | The timeout of the Server Based Nodes Configuration Store's NODES\_CONFIGURATION polling round. | 60s |  |
 | server-default-dscp | Use default DSCP to setup to server sockets at Sender.Range was defined by https://tools.ietf.org/html/rfc4594#section-1.4.4 | 0 | requires&nbsp;restart, server&nbsp;only |
+| server\_based\_nodes\_configuration\_store\_polling\_extra\_requests | how many extra requests to send for server based Nodes Configuration Store polling in addition to the required response for each wave | 1 |  |
 | zk-config-polling-interval | polling and retry interval for Zookeeper config source | 1000ms | CLI&nbsp;only |
 
 ## Core settings

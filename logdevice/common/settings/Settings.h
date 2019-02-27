@@ -70,6 +70,11 @@ struct Settings : public SettingsBundle {
   // This isn't set by any parsed setting, but is only set directly by servers
   bool server = false;
 
+  // if true, the Processor is only used to perform bootstrapping and will be
+  // destroyed after bootstrapping is completed.
+  // This isn't set by any parsed setting, but is only set directly internally
+  bool bootstrapping = false;
+
   // number of worker threads to run
   int num_workers;
 
@@ -779,8 +784,21 @@ struct Settings : public SettingsBundle {
   std::chrono::milliseconds configuration_update_retry_interval{5000};
 
   // The timeout of the Server Based Nodes Configuration Store's
-  // NODES_CONFIGURATION config fetch request.
+  // NODES_CONFIGURATION polling round
   std::chrono::milliseconds server_based_nodes_configuration_store_timeout;
+
+  // timeout settings for server based Nodes Configuration Store's multi-wave
+  // backoff retry behavior
+  chrono_expbackoff_t<std::chrono::milliseconds>
+      server_based_nodes_configuration_polling_wave_timeout;
+
+  // how many successful responses for server based Nodes Configuration Store
+  // polling to wait for each round
+  size_t server_based_nodes_configuration_store_polling_responses;
+
+  // how many extra requests to send for server based Nodes Configuration Store
+  // polling in addition to the required response for each wave
+  size_t server_based_nodes_configuration_store_polling_extra_requests;
 
   // The seed string that will be used to fetch the initial nodes configuration
   // It can be in the form string:<server1>,<server2>,etc. Or you can provide an

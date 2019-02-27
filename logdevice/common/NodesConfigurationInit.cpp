@@ -37,12 +37,12 @@ bool NodesConfigurationInit::init(
         "There are no seed servers to bootstrap the nodes configuration from");
     return false;
   }
-  auto dummy_config = buildDummyServerConfig(host_list);
-  if (dummy_config == nullptr) {
-    ld_error("Failed to build a dummy server config for the processor");
+  auto bootstrapping_config = buildBootstrappingServerConfig(host_list);
+  if (bootstrapping_config == nullptr) {
+    ld_error("Failed to build a bootstrapping server config for the processor");
     return false;
   }
-  auto processor = buildDummyProcessor(std::move(dummy_config));
+  auto processor = buildBootstrappingProcessor(std::move(bootstrapping_config));
 
   return run_on_worker(
              processor.get(),
@@ -115,7 +115,7 @@ bool NodesConfigurationInit::parseAndFetchHostList(
 }
 
 std::shared_ptr<UpdateableConfig>
-NodesConfigurationInit::buildDummyServerConfig(
+NodesConfigurationInit::buildBootstrappingServerConfig(
     const std::vector<std::string>& host_list) const {
   // clang-format off
   folly::dynamic json = folly::dynamic::object
@@ -141,10 +141,11 @@ NodesConfigurationInit::buildDummyServerConfig(
   return config;
 }
 
-std::shared_ptr<Processor> NodesConfigurationInit::buildDummyProcessor(
+std::shared_ptr<Processor> NodesConfigurationInit::buildBootstrappingProcessor(
     std::shared_ptr<UpdateableConfig> config) const {
   Settings settings = create_default_settings<Settings>();
   settings.num_workers = 1;
+  settings.bootstrapping = true;
 
   // Given that we don't have the cluster name at this point.
   settings.include_cluster_name_on_handshake = false;

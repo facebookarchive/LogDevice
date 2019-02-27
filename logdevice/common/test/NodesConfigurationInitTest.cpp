@@ -33,7 +33,7 @@ struct MockNodesConfigurationInit : public NodesConfigurationInit {
 
 TEST(NodesConfigurationInitTest, ConfigCreation) {
   MockNodesConfigurationInit init(nullptr);
-  auto config = init.buildDummyServerConfig({
+  auto config = init.buildBootstrappingServerConfig({
       "10.0.0.2:4440",
       "10.0.0.3:4440",
       "10.0.0.4:4440",

@@ -457,6 +457,11 @@ void Processor::setNodesConfigurationManager(
   ncm_ = std::move(ncm);
 }
 
+std::shared_ptr<const configuration::nodes::NodesConfiguration>
+Processor::getNodesConfigurationFromNCMSource() const {
+  return config_->getNodesConfiguration();
+}
+
 configuration::nodes::NodesConfigurationManager*
 Processor::getNodesConfigurationManager() {
   return ncm_.get();

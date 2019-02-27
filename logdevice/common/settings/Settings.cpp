@@ -405,6 +405,15 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "by "
        "any parsed setting, but is only set directly by servers",
        INTERNAL_ONLY);
+  init("bootstrapping",
+       &bootstrapping,
+       "false",
+       nullptr, // no validation
+       "if true, the Processor with this Settings object is only used to "
+       "perform bootstraping and will be destroyed after bootstrapping is "
+       "completed. This isn't set by any parsed setting, but is only set "
+       "directly internally",
+       INTERNAL_ONLY);
   init(
       "max-incoming-connections",
       &max_incoming_connections,
@@ -1801,7 +1810,33 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "60s",
        validate_nonnegative<ssize_t>(),
        "The timeout of the Server Based Nodes Configuration Store's "
-       "NODES_CONFIGURATION config fetch request.",
+       "NODES_CONFIGURATION polling round.",
+       CLIENT | SERVER,
+       SettingsCategory::Configuration);
+  init(
+      "server-based-nodes-configuration-polling-wave-timeout",
+      &server_based_nodes_configuration_polling_wave_timeout,
+      "500ms..10s",
+      validate_positive<ssize_t>(),
+      "timeout settings for server based Nodes Configuration Store's multi-wave"
+      "backoff retry behavior",
+      CLIENT | SERVER,
+      SettingsCategory::Configuration);
+  init(
+      "server-based-nodes-configuration-store-polling-responses",
+      &server_based_nodes_configuration_store_polling_responses,
+      "2",
+      parse_positive<ssize_t>(),
+      "how many successful responses for server based Nodes Configuration Store"
+      "polling to wait for each round",
+      CLIENT | SERVER,
+      SettingsCategory::Configuration);
+  init("server_based_nodes_configuration_store_polling_extra_requests",
+       &server_based_nodes_configuration_store_polling_extra_requests,
+       "1",
+       parse_nonnegative<ssize_t>(),
+       "how many extra requests to send for server based Nodes Configuration "
+       "Store polling in addition to the required response for each wave",
        CLIENT | SERVER,
        SettingsCategory::Configuration);
   init("nodes-configuration-seed-servers",

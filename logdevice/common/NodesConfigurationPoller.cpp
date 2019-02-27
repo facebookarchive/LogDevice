@@ -212,6 +212,15 @@ NodesConfigurationPoller::sendRequestToNode(Poller::RoundID round,
     });
   };
 
+  folly::Optional<uint64_t> conditional_poll_version;
+  if (!Worker::settings().bootstrapping && highest_seen_.val() > 0) {
+    // if the request is running in a bootstrappig environment, do not enable
+    // conditional polling as the Processor's nodes configuration is not the
+    // real nodes config of the cluster. Otherwise, use the highest nodes
+    // configuration has ever seen for conditional polling
+    conditional_poll_version.assign(highest_seen_.val());
+  }
+
   std::unique_ptr<Request> rq = std::make_unique<ConfigurationFetchRequest>(
       nid,
       ConfigurationFetchRequest::ConfigType::NODES_CONFIGURATION,
@@ -221,10 +230,7 @@ NodesConfigurationPoller::sendRequestToNode(Poller::RoundID round,
       WORKER_ID_INVALID,
       // use the full round timeout as the RPC request timeout
       options_.round_timeout,
-      // highest nodes configuration has ever seen for conditional polling
-      (highest_seen_.val() == 0
-           ? folly::none
-           : folly::Optional<uint64_t>(highest_seen_.val())));
+      conditional_poll_version);
 
   int rv = worker->processor_->postRequest(rq);
   if (rv != 0 && err == E::NOBUFS) {
