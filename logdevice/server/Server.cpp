@@ -644,6 +644,39 @@ bool Server::initProcessor() {
                                 "ld:srv" // prefix of worker thread names
         );
 
+    if (params_->getProcessorSettings()->enable_nodes_configuration_manager) {
+      // create and initialize NodesConfigurationManager (NCM) and attach it to
+      // the Processor
+
+      // TODO: Fetch the NodesID from the NodesConfiguration instead of the
+      // ServerConfig.
+      auto my_node_id = updateable_config_->getServerConfig()->getMyNodeID();
+      auto node_svc_discovery =
+          updateable_config_->getNodesConfiguration()->getNodeServiceDiscovery(
+              my_node_id);
+      if (node_svc_discovery == nullptr) {
+        ld_critical(
+            "NodeID '%s' doesn't exist in the NodesConfiguration of %s",
+            my_node_id.toString().c_str(),
+            updateable_config_->getServerConfig()->getClusterName().c_str());
+        throw ConstructorFailed();
+      }
+      auto roleset = node_svc_discovery->getRoles();
+
+      // TODO: get NCS from NodesConfigurationInit instead
+      auto ncm = configuration::nodes::NodesConfigurationManagerFactory::create(
+          processor_.get(), nullptr, roleset);
+      if (ncm == nullptr) {
+        ld_critical("Unable to create NodesConfigurationManager during server "
+                    "creation!");
+        throw ConstructorFailed();
+      }
+
+      // TODO: initialize NCM with an initial NodesConfiguraiton from NCInit
+      ncm->init();
+      processor_->setNodesConfigurationManager(std::move(ncm));
+    }
+
     if (sharded_storage_thread_pool_) {
       sharded_storage_thread_pool_->setProcessor(processor_.get());
 

@@ -26,9 +26,9 @@
 #include "logdevice/test/utils/IntegrationTestUtils.h"
 
 using namespace facebook::logdevice;
+using namespace facebook::logdevice::configuration::nodes;
+using namespace facebook::logdevice::membership;
 using NCAPI = facebook::logdevice::configuration::NodesConfigurationAPI;
-using NodesConfiguration =
-    facebook::logdevice::configuration::nodes::NodesConfiguration;
 
 namespace {
 
@@ -49,6 +49,19 @@ NCAPI* getNCAPI(std::shared_ptr<Client>& client) {
   return static_cast<ClientImpl*>(client.get())->getNodesConfigurationAPI();
 }
 
+NodesConfiguration::Update buildSimpleUpdate() {
+  NodesConfiguration::Update update{};
+  update.sequencer_config_update = std::make_unique<SequencerConfig::Update>();
+  update.sequencer_config_update->membership_update =
+      std::make_unique<SequencerMembership::Update>(MembershipVersion::Type(1));
+  update.sequencer_config_update->membership_update->addNode(
+      0,
+      {SequencerMembershipTransition::SET_WEIGHT,
+       0.6,
+       MaintenanceID::Type(1000)});
+  return update;
+}
+
 TEST_F(NCMIntegrationTest, ToolingClientBasic) {
   auto cluster = IntegrationTestUtils::ClusterFactory().create(3);
 
@@ -58,11 +71,14 @@ TEST_F(NCMIntegrationTest, ToolingClientBasic) {
   std::shared_ptr<Client> admin_client2 = cluster->createClient(
       testTimeout(), createAdminClientSettings(cluster->getNCSPath()));
 
-  auto nc_empty = std::make_shared<const NodesConfiguration>();
-  auto nc_expected = nc_empty->applyUpdate(initialProvisionUpdate());
+  auto current_nc = getNCAPI(admin_client1)->getConfig();
+  ASSERT_TRUE(current_nc); // Initialized by the integration testing framework
+
+  auto nc_expected = current_nc->applyUpdate(buildSimpleUpdate());
+  ASSERT_TRUE(nc_expected);
   folly::Baton<> b;
   getNCAPI(admin_client1)
-      ->update(initialProvisionUpdate(),
+      ->update(buildSimpleUpdate(),
                [nc_expected, &b](
                    Status st, std::shared_ptr<const NodesConfiguration> nc) {
                  EXPECT_EQ(Status::OK, st);
@@ -72,14 +88,16 @@ TEST_F(NCMIntegrationTest, ToolingClientBasic) {
   b.wait();
 
   wait_until("admin_client1 gets the new NC", [&]() {
-    return getNCAPI(admin_client1)->getConfig()->getVersion().val() > 0;
+    return getNCAPI(admin_client1)->getConfig()->getVersion() ==
+        nc_expected->getVersion();
   });
 
   auto nc_client1 = getNCAPI(admin_client1)->getConfig();
   ASSERT_TRUE(nc_expected->equalWithTimestampIgnored(*nc_client1));
 
   wait_until("admin_client2 gets the new NC", [&]() {
-    return getNCAPI(admin_client2)->getConfig()->getVersion().val() > 0;
+    return getNCAPI(admin_client2)->getConfig()->getVersion() ==
+        nc_expected->getVersion();
   });
 
   auto nc_client2 = getNCAPI(admin_client2)->getConfig();

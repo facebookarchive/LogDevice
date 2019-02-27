@@ -99,7 +99,8 @@ Cluster::Cluster(std::string root_path,
                  bool enable_logsconfig_manager,
                  bool one_config_per_node,
                  dbg::Level default_log_level,
-                 bool write_logs_config_file_separately)
+                 bool write_logs_config_file_separately,
+                 bool sync_server_config_to_nodes_configuration)
     : root_path_(std::move(root_path)),
       root_pin_(std::move(root_pin)),
       config_path_(std::move(config_path)),
@@ -110,7 +111,9 @@ Cluster::Cluster(std::string root_path,
       enable_logsconfig_manager_(enable_logsconfig_manager),
       one_config_per_node_(one_config_per_node),
       default_log_level_(default_log_level),
-      write_logs_config_file_separately_(write_logs_config_file_separately) {
+      write_logs_config_file_separately_(write_logs_config_file_separately),
+      sync_server_config_to_nodes_configuration_(
+          sync_server_config_to_nodes_configuration) {
   config_ = std::make_shared<UpdateableConfig>();
   client_settings_.reset(ClientSettings::create());
   ClientSettingsImpl* impl_settings =
@@ -576,7 +579,8 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
                   enable_logsconfig_manager_,
                   one_config_per_node_,
                   default_log_level_,
-                  write_logs_config_file_separately_));
+                  write_logs_config_file_separately_,
+                  sync_server_config_to_nodes_configuration_));
   if (use_tcp_) {
     cluster->use_tcp_ = true;
   }
@@ -612,10 +616,9 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
   }
 
   if (provision_nodes_configuration_store_) {
-    // TODO pass the actual nodes configuration here, instead of an empty one.
-    if (cluster->provisionNodesConfigurationStore(
-            std::make_shared<configuration::nodes::NodesConfiguration>()) !=
-        0) {
+    const auto& server_config = config->serverConfig();
+    if (cluster->updateNodesConfigurationFromServerConfig(
+            server_config.get()) != 0) {
       return nullptr;
     }
   }
@@ -878,9 +881,13 @@ int Cluster::provisionEpochMetaData(std::shared_ptr<NodeSetSelector> selector,
   return rv;
 }
 
-int Cluster::provisionNodesConfigurationStore(
-    std::shared_ptr<NodesConfiguration> config) {
+int Cluster::updateNodesConfigurationFromServerConfig(
+    const ServerConfig* server_config) {
   using namespace logdevice::configuration::nodes;
+  auto nc = NodesConfigLegacyConverter::fromLegacyNodesConfig(
+      server_config->getNodesConfig(),
+      server_config->getMetaDataLogsConfig(),
+      server_config->getVersion());
   NodesConfigurationStoreFactory::Params params;
   params.type = NodesConfigurationStoreFactory::NCSType::File;
   params.file_store_root_dir = ncs_path_;
@@ -891,7 +898,7 @@ int Cluster::provisionNodesConfigurationStore(
   if (store == nullptr) {
     return -1;
   }
-  auto serialized = NodesConfigurationCodecFlatBuffers::serialize(*config);
+  auto serialized = NodesConfigurationCodecFlatBuffers::serialize(*nc);
   if (serialized.empty()) {
     return -1;
   }
@@ -2878,8 +2885,17 @@ int Cluster::writeConfig(const ServerConfig* server_cfg,
                            server_cfg,
                            logs_cfg,
                            write_logs_config_file_separately_);
-  if (rv != 0 || !wait_for_update) {
+  if (rv != 0) {
     return rv;
+  }
+  if (sync_server_config_to_nodes_configuration_ && server_cfg != nullptr) {
+    rv = updateNodesConfigurationFromServerConfig(server_cfg);
+    if (rv != 0) {
+      return rv;
+    }
+  }
+  if (!wait_for_update) {
+    return 0;
   }
   config_source_->thread()->advisePollingIteration();
   ld_check(write_logs_config_file_separately_ || server_cfg != nullptr);

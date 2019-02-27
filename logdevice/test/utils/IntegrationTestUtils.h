@@ -318,6 +318,11 @@ class ClusterFactory {
     return *this;
   }
 
+  ClusterFactory& doNotSyncServerConfigToNodesConfiguration() {
+    sync_server_config_to_nodes_configuration_ = false;
+    return *this;
+  }
+
   /**
    * By default, epoch store metadata is provisioned and metadata logs are
    * written by sequencers. If this method is called, sequencers will be
@@ -593,6 +598,11 @@ class ClusterFactory {
 
   // Provision the inital nodes configuration store
   bool provision_nodes_configuration_store_ = true;
+
+  // Controls whether the cluster should also update the NodesConfiguration
+  // whenver the ServerConfig change. This is there only during the migration
+  // period.
+  bool sync_server_config_to_nodes_configuration_ = true;
 
   // Whether to let sequencers provision metadata
   bool let_sequencers_provision_metadata_ = true;
@@ -888,12 +898,13 @@ class Cluster {
       bool allow_existing_metadata = false);
 
   /**
-   * Provision the initial nodes configuration store.
-   * @param nodes_configuration                  the initial config to write
+   * Converts the server config into a nodes configuration and writes it to
+   * disk via a FileBasedNodesConfigurationStore.
+   * @param server_config                  the server config to convert
    * @return          0 for success, -1 for failure
    */
-  int provisionNodesConfigurationStore(
-      std::shared_ptr<NodesConfiguration> config = nullptr);
+  int updateNodesConfigurationFromServerConfig(
+      const ServerConfig* server_config);
 
   /**
    * Replaces the node at the specified index.  Kills the current process if
@@ -1085,7 +1096,8 @@ class Cluster {
           bool enable_logsconfig_manager,
           bool one_config_per_node,
           dbg::Level default_log_level,
-          bool write_logs_config_file_separately);
+          bool write_logs_config_file_separately,
+          bool sync_server_config_to_nodes_configuration);
 
   // Directory where to store the data for a node (logs, db, sockets).
   static std::string getNodeDataPath(const std::string& root,
@@ -1165,6 +1177,11 @@ class Cluster {
   dbg::Level default_log_level_ = dbg::Level::INFO;
 
   bool write_logs_config_file_separately_{false};
+
+  // Controls whether the cluster should also update the NodesConfiguration
+  // whenver the ServerConfig change. This is there only during the migration
+  // period.
+  bool sync_server_config_to_nodes_configuration_{false};
 
   bool no_ssl_address_{false};
 

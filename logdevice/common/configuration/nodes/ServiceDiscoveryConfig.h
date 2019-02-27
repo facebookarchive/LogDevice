@@ -77,6 +77,10 @@ struct NodeServiceDiscovery {
 
   // return the corresponding sockaddr for the given socket type
   const Sockaddr& getSockaddr(SocketType type, ConnectionType conntype) const;
+
+  const RoleSet& getRoles() const {
+    return roles;
+  }
 };
 
 using ServiceDiscoveryConfig =
