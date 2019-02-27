@@ -584,6 +584,41 @@ struct StatsParams {
 
   bool is_server = false;
 
+  // Used to initialize StatsHolder objects for custom stats, hooked into the
+  // client by entities that wrap it, such as LDBench workers.
+  // DEFAULT means server/client as indicated by is_server.
+  enum class StatsSet { DEFAULT = 0, LDBENCH_WORKER };
+  StatsSet stats_set{StatsSet::DEFAULT};
+
+  std::string getStatsSetName() const {
+    if (is_server) {
+      return "server";
+    } else {
+      switch (stats_set) {
+        case StatsSet::LDBENCH_WORKER:
+          return "ldbench";
+        case StatsSet::DEFAULT:
+          return "client";
+      } // let compiler check that all enum values are handled.
+
+      // We'll never get here, but some customers have the compiler configured
+      // such that it will complain about the above, so here's a return value:
+      ld_check(false);
+      return "";
+    }
+  }
+
+  bool isClientStatsSet() {
+    return !is_server && stats_set == StatsSet::DEFAULT;
+  }
+
+  // TODO(T40896662) stop supporting this, see task
+  folly::Optional<std::string> additional_entity_suffix{folly::none};
+  StatsParams& addAdditionalEntitySuffix(std::string suffix) {
+    additional_entity_suffix = suffix;
+    return *this;
+  }
+
   /**
    * Below are parameters which can be defined in settings
    * The reason for not passing the settings object is to not have Stats depend
@@ -635,6 +670,11 @@ struct StatsParams {
     worker_stats_retention_time = duration;
     return *this;
   }
+
+  StatsParams& setStatsSet(StatsSet set) {
+    stats_set = set;
+    return *this;
+  }
 };
 
 /**
@@ -644,6 +684,11 @@ struct StatsParams {
  * - Per-log-group stats
  * - Histograms
  * - Per-node stats for append success / fails kept for only a certain time
+ *
+ * TODO(T40895127): refactor this, such that Stats is abstract and different
+ * implementations exist for each set of stats, e.g. server/client/ldbench/etc.
+ * Hopefully auto-generate boilerplate code related to importing stats from
+ * .inc file.
  */
 struct Stats final {
   class EnumerationCallbacks;
@@ -729,6 +774,38 @@ struct Stats final {
    * StatsHolder::aggregate()). This function calculates all derived stats.
    */
   void deriveStats();
+
+  /**
+   * Indicates whether we're representing server stats.
+   */
+  bool isServerStats() const {
+    return params->get()->is_server;
+  }
+
+  /**
+   * Indicates whether we should push stats that have never been non-zero, as
+   * this varies depending on what set of stats this is representing.
+   */
+  bool shouldSkipNeverBumpedStats() const {
+    // Only clients don't want this, for now. T40895127 will make this cleaner.
+    return params->get()->isClientStatsSet();
+  }
+
+  /**
+   * Returns the chosen name of this set of stats, which are to be used as ODS
+   * key prefix.
+   */
+  std::string getName() const {
+    return params->get()->getStatsSetName();
+  }
+
+  /**
+   * Returns an additional entity suffix, that stats should also be pushed to.
+   * TODO(T40896662): get rid of this.
+   */
+  folly::Optional<std::string> getAdditionalEntitySuffix() const {
+    return params->get()->additional_entity_suffix;
+  }
 
   /**
    * Take a read-lock and make a deep copy of a some map wrapped in a
@@ -819,6 +896,26 @@ struct Stats final {
     std::unique_ptr<ClientHistograms> histograms;
 
   } client;
+
+  // Custom stats from things that wrap a client, such as an LDBench worker or
+  // commandline tool.
+
+  struct LDBenchStats {
+#define STAT_DEFINE(name, _) StatsCounter name{};
+#include "logdevice/common/stats/ldbench_worker_stats.inc" // nolint
+
+    LDBenchStats() = default;
+    ~LDBenchStats() = default;
+
+    LDBenchStats(const LDBenchStats&) = delete;
+    LDBenchStats& operator=(const LDBenchStats&) = delete;
+
+    LDBenchStats(LDBenchStats&&) noexcept = default;
+    LDBenchStats& operator=(LDBenchStats&&) noexcept = default;
+  };
+
+  // Initialized only if necessary.
+  std::unique_ptr<LDBenchStats> ldbench{nullptr};
 
   const FastUpdateableSharedPtr<StatsParams>* params;
 

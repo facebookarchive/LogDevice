@@ -9,6 +9,7 @@
 
 #include <chrono>
 #include <string>
+#include <vector>
 
 namespace facebook { namespace logdevice {
 
@@ -18,22 +19,22 @@ namespace facebook { namespace logdevice {
 
 struct Stats;
 
-enum class StatsPublisherScope { SERVER, CLIENT };
-
 class StatsPublisher {
  public:
   /**
-   * Called periodically by StatsCollectionThread.  `current' gives a snapshot
-   * of stats collected just before the call.  `previous' is the previous
-   * snapshot and `elapsed' the amount of time between the two snapshots,
-   * which can be used to calculate rates over the time interval.
+   * Called periodically by StatsCollectionThread. 'current' and 'previous' are
+   * vectors of stats sets for different things like client, server, ldbench
+   * worker, and so on. 'current' is snapshots of stats collected just before
+   * the call. `previous' is the previous snapshots and `elapsed' is the amount
+   * of time between the snapshots, which can be used to calculate rates over
+   * the time interval.
    */
-  virtual void publish(const Stats& current,
-                       const Stats& previous,
+  virtual void publish(const std::vector<const Stats*>& current,
+                       const std::vector<const Stats*>& previous,
                        std::chrono::milliseconds elapsed) = 0;
 
   /**
-   * Additionally aggregate stats against the given entity.
+   * Additionally aggregate stats against the given entity, for ALL stats sets.
    *
    * For example, all clients of a particular LogDevice tier could
    * aggregate their individual stats under an entity derived from the

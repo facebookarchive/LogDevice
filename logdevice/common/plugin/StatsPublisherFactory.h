@@ -9,6 +9,7 @@
 
 #include "logdevice/common/StatsPublisher.h"
 #include "logdevice/common/plugin/Plugin.h"
+#include "logdevice/common/stats/Stats.h"
 
 namespace facebook { namespace logdevice {
 
@@ -33,9 +34,7 @@ class StatsPublisherFactory : public Plugin {
    * StatsPublisher object.
    */
   virtual std::unique_ptr<StatsPublisher>
-  operator()(StatsPublisherScope,
-             UpdateableSettings<Settings>,
-             int num_db_shards) = 0;
+  operator()(UpdateableSettings<Settings>, int num_db_shards) = 0;
 };
 
 }} // namespace facebook::logdevice

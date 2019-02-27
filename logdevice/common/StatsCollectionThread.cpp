@@ -24,7 +24,7 @@ StatsCollectionThread::StatsCollectionThread(
     const StatsHolder* source,
     std::chrono::seconds interval,
     std::unique_ptr<StatsPublisher> publisher)
-    : source_stats_(source),
+    : source_stats_sets_({source}),
       interval_(interval),
       publisher_(std::move(publisher)),
       thread_(std::bind(&StatsCollectionThread::mainLoop, this)) {
@@ -37,30 +37,58 @@ StatsCollectionThread::~StatsCollectionThread() {
 }
 
 namespace {
-struct StatsSnapshot {
-  Stats stats;
+struct StatsSnapshots {
+  std::vector<Stats> stats;
   std::chrono::steady_clock::time_point when;
 };
 } // namespace
 
+void StatsCollectionThread::addStatsSource(const StatsHolder* source) {
+  std::unique_lock<std::mutex> lock(mutex_);
+  source_stats_sets_.push_back(source);
+}
+
 void StatsCollectionThread::mainLoop() {
   ThreadID::set(ThreadID::Type::UTILITY, "ld:stats");
 
-  folly::Optional<StatsSnapshot> previous;
+  using namespace std::chrono;
+
+  StatsSnapshots previous_snapshots{{}, steady_clock::now()};
 
   while (true) {
-    using namespace std::chrono;
     const auto now = steady_clock::now();
     const auto next_tick = now + interval_;
-    StatsSnapshot current = {source_stats_->aggregate(), now};
-    ld_debug("Publishing Stats...");
-    if (previous.hasValue()) {
-      publisher_->publish(
-          current.stats,
-          previous.value().stats,
-          duration_cast<milliseconds>(now - previous.value().when));
+
+    StatsSnapshots current_snapshots{{}, now};
+
+    {
+      std::unique_lock<std::mutex> lock(mutex_);
+      for (const StatsHolder* source_stats_set : source_stats_sets_) {
+        current_snapshots.stats.push_back(source_stats_set->aggregate());
+      }
     }
-    previous.assign(std::move(current));
+
+    ld_debug("Publishing Stats...");
+    if (!previous_snapshots.stats.empty()) {
+      ld_check_gt(previous_snapshots.stats.size(), 0);
+      ld_check_ge(
+          current_snapshots.stats.size(), previous_snapshots.stats.size());
+      std::vector<const Stats*> previous_stats_sets;
+      std::vector<const Stats*> current_stats_sets;
+
+      // Publish only the stats for which we already have a previous value.
+      for (int i = 0; i < previous_snapshots.stats.size(); i++) {
+        previous_stats_sets.push_back(&previous_snapshots.stats[i]);
+        current_stats_sets.push_back(&current_snapshots.stats[i]);
+      }
+
+      publisher_->publish(
+          current_stats_sets,
+          previous_stats_sets,
+          duration_cast<milliseconds>(now - previous_snapshots.when));
+    }
+
+    previous_snapshots = std::move(current_snapshots);
 
     {
       std::unique_lock<std::mutex> lock(mutex_);
@@ -80,7 +108,6 @@ std::unique_ptr<StatsCollectionThread> StatsCollectionThread::maybeCreate(
     const UpdateableSettings<Settings>& settings,
     std::shared_ptr<ServerConfig> config,
     std::shared_ptr<PluginRegistry> plugin_registry,
-    StatsPublisherScope scope,
     int num_shards,
     const StatsHolder* source) {
   ld_check(settings.get());
@@ -91,23 +118,19 @@ std::unique_ptr<StatsCollectionThread> StatsCollectionThread::maybeCreate(
   if (stats_collection_interval.count() <= 0) {
     return nullptr;
   }
+
   auto factory = plugin_registry->getSinglePlugin<StatsPublisherFactory>(
       PluginType::STATS_PUBLISHER_FACTORY);
   if (!factory) {
     return nullptr;
   }
-  auto stats_publisher = (*factory)(scope, settings, num_shards);
+
+  auto stats_publisher = (*factory)(settings, num_shards);
   if (!stats_publisher) {
     return nullptr;
   }
-  auto rollup_entity = config->getClusterName();
-  stats_publisher->addRollupEntity(rollup_entity);
-  if (scope == StatsPublisherScope::CLIENT) {
-    // This is here for backward compatibility with our tooling. The
-    // <tier>.client entity space is deprecated and all new tooling should
-    // be using the tier name without suffix
-    stats_publisher->addRollupEntity(rollup_entity + ".client");
-  }
+
+  stats_publisher->addRollupEntity(config->getClusterName());
   return std::make_unique<StatsCollectionThread>(
       source, stats_collection_interval, std::move(stats_publisher));
 }

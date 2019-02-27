@@ -424,7 +424,6 @@ int main(int argc, const char** argv) {
           settings,
           params.get()->getUpdateableConfig()->get()->serverConfig(),
           plugin_registry,
-          StatsPublisherScope::SERVER,
           params->getNumDBShards(),
           params.get()->getStats());
 

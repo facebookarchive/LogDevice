@@ -23,6 +23,7 @@
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
+#include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Client.h"
 #include "logdevice/include/types.h"
@@ -62,6 +63,7 @@ class ClientImpl : public Client,
                    public BufferedWriterAppendSink {
  public:
   using SteadyClock = std::chrono::steady_clock;
+  using StatsSet = StatsParams::StatsSet;
 
   /**
    * This constructor should only be called by create() and the object
@@ -378,6 +380,12 @@ class ClientImpl : public Client,
   StatsHolder* stats() const {
     return stats_.get();
   }
+
+  // Registers custom stats to be published along with regular client stats.
+  // As a proxy for stats being enabled, if stats_ isn't initialized, these
+  // custom stats will be ignored.
+  // Custom stats mustn't be destroyed before the client itself.
+  void registerCustomStats(StatsHolder* custom_stats);
 
   configuration::NodesConfigurationAPI* getNodesConfigurationAPI();
   configuration::nodes::NodesConfigurationManager*

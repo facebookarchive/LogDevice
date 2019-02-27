@@ -53,18 +53,19 @@ class StatsCollectionThread {
     cv_.notify_one();
   }
 
+  void addStatsSource(const StatsHolder* source);
+
   static std::unique_ptr<StatsCollectionThread>
   maybeCreate(const UpdateableSettings<Settings>&,
               std::shared_ptr<ServerConfig>,
               std::shared_ptr<PluginRegistry>,
-              StatsPublisherScope,
               int num_shards,
               const StatsHolder* source);
 
  private:
   void mainLoop();
 
-  const StatsHolder* source_stats_;
+  std::vector<const StatsHolder*> source_stats_sets_;
   std::chrono::seconds interval_;
   std::unique_ptr<StatsPublisher> publisher_;
   bool stop_ = false;

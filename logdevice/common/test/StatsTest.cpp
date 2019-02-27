@@ -34,28 +34,29 @@ using namespace facebook::logdevice;
 // This tests basic aggregation functionality of the Stats class.
 TEST(StatsTest, StatsAggregateTest) {
   FastUpdateableSharedPtr<StatsParams> params(std::make_shared<StatsParams>());
+  params.get()->setIsServer(false); // client stats
   Stats s1(&params), s2(&params), total(&params);
 
-  ++s1.num_connections;
-  ++s2.num_connections;
-  ++s2.num_connections;
+  ++s1.client.records_delivered;
+  ++s2.client.records_delivered;
+  ++s2.client.records_delivered;
 
   total.aggregate(s1, StatsAgg::SUM);
   total.aggregate(s2);
 
-  EXPECT_EQ(3, total.num_connections);
+  EXPECT_EQ(3, total.client.records_delivered);
 
   total.aggregate(s1, StatsAgg::SUBTRACT);
 
-  EXPECT_EQ(2, total.num_connections);
+  EXPECT_EQ(2, total.client.records_delivered);
 
-  s1.num_connections = 42;
+  s1.client.records_delivered = 42;
   total.aggregate(s1, StatsAgg::ASSIGN);
 
-  EXPECT_EQ(42, total.num_connections);
+  EXPECT_EQ(42, total.client.records_delivered);
 
   total = s2;
-  EXPECT_EQ(2, total.num_connections);
+  EXPECT_EQ(2, total.client.records_delivered);
 }
 
 // This test creates N threads, each of which increments num_connections and

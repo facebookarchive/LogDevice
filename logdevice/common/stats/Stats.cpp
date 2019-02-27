@@ -254,6 +254,15 @@ Stats::Stats(const FastUpdateableSharedPtr<StatsParams>* params)
     per_shard_histograms = std::make_unique<PerShardHistograms>();
     per_shard_stats = std::make_unique<ShardedStats>();
   }
+
+  // Initialize custom stats struct/s if needed.
+  switch (params->get()->stats_set) {
+    case StatsParams::StatsSet::LDBENCH_WORKER:
+      ldbench = std::make_unique<LDBenchStats>();
+      break;
+    default:
+      break;
+  }
 }
 
 Stats::~Stats() = default;
@@ -273,30 +282,53 @@ Stats::Stats(Stats&& other) noexcept(true) = default;
 Stats& Stats::operator=(Stats&& other) noexcept(false) = default;
 
 void Stats::aggregate(Stats const& other, StatsAggOptional agg_override) {
+  switch (params->get()->stats_set) {
+    case StatsParams::StatsSet::DEFAULT:
+      if (params->get()->is_server) {
 #define STAT_DEFINE(name, agg) \
   aggregateStat(StatsAgg::agg, agg_override, name, other.name);
 #include "logdevice/common/stats/server_stats.inc" // nolint
-#define STAT_DEFINE(name, agg) \
-  aggregateStat(StatsAgg::agg, agg_override, name, other.name);
-#include "logdevice/common/stats/common_stats.inc" // nolint
+      } else {
 #define STAT_DEFINE(name, agg) \
   aggregateStat(StatsAgg::agg, agg_override, client.name, other.client.name);
 #include "logdevice/common/stats/client_stats.inc" // nolint
-
-  aggregateCompoundStats(other, agg_override);
+      }
+#define STAT_DEFINE(name, agg) \
+  aggregateStat(StatsAgg::agg, agg_override, name, other.name);
+#include "logdevice/common/stats/common_stats.inc" // nolint
+      aggregateCompoundStats(other, agg_override);
+      break;
+    case StatsParams::StatsSet::LDBENCH_WORKER:
+#define STAT_DEFINE(name, agg) \
+  aggregateStat(               \
+      StatsAgg::agg, agg_override, ldbench->name, other.ldbench->name);
+#include "logdevice/common/stats/ldbench_worker_stats.inc" // nolint
+      break;
+  } // let compiler check that all enum values are handled.
 }
 
 void Stats::aggregateForDestroyedThread(Stats const& other) {
 #define DESTROYING_THREAD
+  switch (params->get()->stats_set) {
+    case StatsParams::StatsSet::DEFAULT:
+      if (params->get()->is_server) {
 #define STAT_DEFINE(name, agg) aggregateStat(StatsAgg::agg, name, other.name);
 #include "logdevice/common/stats/server_stats.inc" // nolint
-#define STAT_DEFINE(name, agg) aggregateStat(StatsAgg::agg, name, other.name);
-#include "logdevice/common/stats/common_stats.inc" // nolint
+      } else {
 #define STAT_DEFINE(name, agg) \
   aggregateStat(StatsAgg::agg, client.name, other.client.name);
 #include "logdevice/common/stats/client_stats.inc" // nolint
-
-  aggregateCompoundStats(other, folly::none, true);
+      }
+#define STAT_DEFINE(name, agg) aggregateStat(StatsAgg::agg, name, other.name);
+#include "logdevice/common/stats/common_stats.inc" // nolint
+      aggregateCompoundStats(other, folly::none, true);
+      break;
+    case StatsParams::StatsSet::LDBENCH_WORKER:
+#define STAT_DEFINE(name, agg) \
+  aggregateStat(StatsAgg::agg, ldbench->name, other.ldbench->name);
+#include "logdevice/common/stats/ldbench_worker_stats.inc" // nolint
+      break;
+  } // let compiler check that all enum values are handled.
 }
 
 void Stats::aggregateCompoundStats(Stats const& other,
@@ -384,50 +416,57 @@ void Stats::aggregateCompoundStats(Stats const& other,
 
 void Stats::reset() {
 #define RESETTING_STATS
-#define STAT_DEFINE(name, _) name = {};
-#include "logdevice/common/stats/server_stats.inc" // nolint
+  switch (params->get()->stats_set) {
+    case StatsParams::StatsSet::DEFAULT:
 #define STAT_DEFINE(name, _) name = {};
 #include "logdevice/common/stats/common_stats.inc" // nolint
+      if (params->get()->is_server) {
+#define STAT_DEFINE(name, _) name = {};
+#include "logdevice/common/stats/server_stats.inc" // nolint
+        for (auto& sts : per_storage_task_type_stats) {
+          sts.reset();
+        }
+        if (server_histograms) {
+          server_histograms->clear();
+        }
+        if (per_shard_histograms) {
+          per_shard_histograms->clear();
+        }
+        if (per_shard_stats) {
+          per_shard_stats->reset();
+        }
+      } else {
 #define STAT_DEFINE(name, _) client.name = {};
 #include "logdevice/common/stats/client_stats.inc" // nolint
+        per_client_node_stats.wlock()->reset();
+        client.histograms->clear();
+      }
 
-  for (auto& tcs : per_traffic_class_stats) {
-    tcs.reset();
-  }
+      for (auto& tcs : per_traffic_class_stats) {
+        tcs.reset();
+      }
 
-  for (auto& fgs : per_flow_group_stats) {
-    fgs.reset();
-  }
+      for (auto& fgs : per_flow_group_stats) {
+        fgs.reset();
+      }
 
-  for (auto& rts : per_request_type_stats) {
-    rts.reset();
-  }
+      for (auto& rts : per_request_type_stats) {
+        rts.reset();
+      }
 
-  for (auto& mts : per_message_type_stats) {
-    mts.reset();
-  }
+      for (auto& mts : per_message_type_stats) {
+        mts.reset();
+      }
 
-  for (auto& sts : per_storage_task_type_stats) {
-    sts.reset();
-  }
+      per_worker_stats.wlock()->clear();
 
-  per_worker_stats.wlock()->clear();
-
-  per_log_stats.wlock()->clear();
-
-  if (server_histograms) {
-    server_histograms->clear();
-  }
-  if (per_shard_histograms) {
-    per_shard_histograms->clear();
-  }
-  if (per_shard_stats) {
-    per_shard_stats->reset();
-  }
-
-  per_client_node_stats.wlock()->reset();
-
-  client.histograms->clear();
+      per_log_stats.wlock()->clear();
+      break;
+    case StatsParams::StatsSet::LDBENCH_WORKER:
+#define STAT_DEFINE(name, _) ldbench->name = {};
+#include "logdevice/common/stats/ldbench_worker_stats.inc" // nolint
+      break;
+  } // let compiler check that all enum values are handled.
 }
 
 PerTrafficClassStats Stats::totalPerTrafficClassStats() const {
@@ -476,6 +515,15 @@ std::unique_ptr<PerShardHistograms> Stats::totalPerShardHistograms() const {
 
 void Stats::enumerate(EnumerationCallbacks* cb, bool list_all) const {
   ld_check(cb);
+
+  switch (params->get()->stats_set) {
+    case StatsParams::StatsSet::LDBENCH_WORKER:
+#define STAT_DEFINE(s, _) cb->stat(#s, ldbench->s);
+#include "logdevice/common/stats/ldbench_worker_stats.inc" // nolint
+      return; // nothing more to do here
+    case StatsParams::StatsSet::DEFAULT:
+      break;
+  } // let compiler check that all enum values are handled.
 
   if (params->get()->is_server) {
     // Server simple stats.
@@ -645,9 +693,7 @@ void Stats::enumerate(EnumerationCallbacks* cb, bool list_all) const {
       auto from = now - params->get()->worker_stats_retention_time;
       cb->stat("avg_worker_load", kv.first, kv.second->avgLoad(from, now));
     }
-  }
 
-  if (params->get()->is_server) {
     // Server histograms.
     ld_check(server_histograms);
 

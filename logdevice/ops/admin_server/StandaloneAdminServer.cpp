@@ -195,7 +195,6 @@ void StandaloneAdminServer::initStatsCollection() {
       settings_,
       updateable_config_->get()->serverConfig(),
       plugin_registry_,
-      StatsPublisherScope::CLIENT,
       /* num_shards */ 0,
       stats_.get());
 }
