@@ -308,16 +308,18 @@ void PerWorkerStorageTaskQueue::drop(StorageTask::ThreadType thread_type) {
 }
 
 void PerWorkerStorageTaskQueue::onBufferFull(StorageTask::ThreadType type) {
-  ld_warning("per-worker %s storage task buffer of worker %s full for "
-             "shard %i, dropping. "
-             "taskBuffer_ size[normal:%lu, non-droppable:%lu],"
-             " max_buffered_tasks_:%lu",
-             storageTaskThreadTypeName(type),
-             Worker::onThisThread()->getName().c_str(),
-             shard_idx_,
-             taskBuffer_[(int)type].normal.size(),
-             taskBuffer_[(int)type].non_droppable.size(),
-             max_buffered_tasks_);
+  RATELIMIT_WARNING(std::chrono::seconds(10),
+                    2,
+                    "per-worker %s storage task buffer of worker %s full for "
+                    "shard %i, dropping. "
+                    "taskBuffer_ size[normal:%lu, non-droppable:%lu],"
+                    " max_buffered_tasks_:%lu",
+                    storageTaskThreadTypeName(type),
+                    Worker::onThisThread()->getName().c_str(),
+                    shard_idx_,
+                    taskBuffer_[(int)type].normal.size(),
+                    taskBuffer_[(int)type].non_droppable.size(),
+                    max_buffered_tasks_);
 
   // Tell the storage thread queue (shared by all workers) to drop all tasks.
   // We do this because a single worker's queue filling up is a good indicator
