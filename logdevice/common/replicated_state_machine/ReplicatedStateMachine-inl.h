@@ -302,6 +302,12 @@ bool ReplicatedStateMachine<T, D>::processSnapshot(
     data_ = std::move(data);
     version_ = header.base_version;
     last_snapshot_version_ = header.base_version;
+    if (header.format_version >=
+        RSMSnapshotHeader::CONTAINS_DELTA_LOG_READ_PTR) {
+      last_snapshot_last_read_ptr_ = header.delta_log_read_ptr;
+    } else {
+      last_snapshot_last_read_ptr_ = LSN_OLDEST;
+    }
     delta_log_byte_offset_ = header.byte_offset;
     delta_log_offset_ = header.offset;
     snapshot_log_timestamp_ = record->attrs.timestamp;
@@ -312,10 +318,11 @@ bool ReplicatedStateMachine<T, D>::processSnapshot(
 
     rsm_info(rsm_type_,
              "Applied snapshot record with lsn %s timestamp %lu "
-             "and base version %s",
+             "and base version %s (serialization format version was %d)",
              lsn_to_string(record->attrs.lsn).c_str(),
              record->attrs.timestamp.count(),
-             lsn_to_string(header.base_version).c_str());
+             lsn_to_string(header.base_version).c_str(),
+             header.format_version);
   }
 
   if (rv == 0) {
@@ -447,7 +454,7 @@ void ReplicatedStateMachine<T, D>::onGotDeltaLogTailLSN(Status st, lsn_t lsn) {
 
   delta_sync_ = lsn;
 
-  const lsn_t start_lsn = version_ + 1;
+  const lsn_t start_lsn = std::max(version_ + 1, last_snapshot_last_read_ptr_);
   // If stop_at_tail_ is true, we don't care about reading deltas past the tail
   // lsn.
   const lsn_t until_lsn = stop_at_tail_ ? delta_sync_ : LSN_MAX;
@@ -1092,14 +1099,21 @@ void ReplicatedStateMachine<T, D>::notifySubscribers(const D* delta) {
 }
 
 template <typename T, typename D>
-std::string ReplicatedStateMachine<T, D>::createSnapshotPayload(const T& data,
-                                                                lsn_t version) {
+std::string ReplicatedStateMachine<T, D>::createSnapshotPayload(
+    const T& data,
+    lsn_t version,
+    bool rsm_include_read_pointer_in_snapshot) {
   RSMSnapshotHeader header;
-  header.format_version = 0; // unused but might be handy in the future.
+  header.format_version = RSMSnapshotHeader::BASE_VERSION;
   header.flags = 0;
   header.byte_offset = delta_log_byte_offset_;
   header.offset = delta_log_offset_;
   header.base_version = version;
+
+  if (rsm_include_read_pointer_in_snapshot) {
+    header.format_version = RSMSnapshotHeader::CONTAINS_DELTA_LOG_READ_PTR;
+    header.delta_log_read_ptr = delta_read_ptr_;
+  }
 
   // Determine the size of the header.
   const size_t header_sz = RSMSnapshotHeader::serialize(header, nullptr, 0);
@@ -1190,7 +1204,10 @@ void ReplicatedStateMachine<T, D>::snapshot(std::function<void(Status st)> cb) {
            "Creating snapshot with version %s (compression %s)",
            lsn_to_string(version_).c_str(),
            snapshot_compression_ ? "enabled" : "disabled");
-  std::string payload = createSnapshotPayload(*data_, version_);
+  std::string payload = createSnapshotPayload(
+      *data_,
+      version_,
+      Worker::settings().rsm_include_read_pointer_in_snapshot);
 
   // We'll capture these in the lambda below.
   const size_t byte_offset_at_time_of_snapshot = delta_log_byte_offset_;

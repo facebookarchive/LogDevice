@@ -136,8 +136,8 @@ class ClientImpl : public Client,
                  worker_id_t target_worker,
                  int checksum_bits) override;
 
-  std::unique_ptr<Reader> createReader(size_t max_logs,
-                                       ssize_t buffer_size) noexcept override;
+  std::unique_ptr<Reader>
+  createReader(size_t max_logs, ssize_t buffer_size = -1) noexcept override;
 
   std::unique_ptr<AsyncReader>
   createAsyncReader(ssize_t buffer_size) noexcept override;

@@ -1015,6 +1015,16 @@ class Cluster {
   int getShardAuthoritativeStatusMap(ShardAuthoritativeStatusMap& map);
 
   /**
+   * Wait until all nodes in @param nodes have read the logs config delta log up
+   * to @param sync_lsn.
+   */
+  int waitUntilLogsConfigSynced(
+      lsn_t sync_lsn,
+      const std::vector<node_index_t>& nodes,
+      std::chrono::steady_clock::time_point deadline =
+          std::chrono::steady_clock::time_point::max());
+
+  /**
    * Wait until all nodes in @param nodes have read the event log up to
    * @param sync_lsn.
    */
@@ -1347,6 +1357,15 @@ class Node {
                        std::chrono::steady_clock::time_point::max());
 
   /**
+   * Wait until the node have read logsconfig delta log up to @param sync_lsn
+   * and propagated it to all workers.
+   */
+  int waitUntilLogsConfigSynced(
+      lsn_t sync_lsn,
+      std::chrono::steady_clock::time_point deadline =
+          std::chrono::steady_clock::time_point::max());
+
+  /**
    * Wait until the node have read the event log up to @param sync_lsn and
    * propagated it to all workers.
    * Note that the propagation is delayed by --event-log-grace-period, so if
@@ -1477,6 +1496,13 @@ class Node {
    * Issues a STARTRECOVERY command, and EXPECT_EQs that it succeeds.
    */
   void startRecovery(logid_t logid) const;
+
+  /**
+   * Issues an INFO LOGSCONFIG_RSM command to the node's command port and
+   * collects the results in a map. Returns an empty map if the node is not
+   * reading the event log.
+   */
+  std::map<std::string, std::string> logsConfigInfo() const;
 
   /**
    * Issues an INFO EVENT_LOG command to the node's command port and collects

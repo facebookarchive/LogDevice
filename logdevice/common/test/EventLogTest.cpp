@@ -230,7 +230,8 @@ class EventLogTest : public ::testing::TestWithParam<bool> {
 
   std::unique_ptr<DataRecord>
   genSnapshotRecord(const EventLogRebuildingSet& set, lsn_t v, lsn_t lsn) {
-    auto buf = evlog_->createSnapshotPayload(set, v);
+    auto buf = evlog_->createSnapshotPayload(
+        set, v, settings_->rsm_include_read_pointer_in_snapshot);
     void* malloced = malloc(buf.size());
     memcpy(malloced, &buf[0], buf.size());
 

@@ -409,7 +409,7 @@ class ReplicatedStateMachine {
   bool onDeltaGap(const GapRecord& gap);
 
   // Called once the tail lsn of the delta log was retrieved. Create a read
-  // stream to read the delta log starting from `snapshot_base_version_` + 1.
+  // stream to read the delta log starting from `delta_log_start_lsn_`.
   void onGotDeltaLogTailLSN(Status st, lsn_t lsn);
 
   // Called when the delta log client read stream switches to being unhealthy
@@ -422,7 +422,9 @@ class ReplicatedStateMachine {
 
   // Create a payload for a snapshot. The payload includes `data` serialized as
   // well as the version of that snapshot.
-  std::string createSnapshotPayload(const T& data, lsn_t version);
+  std::string createSnapshotPayload(const T& data,
+                                    lsn_t version,
+                                    bool rsm_include_read_pointer_in_snapshot);
 
   // Some metadata included inside delta records.
   struct DeltaHeader {
@@ -700,6 +702,10 @@ class ReplicatedStateMachine {
 
   // version of the last record from the snapshot log.
   lsn_t last_snapshot_version_{LSN_INVALID};
+
+  // Delta log read pointer as marked by the last snapshot (this allows us to
+  // skip reading deltas already applied and skip gaps).
+  lsn_t last_snapshot_last_read_ptr_{LSN_OLDEST};
 
   // Current state of the process of syncing our local version to the last
   // version prior to this state machine starting.

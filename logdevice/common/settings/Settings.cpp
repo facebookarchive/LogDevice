@@ -2904,6 +2904,15 @@ void Settings::defineSettings(SettingEasyInit& init) {
        CLIENT,
        SettingsCategory::ReaderFailover);
 
+  init("rsm-include-read-pointer-in-snapshot",
+       &rsm_include_read_pointer_in_snapshot,
+       "false",
+       nullptr,
+       "Allow inclusion of read pointer in RSM snapshots. Note that if this is "
+       "set to true IT IS UNSAFE TO CHANGE IT BACK TO FALSE!",
+       SERVER | CLIENT,
+       SettingsCategory::Core);
+
   init("eventlog-snapshotting-period",
        &eventlog_snapshotting_period,
        "1h",

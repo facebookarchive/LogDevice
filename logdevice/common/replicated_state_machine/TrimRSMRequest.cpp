@@ -72,8 +72,10 @@ Request::Execution TrimRSMRequest::execute() {
   return Execution::CONTINUE;
 }
 
-lsn_t TrimRSMRequest::extractVersionFromSnapshot(DataRecord& rec,
-                                                 RSMType rsm_type) {
+void TrimRSMRequest::extractVersionAndReadPointerFromSnapshot(DataRecord& rec,
+                                                              RSMType rsm_type,
+                                                              lsn_t& version,
+                                                              lsn_t& read_ptr) {
   RSMSnapshotHeader hdr;
 
   auto sz = RSMSnapshotHeader::deserialize(rec.payload, hdr);
@@ -81,7 +83,8 @@ lsn_t TrimRSMRequest::extractVersionFromSnapshot(DataRecord& rec,
     rsm_error(rsm_type,
               "Failed to deserialize header of snapshot record with lsn %s",
               lsn_to_string(rec.attrs.lsn).c_str());
-    return LSN_INVALID;
+    read_ptr = version = LSN_INVALID;
+    return;
   }
 
   if (hdr.base_version == LSN_INVALID) {
@@ -89,10 +92,17 @@ lsn_t TrimRSMRequest::extractVersionFromSnapshot(DataRecord& rec,
               "Unexpected version LSN_INVALID seen in snapshot with lsn %s",
               lsn_to_string(rec.attrs.lsn).c_str());
     err = E::BADMSG;
-    return LSN_INVALID;
+    read_ptr = version = LSN_INVALID;
+    return;
   }
 
-  return hdr.base_version;
+  version = hdr.base_version;
+  if (hdr.format_version >= RSMSnapshotHeader::CONTAINS_DELTA_LOG_READ_PTR) {
+    read_ptr = hdr.delta_log_read_ptr;
+  } else {
+    // We can estimate it to be base_version + 1
+    read_ptr = std::min(hdr.base_version, LSN_MAX - 1) + 1;
+  }
 }
 
 void TrimRSMRequest::snapshotFindTimeCallback(Status st, lsn_t lsn) {
@@ -210,9 +220,12 @@ void TrimRSMRequest::trimSnapshotLog() {
   min_snapshot_lsn_ = last_seen_snapshot_->attrs.lsn;
   if (trim_everything_) {
     min_snapshot_version_ = LSN_MAX;
+    snapshot_delta_read_ptr_ = LSN_MAX;
   } else {
-    min_snapshot_version_ =
-        extractVersionFromSnapshot(*last_seen_snapshot_, rsm_type_);
+    extractVersionAndReadPointerFromSnapshot(*last_seen_snapshot_,
+                                             rsm_type_,
+                                             min_snapshot_version_,
+                                             snapshot_delta_read_ptr_);
   }
 
   if (min_snapshot_version_ == LSN_INVALID) {
@@ -226,12 +239,14 @@ void TrimRSMRequest::trimSnapshotLog() {
     return;
   }
 
-  rsm_info(rsm_type_,
-           "Found snapshot with lsn=%s, version=%s, ts=%s. Will trim "
-           "every snapshot prior to that snapshot.",
-           lsn_to_string(min_snapshot_lsn_).c_str(),
-           lsn_to_string(min_snapshot_version_).c_str(),
-           format_time(last_seen_snapshot_->attrs.timestamp).c_str());
+  rsm_info(
+      rsm_type_,
+      "Found snapshot with lsn=%s, version=%s, ts=%s, delta_log_read_ptr=%s. "
+      "Will trim every snapshot prior to that snapshot.",
+      lsn_to_string(min_snapshot_lsn_).c_str(),
+      lsn_to_string(min_snapshot_version_).c_str(),
+      format_time(last_seen_snapshot_->attrs.timestamp).c_str(),
+      lsn_to_string(snapshot_delta_read_ptr_).c_str());
 
   // Step 3: trim the snapshot log up to `min_snapshot_lsn_-1`.
 
@@ -360,10 +375,11 @@ void TrimRSMRequest::deltaFindTimeCallback(Status st, lsn_t lsn) {
            delta_log_id_.val_);
 
   ld_check(lsn > LSN_OLDEST);
-  // on trim_everything_ the min_snapshot_version_ is LSN_MAX
-  const lsn_t trim_up_to = std::min(lsn - 1, min_snapshot_version_);
+  // on trim_everything_ the snapshot_delta_read_ptr_ is LSN_MAX
+  const lsn_t trim_up_to =
+      std::max(std::min(lsn, snapshot_delta_read_ptr_), LSN_OLDEST + 1) - 1;
 
-  // Step 5: trim delta log up to min(f - 1, min_snapshot_version_)
+  // Step 5: trim delta log up to min(f - 1, snapshot_delta_read_ptr_ - 1)
 
   rsm_info(rsm_type_,
            "Trimming delta log %lu up to lsn %s.",

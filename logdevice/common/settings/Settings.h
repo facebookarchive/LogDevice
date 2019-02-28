@@ -1221,6 +1221,7 @@ struct Settings : public SettingsBundle {
   std::unordered_set<MessageType> message_tracing_types;
   SockaddrSet message_tracing_peers;
   dbg::Level message_tracing_log_level;
+  bool rsm_include_read_pointer_in_snapshot;
   std::chrono::milliseconds eventlog_snapshotting_period;
   std::chrono::milliseconds logsconfig_snapshotting_period;
   std::chrono::milliseconds maintenance_log_snapshotting_period;

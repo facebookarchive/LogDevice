@@ -1536,6 +1536,42 @@ int Node::waitForPurge(logid_t log_id,
   return rv;
 }
 
+int Node::waitUntilLogsConfigSynced(
+    lsn_t sync_lsn,
+    std::chrono::steady_clock::time_point deadline) {
+  if (stopped_) {
+    return false;
+  }
+  ld_info("Waiting for node %d to have read logs config log read up to %s.",
+          node_index_,
+          lsn_to_string(sync_lsn).c_str());
+
+  const int rv =
+      wait_until("logsconfig synced",
+                 [&]() {
+                   auto map = logsConfigInfo();
+                   if (map.empty()) {
+                     return false;
+                   }
+                   ld_check(map.count("Delta read ptr"));
+                   std::string s = map["Delta read ptr"];
+                   return !s.empty() && folly::to<lsn_t>(s) >= sync_lsn;
+                 },
+                 deadline);
+
+  if (rv == 0) {
+    ld_info("Node %d finished syncing logsconfig up to %s.",
+            node_index_,
+            lsn_to_string(sync_lsn).c_str());
+  } else {
+    ld_info("Timed out waiting for node %d to sync logsconfig up to %s.",
+            node_index_,
+            lsn_to_string(sync_lsn).c_str());
+  }
+
+  return rv;
+}
+
 int Node::waitUntilEventLogSynced(
     lsn_t sync_lsn,
     std::chrono::steady_clock::time_point deadline) {
@@ -1946,6 +1982,16 @@ std::map<std::string, std::string> Node::sequencerInfo(logid_t log_id) const {
 
 std::map<std::string, std::string> Node::eventLogInfo() const {
   const std::string command = "info event_log --json";
+  auto data = parseJsonAdminCommand(sendCommand(command));
+  if (data.empty()) {
+    // This node does not seem to be reading the event log.
+    return std::map<std::string, std::string>();
+  }
+  return data[0];
+}
+
+std::map<std::string, std::string> Node::logsConfigInfo() const {
+  const std::string command = "info logsconfig_rsm --json";
   auto data = parseJsonAdminCommand(sendCommand(command));
   if (data.empty()) {
     // This node does not seem to be reading the event log.
@@ -2488,6 +2534,20 @@ int Cluster::waitForRecovery(std::chrono::steady_clock::time_point deadline) {
       if (rv) {
         return -1;
       }
+    }
+  }
+
+  return 0;
+}
+
+int Cluster::waitUntilLogsConfigSynced(
+    lsn_t sync_lsn,
+    const std::vector<node_index_t>& nodes,
+    std::chrono::steady_clock::time_point deadline) {
+  for (int n : nodes) {
+    int rv = getNode(n).waitUntilLogsConfigSynced(sync_lsn, deadline);
+    if (rv != 0) {
+      return -1;
     }
   }
 

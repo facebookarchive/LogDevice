@@ -31,10 +31,11 @@
  * 2/ Read the snapshot log up to the last released lsn to find the last
  *    snapshot record:
  *      - min_snapshot_lsn_ is the lsn of the last snapshot;
- *      - min_snapshot_version_ is the version of the last snapshot;
+ *      - snapshot_read_ptr_ is the delta log read pointer at the time we took
+ *        a snapshot;
  * 3/ trim snapshot log up to min_snapshot_lsn_ - 1
  * 4/ f=findTime(delta_log_id, NOW-retention)
- * 5/ trim delta log up to min(f - 1, min_snapshot_version_)
+ * 5/ trim delta log up to min(f - 1, snapshot_read_ptr_ - 1)
  */
 
 namespace facebook { namespace logdevice {
@@ -99,7 +100,10 @@ class TrimRSMRequest : public Request {
   void onDeltaTrimmed(Status st);
 
  private:
-  static lsn_t extractVersionFromSnapshot(DataRecord& rec, RSMType rsm_type);
+  static void extractVersionAndReadPointerFromSnapshot(DataRecord& rec,
+                                                       RSMType rsm_type,
+                                                       lsn_t& version,
+                                                       lsn_t& read_ptr);
   void completeAndDeleteThis(Status st);
 
   const logid_t delta_log_id_;
@@ -120,6 +124,8 @@ class TrimRSMRequest : public Request {
   lsn_t min_snapshot_lsn_{LSN_INVALID};
   // Version of the oldest snapshot we want to keep.
   lsn_t min_snapshot_version_{LSN_INVALID};
+  // Delta log read pointer recorded in the oldest snapshot.
+  lsn_t snapshot_delta_read_ptr_{LSN_INVALID};
 
   bool is_partial_{false};
   read_stream_id_t snapshot_log_rsid_{READ_STREAM_ID_INVALID};

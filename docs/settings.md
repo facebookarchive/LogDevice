@@ -77,6 +77,7 @@ sidebar_label: Settings
 | meta-api-timeout | Timeout for trims/isLogEmpty/tailLSN/datasize API/etc. If omitted the client timeout will be used. |  | client&nbsp;only |
 | my-location | {client-only setting}. Specifies the location of the machine running the client. Used for determining whether to use SSL based on --ssl-boundary. Also used in local SCD reading. Format: "{region}.{dc}.{cluster}.{row}.{rack}". |  | requires&nbsp;restart, client&nbsp;only |
 | port | TCP port on which the server listens for non-SSL clients | 16111 | CLI&nbsp;only, requires&nbsp;restart, server&nbsp;only |
+| rsm-include-read-pointer-in-snapshot | Allow inclusion of read pointer in RSM snapshots. Note that if this is set to true IT IS UNSAFE TO CHANGE IT BACK TO FALSE! | false |  |
 | server-id | optional server ID, reported by INFO admin command |  | requires&nbsp;restart, server&nbsp;only |
 | shutdown-timeout | amount of time to wait for the server to shut down before terminating the process. Consider modifying --time-delay-before-force-abort when changing this value. | 120s | server&nbsp;only |
 | store-histogram-min-samples-per-bucket | How many stores should the store histogram wait for before reporting latency estimates | 30 | server&nbsp;only |

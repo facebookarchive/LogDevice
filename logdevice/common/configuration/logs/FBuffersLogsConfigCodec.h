@@ -149,9 +149,11 @@ class LogsConfigCodec<CodecType::FLATBUFFERS> {
     logsconfig_codec_version_t codec_version =
         *ptr++; // Read the first uint8_t of the buffer to know the version
 
-    dd_assert(codec_version == CODEC_VERSION,
-              "Unknown Codec Version (%u) in the serialized payload",
-              codec_version);
+    if (codec_version != CODEC_VERSION) {
+      ld_critical("Unknown Codec Version (%u) in the serialized payload",
+                  codec_version);
+      return nullptr;
+    }
 
     bool shouldDecompress = (*ptr++ == 1) ? true : false;
     std::unique_ptr<uint8_t[]> buf;

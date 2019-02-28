@@ -42,6 +42,9 @@ void RSMSnapshotHeader::deserialize(ProtocolReader& reader,
   reader.read(&byte_offset);
   reader.read(&offset);
   reader.read(&base_version);
+  if (reader.proto() >= CONTAINS_DELTA_LOG_READ_PTR) {
+    reader.read(&delta_log_read_ptr);
+  }
 }
 
 void RSMSnapshotHeader::serialize(ProtocolWriter& writer) const {
@@ -50,12 +53,17 @@ void RSMSnapshotHeader::serialize(ProtocolWriter& writer) const {
   writer.write(byte_offset);
   writer.write(offset);
   writer.write(base_version);
+  if (writer.proto() >= CONTAINS_DELTA_LOG_READ_PTR) {
+    writer.write(delta_log_read_ptr);
+  }
 }
 
 bool RSMSnapshotHeader::operator==(const RSMSnapshotHeader& out) const {
   return format_version == out.format_version && flags == out.flags &&
       byte_offset == out.byte_offset && offset == out.offset &&
-      base_version == out.base_version;
+      base_version == out.base_version &&
+      (format_version < CONTAINS_DELTA_LOG_READ_PTR ||
+       delta_log_read_ptr == out.delta_log_read_ptr);
 }
 
 }} // namespace facebook::logdevice
