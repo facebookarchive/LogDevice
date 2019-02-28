@@ -390,7 +390,8 @@ void STORE_Message::sendReply(Status status,
     // this STORE is for a mutation during recovery, reply with MUTATED,
     // TODO T28121050: include rebuildignRecipient in MUTATED replies.
     MUTATED_Message::createAndSend(
-        MUTATED_Header{extra_.recovery_id, header_.rid, status, seal, shard},
+        MUTATED_Header{
+            extra_.recovery_id, header_.rid, status, seal, shard, header_.wave},
         reply_to_);
 
   } else {

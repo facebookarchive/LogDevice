@@ -91,7 +91,9 @@ class MutatorTest : public ::testing::Test {
 
   void initStoreHeaderAndExtras();
   void setUp();
-  MUTATED_Header createMutatedHeader(Status status = E::OK, Seal seal = Seal());
+  MUTATED_Header createMutatedHeader(uint32_t wave = 1,
+                                     Status status = E::OK,
+                                     Seal seal = Seal());
 };
 
 class TestCopySetSelectorDeps : public CopySetSelectorDependencies,
@@ -325,13 +327,16 @@ void MutatorTest::setUp() {
   ASSERT_NE(nullptr, mutator_);
 }
 
-MUTATED_Header MutatorTest::createMutatedHeader(Status status, Seal seal) {
+MUTATED_Header MutatorTest::createMutatedHeader(uint32_t wave,
+                                                Status status,
+                                                Seal seal) {
   MUTATED_Header header;
   header.recovery_id = recovery_id_;
   header.rid = RecordID{ESN, EPOCH, LOG_ID};
   header.status = status;
   header.seal = seal;
   header.shard = 0;
+  header.wave = wave;
   return header;
 }
 
@@ -393,7 +398,7 @@ TEST_F(MutatorTest, BasicReplication) {
   int stored = 0;
   for (const auto& kv : messages_) {
     mutator_->onStored(
-        ShardID(kv.first.index(), 0), createMutatedHeader(E::OK));
+        ShardID(kv.first.index(), 0), createMutatedHeader(1, E::OK));
     if (++stored < 3) {
       ASSERT_EQ(E::UNKNOWN, mutation_status_);
     }
@@ -432,13 +437,13 @@ TEST_F(MutatorTest, Preemption) {
   ASSERT_EQ(E::UNKNOWN, mutation_status_);
 
   for (auto s : StorageSet{N3, N4, N5}) {
-    mutator_->onStored(s, createMutatedHeader(E::OK));
+    mutator_->onStored(s, createMutatedHeader(1, E::OK));
   }
   // must wait for N6 to respond
   ASSERT_EQ(E::UNKNOWN, mutation_status_);
   Seal preempted_seal(epoch_t(SEAL_EPOCH.val_ + 5), NodeID(8));
   // N6 replied with E::PREEMPTED
-  mutator_->onStored(N6, createMutatedHeader(E::PREEMPTED, preempted_seal));
+  mutator_->onStored(N6, createMutatedHeader(1, E::PREEMPTED, preempted_seal));
 
   ASSERT_EQ(E::PREEMPTED, mutation_status_);
   ASSERT_EQ(preempted_seal, mutator_->getPreemptedSeal());
@@ -474,7 +479,7 @@ TEST_F(MutatorTest, NotInConfig) {
   }
   ASSERT_EQ(E::UNKNOWN, mutation_status_);
   for (auto s : StorageSet{N2, N3}) {
-    mutator_->onStored(s, createMutatedHeader(E::OK));
+    mutator_->onStored(s, createMutatedHeader(1, E::OK));
   }
   // N4 disconnects with E::NOTINCONFIG
   auto* callback = socket_callbacks_[4];
@@ -517,7 +522,7 @@ TEST_F(MutatorTest, MultipleWaves) {
   for (const auto& kv : messages_) {
     if (kv.first.index() != 2) {
       mutator_->onStored(
-          ShardID(kv.first.index(), 0), createMutatedHeader(E::OK));
+          ShardID(kv.first.index(), 0), createMutatedHeader(1, E::OK));
     }
   }
   ASSERT_EQ(E::UNKNOWN, mutation_status_);
@@ -540,7 +545,7 @@ TEST_F(MutatorTest, MultipleWaves) {
   }
   for (const auto& kv : messages_) {
     mutator_->onStored(
-        ShardID(kv.first.index(), 0), createMutatedHeader(E::OK));
+        ShardID(kv.first.index(), 0), createMutatedHeader(2, E::OK));
   }
   ASSERT_EQ(E::OK, mutation_status_);
 }

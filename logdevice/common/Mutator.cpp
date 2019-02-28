@@ -262,12 +262,9 @@ void Mutator::onStored(ShardID from, const MUTATED_Header& header) {
   }
 
   if (st == E::OK) {
-    // TODO: extend MUTATED message to contain the wave number. use the wave
-    // number in MUTATED instead.
-
     // node successfully stored
     nodeset_accessor_->onShardAccessed(
-        from, {StorageSetAccessor::Result::SUCCESS, st}, current_wave_);
+        from, {StorageSetAccessor::Result::SUCCESS, st}, header.wave);
   } else if (st == E::PREEMPTED) {
     mutation_status_ = st;
     if (header.seal.valid()) {
@@ -285,7 +282,7 @@ void Mutator::onStored(ShardID from, const MUTATED_Header& header) {
   } else {
     // consider all other error case as transient error
     nodeset_accessor_->onShardAccessed(
-        from, {StorageSetAccessor::Result::TRANSIENT_ERROR, st}, current_wave_);
+        from, {StorageSetAccessor::Result::TRANSIENT_ERROR, st}, header.wave);
   }
 }
 

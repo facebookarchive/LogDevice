@@ -39,9 +39,16 @@ struct MUTATED_Header {
 
   shard_index_t shard;
 
+  // Recovery wave. Not to be confused with recovery epoch. Zero if the message
+  // was sent by an older version of logdevice that doesn't support it.
+  // TODO (T11866467): make it required.
+  uint32_t wave;
+
   // size of the header in message given the protocol version
   static size_t headerSize(uint16_t proto) {
-    return sizeof(MUTATED_Header);
+    return proto >= Compatibility::WAVE_IN_MUTATED
+        ? sizeof(MUTATED_Header)
+        : offsetof(MUTATED_Header, wave);
   }
 
 } __attribute__((__packed__));

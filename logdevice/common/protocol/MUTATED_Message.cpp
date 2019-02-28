@@ -75,8 +75,9 @@ MessageReadResult MUTATED_Message::deserialize(ProtocolReader& reader) {
   // Defaults for old protocols
   hdr.seal = Seal();
   hdr.shard = -1;
+  hdr.wave = 0;
   reader.read(&hdr, MUTATED_Header::headerSize(reader.proto()));
-  return reader.result([&] { return new MUTATED_Message(hdr); });
+  return reader.result([&] { return std::make_unique<MUTATED_Message>(hdr); });
 }
 
 void MUTATED_Message::createAndSend(const MUTATED_Header& header, ClientID to) {

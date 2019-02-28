@@ -24,6 +24,7 @@
 #include "logdevice/common/protocol/GET_EPOCH_RECOVERY_METADATA_Message.h"
 #include "logdevice/common/protocol/GET_EPOCH_RECOVERY_METADATA_REPLY_Message.h"
 #include "logdevice/common/protocol/HELLO_Message.h"
+#include "logdevice/common/protocol/MUTATED_Message.h"
 #include "logdevice/common/protocol/MessageDeserializers.h"
 #include "logdevice/common/protocol/MessageTypeNames.h"
 #include "logdevice/common/protocol/ProtocolReader.h"
@@ -1557,6 +1558,44 @@ TEST_F(MessageSerializationTest, DrainExtraBytes) {
             memcmp(&delete_msg.getHeader(),
                    &delete_deserialized->getHeader(),
                    sizeof(delete_msg.getHeader())));
+}
+
+TEST_F(MessageSerializationTest, MUTATED) {
+  MUTATED_Header h = {recovery_id_t(1),
+                      RecordID(esn_t(2), epoch_t(3), logid_t(4)),
+                      Status::DROPPED,
+                      Seal(epoch_t(5), NodeID(node_index_t(6))),
+                      shard_index_t(7),
+                      8};
+  MUTATED_Message m(h);
+  auto check = [&](const MUTATED_Message& m2, uint16_t proto) {
+    auto& h2 = m2.header_;
+    EXPECT_EQ(1, h2.recovery_id.val());
+    EXPECT_EQ(2, h2.rid.esn.val());
+    EXPECT_EQ(3, h2.rid.epoch.val());
+    EXPECT_EQ(4, h2.rid.logid.val());
+    EXPECT_EQ(Status::DROPPED, h2.status);
+    EXPECT_EQ(5, h2.seal.epoch.val());
+    EXPECT_EQ(6, h2.seal.seq_node.index());
+    EXPECT_EQ(0, h2.seal.seq_node.generation());
+    EXPECT_EQ(7, h2.shard);
+    EXPECT_EQ(proto < Compatibility::WAVE_IN_MUTATED ? 0 : 8, h2.wave);
+  };
+  {
+    std::string expected_old = "01000000000000000200000003000000040000000000000"
+                               "0330005000000000006000700";
+    std::string expected_new = "01000000000000000200000003000000040000000000000"
+                               "033000500000000000600070008000000";
+    DO_TEST(m,
+            check,
+            Compatibility::MIN_PROTOCOL_SUPPORTED,
+            Compatibility::MAX_PROTOCOL_SUPPORTED,
+            [&](uint16_t proto) {
+              return (proto >= Compatibility::WAVE_IN_MUTATED) ? expected_new
+                                                               : expected_old;
+            },
+            nullptr);
+  }
 }
 
 }} // namespace facebook::logdevice

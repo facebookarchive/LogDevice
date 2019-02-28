@@ -273,7 +273,8 @@ void StoreStorageTask::sendReply(Status status) const {
   if (recovery_) {
     // STORE was for a mutation, reply with MUTATED
     MUTATED_Message::createAndSend(
-        MUTATED_Header{extra_.recovery_id, rid_, status, seal_, getShardIdx()},
+        MUTATED_Header{
+            extra_.recovery_id, rid_, status, seal_, getShardIdx(), wave_},
         reply_to_);
     return;
   }

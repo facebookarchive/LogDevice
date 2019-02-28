@@ -88,6 +88,10 @@ enum ProtocolVersion : uint16_t {
   // Adds an optional request ID to CONFIG_FETCH & CONFIG_CHANGED messages
   RID_IN_CONFIG_MESSAGES, // = 93
 
+  // Include recovery wave (not to be confused with recovery epoch) in
+  // MUTATED_Message.
+  WAVE_IN_MUTATED, // = 94
+
   // NOTE: insert new protocol versions here
 
   // Maximum version number of the protocol this version of LogDevice
