@@ -80,6 +80,25 @@ Request::Execution UpdateRequest::executeOnNCM(
   return Execution::COMPLETE;
 }
 
+Request::Execution ReportRequest::executeOnNCM(
+    std::shared_ptr<NodesConfigurationManager> ncm_ptr) {
+  auto holder = ncm_ptr->deps()->getStats();
+  switch (type_) {
+    case NCMReportType::NCS_READ_FAILED: {
+      STAT_INCR(holder, nodes_configuration_store_read_failed);
+      break;
+    }
+    case NCMReportType::ADVANCE_INTERMEDIARY_SHARD_STATES_FAILED: {
+      STAT_INCR(holder,
+                nodes_configuration_manager_advance_intermediary_state_failed);
+      break;
+    }
+    default:
+      break;
+  }
+  return Execution::COMPLETE;
+}
+
 Dependencies::Dependencies(Processor* processor,
                            std::unique_ptr<NodesConfigurationStore> store)
     : processor_(processor), store_(std::move(store)) {
@@ -227,13 +246,7 @@ void Dependencies::postNewConfigRequest(
   processor_->postWithRetrying(req);
 }
 
-bool Dependencies::shouldDoConsistentConfigFetch() {
-  auto ncm = ncm_.lock();
-  ld_assert(ncm);
-  return ncm->mode_.isStorageMember() && ncm->getConfig() == nullptr;
-}
-
-void Dependencies::readFromStoreAndActivateTimer() {
+void Dependencies::readFromStore(bool should_do_consistent_config_fetch) {
   dcheckOnNCM();
 
   if (shutdownSignaled()) {
@@ -241,16 +254,16 @@ void Dependencies::readFromStoreAndActivateTimer() {
   }
 
   ld_assert(store_);
-
   auto data_cb = [ncm = ncm_](Status status, std::string value) {
     // May not be on the NCM thread
     auto ncm_ptr = ncm.lock();
     if (!ncm_ptr) {
       return;
     }
+
+    auto deps = ncm_ptr->deps();
+    ld_assert(deps);
     if (status == Status::OK) {
-      auto deps = ncm_ptr->deps();
-      ld_assert(deps);
       deps->postNewConfigRequest(std::move(value));
     } else {
       RATELIMIT_ERROR(
@@ -258,12 +271,21 @@ void Dependencies::readFromStoreAndActivateTimer() {
           5,
           "Reading from NodesConfigurationStore failed with error %s",
           error_name(status));
+      deps->reportEvent(NCMReportType::NCS_READ_FAILED);
     }
   };
-  if (shouldDoConsistentConfigFetch()) {
+  if (should_do_consistent_config_fetch) {
     store_->getLatestConfig(std::move(data_cb));
   } else {
     store_->getConfig(std::move(data_cb));
+  }
+}
+
+void Dependencies::scheduleHeartBeat() {
+  dcheckOnNCM();
+
+  if (shutdownSignaled()) {
+    return;
   }
 
   if (!timer_) {
@@ -277,7 +299,9 @@ void Dependencies::readFromStoreAndActivateTimer() {
       if (ncm_ptr->shutdownSignaled()) {
         return;
       }
-      ncm_ptr->deps()->readFromStoreAndActivateTimer();
+      ncm_ptr->deps()->dcheckOnNCM();
+      ncm_ptr->onHeartBeat();
+      ncm_ptr->deps()->scheduleHeartBeat();
     });
   }
 
@@ -311,6 +335,12 @@ void Dependencies::reportPropagationLatency(
                          nodes_config_manager_propagation_latency,
                          propagation_latency);
   }
+}
+
+void Dependencies::reportEvent(NCMReportType type) {
+  // no need to be on NCM thread
+  auto req = makeNCMRequest<ReportRequest>(type);
+  processor_->postWithRetrying(req);
 }
 
 }}}}} // namespace facebook::logdevice::configuration::nodes::ncm

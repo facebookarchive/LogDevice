@@ -145,6 +145,10 @@ void NodesConfigurationManager::upgradeToProposer() {
   mode_.upgradeToProposer();
 }
 
+bool NodesConfigurationManager::shouldDoConsistentConfigFetch() const {
+  return mode_.isStorageMember() && getConfig() == nullptr;
+}
+
 void NodesConfigurationManager::shutdown() {
   shutdown_signaled_.store(true);
   deps_->shutdown();
@@ -209,7 +213,9 @@ void NodesConfigurationManager::overwrite(
 
 void NodesConfigurationManager::initOnNCM() {
   deps_->dcheckOnNCM();
-  startPollingFromStore();
+  // start polling from NCS
+  onHeartBeat();
+  deps_->scheduleHeartBeat();
   STAT_SET(deps_->getStats(), nodes_config_manager_started, 1);
 
   const auto initial_nc = deps()->processor_->config_->getNodesConfiguration();
@@ -224,10 +230,6 @@ void NodesConfigurationManager::initOnNCM() {
                "NodesConfiguration in its Processor context. This should "
                "only happen in tests.");
   }
-}
-
-void NodesConfigurationManager::startPollingFromStore() {
-  deps_->readFromStoreAndActivateTimer();
 }
 
 void NodesConfigurationManager::onNewConfig(std::string new_config) {
@@ -279,6 +281,12 @@ void NodesConfigurationManager::onNewConfig(
            new_config_version.val());
   // Incoming config has a higher version, use it as the staged config
   staged_nodes_config_ = std::move(new_config);
+
+  ld_debug("Updating ShardStateTracker with NC version %lu",
+           new_config_version.val());
+  tracker_.onNewConfig(staged_nodes_config_);
+  advanceIntermediaryShardStates();
+
   STAT_SET(deps_->getStats(),
            nodes_config_manager_staged_version,
            staged_nodes_config_->getVersion().val());
@@ -363,6 +371,8 @@ void NodesConfigurationManager::onUpdateRequest(
                 // NCM shut down, no need to notify it
                 return;
               }
+              ld_info("notified ncm of new config %lu",
+                      new_config_ptr->getVersion().val());
               ncm_ptr->deps()->postNewConfigRequest(std::move(new_config_ptr));
             };
 
@@ -501,4 +511,49 @@ bool NodesConfigurationManager::hasProcessedVersion(
       local_nodes_config_ptr->getVersion() >= version;
 }
 
+void NodesConfigurationManager::onHeartBeat() {
+  deps()->dcheckOnNCM();
+  deps()->readFromStore(shouldDoConsistentConfigFetch());
+  advanceIntermediaryShardStates();
+}
+
+void NodesConfigurationManager::advanceIntermediaryShardStates() {
+  deps()->dcheckOnNCM();
+  if (!mode_.isProposer() || shutdownSignaled()) {
+    return;
+  }
+
+  SystemTimestamp till_timestamp = SystemTimestamp::now() -
+      deps()
+          ->processor_->settings()
+          ->nodes_configuration_manager_intermediary_shard_state_timeout;
+  auto update_opt = tracker_.extractNCUpdate(till_timestamp);
+  if (update_opt.hasValue()) {
+    ld_info("Proposing update to transition shards out of intermediary "
+            "states that entered the state before %s...",
+            till_timestamp.toString().c_str());
+    update(
+        std::move(update_opt).value(),
+        [ncm = weak_from_this()](
+            Status status, std::shared_ptr<const NodesConfiguration>) mutable {
+          if (status == Status::OK || status == E::VERSION_MISMATCH) {
+            return;
+          }
+
+          RATELIMIT_ERROR(
+              std::chrono::seconds(10),
+              5,
+              "Attempt to advance intermediary state failed with error %s",
+              error_name(status));
+
+          auto ncm_ptr = ncm.lock();
+          if (!ncm_ptr || ncm_ptr->shutdownSignaled()) {
+            return;
+          }
+
+          ncm_ptr->deps()->reportEvent(
+              NCMReportType::ADVANCE_INTERMEDIARY_SHARD_STATES_FAILED);
+        });
+  }
+}
 }}}} // namespace facebook::logdevice::configuration::nodes

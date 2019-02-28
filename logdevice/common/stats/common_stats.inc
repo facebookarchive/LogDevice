@@ -88,6 +88,7 @@ STAT_DEFINE(logsconfig_manager_serialization_errors, SUM)
 // LogsConfig number of deltas applied
 STAT_DEFINE(logsconfig_manager_delta_applied, SUM)
 
+// TODO: rename s/NodesConfig/NodesConfiguration
 // NodesConfigManager
 // Number of new nodes configuration published
 STAT_DEFINE(nodes_config_manager_config_published, SUM)
@@ -107,6 +108,10 @@ STAT_DEFINE(nodes_config_manager_updates_requested, SUM)
 STAT_DEFINE(nodes_config_manager_overwrites_requested, SUM)
 // NodesConfigManager deserialization errors
 STAT_DEFINE(nodes_config_manager_serialization_errors, SUM)
+// Read from NodesConfigurationStore failed
+STAT_DEFINE(nodes_configuration_store_read_failed, SUM)
+// Proposed advancement out of intermediary states failed
+STAT_DEFINE(nodes_configuration_manager_advance_intermediary_state_failed, SUM)
 
 // BufferedWriter stats
 STAT_DEFINE(buffered_writer_bytes_in, SUM)

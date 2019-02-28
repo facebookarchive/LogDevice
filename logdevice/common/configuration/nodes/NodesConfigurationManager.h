@@ -14,10 +14,16 @@
 #include "logdevice/common/configuration/nodes/NodesConfigurationManagerDependencies.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationStore.h"
 #include "logdevice/common/configuration/nodes/ServiceDiscoveryConfig.h"
+#include "logdevice/common/configuration/nodes/ShardStateTracker.h"
 #include "logdevice/common/membership/StorageMembership.h"
 
 namespace facebook { namespace logdevice { namespace configuration {
 namespace nodes {
+
+enum class NCMReportType : uint16_t {
+  NCS_READ_FAILED,
+  ADVANCE_INTERMEDIARY_SHARD_STATES_FAILED,
+};
 
 // NodesConfigurationManager is the singleton state machine that persists and
 // manages the service discovery info as well as storage membership. It also
@@ -130,7 +136,12 @@ class NodesConfigurationManager
 
  private:
   void initOnNCM();
-  void startPollingFromStore();
+
+  // Returns true when we should fetch the latest config from the store.
+  // NCM needs to ensure that the locally committed config version never
+  // decreases, even across restarts. Currently we achieve this by doing a
+  // strongly consistent read when storage node starts up.
+  bool shouldDoConsistentConfigFetch() const;
   bool shutdownSignaled() const;
 
   // onNewConfig should only be called by NewConfigRequest.
@@ -179,6 +190,17 @@ class NodesConfigurationManager
   bool isProcessingEqualOrHigherVersion(membership::MembershipVersion::Type);
   bool hasProcessedVersion(membership::MembershipVersion::Type);
 
+  // Called regularly to read config from NCS and check for various timeouts.
+  void onHeartBeat();
+
+  // Check whether there are shards in the intermediary states past the timeout,
+  // if so, propose an update to transition them out of the intermediary states.
+  //
+  // No-op if NCM is not run as a proposer.
+  //
+  // Must be called from the NCM context.
+  void advanceIntermediaryShardStates();
+
   OperationMode mode_;
   std::unique_ptr<ncm::Dependencies> deps_{nullptr};
 
@@ -197,6 +219,8 @@ class NodesConfigurationManager
       nullptr};
   std::atomic<bool> shutdown_signaled_{false};
   folly::Baton<> shutdown_completed_;
+
+  ShardStateTracker tracker_{};
 
   friend class ncm::NCMRequest;
   friend class ncm::Dependencies::Dependencies;

@@ -20,6 +20,7 @@
 #include "logdevice/common/configuration/nodes/NodesConfigurationCodecFlatBuffers.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationStore.h"
 #include "logdevice/common/configuration/nodes/ZookeeperNodesConfigurationStore.h"
+#include "logdevice/common/membership/utils.h"
 #include "logdevice/common/request_util.h"
 #include "logdevice/common/test/InMemNodesConfigurationStore.h"
 #include "logdevice/common/test/MockNodesConfigurationStore.h"
@@ -79,6 +80,10 @@ class NodesConfigurationManagerTest : public ::testing::Test {
 
     Settings settings = create_default_settings<Settings>();
     settings.num_workers = 3;
+    settings.nodes_configuration_manager_store_polling_interval =
+        std::chrono::seconds(1);
+    settings.nodes_configuration_manager_intermediary_shard_state_timeout =
+        std::chrono::seconds(2);
     processor_ = make_test_processor(settings);
 
     auto deps = std::make_unique<TestDeps>(processor_.get(), std::move(store));
@@ -140,8 +145,6 @@ TEST_F(NodesConfigurationManagerTest, basic) {
 TEST_F(NodesConfigurationManagerTest, update) {
   waitTillNCMReceives(MembershipVersion::EMPTY_VERSION);
   {
-    // initial provision: the znode is originally empty, which we treat as
-    // EMPTY_VERSION
     auto update = initialProvisionUpdate();
     ncm_->update(std::move(update),
                  [](Status status, std::shared_ptr<const NodesConfiguration>) {
@@ -164,6 +167,41 @@ TEST_F(NodesConfigurationManagerTest, update) {
           EXPECT_EQ(kNewVersion, new_config->getVersion());
         });
     waitTillNCMReceives(kNewVersion);
+  }
+}
+
+TEST_F(NodesConfigurationManagerTest, trackState) {
+  {
+    auto update = initialProvisionUpdate();
+    ncm_->update(std::move(update),
+                 [](Status status, std::shared_ptr<const NodesConfiguration>) {
+                   ASSERT_EQ(Status::OK, status);
+                 });
+    waitTillNCMReceives(MembershipVersion::MIN_VERSION);
+    ncm_->update(addNewNodeUpdate(),
+                 [](Status status, std::shared_ptr<const NodesConfiguration>) {
+                   ASSERT_EQ(Status::OK, status);
+                 });
+    auto enabling_read_base_version =
+        MembershipVersion::Type{MembershipVersion::MIN_VERSION.val() + 1};
+    waitTillNCMReceives(enabling_read_base_version);
+
+    ncm_->update(
+        enablingReadUpdate(enabling_read_base_version),
+        [](Status status, std::shared_ptr<const NodesConfiguration> nc) {
+          ASSERT_EQ(Status::OK, status);
+          ASSERT_NE(nullptr, nc);
+        });
+    auto final_version =
+        MembershipVersion::Type{enabling_read_base_version.val() + 2};
+    waitTillNCMReceives(final_version);
+  }
+  {
+    auto nc = ncm_->getConfig();
+    auto p = nc->getStorageMembership()->getShardState(ShardID{17, 0});
+    EXPECT_TRUE(p.first);
+    EXPECT_EQ(membership::StorageState::READ_ONLY, p.second.storage_state);
+    EXPECT_EQ(membership::MetaDataStorageState::NONE, p.second.metadata_state);
   }
 }
 
@@ -222,10 +260,7 @@ TEST_F(NodesConfigurationManagerTest, overwrite) {
 }
 
 TEST_F(NodesConfigurationManagerTest, LinearizableReadOnStartup) {
-  constexpr MembershipVersion::Type kVersion{102};
-
-  NodesConfiguration initial_config{};
-  initial_config.setVersion(kVersion);
+  auto initial_config = makeDummyNodesConfiguration(kVersion);
   EXPECT_TRUE(initial_config.validate());
   std::string config =
       NodesConfigurationCodecFlatBuffers::serialize(initial_config);

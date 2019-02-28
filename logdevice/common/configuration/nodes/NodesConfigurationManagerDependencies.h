@@ -21,6 +21,7 @@ namespace facebook { namespace logdevice { namespace configuration {
 namespace nodes {
 
 class NodesConfigurationManager;
+enum class NCMReportType : uint16_t;
 
 // This namespace should be considered implementation detail.
 namespace ncm {
@@ -124,6 +125,19 @@ class UpdateRequest : public NCMRequest {
   NodesConfigurationAPI::CompletionCb callback_;
 };
 
+class ReportRequest : public NCMRequest {
+ public:
+  template <typename... Args>
+  explicit ReportRequest(NCMReportType type, Args&&... args)
+      : NCMRequest(std::forward<Args>(args)...), type_(type) {}
+
+  Request::Execution
+      executeOnNCM(std::shared_ptr<NodesConfigurationManager>) override;
+
+ private:
+  NCMReportType type_;
+};
+
 // External dependencies for the NodesConfigurationManager. Dependencies is
 // owned by the state machine, thus it's safe to access it as long as the state
 // machine is alive.
@@ -177,17 +191,15 @@ class Dependencies {
 
   // should be called in NCM context
   void cancelTimer();
+  void readFromStore(bool should_do_consistent_config_fetch);
 
-  // Returns true when we should fetch the latest config from the store.
-  // NCM needs to ensure that the locally committed config version never
-  // decreases, even across restarts. Currently we achieve this by doing a
-  // strongly consistent read when storage node starts up.
-  bool shouldDoConsistentConfigFetch();
-  void readFromStoreAndActivateTimer();
+  void scheduleHeartBeat();
 
   StatsHolder* getStats();
   void
   reportPropagationLatency(const std::shared_ptr<const NodesConfiguration>&);
+  // Only worker threads have access to stats
+  void reportEvent(NCMReportType type);
 
   NCMWeakPtr ncm_{};
   // Worker / thread pinning in the current work execution model
@@ -202,6 +214,7 @@ class Dependencies {
   std::atomic<bool> shutdown_signaled_{false};
 
   friend class nodes::NodesConfigurationManager;
+  friend class ReportRequest;
 };
 } // namespace ncm
 }}}} // namespace facebook::logdevice::configuration::nodes

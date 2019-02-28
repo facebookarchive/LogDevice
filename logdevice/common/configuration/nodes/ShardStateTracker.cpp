@@ -65,7 +65,7 @@ void ShardStateTracker::onNewConfig(
   const auto& storage_membership_ptr = config->getStorageMembership();
   ld_check(storage_membership_ptr);
   const auto& storage_membership = *storage_membership_ptr;
-  if (storage_membership.getVersion() <=
+  if (storage_membership.getVersion() <
       last_known_storage_membership_version_) {
     RATELIMIT_CRITICAL(
         std::chrono::seconds(10),
