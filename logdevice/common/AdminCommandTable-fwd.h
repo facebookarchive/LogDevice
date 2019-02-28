@@ -167,6 +167,7 @@ typedef AdminCommandTable<int,                       /* Shard */
                           std::chrono::milliseconds, /* Max Durable Time */
                           std::string,               /* Append Dirtied By */
                           std::string,               /* Rebuild Dirtied By */
+                          bool,                      /* Under Replicated */
                           uint64_t /* Approx. Obsolete Bytes */
                           >
     InfoPartitionsTable;
@@ -312,7 +313,8 @@ typedef AdminCommandTable<uint64_t,    /* Shard ID */
                           bool,        /* Failing */
                           Status,      /* Accepting writes */
                           std::string, /* Rebuilding state */
-                          uint64_t     /* Default CF version */
+                          uint64_t,    /* Default CF version */
+                          std::string  /* Dirty state */
                           >
     InfoShardsTable;
 

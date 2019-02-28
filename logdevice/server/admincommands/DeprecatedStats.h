@@ -22,7 +22,7 @@ class DeprecatedStats : public AdminCommand {
       : old_(old), new_(n) {}
 
   std::string getUsage() override {
-    return "`" + old_ + "` is disabled, use `" + new_ + "`";
+    return "`" + old_ + "` is deprecated, use `" + new_ + "`";
   }
 
   void run() override {

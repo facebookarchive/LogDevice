@@ -12,7 +12,9 @@
 #include <type_traits>
 
 #include <boost/icl/interval_set.hpp>
+#include <folly/Format.h>
 
+#include "logdevice/common/debug.h"
 #include "logdevice/common/util.h"
 
 namespace facebook { namespace logdevice {
@@ -423,6 +425,75 @@ class Timestamp {
     return OutTimestamp<Duration>(Duration::zero());
   }
 
+  static bool fromString(std::string tstr, OutTimestamp<Duration>& result) {
+    auto failed_conversion = [&]() {
+      ld_warning("Unabled to convert %s to Timestamp.", tstr.c_str());
+      return false;
+    };
+
+    // Remove leading and trailing whitespace.
+    auto lstrip = [](std::string& s) {
+      s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](int ch) {
+                return !std::isspace(ch);
+              }));
+    };
+    auto rstrip = [](std::string& s) {
+      s.erase(
+          std::find_if(
+              s.rbegin(), s.rend(), [](int ch) { return !std::isspace(ch); })
+              .base(),
+          s.end());
+    };
+    lstrip(tstr);
+    rstrip(tstr);
+
+    // Range limits shorthand
+    if (tstr == "-inf") {
+      result = OutTimestamp<Duration>::min();
+      return true;
+    }
+    if (tstr == "+inf") {
+      result = OutTimestamp<Duration>::max();
+      return true;
+    }
+
+    // YYYY-MM-DD HH:MM:SS[.mmm] (machine local time).
+    struct tm tm {};
+    intmax_t epoch_ms;
+    const char* ms_start = strptime(tstr.c_str(), "%F %T", &tm);
+    if (ms_start != nullptr) {
+      // strptime was successful.
+      epoch_ms = mktime(&tm) * 1000;
+
+      // Check for optional milliseconds.
+      const char* ms_end(ms_start);
+      if (*ms_start == '.') {
+        while (std::isdigit(*++ms_end)) {
+        }
+        if ((ms_end - ms_start) == 4) {
+          try {
+            epoch_ms += std::stoull(ms_start + 1);
+          } catch (...) {
+            return failed_conversion();
+          }
+        }
+      }
+      // Treat unparsed trailing characters as an error.
+      if (*ms_end != '\0') {
+        return failed_conversion();
+      }
+    } else {
+      // Milliseconds since the unix epoch
+      try {
+        epoch_ms = stoll(tstr);
+      } catch (...) {
+        return failed_conversion();
+      }
+    }
+    result = OutTimestamp<Duration>(std::chrono::milliseconds(epoch_ms));
+    return true;
+  }
+
  private:
   // Common operator= implementation for assignment from Timestamp or
   // time_point that shares the same clock.
@@ -540,6 +611,7 @@ template <typename TS>
 using TimeInterval = typename TimeIntervals<TS>::interval_type;
 using RecordTimeIntervals = TimeIntervals<RecordTimestamp>;
 using RecordTimeInterval = TimeInterval<RecordTimestamp>;
+enum class TimeIntervalOp { ADD, REMOVE };
 
 inline RecordTimeInterval allRecordTimeInterval() {
   return RecordTimeInterval(RecordTimestamp::min(), RecordTimestamp::max());

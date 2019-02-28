@@ -2808,6 +2808,318 @@ TEST_P(RebuildingTest, DisableDataLogRebuildNodeFailed) {
   }
 }
 
+TEST_P(RebuildingTest, DirtyRangeAdminCommands) {
+  std::chrono::seconds maxBacklogDuration(30);
+
+  logsconfig::LogAttributes log_attrs;
+  log_attrs.set_replicationFactor(3);
+  log_attrs.set_extraCopies(0);
+  log_attrs.set_syncedCopies(0);
+  log_attrs.set_maxWritesInFlight(30);
+  log_attrs.set_backlogDuration(maxBacklogDuration);
+
+  logsconfig::LogAttributes event_log_attrs;
+  event_log_attrs.set_replicationFactor(3);
+  event_log_attrs.set_extraCopies(0);
+  event_log_attrs.set_syncedCopies(0);
+  event_log_attrs.set_maxWritesInFlight(30);
+
+  NodeSetIndices node_set(5);
+  std::iota(node_set.begin(), node_set.end(), 0);
+  auto cluster =
+      IntegrationTestUtils::ClusterFactory()
+          .apply(commonSetup())
+          .setLogGroupName("test-log-group")
+          .setEventLogAttributes(event_log_attrs)
+          .setParam("--append-store-durability", "memory")
+          // Set min flush trigger intervals and partition duration high
+          // so that only the test is creating/retiring partitions.
+          .setParam("--rocksdb-min-manual-flush-interval", "900s")
+          .setParam("--rocksdb-partition-duration", "900s")
+          // Decrease the timestamp granularity so that we can minimize the
+          // amount of wall clock delay required for this test to create
+          // adjacent partitions with non-overlapping time ranges.
+          .setParam("--rocksdb-partition-timestamp-granularity", "100ms")
+          // To ensure that all nodes receive at least some data when we dirty
+          // them, adjust the copyset block size so we get a copyset shuffle
+          // every ~6 records.
+          .setParam("--sticky-copysets-block-size", "128")
+          // Disable rebuilding so dirty time ranges are only retired if
+          // they expire by retention, or are explicitly cleared by this
+          // test.
+          .setParam("--disable-data-log-rebuilding")
+          // Use only a single shard so that partition creation/flushing
+          // commands can be unambiguously targetted.
+          .setNumDBShards(1)
+          .create(5);
+
+  cluster->waitForRecovery();
+
+  auto client = cluster->createClient();
+
+  // Write records and generate partitions...
+  folly::Optional<lsn_t> batch_start;
+  dirtyNodes(*cluster, *client, node_set, /*shard*/ 0, batch_start);
+  // And a few more partitions to ensure we have enough to work with.
+  dirtyNodes(*cluster, *client, node_set, /*shard*/ 0, batch_start);
+
+  auto& node1 = cluster->getNode(1);
+
+  // Crash the node so dirty partition state is persisted to the
+  // RebuildingRanges metadata.
+  node1.kill();
+  node1.start();
+  node1.waitUntilStarted();
+
+  // ----------------------------- Helpers ------------------------------------
+  auto get_partitions = [&node1] {
+    return node1.partitionsInfo(/*shard*/ 0, /*level*/ 2);
+  };
+
+  auto count_dirty_partitions = [&]() {
+    auto partitions = get_partitions();
+    return std::count_if(partitions.begin(), partitions.end(), [](auto p) {
+      return p["Under Replicated"] == "1";
+    });
+  };
+
+  auto find_partition = [&](bool dirty) {
+    auto partitions = get_partitions();
+    for (auto partition : partitions) {
+      if (partition["Under Replicated"] == (dirty ? "1" : "0")) {
+        return partition;
+      }
+    }
+    // Test invariants broken. Log a failure.
+    EXPECT_FALSE(true);
+    return partitions.front();
+  };
+
+  auto find_partition_by_id = [&](std::string id) {
+    auto partitions = get_partitions();
+    for (auto partition : partitions) {
+      if (partition["ID"] == id) {
+        return partition;
+      }
+    }
+    // Test invariants broken. Log a failure.
+    EXPECT_FALSE(true);
+    return partitions.front();
+  };
+
+  // Ensure there's a mix of clean and dirty partitions to work with.
+  auto assert_good_partition_mix = [&]() {
+    ASSERT_GT(get_partitions().size(), 5);
+    ASSERT_GE(count_dirty_partitions(), 1);
+    ASSERT_NE(get_partitions().size(), count_dirty_partitions());
+    EXPECT_FALSE(node1.dirtyShardInfo().empty());
+  };
+
+  auto send_cmd = [&](std::string dirty_or_clean, auto min, auto max) {
+    std::string response = node1.sendCommand(
+        folly::format("rebuilding mark_{} 0 --time-from='{}' --time-to='{}'",
+                      dirty_or_clean,
+                      min,
+                      max)
+            .str());
+    ASSERT_EQ(response, "Done.\r\nEND\r\n");
+  };
+
+  auto start_time = [](auto partition) {
+    return std::chrono::milliseconds(std::stoull(partition["Start Time"]));
+  };
+
+  // Take care in case the partition has not seen any records:
+  // min == RecordTimestamp::max().
+  auto min_time = [&](auto partition) {
+    auto min = std::chrono::milliseconds(std::stoll(partition["Min Time"]));
+    return (min == RecordTimestamp::max().time_since_epoch())
+        ? start_time(partition)
+        : min;
+  };
+
+  // Take care in case the partition has not seen any records:
+  // max == RecordTimestamp::min().
+  auto max_time = [&](auto partition) {
+    auto max = std::chrono::milliseconds(std::stoll(partition["Max Time"]));
+    return (max == RecordTimestamp::min().time_since_epoch())
+        ? start_time(partition)
+        : max;
+  };
+
+  // --------------------------- Test Cases -----------------------------------
+  // NOTE: Test case order matters. Some early test cases assume the
+  //       time ranges listed in dirtyShardInfo() match the min/max ranges
+  //       of under-replicated partitions. That stops being true after
+  //       test cases that clear only part of a partition's time range.
+
+  // Clearing a time range that is before all partitions should have no effect.
+  {
+    assert_good_partition_mix();
+
+    auto base_dirty_info = node1.dirtyShardInfo();
+    auto base_dirty_pariritions = count_dirty_partitions();
+    auto partitions = get_partitions();
+    auto& partition0 = partitions.front();
+    auto min = min_time(partition0);
+
+    send_cmd("clean", min.count() - 6000, min.count() - 1000);
+
+    EXPECT_EQ(base_dirty_pariritions, count_dirty_partitions());
+    EXPECT_EQ(node1.dirtyShardInfo(), base_dirty_info);
+  }
+
+  // Clearing a time range that is after all partitions should have no effect.
+  {
+    assert_good_partition_mix();
+
+    auto base_dirty_info = node1.dirtyShardInfo();
+    auto base_dirty_pariritions = count_dirty_partitions();
+    auto partitions = get_partitions();
+    auto& last_partition = partitions.back();
+    auto max = max_time(last_partition);
+
+    send_cmd("clean", max.count() + 1000, max.count() + 6000);
+
+    EXPECT_EQ(base_dirty_pariritions, count_dirty_partitions());
+    EXPECT_EQ(node1.dirtyShardInfo(), base_dirty_info);
+  }
+
+  // Dirtying a range before all partitions should update the dirty shard
+  // metadata, but not find any partitions to mark dirty.
+  {
+    assert_good_partition_mix();
+
+    auto base_dirty_info = node1.dirtyShardInfo();
+    auto base_dirty_pariritions = count_dirty_partitions();
+    auto partitions = get_partitions();
+    auto& partition0 = partitions.front();
+    auto min = min_time(partition0);
+
+    send_cmd("dirty", min.count() - 6000, min.count() - 1000);
+
+    EXPECT_EQ(base_dirty_pariritions, count_dirty_partitions());
+    EXPECT_NE(node1.dirtyShardInfo(), base_dirty_info);
+  }
+
+  // Dirtying a range after all partitions should update the dirty shard
+  // metadata, but not find any partitions to mark dirty.
+  {
+    assert_good_partition_mix();
+
+    auto base_dirty_info = node1.dirtyShardInfo();
+    auto base_dirty_pariritions = count_dirty_partitions();
+    auto partitions = get_partitions();
+    auto& last_partition = partitions.back();
+    auto max = max_time(last_partition);
+
+    send_cmd("dirty", max.count() + 1000, max.count() + 6000);
+
+    EXPECT_EQ(base_dirty_pariritions, count_dirty_partitions());
+    EXPECT_NE(node1.dirtyShardInfo(), base_dirty_info);
+  }
+
+  // Add a dirty range that matches an existing dirty partition.
+  // Should be a no-op.
+  {
+    assert_good_partition_mix();
+
+    auto base_dirty_info = node1.dirtyShardInfo();
+    auto base_partitions = get_partitions();
+    auto partition = find_partition(/*dirty*/ true);
+    auto min = min_time(partition);
+    auto max = max_time(partition);
+    ASSERT_GT((max - min).count(), 1);
+
+    send_cmd("dirty", min.count(), max.count());
+
+    auto partitions = get_partitions();
+    EXPECT_EQ(partitions, base_partitions);
+    EXPECT_EQ(node1.dirtyShardInfo(), base_dirty_info);
+  }
+
+  // Removing part of a partition's time range should update the
+  // RebuildignRanges metadata, but leave the partition as under-replicated.
+  {
+    assert_good_partition_mix();
+
+    auto base_dirty_info = node1.dirtyShardInfo();
+    auto partition = find_partition(/*dirty*/ true);
+    auto min = min_time(partition);
+    auto max = max_time(partition);
+    ASSERT_GT((max - min).count(), 1);
+
+    send_cmd("clean", min.count(), min.count() + 1);
+
+    partition = find_partition_by_id(partition["ID"]);
+    EXPECT_EQ(partition["Under Replicated"], "1");
+    EXPECT_NE(node1.dirtyShardInfo(), base_dirty_info);
+  }
+
+  // Removing all of a partition's time range should update the
+  // RebuildignRanges metadata, and clear the partition's under-replicated
+  // status.
+  {
+    assert_good_partition_mix();
+
+    auto base_dirty_info = node1.dirtyShardInfo();
+    auto partition = find_partition(/*dirty*/ true);
+
+    send_cmd("clean", min_time(partition).count(), max_time(partition).count());
+
+    partition = find_partition_by_id(partition["ID"]);
+    EXPECT_EQ(partition["Under Replicated"], "0");
+    EXPECT_NE(node1.dirtyShardInfo(), base_dirty_info);
+  }
+
+  // Adding a dirty range that spans part of two adjoining, clean
+  // partitions, should mark both partitions as under-replicated.
+  {
+    assert_good_partition_mix();
+
+    auto base_dirty_info = node1.dirtyShardInfo();
+    auto partitions = get_partitions();
+    for (auto it = partitions.begin();; ++it) {
+      auto next_it = std::next(it);
+      if (next_it == partitions.end()) {
+        ld_error("Unable to find two adjoining clean partitions");
+        FAIL();
+        break;
+      }
+      if ((*it)["Under Replicated"] == "1" ||
+          (*next_it)["Under Replicated"] == "1") {
+        continue;
+      }
+
+      send_cmd("dirty", max_time(*it).count(), min_time(*next_it).count());
+
+      EXPECT_EQ(find_partition_by_id((*it)["ID"])["Under Replicated"], "1");
+      EXPECT_EQ(
+          find_partition_by_id((*next_it)["ID"])["Under Replicated"], "1");
+      EXPECT_NE(node1.dirtyShardInfo(), base_dirty_info);
+      break;
+    }
+  }
+
+  // Verify that nothing is left dirty if all ranges are cleared.
+  {
+    assert_good_partition_mix();
+
+    auto base_dirty_info = node1.dirtyShardInfo();
+    ASSERT_FALSE(base_dirty_info.empty());
+
+    send_cmd("clean",
+             RecordTimestamp::zero().toString(),
+             (RecordTimestamp::now() + std::chrono::hours(1)).toString());
+
+    EXPECT_EQ(count_dirty_partitions(), 0);
+    EXPECT_TRUE(node1.dirtyShardInfo().empty());
+
+    // Update base for next test.
+    base_dirty_info = node1.dirtyShardInfo();
+  }
+}
+
 std::vector<TestMode> test_params{
     {DurabilityMode::V1_WITH_WAL, FlushMode::ROCKSDB},
     {DurabilityMode::V1_WITH_WAL, FlushMode::LD},

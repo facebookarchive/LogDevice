@@ -1479,10 +1479,36 @@ void RebuildingCoordinator::publishDirtyShards(
   }
 }
 
+void RebuildingCoordinator::abortCleanedShards(const EventLogRebuildingSet& set,
+                                               DirtyShardMap& cleaned_shards) {
+  // Abort any of my shards that are in cleaned_shards and are
+  // listed in the EventLogRebuildingSet as performing a time-ranged
+  // rebuild.
+  for (auto ds_kv : cleaned_shards) {
+    const auto* my_node_info = set.getNodeInfo(myNodeId_, ds_kv.first);
+    if (my_node_info != nullptr && !my_node_info->dc_dirty_ranges.empty()) {
+      abortForMyShard(ds_kv.first,
+                      set.getForShardOffset(ds_kv.first)->version,
+                      my_node_info,
+                      "Shard has been marked clean");
+    }
+  }
+}
+
 void RebuildingCoordinator::onDirtyStateChanged() {
+  auto cleaned_shards = dirtyShards_;
   dirtyShards_.clear();
   populateDirtyShardCache(dirtyShards_);
-  publishDirtyShards(event_log_->getCurrentRebuildingSet());
+  for (auto it = cleaned_shards.begin(); it != cleaned_shards.end();) {
+    if (dirtyShards_.find(it->first) == dirtyShards_.end()) {
+      ++it;
+    } else {
+      it = cleaned_shards.erase(it);
+    }
+  }
+  auto rebuilding_set = event_log_->getCurrentRebuildingSet();
+  abortCleanedShards(rebuilding_set, cleaned_shards);
+  publishDirtyShards(rebuilding_set);
 }
 
 lsn_t RebuildingCoordinator::getLastSeenEventLogVersion() const {

@@ -191,7 +191,7 @@ void PartitionedRocksDBStore::Iterator::checkAccessedUnderReplicatedRegion(
       return;
     }
 
-    if (end.partition_->dirty_state_.under_replicated) {
+    if (end.partition_->isUnderReplicated()) {
       // Landed in an under-replicated partition.
       ld_spew("TRUE: landed in under-replicated partition");
       accessed_underreplicated_region = true;
@@ -286,7 +286,7 @@ void PartitionedRocksDBStore::Iterator::checkAccessedUnderReplicatedRegion(
   auto partitions = pstore_->getPartitionList();
   for (partition_id_t i = low; i <= high; ++i) {
     PartitionPtr p = partitions->get(i);
-    if (p && p->dirty_state_.under_replicated) {
+    if (p && p->isUnderReplicated()) {
       accessed_underreplicated_region = true;
       ld_spew("SCAN: true");
       break;

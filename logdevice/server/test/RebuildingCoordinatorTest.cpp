@@ -2114,8 +2114,9 @@ TEST_F(RebuildingCoordinatorTest, DirtyShard) {
   auto dirtyStart = RecordTimestamp(now - std::chrono::minutes(10));
   auto dirtyEnd = RecordTimestamp(now - std::chrono::minutes(5));
   RebuildingRangesMetadata rrm;
-  rrm.addTimeInterval(
-      DataClass::APPEND, RecordTimeInterval(dirtyStart, dirtyEnd));
+  rrm.modifyTimeIntervals(TimeIntervalOp::ADD,
+                          DataClass::APPEND,
+                          RecordTimeInterval(dirtyStart, dirtyEnd));
   dirty_shard_cache[1] = rrm;
 
   start();
@@ -2153,8 +2154,9 @@ TEST_F(RebuildingCoordinatorTest, DirtyShardNonAuthoritative) {
   auto dirtyStart = RecordTimestamp(now - std::chrono::minutes(10));
   auto dirtyEnd = RecordTimestamp(now - std::chrono::minutes(5));
   RebuildingRangesMetadata rrm;
-  rrm.addTimeInterval(
-      DataClass::APPEND, RecordTimeInterval(dirtyStart, dirtyEnd));
+  rrm.modifyTimeIntervals(TimeIntervalOp::ADD,
+                          DataClass::APPEND,
+                          RecordTimeInterval(dirtyStart, dirtyEnd));
   dirty_shard_cache[1] = rrm;
 
   start();
@@ -2193,8 +2195,9 @@ TEST_F(RebuildingCoordinatorTest, DirtyShardDrain) {
   auto dirtyStart = RecordTimestamp(now - std::chrono::minutes(10));
   auto dirtyEnd = RecordTimestamp(now - std::chrono::minutes(5));
   RebuildingRangesMetadata rrm;
-  rrm.addTimeInterval(
-      DataClass::APPEND, RecordTimeInterval(dirtyStart, dirtyEnd));
+  rrm.modifyTimeIntervals(TimeIntervalOp::ADD,
+                          DataClass::APPEND,
+                          RecordTimeInterval(dirtyStart, dirtyEnd));
   dirty_shard_cache[1] = rrm;
 
   const auto flags = SHARD_NEEDS_REBUILD_Header::DRAIN;
@@ -2238,8 +2241,9 @@ TEST_F(RebuildingCoordinatorTest, DirtyShardAlreadyRebuilt) {
   auto dirtyStart = RecordTimestamp(now - std::chrono::minutes(10));
   auto dirtyEnd = RecordTimestamp(now - std::chrono::minutes(5));
   RebuildingRangesMetadata rrm;
-  rrm.addTimeInterval(
-      DataClass::APPEND, RecordTimeInterval(dirtyStart, dirtyEnd));
+  rrm.modifyTimeIntervals(TimeIntervalOp::ADD,
+                          DataClass::APPEND,
+                          RecordTimeInterval(dirtyStart, dirtyEnd));
   dirty_shard_cache[1] = rrm;
 
   updateConfig();

@@ -7,6 +7,7 @@
  */
 #pragma once
 
+#include <folly/Optional.h>
 #include <folly/ScopeGuard.h>
 
 #include "logdevice/common/Metadata.h"
@@ -23,18 +24,41 @@ class Rebuilding : public AdminCommand {
  private:
   std::string action_;
   shard_index_t shard_ = -1;
-  int64_t time_from_ = -1;
-  int64_t time_to_ = -1;
+  folly::Optional<RecordTimestamp> time_from_;
+  folly::Optional<RecordTimestamp> time_to_;
 
  public:
   void getOptions(
       boost::program_options::options_description& out_options) override {
     out_options.add_options()(
-        "shard", boost::program_options::value<shard_index_t>(&shard_))(
+        "shard", boost::program_options::value<shard_index_t>(&shard_));
+    out_options.add_options()(
         "action",
-        boost::program_options::value<std::string>(&action_)->required())(
-        "time-from", boost::program_options::value<int64_t>(&time_from_))(
-        "time-to", boost::program_options::value<int64_t>(&time_to_));
+        boost::program_options::value<std::string>(&action_)->required());
+    out_options.add_options()(
+        "time-from",
+        boost::program_options::value<std::string>()->notifier(
+            [&](std::string s) {
+              RecordTimestamp time_from;
+              if (!RecordTimestamp::fromString(s, time_from)) {
+                throw boost::program_options::error(
+                    folly::format("Unabled to convert \"{}\" to Timestamp.", s)
+                        .str());
+              }
+              time_from_ = time_from;
+            }));
+    out_options.add_options()(
+        "time-to",
+        boost::program_options::value<std::string>()->notifier(
+            [&](std::string s) {
+              RecordTimestamp time_to;
+              if (!RecordTimestamp::fromString(s, time_to)) {
+                throw boost::program_options::error(
+                    folly::format("Unabled to convert \"{}\" to Timestamp.", s)
+                        .str());
+              }
+              time_to_ = time_to;
+            }));
   }
   void getPositionalOptions(
       boost::program_options::positional_options_description& out_options)
@@ -43,26 +67,34 @@ class Rebuilding : public AdminCommand {
     out_options.add("shard", 1);
   }
   std::string getUsage() override {
-    return "rebuilding (write_checkpoint|mark_dirty) [shard] "
-           "[--time-from=<unix-timestamp-seconds> "
-           "--time-to=<unix-timestamp-seconds>]";
+    return "rebuilding (write_checkpoint|mark_dirty|mark_clean) [shard] "
+           "[--time-from="
+           "<unix-timestamp-milliseconds/YYYY-MM-DD HH:MM:SS.mmm/-inf/+inf> "
+           "--time-to="
+           "<unix-timestamp-milliseconds/YYYY-MM-DD HH:MM:SS.mmm/-inf/+inf>]";
   }
 
   void run() override {
-    if (action_ != "write_checkpoint" && action_ != "mark_dirty") {
+    // Argument validation
+    if (action_ != "write_checkpoint" && action_ != "mark_dirty" &&
+        action_ != "mark_clean") {
       ld_info("Unknown action \"%s\"", action_.c_str());
       out_.printf("USAGE %s\r\n", getUsage().c_str());
       return;
     }
 
-    if (action_ == "mark_dirty") {
-      if (time_from_ < 0 || time_to_ < 0) {
+    if (action_ == "mark_dirty" || action_ == "mark_clean") {
+      if (!time_from_.hasValue() || !time_to_.hasValue()) {
         out_.printf("Error: --time-from and --time-to arguments are mandatory "
-                    "with the \"mark_dirty\" action");
+                    "with the \"%s\" action.",
+                    action_.c_str());
         return;
       }
-      if (time_from_ > time_to_) {
-        out_.printf("Error: --time-from has to be earlier than --time-to");
+      if (time_from_.value() >= time_to_.value()) {
+        out_.printf("Error: --time-from (%s) has to be earlier than "
+                    "--time-to (%s)",
+                    time_from_.value().toString().c_str(),
+                    time_to_.value().toString().c_str());
         return;
       }
     }
@@ -105,15 +137,18 @@ class Rebuilding : public AdminCommand {
   void doForShard(shard_index_t shard_idx, LocalLogStore* store) {
     if (action_ == "write_checkpoint") {
       writeCheckpointForShard(shard_idx, store);
-    } else if (action_ == "mark_dirty") {
-      markDirtyForShard(shard_idx, store, time_from_, time_to_);
+    } else if (action_ == "mark_dirty" || action_ == "mark_clean") {
+      modifyDirtyForShard(action_ == "mark_dirty" ? TimeIntervalOp::ADD
+                                                  : TimeIntervalOp::REMOVE,
+                          shard_idx,
+                          store);
     } else {
       assert(false);
     }
   }
 
   void doneForAllShards() {
-    if (action_ == "mark_dirty") {
+    if (action_ == "mark_dirty" || action_ == "mark_clean") {
       // Notify RebuildingCoordinator of the changes in dirty state
       run_on_all_workers(server_->getProcessor(), [&]() {
         if (ServerWorker::onThisThread()->rebuilding_coordinator_) {
@@ -129,10 +164,9 @@ class Rebuilding : public AdminCommand {
     }
   }
 
-  void markDirtyForShard(shard_index_t shard_idx,
-                         LocalLogStore* store,
-                         int64_t time_from,
-                         int64_t time_to) {
+  void modifyDirtyForShard(TimeIntervalOp op,
+                           shard_index_t shard_idx,
+                           LocalLogStore* store) {
     // mark partitions as dirty
     auto partitioned_store = dynamic_cast<PartitionedRocksDBStore*>(store);
     if (!partitioned_store) {
@@ -142,12 +176,12 @@ class Rebuilding : public AdminCommand {
           shard_idx);
       return;
     }
-    int rv = partitioned_store->markTimeRangeUnderreplicated(
-        DataClass::APPEND,
-        RecordTimeInterval(std::chrono::system_clock::from_time_t(time_from),
-                           std::chrono::system_clock::from_time_t(time_to)));
+    auto time_interval = RecordTimeInterval(*time_from_, *time_to_);
+    int rv = partitioned_store->modifyUnderReplicatedTimeRange(
+        op, DataClass::APPEND, time_interval);
     if (rv != 0) {
-      out_.printf("Error marking time range dirty for shard %u: %s\r\n",
+      out_.printf("Error marking time range %s for shard %u: %s\r\n",
+                  op == TimeIntervalOp::ADD ? "dirty" : "clean",
                   shard_idx,
                   error_description(err));
       return;

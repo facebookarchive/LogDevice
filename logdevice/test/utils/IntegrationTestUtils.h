@@ -723,10 +723,15 @@ struct SockaddrPair {
   static SockaddrPair buildUnixSocketPair(const std::string& path, bool ssl) {
     SockaddrPair addrs;
     std::string ssl_prefix = (ssl ? "ssl_" : "");
-    addrs.protocol_addr_ = Sockaddr(path + "/" + ssl_prefix + "socket_main");
-    addrs.gossip_addr_ = Sockaddr(path + "/" + "socket_gossip");
-    addrs.command_addr_ = Sockaddr(path + "/" + ssl_prefix + "socket_command");
-    addrs.admin_addr_ = Sockaddr(path + "/" + ssl_prefix + "socket_admin");
+    addrs.protocol_addr_ =
+        Sockaddr(folly::format("{}/{}socket_main", path, ssl_prefix).str());
+    // Gossip currently never uses SSL
+    addrs.gossip_addr_ =
+        Sockaddr(folly::format("{}/socket_gossip", path).str());
+    addrs.command_addr_ =
+        Sockaddr(folly::format("{}/{}socket_command", path, ssl_prefix).str());
+    addrs.admin_addr_ =
+        Sockaddr(folly::format("{}/{}socket_admin", path, ssl_prefix).str());
     return addrs;
   }
 };
@@ -1575,6 +1580,21 @@ class Node {
    * Cluster has to be started with the --gossip-enable option.
    */
   std::map<std::string, std::string> domainIsolationInfo() const;
+
+  /**
+   * Issues an INFO PARTITIONS command to the node's command port to collect
+   * information about the LocalLogStore time partitions active on the given
+   * shard. The 'level' option is passed directly to the command: '0' = terse,
+   * '1' = detailed, '2' = detailed + expensive to collect fields.
+   */
+  std::vector<std::map<std::string, std::string>>
+  partitionsInfo(shard_index_t shard, int level) const;
+
+  /**
+   * Issues a INFO SHARD command to the node's command port and compiles
+   * a map of dirty shard to dirty time ranges.
+   */
+  std::map<shard_index_t, RebuildingRangesMetadata> dirtyShardInfo() const;
 
   // Issues LOGSDB CREATE command. Returns PARTITION_INVALID if it failed.
   partition_id_t createPartition(uint32_t shard);

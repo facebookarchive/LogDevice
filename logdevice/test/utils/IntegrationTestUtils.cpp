@@ -1960,9 +1960,11 @@ void Node::newConnections(bool accept) const {
 void Node::startRecovery(logid_t logid) const {
   auto logid_string = std::to_string(logid.val_);
   auto reply = sendCommand("startrecovery " + logid_string);
-  ld_check(reply ==
-           "Started recovery for logid " + logid_string +
-               ", result success\r\nEND\r\n");
+  ld_check_eq(
+      reply,
+      folly::format("Started recovery for logid {}, result success\r\nEND\r\n",
+                    logid_string)
+          .str());
 }
 
 std::string Node::upDown(const logid_t logid) const {
@@ -2069,6 +2071,45 @@ std::map<std::string, std::string> Node::domainIsolationInfo() const {
   return parse<std::string>(sendCommand("info gossip"), "DOMAIN_ISOLATION");
 }
 
+std::vector<std::map<std::string, std::string>>
+Node::partitionsInfo(shard_index_t shard, int level) const {
+  const std::string command =
+      folly::format("info partitions {} --json --level {}", shard, level).str();
+  auto data = parseJsonAdminCommand(sendCommand(command));
+  if (data.empty()) {
+    return std::vector<std::map<std::string, std::string>>();
+  }
+  return data;
+}
+
+std::map<shard_index_t, RebuildingRangesMetadata> Node::dirtyShardInfo() const {
+  auto data =
+      parseJsonAdminCommand(sendCommand("info shards --json --dirty-as-json"));
+  ld_check(!data.empty());
+  std::map<shard_index_t, RebuildingRangesMetadata> result;
+  for (const auto& row : data) {
+    const auto shard = row.find("Shard");
+    const auto dirty_state = row.find("Dirty State");
+    if (shard == row.end() || dirty_state == row.end() ||
+        dirty_state->second.empty() || dirty_state->second == "{}" ||
+        dirty_state->second == "UNKNOWN") {
+      continue;
+    }
+    try {
+      folly::dynamic obj = folly::parseJson(dirty_state->second);
+      RebuildingRangesMetadata rrm;
+      if (!RebuildingRangesMetadata::fromFollyDynamic(obj, rrm)) {
+        ld_check(false);
+        continue;
+      }
+      result.emplace(std::stoi(shard->second), rrm);
+    } catch (...) {
+      ld_check(false);
+    }
+  }
+  return result;
+}
+
 partition_id_t Node::createPartition(uint32_t shard) {
   std::string out = sendCommand("logsdb create " + std::to_string(shard));
   const std::string expected = "Created partition ";
@@ -2097,7 +2138,7 @@ int Node::compact(logid_t logid) const {
 }
 
 void Node::updateSetting(std::string name, std::string value) {
-  sendCommand("set " + name + " " + value + " --ttl max");
+  sendCommand(folly::format("set {} {} --ttl max", name, value).str());
   // Assert that the setting was successfully changed
   auto data = parseJsonAdminCommand(sendCommand("info settings --json"));
   ld_check(!data.empty());

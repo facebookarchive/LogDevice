@@ -255,9 +255,19 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
    * (the state as it existed when we subscribed to the event
    * log) to emit time ranged SHARD_NEEDS_REBUILD records for any shards
    * that are marked dirty due to an unsafe shutdown.
+   *
+   * It is also called anytime the dirty shard state changes due to a node
+   * local event (e.g. from processing a "rebuilding mark_dirty" admin
+   * command).
    */
   virtual void publishDirtyShards(const EventLogRebuildingSet& set);
 
+  /*
+   * Called anytime a dirty shard is marked clean due to a node local
+   * event (e.g. from processing a "rebuilding mark_clean" admin command).
+   */
+  virtual void abortCleanedShards(const EventLogRebuildingSet& set,
+                                  DirtyShardMap& cleaned_shards);
   /**
    * Issue a storage task to write a RebuildingCompleteMetadata marker in the
    * local log store of shard `shard`.

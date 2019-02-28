@@ -735,8 +735,9 @@ TEST_F(RebuildingSupervisorIntegrationTest,
   auto dirtyStart = RecordTimestamp(now - std::chrono::minutes(10));
   auto dirtyEnd = RecordTimestamp(now - std::chrono::minutes(5));
   RebuildingRangesMetadata rrm;
-  rrm.addTimeInterval(
-      DataClass::APPEND, RecordTimeInterval(dirtyStart, dirtyEnd));
+  rrm.modifyTimeIntervals(TimeIntervalOp::ADD,
+                          DataClass::APPEND,
+                          RecordTimeInterval(dirtyStart, dirtyEnd));
   IntegrationTestUtils::requestShardRebuilding(*client, 1, 0, 0, &rrm);
   // Now kill N3
   cluster->getNode(3).kill();

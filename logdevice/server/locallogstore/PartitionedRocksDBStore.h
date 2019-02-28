@@ -115,7 +115,7 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
           rhs.append_dirtied_wal_token.load(std::memory_order_relaxed);
       latest_dirty_time = rhs.latest_dirty_time.timePoint();
       oldest_dirty_time = rhs.oldest_dirty_time.timePoint();
-      under_replicated = false;
+      under_replicated.store(false, std::memory_order_relaxed);
       return *this;
     }
 
@@ -170,7 +170,8 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
     }
 
     PartitionDirtyMetadata metadata() const {
-      return PartitionDirtyMetadata(dirtied_by_nodes, under_replicated);
+      return PartitionDirtyMetadata(
+          dirtied_by_nodes, under_replicated.load(std::memory_order_relaxed));
     }
 
     // Key used for the special DirtiedByMap entry signifying that a
@@ -224,7 +225,7 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
 
     // Report that this partition has lost records that have not yet been
     // restored by rebuilding.
-    bool under_replicated{false};
+    std::atomic<bool> under_replicated{false};
   };
 
   struct Partition;
@@ -293,6 +294,14 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
       if (pre_dirty_state != nullptr) {
         dirty_state_ = *pre_dirty_state;
       }
+    }
+
+    bool isUnderReplicated() const {
+      return dirty_state_.under_replicated.load(std::memory_order_relaxed);
+    }
+
+    void setUnderReplicated(bool ur) {
+      dirty_state_.under_replicated.store(ur, std::memory_order_relaxed);
     }
 
     // Compute the effective dirty time interval given the currently
@@ -756,10 +765,19 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
 
   // Flag a partition as under-replicated expanding, if necessary, the range
   // of under-replicated partitions.
-  void setUnderReplicated(PartitionPtr p) {
-    p->dirty_state_.under_replicated = true;
-    atomic_fetch_min(min_under_replicated_partition_, p->id_);
-    atomic_fetch_max(max_under_replicated_partition_, p->id_);
+  void setUnderReplicated(PartitionPtr p, bool under_replicated = true) {
+    if (under_replicated && !p->isUnderReplicated()) {
+      p->setUnderReplicated(true);
+      atomic_fetch_min(min_under_replicated_partition_, p->id_);
+      atomic_fetch_max(max_under_replicated_partition_, p->id_);
+    } else if (!under_replicated && p->isUnderReplicated()) {
+      p->setUnderReplicated(false);
+
+      // Mark the partition dirty so that its dirty_state_ (along with
+      // cleared under_replicated flag) gets persisted soon - either after
+      // next memtable flush or at shutdown.
+      p->dirty_state_.noteDirtied(FlushToken_MIN, currentSteadyTime());
+    }
   }
 
   // Returns a list of pending manual compactions. Compactions currently running
@@ -1142,9 +1160,11 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
     joinBackgroundThreads();
   }
 
-  // Marks partitions where data could fall into the given time range as
-  // underreplicated
-  int markTimeRangeUnderreplicated(DataClass dc, RecordTimeInterval interval);
+  // Adds/Removes underreplicated status from Partitions where data could
+  // fall into the given time range.
+  int modifyUnderReplicatedTimeRange(TimeIntervalOp,
+                                     DataClass,
+                                     RecordTimeInterval);
 
   void onSettingsUpdated(
       const std::shared_ptr<const RocksDBSettings> settings) override;
@@ -1767,7 +1787,8 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
   // given time intervals
   void findPartitionsMatchingIntervals(
       RecordTimeIntervals& rtis,
-      std::function<void(PartitionPtr, RecordTimeInterval)> cb) const;
+      std::function<void(PartitionPtr, RecordTimeInterval)> cb,
+      bool include_empty = false) const;
 };
 
 }} // namespace facebook::logdevice

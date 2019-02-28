@@ -732,6 +732,7 @@ bool PartitionedRocksDBStore::open(
 
   // Read per-partition metadata. We'll need it below to decide if we need
   // to create more partitions.
+  rocksdb::WriteBatch partition_updates;
   for (partition_id_t id = oldest_partition_id; id <= latest_partition_id;
        ++id) {
     PartitionPtr partition = partitions_.get(id);
@@ -796,7 +797,38 @@ bool PartitionedRocksDBStore::open(
                 shard_idx_,
                 partition->id_,
                 logdevice::toString(dti).c_str());
-        range_meta.addTimeInterval(DataClass::APPEND, dti);
+        range_meta.modifyTimeIntervals(
+            TimeIntervalOp::ADD, DataClass::APPEND, dti);
+
+        // Expand partition bounds to cover the dirty time range.
+        if (dti.lower() < partition->min_timestamp) {
+          partition->min_timestamp = dti.lower();
+          partition->min_durable_timestamp = dti.lower();
+          PartitionMetaKey key(
+              PartitionMetadataType::MIN_TIMESTAMP, partition->id_);
+          PartitionTimestampMetadata meta(
+              PartitionMetadataType::MIN_TIMESTAMP, partition->min_timestamp);
+          Slice value = meta.serialize();
+          partition_updates.Put(
+              metadata_cf_->get(),
+              rocksdb::Slice(reinterpret_cast<const char*>(&key), sizeof key),
+              rocksdb::Slice(
+                  reinterpret_cast<const char*>(value.data), value.size));
+        }
+        if (dti.upper() > partition->max_timestamp) {
+          partition->max_timestamp = dti.upper();
+          partition->max_durable_timestamp = dti.upper();
+          PartitionMetaKey key(
+              PartitionMetadataType::MAX_TIMESTAMP, partition->id_);
+          PartitionTimestampMetadata meta(
+              PartitionMetadataType::MAX_TIMESTAMP, partition->max_timestamp);
+          Slice value = meta.serialize();
+          partition_updates.Put(
+              metadata_cf_->get(),
+              rocksdb::Slice(reinterpret_cast<const char*>(&key), sizeof key),
+              rocksdb::Slice(
+                  reinterpret_cast<const char*>(value.data), value.size));
+        }
 
         // Since we don't currently persist coordinating node information,
         // handling a single unclean node is sufficient to record the time
@@ -810,7 +842,7 @@ bool PartitionedRocksDBStore::open(
     // range_meta, allow the partition to be cleaned by the cleaner.
     partition->dirty_state_.dirtied_by_nodes.clear();
 
-    if (partition->dirty_state_.under_replicated) {
+    if (partition->isUnderReplicated()) {
       ld_info("Partition s%u:%lu is under-replicated: "
               "Start:%s, Min:%s, Max: %s",
               shard_idx_,
@@ -826,6 +858,10 @@ bool PartitionedRocksDBStore::open(
           logdevice::toString(range_meta).c_str());
 
   if (!getSettings()->read_only && !range_meta.empty()) {
+    status = writer_->writeBatch(rocksdb::WriteOptions(), &partition_updates);
+    if (!status.ok()) {
+      return false;
+    }
     rv = writeStoreMetadata(range_meta, WriteOptions());
     if (rv != 0) {
       return false;
@@ -2381,10 +2417,11 @@ int PartitionedRocksDBStore::findKey(logid_t log_id,
 
 void PartitionedRocksDBStore::findPartitionsMatchingIntervals(
     RecordTimeIntervals& rtis,
-    std::function<void(PartitionPtr, RecordTimeInterval)> cb) const {
+    std::function<void(PartitionPtr, RecordTimeInterval)> cb,
+    bool include_empty) const {
   auto partitions = getPartitionList();
   for (PartitionPtr partition : *partitions) {
-    if (partition->min_timestamp == RecordTimestamp::max()) {
+    if (partition->min_timestamp == RecordTimestamp::max() && !include_empty) {
       // Skip empty partitions.
       continue;
     }
@@ -2400,9 +2437,11 @@ void PartitionedRocksDBStore::findPartitionsMatchingIntervals(
         // search based on min_timestamp's value would return a later partition.
         std::min(partition->starting_timestamp,
                  RecordTimestamp(partition->min_timestamp)),
-        partition->max_timestamp);
-    auto res = rtis.find(pi);
-    if (res != rtis.end()) {
+        // max_timestamp == RecordTimestamp::min() if the partition is
+        // currently empty.
+        std::max(partition->starting_timestamp,
+                 RecordTimestamp(partition->max_timestamp)));
+    if (boost::icl::intersects(rtis, pi)) {
       cb(partition, pi);
     }
   }
@@ -3348,8 +3387,8 @@ int PartitionedRocksDBStore::writeStoreMetadata(
       max_under_replicated_partition_.store(PARTITION_INVALID);
       auto partitions = getPartitionList();
       for (PartitionPtr partition : *partitions) {
-        if (partition->dirty_state_.under_replicated) {
-          partition->dirty_state_.under_replicated = false;
+        if (partition->isUnderReplicated()) {
+          partition->setUnderReplicated(false);
 
           // If not dirty already, mark the partition dirty so that it
           // will be flushed the next time our background thread sees
@@ -3782,7 +3821,8 @@ void PartitionedRocksDBStore::releaseDirtyHold(PartitionPtr partition) {
   }
 }
 
-int PartitionedRocksDBStore::markTimeRangeUnderreplicated(
+int PartitionedRocksDBStore::modifyUnderReplicatedTimeRange(
+    TimeIntervalOp op,
     DataClass dc,
     RecordTimeInterval interval) {
   // Lock out dirty state changes from other threads.
@@ -3801,15 +3841,34 @@ int PartitionedRocksDBStore::markTimeRangeUnderreplicated(
     }
     assert(range_metadata.empty());
   }
-  range_metadata.addTimeInterval(dc, interval);
-  rv = writeStoreMetadata(range_metadata, options);
-  if (rv != 0) {
-    ld_error("Error writting RebuildingRangesMetadata for shard %u: %s\r\n",
-             getShardIdx(),
-             error_description(err));
-    err = E::FAILED;
-    return -1;
+
+  if (op == TimeIntervalOp::REMOVE) {
+    if (range_metadata.empty()) {
+      // No-op.
+      return 0;
+    }
   }
+
+  // Add/Remove dirty time ranges to durable store metadata.
+  // NOTE: We allow intervals to be added even if they do not match
+  //       existing partitions. This allows the administrator to force
+  //       the cluster to re-replicate ranges where local log store data
+  //       has been corrupted or partially lost. The node will publish the
+  //       added ranges, causing any data in the ranges available on other
+  //       nodes to be re-replicated. However, the node will not self
+  //       identify under-replication to readers for ranges that are not
+  //       covered by partitions.
+  range_metadata.modifyTimeIntervals(op, dc, interval);
+
+  if (range_metadata.empty() && (op == TimeIntervalOp::REMOVE)) {
+    // If removing the interval makes the entire shard clean, then
+    // expand the interval to cover all time so that even partitions that
+    // are only partially covered by the original interval will be marked
+    // clean.
+    interval =
+        RecordTimeInterval(RecordTimestamp::min(), RecordTimestamp::max());
+  }
+
   auto partitions = getPartitionList();
   rocksdb::WriteBatch dirty_batch;
   RecordTimeIntervals intervals{interval};
@@ -3818,9 +3877,28 @@ int PartitionedRocksDBStore::markTimeRangeUnderreplicated(
       [&](PartitionPtr partition,
           RecordTimeInterval /* partition's time interval */) {
         folly::SharedMutex::WriteHolder partition_lock(partition->mutex_);
-        setUnderReplicated(partition);
-        writePartitionDirtyState(partition, dirty_batch);
-      });
+        if (op == TimeIntervalOp::ADD) {
+          setUnderReplicated(partition);
+          writePartitionDirtyState(partition, dirty_batch);
+        } else if (partition->max_timestamp != RecordTimestamp::min()) {
+          auto dirty_range = RecordTimeInterval(
+              partition->min_timestamp, partition->max_timestamp);
+          // Can we fully clear the under-replicatedness of this partition?
+          if ((interval & dirty_range) == dirty_range) {
+            setUnderReplicated(partition, false);
+            writePartitionDirtyState(partition, dirty_batch);
+          }
+        }
+      },
+      /*include empty partitions*/ true);
+  rv = writeStoreMetadata(range_metadata, options);
+  if (rv != 0) {
+    ld_error("Error writting RebuildingRangesMetadata for shard %u: %s\r\n",
+             getShardIdx(),
+             error_description(err));
+    err = E::FAILED;
+    return -1;
+  }
   auto status = writer_->writeBatch(rocksdb::WriteOptions(), &dirty_batch);
   if (!status.ok()) {
     ld_error("Failed to write partition dirty data for shard %u: %s",
@@ -4359,7 +4437,6 @@ int PartitionedRocksDBStore::trimLogsBasedOnTime(
 
     // Get existing trim point
 
-    lsn_t existing_trim_point = LSN_INVALID;
     LogStorageState* log_state = state_map.insertOrGet(log_id, getShardIdx());
     ld_check(log_state != nullptr);
 
@@ -4374,9 +4451,11 @@ int PartitionedRocksDBStore::trimLogsBasedOnTime(
                           "Failed to read TrimMetadata");
         log_state->notePermanentError(
             "Reading trim point (in trimLogsBasedOnTime)");
+        err = E::LOCAL_LOG_STORE_READ;
+        return -1;
       }
     }
-    existing_trim_point = log_state->getTrimPoint().value();
+    lsn_t existing_trim_point = log_state->getTrimPoint().value();
 
     // Iterate over partitions.
 
@@ -5274,7 +5353,7 @@ uint64_t PartitionedRocksDBStore::getApproximateObsoleteBytes(
   }
 
   // RocksDBTablePropertiesCollector collects total size of data for each
-  // backlog duration for each table file fluseh/compacted. Here we get
+  // backlog duration for each table file flushed/compacted. Here we get
   // properties of all table files of this partition and see how much data
   // is older than its retention.
 
@@ -5295,12 +5374,15 @@ uint64_t PartitionedRocksDBStore::getApproximateObsoleteBytes(
   }
 
   // Approximate minimum age of records in partition.
-  auto age = currentTime() - next_partition->starting_timestamp;
+  auto age = std::chrono::duration_cast<std::chrono::seconds>(
+      currentTime() - next_partition->starting_timestamp);
 
   uint64_t res = 0;
   for (const auto& it : retention_sizes) {
-    if (it.first <= age) {
-      res += it.second;
+    const auto& retention = it.first;
+    const auto& size = it.second;
+    if (retention <= age) {
+      res += size;
     }
   }
 

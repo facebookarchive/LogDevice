@@ -82,6 +82,7 @@ class InfoPartitions : public AdminCommand {
                               "Durable Max Time",
                               "Append Dirtied By",
                               "Rebuild Dirtied By",
+                              "Under Replicated",
                               // Level 2
                               "Approx. Obsolete Bytes");
 
@@ -172,18 +173,19 @@ class InfoPartitions : public AdminCommand {
             folly::SharedMutex::ReadHolder lock(partition->mutex_);
             PartitionDirtyMetadata meta = partition->dirty_state_.metadata();
             table.set<19>(toString(meta.getDirtiedBy(DataClass::APPEND)))
-                .set<20>(toString(meta.getDirtiedBy(DataClass::REBUILD)));
+                .set<20>(toString(meta.getDirtiedBy(DataClass::REBUILD)))
+                .set<21>(partition->isUnderReplicated());
           }
 
           if (level_ >= 2) {
-            table.set<21>(
+            table.set<22>(
                 partitioned_store->getApproximateObsoleteBytes(partition->id_));
           }
         }
       }
     }
 
-    constexpr std::array<int, maxLevel() + 1> num_stats_per_level = {8, 13, 1};
+    constexpr std::array<int, maxLevel() + 1> num_stats_per_level = {8, 14, 1};
     static_assert(table.numCols() ==
                       num_stats_per_level[0] + num_stats_per_level[1] +
                           num_stats_per_level[2],

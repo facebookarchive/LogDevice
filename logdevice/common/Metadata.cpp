@@ -212,14 +212,28 @@ std::string MutablePerEpochLogMetadata::toString() const {
   return out;
 }
 
-void RebuildingRangesMetadata::addTimeInterval(DataClass dc,
-                                               RecordTimeInterval time_range) {
+void RebuildingRangesMetadata::modifyTimeIntervals(
+    TimeIntervalOp op,
+    DataClass dc,
+    RecordTimeInterval time_range) {
   // ld_check() not dd_assert() since callers are expected to always
   // call with a valid time range.
   ld_check(time_range.lower() < time_range.upper());
   if (time_range.lower() < time_range.upper()) {
-    auto& time_ranges = per_dc_dirty_ranges_[dc];
-    time_ranges.insert(time_range);
+    if (op == TimeIntervalOp::ADD) {
+      auto& time_ranges = per_dc_dirty_ranges_[dc];
+      time_ranges += time_range;
+    } else {
+      ld_check(op == TimeIntervalOp::REMOVE);
+      auto time_ranges_it = per_dc_dirty_ranges_.find(dc);
+      if (time_ranges_it != per_dc_dirty_ranges_.end()) {
+        auto& time_ranges = time_ranges_it->second;
+        time_ranges -= time_range;
+        if (time_ranges.empty()) {
+          per_dc_dirty_ranges_.erase(time_ranges_it);
+        }
+      }
+    }
   }
 }
 
@@ -357,6 +371,54 @@ int RebuildingRangesMetadata::deserialize(Slice blob) {
 
 std::string RebuildingRangesMetadata::toString() const {
   return logdevice::toString(per_dc_dirty_ranges_);
+}
+
+folly::dynamic RebuildingRangesMetadata::toFollyDynamic() const {
+  folly::dynamic result = folly::dynamic::object;
+  for (const auto& dc_kv : per_dc_dirty_ranges_) {
+    folly::dynamic dirty_intervals = folly::dynamic::array;
+    for (const auto& time_range : dc_kv.second) {
+      dirty_intervals.push_back(folly::dynamic::array(
+          time_range.lower().toString(), time_range.upper().toString()));
+    }
+    result[logdevice::toString(dc_kv.first)] = dirty_intervals;
+  }
+  return result;
+}
+
+bool RebuildingRangesMetadata::fromFollyDynamic(const folly::dynamic& obj,
+                                                RebuildingRangesMetadata& rrm) {
+  ld_check(rrm.empty());
+
+  if (!obj.isObject()) {
+    return false;
+  }
+
+  for (const auto& kv : obj.items()) {
+    DataClass dc = dataClassNames().reverseLookup(kv.first);
+    if (dc == DataClass::INVALID) {
+      return false;
+    }
+    const auto& ranges = kv.second;
+    if (!ranges.isArray()) {
+      return false;
+    }
+    for (const auto& range : ranges) {
+      // Each range is a lower/upper pair represented as a 2 element array.
+      if (!range.isArray() || range.size() != 2) {
+        return false;
+      }
+      RecordTimestamp lower;
+      RecordTimestamp upper;
+      if (!RecordTimestamp::fromString(range[0].asString(), lower) ||
+          !RecordTimestamp::fromString(range[1].asString(), upper)) {
+        return false;
+      }
+      auto interval = RecordTimeInterval(lower, upper);
+      rrm.modifyTimeIntervals(TimeIntervalOp::ADD, dc, interval);
+    }
+  }
+  return true;
 }
 
 // EnumMap boilerplate.

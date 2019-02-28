@@ -17,15 +17,17 @@ namespace facebook { namespace logdevice { namespace commands {
 class InfoShards : public AdminCommand {
  private:
   bool json_ = false;
+  bool dirty_as_json_ = false;
 
  public:
   void getOptions(
       boost::program_options::options_description& out_options) override {
     out_options.add_options()(
-        "json", boost::program_options::bool_switch(&json_));
+        "json", boost::program_options::bool_switch(&json_))(
+        "dirty-as-json", boost::program_options::bool_switch(&dirty_as_json_));
   }
   std::string getUsage() override {
-    return "info shards [--json]";
+    return "info shards [--json] [--dirty-as-json]";
   }
 
   void run() override {
@@ -34,7 +36,8 @@ class InfoShards : public AdminCommand {
                           "Is Failing",
                           "Accepting writes",
                           "Rebuilding state",
-                          "Default CF Version");
+                          "Default CF Version",
+                          "Dirty State");
 
     if (server_->getProcessor()->runningOnStorageNode()) {
       auto sharded_store = server_->getShardedLocalLogStore();
@@ -66,12 +69,37 @@ class InfoShards : public AdminCommand {
           }
         }
 
+        std::string dirty_state(dirty_as_json_ ? "{}" : "CLEAN");
+        auto partitioned_store = dynamic_cast<PartitionedRocksDBStore*>(store);
+        if (partitioned_store) {
+          RebuildingRangesMetadata range_metadata;
+          int rv = partitioned_store->readStoreMetadata(&range_metadata);
+          if (rv != 0) {
+            if (err != E::NOTFOUND) {
+              if (!json_) {
+                out_.printf("Error reading RebuildingRangesMetadata "
+                            "for shard %u: %s\r\n",
+                            shard_idx,
+                            error_description(err));
+              }
+              dirty_state = "UNKNOWN";
+            }
+          } else if (!range_metadata.empty()) {
+            if (dirty_as_json_) {
+              dirty_state = folly::toJson(range_metadata.toFollyDynamic());
+            } else {
+              dirty_state = range_metadata.toString();
+            }
+          }
+        }
+
         table.next()
             .set<0>(shard_idx)
             .set<1>(!!dynamic_cast<FailingLocalLogStore*>(store))
             .set<2>(store->acceptingWrites())
             .set<3>(std::move(rebuilding_state))
-            .set<4>(store->getVersion());
+            .set<4>(store->getVersion())
+            .set<5>(std::move(dirty_state));
       }
     }
 

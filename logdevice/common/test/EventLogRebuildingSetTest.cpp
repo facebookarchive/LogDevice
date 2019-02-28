@@ -522,8 +522,9 @@ TEST_F(EventLogRebuildingSetTest, DirtyRanges) {
 
   // N1 requests a rebuild of it's dirty ranges.
   RebuildingRangesMetadata rmm;
-  rmm.addTimeInterval(
-      DataClass::APPEND, RecordTimeInterval(dirtyStart, dirtyEnd));
+  rmm.modifyTimeIntervals(TimeIntervalOp::ADD,
+                          DataClass::APPEND,
+                          RecordTimeInterval(dirtyStart, dirtyEnd));
   DIRTY_EVENT(set, &rmm, node_index_t{1}, uint32_t{0}, "", "", 0);
   ASSERT_SHARD_STATUS(set, node_index_t{1}, uint32_t{0}, FULLY_AUTHORITATIVE);
 
@@ -550,8 +551,9 @@ TEST_F(EventLogRebuildingSetTest, MiniRebuildingRemovedAfterAck) {
 
   // N1 requests a rebuild of it's dirty ranges.
   RebuildingRangesMetadata rmm;
-  rmm.addTimeInterval(
-      DataClass::APPEND, RecordTimeInterval(dirtyStart, dirtyEnd));
+  rmm.modifyTimeIntervals(TimeIntervalOp::ADD,
+                          DataClass::APPEND,
+                          RecordTimeInterval(dirtyStart, dirtyEnd));
   DIRTY_EVENT(set, &rmm, node_index_t{1}, uint32_t{0}, "", "", 0);
   ASSERT_SHARD_STATUS(set, node_index_t{1}, uint32_t{0}, FULLY_AUTHORITATIVE);
 
@@ -589,8 +591,9 @@ TEST_F(EventLogRebuildingSetTest, DowngradeToMiniRebuilding) {
 
   // N0 comes back up and requests a rebuild of just it's dirty ranges.
   RebuildingRangesMetadata rmm;
-  rmm.addTimeInterval(
-      DataClass::APPEND, RecordTimeInterval(dirtyStart, dirtyEnd));
+  rmm.modifyTimeIntervals(TimeIntervalOp::ADD,
+                          DataClass::APPEND,
+                          RecordTimeInterval(dirtyStart, dirtyEnd));
   DIRTY_EVENT(set, &rmm, node_index_t{0}, uint32_t{0}, "", "", 0);
   ASSERT_SHARD_STATUS(set, node_index_t{0}, uint32_t{0}, FULLY_AUTHORITATIVE);
 }

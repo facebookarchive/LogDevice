@@ -13,6 +13,8 @@
 #include <string>
 #include <utility>
 
+#include <folly/dynamic.h>
+
 #include "logdevice/common/DataClass.h"
 #include "logdevice/common/RebuildingTypes.h"
 #include "logdevice/common/Seal.h"
@@ -456,6 +458,9 @@ class RebuildingRangesMetadata final : public StoreMetadata {
   mutable std::vector<uint8_t> serialize_buffer_;
 
  public:
+  static bool fromFollyDynamic(const folly::dynamic&,
+                               RebuildingRangesMetadata&);
+
   RebuildingRangesMetadata() = default;
 
   StoreMetadataType getType() const override {
@@ -464,6 +469,7 @@ class RebuildingRangesMetadata final : public StoreMetadata {
   Slice serialize() const override;
   std::string toString() const override;
   int deserialize(Slice blob) override;
+  folly::dynamic toFollyDynamic() const;
 
   const PerDataClassTimeRanges& getDCDirtyRanges() const {
     return per_dc_dirty_ranges_;
@@ -484,7 +490,9 @@ class RebuildingRangesMetadata final : public StoreMetadata {
     return dcr_kv == per_dc_dirty_ranges_.end() || dcr_kv->second.empty();
   }
 
-  void addTimeInterval(DataClass dc, RecordTimeInterval time_range);
+  void modifyTimeIntervals(TimeIntervalOp op,
+                           DataClass dc,
+                           RecordTimeInterval time_range);
 };
 
 class StoreMetadataFactory final {
