@@ -303,7 +303,7 @@ bool ReplicatedStateMachine<T, D>::processSnapshot(
     version_ = header.base_version;
     last_snapshot_version_ = header.base_version;
     if (header.format_version >=
-        RSMSnapshotHeader::CONTAINS_DELTA_LOG_READ_PTR) {
+        RSMSnapshotHeader::CONTAINS_DELTA_LOG_READ_PTR_AND_LENGTH) {
       last_snapshot_last_read_ptr_ = header.delta_log_read_ptr;
     } else {
       last_snapshot_last_read_ptr_ = LSN_OLDEST;
@@ -1103,20 +1103,18 @@ std::string ReplicatedStateMachine<T, D>::createSnapshotPayload(
     const T& data,
     lsn_t version,
     bool rsm_include_read_pointer_in_snapshot) {
-  RSMSnapshotHeader header;
-  header.format_version = RSMSnapshotHeader::BASE_VERSION;
-  header.flags = 0;
-  header.byte_offset = delta_log_byte_offset_;
-  header.offset = delta_log_offset_;
-  header.base_version = version;
-
-  if (rsm_include_read_pointer_in_snapshot) {
-    header.format_version = RSMSnapshotHeader::CONTAINS_DELTA_LOG_READ_PTR;
-    header.delta_log_read_ptr = delta_read_ptr_;
-  }
+  RSMSnapshotHeader header{
+      /*format_version=*/rsm_include_read_pointer_in_snapshot
+          ? RSMSnapshotHeader::CONTAINS_DELTA_LOG_READ_PTR_AND_LENGTH
+          : RSMSnapshotHeader::BASE_VERSION,
+      /*flags=*/0,
+      /*byte_offset=*/delta_log_byte_offset_,
+      /*offset=*/delta_log_offset_,
+      /*base_version=*/version,
+      /*delta_log_read_ptr=*/delta_read_ptr_};
 
   // Determine the size of the header.
-  const size_t header_sz = RSMSnapshotHeader::serialize(header, nullptr, 0);
+  const size_t header_sz = RSMSnapshotHeader::computeLengthInBytes(header);
   ld_check(header_sz > 0);
 
   // Determine the size of the uncompressed payload.

@@ -97,7 +97,8 @@ void TrimRSMRequest::extractVersionAndReadPointerFromSnapshot(DataRecord& rec,
   }
 
   version = hdr.base_version;
-  if (hdr.format_version >= RSMSnapshotHeader::CONTAINS_DELTA_LOG_READ_PTR) {
+  if (hdr.format_version >=
+      RSMSnapshotHeader::CONTAINS_DELTA_LOG_READ_PTR_AND_LENGTH) {
     read_ptr = hdr.delta_log_read_ptr;
   } else {
     // We can estimate it to be base_version + 1
