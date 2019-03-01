@@ -326,7 +326,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
 
   init("rocksdb-partition-partial-compaction-old-age-threshold",
        &partition_partial_compaction_old_age_threshold_,
-       "24h",
+       "6h",
        [](std::chrono::hours val) {
          if (val.count() < 0) {
            throw boost::program_options::error(
@@ -349,7 +349,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
 
   init("rocksdb-partition-partial-compaction-file-num-threshold-old",
        &partition_partial_compaction_file_num_threshold_old_,
-       "10",
+       "100",
        [](size_t val) {
          if (val < 2) {
            throw boost::program_options::error(
@@ -382,7 +382,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
 
   init("rocksdb-partition-partial-compaction-max-files",
        &partition_partial_compaction_max_files_,
-       "100",
+       "120",
        nullptr,
        "the maximum number of files to compact in a single partial compaction",
        SERVER,
