@@ -71,7 +71,7 @@ class InfoLogsConfigRsm : public AdminCommand {
       table.mergeWith(std::move(tables[i]));
     }
 
-    ld_check_eq(1ul, table.numRows());
+    ld_check_le(table.numRows(), 1ul);
 
     // Omit the last column: "Propagated version". We're not populating it yet.
     json_
