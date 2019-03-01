@@ -386,7 +386,7 @@ bool ServerParameters::initNodesConfiguration() {
 
   auto store = NodesConfigurationStoreFactory::create(
       *updateable_config_->get(), *getProcessorSettings().get());
-  NodesConfigurationInit config_init(std::move(store));
+  NodesConfigurationInit config_init(std::move(store), getProcessorSettings());
   return config_init.initWithoutProcessor(
       updateable_config_->updateableNodesConfiguration());
 }

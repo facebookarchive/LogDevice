@@ -807,6 +807,15 @@ struct Settings : public SettingsBundle {
   // TODO finalize the format of the string the config string.
   std::string nodes_configuration_seed_servers;
 
+  // timeout settings for the exponential backoff retry behavior for
+  // initializing Nodes Configuration for the first time
+  chrono_expbackoff_t<std::chrono::milliseconds>
+      nodes_configuration_init_retry_timeout;
+
+  // defines the maximum time allowed on the initial nodes configuration
+  // fetch
+  std::chrono::milliseconds nodes_configuration_init_timeout;
+
   // Flag indicating whether tcp keep alive should be on.
   bool use_tcp_keep_alive;
 

@@ -8,15 +8,19 @@
 
 #include "logdevice/common/NodesConfigurationInit.h"
 
+#include <folly/futures/Retrying.h>
+
 #include "logdevice/common/ConfigSourceLocationParser.h"
 #include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/Processor.h"
+#include "logdevice/common/Timestamp.h"
 #include "logdevice/common/configuration/Node.h"
 #include "logdevice/common/configuration/ServerConfig.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationCodecFlatBuffers.h"
 #include "logdevice/common/plugin/CommonBuiltinPlugins.h"
 #include "logdevice/common/request_util.h"
 #include "logdevice/common/settings/util.h"
+#include "logdevice/common/toString.h"
 
 namespace facebook { namespace logdevice {
 
@@ -43,17 +47,20 @@ bool NodesConfigurationInit::init(
     return false;
   }
   auto processor = buildBootstrappingProcessor(std::move(bootstrapping_config));
-
-  return run_on_worker(
+  return getConfigWithRetryingAndTimeout(
+             std::move(nodes_configuration_config),
              processor.get(),
-             0,
-             [&]() { return executeGetConfig(nodes_configuration_config); })
+             settings_->nodes_configuration_init_timeout)
       .get();
 }
 
 bool NodesConfigurationInit::initWithoutProcessor(
     std::shared_ptr<UpdateableNodesConfiguration> nodes_configuration_config) {
-  return executeGetConfig(std::move(nodes_configuration_config)).get();
+  return getConfigWithRetryingAndTimeout(
+             std::move(nodes_configuration_config),
+             /*processor=*/nullptr,
+             settings_->nodes_configuration_init_timeout)
+      .get();
 }
 
 bool NodesConfigurationInit::parseAndFetchHostList(
@@ -172,7 +179,75 @@ NodesConfigurationInit::parseNodesConfiguration(const std::string& config) {
       config);
 }
 
+folly::Future<bool> NodesConfigurationInit::getConfigWithRetryingAndTimeout(
+    std::shared_ptr<UpdateableNodesConfiguration> nodes_configuration_config,
+    Processor* processor,
+    std::chrono::milliseconds timeout) {
+  using TP = Timestamp<std::chrono::steady_clock,
+                       detail::Holder,
+                       std::chrono::milliseconds>;
+  const TP deadline = TP::now() + timeout;
+
+  auto retry_policy =
+      folly::futures::retryingPolicyCappedJitteredExponentialBackoff(
+          /*retry_forever*/ std::numeric_limits<int64_t>::max(),
+          settings_->nodes_configuration_init_retry_timeout.initial_delay,
+          settings_->nodes_configuration_init_retry_timeout.max_delay,
+          /*jitter param*/ 0.1,
+          folly::ThreadLocalPRNG(),
+          [deadline, timeout](size_t, const folly::exception_wrapper&) {
+            if (TP::now() > deadline) {
+              ld_error(
+                  "Failed to get initial nodes configuration after the timeout "
+                  "of %lu ms.",
+                  timeout.count());
+              return false;
+            }
+            return true;
+          });
+
+  auto retry_func = [nodes_configuration_config, processor, this](size_t k) {
+    ld_info("Fetching initial nodes configuration (Attempt %lu)...", k + 1);
+    return executeGetConfig(nodes_configuration_config, processor)
+        .toUnsafeFuture()
+        .thenValue([](bool result) {
+          if (!result) {
+            return folly::makeSemiFuture<folly::Unit>(std::runtime_error(
+                "Unable to fetch a valid nodes configuration."));
+          }
+          return folly::makeSemiFuture();
+        });
+  };
+
+  return folly::futures::retrying(
+             std::move(retry_policy), std::move(retry_func))
+      .thenTry([](auto&& t) {
+        if (t.hasValue()) {
+          return true;
+        } else {
+          ld_check(t.hasException());
+          // this happened when deadline has expired
+          return false;
+        }
+      });
+}
+
 folly::SemiFuture<bool> NodesConfigurationInit::executeGetConfig(
+    std::shared_ptr<UpdateableNodesConfiguration> nodes_configuration_config,
+    Processor* processor) {
+  if (processor == nullptr) {
+    return getConfigImpl(std::move(nodes_configuration_config));
+  }
+
+  return run_on_worker(
+      processor,
+      0,
+      [this, cfg = std::move(nodes_configuration_config)]() mutable {
+        return getConfigImpl(std::move(cfg));
+      });
+}
+
+folly::SemiFuture<bool> NodesConfigurationInit::getConfigImpl(
     std::shared_ptr<UpdateableNodesConfiguration> nodes_configuration_config) {
   folly::Promise<bool> promise;
   auto future = promise.getSemiFuture();
@@ -198,11 +273,12 @@ folly::SemiFuture<bool> NodesConfigurationInit::executeGetConfig(
     }
   };
 
-  // TODO Override the timeout of the store with the time we have left to
-  // do the config fetch.
-  // TODO Make this config fetch more robust by adding retries and timeouts.
-  // TODO For servers this should be `getLatestConfig`.
-  store_->getConfig(std::move(config_cb));
+  if (settings_->server) {
+    // perform a strong consistent config read if running on server nodes
+    store_->getLatestConfig(std::move(config_cb));
+  } else {
+    store_->getConfig(std::move(config_cb));
+  }
   return future;
 }
 

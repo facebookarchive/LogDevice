@@ -1849,6 +1849,22 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "NCM client bootstraping is not used.",
        CLIENT,
        SettingsCategory::Configuration);
+  init("nodes-configuration-init-retry-timeout",
+       &nodes_configuration_init_retry_timeout,
+       "500ms..5s",
+       validate_positive<ssize_t>(),
+       "timeout settings for the exponential backoff retry behavior for "
+       "initializing Nodes Configuration for the first time",
+       CLIENT | SERVER,
+       SettingsCategory::Configuration);
+  init("nodes-configuration-init-timeout",
+       &nodes_configuration_init_timeout,
+       "60s",
+       validate_positive<ssize_t>(),
+       "defines the maximum time allowed on the initial nodes configuration "
+       "fetch.",
+       CLIENT | SERVER,
+       SettingsCategory::Configuration);
   init("use-tcp-keep-alive",
        &use_tcp_keep_alive,
        "true",

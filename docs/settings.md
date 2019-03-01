@@ -43,6 +43,8 @@ sidebar_label: Settings
 | maintenance-log-snapshotting | Allow the maintenance log to be snapshotted onto a snapshot log. This requires the maintenance log group to contain two logs, the first one being the snapshot log and the second one being the delta log. | true | requires&nbsp;restart, server&nbsp;only |
 | maintenance-log-snapshotting-period | Controls time based snapshotting. New maintenancelog snapshot will be created after this period if there are new deltas | 1h | server&nbsp;only |
 | max-sequencer-background-activations-in-flight | Max number of concurrent background sequencer activations to run. Background sequencer activations perform log metadata changes (reprovisioning) when the configuration attributes of a log change. | 20 | server&nbsp;only |
+| nodes-configuration-init-retry-timeout | timeout settings for the exponential backoff retry behavior for initializing Nodes Configuration for the first time | 500ms..5s |  |
+| nodes-configuration-init-timeout | defines the maximum time allowed on the initial nodes configuration fetch. | 60s |  |
 | nodes-configuration-manager-intermediary-shard-state-timeout | Timeout for proposing the transition for a shard from an intermediary state to its 'destination' state | 180s |  |
 | nodes-configuration-manager-store-polling-interval | Polling interval of NodesConfigurationManager to NodesConfigurationStore to read NodesConfiguration | 3s |  |
 | nodes-configuration-seed-servers | The seed string that will be used to fetch the initial nodes configuration // It can be in the form string:<server1>,<server2>,etc. Or you can provide an smc tier via 'smc:<smc\_tier>'. If it's empty, NCM client bootstraping is not used. |  | client&nbsp;only |

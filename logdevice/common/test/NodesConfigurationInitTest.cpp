@@ -8,16 +8,21 @@
 
 #include "logdevice/common/NodesConfigurationInit.h"
 
+#include <folly/futures/Future.h>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <gtest/gtest_prod.h>
 
+#include "logdevice/common/Timestamp.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationCodecFlatBuffers.h"
 #include "logdevice/common/test/InMemNodesConfigurationStore.h"
+#include "logdevice/common/test/NodesConfigurationTestUtil.h"
 #include "logdevice/common/test/TestUtil.h"
 
 using namespace facebook::logdevice;
 using namespace facebook::logdevice::configuration::nodes;
+
+namespace {
 
 struct MockNodesConfigurationInit : public NodesConfigurationInit {
   ~MockNodesConfigurationInit() override = default;
@@ -31,8 +36,69 @@ struct MockNodesConfigurationInit : public NodesConfigurationInit {
   FRIEND_TEST(NodesConfigurationInitTest, ConfigCreation);
 };
 
+class TimeControlledNCS : public NodesConfigurationStore {
+ public:
+  using Timestamp = Timestamp<std::chrono::steady_clock,
+                              detail::Holder,
+                              std::chrono::milliseconds>;
+  TimeControlledNCS(
+      std::string config,
+      std::chrono::milliseconds unavailable_duration,
+      folly::Optional<std::chrono::milliseconds> get_delay = folly::none)
+      : config_(std::move(config)),
+        available_since_(Timestamp::now() + unavailable_duration),
+        get_delay_(std::move(get_delay)) {}
+
+  void getConfig(value_callback_t cb) const override {
+    if (Timestamp::now() < available_since_) {
+      cb(E::NOTREADY, "");
+      return;
+    }
+
+    if (get_delay_.hasValue()) {
+      folly::makeFuture()
+          .delayed(get_delay_.value())
+          .thenValue([mcb = std::move(cb), cfg = config_](auto&&) mutable {
+            ld_info("Calling delayed callback");
+            mcb(E::OK, std::move(cfg));
+          });
+    } else {
+      cb(E::OK, config_);
+    }
+  }
+
+  void getLatestConfig(value_callback_t cb) const override {
+    getConfig(std::move(cb));
+  }
+
+  Status getConfigSync(std::string*) const override {
+    ld_check(false);
+    return E::INTERNAL;
+  }
+
+  void updateConfig(std::string,
+                    folly::Optional<version_t>,
+                    write_callback_t) override {
+    ld_check(false);
+  }
+
+  Status updateConfigSync(std::string,
+                          folly::Optional<version_t>,
+                          version_t*,
+                          std::string*) override {
+    return E::INTERNAL;
+  }
+
+  void shutdown() override {}
+
+ private:
+  const std::string config_;
+  const Timestamp available_since_;
+  const folly::Optional<std::chrono::milliseconds> get_delay_;
+};
+
 TEST(NodesConfigurationInitTest, ConfigCreation) {
-  MockNodesConfigurationInit init(nullptr);
+  MockNodesConfigurationInit init(nullptr, UpdateableSettings<Settings>());
   auto config = init.buildBootstrappingServerConfig({
       "10.0.0.2:4440",
       "10.0.0.3:4440",
@@ -68,7 +134,8 @@ TEST(NodesConfigurationInitTest, InitTest) {
   auto status = store->updateConfigSync(serialized, folly::none);
   EXPECT_EQ(Status::OK, status);
 
-  MockNodesConfigurationInit init(std::move(store));
+  MockNodesConfigurationInit init(
+      std::move(store), UpdateableSettings<Settings>());
   auto fetched_node_config = std::make_shared<UpdateableNodesConfiguration>();
   int success = init.init(
       fetched_node_config, make_test_plugin_registry(), "data:10.0.0.2:4440");
@@ -77,3 +144,81 @@ TEST(NodesConfigurationInitTest, InitTest) {
   EXPECT_EQ(vcs_config_version_t(2), fetched_node_config->get()->getVersion());
   EXPECT_EQ(3, fetched_node_config->get()->clusterSize());
 }
+
+TEST(NodesConfigurationInitTest, Retry) {
+  auto nodes_configuration = provisionNodes();
+  auto serialized =
+      NodesConfigurationCodecFlatBuffers::serialize(*nodes_configuration);
+
+  Settings settings(create_default_settings<Settings>());
+  settings.nodes_configuration_init_timeout = std::chrono::seconds(10);
+  settings.nodes_configuration_init_retry_timeout =
+      chrono_expbackoff_t<std::chrono::milliseconds>(
+          std::chrono::milliseconds(50), std::chrono::milliseconds(200));
+
+  // store will be unavailable for 2 seconds
+  auto store =
+      std::make_unique<TimeControlledNCS>(serialized, std::chrono::seconds(2));
+
+  MockNodesConfigurationInit init(
+      std::move(store), UpdateableSettings<Settings>(settings));
+  auto fetched_node_config = std::make_shared<UpdateableNodesConfiguration>();
+  int success = init.init(
+      fetched_node_config, make_test_plugin_registry(), "data:10.0.0.2:4440");
+  EXPECT_TRUE(success);
+  ASSERT_NE(nullptr, fetched_node_config->get());
+  EXPECT_EQ(*nodes_configuration, *fetched_node_config->get());
+}
+
+TEST(NodesConfigurationInitTest, Timeout) {
+  auto nodes_configuration = provisionNodes();
+  auto serialized =
+      NodesConfigurationCodecFlatBuffers::serialize(*nodes_configuration);
+
+  Settings settings(create_default_settings<Settings>());
+  settings.nodes_configuration_init_timeout = std::chrono::seconds(2);
+  settings.nodes_configuration_init_retry_timeout =
+      chrono_expbackoff_t<std::chrono::milliseconds>(
+          std::chrono::milliseconds(50), std::chrono::milliseconds(200));
+
+  // store will be unavailable for 300 seconds
+  auto store = std::make_unique<TimeControlledNCS>(
+      serialized, std::chrono::seconds(300));
+
+  MockNodesConfigurationInit init(
+      std::move(store), UpdateableSettings<Settings>(settings));
+  auto fetched_node_config = std::make_shared<UpdateableNodesConfiguration>();
+  int success = init.init(
+      fetched_node_config, make_test_plugin_registry(), "data:10.0.0.2:4440");
+  EXPECT_FALSE(success);
+  ASSERT_EQ(nullptr, fetched_node_config->get());
+}
+
+TEST(NodesConfigurationInitTest, WithLongDurationCallback) {
+  auto nodes_configuration = provisionNodes();
+  auto serialized =
+      NodesConfigurationCodecFlatBuffers::serialize(*nodes_configuration);
+
+  Settings settings(create_default_settings<Settings>());
+  settings.nodes_configuration_init_timeout = std::chrono::seconds(1);
+  settings.nodes_configuration_init_retry_timeout =
+      chrono_expbackoff_t<std::chrono::milliseconds>(
+          std::chrono::milliseconds(50), std::chrono::milliseconds(200));
+
+  // store will be immediately available, however callbacks will be delayed 2s
+  auto store = std::make_unique<TimeControlledNCS>(
+      serialized, std::chrono::seconds(0), std::chrono::milliseconds(2000));
+
+  MockNodesConfigurationInit init(
+      std::move(store), UpdateableSettings<Settings>(settings));
+  auto fetched_node_config = std::make_shared<UpdateableNodesConfiguration>();
+  int success = init.init(
+      fetched_node_config, make_test_plugin_registry(), "data:10.0.0.2:4440");
+  // we should still success after 2 seconds despite that the config init
+  // timeout is 1s
+  EXPECT_TRUE(success);
+  ASSERT_NE(nullptr, fetched_node_config->get());
+  EXPECT_EQ(*nodes_configuration, *fetched_node_config->get());
+}
+
+} // namespace

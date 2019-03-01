@@ -42,10 +42,10 @@ class NodesConfigurationInit {
   };
 
  public:
-  // TODO add a bootstrapping timeout
   explicit NodesConfigurationInit(
-      std::shared_ptr<configuration::nodes::NodesConfigurationStore> store)
-      : store_(std::move(store)) {}
+      std::shared_ptr<configuration::nodes::NodesConfigurationStore> store,
+      UpdateableSettings<Settings> settings)
+      : store_(std::move(store)), settings_(std::move(settings)) {}
 
   virtual ~NodesConfigurationInit() = default;
 
@@ -104,11 +104,26 @@ class NodesConfigurationInit {
   static std::shared_ptr<const configuration::nodes::NodesConfiguration>
   parseNodesConfiguration(const std::string& config);
 
+  // @param processor    if not nullptr, execute the config fetch workflow on
+  //                     the given Processor context, otherwise, execute the
+  //                     fetch on the current context
   folly::SemiFuture<bool> executeGetConfig(
+      std::shared_ptr<UpdateableNodesConfiguration> nodes_configuration_config,
+      Processor* processor);
+
+  folly::SemiFuture<bool> getConfigImpl(
       std::shared_ptr<UpdateableNodesConfiguration> nodes_configuration_config);
+
+  // @return      true on success, false failed to get a valid config within the
+  //              given timeout period
+  folly::Future<bool> getConfigWithRetryingAndTimeout(
+      std::shared_ptr<UpdateableNodesConfiguration> nodes_configuration_config,
+      Processor* processor,
+      std::chrono::milliseconds timeout);
 
  private:
   std::shared_ptr<configuration::nodes::NodesConfigurationStore> store_;
+  UpdateableSettings<Settings> settings_;
 };
 
 }} // namespace facebook::logdevice
