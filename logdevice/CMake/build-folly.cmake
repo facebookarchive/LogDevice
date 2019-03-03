@@ -12,6 +12,7 @@ ExternalProject_Add(folly
     SOURCE_DIR "${FOLLY_ROOT_DIR}"
     DOWNLOAD_COMMAND ""
     CMAKE_ARGS -DCMAKE_POSITION_INDEPENDENT_CODE=True -DCXX_STD=gnu++14
+        -DPYTHON_EXTENSIONS=True
     INSTALL_COMMAND make install DESTDIR=${LOGDEVICE_STAGING_DIR}
     )
 
@@ -19,7 +20,7 @@ ExternalProject_Get_Property(folly SOURCE_DIR)
 ExternalProject_Get_Property(folly BINARY_DIR)
 
 set(FOLLY_LIBRARIES
-    ${BINARY_DIR}/libfolly.a)
+    ${BINARY_DIR}/libfolly_pic.a)
 set(FOLLY_BENCHMARK_LIBRARIES
     ${BINARY_DIR}/folly/libfollybenchmark.a)
 
