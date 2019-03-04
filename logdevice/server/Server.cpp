@@ -269,11 +269,6 @@ ServerParameters::ServerParameters(
       updateable_server_config->addHook(std::bind(
           &ServerParameters::validateNodes, this, std::placeholders::_1)));
 
-  std::shared_ptr<ZookeeperClientFactory> zookeeper_client_factory_ =
-      plugin_registry_->getSinglePlugin<ZookeeperClientFactory>(
-          PluginType::ZOOKEEPER_CLIENT_FACTORY);
-  ld_assert(zookeeper_client_factory_);
-
   {
     ConfigInit config_init(
         processor_settings_->initial_config_load_timeout, getStats());
@@ -384,8 +379,13 @@ size_t ServerParameters::getNumDBShards() const {
 bool ServerParameters::initNodesConfiguration() {
   using namespace facebook::logdevice::configuration::nodes;
 
+  std::shared_ptr<ZookeeperClientFactory> zookeeper_client_factory =
+      getPluginRegistry()->getSinglePlugin<ZookeeperClientFactory>(
+          PluginType::ZOOKEEPER_CLIENT_FACTORY);
   auto store = NodesConfigurationStoreFactory::create(
-      *updateable_config_->get(), *getProcessorSettings().get());
+      *updateable_config_->get(),
+      *getProcessorSettings().get(),
+      std::move(zookeeper_client_factory));
   NodesConfigurationInit config_init(std::move(store), getProcessorSettings());
   return config_init.initWithoutProcessor(
       updateable_config_->updateableNodesConfiguration());
@@ -664,8 +664,11 @@ bool Server::initProcessor() {
       auto roleset = node_svc_discovery->getRoles();
 
       // TODO: get NCS from NodesConfigurationInit instead
+      auto zk_client_factory = processor_->getPluginRegistry()
+                                   ->getSinglePlugin<ZookeeperClientFactory>(
+                                       PluginType::ZOOKEEPER_CLIENT_FACTORY);
       auto ncm = configuration::nodes::NodesConfigurationManagerFactory::create(
-          processor_.get(), nullptr, roleset);
+          processor_.get(), nullptr, roleset, std::move(zk_client_factory));
       if (ncm == nullptr) {
         ld_critical("Unable to create NodesConfigurationManager during server "
                     "creation!");
@@ -773,7 +776,7 @@ bool Server::initSequencers() {
   } else {
     ld_info("Initializing ZookeeperEpochStore");
     try {
-      std::shared_ptr<ZookeeperClientFactory> zookeeper_client_factory =
+      std::shared_ptr<ZookeeperClientFactory> zk_client_factory =
           processor_->getPluginRegistry()
               ->getSinglePlugin<ZookeeperClientFactory>(
                   PluginType::ZOOKEEPER_CLIENT_FACTORY);
@@ -783,7 +786,7 @@ bool Server::initSequencers() {
           updateable_config_->updateableZookeeperConfig(),
           updateable_config_->updateableServerConfig(),
           processor_->updateableSettings(),
-          zookeeper_client_factory);
+          zk_client_factory);
     } catch (const ConstructorFailed&) {
       ld_error("Failed to construct ZookeeperEpochStore: %s",
                error_description(err));

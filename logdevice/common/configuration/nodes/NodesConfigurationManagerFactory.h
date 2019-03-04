@@ -16,28 +16,30 @@ namespace facebook { namespace logdevice {
 
 class Configuration;
 class Processor;
+class ZookeeperClientFactory;
 struct Settings;
 
 namespace configuration { namespace nodes {
 
 class NodesConfigurationStoreFactory {
  public:
-  enum class NCSType { Zookeeper = 0, File, Server };
+  enum class NCSType { Zookeeper = 0, File, Server, Invalid };
 
   struct Params {
-    NCSType type;
+    NCSType type{NCSType::Invalid};
 
     // used when type == NCSType::Zookeeper, NCS will be created as
     // ZookeeperNodesConfigurationStore with the specified zookeeper config
-    std::shared_ptr<configuration::ZookeeperConfig> zk_config;
+    std::shared_ptr<configuration::ZookeeperConfig> zk_config{nullptr};
+    std::shared_ptr<ZookeeperClientFactory> zk_client_factory{nullptr};
 
     // used when type == NCSType::File
-    std::string file_store_root_dir;
+    std::string file_store_root_dir{};
 
     // The path under-which the config itself will be stored. This is used by
     // all the NCSes as the key to the fetches/updates. The NCS itself can
     // prepend a root_path to this path if needed.
-    std::string path;
+    std::string path{};
 
     bool isValid() const;
   };
@@ -50,7 +52,9 @@ class NodesConfigurationStoreFactory {
    * config and settings
    */
   static std::unique_ptr<NodesConfigurationStore>
-  create(const Configuration& config, const Settings& settings) noexcept;
+  create(const Configuration& config,
+         const Settings& settings,
+         std::shared_ptr<ZookeeperClientFactory> zk_client_facotory) noexcept;
 
   static std::string getDefaultConfigStorePath(NCSType type,
                                                const std::string& cluster_name);
@@ -86,7 +90,8 @@ class NodesConfigurationManagerFactory {
   static std::shared_ptr<NodesConfigurationManager>
   create(Processor* processor,
          std::unique_ptr<configuration::nodes::NodesConfigurationStore> store,
-         folly::Optional<NodeServiceDiscovery::RoleSet> roles) noexcept;
+         folly::Optional<NodeServiceDiscovery::RoleSet> roles,
+         std::shared_ptr<ZookeeperClientFactory> zk_client_factory) noexcept;
 };
 
 }} // namespace configuration::nodes

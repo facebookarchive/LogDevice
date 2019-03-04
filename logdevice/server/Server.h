@@ -47,7 +47,6 @@ class ShardedRocksDBLocalLogStore;
 class ShardedStorageThreadPool;
 class TraceLogger;
 class UnreleasedRecordDetector;
-class ZookeeperClientFactory;
 
 /**
  * Command line options and configuration needed to run a server.
@@ -231,7 +230,6 @@ class Server {
   std::shared_ptr<UpdateableConfig> updateable_config_;
   std::shared_ptr<ServerConfig> server_config_;
   std::shared_ptr<SettingsUpdater> settings_updater_;
-  std::shared_ptr<ZookeeperClientFactory> zookeeper_client_factory_;
 
   // initListeners()
   std::unique_ptr<EventLoopHandle> connection_listener_handle_;

@@ -48,6 +48,7 @@
 #include "logdevice/common/configuration/nodes/NodesConfigurationManagerFactory.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/plugin/TraceLoggerFactory.h"
+#include "logdevice/common/plugin/ZookeeperClientFactory.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/common/stats/Stats.h"
@@ -208,8 +209,14 @@ ClientImpl::ClientImpl(std::string cluster_name,
     // the Processor
 
     // TODO: get NCS from NodesConfigurationInit instead
+    auto zk_client_factory =
+        plugin_registry_->getSinglePlugin<ZookeeperClientFactory>(
+            PluginType::ZOOKEEPER_CLIENT_FACTORY);
     auto ncm = configuration::nodes::NodesConfigurationManagerFactory::create(
-        processor_.get(), /*store=*/nullptr, /*server_roles*/ folly::none);
+        processor_.get(),
+        /*store=*/nullptr,
+        /*server_roles*/ folly::none,
+        std::move(zk_client_factory));
     if (ncm == nullptr) {
       ld_critical(
           "Unable to create NodesConfigurationManager during Client creation!");

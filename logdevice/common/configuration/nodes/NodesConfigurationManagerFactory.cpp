@@ -11,7 +11,6 @@
 #include <boost/filesystem.hpp>
 #include <folly/Conv.h>
 
-#include "logdevice/common/ZookeeperClientFactoryProd.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/configuration/nodes/FileBasedNodesConfigurationStore.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationCodecFlatBuffers.h"
@@ -19,6 +18,7 @@
 #include "logdevice/common/configuration/nodes/ServerBasedNodesConfigurationStore.h"
 #include "logdevice/common/configuration/nodes/ZookeeperNodesConfigurationStore.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/plugin/ZookeeperClientFactory.h"
 #include "logdevice/common/settings/Settings.h"
 
 namespace facebook { namespace logdevice { namespace configuration {
@@ -27,11 +27,14 @@ namespace nodes {
 bool NodesConfigurationStoreFactory::Params::isValid() const {
   switch (type) {
     case NCSType::Zookeeper:
-      return zk_config != nullptr && !path.empty();
+      return zk_config != nullptr && zk_client_factory != nullptr &&
+          !path.empty();
     case NCSType::File:
       return !file_store_root_dir.empty() && !path.empty();
     case NCSType::Server:
       return true;
+    case NCSType::Invalid:
+      break;
   }
   ld_check(false);
   return false;
@@ -55,7 +58,7 @@ NodesConfigurationStoreFactory::create(Params params) noexcept {
 
   switch (params.type) {
     case NCSType::Zookeeper: {
-      auto zkclient = zkFactoryProd(*params.zk_config);
+      auto zkclient = params.zk_client_factory->getClient(*params.zk_config);
       if (zkclient == nullptr) {
         ld_error("Unable to create the zookeeper client for NCS!");
         return nullptr;
@@ -73,6 +76,8 @@ NodesConfigurationStoreFactory::create(Params params) noexcept {
     }
     case NCSType::Server:
       return std::make_unique<ServerBasedNodesConfigurationStore>();
+    case NCSType::Invalid:
+      break;
   }
 
   ld_check(false);
@@ -80,9 +85,10 @@ NodesConfigurationStoreFactory::create(Params params) noexcept {
 }
 
 /*static*/
-std::unique_ptr<NodesConfigurationStore>
-NodesConfigurationStoreFactory::create(const Configuration& config,
-                                       const Settings& settings) noexcept {
+std::unique_ptr<NodesConfigurationStore> NodesConfigurationStoreFactory::create(
+    const Configuration& config,
+    const Settings& settings,
+    std::shared_ptr<ZookeeperClientFactory> zk_client_factory) noexcept {
   configuration::nodes::NodesConfigurationStoreFactory::Params ncs_params;
   const bool is_server = settings.server;
 
@@ -101,6 +107,7 @@ NodesConfigurationStoreFactory::create(const Configuration& config,
     } else {
       ncs_params.type = NCSType::Zookeeper;
       ncs_params.zk_config = config.zookeeperConfig();
+      ncs_params.zk_client_factory = std::move(zk_client_factory);
       ncs_params.path = getDefaultConfigStorePath(
           NCSType::Zookeeper, config.serverConfig()->getClusterName());
     }
@@ -121,6 +128,8 @@ std::string NodesConfigurationStoreFactory::getDefaultConfigStorePath(
       // ServerBasedNodesConfigurationStore doesn't require a path.
       ld_check(false);
       return "";
+    case NCSType::Invalid:
+      break;
   }
   /* Unreachable */
   ld_check(false);
@@ -169,7 +178,8 @@ std::shared_ptr<NodesConfigurationManager>
 NodesConfigurationManagerFactory::create(
     Processor* processor,
     std::unique_ptr<configuration::nodes::NodesConfigurationStore> store,
-    folly::Optional<NodeServiceDiscovery::RoleSet> roles) noexcept {
+    folly::Optional<NodeServiceDiscovery::RoleSet> roles,
+    std::shared_ptr<ZookeeperClientFactory> zk_client_factory) noexcept {
   ld_check(processor != nullptr);
   const auto& settings = *processor->settings();
   const bool is_server = settings.server;
@@ -184,7 +194,7 @@ NodesConfigurationManagerFactory::create(
 
   if (store == nullptr) {
     store = NodesConfigurationStoreFactory::create(
-        *processor->config_->get(), settings);
+        *processor->config_->get(), settings, std::move(zk_client_factory));
     if (store == nullptr) {
       ld_error("Unable to create NodesConfigurationStore for creating "
                "NodesConfiguratonManager!");

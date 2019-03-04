@@ -180,9 +180,14 @@ std::shared_ptr<Client> ClientFactory::create(std::string config_url) noexcept {
   auto nodes_configuration_seed =
       impl_settings->getSettings()->nodes_configuration_seed_servers;
   if (!nodes_configuration_seed.empty()) {
+    std::shared_ptr<ZookeeperClientFactory> zk_client_factory =
+        plugin_registry->getSinglePlugin<ZookeeperClientFactory>(
+            PluginType::ZOOKEEPER_CLIENT_FACTORY);
     auto server_nodes_cfg_store =
         configuration::nodes::NodesConfigurationStoreFactory::create(
-            *config->get(), *impl_settings->getSettings().get());
+            *config->get(),
+            *impl_settings->getSettings().get(),
+            std::move(zk_client_factory));
 
     NodesConfigurationInit nodes_cfg_init(
         std::move(server_nodes_cfg_store), impl_settings->getSettings());
