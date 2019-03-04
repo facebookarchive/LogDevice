@@ -821,7 +821,7 @@ Socket* Sender::initServerSocket(NodeID nid,
   }
 
   std::shared_ptr<ServerConfig> cfg(Worker::getConfig()->serverConfig());
-  auto node_cfg = cfg->getNode(nid.index());
+  auto node_cfg = cfg->getNode(nid);
   // Don't try to connect if the node is not in config.
   // If the socket was already connected but the node removed from config,
   // it will be closed once noteConfigurationChanged() executes.
