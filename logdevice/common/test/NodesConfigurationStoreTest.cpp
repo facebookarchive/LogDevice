@@ -223,10 +223,7 @@ TEST(NodesConfigurationStore, basicMT) {
 
 TEST(NodesConfigurationStore, zk_basic) {
   auto z = std::make_unique<ZookeeperClientInMemory>(
-      "unused quorum",
-      ZookeeperClientInMemory::state_map_t{
-          {kConfigKey,
-           {TestEntry{0, "initValue"}.serialize(), zk::Stat{.version_ = 4}}}});
+      "unused quorum", ZookeeperClientInMemory::state_map_t{});
   runBasicTests(std::make_unique<ZookeeperNodesConfigurationStore>(
                     kConfigKey, TestEntry::extractVersionFn, std::move(z)),
                 /* initialWrite = */ false);

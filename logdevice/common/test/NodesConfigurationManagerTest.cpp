@@ -207,6 +207,38 @@ TEST_F(NodesConfigurationManagerTest, trackState) {
 
 TEST_F(NodesConfigurationManagerTest, overwrite) {
   {
+    std::vector<zk::Op> ops = {
+        ZookeeperClientBase::makeDeleteOp(kConfigKey, /* version */ -1)};
+    folly::Baton<> b;
+    z_->multiOp(
+        std::move(ops), [&b](int rc, std::vector<zk::OpResponse> responses) {
+          EXPECT_EQ(ZOK, rc);
+          EXPECT_EQ(1, responses.size());
+          EXPECT_EQ(ZOK, responses.at(0).rc_);
+          b.post();
+        });
+    b.wait();
+  }
+  {
+    constexpr const MembershipVersion::Type kMidVersion{42};
+    EXPECT_LT(kMidVersion, kVersion);
+    // ensure we can overwrite even if the znode did not exist
+    NodesConfiguration initial_config =
+        makeDummyNodesConfiguration(kMidVersion);
+    folly::Baton<> b;
+    ncm_->overwrite(
+        std::make_shared<const NodesConfiguration>(initial_config),
+        [&b, &kMidVersion](
+            Status status, std::shared_ptr<const NodesConfiguration> config) {
+          ASSERT_EQ(E::OK, status);
+          EXPECT_TRUE(config);
+          EXPECT_EQ(kMidVersion, config->getVersion());
+          b.post();
+        });
+    waitTillNCMReceives(kMidVersion);
+    b.wait();
+  }
+  {
     // ensure we can overwrite the initial empty znode
     auto initial_config = makeDummyNodesConfiguration(kVersion);
     folly::Baton<> b;

@@ -147,7 +147,9 @@ void Dependencies::overwrite(std::shared_ptr<const NodesConfiguration> config,
                      serialized_initial_config =
                          std::move(serialized_initial_config)](
                         Status status, std::string current_serialized) mutable {
-    if (status != E::OK) {
+    // For overwrite, we handle the case where the initial NCS key is not
+    // provisioned
+    if (status != E::OK && status != E::NOTFOUND) {
       callback(status, nullptr);
       return;
     }
