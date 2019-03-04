@@ -18,8 +18,8 @@ enum class MaintenanceTransitionStatus : uint16_t {
   NOT_STARTED = 0,
   STARTED = 1,
   /*
-   * MaintenanceManager is waiting for a response from the NodesConfigManager
-   * after requesting to apply changes
+   * MaintenanceManager is waiting for a response from the
+   * NodesConfigurationManager after requesting to apply changes
    */
   AWAITING_STORAGE_STATE_CHANGES = 2,
   /*

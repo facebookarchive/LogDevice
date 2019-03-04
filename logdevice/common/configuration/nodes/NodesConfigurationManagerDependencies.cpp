@@ -330,11 +330,11 @@ void Dependencies::reportPropagationLatency(
   auto propagation_latency = msec_since(config->getLastChangeTimestamp());
   if (processor_->settings()->server) {
     HISTOGRAM_ADD(getStats(),
-                  nodes_config_manager_propagation_latency,
+                  nodes_configuration_manager_propagation_latency,
                   propagation_latency);
   } else {
     CLIENT_HISTOGRAM_ADD(getStats(),
-                         nodes_config_manager_propagation_latency,
+                         nodes_configuration_manager_propagation_latency,
                          propagation_latency);
   }
 }

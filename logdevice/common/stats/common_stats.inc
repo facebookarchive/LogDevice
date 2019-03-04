@@ -88,26 +88,25 @@ STAT_DEFINE(logsconfig_manager_serialization_errors, SUM)
 // LogsConfig number of deltas applied
 STAT_DEFINE(logsconfig_manager_delta_applied, SUM)
 
-// TODO: rename s/NodesConfig/NodesConfiguration
-// NodesConfigManager
+// NodesConfigurationManager
 // Number of new nodes configuration published
-STAT_DEFINE(nodes_config_manager_config_published, SUM)
+STAT_DEFINE(nodes_configuration_manager_config_published, SUM)
 // Number of nodes configuration received
-STAT_DEFINE(nodes_config_manager_config_received, SUM)
+STAT_DEFINE(nodes_configuration_manager_config_received, SUM)
 // The version of the staged nodes configuration
-STAT_DEFINE(nodes_config_manager_staged_version, MAX)
+STAT_DEFINE(nodes_configuration_manager_staged_version, MAX)
 // The version of the nodes configuration being processed
-STAT_DEFINE(nodes_config_manager_pending_version, MAX)
+STAT_DEFINE(nodes_configuration_manager_pending_version, MAX)
 // The version of the last published NodesConfig
-STAT_DEFINE(nodes_config_manager_published_version, MAX)
-// NodesConfigManager Is Started
-STAT_DEFINE(nodes_config_manager_started, MAX)
+STAT_DEFINE(nodes_configuration_manager_published_version, MAX)
+// NodesConfigurationManager Is Started
+STAT_DEFINE(nodes_configuration_manager_started, MAX)
 // Number of time the NCM updates proposed
-STAT_DEFINE(nodes_config_manager_updates_requested, SUM)
+STAT_DEFINE(nodes_configuration_manager_updates_requested, SUM)
 // Number of time the NCM overwrites requested
-STAT_DEFINE(nodes_config_manager_overwrites_requested, SUM)
-// NodesConfigManager deserialization errors
-STAT_DEFINE(nodes_config_manager_serialization_errors, SUM)
+STAT_DEFINE(nodes_configuration_manager_overwrites_requested, SUM)
+// NodesConfigurationManager deserialization errors
+STAT_DEFINE(nodes_configuration_manager_serialization_errors, SUM)
 // Read from NodesConfigurationStore failed
 STAT_DEFINE(nodes_configuration_store_read_failed, SUM)
 // Proposed advancement out of intermediary states failed
