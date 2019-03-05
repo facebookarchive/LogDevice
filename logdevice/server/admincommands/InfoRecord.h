@@ -47,7 +47,8 @@ class InfoRecordStorageTask : public StorageTask {
                                  folly::Synchronized<EvbufferTextOutput*> out,
                                  InfoRecordTable& table,
                                  bool print_table,
-                                 size_t max_records)
+                                 size_t max_records,
+                                 bool csi_only)
       : StorageTask(StorageTask::Type::INFO_RECORD),
         log_id_(log_id),
         lsn_start_(lsn_start),
@@ -57,7 +58,8 @@ class InfoRecordStorageTask : public StorageTask {
         sem_(sem),
         out_(out),
         table_(table),
-        print_table_(print_table) {}
+        print_table_(print_table),
+        csi_only_(csi_only) {}
 
   Principal getPrincipal() const override {
     return Principal::METADATA;
@@ -68,6 +70,10 @@ class InfoRecordStorageTask : public StorageTask {
     options.allow_blocking_io = true;
     options.tailing = false;
     options.fill_cache = false;
+    if (csi_only_) {
+      options.allow_copyset_index = true;
+      options.csi_data_only = true;
+    }
     std::unique_ptr<LocalLogStore::ReadIterator> it =
         storageThreadPool_->getLocalLogStore().read(log_id_, options);
 
@@ -188,6 +194,7 @@ class InfoRecordStorageTask : public StorageTask {
   folly::Synchronized<EvbufferTextOutput*> out_;
   InfoRecordTable& table_;
   const bool print_table_;
+  const bool csi_only_;
 };
 
 class InfoRecordRequest : public Request {
@@ -200,7 +207,8 @@ class InfoRecordRequest : public Request {
                              folly::Synchronized<EvbufferTextOutput*> out,
                              InfoRecordTable& table,
                              bool print_table,
-                             size_t max_records)
+                             size_t max_records,
+                             bool csi_only)
       : Request(RequestType::ADMIN_CMD_INFO_RECORD),
         log_id_(log_id),
         lsn_start_(lsn_start),
@@ -210,7 +218,8 @@ class InfoRecordRequest : public Request {
         sem_(sem),
         out_(out),
         table_(table),
-        print_table_(print_table) {}
+        print_table_(print_table),
+        csi_only_(csi_only) {}
 
   Execution execute() override {
     auto pool =
@@ -227,7 +236,8 @@ class InfoRecordRequest : public Request {
                                     out_,
                                     table_,
                                     print_table_,
-                                    max_records_));
+                                    max_records_,
+                                    csi_only_));
       ServerWorker::onThisThread()->getStorageTaskQueueForShard(s)->putTask(
           std::move(task));
     }
@@ -243,6 +253,7 @@ class InfoRecordRequest : public Request {
   folly::Synchronized<EvbufferTextOutput*> out_;
   InfoRecordTable& table_;
   const bool print_table_;
+  const bool csi_only_;
 };
 
 class InfoRecord : public AdminCommand {
@@ -252,6 +263,7 @@ class InfoRecord : public AdminCommand {
   ssize_t payload_max_len_ = 100;
   ssize_t max_records_ = 1000;
   bool table_ = false;
+  bool csi_only_ = false;
   bool json_ = false;
 
  public:
@@ -274,7 +286,8 @@ class InfoRecord : public AdminCommand {
       ("max",
         boost::program_options::value<ssize_t>(&max_records_)
           ->default_value(max_records_),
-          "Truncate result to at most this many rows.");
+          "Truncate result to at most this many rows.")
+      ("csi", boost::program_options::bool_switch(&csi_only_));
     // clang-format on
   }
 
@@ -353,7 +366,8 @@ class InfoRecord : public AdminCommand {
                                             out_ptr,
                                             table,
                                             table_,
-                                            max_records_);
+                                            max_records_,
+                                            csi_only_);
     if (server_->getProcessor()->postRequest(req) != 0) {
       (*out_ptr.wlock())->printf("Error: cannot post request on worker\r\n");
       return;
