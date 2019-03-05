@@ -38,9 +38,9 @@ struct MockNodesConfigurationInit : public NodesConfigurationInit {
 
 class TimeControlledNCS : public NodesConfigurationStore {
  public:
-  using Timestamp = Timestamp<std::chrono::steady_clock,
-                              detail::Holder,
-                              std::chrono::milliseconds>;
+  using Timestamp = ::Timestamp<std::chrono::steady_clock,
+                                detail::Holder,
+                                std::chrono::milliseconds>;
   TimeControlledNCS(
       std::string config,
       std::chrono::milliseconds unavailable_duration,
