@@ -284,7 +284,7 @@ _attributes = [
 
 
 def _get_client():
-    return context.get_context().client
+    return context.get_context().get_client()
 
 
 def _clone_attributes(attrs):
