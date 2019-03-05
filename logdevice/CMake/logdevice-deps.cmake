@@ -8,7 +8,9 @@
 set(LD_PYTHON_VERSION 3.5 CACHE STRING "Python version")
 find_package(PythonInterp ${LD_PYTHON_VERSION} REQUIRED)
 find_package(PythonLibs ${LD_PYTHON_VERSION} REQUIRED)
-
+if(thriftpy3)
+  find_package(Cython 0.29 REQUIRED)
+endif()
 set(_boost_py_component1
 	    python${PYTHON_VERSION_MAJOR})
 set(_boost_py_component2

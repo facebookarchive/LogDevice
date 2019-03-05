@@ -1,16 +1,30 @@
-# Copyright (c) 2018-present, Facebook, Inc.
+# Copyright (c) 2018-present, Facebook, Inc. and its affiliates.
 # All rights reserved.
 #
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
 
 include_directories(${CMAKE_BINARY_DIR})
+link_directories("${CMAKE_BINARY_DIR}/staging/usr/local/lib")
 
 set(_adminapi_if_include_prefix "logdevice/admin/if")
+set(_adminapi_binary_dir "${CMAKE_BINARY_DIR}/logdevice/admin/if")
 
 add_subdirectory(common/fb303/if)
 
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/${_adminapi_if_include_prefix})
+
+set(_common_libs
+  "admin-cpp2"
+  "fb303-cpp2"
+  "exceptions-cpp2"
+  "common-cpp2"
+  "maintenance-cpp2"
+  "safety-cpp2"
+  "settings-cpp2"
+  "logtree-cpp2"
+  "nodes-cpp2"
+  thriftcpp2_shared)
 
 foreach(THRIFT_SOURCE
         common
@@ -21,35 +35,85 @@ foreach(THRIFT_SOURCE
         safety
         maintenance
 )
-  thrift_generate(
+
+  ld_thrift_py3_library(
     ${THRIFT_SOURCE}
     ""
-    "cpp2"
-    ""
     "${CMAKE_CURRENT_SOURCE_DIR}"
-    "${CMAKE_BINARY_DIR}/${_adminapi_if_include_prefix}"
+    "${_adminapi_binary_dir}"
     "${_adminapi_if_include_prefix}"
-   )
-   add_dependencies(${THRIFT_SOURCE}-cpp2-target fbthrift)
+    PY3_NAMESPACE "logdevice/admin"
+    CYTHON_INCLUDES "${CMAKE_BINARY_DIR}/logdevice/admin/if/gen-py3/"
+  )
+
+  add_dependencies(${THRIFT_SOURCE}-cpp2-target fbthrift)
+
+  if(thriftpy3)
+    target_link_libraries(
+      "logdevice-admin-${THRIFT_SOURCE}-types-py3"
+      PRIVATE
+        ${_common_libs})
+  endif()
 endforeach()
 
-thrift_library(
+ld_thrift_py3_library(
   "admin"
   "AdminAPI"
-  "cpp2"
-  ""
   "${CMAKE_CURRENT_SOURCE_DIR}"
-  "${CMAKE_BINARY_DIR}/${_adminapi_if_include_prefix}"
-  "${_adminapi_if_include_prefix}"
- )
-add_dependencies(admin-cpp2-target fbthrift)
+  "${CMAKE_BINARY_DIR}/logdevice/admin/if"
+  "logdevice/admin/if"
+  PY3_NAMESPACE "logdevice"
+  CYTHON_INCLUDES "${CMAKE_BINARY_DIR}/logdevice/admin/if/gen-py3/"
+    "${CMAKE_BINARY_DIR}/common/fb303/if/gen-py3"
+    "${CMAKE_BINARY_DIR}/logdevice/admin/gen-py3"
+    "${CMAKE_BINARY_DIR}/logdevice"
+    "${CMAKE_BINARY_DIR}/fbthrift-prefix/src/fbthrift-build/thrift/lib/py3/cybld"
+)
+if(thriftpy3)
+  set_source_files_properties(
+    "${CMAKE_BINARY_DIR}/common/fb303/if/gen-py3/fb303/clients_wrapper.cpp"
+    PROPERTIES GENERATED TRUE
+  )
 
-add_dependencies(admin-cpp2-target
-                 common-cpp2-target
-                 nodes-cpp2-target
-                 fb303-cpp2-target
-                 exceptions-cpp2-target
-                 logtree-cpp2-target
-                 safety-cpp2-target
-                 maintenance-cpp2-target
-                 settings-cpp2-target)
+  target_sources(
+    "logdevice-admin-clients-py3"
+    PRIVATE
+      "${CMAKE_BINARY_DIR}/common/fb303/if/gen-py3/fb303/clients_wrapper.cpp")
+
+  target_link_libraries(
+    "logdevice-admin-clients-py3"
+    PRIVATE
+      ${_common_libs})
+endif()
+
+set(_languages cpp2)
+
+if(thriftpy3)
+  list(APPEND _languages py3)
+
+  add_dependencies(admin-py3-target admin-cpp2)
+  add_dependencies(logdevice-admin-types-py3
+    fb303-types-py3
+    logdevice-admin-common-types-py3
+    logdevice-admin-nodes-types-py3
+    logdevice-admin-exceptions-types-py3
+    logdevice-admin-logtree-types-py3
+    logdevice-admin-safety-types-py3
+    logdevice-admin-maintenance-types-py3
+    logdevice-admin-settings-types-py3)
+
+  add_dependencies(logdevice-admin-clients-py3 fb303-clients-py3)
+endif()
+
+add_dependencies(admin-cpp2-target fbthrift)
+foreach(_lang ${_languages})
+add_dependencies(admin-${_lang}-target
+                 common-${_lang}-target
+                 nodes-${_lang}-target
+                 fb303-${_lang}-target
+                 exceptions-${_lang}-target
+                 logtree-${_lang}-target
+                 safety-${_lang}-target
+                 maintenance-${_lang}-target
+                 settings-${_lang}-target)
+endforeach()

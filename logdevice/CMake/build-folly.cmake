@@ -8,10 +8,16 @@ set(FOLLY_ROOT_DIR ${LOGDEVICE_DIR}/external/folly)
 
 include(ExternalProject)
 
+if(thriftpy3)
+  set(_folly_cmake_extra_opts "-DPYTHON_EXTENSIONS=True")
+endif()
+
+
 ExternalProject_Add(folly
     SOURCE_DIR "${FOLLY_ROOT_DIR}"
     DOWNLOAD_COMMAND ""
     CMAKE_ARGS -DCMAKE_POSITION_INDEPENDENT_CODE=True -DCXX_STD=gnu++14
+       ${_folly_cmake_extra_opts}
     INSTALL_COMMAND make install DESTDIR=${LOGDEVICE_STAGING_DIR}
     )
 
