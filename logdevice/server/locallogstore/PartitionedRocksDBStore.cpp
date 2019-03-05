@@ -5907,10 +5907,23 @@ void PartitionedRocksDBStore::loPriBackgroundThreadRun() {
     PartitionToCompact::removeDuplicates(&to_compact);
     PartitionToCompact::interleavePartialAndNormalCompactions(&to_compact);
 
+    size_t num_partial_compactions = 0;
+    for (const auto& p : to_compact) {
+      if (p.reason == PartitionToCompact::Reason::PARTIAL) {
+        num_partial_compactions += 1;
+      }
+    }
+
     PER_SHARD_STAT_SET(stats_,
-                       pending_compactions,
+                       pending_retention_compactions,
                        shard_idx_,
-                       to_compact.size() + num_partial_compactions_postponed);
+                       to_compact.size() - num_partial_compactions);
+
+    PER_SHARD_STAT_SET(
+        stats_,
+        pending_partial_compactions,
+        shard_idx_,
+        num_partial_compactions + num_partial_compactions_postponed);
 
     auto compactions_start_time = currentTime();
 

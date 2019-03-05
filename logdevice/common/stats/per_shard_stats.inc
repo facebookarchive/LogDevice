@@ -178,8 +178,11 @@ STAT_DEFINE(sbt_effective_retention_seconds, SUM)
 // because grace period hasn't expired.
 STAT_DEFINE(logs_waiting_for_grace_period, SUM)
 
-// How many partitions are waiting to be compacted.
-STAT_DEFINE(pending_compactions, SUM)
+// How many partitions are waiting to be compacted for expired data.
+STAT_DEFINE(pending_retention_compactions, SUM)
+
+// How many partitions are waiting to be compacted for coalescing.
+STAT_DEFINE(pending_partial_compactions, SUM)
 
 #endif // DESTROYING_THREAD
 
