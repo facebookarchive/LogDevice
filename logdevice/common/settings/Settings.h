@@ -1149,6 +1149,10 @@ struct Settings : public SettingsBundle {
   // enable NodesConfigurationManager on clients and servers
   bool enable_nodes_configuration_manager;
 
+  // if true and enable_nodes_configuration_manager is set, logdevice will use
+  // the nodes configuration from the NodesConfigurationManager
+  bool use_nodes_configuration_manager_nodes_configuration;
+
   // Polling interval of NodesConfigurationManager to NodesConfigurationStore
   // to read NodesConfiguration
   std::chrono::seconds nodes_configuration_manager_store_polling_interval;

@@ -462,6 +462,16 @@ Processor::getNodesConfigurationFromNCMSource() const {
   return config_->getNodesConfiguration();
 }
 
+std::shared_ptr<const configuration::nodes::NodesConfiguration>
+Processor::getNodesConfiguration() const {
+  if (settings_->enable_nodes_configuration_manager &&
+      settings_->use_nodes_configuration_manager_nodes_configuration) {
+    return getNodesConfigurationFromNCMSource();
+  }
+
+  return config_->getServerConfig()->getNodesConfiguration();
+}
+
 configuration::nodes::NodesConfigurationManager*
 Processor::getNodesConfigurationManager() {
   return ncm_.get();

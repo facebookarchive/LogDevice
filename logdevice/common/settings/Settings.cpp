@@ -2580,6 +2580,15 @@ void Settings::defineSettings(SettingEasyInit& init) {
        CLIENT | SERVER | REQUIRES_RESTART,
        SettingsCategory::Configuration);
 
+  init("use-nodes-configuration-manager-nodes-configuration",
+       &use_nodes_configuration_manager_nodes_configuration,
+       "false", // defaults to false
+       nullptr, // no custom validation necessary
+       "If true and enable_nodes_configuration_manager is set, logdevice will "
+       "use the nodes configuration from the NodesConfigurationManager.",
+       CLIENT | SERVER | REQUIRES_RESTART,
+       SettingsCategory::Configuration);
+
   init("nodes-configuration-manager-store-polling-interval",
        &nodes_configuration_manager_store_polling_interval,
        "3s",

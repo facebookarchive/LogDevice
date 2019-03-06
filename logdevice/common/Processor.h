@@ -431,6 +431,13 @@ class Processor : public folly::enable_shared_from_this<Processor> {
   getNodesConfigurationFromNCMSource() const;
 
   /**
+   * @return  NodesConfiguraton object of the cluster, depending on
+   *          processor settings, the source can be server config or NCM.
+   */
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const;
+
+  /**
    * Get the NodesConfigurationManager instance that implements
    * NodesConfigurationAPI. When NCM is enabled in settings, should always
    * return a valid pointer after Processor init workflow in client/server.

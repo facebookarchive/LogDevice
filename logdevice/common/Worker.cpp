@@ -243,8 +243,13 @@ std::shared_ptr<ServerConfig> Worker::getServerConfig() const {
   return config_->getServerConfig();
 }
 
-const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
+std::shared_ptr<const configuration::nodes::NodesConfiguration>
 Worker::getNodesConfiguration() const {
+  if (settings().enable_nodes_configuration_manager &&
+      settings().use_nodes_configuration_manager_nodes_configuration) {
+    return getNodesConfigurationFromNCMSource();
+  }
+
   return getServerConfig()->getNodesConfiguration();
 }
 

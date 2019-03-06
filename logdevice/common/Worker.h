@@ -252,9 +252,10 @@ class Worker : public EventLoop {
   std::shared_ptr<ServerConfig> getServerConfig() const;
 
   /**
-   * @return  NodesConfiguraton object cached on this worker
+   * @return  NodesConfiguraton object cached on this worker, depending on
+   *          processor settings, the source can be server config or NCM.
    */
-  const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const;
 
   /**
