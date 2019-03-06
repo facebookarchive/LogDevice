@@ -71,11 +71,17 @@ namespace facebook { namespace logdevice { namespace IntegrationTestUtils {
 std::string defaultLogdevicedPath() {
   return "logdevice/server/logdeviced_nofb";
 }
+std::string defaultMarkdownLDQueryPath() {
+  return "logdevice/ops/ldquery/markdown-ldquery";
+}
 static const char* CHECKER_PATH =
     "logdevice/replication_checker/replication_checker_nofb";
 #else
 std::string defaultLogdevicedPath() {
   return "bin/logdeviced";
+}
+std::string defaultMarkdownLDQueryPath() {
+  return "bin/markdown-ldquery";
 }
 static const char* CHECKER_PATH = "bin/replication_checker_nofb";
 #endif

@@ -8,30 +8,44 @@
 #include <folly/FileUtil.h>
 #include <gtest/gtest.h>
 
-//#include "logdevice/test/utils/IntegrationTestBase.h"
+#include "logdevice/test/utils/IntegrationTestBase.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
 
 using namespace facebook::logdevice;
 using namespace facebook::logdevice::IntegrationTestUtils;
 
-// Output of running `logdeviced(_nofb) --markdown-settings` must match contents
-// of (public_tld/)docs/settings.md. Regenerate the settings.md file if there
-// is a mismatch
-TEST(ServerSettingsTest, SettingsMatch) {
-  auto binary_path = findBinary(defaultLogdevicedPath());
+struct TestParams {
+  std::string doc;
+  std::string command;
+  std::vector<std::string> args;
+};
+
+class DocumentationInSyncTest
+    : public IntegrationTestBase,
+      public ::testing::WithParamInterface<TestParams> {};
+
+// Output of running markdown generator must match contents markdown document,
+// ensuring published documentation kept in-sync with latest changes
+// `logdeviced(_nofb) --markdown-settings` matches (public_tld/)docs/settings.md
+// `markdown-ldquery` matches (public_tld/)docs/ldquery.md
+// Regenerate the appropriate document if there is a mismatch.
+TEST_P(DocumentationInSyncTest, RegenAndCompare) {
+  auto params = GetParam();
+
+  auto binary_path = findBinary(params.command);
   ASSERT_FALSE(binary_path.empty());
+  params.args.insert(params.args.begin(), binary_path);
   folly::Subprocess ldrun(
-      {binary_path, "--markdown-settings"},
-      folly::Subprocess::Options().pipeStdout().pipeStderr());
+      params.args, folly::Subprocess::Options().pipeStdout().pipeStderr());
   auto outputs = ldrun.communicate();
   auto status = ldrun.wait();
   if (!status.exited()) {
     ld_error("logdeviced did not exit properly: %s", status.str().c_str());
     ASSERT_TRUE(false);
   }
-  auto settings_path = findFile("docs/settings.md");
+  auto settings_path = findFile("docs/" + params.doc);
   if (settings_path.empty()) {
-    settings_path = findFile("logdevice/public_tld/docs/settings.md");
+    settings_path = findFile("logdevice/public_tld/docs/" + params.doc);
   }
   ASSERT_FALSE(settings_path.empty());
   std::string settings_file;
@@ -57,3 +71,11 @@ TEST(ServerSettingsTest, SettingsMatch) {
   }
   ASSERT_EQ(lines_generated, lines_file);
 }
+
+std::vector<TestParams> settings_test_params{
+    {"settings.md", defaultLogdevicedPath(), {"--markdown-settings"}},
+    {"ldquery.md", defaultMarkdownLDQueryPath(), {}}};
+
+INSTANTIATE_TEST_CASE_P(ServerSettingsTest,
+                        DocumentationInSyncTest,
+                        ::testing::ValuesIn(settings_test_params));

@@ -1691,6 +1691,10 @@ Status getSeqState(Client* client,
 // Returns the default path for logdeviced
 std::string defaultLogdevicedPath();
 
+// Returns the default path for ldquery-markdown
+std::string
+defaultMarkdownLDQueryPath();
+
 // Attempts to find a binary, given a relative path to search for.  Within FB
 // we just ask the build system for the path. For open source, calls findFile()
 std::string findBinary(const std::string& relative_path);

@@ -525,6 +525,9 @@ This table dumps information about all the Sequencer objects in the cluster.  Se
 | draining | long | Epoch that is draining (if any).  Draining means that the sequencer stopped accepting new writes but is completing appends curretnly in flight. |
 | metadata\_log\_written | long | Whether the epoch metadata used by this sequencer has been written to the metadata log. |
 | last\_byte\_offset | string | Offsets of the tail record. |
+| bytes\_per\_second | real | Append throughput averaged over the last throughput\_window\_seconds seconds. |
+| throughput\_window\_seconds | real | Time window over which append throughput estimate bytes\_per\_second was obtained. |
+| seconds\_until\_nodeset\_adjustment | real | Time until the next potential nodeset size adjustment or nodeset randomization. Zero if nodeset adjustment is disabled or if the sequencer reactivation is in progress. |
 
 ## settings
 Dumps the state of all settings for all nodes in the cluster.

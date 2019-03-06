@@ -31,9 +31,6 @@ jobs:
           working_directory: _build
           command: |
             make -j 8 docs
-      - run:
-          name: Ensure docs not modified by build
-          command: git diff --exit-code -- docs
       - persist_to_workspace:
           root: .
           paths:
