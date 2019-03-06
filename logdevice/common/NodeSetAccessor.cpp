@@ -820,32 +820,40 @@ void StorageSetAccessor::applyShardStatus() {
   }
 }
 
-void StorageSetAccessor::printShardStatus() {
-  const auto& shard_status_map = getShardAuthoritativeStatusMap();
-  std::string result;
+std::string StorageSetAccessor::getHumanReadableShardStatuses() {
+  std::vector<std::string> result_statuses;
+  const auto shard_status_map =
+      failure_domain_.getShardAuthoritativeStatusMap();
 
   for (const ShardID shard : epoch_metadata_.shards) {
-    const auto st =
-        shard_status_map.getShardStatus(shard.node(), shard.shard());
+    const auto st = failure_domain_.getShardAuthoritativeStatus(shard);
 
     ShardStatus st_attr_status;
     int rv = failure_domain_.getShardAttribute(shard, &st_attr_status);
+
     if (rv < 0) {
-      ld_error("INTERNAL ERROR: Couldn't find shard attribute.");
-      return;
+      RATELIMIT_ERROR(std::chrono::seconds(10),
+                      10,
+                      "INTERNAL ERROR: state for shard %s not found!",
+                      shard.toString().c_str());
+      ld_check(false);
+      return "<error>";
     }
 
     if (st_attr_status.state != ShardState::SUCCESS) {
-      result += shard.toString() + " = " +
-          logdevice::toShortString(st).c_str() +
+      result_statuses.push_back(
+          shard.toString() + " = " + logdevice::toShortString(st).c_str() +
           "(state=" + getShardState(st_attr_status.state).c_str() +
-          ", status=" + error_name(st_attr_status.status) + "); ";
+          ", status=" + error_name(st_attr_status.status) + ")");
     }
   }
 
-  ld_info("log:%lu, shards that couldn't reply successfully :[%s]",
-          log_id_.val(),
-          result.c_str());
+  return folly::join("; ", result_statuses);
+}
+
+void StorageSetAccessor::printShardStatus() {
+  ld_info(
+      "Log %lu: [%s]", log_id_.val(), getHumanReadableShardStatuses().c_str());
 }
 
 std::string StorageSetAccessor::getDebugInfo() const {

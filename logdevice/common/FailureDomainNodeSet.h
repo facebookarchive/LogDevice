@@ -131,6 +131,11 @@ class FailureDomainNodeSet {
   // such attribute value will be selected.
   using attr_pred_t = std::function<bool(AttrType)>;
 
+  // TODO(T40776059) re-implement ShardAuthoritativeStatusMap to encapsulate
+  // the below.
+  typedef std::unordered_map<ShardID, AuthoritativeStatus, ShardID::Hash>
+      AuthoritativeStatusMap;
+
   /**
    * Construct a FailureDomainNodeSet object.
    * @param storage_set              the entire set of shards to keep track of
@@ -251,6 +256,10 @@ class FailureDomainNodeSet {
 
   bool containsShard(ShardID shard) const {
     return shard_authoritative_.count(shard);
+  }
+
+  const AuthoritativeStatusMap getShardAuthoritativeStatusMap() {
+    return shard_authoritative_;
   }
 
  private:

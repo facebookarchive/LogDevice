@@ -121,6 +121,20 @@ class MockIsLogEmptyRequest : public IsLogEmptyRequest {
     onShardStatusChanged();
   }
 
+  void injectNAShardStatus(ShardID shard, AuthoritativeStatus auth_st) {
+    getMockStorageSetAccessor()->mockShardStatusChanged(shard, auth_st);
+    getMockStorageSetAccessor()->onShardStatusChanged();
+  }
+
+  void injectFDShardStatus(ShardID shard, AuthoritativeStatus auth_st) {
+    map_.setShardStatus(shard.node(), shard.shard(), auth_st);
+    IsLogEmptyRequest::applyShardStatus(/*initialize_unknown=*/false);
+  }
+
+  bool haveShardAuthoritativeStatusDifferences() {
+    return IsLogEmptyRequest::haveShardAuthoritativeStatusDifferences();
+  }
+
   bool isShardRebuilding(ShardID shard) {
     shard_status_t st;
     int rv = failure_domain_->getShardAttribute(shard, &st);
@@ -136,6 +150,19 @@ class MockIsLogEmptyRequest : public IsLogEmptyRequest {
   }
   bool haveDeadEnd() {
     return IsLogEmptyRequest::haveDeadEnd();
+  }
+
+  std::string getHumanReadableShardStatuses() {
+    return IsLogEmptyRequest::getHumanReadableShardStatuses();
+  }
+
+  std::string getNonEmptyShardsList() {
+    return IsLogEmptyRequest::getNonEmptyShardsList();
+  }
+
+  MockStorageSetAccessor* getMockStorageSetAccessor() {
+    ld_check(nodeset_accessor_);
+    return (MockStorageSetAccessor*)nodeset_accessor_.get();
   }
 
  protected: // mock stuff that communicates externally
@@ -180,11 +207,6 @@ class MockIsLogEmptyRequest : public IsLogEmptyRequest {
   }
 
  private:
-  MockStorageSetAccessor* getMockStorageSetAccessor() {
-    ld_check(nodeset_accessor_);
-    return (MockStorageSetAccessor*)nodeset_accessor_.get();
-  }
-
   StorageSet storage_set_;
   ReplicationProperty replication_;
   std::shared_ptr<ServerConfig> config_;
@@ -1385,6 +1407,68 @@ TEST(IsLogEmptyRequestTest, MiniRebuildingFinishesNonEmpty) {
   ASSERT_FALSE(req.isMockGracePeriodTimerActive());
   // Should be counted a dead end, and finish with a partial result.
   cb.assertCalled(E::OK, false);
+}
+
+// Check that haveShardAuthoritativeStatusDifferences() works.
+TEST(IsLogEmptyRequestTest, ShardAuthStatusDifferenceCheck) {
+  Callback cb;
+  // Have N0's shard be authoritative empty from the start
+  changeShardStartingAuthStatus(
+      node(0), AuthoritativeStatus::AUTHORITATIVE_EMPTY);
+  MockIsLogEmptyRequest req(6,
+                            ReplicationProperty({{NodeLocationScope::NODE, 3}}),
+                            cb,
+                            /*grace_period=*/std::chrono::milliseconds(500));
+  cb.assertNotCalled();
+  ASSERT_TRUE(req.isMockJobTimerActive());
+  ASSERT_FALSE(req.isMockGracePeriodTimerActive());
+  req.onReply(node(0), E::CONNFAILED, false);
+  cb.assertNotCalled();
+  req.onReply(node(1), E::OK, false);
+  cb.assertNotCalled();
+
+  // Provides debugging information in case of test failure, but also prevents
+  // people from completely breaking the logging functions, or if anyone wants
+  // to change them, they can simply make this test fail at the end.
+  auto print_shard_states = [&] {
+    ld_info(
+        "Shard states according to\nNA: [%s],\nFD: [%s].\nNon-empty shards: %s",
+        req.getMockStorageSetAccessor()
+            ->getHumanReadableShardStatuses()
+            .c_str(),
+        req.getHumanReadableShardStatuses().c_str(),
+        req.getNonEmptyShardsList().c_str());
+  };
+
+  // Inject authoritative status differences, verify that check catches them.
+  // First with NA, then with FD.
+  ASSERT_FALSE(req.haveShardAuthoritativeStatusDifferences());
+  print_shard_states();
+  req.injectNAShardStatus(node(2), AuthoritativeStatus::UNDERREPLICATION);
+  print_shard_states();
+  ASSERT_TRUE(req.haveShardAuthoritativeStatusDifferences());
+  req.injectFDShardStatus(node(2), AuthoritativeStatus::UNDERREPLICATION);
+  print_shard_states();
+  ASSERT_FALSE(req.haveShardAuthoritativeStatusDifferences());
+  req.injectFDShardStatus(node(5), AuthoritativeStatus::UNAVAILABLE);
+  print_shard_states();
+  ASSERT_TRUE(req.haveShardAuthoritativeStatusDifferences());
+  req.injectNAShardStatus(node(5), AuthoritativeStatus::UNAVAILABLE);
+  ASSERT_FALSE(req.haveShardAuthoritativeStatusDifferences());
+  print_shard_states();
+
+  // Make request finish non-empty.
+  req.onReply(node(5), E::REBUILDING, false);
+  cb.assertNotCalled();
+  req.onReply(node(2), E::REBUILDING, false);
+  cb.assertNotCalled();
+  req.onReply(node(3), E::OK, false);
+  cb.assertNotCalled();
+  req.onReply(node(4), E::OK, false);
+  ASSERT_FALSE(req.completionConditionCalled());
+  ASSERT_FALSE(req.isMockGracePeriodTimerActive());
+  cb.assertCalled(E::OK, false);
+  print_shard_states();
 }
 
 } // namespace

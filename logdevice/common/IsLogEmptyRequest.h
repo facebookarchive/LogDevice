@@ -174,6 +174,7 @@ class IsLogEmptyRequest : public DistributedRequest,
   // is either UNDERREPLICATION or UNAVAILABLE.
   static const shard_status_t SHARD_IS_REBUILDING = 1u << 3;
   using FailureDomain = FailureDomainNodeSet<shard_status_t>;
+  using AuthoritativeStatusMap = FailureDomain::AuthoritativeStatusMap;
 
   std::unique_ptr<FailureDomain> failure_domain_;
   bool completion_cond_called_ = false;
@@ -215,6 +216,21 @@ class IsLogEmptyRequest : public DistributedRequest,
   static chrono_interval_t<std::chrono::milliseconds>
   getWaveTimeoutInterval(std::chrono::milliseconds timeout);
 
+  // Print any differences between shard statuses of failure_domain_, and the
+  // corresponding status according to nodeset_accessor_. Return true if there
+  // is a difference.
+  bool haveShardAuthoritativeStatusDifferences(
+      const AuthoritativeStatusMap* fd_before = nullptr,
+      const AuthoritativeStatusMap* na_before = nullptr);
+
+  // Create a human-readable string with details on all shards that aren't
+  // considered fully authoritative. Returned string might be an error message.
+  std::string getHumanReadableShardStatuses();
+
+  std::string getNonEmptyShardsList();
+
+  void applyShardStatus(bool initialize_unknown);
+
  private:
   const logid_t log_id_;
   const std::chrono::milliseconds client_timeout_;
@@ -225,11 +241,11 @@ class IsLogEmptyRequest : public DistributedRequest,
   std::unique_ptr<NodeSetFinder> nodeset_finder_{nullptr};
 
   static bool node_empty_filter(shard_status_t val) {
-    return val & SHARD_HAS_RESULT && val & SHARD_IS_EMPTY;
+    return (val & SHARD_HAS_RESULT) && (val & SHARD_IS_EMPTY);
   }
 
   static bool node_non_empty_filter(shard_status_t val) {
-    return val & SHARD_HAS_RESULT && !(val & SHARD_IS_EMPTY);
+    return (val & SHARD_HAS_RESULT) && (~val & SHARD_IS_EMPTY);
   }
 
   bool completion_cond_allowed_termination_ = false;
@@ -240,6 +256,11 @@ class IsLogEmptyRequest : public DistributedRequest,
   // Only to be used for debugging purposes
   bool started_{false};
 
+  // save results
+  Status status_{E::UNKNOWN};
+
+  StorageSet shards_;
+
   void initStorageSetAccessor();
 
   // check if request is done and call finalize
@@ -248,7 +269,6 @@ class IsLogEmptyRequest : public DistributedRequest,
   // Invokes the application-supplied callback and destroys the Request
   void finalize(Status status, bool empty, bool delete_this = true);
 
-  void applyShardStatus(bool initialize_unknown);
   void setShardAuthoritativeStatus(ShardID shard,
                                    AuthoritativeStatus st,
                                    bool initialize_unknown);
@@ -261,6 +281,9 @@ class IsLogEmptyRequest : public DistributedRequest,
   }
 
   void completion(Status st);
+
+  // Human-readable representation of shard_status_t
+  static std::string getShardState(shard_status_t s);
 };
 
 }} // namespace facebook::logdevice

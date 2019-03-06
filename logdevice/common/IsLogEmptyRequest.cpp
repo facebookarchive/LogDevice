@@ -78,11 +78,11 @@ std::unique_ptr<NodeSetFinder> IsLogEmptyRequest::makeNodeSetFinder() {
 void IsLogEmptyRequest::initStorageSetAccessor() {
   ld_check(nodeset_finder_);
   auto config = getConfig();
-  auto shards = nodeset_finder_->getUnionStorageSet(config);
+  shards_ = nodeset_finder_->getUnionStorageSet(config);
   ReplicationProperty minRep = nodeset_finder_->getNarrowestReplication();
   ld_debug("Building StorageSetAccessor with %lu shards in storage set, "
            "replication %s",
-           shards.size(),
+           shards_.size(),
            minRep.toString().c_str());
 
   StorageSetAccessor::ShardAccessFunc shard_access =
@@ -107,10 +107,10 @@ void IsLogEmptyRequest::initStorageSetAccessor() {
   };
 
   nodeset_accessor_ =
-      makeStorageSetAccessor(config, shards, minRep, shard_access, completion);
+      makeStorageSetAccessor(config, shards_, minRep, shard_access, completion);
   nodeset_accessor_->setGracePeriod(grace_period_, completion_cond);
   nodeset_accessor_->setWaveTimeout(getWaveTimeoutInterval(client_timeout_));
-  failure_domain_ = makeFailureDomain(shards, config, minRep);
+  failure_domain_ = makeFailureDomain(shards_, config, minRep);
 }
 
 chrono_interval_t<std::chrono::milliseconds>
@@ -127,6 +127,16 @@ IsLogEmptyRequest::getWaveTimeoutInterval(std::chrono::milliseconds timeout) {
 void IsLogEmptyRequest::onShardStatusChanged(bool initialize) {
   // nodeset accessor may be not constructed yet.
   if (nodeset_accessor_) {
+    if (!initialize) {
+      // May only differ when we're still starting up
+      ld_check(!haveShardAuthoritativeStatusDifferences());
+    }
+
+    const auto fd_auth_statuses_before =
+        failure_domain_->getShardAuthoritativeStatusMap();
+    const auto na_auth_statuses_before =
+        nodeset_accessor_->getFailureDomainShardAuthoritativeStatusMap();
+
     applyShardStatus(initialize);
 
     // A node may have become underreplicated or unavailable, such that we no
@@ -145,13 +155,15 @@ void IsLogEmptyRequest::onShardStatusChanged(bool initialize) {
                      "%lu non-empty. Shard statuses according to request's "
                      "FailureDomain: [%s]",
                      log_id_.val(),
-                     nodeset_accessor_->allShardsStateSummary().c_str());
+                     getHumanReadableShardStatuses().c_str());
       completion(E::FAILED); // this will correctly decide the final status
     } else {
       // NodeSetAccessor won't be ready when we initialize this request's
       // failure domain, but will update itself when we start it.
       if (!initialize) {
         nodeset_accessor_->onShardStatusChanged();
+        ld_check(!haveShardAuthoritativeStatusDifferences(
+            &fd_auth_statuses_before, &na_auth_statuses_before));
       }
     }
   }
@@ -474,6 +486,107 @@ void IsLogEmptyRequest::onReply(ShardID from, Status status, bool is_empty) {
   }
 }
 
+bool IsLogEmptyRequest::haveShardAuthoritativeStatusDifferences(
+    const AuthoritativeStatusMap* fd_auth_statuses_before,
+    const AuthoritativeStatusMap* na_auth_statuses_before) {
+  const auto fd_auth_statuses_after =
+      failure_domain_->getShardAuthoritativeStatusMap();
+  const auto na_auth_statuses_after =
+      nodeset_accessor_->getFailureDomainShardAuthoritativeStatusMap();
+
+  auto shard_status_pair_to_str =
+      [&](ShardID shard,
+          const std::unordered_map<ShardID, AuthoritativeStatus, ShardID::Hash>*
+              map) -> std::string {
+    if (map == nullptr) {
+      return "?";
+    }
+    auto pair = map->find(shard);
+    return pair == map->cend() ? "?" : logdevice::toShortString(pair->second);
+  };
+
+  bool have_difference = false;
+
+  auto print_shard_status_difference = [&](ShardID shard) {
+    have_difference = true;
+    RATELIMIT_ERROR(
+        std::chrono::seconds(60),
+        60,
+        "Failure domains differ: request for log %lu says shard %s [%s -> %s], "
+        "NodeSetAccessor says [%s -> %s]",
+        log_id_.val(),
+        shard.toString().c_str(),
+        shard_status_pair_to_str(shard, fd_auth_statuses_before).c_str(),
+        shard_status_pair_to_str(shard, &fd_auth_statuses_after).c_str(),
+        shard_status_pair_to_str(shard, na_auth_statuses_before).c_str(),
+        shard_status_pair_to_str(shard, &na_auth_statuses_after).c_str());
+  };
+
+  // Look through all shards known by this request's FailureDomain, and look
+  // for any inconsistencies w.r.t. the NodeSetAccessor's FailureDomain.
+  for (const auto fd_pair : fd_auth_statuses_after) {
+    const auto na_pair = na_auth_statuses_after.find(fd_pair.first);
+    if (na_pair == na_auth_statuses_after.cend() ||
+        fd_pair.second != na_pair->second) {
+      print_shard_status_difference(fd_pair.first);
+    }
+  }
+  // Now, all that possibly remains is some shards that NodeSetAccessor know
+  // about that this request doesn't.
+  for (const auto na_pair : na_auth_statuses_after) {
+    if (fd_auth_statuses_after.find(na_pair.first) ==
+        fd_auth_statuses_after.cend()) {
+      print_shard_status_difference(na_pair.first);
+    }
+  }
+
+  return have_difference;
+}
+
+std::string IsLogEmptyRequest::getHumanReadableShardStatuses() {
+  std::vector<std::string> result_statuses;
+
+  for (const ShardID shard : shards_) {
+    const auto st = failure_domain_->getShardAuthoritativeStatus(shard);
+
+    shard_status_t st_attr_status = 0;
+    int rv = failure_domain_->getShardAttribute(shard, &st_attr_status);
+    if (rv != 0) {
+      RATELIMIT_ERROR(std::chrono::seconds(10),
+                      10,
+                      "INTERNAL ERROR: state for shard %s not found!",
+                      shard.toString().c_str());
+      ld_check(false);
+      return "<error>";
+    }
+
+    // Print status of nodes that did not give us a result
+    if (~st_attr_status & SHARD_HAS_RESULT) {
+      result_statuses.push_back(shard.toString() + " = " +
+                                logdevice::toShortString(st).c_str() + "(" +
+                                getShardState(st_attr_status).c_str() + ")");
+    }
+  }
+
+  return folly::join("; ", result_statuses);
+}
+
+std::string IsLogEmptyRequest::getShardState(shard_status_t s) {
+  std::vector<std::string> results;
+
+  if (s & SHARD_HAS_ERROR) {
+    results.push_back("HAS_ERROR");
+  }
+  if (s & SHARD_HAS_RESULT) {
+    results.push_back(s & SHARD_IS_EMPTY ? "RESULT=EMPTY" : "RESULT=NON_EMPTY");
+  }
+  if (s & SHARD_IS_REBUILDING) {
+    results.push_back("IS_REBUILDING");
+  }
+
+  return results.empty() ? "-" : folly::join("|", results);
+}
+
 void IsLogEmptyRequest::deleteThis() {
   Worker* worker = Worker::onThisThread();
 
@@ -487,21 +600,26 @@ void IsLogEmptyRequest::deleteThis() {
 void IsLogEmptyRequest::completion(Status st) {
   ld_check_in(st, ({E::OK, E::TIMEDOUT, E::FAILED}));
 
-  std::string shard_states = "";
-
   if (nodeset_accessor_) {
-    shard_states = nodeset_accessor_->allShardsStateSummary();
+    if (started_) {
+      ld_check(!haveShardAuthoritativeStatusDifferences());
+    }
   }
 
   if (st == E::TIMEDOUT) {
     // Hit the client timeout before seeing an f-majority of responses.
-    RATELIMIT_WARNING(std::chrono::seconds(1),
-                      10,
-                      "timed out (%ld ms) waiting for storage nodes, "
-                      "assuming that log %lu is not empty. Shard states: %s",
-                      client_timeout_.count(),
-                      log_id_.val(),
-                      shard_states.c_str());
+    RATELIMIT_WARNING(
+        std::chrono::seconds(1),
+        10,
+        "timed out (%ld ms) waiting for storage nodes, "
+        "assuming that log %lu is not empty. Shard states "
+        "according to NA: [%s], FD: [%s]",
+        client_timeout_.count(),
+        log_id_.val(),
+        nodeset_accessor_
+            ? nodeset_accessor_->getHumanReadableShardStatuses().c_str()
+            : "<not initialized>",
+        getHumanReadableShardStatuses().c_str());
     ld_check(!completion_cond_called_);
     finalize(E::TIMEDOUT, false);
   } else if (st == E::OK) {
@@ -519,12 +637,15 @@ void IsLogEmptyRequest::completion(Status st) {
                      10,
                      "Saw an f-majority of responses but got no consensus "
                      "despite waiting for a %lu ms grace period or "
-                     "the %lu ms client timeout running out; considering "
-                     "log %lu non-empty (partial result). Shard states: %s",
+                     "the %lu ms client timeout; considering log %lu "
+                     "non-empty (partial result). Shard states according to "
+                     "NA: [%s], FD: [%s]. Non-empty shards: %s",
                      grace_period_.count(),
                      client_timeout_.count(),
                      log_id_.val(),
-                     shard_states.c_str());
+                     nodeset_accessor_->getHumanReadableShardStatuses().c_str(),
+                     getHumanReadableShardStatuses().c_str(),
+                     getNonEmptyShardsList().c_str());
 
       finalize(E::PARTIAL, false);
     } else if (haveEmptyFMajority()) {
@@ -545,6 +666,37 @@ void IsLogEmptyRequest::completion(Status st) {
     ld_check_eq(st, E::FAILED);
     finalize(haveOnlyRebuildingFailures() ? E::PARTIAL : E::FAILED, false);
   }
+}
+
+std::string IsLogEmptyRequest::getNonEmptyShardsList() {
+  std::string result = "[";
+  bool first = true;
+  bool some_not_found = false;
+
+  for (ShardID shard : shards_) {
+    shard_status_t status;
+    int rv = failure_domain_->getShardAttribute(shard, &status);
+    ld_check_eq(rv, 0);
+    if (rv != 0) {
+      some_not_found = true;
+    } else if (node_non_empty_filter(status)) {
+      if (first) {
+        first = false;
+      } else {
+        result += ", ";
+      }
+      result += shard.toString();
+    }
+  }
+
+  result += "]";
+
+  if (some_not_found) {
+    // This should be impossible, but just in case.
+    result += " (some shards not found due to an internal error)";
+  }
+
+  return result;
 }
 
 }} // namespace facebook::logdevice

@@ -247,6 +247,13 @@ class StorageSetAccessor {
   std::string getDebugInfo() const;
 
   /**
+   * Returns human-readable shard information (or an error message).
+   * Helper for printShardStatus().
+   */
+ public:
+  std::string getHumanReadableShardStatuses();
+
+  /**
    * Set the authoritative status of a node, by default all nodes are
    * FULLY_AUTHORITATIVE. Note that for certain properties, changing
    * authoritative status can change whether or not the property is satisfied,
@@ -302,6 +309,11 @@ class StorageSetAccessor {
 
   FailedShardsMap
   getFailedShards(std::function<bool(Status)> failure_status_predicate) const;
+
+  const std::unordered_map<ShardID, AuthoritativeStatus, ShardID::Hash>
+  getFailureDomainShardAuthoritativeStatusMap() {
+    return failure_domain_.getShardAuthoritativeStatusMap();
+  }
 
  protected:
   virtual std::unique_ptr<Timer> createJobTimer(std::function<void()> callback);
