@@ -15,6 +15,7 @@ ExternalProject_Add(fbthrift
     CMAKE_ARGS -Dthriftpy3=${thriftpy3} -DCXX_STD=gnu++14
         -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}
         -DCMAKE_PREFIX_PATH=${LOGDEVICE_STAGING_DIR}/usr/local
+        -DCMAKE_POSITION_INDEPENDENT_CODE=True
     INSTALL_COMMAND make install DESTDIR=${LOGDEVICE_STAGING_DIR}
     )
 
@@ -32,7 +33,7 @@ set(THRIFTCPP2 ${BINARY_DIR}/lib/libthriftcpp2.a)
 set(FBTHRIFT_LIBRARIES
     ${BINARY_DIR}/libfbthrift.a)
 set(FBTHRIFT_INCLUDE_DIR
-    ${SOURCE_DIR})
+    ${SOURCE_DIR} ${BINARY_DIR})
 message(STATUS "FBThrift Library: ${FBTHRIFT_LIBRARIES}")
 message(STATUS "FBThrift Includes: ${FBTHRIFT_INCLUDE_DIR}")
 message("FBThrift Compiler: ${THRIFT1}")
