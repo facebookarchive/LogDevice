@@ -37,7 +37,7 @@ struct STARTED_Header {
   //   closes).
   // - FAILED: Persistent error, no point in retrying unless the socket
   //   closes.
-  // - AGAIN, NOTREADY: Transient error, reader should retry.
+  // - AGAIN, NOTREADY, SYSLIMIT: Transient error, reader should retry.
   // - REBUILDING: Server is in rebuilding state. No point in retrying unless
   //   the socket closes.
   // - SHUTDOWN: Server is shutting down. No point in retrying unless the socket

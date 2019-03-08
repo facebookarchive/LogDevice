@@ -770,6 +770,7 @@ void ClientReadStream::onStarted(ShardID from, const STARTED_Message& msg) {
 
     case E::AGAIN:
     case E::NOTREADY:
+    case E::SYSLIMIT:
       onConnectionFailure(state, status);
       break;
     case E::ACCESS:

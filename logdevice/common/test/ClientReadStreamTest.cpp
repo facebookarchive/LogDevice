@@ -805,6 +805,9 @@ bool start_cmp(StartMessage const& a, StartMessage const& b) {
 #define ON_STARTED_ACCESS(filter_version, ...) \
   ON_STARTED_FULL(filter_version, E::ACCESS, LSN_INVALID, __VA_ARGS__)
 
+#define ON_STARTED_SYSLIMIT(filter_version, ...) \
+  ON_STARTED_FULL(filter_version, E::SYSLIMIT, LSN_INVALID, __VA_ARGS__)
+
 #define ASSERT_STOP_MESSAGES(...)                                  \
   {                                                                \
     std::stable_sort(state_.stop.begin(), state_.stop.end());      \
@@ -1898,6 +1901,21 @@ TEST_P(ClientReadStreamTest, AccessGap) {
 
   // Check that the Read Stream destroyed it self correctly
   ASSERT_TRUE(state_.disposed);
+}
+
+// Ensures that STARTED with status E::SYSLIMIT reconnects
+TEST_P(ClientReadStreamTest, STARTED_Syslimit) {
+  start_lsn_ = lsn(1, 1);
+  until_lsn_ = lsn(1, 100);
+  start();
+
+  overrideConnectionStates(ConnectionState::START_SENT);
+
+  ASSERT_FALSE(reconnectTimerIsActive(N0));
+
+  ON_STARTED_SYSLIMIT(filter_version_t{1}, N0);
+
+  ASSERT_TRUE(reconnectTimerIsActive(N0));
 }
 
 // Ensures that Access Gaps are being sent even if client can not accept
