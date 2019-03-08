@@ -32,6 +32,11 @@ using RocksDBKeyFormat::PerEpochLogMetaKey;
 
 namespace {
 
+// Flags that should be ORed together from all merge operands.
+const LocalLogStoreRecordFormat::flags_t CUMULATIVE_RECORD_FLAGS =
+    LocalLogStoreRecordFormat::FLAG_WRITTEN_BY_REBUILDING |
+    LocalLogStoreRecordFormat::FLAG_WRITTEN_BY_RECOVERY;
+
 // Convert rocksdb::Slice to logdevice::Slice.
 static inline Slice toLdSlice(const rocksdb::Slice& rocksDbSlice) {
   return Slice(rocksDbSlice.data(), rocksDbSlice.size());
@@ -280,6 +285,8 @@ bool handleDataRecord(const rocksdb::Slice& key,
   Pick with_payload;
   Pick amend;
   int32_t next_index = 0;
+  // Flags that shoud get bitwise ORed across all applied amends.
+  LocalLogStoreRecordFormat::flags_t cumulative_flags = 0;
 
   // Helper function used both for *existing_value and merge operands.
   // Updates `with_payload' and `amend'.
@@ -316,6 +323,10 @@ bool handleDataRecord(const rocksdb::Slice& key,
       pick.precedence = p;
       pick.copyset_size = copyset_size;
     }
+
+    // Collect flags.
+    cumulative_flags |= flags & CUMULATIVE_RECORD_FLAGS;
+
     return true;
   };
 
@@ -348,10 +359,33 @@ bool handleDataRecord(const rocksdb::Slice& key,
     }
   }
 
+  // Set the result to one of the existing operands, but make sure that its
+  // cumulative flags match cumulative_flags.
+  auto use_existing_but_maybe_modify_flags = [&](const Pick& p) {
+    if ((p.precedence.flags & CUMULATIVE_RECORD_FLAGS) == cumulative_flags) {
+      // Common case: the existing operand has the right flags.
+      out.setExistingOperand(p.slice);
+      return;
+    }
+
+    // Rare case: we need to make a copy just to change flags.
+    // This is an annoying thing we have to do to keep the behavior exactly the
+    // same as in CSI merging (which doesn't know which values have payloads).
+    // Just "combine" the value with itself to reuse combine()'s
+    // parsing, formatting and flag-replacing code.
+    combine(p.slice,
+            p.slice,
+            p.precedence.flags | cumulative_flags,
+            p.precedence.wave,
+            p.copyset_size,
+            this_shard,
+            out);
+  };
+
   if (amend.precedence < with_payload.precedence) {
     // Common case: latest entry had the payload, often just one
     ld_check(!with_payload.precedence.empty());
-    out.setExistingOperand(with_payload.slice);
+    use_existing_but_maybe_modify_flags(with_payload);
     return true;
   }
 
@@ -359,7 +393,7 @@ bool handleDataRecord(const rocksdb::Slice& key,
     // Much less common: we did not find the payload, probably just doing a
     // partial merge of amends
     ld_check(!amend.precedence.empty());
-    out.setExistingOperand(amend.slice);
+    use_existing_but_maybe_modify_flags(amend);
     return true;
   }
 
@@ -371,7 +405,7 @@ bool handleDataRecord(const rocksdb::Slice& key,
 
   combine(with_payload.slice,
           amend.slice,
-          amend.precedence.flags,
+          amend.precedence.flags | cumulative_flags,
           amend.precedence.wave,
           amend.copyset_size,
           this_shard,
@@ -385,8 +419,6 @@ bool handleCopySetIndexEntry(const rocksdb::Slice& key,
                              const OperandList& operand_list,
                              shard_index_t this_shard,
                              DataMergeOutput& out) {
-  Slice result_value{nullptr, 0};
-
   if (!CopySetIndexKey::valid(key.data(), key.size())) {
     RATELIMIT_ERROR(std::chrono::seconds(1),
                     10,
@@ -403,14 +435,12 @@ bool handleCopySetIndexEntry(const rocksdb::Slice& key,
   }
 
   int32_t next_index = 0;
+  Slice result_value{nullptr, 0};
   Precedence max_precedence;
+  LocalLogStoreRecordFormat::flags_t cumulative_record_flags = 0;
 
   // Helper function used both for *existing_value and merge operands.
-  auto process = [&key,
-                  &result_value,
-                  &next_index,
-                  &max_precedence,
-                  this_shard](const rocksdb::Slice& rocks_value) {
+  auto process = [&](const rocksdb::Slice& rocks_value) {
     const auto value = toLdSlice(rocks_value);
     if (!value.data || !value.size) {
       RATELIMIT_ERROR(std::chrono::seconds(1),
@@ -439,10 +469,10 @@ bool handleCopySetIndexEntry(const rocksdb::Slice& key,
       return false;
     }
 
-    Precedence p(
-        LocalLogStoreRecordFormat::copySetIndexFlagsToRecordFlags(csi_flags),
-        wave,
-        next_index++);
+    LocalLogStoreRecordFormat::flags_t record_flags =
+        LocalLogStoreRecordFormat::copySetIndexFlagsToRecordFlags(csi_flags);
+    cumulative_record_flags |= record_flags & CUMULATIVE_RECORD_FLAGS;
+    Precedence p(record_flags, wave, next_index++);
     if (max_precedence < p) {
       result_value = value;
       max_precedence = p;
@@ -460,7 +490,35 @@ bool handleCopySetIndexEntry(const rocksdb::Slice& key,
     }
   }
 
-  out.setExistingOperand(result_value);
+  // Some flags need to be bitwise ORed from all operands, while other flags
+  // are just taken from the highest-precedence operand.
+  if ((max_precedence.flags & CUMULATIVE_RECORD_FLAGS) ==
+      cumulative_record_flags) {
+    // Common case: the highest-precedence operand already has all needed flags.
+    out.setExistingOperand(result_value);
+    return true;
+  }
+
+  // Annoying rare case: we need to copy the operand and change some flags.
+  // Deserialize, bitwise OR the flags, serialize.
+
+  std::vector<ShardID> copyset;
+  uint32_t wave;
+  LocalLogStoreRecordFormat::csi_flags_t csi_flags = 0;
+  bool rv = LocalLogStoreRecordFormat::parseCopySetIndexSingleEntry(
+      result_value, &copyset, &wave, &csi_flags, this_shard);
+  ld_check(rv); // parsing succeeded before
+  ld_check(!copyset.empty());
+  // Assume that cumulative record flags 1:1 correspond to CSI flags.
+  csi_flags |=
+      LocalLogStoreRecordFormat::formCopySetIndexFlags(cumulative_record_flags);
+  LocalLogStoreRecordFormat::formCopySetIndexEntry(wave,
+                                                   &copyset[0],
+                                                   copyset.size(),
+                                                   LSN_INVALID,
+                                                   csi_flags,
+                                                   &out.new_value);
+  ld_check(!out.new_value.empty());
   return true;
 }
 
@@ -514,11 +572,9 @@ void combine(const Slice& with_payload_slice,
     ld_check(rv == 0);
   }
 
-  // The WRITTEN_BY_RECOVERY and WRITTEN_BY_REBUILDING flags, once set, are
-  // sticky. An amend can set them, but not clear them.
-  flags |= amend_flags &
-      (LocalLogStoreRecordFormat::FLAG_WRITTEN_BY_RECOVERY |
-       LocalLogStoreRecordFormat::FLAG_WRITTEN_BY_REBUILDING);
+  // Some flags, once set, are sticky. An amend can set them, but not clear
+  // them.
+  flags |= amend_flags & CUMULATIVE_RECORD_FLAGS;
 
   // Drained records may be replaced during a subsequent rebuilding event
   // with a copy that should be visible. So the amend's flags override any

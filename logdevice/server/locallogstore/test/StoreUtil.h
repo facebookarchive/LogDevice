@@ -79,10 +79,20 @@ class TestRecord {
     return *this;
   }
 
+  TestRecord& writtenByRebuilding() {
+    flags_ |= LocalLogStoreRecordFormat::FLAG_WRITTEN_BY_REBUILDING;
+    return *this;
+  }
+
   TestRecord& offsetsWithinEpoch(OffsetMap offsets_within_epoch) {
     flags_ |= LocalLogStoreRecordFormat::FLAG_OFFSET_WITHIN_EPOCH;
     flags_ |= LocalLogStoreRecordFormat::FLAG_OFFSET_MAP;
     offsets_within_epoch_ = std::move(offsets_within_epoch);
+    return *this;
+  }
+
+  TestRecord& flagWrittenByRecovery() {
+    flags_ |= LocalLogStoreRecordFormat::FLAG_WRITTEN_BY_RECOVERY;
     return *this;
   }
 

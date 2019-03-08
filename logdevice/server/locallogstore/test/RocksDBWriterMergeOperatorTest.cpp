@@ -92,7 +92,10 @@ class RocksDBWriterMergeOperatorTest : public ::testing::Test {
       std::vector<RawRecord> rec;
       Status st = reader.logID(LOG_ID).process(&store_, rec);
       ASSERT_EQ(E::UNTIL_LSN_REACHED, st);
-      run_on_all(rec);
+      {
+        SCOPED_TRACE("csi = " + std::to_string(csi));
+        run_on_all(rec);
+      }
       if (csi) {
         run_on_csi(rec);
       } else {
@@ -539,6 +542,69 @@ TEST_F(RocksDBWriterMergeOperatorTest, EpochRecoveryNotOverrideByteOffset) {
         OffsetMap({{BYTE_OFFSET, 10}}), parse(rec[0]).offsets_within_epoch);
   };
   verify(cb_all, cb_records_only);
+}
+
+TEST_F(RocksDBWriterMergeOperatorTest, CumulativeFlags) {
+  // Write a few merge operands, flushing after each one to make sure rocksdb
+  // merges them all in one call.
+  // The sequence of operations is probably not realistic, but why not.
+
+  // Full record from rebuilding+recovery.
+  // The only record having rebuilding flag; the flag should make it into
+  // the final merge result.
+  // Payload will be overridden by the full record below.
+  storeRecords({TestRecord(LOG_ID, lsn_t(1), esn_t(0))
+                    .writtenByRebuilding()
+                    .flagWrittenByRecovery()
+                    .copyset({N2, N3})
+                    .payload(Payload("foo", 3))});
+  getStore().sync(Durability::MEMORY);
+  // Amend from recovery. Will be overriddem by the record and amend below.
+  storeRecords({TestRecord(LOG_ID, lsn_t(1), esn_t(0))
+                    .flagWrittenByRecovery()
+                    .copyset({N2, N3})
+                    .flagAmend()
+                    .payload(Payload())});
+  getStore().sync(Durability::MEMORY);
+  // Full record from recovery. Overrides the payload.
+  storeRecords({TestRecord(LOG_ID, lsn_t(1), esn_t(0))
+                    .flagWrittenByRecovery()
+                    .copyset({N2, N3})
+                    .payload(Payload("pikachu", 7))});
+  getStore().sync(Durability::MEMORY);
+  // Amend from recovery. Overrides copyset.
+  storeRecords({TestRecord(LOG_ID, lsn_t(1), esn_t(0))
+                    .flagWrittenByRecovery()
+                    .copyset({N1})
+                    .flagAmend()
+                    .payload(Payload())});
+  getStore().sync(Durability::MEMORY);
+  // Amend *not* from recovery. Overridden by the amend from recovery above.
+  storeRecords({TestRecord(LOG_ID, lsn_t(1), esn_t(0))
+                    .copyset({N2, N3})
+                    .flagAmend()
+                    .payload(Payload())});
+
+  verify(
+      [](const std::vector<RawRecord>& recs) {
+        ASSERT_EQ(1, recs.size());
+        ParseResult p = parse(recs[0]);
+        auto expected_flags =
+            LocalLogStoreRecordFormat::FLAG_WRITTEN_BY_RECOVERY |
+            LocalLogStoreRecordFormat::FLAG_WRITTEN_BY_REBUILDING;
+        EXPECT_EQ(
+            LocalLogStoreRecordFormat::flagsToString(expected_flags),
+            LocalLogStoreRecordFormat::flagsToString(p.flags & expected_flags));
+        EXPECT_EQ(1, p.wave);
+
+        EXPECT_EQ(std::vector<ShardID>({N1}), p.copyset);
+      },
+      [](const std::vector<RawRecord>& recs) {
+        EXPECT_EQ("pikachu", parse(recs.at(0)).payload);
+      },
+      [](const std::vector<RawRecord>& recs) {
+        EXPECT_EQ("", parse(recs.at(0)).payload);
+      });
 }
 
 } // namespace

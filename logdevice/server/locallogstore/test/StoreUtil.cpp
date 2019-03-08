@@ -73,7 +73,7 @@ void store_fill(LocalLogStore& store,
                      block_starting_lsn,
                      copyset_slice,
                      index_key_list,
-                     Durability::ASYNC_WRITE, // We explicitly flush at the end
+                     Durability::ASYNC_WRITE, // We explicitly sync at the end
                      false                    // not rebuilding
     );
     op_ptrs.push_back(&ops.back());
