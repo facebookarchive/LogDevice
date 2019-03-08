@@ -905,7 +905,7 @@ Return if a particular log is empty or not
            &logdevice_data_size,
            args("self", "logid", "start_sec", "end_sec"),
            R"DOC(
-Estiamte size of data in the given time range for a particular log.
+Estimate size of data in the given time range for a particular log.
 )DOC")
 
       .def("get_max_payload_size",
