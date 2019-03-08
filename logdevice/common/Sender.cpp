@@ -1270,7 +1270,11 @@ std::string Sender::describeConnection(const Address& addr) {
   std::string res;
   res.reserve(64);
 
-  res += Worker::getName(assignee.first, assignee.second);
+  if (assignee.second.val() == -1) {
+    res += "(disconnected)";
+  } else {
+    res += Worker::getName(assignee.first, assignee.second);
+  }
   res += ":";
   res += addr.toString();
   if (!addr.isClientAddress() ||

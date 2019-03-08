@@ -193,7 +193,7 @@ void SEALED_Message::createAndSend(const Address& to,
                       header.seal_epoch.val_,
                       error_name(header.status),
                       Sender::describeConnection(to).c_str(),
-                      error_name(header.status));
+                      error_name(err));
     WORKER_STAT_INCR(sealed_reply_failed_to_send);
   }
 }
