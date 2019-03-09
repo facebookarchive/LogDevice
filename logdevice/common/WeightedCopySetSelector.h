@@ -21,6 +21,14 @@ class StatsHolder;
 
 class WeightedCopySetSelector : public CopySetSelector {
  public:
+  // @param print_bias_warnings
+  //   If true, the copyset selector may print rate-limited log messages if
+  //   it can't distribute the load evenly across shards (e.g. if replicating
+  //   to 2 racks, and some rack is bigger than all other racks combined,
+  //   we're forced to underutilize the nodes of the big rack).
+  //   Set to false if load balancing is not important, e.g. for internal logs.
+  //   Other, non-load-balancing-related, warnings are printed regardless of
+  //   this setting.
   WeightedCopySetSelector(logid_t logid,
                           const EpochMetaData& epoch_metadata,
                           std::shared_ptr<NodeSetState> nodeset_state,
@@ -29,6 +37,7 @@ class WeightedCopySetSelector : public CopySetSelector {
                           bool locality_enabled,
                           StatsHolder* stats = nullptr,
                           RNG& init_rng = DefaultRNG::get(),
+                          bool print_bias_warnings = true,
                           const CopySetSelectorDependencies* deps =
                               CopySetSelectorDependencies::instance());
 
@@ -262,6 +271,7 @@ class WeightedCopySetSelector : public CopySetSelector {
   const logid_t logid_;
   const CopySetSelectorDependencies* deps_;
   const std::shared_ptr<NodeSetState> nodeset_state_;
+  const bool print_bias_warnings_;
   copyset_size_t replication_;
   copyset_size_t secondary_replication_;
 

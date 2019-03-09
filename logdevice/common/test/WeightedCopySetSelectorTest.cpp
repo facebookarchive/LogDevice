@@ -257,15 +257,17 @@ WeightedCopySetSelectorTest::getSelector(logid_t log,
   s.server_config = std::shared_ptr<ServerConfig>(ServerConfig::fromDataTest(
       "weighted_copyset_selector_test", std::move(nodes_config)));
   s.server_config->setMyNodeID(NodeID(my_node, 1));
-  s.selector = std::make_unique<WeightedCopySetSelector>(log,
-                                                         epoch_metadata_,
-                                                         nodeset_state_,
-                                                         s.server_config,
-                                                         &default_log_attrs_,
-                                                         locality,
-                                                         &stats,
-                                                         rng_,
-                                                         &deps_);
+  s.selector =
+      std::make_unique<WeightedCopySetSelector>(log,
+                                                epoch_metadata_,
+                                                nodeset_state_,
+                                                s.server_config,
+                                                &default_log_attrs_,
+                                                locality,
+                                                &stats,
+                                                rng_,
+                                                /* print_bias_warnings */ true,
+                                                &deps_);
   return *s.selector;
 }
 

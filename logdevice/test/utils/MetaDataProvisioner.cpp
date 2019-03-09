@@ -296,6 +296,7 @@ copyset_t MetaDataProvisioner::genCopySet(const StorageSet& storage_set,
                                    false /* locality */,
                                    nullptr /* stats */,
                                    DefaultRNG::get(),
+                                   true /* print_bias_warnings */,
                                    &deps);
 
   std::vector<StoreChainLink> cs(selector.getReplicationFactor());

@@ -9,10 +9,12 @@
 
 #include "logdevice/common/CrossDomainCopySetSelector.h"
 #include "logdevice/common/LinearCopySetSelector.h"
+#include "logdevice/common/MetaDataLog.h"
 #include "logdevice/common/PassThroughCopySetManager.h"
 #include "logdevice/common/StickyCopySetManager.h"
 #include "logdevice/common/WeightedCopySetSelector.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/configuration/InternalLogs.h"
 
 namespace facebook { namespace logdevice {
 
@@ -43,6 +45,13 @@ CopySetSelectorFactory::create(logid_t logid,
     bool locality_enabled =
         epoch_metadata.replication.getBiggestReplicationScope() >=
         settings.copyset_locality_min_scope;
+    // Internal logs often have high replication factor and small nodesets,
+    // making it a bit difficult for WeightedCopySetSelector to spread the load
+    // uniformly. We don't care much about that because internal logs have low
+    // throughput. Tell the copyset selector to not log balance-related warnings
+    // for internal logs.
+    bool print_bias_warnings = !MetaDataLog::isMetaDataLog(logid) &&
+        !configuration::InternalLogs::isInternal(logid);
     return std::make_unique<WeightedCopySetSelector>(logid,
                                                      epoch_metadata,
                                                      nodeset_state,
@@ -50,7 +59,8 @@ CopySetSelectorFactory::create(logid_t logid,
                                                      log_attrs,
                                                      locality_enabled,
                                                      Worker::stats(),
-                                                     init_rng);
+                                                     init_rng,
+                                                     print_bias_warnings);
   }
 
   if (legacy_replication->sync_replication_scope == NodeLocationScope::NODE ||

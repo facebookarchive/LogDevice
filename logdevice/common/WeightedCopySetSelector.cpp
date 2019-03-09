@@ -43,10 +43,12 @@ WeightedCopySetSelector::WeightedCopySetSelector(
     bool locality_enabled,
     StatsHolder* stats,
     RNG& init_rng,
+    bool print_bias_warnings,
     const CopySetSelectorDependencies* deps)
     : logid_(logid),
       deps_(deps),
       nodeset_state_(nodeset_state),
+      print_bias_warnings_(print_bias_warnings),
       locality_enabled_(locality_enabled),
       stats_(stats),
       nodeset_indices_(epoch_metadata.shards) {
@@ -618,13 +620,15 @@ bool WeightedCopySetSelector::checkAvailabilityAndBlacklist(
           (!nodeset_state_ ||
            nodeset_state_->getNotAvailableReason(node) !=
                NodeSetState::NotAvailableReason::SLOW)) {
-        RATELIMIT_INFO(
-            std::chrono::seconds(10),
-            1,
-            "Copyset for log %lu is biased because we've just blacklisted node "
-            "%s. This should be transient.",
-            logid_.val_,
-            node.toString().c_str());
+        if (print_bias_warnings_) {
+          RATELIMIT_INFO(std::chrono::seconds(10),
+                         1,
+                         "Copyset for log %lu is biased because we've just "
+                         "blacklisted node "
+                         "%s. This should be transient.",
+                         logid_.val_,
+                         node.toString().c_str());
+        }
         *out_biased = true;
       }
       ok = false;
@@ -782,15 +786,18 @@ WeightedCopySetSelector::select(copyset_size_t extras,
       if (target_num_local_copies > max_allowed) {
         if (!biased) {
           // Transient because we'll stop detaching local domain.
-          RATELIMIT_INFO(
-              std::chrono::seconds(10),
-              1,
-              "Copyset for log %lu is biased because local %s is too heavy: "
-              "%.3f. Other weights: %s. This should be transient.",
-              logid_.val_,
-              NodeLocation::scopeNames()[secondary_replication_scope_].c_str(),
-              local_weight,
-              hierarchy.getRoot().getWeights().toString().c_str());
+          if (print_bias_warnings_) {
+            RATELIMIT_INFO(
+                std::chrono::seconds(10),
+                1,
+                "Copyset for log %lu is biased because local %s is too heavy: "
+                "%.3f. Other weights: %s. This should be transient.",
+                logid_.val_,
+                NodeLocation::scopeNames()[secondary_replication_scope_]
+                    .c_str(),
+                local_weight,
+                hierarchy.getRoot().getWeights().toString().c_str());
+          }
           biased = true;
         }
         target_num_local_copies = max_allowed;
@@ -823,15 +830,18 @@ WeightedCopySetSelector::select(copyset_size_t extras,
         // Must use local domain.
         if (!biased) {
           // Treansient because we'll stop detaching local domain.
-          RATELIMIT_INFO(
-              std::chrono::seconds(10),
-              1,
-              "Copyset for log %lu is biased because there are fewer than %d "
-              "non-local %ss. Weights: %s. This should be transient.",
-              logid_.val_,
-              (int)secondary_replication_,
-              NodeLocation::scopeNames()[secondary_replication_scope_].c_str(),
-              hierarchy.getRoot().getWeights().toString().c_str());
+          if (print_bias_warnings_) {
+            RATELIMIT_INFO(
+                std::chrono::seconds(10),
+                1,
+                "Copyset for log %lu is biased because there are fewer than %d "
+                "non-local %ss. Weights: %s. This should be transient.",
+                logid_.val_,
+                (int)secondary_replication_,
+                NodeLocation::scopeNames()[secondary_replication_scope_]
+                    .c_str(),
+                hierarchy.getRoot().getWeights().toString().c_str());
+          }
           biased = true;
         }
         target_num_local_copies = 1;
@@ -1295,22 +1305,25 @@ size_t WeightedCopySetSelector::selectCrossDomain(size_t num_domains,
     return 0;
   }
   if (rv == Sampling::Result::BIASED && !*out_biased) {
-    RATELIMIT_INFO(
-        std::chrono::seconds(10),
-        1,
-        "Copyset for log %lu is biased because %s containing %s is too heavy: "
-        "%.3f when selecting %lu %ss from %s",
-        logid_.val_,
-        NodeLocation::scopeNames()[secondary_replication_scope_].c_str(),
-        domain.getSubdomain(overweight_idx)
-            .getSubdomain(0)
-            .getShardID(0)
-            .toString()
-            .c_str(),
-        domain.getWeights().weight(overweight_idx),
-        num_domains,
-        NodeLocation::scopeNames()[replication_scope_].c_str(),
-        domain.getWeights().toString().c_str());
+    if (print_bias_warnings_) {
+      RATELIMIT_INFO(
+          std::chrono::seconds(10),
+          1,
+          "Copyset for log %lu is biased because %s containing %s is too "
+          "heavy: "
+          "%.3f when selecting %lu %ss from %s",
+          logid_.val_,
+          NodeLocation::scopeNames()[secondary_replication_scope_].c_str(),
+          domain.getSubdomain(overweight_idx)
+              .getSubdomain(0)
+              .getShardID(0)
+              .toString()
+              .c_str(),
+          domain.getWeights().weight(overweight_idx),
+          num_domains,
+          NodeLocation::scopeNames()[replication_scope_].c_str(),
+          domain.getWeights().toString().c_str());
+    }
     *out_biased = true;
   }
   simple_shuffle(subdomains.begin(), subdomains.end(), rng);
@@ -1363,16 +1376,19 @@ size_t WeightedCopySetSelector::selectCrossDomain(size_t num_domains,
   // factor. Expand the search to other domains.
   ld_check(shard_in_overly_small_domain.isValid());
   if (!*out_biased) {
-    RATELIMIT_INFO(
-        std::chrono::seconds(10),
-        1,
-        "Copyset for log %lu is biased because %s containing %s contains fewer "
-        "than replication - secondary_replication + 1 = %d %ss.",
-        logid_.val_,
-        NodeLocation::scopeNames()[secondary_replication_scope_].c_str(),
-        shard_in_overly_small_domain.toString().c_str(),
-        (int)(replication_ - secondary_replication_ + 1),
-        NodeLocation::scopeNames()[replication_scope_].c_str());
+    if (print_bias_warnings_) {
+      RATELIMIT_INFO(
+          std::chrono::seconds(10),
+          1,
+          "Copyset for log %lu is biased because %s containing %s contains "
+          "fewer "
+          "than replication - secondary_replication + 1 = %d %ss.",
+          logid_.val_,
+          NodeLocation::scopeNames()[secondary_replication_scope_].c_str(),
+          shard_in_overly_small_domain.toString().c_str(),
+          (int)(replication_ - secondary_replication_ + 1),
+          NodeLocation::scopeNames()[replication_scope_].c_str());
+    }
     *out_biased = true;
   }
   size_t all_subdomains = domain.getWeights().size();
@@ -1423,31 +1439,38 @@ size_t WeightedCopySetSelector::selectFlat(size_t replication,
                                   &overweight_idx);
 
   if (rv != Sampling::Result::OK && !*out_biased) {
-    if (rv == Sampling::Result::BIASED) {
-      RATELIMIT_INFO(
-          std::chrono::seconds(10),
-          1,
-          "Copyset for log %lu is biased because %s containing %s is too "
-          "heavy: %.3f when selecting %lu shards from %s with weights %s",
-          logid_.val_,
-          NodeLocation::scopeNames()[replication_scope_].c_str(),
-          domain.getSubdomain(overweight_idx).getShardID(0).toString().c_str(),
-          domain.getWeights().weight(overweight_idx),
-          replication,
-          NodeLocation::scopeNames()[secondary_replication_scope_].c_str(),
-          domain.getWeights().toString().c_str());
-    } else {
-      ld_check(rv == Sampling::Result::IMPOSSIBLE);
-      RATELIMIT_INFO(
-          std::chrono::seconds(10),
-          1,
-          "Copyset for log %lu is biased because %s containing %s is too "
-          "small: got %lu shards when selecting %lu shards.",
-          logid_.val_,
-          NodeLocation::scopeNames()[secondary_replication_scope_].c_str(),
-          domain.getSubdomain(0).getShardID(0).toString().c_str(),
-          size,
-          replication);
+    ld_check(rv == Sampling::Result::BIASED ||
+             rv == Sampling::Result::IMPOSSIBLE);
+    if (print_bias_warnings_) {
+      if (rv == Sampling::Result::BIASED) {
+        RATELIMIT_INFO(
+            std::chrono::seconds(10),
+            1,
+            "Copyset for log %lu is biased because %s containing %s is too "
+            "heavy: %.3f when selecting %lu shards from %s with weights %s",
+            logid_.val_,
+            NodeLocation::scopeNames()[replication_scope_].c_str(),
+            domain.getSubdomain(overweight_idx)
+                .getShardID(0)
+                .toString()
+                .c_str(),
+            domain.getWeights().weight(overweight_idx),
+            replication,
+            NodeLocation::scopeNames()[secondary_replication_scope_].c_str(),
+            domain.getWeights().toString().c_str());
+      } else {
+        ld_check(rv == Sampling::Result::IMPOSSIBLE);
+        RATELIMIT_INFO(
+            std::chrono::seconds(10),
+            1,
+            "Copyset for log %lu is biased because %s containing %s is too "
+            "small: got %lu shards when selecting %lu shards.",
+            logid_.val_,
+            NodeLocation::scopeNames()[secondary_replication_scope_].c_str(),
+            domain.getSubdomain(0).getShardID(0).toString().c_str(),
+            size,
+            replication);
+      }
     }
     *out_biased = true;
   }
