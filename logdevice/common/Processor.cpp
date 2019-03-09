@@ -238,6 +238,8 @@ void Processor::init() {
       cluster_state_->refreshClusterStateAsync();
     }
   }
+
+  initialized_.store(true, std::memory_order_relaxed);
 }
 
 workers_t Processor::createWorkerPool(WorkerType type, size_t count) {

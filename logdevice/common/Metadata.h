@@ -469,6 +469,11 @@ class RebuildingRangesMetadata final : public StoreMetadata {
   Slice serialize() const override;
   std::string toString() const override;
   int deserialize(Slice blob) override;
+
+  void clear() {
+    per_dc_dirty_ranges_.clear();
+  }
+
   folly::dynamic toFollyDynamic() const;
 
   const PerDataClassTimeRanges& getDCDirtyRanges() const {
@@ -479,6 +484,19 @@ class RebuildingRangesMetadata final : public StoreMetadata {
     // Ignore the serialization buffer since serialization may
     // never have occurred or the ranges modified post serialization.
     return per_dc_dirty_ranges_ == other.per_dc_dirty_ranges_;
+  }
+
+  RebuildingRangesMetadata& operator&=(const RecordTimeIntervals& rti_mask) {
+    auto it = per_dc_dirty_ranges_.begin();
+    while (it != per_dc_dirty_ranges_.end()) {
+      it->second &= rti_mask;
+      if (it->second.empty()) {
+        it = per_dc_dirty_ranges_.erase(it);
+      } else {
+        ++it;
+      }
+    }
+    return *this;
   }
 
   bool empty() const {

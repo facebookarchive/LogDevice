@@ -29,6 +29,7 @@
 #include "logdevice/common/ThreadID.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/request_util.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/util.h"
 #include "logdevice/server/ServerProcessor.h"
@@ -716,18 +717,11 @@ bool PartitionedRocksDBStore::open(
     return false;
   }
 
+  // Use per-partition dirty information to create or update
+  // RebuildingRangeMetadata.
   RebuildingRangesMetadata range_meta;
-  if (!getSettings()->read_only) {
-    // Use per-partition dirty information to create or update
-    // RebuildingRangeMetadata.
-    rv = readStoreMetadata(&range_meta);
-    if (rv != 0) {
-      if (err != E::NOTFOUND) {
-        ld_error("Couldn't read RebuildingRangeMetadata");
-        return false;
-      }
-      ld_check(range_meta.empty());
-    }
+  if (!getSettings()->read_only && getRebuildingRanges(range_meta) != 0) {
+    return false;
   }
 
   // Read per-partition metadata. We'll need it below to decide if we need
@@ -3626,6 +3620,7 @@ int PartitionedRocksDBStore::dropPartitions(
   }
 
   cleanUpPartitionMetadataAfterDrop(oldest_to_keep);
+  trimRebuildingRangesMetadata();
 
   STAT_ADD(stats_, partitions_dropped, partitions.size());
   STAT_SUB(stats_, partitions, partitions.size());
@@ -3830,16 +3825,9 @@ int PartitionedRocksDBStore::modifyUnderReplicatedTimeRange(
 
   LocalLogStore::WriteOptions options;
   RebuildingRangesMetadata range_metadata;
-  int rv = readStoreMetadata(&range_metadata);
-  if (rv != 0) {
-    if (err != E::NOTFOUND) {
-      ld_error("Error reading RebuildingRangesMetadata for shard %u: %s\r\n",
-               getShardIdx(),
-               error_description(err));
-      err = E::FAILED;
-      return -1;
-    }
-    assert(range_metadata.empty());
+  if (getRebuildingRanges(range_metadata) != 0) {
+    err = E::FAILED;
+    return -1;
   }
 
   if (op == TimeIntervalOp::REMOVE) {
@@ -3891,11 +3879,8 @@ int PartitionedRocksDBStore::modifyUnderReplicatedTimeRange(
         }
       },
       /*include empty partitions*/ true);
-  rv = writeStoreMetadata(range_metadata, options);
-  if (rv != 0) {
-    ld_error("Error writting RebuildingRangesMetadata for shard %u: %s\r\n",
-             getShardIdx(),
-             error_description(err));
+
+  if (writeRebuildingRanges(range_metadata) != 0) {
     err = E::FAILED;
     return -1;
   }
@@ -4503,6 +4488,40 @@ int PartitionedRocksDBStore::trimLogsBasedOnTime(
   if (iterator.error()) {
     err = E::LOCAL_LOG_STORE_READ;
     return -1;
+  }
+
+  if (out_to_compact != nullptr || out_oldest_to_keep != nullptr) {
+    // Prevent empty dirty partitions from being trimmed away. We need
+    // them to exist so that under-replicated regions are properly reported
+    // to iterators.
+    //
+    // NOTE: Since we may update oldest_to_keep, this can increase the
+    //       number of partitions added to out_to_compact below.
+    auto min_cutoff_timestamp =
+        RecordTimestamp(now - config->getMaxBacklogDuration());
+    auto min_dirty_partition = min_under_replicated_partition_.load();
+    auto max_dirty_partition = max_under_replicated_partition_.load();
+    while (min_dirty_partition < oldest_to_keep) {
+      if (min_dirty_partition > max_dirty_partition) {
+        // All dirty partitions have been trimmed away due to retention.
+        break;
+      }
+      auto partition = partitions->get(min_dirty_partition);
+      RecordTimestamp max_timestamp = partition->max_timestamp;
+      if (max_timestamp == RecordTimestamp::min()) {
+        // Empty partition. It covers up to the start of the next
+        // partition. Accessing the next partition is safe here because
+        // min_dirty_partition is less than oldest_to_keep.
+        max_timestamp =
+            partitions->get(min_dirty_partition + 1)->starting_timestamp;
+      }
+      if (partition->isUnderReplicated() &&
+          max_timestamp >= min_cutoff_timestamp) {
+        oldest_to_keep = min_dirty_partition;
+        break;
+      }
+      ++min_dirty_partition;
+    }
   }
 
   if (out_to_compact != nullptr) {
@@ -5220,6 +5239,54 @@ void PartitionedRocksDBStore::cleanUpPartitionMetadataAfterDrop(
   }
 }
 
+int PartitionedRocksDBStore::trimRebuildingRangesMetadata() {
+  RebuildingRangesMetadata range_meta;
+  if (getRebuildingRanges(range_meta) != 0) {
+    return -1;
+  }
+  if (range_meta.empty()) {
+    return 0;
+  }
+  partition_id_t new_min_ur_partition{PARTITION_MAX};
+  partition_id_t new_max_ur_partition{PARTITION_INVALID};
+  auto partitions = getPartitionList();
+  RecordTimeIntervals time_interval_mask;
+  for (PartitionPtr partition : *partitions) {
+    if (partition->isUnderReplicated()) {
+      new_min_ur_partition = std::min(new_min_ur_partition, partition->id_);
+      new_max_ur_partition = std::max(new_max_ur_partition, partition->id_);
+      time_interval_mask.insert(RecordTimeInterval(
+          partition->min_timestamp, partition->max_timestamp));
+    }
+  }
+  min_under_replicated_partition_.store(new_min_ur_partition);
+  max_under_replicated_partition_.store(new_max_ur_partition);
+
+  auto new_range_meta = range_meta;
+  new_range_meta &= time_interval_mask;
+  if (new_range_meta == range_meta) {
+    return 0;
+  }
+
+  if (writeRebuildingRanges(new_range_meta) != 0) {
+    return -1;
+  }
+
+  ServerProcessor* processor = processor_.load();
+  if (new_range_meta.empty() && processor && processor->isInitialized()) {
+    // Notify RebuildingCoordinator now that the shard is no longer
+    // dirty.
+    run_on_all_workers(processor_, [&]() {
+      if (ServerWorker::onThisThread()->rebuilding_coordinator_) {
+        ServerWorker::onThisThread()
+            ->rebuilding_coordinator_->onDirtyStateChanged();
+      }
+      return 0;
+    });
+  }
+  return 0;
+}
+
 int PartitionedRocksDBStore::dropPartitionsUpTo(partition_id_t oldest_to_keep) {
   ld_check(!getSettings()->read_only);
   ld_check(!immutable_.load());
@@ -5561,6 +5628,34 @@ int PartitionedRocksDBStore::getApproximateTimestamp(
     *timestamp_out = next_partition_ts.toMilliseconds();
   } else {
     err = E::NOTFOUND;
+    return -1;
+  }
+  return 0;
+}
+
+int PartitionedRocksDBStore::getRebuildingRanges(
+    RebuildingRangesMetadata& rrm) {
+  rrm.clear();
+  int rv = readStoreMetadata(&rrm);
+  if (rv != 0) {
+    if (err != E::NOTFOUND) {
+      ld_error("Error reading RebuildingRangesMetadata for shard %u: %s\r\n",
+               getShardIdx(),
+               error_description(err));
+      return -1;
+    }
+    ld_check(rrm.empty());
+  }
+  return 0;
+}
+
+int PartitionedRocksDBStore::writeRebuildingRanges(
+    RebuildingRangesMetadata& rrm) {
+  int rv = writeStoreMetadata(rrm, LocalLogStore::WriteOptions());
+  if (rv != 0) {
+    ld_error("Error writting RebuildingRangesMetadata for shard %u: %s\r\n",
+             getShardIdx(),
+             error_description(err));
     return -1;
   }
   return 0;

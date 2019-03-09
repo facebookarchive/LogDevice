@@ -2441,6 +2441,109 @@ TEST_F(PartitionedRocksDBStoreTest, AutoTrim) {
   ASSERT_EQ(0, data[0].size());
 }
 
+// Check that time-based auto-trimming trims properly when partitions are dirty.
+TEST_F(PartitionedRocksDBStoreTest, AutoTrimDirty) {
+  logid_t logid(1);
+
+  // Non-empty, dirty partition.
+  time_ = SystemTimestamp(std::chrono::milliseconds(BASE_TIME));
+  put({TestRecord(logid, 10, BASE_TIME)});
+
+  // Empty, dirty partition.
+  time_ = SystemTimestamp(std::chrono::milliseconds(BASE_TIME + 15 * MINUTE));
+  store_->createPartition();
+
+  time_ = SystemTimestamp(std::chrono::milliseconds(BASE_TIME + 30 * MINUTE));
+  store_->createPartition();
+
+  time_ = SystemTimestamp(std::chrono::milliseconds(BASE_TIME + HOUR));
+  store_->createPartition();
+  put({TestRecord(logid, 20, BASE_TIME + HOUR)});
+  put({TestRecord(logid, 30, BASE_TIME + HOUR)});
+
+  time_ = SystemTimestamp(std::chrono::milliseconds(BASE_TIME + 2 * HOUR));
+  store_->createPartition();
+  put({TestRecord(logid, 40, BASE_TIME + 2 * HOUR)});
+  put({TestRecord(logid, 50, BASE_TIME + 2 * HOUR)});
+  store_->createPartition();
+
+  // Mark the first two parittions dirty.
+  store_->modifyUnderReplicatedTimeRange(
+      TimeIntervalOp::ADD,
+      DataClass::APPEND,
+      RecordTimeInterval(
+          RecordTimestamp(std::chrono::milliseconds(BASE_TIME)),
+          RecordTimestamp(std::chrono::milliseconds(BASE_TIME + 16 * MINUTE))));
+  auto data = readAndCheck();
+  ASSERT_EQ(6, data.size());
+  ASSERT_EQ(1, data[0].size());
+  ASSERT_EQ(0, data[1].size());
+  ASSERT_EQ(0, data[2].size());
+  ASSERT_EQ(1, data[3].size());
+  ASSERT_EQ(1, data[4].size());
+  ASSERT_EQ(0, data[5].size());
+
+  openStore();
+  ASSERT_TRUE(store_->isUnderReplicated());
+
+  // The first two partitions are dirty, increasing the effective retention
+  // for those partitions to the max retention in the config (7 days).
+  // The Lo-pri background thread should compact the first partition but not
+  // drop any partitions.
+  time_ =
+      SystemTimestamp(std::chrono::milliseconds(BASE_TIME + DAY + 16 * MINUTE));
+  store_
+      ->backgroundThreadIteration(
+          PartitionedRocksDBStore::BackgroundThreadType::LO_PRI)
+      .wait();
+  ASSERT_TRUE(store_->isUnderReplicated());
+  data = readAndCheck();
+  ASSERT_EQ(6, data.size());
+  ASSERT_EQ(0, data[0].size());
+  ASSERT_EQ(0, data[1].size());
+  ASSERT_EQ(0, data[2].size());
+  ASSERT_EQ(1, data[3].size());
+  ASSERT_EQ(1, data[4].size());
+  ASSERT_EQ(0, data[5].size());
+
+  openStore();
+  ASSERT_TRUE(store_->isUnderReplicated());
+
+  // Lo-pri background thread should compact the rest of the partitions,
+  // but still not drop any.
+  time_ =
+      SystemTimestamp(std::chrono::milliseconds(BASE_TIME + DAY + 3 * HOUR));
+  store_
+      ->backgroundThreadIteration(
+          PartitionedRocksDBStore::BackgroundThreadType::LO_PRI)
+      .wait();
+  ASSERT_TRUE(store_->isUnderReplicated());
+  data = readAndCheck();
+  ASSERT_EQ(6, data.size());
+  ASSERT_EQ(0, data[0].size());
+  ASSERT_EQ(0, data[1].size());
+  ASSERT_EQ(0, data[2].size());
+  ASSERT_EQ(0, data[3].size());
+  ASSERT_EQ(0, data[4].size());
+  ASSERT_EQ(0, data[5].size());
+
+  openStore();
+  ASSERT_TRUE(store_->isUnderReplicated());
+
+  // As soon as the dirty partitions are over 7 days old, drops are allowed.
+  // This should clean the store and leave us with one empty partition.
+  time_ =
+      SystemTimestamp(std::chrono::milliseconds(BASE_TIME + 7 * DAY + HOUR));
+  store_
+      ->backgroundThreadIteration(
+          PartitionedRocksDBStore::BackgroundThreadType::LO_PRI)
+      .wait();
+  ASSERT_FALSE(store_->isUnderReplicated());
+  data = readAndCheck();
+  ASSERT_EQ(1, data.size());
+  ASSERT_EQ(0, data[0].size());
+}
+
 TEST_F(PartitionedRocksDBStoreTest, TrimPerEpochLogMetadata) {
   logid_t logid(1);
 

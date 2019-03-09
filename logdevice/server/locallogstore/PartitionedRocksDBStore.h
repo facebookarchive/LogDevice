@@ -672,6 +672,9 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
       bool allow_blocking_io,
       std::chrono::milliseconds* timestamp_out) override;
 
+  int getRebuildingRanges(RebuildingRangesMetadata& rrm);
+  int writeRebuildingRanges(RebuildingRangesMetadata& rrm);
+
   // Calls `cb` for every log that has at least one record stored. Note that
   // this method doesn't check trim points, so it's possible that some of the
   // returned logs are already fully behind trim points but compactions/drops
@@ -1586,6 +1589,12 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
   cleanUpDirectory(const std::set<partition_id_t>& compacted_partitions = {});
   // Same for partition metadata.
   void cleanUpPartitionMetadataAfterDrop(partition_id_t oldest_to_keep);
+  // Clears dirty ranges that are no longer backed by partitions and
+  // signals the RebuildingCoordinator to update the event log if no
+  // rebuilding ranges remain.
+  //
+  // Called after partitions are dropped.
+  int trimRebuildingRangesMetadata();
 
   // Applies RocksDBSettings::metadata_compaction_period.
   void compactMetadataCFIfNeeded();

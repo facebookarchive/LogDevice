@@ -638,6 +638,10 @@ class Processor : public folly::enable_shared_from_this<Processor> {
     return shutting_down_.load();
   }
 
+  bool isInitialized() const {
+    return initialized_.load(std::memory_order_relaxed);
+  }
+
  private:
   const std::shared_ptr<TraceLogger> trace_logger_;
 
@@ -648,6 +652,10 @@ class Processor : public folly::enable_shared_from_this<Processor> {
 
   // Used to ensure shutdown() is only called once.
   std::atomic<bool> shutting_down_{false};
+
+  // Used to detect that we are in a test environment without a
+  // fully initialized processor;
+  std::atomic<bool> initialized_{false};
 
   // Keeps track of those workers that called noteWorkerFinished()
   std::array<folly::AtomicBitSet<MAX_WORKERS>,
