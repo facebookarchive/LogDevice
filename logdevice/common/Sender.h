@@ -42,6 +42,10 @@ struct event_base;
 
 namespace facebook { namespace logdevice {
 
+namespace configuration { namespace nodes {
+class NodesConfiguration;
+}} // namespace configuration::nodes
+
 class BWAvailableCallback;
 class ClientIdxAllocator;
 class FlowGroup;
@@ -728,7 +732,8 @@ class Sender : public SenderBase {
    * Called when configuration has changed.  Sender closes any open
    * connections to nodes that are no longer in the config.
    */
-  void noteConfigurationChanged();
+  void noteConfigurationChanged(
+      const configuration::nodes::NodesConfiguration& nodes_configuration);
 
   /**
    * Add a client id to the list of Sockets to be erased from .client_sockets_

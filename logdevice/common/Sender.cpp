@@ -308,13 +308,10 @@ int Sender::notifyPeerConfigUpdated(Socket& sock) {
         CONFIG_CHANGED_Header::Action::UPDATE};
     metadata.hash.copy(hdr.hash, sizeof hdr.hash);
 
-    // We still send the Zookeeper section for backwards compatibility on
-    // older servers, but on newer servers this is ignored
-    // Clients already ignore / don't use the Zookeeper section
-    // TODO deprecate in T32793726
-    auto zk_config = Worker::onThisThread()->getZookeeperConfig();
     msg = std::make_unique<CONFIG_CHANGED_Message>(
-        hdr, server_config->toString(nullptr, zk_config.get(), true));
+        hdr,
+        server_config->toString(
+            /* with_logs */ nullptr, /* with_zk */ nullptr, true));
   } else {
     // The peer is a server. Send a CONFIG_ADVISORY to let it know about our
     // config version. Upon receiving this message, if the server config hasn't
@@ -1351,11 +1348,8 @@ node_index_t Sender::getMyNodeIndex() {
   return my_node_index_;
 }
 
-void Sender::noteConfigurationChanged() {
-  const auto& nodes_configuration =
-      Worker::onThisThread()->getNodesConfiguration();
-  ld_check(nodes_configuration != nullptr);
-
+void Sender::noteConfigurationChanged(
+    const configuration::nodes::NodesConfiguration& nodes_configuration) {
   initMyLocation();
 
   for (int i = 0; i < impl_->server_sockets_.size(); i++) {
@@ -1369,10 +1363,10 @@ void Sender::noteConfigurationChanged() {
     ld_check(s->peer_name_.id_.node_.index() == i);
 
     const auto* node_service_discovery =
-        nodes_configuration->getNodeServiceDiscovery(i);
+        nodes_configuration.getNodeServiceDiscovery(i);
 
     if (node_service_discovery != nullptr) {
-      node_gen_t generation = nodes_configuration->getNodeGeneration(i);
+      node_gen_t generation = nodes_configuration.getNodeGeneration(i);
       const Sockaddr& newaddr = node_service_discovery->getSockaddr(
           s->getSockType(), s->getConnType());
       if (s->peer_name_.id_.node_.generation() == generation &&
@@ -1392,14 +1386,14 @@ void Sender::noteConfigurationChanged() {
           "Node %s is no longer in cluster configuration. New cluster "
           "size is %zu. Destroying old socket.",
           Sender::describeConnection(Address(s->peer_name_.id_.node_)).c_str(),
-          nodes_configuration->clusterSize());
+          nodes_configuration.clusterSize());
     }
 
     s->close(E::NOTINCONFIG);
     s.reset();
   }
 
-  impl_->server_sockets_.resize(nodes_configuration->getMaxNodeIndex() + 1);
+  impl_->server_sockets_.resize(nodes_configuration.getMaxNodeIndex() + 1);
 }
 
 bool Sender::bytesPendingLimitReached() {

@@ -286,7 +286,10 @@ void Worker::onServerConfigUpdated() {
   dbg::thisThreadClusterName() =
       config_->get()->serverConfig()->getClusterName();
 
-  sender().noteConfigurationChanged();
+  const auto& nodes_configuration = getNodesConfiguration();
+  ld_check(nodes_configuration.get() != nullptr);
+  sender().noteConfigurationChanged(*nodes_configuration);
+
   clientReadStreams().noteConfigurationChanged();
   // propagate the config change to metadata sequencer
   runningWriteMetaDataRecords().noteConfigurationChanged();
