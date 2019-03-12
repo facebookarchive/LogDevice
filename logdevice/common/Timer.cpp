@@ -10,6 +10,7 @@
 #include "logdevice/common/EventLoop.h"
 #include "logdevice/common/LibeventTimer.h"
 #include "logdevice/common/Processor.h"
+#include "logdevice/common/RunState.h"
 #include "logdevice/common/WheelTimer.h"
 #include "logdevice/common/Worker.h"
 
@@ -87,7 +88,8 @@ class WheelTimerDispatchImpl : public TimerInterface {
 
   decltype(auto) makeWheelTimerInternalExecutor(Worker* worker);
 
-  // always will be called on a timer creator thread
+  RunState workerRunState_;
+  // it always will be called on a timer creator thread, which should exist
   std::function<void()> callback_;
   std::shared_ptr<std::atomic<bool>> is_canceled_;
   bool is_activated_{false};
@@ -99,12 +101,17 @@ WheelTimerDispatchImpl::makeWheelTimerInternalExecutor(Worker* worker) {
     if (!*canceled) {
       worker->add([canceled = std::move(canceled), timer]() {
         if (!*canceled && timer->callback_) {
+          auto run_state = timer->workerRunState_;
+          Worker::onStartedRunning(run_state);
           // Make a local copy of callback to make sure it's not destroyed
           // while it's running, in particular if it calls setCallback().
-          std::function<void()> cb = timer->callback_;
+          {
+            std::function<void()> cb = timer->callback_;
 
-          cb();
-          // `timer` might have been destroyed.
+            cb();
+            // `timer` might have been destroyed.
+          }
+          Worker::onStoppedRunning(run_state);
         }
       });
     }
@@ -159,6 +166,7 @@ void WheelTimerDispatchImpl::activate(microseconds delay, TimeoutMap*) {
       makeWheelTimerInternalExecutor(worker),
       duration_cast<milliseconds>(delay));
 
+  workerRunState_ = worker->currentlyRunning_;
   is_activated_ = true;
 }
 
