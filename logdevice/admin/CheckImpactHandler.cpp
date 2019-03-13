@@ -69,15 +69,6 @@ CheckImpactHandler::semifuture_checkImpact(
     }
   }
 
-  bool check_metadata_logs = true;
-  if (request->get_check_metadata_logs()) {
-    check_metadata_logs = *request->get_check_metadata_logs();
-  }
-  bool check_internal_logs = true;
-  if (request->get_check_internal_logs()) {
-    check_internal_logs = *request->get_check_internal_logs();
-  }
-
   // It's important that we get the SemiFuture before we move the promise
   // out of this function.
   auto future = promise.getSemiFuture();
@@ -113,13 +104,13 @@ CheckImpactHandler::semifuture_checkImpact(
       std::move(shards),
       target_storage_state,
       safety_margin,
-      check_metadata_logs,
-      check_internal_logs,
+      request->check_metadata_logs_ref().value_or(true),
+      request->check_internal_logs_ref().value_or(true),
       logs_to_check,
       updateable_admin_server_settings_->safety_max_logs_in_flight,
-      request->abort_on_negative_impact_ref().value_unchecked(),
+      request->abort_on_negative_impact_ref().value_or(true),
       updateable_admin_server_settings_->safety_check_timeout,
-      request->return_sample_size_ref().value_unchecked(),
+      request->return_sample_size_ref().value_or(50),
       updateable_admin_server_settings_->read_metadata_from_sequencers,
       CheckImpactRequest::workerType(processor_),
       std::move(cb));

@@ -211,18 +211,15 @@ void AdminAPIHandler::getLogGroupThroughput(
         "This admin server cannot provide per-log-throughtput stats");
     throw err;
   }
-  auto operation =
-      thrift::LogGroupOperation(thrift::LogGroupOperation::APPENDS);
-  if (request->__isset.operation) {
-    operation = request->operation_ref().value_unchecked();
-  }
+  auto operation = request->operation_ref().value_or(
+      thrift::LogGroupOperation(thrift::LogGroupOperation::APPENDS));
 
   using apache::thrift::util::enumName;
   std::string time_series = lowerCase(enumName(operation));
 
   std::vector<Duration> query_intervals;
-  if (request->__isset.time_period) {
-    auto time_period = request->time_period_ref().value_unchecked();
+  if (request->time_period_ref().has_value()) {
+    auto time_period = request->time_period_ref().value();
     for (const auto t : time_period) {
       query_intervals.push_back(std::chrono::seconds(t));
     }
@@ -243,10 +240,7 @@ void AdminAPIHandler::getLogGroupThroughput(
                                  query_intervals,
                                  processor_->config_->getLogsConfig());
 
-  std::string req_log_group;
-  if (request->__isset.log_group_name) {
-    req_log_group = request->log_group_name_ref().value_unchecked();
-  }
+  std::string req_log_group = request->log_group_name_ref().value_or("");
 
   for (const auto& entry : agg) {
     std::string log_group_name = folly::to<std::string>(entry.first);
