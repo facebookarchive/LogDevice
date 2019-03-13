@@ -190,7 +190,7 @@ TEST(ConfigurationFetchRequestTest, GetThreadAffinity) {
 
 TEST(ConfigurationFetchRequestTest, TimeoutTimer) {
   bool cb_called = false;
-
+  Semaphore sem;
   auto mrq = std::make_unique<MockConfigurationFetchRequest>(
       NodeID(2, 0),
       ConfigurationFetchRequest::ConfigType::LOGS_CONFIG,
@@ -198,6 +198,7 @@ TEST(ConfigurationFetchRequestTest, TimeoutTimer) {
         cb_called = true;
         EXPECT_EQ(Status::TIMEDOUT, status);
         EXPECT_EQ(worker_id_t(1), Worker::onThisThread()->idx_);
+        sem.post();
       },
       worker_id_t(1),
       200ms);
@@ -212,7 +213,7 @@ TEST(ConfigurationFetchRequestTest, TimeoutTimer) {
   std::unique_ptr<Request> rq = std::move(mrq);
   processor->postRequest(rq);
 
-  /* sleep override */ std::this_thread::sleep_for(300ms);
+  sem.timedwait(std::chrono::seconds{10});
 
   EXPECT_TRUE(cb_called);
 
