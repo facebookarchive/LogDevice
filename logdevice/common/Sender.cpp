@@ -1243,6 +1243,9 @@ void Sender::setPeerNodeID(const Address& addr, NodeID node_id) {
   if (it != impl_->client_sockets_.end()) {
     NodeID& peer_node = it->second.peer_node_id_;
     peer_node = node_id;
+    if (node_id.isNodeID()) {
+      it->second.setDSCP(Worker::settings().server_dscp_default);
+    }
   }
 }
 

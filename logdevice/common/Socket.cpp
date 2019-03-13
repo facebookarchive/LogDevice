@@ -502,9 +502,9 @@ int Socket::connect() {
 }
 
 int Socket::doConnectAttempt() {
-  const uint8_t default_dscp = peer_name_.isClientAddress()
-      ? getSettings().client_dscp_default
-      : getSettings().server_dscp_default;
+  const uint8_t default_dscp = getSettings().server
+      ? getSettings().server_dscp_default
+      : getSettings().client_dscp_default;
 
   ld_check(!connected_);
   ld_check(!bev_);

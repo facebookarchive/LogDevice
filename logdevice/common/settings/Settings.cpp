@@ -2329,7 +2329,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        parse_validate_range<uint8_t>(0, 63),
        "Use default DSCP to setup to client sockets at Sender."
        "Range was defined by https://tools.ietf.org/html/rfc4594#section-1.4.4",
-       CLIENT | REQUIRES_RESTART,
+       REQUIRES_RESTART,
        SettingsCategory::Configuration);
 
   init("disable-event-log-trimming",
