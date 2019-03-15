@@ -8,6 +8,10 @@
 
 from __future__ import absolute_import, division, print_function, unicode_literals
 
+import specs.fizz as fizz
+import specs.folly as folly
+import specs.rocksdb as rocksdb
+import specs.wangle as wangle
 import specs.zstd as zstd
 from shell_quoting import ShellQuoted
 
@@ -38,18 +42,24 @@ def fbcode_builder_spec(builder):
     builder.add_option(
         "no1msd/mstch:git_hash", ShellQuoted("$(git describe --abbrev=0 --tags)")
     )
+    builder.add_option(
+        "LogDevice/logdevice/_build:cmake_defines", {"BUILD_SUBMODULES": "OFF"}
+    )
     return {
-        "depends_on": [zstd],
+        "depends_on": [rocksdb, folly, fizz, wangle, zstd],
         "steps": [
             # This isn't a separete spec, since only fbthrift uses mstch.
             builder.github_project_workdir("no1msd/mstch", "build"),
             builder.cmake_install("no1msd/mstch"),
-            builder.fb_github_cmake_install("LogDevice/logdevice/_build"),
+            builder.fb_github_cmake_install("fbthrift/thrift"),
+            builder.fb_github_cmake_install(
+                "LogDevice/logdevice/_build", github_org="facebookincubator"
+            ),
         ],
     }
 
 
 config = {
-    "github_project": "facebookinubator/LogDevice",
+    "github_project": "facebookincubator/LogDevice",
     "fbcode_builder_spec": fbcode_builder_spec,
 }
