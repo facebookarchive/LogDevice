@@ -15,6 +15,8 @@
 #include "logdevice/common/membership/MembershipCodecFlatBuffers.h"
 #include "logdevice/common/membership/SequencerMembership.h"
 #include "logdevice/common/test/TestUtil.h"
+#include "thrift/lib/cpp2/protocol/BinaryProtocol.h"
+#include "thrift/lib/cpp2/protocol/Serializer.h"
 
 using namespace facebook::logdevice;
 using namespace facebook::logdevice::membership;
@@ -63,26 +65,11 @@ class SequencerMembershipTest : public ::testing::Test {
   }
 
   inline void checkCodecSerialization(const SequencerMembership& m) {
-    flatbuffers::FlatBufferBuilder builder;
-    auto membership = MembershipCodecFlatBuffers::serialize(builder, m);
-    builder.Finish(membership);
+    auto got = MembershipCodecFlatBuffers::fromThrift(
+        MembershipCodecFlatBuffers::toThrift(m));
 
-    // run flatbuffers internal verification
-    auto verifier =
-        flatbuffers::Verifier(builder.GetBufferPointer(), builder.GetSize());
-
-    auto res =
-        verifier.VerifyBuffer<flat_buffer_codec::SequencerMembership>(nullptr);
-    ASSERT_TRUE(res);
-
-    auto membership_ptr =
-        flatbuffers::GetRoot<flat_buffer_codec::SequencerMembership>(
-            builder.GetBufferPointer());
-    auto m_deserialized =
-        MembershipCodecFlatBuffers::deserialize(membership_ptr);
-
-    ASSERT_NE(nullptr, m_deserialized);
-    ASSERT_EQ(m, *m_deserialized);
+    ASSERT_NE(nullptr, got);
+    ASSERT_EQ(m, *got);
   }
 };
 

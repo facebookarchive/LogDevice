@@ -8,9 +8,9 @@
 #pragma once
 
 #include "logdevice/common/membership/Membership.h"
-#include "logdevice/common/membership/MembershipCodec_generated.h"
 #include "logdevice/common/membership/SequencerMembership.h"
 #include "logdevice/common/membership/StorageMembership.h"
+#include "logdevice/common/membership/gen-cpp2/Membership_types.h"
 
 namespace facebook { namespace logdevice { namespace membership {
 
@@ -27,23 +27,20 @@ class MembershipCodecFlatBuffers {
   // class) is needed.
   static constexpr ProtocolVersion CURRENT_PROTO_VERSION = 1;
 
-  static flatbuffers::Offset<flat_buffer_codec::StorageMembership>
-  serialize(flatbuffers::FlatBufferBuilder& b,
-            const StorageMembership& storage_membership);
+  static thrift::StorageMembership
+  toThrift(const StorageMembership& storage_membership);
 
   static std::shared_ptr<StorageMembership>
-  deserialize(const flat_buffer_codec::StorageMembership* storage_membership);
+  fromThrift(const thrift::StorageMembership& storage_membership);
 
-  static flatbuffers::Offset<flat_buffer_codec::SequencerMembership>
-  serialize(flatbuffers::FlatBufferBuilder& b,
-            const SequencerMembership& sequencer_membership);
+  static thrift::SequencerMembership
+  toThrift(const SequencerMembership& sequencer_membership);
 
-  static std::shared_ptr<SequencerMembership> deserialize(
-      const flat_buffer_codec::SequencerMembership* sequencer_membership);
+  static std::shared_ptr<SequencerMembership>
+  fromThrift(const thrift::SequencerMembership& sequencer_membership);
 
  private:
-  static ShardState
-  deserialize(const flat_buffer_codec::ShardState* shard_state);
+  static ShardState fromThrift(const thrift::ShardState& shard_state);
 };
 
 }}} // namespace facebook::logdevice::membership

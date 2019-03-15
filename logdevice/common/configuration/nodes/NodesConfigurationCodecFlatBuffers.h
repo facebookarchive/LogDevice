@@ -10,7 +10,7 @@
 #include <folly/Range.h>
 
 #include "logdevice/common/configuration/nodes/NodesConfiguration.h"
-#include "logdevice/common/configuration/nodes/NodesConfigurationCodec_generated.h"
+#include "logdevice/common/configuration/nodes/gen-cpp2/NodesConfiguration_types.h"
 
 namespace facebook { namespace logdevice {
 
@@ -32,16 +32,14 @@ class NodesConfigurationCodecFlatBuffers {
   // needed.
   static constexpr ProtocolVersion CURRENT_PROTO_VERSION = 1;
 
-#define GEN_SERIALIZATION_CONFIG(_Config)                           \
-  static flatbuffers::Offset<flat_buffer_codec::_Config> serialize( \
-      flatbuffers::FlatBufferBuilder& b, const _Config& config);    \
-  static std::shared_ptr<_Config> deserialize(                      \
-      const flat_buffer_codec::_Config* flat_buffer_config);
+#define GEN_SERIALIZATION_CONFIG(_Config)                 \
+  static thrift::_Config toThrift(const _Config& config); \
+  static std::shared_ptr<_Config> fromThrift(             \
+      const thrift::_Config& flat_buffer_config);
 
-#define GEN_SERIALIZATION_OBJECT(_Object)                           \
-  static flatbuffers::Offset<flat_buffer_codec::_Object> serialize( \
-      flatbuffers::FlatBufferBuilder& b, const _Object& object);    \
-  static int deserialize(const flat_buffer_codec::_Object* obj, _Object* out);
+#define GEN_SERIALIZATION_OBJECT(_Object)                 \
+  static thrift::_Object toThrift(const _Object& object); \
+  static int fromThrift(const thrift::_Object& obj, _Object* out);
 
   GEN_SERIALIZATION_CONFIG(ServiceDiscoveryConfig)
   GEN_SERIALIZATION_CONFIG(SequencerAttributeConfig)
@@ -82,11 +80,27 @@ class NodesConfigurationCodecFlatBuffers {
   static folly::Optional<membership::MembershipVersion::Type>
   extractConfigVersion(folly::StringPiece serialized_data);
 
-  // Uses the verifer to verify that the passed Slice is correctly formatted and
-  // returns a pointer to the root table of type T.
-  // Returns a nullptr if the verification fails.
-  template <class T>
-  static const T* verifyAndGetRoot(Slice data_blob);
+  template <class Serializer, class T>
+  static std::string serializeThrift(T thrift) {
+    return Serializer::template serialize<std::string>(thrift);
+  }
+
+  template <class Serializer, class T>
+  static std::shared_ptr<T> deserializeThrift(Slice binary) {
+    // TODO is there an exception free API?
+    std::shared_ptr<T> thrift_ptr{nullptr};
+    try {
+      auto thrift = Serializer::template deserialize<T>(
+          folly::StringPiece(binary.ptr(), binary.size));
+      thrift_ptr = std::make_shared<T>(std::move(thrift));
+    } catch (const std::exception& exception) {
+      RATELIMIT_ERROR(std::chrono::seconds(10),
+                      5,
+                      "Failed to deserialize NodesConfiguration thrift: %s",
+                      exception.what());
+    }
+    return thrift_ptr;
+  }
 
  private:
   GEN_SERIALIZATION_OBJECT(NodeServiceDiscovery)

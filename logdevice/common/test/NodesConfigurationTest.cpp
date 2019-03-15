@@ -30,25 +30,10 @@ class NodesConfigurationTest : public ::testing::Test {
  public:
   inline void checkCodecSerialization(const NodesConfiguration& c) {
     {
-      flatbuffers::FlatBufferBuilder builder;
-      auto config = NodesConfigurationCodecFlatBuffers::serialize(builder, c);
-      builder.Finish(config);
-
-      // run flatbuffers internal verification
-      auto verifier =
-          flatbuffers::Verifier(builder.GetBufferPointer(), builder.GetSize());
-      auto res = verifier.VerifyBuffer<
-          configuration::nodes::flat_buffer_codec::NodesConfiguration>(nullptr);
-      ASSERT_TRUE(res);
-
-      auto config_ptr = flatbuffers::GetRoot<
-          configuration::nodes::flat_buffer_codec::NodesConfiguration>(
-          builder.GetBufferPointer());
-      auto c_deserialized =
-          NodesConfigurationCodecFlatBuffers::deserialize(config_ptr);
-
-      ASSERT_NE(nullptr, c_deserialized);
-      ASSERT_EQ(c, *c_deserialized);
+      auto got = NodesConfigurationCodecFlatBuffers::fromThrift(
+          NodesConfigurationCodecFlatBuffers::toThrift(c));
+      ASSERT_NE(nullptr, got);
+      ASSERT_EQ(c, *got);
     }
     {
       // also test serialization with linear buffers

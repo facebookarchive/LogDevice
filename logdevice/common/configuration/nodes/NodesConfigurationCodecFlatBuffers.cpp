@@ -14,57 +14,49 @@
 #include "logdevice/common/protocol/ProtocolReader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
 #include "logdevice/include/Err.h"
+#include "thrift/lib/cpp2/protocol/BinaryProtocol.h"
+#include "thrift/lib/cpp2/protocol/Serializer.h"
 
 namespace facebook { namespace logdevice { namespace configuration {
 namespace nodes {
 
+using apache::thrift::BinarySerializer;
+
 constexpr NodesConfigurationCodecFlatBuffers::ProtocolVersion
     NodesConfigurationCodecFlatBuffers::CURRENT_PROTO_VERSION;
-
-namespace {
-
-template <typename T>
-flatbuffers::Offset<flatbuffers::String>
-serializeOptionalStrField(flatbuffers::FlatBufferBuilder& b,
-                          const T& op_field) {
-  return op_field.hasValue() ? b.CreateString(op_field.value().toString()) : 0;
-}
-
-} // namespace
 
 //////////////////////// NodeServiceDiscovery //////////////////////////////
 
 /*static*/
-flatbuffers::Offset<flat_buffer_codec::NodeServiceDiscovery>
-NodesConfigurationCodecFlatBuffers::serialize(
-    flatbuffers::FlatBufferBuilder& b,
+thrift::NodeServiceDiscovery NodesConfigurationCodecFlatBuffers::toThrift(
     const NodeServiceDiscovery& discovery) {
-  return flat_buffer_codec::CreateNodeServiceDiscovery(
-      b,
-      b.CreateString(discovery.address.toString()),
-      b.CreateString(discovery.gossip_address.toString()),
-      serializeOptionalStrField(b, discovery.ssl_address),
-      serializeOptionalStrField(b, discovery.location),
-      discovery.roles.to_ullong(),
-      b.CreateString(discovery.hostname));
+  thrift::NodeServiceDiscovery disc;
+  disc.set_address(discovery.address.toString());
+  disc.set_gossip_address(discovery.gossip_address.toString());
+  if (discovery.ssl_address.hasValue()) {
+    disc.set_ssl_address(discovery.ssl_address.value().toString());
+  }
+  if (discovery.location.hasValue()) {
+    disc.set_location(discovery.location.value().toString());
+  }
+  disc.set_roles(discovery.roles.to_ullong());
+  disc.set_hostname(discovery.hostname);
+  return disc;
 }
 
 /*static*/
-int NodesConfigurationCodecFlatBuffers::deserialize(
-    const flat_buffer_codec::NodeServiceDiscovery* obj,
+int NodesConfigurationCodecFlatBuffers::fromThrift(
+    const thrift::NodeServiceDiscovery& obj,
     NodeServiceDiscovery* out) {
-  ld_check(obj != nullptr);
   NodeServiceDiscovery result;
 
-#define PARSE_SOCK_FIELD(_name, _optional)                   \
+#define PARSE_SOCK_FIELD(_name)                              \
   do {                                                       \
-    if (!obj->_name()) {                                     \
-      if (!_optional) {                                      \
-        ld_error("Missing required field %s.", #_name);      \
-        return -1;                                           \
-      }                                                      \
+    if (obj._name.empty()) {                                 \
+      ld_error("Missing required field %s.", #_name);        \
+      return -1;                                             \
     } else {                                                 \
-      auto sock = Sockaddr::fromString(obj->_name()->str()); \
+      auto sock = Sockaddr::fromString(obj._name);           \
       if (!sock.hasValue()) {                                \
         ld_error("malformed socket addr field %s.", #_name); \
         return -1;                                           \
@@ -73,26 +65,33 @@ int NodesConfigurationCodecFlatBuffers::deserialize(
     }                                                        \
   } while (0)
 
-  PARSE_SOCK_FIELD(address, false);
-  PARSE_SOCK_FIELD(gossip_address, false);
-  PARSE_SOCK_FIELD(ssl_address, true);
-
+  PARSE_SOCK_FIELD(address);
+  PARSE_SOCK_FIELD(gossip_address);
 #undef PARSE_SOCK_FIELD
 
-  if (obj->location()) {
+  if (obj.ssl_address_ref().has_value()) {
+    auto sock = Sockaddr::fromString(obj.ssl_address_ref().value());
+    if (!sock.hasValue()) {
+      ld_error("malformed socket addr field ssl_address.");
+      return -1;
+    }
+    result.ssl_address = sock.value();
+  }
+
+  if (obj.location_ref().has_value()) {
     NodeLocation location;
-    int rv = location.fromDomainString(obj->location()->str());
+    int rv = location.fromDomainString(obj.location_ref().value());
     if (rv != 0) {
-      ld_error("Invalid \"location\" string %s", obj->location()->c_str());
+      ld_error("Invalid \"location\" string %s", obj.location.c_str());
       return -1;
     }
     result.location = location;
   }
 
-  result.roles = NodeServiceDiscovery::RoleSet(obj->roles());
+  result.roles = NodeServiceDiscovery::RoleSet(obj.roles);
 
-  if (obj->hostname()) {
-    result.hostname = obj->hostname()->str();
+  if (!obj.hostname.empty()) {
+    result.hostname = obj.hostname;
   }
 
   if (out != nullptr) {
@@ -104,16 +103,14 @@ int NodesConfigurationCodecFlatBuffers::deserialize(
 //////////////////////// SequencerNodeAttribute //////////////////////////////
 
 /*static*/
-flatbuffers::Offset<flat_buffer_codec::SequencerNodeAttribute>
-NodesConfigurationCodecFlatBuffers::serialize(
-    flatbuffers::FlatBufferBuilder& b,
+thrift::SequencerNodeAttribute NodesConfigurationCodecFlatBuffers::toThrift(
     const SequencerNodeAttribute& /*unused*/) {
-  return flat_buffer_codec::CreateSequencerNodeAttribute(b);
+  return thrift::SequencerNodeAttribute{};
 }
 
 /*static*/
-int NodesConfigurationCodecFlatBuffers::deserialize(
-    const flat_buffer_codec::SequencerNodeAttribute* obj,
+int NodesConfigurationCodecFlatBuffers::fromThrift(
+    const thrift::SequencerNodeAttribute& /* unused */,
     SequencerNodeAttribute* out) {
   if (out != nullptr) {
     *out = SequencerNodeAttribute();
@@ -124,27 +121,22 @@ int NodesConfigurationCodecFlatBuffers::deserialize(
 //////////////////////// StorageNodeAttribute //////////////////////////////
 
 /*static*/
-flatbuffers::Offset<flat_buffer_codec::StorageNodeAttribute>
-NodesConfigurationCodecFlatBuffers::serialize(
-    flatbuffers::FlatBufferBuilder& b,
+thrift::StorageNodeAttribute NodesConfigurationCodecFlatBuffers::toThrift(
     const StorageNodeAttribute& storage_attr) {
-  return flat_buffer_codec::CreateStorageNodeAttribute(
-      b,
-      storage_attr.capacity,
-      storage_attr.num_shards,
-      storage_attr.generation,
-      storage_attr.exclude_from_nodesets);
+  thrift::StorageNodeAttribute attr;
+  attr.set_capacity(storage_attr.capacity);
+  attr.set_num_shards(storage_attr.num_shards);
+  attr.set_generation(storage_attr.generation);
+  attr.set_exclude_from_nodesets(storage_attr.exclude_from_nodesets);
+  return attr;
 }
 
 /*static*/
-int NodesConfigurationCodecFlatBuffers::deserialize(
-    const flat_buffer_codec::StorageNodeAttribute* obj,
+int NodesConfigurationCodecFlatBuffers::fromThrift(
+    const thrift::StorageNodeAttribute& obj,
     StorageNodeAttribute* out) {
-  ld_check(obj != nullptr);
-  StorageNodeAttribute result{obj->capacity(),
-                              obj->num_shards(),
-                              obj->generation(),
-                              obj->exclude_from_nodesets()};
+  StorageNodeAttribute result{
+      obj.capacity, obj.num_shards, obj.generation, obj.exclude_from_nodesets};
 
   if (out != nullptr) {
     *out = result;
@@ -154,54 +146,37 @@ int NodesConfigurationCodecFlatBuffers::deserialize(
 
 //////////////////////// NodeAttributesConfig //////////////////////////////
 
-#define GEN_SERIALIZATION_NODE_ATTRS_CONFIG(_Config, _Attribute)            \
-  /*static*/                                                                \
-  flatbuffers::Offset<flat_buffer_codec::_Config>                           \
-  NodesConfigurationCodecFlatBuffers::serialize(                            \
-      flatbuffers::FlatBufferBuilder& _b, const _Config& _config) {         \
-    std::vector<flatbuffers::Offset<flat_buffer_codec::_Config##MapItem>>   \
-        node_states;                                                        \
-    for (const auto& node_kv : (_config).node_states_) {                    \
-      node_states.push_back(flat_buffer_codec::Create##_Config##MapItem(    \
-          (_b), node_kv.first, serialize((_b), node_kv.second)));           \
-    }                                                                       \
-    return flat_buffer_codec::Create##_Config(                              \
-        (_b), (_b).CreateVector(node_states));                              \
-  }                                                                         \
-                                                                            \
-  /*static*/                                                                \
-  std::shared_ptr<_Config> NodesConfigurationCodecFlatBuffers::deserialize( \
-      const flat_buffer_codec::_Config* _fb_config) {                       \
-    ld_check(_fb_config != nullptr);                                        \
-    auto result = std::make_shared<_Config>();                              \
-    auto node_states = _fb_config->node_states();                           \
-    if (node_states) {                                                      \
-      for (size_t i = 0; i < node_states->Length(); ++i) {                  \
-        auto node_state = node_states->Get(i);                              \
-        node_index_t node = node_state->node_idx();                         \
-        auto node_attribute = node_state->node_attribute();                 \
-        if (node_attribute == nullptr) {                                    \
-          ld_error("Node %hu does not have an attribute.", node);           \
-          err = E::INVALID_CONFIG;                                          \
-          return nullptr;                                                   \
-        }                                                                   \
-        if (result->hasNode(node)) {                                        \
-          ld_error("Duplicate Node %hu in the config.", node);              \
-          err = E::INVALID_CONFIG;                                          \
-          return nullptr;                                                   \
-        }                                                                   \
-        _Attribute attr;                                                    \
-        int rv = deserialize(node_attribute, &attr);                        \
-        if (rv != 0) {                                                      \
-          err = E::INVALID_CONFIG;                                          \
-          return nullptr;                                                   \
-        }                                                                   \
-        result->setNodeAttributes(node, attr);                              \
-      }                                                                     \
-    }                                                                       \
-    /* note: we don't do validation here since it will be done */           \
-    /* at NodesConfiguration deserialization */                             \
-    return result;                                                          \
+#define GEN_SERIALIZATION_NODE_ATTRS_CONFIG(_Config, _Attribute)           \
+  /*static*/                                                               \
+  thrift::_Config NodesConfigurationCodecFlatBuffers::toThrift(            \
+      const _Config& _config) {                                            \
+    std::map<thrift::node_idx, thrift::_Attribute> node_states;            \
+    for (const auto& node_kv : _config.node_states_) {                     \
+      node_states.emplace(node_kv.first, toThrift(node_kv.second));        \
+    }                                                                      \
+    thrift::_Config config;                                                \
+    config.set_node_states(std::move(node_states));                        \
+    return config;                                                         \
+  }                                                                        \
+                                                                           \
+  /*static*/                                                               \
+  std::shared_ptr<_Config> NodesConfigurationCodecFlatBuffers::fromThrift( \
+      const thrift::_Config& _fb_config) {                                 \
+    auto result = std::make_shared<_Config>();                             \
+    for (const auto& state : _fb_config.node_states) {                     \
+      node_index_t node = state.first;                                     \
+      auto node_attribute = state.second;                                  \
+      _Attribute attr;                                                     \
+      int rv = fromThrift(node_attribute, &attr);                          \
+      if (rv != 0) {                                                       \
+        err = E::INVALID_CONFIG;                                           \
+        return nullptr;                                                    \
+      }                                                                    \
+      result->setNodeAttributes(node, std::move(attr));                    \
+    }                                                                      \
+    /* note: we don't do validation here since it will be done */          \
+    /* at NodesConfiguration deserialization */                            \
+    return result;                                                         \
   }
 
 GEN_SERIALIZATION_NODE_ATTRS_CONFIG(ServiceDiscoveryConfig,
@@ -210,46 +185,35 @@ GEN_SERIALIZATION_NODE_ATTRS_CONFIG(SequencerAttributeConfig,
                                     SequencerNodeAttribute)
 GEN_SERIALIZATION_NODE_ATTRS_CONFIG(StorageAttributeConfig,
                                     StorageNodeAttribute)
-
 #undef GEN_SERIALIZATION_NODE_ATTRS_CONFIG
 
-//////////////////////// PerRoleConfig //////////////////////////////
+//////////////////////// PerRoleConfig
+////////////////////////////////////
 
 #define GEN_SERIALIZATION_PER_ROLE_CONFIG(_Config, _AttrConfig, _Membership) \
   /*static*/                                                                 \
-  flatbuffers::Offset<flat_buffer_codec::_Config>                            \
-  NodesConfigurationCodecFlatBuffers::serialize(                             \
-      flatbuffers::FlatBufferBuilder& _b, const _Config& _config) {          \
+  thrift::_Config NodesConfigurationCodecFlatBuffers::toThrift(              \
+      const _Config& _config) {                                              \
     /* must serialize a valid config */                                      \
     ld_check(_config.membership_ != nullptr);                                \
     ld_check(_config.attributes_ != nullptr);                                \
-    return flat_buffer_codec::Create##_Config(                               \
-        _b,                                                                  \
-        serialize(_b, *_config.attributes_),                                 \
-        membership::MembershipCodecFlatBuffers::serialize(                   \
-            _b, *_config.membership_));                                      \
+    thrift::_Config conf;                                                    \
+    conf.set_attr_conf(toThrift(*_config.attributes_));                      \
+    conf.set_membership(membership::MembershipCodecFlatBuffers::toThrift(    \
+        *_config.membership_));                                              \
+    return conf;                                                             \
   }                                                                          \
                                                                              \
   /*static*/                                                                 \
-  std::shared_ptr<_Config> NodesConfigurationCodecFlatBuffers::deserialize(  \
-      const flat_buffer_codec::_Config* _fb_config) {                        \
-    if (_fb_config->attr_conf() == nullptr) {                                \
-      ld_error("Attribute config missing for %s.", #_Config);                \
-      err = E::INVALID_CONFIG;                                               \
-      return nullptr;                                                        \
-    }                                                                        \
-    if (_fb_config->membership() == nullptr) {                               \
-      ld_error("Membership missing for %s.", #_Config);                      \
-      err = E::INVALID_CONFIG;                                               \
-      return nullptr;                                                        \
-    }                                                                        \
-    auto attr_config = deserialize(_fb_config->attr_conf());                 \
+  std::shared_ptr<_Config> NodesConfigurationCodecFlatBuffers::fromThrift(   \
+      const thrift::_Config& _fb_config) {                                   \
+    auto attr_config = fromThrift(_fb_config.attr_conf);                     \
     if (attr_config == nullptr) {                                            \
       err = E::INVALID_CONFIG;                                               \
       return nullptr;                                                        \
     }                                                                        \
-    auto membership = membership::MembershipCodecFlatBuffers::deserialize(   \
-        _fb_config->membership());                                           \
+    auto membership = membership::MembershipCodecFlatBuffers::fromThrift(    \
+        _fb_config.membership);                                              \
     if (membership == nullptr) {                                             \
       err = E::INVALID_CONFIG;                                               \
       return nullptr;                                                        \
@@ -270,56 +234,50 @@ GEN_SERIALIZATION_PER_ROLE_CONFIG(StorageConfig,
 //////////////////////// MetaDataLogsReplication //////////////////////////////
 
 /* static */
-flatbuffers::Offset<flat_buffer_codec::MetaDataLogsReplication>
-NodesConfigurationCodecFlatBuffers::serialize(
-    flatbuffers::FlatBufferBuilder& b,
+thrift::MetaDataLogsReplication NodesConfigurationCodecFlatBuffers::toThrift(
     const MetaDataLogsReplication& config) {
   // must serialize a valid config
   ld_check(config.validate());
-  std::vector<flat_buffer_codec::ScopeReplication> scopes;
+  std::vector<thrift::ScopeReplication> scopes;
   for (const auto& reps : config.replication_.getDistinctReplicationFactors()) {
-    scopes.push_back(flat_buffer_codec::ScopeReplication(
-        static_cast<uint8_t>(reps.first), reps.second));
+    thrift::ScopeReplication rep;
+    rep.set_scope(static_cast<uint8_t>(reps.first));
+    rep.set_replication_factor(reps.second);
+    scopes.push_back(std::move(rep));
   }
 
-  return flat_buffer_codec::CreateMetaDataLogsReplication(
-      b,
-      config.version_.val(),
-      flat_buffer_codec::CreateReplicationProperty(
-          b, b.CreateVectorOfStructs(scopes)));
+  thrift::ReplicationProperty replication;
+  replication.set_scopes(std::move(scopes));
+
+  thrift::MetaDataLogsReplication metadata;
+  metadata.set_version(config.version_.val());
+  metadata.set_replication(std::move(replication));
+
+  return metadata;
 }
 
 /* static */
 std::shared_ptr<MetaDataLogsReplication>
-NodesConfigurationCodecFlatBuffers::deserialize(
-    const flat_buffer_codec::MetaDataLogsReplication* flat_buffer_config) {
-  ld_check(flat_buffer_config != nullptr);
-
+NodesConfigurationCodecFlatBuffers::fromThrift(
+    const thrift::MetaDataLogsReplication& flat_buffer_config) {
   auto result = std::make_shared<MetaDataLogsReplication>();
-  if (flat_buffer_config->replication() == nullptr) {
-    ld_error("No replication property provided in MetaDataLogsReplication");
-    err = E::INVALID_CONFIG;
-    return nullptr;
-  }
   std::vector<ReplicationProperty::ScopeReplication> scopes;
-  auto rep_scopes = flat_buffer_config->replication()->scopes();
-  if (rep_scopes) {
-    for (size_t i = 0; i < rep_scopes->Length(); ++i) {
-      auto scope = rep_scopes->Get(i);
-      scopes.emplace_back(static_cast<NodeLocationScope>(scope->scope()),
-                          static_cast<int>(scope->replication_factor()));
-    }
+  for (const auto& scope : flat_buffer_config.replication.scopes) {
+    scopes.emplace_back(static_cast<NodeLocationScope>(scope.scope),
+                        static_cast<int>(scope.replication_factor));
   }
 
   result->version_ =
-      membership::MembershipVersion::Type(flat_buffer_config->version());
+      membership::MembershipVersion::Type(flat_buffer_config.version);
 
-  // allow empty scopes here (which is prohibited in
+  // allow empty scopes here (which is
+  // prohibited in
   // ReplicationProperty::assign())
   if (!scopes.empty()) {
     int rv = result->replication_.assign(std::move(scopes));
     if (rv != 0) {
-      ld_error("Invalid replication property for metadata logs replication.");
+      ld_error("Invalid replication property "
+               "for metadata logs replication.");
       return nullptr;
     }
   }
@@ -327,48 +285,47 @@ NodesConfigurationCodecFlatBuffers::deserialize(
   return result;
 }
 
-//////////////////////// NodesConfiguration //////////////////////////////
+//////////////////////// NodesConfiguration
+/////////////////////////////////
 
 /* static */
-flatbuffers::Offset<flat_buffer_codec::NodesConfiguration>
-NodesConfigurationCodecFlatBuffers::serialize(
-    flatbuffers::FlatBufferBuilder& b,
-    const NodesConfiguration& config) {
+thrift::NodesConfiguration
+NodesConfigurationCodecFlatBuffers::toThrift(const NodesConfiguration& config) {
   // config must have valid components
   ld_check(config.service_discovery_ != nullptr);
   ld_check(config.sequencer_config_ != nullptr);
   ld_check(config.storage_config_ != nullptr);
   ld_check(config.metadata_logs_rep_ != nullptr);
 
-  return flat_buffer_codec::CreateNodesConfiguration(
-      b,
-      CURRENT_PROTO_VERSION,
-      config.getVersion().val(),
-      serialize(b, *config.service_discovery_),
-      serialize(b, *config.sequencer_config_),
-      serialize(b, *config.storage_config_),
-      serialize(b, *config.metadata_logs_rep_),
-      config.last_change_timestamp_,
-      config.last_maintenance_.val(),
-      b.CreateString(config.last_change_context_));
+  thrift::NodesConfiguration conf;
+  conf.set_proto_version(CURRENT_PROTO_VERSION);
+  conf.set_version(config.getVersion().val());
+  conf.set_service_discovery(toThrift(*config.service_discovery_));
+  conf.set_sequencer_config(toThrift(*config.sequencer_config_));
+  conf.set_storage_config(toThrift(*config.storage_config_));
+  conf.set_metadata_logs_rep(toThrift(*config.metadata_logs_rep_));
+  conf.set_last_timestamp(config.last_change_timestamp_);
+  conf.set_last_maintenance(config.last_maintenance_.val());
+  conf.set_last_context(config.last_change_context_);
+  return conf;
 }
 
 /* static */
 std::shared_ptr<NodesConfiguration>
-NodesConfigurationCodecFlatBuffers::deserialize(
-    const flat_buffer_codec::NodesConfiguration* fb_config) {
-  ld_check(fb_config != nullptr);
+NodesConfigurationCodecFlatBuffers::fromThrift(
+    const thrift::NodesConfiguration& fb_config) {
   NodesConfigurationCodecFlatBuffers::ProtocolVersion pv =
-      fb_config->proto_version();
+      fb_config.proto_version;
   if (pv > CURRENT_PROTO_VERSION) {
-    RATELIMIT_ERROR(
-        std::chrono::seconds(10),
-        5,
-        "Received codec protocol version %u is larger than current "
-        "codec protocol version %u. There might be incompatible data, "
-        "aborting deserialization",
-        pv,
-        CURRENT_PROTO_VERSION);
+    RATELIMIT_ERROR(std::chrono::seconds(10),
+                    5,
+                    "Received codec protocol version "
+                    "%u is larger than current "
+                    "codec protocol version %u. There "
+                    "might be incompatible data, "
+                    "aborting deserialization",
+                    pv,
+                    CURRENT_PROTO_VERSION);
     err = E::NOTSUPPORTED;
     return nullptr;
   }
@@ -377,12 +334,7 @@ NodesConfigurationCodecFlatBuffers::deserialize(
 
 #define PARSE_SUB_CONF(_name)                             \
   do {                                                    \
-    if (fb_config->_name() == nullptr) {                  \
-      ld_error("subconfig %s is missing.", #_name);       \
-      err = E::INVALID_CONFIG;                            \
-      return nullptr;                                     \
-    }                                                     \
-    result->_name##_ = deserialize(fb_config->_name());   \
+    result->_name##_ = fromThrift(fb_config._name);       \
     if (result->_name##_ == nullptr) {                    \
       ld_error("failure to parse subconfig %s.", #_name); \
       err = E::INVALID_CONFIG;                            \
@@ -396,12 +348,12 @@ NodesConfigurationCodecFlatBuffers::deserialize(
   PARSE_SUB_CONF(metadata_logs_rep);
 #undef PARSE_SUB_CONF
 
-  result->version_ = membership::MembershipVersion::Type(fb_config->version());
-  result->last_change_timestamp_ = fb_config->last_timestamp();
+  result->version_ = membership::MembershipVersion::Type(fb_config.version);
+  result->last_change_timestamp_ = fb_config.last_timestamp;
   result->last_maintenance_ =
-      membership::MaintenanceID::Type(fb_config->last_maintenance());
-  if (fb_config->last_context()) {
-    result->last_change_context_ = fb_config->last_context()->str();
+      membership::MaintenanceID::Type(fb_config.last_maintenance);
+  if (!fb_config.last_context.empty()) {
+    result->last_change_context_ = fb_config.last_context;
   }
 
   // recompute all config metadata
@@ -409,7 +361,8 @@ NodesConfigurationCodecFlatBuffers::deserialize(
 
   // perform the final validation
   if (!result->validate()) {
-    ld_error("Invalid NodesConfiguration after deserialization.");
+    ld_error("Invalid NodesConfiguration "
+             "after deserialization.");
     err = E::INVALID_CONFIG;
     return nullptr;
   }
@@ -417,34 +370,14 @@ NodesConfigurationCodecFlatBuffers::deserialize(
   return result;
 }
 
-template <class T>
-const T* NodesConfigurationCodecFlatBuffers::verifyAndGetRoot(Slice data_blob) {
-  static_assert(std::is_base_of<flatbuffers::Table, T>::value,
-                "The generic type should be a FBS table");
-  auto verifier =
-      flatbuffers::Verifier(static_cast<const uint8_t*>(data_blob.data),
-                            data_blob.size,
-                            128, /* max verification depth */
-                            10000000 /* max number of tables to be verified */);
-  bool res = verifier.VerifyBuffer<T>(nullptr);
-  if (!res) {
-    RATELIMIT_ERROR(std::chrono::seconds(5), 1, "Buffer verification failed!");
-    err = E::BADMSG;
-    return nullptr;
-  }
-  return flatbuffers::GetRoot<T>(data_blob.data);
-}
-
 /*static*/
 void NodesConfigurationCodecFlatBuffers::serialize(
     const NodesConfiguration& nodes_config,
     ProtocolWriter& writer,
     SerializeOptions options) {
-  flatbuffers::FlatBufferBuilder builder;
-  auto config = serialize(builder, nodes_config);
-  builder.Finish(config);
-
-  Slice data_blob{builder.GetBufferPointer(), builder.GetSize()};
+  std::string thrift_str =
+      serializeThrift<BinarySerializer>(toThrift(nodes_config));
+  auto data_blob = Slice::fromString(thrift_str);
 
   std::unique_ptr<uint8_t[]> buffer;
   if (options.compression) {
@@ -467,54 +400,54 @@ void NodesConfigurationCodecFlatBuffers::serialize(
              data_blob.size,
              compressed_size);
     ld_check(compressed_size <= compressed_size_upperbound);
-    // revise the data_blob to point to the compressed blob instead
+    // revise the data_blob to point to the
+    // compressed blob instead
     data_blob = Slice{buffer.get(), compressed_size};
   }
 
-  flatbuffers::FlatBufferBuilder wrapper_builder;
-  auto wrapper_header = flat_buffer_codec::CreateNodesConfigurationHeader(
-      wrapper_builder,
+  auto wrapper_header = thrift::NodesConfigurationHeader(
+      apache::thrift::FragileConstructor::FRAGILE,
       CURRENT_PROTO_VERSION,
       nodes_config.getVersion().val(),
       options.compression);
-  auto wrapper = flat_buffer_codec::CreateNodesConfigurationWrapper(
-      wrapper_builder,
+  auto wrapper = thrift::NodesConfigurationWrapper(
+      apache::thrift::FragileConstructor::FRAGILE,
       wrapper_header,
-      wrapper_builder.CreateVector(
-          static_cast<const uint8_t*>(data_blob.data), data_blob.size));
-  wrapper_builder.Finish(wrapper);
+      // TODO get rid of this copy
+      std::string(data_blob.ptr(), data_blob.size));
 
-  writer.write(wrapper_builder.GetBufferPointer(), wrapper_builder.GetSize());
+  writer.writeVector(serializeThrift<BinarySerializer>(wrapper));
 }
 
 /*static*/
 std::shared_ptr<const NodesConfiguration>
 NodesConfigurationCodecFlatBuffers::deserialize(Slice wrapper_blob) {
-  auto wrapper_ptr = verifyAndGetRoot<
-      configuration::nodes::flat_buffer_codec::NodesConfigurationWrapper>(
-      wrapper_blob);
+  auto wrapper_ptr =
+      deserializeThrift<BinarySerializer, thrift::NodesConfigurationWrapper>(
+          wrapper_blob);
   if (wrapper_ptr == nullptr) {
+    err = E::BADMSG;
     return nullptr;
   }
 
-  if (wrapper_ptr->header()->proto_version() > CURRENT_PROTO_VERSION) {
+  if (wrapper_ptr->header.proto_version > CURRENT_PROTO_VERSION) {
     RATELIMIT_ERROR(
         std::chrono::seconds(10),
         5,
         "Received codec protocol version %u is larger than current "
         "codec protocol version %u. There might be incompatible data, "
         "aborting deserialization",
-        wrapper_ptr->header()->proto_version(),
+        wrapper_ptr->header.proto_version,
         CURRENT_PROTO_VERSION);
     err = E::NOTSUPPORTED;
     return nullptr;
   }
 
   std::unique_ptr<uint8_t[]> buffer;
-  const auto& serialized_config = wrapper_ptr->serialized_config();
-  Slice data_blob{serialized_config->data(), serialized_config->size()};
+  const auto& serialized_config = wrapper_ptr->serialized_config;
+  auto data_blob = Slice::fromString(serialized_config);
 
-  if (wrapper_ptr->header()->is_compressed()) {
+  if (wrapper_ptr->header.is_compressed) {
     size_t uncompressed_size =
         ZSTD_getDecompressedSize(data_blob.data, data_blob.size);
     if (uncompressed_size == 0) {
@@ -540,9 +473,14 @@ NodesConfigurationCodecFlatBuffers::deserialize(Slice wrapper_blob) {
     data_blob = Slice{buffer.get(), uncompressed_size};
   }
 
-  auto config_ptr = verifyAndGetRoot<
-      configuration::nodes::flat_buffer_codec::NodesConfiguration>(data_blob);
-  return NodesConfigurationCodecFlatBuffers::deserialize(config_ptr);
+  auto config_ptr =
+      deserializeThrift<BinarySerializer, thrift::NodesConfiguration>(
+          data_blob);
+  if (config_ptr == nullptr) {
+    err = E::BADMSG;
+    return nullptr;
+  }
+  return NodesConfigurationCodecFlatBuffers::fromThrift(*config_ptr);
 }
 
 /*static*/
@@ -572,9 +510,11 @@ NodesConfigurationCodecFlatBuffers::extractConfigVersion(
   if (serialized_data.empty()) {
     return folly::none;
   }
-  auto wrapper_ptr = verifyAndGetRoot<
-      configuration::nodes::flat_buffer_codec::NodesConfigurationWrapper>(
-      Slice{serialized_data.data(), serialized_data.size()});
+  // TODO consider using thrift frozen for this wrapper to avoid deserializing
+  // the whole struct to get the version.
+  auto wrapper_ptr =
+      deserializeThrift<BinarySerializer, thrift::NodesConfigurationWrapper>(
+          Slice{serialized_data.data(), serialized_data.size()});
   if (wrapper_ptr == nullptr) {
     RATELIMIT_ERROR(
         std::chrono::seconds(5), 1, "Failed to extract configuration version");
@@ -582,7 +522,7 @@ NodesConfigurationCodecFlatBuffers::extractConfigVersion(
   }
 
   return membership::MembershipVersion::Type(
-      wrapper_ptr->header()->config_version());
+      wrapper_ptr->header.config_version);
 }
 
 }}}} // namespace facebook::logdevice::configuration::nodes
