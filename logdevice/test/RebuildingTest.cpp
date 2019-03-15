@@ -2872,6 +2872,8 @@ TEST_P(RebuildingTest, DirtyRangeAdminCommands) {
   node1.waitUntilStarted();
 
   // ----------------------------- Helpers ------------------------------------
+  using namespace std::chrono_literals;
+
   auto get_partitions = [&node1] {
     return node1.partitionsInfo(/*shard*/ 0, /*level*/ 2);
   };
@@ -2916,17 +2918,20 @@ TEST_P(RebuildingTest, DirtyRangeAdminCommands) {
   };
 
   auto send_cmd = [&](std::string dirty_or_clean, auto min, auto max) {
-    std::string response = node1.sendCommand(
+    auto cmd_str =
         folly::format("rebuilding mark_{} 0 --time-from='{}' --time-to='{}'",
                       dirty_or_clean,
                       min,
                       max)
-            .str());
+            .str();
+    ld_info("Sending command %s", cmd_str.c_str());
+    std::string response = node1.sendCommand(cmd_str);
     ASSERT_EQ(response, "Done.\r\nEND\r\n");
   };
 
   auto start_time = [](auto partition) {
-    return std::chrono::milliseconds(std::stoull(partition["Start Time"]));
+    return RecordTimestamp(
+        std::chrono::milliseconds(std::stoull(partition["Start Time"])));
   };
 
   // Take care in case the partition has not seen any records:
@@ -2935,7 +2940,7 @@ TEST_P(RebuildingTest, DirtyRangeAdminCommands) {
     auto min = std::chrono::milliseconds(std::stoll(partition["Min Time"]));
     return (min == RecordTimestamp::max().time_since_epoch())
         ? start_time(partition)
-        : min;
+        : RecordTimestamp(min);
   };
 
   // Take care in case the partition has not seen any records:
@@ -2944,7 +2949,7 @@ TEST_P(RebuildingTest, DirtyRangeAdminCommands) {
     auto max = std::chrono::milliseconds(std::stoll(partition["Max Time"]));
     return (max == RecordTimestamp::min().time_since_epoch())
         ? start_time(partition)
-        : max;
+        : RecordTimestamp(max);
   };
 
   // --------------------------- Test Cases -----------------------------------
@@ -2963,10 +2968,10 @@ TEST_P(RebuildingTest, DirtyRangeAdminCommands) {
     auto& partition0 = partitions.front();
     auto min = min_time(partition0);
 
-    send_cmd("clean", min.count() - 6000, min.count() - 1000);
+    send_cmd("clean", (min - 6000ms).toString(), (min - 1000ms).toString());
 
     EXPECT_EQ(base_dirty_pariritions, count_dirty_partitions());
-    EXPECT_EQ(node1.dirtyShardInfo(), base_dirty_info);
+    EXPECT_EQ(toString(node1.dirtyShardInfo()), toString(base_dirty_info));
   }
 
   // Clearing a time range that is after all partitions should have no effect.
@@ -2979,10 +2984,10 @@ TEST_P(RebuildingTest, DirtyRangeAdminCommands) {
     auto& last_partition = partitions.back();
     auto max = max_time(last_partition);
 
-    send_cmd("clean", max.count() + 1000, max.count() + 6000);
+    send_cmd("clean", max + 1000ms, max + 6000ms);
 
     EXPECT_EQ(base_dirty_pariritions, count_dirty_partitions());
-    EXPECT_EQ(node1.dirtyShardInfo(), base_dirty_info);
+    EXPECT_EQ(toString(node1.dirtyShardInfo()), toString(base_dirty_info));
   }
 
   // Dirtying a range before all partitions should update the dirty shard
@@ -2996,10 +3001,10 @@ TEST_P(RebuildingTest, DirtyRangeAdminCommands) {
     auto& partition0 = partitions.front();
     auto min = min_time(partition0);
 
-    send_cmd("dirty", min.count() - 6000, min.count() - 1000);
+    send_cmd("dirty", min - 6000ms, min - 1000ms);
 
     EXPECT_EQ(base_dirty_pariritions, count_dirty_partitions());
-    EXPECT_NE(node1.dirtyShardInfo(), base_dirty_info);
+    EXPECT_NE(toString(node1.dirtyShardInfo()), toString(base_dirty_info));
   }
 
   // Dirtying a range after all partitions should update the dirty shard
@@ -3013,10 +3018,10 @@ TEST_P(RebuildingTest, DirtyRangeAdminCommands) {
     auto& last_partition = partitions.back();
     auto max = max_time(last_partition);
 
-    send_cmd("dirty", max.count() + 1000, max.count() + 6000);
+    send_cmd("dirty", max + 1000ms, max + 6000ms);
 
     EXPECT_EQ(base_dirty_pariritions, count_dirty_partitions());
-    EXPECT_NE(node1.dirtyShardInfo(), base_dirty_info);
+    EXPECT_NE(toString(node1.dirtyShardInfo()), toString(base_dirty_info));
   }
 
   // Add a dirty range that matches an existing dirty partition.
@@ -3031,11 +3036,11 @@ TEST_P(RebuildingTest, DirtyRangeAdminCommands) {
     auto max = max_time(partition);
     ASSERT_GT((max - min).count(), 1);
 
-    send_cmd("dirty", min.count(), max.count());
+    send_cmd("dirty", min.toString(), max.toString());
 
     auto partitions = get_partitions();
     EXPECT_EQ(partitions, base_partitions);
-    EXPECT_EQ(node1.dirtyShardInfo(), base_dirty_info);
+    EXPECT_EQ(toString(node1.dirtyShardInfo()), toString(base_dirty_info));
   }
 
   // Removing part of a partition's time range should update the
@@ -3049,11 +3054,11 @@ TEST_P(RebuildingTest, DirtyRangeAdminCommands) {
     auto max = max_time(partition);
     ASSERT_GT((max - min).count(), 1);
 
-    send_cmd("clean", min.count(), min.count() + 1);
+    send_cmd("clean", min, min + 1ms);
 
     partition = find_partition_by_id(partition["ID"]);
     EXPECT_EQ(partition["Under Replicated"], "1");
-    EXPECT_NE(node1.dirtyShardInfo(), base_dirty_info);
+    EXPECT_NE(toString(node1.dirtyShardInfo()), toString(base_dirty_info));
   }
 
   // Removing all of a partition's time range should update the
@@ -3065,11 +3070,11 @@ TEST_P(RebuildingTest, DirtyRangeAdminCommands) {
     auto base_dirty_info = node1.dirtyShardInfo();
     auto partition = find_partition(/*dirty*/ true);
 
-    send_cmd("clean", min_time(partition).count(), max_time(partition).count());
+    send_cmd("clean", min_time(partition), max_time(partition));
 
     partition = find_partition_by_id(partition["ID"]);
     EXPECT_EQ(partition["Under Replicated"], "0");
-    EXPECT_NE(node1.dirtyShardInfo(), base_dirty_info);
+    EXPECT_NE(toString(node1.dirtyShardInfo()), toString(base_dirty_info));
   }
 
   // Adding a dirty range that spans part of two adjoining, clean
@@ -3091,12 +3096,12 @@ TEST_P(RebuildingTest, DirtyRangeAdminCommands) {
         continue;
       }
 
-      send_cmd("dirty", max_time(*it).count(), min_time(*next_it).count());
+      send_cmd("dirty", max_time(*it), min_time(*next_it));
 
       EXPECT_EQ(find_partition_by_id((*it)["ID"])["Under Replicated"], "1");
       EXPECT_EQ(
           find_partition_by_id((*next_it)["ID"])["Under Replicated"], "1");
-      EXPECT_NE(node1.dirtyShardInfo(), base_dirty_info);
+      EXPECT_NE(toString(node1.dirtyShardInfo()), toString(base_dirty_info));
       break;
     }
   }
@@ -3109,8 +3114,8 @@ TEST_P(RebuildingTest, DirtyRangeAdminCommands) {
     ASSERT_FALSE(base_dirty_info.empty());
 
     send_cmd("clean",
-             RecordTimestamp::zero().toString(),
-             (RecordTimestamp::now() + std::chrono::hours(1)).toString());
+             RecordTimestamp::zero(),
+             RecordTimestamp::now() + std::chrono::hours(1));
 
     EXPECT_EQ(count_dirty_partitions(), 0);
     EXPECT_TRUE(node1.dirtyShardInfo().empty());

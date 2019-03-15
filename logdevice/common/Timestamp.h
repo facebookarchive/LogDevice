@@ -463,6 +463,7 @@ class Timestamp {
     const char* ms_start = strptime(tstr.c_str(), "%F %T", &tm);
     if (ms_start != nullptr) {
       // strptime was successful.
+      tm.tm_isdst = /* auto-detect DST from date/time in tm */ -1;
       epoch_ms = mktime(&tm) * 1000;
 
       // Check for optional milliseconds.
@@ -714,3 +715,23 @@ std::string toString(const TimeIntervals<TS>& ranges) {
 }
 
 }} // namespace facebook::logdevice
+
+namespace folly {
+/**
+ * folly::format support for Timestamps.
+ */
+template <typename C, template <typename> class H, typename D>
+class FormatValue<facebook::logdevice::Timestamp<C, H, D>> {
+ public:
+  explicit FormatValue(const facebook::logdevice::Timestamp<C, H, D>& val)
+      : val_(val) {}
+
+  template <class FormatCallback>
+  void format(FormatArg& arg, FormatCallback& cb) const {
+    FormatValue<std::string>(val_.toString()).format(arg, cb);
+  }
+
+ private:
+  const facebook::logdevice::Timestamp<C, H, D>& val_;
+};
+} // namespace folly
