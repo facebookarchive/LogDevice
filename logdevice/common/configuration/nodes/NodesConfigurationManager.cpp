@@ -127,13 +127,21 @@ NodesConfigurationManager::NodesConfigurationManager(
   ld_check(deps_ != nullptr);
 }
 
-void NodesConfigurationManager::init() {
+bool NodesConfigurationManager::init(
+    std::shared_ptr<const NodesConfiguration> init_nc,
+    bool wait_until_initialized) {
   if (shutdownSignaled()) {
-    return;
+    return true;
   }
   auto wp = weak_from_this();
   ld_check(wp.lock() != nullptr);
-  deps_->init(wp);
+  deps_->init(wp, std::move(init_nc));
+  if (wait_until_initialized) {
+    // We should not be on _any_ worker thread, otherwise we will deadlock.
+    deps_->dcheckNotOnProcessor();
+    return initialized_.try_wait_for(std::chrono::seconds(10));
+  }
+  return true;
 }
 
 void NodesConfigurationManager::upgradeToProposer() {
@@ -152,6 +160,9 @@ bool NodesConfigurationManager::shouldDoConsistentConfigFetch() const {
 void NodesConfigurationManager::shutdown() {
   shutdown_signaled_.store(true);
   deps_->shutdown();
+  // Just in case shutdown was signaled before / while the Processor is handling
+  // the InitRequest.
+  initialized_.wait();
   // Since the Processor doesn't complete pending requests when joining the
   // worker threads, we wait for the ShutdownRequest to execute before
   // returning.
@@ -212,25 +223,16 @@ void NodesConfigurationManager::overwrite(
   deps()->overwrite(std::move(configuration), std::move(callback));
 }
 
-void NodesConfigurationManager::initOnNCM() {
+void NodesConfigurationManager::initOnNCM(
+    std::shared_ptr<const NodesConfiguration> init_nc) {
   deps_->dcheckOnNCM();
   // start polling from NCS
   onHeartBeat();
   deps_->scheduleHeartBeat();
   STAT_SET(deps_->getStats(), nodes_configuration_manager_started, 1);
 
-  const auto initial_nc = deps()->processor_->config_->getNodesConfiguration();
-  if (initial_nc != nullptr) {
-    onNewConfig(std::move(initial_nc));
-  } else {
-    // Currently this should only happen in tests as our boostrapping workflow
-    // should always ensure the Processor has a valid NodesConfiguration before
-    // initializing NCM. In the future we will require a valid NC for Processor
-    // construction and will turn this into a ld_check.
-    ld_warning("NodesConfigurationManager initialized without a valid "
-               "NodesConfiguration in its Processor context. This should "
-               "only happen in tests.");
-  }
+  ld_assert(init_nc);
+  onNewConfig(std::move(init_nc));
 }
 
 void NodesConfigurationManager::onNewConfig(std::string new_config) {
@@ -484,6 +486,8 @@ void NodesConfigurationManager::onProcessingFinished(
   ld_check(!hasProcessedVersion(new_version));
   // Only the NCM thread is allowed to update local_nodes_config_
   local_nodes_config_.update(std::move(pending_nodes_config_));
+  initialized_.post();
+
   ld_info("Updated local nodes config to version %lu...", new_version.val());
   STAT_INCR(deps_->getStats(), nodes_configuration_manager_config_published);
   STAT_SET(deps_->getStats(),

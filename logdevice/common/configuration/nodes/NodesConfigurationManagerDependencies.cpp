@@ -45,7 +45,7 @@ Request::Execution NCMRequest::execute() {
 
 Request::Execution Dependencies::InitRequest::executeOnNCM(
     std::shared_ptr<NodesConfigurationManager> ncm_ptr) {
-  ncm_ptr->initOnNCM();
+  ncm_ptr->initOnNCM(std::move(init_nc_));
   return Execution::COMPLETE;
 }
 
@@ -113,14 +113,26 @@ Dependencies::Dependencies(Processor* processor,
       folly::Random::rand32(processor_->getWorkerCount(worker_type_)))};
 }
 
-void Dependencies::dcheckOnNCM() const {
-  if (!folly::kIsDebug) {
-    return;
-  }
+bool Dependencies::isOnNCM() const {
   auto current_worker = Worker::onThisThread(/* enforce_worker = */ false);
-  ld_assert(current_worker);
-  ld_assert_eq(current_worker->idx_, worker_id_);
-  ld_assert(current_worker->worker_type_ == worker_type_);
+  if (!current_worker) {
+    return false;
+  }
+
+  return current_worker->idx_ == worker_id_ &&
+      current_worker->worker_type_ == worker_type_;
+}
+
+void Dependencies::dcheckOnNCM() const {
+  ld_assert(isOnNCM());
+}
+
+void Dependencies::dcheckNotOnNCM() const {
+  ld_assert(!isOnNCM());
+}
+
+void Dependencies::dcheckNotOnProcessor() const {
+  ld_assert(!Worker::onThisThread(/* enforce_worker = */ false));
 }
 
 void Dependencies::overwrite(std::shared_ptr<const NodesConfiguration> config,
@@ -210,11 +222,12 @@ void Dependencies::overwrite(std::shared_ptr<const NodesConfiguration> config,
   });       // getConfig
 }
 
-void Dependencies::init(NCMWeakPtr ncm) {
+void Dependencies::init(NCMWeakPtr ncm,
+                        std::shared_ptr<const NodesConfiguration> init_nc) {
   ld_assert(ncm.lock());
   ncm_ = ncm;
 
-  auto req = makeNCMRequest<InitRequest>();
+  auto req = makeNCMRequest<InitRequest>(std::move(init_nc));
   processor_->postWithRetrying(req);
 }
 

@@ -90,7 +90,8 @@ class NodesConfigurationManagerTest : public ::testing::Test {
     ncm_ = NodesConfigurationManager::create(
         NodesConfigurationManager::OperationMode::forTooling(),
         std::move(deps));
-    ncm_->init();
+
+    assert(ncm_->init(std::make_shared<const NodesConfiguration>()));
     ncm_->upgradeToProposer();
   }
 
@@ -313,12 +314,8 @@ TEST_F(NodesConfigurationManagerTest, LinearizableReadOnStartup) {
     auto m = NodesConfigurationManager::create(
         NodesConfigurationManager::OperationMode::forTooling(),
         std::move(deps));
-    m->init();
-    EXPECT_EQ(0,
-              wait_until(
-                  "Config is fetched",
-                  [&m]() { return m->getConfig() != nullptr; },
-                  std::chrono::steady_clock::now() + std::chrono::seconds(10)));
+    EXPECT_TRUE(m->init(std::make_shared<const NodesConfiguration>()));
+    EXPECT_NE(nullptr, m->getConfig());
   }
 
   {
@@ -336,11 +333,7 @@ TEST_F(NodesConfigurationManagerTest, LinearizableReadOnStartup) {
     auto m = NodesConfigurationManager::create(
         NodesConfigurationManager::OperationMode::forNodeRoles(roles),
         std::move(deps));
-    m->init();
-    EXPECT_EQ(0,
-              wait_until(
-                  "Config is fetched",
-                  [&m]() { return m->getConfig() != nullptr; },
-                  std::chrono::steady_clock::now() + std::chrono::seconds(10)));
+    EXPECT_TRUE(m->init(std::make_shared<const NodesConfiguration>()));
+    EXPECT_NE(nullptr, m->getConfig());
   }
 }

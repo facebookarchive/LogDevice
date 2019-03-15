@@ -223,8 +223,23 @@ ClientImpl::ClientImpl(std::string cluster_name,
       throw ConstructorFailed();
     }
 
-    // TODO: initialize NCM with an initial NodesConfiguraiton from NCInit
-    ncm->init();
+    auto initial_nc = processor_->config_->getNodesConfiguration();
+    if (!initial_nc) {
+      // Currently this should only happen in tests as our boostrapping
+      // workflow should always ensure the Processor has a valid
+      // NodesConfiguration before initializing NCM. In the future we will
+      // require a valid NC for Processor construction and will turn this into
+      // a ld_check.
+      ld_warning("NodesConfigurationManager initialized without a valid "
+                 "NodesConfiguration in its Processor context. This should "
+                 "only happen in tests.");
+      initial_nc = std::make_shared<const NodesConfiguration>();
+    }
+    if (!ncm->init(std::move(initial_nc))) {
+      ld_critical(
+          "Processing initial NodesConfiguration did not finish in time.");
+      throw ConstructorFailed();
+    }
     processor_->setNodesConfigurationManager(std::move(ncm));
   }
 

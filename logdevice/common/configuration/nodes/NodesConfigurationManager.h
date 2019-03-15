@@ -8,6 +8,7 @@
 #pragma once
 
 #include <folly/synchronization/Baton.h>
+#include <folly/synchronization/SaturatingSemaphore.h>
 
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationAPI.h"
@@ -99,7 +100,13 @@ class NodesConfigurationManager
 
   ~NodesConfigurationManager() override {}
 
-  void init();
+  // Some init procedure needs to happen on Processor worker threads. If
+  // wait_until_initialized is true, init() will block until the async prodecure
+  // has finished on the worker thread.
+  //
+  // Returns whether initialization was successful.
+  bool init(std::shared_ptr<const NodesConfiguration> init_nc,
+            bool wait_until_initialized = true);
   void upgradeToProposer();
 
   // Called by the owning Processor on its own shutdown. Guarantees that all
@@ -135,7 +142,7 @@ class NodesConfigurationManager
   }
 
  private:
-  void initOnNCM();
+  void initOnNCM(std::shared_ptr<const NodesConfiguration> init_nc);
 
   // Returns true when we should fetch the latest config from the store.
   // NCM needs to ensure that the locally committed config version never
@@ -217,6 +224,12 @@ class NodesConfigurationManager
   // machine context, but reads may be from different threads.
   UpdateableSharedPtr<const NodesConfiguration, NCMTag> local_nodes_config_{
       nullptr};
+
+  // Basically a baton but allows multiple waiters and posters: both init() and
+  // shutdown() would want to wait until initialization has finished, and we
+  // don't post until we finish processing the initial NC, whose logic is
+  // separated from the init logic so can be called many times.
+  folly::SaturatingSemaphore</* MayBlock */ true> initialized_{};
   std::atomic<bool> shutdown_signaled_{false};
   folly::Baton<> shutdown_completed_;
 

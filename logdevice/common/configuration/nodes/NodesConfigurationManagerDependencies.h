@@ -155,11 +155,15 @@ class Dependencies {
 
   // dcheck that we are in the proper NCM work context
   void dcheckOnNCM() const;
+  void dcheckNotOnNCM() const;
+  void dcheckNotOnProcessor() const;
 
   void overwrite(std::shared_ptr<const NodesConfiguration> configuration,
                  NodesConfigurationAPI::CompletionCb callback);
 
  private:
+  bool isOnNCM() const;
+
   // Convenience method to reduce boilerplate: only necessary to specify the
   // custom arguments
   template <typename Req, typename... Args>
@@ -173,9 +177,16 @@ class Dependencies {
 
   class InitRequest : public NCMRequest {
    public:
-    using NCMRequest::NCMRequest;
+    template <typename... Args>
+    InitRequest(std::shared_ptr<const NodesConfiguration> init_nc,
+                Args&&... args)
+        : NCMRequest(std::forward<Args>(args)...),
+          init_nc_(std::move(init_nc)) {}
     Request::Execution
         executeOnNCM(std::shared_ptr<NodesConfigurationManager>) override;
+
+   private:
+    std::shared_ptr<const NodesConfiguration> init_nc_;
   };
 
   class ShutdownRequest : public NCMRequest {
@@ -185,7 +196,7 @@ class Dependencies {
         executeOnNCM(std::shared_ptr<NodesConfigurationManager>) override;
   };
 
-  void init(NCMWeakPtr);
+  void init(NCMWeakPtr, std::shared_ptr<const NodesConfiguration>);
   void shutdown();
   bool shutdownSignaled() const;
 
