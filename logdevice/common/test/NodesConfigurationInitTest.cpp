@@ -9,6 +9,7 @@
 #include "logdevice/common/NodesConfigurationInit.h"
 
 #include <folly/futures/Future.h>
+#include <folly/init/Init.h>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <gtest/gtest_prod.h>
@@ -222,3 +223,9 @@ TEST(NodesConfigurationInitTest, WithLongDurationCallback) {
 }
 
 } // namespace
+
+int main(int argc, char** argv) {
+  ::testing::InitGoogleTest(&argc, argv);
+  folly::init(&argc, &argv);
+  return RUN_ALL_TESTS();
+}

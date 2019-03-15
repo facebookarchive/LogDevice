@@ -92,6 +92,8 @@ set(LOGDEVICE_EXTERNAL_DEPS
   ${SNAPPY_LIBRARY}
   Threads::Threads)
 
+include_directories(${CMAKE_BINARY_DIR})
+
 add_subdirectory(common)
 add_subdirectory(lib)
 add_subdirectory(server)

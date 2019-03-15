@@ -7,13 +7,19 @@
 auto_sources(hfiles "*.h" RECURSE "${LOGDEVICE_COMMON_DIR}")
 auto_sources(files "*.cpp" RECURSE "${LOGDEVICE_COMMON_DIR}")
 
+include_directories(${CMAKE_BINARY_DIR})
+
 REMOVE_MATCHES_FROM_LISTS(files hfiles
   MATCHES
     "/test/"
 )
 
+add_subdirectory(configuration/nodes)
+add_subdirectory(membership)
+
 add_library(common STATIC ${hfiles} ${files})
 add_dependencies(common folly flatbuffers OpenTracing)
+add_dependencies(common NodesConfiguration-cpp2-target)
 
 set_target_properties(common
   PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -32,6 +38,11 @@ add_library(common_test_util STATIC
   "test/ZookeeperClientInMemory.cpp"
   "test/ZookeeperClientInMemory.h"
   )
+
+target_link_libraries(common
+  Membership-cpp2
+  NodesConfiguration-cpp2
+)
 
 target_link_libraries(common_test_util
   common

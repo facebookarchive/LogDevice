@@ -31,7 +31,21 @@ set(THRIFT_TEMPLATES ${LOGDEVICE_DIR}/external/fbthrift/thrift/compiler/generate
 set(THRIFTCPP2 ${BINARY_DIR}/lib/libthriftcpp2.a)
 
 set(FBTHRIFT_LIBRARIES
-    ${BINARY_DIR}/libfbthrift.a)
+    ${BINARY_DIR}/lib/libprotocol.a
+    ${BINARY_DIR}/lib/libcompiler_ast.a
+    ${BINARY_DIR}/lib/libthriftprotocol.a
+    ${BINARY_DIR}/lib/libtransport.a
+    ${BINARY_DIR}/lib/libconcurrency.a
+    ${BINARY_DIR}/lib/libthriftfrozen2.a
+    ${BINARY_DIR}/lib/libcompiler_generators.a
+    ${BINARY_DIR}/lib/libcompiler_lib.a
+    ${BINARY_DIR}/lib/libasync.a
+    ${BINARY_DIR}/lib/libthrift-core.a
+    ${BINARY_DIR}/lib/libcompiler_base.a
+    ${BINARY_DIR}/lib/libthriftcpp2.a
+    ${BINARY_DIR}/lib/libthrift.a
+)
+
 set(FBTHRIFT_INCLUDE_DIR
     ${SOURCE_DIR} ${BINARY_DIR})
 message(STATUS "FBThrift Library: ${FBTHRIFT_LIBRARIES}")
