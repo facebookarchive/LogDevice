@@ -21,6 +21,7 @@
 #include "logdevice/common/ThreadID.h"
 
 struct event_base;
+struct event;
 
 namespace facebook { namespace logdevice {
 
@@ -136,6 +137,9 @@ class EventLoop : public folly::Executor {
   // control to libevent
   std::atomic<size_t> event_handlers_completed_{0};
 
+  // Delay in running a default priority event by EventLoo0p
+  std::atomic<std::chrono::microseconds> delay_us_;
+
  protected:
   // called on this EventLoop's thread before starting the event loop
   virtual void onThreadStarted() {}
@@ -193,6 +197,16 @@ class EventLoop : public folly::Executor {
   // the event base in its constructor without worrying that the worker thread
   // is concurrently using it.
   Semaphore start_sem_;
+
+  // Constantly repeating event to calculate delay in event loop runs.
+  // Every 1s schedules a zero timeout event and notes delays in
+  // executing this event. This indicates how long it takes to service a active
+  // event on eventloop
+  const struct timeval* const sched_timeout_;
+  static void delayCheckCallback(void* arg, short);
+  struct event* scheduled_event_;
+  std::chrono::steady_clock::time_point scheduled_event_start_time_{
+      std::chrono::steady_clock::time_point::min()};
 
   // Counter to keep track of number of work contexts that depend on the
   // eventloop.

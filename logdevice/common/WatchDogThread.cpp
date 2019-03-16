@@ -46,6 +46,9 @@ void WatchDogThread::detectStalls() {
 
         size_t events_called_new = w.event_handlers_called_.load();
         size_t events_completed_new = w.event_handlers_completed_.load();
+        STAT_ADD(w.processor_->stats_,
+                 event_loop_sched_delay,
+                 w.delay_us_.load().count());
 
         // Watchdog considers a worker as stalled if the worker hasn't
         // completed any outstanding events since the time Watchdog last

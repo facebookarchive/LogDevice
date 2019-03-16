@@ -196,4 +196,21 @@ STAT_DEFINE(get_seq_state_unique_context_historical_metadata, SUM)
 STAT_DEFINE(get_seq_state_unique_context_get_tail_record, SUM)
 STAT_DEFINE(get_seq_state_unique_context_reader_monitoring, SUM)
 
+// Socket stats.
+STAT_DEFINE(sock_read_events, SUM)
+STAT_DEFINE(sock_time_spent_reading_message, SUM)
+STAT_DEFINE(sock_num_messages_read, SUM)
+
+STAT_DEFINE(sock_write_events, SUM)
+STAT_DEFINE(sock_time_spent_to_process_send_done, SUM)
+STAT_DEFINE(sock_num_messages_sent, SUM)
+
+STAT_DEFINE(sock_misc_socket_events, SUM)
+STAT_DEFINE(sock_connect_event_proc_time, SUM)
+STAT_DEFINE(sock_error_event_proc_time, SUM)
+STAT_DEFINE(sock_peer_closed_event_proc_time, SUM)
+
+// Timer Delays
+STAT_DEFINE(wh_timer_sched_delay, SUM)
+
 #undef STAT_DEFINE

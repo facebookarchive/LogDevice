@@ -13,6 +13,7 @@
 #include "logdevice/common/RunState.h"
 #include "logdevice/common/WheelTimer.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/stats/Stats.h"
 
 namespace facebook { namespace logdevice {
 
@@ -99,9 +100,13 @@ decltype(auto)
 WheelTimerDispatchImpl::makeWheelTimerInternalExecutor(Worker* worker) {
   return [timer = this, canceled = is_canceled_, worker]() mutable {
     if (!*canceled) {
-      worker->add([canceled = std::move(canceled), timer]() {
+      auto start_time = steady_clock::now();
+      worker->add([canceled = std::move(canceled), timer, start_time]() {
         if (!*canceled && timer->callback_) {
           auto run_state = timer->workerRunState_;
+          auto diff =
+              duration_cast<milliseconds>(steady_clock::now() - start_time);
+          WORKER_STAT_ADD(wh_timer_sched_delay, diff.count());
           Worker::onStartedRunning(run_state);
           // Make a local copy of callback to make sure it's not destroyed
           // while it's running, in particular if it calls setCallback().

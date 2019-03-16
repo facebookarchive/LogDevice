@@ -16,6 +16,7 @@
 #include <sys/types.h>
 
 #include "logdevice/common/ConstructorFailed.h"
+#include "logdevice/common/EventHandler.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/RequestPump.h"
 #include "logdevice/common/ThreadID.h"
@@ -28,6 +29,7 @@ namespace facebook { namespace logdevice {
 __thread EventLoop* EventLoop::thisThreadLoop;
 
 static const struct timeval tv_zero { 0, 0 };
+static const struct timeval tv_sched_event { 1, 0 };
 
 static struct event_base* createEventBase() {
   int rv;
@@ -70,7 +72,11 @@ EventLoop::EventLoop(std::string thread_name, ThreadID::Type thread_type)
       thread_name_(thread_name),
       thread_(pthread_self()), // placeholder serving as "invalid" value
       running_(false),
-      shutting_down_(false) {
+      shutting_down_(false),
+      sched_timeout_(
+          base_ ? LD_EV(event_base_init_common_timeout)(base_.get(),
+                                                        &tv_sched_event)
+                : nullptr) {
   int rv;
   pthread_attr_t attr;
 
@@ -80,6 +86,15 @@ EventLoop::EventLoop(std::string thread_name, ThreadID::Type thread_type)
   }
 
   ld_check(zero_timeout_);
+
+  scheduled_event_ = LD_EV(event_new)(
+      base_.get(), -1, 0, EventHandler<EventLoop::delayCheckCallback>, this);
+  if (!scheduled_event_) {
+    ld_error("Failed to initialize scheduled event.");
+    throw ConstructorFailed();
+  }
+
+  ld_check(sched_timeout_);
 
   rv = pthread_attr_init(&attr);
   if (rv != 0) { // unlikely
@@ -111,6 +126,7 @@ EventLoop::EventLoop(std::string thread_name, ThreadID::Type thread_type)
 EventLoop::~EventLoop() {
   // Shutdown drains all the work contexts before invoking this destructor.
   ld_check(num_references_.load() == 0);
+  LD_EV(event_free)(scheduled_event_);
 
   if (running_) {
     // start() was already invoked, it's EventLoopHandle's responsibility to
@@ -138,6 +154,24 @@ void* EventLoop::enter(void* self) {
   return nullptr;
 }
 
+void EventLoop::delayCheckCallback(void* arg, short) {
+  EventLoop* self = (EventLoop*)arg;
+  using namespace std::chrono;
+  auto now = steady_clock::now();
+  if (self->scheduled_event_start_time_ != steady_clock::time_point::min()) {
+    evtimer_add(self->scheduled_event_, self->sched_timeout_);
+    if (now > self->scheduled_event_start_time_) {
+      auto diff = now - self->scheduled_event_start_time_;
+      auto cur_delay = duration_cast<microseconds>(diff);
+      self->delay_us_.store(cur_delay);
+    }
+    self->scheduled_event_start_time_ = steady_clock::time_point::min();
+  } else {
+    evtimer_add(self->scheduled_event_, self->zero_timeout_);
+    self->scheduled_event_start_time_ = now;
+  }
+}
+
 void EventLoop::run() {
   int rv;
   tid_ = syscall(__NR_gettid);
@@ -151,6 +185,11 @@ void EventLoop::run() {
   }
 
   running_ = true;
+
+  // Initiate runs to detect eventloop delays.
+  delay_us_.store(std::chrono::milliseconds(0));
+  scheduled_event_start_time_ = std::chrono::steady_clock::time_point::min();
+  evtimer_add(scheduled_event_, sched_timeout_);
 
   ThreadID::set(thread_type_, thread_name_);
 

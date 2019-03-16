@@ -959,6 +959,9 @@ STAT_DEFINE(watchdog_num_delays, SUM)
 // Num workers detected as stalled by watchdog
 STAT_DEFINE(num_stalled_workers, SUM)
 
+// EventLoop delays.
+STAT_DEFINE(event_loop_sched_delay, SUM)
+
 // Number of records from the event log that EventLogReader has seen so far.
 STAT_DEFINE(num_event_log_records_read, SUM)
 STAT_DEFINE(malformed_event_log_records_read, SUM)

@@ -94,6 +94,12 @@ static bool forceSSLSockets() {
   return val;
 }
 
+static std::chrono::milliseconds
+getTimeDiff(std::chrono::steady_clock::time_point& start_time) {
+  auto diff = std::chrono::steady_clock::now() - start_time;
+  return std::chrono::duration_cast<std::chrono::milliseconds>(diff);
+}
+
 Socket::Socket(std::unique_ptr<SocketDependencies>& deps,
                Address peer_name,
                const Sockaddr& peer_sockaddr,
@@ -649,7 +655,10 @@ void Socket::onBytesAvailable(bool fresh) {
   // fewer bytes in bev_'s input buffer than dataReadCallback() expects.
   ld_assert(!fresh || available >= bytesExpected());
 
-  for (unsigned i = 0;; i++) {
+  auto start_time = std::chrono::steady_clock::now();
+  unsigned i = 0;
+  STAT_INCR(deps_->getStats(), sock_read_events);
+  for (;; i++) {
     if (available >= bytesExpected()) {
       if (i / 2 < process_max) {
         // it's i/2 because we need 2 calls to receiveMessage() to consume
@@ -692,6 +701,11 @@ void Socket::onBytesAvailable(bool fresh) {
     ld_check(!isClosed());
     available = LD_EV(evbuffer_get_length)(deps_->getInput(bev_));
   }
+
+  STAT_ADD(deps_->getStats(), sock_num_messages_read, i);
+  auto total_time = getTimeDiff(start_time);
+  STAT_ADD(
+      deps_->getStats(), sock_time_spent_reading_message, total_time.count());
 }
 
 void Socket::dataReadCallback(struct bufferevent* bev, void* arg, short) {
@@ -748,12 +762,23 @@ void Socket::eventCallback(struct bufferevent* bev, void* arg, short what) {
 }
 
 void Socket::eventCallbackImpl(SocketEvent e) {
+  STAT_INCR(deps_->getStats(), sock_misc_socket_events);
+  auto start_time = std::chrono::steady_clock::now();
   if (e.what & BEV_EVENT_CONNECTED) {
     onConnected();
+    auto total_time = getTimeDiff(start_time);
+    STAT_ADD(
+        deps_->getStats(), sock_connect_event_proc_time, total_time.count());
   } else if (e.what & BEV_EVENT_ERROR) {
     onError(e.what & (BEV_EVENT_READING | BEV_EVENT_WRITING), e.socket_errno);
+    auto total_time = getTimeDiff(start_time);
+    STAT_ADD(deps_->getStats(), sock_error_event_proc_time, total_time.count());
   } else if (e.what & BEV_EVENT_EOF) {
     onPeerClosed();
+    auto total_time = getTimeDiff(start_time);
+    STAT_ADD(deps_->getStats(),
+             sock_peer_closed_event_proc_time,
+             total_time.count());
   } else {
     // BEV_EVENT_TIMEOUT must not be reported yet
     ld_critical("INTERNAL ERROR: unexpected event bitset in a bufferevent "
@@ -1669,7 +1694,7 @@ void Socket::bytesSentCallback(struct evbuffer* buffer,
   ld_check(self);
   ld_check(self->bev_);
   ld_check(buffer == self->deps_->getOutput(self->bev_));
-
+  STAT_INCR(self->deps_->getStats(), sock_write_events);
   if (info->n_deleted > 0) {
     self->onBytesPassedToTCP(info->n_deleted);
   }
@@ -1689,6 +1714,7 @@ void Socket::onBytesPassedToTCP(size_t nbytes) {
   message_pos_t next_drain_pos = drain_pos_ + nbytes;
   ld_check(next_pos_ >= next_drain_pos);
   size_t num_messages = 0;
+  auto start_time = std::chrono::steady_clock::now();
 
   while (!sendq_.empty() && sendq_.front().getDrainPos() <= next_drain_pos) {
     // All bytes of message at cur have been sent into the underlying socket.
@@ -1727,6 +1753,12 @@ void Socket::onBytesPassedToTCP(size_t nbytes) {
   deps_->noteBytesDrained(nbytes);
 
   drain_pos_ = next_drain_pos;
+
+  auto total_time = getTimeDiff(start_time);
+  STAT_ADD(deps_->getStats(),
+           sock_time_spent_to_process_send_done,
+           total_time.count());
+  STAT_ADD(deps_->getStats(), sock_num_messages_sent, num_messages);
 
   ld_spew("Socket %s passed %zu bytes to TCP. Worker #%i now has %zu total "
           "bytes pending",
