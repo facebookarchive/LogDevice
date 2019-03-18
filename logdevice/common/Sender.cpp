@@ -665,11 +665,11 @@ int Sender::closeAllClientSockets(Status reason) {
 bool Sender::isClosed() {
   // Go over all sockets at shutdown to find pending work. This could help in
   // figuring which sockets are slow in draining buffers.
-  auto go_over_all_sockets = !Worker::onThisThread()->isAcceptingWork();
+  bool go_over_all_sockets = !Worker::onThisThread()->isAcceptingWork();
 
-  auto num_open_server_sockets = 0;
+  int num_open_server_sockets = 0;
   Socket* max_pending_work_server = nullptr;
-  auto server_with_max_pending_bytes = 0;
+  size_t server_with_max_pending_bytes = 0;
   for (const auto& socket : impl_->server_sockets_) {
     if (socket && !socket->isClosed()) {
       if (!go_over_all_sockets) {
@@ -677,7 +677,7 @@ bool Sender::isClosed() {
       }
 
       ++num_open_server_sockets;
-      auto pending_bytes = socket->getBytesPending();
+      size_t pending_bytes = socket->getBytesPending();
       if (server_with_max_pending_bytes < pending_bytes) {
         max_pending_work_server = socket.get();
         server_with_max_pending_bytes = pending_bytes;
@@ -685,10 +685,10 @@ bool Sender::isClosed() {
     }
   }
 
-  auto num_open_client_sockets = 0;
-  auto max_pending_work_clientID = ClientID();
+  int num_open_client_sockets = 0;
+  ClientID max_pending_work_clientID;
   Socket* max_pending_work_client = nullptr;
-  auto client_with_max_pending_bytes = 0;
+  size_t client_with_max_pending_bytes = 0;
   for (auto& it : impl_->client_sockets_) {
     if (!it.second.isClosed()) {
       if (!go_over_all_sockets) {
@@ -697,7 +697,7 @@ bool Sender::isClosed() {
 
       ++num_open_client_sockets;
       auto& socket = it.second;
-      auto pending_bytes = socket.getBytesPending();
+      size_t pending_bytes = socket.getBytesPending();
 
       if (client_with_max_pending_bytes < pending_bytes) {
         max_pending_work_client = &socket;
@@ -714,16 +714,16 @@ bool Sender::isClosed() {
 
   RATELIMIT_INFO(std::chrono::seconds(5),
                  5,
-                 "Sockets still open: Server socket count %d max stats 0x%p "
-                 "pending %d msgs, Client socket count %d max stats clientID "
-                 "%s socket 0x%p pending %d msgs",
+                 "Sockets still open: Server socket count %d (max pending "
+                 "bytes: %lu in socket 0x%p), Client socket count %d (max "
+                 "pending bytes: %lu for client %s socket 0x%p)",
                  num_open_server_sockets,
-                 (void*)max_pending_work_server,
                  server_with_max_pending_bytes,
+                 (void*)max_pending_work_server,
                  num_open_client_sockets,
+                 client_with_max_pending_bytes,
                  max_pending_work_clientID.toString().c_str(),
-                 (void*)max_pending_work_client,
-                 client_with_max_pending_bytes);
+                 (void*)max_pending_work_client);
 
   return false;
 }
