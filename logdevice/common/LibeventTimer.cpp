@@ -77,7 +77,7 @@ void LibeventTimer::activate(const struct timeval* delay) {
   ld_assert(evtimer_pending(&timer_, nullptr));
 
   Worker* w = Worker::onThisThread(false);
-  workerRunState_ = w ? w->currentlyRunning_ : RunState();
+  workerRunContext_ = w ? w->currentlyRunning_ : RunContext();
   active_ = true;
 }
 
@@ -104,23 +104,23 @@ void LibeventTimer::libeventCallback(void* instance, short) {
   ld_assert(!evtimer_pending(&self->timer_, nullptr));
   self->active_ = false;
 
-  RunState run_state = self->workerRunState_;
+  RunContext run_context = self->workerRunContext_;
 
   if (!ThreadID::isEventLoop()) {
     RATELIMIT_ERROR(std::chrono::seconds(1),
                     5,
                     "LibeventTimer not used on a worker, timer source: %s",
-                    run_state.describe().c_str());
+                    run_context.describe().c_str());
   }
 
   Worker* w = Worker::onThisThread(false);
   if (w) {
-    Worker::onStartedRunning(run_state);
+    Worker::onStartedRunning(run_context);
   }
   ld_check(self->callback_);
   self->callback_(); // self could be destroyed after this
   if (w) {
-    Worker::onStoppedRunning(run_state);
+    Worker::onStoppedRunning(run_context);
   }
 }
 

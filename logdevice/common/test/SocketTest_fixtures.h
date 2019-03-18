@@ -120,8 +120,8 @@ class TestSocketDependencies : public SocketDependencies {
   virtual bool includeHELLOCredentials() override;
   virtual std::string getClientBuildInfo() override;
   virtual bool authenticationEnabled() override;
-  virtual void onStartedRunning(RunState state) override;
-  virtual void onStoppedRunning(RunState prev_state) override;
+  virtual void onStartedRunning(RunContext context) override;
+  virtual void onStoppedRunning(RunContext prev_context) override;
 
   NodeID getDestinationNodeID();
 

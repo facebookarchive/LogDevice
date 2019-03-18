@@ -24,27 +24,27 @@ namespace facebook { namespace logdevice {
 // This structure should be kept lightweight - it's copied multiple times per
 // request execution - but contain enough information to locate the relevant
 // piece of code with reasonable precision.
-class RunState {
+class RunContext {
  public:
   enum Type { NONE = 0, REQUEST, MESSAGE, STORAGE_TASK_RESPONSE };
 
-  RunState() : type_(NONE) {}
-  explicit RunState(MessageType t) {
+  RunContext() : type_(NONE) {}
+  explicit RunContext(MessageType t) {
     type_ = MESSAGE;
     subtype_.message = t;
   }
 
-  explicit RunState(RequestType t) {
+  explicit RunContext(RequestType t) {
     type_ = REQUEST;
     subtype_.request = t;
   }
 
-  explicit RunState(StorageTaskType t) {
+  explicit RunContext(StorageTaskType t) {
     type_ = STORAGE_TASK_RESPONSE;
     subtype_.storage_task = t;
   }
 
-  bool operator==(RunState& b) {
+  bool operator==(RunContext& b) {
     if (type_ != b.type_) {
       return false;
     }
@@ -63,7 +63,7 @@ class RunState {
     return false;
   }
 
-  bool operator!=(RunState& b) {
+  bool operator!=(RunContext& b) {
     return !operator==(b);
   }
 

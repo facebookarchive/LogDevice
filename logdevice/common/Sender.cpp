@@ -105,13 +105,13 @@ int SenderProxy::sendMessageImpl(std::unique_ptr<Message>&& msg,
 }
 
 void SenderBase::MessageCompletion::send() {
-  auto prev_state = Worker::packRunState();
-  RunState run_state(msg_->type_);
-  Worker::onStartedRunning(run_state);
+  auto prev_context = Worker::packRunContext();
+  RunContext run_context(msg_->type_);
+  Worker::onStartedRunning(run_context);
   Worker::onThisThread()->message_dispatch_->onSent(
       *msg_, status_, destination_, enqueue_time_);
-  Worker::onStoppedRunning(run_state);
-  Worker::unpackRunState(prev_state);
+  Worker::onStoppedRunning(run_context);
+  Worker::unpackRunContext(prev_context);
 }
 
 Sender::Sender(struct event_base* base,

@@ -63,7 +63,7 @@ void RequestPump::processRequest(std::unique_ptr<Request>& rq) {
     return;
   }
 
-  RunState run_state = rq->getRunState();
+  RunContext run_context = rq->getRunContext();
 
   if (on_worker_thread) {
     auto queue_time{
@@ -78,14 +78,14 @@ void RequestPump::processRequest(std::unique_ptr<Request>& rq) {
                         rq->id_.val());
     }
 
-    Worker::onStartedRunning(run_state);
+    Worker::onStartedRunning(run_context);
   }
 
   // rq should not be accessed after execute, as it may have been deleted.
   Request::Execution status = rq->execute();
 
   if (on_worker_thread) {
-    Worker::onStoppedRunning(run_state);
+    Worker::onStoppedRunning(run_context);
     WORKER_STAT_INCR(worker_requests_executed);
   }
 

@@ -2090,8 +2090,8 @@ int Socket::receiveMessage() {
     TRAFFIC_CLASS_STAT_ADD(
         deps_->getStats(), msg->tc_, bytes_received, recv_message_ph_.len);
 
-    RunState run_state(msg->type_);
-    deps_->onStartedRunning(run_state);
+    RunContext run_context(msg->type_);
+    deps_->onStartedRunning(run_context);
 
     /* verify that gossip sockets don't receive non-gossip messages
      * exceptions: handshake, config synchronization, shutdown
@@ -2113,7 +2113,7 @@ int Socket::receiveMessage() {
             deps_->describeConnection(peer_name_).c_str());
     Message::Disposition disp = deps_->onReceived(msg.get(), peer_name_);
     Status onreceived_err = err;
-    deps_->onStoppedRunning(run_state);
+    deps_->onStoppedRunning(run_context);
 
     // If this is a newly handshaken client connection, we might want to drop
     // it at this point if we're already over the limit. onReceived() of a
@@ -2634,15 +2634,15 @@ void SocketDependencies::onSent(std::unique_ptr<Message> msg,
                                 Status st,
                                 SteadyTimestamp t,
                                 Message::CompletionMethod cm) {
-  RunState run_state(msg->type_);
+  RunContext run_context(msg->type_);
 
   switch (cm) {
     case Message::CompletionMethod::IMMEDIATE: {
-      auto prev_state = Worker::packRunState();
-      Worker::onStartedRunning(run_state);
+      auto prev_context = Worker::packRunContext();
+      Worker::onStartedRunning(run_context);
       Worker::onThisThread()->message_dispatch_->onSent(*msg, st, to, t);
-      Worker::onStoppedRunning(run_state);
-      Worker::unpackRunState(prev_state);
+      Worker::onStoppedRunning(run_context);
+      Worker::unpackRunContext(prev_context);
       break;
     }
     default:
@@ -2897,12 +2897,12 @@ bool SocketDependencies::includeHELLOCredentials() {
        AuthenticationType::SELF_IDENTIFICATION);
 }
 
-void SocketDependencies::onStartedRunning(RunState state) {
-  Worker::onStartedRunning(state);
+void SocketDependencies::onStartedRunning(RunContext context) {
+  Worker::onStartedRunning(context);
 }
 
-void SocketDependencies::onStoppedRunning(RunState prev_state) {
-  Worker::onStoppedRunning(prev_state);
+void SocketDependencies::onStoppedRunning(RunContext prev_context) {
+  Worker::onStoppedRunning(prev_context);
 }
 
 }} // namespace facebook::logdevice

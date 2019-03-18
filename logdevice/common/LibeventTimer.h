@@ -14,7 +14,7 @@
 #include <folly/IntrusiveList.h>
 
 #include "event2/event_struct.h"
-#include "logdevice/common/RunState.h"
+#include "logdevice/common/RunContext.h"
 
 /**
  * @file
@@ -114,9 +114,9 @@ class LibeventTimer : boost::noncopyable {
   std::function<void()> callback_;
   bool active_ = false;
 
-  // The worker run state that this timer was activated in. Will be propagated
+  // The worker run context that this timer was activated in. Will be propagated
   // with all callbacks.
-  RunState workerRunState_;
+  RunContext workerRunContext_;
 };
 
 }} // namespace facebook::logdevice

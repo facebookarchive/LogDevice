@@ -23,7 +23,7 @@
 #include "logdevice/common/EventLoop.h"
 #include "logdevice/common/ExponentialBackoffTimer.h"
 #include "logdevice/common/RecordID.h"
-#include "logdevice/common/RunState.h"
+#include "logdevice/common/RunContext.h"
 #include "logdevice/common/ThreadID.h"
 #include "logdevice/common/TimeoutMap.h"
 #include "logdevice/common/Timer.h"
@@ -695,7 +695,7 @@ class Worker : public EventLoop {
       RebuildingCoordinatorInterface* rebuilding_coordinator);
 
   // The currently running request / message callback
-  RunState currentlyRunning_;
+  RunContext currentlyRunning_;
 
   // Time when currentlyRunning_ was set
   std::chrono::steady_clock::time_point currentlyRunningStart_;
@@ -709,24 +709,24 @@ class Worker : public EventLoop {
   // placeholder for processing change notified by the NodesConfigurationManager
   void onNodesConfigurationUpdated();
 
-  // Sets currently running state. Verifies that we are on a worker and that the
-  // current state is NONE
-  static void onStartedRunning(RunState new_state);
+  // Sets currently running request. Verifies that we are on a worker and that
+  // the current context is NONE
+  static void onStartedRunning(RunContext new_context);
 
-  // Resets the currently running state to NONE and bumps counters for
-  // prev_state
-  static void onStoppedRunning(RunState prev_state);
+  // Resets the currently running context to NONE and bumps counters for
+  // prev_context
+  static void onStoppedRunning(RunContext prev_context);
 
-  // Packs the current RunState and returns it along with how long it ran for,
-  // sets the current RunState to NONE
-  static std::tuple<RunState, std::chrono::steady_clock::duration>
-  packRunState();
+  // Packs the current RunContext and returns it along with how long it ran for,
+  // sets the current RunContext to NONE
+  static std::tuple<RunContext, std::chrono::steady_clock::duration>
+  packRunContext();
 
-  // Unpacks the given RunState, sets the current worker's RunState to the one
-  // supplied and adds the supplied duration to the duration of the current
-  // RunState.
-  static void
-  unpackRunState(std::tuple<RunState, std::chrono::steady_clock::duration> s);
+  // Unpacks the given RunContext, sets the current worker's RunContext to the
+  // one supplied and adds the supplied duration to the duration of the current
+  // RunContext.
+  static void unpackRunContext(
+      std::tuple<RunContext, std::chrono::steady_clock::duration> s);
 
   // For debugging.
   static std::string describeMyNode();
@@ -768,7 +768,8 @@ class Worker : public EventLoop {
   void initializeSubscriptions();
 
   // Helper used by onStartedRunning() and onStoppedRunning()
-  static void setCurrentlyRunningState(RunState new_state, RunState prev_state);
+  static void setCurrentlyRunningContext(RunContext new_context,
+                                         RunContext prev_context);
 
   // Subclasses can override to create a MessageDispatch subclass during
   // initialisation

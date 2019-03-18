@@ -28,7 +28,7 @@
 #include "logdevice/common/PrincipalIdentity.h"
 #include "logdevice/common/PriorityQueue.h"
 #include "logdevice/common/ResourceBudget.h"
-#include "logdevice/common/RunState.h"
+#include "logdevice/common/RunContext.h"
 #include "logdevice/common/SecurityInformation.h"
 #include "logdevice/common/Sockaddr.h"
 #include "logdevice/common/SocketTypes.h"
@@ -1219,8 +1219,8 @@ class SocketDependencies {
   virtual bool authenticationEnabled();
   virtual bool allowUnauthenticated();
   virtual bool includeHELLOCredentials();
-  virtual void onStartedRunning(RunState state);
-  virtual void onStoppedRunning(RunState prev_state);
+  virtual void onStartedRunning(RunContext context);
+  virtual void onStoppedRunning(RunContext prev_context);
 
   virtual ~SocketDependencies() {}
 };

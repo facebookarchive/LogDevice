@@ -266,9 +266,9 @@ bool TestSocketDependencies::authenticationEnabled() {
   return false;
 }
 
-void TestSocketDependencies::onStartedRunning(RunState /*state*/) {}
+void TestSocketDependencies::onStartedRunning(RunContext /*context*/) {}
 
-void TestSocketDependencies::onStoppedRunning(RunState /*prev_state*/) {}
+void TestSocketDependencies::onStoppedRunning(RunContext /*prev_context*/) {}
 
 //
 

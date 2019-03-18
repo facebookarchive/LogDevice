@@ -870,13 +870,13 @@ ClusterState* Worker::getClusterState() {
   return Worker::onThisThread()->processor_->cluster_state_.get();
 }
 
-void Worker::onStoppedRunning(RunState prev_state) {
+void Worker::onStoppedRunning(RunContext prev_context) {
   Worker* w = Worker::onThisThread();
   ld_check(w);
   std::chrono::steady_clock::time_point start_time;
   start_time = w->currentlyRunningStart_;
 
-  setCurrentlyRunningState(RunState(), prev_state);
+  setCurrentlyRunningContext(RunContext(), prev_context);
 
   auto end_time = w->currentlyRunningStart_;
   // Bumping the counters
@@ -887,30 +887,30 @@ void Worker::onStoppedRunning(RunState prev_state) {
                       std::chrono::duration_cast<std::chrono::duration<double>>(
                           end_time - start_time)
                           .count(),
-                      prev_state.describe().c_str());
+                      prev_context.describe().c_str());
     WORKER_STAT_INCR(worker_slow_requests);
   }
   auto usec = std::chrono::duration_cast<std::chrono::microseconds>(end_time -
                                                                     start_time)
                   .count();
-  switch (prev_state.type_) {
-    case RunState::MESSAGE: {
-      auto msg_type = static_cast<int>(prev_state.subtype_.message);
+  switch (prev_context.type_) {
+    case RunContext::MESSAGE: {
+      auto msg_type = static_cast<int>(prev_context.subtype_.message);
       ld_check(msg_type < static_cast<int>(MessageType::MAX));
       MESSAGE_TYPE_STAT_ADD(
           Worker::stats(), msg_type, message_worker_usec, usec);
       HISTOGRAM_ADD(Worker::stats(), message_callback_duration[msg_type], usec);
       break;
     }
-    case RunState::REQUEST: {
-      int rqtype = static_cast<int>(prev_state.subtype_.request);
+    case RunContext::REQUEST: {
+      int rqtype = static_cast<int>(prev_context.subtype_.request);
       ld_check(rqtype < static_cast<int>(RequestType::MAX));
       REQUEST_TYPE_STAT_ADD(Worker::stats(), rqtype, request_worker_usec, usec);
       HISTOGRAM_ADD(Worker::stats(), request_execution_duration[rqtype], usec);
       break;
     }
-    case RunState::STORAGE_TASK_RESPONSE: {
-      int task_type = static_cast<int>(prev_state.subtype_.storage_task);
+    case RunContext::STORAGE_TASK_RESPONSE: {
+      int task_type = static_cast<int>(prev_context.subtype_.storage_task);
       ld_check(task_type < static_cast<int>(StorageTaskType::MAX));
       STORAGE_TASK_TYPE_STAT_ADD(
           Worker::stats(), task_type, storage_task_response_worker_usec, usec);
@@ -918,7 +918,7 @@ void Worker::onStoppedRunning(RunState prev_state) {
           Worker::stats(), storage_task_response_duration[task_type], usec);
       break;
     }
-    case RunState::NONE: {
+    case RunContext::NONE: {
       REQUEST_TYPE_STAT_ADD(
           Worker::stats(), RequestType::INVALID, request_worker_usec, usec);
       HISTOGRAM_ADD(
@@ -930,8 +930,8 @@ void Worker::onStoppedRunning(RunState prev_state) {
   }
 }
 
-void Worker::onStartedRunning(RunState new_state) {
-  setCurrentlyRunningState(new_state, RunState());
+void Worker::onStartedRunning(RunContext new_context) {
+  setCurrentlyRunningContext(new_context, RunContext());
 }
 
 void Worker::activateIsolationTimer() {
@@ -946,16 +946,17 @@ void Worker::deactivateIsolationTimer() {
   isolation_timer_->cancel();
 }
 
-void Worker::setCurrentlyRunningState(RunState new_state, RunState prev_state) {
+void Worker::setCurrentlyRunningContext(RunContext new_context,
+                                        RunContext prev_context) {
 #ifndef NDEBUG
   if ((ThreadID::isWorker()) &&
       !dynamic_cast<Worker*>(EventLoop::onThisThread())) {
     RATELIMIT_ERROR(std::chrono::seconds(10),
                     10,
-                    "Attempting to set worker state on a worker being "
-                    "destroyed to: %s, expected state: %s.",
-                    new_state.describe().c_str(),
-                    prev_state.describe().c_str());
+                    "Attempting to set worker context on a worker being "
+                    "destroyed to: %s, expected context: %s.",
+                    new_context.describe().c_str(),
+                    prev_context.describe().c_str());
     ld_check(false);
     return;
   }
@@ -965,15 +966,15 @@ void Worker::setCurrentlyRunningState(RunState new_state, RunState prev_state) {
   if (!w) {
     RATELIMIT_ERROR(std::chrono::seconds(10),
                     10,
-                    "Attempting to set worker state while not on a worker. New "
-                    "state: %s, expected state: %s.",
-                    new_state.describe().c_str(),
-                    prev_state.describe().c_str());
+                    "Attempting to set worker context while not on a worker. "
+                    "New context: %s, expected context: %s.",
+                    new_context.describe().c_str(),
+                    prev_context.describe().c_str());
     ld_check(false);
     return;
   }
-  ld_check(w->currentlyRunning_ == prev_state);
-  w->currentlyRunning_ = new_state;
+  ld_check(w->currentlyRunning_ == prev_context);
+  w->currentlyRunning_ = new_context;
   w->currentlyRunningStart_ = std::chrono::steady_clock::now();
 }
 
@@ -983,19 +984,20 @@ std::unique_ptr<MessageDispatch> Worker::createMessageDispatch() {
   return std::make_unique<MessageDispatch>();
 }
 
-// Stashes current RunState and pauses its timer. Returns everything needed to
-// restore it. Use it for nesting RunStates.
-std::tuple<RunState, std::chrono::steady_clock::duration>
-Worker::packRunState() {
+// Stashes current RunContext and pauses its timer. Returns everything needed to
+// restore it. Use it for nesting RunContexts.
+std::tuple<RunContext, std::chrono::steady_clock::duration>
+Worker::packRunContext() {
 #ifndef NDEBUG
   if ((ThreadID::isWorker()) &&
       !dynamic_cast<Worker*>(EventLoop::onThisThread())) {
     RATELIMIT_ERROR(std::chrono::seconds(10),
                     10,
-                    "Attempting to pack worker state on a worker being "
+                    "Attempting to pack worker context on a worker being "
                     "destroyed.");
     ld_check(false);
-    return std::make_tuple(RunState(), std::chrono::steady_clock::duration(0));
+    return std::make_tuple(
+        RunContext(), std::chrono::steady_clock::duration(0));
   }
 #endif
 
@@ -1003,26 +1005,27 @@ Worker::packRunState() {
   if (!w) {
     RATELIMIT_ERROR(std::chrono::seconds(10),
                     10,
-                    "Attempting to pack worker state while not on a worker.");
+                    "Attempting to pack worker context while not on a worker.");
     ld_check(false);
-    return std::make_tuple(RunState(), std::chrono::steady_clock::duration(0));
+    return std::make_tuple(
+        RunContext(), std::chrono::steady_clock::duration(0));
   }
   auto res = std::make_tuple(
       w->currentlyRunning_,
       std::chrono::steady_clock::now() - w->currentlyRunningStart_);
-  w->currentlyRunning_ = RunState();
+  w->currentlyRunning_ = RunContext();
   w->currentlyRunningStart_ = std::chrono::steady_clock::now();
   return res;
 }
 
-void Worker::unpackRunState(
-    std::tuple<RunState, std::chrono::steady_clock::duration> s) {
+void Worker::unpackRunContext(
+    std::tuple<RunContext, std::chrono::steady_clock::duration> s) {
 #ifndef NDEBUG
   if ((ThreadID::isWorker()) &&
       !dynamic_cast<Worker*>(EventLoop::onThisThread())) {
     RATELIMIT_ERROR(std::chrono::seconds(10),
                     10,
-                    "Attempting to unpack worker state on a worker being "
+                    "Attempting to unpack worker context on a worker being "
                     "destroyed.");
     ld_check(false);
     return;
@@ -1033,11 +1036,11 @@ void Worker::unpackRunState(
   if (!w) {
     RATELIMIT_ERROR(std::chrono::seconds(10),
                     10,
-                    "Attempting to pack worker state while not on a worker.");
+                    "Attempting to pack worker context while not on a worker.");
     ld_check(false);
     return;
   }
-  ld_check(w->currentlyRunning_.type_ == RunState::Type::NONE);
+  ld_check(w->currentlyRunning_.type_ == RunContext::Type::NONE);
   w->currentlyRunning_ = std::get<0>(s);
   w->currentlyRunningStart_ = std::chrono::steady_clock::now() - std::get<1>(s);
 }

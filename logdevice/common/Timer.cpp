@@ -10,7 +10,7 @@
 #include "logdevice/common/EventLoop.h"
 #include "logdevice/common/LibeventTimer.h"
 #include "logdevice/common/Processor.h"
-#include "logdevice/common/RunState.h"
+#include "logdevice/common/RunContext.h"
 #include "logdevice/common/WheelTimer.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/stats/Stats.h"
@@ -89,7 +89,7 @@ class WheelTimerDispatchImpl : public TimerInterface {
 
   decltype(auto) makeWheelTimerInternalExecutor(Worker* worker);
 
-  RunState workerRunState_;
+  RunContext workerRunContext_;
   // it always will be called on a timer creator thread, which should exist
   std::function<void()> callback_;
   std::shared_ptr<std::atomic<bool>> is_canceled_;
@@ -103,11 +103,11 @@ WheelTimerDispatchImpl::makeWheelTimerInternalExecutor(Worker* worker) {
       auto start_time = steady_clock::now();
       worker->add([canceled = std::move(canceled), timer, start_time]() {
         if (!*canceled && timer->callback_) {
-          auto run_state = timer->workerRunState_;
+          auto run_context = timer->workerRunContext_;
           auto diff =
               duration_cast<milliseconds>(steady_clock::now() - start_time);
           WORKER_STAT_ADD(wh_timer_sched_delay, diff.count());
-          Worker::onStartedRunning(run_state);
+          Worker::onStartedRunning(run_context);
           // Make a local copy of callback to make sure it's not destroyed
           // while it's running, in particular if it calls setCallback().
           {
@@ -116,7 +116,7 @@ WheelTimerDispatchImpl::makeWheelTimerInternalExecutor(Worker* worker) {
             cb();
             // `timer` might have been destroyed.
           }
-          Worker::onStoppedRunning(run_state);
+          Worker::onStoppedRunning(run_context);
         }
       });
     }
@@ -171,7 +171,7 @@ void WheelTimerDispatchImpl::activate(microseconds delay, TimeoutMap*) {
       makeWheelTimerInternalExecutor(worker),
       duration_cast<milliseconds>(delay));
 
-  workerRunState_ = worker->currentlyRunning_;
+  workerRunContext_ = worker->currentlyRunning_;
   is_activated_ = true;
 }
 
