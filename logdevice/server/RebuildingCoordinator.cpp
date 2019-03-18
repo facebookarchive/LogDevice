@@ -1722,15 +1722,20 @@ void RebuildingCoordinator::getDebugInfo(
     InfoRebuildingShardsTable& table) const {
   for (auto& s : shardsRebuilding_) {
     auto& shard_state = s.second;
-    auto nLogsWaitingForPlan =
-        (shard_state.planner ? shard_state.planner->getNumRemainingLogs() : 0);
+    int64_t logs_waiting_for_plan = 0;
+    if (shard_state.planner != nullptr) {
+      // Use -1 to indicate that we don't know how many logs there are yet.
+      logs_waiting_for_plan = shard_state.planner->isEnumerationComplete()
+          ? static_cast<int64_t>(shard_state.planner->getNumRemainingLogs())
+          : -1l;
+    }
     table.next()
         .set<0>(s.first)
         .set<1>(shard_state.rebuildingSet->describe(
             std::numeric_limits<size_t>::max()))
         .set<2>(shard_state.version)
         .set<3>(shard_state.globalWindowEnd.toMilliseconds())
-        .set<5>(nLogsWaitingForPlan)
+        .set<5>(logs_waiting_for_plan)
         .set<13>(shard_state.participating);
 
     if (shard_state.shardRebuilding != nullptr) {

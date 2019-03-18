@@ -127,7 +127,7 @@ typedef AdminCommandTable<uint32_t,                  /* Shard id */
                           admin_command_table::LSN,  /* Version */
                           std::chrono::milliseconds, /* Global window end */
                           std::chrono::milliseconds, /* Local window end */
-                          uint64_t,    /* Num logs waiting for until LSN */
+                          int64_t,     /* Num logs waiting for plan */
                           uint64_t,    /* Num logs catching up */
                           uint64_t,    /* Num logs queued for catchup */
                           uint64_t,    /* Num logs in restart queue */

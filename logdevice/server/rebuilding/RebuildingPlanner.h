@@ -126,6 +126,7 @@ class RebuildingPlanner : public RebuildingLogEnumerator::Listener {
 
   void abortShardIdx(shard_index_t shard);
 
+  bool isEnumerationComplete();
   size_t getNumRemainingLogs();
 
  private:

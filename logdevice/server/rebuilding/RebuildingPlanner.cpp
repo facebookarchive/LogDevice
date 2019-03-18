@@ -90,6 +90,10 @@ RebuildingPlanner::~RebuildingPlanner() {
       Worker::stats(), num_logs_rebuilding, last_reported_num_logs_to_plan_);
 }
 
+bool RebuildingPlanner::isEnumerationComplete() {
+  return log_enumerator_ == nullptr;
+}
+
 size_t RebuildingPlanner::getNumRemainingLogs() {
   return remaining_.size() + inFlight_;
 }
@@ -98,7 +102,9 @@ void RebuildingPlanner::start() {
   log_enumerator_->start();
 }
 
-void RebuildingPlanner::onLogsEnumerated(EnumerationResults results, std::chrono::milliseconds max_rebuild_by_retention_backlog) {
+void RebuildingPlanner::onLogsEnumerated(
+    EnumerationResults results,
+    std::chrono::milliseconds max_rebuild_by_retention_backlog) {
   ld_check(remaining_.size() == 0);
   log_enumerator_.reset();
 
