@@ -21,6 +21,9 @@ namespace facebook { namespace logdevice {
  */
 
 class RebuildingReadStorageTaskV2 : public StorageTask {
+ private:
+  class Filter;
+
  public:
   struct Context {
     struct LogState {
@@ -111,87 +114,14 @@ class RebuildingReadStorageTaskV2 : public StorageTask {
     bool persistentError = false;
 
     void getLogsDebugInfo(InfoRebuildingLogsTable& table) const;
-  };
 
-  class Filter : public LocalLogStoreReadFilter {
-   public:
-    enum class FilteredReason {
-      SCD,
-      NOT_DIRTY,
-      DRAINED,
-      TIMESTAMP,
-      EPOCH_RANGE
-    };
+   private:
+    friend class RebuildingReadStorageTaskV2;
 
-    Filter(RebuildingReadStorageTaskV2* task, Context* context);
-
-    bool operator()(logid_t log,
-                    lsn_t lsn,
-                    const ShardID* copyset,
-                    const copyset_size_t copyset_size,
-                    const csi_flags_t csi_flags,
-                    RecordTimestamp min_ts,
-                    RecordTimestamp max_ts) override;
-
-    bool shouldProcessTimeRange(RecordTimestamp min,
-                                RecordTimestamp max) override;
-
-    bool shouldProcessRecordRange(logid_t log,
-                                  lsn_t min_lsn,
-                                  lsn_t max_lsn,
-                                  RecordTimestamp min_ts,
-                                  RecordTimestamp max_ts) override;
-
-    // Finds the log in `context->logs` and puts it in `currentLogState`.
-    // Has a fast path for consecutive lookups of the same log.
-    // If the log is not in `context->logs`, sets currentLogState = nullptr
-    // and returns false.
-    bool lookUpLogState(logid_t log);
-
-    // Update stats regarding skipped records.
-    // @param late  true if the filter was called on the full record rather
-    // than CSI entry.
-    void noteRecordFiltered(FilteredReason reason, bool late);
-
-    RebuildingReadStorageTaskV2* task;
-    Context* context;
-
-    // Just a cache to avoid lookup in context->logs.
-    // If currentLog is valid but currentLogState is nullptr, it means this log
-    // is not in context->logs, i.e. we're not interested in it.
-    logid_t currentLog = LOGID_INVALID;
-    Context::LogState* currentLogState = nullptr;
-
-    // Cached set of shards that are effectively not in the rebuilding set,
-    // as long as the given time range is concerned.
-    // This struct uses the fact that operator() is usually called many times
-    // in a row with the same min_ts and max_ts.
-    struct {
-      RecordTimestamp minTs = RecordTimestamp::min();
-      RecordTimestamp maxTs = RecordTimestamp::max();
-      // ShardID+DataClass pairs whose dirty ranges have no intersection with
-      // time range [minTs, maxTs].
-      // The dirty ranges are rebuildingSet.shards[s].dc_dirty_ranges[dc].
-      std::unordered_set<std::pair<ShardID, DataClass>> shardsOutsideTimeRange;
-
-      bool valid(RecordTimestamp min_ts, RecordTimestamp max_ts) const {
-        return min_ts == minTs && max_ts == maxTs;
-      }
-
-      void clear() {
-        minTs = RecordTimestamp::min();
-        maxTs = RecordTimestamp::max();
-        shardsOutsideTimeRange.clear();
-      }
-    } timeRangeCache;
-
-    // How many records we filtered out for various reasons. Used for logging.
-    size_t nRecordsLateFiltered{0};
-    size_t nRecordsSCDFiltered{0};
-    size_t nRecordsNotDirtyFiltered{0};
-    size_t nRecordsDrainedFiltered{0};
-    size_t nRecordsTimestampFiltered{0};
-    size_t nRecordsEpochRangeFiltered{0};
+    // Used for filtering records in iterator. Lives in Context because the
+    // filter's state needs to be preserved across multiple
+    // RebuildingReadStorageTaskV2 runs.
+    std::unique_ptr<Filter> filter;
   };
 
   explicit RebuildingReadStorageTaskV2(std::weak_ptr<Context> context);
@@ -244,6 +174,92 @@ class RebuildingReadStorageTaskV2 : public StorageTask {
                                Context::LogState* log_state);
 
  private:
+  class Filter : public LocalLogStoreReadFilter {
+   public:
+    enum class FilteredReason {
+      SCD,
+      NOT_DIRTY,
+      DRAINED,
+      TIMESTAMP,
+      EPOCH_RANGE
+    };
+
+    explicit Filter(Context* context);
+
+    bool operator()(logid_t log,
+                    lsn_t lsn,
+                    const ShardID* copyset,
+                    const copyset_size_t copyset_size,
+                    const csi_flags_t csi_flags,
+                    RecordTimestamp min_ts,
+                    RecordTimestamp max_ts) override;
+
+    bool shouldProcessTimeRange(RecordTimestamp min,
+                                RecordTimestamp max) override;
+
+    bool shouldProcessRecordRange(logid_t log,
+                                  lsn_t min_lsn,
+                                  lsn_t max_lsn,
+                                  RecordTimestamp min_ts,
+                                  RecordTimestamp max_ts) override;
+
+    // Finds the log in `context->logs` and puts it in `currentLogState`.
+    // Has a fast path for consecutive lookups of the same log.
+    // If the log is not in `context->logs`, sets currentLogState = nullptr
+    // and returns false.
+    bool lookUpLogState(logid_t log);
+
+    // Update stats regarding skipped records.
+    // @param late  true if the filter was called on the full record rather
+    // than CSI entry.
+    void noteRecordFiltered(FilteredReason reason, bool late);
+
+    void clearStats();
+
+    RebuildingReadStorageTaskV2* task;
+    Context* context;
+
+    // Just a cache to avoid lookup in context->logs.
+    // If currentLog is valid but currentLogState is nullptr, it means this log
+    // is not in context->logs, i.e. we're not interested in it.
+    logid_t currentLog = LOGID_INVALID;
+    Context::LogState* currentLogState = nullptr;
+
+    // Cached set of shards that are effectively not in the rebuilding set,
+    // as long as the given time range is concerned.
+    // This struct uses the fact that operator() is usually called many times
+    // in a row with the same min_ts and max_ts.
+    struct {
+      RecordTimestamp minTs = RecordTimestamp::min();
+      RecordTimestamp maxTs = RecordTimestamp::max();
+      // ShardID+DataClass pairs whose dirty ranges have no intersection with
+      // time range [minTs, maxTs].
+      // The dirty ranges are rebuildingSet.shards[s].dc_dirty_ranges[dc].
+      std::unordered_set<std::pair<ShardID, DataClass>> shardsOutsideTimeRange;
+
+      bool valid(RecordTimestamp min_ts, RecordTimestamp max_ts) const {
+        return min_ts == minTs && max_ts == maxTs;
+      }
+
+      void clear() {
+        minTs = RecordTimestamp::min();
+        maxTs = RecordTimestamp::max();
+        shardsOutsideTimeRange.clear();
+      }
+    } timeRangeCache;
+
+    // How many records we filtered out for various reasons. Used for logging.
+    // When adding fields here, don't forget to update clearStats() too.
+    // Initialized to garbage values; clearStats() zeros them out before
+    // first use.
+    size_t nRecordsLateFiltered{std::numeric_limits<size_t>::max() / 2};
+    size_t nRecordsSCDFiltered{std::numeric_limits<size_t>::max() / 2};
+    size_t nRecordsNotDirtyFiltered{std::numeric_limits<size_t>::max() / 2};
+    size_t nRecordsDrainedFiltered{std::numeric_limits<size_t>::max() / 2};
+    size_t nRecordsTimestampFiltered{std::numeric_limits<size_t>::max() / 2};
+    size_t nRecordsEpochRangeFiltered{std::numeric_limits<size_t>::max() / 2};
+  };
+
   std::weak_ptr<Context> context_;
   std::vector<std::unique_ptr<ChunkData>> result_;
 

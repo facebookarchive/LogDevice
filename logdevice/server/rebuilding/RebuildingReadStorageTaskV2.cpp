@@ -62,11 +62,14 @@ void RebuildingReadStorageTaskV2::execute() {
     context->nextLocation =
         std::shared_ptr<LocalLogStore::AllLogsIterator::Location>(
             context->iterator->minLocation());
+
+    context->filter = std::make_unique<Filter>(context.get());
   }
 
   LocalLogStore::AllLogsIterator* iterator = context->iterator.get();
 
-  Filter filter(this, context.get());
+  context->filter->task = this;
+  context->filter->clearStats();
 
   LocalLogStore::ReadStats read_stats;
   read_stats.max_bytes_to_read = context->rebuildingSettings->max_batch_bytes;
@@ -120,11 +123,13 @@ void RebuildingReadStorageTaskV2::execute() {
                read_stats.filtered_record_bytes);
       STAT_ADD(stats,
                read_streams_num_records_late_filtered_rebuilding,
-               filter.nRecordsLateFiltered);
+               context->filter->nRecordsLateFiltered);
 
-      size_t tot_skipped = filter.nRecordsSCDFiltered +
-          filter.nRecordsNotDirtyFiltered + filter.nRecordsTimestampFiltered +
-          filter.nRecordsDrainedFiltered + filter.nRecordsEpochRangeFiltered;
+      size_t tot_skipped = context->filter->nRecordsSCDFiltered +
+          context->filter->nRecordsNotDirtyFiltered +
+          context->filter->nRecordsTimestampFiltered +
+          context->filter->nRecordsDrainedFiltered +
+          context->filter->nRecordsEpochRangeFiltered;
 
       auto end_time = SteadyTimestamp::now();
 
@@ -141,12 +146,12 @@ void RebuildingReadStorageTaskV2::execute() {
           bytes_in_result,
           result_.size(),
           tot_skipped,
-          filter.nRecordsSCDFiltered,
-          filter.nRecordsNotDirtyFiltered,
-          filter.nRecordsDrainedFiltered,
-          filter.nRecordsTimestampFiltered,
-          filter.nRecordsEpochRangeFiltered,
-          filter.nRecordsLateFiltered);
+          context->filter->nRecordsSCDFiltered,
+          context->filter->nRecordsNotDirtyFiltered,
+          context->filter->nRecordsDrainedFiltered,
+          context->filter->nRecordsTimestampFiltered,
+          context->filter->nRecordsEpochRangeFiltered,
+          context->filter->nRecordsLateFiltered);
     }
   };
 
@@ -160,7 +165,8 @@ void RebuildingReadStorageTaskV2::execute() {
     case IteratorState::LIMIT_REACHED:
       // Newly created or invalidated iterator, or reached limit and need to
       // reseek.
-      iterator->seek(*context->nextLocation, &filter, &read_stats);
+      iterator->seek(
+          *context->nextLocation, context->filter.get(), &read_stats);
       break;
     case IteratorState::ERROR:
       // If previous storage task got the iterator into ERROR state, it would
@@ -179,7 +185,7 @@ void RebuildingReadStorageTaskV2::execute() {
   ChunkData* chunk = nullptr;
   Context::LogState* log_state = nullptr;
   for (; iterator->state() == IteratorState::AT_RECORD;
-       iterator->next(&filter, &read_stats)) {
+       iterator->next(context->filter.get(), &read_stats)) {
     if (!result_.empty() && read_stats.readLimitReached()) {
       // Current record took us over the limit. If it's not the first record,
       // stop here without delivering it.
@@ -513,10 +519,18 @@ void RebuildingReadStorageTaskV2::updateTrimPoint(
   log_state->trimPoint = t.value();
 }
 
-RebuildingReadStorageTaskV2::Filter::Filter(RebuildingReadStorageTaskV2* task,
-                                            Context* context)
-    : LocalLogStoreReadFilter(), task(task), context(context) {
+RebuildingReadStorageTaskV2::Filter::Filter(Context* context)
+    : context(context) {
   scd_my_shard_id_ = context->myShardID;
+}
+
+void RebuildingReadStorageTaskV2::Filter::clearStats() {
+  nRecordsLateFiltered = 0;
+  nRecordsSCDFiltered = 0;
+  nRecordsNotDirtyFiltered = 0;
+  nRecordsDrainedFiltered = 0;
+  nRecordsTimestampFiltered = 0;
+  nRecordsEpochRangeFiltered = 0;
 }
 
 bool RebuildingReadStorageTaskV2::Filter::shouldProcessTimeRange(
