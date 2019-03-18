@@ -505,8 +505,21 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
   std::string epoch_store_path = root_path + "/epoch_store";
   mkdir(epoch_store_path.c_str(), 0777);
 
-  std::string ncs_path = root_path + "/nc_store";
-  mkdir(ncs_path.c_str(), 0777);
+  std::string ncs_path;
+  {
+    // If the settings specify a certain NCS path, use it, otherwise, use a
+    // default one under root_path.
+    const auto& server_settings =
+        source_config.serverConfig()->getServerSettingsConfig();
+    auto config_ncs_path =
+        server_settings.find("nodes-configuration-file-store-dir");
+    if (config_ncs_path != server_settings.end()) {
+      ncs_path = config_ncs_path->second;
+    } else {
+      ncs_path = root_path + "/nc_store";
+      mkdir(ncs_path.c_str(), 0777);
+    }
+  }
 
   // Each node in the cluster has a SockaddrPair object that defines with
   // tcp port or unix domain socket it uses for its protocol port and
