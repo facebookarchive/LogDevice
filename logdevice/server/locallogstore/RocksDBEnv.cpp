@@ -163,8 +163,9 @@ rocksdb::Status RocksDBEnv::DeleteFile(const std::string& fname) {
       ? dbg::Level::INFO
       : dbg::Level::DEBUG;
   ld_log(level,
-         "Deleted a file from Worker thread %s in %.6f seconds, path: %s",
+         "Deleted a file from Worker thread %s (%s) in %.6f seconds, path: %s",
          w->getName().c_str(),
+         w->currentlyRunning_.describe().c_str(),
          std::chrono::duration_cast<std::chrono::duration<double>>(end_time -
                                                                    start_time)
              .count(),
