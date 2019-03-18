@@ -39,6 +39,10 @@ class StorageTaskResponse : public Request {
 
   Execution execute() override;
 
+  RunState getRunState() const override {
+    return RunState(task_->getType());
+  }
+
   std::string describe() const override;
 
  private:

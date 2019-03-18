@@ -21,6 +21,8 @@ STAT_DEFINE(storage_tasks_executed, SUM)
 STAT_DEFINE(storage_thread_usec, SUM)
 // Number of microseconds spent by task in the storage (scheduler) queue.
 STAT_DEFINE(storage_q_usec, SUM)
+// Number of microseconds spent by StorageTaskResponse on worker thread.
+STAT_DEFINE(storage_task_response_worker_usec, SUM)
 
 #undef STAT_DEFINE
 #undef RESETTING_STATS

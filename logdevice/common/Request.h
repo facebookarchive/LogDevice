@@ -13,6 +13,7 @@
 #include <folly/AtomicIntrusiveLinkedList.h>
 
 #include "logdevice/common/RequestType.h"
+#include "logdevice/common/RunState.h"
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/WorkerType.h"
 #include "logdevice/common/types_internal.h"
@@ -84,6 +85,10 @@ class Request {
    */
   virtual WorkerType getWorkerTypeAffinity() {
     return WorkerType::GENERAL;
+  }
+
+  virtual RunState getRunState() const {
+    return RunState(type_);
   }
 
   /**

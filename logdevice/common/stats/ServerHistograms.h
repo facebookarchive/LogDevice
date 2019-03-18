@@ -55,6 +55,10 @@ struct ServerHistograms : public HistogramBundle {
   {"message_callback_duration." #name, \
    &message_callback_duration[int(MessageType::name)]},
 #include "logdevice/common/message_types.inc" // nolint
+#define STORAGE_TASK_TYPE(type, name, unused2) \
+  {"storage_task_response_duration." name,     \
+   &storage_task_response_duration[int(StorageTaskType::type)]},
+#include "logdevice/common/storage_task_types.inc" // nolint
     };
   }
   // Latency of appends as seen by the sequencer
@@ -123,6 +127,8 @@ struct ServerHistograms : public HistogramBundle {
       request_execution_duration;
   std::array<LatencyHistogram, static_cast<int>(MessageType::MAX)>
       message_callback_duration;
+  std::array<LatencyHistogram, static_cast<int>(StorageTaskType::MAX)>
+      storage_task_response_duration;
 };
 
 }} // namespace facebook::logdevice

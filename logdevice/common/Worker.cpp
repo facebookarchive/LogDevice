@@ -903,10 +903,19 @@ void Worker::onStoppedRunning(RunState prev_state) {
       break;
     }
     case RunState::REQUEST: {
-      auto rqtype = static_cast<int>(prev_state.subtype_.request);
+      int rqtype = static_cast<int>(prev_state.subtype_.request);
       ld_check(rqtype < static_cast<int>(RequestType::MAX));
       REQUEST_TYPE_STAT_ADD(Worker::stats(), rqtype, request_worker_usec, usec);
       HISTOGRAM_ADD(Worker::stats(), request_execution_duration[rqtype], usec);
+      break;
+    }
+    case RunState::STORAGE_TASK_RESPONSE: {
+      int task_type = static_cast<int>(prev_state.subtype_.storage_task);
+      ld_check(task_type < static_cast<int>(StorageTaskType::MAX));
+      STORAGE_TASK_TYPE_STAT_ADD(
+          Worker::stats(), task_type, storage_task_response_worker_usec, usec);
+      HISTOGRAM_ADD(
+          Worker::stats(), storage_task_response_duration[task_type], usec);
       break;
     }
     case RunState::NONE: {

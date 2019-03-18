@@ -63,8 +63,7 @@ void RequestPump::processRequest(std::unique_ptr<Request>& rq) {
     return;
   }
 
-  auto rqtype = rq->type_;
-  RunState run_state(rqtype);
+  RunState run_state = rq->getRunState();
 
   if (on_worker_thread) {
     auto queue_time{

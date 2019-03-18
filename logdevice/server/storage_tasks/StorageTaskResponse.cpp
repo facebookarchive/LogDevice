@@ -70,4 +70,5 @@ std::string StorageTaskResponse::describe() const {
   return requestTypeNames[type_] + "(" +
       storageTaskTypeNames[task_->getType()] + ")";
 }
+
 }} // namespace facebook::logdevice

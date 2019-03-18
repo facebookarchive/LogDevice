@@ -8,6 +8,7 @@
 #pragma once
 
 #include "logdevice/common/RequestType.h"
+#include "logdevice/common/StorageTask-enums.h"
 #include "logdevice/common/checks.h"
 #include "logdevice/common/protocol/MessageTypeNames.h"
 
@@ -17,11 +18,15 @@
  */
 
 namespace facebook { namespace logdevice {
-// RunState stores the Request/Message type for which we are currently
-// executing methods or timer callbacks on a particular thread.
+// Identifies the type of Request/Message. Used for tracking what each worker
+// thread is doing at any particular moment, and reporting when a piece of
+// work takes longer than expected.
+// This structure should be kept lightweight - it's copied multiple times per
+// request execution - but contain enough information to locate the relevant
+// piece of code with reasonable precision.
 class RunState {
  public:
-  enum Type { NONE = 0, REQUEST, MESSAGE };
+  enum Type { NONE = 0, REQUEST, MESSAGE, STORAGE_TASK_RESPONSE };
 
   RunState() : type_(NONE) {}
   explicit RunState(MessageType t) {
@@ -32,6 +37,11 @@ class RunState {
   explicit RunState(RequestType t) {
     type_ = REQUEST;
     subtype_.request = t;
+  }
+
+  explicit RunState(StorageTaskType t) {
+    type_ = STORAGE_TASK_RESPONSE;
+    subtype_.storage_task = t;
   }
 
   bool operator==(RunState& b) {
@@ -45,6 +55,8 @@ class RunState {
         return subtype_.request == b.subtype_.request;
       case MESSAGE:
         return subtype_.message == b.subtype_.message;
+      case STORAGE_TASK_RESPONSE:
+        return subtype_.storage_task == b.subtype_.storage_task;
     }
     // We should never end up here,
     ld_check(false);
@@ -69,6 +81,10 @@ class RunState {
         res += "Message: ";
         res += messageTypeNames[subtype_.message].c_str();
         break;
+      case STORAGE_TASK_RESPONSE:
+        res += "Storage task response: ";
+        res += storageTaskTypeNames[subtype_.storage_task].c_str();
+        break;
     }
     res += "]";
     return res;
@@ -78,6 +94,7 @@ class RunState {
   union {
     RequestType request;
     MessageType message;
+    StorageTaskType storage_task;
   } subtype_;
 };
 }} // namespace facebook::logdevice
