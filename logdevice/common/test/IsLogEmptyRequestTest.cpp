@@ -1475,9 +1475,7 @@ TEST_F(IsLogEmptyRequestTest, ShardAuthStatusDifferenceCheck) {
   auto print_shard_states = [&] {
     ld_info(
         "Shard states according to\nNA: [%s],\nFD: [%s].\nNon-empty shards: %s",
-        req.getMockStorageSetAccessor()
-            ->getHumanReadableShardStatuses()
-            .c_str(),
+        req.getMockStorageSetAccessor()->describeState().c_str(),
         req.getHumanReadableShardStatuses().c_str(),
         req.getNonEmptyShardsList().c_str());
   };

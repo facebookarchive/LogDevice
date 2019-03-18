@@ -123,7 +123,13 @@ class Mutator {
   /**
    * What to print to the log if this mutation times out.
    */
-  std::string getDebugInfo() const;
+  std::string describeState() const;
+
+  /**
+   * Enables collection and printing of a trace of what this Mutator has done.
+   * See NodeSetAccessor::getDebugTrace().
+   */
+  void printDebugTraceWhenComplete();
 
   //// expose some internal members for testing
 
@@ -238,6 +244,8 @@ class Mutator {
   // TODO 11866467: this is a workaround for pretending all MUTATED replies are
   // from the latest wave, remove this once we include wave in MUTATED messages
   uint32_t current_wave_{0};
+
+  bool print_debug_trace_when_complete_ = false;
 
   bool done() const {
     return mutation_status_ != E::UNKNOWN;

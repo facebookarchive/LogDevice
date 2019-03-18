@@ -255,10 +255,10 @@ void GetHeadAttributesRequest::onClientTimeout() {
   RATELIMIT_WARNING(std::chrono::seconds(1),
                     10,
                     "timed out (%ld ms) waiting for storage nodes, "
-                    "assuming that the log is not empty. Shard states: [%s]",
+                    "assuming that the log is not empty. Shard states: %s",
                     client_timeout_.count(),
                     (nodeset_accessor_ != nullptr)
-                        ? nodeset_accessor_->allShardsStateSummary().c_str()
+                        ? nodeset_accessor_->describeState().c_str()
                         : "");
   finalize(E::TIMEDOUT);
 }

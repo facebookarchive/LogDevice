@@ -115,7 +115,7 @@ void DataSizeRequest::onShardStatusChanged(bool initialize) {
                      "DATA_SIZE[%lu] hit a dead end due to shard "
                      "authoritative status change. Shard statuses: %s",
                      log_id_.val(),
-                     nodeset_accessor_->allShardsStateSummary().c_str());
+                     nodeset_accessor_->describeState().c_str());
       finalize(E::PARTIAL, /*delete_this=*/!initialize);
       return;
     }
@@ -257,7 +257,7 @@ void DataSizeRequest::finalize(Status status, bool delete_this) {
                "FAILED instead. Shard statuses: %s",
                log_id_.val(),
                error_name(status),
-               nodeset_accessor_->allShardsStateSummary().c_str());
+               nodeset_accessor_->describeState().c_str());
       ld_check(false);
       status = E::FAILED;
   }

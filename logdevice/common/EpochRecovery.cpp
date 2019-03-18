@@ -950,6 +950,21 @@ bool EpochRecovery::mutateEpoch(const std::set<ShardID>& mutation_set,
     return false;
   }
 
+  // Tell the first few and last few mutators to report more debug information
+  // when done.
+  {
+    size_t i = 0;
+    for (auto jt = mutators_.begin(); jt != mutators_.end() && i < 2;
+         ++jt, ++i) {
+      jt->second->printDebugTraceWhenComplete();
+    }
+    i = 0;
+    for (auto jt = mutators_.rbegin(); jt != mutators_.rend() && i < 2;
+         ++jt, ++i) {
+      jt->second->printDebugTraceWhenComplete();
+    }
+  }
+
   const recovery_id_t recovery_id = id_;
   // start all mutators, note that it is possible some may synchronously finish
   for (auto mit = mutators_.begin(); mit != mutators_.end();) {
@@ -1092,7 +1107,7 @@ void EpochRecovery::onTimeout() {
           ss << ", ";
         }
         first = false;
-        ss << "e" << m.first.val() << ": {" << m.second->getDebugInfo() << "}";
+        ss << "e" << m.first.val() << ": {" << m.second->describeState() << "}";
       }
       ss << "}";
       return ss.str();

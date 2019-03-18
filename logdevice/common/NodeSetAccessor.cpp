@@ -20,6 +20,18 @@
 
 namespace facebook { namespace logdevice {
 
+// Appends the given string to trace_.
+// If trace_ is already too long, doesn't append and doesn't evaluate x.
+#define ADD_TO_TRACE(x)                        \
+  do {                                         \
+    if (trace_.size() < trace_size_limit_) {   \
+      trace_.append(x);                        \
+      if (trace_.size() > trace_size_limit_) { \
+        trace_.resize(trace_size_limit_);      \
+      }                                        \
+    }                                          \
+  } while (false)
+
 StorageSetAccessor::StorageSetAccessor(logid_t log_id,
                                        StorageSet shards,
                                        std::shared_ptr<ServerConfig> config,
@@ -84,6 +96,12 @@ void StorageSetAccessor::setRequiredShards(const StorageSet& required_shards) {
       required_shards_.insert(shard);
     }
   }
+
+  if (!required_shards_.empty()) {
+    ADD_TO_TRACE("required:");
+    ADD_TO_TRACE(toString(required_shards_));
+    ADD_TO_TRACE(";");
+  }
 }
 
 void StorageSetAccessor::start() {
@@ -121,7 +139,7 @@ void StorageSetAccessor::start() {
   sendWave();
 }
 
-void StorageSetAccessor::complete(Status status) {
+void StorageSetAccessor::complete(Status status, const char* trace) {
   ld_check(started_);
   ld_check(!finished_);
   ld_check_in(status, ({E::OK, E::TIMEDOUT, E::ABORTED, E::FAILED}));
@@ -130,6 +148,12 @@ void StorageSetAccessor::complete(Status status) {
   job_timer_.reset();
   grace_period_timer_.reset();
   finished_ = true;
+
+  ADD_TO_TRACE("done:");
+  ADD_TO_TRACE(trace);
+  ADD_TO_TRACE(":");
+  ADD_TO_TRACE(error_name(status));
+  ADD_TO_TRACE(";");
 
   ld_debug("StorageSetAccessor for log %lu completed with status %s",
            log_id_.val_,
@@ -149,14 +173,14 @@ void StorageSetAccessor::setGracePeriod(std::chrono::milliseconds grace_period,
 
 void StorageSetAccessor::onGracePeriodTimedout() {
   ld_check(grace_period_.hasValue());
-  complete(E::OK);
+  complete(E::OK, "grace_period");
 }
 
 void StorageSetAccessor::onJobTimedout() {
   ld_check(timeout_ > std::chrono::milliseconds::zero());
-  complete(grace_period_timer_ && grace_period_timer_->isActive()
-               ? E::OK
-               : E::TIMEDOUT);
+  complete(grace_period_timer_ && grace_period_timer_->isActive() ? E::OK
+                                                                  : E::TIMEDOUT,
+           "timeout");
 }
 
 StorageSet StorageSetAccessor::pickWaveFromCopySet() {
@@ -185,6 +209,7 @@ StorageSet StorageSetAccessor::pickWaveFromCopySet() {
                                            wave_size_before_copyset,
                                            &wave_size_after_copyset,
                                            *rng_);
+  copyset_selection_failed_ = result != CopySetSelector::Result::SUCCESS;
 
   if (result != CopySetSelector::Result::SUCCESS) {
     RATELIMIT_ERROR(std::chrono::seconds(1),
@@ -193,6 +218,8 @@ StorageSet StorageSetAccessor::pickWaveFromCopySet() {
                     "exisiting nodes %s.",
                     log_id_.val_,
                     toString(getShardsInStatus(access_target_nodes)).c_str());
+
+    ADD_TO_TRACE("F;");
 
     // We are unable to pick a copyset from copyset selector, picking some
     // extra nodes to make progress:
@@ -309,7 +336,7 @@ void StorageSetAccessor::sendWave() {
     wave_shards = pickWaveFromCopySet();
   } else {
     // send to all nodes that are not finished and still have a chance to
-    // success
+    // succeed
     wave_shards = getShardsInStatus([](ShardStatus st) {
       return (st.state != ShardState::SUCCESS &&
               st.state != ShardState::PERMANENT_ERROR);
@@ -326,6 +353,11 @@ void StorageSetAccessor::sendWave() {
             "duplicate nodes in a wave");
 #endif
 
+  ADD_TO_TRACE("W");
+  ADD_TO_TRACE(toString(wave_info.wave));
+  ADD_TO_TRACE(toString(wave_shards));
+  ADD_TO_TRACE(";");
+
   for (auto index : wave_shards) {
     auto result_status = accessShard(index, wave_info);
     auto result = result_status.result;
@@ -341,7 +373,7 @@ void StorageSetAccessor::sendWave() {
         }
         break;
       case Result::ABORT:
-        complete(E::ABORTED);
+        complete(E::ABORTED, "aborted");
         return;
     }
     ++wave_info.offset;
@@ -380,6 +412,17 @@ StorageSetAccessor::accessShard(ShardID shard, const WaveInfo& wave_info) {
   AccessResult access_result = shard_func_(shard, wave_info);
   auto result = access_result.result;
   auto status = access_result.status;
+
+  ADD_TO_TRACE("X:");
+  ADD_TO_TRACE(shard.toString());
+  ADD_TO_TRACE(":");
+  ADD_TO_TRACE(resultShortString(result));
+  if (result != Result::SUCCESS || status != E::OK) {
+    ADD_TO_TRACE(":");
+    ADD_TO_TRACE(error_name(status));
+  }
+  ADD_TO_TRACE(";");
+
   switch (result) {
     case Result::SUCCESS:
       setShardState(shard, ShardState::INPROGRESS, status);
@@ -420,13 +463,13 @@ bool StorageSetAccessor::checkIfDone() {
       // one of the required node permanently failed, no chance of success
       RATELIMIT_WARNING(std::chrono::seconds(10),
                         2,
-                        "Abort StorageSetAccessor for log %lu because the "
-                        "one of the required shard %s has a permanent error. "
+                        "Abort StorageSetAccessor for log %lu because "
+                        "required shard %s has a permanent error. "
                         "Node states: %s.",
                         log_id_.val_,
                         required.toString().c_str(),
-                        allShardsStateSummary().c_str());
-      complete(E::FAILED);
+                        describeState().c_str());
+      complete(E::FAILED, "required_has_permanent_error");
       return true;
     }
 
@@ -456,7 +499,7 @@ bool StorageSetAccessor::checkIfDone() {
           failure_domain_.numShards()) {
     // if allow_success_if_all_accessed_ is set, complete with E::OK if all
     // nodes report success
-    complete(E::OK);
+    complete(E::OK, "all");
     return true;
   }
 
@@ -468,13 +511,13 @@ bool StorageSetAccessor::checkIfDone() {
   switch (property_) {
     case Property::ANY: {
       if (failure_domain_.countShards(success_nodes_pred) > 0) {
-        complete(E::OK);
+        complete(E::OK, "any");
         return true;
       }
 
       if (failure_domain_.countShards(failed_nodes_pred) ==
           failure_domain_.numShards()) {
-        complete(E::FAILED);
+        complete(E::FAILED, "all_permanent_error");
         return true;
       }
       return false;
@@ -511,7 +554,7 @@ bool StorageSetAccessor::checkIfDone() {
         ld_debug("Property satisfied with %lu nodes in SUCCESS state",
                  failure_domain_.countShards(success_nodes_pred));
         // conclude once we have f-majority
-        complete(E::OK);
+        complete(E::OK, fmajorityResultString(fmajority_result));
         return true;
       }
 
@@ -524,10 +567,10 @@ bool StorageSetAccessor::checkIfDone() {
                           "f-majority property cannot be satisfied with "
                           "remaining eligible nodes. Node states: %s.",
                           log_id_.val_,
-                          allShardsStateSummary().c_str());
+                          describeState().c_str());
         if (!no_early_abort_ ||
             failure_domain_.countShards(inprogress_nodes_pred) == 0) {
-          complete(E::FAILED);
+          complete(E::FAILED, "too_many_permanent_errors");
           return true;
         }
       }
@@ -538,7 +581,7 @@ bool StorageSetAccessor::checkIfDone() {
       if (failure_domain_.canReplicate(success_nodes_pred)) {
         // subset of nodes that were successfully accessed already satisfy
         // the failure domain property, complete with SUCCESS status
-        complete(E::OK);
+        complete(E::OK, "can_replicate");
         return true;
       }
 
@@ -549,8 +592,8 @@ bool StorageSetAccessor::checkIfDone() {
                           "replication property cannot be satisfied with "
                           "remaining eligible nodes. Node states: %s.",
                           log_id_.val_,
-                          allShardsStateSummary().c_str());
-        complete(E::FAILED);
+                          describeState().c_str());
+        complete(E::FAILED, "too_many_permanent_errors");
         return true;
       }
 
@@ -564,6 +607,18 @@ bool StorageSetAccessor::checkIfDone() {
 void StorageSetAccessor::onShardAccessed(ShardID shard,
                                          AccessResult result,
                                          uint32_t wave) {
+  ADD_TO_TRACE("Y");
+  ADD_TO_TRACE(toString(wave));
+  ADD_TO_TRACE(":");
+  ADD_TO_TRACE(shard.toString());
+  ADD_TO_TRACE(":");
+  ADD_TO_TRACE(resultShortString(result.result));
+  if (result.result != Result::SUCCESS || result.status != E::OK) {
+    ADD_TO_TRACE(":");
+    ADD_TO_TRACE(error_name(result.status));
+  }
+  ADD_TO_TRACE(";");
+
   if (finished_) {
     // ignore calls if StorageSetAccessor is finished
     RATELIMIT_WARNING(std::chrono::seconds(1),
@@ -689,6 +744,12 @@ bool StorageSetAccessor::setShardAuthoritativeStatusImpl(
   if (st == prev_status) {
     return false;
   }
+
+  ADD_TO_TRACE("A:");
+  ADD_TO_TRACE(shard.toString());
+  ADD_TO_TRACE(":");
+  ADD_TO_TRACE(toShortString(st));
+  ADD_TO_TRACE(";");
 
   failure_domain_.setShardAuthoritativeStatus(shard, st);
   // On authoritative status changes, always reset the node to NOT_SENT, and
@@ -820,66 +881,88 @@ void StorageSetAccessor::applyShardStatus() {
   }
 }
 
-std::string StorageSetAccessor::getHumanReadableShardStatuses() {
-  std::vector<std::string> result_statuses;
-  const auto shard_status_map =
-      failure_domain_.getShardAuthoritativeStatusMap();
-
-  for (const ShardID shard : epoch_metadata_.shards) {
-    const auto st = failure_domain_.getShardAuthoritativeStatus(shard);
-
-    ShardStatus st_attr_status;
-    int rv = failure_domain_.getShardAttribute(shard, &st_attr_status);
-
-    if (rv < 0) {
-      RATELIMIT_ERROR(std::chrono::seconds(10),
-                      10,
-                      "INTERNAL ERROR: state for shard %s not found!",
-                      shard.toString().c_str());
-      ld_check(false);
-      return "<error>";
-    }
-
-    if (st_attr_status.state != ShardState::SUCCESS) {
-      result_statuses.push_back(
-          shard.toString() + " = " + logdevice::toShortString(st).c_str() +
-          "(state=" + getShardState(st_attr_status.state).c_str() +
-          ", status=" + error_name(st_attr_status.status) + ")");
-    }
-  }
-
-  return folly::join("; ", result_statuses);
-}
-
-void StorageSetAccessor::printShardStatus() {
-  ld_info(
-      "Log %lu: [%s]", log_id_.val(), getHumanReadableShardStatuses().c_str());
-}
-
-std::string StorageSetAccessor::getDebugInfo() const {
+std::string StorageSetAccessor::describeState(bool all_shards) const {
   std::stringstream ss;
   ss.precision(3);
   ss.setf(std::ios::fixed, std::ios::floatfield);
-  ss << "wave " << wave_ << ": " << toString(wave_shards_) << ", wave started "
-     << (SteadyTimestamp::now().toMilliseconds() -
-         wave_start_time_.toMilliseconds())
-              .count() /
-          1000.
-     << "s ago, shards involved: {";
+  // Describe current wave. Don't do it for FMAJORITY because the waves don't
+  // matter in that case.
+  if (property_ == Property::REPLICATION || property_ == Property::ANY) {
+    ss << "wave " << wave_ << ": " << toString(wave_shards_)
+       << ", wave started "
+       << (SteadyTimestamp::now().toMilliseconds() -
+           wave_start_time_.toMilliseconds())
+                .count() /
+            1000.
+       << "s ago; ";
+  }
+
+  // Figure out which shard state is "uninteresting" in current situation.
+  ShardState omit_state = ShardState::Count;
+  if (!all_shards) {
+    if (property_ == Property::FMAJORITY) {
+      // If accessing f-majority, only print shards that are not completed yet.
+      omit_state = ShardState::SUCCESS;
+    } else if (!wave_shards_.empty() && !copyset_selection_failed_) {
+      // If accessing a copyset or a single node, and current wave's list of
+      // shards is good, only print shards we tried to access. (And we printed
+      // current wave's list of shards above.)
+      omit_state = ShardState::NOT_SENT;
+    }
+  }
+
+  // Print the list of shards.
+  ss << "{";
   bool first = true;
+  size_t num_omitted = 0;
   for (ShardID shard : epoch_metadata_.shards) {
     ShardStatus s;
     if (failure_domain_.getShardAttribute(shard, &s) != 0) {
       continue;
     }
+    if (s.state == omit_state && !s.required) {
+      ++num_omitted;
+      continue;
+    }
+
     if (!first) {
       ss << ", ";
     }
     first = false;
-    ss << shard.toString() << ": state=" << getShardState(s.state)
-       << ", status=" << error_name(s.status);
+
+    ss << shard.toString();
+
+    if (s.required) {
+      ss << "(r)";
+    }
+    auto auth_status = failure_domain_.getShardAuthoritativeStatus(shard);
+    if (auth_status != AuthoritativeStatus::FULLY_AUTHORITATIVE) {
+      ss << "(" << toShortString(auth_status) << ")";
+    }
+
+    ss << ": " << getShardState(s.state);
+
+    // Print status unless it's obvious (UNKNOWN for NOT_SENT, OK for INPROGRESS
+    // or SUCCESS).
+    folly::Optional<Status> normal_status;
+    if (s.state == ShardState::NOT_SENT) {
+      normal_status = E::UNKNOWN;
+    } else if (s.state == ShardState::INPROGRESS ||
+               s.state == ShardState::SUCCESS) {
+      normal_status = E::OK;
+    }
+    if (!normal_status.hasValue() || s.status != normal_status.value()) {
+      ss << ' ' << error_name(s.status);
+    }
   }
   ss << "}";
+
+  // Report number of omitted shards.
+  if (num_omitted != 0) {
+    ss << "; " << num_omitted << " shards in state "
+       << getShardState(omit_state);
+  }
+
   return ss.str();
 }
 
@@ -904,22 +987,6 @@ StorageSetAccessor::getShardAuthoritativeStatusMap() {
       .getShardAuthoritativeStatusMap();
 }
 
-std::string StorageSetAccessor::allShardsStateSummary() const {
-  std::vector<std::string> state_strings;
-  for (const ShardID& shard : epoch_metadata_.shards) {
-    std::string state_str = shard.toString();
-    ShardStatus st;
-    if (failure_domain_.getShardAttribute(shard, &st) == 0) {
-      state_str += getShardState(st.state);
-      if (isRequired(shard)) {
-        state_str += "(r)";
-      }
-    }
-    state_strings.push_back(state_str);
-  }
-  return folly::join(',', state_strings);
-}
-
 const char* StorageSetAccessor::resultString(Result result) {
   switch (result) {
     case Result::SUCCESS:
@@ -930,6 +997,21 @@ const char* StorageSetAccessor::resultString(Result result) {
       return "PERMANENT_ERROR";
     case Result::ABORT:
       return "ABORT";
+  }
+  ld_check(false);
+  return "INVALID";
+}
+
+const char* StorageSetAccessor::resultShortString(Result result) {
+  switch (result) {
+    case Result::SUCCESS:
+      return "K";
+    case Result::TRANSIENT_ERROR:
+      return "T";
+    case Result::PERMANENT_ERROR:
+      return "P";
+    case Result::ABORT:
+      return "A";
   }
   ld_check(false);
   return "INVALID";

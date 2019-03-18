@@ -249,11 +249,6 @@ void TrimRequest::onReply(ShardID from, Status status) {
     case E::INVALID_PARAM:
     case E::NOTFOUND:
     case E::SYSLIMIT:
-      RATELIMIT_WARNING(std::chrono::seconds(1),
-                        10,
-                        "Failure while trimming from %s with status %s.",
-                        from.toString().c_str(),
-                        error_name(status));
       res = StorageSetAccessor::Result::PERMANENT_ERROR;
       break;
     case E::ACCESS:
@@ -371,6 +366,14 @@ void TrimRequest::initStorageSetAccessor() {
     if (st == E::FAILED) {
       // We could have advanced trim point on some storage nodes.
       st = E::PARTIAL;
+    }
+    if (st != E::OK) {
+      RATELIMIT_INFO(std::chrono::seconds(10),
+                     2,
+                     "Failed to trim log %lu: %s. %s",
+                     log_id_.val(),
+                     error_name(st),
+                     nodeset_accessor_->describeState().c_str());
     }
     finalize(st);
   };

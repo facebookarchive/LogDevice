@@ -153,7 +153,7 @@ void IsLogEmptyRequest::onShardStatusChanged(bool initialize) {
                      "After a change in shard status, we hit a dead end -- we "
                      "won't get an accurate answer right now. Considering log "
                      "%lu non-empty. Shard statuses according to request's "
-                     "FailureDomain: [%s]",
+                     "FailureDomain: %s",
                      log_id_.val(),
                      getHumanReadableShardStatuses().c_str());
       completion(E::FAILED); // this will correctly decide the final status
@@ -608,18 +608,17 @@ void IsLogEmptyRequest::completion(Status st) {
 
   if (st == E::TIMEDOUT) {
     // Hit the client timeout before seeing an f-majority of responses.
-    RATELIMIT_WARNING(
-        std::chrono::seconds(1),
-        10,
-        "timed out (%ld ms) waiting for storage nodes, "
-        "assuming that log %lu is not empty. Shard states "
-        "according to NA: [%s], FD: [%s]",
-        client_timeout_.count(),
-        log_id_.val(),
-        nodeset_accessor_
-            ? nodeset_accessor_->getHumanReadableShardStatuses().c_str()
-            : "<not initialized>",
-        getHumanReadableShardStatuses().c_str());
+    RATELIMIT_WARNING(std::chrono::seconds(1),
+                      10,
+                      "timed out (%ld ms) waiting for storage nodes, "
+                      "assuming that log %lu is not empty. Shard states "
+                      "according to NA: [%s], FD: [%s]",
+                      client_timeout_.count(),
+                      log_id_.val(),
+                      nodeset_accessor_
+                          ? nodeset_accessor_->describeState().c_str()
+                          : "<not initialized>",
+                      getHumanReadableShardStatuses().c_str());
     ld_check(!completion_cond_called_);
     finalize(E::TIMEDOUT, false);
   } else if (st == E::OK) {
@@ -643,7 +642,7 @@ void IsLogEmptyRequest::completion(Status st) {
                      grace_period_.count(),
                      client_timeout_.count(),
                      log_id_.val(),
-                     nodeset_accessor_->getHumanReadableShardStatuses().c_str(),
+                     nodeset_accessor_->describeState().c_str(),
                      getHumanReadableShardStatuses().c_str(),
                      getNonEmptyShardsList().c_str());
 

@@ -239,21 +239,6 @@ class StorageSetAccessor {
                        uint32_t wave = WAVE_INVALID);
 
   /**
-   * Print the authoritative status of shards for which we didn't receive
-   * a successful reply. This is useful e.g. when findTime fails.
-   */
-  void printShardStatus();
-
-  std::string getDebugInfo() const;
-
-  /**
-   * Returns human-readable shard information (or an error message).
-   * Helper for printShardStatus().
-   */
- public:
-  std::string getHumanReadableShardStatuses();
-
-  /**
    * Set the authoritative status of a node, by default all nodes are
    * FULLY_AUTHORITATIVE. Note that for certain properties, changing
    * authoritative status can change whether or not the property is satisfied,
@@ -277,11 +262,39 @@ class StorageSetAccessor {
   }
 
   /**
-   * Generates summary of nodes states
-   *
-   * @return  a human readable string of summary of states of all nodes
+   * Human-readable string with information about current wave and current
+   * states of shards.
+   * If @param all_shards is true, all shards of the nodeset are included.
+   * Otherwise, the "uninteresting" ones are omitted: if Property is FMAJORITY,
+   * successfully accessed shards are omitted; if Property is ANY or
+   * REPLICATION, and copyset selection was successful, unaccessed shards are
+   * omitted.
    */
-  std::string allShardsStateSummary() const;
+  std::string describeState(bool all_shards = false) const;
+
+  /**
+   * Returns human-readable concise log of events that happened, such as
+   * starting waves, access attempts, access results, errors.
+   * enableDebugTrace() needs to be called first.
+   * Semicolon-separated sequence of events, each event one of:
+   *  - required:{<shards>} - setRequiredShards(<shards>)
+   *  - A:<shard>:<status> - authoritative status of <shard> set to <status>
+   *  - F - failed to select copyset (but proceeding with the wave anyway)
+   *  - W<n>[<shards>] - starting wave number <n>
+   *  - X:<shard>:<result>:<status> - shard access began
+   *  - Y<wave>:<shard>:<result>:<status> - shard accessed
+   *  - done:<reason>:<status> - completed
+   * Note that the representation of potentially frequent events is kept short,
+   * while one-time events can be longer.
+   */
+  const std::string& getDebugTrace() const {
+    return trace_;
+  }
+
+  void enableDebugTrace(size_t size_limit = 1000) {
+    ld_check(!started_);
+    trace_size_limit_ = size_limit;
+  }
 
   virtual ~StorageSetAccessor() {}
 
@@ -428,9 +441,11 @@ class StorageSetAccessor {
   std::unique_ptr<BackoffTimer> wave_timer_;
   std::unique_ptr<Timer> grace_period_timer_;
 
-  // These are used by getDebugInfo().
+  // These are used by describeState().
   StorageSet wave_shards_;
   SteadyTimestamp wave_start_time_;
+  // true if copyset selector returned an error on current wave.
+  bool copyset_selection_failed_ = false;
 
   // min and max timeout for sending waves in a backoff manner
   std::chrono::milliseconds wave_timeout_min_{500};
@@ -448,13 +463,18 @@ class StorageSetAccessor {
   // Can be overridden in tests to make it deterministic.
   RNG* rng_ = &DefaultRNG::get();
 
+  // Concise debug information about the sequence of events so far.
+  std::string trace_;
+  // Limit on the length of trace_.
+  size_t trace_size_limit_ = 0;
+
   // helper function that gets an array of nodes in certain ShardStatus
   StorageSet getShardsInStatus(std::function<bool(ShardStatus)>) const;
 
   // helper function that gets an array of nodes in certain ShardState
   StorageSet getShardsInState(ShardState) const;
 
-  void complete(Status status);
+  void complete(Status status, const char* trace);
   void onJobTimedout();
 
   // pick a wave of nodes to send using copyset selector, the method tries to
@@ -488,6 +508,7 @@ class StorageSetAccessor {
                      Status detail_status = Status::UNKNOWN);
 
   static const char* resultString(Result result);
+  static const char* resultShortString(Result result);
   static const char* stateString(ShardState state);
 
   friend class NodeSetAccessorTest;

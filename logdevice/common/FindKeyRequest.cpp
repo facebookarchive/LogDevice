@@ -165,7 +165,12 @@ void FindKeyRequest::finalize(Status status, bool delete_this) {
   }
 
   if (status != E::OK && nodeset_accessor_) {
-    nodeset_accessor_->printShardStatus();
+    RATELIMIT_INFO(std::chrono::seconds(10),
+                   2,
+                   "Failed for log %lu. Status: %s. %s",
+                   log_id_.val(),
+                   error_name(status),
+                   nodeset_accessor_->describeState().c_str());
   }
 
   if (delete_this) {

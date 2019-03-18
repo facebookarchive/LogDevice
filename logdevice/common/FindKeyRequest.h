@@ -16,7 +16,6 @@
 
 #include "logdevice/common/DistributedRequest.h"
 #include "logdevice/common/NodeID.h"
-#include "logdevice/common/NodeSetAccessor.h"
 #include "logdevice/common/NodeSetFinder.h"
 #include "logdevice/common/RequestType.h"
 #include "logdevice/common/Timer.h"

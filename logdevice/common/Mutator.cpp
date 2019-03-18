@@ -122,6 +122,10 @@ void Mutator::start() {
   nodeset_accessor_->setRequiredShards(required_nodes);
   nodeset_accessor_->successIfAllShardsAccessed();
 
+  if (print_debug_trace_when_complete_) {
+    nodeset_accessor_->enableDebugTrace();
+  }
+
   // this makes Mutator more like Appender: it sends in waves and only conclude
   // when successfully stored nodes in the latest wave can meet the replication
   // requirement.
@@ -355,15 +359,27 @@ void Mutator::finalize(Status status, ShardID node_to_reseal) {
     ld_check(node_to_reseal.isValid());
   }
 
+  if (print_debug_trace_when_complete_) {
+    ld_info("Mutator %s completed (%s). Trace: %s",
+            header_.rid.toString().c_str(),
+            error_name(status),
+            nodeset_accessor_->getDebugTrace().c_str());
+  }
+
   epoch_recovery_->onMutationComplete(header_.rid.esn, status, node_to_reseal);
 }
 
-std::string Mutator::getDebugInfo() const {
+std::string Mutator::describeState() const {
   std::stringstream ss;
   ss << "amend: " << toString(amend_metadata_)
      << ", conflict: " << toString(conflict_copies_) << ", "
-     << nodeset_accessor_->getDebugInfo();
+     << nodeset_accessor_->describeState();
   return ss.str();
+}
+
+void Mutator::printDebugTraceWhenComplete() {
+  ld_check(nodeset_accessor_ == nullptr);
+  print_debug_trace_when_complete_ = true;
 }
 
 std::unique_ptr<StorageSetAccessor> Mutator::createStorageSetAccessor(
