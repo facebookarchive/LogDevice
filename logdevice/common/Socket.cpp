@@ -1941,6 +1941,15 @@ int Socket::receiveMessage() {
   } else {
     // Got message body.
 
+    // Tell the Worker that we're processing a message, so it can time it.
+    // The time will include message's deserialization, checksumming,
+    // onReceived, destructor and Socket's processing overhead.
+    RunContext run_context(recv_message_ph_.type);
+    deps_->onStartedRunning(run_context);
+    SCOPE_EXIT {
+      deps_->onStoppedRunning(run_context);
+    };
+
     ld_check(messageDeserializers[recv_message_ph_.type]);
 
     size_t protocol_bytes_already_read =
@@ -2090,9 +2099,6 @@ int Socket::receiveMessage() {
     TRAFFIC_CLASS_STAT_ADD(
         deps_->getStats(), msg->tc_, bytes_received, recv_message_ph_.len);
 
-    RunContext run_context(msg->type_);
-    deps_->onStartedRunning(run_context);
-
     /* verify that gossip sockets don't receive non-gossip messages
      * exceptions: handshake, config synchronization, shutdown
      */
@@ -2113,7 +2119,6 @@ int Socket::receiveMessage() {
             deps_->describeConnection(peer_name_).c_str());
     Message::Disposition disp = deps_->onReceived(msg.get(), peer_name_);
     Status onreceived_err = err;
-    deps_->onStoppedRunning(run_context);
 
     // If this is a newly handshaken client connection, we might want to drop
     // it at this point if we're already over the limit. onReceived() of a
@@ -2634,13 +2639,16 @@ void SocketDependencies::onSent(std::unique_ptr<Message> msg,
                                 Status st,
                                 SteadyTimestamp t,
                                 Message::CompletionMethod cm) {
-  RunContext run_context(msg->type_);
-
   switch (cm) {
     case Message::CompletionMethod::IMMEDIATE: {
+      // Note: instead of creating a RunContext with message type, we could
+      // use RunContext of whoever sent the message (grabbed in Sender::send()),
+      // similar to how timers do it.
+      RunContext run_context(msg->type_);
       auto prev_context = Worker::packRunContext();
       Worker::onStartedRunning(run_context);
       Worker::onThisThread()->message_dispatch_->onSent(*msg, st, to, t);
+      msg.reset(); // count destructor as part of message's execution time
       Worker::onStoppedRunning(run_context);
       Worker::unpackRunContext(prev_context);
       break;

@@ -78,7 +78,7 @@ class RunContext {
         res += requestTypeNames[subtype_.request];
         break;
       case MESSAGE:
-        res += "Message: ";
+        res += "Message sent/received: ";
         res += messageTypeNames[subtype_.message].c_str();
         break;
       case STORAGE_TASK_RESPONSE:

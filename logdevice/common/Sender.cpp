@@ -110,6 +110,7 @@ void SenderBase::MessageCompletion::send() {
   Worker::onStartedRunning(run_context);
   Worker::onThisThread()->message_dispatch_->onSent(
       *msg_, status_, destination_, enqueue_time_);
+  msg_.reset(); // count destructor as part of message's execution time
   Worker::onStoppedRunning(run_context);
   Worker::unpackRunContext(prev_context);
 }

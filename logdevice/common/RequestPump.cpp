@@ -84,17 +84,19 @@ void RequestPump::processRequest(std::unique_ptr<Request>& rq) {
   // rq should not be accessed after execute, as it may have been deleted.
   Request::Execution status = rq->execute();
 
-  if (on_worker_thread) {
-    Worker::onStoppedRunning(run_context);
-    WORKER_STAT_INCR(worker_requests_executed);
-  }
-
   switch (status) {
     case Request::Execution::COMPLETE:
+      // Count destructor towards request's execution time.
+      rq.reset();
       break;
     case Request::Execution::CONTINUE:
       rq.release();
       break;
+  }
+
+  if (on_worker_thread) {
+    Worker::onStoppedRunning(run_context);
+    WORKER_STAT_INCR(worker_requests_executed);
   }
 }
 
