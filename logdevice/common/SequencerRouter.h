@@ -126,7 +126,9 @@ class SequencerRouter {
   void onDeadNode(NodeID node, Status status);
 
  protected: // tests can override
-  virtual std::shared_ptr<ServerConfig> getServerConfig() const;
+  virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const;
+
   virtual const Settings& getSettings() const;
 
   // Returns a reference to the SequencerLocator object used to map logs to

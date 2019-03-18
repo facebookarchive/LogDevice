@@ -10,6 +10,7 @@
 #include <memory>
 
 #include "logdevice/common/plugin/Plugin.h"
+#include "logdevice/common/settings/UpdateableSettings.h"
 
 namespace facebook { namespace logdevice {
 
@@ -32,7 +33,8 @@ class SequencerLocatorFactory : public Plugin {
    * sequencers on servers and for clients to locate sequencers.
    */
   virtual std::unique_ptr<SequencerLocator>
-  operator()(const std::shared_ptr<UpdateableConfig>& config) = 0;
+  operator()(std::shared_ptr<UpdateableConfig> config,
+             UpdateableSettings<Settings> settings) = 0;
 };
 
 }} // namespace facebook::logdevice

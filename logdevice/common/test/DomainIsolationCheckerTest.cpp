@@ -61,7 +61,8 @@ class MockDomainIsolationChecker : public DomainIsolationChecker {
 
   std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const override {
-    return test_->config_->getNodesConfiguration();
+    // TODO: migrate it to use NodesConfiguration with switchable source
+    return test_->config_->getNodesConfigurationFromServerConfigSource();
   }
 
   NodeID getMyNodeID() const override {

@@ -303,8 +303,9 @@ class AppenderTest::TestCopySetSelectorDeps
     return this;
   }
 
-  std::shared_ptr<Configuration> getClusterConfig() const override {
-    return test_->config_.get();
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const override {
+    return test_->config_.getNodesConfiguration(test_->settings_);
   }
 
  private:

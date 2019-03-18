@@ -11,6 +11,7 @@
 #include "logdevice/common/ClusterState.h"
 #include "logdevice/common/HashBasedSequencerLocator.h"
 #include "logdevice/common/SequencerRouter.h"
+#include "logdevice/common/StaticSequencerLocator.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/settings/Settings.h"
@@ -29,6 +30,8 @@ class MockClusterState : public ClusterState {
 
 class MockSequencerRouter : public SequencerRouter {
  public:
+  // TODO T41319009: allow passing NodesConfiguration and make use of it
+  // in getNodesConfiguration()
   MockSequencerRouter(logid_t log_id,
                       Handler* handler,
                       std::shared_ptr<ServerConfig> config,
@@ -44,9 +47,12 @@ class MockSequencerRouter : public SequencerRouter {
 
   ~MockSequencerRouter() override {}
 
-  std::shared_ptr<ServerConfig> getServerConfig() const override {
-    return config_;
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const override {
+    // TODO: migrate it to use NodesConfiguration with switchable source
+    return config_->getNodesConfigurationFromServerConfigSource();
   }
+
   const Settings& getSettings() const override {
     return settings_;
   }
@@ -68,12 +74,14 @@ class MockSequencerRouter : public SequencerRouter {
 
 class MockHashBasedSequencerLocator : public HashBasedSequencerLocator {
  public:
+  // TODO T41319009: allow passing NodesConfiguration and make use of it
+  // in getNodesConfiguration()
   MockHashBasedSequencerLocator(
       std::shared_ptr<UpdateableServerConfig> server_config,
       ClusterState* cluster_state,
       std::shared_ptr<const Configuration> config,
       Settings settings = create_default_settings<Settings>())
-      : HashBasedSequencerLocator(server_config),
+      : HashBasedSequencerLocator(),
         settings_(settings),
         cluster_state_(cluster_state),
         config_(config) {}
@@ -90,6 +98,12 @@ class MockHashBasedSequencerLocator : public HashBasedSequencerLocator {
 
   const Settings& getSettings() const override {
     return settings_;
+  }
+
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const override {
+    return config_->serverConfig()
+        ->getNodesConfigurationFromServerConfigSource();
   }
 
  private:

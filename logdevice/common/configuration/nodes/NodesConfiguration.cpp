@@ -318,6 +318,45 @@ node_index_t NodesConfiguration::computeMaxNodeIndex() const {
   return res;
 }
 
+SequencersConfig NodesConfiguration::computeSequencersConfig() const {
+  // sequencersConfig_ needs consecutive node indexes, see comment in
+  // SequencersConfig.h.
+  // Pad with zero-weight invalid nodes if there are gaps in numbering.
+
+  // note: this is actually computed eariler in recomputeConfigMetadata(),
+  // however, do it again now for safety just in case people forget about
+  // such assupmption
+  SequencersConfig result;
+
+  // TODO T41571347 use max node id in sequencer membership instead of the
+  // max node id of the whole cluster
+  size_t max_node = computeMaxNodeIndex();
+  result.nodes.resize(max_node + 1);
+  result.weights.resize(max_node + 1);
+
+  const auto sequencer_membership = getSequencerMembership();
+  for (const auto node : *sequencer_membership) {
+    if (sequencer_membership->isSequencingEnabled(node)) {
+      result.nodes[node] = getNodeID(node);
+      result.weights[node] =
+          sequencer_membership->getNodeStatePtr(node)->weight;
+    }
+  }
+
+  // Scale all weights to the [0, 1] range. Note that increasing the maximum
+  // weight will cause all nodes' weights to change, possibly resulting in
+  // many sequencers being relocated.
+  auto max_it = std::max_element(result.weights.begin(), result.weights.end());
+  if (max_it != result.weights.end() && *max_it > 0) {
+    double max_weight = *max_it;
+    for (double& weight : result.weights) {
+      weight /= max_weight;
+    }
+  }
+
+  return result;
+}
+
 void NodesConfiguration::touch(std::string context) {
   version_ = MembershipVersion::Type(version_.val() + 1);
   last_change_timestamp_ = SystemTimestamp{std::chrono::system_clock::now()}
@@ -330,6 +369,7 @@ void NodesConfiguration::recomputeConfigMetadata() {
   storage_hash_ = computeStorageNodesHash();
   num_shards_ = computeNumShards();
   max_node_index_ = computeMaxNodeIndex();
+  sequencer_locator_config_ = computeSequencersConfig();
 
   addr_to_index_.clear();
 

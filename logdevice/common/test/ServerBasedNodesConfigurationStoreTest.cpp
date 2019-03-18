@@ -30,7 +30,7 @@ TEST(ServerBasedNodesConfigurationStoreTest, SuccessScenario) {
   Settings settings = create_default_settings<Settings>();
   settings.num_workers = 5;
   auto processor = make_test_processor(settings, std::move(updatable_config));
-  auto nc = processor->config_->getServerConfig()->getNodesConfiguration();
+  auto nc = processor->getNodesConfiguration();
   const std::string nc_str =
       NodesConfigurationCodecFlatBuffers::serialize(*nc, {false});
   auto nc_bumped = nc->withIncrementedVersionAndTimestamp();

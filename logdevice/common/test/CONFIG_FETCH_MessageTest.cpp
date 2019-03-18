@@ -98,7 +98,9 @@ struct CONFIG_FETCH_MessageMock : public CONFIG_FETCH_Message {
 
   std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() override {
-    return config->serverConfig()->getNodesConfiguration();
+    // TODO: migrate it to use NodesConfiguration with switchable source
+    return config->serverConfig()
+        ->getNodesConfigurationFromServerConfigSource();
   }
 
   int sendMessage(std::unique_ptr<CONFIG_CHANGED_Message> msg,
@@ -144,20 +146,23 @@ TEST(CONFIG_FETCH_MessageTest, OnReceivedNodesConfiguration) {
   config->serverConfig()->setMyNodeID(NodeID(2, 1));
   msg.config = config;
 
+  // TODO: migrate it to use NodesConfiguration with switchable source
   auto expected = std::make_unique<CONFIG_CHANGED_Message>(
       CONFIG_CHANGED_Header{
           Status::OK,
           request_id_t(4),
-          static_cast<uint64_t>(config->serverConfig()
-                                    ->getNodesConfiguration()
-                                    ->getLastChangeTimestamp()
-                                    .time_since_epoch()
-                                    .count()),
+          static_cast<uint64_t>(
+              config->serverConfig()
+                  ->getNodesConfigurationFromServerConfigSource()
+                  ->getLastChangeTimestamp()
+                  .time_since_epoch()
+                  .count()),
           1,
           NodeID(2, 1),
           CONFIG_CHANGED_Header::ConfigType::NODES_CONFIGURATION,
           CONFIG_CHANGED_Header::Action::CALLBACK},
-      serialize(config->serverConfig()->getNodesConfiguration()));
+      serialize(config->serverConfig()
+                    ->getNodesConfigurationFromServerConfigSource()));
 
   EXPECT_CALL(msg, sendMessage_(_, Address(NodeID(1, 1))))
       .WillOnce(
@@ -186,11 +191,12 @@ TEST(CONFIG_FETCH_MessageTest, OnReceivedNodesConfigurationConditional) {
       CONFIG_CHANGED_Header{
           Status::UPTODATE,
           request_id_t(4),
-          static_cast<uint64_t>(config->serverConfig()
-                                    ->getNodesConfiguration()
-                                    ->getLastChangeTimestamp()
-                                    .time_since_epoch()
-                                    .count()),
+          static_cast<uint64_t>(
+              config->serverConfig()
+                  ->getNodesConfigurationFromServerConfigSource()
+                  ->getLastChangeTimestamp()
+                  .time_since_epoch()
+                  .count()),
           1,
           NodeID(2, 1),
           CONFIG_CHANGED_Header::ConfigType::NODES_CONFIGURATION,

@@ -110,7 +110,10 @@ class CopySetSelectorTest : public ::testing::Test {
 
   size_t getClusterSize() const {
     // TODO: test non-consecutive node indexes
-    return config_->serverConfig()->getNodesConfiguration()->clusterSize();
+    // TODO: migrate it to use NodesConfiguration with switchable source
+    return config_->serverConfig()
+        ->getNodesConfigurationFromServerConfigSource()
+        ->clusterSize();
   }
 
   // helper functions

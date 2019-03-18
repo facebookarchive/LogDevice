@@ -39,8 +39,9 @@ RandomNodeSetSelector::randomlySelectNodes(logid_t log_id,
   }
 
   auto candidates = std::make_unique<StorageSet>();
+  // TODO: migrate it to use NodesConfiguration with switchable source
   const auto& nodes_configuration =
-      config->serverConfig()->getNodesConfiguration();
+      config->serverConfig()->getNodesConfigurationFromServerConfigSource();
   ld_check(nodes_configuration != nullptr);
   const auto& membership = nodes_configuration->getStorageMembership();
 
@@ -95,8 +96,9 @@ RandomNodeSetSelector::getStorageSetSize(logid_t log_id,
                                          const Options* /*options*/) {
   size_t storage_set_count = 0;
 
+  // TODO: migrate it to use NodesConfiguration with switchable source
   const auto& nodes_configuration =
-      cfg->serverConfig()->getNodesConfiguration();
+      cfg->serverConfig()->getNodesConfigurationFromServerConfigSource();
   ld_check(nodes_configuration != nullptr);
   const auto& membership = nodes_configuration->getStorageMembership();
 
@@ -144,8 +146,9 @@ RandomNodeSetSelector::getStorageSet(logid_t log_id,
     return res;
   }
 
+  // TODO: migrate it to use NodesConfiguration with switchable source
   const auto& nodes_configuration =
-      cfg->serverConfig()->getNodesConfiguration();
+      cfg->serverConfig()->getNodesConfigurationFromServerConfigSource();
   ld_check(nodes_configuration != nullptr);
   const size_t nodeset_size = getStorageSetSize(
       log_id, cfg, target_nodeset_size, replication_property, options);

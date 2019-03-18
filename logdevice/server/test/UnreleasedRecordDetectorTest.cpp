@@ -215,8 +215,7 @@ void UnreleasedRecordDetectorTest::SetUp() {
       socketPath, node->address, "host"));
 
   // do the same thing for NodesConfiguration
-  auto nodes_configuration =
-      config_->getServerConfig()->getNodesConfiguration();
+  auto nodes_configuration = config_->getNodesConfiguration(*usettings_->get());
   ASSERT_NE(nullptr, nodes_configuration);
   const auto* serv_disc = nodes_configuration->getNodeServiceDiscovery(0);
   ASSERT_NE(nullptr, serv_disc);

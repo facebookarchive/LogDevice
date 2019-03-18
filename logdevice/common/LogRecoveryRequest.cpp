@@ -854,7 +854,7 @@ void LogRecoveryRequest::sealLog() {
   ld_check(node_statuses_.empty());
 
   const auto& nodes_configuration =
-      config->serverConfig()->getNodesConfiguration();
+      Worker::onThisThread()->getNodesConfiguration();
   const auto& storage_membership = nodes_configuration->getStorageMembership();
 
   // send SEALs to nodes that belong to the union of all nodesets of

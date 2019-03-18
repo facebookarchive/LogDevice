@@ -171,6 +171,10 @@ class DataSizeRequest : public DistributedRequest,
 
   // ------------------  overridden in unit tests  ------------------
   virtual std::shared_ptr<ServerConfig> getConfig() const;
+
+  virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const;
+
   virtual void deleteThis();
   virtual std::unique_ptr<NodeSetFinder> makeNodeSetFinder();
   void initNodeSetFinder();

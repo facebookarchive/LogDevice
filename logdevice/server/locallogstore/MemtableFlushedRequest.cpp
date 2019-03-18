@@ -27,8 +27,8 @@ Request::Execution MemtableFlushedRequest::execute() {
 void MemtableFlushedRequest::broadcast() {
   auto config = getServerConfig();
 
-  const auto& nodes_config = config->getNodesConfiguration();
-  const auto& storage_membership = nodes_config->getStorageMembership();
+  const auto& nodes_configuration = getNodesConfiguration();
+  const auto& storage_membership = nodes_configuration->getStorageMembership();
 
   for (const node_index_t node : *storage_membership) {
     // current flexible log sharding is not supported in rebuilding, so
@@ -38,7 +38,7 @@ void MemtableFlushedRequest::broadcast() {
         responsibleForNodesUpdates(node)) {
       MEMTABLE_FLUSHED_Header header(
           flushToken_, server_instance_id_, shard_idx_, node_index_);
-      NodeID nodeId(node, nodes_config->getNodeGeneration(node));
+      NodeID nodeId(node, nodes_configuration->getNodeGeneration(node));
       auto msg = std::make_unique<MEMTABLE_FLUSHED_Message>(header);
       int rv = sender_->sendMessage(std::move(msg), nodeId);
       if (rv != 0) {
@@ -68,6 +68,12 @@ void MemtableFlushedRequest::applyFlush() {
 std::shared_ptr<ServerConfig> MemtableFlushedRequest::getServerConfig() {
   ServerWorker* w = ServerWorker::onThisThread();
   return w->getServerConfig();
+}
+
+std::shared_ptr<const configuration::nodes::NodesConfiguration>
+MemtableFlushedRequest::getNodesConfiguration() const {
+  const ServerWorker* w = ServerWorker::onThisThread();
+  return w->getNodesConfiguration();
 }
 
 int MemtableFlushedRequest::getThreadAffinity(int /*unused*/) {

@@ -57,8 +57,9 @@ CrossDomainCopySetSelector::CrossDomainCopySetSelector(
   local_domains_.fill(nullptr);
   const node_index_t my_index = cfg->getMyNodeID().index();
 
-  const auto* my_sd =
-      cfg->getNodesConfiguration()->getNodeServiceDiscovery(my_index);
+  // TODO: migrate it to use NodesConfiguration with switchable source
+  const auto* my_sd = cfg->getNodesConfigurationFromServerConfigSource()
+                          ->getNodeServiceDiscovery(my_index);
   if (my_sd == nullptr) {
     ld_error("This sequencer node (index %hd) for log %lu is no "
              "longer in config!",

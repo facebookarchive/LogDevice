@@ -24,6 +24,14 @@ struct SequencersConfig {
 
   // normalized weights of sequencer nodes
   std::vector<double> weights;
+
+  bool operator==(const SequencersConfig& rhs) const {
+    return nodes == rhs.nodes && weights == rhs.weights;
+  }
+
+  bool operator!=(const SequencersConfig& rhs) const {
+    return !(*this == rhs);
+  }
 };
 
 }}} // namespace facebook::logdevice::configuration

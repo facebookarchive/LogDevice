@@ -430,6 +430,9 @@ class Processor : public folly::enable_shared_from_this<Processor> {
   std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfigurationFromNCMSource() const;
 
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfigurationFromServerConfigSource() const;
+
   /**
    * @return  NodesConfiguraton object of the cluster, depending on
    *          processor settings, the source can be server config or NCM.
@@ -592,11 +595,11 @@ class Processor : public folly::enable_shared_from_this<Processor> {
     return name_;
   }
 
-  UpdateableSettings<Settings> updateableSettings() {
+  UpdateableSettings<Settings> updateableSettings() const {
     return settings_;
   }
 
-  std::shared_ptr<const Settings> settings() {
+  std::shared_ptr<const Settings> settings() const {
     return settings_.get();
   }
 

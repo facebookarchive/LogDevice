@@ -265,6 +265,9 @@ class Worker : public EventLoop {
   std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfigurationFromNCMSource() const;
 
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfigurationFromServerConfigSource() const;
+
   /**
    * @return logs configuration object cached on this Worker and
    *         auto updated

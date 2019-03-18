@@ -31,7 +31,9 @@ int MyNodeID::calculateFromTcpPort(const ServerConfig& config, NodeID& out) {
     freeifaddrs(ifaddr);
   };
 
-  const auto& nodes_configuration = config.getNodesConfiguration();
+  // TODO: migrate it to use NodesConfiguration with switchable source
+  const auto& nodes_configuration =
+      config.getNodesConfigurationFromServerConfigSource();
   ld_check(nodes_configuration != nullptr);
   const auto& sd_config = nodes_configuration->getServiceDiscovery();
 
@@ -66,7 +68,9 @@ int MyNodeID::calculateFromTcpPort(const ServerConfig& config, NodeID& out) {
 }
 
 int MyNodeID::calculateFromUnixSocket(const ServerConfig& config, NodeID& out) {
-  const auto& nodes_configuration = config.getNodesConfiguration();
+  // TODO: migrate it to use NodesConfiguration with switchable source
+  const auto& nodes_configuration =
+      config.getNodesConfigurationFromServerConfigSource();
   ld_check(nodes_configuration != nullptr);
   const auto& sd_config = nodes_configuration->getServiceDiscovery();
 

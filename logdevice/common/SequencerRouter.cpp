@@ -187,8 +187,9 @@ void SequencerRouter::onRedirected(NodeID from, NodeID to, Status status) {
     }
   }
 
-  const int limit =
-      std::max<size_t>(10, 3 * getServerConfig()->getSequencers().nodes.size());
+  const int limit = std::max<size_t>(
+      10, 3 * getNodesConfiguration()->getSequencersConfig().nodes.size());
+
   if (attempts_ > limit) {
     RATELIMIT_WARNING(std::chrono::seconds(1),
                       1,
@@ -503,7 +504,7 @@ void SequencerRouter::sendTo(NodeID dest, flags_t flags) {
 bool SequencerRouter::blacklist(NodeID node) {
   if (!sequencers_.hasValue()) {
     // make a copy of the sequencer list from the cluster config
-    sequencers_ = getServerConfig()->getSequencers();
+    sequencers_ = getNodesConfiguration()->getSequencersConfig();
   }
 
   ServerConfig::SequencersConfig& cfg = sequencers_.value();
@@ -530,8 +531,9 @@ bool SequencerRouter::blacklist(NodeID node) {
   return true;
 }
 
-std::shared_ptr<ServerConfig> SequencerRouter::getServerConfig() const {
-  return Worker::onThisThread()->getConfig()->serverConfig();
+std::shared_ptr<const configuration::nodes::NodesConfiguration>
+SequencerRouter::getNodesConfiguration() const {
+  return Worker::onThisThread()->getNodesConfiguration();
 }
 
 const Settings& SequencerRouter::getSettings() const {

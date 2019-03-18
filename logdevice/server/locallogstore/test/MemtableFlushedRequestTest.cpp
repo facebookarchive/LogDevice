@@ -66,6 +66,12 @@ class MockMemtableFlushedRequest : public MemtableFlushedRequest {
     return test_->config;
   }
 
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const override {
+    // TODO: migrate it to use NodesConfiguration with switchable source
+    return test_->config->getNodesConfigurationFromServerConfigSource();
+  }
+
   bool responsibleForNodesUpdates(node_index_t /*unused*/) override {
     return true;
   }

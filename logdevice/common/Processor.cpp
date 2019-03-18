@@ -126,14 +126,14 @@ void settingsUpdated(const UpdateableSettings<Settings>& settings) {
 
 std::unique_ptr<SequencerLocator>
 get_sequencer_locator(std::shared_ptr<PluginRegistry> plugin_registry,
-                      const std ::shared_ptr<UpdateableConfig>& config) {
+                      std ::shared_ptr<UpdateableConfig> config,
+                      UpdateableSettings<Settings> settings) {
   auto plugin = plugin_registry->getSinglePlugin<SequencerLocatorFactory>(
       PluginType::SEQUENCER_LOCATOR_FACTORY);
   if (plugin) {
-    return (*plugin)(config);
+    return (*plugin)(std::move(config), std::move(settings));
   } else {
-    return std::make_unique<HashBasedSequencerLocator>(
-        config->updateableServerConfig());
+    return std::make_unique<HashBasedSequencerLocator>();
   }
 }
 
@@ -154,7 +154,8 @@ Processor::Processor(std::shared_ptr<UpdateableConfig> updateable_config,
       plugin_registry_(std::move(plugin_registry)),
       stats_(stats),
       impl_(new ProcessorImpl(this, settings)),
-      sequencer_locator_(get_sequencer_locator(plugin_registry_, config_)),
+      sequencer_locator_(
+          get_sequencer_locator(plugin_registry_, config_, settings_)),
       conn_budget_incoming_(settings_->max_incoming_connections),
       conn_budget_backlog_(settings_->connection_backlog),
       conn_budget_external_(settings_->max_external_connections),
@@ -460,18 +461,18 @@ void Processor::setNodesConfigurationManager(
 }
 
 std::shared_ptr<const configuration::nodes::NodesConfiguration>
-Processor::getNodesConfigurationFromNCMSource() const {
-  return config_->getNodesConfiguration();
+Processor::getNodesConfiguration() const {
+  return config_->getNodesConfiguration(*settings());
 }
 
 std::shared_ptr<const configuration::nodes::NodesConfiguration>
-Processor::getNodesConfiguration() const {
-  if (settings_->enable_nodes_configuration_manager &&
-      settings_->use_nodes_configuration_manager_nodes_configuration) {
-    return getNodesConfigurationFromNCMSource();
-  }
+Processor::getNodesConfigurationFromNCMSource() const {
+  return config_->getNodesConfigurationFromNCMSource();
+}
 
-  return config_->getServerConfig()->getNodesConfiguration();
+std::shared_ptr<const configuration::nodes::NodesConfiguration>
+Processor::getNodesConfigurationFromServerConfigSource() const {
+  return config_->getNodesConfigurationFromServerConfigSource();
 }
 
 configuration::nodes::NodesConfigurationManager*

@@ -214,25 +214,28 @@ TEST(ConfigurationTest, SimpleValid) {
   ASSERT_EQ(5, nodes.size());
 
   // N0 and N5 are sequencer nodes. The list of sequencers is padded to size 43.
-  EXPECT_EQ(43, config->serverConfig()->getSequencers().nodes.size());
-  EXPECT_EQ(43, config->serverConfig()->getSequencers().weights.size());
+  const auto& seq_locator_config =
+      config->serverConfig()
+          ->getNodesConfigurationFromServerConfigSource()
+          ->getSequencersConfig();
+  EXPECT_EQ(43, seq_locator_config.nodes.size());
+  EXPECT_EQ(43, seq_locator_config.weights.size());
   for (int i = 0; i <= 42; ++i) {
     if (i == 0) {
-      EXPECT_EQ(NodeID(0, 3), config->serverConfig()->getSequencers().nodes[i]);
-      EXPECT_EQ(1, config->serverConfig()->getSequencers().weights[i]);
+      EXPECT_EQ(NodeID(0, 3), seq_locator_config.nodes[i]);
+      EXPECT_EQ(1, seq_locator_config.weights[i]);
     } else if (i == 5) {
-      EXPECT_EQ(NodeID(5, 2), config->serverConfig()->getSequencers().nodes[i]);
-      EXPECT_EQ(1, config->serverConfig()->getSequencers().weights[i]);
+      EXPECT_EQ(NodeID(5, 2), seq_locator_config.nodes[i]);
+      EXPECT_EQ(1, seq_locator_config.weights[i]);
     } else if (i == 6) {
-      EXPECT_EQ(NodeID(6, 2), config->serverConfig()->getSequencers().nodes[i]);
-      EXPECT_EQ(1, config->serverConfig()->getSequencers().weights[i]);
+      EXPECT_EQ(NodeID(6, 2), seq_locator_config.nodes[i]);
+      EXPECT_EQ(1, seq_locator_config.weights[i]);
     } else if (i == 42) {
-      EXPECT_EQ(
-          NodeID(42, 5), config->serverConfig()->getSequencers().nodes[i]);
-      EXPECT_EQ(1, config->serverConfig()->getSequencers().weights[i]);
+      EXPECT_EQ(NodeID(42, 5), seq_locator_config.nodes[i]);
+      EXPECT_EQ(1, seq_locator_config.weights[i]);
     } else {
-      EXPECT_EQ(NodeID(), config->serverConfig()->getSequencers().nodes[i]);
-      EXPECT_EQ(0, config->serverConfig()->getSequencers().weights[i]);
+      EXPECT_EQ(NodeID(), seq_locator_config.nodes[i]);
+      EXPECT_EQ(0, seq_locator_config.weights[i]);
     }
   }
 
@@ -1469,7 +1472,9 @@ TEST(ConfigurationTest, SequencerWeights) {
   ASSERT_NE(nullptr, config.get());
   ASSERT_EQ(4, config->serverConfig()->getNodes().size());
 
-  auto& seq_config = config->serverConfig()->getSequencers();
+  const auto& seq_config = config->serverConfig()
+                               ->getNodesConfigurationFromServerConfigSource()
+                               ->getSequencersConfig();
 
   // check padded node IDs
   EXPECT_EQ(

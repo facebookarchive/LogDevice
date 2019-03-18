@@ -62,6 +62,11 @@ std::shared_ptr<ServerConfig> DataSizeRequest::getConfig() const {
   return Worker::onThisThread()->getConfig()->serverConfig();
 }
 
+std::shared_ptr<const configuration::nodes::NodesConfiguration>
+DataSizeRequest::getNodesConfiguration() const {
+  return Worker::onThisThread()->getNodesConfiguration();
+}
+
 std::unique_ptr<NodeSetFinder> DataSizeRequest::makeNodeSetFinder() {
   return std::make_unique<NodeSetFinder>(
       log_id_,
@@ -215,7 +220,7 @@ void DataSizeRequest::start(Status status) {
 }
 
 StorageSetAccessor::SendResult DataSizeRequest::sendTo(ShardID shard) {
-  const auto& nodes_configuration = getConfig()->getNodesConfiguration();
+  const auto& nodes_configuration = getNodesConfiguration();
   if (!nodes_configuration->isNodeInServiceDiscoveryConfig(shard.node())) {
     ld_error("Cannot find node at index %u", shard.node());
     return {StorageSetAccessor::Result::PERMANENT_ERROR, Status::NOTFOUND};

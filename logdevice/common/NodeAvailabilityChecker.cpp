@@ -25,10 +25,8 @@ NodeAvailabilityChecker::checkNode(NodeSetState* nodeset_state,
                                    bool ignore_nodeset_state,
                                    bool allow_unencrypted_connections) const {
   ld_check(destination_out != nullptr);
-  const auto& storage_membership = getClusterConfig()
-                                       ->serverConfig()
-                                       ->getNodesConfiguration()
-                                       ->getStorageMembership();
+  const auto& storage_membership =
+      getNodesConfiguration()->getStorageMembership();
   if (!storage_membership->hasShard(shard)) {
     // shard is no longer in the membership
     return NodeStatus::NOT_AVAILABLE;
@@ -160,9 +158,9 @@ NodeAvailabilityChecker::getGraylistedNodes() const {
   return Worker::onThisThread()->getGraylistedNodes();
 }
 
-std::shared_ptr<Configuration>
-NodeAvailabilityChecker::getClusterConfig() const {
-  return Worker::getConfig();
+std::shared_ptr<const configuration::nodes::NodesConfiguration>
+NodeAvailabilityChecker::getNodesConfiguration() const {
+  return Worker::onThisThread()->getNodesConfiguration();
 }
 
 int NodeAvailabilityChecker::connect(NodeID nid, bool allow_unencrypted) const {

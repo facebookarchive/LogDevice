@@ -88,8 +88,9 @@ class NodeAvailabilityChecker {
 
   virtual const std::unordered_set<node_index_t>& getGraylistedNodes() const;
 
-  // get the Configuration of the cluster. override in tests
-  virtual std::shared_ptr<Configuration> getClusterConfig() const;
+  // get the NodesConfiguration of the cluster. override in tests
+  virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const;
 
   // Proxy for Sender::connect(). override in tests
   virtual int connect(NodeID nid, bool allow_unencrypted) const;

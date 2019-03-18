@@ -245,17 +245,17 @@ std::shared_ptr<ServerConfig> Worker::getServerConfig() const {
 
 std::shared_ptr<const configuration::nodes::NodesConfiguration>
 Worker::getNodesConfiguration() const {
-  if (settings().enable_nodes_configuration_manager &&
-      settings().use_nodes_configuration_manager_nodes_configuration) {
-    return getNodesConfigurationFromNCMSource();
-  }
-
-  return getServerConfig()->getNodesConfiguration();
+  return config_->getNodesConfiguration(settings());
 }
 
 std::shared_ptr<const configuration::nodes::NodesConfiguration>
 Worker::getNodesConfigurationFromNCMSource() const {
-  return config_->getNodesConfiguration();
+  return config_->getNodesConfigurationFromNCMSource();
+}
+
+std::shared_ptr<const configuration::nodes::NodesConfiguration>
+Worker::getNodesConfigurationFromServerConfigSource() const {
+  return config_->getNodesConfigurationFromServerConfigSource();
 }
 
 std::shared_ptr<LogsConfig> Worker::getLogsConfig() const {

@@ -150,11 +150,9 @@ bool ServerParameters::setConnectionLimits() {
     return true;
   }
 
-  auto config = updateable_config_->get();
   std::shared_ptr<const Settings> settings = processor_settings_.get();
-
   const size_t nodes =
-      config->serverConfig()->getNodesConfiguration()->clusterSize();
+      updateable_config_->getNodesConfiguration(*settings)->clusterSize();
   const size_t workers = settings->num_workers;
 
   const int available =
@@ -286,6 +284,8 @@ ServerParameters::ServerParameters(
     if (!initNodesConfiguration()) {
       throw ConstructorFailed();
     }
+    ld_check(updateable_config_->getNodesConfigurationFromNCMSource() !=
+             nullptr);
   }
 
   if (updateable_logs_config->get() == nullptr) {
@@ -652,8 +652,8 @@ bool Server::initProcessor() {
       // ServerConfig.
       auto my_node_id = updateable_config_->getServerConfig()->getMyNodeID();
       auto node_svc_discovery =
-          updateable_config_->getNodesConfiguration()->getNodeServiceDiscovery(
-              my_node_id);
+          updateable_config_->getNodesConfigurationFromNCMSource()
+              ->getNodeServiceDiscovery(my_node_id);
       if (node_svc_discovery == nullptr) {
         ld_critical(
             "NodeID '%s' doesn't exist in the NodesConfiguration of %s",
@@ -675,7 +675,8 @@ bool Server::initProcessor() {
         throw ConstructorFailed();
       }
 
-      auto initial_nc = processor_->config_->getNodesConfiguration();
+      auto initial_nc =
+          processor_->config_->getNodesConfigurationFromNCMSource();
       if (!initial_nc) {
         // Currently this should only happen in tests as our boostrapping
         // workflow should always ensure the Processor has a valid

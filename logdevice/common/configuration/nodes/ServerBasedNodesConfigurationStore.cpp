@@ -101,10 +101,11 @@ void ServerBasedNodesConfigurationStore::getConfig(
   // even in the special bootstrapping processor
   std::unique_ptr<Request> rq =
       std::make_unique<NodesConfigurationOneTimePollRequest>(
-          genPollerOptions(NodesConfigurationPoller::Poller::Mode::ONE_TIME,
-                           *worker->processor_->settings(),
-                           *worker->processor_->config_->getServerConfig()
-                                ->getNodesConfiguration()),
+          genPollerOptions(
+              NodesConfigurationPoller::Poller::Mode::ONE_TIME,
+              *worker->processor_->settings(),
+              *worker->processor_->config_->getServerConfig()
+                   ->getNodesConfigurationFromServerConfigSource()),
           std::move(callback));
   worker->processor_->postRequest(rq);
 }

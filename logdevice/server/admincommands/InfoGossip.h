@@ -60,9 +60,8 @@ class InfoGossip : public AdminCommand {
       return obj;
     }
 
-    auto conf = server_->getParameters()->getUpdateableConfig()->get();
     const auto& nodes_configuration =
-        conf->serverConfig()->getNodesConfiguration();
+        server_->getProcessor()->getNodesConfiguration();
 
     node_index_t lo = 0;
     node_index_t hi = nodes_configuration->getMaxNodeIndex();
@@ -77,7 +76,6 @@ class InfoGossip : public AdminCommand {
     }
 
     auto cs = server_->getProcessor()->cluster_state_.get();
-    auto config = conf->serverConfig();
     auto& states = obj["states"] = folly::dynamic::array;
     for (node_index_t idx = lo; idx <= hi; ++idx) {
       if (!nodes_configuration->isNodeInServiceDiscoveryConfig(idx)) {
@@ -109,9 +107,8 @@ class InfoGossip : public AdminCommand {
       return;
     }
 
-    auto conf = server_->getParameters()->getUpdateableConfig()->get();
     const auto& nodes_configuration =
-        conf->serverConfig()->getNodesConfiguration();
+        server_->getProcessor()->getNodesConfiguration();
 
     node_index_t lo = 0;
     node_index_t hi = nodes_configuration->getMaxNodeIndex();
@@ -125,7 +122,6 @@ class InfoGossip : public AdminCommand {
     }
 
     auto cs = server_->getProcessor()->cluster_state_.get();
-    auto config = conf->serverConfig();
     for (node_index_t idx = lo; idx <= hi; ++idx) {
       if (!nodes_configuration->isNodeInServiceDiscoveryConfig(idx)) {
         continue;

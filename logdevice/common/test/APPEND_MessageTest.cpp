@@ -381,7 +381,7 @@ class MockAppenderPrep : public AppenderPrep {
 int MockSequencerLocator::locateSequencer(
     logid_t logid,
     Completion cf,
-    const ServerConfig::SequencersConfig*) {
+    const configuration::SequencersConfig*) {
   NodeID node_out;
   if (appender_prep_.getSequencerNode(logid, &node_out) == 0) {
     cf(E::OK, logid, node_out);

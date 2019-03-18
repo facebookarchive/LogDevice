@@ -13,6 +13,7 @@
 #include "logdevice/common/configuration/MetaDataLogsConfig.h"
 #include "logdevice/common/configuration/Node.h"
 #include "logdevice/common/configuration/NodesConfig.h"
+#include "logdevice/common/configuration/ServerConfig.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationCodecFlatBuffers.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/membership/utils.h"
@@ -290,7 +291,8 @@ bool NodesConfigLegacyConverter::testWithServerConfig(
               .count(),
           server_config.getClusterName().c_str());
 
-  auto new_nodes_config = server_config.getNodesConfiguration();
+  auto new_nodes_config =
+      server_config.getNodesConfigurationFromServerConfigSource();
   ld_check(new_nodes_config != nullptr);
 
   if (new_nodes_config->getStorageNodesHash() !=
@@ -328,6 +330,13 @@ bool NodesConfigLegacyConverter::testWithServerConfig(
              "%s, new: %s.",
              toString(server_config.getAddrToIndex()).c_str(),
              toString(new_nodes_config->addr_to_index_).c_str());
+    return false;
+  }
+
+  if (new_nodes_config->getSequencersConfig() !=
+      server_config.getSequencers_DEPRECATED()) {
+    ld_error(
+        "Sequencer config does not match b/w new NC and legacy server config!");
     return false;
   }
 
@@ -380,7 +389,8 @@ bool NodesConfigLegacyConverter::testWithServerConfig(
 bool NodesConfigLegacyConverter::testSerialization(
     const ServerConfig& server_config,
     bool compress) {
-  auto nodes_config = server_config.getNodesConfiguration();
+  auto nodes_config =
+      server_config.getNodesConfigurationFromServerConfigSource();
   ld_check(nodes_config != nullptr);
 
   auto serialization_start_time = std::chrono::steady_clock::now();

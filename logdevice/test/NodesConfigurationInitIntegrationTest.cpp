@@ -33,7 +33,7 @@ TEST_F(NodesConfigurationInitIntegrationTest, SuccessScenario) {
     auto client = cluster->createIndependentClient();
     auto client_impl = dynamic_cast<ClientImpl*>(client.get());
     auto config = client_impl->getConfig();
-    EXPECT_EQ(nullptr, config->getNodesConfiguration());
+    EXPECT_EQ(nullptr, config->getNodesConfigurationFromNCMSource());
   }
 
   {
@@ -46,7 +46,7 @@ TEST_F(NodesConfigurationInitIntegrationTest, SuccessScenario) {
         getDefaultTestTimeout(), std::move(settings));
     auto client_impl = dynamic_cast<ClientImpl*>(client.get());
     auto config = client_impl->getConfig();
-    auto nodes_cfg = config->getNodesConfiguration();
+    auto nodes_cfg = config->getNodesConfigurationFromNCMSource();
     ASSERT_NE(nullptr, nodes_cfg);
     EXPECT_EQ(get_protocol_addr(0),
               nodes_cfg->getNodeServiceDiscovery(0)->address.toString());

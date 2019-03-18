@@ -11,6 +11,7 @@
 
 #include "logdevice/common/configuration/LocalLogsConfig.h"
 #include "logdevice/common/configuration/nodes/NodesConfiguration.h"
+#include "logdevice/common/settings/Settings.h"
 
 namespace facebook { namespace logdevice {
 
@@ -72,6 +73,15 @@ std::shared_ptr<configuration::LocalLogsConfig>
 UpdateableConfig::getLocalLogsConfig() const {
   return checked_downcast<std::shared_ptr<configuration::LocalLogsConfig>>(
       updateable_logs_config_->get());
+}
+
+std::shared_ptr<const configuration::nodes::NodesConfiguration>
+UpdateableConfig::getNodesConfiguration(const Settings& settings) const {
+  if (settings.enable_nodes_configuration_manager &&
+      settings.use_nodes_configuration_manager_nodes_configuration) {
+    return getNodesConfigurationFromNCMSource();
+  }
+  return getNodesConfigurationFromServerConfigSource();
 }
 
 std::shared_ptr<UpdateableConfig> UpdateableConfig::createEmpty() {

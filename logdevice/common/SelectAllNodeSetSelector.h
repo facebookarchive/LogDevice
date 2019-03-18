@@ -49,8 +49,9 @@ class SelectAllNodeSetSelector : public NodeSetSelector {
       return res;
     }
 
+    // TODO: migrate it to use NodesConfiguration with switchable source
     const auto& nodes_configuration =
-        cfg->serverConfig()->getNodesConfiguration();
+        cfg->serverConfig()->getNodesConfigurationFromServerConfigSource();
     ld_check(nodes_configuration != nullptr);
 
     const auto& membership = nodes_configuration->getStorageMembership();

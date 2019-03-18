@@ -21,8 +21,10 @@ namespace facebook { namespace logdevice {
 static StorageSet
 getWritableShards(const StorageSet& ns,
                   const std::shared_ptr<ServerConfig> config) {
-  return config->getNodesConfiguration()->getStorageMembership()->writerView(
-      ns);
+  // TODO: migrate it to use NodesConfiguration with switchable source
+  return config->getNodesConfigurationFromServerConfigSource()
+      ->getStorageMembership()
+      ->writerView(ns);
 }
 
 std::unique_ptr<CopySetSelector>

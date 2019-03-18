@@ -167,8 +167,9 @@ ServerConfig::fromJson(const folly::dynamic& parsed) {
                          ns_delimiter);
 
   config->setVersion(version);
-  ld_check_eq(membership::MembershipVersion::Type(config->getVersion().val()),
-              config->getNodesConfiguration()->getVersion());
+  ld_check_eq(
+      membership::MembershipVersion::Type(config->getVersion().val()),
+      config->getNodesConfigurationFromServerConfigSource()->getVersion());
   return config;
 }
 
@@ -386,8 +387,9 @@ ServerConfig::fromDataTest(std::string cluster_name,
                        std::move(customFields),
                        ns_delimiter));
 
-  ld_check_eq(membership::MembershipVersion::Type(config->getVersion().val()),
-              config->getNodesConfiguration()->getVersion());
+  ld_check_eq(
+      membership::MembershipVersion::Type(config->getVersion().val()),
+      config->getNodesConfigurationFromServerConfigSource()->getVersion());
   return config;
 }
 

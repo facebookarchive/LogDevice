@@ -12,11 +12,9 @@ namespace facebook { namespace logdevice {
 
 Request::Execution LocateSequencerRequest::execute() {
   Worker* w = Worker::onThisThread();
-  const ServerConfig::SequencersConfig& sequencers =
-      w->getConfig()->serverConfig()->getSequencers();
   SequencerLocator& seqlocator = *(w->processor_->sequencer_locator_);
 
-  seqlocator.locateSequencer(log_, *cb_, &sequencers);
+  seqlocator.locateSequencer(log_, *cb_);
   return Execution::COMPLETE;
 }
 

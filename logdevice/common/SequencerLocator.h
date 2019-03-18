@@ -12,7 +12,7 @@
 
 #include "logdevice/common/CompletionRequest.h"
 #include "logdevice/common/NodeID.h"
-#include "logdevice/common/configuration/ServerConfig.h"
+#include "logdevice/common/configuration/SequencersConfig.h"
 #include "logdevice/include/types.h"
 
 /**
@@ -83,7 +83,7 @@ class SequencerLocator {
   virtual int locateSequencer(
       logid_t logid,
       Completion cf,
-      const ServerConfig::SequencersConfig* sequencers = nullptr) = 0;
+      const configuration::SequencersConfig* sequencers = nullptr) = 0;
 
   /**
    * Can upper layers cache results returned by locateSequencer() and bypass

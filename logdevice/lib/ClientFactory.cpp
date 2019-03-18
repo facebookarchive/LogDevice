@@ -197,7 +197,7 @@ std::shared_ptr<Client> ClientFactory::create(std::string config_url) noexcept {
     if (!success) {
       return nullptr;
     }
-    ld_check(config->getNodesConfiguration() != nullptr);
+    ld_check(config->getNodesConfigurationFromNCMSource() != nullptr);
   }
 
   if (!validateSSLSettings(

@@ -185,8 +185,10 @@ class ServerConfig {
 
   /**
    * Returns a description of sequencer nodes in the cluster.
+   * NOTE: being DEPRECATED. Use NodesConfiguration::getSequencersConfig()
+   * instead.
    */
-  const SequencersConfig& getSequencers() const {
+  const SequencersConfig& getSequencers_DEPRECATED() const {
     return sequencersConfig_;
   }
 
@@ -377,10 +379,11 @@ class ServerConfig {
 
   /**
    * Get the new representation of cluster nodes (i.e. NodesConfiguration
-   * class).
+   * class). reiterate the _FromServerConfigSource_ part to avoid confusion
+   * during NodesConfiguration migration.
    */
   const std::shared_ptr<const NodesConfiguration>&
-  getNodesConfiguration() const {
+  getNodesConfigurationFromServerConfigSource() const {
     return nodesConfig_.getNodesConfiguration();
   }
 

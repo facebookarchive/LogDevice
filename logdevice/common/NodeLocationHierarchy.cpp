@@ -24,7 +24,9 @@ NodeLocationHierarchy::Domain::Domain(NodeLocationScope scope, Domain* parent)
 NodeLocationHierarchy::NodeLocationHierarchy(std::shared_ptr<ServerConfig> cfg,
                                              const StorageSet& indices)
     : root_(NodeLocationScope::ROOT, nullptr) {
-  const auto& nodes_configuration = cfg->getNodesConfiguration();
+  // TODO: migrate it to use NodesConfiguration with switchable source
+  const auto& nodes_configuration =
+      cfg->getNodesConfigurationFromServerConfigSource();
   for (const ShardID i : indices) {
     const auto* node_sd =
         nodes_configuration->getNodeServiceDiscovery(i.node());

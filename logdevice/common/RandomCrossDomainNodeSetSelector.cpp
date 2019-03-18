@@ -35,7 +35,9 @@ int RandomCrossDomainNodeSetSelector::buildDomainMap(
 
   map->clear();
 
-  const auto& nodes_configuration = cfg->getNodesConfiguration();
+  // TODO: migrate it to use NodesConfiguration with switchable source
+  const auto& nodes_configuration =
+      cfg->getNodesConfigurationFromServerConfigSource();
   ld_check(nodes_configuration != nullptr);
   const auto& membership = nodes_configuration->getStorageMembership();
 

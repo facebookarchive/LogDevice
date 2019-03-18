@@ -29,9 +29,7 @@ namespace facebook { namespace logdevice {
 
 class HashBasedSequencerLocator : public SequencerLocator {
  public:
-  explicit HashBasedSequencerLocator(
-      std::shared_ptr<UpdateableServerConfig> config)
-      : updateable_server_config_(std::move(config)), holder_(this) {}
+  explicit HashBasedSequencerLocator() : holder_(this) {}
 
   ~HashBasedSequencerLocator() override {}
 
@@ -61,11 +59,11 @@ class HashBasedSequencerLocator : public SequencerLocator {
   // Used in tests.
   static int locateSequencer(
       logid_t log_id,
-      const ServerConfig* config,
+      const configuration::nodes::NodesConfiguration* nodes_configuration,
       const logsconfig::LogAttributes* log_attrs, // if null, no affinity
       ClusterState* cs, // if null, all nodes considered available
       NodeID* out_sequencer,
-      const ServerConfig::SequencersConfig* sequencers = nullptr);
+      const configuration::SequencersConfig* sequencers = nullptr);
 
   bool isAllowedToCache() const override;
 
@@ -73,9 +71,10 @@ class HashBasedSequencerLocator : public SequencerLocator {
   virtual ClusterState* getClusterState() const;
   virtual std::shared_ptr<const Configuration> getConfig() const;
   virtual const Settings& getSettings() const;
+  virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const;
 
  private:
-  std::shared_ptr<UpdateableServerConfig> updateable_server_config_;
   WeakRefHolder<HashBasedSequencerLocator> holder_;
 };
 

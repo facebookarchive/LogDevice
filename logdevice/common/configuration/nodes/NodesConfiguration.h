@@ -8,6 +8,7 @@
 #pragma once
 
 #include "logdevice/common/Timestamp.h"
+#include "logdevice/common/configuration/SequencersConfig.h"
 #include "logdevice/common/configuration/nodes/MetaDataLogsReplication.h"
 #include "logdevice/common/configuration/nodes/SequencerConfig.h"
 #include "logdevice/common/configuration/nodes/ServiceDiscoveryConfig.h"
@@ -163,6 +164,10 @@ class NodesConfiguration {
     return max_node_index_;
   }
 
+  const SequencersConfig& getSequencersConfig() const {
+    return sequencer_locator_config_;
+  }
+
   // TODO(T33035439): this should only be used in migration or emergency. Config
   // version bump should be automatically handled through Update.
   void setVersion(membership::MembershipVersion::Type version) {
@@ -225,6 +230,13 @@ class NodesConfiguration {
   shard_size_t num_shards_{};
   node_index_t max_node_index_{};
 
+  // SeqeuncersConfig is the current data structure used by SequencerLocator and
+  // sequencer routing logic. It is derived from sequencer membership and
+  // refreshed when the config is updated.
+  // TODO T41571347: use SequencerMembership instead of SequencersConfig in
+  // sequencer locator / routing / placement logic and get rid of this field
+  SequencersConfig sequencer_locator_config_;
+
   // mapping from node address to the index
   // TODO(T33035439): get rid of this on config sync revamp
   std::unordered_map<Sockaddr, node_index_t, Sockaddr::Hash> addr_to_index_{};
@@ -239,6 +251,7 @@ class NodesConfiguration {
   uint64_t computeStorageNodesHash() const;
   shard_size_t computeNumShards() const;
   node_index_t computeMaxNodeIndex() const;
+  SequencersConfig computeSequencersConfig() const;
 
   // recompute configuration metadata (e.g., storage_hash_, num_shards_, and
   // addr_to_index_) from each sub-configuration, note that version, timestamp,

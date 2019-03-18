@@ -22,6 +22,8 @@ namespace configuration {
 class LocalLogsConfig;
 }
 
+struct Settings;
+
 /**
  * UpdateableConfiguration is a proxy class for independent UpdateableConfigs.
  *
@@ -68,9 +70,24 @@ class UpdateableConfig : public configuration::UpdateableConfigBase {
   std::shared_ptr<ZookeeperConfig> getZookeeperConfig() const {
     return updateable_zookeeper_config_->get();
   }
-  std::shared_ptr<const NodesConfiguration> getNodesConfiguration() const {
+
+  /**
+   * @return  NodesConfiguraton object, depending on the given settings, the
+   *          source can be from ServerConfig or NCM.
+   */
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration(const Settings&) const;
+
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfigurationFromNCMSource() const {
     return updateable_nodes_configuration_->get();
   }
+
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfigurationFromServerConfigSource() const {
+    return getServerConfig()->getNodesConfigurationFromServerConfigSource();
+  }
+
   std::shared_ptr<configuration::LocalLogsConfig> getLocalLogsConfig() const;
   std::shared_ptr<UpdateableServerConfig> updateableServerConfig() const {
     return updateable_server_config_;
@@ -95,9 +112,8 @@ class UpdateableConfig : public configuration::UpdateableConfigBase {
   std::shared_ptr<UpdateableServerConfig> updateable_server_config_;
   std::shared_ptr<UpdateableLogsConfig> updateable_logs_config_;
   std::shared_ptr<UpdateableZookeeperConfig> updateable_zookeeper_config_;
-  // Placeholder, pending separation of NodesConfig out of ServerConfig.
-  // Currently only interacts with NodesConfigurationManager and otherwise
-  // unused.
+
+  // Populated by NCM, pending separation of NodesConfig out of ServerConfig.
   std::shared_ptr<UpdateableNodesConfiguration> updateable_nodes_configuration_;
 
   ConfigSubscriptionHandle server_config_subscription_;

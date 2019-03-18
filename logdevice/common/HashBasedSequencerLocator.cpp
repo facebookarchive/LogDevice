@@ -17,7 +17,7 @@ namespace facebook { namespace logdevice {
 int HashBasedSequencerLocator::locateSequencer(
     logid_t log_id,
     Completion cf,
-    const ServerConfig::SequencersConfig* sequencers) {
+    const configuration::SequencersConfig* sequencers) {
   if (!getSettings().use_sequencer_affinity) {
     locateContinuation(log_id, cf, sequencers, nullptr);
     return 0;
@@ -51,14 +51,14 @@ int HashBasedSequencerLocator::locateSequencer(
 void HashBasedSequencerLocator::locateContinuation(
     logid_t log_id,
     Completion cf,
-    const ServerConfig::SequencersConfig* sequencers,
+    const configuration::SequencersConfig* sequencers,
     const logsconfig::LogAttributes* log_attrs) {
-  auto config = updateable_server_config_->get();
+  auto nodes_configuration = getNodesConfiguration();
   auto cs = getClusterState();
   ld_check(cs);
   NodeID res;
-  auto rv =
-      locateSequencer(log_id, config.get(), log_attrs, cs, &res, sequencers);
+  auto rv = locateSequencer(
+      log_id, nodes_configuration.get(), log_attrs, cs, &res, sequencers);
   if (rv == 0) {
     cf(E::OK, log_id, res);
   } else {
@@ -71,28 +71,40 @@ node_index_t HashBasedSequencerLocator::getPrimarySequencerNode(
     const ServerConfig* config,
     const logsconfig::LogAttributes* log_attrs) {
   NodeID res;
-  auto rv = locateSequencer(log_id, config, log_attrs, /* cs */ nullptr, &res);
+  // TODO T41319009: use NodesConfiguration instead of ServerConfig,
+  // currently getPrimarySequencerNode() only affects weighted copyset
+  // selection but not sequencer routing
+  auto rv = locateSequencer(
+      log_id,
+      config->getNodesConfigurationFromServerConfigSource().get(),
+      log_attrs,
+      /* cs */ nullptr,
+      &res);
   if (rv == 0) {
     return res.index();
   } else {
     ld_check(err == E::NOTFOUND);
-    return config->getSequencers().nodes[0].index();
+    return config->getNodesConfigurationFromServerConfigSource()
+        ->getSequencersConfig()
+        .nodes[0]
+        .index();
   }
 }
 
 int HashBasedSequencerLocator::locateSequencer(
     logid_t log_id,
-    const ServerConfig* config,
+    const configuration::nodes::NodesConfiguration* nodes_configuration,
     const logsconfig::LogAttributes* log_attrs,
     ClusterState* cs,
     NodeID* out_sequencer,
-    const ServerConfig::SequencersConfig* sequencers) {
-  ld_check(config != nullptr);
+    const configuration::SequencersConfig* sequencers) {
+  ld_check(nodes_configuration != nullptr);
   ld_check(out_sequencer != nullptr);
 
   if (sequencers == nullptr) {
-    sequencers = &config->getSequencers();
+    sequencers = &nodes_configuration->getSequencersConfig();
   }
+
   ld_check(sequencers != nullptr);
   ld_check(sequencers->weights.size() == sequencers->nodes.size());
 
@@ -138,14 +150,15 @@ int HashBasedSequencerLocator::locateSequencer(
   if (sequencerAffinity && !sequencerAffinity->isEmpty()) {
     // trying to find sequencer according to location affinity
     auto weight_fn_with_loc = [sequencers,
-                               config,
+                               nodes_configuration,
                                sequencerAffinity,
                                can_we_route_to](uint64_t node) {
       double w = sequencers->weights[node];
       if (can_we_route_to(node, w)) {
-        auto node_object = config->getNode(node);
-        if (node_object) {
-          auto location = node_object->location;
+        const auto* serv_disc =
+            nodes_configuration->getNodeServiceDiscovery(node);
+        if (serv_disc != nullptr) {
+          const auto location = serv_disc->location;
           if (location.hasValue()) {
             if (sequencerAffinity->sharesScopeWith(
                     location.value(), sequencerAffinity->lastScope())) {
@@ -214,6 +227,11 @@ ClusterState* HashBasedSequencerLocator::getClusterState() const {
 std::shared_ptr<const Configuration>
 HashBasedSequencerLocator::getConfig() const {
   return Worker::getConfig();
+}
+
+std::shared_ptr<const configuration::nodes::NodesConfiguration>
+HashBasedSequencerLocator::getNodesConfiguration() const {
+  return Worker::onThisThread()->getNodesConfiguration();
 }
 
 const Settings& HashBasedSequencerLocator::getSettings() const {
