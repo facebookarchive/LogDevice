@@ -2462,7 +2462,8 @@ void Appender::decideAmends(const StoreChainLink copyset[],
 
 int64_t Appender::getStoreTimeoutMultiplier() const {
   const int wave = store_hdr_.wave;
-  const int64_t multiplier = (INT64_C(1) << std::min(wave, 20));
+  ld_check_ge(wave, 1);
+  const int64_t multiplier = (INT64_C(1) << std::min(wave - 1, 20));
   return multiplier;
 }
 
