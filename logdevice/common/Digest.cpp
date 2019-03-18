@@ -75,7 +75,7 @@ Digest::Digest(logid_t log_id,
       epoch_(epoch),
       seal_epoch_(seal_epoch),
       failure_domain_(epoch_metadata.shards,
-                      config,
+                      *config->getNodesConfigurationFromServerConfigSource(),
                       epoch_metadata.replication),
       options_(options) {
   ld_check(seal_epoch > EPOCH_INVALID);

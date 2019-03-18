@@ -288,9 +288,10 @@ WeightAwareNodeSetSelector::getStorageSet(logid_t log_id,
 
   // Check that we have enough nodes and domains to satisfy the replication
   // requirement.
-  if (!ServerConfig::validStorageSet(cfg->serverConfig()->getNodes(),
-                                     res.storage_set,
-                                     replication_property)) {
+  if (!configuration::nodes::validStorageSet(
+          *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource(),
+          res.storage_set,
+          replication_property)) {
     ld_error("Not enough storage nodes to select nodeset for log %lu, "
              "replication: %s, selected: %s.",
              log_id.val_,

@@ -193,6 +193,8 @@ class IsLogEmptyRequest : public DistributedRequest,
 
   // ------------------  overridden in unit tests  ------------------
   virtual std::shared_ptr<ServerConfig> getConfig() const;
+  virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const;
   virtual void deleteThis();
   virtual std::unique_ptr<NodeSetFinder> makeNodeSetFinder();
   void initNodeSetFinder();
@@ -273,11 +275,13 @@ class IsLogEmptyRequest : public DistributedRequest,
                                    AuthoritativeStatus st,
                                    bool initialize_unknown);
 
-  virtual std::unique_ptr<FailureDomain>
-  makeFailureDomain(StorageSet shards,
-                    std::shared_ptr<ServerConfig> config,
-                    ReplicationProperty replication) {
-    return std::make_unique<FailureDomain>(shards, config, replication);
+  std::unique_ptr<FailureDomain> makeFailureDomain(
+      StorageSet shards,
+      const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
+          nodes_configuration,
+      ReplicationProperty replication) {
+    return std::make_unique<FailureDomain>(
+        shards, *nodes_configuration, replication);
   }
 
   void completion(Status st);

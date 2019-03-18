@@ -103,7 +103,7 @@ void DataSizeRequest::initStorageSetAccessor() {
 
   nodeset_accessor_ =
       makeStorageSetAccessor(config, shards, minRep, shard_access, completion);
-  failure_domain_ = makeFailureDomain(shards, config, minRep);
+  failure_domain_ = makeFailureDomain(shards, getNodesConfiguration(), minRep);
 }
 
 void DataSizeRequest::onShardStatusChanged(bool initialize) {

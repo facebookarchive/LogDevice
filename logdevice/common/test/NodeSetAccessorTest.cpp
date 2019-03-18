@@ -45,7 +45,7 @@ class TestCopySetSelector : public CopySetSelector {
                       NodeLocationScope sync_replication_scope)
       : failure_domain_(
             nodeset,
-            cfg->serverConfig(),
+            *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource(),
             ReplicationProperty(replication, sync_replication_scope)),
         replication_(replication) {
     ld_check(replication_ > 0 && replication_ <= COPYSET_SIZE_MAX);

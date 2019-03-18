@@ -57,6 +57,11 @@ std::shared_ptr<ServerConfig> IsLogEmptyRequest::getConfig() const {
   return Worker::onThisThread()->getConfig()->serverConfig();
 }
 
+std::shared_ptr<const configuration::nodes::NodesConfiguration>
+IsLogEmptyRequest::getNodesConfiguration() const {
+  return Worker::onThisThread()->getNodesConfiguration();
+}
+
 std::unique_ptr<NodeSetFinder> IsLogEmptyRequest::makeNodeSetFinder() {
   return std::make_unique<NodeSetFinder>(
       log_id_,
@@ -110,7 +115,7 @@ void IsLogEmptyRequest::initStorageSetAccessor() {
       makeStorageSetAccessor(config, shards_, minRep, shard_access, completion);
   nodeset_accessor_->setGracePeriod(grace_period_, completion_cond);
   nodeset_accessor_->setWaveTimeout(getWaveTimeoutInterval(client_timeout_));
-  failure_domain_ = makeFailureDomain(shards_, config, minRep);
+  failure_domain_ = makeFailureDomain(shards_, getNodesConfiguration(), minRep);
 }
 
 chrono_interval_t<std::chrono::milliseconds>

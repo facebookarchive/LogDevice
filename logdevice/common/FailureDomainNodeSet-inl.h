@@ -12,14 +12,7 @@ namespace facebook { namespace logdevice {
 template <typename AttrType, typename HashFn>
 FailureDomainNodeSet<AttrType, HashFn>::FailureDomainNodeSet(
     const StorageSet& storage_set,
-    const std::shared_ptr<ServerConfig>& cfg,
-    const ReplicationProperty& rep)
-    : FailureDomainNodeSet(storage_set, cfg->getNodes(), rep) {}
-
-template <typename AttrType, typename HashFn>
-FailureDomainNodeSet<AttrType, HashFn>::FailureDomainNodeSet(
-    const StorageSet& storage_set,
-    const ServerConfig::Nodes& cluster_nodes,
+    const configuration::nodes::NodesConfiguration& nodes_configuration,
     const ReplicationProperty& rep) {
   // in debug build, assert indices in _storage_set_ are unique
 #ifndef NDEBUG
@@ -31,7 +24,6 @@ FailureDomainNodeSet<AttrType, HashFn>::FailureDomainNodeSet(
 
   // The user is expected to pass a valid ReplicationProperty object.
   ld_check(rep.isValid());
-
   size_t shard_replication = 0;
   auto scope = NodeLocation::nextSmallerScope(NodeLocationScope::ROOT);
   while (scope != NodeLocationScope::INVALID) {
@@ -54,18 +46,13 @@ FailureDomainNodeSet<AttrType, HashFn>::FailureDomainNodeSet(
   ld_check(shard_scope_.replication > 0);
 
   // cluster should have some nodes.
-  ld_check(cluster_nodes.size() > 0);
+  ld_check(nodes_configuration.clusterSize() > 0);
 
-  for (const ShardID shard : storage_set) {
-    auto it = cluster_nodes.find(shard.node());
-    if (it == cluster_nodes.end() || !it->second.isReadableStorageNode()) {
-      // node is no longer in config, exclude the node from the failure domain
-      // storage_set.
-      continue;
-    }
-
-    const ServerConfig::Node* node = &it->second;
-    addShard(shard, node);
+  // only include storage shards in nodes configuration and in reader's view
+  // (e.g., exclude shards in "none" state)
+  for (const ShardID shard :
+       nodes_configuration.getStorageMembership()->readerView(storage_set)) {
+    addShard(shard, nodes_configuration);
   }
 
   ld_check(numShards() <= storage_set.size());
@@ -75,22 +62,27 @@ FailureDomainNodeSet<AttrType, HashFn>::FailureDomainNodeSet(
 template <typename AttrType, typename HashFn>
 void FailureDomainNodeSet<AttrType, HashFn>::addShard(
     ShardID shard,
-    const ServerConfig::Node* node) {
+    const configuration::nodes::NodesConfiguration& nodes_configuration) {
+  const auto* service_disc =
+      nodes_configuration.getNodeServiceDiscovery(shard.node());
+  // shard came from the membership reader view of the node configuration
+  ld_check(service_disc != nullptr);
+
   for (auto it = scopes_.begin(); it != scopes_.end(); ++it) {
     const NodeLocationScope scope = it->first;
     std::string domain_name;
     if (scope == NodeLocationScope::NODE) {
       domain_name = std::to_string(shard.node());
-    } else if (!node->location.hasValue() ||
-               !node->location.value().scopeSpecified(scope)) {
+    } else if (!service_disc->location.hasValue() ||
+               !service_disc->location.value().scopeSpecified(scope)) {
       ld_error("Node %d (%s) in the storage_set does not have location "
                "information in location scope: %s.",
                shard.node(),
-               node->address.toString().c_str(),
+               service_disc->address.toString().c_str(),
                NodeLocation::scopeNames()[scope].c_str());
       continue;
     } else {
-      domain_name = node->location.value().getDomain(scope);
+      domain_name = service_disc->location.value().getDomain(scope);
     }
 
     ScopeState& state = it->second;

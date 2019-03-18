@@ -206,6 +206,11 @@ class MockIsLogEmptyRequest : public IsLogEmptyRequest {
     return config_;
   }
 
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const override {
+    return config_->getNodesConfigurationFromServerConfigSource();
+  }
+
   ShardAuthoritativeStatusMap& getShardAuthoritativeStatusMap() override {
     return map_;
   }

@@ -17,6 +17,7 @@
 #include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/common/configuration/ReplicationProperty.h"
 #include "logdevice/common/configuration/ServerConfig.h"
+#include "logdevice/common/configuration/nodes/NodesConfiguration.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/common/util.h"
@@ -139,20 +140,14 @@ class FailureDomainNodeSet {
   /**
    * Construct a FailureDomainNodeSet object.
    * @param storage_set              the entire set of shards to keep track of
-   * @param cfg                      cluster configuration
+   * @param nodes_configuration      cluster nodes configuration that contains
+   *                                 storage node membership
    * @param rep                      replication requirement
    */
-  FailureDomainNodeSet(const StorageSet& storage_set,
-                       const std::shared_ptr<ServerConfig>& cfg,
-                       const ReplicationProperty& rep);
-
-  /**
-   * Overloaded constructor that takes a map of ServerConfig::Node for
-   * all cluster nodes.
-   */
-  FailureDomainNodeSet(const StorageSet& storage_set,
-                       const ServerConfig::Nodes& cluster_nodes,
-                       const ReplicationProperty& replication);
+  FailureDomainNodeSet(
+      const StorageSet& storage_set,
+      const configuration::nodes::NodesConfiguration& nodes_configuration,
+      const ReplicationProperty& rep);
 
   ~FailureDomainNodeSet() {
     checkConsistency();
@@ -359,7 +354,9 @@ class FailureDomainNodeSet {
         st == AuthoritativeStatus::UNAVAILABLE;
   }
 
-  void addShard(ShardID shard, const ServerConfig::Node* node);
+  void
+  addShard(ShardID shard,
+           const configuration::nodes::NodesConfiguration& nodes_configuration);
 
   // Untag a shard with an attribute. Status is the current authoritative status
   // of that shard.

@@ -935,7 +935,9 @@ class LogChecker : public std::enable_shared_from_this<LogChecker> {
     const auto meta = stream_->getCurrentEpochMetadata();
     ld_check(meta);
     replication_checker_ = std::make_unique<FailureDomainNodeSet<lsn_t>>(
-        meta->shards, cfg_->serverConfig(), meta->replication);
+        meta->shards,
+        *cfg_->serverConfig()->getNodesConfigurationFromServerConfigSource(),
+        meta->replication);
   }
 
   bool gotAllCopiesOfRecord(lsn_t lsn) {

@@ -17,6 +17,7 @@
 #include "logdevice/common/NodeSetSelectorFactory.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
+#include "logdevice/common/configuration/nodes/utils.h"
 #include "logdevice/common/test/NodeSetTestUtil.h"
 #include "logdevice/common/util.h"
 
@@ -88,9 +89,10 @@ verify_result(NodeSetSelector* selector,
         config->getLogGroupByIDShared(logid);
     ASSERT_NE(nullptr, logcfg);
     const auto& attrs = logcfg->attrs();
-    const auto& all_nodes = config->serverConfig()->getNodes();
-    ASSERT_TRUE(ServerConfig::validStorageSet(
-        all_nodes,
+    const auto& nodes_config =
+        *config->serverConfig()->getNodesConfigurationFromServerConfigSource();
+    ASSERT_TRUE(configuration::nodes::validStorageSet(
+        nodes_config,
         res.storage_set,
         ReplicationProperty::fromLogAttributes(attrs)));
 

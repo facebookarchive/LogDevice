@@ -18,6 +18,7 @@
 #include "logdevice/common/SlidingWindow.h"
 #include "logdevice/common/commandline_util_chrono.h"
 #include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/common/configuration/nodes/utils.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Err.h"
@@ -188,12 +189,13 @@ bool validateNodeCount(const ServerConfig& server_cfg,
   const auto& meta_cfg = server_cfg.getMetaDataLogsConfig();
   auto storage_set = nodesetToStorageSet(meta_cfg.metadata_nodes);
   // ensure metadata_logs section is consistent with nodes section
-  if (!ServerConfig::validStorageSet(nodes,
-                                     storage_set,
-                                     ReplicationProperty::fromLogAttributes(
-                                         meta_cfg.metadata_log_group->attrs()),
-                                     true // check the nodes exist
-                                     )) {
+  if (!configuration::nodes::validStorageSet(
+          *server_cfg.getNodesConfigurationFromServerConfigSource(),
+          storage_set,
+          ReplicationProperty::fromLogAttributes(
+              meta_cfg.metadata_log_group->attrs()),
+          true // check the nodes exist
+          )) {
     ld_error("Nodeset for metadata_logs is not compatible with its "
              "configuration, please check if the metadata nodes satisfy "
              "replication requirements on its replication scope. "

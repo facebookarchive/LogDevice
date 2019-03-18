@@ -201,12 +201,14 @@ void WeightedCopySetSelectorTest::initIfNeeded() {
   nodeset_state_ = std::make_shared<NodeSetState>(
       nodeset_indices_, LOG_ID, NodeSetState::HealthCheck::DISABLED);
   epoch_metadata_ = EpochMetaData(nodeset_indices_, replication_);
-  replication_checker_ = std::make_unique<FailureDomainNodeSet<size_t>>(
-      nodeset_indices_, nodes_in_config_, replication_);
   configuration::NodesConfig nodes_config(nodes_in_config_);
   anon_server_config_ =
       std::unique_ptr<ServerConfig>(ServerConfig::fromDataTest(
           "weighted_copyset_selector_test(anon)", std::move(nodes_config)));
+  replication_checker_ = std::make_unique<FailureDomainNodeSet<size_t>>(
+      nodeset_indices_,
+      *anon_server_config_->getNodesConfigurationFromServerConfigSource(),
+      replication_);
 }
 
 node_index_t WeightedCopySetSelectorTest::getPrimarySequencerNode(logid_t log) {
@@ -244,12 +246,14 @@ WeightedCopySetSelectorTest::getSelector(logid_t log,
     nodeset_state_ = std::make_shared<NodeSetState>(
         nodeset_indices_, LOG_ID, NodeSetState::HealthCheck::DISABLED);
     epoch_metadata_ = EpochMetaData(nodeset_indices_, replication_);
-    replication_checker_ = std::make_unique<FailureDomainNodeSet<size_t>>(
-        nodeset_indices_, nodes_in_config_, replication_);
     configuration::NodesConfig nodes_config(nodes_in_config_);
     anon_server_config_ =
         std::unique_ptr<ServerConfig>(ServerConfig::fromDataTest(
             "weighted_copyset_selector_test(anon)", std::move(nodes_config)));
+    replication_checker_ = std::make_unique<FailureDomainNodeSet<size_t>>(
+        nodeset_indices_,
+        *anon_server_config_->getNodesConfigurationFromServerConfigSource(),
+        replication_);
   }
 
   Selector& s = selectors_[key];

@@ -18,6 +18,7 @@
 #include <folly/String.h>
 
 #include "logdevice/common/configuration/NodeLocation.h"
+#include "logdevice/common/configuration/nodes/utils.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/hash.h"
 #include "logdevice/include/types.h"
@@ -313,9 +314,10 @@ NodeSetSelector::Result RandomCrossDomainNodeSetSelector::getStorageSet(
   // the final nodeset does not satisfied the replication requirement in case
   // many nodes are of 0 weight. To prevent the loss of write availability,
   // fail the nodeset selection.
-  if (!ServerConfig::validStorageSet(cfg->serverConfig()->getNodes(),
-                                     res.storage_set,
-                                     replication_property)) {
+  if (!configuration::nodes::validStorageSet(
+          *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource(),
+          res.storage_set,
+          replication_property)) {
     ld_error("Invalid nodeset %s for log %lu, check nodes weights.",
              toString(res.storage_set).c_str(),
              log_id.val_);

@@ -181,9 +181,10 @@ RandomNodeSetSelector::getStorageSet(logid_t log_id,
   // sort the nodeset
   std::sort(candidates->begin(), candidates->end());
 
-  // TODO T33035439: convert validStorageSet() to use the new NodesConfiguration
-  if (!ServerConfig::validStorageSet(
-          cfg->serverConfig()->getNodes(), *candidates, replication_property)) {
+  if (!configuration::nodes::validStorageSet(
+          *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource(),
+          *candidates,
+          replication_property)) {
     ld_error("Invalid nodeset %s for log %lu, check nodes weights.",
              toString(*candidates).c_str(),
              log_id.val_);

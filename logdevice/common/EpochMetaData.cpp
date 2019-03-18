@@ -10,6 +10,7 @@
 #include <folly/Memory.h>
 
 #include "logdevice/common/LegacyLogToShard.h"
+#include "logdevice/common/configuration/nodes/utils.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/ProtocolReader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
@@ -52,9 +53,11 @@ bool EpochMetaData::validWithConfig(
     ld_error("No log config for log %lu", log_id.val_);
     return false;
   }
-  const auto& all_nodes = cfg->serverConfig()->getNodes();
+  const auto& nodes_configuration =
+      *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource();
   // check nodeset and replication factor with config
-  if (!ServerConfig::validStorageSet(all_nodes, shards, replication)) {
+  if (!configuration::nodes::validStorageSet(
+          nodes_configuration, shards, replication)) {
     ld_error("Invalid nodeset for log %lu", log_id.val_);
     return false;
   }

@@ -223,11 +223,13 @@ class DataSizeRequest : public DistributedRequest,
                                    AuthoritativeStatus st,
                                    bool initialize_unknown);
 
-  virtual std::unique_ptr<FailureDomain>
-  makeFailureDomain(StorageSet shards,
-                    std::shared_ptr<ServerConfig> config,
-                    ReplicationProperty replication) {
-    return std::make_unique<FailureDomain>(shards, config, replication);
+  std::unique_ptr<FailureDomain> makeFailureDomain(
+      StorageSet shards,
+      const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
+          nodes_configuration,
+      ReplicationProperty replication) {
+    return std::make_unique<FailureDomain>(
+        shards, *nodes_configuration, replication);
   }
 };
 

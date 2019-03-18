@@ -330,7 +330,10 @@ bool RebuildingPlanner::rebuildingIsAuthoritative(
 
   // Create a FailureDomainNodeSet where the attribute is whether or not the
   // node is rebuilding in RESTORE mode...
-  FailureDomainNodeSet<bool> f(metadata.shards, cfg, metadata.replication);
+  FailureDomainNodeSet<bool> f(
+      metadata.shards,
+      *cfg->getNodesConfigurationFromServerConfigSource(),
+      metadata.replication);
 
   // ... Set the attribute for each node being rebuilt that is currently
   // unavailable, but may return with intact data later.  This is all nodes
@@ -366,7 +369,10 @@ bool RebuildingPlanner::rebuildingSetTooBig(
 
   // Create a FailureDomainNodeSet where the attribute is whether or not a
   // storage shard can receive stores...
-  FailureDomainNodeSet<bool> f(metadata.shards, cfg, metadata.replication);
+  FailureDomainNodeSet<bool> f(
+      metadata.shards,
+      *cfg->getNodesConfigurationFromServerConfigSource(),
+      metadata.replication);
   for (ShardID s : metadata.shards) {
     bool accepting_stores = true;
 

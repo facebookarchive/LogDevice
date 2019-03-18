@@ -292,36 +292,6 @@ double ServerConfig::getDefaultSamplePercentage() const {
   return traceLoggerConfig_.getDefaultSamplePercentage();
 }
 
-bool ServerConfig::validStorageSet(const Nodes& cluster_nodes,
-                                   const StorageSet& storage_set,
-                                   ReplicationProperty replication,
-                                   bool strict) {
-  if (!replication.isValid()) {
-    return false;
-  }
-
-  // attribute is whether the node is writable
-  FailureDomainNodeSet<bool> failure_domain(
-      storage_set, cluster_nodes, replication);
-
-  for (auto shard : storage_set) {
-    auto it = cluster_nodes.find(shard.node());
-    if (strict && it == cluster_nodes.end()) {
-      ld_error("Invalid nodeset: %s is referenced from the nodeset but "
-               "doesn't exist in nodes config.",
-               shard.toString().c_str());
-      return false;
-    }
-    if (it != cluster_nodes.end() && it->second.isWritableStorageNode()) {
-      failure_domain.setShardAttribute(shard, true);
-    }
-  }
-
-  // return true if the subset of writable storage nodes can satisfy
-  // replication property
-  return failure_domain.canReplicate(true);
-}
-
 std::unique_ptr<ServerConfig>
 ServerConfig::fromData(std::string cluster_name,
                        NodesConfig nodes,

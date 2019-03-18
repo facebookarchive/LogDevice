@@ -21,9 +21,10 @@ RecoverySet::RecoverySet(const EpochMetaData& epoch_metadata,
                          const std::shared_ptr<ServerConfig>& config,
                          EpochRecovery* recovery)
     : recovery_(recovery),
-      failure_domain_nodes_(epoch_metadata.shards,
-                            config,
-                            epoch_metadata.replication) {
+      failure_domain_nodes_(
+          epoch_metadata.shards,
+          *config->getNodesConfigurationFromServerConfigSource(),
+          epoch_metadata.replication) {
   for (const ShardID& shard : epoch_metadata.shards) {
     const configuration::Node* n = config->getNode(shard.node());
     if (!n || !n->isReadableStorageNode()) {

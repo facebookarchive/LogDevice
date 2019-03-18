@@ -201,7 +201,9 @@ bool canWipeShardsWithoutCausingDataLoss(
     ld_info("Checking if there would be data loss in shard %u...", shard);
 
     FailureDomainNodeSet<bool> failure_domain_info(
-        storage_set, config->serverConfig(), min_replication);
+        storage_set,
+        *config->serverConfig()->getNodesConfigurationFromServerConfigSource(),
+        min_replication);
 
     for (ShardID s : storage_set) {
       AuthoritativeStatus status = map.getShardStatus(s.node(), s.shard());

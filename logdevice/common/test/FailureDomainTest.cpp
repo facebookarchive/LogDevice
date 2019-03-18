@@ -117,7 +117,7 @@ void FailureDomainTest::setUp() {
 
   failure_set_ = std::make_unique<FailureDomainTestSet>(
       storage_set_,
-      config_->serverConfig(),
+      *config_->serverConfig()->getNodesConfigurationFromServerConfigSource(),
       ReplicationProperty(replication_, sync_replication_scope_));
   failure_set_->fullConsistencyCheck();
 }
@@ -155,7 +155,9 @@ void FailureDomainTest::setUpWithMultiScopes() {
   rep.setReplication(NodeLocationScope::REGION, 2);
 
   failure_set_ = std::make_unique<FailureDomainTestSet>(
-      storage_set_, config_->serverConfig(), rep);
+      storage_set_,
+      *config_->serverConfig()->getNodesConfigurationFromServerConfigSource(),
+      rep);
   failure_set_->fullConsistencyCheck();
 }
 
@@ -191,7 +193,9 @@ void FailureDomainTest::setUpWithShards() {
   rep.setReplication(NodeLocationScope::RACK, 2);
 
   failure_set_ = std::make_unique<FailureDomainTestSet>(
-      storage_set_, config_->serverConfig(), rep);
+      storage_set_,
+      *config_->serverConfig()->getNodesConfigurationFromServerConfigSource(),
+      rep);
   failure_set_->fullConsistencyCheck();
 }
 
@@ -200,9 +204,9 @@ void FailureDomainTest::setUpWithShardsAndOnlyRackReplication() {
 
   // 24 shards spanning 3 racks.
   configuration::Nodes nodes;
-  addNodes(&nodes, 4, 1, "rg0.dc0.cl0.ro0.rk1", 1); // 0-3
-  addNodes(&nodes, 4, 1, "rg0.dc0.cl0.ro0.rk2", 1); // 4-7
-  addNodes(&nodes, 4, 1, "rg0.dc0.cl0.ro0.rk3", 2); // 8-11
+  addNodes(&nodes, 4, 2, "rg0.dc0.cl0.ro0.rk1", 1); // 0-3
+  addNodes(&nodes, 4, 2, "rg0.dc0.cl0.ro0.rk2", 1); // 4-7
+  addNodes(&nodes, 4, 2, "rg0.dc0.cl0.ro0.rk3", 2); // 8-11
 
   // Shard set contains 24 nodes (2 shards per node in the cluster).
   for (node_index_t i = 0; i < 12; ++i) {
@@ -228,7 +232,9 @@ void FailureDomainTest::setUpWithShardsAndOnlyRackReplication() {
   rep.setReplication(NodeLocationScope::RACK, 2);
 
   failure_set_ = std::make_unique<FailureDomainTestSet>(
-      storage_set_, config_->serverConfig(), rep);
+      storage_set_,
+      *config_->serverConfig()->getNodesConfigurationFromServerConfigSource(),
+      rep);
   failure_set_->fullConsistencyCheck();
 }
 
@@ -875,7 +881,9 @@ TEST_F(FailureDomainTest, T30067676) {
   rep.setReplication(NodeLocationScope::RACK, 2);
 
   failure_set_ = std::make_unique<FailureDomainTestSet>(
-      storage_set_, config_->serverConfig(), rep);
+      storage_set_,
+      *config_->serverConfig()->getNodesConfigurationFromServerConfigSource(),
+      rep);
   failure_set_->fullConsistencyCheck();
 
   setShardsAttr(TestAttr(RecoveryNode::State::DIGESTING), {N0});

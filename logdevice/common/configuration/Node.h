@@ -238,10 +238,4 @@ struct Node {
 
 using Nodes = std::unordered_map<node_index_t, Node>;
 
-// see ServerConfig::validStorageSet()
-bool validStorageSet(const Nodes& cluster_nodes,
-                     const StorageSet& storage_set,
-                     ReplicationProperty replication,
-                     bool strict = false);
-
 }}} // namespace facebook::logdevice::configuration

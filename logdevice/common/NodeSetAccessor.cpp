@@ -67,7 +67,7 @@ StorageSetAccessor::StorageSetAccessor(logid_t log_id,
       shard_func_(std::move(shard_access)),
       completion_func_(std::move(completion)),
       failure_domain_(epoch_metadata_.shards,
-                      config_,
+                      *config_->getNodesConfigurationFromServerConfigSource(),
                       epoch_metadata_.replication) {
   ld_check(config_ != nullptr);
   ld_check(epoch_metadata_.isValid());

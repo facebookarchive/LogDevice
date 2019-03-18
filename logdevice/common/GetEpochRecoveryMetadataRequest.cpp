@@ -79,7 +79,9 @@ void GetEpochRecoveryMetadataRequest::start() {
   // when _all_ authoritative nodes respond.
   nodes_responded_ = std::make_unique<ResponseNodeSet>(
       epoch_metadata_->shards,
-      getClusterConfig()->serverConfig(),
+      *getClusterConfig()
+           ->serverConfig()
+           ->getNodesConfigurationFromServerConfigSource(),
       ReplicationProperty({{NodeLocationScope::NODE, 1}}));
 
   createStorageSetAccessorAndStart();

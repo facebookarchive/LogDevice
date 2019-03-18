@@ -344,7 +344,9 @@ bool CheckImpactForLogRequest::checkWriteAvailability(
   // if N nodes are required to maintain write availability, make sure to
   // always have N+x nodes to have room for organic failures of x nodes
   FailureDomainNodeSet<bool> available_node_set(
-      storage_set, config->serverConfig(), replication);
+      storage_set,
+      *config->serverConfig()->getNodesConfigurationFromServerConfigSource(),
+      replication);
 
   for (const ShardID& shard : storage_set) {
     const auto& node = config->serverConfig()->getNode(shard.node());
@@ -379,7 +381,9 @@ bool CheckImpactForLogRequest::checkReadAvailability(
   // shards on which we are going to be stopped.
 
   FailureDomainNodeSet<bool> available_node_set(
-      storage_set, config->serverConfig(), replication);
+      storage_set,
+      *config->serverConfig()->getNodesConfigurationFromServerConfigSource(),
+      replication);
 
   for (const ShardID& shard : storage_set) {
     const auto& node = config->serverConfig()->getNode(shard.node());

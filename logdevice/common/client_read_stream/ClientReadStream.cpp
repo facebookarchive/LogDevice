@@ -2691,9 +2691,13 @@ void ClientReadStream::updateCurrentReadSet() {
   // new read set and the gap state for each shards in the new read set.
   // Do the same thing to the connection failure domain.
   gap_failure_domain_ = std::make_unique<GapFailureDomain>(
-      read_set, config->serverConfig(), replication);
+      read_set,
+      *config->serverConfig()->getNodesConfigurationFromServerConfigSource(),
+      replication);
   healthy_node_set_ = std::make_unique<HealthyNodeSet>(
-      read_set, config->serverConfig(), replication);
+      read_set,
+      *config->serverConfig()->getNodesConfigurationFromServerConfigSource(),
+      replication);
 
   ld_check(healthy_node_set_->numShards() == storage_set_states_.size());
   ld_check(gap_failure_domain_->numShards() == storage_set_states_.size());
