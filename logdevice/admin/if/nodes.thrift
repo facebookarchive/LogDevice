@@ -20,7 +20,7 @@ struct SequencerConfig {
    * sequencer objects compared to other sequencer nodes on the cluster.
    * This cannot be non-positive if the sequencer field is set in NodeConfig.
    */
-  1: required double weight = 1,
+  1: double weight = 1,
 }
 
 struct StorageConfig {
@@ -28,12 +28,12 @@ struct StorageConfig {
    * This is a positive value indicating how much storage traffic it will get
    * relative to other nodes in the cluster. This cannot be zero.
    */
-  1: required double weight = 1,
+  1: double weight = 1,
   /**
    * How many shards does this storage node has. Each shard will have to map to
    * a directory called.
    */
-  2: required i32 num_shards = 1,
+  2: i32 num_shards = 1,
 }
 
 /**
@@ -48,9 +48,9 @@ struct NodeConfig {
   /**
    * If this set is empty, the node is neither a storage node nor a sequencer.
    */
-  1: required common.NodeIndex node_index,
-  2: required common.SocketAddress data_address,
-  3: required set<common.Role> roles;
+  1: common.NodeIndex node_index,
+  2: common.SocketAddress data_address,
+  3: set<common.Role> roles;
   4: optional common.Addresses other_addresses;
   /**
    * A string representing the physical location of the node, this has to use
@@ -202,17 +202,17 @@ struct ShardState {
   /**
    * See the ShardDataHealth enum for info.
    */
-  1: required ShardDataHealth data_health,
+  1: ShardDataHealth data_health,
   /**
    * Reflects whether storage on this node is currently DISABLED, READ_ONLY, or
    * READ_WRITE
    */
-  2: required ShardStorageState current_storage_state,
+  2: ShardStorageState current_storage_state,
   /**
    * See the ShardOperationalState enum for info. See the
    * active_maintenance for information about the active transition
    */
-  3: required ShardOperationalState current_operational_state,
+  3: ShardOperationalState current_operational_state,
 }
 
 /**
@@ -238,7 +238,7 @@ enum SequencingState {
  * node.
  */
 struct SequencerState {
-  1: required SequencingState state,
+  1: SequencingState state,
   2: optional common.Timestamp sequencer_state_last_updated,
 }
 
@@ -281,7 +281,7 @@ struct NodeState {
   /**
    * The index of this node
    */
-  1: required common.NodeIndex node_index,
+  1: common.NodeIndex node_index,
   /**
    * The gossip status of node.
    */
@@ -314,16 +314,16 @@ struct NodesConfigResponse {
   /**
    * This is an empty list if we cannot find any nodes
    */
-  1: required NodesConfig nodes,
-  2: required common.unsigned64 version,
+  1: NodesConfig nodes,
+  2: common.unsigned64 version,
 }
 
 struct NodesStateResponse {
   /**
    * This is an empty list if we cannot find any nodes
    */
-  1: required NodesState states,
-  2: required common.unsigned64 version,
+  1: NodesState states,
+  2: common.unsigned64 version,
 }
 
 struct NodesStateRequest {

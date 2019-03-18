@@ -20,23 +20,23 @@ struct ShardMaintenance {
    * if ShardID's shard_index == -1 this maintenance targets the entire node.
    * Accepted values are [MAY_DISAPPEAR, DRAINED]
    */
-  1: required common.ShardID shard,
-  2: required nodes.ShardOperationalState target_state,
+  1: common.ShardID shard,
+  2: nodes.ShardOperationalState target_state,
 }
 
 struct SequencerMaintenance {
-  1: required common.NodeID node,
+  1: common.NodeID node,
   /*
    * Accepted value is DISABLED only.
    */
-  2: required nodes.SequencerState target_state,
+  2: nodes.SequencerState target_state,
 }
 
 struct ApplyMaintenanceRequest {
-  1: required list<ShardMaintenance> shards_maintenance,
-  2: required list<SequencerMaintenance> sequencers_maintenance,
-  3: required string user,
-  4: required string reason,
+  1: list<ShardMaintenance> shards_maintenance,
+  2: list<SequencerMaintenance> sequencers_maintenance,
+  3: string user,
+  4: string reason,
   /*
    * Dangerous and should only be used for emergency situations.
    */
@@ -44,8 +44,8 @@ struct ApplyMaintenanceRequest {
 }
 
 struct ApplyMaintenanceResponse {
-  1: required list<ShardMaintenance> shards_maintenance,
-  2: required list<SequencerMaintenance> sequencers_maintenance,
+  1: list<ShardMaintenance> shards_maintenance,
+  2: list<SequencerMaintenance> sequencers_maintenance,
 }
 
 /*
@@ -57,18 +57,18 @@ struct RemoveMaintenanceRequest {
    * This has to be supplied. If the user is not set, you will get an
    * InvalidRequest exception.
    */
-  1: required string user,
+  1: string user,
   /*
    * The list of shards that we want to remove maintenances from. If empty, this
    * filter will match all shards. If you want to remove a maintenance on
    * sequencer node or all shards of a node, pass -1 to shard_index.
    */
-  2: required list<common.ShardID> shards,
+  2: list<common.ShardID> shards,
   /*
    * The list of nodes we want to remove sequencer maintenance applied by this
    * user.
    */
-  3: required list<common.NodeID> sequencers,
+  3: list<common.NodeID> sequencers,
   /*
    * Optional: The reason of removing the maintenance, this is used for
    * maintenance auditing and logging.
@@ -127,7 +127,7 @@ enum MaintenanceTransitionStatus {
 }
 
 struct MaintenanceProgress {
-  1: required MaintenanceTransitionStatus status,
+  1: MaintenanceTransitionStatus status,
   2: optional common.Timestamp last_updated_at,
   /*
    * If the operation is blocked, the maintenance manager will attempt to retry
@@ -149,8 +149,8 @@ struct MaintenanceProgress {
  * will be set.
  */
 struct ShardMaintenanceState {
-  1: required bool is_active,
-  2: required nodes.ShardOperationalState target_state,
+  1: bool is_active,
+  2: nodes.ShardOperationalState target_state,
   /*
    * This is set if the maintenance is driven by an internal operation. This
    * can be because RebuildingSupervisor has detected loss of nodes or we are
@@ -158,10 +158,10 @@ struct ShardMaintenanceState {
    * In this case the user will be a special string
    * "LogDeviceInternal"
    */
-  3: required bool internal,
-  4: required string user,
-  5: required string reason,
-  6: required common.Timestamp created_at,
+  3: bool internal,
+  4: string user,
+  5: string reason,
+  6: common.Timestamp created_at,
   /*
    * Only set if is_active == true.
    */
@@ -169,11 +169,11 @@ struct ShardMaintenanceState {
 }
 
 struct SequencerMaintenanceState {
-  1: required bool is_active,
-  2: required nodes.SequencingState target_state,
-  3: required string user,
-  4: required string reason,
-  5: required common.Timestamp created_at,
+  1: bool is_active,
+  2: nodes.SequencingState target_state,
+  3: string user,
+  4: string reason,
+  5: common.Timestamp created_at,
   6: optional MaintenanceProgress progress,
 }
 
@@ -188,12 +188,12 @@ struct NodeMaintenanceState {
    * The list of maintenances applied to every shard in this node, the active
    * maintenance will have is_active set to true.
    */
-  2: required map<common.ShardIndex, list<ShardMaintenanceState>> shards_maintenance,
-  3: required list<SequencerMaintenanceState> sequencers_maintenance,
+  2: map<common.ShardIndex, list<ShardMaintenanceState>> shards_maintenance,
+  3: list<SequencerMaintenanceState> sequencers_maintenance,
 }
 
 struct GetMaintenancesResult {
-  1: required list<NodeMaintenanceState> nodes,
+  1: list<NodeMaintenanceState> nodes,
 }
 
 /*
@@ -203,8 +203,8 @@ struct UnblockRebuildingRequest {
   /*
    * This information will be used for auditing purposes
    */
-  1: required string user,
-  2: required string reason,
+  1: string user,
+  2: string reason,
 }
 
 // TODO: TBD

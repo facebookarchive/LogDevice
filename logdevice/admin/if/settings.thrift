@@ -38,7 +38,7 @@ struct Setting {
   /*
    * The setting as set by each SettingSource
    */
-  3: required map<SettingSource, string> sources,
+  3: map<SettingSource, string> sources,
 }
 
 struct SettingsResponse {

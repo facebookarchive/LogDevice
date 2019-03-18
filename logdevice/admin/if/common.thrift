@@ -30,7 +30,7 @@ enum SocketAddressFamily {
 }
 
 struct SocketAddress {
-  1: required SocketAddressFamily address_family = SocketAddressFamily.INET,
+  1: SocketAddressFamily address_family = SocketAddressFamily.INET,
   /**
    * This contains the unix_socket path if address_family is set to UNIX
    */
@@ -62,11 +62,11 @@ struct NodeID {
  * node. This is typically used in the low-level APIs of the Administrative API.
  */
 struct ShardID {
-  1: required NodeID node,
+  1: NodeID node,
   /**
    * this can be -1 which means all shards in a node.
    */
-  2: required ShardIndex shard_index = -1,
+  2: ShardIndex shard_index = -1,
 }
 
 /**

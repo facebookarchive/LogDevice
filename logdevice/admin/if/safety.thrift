@@ -59,20 +59,20 @@ struct ImpactOnEpoch {
   /**
    * if log_id == 0 this is the metadata log.
    */
-  1: required common.unsigned64 log_id,
+  1: common.unsigned64 log_id,
   /**
    * if log_id == 0, epoch will be zero as well.
    */
-  2: required common.unsigned64 epoch,
+  2: common.unsigned64 epoch,
   /**
    * What is the storage set for this epoch (aka. NodeSet)
    */
-  3: required common.StorageSet storage_set,
+  3: common.StorageSet storage_set,
   /**
    * What is the replication policy for this particular epoch
    */
-  4: required common.ReplicationProperty replication,
-  5: required list<OperationImpact> impact,
+  4: common.ReplicationProperty replication,
+  5: list<OperationImpact> impact,
   /**
    * Extra information about the storage set to help visualize the impact
    * to the user.
@@ -87,7 +87,7 @@ struct CheckImpactRequest {
    * or sequencer nodes based on their address or index. This can be empty if
    * you would like to check what is the current state of the cluster.
    */
-  1: required common.ShardSet shards,
+  1: common.ShardSet shards,
   /*
    * This can be unset ONLY if disable_sequencers is set to true or if the list
    * of shards is empty.
@@ -132,7 +132,7 @@ struct CheckImpactResponse {
   /*
    * empty means that no impact, operation is SAFE.
    */
-  1: required list<OperationImpact> impact,
+  1: list<OperationImpact> impact,
   /*
    * Only set if there is impact. This indicates whether there will be effect on
    * the metadata logs or the internal state machine logs.
