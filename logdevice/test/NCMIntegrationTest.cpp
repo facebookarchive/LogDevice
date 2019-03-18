@@ -102,8 +102,8 @@ TEST_F(NCMIntegrationTest, ToolingClientBasic) {
   ASSERT_TRUE(nc_expected->equalWithTimestampIgnored(*nc_client1));
 
   wait_until("admin_client2 gets the new NC", [&]() {
-    return getNCAPI(admin_client2)->getConfig()->getVersion() ==
-        nc_expected->getVersion();
+    auto config = getNCAPI(admin_client2)->getConfig();
+    return config && config->getVersion() == nc_expected->getVersion();
   });
 
   auto nc_client2 = getNCAPI(admin_client2)->getConfig();
