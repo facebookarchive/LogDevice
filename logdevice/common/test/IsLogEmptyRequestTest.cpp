@@ -50,14 +50,18 @@ class Callback {
   Status status_;
 };
 
-ShardAuthoritativeStatusMap starting_map_;
-void changeShardStartingAuthStatus(ShardID shard, AuthoritativeStatus st) {
-  starting_map_.setShardStatus(shard.node(), shard.shard(), st);
-}
+class IsLogEmptyRequestTest : public ::testing::Test {
+ public:
+  ShardAuthoritativeStatusMap starting_map_;
+  void changeShardStartingAuthStatus(ShardID shard, AuthoritativeStatus st) {
+    starting_map_.setShardStatus(shard.node(), shard.shard(), st);
+  }
+};
 
 class MockIsLogEmptyRequest : public IsLogEmptyRequest {
  public:
-  MockIsLogEmptyRequest(int storage_set_size,
+  MockIsLogEmptyRequest(IsLogEmptyRequestTest* test,
+                        int storage_set_size,
                         ReplicationProperty replication,
                         Callback& callback,
                         std::chrono::milliseconds grace_period =
@@ -71,7 +75,7 @@ class MockIsLogEmptyRequest : public IsLogEmptyRequest {
                           std::ref(callback),
                           grace_period),
         replication_(replication) {
-    map_ = starting_map_;
+    map_ = test->starting_map_;
 
     Configuration::NodesConfig nodes_config = nodes_config_override.hasValue()
         ? std::move(nodes_config_override.value())
@@ -217,9 +221,10 @@ ShardID node(node_index_t index) {
   return ShardID(index, 1);
 }
 
-TEST(IsLogEmptyRequestTest, Empty) {
+TEST_F(IsLogEmptyRequestTest, Empty) {
   Callback cb;
-  MockIsLogEmptyRequest req(5,
+  MockIsLogEmptyRequest req(this,
+                            5,
                             ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                             cb,
                             /*grace_period=*/std::chrono::milliseconds(0));
@@ -235,9 +240,10 @@ TEST(IsLogEmptyRequestTest, Empty) {
   cb.assertCalled(E::OK, true);
 }
 
-TEST(IsLogEmptyRequestTest, EmptyWithGracePeriod) {
+TEST_F(IsLogEmptyRequestTest, EmptyWithGracePeriod) {
   Callback cb;
-  MockIsLogEmptyRequest req(5,
+  MockIsLogEmptyRequest req(this,
+                            5,
                             ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                             cb,
                             /*grace_period=*/std::chrono::milliseconds(500));
@@ -253,9 +259,10 @@ TEST(IsLogEmptyRequestTest, EmptyWithGracePeriod) {
   ASSERT_FALSE(req.isMockGracePeriodTimerActive());
 }
 
-TEST(IsLogEmptyRequestTest, NotEmpty) {
+TEST_F(IsLogEmptyRequestTest, NotEmpty) {
   Callback cb;
-  MockIsLogEmptyRequest req(5,
+  MockIsLogEmptyRequest req(this,
+                            5,
                             ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                             cb,
                             /*grace_period=*/std::chrono::milliseconds(0));
@@ -272,9 +279,10 @@ TEST(IsLogEmptyRequestTest, NotEmpty) {
   ASSERT_FALSE(req.isMockGracePeriodTimerActive());
 }
 
-TEST(IsLogEmptyRequestTest, SomeNodesEmpty1) {
+TEST_F(IsLogEmptyRequestTest, SomeNodesEmpty1) {
   Callback cb;
-  MockIsLogEmptyRequest req(10,
+  MockIsLogEmptyRequest req(this,
+                            10,
                             ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                             cb,
                             /*grace_period=*/std::chrono::milliseconds(0));
@@ -294,9 +302,10 @@ TEST(IsLogEmptyRequestTest, SomeNodesEmpty1) {
   ASSERT_FALSE(req.isMockGracePeriodTimerActive());
 }
 
-TEST(IsLogEmptyRequestTest, SomeNodesEmpty2) {
+TEST_F(IsLogEmptyRequestTest, SomeNodesEmpty2) {
   Callback cb;
-  MockIsLogEmptyRequest req(6,
+  MockIsLogEmptyRequest req(this,
+                            6,
                             ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                             cb,
                             /*grace_period=*/std::chrono::milliseconds(500));
@@ -318,9 +327,10 @@ TEST(IsLogEmptyRequestTest, SomeNodesEmpty2) {
   cb.assertCalled(E::OK, true);
 }
 
-TEST(IsLogEmptyRequestTest, NotEmptyAndExceededGracePeriod) {
+TEST_F(IsLogEmptyRequestTest, NotEmptyAndExceededGracePeriod) {
   Callback cb;
-  MockIsLogEmptyRequest req(5,
+  MockIsLogEmptyRequest req(this,
+                            5,
                             ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                             cb,
                             /*grace_period=*/std::chrono::milliseconds(500));
@@ -341,9 +351,10 @@ TEST(IsLogEmptyRequestTest, NotEmptyAndExceededGracePeriod) {
   cb.assertCalled(E::PARTIAL, false);
 }
 
-TEST(IsLogEmptyRequestTest, MixedResponsesNoGracePeriod) {
+TEST_F(IsLogEmptyRequestTest, MixedResponsesNoGracePeriod) {
   Callback cb;
-  MockIsLogEmptyRequest req(5,
+  MockIsLogEmptyRequest req(this,
+                            5,
                             ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                             cb,
                             /*grace_period=*/std::chrono::milliseconds(0));
@@ -361,7 +372,7 @@ TEST(IsLogEmptyRequestTest, MixedResponsesNoGracePeriod) {
   cb.assertCalled(E::PARTIAL, false);
 }
 
-TEST(IsLogEmptyRequestTest, CrossRackReplicated1) {
+TEST_F(IsLogEmptyRequestTest, CrossRackReplicated1) {
   Callback cb;
   ReplicationProperty replication(
       {{NodeLocationScope::RACK, 2}, {NodeLocationScope::NODE, 3}});
@@ -370,13 +381,14 @@ TEST(IsLogEmptyRequestTest, CrossRackReplicated1) {
   Configuration::NodesConfig nodes_config =
       createSimpleNodesConfig(storage_set_size);
 
-  // Use 9 nodes, 3 per rack, with 1 shard each.
-  addNodes(&nodes, 3, 1, "test.test1.01.01A.aa"); // nodes 0-2
-  addNodes(&nodes, 3, 1, "test.test1.02.02A.aa"); // nodes 3-5
-  addNodes(&nodes, 3, 1, "test.test1.02.02A.ab"); // nodes 6-9
+  // Use 9 nodes, 3 per rack, with 2 shard each.
+  addNodes(&nodes, 3, 2, "test.test1.01.01A.aa"); // nodes 0-2
+  addNodes(&nodes, 3, 2, "test.test1.02.02A.aa"); // nodes 3-5
+  addNodes(&nodes, 3, 2, "test.test1.02.02A.ab"); // nodes 6-9
   nodes_config.setNodes(std::move(nodes));
 
   MockIsLogEmptyRequest req(
+      this,
       storage_set_size,
       replication,
       cb,
@@ -417,7 +429,7 @@ TEST(IsLogEmptyRequestTest, CrossRackReplicated1) {
   ASSERT_FALSE(req.isMockGracePeriodTimerActive());
 }
 
-TEST(IsLogEmptyRequestTest, CrossRackReplicated2) {
+TEST_F(IsLogEmptyRequestTest, CrossRackReplicated2) {
   Callback cb;
   ReplicationProperty replication(
       {{NodeLocationScope::RACK, 3}, {NodeLocationScope::NODE, 4}});
@@ -426,13 +438,14 @@ TEST(IsLogEmptyRequestTest, CrossRackReplicated2) {
   Configuration::NodesConfig nodes_config =
       createSimpleNodesConfig(storage_set_size);
 
-  // Use 9 nodes, 3 per rack, with 1 shard each.
-  addNodes(&nodes, 3, 1, "test.test1.01.01A.aa"); // nodes 0-2
-  addNodes(&nodes, 3, 1, "test.test1.02.02A.aa"); // nodes 3-5
-  addNodes(&nodes, 3, 1, "test.test1.02.02A.ab"); // nodes 6-8
+  // Use 9 nodes, 3 per rack, with 2 shard each.
+  addNodes(&nodes, 3, 2, "test.test1.01.01A.aa"); // nodes 0-2
+  addNodes(&nodes, 3, 2, "test.test1.02.02A.aa"); // nodes 3-5
+  addNodes(&nodes, 3, 2, "test.test1.02.02A.ab"); // nodes 6-8
   nodes_config.setNodes(std::move(nodes));
 
   MockIsLogEmptyRequest req(
+      this,
       storage_set_size,
       replication,
       cb,
@@ -463,7 +476,7 @@ TEST(IsLogEmptyRequestTest, CrossRackReplicated2) {
   ASSERT_FALSE(req.isMockGracePeriodTimerActive());
 }
 
-TEST(IsLogEmptyRequestTest, CrossRackUnderReplicated1) {
+TEST_F(IsLogEmptyRequestTest, CrossRackUnderReplicated1) {
   Callback cb;
   ReplicationProperty replication(
       {{NodeLocationScope::RACK, 2}, {NodeLocationScope::NODE, 3}});
@@ -472,16 +485,17 @@ TEST(IsLogEmptyRequestTest, CrossRackUnderReplicated1) {
   Configuration::NodesConfig nodes_config =
       createSimpleNodesConfig(storage_set_size);
 
-  // Use 6 nodes, 2 per rack, with 1 shard each.
-  addNodes(&nodes, 2, 1, "test.test1.01.01A.aa"); // nodes 0-1
-  addNodes(&nodes, 2, 1, "test.test1.02.02A.aa"); // nodes 2-3
-  addNodes(&nodes, 2, 1, "test.test1.02.02A.ab"); // nodes 4-5
+  // Use 6 nodes, 2 per rack, with 2 shard each.
+  addNodes(&nodes, 2, 2, "test.test1.01.01A.aa"); // nodes 0-1
+  addNodes(&nodes, 2, 2, "test.test1.02.02A.aa"); // nodes 2-3
+  addNodes(&nodes, 2, 2, "test.test1.02.02A.ab"); // nodes 4-5
   nodes_config.setNodes(std::move(nodes));
 
   // Have N0's shard be underreplicated from the start
   changeShardStartingAuthStatus(node(0), AuthoritativeStatus::UNDERREPLICATION);
 
   MockIsLogEmptyRequest req(
+      this,
       storage_set_size,
       replication,
       cb,
@@ -514,7 +528,7 @@ TEST(IsLogEmptyRequestTest, CrossRackUnderReplicated1) {
   cb.assertCalled(E::OK, true);
 }
 
-TEST(IsLogEmptyRequestTest, CrossRackUnderReplicated2) {
+TEST_F(IsLogEmptyRequestTest, CrossRackUnderReplicated2) {
   Callback cb;
   ReplicationProperty replication(
       {{NodeLocationScope::RACK, 2}, {NodeLocationScope::NODE, 3}});
@@ -523,14 +537,15 @@ TEST(IsLogEmptyRequestTest, CrossRackUnderReplicated2) {
   Configuration::NodesConfig nodes_config =
       createSimpleNodesConfig(storage_set_size);
 
-  // Use 6 nodes, 2 per rack, with 1 shard each.
-  addNodes(&nodes, 2, 1, "test.test1.01.01A.aa"); // nodes 0-1
-  addNodes(&nodes, 2, 1, "test.test1.02.02A.aa"); // nodes 2-3
-  addNodes(&nodes, 2, 1, "test.test1.02.02A.ab"); // nodes 4-5
+  // Use 6 nodes, 2 per rack, with 2 shard each.
+  addNodes(&nodes, 2, 2, "test.test1.01.01A.aa"); // nodes 0-1
+  addNodes(&nodes, 2, 2, "test.test1.02.02A.aa"); // nodes 2-3
+  addNodes(&nodes, 2, 2, "test.test1.02.02A.ab"); // nodes 4-5
   ld_check_eq(nodes.size(), storage_set_size);
   nodes_config.setNodes(std::move(nodes));
 
   MockIsLogEmptyRequest req(
+      this,
       storage_set_size,
       replication,
       cb,
@@ -563,7 +578,7 @@ TEST(IsLogEmptyRequestTest, CrossRackUnderReplicated2) {
   ASSERT_FALSE(req.isMockGracePeriodTimerActive());
 }
 
-TEST(IsLogEmptyRequestTest, CrossRackUnderReplicated3) {
+TEST_F(IsLogEmptyRequestTest, CrossRackUnderReplicated3) {
   Callback cb;
   ReplicationProperty replication(
       {{NodeLocationScope::RACK, 2}, {NodeLocationScope::NODE, 3}});
@@ -572,14 +587,15 @@ TEST(IsLogEmptyRequestTest, CrossRackUnderReplicated3) {
   Configuration::NodesConfig nodes_config =
       createSimpleNodesConfig(storage_set_size);
 
-  // Use 6 nodes, 2 per rack, with 1 shard each.
-  addNodes(&nodes, 2, 1, "test.test1.01.01A.aa"); // nodes 0-1
-  addNodes(&nodes, 2, 1, "test.test1.02.02A.aa"); // nodes 2-3
-  addNodes(&nodes, 2, 1, "test.test1.02.02A.ab"); // nodes 4-5
+  // Use 6 nodes, 2 per rack, with 2 shard each.
+  addNodes(&nodes, 2, 2, "test.test1.01.01A.aa"); // nodes 0-1
+  addNodes(&nodes, 2, 2, "test.test1.02.02A.aa"); // nodes 2-3
+  addNodes(&nodes, 2, 2, "test.test1.02.02A.ab"); // nodes 4-5
   ld_check_eq(nodes.size(), storage_set_size);
   nodes_config.setNodes(std::move(nodes));
 
   MockIsLogEmptyRequest req(
+      this,
       storage_set_size,
       replication,
       cb,
@@ -620,7 +636,7 @@ TEST(IsLogEmptyRequestTest, CrossRackUnderReplicated3) {
   cb.assertCalled(E::PARTIAL, false);
 }
 
-TEST(IsLogEmptyRequestTest, EarlyDeadEnd) {
+TEST_F(IsLogEmptyRequestTest, EarlyDeadEnd) {
   Callback cb;
   ReplicationProperty replication({{NodeLocationScope::NODE, 3}});
   int storage_set_size = 6;
@@ -628,12 +644,13 @@ TEST(IsLogEmptyRequestTest, EarlyDeadEnd) {
   Configuration::NodesConfig nodes_config =
       createSimpleNodesConfig(storage_set_size);
 
-  // Use 6 nodes in a single rack with 1 shard each.
-  addNodes(&nodes, 6, 1, "test.test1.01.01A.aa");
+  // Use 6 nodes in a single rack with 2 shard each.
+  addNodes(&nodes, 6, 2, "test.test1.01.01A.aa");
   ld_check_eq(nodes.size(), storage_set_size);
   nodes_config.setNodes(std::move(nodes));
 
   MockIsLogEmptyRequest req(
+      this,
       storage_set_size,
       replication,
       cb,
@@ -671,7 +688,7 @@ TEST(IsLogEmptyRequestTest, EarlyDeadEnd) {
   ASSERT_FALSE(req.isMockGracePeriodTimerActive());
 }
 
-TEST(IsLogEmptyRequestTest, LateDeadEnd) {
+TEST_F(IsLogEmptyRequestTest, LateDeadEnd) {
   Callback cb;
   ReplicationProperty replication({{NodeLocationScope::NODE, 3}});
   int storage_set_size = 6;
@@ -679,12 +696,13 @@ TEST(IsLogEmptyRequestTest, LateDeadEnd) {
   Configuration::NodesConfig nodes_config =
       createSimpleNodesConfig(storage_set_size);
 
-  // Use 6 nodes in a single rack with 1 shard each.
-  addNodes(&nodes, 6, 1, "test.test1.01.01A.aa");
+  // Use 6 nodes in a single rack with 2 shard each.
+  addNodes(&nodes, 6, 2, "test.test1.01.01A.aa");
   ld_check_eq(nodes.size(), storage_set_size);
   nodes_config.setNodes(std::move(nodes));
 
   MockIsLogEmptyRequest req(
+      this,
       storage_set_size,
       replication,
       cb,
@@ -721,9 +739,10 @@ TEST(IsLogEmptyRequestTest, LateDeadEnd) {
   cb.assertCalled(E::PARTIAL, false);
 }
 
-TEST(IsLogEmptyRequestTest, Failed) {
+TEST_F(IsLogEmptyRequestTest, Failed) {
   Callback cb;
-  MockIsLogEmptyRequest req(5,
+  MockIsLogEmptyRequest req(this,
+                            5,
                             ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                             cb,
                             /*grace_period=*/std::chrono::milliseconds(0));
@@ -737,9 +756,10 @@ TEST(IsLogEmptyRequestTest, Failed) {
   cb.assertCalled(E::FAILED, false);
 }
 
-TEST(IsLogEmptyRequestTest, ClientTimeout) {
+TEST_F(IsLogEmptyRequestTest, ClientTimeout) {
   Callback cb;
-  MockIsLogEmptyRequest req(5,
+  MockIsLogEmptyRequest req(this,
+                            5,
                             ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                             cb,
                             /*grace_period=*/std::chrono::milliseconds(0));
@@ -752,9 +772,10 @@ TEST(IsLogEmptyRequestTest, ClientTimeout) {
   cb.assertCalled(E::TIMEDOUT, false);
 }
 
-TEST(IsLogEmptyRequestTest, BasicNodeDown) {
+TEST_F(IsLogEmptyRequestTest, BasicNodeDown) {
   Callback cb;
-  MockIsLogEmptyRequest req(6,
+  MockIsLogEmptyRequest req(this,
+                            6,
                             ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                             cb,
                             /*grace_period=*/std::chrono::milliseconds(500));
@@ -779,9 +800,10 @@ TEST(IsLogEmptyRequestTest, BasicNodeDown) {
   cb.assertCalled(E::OK, true);
 }
 
-TEST(IsLogEmptyRequestTest, NodeDownNoGracePeriod) {
+TEST_F(IsLogEmptyRequestTest, NodeDownNoGracePeriod) {
   Callback cb;
-  MockIsLogEmptyRequest req(6,
+  MockIsLogEmptyRequest req(this,
+                            6,
                             ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                             cb,
                             /*grace_period=*/std::chrono::milliseconds(0));
@@ -808,9 +830,10 @@ TEST(IsLogEmptyRequestTest, NodeDownNoGracePeriod) {
   cb.assertCalled(E::PARTIAL, false);
 }
 
-TEST(IsLogEmptyRequestTest, BasicTransientError) {
+TEST_F(IsLogEmptyRequestTest, BasicTransientError) {
   Callback cb;
-  MockIsLogEmptyRequest req(6,
+  MockIsLogEmptyRequest req(this,
+                            6,
                             ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                             cb,
                             /*grace_period=*/std::chrono::milliseconds(500));
@@ -834,9 +857,10 @@ TEST(IsLogEmptyRequestTest, BasicTransientError) {
   cb.assertCalled(E::PARTIAL, false);
 }
 
-TEST(IsLogEmptyRequestTest, TransientErrorNoGracePeriod) {
+TEST_F(IsLogEmptyRequestTest, TransientErrorNoGracePeriod) {
   Callback cb;
-  MockIsLogEmptyRequest req(6,
+  MockIsLogEmptyRequest req(this,
+                            6,
                             ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                             cb,
                             /*grace_period=*/std::chrono::milliseconds(0));
@@ -860,12 +884,13 @@ TEST(IsLogEmptyRequestTest, TransientErrorNoGracePeriod) {
   cb.assertCalled(E::PARTIAL, false);
 }
 
-TEST(IsLogEmptyRequestTest, NodeDisabled1) {
+TEST_F(IsLogEmptyRequestTest, NodeDisabled1) {
   Callback cb;
   // Have N0's shard be authoritative empty from the start
   changeShardStartingAuthStatus(
       node(0), AuthoritativeStatus::AUTHORITATIVE_EMPTY);
-  MockIsLogEmptyRequest req(6,
+  MockIsLogEmptyRequest req(this,
+                            6,
                             ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                             cb,
                             /*grace_period=*/std::chrono::milliseconds(500));
@@ -886,9 +911,10 @@ TEST(IsLogEmptyRequestTest, NodeDisabled1) {
   cb.assertCalled(E::OK, true);
 }
 
-TEST(IsLogEmptyRequestTest, NodeDisabled2) {
+TEST_F(IsLogEmptyRequestTest, NodeDisabled2) {
   Callback cb;
-  MockIsLogEmptyRequest req(6,
+  MockIsLogEmptyRequest req(this,
+                            6,
                             ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                             cb,
                             /*grace_period=*/std::chrono::milliseconds(500));
@@ -913,14 +939,15 @@ TEST(IsLogEmptyRequestTest, NodeDisabled2) {
   cb.assertCalled(E::OK, true);
 }
 
-TEST(IsLogEmptyRequestTest, AuthEmptyFMajorityOnStart) {
+TEST_F(IsLogEmptyRequestTest, AuthEmptyFMajorityOnStart) {
   Callback cb;
   // Have N[0..3] be authoritative empty from the start
   for (int i = 0; i < 4; i++) {
     changeShardStartingAuthStatus(
         node(i), AuthoritativeStatus::AUTHORITATIVE_EMPTY);
   }
-  MockIsLogEmptyRequest req(6,
+  MockIsLogEmptyRequest req(this,
+                            6,
                             ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                             cb,
                             /*grace_period=*/std::chrono::milliseconds(500));
@@ -930,14 +957,15 @@ TEST(IsLogEmptyRequestTest, AuthEmptyFMajorityOnStart) {
   cb.assertCalled(E::OK, true);
 }
 
-TEST(IsLogEmptyRequestTest, AllAuthEmptyOnStart) {
+TEST_F(IsLogEmptyRequestTest, AllAuthEmptyOnStart) {
   Callback cb;
   // Have all nodes be authoritative empty from the start
   for (int i = 0; i < 6; i++) {
     changeShardStartingAuthStatus(
         node(i), AuthoritativeStatus::AUTHORITATIVE_EMPTY);
   }
-  MockIsLogEmptyRequest req(6,
+  MockIsLogEmptyRequest req(this,
+                            6,
                             ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                             cb,
                             /*grace_period=*/std::chrono::milliseconds(500));
@@ -947,14 +975,15 @@ TEST(IsLogEmptyRequestTest, AllAuthEmptyOnStart) {
   cb.assertCalled(E::OK, true);
 }
 
-TEST(IsLogEmptyRequestTest, MostUnderreplicatedOnStart) {
+TEST_F(IsLogEmptyRequestTest, MostUnderreplicatedOnStart) {
   Callback cb;
   // Have most nodes be underreplicated from the start
   for (int i = 0; i < 5; i++) {
     changeShardStartingAuthStatus(
         node(i), AuthoritativeStatus::UNDERREPLICATION);
   }
-  MockIsLogEmptyRequest req(6,
+  MockIsLogEmptyRequest req(this,
+                            6,
                             ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                             cb,
                             /*grace_period=*/std::chrono::milliseconds(500));
@@ -965,14 +994,15 @@ TEST(IsLogEmptyRequestTest, MostUnderreplicatedOnStart) {
   cb.assertCalled(E::PARTIAL, false);
 }
 
-TEST(IsLogEmptyRequestTest, MostUnderreplicatedOnStart2) {
+TEST_F(IsLogEmptyRequestTest, MostUnderreplicatedOnStart2) {
   Callback cb;
   // Have most nodes be underreplicated from the start
   for (int i = 0; i < 2; i++) {
     changeShardStartingAuthStatus(
         node(i), AuthoritativeStatus::UNDERREPLICATION);
   }
-  MockIsLogEmptyRequest req(6,
+  MockIsLogEmptyRequest req(this,
+                            6,
                             ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                             cb,
                             /*grace_period=*/std::chrono::milliseconds(500));
@@ -987,14 +1017,15 @@ TEST(IsLogEmptyRequestTest, MostUnderreplicatedOnStart2) {
   cb.assertCalled(E::PARTIAL, false);
 }
 
-TEST(IsLogEmptyRequestTest, AllUnderreplicatedOnStart) {
+TEST_F(IsLogEmptyRequestTest, AllUnderreplicatedOnStart) {
   Callback cb;
   // Have all nodes be underreplicated from the start
   for (int i = 0; i < 6; i++) {
     changeShardStartingAuthStatus(
         node(i), AuthoritativeStatus::UNDERREPLICATION);
   }
-  MockIsLogEmptyRequest req(6,
+  MockIsLogEmptyRequest req(this,
+                            6,
                             ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                             cb,
                             /*grace_period=*/std::chrono::milliseconds(500));
@@ -1005,13 +1036,14 @@ TEST(IsLogEmptyRequestTest, AllUnderreplicatedOnStart) {
   cb.assertCalled(E::PARTIAL, false);
 }
 
-TEST(IsLogEmptyRequestTest, AllUnavailableOnStart) {
+TEST_F(IsLogEmptyRequestTest, AllUnavailableOnStart) {
   Callback cb;
   // Have all nodes be unavailable from the start
   for (int i = 0; i < 6; i++) {
     changeShardStartingAuthStatus(node(i), AuthoritativeStatus::UNAVAILABLE);
   }
-  MockIsLogEmptyRequest req(6,
+  MockIsLogEmptyRequest req(this,
+                            6,
                             ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                             cb,
                             /*grace_period=*/std::chrono::milliseconds(500));
@@ -1023,9 +1055,10 @@ TEST(IsLogEmptyRequestTest, AllUnavailableOnStart) {
 
 // Verify that we're correctly handling the case where some permanent error
 // causes finalizing from onMessageSent.
-TEST(IsLogEmptyRequestTest, LegacyNodeCausesDeadEnd1) {
+TEST_F(IsLogEmptyRequestTest, LegacyNodeCausesDeadEnd1) {
   Callback cb;
-  MockIsLogEmptyRequest req(6,
+  MockIsLogEmptyRequest req(this,
+                            6,
                             ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                             cb,
                             /*grace_period=*/std::chrono::milliseconds(500));
@@ -1052,9 +1085,10 @@ TEST(IsLogEmptyRequestTest, LegacyNodeCausesDeadEnd1) {
 
 // Have some node fail due to not supporting this request type; reach dead end
 // by non-empty node making consensus impossible.
-TEST(IsLogEmptyRequestTest, LegacyNodeThenDeadEnd) {
+TEST_F(IsLogEmptyRequestTest, LegacyNodeThenDeadEnd) {
   Callback cb;
-  MockIsLogEmptyRequest req(6,
+  MockIsLogEmptyRequest req(this,
+                            6,
                             ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                             cb,
                             /*grace_period=*/std::chrono::milliseconds(500));
@@ -1081,14 +1115,15 @@ TEST(IsLogEmptyRequestTest, LegacyNodeThenDeadEnd) {
 
 // If we hit a dead end before getting proper responses from an f-majority o
 // the nodes, we should finish with E::FAILED.
-TEST(IsLogEmptyRequestTest, EarlyDeadEndFailed1) {
+TEST_F(IsLogEmptyRequestTest, EarlyDeadEndFailed1) {
   Callback cb;
   // Have a bunch of nodes be underreplicated from the start
   for (int i = 0; i < 2; i++) {
     changeShardStartingAuthStatus(
         node(i), AuthoritativeStatus::UNDERREPLICATION);
   }
-  MockIsLogEmptyRequest req(6,
+  MockIsLogEmptyRequest req(this,
+                            6,
                             ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                             cb,
                             /*grace_period=*/std::chrono::milliseconds(500));
@@ -1105,9 +1140,10 @@ TEST(IsLogEmptyRequestTest, EarlyDeadEndFailed1) {
   cb.assertCalled(E::FAILED, false);
 }
 
-TEST(IsLogEmptyRequestTest, EarlyDeadEndFailed2) {
+TEST_F(IsLogEmptyRequestTest, EarlyDeadEndFailed2) {
   Callback cb;
-  MockIsLogEmptyRequest req(6,
+  MockIsLogEmptyRequest req(this,
+                            6,
                             ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                             cb,
                             /*grace_period=*/std::chrono::milliseconds(500));
@@ -1127,14 +1163,15 @@ TEST(IsLogEmptyRequestTest, EarlyDeadEndFailed2) {
   cb.assertCalled(E::FAILED, false);
 }
 
-TEST(IsLogEmptyRequestTest, SomeAuthEmpty1) {
+TEST_F(IsLogEmptyRequestTest, SomeAuthEmpty1) {
   Callback cb;
   // Have N0,N1 be authoritative empty from the start
   for (int i = 0; i < 2; i++) {
     changeShardStartingAuthStatus(
         node(i), AuthoritativeStatus::AUTHORITATIVE_EMPTY);
   }
-  MockIsLogEmptyRequest req(6,
+  MockIsLogEmptyRequest req(this,
+                            6,
                             ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                             cb,
                             /*grace_period=*/std::chrono::milliseconds(500));
@@ -1157,14 +1194,15 @@ TEST(IsLogEmptyRequestTest, SomeAuthEmpty1) {
   cb.assertCalled(E::OK, true);
 }
 
-TEST(IsLogEmptyRequestTest, SomeAuthEmpty2) {
+TEST_F(IsLogEmptyRequestTest, SomeAuthEmpty2) {
   Callback cb;
   // Have N0, N1 be authoritative empty from the start
   for (int i = 0; i < 2; i++) {
     changeShardStartingAuthStatus(
         node(i), AuthoritativeStatus::AUTHORITATIVE_EMPTY);
   }
-  MockIsLogEmptyRequest req(6,
+  MockIsLogEmptyRequest req(this,
+                            6,
                             ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                             cb,
                             /*grace_period=*/std::chrono::milliseconds(500));
@@ -1187,12 +1225,13 @@ TEST(IsLogEmptyRequestTest, SomeAuthEmpty2) {
   cb.assertCalled(E::OK, true);
 }
 
-TEST(IsLogEmptyRequestTest, SomeAuthEmpty3) {
+TEST_F(IsLogEmptyRequestTest, SomeAuthEmpty3) {
   Callback cb;
   // Have N0 be authoritative empty from the start
   changeShardStartingAuthStatus(
       node(0), AuthoritativeStatus::AUTHORITATIVE_EMPTY);
-  MockIsLogEmptyRequest req(6,
+  MockIsLogEmptyRequest req(this,
+                            6,
                             ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                             cb,
                             /*grace_period=*/std::chrono::milliseconds(500));
@@ -1215,9 +1254,10 @@ TEST(IsLogEmptyRequestTest, SomeAuthEmpty3) {
   cb.assertCalled(E::OK, false);
 }
 
-TEST(IsLogEmptyRequestTest, ResponseAfterAuthEmpty) {
+TEST_F(IsLogEmptyRequestTest, ResponseAfterAuthEmpty) {
   Callback cb;
-  MockIsLogEmptyRequest req(6,
+  MockIsLogEmptyRequest req(this,
+                            6,
                             ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                             cb,
                             /*grace_period=*/std::chrono::milliseconds(500));
@@ -1243,9 +1283,10 @@ TEST(IsLogEmptyRequestTest, ResponseAfterAuthEmpty) {
   cb.assertCalled(E::OK, false);
 }
 
-TEST(IsLogEmptyRequestTest, AuthEmptyThenPermanentError) {
+TEST_F(IsLogEmptyRequestTest, AuthEmptyThenPermanentError) {
   Callback cb;
-  MockIsLogEmptyRequest req(6,
+  MockIsLogEmptyRequest req(this,
+                            6,
                             ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                             cb,
                             /*grace_period=*/std::chrono::milliseconds(500));
@@ -1275,7 +1316,7 @@ TEST(IsLogEmptyRequestTest, AuthEmptyThenPermanentError) {
 }
 
 // Make sure wave timeout choice works as intended
-TEST(IsLogEmptyRequestTest, WaveTimeoutInterval) {
+TEST_F(IsLogEmptyRequestTest, WaveTimeoutInterval) {
   static_assert(IsLogEmptyRequest::WAVE_TIMEOUT_LOWER_BOUND_MIN == 500 &&
                     IsLogEmptyRequest::WAVE_TIMEOUT_LOWER_BOUND_MAX == 1500,
                 "Range to which we clamp wave timeouts changed, please update "
@@ -1305,10 +1346,10 @@ TEST(IsLogEmptyRequestTest, WaveTimeoutInterval) {
 // Make sure that when too many nodes are unable to respond due to mini
 // rebuilding being slow or stuck, we quit early with PARTIAL result, rather
 // than retrying until timeout.
-TEST(IsLogEmptyRequestTest, StuckMiniRebuilding) {
+TEST_F(IsLogEmptyRequestTest, StuckMiniRebuilding) {
   Callback cb;
   MockIsLogEmptyRequest req(
-      6, ReplicationProperty({{NodeLocationScope::NODE, 3}}), cb);
+      this, 6, ReplicationProperty({{NodeLocationScope::NODE, 3}}), cb);
   ASSERT_TRUE(req.isMockJobTimerActive());
   ASSERT_FALSE(req.isMockGracePeriodTimerActive());
   req.onReply(node(0), E::OK, true);
@@ -1328,10 +1369,10 @@ TEST(IsLogEmptyRequestTest, StuckMiniRebuilding) {
 }
 
 // Two nodes with stuck mini-rebuilding, one unresponsive node.
-TEST(IsLogEmptyRequestTest, StuckMiniRebuildingAndOneSlowNode) {
+TEST_F(IsLogEmptyRequestTest, StuckMiniRebuildingAndOneSlowNode) {
   Callback cb;
   MockIsLogEmptyRequest req(
-      20, ReplicationProperty({{NodeLocationScope::NODE, 3}}), cb);
+      this, 20, ReplicationProperty({{NodeLocationScope::NODE, 3}}), cb);
   ASSERT_TRUE(req.isMockJobTimerActive());
   ASSERT_FALSE(req.isMockGracePeriodTimerActive());
   req.onReply(node(0), E::OK, true);
@@ -1354,10 +1395,10 @@ TEST(IsLogEmptyRequestTest, StuckMiniRebuildingAndOneSlowNode) {
 }
 
 // A node finishes mini-rebuilding, makes us reach empty f-majority.
-TEST(IsLogEmptyRequestTest, MiniRebuildingFinishesEmpty) {
+TEST_F(IsLogEmptyRequestTest, MiniRebuildingFinishesEmpty) {
   Callback cb;
   MockIsLogEmptyRequest req(
-      6, ReplicationProperty({{NodeLocationScope::NODE, 3}}), cb);
+      this, 6, ReplicationProperty({{NodeLocationScope::NODE, 3}}), cb);
   ASSERT_TRUE(req.isMockJobTimerActive());
   ASSERT_FALSE(req.isMockGracePeriodTimerActive());
   req.onReply(node(0), E::OK, true);
@@ -1382,10 +1423,10 @@ TEST(IsLogEmptyRequestTest, MiniRebuildingFinishesEmpty) {
 }
 
 // A node finishes mini-rebuilding, makes us reach non-empty copyset.
-TEST(IsLogEmptyRequestTest, MiniRebuildingFinishesNonEmpty) {
+TEST_F(IsLogEmptyRequestTest, MiniRebuildingFinishesNonEmpty) {
   Callback cb;
   MockIsLogEmptyRequest req(
-      6, ReplicationProperty({{NodeLocationScope::NODE, 3}}), cb);
+      this, 6, ReplicationProperty({{NodeLocationScope::NODE, 3}}), cb);
   ASSERT_TRUE(req.isMockJobTimerActive());
   ASSERT_FALSE(req.isMockGracePeriodTimerActive());
   req.onReply(node(0), E::OK, false);
@@ -1410,12 +1451,13 @@ TEST(IsLogEmptyRequestTest, MiniRebuildingFinishesNonEmpty) {
 }
 
 // Check that haveShardAuthoritativeStatusDifferences() works.
-TEST(IsLogEmptyRequestTest, ShardAuthStatusDifferenceCheck) {
+TEST_F(IsLogEmptyRequestTest, ShardAuthStatusDifferenceCheck) {
   Callback cb;
   // Have N0's shard be authoritative empty from the start
   changeShardStartingAuthStatus(
       node(0), AuthoritativeStatus::AUTHORITATIVE_EMPTY);
-  MockIsLogEmptyRequest req(6,
+  MockIsLogEmptyRequest req(this,
+                            6,
                             ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                             cb,
                             /*grace_period=*/std::chrono::milliseconds(500));
