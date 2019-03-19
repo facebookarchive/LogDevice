@@ -1768,6 +1768,14 @@ void setup_dump_state_trigger() {
 }
 
 int main(int argc, const char** argv) {
+  // These parameters are used to split the work of checking between multiple
+  // checker instances. When the checker process is spawned it is passed the
+  // number of checker instances that will run (numTasks) and the ID of this
+  // instance (taskId). Based on this, the instance can pick the logs it will
+  // be responsible for. The default is one checker instance.
+  int numTasks = 1;
+  int taskId = 0;
+
   logdeviceInit();
 
   client_settings.reset(new ClientSettingsImpl);
@@ -1815,6 +1823,32 @@ int main(int argc, const char** argv) {
          ),
        "location of the cluster config file to use. Format: "
        "[file:]<path-to-config-file> or configerator:<configerator-path>"
+      )
+      ("num-tasks,n",
+       boost::program_options::value<int>(&numTasks)
+       ->default_value(numTasks)
+       ->notifier([](int val) -> void {
+          if (val < 1) {
+            throw boost::program_options::error(
+            "Invalid value for --num-tasks. Expected >= 1");
+          }
+         }),
+       "number of checker processes running in paralel against the same tier. "
+       "If > 1 then it's passed in to this tier so that in can be used by this "
+       "instance, in conjunction with --task-id, to determine which logs to check "
+       "from this task instance."
+      )
+      ("task-id,n",
+       boost::program_options::value<int>(&taskId)
+       ->default_value(taskId)
+       ->notifier([](int val) -> void {
+          if (val < 0) {
+            throw boost::program_options::error(
+            "Invalid value for --task-id. Expected >= 0");
+          }
+         }),
+       "Task ID of this instance. Used in conjunction with --num-tasks "
+       "to decide which logs to check from this task."
       )
       ("logs,l",
        boost::program_options::value<std::string>()
@@ -1897,6 +1931,10 @@ int main(int argc, const char** argv) {
     std::cerr << "--num-logs-to-check and --logs are incompatible" << std::endl;
     exit(2);
   }
+  if (numTasks > 1 && !logids_to_check.empty()) {
+    std::cerr << "--numTasks > 1 and --logs are incompatible" << std::endl;
+    exit(2);
+  }
   errors_to_ignore = checker_settings->dont_fail_on_errors;
   if (!checker_settings->enable_noisy_errors) {
     const RecordLevelError noisy_errors =
@@ -1928,12 +1966,18 @@ int main(int argc, const char** argv) {
       if (!logids_to_check_set.empty() && !logids_to_check_set.count(log_id)) {
         return;
       }
-      logs_to_check.push_back({
-          log_id,
-          replication_factor,
-          1,       // start_lsn
-          LSN_MAX, // until_lsn
-      });
+
+      if ((log_id.val_ % numTasks) == taskId) {
+        ld_debug("Queueing log %lu for checking", log_id.val_);
+        logs_to_check.push_back({
+            log_id,
+            replication_factor,
+            1,       // start_lsn
+            LSN_MAX, // until_lsn
+        });
+      } else {
+        ld_debug("Skipping log %lu due to instance filter", log_id.val_);
+      }
     };
     // Add log and its metadata log.
     if (!checker_settings->only_metadata_logs) {
