@@ -122,10 +122,7 @@ Sender::Sender(struct event_base* base,
                ClientIdxAllocator* client_id_allocator)
     : impl_(new SenderImpl(max_node_idx, num_workers, client_id_allocator)) {
   nw_shaping_container_ = std::make_unique<ShapingContainer>(
-      static_cast<size_t>(NodeLocationScope::ROOT) + 1,
-      base,
-      &tsc,
-      FlowGroupType::NETWORK);
+      static_cast<size_t>(NodeLocationScope::ROOT) + 1, base, &tsc);
 
   auto scope = NodeLocationScope::NODE;
   for (auto& fg : nw_shaping_container_->flow_groups_) {

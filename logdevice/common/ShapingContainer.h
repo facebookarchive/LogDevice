@@ -18,7 +18,7 @@
 #include "logdevice/common/EventHandler.h"
 #include "logdevice/common/FlowGroup.h"
 #include "logdevice/common/Worker.h"
-#include "logdevice/common/configuration/TrafficShapingConfig.h"
+#include "logdevice/common/configuration/ShapingConfig.h"
 #include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/stats/ServerHistograms.h"
 
@@ -37,9 +37,8 @@ class ShapingContainer {
   enum class RunType { REPLENISH, EVENTLOOP };
   explicit ShapingContainer(size_t num_scopes,
                             struct event_base* base,
-                            const configuration::ShapingConfig* sc,
-                            FlowGroupType type)
-      : type_(type),
+                            const configuration::ShapingConfig* scfg)
+      : type_(scfg->getType()),
         num_scopes_(num_scopes),
         flow_groups_run_requested_(LD_EV(event_new)(
             base,
@@ -57,9 +56,8 @@ class ShapingContainer {
 
     auto scope = NodeLocationScope::NODE;
     for (auto& fg : flow_groups_) {
-      fg.configure(sc->configured(scope));
+      fg.configure(scfg->configured(scope));
       scope = NodeLocation::nextGreaterScope(scope);
-      fg.setType(type);
     }
 
     if (!flow_groups_run_requested_) { // unlikely
@@ -180,7 +178,7 @@ class ShapingContainer {
     return flow_groups_[static_cast<int>(starting_scope)];
   }
 
-  FlowGroupType type_{FlowGroupType::NONE};
+  configuration::ShapingType type_{configuration::ShapingType::NONE};
   std::vector<FlowGroup> flow_groups_;
   // Provides mutual exclusion between application of flow group updates
   // by the TrafficShaper thread and normal packet transmission on this

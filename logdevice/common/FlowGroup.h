@@ -65,16 +65,8 @@ namespace facebook { namespace logdevice {
 
 class FlowGroupsUpdate {
  public:
-  FlowGroupsUpdate(size_t num_scopes, FlowGroupType type) {
-    type_ = type;
+  explicit FlowGroupsUpdate(size_t num_scopes) {
     group_entries.resize(num_scopes);
-    for (auto& ge : group_entries) {
-      ge.policy.setType(type);
-    }
-  }
-
-  FlowGroupType getType() {
-    return type_;
   }
 
   struct GroupEntry {
@@ -124,7 +116,6 @@ class FlowGroupsUpdate {
         overflow_entries;
   };
 
-  FlowGroupType type_{FlowGroupType::NONE};
   std::vector<GroupEntry> group_entries;
 };
 
@@ -217,16 +208,6 @@ class FlowGroup {
 
   void configure(bool configured) {
     configured_ = configured;
-  }
-
-  FlowGroupType getType() {
-    return type_;
-  }
-
-  void setType(FlowGroupType type) {
-    type_ = type;
-    meter_.setType(type);
-    priorityq_.setType(type);
   }
 
   /**
@@ -436,8 +417,6 @@ class FlowGroup {
   // variable is set to true when we issue a callback and reset to false
   // either after the first message is sent or the callback completes.
   bool assert_can_drain_ = false;
-
-  FlowGroupType type_{FlowGroupType::NONE};
 };
 
 }} // namespace facebook::logdevice

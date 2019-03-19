@@ -34,11 +34,11 @@ bool FlowGroup::applyUpdate(FlowGroupsUpdate::GroupEntry& update,
                             StatsHolder* stats) {
   // Skip update work if shaping on this flow group has been and continues
   // to be disabled.
-  if (!enabled_ && !update.policy.trafficShapingEnabled()) {
+  if (!enabled_ && !update.policy.enabled()) {
     return false;
   }
 
-  enabled_ = update.policy.trafficShapingEnabled();
+  enabled_ = update.policy.enabled();
 
   // Run one last time once after disabling traffic shaping on a FlowGroup.
   // This ensures that any messages blocked due to past resource constraints

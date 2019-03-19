@@ -5,6 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+
 #include "logdevice/common/configuration/ParsingHelpers.h"
 
 #include <algorithm>
@@ -320,6 +321,7 @@ bool parseEnumImpl(const char* enum_name,
 
   std::transform(output.begin(), output.end(), output.begin(), ::toupper);
   Enum e = enum_name_map.reverseLookup(output);
+
   if (e == enum_name_map.invalidEnum() || (filter != nullptr && !filter(e))) {
     std::string allowed_values;
     bool first = true;
@@ -724,10 +726,10 @@ bool parseSecurityInfo(const folly::dynamic& clusterMap,
 }
 
 bool parseList(const folly::dynamic& map,
-               const std::string& name,
+               const std::string& list_name,
                SecurityConfig& securityConfig,
                std::unordered_set<std::string>& values) {
-  auto list_iter = map.find(name);
+  auto list_iter = map.find(list_name);
   if (list_iter != map.items().end()) {
     // admin_list is only valid for config based and permission store
     // permission checking.
@@ -738,7 +740,7 @@ bool parseList(const folly::dynamic& map,
                "\"security_information\", this attribute should only be in "
                "the config if \"permission_checker_type\" is set to "
                "\"config\" or \"permission_store\"",
-               name.c_str());
+               list_name.c_str());
       err = E::INVALID_CONFIG;
       return false;
     }
@@ -747,14 +749,15 @@ bool parseList(const folly::dynamic& map,
       ld_error("Invalid \"%s\" attribute within "
                "\"security_information\", \"admin_list\" should map to "
                "an array",
-               name.c_str());
+               list_name.c_str());
       err = E::INVALID_CONFIG;
       return false;
     }
 
     for (const auto& admin : list_iter->second) {
       if (!admin.isString()) {
-        ld_error("Items within the \"%s\" list must be strings", name.c_str());
+        ld_error(
+            "Items within the \"%s\" list must be strings", list_name.c_str());
         err = E::INVALID_CONFIG;
         return false;
       }
@@ -764,23 +767,53 @@ bool parseList(const folly::dynamic& map,
   return true;
 }
 
-bool parseTrafficShaping(const folly::dynamic& map, TrafficShapingConfig& tsc) {
-  auto iter = map.find("traffic_shaping");
-  if (iter == map.items().end()) {
-    // Not a required Field
-    return true;
-  }
-
-  auto& section = iter->second;
-  if (!section.isObject()) {
-    ld_error("\"traffic_shaping\" must be a map");
+bool parseShapingConfig(ShapingConfig& sc,
+                        const folly::dynamic& shaping_section) {
+  if (!shaping_section.isObject()) {
+    ld_error("Section must be a map");
     err = E::INVALID_CONFIG;
     return false;
   }
 
-  // Not a required field, default is READ_BACKLOG.
-  tsc.default_read_traffic_class = TrafficClass::READ_BACKLOG;
-  bool successful = parseEnum(section,
+  auto map_it = shaping_section.find("scopes");
+  if (map_it == shaping_section.items().end()) {
+    // Not a required Field
+    return true;
+  }
+
+  auto& scopes = map_it->second;
+  if (!scopes.isArray()) {
+    ld_error("Scopes must be an array");
+    err = E::INVALID_CONFIG;
+    return false;
+  }
+
+  for (auto& scope : scopes) {
+    if (!parseShapingScope(sc, scope)) {
+      ld_error("Parsing of scope failed!");
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool parseTrafficShaping(const folly::dynamic& map, TrafficShapingConfig& tsc) {
+  // 1. Find optional "traffic_shaping" section
+  folly::dynamic::const_item_iterator iter = map.find("traffic_shaping");
+  if (iter == map.items().end()) {
+    return true;
+  }
+
+  // 2. Parse common parts of a shaping config
+  if (!parseShapingConfig(tsc, iter->second)) {
+    ld_error("Parsing of traffic_shaping failed");
+    return false;
+  }
+
+  // 3. Parse optional fields that are relevant only to "traffic_shaping"
+  tsc.default_read_traffic_class = TrafficClass::READ_BACKLOG; // default value
+  bool successful = parseEnum(iter->second,
                               "default_read_traffic_class",
                               tsc.default_read_traffic_class,
                               /*defaults*/ nullptr,
@@ -791,31 +824,27 @@ bool parseTrafficShaping(const folly::dynamic& map, TrafficShapingConfig& tsc) {
     return false;
   }
 
-  iter = section.find("scopes");
-  if (iter == section.items().end()) {
-    // Not a required Field
+  return true;
+}
+
+bool parseReadIOThrottling(const folly::dynamic& map, ShapingConfig& rsc) {
+  // 1. Find optional "read_throttling" section
+  folly::dynamic::const_item_iterator iter = map.find("read_throttling");
+  if (iter == map.items().end()) {
     return true;
   }
 
-  auto& scopes = iter->second;
-  if (!scopes.isArray()) {
-    ld_error("\"traffic_shaping::scopes\" must be an array");
-    err = E::INVALID_CONFIG;
+  // 2. Parse common parts of a shaping config
+  if (!parseShapingConfig(rsc, iter->second)) {
+    ld_error("Parsing of read_throttling failed");
     return false;
-  }
-
-  for (auto& scope : scopes) {
-    if (!parseTrafficShapingScope(scope, tsc)) {
-      return false;
-    }
   }
   return true;
 }
 
-bool parseTrafficShapingScope(const folly::dynamic& scope,
-                              TrafficShapingConfig& tsc) {
+bool parseShapingScope(ShapingConfig& sc, const folly::dynamic& scope) {
   if (!scope.isObject()) {
-    ld_error("Elements of \"traffic_shaping::scopes\" must be objects");
+    ld_error("Elements of scopes must be objects");
     err = E::INVALID_CONFIG;
     return false;
   }
@@ -825,17 +854,34 @@ bool parseTrafficShapingScope(const folly::dynamic& scope,
   if (!successful) {
     return false;
   }
-  const std::string& scope_name = NodeLocation::scopeNames()[scope_enum];
 
-  auto& fgp = tsc.flowGroupPolicies[static_cast<size_t>(scope_enum)];
+  const std::set<NodeLocationScope>& valid_scopes = sc.getValidScopes();
+  const std::string& scope_name = NodeLocation::scopeNames()[scope_enum];
+  if (std::find(valid_scopes.begin(), valid_scopes.end(), scope_enum) ==
+      valid_scopes.end()) {
+    ld_error("Invalid scope_name %s found", scope_name.c_str());
+    err = E::INVALID_CONFIG;
+    return false;
+  }
+
+  auto fgp_it = sc.flowGroupPolicies.find(scope_enum);
+  if (fgp_it == sc.flowGroupPolicies.end()) {
+    auto result = sc.flowGroupPolicies.insert(
+        std::pair<NodeLocationScope, FlowGroupPolicy>(
+            scope_enum, FlowGroupPolicy()));
+    if (!result.second) {
+      ld_error("Couldn't insert scope_name:%s", scope_name.c_str());
+      return false;
+    }
+    fgp_it = result.first;
+  }
+  auto& fgp(fgp_it->second);
 
   // Not a required field, default value for shaping_enabled is false.
   bool shaping_enabled = false;
   successful = getBoolFromMap(scope, "shaping_enabled", shaping_enabled);
   if (!(successful || err == E::NOTFOUND)) {
-    ld_error("Invalid type for "
-             "\"traffic_shaping.scopes[%s].shaping_enabled\". "
-             "Bool expected.",
+    ld_error("Invalid type for scopes[%s].shaping_enabled. Bool expected.",
              scope_name.c_str());
     err = E::INVALID_CONFIG;
     return false;
@@ -855,22 +901,23 @@ bool parseTrafficShapingScope(const folly::dynamic& scope,
     }
 
     for (auto& meter : meters) {
-      if (!parseTrafficShapingScopeMeter(scope_name, meter, fgp)) {
+      if (!parseShapingScopeMeter(scope_name, meter, fgp)) {
+        ld_error("Parsing of scope meter failed!");
         return false;
       }
     }
   }
-
   fgp.setConfigured(true);
+
   return true;
 }
 
-bool parseTrafficShapingScopeMeter(const std::string& scope_name,
-                                   const folly::dynamic& meter,
-                                   FlowGroupPolicy& fgp) {
+bool parseShapingScopeMeter(const std::string& scope_name,
+                            const folly::dynamic& meter,
+                            FlowGroupPolicy& fgp) {
   if (!meter.isObject()) {
     ld_error("Invalid element within "
-             "\"traffic_shaping.scopes[%s].meters[]\". Object expected.",
+             "scopes[%s].meters[]. Object expected.",
              scope_name.c_str());
     err = E::INVALID_CONFIG;
     return false;
@@ -879,12 +926,10 @@ bool parseTrafficShapingScopeMeter(const std::string& scope_name,
   std::string meter_name;
   if (!getStringFromMap(meter, "name", meter_name)) {
     if (err == E::NOTFOUND) {
-      ld_error("Missing required attribute "
-               "\"traffic_shaping.scopes[%s].meters[??].name\".",
+      ld_error("Missing required attribute scopes[%s].meters[??].name.",
                scope_name.c_str());
     } else {
-      ld_error("Invalid type for "
-               "\"traffic_shaping.scopes[%s].meters[??].name\". "
+      ld_error("Invalid type for scopes[%s].meters[??].name. "
                "String representing a priority expected.",
                scope_name.c_str());
     }
@@ -894,9 +939,8 @@ bool parseTrafficShapingScopeMeter(const std::string& scope_name,
 
   Priority p = Priority::NUM_PRIORITIES;
   if (meter_name != "PRIORITY_QUEUE" && !parseEnum(meter, "name", p)) {
-    ld_error("While processing "
-             "\"traffic_shaping.scopes[%s].meters[??].name\".",
-             scope_name.c_str());
+    ld_error(
+        "While processing scopes[%s].meters[??].name.", scope_name.c_str());
     return false;
   }
 
@@ -926,15 +970,13 @@ bool parseTrafficShapingScopeMeter(const std::string& scope_name,
         if (!rv) {
           if (err == E::NOTFOUND) {
             if (required) {
-              ld_error("Missing required attribute "
-                       "\"traffic_shaping.scopes[%s].meters[%s].%s\".",
+              ld_error("Missing required attribute scopes[%s].meters[%s].%s.",
                        scope_name.c_str(),
                        meter_name.c_str(),
                        preferred_attrib_name);
             }
           } else {
-            ld_error("Invalid value for "
-                     "\"traffic_shaping.scopes[%s].meters[%s].%s\". "
+            ld_error("Invalid value for scopes[%s].meters[%s].%s. "
                      "Positive integer less than INT64_MAX expected.",
                      scope_name.c_str(),
                      meter_name.c_str(),
@@ -943,8 +985,7 @@ bool parseTrafficShapingScopeMeter(const std::string& scope_name,
           err = E::INVALID_CONFIG;
           return false;
         } else if (value < 0) {
-          ld_error("Invalid value for "
-                   "\"traffic_shaping.scopes[%s].meters[%s].%s\". "
+          ld_error("Invalid value for scopes[%s].meters[%s].%s. "
                    "Non-negative integer less than INT64_MAX expected.",
                    scope_name.c_str(),
                    meter_name.c_str(),
@@ -974,7 +1015,6 @@ bool parseTrafficShapingScopeMeter(const std::string& scope_name,
 
   fgp.set(
       p, max_burst_bytes, guaranteed_bytes_per_second, max_bytes_per_second);
-
   return true;
 }
 

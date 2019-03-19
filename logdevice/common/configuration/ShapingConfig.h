@@ -7,7 +7,10 @@
  */
 #pragma once
 
-#include <vector>
+#include <set>
+
+#include <folly/dynamic.h>
+#include <folly/json.h>
 
 #include "logdevice/common/configuration/FlowGroupPolicy.h"
 #include "logdevice/common/configuration/NodeLocation.h"
@@ -25,12 +28,46 @@ struct dynamic;
 
 namespace facebook { namespace logdevice { namespace configuration {
 
+enum class ShapingType {
+  NONE,
+  NETWORK,
+  READS,
+};
+
 class ShapingConfig {
  public:
-  virtual bool configured(NodeLocationScope) const = 0;
-  virtual folly::dynamic toFollyDynamic() const = 0;
-  std::vector<FlowGroupPolicy> flowGroupPolicies;
+  ShapingConfig(ShapingType type,
+                std::set<NodeLocationScope> valid_scopes,
+                const std::set<NodeLocationScope>& scopes_to_configure);
+
+  bool configured(NodeLocationScope scope) const;
+
+  /* Common Serialization functions */
+  static folly::dynamic toFollyDynamic(const NodeLocationScope scope,
+                                       const FlowGroupPolicy& fgp);
+  static folly::dynamic toFollyDynamic(const Priority pri,
+                                       const FlowGroupPolicy::Entry& fgp_entry);
+  void toFollyDynamic(folly::dynamic& result) const;
+  virtual folly::dynamic toFollyDynamic() const {
+    folly::dynamic result = folly::dynamic::object();
+    ShapingConfig::toFollyDynamic(result);
+    return result;
+  }
+
+  ShapingType getType() const {
+    return type_;
+  }
+
+  const std::set<NodeLocationScope>& getValidScopes() {
+    return valid_scopes_;
+  }
+
+  std::map<NodeLocationScope, FlowGroupPolicy> flowGroupPolicies;
   virtual ~ShapingConfig() {}
+
+ private:
+  ShapingType type_{ShapingType::NONE};
+  std::set<NodeLocationScope> valid_scopes_;
 };
 
 }}} // namespace facebook::logdevice::configuration

@@ -335,6 +335,10 @@ class NodeStatsControllerIntegrationTest
         ServerConfig::SecurityConfig(),
         ServerConfig::TraceLoggerConfig(),
         ServerConfig::TrafficShapingConfig(),
+        ServerConfig::ShapingConfig(
+            configuration::ShapingType::READS,
+            std::set<NodeLocationScope>{NodeLocationScope::NODE},
+            std::set<NodeLocationScope>{NodeLocationScope::NODE}),
         new_settings,
         other->getClientSettingsConfig());
 

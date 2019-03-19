@@ -77,7 +77,7 @@ class TrafficShaper {
    */
   void mainLoop();
 
-  bool dispatchUpdateCommon(const configuration::ShapingConfig* shaping_config,
+  bool dispatchUpdateCommon(const configuration::ShapingConfig& shaping_config,
                             int nworkers,
                             FlowGroupsUpdate& update,
                             StatsHolder* stats);

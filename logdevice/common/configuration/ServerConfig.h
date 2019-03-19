@@ -384,21 +384,25 @@ class ServerConfig {
    *
    * Public for testing.
    */
-  static std::unique_ptr<ServerConfig>
-  fromDataTest(std::string cluster_name,
-               NodesConfig nodes,
-               MetaDataLogsConfig metadata_logs = MetaDataLogsConfig(),
-               PrincipalsConfig = PrincipalsConfig(),
-               SecurityConfig securityConfig = SecurityConfig(),
-               TraceLoggerConfig trace_config = TraceLoggerConfig(),
-               TrafficShapingConfig = TrafficShapingConfig(),
-               SettingsConfig server_settings_config = SettingsConfig(),
-               SettingsConfig client_settings_config = SettingsConfig(),
-               InternalLogs internal_logs = InternalLogs(),
-               OptionalTimestamp clusterCreationTime = OptionalTimestamp(),
-               folly::dynamic customFields = folly::dynamic::object,
-               const std::string& ns_delimiter =
-                   LogsConfig::default_namespace_delimiter_);
+  static std::unique_ptr<ServerConfig> fromDataTest(
+      std::string cluster_name,
+      NodesConfig nodes,
+      MetaDataLogsConfig metadata_logs = MetaDataLogsConfig(),
+      PrincipalsConfig = PrincipalsConfig(),
+      SecurityConfig securityConfig = SecurityConfig(),
+      TraceLoggerConfig trace_config = TraceLoggerConfig(),
+      TrafficShapingConfig = TrafficShapingConfig(),
+      ShapingConfig =
+          ShapingConfig(configuration::ShapingType::READS,
+                        std::set<NodeLocationScope>{NodeLocationScope::NODE},
+                        std::set<NodeLocationScope>{NodeLocationScope::NODE}),
+      SettingsConfig server_settings_config = SettingsConfig(),
+      SettingsConfig client_settings_config = SettingsConfig(),
+      InternalLogs internal_logs = InternalLogs(),
+      OptionalTimestamp clusterCreationTime = OptionalTimestamp(),
+      folly::dynamic customFields = folly::dynamic::object,
+      const std::string& ns_delimiter =
+          LogsConfig::default_namespace_delimiter_);
 
   /**
    * Returns a duplicate of the configuration.
@@ -483,8 +487,8 @@ class ServerConfig {
     return trafficShapingConfig_;
   }
 
-  const ShapingConfig* getTrafficShapingConfigPtr() const {
-    return &trafficShapingConfig_;
+  const ShapingConfig& getReadIOShapingConfig() const {
+    return readIOShapingConfig_;
   }
 
   /**
@@ -549,6 +553,7 @@ class ServerConfig {
                SecurityConfig securityConfig,
                TraceLoggerConfig traceLoggerConfig,
                TrafficShapingConfig trafficShapingConfig,
+               ShapingConfig readIOShapingConfig,
                SettingsConfig serverSettingsConfig,
                SettingsConfig clientSettingsConfig,
                InternalLogs internalLogs,
@@ -563,21 +568,25 @@ class ServerConfig {
   // Creates a ServerConfig object from existing cluster name,
   // NodesConfig, LogsConfig, SecurityConfig and an optional ZookeeperConfig
   // instances.
-  static std::unique_ptr<ServerConfig>
-  fromData(std::string cluster_name,
-           NodesConfig nodes,
-           MetaDataLogsConfig metadata_logs = MetaDataLogsConfig(),
-           PrincipalsConfig = PrincipalsConfig(),
-           SecurityConfig securityConfig = SecurityConfig(),
-           TraceLoggerConfig trace_config = TraceLoggerConfig(),
-           TrafficShapingConfig = TrafficShapingConfig(),
-           SettingsConfig server_settings_config = SettingsConfig(),
-           SettingsConfig client_settings_config = SettingsConfig(),
-           InternalLogs internal_logs = InternalLogs(),
-           OptionalTimestamp clusterCreationTime = OptionalTimestamp(),
-           folly::dynamic customFields = folly::dynamic::object,
-           const std::string& ns_delimiter =
-               LogsConfig::default_namespace_delimiter_);
+  static std::unique_ptr<ServerConfig> fromData(
+      std::string cluster_name,
+      NodesConfig nodes,
+      MetaDataLogsConfig metadata_logs = MetaDataLogsConfig(),
+      PrincipalsConfig = PrincipalsConfig(),
+      SecurityConfig securityConfig = SecurityConfig(),
+      TraceLoggerConfig trace_config = TraceLoggerConfig(),
+      TrafficShapingConfig = TrafficShapingConfig(),
+      ShapingConfig =
+          ShapingConfig(configuration::ShapingType::READS,
+                        std::set<NodeLocationScope>{NodeLocationScope::NODE},
+                        std::set<NodeLocationScope>{NodeLocationScope::NODE}),
+      SettingsConfig server_settings_config = SettingsConfig(),
+      SettingsConfig client_settings_config = SettingsConfig(),
+      InternalLogs internal_logs = InternalLogs(),
+      OptionalTimestamp clusterCreationTime = OptionalTimestamp(),
+      folly::dynamic customFields = folly::dynamic::object,
+      const std::string& ns_delimiter =
+          LogsConfig::default_namespace_delimiter_);
 
   std::string clusterName_;
   OptionalTimestamp clusterCreationTime_;
@@ -588,6 +597,7 @@ class ServerConfig {
   SecurityConfig securityConfig_;
   SequencersConfig sequencersConfig_;
   TrafficShapingConfig trafficShapingConfig_;
+  ShapingConfig readIOShapingConfig_;
   TraceLoggerConfig traceLoggerConfig_;
   SettingsConfig serverSettingsConfig_;
   SettingsConfig clientSettingsConfig_;

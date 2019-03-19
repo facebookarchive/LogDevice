@@ -128,14 +128,6 @@ class PriorityQueue : boost::noncopyable {
             uint64_t to_cut,
             std::function<void(T&)> = nullptr);
 
-  void setType(FlowGroupType type) {
-    type_ = type;
-  }
-
-  FlowGroupType getType() {
-    return type_;
-  }
-
  private:
   using Queue = CostQueueBase<T, ListHook>;
   using CostQueues =
@@ -153,8 +145,6 @@ class PriorityQueue : boost::noncopyable {
 
   // One CostQueue "bucket" per-priority level.
   CostQueues queues_;
-
-  FlowGroupType type_{FlowGroupType::NONE};
 
   static_assert(asInt(Priority::NUM_PRIORITIES) <
                     sizeof(unsigned long) * CHAR_BIT,

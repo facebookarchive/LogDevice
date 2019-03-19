@@ -40,7 +40,7 @@ class TrafficShaper::RunFlowGroupsRequest : public Request {
 TrafficShaper::TrafficShaper(Processor* processor, StatsHolder* stats)
     : processor_(processor), stats_(stats) {
   nw_update_ = std::make_unique<FlowGroupsUpdate>(
-      static_cast<size_t>(NodeLocationScope::ROOT) + 1, FlowGroupType::NETWORK);
+      static_cast<size_t>(NodeLocationScope::ROOT) + 1);
 
   if (processor_->getAllWorkersCount() != 0) {
     mainLoopThread_ = std::thread(&TrafficShaper::mainLoop, this);
@@ -113,7 +113,7 @@ void TrafficShaper::mainLoop() {
       for (auto& policy : shaping_config.flowGroupPolicies) {
         auto value = 0;
         Priority p = Priority::MAX;
-        for (const auto& entry : policy.entries) {
+        for (const auto& entry : policy.second.entries) {
           value += entry.guaranteed_bw;
 
           if (p == Priority::INVALID) {
@@ -144,21 +144,21 @@ void TrafficShaper::mainLoop() {
 }
 
 bool TrafficShaper::dispatchUpdateCommon(
-    const configuration::ShapingConfig* shaping_config,
+    const configuration::ShapingConfig& shaping_config,
     int nworkers,
     FlowGroupsUpdate& update,
     StatsHolder* stats) {
   bool future_updates_required = false;
-  auto policy_it = shaping_config->flowGroupPolicies.begin();
+  auto policy_it = shaping_config.flowGroupPolicies.begin();
   auto scope = NodeLocationScope::NODE;
   for (auto& ge : update.group_entries) {
-    if (policy_it->trafficShapingEnabled()) {
+    if (policy_it->second.enabled()) {
       future_updates_required = true;
     }
 
     // The policy or interval may change at any time via the admin
     // interface, so normalize on each update.
-    ge.policy = policy_it->normalize(nworkers, updateInterval_);
+    ge.policy = policy_it->second.normalize(nworkers, updateInterval_);
 
     // Any overflow from the last run that couldn't be used in the
     // priority queue buckets indicates that the priority queues have
@@ -196,8 +196,8 @@ bool TrafficShaper::dispatchUpdateCommon(
 
 bool TrafficShaper::dispatchUpdateNw() {
   auto config = processor_->config_->updateableServerConfig()->get();
-  const configuration::ShapingConfig* shaping_config;
-  shaping_config = config->getTrafficShapingConfigPtr();
+  const configuration::ShapingConfig& shaping_config =
+      config->getTrafficShapingConfig();
   bool future_updates_required = dispatchUpdateCommon(
       shaping_config, processor_->getAllWorkersCount(), *nw_update_, stats_);
 

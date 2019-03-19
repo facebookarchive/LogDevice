@@ -9,6 +9,7 @@
 
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/SecurityConfig.h"
+#include "logdevice/common/configuration/ShapingConfig.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/include/Err.h"
 #include "logdevice/include/LogAttributes.h"
@@ -262,47 +263,61 @@ bool parseLogACLs(
     logsconfig::Attribute<logsconfig::LogAttributes::ACLList>& output);
 
 /**
- * parses "shadow" for traffic shadowing
+ * Parses "shadow" for traffic shadowing
  */
 bool parseShadow(
     const folly::dynamic& shadow,
     logsconfig::Attribute<logsconfig::LogAttributes::Shadow>& output);
 
 /**
- * parses the optional "principals" array within the config
+ * Parses the optional "principals" array within the config
  */
 bool parsePrincipals(const folly::dynamic& clusterMap, PrincipalsConfig&);
 
 /**
- * parses the "security_information" entry within the config
+ * Parses the "security_information" entry within the config
  */
 bool parseSecurityInfo(const folly::dynamic& clusterMap, SecurityConfig&);
 
 /**
- * parses the optional "traffic_shaping" map within the config
+ * Common code to parse the optional Shaping map within the config,
+ */
+bool parseShapingConfig(ShapingConfig& sc,
+                        const folly::dynamic& shaping_section);
+
+/**
+ * Extract optional "traffic_shaping" section of the config
  */
 bool parseTrafficShaping(const folly::dynamic& clusterMap,
                          TrafficShapingConfig&);
 
 /**
- * parses an element of the "traffic_shaping::scopes" array.
+ * Extract optional "read_throttling" section of the config
  */
-bool parseTrafficShapingScope(const folly::dynamic& scope,
-                              TrafficShapingConfig&);
+bool parseReadIOThrottling(const folly::dynamic& clusterMap,
+                           ShapingConfig& rsc);
 
 /**
- * parses an element of the "traffic_shaping::scopes::meters" array.
+ * Generic method to parse an element of the "shaping::scopes" array
  */
-bool parseTrafficShapingScopeMeter(const std::string& scope_name,
-                                   const folly::dynamic& meter,
-                                   FlowGroupPolicy&);
+bool parseShapingScope(ShapingConfig& sc, const folly::dynamic& scope);
 
 /**
- * parses an "name" element of the map to the "values".
- * "name" filed is not a required.
+ * Parses an element of the "scopes::meters" array.
+ */
+bool parseShapingScopeMeter(const std::string& scope_name,
+                            const folly::dynamic& meter,
+                            FlowGroupPolicy& fgp);
+
+/**
+ * Parses an optional element `list_name` in the map, to a set of strings
+ * contained inside it (`values`).
+ * For example: "security_information" section in the config contains lists like
+ * "admin_list" : ["logdevice_admins", "logdevice_testing_admins"]
+ * "domain_list" : ["domains/hipster/AuthorizationScribeSigned"]
  */
 bool parseList(const folly::dynamic& map,
-               const std::string& name,
+               const std::string& list_name,
                SecurityConfig& securityConfig,
                std::unordered_set<std::string>& values);
 }}}} // namespace facebook::logdevice::configuration::parser

@@ -12,11 +12,6 @@
 
 #include "logdevice/common/FlowMeter.h"
 #include "logdevice/common/Priority.h"
-#include "logdevice/common/configuration/NodeLocation.h"
-
-namespace folly {
-struct dynamic;
-}
 
 namespace facebook { namespace logdevice {
 
@@ -29,9 +24,6 @@ namespace facebook { namespace logdevice {
 class FlowGroupPolicy {
  public:
   struct Entry {
-    /** Serialize. */
-    folly::dynamic toFollyDynamic(Priority) const;
-
     // NOTE: FlowGroupMeters can go negative (into debt). This is required
     //       in order to support messages that are larger than the "leaky
     //       bucket size". To eliminate the chance of subtle bugs introduced
@@ -55,8 +47,8 @@ class FlowGroupPolicy {
   bool configured() const {
     return configured_;
   }
-  bool trafficShapingEnabled() const {
-    return traffic_shaping_enabled_;
+  bool enabled() const {
+    return enabled_;
   }
 
   void setConfigured(bool configured) {
@@ -64,11 +56,7 @@ class FlowGroupPolicy {
   }
 
   void setEnabled(bool enable) {
-    traffic_shaping_enabled_ = enable;
-  }
-
-  void setType(FlowGroupType type) {
-    type_ = type;
+    enabled_ = enable;
   }
 
   void set(Priority p,
@@ -90,9 +78,6 @@ class FlowGroupPolicy {
   FlowGroupPolicy normalize(size_t num_workers,
                             std::chrono::microseconds interval) const;
 
-  /** Serialize. */
-  folly::dynamic toFollyDynamic(NodeLocationScope) const;
-
   /**
    * Convenience function for accessing the bandwidth policy for
    * shared priority queue.
@@ -110,8 +95,7 @@ class FlowGroupPolicy {
 
  private:
   bool configured_ = false;
-  bool traffic_shaping_enabled_ = false;
-  FlowGroupType type_{FlowGroupType::NONE};
+  bool enabled_ = false;
 };
 
 }} // namespace facebook::logdevice

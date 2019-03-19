@@ -16,10 +16,6 @@ namespace facebook { namespace logdevice { namespace configuration {
 struct TrafficShapingConfig : public ShapingConfig {
   TrafficShapingConfig();
 
-  bool configured(NodeLocationScope scope) const {
-    return flowGroupPolicies[static_cast<size_t>(scope)].configured();
-  }
-
   folly::dynamic toFollyDynamic() const;
 
   TrafficClass default_read_traffic_class = TrafficClass::READ_BACKLOG;

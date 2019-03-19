@@ -8,40 +8,28 @@
 #include "logdevice/common/configuration/TrafficShapingConfig.h"
 
 #include <folly/dynamic.h>
-#include <folly/json.h>
-
-#include "logdevice/common/PriorityMap.h"
 
 namespace facebook { namespace logdevice { namespace configuration {
 
-TrafficShapingConfig::TrafficShapingConfig() {
-  flowGroupPolicies.resize(NodeLocation::NUM_ALL_SCOPES);
-  for (auto& fgp : flowGroupPolicies) {
-    fgp.setType(FlowGroupType::NETWORK);
-  }
-  flowGroupPolicies[static_cast<size_t>(NodeLocationScope::NODE)].setConfigured(
-      true);
-  flowGroupPolicies[static_cast<size_t>(NodeLocationScope::ROOT)].setConfigured(
-      true);
+TrafficShapingConfig::TrafficShapingConfig()
+    : ShapingConfig(ShapingType::NETWORK,
+                    std::set<NodeLocationScope>{NodeLocationScope::NODE,
+                                                NodeLocationScope::RACK,
+                                                NodeLocationScope::ROW,
+                                                NodeLocationScope::CLUSTER,
+                                                NodeLocationScope::DATA_CENTER,
+                                                NodeLocationScope::REGION,
+                                                NodeLocationScope::ROOT},
+                    std::set<NodeLocationScope>{NodeLocationScope::NODE,
+                                                NodeLocationScope::ROOT}) {
+  static_assert(static_cast<int>(NodeLocationScope::INVALID) == 7, "");
 }
 
 folly::dynamic TrafficShapingConfig::toFollyDynamic() const {
   folly::dynamic result =
       folly::dynamic::object("default_read_traffic_class",
                              trafficClasses()[default_read_traffic_class]);
-
-  folly::dynamic scope_list = folly::dynamic::array;
-  NodeLocationScope scope = NodeLocationScope::NODE;
-  for (const auto& fgp : flowGroupPolicies) {
-    if (fgp.configured()) {
-      scope_list.push_back(fgp.toFollyDynamic(scope));
-    }
-    scope = NodeLocation::nextGreaterScope(scope);
-  }
-  if (!scope_list.empty()) {
-    result["scopes"] = scope_list;
-  }
-
+  ShapingConfig::toFollyDynamic(result);
   return result;
 }
 

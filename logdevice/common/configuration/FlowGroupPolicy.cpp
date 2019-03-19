@@ -7,10 +7,6 @@
  */
 #include "logdevice/common/configuration/FlowGroupPolicy.h"
 
-#include <folly/dynamic.h>
-
-#include "logdevice/common/PriorityMap.h"
-
 namespace facebook { namespace logdevice {
 
 FlowGroupPolicy
@@ -30,41 +26,6 @@ FlowGroupPolicy::normalize(size_t num_workers,
       e.max_bw = e.max_bw / portions;
     }
   }
-  return result;
-}
-
-folly::dynamic FlowGroupPolicy::toFollyDynamic(NodeLocationScope scope) const {
-  folly::dynamic result =
-      folly::dynamic::object("name", NodeLocation::scopeNames()[scope])(
-          "shaping_enabled", trafficShapingEnabled());
-
-  folly::dynamic meter_list = folly::dynamic::array;
-  Priority p = Priority::MAX;
-  for (const auto& entry : entries) {
-    if (entry.guaranteed_bw != 0 || entry.capacity != 0) {
-      meter_list.push_back(entry.toFollyDynamic(p));
-    }
-    p = priorityBelow(p);
-  }
-  if (!meter_list.empty()) {
-    result["meters"] = meter_list;
-  }
-
-  return result;
-}
-
-folly::dynamic FlowGroupPolicy::Entry::toFollyDynamic(Priority priority) const {
-  folly::dynamic result = folly::dynamic::object(
-      "name",
-      priority == Priority::INVALID ? "PRIORITY_QUEUE"
-                                    : PriorityMap::toName()[priority])(
-      "guaranteed_bytes_per_second", guaranteed_bw)(
-      "max_burst_bytes", capacity);
-
-  if (max_bw != INT64_MAX) {
-    result.insert("max_bytes_per_second", max_bw);
-  }
-
   return result;
 }
 

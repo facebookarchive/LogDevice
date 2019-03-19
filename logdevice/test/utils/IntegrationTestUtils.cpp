@@ -398,36 +398,39 @@ std::unique_ptr<Cluster> ClusterFactory::create(int nnodes) {
   // Have all connections assigned to the ROOT scope and use the same
   // shaping config.
   configuration::TrafficShapingConfig ts_config;
+  configuration::ShapingConfig read_throttling_config(
+      configuration::ShapingType::READS,
+      std::set<NodeLocationScope>{NodeLocationScope::NODE},
+      std::set<NodeLocationScope>{NodeLocationScope::NODE});
   if (use_default_traffic_shaping_config_) {
-    auto& root_fgp =
-        ts_config
-            .flowGroupPolicies[static_cast<size_t>(NodeLocationScope::ROOT)];
-    root_fgp.setConfigured(true);
-    root_fgp.setEnabled(true);
+    auto root_fgp = ts_config.flowGroupPolicies.find(NodeLocationScope::ROOT);
+    ld_check(root_fgp != ts_config.flowGroupPolicies.end());
+    root_fgp->second.setConfigured(true);
+    root_fgp->second.setEnabled(true);
     // Set burst capacity small to increase the likelyhood of experiencing
     // a message deferral during a test run.
-    root_fgp.set(Priority::MAX,
-                 /*Burst Bytes*/ 10000,
-                 /*Guaranteed Bps*/ 1000000);
-    root_fgp.set(Priority::CLIENT_HIGH,
-                 /*Burst Bytes*/ 10000,
-                 /*Guaranteed Bps*/ 1000000,
-                 /*Max Bps*/ 2000000);
+    root_fgp->second.set(Priority::MAX,
+                         /*Burst Bytes*/ 10000,
+                         /*Guaranteed Bps*/ 1000000);
+    root_fgp->second.set(Priority::CLIENT_HIGH,
+                         /*Burst Bytes*/ 10000,
+                         /*Guaranteed Bps*/ 1000000,
+                         /*Max Bps*/ 2000000);
     // Provide 0 capacity for client normal so that it must always be
     // deferred to a priority queue run.
-    root_fgp.set(Priority::CLIENT_NORMAL,
-                 /*Burst Bytes*/ 10000,
-                 /*Guaranteed Bps*/ 0,
-                 /*Max Bps*/ 1000000);
-    root_fgp.set(Priority::CLIENT_LOW,
-                 /*Burst Bytes*/ 10000,
-                 /*Guaranteed Bps*/ 1000000);
-    root_fgp.set(Priority::BACKGROUND,
-                 /*Burst Bytes*/ 10000,
-                 /*Guaranteed Bps*/ 1000000);
-    root_fgp.set(FlowGroup::PRIORITYQ_PRIORITY,
-                 /*Burst Bytes*/ 10000,
-                 /*Guaranteed Bps*/ 1000000);
+    root_fgp->second.set(Priority::CLIENT_NORMAL,
+                         /*Burst Bytes*/ 10000,
+                         /*Guaranteed Bps*/ 0,
+                         /*Max Bps*/ 1000000);
+    root_fgp->second.set(Priority::CLIENT_LOW,
+                         /*Burst Bytes*/ 10000,
+                         /*Guaranteed Bps*/ 1000000);
+    root_fgp->second.set(Priority::BACKGROUND,
+                         /*Burst Bytes*/ 10000,
+                         /*Guaranteed Bps*/ 1000000);
+    root_fgp->second.set(FlowGroup::PRIORITYQ_PRIORITY,
+                         /*Burst Bytes*/ 10000,
+                         /*Guaranteed Bps*/ 1000000);
   }
 
   auto server_settings = ServerConfig::SettingsConfig();
@@ -454,6 +457,7 @@ std::unique_ptr<Cluster> ClusterFactory::create(int nnodes) {
                                  ServerConfig::SecurityConfig(),
                                  ServerConfig::TraceLoggerConfig(),
                                  std::move(ts_config),
+                                 std::move(read_throttling_config),
                                  std::move(server_settings),
                                  std::move(client_settings),
                                  internal_logs_),

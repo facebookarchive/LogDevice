@@ -190,8 +190,9 @@ class TrafficShaping : public AdminCommand {
       tsc->default_read_traffic_class = tc;
     }
 
-    for (; scope <= last_scope; scope = NodeLocation::nextGreaterScope(scope)) {
-      auto& fgp = tsc->flowGroupPolicies[static_cast<size_t>(scope)];
+    for (auto& policy_it : tsc->flowGroupPolicies) {
+      auto& scope = policy_it.first;
+      auto& fgp = policy_it.second;
       const auto sname = NodeLocation::scopeNames()[scope].c_str();
 
       if (!fgp.configured()) {
@@ -209,7 +210,7 @@ class TrafficShaping : public AdminCommand {
       if (enable_ || disable_) {
         out_.printf("traffic_shaping::%s %s => %s\r\n",
                     sname,
-                    fgp.trafficShapingEnabled() ? "enabled" : "disabled",
+                    fgp.enabled() ? "enabled" : "disabled",
                     enable_ ? "enabled" : "disabled");
         fgp.setEnabled(enable_);
       }

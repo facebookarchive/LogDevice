@@ -59,6 +59,7 @@ static const std::set<std::string> config_recognized_keys = {
     "server_settings",
     "trace-logger",
     "traffic_shaping",
+    "read_throttling",
     "version",
     "zookeeper",
 };
@@ -86,6 +87,10 @@ ServerConfig::fromJson(const folly::dynamic& parsed) {
   SecurityConfig securityConfig;
   TraceLoggerConfig traceLoggerConfig;
   TrafficShapingConfig trafficShapingConfig;
+  ShapingConfig readIOShapingConfig(
+      configuration::ShapingType::READS,
+      std::set<NodeLocationScope>{NodeLocationScope::NODE},
+      std::set<NodeLocationScope>{NodeLocationScope::NODE});
   SettingsConfig serverSettingsConfig;
   SettingsConfig clientSettingsConfig;
 
@@ -122,6 +127,7 @@ ServerConfig::fromJson(const folly::dynamic& parsed) {
       parseClusterCreationTime(parsed, clusterCreationTime) &&
       parseSecurityInfo(parsed, securityConfig) &&
       parseTrafficShaping(parsed, trafficShapingConfig) &&
+      parseReadIOThrottling(parsed, readIOShapingConfig) &&
       parseNodes(parsed, nodesConfig) &&
       parseMetaDataLog(parsed, securityConfig, metaDataLogsConfig) &&
       parseSettings(parsed, "server_settings", serverSettingsConfig) &&
@@ -159,6 +165,7 @@ ServerConfig::fromJson(const folly::dynamic& parsed) {
                          std::move(securityConfig),
                          std::move(traceLoggerConfig),
                          std::move(trafficShapingConfig),
+                         std::move(readIOShapingConfig),
                          std::move(serverSettingsConfig),
                          std::move(clientSettingsConfig),
                          std::move(internalLogs),
@@ -180,6 +187,7 @@ ServerConfig::ServerConfig(std::string cluster_name,
                            SecurityConfig securityConfig,
                            TraceLoggerConfig traceLoggerConfig,
                            TrafficShapingConfig trafficShapingConfig,
+                           ShapingConfig readIOShapingConfig,
                            SettingsConfig serverSettingsConfig,
                            SettingsConfig clientSettingsConfig,
                            InternalLogs internalLogs,
@@ -193,6 +201,7 @@ ServerConfig::ServerConfig(std::string cluster_name,
       principalsConfig_(std::move(principalsConfig)),
       securityConfig_(std::move(securityConfig)),
       trafficShapingConfig_(std::move(trafficShapingConfig)),
+      readIOShapingConfig_(std::move(readIOShapingConfig)),
       traceLoggerConfig_(std::move(traceLoggerConfig)),
       serverSettingsConfig_(std::move(serverSettingsConfig)),
       clientSettingsConfig_(std::move(clientSettingsConfig)),
@@ -300,6 +309,7 @@ ServerConfig::fromData(std::string cluster_name,
                        SecurityConfig securityConfig,
                        TraceLoggerConfig traceLoggerConfig,
                        TrafficShapingConfig trafficShapingConfig,
+                       ShapingConfig readIOShapingConfig,
                        SettingsConfig serverSettingsConfig,
                        SettingsConfig clientSettingsConfig,
                        InternalLogs internalLogs,
@@ -315,6 +325,7 @@ ServerConfig::fromData(std::string cluster_name,
                        std::move(securityConfig),
                        std::move(traceLoggerConfig),
                        std::move(trafficShapingConfig),
+                       std::move(readIOShapingConfig),
                        std::move(serverSettingsConfig),
                        std::move(clientSettingsConfig),
                        std::move(internalLogs),
@@ -331,6 +342,7 @@ ServerConfig::fromDataTest(std::string cluster_name,
                            SecurityConfig securityConfig,
                            TraceLoggerConfig traceLoggerConfig,
                            TrafficShapingConfig trafficShapingConfig,
+                           ShapingConfig readIOShapingConfig,
                            SettingsConfig serverSettingsConfig,
                            SettingsConfig clientSettingsConfig,
                            InternalLogs internalLogs,
@@ -350,6 +362,7 @@ ServerConfig::fromDataTest(std::string cluster_name,
                        std::move(securityConfig),
                        std::move(traceLoggerConfig),
                        std::move(trafficShapingConfig),
+                       std::move(readIOShapingConfig),
                        std::move(serverSettingsConfig),
                        std::move(clientSettingsConfig),
                        std::move(internalLogs),
@@ -371,6 +384,7 @@ std::unique_ptr<ServerConfig> ServerConfig::copy() const {
                                                   securityConfig_,
                                                   traceLoggerConfig_,
                                                   trafficShapingConfig_,
+                                                  readIOShapingConfig_,
                                                   serverSettingsConfig_,
                                                   clientSettingsConfig_,
                                                   internalLogs_,
@@ -413,6 +427,7 @@ std::shared_ptr<ServerConfig> ServerConfig::withNodes(NodesConfig nodes) const {
                                                   securityConfig_,
                                                   traceLoggerConfig_,
                                                   trafficShapingConfig_,
+                                                  readIOShapingConfig_,
                                                   serverSettingsConfig_,
                                                   clientSettingsConfig_,
                                                   internalLogs_,
@@ -437,6 +452,7 @@ ServerConfig::withVersion(config_version_t version) const {
                                                   securityConfig_,
                                                   traceLoggerConfig_,
                                                   trafficShapingConfig_,
+                                                  readIOShapingConfig_,
                                                   serverSettingsConfig_,
                                                   clientSettingsConfig_,
                                                   internalLogs_,
@@ -454,18 +470,22 @@ ServerConfig::withVersion(config_version_t version) const {
 }
 
 std::shared_ptr<ServerConfig> ServerConfig::createEmpty() {
-  return fromData(std::string(),
-                  NodesConfig(),
-                  MetaDataLogsConfig(),
-                  PrincipalsConfig(),
-                  SecurityConfig(),
-                  TraceLoggerConfig(),
-                  TrafficShapingConfig(),
-                  SettingsConfig(),
-                  SettingsConfig(),
-                  InternalLogs(),
-                  OptionalTimestamp(),
-                  folly::dynamic::object());
+  return fromData(
+      std::string(),
+      NodesConfig(),
+      MetaDataLogsConfig(),
+      PrincipalsConfig(),
+      SecurityConfig(),
+      TraceLoggerConfig(),
+      TrafficShapingConfig(),
+      ShapingConfig(configuration::ShapingType::READS,
+                    std::set<NodeLocationScope>{NodeLocationScope::NODE},
+                    std::set<NodeLocationScope>{NodeLocationScope::NODE}),
+      SettingsConfig(),
+      SettingsConfig(),
+      InternalLogs(),
+      OptionalTimestamp(),
+      folly::dynamic::object());
 }
 
 const std::string ServerConfig::toString(const LogsConfig* with_logs,
@@ -624,6 +644,7 @@ folly::dynamic ServerConfig::toJson(const LogsConfig* with_logs,
       "metadata_logs", std::move(metadata_logs))(
       "internal_logs", internalLogs_.toDynamic())(
       "principals", principalsConfig_.toFollyDynamic())(
+      "read_throttling", readIOShapingConfig_.toFollyDynamic())(
       "traffic_shaping", trafficShapingConfig_.toFollyDynamic())(
       "server_settings", folly::toDynamic(serverSettingsConfig_))(
       "client_settings", folly::toDynamic(clientSettingsConfig_))(
