@@ -94,11 +94,55 @@ class AppendThread {
 
     stop_ = false;
     append_thread_ = std::thread([=] {
+      std::vector<std::map<Status, int>> results(outlier_nodes.size());
+      SteadyTimestamp last_report_time = SteadyTimestamp::now();
+      auto report_stats = [&](bool force) {
+        SteadyTimestamp now = SteadyTimestamp::now();
+        if (!force && now - last_report_time < std::chrono::seconds(1)) {
+          return;
+        }
+        std::stringstream ss;
+        for (size_t i = 0; i < outlier_nodes.size(); ++i) {
+          if (i > 0) {
+            ss << ", ";
+          }
+          ss << "log " << outlier_nodes[i] + 1 << ": {";
+          bool first = true;
+          for (const auto& p : results[i]) {
+            if (!first) {
+              ss << ", ";
+            }
+            first = false;
+            ss << error_name(p.first) << ": " << p.second;
+          }
+          ss << "}";
+        }
+        ld_info("Append stats for %.3fs. %s",
+                to_sec_double(now - last_report_time),
+                ss.str().c_str());
+        for (auto& r : results) {
+          r.clear();
+        }
+        last_report_time = now;
+      };
+
       while (!stop_) {
-        for (auto outlier : outlier_nodes) {
-          client->appendSync(logid_t{static_cast<uint64_t>(outlier + 1)}, ".");
+        for (size_t i = 0; i < outlier_nodes.size(); ++i) {
+          // Append.
+          lsn_t lsn = client->appendSync(
+              logid_t{static_cast<uint64_t>(outlier_nodes[i] + 1)}, ".");
+          Status s = lsn == LSN_INVALID ? err : E::OK;
+
+          // Update stats.
+          ++results[i][s];
+          report_stats(false);
+
+          // Sleep a bit to avoid going way too fast.
+          /* sleep override */
+          std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
       }
+      report_stats(true);
     });
   }
 
@@ -167,6 +211,9 @@ class NodeStatsControllerIntegrationTest
             // Use a relatively big relative margin to ensure the tests are not
             // flaky.
             .setParam("--node-stats-boycott-relative-margin", "0.5")
+            // Another flakiness reduction measure - only boycott if the node
+            // is failing 3% of the appends or more.
+            .setParam("--node-stats-boycott-sensitivity", "0.03")
             .setParam("--use-sequencer-affinity", "true")
             /* will lazily assign sequencers and enable gossip */
             .useHashBasedSequencerAssignment()

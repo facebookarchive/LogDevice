@@ -1024,7 +1024,7 @@ ParamMap Cluster::commandArgsForNode(node_index_t i, const Node& node) const {
         {"--sequencers", ParamValue{"all"}},
         // Small timeout is needed so that appends that happen right after
         // rebuilding, when socket isn't reconnected yet, retry quickly.
-        {"--store-timeout", ParamValue{"50ms..1s"}},
+        {"--store-timeout", ParamValue{"10ms..1s"}},
         // smaller recovery retry timeout for reading seqencer metadata
         {"--recovery-seq-metadata-timeout", ParamValue{"100ms..500ms"}},
         // if we fail to store something on a node, we should retry earlier than
