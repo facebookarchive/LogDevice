@@ -11,6 +11,7 @@
 #include <functional>
 #include <limits>
 #include <numeric>
+#include <vector>
 
 #include "logdevice/common/debug.h"
 #include "logdevice/common/toString.h"
