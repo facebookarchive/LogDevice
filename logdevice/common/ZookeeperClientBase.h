@@ -217,6 +217,8 @@ class ZookeeperClientBase : boost::noncopyable {
   // If you do not know what this API does, you probably do not need it.
   virtual void sync(sync_callback_t cb) = 0;
 
+  virtual void close() {}
+
   //////// RECIPES ////////
   // The following methods are implemented on top of the Zookeeper primitives
   // and may consist of multiple ZK operations / RPCs / transactions and thus

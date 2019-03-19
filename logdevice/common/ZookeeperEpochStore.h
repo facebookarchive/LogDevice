@@ -13,6 +13,7 @@
 
 #include <boost/noncopyable.hpp>
 #include <folly/Optional.h>
+#include <folly/concurrency/AtomicSharedPtr.h>
 #include <zookeeper/zookeeper.h>
 
 #include "logdevice/common/EpochStore.h"
@@ -109,8 +110,12 @@ class ZookeeperEpochStore : public EpochStore, boost::noncopyable {
   static const int ZNODE_VALUE_READ_LEN_MAX =
       EpochStoreEpochMetaDataFormat::BUFFER_LEN_MAX;
 
+  // This method should be used cautiously. It returns a shared pointer to the
+  // zkclient created by ZookeeperEpochStore. Once ZookeeperEpochStore is
+  // destroyed, no new calls should be made using this zkclient pointer. The
+  // behaviour is currently undefined
   std::shared_ptr<ZookeeperClientBase> getZookeeperClient() const {
-    return zkclient_.get();
+    return zkclient_.load();
   }
 
   std::shared_ptr<std::atomic<bool>> getShuttingDownPtr() const {
@@ -129,7 +134,7 @@ class ZookeeperEpochStore : public EpochStore, boost::noncopyable {
   Processor* processor_;
 
   // wraps the zhandle_t over which we talk to Zookeeper.
-  UpdateableSharedPtr<ZookeeperClientBase> zkclient_;
+  folly::atomic_shared_ptr<ZookeeperClientBase> zkclient_;
 
   // name of LD cluster serviced by this epoch store. Used as a
   // component of the path to epoch znodes
