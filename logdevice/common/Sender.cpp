@@ -29,6 +29,7 @@
 #include "logdevice/common/Socket.h"
 #include "logdevice/common/SocketCallback.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/configuration/TrafficShapingConfig.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/protocol/CONFIG_ADVISORY_Message.h"
@@ -44,7 +45,6 @@
 namespace facebook { namespace logdevice {
 
 using steady_clock = std::chrono::steady_clock;
-using namespace configuration::nodes;
 
 namespace {
 
@@ -116,19 +116,11 @@ void SenderBase::MessageCompletion::send() {
 }
 
 Sender::Sender(struct event_base* base,
-               const configuration::ShapingConfig& tsc,
+               const configuration::TrafficShapingConfig& tsc,
                size_t max_node_idx,
                int32_t num_workers,
-               ClientIdxAllocator* client_id_allocator,
-               bool is_gossip_sender,
-               std::shared_ptr<const NodesConfiguration> nodes,
-               node_index_t my_index,
-               folly::Optional<NodeLocation> my_location)
-    : impl_(new SenderImpl(max_node_idx, num_workers, client_id_allocator)),
-      is_gossip_sender_(is_gossip_sender),
-      nodes_(std::move(nodes)),
-      my_node_index_(my_index),
-      my_location_(std::move(my_location)) {
+               ClientIdxAllocator* client_id_allocator)
+    : impl_(new SenderImpl(max_node_idx, num_workers, client_id_allocator)) {
   nw_shaping_container_ = std::make_unique<ShapingContainer>(
       static_cast<size_t>(NodeLocationScope::ROOT) + 1, base, &tsc);
 
@@ -151,11 +143,20 @@ void Sender::onCompletedMessagesAvailable(void* arg, short) {
   self->deliverCompletedMessages();
 }
 
+bool Sender::onMyWorker() const {
+  Worker* w = Worker::onThisThread();
+  ld_check(w);
+  return (&w->sender() == this);
+}
+
 int Sender::addClient(int fd,
                       const Sockaddr& client_addr,
                       ResourceBudget::Token conn_token,
                       SocketType type,
                       ConnectionType conntype) {
+  Worker* w = Worker::onThisThread();
+  ld_check(&w->sender() == this);
+
   if (shutting_down_) {
     ld_check(false); // listeners are shut down before Senders.
     ld_error("Sender is shut down");
@@ -165,7 +166,6 @@ int Sender::addClient(int fd,
 
   eraseDisconnectedClients();
 
-  auto w = Worker::onThisThread();
   ClientID client_name(
       impl_->client_id_allocator_->issueClientIdx(w->worker_type_, w->idx_));
 
@@ -437,9 +437,10 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
                             BWAvailableCallback* on_bw_avail,
                             SocketCallback* onclose) {
   ld_check(!shutting_down_);
+  ld_check(onMyWorker());
 
   /* verify that we only send allowed messages via gossip socket */
-  if (is_gossip_sender_) {
+  if (sock.getSockType() == SocketType::GOSSIP) {
     if (!Socket::allowedOnGossipConnection(msg->type_)) {
       RATELIMIT_WARNING(std::chrono::seconds(1),
                         1,
@@ -593,6 +594,7 @@ void Sender::flushOutputAndClose(Status reason) {
 
 int Sender::closeClientSocket(ClientID cid, Status reason) {
   ld_check(cid.valid());
+  ld_check(onMyWorker());
 
   auto pos = impl_->client_sockets_.find(cid);
   if (pos == impl_->client_sockets_.end()) {
@@ -606,6 +608,8 @@ int Sender::closeClientSocket(ClientID cid, Status reason) {
 }
 
 int Sender::closeServerSocket(NodeID peer, Status reason) {
+  ld_check(onMyWorker());
+
   Socket* s = findServerSocket(peer.index());
   if (!s) {
     err = E::NOTFOUND;
@@ -620,6 +624,8 @@ int Sender::closeServerSocket(NodeID peer, Status reason) {
 }
 
 std::pair<uint32_t, uint32_t> Sender::closeAllSockets() {
+  ld_check(onMyWorker());
+
   std::pair<uint32_t, uint32_t> sockets_closed = {0, 0};
 
   for (auto& entry : impl_->server_sockets_) {
@@ -640,6 +646,8 @@ std::pair<uint32_t, uint32_t> Sender::closeAllSockets() {
 }
 
 int Sender::closeAllClientSockets(Status reason) {
+  ld_check(onMyWorker());
+
   int sockets_closed = 0;
 
   for (auto& entry : impl_->client_sockets_) {
@@ -765,7 +773,7 @@ int Sender::connect(NodeID nid, bool allow_unencrypted) {
 bool Sender::useSSLWith(NodeID nid,
                         bool* cross_boundary_out,
                         bool* authentication_out) {
-  if (nid.index() == my_node_index_) {
+  if (nid.index() == getMyNodeIndex()) {
     // Don't use SSL for connections to self
     return false;
   }
@@ -776,7 +784,7 @@ bool Sender::useSSLWith(NodeID nid,
   NodeLocationScope diff_level = Worker::settings().ssl_boundary;
 
   std::shared_ptr<ServerConfig> cfg(Worker::getConfig()->serverConfig());
-  cross_boundary = cfg->getNodeSSL(my_location_, nid, diff_level);
+  cross_boundary = cfg->getNodeSSL(getMyLocation(), nid, diff_level);
 
   // Determine whether we need to use an SSL socket for authentication.
   // We will use a SSL socket for authentication when the client or server
@@ -807,8 +815,8 @@ Socket* Sender::initServerSocket(NodeID nid,
     return nullptr;
   }
 
-  const auto node_cfg = nodes_->getNodeServiceDiscovery(nid.index());
-
+  std::shared_ptr<ServerConfig> cfg(Worker::getConfig()->serverConfig());
+  auto node_cfg = cfg->getNode(nid);
   // Don't try to connect if the node is not in config.
   // If the socket was already connected but the node removed from config,
   // it will be closed once noteConfigurationChanged() executes.
@@ -833,18 +841,18 @@ Socket* Sender::initServerSocket(NodeID nid,
     // Don't try to connect if we expect a generation and it's different than
     // what is in the config.
     if (nid.generation() == 0) {
-      nid = nodes_->getNodeID(nid.index());
-    } else if (nodes_->getNodeGeneration(nid.index()) != nid.generation()) {
+      nid = NodeID(nid.index(), node_cfg->generation);
+    } else if (node_cfg->generation != nid.generation()) {
       err = E::NOTINCONFIG;
       return nullptr;
     }
 
     // Determine whether we should use SSL and what the flow group scope is
     auto flow_group_scope = NodeLocationScope::NODE;
-    if (nid.index() != my_node_index_) {
-      if (my_location_.hasValue() && node_cfg->location) {
+    if (nid.index() != getMyNodeIndex()) {
+      if (getMyLocation() && node_cfg && node_cfg->location) {
         flow_group_scope =
-            my_location_->closestSharedScope(*node_cfg->location);
+            getMyLocation()->closestSharedScope(*node_cfg->location);
       } else {
         // Assume within the same region for now, since cross region should
         // use SSL and have a location specified in the config.
@@ -861,9 +869,10 @@ Socket* Sender::initServerSocket(NodeID nid,
       auto& flow_group =
           nw_shaping_container_->selectFlowGroup(flow_group_scope);
       if (sock_type == SocketType::GOSSIP) {
-        ld_check(is_gossip_sender_);
-        if (Worker::settings().send_to_gossip_port) {
-          use_ssl = Worker::settings().ssl_on_gossip_port;
+        Worker* w = Worker::onThisThread();
+        ld_check(w->worker_type_ == WorkerType::FAILURE_DETECTOR);
+        if (w->settings().send_to_gossip_port) {
+          use_ssl = w->settings().ssl_on_gossip_port;
         }
       }
 
@@ -926,6 +935,8 @@ ConnectionType Sender::getSockConnType(const Address& addr) {
 }
 
 Socket* FOLLY_NULLABLE Sender::getSocket(const ClientID& cid) {
+  ld_check(onMyWorker());
+
   if (shutting_down_) {
     err = E::SHUTDOWN;
     return nullptr;
@@ -941,13 +952,16 @@ Socket* FOLLY_NULLABLE Sender::getSocket(const ClientID& cid) {
 
 Socket* FOLLY_NULLABLE Sender::getSocket(const NodeID& nid,
                                          const Message& msg) {
+  ld_check(onMyWorker());
+
   if (shutting_down_) {
     err = E::SHUTDOWN;
     return nullptr;
   }
 
   SocketType sock_type;
-  if (is_gossip_sender_) {
+  Worker* w = Worker::onThisThread();
+  if (w->worker_type_ == WorkerType::FAILURE_DETECTOR) {
     ld_check(Socket::allowedOnGossipConnection(msg.type_));
     sock_type = SocketType::GOSSIP;
   } else {
@@ -1198,6 +1212,9 @@ X509* Sender::getPeerCert(const Address& addr) {
 
 Sockaddr Sender::thisThreadSockaddr(const Address& addr) {
   Worker* w = Worker::onThisThread();
+
+  ld_check(w);
+
   return w->sender().getSockaddr(addr);
 }
 
@@ -1271,6 +1288,8 @@ std::string Sender::describeConnection(const Address& addr) {
 
 int Sender::noteDisconnectedClient(ClientID client_name) {
   ld_check(client_name.valid());
+  ld_check(onMyWorker());
+
   if (Worker::onThisThread()->shuttingDown()) {
     // This instance might already be (partially) destroyed.
     return 0;
@@ -1303,9 +1322,36 @@ void DisconnectedClientCallback::operator()(Status st, const Address& name) {
   delete this;
 }
 
+void Sender::initMyLocation() {
+  if (Worker::settings().server) {
+    std::shared_ptr<ServerConfig> cfg(Worker::getConfig()->serverConfig());
+    my_node_index_ = cfg->getMyNodeID().index();
+    const Configuration::Node* node_cfg = cfg->getNode(my_node_index_);
+    ld_check(node_cfg);
+    my_location_ = node_cfg->location;
+  } else {
+    my_node_index_ = NODE_INDEX_INVALID;
+    my_location_ = Worker::settings().client_location;
+  }
+}
+
+folly::Optional<NodeLocation> Sender::getMyLocation() {
+  if (!my_location_.hasValue()) {
+    initMyLocation();
+  }
+  return my_location_;
+}
+
+node_index_t Sender::getMyNodeIndex() {
+  if (!my_location_.hasValue()) {
+    initMyLocation();
+  }
+  return my_node_index_;
+}
+
 void Sender::noteConfigurationChanged(
-    std::shared_ptr<const NodesConfiguration> nodes_configuration) {
-  nodes_ = std::move(nodes_configuration);
+    const configuration::nodes::NodesConfiguration& nodes_configuration) {
+  initMyLocation();
 
   for (int i = 0; i < impl_->server_sockets_.size(); i++) {
     std::unique_ptr<Socket>& s = impl_->server_sockets_[i];
@@ -1317,10 +1363,11 @@ void Sender::noteConfigurationChanged(
     ld_check(!s->peer_name_.isClientAddress());
     ld_check(s->peer_name_.id_.node_.index() == i);
 
-    const auto node_service_discovery = nodes_->getNodeServiceDiscovery(i);
+    const auto* node_service_discovery =
+        nodes_configuration.getNodeServiceDiscovery(i);
 
     if (node_service_discovery != nullptr) {
-      node_gen_t generation = nodes_->getNodeGeneration(i);
+      node_gen_t generation = nodes_configuration.getNodeGeneration(i);
       const Sockaddr& newaddr = node_service_discovery->getSockaddr(
           s->getSockType(), s->getConnType());
       if (s->peer_name_.id_.node_.generation() == generation &&
@@ -1340,14 +1387,14 @@ void Sender::noteConfigurationChanged(
           "Node %s is no longer in cluster configuration. New cluster "
           "size is %zu. Destroying old socket.",
           Sender::describeConnection(Address(s->peer_name_.id_.node_)).c_str(),
-          nodes_->clusterSize());
+          nodes_configuration.clusterSize());
     }
 
     s->close(E::NOTINCONFIG);
     s.reset();
   }
 
-  impl_->server_sockets_.resize(nodes_->getMaxNodeIndex() + 1);
+  impl_->server_sockets_.resize(nodes_configuration.getMaxNodeIndex() + 1);
 }
 
 bool Sender::bytesPendingLimitReached() {

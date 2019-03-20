@@ -76,12 +76,9 @@ class NodesConfiguration {
     return service_discovery_->numNodes();
   }
 
-  virtual const NodeServiceDiscovery*
-  getNodeServiceDiscovery(node_index_t node) const;
-
+  const NodeServiceDiscovery* getNodeServiceDiscovery(node_index_t node) const;
   // note: return nullptr if generation number mismatches
-  virtual const NodeServiceDiscovery*
-  getNodeServiceDiscovery(NodeID node) const;
+  const NodeServiceDiscovery* getNodeServiceDiscovery(NodeID node) const;
 
   bool isNodeInServiceDiscoveryConfig(node_index_t node) const {
     return service_discovery_->hasNode(node);
@@ -209,8 +206,6 @@ class NodesConfiguration {
 
   // same as == operator but with config timestamp ignored
   bool equalWithTimestampIgnored(const NodesConfiguration& rhs) const;
-
-  virtual ~NodesConfiguration() = default;
 
  private:
   std::shared_ptr<const ServiceDiscoveryConfig> service_discovery_{nullptr};
