@@ -73,6 +73,32 @@
 
 namespace facebook { namespace logdevice {
 
+namespace {
+node_index_t getMyNodeIndex(const std::shared_ptr<UpdateableConfig>& config,
+                            const Worker* worker) {
+  if (worker->immutable_settings_->server) {
+    return config->get()->serverConfig()->getMyNodeID().index();
+  }
+  return NODE_INDEX_INVALID;
+}
+
+folly::Optional<NodeLocation>
+getMyLocation(const std::shared_ptr<UpdateableConfig>& config,
+              const Worker* worker) {
+  if (worker->immutable_settings_->server) {
+    std::shared_ptr<ServerConfig> cfg(config->get()->serverConfig());
+    ld_check(cfg->hasMyNodeID());
+    auto my_node_index = cfg->getMyNodeID().index();
+    auto nodes = config->getServerConfig()
+                     ->getNodesConfigurationFromServerConfigSource();
+    auto node = nodes->getNodeServiceDiscovery(my_node_index);
+    ld_check(node);
+    return node->location;
+  }
+  return worker->immutable_settings_->client_location;
+}
+} // namespace
+
 // the size of the bucket array of activeAppenders_ map
 static constexpr size_t N_APPENDER_MAP_BUCKETS = 128 * 1024;
 
@@ -85,7 +111,12 @@ class WorkerImpl {
                 config->get()->serverConfig()->getTrafficShapingConfig(),
                 config->get()->serverConfig()->getMaxNodeIdx(),
                 w->processor_->getWorkerCount(w->worker_type_),
-                &w->processor_->clientIdxAllocator()),
+                &w->processor_->clientIdxAllocator(),
+                w->worker_type_ == WorkerType::FAILURE_DETECTOR,
+                config->getServerConfig()
+                    ->getNodesConfigurationFromServerConfigSource(),
+                getMyNodeIndex(config, w),
+                getMyLocation(config, w)),
         commonTimeouts_(w->getEventBase(), Worker::MAX_FAST_TIMEOUTS),
         activeAppenders_(w->immutable_settings_->server ? N_APPENDER_MAP_BUCKETS
                                                         : 1),
@@ -286,9 +317,7 @@ void Worker::onServerConfigUpdated() {
   dbg::thisThreadClusterName() =
       config_->get()->serverConfig()->getClusterName();
 
-  const auto& nodes_configuration = getNodesConfiguration();
-  ld_check(nodes_configuration.get() != nullptr);
-  sender().noteConfigurationChanged(*nodes_configuration);
+  sender().noteConfigurationChanged(getNodesConfiguration());
 
   clientReadStreams().noteConfigurationChanged();
   // propagate the config change to metadata sequencer
