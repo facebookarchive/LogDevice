@@ -222,7 +222,7 @@ void MetaDataLogReader::onGapRecord(const GapRecord& gap) {
              lsn_to_string(gap.hi).c_str(),
              lastReadEpoch().val_);
     bad_epoch_ = true;
-    error_reason_ = E::BADMSG;
+    error_reason_ = E::DATALOSS;
   }
 
   if (gap.type == GapType::NOTINCONFIG) {
@@ -338,6 +338,8 @@ void MetaDataLogReader::deliverMetaData(Status st,
 
     if (st == E::BADMSG) {
       STAT_INCR(getStats(), metadata_log_read_failed_corruption);
+    } else if (st == E::DATALOSS) {
+      STAT_INCR(getStats(), metadata_log_read_dataloss);
     } else {
       STAT_INCR(getStats(), metadata_log_read_failed_other);
     }

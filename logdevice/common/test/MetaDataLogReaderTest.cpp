@@ -392,17 +392,17 @@ TEST(MetaDataLogReaderTest, MalformedRecord) {
 TEST(MetaDataLogReaderTest, DataLoss) {
   // message sequence {X, 10, X, 30, X}, X stands for DATALOSS gaps
   ASSERT_READ_ERROR(
-      MESSAGE_SEQ_DATALOSS, epoch_t(0), epoch_t(9), NOT_LAST, E::BADMSG);
+      MESSAGE_SEQ_DATALOSS, epoch_t(0), epoch_t(9), NOT_LAST, E::DATALOSS);
   ASSERT_READ_ERROR(
-      MESSAGE_SEQ_DATALOSS, epoch_t(9), epoch_t(9), NOT_LAST, E::BADMSG);
+      MESSAGE_SEQ_DATALOSS, epoch_t(9), epoch_t(9), NOT_LAST, E::DATALOSS);
   ASSERT_READ_DATALOSS(epoch_t(10), epoch_t(10), epoch_t(10), NOT_LAST);
   ASSERT_READ_ERROR(
-      MESSAGE_SEQ_DATALOSS, epoch_t(12), epoch_t(29), NOT_LAST, E::BADMSG);
+      MESSAGE_SEQ_DATALOSS, epoch_t(12), epoch_t(29), NOT_LAST, E::DATALOSS);
   ASSERT_READ_ERROR(
-      MESSAGE_SEQ_DATALOSS, epoch_t(29), epoch_t(29), NOT_LAST, E::BADMSG);
+      MESSAGE_SEQ_DATALOSS, epoch_t(29), epoch_t(29), NOT_LAST, E::DATALOSS);
   ASSERT_READ_DATALOSS(epoch_t(30), epoch_t(30), epoch_t(30), NOT_LAST);
   ASSERT_READ_ERROR(
-      MESSAGE_SEQ_DATALOSS, epoch_t(31), epoch_t(31), LAST, E::BADMSG);
+      MESSAGE_SEQ_DATALOSS, epoch_t(31), epoch_t(31), LAST, E::DATALOSS);
 }
 
 #define MESSAGE_SEQ_FOR_WAIT_APPEAR(reader)                                  \

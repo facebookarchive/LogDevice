@@ -82,6 +82,7 @@ ERROR_CODE(CBREGISTERED             ,   57, "Will call callback to retry operati
 ERROR_CODE(LOW_ON_SPC               ,   58, "Met low watermark of free disk space on local log store")
 ERROR_CODE(PEER_UNAVAILABLE         ,   59, "server is unavailable")
 ERROR_CODE(NOTSUPPORTEDLOG          ,   60, "not supported for this log")
+ERROR_CODE(DATALOSS                 ,   61, "data is lost")
 // Errors about invalid entities
 
 ERROR_CODE(INVALID_PARAM            ,  100, "invalid parameter")

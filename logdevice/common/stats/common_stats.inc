@@ -33,10 +33,13 @@ STAT_DEFINE(metadata_log_readers_started, SUM)
 STAT_DEFINE(metadata_log_readers_finalized, SUM)
 
 // Number of failures to deliver a metadata log record upon request.
-// _corruption: because of data loss or malformed records,
+// _corruption: because of malformed records,
+// _dataloss: because of dataloss gap in metadata log
 // _other: because metadata log is empty or access is denied.
 STAT_DEFINE(metadata_log_read_failed_corruption, SUM)
+STAT_DEFINE(metadata_log_read_dataloss, SUM)
 STAT_DEFINE(metadata_log_read_failed_other, SUM)
+
 
 // Number of CONFIG_CHANGED_Messages received with Action::Reload.
 STAT_DEFINE(config_changed_reload, SUM)

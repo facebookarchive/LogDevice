@@ -152,8 +152,9 @@ class MetaDataLogReader {
    * @param status        status of the request. Could be:
    *                         E::OK         metadata is successfully fetched
    *                         E::NOTFOUND   metadata does not exist
-   *                         E::BADMSG     malformed record or data loss
+   *                         E::BADMSG     malformed record
    *                         E::ACCESS     permission denied
+   *                         E::DATALOSS   metadata loss
    * @param result        Result object containing the result of the request
    */
   using Callback = std::function<void(Status, Result)>;
