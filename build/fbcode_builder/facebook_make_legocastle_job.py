@@ -205,13 +205,9 @@ def make_lego_jobs(args, project_dirs):
 def run_shipit(fbsource, project_name, output_dir):
     logging.debug('Running shipit for %s', project_name)
 
-    # Run shipit
-    script = os.path.join(
-        fbsource, 'fbcode/opensource/shipit/bin/run_shipit.php'
-    )
     cmd = [
         'php',
-        script,
+        '/var/www/scripts/opensource/shipit/run_shipit.php',
         '--project=' + project_name,
         '--create-new-repo',
         '--source-repo-dir=' + fbsource,
