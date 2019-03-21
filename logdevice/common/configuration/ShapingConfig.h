@@ -65,6 +65,9 @@ class ShapingConfig {
   std::map<NodeLocationScope, FlowGroupPolicy> flowGroupPolicies;
   virtual ~ShapingConfig() {}
 
+ protected:
+  ShapingConfig() = default;
+
  private:
   ShapingType type_{ShapingType::NONE};
   std::set<NodeLocationScope> valid_scopes_;
