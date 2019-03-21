@@ -30,6 +30,7 @@
 #include "logdevice/common/WeakRefHolder.h"
 #include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/common/configuration/TrafficClass.h"
+#include "logdevice/common/configuration/TrafficShapingConfig.h"
 #include "logdevice/common/protocol/Message.h"
 #include "logdevice/include/Err.h"
 // Think twice before adding new includes here!  This file is included in many
@@ -345,11 +346,16 @@ class Sender : public SenderBase {
    * @param node_count   the number of nodes in cluster configuration at the
    *                     time this Sender was created
    */
-  explicit Sender(struct event_base* base,
-                  const configuration::TrafficShapingConfig& tsc,
-                  size_t max_node_idx,
-                  int32_t num_workders,
-                  ClientIdxAllocator* client_id_allocator);
+  explicit Sender(
+      struct event_base* base,
+      const configuration::ShapingConfig& tsc,
+      size_t max_node_idx,
+      int32_t num_workders,
+      ClientIdxAllocator* client_id_allocator,
+      bool is_gossip_sender,
+      std::shared_ptr<const configuration::nodes::NodesConfiguration> nodes,
+      node_index_t my_node_index,
+      folly::Optional<NodeLocation> my_location);
   ~Sender() override;
 
   Sender(const Sender&) = delete;
@@ -733,7 +739,7 @@ class Sender : public SenderBase {
    * connections to nodes that are no longer in the config.
    */
   void noteConfigurationChanged(
-      const configuration::nodes::NodesConfiguration& nodes_configuration);
+      std::shared_ptr<const configuration::nodes::NodesConfiguration>);
 
   /**
    * Add a client id to the list of Sockets to be erased from .client_sockets_
@@ -793,6 +799,10 @@ class Sender : public SenderBase {
   friend class SenderImpl;
   std::unique_ptr<SenderImpl> impl_;
 
+  bool is_gossip_sender_;
+
+  std::shared_ptr<const configuration::nodes::NodesConfiguration> nodes_;
+
   // ids of disconnected sockets to be erased from .client_sockets_
   std::forward_list<ClientID> disconnected_clients_;
 
@@ -812,17 +822,11 @@ class Sender : public SenderBase {
 
   // The id of this node.
   // If running on the client, this will be set to NODE_INDEX_INVALID.
-  node_index_t my_node_index_;
-
-  // initializes my_node_id_ before returning it
-  node_index_t getMyNodeIndex();
+  const node_index_t my_node_index_;
 
   // The location of this node (or client). Used to determine whether to use
   // SSL when connecting.
-  folly::Optional<NodeLocation> my_location_;
-
-  // initializes my_location_ before returning it
-  folly::Optional<NodeLocation> getMyLocation();
+  const folly::Optional<NodeLocation> my_location_;
 
   /**
    * A helper method for sending a message to a connected socket.
