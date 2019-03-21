@@ -117,15 +117,22 @@ def parse_args():
     return args
 
 
-def make_lego_spec(builder):
+def make_lego_spec(builder, type):
+    capabilities = {
+        'type': type,
+        'vcs': 'fbcode-fbsource',
+        'os': builder.option('legocastle_os', 'stable'),
+    }
+    xcode = builder.option('xcode_version', '')
+    if xcode != '':
+        capabilities['xcode'] = xcode
+    tenant = builder.option('tenant', '')
+    if tenant != '':
+        capabilities['tenant'] = tenant
     return {
         'alias': builder.option('alias'),
         'command': 'SandcastleUniversalCommand',
-        'capabilities': {
-            'type': 'lego-linux',
-            'vcs': 'fbcode-fbsource',
-            'os': builder.option('legocastle_os', 'stable'),
-        },
+        'capabilities': capabilities,
         'priority': 3, # See SandcastleFBCodeUtils::getSuggestedChildPriority
         'args': {
             'name': builder.option('build_name'),
@@ -136,6 +143,12 @@ def make_lego_spec(builder):
             'steps': [],
         },
     }
+
+
+LEGO_OPTS_MAP = {
+    'legocastle_opts': "lego-linux",
+    'legocastle_opts_macos': "lego-mac",
+}
 
 
 def make_lego_jobs(args, project_dirs):
@@ -165,39 +178,42 @@ def make_lego_jobs(args, project_dirs):
         config_path = os.path.join(project, 'facebook_fbcode_builder_config.py')
         config = read_fbcode_builder_config(config_path)
 
-        config_opts = config['legocastle_opts']
+        for opts_key, lego_type in LEGO_OPTS_MAP.items():
+            config_opts = config.get(opts_key)
+            if not config_opts:
+                continue
 
-        # Construct the options for this project.
-        # Use everything listed in config_opts, unless the value is None.
-        project_opts = {
-            opt_name: value
-            for opt_name, value in config_opts.items() if value is not None
-        }
+            # Construct the options for this project.
+            # Use everything listed in config_opts, unless the value is None.
+            project_opts = {
+                opt_name: value
+                for opt_name, value in config_opts.items() if value is not None
+            }
 
-        # Allow options specified on the command line to override the
-        # config's legocastle_opts data.
-        # For options that weren't provided in either place, use the default
-        # value from project_option_defaults.
-        for opt_name, default_value in project_option_defaults.items():
-            cli_value = getattr(args, opt_name)
-            if cli_value is not None:
-                project_opts[opt_name] = cli_value
-            elif opt_name not in config_opts:
-                project_opts[opt_name] = default_value
+            # Allow options specified on the command line to override the
+            # config's legocastle_opts data.
+            # For options that weren't provided in either place, use the default
+            # value from project_option_defaults.
+            for opt_name, default_value in project_option_defaults.items():
+                cli_value = getattr(args, opt_name)
+                if cli_value is not None:
+                    project_opts[opt_name] = cli_value
+                elif opt_name not in config_opts:
+                    project_opts[opt_name] = default_value
 
-        # The shipit_project_dir option cannot be overridden on a per-project
-        # basis.  We emit this data in a single location that must be consisten
-        # across all of the projects we are building.
-        project_opts['shipit_project_dir'] = args.shipit_project_dir
+            # The shipit_project_dir option cannot be overridden on a per-project
+            # basis.  We emit this data in a single location that must be consisten
+            # across all of the projects we are building.
+            project_opts['shipit_project_dir'] = args.shipit_project_dir
 
-        builder = LegocastleFBCodeBuilder(**project_opts)
-        steps = build_fbcode_builder_config(config)(builder)
+            builder = LegocastleFBCodeBuilder(**project_opts)
+            steps = build_fbcode_builder_config(config)(builder)
 
-        lego_spec = make_lego_spec(builder)
+            lego_spec = make_lego_spec(builder, type=lego_type)
 
-        shipit_projects, lego_spec['args']['steps'] = builder.render(steps)
-        all_shipit_projects.update(shipit_projects)
-        children_jobs.append(lego_spec)
+            shipit_projects, lego_spec['args']['steps'] = builder.render(steps)
+            all_shipit_projects.update(shipit_projects)
+            children_jobs.append(lego_spec)
 
     return all_shipit_projects, children_jobs
 

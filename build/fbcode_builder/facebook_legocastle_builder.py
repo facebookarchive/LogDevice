@@ -60,7 +60,18 @@ class LegocastleStep(namedtuple('LegocastleStepBase', ('name', 'actions'))):
 class LegocastleFBCodeBuilder(FBCodeBuilder):
 
     def setup(self):
-        return []
+        return self.step('Setup', [
+            self.run(ShellQuoted("""
+case "$OSTYPE" in
+  darwin*)
+    http_proxy= https_proxy= ./tools/lfs/lfs.py \\
+            download homebrew.tar.gz \\
+            -l ./watchman/facebook/lego/.lfs-pointers
+    rm -rf /var/tmp/homebrew
+    tar xzf homebrew.tar.gz -C /var/tmp
+  ;;
+esac
+"""))])
 
     def step(self, name, actions):
         return LegocastleStep(name=name, actions=actions)
@@ -97,7 +108,31 @@ class LegocastleFBCodeBuilder(FBCodeBuilder):
                     action.project_and_path.split('/', 1)[0]
                 )
             elif isinstance(action, LegocastleStep):
-                pre_actions = [ShellQuoted('set -ex')]
+                pre_actions = [
+                    ShellQuoted('set -ex'),
+                    ShellQuoted("""
+case "$OSTYPE" in
+  darwin*)
+    BREW_PREFIX=/var/tmp/homebrew
+
+    # The apple-provided flex and bison tools are too old to successfully
+    # build thrift.  Ensure that we resolve to the homebrew versions.
+    # Note that homebrew doesn't link these into its bin dir to avoid
+    # these newer versions taking precedence, so we need to reach into
+    # the cellar path.  The glob is to make this script less prone to
+    # problems if/when the version is bumped.
+    BISON_BIN=$(echo $BREW_PREFIX/Cellar/bison/*/bin)
+    FLEX_BIN=$(echo $BREW_PREFIX/Cellar/flex/*/bin)
+
+    export CMAKE_SYSTEM_PREFIX_PATH=$BREW_PREFIX
+    export PKG_CONFIG_PATH=$BREW_PREFIX/opt/openssl/lib/pkgconfig
+    export PATH=$BISON_BIN:$FLEX_BIN:$BREW_PREFIX/bin:$PATH
+    export HOMEBREW_NO_AUTO_UPDATE=1
+    export SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/
+  ;;
+esac
+"""),
+                ]
                 if next_workdir is not None:
                     pre_actions.append(self.workdir(next_workdir))
 
