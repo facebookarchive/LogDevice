@@ -8,6 +8,7 @@
 #include <folly/Random.h>
 #include <gtest/gtest.h>
 
+#include "logdevice/common/LogsConfigApiRequest.h"
 #include "logdevice/common/configuration/logs/FBuffersLogsConfigCodec.h"
 #include "logdevice/common/configuration/logs/LogsConfigDeltaTypes.h"
 #include "logdevice/common/configuration/logs/LogsConfigStateMachine.h"
@@ -126,6 +127,7 @@ TEST_F(LogsConfigIntegrationTest, MakeLogGroup) {
       false);
   ASSERT_NE(nullptr, lg2);
   ASSERT_TRUE(lg2->version() > lg1->version());
+  client->syncLogsConfigVersion(lg2->version());
   std::unique_ptr<client::Directory> dir = client->getDirectorySync("/");
 
   ASSERT_NE(nullptr, dir);
@@ -201,6 +203,7 @@ TEST_F(LogsConfigIntegrationTest, Remove) {
   auto cluster =
       IntegrationTestUtils::ClusterFactory().enableLogsConfigManager().create(
           3);
+  uint64_t version;
   std::shared_ptr<Client> client = cluster->createIndependentClient();
   ASSERT_NE(nullptr,
             client->makeDirectorySync(
@@ -226,12 +229,16 @@ TEST_F(LogsConfigIntegrationTest, Remove) {
                 false));
 
   ASSERT_FALSE(client->removeDirectorySync("/my_logs/your_logs", false));
-  ASSERT_TRUE(client->removeDirectorySync("/my_logs/your_logs", true));
+  ASSERT_TRUE(
+      client->removeDirectorySync("/my_logs/your_logs", true, &version));
+  client->syncLogsConfigVersion(version);
   ASSERT_EQ(nullptr, client->getDirectorySync("/my_logs/your_logs"));
 
-  ASSERT_FALSE(client->removeLogGroupSync("/log5"));
+  ASSERT_FALSE(client->removeLogGroupSync("/log5", &version));
+  client->syncLogsConfigVersion(version);
 
-  ASSERT_TRUE(client->removeLogGroupSync("/log1"));
+  ASSERT_TRUE(client->removeLogGroupSync("/log1", &version));
+  client->syncLogsConfigVersion(version);
   ASSERT_EQ(nullptr, client->getLogGroupSync("/log1"));
 }
 
@@ -242,11 +249,11 @@ TEST_F(LogsConfigIntegrationTest, Defaults) {
   std::shared_ptr<Client> client = cluster->createIndependentClient();
   ASSERT_EQ(logsconfig::DefaultLogAttributes().maxWritesInFlight().value(),
             client->getDirectorySync("/")->attrs().maxWritesInFlight().value());
-  ASSERT_NE(nullptr,
-            client->makeDirectorySync(
-                "/my_logs",
-                false,
-                client::LogAttributes().with_replicationFactor(22)));
+
+  auto my_logs = client->makeDirectorySync(
+      "/my_logs", false, client::LogAttributes().with_replicationFactor(22));
+  ASSERT_NE(nullptr, my_logs);
+  client->syncLogsConfigVersion(my_logs->version());
 
   auto dir1 = client->getDirectorySync("/my_logs");
   ASSERT_NE(nullptr, dir1);
@@ -254,12 +261,13 @@ TEST_F(LogsConfigIntegrationTest, Defaults) {
             dir1->attrs().maxWritesInFlight().value());
   ASSERT_EQ(22, dir1->attrs().replicationFactor().value());
 
-  ASSERT_NE(nullptr,
-            client->makeLogGroupSync(
-                "/my_logs/log1",
-                logid_range_t(logid_t(101), logid_t(120)),
-                client::LogAttributes().with_replicationFactor(2),
-                false));
+  auto my_logs_log1 = client->makeLogGroupSync(
+      "/my_logs/log1",
+      logid_range_t(logid_t(101), logid_t(120)),
+      client::LogAttributes().with_replicationFactor(2),
+      false);
+  ASSERT_NE(nullptr, my_logs_log1);
+  client->syncLogsConfigVersion(my_logs_log1->version());
   auto lg1 = client->getLogGroupSync("/my_logs/log1");
   ASSERT_NE(nullptr, lg1);
 
@@ -267,11 +275,14 @@ TEST_F(LogsConfigIntegrationTest, Defaults) {
             lg1->attrs().maxWritesInFlight().value());
   ASSERT_EQ(2, lg1->attrs().replicationFactor().value());
 
-  ASSERT_NE(nullptr,
-            client->makeLogGroupSync("/my_logs/duper/log2",
-                                     logid_range_t(logid_t(201), logid_t(220)),
-                                     client::LogAttributes(),
-                                     true));
+  auto my_logs_log2 =
+      client->makeLogGroupSync("/my_logs/duper/log2",
+                               logid_range_t(logid_t(201), logid_t(220)),
+                               client::LogAttributes(),
+                               true);
+  ASSERT_NE(nullptr, my_logs_log2);
+  client->syncLogsConfigVersion(my_logs_log2->version());
+
   auto dir2 = client->getDirectorySync("/my_logs/duper");
   ASSERT_NE(nullptr, dir2);
   ASSERT_EQ(22, dir2->attrs().replicationFactor().value());
@@ -297,9 +308,10 @@ TEST_F(LogsConfigIntegrationTest, SetAttributes) {
       client->makeLogGroupSync("/my_logs/your_logs/log1",
                                logid_range_t(logid_t(101), logid_t(120))));
 
+  uint64_t version;
   ASSERT_TRUE(client->setAttributesSync(
-      "/my_logs", client::LogAttributes().with_replicationFactor(3)));
-
+      "/my_logs", client::LogAttributes().with_replicationFactor(3), &version));
+  client->syncLogsConfigVersion(version);
   ASSERT_EQ(3,
             client->getDirectorySync("/my_logs")
                 ->attrs()
@@ -314,7 +326,9 @@ TEST_F(LogsConfigIntegrationTest, SetAttributes) {
 
   ASSERT_TRUE(client->setAttributesSync(
       "/my_logs/your_logs/log1",
-      client::LogAttributes().with_replicationFactor(3)));
+      client::LogAttributes().with_replicationFactor(3),
+      &version));
+  client->syncLogsConfigVersion(version);
 
   ASSERT_EQ(3,
             client->getLogGroupSync("/my_logs/your_logs/log1")
@@ -347,8 +361,12 @@ TEST_F(LogsConfigIntegrationTest, SetLogRange) {
       "/my_logs/your_logs/log1", logid_range_t(logid_t(101), logid_t(220))));
   ASSERT_EQ(E::ID_CLASH, err);
 
-  ASSERT_TRUE(client->setLogGroupRangeSync(
-      "/my_logs/your_logs/log1", logid_range_t(logid_t(101), logid_t(149))));
+  uint64_t version;
+  ASSERT_TRUE(
+      client->setLogGroupRangeSync("/my_logs/your_logs/log1",
+                                   logid_range_t(logid_t(101), logid_t(149)),
+                                   &version));
+  client->syncLogsConfigVersion(version);
 
   auto lg = client->getLogGroupSync("/my_logs/your_logs/log1");
   ASSERT_NE(nullptr, lg);
@@ -462,6 +480,7 @@ TEST_F(LogsConfigIntegrationTest, TextConfigUpdaterIsDisabled) {
                      .setParam("--file-config-update-interval", "10ms")
                      .deferStart()
                      .create(*config);
+  uint64_t version;
   // provision internal logs
   ASSERT_EQ(0, cluster->provisionEpochMetaData(nullptr, true));
   cluster->start();
@@ -476,7 +495,10 @@ TEST_F(LogsConfigIntegrationTest, TextConfigUpdaterIsDisabled) {
   auto dir =
       client->makeDirectorySync("/my_logs", false, client::LogAttributes());
   ASSERT_NE(nullptr, dir);
-  ASSERT_NE(nullptr, client->makeDirectorySync("/my_logs/your_logs", false));
+
+  auto your_logs = client->makeDirectorySync("/my_logs/your_logs", false);
+  ASSERT_NE(nullptr, your_logs);
+  client->syncLogsConfigVersion(your_logs->version());
   auto root2 = client->getDirectorySync("/");
   ASSERT_NE(nullptr, root2);
   ASSERT_TRUE(root2->version() > root1->version());
@@ -517,6 +539,51 @@ TEST_F(LogsConfigIntegrationTest, TextConfigUpdaterIsDisabled) {
   auto updateable_config = raw_client->getConfig();
   auto local_config1 = updateable_config->getLocalLogsConfig();
   ASSERT_EQ(root3->version(), local_config1->getVersion());
+}
+
+// The public facing client API should return NOTFOUND on internal and
+// metadata logs. The LogsConfigAPI itself should be able to handle it though
+// which is tested in LogsConfigAPIMetadataLogs.
+TEST_F(LogsConfigIntegrationTest, GetByIDForInternalLogs) {
+  auto cluster =
+      IntegrationTestUtils::ClusterFactory().enableLogsConfigManager().create(
+          3);
+  std::shared_ptr<Client> client = cluster->createIndependentClient();
+
+  ASSERT_EQ(
+      nullptr, client->getLogGroupByIdSync(logid_t(9223372036854775809ul)));
+
+  ASSERT_EQ(nullptr,
+            client->getLogGroupByIdSync(
+                configuration::InternalLogs::MAINTENANCE_LOG_DELTAS));
+  ASSERT_EQ(E::NOTFOUND, err);
+}
+
+TEST_F(LogsConfigIntegrationTest, LogsConfigAPIMetadataLogs) {
+  auto cluster =
+      IntegrationTestUtils::ClusterFactory().enableLogsConfigManager().create(
+          3);
+  std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
+  Settings settings = create_default_settings<Settings>();
+  settings.num_workers = 3;
+  auto processor = make_test_processor(settings, cluster->getConfig());
+
+  Semaphore sem;
+  auto callback = [&](Status st, uint64_t, std::string) {
+    ASSERT_EQ(Status::OK, st);
+    sem.post();
+  };
+
+  std::unique_ptr<Request> req = std::make_unique<LogsConfigApiRequest>(
+      LOGS_CONFIG_API_Header::Type::GET_LOG_GROUP_BY_ID,
+      std::to_string(9223372036854775809ul),
+      std::chrono::seconds(5),
+      LogsConfigApiRequest::MAX_ERRORS,
+      10,
+      callback);
+
+  processor->postRequest(req);
+  sem.wait();
 }
 
 TEST_F(LogsConfigIntegrationTest, ConfigManagerFromServerSettings) {
@@ -585,6 +652,7 @@ TEST_F(LogsConfigIntegrationTest, StartClientWithNoLogsSection) {
   auto dir =
       client->makeDirectorySync("/my_logs", false, client::LogAttributes());
   ASSERT_NE(nullptr, dir);
+  client->syncLogsConfigVersion(dir->version());
   auto root1 = client->getDirectorySync("/");
   ASSERT_NE(nullptr, root1);
   ASSERT_EQ(0, root1->logs().size());
@@ -647,7 +715,10 @@ TEST_F(LogsConfigIntegrationTest, RemoveLogsSection) {
   auto dir =
       client->makeDirectorySync("/my_logs", false, client::LogAttributes());
   ASSERT_NE(nullptr, dir);
-  ASSERT_NE(nullptr, client->makeDirectorySync("/my_logs/your_logs", false));
+  auto dir2 = client->makeDirectorySync("/my_logs/your_logs", false);
+  ASSERT_NE(nullptr, dir2);
+  client->syncLogsConfigVersion(dir2->version());
+
   auto root2 = client->getDirectorySync("/");
   ASSERT_NE(nullptr, root2);
   ASSERT_TRUE(root2->version() > root1->version());
@@ -717,11 +788,15 @@ TEST_F(LogsConfigIntegrationTest, LogGroupById) {
                 logid_range_t(logid_t(1), logid_t(100)),
                 client::LogAttributes().with_replicationFactor(2),
                 false));
-  ASSERT_NE(nullptr,
-            client->makeLogGroupSync("/my_logs/log2",
-                                     logid_range_t(logid_t(201), logid_t(300)),
-                                     client::LogAttributes(),
-                                     false));
+
+  auto my_logs_log2 =
+      client->makeLogGroupSync("/my_logs/log2",
+                               logid_range_t(logid_t(201), logid_t(300)),
+                               client::LogAttributes(),
+                               false);
+  ASSERT_NE(nullptr, my_logs_log2);
+  client->syncLogsConfigVersion(my_logs_log2->version());
+
   // Look for non-existing log groups
   auto log_group = client->getLogGroupByIdSync(logid_t(0));
   ASSERT_EQ(nullptr, log_group);
@@ -754,10 +829,6 @@ TEST_F(LogsConfigIntegrationTest, LogGroupById) {
   ASSERT_EQ(2, log_group->attrs().replicationFactor().value());
   log_group = client->getLogGroupByIdSync(logid_t(250));
   ASSERT_EQ(22, log_group->attrs().replicationFactor().value());
-
-  // Check for metadata logs
-  log_group = client->getLogGroupByIdSync(logid_t(9223372036854775809ul));
-  ASSERT_NE(log_group, nullptr);
 }
 
 TEST_F(LogsConfigIntegrationTest, SetAttributesLogGroupClash) {

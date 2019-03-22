@@ -466,6 +466,17 @@ class ClientImpl : public Client,
 
   void updateStatsSettings();
 
+  int getLocalDirectory(const std::string& path,
+                        get_directory_callback_t cb) noexcept;
+
+  void getLocalLogGroup(const std::string& name,
+                        get_log_group_callback_t cb) noexcept;
+
+  void getLocalLogGroupById(const logid_t logid,
+                            get_log_group_callback_t cb) noexcept;
+
+  bool hasFullyLoadedLocalLogsConfig() const;
+
   std::shared_ptr<PluginRegistry> plugin_registry_;
 
   std::string cluster_name_;

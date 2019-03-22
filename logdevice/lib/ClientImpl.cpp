@@ -653,9 +653,35 @@ ClientImpl::getLogGroupSync(const std::string& name) noexcept {
   return lg;
 }
 
+bool ClientImpl::hasFullyLoadedLocalLogsConfig() const {
+  auto logs_config = config_->getLogsConfig();
+  return logs_config != nullptr && logs_config->isLocal() &&
+      logs_config->isFullyLoaded();
+}
+
+void ClientImpl::getLocalLogGroup(const std::string& path,
+                                  get_log_group_callback_t cb) noexcept {
+  ld_assert(hasFullyLoadedLocalLogsConfig());
+  auto logs_config = config_->getLocalLogsConfig();
+
+  auto log_group = logs_config->getLogGroup(path);
+  if (log_group == nullptr) {
+    cb(Status::NOTFOUND, nullptr);
+    return;
+  }
+  std::unique_ptr<client::LogGroupImpl> lg =
+      std::make_unique<client::LogGroupImpl>(
+          std::move(log_group), path, logs_config->getVersion());
+  cb(Status::OK, std::move(lg));
+}
+
 void ClientImpl::getLogGroup(const std::string& path,
                              get_log_group_callback_t cb) noexcept {
   auto full_ns = get_full_name(path, *config_->get(), *settings_);
+  if (hasFullyLoadedLocalLogsConfig()) {
+    getLocalLogGroup(full_ns, std::move(cb));
+    return;
+  }
   std::string delimiter =
       config_->get()->serverConfig()->getNamespaceDelimiter();
   auto callback = [cb, full_ns, delimiter](
@@ -719,8 +745,35 @@ ClientImpl::getLogGroupByIdSync(const logid_t logid) noexcept {
   return lg;
 }
 
+void ClientImpl::getLocalLogGroupById(const logid_t logid,
+                                      get_log_group_callback_t cb) noexcept {
+  ld_assert(hasFullyLoadedLocalLogsConfig());
+  auto logs_config = config_->getLocalLogsConfig();
+
+  auto lid = logs_config->getLogGroupInDirectoryByIDRaw(logid);
+  if (lid == nullptr) {
+    cb(Status::NOTFOUND, nullptr);
+    return;
+  }
+
+  std::string full_ns = lid->getFullyQualifiedName();
+  std::unique_ptr<client::LogGroupImpl> lg =
+      std::make_unique<client::LogGroupImpl>(
+          lid->log_group, std::move(full_ns), logs_config->getVersion());
+  cb(Status::OK, std::move(lg));
+}
+
 void ClientImpl::getLogGroupById(const logid_t logid,
                                  get_log_group_callback_t cb) noexcept {
+  if (MetaDataLog::isMetaDataLog(logid) ||
+      configuration::InternalLogs::isInternal(logid)) {
+    cb(Status::NOTFOUND, nullptr);
+    return;
+  }
+  if (hasFullyLoadedLocalLogsConfig()) {
+    getLocalLogGroupById(logid, std::move(cb));
+    return;
+  }
   std::string delimiter =
       config_->get()->serverConfig()->getNamespaceDelimiter();
   auto callback = [cb, delimiter](
@@ -1249,9 +1302,32 @@ bool ClientImpl::setLogGroupRangeSync(const std::string& path,
   return true;
 }
 
+int ClientImpl::getLocalDirectory(const std::string& path,
+                                  get_directory_callback_t cb) noexcept {
+  ld_assert(hasFullyLoadedLocalLogsConfig());
+  auto logs_config = config_->getLocalLogsConfig();
+  const auto& tree = logs_config->getLogsConfigTree();
+  auto dir = tree.findDirectory(path);
+
+  if (dir == nullptr) {
+    cb(Status::NOTFOUND, nullptr);
+    return 0;
+  }
+  auto server_cfg = config_->getServerConfig();
+  std::string delimiter = server_cfg->getNamespaceDelimiter();
+  std::unique_ptr<client::DirectoryImpl> lg =
+      std::make_unique<client::DirectoryImpl>(
+          *dir, nullptr, path, delimiter, logs_config->getVersion());
+  cb(Status::OK, std::move(lg));
+  return 0;
+}
+
 int ClientImpl::getDirectory(const std::string& path,
                              get_directory_callback_t cb) noexcept {
   auto full_ns = get_full_name(path, *config_->get(), *settings_);
+  if (hasFullyLoadedLocalLogsConfig()) {
+    return getLocalDirectory(full_ns, std::move(cb));
+  }
   std::string delimiter =
       config_->get()->serverConfig()->getNamespaceDelimiter();
   auto callback = [cb, full_ns, delimiter](
