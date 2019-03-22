@@ -747,7 +747,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        SettingsCategory::Monitoring);
   init("purging-use-metadata-log-only",
        &purging_use_metadata_log_only,
-       "true",
+       "false",
        nullptr,
        "If true, the NodeSetFinder within PurgeUncleanEpochs will use"
        "only the metadata log as source for fetching historical metadata."
