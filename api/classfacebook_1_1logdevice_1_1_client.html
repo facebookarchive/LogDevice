@@ -147,30 +147,30 @@ Public Member Functions</h2></td></tr>
 <tr class="separator:a70bbf9403fb51a73c2124e55fb97d0f4"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a553df78853ca09da72c8c090ab1904f9"><td class="memItemLeft" align="right" valign="top">virtual std::unique_ptr&lt; client::Directory &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a553df78853ca09da72c8c090ab1904f9">makeDirectorySync</a> (const std::string &amp;path, bool mk_intermediate_dirs=false, const client::LogAttributes &amp;attrs=client::LogAttributes(), std::string *failure_reason=nullptr) noexcept=0</td></tr>
 <tr class="separator:a553df78853ca09da72c8c090ab1904f9"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:aa1697b6688a972f991a05c706bdcecdf"><td class="memItemLeft" align="right" valign="top">virtual int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#aa1697b6688a972f991a05c706bdcecdf">removeDirectory</a> (const std::string &amp;path, bool recursive, status_callback_t) noexcept=0</td></tr>
-<tr class="separator:aa1697b6688a972f991a05c706bdcecdf"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a56747c28caeca0476ad42495cd2d00ca"><td class="memItemLeft" align="right" valign="top">virtual bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a56747c28caeca0476ad42495cd2d00ca">removeDirectorySync</a> (const std::string &amp;path, bool recursive=false) noexcept=0</td></tr>
-<tr class="separator:a56747c28caeca0476ad42495cd2d00ca"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a1a2c5b528fdeca565cb837d2e307df34"><td class="memItemLeft" align="right" valign="top">virtual bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a1a2c5b528fdeca565cb837d2e307df34">removeLogGroupSync</a> (const std::string &amp;path) noexcept=0</td></tr>
-<tr class="separator:a1a2c5b528fdeca565cb837d2e307df34"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a0f09c107d0083cf3e23538dca8b430bb"><td class="memItemLeft" align="right" valign="top">virtual int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a0f09c107d0083cf3e23538dca8b430bb">removeLogGroup</a> (const std::string &amp;path, status_callback_t cb) noexcept=0</td></tr>
-<tr class="separator:a0f09c107d0083cf3e23538dca8b430bb"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a9c3bcf709656e91fc65a82ee32e6634c"><td class="memItemLeft" align="right" valign="top">virtual int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a9c3bcf709656e91fc65a82ee32e6634c">rename</a> (const std::string &amp;from_path, const std::string &amp;to_path, status_callback_t cb) noexcept=0</td></tr>
-<tr class="separator:a9c3bcf709656e91fc65a82ee32e6634c"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:adea81d5b164611e4da5a6878458b51e0"><td class="memItemLeft" align="right" valign="top">virtual bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#adea81d5b164611e4da5a6878458b51e0">renameSync</a> (const std::string &amp;from_path, const std::string &amp;to_path, std::string *failure_reason=nullptr) noexcept=0</td></tr>
-<tr class="separator:adea81d5b164611e4da5a6878458b51e0"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a61dfbec83299386b42598cd9c7452ea6"><td class="memItemLeft" align="right" valign="top">virtual int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a61dfbec83299386b42598cd9c7452ea6">removeDirectory</a> (const std::string &amp;path, bool recursive, logsconfig_status_callback_t) noexcept=0</td></tr>
+<tr class="separator:a61dfbec83299386b42598cd9c7452ea6"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a29ca99dae58d178f463bbfe05aee9878"><td class="memItemLeft" align="right" valign="top">virtual bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a29ca99dae58d178f463bbfe05aee9878">removeDirectorySync</a> (const std::string &amp;path, bool recursive=false, uint64_t *version=nullptr) noexcept=0</td></tr>
+<tr class="separator:a29ca99dae58d178f463bbfe05aee9878"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa21d050c9967ee4b1f461097295ac2e0"><td class="memItemLeft" align="right" valign="top">virtual bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#aa21d050c9967ee4b1f461097295ac2e0">removeLogGroupSync</a> (const std::string &amp;path, uint64_t *version=nullptr) noexcept=0</td></tr>
+<tr class="separator:aa21d050c9967ee4b1f461097295ac2e0"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a259683c89ba0e43829bc0f620c7ffd42"><td class="memItemLeft" align="right" valign="top">virtual int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a259683c89ba0e43829bc0f620c7ffd42">removeLogGroup</a> (const std::string &amp;path, logsconfig_status_callback_t cb) noexcept=0</td></tr>
+<tr class="separator:a259683c89ba0e43829bc0f620c7ffd42"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aabe5c7cf00d4b2225bba81b41d1a83cd"><td class="memItemLeft" align="right" valign="top">virtual int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#aabe5c7cf00d4b2225bba81b41d1a83cd">rename</a> (const std::string &amp;from_path, const std::string &amp;to_path, logsconfig_status_callback_t cb) noexcept=0</td></tr>
+<tr class="separator:aabe5c7cf00d4b2225bba81b41d1a83cd"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a13ab01950612cc5c13a8bf40b518f9a4"><td class="memItemLeft" align="right" valign="top">virtual bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a13ab01950612cc5c13a8bf40b518f9a4">renameSync</a> (const std::string &amp;from_path, const std::string &amp;to_path, uint64_t *version=nullptr, std::string *failure_reason=nullptr) noexcept=0</td></tr>
+<tr class="separator:a13ab01950612cc5c13a8bf40b518f9a4"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:af5d99be796b2bdba8e9da20b08b04719"><td class="memItemLeft" align="right" valign="top">virtual int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#af5d99be796b2bdba8e9da20b08b04719">makeLogGroup</a> (const std::string &amp;path, const logid_range_t &amp;range, const client::LogAttributes &amp;attrs, bool mk_intermediate_dirs, make_log_group_callback_t cb) noexcept=0</td></tr>
 <tr class="separator:af5d99be796b2bdba8e9da20b08b04719"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a54632fc9babcbe30d475e2da23f914f6"><td class="memItemLeft" align="right" valign="top">virtual std::unique_ptr&lt; client::LogGroup &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a54632fc9babcbe30d475e2da23f914f6">makeLogGroupSync</a> (const std::string &amp;path, const logid_range_t &amp;range, const client::LogAttributes &amp;attrs=client::LogAttributes(), bool mk_intermediate_dirs=false, std::string *failure_reason=nullptr) noexcept=0</td></tr>
 <tr class="separator:a54632fc9babcbe30d475e2da23f914f6"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a771e6e5420f578bac83c51da04c878c2"><td class="memItemLeft" align="right" valign="top">virtual int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a771e6e5420f578bac83c51da04c878c2">setAttributes</a> (const std::string &amp;path, const client::LogAttributes &amp;attrs, status_callback_t cb) noexcept=0</td></tr>
-<tr class="separator:a771e6e5420f578bac83c51da04c878c2"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a1692d455a2c608dbcecd675123338c7a"><td class="memItemLeft" align="right" valign="top">virtual bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a1692d455a2c608dbcecd675123338c7a">setAttributesSync</a> (const std::string &amp;path, const client::LogAttributes &amp;attrs, std::string *failure_reason=nullptr) noexcept=0</td></tr>
-<tr class="separator:a1692d455a2c608dbcecd675123338c7a"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:aaef92340ce40a5f12b0e9b685595145a"><td class="memItemLeft" align="right" valign="top">virtual int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#aaef92340ce40a5f12b0e9b685595145a">setLogGroupRange</a> (const std::string &amp;path, const logid_range_t &amp;range, status_callback_t) noexcept=0</td></tr>
-<tr class="separator:aaef92340ce40a5f12b0e9b685595145a"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ab7c94850b340bcc37cda74f35f9183d0"><td class="memItemLeft" align="right" valign="top">virtual bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#ab7c94850b340bcc37cda74f35f9183d0">setLogGroupRangeSync</a> (const std::string &amp;path, const logid_range_t &amp;range, std::string *failure_reason=nullptr) noexcept=0</td></tr>
-<tr class="separator:ab7c94850b340bcc37cda74f35f9183d0"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a134074a21bfb899f19a20e335146a9fa"><td class="memItemLeft" align="right" valign="top">virtual int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a134074a21bfb899f19a20e335146a9fa">setAttributes</a> (const std::string &amp;path, const client::LogAttributes &amp;attrs, logsconfig_status_callback_t cb) noexcept=0</td></tr>
+<tr class="separator:a134074a21bfb899f19a20e335146a9fa"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af9cc5e0552af197f061e29f04afa0a70"><td class="memItemLeft" align="right" valign="top">virtual bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#af9cc5e0552af197f061e29f04afa0a70">setAttributesSync</a> (const std::string &amp;path, const client::LogAttributes &amp;attrs, uint64_t *version=nullptr, std::string *failure_reason=nullptr) noexcept=0</td></tr>
+<tr class="separator:af9cc5e0552af197f061e29f04afa0a70"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae46cb78be6906e72b88cafe6981c4349"><td class="memItemLeft" align="right" valign="top">virtual int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#ae46cb78be6906e72b88cafe6981c4349">setLogGroupRange</a> (const std::string &amp;path, const logid_range_t &amp;range, logsconfig_status_callback_t) noexcept=0</td></tr>
+<tr class="separator:ae46cb78be6906e72b88cafe6981c4349"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac034f89ca88ee185b69f7cae69e73f99"><td class="memItemLeft" align="right" valign="top">virtual bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#ac034f89ca88ee185b69f7cae69e73f99">setLogGroupRangeSync</a> (const std::string &amp;path, const logid_range_t &amp;range, uint64_t *version=nullptr, std::string *failure_reason=nullptr) noexcept=0</td></tr>
+<tr class="separator:ac034f89ca88ee185b69f7cae69e73f99"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a2c2b8650e686d6165f1d5a7945d63996"><td class="memItemLeft" align="right" valign="top">virtual int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a2c2b8650e686d6165f1d5a7945d63996">getDirectory</a> (const std::string &amp;path, get_directory_callback_t) noexcept=0</td></tr>
 <tr class="separator:a2c2b8650e686d6165f1d5a7945d63996"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a267a0614cc5e63a390251b028d4bae5f"><td class="memItemLeft" align="right" valign="top">virtual std::unique_ptr&lt; client::Directory &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a267a0614cc5e63a390251b028d4bae5f">getDirectorySync</a> (const std::string &amp;path) noexcept=0</td></tr>
@@ -2181,8 +2181,8 @@ Static Public Member Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="aa1697b6688a972f991a05c706bdcecdf"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aa1697b6688a972f991a05c706bdcecdf">&#9670;&nbsp;</a></span>removeDirectory()</h2>
+<a id="a61dfbec83299386b42598cd9c7452ea6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a61dfbec83299386b42598cd9c7452ea6">&#9670;&nbsp;</a></span>removeDirectory()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -2205,7 +2205,7 @@ Static Public Member Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">status_callback_t&#160;</td>
+          <td class="paramtype">logsconfig_status_callback_t&#160;</td>
           <td class="paramname">&#160;</td>
         </tr>
         <tr>
@@ -2232,8 +2232,8 @@ Static Public Member Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a56747c28caeca0476ad42495cd2d00ca"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a56747c28caeca0476ad42495cd2d00ca">&#9670;&nbsp;</a></span>removeDirectorySync()</h2>
+<a id="a29ca99dae58d178f463bbfe05aee9878"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a29ca99dae58d178f463bbfe05aee9878">&#9670;&nbsp;</a></span>removeDirectorySync()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -2251,7 +2251,13 @@ Static Public Member Functions</h2></td></tr>
           <td class="paramkey"></td>
           <td></td>
           <td class="paramtype">bool&#160;</td>
-          <td class="paramname"><em>recursive</em> = <code>false</code>&#160;</td>
+          <td class="paramname"><em>recursive</em> = <code>false</code>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t *&#160;</td>
+          <td class="paramname"><em>version</em> = <code>nullptr</code>&#160;</td>
         </tr>
         <tr>
           <td></td>
@@ -2265,12 +2271,19 @@ Static Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
-<p>blocking version of <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#aa1697b6688a972f991a05c706bdcecdf">removeDirectory()</a> </p><dl class="section return"><dt>Returns</dt><dd>true if removed, otherwise the err will be set like its async counterpart. </dd></dl>
+<p>blocking version of <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a61dfbec83299386b42598cd9c7452ea6">removeDirectory()</a></p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">version</td><td>If not nullptr, gets populated with the version of the logsconfig at which the directory got removed.</td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true if removed, otherwise the err will be set like its async counterpart. </dd></dl>
 
 </div>
 </div>
-<a id="a0f09c107d0083cf3e23538dca8b430bb"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a0f09c107d0083cf3e23538dca8b430bb">&#9670;&nbsp;</a></span>removeLogGroup()</h2>
+<a id="a259683c89ba0e43829bc0f620c7ffd42"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a259683c89ba0e43829bc0f620c7ffd42">&#9670;&nbsp;</a></span>removeLogGroup()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -2287,7 +2300,7 @@ Static Public Member Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">status_callback_t&#160;</td>
+          <td class="paramtype">logsconfig_status_callback_t&#160;</td>
           <td class="paramname"><em>cb</em>&#160;</td>
         </tr>
         <tr>
@@ -2307,8 +2320,8 @@ Static Public Member Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a1a2c5b528fdeca565cb837d2e307df34"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a1a2c5b528fdeca565cb837d2e307df34">&#9670;&nbsp;</a></span>removeLogGroupSync()</h2>
+<a id="aa21d050c9967ee4b1f461097295ac2e0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa21d050c9967ee4b1f461097295ac2e0">&#9670;&nbsp;</a></span>removeLogGroupSync()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -2320,8 +2333,18 @@ Static Public Member Functions</h2></td></tr>
           <td class="memname">virtual bool facebook::logdevice::Client::removeLogGroupSync </td>
           <td>(</td>
           <td class="paramtype">const std::string &amp;&#160;</td>
-          <td class="paramname"><em>path</em></td><td>)</td>
+          <td class="paramname"><em>path</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
           <td></td>
+          <td class="paramtype">uint64_t *&#160;</td>
+          <td class="paramname"><em>version</em> = <code>nullptr</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
         </tr>
       </table>
   </td>
@@ -2330,13 +2353,19 @@ Static Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
-<p>blocking version of <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a0f09c107d0083cf3e23538dca8b430bb">removeLogGroup()</a></p>
+<p>blocking version of <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a259683c89ba0e43829bc0f620c7ffd42">removeLogGroup()</a></p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">version</td><td>If not nullptr, gets populated with the version of the logsconfig at which the log group got removed.</td></tr>
+  </table>
+  </dd>
+</dl>
 <dl class="section return"><dt>Returns</dt><dd>true if removed, otherwise err will be set as the async counterpart. </dd></dl>
 
 </div>
 </div>
-<a id="a9c3bcf709656e91fc65a82ee32e6634c"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a9c3bcf709656e91fc65a82ee32e6634c">&#9670;&nbsp;</a></span>rename()</h2>
+<a id="aabe5c7cf00d4b2225bba81b41d1a83cd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aabe5c7cf00d4b2225bba81b41d1a83cd">&#9670;&nbsp;</a></span>rename()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -2359,7 +2388,7 @@ Static Public Member Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">status_callback_t&#160;</td>
+          <td class="paramtype">logsconfig_status_callback_t&#160;</td>
           <td class="paramname"><em>cb</em>&#160;</td>
         </tr>
         <tr>
@@ -2386,8 +2415,8 @@ Static Public Member Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="adea81d5b164611e4da5a6878458b51e0"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#adea81d5b164611e4da5a6878458b51e0">&#9670;&nbsp;</a></span>renameSync()</h2>
+<a id="a13ab01950612cc5c13a8bf40b518f9a4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a13ab01950612cc5c13a8bf40b518f9a4">&#9670;&nbsp;</a></span>renameSync()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -2410,6 +2439,12 @@ Static Public Member Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
+          <td class="paramtype">uint64_t *&#160;</td>
+          <td class="paramname"><em>version</em> = <code>nullptr</code>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
           <td class="paramtype">std::string *&#160;</td>
           <td class="paramname"><em>failure_reason</em> = <code>nullptr</code>&#160;</td>
         </tr>
@@ -2425,12 +2460,19 @@ Static Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
-<p>blocking version of <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a9c3bcf709656e91fc65a82ee32e6634c">rename()</a> If failure_reason is not nullptr, it will be populated with a human-readable error string if the operation failed. Return true if rename was successful, otherwise err is set like the async counterpart. </p>
+<p>blocking version of <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#aabe5c7cf00d4b2225bba81b41d1a83cd">rename()</a> If failure_reason is not nullptr, it will be populated with a human-readable error string if the operation failed.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">version</td><td>If not nullptr, gets populated with the version of the logsconfig at which the path got renamed.</td></tr>
+  </table>
+  </dd>
+</dl>
+<p>Return true if rename was successful, otherwise err is set like the async counterpart. </p>
 
 </div>
 </div>
-<a id="a771e6e5420f578bac83c51da04c878c2"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a771e6e5420f578bac83c51da04c878c2">&#9670;&nbsp;</a></span>setAttributes()</h2>
+<a id="a134074a21bfb899f19a20e335146a9fa"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a134074a21bfb899f19a20e335146a9fa">&#9670;&nbsp;</a></span>setAttributes()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -2453,7 +2495,7 @@ Static Public Member Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">status_callback_t&#160;</td>
+          <td class="paramtype">logsconfig_status_callback_t&#160;</td>
           <td class="paramname"><em>cb</em>&#160;</td>
         </tr>
         <tr>
@@ -2473,8 +2515,8 @@ Static Public Member Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a1692d455a2c608dbcecd675123338c7a"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a1692d455a2c608dbcecd675123338c7a">&#9670;&nbsp;</a></span>setAttributesSync()</h2>
+<a id="af9cc5e0552af197f061e29f04afa0a70"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af9cc5e0552af197f061e29f04afa0a70">&#9670;&nbsp;</a></span>setAttributesSync()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -2497,6 +2539,12 @@ Static Public Member Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
+          <td class="paramtype">uint64_t *&#160;</td>
+          <td class="paramname"><em>version</em> = <code>nullptr</code>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
           <td class="paramtype">std::string *&#160;</td>
           <td class="paramname"><em>failure_reason</em> = <code>nullptr</code>&#160;</td>
         </tr>
@@ -2512,12 +2560,14 @@ Static Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
-<p>blocking version of <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a771e6e5420f578bac83c51da04c878c2">setAttributes()</a> If failure_reason is not nullptr, it will be populated with a human-readable error string if the operation failed. </p>
+<p>blocking version of <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a134074a21bfb899f19a20e335146a9fa">setAttributes()</a></p>
+<p>If version is not nullptr, it will be populated with the version at which the attributes were set.</p>
+<p>If failure_reason is not nullptr, it will be populated with a human-readable error string if the operation failed. </p>
 
 </div>
 </div>
-<a id="aaef92340ce40a5f12b0e9b685595145a"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aaef92340ce40a5f12b0e9b685595145a">&#9670;&nbsp;</a></span>setLogGroupRange()</h2>
+<a id="ae46cb78be6906e72b88cafe6981c4349"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae46cb78be6906e72b88cafe6981c4349">&#9670;&nbsp;</a></span>setLogGroupRange()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -2540,7 +2590,7 @@ Static Public Member Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">status_callback_t&#160;</td>
+          <td class="paramtype">logsconfig_status_callback_t&#160;</td>
           <td class="paramname">&#160;</td>
         </tr>
         <tr>
@@ -2559,8 +2609,8 @@ Static Public Member Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="ab7c94850b340bcc37cda74f35f9183d0"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ab7c94850b340bcc37cda74f35f9183d0">&#9670;&nbsp;</a></span>setLogGroupRangeSync()</h2>
+<a id="ac034f89ca88ee185b69f7cae69e73f99"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac034f89ca88ee185b69f7cae69e73f99">&#9670;&nbsp;</a></span>setLogGroupRangeSync()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -2583,6 +2633,12 @@ Static Public Member Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
+          <td class="paramtype">uint64_t *&#160;</td>
+          <td class="paramname"><em>version</em> = <code>nullptr</code>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
           <td class="paramtype">std::string *&#160;</td>
           <td class="paramname"><em>failure_reason</em> = <code>nullptr</code>&#160;</td>
         </tr>
@@ -2598,7 +2654,9 @@ Static Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
-<p>blocking version of <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#aaef92340ce40a5f12b0e9b685595145a">setLogGroupRange()</a> If failure_reason is not nullptr, it will be populated with a human-readable error string if the operation failed. </p>
+<p>blocking version of <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#ae46cb78be6906e72b88cafe6981c4349">setLogGroupRange()</a></p>
+<p>If version is not nullptr, it will be populated with the version at which the log group range was set.</p>
+<p>If failure_reason is not nullptr, it will be populated with a human-readable error string if the operation failed. </p>
 
 </div>
 </div>
