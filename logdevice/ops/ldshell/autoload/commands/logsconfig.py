@@ -586,8 +586,12 @@ class Logs:
                 '"{}" to "{}"? (y/n)'.format(old_path, new_path)
             ):
                 return
-            c.rename(str(old_path), str(new_path))
-            cprint("Path '{}' has been renamed to '{}'".format(old_path, new_path))
+            version = c.rename(str(old_path), str(new_path))
+            cprint(
+                "Path '{}' has been renamed to '{}' in version {}".format(
+                    old_path, new_path, version
+                )
+            )
 
         except LogDeviceError as e:
             cprint("Cannot perform rename. {}: {}".format(e.args[1], e.args[3]), "red")
@@ -708,8 +712,12 @@ class Logs:
             ):
                 return
             c = _get_client()
-            c.set_attributes(str(path), effective_attributes_to_apply)
-            cprint("Attributes for '{}' has been updated!".format(path))
+            version = c.set_attributes(str(path), effective_attributes_to_apply)
+            cprint(
+                "Attributes for '{}' has been updated in version {}!".format(
+                    path, version
+                )
+            )
 
         except LogDeviceError as e:
             cprint(
@@ -749,8 +757,10 @@ class Logs:
                 )
             ):
                 return
-            c.set_log_group_range(str(path), from_id, to_id)
-            cprint("Log group '{}' has been updated!".format(path))
+            version = c.set_log_group_range(str(path), from_id, to_id)
+            cprint(
+                "Log group '{}' has been updated in version {}!".format(path, version)
+            )
 
         except LogDeviceError as e:
             cprint("Cannot update range for '{}': {}".format(path, e), "red")
@@ -778,11 +788,11 @@ class Logs:
             ):
                 return
             try:
-                c.remove_log_group(str(path))
+                version = c.remove_log_group(str(path))
             except LogDeviceError as e:
                 if e.args[0] == ErrorStatus.NOTFOUND:
-                    c.remove_directory(str(path), recursive)
-            cprint("'{}' has been removed".format(path))
+                    version = c.remove_directory(str(path), recursive)
+            cprint("'{}' has been removed in version {}".format(path, version))
 
         except LogDeviceError as e:
             cprint("Cannot remove '{}'. Reason: {}".format(path, e.args[2]), "red")

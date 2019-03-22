@@ -848,7 +848,7 @@ ClientImpl::makeDirectorySync(const std::string& path,
 
 int ClientImpl::removeDirectory(const std::string& path,
                                 bool recursive,
-                                status_callback_t cb) noexcept {
+                                logsconfig_status_callback_t cb) noexcept {
   auto full_ns = get_full_name(path, *config_->get(), *settings_);
   std::string delimiter = config_->get()->logsConfig()->getNamespaceDelimiter();
   // create the payload
@@ -856,10 +856,9 @@ int ClientImpl::removeDirectory(const std::string& path,
   logsconfig::RemoveDelta delta{
       header, path, true /* is directory */, recursive};
 
-  auto callback = [cb, delimiter](Status st,
-                                  uint64_t /* unused */,
-                                  std::string failure_reason) {
-    cb(st, std::move(failure_reason));
+  auto callback = [cb, delimiter](
+                      Status st, uint64_t version, std::string failure_reason) {
+    cb(st, version, std::move(failure_reason));
   };
 
   std::string payload =
@@ -880,12 +879,16 @@ int ClientImpl::removeDirectory(const std::string& path,
 }
 
 bool ClientImpl::removeDirectorySync(const std::string& path,
-                                     bool recursive) noexcept {
+                                     bool recursive,
+                                     uint64_t* version) noexcept {
   Status status = E::OK;
 
   Semaphore sem;
-  auto cb = [&](Status st, std::string /* unused */) {
+  auto cb = [&](Status st, uint64_t cfg_version, std::string /* unused */) {
     status = st;
+    if (version != nullptr) {
+      *version = cfg_version;
+    }
     sem.post();
   };
 
@@ -902,12 +905,16 @@ bool ClientImpl::removeDirectorySync(const std::string& path,
   return true;
 }
 
-bool ClientImpl::removeLogGroupSync(const std::string& path) noexcept {
+bool ClientImpl::removeLogGroupSync(const std::string& path,
+                                    uint64_t* version) noexcept {
   Status status = E::OK;
 
   Semaphore sem;
-  auto cb = [&](Status st, std::string /* unused */) {
+  auto cb = [&](Status st, uint64_t cfg_version, std::string /* unused */) {
     status = st;
+    if (version != nullptr) {
+      *version = cfg_version;
+    }
     sem.post();
   };
 
@@ -925,7 +932,7 @@ bool ClientImpl::removeLogGroupSync(const std::string& path) noexcept {
 }
 
 int ClientImpl::removeLogGroup(const std::string& path,
-                               status_callback_t cb) noexcept {
+                               logsconfig_status_callback_t cb) noexcept {
   auto full_ns = get_full_name(path, *config_->get(), *settings_);
   std::string delimiter = config_->get()->logsConfig()->getNamespaceDelimiter();
   // create the payload
@@ -934,9 +941,9 @@ int ClientImpl::removeLogGroup(const std::string& path,
       header, path, false /* not a directory */, false};
 
   auto callback = [cb, delimiter](
-                      Status st,
-                      uint64_t /* unused */,
-                      std::string failure_reason) { cb(st, failure_reason); };
+                      Status st, uint64_t version, std::string failure_reason) {
+    cb(st, version, failure_reason);
+  };
 
   std::string payload =
       FBuffersLogsConfigCodec::serialize(delta, false /* flatten */).toString();
@@ -957,7 +964,7 @@ int ClientImpl::removeLogGroup(const std::string& path,
 
 int ClientImpl::rename(const std::string& from_path,
                        const std::string& to_path,
-                       status_callback_t cb) noexcept {
+                       logsconfig_status_callback_t cb) noexcept {
   auto source_full_ns = get_full_name(from_path, *config_->get(), *settings_);
   auto dest_full_ns = get_full_name(to_path, *config_->get(), *settings_);
   std::string delimiter = config_->get()->logsConfig()->getNamespaceDelimiter();
@@ -965,10 +972,10 @@ int ClientImpl::rename(const std::string& from_path,
   logsconfig::DeltaHeader header; // Resolution is Auto by default
   logsconfig::RenameDelta delta{header, source_full_ns, dest_full_ns};
 
-  auto callback =
-      [cb](Status st, uint64_t /* unused */, std::string failure_reason) {
-        cb(st, std::move(failure_reason));
-      };
+  auto callback = [cb](
+                      Status st, uint64_t version, std::string failure_reason) {
+    cb(st, version, std::move(failure_reason));
+  };
 
   std::string payload =
       FBuffersLogsConfigCodec::serialize(delta, false /* flatten */).toString();
@@ -989,12 +996,16 @@ int ClientImpl::rename(const std::string& from_path,
 
 bool ClientImpl::renameSync(const std::string& from_path,
                             const std::string& to_path,
+                            uint64_t* version,
                             std::string* failure_reason) noexcept {
   Status status = E::OK;
 
   Semaphore sem;
-  auto cb = [&](Status st, std::string failure) {
+  auto cb = [&](Status st, uint64_t cfg_version, std::string failure) {
     status = st;
+    if (version != nullptr) {
+      *version = cfg_version;
+    }
     if (failure_reason) {
       *failure_reason = failure;
     }
@@ -1110,7 +1121,7 @@ ClientImpl::makeLogGroupSync(const std::string& path,
 
 int ClientImpl::setAttributes(const std::string& path,
                               const client::LogAttributes& attrs,
-                              status_callback_t cb) noexcept {
+                              logsconfig_status_callback_t cb) noexcept {
   auto full_ns = get_full_name(path, *config_->get(), *settings_);
   std::string delimiter = config_->get()->logsConfig()->getNamespaceDelimiter();
   // create the payload
@@ -1118,9 +1129,9 @@ int ClientImpl::setAttributes(const std::string& path,
   logsconfig::SetAttributesDelta delta{header, path, attrs};
 
   auto callback = [cb, full_ns, delimiter](
-                      Status st,
-                      uint64_t /* unused */,
-                      std::string failure_reason) { cb(st, failure_reason); };
+                      Status st, uint64_t version, std::string failure_reason) {
+    cb(st, version, failure_reason);
+  };
 
   std::string payload =
       FBuffersLogsConfigCodec::serialize(delta, false /* flatten */).toString();
@@ -1141,12 +1152,16 @@ int ClientImpl::setAttributes(const std::string& path,
 
 bool ClientImpl::setAttributesSync(const std::string& path,
                                    const client::LogAttributes& attrs,
+                                   uint64_t* version,
                                    std::string* failure_reason) noexcept {
   Status status = E::OK;
 
   Semaphore sem;
-  auto cb = [&](Status st, std::string failure) {
+  auto cb = [&](Status st, uint64_t cfg_version, std::string failure) {
     status = st;
+    if (version != nullptr) {
+      *version = cfg_version;
+    }
     if (st != E::OK && failure_reason != nullptr) {
       *failure_reason = failure;
     }
@@ -1171,17 +1186,16 @@ bool ClientImpl::setAttributesSync(const std::string& path,
 
 int ClientImpl::setLogGroupRange(const std::string& path,
                                  const logid_range_t& range,
-                                 status_callback_t cb) noexcept {
+                                 logsconfig_status_callback_t cb) noexcept {
   auto full_ns = get_full_name(path, *config_->get(), *settings_);
   std::string delimiter = config_->get()->logsConfig()->getNamespaceDelimiter();
   // create the payload
   logsconfig::DeltaHeader header; // Resolution is Auto by default
   logsconfig::SetLogRangeDelta delta{header, path, range};
 
-  auto callback = [cb, full_ns, delimiter](Status st,
-                                           uint64_t /* unused */,
-                                           std::string failure_reason) {
-    cb(st, std::move(failure_reason));
+  auto callback = [cb, full_ns, delimiter](
+                      Status st, uint64_t version, std::string failure_reason) {
+    cb(st, version, std::move(failure_reason));
   };
 
   std::string payload =
@@ -1203,12 +1217,16 @@ int ClientImpl::setLogGroupRange(const std::string& path,
 
 bool ClientImpl::setLogGroupRangeSync(const std::string& path,
                                       const logid_range_t& range,
+                                      uint64_t* version,
                                       std::string* failure_reason) noexcept {
   Status status = E::OK;
 
   Semaphore sem;
-  auto cb = [&](Status st, std::string failure) {
+  auto cb = [&](Status st, uint64_t cfg_version, std::string failure) {
     status = st;
+    if (version != nullptr) {
+      *version = cfg_version;
+    }
     if (st != E::OK && failure_reason != nullptr) {
       *failure_reason = failure;
     }

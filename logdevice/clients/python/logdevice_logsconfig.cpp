@@ -786,70 +786,86 @@ boost::shared_ptr<client::LogGroup> get_log_group_by_id(Client& client,
   return make_boost_shared_ptr_from_std_shared_ptr(lg);
 }
 
-void remove_directory(Client& client, str path, bool recursive) {
+uint64_t remove_directory(Client& client, str path, bool recursive) {
   std::string path_str = extract_string(path, "path");
+  uint64_t version;
   bool result;
   {
     gil_release_and_guard guard;
-    result = client.removeDirectorySync(path_str, recursive);
+    result = client.removeDirectorySync(path_str, recursive, &version);
   }
   if (!result) {
     throw_logdevice_exception();
   }
+  return version;
 }
 
-void remove_log_group(Client& client, str path) {
+uint64_t remove_log_group(Client& client, str path) {
   std::string path_str = extract_string(path, "path");
   bool result = false;
+  uint64_t version;
   {
     gil_release_and_guard guard;
-    result = client.removeLogGroupSync(path_str);
+    result = client.removeLogGroupSync(path_str, &version);
   }
   if (!result) {
     throw_logdevice_exception();
   }
+  return version;
 }
 
-void rename_path(Client& client, str old_name, str new_name) {
+uint64_t rename_path(Client& client, str old_name, str new_name) {
   std::string old_path_str = extract_string(old_name, "old_name");
   std::string new_path_str = extract_string(new_name, "new_name");
+  uint64_t version;
   std::string failure_reason;
   bool result;
   {
     gil_release_and_guard guard;
-    result = client.renameSync(old_path_str, new_path_str, &failure_reason);
+    result = client.renameSync(
+        old_path_str, new_path_str, &version, &failure_reason);
   }
   if (!result) {
     throw_logdevice_exception(object(failure_reason));
   }
+  return version;
 }
 
-void set_attributes(Client& client, str path, dict attrs) {
+uint64_t set_attributes(Client& client, str path, dict attrs) {
   std::string path_str = extract_string(path, "path");
   std::string failure_reason;
   LogAttributes attributes = dict_to_LogAttributes(attrs);
+  uint64_t version;
   bool result;
   {
     gil_release_and_guard guard;
-    result = client.setAttributesSync(path_str, attributes, &failure_reason);
+    result = client.setAttributesSync(
+        path_str, attributes, &version, &failure_reason);
   }
   if (!result) {
     throw_logdevice_exception(object(failure_reason));
   }
+  return version;
 }
 
-void set_log_group_range(Client& client, str path, logid_t from, logid_t to) {
+uint64_t set_log_group_range(Client& client,
+                             str path,
+                             logid_t from,
+                             logid_t to) {
   std::string path_str = extract_string(path, "path");
   std::string failure_reason;
   logid_range_t range{from, to};
+  uint64_t version;
   bool result;
   {
     gil_release_and_guard guard;
-    result = client.setLogGroupRangeSync(path_str, range, &failure_reason);
+    result =
+        client.setLogGroupRangeSync(path_str, range, &version, &failure_reason);
   }
   if (!result) {
     throw_logdevice_exception(object(failure_reason));
   }
+  return version;
 }
 
 bool sync_logsconfig_version(Client& client, uint64_t version) {

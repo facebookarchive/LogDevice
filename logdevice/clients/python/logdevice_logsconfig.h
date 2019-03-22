@@ -108,17 +108,19 @@ get_log_group_by_name(Client& client, boost::python::str path);
 boost::shared_ptr<client::LogGroup> get_log_group_by_id(Client& client,
                                                         logid_t id);
 
-void remove_directory(Client& client, boost::python::str path, bool recursive);
-void remove_log_group(Client& client, boost::python::str path);
-void rename_path(Client& client,
-                 boost::python::str old_name,
-                 boost::python::str new_name);
-void set_attributes(Client& client,
-                    boost::python::str path,
-                    boost::python::dict attrs);
-void set_log_group_range(Client& client,
-                         boost::python::str path,
-                         logid_t from,
-                         logid_t to);
+uint64_t remove_directory(Client& client,
+                          boost::python::str path,
+                          bool recursive);
+uint64_t remove_log_group(Client& client, boost::python::str path);
+uint64_t rename_path(Client& client,
+                     boost::python::str old_name,
+                     boost::python::str new_name);
+uint64_t set_attributes(Client& client,
+                        boost::python::str path,
+                        boost::python::dict attrs);
+uint64_t set_log_group_range(Client& client,
+                             boost::python::str path,
+                             logid_t from,
+                             logid_t to);
 bool sync_logsconfig_version(Client& client, uint64_t version);
 }}} // namespace facebook::logdevice::logsconfig

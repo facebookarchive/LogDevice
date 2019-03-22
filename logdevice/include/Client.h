@@ -175,8 +175,9 @@ typedef std::function<void(Status status,
                            const std::string& failure_reason)>
     make_directory_callback_t;
 
-typedef std::function<void(Status, const std::string& failure_reason)>
-    status_callback_t;
+typedef std::function<
+    void(Status, uint64_t version, const std::string& failure_reason)>
+    logsconfig_status_callback_t;
 
 /**
  * Type of callback that is called when a non-blocking getTailAttributes()
@@ -1100,23 +1101,32 @@ class Client {
    */
   virtual int removeDirectory(const std::string& path,
                               bool recursive,
-                              status_callback_t) noexcept = 0;
+                              logsconfig_status_callback_t) noexcept = 0;
 
   /**
    * blocking version of removeDirectory()
+   *
+   * @param version: If not nullptr, gets populated with the version of the
+   * logsconfig at which the directory got removed.
+   *
    * @return true if removed, otherwise the err will be set like its async
    * counterpart.
    */
   virtual bool removeDirectorySync(const std::string& path,
-                                   bool recursive = false) noexcept = 0;
+                                   bool recursive = false,
+                                   uint64_t* version = nullptr) noexcept = 0;
 
   /**
    * blocking version of removeLogGroup()
    *
+   * @param version: If not nullptr, gets populated with the version of the
+   * logsconfig at which the log group got removed.
+   *
    * @return true if removed, otherwise err will be set as the async
    * counterpart.
    */
-  virtual bool removeLogGroupSync(const std::string& path) noexcept = 0;
+  virtual bool removeLogGroupSync(const std::string& path,
+                                  uint64_t* version = nullptr) noexcept = 0;
 
   /**
    * Removes a logGroup defined at path
@@ -1129,7 +1139,7 @@ class Client {
    *                                          mutate the logs configuration.
    */
   virtual int removeLogGroup(const std::string& path,
-                             status_callback_t cb) noexcept = 0;
+                             logsconfig_status_callback_t cb) noexcept = 0;
 
   /**
    * Rename the leaf of the supplied path. This does not move entities in the
@@ -1154,17 +1164,22 @@ class Client {
    */
   virtual int rename(const std::string& from_path,
                      const std::string& to_path,
-                     status_callback_t cb) noexcept = 0;
+                     logsconfig_status_callback_t cb) noexcept = 0;
 
   /**
    * blocking version of rename()
    * If failure_reason is not nullptr, it will be populated with a
    * human-readable error string if the operation failed.
+   *
+   * @param version: If not nullptr, gets populated with the version of the
+   * logsconfig at which the path got renamed.
+   *
    * Return true if rename was successful, otherwise err is set like the async
    * counterpart.
    */
   virtual bool renameSync(const std::string& from_path,
                           const std::string& to_path,
+                          uint64_t* version = nullptr,
                           std::string* failure_reason = nullptr) noexcept = 0;
 
   /**
@@ -1224,16 +1239,21 @@ class Client {
    */
   virtual int setAttributes(const std::string& path,
                             const client::LogAttributes& attrs,
-                            status_callback_t cb) noexcept = 0;
+                            logsconfig_status_callback_t cb) noexcept = 0;
 
   /**
    * blocking version of setAttributes()
+   *
+   * If version is not nullptr, it will be populated with the version at which
+   * the attributes were set.
+   *
    * If failure_reason is not nullptr, it will be populated with a
    * human-readable error string if the operation failed.
    */
   virtual bool
   setAttributesSync(const std::string& path,
                     const client::LogAttributes& attrs,
+                    uint64_t* version = nullptr,
                     std::string* failure_reason = nullptr) noexcept = 0;
 
   /**
@@ -1251,16 +1271,21 @@ class Client {
    */
   virtual int setLogGroupRange(const std::string& path,
                                const logid_range_t& range,
-                               status_callback_t) noexcept = 0;
+                               logsconfig_status_callback_t) noexcept = 0;
 
   /**
    * blocking version of setLogGroupRange()
+   *
+   * If version is not nullptr, it will be populated with the version at which
+   * the log group range was set.
+   *
    * If failure_reason is not nullptr, it will be populated with a
    * human-readable error string if the operation failed.
    */
   virtual bool
   setLogGroupRangeSync(const std::string& path,
                        const logid_range_t& range,
+                       uint64_t* version = nullptr,
                        std::string* failure_reason = nullptr) noexcept = 0;
 
   /**

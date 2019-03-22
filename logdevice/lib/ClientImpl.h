@@ -268,22 +268,25 @@ class ClientImpl : public Client,
 
   int removeDirectory(const std::string& path,
                       bool recursive,
-                      status_callback_t cb) noexcept override;
+                      logsconfig_status_callback_t cb) noexcept override;
 
   bool removeDirectorySync(const std::string& path,
-                           bool recursive) noexcept override;
+                           bool recursive,
+                           uint64_t* version) noexcept override;
 
   int removeLogGroup(const std::string& path,
-                     status_callback_t cb) noexcept override;
+                     logsconfig_status_callback_t cb) noexcept override;
 
-  bool removeLogGroupSync(const std::string& path) noexcept override;
+  bool removeLogGroupSync(const std::string& path,
+                          uint64_t* version) noexcept override;
 
   int rename(const std::string& from_path,
              const std::string& to_path,
-             status_callback_t cb) noexcept override;
+             logsconfig_status_callback_t cb) noexcept override;
 
   bool renameSync(const std::string& from_path,
                   const std::string& to_path,
+                  uint64_t* version,
                   std::string* failure_reason) noexcept override;
 
   int makeLogGroup(const std::string& path,
@@ -301,18 +304,20 @@ class ClientImpl : public Client,
 
   int setAttributes(const std::string& path,
                     const client::LogAttributes& attrs,
-                    status_callback_t cb) noexcept override;
+                    logsconfig_status_callback_t cb) noexcept override;
 
   bool setAttributesSync(const std::string& path,
                          const client::LogAttributes& attrs,
+                         uint64_t* version,
                          std::string* failure_reason) noexcept override;
 
   int setLogGroupRange(const std::string& path,
                        const logid_range_t& range,
-                       status_callback_t) noexcept override;
+                       logsconfig_status_callback_t) noexcept override;
 
   bool setLogGroupRangeSync(const std::string& path,
                             const logid_range_t& range,
+                            uint64_t* version,
                             std::string* failure_reason) noexcept override;
 
   int getDirectory(const std::string& path,
