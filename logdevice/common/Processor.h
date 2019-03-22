@@ -645,6 +645,8 @@ class Processor : public folly::enable_shared_from_this<Processor> {
     return initialized_.load(std::memory_order_relaxed);
   }
 
+  bool isLogsConfigLoaded() const;
+
  private:
   const std::shared_ptr<TraceLogger> trace_logger_;
 

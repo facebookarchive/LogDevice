@@ -696,6 +696,15 @@ std::string Processor::describeMyNode() const {
       : "Client";
 }
 
+bool Processor::isLogsConfigLoaded() const {
+  auto logsconfig = config_->getLogsConfig();
+  if (logsconfig == nullptr) {
+    return false;
+  }
+  // Configuration may not be local (RemoteLogsConfig).
+  // In this case we always whether that config is fully loaded.
+  return logsconfig->isFullyLoaded();
+}
 }} // namespace facebook::logdevice
 
 namespace {

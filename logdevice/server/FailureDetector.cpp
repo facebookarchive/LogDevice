@@ -1401,7 +1401,7 @@ bool FailureDetector::isLogsConfigLoaded() {
     // constructed.
     return true;
   }
-  return Worker::getConfig()->localLogsConfig()->isFullyLoaded();
+  return processor_->isLogsConfigLoaded();
 }
 
 }} // namespace facebook::logdevice
