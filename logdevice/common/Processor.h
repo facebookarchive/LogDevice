@@ -66,9 +66,8 @@ class WatchDogThread;
 class Worker;
 class ZeroCopiedRecordDisposal;
 class WheelTimer;
-
 enum class SequencerOptions : uint8_t;
-using workers_t = std::vector<std::unique_ptr<EventLoopHandle>>;
+using workers_t = std::vector<Worker*>;
 
 class Processor : public folly::enable_shared_from_this<Processor> {
  public:
@@ -125,18 +124,8 @@ class Processor : public folly::enable_shared_from_this<Processor> {
    */
   workers_t createWorkerPool(WorkerType type, size_t count);
 
-  /**
-   * Returns a reference to the handle of the worker_idx in the supplied worker
-   * pool
-   *
-   * This assumes that the index exists (and asserts that) It's the caller's
-   * responsibility to verify that it's not calling with an out-of-bound worker
-   * index in this pool. Use getWorkerCount(type) to validate.
-   */
-  EventLoopHandle& findWorker(WorkerType type, int worker_idx);
-
   int postToWorker(std::unique_ptr<Request>& rq,
-                   EventLoopHandle& wh,
+                   Worker& wh,
                    WorkerType worker_type,
                    worker_id_t worker_idx,
                    bool force);
@@ -657,6 +646,8 @@ class Processor : public folly::enable_shared_from_this<Processor> {
 
   // Used to ensure shutdown() is only called once.
   std::atomic<bool> shutting_down_{false};
+
+  std::atomic<bool> allow_post_during_shutdown_{false};
 
   // Used to detect that we are in a test environment without a
   // fully initialized processor;

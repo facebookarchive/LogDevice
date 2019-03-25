@@ -754,6 +754,15 @@ class Worker : public EventLoop {
   const std::unordered_set<node_index_t>& getGraylistedNodes() const;
   void resetGraylist();
 
+  // Common request processing logic, after request is picked up by the worker
+  // or cputhreadpool for execution.
+  void processRequest(std::unique_ptr<Request>& req);
+
+  // Methods used by processor to post requests to worker.
+  int tryPost(std::unique_ptr<Request>& req);
+
+  int forcePost(std::unique_ptr<Request>& req);
+
  protected:
   virtual void onThreadStarted() override;
 
@@ -858,6 +867,10 @@ class Worker : public EventLoop {
   std::unique_ptr<Timer> cluster_state_polling_;
 
   std::unique_ptr<WorkerTimeoutStats> worker_timeout_stats_;
+
+  // Counts the number of requests enqueued into the Worker for processing.
+  // Used to return NOBUFS when count goes above worker_request_pipe_capacity.
+  std::atomic<size_t> num_requests_enqueued_{0};
 
   // Size limit for commonTimeouts_ (NB: libevent has a default upper bound
   // of MAX_COMMON_TIMEOUTS = 256)

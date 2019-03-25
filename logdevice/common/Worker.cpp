@@ -919,6 +919,7 @@ void Worker::onStoppedRunning(RunContext prev_context) {
                       prev_context.describe().c_str());
     WORKER_STAT_INCR(worker_slow_requests);
   }
+
   auto usec = std::chrono::duration_cast<std::chrono::microseconds>(end_time -
                                                                     start_time)
                   .count();
@@ -1238,5 +1239,88 @@ std::string Worker::describeMyNode() {
     return "Can't find Processor";
   }
   return worker->processor_->describeMyNode();
+}
+
+// Per request common execute logic after request has been picked for execution.
+void Worker::processRequest(std::unique_ptr<Request>& rq) {
+  using namespace std::chrono;
+
+  ld_check(rq);
+  if (UNLIKELY(!rq)) {
+    RATELIMIT_CRITICAL(
+        1s, 1, "INTERNAL ERROR: got a NULL request pointer from RequestPump");
+    return;
+  }
+
+  RunContext run_context = rq->getRunContext();
+
+  auto queue_time{
+      duration_cast<microseconds>(steady_clock::now() - rq->enqueue_time_)};
+  HISTOGRAM_ADD(stats_, requests_queue_latency, queue_time.count());
+  if (queue_time > 20ms) {
+    RATELIMIT_WARNING(5s,
+                      10,
+                      "Request queued for %g msec: %s (id: %lu)",
+                      queue_time.count() / 1000.0,
+                      rq->describe().c_str(),
+                      rq->id_.val());
+  }
+
+  Worker::onStartedRunning(run_context);
+
+  // rq should not be accessed after execute, as it may have been deleted.
+  Request::Execution status = rq->execute();
+
+  switch (status) {
+    case Request::Execution::COMPLETE:
+      break;
+    case Request::Execution::CONTINUE:
+      rq.release();
+      break;
+  }
+
+  Worker::onStoppedRunning(run_context);
+  WORKER_STAT_INCR(worker_requests_executed);
+}
+
+int Worker::tryPost(std::unique_ptr<Request>& req) {
+  if (shutting_down_) {
+    err = E::SHUTDOWN;
+    return -1;
+  }
+  if (!req) {
+    err = E::INVALID_PARAM;
+    return -1;
+  }
+
+  if (num_requests_enqueued_.load() >
+      immutable_settings_->worker_request_pipe_capacity) {
+    err = E::NOBUFS;
+    return -1;
+  }
+
+  return forcePost(req);
+}
+
+int Worker::forcePost(std::unique_ptr<Request>& req) {
+  if (shutting_down_) {
+    err = E::SHUTDOWN;
+    return -1;
+  }
+
+  if (!req) {
+    err = E::INVALID_PARAM;
+    return -1;
+  }
+
+  num_requests_enqueued_++;
+
+  req->enqueue_time_ = std::chrono::steady_clock::now();
+  folly::Func func = [rq = std::move(req), this]() mutable {
+    num_requests_enqueued_--;
+    processRequest(rq);
+  };
+  add(std::move(func));
+  return 0;
 }
 }} // namespace facebook::logdevice

@@ -98,7 +98,8 @@ class ProcessorImpl {
         background_queue_() {}
 
   WheelTimer wheel_timer_;
-  std::array<workers_t, static_cast<size_t>(WorkerType::MAX)> workers_;
+  std::array<workers_t, static_cast<size_t>(WorkerType::MAX)> all_workers_;
+  std::vector<std::unique_ptr<EventLoopHandle>> ev_loop_handles_;
   AppendProbeController append_probe_controller_;
   std::unique_ptr<AllSequencers> allSequencers_;
   WorkerLoadBalancing worker_load_balancing_;
@@ -201,13 +202,25 @@ void Processor::init() {
     WorkerType worker_type = workerTypeByIndex(i);
     auto count = getWorkerCount(worker_type);
     workers_t worker_pool = createWorkerPool(worker_type, count);
+    for (auto& worker : worker_pool) {
+      try {
+        auto& ev_handles = impl_->ev_loop_handles_;
+        ev_handles.emplace_back(std::make_unique<EventLoopHandle>(
+            worker,
+            local_settings->worker_request_pipe_capacity,
+            local_settings->requests_per_iteration));
+        impl_->all_workers_[i].push_back(worker);
+      } catch (ConstructorFailed&) {
+        shutdown();
+        throw ConstructorFailed();
+      }
+    }
     ld_info(
         "Initialized %d workers of type %s", count, workerTypeStr(worker_type));
-    impl_->workers_[i] = std::move(worker_pool);
+  }
 
-    for (std::unique_ptr<EventLoopHandle>& handle : impl_->workers_[i]) {
-      handle->start();
-    }
+  for (std::unique_ptr<EventLoopHandle>& handle : impl_->ev_loop_handles_) {
+    handle->start();
   }
 
   impl_->allSequencers_ =
@@ -251,27 +264,17 @@ workers_t Processor::createWorkerPool(WorkerType type, size_t count) {
 
   for (int i = 0; i < count; i++) {
     // increment the next worker idx
-    std::unique_ptr<EventLoopHandle> worker;
+    std::unique_ptr<Worker> worker;
     try {
-      worker = std::make_unique<EventLoopHandle>(
-          createWorker(worker_id_t(i), type),
-          local_settings->worker_request_pipe_capacity,
-          local_settings->requests_per_iteration);
+      worker.reset(createWorker(worker_id_t(i), type));
     } catch (ConstructorFailed&) {
       shutdown();
       throw ConstructorFailed();
     }
     ld_check(worker);
-    workers.push_back(std::move(worker));
+    workers.push_back(worker.release());
   }
   return workers;
-}
-
-EventLoopHandle& Processor::findWorker(WorkerType type, int worker_idx) {
-  ld_check(type != WorkerType::MAX);
-  auto& workers = impl_->workers_[static_cast<uint8_t>(type)];
-  ld_check(worker_idx < workers.size());
-  return *workers[worker_idx];
 }
 
 // Testing Constructor
@@ -344,9 +347,8 @@ WheelTimer& Processor::getWheelTimer() {
 Worker& Processor::getWorker(worker_id_t worker_id, WorkerType worker_type) {
   ld_check(worker_id.val() >= 0);
   ld_check(worker_id.val() < getWorkerCount(worker_type));
-  return *static_cast<Worker*>(
-      impl_->workers_[static_cast<uint8_t>(worker_type)][worker_id.val()]
-          ->get());
+  auto& workers = impl_->all_workers_[static_cast<uint8_t>(worker_type)];
+  return *workers[worker_id.val()];
 }
 
 void Processor::applyToWorkers(folly::Function<void(Worker&)> func,
@@ -368,12 +370,12 @@ void Processor::applyToWorkerPool(folly::Function<void(Worker&)>& func,
 }
 
 int Processor::postToWorker(std::unique_ptr<Request>& rq,
-                            EventLoopHandle& wh,
+                            Worker& w,
                             WorkerType worker_type,
                             worker_id_t worker_idx,
                             bool force) {
   auto type = rq->type_;
-  const int rv = force ? wh.forcePostRequest(rq) : wh.postRequest(rq);
+  const int rv = force ? w.forcePost(rq) : w.tryPost(rq);
   // rq is (hopefully) now invalid!  Don't dereference!
   Request::bumpStatsWhenPosted(stats_, type, worker_type, worker_idx, rv == 0);
   return rv;
@@ -397,13 +399,17 @@ int Processor::postImpl(std::unique_ptr<Request>& rq,
     err = E::INVALID_PARAM;
     return -1;
   }
-  auto& wh = findWorker(worker_type, target_thread);
-  return postToWorker(rq, wh, worker_type, worker_id_t(target_thread), force);
+  auto& w = getWorker(worker_id_t(target_thread), worker_type);
+  return postToWorker(rq, w, worker_type, worker_id_t(target_thread), force);
 }
 
 int Processor::postRequest(std::unique_ptr<Request>& rq,
                            WorkerType worker_type,
                            int target_thread) {
+  if (shutting_down_.load()) {
+    err = E::SHUTDOWN;
+    return -1;
+  }
   return postImpl(rq, worker_type, target_thread, /* force */ false);
 }
 
@@ -422,6 +428,7 @@ int Processor::blockingRequestImpl(std::unique_ptr<Request>& rq, bool force) {
     return rv;
   }
 
+  // Block until the Request has completed
   sem.wait();
   return 0;
 }
@@ -489,6 +496,7 @@ void Processor::shutdown() {
     // already called
     return;
   }
+  allow_post_during_shutdown_.store(true);
 
   if (security_info_) { // can be nullptr in tests
     security_info_->shutdown();
@@ -524,15 +532,15 @@ void Processor::shutdown() {
     ncm_->shutdown();
   }
 
+  // Processor will now stop allowing any requests to workers.
+  allow_post_during_shutdown_.store(false);
   // Tell all Workers to shut down and terminate their threads. This
   // also alters WorkerHandles so that further attempts to post
   // requests through them fail with E::SHUTDOWN.
-  for (int i = 0; i < numOfWorkerTypes(); i++) {
-    for (auto& w : impl_->workers_[i]) {
-      w->dontWaitOnDestruct();
-      w->shutdown();
-      pthreads.push_back(w->getThread());
-    }
+  for (auto& ev_handle : impl_->ev_loop_handles_) {
+    ev_handle->dontWaitOnDestruct();
+    ev_handle->shutdown();
+    pthreads.push_back(ev_handle->getThread());
   }
 
   for (size_t i = 0; i < impl_->background_threads_.size(); ++i) {
@@ -582,6 +590,10 @@ void Processor::reportLoad(worker_id_t idx,
 }
 
 int Processor::postImportant(std::unique_ptr<Request>& rq) {
+  if (shutting_down_.load() && !allow_post_during_shutdown_) {
+    err = E::SHUTDOWN;
+    return -1;
+  }
   return postImpl(rq,
                   rq->getWorkerTypeAffinity(),
                   getTargetThreadForRequest(rq),
@@ -683,7 +695,7 @@ bool Processor::validateFn(const folly::Function<void()>& fn) {
 std::vector<int> Processor::workerIdsRandomPermutation(WorkerType type) {
   folly::ThreadLocalPRNG rng;
   std::vector<int> worker_ids(
-      impl_->workers_[static_cast<uint8_t>(type)].size());
+      impl_->all_workers_[static_cast<uint8_t>(type)].size());
   std::iota(worker_ids.begin(), worker_ids.end(), 0);
   std::shuffle(worker_ids.begin(), worker_ids.end(), rng);
 
