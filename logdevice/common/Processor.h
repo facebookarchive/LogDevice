@@ -66,6 +66,7 @@ class WatchDogThread;
 class Worker;
 class ZeroCopiedRecordDisposal;
 class WheelTimer;
+class Configuration;
 enum class SequencerOptions : uint8_t;
 using workers_t = std::vector<Worker*>;
 
@@ -438,6 +439,8 @@ class Processor : public folly::enable_shared_from_this<Processor> {
   getNodesConfigurationManager();
 
   const std::shared_ptr<TraceLogger> getTraceLogger() const;
+
+  std::shared_ptr<Configuration> getConfig();
 
   std::shared_ptr<UpdateableConfig> config_;
 

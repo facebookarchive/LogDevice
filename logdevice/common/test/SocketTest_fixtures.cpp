@@ -17,7 +17,7 @@ const Settings& TestSocketDependencies::getSettings() const {
   return owner_->settings_;
 }
 
-StatsHolder* TestSocketDependencies::getStats() {
+StatsHolder* TestSocketDependencies::getStats() const {
   return nullptr;
 }
 

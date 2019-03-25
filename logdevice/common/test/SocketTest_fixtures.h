@@ -39,9 +39,10 @@ class SocketTest;
 
 class TestSocketDependencies : public SocketDependencies {
  public:
-  explicit TestSocketDependencies(SocketTest* owner) : owner_(owner) {}
+  explicit TestSocketDependencies(SocketTest* owner)
+      : SocketDependencies(nullptr, nullptr), owner_(owner) {}
   virtual const Settings& getSettings() const override;
-  virtual StatsHolder* getStats() override;
+  virtual StatsHolder* getStats() const override;
   virtual void noteBytesQueued(size_t nbytes) override;
   virtual void noteBytesDrained(size_t nbytes) override;
   virtual size_t getBytesPending() const override;

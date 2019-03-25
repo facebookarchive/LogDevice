@@ -293,6 +293,7 @@ TEST_F(MessagingSocketTest, SocketConnect) {
 
   ld_check((bool)config);
 
+  processor.config_ = config;
   auto h = std::make_unique<EventLoopHandle>(
       new Worker(&processor, worker_id_t(0), config));
   h->start();
@@ -407,6 +408,8 @@ TEST_F(MessagingSocketTest, SenderBasicSend) {
   std::shared_ptr<UpdateableConfig> config(create_config(server.getPort()));
 
   ld_check((bool)config);
+
+  processor.config_ = config;
 
   auto h = std::make_unique<EventLoopHandle>(
       new Worker(&processor, worker_id_t(0), config));
@@ -525,6 +528,7 @@ TEST_F(MessagingSocketTest, OnHandshakeTimeout) {
   ServerSocket server;
 
   std::shared_ptr<UpdateableConfig> config(create_config(server.getPort()));
+  processor.config_ = config;
   std::unique_ptr<Request> req =
       std::make_unique<SendStoredWithTimeoutRequest>();
   auto h = std::make_unique<EventLoopHandle>(
@@ -646,6 +650,7 @@ TEST_F(MessagingSocketTest, AckProtoNoSupportClose) {
   ServerSocket server;
 
   std::shared_ptr<UpdateableConfig> config(create_config(server.getPort()));
+  processor.config_ = config;
 
   Semaphore sem;
   auto raw_req = new SendMessageOnCloseProtoNoSupport(sem);
@@ -690,6 +695,7 @@ TEST_F(MessagingSocketTest, MessageProtoNoSupportOnSent) {
   ServerSocket server;
 
   std::shared_ptr<UpdateableConfig> config(create_config(server.getPort()));
+  processor.config_ = config;
 
   Semaphore sem;
   std::unique_ptr<Request> req;
@@ -781,6 +787,8 @@ TEST_F(MessagingSocketTest, AckInvalidClusterClose) {
 
   std::shared_ptr<UpdateableConfig> config(create_config(server.getPort()));
 
+  processor.config_ = config;
+
   Semaphore sem;
   auto raw_req = new SendMessageOnCloseInvalidCluster(sem);
   std::unique_ptr<Request> req(raw_req);
@@ -838,7 +846,7 @@ TEST_F(MessagingSocketTest, ReentrantOnSent) {
   ServerSocket server;
 
   std::shared_ptr<UpdateableConfig> config(create_config(server.getPort()));
-
+  processor.config_ = config;
   Semaphore sem;
   std::unique_ptr<Request> req;
   req.reset(new SendReentrantMessage(sem));

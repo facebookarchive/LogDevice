@@ -46,6 +46,8 @@ class SocketImpl;
 class SocketProxy;
 class StatsHolder;
 class Worker;
+class Sender;
+class Processor;
 
 /**
  * @file  a Socket is an endpoint of a connection that can send and
@@ -132,12 +134,7 @@ class Socket : public TrafficShappingSocket {
   explicit Socket(NodeID server_name,
                   SocketType type,
                   ConnectionType conntype,
-                  FlowGroup& flow_group)
-      : Socket(server_name,
-               type,
-               conntype,
-               flow_group,
-               std::make_unique<SocketDependencies>()) {}
+                  FlowGroup& flow_group);
 
   /**
    * Used for tests.
@@ -178,15 +175,7 @@ class Socket : public TrafficShappingSocket {
          ResourceBudget::Token conn_token,
          SocketType type,
          ConnectionType conntype,
-         FlowGroup& flow_group)
-      : Socket(fd,
-               client_name,
-               client_addr,
-               std::move(conn_token),
-               type,
-               conntype,
-               flow_group,
-               std::make_unique<SocketDependencies>()) {}
+         FlowGroup& flow_group);
 
   /**
    * Used for tests.
@@ -1136,8 +1125,14 @@ class Socket : public TrafficShappingSocket {
  */
 class SocketDependencies {
  public:
+  SocketDependencies(Processor* processor, Sender* sender)
+      : processor_(processor), sender_(sender) {}
   virtual const Settings& getSettings() const;
-  virtual StatsHolder* getStats();
+  virtual StatsHolder* getStats() const;
+  virtual std::shared_ptr<Configuration> getConfig() const;
+  virtual std::shared_ptr<ServerConfig> getServerConfig() const;
+  virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const;
   virtual void noteBytesQueued(size_t nbytes);
   virtual void noteBytesDrained(size_t nbytes);
   virtual size_t getBytesPending() const;
@@ -1223,6 +1218,10 @@ class SocketDependencies {
   virtual void onStoppedRunning(RunContext prev_context);
 
   virtual ~SocketDependencies() {}
+
+ private:
+  Processor* const processor_;
+  Sender* sender_;
 };
 
 /**

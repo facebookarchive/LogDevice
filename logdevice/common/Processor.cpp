@@ -708,6 +708,10 @@ std::string Processor::describeMyNode() const {
       : "Client";
 }
 
+std::shared_ptr<Configuration> Processor::getConfig() {
+  return config_->get();
+}
+
 bool Processor::isLogsConfigLoaded() const {
   auto logsconfig = config_->getLogsConfig();
   if (logsconfig == nullptr) {

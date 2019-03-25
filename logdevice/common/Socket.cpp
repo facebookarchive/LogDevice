@@ -36,6 +36,7 @@
 #include "logdevice/common/UpdateableSecurityInfo.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/plugin/PluginRegistry.h"
@@ -99,6 +100,35 @@ getTimeDiff(std::chrono::steady_clock::time_point& start_time) {
   auto diff = std::chrono::steady_clock::now() - start_time;
   return std::chrono::duration_cast<std::chrono::milliseconds>(diff);
 }
+
+Socket::Socket(NodeID server_name,
+               SocketType type,
+               ConnectionType conntype,
+               FlowGroup& flow_group)
+    : Socket(server_name,
+             type,
+             conntype,
+             flow_group,
+             std::make_unique<SocketDependencies>(
+                 Worker::onThisThread()->processor_,
+                 &Worker::onThisThread()->sender())) {}
+Socket::Socket(int fd,
+               ClientID client_name,
+               const Sockaddr& client_addr,
+               ResourceBudget::Token conn_token,
+               SocketType type,
+               ConnectionType conntype,
+               FlowGroup& flow_group)
+    : Socket(fd,
+             client_name,
+             client_addr,
+             std::move(conn_token),
+             type,
+             conntype,
+             flow_group,
+             std::make_unique<SocketDependencies>(
+                 Worker::onThisThread()->processor_,
+                 &Worker::onThisThread()->sender())) {}
 
 Socket::Socket(std::unique_ptr<SocketDependencies>& deps,
                Address peer_name,
@@ -2396,29 +2426,43 @@ void Socket::limitCiphersToENULL() {
 }
 
 // The following methods are overridden by tests.
-
 const Settings& SocketDependencies::getSettings() const {
-  return Worker::settings();
+  return *processor_->settings();
 }
 
-StatsHolder* SocketDependencies::getStats() {
-  return Worker::stats();
+StatsHolder* SocketDependencies::getStats() const {
+  return processor_->stats_;
+}
+
+std::shared_ptr<Configuration> SocketDependencies::getConfig() const {
+  return processor_->getConfig();
+}
+
+std::shared_ptr<ServerConfig> SocketDependencies::getServerConfig() const {
+  return getConfig()->serverConfig();
+}
+
+std::shared_ptr<const configuration::nodes::NodesConfiguration>
+SocketDependencies::getNodesConfiguration() const {
+  auto& config = processor_->config_;
+
+  return config->getNodesConfiguration(getSettings());
 }
 
 void SocketDependencies::noteBytesQueued(size_t nbytes) {
-  Worker::onThisThread()->sender().noteBytesQueued(nbytes);
+  sender_->noteBytesQueued(nbytes);
 }
 
 void SocketDependencies::noteBytesDrained(size_t nbytes) {
-  Worker::onThisThread()->sender().noteBytesDrained(nbytes);
+  sender_->noteBytesDrained(nbytes);
 }
 
 size_t SocketDependencies::getBytesPending() const {
-  return Worker::onThisThread()->sender().getBytesPending();
+  return sender_->getBytesPending();
 }
 
 bool SocketDependencies::bytesPendingLimitReached() const {
-  return Worker::onThisThread()->sender().bytesPendingLimitReached();
+  return sender_->bytesPendingLimitReached();
 }
 
 worker_id_t SocketDependencies::getWorkerId() const {
@@ -2443,14 +2487,13 @@ bool SocketDependencies::shuttingDown() const {
 }
 
 std::string SocketDependencies::dumpQueuedMessages(Address addr) const {
-  return Worker::onThisThread()->sender().dumpQueuedMessages(addr);
+  return sender_->dumpQueuedMessages(addr);
 }
 
 const Sockaddr& SocketDependencies::getNodeSockaddr(NodeID nid,
                                                     SocketType type,
                                                     ConnectionType conntype) {
-  const auto& nodes_configuration =
-      Worker::onThisThread()->getNodesConfiguration();
+  auto nodes_configuration = getNodesConfiguration();
   ld_check(nodes_configuration != nullptr);
 
   // note: we don't check for generation here, if the generation has changed in
@@ -2459,7 +2502,7 @@ const Sockaddr& SocketDependencies::getNodeSockaddr(NodeID nid,
       nodes_configuration->getNodeServiceDiscovery(nid.index());
 
   if (node_service_discovery) {
-    if (type == SocketType::GOSSIP && !Worker::settings().send_to_gossip_port) {
+    if (type == SocketType::GOSSIP && !getSettings().send_to_gossip_port) {
       return node_service_discovery->getSockaddr(SocketType::DATA, conntype);
     } else {
       return node_service_discovery->getSockaddr(type, conntype);
@@ -2475,7 +2518,7 @@ int SocketDependencies::eventAssign(struct event* ev,
                                                void* arg),
                                     void* arg) {
   return LD_EV(event_assign)(ev,
-                             Worker::onThisThread()->getEventBase(),
+                             EventLoop::onThisThread()->getEventBase(),
                              -1,
                              EV_WRITE | EV_PERSIST,
                              cb,
@@ -2499,7 +2542,7 @@ int SocketDependencies::evtimerAssign(struct event* ev,
                                                  short what,
                                                  void* arg),
                                       void* arg) {
-  return evtimer_assign(ev, Worker::onThisThread()->getEventBase(), cb, arg);
+  return evtimer_assign(ev, EventLoop::onThisThread()->getEventBase(), cb, arg);
 }
 
 void SocketDependencies::evtimerDel(struct event* ev) {
@@ -2524,7 +2567,7 @@ int SocketDependencies::evtimerPending(struct event* ev, struct timeval* tv) {
   return evtimer_pending(ev, tv);
 }
 
-struct bufferevent*
+struct bufferevent* FOLLY_NULLABLE
 SocketDependencies::buffereventSocketNew(int sfd,
                                          int opts,
                                          bool secure,
@@ -2543,7 +2586,11 @@ SocketDependencies::buffereventSocketNew(int sfd,
     }
 
     struct bufferevent* bev = bufferevent_openssl_socket_new(
-        Worker::onThisThread()->getEventBase(), sfd, ssl, ssl_state, opts);
+        EventLoop::onThisThread()->getEventBase(), sfd, ssl, ssl_state, opts);
+    if (!bev) {
+      return nullptr;
+    }
+
     ld_check(bufferevent_get_openssl_error(bev) == 0);
 #if LIBEVENT_VERSION_NUMBER >= 0x02010100
     bufferevent_openssl_set_allow_dirty_shutdown(bev, 1);
@@ -2552,7 +2599,7 @@ SocketDependencies::buffereventSocketNew(int sfd,
 
   } else {
     return LD_EV(bufferevent_socket_new)(
-        Worker::onThisThread()->getEventBase(), sfd, opts);
+        EventLoop::onThisThread()->getEventBase(), sfd, opts);
   }
 }
 
@@ -2657,8 +2704,7 @@ void SocketDependencies::onSent(std::unique_ptr<Message> msg,
       ld_check(false);
       // fallthrough
     case Message::CompletionMethod::DEFERRED:
-      auto& sender = Worker::onThisThread()->sender();
-      sender.queueMessageCompletion(std::move(msg), to, st, t);
+      sender_->queueMessageCompletion(std::move(msg), to, st, t);
       break;
   }
 }
@@ -2669,11 +2715,11 @@ Message::Disposition SocketDependencies::onReceived(Message* msg,
 }
 
 void SocketDependencies::processDeferredMessageCompletions() {
-  Worker::onThisThread()->sender().deliverCompletedMessages();
+  sender_->deliverCompletedMessages();
 }
 
 NodeID SocketDependencies::getMyNodeID() {
-  return Worker::onThisThread()->getConfig()->serverConfig()->getMyNodeID();
+  return getServerConfig()->getMyNodeID();
 }
 
 /**
@@ -2851,35 +2897,33 @@ int SocketDependencies::setDSCP(int fd,
 }
 
 ResourceBudget& SocketDependencies::getConnBudgetExternal() {
-  return Worker::onThisThread()->processor_->conn_budget_external_;
+  return processor_->conn_budget_external_;
 }
 
 std::string SocketDependencies::getClusterName() {
-  return Worker::getConfig()->serverConfig()->getClusterName();
+  return getServerConfig()->getClusterName();
 }
 
 ServerInstanceId SocketDependencies::getServerInstanceId() {
-  return Worker::onThisThread()->processor_->getServerInstanceId();
+  return processor_->getServerInstanceId();
 }
 
 const std::string& SocketDependencies::getHELLOCredentials() {
-  return Worker::onThisThread()->processor_->HELLOCredentials_;
+  return processor_->HELLOCredentials_;
 }
 
 const std::string& SocketDependencies::getCSID() {
-  return Worker::onThisThread()->processor_->csid_;
+  return processor_->csid_;
 }
 
 std::string SocketDependencies::getClientBuildInfo() {
-  auto build_info = Worker::onThisThread()
-                        ->processor_->getPluginRegistry()
-                        ->getSinglePlugin<BuildInfo>(PluginType::BUILD_INFO);
+  auto build_info = processor_->getPluginRegistry()->getSinglePlugin<BuildInfo>(
+      PluginType::BUILD_INFO);
   ld_check(build_info);
   return build_info->getBuildInfoJson();
 }
 
 bool SocketDependencies::authenticationEnabled() {
-  Processor* const processor_ = Worker::onThisThread()->processor_;
   if (processor_->security_info_) {
     auto principal_parser = processor_->security_info_->getPrincipalParser();
     return principal_parser != nullptr;
@@ -2889,17 +2933,13 @@ bool SocketDependencies::authenticationEnabled() {
 }
 
 bool SocketDependencies::allowUnauthenticated() {
-  return Worker::onThisThread()
-      ->getConfig()
-      ->serverConfig()
-      ->allowUnauthenticated();
+  return getServerConfig()->allowUnauthenticated();
 }
 
 bool SocketDependencies::includeHELLOCredentials() {
   // Only include HELLOCredentials in HELLO_Message when the PrincipalParser
   // will use the data.
-  auto principal_parser =
-      Worker::onThisThread()->processor_->security_info_->getPrincipalParser();
+  auto principal_parser = processor_->security_info_->getPrincipalParser();
   return principal_parser != nullptr &&
       (principal_parser->getAuthenticationType() ==
        AuthenticationType::SELF_IDENTIFICATION);
