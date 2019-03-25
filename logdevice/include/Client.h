@@ -703,9 +703,6 @@ class Client {
   virtual int isLogEmpty(logid_t logid, is_empty_callback_t cb) noexcept = 0;
 
   /**
-   * NOTE: this is currently a dummy API that will always return 0;
-   * please refrain from using other than for testing.
-   *
    * Finds the size of stored data for the given log in the given time range,
    * with accuracy as requested. Please note: this is post-batching and
    * compression; the size will likely be larger to a reader. This method is
