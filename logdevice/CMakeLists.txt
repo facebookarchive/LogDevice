@@ -6,8 +6,15 @@
 
 cmake_minimum_required(VERSION 3.4.0 FATAL_ERROR)
 
-# includes
-set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMake" ${CMAKE_MODULE_PATH})
+# Set directory of the Find$x.cmake files to properly include dependencies
+set(CMAKE_MODULE_PATH
+  "${CMAKE_CURRENT_SOURCE_DIR}/CMake"
+  # for in-fbsource builds
+  "${CMAKE_CURRENT_SOURCE_DIR}/../opensource/fbcode_builder/CMake"
+  # For shipit-transformed builds
+  "${CMAKE_CURRENT_SOURCE_DIR}/../build/fbcode_builder/CMake"
+  ${CMAKE_MODULE_PATH})
+
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories("${LOGDEVICE_STAGING_DIR}/usr/local/include/")
 
@@ -80,7 +87,8 @@ set(LOGDEVICE_EXTERNAL_DEPS
   ${LIBDL_LIBRARIES}
   ${DOUBLE_CONVERSION_LIBRARY}
   ${Zookeeper_LIBRARY}
-  ${LIBGLOG_LIBRARY}
+  ${GLOG_LIBRARIES}
+  ${LIBGFLAGS_LIBRARY}
   ${LZ4_LIBRARY}
   ${ZLIB_LIBRARIES}
   ${LIBLZMA_LIBRARIES}

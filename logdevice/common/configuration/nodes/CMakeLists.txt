@@ -38,6 +38,6 @@ target_link_libraries(
   NodesConfiguration-cpp2
   Membership-cpp2
   ${FBTHRIFT_LIBRARIES}
-  ${LIBGLOG_LIBRARY}
+  ${GLOG_LIBRARIES}
   ${LIBGFLAGS_LIBRARY}
 )
