@@ -21,15 +21,13 @@ namespace facebook { namespace logdevice {
 
 class StaticSequencerLocator : public SequencerLocator {
  public:
-  explicit StaticSequencerLocator(std::shared_ptr<UpdateableConfig> config,
-                                  UpdateableSettings<Settings> settings)
-      : config_(std::move(config)), settings_(std::move(settings)) {}
+  explicit StaticSequencerLocator(std::shared_ptr<UpdateableConfig> config)
+      : config_(std::move(config)) {}
 
   int locateSequencer(logid_t logid,
                       Completion cf,
                       const configuration::SequencersConfig*) override {
-    const auto nodes_configuration =
-        config_->getNodesConfiguration(*settings_.get());
+    const auto nodes_configuration = config_->getNodesConfiguration();
     const bool has_node_zero_seq =
         nodes_configuration->getSequencerMembership()->hasNode(0);
 
@@ -46,7 +44,6 @@ class StaticSequencerLocator : public SequencerLocator {
 
  private:
   std::shared_ptr<UpdateableConfig> config_;
-  UpdateableSettings<Settings> settings_;
 };
 
 }} // namespace facebook::logdevice

@@ -185,7 +185,7 @@ TEST(MessagingTest, RequestPipeOverflow) {
   pthread_t th;
   UpdateableSettings<Settings> updateable_settings;
   auto config = UpdateableConfig::createEmpty();
-  Processor processor(updateable_settings);
+  Processor processor(config, updateable_settings);
 
   dbg::currentLevel = dbg::Level::DEBUG;
 

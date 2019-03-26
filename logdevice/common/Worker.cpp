@@ -46,6 +46,7 @@
 #include "logdevice/common/LogsConfigApiRequest.h"
 #include "logdevice/common/LogsConfigUpdatedRequest.h"
 #include "logdevice/common/MetaDataLogWriter.h"
+#include "logdevice/common/NodesConfigurationUpdatedRequest.h"
 #include "logdevice/common/PermissionChecker.h"
 #include "logdevice/common/PrincipalParser.h"
 #include "logdevice/common/Processor.h"
@@ -276,7 +277,7 @@ std::shared_ptr<ServerConfig> Worker::getServerConfig() const {
 
 std::shared_ptr<const configuration::nodes::NodesConfiguration>
 Worker::getNodesConfiguration() const {
-  return config_->getNodesConfiguration(settings());
+  return config_->getNodesConfiguration();
 }
 
 std::shared_ptr<const configuration::nodes::NodesConfiguration>
@@ -314,6 +315,7 @@ void Worker::onLogsConfigUpdated() {
 
 void Worker::onServerConfigUpdated() {
   ld_check(Worker::onThisThread() == this);
+
   dbg::thisThreadClusterName() =
       config_->get()->serverConfig()->getClusterName();
 
@@ -343,6 +345,7 @@ void Worker::onNodesConfigurationUpdated() {
             idx_.val(),
             workerTypeStr(worker_type_));
   }
+  sender().noteConfigurationChanged(getNodesConfiguration());
 }
 
 namespace {
@@ -413,23 +416,30 @@ void Worker::onSettingsUpdated() {
 }
 
 void Worker::initializeSubscriptions() {
+  enum class ConfigType { SERVER, LOGS, NODES };
   Processor* processor = processor_;
   worker_id_t idx = idx_;
   WorkerType worker_type = worker_type_;
 
-  auto configUpdateCallback = [processor, idx, worker_type](
-                                  bool is_server_config) {
-    return [processor, idx, worker_type, is_server_config]() {
+  auto configUpdateCallback = [processor, idx, worker_type](ConfigType type) {
+    return [processor, idx, worker_type, type]() {
       // callback runs on unspecified thread so we need to post a Request
       // through the processor
       std::unique_ptr<Request> req;
-      if (is_server_config) {
-        req = std::make_unique<ServerConfigUpdatedRequest>(idx, worker_type);
-      } else {
-        req = std::make_unique<LogsConfigUpdatedRequest>(
-            processor->settings()->configuration_update_retry_interval,
-            idx,
-            worker_type);
+      switch (type) {
+        case ConfigType::SERVER:
+          req = std::make_unique<ServerConfigUpdatedRequest>(idx, worker_type);
+          break;
+        case ConfigType::LOGS:
+          req = std::make_unique<LogsConfigUpdatedRequest>(
+              processor->settings()->configuration_update_retry_interval,
+              idx,
+              worker_type);
+          break;
+        case ConfigType::NODES:
+          req = std::make_unique<NodesConfigurationUpdatedRequest>(
+              idx, worker_type);
+          break;
       }
 
       int rv = processor->postWithRetrying(req);
@@ -437,7 +447,9 @@ void Worker::initializeSubscriptions() {
       if (rv != 0) {
         ld_error("error processing %s config update on worker #%d (%s): "
                  "postWithRetrying() failed with status %s",
-                 is_server_config ? "server" : "logs",
+                 type == ConfigType::SERVER
+                     ? "server"
+                     : type == ConfigType::LOGS ? "logs" : "nodes",
                  idx.val_,
                  workerTypeStr(worker_type),
                  error_description(err));
@@ -448,14 +460,18 @@ void Worker::initializeSubscriptions() {
   // Subscribe to config updates
   server_config_update_sub_ =
       config_->updateableServerConfig()->subscribeToUpdates(
-          configUpdateCallback(true));
+          configUpdateCallback(ConfigType::SERVER));
   logs_config_update_sub_ = config_->updateableLogsConfig()->subscribeToUpdates(
-      configUpdateCallback(false));
+      configUpdateCallback(ConfigType::LOGS));
+  nodes_configuration_update_sub_ =
+      config_->updateableNodesConfiguration()->subscribeToUpdates(
+          configUpdateCallback(ConfigType::NODES));
 
   // Pretend we got the config update - to make sure we didn't miss anything
   // before we subscribed
   onServerConfigUpdated();
   onLogsConfigUpdated();
+  onNodesConfigurationUpdated();
 
   auto settingsUpdateCallback = [processor, idx, worker_type]() {
     std::unique_ptr<Request> request =

@@ -810,11 +810,11 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
         std::move(ugossip_settings),
         UpdateableSettings<AdminServerSettings>(
             create_default_settings<AdminServerSettings>()),
+        updateable_config,
         updateable_settings,
         true,
         300,
         &stats_);
-    processor_->config_ = updateable_config;
 
     temp_dir_ = createTemporaryDir("TemporaryLogStore");
     ld_check(temp_dir_);

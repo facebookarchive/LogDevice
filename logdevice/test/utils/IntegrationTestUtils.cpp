@@ -2251,10 +2251,8 @@ class StaticSequencerLocatorFactory : public SequencerLocatorFactory {
     return "Static sequencer placement";
   }
   std::unique_ptr<SequencerLocator>
-  operator()(std::shared_ptr<UpdateableConfig> config,
-             UpdateableSettings<Settings> settings) override {
-    return std::make_unique<StaticSequencerLocator>(
-        std::move(config), std::move(settings));
+  operator()(std::shared_ptr<UpdateableConfig> config) override {
+    return std::make_unique<StaticSequencerLocator>(std::move(config));
   }
 };
 

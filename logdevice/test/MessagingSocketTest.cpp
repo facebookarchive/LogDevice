@@ -285,11 +285,10 @@ TEST_F(MessagingSocketTest, SocketConnect) {
   settings.include_cluster_name_on_handshake = true;
   settings.include_destination_on_handshake = true;
   UpdateableSettings<Settings> updateable_settings(settings);
-  Processor processor(updateable_settings);
-
   ServerSocket server;
 
   std::shared_ptr<UpdateableConfig> config(create_config(server.getPort()));
+  Processor processor(config, updateable_settings);
 
   ld_check((bool)config);
 
@@ -401,11 +400,10 @@ TEST_F(MessagingSocketTest, SenderBasicSend) {
   settings.include_cluster_name_on_handshake = true;
   settings.include_destination_on_handshake = true;
   UpdateableSettings<Settings> updateable_settings(settings);
-  Processor processor(updateable_settings);
-
   ServerSocket server;
-
   std::shared_ptr<UpdateableConfig> config(create_config(server.getPort()));
+
+  Processor processor(config, updateable_settings);
 
   ld_check((bool)config);
 
@@ -523,12 +521,12 @@ TEST_F(MessagingSocketTest, OnHandshakeTimeout) {
   settings.include_destination_on_handshake = true;
   settings.handshake_timeout = std::chrono::milliseconds(1000);
   UpdateableSettings<Settings> updateable_settings(settings);
-  Processor processor(updateable_settings);
 
   ServerSocket server;
-
   std::shared_ptr<UpdateableConfig> config(create_config(server.getPort()));
-  processor.config_ = config;
+
+  Processor processor(config, updateable_settings);
+
   std::unique_ptr<Request> req =
       std::make_unique<SendStoredWithTimeoutRequest>();
   auto h = std::make_unique<EventLoopHandle>(
@@ -645,12 +643,10 @@ struct SendMessageExpectBadProtoRequest : public Request {
  */
 TEST_F(MessagingSocketTest, AckProtoNoSupportClose) {
   UpdateableSettings<Settings> updateable_settings;
-  Processor processor(updateable_settings);
-
   ServerSocket server;
-
   std::shared_ptr<UpdateableConfig> config(create_config(server.getPort()));
-  processor.config_ = config;
+
+  Processor processor(config, updateable_settings);
 
   Semaphore sem;
   auto raw_req = new SendMessageOnCloseProtoNoSupport(sem);
@@ -691,11 +687,10 @@ TEST_F(MessagingSocketTest, MessageProtoNoSupportOnSent) {
   settings.include_destination_on_handshake = true;
   settings.handshake_timeout = std::chrono::milliseconds(1000);
   UpdateableSettings<Settings> updateable_settings(settings);
-  Processor processor(updateable_settings);
   ServerSocket server;
-
   std::shared_ptr<UpdateableConfig> config(create_config(server.getPort()));
-  processor.config_ = config;
+
+  Processor processor(config, updateable_settings);
 
   Semaphore sem;
   std::unique_ptr<Request> req;
@@ -782,12 +777,10 @@ TEST_F(MessagingSocketTest, AckInvalidClusterClose) {
   settings.include_cluster_name_on_handshake = true;
   settings.include_destination_on_handshake = true;
   UpdateableSettings<Settings> updateable_settings(settings);
-  Processor processor(updateable_settings);
   ServerSocket server;
-
   std::shared_ptr<UpdateableConfig> config(create_config(server.getPort()));
 
-  processor.config_ = config;
+  Processor processor(config, updateable_settings);
 
   Semaphore sem;
   auto raw_req = new SendMessageOnCloseInvalidCluster(sem);
@@ -842,11 +835,10 @@ struct SendReentrantMessage : public Request {
  */
 TEST_F(MessagingSocketTest, ReentrantOnSent) {
   UpdateableSettings<Settings> updateable_settings;
-  Processor processor(updateable_settings);
   ServerSocket server;
-
   std::shared_ptr<UpdateableConfig> config(create_config(server.getPort()));
-  processor.config_ = config;
+  Processor processor(config, updateable_settings);
+
   Semaphore sem;
   std::unique_ptr<Request> req;
   req.reset(new SendReentrantMessage(sem));

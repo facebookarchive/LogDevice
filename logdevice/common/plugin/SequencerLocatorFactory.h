@@ -33,8 +33,7 @@ class SequencerLocatorFactory : public Plugin {
    * sequencers on servers and for clients to locate sequencers.
    */
   virtual std::unique_ptr<SequencerLocator>
-  operator()(std::shared_ptr<UpdateableConfig> config,
-             UpdateableSettings<Settings> settings) = 0;
+  operator()(std::shared_ptr<UpdateableConfig> config) = 0;
 };
 
 }} // namespace facebook::logdevice

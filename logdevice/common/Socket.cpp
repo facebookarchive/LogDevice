@@ -2444,9 +2444,7 @@ std::shared_ptr<ServerConfig> SocketDependencies::getServerConfig() const {
 
 std::shared_ptr<const configuration::nodes::NodesConfiguration>
 SocketDependencies::getNodesConfiguration() const {
-  auto& config = processor_->config_;
-
-  return config->getNodesConfiguration(getSettings());
+  return processor_->getNodesConfiguration();
 }
 
 void SocketDependencies::noteBytesQueued(size_t nbytes) {

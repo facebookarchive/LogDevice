@@ -706,7 +706,11 @@ class Worker : public EventLoop {
   // This should be called whenever the LogsConfig gets updated.
   // Has to be called from the worker thread
   void onLogsConfigUpdated();
-  // placeholder for processing change notified by the NodesConfigurationManager
+  // This should be called whenever the NodesConfiguration gets updated.
+  // Has to be called from the worker thread.
+  // There's not gurantee that it will be called only once per config change.
+  // Subscribers should react to the change in config, not to the fact this
+  // function is called.
   void onNodesConfigurationUpdated();
 
   // Sets currently running request. Verifies that we are on a worker and that
@@ -794,6 +798,7 @@ class Worker : public EventLoop {
   // unsubscribe
   ConfigSubscriptionHandle server_config_update_sub_;
   ConfigSubscriptionHandle logs_config_update_sub_;
+  ConfigSubscriptionHandle nodes_configuration_update_sub_;
 
   // subscription for changes in UpdateableSettings<Settings>
   UpdateableSettings<Settings>::SubscriptionHandle

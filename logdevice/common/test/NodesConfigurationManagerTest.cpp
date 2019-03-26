@@ -80,6 +80,8 @@ class NodesConfigurationManagerTest : public ::testing::Test {
 
     Settings settings = create_default_settings<Settings>();
     settings.num_workers = 3;
+    settings.enable_nodes_configuration_manager = true;
+    settings.use_nodes_configuration_manager_nodes_configuration = true;
     settings.nodes_configuration_manager_store_polling_interval =
         std::chrono::seconds(1);
     settings.nodes_configuration_manager_intermediary_shard_state_timeout =

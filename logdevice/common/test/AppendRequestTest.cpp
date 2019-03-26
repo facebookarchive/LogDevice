@@ -103,8 +103,6 @@ class AppendRequestTest : public ::testing::Test {
   void init(size_t nnodes,
             size_t nlogs,
             LocatorType type = LocatorType::HASH_BASED) {
-    updateable_settings_ =
-        UpdateableSettings<Settings>(create_default_settings<Settings>());
     auto simple_config = createSimpleConfig(nnodes, nlogs);
     config_ = UpdateableConfig::createEmpty();
     config_->updateableServerConfig()->update(simple_config->serverConfig());
@@ -118,8 +116,7 @@ class AppendRequestTest : public ::testing::Test {
             simple_config);
         break;
       case LocatorType::STATIC:
-        locator_ = std::make_unique<StaticSequencerLocator>(
-            config_, updateable_settings_);
+        locator_ = std::make_unique<StaticSequencerLocator>(config_);
         break;
     }
   }
@@ -162,7 +159,6 @@ class AppendRequestTest : public ::testing::Test {
   }
 
   std::shared_ptr<UpdateableConfig> config_;
-  UpdateableSettings<Settings> updateable_settings_;
   std::shared_ptr<SequencerLocator> locator_;
   std::unique_ptr<ClusterState> cluster_state_;
 };
@@ -292,7 +288,7 @@ TEST_F(AppendRequestTest, SequencerAffinityTest) {
       TEST_CONFIG_FILE("sequencer_affinity_2nodes.conf")));
 
   cluster_state_ = std::make_unique<MockClusterState>(
-      config_->getNodesConfiguration(settings)->clusterSize());
+      config_->getNodesConfigurationFromServerConfigSource()->clusterSize());
 
   settings.use_sequencer_affinity = true;
   locator_ = std::make_unique<MockHashBasedSequencerLocator>(

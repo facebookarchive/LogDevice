@@ -26,6 +26,7 @@
 #include "logdevice/common/EventLoopHandle.h"
 #include "logdevice/common/HashBasedSequencerLocator.h"
 #include "logdevice/common/MetaDataLogWriter.h"
+#include "logdevice/common/NodesConfigurationPublisher.h"
 #include "logdevice/common/PermissionChecker.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/SecurityInformation.h"
@@ -91,11 +92,12 @@ namespace facebook { namespace logdevice {
 // Processor.h.
 class ProcessorImpl {
  public:
-  ProcessorImpl(Processor* /*processor*/, UpdateableSettings<Settings> settings)
+  ProcessorImpl(Processor* processor, UpdateableSettings<Settings> settings)
       : append_probe_controller_(std::chrono::seconds(10)), // TODO configurable
         worker_load_balancing_(settings->num_workers),
         background_init_flag_(),
-        background_queue_() {}
+        background_queue_(),
+        nc_publisher_(processor->config_, settings) {}
 
   WheelTimer wheel_timer_;
   std::array<workers_t, static_cast<size_t>(WorkerType::MAX)> all_workers_;
@@ -111,6 +113,7 @@ class ProcessorImpl {
   std::vector<std::unique_ptr<BackgroundThread>> background_threads_;
   // An empty function means "exit the thread."
   folly::MPMCQueue<folly::Function<void()>> background_queue_;
+  NodesConfigurationPublisher nc_publisher_;
 };
 
 namespace {
@@ -127,12 +130,11 @@ void settingsUpdated(const UpdateableSettings<Settings>& settings) {
 
 std::unique_ptr<SequencerLocator>
 get_sequencer_locator(std::shared_ptr<PluginRegistry> plugin_registry,
-                      std ::shared_ptr<UpdateableConfig> config,
-                      UpdateableSettings<Settings> settings) {
+                      std ::shared_ptr<UpdateableConfig> config) {
   auto plugin = plugin_registry->getSinglePlugin<SequencerLocatorFactory>(
       PluginType::SEQUENCER_LOCATOR_FACTORY);
   if (plugin) {
-    return (*plugin)(std::move(config), std::move(settings));
+    return (*plugin)(std::move(config));
   } else {
     return std::make_unique<HashBasedSequencerLocator>();
   }
@@ -155,8 +157,7 @@ Processor::Processor(std::shared_ptr<UpdateableConfig> updateable_config,
       plugin_registry_(std::move(plugin_registry)),
       stats_(stats),
       impl_(new ProcessorImpl(this, settings)),
-      sequencer_locator_(
-          get_sequencer_locator(plugin_registry_, config_, settings_)),
+      sequencer_locator_(get_sequencer_locator(plugin_registry_, config_)),
       conn_budget_incoming_(settings_->max_incoming_connections),
       conn_budget_backlog_(settings_->connection_backlog),
       conn_budget_external_(settings_->max_external_connections),
@@ -278,11 +279,13 @@ workers_t Processor::createWorkerPool(WorkerType type, size_t count) {
 }
 
 // Testing Constructor
-Processor::Processor(UpdateableSettings<Settings> settings,
+Processor::Processor(std::shared_ptr<UpdateableConfig> updateable_config,
+                     UpdateableSettings<Settings> settings,
                      bool fake_storage_node,
                      int /*max_logs*/,
                      StatsHolder* stats)
-    : fake_storage_node_(fake_storage_node),
+    : config_(std::move(updateable_config)),
+      fake_storage_node_(fake_storage_node),
       settings_(settings),
       plugin_registry_(std::make_shared<PluginRegistry>(
           createAugmentedCommonBuiltinPluginVector<StaticPluginLoader>())),
@@ -469,7 +472,7 @@ void Processor::setNodesConfigurationManager(
 
 std::shared_ptr<const configuration::nodes::NodesConfiguration>
 Processor::getNodesConfiguration() const {
-  return config_->getNodesConfiguration(*settings());
+  return config_->getNodesConfiguration();
 }
 
 std::shared_ptr<const configuration::nodes::NodesConfiguration>

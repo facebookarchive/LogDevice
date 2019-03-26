@@ -163,7 +163,8 @@ class Processor : public folly::enable_shared_from_this<Processor> {
   /**
    * A null constructor. Used for testing.
    */
-  explicit Processor(UpdateableSettings<Settings> settings,
+  explicit Processor(std::shared_ptr<UpdateableConfig> updateable_config,
+                     UpdateableSettings<Settings> settings,
                      bool fake_storage_node = false,
                      int max_logs = 1,
                      StatsHolder* stats = nullptr);

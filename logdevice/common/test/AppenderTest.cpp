@@ -305,7 +305,7 @@ class AppenderTest::TestCopySetSelectorDeps
 
   std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const override {
-    return test_->config_.getNodesConfiguration(test_->settings_);
+    return test_->config_.getNodesConfiguration();
   }
 
  private:
@@ -742,8 +742,11 @@ void AppenderTest::updateConfig() {
   Configuration::MetaDataLogsConfig meta_config =
       createMetaDataLogsConfig(nodes_config, nodes_config.getNodes().size(), 3);
 
-  config_.updateableServerConfig()->update(
-      ServerConfig::fromDataTest(__FILE__, nodes_config, meta_config));
+  std::shared_ptr<ServerConfig> server_cfg =
+      ServerConfig::fromDataTest(__FILE__, nodes_config, meta_config);
+  config_.updateableServerConfig()->update(server_cfg);
+  config_.updateableNodesConfiguration()->update(
+      server_cfg->getNodesConfigurationFromServerConfigSource());
   config_.updateableLogsConfig()->update(std::move(logs_config));
   config_.get()->serverConfig()->setMyNodeID(NodeID(10, 20));
 

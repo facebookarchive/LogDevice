@@ -152,7 +152,7 @@ bool ServerParameters::setConnectionLimits() {
 
   std::shared_ptr<const Settings> settings = processor_settings_.get();
   const size_t nodes =
-      updateable_config_->getNodesConfiguration(*settings)->clusterSize();
+      updateable_config_->getNodesConfiguration()->clusterSize();
   const size_t workers = settings->num_workers;
 
   const int available =
@@ -388,7 +388,7 @@ bool ServerParameters::initNodesConfiguration() {
       std::move(zookeeper_client_factory));
   NodesConfigurationInit config_init(std::move(store), getProcessorSettings());
   return config_init.initWithoutProcessor(
-      updateable_config_->updateableNodesConfiguration());
+      updateable_config_->updateableNCMNodesConfiguration());
 }
 
 bool ServerParameters::isSequencingEnabled() const {

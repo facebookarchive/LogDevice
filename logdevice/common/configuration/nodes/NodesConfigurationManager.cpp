@@ -430,6 +430,11 @@ void NodesConfigurationManager::maybeProcessStagedConfig() {
   STAT_SET(deps_->getStats(),
            nodes_configuration_manager_pending_version,
            pending_nodes_config_->getVersion().val());
+
+  // Publish the NodesConfiguration to the NCM NC updateable.
+  deps_->processor_->config_->updateableNCMNodesConfiguration()->update(
+      pending_nodes_config_);
+
   auto futures = fulfill_on_all_workers<folly::Unit>(
       deps_->processor_,
       [config = pending_nodes_config_](folly::Promise<folly::Unit> p) {
@@ -438,10 +443,6 @@ void NodesConfigurationManager::maybeProcessStagedConfig() {
                  config->getVersion().val(),
                  w->idx_.val(),
                  workerTypeStr(w->worker_type_));
-
-        // TODO: perhaps return highest config version?
-        w->getUpdateableConfig()->updateableNodesConfiguration()->update(
-            config);
         w->onNodesConfigurationUpdated();
         p.setValue();
       },
