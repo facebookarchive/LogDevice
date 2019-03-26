@@ -50,10 +50,18 @@ exception InvalidRequest {
   1: string message,
 }
 
-/*
+/**
  * There is maintenance already set by the same user for different targets
  */
 exception MaintenanceClash {
+  1: string message,
+}
+
+/**
+ * The system couldn't match the maintenance in the definition with the internal
+ * state
+ */
+exception MaintenanceMatchError {
   1: string message,
 }
 

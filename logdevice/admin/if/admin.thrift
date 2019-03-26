@@ -42,10 +42,10 @@ service AdminAPI extends fb303.FacebookService {
       (1: exceptions.NodeNotReady notready);
 
   /*
-   * Lists the current maintenance list for nodes that match the NodesFilter.
+   * Lists the maintenance by group-ids.
    */
-  maintenance.GetMaintenancesResult getMaintenances(1: nodes.NodesFilter
-      filter) throws
+  maintenance.MaintenanceDefinitionResponse getMaintenances(1:
+      maintenance.MaintenancesFilter filter) throws
       (1: exceptions.NodeNotReady notready,
        2: exceptions.Redirect not_master,
        3: exceptions.InvalidRequest invalid_request,
@@ -67,8 +67,8 @@ service AdminAPI extends fb303.FacebookService {
    *   - By using the getNodesState to inspect the states for particular nodes
    *   or shards.
    */
-  maintenance.ApplyMaintenanceResponse applyMaintenance(1:
-      maintenance.ApplyMaintenanceRequest request) throws
+  maintenance.MaintenanceDefinitionResponse applyMaintenance(1:
+      maintenance.MaintenanceDefinition request) throws
       (1: exceptions.NodeNotReady notready,
        2: exceptions.Redirect not_master,
        3: exceptions.InvalidRequest invalid_request,
@@ -86,8 +86,8 @@ service AdminAPI extends fb303.FacebookService {
    * Removing a maintenance that doesn't exist for one or more of the
    * shards is a no-op.
    */
-  maintenance.RemoveMaintenanceResponse removeMaintenance(1:
-      maintenance.RemoveMaintenanceRequest filter) throws
+  maintenance.RemoveMaintenancesResponse removeMaintenances(1:
+      maintenance.RemoveMaintenancesRequest filter) throws
       (1: exceptions.NodeNotReady notready,
        2: exceptions.Redirect not_master,
        3: exceptions.InvalidRequest invalid_request,

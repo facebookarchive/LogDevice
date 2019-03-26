@@ -15,53 +15,159 @@ namespace py3 logdevice.admin
 namespace php LogDevice
 namespace wiki LogDevice.Maintenance
 
-struct ShardMaintenance {
-  /*
+
+struct MaintenanceDefinition {
+  /**
    * if ShardID's shard_index == -1 this maintenance targets the entire node.
    * Accepted values are [MAY_DISAPPEAR, DRAINED]
    */
-  1: common.ShardID shard,
-  2: nodes.ShardOperationalState target_state,
-}
-
-struct SequencerMaintenance {
-  1: common.NodeID node,
-  /*
-   * Accepted value is DISABLED only.
+  1: list<common.ShardID> shards,
+  /**
+   * Must be set to either MAY_DISAPPEAR or DRAINED iff shards is non-empty.
    */
-  2: nodes.SequencerState target_state,
-}
-
-struct ApplyMaintenanceRequest {
-  1: list<ShardMaintenance> shards_maintenance,
-  2: list<SequencerMaintenance> sequencers_maintenance,
-  3: string user,
-  4: string reason,
-  /*
+  2: nodes.ShardOperationalState shard_target_state,
+  3: list<common.NodeID> sequencer_nodes,
+  /**
+   * Must be set to DISABLED iff sequencer_nodes is non-empty.
+   */
+  4: nodes.SequencingState sequencer_target_state,
+  /**
+   * The user associated with this maintenance request. The same user cannot
+   * request multiple maintenances with different targets for the same shards.
+   * This will trigger MaintenanceClash exception (see exceptions.thrift)
+   */
+  5: string user,
+  /**
+   * A string representation of why this maintenance was requested. This is
+   * purely for logging and tooling.
+   */
+  6: string reason,
+  /**
+   * Extra attributes to be associated with this maintenance. This is up to the
+   * user. Can be used to store metadata about external tooling triggering the
+   * maintenance.
+   */
+  7: map<string, string> extras,
+  /**
    * Dangerous and should only be used for emergency situations.
    */
-  5: optional bool skip_safety_checks = false,
+  8: bool skip_safety_checks = false,
+  /**
+   * Attempt to group the maintenances in this request. This will give a hint to
+   * the internal maintenance scheduler that the user wishes for these
+   * maintenance targets to happen as a single unit.
+   *
+   * From the API perspective, the user should not treat the partial results are
+   * reliable as the system might need to revert some of them. The target state
+   * for this group is only guaranteed if all the shards in the group have
+   * reached their targets. However, the system will not revert states
+   * unnecessarily.
+   */
+  9: bool group = false,
+  /**
+   * This is the time in seconds that we want to keep this maintenance applied.
+   * The countdown starts as you apply the maintenance, you need to take into
+   * account how long does it take the system reach the target state. The ttl
+   * will be refreshed every time the user tries to re-apply the same
+   * maintenance.
+   *
+   * Example:
+   * The user `foo` requests a DRAINED maintenance for Node(1). The ttl is set
+   * to 1 hour (ttl_seconds=3600). Onces the server responds to your request.
+   * The Maintenance Manager starts a count down that the maintenance will
+   * expire in (now + 3600 seconds).
+   * If the user wishes to extend the TTL, they should call the same
+   * applyMaintenance() call with same arguments (user, shards, shard_target_state,
+   * sequencer_nodes, sequencer_target_state, are what matter). Or simply
+   * filling the (user, group-id) field instead. If the request didn't match all
+   * the shards in the group, we will fail the request with MaintenanceMatchError
+   * exception.
+   *
+   * The Maintenance Manager will add another ttl_seconds to the current time.
+   *
+   * The requested refresh might include a different TTL. When the TTL expire,
+   * the maintenance is "removed".
+   * TTL = 0 means that this will never expire, it has to be removed manually.
+   *
+   * Note that refreshing the ttl of a shard in the group means updating the ttl
+   * for the entire group.
+   *
+   * TTL can NOT be negative values, InvalidRequest exception will be thrown in
+   * this case.
+   *
+   * In responses, the ttl_seconds will contain the number of _remaining_
+   * seconds before this maintenance is expired.
+   *
+   */
+  10: i32 ttl_seconds = 0,
+  /**
+   * This instructs the system on whether it will automatically attempt to
+   * fallback into a passive drain (if the requested target is DRAINED) if the
+   * active drain is not possible. This can happen in cases where the historical
+   * storage sets for some logs do not have enough shards to rebuild the data
+   * to.
+   * Passive drains means that we stop accepting writes on these shards and we
+   * will continue waiting until the data is trimmed naturally by retention.
+   * This will not be possible if some of these logs have infinite retention.
+   */
+  11: bool allow_passive_drains = false,
+  /**
+   * Only set by the server once the group is created. If the argument group is
+   * set to False, The system will generate a group_id for each of the shards
+   * and sequencers in the request. The maintenance is going to be treated as N
+   * independent maintenances.
+   */
+  12: optional common.MaintenanceGroupID group_id,
+  /**
+   * If this particular maintenance is blocked on safety checker, the result
+   * will be returned in this object to help the user understand why.
+   */
+  13: optional safety.CheckImpactResponse last_check_impact_result,
+  // This field is populated by the server, it's the timestamp that this
+  // maintenance will expire based on server time.
+  14: optional common.Timestamp expires_on,
+  /**
+   * Timestamp at which the maintenance was first requested
+   */
+  15: optional common.Timestamp created_on,
 }
 
-struct ApplyMaintenanceResponse {
-  1: list<ShardMaintenance> shards_maintenance,
-  2: list<SequencerMaintenance> sequencers_maintenance,
+/**
+ * A map for all maintenance definitions currently applied.
+ */
+struct ClusterMaintenanceState {
+  1: list<MaintenanceDefinition> definitions,
 }
 
-/*
+struct MaintenanceDefinitionResponse {
+  /**
+    * The maintenance that was either created or returned, it will be updated
+    * with the group-id in this case.
+    *
+    * The reason this returns a list is that you may have created a single
+    * request but `group=false`. This request is going to be exploded into
+    * multiple maintenance definitions with their own group-ids.
+    */
+  1: list<MaintenanceDefinition> maintenances,
+  2: map<common.ShardID, nodes.ShardMaintenanceProgress> shards,
+  3: map<common.NodeID, nodes.SequencerMaintenanceProgress> sequencers,
+}
+
+/**
  * Defines which maintenances we are matching, typically used for removing
  * applied maintenances.
  */
-struct RemoveMaintenanceRequest {
-  /*
+struct RemoveMaintenancesRequest {
+  /**
    * This has to be supplied. If the user is not set, you will get an
    * InvalidRequest exception.
    */
   1: string user,
-  /*
+  /**
    * The list of shards that we want to remove maintenances from. If empty, this
-   * filter will match all shards. If you want to remove a maintenance on
-   * sequencer node or all shards of a node, pass -1 to shard_index.
+   * filter will match all shards that has maintenances created by the user
+   * specified. If you want to remove a maintenance on all shards of a node,
+   * pass -1 to shard_index.
    */
   2: list<common.ShardID> shards,
   /*
@@ -69,131 +175,35 @@ struct RemoveMaintenanceRequest {
    * user.
    */
   3: list<common.NodeID> sequencers,
+  /**
+   * If set, the entire group will be removed regardless of the values in this
+   * object.
+   *
+   * May accept multiple groups. The user must match the creator of these
+   * maintenances.
+   */
+  4: list<common.MaintenanceGroupID> group_ids,
   /*
    * Optional: The reason of removing the maintenance, this is used for
    * maintenance auditing and logging.
    */
-  4: optional string reason,
+  5: optional string reason,
 }
 
 /*
  * Left empty for future use.
  */
-struct RemoveMaintenanceResponse {}
+struct RemoveMaintenancesResponse {}
 
-/*
- * High-level maintenance status progress
- */
-enum MaintenanceTransitionStatus {
+struct MaintenancesFilter {
   /*
-   * The MaintenanceManager has not started this maintenance transition yet.
+   * If empty, will get all maintenances unless another filter is specified
    */
-  NOT_STARTED = 0,
-  STARTED = 1,
+  1: list<common.MaintenanceGroupID> group_ids,
   /*
-   * MaintenanceManager is waiting for a response from the
-   * NodesConfigurationManager after requesting to apply changes
+   * If set, gets maintenances created by this user
    */
-  AWAITING_STORAGE_STATE_CHANGES = 2,
-  /*
-   * MaintenanceManager is performing a safety verification to ensure that the
-   * operation is safe.
-   */
-  AWAITING_SAFETY_CHECK_RESULTS = 3,
-  /*
-   * The internal safety checker deemed this maintenance operation unsafe. The
-   * maintenance will remain to be blocked until the next retry of safety check
-   * succeeds.
-   */
-  BLOCKED_UNTIL_SAFE = 4,
-  /*
-   * MaintenanceManager is waiting for data migration/rebuilding to complete.
-   * operation is safe.
-   */
-  AWAITING_DATA_REBUILDING = 5,
-  /*
-   * Data migration is blocked because it would lead to data loss if unblocked.
-   * If this is required, use the unblockRebuilding to skip lost records and
-   * and unblock readers waiting for the permanently lost records to be
-   * recovered.
-   */
-  REBUILDING_IS_BLOCKED = 6,
-  /*
-   * Maintenance is expecting the node to join the cluster so we can finialize
-   * this maintenance transition. MaintenanceManager will keep waiting until the
-   * node becomes alive.
-   */
-  AWAITING_NODE_TO_JOIN = 7,
-}
-
-struct MaintenanceProgress {
-  1: MaintenanceTransitionStatus status,
-  2: optional common.Timestamp last_updated_at,
-  /*
-   * If the operation is blocked, the maintenance manager will attempt to retry
-   * the blocking operation approximately at this timestamp.
-   */
-  3: optional common.Timestamp next_retry_at,
-  /*
-   * This will be set only if the operation is deemed unsafe
-   * (MaintenanceTransitionStatus::BLOCKED_UNTIL_SAFE), this returns the
-   * result of the _last_ run of safety checker.
-   */
-  4: optional safety.CheckImpactResponse safety_check_response,
-}
-
-/*
- * A data structure that encapsulates a maintenance on a specific shard. The
- * maintenance be either active (or pending). In case it's active and the
- * maintenance manager is actually performing an operation the progress object
- * will be set.
- */
-struct ShardMaintenanceState {
-  1: bool is_active,
-  2: nodes.ShardOperationalState target_state,
-  /*
-   * This is set if the maintenance is driven by an internal operation. This
-   * can be because RebuildingSupervisor has detected loss of nodes or we are
-   * performing a transition because a maintenance has been removed.
-   * In this case the user will be a special string
-   * "LogDeviceInternal"
-   */
-  3: bool internal,
-  4: string user,
-  5: string reason,
-  6: common.Timestamp created_at,
-  /*
-   * Only set if is_active == true.
-   */
-  7: optional MaintenanceProgress progress,
-}
-
-struct SequencerMaintenanceState {
-  1: bool is_active,
-  2: nodes.SequencingState target_state,
-  3: string user,
-  4: string reason,
-  5: common.Timestamp created_at,
-  6: optional MaintenanceProgress progress,
-}
-
-
-/*
- * A data structure that holds a list of all maintenances for a specific node,
- * whether these are sequencing maintenances and/or shard maintenances.
- */
-struct NodeMaintenanceState {
-  1: common.NodeID node,
-  /*
-   * The list of maintenances applied to every shard in this node, the active
-   * maintenance will have is_active set to true.
-   */
-  2: map<common.ShardIndex, list<ShardMaintenanceState>> shards_maintenance,
-  3: list<SequencerMaintenanceState> sequencers_maintenance,
-}
-
-struct GetMaintenancesResult {
-  1: list<NodeMaintenanceState> nodes,
+  2: optional string user,
 }
 
 /*

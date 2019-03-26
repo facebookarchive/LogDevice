@@ -119,7 +119,7 @@ toShardOperationalState(StorageState storage_state,
           return thrift::ShardOperationalState::DRAINED;
         } else {
           // We are still draining then.
-          return thrift::ShardOperationalState::DRAINING;
+          return thrift::ShardOperationalState::MIGRATING_DATA;
         }
       }
       return thrift::ShardOperationalState::ENABLED;

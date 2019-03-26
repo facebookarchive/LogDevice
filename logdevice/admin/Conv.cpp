@@ -70,6 +70,9 @@ toLogDevice(const thrift::ShardStorageState& storage_state) {
   switch (storage_state) {
     case thrift::ShardStorageState::DISABLED:
       return StorageState::DISABLED;
+    // TODO: Data migration needs to be handled when we move to
+    // NodesConfiguration.
+    case thrift::ShardStorageState::DATA_MIGRATION:
     case thrift::ShardStorageState::READ_ONLY:
       return StorageState::READ_ONLY;
     case thrift::ShardStorageState::READ_WRITE:

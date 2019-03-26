@@ -15,6 +15,7 @@ namespace wiki LogDevice.Common
  * Because thrift doesn't have a u64.
  */
 typedef i64 /* (cpp.type = "std::uint64_t") */ unsigned64
+typedef string MaintenanceGroupID
 
 // *** Cluster Topology
 /**

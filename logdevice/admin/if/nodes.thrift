@@ -70,6 +70,80 @@ struct NodeConfig {
 }
 
 /**
+ * High-level maintenance status progress
+ */
+enum MaintenanceStatus {
+  /**
+   * The MaintenanceManager has not started this maintenance transition yet.
+   */
+  NOT_STARTED = 0,
+  STARTED = 1,
+  /**
+   * MaintenanceManager is waiting for a response from the
+   * NodesConfigurationManager after requesting to apply changes
+   */
+  AWAITING_NODES_CONFIG_CHANGES = 2,
+  /**
+   * MaintenanceManager is performing a safety verification to ensure that the
+   * operation is safe.
+   */
+  AWAITING_SAFETY_CHECK = 3,
+  /**
+   * The internal safety checker deemed this maintenance operation unsafe. The
+   * maintenance will remain to be blocked until the next retry of safety check
+   * succeeds.
+   */
+  BLOCKED_UNTIL_SAFE = 4,
+  /**
+   * We are requesting rebuilding to start on the shards.
+   */
+  REQUESTING_DATA_REBUILDING = 5,
+  /**
+   * MaintenanceManager is waiting for data migration/rebuilding to complete.
+   * operation is safe.
+   */
+  AWAITING_DATA_REBUILDING = 6,
+  /**
+   * Data migration is blocked because it would lead to data loss if unblocked.
+   * If this is required, use the unblockRebuilding to skip lost records and
+   * and unblock readers waiting for the permanently lost records to be
+   * recovered.
+   */
+  REBUILDING_IS_BLOCKED = 7,
+  COMPLETED = 8,
+}
+
+/**
+ * A data structure that holds progress information about maintenances applied
+ * to a given shard in a node.
+ */
+struct ShardMaintenanceProgress {
+  1: MaintenanceStatus status,
+  2: set<ShardOperationalState> target_states,
+  3: common.Timestamp created_at,
+  4: optional common.Timestamp last_updated_at,
+  /**
+   * The list of maintenance groups associated to this maintenace
+   */
+  5: optional list<common.MaintenanceGroupID> associated_group_ids,
+}
+
+/**
+ * A data structure that holds progress information about maintenances applied
+ * to a sequencer node.
+ */
+struct SequencerMaintenanceProgress {
+  1: MaintenanceStatus progress,
+  2: SequencingState target_state,
+  3: common.Timestamp created_at,
+  4: optional common.Timestamp last_updated_at,
+  /**
+   * The list of maintenance groups associated to this maintenace
+   */
+  5: optional list<common.MaintenanceGroupID> associated_group_ids,
+}
+
+/**
  * ShardDataHealth defines the state of the data in a specific shard.
  */
 enum ShardDataHealth {
@@ -108,11 +182,7 @@ enum ShardDataHealth {
 }
 
 /**
- * ShardOperationalState defines the operational state of a shard. There is a
- * clear priority of these maintenance states, `DOWN` > `DRAINED` >
- * `MAY_DISAPPEAR`.
- * If both target maintenances are set on a shard, DRAINED maintenance will
- * always win.
+ * ShardOperationalState defines the operational state of a shard.
  */
 enum ShardOperationalState {
   UNKNOWN = 0,
@@ -126,46 +196,37 @@ enum ShardOperationalState {
    * time and will not allow too many nodes to be in this state at the same
    * time.
    * When the shard disappears, the cluster will wait until the rebuilding
-   * supervisor gives up (usually 20 minutes). Then this will move into DRAINING
-   * and rebuilding will start.
+   * supervisor gives up (usually 20 minutes). Then this will move into
+   * MIGRATING_DATA and rebuilding will start.
    * Setting the shard to this state means that it's okay to perform a
    * maintanance operation on this shard safely. If the shard cannot transit to
-   * this state (active_maintenance has state='blocked-unsafe') this means that
+   * this state (maintenance has state='blocked-unsafe') this means that
    * it's unsafe to do so. The current state will remain as is in this case.
-   * Note that this case is technically identical to ENABLED, the shard is
-   * read-write enabled.
+   * The storage state will be set to (read-only).
    */
   MAY_DISAPPEAR = 2,
   /**
-   * The shard has been fully drained. It does not contain any data
-   * (ShardDataHealth == EMPTY). It's safe to remove this shard from the
-   * cluster. Drained also means that this node is not in the metadata nodeset
-   * anymore.
+   * The shard has been fully drained. It does not contain any data.
+   * It's safe to remove this shard from the cluster. Drained also means that
+   * this shard is not in the metadata storage-set anymore.  This can also
+   * happen after a shard was broken and the RebuildingSupervisor decided to
+   * perform maintenance on it.
    */
   DRAINED = 3,
   /**
-   * The shard is broken (has I/O errors) and has been marked as (needs rebuilding)
-   * by the RebuildingSupervisor. In this case, the shard is temporarily disabled
-   * until it comes back with either its data intact (at which rebuilding will be
-   * cancelled if it's not complete). Or wiped which in that case we will switch it
-   * back to ENABLED or whatever the next logical maintenance in the pending
-   * maintenance list is.
-   */
-  DOWN = 4,
-  /**
    * Transitional States
-   * Draining is a transitional state at which the shard is in the process of
+   * A transitional state at which the shard is in the process of
    * becoming DRAINED. This means that data relocation or rebuilding should be
    * in-progress whenever possible. The shard will move into DRAINED when
    * ShardDataHealth is EMPTY because of rebuilding/relocation or because all
    * data has been trimmed due to the retention period.
    *
-   * During DRAINING, you can track the progress through the active_maintenance
-   * object. If (active_maintenance.state='blocked'/'blocked-unsafe') then
+   * While MIGRATING_DATA, you can track the progress through the
+   * maintenance object. If (maintenance.state='blocked'/'blocked-unsafe') then
    * this shard is still effectively ENABLED and will remain in this state
    * unless the reason of the blockage is gone.
    */
-  DRAINING = 51,
+  MIGRATING_DATA = 51,
   /**
    * The is transitioning from _any_ state into ENABLED. This might be swift
    * enough that you don't ever see this state but it's here for completeness.
@@ -192,6 +253,7 @@ enum ShardStorageState {
   DISABLED = 0,
   READ_ONLY = 1,
   READ_WRITE = 2,
+  DATA_MIGRATION = 3,
 }
 
 /**
@@ -210,9 +272,13 @@ struct ShardState {
   2: ShardStorageState current_storage_state,
   /**
    * See the ShardOperationalState enum for info. See the
-   * active_maintenance for information about the active transition
+   * maintenance for information about the active transition
    */
   3: ShardOperationalState current_operational_state,
+  /*
+   * If there are maintenance applied on this shard.
+   */
+  4: optional ShardMaintenanceProgress maintenance,
 }
 
 /**
@@ -229,8 +295,6 @@ enum SequencingState {
    * Sequencing is disabled.
    */
   DISABLED = 3,
-  // TODO: Remove servers stop reporting it
-  DRAINED = 4,
 }
 
 /**
@@ -240,6 +304,10 @@ enum SequencingState {
 struct SequencerState {
   1: SequencingState state,
   2: optional common.Timestamp sequencer_state_last_updated,
+  /*
+   * If there are maintenance applied on this sequencer.
+   */
+  3: optional SequencerMaintenanceProgress maintenance,
 }
 
 /**
