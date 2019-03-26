@@ -265,7 +265,7 @@ int SHARD_NEEDS_REBUILD_Event::toPayload(void* payload, size_t size) const {
 
 bool SHARD_NEEDS_REBUILD_Event::
 operator==(const SHARD_NEEDS_REBUILD_Event& other) const {
-  static_assert(folly::is_trivially_copyable<SHARD_NEEDS_REBUILD_Header>::value,
+  static_assert(std::is_trivially_copyable<SHARD_NEEDS_REBUILD_Header>::value,
                 "Header must be trivially copyable");
   return (memcmp(&header, &other.header, sizeof(header)) == 0) &&
       time_ranges == other.time_ranges;

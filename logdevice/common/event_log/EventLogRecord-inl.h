@@ -73,7 +73,7 @@ template <class Header,
           event_log_record_version_t FormatVersion>
 bool FixedEventLogRecord<Header, Type, FormatVersion>::operator==(
     const FixedEventLogRecord<Header, Type, FormatVersion>& other) const {
-  static_assert(folly::is_trivially_copyable<Header>::value,
+  static_assert(std::is_trivially_copyable<Header>::value,
                 "Header must be trivially copyable");
   return memcmp(&header, &other.header, sizeof(Header)) == 0;
 }
