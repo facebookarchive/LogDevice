@@ -36,6 +36,6 @@ set_target_properties(
 target_link_libraries(
   Membership-cpp2
   ${FBTHRIFT_LIBRARIES}
-  ${LIBGLOG_LIBRARY}
+  ${GLOG_LIBRARIES}
   ${LIBGFLAGS_LIBRARY}
 )
