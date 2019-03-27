@@ -13,6 +13,7 @@
 
 #include "logdevice/common/ConfigInit.h"
 #include "logdevice/common/NodesConfigurationInit.h"
+#include "logdevice/common/NodesConfigurationPublisher.h"
 #include "logdevice/common/checks.h"
 #include "logdevice/common/configuration/ParsingHelpers.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationManagerFactory.h"
@@ -199,6 +200,13 @@ std::shared_ptr<Client> ClientFactory::create(std::string config_url) noexcept {
     }
     ld_check(config->getNodesConfigurationFromNCMSource() != nullptr);
   }
+
+  // publish the NodesConfiguration for the first time. Later a
+  // long-living subscribing NodesConfigurationPublisher will be created again
+  // in Processor
+  NodesConfigurationPublisher publisher(
+      config, impl_settings->getSettings(), /*subscribe*/ false);
+  ld_check(config->getNodesConfiguration() != nullptr);
 
   if (!validateSSLSettings(
           config->getServerConfig(), impl_settings->getSettings().get())) {

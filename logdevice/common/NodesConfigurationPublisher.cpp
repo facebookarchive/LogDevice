@@ -12,20 +12,23 @@ namespace facebook { namespace logdevice {
 
 NodesConfigurationPublisher::NodesConfigurationPublisher(
     std::shared_ptr<UpdateableConfig> config,
-    UpdateableSettings<Settings> settings)
+    UpdateableSettings<Settings> settings,
+    bool subscribe)
     : config_(std::move(config)), settings_(std::move(settings)) {
   ld_check(config_ != nullptr);
 
-  // It's ok to bind to `this` in here as the subscriptions are destroyed
-  // before the destruction of this class.
-  settings_subscription_ = settings_.subscribeToUpdates(
-      std::bind(&NodesConfigurationPublisher::publish, this));
-  server_config_subscription_ =
-      config_->updateableServerConfig()->subscribeToUpdates(
-          std::bind(&NodesConfigurationPublisher::publish, this));
-  ncm_nodes_configuration_subscription_ =
-      config_->updateableNCMNodesConfiguration()->subscribeToUpdates(
-          std::bind(&NodesConfigurationPublisher::publish, this));
+  if (subscribe) {
+    // It's ok to bind to `this` in here as the subscriptions are destroyed
+    // before the destruction of this class.
+    settings_subscription_ = settings_.subscribeToUpdates(
+        std::bind(&NodesConfigurationPublisher::publish, this));
+    server_config_subscription_ =
+        config_->updateableServerConfig()->subscribeToUpdates(
+            std::bind(&NodesConfigurationPublisher::publish, this));
+    ncm_nodes_configuration_subscription_ =
+        config_->updateableNCMNodesConfiguration()->subscribeToUpdates(
+            std::bind(&NodesConfigurationPublisher::publish, this));
+  }
 
   // Do the inital publishing
   publish();

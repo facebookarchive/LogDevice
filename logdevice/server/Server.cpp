@@ -15,6 +15,7 @@
 #include "logdevice/common/MetaDataLogWriter.h"
 #include "logdevice/common/NodeSetSelectorFactory.h"
 #include "logdevice/common/NodesConfigurationInit.h"
+#include "logdevice/common/NodesConfigurationPublisher.h"
 #include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/SequencerLocator.h"
 #include "logdevice/common/SequencerPlacement.h"
@@ -287,6 +288,13 @@ ServerParameters::ServerParameters(
     ld_check(updateable_config_->getNodesConfigurationFromNCMSource() !=
              nullptr);
   }
+
+  // publish the NodesConfiguration for the first time. Later a
+  // long-living subscribing NodesConfigurationPublisher will be created again
+  // in Processor
+  NodesConfigurationPublisher publisher(
+      updateable_config_, processor_settings_, /*subscribe*/ false);
+  ld_check(updateable_config_->getNodesConfiguration() != nullptr);
 
   if (updateable_logs_config->get() == nullptr) {
     // Initialize logdevice with an empty LogsConfig that only contains the

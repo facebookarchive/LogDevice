@@ -20,14 +20,18 @@ namespace facebook { namespace logdevice {
  * enable_nodes_configuration &&
  * use_nodes_configuration_manager_nodes_configuration.
  *
- * This class subscribes to ServerConfig, settings and NCM NC changes and
- * on change it evaluates whether it needs to publish a new NC to the updateable
- * or not.
+ * By default this class subscribes to ServerConfig, settings and NCM NC changes
+ * and on change it evaluates whether it needs to publish a new NC to the
+ * updateable or not.
  */
 class NodesConfigurationPublisher {
  public:
+  // @param  subscribe  if true, subscribe to ServerConfig, settings and NCM NC
+  //                    changes and perform publish accordingly. Otherwise only
+  //                    publish during construction or when publish is called
   NodesConfigurationPublisher(std::shared_ptr<UpdateableConfig> config,
-                              UpdateableSettings<Settings> settings);
+                              UpdateableSettings<Settings> settings,
+                              bool subscribe = true);
 
  private:
   void publish();

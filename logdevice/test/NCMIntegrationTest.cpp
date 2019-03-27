@@ -69,6 +69,13 @@ TEST_F(NCMIntegrationTest, ToolingClientBasic) {
           .setParam("--nodes-configuration-manager-store-polling-interval",
                     "1s",
                     IntegrationTestUtils::ParamScope::ALL)
+          .setParam("--use-nodes-configuration-manager-nodes-configuration",
+                    "true",
+                    IntegrationTestUtils::ParamScope::ALL)
+          .setParam("--fd-limit", "9999", IntegrationTestUtils::ParamScope::ALL)
+          .setParam("--num-reserved-fds",
+                    "999",
+                    IntegrationTestUtils::ParamScope::ALL)
           .create(3);
 
   std::shared_ptr<Client> admin_client1 = cluster->createClient(
