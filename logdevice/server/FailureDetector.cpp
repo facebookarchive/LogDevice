@@ -193,7 +193,6 @@ StatsHolder* FailureDetector::getStats() {
 }
 
 void FailureDetector::startClusterStateTimer() {
-  Worker* w = Worker::onThisThread();
   auto cs = Worker::getClusterState();
   if (!cs) {
     ld_info("Invalid get-cluster-state");
@@ -205,7 +204,7 @@ void FailureDetector::startClusterStateTimer() {
         buildInitialState();
       }
     });
-    cs_timer_.activate(settings_->gcs_wait_duration, &w->commonTimeouts());
+    cs_timer_.activate(settings_->gcs_wait_duration);
 
     ld_info("Sending GET_CLUSTER_STATE to build initial FD cluster view");
     sendGetClusterState();
@@ -764,8 +763,6 @@ void FailureDetector::onGossipReceived(const GOSSIP_Message& msg) {
 
 void FailureDetector::startSuspectTimer() {
   ld_info("Starting suspect state timer");
-
-  Worker* w = Worker::onThisThread();
   auto config = getServerConfig();
   node_index_t my_idx = config->getMyNodeID().index();
 
@@ -778,7 +775,7 @@ void FailureDetector::startSuspectTimer() {
     updateNodeState(my_idx, false, true, false);
   });
 
-  suspect_timer_.activate(settings_->suspect_duration, &w->commonTimeouts());
+  suspect_timer_.activate(settings_->suspect_duration);
 }
 
 void FailureDetector::startGossiping() {

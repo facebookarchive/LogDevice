@@ -76,7 +76,8 @@ EventLoop::EventLoop(std::string thread_name, ThreadID::Type thread_type)
       sched_timeout_(
           base_ ? LD_EV(event_base_init_common_timeout)(base_.get(),
                                                         &tv_sched_event)
-                : nullptr) {
+                : nullptr),
+      common_timeouts_(base_.get(), kMaxFastTimeouts) {
   int rv;
   pthread_attr_t attr;
 
@@ -118,6 +119,14 @@ EventLoop::EventLoop(std::string thread_name, ThreadID::Type thread_type)
   if (rv != 0) {
     ld_error(
         "Failed to start an EventLoop thread, errno=%d (%s)", rv, strerror(rv));
+    err = E::SYSLIMIT;
+    throw ConstructorFailed();
+  }
+
+  if (!common_timeouts_.add(std::chrono::microseconds(0), zero_timeout_)) {
+    ld_error("Failed to add zero timeout to common timeouts, errno=%d (%s)",
+             rv,
+             strerror(rv));
     err = E::SYSLIMIT;
     throw ConstructorFailed();
   }

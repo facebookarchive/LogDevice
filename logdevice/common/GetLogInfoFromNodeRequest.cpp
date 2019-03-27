@@ -228,7 +228,6 @@ void GetLogInfoFromNodeRequest::createRetryTimer() {
       std::bind(&GetLogInfoFromNodeRequest::attemptSend, this),
       Worker::onThisThread()->settings().on_demand_logs_config_retry_delay);
   ld_check(retry_timer_ != nullptr);
-  retry_timer_->setTimeoutMap(&Worker::onThisThread()->commonTimeouts());
 }
 
 void GetLogInfoFromNodeRequest::activateRetryTimer() {

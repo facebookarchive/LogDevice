@@ -7,6 +7,8 @@
  */
 #include "logdevice/common/TimeoutMap.h"
 
+#include <event2/event.h>
+
 #include "logdevice/common/checks.h"
 #include "logdevice/common/libevent/compat.h"
 

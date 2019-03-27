@@ -49,7 +49,6 @@ class ClientStalledReadTracer;
 class EpochMetaDataCache;
 class ShardAuthoritativeStatusMap;
 class STARTED_Message;
-class TimeoutMap;
 class UpdateableConfig;
 enum class AuthoritativeStatus : uint8_t;
 enum class ClientReadStreamBufferType : uint8_t;
@@ -317,8 +316,6 @@ class ClientReadStreamDependencies {
   virtual ~ClientReadStreamDependencies();
 
   virtual bool hasMemoryPressure() const;
-
-  virtual TimeoutMap* getCommonTimeouts();
 
  private:
   read_stream_id_t read_stream_id_;

@@ -108,8 +108,7 @@ void ClientReadStreamConnectionHealth::scheduleTraceStall(std::string reason) {
     traceStall(r);
     stalled_read_timer_->activate(std::chrono::seconds(60));
   });
-  stalled_read_timer_->activate(
-      std::chrono::microseconds(0), owner_->deps_->getCommonTimeouts());
+  stalled_read_timer_->activate(std::chrono::microseconds(0));
 }
 
 void ClientReadStreamConnectionHealth::recalculate(bool grace_period_expired) {
@@ -192,8 +191,7 @@ void ClientReadStreamConnectionHealth::recalculate(bool grace_period_expired) {
           traceStall(r);
           stalled_read_timer_->activate(std::chrono::seconds(60));
         });
-        stalled_read_timer_->activate(
-            std::chrono::microseconds(0), owner_->deps_->getCommonTimeouts());
+        stalled_read_timer_->activate(std::chrono::microseconds(0));
       }
     } else {
       // 3.b/

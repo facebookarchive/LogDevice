@@ -213,8 +213,6 @@ class NodeSetFinder {
   virtual std::unique_ptr<BackoffTimer>
   createMetaDataLogRetryTimer(std::function<void()> callback);
 
-  virtual TimeoutMap* getTimeoutMap() const;
-
   virtual void readFromSequencer(std::chrono::milliseconds timeout);
   virtual void readFromMetaDataLog();
   virtual void stopReadingMetaDataLog();

@@ -49,13 +49,6 @@ CatchupQueueDependencies::CatchupQueueDependencies(
 
 CatchupQueueDependencies::~CatchupQueueDependencies() = default;
 
-// Proxy for Worker::commonTimeouts() that works in tests (returns nullptr if
-// not on a Worker thread)
-static TimeoutMap* common_timeouts() {
-  Worker* w = Worker::onThisThread(false);
-  return w != nullptr ? &w->commonTimeouts() : nullptr;
-}
-
 CatchupQueue::CatchupQueue(std::unique_ptr<CatchupQueueDependencies>&& deps,
                            ClientID client_id)
     : client_id_(client_id),
@@ -70,10 +63,9 @@ CatchupQueue::CatchupQueue(std::unique_ptr<CatchupQueueDependencies>&& deps,
         // Keep the timer active until this CatchupQueue is destroyed.  We
         // refetch the TTL so that changes to the TTL setting apply at
         // runtime.
-        timer->activate(deps_->iteratorTimerTTL(), common_timeouts());
+        timer->activate(deps_->iteratorTimerTTL());
       });
-  iterator_invalidation_timer_->activate(
-      deps_->iteratorTimerTTL(), common_timeouts());
+  iterator_invalidation_timer_->activate(deps_->iteratorTimerTTL());
 }
 
 CatchupQueue::~CatchupQueue() = default;
@@ -661,9 +653,6 @@ create_timer_common(std::chrono::milliseconds initial_delay,
   auto timer = std::make_unique<ExponentialBackoffTimer>(
       callback, initial_delay, max_delay);
 
-  // Tell the timer to use a TimeoutMap common to all ClientReadStream
-  // instances in a Worker.  See docs for TimeoutMap.
-  timer->setTimeoutMap(&Worker::onThisThread()->commonTimeouts());
   return std::move(timer);
 }
 

@@ -82,7 +82,7 @@ void NodeSetFinder::start() {
       readFromSequencer(stage_timeout);
     } break;
     case State::READ_METADATALOG: {
-      metadata_log_read_job_timer_->activate(stage_timeout, getTimeoutMap());
+      metadata_log_read_job_timer_->activate(stage_timeout);
       readFromMetaDataLog();
     } break;
     default:
@@ -152,7 +152,7 @@ void NodeSetFinder::onMetaDataFromSequencer(
       state_ = State::READ_METADATALOG;
       ld_check(!metadata_log_read_job_timer_->isActive());
       metadata_log_read_job_timer_->activate(
-          getStageTimeout(source_, state_, timeout_), getTimeoutMap());
+          getStageTimeout(source_, state_, timeout_));
       WORKER_STAT_INCR(nodeset_finder_fallback_to_metadata_log);
       readFromMetaDataLog();
       return;
@@ -438,10 +438,6 @@ NodeSetFinder::getStageTimeout(Source source,
   return total_timeout;
 }
 
-TimeoutMap* NodeSetFinder::getTimeoutMap() const {
-  return &Worker::onThisThread()->commonTimeouts();
-}
-
 std::unique_ptr<Timer>
 NodeSetFinder::createJobTimer(std::function<void()> callback) {
   return std::make_unique<Timer>(callback);
@@ -455,7 +451,6 @@ NodeSetFinder::createMetaDataLogRetryTimer(std::function<void()> callback) {
       RETRY_READ_METADATALOG_INITIAL_DELAY,
       RETRY_READ_METADATALOG_MAX_DELAY);
 
-  timer->setTimeoutMap(&Worker::onThisThread()->commonTimeouts());
   return std::move(timer);
 }
 

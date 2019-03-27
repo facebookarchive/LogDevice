@@ -34,7 +34,6 @@ std::unique_ptr<BackoffTimer>
 EventLogWriter::createAppendRetryTimer(std::function<void()> callback) {
   auto timer = std::make_unique<ExponentialBackoffTimer>(
       callback, std::chrono::milliseconds(200), std::chrono::seconds(10));
-  timer->setTimeoutMap(&Worker::onThisThread()->commonTimeouts());
   return std::move(timer);
 }
 

@@ -483,7 +483,6 @@ void MetaDataLogWriter::onWriteMetaDataRecordDone(Status st,
                                    std::placeholders::_1),
                          RETRY_ACTIVATION_INITIAL_DELAY,
                          RETRY_ACTIVATION_MAX_DELAY);
-    node->timer->setTimeoutMap(&w->commonTimeouts());
     node->timer->activate();
   } else {
     if (st == E::PREEMPTED) {

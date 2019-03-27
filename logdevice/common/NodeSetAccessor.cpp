@@ -805,14 +805,12 @@ std::unique_ptr<BackoffTimer>
 StorageSetAccessor::createWaveTimer(std::function<void()> callback) {
   auto timer = std::make_unique<ExponentialBackoffTimer>(
       callback, wave_timeout_min_, wave_timeout_max_);
-
-  timer->setTimeoutMap(&Worker::onThisThread()->commonTimeouts());
   return std::move(timer);
 }
 
 void StorageSetAccessor::activateJobTimer() {
   ld_check(job_timer_ != nullptr);
-  job_timer_->activate(timeout_, &Worker::onThisThread()->commonTimeouts());
+  job_timer_->activate(timeout_);
 }
 
 void StorageSetAccessor::activateGracePeriodTimer() {
@@ -820,8 +818,7 @@ void StorageSetAccessor::activateGracePeriodTimer() {
   if (!grace_period_timer_->isActive()) {
     ld_check(grace_period_.hasValue());
     ld_check(grace_period_timer_ != nullptr);
-    grace_period_timer_->activate(
-        grace_period_.value(), &Worker::onThisThread()->commonTimeouts());
+    grace_period_timer_->activate(grace_period_.value());
   }
 }
 

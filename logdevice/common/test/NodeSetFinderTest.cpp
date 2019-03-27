@@ -98,10 +98,6 @@ class MockNodeSetFinder : public NodeSetFinder {
     return timer;
   }
 
-  TimeoutMap* getTimeoutMap() const override {
-    return nullptr;
-  }
-
   void readFromMetaDataLog() override {
     ASSERT_EQ(NodeSetFinder::State::READ_METADATALOG, getState());
     ++test_->metadata_log_attempts_;

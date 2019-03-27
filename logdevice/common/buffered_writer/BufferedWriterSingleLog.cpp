@@ -482,7 +482,6 @@ void BufferedWriterSingleLog::activateTimeTrigger() {
     return;
   }
 
-  Worker* w = Worker::onThisThread();
   if (!time_trigger_timer_) {
     time_trigger_timer_ = std::make_unique<Timer>([this] {
       StatsHolder* stats{parent_->parent_->processor()->stats_};
@@ -491,7 +490,7 @@ void BufferedWriterSingleLog::activateTimeTrigger() {
     });
   }
   if (!time_trigger_timer_->isActive()) {
-    time_trigger_timer_->activate(options.time_trigger, &w->commonTimeouts());
+    time_trigger_timer_->activate(options.time_trigger);
   }
 }
 

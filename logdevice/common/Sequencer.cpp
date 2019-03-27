@@ -408,7 +408,6 @@ class StartDrainTimerRequest : public Request {
                                    std::placeholders::_1),
                          draining_timeout,
                          draining_timeout);
-    node->timer->setTimeoutMap(&w->commonTimeouts());
     node->timer->activate();
     return Execution::COMPLETE;
   }
@@ -508,8 +507,7 @@ class GetHistoricalMetaDataRequest : public FireAndForgetRequest {
     }
     getMetaData();
     update_metadata_map_timer_->activate(
-        Worker::settings().update_metadata_map_interval,
-        &Worker::onThisThread()->commonTimeouts());
+        Worker::settings().update_metadata_map_interval);
     ld_spew("Setting update_metadata_map_timer_ interval to %lu msecs",
             Worker::settings().update_metadata_map_interval.count());
   }
@@ -525,8 +523,7 @@ class GetHistoricalMetaDataRequest : public FireAndForgetRequest {
     ld_check(!update_metadata_map_timer_->isActive());
 
     update_metadata_map_timer_->activate(
-        Worker::settings().update_metadata_map_interval,
-        &Worker::onThisThread()->commonTimeouts());
+        Worker::settings().update_metadata_map_interval);
     ld_spew("Setting update_metadata_map_timer_ interval to %lu msecs",
             Worker::settings().update_metadata_map_interval.count());
   }

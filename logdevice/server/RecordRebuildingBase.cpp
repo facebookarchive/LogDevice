@@ -71,7 +71,6 @@ void RecordRebuildingBase::activateRetryTimer() {
     const auto& retry_timeout = owner_->getRebuildingSettings()->retry_timeout;
     retryTimer_.assign(
         [this] { onRetryTimeout(); }, retry_timeout.lo, retry_timeout.hi);
-    retryTimer_.setTimeoutMap(&Worker::onThisThread()->commonTimeouts());
   }
 
   retryTimer_.activate();
@@ -90,7 +89,6 @@ void RecordRebuildingBase::activateStoreTimer() {
     const auto& store_timeout = owner_->getRebuildingSettings()->store_timeout;
     storeTimer_.assign(
         [this] { onStoreTimeout(); }, store_timeout.lo, store_timeout.hi);
-    storeTimer_.setTimeoutMap(&Worker::onThisThread()->commonTimeouts());
   }
 
   storeTimer_.activate();
@@ -103,8 +101,7 @@ void RecordRebuildingBase::resetStoreTimer() {
 void RecordRebuildingBase::deferredComplete() {
   // Start a timer with zero delay.
   deferredCompleteTimer_ = std::make_unique<Timer>([this] { onComplete(); });
-  deferredCompleteTimer_->activate(
-      std::chrono::milliseconds(0), &Worker::onThisThread()->commonTimeouts());
+  deferredCompleteTimer_->activate(std::chrono::milliseconds(0));
 }
 
 uint32_t RecordRebuildingBase::getStoreTimeoutMs() const {

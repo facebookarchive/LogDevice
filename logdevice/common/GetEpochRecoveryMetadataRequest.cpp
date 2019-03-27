@@ -575,7 +575,6 @@ GetEpochRecoveryMetadataRequest::createRetryTimer() {
   auto timer = std::make_unique<ExponentialBackoffTimer>(
       std::function<void()>(), INITIAL_RETRY_DELAY, MAX_RETRY_DELAY);
 
-  timer->setTimeoutMap(&Worker::onThisThread()->commonTimeouts());
   return std::move(timer);
 }
 
@@ -594,8 +593,7 @@ GetEpochRecoveryMetadataRequest::createDeferredCompleteTimer(
 
 void GetEpochRecoveryMetadataRequest::activateDeferredCompleteTimer() {
   ld_check(deferredCompleteTimer_);
-  deferredCompleteTimer_->activate(
-      std::chrono::milliseconds(0), &Worker::onThisThread()->commonTimeouts());
+  deferredCompleteTimer_->activate(std::chrono::milliseconds(0));
 }
 
 void GetEpochRecoveryMetadataRequest::done() {

@@ -667,7 +667,7 @@ void ClientReadStreamScd::FailoverTimer::cancel() {
 
 void ClientReadStreamScd::FailoverTimer::activate() {
   if (timer_) {
-    timer_->activate(period_, scd_->owner_->deps_->getCommonTimeouts());
+    timer_->activate(period_);
   }
 }
 

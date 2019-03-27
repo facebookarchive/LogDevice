@@ -546,7 +546,7 @@ void SequencerBackgroundActivator::activateQueueProcessingTimer(
   if (!timeout.hasValue()) {
     timeout = Worker::settings().sequencer_background_activation_retry_interval;
   }
-  retry_timer_.activate(timeout.value(), &w->commonTimeouts());
+  retry_timer_.activate(timeout.value());
 }
 
 void SequencerBackgroundActivator::deactivateQueueProcessingTimer() {

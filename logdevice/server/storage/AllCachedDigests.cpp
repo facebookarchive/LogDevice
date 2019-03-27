@@ -298,8 +298,7 @@ AllCachedDigests::createRescheduleTimer(std::function<void()> callback) {
 
 void AllCachedDigests::activateRescheduleTimer() {
   ld_check(reschedule_timer_ != nullptr);
-  reschedule_timer_->activate(
-      std::chrono::microseconds(0), &Worker::onThisThread()->commonTimeouts());
+  reschedule_timer_->activate(std::chrono::microseconds(0));
 }
 
 }} // namespace facebook::logdevice

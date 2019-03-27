@@ -79,8 +79,7 @@ void AppenderBufferQueue::process(AppenderBuffer::AppenderCallback cb) {
     // processing in the next iteration of event loop and return control to
     // libevent so that its evbuffer can be processed
     resume_callback_ = cb;
-    process_timer_.activate(std::chrono::milliseconds::zero(),
-                            &Worker::onThisThread()->commonTimeouts());
+    process_timer_.activate(std::chrono::milliseconds::zero());
   }
 }
 

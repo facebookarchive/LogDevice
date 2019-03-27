@@ -202,10 +202,8 @@ Request::Execution AppendRequest::execute() {
 
 void AppendRequest::setupTimer() {
   if (timeout_ < std::chrono::milliseconds::max()) {
-    Worker* w = Worker::onThisThread();
-
     timer_.assign([this] { onTimeout(); });
-    timer_.activate(timeout_, &w->commonTimeouts());
+    timer_.activate(timeout_);
   }
 }
 

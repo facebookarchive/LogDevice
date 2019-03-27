@@ -7,6 +7,7 @@
  */
 #include "logdevice/common/TimeoutMap.h"
 
+#include <event2/event.h>
 #include <folly/ScopeGuard.h>
 #include <gtest/gtest.h>
 

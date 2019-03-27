@@ -44,9 +44,8 @@ void SequencerDeactivationRequest::onTimeout() {
 }
 
 void SequencerDeactivationRequest::setupTimer() {
-  ServerWorker* w = ServerWorker::onThisThread();
   timer_.assign([this] { onTimeout(); });
-  timer_.activate(timer_wait_, &w->commonTimeouts());
+  timer_.activate(timer_wait_);
 }
 
 void SequencerDeactivationRequest::executionBody() {

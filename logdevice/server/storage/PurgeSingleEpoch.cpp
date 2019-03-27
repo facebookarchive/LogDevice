@@ -351,8 +351,7 @@ void PurgeSingleEpoch::deferredComplete() {
       driver_->onPurgeSingleEpochDone(epoch_, result_);
     }
   });
-  deferredCompleteTimer_->activate(
-      std::chrono::milliseconds(0), &Worker::onThisThread()->commonTimeouts());
+  deferredCompleteTimer_->activate(std::chrono::milliseconds(0));
 }
 
 std::unique_ptr<BackoffTimer> PurgeSingleEpoch::createRetryTimer() {
@@ -361,8 +360,6 @@ std::unique_ptr<BackoffTimer> PurgeSingleEpoch::createRetryTimer() {
       std::function<void()>(),
       PurgeUncleanEpochs::INITIAL_RETRY_DELAY,
       PurgeUncleanEpochs::MAX_RETRY_DELAY);
-
-  timer->setTimeoutMap(&Worker::onThisThread()->commonTimeouts());
   return std::move(timer);
 }
 

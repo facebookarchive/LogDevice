@@ -32,7 +32,6 @@
 #include "logdevice/common/SSLFetcher.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/SocketCallback.h"
-#include "logdevice/common/TimeoutMap.h"
 #include "logdevice/common/UpdateableSecurityInfo.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/Configuration.h"
@@ -2549,7 +2548,7 @@ void SocketDependencies::evtimerDel(struct event* ev) {
 
 const struct timeval*
 SocketDependencies::getCommonTimeout(std::chrono::milliseconds timeout) {
-  return Worker::onThisThread()->getCommonTimeout(timeout);
+  return EventLoop::onThisThread()->getCommonTimeout(timeout);
 }
 
 const struct timeval* SocketDependencies::getZeroTimeout() {

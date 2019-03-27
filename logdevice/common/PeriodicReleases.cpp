@@ -380,7 +380,6 @@ void PeriodicReleases::startPeriodicReleaseTimer(Type type) {
           ReleaseTimerCallback(weak_from_this(), type), interval);
   ld_check(timer_node != nullptr);
 
-  timer_node->timer->setTimeoutMap(&Worker::onThisThread()->commonTimeouts());
   timer_node->timer->activate();
 }
 

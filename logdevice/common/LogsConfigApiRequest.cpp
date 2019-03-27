@@ -50,8 +50,6 @@ void LogsConfigApiRequest::start() {
       std::chrono::milliseconds(250),
       timeout_);
 
-  retry_timer_->setTimeoutMap(&Worker::onThisThread()->commonTimeouts());
-
   // Sends the request.
   onRetry();
 }

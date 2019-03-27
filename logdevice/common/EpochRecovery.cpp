@@ -1085,8 +1085,7 @@ void EpochRecovery::startMutationAndCleaningTimer() {
       deps_->getSettings().recovery_timeout};
 
   ld_check(recovery_timeout > std::chrono::milliseconds::zero());
-  mutation_and_cleaning_->activate(
-      recovery_timeout, deps_->getCommonTimeouts());
+  mutation_and_cleaning_->activate(recovery_timeout);
 }
 
 void EpochRecovery::onTimeout() {
@@ -1458,7 +1457,7 @@ bool EpochRecovery::onDigestMayHaveBecomeComplete(bool grace_period_expired) {
       auto grace_period = deps_->getSettings().recovery_grace_period;
       if (!grace_period_expired &&
           grace_period > std::chrono::milliseconds::zero()) {
-        grace_period_->activate(grace_period, deps_->getCommonTimeouts());
+        grace_period_->activate(grace_period);
       } else {
         RATELIMIT_INFO(std::chrono::seconds(10),
                        10,
@@ -1893,7 +1892,6 @@ std::unique_ptr<BackoffTimer> EpochRecoveryDependencies::createBackoffTimer(
     std::function<void()> callback) {
   auto timer =
       std::make_unique<ExponentialBackoffTimer>(std::move(callback), backoff);
-  timer->setTimeoutMap(&Worker::onThisThread()->commonTimeouts());
   return std::move(timer);
 }
 
@@ -1901,10 +1899,6 @@ std::unique_ptr<Timer>
 EpochRecoveryDependencies::createTimer(std::function<void()> cb) {
   auto timer = std::make_unique<Timer>(cb);
   return timer;
-}
-
-TimeoutMap* EpochRecoveryDependencies::getCommonTimeouts() const {
-  return &Worker::onThisThread()->commonTimeouts();
 }
 
 int EpochRecoveryDependencies::registerOnSocketClosed(const Address& addr,

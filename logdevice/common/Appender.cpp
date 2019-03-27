@@ -2237,8 +2237,7 @@ void Appender::cancelStoreTimer() {
   store_timer_.cancel();
 }
 void Appender::fireStoreTimer() {
-  store_timer_.activate(
-      std::chrono::microseconds(0), &Worker::onThisThread()->commonTimeouts());
+  store_timer_.activate(std::chrono::microseconds(0));
 }
 bool Appender::storeTimerIsActive() {
   return store_timer_.isActive();
@@ -2257,8 +2256,7 @@ bool Appender::retryTimerIsActive() {
   return retry_timer_.isActive();
 }
 void Appender::activateRetryTimer() {
-  retry_timer_.activate(
-      std::chrono::microseconds(0), &Worker::onThisThread()->commonTimeouts());
+  retry_timer_.activate(std::chrono::microseconds(0));
 }
 
 lsn_t Appender::getLastKnownGood() const {

@@ -571,15 +571,13 @@ void GetSeqStateRequest::setupTimers() {
   backoff_timer_ = std::make_unique<ExponentialBackoffTimer>(
       std::function<void()>(), Worker::settings().seq_state_backoff_time);
   ld_check(backoff_timer_ != nullptr);
-  backoff_timer_->setTimeoutMap(&Worker::onThisThread()->commonTimeouts());
   backoff_timer_->setCallback(
       std::bind(&GetSeqStateRequest::retrySending, this));
 }
 
 void GetSeqStateRequest::activateReplyTimer() {
   ld_assert(reply_timer_.isAssigned());
-  reply_timer_.activate(Worker::settings().get_seq_state_reply_timeout,
-                        &Worker::onThisThread()->commonTimeouts());
+  reply_timer_.activate(Worker::settings().get_seq_state_reply_timeout);
 }
 
 void GetSeqStateRequest::cancelReplyTimer() {

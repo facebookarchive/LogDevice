@@ -118,7 +118,6 @@ class WorkerImpl {
                     ->getNodesConfigurationFromServerConfigSource(),
                 getMyNodeIndex(config, w),
                 getMyLocation(config, w)),
-        commonTimeouts_(w->getEventBase(), Worker::MAX_FAST_TIMEOUTS),
         activeAppenders_(w->immutable_settings_->server ? N_APPENDER_MAP_BUCKETS
                                                         : 1),
         // AppenderBuffer queue capacity is the system-wide per-log limit
@@ -134,11 +133,7 @@ class WorkerImpl {
 
         graylistingTracker_(std::make_unique<GraylistingTracker>())
 
-  {
-    const bool rv =
-        commonTimeouts_.add(std::chrono::microseconds(0), w->zero_timeout_);
-    ld_check(rv);
-  }
+  {}
 
   ShardAuthoritativeStatusManager shardStatusManager_;
   Sender sender_;
@@ -156,7 +151,6 @@ class WorkerImpl {
   CheckImpactRequestMap runningCheckImpactReqs_;
   LogsConfigManagerRequestMap runningLogsConfigManagerReqs_;
   LogsConfigManagerReplyMap runningLogsConfigManagerReplies_;
-  TimeoutMap commonTimeouts_;
   AppendRequestMap runningAppends_;
   CheckSealRequestMap runningCheckSeals_;
   ConfigurationFetchRequestMap runningConfigurationFetches_;
@@ -846,8 +840,7 @@ void Worker::disposeOfMetaReader(std::unique_ptr<MetaDataLogReader> reader) {
   reader->finalize();
   finished_meta_readers_.push(std::move(reader));
   if (accepting_work_ && dispose_metareader_timer_) {
-    dispose_metareader_timer_->activate(
-        std::chrono::milliseconds::zero(), &commonTimeouts());
+    dispose_metareader_timer_->activate(std::chrono::milliseconds::zero());
   }
 }
 
@@ -1149,10 +1142,6 @@ LogsConfigManagerRequestMap& Worker::runningLogsConfigManagerRequests() const {
 
 LogsConfigManagerReplyMap& Worker::runningLogsConfigManagerReplies() const {
   return impl_->runningLogsConfigManagerReplies_;
-}
-
-TimeoutMap& Worker::commonTimeouts() const {
-  return impl_->commonTimeouts_;
 }
 
 AppenderMap& Worker::activeAppenders() const {

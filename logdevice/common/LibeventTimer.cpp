@@ -9,6 +9,8 @@
 
 #include <cstring>
 
+#include <event2/event.h>
+
 #include "logdevice/common/EventHandler.h"
 #include "logdevice/common/TimeoutMap.h"
 #include "logdevice/common/Worker.h"
@@ -36,6 +38,7 @@ LibeventTimer::~LibeventTimer() {
 void LibeventTimer::assign(struct event_base* base,
                            std::function<void()> callback) {
   callback_ = callback;
+  worker_ = Worker::onThisThread(false /* enforce_worker */);
   ld_check(!initialized_);
   // Passing `this` as the callback arg is safe.  If the timer fires, we know
   // the instance still exists.  The destructor would have cancelled the timer
@@ -54,6 +57,9 @@ void LibeventTimer::activate(std::chrono::microseconds delay,
                              TimeoutMap* timeout_map) {
   struct timeval tv_buf;
   const struct timeval* tv;
+  if (timeout_map == nullptr && EventLoop::onThisThread()) {
+    timeout_map = &EventLoop::onThisThread()->commonTimeouts();
+  }
 
   if (timeout_map != nullptr) {
     tv = timeout_map->get(delay, &tv_buf);
@@ -76,8 +82,7 @@ void LibeventTimer::activate(const struct timeval* delay) {
   evtimer_add(&timer_, delay);
   ld_assert(evtimer_pending(&timer_, nullptr));
 
-  Worker* w = Worker::onThisThread(false);
-  workerRunContext_ = w ? w->currentlyRunning_ : RunContext();
+  workerRunContext_ = worker_ ? worker_->currentlyRunning_ : RunContext();
   active_ = true;
 }
 
@@ -102,10 +107,8 @@ bool LibeventTimer::isAssigned() const {
 void LibeventTimer::libeventCallback(void* instance, short) {
   auto self = reinterpret_cast<LibeventTimer*>(instance);
   ld_assert(!evtimer_pending(&self->timer_, nullptr));
-  self->active_ = false;
 
   RunContext run_context = self->workerRunContext_;
-
   if (!ThreadID::isEventLoop()) {
     RATELIMIT_ERROR(std::chrono::seconds(1),
                     5,
@@ -113,14 +116,14 @@ void LibeventTimer::libeventCallback(void* instance, short) {
                     run_context.describe().c_str());
   }
 
-  Worker* w = Worker::onThisThread(false);
-  if (w) {
-    Worker::onStartedRunning(run_context);
-  }
   ld_check(self->callback_);
-  self->callback_(); // self could be destroyed after this
-  if (w) {
+  self->active_ = false;
+  if (self->worker_) {
+    Worker::onStartedRunning(run_context);
+    self->callback_();
     Worker::onStoppedRunning(run_context);
+  } else {
+    self->callback_();
   }
 }
 

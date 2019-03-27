@@ -57,7 +57,7 @@ Request::Execution LogsConfigUpdatedRequest::execute() {
     if (!timer_.isAssigned()) {
       timer_.assign([this] { execute(); });
     }
-    timer_.activate(timeout_, &worker->commonTimeouts());
+    timer_.activate(timeout_);
   } else {
     // sent to everyone
     delete this;

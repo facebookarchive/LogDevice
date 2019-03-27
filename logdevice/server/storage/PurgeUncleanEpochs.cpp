@@ -83,9 +83,7 @@ void PurgeUncleanEpochs::start() {
     // in the next iteration of the event loop.
     deferred_complete_timer_ =
         std::make_unique<Timer>([this] { allEpochsPurged(); });
-    deferred_complete_timer_->activate(
-        std::chrono::milliseconds(0),
-        &Worker::onThisThread()->commonTimeouts());
+    deferred_complete_timer_->activate(std::chrono::milliseconds(0));
     return;
   }
 

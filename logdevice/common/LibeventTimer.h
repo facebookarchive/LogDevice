@@ -28,6 +28,7 @@
 namespace facebook { namespace logdevice {
 
 class TimeoutMap;
+class Worker;
 
 class LibeventTimer : boost::noncopyable {
  public:
@@ -111,6 +112,8 @@ class LibeventTimer : boost::noncopyable {
   bool initialized_{false};
 
   struct event timer_;
+  // Worker instance, which created this timer.
+  Worker* worker_{nullptr};
   std::function<void()> callback_;
   bool active_ = false;
 

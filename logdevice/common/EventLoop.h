@@ -19,6 +19,7 @@
 
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/ThreadID.h"
+#include "logdevice/common/TimeoutMap.h"
 
 struct event_base;
 struct event;
@@ -107,6 +108,25 @@ class EventLoop : public folly::Executor {
    */
   static EventLoop* onThisThread() {
     return EventLoop::thisThreadLoop;
+  }
+
+  // A map that translates std::chrono::milliseconds values into
+  // struct timevals suitable for use with evtimer_add() for append request
+  // timers. The first kMaxFastTimeouts *distinct* timeout values are
+  // mapped into fake struct timeval created by
+  // event_base_init_common_timeout() and actually containing timer queue
+  // ids for this thread's event_base.
+  TimeoutMap& commonTimeouts() {
+    return common_timeouts_;
+  }
+
+  // Convenience function so callers of commonTimeouts().get() don't need
+  // to declare a local timeval. Must only be used from the Worker's thread.
+  template <typename Duration>
+  const struct timeval* getCommonTimeout(Duration d) {
+    ld_check(EventLoop::onThisThread() == this);
+    auto timeout = std::chrono::duration_cast<std::chrono::microseconds>(d);
+    return commonTimeouts().get(timeout, &get_common_tv_buf_);
   }
 
   static const int PRIORITY_LOW = 2;    // lowest priority
@@ -211,6 +231,15 @@ class EventLoop : public folly::Executor {
   // Counter to keep track of number of work contexts that depend on the
   // eventloop.
   std::atomic<size_t> num_references_{0};
+
+  // TimeoutMap to cache common timeouts.
+  TimeoutMap common_timeouts_;
+
+  // Storage for getTimeoutCommon().
+  mutable struct timeval get_common_tv_buf_;
+  // Size limit for commonTimeouts_ (NB: libevent has a default upper bound
+  // of MAX_COMMON_TIMEOUTS = 256)
+  static const int kMaxFastTimeouts = 200;
 };
 
 }} // namespace facebook::logdevice

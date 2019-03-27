@@ -31,7 +31,6 @@ TrimRSMRetryHandler::TrimRSMRetryHandler(logid_t delta_log_id,
       std::bind(&TrimRSMRetryHandler::trimImpl, this),
       std::chrono::seconds{5},
       std::chrono::seconds{300});
-  retry_timer_->setTimeoutMap(&Worker::onThisThread()->commonTimeouts());
 }
 
 void TrimRSMRetryHandler::trim(std::chrono::milliseconds retention) {

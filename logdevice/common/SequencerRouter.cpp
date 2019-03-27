@@ -552,13 +552,11 @@ void SequencerRouter::startClusterStateRefreshTimer() {
   if (getSettings().sequencer_router_internal_timeout <
           std::chrono::milliseconds::max() &&
       !getSettings().server) {
-    Worker* w = Worker::onThisThread();
     auto cs = getClusterState();
     if (cs && !cluster_state_refresh_timer_.isAssigned()) {
       cluster_state_refresh_timer_.assign([this] { onTimeout(); });
       cluster_state_refresh_timer_.activate(
-          getSettings().sequencer_router_internal_timeout,
-          &w->commonTimeouts());
+          getSettings().sequencer_router_internal_timeout);
     }
   }
 }

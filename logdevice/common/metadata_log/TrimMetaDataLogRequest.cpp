@@ -72,8 +72,7 @@ Request::Execution TrimMetaDataLogRequest::execute() {
   if (start_delay_ > std::chrono::milliseconds::zero()) {
     start_delay_timer_ = std::make_unique<Timer>([this] { start(); });
 
-    start_delay_timer_->activate(
-        start_delay_, &Worker::onThisThread()->commonTimeouts());
+    start_delay_timer_->activate(start_delay_);
     return Execution::CONTINUE;
   }
 
@@ -191,8 +190,7 @@ void TrimMetaDataLogRequest::readMetaDataLog() {
     ld_check(!backlog_.hasValue());
     ld_check(!reader_timer_->isActive());
   }
-  reader_timer_->activate(
-      read_timeout_, &Worker::onThisThread()->commonTimeouts());
+  reader_timer_->activate(read_timeout_);
 }
 
 void TrimMetaDataLogRequest::onReadTimeout() {

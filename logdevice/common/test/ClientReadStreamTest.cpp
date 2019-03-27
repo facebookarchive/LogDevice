@@ -335,10 +335,6 @@ class MockClientReadStreamDependencies : public ClientReadStreamDependencies {
     return std::make_unique<MockTimer>();
   }
 
-  TimeoutMap* getCommonTimeouts() override {
-    return nullptr;
-  }
-
   void setClientReadStream(ClientReadStream* client_read_stream) {
     client_read_stream_ = client_read_stream;
   }

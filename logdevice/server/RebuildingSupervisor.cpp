@@ -295,8 +295,7 @@ void RebuildingSupervisor::scheduleNextRun(
     ld_debug("Scheduling next run to execute in approximately %.0fs",
              std::nearbyint(timeout.value().count() / 1000000.0));
     state_ = State::PENDING;
-    rebuilding_timer_.activate(
-        timeout.value(), &Worker::onThisThread()->commonTimeouts());
+    rebuilding_timer_.activate(timeout.value());
   }
 }
 

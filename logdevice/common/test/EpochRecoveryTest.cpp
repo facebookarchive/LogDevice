@@ -226,10 +226,6 @@ class MockEpochRecoveryDependencies : public EpochRecoveryDependencies {
     return std::move(timer);
   }
 
-  TimeoutMap* getCommonTimeouts() const override {
-    return nullptr;
-  }
-
   int registerOnSocketClosed(const Address& addr, SocketCallback& cb) override {
     test_->on_close_cb_map_[addr.asNodeID()].push_back(cb);
     return 0;

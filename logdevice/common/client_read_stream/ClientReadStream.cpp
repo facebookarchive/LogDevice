@@ -3840,7 +3840,7 @@ void ClientReadStream::handleStartPROTONOSUPPORT(ShardID shard_id) {
 
 void ClientReadStream::scheduleRewind(std::string reason) {
   ld_check(!reason.empty());
-  rewind_scheduler_->schedule(deps_->getCommonTimeouts(), std::move(reason));
+  rewind_scheduler_->schedule(nullptr, std::move(reason));
 }
 
 void ClientReadStream::rewind(std::string reason) {
@@ -4088,8 +4088,7 @@ void ClientReadStreamDependencies::getMetaDataForEpoch(
 
       // deliver the metadata on the next event loop iteration to avoid
       // recursively calling findGapsAndRecords()
-      delivery_timer_->activate(std::chrono::microseconds(0),
-                                &Worker::onThisThread()->commonTimeouts());
+      delivery_timer_->activate(std::chrono::microseconds(0));
 
       ld_debug("Got epoch metadata from client cache for epoch %u of log %lu. "
                "metadata epoch %u, effective until %u, metadata: %s",
@@ -4295,9 +4294,6 @@ std::unique_ptr<BackoffTimer> ClientReadStreamDependencies::createBackoffTimer(
 
       std::function<void()>(), // SenderState will change
       settings);
-  // Tell the timer to use a TimeoutMap common to all ClientReadStream
-  // instances in a Worker.  See docs for TimeoutMap.
-  timer->setTimeoutMap(&Worker::onThisThread()->commonTimeouts());
 
   return std::move(timer);
 }
@@ -4348,10 +4344,6 @@ std::unique_ptr<Timer>
 ClientReadStreamDependencies::createTimer(std::function<void()> cb) {
   auto timer = std::make_unique<Timer>(cb);
   return timer;
-}
-
-TimeoutMap* ClientReadStreamDependencies::getCommonTimeouts() {
-  return &Worker::onThisThread()->commonTimeouts();
 }
 
 std::function<ClientReadStream*(read_stream_id_t)>

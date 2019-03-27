@@ -12,7 +12,7 @@
 #include <functional>
 #include <unordered_map>
 
-#include <event2/event.h>
+struct event_base;
 
 namespace facebook { namespace logdevice {
 

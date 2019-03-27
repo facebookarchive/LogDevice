@@ -119,8 +119,7 @@ void TrimDataLogRequest::startReader(lsn_t from_lsn, lsn_t until_lsn) {
   ld_check(reader_timer_ == nullptr);
   reader_timer_ = std::make_unique<Timer>([this] { onReadTimeout(); });
 
-  reader_timer_->activate(
-      read_timeout_, &Worker::onThisThread()->commonTimeouts());
+  reader_timer_->activate(read_timeout_);
 }
 
 void TrimDataLogRequest::onReadTimeout() {
@@ -218,9 +217,7 @@ void TrimDataLogRequest::finalizeReading(Status st) {
   // in the next event loop iteration
   destroy_readstream_timer_ =
       std::make_unique<Timer>([this, st] { onDestroyReadStreamTimer(st); });
-  destroy_readstream_timer_->activate(
-      std::chrono::milliseconds::zero(),
-      &Worker::onThisThread()->commonTimeouts());
+  destroy_readstream_timer_->activate(std::chrono::milliseconds::zero());
 
   reading_finalized_ = true;
 }

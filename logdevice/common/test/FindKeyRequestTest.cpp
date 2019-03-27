@@ -131,10 +131,6 @@ class MockNodeSetFinder : public NodeSetFinder {
     return timer;
   }
 
-  TimeoutMap* getTimeoutMap() const override {
-    return nullptr;
-  }
-
   void readFromMetaDataLog() override {}
 
   void stopReadingMetaDataLog() override {}

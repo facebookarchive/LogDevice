@@ -1805,23 +1805,19 @@ LogRebuilding::createTimer(std::function<void()> callback) {
       std::make_unique<ExponentialBackoffTimer>(std::move(callback),
                                                 std::chrono::milliseconds(5),
                                                 std::chrono::seconds(10));
-  timer->setTimeoutMap(&Worker::onThisThread()->commonTimeouts());
   return std::move(timer);
 }
 
 std::unique_ptr<Timer> LogRebuilding::createIteratorTimer() {
-  auto* c = &Worker::onThisThread()->commonTimeouts();
-
-  auto callback = [this, c] {
+  auto callback = [this] {
     invalidateIterators();
     ld_check(iteratorInvalidationTimer_);
     // keep the timer active until LogRebuilding is destroyed.
-    iteratorInvalidationTimer_->activate(
-        Worker::settings().iterator_cache_ttl, c);
+    iteratorInvalidationTimer_->activate(Worker::settings().iterator_cache_ttl);
   };
 
   auto timer = std::make_unique<Timer>(std::move(callback));
-  timer->activate(Worker::settings().iterator_cache_ttl, c);
+  timer->activate(Worker::settings().iterator_cache_ttl);
   return timer;
 }
 
@@ -1845,8 +1841,7 @@ std::unique_ptr<Timer> LogRebuilding::createNotifyRebuildingCoordinatorTimer() {
 }
 
 void LogRebuilding::activateNotifyRebuildingCoordinatorTimer() {
-  notifyRebuildingCoordinatorTimer_->activate(
-      std::chrono::microseconds(0), &Worker::onThisThread()->commonTimeouts());
+  notifyRebuildingCoordinatorTimer_->activate(std::chrono::microseconds(0));
 }
 
 void LogRebuilding::activateStallTimer() {
@@ -1861,8 +1856,7 @@ std::unique_ptr<Timer> LogRebuilding::createReadNewBatchTimer() {
 
 void LogRebuilding::activateReadNewBatchTimer() {
   ld_check(readNewBatchTimer_);
-  readNewBatchTimer_->activate(
-      std::chrono::microseconds(0), &Worker::onThisThread()->commonTimeouts());
+  readNewBatchTimer_->activate(std::chrono::microseconds(0));
 }
 
 void LogRebuilding::cancelStallTimer() {

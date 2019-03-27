@@ -824,7 +824,6 @@ void AllServerReadStreams::scheduleShardStatusUpdateRetry(ClientID cid) {
         [this, cid]() { sendShardStatusToClient(cid); },
         std::chrono::milliseconds(1),
         std::chrono::seconds(10));
-    timer->setTimeoutMap(&Worker::onThisThread()->commonTimeouts());
     it->second.timer_ = std::move(timer);
   }
 

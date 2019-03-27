@@ -174,7 +174,6 @@ void LogsConfigManager::activatePublishTimer() {
   if (!publish_timer_.isActive()) {
     // Let's publish an initial version first before we activate the publish
     // timer.
-    Worker* w = Worker::onThisThread(true);
     if (!publish_timer_.isAssigned()) {
       publish_timer_.assign([this] {
         // the tree may have been updated during grace_period, use
@@ -182,7 +181,7 @@ void LogsConfigManager::activatePublishTimer() {
         updateLogsConfig(getStateMachine()->getState());
       });
     }
-    publish_timer_.activate(publish_grace_period_, &w->commonTimeouts());
+    publish_timer_.activate(publish_grace_period_);
   } else {
     // log that we are deferring the update because we have a grace period timer
     // set to publish_grace_perios_ value. rate limited PLEASE.
@@ -601,7 +600,6 @@ Request::Execution LogsConfigManagerReply::execute() {
         std::chrono::milliseconds(10),
         std::chrono::milliseconds(100));
 
-    retry_timer_->setTimeoutMap(&w->commonTimeouts());
     retry_timer_->activate();
     return Execution::CONTINUE;
   } else {

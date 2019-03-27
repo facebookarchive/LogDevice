@@ -399,14 +399,12 @@ CachedDigest::createDelayTimer(std::function<void()> callback) {
   auto timer = std::make_unique<ExponentialBackoffTimer>(
       callback, INITIAL_PUSH_DELAY, MAX_PUSH_DELAY);
 
-  timer->setTimeoutMap(&Worker::onThisThread()->commonTimeouts());
   return std::move(timer);
 }
 
 void CachedDigest::activatePushTimer() {
   ld_check(push_timer_ != nullptr);
-  push_timer_->activate(
-      std::chrono::microseconds(0), &Worker::onThisThread()->commonTimeouts());
+  push_timer_->activate(std::chrono::microseconds(0));
 }
 
 void CachedDigest::cancelPushTimer() {

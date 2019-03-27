@@ -51,7 +51,6 @@ class RECORD_Message;
 class SenderBase;
 class SenderProxy;
 class StatsHolder;
-class TimeoutMap;
 
 /**
  * External dependencies of CatchupQueueDependencies are isolated into this

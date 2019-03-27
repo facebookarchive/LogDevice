@@ -42,7 +42,6 @@ struct Settings;
 class LogRecoveryRequest;
 class RECORD_Message;
 class SenderBase;
-class TimeoutMap;
 
 /**
  * External dependencies of EpochRecovery are isolated into this class for
@@ -81,9 +80,6 @@ class EpochRecoveryDependencies {
 
   virtual std::unique_ptr<Timer>
   createTimer(std::function<void()> cb = nullptr);
-
-  // used to activate timers
-  virtual TimeoutMap* getCommonTimeouts() const;
 
   virtual int registerOnSocketClosed(const Address& addr, SocketCallback& cb);
 

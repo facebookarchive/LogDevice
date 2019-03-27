@@ -441,23 +441,6 @@ class Worker : public EventLoop {
   // a map of all currently running ByteOffsetRequests.
   // ByteOffsetRequestMap runningByteOffset_;
 
-  // A map that translates std::chrono::milliseconds values into
-  // struct timevals suitable for use with evtimer_add() for append request
-  // timers. The first MAX_FAST_TIMEOUTS *distinct* timeout values are
-  // mapped into fake struct timeval created by
-  // event_base_init_common_timeout() and actually containing timer queue
-  // ids for this thread's event_base.
-  TimeoutMap& commonTimeouts() const;
-
-  // Convenience function so callers of commonTimeouts().get() don't need
-  // to declare a local timeval. Must only be used from the Worker's thread.
-  template <typename Duration>
-  const struct timeval* getCommonTimeout(Duration d) const {
-    ld_check(Worker::onThisThread() == this);
-    auto timeout = std::chrono::duration_cast<std::chrono::microseconds>(d);
-    return commonTimeouts().get(timeout, &get_common_tv_buf_);
-  }
-
   // a map of all currently running AppendRequests
   AppendRequestMap& runningAppends() const;
 

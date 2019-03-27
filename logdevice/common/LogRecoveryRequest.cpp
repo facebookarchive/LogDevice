@@ -228,8 +228,7 @@ Request::Execution LogRecoveryRequest::execute() {
 
     // Defer log recovery, for delay_ milliseconds. We do this when we retry
     // recovery after a soft error.
-    start_delay_timer_->activate(
-        delay_, &Worker::onThisThread()->commonTimeouts());
+    start_delay_timer_->activate(delay_);
     return Execution::CONTINUE;
   }
 
@@ -684,7 +683,6 @@ void LogRecoveryRequest::readSequencerMetaData() {
         },
         Worker::settings().recovery_seq_metadata_timeout);
 
-    timer->setTimeoutMap(&Worker::onThisThread()->commonTimeouts());
     seq_metadata_timer_ = std::move(timer);
   }
 
@@ -954,8 +952,7 @@ void LogRecoveryRequest::activateCheckSealTimer() {
       activateCheckSealTimer();
     });
   }
-  check_seal_timer_->activate(
-      SEAL_CHECK_INTERVAL, &Worker::onThisThread()->commonTimeouts());
+  check_seal_timer_->activate(SEAL_CHECK_INTERVAL);
 }
 
 int LogRecoveryRequest::sendSeal(ShardID shard) {
@@ -1333,8 +1330,7 @@ void LogRecoveryRequest::completeSoon(Status status) {
   epoch_recovery_machines_.clear();
   deferredCompleteTimer_ =
       std::make_unique<Timer>([this, status] { complete(status); });
-  deferredCompleteTimer_->activate(
-      std::chrono::milliseconds(0), &Worker::onThisThread()->commonTimeouts());
+  deferredCompleteTimer_->activate(std::chrono::milliseconds(0));
 }
 
 void LogRecoveryRequest::complete(Status status) {
