@@ -26,19 +26,17 @@ void NodesConfigAPIHandler::getNodesConfig(
   // The idea is that we keep filtering the nodes based on the supplied filter
   // until we get a final list to return.
 
-  auto server_config = processor_->config_->getServerConfig();
+  auto nodes_configuration = processor_->getNodesConfiguration();
   std::vector<thrift::NodeConfig> result_nodes;
 
-  forFilteredNodes(
-      server_config->getNodes(),
-      filter.get(),
-      [&](const std::pair<const node_index_t, configuration::Node>& it) {
-        thrift::NodeConfig node;
-        fillNodeConfig(node, it.first, it.second);
-        result_nodes.push_back(std::move(node));
-      });
+  forFilteredNodes(*nodes_configuration, filter.get(), [&](node_index_t index) {
+    thrift::NodeConfig node;
+    fillNodeConfig(node, index, *nodes_configuration);
+    result_nodes.push_back(std::move(node));
+  });
   out.set_nodes(std::move(result_nodes));
-  out.set_version(static_cast<int64_t>(server_config->getVersion().val()));
+  out.set_version(
+      static_cast<int64_t>(nodes_configuration->getVersion().val()));
 }
 
 }} // namespace facebook::logdevice

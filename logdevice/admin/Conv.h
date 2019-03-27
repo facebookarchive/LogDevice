@@ -11,6 +11,7 @@
 #include "logdevice/admin/if/gen-cpp2/admin_types.h"
 #include "logdevice/admin/safety/SafetyAPI.h"
 #include "logdevice/common/configuration/Node.h"
+#include "logdevice/common/configuration/nodes/NodeRole.h"
 #include "logdevice/include/NodeLocationScope.h"
 
 namespace facebook { namespace logdevice {
@@ -55,7 +56,7 @@ LDType toLogDevice(const ThriftType& input);
 
 /** Specializations **/
 template <>
-configuration::NodeRole toLogDevice(const thrift::Role& role);
+configuration::nodes::NodeRole toLogDevice(const thrift::Role& role);
 
 template <>
 configuration::StorageState toLogDevice(const thrift::ShardStorageState& input);

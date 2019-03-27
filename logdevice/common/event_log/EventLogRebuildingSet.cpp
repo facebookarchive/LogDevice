@@ -790,12 +790,12 @@ std::string EventLogRebuildingSet::toString() const {
 }
 
 ShardAuthoritativeStatusMap EventLogRebuildingSet::toShardStatusMap(
-    const configuration::Nodes& nodes) const {
+    const configuration::nodes::NodesConfiguration& nodes_configuration) const {
   ShardAuthoritativeStatusMap map(getLastUpdate());
   for (auto& shard : getRebuildingShards()) {
     for (auto& node : shard.second.nodes_) {
-      if (nodes.find(node.first) == nodes.end()) {
-        // ignore nodes that are not in the provided list
+      if (!nodes_configuration.getStorageMembership()->hasNode(node.first)) {
+        // ignore nodes that are not in the storagte membership
         continue;
       }
       map.setShardStatus(node.first,

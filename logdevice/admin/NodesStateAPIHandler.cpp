@@ -19,7 +19,6 @@ using namespace facebook::logdevice;
 namespace facebook { namespace logdevice {
 void NodesStateAPIHandler::toNodeState(thrift::NodeState& out,
                                        thrift::NodeIndex index,
-                                       const configuration::Node& node,
                                        bool force) {
   std::shared_ptr<EventLogRebuildingSet> rebuilding_set =
       processor_->rebuilding_set_.get();
@@ -31,20 +30,17 @@ void NodesStateAPIHandler::toNodeState(thrift::NodeState& out,
                     "different node (or use force=true)");
     throw err;
   }
-  auto server_config = processor_->config_->getServerConfig();
+  auto nodes_configuration = processor_->getNodesConfiguration();
   const ClusterState* cluster_state = processor_->cluster_state_.get();
   // We have the node, let's fill the data that we have into NodeState
-  fillNodeState(out,
-                index,
-                node,
-                rebuilding_set.get(),
-                cluster_state);
+  fillNodeState(
+      out, index, *nodes_configuration, rebuilding_set.get(), cluster_state);
 }
 
 void NodesStateAPIHandler::getNodesState(
     thrift::NodesStateResponse& out,
     std::unique_ptr<thrift::NodesStateRequest> req) {
-  auto server_config = processor_->config_->getServerConfig();
+  auto nodes_configuration = processor_->getNodesConfiguration();
   std::vector<thrift::NodeState> result_states;
   bool force = false;
   thrift::NodesFilter* filter = nullptr;
@@ -52,16 +48,14 @@ void NodesStateAPIHandler::getNodesState(
     filter = req->get_filter();
     force = req->get_force() ? *req->get_force() : false;
   }
-  forFilteredNodes(
-      server_config->getNodes(),
-      filter,
-      [&](const std::pair<const node_index_t, configuration::Node>& it) {
-        thrift::NodeState node_state;
-        toNodeState(node_state, it.first, it.second, force);
-        result_states.push_back(std::move(node_state));
-      });
+  forFilteredNodes(*nodes_configuration, filter, [&](node_index_t index) {
+    thrift::NodeState node_state;
+    toNodeState(node_state, index, force);
+    result_states.push_back(std::move(node_state));
+  });
   out.set_states(std::move(result_states));
-  out.set_version(static_cast<int64_t>(server_config->getVersion().val()));
+  out.set_version(
+      static_cast<int64_t>(nodes_configuration->getVersion().val()));
 }
 
 }} // namespace facebook::logdevice

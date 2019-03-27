@@ -583,9 +583,8 @@ bool RebuildingSupervisor::shouldThrottleRebuilding(
   auto set = w->processor_->rebuilding_set_.get();
   auto threshold = rebuildingSettings_->max_node_rebuilding_percentage;
   if (threshold < 100 && set != nullptr) {
-    const auto& config = w->getServerConfig();
-    const auto& nodes = config->getNodes();
-    auto shards = set->toShardStatusMap(nodes).getShards();
+    const auto& nodes_configuration = w->getNodesConfiguration();
+    auto shards = set->toShardStatusMap(*nodes_configuration).getShards();
     size_t rebuilding_nodes = 0;
     for (auto n : shards) {
       for (auto s : n.second) {
@@ -602,7 +601,7 @@ bool RebuildingSupervisor::shouldThrottleRebuilding(
                  s.first);
       }
     }
-    auto ratio = rebuilding_nodes * 100 / nodes.size();
+    auto ratio = rebuilding_nodes * 100 / nodes_configuration->clusterSize();
     if (ratio > threshold) {
       RATELIMIT_INFO(std::chrono::seconds(1),
                      1,

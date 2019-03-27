@@ -356,7 +356,7 @@ class MockClientReadStreamDependencies : public ClientReadStreamDependencies {
   ShardAuthoritativeStatusMap getShardStatus() const override {
     auto cfg = state_.config->get();
     return state_.rebuilding_set.toShardStatusMap(
-        cfg->serverConfig()->getNodes());
+        *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource());
   }
 
   void refreshClusterState() override {}

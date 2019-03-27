@@ -15,6 +15,12 @@ namespace nodes {
 
 class NodesConfigLegacyConverter {
  public:
+  static membership::StorageState
+  fromLegacyStorageState(configuration::StorageState ls);
+
+  static configuration::StorageState
+  toLegacyStorageState(membership::StorageState ss);
+
   static int toLegacyNodesConfig(const NodesConfiguration& config,
                                  NodesConfig* legacy_config_out);
 

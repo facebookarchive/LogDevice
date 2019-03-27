@@ -38,13 +38,12 @@ CheckImpactHandler::semifuture_checkImpact(
     return promise.getSemiFuture();
   }
 
-  auto server_config = processor_->config_->getServerConfig();
+  const auto& nodes_configuration = processor_->getNodesConfiguration();
   ShardAuthoritativeStatusMap status_map =
-      rebuilding_set->toShardStatusMap(server_config->getNodes());
+      rebuilding_set->toShardStatusMap(*nodes_configuration);
 
   // Resolve shards from thrift to logdevice
-  ShardSet shards =
-      expandShardSet(request->get_shards(), server_config->getNodes());
+  ShardSet shards = expandShardSet(request->get_shards(), *nodes_configuration);
 
   ld_info("SHARDS: %s", toString(shards).c_str());
 

@@ -39,7 +39,7 @@ std::shared_ptr<UpdateableConfig> buildConfig() {
     node.address = Sockaddr("::1", folly::to<std::string>(4440 + nid));
     node.generation = 1;
     node.addSequencerRole();
-    node.addStorageRole();
+    node.addStorageRole(kNumShards);
   }
   Configuration::NodesConfig nodes_config(std::move(nodes));
   Configuration::MetaDataLogsConfig meta_config =
@@ -75,9 +75,10 @@ class EventLogRebuildingSetTest : public ::testing::Test {
 
 #define ASSERT_SHARD_STATUS(set, nid, sid, status)                        \
   {                                                                       \
-    configuration::Nodes nodes;                                           \
-    NodeSetTestUtil::addNodes(&nodes, kNumNodes, kNumShards);             \
-    auto map = set.toShardStatusMap(nodes);                               \
+    const auto nc = buildConfig()                                         \
+                        ->getServerConfig()                               \
+                        ->getNodesConfigurationFromServerConfigSource();  \
+    auto map = set.toShardStatusMap(*nc);                                 \
     EXPECT_EQ(AuthoritativeStatus::status, map.getShardStatus(nid, sid)); \
   }
 

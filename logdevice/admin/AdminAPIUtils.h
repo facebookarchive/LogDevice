@@ -21,41 +21,45 @@ namespace facebook { namespace logdevice {
 class EventLogRebuildingSet;
 class FailureDetector;
 class ClusterState;
-namespace configuration {
-class Node;
-enum class NodeRole : unsigned int;
-} // namespace configuration
+namespace configuration { namespace nodes {
+class NodesConfiguration;
+}} // namespace configuration::nodes
 
 std::string toString(const thrift::SocketAddressFamily& address);
 std::string toString(const thrift::SocketAddress& address);
 
-using NodeFunctor = std::function<void(
-    const std::pair<const node_index_t, configuration::Node>&)>;
+using NodeFunctor = std::function<void(node_index_t)>;
 
-void forFilteredNodes(const configuration::Nodes& nodes,
-                      thrift::NodesFilter* filter,
-                      NodeFunctor fn);
+void forFilteredNodes(
+    const configuration::nodes::NodesConfiguration& nodes_configuration,
+    thrift::NodesFilter* filter,
+    NodeFunctor fn);
 
-void fillNodeConfig(thrift::NodeConfig& out,
-                    node_index_t node_index,
-                    const configuration::Node& node);
+void fillNodeConfig(
+    thrift::NodeConfig& out,
+    node_index_t node_index,
+    const configuration::nodes::NodesConfiguration& nodes_configuration);
 
 void fillSocketAddress(thrift::SocketAddress& out, const Sockaddr& addr);
 
-void fillNodeState(thrift::NodeState& out,
-                   node_index_t node_index,
-                   const configuration::Node& node,
-                   const EventLogRebuildingSet* rebuilding_set,
-                   const ClusterState* cluster_state);
+void fillNodeState(
+    thrift::NodeState& out,
+    node_index_t node_index,
+    const configuration::nodes::NodesConfiguration& nodes_configuration,
+    const EventLogRebuildingSet* rebuilding_set,
+    const ClusterState* cluster_state);
 
-ShardSet resolveShardOrNode(const thrift::ShardID& shard,
-                            const configuration::Nodes& nodes);
+ShardSet resolveShardOrNode(
+    const thrift::ShardID& shard,
+    const configuration::nodes::NodesConfiguration& nodes_configuration);
+
 /**
  * Expands a thrift ShardSet structure into logdevice equivalent. This looks up
  * the nodes via address if specified in the input.
  */
-ShardSet expandShardSet(const thrift::ShardSet& thrift_shards,
-                        const configuration::Nodes& nodes);
+ShardSet expandShardSet(
+    const thrift::ShardSet& thrift_shards,
+    const configuration::nodes::NodesConfiguration& nodes_configuration);
 
 thrift::ShardOperationalState
 toShardOperationalState(configuration::StorageState storage_state,

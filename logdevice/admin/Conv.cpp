@@ -39,15 +39,15 @@ std::vector<thrift::OperationImpact> toThrift(const int& impact_result) {
 }
 
 template <>
-NodeRole toLogDevice(const thrift::Role& role) {
+configuration::nodes::NodeRole toLogDevice(const thrift::Role& role) {
   switch (role) {
     case thrift::Role::SEQUENCER:
-      return NodeRole::SEQUENCER;
+      return configuration::nodes::NodeRole::SEQUENCER;
     case thrift::Role::STORAGE:
-      return NodeRole::STORAGE;
+      return configuration::nodes::NodeRole::STORAGE;
   }
   ld_check(false);
-  return NodeRole::SEQUENCER;
+  return configuration::nodes::NodeRole::SEQUENCER;
 }
 
 template <>

@@ -278,8 +278,9 @@ Request::Execution EventLogWriteDeltaRequest::execute() {
 }
 
 void EventLogStateMachine::updateWorkerShardStatusMap() {
-  auto config = Worker::getConfig()->serverConfig();
-  auto map = getState().toShardStatusMap(config->getNodes());
+  const auto& nodes_configuration =
+      Worker::onThisThread()->getNodesConfiguration();
+  auto map = getState().toShardStatusMap(*nodes_configuration);
 
   for (const auto& p : Worker::settings().authoritative_status_overrides) {
     map.setShardStatus(p.first.node(), p.first.shard(), p.second);

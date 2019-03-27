@@ -167,7 +167,8 @@ int getShardAuthoritativeStatusMap(Client& client,
   // change while we update the map.
   std::shared_ptr<ServerConfig> server_config =
       dynamic_cast<ClientImpl*>(&client)->getConfig()->get()->serverConfig();
-  map = set.toShardStatusMap(server_config->getNodes());
+  map = set.toShardStatusMap(
+      *server_config->getNodesConfigurationFromServerConfigSource());
   return 0;
 }
 

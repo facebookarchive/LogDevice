@@ -13,6 +13,8 @@
 #include "logdevice/common/ClusterState.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/Node.h"
+#include "logdevice/common/configuration/nodes/NodesConfigLegacyConverter.h"
+#include "logdevice/common/configuration/nodes/NodesConfiguration.h"
 #include "logdevice/common/event_log/EventLogRebuildingSet.h"
 #include "logdevice/server/FailureDetector.h"
 
@@ -41,34 +43,38 @@ std::string toString(const thrift::SocketAddress& address) {
       .str();
 }
 
-bool match_by_address(const configuration::Node& node,
+bool match_by_address(const configuration::nodes::NodeServiceDiscovery& node_sd,
                       const thrift::SocketAddress* address) {
   ld_check(address);
-  if (node.address.isUnixAddress() &&
+  if (node_sd.address.isUnixAddress() &&
       address->address_family == thrift::SocketAddressFamily::UNIX &&
-      node.address.getPath() == *address->get_address()) {
+      node_sd.address.getPath() == *address->get_address()) {
     return true;
   }
-  if (!node.address.isUnixAddress() &&
+  if (!node_sd.address.isUnixAddress() &&
       address->address_family == thrift::SocketAddressFamily::INET &&
-      node.address.getAddress().str() == *address->get_address() &&
-      node.address.port() == *address->get_port()) {
+      node_sd.address.getAddress().str() == *address->get_address() &&
+      node_sd.address.port() == *address->get_port()) {
     return true;
   }
   return false;
 }
 
-void forFilteredNodes(const configuration::Nodes& nodes,
-                      thrift::NodesFilter* filter,
-                      NodeFunctor fn) {
-  folly::Optional<NodeRole> role_filter;
+void forFilteredNodes(
+    const configuration::nodes::NodesConfiguration& nodes_configuration,
+    thrift::NodesFilter* filter,
+    NodeFunctor fn) {
+  folly::Optional<configuration::nodes::NodeRole> role_filter;
 
   if (filter && filter->get_role()) {
-    NodeRole ld_role = toLogDevice<NodeRole>(*filter->get_role());
+    configuration::nodes::NodeRole ld_role =
+        toLogDevice<configuration::nodes::NodeRole>(*filter->get_role());
     role_filter.assign(ld_role);
   }
 
-  auto matches = [&](node_index_t index, const Node& node) -> bool {
+  auto matches =
+      [&](node_index_t index,
+          const configuration::nodes::NodeServiceDiscovery& node_sd) -> bool {
     if (!filter) {
       // We don't have a filter, we accept all nodes.
       return true;
@@ -76,13 +82,13 @@ void forFilteredNodes(const configuration::Nodes& nodes,
     bool res = true;
     // filter by role
     if (role_filter) {
-      res &= node.hasRole(*role_filter);
+      res &= node_sd.hasRole(*role_filter);
     }
     // filter by node
     if (filter->get_node()) {
       auto* node_identifier = filter->get_node();
       if (node_identifier->get_address()) {
-        res &= match_by_address(node, node_identifier->get_address());
+        res &= match_by_address(node_sd, node_identifier->get_address());
       }
       // filter by index
       if (node_identifier->get_node_index()) {
@@ -92,15 +98,15 @@ void forFilteredNodes(const configuration::Nodes& nodes,
     // filter by location
     if (filter->get_location()) {
       std::string location_filter_str = *filter->get_location();
-      res &=
-          (node.location && node.location->matchesPrefix(location_filter_str));
+      res &= (node_sd.location &&
+              node_sd.location->matchesPrefix(location_filter_str));
     }
     return res;
   };
 
-  for (const auto& it : nodes) {
-    if (matches(it.first, it.second)) {
-      fn(it);
+  for (const auto& kv : *nodes_configuration.getServiceDiscovery()) {
+    if (matches(kv.first, kv.second)) {
+      fn(kv.first);
     }
   }
 }
@@ -130,44 +136,58 @@ toShardOperationalState(StorageState storage_state,
   return thrift::ShardOperationalState::INVALID;
 }
 
-void fillNodeConfig(thrift::NodeConfig& out,
-                    node_index_t node_index,
-                    const Node& node) {
+void fillNodeConfig(
+    thrift::NodeConfig& out,
+    node_index_t node_index,
+    const configuration::nodes::NodesConfiguration& nodes_configuration) {
   out.set_node_index(node_index);
+
+  const auto* node_sd = nodes_configuration.getNodeServiceDiscovery(node_index);
+  // caller should ensure node_index exists in nodes_configuration
+  ld_check(node_sd != nullptr);
+
   // Roles
   std::set<thrift::Role> roles;
-  if (node.hasRole(NodeRole::SEQUENCER)) {
+  if (node_sd->hasRole(nodes::NodeRole::SEQUENCER)) {
     roles.insert(thrift::Role::SEQUENCER);
-    // Sequencer Config
-    thrift::SequencerConfig sequencer_config;
-    sequencer_config.set_weight(node.sequencer_attributes->weight);
-    out.set_sequencer(std::move(sequencer_config));
+    const auto& seq_membership = nodes_configuration.getSequencerMembership();
+    const auto result = seq_membership->getNodeState(node_index);
+    if (result.first) {
+      // Sequencer Config
+      thrift::SequencerConfig sequencer_config;
+      sequencer_config.set_weight(result.second.weight);
+      out.set_sequencer(std::move(sequencer_config));
+    }
   }
 
-  if (node.hasRole(NodeRole::STORAGE)) {
+  if (node_sd->hasRole(nodes::NodeRole::STORAGE)) {
     roles.insert(thrift::Role::STORAGE);
-    // Storage Node Config
-    thrift::StorageConfig storage_config;
-    storage_config.set_weight(node.storage_attributes->capacity);
-    storage_config.set_num_shards(node.getNumShards());
-    out.set_storage(std::move(storage_config));
+    const auto* storage_attr =
+        nodes_configuration.getNodeStorageAttribute(node_index);
+    if (storage_attr) {
+      // Storage Node Config
+      thrift::StorageConfig storage_config;
+      storage_config.set_weight(storage_attr->capacity);
+      storage_config.set_num_shards(storage_attr->num_shards);
+      out.set_storage(std::move(storage_config));
+    }
   }
 
   out.set_roles(std::move(roles));
-  out.set_location(node.locationStr());
+  out.set_location(node_sd->locationStr());
 
   thrift::SocketAddress data_address;
-  fillSocketAddress(data_address, node.address);
+  fillSocketAddress(data_address, node_sd->address);
   out.set_data_address(std::move(data_address));
 
   // Other Addresses
   thrift::Addresses other_addresses;
   thrift::SocketAddress gossip_address;
-  fillSocketAddress(gossip_address, node.gossip_address);
+  fillSocketAddress(gossip_address, node_sd->gossip_address);
   other_addresses.set_gossip(std::move(gossip_address));
-  if (node.ssl_address) {
+  if (node_sd->ssl_address) {
     thrift::SocketAddress ssl_address;
-    fillSocketAddress(ssl_address, node.ssl_address.value());
+    fillSocketAddress(ssl_address, node_sd->ssl_address.value());
     other_addresses.set_ssl(std::move(ssl_address));
   }
   out.set_other_addresses(std::move(other_addresses));
@@ -184,11 +204,12 @@ void fillSocketAddress(thrift::SocketAddress& out, const Sockaddr& addr) {
   }
 }
 
-void fillNodeState(thrift::NodeState& out,
-                   node_index_t node_index,
-                   const Node& node,
-                   const EventLogRebuildingSet* rebuilding_set,
-                   const ClusterState* cluster_state) {
+void fillNodeState(
+    thrift::NodeState& out,
+    node_index_t node_index,
+    const configuration::nodes::NodesConfiguration& nodes_configuration,
+    const EventLogRebuildingSet* rebuilding_set,
+    const ClusterState* cluster_state) {
   out.set_node_index(node_index);
 
   if (cluster_state) {
@@ -210,11 +231,17 @@ void fillNodeState(thrift::NodeState& out,
     out.set_daemon_state(daemon_state);
   }
 
+  const auto* node_sd = nodes_configuration.getNodeServiceDiscovery(node_index);
+  // caller should ensure node_index exists in nodes_configuration
+  ld_check(node_sd != nullptr);
+
   // Sequencer State
-  if (node.hasRole(NodeRole::SEQUENCER)) {
+  if (node_sd->hasRole(nodes::NodeRole::SEQUENCER)) {
     thrift::SequencerState sequencer;
     thrift::SequencingState state = thrift::SequencingState::DISABLED;
-    if (node.isSequencingEnabled()) {
+    const auto& seq_membership = nodes_configuration.getSequencerMembership();
+
+    if (seq_membership->isSequencingEnabled(node_index)) {
       state = thrift::SequencingState::ENABLED;
       // let's see if we have a failure-detector state about this sequencer
       if (cluster_state && cluster_state->isNodeBoycotted(node_index)) {
@@ -227,19 +254,33 @@ void fillNodeState(thrift::NodeState& out,
   }
 
   // Storage State
-  if (node.hasRole(NodeRole::STORAGE)) {
+  if (node_sd->hasRole(nodes::NodeRole::STORAGE)) {
+    const auto& storage_membership = nodes_configuration.getStorageMembership();
     std::vector<thrift::ShardState> shard_states;
-    for (int shard_index = 0; shard_index < node.getNumShards();
+    for (int shard_index = 0;
+         shard_index < nodes_configuration.getNumShards(node_index);
          shard_index++) {
-      // For every shard.
+      // For every shard in storage membership
+      ShardID shard(node_index, shard_index);
+      auto result = storage_membership->getShardState(shard);
+      if (!result.first) {
+        // shard does not exist in membership
+        continue;
+      }
+
+      // TODO T41895204: use cluster membership in admin api thrift interfaces
+      const auto legacy_storage_state =
+          configuration::nodes::NodesConfigLegacyConverter::
+              toLegacyStorageState(result.second.storage_state);
+
       thrift::ShardState state;
       auto node_info = rebuilding_set
           ? rebuilding_set->getNodeInfo(node_index, shard_index)
           : nullptr;
       state.set_current_storage_state(
-          toThrift<thrift::ShardStorageState>(node.getStorageState()));
+          toThrift<thrift::ShardStorageState>(legacy_storage_state));
       state.set_current_operational_state(
-          toShardOperationalState(node.getStorageState(), node_info));
+          toShardOperationalState(legacy_storage_state, node_info));
       AuthoritativeStatus auth_status =
           AuthoritativeStatus::FULLY_AUTHORITATIVE;
       bool has_dirty_ranges = false;
@@ -254,16 +295,18 @@ void fillNodeState(thrift::NodeState& out,
   }
 }
 
-ShardSet resolveShardOrNode(const thrift::ShardID& shard,
-                            const configuration::Nodes& nodes) {
+ShardSet resolveShardOrNode(
+    const thrift::ShardID& shard,
+    const configuration::nodes::NodesConfiguration& nodes_configuration) {
   ShardSet output;
 
+  const auto& serv_disc = nodes_configuration.getServiceDiscovery();
   shard_index_t shard_index = (shard.shard_index < 0) ? -1 : shard.shard_index;
   shard_size_t num_shards = 1;
   node_index_t node_index = -1;
   if (shard.get_node().get_node_index()) {
     node_index = *shard.get_node().get_node_index();
-    if (node_index >= nodes.size()) {
+    if (node_index >= nodes_configuration.clusterSize()) {
       // We didn't find the node.
       thrift::InvalidRequest err;
       err.set_message(
@@ -273,16 +316,17 @@ ShardSet resolveShardOrNode(const thrift::ShardID& shard,
               .str());
       throw err;
     }
-    num_shards = nodes.at(node_index).getNumShards();
+    num_shards = nodes_configuration.getNumShards(node_index);
   } else if (shard.get_node().get_address()) {
     // resolve the node index from the nodes configuration.
-    for (const auto& it : nodes) {
-      if (match_by_address(it.second, shard.get_node().get_address())) {
-        node_index = it.first;
-        num_shards = it.second.getNumShards();
+    for (const auto& kv : *serv_disc) {
+      if (match_by_address(kv.second, shard.get_node().get_address())) {
+        node_index = kv.first;
+        num_shards = nodes_configuration.getNumShards(node_index);
         break;
       }
     }
+
     // We didn't find the node.
     thrift::InvalidRequest err;
     err.set_message(
@@ -307,11 +351,12 @@ ShardSet resolveShardOrNode(const thrift::ShardID& shard,
   return output;
 }
 
-ShardSet expandShardSet(const thrift::ShardSet& thrift_shards,
-                        const configuration::Nodes& nodes) {
+ShardSet expandShardSet(
+    const thrift::ShardSet& thrift_shards,
+    const configuration::nodes::NodesConfiguration& nodes_configuration) {
   ShardSet output;
   for (const auto& it : thrift_shards) {
-    ShardSet expanded = resolveShardOrNode(it, nodes);
+    ShardSet expanded = resolveShardOrNode(it, nodes_configuration);
     output.merge(expanded);
   }
   return output;

@@ -22,10 +22,9 @@
 namespace facebook { namespace logdevice { namespace configuration {
 namespace nodes {
 
-namespace {
-
-membership::StorageState
-fromLegacyStorageState(configuration::StorageState ls) {
+/*static*/
+membership::StorageState NodesConfigLegacyConverter::fromLegacyStorageState(
+    configuration::StorageState ls) {
   switch (ls) {
     case configuration::StorageState::READ_WRITE:
       return membership::StorageState::READ_WRITE;
@@ -38,7 +37,9 @@ fromLegacyStorageState(configuration::StorageState ls) {
   return membership::StorageState::INVALID;
 }
 
-configuration::StorageState toLegacyStorageState(membership::StorageState ss) {
+/*static*/
+configuration::StorageState
+NodesConfigLegacyConverter::toLegacyStorageState(membership::StorageState ss) {
   switch (ss) {
     case membership::StorageState::NONE:
       return configuration::StorageState::DISABLED;
@@ -58,8 +59,6 @@ configuration::StorageState toLegacyStorageState(membership::StorageState ss) {
   ld_check(false);
   return configuration::StorageState::DISABLED;
 }
-
-} // namespace
 
 /*static*/
 int NodesConfigLegacyConverter::toLegacyNodesConfig(

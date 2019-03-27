@@ -20,6 +20,7 @@
 #include "logdevice/common/SocketTypes.h"
 #include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/common/configuration/ReplicationProperty.h"
+#include "logdevice/common/configuration/nodes/NodeRole.h"
 
 #define NUM_ROLES 2
 
@@ -59,6 +60,13 @@ enum class NodeRole : unsigned int {
   // and deliver them to log readers
   STORAGE,
 };
+
+static_assert((size_t)NodeRole::SEQUENCER == (size_t)nodes::NodeRole::SEQUENCER,
+              "NodeRole value mismatch between old and new nodes configuration "
+              "definition.");
+static_assert((size_t)NodeRole::STORAGE == (size_t)nodes::NodeRole::STORAGE,
+              "NodeRole value mismatch between old and new nodes configuration "
+              "definition.");
 
 std::string toString(NodeRole& v);
 bool nodeRoleFromString(const std::string&, NodeRole* out);

@@ -31,6 +31,10 @@
 
 namespace facebook { namespace logdevice {
 
+namespace configuration { namespace nodes {
+class NodesConfiguration;
+}} // namespace configuration::nodes
+
 class Configuration;
 
 /**
@@ -308,15 +312,17 @@ class EventLogRebuildingSet {
 
   /**
    * Create a ShardAuthoritativeStatusMap object from this rebuilding set.
-   * @param nodes      Node configuration of the cluster. EventLogRebuildingSet
+   * @param nodes_configuration
+   *                   Node configuration of the cluster. EventLogRebuildingSet
    *                   keeps track of the list of nodes that sent a
-   *                   SHARD_IS_REBUILT event. This node config is used to
-   *                   determined when rebuilding of a shard completed by
+   *                   SHARD_IS_REBUILT event. This node configuration is used
+   *                   to determined when rebuilding of a shard completed by
    *                   comparing the list of nodes that sent SHARD_IS_REBUILT
    *                   with it.
    */
-  ShardAuthoritativeStatusMap
-  toShardStatusMap(const configuration::Nodes& nodes) const;
+  ShardAuthoritativeStatusMap toShardStatusMap(
+      const configuration::nodes::NodesConfiguration& nodes_configuration)
+      const;
 
   void recomputeAuthoritativeStatus(uint32_t shard,
                                     std::chrono::milliseconds timestamp,

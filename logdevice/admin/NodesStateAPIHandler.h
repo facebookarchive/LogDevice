@@ -27,9 +27,6 @@ class NodesStateAPIHandler : public virtual AdminAPIHandlerBase {
                 std::unique_ptr<thrift::NodesStateRequest> request) override;
 
  private:
-  void toNodeState(thrift::NodeState& out,
-                   thrift::NodeIndex index,
-                   const configuration::Node& node,
-                   bool force);
+  void toNodeState(thrift::NodeState& out, thrift::NodeIndex index, bool force);
 };
 }} // namespace facebook::logdevice
