@@ -53,8 +53,6 @@ target_link_libraries(common_test_util
 
 add_dependencies(common_test_util googletest folly rocksdb OpenTracing)
 
-set(test_files ${test_files} ${LOGDEVICE_DIR}/external/folly/folly/test/DeterministicSchedule.cpp)
-set(test_files ${test_files} ${LOGDEVICE_DIR}/external/folly/folly/test/JsonTestUtil.cpp)
 
 add_executable(common_test ${test_hfiles} ${test_files})
 add_dependencies(common_test googletest folly)
@@ -62,6 +60,7 @@ target_link_libraries(common_test
   common
   common_test_util
   ${LOGDEVICE_EXTERNAL_DEPS}
+  ${FOLLY_TEST_UTIL_LIBRARIES}
   ${GMOCK_LIBRARY}
   ${GTEST_LIBRARY}
   ${LIBGFLAGS_LIBRARY})

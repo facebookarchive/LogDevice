@@ -28,6 +28,8 @@ set(FOLLY_LIBRARIES
     ${BINARY_DIR}/libfolly.a)
 set(FOLLY_BENCHMARK_LIBRARIES
     ${BINARY_DIR}/folly/libfollybenchmark.a)
+set(FOLLY_TEST_UTIL_LIBRARIES
+    ${BINARY_DIR}/libfolly_test_util.a)
 
 set(FOLLY_INCLUDE_DIR ${SOURCE_DIR})
 message(STATUS "Folly Library: ${FOLLY_LIBRARIES}")

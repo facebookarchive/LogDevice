@@ -40,14 +40,49 @@ include (logdevice-functions)
 
 include(build-config)
 
-include(build-folly)
-include(build-fizz)
-include(build-wangle)
-include(build-fbthrift)
+option(BUILD_SUBMODULES "Build using Git submodules, to fulfill dependencies" ON)
+if(${BUILD_SUBMODULES})
+  include(build-rocksdb)
+  include(build-folly)
+  include(build-fizz)
+  include(build-wangle)
+  include(build-fbthrift)
+  include(${LOGDEVICE_DIR}/external/fbthrift/ThriftLibrary.cmake)
+else()
+  find_package(RocksDB CONFIG REQUIRED)
+  set(ROCKSDB_LIBRARIES RocksDB::rocksdb)
+  find_package(folly CONFIG REQUIRED)
+  set(FOLLY_LIBRARIES Folly::folly)
+  set(FOLLY_BENCHMARK_LIBRARIES Folly::follybenchmark)
+  set(FOLLY_TEST_UTIL_LIBRARIES Folly::folly_test_util)
+  find_package(fizz CONFIG REQUIRED)
+  find_package(wangle CONFIG REQUIRED)
+  find_package(FBThrift CONFIG REQUIRED)
+  find_program(THRIFT1 thrift1)
+  find_path(THRIFT_COMPILER_INCLUDE thrift/templates)
+  set(THRIFT_TEMPLATES ${THRIFT_COMPILER_INCLUDE}/thrift/templates)
+  set(FBTHRIFT_LIBRARIES
+    FBThrift::protocol
+    FBThrift::thriftprotocol
+    FBThrift::transport
+    FBThrift::concurrency
+    FBThrift::thriftfrozen2
+    FBThrift::async
+    FBThrift::thrift-core
+    FBThrift::thriftcpp2
+    FBThrift::thrift
+  )
+  include(${THRIFT_COMPILER_INCLUDE}/thrift/ThriftLibrary.cmake)
 
-include(${LOGDEVICE_DIR}/external/fbthrift/ThriftLibrary.cmake)
+  # If we are not building the submodules, replace targets with fake targets so
+  # that later rules know they are already fulfilled.
+  add_custom_target(rocksdb)
+  add_custom_target(folly)
+  add_custom_target(fizz)
+  add_custom_target(wangle)
+  add_custom_target(fbthrift)
+endif()
 
-include(build-rocksdb)
 include(build-docs)
 include(logdevice-deps)
 
