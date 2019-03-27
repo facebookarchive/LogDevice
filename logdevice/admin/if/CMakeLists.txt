@@ -116,4 +116,21 @@ add_dependencies(admin-${_lang}-target
                  safety-${_lang}-target
                  maintenance-${_lang}-target
                  settings-${_lang}-target)
+
+add_dependencies(exceptions-${_lang}-target
+                 common-${_lang}-target)
+add_dependencies(logtree-${_lang}-target
+                 common-${_lang}-target)
+add_dependencies(maintenance-${_lang}-target
+                 common-${_lang}-target
+                 nodes-${_lang}-target
+                 safety-${_lang}-target)
+add_dependencies(nodes-${_lang}-target
+                 common-${_lang}-target)
+add_dependencies(safety-${_lang}-target
+                 common-${_lang}-target
+                 nodes-${_lang}-target)
+add_dependencies(settings-${_lang}-target
+                 common-${_lang}-target)
+
 endforeach()
