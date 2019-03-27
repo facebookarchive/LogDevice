@@ -31,4 +31,28 @@ static_assert(sizeof(MessageType) == 1, "MessageType must be 1 byte");
   static_assert(num != 'Y', "Message key Y is deprecated");
 #include "logdevice/common/message_types.inc"
 
+constexpr bool isHELLOMessage(MessageType type) {
+  return type == MessageType::HELLO;
+}
+
+constexpr bool isACKMessage(MessageType type) {
+  return type == MessageType::ACK;
+}
+
+constexpr bool isHandshakeMessage(MessageType type) {
+  return isHELLOMessage(type) || isACKMessage(type);
+}
+
+constexpr bool isConfigSynchronizationMessage(MessageType type) {
+  return type == MessageType::CONFIG_ADVISORY ||
+      type == MessageType::CONFIG_CHANGED || type == MessageType::CONFIG_FETCH;
+}
+
+constexpr bool allowedOnGossipConnection(MessageType type) {
+  return type == MessageType::GOSSIP ||
+      type == MessageType::GET_CLUSTER_STATE ||
+      type == MessageType::GET_CLUSTER_STATE_REPLY ||
+      isHandshakeMessage(type) || isConfigSynchronizationMessage(type);
+}
+
 }} // namespace facebook::logdevice

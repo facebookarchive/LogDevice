@@ -2134,7 +2134,7 @@ int Socket::receiveMessage() {
      */
     if (type_ == SocketType::GOSSIP) {
       if (!(msg->type_ == MessageType::SHUTDOWN ||
-            Socket::allowedOnGossipConnection(msg->type_))) {
+            allowedOnGossipConnection(msg->type_))) {
         RATELIMIT_WARNING(std::chrono::seconds(1),
                           1,
                           "Received invalid message(%u) on gossip socket",

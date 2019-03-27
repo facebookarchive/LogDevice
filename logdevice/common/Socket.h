@@ -514,32 +514,6 @@ class Socket : public TrafficShappingSocket {
 
   const Settings& getSettings();
 
-  static bool isHELLOMessage(MessageType type) {
-    return type == MessageType::HELLO;
-  }
-
-  static bool isACKMessage(MessageType type) {
-    return type == MessageType::ACK;
-  }
-
-  static bool isHandshakeMessage(MessageType type) {
-    return isHELLOMessage(type) || isACKMessage(type);
-  }
-
-  static bool isConfigSynchronizationMessage(MessageType type) {
-    return type == MessageType::CONFIG_ADVISORY ||
-        type == MessageType::CONFIG_CHANGED ||
-        type == MessageType::CONFIG_FETCH;
-  }
-
-  static bool allowedOnGossipConnection(MessageType type) {
-    return type == MessageType::GOSSIP ||
-        type == MessageType::GET_CLUSTER_STATE ||
-        type == MessageType::GET_CLUSTER_STATE_REPLY ||
-        Socket::isHandshakeMessage(type) ||
-        Socket::isConfigSynchronizationMessage(type);
-  }
-
   /**
    * The amount of bytes waiting to be sent on this socket.
    */

@@ -387,8 +387,8 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
 
   // If the message is neither a handshake message nor a config sychronization
   // message, we need to update the client config version on the socket.
-  if (!Socket::isHandshakeMessage(msg->type_) &&
-      !Socket::isConfigSynchronizationMessage(msg->type_) &&
+  if (!isHandshakeMessage(msg->type_) &&
+      !isConfigSynchronizationMessage(msg->type_) &&
       Worker::settings().enable_config_synchronization) {
     int rv = notifyPeerConfigUpdated(*sock);
     if (rv != 0) {
@@ -440,7 +440,7 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
 
   /* verify that we only send allowed messages via gossip socket */
   if (is_gossip_sender_) {
-    if (!Socket::allowedOnGossipConnection(msg->type_)) {
+    if (!allowedOnGossipConnection(msg->type_)) {
       RATELIMIT_WARNING(std::chrono::seconds(1),
                         1,
                         "Unexpected msg type:%u",
@@ -952,7 +952,7 @@ Socket* FOLLY_NULLABLE Sender::getSocket(const NodeID& nid,
 
   SocketType sock_type;
   if (is_gossip_sender_) {
-    ld_check(Socket::allowedOnGossipConnection(msg.type_));
+    ld_check(allowedOnGossipConnection(msg.type_));
     sock_type = SocketType::GOSSIP;
   } else {
     sock_type = SocketType::DATA;
