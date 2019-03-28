@@ -11,13 +11,12 @@ namespace py3 logdevice.admin
 namespace php LogDevice
 namespace wiki LogDevice.Common
 
-/*
+/**
  * Because thrift doesn't have a u64.
  */
 typedef i64 /* (cpp.type = "std::uint64_t") */ unsigned64
 typedef string MaintenanceGroupID
 
-// *** Cluster Topology
 /**
  * A Socket object is the identifier for a specific node on the cluster from the
  * Admin API point of view. This is basically a hostname and port pair. You can

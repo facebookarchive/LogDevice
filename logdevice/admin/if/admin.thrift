@@ -41,7 +41,7 @@ service AdminAPI extends fb303.FacebookService {
    nodes.NodesStateResponse getNodesState(1: nodes.NodesStateRequest request) throws
       (1: exceptions.NodeNotReady notready);
 
-  /*
+  /**
    * Lists the maintenance by group-ids.
    */
   maintenance.MaintenanceDefinitionResponse getMaintenances(1:
@@ -51,7 +51,7 @@ service AdminAPI extends fb303.FacebookService {
        3: exceptions.InvalidRequest invalid_request,
        4: exceptions.OperationError error);
 
-  /*
+  /**
    * Perform a maintenance on one or more nodes/shards declaratively. The
    * operation is accepted only if no other maintenance with different target
    * is set by the same user for _any_ of the shards/nodes passed.
@@ -75,7 +75,7 @@ service AdminAPI extends fb303.FacebookService {
        4: exceptions.MaintenanceClash clash,
        5: exceptions.OperationError operation_error);
 
-  /*
+  /**
    * Cancels a maintenance that has been scheduled or executed on one or more
    * shards/nodes. If the removed maintenance is the current active
    * maintenance, the MaintenanceManager will trigger a transition to
@@ -93,7 +93,7 @@ service AdminAPI extends fb303.FacebookService {
        3: exceptions.InvalidRequest invalid_request,
        4: exceptions.OperationError operation_error);
 
-  /*
+  /**
    * Call this if rebuilding is currently blocked because we have too many
    * donors. Calling this will unblock rebuilding by declaring that we have
    * PERMANENTLY LOST DATA and LogDevice will unblock readers waiting for these
@@ -108,7 +108,9 @@ service AdminAPI extends fb303.FacebookService {
      3: exceptions.OperationError operation_error);
 
   /**
-   * Safety check an operation.
+   * Validates whether it's safe to perform a storage-state change on one or
+   * more shards or not. That operation does and exhaustive test on all the
+   * configured logs.
    */
   safety.CheckImpactResponse checkImpact(1: safety.CheckImpactRequest request) throws
       (1: exceptions.NodeNotReady notready,

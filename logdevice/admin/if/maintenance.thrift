@@ -132,8 +132,10 @@ struct MaintenanceDefinition {
    * will be returned in this object to help the user understand why.
    */
   14: optional safety.CheckImpactResponse last_check_impact_result,
-  // This field is populated by the server, it's the timestamp that this
-  // maintenance will expire based on server time.
+  /**
+   * This field is populated by the server, it's the timestamp that this
+   * maintenance will expire based on server time.
+   */
   15: optional common.Timestamp expires_on,
   /**
    * Timestamp at which the maintenance was first requested
@@ -180,7 +182,7 @@ struct RemoveMaintenancesRequest {
    * pass -1 to shard_index.
    */
   2: list<common.ShardID> shards,
-  /*
+  /**
    * The list of nodes we want to remove sequencer maintenance applied by this
    * user.
    */
@@ -193,34 +195,34 @@ struct RemoveMaintenancesRequest {
    * maintenances.
    */
   4: list<common.MaintenanceGroupID> group_ids,
-  /*
+  /**
    * Optional: The reason of removing the maintenance, this is used for
    * maintenance auditing and logging.
    */
   5: optional string reason,
 }
 
-/*
+/**
  * Left empty for future use.
  */
 struct RemoveMaintenancesResponse {}
 
 struct MaintenancesFilter {
-  /*
+  /**
    * If empty, will get all maintenances unless another filter is specified
    */
   1: list<common.MaintenanceGroupID> group_ids,
-  /*
+  /**
    * If set, gets maintenances created by this user
    */
   2: optional string user,
 }
 
-/*
+/**
  * See unblockRebuilding() for documentation.
  */
 struct UnblockRebuildingRequest {
-  /*
+  /**
    * This information will be used for auditing purposes
    */
   1: string user,

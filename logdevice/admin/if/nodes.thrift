@@ -314,7 +314,7 @@ enum SequencingState {
 struct SequencerState {
   1: SequencingState state,
   2: optional common.Timestamp sequencer_state_last_updated,
-  /*
+  /**
    * If there are maintenance applied on this sequencer.
    */
   3: optional SequencerMaintenanceProgress maintenance,
