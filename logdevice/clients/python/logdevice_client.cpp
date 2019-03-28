@@ -390,9 +390,9 @@ template <class DurationClass>
 std::string chrono_to_string(DurationClass duration) {
   std::chrono::milliseconds input =
       std::chrono::duration_cast<std::chrono::milliseconds>(duration);
-  if (input.count() >= HOUR) {
+  if (input.count() >= HOUR && input.count() % HOUR == 0) {
     return chrono_string(std::chrono::duration_cast<std::chrono::hours>(input));
-  } else if (input.count() >= MINUTE) {
+  } else if (input.count() >= MINUTE && input.count() % MINUTE == 0) {
     return chrono_string(
         std::chrono::duration_cast<std::chrono::minutes>(input));
   } else if (input.count() >= SECOND) {
