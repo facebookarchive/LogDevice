@@ -6,13 +6,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 include "common/fb303/if/fb303.thrift"
-include "common.thrift"
-include "exceptions.thrift"
-include "logtree.thrift"
-include "maintenance.thrift"
-include "nodes.thrift"
-include "safety.thrift"
-include "settings.thrift"
+include "logdevice/admin/if/common.thrift"
+include "logdevice/admin/if/exceptions.thrift"
+include "logdevice/admin/if/logtree.thrift"
+include "logdevice/admin/if/maintenance.thrift"
+include "logdevice/admin/if/nodes.thrift"
+include "logdevice/admin/if/safety.thrift"
+include "logdevice/admin/if/settings.thrift"
 
 namespace cpp2 facebook.logdevice.thrift
 namespace py3 logdevice

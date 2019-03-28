@@ -82,7 +82,7 @@ ShardSet expandShardSet(
     bool ignore_missing = false);
 
 thrift::ShardOperationalState
-toShardOperationalState(configuration::StorageState storage_state,
+toShardOperationalState(membership::StorageState storage_state,
                         const EventLogRebuildingSet::NodeInfo* node_info);
 
 }} // namespace facebook::logdevice

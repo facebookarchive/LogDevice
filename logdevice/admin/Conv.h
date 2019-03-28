@@ -12,6 +12,7 @@
 #include "logdevice/admin/safety/SafetyAPI.h"
 #include "logdevice/common/configuration/Node.h"
 #include "logdevice/common/configuration/nodes/NodeRole.h"
+#include "logdevice/common/membership/StorageState.h"
 #include "logdevice/include/NodeLocationScope.h"
 
 namespace facebook { namespace logdevice {
@@ -26,8 +27,18 @@ template <typename ThriftType, typename LDType>
 ThriftType toThrift(const LDType& input);
 
 /** Specializations **/
+
+/// DEPRECATED
 template <>
 thrift::ShardStorageState toThrift(const configuration::StorageState& input);
+
+template <>
+membership::thrift::StorageState
+toThrift(const membership::StorageState& input);
+
+template <>
+membership::thrift::MetaDataStorageState
+toThrift(const membership::MetaDataStorageState& input);
 
 template <>
 thrift::Role toThrift(const configuration::NodeRole& role);
@@ -58,8 +69,17 @@ LDType toLogDevice(const ThriftType& input);
 template <>
 configuration::nodes::NodeRole toLogDevice(const thrift::Role& role);
 
+// DEPRECATED
 template <>
 configuration::StorageState toLogDevice(const thrift::ShardStorageState& input);
+
+template <>
+membership::StorageState
+toLogDevice(const membership::thrift::StorageState& input);
+
+template <>
+membership::MetaDataStorageState
+toLogDevice(const membership::thrift::MetaDataStorageState& input);
 
 template <>
 NodeLocationScope toLogDevice(const thrift::LocationScope& input);

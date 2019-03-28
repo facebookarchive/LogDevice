@@ -8,7 +8,14 @@
 
 #include "logdevice/admin/Conv.h"
 
-using namespace facebook::logdevice::configuration;
+using namespace facebook::logdevice;
+using facebook::logdevice::configuration::nodes::NodeRole;
+using facebook::logdevice::membership::MetaDataStorageState;
+using TMetaDataStorageState =
+    facebook::logdevice::membership::thrift::MetaDataStorageState;
+using facebook::logdevice::membership::StorageState;
+using TStorageState = facebook::logdevice::membership::thrift::StorageState;
+
 namespace facebook { namespace logdevice {
 
 template <>
@@ -17,6 +24,8 @@ thrift::Role toThrift(const NodeRole& role) {
     case NodeRole::SEQUENCER:
       return thrift::Role::SEQUENCER;
     case NodeRole::STORAGE:
+      return thrift::Role::STORAGE;
+    default:
       return thrift::Role::STORAGE;
   }
   ld_check(false);
@@ -50,36 +59,61 @@ configuration::nodes::NodeRole toLogDevice(const thrift::Role& role) {
   return configuration::nodes::NodeRole::SEQUENCER;
 }
 
+// DEPRECATED
 template <>
-thrift::ShardStorageState toThrift(const StorageState& storage_state) {
+thrift::ShardStorageState
+toThrift(const configuration::StorageState& storage_state) {
   switch (storage_state) {
-    case StorageState::DISABLED:
+    case configuration::StorageState::DISABLED:
       return thrift::ShardStorageState::DISABLED;
-    case StorageState::READ_ONLY:
+    case configuration::StorageState::READ_ONLY:
       return thrift::ShardStorageState::READ_ONLY;
-    case StorageState::READ_WRITE:
+    case configuration::StorageState::READ_WRITE:
       return thrift::ShardStorageState::READ_WRITE;
   }
   ld_check(false);
   return thrift::ShardStorageState::DISABLED;
 }
 
+// DEPRECATED
 template <>
 configuration::StorageState
 toLogDevice(const thrift::ShardStorageState& storage_state) {
   switch (storage_state) {
     case thrift::ShardStorageState::DISABLED:
-      return StorageState::DISABLED;
-    // TODO: Data migration needs to be handled when we move to
-    // NodesConfiguration.
+      return configuration::StorageState::DISABLED;
     case thrift::ShardStorageState::DATA_MIGRATION:
     case thrift::ShardStorageState::READ_ONLY:
-      return StorageState::READ_ONLY;
+      return configuration::StorageState::READ_ONLY;
     case thrift::ShardStorageState::READ_WRITE:
-      return StorageState::READ_WRITE;
+      return configuration::StorageState::READ_WRITE;
   }
   ld_check(false);
-  return StorageState::DISABLED;
+  return configuration::StorageState::DISABLED;
+}
+
+// From Membership.thrift
+template <>
+TStorageState toThrift(const StorageState& storage_state) {
+  return static_cast<TStorageState>(storage_state);
+}
+
+// From Membership.thrift
+template <>
+StorageState toLogDevice(const TStorageState& storage_state) {
+  return static_cast<StorageState>(storage_state);
+}
+
+// From Membership.thrift
+template <>
+TMetaDataStorageState toThrift(const MetaDataStorageState& storage_state) {
+  return static_cast<TMetaDataStorageState>(storage_state);
+}
+
+// From Membership.thrift
+template <>
+MetaDataStorageState toLogDevice(const TMetaDataStorageState& storage_state) {
+  return static_cast<MetaDataStorageState>(storage_state);
 }
 
 template <>

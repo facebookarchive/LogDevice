@@ -128,13 +128,19 @@ void forFilteredNodes(
   }
 }
 
+// TODO: Deprecate and use Maintenance Manager instead.
 thrift::ShardOperationalState
-toShardOperationalState(StorageState storage_state,
+toShardOperationalState(membership::StorageState storage_state,
                         const EventLogRebuildingSet::NodeInfo* node_info) {
   switch (storage_state) {
-    case StorageState::DISABLED:
+    case membership::StorageState::INVALID:
+      return thrift::ShardOperationalState::INVALID;
+    case membership::StorageState::NONE:
       return thrift::ShardOperationalState::DRAINED;
-    case StorageState::READ_ONLY:
+    case membership::StorageState::NONE_TO_RO:
+    case membership::StorageState::RW_TO_RO:
+    case membership::StorageState::DATA_MIGRATION:
+    case membership::StorageState::READ_ONLY:
       // The node will be in READ_ONLY if we are draining.
       if (node_info && node_info->drain) {
         if (node_info->auth_status ==
@@ -146,7 +152,7 @@ toShardOperationalState(StorageState storage_state,
         }
       }
       return thrift::ShardOperationalState::ENABLED;
-    case StorageState::READ_WRITE:
+    case membership::StorageState::READ_WRITE:
       return thrift::ShardOperationalState::ENABLED;
   }
   ld_check(false);
@@ -285,7 +291,6 @@ void fillNodeState(
         continue;
       }
 
-      // TODO T41895204: use cluster membership in admin api thrift interfaces
       const auto legacy_storage_state =
           configuration::nodes::NodesConfigLegacyConverter::
               toLegacyStorageState(result.second.storage_state);
@@ -294,10 +299,19 @@ void fillNodeState(
       auto node_info = rebuilding_set
           ? rebuilding_set->getNodeInfo(node_index, shard_index)
           : nullptr;
+      // DEPRECATED
       state.set_current_storage_state(
           toThrift<thrift::ShardStorageState>(legacy_storage_state));
+
+      state.set_storage_state(toThrift<membership::thrift::StorageState>(
+          result.second.storage_state));
+
+      state.set_metadata_state(
+          toThrift<membership::thrift::MetaDataStorageState>(
+              result.second.metadata_state));
+
       state.set_current_operational_state(
-          toShardOperationalState(legacy_storage_state, node_info));
+          toShardOperationalState(result.second.storage_state, node_info));
       AuthoritativeStatus auth_status =
           AuthoritativeStatus::FULLY_AUTHORITATIVE;
       bool has_dirty_ranges = false;

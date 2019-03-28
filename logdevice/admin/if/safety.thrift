@@ -6,8 +6,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-include "common.thrift"
-include "nodes.thrift"
+include "logdevice/admin/if/common.thrift"
+include "logdevice/admin/if/nodes.thrift"
 
 namespace cpp2 facebook.logdevice.thrift
 namespace py3 logdevice.admin

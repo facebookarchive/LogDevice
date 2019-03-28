@@ -6,7 +6,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-include "common.thrift"
+include "logdevice/admin/if/common.thrift"
+
+include "logdevice/common/membership/Membership.thrift"
 
 namespace cpp2 facebook.logdevice.thrift
 namespace py3 logdevice.admin
@@ -247,7 +249,7 @@ enum ShardOperationalState {
 }
 
 /**
- * ShardStorageState represents the active storage state of a shard.
+ * [DEPRECATED] IN FAVOR OF Membership.StorageState
  */
 enum ShardStorageState {
   DISABLED = 0,
@@ -266,8 +268,7 @@ struct ShardState {
    */
   1: ShardDataHealth data_health,
   /**
-   * Reflects whether storage on this node is currently DISABLED, READ_ONLY, or
-   * READ_WRITE
+   * [DEPRECATED]. Will be removed once callers move to storage_state instead.
    */
   2: ShardStorageState current_storage_state,
   /**
@@ -279,6 +280,15 @@ struct ShardState {
    * If there are maintenance applied on this shard.
    */
   4: optional ShardMaintenanceProgress maintenance,
+  /*
+   * The current membership storage state.
+   */
+  5: Membership.StorageState storage_state,
+  /*
+   * The current membership metadata storage state. If set to
+   * MetaDataStorageState.METADATA Then this shard is in the metadata nodeset.
+   */
+  6: Membership.MetaDataStorageState metadata_state,
 }
 
 /**
