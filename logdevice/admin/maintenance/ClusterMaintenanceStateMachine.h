@@ -7,108 +7,53 @@
  */
 #pragma once
 
-#include "logdevice/admin/maintenance/ClusterMaintenanceLogRecord.h"
-#include "logdevice/admin/maintenance/MaintenanceTransitionStatus.h"
-#include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/admin/maintenance/gen-cpp2/MaintenanceDelta_types.h"
+#include "logdevice/admin/settings/AdminServerSettings.h"
 #include "logdevice/common/replicated_state_machine/ReplicatedStateMachine.h"
 
 /**
- * ClusterMaintenanceState is the state maintained by
-
- * ClusterMaintenanceStateMachine. ClusterMaintenanceState keeps track
- * of any pending Sequencer/Shard maintenances
+ * ClusterMaintenanceState is the state maintained by this replicated state
+ * machine. ClusterMaintenanceState keeps track of any defined maintenance on
+ * sequencers and shards.
  *
  * The state machine is backed by maintenance delta log.
  */
 
 namespace facebook { namespace logdevice {
+extern template class ReplicatedStateMachine<thrift::ClusterMaintenanceState,
+                                             maintenance::MaintenanceDelta>;
+}} // namespace facebook::logdevice
 
-class ClusterMaintenanceState {
- public:
-  explicit ClusterMaintenanceState(lsn_t version)
-      : last_seen_lsn_(version), last_applied_lsn_(version) {}
-
-  // Metadata we maintain for every shard/sequencer
-  // maintenance.
-  struct MaintenanceMetadata {
-    std::string user_id;
-    std::string reason;
-    RecordTimestamp created_on;
-    membership::MaintenanceID::Type maintenance_id;
-  };
-
-  struct SequencerMaintenance : MaintenanceMetadata {
-    SequencingState target_sequencing_state;
-    bool operator<(const SequencerMaintenance& rhs) const {
-      if (target_sequencing_state == rhs.target_sequencing_state) {
-        return maintenance_id < rhs.maintenance_id;
-      }
-      return target_sequencing_state > rhs.target_sequencing_state;
-    }
-  };
-
-  struct ShardMaintenance : MaintenanceMetadata {
-   public:
-    explicit ShardMaintenance(ShardOperationalState target)
-        : target_operational_state(target) {}
-    ShardOperationalState target_operational_state;
-    bool operator<(const ShardMaintenance& rhs) const {
-      if (target_operational_state == rhs.target_operational_state) {
-        return maintenance_id < rhs.maintenance_id;
-      }
-      return target_operational_state > rhs.target_operational_state;
-    }
-  };
-
-  using PendingSequencerMaintenanceSet = std::set<SequencerMaintenance>;
-  using PendingShardMaintenanceSet = std::set<ShardMaintenance>;
-
-  int update(const MaintenanceLogDeltaRecord& delta,
-             lsn_t version,
-             std::chrono::milliseconds timestamp);
-
-  std::unordered_map<ShardID, PendingShardMaintenanceSet, ShardID::Hash>
-      storage_maintenance;
-  std::unordered_map<node_index_t, PendingSequencerMaintenanceSet>
-      sequencer_maintenance;
-
- private:
-  // Useful for debugging purposes
-  // The lsn of the delta log record that was last delivered from log
-  lsn_t last_seen_lsn_;
-  // The lsn of the delta log record that resulted in state being updated
-  // successfully
-  lsn_t last_applied_lsn_;
-};
-
-extern template class ReplicatedStateMachine<ClusterMaintenanceState,
-                                             MaintenanceLogDeltaRecord>;
+namespace facebook { namespace logdevice { namespace maintenance {
 
 class ClusterMaintenanceStateMachine
-    : public ReplicatedStateMachine<ClusterMaintenanceState,
-                                    MaintenanceLogDeltaRecord> {
+    : public facebook::logdevice::ReplicatedStateMachine<
+          thrift::ClusterMaintenanceState,
+          MaintenanceDelta> {
  public:
-  using Base = ReplicatedStateMachine<ClusterMaintenanceState,
-                                      MaintenanceLogDeltaRecord>;
+  using ClusterMaintenanceState = thrift::ClusterMaintenanceState;
+  using Base =
+      facebook::logdevice::ReplicatedStateMachine<ClusterMaintenanceState,
+                                                  MaintenanceDelta>;
 
   explicit ClusterMaintenanceStateMachine(
-      UpdateableSettings<Settings> settings);
+      UpdateableSettings<AdminServerSettings> settings);
 
   /**
    * Start reading the maintenance log
    */
   void start();
 
-  const ClusterMaintenanceState& getCurrentState() const {
+  const thrift::ClusterMaintenanceState& getCurrentState() const {
     return getState();
   }
 
-  static int serializeDelta(const MaintenanceLogDeltaRecord& delta,
+  static int serializeDelta(const MaintenanceDelta& delta,
                             void* buf,
                             size_t buf_size);
 
   void writeDelta(
-      const MaintenanceLogDeltaRecord& delta,
+      const MaintenanceDelta& delta,
       std::function<
           void(Status st, lsn_t version, const std::string& failure_reason)> cb,
       WriteMode mode = WriteMode::CONFIRM_APPLIED,
@@ -127,10 +72,9 @@ class ClusterMaintenanceStateMachine
 
   void gotInitialState(const ClusterMaintenanceState& state) const override;
 
-  std::unique_ptr<MaintenanceLogDeltaRecord>
-  deserializeDelta(Payload payload) override;
+  std::unique_ptr<MaintenanceDelta> deserializeDelta(Payload payload) override;
 
-  int applyDelta(const MaintenanceLogDeltaRecord& delta,
+  int applyDelta(const MaintenanceDelta& delta,
                  ClusterMaintenanceState& state,
                  lsn_t version,
                  std::chrono::milliseconds timestamp,
@@ -150,7 +94,7 @@ class ClusterMaintenanceStateMachine
   // trim the RSM if possible.
   void onSnapshotCreated(Status st, size_t snapshotSize) override;
 
-  UpdateableSettings<Settings> settings_;
+  UpdateableSettings<AdminServerSettings> settings_;
 }; // ClusterMaintenanceStateMachine
 
-}} // namespace facebook::logdevice
+}}} // namespace facebook::logdevice::maintenance

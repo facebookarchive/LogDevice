@@ -32,6 +32,11 @@ struct AdminServerSettings : public SettingsBundle {
 
   int safety_max_logs_in_flight;
   std::chrono::milliseconds safety_check_timeout;
+
+  // Allow the maintenance log to be snapshotted onto a snapshot log
+  bool maintenance_log_snapshotting;
+  std::chrono::milliseconds maintenance_log_snapshotting_period;
+
   bool read_metadata_from_sequencers;
 
  private:

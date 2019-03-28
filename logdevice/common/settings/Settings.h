@@ -1033,9 +1033,6 @@ struct Settings : public SettingsBundle {
   // and delta.
   std::chrono::milliseconds event_log_retention;
 
-  // Allow the maintenance log to be snapshotted onto a snapshot log
-  bool maintenance_log_snapshotting;
-
   // Test Options:
 
   // if not Status::OK, reject all HELLOs with this status code
@@ -1237,7 +1234,6 @@ struct Settings : public SettingsBundle {
   bool rsm_include_read_pointer_in_snapshot;
   std::chrono::milliseconds eventlog_snapshotting_period;
   std::chrono::milliseconds logsconfig_snapshotting_period;
-  std::chrono::milliseconds maintenance_log_snapshotting_period;
 
   // polling interval for fetching trim point from historical node set
   std::chrono::seconds get_trimpoint_interval;
