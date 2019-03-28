@@ -48,6 +48,8 @@ NodeSetSelectorTypeFromString(const std::string& str) {
     return NodeSetSelectorType::WEIGHT_AWARE_V2;
   } else if (str == "consistent-hashing") {
     return NodeSetSelectorType::CONSISTENT_HASHING;
+  } else if (str == "consistent-hashing-v2") {
+    return NodeSetSelectorType::CONSISTENT_HASHING_V2;
   }
   return NodeSetSelectorType::INVALID;
 }
