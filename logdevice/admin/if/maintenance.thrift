@@ -21,7 +21,7 @@ struct MaintenanceDefinition {
    * if ShardID's shard_index == -1 this maintenance targets the entire node.
    * Accepted values are [MAY_DISAPPEAR, DRAINED]
    */
-  1: list<common.ShardID> shards,
+  1: common.ShardSet shards,
   /**
    * Must be set to either MAY_DISAPPEAR or DRAINED iff shards is non-empty.
    */
@@ -53,6 +53,15 @@ struct MaintenanceDefinition {
    */
   8: bool skip_safety_checks = false,
   /**
+   * Should NEVER be set by the user. Admin API will reject requests setting
+   * this to true. This can only be set by internal maintenances requested by
+   * the RebuildingSupervisor.
+   *
+   * If this is set to true, this means that we don't expect the shards to be
+   * donors in the rebuilding process. aka. shards are inaccessible!
+   */
+  9: bool force_restore_rebuilding = false,
+  /**
    * Attempt to group the maintenances in this request. This will give a hint to
    * the internal maintenance scheduler that the user wishes for these
    * maintenance targets to happen as a single unit.
@@ -63,7 +72,7 @@ struct MaintenanceDefinition {
    * reached their targets. However, the system will not revert states
    * unnecessarily.
    */
-  9: bool group = false,
+  10: bool group = false,
   /**
    * This is the time in seconds that we want to keep this maintenance applied.
    * The countdown starts as you apply the maintenance, you need to take into
@@ -99,7 +108,7 @@ struct MaintenanceDefinition {
    * seconds before this maintenance is expired.
    *
    */
-  10: i32 ttl_seconds = 0,
+  11: i32 ttl_seconds = 0,
   /**
    * This instructs the system on whether it will automatically attempt to
    * fallback into a passive drain (if the requested target is DRAINED) if the
@@ -110,26 +119,26 @@ struct MaintenanceDefinition {
    * will continue waiting until the data is trimmed naturally by retention.
    * This will not be possible if some of these logs have infinite retention.
    */
-  11: bool allow_passive_drains = false,
+  12: bool allow_passive_drains = false,
   /**
    * Only set by the server once the group is created. If the argument group is
    * set to False, The system will generate a group_id for each of the shards
    * and sequencers in the request. The maintenance is going to be treated as N
    * independent maintenances.
    */
-  12: optional common.MaintenanceGroupID group_id,
+  13: optional common.MaintenanceGroupID group_id,
   /**
    * If this particular maintenance is blocked on safety checker, the result
    * will be returned in this object to help the user understand why.
    */
-  13: optional safety.CheckImpactResponse last_check_impact_result,
+  14: optional safety.CheckImpactResponse last_check_impact_result,
   // This field is populated by the server, it's the timestamp that this
   // maintenance will expire based on server time.
-  14: optional common.Timestamp expires_on,
+  15: optional common.Timestamp expires_on,
   /**
    * Timestamp at which the maintenance was first requested
    */
-  15: optional common.Timestamp created_on,
+  16: optional common.Timestamp created_on,
 }
 
 /**
@@ -137,6 +146,7 @@ struct MaintenanceDefinition {
  */
 struct ClusterMaintenanceState {
   1: list<MaintenanceDefinition> definitions,
+  2: common.unsigned64 version,
 }
 
 struct MaintenanceDefinitionResponse {

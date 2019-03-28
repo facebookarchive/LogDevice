@@ -15,8 +15,8 @@
 #include "logdevice/common/configuration/Node.h"
 #include "logdevice/common/configuration/nodes/NodesConfigLegacyConverter.h"
 #include "logdevice/common/configuration/nodes/NodesConfiguration.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/event_log/EventLogRebuildingSet.h"
-#include "logdevice/server/FailureDetector.h"
 
 using namespace facebook::logdevice::configuration;
 
@@ -44,18 +44,33 @@ std::string toString(const thrift::SocketAddress& address) {
 }
 
 bool match_by_address(const configuration::nodes::NodeServiceDiscovery& node_sd,
-                      const thrift::SocketAddress* address) {
-  ld_check(address);
+                      const thrift::SocketAddress& address) {
   if (node_sd.address.isUnixAddress() &&
-      address->address_family == thrift::SocketAddressFamily::UNIX &&
-      node_sd.address.getPath() == *address->get_address()) {
+      address.address_family == thrift::SocketAddressFamily::UNIX) {
+    if (address.address_ref().has_value()) {
+      // match by the address value if it's set.
+      return node_sd.address.getPath() == address.address_ref().value();
+    }
     return true;
   }
+
   if (!node_sd.address.isUnixAddress() &&
-      address->address_family == thrift::SocketAddressFamily::INET &&
-      node_sd.address.getAddress().str() == *address->get_address() &&
-      node_sd.address.port() == *address->get_port()) {
-    return true;
+      address.address_family == thrift::SocketAddressFamily::INET) {
+    // match is true as long as nothing below would set it to false.
+    bool match = true;
+
+    // if address string is set, use it to match too.
+    if (address.address_ref().has_value()) {
+      match &=
+          node_sd.address.getAddress().str() == address.address_ref().value();
+    }
+
+    // if port is set, use it to match.
+    if (address.port_ref().has_value()) {
+      // match by the port value if it's set.
+      match &= node_sd.address.port() == address.port_ref().value();
+    }
+    return match;
   }
   return false;
 }
@@ -85,19 +100,21 @@ void forFilteredNodes(
       res &= node_sd.hasRole(*role_filter);
     }
     // filter by node
-    if (filter->get_node()) {
-      auto* node_identifier = filter->get_node();
-      if (node_identifier->get_address()) {
-        res &= match_by_address(node_sd, node_identifier->get_address());
+    if (filter->node_ref().has_value()) {
+      auto node = filter->node_ref().value();
+      // if address string is set, use it to match too.
+      if (node.address_ref().has_value()) {
+        res &= match_by_address(node_sd, node.address_ref().value());
       }
-      // filter by index
-      if (node_identifier->get_node_index()) {
-        res &= (index == *node_identifier->get_node_index());
+
+      // match by index.
+      if (node.node_index_ref().has_value()) {
+        res &= (node.node_index_ref().value() == index);
       }
     }
     // filter by location
-    if (filter->get_location()) {
-      std::string location_filter_str = *filter->get_location();
+    if (filter->location_ref().has_value()) {
+      std::string location_filter_str = filter->location_ref().value();
       res &= (node_sd.location &&
               node_sd.location->matchesPrefix(location_filter_str));
     }
@@ -295,68 +312,78 @@ void fillNodeState(
   }
 }
 
+folly::Optional<node_index_t> findNodeIndex(
+    const thrift::NodeID& node,
+    const configuration::nodes::NodesConfiguration& nodes_configuration) {
+  node_index_t found_index = -1;
+  for (const auto& kv : *nodes_configuration.getServiceDiscovery()) {
+    bool res = true;
+    // if address string is set, use it to match too.
+    if (node.address_ref().has_value()) {
+      res &= match_by_address(kv.second, node.address_ref().value());
+    }
+
+    // match by index.
+    if (node.node_index_ref().has_value()) {
+      res &= (node.node_index_ref().value() == kv.first);
+    }
+    if (res) {
+      if (found_index > -1) {
+        // we have seen a match before. We can't match multiple nodes here.
+        found_index = -1;
+        break;
+      }
+      found_index = kv.first;
+    }
+  }
+
+  if (found_index > -1) {
+    return found_index;
+  }
+  return folly::none;
+}
+
 ShardSet resolveShardOrNode(
     const thrift::ShardID& shard,
-    const configuration::nodes::NodesConfiguration& nodes_configuration) {
+    const configuration::nodes::NodesConfiguration& nodes_configuration,
+    bool ignore_missing) {
   ShardSet output;
 
   const auto& serv_disc = nodes_configuration.getServiceDiscovery();
   shard_index_t shard_index = (shard.shard_index < 0) ? -1 : shard.shard_index;
   shard_size_t num_shards = 1;
-  node_index_t node_index = -1;
-  if (shard.get_node().get_node_index()) {
-    node_index = *shard.get_node().get_node_index();
-    if (node_index >= nodes_configuration.clusterSize()) {
-      // We didn't find the node.
-      thrift::InvalidRequest err;
-      err.set_message(
-          folly::format(
-              "Node with index '{}' was not found in the nodes config.",
-              node_index)
-              .str());
-      throw err;
+  folly::Optional<node_index_t> found_node =
+      findNodeIndex(shard.get_node(), nodes_configuration);
+  // Node is not in nodes configuration
+  if (!found_node) {
+    if (ignore_missing) {
+      return output;
     }
-    num_shards = nodes_configuration.getNumShards(node_index);
-  } else if (shard.get_node().get_address()) {
-    // resolve the node index from the nodes configuration.
-    for (const auto& kv : *serv_disc) {
-      if (match_by_address(kv.second, shard.get_node().get_address())) {
-        node_index = kv.first;
-        num_shards = nodes_configuration.getNumShards(node_index);
-        break;
-      }
-    }
-
     // We didn't find the node.
     thrift::InvalidRequest err;
-    err.set_message(
-        folly::format(
-            "Node with address '{}' was not found in the nodes config.",
-            toString(*shard.get_node().get_address()))
-            .str());
-    throw err;
-  } else {
-    thrift::InvalidRequest err;
-    err.set_message("Cannot accept nodes or shards without specifying an "
-                    "address or node index");
+    err.set_message("Node was not found in the nodes config.");
     throw err;
   }
+
   if (shard_index == -1) {
+    num_shards = nodes_configuration.getNumShards(*found_node);
     for (int i = 0; i < num_shards; i++) {
-      output.emplace(ShardID(node_index, i));
+      output.emplace(ShardID(*found_node, i));
     }
   } else {
-    output.emplace(ShardID(node_index, shard_index));
+    output.emplace(ShardID(*found_node, shard_index));
   }
   return output;
 }
 
 ShardSet expandShardSet(
     const thrift::ShardSet& thrift_shards,
-    const configuration::nodes::NodesConfiguration& nodes_configuration) {
+    const configuration::nodes::NodesConfiguration& nodes_configuration,
+    bool ignore_missing) {
   ShardSet output;
   for (const auto& it : thrift_shards) {
-    ShardSet expanded = resolveShardOrNode(it, nodes_configuration);
+    ShardSet expanded =
+        resolveShardOrNode(it, nodes_configuration, ignore_missing);
     output.merge(expanded);
   }
   return output;

@@ -49,9 +49,28 @@ void fillNodeState(
     const EventLogRebuildingSet* rebuilding_set,
     const ClusterState* cluster_state);
 
+/**
+ * Finds a node in the nodes configuration and return its node_index. The
+ * function returns folly::none if the node cannot be found or the NodeID
+ * matches multiple nodes.
+ */
+folly::Optional<node_index_t> findNodeIndex(
+    const thrift::NodeID& node,
+    const configuration::nodes::NodesConfiguration& nodes_configuration);
+
+/**
+ * Resolves a ShardID into a set of shards. If the input shard refers to a node
+ * by address, server-instance, or index. It wil get the node_index_t for it.
+ * Also if the shard_id is -1, it will expand it into num_shards instances of
+ * ShardID.
+ *
+ * @param ignore_missing  Will simply ignore nodes that were not found in the
+ * configuration file silently. Otherwise, exception will be thrown.
+ */
 ShardSet resolveShardOrNode(
     const thrift::ShardID& shard,
-    const configuration::nodes::NodesConfiguration& nodes_configuration);
+    const configuration::nodes::NodesConfiguration& nodes_configuration,
+    bool ignore_missing = false);
 
 /**
  * Expands a thrift ShardSet structure into logdevice equivalent. This looks up
@@ -59,7 +78,8 @@ ShardSet resolveShardOrNode(
  */
 ShardSet expandShardSet(
     const thrift::ShardSet& thrift_shards,
-    const configuration::nodes::NodesConfiguration& nodes_configuration);
+    const configuration::nodes::NodesConfiguration& nodes_configuration,
+    bool ignore_missing = false);
 
 thrift::ShardOperationalState
 toShardOperationalState(configuration::StorageState storage_state,
