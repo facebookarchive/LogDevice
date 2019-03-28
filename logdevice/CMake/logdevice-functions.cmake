@@ -166,6 +166,7 @@ macro(ld_thrift_py3_library file_name services file_path output_path include_pre
     "${file_path}"
     "${output_path}"
     "${include_prefix}"
+    THRIFT_INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/.."
   )
 
   if(thriftpy3)
@@ -237,4 +238,3 @@ macro(ld_thrift_py3_library file_name services file_path output_path include_pre
     endforeach()
   endif() # thriftpy3
 endmacro()
-
