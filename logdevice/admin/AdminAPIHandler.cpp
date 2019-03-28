@@ -21,6 +21,7 @@
 #include "logdevice/common/settings/SettingsUpdater.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/util.h"
+#include "logdevice/server/LogGroupCustomCounters.h"
 #include "logdevice/server/LogGroupThroughput.h"
 #include "logdevice/server/Server.h"
 #include "logdevice/server/ServerProcessor.h"
@@ -200,6 +201,81 @@ folly::SemiFuture<folly::Unit> AdminAPIHandler::semifuture_takeLogTreeSnapshot(
       RequestType::ADMIN_CMD_UTIL_INTERNAL);
 }
 
+void setLogGroupCustomCountersResponse(
+    std::string log_group_name,
+    GroupResults counters,
+    thrift::LogGroupCustomCountersResponse& response,
+    std::vector<uint16_t> keys_filter) {
+  std::vector<thrift::LogGroupCustomCounter> results;
+  for (const auto& result : counters) {
+    if (!keys_filter.empty()) {
+      auto key_it =
+          std::find(keys_filter.begin(), keys_filter.end(), result.first);
+      if (key_it == keys_filter.end()) {
+        continue;
+      }
+    }
+    thrift::LogGroupCustomCounter counter;
+    counter.key = static_cast<int16_t>(result.first);
+    counter.val = static_cast<int64_t>(result.second);
+    results.push_back(counter);
+  }
+
+  response.counters[log_group_name] = std::move(results);
+}
+
+void AdminAPIHandler::getLogGroupCustomCounters(
+    thrift::LogGroupCustomCountersResponse& response,
+    std::unique_ptr<thrift::LogGroupCustomCountersRequest> request) {
+  ld_check(request != nullptr);
+
+  if (!stats_holder_) {
+    thrift::NotSupported err;
+    err.set_message("This admin server cannot provide stats");
+    throw err;
+  }
+
+  Duration query_interval = std::chrono::seconds(60);
+  if (request->time_period != 0) {
+    query_interval = std::chrono::seconds(request->time_period);
+  }
+
+  CustomCountersAggregateMap agg =
+      doAggregateCustomCounters(stats_holder_, query_interval);
+
+  std::string req_log_group = request->log_group_path;
+
+  std::vector<u_int16_t> keys_filter;
+  for (const uint8_t& key : request->keys) {
+    if (key > std::numeric_limits<uint8_t>::max() || key < 0) {
+      thrift::InvalidRequest err;
+      std::ostringstream error_message;
+      error_message << "key " << key << " is not within the limits 0-"
+                    << std::numeric_limits<uint8_t>::max();
+
+      err.set_message(error_message.str());
+      throw err;
+    }
+    keys_filter.push_back(key);
+  }
+
+  if (!req_log_group.empty()) {
+    if (agg.find(req_log_group) == agg.end()) {
+      return;
+    }
+    auto log_group = agg[req_log_group];
+
+    setLogGroupCustomCountersResponse(
+        req_log_group, log_group, response, keys_filter);
+    return;
+  }
+
+  for (const auto& entry : agg) {
+    setLogGroupCustomCountersResponse(
+        entry.first, entry.second, response, keys_filter);
+  }
+}
+
 void AdminAPIHandler::getLogGroupThroughput(
     thrift::LogGroupThroughputResponse& response,
     std::unique_ptr<thrift::LogGroupThroughputRequest> request) {
@@ -243,7 +319,7 @@ void AdminAPIHandler::getLogGroupThroughput(
   std::string req_log_group = request->log_group_name_ref().value_or("");
 
   for (const auto& entry : agg) {
-    std::string log_group_name = folly::to<std::string>(entry.first);
+    std::string log_group_name = entry.first;
     if (!req_log_group.empty() && log_group_name != req_log_group) {
       continue;
     }

@@ -46,5 +46,9 @@ class AdminAPIHandler : public NodesConfigAPIHandler,
   void getLogGroupThroughput(
       thrift::LogGroupThroughputResponse& response,
       std::unique_ptr<thrift::LogGroupThroughputRequest> request) override;
+
+  void getLogGroupCustomCounters(
+      thrift::LogGroupCustomCountersResponse& response,
+      std::unique_ptr<thrift::LogGroupCustomCountersRequest> request) override;
 };
 }} // namespace facebook::logdevice

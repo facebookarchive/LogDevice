@@ -63,6 +63,32 @@ enum LogGroupOperation {
   READS = 1,
 }
 
+struct LogGroupCustomCountersRequest {
+   /**
+    * time period in seconds. Throughput is calculated for the given
+    * time periods, for instance, 1 min (60 sec), 5 min (300 sec) and so on.
+    * By default: 60 sec
+    */
+  1: i32 time_period,
+    /**
+    * custom counter keys to get
+    */
+  2: list<i16> keys,
+    /**
+    * log group name filtering
+    */
+  3: string log_group_path,
+}
+
+struct LogGroupCustomCounter {
+    1: i16 key,
+    2: i64 val,
+}
+
+struct LogGroupCustomCountersResponse {
+  1: map<string, list<LogGroupCustomCounter>> counters;
+}
+
 struct LogGroupThroughput {
   /**
    * appends or reads

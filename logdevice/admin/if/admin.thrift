@@ -142,4 +142,12 @@ service AdminAPI extends fb303.FacebookService {
    */
   logtree.LogGroupThroughputResponse getLogGroupThroughput(
                                 1: logtree.LogGroupThroughputRequest request);
+
+  /**
+   * Get Log Group custom counters
+   */
+  logtree.LogGroupCustomCountersResponse getLogGroupCustomCounters(
+    1: logtree.LogGroupCustomCountersRequest request) throws
+    (1: exceptions.NotSupported notsupported,
+     2: exceptions.InvalidRequest invalid_request);
 }

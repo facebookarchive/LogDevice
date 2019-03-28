@@ -19,7 +19,9 @@ namespace facebook { namespace logdevice { namespace IntegrationTestUtils {
 class AppendThread {
  public:
   explicit AppendThread(std::shared_ptr<Client> client, logid_t logid)
-      : client_(std::move(client)), logid_(logid) {}
+      : client_(std::move(client)), logid_(logid) {
+    attrs_ = AppendAttributes();
+  }
   ~AppendThread() {
     stop();
   }
@@ -36,6 +38,10 @@ class AppendThread {
     }
   }
 
+  void setAppendAttributes(AppendAttributes attrs) {
+    attrs_ = attrs;
+  }
+
   size_t getNumRecordsAppended() const {
     return n_appended_;
   }
@@ -46,11 +52,12 @@ class AppendThread {
   std::thread thread_;
   std::atomic_bool stopped_;
   size_t n_appended_{0};
+  AppendAttributes attrs_;
 
   void loop() {
     while (!stopped_) {
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
-      lsn_t lsn = client_->appendSync(logid_, Payload("test", 4));
+      lsn_t lsn = client_->appendSync(logid_, Payload("test", 4), attrs_);
       // Appends may fail during our tests. Count the ones that don't.
       if (lsn != LSN_INVALID) {
         ++n_appended_;
