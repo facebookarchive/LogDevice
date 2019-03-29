@@ -9,6 +9,8 @@ sidebar_label: Settings
 |-----------|-----------------|:---------:|-----------|
 | admin-port | TCP port on which the server listens to for admin commands, supports commands over SSL | 6440 | requires&nbsp;restart, server&nbsp;only |
 | admin-unix-socket | Path to the unix domain socket the server will use to listen for admin thrift interface |  | requires&nbsp;restart, server&nbsp;only |
+| maintenance-log-snapshotting | Allow the maintenance log to be snapshotted onto a snapshot log. This requires the maintenance log group to contain two logs, the first one being the snapshot log and the second one being the delta log. | true | server&nbsp;only |
+| maintenance-log-snapshotting-period | Controls time based snapshotting. New maintenancelog snapshot will be created after this period if there are new deltas | 1h | server&nbsp;only |
 | read-metadata-from-sequencers | Safety checker to read the metadata of logs directly from sequencers. | true | server&nbsp;only |
 | safety-check-max-logs-in-flight | The number of concurrent logs that we runs checks against during execution of the CheckImpact operation either internally during a maintenance or through the Admin API's checkImpact() call | 1000 | server&nbsp;only |
 | safety-check-timeout | The total time the safety check should take to run. This is the time that the CheckImpact operation need to take to scan all logs along with all the historical metadata to ensure than a maintenance is safe | 10min | server&nbsp;only |
@@ -40,8 +42,6 @@ sidebar_label: Settings
 | logsconfig-max-delta-bytes | How many bytes of deltas to keep in the logsconfig deltas log before we snapshot it. | 10485760 | server&nbsp;only |
 | logsconfig-max-delta-records | How many delta records to keep in the logsconfig deltas log before we snapshot it. | 4000 | server&nbsp;only |
 | logsconfig-snapshotting-period | Controls time based snapshotting. New logsconfig snapshot will be created after this period if there are new log configuration deltas | 1h | server&nbsp;only |
-| maintenance-log-snapshotting | Allow the maintenance log to be snapshotted onto a snapshot log. This requires the maintenance log group to contain two logs, the first one being the snapshot log and the second one being the delta log. | true | requires&nbsp;restart, server&nbsp;only |
-| maintenance-log-snapshotting-period | Controls time based snapshotting. New maintenancelog snapshot will be created after this period if there are new deltas | 1h | server&nbsp;only |
 | max-sequencer-background-activations-in-flight | Max number of concurrent background sequencer activations to run. Background sequencer activations perform log metadata changes (reprovisioning) when the configuration attributes of a log change. | 20 | server&nbsp;only |
 | nodes-configuration-init-retry-timeout | timeout settings for the exponential backoff retry behavior for initializing Nodes Configuration for the first time | 500ms..5s |  |
 | nodes-configuration-init-timeout | defines the maximum time allowed on the initial nodes configuration fetch. | 60s |  |
