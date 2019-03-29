@@ -523,7 +523,9 @@ void RebuildingSupervisor::checkThrottlingMode() {
   throttling_threshold_ = getRebuildingTriggerQueueThreshold();
   if (triggers_.size() > throttling_threshold_) {
     if (!throttling_) {
-      ld_warning("Entering throttling mode");
+      ld_warning("Entering throttling mode (triggers:%zu, threshold:%zu)",
+                 triggers_.size(),
+                 throttling_threshold_);
       throttling_ = true;
     }
   } else {
