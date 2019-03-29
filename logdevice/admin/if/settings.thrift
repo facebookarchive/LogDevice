@@ -11,7 +11,7 @@ include "logdevice/admin/if/common.thrift"
 namespace cpp2 facebook.logdevice.thrift
 namespace py3 logdevice.admin
 namespace php LogDevice
-namespace wiki LogDevice.Settings
+namespace wiki Thriftdoc.LogDevice.Settings
 
 
 /*

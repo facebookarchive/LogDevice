@@ -17,7 +17,7 @@ include "logdevice/admin/if/settings.thrift"
 namespace cpp2 facebook.logdevice.thrift
 namespace py3 logdevice
 namespace php LogDevice
-namespace wiki LogDevice.AdminAPI
+namespace wiki Thriftdoc.LogDevice.AdminAPI
 
 // *** AdminAPI Service
 service AdminAPI extends fb303.FacebookService {

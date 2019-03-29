@@ -13,7 +13,7 @@ include "logdevice/common/membership/Membership.thrift"
 namespace cpp2 facebook.logdevice.thrift
 namespace py3 logdevice.admin
 namespace php LogDevice
-namespace wiki LogDevice.Nodes
+namespace wiki Thriftdoc.LogDevice.Nodes
 
 
 struct SequencerConfig {

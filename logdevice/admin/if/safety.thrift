@@ -12,7 +12,7 @@ include "logdevice/admin/if/nodes.thrift"
 namespace cpp2 facebook.logdevice.thrift
 namespace py3 logdevice.admin
 namespace php LogDevice
-namespace wiki LogDevice.Safety
+namespace wiki Thriftdoc.LogDevice.Safety
 
 
 enum OperationImpact {

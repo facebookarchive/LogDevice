@@ -9,7 +9,7 @@
 namespace cpp2 facebook.logdevice.thrift
 namespace py3 logdevice.admin
 namespace php LogDevice
-namespace wiki LogDevice.Common
+namespace wiki Thriftdoc.LogDevice.Common
 
 /**
  * Because thrift doesn't have a u64.

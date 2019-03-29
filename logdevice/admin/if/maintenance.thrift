@@ -13,7 +13,7 @@ include "logdevice/admin/if/safety.thrift"
 namespace cpp2 facebook.logdevice.thrift
 namespace py3 logdevice.admin
 namespace php LogDevice
-namespace wiki LogDevice.Maintenance
+namespace wiki Thriftdoc.LogDevice.Maintenance
 
 
 struct MaintenanceDefinition {
