@@ -6,7 +6,14 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#pragma once
+
+#include "logdevice/admin/maintenance/MaintenanceManager.h"
+#include "logdevice/common/event_log/EventLogRecord.h"
+
 namespace facebook { namespace logdevice { namespace maintenance {
+
+class MaintenanceManager;
 
 class EventLogWriter {
  public:

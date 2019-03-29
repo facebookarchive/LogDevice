@@ -113,6 +113,11 @@ enum MaintenanceStatus {
    */
   REBUILDING_IS_BLOCKED = 7,
   COMPLETED = 8,
+  /**
+   * Maintenance cannot proceed because of some operational error. Will
+   * be retried internally
+   */
+  RETRY = 9,
 }
 
 /**

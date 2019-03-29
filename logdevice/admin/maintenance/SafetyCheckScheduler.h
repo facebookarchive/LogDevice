@@ -7,8 +7,9 @@
  */
 #pragma once
 
-#include <folly/Future.h>
+#include <folly/futures/Future.h>
 
+#include "logdevice/admin/safety/SafetyAPI.h"
 #include "logdevice/admin/settings/AdminServerSettings.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/ShardID.h"

@@ -23,6 +23,8 @@ std::string toString(const RebuildingMode& mode) {
       return "RELOCATE";
     case RebuildingMode::RESTORE:
       return "RESTORE";
+    case RebuildingMode::INVALID:
+      return "INVALID";
   }
   return "UNKNOWN";
 }

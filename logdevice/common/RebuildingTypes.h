@@ -36,10 +36,11 @@ enum class RebuildingMode {
             // their data and are asked to participate as donor nodes.
             // This mode can be used when rebuilding a node before it gets
             // decommissioned.
-  RESTORE   // In this mode, nodes for which we rebuild are not donor nodes.
+  RESTORE,  // In this mode, nodes for which we rebuild are not donor nodes.
             // All of their data will be rebuilt by other donors. This mode
             // should be used if the node for which we are rebuilding lost its
             // data.
+  INVALID
 };
 
 std::string toString(const RebuildingMode&);

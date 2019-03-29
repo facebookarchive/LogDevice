@@ -9,20 +9,25 @@
 
 #include <folly/container/F14Map.h>
 #include <folly/futures/Future.h>
+#include <folly/futures/SharedPromise.h>
 
 #include "logdevice/admin/maintenance/ClusterMaintenanceStateMachine.h"
-#include "logdevice/admin/maintenance/SequencerMaintenanceWorkflow.h"
-#include "logdevice/admin/maintenance/ShardDataHealth.h"
-#include "logdevice/admin/maintenance/ShardMaintenanceWorkflow.h"
-#include "logdevice/admin/safety/SafetyChecker.h"
+#include "logdevice/admin/maintenance/ClusterMaintenanceWrapper.h"
+#include "logdevice/admin/maintenance/SafetyCheckScheduler.h"
+#include "logdevice/admin/maintenance/types.h"
 #include "logdevice/common/ShardAuthoritativeStatusMap.h"
 #include "logdevice/common/configuration/nodes/NodesConfiguration.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationAPI.h"
 #include "logdevice/common/event_log/EventLogRecord.h"
 #include "logdevice/common/event_log/EventLogWriter.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/work_model/SerialWorkContext.h"
 
 namespace facebook { namespace logdevice { namespace maintenance {
+
+class MaintenanceManager;
+class ShardWorkflow;
+class SequencerWorkflow;
 
 /*
  * Dependencies of MaintenanceManager isolated
@@ -58,30 +63,25 @@ class MaintenanceManagerDependencies {
   // Resets subscription handles
   virtual void stopSubscription();
 
-  // TODO: Remove and use the one in SafetyCheckScheduler
-  struct SafetyCheckResult {
-    std::unordered_map<ShardID, Impact> shard_result;
-    std::unordered_map<NodeID, Imapct> seq_result;
-  };
-
   /*
    * Posts safety check request
    *
-   * @param shard_wf Set of references to ShardMaintenanceWorkflow for
+   * @param shard_wf Set of references to ShardWorkflow for
    *                 the shards for which we need to run safety check
-   * @param seq_wf   Set of references to SequencerMaintenanceWorkflow for
+   * @param seq_wf   Set of references to SequencerWorkflow for
    *                 the sequencer nodes for which we need to run safety check
    *
    * @return folly::SemiFuture<SafetyCheckResult> A future whose promise
    * is fulfiled once we have results for all workflows
    */
 
-  virtual folly::SemiFuture<SafetyCheckResult> postSafetyCheckRequest(
-      const std::set<const ShardMaintenanceWorkflow&> shard_wf,
-      const std::set<const SequencerMaintenanceWorkflow&> seq_wf);
+  virtual folly::SemiFuture<SafetyCheckScheduler::Result>
+  postSafetyCheckRequest(const std::set<const ShardWorkflow&> shard_wf,
+                         const std::set<const SequencerWorkflow&> seq_wf);
 
-  using NodesConfigurationUpdateResult =
-      std::tuple<Status, std::shared_ptr<const nodes::NodesConfiguration>>> ;
+  using NodesConfigurationUpdateResult = std::tuple<
+      Status,
+      std::shared_ptr<const configuration::nodes::NodesConfiguration>>;
 
   // calls `update` on the NodesConfigManager
   virtual folly::SemiFuture<NodesConfigurationUpdateResult>
@@ -93,12 +93,14 @@ class MaintenanceManagerDependencies {
 
   virtual void writeToEventLog(std::unique_ptr<EventLogRecord> event);
 
-  virtual void setOwner(ClusterMaintenanceManager* owner) {
+  virtual void setOwner(MaintenanceManager* owner) {
     owner_ = owner;
   }
 
  private:
   MaintenanceManager* owner_;
+
+  UpdateableSettings<AdminServerSettings> settings_;
 
   // A replicated state machine that tails the maintenance logs
   const ClusterMaintenanceStateMachine* cluster_maintenance_state_machine_;
@@ -106,7 +108,6 @@ class MaintenanceManagerDependencies {
   // A replicated state machine that tails the event log
   const EventLogStateMachine* event_log_state_machine_;
 
-  UpdateableSettings<AdminServerSettings> settings_
 
       // Subscription handle for ClusterMaintenanceStateMachine.
       // calls the onClusterMaintenanceStateUpdate callback when updated
@@ -123,14 +124,15 @@ class MaintenanceManagerDependencies {
   std::unique_ptr<EventLogWriter> event_log_writer_;
 
   // TODO: This will be a handle to the safety check scheduler
-  std::unique_ptr<SafetyChecker> safety_checker_;
+  std::unique_ptr<SafetyCheckScheduler> safety_check_scheduler_;
 
   // Callback that gets called when there is a new update from the
   // ClusterMaintenanceStateMachine.
   // sets `run_evaluate_` on owner to signal the need to run `evaluate` again
-  void onClusterMaintenanceStateUpdate(const ClusterMaintenanceState& state,
-                                       const MaintenanceDelta* delta,
-                                       lsn_t version);
+  void
+  onClusterMaintenanceStateUpdate(const thrift::ClusterMaintenanceState& state,
+                                  const MaintenanceDelta* delta,
+                                  lsn_t version);
 
   // Subscription callback for ClusterMembership
   // sets `run_evaluate_` on owner to signal the need to run `evaluate` again
@@ -151,7 +153,7 @@ class MaintenanceManagerDependencies {
 /*
  * MaintenanceManager is the entity that manages all
  * the maintenances on a cluster. The main task of cluster maintenance
- * manager is to evaluate the maintenances in ClusterMaintenanceState
+ * manager is to evaluate the maintenances in ClusterMaintenanceStateWrapper
  * and create and run workflows and schedule safety checks and request
  * NodesConfig updates
  */
@@ -202,9 +204,8 @@ class MaintenanceManager : public SerialWorkContext {
 
  protected:
   // Used only in tests
-  ShardMaintenanceWorkflow* getActiveShardMaintenanceWorkflow(ShardID shard);
-  SequencerMaintenanceWorkflow*
-  getActiveSequencerMaintenanceWorkflow(NodeID node);
+  ShardWorkflow* getActiveShardWorkflow(ShardID shard);
+  SequencerWorkflow* getActiveSequencerWorkflow(NodeID node);
 
  private:
   std::unique_ptr<MaintenanceManagerDependencies> deps_;
@@ -219,7 +220,7 @@ class MaintenanceManager : public SerialWorkContext {
   // indicating MaintenanceManager has been stopped
   folly::SharedPromise<bool> stop_promise_;
 
-  // The main method that evaluate the current ClusterMaintenanceState,
+  // The main method that evaluate the current ClusterMaintenanceStateWrapper,
   // creates and runs workflows and requests NodesConfiguration update
   // and safety checks
   void evaluate();
@@ -228,12 +229,12 @@ class MaintenanceManager : public SerialWorkContext {
   void shutdown();
 
   // A map of shard to the currently running maintenance worlflow
-  folly::F14NodeMap<ShardID, std::unique_ptr<ShardMaintenanceWorkflow>>
-      active_shard_maintenance_workflow_;
+  folly::F14NodeMap<ShardID, std::unique_ptr<ShardWorkflow>>
+      active_shard_workflow_;
 
   // A map of node to the currently running sequencer maintenance worlflow
-  folly::F14NodeMap<NodeID, std::unique_ptr<SequencerMaintenanceWorkflow>>
-      active_sequencer_maintenance_workflow_;
+  folly::F14NodeMap<NodeID, std::unique_ptr<SequencerWorkflow>>
+      active_sequencer_workflow_;
 };
 
 }}} // namespace facebook::logdevice::maintenance

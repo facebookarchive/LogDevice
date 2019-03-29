@@ -14,5 +14,7 @@ using ShardOperationalState = thrift::ShardOperationalState;
 using SequencingState = thrift::SequencingState;
 using MaintenanceDefinition = thrift::MaintenanceDefinition;
 using GroupID = thrift::MaintenanceGroupID;
+using MaintenanceStatus = thrift::MaintenanceStatus;
+using ShardDataHealth = thrift::ShardDataHealth;
 
 }}} // namespace facebook::logdevice::maintenance

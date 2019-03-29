@@ -17,9 +17,9 @@ namespace facebook { namespace logdevice { namespace maintenance {
  * A SequencerMaintenanceworkflow is a state machine that tracks state
  * transitions of a Sequencer node.
  */
-class SequencerMaintenanceWorkflow : public Workflow {
+class SequencerWorkflow : public Workflow {
  public:
-  SequencerMaintenanceWorkflow(NodeID node) : node_(node) {}
+  explicit SequencerWorkflow(NodeID node) : node_(node) {}
 
   folly::SemiFuture<MaintenanceStatus> run(bool is_sequencing_enabled);
 

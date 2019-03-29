@@ -24,9 +24,9 @@ namespace facebook { namespace logdevice { namespace maintenance {
  */
 class Workflow {
  public:
-  Workflow() = 0;
+  Workflow();
 
-  ~Workflow() {}
+  virtual ~Workflow() {}
 
   MaintenanceStatus getStatus() const;
 

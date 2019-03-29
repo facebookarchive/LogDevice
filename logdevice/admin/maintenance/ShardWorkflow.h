@@ -11,19 +11,19 @@
 
 #include "logdevice/admin/maintenance/EventLogWriter.h"
 #include "logdevice/admin/maintenance/Workflow.h"
+#include "logdevice/admin/maintenance/types.h"
 #include "logdevice/common/AuthoritativeStatus.h"
 #include "logdevice/common/event_log/EventLogRecord.h"
 #include "logdevice/common/membership/StorageState.h"
 
 namespace facebook { namespace logdevice { namespace maintenance {
 /**
- * A ShardMaintenanceworkflow is a state machine that tracks state
+ * A ShardWorkflow is a state machine that tracks state
  * transitions of a shard.
  */
-class ShardMaintenanceWorkflow : public Workflow {
+class ShardWorkflow : public Workflow {
  public:
-  ShardMaintenanceWorkflow(ShardID shard,
-                           const EventLogWriter* event_log_writer)
+  ShardWorkflow(ShardID shard, const EventLogWriter* event_log_writer)
       : shard_(shard), event_log_writer_(event_log_writer) {}
 
   folly::SemiFuture<MaintenanceStatus>
@@ -31,8 +31,11 @@ class ShardMaintenanceWorkflow : public Workflow {
       ShardDataHealth data_health,
       RebuildingMode rebuilding_mode);
 
+  // Returns the ShardID for this workflow
+  ShardID getShardID() const;
+
   // Adds state to target_op_state_
-  void addTargetOpState(ShardOperationalState state);
+  void addTargetOpState(std::unordered_set<ShardOperationalState> state);
 
   // Called if this workflow should only execute active
   // drain. If safety check fails, we will not run passive
@@ -46,7 +49,7 @@ class ShardMaintenanceWorkflow : public Workflow {
   void rebuildInRestoreMode(bool is_restore);
 
   // Returns the target_op_state_
-  std::set<ShardOperationalState> getTargetOpState() const;
+  std::unordered_set<ShardOperationalState> getTargetOpState() const;
 
   // Returns the EventLogRecord that needs to be written to
   // EventLog, if there is one. nullptr otherwise
@@ -58,7 +61,7 @@ class ShardMaintenanceWorkflow : public Workflow {
   membership::StorageState getExpectedStorageState() const;
 
  private:
-  std::set<ShardOperationalState> target_op_state_;
+  std::unordered_set<ShardOperationalState> target_op_state_;
   // The shard this workflow is for
   ShardID shard_;
   // Any even that needs to be written by this workflow
@@ -93,12 +96,19 @@ class ShardMaintenanceWorkflow : public Workflow {
   RebuildingMode current_rebuilding_mode_;
   // Determines the next MaintenanceStatus based on
   // current storage state, shard data health and rebuilding mode
-  MaintenanceStatus computeMaintenanceStatus();
+  void computeMaintenanceStatus();
+  void computeMaintenanceStatusForDrain();
+  void computeMaintenanceStatusForMayDisappear();
+  void computeMaintenanceStatusForEnable();
+
   // Method that is called when there is an event that needs to
   // be written to event log by this workflow
   virtual void writeToEventLog(
       std::unique_ptr<EventLogRecord> event,
-      std::function<Status st, lsn_t lsn, const std::string & str> cb);
+      std::function<void(Status st, lsn_t lsn, const std::string& str)> cb);
+  // Sets event_ to SHARD_ABORT_EVENT if this is a full shard
+  // rebuilding based on current_data_health_ and current_rebuilding_mode_
+  void createAbortEventIfRequired();
 };
 
 }}} // namespace facebook::logdevice::maintenance

@@ -6,14 +6,17 @@
  *  LICENSE file in the root directory of this source tree.
  **/
 
-#include "logdevice/admin/maintenance/SequencerWorkflow.h"
+#include "logdevice/admin/maintenance/EventLogWriter.h"
 
 namespace facebook { namespace logdevice { namespace maintenance {
 
-folly::SemiFuture<MaintenanceStatus>
-SequencerWorkflow::run(bool is_sequencer_enabled) {
-  folly::Promise<MaintenanceStatus> p;
-  return p.getFuture();
+void EventLogWriter::writeToEventLog(
+    std::unique_ptr<EventLogRecord> event,
+    std::function<
+        void(Status st, lsn_t version, const std::string& /* unused */)> cb) {
+  ld_check(owner_ != nullptr);
+  // TODO:Implementation
+  return;
 }
 
 }}} // namespace facebook::logdevice::maintenance
