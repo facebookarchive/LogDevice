@@ -82,33 +82,34 @@ ClusterMaintenanceWrapper::getMaintenanceByGroupID(GroupID group) const {
   return nullptr;
 }
 
-std::set<GroupID>
+std::unordered_set<GroupID>
 ClusterMaintenanceWrapper::getGroupsForShard(ShardID shard) const {
   ld_assert(shard.isValid());
   const auto it = shards_to_groups_.find(shard);
   if (it != shards_to_groups_.end()) {
     return it->second;
   }
-  return std::set<GroupID>();
+  return std::unordered_set<GroupID>();
 }
 
-std::set<GroupID>
+std::unordered_set<GroupID>
 ClusterMaintenanceWrapper::getGroupsForSequencer(node_index_t node) const {
   const auto it = nodes_to_groups_.find(node);
   if (it != nodes_to_groups_.end()) {
     return it->second;
   }
-  return std::set<GroupID>();
+  return std::unordered_set<GroupID>();
 }
 
-std::set<ShardOperationalState>
+std::unordered_set<ShardOperationalState>
 ClusterMaintenanceWrapper::getShardTargetStates(ShardID shard) const {
   ld_assert(shard.isValid());
   const auto it = shards_to_targets_.find(shard);
   if (it != shards_to_targets_.end()) {
     return it->second;
   }
-  return std::set<ShardOperationalState>{ShardOperationalState::ENABLED};
+  return std::unordered_set<ShardOperationalState>{
+      ShardOperationalState::ENABLED};
 }
 
 SequencingState ClusterMaintenanceWrapper::getSequencerTargetState(
@@ -121,7 +122,7 @@ SequencingState ClusterMaintenanceWrapper::getSequencerTargetState(
 }
 
 bool ClusterMaintenanceWrapper::shouldSkipSafetyCheck(ShardID shard) const {
-  std::set<GroupID> groups = getGroupsForShard(shard);
+  std::unordered_set<GroupID> groups = getGroupsForShard(shard);
   bool skip_safety_check = false;
 
   for (const auto& group : groups) {
@@ -135,7 +136,7 @@ bool ClusterMaintenanceWrapper::shouldSkipSafetyCheck(ShardID shard) const {
 
 bool ClusterMaintenanceWrapper::shouldForceRestoreRebuilding(
     ShardID shard) const {
-  std::set<GroupID> groups = getGroupsForShard(shard);
+  std::unordered_set<GroupID> groups = getGroupsForShard(shard);
   bool force_restore_mode = false;
 
   for (const auto& group : groups) {
@@ -149,7 +150,7 @@ bool ClusterMaintenanceWrapper::shouldForceRestoreRebuilding(
 
 bool ClusterMaintenanceWrapper::shouldSkipSafetyCheck(
     node_index_t node_id) const {
-  std::set<GroupID> groups = getGroupsForSequencer(node_id);
+  std::unordered_set<GroupID> groups = getGroupsForSequencer(node_id);
   bool skip_safety_check = false;
 
   for (const auto& group : groups) {
@@ -162,7 +163,7 @@ bool ClusterMaintenanceWrapper::shouldSkipSafetyCheck(
 }
 
 bool ClusterMaintenanceWrapper::isPassiveDrainAllowed(ShardID shard) const {
-  std::set<GroupID> groups = getGroupsForShard(shard);
+  std::unordered_set<GroupID> groups = getGroupsForShard(shard);
   bool passive_drain_allowed = false;
 
   for (const auto& group : groups) {

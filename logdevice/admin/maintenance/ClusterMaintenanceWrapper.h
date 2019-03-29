@@ -43,7 +43,8 @@ class ClusterMaintenanceWrapper {
    * This also will return ENABLED for shards that are not even member of the
    * cluster.
    */
-  std::set<ShardOperationalState> getShardTargetStates(ShardID shard) const;
+  std::unordered_set<ShardOperationalState>
+  getShardTargetStates(ShardID shard) const;
   /**
    * This doesn't look into the node role, if there is no maintenance applied
    * for this particular node index, this will return SequencingState::ENABLED.
@@ -58,11 +59,11 @@ class ClusterMaintenanceWrapper {
   /**
    * Returns an empty vector if no maintenances applied on this shard.
    */
-  std::set<GroupID> getGroupsForShard(ShardID shard) const;
+  std::unordered_set<GroupID> getGroupsForShard(ShardID shard) const;
   /**
    * Returns an empty vector if no maintenances applied on this node.
    */
-  std::set<GroupID> getGroupsForSequencer(node_index_t node) const;
+  std::unordered_set<GroupID> getGroupsForSequencer(node_index_t node) const;
 
   /**
    * Does the maintenances applied on a shard want us to skip safety checks?
@@ -104,11 +105,11 @@ class ClusterMaintenanceWrapper {
   std::shared_ptr<const configuration::nodes::NodesConfiguration> nodes_config_;
   folly::F14NodeMap<GroupID, const MaintenanceDefinition*> groups_;
 
-  folly::F14NodeMap<ShardID, std::set<GroupID>> shards_to_groups_;
-  folly::F14NodeMap<ShardID, std::set<ShardOperationalState>>
+  folly::F14NodeMap<ShardID, std::unordered_set<GroupID>> shards_to_groups_;
+  folly::F14NodeMap<ShardID, std::unordered_set<ShardOperationalState>>
       shards_to_targets_;
 
-  folly::F14NodeMap<node_index_t, std::set<GroupID>> nodes_to_groups_;
+  folly::F14NodeMap<node_index_t, std::unordered_set<GroupID>> nodes_to_groups_;
   folly::F14NodeMap<node_index_t, SequencingState> nodes_to_targets_;
 };
 

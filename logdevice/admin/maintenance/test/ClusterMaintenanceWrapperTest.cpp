@@ -25,7 +25,8 @@ TEST(ClusterMaintenanceWrapperTest, Empty) {
   ASSERT_EQ(nullptr, wrapper.getMaintenanceByGroupID("911"));
 
   ASSERT_EQ(0, wrapper.getGroupsForShard(ShardID(0, 0)).size());
-  std::set<ShardOperationalState> enabled = {ShardOperationalState::ENABLED};
+  std::unordered_set<ShardOperationalState> enabled = {
+      ShardOperationalState::ENABLED};
   ASSERT_EQ(enabled, wrapper.getShardTargetStates(ShardID(0, 0)));
   ASSERT_EQ(SequencingState::ENABLED, wrapper.getSequencerTargetState(0));
 
@@ -105,7 +106,8 @@ TEST(ClusterMaintenanceWrapperTest, ShardDefinitions) {
   ASSERT_EQ("Automation", wrapper.getMaintenanceByGroupID("911")->get_user());
 
   ASSERT_EQ(1, wrapper.getGroupsForShard(ShardID(1, 0)).size());
-  ASSERT_EQ(std::set<GroupID>{"911"}, wrapper.getGroupsForShard(ShardID(1, 0)));
+  ASSERT_EQ(std::unordered_set<GroupID>{"911"},
+            wrapper.getGroupsForShard(ShardID(1, 0)));
 
   ASSERT_EQ(2, wrapper.getGroupsForShard(ShardID(2, 0)).size());
   ASSERT_THAT(wrapper.getGroupsForShard(ShardID(2, 0)),
@@ -113,7 +115,8 @@ TEST(ClusterMaintenanceWrapperTest, ShardDefinitions) {
 
   // N9 resolved by address.
   ASSERT_EQ(1, wrapper.getGroupsForShard(ShardID(9, 0)).size());
-  ASSERT_EQ(std::set<GroupID>{"520"}, wrapper.getGroupsForShard(ShardID(9, 0)));
+  ASSERT_EQ(std::unordered_set<GroupID>{"520"},
+            wrapper.getGroupsForShard(ShardID(9, 0)));
 
   ASSERT_TRUE(wrapper.shouldSkipSafetyCheck(ShardID(2, 0)));
   ASSERT_FALSE(wrapper.shouldForceRestoreRebuilding(ShardID(2, 0)));
@@ -127,13 +130,15 @@ TEST(ClusterMaintenanceWrapperTest, ShardDefinitions) {
   ASSERT_TRUE(wrapper.isPassiveDrainAllowed(ShardID(9, 0)));
   ASSERT_FALSE(wrapper.shouldSkipSafetyCheck(ShardID(9, 0)));
 
-  std::set<ShardOperationalState> expected_states = {
+  std::unordered_set<ShardOperationalState> expected_states = {
       ShardOperationalState::DRAINED, ShardOperationalState::MAY_DISAPPEAR};
   ASSERT_EQ(expected_states, wrapper.getShardTargetStates(ShardID(2, 0)));
-  ASSERT_EQ(std::set<ShardOperationalState>{ShardOperationalState::DRAINED},
-            wrapper.getShardTargetStates(ShardID(9, 0)));
   ASSERT_EQ(
-      std::set<ShardOperationalState>{ShardOperationalState::MAY_DISAPPEAR},
+      std::unordered_set<ShardOperationalState>{ShardOperationalState::DRAINED},
+      wrapper.getShardTargetStates(ShardID(9, 0)));
+  ASSERT_EQ(
+      std::unordered_set<ShardOperationalState>{
+          ShardOperationalState::MAY_DISAPPEAR},
       wrapper.getShardTargetStates(ShardID(1, 0)));
 }
 
@@ -194,10 +199,12 @@ TEST(ClusterMaintenanceWrapperTest, SequencerDefinitions) {
   // The unknown node.
   ASSERT_EQ(0, wrapper.getGroupsForSequencer(900).size());
 
-  ASSERT_EQ(std::set<GroupID>{"911"}, wrapper.getGroupsForSequencer(1));
+  ASSERT_EQ(
+      std::unordered_set<GroupID>{"911"}, wrapper.getGroupsForSequencer(1));
   ASSERT_THAT(
       wrapper.getGroupsForSequencer(2), UnorderedElementsAre("911", "122"));
-  ASSERT_EQ(std::set<GroupID>{"122"}, wrapper.getGroupsForSequencer(9));
+  ASSERT_EQ(
+      std::unordered_set<GroupID>{"122"}, wrapper.getGroupsForSequencer(9));
 
   ASSERT_FALSE(wrapper.shouldSkipSafetyCheck(1));
   // Node ID 2 will skip safety since definition-2 includes it.
