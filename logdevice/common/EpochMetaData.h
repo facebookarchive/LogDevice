@@ -339,12 +339,13 @@ class EpochMetaData {
    * Convert a NodeSetIndices to a StorageSet.
    *
    * Converts node_index_t values to ShardIDs where the shard_index_t component
-   * is 0.
+   * is 0 by default.
    *
    * TODO(TT15517759): this function will be removed once all state machines are
    * converted to use StorageSet.
    */
-  static StorageSet nodesetToStorageSet(const NodeSetIndices& indices);
+  static StorageSet nodesetToStorageSet(const NodeSetIndices& indices,
+                                        shard_index_t shard_id = 0);
 
   /**
    * Convert a NodeSetIndices to a StorageSet.

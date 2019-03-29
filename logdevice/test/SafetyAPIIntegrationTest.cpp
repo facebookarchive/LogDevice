@@ -411,6 +411,7 @@ TEST_F(SafetyAPIIntegrationTest, DisableReads) {
       shard_status, shards, configuration::StorageState::DISABLED);
   ld_info("IMPACT: %s", impact.toString().c_str());
   ASSERT_EQ(Impact::ImpactResult::READ_AVAILABILITY_LOSS |
+                Impact::ImpactResult::WRITE_AVAILABILITY_LOSS |
                 Impact::ImpactResult::REBUILDING_STALL,
             impact.result);
 

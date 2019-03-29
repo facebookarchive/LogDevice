@@ -114,27 +114,33 @@ void CheckImpactForLogRequest::checkMetadataNodeset() {
   ReplicationProperty replication_property =
       ReplicationProperty::fromLogAttributes(metadatalog_group->attrs());
 
-  // TODO(T15517759): metadata log storage set should use ShardID.
-  auto storage_set =
-      EpochMetaData::nodesetToStorageSet(metadatalogs_config.metadata_nodes);
-
+  const shard_size_t n_shards = config->serverConfig()->getNumShards();
   int impact_result = Impact::ImpactResult::NONE;
-  NodeLocationScope fail_scope;
-  bool safe_reads;
-  bool safe_writes;
-  std::tie(safe_reads, safe_writes, fail_scope) =
-      checkReadWriteAvailablity(storage_set, replication_property);
+  Impact::StorageSetMetadata storage_set_metadata;
+  StorageSet storage_set;
+  for (shard_size_t shard_id = 0; shard_id < n_shards; ++shard_id) {
+    // TODO(T15517759): metadata log storage set should use ShardID.
+    storage_set = EpochMetaData::nodesetToStorageSet(
+        metadatalogs_config.metadata_nodes, shard_id);
+    storage_set_metadata = getStorageSetMetadata(storage_set);
 
-  if (!safe_writes) {
-    impact_result |= Impact::ImpactResult::WRITE_AVAILABILITY_LOSS;
-  }
-  if (!safe_reads) {
-    impact_result |= Impact::ImpactResult::READ_AVAILABILITY_LOSS;
-    ld_debug("It is safe to perform operations on metadata nodes");
+    NodeLocationScope fail_scope;
+    bool safe_reads;
+    bool safe_writes;
+    std::tie(safe_reads, safe_writes, fail_scope) =
+        checkReadWriteAvailablity(storage_set, replication_property);
+
+    if (!safe_writes) {
+      impact_result |= Impact::ImpactResult::WRITE_AVAILABILITY_LOSS;
+    }
+    if (!safe_reads) {
+      impact_result |= Impact::ImpactResult::READ_AVAILABILITY_LOSS;
+    }
+    if (impact_result != Impact::ImpactResult::NONE) {
+      break;
+    }
   }
 
-  Impact::StorageSetMetadata storage_set_metadata =
-      getStorageSetMetadata(storage_set);
   complete(E::OK,
            impact_result,
            EPOCH_INVALID,

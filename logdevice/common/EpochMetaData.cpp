@@ -523,11 +523,12 @@ std::string EpochMetaData::flagsToString(epoch_metadata_flags_t flags) {
   return s;
 }
 
-StorageSet EpochMetaData::nodesetToStorageSet(const NodeSetIndices& indices) {
+StorageSet EpochMetaData::nodesetToStorageSet(const NodeSetIndices& indices,
+                                              shard_index_t shard_id) {
   StorageSet set;
   set.reserve(indices.size());
   for (node_index_t nid : indices) {
-    set.push_back(ShardID(nid, 0));
+    set.push_back(ShardID(nid, shard_id));
   }
   return set;
 }
