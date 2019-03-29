@@ -967,7 +967,8 @@ Returns a LogGroup if exists, otherwise throws an exception.
            args("self", "path", "recursive"),
            R"DOC(
 Removes a directory from the LogsConfig tree, if recursive is True, this will
-delete all the children as well. Throws an exception if failed.
+delete all the children as well. Throws an exception if failed. Returns
+LogsConfig version.
   E::ACCESS you don't have permissions to
             mutate the logs configuration.
   E::EXISTS Directory already exists.
@@ -980,6 +981,7 @@ delete all the children as well. Throws an exception if failed.
            args("self", "path"),
            R"DOC(
 Removes a log group from the LogsConfig tree. Throws an exception if failed.
+Returns LogsConfig version.
   E::ACCESS you don't have permissions to
             mutate the logs configuration.
   E::EXISTS Directory already exists.
@@ -992,7 +994,8 @@ Removes a log group from the LogsConfig tree. Throws an exception if failed.
            args("self", "old_path", "new_path"),
            R"DOC(
 Rename the leaf of the supplied path. This does not move entities in the
-tree it only renames the last token in the path supplies.
+tree it only renames the last token in the path supplies. Returns LogsConfig
+version.
 
 The new path is the full path of the destination, it must not exist,
 otherwise you will receive status of E::EXISTS
@@ -1013,7 +1016,7 @@ otherwise you will receive status of E::EXISTS
 This sets either a LogGroup or LogsDirectory attributes to the supplied
 attributes object. If the path refers to directory, all child directories
 and log groups will be updated accordingly. Throws an exception if operation
-has failed.
+has failed. Returns LogsConfig version.
   E::ID_CLASH          the supplied ID clashes with an existing log group
   E::INVALID_ATTRIBUTES After applying the parent
                        attributes and the supplied
@@ -1029,7 +1032,7 @@ has failed.
            args("self", "path", "from", "to"),
            R"DOC(
 This sets the log group range to the supplied new range. Throws an exception
-if failed.
+if failed. Returns LogsConfig version.
   E::NOTFOUND if the path doesn't exist or it's
      pointing to a directory
   E::INVALID_ATTRIBUTES the range you supplied is
