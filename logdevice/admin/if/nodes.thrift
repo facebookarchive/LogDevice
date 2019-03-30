@@ -97,27 +97,25 @@ enum MaintenanceStatus {
    */
   BLOCKED_UNTIL_SAFE = 4,
   /**
-   * We are requesting rebuilding to start on the shards.
-   */
-  REQUESTING_DATA_REBUILDING = 5,
-  /**
    * MaintenanceManager is waiting for data migration/rebuilding to complete.
    * operation is safe.
    */
-  AWAITING_DATA_REBUILDING = 6,
+  AWAITING_DATA_REBUILDING = 5,
   /**
    * Data migration is blocked because it would lead to data loss if unblocked.
    * If this is required, use the unblockRebuilding to skip lost records and
    * and unblock readers waiting for the permanently lost records to be
    * recovered.
    */
-  REBUILDING_IS_BLOCKED = 7,
-  COMPLETED = 8,
+  REBUILDING_IS_BLOCKED = 6,
+  COMPLETED = 7,
   /**
-   * Maintenance cannot proceed because of some operational error. Will
+   * Maintenance cannot proceed because of an internal error error.
+   * (ex: Event couldn't be written to event log or the StorageState
+   * for the Shard in NC is in a transitional state) Will
    * be retried internally
    */
-  RETRY = 9,
+  RETRY = 8,
 }
 
 /**

@@ -33,7 +33,8 @@ class EventLogWriter {
   void writeToEventLog(
       std::unique_ptr<EventLogRecord> event,
       std::function<
-          void(Status st, lsn_t version, const std::string& /* unused */)> cb);
+          void(Status st, lsn_t version, const std::string& /* unused */)> cb)
+      const;
 
  private:
   const MaintenanceManager* owner_;

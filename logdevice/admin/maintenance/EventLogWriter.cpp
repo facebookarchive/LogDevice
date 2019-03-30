@@ -13,7 +13,8 @@ namespace facebook { namespace logdevice { namespace maintenance {
 void EventLogWriter::writeToEventLog(
     std::unique_ptr<EventLogRecord> event,
     std::function<
-        void(Status st, lsn_t version, const std::string& /* unused */)> cb) {
+        void(Status st, lsn_t version, const std::string& /* unused */)> cb)
+    const {
   ld_check(owner_ != nullptr);
   // TODO:Implementation
   return;

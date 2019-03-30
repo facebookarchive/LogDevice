@@ -9,7 +9,7 @@
 
 #include <folly/futures/Future.h>
 
-#include "logdevice/admin/maintenance/Workflow.h"
+#include "logdevice/admin/maintenance/types.h"
 #include "logdevice/common/NodeID.h"
 
 namespace facebook { namespace logdevice { namespace maintenance {
@@ -17,7 +17,7 @@ namespace facebook { namespace logdevice { namespace maintenance {
  * A SequencerMaintenanceworkflow is a state machine that tracks state
  * transitions of a Sequencer node.
  */
-class SequencerWorkflow : public Workflow {
+class SequencerWorkflow {
  public:
   explicit SequencerWorkflow(NodeID node) : node_(node) {}
 
