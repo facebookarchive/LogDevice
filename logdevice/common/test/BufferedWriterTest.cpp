@@ -23,6 +23,7 @@
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/settings/util.h"
 #include "logdevice/common/test/TestUtil.h"
+#include "logdevice/include/Err.h"
 
 /**
  * @file Unit tests for BufferedWriter.  Outgoing (batched) appends are
@@ -104,12 +105,18 @@ class TestAppendSink : public BufferedWriterAppendSink {
  public:
   explicit TestAppendSink(Processor* processor) : processor_(processor) {}
 
+  // If this returns false, be sure to set logdevice::err as appropriate.
   bool checkAppend(logid_t, size_t payload_size, bool allow_extra) override {
     size_t max_size = processor_->settings()->max_payload_size;
     if (allow_extra) {
       max_size += MAX_PAYLOAD_EXTRA_SIZE;
     }
-    return payload_size <= max_size;
+    if (payload_size > max_size) {
+      err = E::TOOBIG;
+      return false;
+    }
+
+    return true;
   }
 
   Status canSendToWorker() override {
@@ -524,6 +531,7 @@ TEST_F(BufferedWriterTest, MaxSizePayloadFail) {
   const logid_t LOG_ID(1);
   const std::string payload(MAX_PAYLOAD_SIZE_PUBLIC, 'a');
   ASSERT_NE(0, writer->append(LOG_ID, std::string(payload), NULL_CONTEXT));
+  ASSERT_EQ(err, E::TOOBIG);
   // Callback should not get invoked
   ASSERT_EQ(0, cb.sem.value());
 }
