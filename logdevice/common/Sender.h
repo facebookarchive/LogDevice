@@ -349,8 +349,6 @@ class Sender : public SenderBase {
   explicit Sender(
       struct event_base* base,
       const configuration::ShapingConfig& tsc,
-      size_t max_node_idx,
-      int32_t num_workders,
       ClientIdxAllocator* client_id_allocator,
       bool is_gossip_sender,
       std::shared_ptr<const configuration::nodes::NodesConfiguration> nodes,
@@ -478,7 +476,7 @@ class Sender : public SenderBase {
   /**
    * @return true iff all owned sockets are closed.
    */
-  bool isClosed();
+  bool isClosed() const;
 
   /**
    * Check if a working connection to a given node exists. Returns through

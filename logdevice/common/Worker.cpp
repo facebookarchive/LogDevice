@@ -110,8 +110,6 @@ class WorkerImpl {
   WorkerImpl(Worker* w, const std::shared_ptr<UpdateableConfig>& config)
       : sender_(w->getEventBase(),
                 config->get()->serverConfig()->getTrafficShapingConfig(),
-                config->get()->serverConfig()->getMaxNodeIdx(),
-                w->processor_->getWorkerCount(w->worker_type_),
                 &w->processor_->clientIdxAllocator(),
                 w->worker_type_ == WorkerType::FAILURE_DETECTOR,
                 config->getServerConfig()

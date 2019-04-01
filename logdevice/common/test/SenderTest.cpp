@@ -49,8 +49,6 @@ TEST(SenderTest, StartStop) {
 
   Sender sender(thread_pool.getEventBase()->getLibeventBase(),
                 sc,
-                1,
-                1,
                 &client_idx_allocator,
                 false,
                 nodes,
