@@ -802,7 +802,11 @@ Socket* Sender::initServerSocket(NodeID nid,
     return nullptr;
   }
 
-  const bool use_ssl = (!allow_unencrypted && useSSLWith(nid)) ||
+  bool cross_boundary = false;
+  bool ssl_authentication = false;
+  const bool use_ssl =
+      (!allow_unencrypted &&
+       useSSLWith(nid, &cross_boundary, &ssl_authentication)) ||
       (Worker::settings().ssl_on_gossip_port &&
        sock_type == SocketType::GOSSIP);
 
@@ -840,20 +844,9 @@ Socket* Sender::initServerSocket(NodeID nid,
       }
     }
 
-    bool cross_boundary = false;
-    bool ssl_authentication = false;
-    bool use_ssl = !allow_unencrypted &&
-        useSSLWith(nid, &cross_boundary, &ssl_authentication);
-
     try {
       auto& flow_group =
           nw_shaping_container_->selectFlowGroup(flow_group_scope);
-      if (sock_type == SocketType::GOSSIP) {
-        ld_check(is_gossip_sender_);
-        if (Worker::settings().send_to_gossip_port) {
-          use_ssl = Worker::settings().ssl_on_gossip_port;
-        }
-      }
 
       std::unique_ptr<Socket> sock(
           new Socket(nid,
@@ -870,6 +863,10 @@ Socket* Sender::initServerSocket(NodeID nid,
       if (use_ssl && !cross_boundary) {
         // If the connection does not cross the ssl boundary, limit the ciphers
         // to eNULL ciphers to reduce overhead.
+
+        // TODO(tau0): We should probably remove this.
+        // Because it seems that null ciphers are less performant:
+        // https://fburl.com/yafb7etk
         it->second->limitCiphersToENULL();
       }
     } catch (ConstructorFailed&) {
