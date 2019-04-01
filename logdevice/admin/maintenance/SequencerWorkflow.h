@@ -23,13 +23,28 @@ class SequencerWorkflow {
 
   folly::SemiFuture<MaintenanceStatus> run(bool is_sequencing_enabled);
 
+  // Sets the target_op_state_ to given value
+  // Can only be SequencingState::ENABLED or SequencingState::DISABLED
+  void setTargetOpState(SequencingState state);
+
   // Returns the target_op_state_
   SequencingState getTargetOpState() const;
+
+  // Returns the NodeID for this workflow
+  NodeID getNodeID() const;
+
+  // Sets skip_safety_check_ to value of `skip`
+  void shouldSkipSafetyCheck(bool skip);
 
  private:
   SequencingState target_op_state_;
   // The shard this workflow is for
   NodeID node_;
+  // True if Sequencing is enabled in NodesConfig.
+  // Updated every time run is called
+  SequencingState current_sequencing_state_;
+  // If true, skip safety check for this workflow
+  bool skip_safety_check_{false};
 };
 
 }}} // namespace facebook::logdevice::maintenance
