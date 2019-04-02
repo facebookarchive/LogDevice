@@ -421,6 +421,24 @@ void PurgeCoordinator::onReleaseMessage(lsn_t lsn,
     return;
   }
 
+  // Do not process the release if the log does not exist.
+  // as purging will fail. Log may not exists becasue
+  // 1. It is deleted - Dropping release in innocuous
+  // 2. This node has a stale config - if log does exist
+  // and is being written to, future release will be processed
+  // once config catches up to version that has the log. Dropping
+  // the release now should be innocuous as well
+  if (!logExistsInConfig()) {
+    // Log does not exists in the config. Do not
+    // process this release as purging will fail anyway
+    RATELIMIT_INFO(std::chrono::seconds(10),
+                   2,
+                   "Not processing release message for log %lu as it does not "
+                   "exist in config",
+                   log_id_.val_);
+    return;
+  }
+
   // We need to purge (or just load the last clean epoch) before we can
   // process this RELEASE. Does not apply to per-epoch RELEASE messages (which
   // do not purge and are always processed immediately).
@@ -448,6 +466,12 @@ void PurgeCoordinator::onReleaseMessage(lsn_t lsn,
   epoch_t purge_to = epoch_t(release_epoch.val_ - 1);
   startPurge(std::move(guard), purge_to, purge_to, from, std::move(token));
   // No longer holding lock here
+}
+
+bool PurgeCoordinator::logExistsInConfig() {
+  ServerWorker* w = ServerWorker::onThisThread();
+  return w->getLogsConfig()->isFullyLoaded() &&
+      w->getLogsConfig()->logExists(log_id_);
 }
 
 std::pair<Status, Seal>

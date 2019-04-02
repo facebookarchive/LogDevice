@@ -210,6 +210,11 @@ class PurgeCoordinator : public LogStorageState_PurgeCoordinator_Bridge {
                            worker_id_t worker_id,
                            Seal preempted_seal);
 
+  // Returns true if the logsconfig is loaded and the log
+  // does exist in logs config. Used to drop processing release
+  // message if log does not exist as purging will fail
+  virtual bool logExistsInConfig();
+
   // helper function for checking and updating last clean epoch in memory
   void updateLastCleanEpochInRecordCache(epoch_t lce);
 
