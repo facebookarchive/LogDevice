@@ -18,6 +18,7 @@
 #include "logdevice/common/protocol/Message.h"
 #include "logdevice/common/test/MockNodeServiceDiscovery.h"
 #include "logdevice/common/test/MockNodesConfiguration.h"
+#include "logdevice/common/test/MockSettings.h"
 #include "logdevice/common/test/MockShapingConfig.h"
 #include "logdevice/include/NodeLocationScope.h"
 
@@ -46,8 +47,10 @@ TEST(SenderTest, StartStop) {
       std::make_shared<MockNodesConfiguration>();
   NodeLocation loc;
   loc.fromDomainString("ash.2.08.k.z");
+  std::shared_ptr<Settings> settings = std::make_shared<MockSettings>();
 
-  Sender sender(thread_pool.getEventBase()->getLibeventBase(),
+  Sender sender(settings,
+                thread_pool.getEventBase()->getLibeventBase(),
                 sc,
                 &client_idx_allocator,
                 false,

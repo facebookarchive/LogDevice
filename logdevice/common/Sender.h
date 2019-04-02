@@ -58,6 +58,7 @@ class Socket;
 class SocketCallback;
 class SocketProxy;
 class StatsHolder;
+struct Settings;
 
 namespace configuration {
 struct TrafficShapingConfig;
@@ -347,6 +348,7 @@ class Sender : public SenderBase {
    *                     time this Sender was created
    */
   explicit Sender(
+      std::shared_ptr<const Settings> settings,
       struct event_base* base,
       const configuration::ShapingConfig& tsc,
       ClientIdxAllocator* client_id_allocator,
@@ -739,6 +741,10 @@ class Sender : public SenderBase {
   void noteConfigurationChanged(
       std::shared_ptr<const configuration::nodes::NodesConfiguration>);
 
+  void onSettingsUpdated(std::shared_ptr<const Settings> new_settings) {
+    settings_.swap(new_settings);
+  }
+
   /**
    * Add a client id to the list of Sockets to be erased from .client_sockets_
    * next time this object tries to add a new entry to that map.
@@ -790,6 +796,8 @@ class Sender : public SenderBase {
   void forAllClientSockets(std::function<void(Socket&)> fn);
 
  private:
+  std::shared_ptr<const Settings> settings_;
+
   // Network Traffic Shaping
   std::unique_ptr<ShapingContainer> nw_shaping_container_;
 

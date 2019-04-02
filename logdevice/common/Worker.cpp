@@ -108,7 +108,8 @@ static constexpr size_t N_APPENDER_MAP_BUCKETS = 128 * 1024;
 class WorkerImpl {
  public:
   WorkerImpl(Worker* w, const std::shared_ptr<UpdateableConfig>& config)
-      : sender_(w->getEventBase(),
+      : sender_(w->immutable_settings_,
+                w->getEventBase(),
                 config->get()->serverConfig()->getTrafficShapingConfig(),
                 &w->processor_->clientIdxAllocator(),
                 w->worker_type_ == WorkerType::FAILURE_DETECTOR,
@@ -405,6 +406,8 @@ void Worker::onSettingsUpdated() {
   if (impl_->sequencerBackgroundActivator_) {
     impl_->sequencerBackgroundActivator_->onSettingsUpdated();
   }
+
+  impl_->sender_.onSettingsUpdated(immutable_settings_);
 }
 
 void Worker::initializeSubscriptions() {

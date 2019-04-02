@@ -111,14 +111,16 @@ void SenderBase::MessageCompletion::send() {
   Worker::unpackRunContext(prev_context);
 }
 
-Sender::Sender(struct event_base* base,
+Sender::Sender(std::shared_ptr<const Settings> settings,
+               struct event_base* base,
                const configuration::ShapingConfig& tsc,
                ClientIdxAllocator* client_id_allocator,
                bool is_gossip_sender,
                std::shared_ptr<const NodesConfiguration> nodes,
                node_index_t my_index,
                folly::Optional<NodeLocation> my_location)
-    : impl_(new SenderImpl(client_id_allocator)),
+    : settings_(settings),
+      impl_(new SenderImpl(client_id_allocator)),
       is_gossip_sender_(is_gossip_sender),
       nodes_(std::move(nodes)),
       my_node_index_(my_index),
@@ -383,7 +385,7 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
   // message, we need to update the client config version on the socket.
   if (!isHandshakeMessage(msg->type_) &&
       !isConfigSynchronizationMessage(msg->type_) &&
-      Worker::settings().enable_config_synchronization) {
+      settings_->enable_config_synchronization) {
     int rv = notifyPeerConfigUpdated(*sock);
     if (rv != 0) {
       return -1;
@@ -765,7 +767,7 @@ bool Sender::useSSLWith(NodeID nid,
   // Determine whether we need to use SSL by comparing our location with the
   // location of the target node.
   bool cross_boundary = false;
-  NodeLocationScope diff_level = Worker::settings().ssl_boundary;
+  NodeLocationScope diff_level = settings_->ssl_boundary;
 
   std::shared_ptr<ServerConfig> cfg(Worker::getConfig()->serverConfig());
   cross_boundary = cfg->getNodeSSL(my_location_, nid, diff_level);
@@ -774,7 +776,7 @@ bool Sender::useSSLWith(NodeID nid,
   // We will use a SSL socket for authentication when the client or server
   // want to load their certificate.
   bool authentication = false;
-  if (Worker::settings().ssl_load_client_cert) {
+  if (settings_->ssl_load_client_cert) {
     authentication = true;
   }
 
@@ -1199,7 +1201,7 @@ void Sender::setPeerNodeID(const Address& addr, NodeID node_id) {
     NodeID& peer_node = it->second->peer_node_id_;
     peer_node = node_id;
     if (node_id.isNodeID()) {
-      it->second->setDSCP(Worker::settings().server_dscp_default);
+      it->second->setDSCP(settings_->server_dscp_default);
     }
   }
 }
@@ -1321,8 +1323,7 @@ void Sender::noteConfigurationChanged(
 }
 
 bool Sender::bytesPendingLimitReached() {
-  return getBytesPending() >
-      Worker::settings().outbufs_mb_max_per_thread * 1024 * 1024;
+  return getBytesPending() > settings_->outbufs_mb_max_per_thread * 1024 * 1024;
 }
 
 void Sender::queueMessageCompletion(std::unique_ptr<Message> msg,
