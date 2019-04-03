@@ -16,8 +16,8 @@ namespace facebook { namespace logdevice { namespace maintenance {
 
 ClusterMaintenanceWrapper::ClusterMaintenanceWrapper(
     std::unique_ptr<thrift::ClusterMaintenanceState> state,
-    std::shared_ptr<const NodesConfiguration> nodes_config)
-    : state_(std::move(state)), nodes_config_(std::move(nodes_config)) {
+    const std::shared_ptr<const NodesConfiguration>& nodes_config)
+    : state_(std::move(state)), nodes_config_(nodes_config) {
   indexDefinitions();
 }
 
@@ -30,6 +30,7 @@ void ClusterMaintenanceWrapper::clear() {
 }
 
 void ClusterMaintenanceWrapper::indexDefinitions() {
+  ld_assert(nodes_config_ != nullptr);
   ld_assert(state_);
   for (const auto& definition : state_->get_definitions()) {
     // At this point we assume that all definitions are legal, they have been
@@ -45,7 +46,7 @@ void ClusterMaintenanceWrapper::indexDefinitions() {
       // ignore_missing = true. We ignore nodes that we cannot find in the
       // configuration.
       ShardSet expanded_shards = expandShardSet(shards, *nodes_config_, true);
-      for (auto shard : expanded_shards) {
+      for (auto& shard : expanded_shards) {
         shards_to_groups_[shard].insert(group_id);
         shards_to_targets_[shard].insert(definition.get_shard_target_state());
       }
@@ -74,7 +75,7 @@ void ClusterMaintenanceWrapper::indexDefinitions() {
 }
 
 const MaintenanceDefinition*
-ClusterMaintenanceWrapper::getMaintenanceByGroupID(GroupID group) const {
+ClusterMaintenanceWrapper::getMaintenanceByGroupID(const GroupID& group) const {
   const auto it = groups_.find(group);
   if (it != groups_.end()) {
     return it->second;
@@ -82,34 +83,65 @@ ClusterMaintenanceWrapper::getMaintenanceByGroupID(GroupID group) const {
   return nullptr;
 }
 
-std::unordered_set<GroupID>
-ClusterMaintenanceWrapper::getGroupsForShard(ShardID shard) const {
+const std::unordered_set<GroupID>&
+ClusterMaintenanceWrapper::getGroupsForShard(const ShardID& shard) const {
   ld_assert(shard.isValid());
+  static const std::unordered_set<GroupID> default_state{};
   const auto it = shards_to_groups_.find(shard);
   if (it != shards_to_groups_.end()) {
     return it->second;
   }
-  return std::unordered_set<GroupID>();
+  return default_state;
 }
 
-std::unordered_set<GroupID>
+const std::unordered_set<GroupID>&
 ClusterMaintenanceWrapper::getGroupsForSequencer(node_index_t node) const {
+  static const std::unordered_set<GroupID> default_state{};
   const auto it = nodes_to_groups_.find(node);
   if (it != nodes_to_groups_.end()) {
     return it->second;
   }
-  return std::unordered_set<GroupID>();
+  return default_state;
 }
 
-std::unordered_set<ShardOperationalState>
-ClusterMaintenanceWrapper::getShardTargetStates(ShardID shard) const {
+std::unordered_map<GroupID, ShardSet>
+ClusterMaintenanceWrapper::groupShardsByGroupID(
+    const std::vector<ShardID>& shards) const {
+  std::unordered_map<GroupID, ShardSet> output;
+  for (const auto& shard : shards) {
+    // Let's find it in out groups index
+    auto groups = getGroupsForShard(shard);
+    for (const GroupID& group : groups) {
+      output[group].insert(shard);
+    }
+  }
+  return output;
+}
+
+std::unordered_map<GroupID, std::unordered_set<node_index_t>>
+ClusterMaintenanceWrapper::groupSequencersByGroupID(
+    const std::vector<node_index_t>& nodes) const {
+  std::unordered_map<GroupID, std::unordered_set<node_index_t>> output;
+  for (const auto& node : nodes) {
+    // Let's find it in out groups index
+    auto groups = getGroupsForSequencer(node);
+    for (const GroupID& group : groups) {
+      output[group].insert(node);
+    }
+  }
+  return output;
+}
+
+const std::unordered_set<ShardOperationalState>&
+ClusterMaintenanceWrapper::getShardTargetStates(const ShardID& shard) const {
+  static const std::unordered_set<ShardOperationalState> default_state{
+      ShardOperationalState::ENABLED};
   ld_assert(shard.isValid());
   const auto it = shards_to_targets_.find(shard);
   if (it != shards_to_targets_.end()) {
     return it->second;
   }
-  return std::unordered_set<ShardOperationalState>{
-      ShardOperationalState::ENABLED};
+  return default_state;
 }
 
 SequencingState ClusterMaintenanceWrapper::getSequencerTargetState(
@@ -121,11 +153,12 @@ SequencingState ClusterMaintenanceWrapper::getSequencerTargetState(
   return SequencingState::ENABLED;
 }
 
-bool ClusterMaintenanceWrapper::shouldSkipSafetyCheck(ShardID shard) const {
-  std::unordered_set<GroupID> groups = getGroupsForShard(shard);
+bool ClusterMaintenanceWrapper::shouldSkipSafetyCheck(
+    const ShardID& shard) const {
+  const auto& groups = getGroupsForShard(shard);
   bool skip_safety_check = false;
 
-  for (const auto& group : groups) {
+  for (const GroupID& group : groups) {
     // we use [] operator as we are sure that group exists.
     ld_assert(groups_.count(group) > 0);
     auto* definition = groups_.at(group);
@@ -135,12 +168,11 @@ bool ClusterMaintenanceWrapper::shouldSkipSafetyCheck(ShardID shard) const {
 }
 
 bool ClusterMaintenanceWrapper::shouldForceRestoreRebuilding(
-    ShardID shard) const {
-  std::unordered_set<GroupID> groups = getGroupsForShard(shard);
+    const ShardID& shard) const {
+  const auto& groups = getGroupsForShard(shard);
   bool force_restore_mode = false;
 
-  for (const auto& group : groups) {
-    // we use [] operator as we are sure that group exists.
+  for (const GroupID& group : groups) {
     ld_assert(groups_.count(group) > 0);
     auto* definition = groups_.at(group);
     force_restore_mode |= definition->get_force_restore_rebuilding();
@@ -150,11 +182,10 @@ bool ClusterMaintenanceWrapper::shouldForceRestoreRebuilding(
 
 bool ClusterMaintenanceWrapper::shouldSkipSafetyCheck(
     node_index_t node_id) const {
-  std::unordered_set<GroupID> groups = getGroupsForSequencer(node_id);
+  const auto& groups = getGroupsForSequencer(node_id);
   bool skip_safety_check = false;
 
-  for (const auto& group : groups) {
-    // we use [] operator as we are sure that group exists.
+  for (const GroupID& group : groups) {
     ld_assert(groups_.count(group) > 0);
     auto* definition = groups_.at(group);
     skip_safety_check |= definition->get_skip_safety_checks();
@@ -162,12 +193,12 @@ bool ClusterMaintenanceWrapper::shouldSkipSafetyCheck(
   return skip_safety_check;
 }
 
-bool ClusterMaintenanceWrapper::isPassiveDrainAllowed(ShardID shard) const {
-  std::unordered_set<GroupID> groups = getGroupsForShard(shard);
+bool ClusterMaintenanceWrapper::isPassiveDrainAllowed(
+    const ShardID& shard) const {
+  const auto& groups = getGroupsForShard(shard);
   bool passive_drain_allowed = false;
 
-  for (const auto& group : groups) {
-    // we use [] operator as we are sure that group exists.
+  for (const GroupID& group : groups) {
     ld_assert(groups_.count(group) > 0);
     auto* definition = groups_.at(group);
     passive_drain_allowed |= definition->get_allow_passive_drains();

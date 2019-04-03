@@ -25,26 +25,25 @@ class ClusterMaintenanceWrapper {
  public:
   ClusterMaintenanceWrapper(
       std::unique_ptr<thrift::ClusterMaintenanceState> state,
-      std::shared_ptr<const configuration::nodes::NodesConfiguration>
+      const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
           nodes_config);
 
   /**
    * Queries the groups by ID and returns a pointer if found. The
    * MaintenanceDefinition lifetime is bound by this wrapper object.
    */
-  const MaintenanceDefinition* getMaintenanceByGroupID(GroupID group) const;
+  const MaintenanceDefinition*
+  getMaintenanceByGroupID(const GroupID& group) const;
 
   /**
    * This doesn't look into the node role, if there is no maintenance applied
-   * for this particular shard, this will return
-   * {ShardOperationalState::ENABLED}. It's the responsibility of the caller to
-   * verify whether this is a storage node or not.
-   *
-   * This also will return ENABLED for shards that are not even member of the
-   * cluster.
+   * for this particular shard it will return {ShardOperationalState::ENABLED}
+   * It's the responsibility of the caller to verify whether this is a storage
+   * node or not.
    */
-  std::unordered_set<ShardOperationalState>
-  getShardTargetStates(ShardID shard) const;
+  const std::unordered_set<ShardOperationalState>&
+  getShardTargetStates(const ShardID& shard) const;
+
   /**
    * This doesn't look into the node role, if there is no maintenance applied
    * for this particular node index, this will return SequencingState::ENABLED.
@@ -57,18 +56,37 @@ class ClusterMaintenanceWrapper {
   SequencingState getSequencerTargetState(node_index_t node_index) const;
 
   /**
-   * Returns an empty vector if no maintenances applied on this shard.
+   * Returns a reference to a reference to an empty set if no maintenances
+   * applied on this shard.
    */
-  std::unordered_set<GroupID> getGroupsForShard(ShardID shard) const;
+  const std::unordered_set<GroupID>&
+  getGroupsForShard(const ShardID& shard) const;
+
   /**
-   * Returns an empty vector if no maintenances applied on this node.
+   * Returns a a reference to an empty set if no maintenances applied on this
+   * node.
    */
-  std::unordered_set<GroupID> getGroupsForSequencer(node_index_t node) const;
+  const std::unordered_set<GroupID>&
+  getGroupsForSequencer(node_index_t node) const;
+
+  /**
+   * Accepts a list of shard ids and return them grouped by group-ids. Note that
+   * the shard may appear in multiple groups.
+   */
+  std::unordered_map<GroupID, ShardSet>
+  groupShardsByGroupID(const std::vector<ShardID>& shards) const;
+
+  /**
+   * Accepts a list of node ids and return them grouped by group-ids. Note that
+   * the node may appear in multiple groups.
+   */
+  std::unordered_map<GroupID, std::unordered_set<node_index_t>>
+  groupSequencersByGroupID(const std::vector<node_index_t>& shards) const;
 
   /**
    * Does the maintenances applied on a shard want us to skip safety checks?
    */
-  bool shouldSkipSafetyCheck(ShardID shard) const;
+  bool shouldSkipSafetyCheck(const ShardID& shard) const;
   /**
    * Does the maintenances applied on a sequencer want us to skip safety checks?
    */
@@ -76,31 +94,33 @@ class ClusterMaintenanceWrapper {
   /**
    * Do we allow passive drains to happen automatically?
    */
-  bool isPassiveDrainAllowed(ShardID shard) const;
+  bool isPassiveDrainAllowed(const ShardID& shard) const;
   /**
    * This is usually set by the RebuildingSupervisor to indicate that we should
    * run rebuilding in RESTORE mode.
    */
-  bool shouldForceRestoreRebuilding(ShardID shard) const;
+  bool shouldForceRestoreRebuilding(const ShardID& shard) const;
   /**
    * Update the underlying nodes configuration used by this structure to resolve
    * nodes and shards. This will trigger a recreation of the internal indexes.
    */
   void updateNodesConfiguration(
-      std::shared_ptr<const configuration::nodes::NodesConfiguration>
+      const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
           nodes_config) {
+    ld_assert(nodes_config != nullptr);
     if (nodes_config_->getVersion() == nodes_config->getVersion()) {
-      ld_info("NodesConfig is up-to-date(version:%lu). Not regenerating index "
-              "for definitions",
-              nodes_config_->getVersion().val_);
+      ld_debug("NodesConfig is up-to-date(version:%lu). Not regenerating index "
+               "for definitions",
+               nodes_config_->getVersion().val_);
       return;
     }
+
     nodes_config_ = nodes_config;
     clear();
     indexDefinitions();
-    ld_info("Regenerated index for definitions using NodesConfiguration "
-            "version:%lu",
-            nodes_config_->getVersion().val_);
+    ld_debug("Regenerated index for definitions using NodesConfiguration "
+             "version:%lu",
+             nodes_config_->getVersion().val_);
   }
 
   uint64_t getVersion() {

@@ -25,6 +25,8 @@ TEST(ClusterMaintenanceWrapperTest, Empty) {
   ASSERT_EQ(nullptr, wrapper.getMaintenanceByGroupID("911"));
 
   ASSERT_EQ(0, wrapper.getGroupsForShard(ShardID(0, 0)).size());
+  ASSERT_EQ(0, wrapper.getGroupsForSequencer(0).size());
+
   std::unordered_set<ShardOperationalState> enabled = {
       ShardOperationalState::ENABLED};
   ASSERT_EQ(enabled, wrapper.getShardTargetStates(ShardID(0, 0)));
@@ -170,6 +172,14 @@ TEST(ClusterMaintenanceWrapperTest, ShardDefinitions) {
   ASSERT_EQ(
       std::unordered_set<ShardOperationalState>{ShardOperationalState::DRAINED},
       wrapper.getShardTargetStates(ShardID(17, 0)));
+
+  auto grouped = wrapper.groupShardsByGroupID(
+      {ShardID(9, 0), ShardID(1, 0), ShardID(2, 0)});
+  // 3 groups.
+  ASSERT_EQ(3, grouped.size());
+  ASSERT_EQ(ShardSet({ShardID(9, 0)}), grouped["520"]);
+  ASSERT_EQ(ShardSet({ShardID(1, 0), ShardID(2, 0)}), grouped["911"]);
+  ASSERT_EQ(ShardSet({ShardID(2, 0)}), grouped["122"]);
 }
 
 TEST(ClusterMaintenanceWrapperTest, SequencerDefinitions) {
@@ -244,4 +254,10 @@ TEST(ClusterMaintenanceWrapperTest, SequencerDefinitions) {
   ASSERT_EQ(SequencingState::DISABLED, wrapper.getSequencerTargetState(1));
   ASSERT_EQ(SequencingState::DISABLED, wrapper.getSequencerTargetState(2));
   ASSERT_EQ(SequencingState::DISABLED, wrapper.getSequencerTargetState(9));
+
+  auto grouped = wrapper.groupSequencersByGroupID({1, 2, 9});
+  // 3 groups.
+  ASSERT_EQ(2, grouped.size());
+  ASSERT_EQ(std::unordered_set<node_index_t>({1, 2}), grouped["911"]);
+  ASSERT_EQ(std::unordered_set<node_index_t>({2, 9}), grouped["122"]);
 }
