@@ -95,6 +95,20 @@ TEST(ClusterMaintenanceWrapperTest, ShardDefinitions) {
   def3.set_force_restore_rebuilding(true);
   definitions.push_back(def3);
 
+  // Non Existent node that will be added later
+  auto node4 = thrift::NodeID();
+  node4.set_node_index(17);
+  auto def4 = MaintenanceDefinition();
+  auto shard4 = thrift::ShardID();
+  shard4.set_node(node4);
+  shard4.set_shard_index(0);
+  def4.set_user("humans");
+  def4.set_shards({shard4});
+  def4.set_shard_target_state(ShardOperationalState::DRAINED);
+  def4.set_group_id("620");
+  def4.set_allow_passive_drains(true);
+  definitions.push_back(def4);
+
   cluster_state->set_definitions(std::move(definitions));
 
   ClusterMaintenanceWrapper wrapper{std::move(cluster_state), config};
@@ -140,6 +154,22 @@ TEST(ClusterMaintenanceWrapperTest, ShardDefinitions) {
       std::unordered_set<ShardOperationalState>{
           ShardOperationalState::MAY_DISAPPEAR},
       wrapper.getShardTargetStates(ShardID(1, 0)));
+
+  // N17 is not in the config. Querying for target state
+  // should return ENABLED
+  EXPECT_FALSE(config->getStorageConfig()->getMembership()->hasNode(17));
+  ASSERT_EQ(
+      std::unordered_set<ShardOperationalState>{ShardOperationalState::ENABLED},
+      wrapper.getShardTargetStates(ShardID(17, 0)));
+
+  // Added new node to config and ensure an updated config
+  // results in regeneration of index definition
+  config = config->applyUpdate(addNewNodeUpdate());
+  wrapper.updateNodesConfiguration(config);
+  EXPECT_TRUE(config->getStorageConfig()->getMembership()->hasNode(17));
+  ASSERT_EQ(
+      std::unordered_set<ShardOperationalState>{ShardOperationalState::DRAINED},
+      wrapper.getShardTargetStates(ShardID(17, 0)));
 }
 
 TEST(ClusterMaintenanceWrapperTest, SequencerDefinitions) {

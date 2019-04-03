@@ -89,8 +89,18 @@ class ClusterMaintenanceWrapper {
   void updateNodesConfiguration(
       std::shared_ptr<const configuration::nodes::NodesConfiguration>
           nodes_config) {
+    if (nodes_config_->getVersion() == nodes_config->getVersion()) {
+      ld_info("NodesConfig is up-to-date(version:%lu). Not regenerating index "
+              "for definitions",
+              nodes_config_->getVersion().val_);
+      return;
+    }
+    nodes_config_ = nodes_config;
     clear();
     indexDefinitions();
+    ld_info("Regenerated index for definitions using NodesConfiguration "
+            "version:%lu",
+            nodes_config_->getVersion().val_);
   }
 
   uint64_t getVersion() {
