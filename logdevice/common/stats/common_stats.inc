@@ -216,4 +216,7 @@ STAT_DEFINE(sock_peer_closed_event_proc_time, SUM)
 // Timer Delays
 STAT_DEFINE(wh_timer_sched_delay, SUM)
 
+// No of SSL context updates.
+STAT_DEFINE(ssl_context_updated, SUM)
+
 #undef STAT_DEFINE

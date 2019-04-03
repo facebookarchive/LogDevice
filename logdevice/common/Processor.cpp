@@ -29,6 +29,7 @@
 #include "logdevice/common/NodesConfigurationPublisher.h"
 #include "logdevice/common/PermissionChecker.h"
 #include "logdevice/common/Request.h"
+#include "logdevice/common/SSLFetcher.h"
 #include "logdevice/common/SecurityInformation.h"
 #include "logdevice/common/SequencerBatching.h"
 #include "logdevice/common/SequencerLocator.h"
@@ -95,6 +96,11 @@ class ProcessorImpl {
   ProcessorImpl(Processor* processor, UpdateableSettings<Settings> settings)
       : append_probe_controller_(std::chrono::seconds(10)), // TODO configurable
         worker_load_balancing_(settings->num_workers),
+        sslFetcher_(settings->ssl_cert_path,
+                    settings->ssl_key_path,
+                    settings->ssl_ca_path,
+                    settings->ssl_cert_refresh_interval,
+                    processor->stats_),
         background_init_flag_(),
         background_queue_(),
         nc_publisher_(processor->config_, settings) {}
@@ -106,6 +112,7 @@ class ProcessorImpl {
   std::unique_ptr<AllSequencers> allSequencers_;
   WorkerLoadBalancing worker_load_balancing_;
   ClientIdxAllocator client_idx_allocator_;
+  SSLFetcher sslFetcher_;
   std::unique_ptr<ZeroCopiedRecordDisposal> record_disposal_;
 
   // for lazy init of background queue and threads
@@ -713,6 +720,10 @@ std::string Processor::describeMyNode() const {
 
 std::shared_ptr<Configuration> Processor::getConfig() {
   return config_->get();
+}
+
+SSLFetcher& Processor::sslFetcher() const {
+  return impl_->sslFetcher_;
 }
 
 bool Processor::isLogsConfigLoaded() const {

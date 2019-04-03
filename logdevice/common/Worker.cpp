@@ -50,7 +50,6 @@
 #include "logdevice/common/PermissionChecker.h"
 #include "logdevice/common/PrincipalParser.h"
 #include "logdevice/common/Processor.h"
-#include "logdevice/common/SSLFetcher.h"
 #include "logdevice/common/SequencerBackgroundActivator.h"
 #include "logdevice/common/ServerConfigUpdatedRequest.h"
 #include "logdevice/common/SyncSequencerRequest.h"
@@ -125,11 +124,6 @@ class WorkerImpl {
                         w->immutable_settings_->num_workers),
         // TODO: Make this configurable
         previously_redirected_appends_(1024),
-        sslFetcher_(w->immutable_settings_->ssl_cert_path,
-                    w->immutable_settings_->ssl_key_path,
-                    w->immutable_settings_->ssl_ca_path,
-                    w->immutable_settings_->ssl_cert_refresh_interval),
-
         graylistingTracker_(std::make_unique<GraylistingTracker>())
 
   {}
@@ -167,7 +161,6 @@ class WorkerImpl {
   WriteMetaDataRecordMap runningWriteMetaDataRecords_;
   AppendRequestEpochMap appendRequestEpochMap_;
   CheckNodeHealthRequestSet pendingHealthChecks_;
-  SSLFetcher sslFetcher_;
   std::unique_ptr<SequencerBackgroundActivator> sequencerBackgroundActivator_;
   std::unique_ptr<GraylistingTracker> graylistingTracker_;
 };
@@ -1220,10 +1213,6 @@ CheckNodeHealthRequestSet& Worker::pendingHealthChecks() const {
 GetEpochRecoveryMetadataRequestMap&
 Worker::runningGetEpochRecoveryMetadata() const {
   return impl_->runningGetEpochRecoveryMetadata_;
-}
-
-SSLFetcher& Worker::sslFetcher() const {
-  return impl_->sslFetcher_;
 }
 
 std::unique_ptr<SequencerBackgroundActivator>&

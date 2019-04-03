@@ -10,17 +10,19 @@
 #include <chrono>
 #include <string>
 
+#include <folly/SharedMutex.h>
 #include <folly/io/async/SSLContext.h>
 #include <folly/portability/OpenSSL.h>
 
 #include "logdevice/common/debug.h"
+#include "logdevice/common/stats/Stats.h"
 
 namespace facebook { namespace logdevice {
 
 /**
  * @file Loads the SSL context from the specified files, reloads it if it gets
  *       older than the defined expiration interval, provides a shared_ptr to
- *       folly::SSLContext. Does not implement any thread safety mechanics.
+ *       folly::SSLContext.
  */
 
 class SSLFetcher {
@@ -31,11 +33,13 @@ class SSLFetcher {
   SSLFetcher(const std::string& cert_path,
              const std::string& key_path,
              const std::string& ca_path,
-             std::chrono::seconds refresh_interval)
+             std::chrono::seconds refresh_interval,
+             StatsHolder* stats = nullptr)
       : cert_path_(cert_path),
         key_path_(key_path),
         ca_path_(ca_path),
-        refresh_interval_(refresh_interval) {}
+        refresh_interval_(refresh_interval),
+        stats_(stats) {}
 
   /**
    * @param loadCert          Defines whether or not the certificate will be
@@ -52,9 +56,21 @@ class SSLFetcher {
   std::shared_ptr<folly::SSLContext> getSSLContext(bool loadCert,
                                                    bool ssl_accepting,
                                                    bool null_ciphers_only) {
+    // Most of the time caller just needs a read lock to fetch context.
+    folly::SharedMutex::ReadHolder rlock(context_mutex_);
     if (!context_ ||
         requireContextUpdate(loadCert, ssl_accepting, null_ciphers_only)) {
+      rlock.unlock();
+      // Try to get write lock here as we are going to update context.
+      folly::SharedMutex::WriteHolder wlock(context_mutex_);
+      // Check if someone else already updated the context.
+      if (context_ &&
+          !requireContextUpdate(loadCert, ssl_accepting, null_ciphers_only)) {
+        return context_;
+      }
+
       try {
+        STAT_INCR(stats_, ssl_context_updated);
         context_.reset(new folly::SSLContext());
         context_->loadTrustedCertificates(ca_path_.c_str());
         context_->loadClientCAList(ca_path_.c_str());
@@ -94,8 +110,8 @@ class SSLFetcher {
         context_->setVerificationOption(folly::SSLContext::VERIFY);
 
         // Don't force client to use a certificate, however still verify
-        // server certificate. If client does provide a certificate, then it is
-        // also verifed by the server.
+        // server certificate. If client does provide a certificate, then it
+        // is also verifed by the server.
         // TODO: remove callback before open-sourcing
         SSL_CTX_set_verify(
             context_->getSSLCtx(), SSL_VERIFY_PEER, verify_callback);
@@ -103,12 +119,14 @@ class SSLFetcher {
         // Disabling sessions caching
         SSL_CTX_set_session_cache_mode(
             context_->getSSLCtx(), SSL_SESS_CACHE_OFF);
-
+        return context_;
       } catch (const std::exception& ex) {
         ld_error("Failed to load SSL certificate, ex: %s", ex.what());
         context_.reset();
         return nullptr;
       }
+      // No locks held after this point, should not reach here.
+      ld_check(false);
     }
     return context_;
   }
@@ -124,6 +142,9 @@ class SSLFetcher {
   bool last_null_cipher_only_ = false;
   bool last_accepting_state_ = false;
   bool last_load_cert_ = false;
+
+  folly::SharedMutex context_mutex_;
+  StatsHolder* stats_;
 
   // verification callback for ssl context. Used to check extra critical
   // extensions of a certificate.
