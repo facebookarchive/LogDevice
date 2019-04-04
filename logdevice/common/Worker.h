@@ -126,6 +126,7 @@ class Request;
 class Sender;
 class SequencerBackgroundActivator;
 class ServerConfig;
+class ShapingContainer;
 class ShardAuthoritativeStatusManager;
 class SocketCallback;
 class StatsHolder;
@@ -436,6 +437,7 @@ class Worker : public EventLoop {
 
   // a map of all currently running CheckSealRequest
   CheckSealRequestMap& runningCheckSeals() const;
+  ShapingContainer& readShapingContainer() const;
 
   ConfigurationFetchRequestMap& runningConfigurationFetches() const;
 

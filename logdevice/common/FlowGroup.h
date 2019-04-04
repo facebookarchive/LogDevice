@@ -152,14 +152,35 @@ class FlowGroup {
     return scope_;
   }
 
+  bool canDrainMeter(Priority p) const {
+    return !enabled() || meter_.entries[asInt(p)].canDrain();
+  }
+
   /**
    * Return true if sufficient bandwidth exists to transmit at least one
    * message at the given priority level.
    */
   bool canDrain(Priority p) const {
-    return !wouldCutInLine(p) &&
-        (!enabled() || meter_.entries[asInt(p)].canDrain());
+    return !wouldCutInLine(p) && canDrainMeter(p);
   }
+
+  /**
+   * Debit priority's meter unconditionally, e.g. if we took out
+   * more credit than anticipated.
+   **/
+  void debitMeter(Priority p, size_t debit_amount) {
+    meter_.entries[asInt(p)].drain(
+        debit_amount, true /* drain_on_negative_level */);
+  }
+
+  bool isPriorityQueueBlocked(Priority p) {
+    return !canDrainMeter(p) && !priorityq_.empty();
+  }
+
+  /**
+   * See FlowMeter::Entry::putUnutilizedCredits() docblock
+   **/
+  size_t putUnutilizedCredits(Priority p, size_t amount);
 
   size_t debt(Priority p) const {
     return meter_.entries[asInt(p)].debt();
@@ -217,7 +238,10 @@ class FlowGroup {
    * @return true if the FlowMeter had credit and the cost was decremented.
    */
   bool drain(const Envelope& e) {
-    return drain(e, e.priority());
+    if (e.message().tc_ == TrafficClass::HANDSHAKE) {
+      return true;
+    }
+    return drain(e.cost(), e.priority());
   }
 
   /**
@@ -323,7 +347,7 @@ class FlowGroup {
    * (as specified by Priority) to be different than the Priority of the
    * Envelope/Message. This simplifies unit tests.
    */
-  bool drain(const Envelope& e, Priority p) {
+  bool drain(size_t cost, Priority p) {
     // assert_can_drain_ is only used when running the backlog.
     ld_check(!assert_can_drain_ || isRunningBacklog());
     auto drainSuccess = [this]() {
@@ -336,10 +360,9 @@ class FlowGroup {
     }
 
     auto& meter = meter_.entries[asInt(p)];
-    if (!enabled_ || e.message().tc_ == TrafficClass::HANDSHAKE ||
-        meter.drain(e.cost())) {
+    if (!enabled_ || meter.drain(cost)) {
       FLOW_GROUP_PRIORITY_STAT_ADD(
-          Worker::stats(), scope_, p, bwconsumed, e.cost());
+          Worker::stats(), scope_, p, bwconsumed, cost);
       return drainSuccess();
     }
 
@@ -392,7 +415,7 @@ class FlowGroup {
   // The Sender that contains this FlowGroup.
   //
   // Used to catch unintended foreign thread manipulation of FlowGroups.
-  // All operations on a FlowGroup, with the excetpion of bandwidth deposits
+  // All operations on a FlowGroup, with the exception of bandwidth deposits
   // by the TrafficShaper, must be performed from the Sender's Worker.
   Sender* sender_ = nullptr;
 

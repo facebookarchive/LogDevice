@@ -52,6 +52,7 @@
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/SequencerBackgroundActivator.h"
 #include "logdevice/common/ServerConfigUpdatedRequest.h"
+#include "logdevice/common/ShapingContainer.h"
 #include "logdevice/common/SyncSequencerRequest.h"
 #include "logdevice/common/TimeoutMap.h"
 #include "logdevice/common/TraceLogger.h"
@@ -125,7 +126,12 @@ class WorkerImpl {
         previously_redirected_appends_(1024),
         graylistingTracker_(std::make_unique<GraylistingTracker>())
 
-  {}
+  {
+    const auto& read_shaping_cfg =
+        config->get()->serverConfig()->getReadIOShapingConfig();
+    read_shaping_container_ = std::make_unique<ShapingContainer>(
+        1, w->getEventBase(), read_shaping_cfg);
+  }
 
   ShardAuthoritativeStatusManager shardStatusManager_;
   Sender sender_;
@@ -162,6 +168,7 @@ class WorkerImpl {
   CheckNodeHealthRequestSet pendingHealthChecks_;
   std::unique_ptr<SequencerBackgroundActivator> sequencerBackgroundActivator_;
   std::unique_ptr<GraylistingTracker> graylistingTracker_;
+  std::unique_ptr<ShapingContainer> read_shaping_container_;
 };
 
 static std::string makeThreadName(Processor* processor,
@@ -1137,6 +1144,10 @@ CheckSealRequestMap& Worker::runningCheckSeals() const {
 
 ConfigurationFetchRequestMap& Worker::runningConfigurationFetches() const {
   return impl_->runningConfigurationFetches_;
+}
+
+ShapingContainer& Worker::readShapingContainer() const {
+  return *impl_->read_shaping_container_;
 }
 
 GetSeqStateRequestMap& Worker::runningGetSeqState() const {

@@ -431,6 +431,23 @@ std::unique_ptr<Cluster> ClusterFactory::create(int nnodes) {
     root_fgp->second.set(FlowGroup::PRIORITYQ_PRIORITY,
                          /*Burst Bytes*/ 10000,
                          /*Guaranteed Bps*/ 1000000);
+    auto read_fgp =
+        read_throttling_config.flowGroupPolicies.find(NodeLocationScope::NODE);
+    ld_check(read_fgp != read_throttling_config.flowGroupPolicies.end());
+    read_fgp->second.setConfigured(true);
+    read_fgp->second.setEnabled(true);
+    read_fgp->second.set(static_cast<Priority>(Priority::MAX),
+                         /*Burst Bytes*/ 25000,
+                         /*Guaranteed Bps*/ 50000);
+    read_fgp->second.set(static_cast<Priority>(Priority::CLIENT_HIGH),
+                         /*Burst Bytes*/ 20000,
+                         /*Guaranteed Bps*/ 40000);
+    read_fgp->second.set(static_cast<Priority>(Priority::CLIENT_NORMAL),
+                         /*Burst Bytes*/ 15000,
+                         /*Guaranteed Bps*/ 30000);
+    read_fgp->second.set(static_cast<Priority>(Priority::CLIENT_LOW),
+                         /*Burst Bytes*/ 10000,
+                         /*Guaranteed Bps*/ 20000);
   }
 
   auto server_settings = ServerConfig::SettingsConfig();

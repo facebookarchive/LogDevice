@@ -47,6 +47,7 @@ class TrafficShaper {
 
  private:
   class RunFlowGroupsRequest;
+  class RunFlowGroupsRequestReadIO;
 
   Processor* processor_;
   StatsHolder* stats_;
@@ -59,6 +60,7 @@ class TrafficShaper {
 
   std::chrono::microseconds updateInterval_{1000};
   std::unique_ptr<FlowGroupsUpdate> nw_update_;
+  std::unique_ptr<FlowGroupsUpdate> read_io_update_;
 
   // comes last to ensure unsubscription before rest of destruction
   ConfigSubscriptionHandle config_update_sub_;
@@ -89,6 +91,7 @@ class TrafficShaper {
    *                thread can sleep until a configuration change occurs.
    */
   bool dispatchUpdateNw();
+  bool dispatchUpdateReadIO();
 
   void setIntervalImpl(const decltype(updateInterval_)& interval);
 };

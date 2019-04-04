@@ -391,7 +391,10 @@ class FlowGroupTest : public ClientSocketTest {
   void setupConnection();
 
   bool drain(Envelope& e, Priority p) {
-    return flow_group.drain(e, p);
+    if (e.message().tc_ == TrafficClass::HANDSHAKE) {
+      return true;
+    }
+    return flow_group.drain(e.cost(), p);
   }
 
   void push(Envelope& e, Priority p) {

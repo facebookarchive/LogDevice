@@ -59,6 +59,7 @@ bool FlowGroup::applyUpdate(FlowGroupsUpdate::GroupEntry& update,
   for (auto& entry : update.overflow_entries) {
     auto priorityq_was_blocked = !meter_it->canDrain() && !priorityq_.empty();
 
+    meter_it->setCapacity(policy_it->capacity);
     meter_it->resetDepositBudget(policy_it->max_bw);
 
     // Every Sender gets the same priority based increment.
@@ -66,6 +67,10 @@ bool FlowGroup::applyUpdate(FlowGroupsUpdate::GroupEntry& update,
     // the overflow value used during the next quantum.
     entry.cur_overflow +=
         meter_it->fill(policy_it->guaranteed_bw, policy_it->capacity);
+
+    // This will be used in the next quantum when cur_overflow
+    // becomes last_overflow
+    entry.cur_overflow += meter_it->consumeOverflow();
 
     // First fit. Any overflow remaining at the end of the run is
     // given to the priority queue buckets. If it can't fit in the
@@ -129,6 +134,13 @@ bool FlowGroup::applyUpdate(FlowGroupsUpdate::GroupEntry& update,
     p = priorityBelow(p);
   }
   return need_to_run;
+}
+
+size_t FlowGroup::putUnutilizedCredits(Priority p, size_t amount) {
+  if (!enabled()) {
+    return amount;
+  }
+  return meter_.entries[asInt(p)].putUnutilizedCredits(amount);
 }
 
 bool FlowGroup::run(std::mutex& flow_meters_mutex,

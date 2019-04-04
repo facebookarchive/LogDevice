@@ -25,22 +25,23 @@ namespace facebook { namespace logdevice {
 
 class TrafficShaper::RunFlowGroupsRequest : public Request {
  public:
-  RunFlowGroupsRequest()
-      : Request(RequestType::TRAFFIC_SHAPER_RUN_FLOW_GROUPS) {}
+  RunFlowGroupsRequest(ShapingContainer* container, RequestType type)
+      : Request(type), container_(container) {}
   Execution execute() override {
-    auto w = Worker::onThisThread();
-    w->sender().getNwShapingContainer()->updateFlowGroupRunRequestedTime(
-        enqueue_time_);
-    w->sender().getNwShapingContainer()->runFlowGroups(
-        ShapingContainer::RunType::REPLENISH);
+    container_->updateFlowGroupRunRequestedTime(enqueue_time_);
+    container_->runFlowGroups(ShapingContainer::RunType::REPLENISH);
     return Request::Execution::COMPLETE;
   }
+
+ private:
+  ShapingContainer* container_{nullptr};
 };
 
 TrafficShaper::TrafficShaper(Processor* processor, StatsHolder* stats)
     : processor_(processor), stats_(stats) {
   nw_update_ = std::make_unique<FlowGroupsUpdate>(
       static_cast<size_t>(NodeLocationScope::ROOT) + 1);
+  read_io_update_ = std::make_unique<FlowGroupsUpdate>(1);
 
   if (processor_->getAllWorkersCount() != 0) {
     mainLoopThread_ = std::thread(&TrafficShaper::mainLoop, this);
@@ -85,11 +86,12 @@ void TrafficShaper::mainLoop() {
   std::unique_lock<std::mutex> cv_lock(mainLoopWaitMutex_);
   while (!mainLoopStop_.load()) {
     HISTOGRAM_ADD(stats_, traffic_shaper_bw_dispatch, usec_since(next_run));
-    bool timed_sleep = dispatchUpdateNw();
+    bool timed_sleep_nw = dispatchUpdateNw();
+    bool timed_sleep_readio = dispatchUpdateReadIO();
     auto now = std::chrono::steady_clock::now();
     next_run += updateInterval_;
     if (now < next_run) {
-      if (timed_sleep) {
+      if (timed_sleep_nw || timed_sleep_readio) {
         mainLoopWaitCondition_.wait_for(cv_lock, next_run - now);
       } else {
         mainLoopWaitCondition_.wait(cv_lock);
@@ -169,6 +171,8 @@ bool TrafficShaper::dispatchUpdateCommon(
 
     Priority p = Priority::MAX;
 
+    // This loop takes extra bandwidth from each Prioirty Level and
+    // gives it to the priority queue overflow bucket
     for (auto& overflow_entry : ge.overflow_entries) {
       // Excess bandwidth that couldn't be consumed during a second
       // first-fit pass on the buckets for a priority level across
@@ -206,7 +210,35 @@ bool TrafficShaper::dispatchUpdateNw() {
         if (w.sender().getNwShapingContainer()->applyFlowGroupsUpdate(
                 *nw_update_, stats_)) {
           std::unique_ptr<Request> run_req =
-              std::make_unique<RunFlowGroupsRequest>();
+              std::make_unique<RunFlowGroupsRequest>(
+                  w.sender().getNwShapingContainer(),
+                  RequestType::TRAFFIC_SHAPER_RUN_FLOW_GROUPS);
+          processor_->postRequest(run_req, w.worker_type_, w.idx_.val());
+        }
+      },
+      Processor::Order::RANDOM);
+
+  return future_updates_required;
+}
+
+bool TrafficShaper::dispatchUpdateReadIO() {
+  auto config = processor_->config_->updateableServerConfig()->get();
+  const configuration::ShapingConfig& shaping_config =
+      config->getReadIOShapingConfig();
+  bool future_updates_required =
+      dispatchUpdateCommon(shaping_config,
+                           processor_->getWorkerCount(WorkerType::GENERAL),
+                           *read_io_update_,
+                           nullptr /*stats*/);
+
+  processor_->applyToWorkers(
+      [&](Worker& w) {
+        if (w.readShapingContainer().applyFlowGroupsUpdate(
+                *read_io_update_, nullptr /*stats*/)) {
+          std::unique_ptr<Request> run_req =
+              std::make_unique<RunFlowGroupsRequest>(
+                  &w.readShapingContainer(),
+                  RequestType::READIO_SHAPER_RUN_FLOW_GROUPS);
           processor_->postRequest(run_req, w.worker_type_, w.idx_.val());
         }
       },

@@ -51,11 +51,59 @@ class FlowMeter {
     int64_t depositBudget() const {
       return deposit_budget_;
     }
+    void setCapacity(int64_t capacity) {
+      ld_check(capacity >= 0);
+      bucket_capacity_ = capacity;
+    }
+
+    /**
+     * These credits will be deposited into FlowGroupsUpdate's 'cur_overflow'
+     * via FlowGroup::applyUpdate()
+     */
+    size_t consumeOverflow() {
+      return std::exchange(unused_credits_, 0);
+    }
+
+    /*
+     * Put unconsumed credit back into the meter if e.g. consumer debited
+     * more than required initially.
+     *
+     * @return credits that couldn't be accepted(for stats purpose)
+     */
+    size_t putUnutilizedCredits(size_t amount) {
+      auto add =
+          [](int64_t level, int64_t credits, size_t& overflow_out) -> int64_t {
+        ld_check(credits >= 0);
+        int64_t max_level;
+        if ((credits > 0) && (level > (INT64_MAX - credits))) {
+          // overflow detected
+          max_level = INT64_MAX;
+          overflow_out += level - (INT64_MAX - credits);
+        } else {
+          max_level = level + credits;
+        }
+        return max_level;
+      };
+
+      ld_check(bucket_capacity_ >= 0);
+      int64_t allowed_amount = std::min(amount, static_cast<size_t>(INT64_MAX));
+      size_t overflow = 0;
+      // We don't need to consult deposit_budget_ since this is bandwidth
+      // that was already approved in the past
+      int64_t max_level = add(level_, allowed_amount, overflow);
+      int64_t new_level = std::min(max_level, bucket_capacity_);
+      // additional overflow (can fit in size_t)
+      overflow += (max_level - new_level);
+      level_ = new_level;
+
+      unused_credits_ += overflow;
+      return overflow; // for stats purpose only
+    }
 
     /**
      * Add bandwidth credit to this bucket.
      *
-     * @param  amount  Bytes of credit to deposit into this meter.
+     * @param amount   Bytes of credit to deposit into this meter.
      * @param capacity The maximum accumulation of credit in bytes allowed
      *                 for this meter.
      *
@@ -105,16 +153,23 @@ class FlowMeter {
      *               was taken from the bucket. The level in the bucket may
      *               now be negative, indicating the cost of this debit must
      *               be "paid off" before future drain() calls will succeed.
-     *         false The level in this bucket was already zero or negative.
+     *         false The level in this bucket was already zero or negative(when
+     *               drain at negative level is not allowed)
      */
-    bool drain(size_t amount) {
-      if (level_ <= 0) {
+    bool drain(size_t amount, bool drain_on_negative_level = false) {
+      if (!drain_on_negative_level && (level_ <= 0)) {
         return false;
       }
+
+      unconditionalDrain(amount);
+      return true;
+    }
+
+    int64_t unconditionalDrain(size_t amount) {
       int64_t new_level = level_ - amount;
       ld_check(new_level < level_);
       level_ = new_level;
-      return true;
+      return level_;
     }
 
     /**
@@ -126,6 +181,7 @@ class FlowMeter {
       auto transfer_amount = requested_amount;
       transfer_amount = std::min(transfer_amount, level_);
       transfer_amount = std::min(transfer_amount, bwSink.deposit_budget_);
+
       if (transfer_amount > 0) {
         level_ -= transfer_amount;
         bwSink.deposit_budget_ -= transfer_amount;
@@ -149,7 +205,7 @@ class FlowMeter {
       return level_ > 0;
     }
 
-    /** @return  true  iff this meter can accept any bandwidth. */
+    /** @return  true iff this meter can accept any bandwidth. */
     bool canFill() const {
       return deposit_budget_ > 0;
     }
@@ -173,6 +229,15 @@ class FlowMeter {
     // Max number of bytes that can be added to the bucket until the next
     // bandwidth deposit by the traffic shaper.
     int64_t deposit_budget_ = INT64_MAX;
+
+    // Bucket size as calculated from config
+    int64_t bucket_capacity_{0};
+
+    // Credits that get returned to the meter via putUnutilizedCredits()
+    // These are later used in FlowGroup::applyUpdates() via consumeOverflow()
+    // Its possible that not everything gets used, especially if
+    // deposit budget is small.
+    size_t unused_credits_{0};
   };
 
   /**

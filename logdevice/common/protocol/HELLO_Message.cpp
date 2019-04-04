@@ -118,7 +118,7 @@ static bool isValidServerConnection(const NodeID& peer_nid,
 /**
  * Gets the authentication data for the connection and verifies that the
  * connection is allowed. If the connection is permitted a principal will
- * be assigned to to the calling Socket Object. If it is not, the status
+ * be assigned to the calling Socket Object. If it is not, the status
  * in the ackhdr will be set to E::ACCESS or E::INTERNAL.
  *
  * @param hellohdr      Header of the HELLO/HELLO message.

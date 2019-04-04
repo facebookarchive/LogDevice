@@ -37,8 +37,8 @@ class ShapingContainer {
   enum class RunType { REPLENISH, EVENTLOOP };
   explicit ShapingContainer(size_t num_scopes,
                             struct event_base* base,
-                            const configuration::ShapingConfig* scfg)
-      : type_(scfg->getType()),
+                            const configuration::ShapingConfig& scfg)
+      : type_(scfg.getType()),
         num_scopes_(num_scopes),
         flow_groups_run_requested_(LD_EV(event_new)(
             base,
@@ -56,7 +56,7 @@ class ShapingContainer {
 
     auto scope = NodeLocationScope::NODE;
     for (auto& fg : flow_groups_) {
-      fg.configure(scfg->configured(scope));
+      fg.configure(scfg.configured(scope));
       scope = NodeLocation::nextGreaterScope(scope);
     }
 
