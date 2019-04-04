@@ -66,7 +66,6 @@ class WatchDogThread;
 class Worker;
 class WheelTimer;
 class Configuration;
-class SSLFetcher;
 enum class SequencerOptions : uint8_t;
 using workers_t = std::vector<Worker*>;
 
@@ -444,9 +443,6 @@ class Processor : public folly::enable_shared_from_this<Processor> {
   std::shared_ptr<Configuration> getConfig();
 
   std::shared_ptr<UpdateableConfig> config_;
-
-  // SSL context fetcher, used to refresh certificate data
-  SSLFetcher& sslFetcher() const;
 
  private:
   // Make runningOnStorageNode() return true. Used for tests.

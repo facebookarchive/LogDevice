@@ -2475,7 +2475,7 @@ SocketDependencies::getSSLContext(bufferevent_ssl_state ssl_state,
   bool loadCert = getSettings().server || getSettings().ssl_load_client_cert;
   bool ssl_accepting = ssl_state == BUFFEREVENT_SSL_ACCEPTING;
 
-  return processor_->sslFetcher().getSSLContext(
+  return Worker::onThisThread()->sslFetcher().getSSLContext(
       loadCert, ssl_accepting, null_ciphers_only);
 }
 

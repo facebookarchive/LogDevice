@@ -123,6 +123,7 @@ class Mutator;
 class Processor;
 class RebuildingCoordinatorInterface;
 class Request;
+class SSLFetcher;
 class Sender;
 class SequencerBackgroundActivator;
 class ServerConfig;
@@ -540,6 +541,9 @@ class Worker : public EventLoop {
 
   // Outstanding health check requests
   CheckNodeHealthRequestSet& pendingHealthChecks() const;
+
+  // SSL context fetcher, used to refresh certificate data
+  SSLFetcher& sslFetcher() const;
 
   // Sequencer background activator, only runs on one worker
   std::unique_ptr<SequencerBackgroundActivator>&

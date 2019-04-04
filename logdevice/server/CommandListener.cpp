@@ -43,8 +43,7 @@ CommandListener::CommandListener(Listener::InterfaceDef iface, Server* server)
           server_->getParameters()->getProcessorSettings()->ssl_ca_path,
           server_->getParameters()
               ->getProcessorSettings()
-              ->ssl_cert_refresh_interval,
-          server_->getParameters()->getStats()) {
+              ->ssl_cert_refresh_interval) {
   ld_check(server_);
 }
 
