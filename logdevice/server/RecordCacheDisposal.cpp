@@ -9,7 +9,6 @@
 
 #include "logdevice/common/MetaDataLog.h"
 #include "logdevice/common/Worker.h"
-#include "logdevice/common/ZeroCopiedRecordDisposal.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/server/EpochRecordCache.h"
@@ -40,7 +39,9 @@ void RecordCacheDisposal::disposeOfCacheEntry(
   // for all of them.
   entry->next_.reset();
 
-  processor_->zeroCopiedRecordDisposal().disposeOfRecord(std::move(entry));
+  // Free the payload so that it can deallocated on the right thread.
+  // Rest of the record is freed here.
+  entry.reset();
 }
 
 void RecordCacheDisposal::onRecordsReleased(const EpochRecordCache& cache,

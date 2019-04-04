@@ -46,9 +46,7 @@ EpochRecordCacheEntry::EpochRecordCacheEntry(
                        payload_raw,
                        std::move(payload_holder)) {}
 
-EpochRecordCacheEntry::~EpochRecordCacheEntry() = default;
-
-void EpochRecordCacheEntry::onDisposedOf() {
+EpochRecordCacheEntry::~EpochRecordCacheEntry() {
   WORKER_STAT_SUB(record_cache_bytes_cached_estimate, getBytesEstimate());
   WORKER_STAT_INCR(record_cache_records_evicted);
 }

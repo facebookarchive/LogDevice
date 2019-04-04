@@ -292,15 +292,6 @@ class Worker : public EventLoop {
   }
 
   /**
-   * Destroy all zero copied records by draining records on the disposal list
-   * of this worker in ZeroCopiedRecordDisposal. Payload of the record will
-   * be detroyed if there is no reference to its payload holder.
-   *
-   * @return   num of zero copied records drained
-   */
-  size_t destroyZeroCopiedRecordsInDisposal();
-
-  /**
    * @param enforce_worker  set this to false if you're fine with getting back
    *                        a nullptr if this isn't called on a worker thread.
    * @return                a pointer to the Worker object running on this

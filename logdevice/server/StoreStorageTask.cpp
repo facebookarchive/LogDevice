@@ -221,7 +221,6 @@ void StoreStorageTask::onDone() {
                    "as StoreStorageTask timed out",
                    rid_.toString().c_str());
     STAT_INCR(worker->stats(), store_storage_task_timedout);
-    drainCacheDisposalOnWorker();
     return;
   }
 
@@ -258,7 +257,6 @@ void StoreStorageTask::onDone() {
   }
 
   sendReply(status_);
-  drainCacheDisposalOnWorker();
 }
 
 void StoreStorageTask::onDropped() {
@@ -361,12 +359,6 @@ int StoreStorageTask::putCache() {
              EpochRecordCacheEntry::getBytesEstimate(payload_raw_));
   }
   return rv;
-}
-
-void StoreStorageTask::drainCacheDisposalOnWorker() {
-  ld_check(storageThreadPool_ != nullptr);
-  Worker* worker = Worker::onThisThread();
-  worker->destroyZeroCopiedRecordsInDisposal();
 }
 
 StatsHolder* StoreStorageTask::stats() {

@@ -58,7 +58,6 @@
 #include "logdevice/common/TrimRequest.h"
 #include "logdevice/common/WorkerTimeoutStats.h"
 #include "logdevice/common/WriteMetaDataRecord.h"
-#include "logdevice/common/ZeroCopiedRecordDisposal.h"
 #include "logdevice/common/client_read_stream/AllClientReadStreams.h"
 #include "logdevice/common/configuration/ServerConfig.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
@@ -197,10 +196,6 @@ Worker::Worker(Processor* processor,
       accepting_work_(true),
       worker_timeout_stats_(std::make_unique<WorkerTimeoutStats>()) {}
 
-size_t Worker::destroyZeroCopiedRecordsInDisposal() {
-  return processor_->zeroCopiedRecordDisposal().drainRecords(
-      worker_type_, idx_);
-}
 
 Worker::~Worker() {
   shutting_down_ = true;
@@ -229,22 +224,12 @@ Worker::~Worker() {
     delete &node;
   }
 
-  // destroy all Appenders to free up zero copied record that must be
-  // disposed of in destroyZeroCopiedRecordsInDisposal() below.
+  // destroy all Appenders to free up zero copied records.
   // Note: on graceful shutdown there should be no active appenders and
   // this is mostly used in situations where full graceful shutdown is not
   // used (e.g., tests)
   activeAppenders().map.clearAndDispose();
 
-  // drain all zero-copied records on all workers before shutting
-  // down ZeroCopiedRecordDisposal
-  destroyZeroCopiedRecordsInDisposal();
-
-  if (event_handlers_called_.load() != event_handlers_completed_.load()) {
-    ld_info("EventHandlers called: %lu, EventHandlers completed: %lu",
-            event_handlers_called_.load(),
-            event_handlers_completed_.load());
-  }
 }
 
 std::string Worker::getName(WorkerType type, worker_id_t idx) {

@@ -77,6 +77,7 @@ EventLoop::EventLoop(std::string thread_name, ThreadID::Type thread_type)
           base_ ? LD_EV(event_base_init_common_timeout)(base_.get(),
                                                         &tv_sched_event)
                 : nullptr),
+      disposer_(this),
       common_timeouts_(base_.get(), kMaxFastTimeouts) {
   int rv;
   pthread_attr_t attr;
@@ -219,4 +220,7 @@ void EventLoop::run() {
   // the thread on which this EventLoop ran terminates here
 }
 
+void EventLoop::dispose(ZeroCopyPayload* payload) {
+  disposer_.dispose(payload);
+}
 }} // namespace facebook::logdevice

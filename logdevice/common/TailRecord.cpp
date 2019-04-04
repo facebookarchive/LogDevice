@@ -147,12 +147,8 @@ void TailRecord::deserialize(ProtocolReader& reader,
       if (payload_ && evbuffer_zero_copy) {
         // linearize the payload
         auto ph_raw = payload_->getPayload();
-        // must be on worker thread
-        auto w = Worker::onThisThread();
         // further wraps the payload into ZeroCopiedRecord
-        zero_copied_record_ = ZeroCopiedRecord::create<ZeroCopiedRecord>(
-            ZeroCopiedRecord::Disposer(
-                &w->processor_->zeroCopiedRecordDisposal()),
+        zero_copied_record_ = std::make_shared<ZeroCopiedRecord>(
             header.lsn,
             /*unused flags*/ 0,
             header.timestamp,

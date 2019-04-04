@@ -41,7 +41,6 @@
 #include "logdevice/common/WheelTimer.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/WorkerLoadBalancing.h"
-#include "logdevice/common/ZeroCopiedRecordDisposal.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationManager.h"
 #include "logdevice/common/event_log/EventLogRebuildingSet.h"
@@ -113,7 +112,6 @@ class ProcessorImpl {
   WorkerLoadBalancing worker_load_balancing_;
   ClientIdxAllocator client_idx_allocator_;
   SSLFetcher sslFetcher_;
-  std::unique_ptr<ZeroCopiedRecordDisposal> record_disposal_;
 
   // for lazy init of background queue and threads
   folly::once_flag background_init_flag_;
@@ -203,9 +201,6 @@ void Processor::init() {
   cluster_state_ = std::make_unique<ClusterState>(
       config->serverConfig()->getMaxNodeIdx() + 1, this);
 
-  // This needs to be initialized here to make sure that getWorkerCount()
-  // is called on the sub-type of the actual processor.
-  impl_->record_disposal_ = std::make_unique<ZeroCopiedRecordDisposal>(this);
   for (int i = 0; i < numOfWorkerTypes(); i++) {
     WorkerType worker_type = workerTypeByIndex(i);
     auto count = getWorkerCount(worker_type);
@@ -303,7 +298,6 @@ Processor::Processor(std::shared_ptr<UpdateableConfig> updateable_config,
       conn_budget_external_(settings_.get()->max_external_connections) {
   ld_check(settings.get());
   num_general_workers_ = settings_->num_workers;
-  impl_->record_disposal_ = std::make_unique<ZeroCopiedRecordDisposal>(this);
 }
 
 Processor::~Processor() {
@@ -633,10 +627,6 @@ AllSequencers& Processor::allSequencers() const {
 
 ClientIdxAllocator& Processor::clientIdxAllocator() const {
   return impl_->client_idx_allocator_;
-}
-
-ZeroCopiedRecordDisposal& Processor::zeroCopiedRecordDisposal() const {
-  return *impl_->record_disposal_;
 }
 
 namespace {

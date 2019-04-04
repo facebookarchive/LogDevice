@@ -7,8 +7,8 @@
  */
 #pragma once
 
-#include "logdevice/common/EventLoop.h"
 #include "logdevice/common/WorkerType.h"
+#include "logdevice/common/ZeroCopyPayload.h"
 #include "logdevice/common/protocol/Message.h"
 #include "logdevice/include/Record.h"
 
@@ -24,6 +24,7 @@ namespace facebook { namespace logdevice {
  */
 
 class ProtocolWriter;
+class EventLoop;
 
 class PayloadHolder {
  public:
@@ -32,9 +33,7 @@ class PayloadHolder {
    * will be free'd by the destructor.
    */
   PayloadHolder(const void* buf, size_t size, bool ignore_size_limit = false)
-      : payload_flat_(buf, size),
-        payload_evbuffer_(nullptr),
-        eventloop_(nullptr) {
+      : payload_flat_(buf, size), payload_evbuffer_(nullptr) {
     if (!ignore_size_limit) {
       ld_check(payload_flat_.size() == 0 || payload_flat_.data() != nullptr);
       ld_check(payload_flat_.size() < Message::MAX_LEN);
@@ -90,7 +89,6 @@ class PayloadHolder {
       std::swap(payload_flat_, other.payload_flat_);
       std::swap(payload_evbuffer_, other.payload_evbuffer_);
       std::swap(owned_, other.owned_);
-      std::swap(eventloop_, other.eventloop_);
       other.reset();
     }
     return *this;
@@ -150,7 +148,6 @@ class PayloadHolder {
   static PayloadHolder deserialize(ProtocolReader& reader,
                                    size_t payload_size,
                                    bool zero_copy);
-
   /**
    * Corrupts a copy of the payload, runs reset(), and sets the corrupted copy
    * as the new payload. Used for testing to simulate bad hardware that flips
@@ -187,15 +184,6 @@ class PayloadHolder {
    */
   std::string toString();
 
-  /**
-   * @return    the EventLoop on which the destruction of the payload must
-   *            happen. return nullptr if the payload can be safely destroyed on
-   *            any thread, e.g., if the payload is a flatbuffer.
-   */
-  EventLoop* getEventLoop() const {
-    return eventloop_;
-  }
-
  private:
   // A client-supplied payload, or a small payload that was read from
   // an evbuffer into a flat buffer.  Whenever this field is in use,
@@ -207,19 +195,14 @@ class PayloadHolder {
 
   // if this payload was read from a Socket, or copy-constructed from a
   //  message read from a Socket, and the message is big enough to make
-  // zero-copy worthwhile, this evbuffer contains the record's payload,
-  // zero-copied from the input evbuffer of the Socket. Otherwise this is
-  // nullptr.
-  struct evbuffer* payload_evbuffer_;
+  // zero-copy worthwhile, this ZeroCopyPayload ptr contains the record's
+  // payload, zero-copied from the input evbuffer of the Socket. Otherwise this
+  // is nullptr.
+  std::shared_ptr<ZeroCopyPayload> payload_evbuffer_;
 
   // If true (default), the PayloadHolder owns the payload and will free it in
   // the destructor.
   bool owned_ = true;
-
-  // If the instance owns an evbuffer, this is the EventLoop that the evbuffer
-  // belongs to.  It is used to assert that all operations happen on the same
-  // event loop, since we use libevent without locking.
-  EventLoop* eventloop_{nullptr};
 };
 
 }} // namespace facebook::logdevice

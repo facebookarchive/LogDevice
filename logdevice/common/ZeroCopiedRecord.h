@@ -34,16 +34,12 @@ namespace facebook { namespace logdevice {
  *           multi-casting without copy using evbuffer_add_reference (or
  *           ProtocolWriter::writeWithoutCopy).
  *
- *         - once the refcount of ZeroCopiedRecord dropped to zero, it is
- *           guaranteed to be destroyed on the original worker thread that
- *           allocated the payload. This ensures the thread safety of evbuffer.
+ *         - once the refcount of ZeroCopiedRecord dropped to zero, payload is
+ *           guaranteed to be destroyed on the original eventloop thread that
+ *           allocated the payload. This ensures the thread safety of evbuffer
+ *           contained in the payload.
  *
  *        Important Note:
- *         - In practice, ZeroCopiedRecord (and its derived classes) must only
- *           be constructed using the factory method create() of each class.
- *           This ensures that ZeroCopiedRecord is ref counted using shared_ptr
- *           with a custom Deleter that disposes of the object in the correct
- *           thread.
  *
  *         - TODO T20422519: Currently it is required that the payload used to
  *           construct ZeroCopiedRecord must be linear, which means that for
@@ -54,7 +50,6 @@ namespace facebook { namespace logdevice {
  *           payloads from network sockets.
  */
 
-class ZeroCopiedRecordDisposal;
 class PayloadHolder;
 
 class ZeroCopiedRecord {
@@ -74,9 +69,6 @@ class ZeroCopiedRecord {
   // Linked list used by realtime reads.
   std::shared_ptr<ZeroCopiedRecord> next_;
 
-  // atomic list hook for disposal purpose
-  folly::AtomicIntrusiveLinkedListHook<ZeroCopiedRecord> hook;
-
   virtual ~ZeroCopiedRecord() {}
 
   virtual void onDisposedOf() {}
@@ -89,37 +81,9 @@ class ZeroCopiedRecord {
    */
   static size_t getBytesEstimate(Slice payload_raw);
 
-  // return if the entry is in the disposal list waiting to be freed
-  bool isLinked() const {
-    return hook.next != nullptr;
-  }
-
-  /**
-   * @return  the index of the worker thread which is responsible for freeing
-   *          the payload, -1 if the payload can be freed on any thread
-   */
-  worker_id_t getDisposalThread() const;
-
-  WorkerType getDisposalWorkerType() const;
-
   ZeroCopiedRecord(const ZeroCopiedRecord&) = delete;
   ZeroCopiedRecord& operator=(const ZeroCopiedRecord&) = delete;
 
-  // functor class invoked when reference count of entry drops to zero
-  class Disposer;
-
-  /**
-   * Factory function for creating a ZeroCopiedRecord object. Should be the
-   * only way an entry created. Ensures that entry is always reference counted
-   * with a custom deleter function.
-   */
-  template <typename Derived, typename Disposer, typename... Args>
-  static std::shared_ptr<Derived> create(Disposer disposer, Args&&... args) {
-    return std::shared_ptr<Derived>(
-        new Derived(std::forward<Args>(args)...), std::move(disposer));
-  }
-
- protected:
   ZeroCopiedRecord();
   ZeroCopiedRecord(lsn_t lsn,
                    STORE_flags_t flags,
@@ -132,6 +96,7 @@ class ZeroCopiedRecord {
                    Slice payload_raw,
                    std::shared_ptr<PayloadHolder> payload_holder);
 
+ protected:
   // Hold a reference to the actual payload.
   // Note: destruction of the entry object does not necessarily
   // destroy the payload since there may be other references.
@@ -141,15 +106,4 @@ class ZeroCopiedRecord {
   // should be ultimatedly freed on the same worker thread.
   std::shared_ptr<PayloadHolder> payload_holder_;
 };
-
-class ZeroCopiedRecord::Disposer {
- public:
-  explicit Disposer(ZeroCopiedRecordDisposal* const disposal)
-      : disposal_(disposal) {}
-  void operator()(ZeroCopiedRecord* record);
-
- private:
-  ZeroCopiedRecordDisposal* const disposal_;
-};
-
 }} // namespace facebook::logdevice

@@ -11,16 +11,16 @@
 
 #include <event2/buffer.h>
 
+#include "logdevice/common/EventLoop.h"
 #include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/protocol/ProtocolReader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
-
 namespace facebook { namespace logdevice {
 
 PayloadHolder::PayloadHolder(struct evbuffer* payload)
     : payload_flat_(Payload(nullptr, 1)),
-      payload_evbuffer_(payload),
-      eventloop_(EventLoop::onThisThread()) {
+      payload_evbuffer_(
+          ZeroCopyPayload::create(EventLoop::onThisThread(), payload)) {
   if (folly::kIsDebug) {
     ld_check(payload);
     size_t payload_size = LD_EV(evbuffer_get_length)(payload);
@@ -33,12 +33,10 @@ PayloadHolder::PayloadHolder(struct evbuffer* payload)
 void PayloadHolder::reset() {
   if (payload_evbuffer_) {
     ld_check(payload_flat_.data() == nullptr);
-    ld_check(EventLoop::onThisThread() == eventloop_);
 
     if (owned_) {
-      LD_EV(evbuffer_free)(payload_evbuffer_);
+      payload_evbuffer_ = nullptr;
     }
-    payload_evbuffer_ = nullptr;
   } else {
     if (owned_) {
       free(const_cast<void*>(payload_flat_.data()));
@@ -51,18 +49,17 @@ void PayloadHolder::reset() {
 
 size_t PayloadHolder::size() const {
   ld_check(valid());
-  return payload_evbuffer_ ? LD_EV(evbuffer_get_length)(payload_evbuffer_)
-                           : payload_flat_.size();
+  return payload_evbuffer_ ? payload_evbuffer_->length() : payload_flat_.size();
 }
 
 void PayloadHolder::serialize(ProtocolWriter& writer) const {
   if (payload_evbuffer_) {
     if (folly::kIsDebug) {
-      size_t payload_size = LD_EV(evbuffer_get_length)(payload_evbuffer_);
+      size_t payload_size = payload_evbuffer_->length();
       ld_check(payload_size > 0);
       ld_check(payload_size < Message::MAX_LEN);
     }
-    writer.writeEvbuffer(payload_evbuffer_);
+    writer.writeEvbuffer(payload_evbuffer_->get());
   } else if (payload_flat_.data()) {
     ld_check(payload_flat_.size() < Message::MAX_LEN); // must have been checked
                                                        // by upper layers
@@ -124,9 +121,9 @@ void PayloadHolder::TEST_corruptPayload() {
 Payload PayloadHolder::getPayload() {
   ld_check(valid());
   if (payload_evbuffer_ != nullptr) {
-    ld_check(EventLoop::onThisThread() == eventloop_);
-    size_t size = LD_EV(evbuffer_get_length)(payload_evbuffer_);
-    return Payload(LD_EV(evbuffer_pullup)(payload_evbuffer_, size), size);
+    size_t size = payload_evbuffer_->length();
+    return Payload(
+        LD_EV(evbuffer_pullup)(payload_evbuffer_->get(), size), size);
   } else {
     return payload_flat_;
   }

@@ -842,12 +842,9 @@ void Appender::prepareTailRecord(bool include_payload) {
   if (payload_->isEvbuffer()) {
     // payload is evbuffer backed,
     // 1) linearize the evbuffer if not already done
-    // 2) create a ZeroCopiedRecord to safely handle the evbuffer
     auto ph_raw = payload_->getPayload();
-    // must be on worker thread for handling evbuffer
-    auto w = Worker::onThisThread();
-    auto zero_copied_record = ZeroCopiedRecord::create<ZeroCopiedRecord>(
-        ZeroCopiedRecord::Disposer(&w->processor_->zeroCopiedRecordDisposal()),
+
+    auto zero_copied_record = std::make_shared<ZeroCopiedRecord>(
         lsn_t(store_hdr_.rid.lsn()),
         STORE_flags_t(store_hdr_.flags),
         uint64_t(store_hdr_.timestamp),

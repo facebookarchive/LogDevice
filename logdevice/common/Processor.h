@@ -64,7 +64,6 @@ class UpdateableConfig;
 class UpdateableSecurityInfo;
 class WatchDogThread;
 class Worker;
-class ZeroCopiedRecordDisposal;
 class WheelTimer;
 class Configuration;
 class SSLFetcher;
@@ -484,9 +483,6 @@ class Processor : public folly::enable_shared_from_this<Processor> {
   // a map from log ids to Sequencer objects owned by this Processor that
   // manage append requests on those logs.
   AllSequencers& allSequencers() const;
-
-  // sink for all ZeroCopiedRecord_s
-  ZeroCopiedRecordDisposal& zeroCopiedRecordDisposal() const;
 
   // UpdateableSecurityInfo owned by the processor
   // encapsulates PrincipalParser and PermissionChecker

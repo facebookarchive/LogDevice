@@ -820,28 +820,28 @@ TEST_F(EpochRecordCacheTest, EntrySequencing) {
 
   // Serialize different Entry objects w/ equal values, expect same result
   copyset_t copyset({N0, N1, N2});
-  auto entry1 = Entry::create<Entry>(Entry::Disposer(deps_.get()),
-                                     0,
-                                     flags,
-                                     10,
-                                     esn_t(11),
-                                     12,
-                                     copyset,
-                                     OffsetMap({{BYTE_OFFSET, 15}}),
-                                     KeysType{},
-                                     slice1,
-                                     payload1);
-  auto entry2 = Entry::create<Entry>(Entry::Disposer(deps_.get()),
-                                     0,
-                                     flags,
-                                     10,
-                                     esn_t(11),
-                                     12,
-                                     copyset,
-                                     OffsetMap({{BYTE_OFFSET, 15}}),
-                                     KeysType{},
-                                     slice2,
-                                     payload2);
+  auto entry1 = std::shared_ptr<Entry>(new Entry(0,
+                                                 flags,
+                                                 10,
+                                                 esn_t(11),
+                                                 12,
+                                                 copyset,
+                                                 OffsetMap({{BYTE_OFFSET, 15}}),
+                                                 KeysType{},
+                                                 slice1,
+                                                 payload1),
+                                       Entry::Disposer(deps_.get()));
+  auto entry2 = std::shared_ptr<Entry>(new Entry(0,
+                                                 flags,
+                                                 10,
+                                                 esn_t(11),
+                                                 12,
+                                                 copyset,
+                                                 OffsetMap({{BYTE_OFFSET, 15}}),
+                                                 KeysType{},
+                                                 slice2,
+                                                 payload2),
+                                       Entry::Disposer(deps_.get()));
   int entry1_serial_len = entry1->toLinearBuffer(buf1.get(), buflen);
   ASSERT_NE(entry1_serial_len, -1);
   ASSERT_NE(memcmp(buf1.get(), buf2.get(), entry1_serial_len), 0);
@@ -852,17 +852,17 @@ TEST_F(EpochRecordCacheTest, EntrySequencing) {
   ASSERT_EQ(memcmp(buf1.get(), buf2.get(), entry1_serial_len), 0);
 
   // Compare w/ Entry w/ different payloads, expect different result
-  entry2 = Entry::create<Entry>(Entry::Disposer(deps_.get()),
-                                0,
-                                0,
-                                10,
-                                esn_t(11),
-                                12,
-                                copyset,
-                                OffsetMap({{BYTE_OFFSET, 15}}),
-                                KeysType{},
-                                slice_short,
-                                payload_short);
+  entry2 = std::shared_ptr<Entry>(new Entry(0,
+                                            0,
+                                            10,
+                                            esn_t(11),
+                                            12,
+                                            copyset,
+                                            OffsetMap({{BYTE_OFFSET, 15}}),
+                                            KeysType{},
+                                            slice_short,
+                                            payload_short),
+                                  Entry::Disposer(deps_.get()));
   entry2_serial_len = entry2->toLinearBuffer(buf2.get(), buflen);
   ASSERT_NE(entry2_serial_len, -1);
   ASSERT_NE(entry1_serial_len, entry2_serial_len);

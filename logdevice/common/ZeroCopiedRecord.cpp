@@ -12,7 +12,6 @@
 
 #include "logdevice/common/PayloadHolder.h"
 #include "logdevice/common/Worker.h"
-#include "logdevice/common/ZeroCopiedRecordDisposal.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/util.h"
 #include "logdevice/include/Err.h"
@@ -43,26 +42,6 @@ ZeroCopiedRecord::ZeroCopiedRecord(
       payload_raw(payload_raw),
       payload_holder_(std::move(payload_holder)) {}
 
-worker_id_t ZeroCopiedRecord::getDisposalThread() const {
-  Worker* w = nullptr;
-  if (payload_holder_ == nullptr ||
-      (w = checked_downcast_or_null<Worker*>(
-           payload_holder_->getEventLoop())) == nullptr) {
-    return worker_id_t(-1);
-  }
-  return w->idx_;
-}
-
-WorkerType ZeroCopiedRecord::getDisposalWorkerType() const {
-  Worker* w = nullptr;
-  if (payload_holder_ == nullptr ||
-      (w = checked_downcast_or_null<Worker*>(
-           payload_holder_->getEventLoop())) == nullptr) {
-    return WorkerType::GENERAL;
-  }
-  return w->worker_type_;
-}
-
 /*static*/
 size_t ZeroCopiedRecord::getBytesEstimate(Slice payload_raw) {
   return sizeof(ZeroCopiedRecord) + payload_raw.size +
@@ -71,11 +50,6 @@ size_t ZeroCopiedRecord::getBytesEstimate(Slice payload_raw) {
 
 size_t ZeroCopiedRecord::getBytesEstimate() const {
   return getBytesEstimate(payload_raw);
-}
-
-void ZeroCopiedRecord::Disposer::operator()(ZeroCopiedRecord* e) {
-  std::unique_ptr<ZeroCopiedRecord> record_ptr(e);
-  disposal_->disposeOfRecord(std::move(record_ptr));
 }
 
 }} // namespace facebook::logdevice

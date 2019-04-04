@@ -34,8 +34,6 @@ class EpochRecordCacheEntry : public ZeroCopiedRecord {
  public:
   class Disposer;
 
-  void onDisposedOf() override;
-
   /*
    * Create and repopulate an entry from serialized representation in the
    * given buffer, and with the given disposer. Returns nullptr if the
@@ -63,10 +61,7 @@ class EpochRecordCacheEntry : public ZeroCopiedRecord {
    */
   ssize_t toLinearBuffer(char* buffer, size_t size) const;
 
-  ~EpochRecordCacheEntry();
-
- private:
-  int fromLinearBuffer(lsn_t lsn, const char* buffer, size_t size);
+  ~EpochRecordCacheEntry() override;
 
   EpochRecordCacheEntry();
 
@@ -80,6 +75,9 @@ class EpochRecordCacheEntry : public ZeroCopiedRecord {
                         std::map<KeyType, std::string>&& keys,
                         Slice payload_raw,
                         std::shared_ptr<PayloadHolder> payload_holder);
+
+ private:
+  int fromLinearBuffer(lsn_t lsn, const char* buffer, size_t size);
 
   friend class ZeroCopiedRecord;
   friend class EpochRecordCacheSerializer::EpochRecordCacheCompare;

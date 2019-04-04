@@ -17,9 +17,11 @@
 
 #include <folly/Executor.h>
 
+#include "logdevice/common/BatchedBufferDisposer.h"
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/ThreadID.h"
 #include "logdevice/common/TimeoutMap.h"
+#include "logdevice/common/ZeroCopyPayload.h"
 
 struct event_base;
 struct event;
@@ -108,6 +110,12 @@ class EventLoop : public folly::Executor {
    */
   static EventLoop* onThisThread() {
     return EventLoop::thisThreadLoop;
+  }
+
+  void dispose(ZeroCopyPayload* payload);
+
+  const BatchedBufferDisposer<ZeroCopyPayload>& disposer() const {
+    return disposer_;
   }
 
   // A map that translates std::chrono::milliseconds values into
@@ -231,6 +239,9 @@ class EventLoop : public folly::Executor {
   // Counter to keep track of number of work contexts that depend on the
   // eventloop.
   std::atomic<size_t> num_references_{0};
+
+  // Batched disposer to delete records on this event base in a batch.
+  BatchedBufferDisposer<ZeroCopyPayload> disposer_;
 
   // TimeoutMap to cache common timeouts.
   TimeoutMap common_timeouts_;

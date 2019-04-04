@@ -269,18 +269,18 @@ int EpochRecordCache::putRecord(
 
   // it is likely that the record will be stored in cache, pre-allocate
   // its entry
-  auto entry = EpochRecordCacheEntry::create<EpochRecordCacheEntry>(
-      EpochRecordCacheEntry::Disposer(deps_),
-      rid.lsn(),
-      flags,
-      timestamp,
-      lng,
-      wave_or_recovery_epoch,
-      copyset,
-      offsets_within_epoch,
-      std::move(keys),
-      payload_raw,
-      payload_holder);
+  auto entry = std::shared_ptr<EpochRecordCacheEntry>(
+      new EpochRecordCacheEntry(rid.lsn(),
+                                flags,
+                                timestamp,
+                                lng,
+                                wave_or_recovery_epoch,
+                                copyset,
+                                offsets_within_epoch,
+                                std::move(keys),
+                                payload_raw,
+                                payload_holder),
+      EpochRecordCacheEntry::Disposer(deps_));
 
   ReleasedVector entries_to_drop;
   int rv = 0;
@@ -552,7 +552,6 @@ EpochRecordCache::getEntry(esn_t esn) const {
   if (e == nullptr) {
     return std::make_pair(false, nullptr);
   }
-  ld_check(!e->isLinked());
   return std::make_pair(true, e);
 }
 
@@ -652,7 +651,6 @@ EpochRecordCache::createSnapshotImpl(Snapshot::SnapshotType type,
     for (size_t i = start_idx; i <= until_idx; ++i) {
       auto& e = buffer_[i];
       if (e != nullptr) {
-        ld_check(!e->isLinked());
         snapshot->entry_map_[esn_t(head + i)] = e;
       }
     }
