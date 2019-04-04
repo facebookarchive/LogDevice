@@ -44,6 +44,5 @@ libboost-context-dev
 libzstd1-dev
 bison
 flex
-libmstch-dev
 libkrb5-dev
 libsodium-dev

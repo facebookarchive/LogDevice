@@ -15,28 +15,13 @@ jobs:
     steps:
       - checkout
       - run: apt-get update
-      - run: apt-get install -y ca-certificates doxygen $(cat logdevice/build_tools/ubuntu.deps)
-      - run: git reset --hard HEAD
-      - run: git submodule sync
-      - run: git submodule update --init
+      - run: apt-get install -y ca-certificates doxygen python2.7 $(cat logdevice/build_tools/ubuntu.deps)
+      - run: update-alternatives --install /usr/bin/python python /usr/bin/python2.7 10
       - run:
           name: Build LogDevice
+          working_directory: build
           command: |
-            mkdir -p _build
-            cd _build
-            cmake -DPORTABLE=ON ../logdevice/
-            make -j 8
-      - run:
-          name: Generate Documentation
-          working_directory: _build
-          command: |
-            make -j 8 docs
-      - persist_to_workspace:
-          root: .
-          paths:
-            - website
-            - docs
-            - _build
+            python fbcode_builder/shell_builder.py | tee build_logdevice.sh | bash -
   deploy-website:
     docker:
       - image: circleci/node:8.12.0  # Use LTS version of Node.js
