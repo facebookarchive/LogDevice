@@ -1966,261 +1966,279 @@ int Socket::receiveMessage() {
     ld_check(!expectingProtocolHeader());
   } else {
     // Got message body.
-
-    // Tell the Worker that we're processing a message, so it can time it.
-    // The time will include message's deserialization, checksumming,
-    // onReceived, destructor and Socket's processing overhead.
-    RunContext run_context(recv_message_ph_.type);
-    deps_->onStartedRunning(run_context);
-    SCOPE_EXIT {
-      deps_->onStoppedRunning(run_context);
-    };
-
-    ld_check(messageDeserializers[recv_message_ph_.type]);
-
-    size_t protocol_bytes_already_read =
-        ProtocolHeader::bytesNeeded(recv_message_ph_.type, proto_);
-    std::string msgtype = messageTypeNames[recv_message_ph_.type];
-
-    ProtocolReader reader(recv_message_ph_.type,
-                          inbuf,
-                          recv_message_ph_.len - protocol_bytes_already_read,
-                          proto_);
-
-    // 1. read checksum
-    uint64_t cksum_recvd = 0;
-    uint64_t cksum_computed = 0;
-    auto checksumming_enabled = isChecksummingEnabled(recv_message_ph_.type);
-    bool need_checksum_in_header =
-        ProtocolHeader::needChecksumInHeader(recv_message_ph_.type, proto_);
-    if (need_checksum_in_header) {
-      // always read the checksum, we'll decide whether to verify it
-      // or not based on other settings
-      cksum_recvd = recv_message_ph_.cksum;
-      if (checksumming_enabled && cksum_recvd != 0) {
-        cksum_computed = reader.computeChecksum(recv_message_ph_.len -
-                                                sizeof(ProtocolHeader));
-      }
-    }
-
-    RATELIMIT_DEBUG(
-        std::chrono::seconds(10),
-        2,
-        "msg:%s, cksum_recvd:%lu, cksum_computed:%lu, msg_len:%u, "
-        "proto_:%hu, protocol_bytes_already_read:%zu, checksumming_enabled:%s",
-        msgtype.c_str(),
-        cksum_recvd,
-        cksum_computed,
-        recv_message_ph_.len,
-        proto_,
-        protocol_bytes_already_read,
-        checksumming_enabled ? "yes" : "no");
-
-    // 2. read actual message
-    std::unique_ptr<Message> msg =
-        messageDeserializers[recv_message_ph_.type](reader).msg;
-
-    ++num_messages_received_;
-    num_bytes_received_ += recv_message_ph_.len;
-
-    bool cksum_failed = false;
-    if (need_checksum_in_header && checksumming_enabled) {
-      if (cksum_recvd != cksum_computed) {
-        RATELIMIT_ERROR(
-            std::chrono::seconds(1),
-            2,
-            "Checksum mismatch (recvd:%lu, computed:%lu) detected with peer %s"
-            ", msgtype:%s",
-            cksum_recvd,
-            cksum_computed,
-            deps_->describeConnection().c_str(),
-            messageTypeNames[recv_message_ph_.type].c_str());
-
-        cksum_failed = true;
-        err = E::CHECKSUM_MISMATCH;
-        STAT_INCR(deps_->getStats(), protocol_checksum_mismatch);
-      } else {
-        STAT_INCR(deps_->getStats(), protocol_checksum_matched);
-      }
-    }
-
     expectProtocolHeader();
-
-    if (!msg || cksum_failed) {
-      switch (err) {
-        case E::TOOBIG:
-          ld_error("PROTOCOL ERROR: message of type %s received from peer "
-                   "%s is too large: %u bytes",
-                   messageTypeNames[recv_message_ph_.type].c_str(),
-                   deps_->describeConnection().c_str(),
-                   recv_message_ph_.len);
-          err = E::BADMSG;
-          return -1;
-
-        case E::BADMSG:
-          ld_error("PROTOCOL ERROR: message of type %s received from peer "
-                   "%s has invalid format. proto_:%hu",
-                   messageTypeNames[recv_message_ph_.type].c_str(),
-                   deps_->describeConnection().c_str(),
-                   proto_);
-          err = E::BADMSG;
-          return -1;
-
-        case E::CHECKSUM_MISMATCH:
-          // converting error type since existing clients don't
-          // handle E::CHECKSUM_MISMATCH
-          err = E::BADMSG;
-          return -1;
-
-        case E::INTERNAL:
-          ld_critical("INTERNAL ERROR while deserializing a message of type "
-                      "%s received from peer %s",
-                      messageTypeNames[recv_message_ph_.type].c_str(),
-                      deps_->describeConnection().c_str());
-          return 0;
-
-        case E::NOTSUPPORTED:
-          ld_critical(
-              "INTERNAL ERROR: deserializer for message type %d (%s) not "
-              "implemented.",
-              int(recv_message_ph_.type),
-              messageTypeNames[recv_message_ph_.type].c_str());
-          ld_check(false);
-          err = E::INTERNAL;
-          return -1;
-
-        default:
-          ld_critical("INTERNAL ERROR: unexpected error code %d (%s) from "
-                      "deserializer for message type %s received from peer %s",
-                      static_cast<int>(err),
-                      error_name(err),
-                      messageTypeNames[recv_message_ph_.type].c_str(),
-                      deps_->describeConnection().c_str());
-          return 0;
-      }
-
-      ld_check(false); // must not get here
-      return 0;
-    }
-
-    ld_check(msg);
-
-    if (isHandshakeMessage(recv_message_ph_.type)) {
-      if (handshaken_) {
-        ld_error("PROTOCOL ERROR: got a duplicate %s from %s",
-                 messageTypeNames[recv_message_ph_.type].c_str(),
-                 deps_->describeConnection().c_str());
-        err = E::PROTO;
-        return -1;
-      }
-
-      handshaken_ = true;
-      first_attempt_ = false;
-      deps_->evtimerDel(&handshake_timeout_event_);
-    }
-
-    MESSAGE_TYPE_STAT_INCR(
-        deps_->getStats(), recv_message_ph_.type, message_received);
-    TRAFFIC_CLASS_STAT_INCR(deps_->getStats(), msg->tc_, messages_received);
-    TRAFFIC_CLASS_STAT_ADD(
-        deps_->getStats(), msg->tc_, bytes_received, recv_message_ph_.len);
-
-    /* verify that gossip sockets don't receive non-gossip messages
-     * exceptions: handshake, config synchronization, shutdown
-     */
-    if (type_ == SocketType::GOSSIP) {
-      if (!(msg->type_ == MessageType::SHUTDOWN ||
-            allowedOnGossipConnection(msg->type_))) {
-        RATELIMIT_WARNING(std::chrono::seconds(1),
-                          1,
-                          "Received invalid message(%u) on gossip socket",
-                          static_cast<unsigned char>(msg->type_));
-        err = E::BADMSG;
-        return -1;
-      }
-    }
-    ld_spew("Received message %s of size %u bytes from %s",
-            messageTypeNames[recv_message_ph_.type].c_str(),
-            recv_message_ph_.len,
-            deps_->describeConnection().c_str());
-    Message::Disposition disp = deps_->onReceived(msg.get(), peer_name_);
-    Status onreceived_err = err;
-
-    // If this is a newly handshaken client connection, we might want to drop
-    // it at this point if we're already over the limit. onReceived() of a
-    // handshake message may set peer_node_id_ (if the client connection is in
-    // fact from another node in the cluster), which is why the check is not
-    // done earlier.
-    if (isHandshakeMessage(recv_message_ph_.type)) {
-      if (peerIsClient()) {
-        conn_external_token_ = deps_->getConnBudgetExternal().acquireToken();
-        if (!conn_external_token_) {
-          RATELIMIT_WARNING(std::chrono::seconds(10),
-                            1,
-                            "Rejecting a client connection from %s because the "
-                            "client connection limit has been reached.",
-                            deps_->describeConnection().c_str());
-
-          // Set to false to prevent close() from releasing even though
-          // acquire() failed.
-          handshaken_ = false;
-
-          err = E::TOOMANY;
-          return -1;
-        }
-      }
-    }
-
-    switch (disp) {
-      case Message::Disposition::NORMAL:
-        if (isHandshakeMessage(recv_message_ph_.type)) {
-          switch (recv_message_ph_.type) {
-            case MessageType::ACK: {
-              ACK_Message* ack = static_cast<ACK_Message*>(msg.get());
-              our_name_at_peer_ = ClientID(ack->getHeader().client_idx);
-              proto_ = ack->getHeader().proto;
-              connect_throttle_.connectSucceeded();
-            } break;
-            case MessageType::HELLO:
-              proto_ = std::min(
-                  static_cast<HELLO_Message*>(msg.get())->header_.proto_max,
-                  getSettings().max_protocol);
-              break;
-            default:
-              ld_check(false); // unreachable.
-          };
-          ld_check(proto_ >= Compatibility::MIN_PROTOCOL_SUPPORTED);
-          ld_check(proto_ <= Compatibility::MAX_PROTOCOL_SUPPORTED);
-          ld_assert(proto_ <= getSettings().max_protocol);
-          ld_spew("%s negotiated protocol %d",
-                  deps_->describeConnection().c_str(),
-                  proto_);
-
-          // Now that we know what protocol we are speaking with the other end,
-          // we can serialize pending messages. Messages that are not compatible
-          // with the protocol will not be sent.
-          flushSerializeQueue();
-        }
-        break;
-      case Message::Disposition::KEEP:
-        // msg may have been deleted here, do not dereference
-        ld_check(!isHandshakeMessage(recv_message_ph_.type));
-        msg.release();
-        break;
-      case Message::Disposition::ERROR:
-        // This should be in sync with comment in Message::Disposition enum.
-        err = onreceived_err;
-        ld_check_in(err,
-                    ({E::ACCESS,
-                      E::PROTONOSUPPORT,
-                      E::PROTO,
-                      E::BADMSG,
-                      E::DESTINATION_MISMATCH,
-                      E::INVALID_CLUSTER,
-                      E::INTERNAL}));
-        return -1;
+    int rv = onReceived(recv_message_ph_, inbuf);
+    if (rv != 0) {
+      return rv;
     }
   } // processing message body
+
+  return 0;
+}
+
+bool Socket::verifyChecksum(ProtocolHeader ph, ProtocolReader& reader) {
+  size_t protocol_bytes_already_read =
+      ProtocolHeader::bytesNeeded(ph.type, proto_);
+
+  auto enabled = isChecksummingEnabled(ph.type) &&
+      ProtocolHeader::needChecksumInHeader(ph.type, proto_) && ph.cksum != 0;
+
+  if (!enabled) {
+    return true;
+  }
+
+  uint64_t cksum_recvd = ph.cksum;
+  uint64_t cksum_computed =
+      reader.computeChecksum(ph.len - sizeof(ProtocolHeader));
+
+  RATELIMIT_DEBUG(std::chrono::seconds(10),
+                  2,
+                  "msg:%s, cksum_recvd:%lu, cksum_computed:%lu, msg_len:%u, "
+                  "proto_:%hu, protocol_bytes_already_read:%zu",
+                  messageTypeNames[ph.type].c_str(),
+                  cksum_recvd,
+                  cksum_computed,
+                  ph.len,
+                  proto_,
+                  protocol_bytes_already_read);
+
+  if (cksum_recvd != cksum_computed) {
+    RATELIMIT_ERROR(
+        std::chrono::seconds(1),
+        2,
+        "Checksum mismatch (recvd:%lu, computed:%lu) detected with peer %s"
+        ", msgtype:%s",
+        cksum_recvd,
+        cksum_computed,
+        deps_->describeConnection().c_str(),
+        messageTypeNames[ph.type].c_str());
+
+    err = E::CHECKSUM_MISMATCH;
+    STAT_INCR(deps_->getStats(), protocol_checksum_mismatch);
+    return false;
+  }
+
+  STAT_INCR(deps_->getStats(), protocol_checksum_matched);
+  return true;
+}
+
+bool Socket::validateReceivedMessage(const Message* msg) const {
+  if (isHandshakeMessage(msg->type_)) {
+    if (handshaken_) {
+      ld_error("PROTOCOL ERROR: got a duplicate %s from %s",
+               messageTypeNames[msg->type_].c_str(),
+               deps_->describeConnection().c_str());
+      err = E::PROTO;
+      return false;
+    }
+  }
+  /* verify that gossip sockets don't receive non-gossip messages
+   * exceptions: handshake, config synchronization, shutdown
+   */
+  if (type_ == SocketType::GOSSIP) {
+    if (!(msg->type_ == MessageType::SHUTDOWN ||
+          allowedOnGossipConnection(msg->type_))) {
+      RATELIMIT_WARNING(std::chrono::seconds(1),
+                        1,
+                        "Received invalid message(%u) on gossip socket",
+                        static_cast<unsigned char>(msg->type_));
+      err = E::BADMSG;
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool Socket::processHandshakeMessage(const Message* msg) {
+  switch (msg->type_) {
+    case MessageType::ACK: {
+      const ACK_Message* ack = static_cast<const ACK_Message*>(msg);
+      our_name_at_peer_ = ClientID(ack->getHeader().client_idx);
+      proto_ = ack->getHeader().proto;
+      connect_throttle_.connectSucceeded();
+    } break;
+    case MessageType::HELLO:
+      // If this is a newly handshaken client connection, we might want to
+      // drop it at this point if we're already over the limit. onReceived()
+      // of a handshake message may set peer_node_id_ (if the client
+      // connection is in fact from another node in the cluster), which is why
+      // the check is not done earlier.
+      if (peerIsClient() &&
+          !(conn_external_token_ =
+                deps_->getConnBudgetExternal().acquireToken())) {
+        RATELIMIT_WARNING(std::chrono::seconds(10),
+                          1,
+                          "Rejecting a client connection from %s because the "
+                          "client connection limit has been reached.",
+                          deps_->describeConnection().c_str());
+
+        // Set to false to prevent close() from releasing even though
+        // acquire() failed.
+        handshaken_ = false;
+
+        err = E::TOOMANY;
+        return false;
+      }
+      proto_ =
+          std::min(static_cast<const HELLO_Message*>(msg)->header_.proto_max,
+                   getSettings().max_protocol);
+      break;
+    default:
+      ld_check(false); // unreachable.
+  };
+
+  ld_check(proto_ >= Compatibility::MIN_PROTOCOL_SUPPORTED);
+  ld_check(proto_ <= Compatibility::MAX_PROTOCOL_SUPPORTED);
+  ld_assert(proto_ <= getSettings().max_protocol);
+  ld_spew(
+      "%s negotiated protocol %d", deps_->describeConnection().c_str(), proto_);
+
+  // Now that we know what protocol we are speaking with the other end,
+  // we can serialize pending messages. Messages that are not compatible
+  // with the protocol will not be sent.
+  flushSerializeQueue();
+
+  return true;
+}
+
+int Socket::onReceived(ProtocolHeader ph, struct evbuffer* inbuf) {
+  // Tell the Worker that we're processing a message, so it can time it.
+  // The time will include message's deserialization, checksumming,
+  // onReceived, destructor and Socket's processing overhead.
+  RunContext run_context(ph.type);
+  deps_->onStartedRunning(run_context);
+  SCOPE_EXIT {
+    deps_->onStoppedRunning(run_context);
+  };
+
+  ld_check(messageDeserializers[ph.type]);
+
+  size_t protocol_bytes_already_read =
+      ProtocolHeader::bytesNeeded(ph.type, proto_);
+
+  ProtocolReader reader(
+      ph.type, inbuf, ph.len - protocol_bytes_already_read, proto_);
+
+  ++num_messages_received_;
+  num_bytes_received_ += ph.len;
+  expectProtocolHeader();
+
+  // 1. compute and verify checksum in header.
+
+  if (!verifyChecksum(ph, reader)) {
+    ld_check_eq(err, E::CHECKSUM_MISMATCH);
+    // converting error type since existing clients don't
+    // handle E::CHECKSUM_MISMATCH
+    err = E::BADMSG;
+    return -1;
+  }
+
+  // 2. read and parse message body.
+
+  std::unique_ptr<Message> msg = messageDeserializers[ph.type](reader).msg;
+
+  if (!msg) {
+    switch (err) {
+      case E::TOOBIG:
+        ld_error("PROTOCOL ERROR: message of type %s received from peer "
+                 "%s is too large: %u bytes",
+                 messageTypeNames[ph.type].c_str(),
+                 deps_->describeConnection().c_str(),
+                 ph.len);
+        err = E::BADMSG;
+        return -1;
+
+      case E::BADMSG:
+        ld_error("PROTOCOL ERROR: message of type %s received from peer "
+                 "%s has invalid format. proto_:%hu",
+                 messageTypeNames[ph.type].c_str(),
+                 deps_->describeConnection().c_str(),
+                 proto_);
+        err = E::BADMSG;
+        return -1;
+
+      case E::INTERNAL:
+        ld_critical("INTERNAL ERROR while deserializing a message of type "
+                    "%s received from peer %s",
+                    messageTypeNames[ph.type].c_str(),
+                    deps_->describeConnection().c_str());
+        return 0;
+
+      case E::NOTSUPPORTED:
+        ld_critical("INTERNAL ERROR: deserializer for message type %d (%s) not "
+                    "implemented.",
+                    int(ph.type),
+                    messageTypeNames[ph.type].c_str());
+        ld_check(false);
+        err = E::INTERNAL;
+        return -1;
+
+      default:
+        ld_critical("INTERNAL ERROR: unexpected error code %d (%s) from "
+                    "deserializer for message type %s received from peer %s",
+                    static_cast<int>(err),
+                    error_name(err),
+                    messageTypeNames[ph.type].c_str(),
+                    deps_->describeConnection().c_str());
+        return 0;
+    }
+
+    ld_check(false); // must not get here
+    return 0;
+  }
+
+  ld_check(msg);
+
+  // 3. Run basic validations.
+  if (!validateReceivedMessage(msg.get())) {
+    return -1;
+  }
+
+  if (isHandshakeMessage(ph.type)) {
+    handshaken_ = true;
+    first_attempt_ = false;
+    deps_->evtimerDel(&handshake_timeout_event_);
+  }
+
+  MESSAGE_TYPE_STAT_INCR(deps_->getStats(), ph.type, message_received);
+  TRAFFIC_CLASS_STAT_INCR(deps_->getStats(), msg->tc_, messages_received);
+  TRAFFIC_CLASS_STAT_ADD(deps_->getStats(), msg->tc_, bytes_received, ph.len);
+
+  ld_spew("Received message %s of size %u bytes from %s",
+          messageTypeNames[ph.type].c_str(),
+          recv_message_ph_.len,
+          deps_->describeConnection().c_str());
+
+  // 4. Dispatch message to state machines for processing.
+
+  Message::Disposition disp = deps_->onReceived(msg.get(), peer_name_);
+
+  // 5. Dispose off message according to state machine's request.
+  switch (disp) {
+    case Message::Disposition::NORMAL:
+      // Extra processing for handshake message.
+      if (isHandshakeMessage(ph.type) && !processHandshakeMessage(msg.get())) {
+        return -1;
+      }
+      break;
+    case Message::Disposition::KEEP:
+      // msg may have been deleted here, do not dereference
+      ld_check(!isHandshakeMessage(ph.type));
+      msg.release();
+      break;
+    case Message::Disposition::ERROR:
+      // This should be in sync with comment in Message::Disposition enum.
+      ld_check_in(err,
+                  ({E::ACCESS,
+                    E::PROTONOSUPPORT,
+                    E::PROTO,
+                    E::BADMSG,
+                    E::DESTINATION_MISMATCH,
+                    E::INVALID_CLUSTER,
+                    E::INTERNAL}));
+      return -1;
+  }
 
   return 0;
 }

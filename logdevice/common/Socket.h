@@ -192,7 +192,7 @@ class Socket : public TrafficShappingSocket {
   /**
    * Disconnects, deletes the underlying bufferevent, and closes the TCP socket.
    */
-  ~Socket();
+  virtual ~Socket();
 
   Socket(const Socket&) = delete;
   Socket(Socket&&) = delete;
@@ -519,6 +519,9 @@ class Socket : public TrafficShappingSocket {
    */
   size_t getBytesPending() const;
 
+ protected:
+  virtual int onReceived(ProtocolHeader ph, struct evbuffer* inbuf);
+
  private:
   /**
    * This is strictly a delegating constructor. It sets all members
@@ -704,6 +707,26 @@ class Socket : public TrafficShappingSocket {
    * The message will be sent as soon as the connection is established.
    */
   void sendHello();
+
+  /**
+   * Verifies checksum by matching checksum received in the header with checksum
+   * computed on the received message body. Returns true if checksum matches or
+   * checksum verification is disabled. Returns false if the message did not
+   * match.
+   */
+  bool verifyChecksum(ProtocolHeader ph, ProtocolReader& reader);
+  /**
+   * Kitchen sink for running basic checks on the received message after
+   * checksum verification but before dispatching it to the state machines.
+   */
+  bool validateReceivedMessage(const Message* msg) const;
+
+  /**
+   * In case of handshake message, some fields of the Socket object are
+   * initialized after processing the message. This methods does the leftover
+   * initialization of the Socket.
+   */
+  bool processHandshakeMessage(const Message* msg);
 
   /**
    * @return the number of bytes that receiveMessage() expects to find in
