@@ -225,7 +225,6 @@ RocksDBCompactionFilter::filterOutAndMaybeSkip(logid_t log_id,
                                                std::string* skip_until) {
   using namespace facebook::logdevice::RocksDBKeyFormat;
 
-#ifdef LOGDEVICED_ROCKSDB_HAS_FILTER_V2
   if (!force_no_skips_) {
     // Tell rocksdb to drop this key-value, and also to drop everything up to
     // key skip_until. We'll fill skip_until with some lower bound estimate
@@ -293,9 +292,7 @@ RocksDBCompactionFilter::filterOutAndMaybeSkip(logid_t log_id,
     ld_check((*skip_until)[0] == key[0]);
 
     return Decision::kRemoveAndSkipUntil;
-  } else
-#endif
-  {
+  } else {
     return Decision::kRemove;
   }
 }

@@ -53,29 +53,14 @@ void RocksDBEnv::BaseSchedule(void (*function)(void* arg),
                               Priority pri,
                               void* tag,
                               void (*unschedFunction)(void* arg)) {
-#ifdef LOGDEVICED_ROCKSDB_UNSCHED_FUNCTION
   rocksdb::EnvWrapper::Schedule(function, arg, pri, tag, unschedFunction);
-#else
-  ld_check(!unschedFunction);
-  rocksdb::EnvWrapper::Schedule(function, arg, pri, tag);
-#endif
 }
 
-#ifdef LOGDEVICED_ROCKSDB_UNSCHED_FUNCTION
 void RocksDBEnv::Schedule(void (*function)(void* arg),
                           void* arg,
                           Priority pri,
                           void* tag,
                           void (*unschedFunction)(void* arg)) {
-#else
-void RocksDBEnv::Schedule(void (*function)(void* arg),
-                          void* arg,
-                          Priority pri,
-                          void* tag) {
-  typedef void (*UnschedFunction)(void*);
-  UnschedFunction unschedFunction = nullptr;
-#endif
-
   if (pri != Priority::LOW || !settings_->low_ioprio.hasValue()) {
     BaseSchedule(function, arg, pri, tag, unschedFunction);
     return;
@@ -268,14 +253,8 @@ RocksDBBackgroundSyncFile::~RocksDBBackgroundSyncFile() {
   JoinThread();
 }
 
-rocksdb::Status RocksDBBackgroundSyncFile::RangeSync(
-#ifdef LOGDEVICED_ROCKSDB_RANGE_SYNC_NEW_TYPES
-    uint64_t offset,
-    uint64_t nbytes) {
-#else
-    off_t offset,
-    off_t nbytes) {
-#endif
+rocksdb::Status RocksDBBackgroundSyncFile::RangeSync(uint64_t offset,
+                                                     uint64_t nbytes) {
   if (static_cast<off_t>(offset) != to_sync_end_.load()) {
     // We expect RangeSync() to be called for sequential ranges.
     RATELIMIT_WARNING(

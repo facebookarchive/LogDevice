@@ -177,7 +177,6 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        "of any issues caused by compaction optimizations.",
        SERVER | DEPRECATED,
        SettingsCategory::RocksDB);
-#ifdef LOGDEVICED_ROCKSDB_INSERT_HINT
   init("rocksdb-enable-insert-hint",
        &enable_insert_hint_,
        "true",
@@ -186,9 +185,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        "inserting keys into rocksdb, with small memory overhead.",
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
-#endif
 
-#ifdef LOGDEVICED_ROCKSDB_CACHE_INDEX_HIGH_PRI
   init("rocksdb-cache-index-with-high-priority",
        &cache_index_with_high_priority_,
        "false",
@@ -212,9 +209,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        "--rocksdb-cache-index-with-high-priority is enabled.",
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
-#endif
 
-#ifdef LOGDEVICED_ROCKSDB_READ_AMP_STATS
   init("rocksdb-read-amp-bytes-per-bit",
        &read_amp_bytes_per_bit_,
        "32",
@@ -224,7 +219,6 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        "READ_AMP_ESTIMATE_USEFUL_BYTES and READ_AMP_TOTAL_READ_BYTES stats.",
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
-#endif
 
   init("rocksdb-partitioned",
        &partitioned,
@@ -841,7 +835,6 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
 
   init("rocksdb-bloom-bits-per-key",
        &bloom_bits_per_key_,
-#ifdef LOGDEVICED_ROCKSDB_BLOOM_UNBROKEN
        "10",
        [](int val) {
          if (val < 0) {
@@ -851,16 +844,6 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
                "value.");
          }
        },
-#else
-       "0",
-       [](int val) {
-         if (val != 0) {
-           throw boost::program_options::error(
-               "bloom filters are broken in this version of rocksdb. Please "
-               "use --rocksdb-bloom-bits-per-key=0.");
-         }
-       },
-#endif
        "Controls the size of bloom filters in sst files. Set to 0 to disable "
        "bloom filters. \"Key\" in the bloom filter is log ID and entry type "
        "(data record, CSI entry or findTime index entry). Iterators then use "
@@ -882,7 +865,6 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
   init("rocksdb-metadata-bloom-bits-per-key",
        &metadata_bloom_bits_per_key_,
        "0",
-#ifdef LOGDEVICED_ROCKSDB_BLOOM_UNBROKEN
        [](int val) {
          if (val < 0) {
            throw boost::program_options::error(
@@ -891,15 +873,6 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
                "nonnegative value.");
          }
        },
-#else
-       [](int val) {
-         if (val != 0) {
-           throw boost::program_options::error(
-               "bloom filters are broken in this version of rocksdb. Please "
-               "use --rocksdb-metadata-bloom-bits-per-key=0.");
-         }
-       },
-#endif
        "Similar to --rocksdb-bloom-bits-per-key but for metadata column "
        "family. You probably don't want to enable this. This option is here "
        "just for completeness. It's not expected to have any positive effect "
@@ -1114,11 +1087,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
 
   init("rocksdb-compaction-readahead-size",
        &compaction_readahead_size,
-#ifdef LOGDEVICED_ROCKSDB_HAS_FILTER_V2
        "4096",
-#else
-       "4194304",
-#endif
        parse_nonnegative<ssize_t>(),
        "if non-zero, perform reads of this size (in bytes) when doing "
        "compaction; big readahead can decrease efficiency of compactions that "

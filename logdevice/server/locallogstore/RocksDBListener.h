@@ -109,13 +109,8 @@ class RocksDBTablePropertiesCollectorFactory
       StatsHolder* stats)
       : updateable_config_(updateable_config), stats_(stats) {}
 
-#if defined(ROCKSDB_MAJOR) && \
-    (ROCKSDB_MAJOR > 4 || (ROCKSDB_MAJOR == 4 && ROCKSDB_MINOR >= 2))
   rocksdb::TablePropertiesCollector* CreateTablePropertiesCollector(
       rocksdb::TablePropertiesCollectorFactory::Context context) override;
-#else
-  rocksdb::TablePropertiesCollector* CreateTablePropertiesCollector() override;
-#endif
   const char* Name() const override;
 
  private:

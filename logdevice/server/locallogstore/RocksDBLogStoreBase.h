@@ -373,7 +373,7 @@ class RocksDBLogStoreBase : public LocalLogStore {
       const std::shared_ptr<const RocksDBSettings> /* unused */) {}
 
   static size_t getIOBytesUnnormalized() {
-    return ROCKSDB_PERF_CONTEXT()->block_read_byte;
+    return rocksdb::get_perf_context()->block_read_byte;
   }
 
   // Get column family holder shared ptr. Returned instance could be
@@ -751,11 +751,7 @@ class RocksDBIterator {
 
   rocksdb::Status GetProperty(std::string prop_name, std::string* prop) {
     ld_check(iterator_ != nullptr);
-#if ROCKSDB_MAJOR > 4 || (ROCKSDB_MAJOR == 4 && ROCKSDB_MINOR >= 6)
     return iterator_->GetProperty(std::move(prop_name), prop);
-#else
-    return rocksdb::Status::NotSupported();
-#endif
   }
 
   bool totalOrderSeek() const {

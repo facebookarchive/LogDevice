@@ -4635,16 +4635,13 @@ void PartitionedRocksDBStore::performCompactionInternal(
 
   auto start_time = currentSteadyTime();
 
-#ifdef LOGDEVICED_ROCKSDB_HAS_FILTER_V2
   if (to_compact.reason == PartitionToCompact::Reason::RETENTION &&
       !getSettings()->force_no_compaction_optimizations_) {
     bool ok = performStronglyFilteredCompactionInternal(partition);
     if (!ok) {
       return;
     }
-  } else
-#endif
-  {
+  } else {
     auto factory = checked_downcast<RocksDBCompactionFilterFactory*>(
         rocksdb_config_.options_.compaction_filter_factory.get());
 
@@ -4664,15 +4661,10 @@ void PartitionedRocksDBStore::performCompactionInternal(
         rocksdb::CompactionOptions options;
         options.compression = rocksdb_config_.options_.compression;
 
-#ifdef LOGDEVICED_ENABLE_PARTIAL_COMPACTIONS
         status = db_->CompactFiles(options,
                                    partition->cf_->get(),
                                    to_compact.partial_compaction_filenames,
                                    0 /* L0 */);
-#else
-        status = rocksdb::Status::Aborted();
-        ld_error("CompactFiles() not supported in RocksDB < 4.5");
-#endif
       } else {
         status = db_->CompactRange(rocksdb::CompactRangeOptions(),
                                    partition->cf_->get(),
@@ -4869,9 +4861,6 @@ bool PartitionedRocksDBStore::performStronglyFilteredCompactionInternal(
     rocksdb::CompactionOptions options;
     options.compression = rocksdb_config_.options_.compression;
 
-#ifndef LOGDEVICED_ENABLE_PARTIAL_COMPACTIONS
-    ld_check(false); // shouldn't call this method on old rocksdb
-#endif
     status = db_->CompactFiles(
         options, partition->cf_->get(), files_to_compact, 0 /* L0 */);
   }
@@ -5929,12 +5918,7 @@ void PartitionedRocksDBStore::loPriBackgroundThreadRun() {
     }
 
     size_t partition_partial_compaction_max_num_per_loop{
-#ifdef LOGDEVICED_ENABLE_PARTIAL_COMPACTIONS
-        getSettings()->partition_partial_compaction_max_num_per_loop_
-#else
-        0
-#endif
-    };
+        getSettings()->partition_partial_compaction_max_num_per_loop_};
     size_t max_pending_partial_compactions =
         getSettings()->partition_partial_compaction_stall_trigger_;
 

@@ -5977,7 +5977,6 @@ TEST_F(PartitionedRocksDBStoreTest, SnapshotsPersistence) {
   ASSERT_EQ(blob_map, snapshots_content);
 }
 
-#ifdef LOGDEVICED_ROCKSDB_HAS_FILTER_V2
 TEST_F(PartitionedRocksDBStoreTest, CompactionRangeSkip) {
   filter_history_t filter_calls;
   filter_factory_->out_history_ = &filter_calls;
@@ -6061,7 +6060,6 @@ TEST_F(PartitionedRocksDBStoreTest, CompactionRangeSkip) {
   EXPECT_EQ(std::vector<lsn_t>({100, 250}), data[0][logid_t(210)].records);
   EXPECT_EQ(std::vector<lsn_t>({450}), data[0][logid_t(230)].records);
 }
-#endif
 
 TEST_F(PartitionedRocksDBStoreTest, NewPartitionTriggers) {
   closeStore();

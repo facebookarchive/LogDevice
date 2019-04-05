@@ -30,6 +30,27 @@ using RocksDBKeyFormat::CopySetIndexKey;
 using RocksDBKeyFormat::DataKey;
 using RocksDBKeyFormat::PerEpochLogMetaKey;
 
+bool RocksDBWriterMergeOperator::PartialMergeMulti(
+    const rocksdb::Slice& key,
+    const std::deque<rocksdb::Slice>& operand_list,
+    std::string* new_value,
+    rocksdb::Logger*) const {
+  ld_check(new_value != nullptr);
+  return AnyWayMerge(false, key, nullptr, operand_list, *new_value, nullptr);
+}
+
+bool RocksDBWriterMergeOperator::FullMergeV2(
+    const MergeOperationInput& merge_in,
+    MergeOperationOutput* merge_out) const {
+  ld_check(merge_out != nullptr);
+  return AnyWayMerge(true,
+                     merge_in.key,
+                     merge_in.existing_value,
+                     merge_in.operand_list,
+                     merge_out->new_value,
+                     &merge_out->existing_operand);
+}
+
 namespace {
 
 // Flags that should be ORed together from all merge operands.
@@ -47,6 +68,8 @@ static inline rocksdb::Slice toRocksDbSlice(const Slice& ldSlice) {
   return rocksdb::Slice(static_cast<const char*>(ldSlice.data), ldSlice.size);
 }
 
+// Just like rocksdb::MergeOperator::MergeOperationOutput, but existing_operand
+// is optional.
 // Helper struct for the output of a data record merge.  This is produced by
 // handleDataMerge and may be used both for a FullMergeV2 (in which case the
 // output is the value of a row) or a PartialMergeMulti (in which case the
@@ -102,56 +125,6 @@ bool handleMutablePerEpochLogMetadata(const rocksdb::Slice& key,
                                       const OperandList& operand_list,
                                       DataMergeOutput& out);
 } // anonymous namespace
-
-bool RocksDBWriterMergeOperator::FullMerge(
-    const rocksdb::Slice& /*key*/,
-    const rocksdb::Slice* /*existing_value*/,
-    const std::deque<std::string>& /*operand_list*/,
-    std::string* /*new_value*/,
-    rocksdb::Logger*) const {
-#ifdef LOGDEVICED_ROCKSDB_HAS_FULL_MERGE_V2
-  // Don't expect this to ever be called as we implement FullMergeV2()
-  ld_check(false);
-  return false;
-#else
-  ld_check(new_value != nullptr);
-  return AnyWayMerge(
-      true, key, existing_value, operand_list, *new_value, nullptr);
-#endif
-}
-
-bool RocksDBWriterMergeOperator::PartialMerge(const rocksdb::Slice&,
-                                              const rocksdb::Slice&,
-                                              const rocksdb::Slice&,
-                                              std::string*,
-                                              rocksdb::Logger*) const {
-  // Don't expect this to ever be called as we implement PartialMergeMulti()
-  ld_check(false);
-  return false;
-}
-
-bool RocksDBWriterMergeOperator::PartialMergeMulti(
-    const rocksdb::Slice& key,
-    const std::deque<rocksdb::Slice>& operand_list,
-    std::string* new_value,
-    rocksdb::Logger*) const {
-  ld_check(new_value != nullptr);
-  return AnyWayMerge(false, key, nullptr, operand_list, *new_value, nullptr);
-}
-
-#ifdef LOGDEVICED_ROCKSDB_HAS_FULL_MERGE_V2
-bool RocksDBWriterMergeOperator::FullMergeV2(
-    const MergeOperationInput& merge_in,
-    MergeOperationOutput* merge_out) const {
-  ld_check(merge_out != nullptr);
-  return AnyWayMerge(true,
-                     merge_in.key,
-                     merge_in.existing_value,
-                     merge_in.operand_list,
-                     merge_out->new_value,
-                     &merge_out->existing_operand);
-}
-#endif
 
 template <typename OperandList>
 bool RocksDBWriterMergeOperator::AnyWayMerge(

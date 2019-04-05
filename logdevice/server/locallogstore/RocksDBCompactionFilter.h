@@ -71,12 +71,6 @@ struct CompactionContext {
 // single thread so no synchronization is needed in the filter
 class RocksDBCompactionFilter : public rocksdb::CompactionFilter {
  public:
-#ifndef LOGDEVICED_ROCKSDB_HAS_FILTER_V2
-  // If rocksdb is new enough, it defines rocksdb::CompactionFilter::Decision
-  // enum, otherwise we define it here.
-  enum class Decision{kKeep, kRemove};
-#endif
-
   explicit RocksDBCompactionFilter(StorageThreadPool* pool,
                                    UpdateableSettings<RocksDBSettings> settings,
                                    CompactionContext* context)
@@ -91,7 +85,6 @@ class RocksDBCompactionFilter : public rocksdb::CompactionFilter {
 
   ~RocksDBCompactionFilter() override;
 
-#ifdef LOGDEVICED_ROCKSDB_HAS_FILTER_V2
   Decision FilterV2(int /*level*/,
                     const rocksdb::Slice& key,
                     ValueType value_type,
@@ -113,28 +106,6 @@ class RocksDBCompactionFilter : public rocksdb::CompactionFilter {
     ld_check(false);
     return Decision::kKeep;
   }
-#else
-  bool Filter(int level,
-              const rocksdb::Slice& key,
-              const rocksdb::Slice& existing_value,
-              std::string* new_value,
-              bool* value_changed) const override {
-    // Filter() is const in the RocksDB-dictated interface but it doesn't make
-    // sense and we want to maintain state.
-    Decision decision = const_cast<RocksDBCompactionFilter*>(this)->filterImpl(
-        key, existing_value, nullptr);
-    return decision == Decision::kRemove; // true to remove
-  }
-
-  bool FilterMergeOperand(int level,
-                          const rocksdb::Slice& key,
-                          const rocksdb::Slice& operand) const override {
-    Decision decision =
-        const_cast<RocksDBCompactionFilter*>(this)->filterMergeImpl(
-            key, operand, nullptr);
-    return decision == Decision::kRemove; // true to remove
-  }
-#endif
 
   const char* Name() const override {
     return "logdevice::RocksDBCompactionFilter";

@@ -63,22 +63,11 @@ class CustomEnv : public rocksdb::EnvWrapper {
     }
 
    protected:
-#if defined(ROCKSDB_MAJOR) && \
-    (ROCKSDB_MAJOR > 4 || (ROCKSDB_MAJOR == 4 && ROCKSDB_MINOR >= 3))
     rocksdb::Status Allocate(uint64_t /*offset*/, uint64_t /*len*/) override {
-#else
-    rocksdb::Status Allocate(off_t offset, off_t len) override {
-#endif
-
       return rocksdb::Status::OK();
     }
-#if defined(ROCKSDB_MAJOR) && \
-    (ROCKSDB_MAJOR > 4 || (ROCKSDB_MAJOR == 4 && ROCKSDB_MINOR >= 3))
     rocksdb::Status RangeSync(uint64_t /*offset*/,
                               uint64_t /*nbytes*/) override {
-#else
-    rocksdb::Status RangeSync(off_t offset, off_t nbytes) override {
-#endif
       return rocksdb::Status::OK();
     }
 

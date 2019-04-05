@@ -19,14 +19,6 @@
 #include "logdevice/server/locallogstore/LocalLogStore.h"
 #include "logdevice/server/locallogstore/RocksDBSettings.h"
 
-#if ROCKSDB_MAJOR > 4 || (ROCKSDB_MAJOR == 4 && ROCKSDB_MINOR >= 4)
-#define LOGDEVICED_ROCKSDB_UNSCHED_FUNCTION
-#endif
-
-#if ROCKSDB_MAJOR > 4 || (ROCKSDB_MAJOR == 4 && ROCKSDB_MINOR >= 3)
-#define LOGDEVICED_ROCKSDB_RANGE_SYNC_NEW_TYPES
-#endif
-
 namespace facebook { namespace logdevice {
 
 class StatsHolder;
@@ -45,18 +37,11 @@ class RocksDBEnv : public rocksdb::EnvWrapper {
         settings_(std::move(settings)),
         stats_(stats) {}
 
-#ifdef LOGDEVICED_ROCKSDB_UNSCHED_FUNCTION
   void Schedule(void (*function)(void* arg),
                 void* arg,
                 Priority pri = LOW,
                 void* tag = nullptr,
                 void (*unschedFunction)(void* arg) = 0) override;
-#else
-  void Schedule(void (*function)(void* arg),
-                void* arg,
-                Priority pri = LOW,
-                void* tag = nullptr) override;
-#endif
 
   // Instantiate RocksDBRandomAccessFile objects (a RandomAccessFile
   // wrapper) so we can track RocksDB read operations.
@@ -135,19 +120,6 @@ class RocksDBRandomAccessFileWrapper : public rocksdb::RandomAccessFile {
     return target_->Read(offset, n, result, scratch);
   }
 
-// ShouldForwardRawRequest() and EnableReadAhead() were removed in 5.5
-#if ROCKSDB_MAJOR < 5 || (ROCKSDB_MAJOR == 5 && ROCKSDB_MINOR <= 4)
-  bool ShouldForwardRawRequest() const override {
-    return target_->ShouldForwardRawRequest();
-  }
-// EnableReadAhead() was added in 4.4.2
-#if ROCKSDB_MAJOR > 4 || (ROCKSDB_MAJOR == 4 && ROCKSDB_MINOR >= 2)
-  void EnableReadAhead() override {
-    target_->EnableReadAhead();
-  }
-#endif
-#endif
-
   size_t GetUniqueId(char* id, size_t max_size) const override {
     return target_->GetUniqueId(id, max_size);
   }
@@ -225,11 +197,7 @@ class RocksDBBackgroundSyncFile : public RocksDBWritableFile {
         std::thread(std::bind(&RocksDBBackgroundSyncFile::ThreadRun, this));
   }
 
-#ifdef LOGDEVICED_ROCKSDB_RANGE_SYNC_NEW_TYPES
   rocksdb::Status RangeSync(uint64_t offset, uint64_t nbytes) override;
-#else
-  rocksdb::Status RangeSync(off_t offset, off_t nbytes) override;
-#endif
 
   rocksdb::Status Close() override;
   ~RocksDBBackgroundSyncFile() override;

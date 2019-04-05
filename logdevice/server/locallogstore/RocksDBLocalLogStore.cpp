@@ -276,7 +276,7 @@ LocalLogStore::WriteBufStats RocksDBLocalLogStore::scheduleWriteBufFlush(
 #define ROCKSDB_ACCOUNTED_OP(iterator, opname, op, itname)                 \
   do {                                                                     \
     AddContext opContxt(#opname);                                          \
-    auto* perf_context = ROCKSDB_PERF_CONTEXT();                           \
+    auto* perf_context = rocksdb::get_perf_context();                      \
     uint64_t prev_reads = perf_context->block_read_byte;                   \
     uint64_t prev_hits = perf_context->block_cache_hit_count;              \
     (iterator)->op;                                                        \

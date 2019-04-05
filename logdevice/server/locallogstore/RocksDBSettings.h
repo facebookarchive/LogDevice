@@ -18,44 +18,8 @@
 #include "logdevice/common/configuration/ServerConfig.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 
-#if ROCKSDB_MAJOR > 4 || (ROCKSDB_MAJOR == 4 && ROCKSDB_MINOR >= 2)
-#define LOGDEVICED_ROCKSDB_HAS_GET_AGGREGATED_INT_PROPERTY
-#endif
-
-#if ROCKSDB_MAJOR > 4 || (ROCKSDB_MAJOR == 4 && ROCKSDB_MINOR >= 5)
-// Running CompactFiles on RocksDB < 4.5 can cause us to crash and lose
-// some SST files randomly. See https://reviews.facebook.net/D54219 and
-// https://reviews.facebook.net/D54561
-#define LOGDEVICED_ENABLE_PARTIAL_COMPACTIONS
-
-#define LOGDEVICED_ROCKSDB_HAS_INDEX_BLOCK_RESTART_INTERVAL
-#endif
-
-#if ROCKSDB_MAJOR > 4 || (ROCKSDB_MAJOR == 4 && ROCKSDB_MINOR >= 11)
-#define LOGDEVICED_ROCKSDB_HAS_FULL_MERGE_V2
-#endif
-
-#if ROCKSDB_MAJOR > 4 || (ROCKSDB_MAJOR == 4 && ROCKSDB_MINOR >= 13)
-#define LOGDEVICED_ROCKSDB_CACHE_INDEX_HIGH_PRI
-#define LOGDEVICED_ROCKSDB_READ_AMP_STATS
-#endif
-
-#if ROCKSDB_MAJOR > 5 || (ROCKSDB_MAJOR == 5 && ROCKSDB_MINOR >= 0)
-#define LOGDEVICED_ROCKSDB_HAS_FILTER_V2
-#define LOGDEVICED_ROCKSDB_INSERT_HINT
-#endif
-
-#if ROCKSDB_MAJOR > 5 || (ROCKSDB_MAJOR == 5 && ROCKSDB_MINOR >= 6)
-#define ROCKSDB_PERF_CONTEXT() (rocksdb::get_perf_context())
-#define ROCKSDB_IOSTATS_CONTEXT() (rocksdb::get_iostats_context())
-#else
-#define ROCKSDB_PERF_CONTEXT() (&rocksdb::perf_context)
-#define ROCKSDB_IOSTATS_CONTEXT() (&rocksdb::iostats_context)
-#endif
-
-#if ROCKSDB_MAJOR > 5 || (ROCKSDB_MAJOR == 5 && ROCKSDB_MINOR >= 7)
-#define LOGDEVICED_ROCKSDB_BLOOM_UNBROKEN
-#endif
+static_assert(ROCKSDB_MAJOR > 5 || (ROCKSDB_MAJOR == 5 && ROCKSDB_MINOR >= 7),
+              "LogDevice requires rocksdb 5.7 or higher");
 
 #if ROCKSDB_MAJOR > 5 || (ROCKSDB_MAJOR == 5 && ROCKSDB_MINOR >= 14)
 // These performance counters were added in rocksdb 5.14.
@@ -361,27 +325,21 @@ class RocksDBSettings : public SettingsBundle {
   // See .cpp
   std::chrono::milliseconds flush_trigger_check_interval;
 
-#ifdef LOGDEVICED_ROCKSDB_INSERT_HINT
   // Enable rocksdb insert hint optimization with data/metadata keys. May reduce
   // CPU usage for inserting keys into rocksdb and incur small memory overhead.
   bool enable_insert_hint_;
-#endif
 
-#ifdef LOGDEVICED_ROCKSDB_CACHE_INDEX_HIGH_PRI
   // If Cache index and filter block in high pri pool of block cache, making
   // them less likely to be evicted than data blocks.
   bool cache_index_with_high_priority_;
 
   // Ratio of rocksdb block cache reserve for index and filter blocks.
   double cache_high_pri_pool_ratio_;
-#endif
 
-#ifdef LOGDEVICED_ROCKSDB_READ_AMP_STATS
   // If greater than 0, will create a bitmap to estimate rocksdb read
   // amplification and expose the result through
   // READ_AMP_ESTIMATE_USEFUL_BYTES and READ_AMP_TOTAL_READ_BYTES stats.
   uint32_t read_amp_bytes_per_bit_;
-#endif
 
   // See .cpp
   int bloom_bits_per_key_;

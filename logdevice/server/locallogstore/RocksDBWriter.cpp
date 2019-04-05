@@ -721,8 +721,8 @@ rocksdb::Status RocksDBWriter::writeBatch(const rocksdb::WriteOptions& options,
   using IOType = IOFaultInjection::IOType;
   using FaultType = IOFaultInjection::FaultType;
 
-  auto* perf_context = ROCKSDB_PERF_CONTEXT();
-  auto* iostats_context = ROCKSDB_IOSTATS_CONTEXT();
+  auto* perf_context = rocksdb::get_perf_context();
+  auto* iostats_context = rocksdb::get_iostats_context();
   uint64_t wal_start = perf_context->write_wal_time;
   uint64_t mem_start = perf_context->write_memtable_time;
   uint64_t delay_start = perf_context->write_delay_time;

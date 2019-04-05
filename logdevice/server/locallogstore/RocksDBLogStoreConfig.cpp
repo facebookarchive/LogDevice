@@ -41,10 +41,8 @@ RocksDBLogStoreConfig::RocksDBLogStoreConfig(
   options_.allow_mmap_writes = false;
   options_.create_if_missing = true;
 
-#ifdef LOGDEVICED_ROCKSDB_HAS_INDEX_BLOCK_RESTART_INTERVAL
   table_options_.index_block_restart_interval =
       rocksdb_settings_->index_block_restart_interval;
-#endif
 
   table_options_.whole_key_filtering = false;
 
@@ -70,17 +68,11 @@ RocksDBLogStoreConfig::RocksDBLogStoreConfig(
 
   if (rocksdb_settings_->cache_size_ > 0) {
     if (rocksdb_settings_->cache_numshardbits_ > 0) {
-#ifdef LOGDEVICED_ROCKSDB_CACHE_INDEX_HIGH_PRI
       table_options_.block_cache =
           rocksdb::NewLRUCache(rocksdb_settings_->cache_size_,
                                rocksdb_settings_->cache_numshardbits_,
                                false, /*strict_capacity_limit*/
                                rocksdb_settings_->cache_high_pri_pool_ratio_);
-#else
-      table_options_.block_cache =
-          rocksdb::NewLRUCache(rocksdb_settings_->cache_size_,
-                               rocksdb_settings_->cache_numshardbits_);
-#endif
     } else {
       table_options_.block_cache =
           rocksdb::NewLRUCache(rocksdb_settings_->cache_size_);
@@ -112,14 +104,10 @@ RocksDBLogStoreConfig::RocksDBLogStoreConfig(
   table_options_.block_size = rocksdb_settings_->block_size_;
   table_options_.cache_index_and_filter_blocks =
       rocksdb_settings_->cache_index_;
-#ifdef LOGDEVICED_ROCKSDB_CACHE_INDEX_HIGH_PRI
   table_options_.cache_index_and_filter_blocks_with_high_priority =
       rocksdb_settings_->cache_index_with_high_priority_;
-#endif
-#ifdef LOGDEVICED_ROCKSDB_READ_AMP_STATS
   table_options_.read_amp_bytes_per_bit =
       rocksdb_settings_->read_amp_bytes_per_bit_;
-#endif
 
   if (rocksdb_settings_->bloom_bits_per_key_ > 0) {
     table_options_.filter_policy.reset(
@@ -130,7 +118,6 @@ RocksDBLogStoreConfig::RocksDBLogStoreConfig(
   options_.table_factory.reset(
       rocksdb::NewBlockBasedTableFactory(table_options_));
 
-#ifdef LOGDEVICED_ROCKSDB_INSERT_HINT
   if (rocksdb_settings_->enable_insert_hint_) {
     // In case data is not partitioned, DataKey::PREFIX_LENGTH (=9) will be
     // used for both DataKey and various metadata keys. This is fine:
@@ -138,7 +125,6 @@ RocksDBLogStoreConfig::RocksDBLogStoreConfig(
     options_.memtable_insert_with_hint_prefix_extractor.reset(
         rocksdb::NewCappedPrefixTransform(DataKey::PREFIX_LENGTH));
   }
-#endif
 
   // Separate caches and options for metadata column family.
   if (rocksdb_settings_->partitioned) {
@@ -186,12 +172,10 @@ RocksDBLogStoreConfig::RocksDBLogStoreConfig(
       metadata_options_.table_factory.reset(
           rocksdb::NewBlockBasedTableFactory(metadata_table_options_));
     }
-#ifdef LOGDEVICED_ROCKSDB_INSERT_HINT
     if (rocksdb_settings_->enable_insert_hint_) {
       metadata_options_.memtable_insert_with_hint_prefix_extractor.reset(
           rocksdb::NewNoopTransform());
     }
-#endif
 
     // LD managed flushes.
     // Make sure RocksDBSettings::INFINITE_MEMORY_LIMIT value is sufficiently

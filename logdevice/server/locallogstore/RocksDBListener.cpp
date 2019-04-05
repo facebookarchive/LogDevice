@@ -281,13 +281,8 @@ const char* RocksDBTablePropertiesCollector::Name() const {
 }
 
 rocksdb::TablePropertiesCollector*
-#if defined(ROCKSDB_MAJOR) && \
-    (ROCKSDB_MAJOR > 4 || (ROCKSDB_MAJOR == 4 && ROCKSDB_MINOR >= 2))
 RocksDBTablePropertiesCollectorFactory::CreateTablePropertiesCollector(
     rocksdb::TablePropertiesCollectorFactory::Context /*context*/) {
-#else
-RocksDBTablePropertiesCollectorFactory::CreateTablePropertiesCollector() {
-#endif
   return new RocksDBTablePropertiesCollector(
       updateable_config_ ? updateable_config_->get() : nullptr, stats_);
 }
