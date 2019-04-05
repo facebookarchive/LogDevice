@@ -321,7 +321,7 @@ class Socket : public TrafficShappingSocket {
    *                          DESTINATION_MISMATCH, PEER_CLOSED,
    *                          PEER_UNAVAILABLE, INVALID_CLUSTER.
    */
-  void close(Status reason);
+  virtual void close(Status reason);
 
   /**
    * Make sure any enqueued message is sent and close the connection.
@@ -520,7 +520,48 @@ class Socket : public TrafficShappingSocket {
   size_t getBytesPending() const;
 
  protected:
+  /**
+   * Called by bev_ when the underlying connection is established
+   */
+  virtual void onConnected();
+
   virtual int onReceived(ProtocolHeader ph, struct evbuffer* inbuf);
+
+  /**
+   * Called when connection timeout occurs. Either we could not establish the
+   * TCP connection after multiple retries or the LD handshake did not complete
+   * in time.
+   */
+  virtual void onConnectTimeout();
+
+  /**
+   * Called when LD handshake doesn't complete in the allottted time.
+   */
+  virtual void onHandshakeTimeout();
+
+  /**
+   * Called when the TCP connection could not be established in time.
+   * If n_retries_left_ is positive, will try to connect again.
+   */
+  virtual void onConnectAttemptTimeout();
+  virtual void
+      onSent(std::unique_ptr<Envelope>,
+             Status,
+             Message::CompletionMethod = Message::CompletionMethod::IMMEDIATE);
+
+  /**
+   * Called by bev_ when connection closes because of an error. This
+   * generally causes the Socket to enter DISCONNECTED state.
+   *
+   * @param direction  BEV_EVENT_READING or BEV_EVENT_WRITING to indicate
+   *                   if the error occurred on a read or a write
+   */
+  virtual void onError(short direction, int socket_errno);
+
+  /**
+   * Called by bev_ when the other end closes connection.
+   */
+  virtual void onPeerClosed();
 
  private:
   /**
@@ -660,47 +701,6 @@ class Socket : public TrafficShappingSocket {
    * Called by receiveMessage() once we are handshaken.
    */
   void flushSerializeQueue();
-
-  /**
-   * Called by bev_ when the underlying connection is established
-   */
-  void onConnected();
-
-  void onSent(std::unique_ptr<Envelope>,
-              Status,
-              Message::CompletionMethod = Message::CompletionMethod::IMMEDIATE);
-
-  /**
-   * Called by bev_ when connection closes because of an error. This
-   * generally causes the Socket to enter DISCONNECTED state.
-   *
-   * @param direction  BEV_EVENT_READING or BEV_EVENT_WRITING to indicate
-   *                   if the error occurred on a read or a write
-   */
-  void onError(short direction, int socket_errno);
-
-  /**
-   * Called by bev_ when the other end closes connection.
-   */
-  void onPeerClosed();
-
-  /**
-   * Called when connection timeout occurs. Either we could not establish the
-   * TCP connection after multiple retries or the LD handshake did not complete
-   * in time.
-   */
-  void onConnectTimeout();
-
-  /**
-   * Called when LD handshake doesn't complete in the allottted time.
-   */
-  void onHandshakeTimeout();
-
-  /**
-   * Called when the TCP connection could not be established in time.
-   * If n_retries_left_ is positive, will try to connect again.
-   */
-  void onConnectAttemptTimeout();
 
   /**
    * Queues up a HELLO message for delivery. The Socket must not be connected.
@@ -1007,7 +1007,6 @@ class Socket : public TrafficShappingSocket {
   // The zero-timeout timer used to flush the output buffer
   struct event buffered_output_flush_event_;
 
- private:
   // called by bev_ when all bytes we have been waiting for arrive
   static void dataReadCallback(struct bufferevent*, void*, short);
 
