@@ -20,13 +20,13 @@
 
 #include "event2/event.h"
 #include "logdevice/common/ClientIdxAllocator.h"
+#include "logdevice/common/Connection.h"
 #include "logdevice/common/ConstructorFailed.h"
 #include "logdevice/common/FlowGroup.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/ResourceBudget.h"
 #include "logdevice/common/ShapingContainer.h"
 #include "logdevice/common/Sockaddr.h"
-#include "logdevice/common/Socket.h"
 #include "logdevice/common/SocketCallback.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/debug.h"
@@ -74,11 +74,11 @@ class SenderImpl {
   // false). The Socket object remains in the map. sendMessage() to
   // the node_index_t or NodeID of that Socket will try to reconnect.
   // The rate of reconnection attempts is controlled by a ConnectionThrottle.
-  std::unordered_map<node_index_t, std::unique_ptr<Socket>> server_sockets_;
+  std::unordered_map<node_index_t, std::unique_ptr<Connection>> server_sockets_;
 
   // a map of all Sockets wrapping connections that were accepted from
   // clients, keyed by 32-bit client ids. This map is empty on clients.
-  std::unordered_map<ClientID, std::unique_ptr<Socket>, ClientID::Hash>
+  std::unordered_map<ClientID, std::unique_ptr<Connection>, ClientID::Hash>
       client_sockets_;
 
   ClientIdxAllocator* client_id_allocator_;
@@ -172,13 +172,13 @@ int Sender::addClient(int fd,
 
     auto& flow_group = nw_shaping_container_->selectFlowGroup(flow_group_scope);
 
-    std::unique_ptr<Socket> sock(new Socket(fd,
-                                            client_name,
-                                            client_addr,
-                                            std::move(conn_token),
-                                            type,
-                                            conntype,
-                                            flow_group));
+    std::unique_ptr<Connection> sock(new Connection(fd,
+                                                    client_name,
+                                                    client_addr,
+                                                    std::move(conn_token),
+                                                    type,
+                                                    conntype,
+                                                    flow_group));
 
     auto res =
         impl_->client_sockets_.emplace(std::piecewise_construct,
@@ -868,11 +868,11 @@ Socket* Sender::initServerSocket(NodeID nid,
       auto& flow_group =
           nw_shaping_container_->selectFlowGroup(flow_group_scope);
 
-      std::unique_ptr<Socket> sock(
-          new Socket(nid,
-                     sock_type,
-                     use_ssl ? ConnectionType::SSL : ConnectionType::PLAIN,
-                     flow_group));
+      std::unique_ptr<Connection> sock(
+          new Connection(nid,
+                         sock_type,
+                         use_ssl ? ConnectionType::SSL : ConnectionType::PLAIN,
+                         flow_group));
 
       auto res = impl_->server_sockets_.emplace(
           std::piecewise_construct,

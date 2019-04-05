@@ -100,11 +100,6 @@ class TrafficShappingSocket : public SocketBase {
   using EnvelopeQueue = CostQueue<Envelope, &Envelope::links_>;
 };
 /**
- * this will we a wrapper around our socket which knows about protocol and
- * serialization
- */
-class Connection {};
-/**
  * this gets an open socket and negotiates connection to decouple code and
  * remove special handling of messages before/after protocol negotiation
  */
@@ -1101,6 +1096,7 @@ class Socket : public TrafficShappingSocket {
   friend class SocketTest;
   friend class ClientSocketTest;
   friend class ServerSocketTest;
+  friend class Connection;
 };
 
 /**
