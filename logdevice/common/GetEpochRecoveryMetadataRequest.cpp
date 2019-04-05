@@ -131,7 +131,8 @@ void GetEpochRecoveryMetadataRequest::onShardStatusChanged() {
   const auto& shard_status_map = getShardAuthoritativeStatusMap();
   for (const ShardID shard : epoch_metadata_->shards) {
     auto node = getClusterConfig()->serverConfig()->getNode(shard.node());
-    if (node != nullptr && node->isReadableStorageNode()) {
+    if (node != nullptr && node->isReadableStorageNode() &&
+        nodes_responded_->containsShard(shard)) {
       auto st = shard_status_map.getShardStatus(shard.node(), shard.shard());
       // Purging should not be stalled because some nodes are rebuilding.
       // Considering the nodes that are unavailable as underreplicated will
