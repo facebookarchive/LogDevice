@@ -1152,7 +1152,6 @@ void Socket::close(Status reason) {
   ld_check(impl_->pending_bw_cbs_.empty());
   ld_check(deferred_event_queue_.empty());
 
-  trim(moved_pendingq, Priority::MAX, reason, moved_pendingq.cost());
   for (auto& queue : moved_queues) {
     while (!queue.empty()) {
       std::unique_ptr<Envelope> e(&queue.front());
@@ -1164,6 +1163,13 @@ void Socket::close(Status reason) {
   // Clients expect all outstanding messages to be completed prior to
   // delivering "on close" callbacks.
   if (!deps_->shuttingDown()) {
+    moved_pendingq.trim(
+        Priority::MAX, moved_pendingq.cost(), [&](Envelope& e_ref) {
+          std::unique_ptr<Envelope> e(&e_ref);
+          onSent(std::move(e), reason);
+        });
+    // If there are any injected errors they need to be completed before on
+    // close callbacks.
     deps_->processDeferredMessageCompletions();
   }
 
@@ -1536,16 +1542,6 @@ void Socket::send(std::unique_ptr<Envelope> envelope) {
   } else {
     serializeq_.push_back(*envelope.release());
   }
-}
-
-bool Socket::trim(PendingQueue& pq,
-                  Priority max_trim_priority,
-                  Status reason,
-                  size_t to_cut) {
-  return pq.trim(max_trim_priority, to_cut, [&](Envelope& e_ref) {
-    std::unique_ptr<Envelope> e(&e_ref);
-    onSent(std::move(e), reason, Message::CompletionMethod::DEFERRED);
-  });
 }
 
 Envelope* Socket::registerMessage(std::unique_ptr<Message>&& msg) {

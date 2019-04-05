@@ -553,18 +553,6 @@ class Socket : public TrafficShappingSocket {
    */
   void send(std::unique_ptr<Envelope> envelope);
 
-  /**
-   * Trim lower priority messages from our priority queue if necessary
-   * to make space for this new message to be queued.
-   *
-   * @return true iff at least to_cut message bytes were trimmed from the
-   *              queue.
-   */
-  bool trim(PendingQueue&,
-            Priority max_trim_priority,
-            Status reason,
-            size_t to_cut);
-
   bool isChecksummingEnabled(MessageType msgtype);
 
   /**
