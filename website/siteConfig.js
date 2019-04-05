@@ -33,6 +33,7 @@ const siteConfig = {
     {doc: 'Overview', label: 'Docs'},
     {href: BASEURL+'api/annotated.html', label: 'API'},
     {page: 'help', label: 'Support'},
+    {href: 'https://github.com/facebookincubator/LogDevice', label: 'GitHub'},
     {blog: true, label: 'Blog'},
   ],
 
@@ -68,6 +69,8 @@ const siteConfig = {
     // Highlight.js theme to use for syntax highlighting in code blocks
     theme: 'default',
   },
+
+  gaTrackingId: 'UA-137238014-1',
 
   scripts: ['https://buttons.github.io/buttons.js'],
 

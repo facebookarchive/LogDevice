@@ -1,7 +1,7 @@
 ---
 id: Installation
-title: Installation
-sidebar_label: Installation
+title: Build LogDevice
+sidebar_label: Build LogDevice
 ---
 Follow these instructions to build LogDevice components including `logdeviced` (the LogDevice server), the client library, and `ldshell`, an administrative shell utility.
 
@@ -25,13 +25,13 @@ sudo apt-get install -y $(cat LogDevice/logdevice/build_tools/ubuntu.deps)
 
 If the command fails with "Unable to locate package", run `sudo apt-get update` to update the package list.
 
-On Fedora you may try:
+** Fedora only - Install packages. **
 
 ```shell
 sudo yum install $(cat LogDevice/logdevice/build_tools/fedora.deps)
 ```
 
-You will also need mstch, which is not shipped with Fedora, so you will do have to do:
+You also need mstch, which is not shipped with Fedora, so clone and build it:
 
 ```shell
 git clone https://github.com/no1msd/mstch.git
@@ -67,7 +67,7 @@ make -j $(nproc)
 If the build does not complete successfully, particularly if you get an internal compiler error,
 you may need to reduce the number of parallel jobs. In the above make command, try `make -j 4` or `make -j 2`.
 
-## Output
+## Built binaries and libraries
 
 On successful completion, the build process creates the following binaries and libraries:
 
@@ -92,43 +92,33 @@ cmake -DCMAKE_BUILD_TYPE=Debug ../../logdevice
 make -j$(nproc)
 ```
 
-## Build using Docker
+## Build Docker image
 
-You can build a Docker container that runs LogDevice using the Dockerfile under the `docker` directory. First, install and launch Docker. You may need to increase the number of resources available to Docker to avoid a build failure.
+You can build a Docker container that runs LogDevice using the Dockerfile under the `docker` directory.
 
-From the root directory of the repo, enter the following command:
+First, install and launch Docker. You may need to increase the number of resources available to Docker to avoid a build failure.
+
+You can build a production Docker image or a development one.
+The development image is the container with all the development packages, including compiler tools, against which LogDevice developers compile.
+The binaries generated from the packages are combined with the run-time image to produce a Docker image.
+
+The production image is a few hundred megabytes in size while the development image is many gigabytes.
+
+**To build a production Docker image,** from the root directory of the repo, enter the following command:
 
 ```shell
 docker build -t logdevice-ubuntu -f docker/Dockerfile.ubuntu .
 ```
 
-This builds the docker image, tags it with `logdevice-ubuntu`, and puts the binaries under `/usr/local/bin/` of the docker image. So you can, for example, start the test cluster by running:
+
+**To build a development Docker image,** from the root directory of the repo, enter the following command:
+
+```shell
+docker build -t logdevice-ubuntu -f docker/Dockerfile.ubuntu --target=builder .
+```
+
+This builds the Docker image, tags it with `logdevice-ubuntu`, and puts the binaries under `/usr/local/bin/` of the Docker image. So you can, for example, start the test cluster utility by running:
 
 ```shell
 docker run -it logdevice-ubuntu /usr/local/bin/ld-dev-cluster
 ```
-
-## Documentation
-
-This web site is created with [Docusaurus](https://docusaurus.io/).
-The simplest way to test documentation changes or changes to the structure
-of the site is to install Docusaurus locally as follows:
-
-* [install Node.js](https://nodejs.org/en/download/)
-* [install Yarn](https://yarnpkg.com/en/docs/install) (a package manager
-for Node)
-
-Docusarus requires Node.js >= 8.2 and Yarn >= 1.5.
-
-* `cd LogDevice/website` (where `LogDevice` is the root of your local LogDevice
-source tree)
-* `yarn add docusaurus --dev` This creates the LogDevice/website/node_modules
-directory with much Javascript. It may also update website/package.json with
-the then-current version number of Docusaurus.
-
-To start a Node.js server and load the doc site in a new browser tab,
-`cd LogDevice/website` and run `yarn run start`. To stop the server,
-Ctrl+C the process.
-
-Most of the LogDevice documentation lives in `LogDevice/docs`. The API reference
-in `LogDevice/website/static/api` is generated with Doxygen.
