@@ -447,6 +447,11 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
     }
   }
 
+  if (!isHandshakeMessage(msg->type_) && bytesPendingLimitReached()) {
+    err = E::NOBUFS;
+    return -1;
+  }
+
   auto envelope = sock.registerMessage(std::move(msg));
   if (!envelope) {
     ld_check(err == E::INTERNAL || err == E::NOBUFS || err == E::NOTCONN ||
@@ -496,7 +501,7 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
   return -1;
 }
 
-Socket* Sender::findServerSocket(node_index_t idx) {
+Socket* Sender::findServerSocket(node_index_t idx) const {
   ld_check(idx >= 0);
 
   auto it = impl_->server_sockets_.find(idx);
@@ -510,6 +515,19 @@ Socket* Sender::findServerSocket(node_index_t idx) {
   ld_check(s->peer_name_.asNodeID().index() == idx);
 
   return s;
+}
+
+folly::Optional<uint16_t>
+Sender::getSocketProtocolVersion(node_index_t idx) const {
+  auto socket = findServerSocket(idx);
+  return socket != nullptr && socket->isHandshaken()
+      ? socket->getProto()
+      : folly::Optional<uint16_t>();
+}
+
+ClientID Sender::getOurNameAtPeer(node_index_t node_index) const {
+  Socket* socket = findServerSocket(node_index);
+  return socket != nullptr ? socket->getOurNameAtPeer() : ClientID::INVALID;
 }
 
 void Sender::deliverCompletedMessages() {
@@ -1323,7 +1341,16 @@ void Sender::noteConfigurationChanged(
 }
 
 bool Sender::bytesPendingLimitReached() {
-  return getBytesPending() > settings_->outbufs_mb_max_per_thread * 1024 * 1024;
+  size_t limit = Worker::settings().outbufs_mb_max_per_thread * 1024 * 1024;
+  bool limit_reached = getBytesPending() > limit;
+  if (limit_reached) {
+    RATELIMIT_WARNING(std::chrono::seconds(1),
+                      10,
+                      "ENOBUFS for Sender. Current socket usage: %zu, max: %zu",
+                      getBytesPending(),
+                      limit);
+  }
+  return limit_reached;
 }
 
 void Sender::queueMessageCompletion(std::unique_ptr<Message> msg,

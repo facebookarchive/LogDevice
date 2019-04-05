@@ -1112,7 +1112,6 @@ class SocketDependencies {
   virtual void noteBytesQueued(size_t nbytes);
   virtual void noteBytesDrained(size_t nbytes);
   virtual size_t getBytesPending() const;
-  virtual bool bytesPendingLimitReached() const;
 
   virtual std::shared_ptr<folly::SSLContext>
   getSSLContext(bufferevent_ssl_state, bool) const;

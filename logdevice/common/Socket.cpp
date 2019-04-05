@@ -1196,8 +1196,7 @@ bool Socket::isClosed() const {
 }
 
 bool Socket::sizeLimitsExceeded() const {
-  return deps_->bytesPendingLimitReached() ||
-      (getBytesPending() > outbuf_overflow_);
+  return getBytesPending() > outbuf_overflow_;
 }
 
 bool Socket::isChecksummingEnabled(MessageType msgtype) {
@@ -2468,10 +2467,6 @@ void SocketDependencies::noteBytesDrained(size_t nbytes) {
 
 size_t SocketDependencies::getBytesPending() const {
   return sender_->getBytesPending();
-}
-
-bool SocketDependencies::bytesPendingLimitReached() const {
-  return sender_->bytesPendingLimitReached();
 }
 
 std::shared_ptr<SSLContext>

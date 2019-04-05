@@ -720,8 +720,20 @@ class Sender : public SenderBase {
   /**
    * @return if this Sender manages a Socket for the node at configuration
    *         position idx, return that Socket. Otherwise return nullptr.
+   *         Deprecated : Do not use this API to get Socket. Use of Socket
+   *         outside Sender is deprecated.
    */
-  Socket* findServerSocket(node_index_t idx);
+  Socket* findServerSocket(node_index_t idx) const;
+
+  /**
+   * @return protocol version of the socket.
+   */
+  folly::Optional<uint16_t> getSocketProtocolVersion(node_index_t idx) const;
+
+  /**
+   * @return get ID assigned by client.
+   */
+  ClientID getOurNameAtPeer(node_index_t node_index) const;
 
   /**
    * Resets the server socket's connect throttle.
@@ -821,7 +833,7 @@ class Sender : public SenderBase {
   std::atomic<bool> delivering_completed_messages_{false};
 
   // current number of bytes in all output buffers combined
-  size_t bytes_pending_ = 0;
+  std::atomic<size_t> bytes_pending_{0};
 
   // if true, disallow sending messages and initiating connections
   bool shutting_down_ = false;

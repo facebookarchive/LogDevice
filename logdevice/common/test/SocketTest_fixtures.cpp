@@ -34,11 +34,6 @@ size_t TestSocketDependencies::getBytesPending() const {
   return owner_->bytes_pending_;
 }
 
-bool TestSocketDependencies::bytesPendingLimitReached() const {
-  return owner_->bytes_pending_ >
-      owner_->settings_.outbufs_mb_max_per_thread * 1024 * 1024;
-}
-
 std::shared_ptr<folly::SSLContext>
 TestSocketDependencies::getSSLContext(bufferevent_ssl_state /*ssl_state*/,
                                       bool /*null_ciphers_only*/) const {

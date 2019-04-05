@@ -32,7 +32,6 @@
 #include "logdevice/common/NodeSetSelectorFactory.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Sender.h"
-#include "logdevice/common/Socket.h"
 #include "logdevice/common/SocketCallback.h"
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/Worker.h"
@@ -4375,17 +4374,13 @@ void ClientReadStreamDependencies::refreshClusterState() {
 
 folly::Optional<uint16_t>
 ClientReadStreamDependencies::getSocketProtocolVersion(node_index_t nid) const {
-  Socket* socket = Worker::onThisThread()->sender().findServerSocket(nid);
-  return socket != nullptr && socket->isHandshaken()
-      ? socket->getProto()
-      : folly::Optional<uint16_t>();
+  return Worker::onThisThread()->sender().getSocketProtocolVersion(nid);
 }
 
 ClientID
 ClientReadStreamDependencies::getOurNameAtPeer(node_index_t node_index) const {
   Worker* w = Worker::onThisThread(false);
-  Socket* socket = w ? w->sender().findServerSocket(node_index) : nullptr;
-  return socket != nullptr ? socket->getOurNameAtPeer() : ClientID::INVALID;
+  return w ? w->sender().getOurNameAtPeer(node_index) : ClientID::INVALID;
 }
 
 void bumpGapStat(logid_t logid, StatsHolder* stats, GapType gap_type) {

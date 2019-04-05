@@ -46,7 +46,6 @@ class TestSocketDependencies : public SocketDependencies {
   virtual void noteBytesQueued(size_t nbytes) override;
   virtual void noteBytesDrained(size_t nbytes) override;
   virtual size_t getBytesPending() const override;
-  virtual bool bytesPendingLimitReached() const override;
   virtual std::shared_ptr<folly::SSLContext>
   getSSLContext(bufferevent_ssl_state, bool) const override;
   virtual bool shuttingDown() const override;
