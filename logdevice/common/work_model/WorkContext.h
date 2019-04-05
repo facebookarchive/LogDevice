@@ -25,6 +25,8 @@ class WorkContext : public folly::Executor {
   ~WorkContext() override;
 
   virtual void add(folly::Func func) override;
+
+  virtual void addWithPriority(folly::Func func, int8_t priority) override;
   work_context_id_t getId() const;
   bool anonymous() const;
 

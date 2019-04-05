@@ -25,6 +25,10 @@ void WorkContext::add(folly::Func func) {
   executor_->add(std::move(func));
 }
 
+void WorkContext::addWithPriority(folly::Func func, int8_t priority) {
+  executor_->addWithPriority(std::move(func), priority);
+}
+
 WorkContext::work_context_id_t WorkContext::getId() const {
   return id_;
 }

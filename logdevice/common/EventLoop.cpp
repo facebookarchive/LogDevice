@@ -12,6 +12,7 @@
 
 #include <event2/event.h>
 #include <folly/Memory.h>
+#include <folly/io/async/Request.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
 
@@ -151,8 +152,12 @@ EventLoop::~EventLoop() {
   pthread_join(thread_, nullptr);
 }
 
-void EventLoop::add(folly::Function<void()> task) {
-  request_pump_->add(std::move(task));
+void EventLoop::add(folly::Function<void()> func) {
+  request_pump_->add([f = std::move(func),
+                      ctx = folly::RequestContext::saveContext()]() mutable {
+    folly::RequestContextScopeGuard g(ctx);
+    f();
+  });
 }
 
 void EventLoop::addWithPriority(folly::Function<void()> func,
