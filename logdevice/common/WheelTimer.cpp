@@ -68,7 +68,13 @@ WheelTimer::WheelTimer() : executor_(std::make_unique<folly::EventBase>()) {
 }
 
 WheelTimer::~WheelTimer() {
-  shutdown_.store(true);
+  shutdown();
+}
+
+void WheelTimer::shutdown() {
+  if (shutdown_.exchange(true)) {
+    return;
+  }
   executor_->terminateLoopSoon();
   timer_thread_.join();
 }

@@ -177,12 +177,6 @@ void ServerWorker::onSettingsUpdated() {
   if (server_read_streams_) {
     server_read_streams_->onSettingsUpdate();
   }
-  for (auto& q : storage_task_queues_) {
-    if (q) {
-      q->getRequestPump()->setNumRequestsPerIteration(
-          immutable_settings_->requests_per_iteration);
-    }
-  }
 }
 
 void ServerWorker::onServerConfigUpdated() {

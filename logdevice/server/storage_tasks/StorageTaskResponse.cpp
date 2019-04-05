@@ -17,8 +17,8 @@
 namespace facebook { namespace logdevice {
 
 void StorageTaskResponse::sendBackToWorker(std::unique_ptr<StorageTask> task) {
-  std::shared_ptr<RequestPump> reply_pump = std::move(task->reply_pump_);
-  if (!reply_pump) {
+  auto executor = task->reply_executor_;
+  if (!executor) {
     // Not all storage tasks need to get sent back to workers
     return;
   }
@@ -38,8 +38,14 @@ void StorageTaskResponse::sendBackToWorker(std::unique_ptr<StorageTask> task) {
   auto worker_type = req->getWorkerTypeAffinity();
 
   req->enqueue_time_ = std::chrono::steady_clock::now();
-  int rv = reply_pump->forcePost(req);
-  ld_check(rv == 0);
+  auto w = dynamic_cast<Worker*>(executor);
+  if (w) {
+    int rv = w->forcePost(req, folly::Executor::HI_PRI);
+    ld_check(rv == 0);
+  } else if (executor) {
+    executor->addWithPriority(
+        [rq = std::move(req)] { rq->execute(); }, folly::Executor::HI_PRI);
+  }
 
   Request::bumpStatsWhenPosted(stats, req_type, worker_type, worker_idx, true);
 }

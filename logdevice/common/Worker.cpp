@@ -102,6 +102,10 @@ getMyLocation(const std::shared_ptr<UpdateableConfig>& config,
 
 // the size of the bucket array of activeAppenders_ map
 static constexpr size_t N_APPENDER_MAP_BUCKETS = 128 * 1024;
+// Definition of static constexpr to make pre C++17 compilers happy.
+constexpr int Worker::kHiPriTaskExecDistribution;
+constexpr int Worker::kMidPriTaskExecDistribution;
+constexpr int Worker::kLoPriTaskExecDistribution;
 
 // This pimpl class is a container for all classes that would normally be
 // members of Worker but we don't want to have to include them in Worker.h.
@@ -210,7 +214,6 @@ Worker::Worker(Processor* processor,
       accepting_work_(true),
       worker_timeout_stats_(std::make_unique<WorkerTimeoutStats>()) {}
 
-
 Worker::~Worker() {
   shutting_down_ = true;
   stopAcceptingWork();
@@ -243,7 +246,6 @@ Worker::~Worker() {
   // this is mostly used in situations where full graceful shutdown is not
   // used (e.g., tests)
   activeAppenders().map.clearAndDispose();
-
 }
 
 std::string Worker::getName(WorkerType type, worker_id_t idx) {
@@ -1244,7 +1246,7 @@ std::string Worker::describeMyNode() {
 }
 
 // Per request common execute logic after request has been picked for execution.
-void Worker::processRequest(std::unique_ptr<Request>& rq) {
+void Worker::processRequest(std::unique_ptr<Request> rq) {
   using namespace std::chrono;
 
   ld_check(rq);
@@ -1275,6 +1277,7 @@ void Worker::processRequest(std::unique_ptr<Request>& rq) {
 
   switch (status) {
     case Request::Execution::COMPLETE:
+      rq.reset();
       break;
     case Request::Execution::CONTINUE:
       rq.release();
@@ -1304,7 +1307,81 @@ int Worker::tryPost(std::unique_ptr<Request>& req) {
   return forcePost(req);
 }
 
-int Worker::forcePost(std::unique_ptr<Request>& req) {
+void Worker::pickAndExecuteTask(int8_t priority_hint) {
+  auto* queue = &lo_pri_tasks_;
+  switch (priority_hint) {
+    case Executor::LO_PRI:
+      if (lo_pri_tasks_.empty()) {
+        queue = &hi_pri_tasks_;
+        WORKER_STAT_INCR(worker_executed_hi_pri_work);
+      } else {
+        WORKER_STAT_INCR(worker_executed_lo_pri_work);
+      }
+      break;
+    case Executor::HI_PRI:
+    case Executor::MID_PRI:
+      if (hi_pri_tasks_.empty()) {
+        WORKER_STAT_INCR(worker_executed_lo_pri_work);
+      } else {
+        queue = &hi_pri_tasks_;
+        WORKER_STAT_INCR(worker_executed_hi_pri_work);
+      }
+      break;
+    default:
+      ld_check(false);
+  };
+  ld_check(queue && !queue->empty());
+  folly::Func f = queue->dequeue();
+  f();
+}
+
+void Worker::add(folly::Func func) {
+  addWithPriority(std::move(func), folly::Executor::LO_PRI);
+}
+
+void Worker::addWithPriority(folly::Func func, int8_t priority) {
+  num_requests_enqueued_++;
+  // Enqueue task in right list so they are available to execute
+  // right away.
+  ld_check_in(priority, ({folly::Executor::HI_PRI, folly::Executor::LO_PRI}));
+  if (priority == folly::Executor::HI_PRI) {
+    // Called from non-worker threads hence Worker::stats() returns null.
+    STAT_INCR(processor_->stats_, worker_enqueued_hi_pri_work);
+    hi_pri_tasks_.enqueue(std::move(func));
+  } else {
+    // Called from non-worker threads hence Worker::stats() returns null.
+    STAT_INCR(processor_->stats_, worker_enqueued_lo_pri_work);
+    lo_pri_tasks_.enqueue(std::move(func));
+  }
+  EventLoop::add([this] {
+    ld_check_gt(num_requests_enqueued_.load(), 0);
+    num_requests_enqueued_--;
+
+    int8_t priority_hint = folly::Executor::LO_PRI;
+    switch (task_distribution_(task_rng_)) {
+      case 0:
+        break;
+      case 1:
+        priority_hint = folly::Executor::MID_PRI;
+        break;
+      case 2:
+        priority_hint = folly::Executor::HI_PRI;
+        break;
+      default:
+        ld_check(false);
+        priority_hint = folly::Executor::HI_PRI;
+    };
+
+    if (priority_hint == folly::Executor::HI_PRI) {
+      // Just to make sure we choose hi priority task according to given
+      // distribution.
+      WORKER_STAT_INCR(worker_choose_hi_pri_work);
+    }
+    pickAndExecuteTask(priority_hint);
+  });
+}
+
+int Worker::forcePost(std::unique_ptr<Request>& req, int8_t priority) {
   if (shutting_down_) {
     err = E::SHUTDOWN;
     return -1;
@@ -1315,14 +1392,12 @@ int Worker::forcePost(std::unique_ptr<Request>& req) {
     return -1;
   }
 
-  num_requests_enqueued_++;
-
   req->enqueue_time_ = std::chrono::steady_clock::now();
   folly::Func func = [rq = std::move(req), this]() mutable {
-    num_requests_enqueued_--;
-    processRequest(rq);
+    processRequest(std::move(rq));
   };
-  add(std::move(func));
+  addWithPriority(std::move(func), priority);
+
   return 0;
 }
 }} // namespace facebook::logdevice

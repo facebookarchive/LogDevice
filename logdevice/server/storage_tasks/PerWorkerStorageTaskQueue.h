@@ -85,14 +85,6 @@ class PerWorkerStorageTaskQueue {
    */
   bool isOverloaded() const;
 
-  /**
-   * Returns the request pump used by the queue for posting storage task replies
-   * back to the worker
-   */
-  std::shared_ptr<RequestPump> getRequestPump() const {
-    return reply_pump_;
-  }
-
  private:
   // Index in worker's storage_task_queues_ vector, used to send requests to
   // StorageThreadPool with the same index
@@ -139,7 +131,5 @@ class PerWorkerStorageTaskQueue {
     std::chrono::steady_clock::time_point last_queue_drop_time{};
   } taskBuffer_[(int)StorageTask::ThreadType::MAX];
 
-  // Responses come through this
-  std::shared_ptr<RequestPump> reply_pump_;
 };
 }} // namespace facebook::logdevice

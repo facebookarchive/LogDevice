@@ -25,6 +25,7 @@
 #include "logdevice/common/Request.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/common/types_internal.h"
 
@@ -272,4 +273,51 @@ TEST_F(ProcessorTest, EventLoopKeepAliveTest) {
     keep_alive.reset();
     handle.reset();
   }
+}
+
+TEST_F(ProcessorTest, PostPrioritizedWork) {
+  Settings settings = create_default_settings<Settings>();
+  settings.num_workers = 1;
+  settings.worker_request_pipe_capacity = 1001;
+  auto stats = std::make_unique<StatsHolder>(StatsParams());
+  auto processor = make_test_processor(settings, nullptr, stats.get());
+  auto init_val = processor->stats_->aggregate().worker_choose_hi_pri_work;
+  EXPECT_EQ(1, processor->getWorkerCount(WorkerType::GENERAL));
+  auto& w = processor->getWorker(worker_id_t(0), WorkerType::GENERAL);
+  size_t num_hi_pri_tasks = 500;
+  size_t num_lo_pri_tasks = 500;
+  size_t total_tasks = num_hi_pri_tasks + num_lo_pri_tasks;
+  Semaphore sem0, sem1;
+  // Make sure execution does not start right away.
+  w.add([&sem0, &sem1] {
+    sem0.post();
+    sem1.wait();
+  });
+  sem0.wait();
+  size_t num_hi_pri_executed = 0;
+  for (auto i = 0; i < num_hi_pri_tasks; ++i) {
+    w.addWithPriority(
+        [&sem0, &num_hi_pri_executed] {
+          ++num_hi_pri_executed;
+          sem0.post();
+        },
+        folly::Executor::HI_PRI);
+  }
+  size_t num_lo_pri_executed = 0;
+  for (auto i = 0; i < num_lo_pri_tasks; ++i) {
+    w.addWithPriority(
+        [&num_lo_pri_executed, &sem0] {
+          ++num_lo_pri_executed;
+          sem0.post();
+        },
+        folly::Executor::LO_PRI);
+  }
+  sem1.post();
+  for (auto i = 0; i < total_tasks; ++i) {
+    sem0.wait();
+  }
+
+  EXPECT_EQ(stats->aggregate().worker_enqueued_hi_pri_work, num_hi_pri_tasks);
+  EXPECT_EQ(
+      stats->aggregate().worker_executed_hi_pri_work, num_hi_pri_executed);
 }

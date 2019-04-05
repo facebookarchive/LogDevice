@@ -24,6 +24,12 @@ STAT_DEFINE(worker_requests_executed, SUM)
 STAT_DEFINE(worker_slow_requests, SUM)
 // Number of tasks on background thread that spent > 10 msec executing.
 STAT_DEFINE(background_slow_requests, SUM)
+// TaskQueue stats.
+STAT_DEFINE(worker_choose_hi_pri_work, SUM)
+STAT_DEFINE(worker_enqueued_hi_pri_work, SUM)
+STAT_DEFINE(worker_enqueued_lo_pri_work, SUM)
+STAT_DEFINE(worker_executed_hi_pri_work, SUM)
+STAT_DEFINE(worker_executed_lo_pri_work, SUM)
 
 // number of MetaDataLogReaders created
 STAT_DEFINE(metadata_log_readers_created, SUM)

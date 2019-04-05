@@ -31,6 +31,7 @@ class WheelTimer {
                    std::chrono::milliseconds timeout);
 
   ~WheelTimer();
+  void shutdown();
 
  private:
   WheelTimer(const WheelTimer&) = delete;

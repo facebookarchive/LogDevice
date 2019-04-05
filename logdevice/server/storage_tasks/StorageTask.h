@@ -17,6 +17,10 @@
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/settings/Durability.h"
 
+namespace folly {
+class Executor;
+}
+
 namespace facebook { namespace logdevice {
 
 /**
@@ -211,10 +215,11 @@ class StorageTask {
   virtual ~StorageTask() {}
 
   /**
-   * RequestPump that the response should be written to.  Set by
-   * PerWorkerStorageTaskQueue::putTask().
+   * State Machine that will process the response of this storage task.
+   * It is set by PerWorkerStorageTaskQueue::putTask() when issuing the task to
+   * storage threads.
    */
-  std::shared_ptr<RequestPump> reply_pump_;
+  folly::Executor* reply_executor_;
 
   /**
    * Index of database shard that this task is going to.  Set by

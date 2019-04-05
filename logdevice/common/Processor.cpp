@@ -529,6 +529,9 @@ void Processor::shutdown() {
     ncm_->shutdown();
   }
 
+  // Shutdown wheeltimer so that before shutting down executor threads.
+  impl_->wheel_timer_.shutdown();
+
   // Processor will now stop allowing any requests to workers.
   allow_post_during_shutdown_.store(false);
   // Tell all Workers to shut down and terminate their threads. This

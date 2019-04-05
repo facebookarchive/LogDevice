@@ -155,6 +155,11 @@ void EventLoop::add(folly::Function<void()> task) {
   request_pump_->add(std::move(task));
 }
 
+void EventLoop::addWithPriority(folly::Function<void()> func,
+                                int8_t /*priority*/) {
+  add(std::move(func));
+}
+
 void EventLoop::start() {
   start_sem_.post();
 }

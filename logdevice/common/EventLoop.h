@@ -74,6 +74,13 @@ class EventLoop : public folly::Executor {
   void add(folly::Function<void()>) override;
 
   /**
+   * Enqueue function in scheduler with priority. Executor will enqueue it in
+   * priortized fashion. Default implementation does not honor priority and just
+   * calls EventLoop::add.
+   */
+  void addWithPriority(folly::Function<void()>, int8_t priority) override;
+
+  /**
    * Provides shared ownership of the pump that the EventLoop will get
    * `Request' instances through.  Must be called before `start()'.
    */

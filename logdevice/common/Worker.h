@@ -18,6 +18,8 @@
 #include <vector>
 
 #include <folly/IntrusiveList.h>
+#include <folly/Random.h>
+#include <folly/concurrency/UnboundedQueue.h>
 
 #include "logdevice/common/ClientID.h"
 #include "logdevice/common/EventLoop.h"
@@ -736,12 +738,36 @@ class Worker : public EventLoop {
 
   // Common request processing logic, after request is picked up by the worker
   // or cputhreadpool for execution.
-  void processRequest(std::unique_ptr<Request>& req);
-
+  void processRequest(std::unique_ptr<Request> req);
   // Methods used by processor to post requests to worker.
   int tryPost(std::unique_ptr<Request>& req);
 
-  int forcePost(std::unique_ptr<Request>& req);
+  // Add lo_pri work into the executor.
+  void add(folly::Func func) override;
+
+  // Add to the executor with a given priority.
+  void addWithPriority(folly::Func func, int8_t priority) override;
+
+  /**
+   * Post a request into Worker for execution. The post cannot fail with NOBUFS.
+   * Optionally, specify work priority. As of today, high priority is not
+   * implemented any different than low priority. The only difference between
+   * the two is high priority queue depth is small compared to more general low
+   * priority queue. A new request getting scheduled as high priority
+   * should not delay other tasks like storage responses and timer callbacks who
+   * are the primary consumers of this mechanism.
+   *
+   * @return 0 if a request was posted. Otherwise it returns -1 and err contains
+   * the actual error_code.
+   */
+  int forcePost(std::unique_ptr<Request>& req,
+                int8_t priority = folly::Executor::LO_PRI);
+
+  // Execution probability distribution of different tasks. Hi Priority tasks
+  // are called such because they have a higher chance of getting executed.
+  static constexpr int kHiPriTaskExecDistribution = 70;
+  static constexpr int kMidPriTaskExecDistribution = 0;
+  static constexpr int kLoPriTaskExecDistribution = 30;
 
  protected:
   virtual void onThreadStarted() override;
@@ -755,6 +781,15 @@ class Worker : public EventLoop {
 
   // Initializes subscriptions to config and setting updates
   void initializeSubscriptions();
+
+  // Pick and execute a single task.
+  // This method tries to select a task of given priority. If it does not
+  // find a task enqueued for that priority it will continue looking in the next
+  // lower priority level to check if there is task available. If lowest
+  // priority level is empty it goes back to the highest priority and continues
+  // the search. It goes over all priories atmost once looking for tasks. Method
+  // expects that there is atleast a single task available to execute.
+  void pickAndExecuteTask(int8_t priority_hint);
 
   // Helper used by onStartedRunning() and onStoppedRunning()
   static void setCurrentlyRunningContext(RunContext new_context,
@@ -853,9 +888,26 @@ class Worker : public EventLoop {
   // Used to return NOBUFS when count goes above worker_request_pipe_capacity.
   std::atomic<size_t> num_requests_enqueued_{0};
 
-  // Size limit for commonTimeouts_ (NB: libevent has a default upper bound
-  // of MAX_COMMON_TIMEOUTS = 256)
-  static const int MAX_FAST_TIMEOUTS = 200;
+  // These task queues are used to hold work posted to the worker till the
+  // worker gets a chance to run on the executor. When a request or any type of
+  // work is posted to worker. Based on the priority of the posted work , it is
+  // saved off in one of these task queues. A separate lambda is posted to the
+  // executor queue. The lambda when executed on the executor thread selects a
+  // task to execute from one of the task queue. task_distribution_ is used to
+  // select the queue from where a task should be dequeued.
+  folly::UMPSCQueue<folly::Func, false /* MayBlock */, 9> hi_pri_tasks_;
+  folly::UMPSCQueue<folly::Func, false /* MayBlock */, 9> lo_pri_tasks_;
+
+  // Discrete distribution for tasks so there is bounded preference to a
+  // particular class instead of unbounded favor to a particular class. This
+  // also makes this logic extensible where another priority class can be added
+  // easily. I will make the distribution a setting and initialize this in
+  // constructor once reviewers are ok with this method.
+  folly::ThreadLocalPRNG task_rng_;
+  std::discrete_distribution<> task_distribution_{
+      kLoPriTaskExecDistribution /*Executor::LO_PRI*/,
+      kMidPriTaskExecDistribution /*Executor::MID_PRI*/,
+      kHiPriTaskExecDistribution /*Executor::HI_PRI*/};
 
   friend struct ::testing::SocketConnectRequest;
 };

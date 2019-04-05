@@ -41,12 +41,7 @@ PerWorkerStorageTaskQueue::PerWorkerStorageTaskQueue(
 
       shard_idx_(shard_idx),
       max_tasks_in_flight_(max_tasks_in_flight),
-      max_buffered_tasks_(max_buffered_tasks),
-      // capacity parameter to RequestPump does not matter since we only use
-      // forcePost() to ensure that any storage task that we had previously
-      // decided to admit can come back to the worker with the result
-      reply_pump_(
-          std::make_shared<RequestPump>(base, 0, requests_per_iteration))
+      max_buffered_tasks_(max_buffered_tasks)
 
 {}
 
@@ -101,7 +96,7 @@ bool PerWorkerStorageTaskQueue::isWriteExempt(WriteStorageTask* write,
 }
 
 void PerWorkerStorageTaskQueue::putTask(std::unique_ptr<StorageTask>&& task) {
-  task->reply_pump_ = reply_pump_;
+  task->reply_executor_ = Worker::onThisThread();
   task->reply_shard_idx_ = shard_idx_;
   task->reply_worker_idx_ = Worker::onThisThread()->idx_;
   task->stats_ = Worker::stats();
@@ -256,7 +251,7 @@ void PerWorkerStorageTaskQueue::sendTaskToStorageThread(
 
     // Now put a blank WriteBatchStorageTask onto the main queue
     auto batch_task = std::make_unique<WriteBatchStorageTask>(thread_type);
-    batch_task->reply_pump_ = reply_pump_;
+    batch_task->reply_executor_ = Worker::onThisThread();
     batch_task->reply_shard_idx_ = shard_idx_;
     batch_task->reply_worker_idx_ = Worker::onThisThread()->idx_;
     batch_task->stats_ = Worker::stats();
