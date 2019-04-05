@@ -1099,8 +1099,10 @@ class Socket : public TrafficShappingSocket {
  */
 class SocketDependencies {
  public:
-  SocketDependencies(Processor* processor, Sender* sender)
-      : processor_(processor), sender_(sender) {}
+  SocketDependencies(Processor* processor,
+                     Sender* sender,
+                     const Address& peer_name);
+
   virtual const Settings& getSettings() const;
   virtual StatsHolder* getStats() const;
   virtual std::shared_ptr<Configuration> getConfig() const;
@@ -1112,7 +1114,6 @@ class SocketDependencies {
   virtual size_t getBytesPending() const;
   virtual bool bytesPendingLimitReached() const;
 
-  virtual worker_id_t getWorkerId() const;
   virtual std::shared_ptr<folly::SSLContext>
   getSSLContext(bufferevent_ssl_state, bool) const;
   virtual bool shuttingDown() const;
@@ -1161,7 +1162,7 @@ class SocketDependencies {
                                            size_t size);
   virtual int buffereventSetMaxSingleRead(struct bufferevent* bev, size_t size);
   virtual int buffereventEnable(struct bufferevent* bev, short event);
-  virtual std::string describeConnection(const Address& addr);
+  virtual std::string describeConnection();
   virtual void onSent(std::unique_ptr<Message> msg,
                       const Address& to,
                       Status st,
@@ -1196,6 +1197,7 @@ class SocketDependencies {
  private:
   Processor* const processor_;
   Sender* sender_;
+  std::string conn_description_;
 };
 
 /**

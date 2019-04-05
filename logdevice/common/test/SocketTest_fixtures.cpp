@@ -39,10 +39,6 @@ bool TestSocketDependencies::bytesPendingLimitReached() const {
       owner_->settings_.outbufs_mb_max_per_thread * 1024 * 1024;
 }
 
-worker_id_t TestSocketDependencies::getWorkerId() const {
-  return worker_id_t(0);
-}
-
 std::shared_ptr<folly::SSLContext>
 TestSocketDependencies::getSSLContext(bufferevent_ssl_state /*ssl_state*/,
                                       bool /*null_ciphers_only*/) const {
@@ -203,8 +199,7 @@ int TestSocketDependencies::buffereventEnable(struct bufferevent* /*bev*/,
   return 0;
 }
 
-std::string
-TestSocketDependencies::describeConnection(const Address& /*addr*/) {
+std::string TestSocketDependencies::describeConnection() {
   return "";
 }
 

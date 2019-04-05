@@ -40,14 +40,13 @@ class SocketTest;
 class TestSocketDependencies : public SocketDependencies {
  public:
   explicit TestSocketDependencies(SocketTest* owner)
-      : SocketDependencies(nullptr, nullptr), owner_(owner) {}
+      : SocketDependencies(nullptr, nullptr, Address()), owner_(owner) {}
   virtual const Settings& getSettings() const override;
   virtual StatsHolder* getStats() const override;
   virtual void noteBytesQueued(size_t nbytes) override;
   virtual void noteBytesDrained(size_t nbytes) override;
   virtual size_t getBytesPending() const override;
   virtual bool bytesPendingLimitReached() const override;
-  virtual worker_id_t getWorkerId() const override;
   virtual std::shared_ptr<folly::SSLContext>
   getSSLContext(bufferevent_ssl_state, bool) const override;
   virtual bool shuttingDown() const override;
@@ -99,7 +98,7 @@ class TestSocketDependencies : public SocketDependencies {
   virtual int buffereventSetMaxSingleRead(struct bufferevent* bev,
                                           size_t size) override;
   virtual int buffereventEnable(struct bufferevent* bev, short event) override;
-  virtual std::string describeConnection(const Address& addr) override;
+  virtual std::string describeConnection() override;
   virtual void onSent(std::unique_ptr<Message> msg,
                       const Address& to,
                       Status st,
