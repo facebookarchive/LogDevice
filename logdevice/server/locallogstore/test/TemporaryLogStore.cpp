@@ -16,19 +16,22 @@
 
 namespace facebook { namespace logdevice {
 
-TemporaryLogStore::TemporaryLogStore(factory_func_t factory)
+TemporaryLogStore::TemporaryLogStore(factory_func_t factory,
+                                     bool open_right_away)
     : factory_(factory) {
   temp_dir_ = createTemporaryDir("TemporaryLogStore", /*keep_data=*/false);
   ld_check(temp_dir_);
 
-  open();
-  ld_debug("initialized temporary log store in %s", getPath());
+  if (open_right_away) {
+    open();
+  }
+  ld_debug("created temporary log store in %s", getPath());
 }
 
 TemporaryLogStore::~TemporaryLogStore() {}
 
 void TemporaryLogStore::open() {
-  db_.reset(factory_(getPath()));
+  db_ = factory_(getPath());
   ld_check(db_);
 }
 
@@ -217,18 +220,8 @@ int TemporaryLogStore::deleteAllLogSnapshotBlobs() {
   return db_->deleteAllLogSnapshotBlobs();
 }
 
-namespace {
-class RocksDBStoreFactory : public LocalLogStoreFactory {
- public:
-  std::unique_ptr<LocalLogStore> create(uint32_t /* shard_idx */,
-                                        std::string /*path*/) const override {
-    return std::unique_ptr<LocalLogStore>();
-  }
-};
-} // namespace
-
 TemporaryRocksDBStore::TemporaryRocksDBStore(bool read_find_time_index)
-    : TemporaryLogStore([read_find_time_index](std::string path) {
+    : TemporaryLogStore([read_find_time_index](const std::string& path) {
         // All tests should assume this is shard 0.
         shard_index_t shard_idx = 0;
 
@@ -243,19 +236,20 @@ TemporaryRocksDBStore::TemporaryRocksDBStore(bool read_find_time_index)
             settings, rebuilding_settings, nullptr, nullptr, nullptr);
         rocksdb_config.createMergeOperator(shard_idx);
 
-        return new RocksDBLocalLogStore(
-            shard_idx, path.c_str(), std::move(rocksdb_config));
+        return std::make_unique<RocksDBLocalLogStore>(shard_idx,
+                                                      path,
+                                                      std::move(rocksdb_config),
+                                                      /* stats */ nullptr);
       }) {}
 
 class TemporaryPartitionedStoreImpl : public PartitionedRocksDBStore {
  public:
-  explicit TemporaryPartitionedStoreImpl(uint32_t shard_idx,
-                                         const std::string& path,
+  explicit TemporaryPartitionedStoreImpl(const std::string& path,
                                          RocksDBLogStoreConfig rocksdb_config,
                                          const Configuration* config,
                                          StatsHolder* stats,
                                          SystemTimestamp* time)
-      : PartitionedRocksDBStore(shard_idx,
+      : PartitionedRocksDBStore(0,
                                 path,
                                 std::move(rocksdb_config),
                                 config,
@@ -278,26 +272,32 @@ void TemporaryPartitionedStore::setTime(SystemTimestamp time) {
 }
 
 TemporaryPartitionedStore::TemporaryPartitionedStore(bool use_csi)
-    : TemporaryLogStore([use_csi, this](std::string path) {
-        shard_index_t shard_idx = 0;
+    : TemporaryLogStore(
+          [use_csi, this](const std::string& path) {
+            RocksDBSettings raw_settings =
+                RocksDBSettings::defaultTestSettings();
+            raw_settings.use_copyset_index = use_csi;
 
-        RocksDBSettings raw_settings = RocksDBSettings::defaultTestSettings();
-        raw_settings.use_copyset_index = use_csi;
+            UpdateableSettings<RocksDBSettings> settings(raw_settings);
+            UpdateableSettings<RebuildingSettings> rebuilding_settings;
 
-        UpdateableSettings<RocksDBSettings> settings(raw_settings);
-        UpdateableSettings<RebuildingSettings> rebuilding_settings;
+            RocksDBLogStoreConfig rocksdb_config(
+                settings, rebuilding_settings, nullptr, nullptr, nullptr);
+            rocksdb_config.createMergeOperator(0);
 
-        RocksDBLogStoreConfig rocksdb_config(
-            settings, rebuilding_settings, nullptr, nullptr, nullptr);
-        rocksdb_config.createMergeOperator(shard_idx);
-
-        return new TemporaryPartitionedStoreImpl(shard_idx,
-                                                 path,
-                                                 std::move(rocksdb_config),
-                                                 /* config */ nullptr,
-                                                 /* stats */ nullptr,
-                                                 &time_);
-      }) {}
+            return std::make_unique<TemporaryPartitionedStoreImpl>(
+                path,
+                std::move(rocksdb_config),
+                /* config */ nullptr,
+                /* stats */ nullptr,
+                &time_);
+          },
+          false) {
+  open();
+}
+TemporaryPartitionedStore::~TemporaryPartitionedStore() {
+  close();
+}
 
 int TemporaryPartitionedStore::putRecord(
     logid_t log,

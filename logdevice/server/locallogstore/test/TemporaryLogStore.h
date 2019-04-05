@@ -12,7 +12,6 @@
 #include "logdevice/common/Metadata.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/server/locallogstore/LocalLogStore.h"
-#include "logdevice/server/locallogstore/LocalLogStoreFactory.h"
 
 namespace facebook { namespace logdevice {
 
@@ -23,9 +22,19 @@ namespace facebook { namespace logdevice {
 
 class TemporaryLogStore : public LocalLogStore {
  public:
-  typedef std::function<LocalLogStore*(std::string path)> factory_func_t;
+  typedef std::function<std::unique_ptr<LocalLogStore>(const std::string& path)>
+      factory_func_t;
 
-  explicit TemporaryLogStore(factory_func_t factory);
+  // If open_right_away is true, this constructor will call open().
+  // Otherwise you need to call it afterwards.
+  // Using open_right_away=false is important for subclasses of
+  // TemporaryLogStore whose `factory` function uses fields of the subclass:
+  // at the time of TemporaryLogStore construction these fields are
+  // not initialized yet.
+  explicit TemporaryLogStore(factory_func_t factory,
+                             bool open_right_away = true);
+  // If your subclass's LocalLogStore references your subclass's fields,
+  // make sure to call close() in subclass's destructor.
   ~TemporaryLogStore() override;
 
   /**
@@ -155,6 +164,7 @@ struct TemporaryRocksDBStore : public TemporaryLogStore {
 // This allows controlling which partition each record goes to.
 struct TemporaryPartitionedStore : public TemporaryLogStore {
   explicit TemporaryPartitionedStore(bool use_csi = true);
+  ~TemporaryPartitionedStore() override;
 
   void setTime(SystemTimestamp time);
 

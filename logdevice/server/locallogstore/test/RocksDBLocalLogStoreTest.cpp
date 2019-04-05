@@ -109,13 +109,14 @@ class RocksDBLocalLogStoreTest : public ::testing::Test {
 
   std::unique_ptr<LocalLogStore> createRocksDBLocalLogStore() {
     return std::make_unique<TemporaryLogStore>([&](std::string path) {
-      return new RocksDBLocalLogStore(0, path, rocksdb_config_, &stats_);
+      return std::make_unique<RocksDBLocalLogStore>(
+          0, path, rocksdb_config_, &stats_);
     });
   }
 
   std::unique_ptr<LocalLogStore> createPartitionedRocksDBStore() {
     return std::make_unique<TemporaryLogStore>([&](std::string path) {
-      return new PartitionedRocksDBStore(
+      return std::make_unique<PartitionedRocksDBStore>(
           0, path, rocksdb_config_, nullptr, &stats_);
     });
   }
