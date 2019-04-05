@@ -180,16 +180,16 @@ class IsLogEmptyRequest : public DistributedRequest,
   bool completion_cond_called_ = false;
 
   // Below are used to determine if we are ready to terminate with a result.
-  bool haveNonEmptyCopyset();
-  bool haveEmptyFMajority();
+  bool haveNonEmptyCopyset() const;
+  bool haveEmptyFMajority() const;
   // Checks if there are enough outstanding non-underreplicated nodes to reach
   // any of the above two.
-  bool haveDeadEnd();
+  bool haveDeadEnd() const;
   // Checks if we've got an f-majority of unambiguous responses
-  bool haveFmajorityOfResponses();
+  bool haveFmajorityOfResponses() const;
   // Checks whether some nodes weren't able to give us an answer for other
   // reasons than being rebuilt
-  bool haveOnlyRebuildingFailures();
+  bool haveOnlyRebuildingFailures() const;
 
   // ------------------  overridden in unit tests  ------------------
   virtual std::shared_ptr<ServerConfig> getConfig() const;
@@ -223,13 +223,13 @@ class IsLogEmptyRequest : public DistributedRequest,
   // is a difference.
   bool haveShardAuthoritativeStatusDifferences(
       const AuthoritativeStatusMap* fd_before = nullptr,
-      const AuthoritativeStatusMap* na_before = nullptr);
+      const AuthoritativeStatusMap* na_before = nullptr) const;
 
   // Create a human-readable string with details on all shards that aren't
   // considered fully authoritative. Returned string might be an error message.
-  std::string getHumanReadableShardStatuses();
+  std::string getHumanReadableShardStatuses() const;
 
-  std::string getNonEmptyShardsList();
+  std::string getNonEmptyShardsList() const;
 
   void applyShardStatus(bool initialize_unknown);
 

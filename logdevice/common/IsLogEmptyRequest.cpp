@@ -166,9 +166,13 @@ void IsLogEmptyRequest::onShardStatusChanged(bool initialize) {
       // NodeSetAccessor won't be ready when we initialize this request's
       // failure domain, but will update itself when we start it.
       if (!initialize) {
-        nodeset_accessor_->onShardStatusChanged();
-        ld_check(!haveShardAuthoritativeStatusDifferences(
-            &fd_auth_statuses_before, &na_auth_statuses_before));
+        bool done = nodeset_accessor_->onShardStatusChanged();
+        if (!done) {
+          ld_check(!haveShardAuthoritativeStatusDifferences(
+              &fd_auth_statuses_before, &na_auth_statuses_before));
+        } else {
+          // `this` was destroyed by nodeset_accessor_'s completion callback
+        }
       }
     }
   }
@@ -342,17 +346,17 @@ void IsLogEmptyRequest::onMessageSent(ShardID to, Status status) {
   }
 }
 
-bool IsLogEmptyRequest::haveNonEmptyCopyset() {
+bool IsLogEmptyRequest::haveNonEmptyCopyset() const {
   return failure_domain_->canReplicate(node_non_empty_filter);
 }
 
-bool IsLogEmptyRequest::haveEmptyFMajority() {
+bool IsLogEmptyRequest::haveEmptyFMajority() const {
   auto fmajority_result = failure_domain_->isFmajority(node_empty_filter);
   return fmajority_result != FmajorityResult::NONE &&
       fmajority_result != FmajorityResult::NON_AUTHORITATIVE;
 }
 
-bool IsLogEmptyRequest::haveDeadEnd() {
+bool IsLogEmptyRequest::haveDeadEnd() const {
   // If we have an f-majority of responses but neither an empty f-majority, or
   // non-empty copyset, this function is used to see if there's enough
   // non-underreplicated and available nodes we're still waiting for answers
@@ -378,7 +382,7 @@ bool IsLogEmptyRequest::haveDeadEnd() {
       fmajority_result == FmajorityResult::NON_AUTHORITATIVE;
 }
 
-bool IsLogEmptyRequest::haveFmajorityOfResponses() {
+bool IsLogEmptyRequest::haveFmajorityOfResponses() const {
   // In case we hit a dead end on a change of shard authoritative status, this
   // is used to determine whether we have enough responses to consider it a
   // sufficient result and return E::OK, or whether to return E::PARTIAL.
@@ -390,7 +394,7 @@ bool IsLogEmptyRequest::haveFmajorityOfResponses() {
       fmajority_result != FmajorityResult::NON_AUTHORITATIVE;
 }
 
-bool IsLogEmptyRequest::haveOnlyRebuildingFailures() {
+bool IsLogEmptyRequest::haveOnlyRebuildingFailures() const {
   // Count number of non-rebuilding failures
   return failure_domain_->countShards(
              [](shard_status_t val) { return val & SHARD_HAS_ERROR; }) == 0;
@@ -493,7 +497,7 @@ void IsLogEmptyRequest::onReply(ShardID from, Status status, bool is_empty) {
 
 bool IsLogEmptyRequest::haveShardAuthoritativeStatusDifferences(
     const AuthoritativeStatusMap* fd_auth_statuses_before,
-    const AuthoritativeStatusMap* na_auth_statuses_before) {
+    const AuthoritativeStatusMap* na_auth_statuses_before) const {
   const auto fd_auth_statuses_after =
       failure_domain_->getShardAuthoritativeStatusMap();
   const auto na_auth_statuses_after =
@@ -548,7 +552,7 @@ bool IsLogEmptyRequest::haveShardAuthoritativeStatusDifferences(
   return have_difference;
 }
 
-std::string IsLogEmptyRequest::getHumanReadableShardStatuses() {
+std::string IsLogEmptyRequest::getHumanReadableShardStatuses() const {
   std::vector<std::string> result_statuses;
 
   for (const ShardID shard : shards_) {
@@ -672,7 +676,7 @@ void IsLogEmptyRequest::completion(Status st) {
   }
 }
 
-std::string IsLogEmptyRequest::getNonEmptyShardsList() {
+std::string IsLogEmptyRequest::getNonEmptyShardsList() const {
   std::string result = "[";
   bool first = true;
   bool some_not_found = false;

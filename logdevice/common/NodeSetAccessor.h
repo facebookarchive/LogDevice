@@ -298,7 +298,14 @@ class StorageSetAccessor {
 
   virtual ~StorageSetAccessor() {}
 
-  void onShardStatusChanged();
+  /**
+   * Handles the situation where a shard's authoritative status changed.
+   * If the request is not yet done: applies the change, and checks if this
+   * brings the request to completion.
+   * @return true if the request has completed (either it was already done, or
+   *              it completed as a result of this status change).
+   */
+  bool onShardStatusChanged();
 
   /**
    * When the property is FMAJORITY, this function changes the mode of

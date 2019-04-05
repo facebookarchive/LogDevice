@@ -963,18 +963,18 @@ std::string StorageSetAccessor::describeState(bool all_shards) const {
   return ss.str();
 }
 
-void StorageSetAccessor::onShardStatusChanged() {
+bool StorageSetAccessor::onShardStatusChanged() {
   if (finished_) {
     // ignore calls if StorageSetAccessor is finished
     RATELIMIT_WARNING(std::chrono::seconds(1),
                       2,
                       "called when StorageSetAccessor for log %lu is finished.",
                       log_id_.val());
-    return;
+    return true;
   }
 
   applyShardStatus();
-  checkIfDone();
+  return checkIfDone();
 }
 
 ShardAuthoritativeStatusMap&
