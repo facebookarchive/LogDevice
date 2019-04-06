@@ -98,11 +98,17 @@ class ProcessorImpl {
         background_queue_(),
         nc_publisher_(processor->config_, settings) {}
 
+  ~ProcessorImpl() {
+    for (auto& workers : all_workers_) {
+      for (auto& worker : workers) {
+        folly::RequestContextScopeGuard g(worker->getContext());
+        worker.reset();
+      }
+    }
+  }
+
   WheelTimer wheel_timer_;
-  std::array<workers_t, static_cast<size_t>(WorkerType::MAX)> all_workers_;
-  std::vector<std::unique_ptr<EventLoopHandle>> ev_loop_handles_;
   AppendProbeController append_probe_controller_;
-  std::unique_ptr<AllSequencers> allSequencers_;
   WorkerLoadBalancing worker_load_balancing_;
   ClientIdxAllocator client_idx_allocator_;
 
@@ -112,6 +118,11 @@ class ProcessorImpl {
   // An empty function means "exit the thread."
   folly::MPMCQueue<folly::Function<void()>> background_queue_;
   NodesConfigurationPublisher nc_publisher_;
+  std::vector<std::unique_ptr<EventLoopHandle>> ev_loop_handles_;
+  std::unique_ptr<AllSequencers> allSequencers_;
+  std::array<workers_t, static_cast<size_t>(WorkerType::MAX)> all_workers_;
+  // If anything depends on worker make sure that it is deleted in the
+  // destructor above.
 };
 
 namespace {
@@ -198,21 +209,9 @@ void Processor::init() {
     WorkerType worker_type = workerTypeByIndex(i);
     auto count = getWorkerCount(worker_type);
     workers_t worker_pool = createWorkerPool(worker_type, count);
-    for (auto& worker : worker_pool) {
-      try {
-        auto& ev_handles = impl_->ev_loop_handles_;
-        ev_handles.emplace_back(std::make_unique<EventLoopHandle>(
-            worker,
-            local_settings->worker_request_pipe_capacity,
-            local_settings->requests_per_iteration));
-        impl_->all_workers_[i].push_back(worker);
-      } catch (ConstructorFailed&) {
-        shutdown();
-        throw ConstructorFailed();
-      }
-    }
     ld_info(
         "Initialized %d workers of type %s", count, workerTypeStr(worker_type));
+    impl_->all_workers_[i] = std::move(worker_pool);
   }
 
   for (std::unique_ptr<EventLoopHandle>& handle : impl_->ev_loop_handles_) {
@@ -262,13 +261,22 @@ workers_t Processor::createWorkerPool(WorkerType type, size_t count) {
     // increment the next worker idx
     std::unique_ptr<Worker> worker;
     try {
-      worker.reset(createWorker(worker_id_t(i), type));
+      auto& handles = impl_->ev_loop_handles_;
+      auto ev_loop =
+          new EventLoop(Worker::makeThreadName(this, type, worker_id_t(i)),
+                        ThreadID::CPU_EXEC);
+      handles.emplace_back(std::make_unique<EventLoopHandle>(
+          ev_loop,
+          local_settings->worker_request_pipe_capacity,
+          local_settings->requests_per_iteration));
+      auto executor = folly::getKeepAliveToken(handles.back()->get());
+      worker.reset(createWorker(std::move(executor), worker_id_t(i), type));
     } catch (ConstructorFailed&) {
       shutdown();
       throw ConstructorFailed();
     }
     ld_check(worker);
-    workers.push_back(worker.release());
+    workers.push_back(std::move(worker));
   }
   return workers;
 }
@@ -345,7 +353,12 @@ Worker& Processor::getWorker(worker_id_t worker_id, WorkerType worker_type) {
   ld_check(worker_id.val() >= 0);
   ld_check(worker_id.val() < getWorkerCount(worker_type));
   auto& workers = impl_->all_workers_[static_cast<uint8_t>(worker_type)];
-  return *workers[worker_id.val()];
+  return *workers[worker_id.val()].get();
+}
+
+std::vector<std::unique_ptr<EventLoopHandle>>&
+Processor::getEventLoopHandles() {
+  return impl_->ev_loop_handles_;
 }
 
 void Processor::applyToWorkers(folly::Function<void(Worker&)> func,
@@ -538,7 +551,6 @@ void Processor::shutdown() {
   // also alters WorkerHandles so that further attempts to post
   // requests through them fail with E::SHUTDOWN.
   for (auto& ev_handle : impl_->ev_loop_handles_) {
-    ev_handle->dontWaitOnDestruct();
     ev_handle->shutdown();
     pthreads.push_back(ev_handle->getThread());
   }
@@ -605,8 +617,14 @@ SequencerBatching& Processor::sequencerBatching() {
   return *sequencer_batching_;
 }
 
-Worker* Processor::createWorker(worker_id_t i, WorkerType type) {
-  return new Worker(this, i, config_, stats_, type);
+Worker* Processor::createWorker(WorkContext::KeepAlive executor,
+                                worker_id_t idx,
+                                WorkerType worker_type) {
+  auto worker =
+      new Worker(std::move(executor), this, idx, config_, stats_, worker_type);
+  // Finish the remaining initialization on the executor.
+  worker->add([worker] { worker->setupWorker(); });
+  return worker;
 }
 
 //

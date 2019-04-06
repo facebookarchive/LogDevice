@@ -946,7 +946,7 @@ StatsHolder* AllSequencers::getStats() const {
 
 std::shared_ptr<Sequencer>
 AllSequencers::getMetaDataLogSequencer(logid_t datalog_id) {
-  const Worker* worker = dynamic_cast<Worker*>(EventLoop::onThisThread());
+  const Worker* worker = Worker::onThisThread(false /* enforce_worker */);
   if (!worker) {
     // may happen in tests
     err = E::NOSEQUENCER;

@@ -24,6 +24,7 @@
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/common/types_internal.h"
+#include "logdevice/common/work_model/WorkContext.h"
 #include "logdevice/include/types.h"
 // Think twice before adding new includes here!  This file is included in many
 // translation units and increasing its transitive dependency footprint will
@@ -67,7 +68,7 @@ class Worker;
 class WheelTimer;
 class Configuration;
 enum class SequencerOptions : uint8_t;
-using workers_t = std::vector<Worker*>;
+using workers_t = std::vector<std::unique_ptr<Worker>>;
 
 class Processor : public folly::enable_shared_from_this<Processor> {
  public:
@@ -239,6 +240,12 @@ class Processor : public folly::enable_shared_from_this<Processor> {
    * worker pool.
    */
   Worker& getWorker(worker_id_t worker_id, WorkerType type);
+
+  /**
+   * Get all EventLoopHandle's owned by the Processor.
+   * Used for tests.
+   */
+  std::vector<std::unique_ptr<EventLoopHandle>>& getEventLoopHandles();
 
   /**
    * Returns the refernce to an object which is responsible for timers
@@ -681,8 +688,12 @@ class Processor : public folly::enable_shared_from_this<Processor> {
    * Subclasses override to create the correct Worker subclasses;
    * ServerProcessor creates ServerWorker instances, ClientProcessor creates
    * ClientWorker.
+   * Accepts KeepAlive of the executor on which the worker will execute most of
+   * it's CPU logic.
    */
-  virtual Worker* createWorker(worker_id_t, WorkerType type);
+  virtual Worker* createWorker(WorkContext::KeepAlive executor,
+                               worker_id_t,
+                               WorkerType type);
 
   bool validateFn(const folly::Function<void()>& fn);
 

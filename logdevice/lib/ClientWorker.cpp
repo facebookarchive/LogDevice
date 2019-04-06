@@ -24,12 +24,19 @@ class ClientWorkerImpl {
   std::unique_ptr<NodeStatsHandler> node_stats_handler_;
 };
 
-ClientWorker::ClientWorker(ClientProcessor* processor,
+ClientWorker::ClientWorker(WorkContext::KeepAlive event_loop,
+                           ClientProcessor* processor,
                            worker_id_t idx,
                            const std::shared_ptr<UpdateableConfig>& config,
                            StatsHolder* stats = nullptr,
                            WorkerType type = WorkerType::GENERAL)
-    : Worker(processor, idx, config, stats, type, ThreadID::CLIENT_WORKER),
+    : Worker(std::move(event_loop),
+             processor,
+             idx,
+             config,
+             stats,
+             type,
+             ThreadID::CLIENT_WORKER),
       processor_(processor),
       impl_(new ClientWorkerImpl(this)) {}
 
@@ -37,8 +44,8 @@ std::unique_ptr<MessageDispatch> ClientWorker::createMessageDispatch() {
   return std::make_unique<ClientMessageDispatch>();
 }
 
-void ClientWorker::onThreadStarted() {
-  Worker::onThreadStarted();
+void ClientWorker::setupWorker() {
+  Worker::setupWorker();
   if (idx_.val() ==
       NodeStatsHandler::getThreadAffinity(
           processor_->getWorkerCount(WorkerType::GENERAL))) {

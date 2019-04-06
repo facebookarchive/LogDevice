@@ -25,14 +25,9 @@ ZookeeperEpochStoreRequest::ZookeeperEpochStoreRequest(
       epoch_store_shutting_down_(store_->getShuttingDownPtr()),
       epoch_(epoch),
       cf_meta_data_(cf),
-      worker_idx_(dynamic_cast<Worker*>(EventLoop::onThisThread())
+      worker_idx_(Worker::onThisThread(false /* enforce_worker */)
                       ? Worker::onThisThread()->idx_
                       : worker_id_t(-1)) {
-  // Worker::onThisThread() asserts if called on a non-Worker thread
-  // EventLoop::onThisThread() does not. We use the latter to
-  // determine if we are on a Worker thread, then initialize
-  // worker_idx_ appropriately.
-
   ld_check(logid_ != LOGID_INVALID);
   ld_check(store_);
 }
@@ -47,7 +42,7 @@ ZookeeperEpochStoreRequest::ZookeeperEpochStoreRequest(
       epoch_store_shutting_down_(store_->getShuttingDownPtr()),
       epoch_(epoch),
       cf_lce_(cf),
-      worker_idx_(dynamic_cast<Worker*>(EventLoop::onThisThread())
+      worker_idx_(Worker::onThisThread(false /* enforce_worker */)
                       ? Worker::onThisThread()->idx_
                       : worker_id_t(-1)) {
   ld_check(logid_ != LOGID_INVALID);

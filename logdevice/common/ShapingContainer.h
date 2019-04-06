@@ -16,6 +16,7 @@
 #include "event2/event.h"
 #include "logdevice/common/ConstructorFailed.h"
 #include "logdevice/common/EventHandler.h"
+#include "logdevice/common/EventLoop.h"
 #include "logdevice/common/FlowGroup.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/ShapingConfig.h"
@@ -38,20 +39,7 @@ class ShapingContainer {
   explicit ShapingContainer(size_t num_scopes,
                             struct event_base* base,
                             const configuration::ShapingConfig& scfg)
-      : type_(scfg.getType()),
-        num_scopes_(num_scopes),
-        flow_groups_run_requested_(LD_EV(event_new)(
-            base,
-            -1,
-            EV_WRITE | EV_PERSIST,
-            EventHandler<ShapingContainer::onFlowGroupsRunRequested>,
-            this)),
-        flow_groups_run_deadline_exceeded_(LD_EV(event_new)(
-            base,
-            -1,
-            0,
-            EventHandler<ShapingContainer::onFlowGroupsRunRequested>,
-            this)) {
+      : type_(scfg.getType()), num_scopes_(num_scopes) {
     flow_groups_.resize(num_scopes);
 
     auto scope = NodeLocationScope::NODE;
@@ -59,27 +47,9 @@ class ShapingContainer {
       fg.configure(scfg.configured(scope));
       scope = NodeLocation::nextGreaterScope(scope);
     }
-
-    if (!flow_groups_run_requested_) { // unlikely
-      ld_error("Failed to create 'flow groups run requested' event");
-      err = E::NOMEM;
-      throw ConstructorFailed();
-    }
-
-    LD_EV(event_priority_set)
-    (flow_groups_run_requested_, EventLoop::PRIORITY_LOW);
-
-    if (!flow_groups_run_deadline_exceeded_) { // unlikely
-      ld_error("Failed to create 'flow groups run deadline exceeded' event");
-      err = E::NOMEM;
-      throw ConstructorFailed();
-    }
   }
 
-  ~ShapingContainer() {
-    LD_EV(event_free)(flow_groups_run_requested_);
-    LD_EV(event_free)(flow_groups_run_deadline_exceeded_);
-  }
+  ~ShapingContainer() {}
 
   // Lock to prevent race between worker threads and TrafficShaper thread
   // trying to debit/credit bandwidth into FlowGroups
@@ -115,9 +85,6 @@ class ShapingContainer {
    * empty or have exhausted their bandwidth credit.
    */
   void runFlowGroups(RunType /*rt*/) {
-    LD_EV(event_del)(flow_groups_run_requested_);
-    evtimer_del(flow_groups_run_deadline_exceeded_);
-
     if (flow_groups_run_requested_time_ != SteadyTimestamp()) {
       auto queue_latency =
           std::chrono::duration_cast<std::chrono::microseconds>(
@@ -147,8 +114,9 @@ class ShapingContainer {
         // Run again after yielding to the event loop.
         STAT_INCR(Worker::stats(), flow_groups_run_deadline_exceeded);
         flow_groups_run_requested_time_ = SteadyTimestamp::now();
-        evtimer_add(flow_groups_run_deadline_exceeded_,
-                    Worker::onThisThread()->zero_timeout_);
+        auto w = Worker::onThisThread();
+        w->addWithPriority([&] { runFlowGroups(RunType::EVENTLOOP); },
+                           folly::Executor::LO_PRI);
         break;
       }
     }
@@ -196,17 +164,6 @@ class ShapingContainer {
   std::mutex flow_meters_mutex_;
 
   size_t num_scopes_;
-
-  // Event signalled when there is demand for priority queue bandwidth.
-  // When activated, this low priority event will be serviced once the
-  // event loop goes idle for normal priority events. This allows demand
-  // from multiple priorities to be aggregated before servicing.
-  struct event* flow_groups_run_requested_;
-
-  // Backup event for flow_groups_run_requested_ when the Worker is saturated.
-  // When this timer event fires, the flow group run is scheduled at normal
-  // priority and is serviced in FIFO order with all other events.
-  struct event* flow_groups_run_deadline_exceeded_;
 
   SteadyTimestamp flow_groups_run_requested_time_;
 };

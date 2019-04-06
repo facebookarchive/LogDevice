@@ -4260,6 +4260,11 @@ int ClientReadStreamDependencies::sendStopMessage(ShardID shard) {
   header.read_stream_id = read_stream_id_;
   header.shard = shard.shard();
 
+  // Worker is shutting down skip the shutdown message.
+  if (!w->isAcceptingWork()) {
+    return 0;
+  }
+
   auto msg = std::make_unique<STOP_Message>(header);
   return w->sender().sendMessage(std::move(msg), shard.asNodeID());
 }

@@ -14,6 +14,7 @@
 #include <folly/Memory.h>
 #include <gtest/gtest.h>
 
+#include "logdevice/common/Connection.h"
 #include "logdevice/common/EventLoopHandle.h"
 #include "logdevice/common/FlowGroup.h"
 #include "logdevice/common/Processor.h"
@@ -58,6 +59,7 @@ struct SocketConnectRequest : public Request {
       : Request(RequestType::TEST_MESSAGING_SOCKET_CONNECT_REQUEST) {}
 
   Request::Execution execute() override {
+    ThreadID::set(ThreadID::SERVER_WORKER, "");
     bool constructor_failed = false;
     int rv;
 
@@ -71,7 +73,8 @@ struct SocketConnectRequest : public Request {
     }
 
     try {
-      Socket s(badNodeID, SocketType::DATA, ConnectionType::PLAIN, flow_group);
+      Connection s(
+          badNodeID, SocketType::DATA, ConnectionType::PLAIN, flow_group);
     } catch (const ConstructorFailed&) {
       constructor_failed = true;
     }
@@ -82,7 +85,7 @@ struct SocketConnectRequest : public Request {
     constructor_failed = false;
 
     try {
-      SocketConnectRequest::sock = new Socket(
+      SocketConnectRequest::sock = new Connection(
           firstNodeID, SocketType::DATA, ConnectionType::PLAIN, flow_group);
     } catch (const ConstructorFailed&) {
       constructor_failed = true;
@@ -271,6 +274,18 @@ class ServerSocket {
   std::list<int> fds_;
 };
 
+std::tuple<std::unique_ptr<EventLoopHandle>, std::unique_ptr<Worker>>
+createWorker(Processor* p, std::shared_ptr<UpdateableConfig>& config) {
+  auto h = std::make_unique<EventLoopHandle>(new EventLoop());
+  h->start();
+  auto w = std::make_unique<Worker>(
+      folly::getKeepAliveToken(h->get()), p, worker_id_t(0), config);
+
+  w->add([w = w.get()] { w->setupWorker(); });
+
+  return std::make_tuple(std::move(h), std::move(w));
+}
+
 /**
  * A basic Socket connection test.
  *
@@ -285,17 +300,16 @@ TEST_F(MessagingSocketTest, SocketConnect) {
   settings.include_cluster_name_on_handshake = true;
   settings.include_destination_on_handshake = true;
   UpdateableSettings<Settings> updateable_settings(settings);
+  settings.num_workers = 1;
   ServerSocket server;
 
   std::shared_ptr<UpdateableConfig> config(create_config(server.getPort()));
   Processor processor(config, updateable_settings);
 
   ld_check((bool)config);
-
-  processor.config_ = config;
-  auto h = std::make_unique<EventLoopHandle>(
-      new Worker(&processor, worker_id_t(0), config));
-  h->start();
+  auto out = createWorker(&processor, config);
+  auto h = std::move(std::get<0>(out));
+  auto w = std::move(std::get<1>(out));
 
   th = h->getThread();
   ASSERT_FALSE(pthread_equal(pthread_self(), th));
@@ -305,7 +319,7 @@ TEST_F(MessagingSocketTest, SocketConnect) {
   std::unique_ptr<Request> rq1 =
       std::make_unique<testing::SocketConnectRequest>();
 
-  EXPECT_EQ(0, h->postRequest(rq1));
+  EXPECT_EQ(0, w->tryPost(rq1));
 
   const int fd = server.accept();
 
@@ -318,8 +332,11 @@ TEST_F(MessagingSocketTest, SocketConnect) {
 
   std::unique_ptr<Request> rq2 =
       std::make_unique<testing::SocketConnectRequest>();
-
-  EXPECT_EQ(0, h->postRequest(rq2));
+  // Block for request to execute, as worker will be destructed first.
+  Semaphore sem;
+  rq2->setClientBlockedSemaphore(&sem);
+  EXPECT_EQ(0, w->tryPost(rq2));
+  sem.wait();
 
   dbg::currentLevel = dbg::Level::ERROR;
 }
@@ -329,6 +346,7 @@ struct SenderBasicSendRequest : public Request {
   SenderBasicSendRequest()
       : Request(RequestType::TEST_MESSAGING_SENDER_BASIC_SEND_REQUEST) {}
   Request::Execution execute() override {
+    ThreadID::set(ThreadID::SERVER_WORKER, "");
     int rv;
     Worker* w = Worker::onThisThread();
     EXPECT_TRUE(w);
@@ -400,6 +418,7 @@ TEST_F(MessagingSocketTest, SenderBasicSend) {
   settings.include_cluster_name_on_handshake = true;
   settings.include_destination_on_handshake = true;
   UpdateableSettings<Settings> updateable_settings(settings);
+
   ServerSocket server;
   std::shared_ptr<UpdateableConfig> config(create_config(server.getPort()));
 
@@ -407,11 +426,9 @@ TEST_F(MessagingSocketTest, SenderBasicSend) {
 
   ld_check((bool)config);
 
-  processor.config_ = config;
-
-  auto h = std::make_unique<EventLoopHandle>(
-      new Worker(&processor, worker_id_t(0), config));
-  h->start();
+  auto out = createWorker(&processor, config);
+  auto h = std::move(std::get<0>(out));
+  auto w = std::move(std::get<1>(out));
 
   th = h->getThread();
   ASSERT_FALSE(pthread_equal(pthread_self(), th));
@@ -420,7 +437,7 @@ TEST_F(MessagingSocketTest, SenderBasicSend) {
 
   std::unique_ptr<Request> rq = std::make_unique<SenderBasicSendRequest>();
 
-  EXPECT_EQ(0, h->postRequest(rq));
+  EXPECT_EQ(0, w->tryPost(rq));
 
   const int fd = server.accept();
 
@@ -487,6 +504,7 @@ struct SendStoredWithTimeoutRequest : public Request {
   SendStoredWithTimeoutRequest()
       : Request(RequestType::TEST_MESSAGING_SEND_STORED_WITH_TIMEOUT_REQUEST) {}
   Request::Execution execute() override {
+    ThreadID::set(ThreadID::SERVER_WORKER, "");
     Worker* w = Worker::onThisThread();
 
     auto msg = std::make_unique<STORED_Message>(SenderBasicSendRequest::hdr1out,
@@ -527,13 +545,12 @@ TEST_F(MessagingSocketTest, OnHandshakeTimeout) {
 
   Processor processor(config, updateable_settings);
 
+  auto out = createWorker(&processor, config);
+  auto h = std::move(std::get<0>(out));
+  auto w = std::move(std::get<1>(out));
   std::unique_ptr<Request> req =
       std::make_unique<SendStoredWithTimeoutRequest>();
-  auto h = std::make_unique<EventLoopHandle>(
-      new Worker(&processor, worker_id_t(0), config));
-  h->start();
-
-  EXPECT_EQ(0, h->postRequest(req));
+  EXPECT_EQ(0, w->tryPost(req));
 
   // Accept the connection, swallow the HELLO message but do not send ACK.
   const int fd = server.accept();
@@ -554,6 +571,7 @@ struct SendMessageOnCloseProtoNoSupport : public Request {
         sem_(sem),
         close_callback_(new OnClose(sem)) {}
   Request::Execution execute() override {
+    ThreadID::set(ThreadID::SERVER_WORKER, "");
     Worker* w = Worker::onThisThread();
 
     // Since the socket will be closed with E::PROTONOSUPPORT, the message
@@ -595,6 +613,7 @@ struct SendMessageExpectBadProtoRequest : public Request {
         sem_(sem),
         synchronous_error_(sync) {}
   Request::Execution execute() override {
+    ThreadID::set(ThreadID::SERVER_WORKER, "");
     Worker* w = Worker::onThisThread();
 
     // Protocol version validation can only occur once we are connected
@@ -647,15 +666,15 @@ TEST_F(MessagingSocketTest, AckProtoNoSupportClose) {
   std::shared_ptr<UpdateableConfig> config(create_config(server.getPort()));
 
   Processor processor(config, updateable_settings);
+  auto out = createWorker(&processor, config);
+  auto h = std::move(std::get<0>(out));
+  auto w = std::move(std::get<1>(out));
 
   Semaphore sem;
   auto raw_req = new SendMessageOnCloseProtoNoSupport(sem);
   std::unique_ptr<Request> req(raw_req);
-  auto h = std::make_unique<EventLoopHandle>(
-      new Worker(&processor, worker_id_t(0), config));
-  h->start();
 
-  EXPECT_EQ(0, h->postRequest(req));
+  EXPECT_EQ(0, w->tryPost(req));
 
   const int fd = server.accept();
 
@@ -691,15 +710,15 @@ TEST_F(MessagingSocketTest, MessageProtoNoSupportOnSent) {
   std::shared_ptr<UpdateableConfig> config(create_config(server.getPort()));
 
   Processor processor(config, updateable_settings);
+  auto out = createWorker(&processor, config);
+  auto h = std::move(std::get<0>(out));
+  auto w = std::move(std::get<1>(out));
 
   Semaphore sem;
   std::unique_ptr<Request> req;
   req.reset(new SendMessageExpectBadProtoRequest(sem, /*sync*/ false));
-  auto h = std::make_unique<EventLoopHandle>(
-      new Worker(&processor, worker_id_t(0), config));
-  h->start();
 
-  EXPECT_EQ(0, h->postRequest(req));
+  EXPECT_EQ(0, w->tryPost(req));
 
   const int fd = server.accept();
   HELLO_Raw hello;
@@ -724,7 +743,7 @@ TEST_F(MessagingSocketTest, MessageProtoNoSupportOnSent) {
   // With the handshake complete, messages sent with an unsupported
   // protocol version should fail synchronously.
   req.reset(new SendMessageExpectBadProtoRequest(sem, /*sync*/ true));
-  EXPECT_EQ(0, h->postRequest(req));
+  EXPECT_EQ(0, w->tryPost(req));
 
   // Only one of the two messages will actually be transmitted and have
   // their onSent() callback invoked.
@@ -739,6 +758,7 @@ struct SendMessageOnCloseInvalidCluster : public Request {
         sem_(sem),
         close_callback_(new OnClose(sem)) {}
   Request::Execution execute() override {
+    ThreadID::set(ThreadID::SERVER_WORKER, "");
     Worker* w = Worker::onThisThread();
 
     // Since the socket will be closed with E::INVALID_CLUSTER, the message
@@ -781,16 +801,15 @@ TEST_F(MessagingSocketTest, AckInvalidClusterClose) {
   std::shared_ptr<UpdateableConfig> config(create_config(server.getPort()));
 
   Processor processor(config, updateable_settings);
+  auto out = createWorker(&processor, config);
+  auto h = std::move(std::get<0>(out));
+  auto w = std::move(std::get<1>(out));
 
   Semaphore sem;
   auto raw_req = new SendMessageOnCloseInvalidCluster(sem);
   std::unique_ptr<Request> req(raw_req);
 
-  auto h = std::make_unique<EventLoopHandle>(
-      new Worker(&processor, worker_id_t(0), config));
-  h->start();
-
-  EXPECT_EQ(0, h->postRequest(req));
+  EXPECT_EQ(0, w->tryPost(req));
 
   const int fd = server.accept();
 
@@ -806,6 +825,7 @@ TEST_F(MessagingSocketTest, AckInvalidClusterClose) {
 
   // Wait for DummyMessage::onSent() and OnClose() to be called.
   sem.wait();
+  sem.wait();
 }
 
 // Used by ReentrantOnSent test.
@@ -814,6 +834,7 @@ struct SendReentrantMessage : public Request {
       : Request(RequestType::TEST_SENDMESSAGE_EXPECT_TWO_MESSAGES_SENT),
         sem_(sem) {}
   Request::Execution execute() override {
+    ThreadID::set(ThreadID::SERVER_WORKER, "");
     Worker* w = Worker::onThisThread();
 
     auto msg = std::make_unique<ReentrantDummyMessage>(sem_, E::CANCELLED);
@@ -838,17 +859,17 @@ TEST_F(MessagingSocketTest, ReentrantOnSent) {
   ServerSocket server;
   std::shared_ptr<UpdateableConfig> config(create_config(server.getPort()));
   Processor processor(config, updateable_settings);
+  auto out = createWorker(&processor, config);
+  auto h = std::move(std::get<0>(out));
+  auto w = std::move(std::get<1>(out));
 
   Semaphore sem;
   std::unique_ptr<Request> req;
   req.reset(new SendReentrantMessage(sem));
-  auto h = std::make_unique<EventLoopHandle>(
-      new Worker(&processor, worker_id_t(0), config));
-  h->start();
 
   // Queue up prior to handshake so that our messages is processed from
   // handshake completion context.
-  EXPECT_EQ(0, h->postRequest(req));
+  EXPECT_EQ(0, w->tryPost(req));
 
   const int fd = server.accept();
 
@@ -871,7 +892,7 @@ TEST_F(MessagingSocketTest, ReentrantOnSent) {
   // Now that handshake processing is complete, queue up again so the
   // message is sent from Sender::sendMessage() context.
   req.reset(new SendReentrantMessage(sem));
-  EXPECT_EQ(0, h->postRequest(req));
+  EXPECT_EQ(0, w->tryPost(req));
 
   // Wait for ReentrantDummyMessage::onSent() and DummyMessage::onSent()
   // to be called.

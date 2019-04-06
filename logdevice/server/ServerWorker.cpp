@@ -59,12 +59,19 @@ class ServerWorkerImpl {
   Timer node_stats_controller_locator_timer_;
 };
 
-ServerWorker::ServerWorker(ServerProcessor* processor,
+ServerWorker::ServerWorker(WorkContext::KeepAlive event_loop,
+                           ServerProcessor* processor,
                            worker_id_t idx,
                            const std::shared_ptr<UpdateableConfig>& config,
                            StatsHolder* stats = nullptr,
                            WorkerType type = WorkerType::GENERAL)
-    : Worker(processor, idx, config, stats, type, ThreadID::SERVER_WORKER),
+    : Worker(std::move(event_loop),
+             processor,
+             idx,
+             config,
+             stats,
+             type,
+             ThreadID::SERVER_WORKER),
       processor_(processor),
       impl_(new ServerWorkerImpl(this)) {
   server_read_streams_ = folly::make_unique<AllServerReadStreams>(
@@ -103,6 +110,7 @@ ServerWorker::~ServerWorker() {
   impl_->node_stats_controller_.reset();
   ld_check(activePurges().map.empty());
   activeSettingOverrides().map.clear();
+  storage_task_queues_.clear();
 }
 
 std::unique_ptr<MessageDispatch> ServerWorker::createMessageDispatch() {
@@ -192,8 +200,8 @@ void ServerWorker::onServerConfigUpdated() {
   Worker::onServerConfigUpdated();
 }
 
-void ServerWorker::onThreadStarted() {
-  Worker::onThreadStarted();
+void ServerWorker::setupWorker() {
+  Worker::setupWorker();
   server_read_streams_->registerForShardAuthoritativeStatusUpdates();
   if ((idx_.val() ==
        NodeStatsController::getThreadAffinity(

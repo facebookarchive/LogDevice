@@ -12,7 +12,13 @@
 
 namespace facebook { namespace logdevice {
 
-Worker* ClientProcessor::createWorker(worker_id_t i, WorkerType type) {
-  return new ClientWorker(this, i, config_, stats_, type);
+Worker* ClientProcessor::createWorker(WorkContext::KeepAlive executor,
+                                      worker_id_t idx,
+                                      WorkerType worker_type) {
+  auto worker =
+      new ClientWorker(executor, this, idx, config_, stats_, worker_type);
+  // Finish the remaining initialization on the executor.
+  worker->add([worker] { worker->setupWorker(); });
+  return worker;
 }
 }} // namespace facebook::logdevice
