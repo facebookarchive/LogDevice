@@ -68,26 +68,6 @@ int getShardAuthoritativeStatusMap(Client& client,
                                    ShardAuthoritativeStatusMap& map);
 
 /**
- * Check if we can wipe some shards without causing data loss.
- *
- * @param client          Client to use for reading the event log.
- * @param map             ShardAuthoritativeStatusMap retrieved with a call to
- *                        getShardAuthoritativeStatusMap for instance.
- * @param shards          List of shards we want to wipe.
- * @param min_replication Minimin replication property for the logs that may be
- *                        stored on these shards.
- *
- * @return True if wiping these shards would not cause dataloss. Returns false
- * otherwise. Note that this function returns False if there are already too
- * many nodes not in the input list that are underreplicated.
- */
-bool canWipeShardsWithoutCausingDataLoss(
-    Client& client,
-    const ShardAuthoritativeStatusMap& map,
-    std::vector<std::pair<node_index_t, uint32_t>> shards,
-    ReplicationProperty min_replication);
-
-/**
  * Trim the event log RSM.
  *
  * @param client    Client to use to read/trim/findtime the event log RSM.
