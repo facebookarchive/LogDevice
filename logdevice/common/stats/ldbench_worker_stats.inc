@@ -23,6 +23,7 @@ STAT_DEFINE(reader_restart_backlog_depth_ms_sum, SUM) // milliseconds
 STAT_DEFINE(reader_num_distinct_logs, SUM)
 STAT_DEFINE(reader_records, SUM)
 STAT_DEFINE(reader_bytes, SUM)
+STAT_DEFINE(reader_backlog_bytes, SUM)
 STAT_DEFINE(reader_restarts_skipped, SUM)
 STAT_DEFINE(reader_avg_fanout_target_1000x, MAX)
 STAT_DEFINE(reader_avg_backlog_depth_target_ms, MAX)
