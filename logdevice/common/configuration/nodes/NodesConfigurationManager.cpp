@@ -372,7 +372,7 @@ void NodesConfigurationManager::onUpdateRequest(
             [ncm = std::move(ncm)](std::shared_ptr<const NodesConfiguration>
                                        new_config_ptr) mutable {
               auto ncm_ptr = ncm.lock();
-              if (!ncm_ptr) {
+              if (!ncm_ptr || ncm_ptr->shutdownSignaled()) {
                 // NCM shut down, no need to notify it
                 return;
               }
@@ -466,12 +466,12 @@ void NodesConfigurationManager::maybeProcessStagedConfig() {
                  pending_nodes_config->getVersion().val());
         // Assume a worker never fails to process a new config.
         ld_assert(t.hasValue());
-        if (ncm) {
-          auto req =
-              ncm->deps()->makeNCMRequest<ncm::ProcessingFinishedRequest>(
-                  std::move(pending_nodes_config));
-          ncm->deps()->processor_->postWithRetrying(req);
+        if (!ncm || ncm->shutdownSignaled()) {
+          return;
         }
+        auto req = ncm->deps()->makeNCMRequest<ncm::ProcessingFinishedRequest>(
+            std::move(pending_nodes_config));
+        ncm->deps()->processor_->postWithRetrying(req);
       });
 }
 
