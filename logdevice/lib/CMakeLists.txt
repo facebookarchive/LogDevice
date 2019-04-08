@@ -30,39 +30,42 @@ target_link_libraries(ldclient_static
 set_target_properties(ldclient_static
   PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-# Tests
-file(GLOB test_hfiles "${LOGDEVICE_CLIENT_SRC_DIR}/test/*.h")
-file(GLOB test_files  "${LOGDEVICE_CLIENT_SRC_DIR}/test/*.cpp")
-
-add_executable(ldclient_test ${test_hfiles} ${test_files})
-
-target_link_libraries(ldclient_test
-  ldclient_static
-  common
-  common_test_util
-  ${LOGDEVICE_EXTERNAL_DEPS}
-  ${GMOCK_LIBRARY}
-  ${GTEST_LIBRARY}
-  ${LIBGFLAGS_LIBRARY})
-
 add_dependencies(ldclient rocksdb folly)
-add_dependencies(ldclient_test rocksdb)
 
-set_target_properties(ldclient_test
-  PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${UNIT_TEST_OUTPUT_DIRECTORY}
-    OUTPUT_NAME logdevice_client_test)
+# Tests
+if (${BUILD_TESTS})
+  file(GLOB test_hfiles "${LOGDEVICE_CLIENT_SRC_DIR}/test/*.h")
+  file(GLOB test_files  "${LOGDEVICE_CLIENT_SRC_DIR}/test/*.cpp")
 
-enable_testing()
-if(HAVE_CMAKE_GTEST)
-gtest_discover_tests(ldclient_test
-                     WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
-else()
-add_test(
-  NAME LdClientTest
-  COMMAND ${UNIT_TEST_OUTPUT_DIRECTORY}/logdevice_client_test
-  WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
-endif()
+  add_executable(ldclient_test ${test_hfiles} ${test_files})
+
+  target_link_libraries(ldclient_test
+    ldclient_static
+    common
+    common_test_util
+    ${LOGDEVICE_EXTERNAL_DEPS}
+    ${GMOCK_LIBRARY}
+    ${GTEST_LIBRARY}
+    ${LIBGFLAGS_LIBRARY})
+
+  add_dependencies(ldclient_test rocksdb)
+
+  set_target_properties(ldclient_test
+    PROPERTIES
+      RUNTIME_OUTPUT_DIRECTORY ${UNIT_TEST_OUTPUT_DIRECTORY}
+      OUTPUT_NAME logdevice_client_test)
+
+  enable_testing()
+  if(HAVE_CMAKE_GTEST)
+  gtest_discover_tests(ldclient_test
+                       WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+  else()
+  add_test(
+    NAME LdClientTest
+    COMMAND ${UNIT_TEST_OUTPUT_DIRECTORY}/logdevice_client_test
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+  endif()
+endif() # ${BUILD_TESTS}
 
 install(DIRECTORY ${LOGDEVICE_CLIENT_HEADER_DIR}/
   COMPONENT devel
