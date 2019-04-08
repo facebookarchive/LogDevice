@@ -822,12 +822,13 @@ Socket* Sender::initServerSocket(NodeID nid,
     return nullptr;
   }
 
-  const bool use_ssl = (!allow_unencrypted && useSSLWith(nid)) ||
+  const bool should_use_ssl = (!allow_unencrypted && useSSLWith(nid)) ||
       (Worker::settings().ssl_on_gossip_port &&
        sock_type == SocketType::GOSSIP);
 
   auto it = impl_->server_sockets_.find(nid.index());
-  if (it != impl_->server_sockets_.end() && it->second->isSSL() != use_ssl) {
+  if (it != impl_->server_sockets_.end() &&
+      it->second->isSSL() != should_use_ssl) {
     // We have a plaintext connection, but now we need an encrypted one.
     // Scheduling this socket to be closed and moving it out of
     // server_sockets_ to initialize an SSL connection in its place.
