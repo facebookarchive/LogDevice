@@ -183,6 +183,7 @@ macro(ld_thrift_py3_library file_name services file_path output_path include_pre
       "${file_path}"
       "${output_path}"
       "${include_prefix}"
+      THRIFT_INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/.."
     )
 
     # TODO: Why not read the py3_namespace from the thrift source file?
