@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 from enum import Enum, auto
-from typing import Any, Dict, List, Tuple, TypeVar
+from typing import Any, Dict, Iterator, List, Optional, Tuple, TypeVar
 
 # class stubs
-Reader = TypeVar("Reader")
 Directory = TypeVar("Directory")
 LogGroup = TypeVar("LogGroup")
 
 # convenience
 Attrs = Dict[str, Any]
+lsn_t = int
 
 # everything here is copied from the BOOST_PYTHON_MODULE in
 # ~/fbcode/logdevice/clients/python/logdevice_client.cpp
@@ -16,9 +16,22 @@ Attrs = Dict[str, Any]
 
 class LogDeviceError(Exception): ...
 
+class Reader:
+    def start_reading(self, logid: int, from_: lsn_t, until_: lsn_t) -> bool: ...
+    def __iter__(self) -> Iterator: ...
+
 # client API
 class Client:
-    def append(self, logid: int, data: str) -> int: ...
+    def __init__(
+        self,
+        name: str,
+        config: str,
+        timeout: int,
+        settings: Dict,
+        credentials: Optional[str] = None,
+        csid: Optional[str] = None,
+    ) -> None: ...
+    def append(self, logid: int, data: str) -> bool: ...
     def create_reader(self, max_logs: int) -> Reader: ...
     def data_size(self, logid: int, start_sec: float, end_sec: float) -> int: ...
     def find_key(self, logid: int, key: str) -> Tuple[int, int]: ...
@@ -77,6 +90,7 @@ class status(Enum):
     EXISTS = auto()
     ID_CLASH = auto()
     NOTFOUND = auto()
+    UNROUTABLE = auto()
 
 # logging
 class LoggingLevel(Enum):
