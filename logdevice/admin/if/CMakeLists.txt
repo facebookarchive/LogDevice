@@ -43,7 +43,9 @@ foreach(THRIFT_SOURCE
     "${_adminapi_binary_dir}"
     "${_adminapi_if_include_prefix}"
     PY3_NAMESPACE "logdevice/admin"
-    CYTHON_INCLUDES "${CMAKE_BINARY_DIR}/logdevice/admin/if/gen-py3/"
+    CYTHON_INCLUDES
+      "${CMAKE_BINARY_DIR}/logdevice/admin/if/gen-py3/"
+      "${CMAKE_BINARY_DIR}/logdevice/common/membership/gen-py3/"
   )
 
   add_dependencies(${THRIFT_SOURCE}-cpp2-target fbthrift)
@@ -68,6 +70,7 @@ ld_thrift_py3_library(
     "${CMAKE_BINARY_DIR}/logdevice/admin/gen-py3"
     "${CMAKE_BINARY_DIR}/logdevice"
     "${CMAKE_BINARY_DIR}/fbthrift-prefix/src/fbthrift-build/thrift/lib/py3/cybld"
+    "${CMAKE_BINARY_DIR}/logdevice/common/membership/gen-py3/"
 )
 if(thriftpy3)
   set_source_files_properties(
@@ -126,6 +129,7 @@ add_dependencies(maintenance-${_lang}-target
                  nodes-${_lang}-target
                  safety-${_lang}-target)
 add_dependencies(nodes-${_lang}-target
+                 Membership-${_lang}-target
                  common-${_lang}-target)
 add_dependencies(safety-${_lang}-target
                  common-${_lang}-target

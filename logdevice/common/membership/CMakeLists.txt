@@ -5,6 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 
 include_directories(${CMAKE_BINARY_DIR})
+link_directories("${CMAKE_BINARY_DIR}/staging/usr/local/lib")
 
 set(
   _membership_if_include_prefix
@@ -15,15 +16,13 @@ file(
   MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/${_membership_if_include_prefix}
  )
 
-thrift_library(
+ld_thrift_py3_library(
   "Membership"
-  ""
-  "cpp2"
   ""
   "${CMAKE_CURRENT_SOURCE_DIR}"
   "${CMAKE_BINARY_DIR}/${_membership_if_include_prefix}"
   "${_membership_if_include_prefix}"
-  THRIFT_INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/.."
+  PY3_NAMESPACE "logdevice/membership"
  )
 
 add_dependencies(Membership-cpp2-target fbthrift)
