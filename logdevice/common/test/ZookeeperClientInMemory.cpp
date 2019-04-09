@@ -48,8 +48,10 @@ namespace facebook { namespace logdevice {
 ZookeeperClientInMemory::ZookeeperClientInMemory(std::string quorum,
                                                  state_map_t map)
     : ZookeeperClientBase(quorum), map_(std::move(map)) {
+  auto mtime = SystemTimestamp::now();
   // The root znode always exists
-  map_.emplace("/", std::make_pair("", zk::Stat{.version_ = 0}));
+  map_.emplace(
+      "/", std::make_pair("", zk::Stat{.version_ = 0, .mtime_ = mtime}));
   // Creating parents for all the nodes in the map
   std::set<std::string> parent_nodes;
   for (const auto& node : map_) {
@@ -58,7 +60,8 @@ ZookeeperClientInMemory::ZookeeperClientInMemory(std::string quorum,
   }
   for (const auto& parent : parent_nodes) {
     // if this path already exists, does nothing
-    map_.emplace(parent, std::make_pair("", zk::Stat{.version_ = 0}));
+    map_.emplace(
+        parent, std::make_pair("", zk::Stat{.version_ = 0, .mtime_ = mtime}));
   }
 
   alive_ = std::make_shared<std::atomic<bool>>(true);
@@ -104,9 +107,10 @@ int ZookeeperClientInMemory::setData(const char* znode_path,
       return ZBADVERSION;
     }
 
-    stat.version = old_version + 1;
     it->second.first = std::string(znode_value, znode_value_size);
-    it->second.second = zk::Stat{.version_ = stat.version};
+    it->second.second =
+        zk::Stat{.version_ = old_version + 1, .mtime_ = SystemTimestamp::now()};
+    stat = toCStat(it->second.second);
     return ZOK;
   };
   int rv = locked_operations();
@@ -137,8 +141,7 @@ int ZookeeperClientInMemory::getData(const char* znode_path,
   std::shared_ptr<std::atomic<bool>> alive = alive_;
 
   std::thread callback([rc, value, zk_stat, data, completion, alive]() {
-    Stat stat;
-    stat.version = zk_stat.version_;
+    Stat stat = toCStat(zk_stat);
     /* sleep override */
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     if (alive.get()->load()) {
@@ -169,8 +172,7 @@ int ZookeeperClientInMemory::exists(const char* znode_path,
   std::shared_ptr<std::atomic<bool>> alive = alive_;
 
   std::thread callback([rc, zk_stat, data, completion, alive]() {
-    Stat stat;
-    stat.version = zk_stat.version_;
+    Stat stat = toCStat(zk_stat);
     /* sleep override */
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     if (alive.get()->load()) {
@@ -205,6 +207,7 @@ int ZookeeperClientInMemory::multiOp(int count,
     // easily validate whether a given operation dependent on a preceding
     // operation within the same batch succeeds or not
     state_map_t new_map = map_;
+    auto mtime = SystemTimestamp::now();
 
     for (int i = 0; i < count; ++i) {
       if (ops[i].type == ZOO_CREATE_OP) {
@@ -216,8 +219,9 @@ int ZookeeperClientInMemory::multiOp(int count,
         if (new_map.find(op.path) != new_map.end()) {
           return fill_result(ZNODEEXISTS);
         }
-        new_map[op.path] = std::make_pair(
-            std::string(op.data, op.datalen), zk::Stat{.version_ = 0});
+        new_map[op.path] =
+            std::make_pair(std::string(op.data, op.datalen),
+                           zk::Stat{.version_ = 0, .mtime_ = mtime});
 
       } else if (ops[i].type == ZOO_DELETE_OP) {
         const auto& op = ops[i].delete_op;
@@ -342,6 +346,13 @@ void ZookeeperClientInMemory::multiOp(std::vector<zk::Op> ops,
   if (rc != ZOK) {
     ZookeeperClient::multiOpCompletion(rc, static_cast<const void*>(context));
   }
+}
+
+/* static */ Stat ZookeeperClientInMemory::toCStat(const zk::Stat& stat) {
+  Stat ret;
+  ret.version = stat.version_;
+  ret.mtime = stat.mtime_.toMilliseconds().count();
+  return ret;
 }
 
 int ZookeeperClientInMemory::mockSync(const char* /* unused */,

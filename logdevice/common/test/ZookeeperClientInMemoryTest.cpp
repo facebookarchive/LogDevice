@@ -47,10 +47,12 @@ void getDataRecursive(ZookeeperClientInMemory& z,
                       std::string expected) {
   z.getData(kFoo,
             [&z, p = std::move(promise), expected](
-                int rc, std::string value, zk::Stat) mutable {
+                int rc, std::string value, zk::Stat stat) mutable {
               if (rc != ZOK || value != expected) {
                 getDataRecursive(z, std::move(p), std::move(expected));
               }
+              EXPECT_LE(stat.mtime_.toMilliseconds(),
+                        SystemTimestamp::now().toMilliseconds());
               p.setValue();
             });
 }
@@ -102,6 +104,7 @@ void runBasicTests(std::unique_ptr<ZookeeperClientInMemory> z) {
   Promise<Unit> p1;
   auto f1 = p1.getSemiFuture();
   zk::version_t version = -1; // impossible value
+  auto lb = SystemTimestamp::now();
   z->setData(
       kFoo, kBar, [p = std::move(p1), &version](int rc, zk::Stat stat) mutable {
         EXPECT_EQ(ZOK, rc);
@@ -114,12 +117,15 @@ void runBasicTests(std::unique_ptr<ZookeeperClientInMemory> z) {
   // reads should now succeed
   Promise<Unit> p2;
   auto f2 = p2.getSemiFuture();
+  auto ub = SystemTimestamp::now();
   z->getData(kFoo,
-             [p = std::move(p2), version](
+             [p = std::move(p2), version, lb, ub](
                  int rc, StringPiece value, zk::Stat stat) mutable {
                EXPECT_EQ(ZOK, rc);
                EXPECT_EQ(kBar, value);
                EXPECT_EQ(version, stat.version_);
+               EXPECT_LE(lb.toMilliseconds(), stat.mtime_.toMilliseconds());
+               EXPECT_LE(stat.mtime_.toMilliseconds(), ub.toMilliseconds());
                p.setValue();
              });
   std::move(f2).wait();
@@ -316,7 +322,9 @@ TEST(ZookeeperClientInMemoryTest, basicMT) {
   runMultiThreadedTests(std::make_unique<ZookeeperClientInMemory>(
       "unused",
       ZookeeperClientInMemory::state_map_t{
-          {kFoo, {"initValue", zk::Stat{.version_ = 4}}}}));
+          {kFoo,
+           {"initValue",
+            zk::Stat{.version_ = 4, .mtime_ = SystemTimestamp::now()}}}}));
 }
 
 TEST(ZookeeperClientInMemoryTest, recipes) {

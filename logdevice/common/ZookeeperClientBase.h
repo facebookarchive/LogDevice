@@ -18,7 +18,7 @@
 #include <folly/Function.h>
 #include <zookeeper/zookeeper.h>
 
-#include "logdevice/common/UpdateableSharedPtr.h"
+#include "logdevice/common/Timestamp.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/include/Err.h"
 
@@ -33,6 +33,8 @@ using version_t = int32_t;
 struct Stat {
   // version -1 has special meaning in Zookeeper
   version_t version_ = -0xbad;
+  // last modified timestamp of the znode from Zookeeper
+  SystemTimestamp mtime_{std::chrono::milliseconds{0xbad}};
 };
 
 struct Id {

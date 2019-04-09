@@ -149,6 +149,7 @@ class ZookeeperClient : public ZookeeperClientBase {
  private:
   using c_acl_vector_data_t = folly::small_vector<::ACL, 4>;
 
+  static zk::Stat toStat(const struct Stat* stat);
   static void getDataCompletion(int rc,
                                 const char* value,
                                 int value_len,

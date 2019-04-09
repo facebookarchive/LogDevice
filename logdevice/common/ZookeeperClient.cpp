@@ -8,6 +8,7 @@
 #include "logdevice/common/ZookeeperClient.h"
 
 #include <cerrno>
+#include <chrono>
 #include <cstdio>
 #include <new>
 
@@ -205,6 +206,13 @@ int ZookeeperClient::multiOp(int count,
   return zoo_amulti(zh_.get().get(), count, ops, results, completion, data);
 }
 
+/* static */ zk::Stat ZookeeperClient::toStat(const struct Stat* stat) {
+  using namespace std::chrono;
+  auto dur = std::chrono::duration_cast<system_clock::duration>(
+      std::chrono::milliseconds{stat->mtime});
+  SystemTimestamp mtime = system_clock::time_point{dur};
+  return zk::Stat{.version_ = stat->version, .mtime_ = mtime};
+}
 /* static */
 void ZookeeperClient::getDataCompletion(int rc,
                                         const char* value,
@@ -222,8 +230,7 @@ void ZookeeperClient::getDataCompletion(int rc,
   if (rc == ZOK) {
     ld_check_ge(value_len, 0);
     ld_check(stat);
-    (*callback)(
-        rc, {value, static_cast<size_t>(value_len)}, zk::Stat{stat->version});
+    (*callback)(rc, {value, static_cast<size_t>(value_len)}, toStat(stat));
   } else {
     std::string s;
     (*callback)(rc, s, {});
@@ -265,7 +272,7 @@ void ZookeeperClient::getData(std::string path, data_callback_t cb) {
   ld_check(*callback);
   if (rc == ZOK) {
     ld_check(stat);
-    (*callback)(rc, zk::Stat{stat->version});
+    (*callback)(rc, toStat(stat));
   } else {
     (*callback)(rc, {});
   }
@@ -302,7 +309,7 @@ void ZookeeperClient::exists(std::string path, stat_callback_t cb) {
   ld_check(*callback);
   if (rc == ZOK) {
     ld_check(stat);
-    (*callback)(rc, zk::Stat{stat->version});
+    (*callback)(rc, toStat(stat));
   } else {
     (*callback)(rc, {});
   }
@@ -486,7 +493,7 @@ void ZookeeperClient::sync(sync_callback_t cb) {
     r.value_ = std::string(op_result.value, op_result.valuelen);
   }
   if (op_result.stat) {
-    r.stat_ = zk::Stat{op_result.stat->version};
+    r.stat_ = toStat(op_result.stat);
   }
   return r;
 }

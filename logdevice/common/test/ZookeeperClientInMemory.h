@@ -96,6 +96,7 @@ class ZookeeperClientInMemory : public ZookeeperClientBase {
                            int32_t flags = 0) override;
 
  private:
+  static Stat toCStat(const zk::Stat& stat);
   int mockSync(const char* znode_path,
                string_completion_t completion,
                const void* context);
