@@ -1176,7 +1176,8 @@ void RebuildingCoordinator::onFinishedRetrievingPlans(uint32_t shard_idx,
     if (!config->getLogGroupByIDShared(it->first)) {
       it = shard_state.logsWithPlan.erase(it);
     } else {
-      total_epoch_ranges += it->second->epochsToRead.size();
+      total_epoch_ranges +=
+          boost::icl::interval_count(it->second->epochsToRead);
       ++it;
     }
   }
