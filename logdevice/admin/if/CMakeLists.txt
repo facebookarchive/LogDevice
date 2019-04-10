@@ -24,7 +24,12 @@ set(_common_libs
   "settings-cpp2"
   "logtree-cpp2"
   "nodes-cpp2"
-  thriftcpp2_shared)
+  )
+if(${BUILD_SUBMODULES})
+  list(APPEND _common_libs thriftcpp2_shared)
+else()
+  list(APPEND _common_libs FBThrift::thriftcpp2_shared)
+endif()
 
 foreach(THRIFT_SOURCE
         common

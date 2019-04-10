@@ -224,12 +224,21 @@ macro(ld_thrift_py3_library file_name services file_path output_path include_pre
       )
 
       python_add_module(${_module_name} ${_generated_module_sources})
-      target_link_libraries(${_module_name}
-        PRIVATE
-        "${file_name}-cpp2"
-        thriftcpp2_shared
-        folly_pic
-      )
+      if(${BUILD_SUBMODULES})
+        target_link_libraries(${_module_name}
+          PRIVATE
+          "${file_name}-cpp2"
+          thriftcpp2_shared
+          folly_pic
+        )
+      else()
+        target_link_libraries(${_module_name}
+          PRIVATE
+          "${file_name}-cpp2"
+          FBThrift::thriftcpp2_shared
+          Folly::folly_pic
+        )
+      endif()
       target_include_directories(${_module_name} PUBLIC ${PYTHON_INCLUDE_DIRS})
       set_target_properties(${_module_name}
         PROPERTIES
