@@ -410,68 +410,46 @@ static bool parseSequencer(const folly::dynamic& nodeMap,
   // 'sequencer_weight': This is a double that controls the amount of logs
   //                     this node should sequence relative to other nodes
   //                     in the cluster. If omitted, weight defaults to 1.
-  //
-  // The deprecated config format, where weight and binary control of
-  // sequencing are conflated, is also supported. In this case
-  // sequencer is a double indicating sequencing weight and positive values
-  // enable sequencing.
 
-  // Default to no sequencing.
   auto* sequencer = output.sequencer_attributes.get();
-  sequencer->weight = 0;
 
-  // Handle deprecated format.
-  double sequencer_weight = 0;
-  if (getDoubleFromMap(nodeMap, "sequencer", sequencer_weight)) {
-    if (sequencer_weight < 0) {
-      ld_error("Invalid value of 'sequencer' attribute. Expected a "
-               "non-negative floating point number, or a bool.");
-      err = E::INVALID_CONFIG;
-      return false;
-    }
-    sequencer->weight = sequencer_weight;
-    return true;
-  }
-
-  // New format.
+  // Parse sequencer field
   bool sequencing_enabled = false;
-  if (getBoolFromMap(nodeMap, "sequencer", sequencing_enabled)) {
-    // Default weight is 1.0 or 0 depending on enable state.
-    sequencer_weight = static_cast<double>(sequencing_enabled);
-    if (sequencing_enabled &&
-        getDoubleFromMap(nodeMap, "sequencer_weight", sequencer_weight)) {
-      if (sequencer_weight < 0) {
-        ld_error("Invalid value of 'sequencer_weight' attribute. Expected a "
-                 "non-negative, floating point number");
-        err = E::INVALID_CONFIG;
-        return false;
-      }
-      if (sequencer_weight == 0) {
-        ld_warning("Enabled sequencer has a weight of 0. This sequencer will "
-                   "not orchestrate the writes for any logs. Prefer setting "
-                   "'sequencer' to false when disabling sequencing on a node.");
-      }
-    } else if (sequencing_enabled && err != E::NOTFOUND) {
-      ld_error("Invalid type for 'sequencer_weight' attribute. Expected a "
-               "double");
-      err = E::INVALID_CONFIG;
-      return false;
-    }
-    sequencer->weight = sequencer_weight;
-    return true;
+  if (!getBoolFromMap(nodeMap, "sequencer", sequencing_enabled) &&
+      err != E::NOTFOUND) {
+    // "sequencer" exists, but is not a bool.
+    ld_error("Invalid value of 'sequencer' attribute. Expected a bool.");
+    err = E::INVALID_CONFIG;
+    return false;
   }
 
-  if (err == E::NOTFOUND) {
-    // 'sequencer' key doesn't exist. Sequencing is disabled.
-    sequencer->weight = 0.0;
-    return true;
+  // Parse sequencer_weight field
+  err = E::OK;
+  double sequencer_weight = sequencing_enabled ? 1.0 : 0.0;
+  if (!getDoubleFromMap(nodeMap, "sequencer_weight", sequencer_weight) &&
+      err != E::NOTFOUND) {
+    ld_error("Invalid type for 'sequencer_weight' attribute. Expected a "
+             "double");
+    err = E::INVALID_CONFIG;
+    return false;
   }
 
-  // "sequencer" exists, but is not a double or a bool.
-  ld_error("Invalid value of 'sequencer' attribute. Expected a "
-           "non-negative floating point number, or a bool.");
-  err = E::INVALID_CONFIG;
-  return false;
+  if (sequencer_weight < 0) {
+    ld_error("Invalid value of 'sequencer_weight' attribute. Expected a "
+             "non-negative, floating point number");
+    err = E::INVALID_CONFIG;
+    return false;
+  }
+
+  if (sequencing_enabled && sequencer_weight == 0) {
+    ld_warning("Enabled sequencer has a weight of 0. This sequencer will "
+               "not orchestrate the writes for any logs. Prefer setting "
+               "'sequencer' to false when disabling sequencing on a node.");
+  }
+
+  sequencer->setEnabled(sequencing_enabled);
+  sequencer->setWeight(sequencer_weight);
+  return true;
 }
 
 static bool parseProactiveCompaction(const folly::dynamic& nodeMap,

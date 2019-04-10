@@ -1470,24 +1470,57 @@ TEST(ConfigurationTest, SequencerWeights) {
   std::shared_ptr<Configuration> config(
       Configuration::fromJsonFile(TEST_CONFIG_FILE("sequencer_weights.conf")));
   ASSERT_NE(nullptr, config.get());
-  ASSERT_EQ(4, config->serverConfig()->getNodes().size());
+  ASSERT_EQ(6, config->serverConfig()->getNodes().size());
 
-  const auto& seq_config = config->serverConfig()
-                               ->getNodesConfigurationFromServerConfigSource()
-                               ->getSequencersConfig();
+  {
+    // Validating the SequencerNodeAttributes structs
+    std::vector<SequencerNodeAttributes> expected{
+        {false, 0},
+        {true, 1},
+        {true, 2},
+        {true, 4},
+        {false, 8},
+        {false, 8},
+    };
 
-  // check padded node IDs
-  EXPECT_EQ(
-      std::vector<NodeID>({NodeID(), NodeID(1, 1), NodeID(2, 1), NodeID(3, 1)}),
-      seq_config.nodes);
+    std::vector<SequencerNodeAttributes> got;
+    const auto& nodes = config->serverConfig()->getNodes();
+    for (short i = 0; i <= config->serverConfig()->getMaxNodeIdx(); i++) {
+      node_index_t idx{i};
+      if (nodes.find(idx) == nodes.end()) {
+        continue;
+      }
+      got.push_back(*nodes.at(idx).sequencer_attributes);
+    }
 
-  // check normalized weights
-  EXPECT_EQ(std::vector<double>({0, .25, .5, 1}), seq_config.weights);
+    EXPECT_EQ(expected, got);
+  }
 
-  EXPECT_FALSE(config->serverConfig()->getNode(0)->isSequencingEnabled());
-  EXPECT_TRUE(config->serverConfig()->getNode(1)->isSequencingEnabled());
-  EXPECT_TRUE(config->serverConfig()->getNode(2)->isSequencingEnabled());
-  EXPECT_TRUE(config->serverConfig()->getNode(3)->isSequencingEnabled());
+  {
+    // Validating that SequencersConfig is properly calculated.
+    const auto& seq_config = config->serverConfig()
+                                 ->getNodesConfigurationFromServerConfigSource()
+                                 ->getSequencersConfig();
+
+    // check padded node IDs
+    EXPECT_EQ(std::vector<NodeID>({NodeID(),
+                                   NodeID(1, 1),
+                                   NodeID(2, 1),
+                                   NodeID(3, 1),
+                                   NodeID(),
+                                   NodeID()}),
+              seq_config.nodes);
+
+    // check normalized weights
+    EXPECT_EQ(std::vector<double>({0, .25, .5, 1, 0, 0}), seq_config.weights);
+
+    EXPECT_FALSE(config->serverConfig()->getNode(0)->isSequencingEnabled());
+    EXPECT_TRUE(config->serverConfig()->getNode(1)->isSequencingEnabled());
+    EXPECT_TRUE(config->serverConfig()->getNode(2)->isSequencingEnabled());
+    EXPECT_TRUE(config->serverConfig()->getNode(3)->isSequencingEnabled());
+    EXPECT_FALSE(config->serverConfig()->getNode(4)->isSequencingEnabled());
+    EXPECT_FALSE(config->serverConfig()->getNode(5)->isSequencingEnabled());
+  }
 }
 
 TEST(ConfigurationTest, Serialization) {

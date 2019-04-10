@@ -599,7 +599,9 @@ folly::dynamic ServerConfig::toJson(const LogsConfig* with_logs,
     auto roles = folly::dynamic::array();
     if (node.hasRole(configuration::NodeRole::SEQUENCER)) {
       roles.push_back("sequencer");
-      node_dict["sequencer"] = node.getSequencerWeight();
+      node_dict["sequencer"] = node.sequencer_attributes->enabled();
+      node_dict["sequencer_weight"] =
+          node.sequencer_attributes->getConfiguredWeight();
     }
 
     // Storage Role Attributes.

@@ -2561,7 +2561,7 @@ int Cluster::updateNodeAttributes(node_index_t index,
   }
 
   if (node.sequencer_attributes != nullptr) {
-    node.sequencer_attributes->weight = sequencer_weight;
+    node.sequencer_attributes->setWeight(sequencer_weight);
   }
 
   Configuration::NodesConfig nodes_config(std::move(nodes));

@@ -74,13 +74,57 @@ bool nodeRoleFromString(const std::string&, NodeRole* out);
 std::string storageStateToString(StorageState);
 bool storageStateFromString(const std::string&, StorageState* out);
 
-struct SequencerNodeAttributes {
+class SequencerNodeAttributes {
+ public:
+  SequencerNodeAttributes(bool enabled, double weight)
+      : weight_(weight), enabled_(enabled) {}
+
+  SequencerNodeAttributes() {}
+
+  double getConfiguredWeight() {
+    return weight_;
+  }
+
+  double getEffectiveWeight() {
+    return enabled_ ? weight_ : 0;
+  }
+
+  bool enabled() {
+    return enabled_;
+  }
+
+  void setEnabled(bool enabled) {
+    enabled_ = enabled;
+  }
+
+  void setWeight(double weight) {
+    weight_ = weight;
+  }
+
+  bool operator==(const SequencerNodeAttributes& rhs) const {
+    return weight_ == rhs.weight_ && enabled_ == rhs.enabled_;
+  }
+
+  bool operator!=(const SequencerNodeAttributes& rhs) const {
+    return !(*this == rhs);
+  }
+
+ private:
   /**
    * A non-negative value indicating how many logs this node will run
    * sequencers for relative to other nodes in the cluster.  A value of
    * zero means sequencing is disabled on this node.
+   * The weight is assumed to be zero, when enable=false.
    */
-  double weight = 1;
+  double weight_ = 1;
+
+  /**
+   * Determines if a sequencer is enabled or not. If the sequencer is not
+   * enabled, it's similar to giving it a weight of zero. It's done this way
+   * to be able to enable/disable sequencers without memorizing its previous
+   * weight.
+   */
+  bool enabled_ = true;
 };
 
 struct StorageNodeAttributes {
@@ -175,7 +219,7 @@ struct Node {
 
   double getSequencerWeight() const {
     if (hasRole(NodeRole::SEQUENCER)) {
-      return sequencer_attributes->weight;
+      return sequencer_attributes->getEffectiveWeight();
     } else {
       return 0;
     }
@@ -231,7 +275,7 @@ struct Node {
   void addSequencerRole(double weight = 1.0) {
     setRole(NodeRole::SEQUENCER);
     sequencer_attributes = std::make_unique<SequencerNodeAttributes>();
-    sequencer_attributes->weight = weight;
+    sequencer_attributes->setWeight(weight);
   }
 
   void addStorageRole(shard_size_t num_shards = 1) {
