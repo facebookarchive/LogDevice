@@ -37,7 +37,6 @@ class StorageTask {
  public:
   using Type = StorageTaskType;
   using ThreadType = StorageTaskThreadType;
-  using Priority = StorageTaskPriority;
   using Principal = StorageTaskPrincipal;
 
   StorageTask() = delete;
@@ -140,9 +139,9 @@ class StorageTask {
   /**
    * What is the priority of this storage task?
    */
-  virtual Priority getPriority() const {
+  virtual StorageTaskPriority getPriority() const {
     // all tasks execute at mid priority by default
-    return Priority::MID;
+    return StorageTaskPriority::MID;
   }
 
   /**

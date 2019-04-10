@@ -191,6 +191,9 @@ struct Settings : public SettingsBundle {
   // pool.
   size_t per_worker_storage_task_queue_size;
 
+  // Setting to control read I/O bandwidth throttling.
+  bool enable_read_throttling;
+
   // A way to turn off putting nodes in graylist, to be able to revert
   // to normal copyset selection behavior.
   bool disable_graylisting;

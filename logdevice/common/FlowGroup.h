@@ -61,6 +61,13 @@ namespace facebook { namespace logdevice {
  *        FlowGroupPolicy value, this can be changed dynamically and will
  *        take effect when the next FlowGroupsUpdate is released. See
  *        TrafficShaper for the default frequency of updates.
+ *
+ *        Credits into a FlowGroup are generated from the following sources:
+ *        a) guaranteed_bw per quantum
+ *        b) from Priority Queue bucket (which periodically collects overflow
+ *           from other priority buckets)
+ *        c) returned credit from the clients (this happens when the client
+ *           requests more than it actually needed)
  */
 
 class FlowGroupsUpdate {
@@ -178,9 +185,9 @@ class FlowGroup {
   }
 
   /**
-   * See FlowMeter::Entry::putUnutilizedCredits() docblock
+   * See FlowMeter::Entry::returnCredits() docblock
    **/
-  size_t putUnutilizedCredits(Priority p, size_t amount);
+  size_t returnCredits(Priority p, size_t amount);
 
   size_t debt(Priority p) const {
     return meter_.entries[asInt(p)].debt();
@@ -232,8 +239,8 @@ class FlowGroup {
   }
 
   /**
-   * If possible, consume Envelope::cost() bytes from the FlowMeter
-   * associated with the priority of the given Envelope/Message.
+   * If possible, consume cost bytes from the FlowMeter associated with
+   * the priority.
    *
    * @return true if the FlowMeter had credit and the cost was decremented.
    */
@@ -243,12 +250,13 @@ class FlowGroup {
     }
     return drain(e.cost(), e.priority());
   }
+  bool drain(size_t cost, Priority p);
 
   /**
    * @return  true iff bandwidth should be considered exhausted while
    *               processing the current message
    */
-  bool injectTrafficShapingEvent(Priority);
+  bool injectShapingEvent(Priority);
 
   /**
    * Discard all accumulated capacity from a Meter.
@@ -340,33 +348,6 @@ class FlowGroup {
    */
   bool wouldCutInLine(Priority p) const {
     return (!isRunningBacklog() && !priorityq_.empty(p));
-  }
-
-  /**
-   * Implementation behind the public version, and also allows the FlowMeter
-   * (as specified by Priority) to be different than the Priority of the
-   * Envelope/Message. This simplifies unit tests.
-   */
-  bool drain(size_t cost, Priority p) {
-    // assert_can_drain_ is only used when running the backlog.
-    ld_check(!assert_can_drain_ || isRunningBacklog());
-    auto drainSuccess = [this]() {
-      assert_can_drain_ = false;
-      return true;
-    };
-
-    if (wouldCutInLine(p)) {
-      return false;
-    }
-
-    auto& meter = meter_.entries[asInt(p)];
-    if (!enabled_ || meter.drain(cost)) {
-      FLOW_GROUP_PRIORITY_STAT_ADD(
-          Worker::stats(), scope_, p, bwconsumed, cost);
-      return drainSuccess();
-    }
-
-    return false;
   }
 
   /**

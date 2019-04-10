@@ -983,6 +983,13 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "The interval at which the graylists are refreshed",
        SERVER,
        SettingsCategory::WritePath);
+  init("enable-read-throttling",
+       &enable_read_throttling,
+       "false",
+       nullptr, // no validation
+       "Throttle Disk I/O due to log read streams",
+       SERVER,
+       SettingsCategory::ReadPath);
   init("enable-adaptive-store-timeout",
        &enable_adaptive_store_timeout,
        "false",

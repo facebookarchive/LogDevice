@@ -51,7 +51,7 @@ class EpochOffsetStorageTask : public StorageTask {
                                   logid_t log_id,
                                   epoch_t epoch,
                                   ThreadType thread_type,
-                                  Priority priority);
+                                  StorageTaskPriority priority);
 
   void execute() override;
 
@@ -64,7 +64,7 @@ class EpochOffsetStorageTask : public StorageTask {
   ThreadType getThreadType() const override {
     return thread_type_;
   }
-  Priority getPriority() const override {
+  StorageTaskPriority getPriority() const override {
     return priority_;
   }
 
@@ -78,7 +78,7 @@ class EpochOffsetStorageTask : public StorageTask {
   logid_t log_id_;
   epoch_t epoch_;
   ThreadType thread_type_;
-  Priority priority_;
+  StorageTaskPriority priority_;
 
   Status status_{E::UNKNOWN};
   OffsetMap result_offsets_;

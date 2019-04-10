@@ -143,9 +143,9 @@ class RebuildingReadStorageTaskV2 : public StorageTask {
     return ThreadType::SLOW;
   }
 
-  Priority getPriority() const override {
+  StorageTaskPriority getPriority() const override {
     // Rebuilding reads should be lo-pri compared to regular reads
-    return Priority::LOW;
+    return StorageTaskPriority::LOW;
   }
 
   Principal getPrincipal() const override {

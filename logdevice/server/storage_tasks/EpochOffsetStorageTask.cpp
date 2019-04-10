@@ -26,7 +26,7 @@ EpochOffsetStorageTask::EpochOffsetStorageTask(WeakRef<ServerReadStream> stream,
                                                logid_t log_id,
                                                epoch_t epoch,
                                                ThreadType thread_type,
-                                               Priority priority)
+                                               StorageTaskPriority priority)
     : StorageTask(StorageTask::Type::EPOCH_OFFSET),
       stream_(std::move(stream)),
       log_id_(log_id),

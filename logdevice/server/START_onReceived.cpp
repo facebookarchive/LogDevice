@@ -522,7 +522,7 @@ onReceivedContinuation(START_Message* msg,
 
     // principalIdentity identity could be nullptr if connection was closed
     if (principalIdentity) {
-      // we look only on first identity which hast traffic class set
+      // we look only on first identity which has traffic class set
       for (auto identity : principalIdentity->identities) {
         auto principal = scfg->getPrincipalByName(&identity.second);
         if (principal != nullptr &&

@@ -21,6 +21,7 @@
 namespace facebook { namespace logdevice {
 
 class BWAvailableCallback;
+class ReadIoShapingCallback;
 class CatchupQueue;
 class CatchupQueueDependencies;
 class LogStorageState;
@@ -65,6 +66,9 @@ class CatchupOneStream {
     // shaping. A callback to resume processing has been registered and will
     // fire once bandwidth is available.
     WAIT_FOR_BANDWIDTH,
+    // We got ratelimited because of excessive read I/O, a callback will be
+    // fired when bandwidth is available
+    WAIT_FOR_READ_BANDWIDTH,
     // Can only be returned by read(). Some records may have already been
     // delivered to the client if try_non_blocking_read is true, but some more
     // records are available and a storage task has been created to read them
@@ -172,7 +176,8 @@ class CatchupOneStream {
                    size_t max_record_bytes_queued,
                    bool first_record_any_size,
                    bool allow_storage_task,
-                   CatchupEventTrigger reason);
+                   CatchupEventTrigger reason,
+                   ReadIoShapingCallback& read_shaping_cb);
 
   Action pushReleasedRecords(std::vector<std::shared_ptr<ReleasedRecords>>&,
                              LocalLogStoreReader::ReadContext& read_ctx);
@@ -211,10 +216,13 @@ class CatchupOneStream {
    *                        read from the Processor's LogStorageStateMap,
    *                        max_record_bytes_queued as well as
    *                        first_record_any_size (See read()).
+   * @cost_estimate         amount of read shaping credits to debit in order to
+   *                        issue this storage task.
    * @param inject_latency  whether to simulate slow reads by injecting latency
    */
   void readOnStorageThread(WeakRef<CatchupQueue> catchup_queue,
                            LocalLogStoreReader::ReadContext& read_ctx,
+                           size_t cost_estimate,
                            bool inject_latency = false);
 
   /**
@@ -316,7 +324,7 @@ class CatchupOneStream {
   int sendGapFilteredOutIfNeeded(folly::Optional<lsn_t> trim_point);
 
   CatchupQueueDependencies& deps_;
-  ServerReadStream* stream_;
+  ServerReadStream* stream_{nullptr};
   BWAvailableCallback& resume_cb_;
 
   // Current amount of bytes we have enqueued in the output evbuffer so far.

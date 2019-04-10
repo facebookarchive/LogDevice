@@ -42,9 +42,9 @@ class GetEpochRecoveryMetadataStorageTask : public StorageTask {
 
   void onDropped() override;
 
-  Priority getPriority() const override {
+  StorageTaskPriority getPriority() const override {
     // metadata access for purging
-    return Priority::HIGH;
+    return StorageTaskPriority::HIGH;
   }
 
   // Public for tests

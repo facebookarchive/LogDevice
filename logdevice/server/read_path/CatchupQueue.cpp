@@ -14,6 +14,7 @@
 #include "logdevice/common/ExponentialBackoffTimer.h"
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
 #include "logdevice/common/Sender.h"
+#include "logdevice/common/ShapingContainer.h"
 #include "logdevice/common/Timer.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/debug.h"
@@ -120,6 +121,8 @@ void CatchupQueue::add(ServerReadStream& stream, CatchupQueue::PushMode mode) {
   }
 
   ld_check(stream.isCatchingUp());
+  // ReadIoShapingCallback holds a weak reference to CatchupQueue
+  stream.addCQRef(ref_holder_.ref());
   stream.adjustStatWhenCatchingUpChanged();
 }
 
@@ -242,6 +245,7 @@ void CatchupQueue::pushRecords(CatchupEventTrigger catchup_reason) {
     STAT_ADD(deps_->getStatsHolder(), read_streams_batch_queue_microsec, t);
 
     ld_check_lt(record_bytes_queued_, max_record_bytes_queued);
+
     CatchupOneStream::Action act;
     size_t n_bytes_queued;
     bool try_non_blocking_read =
@@ -294,6 +298,11 @@ void CatchupQueue::pushRecords(CatchupEventTrigger catchup_reason) {
     } else if (act == CatchupOneStream::Action::WAIT_FOR_BANDWIDTH) {
       // We ran out of bandwidth trying to send out a record to the client.
       // Wait for our callback to fire.
+      break;
+    } else if (act == CatchupOneStream::Action::WAIT_FOR_READ_BANDWIDTH) {
+      // We ran out of configured I/O bandwidth while attempting a
+      // read storage task.
+      ld_check(err == E::CBREGISTERED);
       break;
     } else if (act == CatchupOneStream::Action::WAIT_FOR_STORAGE_TASK) {
       // We called onStorageTaskStarted() above.
@@ -626,6 +635,45 @@ void CatchupQueueDependencies::eraseStream(ClientID client_id,
   all_server_read_streams_->erase(client_id, log_id, read_stream_id, shard);
 }
 
+bool CatchupQueueDependencies::canIssueReadIO(
+    ReadIoShapingCallback& on_bw_avail,
+    ServerReadStream* stream) {
+  logid_t logid = stream->log_id_;
+  Priority rp = stream->getReadPriority();
+
+  if (on_bw_avail.active()) {
+    err = E::CBREGISTERED;
+    ld_spew(
+        "log:%lu, on_bw_avail:%p was already active", logid.val_, &on_bw_avail);
+    return false;
+  }
+
+  auto w = Worker::onThisThread(false);
+  if (!w) {
+    return true;
+  }
+
+  // Lock to prevent race between registering for bandwidth and
+  // a bandwidth deposit from the TrafficShaper.
+  ShapingContainer& read_container = w->readShapingContainer();
+  auto& flow_group = read_container.flow_groups_[0];
+
+  STAT_INCR(getStatsHolder(), read_throttling_num_throttle_checks);
+  std::unique_lock<std::mutex> lock(read_container.flow_meters_mutex_);
+  if (!flow_group.drain(on_bw_avail.cost(), rp)) {
+    flow_group.push(on_bw_avail, rp);
+    lock.unlock();
+    err = E::CBREGISTERED;
+    stream->markThrottled(true);
+    STAT_INCR(getStatsHolder(), read_throttling_num_reads_throttled);
+    ld_spew("Throttled: log:%lu, cb:%p", logid.val_, &on_bw_avail);
+    return false;
+  }
+
+  STAT_INCR(getStatsHolder(), read_throttling_num_reads_allowed);
+  return true;
+}
+
 void CatchupQueueDependencies::distributeNewlyReleasedRecords() {
   all_server_read_streams_->distributeNewlyReleasedRecords();
 }
@@ -726,10 +774,77 @@ const Settings& CatchupQueueDependencies::getSettings() const {
   return Worker::settings();
 }
 
+void CatchupQueue::readThrottlingOnReadTaskDone(const ReadStorageTask& task) {
+  // Reconcile our cost estimate with the actual cost of performing this I/O
+  size_t cost_estimate = task.getThrottlingEstimate();
+  if (!cost_estimate) {
+    return;
+  }
+
+  STAT_ADD(deps_->getStatsHolder(),
+           read_throttling_num_bytes_read,
+           task.total_bytes_);
+
+  auto w = Worker::onThisThread(false);
+  if (!w) {
+    return;
+  }
+
+  ShapingContainer& read_container = w->readShapingContainer();
+  auto& fg = read_container.flow_groups_[0];
+  Priority p = task.getReadPriority();
+
+  if (cost_estimate > task.total_bytes_) {
+    // extra credits were debited, give them back
+    size_t excess = cost_estimate - task.total_bytes_;
+    bool can_run_fg = false;
+    size_t overflow_credits = 0;
+
+    auto lock = read_container.lock();
+    bool was_pq_blocked = fg.isPriorityQueueBlocked(p);
+    overflow_credits = fg.returnCredits(p, excess);
+    // similar to FlowGroup::applyUpdate()
+    if (was_pq_blocked && fg.canDrainMeter(p)) {
+      can_run_fg = true;
+    }
+    lock.unlock();
+
+    if (can_run_fg) {
+      w->readShapingContainer().runFlowGroups(
+          ShapingContainer::RunType::REPLENISH);
+    }
+
+    STAT_ADD(deps_->getStatsHolder(),
+             read_throttling_excess_bytes_debited_from_meter,
+             excess);
+    STAT_ADD(deps_->getStatsHolder(),
+             read_throttling_overflow_bytes,
+             overflow_credits);
+  } else if (cost_estimate < task.total_bytes_) {
+    // more credits were used than initially requested, debit the excess
+    auto lock = read_container.lock();
+    fg.debitMeter(p, task.total_bytes_ - cost_estimate);
+    lock.unlock();
+    STAT_ADD(deps_->getStatsHolder(),
+             read_throttling_excess_bytes_read_from_rocksdb,
+             task.total_bytes_ - cost_estimate);
+  } else {
+    STAT_INCR(deps_->getStatsHolder(), read_throttling_num_exact_debits);
+  }
+}
+
 void CatchupQueue::onReadTaskDone(const ReadStorageTask& task) {
-  ld_spew("got %zu records, status=%s",
+  ld_spew("Got %zu records, status=%s",
           task.records_.size(),
           error_description(task.status_));
+  STAT_ADD(
+      deps_->getStatsHolder(), num_bytes_read_via_read_task, task.total_bytes_);
+
+  // Call to readThrottlingOnReadTaskDone() should remain at the top to give
+  // preference to read streams that were already queued for read i/o
+  // Until onStorageTaskStopped() is called, no more read storage tasks can
+  // be issued because storage_task_in_flight_ will remain true.
+  readThrottlingOnReadTaskDone(task);
 
   // We may be waiting for bandwidth due to attempts to process another
   // stream. Cancel the resume callback so that any records/gaps generated
@@ -738,10 +853,10 @@ void CatchupQueue::onReadTaskDone(const ReadStorageTask& task) {
   // callback may inject messages based on a later stream state before the
   // messages queued here based on the current stream state.
   //
-  // After queing messages related to this task, a check is made to see
+  // After queuing messages related to this task, a check is made to see
   // if additional work can be completed, including a check to see if we
   // are waiting for bandwidth. If required, the callback will be
-  // registerered again at that time. (See push_records() call below).
+  // registered again at that time. (See pushRecords() call below).
   resume_cb_.deactivate();
 
   onStorageTaskStopped(task.stream_.get());

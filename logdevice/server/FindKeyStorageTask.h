@@ -54,11 +54,11 @@ class FindKeyStorageTask : public StorageTask {
     return ThreadType::SLOW;
   }
 
-  Priority getPriority() const override {
+  StorageTaskPriority getPriority() const override {
     // FindKeyStorageTask does not read from data record space and it is usually
     // very fast to complete. Give them a very high priority to avoid head of
     // line blocking caused by other read tasks.
-    return Priority::VERY_HIGH;
+    return StorageTaskPriority::VERY_HIGH;
   }
 
   Principal getPrincipal() const override {

@@ -34,8 +34,8 @@ class RecoverSealTask : public StorageTask {
   void onDone() override;
   void onDropped() override;
 
-  Priority getPriority() const override {
-    return Priority::HIGH;
+  StorageTaskPriority getPriority() const override {
+    return StorageTaskPriority::HIGH;
   }
 
  private:

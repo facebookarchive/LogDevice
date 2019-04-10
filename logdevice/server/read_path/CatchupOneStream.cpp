@@ -69,14 +69,14 @@ class ReadLngTask final : public StorageTask {
               epoch_t epoch,
               StatsHolder* stats,
               ThreadType thread_type,
-              Priority priority);
+              StorageTaskPriority priority);
   void execute() override;
   void onDone() override;
   void onDropped() override;
   ThreadType getThreadType() const override {
     return thread_type_;
   }
-  Priority getPriority() const override {
+  StorageTaskPriority getPriority() const override {
     return priority_;
   }
   Principal getPrincipal() const override {
@@ -88,7 +88,7 @@ class ReadLngTask final : public StorageTask {
   WeakRef<CatchupQueue> catchup_queue_;
   StatsHolder* const stats_;
   ThreadType thread_type_;
-  Priority priority_;
+  StorageTaskPriority priority_;
   const epoch_t epoch_;
   Status status_;
   lsn_t last_known_good_;
@@ -132,12 +132,14 @@ EnumMap<CatchupOneStream::Action, std::string>::invalidValue() {
 
 template <>
 void EnumMap<CatchupOneStream::Action, std::string>::setValues() {
-  static_assert(static_cast<int>(CatchupOneStream::Action::MAX) == 11,
+  static_assert(static_cast<int>(CatchupOneStream::Action::MAX) == 12,
                 "Please update CatchupOneStream.cpp after modifying "
                 "CatchupOneStream::Action");
   set(CatchupOneStream::Action::TRANSIENT_ERROR, "TRANSIENT_ERROR");
   set(CatchupOneStream::Action::PERMANENT_ERROR, "PERMANENT_ERROR");
   set(CatchupOneStream::Action::WAIT_FOR_BANDWIDTH, "WAIT_FOR_BANDWIDTH");
+  set(CatchupOneStream::Action::WAIT_FOR_READ_BANDWIDTH,
+      "WAIT_FOR_READ_BANDWIDTH");
   set(CatchupOneStream::Action::WAIT_FOR_STORAGE_TASK, "WAIT_FOR_STORAGE_TASK");
   set(CatchupOneStream::Action::WAIT_FOR_LNG, "WAIT_FOR_LNG");
   set(CatchupOneStream::Action::DEQUEUE_AND_CONTINUE, "DEQUEUE_AND_CONTINUE");
@@ -709,9 +711,10 @@ int ReadingCallback::shipRecord(lsn_t lsn,
   size_t& bytes_queued = catchup_->record_bytes_queued_;
   ld_check(bytes_queued <= std::numeric_limits<size_t>::max() - msg_size);
   bytes_queued += msg_size;
-  ld_spew("record %lu%s queued, record_bytes_queued_ = %zu",
+  ld_spew("record %lu%s queued, msg_size:%zu, record_bytes_queued_ = %zu",
           header.log_id.val_,
           lsn_to_string(header.lsn).c_str(),
+          msg_size,
           bytes_queued);
   return 0;
 }
@@ -743,7 +746,8 @@ CatchupOneStream::startRead(WeakRef<CatchupQueue> catchup_queue,
                             size_t max_record_bytes_queued,
                             bool first_record_any_size,
                             bool allow_storage_task,
-                            CatchupEventTrigger catchup_reason) {
+                            CatchupEventTrigger catchup_reason,
+                            ReadIoShapingCallback& read_shaping_cb) {
   ServerWorker* w = ServerWorker::onThisThread(false);
   if (w) {
     const auto& log_map = Worker::settings().dont_serve_reads_logs;
@@ -1009,7 +1013,7 @@ CatchupOneStream::startRead(WeakRef<CatchupQueue> catchup_queue,
   // non-blocking reads, otherwise most reads will be served from the cache
   // and we won't see the effects of latency injection.
 
-  // We have to do this AFTER computing the last_released, to ensure than any
+  // We have to do this AFTER computing the last_released, to ensure that any
   // released records <= last_released will be processed below.
   deps_.distributeNewlyReleasedRecords();
   auto released_records = stream_->giveReleasedRecords();
@@ -1060,8 +1064,23 @@ CatchupOneStream::startRead(WeakRef<CatchupQueue> catchup_queue,
       std::min(record_bytes_queued_, read_ctx.max_bytes_to_deliver_);
   read_ctx.first_record_any_size_ &= (record_bytes_queued_ == 0);
 
-  readOnStorageThread(std::move(catchup_queue), read_ctx, inject_latency);
+  bool throttle = deps_.getSettings().enable_read_throttling &&
+      !(MetaDataLog::isMetaDataLog(stream_->log_id_) ||
+        configuration::InternalLogs::isInternal(stream_->log_id_));
 
+  size_t cost_estimate = 0;
+  if (throttle) {
+    if (!deps_.canIssueReadIO(read_shaping_cb, stream_)) {
+      return Action::WAIT_FOR_READ_BANDWIDTH;
+    }
+    if (w) {
+      cost_estimate = w->settings().max_record_bytes_read_at_once;
+    }
+    STAT_INCR(deps_.getStatsHolder(), read_throttling_num_storage_tasks_issued);
+  }
+
+  readOnStorageThread(
+      std::move(catchup_queue), read_ctx, cost_estimate, inject_latency);
   stream_->last_batch_status_ = "sent storage task";
   return Action::WAIT_FOR_STORAGE_TASK;
 }
@@ -1347,6 +1366,7 @@ CatchupOneStream::readNonBlocking(WeakRef<CatchupQueue> /*catchup_queue*/,
 void CatchupOneStream::readOnStorageThread(
     WeakRef<CatchupQueue> catchup_queue,
     LocalLogStoreReader::ReadContext& read_ctx,
+    size_t cost_estimate,
     bool inject_latency) {
   stream_ld_debug(*stream_,
                   "Reading from storage thread. "
@@ -1392,12 +1412,13 @@ void CatchupOneStream::readOnStorageThread(
                                                      read_ctx,
                                                      options,
                                                      read_iterator,
+                                                     cost_estimate,
+                                                     stream_->getReadPriority(),
                                                      std::get<0>(prio),
                                                      std::get<1>(prio),
                                                      std::get<2>(prio),
                                                      std::get<3>(prio),
                                                      client_address);
-
   deps_.putStorageTask(std::move(task_uniq), stream_->shard_);
   STAT_INCR(deps_.getStatsHolder(), read_requests_to_storage);
 
@@ -1421,7 +1442,8 @@ CatchupOneStream::read(CatchupQueueDependencies& deps,
                                     max_record_bytes_queued,
                                     first_record_any_size,
                                     allow_storage_task,
-                                    catchup_reason);
+                                    catchup_reason,
+                                    stream->read_shaping_cb_);
   return std::make_pair(action, catchup.record_bytes_queued_);
 }
 
@@ -2071,7 +2093,7 @@ ReadLngTask::ReadLngTask(ServerReadStream* stream,
                          epoch_t epoch,
                          StatsHolder* stats,
                          ThreadType thread_type,
-                         Priority priority)
+                         StorageTaskPriority priority)
     : StorageTask(StorageTask::Type::READ_LNG),
       stream_(stream->createRef()),
       catchup_queue_(std::move(catchup_queue)),

@@ -175,8 +175,8 @@ class InfoRecordStorageTask : public StorageTask {
     }
   }
 
-  Priority getPriority() const override {
-    return Priority::VERY_HIGH;
+  StorageTaskPriority getPriority() const override {
+    return StorageTaskPriority::VERY_HIGH;
   }
 
   void onDone() override {

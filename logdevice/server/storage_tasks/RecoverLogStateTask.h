@@ -36,10 +36,10 @@ class RecoverLogStateTask : public StorageTask {
   void onDone() override;
   void onDropped() override;
 
-  Priority getPriority() const override {
+  StorageTaskPriority getPriority() const override {
     // There can be at most one of these tasks per log per server process's
     // lifetime.
-    return Priority::HIGH;
+    return StorageTaskPriority::HIGH;
   }
 
   // We can't afford to lose these tasks (and there's nothing better than to

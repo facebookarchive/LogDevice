@@ -56,9 +56,11 @@ ReadStorageTask::ReadStorageTask(
     LocalLogStoreReader::ReadContext read_ctx,
     LocalLogStore::ReadOptions options,
     std::weak_ptr<LocalLogStore::ReadIterator> iterator,
+    size_t cost_estimate,
+    Priority rp,
     StorageTaskType type,
     ThreadType thread_type,
-    Priority priority,
+    StorageTaskPriority priority,
     Principal principal,
     Sockaddr client_address)
     : StorageTask(type),
@@ -71,7 +73,9 @@ ReadStorageTask::ReadStorageTask(
       iterator_from_cache_(iterator),
       thread_type_(thread_type),
       priority_(priority),
-      principal_(principal) {
+      principal_(principal),
+      throttling_estimate_(cost_estimate),
+      rpriority_(rp) {
   ld_check(stream_);
   auto stream_ptr = stream_.get();
   ld_check(stream_ptr);
@@ -176,7 +180,6 @@ void ReadStorageTask::execute() {
 
 void ReadStorageTask::onDone() {
   ServerWorker::onThisThread()->serverReadStreams().onReadTaskDone(*this);
-
   WORKER_STAT_DECR(num_in_flight_read_storage_tasks);
 }
 

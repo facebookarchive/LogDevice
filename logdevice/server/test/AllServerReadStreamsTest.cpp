@@ -240,6 +240,8 @@ TEST(AllServerReadStreams, ReadStorageTasksMemoryLimit) {
         read_ctx,
         options,
         it,
+        0,
+        s->getReadPriority(),
         StorageTaskType::READ_TAIL,
         StorageTaskThreadType::SLOW,
         StorageTaskPriority::MID,

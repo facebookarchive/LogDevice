@@ -56,6 +56,7 @@ ServerReadStream::ServerReadStream(read_stream_id_t id,
       last_enqueued_time_(SteadyTimestamp::min()),
       last_batch_started_time_(SteadyTimestamp::min()),
       next_read_time_(SteadyTimestamp::min()),
+      read_shaping_cb_(ref_holder_.ref()),
       storage_task_in_flight_(false),
       replication_(0),
       log_group_path_(std::move(log_group_path)),
@@ -74,6 +75,9 @@ ServerReadStream::~ServerReadStream() {
   disableSingleCopyDelivery();
   setTrafficClass(TrafficClass::MAX);
   WORKER_LOG_STAT_DECR(log_id_, read_streams);
+  if (is_throttled_) {
+    STAT_INCR(stats_, read_throttling_num_streams_closed_in_throttle);
+  }
 }
 
 const SimpleEnumMap<ServerReadStream::RecordSource, const char*>
@@ -264,6 +268,15 @@ void ServerReadStream::getDebugInfo(InfoReadersTable& table) const {
 
   table.set<18>(storage_task_in_flight_);
   table.set<19>(version_.val_);
+  table.set<20>(is_throttled_);
+
+  if (is_throttled_) {
+    int64_t throttled_since_ms = msec_since(throttling_start_time_);
+    table.set<21>(throttled_since_ms);
+  }
+
+  size_t current_meter_level = getCurrentMeterLevel();
+  table.set<22>(current_meter_level);
 }
 
 void ServerReadStream::addReleasedRecords(

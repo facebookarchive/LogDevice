@@ -60,9 +60,11 @@ class ReadStorageTask : public StorageTask {
                   LocalLogStoreReader::ReadContext read_ctx,
                   LocalLogStore::ReadOptions options,
                   std::weak_ptr<LocalLogStore::ReadIterator> iterator,
+                  size_t throttling_debit,
+                  Priority rp,
                   StorageTaskType type,
                   ThreadType thread_type,
-                  Priority priority,
+                  StorageTaskPriority priority,
                   Principal principal,
                   Sockaddr client_address = Sockaddr());
 
@@ -90,7 +92,7 @@ class ReadStorageTask : public StorageTask {
     return thread_type_;
   }
 
-  Priority getPriority() const override {
+  StorageTaskPriority getPriority() const override {
     return priority_;
   }
 
@@ -130,8 +132,16 @@ class ReadStorageTask : public StorageTask {
   size_t total_bytes_{0};
 
   ThreadType thread_type_;
-  Priority priority_;
+  StorageTaskPriority priority_;
   Principal principal_;
+
+  size_t getThrottlingEstimate() const {
+    return throttling_estimate_;
+  }
+
+  Priority getReadPriority() const {
+    return rpriority_;
+  }
 
  private:
   void getDebugInfoDetailed(StorageTaskDebugInfo&) const override;
@@ -145,5 +155,9 @@ class ReadStorageTask : public StorageTask {
   std::chrono::steady_clock::time_point stream_creation_time_;
   bool stream_scd_enabled_;
   small_shardset_t stream_known_down_;
+  // Amount of bytes that were deducted from Read Throttling framework
+  // while issuing this storage task.
+  size_t throttling_estimate_{0};
+  Priority rpriority_{Priority::MAX};
 };
 }} // namespace facebook::logdevice

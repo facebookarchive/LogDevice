@@ -15,7 +15,7 @@
 
 namespace facebook { namespace logdevice {
 
-bool FlowGroup::injectTrafficShapingEvent(Priority p) {
+bool FlowGroup::injectShapingEvent(Priority p) {
   double chance_percent =
       Worker::settings().message_error_injection_chance_percent;
   if (chance_percent != 0 &&
@@ -68,9 +68,12 @@ bool FlowGroup::applyUpdate(FlowGroupsUpdate::GroupEntry& update,
     entry.cur_overflow +=
         meter_it->fill(policy_it->guaranteed_bw, policy_it->capacity);
 
-    // This will be used in the next quantum when cur_overflow
-    // becomes last_overflow
-    entry.cur_overflow += meter_it->consumeOverflow();
+    // Any credit that was returned by FlowGroup's clients in the last quantum,
+    // that couldn't fit in our bucket, since it would have violated burst
+    // limit, is equivalent to the overflow that happens when we fill the bucket
+    // during a normal TrafficShaper deposit. This overflow occured in the
+    // last quantum, hence we add it to last_overflow.
+    entry.last_overflow += meter_it->consumeReturnedCreditOverflow();
 
     // First fit. Any overflow remaining at the end of the run is
     // given to the priority queue buckets. If it can't fit in the
@@ -136,11 +139,11 @@ bool FlowGroup::applyUpdate(FlowGroupsUpdate::GroupEntry& update,
   return need_to_run;
 }
 
-size_t FlowGroup::putUnutilizedCredits(Priority p, size_t amount) {
+size_t FlowGroup::returnCredits(Priority p, size_t amount) {
   if (!enabled()) {
     return amount;
   }
-  return meter_.entries[asInt(p)].putUnutilizedCredits(amount);
+  return meter_.entries[asInt(p)].returnCredits(amount);
 }
 
 bool FlowGroup::run(std::mutex& flow_meters_mutex,
@@ -176,6 +179,27 @@ bool FlowGroup::run(std::mutex& flow_meters_mutex,
   }
 
   return run_limits_exceeded();
+}
+
+bool FlowGroup::drain(size_t cost, Priority p) {
+  // assert_can_drain_ is only used when running the backlog.
+  ld_check(!assert_can_drain_ || isRunningBacklog());
+  auto drainSuccess = [this]() {
+    assert_can_drain_ = false;
+    return true;
+  };
+
+  if (wouldCutInLine(p)) {
+    return false;
+  }
+
+  auto& meter = meter_.entries[asInt(p)];
+  if (!enabled_ || meter.drain(cost)) {
+    FLOW_GROUP_PRIORITY_STAT_ADD(Worker::stats(), scope_, p, bwconsumed, cost);
+    return drainSuccess();
+  }
+
+  return false;
 }
 
 }} // namespace facebook::logdevice

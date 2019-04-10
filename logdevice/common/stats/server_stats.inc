@@ -156,6 +156,33 @@ STAT_DEFINE(read_stream_started_violations, SUM)
 STAT_DEFINE(read_stream_gap_violations, SUM)
 STAT_DEFINE(read_stream_record_violations, SUM)
 
+// How many times did we consult Read Throttling framework
+STAT_DEFINE(read_throttling_num_throttle_checks, SUM)
+// How many times a read attempt was throttled because of
+// throttling limits set in the config
+STAT_DEFINE(read_throttling_num_streams_throttled, SUM)
+// For how many read streams ReadIoShapingCallback was called
+STAT_DEFINE(read_throttling_num_streams_unthrottled, SUM)
+// How many read streams closed before being unthrottled
+STAT_DEFINE(read_throttling_num_streams_closed_in_throttle, SUM)
+// How many bytes were read off ReadStorageTask that were administered by
+// Read Throttling Framework
+STAT_DEFINE(read_throttling_num_bytes_read, SUM)
+STAT_DEFINE(read_throttling_excess_bytes_debited_from_meter, SUM)
+STAT_DEFINE(read_throttling_excess_bytes_read_from_rocksdb, SUM)
+
+// track outstanding drain() v/s onReadTaskDone
+STAT_DEFINE(read_throttling_num_reads_throttled, SUM)
+STAT_DEFINE(read_throttling_num_reads_allowed, SUM)
+STAT_DEFINE(read_throttling_num_exact_debits, SUM)
+STAT_DEFINE(read_throttling_overflow_bytes, SUM)
+
+// How many bytes were read off ReadStorageTask irrespective of wheter
+// throttling is enabled/disabled
+STAT_DEFINE(num_bytes_read_via_read_task, SUM)
+// How many read storage tasks are issued when Read Throttling is on
+STAT_DEFINE(read_throttling_num_storage_tasks_issued, SUM)
+
 // Age in milliseconds of the oldest running log recovery.
 STAT_DEFINE(oldest_recovery_request, MAX)
 // Number of scheduled log recovery requests. Includes queued requests and

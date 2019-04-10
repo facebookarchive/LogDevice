@@ -20,6 +20,7 @@
 #include "logdevice/common/Address.h"
 #include "logdevice/common/AdminCommandTable-fwd.h"
 #include "logdevice/common/ExponentialBackoffTimer.h"
+#include "logdevice/common/FlowGroup.h"
 #include "logdevice/common/RecordID.h"
 #include "logdevice/common/ResourceBudget.h"
 #include "logdevice/common/ShardAuthoritativeStatusMap.h"
@@ -34,6 +35,7 @@
 #include "logdevice/include/types.h"
 #include "logdevice/server/read_path/CatchupQueue.h"
 #include "logdevice/server/read_path/LogStorageStateMap.h"
+#include "logdevice/server/read_path/ReadIoShapingCallback.h"
 #include "logdevice/server/read_path/ServerReadStream.h"
 
 namespace facebook { namespace logdevice {

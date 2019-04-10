@@ -139,7 +139,7 @@ StorageThreadPool::StorageThreadPool(
   for (int type = 0; type < (int)ThreadType::MAX; ++type) {
     max_tasks_in_flight +=
         taskQueues_[static_cast<ThreadType>(type)].queue.max_capacity() /
-        (ssize_t)StorageTask::Priority::NUM_PRIORITIES;
+        (ssize_t)StorageTaskPriority::NUM_PRIORITIES;
   }
 
   // Start ExecStorageThread instances

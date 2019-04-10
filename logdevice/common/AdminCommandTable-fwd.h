@@ -67,8 +67,11 @@ typedef AdminCommandTable<shard_index_t,              /* Shard */
                           std::chrono::milliseconds,  /* Last Enqueue Time */
                           std::chrono::milliseconds,  /* Last Batch Started Time
                                                        */
-                          bool,    /* Storage task in flight */
-                          uint64_t /* Version */
+                          bool,     /* Storage task in flight */
+                          uint64_t, /* Version */
+                          bool,     /* Throttled? */
+                          int64_t,  /* milliseconds elapsed since throttled */
+                          int64_t   /* Read shaping - current meter level */
                           >
     InfoReadersTable;
 

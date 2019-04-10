@@ -51,8 +51,8 @@ class CompactionThrottleStorageTask : public StorageTask {
     return ThreadType::SLOW;
   }
 
-  Priority getPriority() const override {
-    return Priority::LOW;
+  StorageTaskPriority getPriority() const override {
+    return StorageTaskPriority::LOW;
   }
 
   Principal getPrincipal() const override {

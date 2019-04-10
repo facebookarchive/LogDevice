@@ -35,9 +35,9 @@ class ReadLogRebuildingCheckpointTask : public StorageTask {
         restart_version_(restart_version),
         read_trim_point_(read_trim_point) {}
 
-  Priority getPriority() const override {
+  StorageTaskPriority getPriority() const override {
     // Rebuilding reads should be lo-pri compared to regular reads
-    return Priority::LOW;
+    return StorageTaskPriority::LOW;
   }
 
   Principal getPrincipal() const override {
@@ -89,9 +89,9 @@ class WriteLogRebuildingCheckpointTask : public StorageTask {
         rebuilding_version_(rebuilding_version),
         rebuilt_upto_(rebuilt_upto) {}
 
-  Priority getPriority() const override {
+  StorageTaskPriority getPriority() const override {
     // Rebuilding storage tasks should be lo-pri compared to client reads
-    return Priority::LOW;
+    return StorageTaskPriority::LOW;
   }
 
   Principal getPrincipal() const override {

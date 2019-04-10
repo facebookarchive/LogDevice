@@ -341,8 +341,8 @@ class PurgeReadLastCleanTask : public StorageTask {
   void executeImpl(LocalLogStore& store);
   void onDone() override;
   void onDropped() override;
-  Priority getPriority() const override {
-    return Priority::HIGH;
+  StorageTaskPriority getPriority() const override {
+    return StorageTaskPriority::HIGH;
   }
 
  private:
@@ -370,8 +370,8 @@ class PurgeWriteLastCleanTask : public StorageTask {
   }
   void onDone() override;
   void onDropped() override;
-  Priority getPriority() const override {
-    return Priority::HIGH;
+  StorageTaskPriority getPriority() const override {
+    return StorageTaskPriority::HIGH;
   }
 
  private:

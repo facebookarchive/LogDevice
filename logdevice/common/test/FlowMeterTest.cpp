@@ -84,22 +84,21 @@ TEST_F(FlowGroupTest, FlowMeterPutUnutilizedCreditsOverFlowTest) {
 
   // test1: single overflow, since bucket and level are same size
   ASSERT_EQ(test_bucket.level(), 0);
-  ASSERT_EQ(test_bucket.putUnutilizedCredits(INT64_MAX - 1), 0 /* overflow */);
+  ASSERT_EQ(test_bucket.returnCredits(INT64_MAX - 1), 0 /* overflow */);
   ASSERT_EQ(test_bucket.level(), INT64_MAX - 1);
-  ASSERT_EQ(test_bucket.putUnutilizedCredits(2), 1 /* overflow */);
+  ASSERT_EQ(test_bucket.returnCredits(2), 1 /* overflow */);
   ASSERT_EQ(test_bucket.level(), INT64_MAX);
 
   // test2: level_=INT64_MAX, amount=10, bucket=20, expect two overflows
   test_bucket.setCapacity(20);
-  ASSERT_EQ(
-      test_bucket.putUnutilizedCredits(10), INT64_MAX - 10 /* overflow */);
+  ASSERT_EQ(test_bucket.returnCredits(10), INT64_MAX - 10 /* overflow */);
   ASSERT_EQ(test_bucket.level(), 20);
 
   // test3: level is negative, add INT64_MAX, but we get restricted by
   // bucket size - expect only 1 overflow
   ASSERT_EQ(test_bucket.drain(25), true);
   ASSERT_EQ(test_bucket.level(), -5);
-  ASSERT_EQ(test_bucket.putUnutilizedCredits(INT64_MAX),
+  ASSERT_EQ(test_bucket.returnCredits(INT64_MAX),
             (-5 + INT64_MAX) - 20 /* overflow */);
   ASSERT_EQ(test_bucket.level(), 20);
 
@@ -107,25 +106,24 @@ TEST_F(FlowGroupTest, FlowMeterPutUnutilizedCreditsOverFlowTest) {
   // i.e. no overflow
   ASSERT_EQ(test_bucket.drain(25), true);
   ASSERT_EQ(test_bucket.level(), -5);
-  ASSERT_EQ(test_bucket.putUnutilizedCredits(1), 0 /* overflow */);
+  ASSERT_EQ(test_bucket.returnCredits(1), 0 /* overflow */);
   ASSERT_EQ(test_bucket.level(), -4);
 
   // test5: amount=0
-  ASSERT_EQ(test_bucket.putUnutilizedCredits(0), 0 /* overflow */);
+  ASSERT_EQ(test_bucket.returnCredits(0), 0 /* overflow */);
   ASSERT_EQ(test_bucket.level(), -4);
 
   // test6: level_=INT64_MAX, amount=INT64_MAX, and bucket=0 to get the largest
   // possible overflow
-  ASSERT_EQ(test_bucket.putUnutilizedCredits(4), 0 /* overflow */);
+  ASSERT_EQ(test_bucket.returnCredits(4), 0 /* overflow */);
   ASSERT_EQ(test_bucket.level(), 0);
   test_bucket.setCapacity(INT64_MAX);
-  ASSERT_EQ(test_bucket.putUnutilizedCredits(INT64_MAX), 0 /* overflow */);
+  ASSERT_EQ(test_bucket.returnCredits(INT64_MAX), 0 /* overflow */);
   ASSERT_EQ(test_bucket.level(), INT64_MAX);
   test_bucket.setCapacity(0);
   size_t max_overflow = INT64_MAX;
   max_overflow += INT64_MAX;
-  ASSERT_EQ(
-      test_bucket.putUnutilizedCredits(INT64_MAX), max_overflow /* overflow */);
+  ASSERT_EQ(test_bucket.returnCredits(INT64_MAX), max_overflow /* overflow */);
   ASSERT_EQ(test_bucket.level(), 0);
 }
 
@@ -136,7 +134,7 @@ TEST_F(FlowGroupTest, FlowMeterPutUnutilizedCredits) {
   size_t bucket_capacity = 400;
   test_bucket.setCapacity(bucket_capacity);
 
-  // 1. Test putUnutilizedCredits() when actual credits used were less
+  // 1. Test returnCredits() when actual credits used were less
   //    than anticipated
   test_bucket.resetDepositBudget(bucket_capacity / 2);
   ASSERT_EQ(test_bucket.fill(bucket_capacity, bucket_capacity),
@@ -154,11 +152,10 @@ TEST_F(FlowGroupTest, FlowMeterPutUnutilizedCredits) {
   ASSERT_FALSE(test_bucket.drain(50));
   ASSERT_EQ(test_bucket.level(), bucket_capacity - megabyte);
   // Caller realizes he needed 1MB-1000, returns unutilized(1000)
-  ASSERT_EQ(test_bucket.putUnutilizedCredits(1000), 0 /* overflow */);
+  ASSERT_EQ(test_bucket.returnCredits(1000), 0 /* overflow */);
   ASSERT_EQ(test_bucket.level(), bucket_capacity - megabyte + 1000);
 
-
-  // 2. Test putUnutilizedCredits() when actual credits used were more than
+  // 2. Test returnCredits() when actual credits used were more than
   //    requested
   //
   // Reinitialize meter state - It takes some time to get back the level to >0,
@@ -184,10 +181,9 @@ TEST_F(FlowGroupTest, FlowMeterPutUnutilizedCredits) {
   ASSERT_EQ(test_bucket.level(),
             bucket_capacity - (megabyte + 1000)); // level changes
 
-
-  // 3. fill() v/s putUnutilizedCredits()
+  // 3. fill() v/s returnCredits()
   // If deposit budget is small, fill() will reject credits, but
-  // putUnutilizedCredits() won't
+  // returnCredits() won't
   //
   // Reset meter state
   test_bucket.resetDepositBudget(INT64_MAX);
@@ -201,12 +197,12 @@ TEST_F(FlowGroupTest, FlowMeterPutUnutilizedCredits) {
   // verify level doesn't change with fill() because of 0 deposit budget
   ASSERT_EQ(test_bucket.fill(50, bucket_capacity), 50);
   ASSERT_EQ(test_bucket.level(), bucket_capacity - 50);
-  // verify level does change with putUnutilizedCredits() as it ignores deposit
+  // verify level does change with returnCredits() as it ignores deposit
   // budget, but only looks at capacity
-  ASSERT_EQ(test_bucket.putUnutilizedCredits(50), 0 /* overflow */);
+  ASSERT_EQ(test_bucket.returnCredits(50), 0 /* overflow */);
   ASSERT_EQ(test_bucket.level(), bucket_capacity);
   // reached capacity, now we'll get overflow
-  ASSERT_EQ(test_bucket.putUnutilizedCredits(10), 10 /* overflow */);
+  ASSERT_EQ(test_bucket.returnCredits(10), 10 /* overflow */);
 }
 
 TEST_F(FlowGroupTest, FlowMeterTransferCredit) {

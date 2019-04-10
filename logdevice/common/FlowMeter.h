@@ -57,11 +57,13 @@ class FlowMeter {
     }
 
     /**
-     * These credits will be deposited into FlowGroupsUpdate's 'cur_overflow'
-     * via FlowGroup::applyUpdate()
+     * Withdraw all returned credit received in the previous quantum
+     * that could not be stored in the meter's bucket. These credits
+     * will be deposited into FlowGroupsUpdate's 'last_overflow'
+     * during FlowGroup::applyUpdate().
      */
-    size_t consumeOverflow() {
-      return std::exchange(unused_credits_, 0);
+    size_t consumeReturnedCreditOverflow() {
+      return std::exchange(returned_credits_, 0);
     }
 
     /*
@@ -70,7 +72,7 @@ class FlowMeter {
      *
      * @return credits that couldn't be accepted(for stats purpose)
      */
-    size_t putUnutilizedCredits(size_t amount) {
+    size_t returnCredits(size_t amount) {
       auto add =
           [](int64_t level, int64_t credits, size_t& overflow_out) -> int64_t {
         ld_check(credits >= 0);
@@ -96,7 +98,7 @@ class FlowMeter {
       overflow += (max_level - new_level);
       level_ = new_level;
 
-      unused_credits_ += overflow;
+      returned_credits_ += overflow;
       return overflow; // for stats purpose only
     }
 
@@ -233,11 +235,11 @@ class FlowMeter {
     // Bucket size as calculated from config
     int64_t bucket_capacity_{0};
 
-    // Credits that get returned to the meter via putUnutilizedCredits()
-    // These are later used in FlowGroup::applyUpdates() via consumeOverflow()
-    // Its possible that not everything gets used, especially if
-    // deposit budget is small.
-    size_t unused_credits_{0};
+    // Credits that get returned to the meter via returnCredits()
+    // but that could not be accepted into the meter's bucket without
+    // causing an overflow. These credits are distributed by
+    // FlowGroup::applyUpdates() via consumeReturnedCreditOverflow().
+    size_t returned_credits_{0};
   };
 
   /**

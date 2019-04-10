@@ -465,7 +465,7 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
   }
 
   auto lock = nw_shaping_container_->lock();
-  if (!sock.flow_group_.injectTrafficShapingEvent(envelope->priority()) &&
+  if (!sock.flow_group_.injectShapingEvent(envelope->priority()) &&
       sock.flow_group_.drain(*envelope)) {
     lock.unlock();
     FLOW_GROUP_STAT_INCR(Worker::stats(), sock.flow_group_, direct_dispatched);

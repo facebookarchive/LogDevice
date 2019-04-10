@@ -41,10 +41,10 @@ class StorageThreadPool {
  public:
   using WriteTaskQueue =
       PrioritizedQueue<WriteStorageTask*,
-                       (size_t)StorageTask::Priority::NUM_PRIORITIES>;
+                       (size_t)StorageTaskPriority::NUM_PRIORITIES>;
   using TaskQueue =
       PrioritizedQueue<StorageTask*,
-                       (size_t)StorageTask::Priority::NUM_PRIORITIES>;
+                       (size_t)StorageTaskPriority::NUM_PRIORITIES>;
 
   using DRRTaskQueue = DRRScheduler<StorageTask, &StorageTask::schedulerQHook_>;
 

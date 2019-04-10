@@ -42,8 +42,8 @@ class UpdatePerEpochLogMetadataTask : public StorageTask {
     ld_check(metadata_->valid());
   }
 
-  Priority getPriority() const override {
-    return Priority::HIGH;
+  StorageTaskPriority getPriority() const override {
+    return StorageTaskPriority::HIGH;
   }
 
   void execute() override;

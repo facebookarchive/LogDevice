@@ -106,7 +106,10 @@ class InfoReaders : public AdminCommand {
                            "Last Enqueue Time",
                            "Last Batch Started Time",
                            "Storage task in flight",
-                           "version");
+                           "version",
+                           "Throttled",
+                           "Throttled since(msec)",
+                           "ReadShaping(Meter Level)");
 
     auto tables = run_on_all_workers(server_->getProcessor(), [&]() {
       InfoReadersTable t(table);

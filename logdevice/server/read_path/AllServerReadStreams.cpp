@@ -15,6 +15,7 @@
 
 #include "logdevice/common/AdminCommandTable.h"
 #include "logdevice/common/Sender.h"
+#include "logdevice/common/ShapingContainer.h"
 #include "logdevice/common/configuration/ServerConfig.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/debug.h"

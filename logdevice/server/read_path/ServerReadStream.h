@@ -17,10 +17,13 @@
 #include "logdevice/common/AdminCommandTable-fwd.h"
 #include "logdevice/common/ClientID.h"
 #include "logdevice/common/NodeID.h"
+#include "logdevice/common/Priority.h"
 #include "logdevice/common/SCDCopysetReordering.h"
 #include "logdevice/common/ServerRecordFilter.h"
+#include "logdevice/common/ShapingContainer.h"
 #include "logdevice/common/SimpleEnumMap.h"
 #include "logdevice/common/WeakRefHolder.h"
+#include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/TrafficClass.h"
 #include "logdevice/common/protocol/START_Message.h"
 #include "logdevice/include/Record.h"
@@ -28,9 +31,11 @@
 #include "logdevice/include/types.h"
 #include "logdevice/server/RealTimeRecordBuffer.h"
 #include "logdevice/server/read_path/LocalLogStoreReader.h"
+#include "logdevice/server/read_path/ReadIoShapingCallback.h"
 
 namespace facebook { namespace logdevice {
 
+class CatchupQueue;
 class IteratorCache;
 class StatsHolder;
 class EpochRecordCacheEntry;
@@ -169,9 +174,21 @@ class ServerReadStream : boost::noncopyable {
     return scd_copyset_reordering_;
   }
 
+  bool isThrottled() {
+    return is_throttled_;
+  }
+
   void csidHash(uint64_t& pt1, uint64_t& pt2) const {
     pt1 = csid_hash_pt1;
     pt2 = csid_hash_pt2;
+  }
+
+  void setPriority(Priority rp) {
+    rpriority_ = rp;
+  }
+
+  Priority getReadPriority() const {
+    return rpriority_;
   }
 
   void setTrafficClass(TrafficClass c);
@@ -183,6 +200,10 @@ class ServerReadStream : boost::noncopyable {
   std::string toString() const;
 
   void getDebugInfo(InfoReadersTable& table) const;
+
+  logid_t getLogId() {
+    return log_id_;
+  }
 
   // These update per traffic class stats. setTrafficClass() has to unupdate
   // all these stats for the old class and update them for the new class.
@@ -205,6 +226,31 @@ class ServerReadStream : boost::noncopyable {
     released_records_.clear();
     released_records_.shrink_to_fit();
     return ret;
+  }
+
+  void markThrottled(bool throttled) {
+    is_throttled_ = throttled;
+    if (throttled) {
+      throttling_start_time_ = std::chrono::steady_clock::now();
+      STAT_INCR(stats_, read_throttling_num_streams_throttled);
+    } else {
+      STAT_INCR(stats_, read_throttling_num_streams_unthrottled);
+    }
+  }
+
+  std::chrono::steady_clock::time_point getThrottlingStartTime() {
+    return throttling_start_time_;
+  }
+
+  void addCQRef(WeakRef<CatchupQueue> cq) {
+    read_shaping_cb_.addCQRef(cq);
+  }
+
+  size_t getCurrentMeterLevel() const {
+    auto w = Worker::onThisThread();
+    ShapingContainer& read_container = w->readShapingContainer();
+    auto& flow_group = read_container.flow_groups_[0];
+    return flow_group.level(getReadPriority());
   }
 
   // Id of this read stream.
@@ -442,6 +488,13 @@ class ServerReadStream : boost::noncopyable {
   // here of the next time we can read a batch.
   SteadyTimestamp next_read_time_;
 
+  // Useful for displaying stream's current throttling state via admin command
+  bool is_throttled_{false};
+
+  std::chrono::steady_clock::time_point throttling_start_time_;
+
+  ReadIoShapingCallback read_shaping_cb_;
+
   // Whether there is currently a storage task in flight for this stream, in
   // which case the stream should be at the top of CatchupQueue.
   bool storage_task_in_flight_;
@@ -508,6 +561,10 @@ class ServerReadStream : boost::noncopyable {
    * may be lowered to READ_BACKLOG.
    */
   TrafficClass traffic_class_ = TrafficClass::MAX;
+
+  // TODO: hardcoded for now, need to change priority based on categories later
+  // on.
+  Priority rpriority_ = Priority::MAX;
 
   /**
    * Set to true if single copy delivery mode is enabled.

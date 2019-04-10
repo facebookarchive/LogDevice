@@ -22,10 +22,12 @@
 #include "logdevice/common/BWAvailableCallback.h"
 #include "logdevice/common/ClientID.h"
 #include "logdevice/common/WeakRefHolder.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/GAP_Message.h"
 #include "logdevice/common/protocol/STARTED_Message.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/types.h"
+#include "logdevice/server/read_path/ReadIoShapingCallback.h"
 #include "logdevice/server/read_path/ServerReadStream.h"
 
 namespace facebook { namespace logdevice {
@@ -44,12 +46,15 @@ namespace facebook { namespace logdevice {
 
 class AllServerReadStreams;
 class BackoffTimer;
+class CatchupQueue;
 class Timer;
 class LogStorageStateMap;
+class ReadIoShapingCallback;
 class ReadStorageTask;
 class RECORD_Message;
 class SenderBase;
 class SenderProxy;
+class ServerReadStream;
 class StatsHolder;
 
 /**
@@ -150,6 +155,13 @@ class CatchupQueueDependencies {
    * the client.
    */
   virtual size_t getMaxRecordBytesQueued(ClientID client);
+
+  /**
+   * Checks with underlying FlowGroup's(corresponding to stream's priority)
+   * FlowMeter if sufficient bandwidth exists to allow a read storage task.
+   */
+  virtual bool canIssueReadIO(ReadIoShapingCallback& on_bw_avail,
+                              ServerReadStream* stream);
 
   virtual ~CatchupQueueDependencies();
 
@@ -341,6 +353,12 @@ class CatchupQueue {
   void onStorageTaskStarted(const ServerReadStream* stream);
 
   void onStorageTaskStopped(const ServerReadStream* stream);
+
+  /**
+   * Handle Read Throttling related credits and stats,
+   * should be called upon read storage task completion.
+   */
+  void readThrottlingOnReadTaskDone(const ReadStorageTask& task);
 
   friend class CatchupQueueReadingCallback; // impl detail in CatchupQueue.cpp
   friend class CatchupQueueTest;
