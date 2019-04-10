@@ -14,8 +14,11 @@
 #include <gtest/gtest.h>
 
 #include "logdevice/common/WorkerTimeoutStats.h"
+#include "logdevice/common/test/NodesConfigurationTestUtil.h"
+#include "logdevice/common/test/TestUtil.h"
 
 using namespace facebook::logdevice;
+using namespace facebook::logdevice::configuration;
 using namespace std::literals::chrono_literals;
 using namespace ::testing;
 
@@ -59,14 +62,20 @@ MockWorkerTimeoutStats buildWorkerStats(
 class MockGraylistingTracker : public GraylistingTracker {
  public:
   explicit MockGraylistingTracker(MockWorkerTimeoutStats stats)
-      : stats_(std::move(stats)) {}
+      : stats_(std::move(stats)) {
+    for (node_index_t n : {1, 2, 3, 4, 5, 6}) {
+      nodes_.push_back(buildNode(n, "ash.2.08.k.z", n <= 3 ? true : false));
+    }
+    reComputeNodesConfiguraton();
+  }
 
   WorkerTimeoutStats& getWorkerTimeoutStats() override {
     return stats_;
   }
 
-  const configuration::Nodes& getNodes() const override {
-    return nodes_;
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const override {
+    return nodes_configuration_;
   }
 
   void setStats(MockWorkerTimeoutStats stats) {
@@ -89,30 +98,30 @@ class MockGraylistingTracker : public GraylistingTracker {
     return 0.5;
   }
 
-  configuration::Node buildNode(std::string domain) {
-    configuration::Node n;
-    n.setRole(configuration::NodeRole::STORAGE);
-    auto attr = std::make_unique<configuration::StorageNodeAttributes>();
-    attr->state = configuration::StorageState::READ_WRITE;
-    n.storage_attributes = std::move(attr);
-    NodeLocation loc;
-    loc.fromDomainString(domain);
-    n.location = std::move(loc);
-    return n;
+  NodesConfigurationTestUtil::NodeTemplate buildNode(node_index_t id,
+                                                     std::string domain,
+                                                     bool metadata = false) {
+    return {
+        id, NodesConfigurationTestUtil::both_role, domain, 1.0, 2, metadata};
   }
 
-  void addNode(node_index_t id, configuration::Node node) {
-    nodes_.emplace(id, node);
+  void addNode(node_index_t id, std::string domain) {
+    nodes_.push_back(buildNode(id, domain));
+    reComputeNodesConfiguraton();
+  }
+
+  void reComputeNodesConfiguraton() {
+    nodes_configuration_ = NodesConfigurationTestUtil::provisionNodes(
+        NodesConfigurationTestUtil::initialProvisionUpdate(nodes_));
   }
 
  private:
   MockWorkerTimeoutStats stats_;
-  configuration::Nodes nodes_{{1, buildNode("ash.2.08.k.z")},
-                              {2, buildNode("ash.2.08.k.z")},
-                              {3, buildNode("ash.2.08.k.z")},
-                              {4, buildNode("ash.2.08.k.z")},
-                              {5, buildNode("ash.2.08.k.z")},
-                              {6, buildNode("ash.2.08.k.z")}};
+
+  std::vector<NodesConfigurationTestUtil::NodeTemplate> nodes_;
+
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+      nodes_configuration_;
 
   FRIEND_TEST(GraylistingTrackerTest, RoundRobinFlat);
   FRIEND_TEST(GraylistingTrackerTest, MaxGraylistedNodes);
@@ -460,11 +469,11 @@ TEST(GraylistingTrackerTest, RoundRobinFlat) {
 TEST(GraylistingTrackerTest, GroupLatencyPerRegion) {
   MockGraylistingTracker tracker(buildWorkerStats({}, 0));
 
-  tracker.addNode(101, tracker.buildNode("frc.2.08.k.z"));
-  tracker.addNode(102, tracker.buildNode("frc.3.08.k.z"));
-  tracker.addNode(103, tracker.buildNode("frc.3.09.k.z"));
-  tracker.addNode(104, tracker.buildNode("cln.5.09.k.z"));
-  tracker.addNode(105, tracker.buildNode(""));
+  tracker.addNode(101, "frc.2.08.k.z");
+  tracker.addNode(102, "frc.3.08.k.z");
+  tracker.addNode(103, "frc.3.09.k.z");
+  tracker.addNode(104, "cln.5.09.k.z");
+  tracker.addNode(105, "");
 
   auto got = tracker.groupLatenciesPerRegion({
       {1, 0},
@@ -489,10 +498,10 @@ TEST(GraylistingTrackerTest, GroupLatencyPerRegion) {
 TEST(GraylistingTrackerTest, PerRegionOutlier) {
   MockGraylistingTracker tracker(buildWorkerStats({}, 0));
 
-  tracker.addNode(101, tracker.buildNode("frc.2.08.k.z"));
-  tracker.addNode(102, tracker.buildNode("frc.3.08.k.z"));
-  tracker.addNode(103, tracker.buildNode("frc.2.08.k.y"));
-  tracker.addNode(104, tracker.buildNode("cln.3.08.k.z"));
+  tracker.addNode(101, "frc.2.08.k.z");
+  tracker.addNode(102, "frc.3.08.k.z");
+  tracker.addNode(103, "frc.2.08.k.y");
+  tracker.addNode(104, "cln.3.08.k.z");
 
   MockGraylistingTracker::PerRegionLatencies regional_outliers{
       {"ash", {{1, 100}, {2, 10}, {3, 12}, {4, 13}, {5, 200}, {6, 300}}},

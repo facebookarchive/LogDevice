@@ -240,6 +240,18 @@ class StorageMembership : public Membership {
   bool shouldReadFromShard(ShardID shard) const;
 
   /**
+   * Return true if at least one shard of the node is writable
+   * (canWriteTo(shard) == true);
+   */
+  bool hasWritableShard(node_index_t node) const;
+
+  /**
+   * Return true if at least one shard of the node reader should read from.
+   * (shouldReadFrom(shard) == true);
+   */
+  bool hasShardShouldReadFrom(node_index_t node) const;
+
+  /**
    * Get the writer/reader's view of a given storage set. This is computed
    * by intersecting the storage set with the set of shards in the membership
    * that satisfies canWriteTo() and shouldReadFrom(), respectively.

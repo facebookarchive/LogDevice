@@ -619,6 +619,30 @@ bool StorageMembership::shouldReadFromShard(ShardID shard) const {
   return result.first ? shouldReadFrom(result.second.storage_state) : false;
 }
 
+bool StorageMembership::hasWritableShard(node_index_t node) const {
+  const auto nit = node_states_.find(node);
+  if (nit == node_states_.cend()) {
+    return false;
+  }
+
+  const auto& shards = nit->second.shard_states;
+  return std::any_of(shards.begin(), shards.end(), [](const auto& kv) {
+    return canWriteTo(kv.second.storage_state);
+  });
+}
+
+bool StorageMembership::hasShardShouldReadFrom(node_index_t node) const {
+  const auto nit = node_states_.find(node);
+  if (nit == node_states_.cend()) {
+    return false;
+  }
+
+  const auto& shards = nit->second.shard_states;
+  return std::any_of(shards.begin(), shards.end(), [](const auto& kv) {
+    return shouldReadFrom(kv.second.storage_state);
+  });
+}
+
 bool StorageMembership::canWriteMetaDataToShard(ShardID shard) const {
   auto result = getShardState(shard);
   return (result.first ? canWriteMetaDataTo(result.second.storage_state,

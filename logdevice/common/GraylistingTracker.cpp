@@ -10,7 +10,7 @@
 namespace facebook { namespace logdevice {
 
 void GraylistingTracker::updateGraylist(Timestamp now) {
-  auto latencies = getLatencyEstimationForNodes(getNodes());
+  auto latencies = getLatencyEstimationForNodes(*getNodesConfiguration());
   auto regional_latencies = groupLatenciesPerRegion(std::move(latencies));
   auto outliers = findOutlierNodes(std::move(regional_latencies));
 
@@ -216,10 +216,6 @@ GraylistingTracker::findOutlierNodes(PerRegionLatencies regions) {
   return roundRobinFlattenVector(regional_outliers, getMaxGraylistedNodes());
 }
 
-const configuration::Nodes& GraylistingTracker::getNodes() const {
-  return Worker::onThisThread()->getServerConfig()->getNodes();
-}
-
 std::chrono::seconds GraylistingTracker::getGracePeriod() const {
   return Worker::settings().graylisting_grace_period;
 }
@@ -259,17 +255,17 @@ std::chrono::seconds GraylistingTracker::getMonitoredPeriod() const {
 }
 
 GraylistingTracker::Latencies GraylistingTracker::getLatencyEstimationForNodes(
-    const configuration::Nodes& nodes) {
+    const configuration::nodes::NodesConfiguration& nodes_configuration) {
   auto& stats = getWorkerTimeoutStats();
   GraylistingTracker::Latencies latencies;
-  for (const auto& node : nodes) {
-    auto latency = stats.getEstimations(
-        WorkerTimeoutStats::Levels::TEN_SECONDS, node.first);
+  for (const auto& kv : *nodes_configuration.getServiceDiscovery()) {
+    auto latency =
+        stats.getEstimations(WorkerTimeoutStats::Levels::TEN_SECONDS, kv.first);
     if (!latency.hasValue()) {
       continue;
     }
     latencies.emplace_back(
-        node.first, latency.value()[WorkerTimeoutStats::QuantileIndexes::P95]);
+        kv.first, latency.value()[WorkerTimeoutStats::QuantileIndexes::P95]);
   }
   return latencies;
 }
@@ -299,9 +295,13 @@ void GraylistingTracker::updateActiveGraylist() {
 
 int64_t GraylistingTracker::getMaxGraylistedNodes() const {
   int num_available_nodes = 0;
-  const auto& nodes = getNodes();
-  for (const auto& node : nodes) {
-    if (node.second.isWritableStorageNode()) {
+  const auto& nodes_configuration = getNodesConfiguration();
+  const auto& storage_membership = nodes_configuration->getStorageMembership();
+  for (const auto node : *storage_membership) {
+    if (storage_membership->hasWritableShard(node)) {
+      // GraylistingTracker only tracks at storage node granularity instead of
+      // shards. Therefore, consider the node is available if there is at least
+      // one writable shard
       num_available_nodes++;
     }
   }
@@ -312,6 +312,11 @@ int64_t GraylistingTracker::getMaxGraylistedNodes() const {
 
 double GraylistingTracker::getGraylistNodeThreshold() const {
   return Worker::settings().gray_list_nodes_threshold;
+}
+
+std::shared_ptr<const configuration::nodes::NodesConfiguration>
+GraylistingTracker::getNodesConfiguration() const {
+  return Worker::onThisThread()->getNodesConfiguration();
 }
 
 StatsHolder* GraylistingTracker::getStats() {
@@ -333,16 +338,19 @@ GraylistingTracker::getSortedGraylistDeadlines(
 GraylistingTracker::PerRegionLatencies
 GraylistingTracker::groupLatenciesPerRegion(
     GraylistingTracker::Latencies latencies) {
-  const auto& nodes = getNodes();
+  const auto& nodes_sd = getNodesConfiguration()->getServiceDiscovery();
 
   constexpr folly::StringPiece kUnknownRegion = "";
 
   PerRegionLatencies per_region_latencies;
   for (auto& node : latencies) {
-    const auto& node_cfg = nodes.at(node.first);
-    auto region =
-        node_cfg.location.hasValue() && !node_cfg.location.value().isEmpty()
-        ? node_cfg.location.value().getLabel(NodeLocationScope::REGION)
+    const auto* sd = nodes_sd->getNodeAttributesPtr(node.first);
+    if (sd == nullptr) {
+      continue;
+    }
+
+    auto region = sd->location.hasValue() && !sd->location.value().isEmpty()
+        ? sd->location.value().getLabel(NodeLocationScope::REGION)
         : kUnknownRegion.toString();
     auto it = per_region_latencies.find(region);
     if (it == per_region_latencies.end()) {

@@ -13,7 +13,7 @@
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/Timer.h"
 #include "logdevice/common/WorkerTimeoutStats.h"
-#include "logdevice/common/configuration/Node.h"
+#include "logdevice/common/configuration/nodes/NodesConfiguration.h"
 #include "logdevice/common/stats/Stats.h"
 
 namespace facebook { namespace logdevice {
@@ -105,8 +105,8 @@ class GraylistingTracker {
   // The percentage of the nodes that are allowed to be graylisted
   virtual double getGraylistNodeThreshold() const;
 
-  // Get the nodes of the cluster
-  virtual const configuration::Nodes& getNodes() const;
+  virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const;
 
   virtual StatsHolder* getStats();
 
@@ -122,7 +122,8 @@ class GraylistingTracker {
   void removeExpiredMonitoredNodes(Timestamp now);
 
   // Get the latency estimation for each node in the cluster
-  Latencies getLatencyEstimationForNodes(const configuration::Nodes& nodes);
+  Latencies getLatencyEstimationForNodes(
+      const configuration::nodes::NodesConfiguration& nodes_configuration);
 
   void updateActiveGraylist();
 
