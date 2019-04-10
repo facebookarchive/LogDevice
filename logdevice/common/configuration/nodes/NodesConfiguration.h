@@ -136,6 +136,11 @@ class NodesConfiguration {
     return getStorageMembership()->getMembershipNodes();
   }
 
+  // @return  the list of nodes in the current sequencer membership
+  std::vector<node_index_t> getSequencerNodes() const {
+    return getSequencerMembership()->getMembershipNodes();
+  }
+
   std::shared_ptr<const NodesConfiguration> applyUpdate(Update update) const;
 
   // validations
