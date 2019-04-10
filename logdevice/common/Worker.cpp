@@ -376,7 +376,9 @@ void Worker::onNodesConfigurationUpdated() {
             idx_.val(),
             workerTypeStr(worker_type_));
   }
-  sender().noteConfigurationChanged(getNodesConfiguration());
+  // note: onServerConfigUpdated() is a virtual function and this may calls
+  // derived function from subclass (e.g., ServerWorker)
+  onServerConfigUpdated();
 }
 
 namespace {

@@ -428,8 +428,10 @@ class AllSequencers {
   // in order to get epoch numbers and epoch metadata during log recovery.
   std::unique_ptr<EpochStore> epoch_store_;
 
-  // Handle for the subscription to config updates, used to unsubscribe
-  ConfigSubscriptionHandle config_subscription_;
+  // Handles for the subscription to various config updates
+  ConfigSubscriptionHandle server_config_subscription_;
+  ConfigSubscriptionHandle logs_config_subscription_;
+  ConfigSubscriptionHandle nodes_configuration_subscription_;
 
   // pointer to Processor this instance is owned by
   Processor* processor_;

@@ -213,7 +213,7 @@ TEST_F(FileConfigSourceTest, SubscribeToUpdates) {
 
   int callback_count = 0;
 
-  auto handle = config->subscribeToUpdates([&]() {
+  auto handle = config->updateableServerConfig()->subscribeToUpdates([&]() {
     ld_info("Callback invoked");
     ++callback_count;
   });

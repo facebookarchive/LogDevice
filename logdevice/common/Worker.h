@@ -687,13 +687,13 @@ class Worker : public SerialWorkContext {
   virtual void onServerConfigUpdated();
   // This should be called whenever the LogsConfig gets updated.
   // Has to be called from the worker thread
-  void onLogsConfigUpdated();
+  virtual void onLogsConfigUpdated();
   // This should be called whenever the NodesConfiguration gets updated.
   // Has to be called from the worker thread.
   // There's not gurantee that it will be called only once per config change.
   // Subscribers should react to the change in config, not to the fact this
   // function is called.
-  void onNodesConfigurationUpdated();
+  virtual void onNodesConfigurationUpdated();
 
   // Sets currently running request. Verifies that we are on a worker and that
   // the current context is NONE

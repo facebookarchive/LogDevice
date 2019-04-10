@@ -71,8 +71,17 @@ AllSequencers::AllSequencers(
   map_.set_empty_key(LOGID_INVALID.val());
   map_.set_deleted_key(LOGID_INVALID2.val());
   if (updateable_config_) { // might not be set if not running sequencers
-    config_subscription_ = updateable_config_->subscribeToUpdates(
-        std::bind(&AllSequencers::noteConfigurationChanged, this));
+    server_config_subscription_ =
+        updateable_config_->updateableServerConfig()->subscribeToUpdates(
+            std::bind(&AllSequencers::noteConfigurationChanged, this));
+
+    logs_config_subscription_ =
+        updateable_config_->updateableLogsConfig()->subscribeToUpdates(
+            std::bind(&AllSequencers::noteConfigurationChanged, this));
+
+    nodes_configuration_subscription_ =
+        updateable_config_->updateableNodesConfiguration()->subscribeToUpdates(
+            std::bind(&AllSequencers::noteConfigurationChanged, this));
   }
 }
 
