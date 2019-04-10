@@ -49,7 +49,7 @@ void RebuildingReadStorageTaskV2::execute() {
 
     LocalLogStore::ReadOptions opts(
         "RebuildingReadStorageTaskV2", /* rebuilding */ true);
-    opts.fill_cache = false;
+    opts.fill_cache = context->rebuildingSettings->use_rocksdb_cache;
     opts.allow_copyset_index = true;
 
     std::unordered_map<logid_t, std::pair<lsn_t, lsn_t>> logs;

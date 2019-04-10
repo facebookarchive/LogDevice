@@ -360,6 +360,8 @@ class RocksDBSettings : public SettingsBundle {
   bool update_stats_on_db_open;
   bool allow_fallocate;
   bool auto_create_shards;
+  bool use_direct_reads;
+  bool use_direct_io_for_flush_and_compaction;
   int max_open_files;
   uint64_t compaction_max_bytes_at_once;
   uint64_t bytes_per_sync;

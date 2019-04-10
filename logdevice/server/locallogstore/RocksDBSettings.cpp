@@ -1340,6 +1340,23 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        "granularity of memtable allocations",
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
+
+  init("rocksdb-use-direct-reads",
+       &use_direct_reads,
+       "false",
+       nullptr,
+       "If true, rocksdb will use O_DIRECT for most file reads.",
+       SERVER | REQUIRES_RESTART,
+       SettingsCategory::RocksDB);
+
+  init("rocksdb-use-direct-io-for-flush-and-compaction",
+       &use_direct_io_for_flush_and_compaction,
+       "false",
+       nullptr,
+       "If true, rocksdb will use O_DIRECT for flushes and compactions (both "
+       "input and output files).",
+       SERVER | REQUIRES_RESTART,
+       SettingsCategory::RocksDB);
 }
 
 rocksdb::Options RocksDBSettings::toRocksDBOptions() const {
@@ -1376,6 +1393,9 @@ rocksdb::Options RocksDBSettings::toRocksDBOptions() const {
   options.max_total_wal_size = max_total_wal_size;
   options.db_write_buffer_size = db_write_buffer_size;
   options.arena_block_size = arena_block_size;
+  options.use_direct_reads = use_direct_reads;
+  options.use_direct_io_for_flush_and_compaction =
+      use_direct_io_for_flush_and_compaction;
 
   options.compaction_options_universal.min_merge_width = uc_min_merge_width;
   options.compaction_options_universal.max_merge_width = uc_max_merge_width;
