@@ -28,6 +28,7 @@
 using namespace facebook::logdevice;
 using namespace facebook::logdevice::configuration::nodes;
 using namespace facebook::logdevice::membership;
+using namespace facebook::logdevice::NodesConfigurationTestUtil;
 using NCAPI = facebook::logdevice::configuration::NodesConfigurationAPI;
 
 namespace {

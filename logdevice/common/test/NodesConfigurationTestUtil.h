@@ -9,7 +9,9 @@
 
 #include "logdevice/common/configuration/nodes/NodesConfiguration.h"
 
-namespace facebook { namespace logdevice {
+namespace facebook {
+  namespace logdevice {
+    namespace NodesConfigurationTestUtil {
 
 extern const configuration::nodes::NodeServiceDiscovery::RoleSet seq_role;
 extern const configuration::nodes::NodeServiceDiscovery::RoleSet storage_role;
@@ -17,25 +19,44 @@ extern const configuration::nodes::NodeServiceDiscovery::RoleSet both_role;
 
 extern const membership::MaintenanceID::Type DUMMY_MAINTENANCE;
 
+struct NodeTemplate {
+  node_index_t id;
+  configuration::nodes::NodeServiceDiscovery::RoleSet roles{both_role};
+  std::string location{};
+  double sequencer_weight{1.0};
+  shard_size_t num_shards{2};
+  bool metadata_node{false};
+};
+
 configuration::nodes::NodeServiceDiscovery
 genDiscovery(node_index_t n,
              configuration::nodes::NodeServiceDiscovery::RoleSet roles,
              std::string location);
 
-// provision a LD nodes config with:
+configuration::nodes::NodesConfiguration::Update
+initialProvisionUpdate(std::vector<NodeTemplate> nodes,
+                       ReplicationProperty metadata_rep = ReplicationProperty{
+                           {NodeLocationScope::NODE, 2}});
+
+std::shared_ptr<const configuration::nodes::NodesConfiguration> provisionNodes(
+    configuration::nodes::NodesConfiguration::Update provision_update);
+
+configuration::nodes::NodesConfiguration::Update
+addNewNodeUpdate(const configuration::nodes::NodesConfiguration& existing,
+                 NodeTemplate node);
+
+// provision a specific LD nodes config with:
 // 1) nodes N1, N2, N7, N9, N11, N13
 // 2) N1 and N7 have sequencer role; N1, N2, N9, N11, N13 have storage role;
 // 3) N2 and N9 are metadata storage nodes, metadata logs replicaton is
 //    (rack, 2)
 configuration::nodes::NodesConfiguration::Update initialProvisionUpdate();
-
 std::shared_ptr<const configuration::nodes::NodesConfiguration>
 provisionNodes();
 
 // provision new nodes N17
 configuration::nodes::NodesConfiguration::Update
-addNewNodeUpdate(membership::MembershipVersion::Type base_version =
-                     membership::MembershipVersion::MIN_VERSION);
+addNewNodeUpdate(const configuration::nodes::NodesConfiguration& existing);
 
 // start enabling read on N17
 configuration::nodes::NodesConfiguration::Update
@@ -45,4 +66,4 @@ enablingReadUpdate(membership::MembershipVersion::Type base_version);
 configuration::nodes::NodesConfiguration::Update
 disablingWriteUpdate(membership::MembershipVersion::Type base_version);
 
-}} // namespace facebook::logdevice
+}}} // namespace facebook::logdevice::NodesConfigurationTestUtil

@@ -24,6 +24,8 @@ using namespace facebook::logdevice::membership;
 using namespace facebook::logdevice::configuration::nodes;
 using namespace facebook::logdevice::membership::MembershipVersion;
 using namespace facebook::logdevice::membership::MaintenanceID;
+using namespace facebook::logdevice::NodesConfigurationTestUtil;
+
 using RoleSet = NodeServiceDiscovery::RoleSet;
 
 class NodesConfigurationTest : public ::testing::Test {
@@ -303,7 +305,7 @@ TEST_F(NodesConfigurationTest, AddingNodeWithoutServiceDiscoveryOrAttribute) {
   {
     // with service discovery and attributes, membership addition
     // should be successful
-    NodesConfiguration::Update update = addNewNodeUpdate();
+    NodesConfiguration::Update update = addNewNodeUpdate(*config);
     auto new_config = config->applyUpdate(std::move(update));
     EXPECT_NE(nullptr, new_config);
     EXPECT_TRUE(new_config->getStorageConfig()->getMembership()->hasNode(17));

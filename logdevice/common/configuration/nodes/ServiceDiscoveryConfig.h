@@ -7,8 +7,6 @@
  */
 #pragma once
 
-#include <bitset>
-
 #include <folly/Optional.h>
 
 #include "logdevice/common/ShardID.h"
@@ -22,7 +20,7 @@ namespace facebook { namespace logdevice { namespace configuration {
 namespace nodes {
 
 struct NodeServiceDiscovery {
-  using RoleSet = std::bitset<static_cast<size_t>(NodeRole::Count)>;
+  using RoleSet = configuration::nodes::RoleSet;
 
   /**
    * The IP (v4 or v6) address, including port number.

@@ -15,6 +15,7 @@
 using namespace ::testing;
 using namespace facebook::logdevice;
 using namespace facebook::logdevice::maintenance;
+using namespace facebook::logdevice::NodesConfigurationTestUtil;
 using facebook::logdevice::configuration::nodes::NodesConfiguration;
 
 TEST(ClusterMaintenanceWrapperTest, Empty) {
@@ -166,7 +167,7 @@ TEST(ClusterMaintenanceWrapperTest, ShardDefinitions) {
 
   // Added new node to config and ensure an updated config
   // results in regeneration of index definition
-  config = config->applyUpdate(addNewNodeUpdate());
+  config = config->applyUpdate(addNewNodeUpdate(*config));
   wrapper.updateNodesConfiguration(config);
   EXPECT_TRUE(config->getStorageConfig()->getMembership()->hasNode(17));
   ASSERT_EQ(

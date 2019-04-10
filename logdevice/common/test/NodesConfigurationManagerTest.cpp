@@ -34,6 +34,7 @@ using namespace facebook::logdevice::configuration::nodes;
 using namespace facebook::logdevice::configuration::nodes::ncm;
 using namespace facebook::logdevice::membership;
 using namespace std::chrono_literals;
+using namespace facebook::logdevice::NodesConfigurationTestUtil;
 
 using ::testing::_;
 using ::testing::Invoke;
@@ -160,7 +161,7 @@ TEST_F(NodesConfigurationManagerTest, update) {
   waitTillNCMReceives(kVersion);
   {
     // add new node
-    NodesConfiguration::Update update = addNewNodeUpdate();
+    NodesConfiguration::Update update = addNewNodeUpdate(*provisioned_config);
     ncm_->update(
         std::move(update),
         [](Status status,
@@ -180,7 +181,7 @@ TEST_F(NodesConfigurationManagerTest, trackState) {
                    ASSERT_EQ(Status::OK, status);
                  });
     waitTillNCMReceives(MembershipVersion::MIN_VERSION);
-    ncm_->update(addNewNodeUpdate(),
+    ncm_->update(addNewNodeUpdate(*ncm_->getConfig()),
                  [](Status status, std::shared_ptr<const NodesConfiguration>) {
                    ASSERT_EQ(Status::OK, status);
                  });

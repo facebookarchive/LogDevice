@@ -7,6 +7,7 @@
  */
 #pragma once
 
+#include <bitset>
 #include <cstdint>
 #include <string>
 
@@ -16,6 +17,7 @@ namespace facebook { namespace logdevice { namespace configuration {
 namespace nodes {
 
 enum class NodeRole : uint8_t { SEQUENCER = 0, STORAGE, Count };
+using RoleSet = std::bitset<static_cast<size_t>(NodeRole::Count)>;
 
 inline constexpr folly::StringPiece toString(NodeRole role) {
   switch (role) {
@@ -28,5 +30,8 @@ inline constexpr folly::StringPiece toString(NodeRole role) {
   }
   return "INTERNAL ERROR";
 }
+
+// check if @param roles has @param check_role
+bool hasRole(RoleSet roles, NodeRole check_role);
 
 }}}} // namespace facebook::logdevice::configuration::nodes

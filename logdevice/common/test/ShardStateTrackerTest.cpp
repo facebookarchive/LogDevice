@@ -15,6 +15,7 @@
 using namespace facebook::logdevice;
 using namespace facebook::logdevice::configuration::nodes;
 using namespace facebook::logdevice::membership;
+using namespace facebook::logdevice::NodesConfigurationTestUtil;
 
 TEST(ShardStateTrackerTest, empty) {
   ShardStateTracker t{};
@@ -72,7 +73,7 @@ TEST(ShardStateTrackerTest, basic) {
   /* sleep override */
   std::this_thread::sleep_for(std::chrono::milliseconds(2));
 
-  auto nc2 = nc->applyUpdate(addNewNodeUpdate());
+  auto nc2 = nc->applyUpdate(addNewNodeUpdate(*nc));
   ASSERT_TRUE(nc2->validate());
   auto ts2 = nc2->getLastChangeTimestamp();
   t.onNewConfig(nc2);

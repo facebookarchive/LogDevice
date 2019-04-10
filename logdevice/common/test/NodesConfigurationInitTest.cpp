@@ -22,6 +22,7 @@
 
 using namespace facebook::logdevice;
 using namespace facebook::logdevice::configuration::nodes;
+using namespace facebook::logdevice::NodesConfigurationTestUtil;
 
 namespace {
 

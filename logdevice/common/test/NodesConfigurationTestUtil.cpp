@@ -9,15 +9,17 @@
 
 #include <folly/Format.h>
 
-namespace facebook { namespace logdevice {
+namespace facebook {
+  namespace logdevice {
+    namespace NodesConfigurationTestUtil {
 
 using namespace configuration::nodes;
 using namespace membership;
 using RoleSet = NodeServiceDiscovery::RoleSet;
 
-const configuration::nodes::NodeServiceDiscovery::RoleSet seq_role{1};
-const configuration::nodes::NodeServiceDiscovery::RoleSet storage_role{2};
-const configuration::nodes::NodeServiceDiscovery::RoleSet both_role{3};
+constexpr configuration::nodes::NodeServiceDiscovery::RoleSet seq_role{1};
+constexpr configuration::nodes::NodeServiceDiscovery::RoleSet storage_role{2};
+constexpr configuration::nodes::NodeServiceDiscovery::RoleSet both_role{3};
 
 const membership::MaintenanceID::Type DUMMY_MAINTENANCE{2333};
 const membership::MaintenanceID::Type DUMMY_MAINTENANCE2{2334};
@@ -39,30 +41,24 @@ NodeServiceDiscovery genDiscovery(node_index_t n,
                               "host" + std::to_string(n)};
 }
 
-NodesConfiguration::Update initialProvisionUpdate() {
+NodesConfiguration::Update
+initialProvisionUpdate(std::vector<NodeTemplate> nodes,
+                       ReplicationProperty metadata_rep) {
   NodesConfiguration::Update update{};
 
   // 1. provision service discovery config
   update.service_discovery_update =
       std::make_unique<ServiceDiscoveryConfig::Update>();
 
-  std::map<node_index_t, RoleSet> role_map = {{1, both_role},
-                                              {2, storage_role},
-                                              {7, seq_role},
-                                              {9, storage_role},
-                                              {11, storage_role},
-                                              {13, storage_role}};
-
-  for (node_index_t n : NodeSetIndices({1, 2, 7, 9, 11, 13})) {
+  for (const auto& node : nodes) {
     update.service_discovery_update->addNode(
-        n,
+        node.id,
         ServiceDiscoveryConfig::NodeUpdate{
             ServiceDiscoveryConfig::UpdateType::PROVISION,
-            std::make_unique<NodeServiceDiscovery>(genDiscovery(
-                n,
-                role_map[n],
-                n % 2 == 0 ? "aa.bb.cc.dd.ee" : "aa.bb.cc.dd.ff"))});
+            std::make_unique<NodeServiceDiscovery>(
+                genDiscovery(node.id, node.roles, node.location))});
   }
+
   // 2. provision sequencer config
   update.sequencer_config_update = std::make_unique<SequencerConfig::Update>();
   update.sequencer_config_update->membership_update =
@@ -71,18 +67,20 @@ NodesConfiguration::Update initialProvisionUpdate() {
   update.sequencer_config_update->attributes_update =
       std::make_unique<SequencerAttributeConfig::Update>();
 
-  for (node_index_t n : NodeSetIndices({1, 7})) {
-    update.sequencer_config_update->membership_update->addNode(
-        n,
-        {SequencerMembershipTransition::ADD_NODE,
-         true,
-         n == 1 ? 1.0 : 7.0,
-         MaintenanceID::MAINTENANCE_PROVISION});
+  for (const auto& node : nodes) {
+    if (hasRole(node.roles, NodeRole::SEQUENCER)) {
+      update.sequencer_config_update->membership_update->addNode(
+          node.id,
+          {SequencerMembershipTransition::ADD_NODE,
+           true,
+           node.sequencer_weight,
+           MaintenanceID::MAINTENANCE_PROVISION});
 
-    update.sequencer_config_update->attributes_update->addNode(
-        n,
-        {SequencerAttributeConfig::UpdateType::PROVISION,
-         std::make_unique<SequencerNodeAttribute>()});
+      update.sequencer_config_update->attributes_update->addNode(
+          node.id,
+          {SequencerAttributeConfig::UpdateType::PROVISION,
+           std::make_unique<SequencerNodeAttribute>()});
+    }
   }
 
   // 3. provision storage config
@@ -93,33 +91,36 @@ NodesConfiguration::Update initialProvisionUpdate() {
   update.storage_config_update->attributes_update =
       std::make_unique<StorageAttributeConfig::Update>();
 
-  for (node_index_t n : NodeSetIndices({1, 2, 9, 11, 13})) {
-    update.storage_config_update->membership_update->addShard(
-        ShardID(n, 0),
-        {n == 2 || n == 9 ? StorageStateTransition::PROVISION_METADATA_SHARD
-                          : StorageStateTransition::PROVISION_SHARD,
-         (Condition::EMPTY_SHARD | Condition::LOCAL_STORE_READABLE |
-          Condition::NO_SELF_REPORT_MISSING_DATA |
-          Condition::LOCAL_STORE_WRITABLE),
-         MaintenanceID::MAINTENANCE_PROVISION,
-         /* state_override = */ folly::none});
-
-    update.storage_config_update->attributes_update->addNode(
-        n,
-        {StorageAttributeConfig::UpdateType::PROVISION,
-         std::make_unique<StorageNodeAttribute>(
-             StorageNodeAttribute{/*capacity=*/256.0,
-                                  /*num_shards*/ 1,
-                                  /*generation*/ 1,
-                                  /*exclude_from_nodesets*/ false})});
+  for (const auto& node : nodes) {
+    if (hasRole(node.roles, NodeRole::STORAGE)) {
+      for (int s = 0; s < node.num_shards; ++s) {
+        update.storage_config_update->membership_update->addShard(
+            ShardID(node.id, s),
+            {node.metadata_node
+                 ? StorageStateTransition::PROVISION_METADATA_SHARD
+                 : StorageStateTransition::PROVISION_SHARD,
+             (Condition::EMPTY_SHARD | Condition::LOCAL_STORE_READABLE |
+              Condition::NO_SELF_REPORT_MISSING_DATA |
+              Condition::LOCAL_STORE_WRITABLE),
+             MaintenanceID::MAINTENANCE_PROVISION,
+             /* state_override = */ folly::none});
+      }
+      update.storage_config_update->attributes_update->addNode(
+          node.id,
+          {StorageAttributeConfig::UpdateType::PROVISION,
+           std::make_unique<StorageNodeAttribute>(
+               StorageNodeAttribute{/*capacity=*/256.0,
+                                    /*num_shards*/ node.num_shards,
+                                    /*generation*/ 1,
+                                    /*exclude_from_nodesets*/ false})});
+    }
   }
 
   // 4. provisoin metadata logs replication
   update.metadata_logs_rep_update =
       std::make_unique<MetaDataLogsReplication::Update>(
           MembershipVersion::EMPTY_VERSION);
-  update.metadata_logs_rep_update->replication.assign(
-      {{NodeLocationScope::RACK, 2}});
+  update.metadata_logs_rep_update->replication = metadata_rep;
 
   // 5. fill other update metadata
   update.maintenance = MaintenanceID::MAINTENANCE_PROVISION;
@@ -128,47 +129,106 @@ NodesConfiguration::Update initialProvisionUpdate() {
   return update;
 }
 
-std::shared_ptr<const configuration::nodes::NodesConfiguration>
-provisionNodes() {
+std::shared_ptr<const configuration::nodes::NodesConfiguration> provisionNodes(
+    configuration::nodes::NodesConfiguration::Update provision_update) {
   auto config = std::make_shared<const NodesConfiguration>();
-  NodesConfiguration::Update update = initialProvisionUpdate();
-  // finally perform the update
-  auto new_config = config->applyUpdate(std::move(update));
-  assert(new_config != nullptr);
+  auto new_config = config->applyUpdate(std::move(provision_update));
+  ld_assert(new_config != nullptr);
   return new_config;
 }
 
-NodesConfiguration::Update
-addNewNodeUpdate(MembershipVersion::Type base_version) {
+NodesConfiguration::Update initialProvisionUpdate() {
+  std::vector<NodeTemplate> nodes;
+  std::map<node_index_t, RoleSet> role_map = {{1, both_role},
+                                              {2, storage_role},
+                                              {7, seq_role},
+                                              {9, storage_role},
+                                              {11, storage_role},
+                                              {13, storage_role}};
+  for (node_index_t n : NodeSetIndices({1, 2, 7, 9, 11, 13})) {
+    nodes.push_back({n,
+                     role_map[n],
+                     n % 2 == 0 ? "aa.bb.cc.dd.ee" : "aa.bb.cc.dd.ff",
+                     n == 1 ? 1.0 : 7.0,
+                     /*num_shards=*/1,
+                     n == 2 || n == 9 ? true : false});
+  }
+
+  return initialProvisionUpdate(
+      std::move(nodes), ReplicationProperty{{NodeLocationScope::RACK, 2}});
+}
+
+std::shared_ptr<const configuration::nodes::NodesConfiguration>
+provisionNodes() {
+  return provisionNodes(initialProvisionUpdate());
+}
+
+configuration::nodes::NodesConfiguration::Update
+addNewNodeUpdate(const configuration::nodes::NodesConfiguration& existing,
+                 NodeTemplate node) {
   NodesConfiguration::Update update{};
   update.service_discovery_update =
       std::make_unique<ServiceDiscoveryConfig::Update>();
   update.service_discovery_update->addNode(
-      17,
+      node.id,
       ServiceDiscoveryConfig::NodeUpdate{
           ServiceDiscoveryConfig::UpdateType::PROVISION,
           std::make_unique<NodeServiceDiscovery>(
-              genDiscovery(17, both_role, "aa.bb.cc.dd.ee"))});
+              genDiscovery(node.id, node.roles, node.location))});
+
+  update.sequencer_config_update = std::make_unique<SequencerConfig::Update>();
+  update.sequencer_config_update->membership_update =
+      std::make_unique<SequencerMembership::Update>(
+          existing.getSequencerMembership()->getVersion());
+  update.sequencer_config_update->attributes_update =
+      std::make_unique<SequencerAttributeConfig::Update>();
+
+  if (hasRole(node.roles, NodeRole::SEQUENCER)) {
+    update.sequencer_config_update->membership_update->addNode(
+        node.id,
+        {SequencerMembershipTransition::ADD_NODE,
+         true,
+         node.sequencer_weight,
+         DUMMY_MAINTENANCE});
+
+    update.sequencer_config_update->attributes_update->addNode(
+        node.id,
+        {SequencerAttributeConfig::UpdateType::PROVISION,
+         std::make_unique<SequencerNodeAttribute>()});
+  }
+
   update.storage_config_update = std::make_unique<StorageConfig::Update>();
   update.storage_config_update->attributes_update =
       std::make_unique<StorageAttributeConfig::Update>();
-  update.storage_config_update->attributes_update->addNode(
-      17,
-      {StorageAttributeConfig::UpdateType::PROVISION,
-       std::make_unique<StorageNodeAttribute>(
-           StorageNodeAttribute{/*capacity=*/256.0,
-                                /*num_shards*/ 1,
-                                /*generation*/ 1,
-                                /*exclude_from_nodesets*/ false})});
   update.storage_config_update->membership_update =
-      std::make_unique<StorageMembership::Update>(base_version);
-  update.storage_config_update->membership_update->addShard(
-      ShardID(17, 0),
-      {StorageStateTransition::ADD_EMPTY_SHARD,
-       Condition::FORCE,
-       DUMMY_MAINTENANCE,
-       /* state_override = */ folly::none});
+      std::make_unique<StorageMembership::Update>(
+          existing.getStorageMembership()->getVersion());
+  if (hasRole(node.roles, NodeRole::STORAGE)) {
+    for (int s = 0; s < node.num_shards; ++s) {
+      update.storage_config_update->membership_update->addShard(
+          ShardID(node.id, s),
+          {node.metadata_node ? StorageStateTransition::ADD_EMPTY_METADATA_SHARD
+                              : StorageStateTransition::ADD_EMPTY_SHARD,
+           Condition::FORCE,
+           DUMMY_MAINTENANCE,
+           /* state_override = */ folly::none});
+    }
+    update.storage_config_update->attributes_update->addNode(
+        node.id,
+        {StorageAttributeConfig::UpdateType::PROVISION,
+         std::make_unique<StorageNodeAttribute>(
+             StorageNodeAttribute{/*capacity=*/256.0,
+                                  /*num_shards*/ node.num_shards,
+                                  /*generation*/ 1,
+                                  /*exclude_from_nodesets*/ false})});
+  }
   return update;
+}
+
+configuration::nodes::NodesConfiguration::Update
+addNewNodeUpdate(const configuration::nodes::NodesConfiguration& existing) {
+  return addNewNodeUpdate(
+      existing, {17, both_role, "aa.bb.cc.dd.ee", 0.0, 1, false});
 }
 
 NodesConfiguration::Update
@@ -207,4 +267,4 @@ disablingWriteUpdate(membership::MembershipVersion::Type base_version) {
   return update;
 }
 
-}} // namespace facebook::logdevice
+}}} // namespace facebook::logdevice::NodesConfigurationTestUtil
