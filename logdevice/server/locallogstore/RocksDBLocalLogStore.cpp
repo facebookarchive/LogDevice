@@ -424,6 +424,11 @@ class RocksDBLocalLogStore::CSIWrapper::DataIterator
     return false;
   }
 
+  // TODO (#10357210): Temporary, delet.
+  // When handleKeyFormatMigration() skips over a dangling amend, it assigns its
+  // location to this field, unless it's already assigned.
+  folly::Optional<Location> skipped_dangling_amend_;
+
  private:
   void createIteratorIfNeeded();
 
@@ -435,9 +440,10 @@ class RocksDBLocalLogStore::CSIWrapper::DataIterator
   folly::Optional<RocksDBIterator> iterator_;
 
   // TODO (#10357210):
-  //   merged_value_ and handleKeyFormatMigration() are a temporary
-  //   compatibility measure. Remove them after migrating to new rocksdb key
-  //   format. Remove the #include of RocksDBWriterMergeOperator.h too.
+  //   merged_value_, skipped_dangling_amend_ and handleKeyFormatMigration() are
+  //   a temporary compatibility measure. Remove them after migrating to new
+  //   rocksdb key format. Remove the #include of RocksDBWriterMergeOperator.h
+  //   too.
 
   // If not empty, getRecord() returns this string instead of iterator_'s value.
   std::string merged_value_;
@@ -906,6 +912,7 @@ void RocksDBLocalLogStore::CSIWrapper::moveTo(const Location& target,
     // Move data iterator to `current` and see if it passes filter.
     if (data_iterator_ != nullptr && !data_iterator_good &&
         !current_is_filtered_out) {
+      data_iterator_->skipped_dangling_amend_.clear();
       adaptiveSeek(*data_iterator_, current, dir, data_near, getStatsHolder());
       data_iterator_good = true;
       data_near = true;
@@ -915,12 +922,15 @@ void RocksDBLocalLogStore::CSIWrapper::moveTo(const Location& target,
         state_ = data_iterator_->state();
         if (csi_iterator_good && state_ == IteratorState::AT_END) {
           STAT_INCR(getStatsHolder(), read_streams_num_csi_skips_no_record);
-          RATELIMIT_INFO(std::chrono::seconds(10),
-                         2,
-                         "Copyset index entry without a record at end of "
-                         "partition, log_id %lu, lsn %s",
-                         current.log_id.val_,
-                         lsn_to_string(current.lsn).c_str());
+          if (!data_iterator_->skipped_dangling_amend_.hasValue() ||
+              data_iterator_->skipped_dangling_amend_.value() != current) {
+            RATELIMIT_INFO(std::chrono::seconds(10),
+                           2,
+                           "Copyset index entry without a record at end of "
+                           "partition, log_id %lu, lsn %s",
+                           current.log_id.val_,
+                           lsn_to_string(current.lsn).c_str());
+          }
         }
         return;
       }
@@ -930,14 +940,17 @@ void RocksDBLocalLogStore::CSIWrapper::moveTo(const Location& target,
         ld_check(current.before(data_loc, dir));
         if (csi_iterator_good) {
           STAT_INCR(getStatsHolder(), read_streams_num_csi_skips_no_record);
-          RATELIMIT_INFO(std::chrono::seconds(10),
-                         2,
-                         "Copyset index entry without a record, log_id %lu, "
-                         "lsn %s, next "
-                         "data record lsn %s",
-                         current.log_id.val_,
-                         lsn_to_string(current.lsn).c_str(),
-                         lsn_to_string(data_loc.lsn).c_str());
+          if (!data_iterator_->skipped_dangling_amend_.hasValue() ||
+              data_iterator_->skipped_dangling_amend_.value() != current) {
+            RATELIMIT_INFO(std::chrono::seconds(10),
+                           2,
+                           "Copyset index entry without a record, log_id %lu, "
+                           "lsn %s, next "
+                           "data record lsn %s",
+                           current.log_id.val_,
+                           lsn_to_string(current.lsn).c_str(),
+                           lsn_to_string(data_loc.lsn).c_str());
+          }
         }
         current = data_loc;
         csi_iterator_good = false;
@@ -1407,6 +1420,10 @@ void RocksDBLocalLogStore::CSIWrapper::DataIterator::
 
     // Alright, we've got a dangling amend in new format.
     STAT_INCR(getStatsHolder(), data_key_format_migration_steps);
+
+    if (!skipped_dangling_amend_.hasValue()) {
+      skipped_dangling_amend_ = Location(log, lsn);
+    }
 
     // Save the amend.
     std::string amend_str(slice.size + 1, '\0');
