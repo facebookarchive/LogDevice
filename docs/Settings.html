@@ -512,6 +512,8 @@
 <tr><td>rocksdb-uc-min-merge-width</td><td>minimum number of files in a single universal compaction run</td><td style="text-align:center">2</td><td>requires restart, server only</td></tr>
 <tr><td>rocksdb-uc-size-ratio</td><td>arg is a percentage. If the candidate set size for compaction is arg% smaller than the next file size, then include next file in the candidate set.</td><td style="text-align:center">1M</td><td>requires restart, server only</td></tr>
 <tr><td>rocksdb-update-stats-on-db-open</td><td>load stats from property blocks of several files when opening the database in order to optimize compaction decisions. May significantly impact the time needed to open the db.</td><td style="text-align:center">false</td><td>requires restart, server only</td></tr>
+<tr><td>rocksdb-use-direct-io-for-flush-and-compaction</td><td>If true, rocksdb will use O_DIRECT for flushes and compactions (both input and output files).</td><td style="text-align:center">false</td><td>requires restart, server only</td></tr>
+<tr><td>rocksdb-use-direct-reads</td><td>If true, rocksdb will use O_DIRECT for most file reads.</td><td style="text-align:center">false</td><td>requires restart, server only</td></tr>
 <tr><td>rocksdb-wal-bytes-per-sync</td><td>when writing WAL, sync once per this many bytes written. 0 turns off incremental syncing</td><td style="text-align:center">1M</td><td>requires restart, server only</td></tr>
 <tr><td>rocksdb-write-buffer-size</td><td>When any RocksDB memtable ('write buffer') reaches this size it is made immitable, then flushed into a newly created L0 file. This setting may soon be superceded by a more dynamic --memtable-size-per-node limit.</td><td style="text-align:center">100G</td><td>requires restart, server only</td></tr>
 </tbody>
