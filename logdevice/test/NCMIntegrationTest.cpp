@@ -57,6 +57,7 @@ NodesConfiguration::Update buildSimpleUpdate() {
   update.sequencer_config_update->membership_update->addNode(
       0,
       {SequencerMembershipTransition::SET_WEIGHT,
+       true /* doesn't matter */,
        0.6,
        MaintenanceID::Type(1000)});
   return update;

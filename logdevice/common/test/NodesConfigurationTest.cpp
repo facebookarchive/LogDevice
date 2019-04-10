@@ -91,7 +91,7 @@ TEST_F(NodesConfigurationTest, ProvisionBasic) {
     EXPECT_TRUE(result.first);
     EXPECT_EQ(
         MaintenanceID::MAINTENANCE_PROVISION, result.second.active_maintenance);
-    EXPECT_EQ(n == 1 ? 1.0 : 7.0, result.second.weight);
+    EXPECT_EQ(n == 1 ? 1.0 : 7.0, result.second.getConfiguredWeight());
   }
 
   // test iterating membership nodes
@@ -221,7 +221,10 @@ TEST_F(NodesConfigurationTest, RemovingServiceDiscovery) {
             MembershipVersion::MIN_VERSION);
     update.sequencer_config_update->membership_update->addNode(
         7,
-        {SequencerMembershipTransition::REMOVE_NODE, 0.0, DUMMY_MAINTENANCE});
+        {SequencerMembershipTransition::REMOVE_NODE,
+         false,
+         0.0,
+         DUMMY_MAINTENANCE});
     auto new_config = config->applyUpdate(std::move(update));
     EXPECT_NE(nullptr, new_config);
     EXPECT_FALSE(new_config->getSequencerConfig()->getMembership()->hasNode(7));
@@ -358,6 +361,7 @@ TEST_F(NodesConfigurationTest, RoleConflict) {
     update.sequencer_config_update->membership_update->addNode(
         2,
         {SequencerMembershipTransition::ADD_NODE,
+         true,
          1.0,
          MaintenanceID::MAINTENANCE_PROVISION});
 

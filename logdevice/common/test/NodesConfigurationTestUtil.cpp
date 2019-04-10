@@ -75,6 +75,7 @@ NodesConfiguration::Update initialProvisionUpdate() {
     update.sequencer_config_update->membership_update->addNode(
         n,
         {SequencerMembershipTransition::ADD_NODE,
+         true,
          n == 1 ? 1.0 : 7.0,
          MaintenanceID::MAINTENANCE_PROVISION});
 

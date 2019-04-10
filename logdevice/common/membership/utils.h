@@ -99,6 +99,7 @@ toString(SequencerMembershipTransition transition) {
     GEN_STR(ADD_NODE)
     GEN_STR(REMOVE_NODE)
     GEN_STR(SET_WEIGHT)
+    GEN_STR(SET_ENABLED_FLAG)
 #undef GEN_STR
     case SequencerMembershipTransition::Count:
       return "invalid";

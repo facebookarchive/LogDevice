@@ -64,6 +64,7 @@ struct StorageMembership {
 struct SequencerNodeState {
   1: double weight;
   2: u64 active_maintenance;
+  3: bool sequencer_enabled;
 }
 
 struct SequencerMembership {

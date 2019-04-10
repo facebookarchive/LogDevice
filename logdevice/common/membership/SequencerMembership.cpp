@@ -23,8 +23,9 @@ using namespace MembershipVersion;
 using namespace MaintenanceID;
 
 std::string SequencerNodeState::Update::toString() const {
-  return folly::sformat("[T:{}, W:{}, M:{}]",
+  return folly::sformat("[T:{}, E:{}, W:{}, M:{}]",
                         membership::toString(transition),
+                        membership::toString(sequencer_enabled),
                         membership::toString(weight),
                         membership::toString(maintenance));
 }
@@ -51,13 +52,14 @@ bool SequencerNodeState::Update::isValid() const {
 }
 
 std::string SequencerNodeState::toString() const {
-  return folly::sformat("[W:{}, M:{}]",
-                        membership::toString(weight),
+  return folly::sformat("[E:{}, W:{}, M:{}]",
+                        membership::toString(sequencer_enabled),
+                        membership::toString(weight_),
                         membership::toString(active_maintenance));
 }
 
 bool SequencerNodeState::isValid() const {
-  return weight >= 0;
+  return weight_ >= 0;
 }
 
 bool SequencerMembership::Update::isValid() const {
@@ -194,10 +196,19 @@ int SequencerMembership::applyUpdate(
       } break;
       case SequencerMembershipTransition::SET_WEIGHT:
         ld_check(node_exist);
-        FOLLY_FALLTHROUGH;
+        current_node_state.setWeight(node_update.weight);
+        target_membership_state.setNodeState(node, current_node_state);
+        break;
+      case SequencerMembershipTransition::SET_ENABLED_FLAG:
+        ld_check(node_exist);
+        current_node_state.sequencer_enabled = node_update.sequencer_enabled;
+        target_membership_state.setNodeState(node, current_node_state);
+        break;
       case SequencerMembershipTransition::ADD_NODE:
-        target_membership_state.setNodeState(
-            node, {node_update.weight, node_update.maintenance});
+        target_membership_state.setNodeState(node,
+                                             {node_update.sequencer_enabled,
+                                              node_update.weight,
+                                              node_update.maintenance});
         break;
       case SequencerMembershipTransition::Count:
         ld_check(false);
@@ -257,7 +268,12 @@ std::vector<node_index_t> SequencerMembership::getMembershipNodes() const {
 
 bool SequencerMembership::isSequencingEnabled(node_index_t node) const {
   const auto p = getNodeStatePtr(node);
-  return (p == nullptr) ? false : (p->weight > 0);
+  return (p == nullptr) ? false : (p->getEffectiveWeight() > 0);
+}
+
+bool SequencerMembership::isSequencerEnabledFlagSet(node_index_t node) const {
+  const auto p = getNodeStatePtr(node);
+  return (p == nullptr) ? false : p->sequencer_enabled;
 }
 
 bool SequencerMembership::operator==(const SequencerMembership& rhs) const {

@@ -22,7 +22,7 @@ struct SequencersConfig {
   // added/removed in the middle of the node index range.
   std::vector<NodeID> nodes;
 
-  // normalized weights of sequencer nodes
+  // normalized effective weights of sequencer nodes
   std::vector<double> weights;
 
   bool operator==(const SequencersConfig& rhs) const {

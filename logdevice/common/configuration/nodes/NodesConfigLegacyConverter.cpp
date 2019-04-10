@@ -79,7 +79,8 @@ int NodesConfigLegacyConverter::toLegacyNodesConfig(
     all_nodes.insert(qn);
     auto res = seq_mem->getNodeState(qn);
     ld_check(res.first);
-    res_nodes[qn].addSequencerRole(res.second.weight);
+    res_nodes[qn].addSequencerRole(
+        res.second.sequencer_enabled, res.second.getConfiguredWeight());
 
     // generation is not meaningful for sequencer only node, however
     // to maintain compatibility with legacy format, we set it to 1.
@@ -193,9 +194,11 @@ NodesConfigLegacyConverter::fromLegacyNodesConfig(
         return nullptr;
       }
 
-      double seq_w = node.getSequencerWeight();
+      bool seq_enabled = node.sequencer_attributes->enabled();
+      double seq_w = node.sequencer_attributes->getConfiguredWeight();
       seq_mem->setNodeState(
-          nid, {seq_w, membership::MaintenanceID::MAINTENANCE_NONE});
+          nid,
+          {seq_enabled, seq_w, membership::MaintenanceID::MAINTENANCE_NONE});
       seq_attr->setNodeAttributes(nid, {});
     }
 

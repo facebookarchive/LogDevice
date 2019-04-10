@@ -35,18 +35,36 @@ enum class SequencerMembershipTransition : uint8_t {
   ADD_NODE = 0,
   REMOVE_NODE,
   SET_WEIGHT,
+  SET_ENABLED_FLAG,
 
   Count
 };
 
 struct SequencerNodeState {
+  SequencerNodeState() {}
+  SequencerNodeState(bool sequencer_enabled,
+                     double weight,
+                     MaintenanceID::Type active_maintenance)
+      : sequencer_enabled{sequencer_enabled},
+        weight_{weight},
+        active_maintenance{active_maintenance} {}
+  /**
+   * Determines if a sequencer is enabled or not. If the sequencer is not
+   * enabled, it's similar to giving it a weight of zero. It's done this way
+   * to be able to enable/disable sequencers without memorizing its previous
+   * weight.
+   */
+  bool sequencer_enabled{false};
+
+ private:
   /**
    * A non-negative value indicating how many logs this node will run
    * sequencers for relative to other nodes in the cluster.  A value of
    * zero means sequencing is disabled on this node.
    */
-  double weight{0.0};
+  double weight_{0.0};
 
+ public:
   // identifier for the maintenance event that correspond to the
   // current node state. Used by the maintenance state machine
   MaintenanceID::Type active_maintenance{MaintenanceID::MAINTENANCE_NONE};
@@ -56,17 +74,32 @@ struct SequencerNodeState {
   bool isValid() const;
 
   bool operator==(const SequencerNodeState& rhs) const {
-    return weight == rhs.weight && active_maintenance == rhs.active_maintenance;
+    return sequencer_enabled == rhs.sequencer_enabled &&
+        weight_ == rhs.weight_ && active_maintenance == rhs.active_maintenance;
   }
 
   bool operator!=(const SequencerNodeState& rhs) const {
     return !(*this == rhs);
   }
 
+  double getConfiguredWeight() const {
+    return weight_;
+  }
+
+  double getEffectiveWeight() const {
+    return sequencer_enabled ? weight_ : 0;
+  }
+
+  void setWeight(double weight) {
+    weight_ = weight;
+  }
+
   // Describe the update that can apply to SequencerNodeState
   struct Update {
     SequencerMembershipTransition transition{
         SequencerMembershipTransition::Count};
+
+    bool sequencer_enabled{false};
 
     // set the weight for adding new node or resetting an existing node
     double weight{0.0};
@@ -163,10 +196,16 @@ class SequencerMembership : public Membership {
   }
 
   /**
-   * @return  true if node is in the membership and has a positive sequencer
-   *          weight.
+   * @return  true if node is in the membership and has a positive effective
+   * sequencer weight.
    */
   bool isSequencingEnabled(node_index_t node) const;
+
+  /**
+   * @return  true if node is in the membership and has the sequencer_enabled
+   * flag set in the nodes configuration.
+   */
+  bool isSequencerEnabledFlagSet(node_index_t node) const;
 
   std::string toString() const;
 

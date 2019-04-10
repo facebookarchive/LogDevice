@@ -43,7 +43,7 @@ void addNodes(ServerConfig::Nodes* nodes,
       node.location = std::move(loc);
     }
 
-    node.addSequencerRole(sequencer);
+    node.addSequencerRole(true, sequencer);
     node.addStorageRole(num_shards);
     node.storage_attributes->state = (i < num_non_zw_nodes)
         ? configuration::StorageState::READ_WRITE

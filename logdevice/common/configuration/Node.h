@@ -81,11 +81,11 @@ class SequencerNodeAttributes {
 
   SequencerNodeAttributes() {}
 
-  double getConfiguredWeight() {
+  double getConfiguredWeight() const {
     return weight_;
   }
 
-  double getEffectiveWeight() {
+  double getEffectiveWeight() const {
     return enabled_ ? weight_ : 0;
   }
 
@@ -272,9 +272,10 @@ struct Node {
     return -1;
   }
 
-  void addSequencerRole(double weight = 1.0) {
+  void addSequencerRole(bool enabled = true, double weight = 1.0) {
     setRole(NodeRole::SEQUENCER);
     sequencer_attributes = std::make_unique<SequencerNodeAttributes>();
+    sequencer_attributes->setEnabled(enabled);
     sequencer_attributes->setWeight(weight);
   }
 

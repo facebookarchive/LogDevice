@@ -178,7 +178,7 @@ void fillNodeConfig(
     if (result.first) {
       // Sequencer Config
       thrift::SequencerConfig sequencer_config;
-      sequencer_config.set_weight(result.second.weight);
+      sequencer_config.set_weight(result.second.getConfiguredWeight());
       out.set_sequencer(std::move(sequencer_config));
     }
   }
@@ -264,7 +264,7 @@ void fillNodeState(
     thrift::SequencingState state = thrift::SequencingState::DISABLED;
     const auto& seq_membership = nodes_configuration.getSequencerMembership();
 
-    if (seq_membership->isSequencingEnabled(node_index)) {
+    if (seq_membership->isSequencerEnabledFlagSet(node_index)) {
       state = thrift::SequencingState::ENABLED;
       // let's see if we have a failure-detector state about this sequencer
       if (cluster_state && cluster_state->isNodeBoycotted(node_index)) {

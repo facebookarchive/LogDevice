@@ -339,7 +339,7 @@ SequencersConfig NodesConfiguration::computeSequencersConfig() const {
     if (sequencer_membership->isSequencingEnabled(node)) {
       result.nodes[node] = getNodeID(node);
       result.weights[node] =
-          sequencer_membership->getNodeStatePtr(node)->weight;
+          sequencer_membership->getNodeStatePtr(node)->getEffectiveWeight();
     }
   }
 
