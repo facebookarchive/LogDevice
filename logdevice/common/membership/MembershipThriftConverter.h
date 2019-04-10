@@ -14,7 +14,7 @@
 
 namespace facebook { namespace logdevice { namespace membership {
 
-class MembershipCodecFlatBuffers {
+class MembershipThriftConverter {
  public:
   using ProtocolVersion = uint32_t;
 

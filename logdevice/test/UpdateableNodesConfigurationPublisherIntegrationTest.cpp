@@ -7,7 +7,7 @@
  */
 
 #include "logdevice/common/configuration/nodes/FileBasedNodesConfigurationStore.h"
-#include "logdevice/common/configuration/nodes/NodesConfigurationCodecFlatBuffers.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationCodec.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationManagerFactory.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationStore.h"
 #include "logdevice/common/test/TestUtil.h"
@@ -36,7 +36,7 @@ class NodesConfigurationPublisherIntegrationTest : public IntegrationTestBase {
             NodesConfigurationStoreFactory::NCSType::File,
             "" /* doesn't matter */),
         cluster_->getNCSPath(),
-        NodesConfigurationCodecFlatBuffers::extractConfigVersion);
+        NodesConfigurationCodec::extractConfigVersion);
     ASSERT_NE(nullptr, ncs_);
 
     // Build a client with NCM enabled and a seed server pointing to a node in
@@ -132,8 +132,8 @@ TEST_F(NodesConfigurationPublisherIntegrationTest, Publish) {
 
     auto notified = do_and_wait_for_notification(
         [&]() {
-          auto serialized = NodesConfigurationCodecFlatBuffers::serialize(
-              *new_nodes_configuration);
+          auto serialized =
+              NodesConfigurationCodec::serialize(*new_nodes_configuration);
           ASSERT_EQ(Status::OK,
                     ncs_->updateConfigSync(std::move(serialized), folly::none));
         },
@@ -162,8 +162,8 @@ TEST_F(NodesConfigurationPublisherIntegrationTest, Publish) {
 
     auto notified = do_and_wait_for_notification(
         [&]() {
-          auto serialized = NodesConfigurationCodecFlatBuffers::serialize(
-              *new_nodes_configuration);
+          auto serialized =
+              NodesConfigurationCodec::serialize(*new_nodes_configuration);
           ASSERT_EQ(Status::OK,
                     ncs_->updateConfigSync(std::move(serialized), folly::none));
         },

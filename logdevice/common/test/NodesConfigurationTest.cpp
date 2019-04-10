@@ -12,7 +12,7 @@
 #include <gtest/gtest.h>
 
 #include "logdevice/common/configuration/nodes/NodesConfigLegacyConverter.h"
-#include "logdevice/common/configuration/nodes/NodesConfigurationCodecFlatBuffers.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationCodec.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/test/NodesConfigurationTestUtil.h"
 #include "logdevice/common/test/TestUtil.h"
@@ -30,8 +30,8 @@ class NodesConfigurationTest : public ::testing::Test {
  public:
   inline void checkCodecSerialization(const NodesConfiguration& c) {
     {
-      auto got = NodesConfigurationCodecFlatBuffers::fromThrift(
-          NodesConfigurationCodecFlatBuffers::toThrift(c));
+      auto got = NodesConfigurationThriftConverter::fromThrift(
+          NodesConfigurationThriftConverter::toThrift(c));
       ASSERT_NE(nullptr, got);
       ASSERT_EQ(c, *got);
     }
@@ -39,18 +39,15 @@ class NodesConfigurationTest : public ::testing::Test {
       // also test serialization with linear buffers
       for (auto compress : {false, true}) {
         ld_info("Compression: %s", compress ? "enabled" : "disabled");
-        std::string str_buf =
-            NodesConfigurationCodecFlatBuffers::serialize(c, {compress});
+        std::string str_buf = NodesConfigurationCodec::serialize(c, {compress});
         ASSERT_FALSE(str_buf.empty());
         ld_info("Serialized config blob has %lu bytes", str_buf.size());
 
-        auto version =
-            NodesConfigurationCodecFlatBuffers::extractConfigVersion(str_buf);
+        auto version = NodesConfigurationCodec::extractConfigVersion(str_buf);
         ASSERT_TRUE(version.hasValue());
         ASSERT_EQ(c.getVersion(), version.value());
 
-        auto c_deserialized2 =
-            NodesConfigurationCodecFlatBuffers::deserialize(str_buf);
+        auto c_deserialized2 = NodesConfigurationCodec::deserialize(str_buf);
         ASSERT_NE(nullptr, c_deserialized2);
         ASSERT_EQ(c, *c_deserialized2);
       }
@@ -59,7 +56,7 @@ class NodesConfigurationTest : public ::testing::Test {
 };
 
 TEST_F(NodesConfigurationTest, EmptyNodesConfigStringInValid) {
-  auto config = NodesConfigurationCodecFlatBuffers::deserialize("");
+  auto config = NodesConfigurationCodec::deserialize("");
   ASSERT_EQ(nullptr, config);
 }
 
@@ -447,14 +444,13 @@ TEST_F(NodesConfigurationTest, LegacyConversion1) {
 }
 
 TEST_F(NodesConfigurationTest, ExtractVersionErrorEmptyString) {
-  auto version =
-      NodesConfigurationCodecFlatBuffers::extractConfigVersion(std::string());
+  auto version = NodesConfigurationCodec::extractConfigVersion(std::string());
   ASSERT_FALSE(version.hasValue());
 }
 
 TEST_F(NodesConfigurationTest, ExtractVersionError) {
-  auto version = NodesConfigurationCodecFlatBuffers::extractConfigVersion(
-      std::string("123"));
+  auto version =
+      NodesConfigurationCodec::extractConfigVersion(std::string("123"));
   ASSERT_FALSE(version.hasValue());
 }
 

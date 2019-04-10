@@ -19,7 +19,7 @@ class ProtocolReader;
 
 namespace configuration { namespace nodes {
 
-class NodesConfigurationCodecFlatBuffers {
+class NodesConfigurationCodec {
  public:
   using ProtocolVersion = uint32_t;
 
@@ -30,26 +30,8 @@ class NodesConfigurationCodecFlatBuffers {
   // by flatbuffers itself. This version is only needed when extra compatibility
   // handling (e.g., adding a new enum value of an existing enum class) is
   // needed.
+
   static constexpr ProtocolVersion CURRENT_PROTO_VERSION = 1;
-
-#define GEN_SERIALIZATION_CONFIG(_Config)                 \
-  static thrift::_Config toThrift(const _Config& config); \
-  static std::shared_ptr<_Config> fromThrift(             \
-      const thrift::_Config& flat_buffer_config);
-
-#define GEN_SERIALIZATION_OBJECT(_Object)                 \
-  static thrift::_Object toThrift(const _Object& object); \
-  static int fromThrift(const thrift::_Object& obj, _Object* out);
-
-  GEN_SERIALIZATION_CONFIG(ServiceDiscoveryConfig)
-  GEN_SERIALIZATION_CONFIG(SequencerAttributeConfig)
-  GEN_SERIALIZATION_CONFIG(StorageAttributeConfig)
-  GEN_SERIALIZATION_CONFIG(SequencerConfig);
-  GEN_SERIALIZATION_CONFIG(StorageConfig);
-  GEN_SERIALIZATION_CONFIG(MetaDataLogsReplication);
-  GEN_SERIALIZATION_CONFIG(NodesConfiguration);
-
-  ////////// serialization to linear buffer ///////////
 
   struct SerializeOptions {
     // use zstd to compress the configuration data blob
@@ -79,28 +61,26 @@ class NodesConfigurationCodecFlatBuffers {
   // try to extract the nodes configuration version from a data blob.
   static folly::Optional<membership::MembershipVersion::Type>
   extractConfigVersion(folly::StringPiece serialized_data);
+};
 
-  template <class Serializer, class T>
-  static std::string serializeThrift(T thrift) {
-    return Serializer::template serialize<std::string>(thrift);
-  }
+class NodesConfigurationThriftConverter {
+#define GEN_SERIALIZATION_CONFIG(_Config)                 \
+  static thrift::_Config toThrift(const _Config& config); \
+  static std::shared_ptr<_Config> fromThrift(             \
+      const thrift::_Config& flat_buffer_config);
 
-  template <class Serializer, class T>
-  static std::shared_ptr<T> deserializeThrift(Slice binary) {
-    // TODO is there an exception free API?
-    std::shared_ptr<T> thrift_ptr{nullptr};
-    try {
-      auto thrift = Serializer::template deserialize<T>(
-          folly::StringPiece(binary.ptr(), binary.size));
-      thrift_ptr = std::make_shared<T>(std::move(thrift));
-    } catch (const std::exception& exception) {
-      RATELIMIT_ERROR(std::chrono::seconds(10),
-                      5,
-                      "Failed to deserialize NodesConfiguration thrift: %s",
-                      exception.what());
-    }
-    return thrift_ptr;
-  }
+#define GEN_SERIALIZATION_OBJECT(_Object)                 \
+  static thrift::_Object toThrift(const _Object& object); \
+  static int fromThrift(const thrift::_Object& obj, _Object* out);
+
+ public:
+  GEN_SERIALIZATION_CONFIG(ServiceDiscoveryConfig)
+  GEN_SERIALIZATION_CONFIG(SequencerAttributeConfig)
+  GEN_SERIALIZATION_CONFIG(StorageAttributeConfig)
+  GEN_SERIALIZATION_CONFIG(SequencerConfig);
+  GEN_SERIALIZATION_CONFIG(StorageConfig);
+  GEN_SERIALIZATION_CONFIG(MetaDataLogsReplication);
+  GEN_SERIALIZATION_CONFIG(NodesConfiguration);
 
  private:
   GEN_SERIALIZATION_OBJECT(NodeServiceDiscovery)

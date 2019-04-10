@@ -90,7 +90,7 @@ class Membership {
   MembershipVersion::Type version_{MembershipVersion::EMPTY_VERSION};
 
   friend class configuration::nodes::NodesConfigLegacyConverter;
-  friend class MembershipCodecFlatBuffers;
+  friend class MembershipThriftConverter;
 };
 
 } // namespace membership

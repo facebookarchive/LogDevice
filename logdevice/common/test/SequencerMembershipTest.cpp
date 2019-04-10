@@ -12,7 +12,7 @@
 
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/debug.h"
-#include "logdevice/common/membership/MembershipCodecFlatBuffers.h"
+#include "logdevice/common/membership/MembershipThriftConverter.h"
 #include "logdevice/common/membership/SequencerMembership.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "thrift/lib/cpp2/protocol/BinaryProtocol.h"
@@ -69,8 +69,8 @@ class SequencerMembershipTest : public ::testing::Test {
   }
 
   inline void checkCodecSerialization(const SequencerMembership& m) {
-    auto got = MembershipCodecFlatBuffers::fromThrift(
-        MembershipCodecFlatBuffers::toThrift(m));
+    auto got = MembershipThriftConverter::fromThrift(
+        MembershipThriftConverter::toThrift(m));
 
     ASSERT_NE(nullptr, got);
     ASSERT_EQ(m, *got);

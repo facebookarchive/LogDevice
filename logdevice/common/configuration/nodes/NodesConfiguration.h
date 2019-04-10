@@ -267,7 +267,7 @@ class NodesConfiguration {
   void touch(std::string context);
 
   friend class NodesConfigLegacyConverter;
-  friend class NodesConfigurationCodecFlatBuffers;
+  friend class NodesConfigurationThriftConverter;
 };
 
 }}}} // namespace facebook::logdevice::configuration::nodes

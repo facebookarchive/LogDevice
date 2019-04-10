@@ -5,15 +5,15 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "logdevice/common/membership/MembershipCodecFlatBuffers.h"
+#include "logdevice/common/membership/MembershipThriftConverter.h"
 
 #include "logdevice/common/debug.h"
 #include "logdevice/include/Err.h"
 
 namespace facebook { namespace logdevice { namespace membership {
 
-constexpr MembershipCodecFlatBuffers::ProtocolVersion
-    MembershipCodecFlatBuffers::CURRENT_PROTO_VERSION;
+constexpr MembershipThriftConverter::ProtocolVersion
+    MembershipThriftConverter::CURRENT_PROTO_VERSION;
 
 static_assert(static_cast<uint32_t>(thrift::StorageState::NONE) ==
                   static_cast<uint32_t>(StorageState::NONE),
@@ -29,7 +29,7 @@ static_assert(static_cast<uint32_t>(thrift::MetaDataStorageState::INVALID) ==
               "");
 
 /* static */
-thrift::StorageMembership MembershipCodecFlatBuffers::toThrift(
+thrift::StorageMembership MembershipThriftConverter::toThrift(
     const StorageMembership& storage_membership) {
   std::map<thrift::node_idx, std::vector<thrift::ShardState>> node_states;
   for (const auto& node_kv : storage_membership.node_states_) {
@@ -71,7 +71,7 @@ thrift::StorageMembership MembershipCodecFlatBuffers::toThrift(
 
 /* static */
 ShardState
-MembershipCodecFlatBuffers::fromThrift(const thrift::ShardState& shard_state) {
+MembershipThriftConverter::fromThrift(const thrift::ShardState& shard_state) {
   StorageState storage_state =
       static_cast<StorageState>(shard_state.storage_state);
   StorageStateFlags::Type flags = shard_state.flags;
@@ -84,9 +84,9 @@ MembershipCodecFlatBuffers::fromThrift(const thrift::ShardState& shard_state) {
 }
 
 /* static */
-std::shared_ptr<StorageMembership> MembershipCodecFlatBuffers::fromThrift(
+std::shared_ptr<StorageMembership> MembershipThriftConverter::fromThrift(
     const thrift::StorageMembership& storage_membership) {
-  MembershipCodecFlatBuffers::ProtocolVersion pv =
+  MembershipThriftConverter::ProtocolVersion pv =
       storage_membership.proto_version;
   if (pv > CURRENT_PROTO_VERSION) {
     RATELIMIT_ERROR(
@@ -128,7 +128,7 @@ std::shared_ptr<StorageMembership> MembershipCodecFlatBuffers::fromThrift(
 }
 
 /* static */
-thrift::SequencerMembership MembershipCodecFlatBuffers::toThrift(
+thrift::SequencerMembership MembershipThriftConverter::toThrift(
     const SequencerMembership& sequencer_membership) {
   std::map<thrift::node_idx, thrift::SequencerNodeState> node_states;
   for (const auto& node_kv : sequencer_membership.node_states_) {
@@ -147,9 +147,9 @@ thrift::SequencerMembership MembershipCodecFlatBuffers::toThrift(
 }
 
 /* static */
-std::shared_ptr<SequencerMembership> MembershipCodecFlatBuffers::fromThrift(
+std::shared_ptr<SequencerMembership> MembershipThriftConverter::fromThrift(
     const thrift::SequencerMembership& sequencer_membership) {
-  MembershipCodecFlatBuffers::ProtocolVersion pv =
+  MembershipThriftConverter::ProtocolVersion pv =
       sequencer_membership.proto_version;
   if (pv > CURRENT_PROTO_VERSION) {
     RATELIMIT_ERROR(

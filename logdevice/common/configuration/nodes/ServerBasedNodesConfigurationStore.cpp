@@ -16,7 +16,7 @@
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
-#include "logdevice/common/configuration/nodes/NodesConfigurationCodecFlatBuffers.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationCodec.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/util.h"
 #include "logdevice/include/Err.h"
@@ -36,7 +36,7 @@ class NodesConfigurationOneTimePollRequest : public FireAndForgetRequest {
   void executionBody() override {
     poller_ = std::make_unique<NodesConfigurationPoller>(
         std::move(options_),
-        NodesConfigurationCodecFlatBuffers::extractConfigVersion,
+        NodesConfigurationCodec::extractConfigVersion,
         [this](Status st,
                NodesConfigurationPoller::Poller::RoundID /*round*/,
                folly::Optional<std::string> config_str) {

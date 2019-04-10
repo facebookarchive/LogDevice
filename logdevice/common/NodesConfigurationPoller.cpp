@@ -12,7 +12,7 @@
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/RandomNodeSelector.h"
 #include "logdevice/common/Worker.h"
-#include "logdevice/common/configuration/nodes/NodesConfigurationCodecFlatBuffers.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationCodec.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/util.h"
 

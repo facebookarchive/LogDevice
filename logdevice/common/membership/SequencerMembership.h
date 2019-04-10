@@ -245,7 +245,7 @@ class SequencerMembership : public Membership {
   // @return  true if the removal actual happened
   bool eraseNodeState(node_index_t node);
 
-  friend class MembershipCodecFlatBuffers;
+  friend class MembershipThriftConverter;
   friend class configuration::nodes::NodesConfigLegacyConverter;
 };
 

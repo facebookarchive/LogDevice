@@ -340,7 +340,7 @@ class StorageMembership : public Membership {
 
   friend class configuration::nodes::NodesConfigLegacyConverter;
   friend class configuration::nodes::ShardStateTracker;
-  friend class MembershipCodecFlatBuffers;
+  friend class MembershipThriftConverter;
 };
 
 } // namespace membership

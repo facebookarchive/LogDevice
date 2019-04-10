@@ -17,7 +17,7 @@
 #include <gtest/gtest.h>
 
 #include "logdevice/common/Worker.h"
-#include "logdevice/common/configuration/nodes/NodesConfigurationCodecFlatBuffers.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationCodec.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationStore.h"
 #include "logdevice/common/configuration/nodes/ZookeeperNodesConfigurationStore.h"
 #include "logdevice/common/membership/utils.h"
@@ -70,12 +70,12 @@ class NodesConfigurationManagerTest : public ::testing::Test {
         "unused quorum",
         ZookeeperClientInMemory::state_map_t{
             {kConfigKey,
-             {NodesConfigurationCodecFlatBuffers::serialize(initial_config),
+             {NodesConfigurationCodec::serialize(initial_config),
               zk::Stat{.version_ = 4}}}});
     z_ = z.get();
     auto store = std::make_unique<ZookeeperNodesConfigurationStore>(
         kConfigKey,
-        NodesConfigurationCodecFlatBuffers::extractConfigVersion,
+        NodesConfigurationCodec::extractConfigVersion,
         std::move(z));
 
     Settings settings = create_default_settings<Settings>();
@@ -107,7 +107,7 @@ class NodesConfigurationManagerTest : public ::testing::Test {
   writeNewConfigToZK(std::shared_ptr<const NodesConfiguration> new_config) {
     // fire and forget
     z_->setData(kConfigKey,
-                NodesConfigurationCodecFlatBuffers::serialize(*new_config),
+                NodesConfigurationCodec::serialize(*new_config),
                 /* cb = */ {});
   }
 
@@ -296,8 +296,7 @@ TEST_F(NodesConfigurationManagerTest, overwrite) {
 TEST_F(NodesConfigurationManagerTest, LinearizableReadOnStartup) {
   auto initial_config = makeDummyNodesConfiguration(kVersion);
   EXPECT_TRUE(initial_config.validate());
-  std::string config =
-      NodesConfigurationCodecFlatBuffers::serialize(initial_config);
+  std::string config = NodesConfigurationCodec::serialize(initial_config);
 
   Settings settings = create_default_settings<Settings>();
   settings.num_workers = 3;

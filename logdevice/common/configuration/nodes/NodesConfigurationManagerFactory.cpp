@@ -13,7 +13,7 @@
 
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/configuration/nodes/FileBasedNodesConfigurationStore.h"
-#include "logdevice/common/configuration/nodes/NodesConfigurationCodecFlatBuffers.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationCodec.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationManagerDependencies.h"
 #include "logdevice/common/configuration/nodes/ServerBasedNodesConfigurationStore.h"
 #include "logdevice/common/configuration/nodes/ZookeeperNodesConfigurationStore.h"
@@ -65,14 +65,14 @@ NodesConfigurationStoreFactory::create(Params params) noexcept {
       }
       return std::make_unique<ZookeeperNodesConfigurationStore>(
           params.path,
-          NodesConfigurationCodecFlatBuffers::extractConfigVersion,
+          NodesConfigurationCodec::extractConfigVersion,
           std::move(zkclient));
     }
     case NCSType::File: {
       return std::make_unique<FileBasedNodesConfigurationStore>(
           params.path /* filename */,
           params.file_store_root_dir /* parent_Dir */,
-          NodesConfigurationCodecFlatBuffers::extractConfigVersion);
+          NodesConfigurationCodec::extractConfigVersion);
     }
     case NCSType::Server:
       return std::make_unique<ServerBasedNodesConfigurationStore>();

@@ -12,7 +12,7 @@
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/Configuration.h"
-#include "logdevice/common/configuration/nodes/NodesConfigurationCodecFlatBuffers.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationCodec.h"
 #include "logdevice/common/protocol/CONFIG_CHANGED_Message.h"
 
 namespace facebook { namespace logdevice {
@@ -161,9 +161,8 @@ CONFIG_FETCH_Message::handleNodesConfigurationRequest(const Address& from) {
     hdr.status = Status::UPTODATE;
     msg = std::make_unique<CONFIG_CHANGED_Message>(hdr, "");
   } else {
-    auto serialized =
-        configuration::nodes::NodesConfigurationCodecFlatBuffers::serialize(
-            *nodes_cfg, {/*compression=*/true});
+    auto serialized = configuration::nodes::NodesConfigurationCodec::serialize(
+        *nodes_cfg, {/*compression=*/true});
     if (serialized == "" && err != Status::OK) {
       ld_error("Failed to serialize the NodesConfiguration with error %s",
                error_description(err));

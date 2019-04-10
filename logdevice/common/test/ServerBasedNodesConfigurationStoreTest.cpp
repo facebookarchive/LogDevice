@@ -12,7 +12,7 @@
 
 #include "logdevice/common/ConfigurationFetchRequest.h"
 #include "logdevice/common/Worker.h"
-#include "logdevice/common/configuration/nodes/NodesConfigurationCodecFlatBuffers.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationCodec.h"
 #include "logdevice/common/protocol/CONFIG_CHANGED_Message.h"
 #include "logdevice/common/protocol/MessageDispatch.h"
 #include "logdevice/common/request_util.h"
@@ -31,11 +31,10 @@ TEST(ServerBasedNodesConfigurationStoreTest, SuccessScenario) {
   settings.num_workers = 5;
   auto processor = make_test_processor(settings, std::move(updatable_config));
   auto nc = processor->getNodesConfiguration();
-  const std::string nc_str =
-      NodesConfigurationCodecFlatBuffers::serialize(*nc, {false});
+  const std::string nc_str = NodesConfigurationCodec::serialize(*nc, {false});
   auto nc_bumped = nc->withIncrementedVersionAndTimestamp();
   const std::string nc_str_bumped =
-      NodesConfigurationCodecFlatBuffers::serialize(*nc_bumped, {false});
+      NodesConfigurationCodec::serialize(*nc_bumped, {false});
 
   folly::Baton<> b;
 

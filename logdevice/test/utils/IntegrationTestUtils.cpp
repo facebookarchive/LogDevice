@@ -39,7 +39,7 @@
 #include "logdevice/common/configuration/LocalLogsConfig.h"
 #include "logdevice/common/configuration/TextConfigUpdater.h"
 #include "logdevice/common/configuration/nodes/NodesConfigLegacyConverter.h"
-#include "logdevice/common/configuration/nodes/NodesConfigurationCodecFlatBuffers.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationCodec.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationManagerFactory.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/event_log/EventLogRebuildingSet.h"
@@ -938,7 +938,7 @@ int Cluster::updateNodesConfigurationFromServerConfig(
   if (store == nullptr) {
     return -1;
   }
-  auto serialized = NodesConfigurationCodecFlatBuffers::serialize(*nc);
+  auto serialized = NodesConfigurationCodec::serialize(*nc);
   if (serialized.empty()) {
     return -1;
   }

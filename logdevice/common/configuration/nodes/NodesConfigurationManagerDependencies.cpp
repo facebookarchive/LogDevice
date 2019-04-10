@@ -12,7 +12,7 @@
 #include <folly/json.h>
 
 #include "logdevice/common/Worker.h"
-#include "logdevice/common/configuration/nodes/NodesConfigurationCodecFlatBuffers.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationCodec.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationManager.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/stats/ClientHistograms.h"
@@ -145,7 +145,7 @@ void Dependencies::overwrite(std::shared_ptr<const NodesConfiguration> config,
   }
 
   std::string serialized_initial_config =
-      NodesConfigurationCodecFlatBuffers::serialize(*config);
+      NodesConfigurationCodec::serialize(*config);
   if (serialized_initial_config.empty()) {
     // Even an empty NC would have a non empty serialization due to fields in
     // the header
@@ -174,13 +174,12 @@ void Dependencies::overwrite(std::shared_ptr<const NodesConfiguration> config,
     }
 
     auto current_version_opt =
-        NodesConfigurationCodecFlatBuffers::extractConfigVersion(
-            current_serialized);
+        NodesConfigurationCodec::extractConfigVersion(current_serialized);
     if (current_version_opt.hasValue()) {
       auto current_version = current_version_opt.value();
       if (current_version >= config->getVersion()) {
-        auto current_config = NodesConfigurationCodecFlatBuffers::deserialize(
-            std::move(current_serialized));
+        auto current_config =
+            NodesConfigurationCodec::deserialize(std::move(current_serialized));
         callback(E::VERSION_MISMATCH, std::move(current_config));
         return;
       }
@@ -211,8 +210,7 @@ void Dependencies::overwrite(std::shared_ptr<const NodesConfiguration> config,
             ret_config = std::move(config);
           }
           if (update_status == E::VERSION_MISMATCH && !value.empty()) {
-            ret_config = NodesConfigurationCodecFlatBuffers::deserialize(
-                std::move(value));
+            ret_config = NodesConfigurationCodec::deserialize(std::move(value));
             ld_assert(ret_config);
             ld_assert_eq(version, ret_config->getVersion());
           }

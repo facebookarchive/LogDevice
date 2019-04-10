@@ -15,7 +15,7 @@
 #include <gtest/gtest_prod.h>
 
 #include "logdevice/common/Timestamp.h"
-#include "logdevice/common/configuration/nodes/NodesConfigurationCodecFlatBuffers.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationCodec.h"
 #include "logdevice/common/test/InMemNodesConfigurationStore.h"
 #include "logdevice/common/test/NodesConfigurationTestUtil.h"
 #include "logdevice/common/test/TestUtil.h"
@@ -127,8 +127,7 @@ TEST(NodesConfigurationInitTest, InitTest) {
   auto nodes_configuration = node_config.getNodesConfiguration();
 
   // Serialize it
-  auto serialized =
-      NodesConfigurationCodecFlatBuffers::serialize(*nodes_configuration);
+  auto serialized = NodesConfigurationCodec::serialize(*nodes_configuration);
 
   // Write it to the InMemoryStore
   auto store = std::make_unique<InMemNodesConfigurationStore>(
@@ -149,8 +148,7 @@ TEST(NodesConfigurationInitTest, InitTest) {
 
 TEST(NodesConfigurationInitTest, Retry) {
   auto nodes_configuration = provisionNodes();
-  auto serialized =
-      NodesConfigurationCodecFlatBuffers::serialize(*nodes_configuration);
+  auto serialized = NodesConfigurationCodec::serialize(*nodes_configuration);
 
   Settings settings(create_default_settings<Settings>());
   settings.nodes_configuration_init_timeout = std::chrono::seconds(10);
@@ -174,8 +172,7 @@ TEST(NodesConfigurationInitTest, Retry) {
 
 TEST(NodesConfigurationInitTest, Timeout) {
   auto nodes_configuration = provisionNodes();
-  auto serialized =
-      NodesConfigurationCodecFlatBuffers::serialize(*nodes_configuration);
+  auto serialized = NodesConfigurationCodec::serialize(*nodes_configuration);
 
   Settings settings(create_default_settings<Settings>());
   settings.nodes_configuration_init_timeout = std::chrono::seconds(2);
@@ -198,8 +195,7 @@ TEST(NodesConfigurationInitTest, Timeout) {
 
 TEST(NodesConfigurationInitTest, WithLongDurationCallback) {
   auto nodes_configuration = provisionNodes();
-  auto serialized =
-      NodesConfigurationCodecFlatBuffers::serialize(*nodes_configuration);
+  auto serialized = NodesConfigurationCodec::serialize(*nodes_configuration);
 
   Settings settings(create_default_settings<Settings>());
   settings.nodes_configuration_init_timeout = std::chrono::seconds(1);

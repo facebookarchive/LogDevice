@@ -5,12 +5,13 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "logdevice/common/configuration/nodes/NodesConfigurationCodecFlatBuffers.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationCodec.h"
 
 #include <zstd.h>
 
+#include "logdevice/common/ThriftCodec.h"
 #include "logdevice/common/debug.h"
-#include "logdevice/common/membership/MembershipCodecFlatBuffers.h"
+#include "logdevice/common/membership/MembershipThriftConverter.h"
 #include "logdevice/common/protocol/ProtocolReader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
 #include "logdevice/include/Err.h"
@@ -22,13 +23,13 @@ namespace nodes {
 
 using apache::thrift::BinarySerializer;
 
-constexpr NodesConfigurationCodecFlatBuffers::ProtocolVersion
-    NodesConfigurationCodecFlatBuffers::CURRENT_PROTO_VERSION;
+constexpr NodesConfigurationCodec::ProtocolVersion
+    NodesConfigurationCodec::CURRENT_PROTO_VERSION;
 
 //////////////////////// NodeServiceDiscovery //////////////////////////////
 
 /*static*/
-thrift::NodeServiceDiscovery NodesConfigurationCodecFlatBuffers::toThrift(
+thrift::NodeServiceDiscovery NodesConfigurationThriftConverter::toThrift(
     const NodeServiceDiscovery& discovery) {
   thrift::NodeServiceDiscovery disc;
   disc.set_address(discovery.address.toString());
@@ -45,7 +46,7 @@ thrift::NodeServiceDiscovery NodesConfigurationCodecFlatBuffers::toThrift(
 }
 
 /*static*/
-int NodesConfigurationCodecFlatBuffers::fromThrift(
+int NodesConfigurationThriftConverter::fromThrift(
     const thrift::NodeServiceDiscovery& obj,
     NodeServiceDiscovery* out) {
   NodeServiceDiscovery result;
@@ -103,13 +104,13 @@ int NodesConfigurationCodecFlatBuffers::fromThrift(
 //////////////////////// SequencerNodeAttribute //////////////////////////////
 
 /*static*/
-thrift::SequencerNodeAttribute NodesConfigurationCodecFlatBuffers::toThrift(
+thrift::SequencerNodeAttribute NodesConfigurationThriftConverter::toThrift(
     const SequencerNodeAttribute& /*unused*/) {
   return thrift::SequencerNodeAttribute{};
 }
 
 /*static*/
-int NodesConfigurationCodecFlatBuffers::fromThrift(
+int NodesConfigurationThriftConverter::fromThrift(
     const thrift::SequencerNodeAttribute& /* unused */,
     SequencerNodeAttribute* out) {
   if (out != nullptr) {
@@ -121,7 +122,7 @@ int NodesConfigurationCodecFlatBuffers::fromThrift(
 //////////////////////// StorageNodeAttribute //////////////////////////////
 
 /*static*/
-thrift::StorageNodeAttribute NodesConfigurationCodecFlatBuffers::toThrift(
+thrift::StorageNodeAttribute NodesConfigurationThriftConverter::toThrift(
     const StorageNodeAttribute& storage_attr) {
   thrift::StorageNodeAttribute attr;
   attr.set_capacity(storage_attr.capacity);
@@ -132,7 +133,7 @@ thrift::StorageNodeAttribute NodesConfigurationCodecFlatBuffers::toThrift(
 }
 
 /*static*/
-int NodesConfigurationCodecFlatBuffers::fromThrift(
+int NodesConfigurationThriftConverter::fromThrift(
     const thrift::StorageNodeAttribute& obj,
     StorageNodeAttribute* out) {
   StorageNodeAttribute result{
@@ -146,37 +147,37 @@ int NodesConfigurationCodecFlatBuffers::fromThrift(
 
 //////////////////////// NodeAttributesConfig //////////////////////////////
 
-#define GEN_SERIALIZATION_NODE_ATTRS_CONFIG(_Config, _Attribute)           \
-  /*static*/                                                               \
-  thrift::_Config NodesConfigurationCodecFlatBuffers::toThrift(            \
-      const _Config& _config) {                                            \
-    std::map<thrift::node_idx, thrift::_Attribute> node_states;            \
-    for (const auto& node_kv : _config.node_states_) {                     \
-      node_states.emplace(node_kv.first, toThrift(node_kv.second));        \
-    }                                                                      \
-    thrift::_Config config;                                                \
-    config.set_node_states(std::move(node_states));                        \
-    return config;                                                         \
-  }                                                                        \
-                                                                           \
-  /*static*/                                                               \
-  std::shared_ptr<_Config> NodesConfigurationCodecFlatBuffers::fromThrift( \
-      const thrift::_Config& _fb_config) {                                 \
-    auto result = std::make_shared<_Config>();                             \
-    for (const auto& state : _fb_config.node_states) {                     \
-      node_index_t node = state.first;                                     \
-      auto node_attribute = state.second;                                  \
-      _Attribute attr;                                                     \
-      int rv = fromThrift(node_attribute, &attr);                          \
-      if (rv != 0) {                                                       \
-        err = E::INVALID_CONFIG;                                           \
-        return nullptr;                                                    \
-      }                                                                    \
-      result->setNodeAttributes(node, std::move(attr));                    \
-    }                                                                      \
-    /* note: we don't do validation here since it will be done */          \
-    /* at NodesConfiguration deserialization */                            \
-    return result;                                                         \
+#define GEN_SERIALIZATION_NODE_ATTRS_CONFIG(_Config, _Attribute)          \
+  /*static*/                                                              \
+  thrift::_Config NodesConfigurationThriftConverter::toThrift(            \
+      const _Config& _config) {                                           \
+    std::map<thrift::node_idx, thrift::_Attribute> node_states;           \
+    for (const auto& node_kv : _config.node_states_) {                    \
+      node_states.emplace(node_kv.first, toThrift(node_kv.second));       \
+    }                                                                     \
+    thrift::_Config config;                                               \
+    config.set_node_states(std::move(node_states));                       \
+    return config;                                                        \
+  }                                                                       \
+                                                                          \
+  /*static*/                                                              \
+  std::shared_ptr<_Config> NodesConfigurationThriftConverter::fromThrift( \
+      const thrift::_Config& _thrift_config) {                            \
+    auto result = std::make_shared<_Config>();                            \
+    for (const auto& state : _thrift_config.node_states) {                \
+      node_index_t node = state.first;                                    \
+      auto node_attribute = state.second;                                 \
+      _Attribute attr;                                                    \
+      int rv = fromThrift(node_attribute, &attr);                         \
+      if (rv != 0) {                                                      \
+        err = E::INVALID_CONFIG;                                          \
+        return nullptr;                                                   \
+      }                                                                   \
+      result->setNodeAttributes(node, std::move(attr));                   \
+    }                                                                     \
+    /* note: we don't do validation here since it will be done */         \
+    /* at NodesConfiguration deserialization */                           \
+    return result;                                                        \
   }
 
 GEN_SERIALIZATION_NODE_ATTRS_CONFIG(ServiceDiscoveryConfig,
@@ -192,28 +193,28 @@ GEN_SERIALIZATION_NODE_ATTRS_CONFIG(StorageAttributeConfig,
 
 #define GEN_SERIALIZATION_PER_ROLE_CONFIG(_Config, _AttrConfig, _Membership) \
   /*static*/                                                                 \
-  thrift::_Config NodesConfigurationCodecFlatBuffers::toThrift(              \
+  thrift::_Config NodesConfigurationThriftConverter::toThrift(               \
       const _Config& _config) {                                              \
     /* must serialize a valid config */                                      \
     ld_check(_config.membership_ != nullptr);                                \
     ld_check(_config.attributes_ != nullptr);                                \
     thrift::_Config conf;                                                    \
     conf.set_attr_conf(toThrift(*_config.attributes_));                      \
-    conf.set_membership(membership::MembershipCodecFlatBuffers::toThrift(    \
+    conf.set_membership(membership::MembershipThriftConverter::toThrift(     \
         *_config.membership_));                                              \
     return conf;                                                             \
   }                                                                          \
                                                                              \
   /*static*/                                                                 \
-  std::shared_ptr<_Config> NodesConfigurationCodecFlatBuffers::fromThrift(   \
-      const thrift::_Config& _fb_config) {                                   \
-    auto attr_config = fromThrift(_fb_config.attr_conf);                     \
+  std::shared_ptr<_Config> NodesConfigurationThriftConverter::fromThrift(    \
+      const thrift::_Config& _thrift_config) {                               \
+    auto attr_config = fromThrift(_thrift_config.attr_conf);                 \
     if (attr_config == nullptr) {                                            \
       err = E::INVALID_CONFIG;                                               \
       return nullptr;                                                        \
     }                                                                        \
-    auto membership = membership::MembershipCodecFlatBuffers::fromThrift(    \
-        _fb_config.membership);                                              \
+    auto membership = membership::MembershipThriftConverter::fromThrift(     \
+        _thrift_config.membership);                                          \
     if (membership == nullptr) {                                             \
       err = E::INVALID_CONFIG;                                               \
       return nullptr;                                                        \
@@ -234,7 +235,7 @@ GEN_SERIALIZATION_PER_ROLE_CONFIG(StorageConfig,
 //////////////////////// MetaDataLogsReplication //////////////////////////////
 
 /* static */
-thrift::MetaDataLogsReplication NodesConfigurationCodecFlatBuffers::toThrift(
+thrift::MetaDataLogsReplication NodesConfigurationThriftConverter::toThrift(
     const MetaDataLogsReplication& config) {
   // must serialize a valid config
   ld_check(config.validate());
@@ -258,7 +259,7 @@ thrift::MetaDataLogsReplication NodesConfigurationCodecFlatBuffers::toThrift(
 
 /* static */
 std::shared_ptr<MetaDataLogsReplication>
-NodesConfigurationCodecFlatBuffers::fromThrift(
+NodesConfigurationThriftConverter::fromThrift(
     const thrift::MetaDataLogsReplication& flat_buffer_config) {
   auto result = std::make_shared<MetaDataLogsReplication>();
   std::vector<ReplicationProperty::ScopeReplication> scopes;
@@ -290,7 +291,7 @@ NodesConfigurationCodecFlatBuffers::fromThrift(
 
 /* static */
 thrift::NodesConfiguration
-NodesConfigurationCodecFlatBuffers::toThrift(const NodesConfiguration& config) {
+NodesConfigurationThriftConverter::toThrift(const NodesConfiguration& config) {
   // config must have valid components
   ld_check(config.service_discovery_ != nullptr);
   ld_check(config.sequencer_config_ != nullptr);
@@ -298,7 +299,7 @@ NodesConfigurationCodecFlatBuffers::toThrift(const NodesConfiguration& config) {
   ld_check(config.metadata_logs_rep_ != nullptr);
 
   thrift::NodesConfiguration conf;
-  conf.set_proto_version(CURRENT_PROTO_VERSION);
+  conf.set_proto_version(NodesConfigurationCodec::CURRENT_PROTO_VERSION);
   conf.set_version(config.getVersion().val());
   conf.set_service_discovery(toThrift(*config.service_discovery_));
   conf.set_sequencer_config(toThrift(*config.sequencer_config_));
@@ -312,11 +313,10 @@ NodesConfigurationCodecFlatBuffers::toThrift(const NodesConfiguration& config) {
 
 /* static */
 std::shared_ptr<NodesConfiguration>
-NodesConfigurationCodecFlatBuffers::fromThrift(
-    const thrift::NodesConfiguration& fb_config) {
-  NodesConfigurationCodecFlatBuffers::ProtocolVersion pv =
-      fb_config.proto_version;
-  if (pv > CURRENT_PROTO_VERSION) {
+NodesConfigurationThriftConverter::fromThrift(
+    const thrift::NodesConfiguration& thrift_config) {
+  NodesConfigurationCodec::ProtocolVersion pv = thrift_config.proto_version;
+  if (pv > NodesConfigurationCodec::CURRENT_PROTO_VERSION) {
     RATELIMIT_ERROR(std::chrono::seconds(10),
                     5,
                     "Received codec protocol version "
@@ -325,7 +325,7 @@ NodesConfigurationCodecFlatBuffers::fromThrift(
                     "might be incompatible data, "
                     "aborting deserialization",
                     pv,
-                    CURRENT_PROTO_VERSION);
+                    NodesConfigurationCodec::CURRENT_PROTO_VERSION);
     err = E::NOTSUPPORTED;
     return nullptr;
   }
@@ -334,7 +334,7 @@ NodesConfigurationCodecFlatBuffers::fromThrift(
 
 #define PARSE_SUB_CONF(_name)                             \
   do {                                                    \
-    result->_name##_ = fromThrift(fb_config._name);       \
+    result->_name##_ = fromThrift(thrift_config._name);   \
     if (result->_name##_ == nullptr) {                    \
       ld_error("failure to parse subconfig %s.", #_name); \
       err = E::INVALID_CONFIG;                            \
@@ -348,12 +348,12 @@ NodesConfigurationCodecFlatBuffers::fromThrift(
   PARSE_SUB_CONF(metadata_logs_rep);
 #undef PARSE_SUB_CONF
 
-  result->version_ = membership::MembershipVersion::Type(fb_config.version);
-  result->last_change_timestamp_ = fb_config.last_timestamp;
+  result->version_ = membership::MembershipVersion::Type(thrift_config.version);
+  result->last_change_timestamp_ = thrift_config.last_timestamp;
   result->last_maintenance_ =
-      membership::MaintenanceID::Type(fb_config.last_maintenance);
-  if (!fb_config.last_context.empty()) {
-    result->last_change_context_ = fb_config.last_context;
+      membership::MaintenanceID::Type(thrift_config.last_maintenance);
+  if (!thrift_config.last_context.empty()) {
+    result->last_change_context_ = thrift_config.last_context;
   }
 
   // recompute all config metadata
@@ -371,12 +371,11 @@ NodesConfigurationCodecFlatBuffers::fromThrift(
 }
 
 /*static*/
-void NodesConfigurationCodecFlatBuffers::serialize(
-    const NodesConfiguration& nodes_config,
-    ProtocolWriter& writer,
-    SerializeOptions options) {
-  std::string thrift_str =
-      serializeThrift<BinarySerializer>(toThrift(nodes_config));
+void NodesConfigurationCodec::serialize(const NodesConfiguration& nodes_config,
+                                        ProtocolWriter& writer,
+                                        SerializeOptions options) {
+  std::string thrift_str = ThriftCodec::serialize<BinarySerializer>(
+      NodesConfigurationThriftConverter::toThrift(nodes_config));
   auto data_blob = Slice::fromString(thrift_str);
 
   std::unique_ptr<uint8_t[]> buffer;
@@ -416,15 +415,15 @@ void NodesConfigurationCodecFlatBuffers::serialize(
       // TODO get rid of this copy
       std::string(data_blob.ptr(), data_blob.size));
 
-  writer.writeVector(serializeThrift<BinarySerializer>(wrapper));
+  writer.writeVector(ThriftCodec::serialize<BinarySerializer>(wrapper));
 }
 
 /*static*/
 std::shared_ptr<const NodesConfiguration>
-NodesConfigurationCodecFlatBuffers::deserialize(Slice wrapper_blob) {
+NodesConfigurationCodec::deserialize(Slice wrapper_blob) {
   auto wrapper_ptr =
-      deserializeThrift<BinarySerializer, thrift::NodesConfigurationWrapper>(
-          wrapper_blob);
+      ThriftCodec::deserialize<BinarySerializer,
+                               thrift::NodesConfigurationWrapper>(wrapper_blob);
   if (wrapper_ptr == nullptr) {
     err = E::BADMSG;
     return nullptr;
@@ -474,19 +473,19 @@ NodesConfigurationCodecFlatBuffers::deserialize(Slice wrapper_blob) {
   }
 
   auto config_ptr =
-      deserializeThrift<BinarySerializer, thrift::NodesConfiguration>(
+      ThriftCodec::deserialize<BinarySerializer, thrift::NodesConfiguration>(
           data_blob);
   if (config_ptr == nullptr) {
     err = E::BADMSG;
     return nullptr;
   }
-  return NodesConfigurationCodecFlatBuffers::fromThrift(*config_ptr);
+  return NodesConfigurationThriftConverter::fromThrift(*config_ptr);
 }
 
 /*static*/
-std::string NodesConfigurationCodecFlatBuffers::serialize(
-    const NodesConfiguration& nodes_config,
-    SerializeOptions options) {
+std::string
+NodesConfigurationCodec::serialize(const NodesConfiguration& nodes_config,
+                                   SerializeOptions options) {
   std::string result;
   ProtocolWriter w(&result, "NodesConfiguraton", 0);
   serialize(nodes_config, w, options);
@@ -499,13 +498,13 @@ std::string NodesConfigurationCodecFlatBuffers::serialize(
 
 /*static*/
 std::shared_ptr<const NodesConfiguration>
-NodesConfigurationCodecFlatBuffers::deserialize(folly::StringPiece buf) {
+NodesConfigurationCodec::deserialize(folly::StringPiece buf) {
   return deserialize(Slice(buf.data(), buf.size()));
 }
 
 /*static*/
 folly::Optional<membership::MembershipVersion::Type>
-NodesConfigurationCodecFlatBuffers::extractConfigVersion(
+NodesConfigurationCodec::extractConfigVersion(
     folly::StringPiece serialized_data) {
   if (serialized_data.empty()) {
     return folly::none;
@@ -513,7 +512,8 @@ NodesConfigurationCodecFlatBuffers::extractConfigVersion(
   // TODO consider using thrift frozen for this wrapper to avoid deserializing
   // the whole struct to get the version.
   auto wrapper_ptr =
-      deserializeThrift<BinarySerializer, thrift::NodesConfigurationWrapper>(
+      ThriftCodec::deserialize<BinarySerializer,
+                               thrift::NodesConfigurationWrapper>(
           Slice{serialized_data.data(), serialized_data.size()});
   if (wrapper_ptr == nullptr) {
     RATELIMIT_ERROR(

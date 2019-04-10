@@ -9,7 +9,7 @@
 #include "logdevice/common/configuration/nodes/NodesConfigurationManager.h"
 
 #include "logdevice/common/configuration/UpdateableConfig.h"
-#include "logdevice/common/configuration/nodes/NodesConfigurationCodecFlatBuffers.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationCodec.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/request_util.h"
 #include "logdevice/common/stats/Stats.h"
@@ -243,7 +243,7 @@ void NodesConfigurationManager::onNewConfig(std::string new_config) {
   }
 
   auto new_version_opt =
-      NodesConfigurationCodecFlatBuffers::extractConfigVersion(new_config);
+      NodesConfigurationCodec::extractConfigVersion(new_config);
   if (!new_version_opt) {
     // Invalid serialized blob.
     STAT_INCR(
@@ -256,8 +256,7 @@ void NodesConfigurationManager::onNewConfig(std::string new_config) {
     return;
   }
 
-  auto parsed_config_ptr =
-      NodesConfigurationCodecFlatBuffers::deserialize(new_config);
+  auto parsed_config_ptr = NodesConfigurationCodec::deserialize(new_config);
   if (!parsed_config_ptr) {
     // err is set by deserialize()
     STAT_INCR(
@@ -352,7 +351,7 @@ void NodesConfigurationManager::onUpdateRequest(
   // continuous.
   new_config = new_config->withVersion(
       membership::MembershipVersion::Type{current_version.val() + 1});
-  auto serialized = NodesConfigurationCodecFlatBuffers::serialize(*new_config);
+  auto serialized = NodesConfigurationCodec::serialize(*new_config);
   if (serialized.empty()) {
     callback(err, nullptr);
     return;
@@ -387,14 +386,13 @@ void NodesConfigurationManager::onUpdateRequest(
             !stored_data.empty()) {
           if (folly::kIsDebug) {
             auto extracted_version_opt =
-                NodesConfigurationCodecFlatBuffers::extractConfigVersion(
-                    stored_data);
+                NodesConfigurationCodec::extractConfigVersion(stored_data);
             ld_assert(extracted_version_opt.hasValue());
             ld_assert_eq(stored_version, extracted_version_opt.value());
             ld_assert_gt(stored_version, new_config->getVersion());
           }
-          auto stored_config = NodesConfigurationCodecFlatBuffers::deserialize(
-              std::move(stored_data));
+          auto stored_config =
+              NodesConfigurationCodec::deserialize(std::move(stored_data));
           ld_assert(stored_config);
           notify_ncm_of_new_config(stored_config);
           callback(E::VERSION_MISMATCH, std::move(stored_config));

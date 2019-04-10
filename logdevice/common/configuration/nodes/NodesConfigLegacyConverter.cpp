@@ -14,7 +14,7 @@
 #include "logdevice/common/configuration/Node.h"
 #include "logdevice/common/configuration/NodesConfig.h"
 #include "logdevice/common/configuration/ServerConfig.h"
-#include "logdevice/common/configuration/nodes/NodesConfigurationCodecFlatBuffers.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationCodec.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/membership/utils.h"
 #include "logdevice/common/toString.h"
@@ -397,7 +397,7 @@ bool NodesConfigLegacyConverter::testSerialization(
 
   auto serialization_start_time = std::chrono::steady_clock::now();
   auto config_str =
-      NodesConfigurationCodecFlatBuffers::serialize(*nodes_config, {compress});
+      NodesConfigurationCodec::serialize(*nodes_config, {compress});
   auto serialization_end_time = std::chrono::steady_clock::now();
   if (config_str.empty()) {
     ld_error("Serialization failed for config %s.",
@@ -416,8 +416,7 @@ bool NodesConfigLegacyConverter::testSerialization(
       config_str.size());
 
   auto deserialization_start_time = std::chrono::steady_clock::now();
-  auto deseriazed_config =
-      NodesConfigurationCodecFlatBuffers::deserialize(config_str);
+  auto deseriazed_config = NodesConfigurationCodec::deserialize(config_str);
   auto deserialization_end_time = std::chrono::steady_clock::now();
 
   ld_info("Deserialization took %lu usec with compression %s for config with "

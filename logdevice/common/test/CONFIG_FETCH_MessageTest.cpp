@@ -14,7 +14,7 @@
 #include <gtest/gtest.h>
 #include <gtest/gtest_prod.h>
 
-#include "logdevice/common/configuration/nodes/NodesConfigurationCodecFlatBuffers.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationCodec.h"
 #include "logdevice/common/protocol/CONFIG_CHANGED_Message.h"
 #include "logdevice/common/protocol/Compatibility.h"
 #include "logdevice/common/protocol/FixedSizeMessage.h"
@@ -133,7 +133,7 @@ void compareChangedMessages(std::unique_ptr<CONFIG_CHANGED_Message>& expected,
 
 TEST(CONFIG_FETCH_MessageTest, OnReceivedNodesConfiguration) {
   auto serialize = [](const std::shared_ptr<const NodesConfiguration>& cfg) {
-    return configuration::nodes::NodesConfigurationCodecFlatBuffers::serialize(
+    return configuration::nodes::NodesConfigurationCodec::serialize(
         *cfg, {true});
   };
   CONFIG_FETCH_MessageMock msg{

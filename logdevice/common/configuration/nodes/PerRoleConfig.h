@@ -172,7 +172,7 @@ class PerRoleConfig {
   std::shared_ptr<const AttributesConfig> attributes_{nullptr};
 
   friend class NodesConfigLegacyConverter;
-  friend class NodesConfigurationCodecFlatBuffers;
+  friend class NodesConfigurationThriftConverter;
 };
 
 }}}} // namespace facebook::logdevice::configuration::nodes

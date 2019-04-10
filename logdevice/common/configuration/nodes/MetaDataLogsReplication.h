@@ -49,7 +49,7 @@ class MetaDataLogsReplication {
   ReplicationProperty replication_{};
 
   friend class NodesConfigLegacyConverter;
-  friend class NodesConfigurationCodecFlatBuffers;
+  friend class NodesConfigurationThriftConverter;
 };
 
 }}}} // namespace facebook::logdevice::configuration::nodes

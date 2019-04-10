@@ -16,7 +16,7 @@
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/configuration/Node.h"
 #include "logdevice/common/configuration/ServerConfig.h"
-#include "logdevice/common/configuration/nodes/NodesConfigurationCodecFlatBuffers.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationCodec.h"
 #include "logdevice/common/plugin/CommonBuiltinPlugins.h"
 #include "logdevice/common/request_util.h"
 #include "logdevice/common/settings/util.h"
@@ -175,8 +175,7 @@ std::shared_ptr<Processor> NodesConfigurationInit::buildBootstrappingProcessor(
 
 std::shared_ptr<const configuration::nodes::NodesConfiguration>
 NodesConfigurationInit::parseNodesConfiguration(const std::string& config) {
-  return configuration::nodes::NodesConfigurationCodecFlatBuffers::deserialize(
-      config);
+  return configuration::nodes::NodesConfigurationCodec::deserialize(config);
 }
 
 folly::Future<bool> NodesConfigurationInit::getConfigWithRetryingAndTimeout(
