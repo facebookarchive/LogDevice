@@ -58,14 +58,14 @@ void ClusterStateTable::clearResults() {
   results_.clear();
 }
 
-std::string
-ClusterStateTable::nodesStateToString(const configuration::Nodes& nodes,
-                                      std::vector<uint8_t> nodes_state) {
+std::string ClusterStateTable::nodesStateToString(
+    const configuration::nodes::NodesConfiguration& nodes_configuration,
+    std::vector<uint8_t> nodes_state) {
   std::vector<node_index_t> dead_nodes;
   if (!nodes_state.empty()) {
-    for (auto const& it : nodes) {
-      if (nodes_state[it.first] != 0) {
-        dead_nodes.push_back(it.first);
+    for (auto const& kv : *nodes_configuration.getServiceDiscovery()) {
+      if (nodes_state[kv.first] != 0) {
+        dead_nodes.push_back(kv.first);
       }
     }
   }
@@ -84,8 +84,8 @@ std::shared_ptr<TableData> ClusterStateTable::getData(QueryContext& ctx) {
 
   ld_check(client);
   ClientImpl* client_impl = static_cast<ClientImpl*>(client.get());
-  auto config = client_impl->getConfig()->get();
-  auto const& nodes = config->serverConfig()->getNodes();
+  auto config = client_impl->getConfig();
+  const auto& nodes_configuration = config->getNodesConfiguration();
 
   // If the query contains a constraint on the node id, make sure we only query
   // that node.
@@ -97,8 +97,8 @@ std::shared_ptr<TableData> ClusterStateTable::getData(QueryContext& ctx) {
 
   int posted_requests = 0;
   Semaphore sem;
-  for (auto const& it : nodes) {
-    node_index_t node_id = it.first;
+  for (const auto& kv : *nodes_configuration->getServiceDiscovery()) {
+    node_index_t node_id = kv.first;
     if (requested_node_id > -1 && requested_node_id != node_id) {
       continue;
     }
@@ -115,7 +115,7 @@ std::shared_ptr<TableData> ClusterStateTable::getData(QueryContext& ctx) {
         std::chrono::milliseconds(500), // 500ms timeout
         std::chrono::seconds(60),       // wave timeout is useless here
         std::move(cb),
-        NodeID(node_id, it.second.generation));
+        nodes_configuration->getNodeID(node_id));
 
     auto rv = client_impl->getProcessor().postImportant(req);
     ld_check(rv == 0);
@@ -141,7 +141,7 @@ std::shared_ptr<TableData> ClusterStateTable::getData(QueryContext& ctx) {
       table->cols["status"].push_back(s(status));
       if (result.status == E::OK) {
         table->cols["dead_nodes"].push_back(
-            nodesStateToString(nodes, result.nodes_state));
+            nodesStateToString(*nodes_configuration, result.nodes_state));
         table->cols["boycotted_nodes"].push_back(
             boycottedNodesToString(result.boycotted_nodes));
       } else {

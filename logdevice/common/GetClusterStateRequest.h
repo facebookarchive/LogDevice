@@ -69,6 +69,9 @@ class GetClusterStateRequest : public Request {
   bool start();
 
   virtual std::shared_ptr<ServerConfig> getConfig() const;
+  virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const;
+
   virtual ClusterState* getClusterState() const;
   virtual bool sendTo(NodeID to);
 

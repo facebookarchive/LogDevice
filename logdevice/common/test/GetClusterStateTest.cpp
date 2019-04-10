@@ -39,6 +39,11 @@ class MockGetClusterStateRequest : public GetClusterStateRequest {
     return config_;
   }
 
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const override {
+    return config_->getNodesConfigurationFromServerConfigSource();
+  }
+
   ClusterState* getClusterState() const override {
     return cluster_state_;
   }

@@ -14,6 +14,7 @@
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/configuration/nodes/NodesConfiguration.h"
 #include "logdevice/common/protocol/GET_CLUSTER_STATE_Message.h"
 #include "logdevice/common/stats/Stats.h"
 
@@ -50,7 +51,7 @@ bool GetClusterStateRequest::start() {
   ld_spew("Starting cluster state refresh");
 
   activateWaveTimer();
-  auto config = getConfig();
+  const auto& nodes_configuration = getNodesConfiguration();
 
   // send messages to the first nodes up to wave_size_
   auto cur = next_node_pos_;
@@ -60,17 +61,19 @@ bool GetClusterStateRequest::start() {
   auto end = std::min(next_node_pos_ + wave_size_, nodes_.size());
   next_node_pos_ = end;
   for (; cur < end; cur++) {
-    const Configuration::Node* node = config->getNode(nodes_[cur]);
-    // Node may have been removed from config.
-    if (node != nullptr && sendTo(NodeID(nodes_[cur], node->generation))) {
+    node_index_t node = nodes_[cur];
+    if (nodes_configuration->isNodeInServiceDiscoveryConfig(node) &&
+        sendTo(nodes_configuration->getNodeID(node))) {
       return true;
     }
+    // Node may have been removed from config.
   }
   return false;
 }
 
 void GetClusterStateRequest::initNodes() {
   auto config = getConfig();
+  const auto& nodes_configuration = getNodesConfiguration();
 
   // the following settings is only used in tests to force selection of nodes
   // to be recipients of GET_CLUSTER_STATE messages
@@ -95,15 +98,15 @@ void GetClusterStateRequest::initNodes() {
   }
 
   if (test_recipients.empty()) {
-    for (const auto& it : config->getNodes()) {
-      ld_spew("Adding node N%d", it.first);
-      if (server_side && it.first == my_idx) {
+    for (const auto& kv : *nodes_configuration->getServiceDiscovery()) {
+      ld_spew("Adding node N%d", kv.first);
+      if (server_side && kv.first == my_idx) {
         // Not adding self as a possible destination for
         // sending GET-CLUSTER-STATE
         continue;
       }
 
-      nodes_.push_back(it.first);
+      nodes_.push_back(kv.first);
     }
   } else {
     nodes_ = test_recipients;
@@ -162,6 +165,11 @@ bool GetClusterStateRequest::done(Status status,
 
 std::shared_ptr<ServerConfig> GetClusterStateRequest::getConfig() const {
   return Worker::getConfig()->serverConfig();
+}
+
+std::shared_ptr<const configuration::nodes::NodesConfiguration>
+GetClusterStateRequest::getNodesConfiguration() const {
+  return Worker::onThisThread()->getNodesConfiguration();
 }
 
 ClusterState* GetClusterStateRequest::getClusterState() const {

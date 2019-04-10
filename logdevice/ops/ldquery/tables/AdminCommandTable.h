@@ -98,16 +98,19 @@ class AdminCommandTable : public Table {
 
   // Returns the list of nodes that we should query. This may leverage the query
   // constraints to figure out which nodes need not to be queried.
-  std::vector<node_index_t> selectNodes(const Configuration::Nodes& nodes,
-                                        QueryContext& ctx) const;
+  std::vector<node_index_t> selectNodes(
+      const configuration::nodes::NodesConfiguration& nodes_configuration,
+      QueryContext& ctx) const;
 
   const TableColumns& getColumnsImpl() const;
 
   // Get the address to use to issue admin commands to node at pos `nid` in the
   // cluster. and return both the address and wether it expects SSL.
   std::tuple<folly::SocketAddress, AdminCommandClient::ConnectionType>
-  getAddrForNode(node_index_t nid,
-                 const std::shared_ptr<Configuration>& config);
+  getAddrForNode(
+      node_index_t nid,
+      const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
+          nodes_configuration);
 
   // Check if we need to fetch data from logdeviced instances in the cluster to
   // populate admin_cmd_cache_.

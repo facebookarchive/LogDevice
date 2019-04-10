@@ -14,7 +14,10 @@
 #include "../Utils.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/configuration/nodes/NodesConfigLegacyConverter.h"
+#include "logdevice/common/configuration/nodes/NodesConfiguration.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/membership/utils.h"
 #include "logdevice/lib/ClientImpl.h"
 
 using facebook::logdevice::Configuration;
@@ -86,37 +89,66 @@ std::shared_ptr<TableData> Nodes::getData(QueryContext& /*ctx*/) {
   auto ld_client = ld_ctx_->getClient();
   ld_check(ld_client);
   ClientImpl* client_impl = static_cast<ClientImpl*>(ld_client.get());
-  auto config = client_impl->getConfig()->get();
+  auto config = client_impl->getConfig();
 
-  const auto& nodes = config->serverConfig()->getNodes();
-  const auto& metadata_nodes = config->serverConfig()->getMetaDataNodeIndices();
+  const auto& nodes_configuration = config->getNodesConfiguration();
+  const auto& seq_membership = nodes_configuration->getSequencerMembership();
+  const auto& storage_membership = nodes_configuration->getStorageMembership();
+  const auto& metadata_nodes = storage_membership->getMetaDataNodeIndices();
 
-  for (const auto& it : nodes) {
+  for (const auto& kv : *nodes_configuration->getServiceDiscovery()) {
     result->newRow();
-    node_index_t nid = it.first;
-    const Configuration::Node& node = it.second;
+    node_index_t nid = kv.first;
+    const auto& node_sd = kv.second;
     result->set("node_id", s(nid));
-    result->set("address", node.address.toString());
-    if (node.ssl_address.hasValue()) {
-      result->set("ssl_address", node.ssl_address.value().toString());
+    result->set("address", node_sd.address.toString());
+    if (node_sd.ssl_address.hasValue()) {
+      result->set("ssl_address", node_sd.ssl_address.value().toString());
     }
-    result->set("generation", s(node.generation));
-    if (node.location.hasValue()) {
-      result->set("location", node.location.value().toString());
+    result->set("generation", s(nodes_configuration->getNodeGeneration(nid)));
+    if (node_sd.location.hasValue()) {
+      result->set("location", node_sd.location.value().toString());
     }
+    result->set("sequencer",
+                s(node_sd.hasRole(configuration::nodes::NodeRole::SEQUENCER)));
     result->set(
-        "sequencer", s(node.hasRole(Configuration::NodeRole::SEQUENCER)));
-    result->set("storage", s(node.hasRole(Configuration::NodeRole::STORAGE)));
-    if (node.hasRole(Configuration::NodeRole::SEQUENCER)) {
-      result->set("sequencer_weight", s(node.getSequencerWeight()));
+        "storage", s(node_sd.hasRole(configuration::nodes::NodeRole::STORAGE)));
+
+    if (seq_membership->hasNode(nid)) {
+      ld_check(seq_membership->getNodeStatePtr(nid) != nullptr);
+      result->set(
+          "sequencer_weight",
+          s(seq_membership->getNodeStatePtr(nid)->getEffectiveWeight()));
     }
-    if (node.hasRole(Configuration::NodeRole::STORAGE)) {
-      auto* storage = node.storage_attributes.get();
-      result->set("storage_state",
-                  configuration::storageStateToString(node.getStorageState()));
-      result->set("storage_weight", s(storage->capacity));
-      result->set("num_shards", s(storage->num_shards));
+
+    if (storage_membership->hasNode(nid)) {
+      const auto* storage_attr =
+          nodes_configuration->getNodeStorageAttribute(nid);
+      ld_check(storage_attr != nullptr);
+      // TODO: support showing per-shard storage state
+      // TODO: in compatibility mode, use the storage state of ShardID(nid, 0)
+      ShardID compatibility_shard(nid, 0);
+      auto state_res = storage_membership->getShardState(compatibility_shard);
+      if (state_res.first) {
+        // TODO: use the new storage state string
+        // result->set(
+        //     "storage_state",
+        //     membership::toString(state_res.second.storage_state).toString());
+        const auto legacy_storage_state =
+            configuration::nodes::NodesConfigLegacyConverter::
+                toLegacyStorageState(state_res.second.storage_state);
+        result->set("storage_state",
+                    configuration::storageStateToString(legacy_storage_state));
+      } else {
+        ld_warning("Node %hu does not have shard %s in storage membership!",
+                   nid,
+                   compatibility_shard.toString().c_str());
+      }
+
+      result->set("storage_weight", s(storage_attr->capacity));
+      result->set("num_shards", s(storage_attr->num_shards));
     }
+
     const bool is_metadata_node =
         std::find(metadata_nodes.begin(), metadata_nodes.end(), nid) !=
         metadata_nodes.end();

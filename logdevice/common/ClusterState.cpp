@@ -161,8 +161,8 @@ void ClusterState::onGetClusterStateDone(
     notifyRefreshComplete();
   };
 
-  auto config = Worker::getConfig();
-  auto server_config = config->serverConfig();
+  const auto& nodes_configuration =
+      Worker::onThisThread()->getNodesConfiguration();
 
   folly::SharedMutex::ReadHolder read_lock(shutdown_mutex_);
   if (shutdown_) {
@@ -179,7 +179,7 @@ void ClusterState::onGetClusterStateDone(
     std::vector<std::string> dead;
     for (int i = 0; i < nodes_state.size(); i++) {
       setNodeState(i, static_cast<ClusterState::NodeState>(nodes_state[i]));
-      if (server_config->getNode(i) != nullptr &&
+      if (nodes_configuration->isNodeInServiceDiscoveryConfig(i) &&
           nodes_state[i] == ClusterState::NodeState::DEAD) {
         dead.push_back("N" + std::to_string(i));
       }
@@ -248,8 +248,9 @@ void ClusterState::resizeClusterState(size_t new_size, bool notifySubscribers) {
 }
 
 void ClusterState::noteConfigurationChanged() {
-  auto config = Worker::getConfig();
-  size_t new_size = config->serverConfig()->getMaxNodeIdx() + 1;
+  const auto& nodes_configuration =
+      Worker::onThisThread()->getNodesConfiguration();
+  size_t new_size = nodes_configuration->getMaxNodeIndex() + 1;
 
   if (getClusterSize() != new_size) {
     resizeClusterState(new_size, true);

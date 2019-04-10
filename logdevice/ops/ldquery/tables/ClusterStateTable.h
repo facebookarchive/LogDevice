@@ -13,6 +13,7 @@
 #include "../Context.h"
 #include "../Table.h"
 #include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/common/configuration/nodes/NodesConfiguration.h"
 
 namespace facebook {
   namespace logdevice {
@@ -52,8 +53,10 @@ class ClusterStateTable : public Table {
                  std::vector<uint8_t> nodes_state,
                  std::vector<node_index_t> boycotted_nodes);
 
-  std::string nodesStateToString(const configuration::Nodes& nodes,
-                                 std::vector<uint8_t> nodes_state);
+  std::string nodesStateToString(
+      const configuration::nodes::NodesConfiguration& nodes_configuration,
+      std::vector<uint8_t> nodes_state);
+
   std::string boycottedNodesToString(std::vector<node_index_t> boycotted_nodes);
 
  private:

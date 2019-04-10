@@ -96,15 +96,13 @@ ShardAuthoritativeStatus::getData(QueryContext& /*ctx*/) {
     throw LDQueryError(std::move(failure_reason));
   }
 
-  auto nodes_cfg = dynamic_cast<ClientImpl*>(ld_client.get())
-                       ->getConfig()
-                       ->get()
-                       ->serverConfig()
-                       ->getNodes();
+  const auto& nodes_configuration = dynamic_cast<ClientImpl*>(ld_client.get())
+                                        ->getConfig()
+                                        ->getNodesConfiguration();
 
   for (auto& shard : set.getRebuildingShards()) {
     for (auto& node : shard.second.nodes_) {
-      if (nodes_cfg.find(node.first) == nodes_cfg.end()) {
+      if (!nodes_configuration->isNodeInServiceDiscoveryConfig(node.first)) {
         // ignore nodes that are not in config
         continue;
       }

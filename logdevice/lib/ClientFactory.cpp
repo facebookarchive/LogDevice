@@ -29,11 +29,12 @@ namespace facebook { namespace logdevice {
 
 namespace {
 
-bool validateSSLSettings(std::shared_ptr<ServerConfig> config,
-                         std::shared_ptr<const Settings> settings) {
+bool validateSSLSettings(
+    std::shared_ptr<const NodesConfiguration> nodes_configuration,
+    std::shared_ptr<const Settings> settings) {
   size_t ssl_nodes = 0;
-  for (auto node : config->getNodes()) {
-    if (node.second.ssl_address.hasValue()) {
+  for (const auto& kv : *nodes_configuration->getServiceDiscovery()) {
+    if (kv.second.ssl_address.hasValue()) {
       ++ssl_nodes;
     }
   }
@@ -208,8 +209,8 @@ std::shared_ptr<Client> ClientFactory::create(std::string config_url) noexcept {
       config, impl_settings->getSettings(), /*subscribe*/ false);
   ld_check(config->getNodesConfiguration() != nullptr);
 
-  if (!validateSSLSettings(
-          config->getServerConfig(), impl_settings->getSettings().get())) {
+  if (!validateSSLSettings(config->getNodesConfiguration(),
+                           impl_settings->getSettings().get())) {
     // validateSSLSettings() should output the error
     return nullptr;
   }

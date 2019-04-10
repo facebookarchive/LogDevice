@@ -203,7 +203,7 @@ void NodeStatsHandler::onRetry() {
 }
 
 bool NodeStatsHandler::hasValidNodeSet() const {
-  return Worker::onThisThread()->getServerConfig()->getNodes().size() > 0;
+  return Worker::onThisThread()->getNodesConfiguration()->clusterSize() > 0;
 }
 
 NodeID NodeStatsHandler::findDestinationNode() const {

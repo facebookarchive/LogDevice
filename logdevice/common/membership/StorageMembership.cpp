@@ -706,6 +706,19 @@ bool StorageMembership::isInMetadataStorageSet(ShardID shard) const {
   return metadata_shards_.count(shard);
 }
 
+std::set<node_index_t> StorageMembership::getMetaDataNodeSet() const {
+  std::set<node_index_t> result;
+  for (const auto shard : metadata_shards_) {
+    result.insert(shard.node());
+  }
+  return result;
+}
+
+std::vector<node_index_t> StorageMembership::getMetaDataNodeIndices() const {
+  const std::set<node_index_t> meta_set = getMetaDataNodeSet();
+  return std::vector<node_index_t>(meta_set.begin(), meta_set.end());
+}
+
 bool StorageMembership::operator==(const StorageMembership& rhs) const {
   return version_ == rhs.getVersion() && node_states_ == rhs.node_states_ &&
       metadata_shards_ == rhs.metadata_shards_;

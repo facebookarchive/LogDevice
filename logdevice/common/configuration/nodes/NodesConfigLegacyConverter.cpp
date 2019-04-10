@@ -360,6 +360,12 @@ bool NodesConfigLegacyConverter::testWithServerConfig(
     return false;
   }
 
+  if (new_nodes_config->getStorageMembership()->getMetaDataNodeIndices() !=
+      server_config.getMetaDataNodeIndices()) {
+    ld_error("Metadata nodeset indices is inconsistent after conversion");
+    return false;
+  }
+
   NodesConfig converted_back;
   int rv = toLegacyNodesConfig(*new_nodes_config, &converted_back);
   if (rv != 0) {

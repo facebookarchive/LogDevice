@@ -280,6 +280,13 @@ class StorageMembership : public Membership {
 
   bool isInMetadataStorageSet(ShardID shard) const;
 
+  // the following functions return a list/set of node indices of
+  // metadata storage nodes. Useful in practice as LogDevice currently
+  // uses its own implict sharding scheme (e.g., use data log shards)
+  // for metadata logs.
+  std::vector<node_index_t> getMetaDataNodeIndices() const;
+  std::set<node_index_t> getMetaDataNodeSet() const;
+
   size_t numNodes() const {
     return node_states_.size();
   }

@@ -79,22 +79,22 @@ AdminCommandTable::nodeMatchesConstraint(node_index_t nid,
   return MatchResult::MATCH;
 }
 
-std::vector<node_index_t>
-AdminCommandTable::selectNodes(const Configuration::Nodes& nodes,
-                               QueryContext& ctx) const {
+std::vector<node_index_t> AdminCommandTable::selectNodes(
+    const configuration::nodes::NodesConfiguration& nodes_configuration,
+    QueryContext& ctx) const {
   // Look for constraints on column 0 ("node_id").
   const int col_index = 0;
   auto it_c = ctx.constraints.find(col_index);
   std::unordered_set<int> used_constraints;
   std::vector<node_index_t> res;
 
-  for (const auto& it : nodes) {
+  for (const auto& kv : *nodes_configuration.getServiceDiscovery()) {
     bool skip = false;
     if (it_c != ctx.constraints.end() && allowServerSideFiltering()) {
       const ConstraintList& constraints = it_c->second;
       for (int i = 0; i < constraints.constraints_.size(); ++i) {
         const Constraint& c = constraints.constraints_[i];
-        auto res = nodeMatchesConstraint(it.first, c);
+        auto res = nodeMatchesConstraint(kv.first, c);
         if (res != MatchResult::UNUSED) {
           used_constraints.insert(i);
         }
@@ -104,7 +104,7 @@ AdminCommandTable::selectNodes(const Configuration::Nodes& nodes,
 
     if (!skip) {
       // The node matches all used constraints.
-      res.push_back(it.first);
+      res.push_back(kv.first);
     }
   }
 
@@ -189,16 +189,18 @@ void AdminCommandTable::setCacheTTL(std::chrono::seconds ttl) {
 std::tuple<SocketAddress, AdminCommandClient::ConnectionType>
 AdminCommandTable::getAddrForNode(
     node_index_t nid,
-    const std::shared_ptr<Configuration>& config) {
+    const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
+        nodes_configuration) {
   auto ld_client = ld_ctx_->getClient();
   ld_check(ld_client);
-  const Configuration::Node* node = config->serverConfig()->getNode(nid);
-  ld_check(node);
 
-  if (node->address.isUnixAddress()) {
+  const auto* node_sd = nodes_configuration->getNodeServiceDiscovery(nid);
+  ld_check(node_sd);
+
+  if (node_sd->address.isUnixAddress()) {
     // The node is running locally and using a named socket. Expect another
     // named socket named "socket_command" to exist in the same directory.
-    std::string path = node->address.getPath();
+    std::string path = node_sd->address.getPath();
     path = path.substr(0, path.find_last_of("/\\")) + "/socket_command";
     SocketAddress addr;
     addr.setFromPath(path);
@@ -207,7 +209,7 @@ AdminCommandTable::getAddrForNode(
     // The node is using a TCP address. Use the same address but with port 5440
     // to send admin commands.
     // TODO: extract admin port from config
-    auto addr = node->address.getSocketAddress();
+    auto addr = node_sd->address.getSocketAddress();
     addr.setPort(5440);
     // Is encryption needed?
     auto conntype = AdminCommandClient::ConnectionType::PLAIN;
@@ -229,12 +231,12 @@ void AdminCommandTable::refillCache(QueryContext& ctx) {
   ld_check(ld_client);
   logdevice::ClientImpl* client_impl =
       static_cast<logdevice::ClientImpl*>(ld_client.get());
-  auto config = client_impl->getConfig()->get();
-  const auto& config_nodes = config->serverConfig()->getNodes();
+  const auto& nodes_configuration =
+      client_impl->getConfig()->getNodesConfiguration();
 
   // `selectNodes` may decide to select by `node_id`. In that case it will
   // mutate `ctx.used_constraints`.
-  auto selected_nodes = selectNodes(config_nodes, ctx);
+  auto selected_nodes = selectNodes(*nodes_configuration, ctx);
 
   auto used_constraints = ctx.used_constraints;
 
@@ -283,11 +285,12 @@ void AdminCommandTable::refillCache(QueryContext& ctx) {
   AdminCommandClient::RequestResponses request_response;
   request_response.reserve(selected_nodes.size());
   for (node_index_t i : selected_nodes) {
-    ld_check(config_nodes.count(i));
+    ld_check(nodes_configuration->isNodeInServiceDiscoveryConfig(i));
+
     AdminCommandClient::ConnectionType conntype =
         AdminCommandClient::ConnectionType::UNKNOWN;
     SocketAddress addr;
-    std::tie(addr, conntype) = getAddrForNode(i, config);
+    std::tie(addr, conntype) = getAddrForNode(i, nodes_configuration);
     addr_to_node_id[addr] = i;
     request_response.emplace_back(addr, cmd, conntype);
     ld_ctx_->activeQueryMetadata->contacted_nodes++;
