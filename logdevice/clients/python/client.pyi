@@ -2,10 +2,6 @@
 from enum import Enum, auto
 from typing import Any, Dict, Iterator, List, Optional, Tuple, TypeVar
 
-# class stubs
-Directory = TypeVar("Directory")
-LogGroup = TypeVar("LogGroup")
-
 # convenience
 Attrs = Dict[str, Any]
 lsn_t = int
@@ -15,6 +11,12 @@ lsn_t = int
 # not everything is copied, but i have attempted to be as comprehensive as possible
 
 class LogDeviceError(Exception): ...
+
+class LogGroup:
+    pass  # TODO flesh out
+
+class Directory:
+    pass  # TODO flesh out
 
 class Reader:
     def start_reading(self, logid: int, from_: lsn_t, until_: lsn_t) -> bool: ...
