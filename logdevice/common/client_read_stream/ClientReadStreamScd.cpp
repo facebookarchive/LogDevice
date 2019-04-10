@@ -344,6 +344,7 @@ void ClientReadStreamScd::applyScheduledChanges() {
       if (mode_ == Mode::ALL_SEND_ALL) {
         // We are already here, nothing to do.
         scheduled_mode_transition_.clear();
+        filtered_out_.clear();
         return;
       }
 
