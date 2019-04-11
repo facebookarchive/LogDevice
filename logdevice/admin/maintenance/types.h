@@ -16,5 +16,6 @@ using MaintenanceDefinition = thrift::MaintenanceDefinition;
 using GroupID = thrift::MaintenanceGroupID;
 using MaintenanceStatus = thrift::MaintenanceStatus;
 using ShardDataHealth = thrift::ShardDataHealth;
+using ClusterMaintenanceState = thrift::ClusterMaintenanceState;
 
 }}} // namespace facebook::logdevice::maintenance

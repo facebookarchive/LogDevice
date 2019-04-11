@@ -16,7 +16,7 @@ using namespace facebook::logdevice;
 using namespace facebook::logdevice::maintenance;
 
 TEST(SequencerWorkflowTest, EnableSequencer) {
-  auto wf = std::make_unique<SequencerWorkflow>(NodeID(1, 0));
+  auto wf = std::make_unique<SequencerWorkflow>(node_index_t(1));
   wf->setTargetOpState(SequencingState::ENABLED);
   auto future = wf->run(false /*Sequencer currently disabled*/);
   ASSERT_EQ(std::move(future).get(),
@@ -30,7 +30,7 @@ TEST(SequencerWorkflowTest, EnableSequencer) {
 }
 
 TEST(SequencerWorkflowTest, DisableSequencer) {
-  auto wf = std::make_unique<SequencerWorkflow>(NodeID(1, 0));
+  auto wf = std::make_unique<SequencerWorkflow>(node_index_t(1));
   wf->setTargetOpState(SequencingState::DISABLED);
   auto future = wf->run(true /*Sequencer currently enabled*/);
   ASSERT_EQ(std::move(future).get(), MaintenanceStatus::AWAITING_SAFETY_CHECK);
@@ -43,7 +43,7 @@ TEST(SequencerWorkflowTest, DisableSequencer) {
 }
 
 TEST(SequencerWorkflowTest, DisableSequencerSkipSafety) {
-  auto wf = std::make_unique<SequencerWorkflow>(NodeID(1, 0));
+  auto wf = std::make_unique<SequencerWorkflow>(node_index_t(1));
   wf->setTargetOpState(SequencingState::DISABLED);
   wf->shouldSkipSafetyCheck(true);
   auto future = wf->run(true /*Sequencer currently enabled*/);

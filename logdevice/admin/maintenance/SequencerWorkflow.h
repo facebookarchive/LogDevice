@@ -19,7 +19,7 @@ namespace facebook { namespace logdevice { namespace maintenance {
  */
 class SequencerWorkflow {
  public:
-  explicit SequencerWorkflow(NodeID node) : node_(node) {}
+  explicit SequencerWorkflow(node_index_t node) : node_(node) {}
 
   folly::SemiFuture<MaintenanceStatus> run(bool is_sequencing_enabled);
 
@@ -30,8 +30,8 @@ class SequencerWorkflow {
   // Returns the target_op_state_
   SequencingState getTargetOpState() const;
 
-  // Returns the NodeID for this workflow
-  NodeID getNodeID() const;
+  // Returns the Node index for this workflow
+  node_index_t getNodeIndex() const;
 
   // Sets skip_safety_check_ to value of `skip`
   void shouldSkipSafetyCheck(bool skip);
@@ -39,7 +39,7 @@ class SequencerWorkflow {
  private:
   SequencingState target_op_state_;
   // The shard this workflow is for
-  NodeID node_;
+  node_index_t node_;
   // True if Sequencing is enabled in NodesConfig.
   // Updated every time run is called
   SequencingState current_sequencing_state_;

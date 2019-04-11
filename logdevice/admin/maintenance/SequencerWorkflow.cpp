@@ -39,4 +39,8 @@ void SequencerWorkflow::shouldSkipSafetyCheck(bool skip) {
   skip_safety_check_ = skip;
 }
 
+SequencingState SequencerWorkflow::getTargetOpState() const {
+  return target_op_state_;
+}
+
 }}} // namespace facebook::logdevice::maintenance
