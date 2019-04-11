@@ -42,6 +42,7 @@ def fbcode_builder_spec(builder):
     builder.add_option(
         "no1msd/mstch:git_hash", ShellQuoted("$(git describe --abbrev=0 --tags)")
     )
+    builder.add_option("PYTHON_VENV", "ON")
     builder.add_option(
         "LogDevice/logdevice/_build:cmake_defines", {"BUILD_SUBMODULES": "OFF"}
     )

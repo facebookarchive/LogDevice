@@ -61,6 +61,7 @@ class LegocastleFBCodeBuilder(FBCodeBuilder):
 
     def setup(self):
         return self.step('Setup', [
+            self.create_python_venv()] + [
             self.run(ShellQuoted("""
 case "$OSTYPE" in
   darwin*)
@@ -109,7 +110,12 @@ esac
                 )
             elif isinstance(action, LegocastleStep):
                 pre_actions = [
-                    ShellQuoted('set -ex'),
+                    ShellQuoted('set -ex')
+                ]
+                if action.name != 'Setup' and \
+                        self.option("PYTHON_VENV", "OFF") == "ON":
+                    pre_actions.append(self.python_venv())
+                pre_actions.append(
                     ShellQuoted("""
 case "$OSTYPE" in
   darwin*)
@@ -131,8 +137,8 @@ case "$OSTYPE" in
     export SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/
   ;;
 esac
-"""),
-                ]
+""")
+                )
                 if next_workdir is not None:
                     pre_actions.append(self.workdir(next_workdir))
 
