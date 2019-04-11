@@ -73,9 +73,18 @@ class Context(context.Context):
                 self._build_ldquery()
             return self._ldquery
 
-    @property
-    def client(self):
+    def get_client(self):
         return self._client
+
+    def build_client(self, settings=None):
+        default_settings = {"on-demand-logs-config": "true", "num-workers": 2}
+        default_settings.update(settings or {})
+        return Client(
+            "ldshell",
+            self._config_path,
+            timeout=self._timeout,
+            settings=default_settings,
+        )
 
     def _build_ldquery(self):
         config_path = self._config_path
@@ -98,15 +107,9 @@ class Context(context.Context):
             )
             cprint("connect /var/shared/logdevice-cluster.conf", file=sys.stderr)
             return
-        settings = {"on-demand-logs-config": "true", "num-workers": 2}
         with self._lock:
             try:
-                self._client = Client(
-                    "ldshell",
-                    self._config_path,
-                    timeout=self._timeout,
-                    settings=settings,
-                )
+                self._client = self.build_client()
             except Exception as e:
                 cprint("Cannot connect to logdevice cluster!", "red")
                 self._reset()
