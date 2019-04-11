@@ -9,7 +9,6 @@
 
 #include <folly/futures/Future.h>
 
-#include "logdevice/admin/maintenance/EventLogWriter.h"
 #include "logdevice/admin/maintenance/types.h"
 #include "logdevice/common/AuthoritativeStatus.h"
 #include "logdevice/common/Timestamp.h"
@@ -17,6 +16,9 @@
 #include "logdevice/common/membership/StorageState.h"
 
 namespace facebook { namespace logdevice { namespace maintenance {
+
+class EventLogWriter;
+
 /**
  * A ShardWorkflow is a state machine that tracks state
  * transitions of a shard.
@@ -53,10 +55,8 @@ class ShardWorkflow {
   // Adds state to target_op_state_
   void addTargetOpState(std::unordered_set<ShardOperationalState> state);
 
-  // Called if this workflow should only execute active
-  // drain. If safety check fails, we will not run passive
-  // drain for this shard and the maintenance will be blocked
-  void allowActiveDrainsOnly(bool allow);
+  // Sets allow_passive_drain to `allow`.
+  void isPassiveDrainAllowed(bool allow);
 
   // Sets skip_safety_check_ to value of `skip`
   void shouldSkipSafetyCheck(bool skip);
@@ -76,6 +76,14 @@ class ShardWorkflow {
   // shard to be excluded from new nodesets. Used by
   // MaintenanceManager in NodesConfig update request
   bool excludeFromNodeset() const;
+
+  bool operator==(const ShardWorkflow& other) const {
+    return shard_ == other.shard_ &&
+        target_op_state_ == other.target_op_state_ &&
+        allow_passive_drain_ == other.allow_passive_drain_ &&
+        skip_safety_check_ == other.skip_safety_check_ &&
+        restore_mode_rebuilding_ == other.restore_mode_rebuilding_;
+  }
 
  protected:
   // Method that is called when there is an event that needs to
@@ -97,9 +105,9 @@ class ShardWorkflow {
   // and MaintenanceManager will make use of it to request
   // the update in NodesConfiguration.
   membership::StorageState expected_storage_state_;
-  // If safety checker determines that a drain is required, allow
-  // active drains only
-  bool active_drain_only_{false};
+  // If safety checker determines that a drain is needed,
+  // allow passive drain if reruired
+  bool allow_passive_drain_{false};
   // If true, skip safety check for this workflow
   bool skip_safety_check_{false};
   // If true, this shard needs to excluded from new NodeSets

@@ -11,6 +11,8 @@
 #include <folly/MoveWrapper.h>
 #include <thrift/lib/cpp/util/EnumUtils.h>
 
+#include "logdevice/admin/maintenance/EventLogWriter.h"
+
 namespace facebook { namespace logdevice { namespace maintenance {
 
 using apache::thrift::util::enumName;
@@ -257,8 +259,8 @@ void ShardWorkflow::addTargetOpState(
   target_op_state_.insert(state.begin(), state.end());
 }
 
-void ShardWorkflow::allowActiveDrainsOnly(bool allow) {
-  active_drain_only_ = allow;
+void ShardWorkflow::isPassiveDrainAllowed(bool allow) {
+  allow_passive_drain_ = allow;
 }
 
 void ShardWorkflow::shouldSkipSafetyCheck(bool skip) {
