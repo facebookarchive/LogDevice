@@ -189,10 +189,8 @@ Timer::Timer(std::function<void()> callback) {
 
 TimerInterface& Timer::getTimerImpl() const {
   if (!impl_) {
-    // This is called from tests and ldbench workers. Caller cannot assume
-    // Worker interface to be available in those cases.
-    auto worker = Worker::onThisThread(false /* enforce_worker */);
-    if (worker && worker->updateable_settings_->enable_hh_wheel_backed_timers) {
+    auto worker = Worker::onThisThread();
+    if (worker->updateable_settings_->enable_hh_wheel_backed_timers) {
       impl_ = std::make_unique<WheelTimerDispatchImpl>();
     } else {
       impl_ = std::make_unique<LibEventTimerImpl>();

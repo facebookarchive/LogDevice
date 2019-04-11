@@ -15,7 +15,7 @@
 #include <folly/IntrusiveList.h>
 
 #include "logdevice/common/BackoffTimer.h"
-#include "logdevice/common/Timer.h"
+#include "logdevice/common/LibeventTimer.h"
 #include "logdevice/common/util.h"
 
 /**
@@ -68,10 +68,41 @@ class ExponentialBackoffTimer : public BackoffTimer, boost::noncopyable {
   void assign(std::function<void()> callback,
               const chrono_expbackoff_t<Duration>& settings);
 
+  ExponentialBackoffTimer(
+      struct event_base* base,
+      std::function<void()> callback,
+      Duration initial_delay,
+      Duration max_delay,
+      Duration::rep multiplier =
+          chrono_expbackoff_t<Duration>::DEFAULT_MULTIPLIER) {
+    assign(base, std::move(callback), initial_delay, max_delay, multiplier);
+  }
+
+  ExponentialBackoffTimer(struct event_base* base,
+                          std::function<void()> callback,
+                          const chrono_expbackoff_t<Duration>& settings) {
+    assign(base, std::move(callback), settings);
+  }
+
+  void assign(struct event_base* base,
+              std::function<void()> callback,
+              Duration initial_delay,
+              Duration max_delay,
+              Duration::rep multiplier =
+                  chrono_expbackoff_t<Duration>::DEFAULT_MULTIPLIER) {
+    assign(base,
+           std::move(callback),
+           chrono_expbackoff_t<Duration>(initial_delay, max_delay, multiplier));
+  }
+
+  void assign(struct event_base* base,
+              std::function<void()> callback,
+              const chrono_expbackoff_t<Duration>& settings);
+
   void updateSettings(const chrono_expbackoff_t<Duration>& settings);
 
   /**
-   * Has this timer been assigned to an event ?
+   * Has this timer been assigned to an event base?
    */
   bool isAssigned() const {
     return timer_.isAssigned();
@@ -137,7 +168,7 @@ class ExponentialBackoffTimer : public BackoffTimer, boost::noncopyable {
   }
 
  private:
-  Timer timer_;
+  LibeventTimer timer_;
 
   // User-defined settings.
   chrono_expbackoff_t<Duration> settings_;

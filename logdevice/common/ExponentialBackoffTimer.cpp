@@ -23,10 +23,18 @@ ExponentialBackoffTimer::~ExponentialBackoffTimer() {
 void ExponentialBackoffTimer::assign(
     std::function<void()> callback,
     const chrono_expbackoff_t<Duration>& settings) {
+  assign(Worker::onThisThread()->getEventBase(), callback, settings);
+}
+
+void ExponentialBackoffTimer::assign(
+    struct event_base* base,
+    std::function<void()> callback,
+    const chrono_expbackoff_t<Duration>& settings) {
   // Sanity checks
   updateSettings(settings);
 
   // (Re-)initialize members
+  timer_.assign(base, nullptr);
   setCallback(std::move(callback));
   calculateNextEffectiveDelay();
 }

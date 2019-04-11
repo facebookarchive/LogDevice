@@ -13,7 +13,6 @@
 #include "logdevice/common/AdminCommandTable-fwd.h"
 #include "logdevice/common/BackoffTimer.h"
 #include "logdevice/common/ExponentialBackoffTimer.h"
-#include "logdevice/common/LibeventTimer.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/RebuildingTypes.h"
 #include "logdevice/common/configuration/Configuration.h"
