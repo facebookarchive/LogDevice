@@ -939,10 +939,10 @@ void Socket::onError(short direction, int socket_errno) {
            deps_->describeConnection().c_str(),
            (direction & BEV_EVENT_WRITING) ? "writing" : "reading",
            expecting_ssl_handshake_ ? " (during SSL handshake)" : "",
-           errno != 0 ? ("errno=" + std::to_string(socket_errno) + " (" +
-                         strerror(socket_errno) + ")")
-                            .c_str()
-                      : ssl_error_reported
+           socket_errno != 0 ? ("errno=" + std::to_string(socket_errno) + " (" +
+                                strerror(socket_errno) + ")")
+                                   .c_str()
+                             : ssl_error_reported
                    ? "See SSL errors above."
                    : "OpenSSL didn't report any details about the error.");
   } else {
