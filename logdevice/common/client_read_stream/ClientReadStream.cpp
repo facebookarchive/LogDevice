@@ -3915,21 +3915,28 @@ void ClientReadStream::rewind(std::string reason) {
   rewind_scheduler_->cancel();
 
   if (scd_ && scd_->isActive()) {
-    RATELIMIT_INFO(std::chrono::seconds(1),
-                   10,
-                   "Rewinding read stream for log %lu in SCD mode with version "
-                   "%lu. Reason: %s.",
-                   log_id_.val_,
-                   filter_version_.val_,
-                   reason.c_str());
+    RATELIMIT_INFO(
+        std::chrono::seconds(1),
+        10,
+        "Rewinding read stream for log %lu in SCD mode with version "
+        "%lu. LSN: %s, metadata effective since e%u. Reason: %s.",
+        log_id_.val_,
+        filter_version_.val_,
+        lsn_to_string(next_lsn_to_deliver_).c_str(),
+        current_metadata_ ? current_metadata_->h.effective_since.val() : 0u,
+        reason.c_str());
   } else {
-    RATELIMIT_INFO(std::chrono::seconds(1),
-                   10,
-                   "Rewinding read stream for log %lu in ALL_SEND_ALL mode "
-                   "with version %lu. Reason: %s.",
-                   log_id_.val_,
-                   filter_version_.val_,
-                   reason.c_str());
+    RATELIMIT_INFO(
+        std::chrono::seconds(1),
+        10,
+        "Rewinding read stream for log %lu in ALL_SEND_ALL mode "
+        "with version %lu. LSN: %s, metadata effective since e%u. "
+        "Reason: %s.",
+        log_id_.val_,
+        filter_version_.val_,
+        lsn_to_string(next_lsn_to_deliver_).c_str(),
+        current_metadata_ ? current_metadata_->h.effective_since.val() : 0u,
+        reason.c_str());
   }
   RATELIMIT_INFO(std::chrono::seconds(10),
                  1,
