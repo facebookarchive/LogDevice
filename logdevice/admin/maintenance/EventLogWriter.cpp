@@ -8,6 +8,8 @@
 
 #include "logdevice/admin/maintenance/EventLogWriter.h"
 
+#include "logdevice/admin/maintenance/MaintenanceManager.h"
+
 namespace facebook { namespace logdevice { namespace maintenance {
 
 void EventLogWriter::writeToEventLog(
@@ -15,9 +17,8 @@ void EventLogWriter::writeToEventLog(
     std::function<
         void(Status st, lsn_t version, const std::string& /* unused */)> cb)
     const {
-  ld_check(owner_ != nullptr);
-  // TODO:Implementation
-  return;
+  ld_check(event != nullptr);
+  event_log_.writeDelta(*event, cb);
 }
 
 }}} // namespace facebook::logdevice::maintenance

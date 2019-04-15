@@ -8,26 +8,29 @@
 
 #pragma once
 
-#include "logdevice/admin/maintenance/MaintenanceManager.h"
 #include "logdevice/common/event_log/EventLogRecord.h"
+#include "logdevice/common/event_log/EventLogStateMachine.h"
 
 namespace facebook { namespace logdevice { namespace maintenance {
 
 class MaintenanceManager;
 
+/**
+ * A simple wrapper to write an event to EventLog.
+ */
+
 class EventLogWriter {
  public:
-  EventLogWriter(const MaintenanceManager* owner) : owner_(owner) {}
+  explicit EventLogWriter(EventLogStateMachine& event_log)
+      : event_log_(event_log) {}
 
   /*
-   * Adds work to the MaintenanceManager work context to
-   * write an event to the event log
+   * calls writeDelta on EventLogStateMachine
    *
    * @param  event The EventLogRecord that need to be written
    * @param  cb  The callback that gets called once write to event log
    *             is complete. Note: This callback will be called in
-   *             MaintenanceManager's context since it the entity performing
-   *             the write
+   *             context of the thread which does the write.
    */
 
   void writeToEventLog(
@@ -37,6 +40,6 @@ class EventLogWriter {
       const;
 
  private:
-  const MaintenanceManager* owner_;
+  EventLogStateMachine& event_log_;
 };
 }}} // namespace facebook::logdevice::maintenance
