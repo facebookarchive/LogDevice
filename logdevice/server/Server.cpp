@@ -292,8 +292,12 @@ ServerParameters::ServerParameters(
   // publish the NodesConfiguration for the first time. Later a
   // long-living subscribing NodesConfigurationPublisher will be created again
   // in Processor
+  // TODO(T43023435): use an actual TraceLogger to log this initial update.
   NodesConfigurationPublisher publisher(
-      updateable_config_, processor_settings_, /*subscribe*/ false);
+      updateable_config_,
+      processor_settings_,
+      std::make_shared<NoopTraceLogger>(updateable_config_),
+      /*subscribe*/ false);
   ld_check(updateable_config_->getNodesConfiguration() != nullptr);
 
   if (updateable_logs_config->get() == nullptr) {

@@ -8,6 +8,7 @@
 #pragma once
 
 #include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationTracer.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 
@@ -31,6 +32,7 @@ class NodesConfigurationPublisher {
   //                    publish during construction or when publish is called
   NodesConfigurationPublisher(std::shared_ptr<UpdateableConfig> config,
                               UpdateableSettings<Settings> settings,
+                              std::shared_ptr<TraceLogger> trace_logger,
                               bool subscribe = true);
 
  private:
@@ -38,6 +40,7 @@ class NodesConfigurationPublisher {
 
   std::shared_ptr<UpdateableConfig> config_;
   UpdateableSettings<Settings> settings_;
+  configuration::nodes::NodesConfigurationTracer tracer_;
 
   // The subscriptions responsible for refreshing the
   // UpdateableNodesConfiguration.

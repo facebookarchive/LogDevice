@@ -27,6 +27,7 @@
 #include "logdevice/common/HashBasedSequencerLocator.h"
 #include "logdevice/common/MetaDataLogWriter.h"
 #include "logdevice/common/NodesConfigurationPublisher.h"
+#include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/PermissionChecker.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/SecurityInformation.h"
@@ -91,12 +92,14 @@ namespace facebook { namespace logdevice {
 // Processor.h.
 class ProcessorImpl {
  public:
-  ProcessorImpl(Processor* processor, UpdateableSettings<Settings> settings)
+  ProcessorImpl(Processor* processor,
+                UpdateableSettings<Settings> settings,
+                std::shared_ptr<TraceLogger> trace_logger)
       : append_probe_controller_(std::chrono::seconds(10)), // TODO configurable
         worker_load_balancing_(settings->num_workers),
         background_init_flag_(),
         background_queue_(),
-        nc_publisher_(processor->config_, settings) {}
+        nc_publisher_(processor->config_, settings, std::move(trace_logger)) {}
 
   ~ProcessorImpl() {
     for (auto& workers : all_workers_) {
@@ -165,7 +168,7 @@ Processor::Processor(std::shared_ptr<UpdateableConfig> updateable_config,
       settings_(settings),
       plugin_registry_(std::move(plugin_registry)),
       stats_(stats),
-      impl_(new ProcessorImpl(this, settings)),
+      impl_(new ProcessorImpl(this, settings, trace_logger)),
       sequencer_locator_(get_sequencer_locator(plugin_registry_, config_)),
       conn_budget_incoming_(settings_->max_incoming_connections),
       conn_budget_backlog_(settings_->connection_backlog),
@@ -293,7 +296,9 @@ Processor::Processor(std::shared_ptr<UpdateableConfig> updateable_config,
       plugin_registry_(std::make_shared<PluginRegistry>(
           createAugmentedCommonBuiltinPluginVector<StaticPluginLoader>())),
       stats_(stats),
-      impl_(new ProcessorImpl(this, settings)),
+      impl_(new ProcessorImpl(this,
+                              settings,
+                              std::make_shared<NoopTraceLogger>(config_))),
       conn_budget_incoming_(settings_.get()->max_incoming_connections),
       conn_budget_backlog_(settings_.get()->connection_backlog),
       conn_budget_external_(settings_.get()->max_external_connections) {

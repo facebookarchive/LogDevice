@@ -8,13 +8,18 @@
 
 #include "logdevice/common/NodesConfigurationPublisher.h"
 
+#include "logdevice/common/configuration/nodes/NodesConfigurationTracer.h"
+
 namespace facebook { namespace logdevice {
 
 NodesConfigurationPublisher::NodesConfigurationPublisher(
     std::shared_ptr<UpdateableConfig> config,
     UpdateableSettings<Settings> settings,
+    std::shared_ptr<TraceLogger> trace_logger,
     bool subscribe)
-    : config_(std::move(config)), settings_(std::move(settings)) {
+    : config_(std::move(config)),
+      settings_(std::move(settings)),
+      tracer_(std::move(trace_logger)) {
   ld_check(config_ != nullptr);
 
   if (subscribe) {
@@ -36,20 +41,14 @@ NodesConfigurationPublisher::NodesConfigurationPublisher(
 
 void NodesConfigurationPublisher::publish() {
   auto settings = settings_.get();
-
-  std::shared_ptr<const NodesConfiguration> nodes_configuration_to_publish;
-  bool from_ncm;
-  if (settings->enable_nodes_configuration_manager &&
+  bool from_ncm = settings->enable_nodes_configuration_manager &&
       settings->use_nodes_configuration_manager_nodes_configuration &&
-      !settings->bootstrapping) {
-    nodes_configuration_to_publish =
-        config_->getNodesConfigurationFromNCMSource();
-    from_ncm = true;
-  } else {
-    nodes_configuration_to_publish =
-        config_->getNodesConfigurationFromServerConfigSource();
-    from_ncm = false;
-  }
+      !settings->bootstrapping;
+
+  auto ncm_nc = config_->getNodesConfigurationFromNCMSource();
+  auto server_config_nc =
+      config_->getNodesConfigurationFromServerConfigSource();
+  auto nodes_configuration_to_publish = from_ncm ? ncm_nc : server_config_nc;
 
   ld_check(nodes_configuration_to_publish != nullptr);
 
@@ -62,12 +61,21 @@ void NodesConfigurationPublisher::publish() {
       ld_error("Failed to publish NodesConfiguration with version %ld: %s",
                nodes_configuration_to_publish->getVersion().val(),
                error_description(err));
+      // TODO: log sample to an error dataset
     } else {
       ld_info("Published a NodesConfiguration with version %ld from %s",
               nodes_configuration_to_publish->getVersion().val(),
               from_ncm ? "NodesConfigurationManager" : "ServerConfig");
+
+      configuration::nodes::NodesConfigurationTracer::Sample sample;
+      sample.ncm_nc_ = std::move(ncm_nc);
+      sample.server_config_nc_ = std::move(server_config_nc);
+      sample.using_ncm_nc_ = from_ncm;
+      sample.published_nc_ = std::move(nodes_configuration_to_publish);
+      sample.source_ =
+          configuration::nodes::NodesConfigurationTracer::Source::NC_PUBLISHER;
+      tracer_.trace(std::move(sample));
     }
   }
 }
-
 }} // namespace facebook::logdevice
