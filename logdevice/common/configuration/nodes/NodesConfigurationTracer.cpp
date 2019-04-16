@@ -25,14 +25,16 @@ NodesConfigurationTracer::NodesConfigurationTracer(
 /* static */ std::string NodesConfigurationTracer::toString(
     const NodesConfigurationTracer::Source& source) {
   switch (source) {
-    case NodesConfigurationTracer::Source::UNKNOWN:
-      return "unknonwn";
     case NodesConfigurationTracer::Source::NCM_UPDATE:
       return "ncm_update";
     case NodesConfigurationTracer::Source::NCM_OVERWRITE:
       return "ncm_overwrite";
     case NodesConfigurationTracer::Source::NC_PUBLISHER:
       return "nc_publisher";
+    case NodesConfigurationTracer::Source::UNKNOWN:
+      FOLLY_FALLTHROUGH;
+    default:
+      return "unknonwn";
   };
 }
 
