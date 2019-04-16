@@ -356,4 +356,20 @@ void Dependencies::reportEvent(NCMReportType type) {
   processor_->postWithRetrying(req);
 }
 
+void Dependencies::checkAndReportConsistency() {
+  const auto& server_nc =
+      processor_->getNodesConfigurationFromServerConfigSource();
+  const auto& ncm_nc = processor_->getNodesConfigurationFromNCMSource();
+
+  auto diverged = !ncm_nc->equalWithTimestampAndVersionIgnored(*server_nc);
+  auto same_version = server_nc->getVersion() == ncm_nc->getVersion();
+
+  STAT_SET(
+      getStats(), nodes_configuration_server_config_diverged, diverged ? 1 : 0);
+
+  STAT_SET(getStats(),
+           nodes_configuration_server_config_diverged_with_same_version,
+           diverged && same_version ? 1 : 0);
+}
+
 }}}}} // namespace facebook::logdevice::configuration::nodes::ncm

@@ -215,6 +215,9 @@ class NodesConfiguration {
   // same as == operator but with config timestamp ignored
   bool equalWithTimestampIgnored(const NodesConfiguration& rhs) const;
 
+  // same as == operator but with config timestamp and version ignored
+  bool equalWithTimestampAndVersionIgnored(const NodesConfiguration& rhs) const;
+
   virtual ~NodesConfiguration() = default;
 
  private:

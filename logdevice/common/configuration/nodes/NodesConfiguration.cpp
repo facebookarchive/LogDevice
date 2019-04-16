@@ -440,12 +440,17 @@ bool NodesConfiguration::operator==(const NodesConfiguration& rhs) const {
 
 bool NodesConfiguration::equalWithTimestampIgnored(
     const NodesConfiguration& rhs) const {
+  return equalWithTimestampAndVersionIgnored(rhs) && version_ == rhs.version_;
+}
+
+bool NodesConfiguration::equalWithTimestampAndVersionIgnored(
+    const NodesConfiguration& rhs) const {
   return compare_obj_ptrs(service_discovery_, rhs.service_discovery_) &&
       compare_obj_ptrs(sequencer_config_, rhs.sequencer_config_) &&
       compare_obj_ptrs(storage_config_, rhs.storage_config_) &&
       compare_obj_ptrs(metadata_logs_rep_, rhs.metadata_logs_rep_) &&
-      version_ == rhs.version_ && storage_hash_ == rhs.storage_hash_ &&
-      num_shards_ == rhs.num_shards_ && addr_to_index_ == rhs.addr_to_index_ &&
+      storage_hash_ == rhs.storage_hash_ && num_shards_ == rhs.num_shards_ &&
+      addr_to_index_ == rhs.addr_to_index_ &&
       last_maintenance_ == rhs.last_maintenance_ &&
       last_change_context_ == rhs.last_change_context_;
 }

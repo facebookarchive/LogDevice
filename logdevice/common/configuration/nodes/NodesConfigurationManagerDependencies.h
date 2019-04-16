@@ -212,6 +212,10 @@ class Dependencies {
   // Only worker threads have access to stats
   void reportEvent(NCMReportType type);
 
+  // Compare the ServerConfig NC against the NCM NC and report the divergence
+  // to the stats.
+  void checkAndReportConsistency();
+
   NCMWeakPtr ncm_{};
   // Worker / thread pinning in the current work execution model
   Processor* processor_{nullptr};

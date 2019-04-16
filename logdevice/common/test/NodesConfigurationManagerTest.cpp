@@ -22,6 +22,8 @@
 #include "logdevice/common/configuration/nodes/ZookeeperNodesConfigurationStore.h"
 #include "logdevice/common/membership/utils.h"
 #include "logdevice/common/request_util.h"
+#include "logdevice/common/settings/SettingsUpdater.h"
+#include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/test/InMemNodesConfigurationStore.h"
 #include "logdevice/common/test/MockNodesConfigurationStore.h"
 #include "logdevice/common/test/NodesConfigurationTestUtil.h"
@@ -87,7 +89,10 @@ class NodesConfigurationManagerTest : public ::testing::Test {
         std::chrono::seconds(1);
     settings.nodes_configuration_manager_intermediary_shard_state_timeout =
         std::chrono::seconds(2);
-    processor_ = make_test_processor(settings);
+
+    auto stats_params = StatsParams().setIsServer(true);
+    stats_ = std::make_unique<StatsHolder>(std::move(stats_params));
+    processor_ = make_test_processor(settings, nullptr, stats_.get());
 
     auto deps = std::make_unique<TestDeps>(processor_.get(), std::move(store));
     ncm_ = NodesConfigurationManager::create(
@@ -95,6 +100,7 @@ class NodesConfigurationManagerTest : public ::testing::Test {
         std::move(deps));
     ASSERT_TRUE(ncm_->init(std::make_shared<const NodesConfiguration>()));
     ncm_->upgradeToProposer();
+    processor_->setNodesConfigurationManager(ncm_);
   }
 
   //////// Helper functions ////////
@@ -122,6 +128,7 @@ class NodesConfigurationManagerTest : public ::testing::Test {
     EXPECT_EQ(new_version, p->getVersion());
   }
 
+  std::unique_ptr<StatsHolder> stats_;
   std::shared_ptr<Processor> processor_;
   ZookeeperClientBase* z_;
   std::shared_ptr<NodesConfigurationManager> ncm_;
@@ -337,4 +344,104 @@ TEST_F(NodesConfigurationManagerTest, LinearizableReadOnStartup) {
     EXPECT_TRUE(m->init(std::make_shared<const NodesConfiguration>()));
     EXPECT_NE(nullptr, m->getConfig());
   }
+}
+
+TEST_F(NodesConfigurationManagerTest, DivergenceReporting) {
+  auto expect_diverged = [&](bool diverged, bool same_version_stat_bumped) {
+    const auto& ncm_nc = processor_->getNodesConfigurationFromNCMSource();
+    const auto& server_nc =
+        processor_->getNodesConfigurationFromServerConfigSource();
+
+    EXPECT_EQ(
+        !diverged, ncm_nc->equalWithTimestampAndVersionIgnored(*server_nc));
+    auto wait_res = wait_until(
+        "Diverged Stats are updated",
+        [&]() {
+          auto expected = (diverged ? 1 : 0);
+          auto got = processor_->stats_->aggregate()
+                         .nodes_configuration_server_config_diverged.load();
+          ld_info("expected %d, got %ld", expected, got);
+          return expected == got;
+        },
+        std::chrono::steady_clock::now() + std::chrono::seconds(10));
+    EXPECT_EQ(0, wait_res);
+
+    wait_res = wait_until(
+        "Diverged with same version Stats are updated",
+        [&]() {
+          auto expected = (same_version_stat_bumped ? 1 : 0);
+          auto got =
+              processor_->stats_->aggregate()
+                  .nodes_configuration_server_config_diverged_with_same_version
+                  .load();
+          ld_info("expected %d, got %ld", expected, got);
+          return expected == got;
+        },
+        std::chrono::steady_clock::now() + std::chrono::seconds(10));
+    EXPECT_EQ(0, wait_res);
+  };
+
+  {
+    // Because we only log the divergence on servers, we need to set the server
+    // setting to true.
+    SettingsUpdater updater;
+    updater.registerSettings(processor_->updateableSettings());
+    updater.setInternalSetting("server", "true");
+  }
+
+  // Initially both the NCM NC and ServerConfig NC should be empty
+  waitTillNCMReceives(
+      MembershipVersion::Type{MembershipVersion::EMPTY_VERSION.val()});
+  expect_diverged(false, false);
+
+  // Do a ServerConfig update and expect the configs to diverge
+  {
+    auto new_server_config = processor_->config_->getServerConfig()
+                                 ->withNodes(createSimpleNodesConfig(2))
+                                 ->withIncrementedVersion();
+    processor_->config_->updateableServerConfig()->update(
+        std::move(new_server_config));
+  }
+  expect_diverged(true, false);
+
+  // Re-sync the NC config and expect the divergence metrics to be 0
+  {
+    auto new_nc = processor_->getNodesConfigurationFromServerConfigSource();
+    auto new_version = new_nc->getVersion();
+    ncm_->overwrite(
+        std::move(new_nc),
+        [](Status status, std::shared_ptr<const NodesConfiguration>) {
+          ASSERT_EQ(Status::OK, status);
+        });
+    waitTillNCMReceives(new_version);
+  }
+  expect_diverged(false, false);
+
+  // Do a ServerConfig update without a version bump and expect the configs to
+  // diverge and the with_version stat to get bumped
+  {
+    auto new_server_config = processor_->config_->getServerConfig()->withNodes(
+        createSimpleNodesConfig(3));
+    processor_->config_->updateableServerConfig()->update(
+        std::move(new_server_config));
+  }
+  expect_diverged(true, true);
+
+  // Re-sync the NC config and expect the divergence metrics to be 0
+  {
+    // We can't have a new NC with the same version, we will need to bump the
+    // version of the new NC
+    auto new_version = vcs_config_version_t(
+        processor_->config_->getServerConfig()->getVersion().val() + 1);
+    auto new_nc =
+        processor_->getNodesConfigurationFromServerConfigSource()->withVersion(
+            new_version);
+    ncm_->overwrite(
+        std::move(new_nc),
+        [](Status status, std::shared_ptr<const NodesConfiguration>) {
+          ASSERT_EQ(Status::OK, status);
+        });
+    waitTillNCMReceives(new_version);
+  }
+  expect_diverged(false, false);
 }
