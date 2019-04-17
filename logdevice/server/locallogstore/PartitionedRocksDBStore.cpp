@@ -6425,7 +6425,7 @@ std::vector<CFData> FlushEvaluator::pickCFsToFlush(SteadyTimestamp now,
       std::sort(unpicked_cf.begin(),
                 unpicked_cf.end() - 2,
                 [](const CFData& a, const CFData& b) {
-                  return a.cf->first_dirtied_time_ <= b.cf->first_dirtied_time_;
+                  return a.cf->first_dirtied_time_ < b.cf->first_dirtied_time_;
                 });
     }
 
