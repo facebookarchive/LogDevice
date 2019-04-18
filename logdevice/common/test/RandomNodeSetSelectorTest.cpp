@@ -80,9 +80,8 @@ verify_result(NodeSetSelector* selector,
 
     // perform basic checks
     // nodes in nodeset must be unique and in increasing order
-    ASSERT_TRUE(std::is_sorted(res.storage_set.begin(),
-                               res.storage_set.end(),
-                               std::less_equal<ShardID>()));
+    ASSERT_TRUE(std::is_sorted(
+        res.storage_set.begin(), res.storage_set.end(), std::less<ShardID>()));
 
     // must comply with the config
     const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
