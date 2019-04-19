@@ -151,16 +151,16 @@ bool TrafficShaper::dispatchUpdateCommon(
     FlowGroupsUpdate& update,
     StatsHolder* stats) {
   bool future_updates_required = false;
-  auto policy_it = shaping_config.flowGroupPolicies.begin();
-  auto scope = NodeLocationScope::NODE;
-  for (auto& ge : update.group_entries) {
-    if (policy_it->second.enabled()) {
+  for (auto& policy_it : shaping_config.flowGroupPolicies) {
+    auto scope = policy_it.first;
+    auto& ge = update.group_entries[static_cast<int>(scope)];
+    if (policy_it.second.enabled()) {
       future_updates_required = true;
     }
 
     // The policy or interval may change at any time via the admin
     // interface, so normalize on each update.
-    ge.policy = policy_it->second.normalize(nworkers, updateInterval_);
+    ge.policy = policy_it.second.normalize(nworkers, updateInterval_);
 
     // Any overflow from the last run that couldn't be used in the
     // priority queue buckets indicates that the priority queues have
@@ -190,9 +190,6 @@ bool TrafficShaper::dispatchUpdateCommon(
       overflow_entry.cur_overflow = 0;
       p = priorityBelow(p);
     }
-
-    ++policy_it;
-    scope = NodeLocationScope(static_cast<int>(scope) + 1);
   }
 
   return future_updates_required;
