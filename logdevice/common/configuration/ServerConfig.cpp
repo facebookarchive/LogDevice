@@ -26,6 +26,7 @@
 #include <sys/types.h>
 
 #include "logdevice/common/FailureDomainNodeSet.h"
+#include "logdevice/common/FlowGroupDependencies.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/SlidingWindow.h"
 #include "logdevice/common/commandline_util_chrono.h"
@@ -88,7 +89,6 @@ ServerConfig::fromJson(const folly::dynamic& parsed) {
   TraceLoggerConfig traceLoggerConfig;
   TrafficShapingConfig trafficShapingConfig;
   ShapingConfig readIOShapingConfig(
-      configuration::ShapingType::READS,
       std::set<NodeLocationScope>{NodeLocationScope::NODE},
       std::set<NodeLocationScope>{NodeLocationScope::NODE});
   SettingsConfig serverSettingsConfig;
@@ -478,8 +478,7 @@ std::shared_ptr<ServerConfig> ServerConfig::createEmpty() {
       SecurityConfig(),
       TraceLoggerConfig(),
       TrafficShapingConfig(),
-      ShapingConfig(configuration::ShapingType::READS,
-                    std::set<NodeLocationScope>{NodeLocationScope::NODE},
+      ShapingConfig(std::set<NodeLocationScope>{NodeLocationScope::NODE},
                     std::set<NodeLocationScope>{NodeLocationScope::NODE}),
       SettingsConfig(),
       SettingsConfig(),

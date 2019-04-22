@@ -399,7 +399,6 @@ std::unique_ptr<Cluster> ClusterFactory::create(int nnodes) {
   // shaping config.
   configuration::TrafficShapingConfig ts_config;
   configuration::ShapingConfig read_throttling_config(
-      configuration::ShapingType::READS,
       std::set<NodeLocationScope>{NodeLocationScope::NODE},
       std::set<NodeLocationScope>{NodeLocationScope::NODE});
   if (use_default_traffic_shaping_config_) {

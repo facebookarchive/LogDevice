@@ -28,16 +28,9 @@ struct dynamic;
 
 namespace facebook { namespace logdevice { namespace configuration {
 
-enum class ShapingType {
-  NONE,
-  NETWORK,
-  READS,
-};
-
 class ShapingConfig {
  public:
-  ShapingConfig(ShapingType type,
-                std::set<NodeLocationScope> valid_scopes,
+  ShapingConfig(std::set<NodeLocationScope> valid_scopes,
                 const std::set<NodeLocationScope>& scopes_to_configure);
 
   bool configured(NodeLocationScope scope) const;
@@ -54,10 +47,6 @@ class ShapingConfig {
     return result;
   }
 
-  ShapingType getType() const {
-    return type_;
-  }
-
   const std::set<NodeLocationScope>& getValidScopes() {
     return valid_scopes_;
   }
@@ -69,7 +58,6 @@ class ShapingConfig {
   ShapingConfig() = default;
 
  private:
-  ShapingType type_{ShapingType::NONE};
   std::set<NodeLocationScope> valid_scopes_;
 };
 

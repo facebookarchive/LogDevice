@@ -43,6 +43,9 @@ TrafficShaper::TrafficShaper(Processor* processor, StatsHolder* stats)
       static_cast<size_t>(NodeLocationScope::ROOT) + 1);
   read_io_update_ = std::make_unique<FlowGroupsUpdate>(1);
 
+  nw_shaping_deps_ = std::make_unique<NwShapingFlowGroupDeps>(stats);
+  read_shaping_deps_ = std::make_unique<ReadShapingFlowGroupDeps>(stats);
+
   if (processor_->getAllWorkersCount() != 0) {
     mainLoopThread_ = std::thread(&TrafficShaper::mainLoop, this);
 
@@ -79,6 +82,38 @@ void TrafficShaper::onConfigUpdate(TrafficShaper* ts) {
   ts->mainLoopWaitCondition_.notify_all();
 }
 
+void TrafficShaper::updateStats(const configuration::ShapingConfig* shaping_cfg,
+                                FlowGroupDependencies* deps) {
+  auto scope = NodeLocationScope::NODE;
+  for (auto& policy : shaping_cfg->flowGroupPolicies) {
+    auto value = 0;
+    Priority p = Priority::MAX;
+    for (const auto& entry : policy.second.entries) {
+      value += entry.guaranteed_bw;
+
+      if (p == Priority::INVALID) {
+        continue;
+      }
+
+      if (entry.max_bw != INT64_MAX) {
+        deps->statsSet(
+            &PerShapingPriorityStats::max_bw, scope, p, entry.max_bw);
+      }
+      deps->statsSet(&PerShapingPriorityStats::guaranteed_bw,
+                     scope,
+                     p,
+                     entry.guaranteed_bw);
+      deps->statsSet(
+          &PerShapingPriorityStats::max_burst, scope, p, entry.capacity);
+
+      p = priorityBelow(p);
+    }
+
+    deps->statsSet(&PerFlowGroupStats::limit, scope, value);
+    scope = NodeLocation::nextGreaterScope(scope);
+  }
+}
+
 void TrafficShaper::mainLoop() {
   ThreadID::set(ThreadID::Type::UTILITY, "ld:tshaper");
 
@@ -109,37 +144,8 @@ void TrafficShaper::mainLoop() {
 
     if (now > next_limits_publication_) {
       auto config = processor_->config_->updateableServerConfig()->get();
-      const auto& shaping_config = config->getTrafficShapingConfig();
-
-      auto scope = NodeLocationScope::NODE;
-      for (auto& policy : shaping_config.flowGroupPolicies) {
-        auto value = 0;
-        Priority p = Priority::MAX;
-        for (const auto& entry : policy.second.entries) {
-          value += entry.guaranteed_bw;
-
-          if (p == Priority::INVALID) {
-            continue;
-          }
-
-          if (entry.max_bw != INT64_MAX) {
-            FLOW_GROUP_PRIORITY_STAT_SET(
-                stats_, scope, p, max_bw, entry.max_bw);
-          }
-
-          FLOW_GROUP_PRIORITY_STAT_SET(
-              stats_, scope, p, guaranteed_bw, entry.guaranteed_bw);
-
-          FLOW_GROUP_PRIORITY_STAT_SET(
-              stats_, scope, p, max_burst, entry.capacity);
-
-          p = priorityBelow(p);
-        }
-
-        FLOW_GROUP_STAT_SET(stats_, scope, limit, value);
-
-        scope = NodeLocation::nextGreaterScope(scope);
-      }
+      updateStats(&config->getTrafficShapingConfig(), nw_shaping_deps_.get());
+      updateStats(&config->getReadIOShapingConfig(), read_shaping_deps_.get());
       next_limits_publication_ = now + limits_update_interval_;
     }
   }
@@ -149,7 +155,7 @@ bool TrafficShaper::dispatchUpdateCommon(
     const configuration::ShapingConfig& shaping_config,
     int nworkers,
     FlowGroupsUpdate& update,
-    StatsHolder* stats) {
+    FlowGroupDependencies* deps) {
   bool future_updates_required = false;
   for (auto& policy_it : shaping_config.flowGroupPolicies) {
     auto scope = policy_it.first;
@@ -180,8 +186,10 @@ bool TrafficShaper::dispatchUpdateCommon(
       pq_overflow_entry.cur_overflow += overflow_entry.last_overflow;
 
       if (p <= Priority::NUM_PRIORITIES) {
-        FLOW_GROUP_PRIORITY_STAT_ADD(
-            stats, scope, p, bwdiscarded, overflow_entry.last_overflow);
+        deps->statsAdd(&PerShapingPriorityStats::bwdiscarded,
+                       scope,
+                       p,
+                       overflow_entry.last_overflow);
       }
 
       // Take the current overflow and make it available for next
@@ -199,8 +207,11 @@ bool TrafficShaper::dispatchUpdateNw() {
   auto config = processor_->config_->updateableServerConfig()->get();
   const configuration::ShapingConfig& shaping_config =
       config->getTrafficShapingConfig();
-  bool future_updates_required = dispatchUpdateCommon(
-      shaping_config, processor_->getAllWorkersCount(), *nw_update_, stats_);
+  bool future_updates_required =
+      dispatchUpdateCommon(shaping_config,
+                           processor_->getAllWorkersCount(),
+                           *nw_update_,
+                           nw_shaping_deps_.get());
 
   processor_->applyToWorkers(
       [&](Worker& w) {
@@ -226,7 +237,7 @@ bool TrafficShaper::dispatchUpdateReadIO() {
       dispatchUpdateCommon(shaping_config,
                            processor_->getWorkerCount(WorkerType::GENERAL),
                            *read_io_update_,
-                           nullptr /*stats*/);
+                           read_shaping_deps_.get());
 
   processor_->applyToWorkers(
       [&](Worker& w) {

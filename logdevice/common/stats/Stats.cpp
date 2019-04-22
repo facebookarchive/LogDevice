@@ -152,30 +152,32 @@ void PerTrafficClassStats::reset() {
 #include "logdevice/common/stats/per_traffic_class_stats.inc" // nolint
 }
 
-PerMsgPriorityStats::PerMsgPriorityStats()
+PerShapingPriorityStats::PerShapingPriorityStats()
     : time_in_queue(std::make_unique<LatencyHistogram>()) {}
 
-PerMsgPriorityStats::~PerMsgPriorityStats() = default;
+PerShapingPriorityStats::~PerShapingPriorityStats() = default;
 
-PerMsgPriorityStats::PerMsgPriorityStats(PerMsgPriorityStats&&) noexcept =
-    default;
+PerShapingPriorityStats::PerShapingPriorityStats(
+    PerShapingPriorityStats&&) noexcept = default;
 
-PerMsgPriorityStats& PerMsgPriorityStats::
-operator=(PerMsgPriorityStats&&) noexcept = default;
+PerShapingPriorityStats& PerShapingPriorityStats::
+operator=(PerShapingPriorityStats&&) noexcept = default;
 
-void PerMsgPriorityStats::aggregate(PerMsgPriorityStats const& other,
-                                    StatsAggOptional agg_override) {
+void PerShapingPriorityStats::aggregate(PerShapingPriorityStats const& other,
+                                        StatsAggOptional agg_override) {
   aggregateHistogram(agg_override, *time_in_queue, *other.time_in_queue);
 #define STAT_DEFINE(name, agg) \
   aggregateStat(StatsAgg::agg, agg_override, name, other.name);
-#include "logdevice/common/stats/per_msg_priority_stats.inc" // nolint
+#include "logdevice/common/stats/per_msg_priority_stats.inc"    // nolint
+#include "logdevice/common/stats/per_priority_stats_common.inc" // nolint
 }
 
-void PerMsgPriorityStats::reset() {
+void PerShapingPriorityStats::reset() {
   time_in_queue->clear();
 #define RESETTING_STATS
 #define STAT_DEFINE(name, _) name = {};
-#include "logdevice/common/stats/per_msg_priority_stats.inc" // nolint
+#include "logdevice/common/stats/per_msg_priority_stats.inc"    // nolint
+#include "logdevice/common/stats/per_priority_stats_common.inc" // nolint
 }
 
 void PerFlowGroupStats::aggregate(PerFlowGroupStats const& other,
@@ -197,8 +199,9 @@ void PerFlowGroupStats::reset() {
 #include "logdevice/common/stats/per_flow_group_stats.inc" // nolint
 }
 
-PerMsgPriorityStats PerFlowGroupStats::totalPerMsgPriorityStats() const {
-  PerMsgPriorityStats total;
+PerShapingPriorityStats
+PerFlowGroupStats::totalPerShapingPriorityStats() const {
+  PerShapingPriorityStats total;
   for (auto& p : priorities) {
     total.aggregate(p, folly::none);
   }
@@ -360,6 +363,10 @@ void Stats::aggregateCompoundStats(Stats const& other,
     per_flow_group_stats[i].aggregate(
         other.per_flow_group_stats[i], agg_override);
   }
+  for (int i = 0; i < per_flow_group_stats_rt.size(); ++i) {
+    per_flow_group_stats_rt[i].aggregate(
+        other.per_flow_group_stats_rt[i], agg_override);
+  }
 
   for (int i = 0; i < per_request_type_stats.size(); ++i) {
     per_request_type_stats[i].aggregate(
@@ -464,6 +471,10 @@ void Stats::reset() {
       }
 
       for (auto& fgs : per_flow_group_stats) {
+        fgs.reset();
+      }
+
+      for (auto& fgs : per_flow_group_stats_rt) {
         fgs.reset();
       }
 
@@ -596,6 +607,7 @@ void Stats::enumerate(EnumerationCallbacks* cb, bool list_all) const {
 #include "logdevice/common/stats/per_traffic_class_stats.inc" // nolint
   }
 
+  /* Network Traffic Shaping specific stats */
   for (int i = 0; i < per_flow_group_stats.size(); ++i) {
     // Per flow group (NodeLocationScope).
     auto& fgs = per_flow_group_stats[i];
@@ -603,40 +615,58 @@ void Stats::enumerate(EnumerationCallbacks* cb, bool list_all) const {
   cb->stat("flow_group." #c, (NodeLocationScope)i, fgs.c);
 #include "logdevice/common/stats/per_flow_group_stats.inc" // nolint
 
-    auto msg_priority_totals = fgs.totalPerMsgPriorityStats();
+    auto msg_priority_totals = fgs.totalPerShapingPriorityStats();
 #define STAT_DEFINE(c, _) \
   cb->stat("flow_group." #c, (NodeLocationScope)i, msg_priority_totals.c);
-#include "logdevice/common/stats/per_msg_priority_stats.inc" // nolint
+#include "logdevice/common/stats/per_msg_priority_stats.inc"    // nolint
+#include "logdevice/common/stats/per_priority_stats_common.inc" // nolint
 
     // Per flow group and message priority.
     for (int p_idx = 0; p_idx < fgs.priorities.size(); ++p_idx) {
       auto& mps = fgs.priorities[p_idx];
 #define STAT_DEFINE(c, _) \
   cb->stat("flow_group." #c, (NodeLocationScope)i, (Priority)p_idx, mps.c);
-#include "logdevice/common/stats/per_msg_priority_stats.inc" // nolint
+#include "logdevice/common/stats/per_msg_priority_stats.inc"    // nolint
+#include "logdevice/common/stats/per_priority_stats_common.inc" // nolint
+    }
+  }
+
+  /* Read Throttling specific stats */
+  for (int i = 0; i < per_flow_group_stats_rt.size(); ++i) {
+    auto& fgs = per_flow_group_stats_rt[i];
+    auto priority_totals = fgs.totalPerShapingPriorityStats();
+#define STAT_DEFINE(c, _) \
+  cb->stat("flow_group_rt." #c, (NodeLocationScope)i, priority_totals.c);
+#include "logdevice/common/stats/per_priority_stats_common.inc" // nolint
+
+    // Per flow group and priority.
+    for (int p_idx = 0; p_idx < fgs.priorities.size(); ++p_idx) {
+      auto& mps = fgs.priorities[p_idx];
+#define STAT_DEFINE(c, _) \
+  cb->stat("flow_group_rt." #c, (NodeLocationScope)i, (Priority)p_idx, mps.c);
+#include "logdevice/common/stats/per_priority_stats_common.inc" // nolint
     }
   }
 
   {
     // Aggregated across all flow groups.
-
     auto total = totalPerFlowGroupStats();
 #define STAT_DEFINE(c, _) cb->stat("flow_group." #c, total.c);
 #include "logdevice/common/stats/per_flow_group_stats.inc" // nolint
 
     // Aggregated across all flow groups, per message priority.
-
     for (int p_idx = 0; p_idx < total.priorities.size(); ++p_idx) {
       auto& mps = total.priorities[p_idx];
 #define STAT_DEFINE(c, _) cb->stat("flow_group." #c, (Priority)p_idx, mps.c);
-#include "logdevice/common/stats/per_msg_priority_stats.inc" // nolint
+#include "logdevice/common/stats/per_msg_priority_stats.inc"    // nolint
+#include "logdevice/common/stats/per_priority_stats_common.inc" // nolint
     }
 
     // Aggregated across all flow groups and message priorities.
-
-    auto mps_total = total.totalPerMsgPriorityStats();
+    auto mps_total = total.totalPerShapingPriorityStats();
 #define STAT_DEFINE(c, _) cb->stat("flow_group." #c, mps_total.c);
-#include "logdevice/common/stats/per_msg_priority_stats.inc" // nolint
+#include "logdevice/common/stats/per_msg_priority_stats.inc"    // nolint
+#include "logdevice/common/stats/per_priority_stats_common.inc" // nolint
   }
 
   // Per message type.

@@ -13,10 +13,9 @@
 namespace facebook { namespace logdevice { namespace configuration {
 
 ShapingConfig::ShapingConfig(
-    ShapingType type,
     std::set<NodeLocationScope> valid_scopes,
     const std::set<NodeLocationScope>& scopes_to_configure)
-    : type_(type), valid_scopes_(std::move(valid_scopes)) {
+    : valid_scopes_(std::move(valid_scopes)) {
   FlowGroupPolicy configured_fgp;
   configured_fgp.setConfigured(true);
 

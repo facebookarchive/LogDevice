@@ -32,13 +32,15 @@ namespace facebook { namespace logdevice {
 
 // This can't be in anonymous namespace because it's a friend of SocketCallback
 // and BWAvailableCallback.
-class RecordRebuildingMockSocket {
+class RecordRebuildingAmendMockSocket {
  public:
-  explicit RecordRebuildingMockSocket(NodeID n) : node_id(n) {}
+  explicit RecordRebuildingAmendMockSocket(NodeID n,
+                                           std::unique_ptr<FlowGroup> fgp)
+      : node_id(n), flow_group(std::move(fgp)) {}
 
   void simulateClose() {
-    while (!flow_group.priorityq_.empty()) {
-      auto& cb = flow_group.priorityq_.front();
+    while (!flow_group->priorityq_.empty()) {
+      auto& cb = flow_group->priorityq_.front();
       cb.deactivate();
       cb.cancelled(E::PEER_CLOSED);
     }
@@ -53,10 +55,10 @@ class RecordRebuildingMockSocket {
 
   void simulateBandwidthAvailable() {
     std::mutex mu;
-    while (!flow_group.priorityq_.empty()) {
-      auto& cb = flow_group.priorityq_.front();
+    while (!flow_group->priorityq_.empty()) {
+      auto& cb = flow_group->priorityq_.front();
       cb.deactivate();
-      cb(flow_group, mu);
+      cb(*flow_group, mu);
     }
   }
 
@@ -66,7 +68,7 @@ class RecordRebuildingMockSocket {
 
   // For the purposes of this test, flow_group is just a list of
   // BWAvailableCallback's.
-  FlowGroup flow_group;
+  std::unique_ptr<FlowGroup> flow_group{nullptr};
 
   // Set this to E::CBREGISTERED to simulate traffic shaping; callback will be
   // added to bandwidth_cbs. Set to something like E::UNROUTABLE to simulate
@@ -176,7 +178,7 @@ class TestRecordRebuildingAmend : public RecordRebuildingAmend,
     auto& sock = getSocket(nid.index());
     if (sock.status == E::CBREGISTERED) {
       ld_check(bw_cb != nullptr);
-      sock.flow_group.push(*bw_cb, Priority::BACKGROUND);
+      sock.flow_group->push(*bw_cb, Priority::BACKGROUND);
     }
     if (sock.status == E::OK) {
       sock.close_cbs.push_back(*close_cb);
@@ -189,11 +191,15 @@ class TestRecordRebuildingAmend : public RecordRebuildingAmend,
     return sock.status == E::OK ? 0 : -1;
   }
 
-  RecordRebuildingMockSocket& getSocket(node_index_t n) {
+  RecordRebuildingAmendMockSocket& getSocket(node_index_t n) {
     if (!sockets_.count(n)) {
-      sockets_.emplace(std::piecewise_construct,
-                       std::forward_as_tuple(n),
-                       std::forward_as_tuple(NodeID(n)));
+      sockets_.emplace(
+          std::piecewise_construct,
+          std::forward_as_tuple(n),
+          std::forward_as_tuple(
+              NodeID(n),
+              std::make_unique<FlowGroup>(
+                  std::make_unique<NwShapingFlowGroupDeps>(nullptr))));
     }
     return sockets_.at(n);
   }
@@ -226,7 +232,7 @@ class TestRecordRebuildingAmend : public RecordRebuildingAmend,
   UpdateableSettings<RebuildingSettings> rebuildingSettings_;
   RebuildingSet rebuilding_set_;
 
-  std::map<node_index_t, RecordRebuildingMockSocket> sockets_;
+  std::map<node_index_t, RecordRebuildingAmendMockSocket> sockets_;
 
   std::set<node_index_t> removed_from_config_;
 

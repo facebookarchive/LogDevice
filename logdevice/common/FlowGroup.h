@@ -13,6 +13,7 @@
 
 #include "logdevice/common/BWAvailableCallback.h"
 #include "logdevice/common/Envelope.h"
+#include "logdevice/common/FlowGroupDependencies.h"
 #include "logdevice/common/FlowMeter.h"
 #include "logdevice/common/PriorityQueue.h"
 #include "logdevice/common/Sender.h"
@@ -145,7 +146,12 @@ class FlowGroup {
     FlowGroup* fg_;
   };
 
+  std::shared_ptr<FlowGroupDependencies> deps_;
+
  public:
+  explicit FlowGroup(std::shared_ptr<FlowGroupDependencies> deps)
+      : deps_(std::move(deps)) {}
+
   bool configured() const {
     return configured_;
   }
@@ -324,6 +330,7 @@ class FlowGroup {
 
  private:
   friend class RecordRebuildingMockSocket;
+  friend class RecordRebuildingAmendMockSocket;
 
   bool onMyWorker() const {
     // sender_ is null in unit tests.
@@ -359,11 +366,10 @@ class FlowGroup {
     auto& sink_entry = meter_.entries[asInt(sink)];
     auto initialSourceLevel = source_entry.level();
     source_entry.transferCredit(sink_entry, amount);
-    FLOW_GROUP_PRIORITY_STAT_ADD(Worker::stats(),
-                                 scope_,
-                                 sink,
-                                 bwtransferred,
-                                 initialSourceLevel - source_entry.level());
+    deps_->statsAdd(&PerShapingPriorityStats::bwtransferred,
+                    scope_,
+                    sink,
+                    initialSourceLevel - source_entry.level());
 
     // If the sink can no longer take additional credit, remove it from
     // contention for bandwidth from the priority queue.

@@ -110,7 +110,7 @@ struct SocketConnectRequest : public Request {
 };
 
 Socket* SocketConnectRequest::sock{};
-FlowGroup SocketConnectRequest::flow_group{};
+FlowGroup SocketConnectRequest::flow_group{nullptr};
 
 } // namespace testing
 

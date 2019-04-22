@@ -162,7 +162,10 @@ class WorkerImpl {
     const auto& read_shaping_cfg =
         config->get()->serverConfig()->getReadIOShapingConfig();
     read_shaping_container_ = std::make_unique<ShapingContainer>(
-        1, w->getEventBase(), read_shaping_cfg);
+        1,
+        w->getEventBase(),
+        read_shaping_cfg,
+        std::make_shared<ReadShapingFlowGroupDeps>(Worker::stats()));
   }
 
   // Context save and restored across threads.

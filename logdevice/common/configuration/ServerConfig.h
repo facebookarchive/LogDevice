@@ -393,8 +393,7 @@ class ServerConfig {
       TraceLoggerConfig trace_config = TraceLoggerConfig(),
       TrafficShapingConfig = TrafficShapingConfig(),
       ShapingConfig =
-          ShapingConfig(configuration::ShapingType::READS,
-                        std::set<NodeLocationScope>{NodeLocationScope::NODE},
+          ShapingConfig(std::set<NodeLocationScope>{NodeLocationScope::NODE},
                         std::set<NodeLocationScope>{NodeLocationScope::NODE}),
       SettingsConfig server_settings_config = SettingsConfig(),
       SettingsConfig client_settings_config = SettingsConfig(),
@@ -577,8 +576,7 @@ class ServerConfig {
       TraceLoggerConfig trace_config = TraceLoggerConfig(),
       TrafficShapingConfig = TrafficShapingConfig(),
       ShapingConfig =
-          ShapingConfig(configuration::ShapingType::READS,
-                        std::set<NodeLocationScope>{NodeLocationScope::NODE},
+          ShapingConfig(std::set<NodeLocationScope>{NodeLocationScope::NODE},
                         std::set<NodeLocationScope>{NodeLocationScope::NODE}),
       SettingsConfig server_settings_config = SettingsConfig(),
       SettingsConfig client_settings_config = SettingsConfig(),

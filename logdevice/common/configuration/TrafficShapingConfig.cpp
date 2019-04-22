@@ -12,16 +12,16 @@
 namespace facebook { namespace logdevice { namespace configuration {
 
 TrafficShapingConfig::TrafficShapingConfig()
-    : ShapingConfig(ShapingType::NETWORK,
-                    std::set<NodeLocationScope>{NodeLocationScope::NODE,
-                                                NodeLocationScope::RACK,
-                                                NodeLocationScope::ROW,
-                                                NodeLocationScope::CLUSTER,
-                                                NodeLocationScope::DATA_CENTER,
-                                                NodeLocationScope::REGION,
-                                                NodeLocationScope::ROOT},
-                    std::set<NodeLocationScope>{NodeLocationScope::NODE,
-                                                NodeLocationScope::ROOT}) {
+    : ShapingConfig(/* valid_scopes */
+                    {NodeLocationScope::NODE,
+                     NodeLocationScope::RACK,
+                     NodeLocationScope::ROW,
+                     NodeLocationScope::CLUSTER,
+                     NodeLocationScope::DATA_CENTER,
+                     NodeLocationScope::REGION,
+                     NodeLocationScope::ROOT},
+                    /* configured_scopes */
+                    {NodeLocationScope::NODE, NodeLocationScope::ROOT}) {
   static_assert(static_cast<int>(NodeLocationScope::INVALID) == 7, "");
 }
 

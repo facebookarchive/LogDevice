@@ -1158,6 +1158,7 @@ STAT_DEFINE(evbuffer_total_size, SUM)
 STAT_DEFINE(evbuffer_max_size, MAX)
 // Count of flow groups runs that overran the configured max runtime
 STAT_DEFINE(flow_groups_run_deadline_exceeded, SUM)
+STAT_DEFINE(flow_groups_run_deadline_exceeded_rt, SUM)
 // If this is > 0, there is a non authoritative rebuilding, which means too many
 // shards lost data such that rebuilding could not restore all records, ie some
 // records had all of their copies on these shards. When this happens, the

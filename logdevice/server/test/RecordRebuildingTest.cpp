@@ -34,11 +34,12 @@ namespace facebook { namespace logdevice {
 // and BWAvailableCallback.
 class RecordRebuildingMockSocket {
  public:
-  explicit RecordRebuildingMockSocket(NodeID n) : node_id(n) {}
+  explicit RecordRebuildingMockSocket(NodeID n, std::unique_ptr<FlowGroup> fgp)
+      : flow_group(std::move(fgp)), node_id(n) {}
 
   void simulateClose() {
-    while (!flow_group.priorityq_.empty()) {
-      auto& cb = flow_group.priorityq_.front();
+    while (!flow_group->priorityq_.empty()) {
+      auto& cb = flow_group->priorityq_.front();
       cb.deactivate();
       cb.cancelled(E::PEER_CLOSED);
     }
@@ -53,20 +54,19 @@ class RecordRebuildingMockSocket {
 
   void simulateBandwidthAvailable() {
     std::mutex mu;
-    while (!flow_group.priorityq_.empty()) {
-      auto& cb = flow_group.priorityq_.front();
+    while (!flow_group->priorityq_.empty()) {
+      auto& cb = flow_group->priorityq_.front();
       cb.deactivate();
-      cb(flow_group, mu);
+      cb(*flow_group, mu);
     }
   }
-
-  const NodeID node_id;
 
   folly::IntrusiveList<SocketCallback, &SocketCallback::listHook_> close_cbs;
 
   // For the purposes of this test, flow_group is just a list of
   // BWAvailableCallback's.
-  FlowGroup flow_group;
+  std::unique_ptr<FlowGroup> flow_group{nullptr};
+  const NodeID node_id;
 
   // Set this to E::CBREGISTERED to simulate traffic shaping; callback will be
   // added to bandwidth_cbs. Set to something like E::UNROUTABLE to simulate
@@ -184,7 +184,7 @@ class TestRecordRebuildingStore : public RecordRebuildingStore,
     auto& sock = getSocket(nid.index());
     if (sock.status == E::CBREGISTERED) {
       ld_check(bw_cb != nullptr);
-      sock.flow_group.push(*bw_cb, Priority::BACKGROUND);
+      sock.flow_group->push(*bw_cb, Priority::BACKGROUND);
     }
     if (sock.status == E::OK) {
       sock.close_cbs.push_back(*close_cb);
@@ -199,9 +199,13 @@ class TestRecordRebuildingStore : public RecordRebuildingStore,
 
   RecordRebuildingMockSocket& getSocket(node_index_t n) {
     if (!sockets_.count(n)) {
-      sockets_.emplace(std::piecewise_construct,
-                       std::forward_as_tuple(n),
-                       std::forward_as_tuple(NodeID(n, n * 2)));
+      sockets_.emplace(
+          std::piecewise_construct,
+          std::forward_as_tuple(n),
+          std::forward_as_tuple(
+              NodeID(n, n * 2),
+              std::make_unique<FlowGroup>(
+                  std::make_unique<NwShapingFlowGroupDeps>(nullptr))));
     }
     return sockets_.at(n);
   }

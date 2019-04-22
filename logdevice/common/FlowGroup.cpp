@@ -171,8 +171,8 @@ bool FlowGroup::run(std::mutex& flow_meters_mutex,
     // Getting priorityq size is linear time operation instead just depend on
     // whether request priorityq is empty or not to see if there is still
     // backlog
-    FLOW_GROUP_PRIORITY_STAT_SET(
-        Worker::stats(), scope_, p, pq_backlog, priorityq_.empty(p));
+    deps_->statsSet(
+        &PerShapingPriorityStats::pq_backlog, scope_, p, priorityq_.empty(p));
     // Reconfigure access to priority queue bandwidth. The traffic shaper
     // may have reset the deposit budget.
     priorityq_.enable(p, meter_entry.canFill());
@@ -195,7 +195,7 @@ bool FlowGroup::drain(size_t cost, Priority p) {
 
   auto& meter = meter_.entries[asInt(p)];
   if (!enabled_ || meter.drain(cost)) {
-    FLOW_GROUP_PRIORITY_STAT_ADD(Worker::stats(), scope_, p, bwconsumed, cost);
+    deps_->statsAdd(&PerShapingPriorityStats::bwconsumed, scope_, p, cost);
     return drainSuccess();
   }
 

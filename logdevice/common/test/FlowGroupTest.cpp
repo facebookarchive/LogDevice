@@ -15,7 +15,7 @@ namespace {
 
 TEST_F(FlowGroupTest, DisableTest) {
   update.policy.setEnabled(true);
-  flow_group.applyUpdate(update);
+  flow_group->applyUpdate(update);
 
   auto send_msgs = [this](bool expect_success) {
     size_t msg_size = 10;
@@ -55,7 +55,7 @@ TEST_F(FlowGroupTest, DisableTest) {
 
   // Applying a disabled policy should allow the messages to be released.
   update.policy.setEnabled(false);
-  flow_group.applyUpdate(update);
+  flow_group->applyUpdate(update);
   run();
   flushOutputEvBuffer();
   for (Priority p = Priority::MAX; p < Priority::NUM_PRIORITIES;
@@ -63,10 +63,10 @@ TEST_F(FlowGroupTest, DisableTest) {
     CHECK_ON_SENT(MessageType::GET_SEQ_STATE, E::OK);
   }
   // Nothing should be left to send.
-  flow_group.empty();
+  flow_group->empty();
 
   update.policy.setEnabled(true);
-  flow_group.applyUpdate(update);
+  flow_group->applyUpdate(update);
   resetMeter(-1);
   // Reset the meter to -1 so all priority levels have debt. Attempts to drain
   // should fail.
@@ -80,7 +80,7 @@ TEST_F(FlowGroupTest, DisableTest) {
 
   // Applying a disabled policy should allow the messages to be released.
   update.policy.setEnabled(false);
-  flow_group.applyUpdate(update);
+  flow_group->applyUpdate(update);
   run();
   flushOutputEvBuffer();
   for (Priority p = Priority::MAX; p < Priority::NUM_PRIORITIES;
@@ -88,7 +88,7 @@ TEST_F(FlowGroupTest, DisableTest) {
     CHECK_ON_SENT(MessageType::GET_SEQ_STATE, E::OK);
   }
   // Nothing should be left to send.
-  flow_group.empty();
+  flow_group->empty();
 }
 
 TEST_F(FlowGroupTest, FlowGroupRunLimits) {
@@ -107,7 +107,7 @@ TEST_F(FlowGroupTest, FlowGroupRunLimits) {
 
   // Test 1
   update.policy.setEnabled(true);
-  flow_group.applyUpdate(update);
+  flow_group->applyUpdate(update);
 
   // Increase deadline to reduce the chance of false positives if this
   // test is run in parallel with other, CPU intensive, tests.
@@ -119,8 +119,8 @@ TEST_F(FlowGroupTest, FlowGroupRunLimits) {
 
   SlowCallback callback1(settings_.flow_groups_run_yield_interval * 2);
   SlowCallback callback2(settings_.flow_groups_run_yield_interval / 2);
-  flow_group.push(callback1, Priority::MAX);
-  flow_group.push(callback2, Priority::MAX);
+  flow_group->push(callback1, Priority::MAX);
+  flow_group->push(callback2, Priority::MAX);
 
   // The first run should terminate after the first callback is processed
   // due to its excessive runtime, and signal more work is required by
@@ -139,9 +139,9 @@ TEST_F(FlowGroupTest, FlowGroupRunLimits) {
   // should still be able to drain all the callback
 
   update.policy.setEnabled(false);
-  flow_group.applyUpdate(update);
-  flow_group.push(callback1, Priority::MAX);
-  flow_group.push(callback2, Priority::MAX);
+  flow_group->applyUpdate(update);
+  flow_group->push(callback1, Priority::MAX);
+  flow_group->push(callback2, Priority::MAX);
   EXPECT_TRUE(run());
   EXPECT_FALSE(callback1.active());
   EXPECT_TRUE(callback2.active());
@@ -153,10 +153,10 @@ TEST_F(FlowGroupTest, FlowGroupRunLimits) {
   // Test Case 3
   // Transition from enabled to disabled when flow_group already has pending
   // callbacks. Same expectations as Test Case 2.
-  flow_group.push(callback1, Priority::MAX);
-  flow_group.push(callback2, Priority::MAX);
+  flow_group->push(callback1, Priority::MAX);
+  flow_group->push(callback2, Priority::MAX);
   update.policy.setEnabled(false);
-  flow_group.applyUpdate(update);
+  flow_group->applyUpdate(update);
   EXPECT_TRUE(run());
   EXPECT_FALSE(callback1.active());
   EXPECT_TRUE(callback2.active());
@@ -175,12 +175,12 @@ TEST_F(FlowGroupTest, FlowGroupBandwidthCaps) {
     if (expect_success) {
       // Messages unimpeeded by traffic shaping aren't interesting to us.
       // Just discard them so we don't consume memory.
-      ASSERT_TRUE(flow_group.drain(*e));
+      ASSERT_TRUE(flow_group->drain(*e));
       socket_->discardEnvelope(*e);
     } else {
-      ASSERT_FALSE(flow_group.drain(*e));
+      ASSERT_FALSE(flow_group->drain(*e));
       // Queue up for bandwidth.
-      flow_group.push(*e);
+      flow_group->push(*e);
     }
   };
 
@@ -196,14 +196,14 @@ TEST_F(FlowGroupTest, FlowGroupBandwidthCaps) {
                     /*guaranteed_bps*/ 3 * CLIENT_HIGH_BUCKET_SIZE,
                     /*max_bps*/ 3 * CLIENT_HIGH_BUCKET_SIZE);
   resetMeter(0);
-  flow_group.applyUpdate(update);
-  ASSERT_EQ(flow_group.debt(Priority::CLIENT_HIGH), 0);
+  flow_group->applyUpdate(update);
+  ASSERT_EQ(flow_group->debt(Priority::CLIENT_HIGH), 0);
 
   // At this point, we should have CLIENT_HIGH_BUCKET_SIZE budget to use
   // directly, and an extra 1000 we can borrow from the priorityq.
   // (depositBudget has already been reduced by filling the bucket
   // with CLIENT_HIGH_BUCKET_SIZE during applyUpdate()).
-  ASSERT_EQ(flow_group.depositBudget(Priority::CLIENT_HIGH), 1000);
+  ASSERT_EQ(flow_group->depositBudget(Priority::CLIENT_HIGH), 1000);
 
   // Sending the first CLIENT_HIGH_BUCKET_SIZE shouldn't incur any debt.
   for (size_t bytes_remaining = CLIENT_HIGH_BUCKET_SIZE;
@@ -212,7 +212,7 @@ TEST_F(FlowGroupTest, FlowGroupBandwidthCaps) {
                              bytes_remaining - sizeof(ProtocolHeader));
     send_msg(msg_size, /*expect_success*/ true);
     bytes_remaining -= msg_size + sizeof(ProtocolHeader);
-    ASSERT_EQ(flow_group.debt(Priority::CLIENT_HIGH), 0);
+    ASSERT_EQ(flow_group->debt(Priority::CLIENT_HIGH), 0);
   }
 
   // The next message can only be sent once BW is transferred from the
@@ -220,8 +220,9 @@ TEST_F(FlowGroupTest, FlowGroupBandwidthCaps) {
   // is able to pay for all of this message, our debt level should stay
   // at 0.
   send_msg(/*msg_size*/ 500, /*expect_success*/ false);
-  ASSERT_EQ(flow_group.debt(Priority::CLIENT_HIGH), 0);
-  ASSERT_TRUE(flow_group.level(Priority::CLIENT_HIGH) < sizeof(ProtocolHeader));
+  ASSERT_EQ(flow_group->debt(Priority::CLIENT_HIGH), 0);
+  ASSERT_TRUE(flow_group->level(Priority::CLIENT_HIGH) <
+              sizeof(ProtocolHeader));
 
   // Credits in priorityq bucket can used by other buckets only in the next
   // iteration of traffic shaper run. Create a fake update that will not deposit
@@ -232,26 +233,26 @@ TEST_F(FlowGroupTest, FlowGroupBandwidthCaps) {
       Priority::CLIENT_HIGH,
       /*burst*/ CLIENT_HIGH_BUCKET_SIZE,
       /*guaranteed_bps*/ 0,
-      /*max_bps*/ flow_group.depositBudget(Priority::CLIENT_HIGH));
+      /*max_bps*/ flow_group->depositBudget(Priority::CLIENT_HIGH));
   force_transfer_update.policy.set(Priority::NUM_PRIORITIES,
                                    /*burst*/ 3 * CLIENT_HIGH_BUCKET_SIZE,
                                    /*guaranteed_bps*/ 0,
                                    /*max_bps*/ 0);
 
   force_transfer_update.policy.setEnabled(true);
-  flow_group.applyUpdate(force_transfer_update);
-  ASSERT_EQ(flow_group.debt(Priority::BACKGROUND), 0);
+  flow_group->applyUpdate(force_transfer_update);
+  ASSERT_EQ(flow_group->debt(Priority::BACKGROUND), 0);
   run();
   flushOutputEvBuffer();
   CHECK_ON_SENT(MessageType::GET_SEQ_STATE, E::OK);
-  ASSERT_EQ(flow_group.debt(Priority::CLIENT_HIGH), 0);
+  ASSERT_EQ(flow_group->debt(Priority::CLIENT_HIGH), 0);
 
   // This next message will take us over our max. We allow it to be sent
   // using BW budget from the priorityq bucket, but we'll be left with a
   // debt since the max_bps limit has prevented the PQ bucket from
   // paying for the full message.
   send_msg(/*msg_size*/ 1000, /*expect_success*/ true);
-  ASSERT_TRUE(flow_group.debt(Priority::CLIENT_HIGH) > 0);
+  ASSERT_TRUE(flow_group->debt(Priority::CLIENT_HIGH) > 0);
 
   // A message queued now will not be sent, even after a flow group run because
   // there are insufficient credits in the bucket.
@@ -262,11 +263,11 @@ TEST_F(FlowGroupTest, FlowGroupBandwidthCaps) {
 
   // Another update should reset the max cap and allow the message to be
   // dispatched.
-  flow_group.applyUpdate(update);
+  flow_group->applyUpdate(update);
   run();
   flushOutputEvBuffer();
   CHECK_ON_SENT(MessageType::GET_SEQ_STATE, E::OK);
-  ASSERT_EQ(flow_group.debt(Priority::CLIENT_HIGH), 0);
+  ASSERT_EQ(flow_group->debt(Priority::CLIENT_HIGH), 0);
 }
 
 TEST_F(FlowGroupTest, AllowCompleteBandwidthUsageForBurstyTraffic) {
@@ -280,7 +281,7 @@ TEST_F(FlowGroupTest, AllowCompleteBandwidthUsageForBurstyTraffic) {
     auto e = socket_->registerMessage(std::move(msg));
     // No messages will be deferred by traffic shaping in this test, make sure
     // that is the case.
-    ASSERT_TRUE(flow_group.drain(*e));
+    ASSERT_TRUE(flow_group->drain(*e));
     // Just discard messages at this point so we don't consume memory.
     socket_->discardEnvelope(*e);
   };
@@ -330,13 +331,13 @@ TEST_F(FlowGroupTest, AllowCompleteBandwidthUsageForBurstyTraffic) {
   // Prefill the priority queue bucket so it has sufficient credit to fill the
   // MAX bucket to capacity, when applyUpdate() distributes priority queue
   // bandwidth to other buckets.
-  flow_group.resetMeter(FlowGroup::PRIORITYQ_PRIORITY,
-                        /*level*/ MAXP_BUCKET_SIZE / 2);
+  flow_group->resetMeter(FlowGroup::PRIORITYQ_PRIORITY,
+                         /*level*/ MAXP_BUCKET_SIZE / 2);
 
-  flow_group.applyUpdate(update);
-  ASSERT_EQ(flow_group.debt(Priority::MAX), 0);
-  ASSERT_EQ(flow_group.depositBudget(Priority::MAX), 0);
-  ASSERT_EQ(flow_group.level(Priority::MAX), MAXP_BUCKET_SIZE);
+  flow_group->applyUpdate(update);
+  ASSERT_EQ(flow_group->debt(Priority::MAX), 0);
+  ASSERT_EQ(flow_group->depositBudget(Priority::MAX), 0);
+  ASSERT_EQ(flow_group->level(Priority::MAX), MAXP_BUCKET_SIZE);
 
   // If in the current interval none of the credits in Priority MAX class got
   // used, in the next interval we should allow it to use credits accrued from
@@ -350,24 +351,24 @@ TEST_F(FlowGroupTest, AllowCompleteBandwidthUsageForBurstyTraffic) {
   // in an iteration then credits keep on adding up in it's bucket. This way
   // credits accumulated from multiple previous iteration can be used and
   // requested bandwidth can be achieved.
-  flow_group.applyUpdate(update);
-  ASSERT_EQ(flow_group.debt(Priority::MAX), 0);
-  ASSERT_EQ(flow_group.depositBudget(Priority::MAX), 0);
-  ASSERT_EQ(flow_group.level(Priority::MAX), 2 * MAXP_BUCKET_SIZE);
+  flow_group->applyUpdate(update);
+  ASSERT_EQ(flow_group->debt(Priority::MAX), 0);
+  ASSERT_EQ(flow_group->depositBudget(Priority::MAX), 0);
+  ASSERT_EQ(flow_group->level(Priority::MAX), 2 * MAXP_BUCKET_SIZE);
 
   // If we try to add some more we won't be able to, because the burst capacity
   // will limit the number of credits in the bucket.
-  flow_group.applyUpdate(update);
-  ASSERT_EQ(flow_group.debt(Priority::MAX), 0);
-  ASSERT_EQ(flow_group.level(Priority::MAX), 2 * MAXP_BUCKET_SIZE);
-  ASSERT_EQ(flow_group.depositBudget(Priority::MAX), MAXP_BUCKET_SIZE);
+  flow_group->applyUpdate(update);
+  ASSERT_EQ(flow_group->debt(Priority::MAX), 0);
+  ASSERT_EQ(flow_group->level(Priority::MAX), 2 * MAXP_BUCKET_SIZE);
+  ASSERT_EQ(flow_group->depositBudget(Priority::MAX), MAXP_BUCKET_SIZE);
 
   // Now if a burst of 20 messages comes in, it should go through without any
   // debt thus maintaining the requested bandwidth.
   for (auto bytes_remaining = BURST_SIZE * TOTAL_MSG_SIZE; bytes_remaining > 0;
        bytes_remaining -= TOTAL_MSG_SIZE) {
     send_msg();
-    ASSERT_EQ(flow_group.debt(Priority::MAX), 0);
+    ASSERT_EQ(flow_group->debt(Priority::MAX), 0);
   }
 }
 

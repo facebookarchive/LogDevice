@@ -284,7 +284,9 @@ int SocketTest::getDscp() {
 }
 
 FlowGroupTest::FlowGroupTest() {
-  flow_group.setScope(nullptr, NodeLocationScope::ROOT);
+  flow_group = std::make_unique<FlowGroup>(
+      std::make_unique<NwShapingFlowGroupDeps>(nullptr));
+  flow_group->setScope(nullptr, NodeLocationScope::ROOT);
 
   setupConnection();
 

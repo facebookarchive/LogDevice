@@ -107,7 +107,10 @@ class MockCatchupQueueDependencies;
 class CatchupQueueTest : public ::testing::Test {
  public:
   CatchupQueueTest()
-      : log_storage_state_map_(1), streams_(&log_storage_state_map_, &tasks_) {
+      : log_storage_state_map_(1),
+        streams_(&log_storage_state_map_, &tasks_),
+        flow_group_(std::make_unique<FlowGroup>(
+            std::make_unique<NwShapingFlowGroupDeps>(nullptr))) {
     dbg::assertOnData = true;
 
     // Ensure we have LogStorageState for our log.  Set the last released LSN
@@ -283,7 +286,7 @@ class CatchupQueueTest : public ::testing::Test {
     ld_check(callback_);
     can_send_ = true;
     callback_->deactivate();
-    (*callback_)(flow_group_, callback_mutex_);
+    (*callback_)(*flow_group_, callback_mutex_);
     callback_ = nullptr;
   }
 
@@ -317,7 +320,7 @@ class CatchupQueueTest : public ::testing::Test {
 
   // Used when calling callback_.  Currently, the callback doesn't actually use
   // it.
-  FlowGroup flow_group_;
+  std::unique_ptr<FlowGroup> flow_group_{nullptr};
   std::mutex callback_mutex_;
 };
 
@@ -455,7 +458,7 @@ class MockCatchupQueueDependencies : public CatchupQueueDependencies {
   void saveCallback(BWAvailableCallback& callback, Priority priority) {
     EXPECT_EQ(nullptr, test_.callback_);
     test_.callback_ = &callback;
-    test_.flow_group_.push(callback, priority);
+    test_.flow_group_->push(callback, priority);
   }
 
   UpdateableSettings<Settings> settings_; // never updated

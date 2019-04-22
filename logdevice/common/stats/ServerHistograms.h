@@ -10,6 +10,7 @@
 #include <array>
 
 #include "logdevice/common/RequestType.h"
+#include "logdevice/common/StorageTask-enums.h"
 #include "logdevice/common/protocol/MessageType.h"
 #include "logdevice/common/stats/Histogram.h"
 #include "logdevice/common/stats/HistogramBundle.h"
@@ -37,7 +38,10 @@ struct ServerHistograms : public HistogramBundle {
         {"log_recovery_epoch_recovery_latency", &log_recovery_epoch},
         {"log_recovery_epoch_recovery_restarts", &log_recovery_epoch_restarts},
         {"flow_groups_run_event_loop_delay", &flow_groups_run_event_loop_delay},
+        {"flow_groups_run_event_loop_delay_rt",
+         &flow_groups_run_event_loop_delay_rt},
         {"flow_groups_run_time", &flow_groups_run_time},
+        {"flow_groups_run_time_rt", &flow_groups_run_time_rt},
         {"logsconfig_manager_tree_clone_latency",
          &logsconfig_manager_tree_clone_latency},
         {"logsconfig_manager_delta_apply_latency",
@@ -106,9 +110,11 @@ struct ServerHistograms : public HistogramBundle {
   // Time between when we trigger the flow_groups_run_requested libevent event,
   // and when it actually runs.
   LatencyHistogram flow_groups_run_event_loop_delay;
+  LatencyHistogram flow_groups_run_event_loop_delay_rt;
 
   // Duration of Sender::runFlowGroups.
   LatencyHistogram flow_groups_run_time;
+  LatencyHistogram flow_groups_run_time_rt;
 
   // How long does it take the LogsConfigManager to clone a LogsConfigTree and
   // make it available to the rest of the system

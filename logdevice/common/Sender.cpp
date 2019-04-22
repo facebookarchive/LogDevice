@@ -126,7 +126,10 @@ Sender::Sender(std::shared_ptr<const Settings> settings,
       my_node_index_(my_index),
       my_location_(std::move(my_location)) {
   nw_shaping_container_ = std::make_unique<ShapingContainer>(
-      static_cast<size_t>(NodeLocationScope::ROOT) + 1, base, tsc);
+      static_cast<size_t>(NodeLocationScope::ROOT) + 1,
+      base,
+      tsc,
+      std::make_shared<NwShapingFlowGroupDeps>(Worker::stats()));
 
   auto scope = NodeLocationScope::NODE;
   for (auto& fg : nw_shaping_container_->flow_groups_) {

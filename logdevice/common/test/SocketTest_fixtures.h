@@ -138,7 +138,8 @@ class SocketTest : public ::testing::Test {
       : settings_(create_default_settings<Settings>()),
         server_name_(0, 1),
         server_addr_(get_localhost_address_str(), 4440),
-        destination_node_id_(client_id_, 1) {
+        destination_node_id_(client_id_, 1),
+        flow_group_(std::make_unique<NwShapingFlowGroupDeps>(nullptr)) {
     socket_ = std::make_unique<Socket>(
         server_name_,
         SocketType::DATA,
@@ -392,27 +393,27 @@ class FlowGroupTest : public ClientSocketTest {
     if (e.message().tc_ == TrafficClass::HANDSHAKE) {
       return true;
     }
-    return flow_group.drain(e.cost(), p);
+    return flow_group->drain(e.cost(), p);
   }
 
   void push(Envelope& e, Priority p) {
-    flow_group.push(e, p);
+    flow_group->push(e, p);
   }
 
   bool run() {
     SteadyTimestamp run_deadline(SteadyTimestamp::now() +
                                  settings_.flow_groups_run_yield_interval);
-    return flow_group.run(flow_meter_mutex, run_deadline);
+    return flow_group->run(flow_meter_mutex, run_deadline);
   }
 
   void resetMeter(int32_t level) {
-    for (auto& e : flow_group.meter_.entries) {
+    for (auto& e : flow_group->meter_.entries) {
       e.reset(level);
     }
   }
 
   std::mutex flow_meter_mutex;
-  FlowGroup flow_group;
+  std::unique_ptr<FlowGroup> flow_group;
   FlowGroupsUpdate::GroupEntry update;
 };
 

@@ -389,8 +389,8 @@ class TrafficShapingHistogram : public TrafficShapingHistogramBase {
 
       if (priority_sel_type_ == SelectionType::MERGE) {
         aggregated_priority_stats_.push_back(
-            std::make_unique<PerMsgPriorityStats>(
-                all_flow_groups->totalPerMsgPriorityStats()));
+            std::make_unique<PerShapingPriorityStats>(
+                all_flow_groups->totalPerShapingPriorityStats()));
         auto* h = aggregated_priority_stats_.back()->time_in_queue.get();
 
         hists.push_back(HistTuple("time_in_queue", h, "Merge", "Merge"));
@@ -409,8 +409,8 @@ class TrafficShapingHistogram : public TrafficShapingHistogramBase {
 
         if (priority_sel_type_ == SelectionType::MERGE) {
           aggregated_priority_stats_.push_back(
-              std::make_unique<PerMsgPriorityStats>(
-                  flow_group_stats.totalPerMsgPriorityStats()));
+              std::make_unique<PerShapingPriorityStats>(
+                  flow_group_stats.totalPerShapingPriorityStats()));
           auto* h = aggregated_priority_stats_.back()->time_in_queue.get();
 
           hists.push_back(HistTuple("time_in_queue", h, scope_name, "Merge"));
@@ -456,7 +456,8 @@ class TrafficShapingHistogram : public TrafficShapingHistogramBase {
   int priority_lo_;
   int priority_hi_;
   SelectionType priority_sel_type_;
-  std::vector<std::unique_ptr<PerMsgPriorityStats>> aggregated_priority_stats_;
+  std::vector<std::unique_ptr<PerShapingPriorityStats>>
+      aggregated_priority_stats_;
   std::vector<std::unique_ptr<PerFlowGroupStats>> aggregated_flow_group_stats_;
 };
 

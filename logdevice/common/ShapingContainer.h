@@ -33,14 +33,19 @@
  */
 
 namespace facebook { namespace logdevice {
+
 class ShapingContainer {
  public:
   enum class RunType { REPLENISH, EVENTLOOP };
   explicit ShapingContainer(size_t num_scopes,
                             struct event_base* base,
-                            const configuration::ShapingConfig& scfg)
-      : type_(scfg.getType()), num_scopes_(num_scopes) {
-    flow_groups_.resize(num_scopes);
+                            const configuration::ShapingConfig& scfg,
+                            std::shared_ptr<FlowGroupDependencies> deps)
+      : num_scopes_(num_scopes), deps_(deps) {
+    for (size_t n = 0; n < num_scopes; ++n) {
+      FlowGroup fgp(deps);
+      flow_groups_.push_back(std::move(fgp));
+    }
 
     auto scope = NodeLocationScope::NODE;
     for (auto& fg : flow_groups_) {
@@ -89,9 +94,7 @@ class ShapingContainer {
       auto queue_latency =
           std::chrono::duration_cast<std::chrono::microseconds>(
               SteadyTimestamp::now() - flow_groups_run_requested_time_);
-      HISTOGRAM_ADD(Worker::stats(),
-                    flow_groups_run_event_loop_delay,
-                    queue_latency.count());
+      deps_->histogram_add_fg_run_event_loop_delay(queue_latency.count());
       flow_groups_run_requested_time_ = SteadyTimestamp();
     }
 
@@ -112,7 +115,7 @@ class ShapingContainer {
           flow_groups_[idx].run(flow_meters_mutex_, run_deadline);
       if (exceeded_deadline) {
         // Run again after yielding to the event loop.
-        STAT_INCR(Worker::stats(), flow_groups_run_deadline_exceeded);
+        deps_->stat_incr_fg_run_deadline_exceeded();
         flow_groups_run_requested_time_ = SteadyTimestamp::now();
         auto w = Worker::onThisThread();
         w->addWithPriority([&] { runFlowGroups(RunType::EVENTLOOP); },
@@ -121,11 +124,10 @@ class ShapingContainer {
       }
     }
 
-    HISTOGRAM_ADD(Worker::stats(),
-                  flow_groups_run_time,
-                  std::chrono::duration_cast<std::chrono::microseconds>(
-                      SteadyTimestamp::now() - run_start_time)
-                      .count());
+    deps_->histogram_add_fg_runtime(
+        std::chrono::duration_cast<std::chrono::microseconds>(
+            SteadyTimestamp::now() - run_start_time)
+            .count());
   }
 
   static void onFlowGroupsRunRequested(void* arg, short) {
@@ -146,7 +148,6 @@ class ShapingContainer {
     return flow_groups_[static_cast<int>(starting_scope)];
   }
 
-  configuration::ShapingType type_{configuration::ShapingType::NONE};
   std::vector<FlowGroup> flow_groups_;
   // Provides mutual exclusion between application of flow group updates
   // by the TrafficShaper thread and normal packet transmission on this
@@ -166,6 +167,8 @@ class ShapingContainer {
   size_t num_scopes_;
 
   SteadyTimestamp flow_groups_run_requested_time_;
+
+  std::shared_ptr<FlowGroupDependencies> deps_;
 };
 
 }} // namespace facebook::logdevice

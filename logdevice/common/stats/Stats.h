@@ -169,20 +169,20 @@ struct PerTrafficClassStats {
 #include "logdevice/common/stats/per_traffic_class_stats.inc" // nolint
 };
 
-struct PerMsgPriorityStats {
-  PerMsgPriorityStats();
-  ~PerMsgPriorityStats();
+struct PerShapingPriorityStats {
+  PerShapingPriorityStats();
+  ~PerShapingPriorityStats();
 
-  PerMsgPriorityStats(const PerMsgPriorityStats&) = delete;
-  PerMsgPriorityStats& operator=(const PerMsgPriorityStats&) = delete;
+  PerShapingPriorityStats(const PerShapingPriorityStats&) = delete;
+  PerShapingPriorityStats& operator=(const PerShapingPriorityStats&) = delete;
 
-  PerMsgPriorityStats(PerMsgPriorityStats&&) noexcept;
-  PerMsgPriorityStats& operator=(PerMsgPriorityStats&&) noexcept;
+  PerShapingPriorityStats(PerShapingPriorityStats&&) noexcept;
+  PerShapingPriorityStats& operator=(PerShapingPriorityStats&&) noexcept;
 
   /**
    * Add values from @param other.
    */
-  void aggregate(PerMsgPriorityStats const& other,
+  void aggregate(PerShapingPriorityStats const& other,
                  StatsAggOptional agg_override);
 
   /**
@@ -193,7 +193,8 @@ struct PerMsgPriorityStats {
   std::unique_ptr<LatencyHistogram> time_in_queue;
 
 #define STAT_DEFINE(name, _) StatsCounter name{};
-#include "logdevice/common/stats/per_msg_priority_stats.inc" // nolint
+#include "logdevice/common/stats/per_msg_priority_stats.inc"    // nolint
+#include "logdevice/common/stats/per_priority_stats_common.inc" // nolint
 };
 
 struct PerFlowGroupStats {
@@ -210,11 +211,12 @@ struct PerFlowGroupStats {
   void reset();
 
   /**
-   * Aggregates PerMsgPriorityStats across all Priorities.
+   * Aggregates PerShapingPriorityStats across all Priorities.
    */
-  PerMsgPriorityStats totalPerMsgPriorityStats() const;
+  PerShapingPriorityStats totalPerShapingPriorityStats() const;
 
-  std::array<PerMsgPriorityStats, asInt(Priority::NUM_PRIORITIES)> priorities;
+  std::array<PerShapingPriorityStats, asInt(Priority::NUM_PRIORITIES)>
+      priorities;
 
 #define STAT_DEFINE(name, _) StatsCounter name{};
 #include "logdevice/common/stats/per_flow_group_stats.inc" // nolint
@@ -831,8 +833,11 @@ struct Stats final {
       per_traffic_class_stats = {};
 
   // per-flow group stats
+  // For Network Traffic Shaping
   std::array<PerFlowGroupStats, static_cast<int>(NodeLocation::NUM_ALL_SCOPES)>
       per_flow_group_stats = {};
+  // For Read Throttling, we only need 1 SCOPE
+  std::array<PerFlowGroupStats, 1> per_flow_group_stats_rt = {};
 
   // Per-request-type stats
   std::array<PerRequestTypeStats, static_cast<int>(RequestType::MAX)>
@@ -1288,15 +1293,12 @@ class PerShardStatToken {
     }                                                            \
   } while (0)
 
-#define FLOW_GROUP_STAT_SET(stats_struct, scope, name, val) \
-  do {                                                      \
-    if (stats_struct) {                                     \
-      ld_check(scope <= NodeLocationScope::ROOT);           \
-      (stats_struct)                                        \
-          ->get()                                           \
-          .per_flow_group_stats[static_cast<int>(scope)]    \
-          .name = (val);                                    \
-    }                                                       \
+#define FLOW_GROUP_STAT_SET(stats, fgp_arr, scope, name, val) \
+  do {                                                        \
+    if (stats) {                                              \
+      ld_check(scope <= NodeLocationScope::ROOT);             \
+      fgp_arr[static_cast<int>(scope)].name = (val);          \
+    }                                                         \
   } while (0)
 
 #define FLOW_GROUP_MSG_STAT_ADD(stats_struct, flow_group, msg, name, val) \
@@ -1313,26 +1315,22 @@ class PerShardStatToken {
     }                                                                     \
   } while (0)
 
-#define FLOW_GROUP_PRIORITY_STAT_ADD(stats_struct, scope, priority, name, val) \
-  do {                                                                         \
-    if (stats_struct) {                                                        \
-      (stats_struct)                                                           \
-          ->get()                                                              \
-          .per_flow_group_stats[static_cast<int>(scope)]                       \
-          .priorities[asInt(priority)]                                         \
-          .name += (val);                                                      \
-    }                                                                          \
+#define FLOW_GROUP_PRIORITY_STAT_ADD(                                      \
+    stats, fgp_arr, scope, priority, name, val)                            \
+  do {                                                                     \
+    if (stats) {                                                           \
+      fgp_arr[static_cast<int>(scope)].priorities[asInt(priority)].name += \
+          (val);                                                           \
+    }                                                                      \
   } while (0)
 
-#define FLOW_GROUP_PRIORITY_STAT_SET(stats_struct, scope, priority, name, val) \
-  do {                                                                         \
-    if (stats_struct) {                                                        \
-      (stats_struct)                                                           \
-          ->get()                                                              \
-          .per_flow_group_stats[static_cast<int>(scope)]                       \
-          .priorities[asInt(priority)]                                         \
-          .name = (val);                                                       \
-    }                                                                          \
+#define FLOW_GROUP_PRIORITY_STAT_SET(                                     \
+    stats, fgp_arr, scope, priority, name, val)                           \
+  do {                                                                    \
+    if (stats) {                                                          \
+      fgp_arr[static_cast<int>(scope)].priorities[asInt(priority)].name = \
+          (val);                                                          \
+    }                                                                     \
   } while (0)
 
 #define FLOW_GROUP_MSG_LATENCY_ADD(stats_struct, flow_group, env) \

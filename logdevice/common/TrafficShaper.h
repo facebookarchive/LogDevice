@@ -75,14 +75,16 @@ class TrafficShaper {
   static void onConfigUpdate(TrafficShaper*);
 
   /**
+   * Common method to update FlowGroupsUpdate related stats.
+   */
+  void updateStats(const configuration::ShapingConfig* shaping_cfg,
+                   FlowGroupDependencies* deps);
+
+  /**
    * Repeatedly sleeps for updateInterval_ then distributes credit.
    */
   void mainLoop();
 
-  bool dispatchUpdateCommon(const configuration::ShapingConfig& shaping_config,
-                            int nworkers,
-                            FlowGroupsUpdate& update,
-                            StatsHolder* stats);
   /**
    * Construct and release a FlowGroupsUpdate to each worker.
    *
@@ -92,8 +94,14 @@ class TrafficShaper {
    */
   bool dispatchUpdateNw();
   bool dispatchUpdateReadIO();
+  bool dispatchUpdateCommon(const configuration::ShapingConfig& shaping_config,
+                            int nworkers,
+                            FlowGroupsUpdate& update,
+                            FlowGroupDependencies* deps);
 
   void setIntervalImpl(const decltype(updateInterval_)& interval);
+  std::unique_ptr<FlowGroupDependencies> nw_shaping_deps_;
+  std::unique_ptr<FlowGroupDependencies> read_shaping_deps_;
 };
 
 }} // namespace facebook::logdevice
