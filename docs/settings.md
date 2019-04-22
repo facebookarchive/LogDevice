@@ -9,6 +9,7 @@ sidebar_label: Settings
 |-----------|-----------------|:---------:|-----------|
 | admin-port | TCP port on which the server listens to for admin commands, supports commands over SSL | 6440 | requires&nbsp;restart, server&nbsp;only |
 | admin-unix-socket | Path to the unix domain socket the server will use to listen for admin thrift interface |  | requires&nbsp;restart, server&nbsp;only |
+| enable-maintenance-manager | Start Maintenance Manager | false | server&nbsp;only |
 | maintenance-log-snapshotting | Allow the maintenance log to be snapshotted onto a snapshot log. This requires the maintenance log group to contain two logs, the first one being the snapshot log and the second one being the delta log. | true | server&nbsp;only |
 | maintenance-log-snapshotting-period | Controls time based snapshotting. New maintenancelog snapshot will be created after this period if there are new deltas | 1h | server&nbsp;only |
 | read-metadata-from-sequencers | Safety checker to read the metadata of logs directly from sequencers. | true | server&nbsp;only |

@@ -13,21 +13,30 @@
 
 #include "logdevice/admin/maintenance/ClusterMaintenanceStateMachine.h"
 #include "logdevice/admin/maintenance/ClusterMaintenanceWrapper.h"
+#include "logdevice/admin/maintenance/EventLogWriter.h"
 #include "logdevice/admin/maintenance/SafetyCheckScheduler.h"
+#include "logdevice/admin/maintenance/SequencerWorkflow.h"
+#include "logdevice/admin/maintenance/ShardWorkflow.h"
 #include "logdevice/admin/maintenance/types.h"
+#include "logdevice/common/Processor.h"
 #include "logdevice/common/ShardAuthoritativeStatusMap.h"
 #include "logdevice/common/configuration/nodes/NodesConfiguration.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationAPI.h"
 #include "logdevice/common/event_log/EventLogRecord.h"
-#include "logdevice/common/event_log/EventLogWriter.h"
-#include "logdevice/common/settings/Settings.h"
+#include "logdevice/common/event_log/EventLogStateMachine.h"
 #include "logdevice/common/work_model/SerialWorkContext.h"
+#include "logdevice/include/ConfigSubscriptionHandle.h"
 
 namespace facebook { namespace logdevice { namespace maintenance {
 
-class MaintenanceManager;
-class ShardWorkflow;
-class SequencerWorkflow;
+using NCUpdateResult = folly::Expected<
+    std::shared_ptr<const configuration::nodes::NodesConfiguration>,
+    Status>;
+
+using SafetyCheckResult = folly::Expected<SafetyCheckScheduler::Result, Status>;
+using NodeState = thrift::NodeState;
+using ShardState = thrift::ShardState;
+using SequencerState = thrift::SequencerState;
 
 /*
  * Dependencies of MaintenanceManager isolated
@@ -36,27 +45,14 @@ class SequencerWorkflow;
 class MaintenanceManagerDependencies {
  public:
   MaintenanceManagerDependencies(
-      UpdateableSettings<AdminServerSettings> settings,
+      Processor* processor,
       ClusterMaintenanceStateMachine* cluster_maintenance_state_machine,
       EventLogStateMachine* event_log)
-      : settings_(settings),
+      : processor_(processor),
         cluster_maintenance_state_machine_(cluster_maintenance_state_machine),
         event_log_state_machine_(event_log) {}
 
-  class ShardAuthoritativeStateUpdateHandle
-      : public ShardAuthoritativeStatusSubscriber {
-   public:
-    explicit ShardAuthoritativeStateUpdateHandle(
-        MaintenanceManagerDependencies* dep)
-        : dep(dep) {}
-
-    void onShardStatusChanged() override {
-      dep->onShardStatusChanged();
-    }
-    MaintenanceManagerDependencies* dep;
-  };
-
-  virtual ~MaintenanceManagerDependencies();
+  virtual ~MaintenanceManagerDependencies() {}
 
   // Sets up all necessary subscription handles
   virtual void startSubscription();
@@ -75,79 +71,50 @@ class MaintenanceManagerDependencies {
    * is fulfiled once we have results for all workflows
    */
 
-  virtual folly::SemiFuture<SafetyCheckScheduler::Result>
-  postSafetyCheckRequest(const std::set<const ShardWorkflow&> shard_wf,
-                         const std::set<const SequencerWorkflow&> seq_wf);
-
-  using NodesConfigurationUpdateResult = std::tuple<
-      Status,
-      std::shared_ptr<const configuration::nodes::NodesConfiguration>>;
+  virtual folly::SemiFuture<SafetyCheckResult>
+  postSafetyCheckRequest(const std::vector<const ShardWorkflow*>& shard_wf,
+                         const std::vector<const SequencerWorkflow*>& seq_wf);
 
   // calls `update` on the NodesConfigManager
-  virtual folly::SemiFuture<NodesConfigurationUpdateResult>
-  postNodesConfigurationUpdate(
-      const folly::F14NodeMap<ShardID, membership::ShardState::Update>&
-          shard_update,
-      const folly::F14NodeMap<NodeID, membership::SequencerNodeState::Update>&
-          sequencer_update);
+  virtual folly::SemiFuture<NCUpdateResult> postNodesConfigurationUpdate(
+      std::unique_ptr<membership::StorageMembership::Update> shards_update,
+      std::unique_ptr<membership::SequencerMembership::Update>
+          sequencers_update);
 
-  virtual void writeToEventLog(std::unique_ptr<EventLogRecord> event);
+  void setOwner(MaintenanceManager* owner);
 
-  virtual void setOwner(MaintenanceManager* owner) {
-    owner_ = owner;
-  }
+  EventLogStateMachine* getEventLog();
+
+  // Returns the NodesConfiguration attached to processor_
+  virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const;
 
  private:
-  MaintenanceManager* owner_;
+  // Handle to processor for getting the NodesConfig
+  Processor* processor_;
 
-  UpdateableSettings<AdminServerSettings> settings_;
+  // The MaintenanceManager instance this is attached to
+  MaintenanceManager* owner_{nullptr};
 
   // A replicated state machine that tails the maintenance logs
-  const ClusterMaintenanceStateMachine* cluster_maintenance_state_machine_;
+  ClusterMaintenanceStateMachine* cluster_maintenance_state_machine_;
 
   // A replicated state machine that tails the event log
-  const EventLogStateMachine* event_log_state_machine_;
+  EventLogStateMachine* event_log_state_machine_;
 
-
-      // Subscription handle for ClusterMaintenanceStateMachine.
-      // calls the onClusterMaintenanceStateUpdate callback when updated
-      // state is available from ClusterMaintenanceStateMachine
-      std::unique_ptr<ClusterMaintenanceStateMachine::SubscriptionHandle>
-          cms_update_handle_;
-
-  // Subscription handle for Settings
-  UpdateableSettings<AdminServerSettings>::SubscriptionHandle settings_handle_;
+  // Subscription handle for ClusterMaintenanceStateMachine.
+  // calls the onClusterMaintenanceStateUpdate callback when updated
+  // state is available from ClusterMaintenanceStateMachine
+  std::unique_ptr<ClusterMaintenanceStateMachine::SubscriptionHandle>
+      cms_update_handle_;
 
   // Subscription handle for ShardAuthoritativeStatus.
-  std::unique_ptr<ShardAuthoritativeStateUpdateHandle> sas_update_handle_;
+  std::unique_ptr<EventLogStateMachine::SubscriptionHandle> el_update_handle_;
 
-  std::unique_ptr<EventLogWriter> event_log_writer_;
+  // Subscription handle for NodesConfig update
+  std::unique_ptr<ConfigSubscriptionHandle> nodes_config_update_handle_;
 
-  // TODO: This will be a handle to the safety check scheduler
   std::unique_ptr<SafetyCheckScheduler> safety_check_scheduler_;
-
-  // Callback that gets called when there is a new update from the
-  // ClusterMaintenanceStateMachine.
-  // sets `run_evaluate_` on owner to signal the need to run `evaluate` again
-  void
-  onClusterMaintenanceStateUpdate(const thrift::ClusterMaintenanceState& state,
-                                  const MaintenanceDelta* delta,
-                                  lsn_t version);
-
-  // Subscription callback for ClusterMembership
-  // sets `run_evaluate_` on owner to signal the need to run `evaluate` again
-  void onNodesConfigurationUpdated();
-
-  // Callback that gets called when there is a new ShardAuthoritativeStatus
-  // update.
-  // sets `run_evaluate_` on owner to signal the need to run `evaluate` again
-  void onShardStatusChanged();
-
-  // Subscription callback for Settings update.
-  // Starts/Stops the MaintenanceManager depending on settings
-  void onSettingsUpdated();
-
-  virtual const ShardAuthoritativeStatusMap& getShardAuthoritativeStatusMap();
 };
 
 /*
@@ -155,86 +122,288 @@ class MaintenanceManagerDependencies {
  * the maintenances on a cluster. The main task of cluster maintenance
  * manager is to evaluate the maintenances in ClusterMaintenanceStateWrapper
  * and create and run workflows and schedule safety checks and request
- * NodesConfig updates
+ * NodesConfig updates. This class is not thread-safe and any work that
+ * needs to happen should be added to the work context
  */
 class MaintenanceManager : public SerialWorkContext {
  public:
-  MaintenanceManager(UpdateableSettings<Settings> settings,
+  MaintenanceManager(folly::Executor* executor,
                      std::unique_ptr<MaintenanceManagerDependencies> deps);
 
   virtual ~MaintenanceManager();
 
   /**
-   * Starts the dependencies and sets up internal fields
+   * Schedules work on this object to call `startInternal`
    */
   void start();
 
   /**
-   * Sets shutting_down_ to true which signals the evaluate method
-   * to terminate. Promise will be fulfiled once evaluate terminates
-   * and all internal fields reset
+   * Schedules work on this object to call `stopInternal`
+   *
+   * @return A future whose value will be avilable
+   *         once maintenance manager has truly stopped
    */
-  folly::SemiFuture<bool> stop();
+  folly::SemiFuture<folly::Unit> stop();
+
+  // Getters
+
+  // Getter that returns a SemiFututre with NodeState for a given node
+  folly::SemiFuture<NodeState> getNodeState(node_index_t node);
+  // Getter that returns a SemiFuture with ShardState for a given shard
+  folly::SemiFuture<ShardState> getShardState(ShardID shard);
+  // Getter that returns a SemiFuture with SequencerState for a given node
+  folly::SemiFuture<SequencerState> getSequencerState(node_index_t node);
+  // Getter that returns a SemiFuture with ShardOperationalState for the given
+  // shard
+  folly::SemiFuture<ShardOperationalState>
+  getShardOperationalState(ShardID shard);
+  // Getter that returns a SemiFuture with ShardDataHealth for the given shard
+  folly::SemiFuture<ShardDataHealth> getShardDataHealth(ShardID shard);
+  // Getter that returns a SemiFuture with SequencingState for the gievn node
+  folly::SemiFuture<SequencingState> getSequencingState(node_index_t node);
+  // Getter that returns a SemiFuture with StorageState for a shard from
+  // NodesConfig
+  folly::SemiFuture<membership::StorageState> getStorageState(ShardID shard);
+  // Getter that returns a SemiFuture with MetaDataStorageState for a shard from
+  // NodesConfig
+  folly::SemiFuture<membership::MetaDataStorageState>
+  getMetaDataStorageState(ShardID shard);
+  // Getter that returns a SemiFuture with the shard's target operational state
+  folly::SemiFuture<std::unordered_set<ShardOperationalState>>
+  getShardTargetStates(ShardID shard);
+  // Getter that returns a SemiFuture with node's target sequencing state
+  folly::SemiFuture<SequencingState>
+  getSequencerTargetState(node_index_t node_index);
+
+  // Callback that gets called when there is a new update from the
+  // ClusterMaintenanceStateMachine. Schedules work on this object to
+  // update `cluster_maintenance_state_` and calls `scheduleRun`
+  void onClusterMaintenanceStateUpdate(ClusterMaintenanceState state,
+                                       lsn_t version);
+
+  // Subscription callback for ClusterMembership update
+  // Schedules work on this object to call `scheduleRun`
+  void onNodesConfigurationUpdated();
+
+  // Callback that gets called when there is a EventLogRebuildingSet
+  // update. Schedules work on this object to update
+  // `event_log_rebuilding_set_` and calls `scheduleRun`
+  void onEventLogRebuildingSetUpdate(EventLogRebuildingSet set, lsn_t version);
+
+  enum class MMStatus {
+    // MaintenanceManager has been started
+    // all necessary subscrption and is waiting
+    // for initial state to be available
+    STARTING = 0,
+    // MaintenanceManager is completed a run of evaluation
+    // and is now waiting for a state change in form of
+    // ClusterMaintenanceState, EventLogRebuildingSet or
+    // NodesConfiguration update
+    AWAITING_STATE_CHANGE,
+    // MaintenanceManager is currently running the active
+    // workflows and waiting on results of run
+    RUNNING_WORKFLOWS,
+    // MaintenanceManager is waiting for a callback
+    // after posting a NC update
+    AWAITING_NODES_CONFIG_UPDATE,
+    // MaintenanceManager is waiting for results after
+    // scheduling a safety check
+    AWAITING_SAFETY_CHECK_RESULTS,
+    // MaintenanceManager stop was called. If we
+    // are still in middle of evaluation chain, we will
+    // not interrupt but evaluation will terminate once
+    // future is complete
+    STOPPING,
+    // MaintenanceManager has been stopped. Its safe
+    // to destroy this object
+    STOPPED,
+    // MaintenanceManager object has been created but
+    // not started yet
+    NOT_STARTED
+  };
+
+  // Returns the current status_
+  // Useful for testing
+  folly::SemiFuture<MMStatus> getStatus();
+
+ protected:
+  // Used only in tests
+  ShardWorkflow* FOLLY_NULLABLE getActiveShardWorkflow(ShardID shard) const;
+  SequencerWorkflow* FOLLY_NULLABLE
+  getActiveSequencerWorkflow(node_index_t node) const;
+
+ private:
+  std::unique_ptr<MaintenanceManagerDependencies> deps_;
 
   // Set to true every time we get one of the subscription
   // callback indicating the need to call `evaluate()`
   std::atomic<bool> run_evaluate_{false};
 
-  // Returns the NodeMaintenanceState for given node
-  using NodeState = thrift::NodeState;
-  NodeState getNodeMaintenanceState(NodeID node);
+  // State delivered by the ClusterMaintenanceStateMachine
+  std::unique_ptr<ClusterMaintenanceState> cluster_maintenance_state_;
 
-  // Return the ShardMaintenanceState for the given shard
-  using ShardState = thrift::ShardState;
-  ShardState getShardMaintenanceState(ShardID shard);
+  // Version of the last ClusterMaintenanceState delivered
+  lsn_t last_cms_version_{LSN_INVALID};
 
-  // Getters
+  // State delivered by the EventLogStateMachine
+  std::unique_ptr<EventLogRebuildingSet> event_log_rebuilding_set_;
 
+  // Version of the last EventLogRebuildingSet delivered
+  lsn_t last_ers_version_{LSN_INVALID};
+
+  /**
+   * Starts the dependencies and sets up internal fields
+   */
+  void startInternal();
+
+  /**
+   * Stops the subscriptions and updates the status_
+   */
+  void stopInternal();
+
+  NodeState getNodeStateInternal(node_index_t node) const;
+  // Getter that returns ShardState for a given shard
+  ShardState getShardStateInternal(ShardID shard) const;
+  // Getter that returns SequencerState for a given node
+  SequencerState getSequencerStateInternal(node_index_t node) const;
   // Getter that returns ShardOperationalState for the given shard
-  ShardOperationalState getShardOperationalState(ShardID shard) const;
+  ShardOperationalState getShardOperationalStateInternal(ShardID shard) const;
   // Getter that returns ShardDataHealth for the given shard
-  ShardDataHealth getShardDataHealth(ShardID shard) const;
+  ShardDataHealth getShardDataHealthInternal(ShardID shard) const;
   // Getter that returns SequencingState for the gievn node
-  SequencingState getSequencingState(node_index_t node) const;
-  // Getter that returns the NodesConfiguration
-  virtual const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
-  getNodesConfiguration() const;
-  // Getter that returns the StorageState for a shard
-  membership::StorageState getStorageState(ShardID shard);
+  SequencingState getSequencingStateInternal(node_index_t node) const;
+  // Getter that returns StorageState for a shard from NodesConfig
+  membership::StorageState getStorageStateInternal(ShardID shard) const;
+  // Getter that returns MetaDataStorageState for a shard from
+  // NodesConfig
+  membership::MetaDataStorageState
+  getMetaDataStorageStateInternal(ShardID shard) const;
+  // Getter that returns the shard's target operational state
+  std::unordered_set<ShardOperationalState>
+  getShardTargetStatesInternal(ShardID shard) const;
+  // Getter that returns node's target sequencing state
+  SequencingState
+  getSequencerTargetStateInternal(node_index_t node_index) const;
+  // Returns current value of `status_`
+  MMStatus getStatusInternal() const;
 
- protected:
-  // Used only in tests
-  ShardWorkflow* getActiveShardWorkflow(ShardID shard);
-  SequencerWorkflow* getActiveSequencerWorkflow(NodeID node);
+  // Sets `run_evaluate_` to true
+  void scheduleRun();
 
- private:
-  std::unique_ptr<MaintenanceManagerDependencies> deps_;
-
-  bool started_{false};
-
-  // Set when `stop()` is called. Signals evaluate
-  // method to terminate and call shutdown
-  std::atomic<bool> shutting_down_{false};
-
-  // Promise that is fulfiled at end of shutdown() method
-  // indicating MaintenanceManager has been stopped
-  folly::SharedPromise<bool> stop_promise_;
-
-  // The main method that evaluate the current ClusterMaintenanceStateWrapper,
-  // creates and runs workflows and requests NodesConfiguration update
-  // and safety checks
+  // The main method that creates a chain of functions executed in
+  // sequence.
+  // 1. updates ClientMaintenanceWrapper
+  // 2. Creates and runs ShardWorkflows
+  // 3. Creates and runs SequencerWorkflows
+  // 4. Once all workflows return, schedules NodesConfig updates
+  // 5. Once NodesConfig updates complete, schedules a safety check
+  // 6. Once Safety check completes, call `evaluate` again
+  // If at any point in this sequence, running_ is set to false,
+  // stops executing further in the chain
   void evaluate();
 
-  // Reset all internal fields and fulfils the stop_promise_
-  void shutdown();
+  // Updates the `client_maintenance_wrapper_` if the
+  // version is stale
+  void updateClientMaintenanceStateWrapper();
+
+  // Iterates over all shards/nodes in the current
+  // NodesConfig and creates shard/sequencer workflows
+  void createWorkflows();
+
+  // Calls `run` on active_shard_workflow_
+  virtual std::pair<std::vector<ShardID>,
+                    std::vector<folly::SemiFuture<MaintenanceStatus>>>
+  runShardWorkflows();
+
+  // A helper method that gets called when all futures
+  // returned by `runShardWorkflows` completes
+  void processShardWorkflowResult(
+      const std::vector<ShardID>& shards,
+      const std::vector<folly::Try<MaintenanceStatus>>& status);
+
+  // Set to true if there are shards that need to be enabled.
+  // Used to short circuit evaluation so that we can finish
+  // enabling shards before running safety checks
+  bool has_shards_to_enable_;
+
+  // Remove the corresponding workflow from `active_shard_workflow_`
+  void removeShardWorkflow(ShardID shard);
+
+  // calls `run` on active_sequencer_workflow_
+  virtual std::pair<std::vector<node_index_t>,
+                    std::vector<folly::SemiFuture<MaintenanceStatus>>>
+  runSequencerWorkflows();
+
+  // A helper method that gets called when all futures
+  // returned by `createAndRunSequencerWorkflows` completes
+  void processSequencerWorkflowResult(
+      const std::vector<node_index_t>& nodes,
+      const std::vector<folly::Try<MaintenanceStatus>>& status);
+
+  // Removes the corresponging sequencer workflow from
+  // `active_sequencer_workflow_`
+  void removeSequencerWorkflow(node_index_t node);
+
+  // Schedule NodesConfiguration update for any workflow whose
+  // status is AWAITING_NODES_CONFIG_CHANGES. Will look up shards
+  // in active_shard_workflow_ to determine the transtition that
+  // is to be requested
+  folly::SemiFuture<NCUpdateResult> scheduleNodesConfigUpdates();
+
+  // Schedule Safety check for any workflow whose status is
+  // AWAITING_SAFETY_CHECK
+  folly::SemiFuture<SafetyCheckResult> scheduleSafetyCheck();
+
+  // A helper method that looks at the safety check results
+  // and updates the status of workflows accordingly
+  void processSafetyCheckResult(SafetyCheckScheduler::Result result);
+
+  // Indicates the current status of this MaintenanceManager
+  MMStatus status_{MMStatus::NOT_STARTED};
 
   // A map of shard to the currently running maintenance worlflow
-  folly::F14NodeMap<ShardID, std::unique_ptr<ShardWorkflow>>
+  folly::F14NodeMap<
+      ShardID,
+      std::pair<std::unique_ptr<ShardWorkflow>, MaintenanceStatus>,
+      ShardID::Hash>
       active_shard_workflow_;
 
   // A map of node to the currently running sequencer maintenance worlflow
-  folly::F14NodeMap<NodeID, std::unique_ptr<SequencerWorkflow>>
+  folly::F14NodeMap<
+      node_index_t,
+      std::pair<std::unique_ptr<SequencerWorkflow>, MaintenanceStatus>>
       active_sequencer_workflow_;
+
+  // The current ClusterMaintenanceWrapper generated from the last known
+  // ClusterManintenanceState and NodesConfiguration. Gets updated in
+  // evaluate method if the version of current ClusterMaintenanceState
+  // and the one in wrapper are different
+  std::unique_ptr<ClusterMaintenanceWrapper> cluster_maintenance_wrapper_;
+
+  // Copy of NodesConfiguration. Updated everytime `evaluate` is called or
+  // as part of the NodesConfiguration update callback when MM requested
+  // NC updates are successfully applied. We have a local copy here so that
+  // Maintenancemanager does not have to wait for the update to be propograted
+  // through subscription callback. Note that this copy could diverge from
+  // what is in processor until `evaluate` called again
+  std::shared_ptr<const configuration::nodes::NodesConfiguration> nodes_config_;
+
+  folly::Promise<folly::Unit> shutdown_promise_;
+
+  // Returns true if status_ is STOPPING
+  bool shouldStopProcessing();
+
+  // Fulfills the shutdown_promise_ indicating
+  // shutdown of MaintenanceManager is complete
+  void finishShutdown();
+
+  // Lazily created during call to getEventLogWriter
+  std::unique_ptr<EventLogWriter> event_log_writer_;
+
+  // Returns the event_log_writer_;
+  EventLogWriter* getEventLogWriter();
+
+  friend class MaintenanceManagerTest;
 };
 
 }}} // namespace facebook::logdevice::maintenance

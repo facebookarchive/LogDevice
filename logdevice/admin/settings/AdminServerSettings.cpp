@@ -83,6 +83,14 @@ void AdminServerSettings::defineSettings(SettingEasyInit& init) {
      "Safety checker to read the metadata of logs directly from sequencers.",
      SERVER,
      SettingsCategory::AdminAPI)
+
+    ("enable-maintenance-manager",
+     &enable_maintenance_manager,
+     "false",
+     nullptr,
+     "Start Maintenance Manager",
+     SERVER,
+     SettingsCategory::AdminAPI)
     ;
   // clang-format on
 };

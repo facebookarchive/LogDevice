@@ -308,6 +308,10 @@ enum SequencingState {
    * Sequencing is disabled.
    */
   DISABLED = 3,
+  /*
+   * Sequencing state could not be determined
+   */
+  UNKNOWN = 4,
 }
 
 /**

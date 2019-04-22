@@ -39,6 +39,9 @@ struct AdminServerSettings : public SettingsBundle {
 
   bool read_metadata_from_sequencers;
 
+  // If true, start maintenance manager
+  bool enable_maintenance_manager;
+
  private:
   // Only UpdateableSettings can create this bundle.
   AdminServerSettings() {}

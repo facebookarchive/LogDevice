@@ -239,6 +239,14 @@ class EventLogRebuildingSet {
     return node_info->mode;
   }
 
+  bool shardIsTimeRangeRebuilding(node_index_t node, uint32_t shard) const {
+    NodeInfo const* node_info = getNodeInfo(node, shard);
+    if (!node_info || node_info->dc_dirty_ranges.empty()) {
+      return false;
+    }
+    return true;
+  }
+
   // Returns true if the given node is participating or did participate as
   // a donor in the currently active rebuilding in the given shard.
   bool isDonor(node_index_t node, uint32_t shard) const;
