@@ -42,6 +42,49 @@ def uniquify_names(names):
     return res
 
 
+# Output Printers
+
+
+def _table_printer(headers, rows, column_sizes, delimiter):
+    if not column_sizes:
+        column_sizes = []
+        for idx in range(len(headers)):
+            column_sizes.append(len(headers[idx]))
+        for row in rows:
+            for idx in range(len(headers)):
+                column_sizes[idx] = max(column_sizes[idx], len(row[idx]))
+
+    colsfmt = [" {{:<{}}} ".format(s) for s in column_sizes]
+    colsfmt.insert(0, "")
+    colsfmt.append("")
+    rowfmt = "|".join(colsfmt)
+    headerline = rowfmt.format(*headers)
+    hrule = "+{{:-<{}}}+".format(len(headerline) - 2).format("-")
+
+    cprint(hrule)
+    cprint(headerline)
+    cprint(hrule)
+    for row in rows:
+        cprint(rowfmt.format(*row))
+    cprint(hrule)
+
+
+def _list_printer(headers, rows, _, delimiter):
+    cprint(delimiter.join(headers))
+    for row in rows:
+        cprint(delimiter.join(row))
+
+
+def _line_printer(headers, rows, *_):
+    for row in rows:
+        for hdr_idx in range(len(headers)):
+            cprint("{} = {}".format(headers[hdr_idx], row[hdr_idx]))
+        cprint("")
+
+
+PRINTER_MAP = {"table": _table_printer, "list": _list_printer, "line": _line_printer}
+
+
 class SelectCommand(Command):
     cmds = {
         "select": "a sql query interface for the tier, use `:tables` to get "
@@ -55,9 +98,8 @@ class SelectCommand(Command):
         "run",
         ":pretty": "Enable or disable pretty printing of LSNs and timestamps",
         ":server_side_filtering": "Enable or disable server-side-filtering",
-        "parseable": "Print output table in parseable format. Delimiter can be "
-        "specified by passing an argument: --parseable --delim [], by "
-        "default delimiter is \t.",
+        ":output_format": "One of: table, list, line. Determines the output format "
+        "of ldquery results. Defaults to 'table'",
     }
 
     def __init__(self):
@@ -71,6 +113,7 @@ class SelectCommand(Command):
             ":ttl": self.run_ttl,
             ":pretty": self.run_pretty,
             ":server_side_filtering": self.run_server_side_filtering,
+            ":output_format": self.run_output_format,
         }
         self._last_res = None
         self._ldquery = None
@@ -81,8 +124,9 @@ class SelectCommand(Command):
         self._tables_cached = None
         self._prev_query = None
         self.parseable_output = False
-        self.output_delimiter = ""
+        self.output_delimiter = "\t"
         self.running_from_cli = False
+        self.output_format = "table"
 
     @property
     def ldquery(self):
@@ -267,28 +311,16 @@ class SelectCommand(Command):
             )
         )
 
-    def print_table(self, headers, rows, column_sizes=()):
-        if not column_sizes:
-            column_sizes = []
-            for idx in range(len(headers)):
-                column_sizes.append(len(headers[idx]))
-            for row in rows:
-                for idx in range(len(headers)):
-                    column_sizes[idx] = max(column_sizes[idx], len(row[idx]))
-
-        colsfmt = [" {{:<{}}} ".format(s) for s in column_sizes]
-        colsfmt.insert(0, "")
-        colsfmt.append("")
-        rowfmt = "|".join(colsfmt)
-        headerline = rowfmt.format(*headers)
-        hrule = "+{{:-<{}}}+".format(len(headerline) - 2).format("-")
-
-        cprint(hrule)
-        cprint(headerline)
-        cprint(hrule)
-        for row in rows:
-            cprint(rowfmt.format(*row))
-        cprint(hrule)
+    def run_output_format(self, cmd, input, raw):
+        if input is None or input == "":
+            cprint("Output format is {}".format(self.output_format))
+            return
+        if input in PRINTER_MAP:
+            self.output_format = input
+        else:
+            cprint("Usage: :output-format table|list|line", "red")
+            return
+        cprint("Output format is {}".format(self.output_format))
 
     def run_select(self, cmd, input, query):
         from logdevice.ldquery import LDQueryError, StatementError
@@ -298,17 +330,12 @@ class SelectCommand(Command):
             self._last_res = res
             print()
             column_names = uniquify_names(res.columns)
-            table_str = ""
-            if self.parseable_output:
-                table_str = self.output_delimiter.join(column_names) + "\n"
-                for r in res:
-                    table_str += self.output_delimiter.join([c for c in r._row])
-                    table_str += "\n"
-                cprint(table_str)
-                return None
             if res.count:
-                self.print_table(
-                    column_names, res._result.rows, res._result.cols_max_size
+                PRINTER_MAP[self.output_format](
+                    column_names,
+                    res._result.rows,
+                    res._result.cols_max_size,
+                    self.output_delimiter,
                 )
             else:
                 cprint("No records were retrieved.", "cyan")
@@ -375,10 +402,14 @@ class SelectCommand(Command):
             # Make sure LSNs are displayed with "eXnY" format instead of raw
             # integers.
             self.ldquery.pretty_output = True
+        if args.output_format:
+            if args.output_format not in PRINTER_MAP:
+                cprint("Invalid --output-format '{}'".format(args.output_format))
+                return 1
+            self.output_format = args.output_format
         if args.disable_server_side_filtering:
             self.ldquery.server_side_filtering = False
-        if hasattr(args, "parseable") and args.parseable:
-            self.parseable_output = args.parseable
+        if args.delim:
             self.output_delimiter = args.delim
         self.running_from_cli = True
         return self.run_interactive(cmd, rest, args.query)
@@ -393,10 +424,7 @@ class SelectCommand(Command):
             help=self.get_help(":pretty"),
         )
         subp.add_argument(
-            "--parseable",
-            default=False,
-            action="store_true",
-            help=self.get_help("parseable"),
+            "--output-format", default="table", help=self.get_help(":output_format")
         )
         subp.add_argument(
             "--disable-server-side-filtering", default=False, action="store_true"
