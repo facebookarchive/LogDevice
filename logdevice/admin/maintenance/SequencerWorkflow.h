@@ -21,6 +21,16 @@ class SequencerWorkflow {
  public:
   explicit SequencerWorkflow(node_index_t node) : node_(node) {}
 
+  // moveable.
+  SequencerWorkflow(SequencerWorkflow&& /* unused */) = default;
+  SequencerWorkflow& operator=(SequencerWorkflow&& wf) {
+    return *this;
+  }
+
+  // non-copyable.
+  SequencerWorkflow(const SequencerWorkflow& /* unused */) = delete;
+  SequencerWorkflow& operator=(const SequencerWorkflow& /* unused */) = delete;
+
   folly::SemiFuture<MaintenanceStatus> run(bool is_sequencing_enabled);
 
   // Sets the target_op_state_ to given value
@@ -30,11 +40,14 @@ class SequencerWorkflow {
   // Returns the target_op_state_
   SequencingState getTargetOpState() const;
 
-  // Returns the Node index for this workflow
-  node_index_t getNodeIndex() const;
-
   // Sets skip_safety_check_ to value of `skip`
   void shouldSkipSafetyCheck(bool skip);
+
+  node_index_t getNodeIndex() const {
+    return node_;
+  }
+
+  virtual ~SequencerWorkflow() {}
 
  private:
   SequencingState target_op_state_;

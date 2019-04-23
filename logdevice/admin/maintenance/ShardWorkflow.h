@@ -9,16 +9,17 @@
 
 #include <folly/futures/Future.h>
 
+#include "logdevice/admin/maintenance/EventLogWriter.h"
 #include "logdevice/admin/maintenance/types.h"
-#include "logdevice/common/AuthoritativeStatus.h"
-#include "logdevice/common/Timestamp.h"
-#include "logdevice/common/event_log/EventLogRecord.h"
+#include "logdevice/common/RebuildingTypes.h"
+#include "logdevice/common/ShardID.h"
 #include "logdevice/common/membership/StorageState.h"
 
+namespace facebook { namespace logdevice {
+class EventLogRecord;
+}} // namespace facebook::logdevice
+
 namespace facebook { namespace logdevice { namespace maintenance {
-
-class EventLogWriter;
-
 /**
  * A ShardWorkflow is a state machine that tracks state
  * transitions of a shard.
@@ -28,7 +29,15 @@ class ShardWorkflow {
   explicit ShardWorkflow(ShardID shard, const EventLogWriter* event_log_writer)
       : shard_(shard), event_log_writer_(event_log_writer) {}
 
-  virtual ~ShardWorkflow() {}
+  // moveable.
+  ShardWorkflow(ShardWorkflow&& /* unused */) = default;
+  ShardWorkflow& operator=(ShardWorkflow&& wf) {
+    return *this;
+  }
+
+  // non-copyable.
+  ShardWorkflow(const ShardWorkflow& /* unused */) = delete;
+  ShardWorkflow& operator=(const ShardWorkflow& /* unused */) = delete;
 
   /**
    * Computes the new MaintenanceStatus based on the parameters
@@ -44,7 +53,7 @@ class ShardWorkflow {
    *      fulfiled once the record is written to event log in the context
    *      of the thread doing the write to EventLog
    */
-  folly::SemiFuture<MaintenanceStatus>
+  folly::SemiFuture<thrift::MaintenanceStatus>
   run(membership::StorageState storage_state,
       ShardDataHealth data_health,
       RebuildingMode rebuilding_mode);
@@ -71,6 +80,7 @@ class ShardWorkflow {
   // shard in NodesConfiguration. This will be used
   // by the MaintenanceManager in NodesConfig update request
   membership::StorageState getExpectedStorageState() const;
+  virtual ~ShardWorkflow() {}
 
   // Returns true if this workflow requires this
   // shard to be excluded from new nodesets. Used by

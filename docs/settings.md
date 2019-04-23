@@ -13,6 +13,7 @@ sidebar_label: Settings
 | maintenance-log-snapshotting | Allow the maintenance log to be snapshotted onto a snapshot log. This requires the maintenance log group to contain two logs, the first one being the snapshot log and the second one being the delta log. | true | server&nbsp;only |
 | maintenance-log-snapshotting-period | Controls time based snapshotting. New maintenancelog snapshot will be created after this period if there are new deltas | 1h | server&nbsp;only |
 | read-metadata-from-sequencers | Safety checker to read the metadata of logs directly from sequencers. | true | server&nbsp;only |
+| safety-check-failure-sample-size | The number of sample epochs returned by the Maintenance API for each maintenance if safety check blocks the operation. | 10 | server&nbsp;only |
 | safety-check-max-logs-in-flight | The number of concurrent logs that we runs checks against during execution of the CheckImpact operation either internally during a maintenance or through the Admin API's checkImpact() call | 1000 | server&nbsp;only |
 | safety-check-timeout | The total time the safety check should take to run. This is the time that the CheckImpact operation need to take to scan all logs along with all the historical metadata to ensure than a maintenance is safe | 10min | server&nbsp;only |
 

@@ -69,13 +69,13 @@ struct Impact {
           replication(std::move(replication)),
           impact_result(impact_result) {}
     // Needed for the python bindings
-    bool operator==(ImpactOnEpoch const& x) const {
+    bool operator==(const ImpactOnEpoch& x) const {
       return x.log_id == log_id && x.epoch == epoch &&
           x.storage_set == storage_set &&
           x.storage_set_metadata == storage_set_metadata &&
           x.replication == replication && x.impact_result == impact_result;
     }
-    bool operator!=(ImpactOnEpoch const& x) const {
+    bool operator!=(const ImpactOnEpoch& x) const {
       return !(*this == x);
     }
   };
@@ -114,6 +114,13 @@ struct Impact {
       bool internal_logs_affected = false,
       size_t total_logs_checked = 0,
       std::chrono::seconds total_duration = std::chrono::seconds(0));
+
+  bool operator==(const Impact& x) const {
+    // We don't validate very field here as we care only about the semantic of
+    // equality rather than being identical.
+    return x.logs_affected == logs_affected &&
+        x.internal_logs_affected == internal_logs_affected;
+  }
 
   // Empty constructor sets everything as if the operation is safe.
   Impact();

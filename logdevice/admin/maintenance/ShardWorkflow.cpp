@@ -11,8 +11,6 @@
 #include <folly/MoveWrapper.h>
 #include <thrift/lib/cpp/util/EnumUtils.h>
 
-#include "logdevice/admin/maintenance/EventLogWriter.h"
-
 namespace facebook { namespace logdevice { namespace maintenance {
 
 using apache::thrift::util::enumName;

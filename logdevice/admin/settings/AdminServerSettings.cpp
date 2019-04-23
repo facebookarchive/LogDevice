@@ -45,6 +45,19 @@ void AdminServerSettings::defineSettings(SettingEasyInit& init) {
      SERVER,
      SettingsCategory::AdminAPI)
 
+    ("safety-check-failure-sample-size", &safety_check_failure_sample_size, "10",
+     [](int x) -> void {
+       if (x <= 0) {
+         throw boost::program_options::error(
+           "safety-check-failure-sample-size must be a positive integer"
+         );
+       }
+     },
+     "The number of sample epochs returned by the Maintenance API for each "
+     "maintenance if safety check blocks the operation.",
+     SERVER,
+     SettingsCategory::AdminAPI)
+
     ("safety-check-timeout", &safety_check_timeout, "10min",
      [](std::chrono::milliseconds val) -> void {
        if (val.count() <= 0) {
