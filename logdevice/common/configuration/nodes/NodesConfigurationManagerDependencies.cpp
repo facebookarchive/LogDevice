@@ -222,14 +222,17 @@ void Dependencies::overwrite(std::shared_ptr<const NodesConfiguration> config,
 
 void Dependencies::init(NCMWeakPtr ncm,
                         std::shared_ptr<const NodesConfiguration> init_nc) {
-  ld_assert(ncm.lock());
+  auto ncm_ptr = ncm.lock();
+  ld_assert(ncm_ptr);
   ncm_ = ncm;
+  processor_->setNodesConfigurationManager(ncm_ptr);
 
   auto req = makeNCMRequest<InitRequest>(std::move(init_nc));
   processor_->postWithRetrying(req);
 }
 
 void Dependencies::shutdown() {
+  ld_info("NCM Dependencies shutting down...");
   shutdown_signaled_.store(true);
   store_->shutdown();
   auto req = makeNCMRequest<ShutdownRequest>();

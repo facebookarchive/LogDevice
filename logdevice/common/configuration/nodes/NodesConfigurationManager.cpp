@@ -159,6 +159,7 @@ bool NodesConfigurationManager::shouldDoConsistentConfigFetch() const {
 
 void NodesConfigurationManager::shutdown() {
   shutdown_signaled_.store(true);
+  ld_info("NCM shutting down...");
   deps_->shutdown();
   // Just in case shutdown was signaled before / while the Processor is handling
   // the InitRequest.

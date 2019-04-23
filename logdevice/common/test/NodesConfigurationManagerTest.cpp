@@ -100,7 +100,6 @@ class NodesConfigurationManagerTest : public ::testing::Test {
         std::move(deps));
     ASSERT_TRUE(ncm_->init(std::make_shared<const NodesConfiguration>()));
     ncm_->upgradeToProposer();
-    processor_->setNodesConfigurationManager(ncm_);
   }
 
   //////// Helper functions ////////

@@ -240,7 +240,6 @@ ClientImpl::ClientImpl(std::string cluster_name,
           "Processing initial NodesConfiguration did not finish in time.");
       throw ConstructorFailed();
     }
-    processor_->setNodesConfigurationManager(std::move(ncm));
   }
 
   if (!LogsConfigManager::createAndAttach(
