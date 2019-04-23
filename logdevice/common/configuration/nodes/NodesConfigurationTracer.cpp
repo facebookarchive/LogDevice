@@ -60,7 +60,9 @@ void NodesConfigurationTracer::trace(NodesConfigurationTracer::Sample sample) {
         "using_ncm_nc", static_cast<int64_t>(sample.using_ncm_nc_));
     trace_sample->addIntValue(
         "is_same", compare_obj_ptrs(sample.server_config_nc_, sample.ncm_nc_));
-    trace_sample->addNormalValue("nc_update", std::move(sample.nc_update_));
+    if (sample.nc_update_gen_) {
+      trace_sample->addNormalValue("nc_update", sample.nc_update_gen_());
+    }
     if (!sample.published_nc_) {
       RATELIMIT_ERROR(
           std::chrono::seconds(10),

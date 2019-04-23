@@ -418,6 +418,12 @@ void NodesConfigurationCodec::serialize(const NodesConfiguration& nodes_config,
   writer.writeVector(ThriftCodec::serialize<BinarySerializer>(wrapper));
 }
 
+/* static */ std::string NodesConfigurationCodec::debugJsonString(
+    const NodesConfiguration& nodes_config) {
+  return ThriftCodec::serialize<apache::thrift::SimpleJSONSerializer>(
+      NodesConfigurationThriftConverter::toThrift(nodes_config));
+}
+
 /*static*/
 std::shared_ptr<const NodesConfiguration>
 NodesConfigurationCodec::deserialize(Slice wrapper_blob) {

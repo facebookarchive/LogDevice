@@ -101,7 +101,9 @@ Request::Execution ReportRequest::executeOnNCM(
 
 Dependencies::Dependencies(Processor* processor,
                            std::unique_ptr<NodesConfigurationStore> store)
-    : processor_(processor), store_(std::move(store)) {
+    : processor_(processor),
+      store_(std::move(store)),
+      tracer_(processor_->getTraceLogger()) {
   ld_check(processor_);
   ld_check(store_);
   // Pick a random worker to pin the StateMachine on, use background worker if

@@ -9,6 +9,8 @@
 
 #include <memory>
 
+#include <folly/Function.h>
+
 #include "logdevice/common/SampledTracer.h"
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/membership/types.h"
@@ -40,8 +42,9 @@ class NodesConfigurationTracer : SampledTracer {
     // If you're adding columns here, don't forget to update the underlying
     // TraceLogger.
     bool using_ncm_nc_{};
-    // TODO: avoid serializing the update unless the sample will be logged.
-    std::string nc_update_{};
+    // Allow the option to delay the generation of the update string unless
+    // the sample will be logged.
+    folly::Function<std::string()> nc_update_gen_{};
     Source source_{Source::UNKNOWN};
   };
 

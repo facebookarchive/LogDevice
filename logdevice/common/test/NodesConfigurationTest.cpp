@@ -31,6 +31,7 @@ using RoleSet = NodeServiceDiscovery::RoleSet;
 class NodesConfigurationTest : public ::testing::Test {
  public:
   inline void checkCodecSerialization(const NodesConfiguration& c) {
+    VLOG(1) << "config: " << NodesConfigurationCodec::debugJsonString(c);
     {
       auto got = NodesConfigurationThriftConverter::fromThrift(
           NodesConfigurationThriftConverter::toThrift(c));

@@ -10,6 +10,8 @@
 #include <folly/Format.h>
 #include <glog/logging.h>
 
+#include "logdevice/common/configuration/nodes/NodesConfigurationCodec.h"
+
 namespace facebook {
   namespace logdevice {
     namespace NodesConfigurationTestUtil {
@@ -136,6 +138,7 @@ std::shared_ptr<const configuration::nodes::NodesConfiguration> provisionNodes(
   auto config = std::make_shared<const NodesConfiguration>();
   auto new_config = config->applyUpdate(std::move(provision_update));
   ld_assert(new_config != nullptr);
+  VLOG(1) << "config: " << NodesConfigurationCodec::debugJsonString(*config);
   return new_config;
 }
 

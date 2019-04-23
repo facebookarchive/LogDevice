@@ -200,8 +200,42 @@ void NodesConfigurationManager::update(
     return;
   }
   STAT_INCR(deps_->getStats(), nodes_configuration_manager_updates_requested);
+
+  // wrap around the callback for trace logging
+  auto wrapped_callback =
+      [cb = std::move(callback),
+       ncm = weak_from_this(),
+       updates_str = logdevice::toString(updates)](
+          Status status, std::shared_ptr<const NodesConfiguration> nc) mutable {
+        SCOPE_EXIT {
+          cb(status, std::move(nc));
+        };
+
+        // Only log successful updates and when NCM is not shutting down
+        if (status != Status::OK) {
+          return;
+        }
+        auto ncm_ptr = ncm.lock();
+        if (!ncm_ptr || ncm_ptr->shutdownSignaled()) {
+          return;
+        }
+
+        NodesConfigurationTracer::Sample sample;
+        sample.nc_update_gen_ = [updates_str =
+                                     std::move(updates_str)]() mutable {
+          // TODO: Since NCM consumes updates, currently we always
+          // generate the update string here regardless of whether the
+          // sample is going to be logged. It's likely unnecessary.
+          return std::move(updates_str);
+        };
+        // Note that nc is the published nc only if status is OK
+        sample.published_nc_ = nc;
+        sample.source_ = NodesConfigurationTracer::Source::NCM_UPDATE;
+        ncm_ptr->deps()->tracer_.trace(std::move(sample));
+      };
+
   std::unique_ptr<Request> req = deps()->makeNCMRequest<ncm::UpdateRequest>(
-      std::move(updates), std::move(callback));
+      std::move(updates), std::move(wrapped_callback));
   deps()->processor_->postWithRetrying(req);
 }
 
@@ -219,9 +253,45 @@ void NodesConfigurationManager::overwrite(
     return;
   }
 
+  if (!configuration) {
+    callback(E::INVALID_PARAM, nullptr);
+    return;
+  }
+
   STAT_INCR(
       deps_->getStats(), nodes_configuration_manager_overwrites_requested);
-  deps()->overwrite(std::move(configuration), std::move(callback));
+
+  // wrap around the callback for trace logging
+  auto wrapped_callback =
+      [cb = std::move(callback), ncm = weak_from_this(), configuration](
+          Status status, std::shared_ptr<const NodesConfiguration> nc) mutable {
+        SCOPE_EXIT {
+          cb(status, std::move(nc));
+        };
+
+        // Only log successful updates and when NCM is not shutting down
+        if (status != Status::OK) {
+          return;
+        }
+        auto ncm_ptr = ncm.lock();
+        if (!ncm_ptr || ncm_ptr->shutdownSignaled()) {
+          return;
+        }
+        NodesConfigurationTracer::Sample sample;
+        sample.nc_update_gen_ = [configuration =
+                                     std::move(configuration)]() mutable {
+          // TODO: we don't have NodesConfiguration::toString(), so we use
+          // the debug JSON string instead. This could likely be more
+          // efficient.
+          return NodesConfigurationCodec::debugJsonString(*configuration);
+        };
+        // Note that nc is the published nc only if status is OK
+        sample.published_nc_ = nc;
+        sample.source_ = NodesConfigurationTracer::Source::NCM_OVERWRITE;
+        ncm_ptr->deps()->tracer_.trace(std::move(sample));
+      };
+
+  deps()->overwrite(std::move(configuration), std::move(wrapped_callback));
 }
 
 void NodesConfigurationManager::initOnNCM(

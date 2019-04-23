@@ -15,6 +15,7 @@
 #include "logdevice/common/configuration/Node.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationAPI.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationStore.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationTracer.h"
 #include "logdevice/common/membership/StorageMembership.h"
 
 namespace facebook { namespace logdevice { namespace configuration {
@@ -227,6 +228,7 @@ class Dependencies {
   // Timer for periodically polling from store_
   std::unique_ptr<Timer> timer_;
   std::atomic<bool> shutdown_signaled_{false};
+  NodesConfigurationTracer tracer_;
 
   friend class nodes::NodesConfigurationManager;
   friend class ReportRequest;

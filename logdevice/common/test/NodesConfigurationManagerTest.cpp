@@ -66,6 +66,7 @@ makeDummyNodesConfiguration(MembershipVersion::Type version) {
 class NodesConfigurationManagerTest : public ::testing::Test {
  public:
   void SetUp() override {
+    dbg::currentLevel = getLogLevelFromEnv().value_or(dbg::Level::INFO);
     NodesConfiguration initial_config{};
     initial_config.setVersion(MembershipVersion::EMPTY_VERSION);
     EXPECT_TRUE(initial_config.validate());

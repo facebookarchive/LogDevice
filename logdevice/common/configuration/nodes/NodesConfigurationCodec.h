@@ -54,6 +54,8 @@ class NodesConfigurationCodec {
   static std::string serialize(const NodesConfiguration& nodes_config,
                                SerializeOptions options = {true});
 
+  static std::string debugJsonString(const NodesConfiguration& nodes_config);
+
   static std::shared_ptr<const NodesConfiguration> deserialize(Slice buf);
   static std::shared_ptr<const NodesConfiguration>
   deserialize(folly::StringPiece buf);
