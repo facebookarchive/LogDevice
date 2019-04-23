@@ -85,6 +85,15 @@ bool NodesConfiguration::Update::hasAllUpdates() const {
       metadata_logs_rep_update != nullptr;
 }
 
+std::string NodesConfiguration::Update::toString() const {
+  return folly::sformat(
+      "[Svc:{},Seq:{},Sto:{},Meta:{}]",
+      service_discovery_update ? service_discovery_update->toString() : "",
+      sequencer_config_update ? sequencer_config_update->toString() : "",
+      storage_config_update ? storage_config_update->toString() : "",
+      metadata_logs_rep_update ? metadata_logs_rep_update->toString() : "");
+}
+
 bool NodesConfiguration::serviceDiscoveryConsistentWithMembership() const {
   return serviceDiscoveryhasMembershipNodes(
              *service_discovery_, *sequencer_config_->getMembership()) &&

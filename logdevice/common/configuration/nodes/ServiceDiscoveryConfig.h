@@ -72,6 +72,7 @@ struct NodeServiceDiscovery {
   }
 
   bool isValid() const;
+  std::string toString() const;
 
   // return the corresponding sockaddr for the given socket type
   const Sockaddr& getSockaddr(SocketType type, ConnectionType conntype) const;

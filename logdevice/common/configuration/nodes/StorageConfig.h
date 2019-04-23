@@ -50,6 +50,7 @@ struct StorageNodeAttribute {
   bool exclude_from_nodesets;
 
   bool isValid() const;
+  std::string toString() const;
 
   bool operator==(const StorageNodeAttribute& rhs) const {
     return capacity == rhs.capacity && num_shards == rhs.num_shards &&

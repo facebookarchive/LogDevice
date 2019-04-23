@@ -22,7 +22,7 @@ struct LegacyRSMSnapshotHeader {
   lsn_t base_version;
 };
 
-static_assert(sizeof(LegacyRSMSnapshotHeader) == 32);
+static_assert(sizeof(LegacyRSMSnapshotHeader) == 32, "");
 
 const uint32_t flags = 0x12345678u;
 const uint64_t byte_offset = 0x123456789ABCDEF0u;

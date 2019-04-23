@@ -26,11 +26,36 @@ bool NodeAttributesConfig<Attributes, Mutable>::NodeUpdate::isValid() const {
 }
 
 template <typename Attributes, bool Mutable>
+std::string
+NodeAttributesConfig<Attributes, Mutable>::NodeUpdate::toString() const {
+  std::string t_str;
+  switch (transition) {
+    case UpdateType::PROVISION:
+      t_str = "PR";
+      break;
+    case UpdateType::REMOVE:
+      t_str = "RM";
+      break;
+    case UpdateType::RESET:
+      t_str = "RS";
+      break;
+  }
+  return folly::sformat(
+      "[T:{},A:{}]", t_str, attributes ? attributes->toString() : "");
+}
+
+template <typename Attributes, bool Mutable>
 bool NodeAttributesConfig<Attributes, Mutable>::Update::isValid() const {
   return !node_updates.empty() &&
       std::all_of(node_updates.cbegin(),
                   node_updates.cend(),
                   [](const auto& kv) { return kv.second.isValid(); });
+}
+
+template <typename Attributes, bool Mutable>
+std::string
+NodeAttributesConfig<Attributes, Mutable>::Update::toString() const {
+  return logdevice::toString(node_updates);
 }
 
 template <typename Attributes, bool Mutable>

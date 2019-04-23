@@ -59,6 +59,7 @@ class NodesConfiguration {
 
     bool isValid() const;
     bool hasAllUpdates() const;
+    std::string toString() const;
   };
 
   // create an empty nodes config

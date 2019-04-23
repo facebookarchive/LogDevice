@@ -22,6 +22,7 @@ class MetaDataLogsReplication {
     explicit Update(membership::MembershipVersion::Type base)
         : base_version(base), replication() {}
     bool isValid() const;
+    std::string toString() const;
   };
 
   explicit MetaDataLogsReplication();

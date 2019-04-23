@@ -7,6 +7,8 @@
  */
 #include "logdevice/common/configuration/nodes/MetaDataLogsReplication.h"
 
+#include <folly/Format.h>
+
 #include "logdevice/common/debug.h"
 #include "logdevice/include/Err.h"
 
@@ -20,6 +22,11 @@ MetaDataLogsReplication::MetaDataLogsReplication()
 
 bool MetaDataLogsReplication::Update::isValid() const {
   return replication.isValid();
+}
+
+std::string MetaDataLogsReplication::Update::toString() const {
+  return folly::sformat(
+      "[V:{},R:{}]", logdevice::toString(base_version), replication.toString());
 }
 
 int MetaDataLogsReplication::applyUpdate(

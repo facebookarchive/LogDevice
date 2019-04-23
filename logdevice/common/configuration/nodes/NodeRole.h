@@ -34,4 +34,6 @@ inline constexpr folly::StringPiece toString(NodeRole role) {
 // check if @param roles has @param check_role
 bool hasRole(RoleSet roles, NodeRole check_role);
 
+std::string toString(RoleSet roles);
+
 }}}} // namespace facebook::logdevice::configuration::nodes

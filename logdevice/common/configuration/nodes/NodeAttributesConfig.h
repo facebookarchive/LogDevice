@@ -10,11 +10,13 @@
 #include <map>
 #include <unordered_map>
 
+#include <folly/Format.h>
 #include <folly/Optional.h>
 
 #include "logdevice/common/ShardID.h"
 #include "logdevice/common/configuration/nodes/NodeRole.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/util.h"
 #include "logdevice/include/Err.h"
 
 namespace facebook { namespace logdevice { namespace configuration {
@@ -30,6 +32,7 @@ class NodeAttributesConfig {
     std::unique_ptr<Attributes> attributes{nullptr};
 
     bool isValid() const;
+    std::string toString() const;
   };
 
   struct Update {
@@ -43,6 +46,7 @@ class NodeAttributesConfig {
     }
 
     bool isValid() const;
+    std::string toString() const;
   };
 
   int applyUpdate(const Update& update,

@@ -7,6 +7,7 @@
  */
 #include "logdevice/common/configuration/nodes/ServiceDiscoveryConfig.h"
 
+#include <folly/Format.h>
 #include <folly/Range.h>
 
 #include "logdevice/common/debug.h"
@@ -48,6 +49,16 @@ bool NodeServiceDiscovery::isValid() const {
   }
 
   return true;
+}
+
+std::string NodeServiceDiscovery::toString() const {
+  return folly::sformat("[A:{},G:{},S:{},L:{},R:{},H:{}]",
+                        address.toString(),
+                        gossip_address.toString(),
+                        ssl_address.hasValue() ? ssl_address->toString() : "",
+                        location.hasValue() ? location->toString() : "",
+                        logdevice::toString(roles),
+                        hostname);
 }
 
 const Sockaddr&

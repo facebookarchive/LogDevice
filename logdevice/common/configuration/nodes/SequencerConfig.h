@@ -22,6 +22,10 @@ struct SequencerNodeAttribute {
   bool operator==(const SequencerNodeAttribute& rhs) const {
     return true;
   }
+
+  std::string toString() const {
+    return "";
+  }
 };
 
 using SequencerAttributeConfig =

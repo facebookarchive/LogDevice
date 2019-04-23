@@ -7,6 +7,8 @@
  */
 #include "logdevice/common/configuration/nodes/StorageConfig.h"
 
+#include <folly/Format.h>
+
 #include "logdevice/common/debug.h"
 #include "logdevice/common/types_internal.h"
 
@@ -34,6 +36,14 @@ bool StorageNodeAttribute::isValid() const {
   }
 
   return true;
+}
+
+std::string StorageNodeAttribute::toString() const {
+  return folly::sformat("[cap:{},ns:{},gen:{},ex:{}]",
+                        capacity,
+                        num_shards,
+                        generation,
+                        exclude_from_nodesets);
 }
 
 template <>

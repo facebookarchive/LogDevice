@@ -8,6 +8,7 @@
 #include "logdevice/common/test/NodesConfigurationTestUtil.h"
 
 #include <folly/Format.h>
+#include <glog/logging.h>
 
 namespace facebook {
   namespace logdevice {
@@ -126,6 +127,7 @@ initialProvisionUpdate(std::vector<NodeTemplate> nodes,
   update.maintenance = MaintenanceID::MAINTENANCE_PROVISION;
   update.context = "initial provision";
 
+  VLOG(1) << "update: " << update.toString();
   return update;
 }
 
@@ -222,6 +224,7 @@ addNewNodeUpdate(const configuration::nodes::NodesConfiguration& existing,
                                   /*generation*/ 1,
                                   /*exclude_from_nodesets*/ false})});
   }
+  VLOG(1) << "update: " << update.toString();
   return update;
 }
 
@@ -246,6 +249,7 @@ enablingReadUpdate(MembershipVersion::Type base_version) {
            Condition::CAUGHT_UP_LOCAL_CONFIG,
        DUMMY_MAINTENANCE2,
        /* state_override = */ folly::none});
+  VLOG(1) << "update: " << update.toString();
   return update;
 }
 
@@ -264,6 +268,7 @@ disablingWriteUpdate(membership::MembershipVersion::Type base_version) {
          DUMMY_MAINTENANCE2,
          /* state_override = */ folly::none});
   }
+  VLOG(1) << "update: " << update.toString();
   return update;
 }
 

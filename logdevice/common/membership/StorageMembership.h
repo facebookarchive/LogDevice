@@ -291,8 +291,6 @@ class StorageMembership : public Membership {
     return node_states_.size();
   }
 
-  std::string toString() const;
-
   bool isEmpty() const override {
     return node_states_.empty();
   }

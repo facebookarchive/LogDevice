@@ -154,6 +154,7 @@ TEST_F(NodesConfigurationTest, ChangingServiceDiscoveryAfterProvision) {
           ServiceDiscoveryConfig::UpdateType::RESET,
           std::make_unique<NodeServiceDiscovery>(
               genDiscovery(2, both_role, "aa.bb.cc.dd.ee"))});
+  VLOG(1) << "update: " << update.toString();
   auto new_config = config->applyUpdate(std::move(update));
   EXPECT_EQ(nullptr, new_config);
   EXPECT_EQ(E::INVALID_PARAM, err);
@@ -168,6 +169,7 @@ TEST_F(NodesConfigurationTest, ChangingServiceDiscoveryAfterProvision) {
           ServiceDiscoveryConfig::UpdateType::PROVISION,
           std::make_unique<NodeServiceDiscovery>(
               genDiscovery(9, both_role, "aa.bb.cc.dd.ee"))});
+  VLOG(1) << "update2: " << update2.toString();
   new_config = config->applyUpdate(std::move(update2));
   EXPECT_EQ(nullptr, new_config);
   EXPECT_EQ(E::EXISTS, err);
@@ -185,6 +187,7 @@ TEST_F(NodesConfigurationTest, RemovingServiceDiscovery) {
         17,
         ServiceDiscoveryConfig::NodeUpdate{
             ServiceDiscoveryConfig::UpdateType::REMOVE, nullptr});
+    VLOG(1) << "update: " << update.toString();
     auto new_config = config->applyUpdate(std::move(update));
     EXPECT_EQ(nullptr, new_config);
     EXPECT_EQ(E::NOTINCONFIG, err);
@@ -198,6 +201,7 @@ TEST_F(NodesConfigurationTest, RemovingServiceDiscovery) {
         n,
         ServiceDiscoveryConfig::NodeUpdate{
             ServiceDiscoveryConfig::UpdateType::REMOVE, nullptr});
+    VLOG(1) << "update: " << update.toString();
     auto new_config = config->applyUpdate(std::move(update));
     EXPECT_EQ(nullptr, new_config);
     EXPECT_EQ(E::INVALID_CONFIG, err);
@@ -224,6 +228,7 @@ TEST_F(NodesConfigurationTest, RemovingServiceDiscovery) {
          false,
          0.0,
          DUMMY_MAINTENANCE});
+    VLOG(1) << "update: " << update.toString();
     auto new_config = config->applyUpdate(std::move(update));
     EXPECT_NE(nullptr, new_config);
     EXPECT_FALSE(new_config->getSequencerConfig()->getMembership()->hasNode(7));
@@ -250,6 +255,7 @@ TEST_F(NodesConfigurationTest, ChangingAttributes) {
       2,
       {StorageAttributeConfig::UpdateType::RESET,
        std::make_unique<StorageNodeAttribute>(next_attr)});
+  VLOG(1) << "update: " << update.toString();
   auto new_config = config->applyUpdate(std::move(update));
   EXPECT_NE(nullptr, new_config);
 
@@ -273,6 +279,7 @@ TEST_F(NodesConfigurationTest, AddingNodeWithoutServiceDiscoveryOrAttribute) {
         {StorageStateTransition::ADD_EMPTY_SHARD,
          Condition::FORCE,
          DUMMY_MAINTENANCE});
+    VLOG(1) << "update: " << update.toString();
     auto new_config = config->applyUpdate(std::move(update));
     EXPECT_EQ(nullptr, new_config);
     EXPECT_EQ(E::INVALID_CONFIG, err);
@@ -298,6 +305,7 @@ TEST_F(NodesConfigurationTest, AddingNodeWithoutServiceDiscoveryOrAttribute) {
         {StorageStateTransition::ADD_EMPTY_SHARD,
          Condition::FORCE,
          DUMMY_MAINTENANCE});
+    VLOG(1) << "update: " << update.toString();
     auto new_config = config->applyUpdate(std::move(update));
     EXPECT_EQ(nullptr, new_config);
     EXPECT_EQ(E::INVALID_CONFIG, err);
@@ -341,6 +349,7 @@ TEST_F(NodesConfigurationTest, RoleConflict) {
                                   /*num_shards*/ 1,
                                   /*generation*/ 1,
                                   /*exclude_from_nodesets*/ false})});
+    VLOG(1) << "update: " << update.toString();
     auto new_config = config->applyUpdate(std::move(update));
     EXPECT_EQ(nullptr, new_config);
     EXPECT_EQ(E::INVALID_CONFIG, err);
@@ -369,6 +378,7 @@ TEST_F(NodesConfigurationTest, RoleConflict) {
         {SequencerAttributeConfig::UpdateType::PROVISION,
          std::make_unique<SequencerNodeAttribute>()});
 
+    VLOG(1) << "update: " << update.toString();
     auto new_config = config->applyUpdate(std::move(update));
     EXPECT_EQ(nullptr, new_config);
     EXPECT_EQ(E::INVALID_CONFIG, err);

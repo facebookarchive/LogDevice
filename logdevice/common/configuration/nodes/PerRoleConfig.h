@@ -52,6 +52,13 @@ class PerRoleConfig {
       return (membership_update == nullptr || membership_update->isValid()) &&
           (attributes_update == nullptr || attributes_update->isValid());
     }
+
+    std::string toString() const {
+      return folly::sformat(
+          "[M:{}, A:{}]",
+          membership_update ? membership_update->toString() : "",
+          attributes_update ? attributes_update->toString() : "");
+    }
   };
 
   NodeRole getRole() const {
