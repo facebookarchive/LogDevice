@@ -510,6 +510,7 @@ int Socket::connect() {
 
   int rv = doConnectAttempt();
   if (rv != 0) {
+    connect_throttle_.connectFailed();
     return -1; // err set by doConnectAttempt
   }
   if (isSSL()) {
