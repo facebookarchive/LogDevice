@@ -838,6 +838,8 @@ class Worker : public SerialWorkContext {
   // See isAcceptingWork()
   bool accepting_work_;
 
+  static thread_local Worker* on_this_thread_;
+
   // timer that checks requestsPending() == 0 and !sender().isConnected() and
   // calls Processor's noteWorkerQuiescent() once both are true.
   std::unique_ptr<Timer> requests_pending_timer_;

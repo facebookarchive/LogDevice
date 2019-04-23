@@ -128,6 +128,7 @@ constexpr int Worker::kMidPriTaskExecDistribution;
 constexpr int Worker::kLoPriTaskExecDistribution;
 constexpr folly::StringPiece Worker::kWorkerDataID;
 
+thread_local Worker* Worker::on_this_thread_{nullptr};
 // This pimpl class is a container for all classes that would normally be
 // members of Worker but we don't want to have to include them in Worker.h.
 class WorkerImpl {
@@ -282,6 +283,9 @@ Worker::~Worker() {
 }
 
 Worker* FOLLY_NULLABLE Worker::onThisThread(bool enforce_worker) {
+  if (Worker::on_this_thread_) {
+    return Worker::on_this_thread_;
+  }
   // Check if worker pointer is available in currently loaded RequestContext.
   WorkerRequestContextData* data = dynamic_cast<WorkerRequestContextData*>(
       folly::RequestContext::get()->getContextData(getWorkerToken()));
@@ -1348,7 +1352,9 @@ void Worker::pickAndExecuteTask(int8_t priority_hint) {
   };
   ld_check(queue && !queue->empty());
   folly::Func f = queue->dequeue();
+  Worker::on_this_thread_ = this;
   f();
+  Worker::on_this_thread_ = nullptr;
 }
 
 void Worker::addWithPriority(folly::Func func, int8_t priority) {
