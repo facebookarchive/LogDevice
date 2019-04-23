@@ -158,18 +158,58 @@ class RebuildingSupervisor {
    */
   void onNodeStateChanged(node_index_t node_id, ClusterState::NodeState state);
 
-  /**
-   * Checks global conditions that may prevent us from triggering rebuilding at
-   * the moment, such as too many triggers in the queue.
-   * The rebuilding supervisor will retry later if that's the case.
-   */
-  bool shouldThrottleRebuilding(RebuildingTrigger& trigger);
+  enum class Decision {
+    // trigger should be executed immediately
+    EXECUTE = 0,
+    // trigger should be canceled and removed from the queue
+    CANCEL = 1,
+    // trigger should be postponed and retried at a later time
+    POSTPONE = 2
+  };
 
   /**
-   * Checks throttling condition and updates queue to keep track of throttling
-   * mode.
+   * How we want to throttle rebuilding has several requirements:
+   * 1. In a rack based distribution we want to allow at least once rack of
+   * nodes rebuilding at the same time.
+   * 2. In an MSB based distribution we want at least one MSB scope (multiple
+   * racks) of nodes rebuildng at the same time.
+   * 3. We want #1 and #2 to be applied safely: if the MSB or rack distribution
+   * was not appropriately done then we don't want to start rebuilding an 18
+   * rack cluster in a 32 node cluster.
+   * 4. We want the incoming triggers to be evaluated as a whole before allowed.
+   * E.g., if 18 nodes (1 rack) rebuilding is allowed and 36 nodes (2 racks)
+   * failed, we don't want to stop accepting triggers after accepting the
+   * first 18. Our policy tells us that something is wrong (e.g., human error)
+   * and we want to reject the entire queue of triggers until they fall below
+   * the threshold.
+   * 5. When nodes are draining/drained through administrative
+   * action, we want our throttling scheme to apply only to the
+   * undrained capacity of the cluster. (i.e. operate as if the
+   * the cluster has been shrunk by the drained capacity).
+   * 6. And finally, we don't want to flap between throttling or not on every
+   * trigger. E.g., just because we fall from 19 triggers to 18, we don't want
+   * to accept all 18 at once now. Some minimum grace time period should be
+   * applied before exiting the throttling mode that allows the situation to
+   * settle.
+   *
+   * A simple way to model #1, #2, and #3 is just setting a threshold for the
+   * fraction of nodes that may be rebuilding at a given time. #4, #5, and #6
+   * can be explicitly evaluated.
+   *
+   * Checks global conditions that may prevent us from triggering rebuilding at
+   * the moment, such as the sum of rebuilding nodes and triggers in the queue
+   * exceeding the percentage of nodes allowed to be rebuilt. The rebuilding
+   * supervisor will retry later if that's the case. If we need to throttle then
+   * the entire queue of triggers is deffered. This is to prevent some error
+   * condition from triggering too many rebuildings and us accepting them one at
+   * a time until the threshold is reached before preventing the remaining
+   * triggers. Instead, the entire queue of triggers is accepted or deferred.
+   * In addition, if we were previously throttling then there is a
+   * grace period applied before we go back to not throttling.
+   *
+   * @returns true if we are currently throttling for any reason.
    */
-  void checkThrottlingMode();
+  Decision adjustRebuildingThrottle();
 
   /**
    * Checks wether rebuilding can be triggered for that particular node, such
@@ -198,20 +238,6 @@ class RebuildingSupervisor {
    * (debug) Prints contents of the trigger queue.
    */
   void dumpRebuildingTriggers();
-
-  /**
-   * Computes best threshold for the size of the trigger queue
-   */
-  size_t getRebuildingTriggerQueueThreshold() const;
-
-  enum class Decision {
-    // trigger should be executed immediately
-    EXECUTE = 0,
-    // trigger should be canceled and removed from the queue
-    CANCEL = 1,
-    // trigger should be postponed and retried at a later time
-    POSTPONE = 2
-  };
 
   /**
    * Evaluates whether the trigger can be executed at this time.
@@ -311,7 +337,6 @@ class RebuildingSupervisor {
 
   bool throttling_{false};
   SystemTimestamp throttling_exit_time_;
-  size_t throttling_threshold_{0};
 
   WorkerCallbackHelper<RebuildingSupervisor> callbackHelper_;
 

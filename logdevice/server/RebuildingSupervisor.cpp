@@ -258,16 +258,16 @@ void RebuildingSupervisor::scheduleNextRun(
     rebuilding_timer_.cancel();
   }
 
-  // check wether we need to throttle rebuilding or not
-  checkThrottlingMode();
+  // recalculate the throttling state
+  adjustRebuildingThrottle();
 
   if (triggers_.empty()) {
     // queue is empty. no rebuilding to schedule
     if (retry_timer_.isActive()) {
       retry_timer_.cancel();
     }
-    // restore initial delay so that next time we need to retry an write, we
-    // starts form scratch and don't wait too long.
+    // restore initial delay so that next time we need to retry a write, we
+    // starts from scratch and don't wait too long.
     retry_timer_.reset();
     state_ = State::IDLE;
     ld_debug("No rebuilding trigger to schedule");
@@ -475,11 +475,8 @@ RebuildingSupervisor::Decision RebuildingSupervisor::evaluateTrigger(
     return Decision::POSTPONE;
   }
 
-  if (shouldThrottleRebuilding(trigger)) {
-    return Decision::POSTPONE;
-  }
-
-  return Decision::EXECUTE;
+  Decision decision = adjustRebuildingThrottle();
+  return decision;
 }
 
 bool RebuildingSupervisor::canTriggerNodeRebuilding(
@@ -519,15 +516,124 @@ bool RebuildingSupervisor::canTriggerNodeRebuilding(
   return true;
 }
 
-void RebuildingSupervisor::checkThrottlingMode() {
-  throttling_threshold_ = getRebuildingTriggerQueueThreshold();
-  if (triggers_.size() > throttling_threshold_) {
+/*
+ * Calculates whether we need to throttle. See comments in
+ * RebuildingSupervisor.h.
+ */
+RebuildingSupervisor::Decision
+RebuildingSupervisor::adjustRebuildingThrottle() {
+  auto w = Worker::onThisThread();
+  const auto& nodes_configuration = w->getNodesConfiguration();
+  auto rebuilding_set = w->processor_->rebuilding_set_.get();
+  auto threshold = rebuildingSettings_->max_node_rebuilding_percentage;
+  size_t cluster_size = nodes_configuration->clusterSize();
+  size_t trigger_count = triggers_.size();
+  size_t rebuilding_nodes = 0;
+  size_t draining_nodes = 0;
+
+  struct NodeStatus {
+    bool draining;
+    bool mini_rebuilding;
+  };
+
+  std::unordered_map<node_index_t, NodeStatus> node_map;
+  if (rebuilding_set != nullptr) {
+    for (const auto& shard_info : rebuilding_set->getRebuildingShards()) {
+      for (const auto& node_info : shard_info.second.nodes_) {
+        if (!nodes_configuration->getStorageMembership()->hasNode(
+                node_info.first)) {
+          // ignore nodes that are not in the storage membership
+          continue;
+        }
+
+        auto nodeStatus_it = node_map.find(node_info.first);
+        if (nodeStatus_it != node_map.end()) {
+          // A node is draining only if all rebuilding shards are draining
+          if (nodeStatus_it->second.draining) {
+            nodeStatus_it->second.draining = node_info.second.drain;
+          }
+
+          // A node is mini-rebuilding only if all rebuilding shards
+          // are mini-rebuilding
+          if (nodeStatus_it->second.mini_rebuilding) {
+            nodeStatus_it->second.mini_rebuilding =
+                !node_info.second.dc_dirty_ranges.empty();
+          }
+        } else {
+          NodeStatus nodeStatus;
+          nodeStatus.draining = node_info.second.drain;
+          nodeStatus.mini_rebuilding =
+              !node_info.second.dc_dirty_ranges.empty();
+          node_map.insert(std::make_pair(node_info.first, nodeStatus));
+        }
+      }
+    }
+
+    // Capactity based throttling limits are against the non-drained
+    // capacity of the cluster.
+    draining_nodes =
+        std::count_if(node_map.begin(), node_map.end(), [](const auto& node) {
+          return node.second.draining;
+        });
+    cluster_size -= draining_nodes;
+
+    // As for cluster_size, exclude drained/draining nodes. We also allow
+    // the entire cluster to be mini-rebuilding, so exclude those nodes too.
+    rebuilding_nodes =
+        std::count_if(node_map.begin(), node_map.end(), [](const auto& node) {
+          return !(node.second.draining || node.second.mini_rebuilding);
+        });
+
+    // Restarting an active rebuilding is free, so discount them. The only
+    // exception is that we must account for the capacity loss when upgrading
+    // a mini-rebuilding to a full rebuilding (the node is no longer
+    // FULLY_AUTHORITATIVE and thus cannot take writes).
+    // NOTE: Draining nodes can also crash and trigger mini-rebuilding.
+    //       So we take care here to only count the promotion of nodes
+    //       that weren't already draining.
+    trigger_count -= std::count_if(
+        node_map.begin(), node_map.end(), [self = this](const auto& node) {
+          return self->triggers_.exists(node.first) &&
+              (node.second.draining || !node.second.mini_rebuilding);
+        });
+  }
+
+  size_t totalRebuildings = trigger_count + rebuilding_nodes;
+  auto ratio = totalRebuildings * 100 / cluster_size;
+  if (ratio > threshold) {
+    // if there are too many triggers, it means there are too many dead nodes
+    // in the cluster to safely request rebuilding. this may be caused by this
+    // node being isolated, or any other reason. regardless, stop requesting
+    // any rebuilding until the number of triggers goes back down. (which will
+    // happen when nodes come back online, or rebuildings get manually
+    // triggered).
     if (!throttling_) {
-      ld_warning("Entering throttling mode (triggers:%zu, threshold:%zu)",
-                 triggers_.size(),
-                 throttling_threshold_);
+      ld_warning("Entering throttling mode: #draining=%lu, #rebuilding=%lu, "
+                 "#triggers=%lu, "
+                 "#adjusted cluster size=%lu, threshold=%lu%%, actual=%lu%%",
+                 draining_nodes,
+                 rebuilding_nodes,
+                 trigger_count,
+                 cluster_size,
+                 threshold,
+                 ratio);
       throttling_ = true;
     }
+    RATELIMIT_INFO(std::chrono::seconds(1),
+                   1,
+                   "Entering throttling mode: #draining=%lu, #rebuilding=%lu, "
+                   "#triggers=%lu, "
+                   "#adjusted cluster size=%lu, threshold=%lu%%, actual=%lu%%",
+                   draining_nodes,
+                   rebuilding_nodes,
+                   trigger_count,
+                   cluster_size,
+                   threshold,
+                   ratio);
+
+    STAT_SET(
+        Worker::stats(), rebuilding_supervisor_throttled, throttling_ ? 1 : 0);
+    return Decision::POSTPONE;
   } else {
     if (throttling_) {
       // we were throttling but we are not anymore.
@@ -537,34 +643,7 @@ void RebuildingSupervisor::checkThrottlingMode() {
       throttling_exit_time_ = SystemTimestamp::now();
       throttling_ = false;
     }
-  }
 
-  STAT_SET(Worker::stats(),
-           rebuilding_trigger_queue_threshold,
-           throttling_threshold_);
-  STAT_SET(
-      Worker::stats(), rebuilding_supervisor_throttled, throttling_ ? 1 : 0);
-}
-
-bool RebuildingSupervisor::shouldThrottleRebuilding(
-    RebuildingSupervisor::RebuildingTrigger& trigger) {
-  // if there are too many triggers, it means there are too many dead nodes
-  // in the cluster to safely request rebuilding. this may be caused by this
-  // node being isolated, or any other reason. regardless, stop requesting
-  // any rebuilding until the number of triggers goes back down. (which will
-  // happen when nodes come back online, or rebuildings get manually
-  // triggered).
-  if (throttling_) {
-    RATELIMIT_INFO(std::chrono::seconds(1),
-                   1,
-                   "Not triggering rebuilding of N%d: too many triggers "
-                   "in RebuildingSupervisor queue (threshold=%lu, "
-                   "actual=%lu)",
-                   trigger.node_id_,
-                   throttling_threshold_,
-                   triggers_.size());
-    return true;
-  } else {
     auto now = SystemTimestamp::now();
     auto deadline = throttling_exit_time_ +
         rebuildingSettings_->self_initiated_rebuilding_grace_period;
@@ -573,55 +652,29 @@ bool RebuildingSupervisor::shouldThrottleRebuilding(
       // before starting triggering rebuildings again.
       RATELIMIT_INFO(std::chrono::seconds(1),
                      1,
-                     "Not triggering rebuilding of N%d: too soon after "
-                     "exiting throttling mode",
-                     trigger.node_id_);
-      return true;
+                     "Not triggering new rebuildings: too soon after "
+                     "exiting throttling mode");
+      STAT_SET(Worker::stats(),
+               rebuilding_supervisor_throttled,
+               throttling_ ? 1 : 0);
+      return Decision::POSTPONE;
     }
   }
 
-  auto w = Worker::onThisThread();
-  auto set = w->processor_->rebuilding_set_.get();
-  auto threshold = rebuildingSettings_->max_node_rebuilding_percentage;
-  if (threshold < 100 && set != nullptr) {
-    const auto& nodes_configuration = w->getNodesConfiguration();
-    auto shards = set->toShardStatusMap(*nodes_configuration).getShards();
-    size_t rebuilding_nodes = 0;
-    for (auto n : shards) {
-      for (auto s : n.second) {
-        if (!s.second.time_ranged_rebuild) {
-          // count node as being rebuilt if it has at least one shard
-          // in rebuilding set, but not a time-ranged rebuilding (aka mini
-          // rebuilding)
-          ++rebuilding_nodes;
-          break;
-        }
-        ld_debug("Excluding time-ranged rebuilding of N%d:S%d from throttle "
-                 "computation",
-                 n.first,
-                 s.first);
-      }
-    }
-    auto ratio = rebuilding_nodes * 100 / nodes_configuration->clusterSize();
-    if (ratio > threshold) {
-      RATELIMIT_INFO(std::chrono::seconds(1),
-                     1,
-                     "Not triggering rebuilding of N%d: too many nodes "
-                     "are rebuilding (threshold=%lu%%, actual=%lu%%)",
-                     trigger.node_id_,
-                     threshold,
-                     ratio);
-      return true;
-    } else {
-      ld_debug("Not throttling N%d based on number of rebuildings "
-               "(threshold=%lu%%, actual=%lu%%)",
-               trigger.node_id_,
-               threshold,
-               ratio);
-    }
-  }
+  ld_debug("Not throttling triggers based on number of rebuildings: "
+           "#draining=%lu, #rebuilding=%lu, "
+           "#triggers=%lu, "
+           "#adjusted cluster size=%lu, threshold=%lu%%, actual=%lu%%",
+           draining_nodes,
+           rebuilding_nodes,
+           trigger_count,
+           cluster_size,
+           threshold,
+           ratio);
 
-  return false;
+  STAT_SET(
+      Worker::stats(), rebuilding_supervisor_throttled, throttling_ ? 1 : 0);
+  return Decision::EXECUTE;
 }
 
 bool RebuildingSupervisor::canTriggerShardRebuilding(
@@ -651,43 +704,6 @@ bool RebuildingSupervisor::canTriggerShardRebuilding(
   }
 
   return !trigger.shards_.empty();
-}
-
-size_t RebuildingSupervisor::getRebuildingTriggerQueueThreshold() const {
-  // check configured threshold
-  auto threshold = rebuildingSettings_->max_rebuilding_trigger_queue_size;
-  if (threshold > -1) {
-    // explicit threshold was configured. use that value.
-    return threshold;
-  }
-
-  // store racks sizes in a map to find out which is largest
-  std::map<std::string, size_t> racks;
-
-  auto w = Worker::onThisThread();
-  auto config = w->getServerConfig();
-  for (const auto& node : config->getNodes()) {
-    auto res = racks.insert(
-        std::make_pair<std::string, int>(node.second.locationStr(), 1));
-    if (!res.second) {
-      res.first->second += 1;
-    }
-  }
-
-  // upper bound is half of the cluster
-  size_t upper_bound = config->getNodes().size() / 2;
-  if (racks.size() < 3) {
-    // if there is not even 3 racks, we use the upper bound directly.
-    return upper_bound;
-  }
-
-  // find the largest rack in the cluster
-  auto m = std::max_element(
-      racks.begin(), racks.end(), [](const auto a, const auto b) {
-        return a.second < b.second;
-      });
-  // use largest rack size + 1 or upper bound
-  return std::min(m->second + 1, upper_bound);
 }
 
 void RebuildingSupervisor::RebuildingTriggerQueue::dumpDebugInfo() const {

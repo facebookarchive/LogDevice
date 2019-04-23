@@ -395,6 +395,7 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
       &max_rebuilding_trigger_queue_size,
       "-1",
       nullptr,
+      "DEPRECATED. Not implemented anymore and has no effect. "
       "Maximum number of triggers in the rebuilding supervisor queue before it "
       "switches to throttling mode. This translates to the acceptable number "
       "of dead nodes for which we can trigger rebuilding simultaneously. This "
@@ -402,7 +403,7 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
       "support rack failures. A negative value indicates that the rebuilding "
       "supervisor should compute a reasonable value for this setting "
       "automatically, based on the cluster configuration.",
-      SERVER,
+      SERVER | DEPRECATED,
       SettingsCategory::Rebuilding);
   init("record-durability-timeout",
        &record_durability_timeout,

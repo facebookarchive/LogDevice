@@ -158,8 +158,6 @@ TEST_F(RebuildingSupervisorIntegrationTest, ShrinkAtBeginning) {
                      .setParam("--enable-self-initiated-rebuilding", "false")
                      .setParam("--event-log-grace-period", "1ms")
                      .setParam("--disable-event-log-trimming", "true")
-                     // Cap the rebuilding trigger queue to 1
-                     .setParam("--max-rebuilding-trigger-queue-size", "1")
                      .useHashBasedSequencerAssignment()
                      .setNumDBShards(num_shards)
                      .create(num_nodes);
@@ -201,8 +199,6 @@ TEST_F(RebuildingSupervisorIntegrationTest, ExpandWithDeadNodes) {
                      .setParam("--enable-self-initiated-rebuilding", "false")
                      .setParam("--event-log-grace-period", "1ms")
                      .setParam("--disable-event-log-trimming", "true")
-                     // Cap the rebuilding trigger queue to 1
-                     .setParam("--max-rebuilding-trigger-queue-size", "1")
                      .useHashBasedSequencerAssignment()
                      .setNumDBShards(num_shards)
                      .create(num_nodes);
@@ -568,7 +564,7 @@ TEST_F(RebuildingSupervisorIntegrationTest, BasicShard) {
 // applied.
 // This test simulates the failure of two nodes, while the threshold is 1. The
 // second rebuilding should not trigger.
-TEST_F(RebuildingSupervisorIntegrationTest, NodeRebuildingThreshold) {
+TEST_F(RebuildingSupervisorIntegrationTest, NodeRebuildingHitThreshold) {
   int num_nodes = 6;
 
   Configuration::Nodes nodes_config;
@@ -608,12 +604,9 @@ TEST_F(RebuildingSupervisorIntegrationTest, NodeRebuildingThreshold) {
       .setParam("--disable-rebuilding", "false")
       .setParam("--enable-self-initiated-rebuilding", "false")
       .setParam("--self-initiated-rebuilding-grace-period", "3s")
-      // Don't limit the trigger queue size, to make sure that the only
-      // threshold we hit is the number of currently running rebuildings
-      .setParam("--max-rebuilding-trigger-queue-size", "10")
       // Set the threshold to allow only one node rebuilding at a time
       .setParam("--max-node-rebuilding-percentage",
-                folly::format("{}", (100 / num_nodes - 1)).str());
+                folly::format("{}", (100 / num_nodes)).str());
 
   cluster->start({});
 
@@ -667,6 +660,240 @@ TEST_F(RebuildingSupervisorIntegrationTest, NodeRebuildingThreshold) {
   ASSERT_EQ(0, stats["shard_rebuilding_triggered"]);
 }
 
+// Makes sure that if more than threshold number of triggers arrive
+// then none of the triggers are accepted. E.g., in a 5 rack cluster
+// if max-node-rebuilding-percentage is 20% and 2 racks fail then
+// none of the racks are rebuilt.
+TEST_F(RebuildingSupervisorIntegrationTest, NodeRebuildingHitThresholdAtOnce) {
+  int num_nodes = 10;
+
+  Configuration::Nodes nodes_config;
+  for (int i = 0; i < num_nodes; ++i) {
+    Configuration::Node node;
+    node.generation = 1;
+    if (i == 0) {
+      node.addSequencerRole();
+    }
+    node.addStorageRole(/*num_shards*/ 1);
+    nodes_config[i] = std::move(node);
+  }
+
+  logsconfig::LogAttributes event_log_attrs;
+  event_log_attrs.set_replicationFactor(3);
+  event_log_attrs.set_extraCopies(0);
+  event_log_attrs.set_syncedCopies(0);
+  event_log_attrs.set_singleWriter(false);
+  event_log_attrs.set_syncReplicationScope(NodeLocationScope::NODE);
+
+  auto cluster =
+      IntegrationTestUtils::ClusterFactory()
+          // disable rebuilding to make sure that nodes won't complete
+          // or abort rebuildings, which would interfere with this test.
+          .setParam("--enable-self-initiated-rebuilding", "false")
+          .setParam("--disable-rebuilding", "true")
+          .setParam("--event-log-grace-period", "1ms")
+          .setParam("--reader-stalled-grace-period", "1s")
+          .setParam("--disable-event-log-trimming", "true")
+          .useHashBasedSequencerAssignment()
+          .setNodes(nodes_config)
+          .setEventLogAttributes(event_log_attrs)
+          .deferStart()
+          .create(num_nodes);
+
+  cluster->getNode(0)
+      .setParam("--disable-rebuilding", "false")
+      .setParam("--enable-self-initiated-rebuilding", "false")
+      .setParam("--self-initiated-rebuilding-grace-period", "3s")
+      // Set the threshold to allow 2 nodes rebuilding at a time
+      .setParam("--max-node-rebuilding-percentage", "20");
+
+  cluster->start({});
+
+  auto client = cluster->createClient();
+
+  // Wait until all nodes are seen as alive
+  for (const auto& n : cluster->getNodes()) {
+    wait_until([&]() {
+      for (const auto& it : n.second->gossipCount()) {
+        if (it.second.first != "ALIVE" || it.second.second > 1000000) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }
+
+  auto stats = cluster->getNode(0).stats();
+  ASSERT_EQ(0, stats["rebuilding_supervisor_throttled"]);
+  auto prev_rebuilding_scheduled = stats["shard_rebuilding_scheduled"];
+
+  // Kill N1, N2, and N3
+  cluster->getNode(1).kill();
+  cluster->getNode(2).kill();
+  cluster->getNode(3).kill();
+
+  // Enable self-initiated rebuilding on N0
+  cluster->getNode(0).sendCommand(
+      "set enable-self-initiated-rebuilding true --ttl max");
+
+  // Rebuilding supervisor should hit the threshold of currently running
+  // rebuildings and not trigger any rebuilding.
+  wait_until("rebuilding scheduled", [&]() {
+    // Check N0
+    auto tmp_stats = cluster->getNode(0).stats();
+    return tmp_stats["shard_rebuilding_scheduled"] >=
+        prev_rebuilding_scheduled + 1;
+  });
+
+  // Now wait a few more grace period, to make sure it does not trigger
+  // rebuildings
+  wait_until("rebuilding throttled",
+             [&]() {
+               // Check N0
+               auto tmp_stats = cluster->getNode(0).stats();
+               return tmp_stats["shard_rebuilding_triggered"] > 0;
+             },
+             std::chrono::steady_clock::now() + std::chrono::seconds(6));
+
+  stats = cluster->getNode(0).stats();
+  ASSERT_EQ(0, stats["shard_rebuilding_triggered"]);
+  // Check that the rebuilding supervisor entered throttling mode.
+  ASSERT_EQ(1, stats["rebuilding_supervisor_throttled"]);
+  auto prev_shard_rebuilding_not_triggered =
+      stats["shard_rebuilding_not_triggered_nodealive"];
+
+  // Now start N3. This should cancel the rebuilding trigger, bring
+  // the number of rebuilding nodes under the threshold, and cause the
+  // rebuilding supervisor to exit throttling mode.
+  cluster->getNode(3).start();
+
+  // Wait until N0 sees N3 as alive and cancels the
+  // trigger for N3.
+  wait_until("Cancel trigger", [&]() {
+    // Check N0
+    auto tmp_stats = cluster->getNode(0).stats();
+    return tmp_stats["shard_rebuilding_not_triggered_nodealive"] ==
+        prev_shard_rebuilding_not_triggered + 1;
+  });
+
+  // Now wait until we come out of the throttling grace period
+  wait_until("rebuilding triggered", [&]() {
+    // Check N0
+    auto tmp_stats = cluster->getNode(0).stats();
+    return tmp_stats["shard_rebuilding_triggered"] == 2;
+  });
+  // Check that the rebuilding supervisor exited throttling mode.
+  stats = cluster->getNode(0).stats();
+  ASSERT_EQ(0, stats["rebuilding_supervisor_throttled"]);
+}
+
+// Drains should not be counted when computing whether we
+// need to throttle.
+TEST_F(RebuildingSupervisorIntegrationTest,
+       NodeRebuildingCheckThresholdWithDrain) {
+  int num_nodes = 10;
+
+  Configuration::Nodes nodes_config;
+  for (int i = 0; i < num_nodes; ++i) {
+    Configuration::Node node;
+    node.generation = 1;
+    if (i == 0) {
+      node.addSequencerRole();
+    }
+    node.addStorageRole(/*num_shards*/ 1);
+    nodes_config[i] = std::move(node);
+  }
+
+  logsconfig::LogAttributes event_log_attrs;
+  event_log_attrs.set_replicationFactor(3);
+  event_log_attrs.set_extraCopies(0);
+  event_log_attrs.set_syncedCopies(0);
+  event_log_attrs.set_singleWriter(false);
+  event_log_attrs.set_syncReplicationScope(NodeLocationScope::NODE);
+
+  auto cluster =
+      IntegrationTestUtils::ClusterFactory()
+          // disable rebuilding to make sure that nodes won't complete
+          // or abort rebuildings, which would interfere with this test.
+          .setParam("--enable-self-initiated-rebuilding", "false")
+          .setParam("--disable-rebuilding", "true")
+          .setParam("--event-log-grace-period", "1ms")
+          .setParam("--reader-stalled-grace-period", "1s")
+          .setParam("--disable-event-log-trimming", "true")
+          .useHashBasedSequencerAssignment()
+          .setNodes(nodes_config)
+          .setEventLogAttributes(event_log_attrs)
+          .deferStart()
+          .create(num_nodes);
+
+  cluster->getNode(0)
+      .setParam("--disable-rebuilding", "false")
+      .setParam("--enable-self-initiated-rebuilding", "false")
+      .setParam("--self-initiated-rebuilding-grace-period", "3s")
+      // Set the threshold to allow 2 nodes rebuilding at a time.
+      // More specifically, allow 2 out of 9 nodes to be rebuilding
+      // while 1 node is draining.
+      .setParam("--max-node-rebuilding-percentage", "25");
+
+  cluster->start({});
+
+  auto client = cluster->createClient();
+
+  // Wait until all nodes are seen as alive
+  for (const auto& n : cluster->getNodes()) {
+    wait_until([&]() {
+      for (const auto& it : n.second->gossipCount()) {
+        if (it.second.first != "ALIVE" || it.second.second > 1000000) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }
+
+  auto stats = cluster->getNode(0).stats();
+  ASSERT_EQ(0, stats["rebuilding_supervisor_throttled"]);
+  auto prev_rebuilding_scheduled = stats["shard_rebuilding_scheduled"];
+
+  // Start draining N1
+  auto flags =
+      SHARD_NEEDS_REBUILD_Header::RELOCATE | SHARD_NEEDS_REBUILD_Header::DRAIN;
+  lsn_t lsn =
+      IntegrationTestUtils::requestShardRebuilding(*client, 1, 0, flags);
+  ASSERT_NE(LSN_INVALID, lsn);
+
+  IntegrationTestUtils::waitUntilShardsHaveEventLogState(
+      client, {ShardID(1, 0)}, AuthoritativeStatus::FULLY_AUTHORITATIVE, false);
+
+  // Kill N2, N3
+  cluster->getNode(2).kill();
+  cluster->getNode(3).kill();
+
+  // Enable self-initiated rebuilding on N0
+  cluster->getNode(0).sendCommand(
+      "set enable-self-initiated-rebuilding true --ttl max");
+
+  // No rebuildings should be throttles since we are under the threshold
+  // because draining nodes are not counted against the throttle threshold.
+  wait_until("rebuilding scheduled", [&]() {
+    // Check N0
+    auto tmp_stats = cluster->getNode(0).stats();
+    return tmp_stats["shard_rebuilding_scheduled"] >=
+        prev_rebuilding_scheduled + 1;
+  });
+
+  wait_until("rebuilding triggered", [&]() {
+    // Check N0
+    auto tmp_stats = cluster->getNode(0).stats();
+    return tmp_stats["shard_rebuilding_triggered"] == 2;
+  });
+
+  // Check that the rebuilding supervisor is not throttling.
+  // while we are rebuilding 3 out of 10 nodes.
+  stats = cluster->getNode(0).stats();
+  ASSERT_EQ(0, stats["rebuilding_supervisor_throttled"]);
+}
+
 // Makes sure that mini rebuildings are not counted towards the threshold of
 // currently running rebuildings.
 // This test simulates a mini-rebuilding and then the failure of one node, with
@@ -680,7 +907,7 @@ TEST_F(RebuildingSupervisorIntegrationTest, NodeRebuildingThreshold) {
 // threshold.
 TEST_F(RebuildingSupervisorIntegrationTest,
        NodeRebuildingThresholdIgnoredForMiniRebuilding) {
-  int num_nodes = 6;
+  int num_nodes = 10;
 
   Configuration::Nodes nodes_config;
   for (int i = 0; i < num_nodes; ++i) {
@@ -719,12 +946,8 @@ TEST_F(RebuildingSupervisorIntegrationTest,
       .setParam("--disable-rebuilding", "false")
       .setParam("--enable-self-initiated-rebuilding", "false")
       .setParam("--self-initiated-rebuilding-grace-period", "1s")
-      // Don't limit the trigger queue size, to make sure that the only
-      // threshold we hit is the number of currently running rebuildings
-      .setParam("--max-rebuilding-trigger-queue-size", "10")
       // Set the threshold to allow only one node rebuilding at a time
-      .setParam("--max-node-rebuilding-percentage",
-                folly::format("{}", (100 / num_nodes - 1)).str());
+      .setParam("--max-node-rebuilding-percentage", "10");
 
   cluster->start({});
 
@@ -752,6 +975,117 @@ TEST_F(RebuildingSupervisorIntegrationTest,
     auto tmp_stats = cluster->getNode(0).stats();
     return tmp_stats["shard_rebuilding_triggered"] == 1;
   });
+}
+
+// Make sure that if a mini rebuilding node again arrives
+// as a new trigger then it is not discounted from the
+// threshold anymore and actually counted a new failed node.
+TEST_F(RebuildingSupervisorIntegrationTest,
+       NodeRebuildingThresholdAppliedForFailedMiniRebuildingNode) {
+  int num_nodes = 10;
+
+  Configuration::Nodes nodes_config;
+  for (int i = 0; i < num_nodes; ++i) {
+    Configuration::Node node;
+    node.generation = 1;
+    if (i == 0) {
+      node.addSequencerRole();
+    }
+    node.addStorageRole(/*num_shards*/ 1);
+    nodes_config[i] = std::move(node);
+  }
+
+  logsconfig::LogAttributes event_log_attrs;
+  event_log_attrs.set_replicationFactor(3);
+  event_log_attrs.set_extraCopies(0);
+  event_log_attrs.set_syncedCopies(0);
+  event_log_attrs.set_singleWriter(false);
+  event_log_attrs.set_syncReplicationScope(NodeLocationScope::NODE);
+
+  auto cluster =
+      IntegrationTestUtils::ClusterFactory()
+          // disable rebuilding to make sure that nodes won't complete
+          // or abort rebuildings, which would interfere with this test.
+          .setParam("--enable-self-initiated-rebuilding", "false")
+          .setParam("--disable-rebuilding", "true")
+          .setParam("--event-log-grace-period", "1ms")
+          .setParam("--reader-stalled-grace-period", "1s")
+          .setParam("--disable-event-log-trimming", "true")
+          .useHashBasedSequencerAssignment()
+          .setNodes(nodes_config)
+          .setEventLogAttributes(event_log_attrs)
+          .deferStart()
+          .create(num_nodes);
+
+  cluster->getNode(0)
+      .setParam("--disable-rebuilding", "false")
+      .setParam("--enable-self-initiated-rebuilding", "false")
+      .setParam("--self-initiated-rebuilding-grace-period", "1s")
+      // Set the threshold to allow only one node rebuilding at a time
+      .setParam("--max-node-rebuilding-percentage", "10");
+
+  cluster->start({});
+
+  // Wait until all nodes are seen as alive
+  for (const auto& n : cluster->getNodes()) {
+    wait_until([&]() {
+      for (const auto& it : n.second->gossipCount()) {
+        if (it.second.first != "ALIVE" || it.second.second > 1000000) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }
+
+  auto client = cluster->createClient();
+
+  auto stats = cluster->getNode(0).stats();
+  ASSERT_EQ(0, stats["rebuilding_supervisor_throttled"]);
+  auto prev_rebuilding_scheduled = stats["shard_rebuilding_scheduled"];
+
+  // Manually trigger mini rebuilding for N1
+  auto now = RecordTimestamp::now();
+  auto dirtyStart = RecordTimestamp(now - std::chrono::minutes(10));
+  auto dirtyEnd = RecordTimestamp(now - std::chrono::minutes(5));
+  RebuildingRangesMetadata rrm;
+  rrm.modifyTimeIntervals(TimeIntervalOp::ADD,
+                          DataClass::APPEND,
+                          RecordTimeInterval(dirtyStart, dirtyEnd));
+  IntegrationTestUtils::requestShardRebuilding(*client, 1, 0, 0, &rrm);
+  // Now kill N3
+  cluster->getNode(3).kill();
+
+  // Now kill N1 as well. This becomes a new trigger for an existing mini
+  // rebuilding
+  cluster->getNode(1).kill();
+
+  // Enable self-initiated rebuilding on N0
+  cluster->getNode(0).sendCommand(
+      "set enable-self-initiated-rebuilding true --ttl max");
+
+  // Rebuilding supervisor should hit the threshold and not trigger any
+  // rebuilding.
+  wait_until("rebuilding scheduled", [&]() {
+    // Check N0
+    auto tmp_stats = cluster->getNode(0).stats();
+    return tmp_stats["shard_rebuilding_scheduled"] >=
+        prev_rebuilding_scheduled + 1;
+  });
+
+  // Now wait a few more grace period, to make sure it does not trigger
+  // rebuildings
+  wait_until("rebuilding throttled",
+             [&]() {
+               // Check N0
+               auto tmp_stats = cluster->getNode(0).stats();
+               return tmp_stats["shard_rebuilding_triggered"] > 0;
+             },
+             std::chrono::steady_clock::now() + std::chrono::seconds(6));
+
+  stats = cluster->getNode(0).stats();
+  ASSERT_EQ(1, stats["rebuilding_supervisor_throttled"]);
+  ASSERT_EQ(0, stats["shard_rebuilding_triggered"]);
 }
 
 // Makes sure that the threshold for number of currently running rebuildings
@@ -797,12 +1131,9 @@ TEST_F(RebuildingSupervisorIntegrationTest,
       .setParam("--disable-rebuilding", "false")
       .setParam("--enable-self-initiated-rebuilding", "false")
       .setParam("--self-initiated-rebuilding-grace-period", "3s")
-      // Don't limit the trigger queue size, to make sure that the only
-      // threshold we hit is the number of currently running rebuildings
-      .setParam("--max-rebuilding-trigger-queue-size", "10")
       // Set the threshold to allow only one node rebuilding at a time
       .setParam("--max-node-rebuilding-percentage",
-                folly::format("{}", (100 / num_nodes - 1)).str());
+                folly::format("{}", (100 / num_nodes)).str());
 
   cluster->start({});
 
@@ -914,122 +1245,6 @@ TEST_F(RebuildingSupervisorIntegrationTest, ReadIOError) {
   }
 }
 
-// Makes sure that the threshold for number of rebuilding triggers is
-// applied.
-// This test simulates the failure of two nodes, while the threshold is 1.
-// No rebuilding should be started.
-TEST_F(RebuildingSupervisorIntegrationTest, RebuildingTriggerQueueThreshold) {
-  int num_nodes = 6;
-
-  Configuration::Nodes nodes_config;
-  for (int i = 0; i < num_nodes; ++i) {
-    Configuration::Node node;
-    node.generation = 1;
-    node.addStorageRole(/*num_shards*/ 1);
-    if (i == 0) {
-      node.addSequencerRole();
-    }
-    nodes_config[i] = std::move(node);
-  }
-
-  logsconfig::LogAttributes event_log_attrs;
-  event_log_attrs.set_replicationFactor(3);
-  event_log_attrs.set_extraCopies(0);
-  event_log_attrs.set_syncedCopies(0);
-  event_log_attrs.set_singleWriter(false);
-  event_log_attrs.set_syncReplicationScope(NodeLocationScope::NODE);
-
-  auto cluster =
-      IntegrationTestUtils::ClusterFactory()
-          // Disable M2M rebuilding to make sure that nodes won't complete
-          // or abort rebuildings, which would interfere with this test.
-          .setParam("--enable-self-initiated-rebuilding", "false")
-          .setParam("--disable-rebuilding", "true")
-          .setParam("--event-log-grace-period", "1ms")
-          .setParam("--reader-stalled-grace-period", "1s")
-          .setParam("--disable-event-log-trimming", "true")
-          .useHashBasedSequencerAssignment()
-          .setNodes(nodes_config)
-          .setEventLogAttributes(event_log_attrs)
-          .deferStart()
-          .create(num_nodes);
-
-  cluster->getNode(0)
-      .setParam("--disable-rebuilding", "false")
-      .setParam("--enable-self-initiated-rebuilding", "false")
-      .setParam("--self-initiated-rebuilding-grace-period", "3s")
-      // Set the threshold to 1 to limit the number of triggers
-      .setParam("--max-rebuilding-trigger-queue-size", "1");
-
-  cluster->start({});
-
-  auto client = cluster->createClient();
-
-  // Wait until all nodes are seen as alive
-  for (const auto& n : cluster->getNodes()) {
-    int rv = wait_until([&]() {
-      for (const auto& it : n.second->gossipCount()) {
-        if (it.second.first != "ALIVE" || it.second.second > 1000000) {
-          return false;
-        }
-      }
-      return true;
-    });
-  }
-
-  auto stats = cluster->getNode(0).stats();
-  // Check that the rebuilding supervisor is not throttled.
-  stats = cluster->getNode(0).stats();
-  ASSERT_EQ(0, stats["rebuilding_supervisor_throttled"]);
-  auto prev_rebuilding_scheduled = stats["shard_rebuilding_scheduled"];
-
-  // Kill N1 and N3
-  cluster->getNode(1).kill();
-  cluster->getNode(3).kill();
-  // Enable self-initiated rebuilding on N0
-  cluster->getNode(0).sendCommand(
-      "set enable-self-initiated-rebuilding true --ttl max");
-
-  // Rebuilding supervisor should hit the threshold of current number of
-  // triggers and not trigger any rebuilding
-  wait_until("rebuilding scheduled", [&]() {
-    // Check N0
-    auto tmp_stats = cluster->getNode(0).stats();
-    return tmp_stats["shard_rebuilding_scheduled"] >=
-        prev_rebuilding_scheduled + 1;
-  });
-
-  // Now wait a few more grace period, to make sure it does not trigger
-  // rebuildings
-  wait_until("rebuilding throttled",
-             [&]() {
-               // Check N0
-               auto tmp_stats = cluster->getNode(0).stats();
-               return tmp_stats["shard_rebuilding_triggered"] > 0;
-             },
-             std::chrono::steady_clock::now() + std::chrono::seconds(6));
-
-  stats = cluster->getNode(0).stats();
-  ASSERT_EQ(0, stats["shard_rebuilding_triggered"]);
-  // Check that the rebuilding supervisor entered throttling mode.
-  ASSERT_EQ(1, stats["rebuilding_supervisor_throttled"]);
-
-  // Now start N3. This should cancel the rebuilding trigger, and casue the
-  // rebuilding supervisor to exit throttling mode.
-  cluster->getNode(3).start();
-
-  // Rebuilding supervisor should trigger rebuilding for N2
-  wait_until("rebuilding triggered", [&]() {
-    // Check N0
-    auto tmp_stats = cluster->getNode(0).stats();
-    return tmp_stats["shard_rebuilding_triggered"] == 1;
-  });
-
-  stats = cluster->getNode(0).stats();
-  // Check that the rebuilding supervisor exited throttling mode.
-  ASSERT_EQ(0, stats["rebuilding_supervisor_throttled"]);
-}
-
 // Makes sure that rebuilding_supervisor_throttled stats resets even if the
 // leader changed.
 TEST_F(RebuildingSupervisorIntegrationTest,
@@ -1073,8 +1288,9 @@ TEST_F(RebuildingSupervisorIntegrationTest,
       .setParam("--disable-rebuilding", "false")
       .setParam("--enable-self-initiated-rebuilding", "false")
       .setParam("--self-initiated-rebuilding-grace-period", "3s")
-      // Set the threshold to 1 to limit the number of triggers
-      .setParam("--max-rebuilding-trigger-queue-size", "1");
+      // Set the threshold to allow only one node rebuilding at a time
+      .setParam("--max-node-rebuilding-percentage",
+                folly::format("{}", (100 / num_nodes)).str());
 
   cluster->start({});
 
@@ -1131,7 +1347,7 @@ TEST_F(RebuildingSupervisorIntegrationTest,
   auto prev_shard_rebuilding_not_triggered =
       stats["shard_rebuilding_not_triggered_nodealive"];
 
-  // Now start N0. This should cancel the rebuilding trigger, and casue the
+  // Now start N0. This should cancel the rebuilding trigger, and cause the
   // rebuilding supervisor to exit throttling mode.
   cluster->getNode(0).start();
 

@@ -478,7 +478,6 @@ class ClusterFactory {
       setParam("--self-initiated-rebuilding-grace-period", grace_period);
     }
     return setParam("--enable-self-initiated-rebuilding", "true")
-        .setParam("--max-rebuilding-trigger-queue-size", "3")
         .setParam("--disable-rebuilding", "false");
   }
 

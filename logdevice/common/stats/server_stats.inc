@@ -1025,8 +1025,6 @@ STAT_DEFINE(node_rebuilding_not_triggered_notstorage, SUM)
 STAT_DEFINE(shard_rebuilding_not_triggered_nodealive, SUM)
 // - rebuilding has already started
 STAT_DEFINE(shard_rebuilding_not_triggered_started, SUM)
-// Maximum size of rebuilding trigger queue
-STAT_DEFINE(rebuilding_trigger_queue_threshold, MAX)
 // Rebuilding supervisors that are throttled due to the number of triggers
 // exceeding the trigger queue threshold
 STAT_DEFINE(rebuilding_supervisor_throttled, SUM)
