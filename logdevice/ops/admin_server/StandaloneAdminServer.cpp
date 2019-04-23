@@ -225,17 +225,20 @@ void StandaloneAdminServer::shutdown() {
   ld_info("Stopping AdminServer, no new requests after this point.");
   if (admin_server_) {
     admin_server_->stop();
-    admin_server_.reset();
+    ld_info("Admin API server stopped accepting requests");
   }
   if (processor_) {
     ld_info("Stopping accepting work on all workers.");
     std::vector<folly::SemiFuture<folly::Unit>> futures =
         fulfill_on_all_workers<folly::Unit>(
-            processor_.get(), [](folly::Promise<folly::Unit> p) -> void {
+            processor_.get(),
+            [](folly::Promise<folly::Unit> p) -> void {
               auto* worker = Worker::onThisThread();
               worker->stopAcceptingWork();
               p.setValue();
-            });
+            },
+            /* request_type = */ RequestType::MISC,
+            /* with_retrying = */ true);
     ld_info("Waiting for workers to acknowledge.");
 
     folly::collectAllSemiFuture(futures.begin(), futures.end()).get();
@@ -243,11 +246,14 @@ void StandaloneAdminServer::shutdown() {
 
     ld_info("Finishing work and closing sockets on all workers.");
     futures = fulfill_on_all_workers<folly::Unit>(
-        processor_.get(), [](folly::Promise<folly::Unit> p) -> void {
+        processor_.get(),
+        [](folly::Promise<folly::Unit> p) -> void {
           auto* worker = Worker::onThisThread();
           worker->finishWorkAndCloseSockets();
           p.setValue();
-        });
+        },
+        /* request_type = */ RequestType::MISC,
+        /* with_retrying = */ true);
     ld_info("Waiting for workers to acknowledge.");
 
     folly::collectAllSemiFuture(futures.begin(), futures.end()).get();
@@ -255,6 +261,10 @@ void StandaloneAdminServer::shutdown() {
 
     ld_info("Stopping Processor");
     processor_->waitForWorkers();
+    if (admin_server_) {
+      ld_info("Destroying AdminServer");
+      admin_server_.reset();
+    }
     processor_->shutdown();
   }
 

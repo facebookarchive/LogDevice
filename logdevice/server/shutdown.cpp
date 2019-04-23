@@ -151,8 +151,7 @@ void shutdown_server(
     // This should gracefully finish the current pending admin requests and
     // cleanly shutdown any threads/workers managed by the Admin API server.
     admin_server->stop();
-    ld_info("Admin API server stopped");
-    admin_server.reset();
+    ld_info("Admin API server stopped accepting requests");
   }
 
   if (sequencer_placement && !fast_shutdown) {
@@ -317,6 +316,13 @@ void shutdown_server(
     command_listener.reset();
   }
 
+  if (admin_server) {
+    // Note that deallocating AdminServer might be expensive if it's holding the
+    // safety checker metadata cache, hence why we are destroying it near the
+    // end.
+    ld_info("Admin API server destroyed");
+    admin_server.reset();
+  }
   // take down all worker threads
   ld_info("Shutting down worker threads");
   processor->shutdown();
