@@ -174,7 +174,11 @@ class FlowGroup {
    * message at the given priority level.
    */
   bool canDrain(Priority p) const {
-    return !wouldCutInLine(p) && canDrainMeter(p);
+    bool res = !wouldCutInLine(p) && canDrainMeter(p);
+    if (assert_can_drain_ && reordering_allowed_at_priority_ == p) {
+      ld_check(res);
+    }
+    return res;
   }
 
   /**
@@ -205,10 +209,6 @@ class FlowGroup {
 
   size_t level(Priority p) const {
     return meter_.entries[asInt(p)].level();
-  }
-
-  bool isRunningBacklog() const {
-    return running_;
   }
 
   void setScope(Sender* sender, NodeLocationScope s) {
@@ -282,11 +282,15 @@ class FlowGroup {
     ld_check(p < Priority::NUM_PRIORITIES);
     cb.setAffiliation(this, p);
     priorityq_.push(cb);
+
     // As soon as a sender resorts to deferring a message, revert
     // wouldCutInLine() to its normal mode of operation. We can't
     // allow a future bandwidth delivery by the TrafficShaper to
-    // cause the callback to inadvertantly send a message out of order.
-    running_ = false;
+    // cause the callback to inadvertently send a message out of order.
+    if (p == reordering_allowed_at_priority_) {
+      ld_check(!assert_can_drain_);
+      reordering_allowed_at_priority_ = Priority::INVALID;
+    }
   }
 
   /** Remove a callback from the PriorityQueue for this FlowGroup. */
@@ -354,7 +358,7 @@ class FlowGroup {
    *       group from enabled to disabled.
    */
   bool wouldCutInLine(Priority p) const {
-    return (!isRunningBacklog() && !priorityq_.empty(p));
+    return reordering_allowed_at_priority_ != p && !priorityq_.empty(p);
   }
 
   /**
@@ -384,14 +388,18 @@ class FlowGroup {
    * send at least one message.
    */
   void issueCallback(BWAvailableCallback& cb, std::mutex& mtx) {
-    DeclareCanDrainOnce(this);
-    SCOPE_EXIT {
-      running_ = false;
-    };
-    running_ = true;
+    ld_check(reordering_allowed_at_priority_ == Priority::INVALID);
+    ld_check(assert_can_drain_ == false);
+    ld_check(cb.priority_ != Priority::INVALID);
+
+    reordering_allowed_at_priority_ = cb.priority_;
+    assert_can_drain_ = true;
 
     cb.deactivate();
     cb(*this, mtx);
+
+    reordering_allowed_at_priority_ = Priority::INVALID;
+    assert_can_drain_ = false;
   }
 
   PriorityQueue<BWAvailableCallback, &BWAvailableCallback::flow_group_links_>
@@ -417,9 +425,13 @@ class FlowGroup {
   // traffic. Otherwise, all packets are released immediately.
   bool enabled_ = false;
 
-  // True if the FlowGroup is firing callbacks for work that was previously
-  // delayed.
-  bool running_ = false;
+  // Usually if priorityq_ is not empty we don't allow sending messages, only
+  // pushing more callbacks to priorityq_. But there's one exception: if we're
+  // already inside a BWAvailableCallback, it's ok to send messages of the same
+  // priority as the callback, as long as meter level is positive.
+  // This field is the priority of currently running callback if we're inside
+  // a callback and allowed to send messages. Otherwise INVALID.
+  Priority reordering_allowed_at_priority_ = Priority::INVALID;
 
   // Used to validate the behavior of bandwidth available callbacks.
   // The first message sent from a bandwidth available callback at or above

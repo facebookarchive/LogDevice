@@ -20,8 +20,8 @@ bool FlowGroup::injectShapingEvent(Priority p) {
       Worker::settings().message_error_injection_chance_percent;
   if (chance_percent != 0 &&
       Worker::settings().message_error_injection_status == E::CBREGISTERED &&
-      !isRunningBacklog() && configured() && enabled() &&
-      folly::Random::randDouble(0, 100.0) <= chance_percent) {
+      reordering_allowed_at_priority_ == Priority::INVALID && configured() &&
+      enabled() && folly::Random::randDouble(0, 100.0) <= chance_percent) {
     // Empty the meter so that all subsequent messages see a shortage
     // until more bandwdith is added.
     resetMeter(p);
@@ -182,24 +182,23 @@ bool FlowGroup::run(std::mutex& flow_meters_mutex,
 }
 
 bool FlowGroup::drain(size_t cost, Priority p) {
-  // assert_can_drain_ is only used when running the backlog.
-  ld_check(!assert_can_drain_ || isRunningBacklog());
-  auto drainSuccess = [this]() {
+  bool res = false;
+  if (!wouldCutInLine(p)) {
+    auto& meter = meter_.entries[asInt(p)];
+    if (!enabled_ || meter.drain(cost)) {
+      deps_->statsAdd(&PerShapingPriorityStats::bwconsumed, scope_, p, cost);
+      res = true;
+    }
+  }
+
+  if (assert_can_drain_ && reordering_allowed_at_priority_ == p) {
+    // It's the first drain of a BWAvailableCallback at same priority.
+    // Should be able to drain.
+    ld_check(res);
     assert_can_drain_ = false;
-    return true;
-  };
-
-  if (wouldCutInLine(p)) {
-    return false;
   }
 
-  auto& meter = meter_.entries[asInt(p)];
-  if (!enabled_ || meter.drain(cost)) {
-    deps_->statsAdd(&PerShapingPriorityStats::bwconsumed, scope_, p, cost);
-    return drainSuccess();
-  }
-
-  return false;
+  return res;
 }
 
 }} // namespace facebook::logdevice
