@@ -79,10 +79,10 @@ MessageReadResult CLEAN_Message::deserialize(ProtocolReader& reader) {
   hdr.epoch_end_offset_DEPRECATED = BYTE_OFFSET_INVALID;
 
   return reader.result([&] {
-    return new CLEAN_Message(hdr,
-                             std::move(tail_record),
-                             std::move(epoch_size_map),
-                             std::move(absent_nodes));
+    return std::make_unique<CLEAN_Message>(hdr,
+                                           std::move(tail_record),
+                                           std::move(epoch_size_map),
+                                           std::move(absent_nodes));
   });
 }
 

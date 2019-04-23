@@ -241,7 +241,7 @@ class SealMetadata : public ComparableLogMetadata {
 
   // must write a valid Seal
   bool valid() const override {
-    return seal_.valid();
+    return seal_.validOrEmpty();
   }
 
   LogMetadataType getType() const override {

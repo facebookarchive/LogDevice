@@ -185,6 +185,7 @@ int LogStorageState::updatePerEpochLogMetadataTrimPoint(epoch_t new_epoch) {
 
 int LogStorageState::updateSeal(Seal new_seal, LogStorageState::SealType type) {
   ld_check(type < SealType::Count);
+  ld_check(new_seal.validOrEmpty());
   Seal prev = seals_[static_cast<size_t>(type)].fetchMax(new_seal);
   if (new_seal < prev) {
     err = E::UPTODATE;

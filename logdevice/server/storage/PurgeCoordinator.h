@@ -117,11 +117,6 @@ class PurgeCoordinator : public LogStorageState_PurgeCoordinator_Bridge {
   void updateLastCleanInMemory(epoch_t epoch) override;
 
   /**
-   * called by the state machine when the seal record is updated.
-   */
-  void updateSealInMemory(Seal seal);
-
-  /**
    * Called if this purge state machine enters a permanent error state because
    * a storage task encountered an un-recoverable failure.
    *

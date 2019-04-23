@@ -1471,10 +1471,10 @@ TEST_P(RecoveryTest, MetadatalogPreempted) {
   // Write a seal record with the higher epoch to simulate preemption by another
   // node running recovery.
   const NodeID sealed_by(1, 1);
-  const epoch_t epoch(8);
+  const epoch_t seal_epoch(8);
   {
     auto store = cluster_->getNode(0).createLocalLogStore();
-    SealMetadata meta(Seal(epoch, sealed_by));
+    SealMetadata meta(Seal(seal_epoch, sealed_by));
     ASSERT_EQ(0,
               store->getByIndex(SHARD_IDX)->writeLogMetadata(
                   MetaDataLog::metaDataLogID(LOG_ID),
@@ -1492,11 +1492,32 @@ TEST_P(RecoveryTest, MetadatalogPreempted) {
   auto stats = cluster_->getNode(0).stats();
   auto seq_info = cluster_->getNode(0).sequencerInfo(LOG_ID);
 
-  ASSERT_EQ("PREEMPTED", seq_info["State"]);
-  ASSERT_EQ(std::to_string(sealed_by.index()), seq_info["Preempted by"]);
-  int preempted_epoch = folly::to<int>(seq_info["Preempted epoch"]);
-  ASSERT_LE(2, preempted_epoch);
-  ASSERT_GE(100, preempted_epoch);
+  EXPECT_EQ(std::to_string(sealed_by.index()), seq_info.at("Preempted by"));
+  int preempted_epoch = folly::to<int>(seq_info.at("Preempted epoch"));
+  EXPECT_LE(2, preempted_epoch);
+  EXPECT_GE(8, preempted_epoch);
+  int sequencer_epoch = folly::to<int>(seq_info.at("Epoch"));
+  std::string state = seq_info.at("State");
+
+  // There are two possible situations:
+  if (sequencer_epoch > seal_epoch.val()) {
+    // 1. Sequencer was reactivated so many times that it got to an epoch
+    //    above our seal. Then it's not preempted. This case is unlikely.
+    EXPECT_EQ(9, sequencer_epoch);
+    EXPECT_EQ(8, preempted_epoch);
+    EXPECT_EQ("ACTIVE", state);
+  } else {
+    // 2. Sequencer is preempted. It may still be in ACTIVE state because
+    //    of how things work: metadata log append+recovery notice preemption
+    //    and transition the data sequencer to PREEMPTED, but if the sequencer
+    //    gets activated again (e.g. because of a GET_SEQ_STATE message),
+    //    it'll become ACTIVE, at least until another metadata log write
+    //    attempt notices the preemption again (and even when it does, there's
+    //    at lease one code path that doesn't transition sequencer into
+    //    PREEMPTED state: when AppenderPrep calls sequencer->checkIfPreempted).
+    EXPECT_GE(preempted_epoch, sequencer_epoch);
+    EXPECT_TRUE(state == "ACTIVE" || state == "PREEMPTED") << state;
+  }
 }
 
 // Test the scenario that recovery performs on multiple epochs, each of them

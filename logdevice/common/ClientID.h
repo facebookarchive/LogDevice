@@ -43,7 +43,11 @@ struct ClientID {
   }
 
   std::string toString() const {
-    return "C" + std::to_string(getIdx());
+    if (val_ & (1u << 31)) {
+      return "C" + std::to_string(getIdx());
+    } else {
+      return "[invalid ClientID: " + std::to_string(val_) + "]";
+    }
   }
 
   int32_t getIdx() const {

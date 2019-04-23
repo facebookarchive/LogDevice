@@ -483,7 +483,8 @@ PurgeCoordinator::checkPreemption(epoch_t sequencer_epoch) {
   folly::Optional<Seal> soft_seal =
       parent_->getSeal(LogStorageState::SealType::SOFT);
 
-  if (!normal_seal.hasValue() || !soft_seal.hasValue()) {
+  if (!normal_seal.hasValue() || !soft_seal.hasValue() ||
+      !normal_seal->valid()) {
     // We expect both normal seal and soft seal are likely to have values,
     // since by the time the node received CLEAN message, it must have been
     // Sealed by the same sequencer node already. Sealed implies that both
@@ -494,7 +495,8 @@ PurgeCoordinator::checkPreemption(epoch_t sequencer_epoch) {
     // correctness.
     ld_warning("Unable to find seal of soft seal in LogStorageState "
                "after received CLEAN message for log %lu from sequencer "
-               "with epoch %u.",
+               "with epoch %u. Probably this node was restarted between "
+               "digesting and cleaning phase of recovery.",
                log_id_.val_,
                sequencer_epoch.val_);
     return std::make_pair(Status::OK, Seal());
@@ -567,11 +569,6 @@ void PurgeCoordinator::onCleanMessage(std::unique_ptr<CLEAN_Message> clean_msg,
 
 void PurgeCoordinator::updateLastCleanInMemory(epoch_t epoch) {
   parent_->updateLastCleanEpoch(epoch);
-}
-
-void PurgeCoordinator::updateSealInMemory(Seal seal) {
-  // clean epoch is considered as NORMAL seal
-  parent_->updateSeal(seal, LogStorageState::SealType::NORMAL);
 }
 
 void PurgeCoordinator::startBufferedMessages(

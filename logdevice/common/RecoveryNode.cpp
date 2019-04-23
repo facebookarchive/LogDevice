@@ -156,8 +156,8 @@ void RecoveryNode::transition(State to) {
                  toString(absent_shards).c_str(),
                  epoch_size_map.toString().c_str(),
                  tail_record.toString().c_str());
-        msg.reset(new CLEAN_Message(
-            header, tail_record, epoch_size_map, absent_shards));
+        msg = std::make_unique<CLEAN_Message>(
+            header, tail_record, epoch_size_map, absent_shards);
       } else {
         ld_check(to == State::DIGESTING);
         expected_read_stream_id_ = recovery_->getDeps().issueReadStreamID();

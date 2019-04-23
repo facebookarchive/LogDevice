@@ -28,13 +28,8 @@ void RecoverSealTask::execute() {
     int rv = storageThreadPool_->getLocalLogStore().readLogMetadata(
         log_id_, &metadata);
     if (rv == 0) {
-      if (!metadata.seal_.seq_node.isNodeID()) {
-        ld_error("Local log store contains a seal for log %lu with an invalid "
-                 "NodeID",
-                 log_id_.val_);
-        status_ = E::MALFORMED_RECORD;
-        return -1;
-      }
+      // readLogMetadata() checks Metadata::valid().
+      ld_check(metadata.seal_.validOrEmpty());
     } else if (err != E::NOTFOUND) {
       status_ = err;
       return -1;
@@ -71,8 +66,8 @@ void RecoverSealTask::onDropped() {
 }
 
 void RecoverSealTask::invokeCallback() {
-  ld_check(status_ == E::OK || status_ == E::MALFORMED_RECORD ||
-           status_ == E::LOCAL_LOG_STORE_READ || status_ == E::DROPPED);
+  ld_check(status_ == E::OK || status_ == E::LOCAL_LOG_STORE_READ ||
+           status_ == E::DROPPED);
 
   // We were created after checking the LogStorageState instance so it must
   // exist
@@ -94,6 +89,7 @@ void RecoverSealTask::invokeCallback() {
       // if LogStorageStateMap already contains a seal record with a higher
       // epoch, the value read from local log store is stale; we'll need to
       // reread it from the map
+      ld_check(err == E::UPTODATE);
       stale = (err == E::UPTODATE);
     }
 
@@ -111,8 +107,7 @@ void RecoverSealTask::invokeCallback() {
     // update both seals
     update_seals(LogStorageState::SealType::NORMAL);
     update_seals(LogStorageState::SealType::SOFT);
-  } else if (status_ == E::MALFORMED_RECORD ||
-             status_ == E::LOCAL_LOG_STORE_READ) {
+  } else if (status_ == E::LOCAL_LOG_STORE_READ) {
     state.notePermanentError("Recovering seal");
   }
 

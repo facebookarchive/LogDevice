@@ -411,6 +411,9 @@ class LogStorageState {
 
   // stores all kinds of Seal for a log. Used to decide whether storage nodes
   // should reject all stores with sequence numbers belonging to sealed epochs.
+  // Empty optional means that the seal is unknown and needs to be read
+  // from local log store. In contrast, Seal::empty() means that we _know_
+  // that this storage node didn't receive any seals for this log.
   std::array<AtomicOptional<Seal>, static_cast<size_t>(SealType::Count)> seals_{
       {{Seal(), EMPTY_OPTIONAL}, {Seal(), EMPTY_OPTIONAL}}};
 

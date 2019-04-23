@@ -201,11 +201,15 @@ class RocksDBWriter {
     }
 
     int rv = metadata->deserialize(Slice(value.data(), value.size()));
-    if (rv != 0) {
-      RATELIMIT_ERROR(std::chrono::seconds(1),
-                      10,
-                      "Unable to deserialize metadata %s",
-                      folly::demangle(typeid(Meta).name()).c_str());
+    if (rv != 0 || !metadata->valid()) {
+      RATELIMIT_ERROR(
+          std::chrono::seconds(1),
+          10,
+          "%s metadata %s. Key: %s, value: %s",
+          rv == 0 ? "Invalid" : "Unable to deserialize",
+          folly::demangle(typeid(Meta).name()).c_str(),
+          hexdump_buf(key_slice.data(), key_slice.size(), 100).c_str(),
+          hexdump_buf(value.data(), value.size(), 100).c_str());
       err = E::LOCAL_LOG_STORE_READ;
       return -1;
     }

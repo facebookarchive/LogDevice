@@ -26,8 +26,16 @@ struct Seal {
   Seal() noexcept : epoch(EPOCH_INVALID) {}
   Seal(epoch_t epoch, NodeID node) : epoch(epoch), seq_node(node) {}
 
+  bool empty() const {
+    return epoch == EPOCH_INVALID;
+  }
+
   bool valid() const {
     return epoch_valid(epoch) && seq_node.isNodeID();
+  }
+
+  bool validOrEmpty() const {
+    return empty() || valid();
   }
 
   std::string toString() const {

@@ -34,7 +34,9 @@ SealStorageTask::SealStorageTask(logid_t log_id,
       reply_to_(reply_to),
       tail_optimized_(tail_optimized),
       seal_(seal),
-      status_(E::OK) {}
+      status_(E::OK) {
+  ld_check(seal_.validOrEmpty());
+}
 
 SealStorageTask::SealStorageTask(logid_t log_id,
                                  epoch_t last_clean,
@@ -50,6 +52,7 @@ SealStorageTask::SealStorageTask(logid_t log_id,
       seal_(seal),
       status_(E::OK),
       purge_driver_(std::move(driver)) {
+  ld_check(seal_.validOrEmpty());
   ld_check(!reply_to_.valid());
 }
 
@@ -181,12 +184,7 @@ Status SealStorageTask::recoverSoftSeals(LocalLogStore& store,
     SoftSealMetadata softseal_metadata;
     int rv = store.readLogMetadata(log_id_, &softseal_metadata);
     if (rv == 0) {
-      if (!softseal_metadata.seal_.seq_node.isNodeID()) {
-        ld_error("Local log store contains a soft seal for log %lu with "
-                 "an invalid NodeID",
-                 log_id_.val_);
-        return E::FAILED;
-      }
+      ld_check(softseal_metadata.seal_.validOrEmpty());
     } else if (err != E::NOTFOUND) {
       return E::FAILED;
     }

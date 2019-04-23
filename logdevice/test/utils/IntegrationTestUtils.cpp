@@ -1487,8 +1487,7 @@ int Node::waitForRecovery(logid_t log,
           return true;
         }
 
-        const std::string preempted_by = "Preempted by";
-        if (seq[preempted_by] != "" || seq["State"] == "UNAVAILABLE") {
+        if (seq["State"] == "PREEMPTED") {
           // If sequencer was preempted, consider recovery done.
           return true;
         }

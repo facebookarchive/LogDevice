@@ -81,7 +81,11 @@ struct NodeID {
 
   std::string toString() const {
     if (!isNodeID()) {
-      return "[invalid NodeID]";
+      if (val_ == (1u << 31)) {
+        return "[invalid NodeID]";
+      }
+      // Looks like ClientID.
+      return "[invalid NodeID: C" + std::to_string(val_ ^ (1u << 31)) + "]";
     }
     if (generation() == 0) {
       return "N" + std::to_string(index());

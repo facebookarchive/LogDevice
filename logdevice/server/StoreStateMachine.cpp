@@ -388,6 +388,7 @@ class StoreStateMachine::SoftSealStorageTask : public StorageTask {
 
     SoftSealMetadata softseal_metadata{
         Seal(epoch_t(rid.epoch.val_ - 1), seq_node)};
+    ld_check(softseal_metadata.seal_.validOrEmpty());
 
     LocalLogStore::WriteOptions write_options;
     int rv =
@@ -545,10 +546,9 @@ void StoreStateMachine::onSealRecovered(Status status,
                     message_->header_.rid.logid.val_,
                     error_description(status));
 
-    // TODO (#9289267): get rid of E::MALFORMED_RECORD
-    //                  (and add E::LOCAL_LOG_STORE_WRITE).
-    ld_check(status == E::MALFORMED_RECORD || status == E::DROPPED ||
-             status == E::LOCAL_LOG_STORE_READ || status == E::FAILED);
+    // TODO (#9289267): handle E::LOCAL_LOG_STORE_READ.
+    ld_check(status == E::DROPPED || status == E::LOCAL_LOG_STORE_READ ||
+             status == E::FAILED);
 
     // If there's an error in recovering seal, chances are the error will
     // persist, so the log store is as good as disabled.

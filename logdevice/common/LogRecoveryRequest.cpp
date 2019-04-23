@@ -1043,14 +1043,8 @@ void LogRecoveryRequest::onSealReply(ShardID from,
   if (reply.header_.status == E::PREEMPTED) {
     // some other sequencer is in the process or has finished sealing; fail
     // immediately
-
-    if (reply.seal_.valid()) {
-      onPreempted(reply.seal_.epoch, reply.seal_.seq_node);
-    } else {
-      // nodes running with the old version of the protocol may not include
-      // the seal record in the reply; sequencer will be deactivated without
-      // updating its `preempted_epoch_'
-    }
+    ld_check(reply.seal_.valid());
+    onPreempted(reply.seal_.epoch, reply.seal_.seq_node);
 
     complete(E::PREEMPTED);
     return;

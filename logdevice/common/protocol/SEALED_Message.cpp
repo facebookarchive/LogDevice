@@ -101,18 +101,31 @@ MessageReadResult SEALED_Message::deserialize(ProtocolReader& reader) {
   }
 
   return reader.result([&] {
-    return new SEALED_Message(header,
-                              std::move(epoch_lng),
-                              seal,
-                              std::move(last_timestamp),
-                              std::move(epoch_offset_map),
-                              std::move(max_seen_lsn),
-                              std::move(tail_records));
+    return std::make_unique<SEALED_Message>(header,
+                                            std::move(epoch_lng),
+                                            seal,
+                                            std::move(last_timestamp),
+                                            std::move(epoch_offset_map),
+                                            std::move(max_seen_lsn),
+                                            std::move(tail_records));
   });
 }
 
 Message::Disposition SEALED_Message::onReceived(const Address& from) {
   Worker* worker = Worker::onThisThread();
+
+  if (header_.status == E::PREEMPTED && !seal_.valid()) {
+    RATELIMIT_ERROR(
+        std::chrono::seconds(10),
+        10,
+        "Got a SEALED message for log %lu from %s with status PREEMPTED but "
+        "invalid seal %s. This is unexpected, please investigate.",
+        header_.log_id.val_,
+        Sender::describeConnection(from).c_str(),
+        seal_.toString().c_str());
+    err = E::PROTO;
+    return Disposition::ERROR;
+  }
 
   auto& rqmap = worker->runningLogRecoveries().map;
   auto it = rqmap.find(header_.log_id);
@@ -166,6 +179,11 @@ void SEALED_Message::createAndSend(const Address& to,
                                    std::vector<TailRecord> tail_records) {
   ld_check(lng_list.size() == last_timestamp.size());
   ld_check(lng_list.size() == epoch_offset_map.size());
+
+  if (status == E::PREEMPTED) {
+    ld_check(seal.valid());
+  }
+
   SEALED_Header header;
   header.log_id = log_id;
   header.shard = shard_idx;
