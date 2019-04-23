@@ -73,12 +73,12 @@ CheckImpactHandler::semifuture_checkImpact(
   auto future = promise.getSemiFuture();
   // Promise is moved into the lambda as it's not copieable. Don't use promise
   // after this point.
-  auto cb = [p = std::move(promise)](Impact impact) mutable {
-    if (impact.status != E::OK) {
+  auto cb = [p = std::move(promise)](Status st, Impact impact) mutable {
+    if (st != E::OK) {
       // An error has happened.
       thrift::OperationError ex;
-      ex.set_error_code(static_cast<uint16_t>(impact.status));
-      ex.set_message(error_description(impact.status));
+      ex.set_error_code(static_cast<uint16_t>(st));
+      ex.set_message(error_description(st));
       p.setException(std::move(ex));
       return;
     }

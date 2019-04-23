@@ -94,10 +94,6 @@ struct Impact {
     INVALID = (1u << 30),
   };
 
-  // What was the status of the operation. E::OK means that it's safe to trust
-  // the result of the check impact request. Any other value means that some
-  // error has happened. In such case the ImpactResult will be set to INVALID
-  Status status;
   // bit set of ImpactResult
   int32_t result;
 
@@ -112,15 +108,13 @@ struct Impact {
   // The total duration in seconds during this operation
   std::chrono::seconds total_duration{0};
 
-  Impact(Status status,
-         int result,
-         std::vector<ImpactOnEpoch> logs_affected = {},
-         bool internal_logs_affected = false,
-         size_t total_logs_checked = 0,
-         std::chrono::seconds total_duration = std::chrono::seconds(0));
+  explicit Impact(
+      int result,
+      std::vector<ImpactOnEpoch> logs_affected = {},
+      bool internal_logs_affected = false,
+      size_t total_logs_checked = 0,
+      std::chrono::seconds total_duration = std::chrono::seconds(0));
 
-  // A helper constructor that must only be used if status != E::OK
-  explicit Impact(Status status);
   // Empty constructor sets everything as if the operation is safe.
   Impact();
 

@@ -63,7 +63,7 @@ WorkerType CheckImpactRequest::getWorkerTypeAffinity() {
 
 Request::Execution CheckImpactRequest::execute() {
   if (!shards_.empty() && target_storage_state_ == StorageState::READ_WRITE) {
-    callback_(Impact(E::INVALID_PARAM, Impact::ImpactResult::INVALID, {}));
+    callback_(E::INVALID_PARAM, Impact(Impact::ImpactResult::INVALID, {}));
     callback_called_ = true;
     return Request::Execution::COMPLETE;
   }
@@ -354,10 +354,10 @@ void CheckImpactRequest::complete(Status st) {
   if (st != E::OK) {
     // This is to ensure that we don't return ImpactResult::NONE if the
     // operation was not successful.
-    callback_(Impact(st, Impact::ImpactResult::INVALID, {}, false));
+    callback_(st, Impact(Impact::ImpactResult::INVALID, {}, false));
   } else {
-    callback_(Impact(st,
-                     impact_result_all_,
+    callback_(st,
+              Impact(impact_result_all_,
                      std::move(affected_logs_sample_),
                      internal_logs_affected_,
                      logs_done_,
@@ -379,7 +379,7 @@ CheckImpactRequest::~CheckImpactRequest() {
     // request is still processing
     ld_check(worker->shuttingDown());
     ld_warning("CheckImpactRequest destroyed while still processing");
-    callback_(Impact(E::SHUTDOWN));
+    callback_(E::SHUTDOWN, Impact());
     // There is no point, but just for total correctness!
     callback_called_ = true;
   }

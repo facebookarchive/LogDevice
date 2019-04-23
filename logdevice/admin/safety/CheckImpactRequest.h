@@ -38,7 +38,7 @@ class InternalLogs;
 
 class CheckImpactRequest : public Request {
  public:
-  using Callback = folly::Function<void(Impact)>; // Result of the check
+  using Callback = folly::Function<void(Status, Impact)>; // Result of the check
   enum class State {
     // The state machine is now checking the metadata and internal logs,
     CHECKING_INTERNAL_LOGS,

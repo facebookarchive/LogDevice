@@ -15,30 +15,18 @@
 
 namespace facebook { namespace logdevice {
 
-Impact::Impact(Status status,
-               int result,
+Impact::Impact(int result,
                std::vector<ImpactOnEpoch> logs_affected,
                bool internal_logs_affected,
                size_t total_logs_checked,
                std::chrono::seconds total_duration)
-    : status(status),
-      result(result),
+    : result(result),
       logs_affected(std::move(logs_affected)),
       internal_logs_affected(internal_logs_affected),
       total_logs_checked(total_logs_checked),
       total_duration(total_duration) {}
 
-Impact::Impact(Status status)
-    : status(status),
-      result(ImpactResult::INVALID),
-      internal_logs_affected(false) {
-  ld_assert(status != E::OK);
-}
-
-Impact::Impact()
-    : status(E::OK),
-      result(ImpactResult::NONE),
-      internal_logs_affected(false) {}
+Impact::Impact() : result(ImpactResult::NONE), internal_logs_affected(false) {}
 
 std::string Impact::toStringImpactResult(int result) {
   std::string s;

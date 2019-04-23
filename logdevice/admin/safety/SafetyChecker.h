@@ -7,6 +7,8 @@
  */
 #pragma once
 
+#include <folly/Expected.h>
+
 #include "logdevice/admin/safety/SafetyAPI.h"
 #include "logdevice/common/EpochMetaData.h"
 #include "logdevice/common/FailureDomainNodeSet.h"
@@ -57,7 +59,7 @@ class SafetyChecker {
    * (if 'logids_to_check' is empty then on all logs in the cluster)
    * if 'target_storage_state' is applied on specified shards
    */
-  Impact
+  folly::Expected<Impact, Status>
   checkImpact(const ShardAuthoritativeStatusMap& status_map,
               const ShardSet& shards,
               configuration::StorageState target_storage_state,

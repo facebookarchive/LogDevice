@@ -34,7 +34,7 @@ SafetyChecker::SafetyChecker(Processor* processor,
       error_sample_size_(error_sample_size),
       read_epoch_metadata_from_sequencer_(read_epoch_metadata_from_sequencer) {}
 
-Impact SafetyChecker::checkImpact(
+folly::Expected<Impact, Status> SafetyChecker::checkImpact(
     const ShardAuthoritativeStatusMap& shard_status,
     const ShardSet& shards,
     StorageState target_storage_state,
@@ -55,12 +55,16 @@ Impact SafetyChecker::checkImpact(
       std::chrono::steady_clock::now();
 
   Semaphore sem;
-  Impact impact_result;
-  auto cb = [&](Impact impact) {
+  folly::Expected<Impact, Status> outcome;
+  auto cb = [&](Status st, Impact impact) {
     SCOPE_EXIT {
       sem.post();
     };
-    impact_result = std::move(impact);
+    if (st != E::OK) {
+      outcome = folly::makeUnexpected(st);
+    } else {
+      outcome = std::move(impact);
+    }
   };
 
   WorkerType worker_type = CheckImpactRequest::workerType(processor_);
@@ -86,7 +90,7 @@ Impact SafetyChecker::checkImpact(
              "processor: %s",
              error_description(err));
     ld_check(err != E::OK);
-    return Impact(err);
+    return folly::makeUnexpected(err);
   }
 
   sem.wait();
@@ -95,7 +99,7 @@ Impact SafetyChecker::checkImpact(
                        std::chrono::steady_clock::now() - start_time)
                        .count();
   ld_info("Done. Elapsed time: %.1fs", runtime);
-  return impact_result;
+  return outcome;
 }
 
 }} // namespace facebook::logdevice
