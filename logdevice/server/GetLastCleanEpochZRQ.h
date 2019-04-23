@@ -10,8 +10,8 @@
 #include <cstdio>
 
 #include "logdevice/common/EpochStoreLastCleanEpochFormat.h"
-#include "logdevice/common/LastCleanEpochZRQ.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/server/LastCleanEpochZRQ.h"
 
 namespace facebook { namespace logdevice {
 

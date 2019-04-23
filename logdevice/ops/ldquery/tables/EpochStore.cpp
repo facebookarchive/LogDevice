@@ -17,7 +17,6 @@
 #include "logdevice/common/FileEpochStore.h"
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/ZookeeperClient.h"
-#include "logdevice/common/ZookeeperEpochStore.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/ReplicationProperty.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
@@ -27,6 +26,7 @@
 #include "logdevice/lib/ClientImpl.h"
 #include "logdevice/lib/ops/LogMetaDataFetcher.h"
 #include "logdevice/ops/ldquery/Errors.h"
+#include "logdevice/server/ZookeeperEpochStore.h"
 
 using facebook::logdevice::Configuration;
 

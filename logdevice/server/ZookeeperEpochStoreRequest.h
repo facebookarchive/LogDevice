@@ -7,7 +7,7 @@
  */
 #pragma once
 
-#include "logdevice/common/ZookeeperEpochStore.h"
+#include "logdevice/server/ZookeeperEpochStore.h"
 
 namespace facebook { namespace logdevice {
 

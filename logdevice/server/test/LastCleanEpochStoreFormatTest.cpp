@@ -13,9 +13,9 @@
 
 #include "logdevice/common/EpochStoreEpochMetaDataFormat.h"
 #include "logdevice/common/EpochStoreLastCleanEpochFormat.h"
-#include "logdevice/common/LastCleanEpochZRQ.h"
 #include "logdevice/common/TailRecord.h"
 #include "logdevice/include/Record.h"
+#include "logdevice/server/LastCleanEpochZRQ.h"
 
 namespace {
 

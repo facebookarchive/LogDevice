@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "logdevice/common/ZookeeperEpochStore.h"
+#include "logdevice/server/ZookeeperEpochStore.h"
 
 #include <cstring>
 
@@ -14,16 +14,16 @@
 #include <folly/small_vector.h>
 
 #include "logdevice/common/ConstructorFailed.h"
-#include "logdevice/common/EpochMetaDataZRQ.h"
-#include "logdevice/common/GetLastCleanEpochZRQ.h"
-#include "logdevice/common/SetLastCleanEpochZRQ.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/ZookeeperClient.h"
-#include "logdevice/common/ZookeeperEpochStoreRequest.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/include/Err.h"
+#include "logdevice/server/EpochMetaDataZRQ.h"
+#include "logdevice/server/GetLastCleanEpochZRQ.h"
+#include "logdevice/server/SetLastCleanEpochZRQ.h"
+#include "logdevice/server/ZookeeperEpochStoreRequest.h"
 
 namespace fs = boost::filesystem;
 

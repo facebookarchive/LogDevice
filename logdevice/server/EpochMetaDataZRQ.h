@@ -11,8 +11,8 @@
 
 #include "logdevice/common/EpochStoreEpochMetaDataFormat.h"
 #include "logdevice/common/MetaDataTracer.h"
-#include "logdevice/common/ZookeeperEpochStoreRequest.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/server/ZookeeperEpochStoreRequest.h"
 
 namespace facebook { namespace logdevice {
 
