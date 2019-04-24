@@ -8,6 +8,7 @@
 #pragma once
 
 #include "logdevice/admin/if/gen-cpp2/admin_types.h"
+#include "logdevice/admin/maintenance/gen-cpp2/MaintenanceDelta_types.h"
 
 namespace facebook { namespace logdevice { namespace maintenance {
 using ShardOperationalState = thrift::ShardOperationalState;

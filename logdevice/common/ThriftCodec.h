@@ -9,6 +9,7 @@
 
 #include "logdevice/common/debug.h"
 #include "logdevice/common/types_internal.h"
+#include "logdevice/include/Err.h"
 #include "thrift/lib/cpp2/protocol/Serializer.h"
 
 namespace facebook { namespace logdevice {
@@ -21,23 +22,24 @@ namespace facebook { namespace logdevice {
 class ThriftCodec {
  public:
   template <class Serializer, class T>
-  static std::string serialize(T thrift) {
+  static std::string serialize(const T& thrift) {
     return Serializer::template serialize<std::string>(thrift);
   }
 
   template <class Serializer, class T>
-  static std::shared_ptr<T> deserialize(Slice binary) {
-    std::shared_ptr<T> thrift_ptr{nullptr};
+  static std::unique_ptr<T> deserialize(const Slice& binary) {
+    std::unique_ptr<T> thrift_ptr{nullptr};
     try {
       auto thrift = Serializer::template deserialize<T>(
           folly::StringPiece(binary.ptr(), binary.size));
-      thrift_ptr = std::make_shared<T>(std::move(thrift));
+      thrift_ptr = std::make_unique<T>(std::move(thrift));
     } catch (const std::exception& exception) {
       RATELIMIT_ERROR(std::chrono::seconds(10),
                       5,
                       "Failed to deserialize thrift as %s: %s",
-                      typeid(T).name(),
+                      folly::demangle(typeid(T).name()).c_str(),
                       exception.what());
+      err = E::BADMSG;
     }
     return thrift_ptr;
   }
