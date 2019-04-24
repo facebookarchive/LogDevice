@@ -425,12 +425,21 @@ CheckImpactForLogRequest::getStorageSetMetadata(const StorageSet& storage_set) {
   auto config = Worker::onThisThread()->getConfiguration();
   Impact::StorageSetMetadata out;
   for (const auto& shard : storage_set) {
-    const auto& node = config->serverConfig()->getNode(shard.node());
+    const auto* node = config->serverConfig()->getNode(shard.node());
+    // If the node doesn't exist anymore in the nodes configuration. We use
+    // these defaults.
+    StorageState storage_state = StorageState::DISABLED;
+    folly::Optional<NodeLocation> location = folly::none;
+    if (node != nullptr) {
+      storage_state = node->storage_attributes->state;
+      location = node->location;
+    }
+
     out.push_back(Impact::ShardMetadata{
         .auth_status = shard_status_.getShardStatus(shard),
         .is_alive = isAlive(shard.node()),
-        .storage_state = node->storage_attributes->state,
-        .location = node->location});
+        .storage_state = storage_state,
+        .location = location});
   }
   return out;
 }
