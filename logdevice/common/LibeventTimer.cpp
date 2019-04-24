@@ -38,11 +38,7 @@ LibeventTimer::~LibeventTimer() {
 void LibeventTimer::assign(struct event_base* base,
                            std::function<void()> callback) {
   callback_ = callback;
-  // Make a copy of the current context, save it in LibeventTimer::context_
-  // and restore the old context back. This makes Worker pointer available in
-  // LibeventTimer::libeventCallback .
-  context_ = folly::RequestContext::saveContext();
-  folly::RequestContext::setContext(context_);
+  worker_ = Worker::onThisThread(false /* enforce_worker */);
   ld_check(!initialized_);
   // Passing `this` as the callback arg is safe.  If the timer fires, we know
   // the instance still exists.  The destructor would have cancelled the timer
@@ -86,8 +82,7 @@ void LibeventTimer::activate(const struct timeval* delay) {
   evtimer_add(&timer_, delay);
   ld_assert(evtimer_pending(&timer_, nullptr));
 
-  auto w = Worker::onThisThread(false /*enforce*/);
-  workerRunContext_ = w ? w->currentlyRunning_ : RunContext();
+  workerRunContext_ = worker_ ? worker_->currentlyRunning_ : RunContext();
   active_ = true;
 }
 
@@ -123,8 +118,7 @@ void LibeventTimer::libeventCallback(void* instance, short) {
 
   ld_check(self->callback_);
   self->active_ = false;
-  if (self->context_) {
-    folly::RequestContextScopeGuard g(self->context_);
+  if (self->worker_) {
     Worker::onStartedRunning(run_context);
     self->callback_();
     Worker::onStoppedRunning(run_context);

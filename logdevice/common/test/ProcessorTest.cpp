@@ -174,7 +174,7 @@ TEST_F(ProcessorTest, ShutdownPingPongTest) {
 // Check that EventLoop and EventLoopHandle can function without being wrapped
 // in Worker and Processor. Request, LibeventTimer and ExponentialBackoffTimer
 // should all work. This is used by some tools.
-TEST_F(ProcessorTest, DISABLED_UseEventLoopDirectly) {
+TEST_F(ProcessorTest, UseEventLoopDirectly) {
   Alarm alarm(std::chrono::seconds(10));
 
   EventLoopHandle handle(

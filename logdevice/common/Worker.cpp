@@ -98,26 +98,6 @@ getMyLocation(const std::shared_ptr<UpdateableConfig>& config,
   }
   return worker->immutable_settings_->client_location;
 }
-
-// Local class used to save off and restore Worker pointer in order to resolve
-// Worker::onThisThread invocation.
-struct WorkerRequestContextData : public folly::RequestData {
-  explicit WorkerRequestContextData(Worker* w) : w_(w) {}
-  bool hasCallback() override {
-    return false;
-  }
-
-  Worker* w_;
-};
-static const folly::RequestToken& getWorkerToken() {
-  // Caching worker_token helps to avoid string lookup on every
-  // Worker::onThisThread call.
-  // Note : There cannot be more than 2^32 - 1 request tokens in use through the
-  // lifetime of the process.
-  // Initialize worker token.
-  static folly::RequestToken worker_token(Worker::kWorkerDataID.toString());
-  return worker_token;
-}
 } // namespace
 
 // the size of the bucket array of activeAppenders_ map
@@ -126,7 +106,6 @@ static constexpr size_t N_APPENDER_MAP_BUCKETS = 128 * 1024;
 constexpr int Worker::kHiPriTaskExecDistribution;
 constexpr int Worker::kMidPriTaskExecDistribution;
 constexpr int Worker::kLoPriTaskExecDistribution;
-constexpr folly::StringPiece Worker::kWorkerDataID;
 
 thread_local Worker* Worker::on_this_thread_{nullptr};
 // This pimpl class is a container for all classes that would normally be
@@ -134,8 +113,7 @@ thread_local Worker* Worker::on_this_thread_{nullptr};
 class WorkerImpl {
  public:
   WorkerImpl(Worker* w, const std::shared_ptr<UpdateableConfig>& config)
-      : worker_context_(std::make_shared<folly::RequestContext>()),
-        sender_(w->immutable_settings_,
+      : sender_(w->immutable_settings_,
                 w->getEventBase(),
                 config->get()->serverConfig()->getTrafficShapingConfig(),
                 &w->processor_->clientIdxAllocator(),
@@ -169,8 +147,6 @@ class WorkerImpl {
         std::make_shared<ReadShapingFlowGroupDeps>(Worker::stats()));
   }
 
-  // Context save and restored across threads.
-  std::shared_ptr<folly::RequestContext> worker_context_;
   ShardAuthoritativeStatusManager shardStatusManager_;
   Sender sender_;
   LogRebuildingMap runningLogRebuildings_;
@@ -210,9 +186,9 @@ class WorkerImpl {
   std::unique_ptr<ShapingContainer> read_shaping_container_;
 };
 
-std::string Worker::makeThreadName(Processor* processor,
-                                   WorkerType type,
-                                   worker_id_t idx) {
+static std::string makeThreadName(Processor* processor,
+                                  WorkerType type,
+                                  worker_id_t idx) {
   const std::string& processor_name = processor->getName();
   std::array<char, 16> name_buf;
   snprintf(name_buf.data(),
@@ -223,14 +199,13 @@ std::string Worker::makeThreadName(Processor* processor,
   return name_buf.data();
 }
 
-Worker::Worker(WorkContext::KeepAlive event_loop,
-               Processor* processor,
+Worker::Worker(Processor* processor,
                worker_id_t idx,
                const std::shared_ptr<UpdateableConfig>& config,
                StatsHolder* stats,
                WorkerType worker_type,
                ThreadID::Type thread_type)
-    : SerialWorkContext(std::move(event_loop)),
+    : EventLoop(makeThreadName(processor, worker_type, idx), thread_type),
       processor_(processor),
       updateable_settings_(processor->updateableSettings()),
       immutable_settings_(processor->updateableSettings().get()),
@@ -241,12 +216,7 @@ Worker::Worker(WorkContext::KeepAlive event_loop,
       stats_(stats),
       shutting_down_(false),
       accepting_work_(true),
-      worker_timeout_stats_(std::make_unique<WorkerTimeoutStats>()) {
-  // Executors will capture the context data and provide it where-ever
-  // necessary.
-  impl_->worker_context_->setContextData(
-      getWorkerToken(), std::make_unique<WorkerRequestContextData>(this));
-}
+      worker_timeout_stats_(std::make_unique<WorkerTimeoutStats>()) {}
 
 Worker::~Worker() {
   shutting_down_ = true;
@@ -280,23 +250,6 @@ Worker::~Worker() {
   // this is mostly used in situations where full graceful shutdown is not
   // used (e.g., tests)
   activeAppenders().map.clearAndDispose();
-}
-
-Worker* FOLLY_NULLABLE Worker::onThisThread(bool enforce_worker) {
-  if (Worker::on_this_thread_) {
-    return Worker::on_this_thread_;
-  }
-  // Check if worker pointer is available in currently loaded RequestContext.
-  WorkerRequestContextData* data = dynamic_cast<WorkerRequestContextData*>(
-      folly::RequestContext::get()->getContextData(getWorkerToken()));
-  if (data && data->w_) {
-    return data->w_;
-  }
-  if (enforce_worker) {
-    // Not on a worker == assert failure
-    ld_check(false);
-  }
-  return nullptr;
 }
 
 std::string Worker::getName(WorkerType type, worker_id_t idx) {
@@ -429,8 +382,7 @@ void Worker::onSettingsUpdated() {
   }
 
   immutable_settings_ = new_settings;
-  auto event_loop = checked_downcast<EventLoop*>(getExecutor());
-  event_loop->getRequestPump()->setNumRequestsPerIteration(
+  getRequestPump()->setNumRequestsPerIteration(
       immutable_settings_->requests_per_iteration);
   clientReadStreams().noteSettingsUpdated();
   if (logsconfig_manager_) {
@@ -537,8 +489,7 @@ void Worker::initializeSubscriptions() {
   onSettingsUpdated();
 }
 
-void Worker::setupWorker() {
-  folly::RequestContextScopeGuard g(impl_->worker_context_);
+void Worker::onThreadStarted() {
   requests_stuck_timer_ = std::make_unique<Timer>(
       std::bind(&Worker::reportOldestRecoveryRequest, this));
   load_timer_ = std::make_unique<Timer>(std::bind(&Worker::reportLoad, this));
@@ -1037,6 +988,20 @@ void Worker::deactivateIsolationTimer() {
 
 void Worker::setCurrentlyRunningContext(RunContext new_context,
                                         RunContext prev_context) {
+#ifndef NDEBUG
+  if ((ThreadID::isWorker()) &&
+      !dynamic_cast<Worker*>(EventLoop::onThisThread())) {
+    RATELIMIT_ERROR(std::chrono::seconds(10),
+                    10,
+                    "Attempting to set worker context on a worker being "
+                    "destroyed to: %s, expected context: %s.",
+                    new_context.describe().c_str(),
+                    prev_context.describe().c_str());
+    ld_check(false);
+    return;
+  }
+#endif
+
   Worker* w = Worker::onThisThread(false);
   if (!w) {
     RATELIMIT_ERROR(std::chrono::seconds(10),
@@ -1063,6 +1028,19 @@ std::unique_ptr<MessageDispatch> Worker::createMessageDispatch() {
 // restore it. Use it for nesting RunContexts.
 std::tuple<RunContext, std::chrono::steady_clock::duration>
 Worker::packRunContext() {
+#ifndef NDEBUG
+  if ((ThreadID::isWorker()) &&
+      !dynamic_cast<Worker*>(EventLoop::onThisThread())) {
+    RATELIMIT_ERROR(std::chrono::seconds(10),
+                    10,
+                    "Attempting to pack worker context on a worker being "
+                    "destroyed.");
+    ld_check(false);
+    return std::make_tuple(
+        RunContext(), std::chrono::steady_clock::duration(0));
+  }
+#endif
+
   Worker* w = Worker::onThisThread(false);
   if (!w) {
     RATELIMIT_ERROR(std::chrono::seconds(10),
@@ -1082,6 +1060,18 @@ Worker::packRunContext() {
 
 void Worker::unpackRunContext(
     std::tuple<RunContext, std::chrono::steady_clock::duration> s) {
+#ifndef NDEBUG
+  if ((ThreadID::isWorker()) &&
+      !dynamic_cast<Worker*>(EventLoop::onThisThread())) {
+    RATELIMIT_ERROR(std::chrono::seconds(10),
+                    10,
+                    "Attempting to unpack worker context on a worker being "
+                    "destroyed.");
+    ld_check(false);
+    return;
+  }
+#endif
+
   Worker* w = Worker::onThisThread(false);
   if (!w) {
     RATELIMIT_ERROR(std::chrono::seconds(10),
@@ -1323,10 +1313,6 @@ int Worker::tryPost(std::unique_ptr<Request>& req) {
   return forcePost(req);
 }
 
-void Worker::add(folly::Func func) {
-  addWithPriority(std::move(func), folly::Executor::LO_PRI);
-}
-
 void Worker::pickAndExecuteTask(int8_t priority_hint) {
   auto* queue = &lo_pri_tasks_;
   switch (priority_hint) {
@@ -1357,8 +1343,11 @@ void Worker::pickAndExecuteTask(int8_t priority_hint) {
   Worker::on_this_thread_ = nullptr;
 }
 
+void Worker::add(folly::Func func) {
+  addWithPriority(std::move(func), folly::Executor::LO_PRI);
+}
+
 void Worker::addWithPriority(folly::Func func, int8_t priority) {
-  folly::RequestContextScopeGuard g(impl_->worker_context_);
   num_requests_enqueued_++;
   // Enqueue task in right list so they are available to execute
   // right away.
@@ -1372,7 +1361,7 @@ void Worker::addWithPriority(folly::Func func, int8_t priority) {
     STAT_INCR(processor_->stats_, worker_enqueued_lo_pri_work);
     lo_pri_tasks_.enqueue(std::move(func));
   }
-  SerialWorkContext::add([this] {
+  EventLoop::add([this] {
     ld_check_gt(num_requests_enqueued_.load(), 0);
     num_requests_enqueued_--;
 
@@ -1418,9 +1407,5 @@ int Worker::forcePost(std::unique_ptr<Request>& req, int8_t priority) {
   addWithPriority(std::move(func), priority);
 
   return 0;
-}
-
-std::shared_ptr<folly::RequestContext> Worker::getContext() {
-  return impl_->worker_context_;
 }
 }} // namespace facebook::logdevice

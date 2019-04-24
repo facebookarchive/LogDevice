@@ -23,8 +23,7 @@ class NodeStatsMessageCallback;
 
 class ClientWorker : public Worker {
  public:
-  ClientWorker(WorkContext::KeepAlive,
-               ClientProcessor*,
+  ClientWorker(ClientProcessor*,
                worker_id_t,
                const std::shared_ptr<UpdateableConfig>&,
                StatsHolder*,
@@ -56,7 +55,8 @@ class ClientWorker : public Worker {
    */
   NodeStatsMessageCallback* nodeStatsMessageCallback() const;
 
-  void setupWorker() override;
+ protected:
+  void onThreadStarted() override;
 
  private:
   // Pimpl, contains most of the objects we provide getters for

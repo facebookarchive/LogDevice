@@ -17,7 +17,7 @@ TicketBase::TicketBase() {
   if (!w) {
     // Two asserts to differentiate between running on a non-EventLoop
     // thread and running on a EventLoop that's not a Worker.
-    ld_check(Worker::onThisThread(false /* enforce_worker */));
+    ld_check(EventLoop::onThisThread());
     ld_check(false);
     return;
   }

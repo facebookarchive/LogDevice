@@ -43,7 +43,9 @@ class EventLoopHandle {
   explicit EventLoopHandle(EventLoop* loop,
                            size_t request_pump_capacity = 1024,
                            int requests_per_iteration = 16)
-      : event_loop_(loop), event_loop_thread_(event_loop_->getThread()) {
+      : event_loop_(loop),
+        wait_on_destruct_(true),
+        event_loop_thread_(event_loop_->getThread()) {
     request_pump_ = std::make_shared<RequestPump>(event_loop_->getEventBase(),
                                                   request_pump_capacity,
                                                   requests_per_iteration);
@@ -64,30 +66,18 @@ class EventLoopHandle {
   ~EventLoopHandle() {
     pthread_t thread_id = getThread();
 
-    // Different scenarios in which handle gets deleted.
-    // 1. Constructor failed and we never got a chance to run the thread.
-    //    Just delete EventLoop instance here. No need to shutdown request pump
-    //    or join thread.
-    // 2. EventLoopHandle shutdown for workers in Processor::shutdown.
-    //    Destruction order in this case is, workers have to be deleted before
-    //    their corresponding executor and, EventLoopHandle and consequently
-    //    EventLoop, is deleted after Workers go away. In this scenario,
-    //    Processor::shutdown invokes request pump shutdown and joins EventLoop
-    //    thread. As part of handle destructor we just delete the EventLoop
-    //    instance. CommandListener is the another handle that is destructed in
-    //    this manner because it takes a long time to join its thread.
-    // 3. EventLoopHandles associated with others entities like various
-    //    connection listeners. These do not invoke shutdown
-    //    before this destructor is invoked. For such handles, we just shutdown
-    //    here explicitly, join the thread and delete the eventloop instance.
-    if (started_ && !request_pump_->isShutdown()) {
+    if (started_) {
       // Tell EventLoop on the other end to destroy itself and terminate the
       // thread
       shutdown();
-      pthread_join(thread_id, nullptr);
+      if (wait_on_destruct_) {
+        pthread_join(thread_id, nullptr);
+      }
+    } else {
+      // start() was never called, we still own the event loop and need to
+      // delete it
+      delete event_loop_;
     }
-
-    delete event_loop_;
   }
 
   /**
@@ -107,6 +97,17 @@ class EventLoopHandle {
 
   struct event_base* getEventBase() {
     return event_loop_->getEventBase();
+  }
+
+  /**
+   * By default, EventLoopHandle destructor waits for the EventLoop thread to
+   * finish before returning.  If this method is called, the destructor will
+   * only signal to the EventLoop to shut down but not wait for it.  This can
+   * make it faster to shut down a pool of threads, by signalling to them all
+   * to stop then manually joining the threads.
+   */
+  void dontWaitOnDestruct() {
+    wait_on_destruct_ = false;
   }
 
   /**
@@ -216,7 +217,11 @@ class EventLoopHandle {
 
   std::shared_ptr<RequestPump> request_pump_;
 
+  // should we join the EventLoop thread in the destructor
+  bool wait_on_destruct_;
+
   // pthread id of the event loop thread
   pthread_t event_loop_thread_;
 };
+
 }} // namespace facebook::logdevice

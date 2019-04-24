@@ -166,7 +166,7 @@ void GetLogInfoRequest::finalize(Status status, bool delete_this) {
 }
 
 GetLogInfoRequest::~GetLogInfoRequest() {
-  const Worker* worker = Worker::onThisThread(false /* enforce_worker */);
+  const Worker* worker = static_cast<Worker*>(EventLoop::onThisThread());
   if (!worker) {
     // The request has not made it to a Worker. Do not call the callback.
     return;

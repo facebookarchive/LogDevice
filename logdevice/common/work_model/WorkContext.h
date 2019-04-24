@@ -24,14 +24,11 @@ class WorkContext : public folly::Executor {
   WorkContext& operator=(const WorkContext&) = delete;
   ~WorkContext() override;
 
-  void add(folly::Func func) override;
+  virtual void add(folly::Func func) override;
 
-  void addWithPriority(folly::Func func, int8_t priority) override;
+  virtual void addWithPriority(folly::Func func, int8_t priority) override;
   work_context_id_t getId() const;
   bool anonymous() const;
-  virtual Executor* getExecutor() {
-    return executor_.get();
-  }
 
  protected:
   bool keepAliveAcquire() override;

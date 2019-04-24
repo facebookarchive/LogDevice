@@ -7,7 +7,6 @@
  */
 
 #pragma once
-#include "folly/io/async/Request.h"
 #include "logdevice/common/Address.h"
 #include "logdevice/common/ClientID.h"
 #include "logdevice/common/Socket.h"
@@ -137,16 +136,6 @@ class Connection : public Socket {
   void onError(short direction, int socket_errno) override;
 
   void onPeerClosed() override;
-
- private:
-  void initializeContext();
-  // This makes connection agnostic of it's association to a Worker.
-  // At creation time, if the connection is created in
-  // Worker context the RequestContext associated with Worker is copied and
-  // saved off here. On various socket events, this context is used to set the
-  // per thread context and the callback can access Worker::onThisThread to
-  // fetch the Worker ptr as usual.
-  std::shared_ptr<folly::RequestContext> context_;
 };
 
 }} // namespace facebook::logdevice

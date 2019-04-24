@@ -12,7 +12,6 @@
 
 #include <boost/noncopyable.hpp>
 #include <folly/IntrusiveList.h>
-#include <folly/io/async/Request.h>
 
 #include "event2/event_struct.h"
 #include "logdevice/common/RunContext.h"
@@ -113,11 +112,8 @@ class LibeventTimer : boost::noncopyable {
   bool initialized_{false};
 
   struct event timer_;
-
-  // Use to save off worker context and used in LibeventTimer::libeventCallback
-  // when timeout happens.
-  std::shared_ptr<folly::RequestContext> context_;
-
+  // Worker instance, which created this timer.
+  Worker* worker_{nullptr};
   std::function<void()> callback_;
   bool active_ = false;
 

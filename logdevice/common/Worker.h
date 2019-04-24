@@ -20,7 +20,6 @@
 #include <folly/IntrusiveList.h>
 #include <folly/Random.h>
 #include <folly/concurrency/UnboundedQueue.h>
-#include <folly/io/async/Request.h>
 
 #include "logdevice/common/ClientID.h"
 #include "logdevice/common/EventLoop.h"
@@ -35,7 +34,6 @@
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/common/util.h"
-#include "logdevice/common/work_model/SerialWorkContext.h"
 #include "logdevice/include/ConfigSubscriptionHandle.h"
 // Think twice before adding new includes here!  This file is included in many
 // translation units and increasing its transitive dependency footprint will
@@ -187,7 +185,7 @@ class NodesConfiguration;
 template <typename Duration>
 class ChronoExponentialBackoffAdaptiveVariable;
 
-class Worker : public SerialWorkContext {
+class Worker : public EventLoop {
  public:
   /**
    * Creates and starts a Worker thread.
@@ -211,8 +209,7 @@ class Worker : public SerialWorkContext {
    *       must take this into account. For now we are safe because Processor
    *       creates all Workers before it starts sending them any requests.
    */
-  Worker(WorkContext::KeepAlive event_loop,
-         Processor* processor,
+  Worker(Processor* processor,
          worker_id_t idx,
          const std::shared_ptr<UpdateableConfig>& config,
          StatsHolder* stats = nullptr,
@@ -221,10 +218,6 @@ class Worker : public SerialWorkContext {
   ~Worker() override;
 
   static std::string getName(WorkerType type, worker_id_t idx);
-
-  static std::string makeThreadName(Processor* processor,
-                                    WorkerType type,
-                                    worker_id_t idx);
 
   /**
    * @return the identifier of this worker, in format W<type><idx>, e.g. "WG13".
@@ -238,8 +231,7 @@ class Worker : public SerialWorkContext {
    * Deprecated. It is advised that new code should not use this.
    */
   struct event_base* getEventBase() {
-    auto event_loop = checked_downcast<EventLoop*>(getExecutor());
-    return event_loop->getEventBase();
+    return EventLoop::getEventBase();
   }
 
   /**
@@ -247,8 +239,7 @@ class Worker : public SerialWorkContext {
    * Deprecated. new code should not use this.
    */
   int getThreadId() {
-    auto event_loop = checked_downcast<EventLoop*>(getExecutor());
-    return event_loop->getThreadId();
+    return EventLoop::getThreadId();
   }
 
   /**
@@ -311,7 +302,16 @@ class Worker : public SerialWorkContext {
    *                        thread, or nullptr if this thread is not running a
    *                        Worker.
    */
-  static Worker* onThisThread(bool enforce_worker = true);
+  static Worker* onThisThread(bool enforce_worker = true) {
+    if (ThreadID::isWorker()) {
+      return checked_downcast<Worker*>(EventLoop::onThisThread());
+    }
+    if (enforce_worker) {
+      // Not on a worker == assert failure
+      ld_check(false);
+    }
+    return nullptr;
+  }
 
   /**
    * @return   a pointer to the stats object of the Worker running on this
@@ -368,10 +368,6 @@ class Worker : public SerialWorkContext {
   // make this a MessageDispatch subclass.  Intentionally here to outlive
   // `impl_' (Sender, importantly).
   std::unique_ptr<MessageDispatch> message_dispatch_;
-
-  // ID used to fetch worker reference when work is posted and scheduled on some
-  // thread.
-  constexpr static folly::StringPiece kWorkerDataID{"WORKER"};
 
   // Set of active BufferedWriterShard instances on this worker.  They are
   // managed by BufferedWriter.
@@ -746,8 +742,6 @@ class Worker : public SerialWorkContext {
   // Methods used by processor to post requests to worker.
   int tryPost(std::unique_ptr<Request>& req);
 
-  // Sets up RequestContext so that executor can save it before posting the
-  // function for execution.
   // Add lo_pri work into the executor.
   void add(folly::Func func) override;
 
@@ -769,17 +763,14 @@ class Worker : public SerialWorkContext {
   int forcePost(std::unique_ptr<Request>& req,
                 int8_t priority = folly::Executor::LO_PRI);
 
-  // Get work context which is passed to all requests/tasks posted to this
-  // worker.
-  std::shared_ptr<folly::RequestContext> getContext();
-
-  virtual void setupWorker();
-
   // Execution probability distribution of different tasks. Hi Priority tasks
   // are called such because they have a higher chance of getting executed.
   static constexpr int kHiPriTaskExecDistribution = 70;
   static constexpr int kMidPriTaskExecDistribution = 0;
   static constexpr int kLoPriTaskExecDistribution = 30;
+
+ protected:
+  virtual void onThreadStarted() override;
 
  private:
   // Periodically called to report load to Processor for load-aware work

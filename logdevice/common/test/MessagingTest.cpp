@@ -63,7 +63,6 @@ struct DummySocketCallback : public SocketCallback {
     Worker::onThisThread()->sender().sendMessage(std::move(msg), to);
     // shouldn't trip an assert
     wait_sem.post();
-    delete this;
   }
 };
 
@@ -124,31 +123,30 @@ int CountingRequest::payload_sum;
  * handle, waits for the Worker thread to exit for up to 10s.
  * Verifies that request was processed.
  */
-TEST(MessagingTest, EventLoop) {
+TEST(MessagingTest, Worker) {
   pthread_t th;
-  Settings settings = create_default_settings<Settings>();
-  settings.num_workers = 1;
-  auto processor = make_test_processor(settings);
+
+  auto processor = make_test_processor(create_default_settings<Settings>());
 
   std::unique_ptr<Request> rq = std::make_unique<CountingRequest>(TEST_PAYLOAD);
 
-  auto& handles = processor->getEventLoopHandles();
-  ASSERT_EQ(handles.size(), 1);
-  auto& h = handles[0];
+  auto h = std::make_unique<EventLoopHandle>(new Worker(
+      processor.get(), worker_id_t(0), UpdateableConfig::createEmpty()));
+  h->start();
 
-  EXPECT_EQ(0, processor->postRequest(rq));
+  EXPECT_EQ(0, h->postRequest(rq));
   EXPECT_EQ(nullptr, rq.get());
 
   th = h->getThread();
   ASSERT_FALSE(pthread_equal(pthread_self(), th));
 
   // since no EventLoop is running on this thread
-  ASSERT_EQ(nullptr, EventLoop::onThisThread());
+  ASSERT_EQ(nullptr, Worker::onThisThread(/* enforce */ false));
 
   {
-    // kill the process if thread does not exit in 10s
+    // kill the process if Worker thread does not exit in 10s
     Alarm alarm(std::chrono::seconds(10));
-    processor.reset();
+    h.reset();
   }
 
   EXPECT_EQ(1, CountingRequest::n_requests_executed);
@@ -183,7 +181,7 @@ std::atomic<bool> SlowRequest::stall{true};
  * thread for a second. Posts up to a million more requests. Verifies that
  * at some point a post() fails with E::NOBUFS.
  */
-TEST(MessagingTest, DISABLED_RequestPipeOverflow) {
+TEST(MessagingTest, RequestPipeOverflow) {
   pthread_t th;
   UpdateableSettings<Settings> updateable_settings;
   auto config = UpdateableConfig::createEmpty();
@@ -191,7 +189,8 @@ TEST(MessagingTest, DISABLED_RequestPipeOverflow) {
 
   dbg::currentLevel = dbg::Level::DEBUG;
 
-  auto h = std::make_unique<EventLoopHandle>(new EventLoop());
+  auto h = std::make_unique<EventLoopHandle>(
+      new Worker(&processor, worker_id_t(0), UpdateableConfig::createEmpty()));
   h->start();
 
   th = h->getThread();
@@ -473,7 +472,7 @@ TEST(MessagingTest, OnClientClose) {
     std::unique_ptr<Request> rq =
         std::make_unique<OnClientCloseTestRequest>(clients[i][0], cid);
 
-    rv = p->blockingRequest(rq);
+    rv = p->postRequest(rq);
     EXPECT_EQ(0, rv);
     EXPECT_EQ(nullptr, rq);
   }
@@ -505,13 +504,15 @@ TEST(MessagingTest, SendFromCallback) {
           nullptr));
 
   struct SendRequest : public Request {
-    explicit SendRequest(NodeID node)
-        : Request(RequestType::TEST_MESSAGING_SEND_REQUEST), node_(node) {}
+    SendRequest(NodeID node, SocketCallback* cb)
+        : Request(RequestType::TEST_MESSAGING_SEND_REQUEST),
+          node_(node),
+          cb_(cb) {}
 
     Request::Execution execute() override {
       auto msg = std::make_unique<DUMMY_Message>(DUMMY_Header{true});
       int rv = Worker::onThisThread()->sender().sendMessage(
-          std::move(msg), node_, new DummySocketCallback());
+          std::move(msg), node_, cb_);
       EXPECT_EQ(0, rv) << "sendMessage() failed with err "
                        << errorStrings()[err].name;
       wait_sem.post();
@@ -519,6 +520,7 @@ TEST(MessagingTest, SendFromCallback) {
     }
 
     NodeID node_;
+    SocketCallback* cb_;
   };
 
   Settings settings = create_default_settings<Settings>();
@@ -527,7 +529,9 @@ TEST(MessagingTest, SendFromCallback) {
   settings.connect_throttle.max_delay = std::chrono::milliseconds::zero();
   auto p = make_test_processor(settings, config);
 
-  std::unique_ptr<Request> rq = std::make_unique<SendRequest>(target);
+  DummySocketCallback cb;
+
+  std::unique_ptr<Request> rq = std::make_unique<SendRequest>(target, &cb);
   int rv = p->postRequest(rq);
   ASSERT_EQ(0, rv);
 

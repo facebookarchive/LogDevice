@@ -190,8 +190,9 @@ void shutdown_server(
   // admin command thread.
   auto command_listener_thread = pthread_self();
   if (command_listener != nullptr) {
-    command_listener->shutdown();
+    command_listener->dontWaitOnDestruct();
     command_listener_thread = command_listener->getThread();
+    command_listener.reset();
   }
 
   if (gossip_listener) {
@@ -308,12 +309,15 @@ void shutdown_server(
     ld_info("FAILURE_DETECTOR worker stopped");
   }
 
-  if (command_listener) {
+  // Check if command_listener_thread needs to be joined. If command_listener
+  // instance was non-null then command_listener_thread will be initialized to
+  // have command_listener_thread's pthread_t id otherwise it will be set to
+  // this thread's id.
+  if (!pthread_equal(pthread_self(), command_listener_thread)) {
     // Join command listener thread.
     ld_info("Joining command listener thread.");
     int rv = pthread_join(command_listener_thread, nullptr);
     ld_check(rv == 0);
-    command_listener.reset();
   }
 
   if (admin_server) {

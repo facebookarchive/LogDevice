@@ -349,7 +349,7 @@ void FileEpochStore::postCompletionLCE(EpochStore::CompletionLCE cf,
 
   // If called from a worker thread, invoke `cf' on the same thread. Otherwise,
   // use any thread.
-  worker_id_t worker_idx = Worker::onThisThread(false /* enforce_worker */)
+  worker_id_t worker_idx = dynamic_cast<Worker*>(EventLoop::onThisThread())
       ? Worker::onThisThread()->idx_
       : worker_id_t(-1);
 
@@ -380,7 +380,7 @@ void FileEpochStore::postCompletionMetaData(
     std::unique_ptr<EpochStoreMetaProperties> meta_properties) {
   // If called from a worker thread, invoke `cf' on the same thread. Otherwise,
   // use any thread.
-  worker_id_t worker_idx = Worker::onThisThread(false /* enforce_worker */)
+  worker_id_t worker_idx = dynamic_cast<Worker*>(EventLoop::onThisThread())
       ? Worker::onThisThread()->idx_
       : worker_id_t(-1);
 

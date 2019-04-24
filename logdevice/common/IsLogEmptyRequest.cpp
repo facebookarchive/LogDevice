@@ -313,7 +313,7 @@ void IsLogEmptyRequest::finalize(Status status, bool empty, bool delete_this) {
 }
 
 IsLogEmptyRequest::~IsLogEmptyRequest() {
-  const Worker* worker = Worker::onThisThread(false /* enforce_worker */);
+  const Worker* worker = static_cast<Worker*>(EventLoop::onThisThread());
   if (!worker) {
     // The request has not made it to a Worker. Do not call the callback.
     return;

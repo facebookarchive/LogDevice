@@ -16,14 +16,8 @@
 
 namespace facebook { namespace logdevice {
 
-ServerWorker* ServerProcessor::createWorker(WorkContext::KeepAlive executor,
-                                            worker_id_t idx,
-                                            WorkerType worker_type) {
-  auto worker = new ServerWorker(
-      std::move(executor), this, idx, config_, stats_, worker_type);
-  // Finish the remaining initialization on the executor.
-  worker->add([worker] { worker->setupWorker(); });
-  return worker;
+ServerWorker* ServerProcessor::createWorker(worker_id_t i, WorkerType type) {
+  return new ServerWorker(this, i, config_, stats_, type);
 }
 
 std::unique_ptr<LogStorageState_PurgeCoordinator_Bridge>

@@ -31,8 +31,6 @@ class ClientProcessor : public Processor {
     return p;
   }
 
-  Worker* createWorker(WorkContext::KeepAlive executor,
-                       worker_id_t i,
-                       WorkerType type) override;
+  Worker* createWorker(worker_id_t i, WorkerType type) override;
 };
 }} // namespace facebook::logdevice

@@ -34,15 +34,7 @@ namespace facebook { namespace logdevice {
 class SerialWorkContext : public WorkContext {
  public:
   explicit SerialWorkContext(WorkContext::KeepAlive executor)
-      : WorkContext(folly::SerialExecutor::create(
-            folly::getKeepAliveToken(executor.get()))),
-        parent_(std::move(executor)) {}
-
-  ~SerialWorkContext() override {}
-
-  Executor* getExecutor() override {
-    return parent_.get();
-  }
+      : WorkContext(folly::SerialExecutor::create(std::move(executor))) {}
 
   void add(folly::Func func) override {
     // Serial executor will enqueue one func everytime this method is invoked
@@ -73,12 +65,6 @@ class SerialWorkContext : public WorkContext {
         },
         priority);
   }
-
- protected:
-  // folly::SerialExecutor captures the parent and does not allow to fetch it
-  // Save off the parent keep alive and create another keepAlive for the
-  // SerialExecutor.
-  WorkContext::KeepAlive parent_;
 };
 
 }} // namespace facebook::logdevice
