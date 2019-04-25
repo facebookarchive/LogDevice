@@ -44,7 +44,8 @@ class ConnectionListener : public Listener {
 
   explicit ConnectionListener(Listener::InterfaceDef iface,
                               std::shared_ptr<SharedState> shared_state,
-                              ListenerType listener_type);
+                              ListenerType listener_type,
+                              ResourceBudget& connection_backlog_budget);
 
   void setProcessor(Processor* processor) {
     processor_ = processor;
@@ -60,6 +61,7 @@ class ConnectionListener : public Listener {
                       int len) override;
 
  private:
+  ResourceBudget& connection_backlog_budget_;
   // Pointer to Processor to hand connections off to. Unowned.
   Processor* processor_ = nullptr;
   std::shared_ptr<SharedState> shared_state_;

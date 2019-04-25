@@ -32,8 +32,10 @@ namespace facebook { namespace logdevice {
 ConnectionListener::ConnectionListener(
     Listener::InterfaceDef iface,
     std::shared_ptr<SharedState> shared_state,
-    ListenerType listener_type)
+    ListenerType listener_type,
+    ResourceBudget& connection_backlog_budget)
     : Listener(std::move(iface), listenerTypeNames()[listener_type]),
+      connection_backlog_budget_(connection_backlog_budget),
       shared_state_(shared_state),
       listener_type_(listener_type) {
   ld_check(shared_state);
@@ -72,7 +74,7 @@ void ConnectionListener::acceptCallback(evutil_socket_t sock,
     LD_EV(evutil_closesocket)(sock);
     return;
   }
-  auto conn_backlog_token = processor->conn_budget_backlog_.acquireToken();
+  auto conn_backlog_token = connection_backlog_budget_.acquireToken();
 
   if (!conn_backlog_token) {
     STAT_INCR(processor->stats_, dropped_connection_burst);
@@ -121,7 +123,7 @@ void ConnectionListener::acceptCallback(evutil_socket_t sock,
              error_description(err));
     LD_EV(evutil_closesocket)(sock);
     // ~NewConnectionRequest() will also destroy the token, thus releasing the
-    // fd from conn_budget_incoming_.
+    // fd from connection_backlog_budget_.
   }
 }
 

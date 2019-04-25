@@ -77,6 +77,11 @@ struct ServerSettings : public SettingsBundle {
   // All changes to Trim points are stored in this log.
   std::string audit_log;
 
+  // (server-only setting) Maximum number of incoming connections that have been
+  // accepted by listener (have an open FD) but have not been processed by
+  // workers (made logdevice protocol handshake)
+  size_t connection_backlog;
+
   int deprecated_ssl_port;
   std::string deprecated_ssl_unix_socket;
 

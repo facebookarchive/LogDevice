@@ -268,6 +268,15 @@ class Server {
   UpdateableSettings<Settings>::SubscriptionHandle
       settings_subscription_handle_;
 
+  // ResourceBudget used to limit the total number of accepted connections
+  // which have not been processed by workers. It is the same as looking at the
+  // number of incomplete NewConnectionRequest
+  // See Settings::max_new_connections.
+  ResourceBudget conn_budget_backlog_;
+
+  // Similar to above but we don't want to limit for some listeners.
+  ResourceBudget conn_budget_backlog_unlimited_;
+
   // These methods should be called in this order.
   // In case of error, log it and return false.
   bool initListeners();

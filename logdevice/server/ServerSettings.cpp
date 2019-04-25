@@ -368,6 +368,14 @@ void ServerSettings::defineSettings(SettingEasyInit& init) {
      SERVER | REQUIRES_RESTART,
      SettingsCategory::Security)
 
+    ("connection-backlog", &connection_backlog, "2000",
+     parse_positive<ssize_t>(),
+     "(server-only setting) Maximum number of incoming connections that have "
+     "been accepted by listener (have an open FD) but have not been processed "
+     "by workers (made logdevice protocol handshake).",
+     SERVER | REQUIRES_RESTART,
+     SettingsCategory::Network)
+
     ;
   // clang-format on
 }

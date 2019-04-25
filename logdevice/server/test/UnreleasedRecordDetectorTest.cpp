@@ -31,6 +31,7 @@
 #include "logdevice/common/PrincipalParser.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/ReaderImpl.h"
+#include "logdevice/common/ResourceBudget.h"
 #include "logdevice/common/Sequencer.h"
 #include "logdevice/common/SequencerLocator.h"
 #include "logdevice/common/StaticSequencerLocator.h"
@@ -136,6 +137,7 @@ class UnreleasedRecordDetectorTest : public ::testing::Test {
   std::shared_ptr<UpdateableConfig> config_;
   std::shared_ptr<ServerProcessor> processor_;
   ConnectionListener* connection_listener_;
+  ResourceBudget budget_{std::numeric_limits<uint64_t>::max()};
   std::unique_ptr<EventLoopHandle> connection_listener_handle_;
   std::shared_ptr<UnreleasedRecordDetector> detector_;
 };
@@ -245,7 +247,9 @@ void UnreleasedRecordDetectorTest::SetUp() {
   connection_listener_ = new ConnectionListener(
       Listener::InterfaceDef(std::move(socketPath), false),
       std::make_shared<ConnectionListener::SharedState>(),
-      ConnectionListener::ListenerType::DATA);
+      ConnectionListener::ListenerType::DATA,
+      budget_);
+
   connection_listener_handle_ =
       std::make_unique<EventLoopHandle>(connection_listener_);
   connection_listener_->setProcessor(processor_.get());

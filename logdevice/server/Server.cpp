@@ -441,7 +441,9 @@ Server::Server(ServerParameters* params, std::function<void()> stop_handler)
       server_settings_(params_->getServerSettings()),
       updateable_config_(params_->getUpdateableConfig()),
       server_config_(updateable_config_->getServerConfig()),
-      settings_updater_(params_->getSettingsUpdater()) {
+      settings_updater_(params_->getSettingsUpdater()),
+      conn_budget_backlog_(server_settings_->connection_backlog),
+      conn_budget_backlog_unlimited_(std::numeric_limits<uint64_t>::max()) {
   ld_check(params_);
   ld_check(stop_handler_);
   start_time_ = std::chrono::system_clock::now();
@@ -485,12 +487,13 @@ bool Server::initListeners() {
   try {
     auto conn_shared_state =
         std::make_shared<ConnectionListener::SharedState>();
-    connection_listener_handle_ = initListener<ConnectionListener>(
-        server_settings_->port,
-        server_settings_->unix_socket,
-        false,
-        conn_shared_state,
-        ConnectionListener::ListenerType::DATA);
+    connection_listener_handle_ =
+        initListener<ConnectionListener>(server_settings_->port,
+                                         server_settings_->unix_socket,
+                                         false,
+                                         conn_shared_state,
+                                         ConnectionListener::ListenerType::DATA,
+                                         conn_budget_backlog_);
     command_listener_handle_ =
         initListener<CommandListener>(server_settings_->command_port,
                                       server_settings_->command_unix_socket,
@@ -541,7 +544,8 @@ bool Server::initListeners() {
             ssl_unix_socket,
             true,
             conn_shared_state,
-            ConnectionListener::ListenerType::DATA_SSL);
+            ConnectionListener::ListenerType::DATA_SSL,
+            conn_budget_backlog_);
       }
     }
 
@@ -573,7 +577,8 @@ bool Server::initListeners() {
             gossip_unix_socket,
             false,
             conn_shared_state,
-            ConnectionListener::ListenerType::GOSSIP);
+            ConnectionListener::ListenerType::GOSSIP,
+            conn_budget_backlog_unlimited_);
       }
     } else {
       ld_info("Gossip listener initialization not required"
