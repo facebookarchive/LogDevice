@@ -11,6 +11,8 @@
 #include <array>
 #include <unordered_map>
 
+#include <folly/container/F14Map.h>
+
 #include "logdevice/common/AuthoritativeStatus.h"
 #include "logdevice/common/EpochMetaData.h"
 #include "logdevice/common/ShardID.h"
@@ -278,28 +280,28 @@ class FailureDomainNodeSet {
     // Number of shards that are AUTHORITATIVE_EMPTY in this domain.
     size_t n_empty{0};
     // For each attribute, count the number of shards that have it.
-    std::unordered_map<AttrType, Count, HashFn> shards_attr;
+    folly::F14FastMap<AttrType, Count, HashFn> shards_attr;
   };
 
   // Aggregated data for all domains at the same scope.
   struct ScopeState {
     // The domains at that scope.
-    std::unordered_map<std::string, FailureDomainState> domains;
+    folly::F14NodeMap<std::string, FailureDomainState> domains;
     // A mapping between a shard and the domain it belongs to at that scope for
     // fast lookup.
-    std::unordered_map<ShardID, FailureDomainState*, ShardID::Hash> shard_map;
+    folly::F14FastMap<ShardID, FailureDomainState*, ShardID::Hash> shard_map;
     // Replication factor at that scope.
     size_t replication{0};
     // Number of the domains that have all their shards AUTHORITATIVE_EMPTY.
     size_t n_empty{0};
     // For each AttrType, number of domains at that scope that have all their
     // shards with the attribute. Used by isFmajority and isCompleteSet.
-    std::unordered_map<AttrType, size_t, HashFn> n_full;
+    folly::F14FastMap<AttrType, size_t, HashFn> n_full;
     // For each AttrType, set of domains at that scope that have at least one
     // shard with the attribute. canReplicate merges these sets to figure out if
     // we can replicate at each scope.
     using FDSet = std::unordered_set<const FailureDomainState*>;
-    std::unordered_map<AttrType, FDSet, HashFn> replicate_set;
+    folly::F14FastMap<AttrType, FDSet, HashFn> replicate_set;
   };
 
   struct ScopeHash {
@@ -309,7 +311,7 @@ class FailureDomainNodeSet {
   };
 
   // Contains information about all the domains at all scopes.
-  std::unordered_map<NodeLocationScope, ScopeState, ScopeHash> scopes_;
+  folly::F14FastMap<NodeLocationScope, ScopeState, ScopeHash> scopes_;
   // Accounting for the SHARD scope, which is an implicit scope for which the
   // replication factor is equal to the replication factor of the lower scope
   // defined by the user. For instance, if the user wants to replicate across 3
@@ -331,17 +333,16 @@ class FailureDomainNodeSet {
                  NodeLocationScope* fail_scope = nullptr) const;
 
   // A mapping between ShardID and its attribute value.
-  std::unordered_map<ShardID, AttrType, ShardID::Hash> shard_attribute_;
+  folly::F14FastMap<ShardID, AttrType, ShardID::Hash> shard_attribute_;
 
   // A mapping between a shard and its authoritative status.
-  std::unordered_map<ShardID, AuthoritativeStatus, ShardID::Hash>
-      shard_authoritative_;
+ AuthoritativeStatusMap shard_authoritative_;
 
   // keeping track of how many shards are in each AuthoritativeStatus.
   std::array<size_t, static_cast<size_t>(AuthoritativeStatus::Count)>
       authoritative_count_{};
 
-  std::unordered_map<AttrType, size_t, HashFn> attribute_count_;
+  folly::F14FastMap<AttrType, size_t, HashFn> attribute_count_;
 
   // For performance, even in debug builds, checkConsistency() is not called
   // every time in setShardAttribute() or setShardAuthoritativeStatus(); this

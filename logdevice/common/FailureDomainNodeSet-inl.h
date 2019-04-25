@@ -270,7 +270,7 @@ void FailureDomainNodeSet<AttrType, HashFn>::setShardAuthoritativeStatusAtScope(
   // attributes. Record which ones are currently complete so we can assess what
   // changed later. Note: there are probably more efficient ways to do this but
   // it's not worth the added complexity.
-  std::unordered_map<AttrType, bool, HashFn> was_complete;
+  folly::F14FastMap<AttrType, bool, HashFn> was_complete;
   for (auto& it_attr : fd->shards_attr) {
     const auto a = it_attr.first;
     was_complete[a] = domainIsComplete(*fd, a);
@@ -533,7 +533,7 @@ void FailureDomainNodeSet<AttrType, HashFn>::checkConsistencyAtScope(
     const ScopeState& scope) const {
   // 1/ Build a list of FailureDomainState objects by looking at the state of
   // each shard.
-  std::unordered_map<const FailureDomainState*, FailureDomainState> domains;
+  folly::F14FastMap<const FailureDomainState*, FailureDomainState> domains;
   for (auto it_shard : scope.shard_map) {
     const FailureDomainState* fd = it_shard.second;
     FailureDomainState* fd_expected = &domains[fd];
@@ -560,8 +560,8 @@ void FailureDomainNodeSet<AttrType, HashFn>::checkConsistencyAtScope(
 
   // 2/ Aggregate that data...
   size_t expected_n_empty = 0;
-  std::unordered_map<AttrType, size_t, HashFn> expected_n_full;
-  std::unordered_map<AttrType, typename ScopeState::FDSet, HashFn>
+  folly::F14FastMap<AttrType, size_t, HashFn> expected_n_full;
+  folly::F14FastMap<AttrType, typename ScopeState::FDSet, HashFn>
       expected_replicate_set;
   for (auto it : domains) {
     const FailureDomainState* fd_expected = &it.second;
