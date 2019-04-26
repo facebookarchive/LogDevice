@@ -187,15 +187,15 @@ void EventLoop::run() {
 
   running_ = true;
 
+  ThreadID::set(thread_type_, thread_name_);
+
+  EventLoop::thisThreadLoop = this; // save in a thread-local
+
   // Initiate runs to detect eventloop delays.
   using namespace std::chrono_literals;
   delay_us_.store(std::chrono::milliseconds(0));
   scheduled_event_start_time_ = std::chrono::steady_clock::time_point::min();
   evtimer_add(scheduled_event_, getCommonTimeout(1s));
-
-  ThreadID::set(thread_type_, thread_name_);
-
-  EventLoop::thisThreadLoop = this; // save in a thread-local
   onThreadStarted();
 
   ld_check(base_);
