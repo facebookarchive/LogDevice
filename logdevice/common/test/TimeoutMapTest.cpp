@@ -18,27 +18,23 @@ using namespace facebook::logdevice;
 #define TIMEOUT_MAP_SIZE 10
 
 TEST(TimeoutMap, Correctness) {
-  int i;
-  struct event_base* base = LD_EV(event_base_new)();
+  event_base* base = LD_EV(event_base_new)();
   SCOPE_EXIT {
     LD_EV(event_base_free)(base);
   };
   TimeoutMap tm(base, TIMEOUT_MAP_SIZE);
-  struct timeval tv_buf;
-
-  for (i = 0; i < TIMEOUT_MAP_SIZE; i++) {
-    const struct timeval* tqid = tm.get(std::chrono::milliseconds(i), &tv_buf);
-    ASSERT_FALSE(tqid->tv_sec == 0 && tqid->tv_usec == i * 1000);
-    ASSERT_NE(tqid, &tv_buf);
+  std::vector<std::pair<int, const timeval*>> timers;
+  for (int i = 0; i < TIMEOUT_MAP_SIZE; ++i) {
+    const timeval* tqid = tm.get(std::chrono::milliseconds(i));
+    ASSERT_NE(nullptr, tqid);
+    timers.push_back(std::pair<int, const timeval*>(i, tqid));
   }
 
-  for (i = 0; i < TIMEOUT_MAP_SIZE; i++) {
-    const struct timeval* tqid = tm.get(std::chrono::milliseconds(i), &tv_buf);
-    ASSERT_FALSE(tqid->tv_sec == 0 && tqid->tv_usec == i * 1000);
-    ASSERT_NE(tqid, &tv_buf);
+  for (const auto& timer : timers) {
+    const timeval* tqid = tm.get(std::chrono::milliseconds(timer.first));
+    ASSERT_EQ(timer.second, tqid);
   }
 
-  const struct timeval* tmo = tm.get(std::chrono::milliseconds(i), &tv_buf);
-  ASSERT_TRUE(tmo->tv_sec == 0 && tmo->tv_usec == i * 1000);
-  ASSERT_EQ(tmo, &tv_buf);
+  const timeval* tmo = tm.get(std::chrono::milliseconds(TIMEOUT_MAP_SIZE));
+  ASSERT_EQ(nullptr, tmo);
 }

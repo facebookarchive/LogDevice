@@ -152,7 +152,7 @@ class ShapingContainer {
         deps_->stat_incr_fg_run_deadline_exceeded();
         flow_groups_run_requested_time_ = SteadyTimestamp::now();
         evtimer_add(flow_groups_run_deadline_exceeded_,
-                    Worker::onThisThread()->zero_timeout_);
+                    Worker::onThisThread()->getZeroTimeout());
         break;
       }
     }

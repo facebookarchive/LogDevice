@@ -98,6 +98,12 @@ TestSocketDependencies::getCommonTimeout(std::chrono::milliseconds /*t*/) {
   return nullptr;
 }
 
+const timeval*
+TestSocketDependencies::getTimevalFromMilliseconds(std::chrono::milliseconds) {
+  // This is passed to evtimerAdd and ignored.
+  return nullptr;
+}
+
 const struct timeval* TestSocketDependencies::getZeroTimeout() {
   // This is passed to evtimerAdd and ignored.
   return nullptr;

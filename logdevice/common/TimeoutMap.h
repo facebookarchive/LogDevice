@@ -10,7 +10,8 @@
 #include <chrono>
 #include <ctime>
 #include <functional>
-#include <unordered_map>
+
+#include <folly/container/F14Map.h>
 
 struct event_base;
 
@@ -52,24 +53,21 @@ class TimeoutMap {
   /**
    * Converts the timeout in microseconds to a struct timeval to be used as a
    * libevent timeout. The result may be a libevent "common timeout" or a
-   * straightforward conversion into the supplied tv_buf.
+   * nullptr if we reached the limit of common timeouts.
    *
    * @return   if _timeout_ is in map_, return a pointer to the corresponding
    *           libevent timer queue identifier as a fake struct timeval. If the
    *           timeout value is not found and the map has fewer than max_size_
    *           entries, add an entry and return a new timer queue id. If the
-   *           map is full, copy timeout into tv_buf converting it to struct
-   *           timeval, and return tv_buf.
+   *           map is full return nullptr.
    */
-  const struct timeval* get(std::chrono::microseconds timeout,
-                            struct timeval* tv_buf);
-
-  bool add(std::chrono::microseconds timeout, const struct timeval* tv_buf);
+  const struct timeval* get(std::chrono::microseconds timeout);
 
  private:
-  std::unordered_map<std::chrono::microseconds,
-                     const struct timeval*,
-                     MicrosecondsHash>
+  const struct timeval* add(std::chrono::microseconds timeout);
+  folly::F14FastMap<std::chrono::microseconds,
+                    const struct timeval*,
+                    MicrosecondsHash>
       map_;
 
   // event base for which we are generating timeout queue identifiers

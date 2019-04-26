@@ -29,9 +29,6 @@ namespace facebook { namespace logdevice {
 
 __thread EventLoop* EventLoop::thisThreadLoop;
 
-static const struct timeval tv_zero { 0, 0 };
-static const struct timeval tv_sched_event { 1, 0 };
-
 static struct event_base* createEventBase() {
   int rv;
   struct event_base* base = LD_EV(event_base_new)();
@@ -66,18 +63,11 @@ static void deleteEventBase(struct event_base* base) {
 
 EventLoop::EventLoop(std::string thread_name, ThreadID::Type thread_type)
     : base_(createEventBase(), deleteEventBase),
-      zero_timeout_(
-          base_ ? LD_EV(event_base_init_common_timeout)(base_.get(), &tv_zero)
-                : nullptr),
       thread_type_(thread_type),
       thread_name_(thread_name),
       thread_(pthread_self()), // placeholder serving as "invalid" value
       running_(false),
       shutting_down_(false),
-      sched_timeout_(
-          base_ ? LD_EV(event_base_init_common_timeout)(base_.get(),
-                                                        &tv_sched_event)
-                : nullptr),
       disposer_(this),
       common_timeouts_(base_.get(), kMaxFastTimeouts) {
   int rv;
@@ -88,7 +78,7 @@ EventLoop::EventLoop(std::string thread_name, ThreadID::Type thread_type)
     throw ConstructorFailed();
   }
 
-  ld_check(zero_timeout_);
+  ld_check(common_timeouts_.get(std::chrono::milliseconds(0)));
 
   scheduled_event_ = LD_EV(event_new)(
       base_.get(), -1, 0, EventHandler<EventLoop::delayCheckCallback>, this);
@@ -96,8 +86,6 @@ EventLoop::EventLoop(std::string thread_name, ThreadID::Type thread_type)
     ld_error("Failed to initialize scheduled event.");
     throw ConstructorFailed();
   }
-
-  ld_check(sched_timeout_);
 
   rv = pthread_attr_init(&attr);
   if (rv != 0) { // unlikely
@@ -121,14 +109,6 @@ EventLoop::EventLoop(std::string thread_name, ThreadID::Type thread_type)
   if (rv != 0) {
     ld_error(
         "Failed to start an EventLoop thread, errno=%d (%s)", rv, strerror(rv));
-    err = E::SYSLIMIT;
-    throw ConstructorFailed();
-  }
-
-  if (!common_timeouts_.add(std::chrono::microseconds(0), zero_timeout_)) {
-    ld_error("Failed to add zero timeout to common timeouts, errno=%d (%s)",
-             rv,
-             strerror(rv));
     err = E::SYSLIMIT;
     throw ConstructorFailed();
   }
@@ -177,9 +157,10 @@ void* EventLoop::enter(void* self) {
 void EventLoop::delayCheckCallback(void* arg, short) {
   EventLoop* self = (EventLoop*)arg;
   using namespace std::chrono;
+  using namespace std::chrono_literals;
   auto now = steady_clock::now();
   if (self->scheduled_event_start_time_ != steady_clock::time_point::min()) {
-    evtimer_add(self->scheduled_event_, self->sched_timeout_);
+    evtimer_add(self->scheduled_event_, self->getCommonTimeout(1s));
     if (now > self->scheduled_event_start_time_) {
       auto diff = now - self->scheduled_event_start_time_;
       auto cur_delay = duration_cast<microseconds>(diff);
@@ -187,7 +168,7 @@ void EventLoop::delayCheckCallback(void* arg, short) {
     }
     self->scheduled_event_start_time_ = steady_clock::time_point::min();
   } else {
-    evtimer_add(self->scheduled_event_, self->zero_timeout_);
+    evtimer_add(self->scheduled_event_, self->getZeroTimeout());
     self->scheduled_event_start_time_ = now;
   }
 }
@@ -207,9 +188,10 @@ void EventLoop::run() {
   running_ = true;
 
   // Initiate runs to detect eventloop delays.
+  using namespace std::chrono_literals;
   delay_us_.store(std::chrono::milliseconds(0));
   scheduled_event_start_time_ = std::chrono::steady_clock::time_point::min();
-  evtimer_add(scheduled_event_, sched_timeout_);
+  evtimer_add(scheduled_event_, getCommonTimeout(1s));
 
   ThreadID::set(thread_type_, thread_name_);
 

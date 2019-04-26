@@ -1138,6 +1138,8 @@ class SocketDependencies {
   virtual void evtimerDel(struct event* ev);
   virtual int evtimerPending(struct event* ev, struct timeval* tv = nullptr);
   virtual const struct timeval* getCommonTimeout(std::chrono::milliseconds t);
+  virtual const timeval*
+  getTimevalFromMilliseconds(std::chrono::milliseconds t);
   virtual const struct timeval* getZeroTimeout();
   virtual int evtimerAdd(struct event* ev, const struct timeval* timeout);
   virtual struct bufferevent* buffereventSocketNew(int sfd,

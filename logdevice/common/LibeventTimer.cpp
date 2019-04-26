@@ -56,14 +56,15 @@ void LibeventTimer::assign(struct event_base* base,
 void LibeventTimer::activate(std::chrono::microseconds delay,
                              TimeoutMap* timeout_map) {
   struct timeval tv_buf;
-  const struct timeval* tv;
+  const struct timeval* tv{nullptr};
   if (timeout_map == nullptr && EventLoop::onThisThread()) {
     timeout_map = &EventLoop::onThisThread()->commonTimeouts();
   }
 
   if (timeout_map != nullptr) {
-    tv = timeout_map->get(delay, &tv_buf);
-  } else {
+    tv = timeout_map->get(delay);
+  }
+  if (!tv) {
     tv_buf.tv_sec = delay.count() / 1000000;
     tv_buf.tv_usec = delay.count() % 1000000;
     tv = &tv_buf;

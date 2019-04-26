@@ -20,41 +20,29 @@ TimeoutMap::TimeoutMap(struct event_base* base, int max_size)
   ld_check(max_size >= 0);
 }
 
-bool TimeoutMap::add(std::chrono::microseconds timeout,
-                     const struct timeval* tv_buf) {
+const struct timeval* TimeoutMap::add(std::chrono::microseconds timeout) {
   if (map_.size() >= static_cast<unsigned>(max_size_))
-    return false;
+    return nullptr;
 
-  map_.insert(std::make_pair(timeout, tv_buf));
-  return true;
+  struct timeval tv_buf;
+  tv_buf.tv_sec = timeout.count() / 1000000;
+  tv_buf.tv_usec = timeout.count() % 1000000;
+  const struct timeval* timer_queue_id =
+      LD_EV(event_base_init_common_timeout)(base_, &tv_buf);
+  if (timer_queue_id) {
+    map_.insert(std::make_pair(timeout, timer_queue_id));
+  }
+  return timer_queue_id;
 }
 
-const struct timeval* TimeoutMap::get(std::chrono::microseconds timeout,
-                                      struct timeval* tv_buf) {
-  ld_check(tv_buf);
-
+const struct timeval* TimeoutMap::get(std::chrono::microseconds timeout) {
   const auto pos = map_.find(timeout);
 
   if (pos != map_.end()) {
-    ld_check(pos->second);
     return pos->second;
   }
 
-  tv_buf->tv_sec = timeout.count() / 1000000;
-  tv_buf->tv_usec = timeout.count() % 1000000;
-
-  if (map_.size() < static_cast<unsigned>(max_size_)) {
-    const struct timeval* timer_queue_id =
-        LD_EV(event_base_init_common_timeout)(base_, tv_buf);
-    ld_check(timer_queue_id);
-
-    auto res = map_.insert(std::make_pair(timeout, timer_queue_id));
-    ld_check(res.second);
-
-    return timer_queue_id;
-  }
-
-  return tv_buf;
+  return add(timeout);
 }
 
 }} // namespace facebook::logdevice

@@ -138,10 +138,13 @@ class EventLoop : public folly::Executor {
   // Convenience function so callers of commonTimeouts().get() don't need
   // to declare a local timeval. Must only be used from the Worker's thread.
   template <typename Duration>
-  const struct timeval* getCommonTimeout(Duration d) {
+  const timeval* getCommonTimeout(Duration d) {
     ld_check(EventLoop::onThisThread() == this);
     auto timeout = std::chrono::duration_cast<std::chrono::microseconds>(d);
-    return commonTimeouts().get(timeout, &get_common_tv_buf_);
+    return commonTimeouts().get(timeout);
+  }
+  const timeval* getZeroTimeout() {
+    return commonTimeouts().get(std::chrono::milliseconds(0));
   }
 
   static const int PRIORITY_LOW = 2;    // lowest priority
@@ -157,15 +160,6 @@ class EventLoop : public folly::Executor {
   std::unique_ptr<event_base, std::function<void(event_base*)>> base_;
 
  public:
-  // a pointer to a fake struct timeval that event_base_init_common_timeout()
-  // returned for this event_base and 0 duration. We use this to minimize the
-  // overhead of adding and deleting common zero-timeout timers. See
-  // event_base_init_common_timeout() for details.
-  //
-  // This has to be defined below base_ because of initialization order in
-  // the constructor. Socket needs this constant as well, so I made it public.
-  const struct timeval* const zero_timeout_;
-
   // total number of event handlers that libevent has called so far
   std::atomic<size_t> event_handlers_called_{0};
   // total number of event handlerss that finished processing and returned
@@ -237,7 +231,6 @@ class EventLoop : public folly::Executor {
   // Every 1s schedules a zero timeout event and notes delays in
   // executing this event. This indicates how long it takes to service a active
   // event on eventloop
-  const struct timeval* const sched_timeout_;
   static void delayCheckCallback(void* arg, short);
   struct event* scheduled_event_;
   std::chrono::steady_clock::time_point scheduled_event_start_time_{
@@ -253,8 +246,6 @@ class EventLoop : public folly::Executor {
   // TimeoutMap to cache common timeouts.
   TimeoutMap common_timeouts_;
 
-  // Storage for getTimeoutCommon().
-  mutable struct timeval get_common_tv_buf_;
   // Size limit for commonTimeouts_ (NB: libevent has a default upper bound
   // of MAX_COMMON_TIMEOUTS = 256)
   static const int kMaxFastTimeouts = 200;

@@ -2314,10 +2314,12 @@ size_t Socket::getTcpSendBufSize() const {
 
 void Socket::addHandshakeTimeoutEvent() {
   std::chrono::milliseconds timeout = getSettings().handshake_timeout;
-
   if (timeout.count() > 0) {
-    deps_->evtimerAdd(
-        &handshake_timeout_event_, deps_->getCommonTimeout(timeout));
+    const timeval* tvp = deps_->getCommonTimeout(timeout);
+    if (!tvp) {
+      tvp = deps_->getTimevalFromMilliseconds(timeout);
+    }
+    deps_->evtimerAdd(&handshake_timeout_event_, tvp);
   }
 }
 
@@ -2326,8 +2328,11 @@ void Socket::addConnectAttemptTimeoutEvent() {
   if (timeout.count() > 0) {
     timeout *=
         pow(getSettings().connect_timeout_retry_multiplier, retries_so_far_);
-    deps_->evtimerAdd(
-        &connect_timeout_event_, deps_->getCommonTimeout(timeout));
+    const timeval* tvp = deps_->getCommonTimeout(timeout);
+    if (!tvp) {
+      tvp = deps_->getTimevalFromMilliseconds(timeout);
+    }
+    deps_->evtimerAdd(&connect_timeout_event_, tvp);
   }
 }
 
@@ -2568,9 +2573,16 @@ const struct timeval*
 SocketDependencies::getCommonTimeout(std::chrono::milliseconds timeout) {
   return EventLoop::onThisThread()->getCommonTimeout(timeout);
 }
+const timeval*
+SocketDependencies::getTimevalFromMilliseconds(std::chrono::milliseconds t) {
+  static thread_local timeval tv_buf{0, 0};
+  tv_buf.tv_sec = t.count() / 1000000;
+  tv_buf.tv_usec = t.count() % 1000000;
+  return &tv_buf;
+}
 
 const struct timeval* SocketDependencies::getZeroTimeout() {
-  return EventLoop::onThisThread()->zero_timeout_;
+  return EventLoop::onThisThread()->getZeroTimeout();
 }
 
 int SocketDependencies::evtimerAdd(struct event* ev,

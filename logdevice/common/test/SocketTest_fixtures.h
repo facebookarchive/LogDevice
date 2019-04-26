@@ -66,6 +66,8 @@ class TestSocketDependencies : public SocketDependencies {
   virtual int evtimerPending(struct event* ev, struct timeval* tv) override;
   virtual const struct timeval*
   getCommonTimeout(std::chrono::milliseconds t) override;
+  virtual const timeval*
+  getTimevalFromMilliseconds(std::chrono::milliseconds t) override;
   virtual const struct timeval* getZeroTimeout() override;
   virtual int evtimerAdd(struct event* ev,
                          const struct timeval* timeout) override;
