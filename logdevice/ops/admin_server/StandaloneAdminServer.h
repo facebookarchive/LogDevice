@@ -69,8 +69,12 @@ class StandaloneAdminServer {
   Semaphore main_thread_sem_;
   std::atomic<bool> shutdown_requested_{false};
 
+  void initServerConfig();
+  void initNodesConfiguration();
   void initStatsCollection();
   void initProcessor();
+  void initNodesConfigurationManager();
+  void initLogsConfigManager();
   void initClusterStateRefresher();
   void initAdminServer();
   void initEventLog();

@@ -13,10 +13,13 @@
 #include <folly/futures/Future.h>
 
 #include "logdevice/common/ConfigInit.h"
+#include "logdevice/common/NodesConfigurationInit.h"
+#include "logdevice/common/NodesConfigurationPublisher.h"
 #include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/WheelTimer.h"
 #include "logdevice/common/ZookeeperClient.h"
 #include "logdevice/common/configuration/logs/LogsConfigManager.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationManagerFactory.h"
 #include "logdevice/common/event_log/EventLogStateMachine.h"
 #include "logdevice/common/plugin/AdminServerFactory.h"
 #include "logdevice/common/plugin/LocationProvider.h"
@@ -97,17 +100,41 @@ void StandaloneAdminServer::start() {
   }
   // Loading the config
   updateable_config_ = std::make_shared<UpdateableConfig>();
-  std::unique_ptr<LogsConfig> logs_cfg;
 
   server_config_subscription_ =
       updateable_config_->updateableServerConfig()->addHook(std::bind(
           &StandaloneAdminServer::onConfigUpdate, this, std::placeholders::_1));
 
-  ConfigParserOptions options;
-  options.alternative_layout_property = settings_->alternative_layout_property;
+  initServerConfig();
+  initNodesConfiguration();
+
+  {
+    // publish the NodesConfiguration for the first time. Later a
+    // long-living subscribing NodesConfigurationPublisher will be created again
+    // in Processor
+    // TODO(T43023435): use an actual TraceLogger to log this initial update.
+    NodesConfigurationPublisher publisher(
+        updateable_config_,
+        settings_,
+        std::make_shared<NoopTraceLogger>(updateable_config_),
+        /*subscribe*/ false);
+    ld_check(updateable_config_->getNodesConfiguration() != nullptr);
+  }
+
+  initStatsCollection();
+  initProcessor();
+  initNodesConfigurationManager();
+  initLogsConfigManager();
+  initClusterStateRefresher();
+  initEventLog();
+  initAdminServer();
+}
+
+void StandaloneAdminServer::initServerConfig() {
+  ld_check(updateable_config_);
+  ld_check(plugin_registry_);
 
   ConfigInit config_init(settings_->initial_config_load_timeout);
-
   int rv = config_init.attach(server_settings_->config_path,
                               plugin_registry_,
                               updateable_config_,
@@ -117,11 +144,39 @@ void StandaloneAdminServer::start() {
     ld_critical("Could not load the config file.");
     throw StandaloneAdminServerFailed();
   }
-  initStatsCollection();
-  initProcessor();
-  initClusterStateRefresher();
-  initEventLog();
-  initAdminServer();
+}
+
+void StandaloneAdminServer::initNodesConfiguration() {
+  using namespace facebook::logdevice::configuration::nodes;
+
+  ld_check(updateable_config_);
+  ld_check(plugin_registry_);
+
+  if (!settings_->enable_nodes_configuration_manager) {
+    ld_info("Not fetching the inital NodesConfiguration because "
+            "NodesConfigurationManager is disabled.");
+    return;
+  }
+
+  // AdminServer should use a ZK based NodesConfigurationStore.
+  auto params = NodesConfigurationStoreFactory::Params();
+  params.type = NodesConfigurationStoreFactory::NCSType::Zookeeper;
+  params.zk_client_factory =
+      plugin_registry_->getSinglePlugin<ZookeeperClientFactory>(
+          PluginType::ZOOKEEPER_CLIENT_FACTORY);
+  params.zk_config = updateable_config_->getZookeeperConfig();
+  params.path = NodesConfigurationStoreFactory::getDefaultConfigStorePath(
+      params.type, updateable_config_->getServerConfig()->getClusterName());
+
+  auto store = NodesConfigurationStoreFactory::create(std::move(params));
+  NodesConfigurationInit config_init(std::move(store), settings_);
+  auto success = config_init.initWithoutProcessor(
+      updateable_config_->updateableNCMNodesConfiguration());
+  if (!success) {
+    ld_critical("Failed to load the initial NodesConfiguration.");
+    throw StandaloneAdminServerFailed();
+  }
+  ld_check(updateable_config_->getNodesConfigurationFromNCMSource() != nullptr);
 }
 
 void StandaloneAdminServer::initProcessor() {
@@ -142,7 +197,54 @@ void StandaloneAdminServer::initProcessor() {
                                        plugin_registry_,
                                        /* credentials= */ "",
                                        "admin-server");
+}
 
+void StandaloneAdminServer::initNodesConfigurationManager() {
+  using namespace facebook::logdevice::configuration::nodes;
+
+  ld_check(processor_);
+  ld_check(updateable_config_);
+
+  if (!settings_->enable_nodes_configuration_manager) {
+    ld_info(
+        "NodesConfigurationManager is not enabled in the settings. Moving on.");
+    return;
+  }
+
+  auto initial_nc = updateable_config_->getNodesConfigurationFromNCMSource();
+  ld_check(initial_nc);
+
+  // TODO: get NCS from NodesConfigurationInit instead
+  auto params = NodesConfigurationStoreFactory::Params();
+  params.type = NodesConfigurationStoreFactory::NCSType::Zookeeper;
+  params.zk_client_factory =
+      plugin_registry_->getSinglePlugin<ZookeeperClientFactory>(
+          PluginType::ZOOKEEPER_CLIENT_FACTORY);
+  params.zk_config = updateable_config_->getZookeeperConfig();
+  params.path = NodesConfigurationStoreFactory::getDefaultConfigStorePath(
+      params.type, updateable_config_->getServerConfig()->getClusterName());
+  auto store = NodesConfigurationStoreFactory::create(std::move(params));
+
+  auto ncm = NodesConfigurationManagerFactory::create(
+      NodesConfigurationManager::OperationMode::forTooling(),
+      processor_.get(),
+      std::move(store));
+  if (ncm == nullptr) {
+    ld_critical("Unable to create NodesConfigurationManager during server "
+                "creation!");
+    throw ConstructorFailed();
+  }
+
+  if (!ncm->init(std::move(initial_nc))) {
+    ld_critical(
+        "Processing initial NodesConfiguration did not finish in time.");
+    throw ConstructorFailed();
+  }
+  ld_info("NodesConfigurationManager started successfully.");
+}
+
+void StandaloneAdminServer::initLogsConfigManager() {
+  ld_check(processor_);
   if (!LogsConfigManager::createAndAttach(
           *processor_, false /* is_writable */)) {
     err = E::INVALID_CONFIG;
