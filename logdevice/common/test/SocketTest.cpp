@@ -588,5 +588,21 @@ TEST_F(ClientSocketTest, CloseConnectionOnProtocolChecksumMismatch) {
       Compatibility::MIN_PROTOCOL_SUPPORTED, Message::MAX_LEN));
   ld_check(socket_->isClosed());
 }
+// Test that we can reconnect after error
+TEST_F(ClientSocketTest, ReconnectPossible) {
+  // If buffereventSocketConnect returns -1 with err set to ENETUNREACH,
+  // connect() should fail immediately with E::UNROUTABLE.
+  setNextConnectAttempsStatus(ENETUNREACH);
+  int rv = socket_->connect();
+  ASSERT_EQ(-1, rv);
+  ASSERT_EQ(E::UNROUTABLE, err);
+  setNextConnectAttempsStatus(0);
+  rv = socket_->connect();
+  ASSERT_EQ(E::DISABLED, err);
+  ASSERT_EQ(-1, rv);
+  socket_->resetConnectThrottle();
+  rv = socket_->connect();
+  ASSERT_EQ(0, rv);
+}
 
 }} // namespace facebook::logdevice

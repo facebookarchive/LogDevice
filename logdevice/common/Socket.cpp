@@ -511,6 +511,10 @@ int Socket::connect() {
   int rv = doConnectAttempt();
   if (rv != 0) {
     connect_throttle_.connectFailed();
+    if (bev_) {
+      STAT_INCR(deps_->getStats(), num_connections);
+      close(err);
+    }
     return -1; // err set by doConnectAttempt
   }
   if (isSSL()) {
