@@ -7,12 +7,11 @@
  */
 #pragma once
 
-#include <boost/noncopyable.hpp>
+#include <assert.h>
+
 #include <folly/Memory.h>
 #include <folly/ScopeGuard.h>
 #include <folly/synchronization/LifoSem.h>
-
-#include "logdevice/common/checks.h"
 
 namespace facebook { namespace logdevice {
 namespace detail {
@@ -27,11 +26,14 @@ namespace detail {
 ///
 /// Unlike a Baton, post and wait are cumulative.  It is explicitly allowed
 /// to post() twice and then expect two wait()s or consume()s to succeed.
-struct EventFdBatonBase : boost::noncopyable {
+struct EventFdBatonBase {
   const int fd;
 
   /// Throws an exception if an eventfd can't be opened
-  EventFdBatonBase();
+  explicit EventFdBatonBase();
+
+  EventFdBatonBase(EventFdBatonBase const&) = delete;
+  EventFdBatonBase& operator=(EventFdBatonBase const&) = delete;
 
   ~EventFdBatonBase() noexcept;
 
@@ -69,9 +71,9 @@ struct EventFdBaton : public EventFdBatonBase {
     auto max = std::chrono::time_point<Clock, Duration>::max();
     // deadline support currently unimplemented, and as of this
     // writing, unused.  Consider implementing
-    // EventFdBatonBase::try_wait_until if you hit this CHECK.
-    CHECK_EQ(
-        deadline.time_since_epoch().count(), max.time_since_epoch().count());
+    // EventFdBatonBase::try_wait_until if you hit this assert.
+    assert(deadline.time_since_epoch().count() ==
+           max.time_since_epoch().count());
     EventFdBatonBase::wait();
     return true;
   }
@@ -120,7 +122,7 @@ struct LifoEventSemImpl
     ~AsyncWaiter() noexcept {
       // If the fd isn't readable, then the node is still linked into
       // the semaphore
-      ld_assert(node_->handoff().poll(0));
+      assert(node_->handoff().poll(0));
     }
 
     /// The file descriptor that will be readable when the asynchronous
@@ -156,7 +158,7 @@ struct LifoEventSemImpl
       // we ignore owner_.isShutdown and let notification flow throw the
       // nodes, so that we can implement draining semantics
       if (UNLIKELY(node_->isShutdownNotice())) {
-        ld_check(owner_.isShutdown());
+        assert(owner_.isShutdown());
         throw folly::ShutdownSemError("semaphore has been shut down");
       }
 
@@ -200,7 +202,7 @@ struct LifoEventSemImpl
       }
 
       try {
-        ld_check(maxBatchSize > 0);
+        assert(maxBatchSize > 0);
         auto extra = maxBatchSize > 1 ? owner_.tryWait(maxBatchSize - 1) : 0;
         func(1 + extra);
       } catch (...) {
@@ -226,7 +228,7 @@ struct LifoEventSemImpl
     void beginWait() {
       auto rv = owner_.tryWaitOrPush(*node_);
       if (rv != WaitResult::PUSH) {
-        ld_check(rv == WaitResult::DECR || rv == WaitResult::SHUTDOWN);
+        assert(rv == WaitResult::DECR || rv == WaitResult::SHUTDOWN);
 
         // If semaphore decr succeeded immediately the node didn't
         // get pushed, since LifoSemBase is expecting us to elide the
@@ -269,7 +271,7 @@ struct LifoEventSemImpl
           throw std::runtime_error("unable to recycle AsyncWaiter");
         }
       } else {
-        ld_check(rv == WaitResult::DECR || rv == WaitResult::SHUTDOWN);
+        assert(rv == WaitResult::DECR || rv == WaitResult::SHUTDOWN);
         // in both of these states we want fd() to remain readable,
         // so we just leave the existing value there
       }

@@ -32,11 +32,11 @@ void EventFdBatonBase::post() {
   while ((n = ::write(fd, &val, sizeof(val))) == -1) {
     // any errno besides EINTR violates the spec, and is therefore a
     // logic error
-    ld_check(errno == EINTR);
+    assert(errno == EINTR);
   }
   // any return value except -1 or n violates the spec, and is therefore
   // a logic error
-  ld_check(n == sizeof(val));
+  assert(n == sizeof(val));
 }
 
 bool EventFdBatonBase::poll(int timeoutMillis) {
@@ -49,11 +49,11 @@ bool EventFdBatonBase::poll(int timeoutMillis) {
 
     if (rv == 1) {
       // fd is readable
-      ld_check(poll_info.revents != 0);
+      assert(poll_info.revents != 0);
       return true;
     } else if (rv == 0) {
       // timed out
-      ld_check(timeoutMillis != -1);
+      assert(timeoutMillis != -1);
       return false;
     }
     // else retry
@@ -62,7 +62,7 @@ bool EventFdBatonBase::poll(int timeoutMillis) {
     int e = errno;
     if (e != EINTR && e != ENOMEM) {
       // this shouldn't happen by my reading of the manpage
-      ld_check(false);
+      assert(false);
       return false;
     }
 
@@ -83,11 +83,11 @@ bool EventFdBatonBase::consume() {
       return false;
     }
     // any error except EINTR or EAGAIN is a logic error
-    ld_check(errno == EINTR);
+    assert(errno == EINTR);
   }
   // any read except uint64_t(1) is a logic error when using EFD_SEMAPHORE
-  ld_check(n == sizeof(val));
-  ld_check(val == 1);
+  assert(n == sizeof(val));
+  assert(val == 1);
   return true;
 }
 
@@ -95,7 +95,7 @@ void EventFdBatonBase::wait() {
   if (!consume()) {
     poll();
     auto f = consume();
-    ld_check(f);
+    assert(f);
     (void)f;
   }
 }
