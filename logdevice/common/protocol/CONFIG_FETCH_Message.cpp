@@ -63,8 +63,10 @@ bool CONFIG_FETCH_Message::isCallerWaitingForCallback() const {
 }
 
 Message::Disposition CONFIG_FETCH_Message::onReceived(const Address& from) {
-  ld_info("CONFIG_FETCH received from %s",
-          Sender::describeConnection(from).c_str());
+  RATELIMIT_INFO(std::chrono::seconds(20),
+                 1,
+                 "CONFIG_FETCH messages received. E.g., from %s",
+                 Sender::describeConnection(from).c_str());
 
   switch (header_.config_type) {
     case CONFIG_FETCH_Header::ConfigType::LOGS_CONFIG:
