@@ -34,8 +34,6 @@ void BoycottTracker::calculateBoycotts(
 
   const auto current_time_ns = current_time.time_since_epoch();
 
-  boycotted_nodes_.clear();
-
   removeExpiredBoycotts(current_time);
 
   for (auto boycott_it : reported_boycotts_) {
@@ -57,21 +55,22 @@ void BoycottTracker::calculateBoycotts(
 
   all_boycotts.resize(std::min<size_t>(all_boycotts.size(), max_boycott_count));
 
-  std::transform(all_boycotts.cbegin(),
-                 all_boycotts.cend(),
-                 std::inserter(boycotted_nodes_, boycotted_nodes_.begin()),
-                 [](const Boycott& boycott) {
-                   return std::make_pair(boycott.node_index, boycott);
-                 });
+  auto new_boycotted_nodes =
+      std::make_shared<std::unordered_set<node_index_t>>(all_boycotts.size());
+  std::transform(
+      all_boycotts.cbegin(),
+      all_boycotts.cend(),
+      std::inserter(*new_boycotted_nodes, new_boycotted_nodes->begin()),
+      [](const Boycott& boycott) { return boycott.node_index; });
 
-  ld_check(boycotted_nodes_.size() <= max_boycott_count);
-  WORKER_STAT_SET(boycotts_seen, boycotted_nodes_.size());
+  ld_check(new_boycotted_nodes->size() <= max_boycott_count);
+  WORKER_STAT_SET(boycotts_seen, new_boycotted_nodes->size());
+
+  auto current_boycotted_nodes = boycotted_nodes_.get();
+  boycotted_nodes_.compare_and_swap(
+      current_boycotted_nodes, new_boycotted_nodes);
 
   removeUnusedBoycotts(current_time);
-}
-
-bool BoycottTracker::isBoycotted(node_index_t node) {
-  return boycotted_nodes_.find(node) != boycotted_nodes_.end();
 }
 
 void BoycottTracker::updateReportedBoycotts(
@@ -132,15 +131,8 @@ std::vector<node_index_t>
 BoycottTracker::getBoycottedNodes(std::chrono::system_clock::time_point now) {
   calculateBoycotts(now);
 
-  std::vector<node_index_t> boycotts;
-  boycotts.reserve(boycotted_nodes_.size());
-
-  std::transform(boycotted_nodes_.cbegin(),
-                 boycotted_nodes_.cend(),
-                 std::back_inserter(boycotts),
-                 [](const auto& entry) { return entry.second.node_index; });
-
-  return boycotts;
+  const auto& boycotted_nodes = boycotted_nodes_.get();
+  return {boycotted_nodes->cbegin(), boycotted_nodes->cend()};
 }
 
 void BoycottTracker::setLocalOutliers(std::vector<NodeID> outliers) {
@@ -153,9 +145,15 @@ void BoycottTracker::resetBoycott(node_index_t node_index) {
   local_resets_.wlock()->emplace(node_index);
 }
 
+bool BoycottTracker::isBoycotted(node_index_t node) const {
+  const auto& boycotted_nodes = boycotted_nodes_.get();
+  return boycotted_nodes->find(node) != boycotted_nodes->end();
+}
+
 void BoycottTracker::calculateBoycottsByThisNode(
     std::chrono::system_clock::time_point current_time,
     unsigned int max_boycott_count) {
+  const auto current_boycotts = boycotted_nodes_.get();
   boycotts_by_this_node_.erase(
       std::remove_if(
           boycotts_by_this_node_.begin(),
@@ -187,7 +185,7 @@ void BoycottTracker::calculateBoycottsByThisNode(
   local_outliers_.withULockPtr([&](auto locked_outliers) {
     for (size_t i = 0; i < locked_outliers->size() &&
          // don't try to boycott more nodes than allowed
-         boycotts_by_this_node_.size() + boycotted_nodes_.size() <
+         boycotts_by_this_node_.size() + current_boycotts->size() <
              max_boycott_count;
          ++i) {
       const auto& cur_outlier = locked_outliers->at(i);
@@ -244,13 +242,14 @@ void BoycottTracker::calculateBoycottsByThisNode(
 
 void BoycottTracker::removeUnusedBoycotts(
     std::chrono::system_clock::time_point current_time) {
+  const auto current_boycotts = boycotted_nodes_.get();
   for (auto boycott_it = reported_boycotts_.cbegin();
        boycott_it != reported_boycotts_.cend();) {
     // remove if
     if (
         // if it was not selected as a boycott and it's not a reset, but only if
         // it has propagated everywhere
-        (boycotted_nodes_.count(boycott_it->first) == 0 &&
+        (current_boycotts->count(boycott_it->first) == 0 &&
          !boycott_it->second.reset &&
          boycott_it->second.boycott_in_effect_time <
              current_time.time_since_epoch())) {

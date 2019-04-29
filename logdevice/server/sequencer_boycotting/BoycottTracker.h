@@ -14,6 +14,7 @@
 
 #include <folly/Synchronized.h>
 
+#include "logdevice/common/UpdateableSharedPtr.h"
 #include "logdevice/common/sequencer_boycotting/Boycott.h"
 #include "logdevice/common/sequencer_boycotting/BoycottAdaptiveDuration.h"
 
@@ -34,24 +35,11 @@ class Request;
 class BoycottTracker {
  public:
   virtual ~BoycottTracker() = default;
-  /**
-   * Re-calculates what nodes should be boycotted based on the current time.
-   * Also removes any old boycotts in the reported_boycotts_ set
-   */
-  void calculateBoycotts(std::chrono::system_clock::time_point current_time);
-
-  /**
-   * Have to call calculateBoycotts before calling this function to have the
-   * most up-to-date boycotts
-   *
-   * @params node The index of the node to be checked if it's boycotted
-   * @return      Returns true if it's boycotted, false if not, in O(1) time
-   */
-  bool isBoycotted(node_index_t node);
 
   /**
    * Will update nodes in the internal structure with any nodes that have a
    * greater time
+   * NOTE: Should be called only from the gossip thread.
    *
    * @params boycotts     The boycotts received in the gossip
    */
@@ -60,6 +48,7 @@ class BoycottTracker {
   /**
    * Will update nodes in the internal structure with newer durations. It will
    * also clean default durations.
+   * NOTE: Should be called only from the gossip thread.
    *
    * @params boycott_durations     The boycott_durations received in the gossip
    */
@@ -68,6 +57,7 @@ class BoycottTracker {
       std::chrono::system_clock::time_point now);
 
   /**
+   * NOTE: Should be called only from the gossip thread.
    * @returns a map of the boycotts received in the gossip messages. If
    *          calculateBoycotts is called before getting the boycotts, any
    *          expired boycotts will have been removed
@@ -75,21 +65,23 @@ class BoycottTracker {
   const std::unordered_map<node_index_t, Boycott>& getBoycottsForGossip() const;
 
   /**
+   * NOTE: Should be called only from the gossip thread.
    * @returns a map of the boycott durations to be used for the gossip message.
    */
   const std::unordered_map<node_index_t, BoycottAdaptiveDuration>&
   getBoycottDurationsForGossip() const;
 
   /**
-   * Re-calculates what nodes should be boycotted before returning the vector
-   * @retuns a vector of nodes that should be boycotted
+   * Re-calculates what nodes should be boycotted before returning the vector.
+   * NOTE: Should be called only from the gossip thread.
+   * @retuns a vector of nodes that should be boycotted.
    */
   std::vector<node_index_t>
   getBoycottedNodes(std::chrono::system_clock::time_point now);
 
   /**
-   * Thread safe. This is one of two functions that may be called on a different
-   * thread than the gossip thread during normal operation
+   * Thread safe. This is one of three functions that may be called on a
+   * different thread than the gossip thread during normal operation
    *
    * Will save the outliers, to later be calculated by
    * calculateBoycottsByThisNode
@@ -98,14 +90,32 @@ class BoycottTracker {
   void setLocalOutliers(std::vector<NodeID> outliers);
 
   /**
-   * Thread safe. This is one of two functions that may be called on a different
-   * thread than the gossip thread during normal operation
+   * Thread safe. This is one of three functions that may be called on a
+   * different thread than the gossip thread during normal operation
    *
    * Will reset the boycott of a node
    */
   void resetBoycott(node_index_t node_index);
 
+  /**
+   * Thread safe. This is one of three functions that may be called on a
+   * different thread than the gossip thread during normal operation.
+   *
+   * Have to call calculateBoycotts before calling this function to have the
+   * most up-to-date boycotts
+   *
+   * @params node The index of the node to be checked if it's boycotted
+   * @return      Returns true if it's boycotted, false if not, in O(1) time
+   */
+  bool isBoycotted(node_index_t node) const;
+
  private:
+  /**
+   * Re-calculates what nodes should be boycotted based on the current time.
+   * Also removes any old boycotts in the reported_boycotts_ set
+   */
+  void calculateBoycotts(std::chrono::system_clock::time_point current_time);
+
   /**
    * The time a node was started notified to be boycotted + the spread time will
    * be the time that a boycott goes into effect. This is good because then the
@@ -158,7 +168,8 @@ class BoycottTracker {
   std::unordered_map<node_index_t, BoycottAdaptiveDuration>
       reported_boycott_durations_;
 
-  std::unordered_map<node_index_t, Boycott> boycotted_nodes_;
+  FastUpdateableSharedPtr<std::unordered_set<node_index_t>> boycotted_nodes_{
+      std::make_shared<std::unordered_set<node_index_t>>()};
   std::vector<Boycott> boycotts_by_this_node_{};
 
   folly::Synchronized<std::vector<NodeID>> local_outliers_;
