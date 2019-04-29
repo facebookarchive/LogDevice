@@ -7,6 +7,7 @@
  */
 #include <folly/Benchmark.h>
 #include <folly/Singleton.h>
+#include <folly/io/async/EventBase.h>
 
 #include "logdevice/common/EventLoop.h"
 #include "logdevice/common/EventLoopHandle.h"
@@ -154,6 +155,62 @@ BENCHMARK(RequestPumpFunctionBenchmark, n) {
   }
 }
 
+BENCHMARK_RELATIVE(RequestPumpFunctionBenchmarkOnEventBase, n) {
+  std::condition_variable producers_sem;
+  std::mutex producers_sem_mtx;
+  Semaphore sem;
+  std::atomic<int> executed_count{0};
+  constexpr int numProducers = 10;
+  std::array<std::thread, numProducers> requestsPerProducer;
+  std::unique_ptr<folly::EventBase> loop;
+  std::unique_ptr<std::thread> consumer_ptr;
+  BENCHMARK_SUSPEND {
+    // Create and init consumer
+    loop = std::make_unique<folly::EventBase>();
+    consumer_ptr =
+        std::make_unique<std::thread>([&loop] { loop->loopForever(); });
+    loop->add([&sem]() { sem.post(); });
+
+    sem.wait();
+    executed_count = 0;
+
+    for (int i = 0; i < requestsPerProducer.size(); ++i) {
+      requestsPerProducer[i] = std::thread(
+          [&](int requestCount) {
+            {
+              std::unique_lock<std::mutex> _(producers_sem_mtx);
+              sem.post();
+              producers_sem.wait(_);
+            }
+            for (int j = 0; j < requestCount; ++j) {
+              folly::Func f = [&sem, &executed_count, n]() {
+                int count = executed_count.fetch_add(
+                    1, std::memory_order::memory_order_relaxed);
+                if (count + 1 == n) {
+                  sem.post();
+                }
+              };
+              loop->add(std::move(f));
+            }
+          },
+          n / numProducers + (i < (n % numProducers)));
+      sem.wait();
+    }
+  }
+  {
+    std::unique_lock<std::mutex> _(producers_sem_mtx);
+    producers_sem.notify_all();
+  }
+  sem.wait();
+  BENCHMARK_SUSPEND {
+    for (auto& i : requestsPerProducer) {
+      i.join();
+    }
+    loop->terminateLoopSoon();
+    consumer_ptr->join();
+    loop = nullptr;
+  }
+}
 }} // namespace facebook::logdevice
 
 #ifndef BENCHMARK_BUNDLE
