@@ -8,9 +8,11 @@
 #include <folly/Benchmark.h>
 #include <folly/Singleton.h>
 
+#include "logdevice/common/EventLoop.h"
 #include "logdevice/common/EventLoopHandle.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Request.h"
+#include "logdevice/common/RequestPump.h"
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/request_util.h"
@@ -19,164 +21,136 @@
 
 namespace facebook { namespace logdevice {
 
-namespace {
+constexpr static int kPosts = 5;
+constexpr static int kNumWorkers = 5;
+
 class BenchmarkRequest : public Request {
  public:
-  BenchmarkRequest(Processor* p, Semaphore& sem, size_t max_executions)
-      : Request(), processor_(p), sem_(sem), limit_(max_executions) {}
+  BenchmarkRequest(Processor* p, std::atomic<int>& pending, size_t reposts)
+      : Request(), processor_(p), pending_(pending), reposts_(reposts) {}
+
   Request::Execution execute() override {
-    if (++executed_ == limit_) {
-      // done
-      sem_.post();
+    pending_.fetch_sub(1, std::memory_order_relaxed);
+    if (reposts_ == 0) {
       return Request::Execution::COMPLETE;
     }
-    // post this same request again - with a new ID
-    const_cast<request_id_t&>(id_) = Request::getNextRequestID();
-    std::unique_ptr<Request> rq(this);
-    int rv = processor_->postImportant(rq);
-    ld_assert_eq(0, rv);
-    return Request::Execution::CONTINUE;
+
+    buffer_[reposts_ - 1] =
+        std::make_unique<BenchmarkRequest>(processor_, pending_, reposts_ - 1);
+
+    int rv = processor_->postImportant(buffer_[reposts_ - 1]);
+    ld_check(!rv);
+    return Request::Execution::COMPLETE;
   }
 
  private:
+  std::array<std::unique_ptr<Request>, kPosts - 1> buffer_;
   Processor* processor_;
-  Semaphore& sem_;
-  const size_t limit_;
+  std::atomic<int>& pending_;
+  const size_t reposts_;
   size_t executed_{0};
 };
 
-class EmptyRequest : public Request {
- public:
-  EmptyRequest() {}
-  Request::Execution execute() override {
-    return Request::Execution::COMPLETE;
-  }
-};
-} // namespace
+BENCHMARK(WorkerBenchmarkv2, n) {
+  const int request_count = n / kPosts;
 
-// Benchmark posting requests n times via the whole processor pipeline
-BENCHMARK(WorkerBenchmark) {
-  std::shared_ptr<Processor> processor;
+  std::atomic<int> pending{kPosts * request_count};
   std::vector<std::unique_ptr<Request>> requests;
-  Semaphore sem;
-  size_t request_count = 4000;
-  const size_t repost_request_count = 5;
+  Settings settings = create_default_settings<Settings>();
+  std::shared_ptr<Processor> processor;
 
   BENCHMARK_SUSPEND {
-    Settings settings = create_default_settings<Settings>();
-    settings.num_workers *= 2;
+    settings.num_workers = kNumWorkers;
     processor = make_test_processor(settings);
 
-    while (request_count > 0) {
-      requests.emplace_back(
-          new BenchmarkRequest(processor.get(), sem, repost_request_count));
-      --request_count;
-    }
-  }
-  auto start = SteadyTimestamp::now();
-  for (auto& request : requests) {
-    int rv = processor->postImportant(request);
-    ld_assert_eq(0, rv);
-  }
-  for (size_t i = 0; i < requests.size(); ++i) {
-    sem.wait();
-    if (i == 0) {
-      ld_info("First semaphore fired");
-    } else if (i == requests.size() - 1) {
-      ld_info("Last semaphore fired");
-    }
-  }
-  ld_info("Completed iteration with %lu requests in %lu usec",
-          requests.size(),
-          usec_since(start));
-}
-
-BENCHMARK(RequestPumpPost) {
-  size_t request_count = 30000;
-  std::unique_ptr<EventLoop> ev_loop;
-  std::shared_ptr<RequestPump> request_pump;
-  std::vector<std::unique_ptr<Request>> requests;
-  BENCHMARK_SUSPEND {
-    ev_loop.reset(new EventLoop());
-    Settings settings = create_default_settings<Settings>();
-    request_pump =
-        std::make_shared<RequestPump>(ev_loop->getEventBase(),
-                                      settings.worker_request_pipe_capacity,
-                                      settings.requests_per_iteration);
     for (int i = 0; i < request_count; ++i) {
-      requests.emplace_back(new EmptyRequest());
+      requests.emplace_back(std::make_unique<BenchmarkRequest>(
+          processor.get(), pending, kPosts - 1));
     }
   }
 
-  for (size_t i = 0; i < request_count; ++i) {
-    int rv = request_pump->forcePost(requests[i]);
-    ld_assert_eq(0, rv);
+  for (auto& request : requests) {
+    processor->postImportant(request);
+  }
+
+  while (pending.load(std::memory_order_relaxed) != 0) {
   }
 }
 
-BENCHMARK(RequestPumpFunctionPost) {
-  size_t request_count = 30000;
-  std::unique_ptr<EventLoop> ev_loop(new EventLoop());
-  std::shared_ptr<RequestPump> request_pump;
-  BENCHMARK_SUSPEND {
-    Settings settings = create_default_settings<Settings>();
-    request_pump =
-        std::make_shared<RequestPump>(ev_loop->getEventBase(),
-                                      settings.worker_request_pipe_capacity,
-                                      settings.requests_per_iteration);
-  }
+class RequestPumpBenchmarkRequest : public Request {
+ public:
+  RequestPumpBenchmarkRequest(int postAfter,
+                              std::atomic<int>& counter,
+                              Semaphore& sem)
+      : postAfter_(postAfter), counter_(counter), sem_(sem) {}
 
-  for (auto i = 0; i < request_count; ++i) {
-    Func func = []() {};
-    int rv = request_pump->add(std::move(func));
-    ld_assert_eq(0, rv);
-  }
-}
-
-// Execute tasks is private in EventLoopTaskQueue
-BENCHMARK(RequestPumpPop) {
-  size_t request_count = 30000;
-  std::unique_ptr<EventLoop> ev_loop;
-  std::shared_ptr<RequestPump> request_pump;
-  Semaphore sem_start, sem_end;
-  BENCHMARK_SUSPEND {
-    ev_loop = std::make_unique<EventLoop>();
-    request_pump =
-        std::make_shared<RequestPump>(ev_loop->getEventBase(), 1000, 16);
-    ev_loop->setRequestPump(request_pump);
-    ev_loop->start();
-
-    // Make sure the thread is started.
-    std::unique_ptr<Request> first_request = std::make_unique<FuncRequest>(
-        worker_id_t(0), WorkerType::GENERAL, RequestType::MISC, [&sem_start]() {
-          sem_start.post();
-        });
-    int rv = request_pump->forcePost(first_request);
-    ld_assert_eq(0, rv);
-    sem_start.wait();
-    // Wait for benchmark to start.
-    first_request = std::make_unique<FuncRequest>(
-        worker_id_t(0), WorkerType::GENERAL, RequestType::MISC, [&sem_start]() {
-          sem_start.wait();
-        });
-    for (size_t i = 0; i < request_count; ++i) {
-      std::unique_ptr<Request> req(new EmptyRequest());
-      rv = request_pump->forcePost(req);
-      ld_assert_eq(0, rv);
+  Execution execute() override {
+    int count = counter_.fetch_add(1, std::memory_order::memory_order_relaxed);
+    if (count + 1 == postAfter_) {
+      sem_.post();
     }
-
-    // Wait till the final request runs to completion.
-    std::unique_ptr<Request> last_request = std::make_unique<FuncRequest>(
-        worker_id_t(0), WorkerType::GENERAL, RequestType::MISC, [&sem_end]() {
-          sem_end.post();
-        });
-    rv = request_pump->forcePost(last_request);
-    ld_assert_eq(0, rv);
+    return Execution::COMPLETE;
   }
-  sem_start.post();
-  sem_end.wait();
+
+ private:
+  int postAfter_;
+  std::atomic<int>& counter_;
+  Semaphore& sem_;
+};
+
+BENCHMARK(RequestPumpFunctionBenchmark, n) {
+  std::condition_variable producers_sem;
+  std::mutex producers_sem_mtx;
+  Semaphore sem;
+  std::atomic<int> executed_count{0};
+  std::unique_ptr<EventLoopHandle> handle;
+  constexpr int numProducers = kNumWorkers;
+  std::array<std::thread, numProducers> requestsPerProducer;
   BENCHMARK_SUSPEND {
-    ev_loop.reset();
+    // Create and init consumer
+    handle = std::make_unique<EventLoopHandle>(new EventLoop());
+    handle->start();
+    std::unique_ptr<Request> init_req =
+        std::make_unique<RequestPumpBenchmarkRequest>(1, executed_count, sem);
+    handle->getRequestPump().forcePost(init_req);
+    sem.wait();
+    executed_count = 0;
+
+    for (int i = 0; i < requestsPerProducer.size(); ++i) {
+      requestsPerProducer[i] = std::thread(
+          [&](int requestCount) {
+            {
+              std::unique_lock<std::mutex> _(producers_sem_mtx);
+              sem.post();
+              producers_sem.wait(_);
+            }
+            for (int j = 0; j < requestCount; ++j) {
+              handle->getRequestPump().add([&sem, &executed_count, n]() {
+                int count = executed_count.fetch_add(
+                    1, std::memory_order::memory_order_relaxed);
+                if (count + 1 == n) {
+                  sem.post();
+                }
+              });
+            }
+          },
+          n / numProducers + (i < (n % numProducers)));
+      sem.wait();
+    }
+  }
+  {
+    std::unique_lock<std::mutex> _(producers_sem_mtx);
+    producers_sem.notify_all();
+  }
+  sem.wait();
+  BENCHMARK_SUSPEND {
+    for (auto& i : requestsPerProducer) {
+      i.join();
+    }
+    handle->dontWaitOnDestruct();
+    handle->shutdown();
+    auto thread = handle->getThread();
+    pthread_join(thread, nullptr);
   }
 }
 
@@ -185,6 +159,8 @@ BENCHMARK(RequestPumpPop) {
 #ifndef BENCHMARK_BUNDLE
 
 int main(int argc, char** argv) {
+  facebook::logdevice::dbg::currentLevel =
+      facebook::logdevice::dbg::Level::CRITICAL;
   folly::SingletonVault::singleton()->registrationComplete();
   gflags::ParseCommandLineFlags(&argc, &argv, true);
   folly::runBenchmarks();
