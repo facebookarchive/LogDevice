@@ -448,12 +448,13 @@ class Processor : public folly::enable_shared_from_this<Processor> {
   // Make runningOnStorageNode() return true. Used for tests.
   bool fake_storage_node_ = false;
 
-  // This should be destroyed before settings_, since it accesses that.
-  UpdateableSettings<Settings>::SubscriptionHandle settingsUpdateHandle_;
 
   // global settings shared by this Processor, EventLoops it manages, and
   // all objects running on those EventLoops
   UpdateableSettings<Settings> settings_;
+
+  // This should be destroyed before settings_, since it accesses that.
+  UpdateableSettings<Settings>::SubscriptionHandle settingsUpdateHandle_;
 
   std::shared_ptr<PluginRegistry> plugin_registry_;
 
