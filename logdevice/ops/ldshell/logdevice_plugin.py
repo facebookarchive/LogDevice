@@ -54,8 +54,15 @@ class LogDevicePlugin(PluginInterface):
         Builds the ArgumentParser that will be passed to ldshell, use this to
         build your list of arguments that you want for your shell.
         """
+        epilog = (
+            "NOTES: LIST types are given as comma separated values, "
+            "eg. a,b,c,d. DICT types are given as semicolon separated "
+            "key:value pairs (or key=value), e.g., a:b;c:d and if a dict "
+            "takes a list as value it look like a:1,2;b:1"
+        )
         opts_parser = argparse.ArgumentParser(
             description="Logdevice Shell Utility",
+            epilog=epilog,
             formatter_class=argparse.ArgumentDefaultsHelpFormatter,
             add_help=add_help,
         )
@@ -70,7 +77,7 @@ class LogDevicePlugin(PluginInterface):
             "-v",
             action="count",
             default=0,
-            help="Increase ldshell verbosity, can be specified " "multiple times",
+            help="Increase ldshell verbosity, can be specified multiple times",
         )
         opts_parser.add_argument(
             "--loglevel",
