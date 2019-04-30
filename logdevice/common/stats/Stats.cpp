@@ -247,6 +247,11 @@ void PerStorageTaskTypeStats::reset() {
 #include "logdevice/common/stats/per_storage_task_type_stats.inc" // nolint
 }
 
+Stats::LDBenchStats::LDBenchStats() {
+  delivery_latency = std::make_unique<LatencyHistogram>();
+}
+Stats::LDBenchStats::~LDBenchStats() = default;
+
 Stats::Stats(const FastUpdateableSharedPtr<StatsParams>* params)
     : per_client_node_stats(PerClientNodeTimeSeriesStats{
           params->get()->node_stats_retention_time_on_nodes}),
@@ -302,7 +307,6 @@ void Stats::aggregate(Stats const& other, StatsAggOptional agg_override) {
 #define STAT_DEFINE(name, agg) \
   aggregateStat(StatsAgg::agg, agg_override, name, other.name);
 #include "logdevice/common/stats/common_stats.inc" // nolint
-      aggregateCompoundStats(other, agg_override);
       break;
     case StatsParams::StatsSet::LDBENCH_WORKER:
 #define STAT_DEFINE(name, agg) \
@@ -319,6 +323,8 @@ void Stats::aggregate(Stats const& other, StatsAggOptional agg_override) {
 #include "logdevice/common/stats/characterize_load_stats.inc" // nolint
       break;
   } // let compiler check that all enum values are handled.
+
+  aggregateCompoundStats(other, agg_override);
 }
 
 void Stats::aggregateForDestroyedThread(Stats const& other) {
@@ -335,7 +341,6 @@ void Stats::aggregateForDestroyedThread(Stats const& other) {
       }
 #define STAT_DEFINE(name, agg) aggregateStat(StatsAgg::agg, name, other.name);
 #include "logdevice/common/stats/common_stats.inc" // nolint
-      aggregateCompoundStats(other, folly::none, true);
       break;
     case StatsParams::StatsSet::LDBENCH_WORKER:
 #define STAT_DEFINE(name, agg) \
@@ -349,11 +354,29 @@ void Stats::aggregateForDestroyedThread(Stats const& other) {
 #include "logdevice/common/stats/characterize_load_stats.inc" // nolint
       break;
   } // let compiler check that all enum values are handled.
+
+  aggregateCompoundStats(other, folly::none, true);
 }
 
 void Stats::aggregateCompoundStats(Stats const& other,
                                    StatsAggOptional agg_override,
                                    bool destroyed_threads) {
+  if (params->get()->stats_set != StatsParams::StatsSet::DEFAULT) {
+    switch (params->get()->stats_set) {
+      case StatsParams::StatsSet::LDBENCH_WORKER:
+        ld_check(other.ldbench);
+        ld_check(ldbench);
+        aggregateHistogram(agg_override,
+                           *ldbench->delivery_latency,
+                           *other.ldbench->delivery_latency);
+        break;
+      default:
+        break;
+    }
+
+    return;
+  }
+
   for (int i = 0; i < per_traffic_class_stats.size(); ++i) {
     per_traffic_class_stats[i].aggregate(
         other.per_traffic_class_stats[i], agg_override);
@@ -493,6 +516,8 @@ void Stats::reset() {
     case StatsParams::StatsSet::LDBENCH_WORKER:
 #define STAT_DEFINE(name, _) ldbench->name = {};
 #include "logdevice/common/stats/ldbench_worker_stats.inc" // nolint
+
+      ldbench->delivery_latency->clear();
       break;
     case StatsParams::StatsSet::CHARACTERIZE_LOAD:
 #define STAT_DEFINE(name, _) characterize_load->name = {};
@@ -552,6 +577,8 @@ void Stats::enumerate(EnumerationCallbacks* cb, bool list_all) const {
     case StatsParams::StatsSet::LDBENCH_WORKER:
 #define STAT_DEFINE(s, _) cb->stat(#s, ldbench->s);
 #include "logdevice/common/stats/ldbench_worker_stats.inc" // nolint
+
+      cb->histogram("delivery_latency", *ldbench->delivery_latency);
       return; // nothing more to do here
     case StatsParams::StatsSet::CHARACTERIZE_LOAD:
 #define STAT_DEFINE(s, _) cb->stat(#s, characterize_load->s);

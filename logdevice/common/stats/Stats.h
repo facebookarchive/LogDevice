@@ -730,6 +730,7 @@ struct Stats final {
 
   /**
    * Same but only for per-something stats.
+   * Only used internally by aggregate() and aggregateForDestroyedThread().
    */
   void aggregateCompoundStats(Stats const& other,
                               StatsAggOptional agg_override,
@@ -910,14 +911,16 @@ struct Stats final {
 #define STAT_DEFINE(name, _) StatsCounter name{};
 #include "logdevice/common/stats/ldbench_worker_stats.inc" // nolint
 
-    LDBenchStats() = default;
-    ~LDBenchStats() = default;
+    LDBenchStats();
+    ~LDBenchStats();
 
     LDBenchStats(const LDBenchStats&) = delete;
     LDBenchStats& operator=(const LDBenchStats&) = delete;
 
     LDBenchStats(LDBenchStats&&) noexcept = default;
     LDBenchStats& operator=(LDBenchStats&&) noexcept = default;
+
+    std::unique_ptr<LatencyHistogram> delivery_latency;
   };
 
   struct CharacterizeLoadStats {
