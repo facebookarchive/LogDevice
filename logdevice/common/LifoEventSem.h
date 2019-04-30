@@ -53,17 +53,26 @@ struct EventFdBatonBase {
   void wait();
 };
 
-/// EventFdBaton doesn't actually contain an instance of Atom, but the
-/// template arg is used to inject deterministic scheduling behavior
-/// under test.  The pass-through methods needn't be pass-through in
-/// specialized forms
+/// Unforunately EventFdBatonBase does not provide memory barriers so accessing
+/// variable set by other producer thread requires separate synchronisation.
+/// event_count is used for that purpose.
+/// The pass-through methods needn't be pass-through in specialized forms
 template <template <typename> class Atom>
 struct EventFdBaton : public EventFdBatonBase {
+  Atom<int> event_count{0};
   void post() {
+    event_count.fetch_add(1, std::memory_order_release);
     EventFdBatonBase::post();
   }
   void wait() {
     EventFdBatonBase::wait();
+  }
+  bool consume() {
+    if (EventFdBatonBase::consume()) {
+      event_count.fetch_sub(1, std::memory_order_acquire);
+      return true;
+    };
+    return false;
   }
   template <typename Clock, typename Duration>
   bool
@@ -157,6 +166,10 @@ struct LifoEventSemImpl
     void process(Func&& func, size_t maxCalls) {
       // we ignore owner_.isShutdown and let notification flow throw the
       // nodes, so that we can implement draining semantics
+      if (UNLIKELY(node_->handoff().event_count.load(
+                       std::memory_order_acquire) != 1)) {
+        std::abort();
+      }
       if (UNLIKELY(node_->isShutdownNotice())) {
         assert(owner_.isShutdown());
         throw folly::ShutdownSemError("semaphore has been shut down");
@@ -197,6 +210,10 @@ struct LifoEventSemImpl
     /// Shutdown and error semantics are like process().
     template <typename Func>
     void processBatch(Func&& func, size_t maxBatchSize) {
+      if (UNLIKELY(node_->handoff().event_count.load(
+                       std::memory_order_acquire) != 1)) {
+        std::abort();
+      }
       if (UNLIKELY(node_->isShutdownNotice())) {
         throw folly::ShutdownSemError("semaphore has been shut down");
       }
