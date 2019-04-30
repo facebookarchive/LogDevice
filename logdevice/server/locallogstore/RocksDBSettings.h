@@ -36,6 +36,10 @@ static_assert(ROCKSDB_MAJOR > 5 || (ROCKSDB_MAJOR == 5 && ROCKSDB_MINOR >= 7),
 #define ROCKSDB_PERF_COUNTER_write_thread_wait_nanos(perf_context) 0
 #endif
 
+#if ROCKSDB_MAJOR > 6 || (ROCKSDB_MAJOR == 6 && ROCKSDB_MINOR >= 1)
+#define LOGDEVICED_ROCKSDB_HAS_AVOID_UNNECESSARY_BLOCKING_IO
+#endif
+
 namespace boost { namespace program_options {
 class options_description;
 }} // namespace boost::program_options

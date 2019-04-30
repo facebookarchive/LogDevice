@@ -41,6 +41,14 @@ RocksDBLogStoreConfig::RocksDBLogStoreConfig(
   options_.allow_mmap_writes = false;
   options_.create_if_missing = true;
 
+#ifdef LOGDEVICED_ROCKSDB_HAS_AVOID_UNNECESSARY_BLOCKING_IO
+  // When ColumnFamilyHandle is destroyed, defer file deletions to background
+  // thread. That's because we sometimes do it on worker threads, e.g. when
+  // destroying nonblocking iterators (logsdb iterators hold PartitionPtr,
+  // which owns ColumnFamilyHandle).
+  options_.avoid_unnecessary_blocking_io = true;
+#endif
+
   table_options_.index_block_restart_interval =
       rocksdb_settings_->index_block_restart_interval;
 
