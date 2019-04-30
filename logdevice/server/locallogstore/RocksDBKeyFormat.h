@@ -63,7 +63,9 @@ enum class KeyPrefix : char {
   PartitionMeta_CompactedRetention = 'w',
   PartitionMeta_MinTimestamp = 'x',
   PartitionMeta_MaxTimestamp = 'y',
-  PartitionMeta_LastCompaction = 'z'
+  PartitionMeta_LastCompaction = 'z',
+  // Reserved for identifying the version of DB format, see checkSchemaVersion()
+  Reserved_SchemaVersion = '.'
 };
 
 constexpr char prefix(KeyPrefix prefix) {

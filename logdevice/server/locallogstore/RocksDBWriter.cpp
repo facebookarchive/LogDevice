@@ -934,8 +934,24 @@ int RocksDBWriter::enumerateLogMetadata(
     while (it->status().ok()) {
       bool it_good = it->Valid() && it->key().size() > 0 &&
           it->key()[0] == LogMetaKey::getHeader(type);
+
+      // TODO (#39174994): This is a temporary workaround for a key collision.
+      //                   Remove when migration is complete.
+      if (it_good &&
+          it->key().compare(rocksdb::Slice(
+              RocksDBLogStoreBase::OLD_SCHEMA_VERSION_KEY)) == 0) {
+        it->Next();
+        continue;
+      }
+
       if (it_good &&
           !LogMetaKey::valid(type, it->key().data(), it->key().size())) {
+        RATELIMIT_ERROR(
+            std::chrono::seconds(10),
+            10,
+            "Malformed metadata key. Key: %s, value: %s",
+            hexdump_buf(it->key().data(), it->key().size()).c_str(),
+            hexdump_buf(it->value().data(), it->value().size()).c_str());
         had_malformed_values = true;
         it->Next();
         continue;
@@ -960,6 +976,12 @@ int RocksDBWriter::enumerateLogMetadata(
       if (rv == 0) {
         cb(type, log, *meta);
       } else {
+        RATELIMIT_ERROR(
+            std::chrono::seconds(10),
+            10,
+            "Malformed metadata value. Key: %s, value: %s",
+            hexdump_buf(it->key().data(), it->key().size()).c_str(),
+            hexdump_buf(it->value().data(), it->value().size()).c_str());
         had_malformed_values = true;
       }
       it->Next();

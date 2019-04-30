@@ -300,18 +300,49 @@ class RocksDBWriter {
                           const Key& last_key,
                           const LocalLogStore::WriteOptions& /*write_options*/,
                           rocksdb::ColumnFamilyHandle* cf) {
-    rocksdb::WriteBatch batch;
-    batch.DeleteRange(cf,
-                      rocksdb::Slice(reinterpret_cast<const char*>(&first_key),
-                                     sizeof first_key),
-                      rocksdb::Slice(reinterpret_cast<const char*>(&last_key),
-                                     sizeof last_key));
-
-    rocksdb::Status status = writeBatch(rocksdb::WriteOptions(), &batch);
-    if (!status.ok()) {
+    // Just iterate over keys in the range and delete them one by one.
+    // We don't care about performance here.
+    // We could use rocksdb::WriteBatch::DeleteRange() instead, but we'd rather
+    // not rely on that API unless necessary - its implementation is pretty
+    // complex.
+    rocksdb::Slice last_key_slice(
+        reinterpret_cast<const char*>(&last_key), sizeof(last_key));
+    rocksdb::ReadOptions read_options;
+    auto it = store_->newIterator(read_options, cf);
+    std::vector<std::string> keys;
+    for (it.Seek(rocksdb::Slice(
+             reinterpret_cast<const char*>(&first_key), sizeof(first_key)));
+         it.status().ok() && it.Valid() && it.key().compare(last_key_slice) < 0;
+         it.Next()) {
+      // TODO (#39174994): This is a temporary workaround for a key collision.
+      //                   Remove when migration is complete.
+      if (it.key().compare(rocksdb::Slice(
+              RocksDBLogStoreBase::OLD_SCHEMA_VERSION_KEY)) == 0) {
+        continue;
+      }
+      keys.push_back(it.key().ToString());
+    }
+    if (!it.status().ok()) {
+      // Got an error.
       err = E::LOCAL_LOG_STORE_WRITE;
       return -1;
     }
+
+    ld_info("Deleting %lu metadata entries", keys.size());
+
+    if (!keys.empty()) {
+      rocksdb::WriteBatch batch;
+      for (const std::string& key : keys) {
+        batch.Delete(cf, rocksdb::Slice(key.data(), key.size()));
+      }
+
+      rocksdb::Status status = writeBatch(rocksdb::WriteOptions(), &batch);
+      if (!status.ok()) {
+        err = E::LOCAL_LOG_STORE_WRITE;
+        return -1;
+      }
+    }
+
     return 0;
   }
 

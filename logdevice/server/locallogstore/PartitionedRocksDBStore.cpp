@@ -5452,14 +5452,15 @@ int PartitionedRocksDBStore::isEmpty() const {
   }
 
   // Check that metadata CF doesn't contain anything except:
-  //  * "schema_version",
+  //  * "schema_version" or ".schema_version"
   //  * partition metadata of type STARTING_TIMESTAMP.
   //  * partition metadata of type DIRTY.
   RocksDBIterator it = createMetadataIterator(true);
   it.Seek(rocksdb::Slice("", 0));
   while (
       it.status().ok() && it.Valid() &&
-      (it.key().compare(SCHEMA_VERSION_KEY) == 0 ||
+      (it.key().compare(OLD_SCHEMA_VERSION_KEY) == 0 ||
+       it.key().compare(NEW_SCHEMA_VERSION_KEY) == 0 ||
        PartitionMetaKey::valid(it.key().data(),
                                it.key().size(),
                                PartitionMetadataType::STARTING_TIMESTAMP) ||

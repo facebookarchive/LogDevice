@@ -15,7 +15,10 @@ namespace facebook { namespace logdevice {
 
 using RocksDBKeyFormat::LogSnapshotBlobKey;
 
-const char* const RocksDBLogStoreBase::SCHEMA_VERSION_KEY = "schema_version";
+const char* const RocksDBLogStoreBase::OLD_SCHEMA_VERSION_KEY =
+    "schema_version";
+const char* const RocksDBLogStoreBase::NEW_SCHEMA_VERSION_KEY =
+    ".schema_version";
 
 RocksDBLogStoreBase::RocksDBLogStoreBase(uint32_t shard_idx,
                                          const std::string& path,
@@ -87,7 +90,8 @@ int RocksDBLogStoreBase::isCFEmpty(rocksdb::ColumnFamilyHandle* cf) const {
   // schema_version isn't visible from outside of this LocalLogStore class,
   // so it doesn't count as non-emptiness.
   if (it.status().ok() && it.Valid() &&
-      it.key().compare(SCHEMA_VERSION_KEY) == 0) {
+      (it.key().compare(OLD_SCHEMA_VERSION_KEY) == 0 ||
+       it.key().compare(NEW_SCHEMA_VERSION_KEY) == 0)) {
     it.Next();
   }
   if (!it.status().ok()) {

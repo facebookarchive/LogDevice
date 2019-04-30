@@ -39,9 +39,14 @@ class RocksDBWriter;
 
 class RocksDBLogStoreBase : public LocalLogStore {
  public:
-  // We keep a key-value pair in RocksDB with key "schema_version" and
+  // We keep a key-value pair in RocksDB with key ".schema_version" and
   // value "2", and refuse to open a DB if the value is different.
-  static const char* const SCHEMA_VERSION_KEY;
+  // TODO (#39174994):
+  //   We're migrating from the old key "schema_version" to the new key
+  //   ".schema_version", because the old key clashes with SealMetadata.
+  //   Just the key changes, not the actual schema.
+  static const char* const OLD_SCHEMA_VERSION_KEY;
+  static const char* const NEW_SCHEMA_VERSION_KEY;
 
   ~RocksDBLogStoreBase() override;
 
@@ -412,44 +417,55 @@ class RocksDBLogStoreBase : public LocalLogStore {
   int checkSchemaVersion(rocksdb::DB* db,
                          rocksdb::ColumnFamilyHandle* cf,
                          int expected) const {
-    rocksdb::Slice key_slice(SCHEMA_VERSION_KEY, strlen(SCHEMA_VERSION_KEY));
-    std::string value;
-    rocksdb::Status status =
-        db->Get(getDefaultReadOptions(), cf, key_slice, &value);
-    if (status.ok()) {
-      int db_version = std::stoi(value);
-      if (db_version != expected) {
-        ld_error("Schema version mismatch: code version is %d, database "
-                 "version is \"%s\".",
-                 expected,
-                 value.c_str());
+    std::string expected_str = std::to_string(expected);
+    std::set<std::string> keys_found;
+    for (const char* key : {OLD_SCHEMA_VERSION_KEY, NEW_SCHEMA_VERSION_KEY}) {
+      rocksdb::Slice key_slice(key, strlen(key));
+      std::string value;
+      rocksdb::Status status =
+          db->Get(getDefaultReadOptions(), cf, key_slice, &value);
+      if (status.ok()) {
+        if (value != expected_str) {
+          ld_error("Schema version mismatch: code version is %d, database "
+                   "version is \"%s\" (key: \"%s\").",
+                   expected,
+                   value.c_str(),
+                   key);
+          return -1;
+        }
+        keys_found.insert(key);
+      } else if (!status.IsNotFound()) {
+        ld_error("Error reading schema version from database: %s",
+                 status.ToString().c_str());
+        noteRocksDBStatus(status, "Get() (schema version)");
         return -1;
       }
-      return 0;
-    } else if (status.IsNotFound()) {
-      // Schema version key not found.  Check if the database is empty ...
-      int rv = isCFEmpty(cf);
-      if (rv != 1) {
-        return -1;
-      }
+    }
 
-      // This is a new database with no contents.  Write the schema version.
-      value = std::to_string(expected);
-      status = db->Put(rocksdb::WriteOptions(),
-                       cf,
-                       key_slice,
-                       rocksdb::Slice(value.data(), value.size()));
-      if (!status.ok()) {
-        ld_error("Error writing schema version to database");
-        return -1;
-      }
+    if (!keys_found.empty()) {
+      // Schema found and matches.
       return 0;
-    } else {
-      ld_error("Error reading schema version from database: %s",
-               status.ToString().c_str());
-      noteRocksDBStatus(status, "Get() (schema version)");
+    }
+
+    // Schema version key not found.  Check if the database is empty ...
+    int rv = isCFEmpty(cf);
+    if (rv != 1) {
       return -1;
     }
+
+    // This is a new database with no contents. Write the schema version.
+    rocksdb::Slice key_slice(
+        OLD_SCHEMA_VERSION_KEY, strlen(OLD_SCHEMA_VERSION_KEY));
+    rocksdb::Status status =
+        db->Put(rocksdb::WriteOptions(),
+                cf,
+                key_slice,
+                rocksdb::Slice(expected_str.data(), expected_str.size()));
+    if (!status.ok()) {
+      ld_error("Error writing schema version to database");
+      return -1;
+    }
+    return 0;
   }
 
   // Checks that there are no keys in CF, except, maybe, "schema_version" key.
