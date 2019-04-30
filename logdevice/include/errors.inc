@@ -83,6 +83,7 @@ ERROR_CODE(LOW_ON_SPC               ,   58, "Met low watermark of free disk spac
 ERROR_CODE(PEER_UNAVAILABLE         ,   59, "server is unavailable")
 ERROR_CODE(NOTSUPPORTEDLOG          ,   60, "not supported for this log")
 ERROR_CODE(DATALOSS                 ,   61, "data is lost")
+ERROR_CODE(NEVER_CONNECTED          ,   62, "connection never attempted")
 // Errors about invalid entities
 
 ERROR_CODE(INVALID_PARAM            ,  100, "invalid parameter")

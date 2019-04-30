@@ -66,9 +66,20 @@ NodeAvailabilityChecker::checkNode(NodeSetState* nodeset_state,
   if (rv != 0) {
     switch (err) {
       case E::NOTFOUND:
+      case E::NEVER_CONNECTED:
+        // We never tried/managed to connect to this node and connecting attempt
+        // is not in progress. Let's try to connect and report as unavailable if
+        // it fails immediately.
+        rv = connect(dest_nid, allow_unencrypted_connections);
+        if (rv != 0) {
+          result = NodeStatus::NOT_AVAILABLE;
+        } else {
+          result = NodeStatus::AVAILABLE_NOCHAIN;
+        }
+        break;
       case E::ALREADY:
-        // No socket to this Node yet, or this is the first connection attempt
-        // to the node. The destination is still good, but we can't chain-send.
+        // We are in the process of connecting to the node.
+        // The destination is still good, but we can't chain-send.
         result = NodeStatus::AVAILABLE_NOCHAIN;
         break;
       case E::NOTCONN:

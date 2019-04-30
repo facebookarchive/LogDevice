@@ -2372,13 +2372,15 @@ int Socket::checkConnection(ClientID* our_name_at_peer) {
       err = E::DISABLED;
     } else if (peer_name_.isClientAddress()) {
       err = E::INVALID_PARAM;
+    } else if (bev_) {
+      err = E::ALREADY;
     } else {
       ld_check(!handshaken_);
       // Sender always initiates a connection attempt whenever a Socket is
       // created. Therefore, we're either still waiting on a connection to be
       // established or are expecting an ACK to complete the handshake. Set err
       // to NOTCONN only if we previously had a working connection to the node.
-      err = first_attempt_ ? E::ALREADY : E::NOTCONN;
+      err = first_attempt_ ? E::NEVER_CONNECTED : E::NOTCONN;
     }
 
     return -1;
