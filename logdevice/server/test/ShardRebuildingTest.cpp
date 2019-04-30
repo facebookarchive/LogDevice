@@ -130,7 +130,9 @@ class MockedShardRebuilding : public ShardRebuildingV2,
                                 double progress_estimate) override {
     EXPECT_EQ(shard, SHARD_IDX);
     EXPECT_EQ(version, REBUILDING_VERSION);
-    donorProgress.push_back(next_ts);
+    if (next_ts != RecordTimestamp::min()) {
+      donorProgress.push_back(next_ts);
+    }
   }
 
   // Use these simulate*() wrappers instead of calling the methods directly.

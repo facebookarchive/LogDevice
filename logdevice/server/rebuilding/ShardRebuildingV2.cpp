@@ -235,18 +235,23 @@ void ShardRebuildingV2::startSomeChunkRebuildingsIfNeeded() {
   // Find the oldest timestamp of a chunk that we're going to rebuild but
   // haven't rebuilt yet, and publish this timestamp for other donors to slide
   // global window based on it.
+  RecordTimestamp oldest_timestamp;
   if (!chunkRebuildings_.empty()) {
-    listener_->notifyShardDonorProgress(
-        shard_,
-        chunkRebuildings_.begin()->first.oldestTimestamp,
-        rebuildingVersion_,
-        readingProgress_);
+    // If there are some records in flight, use the oldest one.
+    oldest_timestamp = chunkRebuildings_.begin()->first.oldestTimestamp;
   } else if (!readBuffer_.empty()) {
-    listener_->notifyShardDonorProgress(shard_,
-                                        readBuffer_.front()->oldestTimestamp,
-                                        rebuildingVersion_,
-                                        readingProgress_);
+    // If there are some records in buffer, use the first one.
+    oldest_timestamp = readBuffer_.front()->oldestTimestamp;
+  } else {
+    // Otherwise, either we're just starting, or we're filtering everything we
+    // read. In the latter case it's useful to report the approximate progress
+    // anyway, because reading can be slow even if we're filtering everything.
+    // Reporting the progress allows other donors to make progress (if global
+    // window is enabled), and keeps progress stat up to date.
+    oldest_timestamp = readingProgressTimestamp_;
   }
+  listener_->notifyShardDonorProgress(
+      shard_, oldest_timestamp, rebuildingVersion_, readingProgress_);
 }
 
 worker_id_t
