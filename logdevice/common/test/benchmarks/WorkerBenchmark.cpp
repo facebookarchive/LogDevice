@@ -211,6 +211,32 @@ BENCHMARK_RELATIVE(RequestPumpFunctionBenchmarkOnEventBase, n) {
     loop = nullptr;
   }
 }
+
+BENCHMARK(RequestPumpFunctionBenchmarkSequential, n) {
+  std::unique_ptr<EventLoopHandle> handle;
+  BENCHMARK_SUSPEND {
+    // Create and init consumer
+    handle = std::make_unique<EventLoopHandle>(new EventLoop());
+    handle->start();
+    folly::Promise<folly::Unit> started;
+    auto wait_for_start = started.getSemiFuture();
+    handle->getRequestPump().add(
+        [p = std::move(started)]() mutable { p.setValue(); });
+    wait_for_start.wait();
+  }
+  for (int i = 0; i < n; ++i) {
+    folly::Baton baton;
+    handle->getRequestPump().add([&baton] { baton.post(); });
+    baton.wait();
+  }
+  BENCHMARK_SUSPEND {
+    handle->dontWaitOnDestruct();
+    handle->shutdown();
+    auto thread = handle->getThread();
+    pthread_join(thread, nullptr);
+  }
+}
+
 }} // namespace facebook::logdevice
 
 #ifndef BENCHMARK_BUNDLE
