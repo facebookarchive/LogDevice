@@ -201,9 +201,10 @@ MaintenanceManager::getShardStateInternal(ShardID shard) const {
   return state;
 }
 
-folly::SemiFuture<ShardOperationalState>
+folly::SemiFuture<folly::Expected<ShardOperationalState, Status>>
 MaintenanceManager::getShardOperationalState(ShardID shard) {
-  auto [p, f] = folly::makePromiseContract<ShardOperationalState>();
+  auto [p, f] = folly::makePromiseContract<
+      folly::Expected<ShardOperationalState, Status>>();
   add([this, shard, mpromise = std::move(p)]() mutable {
     mpromise.setValue(getShardOperationalStateInternal(shard));
   });
@@ -211,9 +212,62 @@ MaintenanceManager::getShardOperationalState(ShardID shard) {
   return std::move(f);
 }
 
-ShardOperationalState
+folly::Expected<ShardOperationalState, Status>
 MaintenanceManager::getShardOperationalStateInternal(ShardID shard) const {
-  return ShardOperationalState::INVALID;
+  auto storageState = getStorageStateInternal(shard);
+
+  if (storageState.hasError()) {
+    return folly::makeUnexpected(std::move(storageState.error()));
+  }
+
+  ld_check(storageState.hasValue());
+
+  auto targetOpStates = getShardTargetStatesInternal(shard);
+
+  if (targetOpStates.hasError()) {
+    return folly::makeUnexpected(std::move(targetOpStates.error()));
+  }
+
+  ld_check(targetOpStates.hasValue());
+
+  if (targetOpStates->count(ShardOperationalState::ENABLED)) {
+    ld_check(targetOpStates->size() == 1);
+    if (storageState.value() == membership::StorageState::READ_WRITE) {
+      return ShardOperationalState::ENABLED;
+    } else {
+      // This does not necessarily mean we have an active workflow
+      // right now but one will be created if this state holds
+      return ShardOperationalState::ENABLING;
+    }
+  }
+
+  ShardOperationalState result;
+  ld_check(targetOpStates->count(ShardOperationalState::DRAINED) ||
+           targetOpStates->count(ShardOperationalState::MAY_DISAPPEAR));
+
+  switch (storageState.value()) {
+    case membership::StorageState::NONE:
+      result = ShardOperationalState::DRAINED;
+      break;
+    case membership::StorageState::NONE_TO_RO:
+    case membership::StorageState::RW_TO_RO:
+    case membership::StorageState::READ_ONLY:
+      result = ShardOperationalState::MAY_DISAPPEAR;
+      break;
+    case membership::StorageState::DATA_MIGRATION:
+      result = ShardOperationalState::MIGRATING_DATA;
+      break;
+    case membership::StorageState::READ_WRITE:
+      result = ShardOperationalState::ENABLED;
+      break;
+    default:
+      // This should never happen. All storage state
+      // cases are handled above
+      ld_assert(false);
+      result = ShardOperationalState::UNKNOWN;
+      break;
+  }
+  return std::move(result);
 }
 
 folly::SemiFuture<ShardDataHealth>
@@ -246,9 +300,10 @@ MaintenanceManager::getSequencingStateInternal(node_index_t node) const {
   return SequencingState::ENABLED;
 }
 
-folly::SemiFuture<membership::StorageState>
+folly::SemiFuture<folly::Expected<membership::StorageState, Status>>
 MaintenanceManager::getStorageState(ShardID shard) {
-  auto [p, f] = folly::makePromiseContract<membership::StorageState>();
+  auto [p, f] = folly::makePromiseContract<
+      folly::Expected<membership::StorageState, Status>>();
   add([this, shard, mpromise = std::move(p)]() mutable {
     mpromise.setValue(getStorageStateInternal(shard));
   });
@@ -256,11 +311,12 @@ MaintenanceManager::getStorageState(ShardID shard) {
   return std::move(f);
 }
 
-membership::StorageState
+folly::Expected<membership::StorageState, Status>
 MaintenanceManager::getStorageStateInternal(ShardID shard) const {
   auto [exists, shardState] =
       nodes_config_->getStorageMembership()->getShardState(shard);
-  return exists ? shardState.storage_state : membership::StorageState::INVALID;
+  return exists ? folly::makeExpected<Status>(shardState.storage_state)
+                : folly::makeUnexpected(E::NOTFOUND);
 }
 
 folly::SemiFuture<membership::MetaDataStorageState>
@@ -281,10 +337,11 @@ MaintenanceManager::getMetaDataStorageStateInternal(ShardID shard) const {
                 : membership::MetaDataStorageState::INVALID;
 }
 
-folly::SemiFuture<std::unordered_set<ShardOperationalState>>
+folly::SemiFuture<
+    folly::Expected<std::unordered_set<ShardOperationalState>, Status>>
 MaintenanceManager::getShardTargetStates(ShardID shard) {
-  auto [p, f] =
-      folly::makePromiseContract<std::unordered_set<ShardOperationalState>>();
+  auto [p, f] = folly::makePromiseContract<
+      folly::Expected<std::unordered_set<ShardOperationalState>, Status>>();
   add([this, shard, mpromise = std::move(p)]() mutable {
     mpromise.setValue(getShardTargetStatesInternal(shard));
   });
@@ -292,12 +349,13 @@ MaintenanceManager::getShardTargetStates(ShardID shard) {
   return std::move(f);
 }
 
-std::unordered_set<ShardOperationalState>
+folly::Expected<std::unordered_set<ShardOperationalState>, Status>
 MaintenanceManager::getShardTargetStatesInternal(ShardID shard) const {
   if (!cluster_maintenance_wrapper_) {
-    return {ShardOperationalState::UNKNOWN};
+    return folly::makeUnexpected(E::NOTREADY);
   }
-  return cluster_maintenance_wrapper_->getShardTargetStates(shard);
+  return folly::makeExpected<Status>(
+      cluster_maintenance_wrapper_->getShardTargetStates(shard));
 }
 
 folly::SemiFuture<SequencingState>
@@ -659,8 +717,9 @@ void MaintenanceManager::createWorkflows() {
 bool MaintenanceManager::isShardEnabled(const ShardID& shard) {
   // Shard is considered as enabled if its storage state is READ_WRITE
   // and there is no full rebuilding (mini rebuilding is fine)
-  return getStorageStateInternal(shard) ==
-      membership::StorageState::READ_WRITE &&
+  auto result = getStorageStateInternal(shard);
+  return result.hasValue() &&
+      result.value() == membership::StorageState::READ_WRITE &&
       !event_log_rebuilding_set_
            ->isRebuildingFullShard(shard.node(), shard.shard())
            .hasValue();

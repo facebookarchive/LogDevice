@@ -155,7 +155,7 @@ class MaintenanceManager : public SerialWorkContext {
   folly::SemiFuture<SequencerState> getSequencerState(node_index_t node);
   // Getter that returns a SemiFuture with ShardOperationalState for the given
   // shard
-  folly::SemiFuture<ShardOperationalState>
+  folly::SemiFuture<folly::Expected<ShardOperationalState, Status>>
   getShardOperationalState(ShardID shard);
   // Getter that returns a SemiFuture with ShardDataHealth for the given shard
   folly::SemiFuture<ShardDataHealth> getShardDataHealth(ShardID shard);
@@ -163,13 +163,15 @@ class MaintenanceManager : public SerialWorkContext {
   folly::SemiFuture<SequencingState> getSequencingState(node_index_t node);
   // Getter that returns a SemiFuture with StorageState for a shard from
   // NodesConfig
-  folly::SemiFuture<membership::StorageState> getStorageState(ShardID shard);
+  folly::SemiFuture<folly::Expected<membership::StorageState, Status>>
+  getStorageState(ShardID shard);
   // Getter that returns a SemiFuture with MetaDataStorageState for a shard from
   // NodesConfig
   folly::SemiFuture<membership::MetaDataStorageState>
   getMetaDataStorageState(ShardID shard);
   // Getter that returns a SemiFuture with the shard's target operational state
-  folly::SemiFuture<std::unordered_set<ShardOperationalState>>
+  folly::SemiFuture<
+      folly::Expected<std::unordered_set<ShardOperationalState>, Status>>
   getShardTargetStates(ShardID shard);
   // Getter that returns a SemiFuture with node's target sequencing state
   folly::SemiFuture<SequencingState>
@@ -267,19 +269,34 @@ class MaintenanceManager : public SerialWorkContext {
   // Getter that returns SequencerState for a given node
   SequencerState getSequencerStateInternal(node_index_t node) const;
   // Getter that returns ShardOperationalState for the given shard
-  ShardOperationalState getShardOperationalStateInternal(ShardID shard) const;
+  folly::Expected<ShardOperationalState, Status>
+  getShardOperationalStateInternal(ShardID shard) const;
   // Getter that returns ShardDataHealth for the given shard
   ShardDataHealth getShardDataHealthInternal(ShardID shard) const;
   // Getter that returns SequencingState for the gievn node
   SequencingState getSequencingStateInternal(node_index_t node) const;
-  // Getter that returns StorageState for a shard from NodesConfig
-  membership::StorageState getStorageStateInternal(ShardID shard) const;
+  /**
+   * Getter that returns StorageState for a shard from NodesConfig
+   *
+   * @param   shard ShardID for which to get the StorageState from NodesConfig
+   * @return  membership::StorageState if shard exists in NodesConfig, otherwise
+   *          Status is set to E::NOTFOUND
+   */
+  folly::Expected<membership::StorageState, Status>
+  getStorageStateInternal(ShardID shard) const;
   // Getter that returns MetaDataStorageState for a shard from
   // NodesConfig
   membership::MetaDataStorageState
   getMetaDataStorageStateInternal(ShardID shard) const;
-  // Getter that returns the shard's target operational state
-  std::unordered_set<ShardOperationalState>
+  /**
+   * Getter that returns the shard's target operational state
+   *
+   * @param   shard ShardID for which to get the target states
+   * @return  folly::Expected<std::unordered_set<ShardOperationalState>, Status>
+   *          Set of ShardOperationalState for shard if
+   * ClusterMaintenanceWrapper is initialized. Otherwise returns E::NOTREADY
+   */
+  folly::Expected<std::unordered_set<ShardOperationalState>, Status>
   getShardTargetStatesInternal(ShardID shard) const;
   // Getter that returns node's target sequencing state
   SequencingState

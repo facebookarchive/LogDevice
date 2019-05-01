@@ -138,7 +138,7 @@ struct ShardMaintenanceProgress {
  * to a sequencer node.
  */
 struct SequencerMaintenanceProgress {
-  1: MaintenanceStatus progress,
+  1: MaintenanceStatus status,
   2: SequencingState target_state,
   3: common.Timestamp created_at,
   4: optional common.Timestamp last_updated_at,
@@ -308,8 +308,10 @@ enum SequencingState {
    * Sequencing is disabled.
    */
   DISABLED = 3,
-  /*
-   * Sequencing state could not be determined
+  /**
+   * State could not be determined. This is usually a temporary state
+   * and querying the state again should result in a valid state to
+   * be returned
    */
   UNKNOWN = 4,
 }
