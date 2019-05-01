@@ -310,7 +310,16 @@ class MaintenanceManager : public SerialWorkContext {
   // NodesConfig and creates shard/sequencer workflows
   void createWorkflows();
 
-  // Calls `run` on active_shard_workflow_
+  // Returns true if given shard is enabled in current state
+  // A shard is considered enabled if its storageState is READ_WRITE
+  // and has no full rebuilding accoring to EventLogRebuildingSet
+  bool isShardEnabled(const ShardID& shard);
+
+  // Returns true if given node has Sequencing enabled in the
+  // current `nodes_config_`
+  bool isSequencingEnabled(node_index_t node);
+
+  // Calls `run` on active_shard_workflows_
   virtual std::pair<std::vector<ShardID>,
                     std::vector<folly::SemiFuture<MaintenanceStatus>>>
   runShardWorkflows();
@@ -326,10 +335,10 @@ class MaintenanceManager : public SerialWorkContext {
   // enabling shards before running safety checks
   bool has_shards_to_enable_;
 
-  // Remove the corresponding workflow from `active_shard_workflow_`
+  // Remove the corresponding workflow from `active_shard_workflows_`
   void removeShardWorkflow(ShardID shard);
 
-  // calls `run` on active_sequencer_workflow_
+  // calls `run` on active_sequencer_workflows_
   virtual std::pair<std::vector<node_index_t>,
                     std::vector<folly::SemiFuture<MaintenanceStatus>>>
   runSequencerWorkflows();
@@ -341,12 +350,12 @@ class MaintenanceManager : public SerialWorkContext {
       const std::vector<folly::Try<MaintenanceStatus>>& status);
 
   // Removes the corresponging sequencer workflow from
-  // `active_sequencer_workflow_`
+  // `active_sequencer_workflows_`
   void removeSequencerWorkflow(node_index_t node);
 
   // Schedule NodesConfiguration update for any workflow whose
   // status is AWAITING_NODES_CONFIG_CHANGES. Will look up shards
-  // in active_shard_workflow_ to determine the transtition that
+  // in active_shard_workflows_ to determine the transtition that
   // is to be requested
   folly::SemiFuture<NCUpdateResult> scheduleNodesConfigUpdates();
 
@@ -366,13 +375,13 @@ class MaintenanceManager : public SerialWorkContext {
       ShardID,
       std::pair<std::unique_ptr<ShardWorkflow>, MaintenanceStatus>,
       ShardID::Hash>
-      active_shard_workflow_;
+      active_shard_workflows_;
 
   // A map of node to the currently running sequencer maintenance worlflow
   folly::F14NodeMap<
       node_index_t,
       std::pair<std::unique_ptr<SequencerWorkflow>, MaintenanceStatus>>
-      active_sequencer_workflow_;
+      active_sequencer_workflows_;
 
   // The current ClusterMaintenanceWrapper generated from the last known
   // ClusterManintenanceState and NodesConfiguration. Gets updated in
@@ -402,6 +411,10 @@ class MaintenanceManager : public SerialWorkContext {
 
   // Returns the event_log_writer_;
   EventLogWriter* getEventLogWriter();
+
+  // Returns the RebuildingMode if shard is in rebuilding set
+  // otherwise returns RebuildingMode::INVALID
+  virtual RebuildingMode getCurrentRebuildingMode(ShardID shard);
 
   friend class MaintenanceManagerTest;
 };

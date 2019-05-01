@@ -144,7 +144,7 @@ void MaintenanceManager::scheduleRun() {
   // and EventLogRebuildingSet
   // 2/ MM is actually waiting for a state change
   // (i.e status_ == AWAITING_STATE_CHANGE)
-  run_evaluate_.store(true);
+  run_evaluate_ = true;
   if (status_ == MMStatus::STARTING && last_cms_version_ != LSN_INVALID &&
       last_ers_version_ != LSN_INVALID) {
     ld_info("Initial state available: last_cms_version:%s, last_ers_version:%s",
@@ -350,21 +350,127 @@ void MaintenanceManager::onEventLogRebuildingSetUpdate(
 
 ShardWorkflow* FOLLY_NULLABLE
 MaintenanceManager::getActiveShardWorkflow(ShardID shard) const {
-  if (active_shard_workflow_.count(shard)) {
-    return active_shard_workflow_.at(shard).first.get();
+  if (active_shard_workflows_.count(shard)) {
+    return active_shard_workflows_.at(shard).first.get();
   }
   return nullptr;
 }
 
 SequencerWorkflow* FOLLY_NULLABLE
 MaintenanceManager::getActiveSequencerWorkflow(node_index_t node) const {
-  if (active_sequencer_workflow_.count(node)) {
-    return active_sequencer_workflow_.at(node).first.get();
+  if (active_sequencer_workflows_.count(node)) {
+    return active_sequencer_workflows_.at(node).first.get();
   }
   return nullptr;
 }
 
-void MaintenanceManager::evaluate() {}
+void MaintenanceManager::evaluate() {
+  if (!run_evaluate_) {
+    // State has not changed as there are no updates.
+    ld_info("No state change from previous evaluate run. Will run when next"
+            "state change occurs");
+    status_ = MMStatus::AWAITING_STATE_CHANGE;
+    return;
+  }
+
+  run_evaluate_ = false;
+
+  // This is required because it is possible that we are running evaluate
+  // again before the NodesConfig update from previous iteration makes it
+  // to processor.
+  if (deps_->getNodesConfiguration()->getVersion() >
+      nodes_config_->getVersion()) {
+    nodes_config_ = deps_->getNodesConfiguration();
+  }
+
+  updateClientMaintenanceStateWrapper();
+
+  // Create all required workflows
+  createWorkflows();
+
+  // Run Shard workflows
+  status_ = MMStatus::RUNNING_WORKFLOWS;
+  auto [shards, shard_futures] = runShardWorkflows();
+  collectAllSemiFuture(shard_futures.begin(), shard_futures.end())
+      .via(this)
+      .thenValue([this, shards = std::move(shards)](
+                     std::vector<folly::Try<MaintenanceStatus>> result) {
+        processShardWorkflowResult(shards, result);
+        auto [nodes, node_futures] = runSequencerWorkflows();
+        return collectAllSemiFuture(node_futures.begin(), node_futures.end())
+            .via(this)
+            .thenValue([this, n = std::move(nodes)](
+                           std::vector<folly::Try<MaintenanceStatus>> result) {
+              processSequencerWorkflowResult(n, std::move(result));
+              return folly::makeSemiFuture<
+                  folly::Expected<folly::Unit, Status>>(
+                  folly::makeExpected<Status>(folly::Unit()));
+            });
+      })
+      .thenValue([this](folly::Expected<folly::Unit, Status> result) {
+        if (shouldStopProcessing()) {
+          auto e = folly::makeUnexpected<Status>(E::SHUTDOWN);
+          return folly::makeSemiFuture<NCUpdateResult>(std::move(e));
+        }
+        return scheduleNodesConfigUpdates();
+      })
+      .thenValue([this](NCUpdateResult result) {
+        if (result.hasError() && result.error() != Status::EMPTY) {
+          auto e = folly::makeUnexpected<Status>(std::move(result.error()));
+          return folly::makeSemiFuture<SafetyCheckResult>(std::move(e));
+        }
+        if (shouldStopProcessing()) {
+          auto e = folly::makeUnexpected<Status>(E::SHUTDOWN);
+          return folly::makeSemiFuture<SafetyCheckResult>(std::move(e));
+        }
+        ld_check(!result.hasError() || result.error() == Status::EMPTY);
+        // Update local copy to the version in result
+        if (result.hasValue()) {
+          nodes_config_ = std::move(result.value());
+        }
+        // We have shards that need to be enabled which could potentially
+        // imapct the outcome of safety checks. Hence we will run safety
+        // check only if there are no more shards that need to be enabled.
+        // Return E:RETRY so that we skip safety check and call evaluate
+        // at the end of this chain
+        if (has_shards_to_enable_) {
+          ld_info("Received NCUpdateResult but we have shards that need "
+                  "to be enabled. Returning E::RETRY so that we re-evaluate");
+          return folly::makeSemiFuture<SafetyCheckResult>(
+              folly::makeUnexpected<Status>(E::RETRY));
+        }
+        return scheduleSafetyCheck();
+      })
+      .thenValue([this](SafetyCheckResult result) {
+        if (result.hasError()) {
+          auto e = folly::makeUnexpected<Status>(std::move(result.error()));
+          return folly::makeSemiFuture<NCUpdateResult>(std::move(e));
+        }
+        if (shouldStopProcessing()) {
+          auto e = folly::makeUnexpected<Status>(E::SHUTDOWN);
+          return folly::makeSemiFuture<NCUpdateResult>(std::move(e));
+        }
+        processSafetyCheckResult(std::move(result.value()));
+        return scheduleNodesConfigUpdates();
+      })
+      .thenValue([this](NCUpdateResult result) {
+        if (result.hasError() && result.error() == Status::SHUTDOWN) {
+          ld_check(shouldStopProcessing());
+          finishShutdown();
+          return;
+        }
+
+        if (result.hasValue()) {
+          nodes_config_ = std::move(result.value());
+        }
+
+        if (!shouldStopProcessing()) {
+          evaluate();
+        } else {
+          finishShutdown();
+        }
+      });
+}
 
 void MaintenanceManager::finishShutdown() {
   // Stop was called. We should have a valid promise to fulfill
@@ -379,11 +485,64 @@ bool MaintenanceManager::shouldStopProcessing() {
 
 void MaintenanceManager::processShardWorkflowResult(
     const std::vector<ShardID>& shards,
-    const std::vector<folly::Try<MaintenanceStatus>>& status) {}
+    const std::vector<folly::Try<MaintenanceStatus>>& status) {
+  ld_check(shards.size() == status.size());
+  int i = 0;
+  has_shards_to_enable_ = false;
+  for (const auto& shard : shards) {
+    ld_check(status[i].hasValue());
+    ld_check(active_shard_workflows_.count(shard));
+    auto s = status[i].value();
+    switch (s) {
+      case MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES:
+      case MaintenanceStatus::AWAITING_SAFETY_CHECK:
+      case MaintenanceStatus::AWAITING_DATA_REBUILDING:
+      case MaintenanceStatus::RETRY:
+        active_shard_workflows_[shard].second = s;
+        if (active_shard_workflows_[shard].first->getTargetOpStates().count(
+                ShardOperationalState::ENABLED)) {
+          has_shards_to_enable_ = true;
+        }
+        break;
+      case MaintenanceStatus::COMPLETED:
+        if (active_shard_workflows_[shard].first->getTargetOpStates().count(
+                ShardOperationalState::ENABLED)) {
+          removeShardWorkflow(shard);
+        }
+        break;
+      default:
+        ld_critical("Unexpected Status set by workflow");
+        active_shard_workflows_[shard].second = s;
+        break;
+    }
+    i++;
+  }
+}
 
 void MaintenanceManager::processSequencerWorkflowResult(
     const std::vector<node_index_t>& nodes,
-    const std::vector<folly::Try<MaintenanceStatus>>& status) {}
+    const std::vector<folly::Try<MaintenanceStatus>>& status) {
+  ld_check(nodes.size() == status.size());
+  int i = 0;
+  for (node_index_t n : nodes) {
+    ld_check(status[i].hasValue());
+    auto s = status[i].value();
+    switch (s) {
+      case MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES:
+      case MaintenanceStatus::AWAITING_SAFETY_CHECK:
+        active_sequencer_workflows_[n].second = s;
+        break;
+      case MaintenanceStatus::COMPLETED:
+        removeSequencerWorkflow(n);
+        break;
+      default:
+        ld_critical("Unexpected Status set by workflow");
+        active_sequencer_workflows_[n].second = s;
+        break;
+    }
+    i++;
+  }
+}
 
 void MaintenanceManager::processSafetyCheckResult(
     SafetyCheckScheduler::Result result) {}
@@ -426,14 +585,94 @@ std::pair<std::vector<ShardID>,
 MaintenanceManager::runShardWorkflows() {
   std::vector<ShardID> shards;
   std::vector<folly::SemiFuture<MaintenanceStatus>> futures;
+  for (const auto& it : active_shard_workflows_) {
+    auto shard_id = it.first;
+    ShardWorkflow* wf = it.second.first.get();
+    auto current_storage_state =
+        nodes_config_->getStorageMembership()->getShardState(shard_id);
+    // The shard should be in NodesConfig since workflow is created
+    // only for shards in the config
+    ld_check(current_storage_state.first);
+    shards.push_back(shard_id);
+    futures.push_back(wf->run(current_storage_state.second.storage_state,
+                              getShardDataHealthInternal(shard_id),
+                              getCurrentRebuildingMode(shard_id)));
+  }
   return std::make_pair(std::move(shards), std::move(futures));
 }
 
-void MaintenanceManager::createWorkflows() {}
+void MaintenanceManager::createWorkflows() {
+  // Iterate over all the storage nodes in membership and create
+  // workflows if required
+  for (auto node : nodes_config_->getStorageNodes()) {
+    auto num_shards = nodes_config_->getNumShards(node);
+    for (shard_index_t i = 0; i < num_shards; i++) {
+      auto shard_id = ShardID(node, i);
+      const auto& targets =
+          cluster_maintenance_wrapper_->getShardTargetStates(shard_id);
+      if (targets.count(ShardOperationalState::ENABLED) &&
+          isShardEnabled(shard_id)) {
+        // Shard is already enabled, do not bother creating a workflow
+        continue;
+      }
+      // Create a new workflow if one does not exist or if the target states
+      // are different because some maintenance was removed or new maintenance
+      // was added for this shard
+      if (!active_shard_workflows_.count(shard_id) ||
+          targets !=
+              active_shard_workflows_[shard_id].first->getTargetOpStates()) {
+        active_shard_workflows_[shard_id] = std::make_pair(
+            std::make_unique<ShardWorkflow>(shard_id, getEventLogWriter()),
+            MaintenanceStatus::STARTED);
+      }
+      ShardWorkflow* wf = active_shard_workflows_[shard_id].first.get();
+      wf->isPassiveDrainAllowed(
+          cluster_maintenance_wrapper_->isPassiveDrainAllowed(shard_id));
+      wf->shouldSkipSafetyCheck(
+          cluster_maintenance_wrapper_->shouldSkipSafetyCheck(shard_id));
+      wf->rebuildInRestoreMode(
+          cluster_maintenance_wrapper_->shouldForceRestoreRebuilding(shard_id));
+    }
+  }
+
+  // Iterator over all the sequencer nodes in membership and create
+  // workflows if required
+  for (auto node : nodes_config_->getSequencerNodes()) {
+    auto target = cluster_maintenance_wrapper_->getSequencerTargetState(node);
+    if (target == SequencingState::ENABLED && isSequencingEnabled(node)) {
+      // Sequencer is already enabled, do not bother creating a workflow
+      continue;
+    }
+
+    if (!active_sequencer_workflows_.count(node) ||
+        target != active_sequencer_workflows_[node].first->getTargetOpState()) {
+      active_sequencer_workflows_[node] =
+          std::make_pair(std::make_unique<SequencerWorkflow>(node),
+                         MaintenanceStatus::STARTED);
+    }
+    SequencerWorkflow* wf = active_sequencer_workflows_[node].first.get();
+    wf->shouldSkipSafetyCheck(
+        cluster_maintenance_wrapper_->shouldSkipSafetyCheck(node));
+  }
+}
+
+bool MaintenanceManager::isShardEnabled(const ShardID& shard) {
+  // Shard is considered as enabled if its storage state is READ_WRITE
+  // and there is no full rebuilding (mini rebuilding is fine)
+  return getStorageStateInternal(shard) ==
+      membership::StorageState::READ_WRITE &&
+      !event_log_rebuilding_set_
+           ->isRebuildingFullShard(shard.node(), shard.shard())
+           .hasValue();
+}
+
+bool MaintenanceManager::isSequencingEnabled(node_index_t node) {
+  return nodes_config_->getSequencerMembership()->isSequencingEnabled(node);
+}
 
 void MaintenanceManager::removeShardWorkflow(ShardID shard) {
-  if (active_shard_workflow_.count(shard)) {
-    active_shard_workflow_.erase(shard);
+  if (active_shard_workflows_.count(shard)) {
+    active_shard_workflows_.erase(shard);
   }
 }
 
@@ -442,12 +681,18 @@ std::pair<std::vector<node_index_t>,
 MaintenanceManager::runSequencerWorkflows() {
   std::vector<node_index_t> nodes;
   std::vector<folly::SemiFuture<MaintenanceStatus>> futures;
+  for (const auto& it : active_sequencer_workflows_) {
+    auto node = it.first;
+    auto wf = it.second.first.get();
+    nodes.push_back(node);
+    futures.push_back(wf->run(isSequencingEnabled(node)));
+  }
   return std::make_pair(std::move(nodes), std::move(futures));
 }
 
 void MaintenanceManager::removeSequencerWorkflow(node_index_t node) {
-  if (active_sequencer_workflow_.count(node)) {
-    active_sequencer_workflow_.erase(node);
+  if (active_sequencer_workflows_.count(node)) {
+    active_sequencer_workflows_.erase(node);
   }
 }
 
@@ -456,6 +701,10 @@ EventLogWriter* MaintenanceManager::getEventLogWriter() {
     event_log_writer_ = std::make_unique<EventLogWriter>(*deps_->getEventLog());
   }
   return event_log_writer_.get();
+}
+
+RebuildingMode MaintenanceManager::getCurrentRebuildingMode(ShardID shard) {
+  return RebuildingMode::INVALID;
 }
 
 }}} // namespace facebook::logdevice::maintenance

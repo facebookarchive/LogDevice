@@ -74,7 +74,7 @@ class ShardWorkflow {
   void rebuildInRestoreMode(bool is_restore);
 
   // Returns the target_op_state_
-  std::unordered_set<ShardOperationalState> getTargetOpState() const;
+  std::unordered_set<ShardOperationalState> getTargetOpStates() const;
 
   // Returns the StorageState that this workflow expects for this
   // shard in NodesConfiguration. This will be used

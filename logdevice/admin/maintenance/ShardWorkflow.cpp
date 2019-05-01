@@ -270,7 +270,7 @@ void ShardWorkflow::rebuildInRestoreMode(bool is_restore) {
 }
 
 std::unordered_set<ShardOperationalState>
-ShardWorkflow::getTargetOpState() const {
+ShardWorkflow::getTargetOpStates() const {
   return target_op_state_;
 }
 
