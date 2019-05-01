@@ -160,7 +160,6 @@ Processor::Processor(std::shared_ptr<UpdateableConfig> updateable_config,
       impl_(new ProcessorImpl(this, settings, trace_logger)),
       sequencer_locator_(get_sequencer_locator(plugin_registry_, config_)),
       conn_budget_incoming_(settings_->max_incoming_connections),
-      conn_budget_backlog_(settings_->connection_backlog),
       conn_budget_external_(settings_->max_external_connections),
       api_hits_tracer_(std::make_unique<ClientAPIHitsTracer>(trace_logger)),
       HELLOCredentials_(settings_->server ? Principal::CLUSTER_NODE
@@ -292,7 +291,6 @@ Processor::Processor(std::shared_ptr<UpdateableConfig> updateable_config,
                               settings,
                               std::make_shared<NoopTraceLogger>(config_))),
       conn_budget_incoming_(settings_.get()->max_incoming_connections),
-      conn_budget_backlog_(settings_.get()->connection_backlog),
       conn_budget_external_(settings_.get()->max_external_connections) {
   ld_check(settings.get());
   num_general_workers_ = settings_->num_workers;

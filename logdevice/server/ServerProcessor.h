@@ -130,6 +130,5 @@ class ServerProcessor : public Processor {
   UpdateableSettings<GossipSettings> gossip_settings_;
   UpdateableSettings<AdminServerSettings> admin_server_settings_;
   std::unique_ptr<LogStorageStateMap> log_storage_state_map_;
-  UpdateableSettings<Settings>::SubscriptionHandle settings_subscription_;
 };
 }} // namespace facebook::logdevice

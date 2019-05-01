@@ -52,16 +52,6 @@ void ServerProcessor::init() {
       PER_SHARD_STAT_INCR(stats_, shard_dirty, shard_idx);
     }
   }
-  // It's ok to capture this since ServerProcessor destructor will be called
-  // before Processor destructor. ServerProcessor destructor will unsubscrube
-  // from settings updates. All accessed variables will still be alive since
-  // they are members of base class. Subscribe/unsubscribe/update methods of
-  // UpdateableSettings are mutex protected.
-  std::function<void()> updateResourceBudget = [this]() {
-    conn_budget_backlog_.setLimit(settings()->connection_backlog);
-  };
-  settings_subscription_ =
-      updateableSettings().callAndSubscribeToUpdates(updateResourceBudget);
 }
 
 int ServerProcessor::getWorkerCount(WorkerType type) const {

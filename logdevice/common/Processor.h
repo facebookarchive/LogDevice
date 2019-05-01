@@ -500,12 +500,6 @@ class Processor : public folly::enable_shared_from_this<Processor> {
   // See Settings::max_incoming_connections_.
   ResourceBudget conn_budget_incoming_;
 
-  // ResourceBudget used to limit the total number of accepted connections
-  // which have not been processed by workers. It is the same as looking at the
-  // number of incomplete NewConnectionRequest
-  // See Settings::max_new_connections.
-  ResourceBudget conn_budget_backlog_;
-
   // Limits accepted and established connections originating from clients.
   // See Settings::max_external_connections_.
   ResourceBudget conn_budget_external_;
