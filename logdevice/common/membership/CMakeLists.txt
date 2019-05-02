@@ -19,6 +19,7 @@ file(
 ld_thrift_py3_library(
   "Membership"
   ""
+  "json"
   "${CMAKE_CURRENT_SOURCE_DIR}"
   "${CMAKE_BINARY_DIR}/${_membership_if_include_prefix}"
   "${_membership_if_include_prefix}"

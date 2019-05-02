@@ -44,6 +44,7 @@ foreach(THRIFT_SOURCE
   ld_thrift_py3_library(
     ${THRIFT_SOURCE}
     ""
+    "json"
     "${CMAKE_CURRENT_SOURCE_DIR}"
     "${_adminapi_binary_dir}"
     "${_adminapi_if_include_prefix}"
@@ -66,6 +67,7 @@ endforeach()
 ld_thrift_py3_library(
   "admin"
   "AdminAPI"
+  "json"
   "${CMAKE_CURRENT_SOURCE_DIR}"
   "${CMAKE_BINARY_DIR}/logdevice/admin/if"
   "logdevice/admin/if"

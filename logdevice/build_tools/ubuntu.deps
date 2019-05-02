@@ -35,15 +35,13 @@ libiberty-dev
 libjemalloc-dev
 python3
 python3-pip
+python3-venv
 autoconf
 autoconf-archive
 automake
 pkg-config
 libtool
 libboost-context-dev
-libzstd1-dev
 bison
 flex
-libmstch-dev
 libkrb5-dev
-libsodium-dev

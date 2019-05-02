@@ -43,6 +43,7 @@ include(build-config)
 option(BUILD_TESTS "If enabled, compile the tests." ON)
 option(BUILD_SUBMODULES "Build using Git submodules, to fulfill dependencies" ON)
 if(${BUILD_SUBMODULES})
+  message("Building with submodules enabled")
   include(build-rocksdb)
   include(build-folly)
   include(build-fizz)
@@ -50,6 +51,7 @@ if(${BUILD_SUBMODULES})
   include(build-fbthrift)
   include(${LOGDEVICE_DIR}/external/fbthrift/ThriftLibrary.cmake)
 else()
+  message("Building without submodules")
   find_package(RocksDB CONFIG REQUIRED)
   set(ROCKSDB_LIBRARIES RocksDB::rocksdb)
   find_package(folly CONFIG REQUIRED)
@@ -59,6 +61,9 @@ else()
   find_package(fizz CONFIG REQUIRED)
   find_package(wangle CONFIG REQUIRED)
   find_package(FBThrift CONFIG REQUIRED)
+  find_package(fmt CONFIG REQUIRED)
+  find_package(yarpl CONFIG REQUIRED)
+  find_package(rsocket CONFIG REQUIRED)
   find_program(THRIFT1 thrift1)
   find_path(THRIFT_COMPILER_INCLUDE thrift/templates)
   set(THRIFT_TEMPLATES ${THRIFT_COMPILER_INCLUDE}/thrift/templates)
@@ -134,6 +139,7 @@ set(LOGDEVICE_EXTERNAL_DEPS
   ${JEMALLOC_LIBRARIES}
   ${IBERTY_LIBRARIES}
   ${SNAPPY_LIBRARY}
+  ${PYTHON_LIBRARIES}
   Threads::Threads)
 
 include_directories(${CMAKE_BINARY_DIR})

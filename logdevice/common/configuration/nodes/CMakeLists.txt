@@ -19,7 +19,7 @@ thrift_library(
   "NodesConfiguration"
   ""
   "cpp2"
-  ""
+  "json"
   "${CMAKE_CURRENT_SOURCE_DIR}"
   "${CMAKE_BINARY_DIR}/${_nodesconfiguration_if_include_prefix}"
   "${_nodesconfiguration_if_include_prefix}"

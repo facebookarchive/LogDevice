@@ -17,7 +17,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 config = read_fbcode_builder_config("fbcode_builder_config.py")  # noqa: F821
 config["legocastle_opts"] = {
     "alias": "logdevice-oss-linux",
-    "oncall": "cmarchent",
+    "oncall": "asoli",
     "build_name": "Open-source build for LogDevice",
     "legocastle_os": "unstable",
 }

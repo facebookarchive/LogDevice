@@ -13,6 +13,7 @@ file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/${_fb303_if_include_prefix})
 ld_thrift_py3_library(
   "fb303"
   "FacebookService"
+  ""
   "${CMAKE_CURRENT_SOURCE_DIR}"
   "${CMAKE_BINARY_DIR}/${_fb303_if_include_prefix}"
   "${_fb303_if_include_prefix}"

@@ -126,7 +126,7 @@ endfunction()
 # Create a thrift library, macro prefixed with ld_ so that it can be migrated to ThriftLibrary at
 # some point in the future.
 
-macro(ld_thrift_py3_library file_name services file_path output_path include_prefix)
+macro(ld_thrift_py3_library file_name services options file_path output_path include_prefix)
 
   # Parse optional arguments
   set(_py3_namespace)
@@ -162,7 +162,7 @@ macro(ld_thrift_py3_library file_name services file_path output_path include_pre
     "${file_name}"
     "${services}"
     "cpp2"
-    ""
+    "${options}"
     "${file_path}"
     "${output_path}"
     "${include_prefix}"
@@ -179,7 +179,7 @@ macro(ld_thrift_py3_library file_name services file_path output_path include_pre
       "${file_name}"
       "${services}"
       "py3"
-      ""
+      "${options}"
       "${file_path}"
       "${output_path}"
       "${include_prefix}"
