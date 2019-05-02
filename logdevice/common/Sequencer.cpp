@@ -913,8 +913,7 @@ RunAppenderStatus Sequencer::runAppender(Appender* appender) {
   SteadyTimestamp now = SteadyTimestamp::now();
   atomic_fetch_max(last_append_, now.toMilliseconds());
 
-  append_rate_estimator_.addValue(
-      appender->getPayload()->size(), getRateEstimatorWindowSize(), now);
+  size_t payload_size = appender->getPayload()->size();
 
   ld_check(epoch != EPOCH_INVALID);
   if (appender->isStale(epoch)) {
@@ -945,7 +944,16 @@ RunAppenderStatus Sequencer::runAppender(Appender* appender) {
     appender->TEST_corruptPayload();
   }
 
-  return current->runAppender(appender);
+  RunAppenderStatus res = current->runAppender(appender);
+
+  // Count the record's size towards log throughput estimate only if we're going
+  // to actually run the appender.
+  if (res == RunAppenderStatus::SUCCESS_KEEP) {
+    append_rate_estimator_.addValue(
+        payload_size, getRateEstimatorWindowSize(), now);
+  }
+
+  return res;
 }
 
 size_t Sequencer::getNumAppendsInFlight() const {
