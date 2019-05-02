@@ -12,7 +12,7 @@ from collections import Counter
 from nubia import context
 from nubia.internal.cmdbase import Command
 from prettytable import PrettyTable
-from prompt_toolkit.contrib.completers import WordCompleter
+from prompt_toolkit.completion import WordCompleter
 from termcolor import cprint
 
 
