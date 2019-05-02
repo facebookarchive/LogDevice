@@ -212,6 +212,10 @@ class Socket : public TrafficShappingSocket {
   // struct sockaddr of peer end point
   const Sockaddr peer_sockaddr_;
 
+  // A numan-readable string like
+  // "C22566784 ([abcd:1234:5678:90ef:1111:2222:3333:4444]:41406)"
+  std::string conn_description_;
+
   // Node location of peer end point.
   // In format "{region}.{datacenter}.{cluster}.{row}.{rack}"
   // Currently only used for passing client location from client to server
@@ -1169,7 +1173,6 @@ class SocketDependencies {
                                            size_t size);
   virtual int buffereventSetMaxSingleRead(struct bufferevent* bev, size_t size);
   virtual int buffereventEnable(struct bufferevent* bev, short event);
-  virtual std::string describeConnection();
   virtual void onSent(std::unique_ptr<Message> msg,
                       const Address& to,
                       Status st,
@@ -1204,7 +1207,6 @@ class SocketDependencies {
  private:
   Processor* const processor_;
   Sender* sender_;
-  std::string conn_description_;
 };
 
 /**

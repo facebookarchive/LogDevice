@@ -175,13 +175,13 @@ int Sender::addClient(int fd,
 
     auto& flow_group = nw_shaping_container_->selectFlowGroup(flow_group_scope);
 
-    std::unique_ptr<Connection> sock(new Connection(fd,
-                                                    client_name,
-                                                    client_addr,
-                                                    std::move(conn_token),
-                                                    type,
-                                                    conntype,
-                                                    flow_group));
+    auto sock = std::make_unique<Connection>(fd,
+                                             client_name,
+                                             client_addr,
+                                             std::move(conn_token),
+                                             type,
+                                             conntype,
+                                             flow_group);
 
     auto res =
         impl_->client_sockets_.emplace(std::piecewise_construct,
@@ -879,11 +879,11 @@ Socket* Sender::initServerSocket(NodeID nid,
         }
       }
 
-      std::unique_ptr<Connection> sock(
-          new Connection(nid,
-                         sock_type,
-                         use_ssl ? ConnectionType::SSL : ConnectionType::PLAIN,
-                         flow_group));
+      auto sock = std::make_unique<Connection>(
+          nid,
+          sock_type,
+          use_ssl ? ConnectionType::SSL : ConnectionType::PLAIN,
+          flow_group);
 
       auto res = impl_->server_sockets_.emplace(
           std::piecewise_construct,

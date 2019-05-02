@@ -200,10 +200,6 @@ int TestSocketDependencies::buffereventEnable(struct bufferevent* /*bev*/,
   return 0;
 }
 
-std::string TestSocketDependencies::describeConnection() {
-  return "";
-}
-
 void TestSocketDependencies::onSent(std::unique_ptr<Message> msg,
                                     const Address& /*to*/,
                                     Status st,

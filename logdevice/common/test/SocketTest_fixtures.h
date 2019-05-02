@@ -99,7 +99,6 @@ class TestSocketDependencies : public SocketDependencies {
   virtual int buffereventSetMaxSingleRead(struct bufferevent* bev,
                                           size_t size) override;
   virtual int buffereventEnable(struct bufferevent* bev, short event) override;
-  virtual std::string describeConnection() override;
   virtual void onSent(std::unique_ptr<Message> msg,
                       const Address& to,
                       Status st,

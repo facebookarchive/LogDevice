@@ -139,6 +139,10 @@ Socket::Socket(std::unique_ptr<SocketDependencies>& deps,
                FlowGroup& flow_group)
     : peer_name_(peer_name),
       peer_sockaddr_(peer_sockaddr),
+      conn_description_(peer_name.toString() + "(" +
+                        (peer_sockaddr_.valid() ? peer_sockaddr_.toString()
+                                                : std::string("UNKNOWN")) +
+                        ")"),
       flow_group_(flow_group),
       type_(type),
       socket_ref_holder_(std::make_shared<bool>(true), this),
@@ -348,7 +352,7 @@ void Socket::onBufferedOutputTimerEvent(void* instance, short) {
 }
 
 Socket::~Socket() {
-  ld_debug("Destroying Socket %s", deps_->describeConnection().c_str());
+  ld_debug("Destroying Socket %s", conn_description_.c_str());
   close(E::SHUTDOWN);
 }
 
@@ -588,7 +592,7 @@ int Socket::doConnectAttempt() {
     }
 
     ld_error("Failed to initiate connection to %s errno=%d (%s)",
-             deps_->describeConnection().c_str(),
+             conn_description_.c_str(),
              errno,
              strerror(errno));
     switch (errno) {
@@ -658,7 +662,7 @@ void Socket::flushOutputAndClose(Status reason) {
 
   ld_spew("Flushing %lu bytes of output before closing connection to %s",
           pending_bytes,
-          deps_->describeConnection().c_str());
+          conn_description_.c_str());
 
   close_reason_ = reason;
 
@@ -705,7 +709,7 @@ void Socket::onBytesAvailable(bool fresh) {
                             10,
                             "receiveMessage() failed with %s from %s.",
                             error_name(err),
-                            deps_->describeConnection().c_str());
+                            conn_description_.c_str());
             connect_throttle_.connectFailed();
           }
           if ((err == E::PROTONOSUPPORT || err == E::INVALID_CLUSTER ||
@@ -756,8 +760,8 @@ void Socket::readMoreCallback(void* arg, short what) {
   Socket* self = reinterpret_cast<Socket*>(arg);
   ld_check(what & EV_TIMEOUT);
   ld_check(self->bev_);
-  ld_spew("Socket %s remains above low watermark",
-          self->deps_->describeConnection().c_str());
+  ld_spew(
+      "Socket %s remains above low watermark", self->conn_description_.c_str());
   self->onBytesAvailable(/*fresh=*/false);
 }
 
@@ -844,8 +848,7 @@ void Socket::onConnected() {
     // we receive a BEV_EVENT_CONNECTED for an _incoming_ connection after the
     // handshake is done.
     ld_check(isSSL());
-    ld_debug(
-        "SSL handshake with %s completed", deps_->describeConnection().c_str());
+    ld_debug("SSL handshake with %s completed", conn_description_.c_str());
     expecting_ssl_handshake_ = false;
     expectProtocolHeader();
     return;
@@ -858,9 +861,8 @@ void Socket::onConnected() {
   connected_ = true;
   peer_shuttingdown_ = false;
 
-  ld_debug("Socket(%p) to node %s has connected",
-           this,
-           deps_->describeConnection().c_str());
+  ld_debug(
+      "Socket(%p) to node %s has connected", this, conn_description_.c_str());
 
   // Send the first message enqueued in serializeq_, which should be a HELLO
   // message. The rest of the content of the queue will be serialized only once
@@ -902,7 +904,7 @@ void Socket::onError(short direction, int socket_errno) {
   if (!bev_) {
     ld_critical("INTERNAL ERROR: got a libevent error on disconnected socket "
                 "with peer %s. errno=%d (%s)",
-                deps_->describeConnection().c_str(),
+                conn_description_.c_str(),
                 socket_errno,
                 strerror(socket_errno));
     ld_check(0);
@@ -941,7 +943,7 @@ void Socket::onError(short direction, int socket_errno) {
     ld_log(severe ? facebook::logdevice::dbg::Level::ERROR
                   : facebook::logdevice::dbg::Level::WARNING,
            "Got an error on socket connected to %s while %s%s. %s",
-           deps_->describeConnection().c_str(),
+           conn_description_.c_str(),
            (direction & BEV_EVENT_WRITING) ? "writing" : "reading",
            expecting_ssl_handshake_ ? " (during SSL handshake)" : "",
            socket_errno != 0 ? ("errno=" + std::to_string(socket_errno) + " (" +
@@ -958,7 +960,7 @@ void Socket::onError(short direction, int socket_errno) {
         std::chrono::seconds(10),
         10,
         "Failed to connect to node %s. errno=%d (%s)",
-        deps_->describeConnection().c_str(),
+        conn_description_.c_str(),
         socket_errno,
         strerror(socket_errno));
   }
@@ -967,7 +969,7 @@ void Socket::onError(short direction, int socket_errno) {
 }
 
 void Socket::onPeerClosed() {
-  ld_spew("Peer %s closed.", deps_->describeConnection().c_str());
+  ld_spew("Peer %s closed.", conn_description_.c_str());
   ld_check(bev_);
   if (!isSSL()) {
     // an SSL socket can be in a state where the TCP connection is established,
@@ -988,8 +990,7 @@ void Socket::onPeerClosed() {
 }
 
 void Socket::onConnectTimeout() {
-  ld_spew("Connection timeout connecting to %s",
-          deps_->describeConnection().c_str());
+  ld_spew("Connection timeout connecting to %s", conn_description_.c_str());
   if (!peer_name_.isClientAddress()) {
     connect_throttle_.connectFailed();
   }
@@ -998,8 +999,8 @@ void Socket::onConnectTimeout() {
 }
 
 void Socket::onHandshakeTimeout() {
-  ld_warning("Handshake timeout occurred (peer: %s).",
-             deps_->describeConnection().c_str());
+  ld_warning(
+      "Handshake timeout occurred (peer: %s).", conn_description_.c_str());
   onConnectTimeout();
   STAT_INCR(deps_->getStats(), handshake_timeouts);
 }
@@ -1010,7 +1011,7 @@ void Socket::onConnectAttemptTimeout() {
   RATELIMIT_DEBUG(std::chrono::seconds(5),
                   5,
                   "Connection timeout occurred (peer: %s). Attempt %lu.",
-                  deps_->describeConnection().c_str(),
+                  conn_description_.c_str(),
                   retries_so_far_);
   ld_check(!connected_);
   if (retries_so_far_ >= getSettings().connection_retries) {
@@ -1027,7 +1028,7 @@ void Socket::onConnectAttemptTimeout() {
     if (doConnectAttempt() != 0) {
       ld_warning("Connect attempt #%lu failed (peer:%s), err=%s",
                  retries_so_far_ + 1,
-                 deps_->describeConnection().c_str(),
+                 conn_description_.c_str(),
                  error_name(err));
       onConnectTimeout();
     } else {
@@ -1054,7 +1055,7 @@ void Socket::setDSCP(uint8_t dscp) {
 
 void Socket::close(Status reason) {
   ld_debug("Closing Socket %s, reason %s ",
-           deps_->describeConnection().c_str(),
+           conn_description_.c_str(),
            error_name(reason));
   // Checking and setting this here to prevent recursive closes
   if (closing_) {
@@ -1076,12 +1077,12 @@ void Socket::close(Status reason) {
                   std::chrono::seconds(10),
                   10,
                   "Closing socket %s. Reason: %s",
-                  deps_->describeConnection().c_str(),
+                  conn_description_.c_str(),
                   error_description(reason));
 
   if (getBytesPending() > 0) {
     ld_debug("Socket %s had %zu bytes pending when closed.",
-             deps_->describeConnection().c_str(),
+             conn_description_.c_str(),
              getBytesPending());
 
     ld_debug("Sender now has %zu total bytes pending",
@@ -1461,7 +1462,7 @@ int Socket::preSendCheck(const Message& msg) {
                       "attempt to send a message of type %s to client %s "
                       "before handshake was completed",
                       messageTypeNames[msg.type_].c_str(),
-                      deps_->describeConnection().c_str());
+                      conn_description_.c_str());
       err = E::UNREACHABLE;
       return -1;
     }
@@ -1474,7 +1475,7 @@ int Socket::preSendCheck(const Message& msg) {
           "because messages expects a protocol version >= %hu but "
           "the protocol used for that socket is %hu",
           messageTypeNames[msg.type_].c_str(),
-          deps_->describeConnection().c_str(),
+          conn_description_.c_str(),
           msg.getMinProtocolVersion(),
           proto_);
     }
@@ -1526,7 +1527,7 @@ void Socket::send(std::unique_ptr<Envelope> envelope) {
           2,
           "Tried to send a message that's too long (%lu bytes) to %s",
           (size_t)msglen,
-          deps_->describeConnection().c_str());
+          conn_description_.c_str());
       err = E::TOOBIG;
       onSent(std::move(envelope), err);
       return;
@@ -1563,7 +1564,7 @@ Envelope* Socket::registerMessage(std::unique_ptr<Message>&& msg) {
         std::chrono::seconds(1),
         10,
         "ENOBUFS for Socket %s. Current socket usage: %zu, max: %zu",
-        deps_->describeConnection().c_str(),
+        conn_description_.c_str(),
         getBytesPending(),
         outbuf_overflow_);
 
@@ -1794,7 +1795,7 @@ void Socket::onBytesPassedToTCP(size_t nbytes) {
 
   ld_spew("Socket %s passed %zu bytes to TCP. Sender now has %zu total "
           "bytes pending",
-          deps_->describeConnection().c_str(),
+          conn_description_.c_str(),
           nbytes,
           deps_->getBytesPending());
 }
@@ -1898,7 +1899,7 @@ int Socket::receiveMessage() {
                   "reading a protocol header from peer %s. "
                   "Expected %lu bytes.",
                   nbytes,
-                  deps_->describeConnection().c_str(),
+                  conn_description_.c_str(),
                   min_protohdr_bytes);
       err = E::INTERNAL; // TODO: make sure close() works as an error handler
       return -1;
@@ -1907,7 +1908,7 @@ int Socket::receiveMessage() {
       ld_error("PROTOCOL ERROR: got message length %u from peer %s, expected "
                "at least %zu given sizeof(ProtocolHeader)=%zu",
                recv_message_ph_.len,
-               deps_->describeConnection().c_str(),
+               conn_description_.c_str(),
                min_protohdr_bytes + 1,
                sizeof(ProtocolHeader));
       err = E::BADMSG;
@@ -1922,7 +1923,7 @@ int Socket::receiveMessage() {
       ld_error("PROTOCOL ERROR: got invalid message length %u from peer %s "
                "for msg:%s. Expected at most %u. min_protohdr_bytes:%zu",
                recv_message_ph_.len,
-               deps_->describeConnection().c_str(),
+               conn_description_.c_str(),
                messageTypeNames[recv_message_ph_.type].c_str(),
                Message::MAX_LEN,
                min_protohdr_bytes);
@@ -1935,7 +1936,7 @@ int Socket::receiveMessage() {
                "peer %s",
                int(recv_message_ph_.type),
                int(recv_message_ph_.type),
-               deps_->describeConnection().c_str());
+               conn_description_.c_str());
       err = E::BADMSG;
       return -1;
     }
@@ -1943,7 +1944,7 @@ int Socket::receiveMessage() {
       ld_error("PROTOCOL ERROR: got a message of type %s on a brand new "
                "connection to/from %s). Expected %s.",
                messageTypeNames[recv_message_ph_.type].c_str(),
-               deps_->describeConnection().c_str(),
+               conn_description_.c_str(),
                peer_name_.isClientAddress() ? "HELLO" : "ACK");
       err = E::PROTO;
       return -1;
@@ -1959,7 +1960,7 @@ int Socket::receiveMessage() {
                     "reading checksum in protocol header from peer %s. "
                     "Expected %lu bytes.",
                     cksum_nbytes,
-                    deps_->describeConnection().c_str(),
+                    conn_description_.c_str(),
                     sizeof(recv_message_ph_.cksum));
         err = E::INTERNAL;
         return -1;
@@ -2015,7 +2016,7 @@ bool Socket::verifyChecksum(ProtocolHeader ph, ProtocolReader& reader) {
         ", msgtype:%s",
         cksum_recvd,
         cksum_computed,
-        deps_->describeConnection().c_str(),
+        conn_description_.c_str(),
         messageTypeNames[ph.type].c_str());
 
     err = E::CHECKSUM_MISMATCH;
@@ -2032,7 +2033,7 @@ bool Socket::validateReceivedMessage(const Message* msg) const {
     if (handshaken_) {
       ld_error("PROTOCOL ERROR: got a duplicate %s from %s",
                messageTypeNames[msg->type_].c_str(),
-               deps_->describeConnection().c_str());
+               conn_description_.c_str());
       err = E::PROTO;
       return false;
     }
@@ -2076,7 +2077,7 @@ bool Socket::processHandshakeMessage(const Message* msg) {
                           1,
                           "Rejecting a client connection from %s because the "
                           "client connection limit has been reached.",
-                          deps_->describeConnection().c_str());
+                          conn_description_.c_str());
 
         // Set to false to prevent close() from releasing even though
         // acquire() failed.
@@ -2096,8 +2097,7 @@ bool Socket::processHandshakeMessage(const Message* msg) {
   ld_check(proto_ >= Compatibility::MIN_PROTOCOL_SUPPORTED);
   ld_check(proto_ <= Compatibility::MAX_PROTOCOL_SUPPORTED);
   ld_assert(proto_ <= getSettings().max_protocol);
-  ld_spew(
-      "%s negotiated protocol %d", deps_->describeConnection().c_str(), proto_);
+  ld_spew("%s negotiated protocol %d", conn_description_.c_str(), proto_);
 
   // Now that we know what protocol we are speaking with the other end,
   // we can serialize pending messages. Messages that are not compatible
@@ -2149,7 +2149,7 @@ int Socket::onReceived(ProtocolHeader ph, struct evbuffer* inbuf) {
         ld_error("PROTOCOL ERROR: message of type %s received from peer "
                  "%s is too large: %u bytes",
                  messageTypeNames[ph.type].c_str(),
-                 deps_->describeConnection().c_str(),
+                 conn_description_.c_str(),
                  ph.len);
         err = E::BADMSG;
         return -1;
@@ -2158,7 +2158,7 @@ int Socket::onReceived(ProtocolHeader ph, struct evbuffer* inbuf) {
         ld_error("PROTOCOL ERROR: message of type %s received from peer "
                  "%s has invalid format. proto_:%hu",
                  messageTypeNames[ph.type].c_str(),
-                 deps_->describeConnection().c_str(),
+                 conn_description_.c_str(),
                  proto_);
         err = E::BADMSG;
         return -1;
@@ -2167,7 +2167,7 @@ int Socket::onReceived(ProtocolHeader ph, struct evbuffer* inbuf) {
         ld_critical("INTERNAL ERROR while deserializing a message of type "
                     "%s received from peer %s",
                     messageTypeNames[ph.type].c_str(),
-                    deps_->describeConnection().c_str());
+                    conn_description_.c_str());
         return 0;
 
       case E::NOTSUPPORTED:
@@ -2185,7 +2185,7 @@ int Socket::onReceived(ProtocolHeader ph, struct evbuffer* inbuf) {
                     static_cast<int>(err),
                     error_name(err),
                     messageTypeNames[ph.type].c_str(),
-                    deps_->describeConnection().c_str());
+                    conn_description_.c_str());
         return 0;
     }
 
@@ -2213,7 +2213,7 @@ int Socket::onReceived(ProtocolHeader ph, struct evbuffer* inbuf) {
   ld_spew("Received message %s of size %u bytes from %s",
           messageTypeNames[ph.type].c_str(),
           recv_message_ph_.len,
-          deps_->describeConnection().c_str());
+          conn_description_.c_str());
 
   // 4. Dispatch message to state machines for processing.
 
@@ -2255,7 +2255,7 @@ int Socket::pushOnCloseCallback(SocketCallback& cb) {
         10,
         "INTERNAL ERROR: attempt to push an active SocketCallback "
         "onto the on_close_ callback list of Socket %s",
-        deps_->describeConnection().c_str());
+        conn_description_.c_str());
     ld_check(false);
     err = E::INVALID_PARAM;
     return -1;
@@ -2272,7 +2272,7 @@ int Socket::pushOnBWAvailableCallback(BWAvailableCallback& cb) {
                        "INTERNAL ERROR: attempt to push an active "
                        "BWAvailableCallback onto the pending_bw_cbs_ "
                        "callback list of Socket %s",
-                       deps_->describeConnection().c_str());
+                       conn_description_.c_str());
     ld_check(false);
     err = E::INVALID_PARAM;
     return -1;
@@ -2458,9 +2458,7 @@ void Socket::limitCiphersToENULL() {
 SocketDependencies::SocketDependencies(Processor* processor,
                                        Sender* sender,
                                        const Address& peer_name)
-    : processor_(processor),
-      sender_(sender),
-      conn_description_(Sender::describeConnection(peer_name)) {}
+    : processor_(processor), sender_(sender) {}
 
 const Settings& SocketDependencies::getSettings() const {
   return *processor_->settings();
@@ -2708,10 +2706,6 @@ int SocketDependencies::buffereventSetMaxSingleRead(struct bufferevent* bev,
 int SocketDependencies::buffereventEnable(struct bufferevent* bev,
                                           short event) {
   return LD_EV(bufferevent_enable)(bev, event);
-}
-
-std::string SocketDependencies::describeConnection() {
-  return conn_description_;
 }
 
 void SocketDependencies::onSent(std::unique_ptr<Message> msg,
