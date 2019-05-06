@@ -29,6 +29,7 @@
 #include "logdevice/common/Sockaddr.h"
 #include "logdevice/common/SocketCallback.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/configuration/nodes/utils.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/protocol/CONFIG_ADVISORY_Message.h"
@@ -790,8 +791,8 @@ bool Sender::useSSLWith(NodeID nid,
   bool cross_boundary = false;
   NodeLocationScope diff_level = settings_->ssl_boundary;
 
-  std::shared_ptr<ServerConfig> cfg(Worker::getConfig()->serverConfig());
-  cross_boundary = cfg->getNodeSSL(my_location_, nid, diff_level);
+  cross_boundary = configuration::nodes::getNodeSSL(
+      *nodes_, my_location_, nid.index(), diff_level);
 
   // Determine whether we need to use an SSL socket for authentication.
   // We will use a SSL socket for authentication when the client or server

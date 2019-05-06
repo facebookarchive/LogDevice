@@ -54,4 +54,59 @@ bool validStorageSet(const NodesConfiguration& nodes_configuration,
   return failure_domain.canReplicate(true);
 }
 
+bool getNodeSSL(const NodesConfiguration& nodes_configuration,
+                folly::Optional<NodeLocation> my_location,
+                node_index_t node,
+                NodeLocationScope diff_level) {
+  if (diff_level == NodeLocationScope::ROOT) {
+    // Never use SSL
+    return false;
+  }
+
+  if (diff_level == NodeLocationScope::NODE) {
+    // Always use SSL
+    return true;
+  }
+
+  if (!my_location) {
+    RATELIMIT_ERROR(std::chrono::seconds(1),
+                    10,
+                    "--ssl-boundary specified, but no location available for "
+                    "local machine. Defaulting to SSL.");
+    return true;
+  }
+
+  const auto* node_sd = nodes_configuration.getNodeServiceDiscovery(node);
+  if (!node_sd) {
+    RATELIMIT_CRITICAL(std::chrono::seconds(10),
+                       10,
+                       "node %hu does not exist in nodes configuration.",
+                       node);
+    ld_check(false);
+    return true;
+  }
+
+  if (!node_sd->location) {
+    RATELIMIT_ERROR(std::chrono::seconds(10),
+                    10,
+                    "--ssl-boundary specified, but no location available for "
+                    "node %hu. Defaulting to SSL.",
+                    node);
+    return true;
+  }
+
+  if (!my_location->sharesScopeWith(*node_sd->location, diff_level)) {
+    if (!node_sd->ssl_address) {
+      RATELIMIT_ERROR(std::chrono::seconds(10),
+                      10,
+                      "--ssl-boundary specified, but no SSL address specified "
+                      "for node %hu.",
+                      node);
+    }
+    return true;
+  }
+
+  return false;
+}
+
 }}}} // namespace facebook::logdevice::configuration::nodes

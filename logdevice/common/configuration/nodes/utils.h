@@ -41,4 +41,23 @@ bool validStorageSet(const NodesConfiguration& nodes_configuration,
                      ReplicationProperty replication,
                      bool strict = false);
 
+/**
+ * Helper method for determining whether we need to use SSL for connection
+ * to a node. The diff_level specifies the level in the location hierarchy,
+ * where, if a difference is encountered, we should use SSL. For instance,
+ * if diff_level == NodeLocationScope::RACK, the method will return true
+ * for any node that is in a rack different to my_location's, and return
+ * false otherwise.
+ *
+ * @param nodes_configuration   nodes configuration of the cluster
+ * @param my_location   local NodeLocation
+ * @param node          index of the node we are connecting to, must
+ *                      exist in the given nodes configuration
+ * @param diff_level    The scope of NodeLocation to compare
+ */
+bool getNodeSSL(const NodesConfiguration& nodes_configuration,
+                folly::Optional<NodeLocation> my_location,
+                node_index_t node,
+                NodeLocationScope diff_level);
+
 }}}} // namespace facebook::logdevice::configuration::nodes

@@ -23,6 +23,7 @@
 #include "logdevice/common/configuration/LocalLogsConfig.h"
 #include "logdevice/common/configuration/ParsingHelpers.h"
 #include "logdevice/common/configuration/logs/LogsConfigTree.h"
+#include "logdevice/common/configuration/nodes/utils.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/common/types_internal.h"
@@ -738,16 +739,19 @@ TEST(ConfigurationTest, SSLNodeToNode) {
 
 // The int conversions below are used to circumvent an issue where
 // ASSERT_EQ(<bool>, ...) doesn't build on gcc
-#define TEST_NODE_TO_NODE_SSL(scope, exp_result)       \
-  do {                                                 \
-    NodeID nid0 = NodeID(0, nodes.at(0).generation);   \
-    NodeID nid2 = NodeID(5, nodes.at(5).generation);   \
-    ASSERT_EQ((int)exp_result,                         \
-              config->serverConfig()->getNodeSSL(      \
-                  nodes.at(0).location, nid2, scope)); \
-    ASSERT_EQ((int)exp_result,                         \
-              config->serverConfig()->getNodeSSL(      \
-                  nodes.at(5).location, nid0, scope)); \
+#define TEST_NODE_TO_NODE_SSL(scope, exp_result)                               \
+  do {                                                                         \
+    const auto& nodes = config->serverConfig()->getNodes();                    \
+    NodeID nid0 = NodeID(0, nodes.at(0).generation);                           \
+    NodeID nid2 = NodeID(5, nodes.at(5).generation);                           \
+    const auto nc =                                                            \
+        config->serverConfig()->getNodesConfigurationFromServerConfigSource(); \
+    ASSERT_EQ((int)exp_result,                                                 \
+              configuration::nodes::getNodeSSL(                                \
+                  *nc, nodes.at(0).location, nid2.index(), scope));            \
+    ASSERT_EQ((int)exp_result,                                                 \
+              configuration::nodes::getNodeSSL(                                \
+                  *nc, nodes.at(5).location, nid0.index(), scope));            \
   } while (0)
 
   const auto& nodes = config->serverConfig()->getNodes();
@@ -769,6 +773,16 @@ TEST(ConfigurationTest, SSLNodeToNode) {
             const_cast<NodeLocation&>(*nodes.at(5).location)
                 .fromDomainString("lla.lla1.08.k.z"));
 
+  auto recompute_config = [&]() {
+    auto sc = config->serverConfig();
+    config =
+        std::make_shared<Configuration>(sc->withNodes(sc->getNodesConfig()),
+                                        config->logsConfig(),
+                                        config->zookeeperConfig());
+    ld_check(config != nullptr);
+  };
+
+  recompute_config();
   TEST_NODE_TO_NODE_SSL(NodeLocationScope::NODE, true);
   TEST_NODE_TO_NODE_SSL(NodeLocationScope::RACK, true);
   TEST_NODE_TO_NODE_SSL(NodeLocationScope::ROW, true);
@@ -779,9 +793,11 @@ TEST(ConfigurationTest, SSLNodeToNode) {
 
   // Nodes in the same rack
   EXPECT_EQ(0,
-            const_cast<NodeLocation&>(*nodes.at(5).location)
+            const_cast<NodeLocation&>(
+                *config->serverConfig()->getNodes().at(5).location)
                 .fromDomainString("ash.ash2.08.k.z"));
 
+  recompute_config();
   TEST_NODE_TO_NODE_SSL(NodeLocationScope::NODE, true);
   TEST_NODE_TO_NODE_SSL(NodeLocationScope::RACK, false);
   TEST_NODE_TO_NODE_SSL(NodeLocationScope::ROW, false);

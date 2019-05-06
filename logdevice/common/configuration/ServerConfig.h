@@ -438,22 +438,6 @@ class ServerConfig {
   static std::shared_ptr<ServerConfig> createEmpty();
 
   /**
-   * Helper method for determining whether we need to use SSL for connection
-   * to a node. The diff_level specifies the level in the location hierarchy,
-   * where, if a difference is encountered, we should use SSL. For instance,
-   * if diff_level == NodeLocationScope::RACK, the method will return true
-   * for any node that is in a rack different to my_location's, and return
-   * false otherwise.
-   *
-   * @param my_location   local NodeLocation
-   * @param node          ID of the node we are connecting to
-   * @param diff_level    The scope of NodeLocation to compare
-   */
-  bool getNodeSSL(folly::Optional<NodeLocation> my_location,
-                  NodeID node,
-                  NodeLocationScope diff_level) const;
-
-  /**
    * @return the authentication type defined in the configuration file
    */
   AuthenticationType getAuthenticationType() const {

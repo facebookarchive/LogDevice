@@ -34,6 +34,7 @@
 #include "logdevice/common/configuration/LogsConfigParser.h"
 #include "logdevice/common/configuration/NodesConfigParser.h"
 #include "logdevice/common/configuration/ParsingHelpers.h"
+#include "logdevice/common/configuration/nodes/utils.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/common/util.h"
@@ -675,52 +676,6 @@ folly::dynamic ServerConfig::toJson(const LogsConfig* with_logs,
   }
 
   return json_all;
-}
-
-bool ServerConfig::getNodeSSL(folly::Optional<NodeLocation> my_location,
-                              NodeID node,
-                              NodeLocationScope diff_level) const {
-  if (diff_level == NodeLocationScope::ROOT) {
-    // Never use SSL
-    return false;
-  }
-
-  if (diff_level == NodeLocationScope::NODE) {
-    // Always use SSL
-    return true;
-  }
-
-  if (!my_location) {
-    RATELIMIT_ERROR(std::chrono::seconds(1),
-                    10,
-                    "--ssl-boundary specified, but no location available for "
-                    "local machine. Defaulting to SSL.");
-    return true;
-  }
-
-  auto node_cfg = getNode(node);
-  ld_check(node_cfg);
-  if (!node_cfg->location) {
-    RATELIMIT_ERROR(std::chrono::seconds(1),
-                    10,
-                    "--ssl-boundary specified, but no location available for "
-                    "node %s. Defaulting to SSL.",
-                    node.toString().c_str());
-    return true;
-  }
-
-  if (!my_location->sharesScopeWith(*node_cfg->location, diff_level)) {
-    if (!node_cfg->ssl_address) {
-      RATELIMIT_ERROR(std::chrono::seconds(1),
-                      10,
-                      "--ssl-boundary specified, but no SSL address specified "
-                      "for node %s.",
-                      node.toString().c_str());
-    }
-    return true;
-  }
-
-  return false;
 }
 
 }} // namespace facebook::logdevice
