@@ -53,7 +53,12 @@ class NodesConfigurationOneTimePollRequest : public FireAndForgetRequest {
                      "NodesConfiguration polling got a partial response.");
       st = Status::OK;
     }
-    cb_(st, config_str.value_or(""));
+    if (st == Status::OK && !config_str.hasValue()) {
+      RATELIMIT_DEBUG(std::chrono::seconds(10),
+                      2,
+                      "NodesConfiguration polling no-op: UPTODATE");
+    }
+    cb_(st, std::move(config_str).value_or(""));
     destroy();
   }
 
