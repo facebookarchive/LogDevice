@@ -34,7 +34,7 @@ SafetyChecker::SafetyChecker(Processor* processor,
       error_sample_size_(error_sample_size),
       read_epoch_metadata_from_sequencer_(read_epoch_metadata_from_sequencer) {}
 
-folly::Expected<Impact, Status> SafetyChecker::checkImpact(
+folly::SemiFuture<folly::Expected<Impact, Status>> SafetyChecker::checkImpact(
     const ShardAuthoritativeStatusMap& shard_status,
     const ShardSet& shards,
     StorageState target_storage_state,
@@ -42,28 +42,23 @@ folly::Expected<Impact, Status> SafetyChecker::checkImpact(
     bool check_metadata_logs,
     bool check_internal_logs,
     folly::Optional<std::vector<logid_t>> logids_to_check) {
-  // There is no point of checking this. It's always safe
-  if (target_storage_state == StorageState::READ_WRITE) {
-    return Impact();
-  }
-
-  ld_info("Shards to drain: %s", toString(shards).c_str());
-  ld_info("Target storage state is: %s",
-          storageStateToString(target_storage_state).c_str());
+  folly::Promise<folly::Expected<Impact, Status>> promise;
+  folly::SemiFuture<folly::Expected<Impact, Status>> future =
+      promise.getSemiFuture();
 
   std::chrono::steady_clock::time_point start_time =
       std::chrono::steady_clock::now();
 
-  Semaphore sem;
-  folly::Expected<Impact, Status> outcome;
-  auto cb = [&](Status st, Impact impact) {
-    SCOPE_EXIT {
-      sem.post();
-    };
-    if (st != E::OK) {
-      outcome = folly::makeUnexpected(st);
+  auto cb = [p = std::move(promise), start_time](
+                Status status, Impact impact) mutable {
+    double runtime = std::chrono::duration_cast<std::chrono::duration<double>>(
+                         std::chrono::steady_clock::now() - start_time)
+                         .count();
+    ld_info("Done. Elapsed time: %.1fs", runtime);
+    if (status != E::OK) {
+      p.setValue(folly::makeUnexpected(status));
     } else {
-      outcome = std::move(impact);
+      p.setValue(std::move(impact));
     }
   };
 
@@ -82,24 +77,21 @@ folly::Expected<Impact, Status> SafetyChecker::checkImpact(
                                            error_sample_size_,
                                            read_epoch_metadata_from_sequencer_,
                                            worker_type,
-                                           cb);
+                                           std::move(cb));
   int rv = processor_->postRequest(request);
   if (rv != 0) {
+    folly::Promise<folly::Expected<Impact, Status>> p;
+    folly::SemiFuture<folly::Expected<Impact, Status>> f = p.getSemiFuture();
     // We couldn't submit the request to the processor.
     ld_error("We couldn't submit the CheckImpactRequest to the logdevice "
              "processor: %s",
              error_description(err));
     ld_check(err != E::OK);
-    return folly::makeUnexpected(err);
+    p.setValue(folly::makeUnexpected(err));
+    return f;
   }
 
-  sem.wait();
-
-  double runtime = std::chrono::duration_cast<std::chrono::duration<double>>(
-                       std::chrono::steady_clock::now() - start_time)
-                       .count();
-  ld_info("Done. Elapsed time: %.1fs", runtime);
-  return outcome;
+  return future;
 }
 
 }} // namespace facebook::logdevice

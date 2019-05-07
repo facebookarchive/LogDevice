@@ -113,8 +113,12 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithExpand) {
   }
 
   // it is unsafe to drain all shards
-  folly::Expected<Impact, Status> impact = safety_checker.checkImpact(
-      shard_status, shards, configuration::StorageState::READ_ONLY);
+  folly::Expected<Impact, Status> impact =
+      // block until completion for tests.
+      safety_checker
+          .checkImpact(
+              shard_status, shards, configuration::StorageState::READ_ONLY)
+          .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
   ASSERT_EQ(Impact::ImpactResult::REBUILDING_STALL |
@@ -130,8 +134,10 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithExpand) {
     shards.insert(ShardID(1, i));
   }
 
-  impact = safety_checker.checkImpact(
-      shard_status, shards, configuration::StorageState::READ_ONLY);
+  impact = safety_checker
+               .checkImpact(
+                   shard_status, shards, configuration::StorageState::READ_ONLY)
+               .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
   ASSERT_EQ(Impact::ImpactResult::NONE, impact->result);
@@ -142,8 +148,10 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithExpand) {
     shards.insert(ShardID(2, i));
   }
 
-  impact = safety_checker.checkImpact(
-      shard_status, shards, configuration::StorageState::READ_ONLY);
+  impact = safety_checker
+               .checkImpact(
+                   shard_status, shards, configuration::StorageState::READ_ONLY)
+               .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
   ASSERT_EQ(Impact::ImpactResult::REBUILDING_STALL |
@@ -169,8 +177,10 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithExpand) {
 
   // try to shrink first num_nodes nodes
   // this is going to cause rebuilding stall as nodeset is only on first nodes
-  impact = safety_checker.checkImpact(
-      shard_status, shards, configuration::StorageState::READ_ONLY);
+  impact = safety_checker
+               .checkImpact(
+                   shard_status, shards, configuration::StorageState::READ_ONLY)
+               .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
   ASSERT_EQ(Impact::ImpactResult::REBUILDING_STALL |
@@ -236,8 +246,11 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithSetWeight) {
   ASSERT_EQ(0, rv);
 
   // it is safe to drain 2 nodes as nodeset size is 5, replication is 2
-  folly::Expected<Impact, Status> impact = safety_checker.checkImpact(
-      shard_status, shards, configuration::StorageState::READ_ONLY);
+  folly::Expected<Impact, Status> impact =
+      safety_checker
+          .checkImpact(
+              shard_status, shards, configuration::StorageState::READ_ONLY)
+          .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
   ASSERT_EQ(Impact::ImpactResult::NONE, impact->result);
@@ -249,8 +262,10 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithSetWeight) {
   cluster->waitForMetaDataLogWrites();
 
   // now it is unsafe to drain first 2 nodes
-  impact = safety_checker.checkImpact(
-      shard_status, shards, configuration::StorageState::READ_ONLY);
+  impact = safety_checker
+               .checkImpact(
+                   shard_status, shards, configuration::StorageState::READ_ONLY)
+               .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
   ASSERT_EQ(Impact::ImpactResult::REBUILDING_STALL |
@@ -307,8 +322,11 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithEventLogNotReadable) {
   ASSERT_EQ(0, rv);
 
   // it is unsafe to drain 3 nodes as replication is 3 for event log
-  folly::Expected<Impact, Status> impact = safety_checker.checkImpact(
-      shard_status, shards, configuration::StorageState::READ_ONLY);
+  folly::Expected<Impact, Status> impact =
+      safety_checker
+          .checkImpact(
+              shard_status, shards, configuration::StorageState::READ_ONLY)
+          .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
   ASSERT_EQ(Impact::ImpactResult::REBUILDING_STALL |
@@ -323,8 +341,10 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithEventLogNotReadable) {
   shards.clear();
   shards.insert(ShardID(3, 0));
 
-  impact = safety_checker.checkImpact(
-      shard_status, shards, configuration::StorageState::READ_ONLY);
+  impact = safety_checker
+               .checkImpact(
+                   shard_status, shards, configuration::StorageState::READ_ONLY)
+               .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
   ASSERT_EQ(Impact::ImpactResult::NONE, impact->result);
@@ -386,8 +406,11 @@ TEST_F(SafetyAPIIntegrationTest, DisableReads) {
   ASSERT_EQ(0, rv);
 
   // it is unsafe to stop all shards
-  folly::Expected<Impact, Status> impact = safety_checker.checkImpact(
-      shard_status, shards, configuration::StorageState::DISABLED);
+  folly::Expected<Impact, Status> impact =
+      safety_checker
+          .checkImpact(
+              shard_status, shards, configuration::StorageState::DISABLED)
+          .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
   ASSERT_EQ(Impact::ImpactResult::READ_AVAILABILITY_LOSS |
@@ -405,8 +428,10 @@ TEST_F(SafetyAPIIntegrationTest, DisableReads) {
     }
   }
 
-  impact = safety_checker.checkImpact(
-      shard_status, shards, configuration::StorageState::DISABLED);
+  impact = safety_checker
+               .checkImpact(
+                   shard_status, shards, configuration::StorageState::DISABLED)
+               .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
   ASSERT_EQ(Impact::ImpactResult::NONE, impact->result);
@@ -417,8 +442,10 @@ TEST_F(SafetyAPIIntegrationTest, DisableReads) {
     shards.insert(ShardID(i, 2));
   }
 
-  impact = safety_checker.checkImpact(
-      shard_status, shards, configuration::StorageState::DISABLED);
+  impact = safety_checker
+               .checkImpact(
+                   shard_status, shards, configuration::StorageState::DISABLED)
+               .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
   ASSERT_EQ(Impact::ImpactResult::READ_AVAILABILITY_LOSS |
@@ -431,8 +458,10 @@ TEST_F(SafetyAPIIntegrationTest, DisableReads) {
   shards.insert(ShardID(1, 1));
   shards.insert(ShardID(2, 2));
   shards.insert(ShardID(3, 3));
-  impact = safety_checker.checkImpact(
-      shard_status, shards, configuration::StorageState::DISABLED);
+  impact = safety_checker
+               .checkImpact(
+                   shard_status, shards, configuration::StorageState::DISABLED)
+               .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
   ASSERT_EQ(Impact::ImpactResult::NONE, impact->result);
@@ -513,35 +542,56 @@ TEST_F(SafetyAPIIntegrationTest, SafetyMargin) {
 
   SafetyMargin safety;
 
-  folly::Expected<Impact, Status> impact = safety_checker.checkImpact(
-      shard_status, shards, configuration::StorageState::READ_ONLY, safety);
+  folly::Expected<Impact, Status> impact =
+      safety_checker
+          .checkImpact(shard_status,
+                       shards,
+                       configuration::StorageState::READ_ONLY,
+                       safety)
+          .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
   ASSERT_EQ(Impact::ImpactResult::NONE, impact->result);
 
-  impact = safety_checker.checkImpact(
-      shard_status, shards, configuration::StorageState::DISABLED, safety);
+  impact = safety_checker
+               .checkImpact(shard_status,
+                            shards,
+                            configuration::StorageState::DISABLED,
+                            safety)
+               .get();
   ld_info("IMPACT: %s", impact->toString().c_str());
   ASSERT_EQ(Impact::ImpactResult::NONE, impact->result);
 
   // it is safe if we want to have 1 extra node
   safety[NodeLocationScope::NODE] = 1;
-  impact = safety_checker.checkImpact(
-      shard_status, shards, configuration::StorageState::READ_ONLY, safety);
+  impact = safety_checker
+               .checkImpact(shard_status,
+                            shards,
+                            configuration::StorageState::READ_ONLY,
+                            safety)
+               .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
   ASSERT_EQ(Impact::ImpactResult::NONE, impact->result);
 
-  impact = safety_checker.checkImpact(
-      shard_status, shards, configuration::StorageState::DISABLED, safety);
+  impact = safety_checker
+               .checkImpact(shard_status,
+                            shards,
+                            configuration::StorageState::DISABLED,
+                            safety)
+               .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
   ASSERT_EQ(Impact::ImpactResult::NONE, impact->result);
 
   // it is unsafe if we wantto have 2 extra nodes
   safety[NodeLocationScope::NODE] = 2;
-  impact = safety_checker.checkImpact(
-      shard_status, shards, configuration::StorageState::READ_ONLY, safety);
+  impact = safety_checker
+               .checkImpact(shard_status,
+                            shards,
+                            configuration::StorageState::READ_ONLY,
+                            safety)
+               .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
   ASSERT_EQ(Impact::ImpactResult::REBUILDING_STALL |
@@ -549,8 +599,12 @@ TEST_F(SafetyAPIIntegrationTest, SafetyMargin) {
             impact->result);
   ASSERT_TRUE(impact->internal_logs_affected);
 
-  impact = safety_checker.checkImpact(
-      shard_status, shards, configuration::StorageState::DISABLED, safety);
+  impact = safety_checker
+               .checkImpact(shard_status,
+                            shards,
+                            configuration::StorageState::DISABLED,
+                            safety)
+               .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
   ASSERT_EQ(Impact::ImpactResult::READ_AVAILABILITY_LOSS |
@@ -564,16 +618,22 @@ TEST_F(SafetyAPIIntegrationTest, SafetyMargin) {
   }
 
   // it is fine to drain 2 nodes, without safety maring
-  impact = safety_checker.checkImpact(
-      shard_status, shards, configuration::StorageState::DISABLED);
+  impact = safety_checker
+               .checkImpact(
+                   shard_status, shards, configuration::StorageState::DISABLED)
+               .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
   ASSERT_EQ(Impact::ImpactResult::NONE, impact->result);
 
   // but not enough if we want one extra node
   safety[NodeLocationScope::NODE] = 1;
-  impact = safety_checker.checkImpact(
-      shard_status, shards, configuration::StorageState::DISABLED, safety);
+  impact = safety_checker
+               .checkImpact(shard_status,
+                            shards,
+                            configuration::StorageState::DISABLED,
+                            safety)
+               .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
   ASSERT_EQ(Impact::ImpactResult::READ_AVAILABILITY_LOSS |
