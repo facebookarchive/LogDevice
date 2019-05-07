@@ -140,6 +140,7 @@ set(LOGDEVICE_EXTERNAL_DEPS
   ${IBERTY_LIBRARIES}
   ${SNAPPY_LIBRARY}
   ${PYTHON_LIBRARIES}
+  ${FBTHRIFT_LIBRARIES}
   Threads::Threads)
 
 include_directories(${CMAKE_BINARY_DIR})
@@ -147,8 +148,37 @@ include_directories(${CMAKE_BINARY_DIR})
 add_subdirectory(common)
 add_subdirectory(lib)
 add_subdirectory(server)
-add_subdirectory(replication_checker)
 add_subdirectory(admin)
+
+# Server Library and Binary (logdeviced)
+auto_sources(logdevice_admincommands_hfiles "*.h" RECURSE
+  "${LOGDEVICE_SERVER_DIR}/admincommands/")
+auto_sources(logdevice_admincommands_files "*.cpp" RECURSE
+  "${LOGDEVICE_SERVER_DIR}/admincommands/")
+
+add_library(logdevice_server STATIC
+  "${logdevice_admincommands_files}"
+  "${logdevice_admincommands_hfiles}"
+  "${LOGDEVICE_SERVER_DIR}/Server.cpp"
+  "${LOGDEVICE_SERVER_DIR}/Server.h"
+  "${LOGDEVICE_SERVER_DIR}/shutdown.h"
+  "${LOGDEVICE_SERVER_DIR}/shutdown.cpp"
+)
+
+target_link_libraries(logdevice_server
+  logdevice_server_core
+  logdevice_admin
+  ldclient_static
+  ${LOGDEVICE_EXTERNAL_DEPS})
+
+add_executable(logdeviced ${LOGDEVICE_SERVER_DIR}/main.cpp)
+target_link_libraries(logdeviced logdevice_server)
+
+install(TARGETS logdeviced
+  COMPONENT runtime
+  DESTINATION bin)
+
+add_subdirectory(replication_checker)
 if(${BUILD_TESTS})
   add_subdirectory(test)
 endif()

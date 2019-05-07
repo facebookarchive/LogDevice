@@ -14,13 +14,72 @@ auto_sources(admin_settings_hfiles "*.h" RECURSE
 auto_sources(admin_settings_files
   "*.cpp" RECURSE "${LOGDEVICE_ADMIN_DIR}/settings")
 
+auto_sources(admin_hfiles "*.h" "${LOGDEVICE_ADMIN_DIR}/")
+auto_sources(admin_files "*.cpp" RECURSE "${LOGDEVICE_ADMIN_DIR}/")
+
+# TODO: Add tests for Maintenance and Admin API
+REMOVE_MATCHES_FROM_LISTS(admin_files admin_hfiles
+  MATCHES
+    "/test/"
+    "/maintenance/test/"
+)
+
+
 add_library(logdevice_safety_checker STATIC ${safety_hfiles} ${safety_files})
+target_link_libraries(logdevice_safety_checker common logdevice_server)
 
 add_library(logdevice_admin_settings STATIC ${admin_settings_hfiles}
   ${admin_settings_files})
+target_link_libraries(logdevice_admin_settings common)
 
 
 add_subdirectory(if)
 
-add_dependencies(logdevice_safety_checker common logdevice_server)
-add_dependencies(logdevice_admin_settings common)
+
+add_library(logdevice_admin STATIC ${admin_hfiles} ${admin_files})
+
+target_link_libraries(logdevice_admin
+  common
+  logdevice_admin_settings
+  logdevice_safety_checker
+  admin-cpp2
+  MaintenanceDelta-cpp2
+  logdevice_server_core
+  ${FBTHRIFT_LIBRARIES}
+  ${GLOG_LIBRARIES}
+  ${LIBGFLAGS_LIBRARY}
+)
+
+set(_maintenance_delta_if_include_prefix "logdevice/admin/maintenance")
+set(_maintenance_delta_binary_dir
+  "${CMAKE_BINARY_DIR}/${_maintenance_delta_if_include_prefix}")
+
+file(MAKE_DIRECTORY "${_maintenance_delta_binary_dir}")
+
+thrift_library(
+  "MaintenanceDelta"
+  ""
+  "cpp2"
+  "json"
+  "${CMAKE_CURRENT_SOURCE_DIR}/maintenance"
+  "${_maintenance_delta_binary_dir}"
+  "${_maintenance_delta_if_include_prefix}"
+  THRIFT_INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/.."
+)
+
+add_dependencies(MaintenanceDelta-cpp2-target
+  maintenance-cpp2-target
+  fbthrift
+)
+
+set_target_properties(MaintenanceDelta-cpp2-obj
+        PROPERTIES POSITION_INDEPENDENT_CODE True
+)
+
+target_link_libraries(MaintenanceDelta-cpp2
+  Membership-cpp2
+  admin-cpp2
+  ${FBTHRIFT_LIBRARIES}
+  ${GLOG_LIBRARIES}
+  ${LIBGFLAGS_LIBRARY}
+)

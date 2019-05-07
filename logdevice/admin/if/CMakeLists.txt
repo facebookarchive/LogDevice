@@ -15,7 +15,6 @@ add_subdirectory(common/fb303/if)
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/${_adminapi_if_include_prefix})
 
 set(_common_libs
-  "admin-cpp2"
   "fb303-cpp2"
   "exceptions-cpp2"
   "common-cpp2"
@@ -24,11 +23,14 @@ set(_common_libs
   "settings-cpp2"
   "logtree-cpp2"
   "nodes-cpp2"
+  ${FBTHRIFT_LIBRARIES}
+  ${GLOG_LIBRARIES}
+  ${LIBGFLAGS_LIBRARY}
   )
 if(${BUILD_SUBMODULES})
   list(APPEND _common_libs thriftcpp2_shared)
 else()
-  list(APPEND _common_libs FBThrift::thriftcpp2_shared)
+  list(APPEND _common_libs FBThrift::thriftcpp2)
 endif()
 
 foreach(THRIFT_SOURCE
@@ -60,6 +62,7 @@ foreach(THRIFT_SOURCE
     target_link_libraries(
       "logdevice-admin-${THRIFT_SOURCE}-types-py3"
       PRIVATE
+        admin-cpp2
         ${_common_libs})
   endif()
 endforeach()
@@ -93,6 +96,7 @@ if(thriftpy3)
   target_link_libraries(
     "logdevice-admin-clients-py3"
     PRIVATE
+      admin-cpp2
       ${_common_libs})
 endif()
 
@@ -126,6 +130,10 @@ add_dependencies(admin-${_lang}-target
                  safety-${_lang}-target
                  maintenance-${_lang}-target
                  settings-${_lang}-target)
+
+target_link_libraries(admin-${_lang}
+  ${_common_libs}
+)
 
 add_dependencies(exceptions-${_lang}-target
                  common-${_lang}-target)

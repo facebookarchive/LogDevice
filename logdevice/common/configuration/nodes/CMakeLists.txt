@@ -29,9 +29,9 @@ thrift_library(
 add_dependencies(NodesConfiguration-cpp2-target fbthrift)
 add_dependencies(NodesConfiguration-cpp2-target Membership-cpp2-target)
 
-set_target_properties(
-        NodesConfiguration-cpp2-obj
-        PROPERTIES POSITION_INDEPENDENT_CODE True
+set_target_properties(NodesConfiguration-cpp2-obj
+  PROPERTIES
+    POSITION_INDEPENDENT_CODE True
 )
 
 target_link_libraries(

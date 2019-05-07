@@ -11,23 +11,20 @@ REMOVE_MATCHES_FROM_LISTS(files hfiles
   MATCHES
     "/test/"
     "/locallogstore/test/"
+    "/admincommands/"
     "main.cpp"
+    "Server.cpp"
+    "Server.h"
+    "shutdown.h"
+
 )
 
-add_library(logdevice_server STATIC ${hfiles} ${files})
+add_library(logdevice_server_core STATIC ${hfiles} ${files})
 
-target_link_libraries(logdevice_server
+target_link_libraries(logdevice_server_core
   common
   ldclient_static
-  logdevice_admin_settings
-  ${LOGDEVICE_EXTERNAL_DEPS})
-
-add_executable(logdeviced ${LOGDEVICE_SERVER_DIR}/main.cpp)
-target_link_libraries(logdeviced logdevice_server)
-
-install(TARGETS logdeviced
-  COMPONENT runtime
-  DESTINATION bin)
+  logdevice_admin_settings)
 
 add_subdirectory(locallogstore)
 
