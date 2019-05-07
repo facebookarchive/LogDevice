@@ -115,7 +115,8 @@ service AdminAPI extends fb303.FacebookService {
   safety.CheckImpactResponse checkImpact(1: safety.CheckImpactRequest request) throws
       (1: exceptions.NodeNotReady notready,
        2: exceptions.OperationError error,
-       3: exceptions.InvalidRequest invalid_request);
+       3: exceptions.InvalidRequest invalid_request,
+       4: exceptions.NotSupported notsupported);
 
   // *** LogTree specific APIs
   logtree.LogTreeInfo getLogTreeInfo();

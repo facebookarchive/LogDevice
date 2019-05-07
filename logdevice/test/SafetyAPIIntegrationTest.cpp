@@ -102,8 +102,7 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithExpand) {
   int rv = cluster->getShardAuthoritativeStatusMap(shard_status);
   ASSERT_EQ(0, rv);
 
-  SafetyChecker safety_checker(
-      &client_impl->getProcessor(), 100, true, client_impl->getTimeout());
+  SafetyChecker safety_checker(&client_impl->getProcessor());
   ShardSet shards;
 
   for (int i = 0; i < num_nodes; ++i) {
@@ -231,8 +230,7 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithSetWeight) {
   ld_info("Waiting for metadata log writes to complete");
   cluster->waitForMetaDataLogWrites();
 
-  SafetyChecker safety_checker(
-      &client_impl->getProcessor(), 100, true, client_impl->getTimeout());
+  SafetyChecker safety_checker(&client_impl->getProcessor());
   ShardSet shards;
 
   for (int i = 0; i < 2; ++i) {
@@ -307,8 +305,7 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithEventLogNotReadable) {
   ld_info("Waiting for metadata log writes to complete");
   cluster->waitForMetaDataLogWrites();
 
-  SafetyChecker safety_checker(
-      &client_impl->getProcessor(), 100, true, client_impl->getTimeout());
+  SafetyChecker safety_checker(&client_impl->getProcessor());
   ShardSet shards;
 
   for (int i = 0; i < 3; ++i) {
@@ -393,8 +390,7 @@ TEST_F(SafetyAPIIntegrationTest, DisableReads) {
   ld_info("Waiting for metadata log writes to complete");
   cluster->waitForMetaDataLogWrites();
 
-  SafetyChecker safety_checker(
-      &client_impl->getProcessor(), 100, true, client_impl->getTimeout());
+  SafetyChecker safety_checker(&client_impl->getProcessor());
   ShardSet shards;
 
   for (int i = 0; i < num_nodes; ++i) {
@@ -519,8 +515,7 @@ TEST_F(SafetyAPIIntegrationTest, SafetyMargin) {
   // }
 
   // nodeset size is 3, first three nodes
-  SafetyChecker safety_checker(
-      &client_impl->getProcessor(), 100, true, client_impl->getTimeout());
+  SafetyChecker safety_checker(&client_impl->getProcessor());
   ShardSet shards;
 
   for (int i = 0; i < num_nodes; ++i) {

@@ -10,8 +10,10 @@
 
 #include <iostream>
 
+#include <folly/executors/CPUThreadPoolExecutor.h>
 #include <folly/futures/Future.h>
 
+#include "logdevice/admin/safety/SafetyChecker.h"
 #include "logdevice/common/ConfigInit.h"
 #include "logdevice/common/NodesConfigurationInit.h"
 #include "logdevice/common/NodesConfigurationPublisher.h"
@@ -259,6 +261,10 @@ void StandaloneAdminServer::initAdminServer() {
   auto server_config = updateable_config_->getServerConfig();
   ld_check(server_config);
 
+  // Create a CPU thread pool executor.
+  // TODO: Remove me when we have a shared CPU thread pool executor in processor
+  folly::setCPUExecutor(std::make_shared<folly::CPUThreadPoolExecutor>(3));
+
   auto adm_plugin = plugin_registry_->getSinglePlugin<AdminServerFactory>(
       PluginType::ADMIN_SERVER_FACTORY);
   if (adm_plugin) {
@@ -268,6 +274,9 @@ void StandaloneAdminServer::initAdminServer() {
                                   admin_settings_,
                                   stats_.get());
     ld_check(admin_server_);
+    auto safety_checker = std::make_shared<SafetyChecker>(processor_.get());
+    safety_checker->useAdminSettings(admin_settings_);
+    admin_server_->setSafetyChecker(safety_checker);
     admin_server_->start();
   } else {
     ld_critical(
@@ -363,11 +372,11 @@ void StandaloneAdminServer::shutdown() {
 
     ld_info("Stopping Processor");
     processor_->waitForWorkers();
+    processor_->shutdown();
     if (admin_server_) {
       ld_info("Destroying AdminServer");
       admin_server_.reset();
     }
-    processor_->shutdown();
   }
 
   shutdown_requested_.store(true);

@@ -14,6 +14,7 @@
 
 namespace facebook { namespace logdevice {
 class Processor;
+class SafetyChecker;
 class ServerSettings;
 class SettingsUpdater;
 class ShardedRocksDBLocalLogStore;
@@ -25,6 +26,9 @@ class AdminAPIHandlerBase : public virtual thrift::AdminAPISvIf {
   setShardedRocksDBStore(ShardedRocksDBLocalLogStore* sharded_store) {
     sharded_store_ = sharded_store;
   }
+
+  virtual void
+  setSafetyChecker(const std::shared_ptr<SafetyChecker>& safety_checker);
 
  protected:
   AdminAPIHandlerBase() = default;
@@ -41,6 +45,7 @@ class AdminAPIHandlerBase : public virtual thrift::AdminAPISvIf {
   UpdateableSettings<ServerSettings> updateable_server_settings_;
   UpdateableSettings<AdminServerSettings> updateable_admin_server_settings_;
   StatsHolder* stats_holder_{nullptr};
+  std::shared_ptr<SafetyChecker> safety_checker_{nullptr};
 
  public:
   ShardedRocksDBLocalLogStore* sharded_store_{nullptr};

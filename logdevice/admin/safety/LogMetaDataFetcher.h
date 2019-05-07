@@ -104,6 +104,9 @@ class LogMetaDataFetcher {
   std::shared_ptr<EpochStore> epoch_store_;
   std::list<logid_t> logs_;
 
+  std::unordered_map<logid_t, std::unique_ptr<NodeSetFinder>, logid_t::Hash>
+      nodeset_finders_;
+
   Results results_;
   size_t count_{0};
   size_t in_flight_{0};
@@ -111,9 +114,6 @@ class LogMetaDataFetcher {
   Type type_;
   size_t max_in_flight_ = 1;
   bool read_historical_metadata_only_from_metadata_log_ = false;
-
-  std::unordered_map<logid_t, std::unique_ptr<NodeSetFinder>, logid_t::Hash>
-      nodeset_finders_;
 
   std::chrono::milliseconds historical_metadata_timeout_{15000};
 

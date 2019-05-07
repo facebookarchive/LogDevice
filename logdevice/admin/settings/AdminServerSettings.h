@@ -39,6 +39,8 @@ struct AdminServerSettings : public SettingsBundle {
   std::chrono::milliseconds maintenance_log_snapshotting_period;
 
   bool read_metadata_from_sequencers;
+  bool enable_safety_check_periodic_metadata_update;
+  std::chrono::milliseconds safety_check_metadata_update_period;
 
   // If true, start maintenance manager
   bool enable_maintenance_manager;

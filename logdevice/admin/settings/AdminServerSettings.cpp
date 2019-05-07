@@ -104,6 +104,29 @@ void AdminServerSettings::defineSettings(SettingEasyInit& init) {
      "Start Maintenance Manager",
      SERVER,
      SettingsCategory::AdminAPI)
+
+    ("enable-safety-check-periodic-metadata-update",
+     &enable_safety_check_periodic_metadata_update,
+     "false",
+     nullptr,
+     "Safety check to update its metadata cache periodically",
+     SERVER,
+     SettingsCategory::AdminAPI)
+
+    ("safety-check-metadata-update-period",
+     &safety_check_metadata_update_period,
+     "10min",
+     [](std::chrono::milliseconds val) -> void {
+       if (val.count() <= 0) {
+         throw boost::program_options::error(
+           "safety-check-metadata-update-period must be positive"
+         );
+       }
+     },
+     "The period between automatic metadata updates for safety checker internal "
+     "cache",
+     SERVER,
+     SettingsCategory::AdminAPI)
     ;
   // clang-format on
 };

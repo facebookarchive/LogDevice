@@ -23,6 +23,7 @@
 
 namespace facebook { namespace logdevice {
 class Processor;
+class SafetyChecker;
 }} // namespace facebook::logdevice
 
 namespace facebook { namespace logdevice { namespace maintenance {
@@ -70,8 +71,11 @@ class SafetyCheckScheduler {
   };
 
   SafetyCheckScheduler(Processor* processor,
-                       UpdateableSettings<AdminServerSettings> settings)
-      : processor_(processor), settings_(std::move(settings)) {}
+                       UpdateableSettings<AdminServerSettings> settings,
+                       std::shared_ptr<SafetyChecker> safety_checker)
+      : processor_(processor),
+        settings_(std::move(settings)),
+        safety_checker_(std::move(safety_checker)) {}
 
   /**
    * This is the main function of this class. It accepts a
@@ -166,5 +170,6 @@ class SafetyCheckScheduler {
 
   Processor* processor_;
   UpdateableSettings<AdminServerSettings> settings_;
+  std::shared_ptr<SafetyChecker> safety_checker_;
 };
 }}} // namespace facebook::logdevice::maintenance

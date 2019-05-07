@@ -320,6 +320,10 @@ void shutdown_server(
     ld_check(rv == 0);
   }
 
+  // take down all worker threads
+  ld_info("Shutting down worker threads");
+  processor->shutdown();
+
   if (admin_server) {
     // Note that deallocating AdminServer might be expensive if it's holding the
     // safety checker metadata cache, hence why we are destroying it near the
@@ -327,9 +331,6 @@ void shutdown_server(
     ld_info("Admin API server destroyed");
     admin_server.reset();
   }
-  // take down all worker threads
-  ld_info("Shutting down worker threads");
-  processor->shutdown();
 
   // call destructors for RebuildingCoordinator, SequencerPlacement,
   // ShardedLocalLogStore, ShardedStorageThreadPool, and Processor objects.

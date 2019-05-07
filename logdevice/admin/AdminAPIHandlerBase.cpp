@@ -8,6 +8,7 @@
 
 #include "logdevice/admin/AdminAPIHandlerBase.h"
 
+#include "logdevice/admin/safety/SafetyChecker.h"
 #include "logdevice/server/ServerSettings.h"
 
 namespace facebook { namespace logdevice {
@@ -23,4 +24,9 @@ AdminAPIHandlerBase::AdminAPIHandlerBase(
       updateable_server_settings_(updateable_server_settings),
       updateable_admin_server_settings_(updateable_admin_server_settings),
       stats_holder_(stats_holder) {}
+
+void AdminAPIHandlerBase::setSafetyChecker(
+    const std::shared_ptr<SafetyChecker>& safety_checker) {
+  safety_checker_ = safety_checker;
+}
 }} // namespace facebook::logdevice

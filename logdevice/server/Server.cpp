@@ -7,6 +7,7 @@
  */
 #include "logdevice/server/Server.h"
 
+#include "logdevice/admin/safety/SafetyChecker.h"
 #include "logdevice/common/ConfigInit.h"
 #include "logdevice/common/ConstructorFailed.h"
 #include "logdevice/common/CopySetManager.h"
@@ -1030,6 +1031,9 @@ bool Server::initAdminServer() {
       if (sharded_store_) {
         admin_server_handle_->setShardedRocksDBStore(sharded_store_.get());
       }
+      auto safety_checker = std::make_shared<SafetyChecker>(processor_.get());
+      safety_checker->useAdminSettings(params_->getAdminServerSettings());
+      admin_server_handle_->setSafetyChecker(safety_checker);
     } else {
       ld_info("Not initializing Admin API, since there are no implementations "
               "available.");

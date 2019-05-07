@@ -17,6 +17,7 @@ class Processor;
 class SettingsUpdater;
 class ShardedRocksDBLocalLogStore;
 class StatsHolder;
+class SafetyChecker;
 
 /**
  * An interface that will be overridden by plugins to implement an Admin API
@@ -49,5 +50,11 @@ class AdminServer {
 
   virtual void
   setShardedRocksDBStore(ShardedRocksDBLocalLogStore* sharded_store) = 0;
+  /**
+   * Sets the instance of safety checker that is responsible for executing
+   * server-side safety checks.
+   */
+  virtual void
+  setSafetyChecker(const std::shared_ptr<SafetyChecker>& safety_checker) = 0;
 };
 }} // namespace facebook::logdevice

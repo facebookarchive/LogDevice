@@ -156,7 +156,7 @@ void LogMetaDataFetcher::scheduleForLog(logid_t logid) {
   ++in_flight_;
 
   RATELIMIT_INFO(
-      std::chrono::seconds{1}, 1, "%lu/%lu complete", results_.size(), count_);
+      std::chrono::seconds{10}, 1, "%lu/%lu complete", results_.size(), count_);
 
   if (type_ == Type::HISTORICAL_METADATA_ONLY) {
     readHistoricalMetaData(logid);
@@ -191,7 +191,7 @@ class StartLogMetaDataFetcherRequest : public Request {
 void LogMetaDataFetcher::start(Processor* processor) {
   std::unique_ptr<Request> request =
       std::make_unique<StartLogMetaDataFetcherRequest>(this);
-  processor->postImportant(request);
+  processor->postRequest(request);
 }
 
 }} // namespace facebook::logdevice

@@ -9,8 +9,7 @@
 
 #include "logdevice/admin/maintenance/SequencerWorkflow.h"
 #include "logdevice/admin/maintenance/ShardWorkflow.h"
-#include "logdevice/admin/safety/CheckImpactForLogRequest.h"
-#include "logdevice/admin/safety/CheckImpactRequest.h"
+#include "logdevice/admin/safety/SafetyChecker.h"
 #include "logdevice/common/ClusterState.h"
 #include "logdevice/common/Processor.h"
 
@@ -76,10 +75,8 @@ SafetyCheckScheduler::executePlan(
           // We switch into unsafe future because we know that it's safe to do
           // so. The execution will happen on the worker of the safety checker.
           // This will be executed inline in the worker executing the
-          // underlying CheckImpactRequest.
+          // underlying safety check.
           .toUnsafeFuture()
-          // If the future is set with exception(ExceptionStatus) it will be
-          // passed through to the caller's SemiFuture.
           .thenValue([this,
                       status_map{std::move(status_map)},
                       nodes_config{std::move(nodes_config)},
@@ -143,6 +140,7 @@ SafetyCheckScheduler::performSafetyCheck(
   // We must have nodes configuration to operate.
   ld_assert(nodes_config != nullptr);
   ld_assert(processor_);
+  ld_assert(safety_checker_);
 
   auto [promise, future] =
       folly::makePromiseContract<folly::Expected<Impact, Status>>();
@@ -164,8 +162,7 @@ SafetyCheckScheduler::performSafetyCheck(
   // Combine the shards into a single input list to safety checker.
   shards.insert(disabled_shards.begin(), disabled_shards.end());
 
-  WorkerType worker_type = CheckImpactRequest::workerType(processor_);
-  std::unique_ptr<Request> request = std::make_unique<CheckImpactRequest>(
+  return safety_checker_->checkImpact(
       status_map,
       shards,
       configuration::StorageState::DISABLED, // We always assume that nodes may
@@ -173,27 +170,7 @@ SafetyCheckScheduler::performSafetyCheck(
       SafetyMargin(),
       /* check_metadata_logs= */ true,
       /* check_internal_logs= */ true,
-      /* logids_to_check= */ folly::none,
-      settings_->safety_max_logs_in_flight,
-      /* abort_on_error= */ true,
-      settings_->safety_check_timeout,
-      settings_->safety_check_failure_sample_size,
-      /* read_epoch_metadata_from_sequencer = */ true,
-      worker_type,
-      std::move(cb));
-  int rv = processor_->postRequest(request);
-  if (rv != 0) {
-    // We couldn't submit the request to the processor.
-    ld_error("We couldn't submit the CheckImpactRequest to the logdevice "
-             "processor: %s",
-             error_description(err));
-    ld_check(err != E::OK);
-    folly::Promise<folly::Expected<Impact, Status>> error_promise;
-    error_promise.setValue(folly::makeUnexpected(err));
-    return error_promise.getSemiFuture();
-  }
-
-  return std::move(future);
+      /* logids_to_check= */ folly::none);
 }
 
 std::deque<std::pair<GroupID, SafetyCheckScheduler::ShardsAndSequencers>>
