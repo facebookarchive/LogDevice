@@ -12,13 +12,13 @@
 
 #include "../Table.h"
 #include "../Utils.h"
+#include "logdevice/admin/safety/LogMetaDataFetcher.h"
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/ReplicationProperty.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/lib/ClientImpl.h"
-#include "logdevice/lib/ops/LogMetaDataFetcher.h"
 #include "logdevice/ops/ldquery/Errors.h"
 
 using facebook::logdevice::Configuration;
@@ -155,7 +155,6 @@ HistoricalMetadataTableBase::getDataImpl(QueryContext& ctx, bool legacy) {
   }
 
   LogMetaDataFetcher fetcher(
-      full_client,
       nullptr,
       logs,
       callback,
@@ -169,7 +168,8 @@ HistoricalMetadataTableBase::getDataImpl(QueryContext& ctx, bool legacy) {
   // we allow more parallelism for getting metadata from sequencer since
   // it costs less
   fetcher.setMaxInFlight(legacy ? 1000 : 10000);
-  fetcher.start();
+
+  fetcher.start(&client_impl->getProcessor());
   sem.wait();
 
   return result;

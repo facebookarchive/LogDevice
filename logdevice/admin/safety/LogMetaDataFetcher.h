@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-
+#pragma once
 #include "logdevice/common/EpochMetaDataMap.h"
 #include "logdevice/common/EpochStore.h"
 #include "logdevice/common/MetaDataLog.h"
@@ -17,7 +17,6 @@
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/debug.h"
-#include "logdevice/include/Client.h"
 #include "logdevice/include/types.h"
 
 namespace facebook { namespace logdevice {
@@ -55,7 +54,6 @@ class LogMetaDataFetcher {
   /**
    * Create a LogMetaDataFetcher.
    *
-   * @param client      A client object
    * @param epoch_store EpochStore to use. Can be nullptr if type is
    *                    HISTORICAL_METADATA_ONLY
    * @param logs        Set of logs to process
@@ -69,12 +67,11 @@ class LogMetaDataFetcher {
    *                      epoch metadata from the metadata logs
    *                    - BOTH: read both
    */
-  LogMetaDataFetcher(std::shared_ptr<Client> client,
-                     std::shared_ptr<EpochStore> epoch_store,
+  LogMetaDataFetcher(std::shared_ptr<EpochStore> epoch_store,
                      std::vector<logid_t> logs,
                      Callback cb,
                      Type = Type::HISTORICAL_METADATA_ONLY);
-  ~LogMetaDataFetcher();
+  ~LogMetaDataFetcher() {}
 
   /**
    * @param max How many logs should be processed concurrently;
@@ -101,10 +98,9 @@ class LogMetaDataFetcher {
   /**
    * Start the state machine.
    */
-  void start();
+  void start(Processor* processor);
 
  private:
-  std::shared_ptr<Client> client_;
   std::shared_ptr<EpochStore> epoch_store_;
   std::list<logid_t> logs_;
 

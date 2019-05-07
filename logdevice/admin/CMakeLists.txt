@@ -22,7 +22,5 @@ add_library(logdevice_admin_settings STATIC ${admin_settings_hfiles}
 
 add_subdirectory(if)
 
-# TODO: Remove ldclient when we decouple safety_checker from
-# logdevice client library.
-add_dependencies(logdevice_safety_checker common ldclient logdevice_server)
+add_dependencies(logdevice_safety_checker common logdevice_server)
 add_dependencies(logdevice_admin_settings common)

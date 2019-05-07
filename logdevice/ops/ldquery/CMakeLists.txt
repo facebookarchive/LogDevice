@@ -23,6 +23,7 @@ target_link_libraries(ldquery
   logdevice_server
   logdevice_python
   ldclient
+  logdevice_safety_checker
   admin_command_client
   gason_static
   ${SQLITE_LIBRARY}

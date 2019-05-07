@@ -14,6 +14,7 @@
 
 #include "../Table.h"
 #include "../Utils.h"
+#include "logdevice/admin/safety/LogMetaDataFetcher.h"
 #include "logdevice/common/FileEpochStore.h"
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/ZookeeperClient.h"
@@ -24,7 +25,6 @@
 #include "logdevice/common/plugin/PluginRegistry.h"
 #include "logdevice/common/plugin/ZookeeperClientFactory.h"
 #include "logdevice/lib/ClientImpl.h"
-#include "logdevice/lib/ops/LogMetaDataFetcher.h"
 #include "logdevice/ops/ldquery/Errors.h"
 #include "logdevice/server/ZookeeperEpochStore.h"
 
@@ -223,13 +223,10 @@ std::shared_ptr<TableData> EpochStore::getData(QueryContext& ctx) {
     }
   }
 
-  LogMetaDataFetcher fetcher(full_client,
-                             epoch_store,
-                             logs,
-                             callback,
-                             LogMetaDataFetcher::Type::EPOCH_STORE_ONLY);
+  LogMetaDataFetcher fetcher(
+      epoch_store, logs, callback, LogMetaDataFetcher::Type::EPOCH_STORE_ONLY);
   fetcher.setMaxInFlight(10000);
-  fetcher.start();
+  fetcher.start(&client_impl->getProcessor());
   sem.wait();
 
   return result;

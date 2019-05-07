@@ -6,10 +6,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "logdevice/lib/ops/LogMetaDataFetcher.h"
+#include "logdevice/admin/safety/LogMetaDataFetcher.h"
 
 #include "logdevice/common/Processor.h"
-#include "logdevice/lib/ClientImpl.h"
 
 namespace facebook { namespace logdevice {
 
@@ -166,23 +165,19 @@ void LogMetaDataFetcher::scheduleForLog(logid_t logid) {
   }
 }
 
-LogMetaDataFetcher::LogMetaDataFetcher(std::shared_ptr<Client> client,
-                                       std::shared_ptr<EpochStore> epoch_store,
+LogMetaDataFetcher::LogMetaDataFetcher(std::shared_ptr<EpochStore> epoch_store,
                                        std::vector<logid_t> logs,
                                        Callback cb,
                                        Type type)
-    : client_(std::move(client)),
-      epoch_store_(std::move(epoch_store)),
+    : epoch_store_(std::move(epoch_store)),
       logs_(logs.begin(), logs.end()),
       count_(logs_.size()),
       cb_(cb),
       type_(type) {}
 
-LogMetaDataFetcher::~LogMetaDataFetcher() {}
-
 class StartLogMetaDataFetcherRequest : public Request {
  public:
-  StartLogMetaDataFetcherRequest(LogMetaDataFetcher* fetcher)
+  explicit StartLogMetaDataFetcherRequest(LogMetaDataFetcher* fetcher)
       : Request(RequestType::CHECK_METADATA_LOG) /*TODO*/, fetcher_(fetcher) {}
   Request::Execution execute() override {
     fetcher_->scheduleMore();
@@ -193,11 +188,10 @@ class StartLogMetaDataFetcherRequest : public Request {
   LogMetaDataFetcher* fetcher_;
 };
 
-void LogMetaDataFetcher::start() {
+void LogMetaDataFetcher::start(Processor* processor) {
   std::unique_ptr<Request> request =
       std::make_unique<StartLogMetaDataFetcherRequest>(this);
-  ClientImpl* client = static_cast<ClientImpl*>(client_.get());
-  client->getProcessor().postImportant(request);
+  processor->postImportant(request);
 }
 
 }} // namespace facebook::logdevice
