@@ -14,7 +14,6 @@
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/request_util.h"
 #include "logdevice/common/settings/SettingsUpdater.h"
-#include "logdevice/server/Server.h"
 
 using namespace facebook::logdevice;
 

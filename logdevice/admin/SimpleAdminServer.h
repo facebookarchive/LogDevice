@@ -7,9 +7,12 @@
  */
 #pragma once
 
+#include "logdevice/admin/AdminServer.h"
 #include "logdevice/admin/settings/AdminServerSettings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/server/ServerSettings.h"
+#include "thrift/lib/cpp2/server/ThriftServer.h"
+#include "thrift/lib/cpp2/util/ScopedServerThread.h"
 
 namespace facebook { namespace logdevice {
 
@@ -17,44 +20,37 @@ class Processor;
 class SettingsUpdater;
 class ShardedRocksDBLocalLogStore;
 class StatsHolder;
-class SafetyChecker;
 
 /**
- * An interface that will be overridden by plugins to implement an Admin API
- * interface for logdevice.
+ * An implementation of `AdminServer` that uses cpp2's ThriftServer.
  */
-class AdminServer {
+class SimpleAdminServer : public AdminServer {
  public:
   /**
    * The address defines the information needed to create a listening
    * socket for the admin server.
    */
-  AdminServer(
+  SimpleAdminServer(
       Processor* processor,
       std::shared_ptr<SettingsUpdater> settings_updater,
-      UpdateableSettings<ServerSettings> updateable_server_settings,
-      UpdateableSettings<AdminServerSettings> updateable_admin_server_settings,
-      StatsHolder* stats_holder) {}
+      UpdateableSettings<ServerSettings> server_settings,
+      UpdateableSettings<AdminServerSettings> admin_server_settings,
+      StatsHolder* stats_holder);
   /**
    * will be called on server startup, the server startup will fail if this
    * returned false.
    */
-  virtual bool start() = 0;
+  bool start() override;
   /**
    * This should stop the admin server and all associated threads. This should
    * be a blocking call that waits until pending work has been processed and
    * all threads have exited.
    */
-  virtual void stop() = 0;
-  virtual ~AdminServer() {}
+  void stop() override;
+  virtual ~SimpleAdminServer() {}
 
-  virtual void
-  setShardedRocksDBStore(ShardedRocksDBLocalLogStore* sharded_store) = 0;
-  /**
-   * Sets the instance of safety checker that is responsible for executing
-   * server-side safety checks.
-   */
-  virtual void
-  setSafetyChecker(const std::shared_ptr<SafetyChecker>& safety_checker) = 0;
+ private:
+  std::unique_ptr<apache::thrift::util::ScopedServerThread> server_thread_;
+  std::atomic_bool started_{false};
 };
 }} // namespace facebook::logdevice

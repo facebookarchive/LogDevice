@@ -8,6 +8,7 @@
 
 #include "logdevice/server/test/TestUtil.h"
 
+#include "logdevice/admin/AdminServer.h"
 #include "logdevice/admin/settings/AdminServerSettings.h"
 #include "logdevice/common/EventLoopHandle.h"
 #include "logdevice/common/NoopTraceLogger.h"
@@ -16,7 +17,6 @@
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/common/settings/util.h"
 #include "logdevice/common/test/TestUtil.h"
-#include "logdevice/server/AdminServer.h"
 #include "logdevice/server/LogStoreMonitor.h"
 #include "logdevice/server/RebuildingCoordinator.h"
 #include "logdevice/server/RebuildingSupervisor.h"

@@ -10,6 +10,7 @@
 #include <atomic>
 #include <memory>
 
+#include "logdevice/admin/AdminServer.h"
 #include "logdevice/admin/settings/AdminServerSettings.h"
 #include "logdevice/common/EventLoopHandle.h"
 #include "logdevice/common/PermissionChecker.h"
@@ -20,7 +21,6 @@
 #include "logdevice/common/settings/RebuildingSettings.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/include/ConfigSubscriptionHandle.h"
-#include "logdevice/server/AdminServer.h"
 #include "logdevice/server/CommandListener.h"
 #include "logdevice/server/ConnectionListener.h"
 #include "logdevice/server/LocalLogFile.h"

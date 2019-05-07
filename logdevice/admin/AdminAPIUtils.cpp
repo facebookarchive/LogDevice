@@ -398,7 +398,7 @@ ShardSet expandShardSet(
   for (const auto& it : thrift_shards) {
     ShardSet expanded =
         resolveShardOrNode(it, nodes_configuration, ignore_missing);
-    output.merge(expanded);
+    output.insert(expanded.begin(), expanded.end());
   }
   return output;
 }

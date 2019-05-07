@@ -35,6 +35,7 @@ class SafetyAPIIntegrationTest : public IntegrationTestBase {
   }
 };
 
+namespace {
 void write_test_records(std::shared_ptr<Client> client,
                         logid_t logid,
                         size_t num_records) {
@@ -46,6 +47,7 @@ void write_test_records(std::shared_ptr<Client> client,
         << "Append failed (E::" << error_name(err) << ")";
   }
 }
+} // namespace
 
 logsconfig::LogAttributes createInternalLogAttributes() {
   logsconfig::LogAttributes attrs;

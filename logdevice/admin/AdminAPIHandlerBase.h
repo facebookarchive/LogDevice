@@ -27,9 +27,6 @@ class AdminAPIHandlerBase : public virtual thrift::AdminAPISvIf {
     sharded_store_ = sharded_store;
   }
 
-  virtual void
-  setSafetyChecker(const std::shared_ptr<SafetyChecker>& safety_checker);
-
  protected:
   AdminAPIHandlerBase() = default;
   AdminAPIHandlerBase(

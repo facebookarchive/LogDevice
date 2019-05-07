@@ -13,6 +13,7 @@
 #include <mutex>
 #include <thread>
 
+#include "logdevice/admin/AdminServer.h"
 #include "logdevice/common/EventLoopHandle.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Request.h"
@@ -20,7 +21,6 @@
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/SequencerPlacement.h"
 #include "logdevice/common/Worker.h"
-#include "logdevice/server/AdminServer.h"
 #include "logdevice/server/CommandListener.h"
 #include "logdevice/server/ConnectionListener.h"
 #include "logdevice/server/LogStoreMonitor.h"

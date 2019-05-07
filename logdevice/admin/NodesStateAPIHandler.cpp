@@ -12,7 +12,6 @@
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/event_log/EventLogRebuildingSet.h"
-#include "logdevice/server/Server.h"
 
 using namespace facebook::logdevice;
 

@@ -15,6 +15,8 @@
 #include <thrift/lib/cpp/util/EnumUtils.h>
 
 #include "logdevice/admin/Conv.h"
+#include "logdevice/admin/safety/SafetyChecker.h"
+#include "logdevice/common/BuildInfo.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/logs/LogsConfigManager.h"
 #include "logdevice/common/request_util.h"
@@ -23,23 +25,51 @@
 #include "logdevice/common/util.h"
 #include "logdevice/server/LogGroupCustomCounters.h"
 #include "logdevice/server/LogGroupThroughput.h"
-#include "logdevice/server/Server.h"
-#include "logdevice/server/ServerProcessor.h"
 
 namespace facebook { namespace logdevice {
 
-/* Example on fulfilling a promise on a worker
- *  ld_check(processor_);
- *  return fulfill_on_worker<int32_t>(
- *      processor_, // processor
- *      folly::none, // worker_id if you want to pin it
- *      WorkerType::BACKGROUND, [](folly::Promise<Unit> p) mutable {
- *        Worker* w = Worker::onThisThread();
- *        auto config = w->getConfig();
- *        auto logsconfig = config->localLogsConfig();
- *        p.setValue(logsconfig->getVersion());
- *      });
- */
+AdminAPIHandler::AdminAPIHandler(
+    Processor* processor,
+    std::shared_ptr<SettingsUpdater> settings_updater,
+    UpdateableSettings<ServerSettings> updateable_server_settings,
+    UpdateableSettings<AdminServerSettings> updateable_admin_server_settings,
+    StatsHolder* stats_holder)
+    : AdminAPIHandlerBase(processor,
+                          std::move(settings_updater),
+                          std::move(updateable_server_settings),
+                          std::move(updateable_admin_server_settings),
+                          stats_holder),
+      facebook::fb303::FacebookBase2("LogDevice Admin API Service") {
+  start_time_ = std::chrono::steady_clock::now();
+  safety_checker_ = std::make_shared<SafetyChecker>(processor_);
+  safety_checker_->useAdminSettings(updateable_admin_server_settings_);
+}
+
+facebook::fb303::cpp2::fb_status AdminAPIHandler::getStatus() {
+  // Given that this thrift / Admin API service is started as soon as we
+  // start accepting connections, the service can only be:
+  // - ALIVE
+  // - STOPPING
+  if (processor_->isShuttingDown()) {
+    return facebook::fb303::cpp2::fb_status::STOPPING;
+  } else if (!processor_->isLogsConfigLoaded()) {
+    return facebook::fb303::cpp2::fb_status::STARTING;
+  } else {
+    return facebook::fb303::cpp2::fb_status::ALIVE;
+  }
+}
+
+void AdminAPIHandler::getVersion(std::string& _return) {
+  auto build_info = processor_->getPluginRegistry()->getSinglePlugin<BuildInfo>(
+      PluginType::BUILD_INFO);
+  _return = build_info->version();
+}
+
+int64_t AdminAPIHandler::aliveSince() {
+  auto uptime = std::chrono::duration_cast<std::chrono::seconds>(
+      std::chrono::steady_clock::now() - start_time_);
+  return uptime.count();
+}
 
 void AdminAPIHandler::getLogTreeInfo(thrift::LogTreeInfo& response) {
   auto logsconfig = processor_->config_->getLocalLogsConfig();

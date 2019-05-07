@@ -975,12 +975,13 @@ std::unique_ptr<Node> Cluster::createNode(node_index_t index,
   node->cmd_args_ = commandArgsForNode(index, *node);
 
   ld_info("Node N%d:%d will be started on protocol_addr:%s"
-          ", gossip_addr:%s, command_addr:%s (data in %s)",
+          ", gossip_addr:%s, command_addr:%s, admin_addr:%s (data in %s)",
           index,
           getNodeReplacementCounter(index),
           node->addrs_.protocol_addr_.toString().c_str(),
           node->addrs_.gossip_addr_.toString().c_str(),
           node->addrs_.command_addr_.toString().c_str(),
+          node->addrs_.admin_addr_.toString().c_str(),
           node->data_path_.c_str());
 
   return node;

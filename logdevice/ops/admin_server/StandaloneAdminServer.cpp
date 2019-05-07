@@ -12,7 +12,7 @@
 
 #include <folly/futures/Future.h>
 
-#include "logdevice/admin/safety/SafetyChecker.h"
+#include "logdevice/admin/SimpleAdminServer.h"
 #include "logdevice/common/ConfigInit.h"
 #include "logdevice/common/NodesConfigurationInit.h"
 #include "logdevice/common/NodesConfigurationPublisher.h"
@@ -273,17 +273,16 @@ void StandaloneAdminServer::initAdminServer() {
                                   server_settings_,
                                   admin_settings_,
                                   stats_.get());
-    ld_check(admin_server_);
-    auto safety_checker = std::make_shared<SafetyChecker>(processor_.get());
-    safety_checker->useAdminSettings(admin_settings_);
-    admin_server_->setSafetyChecker(safety_checker);
-    admin_server_->start();
   } else {
-    ld_critical(
-        "Not initializing Admin API, since there are no implementations "
-        "available.");
-    throw StandaloneAdminServerFailed();
+    // Use built-in SimpleAdminServer
+    admin_server_ = std::make_unique<SimpleAdminServer>(processor_.get(),
+                                                        settings_updater_,
+                                                        server_settings_,
+                                                        admin_settings_,
+                                                        stats_.get());
   }
+  ld_check(admin_server_);
+  admin_server_->start();
 }
 
 void StandaloneAdminServer::initClusterStateRefresher() {

@@ -7,7 +7,7 @@
  */
 #include "logdevice/server/Server.h"
 
-#include "logdevice/admin/safety/SafetyChecker.h"
+#include "logdevice/admin/SimpleAdminServer.h"
 #include "logdevice/common/ConfigInit.h"
 #include "logdevice/common/ConstructorFailed.h"
 #include "logdevice/common/CopySetManager.h"
@@ -1013,12 +1013,6 @@ bool Server::initAdminServer() {
     auto server_config = updateable_config_->getServerConfig();
     ld_check(server_config);
 
-    // TODO: Don't get that information from my node section, use settings
-    // instead.
-    NodeID node_id = server_config->getMyNodeID();
-    const ServerConfig::Node* node_config = server_config->getNode(node_id);
-    ld_check(node_config);
-
     auto adm_plugin =
         params_->getPluginRegistry()->getSinglePlugin<AdminServerFactory>(
             PluginType::ADMIN_SERVER_FACTORY);
@@ -1028,15 +1022,17 @@ bool Server::initAdminServer() {
                                            params_->getServerSettings(),
                                            params_->getAdminServerSettings(),
                                            params_->getStats());
-      if (sharded_store_) {
-        admin_server_handle_->setShardedRocksDBStore(sharded_store_.get());
-      }
-      auto safety_checker = std::make_shared<SafetyChecker>(processor_.get());
-      safety_checker->useAdminSettings(params_->getAdminServerSettings());
-      admin_server_handle_->setSafetyChecker(safety_checker);
     } else {
-      ld_info("Not initializing Admin API, since there are no implementations "
-              "available.");
+      // Use built-in SimpleAdminServer
+      admin_server_handle_ =
+          std::make_unique<SimpleAdminServer>(processor_.get(),
+                                              params_->getSettingsUpdater(),
+                                              params_->getServerSettings(),
+                                              params_->getAdminServerSettings(),
+                                              params_->getStats());
+    }
+    if (sharded_store_) {
+      admin_server_handle_->setShardedRocksDBStore(sharded_store_.get());
     }
   } else {
     ld_info("Not initializing Admin API,"

@@ -9,6 +9,7 @@
 
 #include <folly/executors/CPUThreadPoolExecutor.h>
 
+#include "logdevice/admin/AdminServer.h"
 #include "logdevice/admin/settings/AdminServerSettings.h"
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/StatsCollectionThread.h"
@@ -19,7 +20,6 @@
 #include "logdevice/common/settings/SettingsUpdater.h"
 #include "logdevice/include/Client.h"
 #include "logdevice/lib/ClientProcessor.h"
-#include "logdevice/server/AdminServer.h"
 #include "logdevice/server/ServerSettings.h"
 #include "logdevice/server/locallogstore/LocalLogStoreSettings.h"
 #include "logdevice/server/locallogstore/RocksDBSettings.h"
