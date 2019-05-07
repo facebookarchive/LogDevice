@@ -15,7 +15,7 @@
 #include "logdevice/common/AdminCommandTable.h"
 #include "logdevice/common/stats/PerShardHistograms.h"
 #include "logdevice/common/stats/ServerHistograms.h"
-#include "logdevice/server/AdminCommand.h"
+#include "logdevice/server/admincommands/AdminCommand.h"
 #include "logdevice/server/locallogstore/ShardedRocksDBLocalLogStore.h"
 
 namespace facebook { namespace logdevice { namespace commands {

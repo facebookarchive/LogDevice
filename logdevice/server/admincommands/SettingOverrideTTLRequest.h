@@ -20,12 +20,6 @@ namespace facebook { namespace logdevice {
 class Server;
 class SettingOverrideTTLRequest;
 
-// Wrapper instead of typedef to allow forward-declaring in ServerWorker.h
-struct SettingOverrideTTLRequestMap {
-  std::unordered_map<std::string, std::unique_ptr<SettingOverrideTTLRequest>>
-      map;
-};
-
 /**
  * @file SettingOverrideTTLRequest.h
  *

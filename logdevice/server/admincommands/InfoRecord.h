@@ -14,8 +14,8 @@
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/types_internal.h"
-#include "logdevice/server/AdminCommand.h"
 #include "logdevice/server/ServerWorker.h"
+#include "logdevice/server/admincommands/AdminCommand.h"
 #include "logdevice/server/locallogstore/LocalLogStore.h"
 #include "logdevice/server/storage_tasks/PerWorkerStorageTaskQueue.h"
 

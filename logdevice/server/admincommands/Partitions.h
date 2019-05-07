@@ -10,8 +10,8 @@
 #include <folly/ScopeGuard.h>
 
 #include "logdevice/common/AdminCommandTable.h"
-#include "logdevice/server/AdminCommand.h"
 #include "logdevice/server/ServerWorker.h"
+#include "logdevice/server/admincommands/AdminCommand.h"
 #include "logdevice/server/locallogstore/PartitionedRocksDBStore.h"
 
 namespace facebook { namespace logdevice { namespace commands {

@@ -8,7 +8,7 @@
 #pragma once
 
 #include "logdevice/common/config.h"
-#include "logdevice/server/AdminCommand.h"
+#include "logdevice/server/admincommands/AdminCommand.h"
 
 #ifdef LOGDEVICE_USING_JEMALLOC
 

@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "logdevice/server/SequencerDeactivationRequest.h"
+#include "logdevice/server/admincommands/SequencerDeactivationRequest.h"
 
 #include "logdevice/common/AllSequencers.h"
 #include "logdevice/common/Processor.h"

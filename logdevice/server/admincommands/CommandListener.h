@@ -18,9 +18,9 @@
 #include "logdevice/common/Sockaddr.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/stats/Stats.h"
-#include "logdevice/server/AdminCommandFactory.h"
 #include "logdevice/server/Listener.h"
 #include "logdevice/server/ServerSettings.h"
+#include "logdevice/server/admincommands/AdminCommandFactory.h"
 
 namespace facebook { namespace logdevice {
 

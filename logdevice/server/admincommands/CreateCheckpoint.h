@@ -7,7 +7,7 @@
  */
 #pragma once
 
-#include "logdevice/server/AdminCommand.h"
+#include "logdevice/server/admincommands/AdminCommand.h"
 #include "rocksdb/utilities/checkpoint.h"
 
 namespace facebook { namespace logdevice { namespace commands {

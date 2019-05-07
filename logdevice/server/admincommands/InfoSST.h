@@ -8,7 +8,7 @@
 #pragma once
 
 #include "logdevice/common/Processor.h"
-#include "logdevice/server/AdminCommand.h"
+#include "logdevice/server/admincommands/AdminCommand.h"
 #include "logdevice/server/locallogstore/RocksDBLogStoreBase.h"
 #include "logdevice/server/locallogstore/ShardedRocksDBLocalLogStore.h"
 #include "logdevice/server/storage_tasks/ShardedStorageThreadPool.h"

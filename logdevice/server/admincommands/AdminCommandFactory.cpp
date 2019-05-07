@@ -7,7 +7,7 @@
  */
 #define __STDC_FORMAT_MACROS
 
-#include "logdevice/server/AdminCommandFactory.h"
+#include "logdevice/server/admincommands/AdminCommandFactory.h"
 
 #include "logdevice/common/CopySetManager.h"
 #include "logdevice/common/MetaDataLogWriter.h"

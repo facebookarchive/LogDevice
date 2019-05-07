@@ -7,8 +7,8 @@
  */
 #pragma once
 
-#include "logdevice/server/AdminCommand.h"
 #include "logdevice/server/ServerProcessor.h"
+#include "logdevice/server/admincommands/AdminCommand.h"
 #include "logdevice/server/locallogstore/CompactionRequest.h"
 #include "logdevice/server/locallogstore/PartitionedRocksDBStore.h"
 #include "logdevice/server/locallogstore/RocksDBLocalLogStore.h"

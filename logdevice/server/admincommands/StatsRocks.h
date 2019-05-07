@@ -9,8 +9,8 @@
 
 #include <rocksdb/cache.h>
 
-#include "logdevice/server/AdminCommand.h"
 #include "logdevice/server/ServerProcessor.h"
+#include "logdevice/server/admincommands/AdminCommand.h"
 #include "logdevice/server/locallogstore/PartitionedRocksDBStore.h"
 #include "logdevice/server/locallogstore/RocksDBLogStoreBase.h"
 #include "logdevice/server/storage_tasks/ShardedStorageThreadPool.h"

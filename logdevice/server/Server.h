@@ -21,11 +21,11 @@
 #include "logdevice/common/settings/RebuildingSettings.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/include/ConfigSubscriptionHandle.h"
-#include "logdevice/server/CommandListener.h"
 #include "logdevice/server/ConnectionListener.h"
 #include "logdevice/server/LocalLogFile.h"
 #include "logdevice/server/ServerSettings.h"
 #include "logdevice/server/UnreleasedRecordDetector.h"
+#include "logdevice/server/admincommands/CommandListener.h"
 #include "logdevice/server/locallogstore/LocalLogStoreSettings.h"
 #include "logdevice/server/locallogstore/RocksDBSettings.h"
 

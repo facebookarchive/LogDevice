@@ -10,8 +10,8 @@
 #include <folly/json.h>
 
 #include "logdevice/common/NodeID.h"
-#include "logdevice/server/AdminCommand.h"
 #include "logdevice/server/FailureDetector.h"
+#include "logdevice/server/admincommands/AdminCommand.h"
 
 namespace facebook { namespace logdevice { namespace commands {
 

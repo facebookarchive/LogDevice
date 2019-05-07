@@ -15,7 +15,7 @@
 #include "logdevice/common/MetaDataLogWriter.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/SequencerBackgroundActivator.h"
-#include "logdevice/server/AdminCommand.h"
+#include "logdevice/server/admincommands/AdminCommand.h"
 
 namespace facebook { namespace logdevice { namespace commands {
 

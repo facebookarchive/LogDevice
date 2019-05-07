@@ -12,7 +12,7 @@
 
 #include "logdevice/common/Metadata.h"
 #include "logdevice/common/request_util.h"
-#include "logdevice/server/AdminCommand.h"
+#include "logdevice/server/admincommands/AdminCommand.h"
 #include "logdevice/server/locallogstore/LocalLogStore.h"
 #include "logdevice/server/read_path/AllServerReadStreams.h"
 

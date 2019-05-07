@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 #define __STDC_FORMAT_MACROS
-#include "logdevice/server/CommandListener.h"
+#include "logdevice/server/admincommands/CommandListener.h"
 
 #include <pthread.h>
 
@@ -27,7 +27,7 @@
 #include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/include/Err.h"
-#include "logdevice/server/AdminCommand.h"
+#include "logdevice/server/admincommands/AdminCommand.h"
 #include "logdevice/server/read_path/LogStorageState.h"
 #include "logdevice/server/storage_tasks/ShardedStorageThreadPool.h"
 

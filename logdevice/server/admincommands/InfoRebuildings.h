@@ -9,10 +9,10 @@
 
 #include "logdevice/common/AdminCommandTable.h"
 #include "logdevice/common/request_util.h"
-#include "logdevice/server/AdminCommand.h"
 #include "logdevice/server/LogRebuilding.h"
 #include "logdevice/server/RebuildingCoordinator.h"
 #include "logdevice/server/ServerWorker.h"
+#include "logdevice/server/admincommands/AdminCommand.h"
 #include "logdevice/server/rebuilding/ChunkRebuilding.h"
 
 namespace facebook { namespace logdevice { namespace commands {

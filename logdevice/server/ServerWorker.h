@@ -29,7 +29,10 @@ class ServerWorkerImpl;
 
 struct ChunkRebuildingMap;
 struct PurgeUncleanEpochsMap;
-struct SettingOverrideTTLRequestMap;
+
+struct SettingOverrideTTLRequestMap {
+  std::unordered_map<std::string, std::unique_ptr<Request>> map;
+};
 
 class ServerWorker : public Worker {
  public:

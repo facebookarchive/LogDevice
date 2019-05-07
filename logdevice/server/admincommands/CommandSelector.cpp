@@ -5,12 +5,12 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "logdevice/server/CommandSelector.h"
+#include "logdevice/server/admincommands/CommandSelector.h"
 
 #include <folly/String.h>
 
 #include "logdevice/common/libevent/compat.h"
-#include "logdevice/server/AdminCommand.h"
+#include "logdevice/server/admincommands/AdminCommand.h"
 
 namespace facebook { namespace logdevice {
 

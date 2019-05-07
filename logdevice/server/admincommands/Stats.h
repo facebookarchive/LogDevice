@@ -11,7 +11,7 @@
 
 #include "logdevice/common/PriorityMap.h"
 #include "logdevice/common/Processor.h"
-#include "logdevice/server/AdminCommand.h"
+#include "logdevice/server/admincommands/AdminCommand.h"
 #include "logdevice/server/storage_tasks/StorageTask.h"
 
 namespace facebook { namespace logdevice { namespace commands {

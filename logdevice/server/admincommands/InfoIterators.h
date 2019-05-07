@@ -12,7 +12,7 @@
 #include "logdevice/common/AdminCommandTable.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/request_util.h"
-#include "logdevice/server/AdminCommand.h"
+#include "logdevice/server/admincommands/AdminCommand.h"
 #include "logdevice/server/locallogstore/IteratorTracker.h"
 
 namespace facebook { namespace logdevice { namespace commands {

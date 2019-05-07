@@ -13,7 +13,6 @@
 #include "logdevice/server/FailureDetector.h"
 #include "logdevice/server/ServerMessageDispatch.h"
 #include "logdevice/server/ServerProcessor.h"
-#include "logdevice/server/SettingOverrideTTLRequest.h"
 #include "logdevice/server/read_path/AllServerReadStreams.h"
 #include "logdevice/server/rebuilding/ChunkRebuilding.h"
 #include "logdevice/server/sequencer_boycotting/NodeStatsController.h"

@@ -20,7 +20,7 @@
 #include "logdevice/common/UpdateableSecurityInfo.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/plugin/PluginRegistry.h"
-#include "logdevice/server/AdminCommand.h"
+#include "logdevice/server/admincommands/AdminCommand.h"
 #include "logdevice/server/util.h"
 
 namespace facebook { namespace logdevice { namespace commands {

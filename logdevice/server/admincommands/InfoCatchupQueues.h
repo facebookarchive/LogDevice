@@ -14,8 +14,8 @@
 #include "logdevice/common/request_util.h"
 #include "logdevice/common/util.h"
 #include "logdevice/include/types.h"
-#include "logdevice/server/AdminCommand.h"
 #include "logdevice/server/ServerWorker.h"
+#include "logdevice/server/admincommands/AdminCommand.h"
 #include "logdevice/server/read_path/AllServerReadStreams.h"
 
 namespace facebook { namespace logdevice { namespace commands {

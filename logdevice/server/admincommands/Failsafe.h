@@ -9,7 +9,7 @@
 
 #include <folly/ScopeGuard.h>
 
-#include "logdevice/server/AdminCommand.h"
+#include "logdevice/server/admincommands/AdminCommand.h"
 #include "logdevice/server/locallogstore/ShardedRocksDBLocalLogStore.h"
 
 namespace facebook { namespace logdevice { namespace commands {

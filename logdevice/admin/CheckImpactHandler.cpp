@@ -11,9 +11,9 @@
 #include "logdevice/admin/AdminAPIUtils.h"
 #include "logdevice/admin/Conv.h"
 #include "logdevice/admin/safety/SafetyChecker.h"
+#include "logdevice/common/Processor.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/event_log/EventLogRebuildingSet.h"
-#include "logdevice/server/ServerProcessor.h"
 
 using namespace facebook::logdevice::configuration;
 

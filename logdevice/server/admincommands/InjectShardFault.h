@@ -14,8 +14,8 @@
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/SocketTypes.h"
 #include "logdevice/common/debug.h"
-#include "logdevice/server/AdminCommand.h"
 #include "logdevice/server/IOFaultInjection.h"
+#include "logdevice/server/admincommands/AdminCommand.h"
 
 namespace facebook { namespace logdevice { namespace commands {
 

@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "logdevice/server/SettingOverrideTTLRequest.h"
+#include "logdevice/server/admincommands/SettingOverrideTTLRequest.h"
 
 #include "logdevice/common/commandline_util_chrono.h"
 #include "logdevice/common/settings/SettingsUpdater.h"
