@@ -15,9 +15,9 @@ sidebar_label: Settings
 | maintenance-log-snapshotting-period | Controls time based snapshotting. New maintenancelog snapshot will be created after this period if there are new deltas | 1h | server&nbsp;only |
 | read-metadata-from-sequencers | Safety checker to read the metadata of logs directly from sequencers. | true | server&nbsp;only |
 | safety-check-failure-sample-size | The number of sample epochs returned by the Maintenance API for each maintenance if safety check blocks the operation. | 10 | server&nbsp;only |
+| safety-check-max-batch-size | The maximum number of logs to be checked in a single batch. Larger batches mean faster performance but means blocking the CPU thread pool for longer (not yielding often enough) | 15000 | server&nbsp;only |
 | safety-check-max-logs-in-flight | The number of concurrent logs that we runs checks against during execution of the CheckImpact operation either internally during a maintenance or through the Admin API's checkImpact() call | 1000 | server&nbsp;only |
 | safety-check-metadata-update-period | The period between automatic metadata updates for safety checker internal cache | 10min | server&nbsp;only |
-| safety-check-timeout | The total time the safety check should take to run. This is the time that the CheckImpact operation need to take to scan all logs along with all the historical metadata to ensure than a maintenance is safe | 10min | server&nbsp;only |
 
 ## Batching and compression
 |   Name    |   Description   |  Default  |   Notes   |

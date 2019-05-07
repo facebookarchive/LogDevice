@@ -160,7 +160,6 @@ class WorkerImpl {
   GetClusterStateRequestMap runningGetClusterState_;
   GetEpochRecoveryMetadataRequestMap runningGetEpochRecoveryMetadata_;
   LogsConfigApiRequestMap runningLogManagementReqs_;
-  CheckImpactRequestMap runningCheckImpactReqs_;
   LogsConfigManagerRequestMap runningLogsConfigManagerReqs_;
   LogsConfigManagerReplyMap runningLogsConfigManagerReplies_;
   AppendRequestMap runningAppends_;
@@ -1131,10 +1130,6 @@ GetClusterStateRequestMap& Worker::runningGetClusterState() const {
 
 LogsConfigApiRequestMap& Worker::runningLogsConfigApiRequests() const {
   return impl_->runningLogManagementReqs_;
-}
-
-CheckImpactRequestMap& Worker::runningCheckImpactRequests() const {
-  return impl_->runningCheckImpactReqs_;
 }
 
 LogsConfigManagerRequestMap& Worker::runningLogsConfigManagerRequests() const {

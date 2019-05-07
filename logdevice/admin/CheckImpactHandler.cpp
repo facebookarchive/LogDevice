@@ -79,6 +79,7 @@ CheckImpactHandler::semifuture_checkImpact(
   return safety_checker_
       ->checkImpact(std::move(status_map),
                     std::move(shards),
+                    {}, // TODO: Support sequencers
                     target_storage_state,
                     safety_margin,
                     request->check_metadata_logs_ref().value_or(true),

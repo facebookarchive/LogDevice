@@ -166,14 +166,6 @@ struct MUTATED_Header;
 struct TrimRequestMap;
 struct WriteMetaDataRecordMap;
 
-struct CheckImpactRequestMap {
-  std::unordered_map<request_id_t,
-                     // We are not using the concrete type here to avoid the
-                     // dependency on this type.
-                     std::unique_ptr<Request>,
-                     request_id_t::Hash>
-      map;
-};
 
 namespace configuration {
 class ZookeeperConfig;
@@ -418,9 +410,6 @@ class Worker : public EventLoop {
 
   // a map for all currently running LogsConfigApiRequest
   LogsConfigApiRequestMap& runningLogsConfigApiRequests() const;
-
-  // a map for all currently running CheckImpactRequests
-  CheckImpactRequestMap& runningCheckImpactRequests() const;
 
   // Internal LogsConfigManager requests map
   LogsConfigManagerRequestMap& runningLogsConfigManagerRequests() const;

@@ -131,12 +131,12 @@ void SafetyCheckScheduler::updateResult(ExecutionState& state) const {
 folly::SemiFuture<folly::Expected<Impact, Status>>
 SafetyCheckScheduler::performSafetyCheck(
     ShardSet disabled_shards,
-    NodeIndexSet /*disabled_sequencers*/,
+    NodeIndexSet disabled_sequencers,
     ShardAuthoritativeStatusMap status_map,
     std::shared_ptr<const configuration::nodes::NodesConfiguration>
         nodes_config,
     ShardSet shards,
-    NodeIndexSet /*sequencers*/) const {
+    NodeIndexSet sequencers) const {
   // We must have nodes configuration to operate.
   ld_assert(nodes_config != nullptr);
   ld_assert(processor_);
@@ -159,12 +159,22 @@ SafetyCheckScheduler::performSafetyCheck(
           toString(shards).c_str(),
           toString(disabled_shards).c_str());
 
+  if (sequencers.size() > 0) {
+    ld_info("Performing safety check for disabling sequencers %s while "
+            "assuming that "
+            "%s are already disabled",
+            toString(sequencers).c_str(),
+            toString(disabled_sequencers).c_str());
+  }
+
   // Combine the shards into a single input list to safety checker.
   shards.insert(disabled_shards.begin(), disabled_shards.end());
+  sequencers.insert(disabled_sequencers.begin(), disabled_sequencers.end());
 
   return safety_checker_->checkImpact(
       status_map,
       shards,
+      sequencers,
       configuration::StorageState::DISABLED, // We always assume that nodes may
                                              // die.
       SafetyMargin(),

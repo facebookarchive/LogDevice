@@ -57,6 +57,40 @@ std::string Impact::toString() const {
   return toStringImpactResult(result);
 }
 
+Impact Impact::merge(Impact i1, const Impact& i2, size_t error_sample_size) {
+  i1.result |= i2.result;
+  i1.total_logs_checked += i2.total_logs_checked;
+  if (error_sample_size >= 0) {
+    // How many can we accept? merge_limit can be negative if we are already
+    // beyond capacity.
+    size_t merge_limit = error_sample_size - i1.logs_affected.size();
+    // Cannot copy more elements than the size of the source (impact)
+    merge_limit = std::min(merge_limit, i2.logs_affected.size());
+    std::copy_n(i2.logs_affected.begin(),
+                merge_limit,
+                std::back_inserter(i1.logs_affected));
+  } else {
+    // Copy everything
+    std::copy(i2.logs_affected.begin(),
+              i2.logs_affected.end(),
+              std::back_inserter(i1.logs_affected));
+  }
+  return i1;
+}
+
+folly::Expected<Impact, Status>
+Impact::merge(folly::Expected<Impact, Status> i,
+              const folly::Expected<Impact, Status>& i2,
+              size_t error_sample_size) {
+  if (i.hasError()) {
+    return i;
+  }
+  if (i2.hasError()) {
+    return i2;
+  }
+  return merge(std::move(i.value()), i2.value(), error_sample_size);
+}
+
 int parseSafetyMargin(const std::string& descriptor, SafetyMargin& out) {
   if (descriptor.empty()) {
     return 0;

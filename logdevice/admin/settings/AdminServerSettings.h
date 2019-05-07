@@ -32,7 +32,7 @@ struct AdminServerSettings : public SettingsBundle {
 
   int safety_max_logs_in_flight;
   size_t safety_check_failure_sample_size;
-  std::chrono::milliseconds safety_check_timeout;
+  size_t safety_check_max_batch_size;
 
   // Allow the maintenance log to be snapshotted onto a snapshot log
   bool maintenance_log_snapshotting;

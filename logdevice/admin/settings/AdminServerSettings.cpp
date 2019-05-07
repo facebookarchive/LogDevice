@@ -58,17 +58,17 @@ void AdminServerSettings::defineSettings(SettingEasyInit& init) {
      SERVER,
      SettingsCategory::AdminAPI)
 
-    ("safety-check-timeout", &safety_check_timeout, "10min",
-     [](std::chrono::milliseconds val) -> void {
-       if (val.count() <= 0) {
+    ("safety-check-max-batch-size", &safety_check_max_batch_size, "15000",
+     [](int x) -> void {
+       if (x <= 0) {
          throw boost::program_options::error(
-           "safety-check-timeout must be positive"
+           "safety-check-max-batch-size must be a positive integer"
          );
        }
      },
-     "The total time the safety check should take to run. This is the time that "
-     "the CheckImpact operation need to take to scan all logs along with all "
-     "the historical metadata to ensure than a maintenance is safe",
+     "The maximum number of logs to be checked in a single batch. Larger "
+     "batches mean faster performance but means blocking the CPU thread pool "
+     "for longer (not yielding often enough)",
      SERVER,
      SettingsCategory::AdminAPI)
 

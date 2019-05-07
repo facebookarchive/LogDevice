@@ -44,6 +44,7 @@ class SafetyChecker {
   folly::SemiFuture<folly::Expected<Impact, Status>>
   checkImpact(const ShardAuthoritativeStatusMap& status_map,
               const ShardSet& shards,
+              std::unordered_set<node_index_t> sequencers,
               configuration::StorageState target_storage_state,
               SafetyMargin safety_margin = SafetyMargin(),
               bool check_metadata_logs = true,
@@ -62,8 +63,8 @@ class SafetyChecker {
    */
   void useAdminSettings(UpdateableSettings<AdminServerSettings> admin_settings);
 
-  void setTimeout(std::chrono::milliseconds millis) {
-    timeout_ = millis;
+  void setMaxBatchSize(size_t max_batch_size) {
+    max_batch_size_ = max_batch_size;
   }
 
   void setMaxInFlight(size_t max_in_flight) {
@@ -84,8 +85,47 @@ class SafetyChecker {
   // the future is fulfilled if we already have metadata. But will schedule
   // another metadata request asynchronously if elapsed time is higher than our
   // threshold.
+  //
   folly::SemiFuture<folly::Unit> refreshMetadata();
   void onLogsConfigUpdate();
+
+  // Callback when we finish refreshing the metadata.
+  //
+  // Must be called from within the work context.
+  void
+  onMetadataRefreshComplete(LogMetaDataFetcher::Results results,
+                            std::chrono::steady_clock::time_point start_time,
+                            size_t logids_count,
+                            uint64_t logsconfig_version);
+
+  /**
+   * Performs a safety check against the cached metadata.
+   */
+  folly::SemiFuture<folly::Expected<Impact, Status>> performSafetyCheck(
+      ShardAuthoritativeStatusMap status_map,
+      // We capture metadata here to ensure we perform the entirety of the check
+      // over the same set of metadata even if an async refresh changed the
+      // pointer in metadata_
+      std::shared_ptr<LogMetaDataFetcher::Results> metadata,
+      /* Can be empty, means check given current state of shards*/
+      ShardSet shards,
+      std::unordered_set<node_index_t> sequencers,
+      /* Can be READ_WRITE is shards is empty */
+      configuration::StorageState target_storage_state,
+      SafetyMargin safety_margin,
+      /* Do we check the metadata logs too? */
+      bool check_metadata_logs,
+      /* Do we check the interal logs (see InternalLogs.h)? */
+      bool check_internal_logs,
+      /*
+       * if folly::none we check all logs, if empty vector, we don't check any
+       * logs, unless check_metadata_logs and/or check_internal_logs is/are set.
+       */
+      folly::Optional<std::vector<logid_t>> logids_to_check);
+
+  bool appendImpactToSample(
+      Impact::ImpactOnEpoch impact,
+      std::vector<Impact::ImpactOnEpoch>& affected_logs_sample) const;
 
   bool refresh_in_flight_{false};
   // The future that will execute the next timed refresh of metadata. This is
@@ -93,7 +133,7 @@ class SafetyChecker {
   // work context in Timekeeper.
   folly::SemiFuture<folly::Unit> next_refresh_;
   // A promise that is fulfilled when we finish fetching the metadata
-  folly::SharedPromise<folly::Unit> metadata_fetch_promise_;
+  folly::SharedPromise<folly::Unit> initial_fetch_promise_;
 
   std::shared_ptr<LogMetaDataFetcher::Results> metadata_;
   std::chrono::system_clock::time_point last_metadata_refresh_at_;
@@ -106,7 +146,7 @@ class SafetyChecker {
   UpdateableSettings<AdminServerSettings> settings_;
 
   Processor* processor_;
-  std::chrono::milliseconds timeout_{std::chrono::minutes(2)};
+  size_t max_batch_size_{10000};
   size_t logs_in_flight_{10000};
   bool abort_on_error_{true};
   size_t error_sample_size_{20};

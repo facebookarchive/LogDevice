@@ -24,6 +24,8 @@ namespace facebook { namespace logdevice {
 using SafetyMargin = std::map<NodeLocationScope, int>;
 
 struct Impact {
+  // Empty constructor sets everything as if the operation is safe.
+  Impact();
   /**
    * A data structure that holds extra information about the storage set that
    * resemble the status at the time of the safety check.
@@ -56,6 +58,9 @@ struct Impact {
     StorageSetMetadata storage_set_metadata;
     ReplicationProperty replication;
     int impact_result = ImpactResult::INVALID;
+    // Ctor used when there is no impact on log
+    explicit ImpactOnEpoch(logid_t log_id)
+        : log_id(log_id), impact_result(ImpactResult::NONE) {}
     ImpactOnEpoch(logid_t log_id,
                   epoch_t epoch,
                   StorageSet storage_set,
@@ -122,8 +127,20 @@ struct Impact {
         x.internal_logs_affected == internal_logs_affected;
   }
 
-  // Empty constructor sets everything as if the operation is safe.
-  Impact();
+  /**
+   * Combines takes an impact object and combines its result with this one.
+   * Note that this doesn't combine the total_time.
+   * It will also take into account the error_sample_size given to ensure we
+   * are not pushing so many samples.
+   *
+   * If error_sample_size is < 0 we will push all samples.
+   */
+  static Impact merge(Impact i1, const Impact& i2, size_t error_sample_size);
+
+  static folly::Expected<Impact, Status>
+  merge(folly::Expected<Impact, Status> i,
+        const folly::Expected<Impact, Status>& i2,
+        size_t error_sample_size);
 
   std::string toString() const;
   static std::string toStringImpactResult(int);

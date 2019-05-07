@@ -10,7 +10,6 @@
 
 #include <iostream>
 
-#include <folly/executors/CPUThreadPoolExecutor.h>
 #include <folly/futures/Future.h>
 
 #include "logdevice/admin/safety/SafetyChecker.h"
@@ -263,7 +262,8 @@ void StandaloneAdminServer::initAdminServer() {
 
   // Create a CPU thread pool executor.
   // TODO: Remove me when we have a shared CPU thread pool executor in processor
-  folly::setCPUExecutor(std::make_shared<folly::CPUThreadPoolExecutor>(3));
+  cpu_executor_ = std::make_shared<folly::CPUThreadPoolExecutor>(25);
+  folly::setCPUExecutor(cpu_executor_);
 
   auto adm_plugin = plugin_registry_->getSinglePlugin<AdminServerFactory>(
       PluginType::ADMIN_SERVER_FACTORY);
