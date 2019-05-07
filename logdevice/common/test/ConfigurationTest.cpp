@@ -1486,7 +1486,7 @@ TEST(ConfigurationTest, SequencerWeights) {
   std::shared_ptr<Configuration> config(
       Configuration::fromJsonFile(TEST_CONFIG_FILE("sequencer_weights.conf")));
   ASSERT_NE(nullptr, config.get());
-  ASSERT_EQ(6, config->serverConfig()->getNodes().size());
+  ASSERT_EQ(8, config->serverConfig()->getNodes().size());
 
   {
     // Validating the SequencerNodeAttributes structs
@@ -1497,6 +1497,8 @@ TEST(ConfigurationTest, SequencerWeights) {
         {true, 4},
         {false, 8},
         {false, 8},
+        {true, 1},
+        {true, 0},
     };
 
     std::vector<SequencerNodeAttributes> got;
@@ -1524,11 +1526,14 @@ TEST(ConfigurationTest, SequencerWeights) {
                                    NodeID(2, 1),
                                    NodeID(3, 1),
                                    NodeID(),
+                                   NodeID(),
+                                   NodeID(6, 1),
                                    NodeID()}),
               seq_config.nodes);
 
     // check normalized weights
-    EXPECT_EQ(std::vector<double>({0, .25, .5, 1, 0, 0}), seq_config.weights);
+    EXPECT_EQ(std::vector<double>({0, .25, .5, 1, 0, 0, 0.25, 0}),
+              seq_config.weights);
 
     EXPECT_FALSE(config->serverConfig()->getNode(0)->isSequencingEnabled());
     EXPECT_TRUE(config->serverConfig()->getNode(1)->isSequencingEnabled());
@@ -1536,6 +1541,8 @@ TEST(ConfigurationTest, SequencerWeights) {
     EXPECT_TRUE(config->serverConfig()->getNode(3)->isSequencingEnabled());
     EXPECT_FALSE(config->serverConfig()->getNode(4)->isSequencingEnabled());
     EXPECT_FALSE(config->serverConfig()->getNode(5)->isSequencingEnabled());
+    EXPECT_TRUE(config->serverConfig()->getNode(6)->isSequencingEnabled());
+    EXPECT_FALSE(config->serverConfig()->getNode(7)->isSequencingEnabled());
   }
 }
 

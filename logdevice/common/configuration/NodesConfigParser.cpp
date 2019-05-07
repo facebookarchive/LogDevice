@@ -413,6 +413,22 @@ static bool parseSequencer(const folly::dynamic& nodeMap,
 
   auto* sequencer = output.sequencer_attributes.get();
 
+  {
+    // Parse the old sequencer format if the sequencer field is a double
+    double weight = 0;
+    if (getDoubleFromMap(nodeMap, "sequencer", weight)) {
+      if (weight < 0) {
+        ld_error("Sequencer attribute is expected to be a non-negative "
+                 "floating point number.");
+        err = E::INVALID_CONFIG;
+        return false;
+      }
+      sequencer->setEnabled(true);
+      sequencer->setWeight(weight);
+      return true;
+    }
+  }
+
   // Parse sequencer field
   bool sequencing_enabled = false;
   if (!getBoolFromMap(nodeMap, "sequencer", sequencing_enabled) &&
