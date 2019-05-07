@@ -83,7 +83,8 @@ int NodesConfigurationThriftConverter::fromThrift(
     NodeLocation location;
     int rv = location.fromDomainString(obj.location_ref().value());
     if (rv != 0) {
-      ld_error("Invalid \"location\" string %s", obj.location.c_str());
+      ld_error("Invalid \"location\" string %s",
+               obj.location_ref().value_unchecked().c_str());
       return -1;
     }
     result.location = location;
