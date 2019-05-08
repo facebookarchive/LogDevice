@@ -11,6 +11,7 @@
 
 #include "logdevice/admin/maintenance/types.h"
 #include "logdevice/common/NodeID.h"
+#include "logdevice/common/Timestamp.h"
 
 namespace facebook { namespace logdevice { namespace maintenance {
 /**
@@ -19,7 +20,9 @@ namespace facebook { namespace logdevice { namespace maintenance {
  */
 class SequencerWorkflow {
  public:
-  explicit SequencerWorkflow(node_index_t node) : node_(node) {}
+  explicit SequencerWorkflow(node_index_t node) : node_(node) {
+    created_at_ = SystemTimestamp::now();
+  }
 
   // moveable.
   SequencerWorkflow(SequencerWorkflow&& /* unused */) = default;
@@ -40,6 +43,12 @@ class SequencerWorkflow {
   // Returns the target_op_state_
   SequencingState getTargetOpState() const;
 
+  // Returns value of last_updated_at_
+  SystemTimestamp getLastUpdatedTimestamp() const;
+
+  // Returns value of created_at_;
+  SystemTimestamp getCreationTimestamp() const;
+
   // Sets skip_safety_check_ to value of `skip`
   void shouldSkipSafetyCheck(bool skip);
 
@@ -58,6 +67,10 @@ class SequencerWorkflow {
   SequencingState current_sequencing_state_;
   // If true, skip safety check for this workflow
   bool skip_safety_check_{false};
+  // Last time the status_ was updated
+  SystemTimestamp last_updated_at_;
+  // Time when this workflow was created
+  SystemTimestamp created_at_;
 };
 
 }}} // namespace facebook::logdevice::maintenance

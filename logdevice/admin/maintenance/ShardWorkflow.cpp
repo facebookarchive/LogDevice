@@ -278,6 +278,14 @@ membership::StorageState ShardWorkflow::getExpectedStorageState() const {
   return expected_storage_state_;
 }
 
+SystemTimestamp ShardWorkflow::getLastUpdatedTimestamp() const {
+  return last_updated_at_;
+}
+
+SystemTimestamp ShardWorkflow::getCreationTimestamp() const {
+  return created_at_;
+}
+
 bool ShardWorkflow::excludeFromNodeset() const {
   return exclude_from_nodesets_;
 }

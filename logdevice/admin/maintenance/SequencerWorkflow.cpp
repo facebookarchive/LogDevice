@@ -43,4 +43,12 @@ SequencingState SequencerWorkflow::getTargetOpState() const {
   return target_op_state_;
 }
 
+SystemTimestamp SequencerWorkflow::getLastUpdatedTimestamp() const {
+  return last_updated_at_;
+}
+
+SystemTimestamp SequencerWorkflow::getCreationTimestamp() const {
+  return created_at_;
+}
+
 }}} // namespace facebook::logdevice::maintenance

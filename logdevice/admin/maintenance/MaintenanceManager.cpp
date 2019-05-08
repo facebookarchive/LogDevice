@@ -156,26 +156,43 @@ void MaintenanceManager::scheduleRun() {
   }
 }
 
-folly::SemiFuture<thrift::NodeState>
+folly::SemiFuture<folly::Expected<thrift::NodeState, Status>>
 MaintenanceManager::getNodeState(node_index_t node) {
-  auto [p, f] = folly::makePromiseContract<thrift::NodeState>();
+  auto [p, f] =
+      folly::makePromiseContract<folly::Expected<thrift::NodeState, Status>>();
   add([this, node, mpromise = std::move(p)]() mutable {
     mpromise.setValue(getNodeStateInternal(node));
   });
   return std::move(f);
 }
 
-thrift::NodeState
+folly::Expected<thrift::NodeState, Status>
 MaintenanceManager::getNodeStateInternal(node_index_t node) const {
   thrift::NodeState state;
-  return state;
+  state.set_node_index(node);
+  state.set_sequencer_state(getSequencerStateInternal(node));
+  if (nodes_config_->getNumShards() > 0) {
+    std::vector<thrift::ShardState> vec;
+    for (shard_index_t i = 0; i < nodes_config_->getNumShards(); i++) {
+      auto s = getShardStateInternal(ShardID(node, i));
+      if (s.hasError()) {
+        return folly::makeUnexpected(std::move(s.error()));
+      }
+      ld_check(s.hasValue());
+      vec.push_back(std::move(s.value()));
+    }
+    state.set_shard_states(std::move(vec));
+  }
+  return std::move(state);
 }
 
-folly::SemiFuture<thrift::SequencerState>
+folly::SemiFuture<folly::Expected<thrift::SequencerState, Status>>
 MaintenanceManager::getSequencerState(node_index_t node) {
-  auto [p, f] = folly::makePromiseContract<thrift::SequencerState>();
+  auto [p, f] = folly::makePromiseContract<
+      folly::Expected<thrift::SequencerState, Status>>();
   add([this, node, mpromise = std::move(p)]() mutable {
-    mpromise.setValue(getSequencerStateInternal(node));
+    mpromise.setValue(
+        folly::makeExpected<Status>(getSequencerStateInternal(node)));
   });
   return std::move(f);
 }
@@ -183,22 +200,87 @@ MaintenanceManager::getSequencerState(node_index_t node) {
 thrift::SequencerState
 MaintenanceManager::getSequencerStateInternal(node_index_t node) const {
   thrift::SequencerState state;
+  state.set_state(getSequencingStateInternal(node));
+  if (active_sequencer_workflows_.count(node)) {
+    thrift::SequencerMaintenanceProgress progress;
+    const auto& wf_status_pair = active_sequencer_workflows_.at(node);
+    progress.set_status(wf_status_pair.second);
+    progress.set_target_state(wf_status_pair.first->getTargetOpState());
+    progress.set_created_at(
+        wf_status_pair.first->getCreationTimestamp().toMilliseconds().count());
+    progress.set_last_updated_at(wf_status_pair.first->getLastUpdatedTimestamp()
+                                     .toMilliseconds()
+                                     .count());
+    state.set_maintenance(progress);
+  }
   return state;
 }
 
-folly::SemiFuture<thrift::ShardState>
+folly::SemiFuture<folly::Expected<thrift::ShardState, Status>>
 MaintenanceManager::getShardState(ShardID shard) {
-  auto [p, f] = folly::makePromiseContract<thrift::ShardState>();
+  auto [p, f] =
+      folly::makePromiseContract<folly::Expected<thrift::ShardState, Status>>();
   add([this, shard, mpromise = std::move(p)]() mutable {
     mpromise.setValue(getShardStateInternal(shard));
   });
   return std::move(f);
 }
 
-thrift::ShardState
+folly::Expected<thrift::ShardState, Status>
 MaintenanceManager::getShardStateInternal(ShardID shard) const {
   thrift::ShardState state;
-  return state;
+
+  auto dataHealth = getShardDataHealthInternal(shard);
+  if (dataHealth.hasError()) {
+    return folly::makeUnexpected(std::move(dataHealth.error()));
+  }
+  ld_check(dataHealth.hasValue());
+  state.set_data_health(std::move(dataHealth.value()));
+
+  auto opState = getShardOperationalStateInternal(shard);
+  if (opState.hasError()) {
+    return folly::makeUnexpected(std::move(opState.error()));
+  }
+  ld_check(opState.hasValue());
+  state.set_current_operational_state(std::move(opState.value()));
+
+  auto storageState = getStorageStateInternal(shard);
+  if (storageState.hasError()) {
+    return folly::makeUnexpected(std::move(storageState.error()));
+  }
+  ld_check(storageState.hasValue());
+  state.set_storage_state(
+      toThrift<membership::thrift::StorageState>(storageState.value()));
+
+  auto metadataState = getMetaDataStorageStateInternal(shard);
+  if (metadataState.hasError()) {
+    return folly::makeUnexpected(std::move(metadataState.error()));
+  }
+  ld_check(metadataState.hasValue());
+  state.set_metadata_state(toThrift<membership::thrift::MetaDataStorageState>(
+      metadataState.value()));
+
+  if (active_shard_workflows_.count(shard)) {
+    thrift::ShardMaintenanceProgress progress;
+    const auto& wf_status_pair = active_shard_workflows_.at(shard);
+    progress.set_status(wf_status_pair.second);
+    const auto& states = wf_status_pair.first->getTargetOpStates();
+    std::set<ShardOperationalState> set;
+    set.insert(states.begin(), states.end());
+    progress.set_target_states(set);
+    progress.set_created_at(
+        wf_status_pair.first->getCreationTimestamp().toMilliseconds().count());
+    progress.set_last_updated_at(wf_status_pair.first->getLastUpdatedTimestamp()
+                                     .toMilliseconds()
+                                     .count());
+    ld_check(cluster_maintenance_wrapper_);
+    std::vector<GroupID> ids;
+    const auto& groups = cluster_maintenance_wrapper_->getGroupsForShard(shard);
+    std::copy(groups.begin(), groups.end(), std::back_inserter(ids));
+    progress.set_associated_group_ids(std::move(ids));
+    state.set_maintenance(progress);
+  }
+  return std::move(state);
 }
 
 folly::SemiFuture<folly::Expected<ShardOperationalState, Status>>
@@ -270,9 +352,10 @@ MaintenanceManager::getShardOperationalStateInternal(ShardID shard) const {
   return std::move(result);
 }
 
-folly::SemiFuture<ShardDataHealth>
+folly::SemiFuture<folly::Expected<ShardDataHealth, Status>>
 MaintenanceManager::getShardDataHealth(ShardID shard) {
-  auto [p, f] = folly::makePromiseContract<ShardDataHealth>();
+  auto [p, f] =
+      folly::makePromiseContract<folly::Expected<ShardDataHealth, Status>>();
   add([this, shard, mpromise = std::move(p)]() mutable {
     mpromise.setValue(getShardDataHealthInternal(shard));
   });
@@ -280,16 +363,26 @@ MaintenanceManager::getShardDataHealth(ShardID shard) {
   return std::move(f);
 }
 
-ShardDataHealth
+folly::Expected<ShardDataHealth, Status>
 MaintenanceManager::getShardDataHealthInternal(ShardID shard) const {
-  return ShardDataHealth::UNKNOWN;
+  if (!event_log_rebuilding_set_) {
+    return folly::makeUnexpected(E::NOTREADY);
+  }
+  std::vector<node_index_t> donors_remaining;
+  auto auth_status = event_log_rebuilding_set_->getShardAuthoritativeStatus(
+      shard.node(), shard.shard(), donors_remaining);
+  auto has_dirty_ranges = event_log_rebuilding_set_->shardIsTimeRangeRebuilding(
+      shard.node(), shard.shard());
+  return std::move(toShardDataHealth(auth_status, has_dirty_ranges));
 }
 
-folly::SemiFuture<SequencingState>
+folly::SemiFuture<folly::Expected<SequencingState, Status>>
 MaintenanceManager::getSequencingState(node_index_t node) {
-  auto [p, f] = folly::makePromiseContract<SequencingState>();
+  auto [p, f] =
+      folly::makePromiseContract<folly::Expected<SequencingState, Status>>();
   add([this, node, mpromise = std::move(p)]() mutable {
-    mpromise.setValue(getSequencingStateInternal(node));
+    mpromise.setValue(
+        folly::makeExpected<Status>(getSequencingStateInternal(node)));
   });
 
   return std::move(f);
@@ -297,7 +390,8 @@ MaintenanceManager::getSequencingState(node_index_t node) {
 
 SequencingState
 MaintenanceManager::getSequencingStateInternal(node_index_t node) const {
-  return SequencingState::ENABLED;
+  return isSequencingEnabled(node) ? SequencingState::ENABLED
+                                   : SequencingState::DISABLED;
 }
 
 folly::SemiFuture<folly::Expected<membership::StorageState, Status>>
@@ -319,9 +413,10 @@ MaintenanceManager::getStorageStateInternal(ShardID shard) const {
                 : folly::makeUnexpected(E::NOTFOUND);
 }
 
-folly::SemiFuture<membership::MetaDataStorageState>
+folly::SemiFuture<folly::Expected<membership::MetaDataStorageState, Status>>
 MaintenanceManager::getMetaDataStorageState(ShardID shard) {
-  auto [p, f] = folly::makePromiseContract<membership::MetaDataStorageState>();
+  auto [p, f] = folly::makePromiseContract<
+      folly::Expected<membership::MetaDataStorageState, Status>>();
   add([this, shard, mpromise = std::move(p)]() mutable {
     mpromise.setValue(getMetaDataStorageStateInternal(shard));
   });
@@ -329,12 +424,12 @@ MaintenanceManager::getMetaDataStorageState(ShardID shard) {
   return std::move(f);
 }
 
-membership::MetaDataStorageState
+folly::Expected<membership::MetaDataStorageState, Status>
 MaintenanceManager::getMetaDataStorageStateInternal(ShardID shard) const {
   auto [exists, shardState] =
       nodes_config_->getStorageMembership()->getShardState(shard);
-  return exists ? shardState.metadata_state
-                : membership::MetaDataStorageState::INVALID;
+  return exists ? folly::makeExpected<Status>(shardState.metadata_state)
+                : folly::makeUnexpected(E::NOTFOUND);
 }
 
 folly::SemiFuture<
@@ -354,13 +449,13 @@ MaintenanceManager::getShardTargetStatesInternal(ShardID shard) const {
   if (!cluster_maintenance_wrapper_) {
     return folly::makeUnexpected(E::NOTREADY);
   }
-  return folly::makeExpected<Status>(
-      cluster_maintenance_wrapper_->getShardTargetStates(shard));
+  return cluster_maintenance_wrapper_->getShardTargetStates(shard);
 }
 
-folly::SemiFuture<SequencingState>
+folly::SemiFuture<folly::Expected<SequencingState, Status>>
 MaintenanceManager::getSequencerTargetState(node_index_t node) {
-  auto [p, f] = folly::makePromiseContract<SequencingState>();
+  auto [p, f] =
+      folly::makePromiseContract<folly::Expected<SequencingState, Status>>();
   add([this, node, mpromise = std::move(p)]() mutable {
     mpromise.setValue(getSequencerTargetStateInternal(node));
   });
@@ -368,12 +463,14 @@ MaintenanceManager::getSequencerTargetState(node_index_t node) {
   return std::move(f);
 }
 
-SequencingState MaintenanceManager::getSequencerTargetStateInternal(
+folly::Expected<SequencingState, Status>
+MaintenanceManager::getSequencerTargetStateInternal(
     node_index_t node_index) const {
   if (!cluster_maintenance_wrapper_) {
-    return SequencingState::UNKNOWN;
+    return folly::makeUnexpected<Status>(E::NOTREADY);
   }
-  return cluster_maintenance_wrapper_->getSequencerTargetState(node_index);
+  return std::move(
+      cluster_maintenance_wrapper_->getSequencerTargetState(node_index));
 }
 
 void MaintenanceManager::onNodesConfigurationUpdated() {
@@ -641,6 +738,7 @@ void MaintenanceManager::updateClientMaintenanceStateWrapper() {
 std::pair<std::vector<ShardID>,
           std::vector<folly::SemiFuture<MaintenanceStatus>>>
 MaintenanceManager::runShardWorkflows() {
+  ld_check(event_log_rebuilding_set_);
   std::vector<ShardID> shards;
   std::vector<folly::SemiFuture<MaintenanceStatus>> futures;
   for (const auto& it : active_shard_workflows_) {
@@ -653,13 +751,14 @@ MaintenanceManager::runShardWorkflows() {
     ld_check(current_storage_state.first);
     shards.push_back(shard_id);
     futures.push_back(wf->run(current_storage_state.second.storage_state,
-                              getShardDataHealthInternal(shard_id),
+                              getShardDataHealthInternal(shard_id).value(),
                               getCurrentRebuildingMode(shard_id)));
   }
   return std::make_pair(std::move(shards), std::move(futures));
 }
 
 void MaintenanceManager::createWorkflows() {
+  ld_check(cluster_maintenance_wrapper_);
   // Iterate over all the storage nodes in membership and create
   // workflows if required
   for (auto node : nodes_config_->getStorageNodes()) {
@@ -725,7 +824,8 @@ bool MaintenanceManager::isShardEnabled(const ShardID& shard) {
            .hasValue();
 }
 
-bool MaintenanceManager::isSequencingEnabled(node_index_t node) {
+bool MaintenanceManager::isSequencingEnabled(node_index_t node) const {
+  ld_check(nodes_config_);
   return nodes_config_->getSequencerMembership()->isSequencingEnabled(node);
 }
 
@@ -763,7 +863,9 @@ EventLogWriter* MaintenanceManager::getEventLogWriter() {
 }
 
 RebuildingMode MaintenanceManager::getCurrentRebuildingMode(ShardID shard) {
-  return RebuildingMode::INVALID;
+  ld_check(event_log_rebuilding_set_);
+  return event_log_rebuilding_set_->getRebuildingMode(
+      shard.node(), shard.shard());
 }
 
 }}} // namespace facebook::logdevice::maintenance

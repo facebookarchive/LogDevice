@@ -33,11 +33,13 @@ class MaintenanceManagerTest : public ::testing::Test {
   void regenerateClusterMaintenanceWrapper();
   void overrideStorageState(
       std::unordered_map<ShardID, membership::StorageState> map);
+  void createShardWorkflow(ShardID shard, MaintenanceStatus status);
   void addNewNode(node_index_t node);
   void runExecutor();
   void verifyShardOperationalState(
       ShardID shard,
       folly::Expected<ShardOperationalState, Status> state);
+  ShardWorkflow* getShardWorkflow(ShardID shard);
 
   std::unique_ptr<MockMaintenanceManager> maintenance_manager_;
   std::unique_ptr<MockMaintenanceManagerDependencies> deps_;
@@ -195,6 +197,15 @@ void MaintenanceManagerTest::regenerateClusterMaintenanceWrapper() {
   maintenance_manager_->nodes_config_ = nodes_config_;
 }
 
+void MaintenanceManagerTest::createShardWorkflow(ShardID shard,
+                                                 MaintenanceStatus status) {
+  maintenance_manager_->active_shard_workflows_[shard] =
+      std::make_pair(std::make_unique<ShardWorkflow>(shard, nullptr), status);
+}
+
+ShardWorkflow* MaintenanceManagerTest::getShardWorkflow(ShardID shard) {
+  return maintenance_manager_->active_shard_workflows_[shard].first.get();
+}
 void MaintenanceManagerTest::addNewNode(node_index_t node) {
   NodesConfigurationTestUtil::NodeTemplate n;
   n.id = node;
@@ -267,5 +278,64 @@ TEST_F(MaintenanceManagerTest, GetShardOperationalState) {
   // Nonexistent node
   verifyShardOperationalState(
       ShardID(111, 0), folly::makeUnexpected(E::NOTFOUND));
+}
+
+TEST_F(MaintenanceManagerTest, GetNodeStateTest) {
+  init();
+  node_index_t node = 17;
+  ShardID shard = ShardID(node, 0);
+  addNewNode(node);
+  regenerateClusterMaintenanceWrapper();
+  maintenance_manager_->onEventLogRebuildingSetUpdate(set_, lsn_t(1));
+  // Say we have active shard and sequencer workflows
+  createShardWorkflow(shard, MaintenanceStatus::AWAITING_DATA_REBUILDING);
+  getShardWorkflow(shard)->addTargetOpState({ShardOperationalState::DRAINED});
+  // Update NC to reflect this state
+  std::unordered_map<ShardID, membership::StorageState> map;
+  map[shard] = membership::StorageState::DATA_MIGRATION;
+  overrideStorageState(map);
+  regenerateClusterMaintenanceWrapper();
+
+  thrift::NodeState expected_node_state;
+  expected_node_state.set_node_index(node);
+
+  thrift::SequencerState expected_seq_state;
+  expected_seq_state.set_state(SequencingState::ENABLED);
+  expected_node_state.set_sequencer_state(expected_seq_state);
+
+  thrift::ShardState expected_shard_state;
+  expected_shard_state.set_data_health(ShardDataHealth::HEALTHY);
+  expected_shard_state.set_current_operational_state(
+      ShardOperationalState::MIGRATING_DATA);
+  expected_shard_state.set_storage_state(
+      membership::thrift::StorageState::DATA_MIGRATION);
+  expected_shard_state.set_metadata_state(
+      membership::thrift::MetaDataStorageState::NONE);
+
+  thrift::ShardMaintenanceProgress expected_progress;
+  expected_progress.set_status(MaintenanceStatus::AWAITING_DATA_REBUILDING);
+  std::set<ShardOperationalState> state({ShardOperationalState::DRAINED});
+  expected_progress.set_target_states(state);
+  expected_progress.set_created_at(
+      getShardWorkflow(shard)->getCreationTimestamp().toMilliseconds().count());
+  expected_progress.set_last_updated_at(getShardWorkflow(shard)
+                                            ->getLastUpdatedTimestamp()
+                                            .toMilliseconds()
+                                            .count());
+
+  std::vector<thrift::MaintenanceGroupID> ids;
+  ids.push_back("620");
+  expected_progress.set_associated_group_ids(std::move(ids));
+  expected_shard_state.set_maintenance(expected_progress);
+
+  std::vector<thrift::ShardState> vec;
+  expected_node_state.set_shard_states(vec);
+  expected_node_state.shard_states_ref()->push_back(expected_shard_state);
+
+  auto result = maintenance_manager_->getNodeState(node);
+  runExecutor();
+  ASSERT_TRUE(result.hasValue());
+  ASSERT_TRUE(result.value().hasValue());
+  ASSERT_EQ(expected_node_state, result.value().value());
 }
 }}} // namespace facebook::logdevice::maintenance

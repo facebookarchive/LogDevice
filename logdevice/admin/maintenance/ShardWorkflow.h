@@ -14,6 +14,7 @@
 #include "logdevice/common/RebuildingTypes.h"
 #include "logdevice/common/ShardID.h"
 #include "logdevice/common/membership/StorageState.h"
+#include "logdevice/common/membership/StorageStateTransitions.h"
 
 namespace facebook { namespace logdevice {
 class EventLogRecord;
@@ -27,7 +28,9 @@ namespace facebook { namespace logdevice { namespace maintenance {
 class ShardWorkflow {
  public:
   explicit ShardWorkflow(ShardID shard, const EventLogWriter* event_log_writer)
-      : shard_(shard), event_log_writer_(event_log_writer) {}
+      : shard_(shard), event_log_writer_(event_log_writer) {
+    created_at_ = SystemTimestamp::now();
+  }
 
   // moveable.
   ShardWorkflow(ShardWorkflow&& /* unused */) = default;
@@ -77,6 +80,12 @@ class ShardWorkflow {
   std::unordered_set<ShardOperationalState> getTargetOpStates() const;
 
   // Returns the StorageState that this workflow expects for this
+  // Returns value of last_updated_at_
+  SystemTimestamp getLastUpdatedTimestamp() const;
+
+  // Returns value of created_at_;
+  SystemTimestamp getCreationTimestamp() const;
+
   // shard in NodesConfiguration. This will be used
   // by the MaintenanceManager in NodesConfig update request
   membership::StorageState getExpectedStorageState() const;
@@ -146,6 +155,8 @@ class ShardWorkflow {
   RebuildingMode current_rebuilding_mode_;
   // Last time the status_ was updated
   SystemTimestamp last_updated_at_;
+  // Time when this workflow was created
+  SystemTimestamp created_at_;
   // Updates the status_ with given value if
   // it differs from current value
   void updateStatus(MaintenanceStatus status);

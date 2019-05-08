@@ -148,33 +148,38 @@ class MaintenanceManager : public SerialWorkContext {
   // Getters
 
   // Getter that returns a SemiFututre with NodeState for a given node
-  folly::SemiFuture<NodeState> getNodeState(node_index_t node);
+  folly::SemiFuture<folly::Expected<NodeState, Status>>
+  getNodeState(node_index_t node);
   // Getter that returns a SemiFuture with ShardState for a given shard
-  folly::SemiFuture<ShardState> getShardState(ShardID shard);
+  folly::SemiFuture<folly::Expected<ShardState, Status>>
+  getShardState(ShardID shard);
   // Getter that returns a SemiFuture with SequencerState for a given node
-  folly::SemiFuture<SequencerState> getSequencerState(node_index_t node);
+  folly::SemiFuture<folly::Expected<SequencerState, Status>>
+  getSequencerState(node_index_t node);
   // Getter that returns a SemiFuture with ShardOperationalState for the given
   // shard
   folly::SemiFuture<folly::Expected<ShardOperationalState, Status>>
   getShardOperationalState(ShardID shard);
   // Getter that returns a SemiFuture with ShardDataHealth for the given shard
-  folly::SemiFuture<ShardDataHealth> getShardDataHealth(ShardID shard);
+  folly::SemiFuture<folly::Expected<ShardDataHealth, Status>>
+  getShardDataHealth(ShardID shard);
   // Getter that returns a SemiFuture with SequencingState for the gievn node
-  folly::SemiFuture<SequencingState> getSequencingState(node_index_t node);
+  folly::SemiFuture<folly::Expected<SequencingState, Status>>
+  getSequencingState(node_index_t node);
   // Getter that returns a SemiFuture with StorageState for a shard from
   // NodesConfig
   folly::SemiFuture<folly::Expected<membership::StorageState, Status>>
   getStorageState(ShardID shard);
   // Getter that returns a SemiFuture with MetaDataStorageState for a shard from
   // NodesConfig
-  folly::SemiFuture<membership::MetaDataStorageState>
+  folly::SemiFuture<folly::Expected<membership::MetaDataStorageState, Status>>
   getMetaDataStorageState(ShardID shard);
   // Getter that returns a SemiFuture with the shard's target operational state
   folly::SemiFuture<
       folly::Expected<std::unordered_set<ShardOperationalState>, Status>>
   getShardTargetStates(ShardID shard);
   // Getter that returns a SemiFuture with node's target sequencing state
-  folly::SemiFuture<SequencingState>
+  folly::SemiFuture<folly::Expected<SequencingState, Status>>
   getSequencerTargetState(node_index_t node_index);
 
   // Callback that gets called when there is a new update from the
@@ -239,7 +244,7 @@ class MaintenanceManager : public SerialWorkContext {
 
   // Set to true every time we get one of the subscription
   // callback indicating the need to call `evaluate()`
-  std::atomic<bool> run_evaluate_{false};
+  bool run_evaluate_{false};
 
   // State delivered by the ClusterMaintenanceStateMachine
   std::unique_ptr<ClusterMaintenanceState> cluster_maintenance_state_;
@@ -263,16 +268,43 @@ class MaintenanceManager : public SerialWorkContext {
    */
   void stopInternal();
 
-  NodeState getNodeStateInternal(node_index_t node) const;
-  // Getter that returns ShardState for a given shard
-  ShardState getShardStateInternal(ShardID shard) const;
+  /**
+   * Getter that returns NodeState for a given shard
+   *
+   * @param   node_index_t Index of the node for which to get the NodeState
+   * @return  folly::Expected<NodeState, Status> Valid NodeState if node is
+   *          in NodesConfig. Status can be E::NOTREADY if EventLogRebuildingSet
+   *          or ClusterMaintenanceWrapper is not initialized or E::NOTFOUND if
+   *          node or its shards are not in the NodesConfig
+   */
+  folly::Expected<NodeState, Status>
+  getNodeStateInternal(node_index_t node) const;
+  /**
+   * Getter that returns ShardState for a given shard
+   *
+   * @param   shard ShardID for which to get SharrdState
+   * @return  folly::Expected<ShardState, Status> If shard is found,
+   *          valid ShardState. Otherwise Status can be E::NOTFOUND, if
+   *          shard is not in config or E::NOTREADY is
+   *          ClusterMaintenanceWrapper is not initialized
+   */
+  folly::Expected<ShardState, Status>
+  getShardStateInternal(ShardID shard) const;
   // Getter that returns SequencerState for a given node
   SequencerState getSequencerStateInternal(node_index_t node) const;
   // Getter that returns ShardOperationalState for the given shard
   folly::Expected<ShardOperationalState, Status>
   getShardOperationalStateInternal(ShardID shard) const;
-  // Getter that returns ShardDataHealth for the given shard
-  ShardDataHealth getShardDataHealthInternal(ShardID shard) const;
+  /**
+   * Getter that returns ShardDataHealth for the given shard
+   *
+   * @param   shard ShardID for which to get ShardDataHealth
+   * @return  folly::Expected<ShardDataHealth, Status>
+   *          ShardDataHealth or E::NOTREADY if EventLogRebuildingSet
+   *          is not initalized
+   */
+  folly::Expected<ShardDataHealth, Status>
+  getShardDataHealthInternal(ShardID shard) const;
   // Getter that returns SequencingState for the gievn node
   SequencingState getSequencingStateInternal(node_index_t node) const;
   /**
@@ -284,9 +316,16 @@ class MaintenanceManager : public SerialWorkContext {
    */
   folly::Expected<membership::StorageState, Status>
   getStorageStateInternal(ShardID shard) const;
-  // Getter that returns MetaDataStorageState for a shard from
-  // NodesConfig
-  membership::MetaDataStorageState
+  /**
+   * Getter that returns MetaDataStorageState for a shard from
+   * NodesConfig
+   * @param   shard ShardID for which to get the MetadataStorageSTate from
+   * NodesConfig
+   * @return  folly::Expected<membership::MetaDataStorageState, Status>
+   *          membership::MetaDataStorageState if shard exists in NodesConfig,
+   * otherwise Status is set to E::NOTFOUND
+   */
+  folly::Expected<membership::MetaDataStorageState, Status>
   getMetaDataStorageStateInternal(ShardID shard) const;
   /**
    * Getter that returns the shard's target operational state
@@ -294,12 +333,21 @@ class MaintenanceManager : public SerialWorkContext {
    * @param   shard ShardID for which to get the target states
    * @return  folly::Expected<std::unordered_set<ShardOperationalState>, Status>
    *          Set of ShardOperationalState for shard if
-   * ClusterMaintenanceWrapper is initialized. Otherwise returns E::NOTREADY
+   *          ClusterMaintenanceWrapper is initialized. Otherwise Status is
+   *          E::NOTREADY
    */
   folly::Expected<std::unordered_set<ShardOperationalState>, Status>
   getShardTargetStatesInternal(ShardID shard) const;
-  // Getter that returns node's target sequencing state
-  SequencingState
+  /**
+   * Getter that returns node's target sequencing state
+   *
+   * @param   node_index Index of the node for which to get target sequencer
+   *                   state
+   * @return  folly::Expected<SequencingState, Status> SequencingState from
+   *          ClusterMaintenanceWrapper if it is initialized. Otherwise Status
+   *          is set to E::NOTREADY
+   */
+  folly::Expected<SequencingState, Status>
   getSequencerTargetStateInternal(node_index_t node_index) const;
   // Returns current value of `status_`
   MMStatus getStatusInternal() const;
@@ -334,7 +382,7 @@ class MaintenanceManager : public SerialWorkContext {
 
   // Returns true if given node has Sequencing enabled in the
   // current `nodes_config_`
-  bool isSequencingEnabled(node_index_t node);
+  bool isSequencingEnabled(node_index_t node) const;
 
   // Calls `run` on active_shard_workflows_
   virtual std::pair<std::vector<ShardID>,

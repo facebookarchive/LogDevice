@@ -247,6 +247,14 @@ class EventLogRebuildingSet {
     return true;
   }
 
+  RebuildingMode getRebuildingMode(node_index_t node, uint32_t shard) const {
+    NodeInfo const* node_info = getNodeInfo(node, shard);
+    if (!node_info) {
+      return RebuildingMode::INVALID;
+    }
+    return node_info->mode;
+  }
+
   // Returns true if the given node is participating or did participate as
   // a donor in the currently active rebuilding in the given shard.
   bool isDonor(node_index_t node, uint32_t shard) const;
