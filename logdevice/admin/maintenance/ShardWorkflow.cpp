@@ -21,13 +21,13 @@ ShardWorkflow::run(membership::StorageState storage_state,
                    RebuildingMode rebuilding_mode) {
   // TODO: Enable once we have toString implemented
   /*ld_spew("old current_storage_state_:%s,"
-       "expected_storage_state_:%s,"
+       "expected_storage_state_transition_:%s,"
        "current_rebuilding_mode_:%s,"
        "current_data_health_:%s,"
        "status_:%s,"
        "event_type:%s",
        toString(current_storage_state_).c_str(),
-       toString(expected_storage_state_).c_str(),
+       toString(expected_storage_state_transition_).c_str(),
        toString(current_rebuilding_mode_).c_str(),
        enumName(current_data_health_).c_str(),
        enumName(status_).c_str(),
@@ -59,13 +59,13 @@ ShardWorkflow::run(membership::StorageState storage_state,
   }
 
   /*ld_spew("new current_storage_state_:%s,"
-       "expected_storage_state_:%s,"
+       "expected_storage_state_transition_:%s,"
        "current_rebuilding_mode_:%s,"
        "current_data_health_:%s,"
        "status_:%s,"
        "event_type:%s",
        toString(current_storage_state_).c_str(),
-       toString(expected_storage_state_).c_str(),
+       toString(expected_storage_state_transition_).c_str(),
        toString(current_rebuilding_mode_).c_str(),
        enumName(current_data_health_).c_str(),
        enumName(status_).c_str(),
@@ -111,13 +111,15 @@ void ShardWorkflow::computeMaintenanceStatusForDrain() {
       updateStatus(MaintenanceStatus::COMPLETED);
       break;
     case membership::StorageState::READ_WRITE:
-      expected_storage_state_ = membership::StorageState::READ_ONLY;
+      expected_storage_state_transition_ =
+          membership::StorageStateTransition::DISABLING_WRITE;
       updateStatus(skip_safety_check_
                        ? MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES
                        : MaintenanceStatus::AWAITING_SAFETY_CHECK);
       break;
     case membership::StorageState::READ_ONLY:
-      expected_storage_state_ = membership::StorageState::DATA_MIGRATION;
+      expected_storage_state_transition_ =
+          membership::StorageStateTransition::START_DATA_MIGRATION;
       updateStatus(MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES);
       break;
     case membership::StorageState::DATA_MIGRATION:
@@ -127,7 +129,8 @@ void ShardWorkflow::computeMaintenanceStatusForDrain() {
       // No new rebuild event was created. Check if the existing
       // rebuilding is complete.
       if (!event_ && current_data_health_ == ShardDataHealth::EMPTY) {
-        expected_storage_state_ = membership::StorageState::NONE;
+        expected_storage_state_transition_ =
+            membership::StorageStateTransition::DATA_MIGRATION_COMPLETED;
         updateStatus(MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES);
       } else {
         updateStatus(MaintenanceStatus::AWAITING_DATA_REBUILDING);
@@ -156,14 +159,16 @@ void ShardWorkflow::computeMaintenanceStatusForMayDisappear() {
       break;
     case membership::StorageState::READ_WRITE:
       createAbortEventIfRequired();
-      expected_storage_state_ = membership::StorageState::READ_ONLY;
+      expected_storage_state_transition_ =
+          membership::StorageStateTransition::DISABLING_WRITE;
       updateStatus(skip_safety_check_
                        ? MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES
                        : MaintenanceStatus::AWAITING_SAFETY_CHECK);
       break;
     case membership::StorageState::DATA_MIGRATION:
       createAbortEventIfRequired();
-      expected_storage_state_ = membership::StorageState::READ_ONLY;
+      expected_storage_state_transition_ =
+          membership::StorageStateTransition::CANCEL_DATA_MIGRATION;
       updateStatus(MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES);
       break;
     default:
@@ -181,17 +186,20 @@ void ShardWorkflow::computeMaintenanceStatusForEnable() {
 
   switch (current_storage_state_) {
     case membership::StorageState::NONE:
-      expected_storage_state_ = membership::StorageState::READ_ONLY;
+      expected_storage_state_transition_ =
+          membership::StorageStateTransition::ENABLING_READ;
       updateStatus(MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES);
       break;
     case membership::StorageState::READ_ONLY:
       createAbortEventIfRequired();
-      expected_storage_state_ = membership::StorageState::READ_WRITE;
+      expected_storage_state_transition_ =
+          membership::StorageStateTransition::ENABLE_WRITE;
       updateStatus(MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES);
       break;
     case membership::StorageState::DATA_MIGRATION:
       createAbortEventIfRequired();
-      expected_storage_state_ = membership::StorageState::READ_ONLY;
+      expected_storage_state_transition_ =
+          membership::StorageStateTransition::CANCEL_DATA_MIGRATION;
       updateStatus(MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES);
       break;
     case membership::StorageState::READ_WRITE:
@@ -274,16 +282,17 @@ ShardWorkflow::getTargetOpStates() const {
   return target_op_state_;
 }
 
-membership::StorageState ShardWorkflow::getExpectedStorageState() const {
-  return expected_storage_state_;
-}
-
 SystemTimestamp ShardWorkflow::getLastUpdatedTimestamp() const {
   return last_updated_at_;
 }
 
 SystemTimestamp ShardWorkflow::getCreationTimestamp() const {
   return created_at_;
+}
+
+membership::StorageStateTransition
+ShardWorkflow::getExpectedStorageStateTransition() const {
+  return expected_storage_state_transition_;
 }
 
 bool ShardWorkflow::excludeFromNodeset() const {

@@ -42,6 +42,8 @@ class ShardWorkflow {
   ShardWorkflow(const ShardWorkflow& /* unused */) = delete;
   ShardWorkflow& operator=(const ShardWorkflow& /* unused */) = delete;
 
+  virtual ~ShardWorkflow() {}
+
   /**
    * Computes the new MaintenanceStatus based on the parameters
    * passed
@@ -79,17 +81,16 @@ class ShardWorkflow {
   // Returns the target_op_state_
   std::unordered_set<ShardOperationalState> getTargetOpStates() const;
 
-  // Returns the StorageState that this workflow expects for this
   // Returns value of last_updated_at_
   SystemTimestamp getLastUpdatedTimestamp() const;
 
   // Returns value of created_at_;
   SystemTimestamp getCreationTimestamp() const;
 
+  // Returns the StorageStateTransition that this workflow expects for this
   // shard in NodesConfiguration. This will be used
   // by the MaintenanceManager in NodesConfig update request
-  membership::StorageState getExpectedStorageState() const;
-  virtual ~ShardWorkflow() {}
+  membership::StorageStateTransition getExpectedStorageStateTransition() const;
 
   // Returns true if this workflow requires this
   // shard to be excluded from new nodesets. Used by
@@ -119,11 +120,11 @@ class ShardWorkflow {
   // Any even that needs to be written by this workflow
   // is written through this object
   const EventLogWriter* event_log_writer_;
-  // Value of membership::StorageState to be updated
+  // StorageStateTransition to be requested
   // in the NodesConfiguration. Workflow will set this value
   // and MaintenanceManager will make use of it to request
   // the update in NodesConfiguration.
-  membership::StorageState expected_storage_state_;
+  membership::StorageStateTransition expected_storage_state_transition_;
   // If safety checker determines that a drain is needed,
   // allow passive drain if reruired
   bool allow_passive_drain_{false};
