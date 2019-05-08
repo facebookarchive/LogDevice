@@ -140,6 +140,7 @@ void shutdown_server(
     std::unique_ptr<ShardedRocksDBLocalLogStore>& sharded_store,
     std::shared_ptr<SequencerPlacement> sequencer_placement,
     std::unique_ptr<RebuildingCoordinator>& rebuilding_coordinator,
+    std::unique_ptr<EventLogStateMachine>& event_log,
     std::unique_ptr<RebuildingSupervisor>& rebuilding_supervisor,
     std::shared_ptr<UnreleasedRecordDetector>& unreleased_record_detector,
     bool fast_shutdown) {
@@ -337,6 +338,10 @@ void shutdown_server(
   if (rebuilding_coordinator) {
     ld_info("Destroying rebuilding coordinator");
     rebuilding_coordinator.reset();
+  }
+  if (event_log) {
+    ld_info("Destroying EventLogStateMachine");
+    event_log.reset();
   }
   if (rebuilding_supervisor) {
     ld_info("Destroying rebuilding supervisor");

@@ -21,7 +21,6 @@
 #include "logdevice/common/ZookeeperClient.h"
 #include "logdevice/common/configuration/logs/LogsConfigManager.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationManagerFactory.h"
-#include "logdevice/common/event_log/EventLogStateMachine.h"
 #include "logdevice/common/plugin/AdminServerFactory.h"
 #include "logdevice/common/plugin/LocationProvider.h"
 #include "logdevice/common/plugin/TraceLoggerFactory.h"
@@ -310,11 +309,10 @@ void StandaloneAdminServer::initStatsCollection() {
 }
 
 void StandaloneAdminServer::initEventLog() {
-  auto event_log = std::make_unique<EventLogStateMachine>(settings_);
-  event_log->enableSendingUpdatesToWorkers();
+  event_log_ = std::make_unique<EventLogStateMachine>(settings_);
+  event_log_->enableSendingUpdatesToWorkers();
   std::unique_ptr<Request> req =
-      std::make_unique<StartEventLogStateMachineRequest>(
-          std::move(event_log), 0);
+      std::make_unique<StartEventLogStateMachineRequest>(event_log_.get(), 0);
 
   const int rv = processor_->postRequest(req);
   if (rv != 0) {

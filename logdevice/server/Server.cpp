@@ -880,8 +880,6 @@ bool Server::initSequencerPlacement() {
 bool Server::initRebuildingCoordinator() {
   std::shared_ptr<Configuration> config = processor_->config_->get();
 
-  std::unique_ptr<EventLogStateMachine> event_log;
-
   bool enable_rebuilding = false;
   if (params_->getRebuildingSettings()->disable_rebuilding) {
     ld_info("Rebuilding is disabled.");
@@ -892,10 +890,10 @@ bool Server::initRebuildingCoordinator() {
              "server config and restart this server");
   } else {
     enable_rebuilding = true;
-    event_log =
+    event_log_ =
         std::make_unique<EventLogStateMachine>(params_->getProcessorSettings());
-    event_log->enableSendingUpdatesToWorkers();
-    event_log->setMyNodeID(config->serverConfig()->getMyNodeID());
+    event_log_->enableSendingUpdatesToWorkers();
+    event_log_->setMyNodeID(config->serverConfig()->getMyNodeID());
   }
 
   if (sharded_store_) {
@@ -907,17 +905,17 @@ bool Server::initRebuildingCoordinator() {
         getProcessor()->markShardClean(shard);
       }
     } else {
-      ld_check(event_log);
+      ld_check(event_log_);
 
       rebuilding_supervisor_ = std::make_unique<RebuildingSupervisor>(
-          event_log.get(), processor_.get(), params_->getRebuildingSettings());
+          event_log_.get(), processor_.get(), params_->getRebuildingSettings());
       processor_->rebuilding_supervisor_ = rebuilding_supervisor_.get();
       ld_info("Starting RebuildingSupervisor");
       rebuilding_supervisor_->start();
 
       rebuilding_coordinator_ = std::make_unique<RebuildingCoordinator>(
           processor_->config_,
-          event_log.get(),
+          event_log_.get(),
           processor_.get(),
           params_->getRebuildingSettings(),
           sharded_store_.get());
@@ -928,10 +926,9 @@ bool Server::initRebuildingCoordinator() {
     }
   }
 
-  if (event_log) {
+  if (event_log_) {
     std::unique_ptr<Request> req =
-        std::make_unique<StartEventLogStateMachineRequest>(
-            std::move(event_log), 0);
+        std::make_unique<StartEventLogStateMachineRequest>(event_log_.get(), 0);
 
     const int rv = processor_->postRequest(req);
     if (rv != 0) {
@@ -1090,6 +1087,7 @@ void Server::gracefulShutdown() {
                   sharded_store_,
                   sequencer_placement_.get(),
                   rebuilding_coordinator_,
+                  event_log_,
                   rebuilding_supervisor_,
                   unreleased_record_detector_,
                   params_->isFastShutdownEnabled());

@@ -14,6 +14,7 @@
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/StatsCollectionThread.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/event_log/EventLogStateMachine.h"
 #include "logdevice/common/plugin/PluginRegistry.h"
 #include "logdevice/common/settings/GossipSettings.h"
 #include "logdevice/common/settings/RebuildingSettings.h"
@@ -62,6 +63,8 @@ class StandaloneAdminServer {
   std::shared_ptr<UpdateableConfig> updateable_config_;
 
   UpdateableServerConfig::HookHandle server_config_subscription_;
+
+  std::unique_ptr<EventLogStateMachine> event_log_;
 
   std::unique_ptr<StatsHolder> stats_;
   std::unique_ptr<StatsCollectionThread> stats_thread_;

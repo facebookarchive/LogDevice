@@ -260,7 +260,7 @@ bool EventLogStateMachine::shouldCreateSnapshot() const {
 
 Request::Execution StartEventLogStateMachineRequest::execute() {
   event_log_->start();
-  Worker::onThisThread()->setEventLogStateMachine(std::move(event_log_));
+  Worker::onThisThread()->setEventLogStateMachine(event_log_);
   return Execution::COMPLETE;
 }
 

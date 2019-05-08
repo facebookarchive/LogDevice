@@ -257,6 +257,8 @@ class Server {
 
   std::unique_ptr<RebuildingSupervisor> rebuilding_supervisor_;
 
+  std::unique_ptr<EventLogStateMachine> event_log_;
+
   // initUnreleasedRecordDetector()
   // only populated if this node is a storage node.
   std::shared_ptr<UnreleasedRecordDetector> unreleased_record_detector_;

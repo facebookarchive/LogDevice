@@ -561,7 +561,6 @@ void Worker::finishWorkAndCloseSockets() {
 
   if (event_log_) {
     event_log_->stop();
-    event_log_.reset();
   }
 
   if (logsconfig_manager_) {
@@ -880,14 +879,13 @@ void Worker::reportLoad() {
 }
 
 EventLogStateMachine* Worker::getEventLogStateMachine() {
-  return event_log_.get();
+  return event_log_;
 }
 
-void Worker::setEventLogStateMachine(
-    std::unique_ptr<EventLogStateMachine> event_log) {
+void Worker::setEventLogStateMachine(EventLogStateMachine* event_log) {
   ld_check(event_log_ == nullptr);
-  event_log->setWorkerId(idx_);
-  event_log_ = std::move(event_log);
+  event_log_ = event_log;
+  event_log_->setWorkerId(idx_);
 }
 
 void Worker::setLogsConfigManager(std::unique_ptr<LogsConfigManager> manager) {

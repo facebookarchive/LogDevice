@@ -99,6 +99,7 @@ void shutdown_test_server(std::shared_ptr<ServerProcessor>& processor) {
   std::unique_ptr<ShardedRocksDBLocalLogStore> sharded_store;
   std::shared_ptr<SequencerPlacement> sequencer_placement;
   std::unique_ptr<RebuildingCoordinator> rebuilding_coordinator;
+  std::unique_ptr<EventLogStateMachine> event_log;
   std::unique_ptr<RebuildingSupervisor> rebuilding_supervisor;
   std::shared_ptr<UnreleasedRecordDetector> unreleased_record_detector;
 
@@ -113,6 +114,7 @@ void shutdown_test_server(std::shared_ptr<ServerProcessor>& processor) {
                   sharded_store,
                   sequencer_placement,
                   rebuilding_coordinator,
+                  event_log,
                   rebuilding_supervisor,
                   unreleased_record_detector,
                   false);

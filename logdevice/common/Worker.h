@@ -498,7 +498,7 @@ class Worker : public EventLoop {
 
   // EventLogStateMachine only exists on Worker 0 of a server. It provides an
   // interface for listening to updates arriving on the event log.
-  std::unique_ptr<EventLogStateMachine> event_log_;
+  EventLogStateMachine* event_log_{nullptr};
 
   // LogsConfigManager owns the replicated state machine LogsConfigStateMachine
   // and ensures that UpdatebleLogsConfig gets updated when we have a new
@@ -644,9 +644,9 @@ class Worker : public EventLoop {
   EventLogStateMachine* getEventLogStateMachine();
 
   /**
-   * Pass ownership of the given EventLogStateMachine to this Worker.
+   * Register the given EventLogStateMachine to this Worker.
    */
-  void setEventLogStateMachine(std::unique_ptr<EventLogStateMachine> event_log);
+  void setEventLogStateMachine(EventLogStateMachine* event_log);
 
   /**
    * Pass ownership of the LogsConfigManager to this Worker.

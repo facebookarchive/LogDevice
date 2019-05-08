@@ -236,11 +236,9 @@ class EventLogStateMachine
  */
 class StartEventLogStateMachineRequest : public Request {
  public:
-  StartEventLogStateMachineRequest(
-      std::unique_ptr<EventLogStateMachine> event_log,
-      int worker)
+  StartEventLogStateMachineRequest(EventLogStateMachine* event_log, int worker)
       : Request(RequestType::START_EVENT_LOG_READER),
-        event_log_(std::move(event_log)),
+        event_log_(event_log),
         worker_(worker) {}
   ~StartEventLogStateMachineRequest() override {}
   Execution execute() override;
@@ -249,7 +247,7 @@ class StartEventLogStateMachineRequest : public Request {
   }
 
  private:
-  std::unique_ptr<EventLogStateMachine> event_log_;
+  EventLogStateMachine* event_log_;
   int worker_;
 };
 
