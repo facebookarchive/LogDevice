@@ -152,14 +152,12 @@ folly::SemiFuture<folly::Unit> AdminAPIHandler::semifuture_takeLogTreeSnapshot(
 
   // Are we running with LCM?
   if (!processor_->settings()->enable_logsconfig_manager) {
-    thrift::NotSupported error;
-    error.set_message("LogsConfigManager is disabled in settings on this node");
-    p.setException(std::move(error));
+    p.setException(thrift::NotSupported(
+        "LogsConfigManager is disabled in settings on this node"));
     return future;
   } else if (!processor_->settings()->logsconfig_snapshotting) {
-    thrift::NotSupported error;
-    error.set_message("LogsConfigManager snapshotting is not enabled");
-    p.setException(std::move(error));
+    p.setException(
+        thrift::NotSupported("LogsConfigManager snapshotting is not enabled"));
     return future;
   }
 
@@ -182,8 +180,7 @@ folly::SemiFuture<folly::Unit> AdminAPIHandler::semifuture_takeLogTreeSnapshot(
     ld_check(config);
     auto logsconfig = config->localLogsConfig();
     if (minimum_version > 0 && logsconfig->getVersion() < minimum_version) {
-      thrift::StaleVersion error;
-      error.set_message(
+      thrift::StaleVersion error(
           folly::format("LogTree version on this node is {} which is lower "
                         "than the minimum requested {}",
                         logsconfig->getVersion(),
@@ -198,9 +195,8 @@ folly::SemiFuture<folly::Unit> AdminAPIHandler::semifuture_takeLogTreeSnapshot(
     ld_check(w->logsconfig_manager_);
 
     if (!w->logsconfig_manager_->isLogsConfigFullyLoaded()) {
-      thrift::NodeNotReady error;
-      error.set_message("LogsConfigManager has not fully replayed yet");
-      mpromise->setException(error);
+      mpromise->setException(
+          thrift::NodeNotReady("LogsConfigManager has not fully replayed yet"));
       return;
     } else {
       // LogsConfig is has fully replayed. Let's take a snapshot.
@@ -210,11 +206,9 @@ folly::SemiFuture<folly::Unit> AdminAPIHandler::semifuture_takeLogTreeSnapshot(
                   "request");
           mpromise->setValue(folly::Unit());
         } else {
-          thrift::OperationError error;
-          error.set_message(
+          mpromise->setException(thrift::OperationError(
               folly::format("Cannot take a snapshot: {}", error_name(st))
-                  .str());
-          mpromise->setException(std::move(error));
+                  .str()));
         }
       };
       ld_check(w->logsconfig_manager_->getStateMachine());

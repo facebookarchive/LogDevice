@@ -27,9 +27,8 @@ CheckImpactHandler::semifuture_checkImpact(
   // We don't have a safety checker.
   if (safety_checker_ == nullptr) {
     // We don't have a safety checker.
-    thrift::NotSupported err;
-    err.set_message("SafetyChecker is not running on this admin server!");
-    promise.setException(std::move(err));
+    promise.setException(thrift::NotSupported(
+        "SafetyChecker is not running on this admin server!"));
     return promise.getSemiFuture();
   }
   std::shared_ptr<EventLogRebuildingSet> rebuilding_set =
@@ -39,10 +38,9 @@ CheckImpactHandler::semifuture_checkImpact(
   if (!rebuilding_set) {
     // We can't move on if we don't have the current AuthoritativeStatus. We
     // throw NotReady in this case.
-    thrift::NodeNotReady err;
-    err.set_message("Node does not have the shard states yet, try a "
-                    "different node");
-    promise.setException(std::move(err));
+    promise.setException(
+        thrift::NodeNotReady("Node does not have the shard states yet, try a "
+                             "different node"));
     return promise.getSemiFuture();
   }
 
@@ -90,7 +88,7 @@ CheckImpactHandler::semifuture_checkImpact(
         folly::Promise<std::unique_ptr<thrift::CheckImpactResponse>> result;
         if (impact.hasError()) {
           // An error has happened.
-          thrift::OperationError ex;
+          thrift::OperationError ex(error_description(impact.error()));
           ex.set_error_code(static_cast<uint16_t>(impact.error()));
           ex.set_message(error_description(impact.error()));
           result.setException(std::move(ex));

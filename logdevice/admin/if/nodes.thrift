@@ -126,11 +126,11 @@ struct ShardMaintenanceProgress {
   1: MaintenanceStatus status,
   2: set<ShardOperationalState> target_states,
   3: common.Timestamp created_at,
-  4: optional common.Timestamp last_updated_at,
+  4: common.Timestamp last_updated_at,
   /**
    * The list of maintenance groups associated to this maintenace
    */
-  5: optional list<common.MaintenanceGroupID> associated_group_ids,
+  5: list<common.MaintenanceGroupID> associated_group_ids,
 }
 
 /**
@@ -141,11 +141,11 @@ struct SequencerMaintenanceProgress {
   1: MaintenanceStatus status,
   2: SequencingState target_state,
   3: common.Timestamp created_at,
-  4: optional common.Timestamp last_updated_at,
+  4: common.Timestamp last_updated_at,
   /**
    * The list of maintenance groups associated to this maintenace
    */
-  5: optional list<common.MaintenanceGroupID> associated_group_ids,
+  5: list<common.MaintenanceGroupID> associated_group_ids,
 }
 
 /**
@@ -273,7 +273,7 @@ struct ShardState {
   /**
    * [DEPRECATED]. Will be removed once callers move to storage_state instead.
    */
-  2: ShardStorageState current_storage_state,
+  2: ShardStorageState current_storage_state (deprecated),
   /**
    * See the ShardOperationalState enum for info. See the
    * maintenance for information about the active transition
@@ -322,7 +322,6 @@ enum SequencingState {
  */
 struct SequencerState {
   1: SequencingState state,
-  2: optional common.Timestamp sequencer_state_last_updated,
   /**
    * If there are maintenance applied on this sequencer.
    */
@@ -372,7 +371,7 @@ struct NodeState {
   /**
    * The gossip status of node.
    */
-  2: optional ServiceState daemon_state,
+  2: ServiceState daemon_state = ServiceState.UNKNOWN,
   /**
    * This is only set if the node is a sequencer (roles has `SEQUENCER`)
    */

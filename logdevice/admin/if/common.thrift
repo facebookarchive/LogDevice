@@ -43,7 +43,6 @@ struct SocketAddress {
   3: optional i32 port = -1,
 }
 
-typedef SocketAddress Node
 typedef i64 Timestamp /** UNIX time in milliseconds */
 typedef i16 NodeIndex /** node_index_t */
 typedef i16 ShardIndex /** shard_index_t */
@@ -55,7 +54,7 @@ typedef i16 ShardIndex /** shard_index_t */
  */
 struct NodeID {
   1: optional NodeIndex node_index,
-  2: optional Node address,
+  2: optional SocketAddress address,
 }
 
 /**

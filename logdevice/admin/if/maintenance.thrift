@@ -72,7 +72,7 @@ struct MaintenanceDefinition {
    * reached their targets. However, the system will not revert states
    * unnecessarily.
    */
-  10: bool group = false,
+  10: bool group = true,
   /**
    * This is the time in seconds that we want to keep this maintenance applied.
    * The countdown starts as you apply the maintenance, you need to take into
@@ -199,7 +199,7 @@ struct RemoveMaintenancesRequest {
    * Optional: The reason of removing the maintenance, this is used for
    * maintenance auditing and logging.
    */
-  5: optional string reason,
+  5: string reason,
 }
 
 /**

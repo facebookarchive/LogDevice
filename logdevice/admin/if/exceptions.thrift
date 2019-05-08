@@ -18,7 +18,8 @@ namespace wiki Thriftdoc.LogDevice.Exceptions
  */
 exception NodeNotReady {
   1: string message,
-}
+// This will correctly set what() and give us an easy ctor in cpp2
+} (message = "message")
 
 /**
  * The server has an older version than expected
@@ -26,14 +27,14 @@ exception NodeNotReady {
 exception StaleVersion {
   1: string message,
   2: common.unsigned64 server_version,
-}
+} (message = "message")
 
 /**
  * The operation is not supported
  */
 exception NotSupported {
   1: string message,
-}
+} (message = "message")
 
 /**
  * An operation that failed for unexpected reasons
@@ -41,21 +42,22 @@ exception NotSupported {
 exception OperationError {
   1: string message,
   2: optional i32 error_code, // maps to E
-}
+} (message = "message")
 
 /**
  * The request contains invalid parameters
  */
 exception InvalidRequest {
   1: string message,
-}
+} (message = "message")
 
 /**
  * There is maintenance already set by the same user for different targets
  */
 exception MaintenanceClash {
   1: string message,
-}
+} (message = "message")
+
 
 /**
  * The system couldn't match the maintenance in the definition with the internal
@@ -63,12 +65,4 @@ exception MaintenanceClash {
  */
 exception MaintenanceMatchError {
   1: string message,
-}
-
-/*
- * The operation cannot be performed on this node, use the advise supplioed in
- * the redirect_to_node and retry the request
- */
-exception Redirect {
-  1: common.NodeID redirect_to_node,
-}
+} (message = "message")

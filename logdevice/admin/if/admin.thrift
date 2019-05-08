@@ -47,9 +47,9 @@ service AdminAPI extends fb303.FacebookService {
   maintenance.MaintenanceDefinitionResponse getMaintenances(1:
       maintenance.MaintenancesFilter filter) throws
       (1: exceptions.NodeNotReady notready,
-       2: exceptions.Redirect not_master,
        3: exceptions.InvalidRequest invalid_request,
-       4: exceptions.OperationError error);
+       4: exceptions.OperationError error,
+       5: exceptions.NotSupported not_supported);
 
   /**
    * Perform a maintenance on one or more nodes/shards declaratively. The
@@ -70,10 +70,10 @@ service AdminAPI extends fb303.FacebookService {
   maintenance.MaintenanceDefinitionResponse applyMaintenance(1:
       maintenance.MaintenanceDefinition request) throws
       (1: exceptions.NodeNotReady notready,
-       2: exceptions.Redirect not_master,
-       3: exceptions.InvalidRequest invalid_request,
-       4: exceptions.MaintenanceClash clash,
-       5: exceptions.OperationError operation_error);
+       2: exceptions.InvalidRequest invalid_request,
+       3: exceptions.MaintenanceClash clash,
+       4: exceptions.OperationError operation_error,
+       5: exceptions.NotSupported not_supported);
 
   /**
    * Cancels a maintenance that has been scheduled or executed on one or more
@@ -89,9 +89,9 @@ service AdminAPI extends fb303.FacebookService {
   maintenance.RemoveMaintenancesResponse removeMaintenances(1:
       maintenance.RemoveMaintenancesRequest filter) throws
       (1: exceptions.NodeNotReady notready,
-       2: exceptions.Redirect not_master,
-       3: exceptions.InvalidRequest invalid_request,
-       4: exceptions.OperationError operation_error);
+       2: exceptions.InvalidRequest invalid_request,
+       3: exceptions.OperationError operation_error,
+       4: exceptions.NotSupported not_supported);
 
   /**
    * Call this if rebuilding is currently blocked because we have too many
@@ -105,7 +105,8 @@ service AdminAPI extends fb303.FacebookService {
       maintenance.UnblockRebuildingRequest request) throws
     (1: exceptions.NodeNotReady notready,
      2: exceptions.InvalidRequest invalid_request,
-     3: exceptions.OperationError operation_error);
+     3: exceptions.OperationError operation_error,
+     4: exceptions.NotSupported not_supported);
 
   /**
    * Validates whether it's safe to perform a storage-state change on one or

@@ -65,8 +65,7 @@ TEST_F(AdminAPINodeStateTest, getNodeState) {
   ASSERT_EQ(1, response.get_states().size());
   auto node1 = response.get_states()[0];
   ASSERT_EQ(0, node1.get_node_index());
-  ASSERT_TRUE(node1.get_daemon_state());
-  ASSERT_EQ(ServiceState::ALIVE, *node1.get_daemon_state());
+  ASSERT_EQ(ServiceState::ALIVE, node1.get_daemon_state());
   ASSERT_TRUE(node1.get_sequencer_state());
   const SequencerState* seq_state = node1.get_sequencer_state();
   ASSERT_EQ(SequencingState::ENABLED, seq_state->get_state());
@@ -96,6 +95,6 @@ TEST_F(AdminAPINodeStateTest, getNodeState) {
                req.set_filter(fltr);
                admin_client->sync_getNodesState(resp, req);
                auto node = resp.get_states()[0];
-               return (ServiceState::DEAD == *node.get_daemon_state());
+               return (ServiceState::DEAD == node.get_daemon_state());
              });
 }
