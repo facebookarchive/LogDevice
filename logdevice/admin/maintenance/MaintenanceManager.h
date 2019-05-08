@@ -47,10 +47,12 @@ class MaintenanceManagerDependencies {
   MaintenanceManagerDependencies(
       Processor* processor,
       ClusterMaintenanceStateMachine* cluster_maintenance_state_machine,
-      EventLogStateMachine* event_log)
+      EventLogStateMachine* event_log,
+      std::unique_ptr<SafetyCheckScheduler> safety_check_scheduler)
       : processor_(processor),
         cluster_maintenance_state_machine_(cluster_maintenance_state_machine),
-        event_log_state_machine_(event_log) {}
+        event_log_state_machine_(event_log),
+        safety_check_scheduler_(std::move(safety_check_scheduler)) {}
 
   virtual ~MaintenanceManagerDependencies() {}
 
@@ -71,9 +73,13 @@ class MaintenanceManagerDependencies {
    * is fulfiled once we have results for all workflows
    */
 
-  virtual folly::SemiFuture<SafetyCheckResult>
-  postSafetyCheckRequest(const std::vector<const ShardWorkflow*>& shard_wf,
-                         const std::vector<const SequencerWorkflow*>& seq_wf);
+  virtual folly::SemiFuture<SafetyCheckResult> postSafetyCheckRequest(
+      const ClusterMaintenanceWrapper& maintenance_state,
+      const ShardAuthoritativeStatusMap& status_map,
+      const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
+          nodes_config,
+      const std::vector<const ShardWorkflow*>& shard_wf,
+      const std::vector<const SequencerWorkflow*>& seq_wf);
 
   // calls `update` on the NodesConfigManager
   virtual folly::SemiFuture<NCUpdateResult> postNodesConfigurationUpdate(
@@ -103,6 +109,9 @@ class MaintenanceManagerDependencies {
   // A replicated state machine that tails the event log
   EventLogStateMachine* event_log_state_machine_;
 
+  // Scheduler object to schedule safety checks
+  std::unique_ptr<SafetyCheckScheduler> safety_check_scheduler_;
+
   // Subscription handle for ClusterMaintenanceStateMachine.
   // calls the onClusterMaintenanceStateUpdate callback when updated
   // state is available from ClusterMaintenanceStateMachine
@@ -114,8 +123,6 @@ class MaintenanceManagerDependencies {
 
   // Subscription handle for NodesConfig update
   std::unique_ptr<ConfigSubscriptionHandle> nodes_config_update_handle_;
-
-  std::unique_ptr<SafetyCheckScheduler> safety_check_scheduler_;
 };
 
 /*

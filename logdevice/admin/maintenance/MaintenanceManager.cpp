@@ -56,11 +56,15 @@ void MaintenanceManagerDependencies::stopSubscription() {
 
 folly::SemiFuture<SafetyCheckResult>
 MaintenanceManagerDependencies::postSafetyCheckRequest(
+    const ClusterMaintenanceWrapper& maintenance_state,
+    const ShardAuthoritativeStatusMap& status_map,
+    const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
+        nodes_config,
     const std::vector<const ShardWorkflow*>& shard_wf,
     const std::vector<const SequencerWorkflow*>& seq_wf) {
-  // TODO: Integrate with SafetyCheckScheduler
-  folly::Promise<SafetyCheckResult> p;
-  return p.getSemiFuture();
+  ld_check(safety_check_scheduler_);
+  return safety_check_scheduler_->schedule(
+      maintenance_state, status_map, nodes_config, shard_wf, seq_wf);
 }
 
 folly::SemiFuture<NCUpdateResult>
@@ -734,7 +738,58 @@ void MaintenanceManager::processSequencerWorkflowResult(
 }
 
 void MaintenanceManager::processSafetyCheckResult(
-    SafetyCheckScheduler::Result result) {}
+    SafetyCheckScheduler::Result result) {
+  for (auto shard : result.safe_shards) {
+    // We should have an active workflow for every shard in result
+    ld_check(active_shard_workflows_.count(shard));
+    // And its status should be waiting on safety check results
+    ld_check(active_shard_workflows_.at(shard).second ==
+             MaintenanceStatus::AWAITING_SAFETY_CHECK);
+    active_shard_workflows_[shard].second =
+        MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES;
+  }
+
+  for (auto node : result.safe_sequencers) {
+    // We should have an active workflow for every shard in result
+    ld_check(active_sequencer_workflows_.count(node));
+    // And its status should be waiting on safety check results
+    ld_check(active_sequencer_workflows_.at(node).second ==
+             MaintenanceStatus::AWAITING_SAFETY_CHECK);
+    active_sequencer_workflows_[node].second =
+        MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES;
+  }
+
+  for (const auto& it : result.unsafe_groups) {
+    // TODO: update the impact result in MaintenanceDefinition
+    // corresponding to the group
+
+    // Iterate over shards and sequencers every unsafe
+    // group and set status
+    for (auto shard :
+         cluster_maintenance_wrapper_->getShardsForGroup(it.first)) {
+      if (active_shard_workflows_.count(shard) &&
+          active_shard_workflows_.at(shard).second ==
+              MaintenanceStatus::AWAITING_SAFETY_CHECK) {
+        ld_info("Maintenance for Shard:%s is blocked until safe",
+                toString(shard).c_str());
+        active_shard_workflows_[shard].second =
+            MaintenanceStatus::BLOCKED_UNTIL_SAFE;
+      }
+    }
+
+    for (auto node :
+         cluster_maintenance_wrapper_->getSequencersForGroup(it.first)) {
+      if (active_sequencer_workflows_.count(node) &&
+          active_sequencer_workflows_.at(node).second ==
+              MaintenanceStatus::AWAITING_SAFETY_CHECK) {
+        ld_info("Maintenance for Sequencer:%s is blocked until safe",
+                toString(node).c_str());
+        active_sequencer_workflows_[node].second =
+            MaintenanceStatus::BLOCKED_UNTIL_SAFE;
+      }
+    }
+  }
+}
 
 folly::SemiFuture<NCUpdateResult>
 MaintenanceManager::scheduleNodesConfigUpdates() {
@@ -858,7 +913,28 @@ membership::StateTransitionCondition MaintenanceManager::getCondition(
 }
 
 folly::SemiFuture<SafetyCheckResult> MaintenanceManager::scheduleSafetyCheck() {
-  return folly::SemiFuture<SafetyCheckResult>::makeEmpty();
+  std::vector<const ShardWorkflow*> shard_wf;
+  for (const auto& it : active_shard_workflows_) {
+    if (it.second.second == MaintenanceStatus::AWAITING_SAFETY_CHECK) {
+      shard_wf.push_back(it.second.first.get());
+    }
+  }
+  std::vector<const SequencerWorkflow*> seq_wf;
+  for (const auto& it : active_sequencer_workflows_) {
+    if (it.second.second == MaintenanceStatus::AWAITING_SAFETY_CHECK) {
+      seq_wf.push_back(it.second.first.get());
+    }
+  }
+  status_ = MMStatus::AWAITING_SAFETY_CHECK_RESULTS;
+  return (shard_wf.empty() && seq_wf.empty())
+      ? folly::makeSemiFuture<SafetyCheckResult>(
+            folly::makeUnexpected(E::EMPTY))
+      : deps_->postSafetyCheckRequest(
+            *cluster_maintenance_wrapper_,
+            event_log_rebuilding_set_->toShardStatusMap(*nodes_config_),
+            nodes_config_,
+            shard_wf,
+            seq_wf);
 }
 
 folly::SemiFuture<MaintenanceManager::MMStatus>

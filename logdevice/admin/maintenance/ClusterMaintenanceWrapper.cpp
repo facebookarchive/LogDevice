@@ -40,36 +40,15 @@ void ClusterMaintenanceWrapper::indexDefinitions() {
     ld_assert(definition.group_id_ref().has_value());
     GroupID group_id = definition.group_id_ref().value();
     groups_[group_id] = &definition;
-    // Is that maintenance definition applying a state to shards?
-    auto shards = definition.get_shards();
-    if (shards.size() > 0) {
-      // ignore_missing = true. We ignore nodes that we cannot find in the
-      // configuration.
-      ShardSet expanded_shards = expandShardSet(shards, *nodes_config_, true);
-      for (auto& shard : expanded_shards) {
-        shards_to_groups_[shard].insert(group_id);
-        shards_to_targets_[shard].insert(definition.get_shard_target_state());
-      }
+    for (auto shard : getShardsFromDefinition(groups_[group_id])) {
+      shards_to_groups_[shard].insert(group_id);
+      shards_to_targets_[shard].insert(definition.get_shard_target_state());
     }
 
     // Is that maintenance definition applying a state to sequencers?
-    auto sequencers = definition.get_sequencer_nodes();
-    if (sequencers.size() > 0) {
-      for (const auto& node : sequencers) {
-        folly::Optional<node_index_t> found_node_idx =
-            findNodeIndex(node, *nodes_config_);
-        if (!found_node_idx) {
-          // Ignore nodes that we couldn't find in configuration.
-          ld_info("Maintenance (group=%s) references to a node that doesn't "
-                  "exist in the configuration anymore. Can happen if nodes "
-                  "have been removed!",
-                  group_id.c_str());
-          continue;
-        }
-        node_index_t node_id = *found_node_idx;
-        nodes_to_groups_[node_id].insert(group_id);
-        nodes_to_targets_[node_id] = definition.get_sequencer_target_state();
-      }
+    for (auto node_id : getSequencersFromDefinition(groups_[group_id])) {
+      nodes_to_groups_[node_id].insert(group_id);
+      nodes_to_targets_[node_id] = definition.get_sequencer_target_state();
     }
   }
 }
@@ -81,6 +60,52 @@ ClusterMaintenanceWrapper::getMaintenanceByGroupID(const GroupID& group) const {
     return it->second;
   }
   return nullptr;
+}
+
+ShardSet
+ClusterMaintenanceWrapper::getShardsForGroup(const GroupID& group) const {
+  return getShardsFromDefinition(getMaintenanceByGroupID(group));
+}
+
+ShardSet ClusterMaintenanceWrapper::getShardsFromDefinition(
+    const MaintenanceDefinition* def) const {
+  // ignore_missing = true. We ignore nodes that we cannot find in the
+  // configuration.
+  return def && def->get_shards().size() > 0
+      ? expandShardSet(def->get_shards(), *nodes_config_, true)
+      : ShardSet{};
+}
+
+std::unordered_set<node_index_t>
+ClusterMaintenanceWrapper::getSequencersForGroup(const GroupID& group) const {
+  return getSequencersFromDefinition(getMaintenanceByGroupID(group));
+}
+
+std::unordered_set<node_index_t>
+ClusterMaintenanceWrapper::getSequencersFromDefinition(
+    const MaintenanceDefinition* def) const {
+  std::unordered_set<node_index_t> result;
+  if (def == nullptr) {
+    return result;
+  }
+
+  auto& sequencers = def->get_sequencer_nodes();
+  if (sequencers.size() > 0) {
+    for (const auto& node : sequencers) {
+      folly::Optional<node_index_t> found_node_idx =
+          findNodeIndex(node, *nodes_config_);
+      if (!found_node_idx) {
+        // Ignore nodes that we couldn't find in configuration.
+        ld_info("Maintenance (group=%s) references to a node that doesn't "
+                "exist in the configuration anymore. Can happen if nodes "
+                "have been removed!",
+                def->group_id_ref().value().c_str());
+        continue;
+      }
+      result.insert(*found_node_idx);
+    }
+  }
+  return result;
 }
 
 const std::unordered_set<GroupID>&

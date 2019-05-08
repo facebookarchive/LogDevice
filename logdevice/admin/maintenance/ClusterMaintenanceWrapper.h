@@ -36,6 +36,21 @@ class ClusterMaintenanceWrapper {
   getMaintenanceByGroupID(const GroupID& group) const;
 
   /**
+   * Returns a normalized list of shards from the given GroupID. Looks up
+   * the given group id in current ClusterMaintenanceState and returns a
+   * normalized set of shards from the corresponding MaintenanceDefinition
+   */
+  ShardSet getShardsForGroup(const GroupID& group) const;
+
+  /**
+   * Returns the list of sequencer nodes from the given GroupID. Looks up
+   * the given group id in current ClusterMaintenanceState and returns a
+   * set of nodes from the corresponding MaintenanceDefinition
+   */
+  std::unordered_set<node_index_t>
+  getSequencersForGroup(const GroupID& group) const;
+
+  /**
    * This doesn't look into the node role, if there is no maintenance applied
    * for this particular shard it will return {ShardOperationalState::ENABLED}
    * It's the responsibility of the caller to verify whether this is a storage
@@ -141,6 +156,10 @@ class ClusterMaintenanceWrapper {
 
   folly::F14NodeMap<node_index_t, std::unordered_set<GroupID>> nodes_to_groups_;
   folly::F14NodeMap<node_index_t, SequencingState> nodes_to_targets_;
+
+  ShardSet getShardsFromDefinition(const MaintenanceDefinition* def) const;
+  std::unordered_set<node_index_t>
+  getSequencersFromDefinition(const MaintenanceDefinition* def) const;
 };
 
 }}} // namespace facebook::logdevice::maintenance

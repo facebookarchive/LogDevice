@@ -56,7 +56,7 @@ class MockMaintenanceManagerDependencies
     : public MaintenanceManagerDependencies {
  public:
   explicit MockMaintenanceManagerDependencies(MaintenanceManagerTest* test)
-      : MaintenanceManagerDependencies(nullptr, nullptr, nullptr),
+      : MaintenanceManagerDependencies(nullptr, nullptr, nullptr, nullptr),
         test_(test) {}
 
   ~MockMaintenanceManagerDependencies() override {}
@@ -206,6 +206,7 @@ void MaintenanceManagerTest::createShardWorkflow(ShardID shard,
 ShardWorkflow* MaintenanceManagerTest::getShardWorkflow(ShardID shard) {
   return maintenance_manager_->active_shard_workflows_[shard].first.get();
 }
+
 void MaintenanceManagerTest::addNewNode(node_index_t node) {
   NodesConfigurationTestUtil::NodeTemplate n;
   n.id = node;
