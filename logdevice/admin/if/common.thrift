@@ -44,13 +44,14 @@ struct SocketAddress {
 }
 
 typedef SocketAddress Node
-typedef i64 Timestamp
+typedef i64 Timestamp /** UNIX time in milliseconds */
 typedef i16 NodeIndex /** node_index_t */
 typedef i16 ShardIndex /** shard_index_t */
 
 /**
  * This is an identifier for a node, it can locate a node by either the
- * node_index or the socket address.
+ * node_index or the socket address. If this struct is returned by AdminAPI
+ * it is guaranteed that node_index field is set.
  */
 struct NodeID {
   1: optional NodeIndex node_index,
