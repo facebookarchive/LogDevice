@@ -61,8 +61,6 @@ class EpochRecordCacheEntry : public ZeroCopiedRecord {
    */
   ssize_t toLinearBuffer(char* buffer, size_t size) const;
 
-  ~EpochRecordCacheEntry() override;
-
   EpochRecordCacheEntry();
 
   EpochRecordCacheEntry(lsn_t lsn,

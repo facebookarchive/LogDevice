@@ -39,6 +39,11 @@ void RecordCacheDisposal::disposeOfCacheEntry(
   // for all of them.
   entry->next_.reset();
 
+  STAT_SUB(getStatsHolder(),
+           record_cache_bytes_cached_estimate,
+           entry->getBytesEstimate());
+  STAT_INCR(getStatsHolder(), record_cache_records_evicted);
+
   // Free the payload so that it can deallocated on the right thread.
   // Rest of the record is freed here.
   entry.reset();
