@@ -148,4 +148,22 @@ TEST_F(ShardWorkflowTest, SimpleEnable) {
   ASSERT_EQ(f.value(), MaintenanceStatus::COMPLETED);
 }
 
+TEST_F(ShardWorkflowTest, SimpleEnableWithMiniRebuilding) {
+  init();
+  wf->addTargetOpState({ShardOperationalState::ENABLED});
+  auto f = wf->run(membership::StorageState::READ_ONLY,
+                   ShardDataHealth::LOST_REGIONS,
+                   RebuildingMode::RESTORE);
+  ASSERT_TRUE(f.isReady());
+  ASSERT_EQ(f.value(), MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES);
+  ASSERT_EQ(event, nullptr);
+  ASSERT_EQ(wf->getExpectedStorageStateTransition(),
+            membership::StorageStateTransition::ENABLE_WRITE);
+  f = wf->run(membership::StorageState::READ_WRITE,
+              ShardDataHealth::LOST_REGIONS,
+              RebuildingMode::RESTORE);
+  ASSERT_TRUE(f.isReady());
+  ASSERT_EQ(f.value(), MaintenanceStatus::COMPLETED);
+}
+
 }}} // namespace facebook::logdevice::maintenance

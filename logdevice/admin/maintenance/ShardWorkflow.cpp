@@ -219,15 +219,16 @@ void ShardWorkflow::computeMaintenanceStatusForEnable() {
 void ShardWorkflow::createAbortEventIfRequired() {
   /* ShardDataHealth  RebuildingMode  Shard Rebuilding Type
    * Healthy          Relocate        Full (ABORT)
-   * Healthy          Restore         Mini (DO NOT ABORT)
+   * Lost_Regions     Restore         Mini (DO NOT ABORT)
    * Healthy          Invalid         NA   (DO NOT ABORT)
    * Unavilable       Restore         Full (ABORT)
    * Underreplication Restore         Full (ABORT)
    * Empty            Restore         Full (ABORT)
    * Empty            Relocate        Full (ABORT)
    */
-  if (current_data_health_ != ShardDataHealth::HEALTHY ||
-      current_rebuilding_mode_ == RebuildingMode::RELOCATE) {
+  if (current_rebuilding_mode_ == RebuildingMode::RELOCATE ||
+      (current_data_health_ != ShardDataHealth::LOST_REGIONS &&
+       current_data_health_ != ShardDataHealth::HEALTHY)) {
     event_ = std::make_unique<SHARD_ABORT_REBUILD_Event>(
         shard_.node(), (uint32_t)shard_.shard(), LSN_INVALID);
   }
