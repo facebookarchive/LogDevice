@@ -65,11 +65,38 @@ MaintenanceManagerDependencies::postSafetyCheckRequest(
 
 folly::SemiFuture<NCUpdateResult>
 MaintenanceManagerDependencies::postNodesConfigurationUpdate(
-    std::unique_ptr<membership::StorageMembership::Update> shards_update,
-    std::unique_ptr<membership::SequencerMembership::Update>
+    std::unique_ptr<configuration::nodes::StorageConfig::Update> shards_update,
+    std::unique_ptr<configuration::nodes::SequencerConfig::Update>
         sequencers_update) {
-  // TODO: NodesConfig update path
   auto [p, f] = folly::makePromiseContract<NCUpdateResult>();
+
+  NodesConfiguration::Update update{};
+
+  if (shards_update) {
+    update.storage_config_update = std::move(shards_update);
+  }
+  if (sequencers_update) {
+    update.sequencer_config_update = std::move(sequencers_update);
+  }
+
+  auto cb = [promise = std::move(p)](
+                Status st,
+                std::shared_ptr<const configuration::nodes::NodesConfiguration>
+                    nc) mutable {
+    if (st == E::OK) {
+      promise.setValue(nc);
+    } else {
+      // NodesConfig update failed. Return failure status
+      // so that MaintenanceManager can retry all the
+      // workflows again
+      ld_info("NodesConfiguration update failed with status:%s",
+              toString(st).c_str());
+      promise.setValue(folly::makeUnexpected(st));
+    }
+  };
+
+  processor_->getNodesConfigurationManager()->update(
+      std::move(update), std::move(cb));
   return std::move(f);
 }
 
@@ -674,6 +701,13 @@ void MaintenanceManager::processShardWorkflowResult(
   }
 }
 
+membership::StorageStateTransition
+MaintenanceManager::getExpectedStorageStateTransition(ShardID shard) {
+  ld_check(active_shard_workflows_.count(shard));
+  return active_shard_workflows_.at(shard)
+      .first->getExpectedStorageStateTransition();
+}
+
 void MaintenanceManager::processSequencerWorkflowResult(
     const std::vector<node_index_t>& nodes,
     const std::vector<folly::Try<MaintenanceStatus>>& status) {
@@ -704,7 +738,123 @@ void MaintenanceManager::processSafetyCheckResult(
 
 folly::SemiFuture<NCUpdateResult>
 MaintenanceManager::scheduleNodesConfigUpdates() {
-  return folly::SemiFuture<NCUpdateResult>::makeEmpty();
+  std::unique_ptr<membership::StorageMembership::Update>
+      storage_membership_update;
+  std::unique_ptr<configuration::nodes::StorageAttributeConfig::Update>
+      storage_attributes_update;
+
+  for (const auto& it : active_shard_workflows_) {
+    if (it.second.second != MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES) {
+      continue;
+    }
+
+    auto shard = it.first;
+    ShardWorkflow* wf = it.second.first.get();
+
+    // Membership update
+    membership::ShardState::Update shard_state_update;
+    shard_state_update.transition = getExpectedStorageStateTransition(shard);
+    // TODO: Verify conditions are valid and met for each
+    // requested transition
+    shard_state_update.conditions =
+        getCondition(shard, shard_state_update.transition);
+    if (!storage_membership_update) {
+      storage_membership_update =
+          std::make_unique<membership::StorageMembership::Update>(
+              nodes_config_->getVersion());
+    }
+    auto rv = storage_membership_update->addShard(shard, shard_state_update);
+    ld_check(rv == 0);
+
+    // Attribute update
+    // From maintenance manager perspective, today we only care about the
+    // exclude_from_nodesets storage config attribute. Check if current
+    // value is different from what the workflow wants and update if required
+    auto sa = nodes_config_->getNodeStorageAttribute(shard.node());
+    if (wf->excludeFromNodeset() != sa->exclude_from_nodesets) {
+      if (!storage_attributes_update) {
+        storage_attributes_update = std::make_unique<
+            configuration::nodes::StorageAttributeConfig::Update>();
+      }
+      configuration::nodes::StorageAttributeConfig::NodeUpdate node_update;
+      node_update.transition =
+          configuration::nodes::StorageAttributeConfig::UpdateType::RESET;
+      node_update.attributes =
+          std::make_unique<configuration::nodes::StorageNodeAttribute>(
+              configuration::nodes::StorageNodeAttribute{
+                  sa->capacity,
+                  sa->num_shards,
+                  sa->generation,
+                  wf->excludeFromNodeset()});
+      rv = storage_attributes_update->addNode(
+          shard.node(), std::move(node_update));
+      ld_check(rv == 0);
+    }
+  }
+
+  std::unique_ptr<configuration::nodes::StorageConfig::Update>
+      storage_config_update;
+  if (storage_membership_update || storage_attributes_update) {
+    storage_config_update =
+        std::make_unique<configuration::nodes::StorageConfig::Update>();
+    storage_config_update->membership_update =
+        std::move(storage_membership_update);
+    storage_config_update->attributes_update =
+        std::move(storage_attributes_update);
+  }
+
+  std::unique_ptr<membership::SequencerMembership::Update>
+      sequencer_membership_update;
+
+  for (const auto& it : active_sequencer_workflows_) {
+    if (it.second.second != MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES) {
+      continue;
+    }
+    auto node = it.first;
+    SequencerWorkflow* wf = it.second.first.get();
+    membership::SequencerNodeState::Update seq_state_update;
+    seq_state_update.transition =
+        membership::SequencerMembershipTransition::SET_ENABLED_FLAG;
+    seq_state_update.sequencer_enabled =
+        (wf->getTargetOpState() == SequencingState::ENABLED);
+    if (!sequencer_membership_update) {
+      sequencer_membership_update =
+          std::make_unique<membership::SequencerMembership::Update>(
+              nodes_config_->getVersion());
+    }
+    auto rv = sequencer_membership_update->addNode(node, seq_state_update);
+    ld_check(rv == 0);
+  }
+
+  std::unique_ptr<configuration::nodes::SequencerConfig::Update>
+      sequencer_config_update;
+  if (sequencer_membership_update) {
+    sequencer_config_update =
+        std::make_unique<configuration::nodes::SequencerConfig::Update>();
+    sequencer_config_update->membership_update =
+        std::move(sequencer_membership_update);
+  }
+
+  status_ = MMStatus::AWAITING_NODES_CONFIG_UPDATE;
+  return (!storage_config_update && !sequencer_config_update)
+      ? folly::makeSemiFuture<NCUpdateResult>(
+            folly::makeUnexpected(Status::EMPTY))
+      : deps_->postNodesConfigurationUpdate(std::move(storage_config_update),
+                                            std::move(sequencer_config_update));
+}
+
+membership::StateTransitionCondition MaintenanceManager::getCondition(
+    ShardID shard,
+    membership::StorageStateTransition transition) {
+  membership::StateTransitionCondition c;
+  c = membership::required_conditions(transition);
+  auto [exists, state] =
+      nodes_config_->getStorageMembership()->getShardState(shard);
+  ld_check(exists);
+  if (state.metadata_state == membership::MetaDataStorageState::METADATA) {
+    c |= membership::Condition::METADATA_CAPACITY_CHECK;
+  }
+  return c;
 }
 
 folly::SemiFuture<SafetyCheckResult> MaintenanceManager::scheduleSafetyCheck() {

@@ -77,8 +77,9 @@ class MaintenanceManagerDependencies {
 
   // calls `update` on the NodesConfigManager
   virtual folly::SemiFuture<NCUpdateResult> postNodesConfigurationUpdate(
-      std::unique_ptr<membership::StorageMembership::Update> shards_update,
-      std::unique_ptr<membership::SequencerMembership::Update>
+      std::unique_ptr<configuration::nodes::StorageConfig::Update>
+          shards_update,
+      std::unique_ptr<configuration::nodes::SequencerConfig::Update>
           sequencers_update);
 
   void setOwner(MaintenanceManager* owner);
@@ -399,6 +400,14 @@ class MaintenanceManager : public SerialWorkContext {
   // Used to short circuit evaluation so that we can finish
   // enabling shards before running safety checks
   bool has_shards_to_enable_;
+
+  // Returns the transition expected by shard workflow
+  virtual membership::StorageStateTransition
+  getExpectedStorageStateTransition(ShardID shard);
+
+  // Returns the required conditions for given shard and transition
+  membership::StateTransitionCondition
+  getCondition(ShardID shard, membership::StorageStateTransition transition);
 
   // Remove the corresponding workflow from `active_shard_workflows_`
   void removeShardWorkflow(ShardID shard);
