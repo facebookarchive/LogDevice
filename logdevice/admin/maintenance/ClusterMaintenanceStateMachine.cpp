@@ -104,4 +104,12 @@ void ClusterMaintenanceStateMachine::snapshot(
   return;
 }
 
+Request::Execution StartClusterMaintenanceStateMachineRequest::execute() {
+  Worker* w = Worker::onThisThread();
+  ld_check(sm_);
+  w->setClusterMaintenanceStateMachine(sm_);
+  sm_->start();
+  return Request::Execution::COMPLETE;
+}
+
 }}} // namespace facebook::logdevice::maintenance

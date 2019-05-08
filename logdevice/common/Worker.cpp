@@ -903,6 +903,11 @@ void Worker::setRebuildingCoordinator(
   rebuilding_coordinator_ = rebuilding_coordinator;
 }
 
+void Worker::setClusterMaintenanceStateMachine(
+    maintenance::ClusterMaintenanceStateMachine* sm) {
+  cluster_maintenance_state_machine_ = sm;
+}
+
 ClusterState* Worker::getClusterState() {
   return Worker::onThisThread()->processor_->cluster_state_.get();
 }

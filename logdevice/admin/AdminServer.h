@@ -7,6 +7,7 @@
  */
 #pragma once
 
+#include "logdevice/admin/maintenance/MaintenanceManager.h"
 #include "logdevice/admin/settings/AdminServerSettings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/server/ServerSettings.h"
@@ -53,6 +54,10 @@ class AdminServer {
 
   virtual void
   setShardedRocksDBStore(ShardedRocksDBLocalLogStore* sharded_store);
+
+  virtual void setMaintenanceManager(maintenance::MaintenanceManager* mm);
+
+  virtual std::shared_ptr<SafetyChecker> getSafetyChecker();
 
  protected:
   UpdateableSettings<AdminServerSettings> admin_server_settings_;

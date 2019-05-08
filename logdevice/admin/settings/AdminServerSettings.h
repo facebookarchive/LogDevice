@@ -34,6 +34,7 @@ struct AdminServerSettings : public SettingsBundle {
   size_t safety_check_failure_sample_size;
   size_t safety_check_max_batch_size;
 
+  bool enable_cluster_maintenance_state_machine;
   // Allow the maintenance log to be snapshotted onto a snapshot log
   bool maintenance_log_snapshotting;
   std::chrono::milliseconds maintenance_log_snapshotting_period;

@@ -72,7 +72,7 @@ MaintenanceManagerDependencies::postNodesConfigurationUpdate(
     std::unique_ptr<configuration::nodes::StorageConfig::Update> shards_update,
     std::unique_ptr<configuration::nodes::SequencerConfig::Update>
         sequencers_update) {
-  auto [p, f] = folly::makePromiseContract<NCUpdateResult>();
+  auto pf = folly::makePromiseContract<NCUpdateResult>();
 
   NodesConfiguration::Update update{};
 
@@ -83,7 +83,7 @@ MaintenanceManagerDependencies::postNodesConfigurationUpdate(
     update.sequencer_config_update = std::move(sequencers_update);
   }
 
-  auto cb = [promise = std::move(p)](
+  auto cb = [promise = std::move(pf.first)](
                 Status st,
                 std::shared_ptr<const configuration::nodes::NodesConfiguration>
                     nc) mutable {
@@ -101,7 +101,7 @@ MaintenanceManagerDependencies::postNodesConfigurationUpdate(
 
   processor_->getNodesConfigurationManager()->update(
       std::move(update), std::move(cb));
-  return std::move(f);
+  return std::move(pf.second);
 }
 
 void MaintenanceManagerDependencies::setOwner(MaintenanceManager* owner) {
@@ -143,16 +143,17 @@ void MaintenanceManager::startInternal() {
   nodes_config_ = deps_->getNodesConfiguration();
   // Invalid promise
   shutdown_promise_ = folly::Promise<folly::Unit>::makeEmpty();
+  ld_info("Starting Maintenance Manager");
   status_ = MMStatus::STARTING;
 }
 
 folly::SemiFuture<folly::Unit> MaintenanceManager::stop() {
-  auto [p, f] = folly::makePromiseContract<folly::Unit>();
-  add([this, mpromise = std::move(p)]() mutable {
+  auto pf = folly::makePromiseContract<folly::Unit>();
+  add([this, mpromise = std::move(pf.first)]() mutable {
     shutdown_promise_ = std::move(mpromise);
     stopInternal();
   });
-  return std::move(f);
+  return std::move(pf.second);
 }
 
 void MaintenanceManager::stopInternal() {
@@ -189,12 +190,12 @@ void MaintenanceManager::scheduleRun() {
 
 folly::SemiFuture<folly::Expected<thrift::NodeState, Status>>
 MaintenanceManager::getNodeState(node_index_t node) {
-  auto [p, f] =
+  auto pf =
       folly::makePromiseContract<folly::Expected<thrift::NodeState, Status>>();
-  add([this, node, mpromise = std::move(p)]() mutable {
+  add([this, node, mpromise = std::move(pf.first)]() mutable {
     mpromise.setValue(getNodeStateInternal(node));
   });
-  return std::move(f);
+  return std::move(pf.second);
 }
 
 folly::Expected<thrift::NodeState, Status>
@@ -219,13 +220,13 @@ MaintenanceManager::getNodeStateInternal(node_index_t node) const {
 
 folly::SemiFuture<folly::Expected<thrift::SequencerState, Status>>
 MaintenanceManager::getSequencerState(node_index_t node) {
-  auto [p, f] = folly::makePromiseContract<
+  auto pf = folly::makePromiseContract<
       folly::Expected<thrift::SequencerState, Status>>();
-  add([this, node, mpromise = std::move(p)]() mutable {
+  add([this, node, mpromise = std::move(pf.first)]() mutable {
     mpromise.setValue(
         folly::makeExpected<Status>(getSequencerStateInternal(node)));
   });
-  return std::move(f);
+  return std::move(pf.second);
 }
 
 thrift::SequencerState
@@ -249,12 +250,12 @@ MaintenanceManager::getSequencerStateInternal(node_index_t node) const {
 
 folly::SemiFuture<folly::Expected<thrift::ShardState, Status>>
 MaintenanceManager::getShardState(ShardID shard) {
-  auto [p, f] =
+  auto pf =
       folly::makePromiseContract<folly::Expected<thrift::ShardState, Status>>();
-  add([this, shard, mpromise = std::move(p)]() mutable {
+  add([this, shard, mpromise = std::move(pf.first)]() mutable {
     mpromise.setValue(getShardStateInternal(shard));
   });
-  return std::move(f);
+  return std::move(pf.second);
 }
 
 folly::Expected<thrift::ShardState, Status>
@@ -316,13 +317,13 @@ MaintenanceManager::getShardStateInternal(ShardID shard) const {
 
 folly::SemiFuture<folly::Expected<ShardOperationalState, Status>>
 MaintenanceManager::getShardOperationalState(ShardID shard) {
-  auto [p, f] = folly::makePromiseContract<
+  auto pf = folly::makePromiseContract<
       folly::Expected<ShardOperationalState, Status>>();
-  add([this, shard, mpromise = std::move(p)]() mutable {
+  add([this, shard, mpromise = std::move(pf.first)]() mutable {
     mpromise.setValue(getShardOperationalStateInternal(shard));
   });
 
-  return std::move(f);
+  return std::move(pf.second);
 }
 
 folly::Expected<ShardOperationalState, Status>
@@ -385,13 +386,13 @@ MaintenanceManager::getShardOperationalStateInternal(ShardID shard) const {
 
 folly::SemiFuture<folly::Expected<ShardDataHealth, Status>>
 MaintenanceManager::getShardDataHealth(ShardID shard) {
-  auto [p, f] =
+  auto pf =
       folly::makePromiseContract<folly::Expected<ShardDataHealth, Status>>();
-  add([this, shard, mpromise = std::move(p)]() mutable {
+  add([this, shard, mpromise = std::move(pf.first)]() mutable {
     mpromise.setValue(getShardDataHealthInternal(shard));
   });
 
-  return std::move(f);
+  return std::move(pf.second);
 }
 
 folly::Expected<ShardDataHealth, Status>
@@ -409,14 +410,14 @@ MaintenanceManager::getShardDataHealthInternal(ShardID shard) const {
 
 folly::SemiFuture<folly::Expected<SequencingState, Status>>
 MaintenanceManager::getSequencingState(node_index_t node) {
-  auto [p, f] =
+  auto pf =
       folly::makePromiseContract<folly::Expected<SequencingState, Status>>();
-  add([this, node, mpromise = std::move(p)]() mutable {
+  add([this, node, mpromise = std::move(pf.first)]() mutable {
     mpromise.setValue(
         folly::makeExpected<Status>(getSequencingStateInternal(node)));
   });
 
-  return std::move(f);
+  return std::move(pf.second);
 }
 
 SequencingState
@@ -427,52 +428,51 @@ MaintenanceManager::getSequencingStateInternal(node_index_t node) const {
 
 folly::SemiFuture<folly::Expected<membership::StorageState, Status>>
 MaintenanceManager::getStorageState(ShardID shard) {
-  auto [p, f] = folly::makePromiseContract<
+  auto pf = folly::makePromiseContract<
       folly::Expected<membership::StorageState, Status>>();
-  add([this, shard, mpromise = std::move(p)]() mutable {
+  add([this, shard, mpromise = std::move(pf.first)]() mutable {
     mpromise.setValue(getStorageStateInternal(shard));
   });
 
-  return std::move(f);
+  return std::move(pf.second);
 }
 
 folly::Expected<membership::StorageState, Status>
 MaintenanceManager::getStorageStateInternal(ShardID shard) const {
-  auto [exists, shardState] =
-      nodes_config_->getStorageMembership()->getShardState(shard);
-  return exists ? folly::makeExpected<Status>(shardState.storage_state)
-                : folly::makeUnexpected(E::NOTFOUND);
+  auto result = nodes_config_->getStorageMembership()->getShardState(shard);
+  return result.first ? folly::makeExpected<Status>(result.second.storage_state)
+                      : folly::makeUnexpected(E::NOTFOUND);
 }
 
 folly::SemiFuture<folly::Expected<membership::MetaDataStorageState, Status>>
 MaintenanceManager::getMetaDataStorageState(ShardID shard) {
-  auto [p, f] = folly::makePromiseContract<
+  auto pf = folly::makePromiseContract<
       folly::Expected<membership::MetaDataStorageState, Status>>();
-  add([this, shard, mpromise = std::move(p)]() mutable {
+  add([this, shard, mpromise = std::move(pf.first)]() mutable {
     mpromise.setValue(getMetaDataStorageStateInternal(shard));
   });
 
-  return std::move(f);
+  return std::move(pf.second);
 }
 
 folly::Expected<membership::MetaDataStorageState, Status>
 MaintenanceManager::getMetaDataStorageStateInternal(ShardID shard) const {
-  auto [exists, shardState] =
-      nodes_config_->getStorageMembership()->getShardState(shard);
-  return exists ? folly::makeExpected<Status>(shardState.metadata_state)
-                : folly::makeUnexpected(E::NOTFOUND);
+  auto result = nodes_config_->getStorageMembership()->getShardState(shard);
+  return result.first
+      ? folly::makeExpected<Status>(result.second.metadata_state)
+      : folly::makeUnexpected(E::NOTFOUND);
 }
 
 folly::SemiFuture<
     folly::Expected<std::unordered_set<ShardOperationalState>, Status>>
 MaintenanceManager::getShardTargetStates(ShardID shard) {
-  auto [p, f] = folly::makePromiseContract<
+  auto pf = folly::makePromiseContract<
       folly::Expected<std::unordered_set<ShardOperationalState>, Status>>();
-  add([this, shard, mpromise = std::move(p)]() mutable {
+  add([this, shard, mpromise = std::move(pf.first)]() mutable {
     mpromise.setValue(getShardTargetStatesInternal(shard));
   });
 
-  return std::move(f);
+  return std::move(pf.second);
 }
 
 folly::Expected<std::unordered_set<ShardOperationalState>, Status>
@@ -485,13 +485,13 @@ MaintenanceManager::getShardTargetStatesInternal(ShardID shard) const {
 
 folly::SemiFuture<folly::Expected<SequencingState, Status>>
 MaintenanceManager::getSequencerTargetState(node_index_t node) {
-  auto [p, f] =
+  auto pf =
       folly::makePromiseContract<folly::Expected<SequencingState, Status>>();
-  add([this, node, mpromise = std::move(p)]() mutable {
+  add([this, node, mpromise = std::move(pf.first)]() mutable {
     mpromise.setValue(getSequencerTargetStateInternal(node));
   });
 
-  return std::move(f);
+  return std::move(pf.second);
 }
 
 folly::Expected<SequencingState, Status>
@@ -576,16 +576,18 @@ void MaintenanceManager::evaluate() {
 
   // Run Shard workflows
   status_ = MMStatus::RUNNING_WORKFLOWS;
-  auto [shards, shard_futures] = runShardWorkflows();
-  collectAllSemiFuture(shard_futures.begin(), shard_futures.end())
+  auto shards_futures = runShardWorkflows();
+  collectAllSemiFuture(
+      shards_futures.second.begin(), shards_futures.second.end())
       .via(this)
-      .thenValue([this, shards = std::move(shards)](
+      .thenValue([this, shards = std::move(shards_futures.first)](
                      std::vector<folly::Try<MaintenanceStatus>> result) {
         processShardWorkflowResult(shards, result);
-        auto [nodes, node_futures] = runSequencerWorkflows();
-        return collectAllSemiFuture(node_futures.begin(), node_futures.end())
+        auto nodes_futures = runSequencerWorkflows();
+        return collectAllSemiFuture(
+                   nodes_futures.second.begin(), nodes_futures.second.end())
             .via(this)
-            .thenValue([this, n = std::move(nodes)](
+            .thenValue([this, n = std::move(nodes_futures.first)](
                            std::vector<folly::Try<MaintenanceStatus>> result) {
               processSequencerWorkflowResult(n, std::move(result));
               return folly::makeSemiFuture<
@@ -903,10 +905,10 @@ membership::StateTransitionCondition MaintenanceManager::getCondition(
     membership::StorageStateTransition transition) {
   membership::StateTransitionCondition c;
   c = membership::required_conditions(transition);
-  auto [exists, state] =
-      nodes_config_->getStorageMembership()->getShardState(shard);
-  ld_check(exists);
-  if (state.metadata_state == membership::MetaDataStorageState::METADATA) {
+  auto result = nodes_config_->getStorageMembership()->getShardState(shard);
+  ld_check(result.first);
+  if (result.second.metadata_state ==
+      membership::MetaDataStorageState::METADATA) {
     c |= membership::Condition::METADATA_CAPACITY_CHECK;
   }
   return c;
@@ -939,11 +941,11 @@ folly::SemiFuture<SafetyCheckResult> MaintenanceManager::scheduleSafetyCheck() {
 
 folly::SemiFuture<MaintenanceManager::MMStatus>
 MaintenanceManager::getStatus() {
-  auto [p, f] = folly::makePromiseContract<MaintenanceManager::MMStatus>();
-  add([this, mpromise = std::move(p)]() mutable {
+  auto pf = folly::makePromiseContract<MaintenanceManager::MMStatus>();
+  add([this, mpromise = std::move(pf.first)]() mutable {
     mpromise.setValue(getStatusInternal());
   });
-  return std::move(f);
+  return std::move(pf.second);
 }
 
 MaintenanceManager::MMStatus MaintenanceManager::getStatusInternal() const {

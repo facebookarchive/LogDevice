@@ -10,6 +10,7 @@
 #include <folly/executors/CPUThreadPoolExecutor.h>
 
 #include "logdevice/admin/AdminServer.h"
+#include "logdevice/admin/maintenance/ClusterMaintenanceStateMachine.h"
 #include "logdevice/admin/settings/AdminServerSettings.h"
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/StatsCollectionThread.h"
@@ -64,13 +65,15 @@ class StandaloneAdminServer {
 
   UpdateableServerConfig::HookHandle server_config_subscription_;
 
-  std::unique_ptr<EventLogStateMachine> event_log_;
-
   std::unique_ptr<StatsHolder> stats_;
   std::unique_ptr<StatsCollectionThread> stats_thread_;
   std::unique_ptr<AdminServer> admin_server_;
+  std::unique_ptr<maintenance::ClusterMaintenanceStateMachine>
+      cluster_maintenance_state_machine_;
+  std::unique_ptr<maintenance::MaintenanceManager> maintenance_manager_;
   std::shared_ptr<ClientProcessor> processor_;
   std::shared_ptr<folly::CPUThreadPoolExecutor> cpu_executor_;
+  std::unique_ptr<EventLogStateMachine> event_log_;
   // After initializing all threads
   Semaphore main_thread_sem_;
   std::atomic<bool> shutdown_requested_{false};
@@ -84,6 +87,11 @@ class StandaloneAdminServer {
   void initClusterStateRefresher();
   void initAdminServer();
   void initEventLog();
+  void initMaintenanceManager();
+  void initClusterMaintenanceStateMachine();
+  // Creates maintenance manager if it is enabled in settings
+  // starts it on a random worker and sets a handle on AdminServer
+  void createAndAttachMaintenanceManager(AdminServer* server);
   // Gets called whenever ServerSettings is updated, this is also called on
   // startup to set the initial values supplied from the CLI.
   void onSettingsUpdate();

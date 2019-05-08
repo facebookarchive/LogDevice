@@ -60,22 +60,23 @@ SafetyCheckSchedulerMock::performSafetyCheck(
         const configuration::nodes::NodesConfiguration> /* unused */,
     ShardSet shards,
     SafetyCheckScheduler::NodeIndexSet sequencers) const {
-  auto [p, f] = folly::makePromiseContract<folly::Expected<Impact, Status>>();
+  auto promise_future_pair =
+      folly::makePromiseContract<folly::Expected<Impact, Status>>();
   for (const auto& it : shard_impacts) {
     if (it.disabled_shards == disabled_shards &&
         it.disabled_sequencers == disabled_sequencers && it.shards == shards &&
         it.sequencers == sequencers) {
       if (it.status == E::OK) {
-        p.setValue(it.impact);
+        promise_future_pair.first.setValue(it.impact);
       } else {
-        p.setValue(folly::makeUnexpected(it.status));
+        promise_future_pair.first.setValue(folly::makeUnexpected(it.status));
       }
     }
   }
-  if (!f.isReady()) {
+  if (!promise_future_pair.second.isReady()) {
     ld_assert(false);
   }
-  return std::move(f);
+  return std::move(promise_future_pair.second);
 }
 
 std::deque<std::pair<GroupID, SafetyCheckScheduler::ShardsAndSequencers>>
@@ -156,32 +157,33 @@ TEST(SafetyCheckerSchedulerTest, ShardPlanning1) {
   // G2 (N2:S0, N11:S0 -> DRAINED) + (N11 -> DISABLED)
   // G4 (N7 -> DISABLED)
   ASSERT_EQ(4, plan.size());
-  auto [group1, shards_and_sequencers1] = plan[0];
-  auto [shards1, sequencers1] = shards_and_sequencers1;
-  ASSERT_EQ("G1", group1);
-  ASSERT_EQ(ShardSet{{ShardID(1, 0)}}, shards1);
-  ASSERT_EQ(std::unordered_set<node_index_t>{1}, sequencers1);
+  auto group1 = plan[0];
+  auto shards1_sequencers1 = group1.second;
+  ASSERT_EQ("G1", group1.first);
+  ASSERT_EQ(ShardSet{{ShardID(1, 0)}}, shards1_sequencers1.first);
+  ASSERT_EQ(std::unordered_set<node_index_t>{1}, shards1_sequencers1.second);
 
   // G3 (N2:S0 -> DRAINED)
-  auto [group2, shards_and_sequencers2] = plan[1];
-  auto [shards2, sequencers2] = shards_and_sequencers2;
-  ASSERT_EQ("G3", group2);
-  ASSERT_EQ(ShardSet{{ShardID(2, 0)}}, shards2);
-  ASSERT_EQ(std::unordered_set<node_index_t>{}, sequencers2);
+  auto group2 = plan[1];
+  auto shards2_sequencers2 = group2.second;
+  ASSERT_EQ("G3", group2.first);
+  ASSERT_EQ(ShardSet{{ShardID(2, 0)}}, shards2_sequencers2.first);
+  ASSERT_EQ(std::unordered_set<node_index_t>{}, shards2_sequencers2.second);
 
   // G2 (N2:S0, N11:S0 -> DRAINED) + (N11 -> DISABLED)
-  auto [group3, shards_and_sequencers3] = plan[2];
-  auto [shards3, sequencers3] = shards_and_sequencers3;
-  ASSERT_EQ("G2", group3);
-  ASSERT_EQ(ShardSet({ShardID(2, 0), ShardID(11, 0)}), shards3);
-  ASSERT_EQ(std::unordered_set<node_index_t>{11}, sequencers3);
+  auto group3 = plan[2];
+  auto shards3_sequencers3 = group3.second;
+  ASSERT_EQ("G2", group3.first);
+  ASSERT_EQ(
+      ShardSet({ShardID(2, 0), ShardID(11, 0)}), shards3_sequencers3.first);
+  ASSERT_EQ(std::unordered_set<node_index_t>{11}, shards3_sequencers3.second);
 
   // G4 (N7 -> DISABLED)
-  auto [group4, shards_and_sequencers4] = plan[3];
-  auto [shards4, sequencers4] = shards_and_sequencers4;
-  ASSERT_EQ("G4", group4);
-  ASSERT_EQ(ShardSet(), shards4);
-  ASSERT_EQ(std::unordered_set<node_index_t>{7}, sequencers4);
+  auto group4 = plan[3];
+  auto shards4_sequencers4 = group4.second;
+  ASSERT_EQ("G4", group4.first);
+  ASSERT_EQ(ShardSet(), shards4_sequencers4.first);
+  ASSERT_EQ(std::unordered_set<node_index_t>{7}, shards4_sequencers4.second);
 }
 
 TEST(SafetyCheckerSchedulerTest, ShardPlanning2) {
@@ -232,18 +234,18 @@ TEST(SafetyCheckerSchedulerTest, ShardPlanning2) {
   // G1 (N1S0 -> MAY_DISAPPEAR) + (N1 -> DISABLED)
   // G2 () + (N11 -> DISABLED)
   ASSERT_EQ(2, plan.size());
-  auto [group1, shards_and_sequencers1] = plan[0];
-  auto [shards1, sequencers1] = shards_and_sequencers1;
-  ASSERT_EQ("G1", group1);
-  ASSERT_EQ(ShardSet{{ShardID(1, 0)}}, shards1);
-  ASSERT_EQ(std::unordered_set<node_index_t>{1}, sequencers1);
+  auto group1 = plan[0];
+  auto shards1_sequencers1 = group1.second;
+  ASSERT_EQ("G1", group1.first);
+  ASSERT_EQ(ShardSet{{ShardID(1, 0)}}, shards1_sequencers1.first);
+  ASSERT_EQ(std::unordered_set<node_index_t>{1}, shards1_sequencers1.second);
 
   // G2 () + (N11 -> DISABLED)
-  auto [group2, shards_and_sequencers2] = plan[1];
-  auto [shards2, sequencers2] = shards_and_sequencers2;
-  ASSERT_EQ("G2", group2);
-  ASSERT_EQ(ShardSet(), shards2);
-  ASSERT_EQ(std::unordered_set<node_index_t>{11}, sequencers2);
+  auto group2 = plan[1];
+  auto shards2_sequencers2 = group2.second;
+  ASSERT_EQ("G2", group2.first);
+  ASSERT_EQ(ShardSet(), shards2_sequencers2.first);
+  ASSERT_EQ(std::unordered_set<node_index_t>{11}, shards2_sequencers2.second);
 }
 
 TEST(SafetyCheckerSchedulerTest, EmptyPlanning) {

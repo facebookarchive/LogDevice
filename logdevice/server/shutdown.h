@@ -30,6 +30,10 @@ class SequencerPlacement;
 class UnreleasedRecordDetector;
 class Worker;
 
+namespace maintenance {
+class ClusterMaintenanceStateMachine;
+}
+
 /**
  * Function that orchestrates server shutdown. Performs the following sequence
  * of actions:
@@ -64,6 +68,8 @@ void shutdown_server(
     std::unique_ptr<EventLogStateMachine>& event_log,
     std::unique_ptr<RebuildingSupervisor>& rebuilding_supervisor,
     std::shared_ptr<UnreleasedRecordDetector>& unreleased_record_detector,
+    std::unique_ptr<maintenance::ClusterMaintenanceStateMachine>&
+        cluster_maintenance_state_machine,
     bool fast_shutdown);
 
 /**

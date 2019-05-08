@@ -241,6 +241,18 @@ class MaintenanceManager : public SerialWorkContext {
   // Useful for testing
   folly::SemiFuture<MMStatus> getStatus();
 
+  /**
+   * Returns the WorkerType that this state machine should be running on
+   */
+  static WorkerType workerType(Processor* processor) {
+    // This returns either WorkerType::BACKGROUND or WorkerType::GENERAL based
+    // on whether we have background workers.
+    if (processor->getWorkerCount(WorkerType::BACKGROUND) > 0) {
+      return WorkerType::BACKGROUND;
+    }
+    return WorkerType::GENERAL;
+  }
+
  protected:
   // Used only in tests
   ShardWorkflow* FOLLY_NULLABLE getActiveShardWorkflow(ShardID shard) const;

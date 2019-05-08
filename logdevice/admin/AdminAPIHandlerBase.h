@@ -20,11 +20,23 @@ class SettingsUpdater;
 class ShardedRocksDBLocalLogStore;
 class StatsHolder;
 
+namespace maintenance {
+class MaintenanceManager;
+}
+
 class AdminAPIHandlerBase : public virtual thrift::AdminAPISvIf {
  public:
   virtual void
   setShardedRocksDBStore(ShardedRocksDBLocalLogStore* sharded_store) {
     sharded_store_ = sharded_store;
+  }
+
+  virtual void setMaintenanceManager(maintenance::MaintenanceManager* mm) {
+    maintenance_manager_ = mm;
+  }
+
+  std::shared_ptr<SafetyChecker> getSafetyChecker() {
+    return safety_checker_;
   }
 
  protected:
@@ -46,5 +58,6 @@ class AdminAPIHandlerBase : public virtual thrift::AdminAPISvIf {
 
  public:
   ShardedRocksDBLocalLogStore* sharded_store_{nullptr};
+  maintenance::MaintenanceManager* maintenance_manager_{nullptr};
 };
 }} // namespace facebook::logdevice

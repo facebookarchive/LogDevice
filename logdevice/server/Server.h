@@ -48,6 +48,10 @@ class ShardedStorageThreadPool;
 class TraceLogger;
 class UnreleasedRecordDetector;
 
+namespace maintenance {
+class ClusterMaintenanceStateMachine;
+}
+
 /**
  * Command line options and configuration needed to run a server.
  * Can be shared between servers.
@@ -259,6 +263,9 @@ class Server {
 
   std::unique_ptr<EventLogStateMachine> event_log_;
 
+  std::unique_ptr<maintenance::ClusterMaintenanceStateMachine>
+      cluster_maintenance_state_machine_;
+
   // initUnreleasedRecordDetector()
   // only populated if this node is a storage node.
   std::shared_ptr<UnreleasedRecordDetector> unreleased_record_detector_;
@@ -290,6 +297,7 @@ class Server {
   bool initFailureDetector();
   bool initSequencerPlacement();
   bool initRebuildingCoordinator();
+  bool initClusterMaintenanceStateMachine();
   bool initUnreleasedRecordDetector();
   bool initLogsConfigManager();
   bool initSettingsSubscriber();

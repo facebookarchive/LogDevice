@@ -104,9 +104,9 @@ class MockMaintenanceManagerDependencies
           sequencers_update) override {
     test_->shards_update_ = std::move(shards_update);
     test_->sequencers_update_ = std::move(sequencers_update);
-    auto [p, f] = folly::makePromiseContract<NCUpdateResult>();
-    test_->nc_update_promise_ = std::move(p);
-    return std::move(f);
+    auto pf_pair = folly::makePromiseContract<NCUpdateResult>();
+    test_->nc_update_promise_ = std::move(pf_pair.first);
+    return std::move(pf_pair.second);
   }
 
   folly::SemiFuture<SafetyCheckResult> postSafetyCheckRequest(
@@ -122,9 +122,9 @@ class MockMaintenanceManagerDependencies
     for (auto wf : seq_wf) {
       test_->safety_check_nodes_.push_back(wf->getNodeIndex());
     }
-    auto [p, f] = folly::makePromiseContract<SafetyCheckResult>();
-    test_->safety_check_promise_ = std::move(p);
-    return std::move(f);
+    auto pf_pair = folly::makePromiseContract<SafetyCheckResult>();
+    test_->safety_check_promise_ = std::move(pf_pair.first);
+    return std::move(pf_pair.second);
   }
 
   std::shared_ptr<const configuration::nodes::NodesConfiguration>
@@ -383,10 +383,10 @@ void MaintenanceManagerTest::overrideStorageState(
 
   for (const auto& it : map) {
     auto shard = it.first;
-    auto [exists, shardState] =
-        nodes_config_->getStorageMembership()->getShardState(shard);
-    ld_check(exists);
+    auto result = nodes_config_->getStorageMembership()->getShardState(shard);
+    ld_check(result.first);
 
+    auto shardState = result.second;
     membership::ShardState::Update::StateOverride s;
     s.storage_state = it.second;
     s.flags = shardState.flags;

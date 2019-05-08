@@ -61,6 +61,22 @@ class ClusterMaintenanceStateMachine
 
   void snapshot(std::function<void(Status st)> cb);
 
+  /**
+   * Returns the WorkerType that this state machine should be running on
+   */
+  static WorkerType workerType(Processor* processor) {
+    // This returns either WorkerType::BACKGROUND or WorkerType::GENERAL based
+    // on whether we have background workers.
+    if (processor->getWorkerCount(WorkerType::BACKGROUND) > 0) {
+      return WorkerType::BACKGROUND;
+    }
+    return WorkerType::GENERAL;
+  }
+
+  static int getWorkerIndex(int nthreads) {
+    return configuration::InternalLogs::MAINTENANCE_LOG_DELTAS.val_ % nthreads;
+  }
+
  private:
   std::unique_ptr<ClusterMaintenanceState>
   makeDefaultState(lsn_t version) const override;
@@ -96,5 +112,27 @@ class ClusterMaintenanceStateMachine
 
   UpdateableSettings<AdminServerSettings> settings_;
 }; // ClusterMaintenanceStateMachine
+
+class StartClusterMaintenanceStateMachineRequest : public Request {
+ public:
+  explicit StartClusterMaintenanceStateMachineRequest(
+      ClusterMaintenanceStateMachine* sm,
+      WorkerType worker_type)
+      : Request(RequestType::START_CLUSTER_MAINTENANCE_STATE_MACHINE),
+        sm_(sm),
+        worker_type_(worker_type) {}
+
+  Execution execute() override;
+  int getThreadAffinity(int nthreads) override {
+    return ClusterMaintenanceStateMachine::getWorkerIndex(nthreads);
+  }
+  WorkerType getWorkerTypeAffinity() override {
+    return worker_type_;
+  }
+
+ private:
+  ClusterMaintenanceStateMachine* sm_;
+  WorkerType worker_type_;
+};
 
 }}} // namespace facebook::logdevice::maintenance

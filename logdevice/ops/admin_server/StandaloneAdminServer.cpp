@@ -13,6 +13,8 @@
 #include <folly/futures/Future.h>
 
 #include "logdevice/admin/SimpleAdminServer.h"
+#include "logdevice/admin/maintenance/ClusterMaintenanceStateMachine.h"
+#include "logdevice/admin/maintenance/MaintenanceManager.h"
 #include "logdevice/common/ConfigInit.h"
 #include "logdevice/common/NodesConfigurationInit.h"
 #include "logdevice/common/NodesConfigurationPublisher.h"
@@ -127,6 +129,7 @@ void StandaloneAdminServer::start() {
   initLogsConfigManager();
   initClusterStateRefresher();
   initEventLog();
+  initClusterMaintenanceStateMachine();
   initAdminServer();
 }
 
@@ -281,6 +284,7 @@ void StandaloneAdminServer::initAdminServer() {
                                                         stats_.get());
   }
   ld_check(admin_server_);
+  createAndAttachMaintenanceManager(admin_server_.get());
   admin_server_->start();
 }
 
@@ -311,6 +315,7 @@ void StandaloneAdminServer::initStatsCollection() {
 void StandaloneAdminServer::initEventLog() {
   event_log_ = std::make_unique<EventLogStateMachine>(settings_);
   event_log_->enableSendingUpdatesToWorkers();
+
   std::unique_ptr<Request> req =
       std::make_unique<StartEventLogStateMachineRequest>(event_log_.get(), 0);
 
@@ -320,6 +325,70 @@ void StandaloneAdminServer::initEventLog() {
              error_name(err),
              error_description(err));
     throw StandaloneAdminServerFailed();
+  }
+}
+
+void StandaloneAdminServer::initClusterMaintenanceStateMachine() {
+  if (admin_settings_->enable_cluster_maintenance_state_machine) {
+    cluster_maintenance_state_machine_ =
+        std::make_unique<maintenance::ClusterMaintenanceStateMachine>(
+            admin_settings_);
+
+    std::unique_ptr<Request> req = std::make_unique<
+        maintenance::StartClusterMaintenanceStateMachineRequest>(
+        cluster_maintenance_state_machine_.get(),
+        maintenance::ClusterMaintenanceStateMachine::workerType(
+            processor_.get()));
+
+    const int rv = processor_->postRequest(req);
+    if (rv != 0) {
+      ld_error("Cannot post request to start cluster maintenance state "
+               "machine: %s (%s)",
+               error_name(err),
+               error_description(err));
+      throw StandaloneAdminServerFailed();
+    }
+  }
+}
+
+void StandaloneAdminServer::createAndAttachMaintenanceManager(
+    AdminServer* admin_server) {
+  ld_check(admin_server);
+  ld_check(event_log_);
+
+  if (admin_settings_->enable_maintenance_manager &&
+      !admin_settings_->enable_cluster_maintenance_state_machine) {
+    ld_critical(
+        "Not initializing AdminAPI, since MaintenanceManager is enabled"
+        "in settings but ClusterMaintenanceStateMachine is not. "
+        "MaintenanceManager cannot run without ClusterMaintenanceStateMachine");
+    err = E::INVALID_PARAM;
+    throw StandaloneAdminServerFailed();
+  }
+
+  if (admin_settings_->enable_maintenance_manager) {
+    ld_check(cluster_maintenance_state_machine_);
+    auto deps = std::make_unique<maintenance::MaintenanceManagerDependencies>(
+        processor_.get(),
+        cluster_maintenance_state_machine_.get(),
+        event_log_.get(),
+        std::make_unique<maintenance::SafetyCheckScheduler>(
+            processor_.get(),
+            admin_settings_,
+            admin_server->getSafetyChecker()));
+    auto worker_idx = processor_->selectWorkerRandomly(
+        configuration::InternalLogs::MAINTENANCE_LOG_DELTAS.val_ /*seed*/,
+        maintenance::MaintenanceManager::workerType(processor_.get()));
+    auto& w = processor_->getWorker(
+        worker_idx,
+        maintenance::MaintenanceManager::workerType(processor_.get()));
+    maintenance_manager_ =
+        std::make_unique<maintenance::MaintenanceManager>(&w, std::move(deps));
+    admin_server->setMaintenanceManager(maintenance_manager_.get());
+    maintenance_manager_->start();
+  } else {
+    ld_info(
+        "Not initializing MaintenanceManager since it is disabled in settings");
   }
 }
 
@@ -334,6 +403,12 @@ void StandaloneAdminServer::shutdown() {
   if (admin_server_) {
     admin_server_->stop();
     ld_info("Admin API server stopped accepting requests");
+  }
+  if (maintenance_manager_) {
+    maintenance_manager_->stop();
+  }
+  if (cluster_maintenance_state_machine_) {
+    cluster_maintenance_state_machine_->stop();
   }
   if (processor_) {
     ld_info("Stopping accepting work on all workers.");
@@ -366,6 +441,9 @@ void StandaloneAdminServer::shutdown() {
 
     folly::collectAllSemiFuture(futures.begin(), futures.end()).get();
     ld_info("Workers finished all works.");
+
+    maintenance_manager_.reset();
+    cluster_maintenance_state_machine_.reset();
 
     ld_info("Stopping Processor");
     processor_->waitForWorkers();

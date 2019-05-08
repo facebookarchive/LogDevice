@@ -139,6 +139,10 @@ class UpdateableConfig;
 class WorkerImpl;
 class WorkerTimeoutStats;
 
+namespace maintenance {
+class ClusterMaintenanceStateMachine;
+}
+
 struct AppendRequestEpochMap;
 struct AppendRequestMap;
 struct AppenderMap;
@@ -510,6 +514,11 @@ class Worker : public EventLoop {
   // Owned by Server.
   RebuildingCoordinatorInterface* rebuilding_coordinator_{nullptr};
 
+  // Set on the worker running this state machine
+  // The object itself is owned by server
+  maintenance::ClusterMaintenanceStateMachine*
+      cluster_maintenance_state_machine_{nullptr};
+
   // A wrapper around ShardAuthoritativeStatusMap which maps a
   // (node_index_t, uint32_t) to a AuthoritativeStatus.
   // This map is used by Recovery and ClientReadStream state machines to adjust
@@ -660,6 +669,13 @@ class Worker : public EventLoop {
    */
   void setRebuildingCoordinator(
       RebuildingCoordinatorInterface* rebuilding_coordinator);
+
+  /**
+   * Register ClusterMaintenanceStateMachine to the worker thread on which
+   * it runs.
+   */
+  void setClusterMaintenanceStateMachine(
+      maintenance::ClusterMaintenanceStateMachine* sm);
 
   // The currently running request / message callback
   RunContext currentlyRunning_;

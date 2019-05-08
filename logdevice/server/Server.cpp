@@ -8,6 +8,7 @@
 #include "logdevice/server/Server.h"
 
 #include "logdevice/admin/SimpleAdminServer.h"
+#include "logdevice/admin/maintenance/ClusterMaintenanceStateMachine.h"
 #include "logdevice/common/ConfigInit.h"
 #include "logdevice/common/ConstructorFailed.h"
 #include "logdevice/common/CopySetManager.h"
@@ -452,9 +453,9 @@ Server::Server(ServerParameters* params, std::function<void()> stop_handler)
   if (!(initListeners() && initStore() && initProcessor() &&
         repopulateRecordCaches() && initSequencers() && initFailureDetector() &&
         initSequencerPlacement() && initRebuildingCoordinator() &&
-        initLogStoreMonitor() && initUnreleasedRecordDetector() &&
-        initLogsConfigManager() && initSettingsSubscriber() &&
-        initAdminServer())) {
+        initClusterMaintenanceStateMachine() && initLogStoreMonitor() &&
+        initUnreleasedRecordDetector() && initLogsConfigManager() &&
+        initSettingsSubscriber() && initAdminServer())) {
     _exit(EXIT_FAILURE);
   }
 }
@@ -943,6 +944,38 @@ bool Server::initRebuildingCoordinator() {
   return true;
 }
 
+bool Server::initClusterMaintenanceStateMachine() {
+  if (params_->getAdminServerSettings()
+          ->enable_cluster_maintenance_state_machine) {
+    if (!params_->getAdminServerSettings()->enable_maintenance_manager) {
+      ld_critical(
+          "ClusterMaintenanceManager is enabled while MaintenanceManager"
+          "is disabled in settings. Please ensure MaintenanceManager is enabled"
+          "for this cluster");
+    }
+    cluster_maintenance_state_machine_ =
+        std::make_unique<maintenance::ClusterMaintenanceStateMachine>(
+            params_->getAdminServerSettings());
+
+    std::unique_ptr<Request> req = std::make_unique<
+        maintenance::StartClusterMaintenanceStateMachineRequest>(
+        cluster_maintenance_state_machine_.get(),
+        maintenance::ClusterMaintenanceStateMachine::workerType(
+            processor_.get()));
+
+    const int rv = processor_->postRequest(req);
+    if (rv != 0) {
+      ld_error("Cannot post request to start cluster maintenance state "
+               "machine: %s (%s)",
+               error_name(err),
+               error_description(err));
+      ld_check(false);
+      return false;
+    }
+  }
+  return true;
+}
+
 bool Server::initFailureDetector() {
   if (params_->getGossipSettings()->enabled) {
     try {
@@ -1090,6 +1123,7 @@ void Server::gracefulShutdown() {
                   event_log_,
                   rebuilding_supervisor_,
                   unreleased_record_detector_,
+                  cluster_maintenance_state_machine_,
                   params_->isFastShutdownEnabled());
 }
 

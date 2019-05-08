@@ -31,9 +31,9 @@ SafetyCheckScheduler::schedule(
     ld_warning(
         "We are producing an empty safety-check execution plan. This should "
         "only happen if the maintenance workflows supplied are empty!");
-    auto [p, f] = folly::makePromiseContract<folly::Expected<Result, Status>>();
-    p.setValue(folly::makeUnexpected(E::INVALID_PARAM));
-    return std::move(f);
+    auto pf = folly::makePromiseContract<folly::Expected<Result, Status>>();
+    pf.first.setValue(folly::makeUnexpected(E::INVALID_PARAM));
+    return std::move(pf.second);
   }
   // Execute Progressively.
   ExecutionState state;
@@ -51,13 +51,13 @@ SafetyCheckScheduler::executePlan(
   updateResult(state);
 
   if (state.plan.size() == 0) {
-    auto [p, f] = folly::makePromiseContract<folly::Expected<Result, Status>>();
-    p.setValue(std::move(state.result));
-    return std::move(f);
+    auto pf = folly::makePromiseContract<folly::Expected<Result, Status>>();
+    pf.first.setValue(std::move(state.result));
+    return std::move(pf.second);
   }
 
-  auto [group_id, shards_and_sequencers] = state.plan.front();
-  auto [shards_to_check, sequencers_to_check] = shards_and_sequencers;
+  auto group = state.plan.front();
+  auto shards_sequencers_to_check = group.second;
   // remove it from the plan.
   state.plan.pop_front();
   // We have a plan to execute.
@@ -67,8 +67,8 @@ SafetyCheckScheduler::executePlan(
                          state.result.safe_sequencers,
                          status_map,
                          nodes_config,
-                         shards_to_check,
-                         sequencers_to_check);
+                         shards_sequencers_to_check.first,
+                         shards_sequencers_to_check.second);
 
   folly::SemiFuture<folly::Expected<Result, Status>> result_fut =
       std::move(safety_future)
@@ -81,9 +81,11 @@ SafetyCheckScheduler::executePlan(
                       status_map{std::move(status_map)},
                       nodes_config{std::move(nodes_config)},
                       state{std::move(state)},
-                      group_id{std::move(group_id)},
-                      sequencers_to_check{std::move(sequencers_to_check)},
-                      shards_to_check{std::move(shards_to_check)}](
+                      group_id{std::move(group.first)},
+                      sequencers_to_check{
+                          std::move(shards_sequencers_to_check.second)},
+                      shards_to_check{
+                          std::move(shards_sequencers_to_check.first)}](
                          folly::Expected<Impact, Status>
                              expected_impact) mutable {
             if (expected_impact.hasValue()) {
@@ -98,10 +100,10 @@ SafetyCheckScheduler::executePlan(
             }
             // We don't want to continue execution if safety checker is
             // failing. Instead, we fail the entire execution stack.
-            auto [p, f] =
+            auto pf =
                 folly::makePromiseContract<folly::Expected<Result, Status>>();
-            p.setValue(folly::makeUnexpected(expected_impact.error()));
-            return std::move(f);
+            pf.first.setValue(folly::makeUnexpected(expected_impact.error()));
+            return std::move(pf.second);
           });
   return result_fut;
 }
@@ -141,18 +143,6 @@ SafetyCheckScheduler::performSafetyCheck(
   ld_assert(nodes_config != nullptr);
   ld_assert(processor_);
   ld_assert(safety_checker_);
-
-  auto [promise, future] =
-      folly::makePromiseContract<folly::Expected<Impact, Status>>();
-
-  // The request callback fulfills the promise.
-  auto cb = [p = std::move(promise)](Status status, Impact impact) mutable {
-    if (status != E::OK) {
-      p.setValue(folly::makeUnexpected(status));
-    } else {
-      p.setValue(std::move(impact));
-    }
-  };
 
   ld_info("Performing safety check for disabling shards %s while assuming that "
           "%s are already disabled",

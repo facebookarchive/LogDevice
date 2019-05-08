@@ -9,6 +9,7 @@
 #include "logdevice/server/test/TestUtil.h"
 
 #include "logdevice/admin/AdminServer.h"
+#include "logdevice/admin/maintenance/ClusterMaintenanceStateMachine.h"
 #include "logdevice/admin/settings/AdminServerSettings.h"
 #include "logdevice/common/EventLoopHandle.h"
 #include "logdevice/common/NoopTraceLogger.h"
@@ -102,6 +103,8 @@ void shutdown_test_server(std::shared_ptr<ServerProcessor>& processor) {
   std::unique_ptr<EventLogStateMachine> event_log;
   std::unique_ptr<RebuildingSupervisor> rebuilding_supervisor;
   std::shared_ptr<UnreleasedRecordDetector> unreleased_record_detector;
+  std::unique_ptr<maintenance::ClusterMaintenanceStateMachine>
+      cluster_maintenance_state_machine;
 
   shutdown_server(admin_handle,
                   connection_listener,
@@ -117,6 +120,7 @@ void shutdown_test_server(std::shared_ptr<ServerProcessor>& processor) {
                   event_log,
                   rebuilding_supervisor,
                   unreleased_record_detector,
+                  cluster_maintenance_state_machine,
                   false);
 }
 }} // namespace facebook::logdevice

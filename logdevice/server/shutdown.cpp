@@ -14,6 +14,7 @@
 #include <thread>
 
 #include "logdevice/admin/AdminServer.h"
+#include "logdevice/admin/maintenance/ClusterMaintenanceStateMachine.h"
 #include "logdevice/common/EventLoopHandle.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Request.h"
@@ -143,6 +144,8 @@ void shutdown_server(
     std::unique_ptr<EventLogStateMachine>& event_log,
     std::unique_ptr<RebuildingSupervisor>& rebuilding_supervisor,
     std::shared_ptr<UnreleasedRecordDetector>& unreleased_record_detector,
+    std::unique_ptr<maintenance::ClusterMaintenanceStateMachine>&
+        cluster_maintenance_state_machine,
     bool fast_shutdown) {
   auto t1 = steady_clock::now();
 
@@ -174,6 +177,10 @@ void shutdown_server(
   if (rebuilding_supervisor) {
     // stop rebuilding supervisor (destruction is below)
     rebuilding_supervisor->stop();
+  }
+
+  if (cluster_maintenance_state_machine) {
+    cluster_maintenance_state_machine->stop();
   }
 
   // stop accepting new connections
@@ -346,6 +353,10 @@ void shutdown_server(
   if (rebuilding_supervisor) {
     ld_info("Destroying rebuilding supervisor");
     rebuilding_supervisor.reset();
+  }
+  if (cluster_maintenance_state_machine) {
+    ld_info("Destroying ClusterMaintenanceStateMachine");
+    cluster_maintenance_state_machine.reset();
   }
   if (sequencer_placement) {
     ld_info("Destroying sequencer placement");
