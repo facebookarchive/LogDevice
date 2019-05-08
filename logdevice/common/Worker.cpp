@@ -559,8 +559,9 @@ void Worker::finishWorkAndCloseSockets() {
     rebuilding_coordinator_->shutdown();
   }
 
-  if (event_log_) {
+  if (event_log_ && !event_log_stopped_) {
     event_log_->stop();
+    event_log_stopped_ = true;
   }
 
   if (logsconfig_manager_) {

@@ -879,6 +879,10 @@ class Worker : public EventLoop {
   // Used to return NOBUFS when count goes above worker_request_pipe_capacity.
   std::atomic<size_t> num_requests_enqueued_{0};
 
+  // Stop on EventLogStateMachine should only be called once.
+  // Set to true once stop has been called
+  bool event_log_stopped_{false};
+
   // These task queues are used to hold work posted to the worker till the
   // worker gets a chance to run on the executor. When a request or any type of
   // work is posted to worker. Based on the priority of the posted work , it is
