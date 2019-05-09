@@ -44,7 +44,7 @@ class InfoRecordStorageTask : public StorageTask {
                                  lsn_t lsn_end,
                                  size_t payload_max_len,
                                  Semaphore& sem,
-                                 folly::Synchronized<EvbufferTextOutput*> out,
+                                 folly::Synchronized<EvbufferTextOutput*>& out,
                                  InfoRecordTable& table,
                                  bool print_table,
                                  size_t max_records,
@@ -191,7 +191,7 @@ class InfoRecordStorageTask : public StorageTask {
   const lsn_t lsn_start_, lsn_end_;
   const size_t payload_max_len_, max_records_;
   Semaphore& sem_;
-  folly::Synchronized<EvbufferTextOutput*> out_;
+  folly::Synchronized<EvbufferTextOutput*>& out_;
   InfoRecordTable& table_;
   const bool print_table_;
   const bool csi_only_;
@@ -204,7 +204,7 @@ class InfoRecordRequest : public Request {
                              lsn_t lsn_end,
                              size_t payload_max_len,
                              Semaphore& sem,
-                             folly::Synchronized<EvbufferTextOutput*> out,
+                             folly::Synchronized<EvbufferTextOutput*>& out,
                              InfoRecordTable& table,
                              bool print_table,
                              size_t max_records,
@@ -250,7 +250,7 @@ class InfoRecordRequest : public Request {
   const lsn_t lsn_start_, lsn_end_;
   const size_t payload_max_len_, max_records_;
   Semaphore& sem_;
-  folly::Synchronized<EvbufferTextOutput*> out_;
+  folly::Synchronized<EvbufferTextOutput*>& out_;
   InfoRecordTable& table_;
   const bool print_table_;
   const bool csi_only_;
@@ -369,7 +369,7 @@ class InfoRecord : public AdminCommand {
                                             max_records_,
                                             csi_only_);
     if (server_->getProcessor()->postRequest(req) != 0) {
-      (*out_ptr.wlock())->printf("Error: cannot post request on worker\r\n");
+      out_.printf("Error: cannot post request on worker\r\n");
       return;
     }
 
