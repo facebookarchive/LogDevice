@@ -194,7 +194,9 @@ void Processor::init() {
   // workers since some of the timers in the worker (NodeStatsController) will
   // try to read it soon enough, we don't want to have a time race.
   cluster_state_ = std::make_unique<ClusterState>(
-      config->serverConfig()->getMaxNodeIdx() + 1, this);
+      config->serverConfig()->getMaxNodeIdx() + 1,
+      this,
+      *getNodesConfiguration()->getServiceDiscovery());
 
   for (int i = 0; i < numOfWorkerTypes(); i++) {
     WorkerType worker_type = workerTypeByIndex(i);

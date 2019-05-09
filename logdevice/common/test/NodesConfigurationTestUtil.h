@@ -34,6 +34,9 @@ genDiscovery(node_index_t n,
              std::string location);
 
 configuration::nodes::NodesConfiguration::Update
+initialProvisionUpdate(std::vector<node_index_t> node_idxs);
+
+configuration::nodes::NodesConfiguration::Update
 initialProvisionUpdate(std::vector<NodeTemplate> nodes,
                        ReplicationProperty metadata_rep = ReplicationProperty{
                            {NodeLocationScope::NODE, 2}});

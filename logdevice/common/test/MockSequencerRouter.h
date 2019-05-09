@@ -22,10 +22,41 @@ namespace facebook { namespace logdevice {
 class MockClusterState : public ClusterState {
  public:
   explicit MockClusterState(size_t max_nodes)
-      : ClusterState(max_nodes, nullptr) {}
+      : ClusterState(max_nodes,
+                     /*processor=*/nullptr,
+                     /*nconfig=*/createConfigFor(max_nodes)) {}
 
   // override this method to do nothing
   void refreshClusterStateAsync() override {}
+
+ protected:
+  static configuration::nodes::ServiceDiscoveryConfig
+  createConfigFor(size_t nnodes) {
+    using configuration::nodes::NodeServiceDiscovery;
+    using configuration::nodes::ServiceDiscoveryConfig;
+    constexpr NodeServiceDiscovery::RoleSet both_roles{3};
+    ServiceDiscoveryConfig sdconfig;
+
+    ServiceDiscoveryConfig::Update update;
+    for (node_index_t nid = 0; nid < nnodes; nid++) {
+      using NodeUpdate = ServiceDiscoveryConfig::NodeUpdate;
+      auto url = folly::sformat("127.0.0.{}", nid);
+      auto hostname = folly::sformat("host{}", nid);
+      auto nsd = std::make_unique<NodeServiceDiscovery>(
+          NodeServiceDiscovery{Sockaddr(url, 4440),
+                               Sockaddr(url, 4441),
+                               /*ssl_address=*/folly::none,
+                               /*location=*/folly::none,
+                               both_roles,
+                               hostname});
+      NodeUpdate nup{
+          ServiceDiscoveryConfig::UpdateType::PROVISION, std::move(nsd)};
+      update.addNode(nid, std::move(nup));
+    }
+    ServiceDiscoveryConfig sdconfig2;
+    sdconfig.applyUpdate(update, &sdconfig2);
+    return sdconfig2;
+  }
 };
 
 class MockSequencerRouter : public SequencerRouter {

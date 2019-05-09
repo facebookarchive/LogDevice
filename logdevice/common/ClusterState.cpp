@@ -108,15 +108,26 @@ void ClusterState::setBoycottedNodes(std::vector<node_index_t> boycotts) {
 
 node_index_t ClusterState::getFirstNodeAlive() const {
   folly::SharedMutex::ReadHolder read_lock(mutex_);
+  folly::Optional<node_index_t> first_node;
 
   for (node_index_t nid = 0; nid < cluster_size_; nid++) {
-    if (isNodeAlive(nid)) {
-      return nid;
+    if (isNodeInConfig(nid)) {
+      if (isNodeAlive(nid)) {
+        return nid;
+      } else if (!first_node.hasValue()) {
+        first_node = nid;
+      }
     }
   }
 
-  // If all nodes are seen as dead, return node 0.
-  return 0;
+  if (!first_node.hasValue()) {
+    RATELIMIT_WARNING(
+        std::chrono::seconds{5}, 1, "No node in service discovery config.");
+    first_node = 0;
+  }
+
+  // If all nodes are seen as dead, return first node.
+  return first_node.value();
 }
 
 void ClusterState::postUpdateToWorkers(node_index_t node_id, NodeState state) {
@@ -247,6 +258,16 @@ void ClusterState::resizeClusterState(size_t new_size, bool notifySubscribers) {
   }
 }
 
+void ClusterState::updateNodesInConfig(
+    const configuration::nodes::ServiceDiscoveryConfig& sd_config) {
+  folly::SharedMutex::WriteHolder write_lock(mutex_);
+
+  nodes_in_config_.clear();
+  for (auto& node : sd_config) {
+    nodes_in_config_.insert(node.first);
+  }
+}
+
 void ClusterState::noteConfigurationChanged() {
   const auto& nodes_configuration =
       Worker::onThisThread()->getNodesConfiguration();
@@ -255,6 +276,7 @@ void ClusterState::noteConfigurationChanged() {
   if (getClusterSize() != new_size) {
     resizeClusterState(new_size, true);
   }
+  updateNodesInConfig(*nodes_configuration->getServiceDiscovery());
 }
 
 void ClusterState::refreshClusterStateAsync() {

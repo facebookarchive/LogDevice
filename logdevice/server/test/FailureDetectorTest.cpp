@@ -53,7 +53,11 @@ class MockFailureDetector : public FailureDetector {
                                ServerProcessor* p)
       : FailureDetector(std::move(settings), p),
         config_(p->config_->get()->serverConfig()),
-        cluster_state_(new ClusterState(1000, nullptr)) {}
+        cluster_state_(new ClusterState(
+            1000,
+            nullptr,
+            *config_->getNodesConfigurationFromServerConfigSource()
+                 ->getServiceDiscovery())) {}
 
   // simulate passing of time
   void advanceTime() {

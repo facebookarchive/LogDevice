@@ -142,6 +142,17 @@ std::shared_ptr<const configuration::nodes::NodesConfiguration> provisionNodes(
   return new_config;
 }
 
+NodesConfiguration::Update
+initialProvisionUpdate(std::vector<node_index_t> node_idxs) {
+  std::vector<NodeTemplate> nodes;
+  for (auto nid : node_idxs) {
+    nodes.push_back(
+        {nid, both_role, "aa.bb.cc.dd.ee", 1.0, /* num_shard=*/1, false});
+  }
+  return initialProvisionUpdate(
+      std::move(nodes), ReplicationProperty{{NodeLocationScope::RACK, 2}});
+}
+
 NodesConfiguration::Update initialProvisionUpdate() {
   std::vector<NodeTemplate> nodes;
   std::map<node_index_t, RoleSet> role_map = {{1, both_role},

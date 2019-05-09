@@ -12,12 +12,15 @@
 #include <condition_variable>
 #include <list>
 #include <memory>
+#include <numeric>
+#include <set>
 #include <vector>
 
 #include <folly/SharedMutex.h>
 
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/UpdateableSharedPtr.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Err.h"
 
@@ -78,13 +81,21 @@ class ClusterState {
     return "UNKNOWN";
   }
 
-  explicit ClusterState(size_t cluster_size, Processor* processor)
+  explicit ClusterState(
+      size_t cluster_size,
+      Processor* processor,
+      const configuration::nodes::ServiceDiscoveryConfig& sd_config)
       : processor_(processor) {
     resizeClusterState(cluster_size, false);
-    last_refresh_.store(std::chrono::steady_clock::duration::zero());
+    updateNodesInConfig(sd_config);
   }
 
   virtual ~ClusterState() {}
+
+  inline bool isNodeInConfig(node_index_t idx) const {
+    folly::SharedMutex::ReadHolder read_lock(mutex_);
+    return nodes_in_config_.count(idx) > 0;
+  }
 
   static inline bool isAliveState(NodeState state) {
     return state == NodeState::FULLY_STARTED || state == NodeState::STARTING;
@@ -138,6 +149,7 @@ class ClusterState {
                              std::vector<node_index_t> boycotted_nodes);
 
   void noteConfigurationChanged();
+  void updateNodesInConfig(const configuration::nodes::ServiceDiscoveryConfig&);
 
   void shutdown() {
     folly::SharedMutex::WriteHolder write_lock(shutdown_mutex_);
@@ -177,8 +189,10 @@ class ClusterState {
 
   folly::SharedMutex mutex_;
   std::unique_ptr<std::atomic<NodeState>[]> node_state_list_ { nullptr };
+  std::unordered_set<node_index_t> nodes_in_config_;
   size_t cluster_size_{0};
-  std::atomic<std::chrono::steady_clock::duration> last_refresh_;
+  std::atomic<std::chrono::steady_clock::duration> last_refresh_{
+      std::chrono::steady_clock::duration::zero()};
   std::atomic<bool> refresh_in_progress_{false};
   std::mutex cv_mutex_;
   std::condition_variable cv_;
