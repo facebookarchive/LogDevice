@@ -40,7 +40,9 @@ class LibEventTimerImpl : public TimerInterface, public LibeventTimer {
   }
 
   void setCallback(std::function<void()> callback) override {
-    LibeventTimer::setCallback(callback);
+    auto ev_loop = EventLoop::onThisThread();
+    ld_check(ev_loop);
+    LibeventTimer::assign(ev_loop->getEventBase(), callback);
   }
 
   bool isAssigned() const override {
@@ -189,8 +191,10 @@ Timer::Timer(std::function<void()> callback) {
 
 TimerInterface& Timer::getTimerImpl() const {
   if (!impl_) {
-    auto worker = Worker::onThisThread();
-    if (worker->updateable_settings_->enable_hh_wheel_backed_timers) {
+    // This is called from tests and ldbench workers. Caller cannot assume
+    // Worker interface to be available in those cases.
+    auto worker = Worker::onThisThread(false /* enforce_worker */);
+    if (worker && worker->updateable_settings_->enable_hh_wheel_backed_timers) {
       impl_ = std::make_unique<WheelTimerDispatchImpl>();
     } else {
       impl_ = std::make_unique<LibEventTimerImpl>();
