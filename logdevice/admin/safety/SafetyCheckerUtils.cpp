@@ -355,8 +355,7 @@ std::pair<bool, bool> checkReadWriteAvailablity(
   auto check_reads =
       [&](FailureDomainNodeSet<bool>& failure_domains) mutable -> bool {
     for (const ShardID& shard : storage_set) {
-      if (nodes_config->getStorageMembership()->shouldReadFromShard(shard) &&
-          !op_shards.count(shard) && isAlive(cluster_state, shard.node())) {
+      if (nodes_config->getStorageMembership()->shouldReadFromShard(shard)) {
         // We always set the authoritative status for all shards.
         AuthoritativeStatus status = shard_status.getShardStatus(shard);
         if (shard_status.shardIsTimeRangeRebuilding(
@@ -368,7 +367,9 @@ std::pair<bool, bool> checkReadWriteAvailablity(
           status = AuthoritativeStatus::UNAVAILABLE;
         }
         failure_domains.setShardAuthoritativeStatus(shard, status);
-        failure_domains.setShardAttribute(shard, true);
+        if (!op_shards.count(shard) && isAlive(cluster_state, shard.node())) {
+          failure_domains.setShardAttribute(shard, true);
+        }
       }
     }
     FmajorityResult health_state = failure_domains.isFmajority(true);
