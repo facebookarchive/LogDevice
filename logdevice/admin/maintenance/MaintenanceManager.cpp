@@ -588,8 +588,9 @@ void MaintenanceManager::evaluate() {
                    nodes_futures.second.begin(), nodes_futures.second.end())
             .via(this)
             .thenValue([this, n = std::move(nodes_futures.first)](
-                           std::vector<folly::Try<MaintenanceStatus>> result) {
-              processSequencerWorkflowResult(n, std::move(result));
+                           std::vector<folly::Try<MaintenanceStatus>>
+                               sequencerResult) {
+              processSequencerWorkflowResult(n, std::move(sequencerResult));
               return folly::makeSemiFuture<
                   folly::Expected<folly::Unit, Status>>(
                   folly::makeExpected<Status>(folly::Unit()));
