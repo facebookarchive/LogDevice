@@ -12,6 +12,7 @@ When a read stream is in SCD mode, each record in the log will be sent by only o
 In steady state (when there is no failover in place), the primary recipient is the first node in the record's copyset.
 
 DB content for node N0:
+```
 lsn: 42, copyset: [1, 0, 2, 3]
 lsn: 43, copyset: [3, 5, 0, 1]
 lsn: 44, copyset: [0, 1, 2, 3]
@@ -19,6 +20,7 @@ lsn: 45, copyset: [4, 0, 5, 2]
 lsn: 46, copyset: [0, 3, 2, 1]
 lsn: 47, copyset: [4, 3, 2, 5]
 lsn: 48, copyset: [1, 4, 0, 5]
+```
 Here N0 will only send {44, 46}.
 
 ## Failover mechanisms on clients
@@ -100,7 +102,10 @@ Appender's lifetime is divided into 3 stages:
 2. Sync-leader stage;
 3. Leader redundancy stage.
 
-Example candidate copyset: [3, 2, 1, 0, 4]. R = 3, X = 2
+Example candidate copyset: 
+```
+[3, 2, 1, 0, 4]. R = 3, X = 2
+```
 
 ### Replication stage
 
@@ -110,8 +115,10 @@ store the record, and they can be scattered in any order in the copyset. This st
 reply back to the client with an APPENDED message.
 
 Example: at the end of this stage, N2, N0 and N4 replied positively.
-    x     x  x
+```
+ x     x  x
 [3, 2, 1, 0, 4]
+```
 
 ### Sync-leader stage
 
@@ -123,8 +130,11 @@ If num-sync-leaders = 1, we must wait for N3 to store its copy before releasing 
 
 Example: during this stage, N3 responded positively. As a result, a DELETE will be sent to N4. It is now possible for
 readers to start reading this record.
+
+```
  x  x     x
 [3, 2, 1, 0, 4]
+```
 
 ### Leader redundancy stage
 
@@ -134,9 +144,10 @@ Appender should ensure have their copy before it completes its state machne. Thi
 If num-leaders = 3, we must wait for N3, N2, N1 to store their copy before Appender completes its state machine.
 
 Example: during this stage, N1 responded positively. As a result, a DELETE will be sent to N0.
+```
  x  x  x
 [3, 2, 1, 0, 4]
-
+```
 N3 will always ship the record in steady state. If N3 is down, N2 will take over. If both N3 and N2 are down, N1 will
 take over.
 
@@ -160,6 +171,7 @@ Example:
 Nodes N0, N1, and N2 are local
 
 DB content of N1:
+```
   lsn: 42, copyset: [1, 0, 2, 3], will be sent by N1
   lsn: 43, copyset: [3, 5, 0, 1], will be sent by N0
   lsn: 44, copyset: [0, 1, 2, 3], will be sent by N0
@@ -167,7 +179,7 @@ DB content of N1:
   lsn: 46, copyset: [0, 3, 2, 1], will be sent by N0
   lsn: 47, copyset: [4, 3, 2, 5], will be sent by N2
   lsn: 48, copyset: [1, 4, 0, 5], will be sent by N1
-
+```
 - If known_down = {N0}, N1 will send {42, 43, 44, 48}.
 - If known_down = {N0, N2}, N0 will send {42, 43, 44, 46, 48}.
 
