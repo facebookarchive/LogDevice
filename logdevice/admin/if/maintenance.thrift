@@ -147,7 +147,7 @@ struct MaintenanceDefinition {
  * A map for all maintenance definitions currently applied.
  */
 struct ClusterMaintenanceState {
-  1: list<MaintenanceDefinition> definitions,
+  1: list<MaintenanceDefinition> maintenances,
   2: common.unsigned64 version,
 }
 
@@ -166,47 +166,8 @@ struct MaintenanceDefinitionResponse {
 }
 
 /**
- * Defines which maintenances we are matching, typically used for removing
- * applied maintenances.
- */
-struct RemoveMaintenancesRequest {
-  /**
-   * This has to be supplied. If the user is not set, you will get an
-   * InvalidRequest exception.
-   */
-  1: string user,
-  /**
-   * The list of shards that we want to remove maintenances from. If empty, this
-   * filter will match all shards that has maintenances created by the user
-   * specified. If you want to remove a maintenance on all shards of a node,
-   * pass -1 to shard_index.
-   */
-  2: list<common.ShardID> shards,
-  /**
-   * The list of nodes we want to remove sequencer maintenance applied by this
-   * user.
-   */
-  3: list<common.NodeID> sequencers,
-  /**
-   * If set, the entire group will be removed regardless of the values in this
-   * object.
-   *
-   * May accept multiple groups. The user must match the creator of these
-   * maintenances.
-   */
-  4: list<common.MaintenanceGroupID> group_ids,
-  /**
-   * Optional: The reason of removing the maintenance, this is used for
-   * maintenance auditing and logging.
-   */
-  5: string reason,
-}
-
-/**
- * Left empty for future use.
- */
-struct RemoveMaintenancesResponse {}
-
+  * A matching filter object on one or more maintenances
+  */
 struct MaintenancesFilter {
   /**
    * If empty, will get all maintenances unless another filter is specified
@@ -216,6 +177,36 @@ struct MaintenancesFilter {
    * If set, gets maintenances created by this user
    */
   2: optional string user,
+}
+
+/**
+ * Defines which maintenances we are matching, Used for removing
+ * applied maintenances. This request works as a search filter to decide which
+ * maintenance are going to be removed. The different values set in this request
+ * will further narrow the match.
+ */
+struct RemoveMaintenancesRequest {
+  // Maintenances matching this filter will be removed. You cannot supply an
+  // empty filter (throws InvalidRequest).
+  1: MaintenancesFilter filter,
+  /**
+   * Optional: The user doing the removal operation, this is used for
+   * maintenance auditing and logging.
+   */
+  2: string user,
+  /**
+   * Optional: The reason of removing the maintenance, this is used for
+   * maintenance auditing and logging.
+   */
+  3: string reason,
+}
+
+/**
+ * Left empty for future use.
+ */
+struct RemoveMaintenancesResponse {
+  // The list of maintenances removed successfully.
+  1: list<MaintenanceDefinition> maintenances,
 }
 
 /**
