@@ -32,7 +32,7 @@ void ClusterMaintenanceWrapper::clear() {
 void ClusterMaintenanceWrapper::indexDefinitions() {
   ld_assert(nodes_config_ != nullptr);
   ld_assert(state_);
-  for (const auto& definition : state_->get_definitions()) {
+  for (const auto& definition : state_->get_maintenances()) {
     // At this point we assume that all definitions are legal, they have been
     // validated by the RSM and the Admin API layer.
     //

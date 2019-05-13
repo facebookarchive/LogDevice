@@ -94,7 +94,7 @@ std::unique_ptr<thrift::ClusterMaintenanceState> genMaintenanceState() {
   def4.set_group_id("G4");
   definitions.push_back(std::move(def4));
 
-  output->set_definitions(std::move(definitions));
+  output->set_maintenances(std::move(definitions));
   return output;
 }
 

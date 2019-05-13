@@ -56,7 +56,7 @@ MaintenanceDefinition genDefinition() {
 
 TEST(ClusterMaintenanceStateCodecTest, StateSerialization) {
   auto cluster_state = std::make_unique<thrift::ClusterMaintenanceState>();
-  cluster_state->set_definitions({genDefinition()});
+  cluster_state->set_maintenances({genDefinition()});
   cluster_state->set_version(222);
 
   std::string payload =
@@ -68,7 +68,7 @@ TEST(ClusterMaintenanceStateCodecTest, StateSerialization) {
   ASSERT_NE(nullptr, restored);
   ASSERT_EQ(222, restored->get_version());
 
-  ASSERT_EQ(1, restored->get_definitions().size());
+  ASSERT_EQ(1, restored->get_maintenances().size());
 }
 
 TEST(ClusterMaintenanceStateCodecTest, BadDeserialize) {

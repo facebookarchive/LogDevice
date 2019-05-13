@@ -112,7 +112,7 @@ TEST(ClusterMaintenanceWrapperTest, ShardDefinitions) {
   def4.set_allow_passive_drains(true);
   definitions.push_back(def4);
 
-  cluster_state->set_definitions(std::move(definitions));
+  cluster_state->set_maintenances(std::move(definitions));
 
   ClusterMaintenanceWrapper wrapper{std::move(cluster_state), config};
 
@@ -229,7 +229,7 @@ TEST(ClusterMaintenanceWrapperTest, SequencerDefinitions) {
   def2.set_skip_safety_checks(true);
   definitions.push_back(def2);
 
-  cluster_state->set_definitions(std::move(definitions));
+  cluster_state->set_maintenances(std::move(definitions));
 
   ClusterMaintenanceWrapper wrapper{std::move(cluster_state), config};
 

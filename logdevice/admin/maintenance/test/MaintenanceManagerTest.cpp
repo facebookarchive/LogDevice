@@ -245,7 +245,7 @@ void MaintenanceManagerTest::init() {
   def4.set_allow_passive_drains(true);
   definitions.push_back(def4);
 
-  cms_.set_definitions(std::move(definitions));
+  cms_.set_maintenances(std::move(definitions));
   set_ = EventLogRebuildingSet();
   deps_ = std::make_unique<MockMaintenanceManagerDependencies>(this);
 
