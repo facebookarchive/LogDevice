@@ -9,8 +9,8 @@ sidebar_label: Settings
 |-----------|-----------------|:---------:|-----------|
 | admin-port | TCP port on which the server listens to for admin commands, supports commands over SSL | 6440 | requires&nbsp;restart, server&nbsp;only |
 | admin-unix-socket | Path to the unix domain socket the server will use to listen for admin thrift interface |  | requires&nbsp;restart, server&nbsp;only |
-| enable-cluster-maintenance-state-machine | Enable ClusterMaintenanceStateMachine that maintains the ClusterMaintenanceState.ClusterMaintenanceState contains all the MaintenanceDefinitions received from internal and external maintenance requests. Enabling the state machine will alsoenable posting internal maintenance requests instead of writing to event log directly | false | requires&nbsp;restart, server&nbsp;only |
-| enable-maintenance-manager | Start Maintenance Manager | false | requires&nbsp;restart, server&nbsp;only |
+| enable-cluster-maintenance-state-machine | Enables the internal state replicated state machine that holds the maintenance definitions requested by the rebuilding supervisor or via the  admin API. Enabling the state machine will also enable posting internal maintenance requests instead of writing to event log directly | false | requires&nbsp;restart, server&nbsp;only |
+| enable-maintenance-manager | Start Maintenance Manager. This will automatically enable the maintenance state machine as well (--enable-cluster-maintenance-state-machine). | false | requires&nbsp;restart, server&nbsp;only |
 | enable-safety-check-periodic-metadata-update | Safety check to update its metadata cache periodically | false | server&nbsp;only |
 | maintenance-log-snapshotting | Allow the maintenance log to be snapshotted onto a snapshot log. This requires the maintenance log group to contain two logs, the first one being the snapshot log and the second one being the delta log. | false | server&nbsp;only |
 | maintenance-log-snapshotting-period | Controls time based snapshotting. New maintenancelog snapshot will be created after this period if there are new deltas | 1h | server&nbsp;only |

@@ -955,7 +955,7 @@ bool Server::initClusterMaintenanceStateMachine() {
       ld_critical(
           "ClusterMaintenanceManager is enabled while MaintenanceManager"
           "is disabled in settings. Please ensure MaintenanceManager is enabled"
-          "for this cluster");
+          " for this cluster");
     }
     cluster_maintenance_state_machine_ =
         std::make_unique<maintenance::ClusterMaintenanceStateMachine>(

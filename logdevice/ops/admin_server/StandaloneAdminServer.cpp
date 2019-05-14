@@ -329,7 +329,8 @@ void StandaloneAdminServer::initEventLog() {
 }
 
 void StandaloneAdminServer::initClusterMaintenanceStateMachine() {
-  if (admin_settings_->enable_cluster_maintenance_state_machine) {
+  if (admin_settings_->enable_cluster_maintenance_state_machine ||
+      admin_settings_->enable_maintenance_manager) {
     cluster_maintenance_state_machine_ =
         std::make_unique<maintenance::ClusterMaintenanceStateMachine>(
             admin_settings_);
@@ -355,16 +356,6 @@ void StandaloneAdminServer::createAndAttachMaintenanceManager(
     AdminServer* admin_server) {
   ld_check(admin_server);
   ld_check(event_log_);
-
-  if (admin_settings_->enable_maintenance_manager &&
-      !admin_settings_->enable_cluster_maintenance_state_machine) {
-    ld_critical(
-        "Not initializing AdminAPI, since MaintenanceManager is enabled"
-        "in settings but ClusterMaintenanceStateMachine is not. "
-        "MaintenanceManager cannot run without ClusterMaintenanceStateMachine");
-    err = E::INVALID_PARAM;
-    throw StandaloneAdminServerFailed();
-  }
 
   if (admin_settings_->enable_maintenance_manager) {
     ld_check(cluster_maintenance_state_machine_);
@@ -442,10 +433,11 @@ void StandaloneAdminServer::shutdown() {
     folly::collectAllSemiFuture(futures.begin(), futures.end()).get();
     ld_info("Workers finished all works.");
 
-    maintenance_manager_.reset();
     // Prevent the admin server from holding a dangling pointer to the
     // maintenance manager
     admin_server_->setMaintenanceManager(nullptr);
+
+    maintenance_manager_.reset();
     cluster_maintenance_state_machine_.reset();
 
     ld_info("Stopping Processor");

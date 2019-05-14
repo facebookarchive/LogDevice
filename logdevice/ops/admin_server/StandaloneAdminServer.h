@@ -10,7 +10,6 @@
 #include <folly/executors/CPUThreadPoolExecutor.h>
 
 #include "logdevice/admin/AdminServer.h"
-#include "logdevice/admin/maintenance/ClusterMaintenanceStateMachine.h"
 #include "logdevice/admin/settings/AdminServerSettings.h"
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/StatsCollectionThread.h"
@@ -29,6 +28,11 @@
 namespace facebook { namespace logdevice {
 class ClientImpl;
 class SettingsUpdater;
+
+namespace maintenance {
+class MaintenanceManager;
+class ClusterMaintenanceStateMachine;
+} // namespace maintenance
 
 namespace admin {
 

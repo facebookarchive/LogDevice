@@ -76,11 +76,10 @@ void AdminServerSettings::defineSettings(SettingEasyInit& init) {
      &enable_cluster_maintenance_state_machine,
      "false",
      nullptr,
-     "Enable ClusterMaintenanceStateMachine that maintains the ClusterMaintenanceState."
-     "ClusterMaintenanceState contains all the MaintenanceDefinitions received from "
-     "internal and external maintenance requests. Enabling the state machine will also"
-     "enable posting internal maintenance requests instead of writing to event "
-     "log directly",
+     "Enables the internal state replicated state machine that holds the "
+     "maintenance definitions requested by the rebuilding supervisor or via the "
+     " admin API. Enabling the state machine will also enable posting internal "
+     "maintenance requests instead of writing to event log directly",
      SERVER | REQUIRES_RESTART,
      SettingsCategory::AdminAPI)
 
@@ -113,7 +112,8 @@ void AdminServerSettings::defineSettings(SettingEasyInit& init) {
      &enable_maintenance_manager,
      "false",
      nullptr,
-     "Start Maintenance Manager",
+     "Start Maintenance Manager. This will automatically enable the maintenance "
+     "state machine as well (--enable-cluster-maintenance-state-machine).",
      SERVER | REQUIRES_RESTART,
      SettingsCategory::AdminAPI)
 
