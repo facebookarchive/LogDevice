@@ -13,6 +13,7 @@
 
 #include <gtest/gtest.h>
 
+#include "logdevice/admin/maintenance/types.h"
 #include "logdevice/common/LegacyLogToShard.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/InternalLogs.h"
@@ -25,6 +26,7 @@
 #include "logdevice/server/rebuilding/ShardRebuildingV1.h"
 
 using namespace facebook::logdevice;
+using namespace facebook::logdevice::maintenance;
 
 // Convenient shortcuts for writting ShardIDs.
 #define N0S1 ShardID(0, 1)
@@ -182,6 +184,7 @@ static std::unordered_set<std::pair<logid_t, shard_index_t>>
 static std::unordered_set<uint32_t> stall_timer_activated;
 static std::unordered_set<uint32_t> restart_scheduled;
 static bool planning_timer_activated{false};
+static thrift::RemoveMaintenancesRequest remove_maintenance;
 
 class MockedRebuildingCoordinator;
 
@@ -276,6 +279,27 @@ class MockedShardRebuildingV1 : public ShardRebuildingV1 {
   MockedRebuildingCoordinator* owner = nullptr;
 };
 
+class RebuildingCoordinatorTest;
+
+class MockMaintenanceLogWriter : public MaintenanceLogWriter {
+ public:
+  explicit MockMaintenanceLogWriter(RebuildingCoordinatorTest* test)
+      : MaintenanceLogWriter(nullptr), test_(test) {}
+
+  virtual void writeDelta(
+      std::unique_ptr<MaintenanceDelta> delta,
+      std::function<
+          void(Status st, lsn_t version, const std::string& failure_reason)> cb,
+      ClusterMaintenanceStateMachine::WriteMode mode =
+          ClusterMaintenanceStateMachine::WriteMode::CONFIRM_APPLIED,
+      folly::Optional<lsn_t> base_version = folly::none) override {
+    ASSERT_TRUE(delta != nullptr);
+    remove_maintenance = delta->get_remove_maintenances();
+  }
+
+  RebuildingCoordinatorTest* test_;
+};
+
 class MockedRebuildingCoordinator : public RebuildingCoordinator {
  public:
   class MockedRebuildingPlanner : public RebuildingPlanner {
@@ -322,12 +346,19 @@ class MockedRebuildingCoordinator : public RebuildingCoordinator {
     MockedRebuildingCoordinator* owner_;
   };
 
-  MockedRebuildingCoordinator(const std::shared_ptr<UpdateableConfig>& config,
-                              shard_size_t num_shards,
-                              UpdateableSettings<RebuildingSettings> settings,
-                              bool my_shard_has_data_intact,
-                              DirtyShardMap* dirty_shard_cache)
-      : RebuildingCoordinator(config, nullptr, nullptr, settings, nullptr),
+  MockedRebuildingCoordinator(
+      const std::shared_ptr<UpdateableConfig>& config,
+      shard_size_t num_shards,
+      UpdateableSettings<RebuildingSettings> settings,
+      UpdateableSettings<AdminServerSettings> admin_settings,
+      bool my_shard_has_data_intact,
+      DirtyShardMap* dirty_shard_cache)
+      : RebuildingCoordinator(config,
+                              nullptr,
+                              nullptr,
+                              settings,
+                              admin_settings,
+                              nullptr),
         num_shards_(num_shards),
         my_shard_has_data_intact_(my_shard_has_data_intact),
         dirty_shard_cache_(dirty_shard_cache) {}
@@ -500,6 +531,7 @@ class RebuildingCoordinatorTest : public ::testing::Test {
  public:
   RebuildingCoordinatorTest()
       : settings(create_default_settings<RebuildingSettings>()),
+        admin_settings_(create_default_settings<AdminServerSettings>()),
         config_(std::make_shared<UpdateableConfig>()),
         rebuilding_set_(std::make_unique<EventLogRebuildingSet>()) {
     settings.local_window = std::chrono::seconds(10);
@@ -576,6 +608,7 @@ class RebuildingCoordinatorTest : public ::testing::Test {
         config_,
         num_shards,
         UpdateableSettings<RebuildingSettings>(settings),
+        UpdateableSettings<AdminServerSettings>(admin_settings_),
         my_shard_has_data_intact,
         &dirty_shard_cache);
 
@@ -584,6 +617,8 @@ class RebuildingCoordinatorTest : public ::testing::Test {
     // configure themselves.
     coordinator_->rebuildUserLogsOnly();
     coordinator_->start();
+    coordinator_->maintenance_log_writer_ =
+        std::make_unique<MockMaintenanceLogWriter>(this);
     coordinator_->onUpdate(
         *rebuilding_set_, nullptr, rebuilding_set_->getLastSeenLSN());
     triggerScheduledRestarts();
@@ -819,6 +854,7 @@ class RebuildingCoordinatorTest : public ::testing::Test {
   size_t num_logs = 10;
   logid_t event_log{42};
   RebuildingSettings settings;
+  AdminServerSettings admin_settings_;
   bool my_shard_has_data_intact{false};
   RebuildingCoordinator::DirtyShardMap dirty_shard_cache;
 
@@ -961,6 +997,14 @@ class RebuildingCoordinatorTest : public ::testing::Test {
     ASSERT_EQ(it->second, version);                       \
     received.abort_for_my_shard.erase(it);                \
     ASSERT_TRUE(received.abort_for_my_shard.empty());     \
+  }
+
+#define ASSERT_REMOVE_MAINTENANCE(shard)                                  \
+  {                                                                       \
+    ASSERT_EQ(remove_maintenance.get_user(), maintenance::INTERNAL_USER); \
+    auto filter = remove_maintenance.get_filter();                        \
+    ASSERT_TRUE(filter.get_group_ids().size() == 1);                      \
+    ASSERT_EQ(filter.get_group_ids()[0], toString(shard));                \
   }
 
 /**
@@ -1964,6 +2008,92 @@ TEST_F(RebuildingCoordinatorTest, RestoreModeDuringDrain) {
       SHARD_NEEDS_REBUILD_Header::CONDITIONAL_ON_VERSION;
   ASSERT_SHARD_NEEDS_REBUILD(1, flags, v2);
 
+  // The message arrives.
+  lsn_t v3 = onShardNeedsRebuild(0, 1, SHARD_NEEDS_REBUILD_Header::RELOCATE);
+  ASSERT_STARTED(
+      set, RecordTimestamp::max(), 1, 3, 5, 7, 9, 11, 13, 15, 17, 19);
+
+  // Rebuilding completes.
+  onLogRebuildingComplete(9, 1, v3);
+  onLogRebuildingComplete(17, 1, v3);
+  onLogRebuildingComplete(5, 1, v3);
+  onLogRebuildingComplete(19, 1, v3);
+  onLogRebuildingComplete(15, 1, v3);
+  onLogRebuildingComplete(1, 1, v3);
+  onLogRebuildingComplete(3, 1, v3);
+  onLogRebuildingComplete(11, 1, v3);
+  onLogRebuildingComplete(13, 1, v3);
+  onLogRebuildingComplete(7, 1, v3);
+  ASSERT_NO_STARTED();
+  ASSERT_SHARD_REBUILT(1, v3);
+  onShardIsRebuilt(0, 1, v3);
+  onShardIsRebuilt(1, 1, v3);
+  onShardIsRebuilt(2, 1, v3);
+  onShardIsRebuilt(3, 1, v3);
+  onShardIsRebuilt(4, 1, v3);
+
+  // RebuildingCoordinator remembers that the intent was to drain, so it does
+  // not acknowledge when rebuilding completes.
+  ASSERT_NO_SHARD_ACK_REBUILT();
+}
+
+// We start draining of N0:S1 in RELOCATE mode. During the drain, N0:S1 actually
+// goes down so the FD starts rebuilding in RESTORE mode. However the shard
+// comes back up so rebuilding is again restarted in RELOCATE mode instead of
+// being aborted.
+TEST_F(RebuildingCoordinatorTest, RestoreModeDuringDrainUsingMaintenanceLog) {
+  admin_settings_.enable_cluster_maintenance_state_machine = true;
+  settings.local_window = RecordTimestamp::duration::max();
+  settings.global_window = RecordTimestamp::duration::max();
+  settings.max_logs_in_flight = 50;
+  num_logs = 20;
+  num_shards = 2;
+  my_shard_has_data_intact = true;
+
+  start();
+
+  auto flags = SHARD_NEEDS_REBUILD_Header::DRAIN;
+
+  // We drain N0:S1. (we are node 0).
+  // Logs 1, 3, 5, 7, 9, 11, 13, 15, 17, 19 need to be rebuilt.
+  lsn_t v1 = onShardNeedsRebuild(0, 1, flags);
+  RebuildingSet set({{N0S1, RebuildingNodeInfo(RebuildingMode::RELOCATE)}});
+  ASSERT_STARTED(
+      set, RecordTimestamp::max(), 1, 3, 5, 7, 9, 11, 13, 15, 17, 19);
+  onLogRebuildingComplete(9, 1, v1);
+  onLogRebuildingComplete(17, 1, v1);
+  onLogRebuildingComplete(5, 1, v1);
+  onLogRebuildingComplete(19, 1, v1);
+  onLogRebuildingComplete(15, 1, v1);
+  onLogRebuildingComplete(1, 1, v1);
+  onLogRebuildingComplete(3, 1, v1);
+  onLogRebuildingComplete(11, 1, v1);
+  onLogRebuildingComplete(13, 1, v1);
+  onLogRebuildingComplete(7, 1, v1);
+  ASSERT_NO_STARTED();
+  ASSERT_SHARD_REBUILT(1, v1);
+
+  // Some nodes complete rebuilding.
+  onShardIsRebuilt(1, 1, v1);
+  onShardIsRebuilt(4, 1, v1);
+  onShardIsRebuilt(2, 1, v1);
+
+  // Rebuilding is restarted in RESTORE mode (triggered by the FD for instance
+  // if N0 was down for some time).
+  lsn_t v2 = onShardNeedsRebuild(0, 1, 0 /* flags */, LSN_MAX, false);
+  // In RESTORE mode, N0 is not a donor so nothing is started.
+  ASSERT_NO_STARTED();
+
+  // Let's assume N0 is back up, and because the local data is intact (we set
+  // my_shard_has_data_intact=true), RebuildingCoordinator should immediately
+  // send a new SHARD_NEEDS_REBUILD to restart rebuilding in RELOCATE mode.
+  flags = SHARD_NEEDS_REBUILD_Header::RELOCATE |
+      SHARD_NEEDS_REBUILD_Header::CONDITIONAL_ON_VERSION;
+  ASSERT_SHARD_NEEDS_REBUILD(1, flags, v2);
+  // Since ClusterMaintenanceStateMachine is enabled, we should also have
+  // written to maintenance log to remove the Restore mode rebuilding request
+  auto shard = ShardID(0, 1);
+  ASSERT_REMOVE_MAINTENANCE(shard);
   // The message arrives.
   lsn_t v3 = onShardNeedsRebuild(0, 1, SHARD_NEEDS_REBUILD_Header::RELOCATE);
   ASSERT_STARTED(

@@ -10,6 +10,7 @@
 #include <memory>
 #include <queue>
 
+#include "logdevice/admin/maintenance/MaintenanceLogWriter.h"
 #include "logdevice/common/AdminCommandTable-fwd.h"
 #include "logdevice/common/BackoffTimer.h"
 #include "logdevice/common/ExponentialBackoffTimer.h"
@@ -42,6 +43,7 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
       EventLogStateMachine* event_log,
       Processor* processor,
       UpdateableSettings<RebuildingSettings> rebuilding_settings,
+      UpdateableSettings<AdminServerSettings> admin_settings,
       ShardedLocalLogStore* sharded_store);
 
   /**
@@ -438,6 +440,7 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
   worker_id_t my_worker_id_ = WORKER_ID_INVALID;
 
   UpdateableSettings<RebuildingSettings> rebuildingSettings_;
+  UpdateableSettings<AdminServerSettings> adminSettings_;
   UpdateableSettings<RebuildingSettings>::SubscriptionHandle
       rebuildingSettingsSubscription_;
 
@@ -580,6 +583,12 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
   std::unique_ptr<EventLogWriter> writer_;
 
   /**
+   * MaintenanceLogWriter to write records to the maintenance
+   * log
+   */
+  std::unique_ptr<maintenance::MaintenanceLogWriter> maintenance_log_writer_;
+
+  /**
    * @return True if we should rebuild metadata logs given the rebuilding set.
    * Check if this node is in the metadata nodeset, and if yes, if any node in
    * the rebuilding set is in the metadata nodeset.
@@ -703,6 +712,10 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
    */
   ShardState& getShardState(uint32_t shard_idx);
   const ShardState& getShardState(uint32_t shard_idx) const;
+
+  // A helper method to write a thrift:;RemoveMaintenanceRequest to
+  // maintenance log
+  void writeRemoveMaintenance(ShardID shard);
 
   std::unique_ptr<NonAuthoritativeRebuildingChecker>
       nonAuthoratitiveRebuildingChecker_;

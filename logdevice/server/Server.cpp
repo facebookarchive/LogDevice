@@ -909,7 +909,10 @@ bool Server::initRebuildingCoordinator() {
       ld_check(event_log_);
 
       rebuilding_supervisor_ = std::make_unique<RebuildingSupervisor>(
-          event_log_.get(), processor_.get(), params_->getRebuildingSettings());
+          event_log_.get(),
+          processor_.get(),
+          params_->getRebuildingSettings(),
+          params_->getAdminServerSettings());
       processor_->rebuilding_supervisor_ = rebuilding_supervisor_.get();
       ld_info("Starting RebuildingSupervisor");
       rebuilding_supervisor_->start();
@@ -919,6 +922,7 @@ bool Server::initRebuildingCoordinator() {
           event_log_.get(),
           processor_.get(),
           params_->getRebuildingSettings(),
+          params_->getAdminServerSettings(),
           sharded_store_.get());
       ld_info("Starting RebuildingCoordinator");
       if (rebuilding_coordinator_->start() != 0) {

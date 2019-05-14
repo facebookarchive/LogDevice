@@ -9,6 +9,7 @@
 
 #include <folly/hash/Hash.h>
 
+#include "logdevice/admin/maintenance/types.h"
 #include "logdevice/common/AdminCommandTable.h"
 #include "logdevice/common/AppendRequest.h"
 #include "logdevice/common/LegacyLogToShard.h"
@@ -149,15 +150,19 @@ RebuildingCoordinator::RebuildingCoordinator(
     EventLogStateMachine* event_log,
     Processor* processor,
     UpdateableSettings<RebuildingSettings> rebuilding_settings,
+    UpdateableSettings<AdminServerSettings> admin_settings,
     ShardedLocalLogStore* sharded_store)
     : config_(config),
       event_log_(event_log),
       processor_(processor),
       rebuildingSettings_(rebuilding_settings),
+      adminSettings_(admin_settings),
       shardedStore_(sharded_store) {}
 
 int RebuildingCoordinator::start() {
   writer_ = std::make_unique<EventLogWriter>(event_log_);
+  maintenance_log_writer_ =
+      std::make_unique<maintenance::MaintenanceLogWriter>(processor_);
 
   myNodeId_ = getMyNodeID();
 
@@ -401,6 +406,11 @@ void RebuildingCoordinator::onMarkerWrittenForShard(uint32_t shard,
     return;
   }
 
+  // Write RemoveMaintenance request if ClusterMaintenanceStateMachine
+  // is enabled
+  if (adminSettings_->enable_cluster_maintenance_state_machine) {
+    writeRemoveMaintenance(ShardID(myNodeId_, shard));
+  }
   notifyProcessorShardRebuilt(shard);
   notifyAckMyShardRebuilt(shard, version);
   wakeUpReadStreams(shard);
@@ -766,12 +776,23 @@ void RebuildingCoordinator::restartForShard(uint32_t shard_idx,
         // 1/. The data is intact and the user does not wish to drain this
         // shard, abort rebuilding. abortForMyShard() will check for dirtiness
         // and respond appropriately.
+
+        // Write RemoveMaintenance request if ClusterMaintenanceStateMachine
+        // is enabled
+        if (adminSettings_->enable_cluster_maintenance_state_machine) {
+          writeRemoveMaintenance(ShardID(myNodeId_, shard_idx));
+        }
         abortForMyShard(shard_idx,
                         rsi->version,
                         set.getNodeInfo(myNodeId_, shard_idx),
                         "data is intact");
       } else if (is_restore && !myShardIsDirty(shard_idx)) {
         // 2/. The data is intact. Restart the drain in RELOCATE mode.
+        // Write RemoveMaintenance request if ClusterMaintenanceStateMachine
+        // is enabled
+        if (adminSettings_->enable_cluster_maintenance_state_machine) {
+          writeRemoveMaintenance(ShardID(myNodeId_, shard_idx));
+        }
         ld_info("The data on my shard %u is intact, restart rebuilding for "
                 "this shard to continue the drain in RELOCATE mode.",
                 shard_idx);
@@ -837,6 +858,35 @@ void RebuildingCoordinator::normalizeTimeRanges(uint32_t shard_idx,
           ->processor_->sharded_storage_thread_pool_->getByIndex(shard_idx)
           .getLocalLogStore();
   store.normalizeTimeRanges(rtis);
+}
+
+void RebuildingCoordinator::writeRemoveMaintenance(ShardID shard) {
+  // We should remove maintenance only for our own shard
+  ld_check(shard.node() == myNodeId_);
+  auto cb = [shard](Status st, lsn_t version, const std::string& /* unused */) {
+    if (st == E::OK) {
+      ld_info("Successfully appended a RemoveMaintenancesRequest to remove"
+              "maintenance for shard:%s, version:%s",
+              toString(shard).c_str(),
+              toString(version).c_str());
+    } else {
+      ld_info("Failed to append a RemoveMaintenancesRequest to remove"
+              "maintenance for shard:%s, status:%s, version:%s",
+              toString(shard).c_str(),
+              toString(st).c_str(),
+              toString(version).c_str());
+    }
+  };
+
+  auto delta = std::make_unique<maintenance::MaintenanceDelta>();
+  delta->set_remove_maintenances(
+      maintenance::MaintenanceLogWriter::buildRemoveMaintenancesRequest(
+          shard, "Data intact"));
+  maintenance_log_writer_->writeDelta(
+      std::move(delta),
+      std::move(cb),
+      maintenance::ClusterMaintenanceStateMachine::WriteMode::
+          CONFIRM_APPEND_ONLY);
 }
 
 void RebuildingCoordinator::requestPlan(shard_index_t shard_idx,

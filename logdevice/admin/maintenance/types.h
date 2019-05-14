@@ -19,4 +19,8 @@ using MaintenanceStatus = thrift::MaintenanceStatus;
 using ShardDataHealth = thrift::ShardDataHealth;
 using ClusterMaintenanceState = thrift::ClusterMaintenanceState;
 
+// The user string that identifies the maintenances
+// triggered by logdevice internally
+constexpr static folly::StringPiece INTERNAL_USER{"LOGDEVICE_INTERNAL_USER"};
+
 }}} // namespace facebook::logdevice::maintenance

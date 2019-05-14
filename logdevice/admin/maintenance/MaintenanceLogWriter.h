@@ -20,13 +20,28 @@ class MaintenanceLogWriter {
  public:
   explicit MaintenanceLogWriter(Processor* processor) : processor_(processor) {}
 
-  void writeDelta(
+  virtual ~MaintenanceLogWriter() {}
+
+  virtual void writeDelta(
       std::unique_ptr<MaintenanceDelta> delta,
       std::function<
           void(Status st, lsn_t version, const std::string& failure_reason)> cb,
       ClusterMaintenanceStateMachine::WriteMode mode =
           ClusterMaintenanceStateMachine::WriteMode::CONFIRM_APPLIED,
       folly::Optional<lsn_t> base_version = folly::none);
+
+  /**
+   * Returns RemoveMaintenancesRequest for removing an internal maintenance
+   * for the given shard by setting appropriate fields in the request
+   */
+  static thrift::RemoveMaintenancesRequest
+  buildRemoveMaintenancesRequest(ShardID shard, std::string reason);
+  /**
+   * Returns MaintenanceDefinition for rebuilding a given shard internally with
+   * all appropirate fields set
+   */
+  static thrift::MaintenanceDefinition
+  buildMaintenanceDefinitionForRebuilding(ShardID shard, std::string reason);
 
  private:
   Processor* processor_;

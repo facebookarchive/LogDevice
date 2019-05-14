@@ -11,6 +11,7 @@
 #include <cmath>
 #include <functional>
 
+#include "logdevice/admin/maintenance/types.h"
 #include "logdevice/common/AuthoritativeStatus.h"
 #include "logdevice/common/FailureDomainNodeSet.h"
 #include "logdevice/common/Processor.h"
@@ -66,6 +67,9 @@ void RebuildingSupervisor::init() {
 
   auto cs = w->getClusterState();
   ld_check(cs != nullptr);
+
+  maintenance_log_writer_ =
+      std::make_unique<maintenance::MaintenanceLogWriter>(processor_);
 
   auto cb = [&](node_index_t node_id, ClusterState::NodeState state) {
     onNodeStateChanged(node_id, state);
@@ -339,45 +343,67 @@ void RebuildingSupervisor::triggerRebuilding() {
     }
 
     case Decision::EXECUTE: {
+      // Transition to executing state
+      state_ = State::EXECUTING;
       // Only write one event. The others will be written once this one
       // is confirmed.
       // pick first shard
       auto shard = *trigger.shards_.begin();
-      RATELIMIT_INFO(std::chrono::seconds(1),
-                     10,
-                     "Triggering rebuilding of N%d:S%d",
-                     trigger.node_id_,
-                     shard);
-      SHARD_NEEDS_REBUILD_Event event(trigger.node_id_,
-                                      shard,
-                                      myNodeId_.toString(),   // source
-                                      "RebuildingSupervisor", // details
-                                      SHARD_NEEDS_REBUILD_flags_t(0));
-
-      auto ticket = callbackHelper_.ticket();
-      auto cb = [trigger, shard, ticket](
-                    Status st, lsn_t version, const std::string& /* unused */) {
-        if (st == E::TIMEDOUT && version != LSN_INVALID) {
-          // Confirmation timed out but the append succeeded.
-          // Consider it a success, as rebuilding event was written.
-          st = E::OK;
-        }
-        ticket.postCallbackRequest([=](RebuildingSupervisor* p) {
-          if (p) {
-            p->onShardRebuildingTriggered(st, trigger, shard);
-          }
-        });
-      };
-
-      // Transition to executing state
-      state_ = State::EXECUTING;
-      // Makes sure we wait for the event to be successfully appended and read
-      // from the event log before proceeding.
-      auto mode = EventLogStateMachine::WriteMode::CONFIRM_APPLIED;
-      // Try to write the event
-      eventLog_->writeDelta(event, cb, mode, trigger.base_version);
+      requestRebuilding(trigger, shard);
       break;
     }
+  }
+}
+
+void RebuildingSupervisor::requestRebuilding(RebuildingTrigger& trigger,
+                                             shard_index_t shard) {
+  auto ticket = callbackHelper_.ticket();
+  auto cb = [trigger, shard, ticket](
+                Status st, lsn_t version, const std::string& /* unused */) {
+    if (st == E::TIMEDOUT && version != LSN_INVALID) {
+      // Confirmation timed out but the append succeeded.
+      // Consider it a success, as rebuilding event was written.
+      st = E::OK;
+    }
+    ticket.postCallbackRequest([=](RebuildingSupervisor* p) {
+      if (p) {
+        p->onShardRebuildingTriggered(st, trigger, shard);
+      }
+    });
+  };
+
+  // ClusterMaintenanceStateMachine is enabled. So request rebuilding
+  // by adding a new Maintenance
+  if (adminSettings_->enable_cluster_maintenance_state_machine) {
+    RATELIMIT_INFO(
+        std::chrono::seconds(1),
+        10,
+        "Triggering rebuilding of N%d:S%d by writing to MaintenanceLog",
+        trigger.node_id_,
+        shard);
+    auto delta = std::make_unique<maintenance::MaintenanceDelta>();
+    delta->set_apply_maintenance(maintenance::MaintenanceLogWriter::
+                                     buildMaintenanceDefinitionForRebuilding(
+                                         ShardID(trigger.node_id_, shard),
+                                         "Triggered by RebuildingSupervisor"));
+    maintenance_log_writer_->writeDelta(
+        std::move(delta),
+        std::move(cb),
+        maintenance::ClusterMaintenanceStateMachine::WriteMode::
+            CONFIRM_APPLIED);
+  } else {
+    RATELIMIT_INFO(std::chrono::seconds(1),
+                   10,
+                   "Triggering rebuilding of N%d:S%d by writing to EventLog",
+                   trigger.node_id_,
+                   shard);
+    SHARD_NEEDS_REBUILD_Event event(trigger.node_id_,
+                                    (uint32_t)shard,
+                                    myNodeId_.toString(),   // source
+                                    "RebuildingSupervisor", // details
+                                    SHARD_NEEDS_REBUILD_flags_t(0));
+    auto mode = EventLogStateMachine::WriteMode::CONFIRM_APPLIED;
+    eventLog_->writeDelta(event, cb, mode, trigger.base_version);
   }
 }
 

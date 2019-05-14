@@ -16,6 +16,7 @@
 #include <boost/multi_index/ordered_index.hpp>
 #include <boost/multi_index_container.hpp>
 
+#include "logdevice/admin/maintenance/MaintenanceLogWriter.h"
 #include "logdevice/common/BackoffTimer.h"
 #include "logdevice/common/ClusterState.h"
 #include "logdevice/common/NodeID.h"
@@ -57,12 +58,15 @@ namespace facebook { namespace logdevice {
 
 class RebuildingSupervisor {
  public:
-  explicit RebuildingSupervisor(EventLogStateMachine* event_log,
-                                Processor* processor,
-                                UpdateableSettings<RebuildingSettings> settings)
+  explicit RebuildingSupervisor(
+      EventLogStateMachine* event_log,
+      Processor* processor,
+      UpdateableSettings<RebuildingSettings> settings,
+      UpdateableSettings<AdminServerSettings> admin_settings)
       : eventLog_(event_log),
         processor_(processor),
         rebuildingSettings_(settings),
+        adminSettings_(admin_settings),
         thisRefHolder_(this),
         callbackHelper_(this) {}
 
@@ -315,6 +319,8 @@ class RebuildingSupervisor {
   Processor* processor_;
   std::atomic<bool> shuttingDown_{false};
   UpdateableSettings<RebuildingSettings> rebuildingSettings_;
+  UpdateableSettings<AdminServerSettings> adminSettings_;
+  std::unique_ptr<maintenance::MaintenanceLogWriter> maintenance_log_writer_;
 
   // states of the state machine:
   // - IDLE when there is no trigger in the queue
@@ -358,6 +364,11 @@ class RebuildingSupervisor {
   // the onShardRebuildingTriggered completion handler to pick another shard to
   // rebuild.
   void triggerRebuilding();
+
+  // Requests rebuilding of the shard either by writing SHARD_NEED_REBUILD
+  // to event log directly or adding a new maintenance to the maintenance log
+  // depending on the settings
+  void requestRebuilding(RebuildingTrigger& trigger, shard_index_t shard);
 };
 
 }} // namespace facebook::logdevice

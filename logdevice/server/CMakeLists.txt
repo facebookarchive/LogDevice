@@ -24,7 +24,8 @@ add_library(logdevice_server_core STATIC ${hfiles} ${files})
 target_link_libraries(logdevice_server_core
   common
   ldclient_static
-  logdevice_admin_settings)
+  logdevice_admin_settings
+  logdevice_admin_maintenance)
 
 add_subdirectory(locallogstore)
 
