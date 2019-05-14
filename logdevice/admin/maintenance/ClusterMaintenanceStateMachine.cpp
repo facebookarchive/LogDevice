@@ -11,6 +11,7 @@
 #include <folly/dynamic.h>
 
 #include "logdevice/common/ShardAuthoritativeStatusMap.h"
+#include "logdevice/common/ThriftCodec.h"
 #include "logdevice/common/configuration/InternalLogs.h"
 
 namespace facebook { namespace logdevice {
@@ -74,6 +75,35 @@ int ClusterMaintenanceStateMachine::applyDelta(
   return 0;
 }
 
+void ClusterMaintenanceStateMachine::writeMaintenanceDelta(
+    std::unique_ptr<MaintenanceDelta> delta,
+    std::function<
+        void(Status st, lsn_t version, const std::string& failure_reason)> cb,
+    WriteMode mode,
+    folly::Optional<lsn_t> base_version) {
+  std::string serializedDelta =
+      ThriftCodec::serialize<apache::thrift::BinarySerializer>(*delta);
+  postWriteDeltaRequest(
+      std::move(serializedDelta), std::move(cb), mode, std::move(base_version));
+}
+
+void ClusterMaintenanceStateMachine::postWriteDeltaRequest(
+    std::string delta,
+    std::function<
+        void(Status st, lsn_t version, const std::string& failure_reason)> cb,
+    WriteMode mode,
+    folly::Optional<lsn_t> base_version) {
+  std::unique_ptr<Request> req =
+      std::make_unique<MaintenanceLogWriteDeltaRequest>(
+          maintenance::ClusterMaintenanceStateMachine::workerType(
+              Worker::onThisThread()->processor_),
+          std::move(delta),
+          std::move(cb),
+          std::move(mode),
+          std::move(base_version));
+  postRequestWithRetrying(req);
+}
+
 int ClusterMaintenanceStateMachine::serializeState(
     const ClusterMaintenanceState& state,
     void* buf,
@@ -110,6 +140,19 @@ Request::Execution StartClusterMaintenanceStateMachineRequest::execute() {
   w->setClusterMaintenanceStateMachine(sm_);
   sm_->start();
   return Request::Execution::COMPLETE;
+}
+
+Request::Execution MaintenanceLogWriteDeltaRequest::execute() {
+  auto sm = Worker::onThisThread()->cluster_maintenance_state_machine_;
+  if (sm) {
+    sm->writeDelta(
+        std::move(delta_), std::move(cb_), mode_, std::move(base_version_));
+  } else {
+    ld_warning("No ClusterMaintenanceStateMachine available on this worker. "
+               "Returning E::NOTSUPPORTED.");
+    cb_(E::NOTSUPPORTED, LSN_INVALID, "");
+  }
+  return Execution::COMPLETE;
 }
 
 }}} // namespace facebook::logdevice::maintenance

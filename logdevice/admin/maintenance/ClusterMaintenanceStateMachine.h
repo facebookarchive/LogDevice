@@ -52,8 +52,15 @@ class ClusterMaintenanceStateMachine
                             void* buf,
                             size_t buf_size);
 
-  void writeDelta(
-      const MaintenanceDelta& delta,
+  void writeMaintenanceDelta(
+      std::unique_ptr<MaintenanceDelta> delta,
+      std::function<
+          void(Status st, lsn_t version, const std::string& failure_reason)> cb,
+      WriteMode mode = WriteMode::CONFIRM_APPLIED,
+      folly::Optional<lsn_t> base_version = folly::none);
+
+  void postWriteDeltaRequest(
+      std::string delta,
       std::function<
           void(Status st, lsn_t version, const std::string& failure_reason)> cb,
       WriteMode mode = WriteMode::CONFIRM_APPLIED,
@@ -133,6 +140,42 @@ class StartClusterMaintenanceStateMachineRequest : public Request {
  private:
   ClusterMaintenanceStateMachine* sm_;
   WorkerType worker_type_;
+};
+
+class MaintenanceLogWriteDeltaRequest : public Request {
+ public:
+  explicit MaintenanceLogWriteDeltaRequest(
+      WorkerType worker_type,
+      std::string delta,
+      std::function<
+          void(Status st, lsn_t version, const std::string& failure_reason)> cb,
+      ClusterMaintenanceStateMachine::WriteMode mode =
+          ClusterMaintenanceStateMachine::WriteMode::CONFIRM_APPLIED,
+      folly::Optional<lsn_t> base_version = folly::none)
+      : Request(RequestType::MAINTENANCE_LOG_REQUEST),
+        worker_type_(worker_type),
+        delta_(std::move(delta)),
+        cb_(std::move(cb)),
+        mode_(std::move(mode)),
+        base_version_(std::move(base_version)) {}
+
+  ~MaintenanceLogWriteDeltaRequest() override {}
+  Execution execute() override;
+  int getThreadAffinity(int nthreads) override {
+    return ClusterMaintenanceStateMachine::getWorkerIndex(nthreads);
+  }
+  WorkerType getWorkerTypeAffinity() override {
+    return worker_type_;
+  }
+
+ private:
+  WorkerType worker_type_;
+  std::string delta_;
+  std::function<
+      void(Status st, lsn_t version, const std::string& failure_reason)>
+      cb_;
+  ClusterMaintenanceStateMachine::WriteMode mode_;
+  folly::Optional<lsn_t> base_version_;
 };
 
 }}} // namespace facebook::logdevice::maintenance
