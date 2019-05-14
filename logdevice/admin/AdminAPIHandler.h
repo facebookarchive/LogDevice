@@ -11,6 +11,7 @@
 
 #include "common/fb303/cpp/FacebookBase2.h"
 #include "logdevice/admin/CheckImpactHandler.h"
+#include "logdevice/admin/MaintenanceAPIHandler.h"
 #include "logdevice/admin/NodesConfigAPIHandler.h"
 #include "logdevice/admin/NodesStateAPIHandler.h"
 #include "logdevice/admin/if/gen-cpp2/AdminAPI.h"
@@ -32,7 +33,8 @@ class SafetyChecker;
 class AdminAPIHandler : public facebook::fb303::FacebookBase2,
                         public NodesConfigAPIHandler,
                         public NodesStateAPIHandler,
-                        public CheckImpactHandler {
+                        public CheckImpactHandler,
+                        public MaintenanceAPIHandler {
  public:
   AdminAPIHandler(
       Processor* processor,

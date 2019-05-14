@@ -443,6 +443,9 @@ void StandaloneAdminServer::shutdown() {
     ld_info("Workers finished all works.");
 
     maintenance_manager_.reset();
+    // Prevent the admin server from holding a dangling pointer to the
+    // maintenance manager
+    admin_server_->setMaintenanceManager(nullptr);
     cluster_maintenance_state_machine_.reset();
 
     ld_info("Stopping Processor");
