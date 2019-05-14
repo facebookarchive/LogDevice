@@ -107,25 +107,14 @@ TEST_F(AdminAPICheckImpactTest, DisableReads) {
     shards.push_back(std::move(shard));
   }
 
-  folly::EventBase event_base;
-  auto admin_client = create_admin_client(&event_base, cluster.get(), 1);
+  cluster->getNode(1).waitUntilNodeStateReady();
+  auto admin_client = cluster->getNode(1).createAdminClient();
   ASSERT_NE(nullptr, admin_client);
+  // Check Impact
   thrift::CheckImpactRequest request;
   thrift::CheckImpactResponse response;
   request.set_shards(shards);
   request.set_target_storage_state(thrift::ShardStorageState::DISABLED);
-  wait_until(
-      "LogDevice started but we are waiting for the EventLog to be replayed",
-      [&]() {
-        try {
-          thrift::NodesStateRequest req;
-          thrift::NodesStateResponse resp;
-          admin_client->sync_getNodesState(resp, req);
-          return true;
-        } catch (thrift::NodeNotReady& e) {
-          return false;
-        }
-      });
   admin_client->sync_checkImpact(response, request);
 
   ASSERT_TRUE(*response.get_internal_logs_affected());

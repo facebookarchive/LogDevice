@@ -23,7 +23,10 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <thrift/lib/cpp/async/TAsyncSocket.h>
+#include <thrift/lib/cpp2/async/HeaderClientChannel.h>
 
+#include "logdevice/admin/if/gen-cpp2/AdminAPI.h"
 #include "logdevice/common/CheckSealRequest.h"
 #include "logdevice/common/EpochMetaDataUpdater.h"
 #include "logdevice/common/FileConfigSource.h"
@@ -1526,6 +1529,56 @@ int Node::waitForRecovery(logid_t log,
   return rv;
 }
 
+std::unique_ptr<thrift::AdminAPIAsyncClient> Node::createAdminClient() {
+  // This is a very bad way of handling Folly AsyncSocket flakiness in
+  // combination with unix sockets.
+  for (auto i = 0; i < 20; i++) {
+    folly::SocketAddress address = getAdminAddress();
+    auto transport =
+        apache::thrift::async::TAsyncSocket::newSocket(&event_base_, address);
+    auto channel = apache::thrift::HeaderClientChannel::newChannel(transport);
+    channel->setTimeout(5000);
+    if (channel->good()) {
+      return std::make_unique<thrift::AdminAPIAsyncClient>(std::move(channel));
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(10000));
+  }
+  ld_critical(
+      "Couldn't create a thrift client for the Admin server for node %d",
+      node_index_);
+  return nullptr;
+}
+
+int Node::waitUntilNodeStateReady() {
+  waitUntilAvailable();
+  auto admin_client = createAdminClient();
+  return wait_until(
+      "LogDevice started but we are waiting for the EventLog to be replayed",
+      [&]() {
+        try {
+          thrift::NodesStateRequest req;
+          thrift::NodesStateResponse resp;
+          admin_client->sync_getNodesState(resp, req);
+          return true;
+        } catch (thrift::NodeNotReady& e) {
+          ld_info("getNodesState thrown NodeNotReady exception. Node %d is not "
+                  "ready yet",
+                  node_index_);
+          return false;
+        } catch (apache::thrift::transport::TTransportException& ex) {
+          ld_info("AdminServer is not fully started yet, connections are "
+                  "failing to node %d. ex: %s",
+                  node_index_,
+                  ex.what());
+          return false;
+        } catch (std::exception& ex) {
+          ld_critical("An exception in AdminClient that we didn't expect: %s",
+                      ex.what());
+          return false;
+        }
+      });
+}
+
 int Node::waitForPurge(logid_t log_id,
                        epoch_t epoch,
                        std::chrono::steady_clock::time_point deadline) {
@@ -2618,6 +2671,16 @@ int Cluster::waitForRecovery(std::chrono::steady_clock::time_point deadline) {
   }
 
   return 0;
+}
+
+int Cluster::waitUntilAllAvailable(
+    std::chrono::steady_clock::time_point deadline) {
+  int rv = 0;
+  for (auto& it : getNodes()) {
+    node_index_t idx = it.first;
+    rv |= getNode(idx).waitUntilAvailable(deadline);
+  }
+  return rv;
 }
 
 int Cluster::waitUntilLogsConfigSynced(

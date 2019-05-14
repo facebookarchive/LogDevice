@@ -24,14 +24,8 @@ TEST_F(AdminAPINodeConfigTest, getNodeConfig) {
                      .setNumRacks(2)
                      .create(3);
 
-  for (const auto& it : cluster->getNodes()) {
-    node_index_t idx = it.first;
-    cluster->getNode(idx).waitUntilAvailable();
-  }
-
-  folly::EventBase eventBase;
-
-  auto admin_client = create_admin_client(&eventBase, cluster.get(), 1);
+  cluster->waitUntilAllAvailable();
+  auto admin_client = cluster->getNode(1).createAdminClient();
   ASSERT_NE(nullptr, admin_client);
 
   // Find All

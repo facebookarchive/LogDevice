@@ -28,28 +28,11 @@ TEST_F(AdminAPINodeStateTest, getNodeState) {
                      .setParam("--gossip-interval", "5ms")
                      .create(3);
 
-  for (const auto& it : cluster->getNodes()) {
-    node_index_t idx = it.first;
-    cluster->getNode(idx).waitUntilAvailable();
-  }
-
+  cluster->waitUntilAllAvailable();
   cluster->waitForRecovery();
-  folly::EventBase eventBase;
-  auto admin_client = create_admin_client(&eventBase, cluster.get(), 1);
+  cluster->getNode(1).waitUntilNodeStateReady();
+  auto admin_client = cluster->getNode(1).createAdminClient();
   ASSERT_NE(nullptr, admin_client);
-
-  wait_until(
-      "LogDevice started but we are waiting for the EventLog to be replayed",
-      [&]() {
-        try {
-          NodesStateRequest req;
-          NodesStateResponse resp;
-          admin_client->sync_getNodesState(resp, req);
-          return true;
-        } catch (thrift::NodeNotReady& e) {
-          return false;
-        }
-      });
 
   NodesStateRequest request;
   NodesStateResponse response;

@@ -18,6 +18,7 @@
 #include <folly/Subprocess.h>
 #include <folly/experimental/TestUtil.h>
 
+#include "folly/io/async/EventBase.h"
 #include "logdevice/common/EpochMetaData.h"
 #include "logdevice/common/ShardAuthoritativeStatusMap.h"
 #include "logdevice/common/ShardID.h"
@@ -87,6 +88,9 @@ class ShardedLocalLogStore;
 
 namespace test {
 struct ServerInfo;
+}
+namespace thrift {
+class AdminAPIAsyncClient;
 }
 
 namespace IntegrationTestUtils {
@@ -944,6 +948,10 @@ class Cluster {
   int waitForRecovery(std::chrono::steady_clock::time_point deadline =
                           std::chrono::steady_clock::time_point::max());
 
+  // Waits until all nodes are available through gossip (ALIVE)
+  int waitUntilAllAvailable(std::chrono::steady_clock::time_point deadline =
+                                std::chrono::steady_clock::time_point::max());
+
   /**
    * Wait for all sequencer nodes in the cluster to write metadata log records
    * for all logs. This shouldn't block if sequencers_write_metadata_logs is
@@ -1314,6 +1322,19 @@ class Node {
    */
   int shutdown();
 
+  // Creates a thrift client for admin server running on this node.
+  std::unique_ptr<thrift::AdminAPIAsyncClient> createAdminClient();
+
+  /**
+   * Waits until the admin API is able to answer requests that need the event
+   * log. This also ensures that we are in the fb303 ALIVE state before
+   * returning.
+   *
+   * Note: this requires that the server is started with
+   * --disable-rebuilding=false
+   */
+  int waitUntilNodeStateReady();
+
   /**
    * Waits for the server to start accepting connections.
    * @return 0 if started, -1 if the call timed out.
@@ -1604,6 +1625,9 @@ class Node {
   }
 
   std::vector<std::string> commandLine() const;
+
+  // Folly event-base to be used for Admin API operations
+  folly::EventBase event_base_;
 };
 
 /**
@@ -1691,8 +1715,7 @@ Status getSeqState(Client* client,
 std::string defaultLogdevicedPath();
 
 // Returns the default path for ldquery-markdown
-std::string
-defaultMarkdownLDQueryPath();
+std::string defaultMarkdownLDQueryPath();
 
 // Attempts to find a binary, given a relative path to search for.  Within FB
 // we just ask the build system for the path. For open source, calls findFile()

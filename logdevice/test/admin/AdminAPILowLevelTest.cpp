@@ -29,15 +29,10 @@ TEST_F(AdminAPILowLevelTest, BasicThriftClientCreation) {
                      .useHashBasedSequencerAssignment()
                      .create(3);
 
-  for (const auto& it : cluster->getNodes()) {
-    node_index_t idx = it.first;
-    cluster->getNode(idx).waitUntilAvailable();
-  }
-
-  folly::EventBase eventBase;
-
-  auto admin_client = create_admin_client(&eventBase, cluster.get(), 1);
+  cluster->waitUntilAllAvailable();
+  auto admin_client = cluster->getNode(0).createAdminClient();
   ASSERT_NE(nullptr, admin_client);
+
   auto fbStatus = admin_client->sync_getStatus();
   ASSERT_EQ(facebook::fb303::cpp2::fb_status::ALIVE, fbStatus);
 }
@@ -54,14 +49,8 @@ TEST_F(AdminAPILowLevelTest, LogTreeReplicationInfo) {
                      .useHashBasedSequencerAssignment()
                      .create(3);
 
-  for (const auto& it : cluster->getNodes()) {
-    node_index_t idx = it.first;
-    cluster->getNode(idx).waitUntilAvailable();
-  }
-
-  folly::EventBase eventBase;
-
-  auto admin_client = create_admin_client(&eventBase, cluster.get(), 1);
+  cluster->waitUntilAllAvailable();
+  auto admin_client = cluster->getNode(0).createAdminClient();
   ASSERT_NE(nullptr, admin_client);
 
   // Let's create some log groups
@@ -137,14 +126,8 @@ TEST_F(AdminAPILowLevelTest, TakeLogTreeSnapshot) {
                      .useHashBasedSequencerAssignment()
                      .create(node_count);
 
-  for (const auto& it : cluster->getNodes()) {
-    node_index_t idx = it.first;
-    cluster->getNode(idx).waitUntilAvailable();
-  }
-
-  folly::EventBase eventBase;
-
-  auto admin_client = create_admin_client(&eventBase, cluster.get(), 1);
+  cluster->waitUntilAllAvailable();
+  auto admin_client = cluster->getNode(0).createAdminClient();
   ASSERT_NE(nullptr, admin_client);
 
   // Let's create some log groups
@@ -155,10 +138,6 @@ TEST_F(AdminAPILowLevelTest, TakeLogTreeSnapshot) {
 
   cluster->waitForRecovery();
 
-  for (int node_index = 0; node_index < node_count; ++node_index) {
-    IntegrationTestUtils::Node& node = cluster->getNode(node_index);
-    node.waitUntilAvailable();
-  }
 
   auto lg1 = client->makeLogGroupSync(
       "/log1",
@@ -190,14 +169,10 @@ TEST_F(AdminAPILowLevelTest, SettingsAPITest) {
                      .useHashBasedSequencerAssignment()
                      .create(2);
 
-  for (const auto& it : cluster->getNodes()) {
-    node_index_t idx = it.first;
-    cluster->getNode(idx).waitUntilAvailable();
-  }
+  cluster->waitUntilAllAvailable();
+  auto admin_client = cluster->getNode(0).createAdminClient();
+  ASSERT_NE(nullptr, admin_client);
 
-  folly::EventBase eventBase;
-
-  auto admin_client = create_admin_client(&eventBase, cluster.get(), 1);
   auto fbStatus = admin_client->sync_getStatus();
   ASSERT_EQ(facebook::fb303::cpp2::fb_status::ALIVE, fbStatus);
 
@@ -256,10 +231,9 @@ TEST_F(AdminAPILowLevelTest, LogGroupThroughputAPITest) {
                      .useHashBasedSequencerAssignment()
                      .create(1);
 
-  for (const auto& it : cluster->getNodes()) {
-    node_index_t idx = it.first;
-    cluster->getNode(idx).waitUntilAvailable();
-  }
+  cluster->waitUntilAllAvailable();
+  auto admin_client = cluster->getNode(0).createAdminClient();
+  ASSERT_NE(nullptr, admin_client);
 
   auto client = cluster->createClient();
   client->makeLogGroupSync("/log1",
@@ -272,8 +246,6 @@ TEST_F(AdminAPILowLevelTest, LogGroupThroughputAPITest) {
                            client::LogAttributes().with_replicationFactor(1),
                            false);
 
-  folly::EventBase eventBase;
-  auto admin_client = create_admin_client(&eventBase, cluster.get(), 0);
   auto fbStatus = admin_client->sync_getStatus();
   ASSERT_EQ(facebook::fb303::cpp2::fb_status::ALIVE, fbStatus);
 
@@ -353,10 +325,9 @@ TEST_F(AdminAPILowLevelTest, LogGroupCustomCountersAPITest) {
                      .useHashBasedSequencerAssignment()
                      .create(1);
 
-  for (const auto& it : cluster->getNodes()) {
-    node_index_t idx = it.first;
-    cluster->getNode(idx).waitUntilAvailable();
-  }
+  cluster->waitUntilAllAvailable();
+  auto admin_client = cluster->getNode(0).createAdminClient();
+  ASSERT_NE(nullptr, admin_client);
 
   auto client = cluster->createClient();
   client->makeLogGroupSync("/log1",
@@ -367,12 +338,7 @@ TEST_F(AdminAPILowLevelTest, LogGroupCustomCountersAPITest) {
                            logid_range_t(logid_t(21), logid_t(30)),
                            client::LogAttributes().with_replicationFactor(1),
                            false);
-  folly::EventBase eventBase;
-  auto admin_client = create_admin_client(&eventBase, cluster.get(), 0);
-  wait_until([&]() {
-    return admin_client->sync_getStatus() ==
-        facebook::fb303::cpp2::fb_status::ALIVE;
-  });
+
   // Start writers
   using namespace facebook::logdevice::IntegrationTestUtils;
   auto append_thread_lg1 = std::make_unique<AppendThread>(client, logid_t(1));

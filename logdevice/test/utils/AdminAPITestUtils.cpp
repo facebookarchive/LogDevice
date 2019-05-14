@@ -10,26 +10,6 @@
 
 namespace facebook { namespace logdevice {
 
-std::unique_ptr<thrift::AdminAPIAsyncClient>
-create_admin_client(folly::EventBase* eventBase,
-                    IntegrationTestUtils::Cluster* cluster,
-                    node_index_t node_id) {
-  // This is a very bad way of handling Folly AsyncSocket flakiness in
-  // combination with unix sockets.
-  for (auto i = 0; i < 5; i++) {
-    folly::SocketAddress address = cluster->getNode(node_id).getAdminAddress();
-    auto transport =
-        apache::thrift::async::TAsyncSocket::newSocket(eventBase, address);
-    auto channel = apache::thrift::HeaderClientChannel::newChannel(transport);
-    channel->setTimeout(5000);
-    if (channel->good()) {
-      return std::make_unique<thrift::AdminAPIAsyncClient>(std::move(channel));
-    }
-    std::this_thread::sleep_for(std::chrono::milliseconds(5000));
-  }
-  return nullptr;
-}
-
 void retry_until_ready(int32_t attempts,
                        std::chrono::seconds delay,
                        folly::Function<void()> operation) {
