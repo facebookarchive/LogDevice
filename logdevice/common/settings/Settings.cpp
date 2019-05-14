@@ -541,6 +541,14 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "amount of RECORD data to push to the client at once",
        SERVER | CLIENT,
        SettingsCategory::ReadPath);
+  init("max-time-to-allow-socket-drain",
+       &max_time_to_allow_socket_drain,
+       "15s",
+       validate_positive<ssize_t>(),
+       "After hitting NOBUFS, amount of time a socket is allowed to "
+       "successfully send a single message before it is closed.",
+       SERVER | CLIENT,
+       SettingsCategory::Network);
   init("max-cached-digest-record-queued-kb",
        &max_cached_digest_record_queued_kb,
        "256",

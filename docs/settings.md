@@ -195,6 +195,7 @@ sidebar_label: Settings
 | handshake-timeout | LogDevice protocol handshake timeout | 1s |  |
 | include-destination-on-handshake | Include the destination node ID in the LogDevice protocol handshake. If the actual node ID of the connection target does not match the intended destination ID, the connection is terminated. | true |  |
 | max-protocol | maximum version of LogDevice protocol that the server/client will accept | 94 |  |
+| max-time-to-allow-socket-drain | After hitting NOBUFS, amount of time a socket is allowed to successfully send a single message before it is closed. | 15s |  |
 | nagle | enable Nagle's algorithm on TCP sockets. Changing this setting on-the-fly will not apply it to existing sockets, only to newly created ones | false |  |
 | outbuf-kb | max output buffer size (userspace extension of socket sendbuf) in KB. Changing this setting on-the-fly will not apply it to existing sockets, only to newly created ones | 32768 |  |
 | outbytes-mb | per-thread limit on bytes pending in output evbuffers (in MB) | 512 |  |

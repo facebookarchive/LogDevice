@@ -135,8 +135,13 @@ struct Settings : public SettingsBundle {
   // KILOBYTES. See Socket.h.
   size_t outbuf_overflow_kb;
 
-  // How many kilobytes of RECORD messages the delivery code tries to push to
-  // the client at once.  If -1, use the TCP sendbuf size.
+  // If socket is running out of buffers and it is not draining for a while
+  // there is less value in maintaining it's socket buffers. This setting
+  // decides how long will we allow the socket to drain before we close it.
+  std::chrono::milliseconds max_time_to_allow_socket_drain;
+
+  // How many kilobytes of RECORD messages the delivery code tries to push
+  // to the client at once.  If -1, use the TCP sendbuf size.
   int output_max_records_kb;
 
   // How many bytes of records to read in a single StorageTask.

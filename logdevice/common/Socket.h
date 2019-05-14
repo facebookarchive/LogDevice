@@ -518,6 +518,13 @@ class Socket : public TrafficShappingSocket {
    */
   size_t getBytesPending() const;
 
+  /**
+   * Check if the socket cannot drain a message in
+   * max_time_to_allow_socket_drain. Higher layer can take action whether to
+   * close the Socket and keep it as is.
+   */
+  bool slowInDraining();
+
  protected:
   /**
    * Called by bev_ when the underlying connection is established

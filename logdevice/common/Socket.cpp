@@ -2451,6 +2451,25 @@ void Socket::limitCiphersToENULL() {
   null_ciphers_only_ = true;
 }
 
+bool Socket::slowInDraining() {
+  if (!handshaken_ || sendq_.size() == 0) {
+    return false;
+  }
+
+  auto& envelope = sendq_.front();
+  auto age_in_ms = envelope.age() / 1000;
+
+  if (std::chrono::milliseconds(age_in_ms) <
+      deps_->getSettings().max_time_to_allow_socket_drain) {
+    return false;
+  }
+
+  ld_info("Socket %s is slow in draining. Last drained %lu ms back.",
+          peer_name_.toString().c_str(),
+          age_in_ms);
+  return true;
+}
+
 // The following methods are overridden by tests.
 
 // SocketDependencies is created during socket creation from worker context.
@@ -2716,8 +2735,8 @@ void SocketDependencies::onSent(std::unique_ptr<Message> msg,
   switch (cm) {
     case Message::CompletionMethod::IMMEDIATE: {
       // Note: instead of creating a RunContext with message type, we could
-      // use RunContext of whoever sent the message (grabbed in Sender::send()),
-      // similar to how timers do it.
+      // use RunContext of whoever sent the message (grabbed in
+      // Sender::send()), similar to how timers do it.
       RunContext run_context(msg->type_);
       auto prev_context = Worker::packRunContext();
       Worker::onStartedRunning(run_context);
@@ -2979,5 +2998,4 @@ void SocketDependencies::onStartedRunning(RunContext context) {
 void SocketDependencies::onStoppedRunning(RunContext prev_context) {
   Worker::onStoppedRunning(prev_context);
 }
-
 }} // namespace facebook::logdevice

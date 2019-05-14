@@ -83,6 +83,8 @@ class SenderImpl {
       client_sockets_;
 
   ClientIdxAllocator* client_id_allocator_;
+
+  Timer detect_slow_socket_timer_;
 };
 
 bool SenderProxy::canSendToImpl(const Address& addr,
@@ -161,6 +163,13 @@ int Sender::addClient(int fd,
   }
 
   eraseDisconnectedClients();
+  // Activate slow_socket_timer if not active already.
+  if (!impl_->detect_slow_socket_timer_.isActive()) {
+    impl_->detect_slow_socket_timer_.setCallback(
+        [this]() { closeSlowSockets(); });
+    impl_->detect_slow_socket_timer_.activate(
+        Worker::settings().max_time_to_allow_socket_drain);
+  }
 
   auto w = Worker::onThisThread();
   ClientID client_name(
@@ -851,6 +860,13 @@ Socket* Sender::initServerSocket(NodeID nid,
   }
 
   if (it == impl_->server_sockets_.end()) {
+    // Activate slow_socket_timer if not active already.
+    if (!impl_->detect_slow_socket_timer_.isActive()) {
+      impl_->detect_slow_socket_timer_.setCallback(
+          [this]() { closeSlowSockets(); });
+      impl_->detect_slow_socket_timer_.activate(
+          Worker::settings().max_time_to_allow_socket_drain);
+    }
     // Don't try to connect if we expect a generation and it's different than
     // what is in the config.
     if (nid.generation() == 0) {
@@ -1444,5 +1460,41 @@ void Sender::forAllClientSockets(std::function<void(Socket&)> fn) {
   for (auto& it : impl_->client_sockets_) {
     fn(*it.second);
   }
+}
+
+void Sender::closeSlowSockets() {
+  size_t sockets_closed = 0;
+  // Allow this function to run just for 2ms. Stop loop if it goes beyond that
+  // time. We will try it again in 10s.
+  auto deadline = SteadyTimestamp::now() + std::chrono::milliseconds(2);
+  bool end_loop = false;
+  auto close_if_slow = [&](Socket& sock) {
+    if (sock.slowInDraining()) {
+      ++sockets_closed;
+      sock.close(E::TIMEDOUT);
+      if (SteadyTimestamp::now() > deadline) {
+        end_loop = true;
+      }
+    }
+  };
+
+  for (auto& entry : impl_->server_sockets_) {
+    if (end_loop) {
+      break;
+    }
+    close_if_slow(*entry.second);
+  }
+  for (auto& entry : impl_->client_sockets_) {
+    if (end_loop) {
+      break;
+    }
+    close_if_slow(*entry.second);
+  }
+  ld_log(sockets_closed > 0 ? dbg::Level::INFO : dbg::Level::DEBUG,
+         "Sender closed %lu slow sockets. ended loop soon %d",
+         sockets_closed,
+         end_loop);
+  impl_->detect_slow_socket_timer_.activate(
+      Worker::settings().max_time_to_allow_socket_drain);
 }
 }} // namespace facebook::logdevice

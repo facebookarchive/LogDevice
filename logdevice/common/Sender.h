@@ -979,6 +979,11 @@ class Sender : public SenderBase {
    */
   void processSocketsToClose();
 
+  /**
+   * Detects and closes sockets that are not actively sending traffic.
+   */
+  void closeSlowSockets();
+
   static void onCompletedMessagesAvailable(void* self, short);
 };
 
