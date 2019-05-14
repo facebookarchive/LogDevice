@@ -54,6 +54,9 @@ template <>
 thrift::LocationScope toThrift(const NodeLocationScope& input);
 
 template <>
+thrift::Location toThrift(const folly::Optional<NodeLocation>& input);
+
+template <>
 thrift::ShardMetadata toThrift(const Impact::ShardMetadata& input);
 
 template <>

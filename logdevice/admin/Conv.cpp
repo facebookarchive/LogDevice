@@ -213,6 +213,23 @@ thrift::ShardDataHealth toShardDataHealth(AuthoritativeStatus auth_status,
 }
 
 template <>
+thrift::Location toThrift(const folly::Optional<NodeLocation>& input) {
+  thrift::Location output;
+  if (input) {
+    auto insert_scope = [&](thrift::LocationScope t, std::string value) {
+      if (!value.empty()) {
+        output[t] = std::move(value);
+      }
+    };
+#define NODE_LOCATION_SCOPE(name) \
+  insert_scope(                   \
+      thrift::LocationScope::name, input->getLabel(NodeLocationScope::name));
+#include "logdevice/include/node_location_scopes.inc"
+  }
+  return output;
+}
+
+template <>
 thrift::ShardMetadata toThrift(const Impact::ShardMetadata& input) {
   thrift::ShardMetadata output;
   output.set_data_health(
@@ -223,6 +240,7 @@ thrift::ShardMetadata toThrift(const Impact::ShardMetadata& input) {
   if (input.location) {
     output.set_location(input.location->toString());
   }
+  output.set_location_per_scope(toThrift<thrift::Location>(input.location));
 
   return output;
 }

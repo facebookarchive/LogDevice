@@ -198,6 +198,7 @@ void fillNodeConfig(
 
   out.set_roles(std::move(roles));
   out.set_location(node_sd->locationStr());
+  out.set_location_per_scope(toThrift<thrift::Location>(node_sd->location));
 
   thrift::SocketAddress data_address;
   fillSocketAddress(data_address, node_sd->address);

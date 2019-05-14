@@ -54,6 +54,17 @@ TEST_F(AdminAPINodeConfigTest, getNodeConfig) {
   ASSERT_EQ(0, node1.get_node_index());
   ASSERT_TRUE(node1.get_location());
   ASSERT_EQ("rg1.dc1.cl1.rw1.rk1", *node1.get_location());
+
+  ASSERT_TRUE(node1.get_location_per_scope().size() > 0);
+  thrift::Location expected_location({
+      {thrift::LocationScope::REGION, "rg1"},
+      {thrift::LocationScope::DATA_CENTER, "dc1"},
+      {thrift::LocationScope::CLUSTER, "cl1"},
+      {thrift::LocationScope::ROW, "rw1"},
+      {thrift::LocationScope::RACK, "rk1"},
+  });
+  ASSERT_EQ(expected_location, node1.get_location_per_scope());
+
   auto data_address = node1.get_data_address();
   ASSERT_EQ(SocketAddressFamily::UNIX, data_address.get_address_family());
   ASSERT_TRUE(data_address.get_address());

@@ -119,3 +119,4 @@ enum LocationScope {
  * scopes
  */
 typedef map<LocationScope, i32> ReplicationProperty // replication per scope
+typedef map<LocationScope, string> Location // location tag per scope

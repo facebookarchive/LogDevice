@@ -69,6 +69,10 @@ struct NodeConfig {
    * This is only set if `roles` contain STORAGE
    */
   7: optional StorageConfig storage;
+  /**
+   * A convenience structure for location
+   */
+  8: common.Location location_per_scope;
 }
 
 /**

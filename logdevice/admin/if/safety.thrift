@@ -47,6 +47,7 @@ struct ShardMetadata {
   2: bool is_alive,
   3: nodes.ShardStorageState storage_state,
   4: optional string location,
+  5: common.Location location_per_scope,
 }
 
 typedef list<ShardMetadata> StorageSetMetadata
