@@ -7,6 +7,7 @@
  */
 #pragma once
 
+#include <algorithm>
 #include <alloca.h>
 #include <atomic>
 #include <chrono>
@@ -283,6 +284,41 @@ std::string sanitize_string(std::string s, int max_len = 1024);
  * Sanitizes text to be displayed in a Markdown table cell or title.
  */
 std::string markdown_sanitize(const std::string& str);
+
+/**
+ * Returns whether a string has any type of whitespaces in it or not.
+ */
+inline bool contains_whitespaces(const std::string& s) {
+  return s.end() !=
+      std::find_if(s.begin(), s.end(), [](int ch) { return std::isspace(ch); });
+}
+
+/**
+ * Remove whitespaces from the left end of a string
+ */
+inline void lstrip_string(std::string& s) {
+  s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](int ch) {
+            return !std::isspace(ch);
+          }));
+}
+
+/**
+ * Remove whitespaces from the right end of a string
+ */
+inline void rstrip_string(std::string& s) {
+  s.erase(std::find_if(
+              s.rbegin(), s.rend(), [](int ch) { return !std::isspace(ch); })
+              .base(),
+          s.end());
+}
+
+/**
+ * Remove whitespaces from both ends of a string
+ */
+inline void strip_string(std::string& s) {
+  lstrip_string(s);
+  rstrip_string(s);
+}
 
 /**
  * Workaround for almost infinite sleep in std::this_thread::sleep_until().

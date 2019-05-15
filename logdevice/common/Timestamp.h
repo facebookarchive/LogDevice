@@ -432,20 +432,7 @@ class Timestamp {
     };
 
     // Remove leading and trailing whitespace.
-    auto lstrip = [](std::string& s) {
-      s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](int ch) {
-                return !std::isspace(ch);
-              }));
-    };
-    auto rstrip = [](std::string& s) {
-      s.erase(
-          std::find_if(
-              s.rbegin(), s.rend(), [](int ch) { return !std::isspace(ch); })
-              .base(),
-          s.end());
-    };
-    lstrip(tstr);
-    rstrip(tstr);
+    strip_string(tstr);
 
     // Range limits shorthand
     if (tstr == "-inf") {
