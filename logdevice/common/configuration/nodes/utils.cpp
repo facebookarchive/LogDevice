@@ -12,12 +12,13 @@
 namespace facebook { namespace logdevice { namespace configuration {
 namespace nodes {
 
-bool shouldIncludeInNodesetSelection(const NodesConfiguration& nodes_config,
-                                     ShardID shard) {
+bool shouldIncludeInNodesetSelection(
+    const NodesConfiguration& nodes_configuration,
+    ShardID shard) {
   // if `shard' is in membership then it must have an attribute
   // defined, thus direct dereference is used
-  return nodes_config.getStorageMembership()->hasShard(shard) &&
-      !nodes_config.getNodeStorageAttribute(shard.node())
+  return nodes_configuration.getStorageMembership()->hasShard(shard) &&
+      !nodes_configuration.getNodeStorageAttribute(shard.node())
            ->exclude_from_nodesets;
 }
 
@@ -107,6 +108,17 @@ bool getNodeSSL(const NodesConfiguration& nodes_configuration,
   }
 
   return false;
+}
+
+bool isNodeDisabled(const NodesConfiguration& nodes_configuration,
+                    node_index_t node) {
+  if (!nodes_configuration.isNodeInServiceDiscoveryConfig(node)) {
+    return true;
+  }
+
+  return !nodes_configuration.getSequencerMembership()->isSequencingEnabled(
+             node) &&
+      !nodes_configuration.getStorageMembership()->hasShardShouldReadFrom(node);
 }
 
 }}}} // namespace facebook::logdevice::configuration::nodes

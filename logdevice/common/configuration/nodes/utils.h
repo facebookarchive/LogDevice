@@ -25,8 +25,9 @@ namespace nodes {
  * nodes) should be configuraable per nodeset selector. For now, make this
  * compatible with Node::includeInNodesets() in legacy NodesConfig;
  */
-bool shouldIncludeInNodesetSelection(const NodesConfiguration& nodes_config,
-                                     ShardID shard);
+bool shouldIncludeInNodesetSelection(
+    const NodesConfiguration& nodes_configuration,
+    ShardID shard);
 
 /**
  * Check if nodeset is valid with the given replication property and
@@ -40,6 +41,14 @@ bool validStorageSet(const NodesConfiguration& nodes_configuration,
                      const StorageSet& storage_set,
                      ReplicationProperty replication,
                      bool strict = false);
+
+/**
+ * return true if the node is both disabled in sequencer membership and
+ *        does not have any readable shard in storage membership. Node
+ *        not exist in nodes_configuration is also considered disabled.
+ */
+bool isNodeDisabled(const NodesConfiguration& nodes_configuration,
+                    node_index_t node);
 
 /**
  * Helper method for determining whether we need to use SSL for connection

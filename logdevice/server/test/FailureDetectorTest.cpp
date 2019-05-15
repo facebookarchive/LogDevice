@@ -69,9 +69,15 @@ class MockFailureDetector : public FailureDetector {
     messages_.emplace_back(node, std::move(msg));
     return 0;
   }
-  std::shared_ptr<ServerConfig> getServerConfig() const override {
-    return config_;
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const override {
+    return config_->getNodesConfigurationFromServerConfigSource();
   }
+
+  NodeID getMyNodeID() const override {
+    return config_->getMyNodeID();
+  }
+
   ClusterState* getClusterState() const override {
     return cluster_state_.get();
   }

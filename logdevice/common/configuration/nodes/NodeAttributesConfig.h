@@ -89,6 +89,9 @@ class NodeAttributesConfig {
   const_iterator end() const {
     return node_states_.cend();
   }
+  const_iterator find(node_index_t node) const {
+    return node_states_.find(node);
+  }
 
  private:
   MapType node_states_{};

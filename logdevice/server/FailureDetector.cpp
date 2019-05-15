@@ -17,6 +17,7 @@
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Socket.h"
 #include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/common/configuration/nodes/utils.h"
 #include "logdevice/common/stats/ServerHistograms.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/util.h"
@@ -26,19 +27,16 @@ namespace facebook { namespace logdevice {
 
 class FailureDetector::RandomSelector : public FailureDetector::NodeSelector {
   NodeID getNode(FailureDetector* detector) override {
-    auto config = detector->getServerConfig();
-    auto& nodes = config->getNodes();
-
-    NodeID this_node = config->getMyNodeID();
-
+    const auto& nodes_configuration = detector->getNodesConfiguration();
+    NodeID this_node = detector->getMyNodeID();
     // viable candidates are all sequencer/storage nodes we are able to talk to,
     // other than this one
     std::vector<NodeID> candidates;
-    for (const auto& it : nodes) {
+
+    for (const auto& it : *nodes_configuration->getServiceDiscovery()) {
       node_index_t idx = it.first;
       if (idx != this_node.index() && detector->isValidDestination(idx)) {
-        NodeID candidate_id(idx, it.second.generation);
-        candidates.push_back(candidate_id);
+        candidates.push_back(nodes_configuration->getNodeID(idx));
       }
     }
 
@@ -48,54 +46,49 @@ class FailureDetector::RandomSelector : public FailureDetector::NodeSelector {
     }
 
     return candidates[folly::Random::rand32((uint32_t)candidates.size())];
-  };
+  }
 };
 
 class FailureDetector::RoundRobinSelector
     : public FailureDetector::NodeSelector {
  public:
   NodeID getNode(FailureDetector* detector) override {
-    auto config = detector->getServerConfig();
+    const auto& nodes_configuration = detector->getNodesConfiguration();
+    const auto& serv_disc = nodes_configuration->getServiceDiscovery();
+    NodeID this_node = detector->getMyNodeID();
 
-    auto& nodes = config->getNodes();
-    auto this_node = config->getMyNodeID();
-
-    if (next_node_idx_.hasValue() && !nodes.count(next_node_idx_.value())) {
+    if (next_node_idx_.hasValue() &&
+        !serv_disc->hasNode(next_node_idx_.value())) {
       // The node was removed from config.
       next_node_idx_ = folly::none;
     }
 
-    if (!next_node_idx_.hasValue() || iters_ >= nodes.size()) {
+    if (!next_node_idx_.hasValue() || iters_ >= serv_disc->numNodes()) {
       // Every `nodes.size()' iterations reset next_node_idx_ to this
       // node's neighbour. This is meant to avoid all nodes gossiping to the
       // same node in each round, even in the presence of sporadic down nodes.
-
-      auto it = nodes.find(this_node.index());
-      ld_check(it != nodes.end());
+      auto it = serv_disc->find(this_node.index());
+      ld_check(it != serv_disc->end());
       ++it;
-      if (it == nodes.end()) {
-        it = nodes.begin();
+      if (it == serv_disc->end()) {
+        it = serv_disc->begin();
       }
       next_node_idx_ = it->first;
-
       iters_ = 0;
     }
 
     NodeID target;
-    for (int attempts = nodes.size(); attempts > 0; --attempts) {
-      ld_assert(nodes.count(next_node_idx_.value()));
+    for (int attempts = serv_disc->numNodes(); attempts > 0; --attempts) {
+      ld_assert(next_node_idx_.hasValue());
+      ld_assert(serv_disc->hasNode(next_node_idx_.value()));
+      target = nodes_configuration->getNodeID(next_node_idx_.value());
 
-      target = NodeID(
-          next_node_idx_.value(), nodes.at(next_node_idx_.value()).generation);
-      ld_check(config->getNode(target) != nullptr);
-
-      auto it = nodes.find(next_node_idx_.value());
-      ld_check(it != nodes.end());
+      auto it = serv_disc->find(next_node_idx_.value());
+      ld_check(it != serv_disc->end());
       ++it;
-      if (it == nodes.end()) {
-        it = nodes.begin();
+      if (it == serv_disc->end()) {
+        it = serv_disc->begin();
       }
-
       next_node_idx_ = it->first;
 
       if (target != this_node && detector->isValidDestination(target.index())) {
@@ -269,13 +262,14 @@ void FailureDetector::buildInitialState(
   ld_info("Wait over%s", cs_update.size() ? " (cluster state received)" : "");
 
   if (cs_update.size()) {
-    auto config = getServerConfig();
-    node_index_t my_idx = config->getMyNodeID().index();
+    const auto& nodes_configuration = getNodesConfiguration();
+    node_index_t my_idx = getMyNodeID().index();
+
     // Set the correct state of nodes instead of DEAD
     FailureDetector::NodeState state;
 
     auto cs = getClusterState();
-    for (size_t i = 0; i <= config->getMaxNodeIdx(); ++i) {
+    for (size_t i = 0; i <= nodes_configuration->getMaxNodeIndex(); ++i) {
       if (i == my_idx)
         continue;
 
@@ -371,8 +365,9 @@ void FailureDetector::noteConfigurationChanged() {
 }
 
 void FailureDetector::gossip() {
-  auto config = getServerConfig();
-  size_t size = config->getMaxNodeIdx() + 1;
+  const auto& nodes_configuration = getNodesConfiguration();
+  size_t size = nodes_configuration->getMaxNodeIndex() + 1;
+
   std::lock_guard<std::mutex> lock(mutex_);
 
   NodeID dest = selector_->getNode(this);
@@ -383,7 +378,7 @@ void FailureDetector::gossip() {
     dumpFDState();
   }
 
-  NodeID this_node = config->getMyNodeID();
+  NodeID this_node = getMyNodeID();
   auto now = SteadyTimestamp::now();
   // bump other nodes' entry in gossip list if at least 1 gossip_interval passed
   if (now >= last_gossip_tick_time_ + settings_->gossip_interval) {
@@ -553,8 +548,7 @@ bool FailureDetector::processFlags(const GOSSIP_Message& msg) {
     dumpFDState();
   }
 
-  auto config = getServerConfig();
-  node_index_t my_idx = config->getMyNodeID().index();
+  node_index_t my_idx = getMyNodeID().index();
   node_index_t sender_idx = msg.gossip_node_.index();
   ld_check(my_idx != sender_idx);
 
@@ -626,8 +620,7 @@ FailureDetector::flagsToString(GOSSIP_Message::GOSSIP_flags_t flags) {
 }
 
 void FailureDetector::onGossipReceived(const GOSSIP_Message& msg) {
-  auto config = getServerConfig();
-  node_index_t this_index = config->getMyNodeID().index();
+  node_index_t this_index = getMyNodeID().index();
 
   if (shouldDumpState()) {
     ld_info("Gossip message received from node %s, sent_time:%lums",
@@ -763,8 +756,7 @@ void FailureDetector::onGossipReceived(const GOSSIP_Message& msg) {
 
 void FailureDetector::startSuspectTimer() {
   ld_info("Starting suspect state timer");
-  auto config = getServerConfig();
-  node_index_t my_idx = config->getMyNodeID().index();
+  node_index_t my_idx = getMyNodeID().index();
 
   folly::SharedMutex::ReadHolder read_lock(nodes_mutex_);
   nodes_[my_idx].gossip_ = 0;
@@ -794,15 +786,14 @@ void FailureDetector::startGossiping() {
 }
 
 std::string FailureDetector::dumpGossipList(std::vector<uint32_t> list) {
-  auto config = getServerConfig();
-  auto& nodes = config->getNodes();
-  size_t n = config->getMaxNodeIdx() + 1;
+  const auto& nodes_configuration = getNodesConfiguration();
+  size_t n = nodes_configuration->getMaxNodeIndex() + 1;
   n = std::min(n, list.size());
   std::string res;
 
   for (size_t i = 0; i < n; ++i) {
-    // TODO: any chance nodes.at(i) does not exist?
-    NodeID node_id(i, nodes.count(i) ? nodes.at(i).generation : 0);
+    // if i doesn't exist, generation 1 will be used
+    NodeID node_id = nodes_configuration->getNodeID(i);
     res += node_id.toString() + " = " + folly::to<std::string>(list[i]) +
         (i < n - 1 ? ", " : "");
   }
@@ -812,15 +803,14 @@ std::string FailureDetector::dumpGossipList(std::vector<uint32_t> list) {
 
 std::string
 FailureDetector::dumpInstanceList(std::vector<std::chrono::milliseconds> list) {
-  auto config = getServerConfig();
-  auto& nodes = config->getNodes();
-  size_t n = config->getMaxNodeIdx() + 1;
+  const auto& nodes_configuration = getNodesConfiguration();
+  size_t n = nodes_configuration->getMaxNodeIndex() + 1;
   n = std::min(n, list.size());
   std::string res;
 
   for (size_t i = 0; i < n; ++i) {
-    // TODO: any chance nodes.at(i) does not exist?
-    NodeID node_id(i, nodes.count(i) ? nodes.at(i).generation : 0);
+    // if i doesn't exist, generation 1 will be used
+    NodeID node_id = nodes_configuration->getNodeID(i);
     res += node_id.toString() + " = " +
         folly::to<std::string>(list[i].count()) + (i < n - 1 ? ", " : "");
   }
@@ -829,14 +819,13 @@ FailureDetector::dumpInstanceList(std::vector<std::chrono::milliseconds> list) {
 }
 
 void FailureDetector::dumpFDState() {
-  auto config = getServerConfig();
-  auto& nodes = config->getNodes();
-  size_t n = config->getMaxNodeIdx() + 1;
+  const auto& nodes_configuration = getNodesConfiguration();
+  size_t n = nodes_configuration->getMaxNodeIndex() + 1;
   std::string status_str;
 
   for (size_t i = 0; i < n; ++i) {
-    // TODO: any chance nodes.at(i) does not exist?
-    NodeID node_id(i, nodes.count(i) ? nodes.at(i).generation : 0);
+    // if i doesn't exist, generation 1 will be used
+    NodeID node_id = nodes_configuration->getNodeID(i);
     status_str +=
         node_id.toString() + "(" + getNodeStateString(nodes_[i].state) + "), ";
   }
@@ -887,11 +876,11 @@ void FailureDetector::detectFailures(node_index_t self, size_t n) {
   // This is called after locking nodes_mutex_ read lock
 
   const int threshold = settings_->gossip_failure_threshold;
-  auto config = getServerConfig();
+  const auto& nodes_configuration = getNodesConfiguration();
 
   size_t dead_cnt = 0;
   size_t effective_dead_cnt = 0;
-  size_t cluster_size = config->getNodes().size();
+  size_t cluster_size = nodes_configuration->clusterSize();
   size_t effective_cluster_size = cluster_size;
 
   // Finally, update all the states
@@ -928,16 +917,18 @@ void FailureDetector::detectFailures(node_index_t self, size_t n) {
     // re-check node's state as it may be suspect, in which case it is still
     // considered dead
     dead = (it.second.state != NodeState::ALIVE);
-    auto node = config->getNode(it.first);
-    if (node != nullptr) {
-      if (node->isDisabled()) {
+
+    if (nodes_configuration->isNodeInServiceDiscoveryConfig(it.first)) {
+      bool node_disabled =
+          configuration::nodes::isNodeDisabled(*nodes_configuration, it.first);
+      if (node_disabled) {
         // It is disabled. Do not count it towards the effective cluster
         // size, as this node doesn't serve anything
         --effective_cluster_size;
       }
       if (dead) {
         ++dead_cnt;
-        if (!node->isDisabled()) {
+        if (!node_disabled) {
           // only active nodes matter for isolation. see comment below.
           ++effective_dead_cnt;
         }
@@ -1180,8 +1171,13 @@ std::string FailureDetector::getDomainIsolationString() const {
   return "";
 }
 
-std::shared_ptr<ServerConfig> FailureDetector::getServerConfig() const {
-  return Worker::getConfig()->serverConfig();
+std::shared_ptr<const configuration::nodes::NodesConfiguration>
+FailureDetector::getNodesConfiguration() const {
+  return Worker::onThisThread()->getNodesConfiguration();
+}
+
+NodeID FailureDetector::getMyNodeID() const {
+  return Worker::getConfig()->serverConfig()->getMyNodeID();
 }
 
 ClusterState* FailureDetector::getClusterState() const {
@@ -1189,9 +1185,9 @@ ClusterState* FailureDetector::getClusterState() const {
 }
 
 void FailureDetector::broadcastWrapper(GOSSIP_Message::GOSSIP_flags_t flags) {
-  auto config = getServerConfig();
-  auto& nodes = config->getNodes();
-  node_index_t my_idx = config->getMyNodeID().index();
+  const auto& nodes_configuration = getNodesConfiguration();
+  const auto& serv_disc = nodes_configuration->getServiceDiscovery();
+  node_index_t my_idx = getMyNodeID().index();
   NodeID dest;
 
   std::string msg_type = flagsToString(flags);
@@ -1201,21 +1197,20 @@ void FailureDetector::broadcastWrapper(GOSSIP_Message::GOSSIP_flags_t flags) {
   }
 
   ld_info("Broadcasting %s message.", msg_type.c_str());
-  for (const auto& it : nodes) {
+  for (const auto& it : *serv_disc) {
     node_index_t idx = it.first;
-    auto& node = it.second;
     if (idx == my_idx) {
       continue;
     }
 
     auto gossip_msg = std::make_unique<GOSSIP_Message>();
     gossip_msg->node_list_.clear();
-    gossip_msg->gossip_node_ = config->getMyNodeID();
+    gossip_msg->gossip_node_ = getMyNodeID();
     gossip_msg->flags_ |= flags;
     gossip_msg->instance_id_ = instance_id_;
     gossip_msg->sent_time_ = getCurrentTimeInMillis();
 
-    dest = NodeID(idx, node.generation);
+    dest = nodes_configuration->getNodeID(idx);
     RATELIMIT_INFO(std::chrono::seconds(1),
                    2,
                    "Sending %s message with instance id:%lu to node %s",
@@ -1256,7 +1251,7 @@ void FailureDetector::onGossipMessageSent(Status st,
 
   // set the limit of retries to the number of nodes in the cluster.
   // this is arbitrary to try best to send a message to any node.
-  const size_t max_attempts = getServerConfig()->getNodes().size();
+  const size_t max_attempts = getNodesConfiguration()->clusterSize();
   if (st == E::OK) {
     // message was sent successfully, reset the counter.
     num_gossip_attempts_failed_ = 0;
@@ -1351,8 +1346,8 @@ bool FailureDetector::isAlive(node_index_t idx) const {
   /* We'll check whether suspect duration has already passed
    * or not, only for this node.
    */
-  auto config = getServerConfig();
-  node_index_t my_idx = config->getMyNodeID().index();
+  node_index_t my_idx = getMyNodeID().index();
+
   if (my_idx != idx) {
     return false;
   }

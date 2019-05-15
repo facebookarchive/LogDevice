@@ -452,7 +452,10 @@ class FailureDetector {
   }
 
   // these helper functions are overridden in unit tests
-  virtual std::shared_ptr<ServerConfig> getServerConfig() const;
+  virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const;
+  virtual NodeID getMyNodeID() const;
+
   virtual ClusterState* getClusterState() const;
   virtual int sendGossipMessage(NodeID, std::unique_ptr<GOSSIP_Message>);
 
