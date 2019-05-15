@@ -370,7 +370,7 @@ TEST(MessagingTest, BlockingRequestPostFail) {
     // Post a sleeping request to tie up the worker
     std::unique_ptr<Request> rq =
         std::make_unique<PausedRequest>(&block_on_sem, &signal_sem);
-    ASSERT_EQ(0, p->postRequest(rq));
+    ASSERT_EQ(0, p->postImportant(rq));
     // Wait until it is being executed on the worker.
     signal_sem.wait();
   }
