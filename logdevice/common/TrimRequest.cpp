@@ -35,7 +35,8 @@ Request::Execution TrimRequest::execute() {
 }
 
 TrimRequest::~TrimRequest() {
-  const Worker* worker = static_cast<Worker*>(EventLoop::onThisThread());
+  const Worker* worker =
+      static_cast<Worker*>(Worker::onThisThread(false /*enforce_worker*/));
   if (!worker) {
     // The request has not made it to a Worker. Do not call the callback.
     return;

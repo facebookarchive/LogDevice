@@ -36,7 +36,8 @@ struct SettingOverrideTTLRequestMap {
 
 class ServerWorker : public Worker {
  public:
-  ServerWorker(ServerProcessor*,
+  ServerWorker(WorkContext::KeepAlive,
+               ServerProcessor*,
                worker_id_t,
                const std::shared_ptr<UpdateableConfig>&,
                StatsHolder*,
@@ -91,8 +92,8 @@ class ServerWorker : public Worker {
 
   void onServerConfigUpdated() override;
 
-  // This overrides Worker::onThreadStarted() but calls it first thing
-  void onThreadStarted() override;
+  // This overrides Worker::setupWorker() but calls it first thing
+  void setupWorker() override;
 
   /**
    * Gets the storage task queue. This is the main access point

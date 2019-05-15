@@ -148,7 +148,6 @@ BENCHMARK(RequestPumpFunctionBenchmark, n) {
     for (auto& i : requestsPerProducer) {
       i.join();
     }
-    handle->dontWaitOnDestruct();
     handle->shutdown();
     auto thread = handle->getThread();
     pthread_join(thread, nullptr);
@@ -230,7 +229,6 @@ BENCHMARK(RequestPumpFunctionBenchmarkSequential, n) {
     baton.wait();
   }
   BENCHMARK_SUSPEND {
-    handle->dontWaitOnDestruct();
     handle->shutdown();
     auto thread = handle->getThread();
     pthread_join(thread, nullptr);

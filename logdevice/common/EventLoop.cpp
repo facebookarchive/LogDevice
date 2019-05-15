@@ -130,6 +130,13 @@ EventLoop::~EventLoop() {
   start_sem_.post();
 
   pthread_join(thread_, nullptr);
+  // Shutdown drains all the work contexts before invoking this destructor.
+
+  if (event_handlers_called_.load() != event_handlers_completed_.load()) {
+    ld_info("EventHandlers called: %lu, EventHandlers completed: %lu",
+            event_handlers_called_.load(),
+            event_handlers_completed_.load());
+  }
 }
 
 void EventLoop::add(folly::Function<void()> func) {
@@ -206,8 +213,6 @@ void EventLoop::run() {
     ld_error("event_base_loop() exited abnormally with return value %d.", rv);
   }
   ld_check_ge(rv, 0);
-
-  delete this;
 
   // the thread on which this EventLoop ran terminates here
 }

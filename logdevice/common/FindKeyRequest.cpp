@@ -179,7 +179,7 @@ void FindKeyRequest::finalize(Status status, bool delete_this) {
 }
 
 FindKeyRequest::~FindKeyRequest() {
-  const Worker* worker = static_cast<Worker*>(EventLoop::onThisThread());
+  const Worker* worker = Worker::onThisThread(false /* enforce_worker */);
   if (!worker) {
     // The request has not made it to a Worker. Do not call the callback.
     return;

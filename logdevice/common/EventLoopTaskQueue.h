@@ -81,6 +81,13 @@ class EventLoopTaskQueue {
    */
   bool isFull();
 
+  /**
+   * @return request pump shutdown was initiated.
+   */
+  bool isShutdown() {
+    return shutdown_signaled_.load();
+  }
+
  private:
   // The data structures of choice for queue is an UnboundedQueue paired with a
   // LifoEventSem. The posting codepath writes into the queue, then posts to

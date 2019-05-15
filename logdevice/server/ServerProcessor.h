@@ -40,7 +40,9 @@ class ServerProcessor : public Processor {
     return p;
   }
 
-  ServerWorker* createWorker(worker_id_t i, WorkerType type) override;
+  ServerWorker* createWorker(WorkContext::KeepAlive executor,
+                             worker_id_t i,
+                             WorkerType type) override;
 
   void applyToWorkers(folly::Function<void(ServerWorker&)> func,
                       Order order = Order::FORWARD) {

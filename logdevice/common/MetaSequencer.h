@@ -49,7 +49,8 @@ class MetaSequencer : public Sequencer {
     // must be created with a metadata log id
     ld_check(MetaDataLog::isMetaDataLog(logid));
     ld_check(controller != nullptr);
-    const Worker* worker = static_cast<Worker*>(EventLoop::onThisThread());
+    const Worker* worker =
+        static_cast<Worker*>(Worker::onThisThread(false /*enforce_worker*/));
     if (worker) {
       created_on_ = worker->idx_;
     }
