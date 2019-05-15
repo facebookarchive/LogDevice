@@ -17,10 +17,16 @@
 #include "logdevice/common/libevent/compat.h"
 
 namespace facebook { namespace logdevice {
+
+constexpr size_t EventLoopTaskQueue::kNumberOfPriorities;
+
 EventLoopTaskQueue::EventLoopTaskQueue(struct event_base* base,
                                        size_t capacity,
                                        int dequeues_per_iteration)
-    : capacity_(capacity), num_dequeues_per_iteration_(dequeues_per_iteration) {
+    : num_hi_pri_dequeues_per_iteration_(dequeues_per_iteration),
+      num_mid_pri_dequeues_per_iteration_(0),
+      num_lo_pri_dequeues_per_iteration_(0),
+      capacity_(capacity) {
   if (!base) {
     // err shoud be set by the function that tried to create base
     throw ConstructorFailed();
@@ -96,14 +102,14 @@ bool EventLoopTaskQueue::isFull() {
   return false;
 }
 
-int EventLoopTaskQueue::add(Func func) {
+int EventLoopTaskQueue::addWithPriority(Func func, int8_t priority) {
   if (UNLIKELY(sem_.isShutdown())) {
     err = E::SHUTDOWN;
     return -1;
   }
   // During dequeue, semaphore is decremented by a value followed by dequeue of
   // equal number of elements. Hence, enqueue here is done in order
-  queue_.enqueue(std::move(func));
+  queues_[translatePriority(priority)].enqueue(std::move(func));
   sem_.post();
   return 0;
 }
@@ -121,7 +127,11 @@ void EventLoopTaskQueue::haveTasksEventHandler(void* arg, short what) {
     // callback with the amount.  We're guaranteed to have at least that many
     // items in the UMPSCQueue, because the producer pushes into the queue
     // first then increments the semaphore.
-    self->sem_waiter_->processBatch(cb, self->num_dequeues_per_iteration_);
+    self->sem_waiter_->processBatch(
+        cb,
+        self->num_hi_pri_dequeues_per_iteration_ +
+            self->num_mid_pri_dequeues_per_iteration_ +
+            self->num_lo_pri_dequeues_per_iteration_);
   } catch (const folly::ShutdownSemError&) {
     struct event_base* base = LD_EV(event_get_base)(self->tasks_pending_event_);
     // First delete the event since the fd is about to go away
@@ -143,13 +153,35 @@ void EventLoopTaskQueue::haveTasksEventHandler(void* arg, short what) {
   }
 }
 
-void EventLoopTaskQueue::executeTasks(size_t num_tasks_to_dequeue) {
-  for (size_t i = 0; i < num_tasks_to_dequeue; ++i) {
-    Func func;
-    auto success = queue_.try_dequeue(func);
-    ld_check(success);
-    func();
-  }
+void EventLoopTaskQueue::executeTasks(size_t tokens) {
+  auto execute = [this, &tokens](const size_t times, size_t start_priority) {
+    int to_execute = std::min(tokens, times);
+    tokens -= to_execute;
+    for (size_t i = 0; i < to_execute; ++i) {
+      Func func;
+      bool found = 0;
+
+      for (int j = 0; j < kNumberOfPriorities; ++j) {
+        if (queues_[start_priority].try_dequeue(func)) {
+          found = 1;
+          break;
+        }
+        ++start_priority;
+        start_priority %= kNumberOfPriorities;
+      }
+      ld_assert(found);
+      func();
+    }
+  };
+
+  execute(num_hi_pri_dequeues_per_iteration_,
+          translatePriority(folly::Executor::HI_PRI));
+
+  execute(num_mid_pri_dequeues_per_iteration_,
+          translatePriority(folly::Executor::MID_PRI));
+
+  execute(num_lo_pri_dequeues_per_iteration_,
+          translatePriority(folly::Executor::LO_PRI));
 }
 
 }} // namespace facebook::logdevice

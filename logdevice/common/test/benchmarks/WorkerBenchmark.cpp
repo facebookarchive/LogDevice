@@ -99,7 +99,7 @@ class RequestPumpBenchmarkRequest : public Request {
   Semaphore& sem_;
 };
 
-BENCHMARK(RequestPumpFunctionBenchmark, n) {
+BENCHMARK(RequestPumpFunctionBenchmarkOnEventLoop, n) {
   std::condition_variable producers_sem;
   std::mutex producers_sem_mtx;
   Semaphore sem;

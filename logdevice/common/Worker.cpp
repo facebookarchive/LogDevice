@@ -1313,7 +1313,7 @@ int Worker::tryPost(std::unique_ptr<Request>& req) {
     return -1;
   }
 
-  if (num_requests_enqueued_.load() >
+  if (num_requests_enqueued_.load(std::memory_order_relaxed) >
       immutable_settings_->worker_request_pipe_capacity) {
     err = E::NOBUFS;
     return -1;
@@ -1326,77 +1326,30 @@ void Worker::add(folly::Func func) {
   addWithPriority(std::move(func), folly::Executor::LO_PRI);
 }
 
-void Worker::pickAndExecuteTask(int8_t priority_hint) {
-  auto* queue = &lo_pri_tasks_;
-  switch (priority_hint) {
-    case Executor::LO_PRI:
-      if (lo_pri_tasks_.empty()) {
-        queue = &hi_pri_tasks_;
-        WORKER_STAT_INCR(worker_executed_hi_pri_work);
-      } else {
-        WORKER_STAT_INCR(worker_executed_lo_pri_work);
-      }
-      break;
-    case Executor::HI_PRI:
-    case Executor::MID_PRI:
-      if (hi_pri_tasks_.empty()) {
-        WORKER_STAT_INCR(worker_executed_lo_pri_work);
-      } else {
-        queue = &hi_pri_tasks_;
-        WORKER_STAT_INCR(worker_executed_hi_pri_work);
-      }
-      break;
-    default:
-      ld_check(false);
-  };
-  ld_check(queue && !queue->empty());
-  folly::Func f = queue->dequeue();
-  Worker::on_this_thread_ = this;
-  f();
-  Worker::on_this_thread_ = nullptr;
-}
-
 void Worker::addWithPriority(folly::Func func, int8_t priority) {
   folly::RequestContextScopeGuard g(impl_->worker_context_);
-  num_requests_enqueued_++;
-  // Enqueue task in right list so they are available to execute
-  // right away.
-  ld_check_in(priority, ({folly::Executor::HI_PRI, folly::Executor::LO_PRI}));
-  if (priority == folly::Executor::HI_PRI) {
-    // Called from non-worker threads hence Worker::stats() returns null.
-    STAT_INCR(processor_->stats_, worker_enqueued_hi_pri_work);
-    hi_pri_tasks_.enqueue(std::move(func));
-  } else {
-    // Called from non-worker threads hence Worker::stats() returns null.
-    STAT_INCR(processor_->stats_, worker_enqueued_lo_pri_work);
-    lo_pri_tasks_.enqueue(std::move(func));
+
+  switch (priority) {
+    case folly::Executor::HI_PRI:
+      STAT_INCR(processor_->stats_, worker_enqueued_hi_pri_work);
+      break;
+    case folly::Executor::MID_PRI:
+      STAT_INCR(processor_->stats_, worker_enqueued_mid_pri_work);
+      break;
+    case folly::Executor::LO_PRI:
+      STAT_INCR(processor_->stats_, worker_enqueued_lo_pri_work);
+      break;
+    default:
+      break;
   }
-  SerialWorkContext::add([this] {
-    ld_check_gt(num_requests_enqueued_.load(), 0);
-    num_requests_enqueued_--;
 
-    int8_t priority_hint = folly::Executor::LO_PRI;
-    switch (task_distribution_(task_rng_)) {
-      case 0:
-        break;
-      case 1:
-        priority_hint = folly::Executor::MID_PRI;
-        break;
-      case 2:
-        priority_hint = folly::Executor::HI_PRI;
-        break;
-      default:
-        ld_check(false);
-        priority_hint = folly::Executor::HI_PRI;
-    };
-
-    if (priority_hint == folly::Executor::HI_PRI) {
-      // Just to make sure we choose hi priority task according to given
-      // distribution.
-      WORKER_STAT_INCR(worker_choose_hi_pri_work);
-    }
-    pickAndExecuteTask(priority_hint);
-  });
+  num_requests_enqueued_.fetch_add(1, std::memory_order_relaxed);
+  SerialWorkContext::addWithPriority(
+      [this, func = std::move(func)]() mutable {
+        num_requests_enqueued_.fetch_sub(1, std::memory_order_relaxed);
+        func();
+      },
+      priority);
 }
 
 int Worker::forcePost(std::unique_ptr<Request>& req, int8_t priority) {

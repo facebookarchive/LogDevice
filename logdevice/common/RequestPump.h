@@ -73,7 +73,7 @@ class RequestPump : public EventLoopTaskQueue {
    * RequestPump runs.
    */
   void setNumRequestsPerIteration(int requestsPerIteration) {
-    setNumDequeuesPerIteration(requestsPerIteration);
+    setNumPerIterations(requestsPerIteration, 0, 0);
   }
 
  private:

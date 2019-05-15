@@ -796,15 +796,6 @@ class Worker : public SerialWorkContext {
   // Initializes subscriptions to config and setting updates
   void initializeSubscriptions();
 
-  // Pick and execute a single task.
-  // This method tries to select a task of given priority. If it does not
-  // find a task enqueued for that priority it will continue looking in the next
-  // lower priority level to check if there is task available. If lowest
-  // priority level is empty it goes back to the highest priority and continues
-  // the search. It goes over all priories atmost once looking for tasks. Method
-  // expects that there is atleast a single task available to execute.
-  void pickAndExecuteTask(int8_t priority_hint);
-
   // Helper used by onStartedRunning() and onStoppedRunning()
   static void setCurrentlyRunningContext(RunContext new_context,
                                          RunContext prev_context);
@@ -907,27 +898,6 @@ class Worker : public SerialWorkContext {
   // Stop on EventLogStateMachine should only be called once.
   // Set to true once stop has been called
   bool event_log_stopped_{false};
-
-  // These task queues are used to hold work posted to the worker till the
-  // worker gets a chance to run on the executor. When a request or any type of
-  // work is posted to worker. Based on the priority of the posted work , it is
-  // saved off in one of these task queues. A separate lambda is posted to the
-  // executor queue. The lambda when executed on the executor thread selects a
-  // task to execute from one of the task queue. task_distribution_ is used to
-  // select the queue from where a task should be dequeued.
-  folly::UMPSCQueue<folly::Func, false /* MayBlock */, 9> hi_pri_tasks_;
-  folly::UMPSCQueue<folly::Func, false /* MayBlock */, 9> lo_pri_tasks_;
-
-  // Discrete distribution for tasks so there is bounded preference to a
-  // particular class instead of unbounded favor to a particular class. This
-  // also makes this logic extensible where another priority class can be added
-  // easily. I will make the distribution a setting and initialize this in
-  // constructor once reviewers are ok with this method.
-  folly::ThreadLocalPRNG task_rng_;
-  std::discrete_distribution<> task_distribution_{
-      kLoPriTaskExecDistribution /*Executor::LO_PRI*/,
-      kMidPriTaskExecDistribution /*Executor::MID_PRI*/,
-      kHiPriTaskExecDistribution /*Executor::HI_PRI*/};
 
   friend struct ::testing::SocketConnectRequest;
 };

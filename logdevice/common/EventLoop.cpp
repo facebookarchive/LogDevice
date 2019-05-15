@@ -140,16 +140,11 @@ EventLoop::~EventLoop() {
 }
 
 void EventLoop::add(folly::Function<void()> func) {
-  request_pump_->add([f = std::move(func),
-                      ctx = folly::RequestContext::saveContext()]() mutable {
-    folly::RequestContextScopeGuard g(ctx);
-    f();
-  });
+  addWithPriority(std::move(func), folly::Executor::LO_PRI);
 }
 
-void EventLoop::addWithPriority(folly::Function<void()> func,
-                                int8_t /*priority*/) {
-  add(std::move(func));
+void EventLoop::addWithPriority(folly::Function<void()> func, int8_t priority) {
+  request_pump_->addWithPriority(std::move(func), priority);
 }
 
 void EventLoop::start() {

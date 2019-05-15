@@ -6,8 +6,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 #pragma once
+
 #include <memory>
 
+#include <folly/Executor.h>
 #include <folly/Function.h>
 
 #include "folly/concurrency/UnboundedQueue.h"
@@ -33,6 +35,13 @@ struct EventLoopTaskQueueImpl;
  * queue and invokes it. The class returns control to the libevent loop after
  * processing a few tasks (Settings::requests_per_iteration) to avoid
  * hogging the event loop.
+ *
+ * The current implementation of multiple priorities based on three queues.
+ * You can specify how many request per iteration from each queue we should try
+ * to process, but if there is no enough requests to satisfy requirement we
+ * will try to dequeue queue with lower priority, if there is no requests with
+ * lower priority we will try to search in higher priorities from highest to
+ * lowest.
  *
  * The expected pattern is for producers and the consumer to share a
  * std::shared_ptr<EventLoopTaskQueue> for shutdown safety.
@@ -70,10 +79,10 @@ class EventLoopTaskQueue {
    *
    * Can be invoked from any thread.
    */
-  virtual int add(Func func);
+  virtual int addWithPriority(Func func, int8_t priority);
 
-  virtual void setNumDequeuesPerIteration(int num) {
-    num_dequeues_per_iteration_ = num;
+  virtual int add(Func func) {
+    return addWithPriority(std::move(func), folly::Executor::LO_PRI);
   }
 
   /*
@@ -88,7 +97,37 @@ class EventLoopTaskQueue {
     return shutdown_signaled_.load();
   }
 
+  static size_t translatePriority(const int8_t priority) {
+    constexpr static std::array<int8_t, kNumberOfPriorities> lookup_table = {
+        {folly::Executor::HI_PRI,
+         folly::Executor::MID_PRI,
+         folly::Executor::LO_PRI}};
+
+    for (int i = 0; i < kNumberOfPriorities; ++i) {
+      if (lookup_table[i] == priority) {
+        return i;
+      }
+    }
+    return kNumberOfPriorities - 1;
+  }
+
+  void setNumPerIterations(int hi_pri_num, int mid_pri_num, int lo_pri_num) {
+    num_hi_pri_dequeues_per_iteration_ = hi_pri_num;
+    num_mid_pri_dequeues_per_iteration_ = mid_pri_num;
+    num_lo_pri_dequeues_per_iteration_ = lo_pri_num;
+  }
+
  private:
+  using Queue = folly::UMPSCQueue<Func, false /* MayBlock */, 9>;
+
+  // Execution probability distribution of different tasks. Hi Priority tasks
+  // are called such because they have a higher chance of getting executed.
+  size_t num_hi_pri_dequeues_per_iteration_;
+  size_t num_mid_pri_dequeues_per_iteration_;
+  size_t num_lo_pri_dequeues_per_iteration_;
+
+  constexpr static size_t kNumberOfPriorities = 3;
+
   // The data structures of choice for queue is an UnboundedQueue paired with a
   // LifoEventSem. The posting codepath writes into the queue, then posts to
   // the semaphore. LifoEventSem ensures that the FD hooked up to the event
@@ -97,7 +136,8 @@ class EventLoopTaskQueue {
   // the queue: the consumer first consumes some portion of the semaphore's
   // value then pops that many tasks off of the queue (details hidden
   // behind LifoEventSem::processBatch()).
-  folly::UMPSCQueue<Func, false /* MayBlock */, 9> queue_;
+  std::array<Queue, kNumberOfPriorities> queues_;
+
   LifoEventSem sem_;
   std::unique_ptr<LifoEventSem::AsyncWaiter> sem_waiter_;
 
@@ -112,14 +152,11 @@ class EventLoopTaskQueue {
   // processing the shutdown)
   std::atomic<bool> shutdown_signaled_{false};
 
-  // Try to dequeue this many elements at time from the queue. Actual number
-  // depends on how many elements are present in the queue.
-  int num_dequeues_per_iteration_;
-
   // Callback registered with event base. Indicates pending events on the queue.
   static void haveTasksEventHandler(void* self, short what);
 
   // Invoked by haveTasksEventHandle to dequeue tasks from the queue.
   void executeTasks(size_t num_tasks_to_dequeue);
 };
+
 }} // namespace facebook::logdevice

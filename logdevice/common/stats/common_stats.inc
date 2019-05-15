@@ -27,8 +27,10 @@ STAT_DEFINE(background_slow_requests, SUM)
 // TaskQueue stats.
 STAT_DEFINE(worker_choose_hi_pri_work, SUM)
 STAT_DEFINE(worker_enqueued_hi_pri_work, SUM)
+STAT_DEFINE(worker_enqueued_mid_pri_work, SUM)
 STAT_DEFINE(worker_enqueued_lo_pri_work, SUM)
 STAT_DEFINE(worker_executed_hi_pri_work, SUM)
+STAT_DEFINE(worker_executed_mid_pri_work, SUM)
 STAT_DEFINE(worker_executed_lo_pri_work, SUM)
 
 // number of MetaDataLogReaders created
