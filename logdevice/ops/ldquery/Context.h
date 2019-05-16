@@ -22,7 +22,8 @@ struct FailedNodeDetails {
   std::string address;
   std::string failure_reason;
   std::string toString() {
-    return "Host: " + address + ", Reason: " + failure_reason;
+    return folly::to<std::string>(
+        "Host: ", address, ", Reason: ", failure_reason);
   }
 };
 
