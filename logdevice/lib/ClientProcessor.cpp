@@ -7,7 +7,6 @@
  */
 #include "logdevice/lib/ClientProcessor.h"
 
-#include "logdevice/common/EventLoopHandle.h"
 #include "logdevice/lib/ClientWorker.h"
 
 namespace facebook { namespace logdevice {

@@ -12,10 +12,10 @@
 #include <queue>
 #include <utility>
 
-#include "logdevice/common/RequestPump.h"
 #include "logdevice/include/Err.h"
 #include "logdevice/server/storage_tasks/StorageTask.h"
 
+struct event_base;
 namespace facebook { namespace logdevice {
 
 /**
@@ -45,7 +45,7 @@ class PerWorkerStorageTaskQueue {
    *                                run on a single EventLoop iteration
    */
   PerWorkerStorageTaskQueue(shard_index_t shard_idx,
-                            struct event_base* base,
+                            event_base* base,
                             size_t max_tasks_in_flight,
                             size_t max_buffered_tasks,
                             size_t requests_per_iteration);
