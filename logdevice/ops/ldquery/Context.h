@@ -63,11 +63,10 @@ struct Context {
   // e.g. LSNs like "e5n42" and timestamps like "2017-02-23 12:20:34.137".
   bool pretty_output{false};
 
-  std::unique_ptr<ActiveQueryMetadata> activeQueryMetadata =
-      std::make_unique<ActiveQueryMetadata>();
+  ActiveQueryMetadata activeQueryMetadata;
 
   void resetActiveQuery() {
-    activeQueryMetadata.reset(new ActiveQueryMetadata());
+    activeQueryMetadata = ActiveQueryMetadata();
   }
 
  private:

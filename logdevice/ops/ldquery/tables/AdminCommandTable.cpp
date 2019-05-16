@@ -293,7 +293,7 @@ void AdminCommandTable::refillCache(QueryContext& ctx) {
     std::tie(addr, conntype) = getAddrForNode(i, nodes_configuration);
     addr_to_node_id[addr] = i;
     request_response.emplace_back(addr, cmd, conntype);
-    ld_ctx_->activeQueryMetadata->contacted_nodes++;
+    ld_ctx_->activeQueryMetadata.contacted_nodes++;
   }
 
   ld_info("Sending '%s' admin command to %lu nodes...",
@@ -335,7 +335,7 @@ void AdminCommandTable::refillCache(QueryContext& ctx) {
               node_id,
               r.sockaddr.describe().c_str(),
               r.failure_reason.c_str());
-      ld_ctx_->activeQueryMetadata->failures[node_id] =
+      ld_ctx_->activeQueryMetadata.failures[node_id] =
           FailedNodeDetails{r.sockaddr.describe(), r.failure_reason};
     }
   }

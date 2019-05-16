@@ -309,7 +309,7 @@ LDQuery::QueryResults LDQuery::query(const std::string& query) {
     QueryResult res = executeNextStmt(pStmt);
     std::chrono::steady_clock::time_point tend =
         std::chrono::steady_clock::now();
-    res.metadata = *(ctx_->activeQueryMetadata.release());
+    res.metadata = ctx_->activeQueryMetadata;
     sqlite3_finalize(pStmt);
     auto duration =
         std::chrono::duration_cast<std::chrono::milliseconds>(tend - tstart)
