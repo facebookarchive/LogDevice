@@ -129,7 +129,10 @@ struct MaintenanceDefinition {
   13: optional common.MaintenanceGroupID group_id,
   /**
    * If this particular maintenance is blocked on safety checker, the result
-   * will be returned in this object to help the user understand why.
+   * will be returned in this object to help the user understand why. The
+   * information here is a cached version of the last time the maintenance
+   * manager has performed a safety check and once safety check passes this will
+   * be unset.
    */
   14: optional safety.CheckImpactResponse last_check_impact_result,
   /**
@@ -144,30 +147,35 @@ struct MaintenanceDefinition {
 }
 
 /**
- * A map for all maintenance definitions currently applied.
+ * a list of maintenance definition objects given a specific version of the
+ * internal state machine.
  */
 struct ClusterMaintenanceState {
+  /**
+   * The list of maintenances requested by the user
+   */
   1: list<MaintenanceDefinition> maintenances,
+  /**
+   * The version of the state.
+   */
   2: common.unsigned64 version,
 }
 
 struct MaintenanceDefinitionResponse {
   /**
-    * The maintenance that was either created or returned, it will be updated
-    * with the group-id in this case.
-    *
-    * The reason this returns a list is that you may have created a single
-    * request but `group=false`. This request is going to be exploded into
-    * multiple maintenance definitions with their own group-ids.
-    */
+   * The maintenance that was either created or returned, it will be updated
+   * with the group-id in this case.
+   *
+   * The reason this returns a list is that you may have created a single
+   * request but `group=false`. This request is going to be exploded into
+   * multiple maintenance definitions with their own group-ids.
+   */
   1: list<MaintenanceDefinition> maintenances,
-  2: map<common.ShardID, nodes.ShardMaintenanceProgress> shards,
-  3: map<common.NodeID, nodes.SequencerMaintenanceProgress> sequencers,
 }
 
 /**
-  * A matching filter object on one or more maintenances
-  */
+ * A matching filter object on one or more maintenances
+ */
 struct MaintenancesFilter {
   /**
    * If empty, will get all maintenances unless another filter is specified

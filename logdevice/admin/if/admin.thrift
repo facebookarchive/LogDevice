@@ -42,7 +42,10 @@ service AdminAPI extends fb303.FacebookService {
       (1: exceptions.NodeNotReady notready);
 
   /**
-   * Lists the maintenance by group-ids.
+   * Lists the maintenance by group-ids. This returns maintenances from the
+   * state stored in the server which may include maintenances that were not
+   * processed/started yet. If filter is empty, this will return all
+   * maintenances.
    */
   maintenance.MaintenanceDefinitionResponse getMaintenances(1:
       maintenance.MaintenancesFilter filter) throws
