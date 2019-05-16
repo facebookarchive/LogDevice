@@ -382,10 +382,11 @@ void RebuildingSupervisor::requestRebuilding(RebuildingTrigger& trigger,
         trigger.node_id_,
         shard);
     auto delta = std::make_unique<maintenance::MaintenanceDelta>();
-    delta->set_apply_maintenance(maintenance::MaintenanceLogWriter::
-                                     buildMaintenanceDefinitionForRebuilding(
-                                         ShardID(trigger.node_id_, shard),
-                                         "Triggered by RebuildingSupervisor"));
+    delta->set_apply_maintenances(
+        {maintenance::MaintenanceLogWriter::
+             buildMaintenanceDefinitionForRebuilding(
+                 ShardID(trigger.node_id_, shard),
+                 "Triggered by RebuildingSupervisor")});
     maintenance_log_writer_->writeDelta(
         std::move(delta),
         std::move(cb),

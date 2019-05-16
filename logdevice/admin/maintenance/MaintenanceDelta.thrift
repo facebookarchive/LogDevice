@@ -12,6 +12,6 @@ include "logdevice/admin/if/maintenance.thrift"
 namespace cpp2 facebook.logdevice.maintenance
 
 union MaintenanceDelta {
-  1: maintenance.MaintenanceDefinition apply_maintenance,
+  1: list<maintenance.MaintenanceDefinition> apply_maintenances,
   2: maintenance.RemoveMaintenancesRequest remove_maintenances,
 }

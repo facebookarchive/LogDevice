@@ -83,7 +83,7 @@ TEST(ClusterMaintenanceStateCodecTest, BadDeserialize) {
 TEST(ClusterMaintenanceStateCodecTest, DeltaSerialization) {
   MaintenanceDelta apply_maintenance;
   MaintenanceDefinition definition = genDefinition();
-  apply_maintenance.set_apply_maintenance(definition);
+  apply_maintenance.set_apply_maintenances({definition});
 
   std::string payload =
       ThriftCodec::serialize<BinarySerializer>(apply_maintenance);
@@ -93,8 +93,9 @@ TEST(ClusterMaintenanceStateCodecTest, DeltaSerialization) {
   auto restored = ThriftCodec::deserialize<BinarySerializer, MaintenanceDelta>(
       Slice::fromString(payload));
   ASSERT_NE(nullptr, restored);
-  ASSERT_EQ(MaintenanceDelta::Type::apply_maintenance, restored->getType());
+  ASSERT_EQ(MaintenanceDelta::Type::apply_maintenances, restored->getType());
 
   ASSERT_EQ(apply_maintenance, *restored);
-  ASSERT_EQ(definition, restored->get_apply_maintenance());
+  ASSERT_EQ(1, restored->get_apply_maintenances().size());
+  ASSERT_EQ(definition, restored->get_apply_maintenances()[0]);
 }
