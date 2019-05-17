@@ -388,7 +388,7 @@ void RebuildingSupervisor::requestRebuilding(RebuildingTrigger& trigger,
                  ShardID(trigger.node_id_, shard),
                  "Triggered by RebuildingSupervisor")});
     maintenance_log_writer_->writeDelta(
-        std::move(delta),
+        *delta,
         std::move(cb),
         maintenance::ClusterMaintenanceStateMachine::WriteMode::
             CONFIRM_APPLIED);

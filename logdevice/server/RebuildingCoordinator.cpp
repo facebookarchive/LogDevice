@@ -863,30 +863,11 @@ void RebuildingCoordinator::normalizeTimeRanges(uint32_t shard_idx,
 void RebuildingCoordinator::writeRemoveMaintenance(ShardID shard) {
   // We should remove maintenance only for our own shard
   ld_check(shard.node() == myNodeId_);
-  auto cb = [shard](Status st, lsn_t version, const std::string& /* unused */) {
-    if (st == E::OK) {
-      ld_info("Successfully appended a RemoveMaintenancesRequest to remove"
-              "maintenance for shard:%s, version:%s",
-              toString(shard).c_str(),
-              toString(version).c_str());
-    } else {
-      ld_info("Failed to append a RemoveMaintenancesRequest to remove"
-              "maintenance for shard:%s, status:%s, version:%s",
-              toString(shard).c_str(),
-              toString(st).c_str(),
-              toString(version).c_str());
-    }
-  };
-
   auto delta = std::make_unique<maintenance::MaintenanceDelta>();
   delta->set_remove_maintenances(
       maintenance::MaintenanceLogWriter::buildRemoveMaintenancesRequest(
           shard, "Data intact"));
-  maintenance_log_writer_->writeDelta(
-      std::move(delta),
-      std::move(cb),
-      maintenance::ClusterMaintenanceStateMachine::WriteMode::
-          CONFIRM_APPEND_ONLY);
+  maintenance_log_writer_->writeDelta(std::move(delta));
 }
 
 void RebuildingCoordinator::requestPlan(shard_index_t shard_idx,

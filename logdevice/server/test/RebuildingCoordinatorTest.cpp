@@ -21,6 +21,7 @@
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/event_log/EventLogRecord.h"
+#include "logdevice/common/test/MockBackoffTimer.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/server/rebuilding/RebuildingPlan.h"
 #include "logdevice/server/rebuilding/ShardRebuildingV1.h"
@@ -287,13 +288,16 @@ class MockMaintenanceLogWriter : public MaintenanceLogWriter {
       : MaintenanceLogWriter(nullptr), test_(test) {}
 
   virtual void writeDelta(
-      std::unique_ptr<MaintenanceDelta> delta,
+      const MaintenanceDelta& delta,
       std::function<
           void(Status st, lsn_t version, const std::string& failure_reason)> cb,
       ClusterMaintenanceStateMachine::WriteMode mode =
           ClusterMaintenanceStateMachine::WriteMode::CONFIRM_APPLIED,
       folly::Optional<lsn_t> base_version = folly::none) override {
-    ASSERT_TRUE(delta != nullptr);
+    remove_maintenance = delta.get_remove_maintenances();
+  }
+
+  virtual void writeDelta(std::unique_ptr<MaintenanceDelta> delta) override {
     remove_maintenance = delta->get_remove_maintenances();
   }
 
