@@ -59,7 +59,7 @@ class SequencerWorkflow {
   virtual ~SequencerWorkflow() {}
 
  private:
-  SequencingState target_op_state_;
+  SequencingState target_op_state_{SequencingState::UNKNOWN};
   // The shard this workflow is for
   node_index_t node_;
   // True if Sequencing is enabled in NodesConfig.

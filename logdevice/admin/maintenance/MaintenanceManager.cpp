@@ -8,8 +8,11 @@
 
 #include "logdevice/admin/maintenance/MaintenanceManager.h"
 
+#include <thrift/lib/cpp/util/EnumUtils.h>
+
 #include "logdevice/admin/Conv.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationManager.h"
+#include "logdevice/common/membership/utils.h"
 
 namespace facebook { namespace logdevice { namespace maintenance {
 
@@ -44,8 +47,8 @@ void MaintenanceManagerDependencies::startSubscription() {
   auto nc_callback = [this]() { owner_->onNodesConfigurationUpdated(); };
 
   nodes_config_update_handle_ = std::make_unique<ConfigSubscriptionHandle>(
-      processor_->config_->updateableNodesConfiguration()->subscribeToUpdates(
-          nc_callback));
+      processor_->config_->updateableNCMNodesConfiguration()
+          ->subscribeToUpdates(nc_callback));
 }
 
 void MaintenanceManagerDependencies::stopSubscription() {
@@ -694,6 +697,7 @@ void MaintenanceManager::processShardWorkflowResult(
         }
         break;
       case MaintenanceStatus::COMPLETED:
+        active_shard_workflows_[shard].second = s;
         if (active_shard_workflows_[shard].first->getTargetOpStates().count(
                 ShardOperationalState::ENABLED)) {
           removeShardWorkflow(shard);
@@ -729,7 +733,11 @@ void MaintenanceManager::processSequencerWorkflowResult(
         active_sequencer_workflows_[n].second = s;
         break;
       case MaintenanceStatus::COMPLETED:
-        removeSequencerWorkflow(n);
+        active_sequencer_workflows_[n].second = s;
+        if (active_sequencer_workflows_[n].first->getTargetOpState() ==
+            SequencingState::ENABLED) {
+          removeSequencerWorkflow(n);
+        }
         break;
       default:
         ld_critical("Unexpected Status set by workflow");
@@ -844,9 +852,7 @@ MaintenanceManager::scheduleNodesConfigUpdates() {
                   sa->num_shards,
                   sa->generation,
                   wf->excludeFromNodeset()});
-      rv = storage_attributes_update->addNode(
-          shard.node(), std::move(node_update));
-      ld_check(rv == 0);
+      storage_attributes_update->addNode(shard.node(), std::move(node_update));
     }
   }
 
@@ -1012,6 +1018,7 @@ void MaintenanceManager::createWorkflows() {
             MaintenanceStatus::STARTED);
       }
       ShardWorkflow* wf = active_shard_workflows_[shard_id].first.get();
+      wf->addTargetOpState(targets);
       wf->isPassiveDrainAllowed(
           cluster_maintenance_wrapper_->isPassiveDrainAllowed(shard_id));
       wf->shouldSkipSafetyCheck(
@@ -1037,6 +1044,7 @@ void MaintenanceManager::createWorkflows() {
                          MaintenanceStatus::STARTED);
     }
     SequencerWorkflow* wf = active_sequencer_workflows_[node].first.get();
+    wf->setTargetOpState(target);
     wf->shouldSkipSafetyCheck(
         cluster_maintenance_wrapper_->shouldSkipSafetyCheck(node));
   }
