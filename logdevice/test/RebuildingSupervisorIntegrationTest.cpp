@@ -660,6 +660,150 @@ TEST_F(RebuildingSupervisorIntegrationTest, NodeRebuildingHitThreshold) {
   ASSERT_EQ(0, stats["shard_rebuilding_triggered"]);
 }
 
+// Makes sure that we exit the throttling mode once the nodes ack rebuilding.
+TEST_F(RebuildingSupervisorIntegrationTest, NodeRebuildingExitThresholdOnAck) {
+  int num_nodes = 10;
+
+  Configuration::Nodes nodes_config;
+  for (int i = 0; i < num_nodes; ++i) {
+    Configuration::Node node;
+    node.generation = 1;
+    if (i == 0) {
+      node.addSequencerRole();
+    }
+    node.addStorageRole(/*num_shards*/ 1);
+    nodes_config[i] = std::move(node);
+  }
+
+  logsconfig::LogAttributes log_attrs;
+  log_attrs.set_replicationFactor(3);
+  log_attrs.set_extraCopies(0);
+  log_attrs.set_syncedCopies(0);
+  log_attrs.set_singleWriter(false);
+  log_attrs.set_syncReplicationScope(NodeLocationScope::NODE);
+
+  auto cluster = IntegrationTestUtils::ClusterFactory()
+                     .setParam("--enable-self-initiated-rebuilding", "true")
+                     .setParam("--disable-rebuilding", "false")
+                     .setParam("--self-initiated-rebuilding-grace-period", "3s")
+                     // Set the threshold to allow 2 nodes rebuilding at a time
+                     .setParam("--max-node-rebuilding-percentage", "20")
+                     .setParam("--event-log-grace-period", "1ms")
+                     .setParam("--reader-stalled-grace-period", "1s")
+                     .setParam("--disable-event-log-trimming", "true")
+                     .useHashBasedSequencerAssignment()
+                     .setNodes(nodes_config)
+                     .setLogAttributes(log_attrs)
+                     .setEventLogAttributes(log_attrs)
+                     .deferStart()
+                     .setNumDBShards(1)
+                     .create(num_nodes);
+
+  cluster->start({});
+
+  auto client = cluster->createClient();
+
+  // Wait until all nodes are seen as alive
+  for (const auto& n : cluster->getNodes()) {
+    wait_until([&]() {
+      for (const auto& it : n.second->gossipCount()) {
+        if (it.second.first != "ALIVE" || it.second.second > 1000000) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }
+
+  // Write some records.
+  ld_info("write some records");
+  const logid_t log_id(1);
+  for (uint32_t rec = 1; rec <= 100; rec++) {
+    std::string data("data" + std::to_string(rec));
+    lsn_t lsn = client->appendSync(log_id, Payload(data.data(), data.size()));
+    ASSERT_NE(LSN_INVALID, lsn);
+  }
+
+  auto stats = cluster->getNode(0).stats();
+  ASSERT_EQ(0, stats["rebuilding_supervisor_throttled"]);
+  auto prev_rebuilding_scheduled = stats["shard_rebuilding_scheduled"];
+
+  // Kill N1 and N2,
+  ld_info("kill N1 and N2");
+  cluster->getNode(1).kill();
+  cluster->getNode(2).kill();
+
+  // We are under the threshold and rebuilding should succeed.
+  wait_until("rebuilding scheduled", [&]() {
+    // Check N0
+    auto tmp_stats = cluster->getNode(0).stats();
+    return tmp_stats["shard_rebuilding_scheduled"] >=
+        prev_rebuilding_scheduled + 1;
+  });
+
+  wait_until("rebuilding triggered", [&]() {
+    // Check N0
+    auto tmp_stats = cluster->getNode(0).stats();
+    return tmp_stats["shard_rebuilding_triggered"] == 2;
+  });
+
+  // Check that the rebuilding supervisor did not enter throttling mode.
+  stats = cluster->getNode(0).stats();
+  ASSERT_EQ(0, stats["rebuilding_supervisor_throttled"]);
+
+  // Wait for N1 and N2 to be rebuilt. The shards should have authoritative
+  // status UNAVAILABLE because rebuilding was not authoritative.
+  ld_info("wait for N1 and N2 to become AE");
+  cluster->getNode(1).waitUntilAllShardsAuthoritativeEmpty(client);
+  cluster->getNode(2).waitUntilAllShardsAuthoritativeEmpty(client);
+
+  // Failing a 3rd node should cause rebuilding to enter throttling mode since
+  // N1 and N2 are still disabled and have not yet acked there rebuilding.
+  prev_rebuilding_scheduled = stats["shard_rebuilding_scheduled"];
+  cluster->getNode(3).kill();
+  wait_until("rebuilding scheduled", [&]() {
+    auto tmp_stats = cluster->getNode(0).stats();
+    return tmp_stats["shard_rebuilding_scheduled"] >=
+        prev_rebuilding_scheduled + 1;
+  });
+
+  // Now wait a few more grace period, to make sure it does not trigger
+  // rebuildings
+  wait_until("rebuilding throttled",
+             [&]() {
+               // Check N0
+               auto tmp_stats = cluster->getNode(0).stats();
+               return tmp_stats["shard_rebuilding_triggered"] > 2;
+             },
+             std::chrono::steady_clock::now() + std::chrono::seconds(6));
+
+  stats = cluster->getNode(0).stats();
+  ASSERT_EQ(2, stats["shard_rebuilding_triggered"]);
+  // Check that the rebuilding supervisor entered throttling mode.
+  ASSERT_EQ(1, stats["rebuilding_supervisor_throttled"]);
+
+  // Now start N2 so it can ack its rebuilding
+  ld_info("Start N2");
+  cluster->getNode(2).start();
+  cluster->getNode(2).waitUntilAllShardsFullyAuthoritative(client);
+
+  // Now we should be able to exit the throttling mode and rebuilding should
+  // be triggered for N3. Wait until we come out of the throttling grace period.
+  wait_until("rebuilding triggered", [&]() {
+    // Check N0
+    auto tmp_stats = cluster->getNode(0).stats();
+    return tmp_stats["shard_rebuilding_triggered"] == 3;
+  });
+
+  // Check that the rebuilding supervisor is not throttling anymore.
+  stats = cluster->getNode(0).stats();
+  ASSERT_EQ(0, stats["rebuilding_supervisor_throttled"]);
+
+  // wait for N3 to be rebuilt
+  ld_info("wait for N3 to become AE");
+  cluster->getNode(3).waitUntilAllShardsAuthoritativeEmpty(client);
+}
+
 // Makes sure that if more than threshold number of triggers arrive
 // then none of the triggers are accepted. E.g., in a 5 rack cluster
 // if max-node-rebuilding-percentage is 20% and 2 racks fail then

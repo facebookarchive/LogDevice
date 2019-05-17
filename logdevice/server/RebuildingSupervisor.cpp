@@ -573,6 +573,11 @@ RebuildingSupervisor::adjustRebuildingThrottle() {
           continue;
         }
 
+        if (node_info.second.acked) {
+          // ignore nodes that have already acked their rebuilding
+          continue;
+        }
+
         auto nodeStatus_it = node_map.find(node_info.first);
         if (nodeStatus_it != node_map.end()) {
           // A node is draining only if all rebuilding shards are draining
