@@ -11,6 +11,8 @@
 #include <folly/MoveWrapper.h>
 #include <thrift/lib/cpp/util/EnumUtils.h>
 
+#include "logdevice/common/membership/utils.h"
+
 namespace facebook { namespace logdevice { namespace maintenance {
 
 using apache::thrift::util::enumName;
@@ -19,25 +21,48 @@ folly::SemiFuture<MaintenanceStatus>
 ShardWorkflow::run(membership::StorageState storage_state,
                    ShardDataHealth data_health,
                    RebuildingMode rebuilding_mode) {
-  // TODO: Enable once we have toString implemented
-  /*ld_spew("old current_storage_state_:%s,"
-       "expected_storage_state_transition_:%s,"
-       "current_rebuilding_mode_:%s,"
-       "current_data_health_:%s,"
-       "status_:%s,"
-       "event_type:%s",
-       toString(current_storage_state_).c_str(),
-       toString(expected_storage_state_transition_).c_str(),
-       toString(current_rebuilding_mode_).c_str(),
-       enumName(current_data_health_).c_str(),
-       enumName(status_).c_str(),
-       (event_)?toString(event_->getType()):"nullptr");*/
+  ld_spew("%s",
+          folly::format(
+              "State before update:"
+              "current_storage_state_:{},"
+              "expected_storage_state_transition_:{},"
+              "current_rebuilding_mode_:{},"
+              "current_data_health_:{},"
+              "status_:{},"
+              "event_type:{}",
+              membership::toString(current_storage_state_).str(),
+              membership::toString(expected_storage_state_transition_).str(),
+              toString(current_rebuilding_mode_),
+              apache::thrift::util::enumNameSafe(current_data_health_),
+              apache::thrift::util::enumNameSafe(status_),
+              (event_) ? toString(event_->getType()) : "nullptr")
+              .str()
+              .c_str());
 
   current_storage_state_ = storage_state;
   current_data_health_ = data_health;
   current_rebuilding_mode_ = rebuilding_mode;
   event_.reset();
   computeMaintenanceStatus();
+
+  ld_spew("%s",
+          folly::format(
+              "State after update:"
+              "current_storage_state_:{},"
+              "expected_storage_state_transition_:{},"
+              "current_rebuilding_mode_:{},"
+              "current_data_health_:{},"
+              "status_:{},"
+              "event_type:{}",
+              membership::toString(current_storage_state_).str(),
+              membership::toString(expected_storage_state_transition_).str(),
+              toString(current_rebuilding_mode_),
+              apache::thrift::util::enumNameSafe(current_data_health_),
+              apache::thrift::util::enumNameSafe(status_),
+              (event_) ? toString(event_->getType()) : "nullptr")
+              .str()
+              .c_str());
+
   if (event_ != nullptr) {
     // We have a event that needs to be written to the event log.
     // Write the event first and fulfil the promise in callback
@@ -57,19 +82,6 @@ ShardWorkflow::run(membership::StorageState storage_state,
     promise_future.first.setValue(status_);
     return std::move(promise_future.second);
   }
-
-  /*ld_spew("new current_storage_state_:%s,"
-       "expected_storage_state_transition_:%s,"
-       "current_rebuilding_mode_:%s,"
-       "current_data_health_:%s,"
-       "status_:%s,"
-       "event_type:%s",
-       toString(current_storage_state_).c_str(),
-       toString(expected_storage_state_transition_).c_str(),
-       toString(current_rebuilding_mode_).c_str(),
-       enumName(current_data_health_).c_str(),
-       enumName(status_).c_str(),
-       (event_)?toString(event_->getType()):"nullptr");*/
 }
 
 void ShardWorkflow::writeToEventLog(

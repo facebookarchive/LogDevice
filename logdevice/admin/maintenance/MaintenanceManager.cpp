@@ -52,8 +52,11 @@ void MaintenanceManagerDependencies::startSubscription() {
 }
 
 void MaintenanceManagerDependencies::stopSubscription() {
+  ld_info("Canceling subscription to ClustermaintenanceStateMachine");
   cms_update_handle_.reset();
+  ld_info("Canceling subscription to EventLogStateMachine");
   el_update_handle_.reset();
+  ld_info("Canceling subscription to NodesConfiguration");
   nodes_config_update_handle_.reset();
 }
 
@@ -66,6 +69,7 @@ MaintenanceManagerDependencies::postSafetyCheckRequest(
     const std::vector<const ShardWorkflow*>& shard_wf,
     const std::vector<const SequencerWorkflow*>& seq_wf) {
   ld_check(safety_check_scheduler_);
+  ld_debug("Posting Safety check request");
   return safety_check_scheduler_->schedule(
       maintenance_state, status_map, nodes_config, shard_wf, seq_wf);
 }
@@ -91,6 +95,8 @@ MaintenanceManagerDependencies::postNodesConfigurationUpdate(
                 std::shared_ptr<const configuration::nodes::NodesConfiguration>
                     nc) mutable {
     if (st == E::OK) {
+      ld_info("NodesConfig update succeeded. New version:%s",
+              toString(nc->getVersion()).c_str());
       promise.setValue(nc);
     } else {
       // NodesConfig update failed. Return failure status
@@ -101,6 +107,15 @@ MaintenanceManagerDependencies::postNodesConfigurationUpdate(
       promise.setValue(folly::makeUnexpected(st));
     }
   };
+
+  ld_info("Posting NodesConfig update - StorageConfig::Update:%s, "
+          "SequencerConfig::Update:%s",
+          update.storage_config_update
+              ? update.storage_config_update->toString().c_str()
+              : "null",
+          update.sequencer_config_update
+              ? update.sequencer_config_update->toString().c_str()
+              : "null");
 
   processor_->getNodesConfigurationManager()->update(
       std::move(update), std::move(cb));
@@ -148,6 +163,7 @@ void MaintenanceManager::startInternal() {
   shutdown_promise_ = folly::Promise<folly::Unit>::makeEmpty();
   ld_info("Starting Maintenance Manager");
   status_ = MMStatus::STARTING;
+  ld_debug("Updated MaintenanceManager status to STARTING");
 }
 
 folly::SemiFuture<folly::Unit> MaintenanceManager::stop() {
@@ -171,6 +187,7 @@ void MaintenanceManager::stopInternal() {
     return;
   }
   status_ = MMStatus::STOPPING;
+  ld_debug("Updated MaintenanceManager status to STOPPING");
 }
 
 void MaintenanceManager::scheduleRun() {
@@ -183,8 +200,8 @@ void MaintenanceManager::scheduleRun() {
   if (status_ == MMStatus::STARTING && last_cms_version_ != LSN_INVALID &&
       last_ers_version_ != LSN_INVALID) {
     ld_info("Initial state available: last_cms_version:%s, last_ers_version:%s",
-            toString(last_cms_version_).c_str(),
-            toString(last_ers_version_).c_str());
+            lsn_to_string(last_cms_version_).c_str(),
+            lsn_to_string(last_ers_version_).c_str());
     evaluate();
   } else if (status_ == MMStatus::AWAITING_STATE_CHANGE) {
     evaluate();
@@ -516,7 +533,7 @@ void MaintenanceManager::onClusterMaintenanceStateUpdate(
     lsn_t version) {
   add([s = std::move(state), v = version, this]() mutable {
     ld_debug("Received ClusterMaintenanceState update: version:%s",
-             toString(v).c_str());
+             lsn_to_string(v).c_str());
     cluster_maintenance_state_ =
         std::make_unique<ClusterMaintenanceState>(std::move(s));
     last_cms_version_ = v;
@@ -528,8 +545,8 @@ void MaintenanceManager::onEventLogRebuildingSetUpdate(
     EventLogRebuildingSet set,
     lsn_t version) {
   add([s = std::move(set), v = version, this]() mutable {
-    ld_debug("Received EventLogRebuildingSet update: version:%s",
-             toString(v).c_str());
+    ld_info("Received EventLogRebuildingSet update: version:%s",
+            lsn_to_string(v).c_str());
     event_log_rebuilding_set_ =
         std::make_unique<EventLogRebuildingSet>(std::move(s));
     last_ers_version_ = v;
@@ -556,11 +573,21 @@ MaintenanceManager::getActiveSequencerWorkflow(node_index_t node) const {
 void MaintenanceManager::evaluate() {
   if (!run_evaluate_) {
     // State has not changed as there are no updates.
-    ld_info("No state change from previous evaluate run. Will run when next"
+    ld_info("No state change from previous evaluate run. Will run when next "
             "state change occurs");
     status_ = MMStatus::AWAITING_STATE_CHANGE;
     return;
   }
+
+  ld_info("Proceeding with evaluation of current state, "
+          "Latest NodesConfig version:%s, "
+          "Local NodesConfig version:%s, "
+          "ClusterMaintenanceState version:%s, "
+          "EventLogRebuildingSet version:%s",
+          toString(deps_->getNodesConfiguration()->getVersion()).c_str(),
+          toString(nodes_config_->getVersion()).c_str(),
+          lsn_to_string(last_cms_version_).c_str(),
+          lsn_to_string(last_ers_version_).c_str());
 
   run_evaluate_ = false;
 
@@ -579,12 +606,14 @@ void MaintenanceManager::evaluate() {
 
   // Run Shard workflows
   status_ = MMStatus::RUNNING_WORKFLOWS;
+  ld_debug("Updated MaintenanceManager status to RUNNING_WORKFLOWS");
   auto shards_futures = runShardWorkflows();
   collectAllSemiFuture(
       shards_futures.second.begin(), shards_futures.second.end())
       .via(this)
       .thenValue([this, shards = std::move(shards_futures.first)](
                      std::vector<folly::Try<MaintenanceStatus>> result) {
+        ld_debug("runShardWorkflows complete. processing results");
         processShardWorkflowResult(shards, result);
         auto nodes_futures = runSequencerWorkflows();
         return collectAllSemiFuture(
@@ -593,6 +622,7 @@ void MaintenanceManager::evaluate() {
             .thenValue([this, n = std::move(nodes_futures.first)](
                            std::vector<folly::Try<MaintenanceStatus>>
                                sequencerResult) {
+              ld_debug("runSequencerWorkflows complete. processing results");
               processSequencerWorkflowResult(n, std::move(sequencerResult));
               return folly::makeSemiFuture<
                   folly::Expected<folly::Unit, Status>>(
@@ -619,6 +649,9 @@ void MaintenanceManager::evaluate() {
         // Update local copy to the version in result
         if (result.hasValue()) {
           nodes_config_ = std::move(result.value());
+          ld_debug("Updating local copy of NodesConfig to version in "
+                   "NCUpdateResult:%s",
+                   toString(nodes_config_->getVersion()).c_str());
         }
         // We have shards that need to be enabled which could potentially
         // imapct the outcome of safety checks. Hence we will run safety
@@ -654,6 +687,9 @@ void MaintenanceManager::evaluate() {
 
         if (result.hasValue()) {
           nodes_config_ = std::move(result.value());
+          ld_debug("Updating local copy of NodesConfig to version in "
+                   "NCUpdateResult:%s",
+                   toString(nodes_config_->getVersion()).c_str());
         }
 
         if (!shouldStopProcessing()) {
@@ -668,6 +704,7 @@ void MaintenanceManager::finishShutdown() {
   // Stop was called. We should have a valid promise to fulfill
   ld_check(shutdown_promise_.valid());
   status_ = MMStatus::STOPPED;
+  ld_debug("Updated MaintenanceManager status to STOPPED");
   shutdown_promise_.setValue();
 }
 
@@ -685,6 +722,9 @@ void MaintenanceManager::processShardWorkflowResult(
     ld_check(status[i].hasValue());
     ld_check(active_shard_workflows_.count(shard));
     auto s = status[i].value();
+    ld_debug("MaintenanceStatus for Shard:%s set to %s",
+             toString(shard).c_str(),
+             apache::thrift::util::enumNameSafe(s).c_str());
     switch (s) {
       case MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES:
       case MaintenanceStatus::AWAITING_SAFETY_CHECK:
@@ -727,6 +767,9 @@ void MaintenanceManager::processSequencerWorkflowResult(
   for (node_index_t n : nodes) {
     ld_check(status[i].hasValue());
     auto s = status[i].value();
+    ld_debug("MaintenanceStatus for Sequencer Node:%s set to %s",
+             toString(n).c_str(),
+             apache::thrift::util::enumNameSafe(s).c_str());
     switch (s) {
       case MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES:
       case MaintenanceStatus::AWAITING_SAFETY_CHECK:
@@ -750,7 +793,9 @@ void MaintenanceManager::processSequencerWorkflowResult(
 
 void MaintenanceManager::processSafetyCheckResult(
     SafetyCheckScheduler::Result result) {
+  ld_debug("Processing Safety check results");
   for (auto shard : result.safe_shards) {
+    ld_debug("Safety check passed for shard:%s", toString(shard).c_str());
     // We should have an active workflow for every shard in result
     ld_check(active_shard_workflows_.count(shard));
     // And its status should be waiting on safety check results
@@ -758,9 +803,15 @@ void MaintenanceManager::processSafetyCheckResult(
              MaintenanceStatus::AWAITING_SAFETY_CHECK);
     active_shard_workflows_[shard].second =
         MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES;
+    ld_debug("MaintenanceStatus for Shard:%s updated to %s",
+             toString(shard).c_str(),
+             apache::thrift::util::enumNameSafe(
+                 active_shard_workflows_[shard].second)
+                 .c_str());
   }
 
   for (auto node : result.safe_sequencers) {
+    ld_debug("Safety check passed for node:%s", toString(node).c_str());
     // We should have an active workflow for every shard in result
     ld_check(active_sequencer_workflows_.count(node));
     // And its status should be waiting on safety check results
@@ -768,6 +819,11 @@ void MaintenanceManager::processSafetyCheckResult(
              MaintenanceStatus::AWAITING_SAFETY_CHECK);
     active_sequencer_workflows_[node].second =
         MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES;
+    ld_debug("MaintenanceStatus for Sequencer Node:%s updated to %s",
+             toString(node).c_str(),
+             apache::thrift::util::enumNameSafe(
+                 active_sequencer_workflows_[node].second)
+                 .c_str());
   }
 
   for (const auto& it : result.unsafe_groups) {
@@ -781,10 +837,13 @@ void MaintenanceManager::processSafetyCheckResult(
       if (active_shard_workflows_.count(shard) &&
           active_shard_workflows_.at(shard).second ==
               MaintenanceStatus::AWAITING_SAFETY_CHECK) {
-        ld_info("Maintenance for Shard:%s is blocked until safe",
-                toString(shard).c_str());
         active_shard_workflows_[shard].second =
             MaintenanceStatus::BLOCKED_UNTIL_SAFE;
+        ld_debug("MaintenanceStatus for Shard:%s updated to %s",
+                 toString(shard).c_str(),
+                 apache::thrift::util::enumNameSafe(
+                     active_shard_workflows_[shard].second)
+                     .c_str());
       }
     }
 
@@ -797,6 +856,11 @@ void MaintenanceManager::processSafetyCheckResult(
                 toString(node).c_str());
         active_sequencer_workflows_[node].second =
             MaintenanceStatus::BLOCKED_UNTIL_SAFE;
+        ld_debug("MaintenanceStatus for Sequencer Node:%s updated to %s",
+                 toString(node).c_str(),
+                 apache::thrift::util::enumNameSafe(
+                     active_sequencer_workflows_[node].second)
+                     .c_str());
       }
     }
   }
@@ -900,6 +964,7 @@ MaintenanceManager::scheduleNodesConfigUpdates() {
   }
 
   status_ = MMStatus::AWAITING_NODES_CONFIG_UPDATE;
+  ld_debug("Updated MaintenanceManager status to AWAITING_NODES_CONFIG_UPDATE");
   return (!storage_config_update && !sequencer_config_update)
       ? folly::makeSemiFuture<NCUpdateResult>(
             folly::makeUnexpected(Status::EMPTY))
@@ -935,6 +1000,8 @@ folly::SemiFuture<SafetyCheckResult> MaintenanceManager::scheduleSafetyCheck() {
     }
   }
   status_ = MMStatus::AWAITING_SAFETY_CHECK_RESULTS;
+  ld_debug(
+      "Updated MaintenanceManager status to AWAITING_SAFETY_CHECK_RESULTS");
   return (shard_wf.empty() && seq_wf.empty())
       ? folly::makeSemiFuture<SafetyCheckResult>(
             folly::makeUnexpected(E::EMPTY))
