@@ -948,15 +948,53 @@ bool Server::initRebuildingCoordinator() {
   return true;
 }
 
+bool Server::createAndAttachMaintenanceManager(AdminServer* admin_server) {
+  // MaintenanceManager can generally be run on any server. However
+  // MaintenanceManager lacks the leader election logic and hence
+  // we cannot have multiple MaintenanceManager-s running for the
+  // same cluster. To avoid this, we do want MaintenanceManager run
+  // on regular logdevice servers except for purpose of testing, where
+  // the node that should run a instance of MaintenanceManager can be
+  // directly controlled.
+  const auto admin_settings = params_->getAdminServerSettings();
+  if (admin_settings->enable_maintenance_manager) {
+    ld_check(cluster_maintenance_state_machine_);
+    ld_check(event_log_);
+    ld_check(admin_server);
+    auto deps = std::make_unique<maintenance::MaintenanceManagerDependencies>(
+        processor_.get(),
+        cluster_maintenance_state_machine_.get(),
+        event_log_.get(),
+        std::make_unique<maintenance::SafetyCheckScheduler>(
+            processor_.get(),
+            admin_settings,
+            admin_server->getSafetyChecker()));
+    auto worker_idx = processor_->selectWorkerRandomly(
+        configuration::InternalLogs::MAINTENANCE_LOG_DELTAS.val_ /*seed*/,
+        maintenance::MaintenanceManager::workerType(processor_.get()));
+    auto& w = processor_->getWorker(
+        worker_idx,
+        maintenance::MaintenanceManager::workerType(processor_.get()));
+    maintenance_manager_ =
+        std::make_unique<maintenance::MaintenanceManager>(&w, std::move(deps));
+    admin_server->setMaintenanceManager(maintenance_manager_.get());
+    // Since this node is going to run MaintenanceManager, upgrade the
+    // NodesConfigManager to be a proposer
+    auto ncm = processor_->getNodesConfigurationManager();
+    ld_check(ncm);
+    ncm->upgradeToProposer();
+    maintenance_manager_->start();
+  } else {
+    ld_info(
+        "Not initializing MaintenanceManager since it is disabled in settings");
+  }
+  return true;
+}
+
 bool Server::initClusterMaintenanceStateMachine() {
   if (params_->getAdminServerSettings()
-          ->enable_cluster_maintenance_state_machine) {
-    if (!params_->getAdminServerSettings()->enable_maintenance_manager) {
-      ld_critical(
-          "ClusterMaintenanceManager is enabled while MaintenanceManager"
-          "is disabled in settings. Please ensure MaintenanceManager is enabled"
-          " for this cluster");
-    }
+          ->enable_cluster_maintenance_state_machine ||
+      params_->getAdminServerSettings()->enable_maintenance_manager) {
     cluster_maintenance_state_machine_ =
         std::make_unique<maintenance::ClusterMaintenanceStateMachine>(
             params_->getAdminServerSettings());
@@ -1068,6 +1106,7 @@ bool Server::initAdminServer() {
     if (sharded_store_) {
       admin_server_handle_->setShardedRocksDBStore(sharded_store_.get());
     }
+    createAndAttachMaintenanceManager(admin_server_handle_.get());
   } else {
     ld_info("Not initializing Admin API,"
             " since admin-enabled server setting is set to false");
@@ -1168,6 +1207,10 @@ Processor* Server::getProcessor() const {
 
 RebuildingCoordinator* Server::getRebuildingCoordinator() {
   return rebuilding_coordinator_.get();
+}
+
+maintenance::MaintenanceManager* Server::getMaintenanceManager() {
+  return maintenance_manager_.get();
 }
 
 void Server::rotateLocalLogs() {

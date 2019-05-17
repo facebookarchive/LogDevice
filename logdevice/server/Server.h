@@ -50,7 +50,8 @@ class UnreleasedRecordDetector;
 
 namespace maintenance {
 class ClusterMaintenanceStateMachine;
-}
+class MaintenanceManager;
+} // namespace maintenance
 
 /**
  * Command line options and configuration needed to run a server.
@@ -202,6 +203,8 @@ class Server {
 
   RebuildingCoordinator* getRebuildingCoordinator();
 
+  maintenance::MaintenanceManager* getMaintenanceManager();
+
   SettingsUpdater& getSettings() {
     return *settings_updater_;
   }
@@ -266,6 +269,8 @@ class Server {
   std::unique_ptr<maintenance::ClusterMaintenanceStateMachine>
       cluster_maintenance_state_machine_;
 
+  std::unique_ptr<maintenance::MaintenanceManager> maintenance_manager_;
+
   // initUnreleasedRecordDetector()
   // only populated if this node is a storage node.
   std::shared_ptr<UnreleasedRecordDetector> unreleased_record_detector_;
@@ -298,6 +303,7 @@ class Server {
   bool initSequencerPlacement();
   bool initRebuildingCoordinator();
   bool initClusterMaintenanceStateMachine();
+  bool createAndAttachMaintenanceManager(AdminServer* server);
   bool initUnreleasedRecordDetector();
   bool initLogsConfigManager();
   bool initSettingsSubscriber();
