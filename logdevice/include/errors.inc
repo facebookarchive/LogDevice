@@ -140,4 +140,7 @@ ERROR_CODE(CONDITION_MISMATCH,
            502,
            "provided conditions do not match the required conditions")
 
+// Maintenance errors
+ERROR_CODE(MAINTENANCE_CLASH, 600, "Maintenance clashes with an existing one")
+
 #undef ERROR_CODE

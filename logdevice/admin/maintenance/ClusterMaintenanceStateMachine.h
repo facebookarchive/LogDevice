@@ -118,6 +118,8 @@ class ClusterMaintenanceStateMachine
   void onSnapshotCreated(Status st, size_t snapshotSize) override;
 
   UpdateableSettings<AdminServerSettings> settings_;
+
+  friend class ClusterMaintenanceStateMachineTest;
 }; // ClusterMaintenanceStateMachine
 
 class StartClusterMaintenanceStateMachineRequest : public Request {

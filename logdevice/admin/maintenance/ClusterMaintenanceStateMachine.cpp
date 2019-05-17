@@ -10,6 +10,8 @@
 
 #include <folly/dynamic.h>
 
+#include "logdevice/admin/maintenance/MaintenanceDeltaTypes.h"
+#include "logdevice/admin/maintenance/types.h"
 #include "logdevice/common/ShardAuthoritativeStatusMap.h"
 #include "logdevice/common/ThriftCodec.h"
 #include "logdevice/common/configuration/InternalLogs.h"
@@ -50,8 +52,14 @@ ClusterMaintenanceStateMachine::deserializeState(
     Payload payload,
     lsn_t version,
     std::chrono::milliseconds timestamp) const {
-  // TODO: Implmentation
-  return nullptr;
+  std::unique_ptr<ClusterMaintenanceState> state{nullptr};
+  state = ThriftCodec::deserialize<apache::thrift::BinarySerializer,
+                                   ClusterMaintenanceState>(Slice(payload));
+  if (!state) {
+    ld_warning("Failed to deserialize ClusterMaintenanceState with version:%s",
+               toString(version).c_str());
+  }
+  return state;
 }
 
 void ClusterMaintenanceStateMachine::gotInitialState(
@@ -61,8 +69,13 @@ void ClusterMaintenanceStateMachine::gotInitialState(
 
 std::unique_ptr<MaintenanceDelta>
 ClusterMaintenanceStateMachine::deserializeDelta(Payload payload) {
-  // TODO:: Implementation
-  return nullptr;
+  std::unique_ptr<MaintenanceDelta> delta{nullptr};
+  delta = ThriftCodec::deserialize<apache::thrift::BinarySerializer,
+                                   MaintenanceDelta>(Slice(payload));
+  if (!delta) {
+    ld_warning("Failed to deserialize the payload from maintenance log");
+  }
+  return delta;
 }
 
 int ClusterMaintenanceStateMachine::applyDelta(
@@ -71,8 +84,29 @@ int ClusterMaintenanceStateMachine::applyDelta(
     lsn_t version,
     std::chrono::milliseconds timestamp,
     std::string& failure_reason) {
-  // TODO: Implementation
-  return 0;
+  int rv = 0;
+  auto type = delta.getType();
+  switch (type) {
+    case MaintenanceDelta::Type::apply_maintenances: {
+      rv = MaintenanceDeltaTypes::applyMaintenances(
+          delta.get_apply_maintenances(), state, failure_reason);
+      break;
+    }
+    case MaintenanceDelta::Type::remove_maintenances: {
+      rv = MaintenanceDeltaTypes::removeMaintenances(
+          delta.get_remove_maintenances(), state, failure_reason);
+      break;
+    }
+    default:
+      ld_warning("Unknown type of MaintenanceDelta. Not applying the delta");
+      failure_reason = "Unknown type";
+      rv = -1;
+      break;
+  }
+  if (rv == 0) {
+    state.set_version(version);
+  }
+  return rv;
 }
 
 void ClusterMaintenanceStateMachine::writeMaintenanceDelta(
