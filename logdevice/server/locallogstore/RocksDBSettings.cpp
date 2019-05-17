@@ -1357,6 +1357,18 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        "input and output files).",
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
+
+  init("rocksdb-test-clamp-backlog",
+       &test_clamp_backlog,
+       "0",
+       nullptr,
+       "Override backlog duration of all logs to be <= this value. This is a "
+       "quick hack for testing, don't use in production! The override applies "
+       "only in a few places, not to everything using the log attributes. E.g. "
+       "disable-data-log-rebuilding is not aware of this setting and will use "
+       "full retention from log attributes.",
+       SERVER,
+       SettingsCategory::LogsDB);
 }
 
 rocksdb::Options RocksDBSettings::toRocksDBOptions() const {

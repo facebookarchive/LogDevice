@@ -4240,6 +4240,7 @@ PartitionedRocksDBStore::getEffectiveBacklogDuration(
   auto config = processor->config_->get();
   const auto settings = getSettings();
   const auto now = currentTime().toSeconds();
+  auto test_override = settings->test_clamp_backlog;
 
   LogStorageStateMap& state_map = processor->getLogStorageStateMap();
   LogStorageState* log_state = state_map.insertOrGet(log_id, getShardIdx());
@@ -4253,6 +4254,10 @@ PartitionedRocksDBStore::getEffectiveBacklogDuration(
 
   std::chrono::seconds grace_period =
       settings->unconfigured_log_trimming_grace_period_;
+  if (test_override.count() != 0) {
+    grace_period = std::min(grace_period, test_override);
+  }
+
   std::chrono::seconds log_removal_time = log_state->getLogRemovalTime();
   if (log_removal_time == std::chrono::seconds(0)) {
     // This field of LogStorageState is set to '0' by default to indicate
@@ -4305,6 +4310,10 @@ PartitionedRocksDBStore::getEffectiveBacklogDuration(
       log_state->setLogRemovalTime(std::chrono::seconds::max());
     }
     backlog = log_config->attrs().backlogDuration().value();
+
+    if (test_override.count() != 0 && backlog.hasValue()) {
+      backlog = std::min(backlog.value(), test_override);
+    }
   }
 
   return backlog;

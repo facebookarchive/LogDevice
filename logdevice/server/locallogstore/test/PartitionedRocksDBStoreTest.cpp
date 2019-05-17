@@ -10064,3 +10064,34 @@ TEST_F(PartitionedRocksDBStoreTest, DataKeyFormatConversion) {
   EXPECT_EQ(std::vector<lsn_t>({10, 15, 20, 20, 25, 25, 30, 35, 40, 40}),
             data.at(0).at(data_log).records);
 }
+
+TEST_F(PartitionedRocksDBStoreTest, TestClampBacklog) {
+  put({TestRecord(logid_t(1), 2)});
+  store_->createPartition();
+  setTime(BASE_TIME + HOUR * 2);
+  store_->createPartition();
+  store_
+      ->backgroundThreadIteration(
+          PartitionedRocksDBStore::BackgroundThreadType::LO_PRI)
+      .wait();
+  auto it = store_->read(logid_t(1),
+                         LocalLogStore::ReadOptions(
+                             "PartitionedRocksDBStoreTest.TestClampBacklog"));
+
+  it->seek(1);
+  ASSERT_EQ(IteratorState::AT_RECORD, it->state());
+  EXPECT_EQ(2, it->getLSN());
+  it.reset();
+
+  updateSetting("rocksdb-test-clamp-backlog", "1h");
+  store_
+      ->backgroundThreadIteration(
+          PartitionedRocksDBStore::BackgroundThreadType::LO_PRI)
+      .wait();
+  it = store_->read(logid_t(1),
+                    LocalLogStore::ReadOptions(
+                        "PartitionedRocksDBStoreTest.TestClampBacklog"));
+
+  it->seek(1);
+  ASSERT_EQ(IteratorState::AT_END, it->state());
+}

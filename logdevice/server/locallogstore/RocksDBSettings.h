@@ -350,6 +350,8 @@ class RocksDBSettings : public SettingsBundle {
   int metadata_bloom_bits_per_key_;
   bool bloom_block_based_;
 
+  std::chrono::seconds test_clamp_backlog;
+
   // rocksdb::Options
   // These settings are copied to a rocksdb::Options struct on DB creation and
   // thus should have the REQUIRES_RESTART flag.
