@@ -146,6 +146,7 @@ int NodesConfigLegacyConverter::toLegacyNodesConfig(
     ld_check(serv_disc->hasNode(n));
     auto serv = serv_disc->nodeAttributesAt(n);
     auto& node = res_nodes[n];
+    node.name = serv.name;
     node.address = serv.address;
     node.gossip_address = serv.gossip_address;
     node.ssl_address = serv.ssl_address;
@@ -182,7 +183,8 @@ NodesConfigLegacyConverter::fromLegacyNodesConfig(
     const auto& node = it.second;
     // service discovery
     serv_disc->setNodeAttributes(nid,
-                                 {node.address,
+                                 {node.name,
+                                  node.address,
                                   node.gossip_address,
                                   node.ssl_address,
                                   node.location,

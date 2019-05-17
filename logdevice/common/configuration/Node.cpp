@@ -16,6 +16,7 @@
 namespace facebook { namespace logdevice { namespace configuration {
 
 Node::Node(const Node& other) {
+  name = other.name;
   address = other.address;
   gossip_address = other.gossip_address;
   ssl_address = other.ssl_address;

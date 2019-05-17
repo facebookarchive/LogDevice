@@ -41,14 +41,13 @@ class MockClusterState : public ClusterState {
     for (node_index_t nid = 0; nid < nnodes; nid++) {
       using NodeUpdate = ServiceDiscoveryConfig::NodeUpdate;
       auto url = folly::sformat("127.0.0.{}", nid);
-      auto hostname = folly::sformat("host{}", nid);
       auto nsd = std::make_unique<NodeServiceDiscovery>(
-          NodeServiceDiscovery{Sockaddr(url, 4440),
+          NodeServiceDiscovery{folly::sformat("server-{}", nid),
+                               Sockaddr(url, 4440),
                                Sockaddr(url, 4441),
                                /*ssl_address=*/folly::none,
                                /*location=*/folly::none,
-                               both_roles,
-                               hostname});
+                               both_roles});
       NodeUpdate nup{
           ServiceDiscoveryConfig::UpdateType::PROVISION, std::move(nsd)};
       update.addNode(nid, std::move(nup));

@@ -13,6 +13,7 @@
 #include "logdevice/common/commandline_util_chrono.h"
 #include "logdevice/common/configuration/NodesConfig.h"
 #include "logdevice/common/configuration/ParsingHelpers.h"
+#include "logdevice/common/configuration/nodes/utils.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/util.h"
 #include "logdevice/include/Err.h"
@@ -34,6 +35,7 @@ static bool parseOneNode(const folly::dynamic&,
 static bool parseNodeID(const folly::dynamic&, node_index_t&);
 static bool parseGeneration(const folly::dynamic&, Configuration::Node&);
 static bool parseHostFields(const folly::dynamic&,
+                            std::string& /* name */,
                             Sockaddr&, /* host address */
                             Sockaddr&, /* gossip address */
                             folly::Optional<Sockaddr>& /* ssl address */);
@@ -87,6 +89,7 @@ bool parseNodes(const folly::dynamic& clusterMap,
 
   size_t ssl_enabled_nodes = 0;
 
+  std::unordered_map<std::string, node_index_t> seen_names;
   std::unordered_map<Sockaddr, node_index_t, Sockaddr::Hash> seen_addresses;
 
   ld_check(output.getNodes().empty());
@@ -109,17 +112,37 @@ bool parseNodes(const folly::dynamic& clusterMap,
       ++ssl_enabled_nodes;
     }
 
-    auto insert_result =
-        seen_addresses.insert(std::make_pair(node.address, index));
-    if (!insert_result.second) {
-      ld_error("Multiple nodes with the same 'host' entry %s "
-               "(indexes %hd and %hd)",
-               node.address.toString().c_str(),
-               insert_result.first->second,
-               index);
-      err = E::INVALID_CONFIG;
-      return false;
+    {
+      // Validate the uniqness of the address
+      auto insert_result = seen_addresses.emplace(node.address, index);
+      if (!insert_result.second) {
+        ld_error("Multiple nodes with the same 'host' entry %s "
+                 "(indexes %hd and %hd)",
+                 node.address.toString().c_str(),
+                 insert_result.first->second,
+                 index);
+        err = E::INVALID_CONFIG;
+        return false;
+      }
     }
+
+    {
+      // Validate the uniqness of the name if it exists
+      if (!node.name.empty()) {
+        auto insert_result =
+            seen_names.emplace(nodes::normalizeServerName(node.name), index);
+        if (!insert_result.second) {
+          ld_error("Multiple nodes with the same 'name' entry '%s' "
+                   "(indexes %hd and %hd)",
+                   node.name.c_str(),
+                   insert_result.first->second,
+                   index);
+          err = E::INVALID_CONFIG;
+          return false;
+        }
+      }
+    }
+
     res[index] = std::move(node);
   }
 
@@ -191,6 +214,7 @@ static bool parseOneNode(const folly::dynamic& nodeMap,
   }
 
   return parseHostFields(nodeMap,
+                         output.name,
                          output.address,
                          output.gossip_address,
                          output.ssl_address) &&
@@ -268,6 +292,7 @@ bool parseHostString(const std::string& hostStr,
 }
 
 static bool parseHostFields(const folly::dynamic& nodeMap,
+                            std::string& name,
                             Sockaddr& addr_out,
                             Sockaddr& gossip_addr_out,
                             folly::Optional<Sockaddr>& ssl_addr_out) {
@@ -275,6 +300,18 @@ static bool parseHostFields(const folly::dynamic& nodeMap,
   std::string gossipAddressStr;
   std::string sslHostStr;
   int sslPort, gossipPort;
+
+  // Parse the name of the node, if it's there
+  // TODO(T44427489): Make the name field a required field.
+  if (getStringFromMap(nodeMap, "name", name)) {
+    std::string failure_reason;
+    if (!nodes::isValidServerName(name, &failure_reason)) {
+      ld_error(
+          "Invalid name field %s: %s", name.c_str(), failure_reason.c_str());
+    }
+  } else {
+    name = "";
+  }
 
   if (!getStringFromMap(nodeMap, "host", hostStr)) {
     ld_error("missing \"host\" entry for node");

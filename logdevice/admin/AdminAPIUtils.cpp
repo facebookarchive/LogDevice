@@ -169,6 +169,9 @@ void fillNodeConfig(
   // caller should ensure node_index exists in nodes_configuration
   ld_check(node_sd != nullptr);
 
+  // Name
+  out.set_name(node_sd->name);
+
   // Roles
   std::set<thrift::Role> roles;
   if (node_sd->hasRole(nodes::NodeRole::SEQUENCER)) {

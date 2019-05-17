@@ -22,6 +22,12 @@ namespace nodes {
 struct NodeServiceDiscovery {
   using RoleSet = configuration::nodes::RoleSet;
 
+  /*
+   * This is a unique name for the node in the cluster. This is currently not a
+   * required field and can be empty.
+   */
+  std::string name{};
+
   /**
    * The IP (v4 or v6) address, including port number.
    */
@@ -46,13 +52,6 @@ struct NodeServiceDiscovery {
    */
   RoleSet roles{};
 
-  /**
-   * A hostname string for the node. Currently we require it to be immutable.
-   * Currently logdeviced doesn't use it but some tooling does so we set it in
-   * prod. But this can be omitted (as an empty string) in tests.
-   */
-  std::string hostname{};
-
   bool hasRole(NodeRole role) const {
     auto id = static_cast<size_t>(role);
     return roles.test(id);
@@ -68,7 +67,7 @@ struct NodeServiceDiscovery {
   bool operator==(const NodeServiceDiscovery& rhs) const {
     return address == rhs.address && gossip_address == rhs.gossip_address &&
         ssl_address == rhs.ssl_address && location == rhs.location &&
-        roles == rhs.roles && hostname == rhs.hostname;
+        roles == rhs.roles && name == rhs.name;
   }
 
   bool isValid() const;

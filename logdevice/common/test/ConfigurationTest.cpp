@@ -65,6 +65,7 @@ makeConfigForLayoutTest(int range_start,
   "nodes": [
     {
       "node_id": 0,
+      "name": "server-0",
       "host": "127.0.0.1:4444",
       "gossip_port": 4445,
       "weight": 1,
@@ -256,6 +257,7 @@ TEST(ConfigurationTest, SimpleValid) {
     const Configuration::Node& node = nodes.at(0);
     EXPECT_EQ(AF_INET, node.address.family());
 
+    ASSERT_EQ("server-0", node.name);
     struct sockaddr_storage ss;
     int len = node.address.toStructSockaddr(&ss);
     ASSERT_NE(len, -1);
@@ -300,6 +302,7 @@ TEST(ConfigurationTest, SimpleValid) {
     const Configuration::Node& node = nodes.at(1);
     EXPECT_EQ(AF_INET6, node.address.family());
 
+    ASSERT_EQ("server-1", node.name);
     struct sockaddr_storage ss;
     int len = node.address.toStructSockaddr(&ss);
     ASSERT_NE(len, -1);
@@ -340,6 +343,7 @@ TEST(ConfigurationTest, SimpleValid) {
     const Configuration::Node& node = nodes.at(5);
     EXPECT_EQ(AF_INET6, node.address.family());
 
+    ASSERT_EQ("server-5", node.name);
     struct sockaddr_storage ss;
     int len = node.address.toStructSockaddr(&ss);
     ASSERT_NE(len, -1);
@@ -382,6 +386,7 @@ TEST(ConfigurationTest, SimpleValid) {
     const Configuration::Node& node = nodes.at(42);
     EXPECT_EQ(AF_INET6, node.address.family());
 
+    ASSERT_EQ("server-42", node.name);
     struct sockaddr_storage ss;
     int len = node.address.toStructSockaddr(&ss);
     ASSERT_NE(len, -1);
@@ -943,6 +948,15 @@ TEST(ConfigurationTest, DuplicateHost) {
 
   std::shared_ptr<Configuration> config(
       Configuration::fromJsonFile(TEST_CONFIG_FILE("duphost.conf")));
+  ASSERT_EQ(nullptr, config);
+  EXPECT_EQ(err, E::INVALID_CONFIG);
+}
+
+TEST(ConfigurationTest, DuplicateName) {
+  using namespace facebook::logdevice;
+
+  std::shared_ptr<Configuration> config(
+      Configuration::fromJsonFile(TEST_CONFIG_FILE("dup_server_name.conf")));
   ASSERT_EQ(nullptr, config);
   EXPECT_EQ(err, E::INVALID_CONFIG);
 }
@@ -2211,6 +2225,8 @@ TEST(ConfigurationTest, MetaDataLogsConfig) {
     {
       "node_id": )" +
           std::to_string(i) + R"(,
+      "name": "server-)" +
+          std::to_string(i) + R"(",
       "location": "reg)" +
           std::to_string(i) + R"(.x.y.z.w",
       "host": "127.0.0.1:)" +

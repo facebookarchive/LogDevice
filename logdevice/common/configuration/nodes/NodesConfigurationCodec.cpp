@@ -10,6 +10,7 @@
 #include <zstd.h>
 
 #include "logdevice/common/ThriftCodec.h"
+#include "logdevice/common/configuration/nodes/utils.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/membership/MembershipThriftConverter.h"
 #include "logdevice/common/protocol/ProtocolReader.h"
@@ -32,6 +33,7 @@ constexpr NodesConfigurationCodec::ProtocolVersion
 thrift::NodeServiceDiscovery NodesConfigurationThriftConverter::toThrift(
     const NodeServiceDiscovery& discovery) {
   thrift::NodeServiceDiscovery disc;
+  disc.set_name(discovery.name);
   disc.set_address(discovery.address.toString());
   disc.set_gossip_address(discovery.gossip_address.toString());
   if (discovery.ssl_address.hasValue()) {
@@ -41,7 +43,6 @@ thrift::NodeServiceDiscovery NodesConfigurationThriftConverter::toThrift(
     disc.set_location(discovery.location.value().toString());
   }
   disc.set_roles(discovery.roles.to_ullong());
-  disc.set_hostname(discovery.hostname);
   return disc;
 }
 
@@ -50,6 +51,8 @@ int NodesConfigurationThriftConverter::fromThrift(
     const thrift::NodeServiceDiscovery& obj,
     NodeServiceDiscovery* out) {
   NodeServiceDiscovery result;
+
+  result.name = obj.name;
 
 #define PARSE_SOCK_FIELD(_name)                              \
   do {                                                       \
@@ -91,10 +94,6 @@ int NodesConfigurationThriftConverter::fromThrift(
   }
 
   result.roles = NodeServiceDiscovery::RoleSet(obj.roles);
-
-  if (!obj.hostname.empty()) {
-    result.hostname = obj.hostname;
-  }
 
   if (out != nullptr) {
     *out = result;

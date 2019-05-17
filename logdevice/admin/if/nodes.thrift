@@ -73,6 +73,10 @@ struct NodeConfig {
    * A convenience structure for location
    */
   8: common.Location location_per_scope;
+  /*
+   * A unique name for the node in the cluster.
+   */
+  9: string name;
 }
 
 /**

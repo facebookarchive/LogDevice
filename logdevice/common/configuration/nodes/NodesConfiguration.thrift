@@ -23,7 +23,8 @@ typedef u16 node_idx
   3: optional string ssl_address;
   4: optional string location;
   5: u64 roles;
-  6: string hostname;
+  // 6: string hostname;
+  7: string name;
 }
 
 struct ServiceDiscoveryConfig {

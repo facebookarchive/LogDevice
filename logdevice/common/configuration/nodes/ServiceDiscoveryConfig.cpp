@@ -10,6 +10,7 @@
 #include <folly/Format.h>
 #include <folly/Range.h>
 
+#include "logdevice/common/configuration/nodes/utils.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/types_internal.h"
 
@@ -48,17 +49,28 @@ bool NodeServiceDiscovery::isValid() const {
     return false;
   }
 
+  std::string name_invalid_reason;
+  if (!name.empty() && !nodes::isValidServerName(name, &name_invalid_reason)) {
+    RATELIMIT_ERROR(std::chrono::seconds(10),
+                    5,
+                    "Invalid server name: %s: %s",
+                    name.c_str(),
+                    name_invalid_reason.c_str());
+    return false;
+  }
+
+  // TODO(T44427489): Check that the name field is not empty.
   return true;
 }
 
 std::string NodeServiceDiscovery::toString() const {
-  return folly::sformat("[A:{},G:{},S:{},L:{},R:{},H:{}]",
+  return folly::sformat("[{} => A:{},G:{},S:{},L:{},R:{}]",
+                        name,
                         address.toString(),
                         gossip_address.toString(),
                         ssl_address.hasValue() ? ssl_address->toString() : "",
                         location.hasValue() ? location->toString() : "",
-                        logdevice::toString(roles),
-                        hostname);
+                        logdevice::toString(roles));
 }
 
 const Sockaddr&
@@ -87,13 +99,11 @@ NodeServiceDiscovery::getSockaddr(SocketType type,
   return Sockaddr::INVALID;
 }
 
-template <>
-bool ServiceDiscoveryConfig::attributeSpecificValidate() const {
-  // check for address duplication in service discovery
+namespace {
+bool validateAddressUniqueness(ServiceDiscoveryConfig::MapType node_states) {
   std::unordered_map<Sockaddr, node_index_t, Sockaddr::Hash> seen_addresses;
-  for (const auto& kv : node_states_) {
-    auto res =
-        seen_addresses.insert(std::make_pair(kv.second.address, kv.first));
+  for (const auto& kv : node_states) {
+    auto res = seen_addresses.emplace(kv.second.address, kv.first);
     if (!res.second) {
       RATELIMIT_ERROR(std::chrono::seconds(10),
                       5,
@@ -103,8 +113,36 @@ bool ServiceDiscoveryConfig::attributeSpecificValidate() const {
       return false;
     }
   }
-
   return true;
+}
+
+bool validateNameUniqueness(ServiceDiscoveryConfig::MapType node_states) {
+  std::unordered_map<std::string, node_index_t> seen_names;
+  for (const auto& kv : node_states) {
+    if (kv.second.name.empty()) {
+      continue;
+    }
+    auto res =
+        seen_names.emplace(normalizeServerName(kv.second.name), kv.first);
+    if (!res.second) {
+      RATELIMIT_ERROR(std::chrono::seconds(10),
+                      5,
+                      "Multiple nodes with the same name '%s' (idx: %hd, %hd).",
+                      kv.second.name.c_str(),
+                      res.first->second,
+                      kv.first);
+      return false;
+    }
+  }
+  return true;
+}
+
+} // namespace
+
+template <>
+bool ServiceDiscoveryConfig::attributeSpecificValidate() const {
+  return validateAddressUniqueness(node_states_) &&
+      validateNameUniqueness(node_states_);
 }
 
 }}}} // namespace facebook::logdevice::configuration::nodes

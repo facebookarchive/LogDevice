@@ -157,6 +157,12 @@ struct Node {
   Node(Node&&) = default;
   Node& operator=(Node&&) = default;
 
+  /*
+   * This is a unique name for the node in the cluster. This is currently not a
+   * required field and can be empty.
+   */
+  std::string name{""};
+
   /**
    * The IP (v4 or v6) address, including port number.
    */

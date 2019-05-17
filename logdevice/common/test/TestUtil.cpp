@@ -154,6 +154,7 @@ ServerConfig::NodesConfig createSimpleNodesConfig(size_t nnodes) {
   ServerConfig::Nodes nodes;
   for (size_t i = 0; i < nnodes; ++i) {
     auto& node = nodes[i];
+    node.name = folly::sformat("server-{}", i);
     node.address = Sockaddr("::1", folly::to<std::string>(4440 + i));
     node.gossip_address = Sockaddr("::1", folly::to<std::string>(5440 + i));
     node.generation = 1;
@@ -239,6 +240,7 @@ std::shared_ptr<Configuration> createSimpleConfig(size_t nnodes, size_t logs) {
   ServerConfig::Nodes nodes;
   for (size_t i = 0; i < nnodes; ++i) {
     Configuration::Node node;
+    node.name = folly::sformat("server-{}", i);
     node.address = Sockaddr("::1", folly::to<std::string>(4440 + i));
     node.gossip_address =
         Sockaddr("::1", folly::to<std::string>(4440 + nnodes + i));

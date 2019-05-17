@@ -69,4 +69,22 @@ bool getNodeSSL(const NodesConfiguration& nodes_configuration,
                 node_index_t node,
                 NodeLocationScope diff_level);
 
+/**
+ * Checks if the passed value is a valid server name or not. The name is a valid
+ * name if:
+ *   - It's not empty.
+ *   - It doesn't have any whitespaces.
+ *
+ * @param name   The server name to validate
+ * @param reason If the server name is invalid, this string will be filled by
+ *                the reason why it's invalid;
+ */
+bool isValidServerName(const std::string& name, std::string* reason = nullptr);
+
+/**
+ * Normalizes the passed server name by:
+ *  - Converting it to lower case.
+ */
+std::string normalizeServerName(const std::string& name);
+
 }}}} // namespace facebook::logdevice::configuration::nodes

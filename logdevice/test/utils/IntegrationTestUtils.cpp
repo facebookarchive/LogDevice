@@ -275,6 +275,7 @@ std::unique_ptr<Cluster> ClusterFactory::create(int nnodes) {
     // and storage nodes.
     for (int i = 0; i < nnodes; ++i) {
       Configuration::Node node;
+      node.name = folly::sformat("server-{}", i);
       node.generation = 1;
       NodeLocation location;
       location.fromDomainString(loc_prefix +
@@ -291,6 +292,7 @@ std::unique_ptr<Cluster> ClusterFactory::create(int nnodes) {
     for (int i = 0; i < nnodes; ++i) {
       const bool is_storage_node = (nnodes == 1 || i > 0);
       Configuration::Node node;
+      node.name = folly::sformat("server-{}", i);
       NodeLocation location;
       location.fromDomainString(loc_prefix +
                                 std::to_string(i % num_racks_ + 1));
@@ -719,6 +721,7 @@ int Cluster::expand(std::vector<node_index_t> new_indices, bool start_nodes) {
 
   for (node_index_t idx : new_indices) {
     Configuration::Node node;
+    node.name = folly::sformat("server-{}", idx);
     node.generation = 1;
     setNodeReplacementCounter(idx, 1);
 

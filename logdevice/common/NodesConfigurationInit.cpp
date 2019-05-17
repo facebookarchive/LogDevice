@@ -135,6 +135,7 @@ NodesConfigurationInit::buildBootstrappingServerConfig(
   for (size_t index = 0; index < host_list.size(); index++) {
     json["nodes"].push_back(folly::dynamic::object
       ("node_id", index)
+      ("name", folly::sformat("server-{}", index))
       ("host", host_list[index])
       ("roles", folly::dynamic::array("sequencer"))
       ("generation", 1));

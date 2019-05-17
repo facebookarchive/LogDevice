@@ -121,4 +121,24 @@ bool isNodeDisabled(const NodesConfiguration& nodes_configuration,
       !nodes_configuration.getStorageMembership()->hasShardShouldReadFrom(node);
 }
 
+bool isValidServerName(const std::string& name, std::string* reason) {
+  if (name.empty()) {
+    if (reason != nullptr) {
+      *reason = "Name can't be empty";
+    }
+    return false;
+  }
+  if (contains_whitespaces(name)) {
+    if (reason != nullptr) {
+      *reason = "Name can't contain whitespaces";
+    }
+    return false;
+  }
+  return true;
+}
+
+std::string normalizeServerName(const std::string& name) {
+  return logdevice::lowerCase(name);
+}
+
 }}}} // namespace facebook::logdevice::configuration::nodes

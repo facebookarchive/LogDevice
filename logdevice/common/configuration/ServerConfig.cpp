@@ -574,9 +574,10 @@ folly::dynamic ServerConfig::toJson(const LogsConfig* with_logs,
   for (const auto& nidx : sorted_node_ids) {
     const ServerConfig::Node& node = nodes.at(nidx);
 
-    folly::dynamic node_dict = folly::dynamic::object("node_id", nidx)(
-        "host", node.address.toString())("generation", node.generation)(
-        "gossip_address", node.gossip_address.toString());
+    folly::dynamic node_dict =
+        folly::dynamic::object("node_id", nidx)("name", node.name)(
+            "host", node.address.toString())("generation", node.generation)(
+            "gossip_address", node.gossip_address.toString());
 
     if (node.hasRole(NodeRole::STORAGE)) {
       // TODO: Remove once all production configs and tooling
