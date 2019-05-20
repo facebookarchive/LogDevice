@@ -669,7 +669,15 @@ RebuildingSupervisor::adjustRebuildingThrottle() {
   } else {
     if (throttling_) {
       // we were throttling but we are not anymore.
-      ld_warning("Exiting throttling mode");
+      ld_warning("Exiting throttling mode: #draining=%lu, #rebuilding=%lu, "
+                 "#triggers=%lu, "
+                 "#adjusted cluster size=%lu, threshold=%lu%%, actual=%lu%%",
+                 draining_nodes,
+                 rebuilding_nodes,
+                 trigger_count,
+                 cluster_size,
+                 threshold,
+                 ratio);
       // save the time and make sure we don't trigger any rebuilding within
       // one more grace period.
       throttling_exit_time_ = SystemTimestamp::now();
@@ -682,10 +690,12 @@ RebuildingSupervisor::adjustRebuildingThrottle() {
     if (now < deadline) {
       // make sure we wait at least one grace period after exiting throttling
       // before starting triggering rebuildings again.
-      RATELIMIT_INFO(std::chrono::seconds(1),
-                     1,
-                     "Not triggering new rebuildings: too soon after "
-                     "exiting throttling mode");
+      RATELIMIT_INFO(
+          std::chrono::seconds(1),
+          1,
+          "Not triggering new rebuildings until %s: It's too soon after "
+          "exiting throttling mode",
+          deadline.toString().c_str());
       STAT_SET(Worker::stats(),
                rebuilding_supervisor_throttled,
                throttling_ ? 1 : 0);
