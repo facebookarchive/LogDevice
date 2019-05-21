@@ -52,7 +52,9 @@ folly::Expected<Impact::ImpactOnEpoch, Status> checkImpactOnLog(
 /**
  * Checks whether a node is alive in the FailureDetector (gossip) or not.
  */
-bool isAlive(ClusterState* cluster_state, node_index_t index);
+bool isAlive(ClusterState* cluster_state,
+             node_index_t index,
+             bool require_fully_started);
 
 /**
  * Validates the storage set of the metadata log for a given data log.
@@ -81,7 +83,8 @@ std::pair<bool, bool> checkReadWriteAvailablity(
     const SafetyMargin& safety_margin,
     const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
         nodes_config,
-    ClusterState* cluster_state);
+    ClusterState* cluster_state,
+    bool require_fully_started_nodes);
 
 /**
  * Create modified ReplicationProperty which takes into account Safety Margin.
@@ -98,6 +101,7 @@ Impact::StorageSetMetadata getStorageSetMetadata(
     const ShardAuthoritativeStatusMap& shard_status,
     const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
         nodes_config,
-    ClusterState* cluster_state);
+    ClusterState* cluster_state,
+    bool require_fully_started);
 
 }}} // namespace facebook::logdevice::safety

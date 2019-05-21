@@ -111,6 +111,9 @@ folly::Expected<Impact::ImpactOnEpoch, Status> checkImpactOnLog(
                                  Impact::ImpactResult::NONE);
   }
 
+  // We require that the node to be fully started if we are checking a normal
+  // data log (not internal log)
+  bool require_fully_started = !configuration::InternalLogs::isInternal(log_id);
   const LogMetaDataFetcher::Result& metadata_result = (*metadata_cache)[log_id];
   if (metadata_result.historical_metadata_status != E::OK) {
     // We were not able to fetch metadata for this log, in this case we will
@@ -142,7 +145,8 @@ folly::Expected<Impact::ImpactOnEpoch, Status> checkImpactOnLog(
                                   epoch_metadata.replication,
                                   safety_margin,
                                   nodes_config,
-                                  cluster_state);
+                                  cluster_state,
+                                  require_fully_started);
 
     if (safe_writes && safe_reads) {
       continue;
@@ -164,8 +168,12 @@ folly::Expected<Impact::ImpactOnEpoch, Status> checkImpactOnLog(
       // TODO #22911589 check do we lose write availablility
     }
 
-    Impact::StorageSetMetadata storage_set_metadata = getStorageSetMetadata(
-        epoch_metadata.shards, shard_status, nodes_config, cluster_state);
+    Impact::StorageSetMetadata storage_set_metadata =
+        getStorageSetMetadata(epoch_metadata.shards,
+                              shard_status,
+                              nodes_config,
+                              cluster_state,
+                              require_fully_started);
 
     // We don't scan more epochs, one failing epoch is enough for us.
     return Impact::ImpactOnEpoch(log_id,
@@ -225,8 +233,17 @@ Impact checkMetadataStorageSet(
     storage_set = EpochMetaData::nodesetToStorageSet(
         metadata_logs_config.metadata_nodes, shard_id);
 
-    storage_set_metadata = getStorageSetMetadata(
-        storage_set, shard_status, nodes_config, cluster_state);
+    /**
+     * We only require that the node to be at least STARTING_UP for metadata
+     * nodeset checks because they are excluded from the restrictions of this
+     * gossip state.
+     */
+    storage_set_metadata =
+        getStorageSetMetadata(storage_set,
+                              shard_status,
+                              nodes_config,
+                              cluster_state,
+                              /* require_fully_started = */ false);
 
     bool safe_reads;
     bool safe_writes;
@@ -238,7 +255,8 @@ Impact checkMetadataStorageSet(
                                   replication_property,
                                   safety_margin,
                                   nodes_config,
-                                  cluster_state);
+                                  cluster_state,
+                                  /* require_fully_started = */ false);
 
     if (!safe_writes) {
       impact_result |= Impact::ImpactResult::WRITE_AVAILABILITY_LOSS;
@@ -276,7 +294,8 @@ std::pair<bool, bool> checkReadWriteAvailablity(
     const ReplicationProperty& replication_property,
     const SafetyMargin& safety_margin,
     const std::shared_ptr<const nodes::NodesConfiguration>& nodes_config,
-    ClusterState* cluster_state) {
+    ClusterState* cluster_state,
+    bool require_fully_started_nodes) {
   bool safe_writes;
   bool safe_reads = true;
 
@@ -332,7 +351,7 @@ std::pair<bool, bool> checkReadWriteAvailablity(
         // Then tag it as writable.
         if (!op_shards.count(shard) &&
             status == AuthoritativeStatus::FULLY_AUTHORITATIVE &&
-            isAlive(cluster_state, shard.node())) {
+            isAlive(cluster_state, shard.node(), require_fully_started_nodes)) {
           failure_domains.setShardAttribute(shard, true);
         }
       }
@@ -367,7 +386,8 @@ std::pair<bool, bool> checkReadWriteAvailablity(
           status = AuthoritativeStatus::UNAVAILABLE;
         }
         failure_domains.setShardAuthoritativeStatus(shard, status);
-        if (!op_shards.count(shard) && isAlive(cluster_state, shard.node())) {
+        if (!op_shards.count(shard) &&
+            isAlive(cluster_state, shard.node(), require_fully_started_nodes)) {
           failure_domains.setShardAttribute(shard, true);
         }
       }
@@ -415,8 +435,12 @@ std::pair<bool, bool> checkReadWriteAvailablity(
   return std::make_pair(safe_reads, safe_writes);
 }
 
-bool isAlive(ClusterState* cluster_state, node_index_t index) {
-  if (cluster_state) {
+bool isAlive(ClusterState* cluster_state,
+             node_index_t index,
+             bool require_fully_started) {
+  if (cluster_state && require_fully_started) {
+    return cluster_state->isNodeFullyStarted(index);
+  } else if (cluster_state) {
     return cluster_state->isNodeAlive(index);
   } else {
     return true;
@@ -462,7 +486,8 @@ Impact::StorageSetMetadata getStorageSetMetadata(
     const StorageSet& storage_set,
     const ShardAuthoritativeStatusMap& shard_status,
     const std::shared_ptr<const nodes::NodesConfiguration>& nodes_config,
-    ClusterState* cluster_state) {
+    ClusterState* cluster_state,
+    bool require_fully_started) {
   Impact::StorageSetMetadata out;
   for (const auto& shard : storage_set) {
     // If the node doesn't exist anymore in the nodes configuration. We use
@@ -485,11 +510,11 @@ Impact::StorageSetMetadata getStorageSetMetadata(
       location = discovery->location;
     }
 
-    out.push_back(
-        Impact::ShardMetadata{.auth_status = shard_status.getShardStatus(shard),
-                              .is_alive = isAlive(cluster_state, shard.node()),
-                              .storage_state = storage_state,
-                              .location = location});
+    out.push_back(Impact::ShardMetadata{
+        .auth_status = shard_status.getShardStatus(shard),
+        .is_alive = isAlive(cluster_state, shard.node(), require_fully_started),
+        .storage_state = storage_state,
+        .location = location});
   }
   return out;
 }
