@@ -18,6 +18,7 @@
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/common/settings/util.h"
 #include "logdevice/common/test/TestUtil.h"
+#include "logdevice/server/Listener.h"
 #include "logdevice/server/LogStoreMonitor.h"
 #include "logdevice/server/RebuildingCoordinator.h"
 #include "logdevice/server/RebuildingSupervisor.h"
@@ -91,10 +92,14 @@ std::shared_ptr<ServerProcessor> make_test_server_processor(
 
 void shutdown_test_server(std::shared_ptr<ServerProcessor>& processor) {
   std::unique_ptr<AdminServer> admin_handle;
-  std::unique_ptr<EventLoopHandle> connection_listener;
-  std::unique_ptr<EventLoopHandle> command_listener;
-  std::unique_ptr<EventLoopHandle> gossip_listener;
-  std::unique_ptr<EventLoopHandle> ssl_connection_listener;
+  std::unique_ptr<Listener> connection_listener;
+  std::unique_ptr<Listener> command_listener;
+  std::unique_ptr<Listener> gossip_listener;
+  std::unique_ptr<Listener> ssl_connection_listener;
+  std::unique_ptr<EventLoopHandle> connection_listener_handle;
+  std::unique_ptr<EventLoopHandle> command_listener_handle;
+  std::unique_ptr<EventLoopHandle> gossip_listener_handle;
+  std::unique_ptr<EventLoopHandle> ssl_connection_listener_handle;
   std::unique_ptr<LogStoreMonitor> logstore_monitor;
   std::unique_ptr<ShardedStorageThreadPool> storage_thread_pool;
   std::unique_ptr<ShardedRocksDBLocalLogStore> sharded_store;
@@ -111,6 +116,10 @@ void shutdown_test_server(std::shared_ptr<ServerProcessor>& processor) {
                   command_listener,
                   gossip_listener,
                   ssl_connection_listener,
+                  connection_listener_handle,
+                  command_listener_handle,
+                  gossip_listener_handle,
+                  ssl_connection_listener_handle,
                   logstore_monitor,
                   processor,
                   storage_thread_pool,

@@ -32,7 +32,9 @@ class Server;
 
 class CommandListener : public Listener {
  public:
-  explicit CommandListener(Listener::InterfaceDef iface, Server* server);
+  explicit CommandListener(Listener::InterfaceDef iface,
+                           KeepAlive loop,
+                           Server* server);
 
  protected:
   /**
@@ -122,6 +124,8 @@ class CommandListener : public Listener {
 
   // SSL context manager
   SSLFetcher ssl_fetcher_;
+
+  KeepAlive loop_;
 };
 
 }} // namespace facebook::logdevice

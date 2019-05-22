@@ -19,6 +19,7 @@ class CommandListener;
 class ConnectionListener;
 class EventLoopHandle;
 class EventLogStateMachine;
+class Listener;
 class LogStoreMonitor;
 class Processor;
 class RebuildingCoordinator;
@@ -55,10 +56,14 @@ class ClusterMaintenanceStateMachine;
  */
 void shutdown_server(
     std::unique_ptr<AdminServer>& admin_server,
-    std::unique_ptr<EventLoopHandle>& connection_listener,
-    std::unique_ptr<EventLoopHandle>& command_listener,
-    std::unique_ptr<EventLoopHandle>& gossip_listener,
-    std::unique_ptr<EventLoopHandle>& ssl_connection_listener,
+    std::unique_ptr<Listener>& connection_listener,
+    std::unique_ptr<Listener>& command_listener,
+    std::unique_ptr<Listener>& gossip_listener,
+    std::unique_ptr<Listener>& ssl_connection_listener,
+    std::unique_ptr<EventLoopHandle>& connection_listener_handle,
+    std::unique_ptr<EventLoopHandle>& command_listener_handle,
+    std::unique_ptr<EventLoopHandle>& gossip_listener_handle,
+    std::unique_ptr<EventLoopHandle>& ssl_connection_listener_handle,
     std::unique_ptr<LogStoreMonitor>& logstore_monitor,
     std::shared_ptr<ServerProcessor>& processor,
     std::unique_ptr<ShardedStorageThreadPool>& storage_thread_pool,

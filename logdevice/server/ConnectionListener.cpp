@@ -31,10 +31,11 @@ namespace facebook { namespace logdevice {
 
 ConnectionListener::ConnectionListener(
     Listener::InterfaceDef iface,
+    KeepAlive loop,
     std::shared_ptr<SharedState> shared_state,
     ListenerType listener_type,
     ResourceBudget& connection_backlog_budget)
-    : Listener(std::move(iface), listenerTypeNames()[listener_type]),
+    : Listener(std::move(iface), loop),
       connection_backlog_budget_(connection_backlog_budget),
       shared_state_(shared_state),
       listener_type_(listener_type) {

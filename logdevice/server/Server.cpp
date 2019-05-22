@@ -461,18 +461,17 @@ Server::Server(ServerParameters* params, std::function<void()> stop_handler)
 }
 
 template <typename T, typename... Args>
-static std::unique_ptr<EventLoopHandle>
-initListener(int port,
-             const std::string& unix_socket,
-             bool ssl,
-             Args&&... args) {
+static std::unique_ptr<Listener> initListener(int port,
+                                              const std::string& unix_socket,
+                                              bool ssl,
+                                              Args&&... args) {
   if (port > 0 || !unix_socket.empty()) {
     const auto conn_iface = unix_socket.empty()
         ? Listener::InterfaceDef(port, ssl)
         : Listener::InterfaceDef(unix_socket, ssl);
 
     try {
-      return std::make_unique<EventLoopHandle>(new T(conn_iface, args...));
+      return std::make_unique<T>(conn_iface, args...);
     } catch (const ConstructorFailed&) {
       ld_error("Failed to construct a Listener on %s",
                conn_iface.describe().c_str());
@@ -489,18 +488,28 @@ bool Server::initListeners() {
   try {
     auto conn_shared_state =
         std::make_shared<ConnectionListener::SharedState>();
-    connection_listener_handle_ =
-        initListener<ConnectionListener>(server_settings_->port,
-                                         server_settings_->unix_socket,
-                                         false,
-                                         conn_shared_state,
-                                         ConnectionListener::ListenerType::DATA,
-                                         conn_budget_backlog_);
-    command_listener_handle_ =
-        initListener<CommandListener>(server_settings_->command_port,
-                                      server_settings_->command_unix_socket,
-                                      false,
-                                      this);
+    connection_listener_handle_ = std::make_unique<EventLoopHandle>(
+        new EventLoop(ConnectionListener::listenerTypeNames()
+                          [ConnectionListener::ListenerType::DATA],
+                      ThreadID::Type::UTILITY));
+    connection_listener_handle_->start();
+    connection_listener_ = initListener<ConnectionListener>(
+        server_settings_->port,
+        server_settings_->unix_socket,
+        false,
+        folly::getKeepAliveToken(connection_listener_handle_->get()),
+        conn_shared_state,
+        ConnectionListener::ListenerType::DATA,
+        conn_budget_backlog_);
+    command_listener_handle_ = std::make_unique<EventLoopHandle>(
+        new EventLoop("ld:admin", ThreadID::Type::UTILITY));
+    command_listener_handle_->start();
+    command_listener_ = initListener<CommandListener>(
+        server_settings_->command_port,
+        server_settings_->command_unix_socket,
+        false,
+        folly::getKeepAliveToken(command_listener_handle_->get()),
+        this);
 
     std::shared_ptr<Configuration> config = updateable_config_->get();
     ld_check(config);
@@ -541,10 +550,16 @@ bool Server::initListeners() {
           // validateSSLCertificatesExist() should output the error
           return false;
         }
-        ssl_connection_listener_handle_ = initListener<ConnectionListener>(
+        ssl_connection_listener_handle_ = std::make_unique<EventLoopHandle>(
+            new EventLoop(ConnectionListener::listenerTypeNames()
+                              [ConnectionListener::ListenerType::DATA_SSL],
+                          ThreadID::Type::UTILITY));
+        ssl_connection_listener_handle_->start();
+        ssl_connection_listener_ = initListener<ConnectionListener>(
             ssl_port,
             ssl_unix_socket,
             true,
+            folly::getKeepAliveToken(ssl_connection_listener_handle_->get()),
             conn_shared_state,
             ConnectionListener::ListenerType::DATA_SSL,
             conn_budget_backlog_);
@@ -574,10 +589,16 @@ bool Server::initListeners() {
           // validateSSLCertificatesExist() should output the error
           return false;
         }
-        gossip_listener_handle_ = initListener<ConnectionListener>(
+        gossip_listener_handle_ = std::make_unique<EventLoopHandle>(
+            new EventLoop(ConnectionListener::listenerTypeNames()
+                              [ConnectionListener::ListenerType::GOSSIP],
+                          ThreadID::Type::UTILITY));
+        gossip_listener_handle_->start();
+        gossip_listener_ = initListener<ConnectionListener>(
             gossip_port,
             gossip_unix_socket,
             false,
+            folly::getKeepAliveToken(gossip_listener_handle_->get()),
             conn_shared_state,
             ConnectionListener::ListenerType::GOSSIP,
             conn_budget_backlog_unlimited_);
@@ -1046,24 +1067,16 @@ bool Server::initUnreleasedRecordDetector() {
   return true;
 }
 
-bool Server::startCommandListener(std::unique_ptr<EventLoopHandle>& handle) {
-  CommandListener* listener = checked_downcast<CommandListener*>(handle->get());
-  if (listener->startAcceptingConnections() < 0) {
-    return false;
-  }
-  handle->start();
-  return true;
+bool Server::startCommandListener(std::unique_ptr<Listener>& handle) {
+  CommandListener* listener = checked_downcast<CommandListener*>(handle.get());
+  return listener->startAcceptingConnections().wait().value();
 }
 
-bool Server::startConnectionListener(std::unique_ptr<EventLoopHandle>& handle) {
+bool Server::startConnectionListener(std::unique_ptr<Listener>& handle) {
   ConnectionListener* listener =
-      checked_downcast<ConnectionListener*>(handle->get());
+      checked_downcast<ConnectionListener*>(handle.get());
   listener->setProcessor(processor_.get());
-  if (listener->startAcceptingConnections() < 0) {
-    return false;
-  }
-  handle->start();
-  return true;
+  return listener->startAcceptingConnections().wait().value();
 }
 
 bool Server::initLogsConfigManager() {
@@ -1116,24 +1129,23 @@ bool Server::initAdminServer() {
 
 bool Server::startListening() {
   // start accepting new connections
-  if (!startConnectionListener(connection_listener_handle_)) {
+  if (!startConnectionListener(connection_listener_)) {
     return false;
   }
 
-  if (gossip_listener_handle_ &&
-      !startConnectionListener(gossip_listener_handle_)) {
+  if (gossip_listener_handle_ && !startConnectionListener(gossip_listener_)) {
     return false;
   }
 
   if (ssl_connection_listener_handle_ &&
-      !startConnectionListener(ssl_connection_listener_handle_)) {
+      !startConnectionListener(ssl_connection_listener_)) {
     return false;
   }
 
   // start command listener last, so that integration test framework
   // cannot connect to the command port in the event that any other port
   // failed to open.
-  if (!startCommandListener(command_listener_handle_)) {
+  if (!startCommandListener(command_listener_)) {
     return false;
   }
 
@@ -1153,6 +1165,10 @@ void Server::gracefulShutdown() {
     return;
   }
   shutdown_server(admin_server_handle_,
+                  connection_listener_,
+                  command_listener_,
+                  gossip_listener_,
+                  ssl_connection_listener_,
                   connection_listener_handle_,
                   command_listener_handle_,
                   gossip_listener_handle_,

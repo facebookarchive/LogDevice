@@ -33,8 +33,10 @@
 
 namespace facebook { namespace logdevice {
 
-CommandListener::CommandListener(Listener::InterfaceDef iface, Server* server)
-    : Listener(std::move(iface), "ld:admin"),
+CommandListener::CommandListener(Listener::InterfaceDef iface,
+                                 KeepAlive loop,
+                                 Server* server)
+    : Listener(std::move(iface), loop),
       server_(server),
       server_settings_(server_->getServerSettings()),
       ssl_fetcher_(
@@ -43,7 +45,8 @@ CommandListener::CommandListener(Listener::InterfaceDef iface, Server* server)
           server_->getParameters()->getProcessorSettings()->ssl_ca_path,
           server_->getParameters()
               ->getProcessorSettings()
-              ->ssl_cert_refresh_interval) {
+              ->ssl_cert_refresh_interval),
+      loop_(loop) {
   ld_check(server_);
 }
 
@@ -58,7 +61,7 @@ void CommandListener::acceptCallback(evutil_socket_t sock,
                                      struct sockaddr* addr,
                                      int len) {
   struct bufferevent* bev = LD_EV(bufferevent_socket_new)(
-      getEventBase(), sock, BEV_OPT_CLOSE_ON_FREE);
+      loop_->getEventBase(), sock, BEV_OPT_CLOSE_ON_FREE);
 
   if (!bev) {
     ld_error("bufferevent_socket_new() failed. errno=%d (%s)",
@@ -428,7 +431,7 @@ bool CommandListener::upgradeToSSL(ConnectionState* state) {
 
   struct bufferevent* bev = nullptr;
   // wrap original bufferevent in a bufferevent_openssl_filter
-  bev = bufferevent_openssl_filter_new(getEventBase(),
+  bev = bufferevent_openssl_filter_new(loop_->getEventBase(),
                                        state->bev_,
                                        ssl,
                                        BUFFEREVENT_SSL_ACCEPTING,

@@ -8,13 +8,9 @@
 #pragma once
 
 #include <memory>
-#include <vector>
 
-#include "event2/event.h"
-#include "event2/listener.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/SimpleEnumMap.h"
-#include "logdevice/common/WorkerType.h"
 #include "logdevice/server/Listener.h"
 
 namespace facebook { namespace logdevice {
@@ -43,6 +39,7 @@ class ConnectionListener : public Listener {
   static const SimpleEnumMap<ListenerType, std::string>& listenerTypeNames();
 
   explicit ConnectionListener(Listener::InterfaceDef iface,
+                              KeepAlive loop,
                               std::shared_ptr<SharedState> shared_state,
                               ListenerType listener_type,
                               ResourceBudget& connection_backlog_budget);

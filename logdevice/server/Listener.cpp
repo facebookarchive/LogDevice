@@ -25,51 +25,13 @@
 
 namespace facebook { namespace logdevice {
 
-Listener::Listener(InterfaceDef iface, std::string thread_name)
-    : EventLoop(thread_name, ThreadID::Type::UTILITY),
-      iface_(std::move(iface)) {
-  const int rv = iface_.isPort() ? setupTcpSockets() : setupUnixSocket();
-
-  if (rv != 0) {
-    throw ConstructorFailed();
-  }
-}
-
-Listener::~Listener() {
-  for (int fd : socket_fds_) {
-    LD_EV(evutil_closesocket)(fd);
-  }
-}
-
-void Listener::staticAcceptCallback(struct evconnlistener* /*listener*/,
-                                    evutil_socket_t sock,
-                                    struct sockaddr* addr,
-                                    int len,
-                                    void* arg) {
-  auto arg_listener = reinterpret_cast<Listener*>(arg);
-  if (arg_listener->accept_.load()) {
-    arg_listener->acceptCallback(sock, addr, len);
-  } else {
-    LD_EV(evutil_closesocket)(sock);
-  }
-}
-
-static void accept_error_callback(struct evconnlistener* /*listener*/,
-                                  void* /*arg*/) {
-  int err = EVUTIL_SOCKET_ERROR();
-  RATELIMIT_ERROR(std::chrono::seconds(10),
-                  1,
-                  "accept failed with error code %d (%s)",
-                  err,
-                  evutil_socket_error_to_string(err));
-}
-
+namespace {
 /**
  * Helper for setup_evconnlisteners() that creates a new socket for listening
  * on the specified address.  Mostly copied from evconnlistener_new_bind()
  * implementation, with the addition of making ipv6 addresses ipv6-only.
  */
-static int new_listener_socket(const struct sockaddr* sa, int socklen) {
+int new_listener_socket(const struct sockaddr* sa, int socklen) {
   int family = sa->sa_family;
   int fd = socket(family, SOCK_STREAM, 0);
   int off = 0, on = 1;
@@ -126,8 +88,9 @@ err:
   return -1;
 }
 
-int Listener::setupTcpSockets() {
-  ld_check(iface_.isPort());
+int setupTcpSockets(const Listener::InterfaceDef& iface,
+                    std::vector<int>& fds_out) {
+  ld_check(iface.isPort());
   struct addrinfo hints;
   memset(&hints, 0, sizeof hints);
   hints.ai_family = AF_UNSPEC;     // v4 and v6
@@ -136,7 +99,7 @@ int Listener::setupTcpSockets() {
 
   struct addrinfo* result = nullptr;
   int rv = getaddrinfo(
-      nullptr, std::to_string(iface_.port()).c_str(), &hints, &result);
+      nullptr, std::to_string(iface.port()).c_str(), &hints, &result);
   if (rv != 0 || result == nullptr) {
     ld_error(
         "getaddrinfo() failed with error %d (\"%s\")", rv, gai_strerror(rv));
@@ -153,16 +116,17 @@ int Listener::setupTcpSockets() {
       return -1;
     }
 
-    socket_fds_.push_back(fd);
+    fds_out.push_back(fd);
   }
 
   return 0;
 }
 
-int Listener::setupUnixSocket() {
-  ld_check(!iface_.isPort());
-  unlink(iface_.path().c_str());
-  Sockaddr addr(iface_.path());
+int setupUnixSocket(const Listener::InterfaceDef& iface,
+                    std::vector<int>& fds_out) {
+  ld_check(!iface.isPort());
+  unlink(iface.path().c_str());
+  Sockaddr addr(iface.path());
   struct sockaddr_storage ss;
   int len = addr.toStructSockaddr(&ss);
   int fd = new_listener_socket(reinterpret_cast<struct sockaddr*>(&ss), len);
@@ -170,18 +134,75 @@ int Listener::setupUnixSocket() {
     return -1;
   }
 
-  socket_fds_.push_back(fd);
+  fds_out.push_back(fd);
 
   return 0;
 }
 
-int Listener::startAcceptingConnections() {
-  struct event_base* base = getEventBase();
+void accept_error_callback(struct evconnlistener* /*listener*/, void* /*arg*/) {
+  int err = EVUTIL_SOCKET_ERROR();
+  RATELIMIT_ERROR(std::chrono::seconds(10),
+                  1,
+                  "accept failed with error code %d (%s)",
+                  err,
+                  evutil_socket_error_to_string(err));
+}
+
+} // namespace
+
+Listener::Listener(InterfaceDef iface, KeepAlive loop)
+    : iface_(std::move(iface)), loop_(loop) {}
+
+Listener::~Listener() {
+  stopAcceptingConnections().wait();
+}
+
+folly::SemiFuture<bool> Listener::startAcceptingConnections() {
+  folly::Promise<bool> promise;
+  auto res = promise.getSemiFuture();
+  loop_->add([this, promise = std::move(promise)]() mutable {
+    promise.setValue(setupEvConnListeners());
+  });
+  return res;
+}
+
+folly::SemiFuture<folly::Unit> Listener::stopAcceptingConnections() {
+  folly::Promise<folly::Unit> promise;
+  auto res = promise.getSemiFuture();
+  loop_->add([this, promise = std::move(promise)]() mutable {
+    evconnlisteners_.clear();
+    promise.setValue();
+  });
+  return res;
+}
+
+void Listener::staticAcceptCallback(struct evconnlistener* /*listener*/,
+                                    evutil_socket_t sock,
+                                    struct sockaddr* addr,
+                                    int len,
+                                    void* arg) {
+  auto arg_listener = reinterpret_cast<Listener*>(arg);
+  arg_listener->acceptCallback(sock, addr, len);
+}
+
+bool Listener::setupEvConnListeners() {
+  if (evconnlisteners_.size()) {
+    // Already listening
+    return true;
+  }
+  std::vector<int> fds;
+  int rv = iface_.isPort() ? setupTcpSockets(iface_, fds)
+                           : setupUnixSocket(iface_, fds);
+  if (rv != 0) {
+    for (auto fd : fds) {
+      LD_EV(evutil_closesocket)(fd);
+    }
+    return false;
+  }
+  event_base* base = loop_->getEventBase();
   ld_check(base != nullptr);
 
-  for (auto it = socket_fds_.begin(); it != socket_fds_.end();) {
-    auto cur = it++;
-
+  for (auto it = fds.begin(); it != fds.end(); ++it) {
     const unsigned flags = LEV_OPT_CLOSE_ON_FREE;
     struct evconnlistener* listener =
         LD_EV(evconnlistener_new)(base,
@@ -189,23 +210,20 @@ int Listener::startAcceptingConnections() {
                                   this,
                                   flags,
                                   -1, // auto-pick backlog
-                                  *cur);
+                                  *it);
 
     if (listener == nullptr) {
       ld_error("evconnlistener_new() failed (port:%d, path:%s): %s",
                iface_.isPort() ? iface_.port() : -1,
                iface_.isPort() ? "-" : iface_.path().c_str(),
                strerror(errno));
-      return -1;
+      evconnlisteners_.clear();
+      return false;
     }
 
     LD_EV(evconnlistener_set_error_cb)(listener, accept_error_callback);
     evconnlisteners_.emplace_back(listener, LD_EV(evconnlistener_free));
-
-    socket_fds_.erase(cur);
   }
-
-  ld_check(socket_fds_.begin() == socket_fds_.end());
 
   if (iface_.isPort()) {
     ld_info("Listening on %zu interfaces, port %d",
@@ -214,7 +232,7 @@ int Listener::startAcceptingConnections() {
   } else {
     ld_info("Listening on %s", iface_.path().c_str());
   }
-  return 0;
+  return true;
 }
 
 }} // namespace facebook::logdevice

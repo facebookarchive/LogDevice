@@ -9,9 +9,13 @@
 
 #include <list>
 #include <memory>
+#include <mutex>
 #include <vector>
 
 #include <boost/variant.hpp>
+#include <folly/Executor.h>
+#include <folly/futures/Future.h>
+#include <folly/futures/SharedPromise.h>
 
 #include "event2/event.h"
 #include "event2/listener.h"
@@ -22,8 +26,9 @@ namespace facebook { namespace logdevice {
 /**
  * An abstract class that wraps evconnlisteners and handles new connections.
  */
-class Listener : public EventLoop {
+class Listener {
  public:
+  using KeepAlive = folly::Executor::KeepAlive<EventLoop>;
   /**
    * Defines the interface used by this Listener. Can be a TCP port or the path
    * of a unix domain socket.
@@ -68,23 +73,20 @@ class Listener : public EventLoop {
     bool ssl_;
   };
 
-  explicit Listener(InterfaceDef iface, std::string thread_name);
+  explicit Listener(InterfaceDef iface, KeepAlive loop);
 
-  ~Listener() override;
+  virtual ~Listener();
 
   /**
    * Starts listening on a specified port and registers the listener event with
    * this Listener's thread's event base.
    */
-  int startAcceptingConnections();
+  folly::SemiFuture<bool> startAcceptingConnections();
 
   /**
-   * For tests: immediately close any new connections, to simulate
-   * network problems.
+   * Stops listening and frees all events from EventLoop
    */
-  void acceptNewConnections(bool accept) {
-    accept_.store(accept);
-  }
+  folly::SemiFuture<folly::Unit> stopAcceptingConnections();
 
  protected:
   /**
@@ -95,38 +97,26 @@ class Listener : public EventLoop {
                               int len) = 0;
 
   /* Returns true if we're listening on an SSL port */
-  bool isSSL() {
+  bool isSSL() const {
     return iface_.isSSL();
   }
 
  private:
-  // file descriptors of all sockets this Listener should accept connections on
-  // (this is typically just variants of localhost like ipv4, ipv6 etc); when
-  // evconnlistener is created for a socket (by startAcceptingConnections), its
-  // fd is removed from this list
-  std::list<int> socket_fds_;
+  bool setupEvConnListeners();
+
+  void closeEvConnListeners();
 
   // Tcp port or path to unix domain socket we'll use to listen for connections.
   InterfaceDef iface_;
+
+  // EventLoop on which listener is running
+  KeepAlive loop_;
 
   // list of pointers to evconnlistener structs, used to ensure they're properly
   // released when this object is destroyed
   typedef std::unique_ptr<evconnlistener, std::function<void(evconnlistener*)>>
       EvconnListenerUniquePtr;
   std::vector<EvconnListenerUniquePtr> evconnlisteners_;
-
-  // sets up listener sockets
-  int setup_sockets();
-
-  // sets up listener sockets on tcp port.
-  int setupTcpSockets();
-
-  // sets up listener socket on path.
-  int setupUnixSocket();
-
-  // For tests: immediately close any new connections, to simulate
-  // network problems.
-  std::atomic_bool accept_{true};
 
   // static wrapper around acceptCallback() that we can pass to libevent
   static void staticAcceptCallback(struct evconnlistener* listener,

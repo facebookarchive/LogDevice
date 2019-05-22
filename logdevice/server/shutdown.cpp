@@ -131,10 +131,14 @@ using std::chrono::steady_clock;
 
 void shutdown_server(
     std::unique_ptr<AdminServer>& admin_server,
-    std::unique_ptr<EventLoopHandle>& connection_listener,
-    std::unique_ptr<EventLoopHandle>& command_listener,
-    std::unique_ptr<EventLoopHandle>& gossip_listener,
-    std::unique_ptr<EventLoopHandle>& ssl_connection_listener,
+    std::unique_ptr<Listener>& connection_listener,
+    std::unique_ptr<Listener>& command_listener,
+    std::unique_ptr<Listener>& gossip_listener,
+    std::unique_ptr<Listener>& ssl_connection_listener,
+    std::unique_ptr<EventLoopHandle>& connection_listener_handle,
+    std::unique_ptr<EventLoopHandle>& command_listener_handle,
+    std::unique_ptr<EventLoopHandle>& gossip_listener_handle,
+    std::unique_ptr<EventLoopHandle>& ssl_connection_listener_handle,
     std::unique_ptr<LogStoreMonitor>& logstore_monitor,
     std::shared_ptr<ServerProcessor>& processor,
     std::unique_ptr<ShardedStorageThreadPool>& storage_thread_pool,
@@ -185,28 +189,39 @@ void shutdown_server(
 
   // stop accepting new connections
   ld_info("Destroying listeners");
-
-  connection_listener.reset();
-
-  // Save off the thread id for command listener thread. It will be joined after
-  // stopping all workers. Joining admin command is avoided at this time because
+  std::vector<folly::SemiFuture<folly::Unit>> listeners_closed;
+  if (connection_listener) {
+    listeners_closed.emplace_back(
+        connection_listener->stopAcceptingConnections());
+  }
+  // Avoid waiting for command listener as it could take a long time to shutdown
+  // reset it at the end Joining admin command is avoided at this time because
   // , if admin command queue is large joining the thread won't be possible in
   // shutdown timeout. Hence, at this time accepting new requests is stopped but
   // the listener thread itself is not joined. This special casing of admin
   // commands listener is not ideal. Ideally, we want same approach for all
   // listeners. But, all of the stuck shutdowns till now have been because of
   // admin command thread.
-  auto command_listener_thread = pthread_self();
-  if (command_listener != nullptr) {
-    command_listener->shutdown();
-    command_listener_thread = command_listener->getThread();
+  auto command_listener_closed = folly::SemiFuture<folly::Unit>();
+  ld_assert(command_listener_closed.hasValue());
+  if (command_listener) {
+    command_listener_closed = command_listener->stopAcceptingConnections();
   }
-
   if (gossip_listener) {
-    gossip_listener.reset();
+    listeners_closed.emplace_back(gossip_listener->stopAcceptingConnections());
   }
+  if (ssl_connection_listener) {
+    listeners_closed.emplace_back(
+        ssl_connection_listener->stopAcceptingConnections());
+  }
+  folly::collectAll(listeners_closed.begin(), listeners_closed.end()).wait();
 
+  connection_listener.reset();
+  connection_listener_handle.reset();
+  gossip_listener.reset();
+  gossip_listener_handle.reset();
   ssl_connection_listener.reset();
+  ssl_connection_listener_handle.reset();
 
   // set accepting_work to false
   ld_info("Stopping accepting work on all workers except FAILURE_DETECTOR");
@@ -316,13 +331,9 @@ void shutdown_server(
     ld_info("FAILURE_DETECTOR worker stopped");
   }
 
-  if (command_listener) {
-    // Join command listener thread.
-    ld_info("Joining command listener thread.");
-    int rv = pthread_join(command_listener_thread, nullptr);
-    ld_check(rv == 0);
-    command_listener.reset();
-  }
+  command_listener_closed.wait();
+  command_listener.reset();
+  command_listener_handle.reset();
 
   // take down all worker threads
   ld_info("Shutting down worker threads");

@@ -219,10 +219,13 @@ class Server {
 
   // For tests, to help simulate various forms of network partition.
   void acceptNewConnections(bool accept) {
-    checked_downcast<Listener*>(connection_listener_handle_->get())
-        ->acceptNewConnections(accept);
-    checked_downcast<Listener*>(ssl_connection_listener_handle_->get())
-        ->acceptNewConnections(accept);
+    if (accept) {
+      connection_listener_->startAcceptingConnections().wait();
+      ssl_connection_listener_->startAcceptingConnections().wait();
+    } else {
+      connection_listener_->stopAcceptingConnections().wait();
+      ssl_connection_listener_->stopAcceptingConnections().wait();
+    }
   }
 
   void rotateLocalLogs();
@@ -244,6 +247,10 @@ class Server {
   std::unique_ptr<EventLoopHandle> command_listener_handle_;
   std::unique_ptr<EventLoopHandle> gossip_listener_handle_;
   std::unique_ptr<AdminServer> admin_server_handle_;
+  std::unique_ptr<Listener> connection_listener_;
+  std::unique_ptr<Listener> ssl_connection_listener_;
+  std::unique_ptr<Listener> command_listener_;
+  std::unique_ptr<Listener> gossip_listener_;
 
   // initStore()
   std::unique_ptr<ShardedRocksDBLocalLogStore> sharded_store_;
@@ -313,8 +320,8 @@ class Server {
   // if it takes longer than server_settings_->shutdown_timeout ms.
   void shutdownWithTimeout();
 
-  bool startCommandListener(std::unique_ptr<EventLoopHandle>& handle);
-  bool startConnectionListener(std::unique_ptr<EventLoopHandle>& handle);
+  bool startCommandListener(std::unique_ptr<Listener>& handle);
+  bool startConnectionListener(std::unique_ptr<Listener>& handle);
 
   void updateStatsSettings();
 };
