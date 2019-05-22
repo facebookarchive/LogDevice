@@ -130,22 +130,6 @@ class FlowGroupsUpdate {
 class FlowGroup {
   friend class FlowGroupTest;
 
-  // DeclareCanDrainOnce is a scoped class used to assert that operations
-  // within the scope are able to issue at least one message without hitting
-  // a traffic shaping limit.
-  class DeclareCanDrainOnce {
-   public:
-    explicit DeclareCanDrainOnce(FlowGroup* fg) : fg_(fg) {
-      fg_->assert_can_drain_ = true;
-    }
-    ~DeclareCanDrainOnce() {
-      fg_->assert_can_drain_ = false;
-    }
-
-   private:
-    FlowGroup* fg_;
-  };
-
   std::shared_ptr<FlowGroupDependencies> deps_;
 
  public:
@@ -393,6 +377,8 @@ class FlowGroup {
     ld_check(cb.priority_ != Priority::INVALID);
 
     reordering_allowed_at_priority_ = cb.priority_;
+    // A callback should only be invoked if it can issue at least one message
+    // without hitting a traffic shaping limit.
     assert_can_drain_ = true;
 
     cb.deactivate();

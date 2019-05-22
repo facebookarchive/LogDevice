@@ -160,16 +160,18 @@ Message::Disposition START_onReceived(START_Message* msg, const Address& from) {
   // than start_lsn - the client would be initiating a read stream where the
   // server won't send anything until it receives a window update.
   if (header.start_lsn > header.until_lsn ||
-      header.until_lsn < header.window_high) {
+      header.until_lsn < header.window_high ||
+      header.filter_version < filter_version_t{1}) {
     ld_error("invalid START message from %s: log_id %lu, "
              "read_stream_id %lu, start_lsn %s, "
-             "until_lsn %s, window_high %s.",
+             "until_lsn %s, window_high %s, filter_version: %lu.",
              Sender::describeConnection(from).c_str(),
              header.log_id.val_,
              header.read_stream_id.val_,
              lsn_to_string(header.start_lsn).c_str(),
              lsn_to_string(header.until_lsn).c_str(),
-             lsn_to_string(header.window_high).c_str());
+             lsn_to_string(header.window_high).c_str(),
+             header.filter_version.val());
     err = E::BADMSG;
     return Message::Disposition::ERROR; // client misbehaving, close connection
   }
@@ -432,24 +434,23 @@ onReceivedContinuation(START_Message* msg,
     return send_error_reply(msg, from, status);
   }
 
-  stream->replication_ = header.replication;
-
   if (insert_result.second) {
     // This is a new stream. Keep track of start_lsn for debug purposes.
     stream->start_lsn_ = header.start_lsn;
   } else if (header.filter_version < stream->filter_version_) {
-    // this is old message, ignore it. This could be due to
+    // This is an old message, ignore it. This could be due to
     // onReceivedContinuation reordering. See T24126024 for details
     return Message::Disposition::NORMAL;
   }
 
-  if (insert_result.second || header.filter_version > stream->filter_version_) {
+  stream->replication_ = header.replication;
+
+  if (header.filter_version > stream->filter_version_) {
     // This is a new stream, or the filter version increased in which case we
     // allow it to rewind. Initialize the stream.
 
     if (insert_result.second) {
       ld_check_eq(stream->filter_version_, filter_version_t{0});
-      ld_check_ge(header.filter_version, filter_version_t{1});
     } else {
       // Rewind of existing stream.
       stream->last_rewind_time_ = SteadyTimestamp::now();
@@ -515,9 +516,8 @@ onReceivedContinuation(START_Message* msg,
   } else if (stream->include_extra_metadata_) {
     stream->setTrafficClass(TrafficClass::REBUILD);
   } else {
-    auto& tsc = scfg->getTrafficShapingConfig();
-    stream->setTrafficClass(tsc.default_read_traffic_class);
-
+    TrafficClass tc =
+        scfg->getTrafficShapingConfig().default_read_traffic_class;
     const PrincipalIdentity* principalIdentity = w->sender().getPrincipal(from);
 
     // principalIdentity identity could be nullptr if connection was closed
@@ -527,7 +527,7 @@ onReceivedContinuation(START_Message* msg,
         auto principal = scfg->getPrincipalByName(&identity.second);
         if (principal != nullptr &&
             principal->max_read_traffic_class != TrafficClass::INVALID) {
-          stream->setTrafficClass(principal->max_read_traffic_class);
+          tc = principal->max_read_traffic_class;
           ld_debug("Assigning traffic class to principal: %s, "
                    "max_read_traffic_class: %s ",
                    principal->name.c_str(),
@@ -536,6 +536,9 @@ onReceivedContinuation(START_Message* msg,
         }
       }
     }
+
+    // setTrafficClass() updates stats, so let's only call it once.
+    stream->setTrafficClass(tc);
   }
 
   stream->setSCDCopysetReordering(

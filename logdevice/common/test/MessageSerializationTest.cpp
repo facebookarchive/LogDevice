@@ -1165,7 +1165,7 @@ TEST_F(MessageSerializationTest, STARTED) {
                       0x9B7D7B3FEC8486AA, // last released lsn
                       shard_index_t{0}};
 
-  STARTED_Message m(h);
+  STARTED_Message m(h, TrafficClass::READ_BACKLOG);
   auto check = [&](const STARTED_Message& m2, uint16_t proto) {
     checkSTARTED(m, m2, proto);
   };

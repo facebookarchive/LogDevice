@@ -123,7 +123,8 @@ void GAP_Message::serialize(ProtocolWriter& writer) const {
 MessageReadResult GAP_Message::deserialize(ProtocolReader& reader) {
   GAP_Header hdr;
   reader.read(&hdr);
-  return reader.result([&] { return new GAP_Message(hdr); });
+  return reader.result(
+      [&] { return new GAP_Message(hdr, TrafficClass::READ_BACKLOG); });
 }
 
 std::string GAP_Header::identify() const {

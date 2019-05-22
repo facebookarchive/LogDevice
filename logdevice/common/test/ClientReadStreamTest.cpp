@@ -399,7 +399,7 @@ static GAP_Message mockGap(ShardID shard,
       GAP_flags_t{0},
       0 /* shard */
   };
-  return GAP_Message(gap);
+  return GAP_Message(gap, TrafficClass::READ_BACKLOG);
 }
 
 static lsn_t lsn(int epoch, int esn) {
@@ -776,17 +776,18 @@ bool start_cmp(StartMessage const& a, StartMessage const& b) {
   { ASSERT_TRUE(state_.start.empty()); }
 
 // TODO: add shard
-#define ON_STARTED_FULL(filter_version, status, last_released, ...) \
-  {                                                                 \
-    STARTED_Header header = {LOG_ID,                                \
-                             read_stream_id_t(1),                   \
-                             status,                                \
-                             filter_version,                        \
-                             last_released,                         \
-                             /*shard_idx*/ 0};                      \
-    for (auto shard : {__VA_ARGS__}) {                              \
-      read_stream_->onStarted(shard, STARTED_Message(header));      \
-    }                                                               \
+#define ON_STARTED_FULL(filter_version, status, last_released, ...)    \
+  {                                                                    \
+    STARTED_Header header = {LOG_ID,                                   \
+                             read_stream_id_t(1),                      \
+                             status,                                   \
+                             filter_version,                           \
+                             last_released,                            \
+                             /*shard_idx*/ 0};                         \
+    for (auto shard : {__VA_ARGS__}) {                                 \
+      read_stream_->onStarted(                                         \
+          shard, STARTED_Message(header, TrafficClass::READ_BACKLOG)); \
+    }                                                                  \
   }
 
 #define ON_STARTED(filter_version, ...) \

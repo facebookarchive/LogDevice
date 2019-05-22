@@ -269,7 +269,7 @@ class CatchupQueue {
   /**
    * Adds a read stream to the queue. Depending on the mode argument, the
    * stream will be processed either next time pushRecords() runs, or only
-   * when shouldProcessDelayedQueueNow() indicates that it's ok to read.
+   * when processDelayedQueueNow() indicates that it's ok to read.
    */
   void add(ServerReadStream& stream, PushMode mode = PushMode::IMMEDIATE);
 
@@ -350,8 +350,6 @@ class CatchupQueue {
 
   void onBatchComplete(ServerReadStream* stream);
 
-  void onStorageTaskStarted(const ServerReadStream* stream);
-
   void onStorageTaskStopped(const ServerReadStream* stream);
 
   /**
@@ -360,7 +358,6 @@ class CatchupQueue {
    */
   void readThrottlingOnReadTaskDone(const ReadStorageTask& task);
 
-  friend class CatchupQueueReadingCallback; // impl detail in CatchupQueue.cpp
   friend class CatchupQueueTest;
 };
 

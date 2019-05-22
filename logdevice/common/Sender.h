@@ -371,14 +371,6 @@ class Sender : public SenderBase {
                       const Address& addr,
                       BWAvailableCallback* on_bw_avail,
                       SocketCallback* onclose) override;
-  int sendMessageImpl(std::unique_ptr<Message>&&,
-                      ClientID,
-                      BWAvailableCallback* on_bw_avail,
-                      SocketCallback* onclose);
-  int sendMessageImpl(std::unique_ptr<Message>&&,
-                      NodeID,
-                      BWAvailableCallback* on_bw_avail,
-                      SocketCallback* onclose);
 
   /**
    * Get client SocketProxy for the socket associated with client-id 'cid'.

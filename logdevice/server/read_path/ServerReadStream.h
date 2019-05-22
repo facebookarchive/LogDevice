@@ -293,9 +293,6 @@ class ServerReadStream : boost::noncopyable {
   // single record when reading past the last_released_lsn.
   lsn_t last_known_good_ = LSN_INVALID;
 
-  // When this read stream object was created.
-  SteadyTimestamp birth_time_;
-
   // If true, consider last_delivered_lsn_ equal to -1. This is used to handle
   // the case when client sets start_lsn to LSN_INVALID. We want to make sure
   // we send a gap that covers start_lsn.

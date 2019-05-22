@@ -77,7 +77,7 @@ class STARTED_Message : public Message {
   enum class Source { LOCAL_LOG_STORE, CACHED_DIGEST };
 
   explicit STARTED_Message(const STARTED_Header&,
-                           TrafficClass = TrafficClass::READ_BACKLOG,
+                           TrafficClass,
                            Source source = Source::LOCAL_LOG_STORE,
                            lsn_t starting_read_ptr = LSN_INVALID);
 

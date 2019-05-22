@@ -922,7 +922,7 @@ void ClientReadStream::onDataRecord(
                              GapReason::CHECKSUM_FAIL,
                              (GAP_flags_t)0,
                              shard.shard()};
-    onGap(shard, GAP_Message(gap_header));
+    onGap(shard, GAP_Message(gap_header, TrafficClass::READ_BACKLOG));
     return;
   }
 

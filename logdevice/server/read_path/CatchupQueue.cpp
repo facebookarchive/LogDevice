@@ -277,7 +277,9 @@ void CatchupQueue::pushRecords(CatchupEventTrigger catchup_reason) {
     // WAIT_FOR_*.
     if (act == CatchupOneStream::Action::WAIT_FOR_STORAGE_TASK ||
         act == CatchupOneStream::Action::WAIT_FOR_LNG) {
-      onStorageTaskStarted(&*stream);
+      ld_check(stream->storage_task_in_flight_);
+      ld_check(!storage_task_in_flight_);
+      storage_task_in_flight_ = true;
       storage_task_count++;
     } else {
       ld_check(!stream->storage_task_in_flight_);
@@ -285,6 +287,8 @@ void CatchupQueue::pushRecords(CatchupEventTrigger catchup_reason) {
 
     if (act != CatchupOneStream::Action::WAIT_FOR_STORAGE_TASK) {
       onBatchComplete(&*stream);
+    } else {
+      // onReadTaskDone() will call onBatchComplete().
     }
 
     stream_ld_debug(*stream,
@@ -297,7 +301,7 @@ void CatchupQueue::pushRecords(CatchupEventTrigger catchup_reason) {
       break;
     } else if (act == CatchupOneStream::Action::WAIT_FOR_BANDWIDTH) {
       // We ran out of bandwidth trying to send out a record to the client.
-      // Wait for our callback to fire.
+      // Wait for bandwidth available callback to fire.
       break;
     } else if (act == CatchupOneStream::Action::WAIT_FOR_READ_BANDWIDTH) {
       // We ran out of configured I/O bandwidth while attempting a
@@ -305,10 +309,8 @@ void CatchupQueue::pushRecords(CatchupEventTrigger catchup_reason) {
       ld_check(err == E::CBREGISTERED);
       break;
     } else if (act == CatchupOneStream::Action::WAIT_FOR_STORAGE_TASK) {
-      // We called onStorageTaskStarted() above.
       // We will be woken up when the storage task that was posted comes back.
     } else if (act == CatchupOneStream::Action::WAIT_FOR_LNG) {
-      // We called onStorageTaskStarted() above.
       // We need the last known good of the epoch to make progress. The
       // ReadLngTask will call onReadLngTaskDone() when it's done.
     } else if (act == CatchupOneStream::Action::DEQUEUE_AND_CONTINUE) {
@@ -377,7 +379,7 @@ int CatchupQueue::notifyShardError(ServerReadStream* stream) {
   hdr.read_stream_id = stream->id_;
   hdr.filter_version = stream->filter_version_;
   hdr.shard = stream->shard_;
-  auto msg = std::make_unique<STARTED_Message>(hdr);
+  auto msg = std::make_unique<STARTED_Message>(hdr, stream->trafficClass());
   Worker* worker = Worker::onThisThread();
 
   ld_debug("Sending %s to %s for log:%lu, stream id:%lu",
@@ -859,14 +861,15 @@ void CatchupQueue::onReadTaskDone(const ReadStorageTask& task) {
   // registered again at that time. (See pushRecords() call below).
   resume_cb_.deactivate();
 
-  onStorageTaskStopped(task.stream_.get());
-  if (!task.stream_) {
+  ServerReadStream* stream = task.stream_.get();
+  onStorageTaskStopped(stream);
+  if (!stream) {
     // The ServerReadStreams was erased while the storage task was in flight.
     pushRecords();
     return;
   }
 
-  ServerReadStream* stream = &queue_.front();
+  ld_check(stream == &queue_.front());
 
   size_t n_bytes_queued;
   CatchupOneStream::Action act;
@@ -926,12 +929,6 @@ void CatchupQueue::onReadTaskDone(const ReadStorageTask& task) {
       record_bytes_queued_ == 0) {
     pushRecords();
   }
-}
-
-void CatchupQueue::onStorageTaskStarted(const ServerReadStream* stream) {
-  ld_check(stream->storage_task_in_flight_);
-  ld_check(!storage_task_in_flight_);
-  storage_task_in_flight_ = true;
 }
 
 void CatchupQueue::onStorageTaskStopped(const ServerReadStream* stream) {

@@ -427,21 +427,6 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
 }
 
 int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
-                            ClientID cid,
-                            BWAvailableCallback* on_bw_avail,
-                            SocketCallback* onclose) {
-  return sendMessageImpl(std::move(msg), Address(cid), on_bw_avail, onclose);
-}
-
-int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
-                            NodeID nid,
-                            BWAvailableCallback* on_bw_avail,
-                            SocketCallback* onclose) {
-  ld_check(on_bw_avail == nullptr || !on_bw_avail->active());
-  return sendMessageImpl(std::move(msg), Address(nid), on_bw_avail, onclose);
-}
-
-int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
                             Socket& sock,
                             BWAvailableCallback* on_bw_avail,
                             SocketCallback* onclose) {

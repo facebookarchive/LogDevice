@@ -80,7 +80,7 @@ class GAP_Message : public Message {
   enum class Source { LOCAL_LOG_STORE, CACHED_DIGEST };
 
   explicit GAP_Message(const GAP_Header&,
-                       TrafficClass = TrafficClass::READ_BACKLOG,
+                       TrafficClass,
                        Source source = Source::LOCAL_LOG_STORE);
 
   // see Message.h

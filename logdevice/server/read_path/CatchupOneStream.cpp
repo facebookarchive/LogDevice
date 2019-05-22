@@ -898,26 +898,20 @@ CatchupOneStream::startRead(WeakRef<CatchupQueue> catchup_queue,
         }
       }
 
-      if (stream_->last_known_good_ != LSN_INVALID) {
-        // Cached lng is fresh now. It is safe to read up to the minimum of the
-        // lng and the last per-epoch released.
-        lsn_t last_safe_to_read =
-            std::min(last_per_epoch_released, stream_->last_known_good_);
+      if (stream_->last_known_good_ != LSN_INVALID &&
+          lsn_to_epoch(stream_->last_known_good_) ==
+              lsn_to_epoch(stream_->last_delivered_lsn_) &&
+          stream_->last_known_good_ > last_released) {
+        stream_ld_debug(
+            *stream_,
+            "Reading past the global last-released lsn. last_released=%s, "
+            "last_per_epoch_released=%s, last_known_good=%s",
+            lsn_to_string(last_released).c_str(),
+            lsn_to_string(last_per_epoch_released).c_str(),
+            lsn_to_string(stream_->last_known_good_).c_str());
 
-        if (last_safe_to_read > last_released) {
-          stream_ld_debug(
-              *stream_,
-              "Reading past the global last-released lsn. last_released=%s, "
-              "last_per_epoch_released=%s, last_known_good=%s, "
-              "last_safe_to_read=%s",
-              lsn_to_string(last_released).c_str(),
-              lsn_to_string(last_per_epoch_released).c_str(),
-              lsn_to_string(stream_->last_known_good_).c_str(),
-              lsn_to_string(last_safe_to_read).c_str());
-
-          // Bump up last_released to last_safe_to_read.
-          last_released = last_safe_to_read;
-        }
+        // Bump up last_released to last_known_good_.
+        last_released = stream_->last_known_good_;
       }
 
       // Increment success/fail counters. We succeeded if last_released has

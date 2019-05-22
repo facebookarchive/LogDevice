@@ -110,7 +110,8 @@ void STARTED_Message::serialize(ProtocolWriter& writer) const {
 MessageReadResult STARTED_Message::deserialize(ProtocolReader& reader) {
   STARTED_Header hdr;
   reader.read(&hdr);
-  return reader.result([&] { return new STARTED_Message(hdr); });
+  return reader.result(
+      [&] { return new STARTED_Message(hdr, TrafficClass::READ_BACKLOG); });
 }
 
 std::string STARTED_Message::toString() const {
