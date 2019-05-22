@@ -85,4 +85,13 @@ thrift::ShardOperationalState
 toShardOperationalState(membership::StorageState storage_state,
                         const EventLogRebuildingSet::NodeInfo* node_info);
 
+/**
+ * Checks if the passed node (with the index node_index) matches the passed the
+ * NodeID. The node mathes if all the set ID attributes match the node's
+ * attributes.
+ */
+bool nodeMatchesID(node_index_t node_index,
+                   const configuration::nodes::NodeServiceDiscovery& node_sd,
+                   const thrift::NodeID& id);
+
 }} // namespace facebook::logdevice

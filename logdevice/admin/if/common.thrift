@@ -49,12 +49,13 @@ typedef i16 ShardIndex /** shard_index_t */
 
 /**
  * This is an identifier for a node, it can locate a node by either the
- * node_index or the socket address. If this struct is returned by AdminAPI
+ * node_index, socket address or name. If this struct is returned by AdminAPI
  * it is guaranteed that node_index field is set.
  */
 struct NodeID {
   1: optional NodeIndex node_index,
   2: optional SocketAddress address,
+  3: optional string name,
 }
 
 /**

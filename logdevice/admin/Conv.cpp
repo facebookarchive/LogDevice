@@ -161,7 +161,7 @@ thrift::ShardID toThrift(const ShardID& shard) {
   // We do not set the address of the node in the output. This can be useful
   // in the future if we needed to always locate the nodes with their address
   // instead of the index. However, it's not necessary right now.
-  // TODO: Also return node address information.
+  // TODO: Also return node address & name information.
   thrift::NodeID node_identifier;
   node_identifier.set_node_index(shard.node());
   output.set_node(std::move(node_identifier));

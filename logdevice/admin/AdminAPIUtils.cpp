@@ -101,16 +101,7 @@ void forFilteredNodes(
     }
     // filter by node
     if (filter->node_ref().has_value()) {
-      auto node = filter->node_ref().value();
-      // if address string is set, use it to match too.
-      if (node.address_ref().has_value()) {
-        res &= match_by_address(node_sd, node.address_ref().value());
-      }
-
-      // match by index.
-      if (node.node_index_ref().has_value()) {
-        res &= (node.node_index_ref().value() == index);
-      }
+      res &= nodeMatchesID(index, node_sd, filter->node_ref().value());
     }
     // filter by location
     if (filter->location_ref().has_value()) {
@@ -335,17 +326,7 @@ folly::Optional<node_index_t> findNodeIndex(
     const configuration::nodes::NodesConfiguration& nodes_configuration) {
   node_index_t found_index = -1;
   for (const auto& kv : *nodes_configuration.getServiceDiscovery()) {
-    bool res = true;
-    // if address string is set, use it to match too.
-    if (node.address_ref().has_value()) {
-      res &= match_by_address(kv.second, node.address_ref().value());
-    }
-
-    // match by index.
-    if (node.node_index_ref().has_value()) {
-      res &= (node.node_index_ref().value() == kv.first);
-    }
-    if (res) {
+    if (nodeMatchesID(kv.first, kv.second, node)) {
       if (found_index > -1) {
         // we have seen a match before. We can't match multiple nodes here.
         found_index = -1;
@@ -405,6 +386,29 @@ ShardSet expandShardSet(
     output.insert(expanded.begin(), expanded.end());
   }
   return output;
+}
+
+bool nodeMatchesID(node_index_t node_index,
+                   const configuration::nodes::NodeServiceDiscovery& node_sd,
+                   const thrift::NodeID& id) {
+  // if address string is set, use it to match.
+  if (id.address_ref().has_value() &&
+      !match_by_address(node_sd, id.address_ref().value())) {
+    return false;
+  }
+
+  // match by index.
+  if (id.node_index_ref().has_value() &&
+      id.node_index_ref().value() != node_index) {
+    return false;
+  }
+
+  // if name is set, use it to match.
+  if (id.name_ref().has_value() && id.name_ref().value() != node_sd.name) {
+    return false;
+  }
+
+  return true;
 }
 
 }} // namespace facebook::logdevice
