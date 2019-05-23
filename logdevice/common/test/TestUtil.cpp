@@ -35,10 +35,12 @@
 #include "logdevice/common/ReaderImpl.h"
 #include "logdevice/common/SequencerLocator.h"
 #include "logdevice/common/Timer.h"
+#include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/ConfigParser.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/plugin/CommonBuiltinPlugins.h"
 #include "logdevice/common/protocol/MessageTypeNames.h"
+#include "logdevice/common/request_util.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/util.h"
 #include "logdevice/include/Reader.h"
@@ -389,6 +391,42 @@ make_test_processor(const Settings& settings,
                            UpdateableSettings<Settings>(settings),
                            stats,
                            make_test_plugin_registry());
+}
+
+void gracefully_shutdown_processor(Processor* processor) {
+  ld_check(processor != nullptr);
+  std::vector<folly::SemiFuture<folly::Unit>> futures =
+      fulfill_on_all_workers<folly::Unit>(
+          processor,
+          [](folly::Promise<folly::Unit> p) -> void {
+            auto* worker = Worker::onThisThread();
+            worker->stopAcceptingWork();
+            p.setValue();
+          },
+          /* request_type = */ RequestType::MISC,
+          /* with_retrying = */ true);
+  ld_info("Waiting for workers to acknowledge.");
+
+  folly::collectAllSemiFuture(futures.begin(), futures.end()).get();
+  ld_info("Workers acknowledged stopping accepting new work");
+
+  ld_info("Finishing work and closing sockets on all workers.");
+  futures = fulfill_on_all_workers<folly::Unit>(
+      processor,
+      [](folly::Promise<folly::Unit> p) -> void {
+        auto* worker = Worker::onThisThread();
+        worker->finishWorkAndCloseSockets();
+        p.setValue();
+      },
+      /* request_type = */ RequestType::MISC,
+      /* with_retrying = */ true);
+  ld_info("Waiting for workers to acknowledge.");
+
+  folly::collectAllSemiFuture(futures.begin(), futures.end()).get();
+  ld_info("Workers finished all works.");
+
+  ld_info("Stopping Processor");
+  processor->waitForWorkers();
 }
 
 std::string findFile(const std::string& relative_path,

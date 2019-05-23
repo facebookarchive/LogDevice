@@ -13,6 +13,8 @@
 #include <folly/Preprocessor.h>
 
 #include "logdevice/common/ClientID.h"
+#include "logdevice/common/InternalAppendRequest.h"
+#include "logdevice/common/Sender.h"
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/buffered_writer/BufferedWriterImpl.h"
 #include "logdevice/common/protocol/APPEND_Message.h"
@@ -174,6 +176,19 @@ class SequencerBatching : public BufferedWriterImpl::AppendCallbackInternal,
    */
   Status appendProbe();
 
+ protected:
+  virtual folly::Optional<APPENDED_Header>
+  runBufferedAppend(logid_t logid,
+                    AppendAttributes attrs,
+                    const Payload& payload,
+                    InternalAppendRequest::Callback callback,
+                    APPEND_flags_t flags,
+                    int checksum_bits,
+                    uint32_t timeout_ms,
+                    uint32_t append_message_count);
+
+  std::unique_ptr<SenderBase> sender_;
+
  private:
   Processor* processor_;
   std::atomic<bool> shutting_down_{false};
@@ -221,12 +236,12 @@ class SequencerBatching : public BufferedWriterImpl::AppendCallbackInternal,
                 lsn_t = LSN_INVALID,
                 RecordTimestamp = RecordTimestamp::zero());
 
-  static void sendReply(const AppendMessageState& state,
-                        Status status,
-                        NodeID redirect = NodeID(),
-                        lsn_t lsn = LSN_INVALID,
-                        RecordTimestamp timestamp = RecordTimestamp::zero(),
-                        uint32_t offset = 0);
+  void sendReply(const AppendMessageState& state,
+                 Status status,
+                 NodeID redirect = NodeID(),
+                 lsn_t lsn = LSN_INVALID,
+                 RecordTimestamp timestamp = RecordTimestamp::zero(),
+                 uint32_t offset = 0);
 };
 
 }} // namespace facebook::logdevice

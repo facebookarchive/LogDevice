@@ -638,6 +638,11 @@ class Processor : public folly::enable_shared_from_this<Processor> {
 
   bool isLogsConfigLoaded() const;
 
+  // Reset the sequencer batching object. Not safe to use when there are appends
+  // inflight. Should ONLY be used in testing.
+  void
+  setSequencerBatching(std::unique_ptr<SequencerBatching> sequencer_batching);
+
  private:
   const std::shared_ptr<TraceLogger> trace_logger_;
 

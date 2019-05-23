@@ -740,6 +740,12 @@ bool Processor::isLogsConfigLoaded() const {
   // In this case we always whether that config is fully loaded.
   return logsconfig->isFullyLoaded();
 }
+
+void Processor::setSequencerBatching(
+    std::unique_ptr<SequencerBatching> sequencer_batching) {
+  sequencer_batching_ = std::move(sequencer_batching);
+}
+
 }} // namespace facebook::logdevice
 
 namespace {

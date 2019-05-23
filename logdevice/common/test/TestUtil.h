@@ -278,6 +278,8 @@ make_test_processor(const Settings& settings,
                     std::shared_ptr<UpdateableConfig> config = nullptr,
                     StatsHolder* stats = nullptr);
 
+void gracefully_shutdown_processor(Processor* processor);
+
 std::shared_ptr<PluginRegistry> make_test_plugin_registry();
 
 // verifies that file exists (using findFile()) and returns the filename if it

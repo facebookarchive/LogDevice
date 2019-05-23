@@ -66,7 +66,8 @@ static BufferedWriter::LogOptions get_log_options(logid_t log_id) {
 }
 
 SequencerBatching::SequencerBatching(Processor* processor)
-    : processor_(processor),
+    : sender_(std::make_unique<SenderProxy>()),
+      processor_(processor),
       worker_state_machines_(processor_->settings()->num_workers),
       buffered_writer_(new ProcessorProxy(processor_),
                        nullptr, // BufferedWriter::AppendCallback
@@ -308,7 +309,7 @@ std::pair<Status, NodeID> SequencerBatching::appendBuffered(
     unique_contexts.insert(context.first);
   }
 
-  auto reply = runInternalAppend(logid,
+  auto reply = runBufferedAppend(logid,
                                  std::move(attrs),
                                  payload,
                                  std::move(ia_callback),
@@ -355,7 +356,7 @@ class SequencerBatching::DispatchResultsRequest : public Request {
       std::unique_ptr<AppendMessageState> ams(appends_.begin()->first);
       uint32_t offset = appends_.begin()->second;
       ld_assert(ams->owner_worker.load() == target_worker_);
-      SequencerBatching::sendReply(
+      Worker::onThisThread()->processor_->sequencerBatching().sendReply(
           *ams, status_, redirect_, lsn_, timestamp_, offset);
       // ~unique_ptr<AppendMessageState> unhooks from `worker_state_machines_'
     }
@@ -448,8 +449,7 @@ void SequencerBatching::sendReply(const AppendMessageState& ams,
   auto msg = std::make_unique<APPENDED_Message>(replyhdr);
   msg->seq_batching_offset = offset;
 
-  int rv = Worker::onThisThread()->sender().sendMessage(
-      std::move(msg), ams.reply_to);
+  int rv = sender_->sendMessage(std::move(msg), ams.reply_to);
   if (rv != 0) {
     RATELIMIT_WARNING(1s,
                       2,
@@ -493,6 +493,25 @@ Status SequencerBatching::appendProbe() {
   // Allow the append if we would be able to pass it to
   // BufferedWriter for buffering.
   return canSendToWorker();
+}
+
+folly::Optional<APPENDED_Header>
+SequencerBatching::runBufferedAppend(logid_t logid,
+                                     AppendAttributes attrs,
+                                     const Payload& payload,
+                                     InternalAppendRequest::Callback callback,
+                                     APPEND_flags_t flags,
+                                     int checksum_bits,
+                                     uint32_t timeout_ms,
+                                     uint32_t append_message_count) {
+  return runInternalAppend(logid,
+                           std::move(attrs),
+                           payload,
+                           std::move(callback),
+                           flags,
+                           checksum_bits,
+                           timeout_ms,
+                           append_message_count);
 }
 
 }} // namespace facebook::logdevice
