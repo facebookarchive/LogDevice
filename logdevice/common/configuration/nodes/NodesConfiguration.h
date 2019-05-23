@@ -142,7 +142,8 @@ class NodesConfiguration {
     return getSequencerMembership()->getMembershipNodes();
   }
 
-  std::shared_ptr<const NodesConfiguration> applyUpdate(Update update) const;
+  std::shared_ptr<const NodesConfiguration>
+  applyUpdate(const Update& update) const;
 
   // validations
   bool serviceDiscoveryConsistentWithMembership() const;

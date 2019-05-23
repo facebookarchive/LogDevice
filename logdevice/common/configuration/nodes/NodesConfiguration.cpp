@@ -170,8 +170,8 @@ bool NodesConfiguration::validate(bool validate_config_metadata) const {
   return true;
 }
 
-std::shared_ptr<const NodesConfiguration>
-NodesConfiguration::applyUpdate(NodesConfiguration::Update update) const {
+std::shared_ptr<const NodesConfiguration> NodesConfiguration::applyUpdate(
+    const NodesConfiguration::Update& update) const {
   if (!service_discovery_ || !sequencer_config_ || !storage_config_ ||
       !metadata_logs_rep_) {
     // there is no way we could end up in such invalid state
@@ -249,7 +249,7 @@ NodesConfiguration::applyUpdate(NodesConfiguration::Update update) const {
   }
 
   // 6) bump the config version and updates the configuration metadata
-  new_config->touch(std::move(update.context));
+  new_config->touch(update.context);
   // update storage_hash, num_shards and addr_to_index
   new_config->recomputeConfigMetadata();
   new_config->last_maintenance_ = update.maintenance;
