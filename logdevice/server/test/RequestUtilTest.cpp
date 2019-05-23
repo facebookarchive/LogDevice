@@ -27,8 +27,11 @@ TEST(RequestUtilTest, fulfill) {
   server_settings.num_background_workers = kBackgroundWorkers;
   GossipSettings gossip_settings = create_default_settings<GossipSettings>();
   gossip_settings.enabled = true;
-  auto processor =
-      make_test_server_processor(settings, server_settings, gossip_settings);
+
+  auto processor_builder = TestServerProcessorBuilder{settings}
+                               .setServerSettings(server_settings)
+                               .setGossipSettings(gossip_settings);
+  auto processor = std::move(processor_builder).build();
   SCOPE_EXIT {
     shutdown_test_server(processor);
   };

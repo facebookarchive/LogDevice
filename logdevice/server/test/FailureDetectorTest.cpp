@@ -162,8 +162,11 @@ make_processor_with_detector(node_index_t nid,
           gen_config(num_nodes, nid),
           std::make_shared<configuration::LocalLogsConfig>()));
 
-  auto p = make_test_server_processor(
-      main_settings, server_settings, gossip_settings, uconfig);
+  auto processor_builder = TestServerProcessorBuilder{main_settings}
+                               .setServerSettings(server_settings)
+                               .setGossipSettings(gossip_settings)
+                               .setUpdateableConfig(uconfig);
+  auto p = std::move(processor_builder).build();
   p->setServerInstanceId(SystemTimestamp::now().toMilliseconds().count());
   std::unique_ptr<MockFailureDetector> d =
       std::make_unique<MockFailureDetector>(

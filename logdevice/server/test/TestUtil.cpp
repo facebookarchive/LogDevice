@@ -29,65 +29,71 @@
 
 namespace facebook { namespace logdevice {
 
-std::shared_ptr<ServerProcessor> make_test_server_processor(
-    const Settings& settings,
-    const ServerSettings& server_settings,
-    const GossipSettings& gossip_settings,
-    const AdminServerSettings& admin_settings,
-    std::shared_ptr<UpdateableConfig> config,
-    ShardedStorageThreadPool* sharded_storage_thread_pool,
-    StatsHolder* stats) {
-  if (!config) {
-    config = UpdateableConfig::createEmpty();
+TestServerProcessorBuilder::TestServerProcessorBuilder(const Settings& settings)
+    : settings_{UpdateableSettings<Settings>(settings)} {}
+
+TestServerProcessorBuilder& TestServerProcessorBuilder::setServerSettings(
+    const ServerSettings& server_settings) {
+  server_settings_ = UpdateableSettings<ServerSettings>(server_settings);
+  return *this;
+}
+
+TestServerProcessorBuilder& TestServerProcessorBuilder::setGossipSettings(
+    const GossipSettings& gossip_settings) {
+  gossip_settings_ = UpdateableSettings<GossipSettings>(gossip_settings);
+  return *this;
+}
+
+TestServerProcessorBuilder& TestServerProcessorBuilder::setAdminServerSettings(
+    const AdminServerSettings& admin_settings) {
+  admin_settings_ = UpdateableSettings<AdminServerSettings>(admin_settings);
+  return *this;
+}
+
+TestServerProcessorBuilder& TestServerProcessorBuilder::setUpdateableConfig(
+    std::shared_ptr<UpdateableConfig> config) {
+  config_ = config;
+  return *this;
+}
+
+TestServerProcessorBuilder&
+TestServerProcessorBuilder::setShardedStorageThreadPool(
+    ShardedStorageThreadPool* sharded_storage_thread_pool) {
+  sharded_storage_thread_pool_ = sharded_storage_thread_pool;
+  return *this;
+}
+
+TestServerProcessorBuilder&
+TestServerProcessorBuilder::setStatsHolder(StatsHolder* stats) {
+  stats_ = stats;
+  return *this;
+}
+
+std::shared_ptr<ServerProcessor> TestServerProcessorBuilder::build() && {
+  if (!config_) {
+    setUpdateableConfig(UpdateableConfig::createEmpty());
   }
-  return ServerProcessor::create(
-      nullptr,
-      sharded_storage_thread_pool,
-      UpdateableSettings<ServerSettings>(server_settings),
-      UpdateableSettings<GossipSettings>(gossip_settings),
-      UpdateableSettings<AdminServerSettings>(admin_settings),
-      config,
-      std::make_shared<NoopTraceLogger>(config),
-      UpdateableSettings<Settings>(settings),
-      stats,
-      make_test_plugin_registry());
-}
-
-std::shared_ptr<ServerProcessor> make_test_server_processor(
-    const Settings& settings,
-    const ServerSettings& server_settings,
-    const GossipSettings& gossip_settings,
-    std::shared_ptr<UpdateableConfig> config,
-    ShardedStorageThreadPool* sharded_storage_thread_pool,
-    StatsHolder* stats) {
-  AdminServerSettings admin_settings(
-      create_default_settings<AdminServerSettings>());
-  return make_test_server_processor(settings,
-                                    server_settings,
-                                    gossip_settings,
-                                    admin_settings,
-                                    std::move(config),
-                                    sharded_storage_thread_pool,
-                                    stats);
-}
-
-std::shared_ptr<ServerProcessor> make_test_server_processor(
-    const Settings& settings,
-    const ServerSettings& server_settings,
-    std::shared_ptr<UpdateableConfig> config,
-    ShardedStorageThreadPool* sharded_storage_thread_pool,
-    StatsHolder* stats) {
-  GossipSettings gossip_settings(create_default_settings<GossipSettings>());
-  AdminServerSettings admin_settings(
-      create_default_settings<AdminServerSettings>());
-  gossip_settings.enabled = false;
-  return make_test_server_processor(settings,
-                                    server_settings,
-                                    gossip_settings,
-                                    admin_settings,
-                                    std::move(config),
-                                    sharded_storage_thread_pool,
-                                    stats);
+  if (!server_settings_.hasValue()) {
+    setServerSettings(create_default_settings<ServerSettings>());
+  }
+  if (!admin_settings_.hasValue()) {
+    setAdminServerSettings(create_default_settings<AdminServerSettings>());
+  }
+  if (!gossip_settings_.hasValue()) {
+    GossipSettings gossip_settings(create_default_settings<GossipSettings>());
+    gossip_settings.enabled = false;
+    setGossipSettings(std::move(gossip_settings));
+  }
+  return ServerProcessor::create(nullptr,
+                                 sharded_storage_thread_pool_,
+                                 std::move(server_settings_).value(),
+                                 std::move(gossip_settings_).value(),
+                                 std::move(admin_settings_).value(),
+                                 config_,
+                                 std::make_shared<NoopTraceLogger>(config_),
+                                 std::move(settings_),
+                                 stats_,
+                                 make_test_plugin_registry());
 }
 
 void shutdown_test_server(std::shared_ptr<ServerProcessor>& processor) {

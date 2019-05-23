@@ -7,42 +7,58 @@
  */
 #pragma once
 
+#include "logdevice/admin/settings/AdminServerSettings.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/settings/GossipSettings.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/server/ServerSettings.h"
 
 namespace facebook { namespace logdevice {
 
-class AdminServerSettings;
 class UpdateableConfig;
 class ShardedStorageThreadPool;
 class StatsHolder;
 class ServerProcessor;
-class GossipSettings;
 
-std::shared_ptr<ServerProcessor> make_test_server_processor(
-    const Settings& settings,
-    const ServerSettings& server_settings,
-    const GossipSettings& gossip_settings,
-    const AdminServerSettings& admin_settings,
-    std::shared_ptr<UpdateableConfig> config = nullptr,
-    ShardedStorageThreadPool* sharded_storage_thread_pool = nullptr,
-    StatsHolder* stats = nullptr);
+class TestServerProcessorBuilder {
+ public:
+  explicit TestServerProcessorBuilder(const Settings& settings);
 
-std::shared_ptr<ServerProcessor> make_test_server_processor(
-    const Settings& settings,
-    const ServerSettings& server_settings,
-    const GossipSettings& gossip_settings,
-    std::shared_ptr<UpdateableConfig> config = nullptr,
-    ShardedStorageThreadPool* sharded_storage_thread_pool = nullptr,
-    StatsHolder* stats = nullptr);
+  TestServerProcessorBuilder&
+  setServerSettings(const ServerSettings& server_settings);
 
-std::shared_ptr<ServerProcessor> make_test_server_processor(
-    const Settings& settings,
-    const ServerSettings& server_settings,
-    std::shared_ptr<UpdateableConfig> config = nullptr,
-    ShardedStorageThreadPool* sharded_storage_thread_pool = nullptr,
-    StatsHolder* stats = nullptr);
+  TestServerProcessorBuilder&
+  setGossipSettings(const GossipSettings& gossip_settings);
+
+  TestServerProcessorBuilder&
+  setAdminServerSettings(const AdminServerSettings& admin_settings);
+
+  TestServerProcessorBuilder&
+  setUpdateableConfig(std::shared_ptr<UpdateableConfig> config);
+
+  TestServerProcessorBuilder& setShardedStorageThreadPool(
+      ShardedStorageThreadPool* sharded_storage_thread_pool);
+
+  TestServerProcessorBuilder& setStatsHolder(StatsHolder* stats);
+
+  // This is rvalue qualified to make it obvious to the caller that the object
+  // will get consumed and is not reusable anymore.
+  std::shared_ptr<ServerProcessor> build() &&;
+
+ private:
+  UpdateableSettings<Settings> settings_;
+
+  folly::Optional<UpdateableSettings<ServerSettings>> server_settings_{
+      folly::none};
+  folly::Optional<UpdateableSettings<GossipSettings>> gossip_settings_{
+      folly::none};
+  folly::Optional<UpdateableSettings<AdminServerSettings>> admin_settings_{
+      folly::none};
+  std::shared_ptr<UpdateableConfig> config_{nullptr};
+
+  ShardedStorageThreadPool* sharded_storage_thread_pool_{nullptr};
+  StatsHolder* stats_{nullptr};
+};
 
 void shutdown_test_server(std::shared_ptr<ServerProcessor>& processor);
 }} // namespace facebook::logdevice

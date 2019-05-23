@@ -111,8 +111,10 @@ TEST(StorageThreadPoolTest, QueueDrop) {
                                         nullptr // stats
   );
 
-  auto processor = make_test_server_processor(
-      settings, server_settings, nullptr, &sharded_pool);
+  auto processor_builder = TestServerProcessorBuilder{settings}
+                               .setServerSettings(server_settings)
+                               .setShardedStorageThreadPool(&sharded_pool);
+  auto processor = std::move(processor_builder).build();
   sharded_pool.setProcessor(processor.get());
 
   Alarm alarm(std::chrono::seconds(5));
@@ -251,8 +253,10 @@ TEST(StorageThreadPoolTest, DontDropHighPriority) {
                                         nullptr // stats
   );
 
-  auto processor = make_test_server_processor(
-      settings, server_settings, nullptr, &sharded_pool);
+  auto processor_builder = TestServerProcessorBuilder{settings}
+                               .setServerSettings(server_settings)
+                               .setShardedStorageThreadPool(&sharded_pool);
+  auto processor = std::move(processor_builder).build();
   sharded_pool.setProcessor(processor.get());
 
   Alarm alarm(std::chrono::seconds(5));

@@ -161,8 +161,11 @@ TEST(WriteStorageTaskTest, Simple) {
       nworkers * settings.max_inflight_storage_tasks,
       nullptr);
 
-  auto processor = make_test_server_processor(
-      settings, server_settings, nullptr, &sharded_storage_thread_pool);
+  auto processor_builder =
+      TestServerProcessorBuilder{settings}
+          .setServerSettings(server_settings)
+          .setShardedStorageThreadPool(&sharded_storage_thread_pool);
+  auto processor = std::move(processor_builder).build();
 
   std::vector<std::string> datas(nwrites); // needs to live long enough
   std::vector<PutWriteOp> write_ops;
@@ -224,8 +227,11 @@ TEST(WriteStorageTaskTest, MetadataLogNOSPC) {
       updateable_settings,
       1000,
       nullptr);
-  auto processor = make_test_server_processor(
-      settings, server_settings, nullptr, &sharded_storage_thread_pool);
+  auto processor_builder =
+      TestServerProcessorBuilder{settings}
+          .setServerSettings(server_settings)
+          .setShardedStorageThreadPool(&sharded_storage_thread_pool);
+  auto processor = std::move(processor_builder).build();
 
   std::vector<std::string> data(2);
   for (size_t i = 0; i < data.size(); ++i) {
