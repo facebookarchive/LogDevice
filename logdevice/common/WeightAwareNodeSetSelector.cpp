@@ -292,11 +292,13 @@ WeightAwareNodeSetSelector::getStorageSet(logid_t log_id,
           *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource(),
           res.storage_set,
           replication_property)) {
-    ld_error("Not enough storage nodes to select nodeset for log %lu, "
-             "replication: %s, selected: %s.",
-             log_id.val_,
-             replication_property.toString().c_str(),
-             toString(res.storage_set).c_str());
+    RATELIMIT_ERROR(std::chrono::seconds(1),
+                    5,
+                    "Not enough storage nodes to select nodeset for log %lu, "
+                    "replication: %s, selected: %s.",
+                    log_id.val_,
+                    replication_property.toString().c_str(),
+                    toString(res.storage_set).c_str());
     res.decision = Decision::FAILED;
     return res;
   }

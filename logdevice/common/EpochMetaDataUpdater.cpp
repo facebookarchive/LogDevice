@@ -126,9 +126,11 @@ updateMetaDataIfNeeded(logid_t log_id,
 
   switch (selected.decision) {
     case NodeSetSelector::Decision::FAILED:
-      ld_error("NodeSetSelector failed to generate new nodeset for log "
-               "%lu",
-               log_id.val_);
+      RATELIMIT_ERROR(std::chrono::seconds(1),
+                      5,
+                      "NodeSetSelector failed to generate new nodeset for log "
+                      "%lu",
+                      log_id.val_);
       err = E::FAILED;
       return EpochMetaData::UpdateResult::FAILED;
     case NodeSetSelector::Decision::KEEP:
