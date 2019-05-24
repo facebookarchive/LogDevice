@@ -7,8 +7,10 @@
 # LICENSE file in the root directory of this source tree.
 
 
+import socket
 from ipaddress import AddressValueError, IPv4Address, IPv6Address
 from unittest import TestCase
+from unittest.mock import patch
 
 from ldops.types.socket_address import SocketAddress
 from logdevice.admin.common.types import (
@@ -86,6 +88,53 @@ class TestSocketAddress(TestCase):
             ThriftSocketAddress(
                 address_family=SocketAddressFamily.UNIX, address=self.unix_path
             ),
+        )
+
+    def test_from_ip_port(self):
+        # Valid IPv6
+        self.assertEqual(
+            SocketAddress(
+                address_family=SocketAddressFamily.INET,
+                address=IPv6Address(self.ip6_addr),
+                port=self.port,
+            ),
+            SocketAddress.from_ip_port(ipaddr=self.ip6_addr, port=self.port),
+        )
+
+        # Valid IPv4
+        self.assertEqual(
+            SocketAddress(
+                address_family=SocketAddressFamily.INET,
+                address=IPv4Address(self.ip4_addr),
+                port=self.port,
+            ),
+            SocketAddress.from_ip_port(ipaddr=self.ip4_addr, port=self.port),
+        )
+
+        # Definitely invalid IP-address
+        with self.assertRaises(AddressValueError):
+            SocketAddress.from_ip_port(ipaddr="invalid", port=self.port),
+
+    @patch(
+        "socket.getaddrinfo",
+        return_value=[
+            (
+                socket.AF_INET6,
+                socket.SOCK_STREAM,
+                socket.IPPROTO_TCP,
+                "",
+                ("192.0.2.1", 6440),
+            )
+        ],
+    )
+    def test_from_host_port(self, mock_getaddrinfo):
+        self.assertEqual(
+            SocketAddress(
+                address_family=SocketAddressFamily.INET,
+                address=IPv4Address(self.ip4_addr),
+                port=self.port,
+            ),
+            SocketAddress.from_host_port(host="example.tld", port=self.port),
         )
 
     def test_from_thrift(self):

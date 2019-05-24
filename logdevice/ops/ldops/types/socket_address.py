@@ -8,9 +8,11 @@
 
 
 import logging
+import random
+import socket
 from dataclasses import dataclass
 from ipaddress import AddressValueError, IPv4Address, IPv6Address
-from typing import Optional, Union
+from typing import Any, List, Optional, Tuple, Union
 
 from logdevice.admin.common.types import (
     SocketAddress as ThriftSocketAddress,
@@ -62,21 +64,40 @@ class SocketAddress:
         )
 
     @classmethod
+    def from_ip_port(cls, ipaddr: str, port: int) -> "SocketAddress":
+        """
+        Convenience helper which just parses IP-address and returns instance
+        """
+        addr: Union[IPv4Address, IPv6Address]
+        try:
+            addr = IPv6Address(ipaddr)
+        except AddressValueError:
+            addr = IPv4Address(ipaddr)
+
+        return SocketAddress(
+            address_family=SocketAddressFamily.INET, address=addr, port=port
+        )
+
+    @classmethod
+    def from_host_port(cls, host: str, port: int) -> "SocketAddress":
+        """
+        Convenience helper which does resolving and returns instance
+        """
+        socket_address: SocketAddress
+        info: List[Tuple[int, int, int, str, Tuple[Any, ...]]] = socket.getaddrinfo(
+            host, port
+        )
+        return cls.from_ip_port(random.choice(info)[4][0], port)
+
+    @classmethod
     def from_thrift(cls, src: ThriftSocketAddress) -> "SocketAddress":
         """
         Parses Thrift-representation of SocketAddress and returns instance
         """
         socket_address: SocketAddress
         if src.address_family == SocketAddressFamily.INET:
-            addr: Union[IPv4Address, IPv6Address]
-            try:
-                addr = IPv6Address(src.address)
-            except AddressValueError:
-                addr = IPv4Address(src.address)
-
-            socket_address = SocketAddress(
-                address_family=src.address_family, address=addr, port=src.port
-            )
+            assert src.address is not None
+            socket_address = cls.from_ip_port(src.address, src.port)
         elif src.address_family == SocketAddressFamily.UNIX:
             socket_address = SocketAddress(
                 address_family=src.address_family, path=src.address
