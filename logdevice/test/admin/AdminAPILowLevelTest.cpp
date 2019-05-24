@@ -138,7 +138,6 @@ TEST_F(AdminAPILowLevelTest, TakeLogTreeSnapshot) {
 
   cluster->waitForRecovery();
 
-
   auto lg1 = client->makeLogGroupSync(
       "/log1",
       logid_range_t(logid_t(1), logid_t(100)),
@@ -309,6 +308,21 @@ TEST_F(AdminAPILowLevelTest, LogGroupThroughputAPITest) {
   for (const auto& it : response.get_throughput()) {
     ASSERT_EQ("/log1", it.first);
     ASSERT_EQ(thrift::LogGroupOperation::READS, it.second.get_operation());
+    for (const auto& result : it.second.get_results()) {
+      ASSERT_TRUE(result > 0);
+    }
+  }
+
+  // Get throughput for log appends_out. Test interval request and filtering.
+  request.set_operation(thrift::LogGroupOperation::APPENDS_OUT);
+  request.set_log_group_name("/log1");
+  request.set_time_period({60, 300});
+  admin_client->sync_getLogGroupThroughput(response, request);
+  ASSERT_TRUE(!response.get_throughput().empty());
+  for (const auto& it : response.get_throughput()) {
+    ASSERT_EQ("/log1", it.first);
+    ASSERT_EQ(
+        thrift::LogGroupOperation::APPENDS_OUT, it.second.get_operation());
     for (const auto& result : it.second.get_results()) {
       ASSERT_TRUE(result > 0);
     }

@@ -59,8 +59,9 @@ struct ReplicationInfo {
  * Log group operations for throughput gathering
  */
 enum LogGroupOperation {
-  APPENDS = 0,
+  APPENDS = 0, # Appends received by the sequencer
   READS = 1,
+  APPENDS_OUT = 2, # Append bytes after sequencer batching
 }
 
 struct LogGroupCustomCountersRequest {
