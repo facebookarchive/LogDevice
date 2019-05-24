@@ -2645,7 +2645,7 @@ TEST_P(RebuildingTest, DisableDataLogRebuildShardsWiped) {
 
 // Case: shards come back good.
 TEST_P(RebuildingTest, DisableDataLogRebuildShardsAborted) {
-  std::chrono::seconds maxBacklogDuration(30);
+  std::chrono::seconds maxBacklogDuration(300);
 
   logsconfig::LogAttributes log_attrs;
   log_attrs.set_replicationFactor(3);
