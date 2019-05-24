@@ -1,0 +1,142 @@
+#!/usr/bin/env python3
+
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the BSD-style license found in the
+# LICENSE file in the root directory of this source tree.
+
+
+from ipaddress import AddressValueError, IPv4Address, IPv6Address
+from unittest import TestCase
+
+from ldops.types.socket_address import SocketAddress
+from logdevice.admin.common.types import (
+    SocketAddress as ThriftSocketAddress,
+    SocketAddressFamily,
+)
+
+
+class TestSocketAddress(TestCase):
+    ip6_addr = "2001:DB8::1"
+    ip4_addr = "192.0.2.1"
+    unix_path = "/path/to/unix.sock"
+    port = 42
+
+    def test_init(self):
+        # Smoke INET
+        SocketAddress(
+            address_family=SocketAddressFamily.INET,
+            address=IPv6Address(self.ip6_addr),
+            port=self.port,
+        )
+
+        # Smoke UNIX
+        SocketAddress(address_family=SocketAddressFamily.UNIX, path=self.unix_path)
+
+        # Non-specified port
+        with self.assertRaises(ValueError):
+            SocketAddress(
+                address_family=SocketAddressFamily.INET,
+                address=IPv6Address(self.ip6_addr),
+            )
+
+        # Non-specified address
+        with self.assertRaises(ValueError):
+            SocketAddress(address_family=SocketAddressFamily.INET, port=self.port)
+
+        # Invalid UNIX path
+        with self.assertRaises(ValueError):
+            SocketAddress(address_family=SocketAddressFamily.UNIX)
+
+    def test_to_thrift(self):
+        # Valid IPv6
+        self.assertEqual(
+            SocketAddress(
+                address_family=SocketAddressFamily.INET,
+                address=IPv6Address(self.ip6_addr),
+                port=self.port,
+            ).to_thrift(),
+            ThriftSocketAddress(
+                address_family=SocketAddressFamily.INET,
+                address=IPv6Address(self.ip6_addr).exploded,
+                port=self.port,
+            ),
+        )
+
+        # Valid IPv4
+        self.assertEqual(
+            SocketAddress(
+                address_family=SocketAddressFamily.INET,
+                address=IPv4Address(self.ip4_addr),
+                port=self.port,
+            ).to_thrift(),
+            ThriftSocketAddress(
+                address_family=SocketAddressFamily.INET,
+                address=IPv4Address(self.ip4_addr).exploded,
+                port=self.port,
+            ),
+        )
+
+        # Valid UNIX
+        self.assertEqual(
+            SocketAddress(
+                address_family=SocketAddressFamily.UNIX, path=self.unix_path
+            ).to_thrift(),
+            ThriftSocketAddress(
+                address_family=SocketAddressFamily.UNIX, address=self.unix_path
+            ),
+        )
+
+    def test_from_thrift(self):
+        # Valid IPv6
+        self.assertEqual(
+            SocketAddress(
+                address_family=SocketAddressFamily.INET,
+                address=IPv6Address(self.ip6_addr),
+                port=self.port,
+            ),
+            SocketAddress.from_thrift(
+                ThriftSocketAddress(
+                    address_family=SocketAddressFamily.INET,
+                    address=IPv6Address(self.ip6_addr).exploded,
+                    port=self.port,
+                )
+            ),
+        )
+
+        # Valid IPv4
+        self.assertEqual(
+            SocketAddress(
+                address_family=SocketAddressFamily.INET,
+                address=IPv4Address(self.ip4_addr),
+                port=self.port,
+            ),
+            SocketAddress.from_thrift(
+                ThriftSocketAddress(
+                    address_family=SocketAddressFamily.INET,
+                    address=IPv4Address(self.ip4_addr).exploded,
+                    port=self.port,
+                )
+            ),
+        )
+
+        # Valid UNIX
+        self.assertEqual(
+            SocketAddress(address_family=SocketAddressFamily.UNIX, path=self.unix_path),
+            SocketAddress.from_thrift(
+                ThriftSocketAddress(
+                    address_family=SocketAddressFamily.UNIX, address=self.unix_path
+                )
+            ),
+        )
+
+        # Invalid Thrift struct
+        with self.assertRaises(AddressValueError):
+            SocketAddress.from_thrift(
+                ThriftSocketAddress(
+                    address_family=SocketAddressFamily.INET,
+                    address="invalid ip-address",
+                    port=self.port,
+                )
+            )
