@@ -224,4 +224,44 @@ STAT_DEFINE(sock_peer_closed_event_proc_time, SUM)
 // Timer Delays
 STAT_DEFINE(wh_timer_sched_delay, SUM)
 
+// Number of connection retries following a timeout.
+STAT_DEFINE(connection_retries, SUM)
+// Number of timeouts trying to connect a tcp socket.
+STAT_DEFINE(connection_timeouts, SUM)
+// Number of handshake timeouts.
+STAT_DEFINE(handshake_timeouts, SUM)
+
+// number of attempts to record error messages at severety CRITICAL
+STAT_DEFINE(critical_errors, SUM)
+// number of attempts to record error messages at severety ERROR
+STAT_DEFINE(severe_errors, SUM)
+// number of attempts to record error messages at severety INFO,NOTE,WARNING
+STAT_DEFINE(production_notices, SUM)
+
+/*
+ * The following stats will not be reset by Stats::reset() and the 'reset'
+ * admin command.
+ */
+#ifndef RESETTING_STATS
+
+/*
+ * These stats will not be aggregated for destroyed threads.
+ */
+#ifndef DESTROYING_THREAD
+
+// Counts config updates
+STAT_DEFINE(updated_config, SUM)
+// Counts config updates ignored because their version is older than the
+// running config
+STAT_DEFINE(config_update_old_version, SUM)
+// Counts config updates that came in with same version but different hash
+STAT_DEFINE(config_update_hash_mismatch, SUM)
+// Counts config updates ignored because they were identical to running config
+STAT_DEFINE(config_update_same_version, SUM)
+
+#endif // DESTROYING_THREAD
+#endif // RESETTING_STATS
+
 #undef STAT_DEFINE
+#undef RESETTING_STATS
+#undef DESTROYING_THREAD

@@ -484,13 +484,6 @@ STAT_DEFINE(copyset_biased_rebuilding, SUM)
 STAT_DEFINE(copyset_selection_failed_rebuilding, SUM)
 STAT_DEFINE(copyset_selection_attempts_rebuilding, SUM)
 
-// Number of connection retries following a timeout.
-STAT_DEFINE(connection_retries, SUM)
-// Number of timeouts trying to connect a tcp socket.
-STAT_DEFINE(connection_timeouts, SUM)
-// Number of handshake timeouts.
-STAT_DEFINE(handshake_timeouts, SUM)
-
 // number of times that a storage node replied in STORED header
 // with a status code other than E::OK
 STAT_DEFINE(node_stored_unsuccessful_total, SUM)
@@ -653,13 +646,6 @@ STAT_DEFINE(append_rejected_cancelled, SUM)
 
 // number of rocksdb manual compaction performed
 STAT_DEFINE(manual_compactions, SUM)
-
-// number of attempts to record error messages at severety CRITICAL
-STAT_DEFINE(critical_errors, SUM)
-// number of attempts to record error messages at severety ERROR
-STAT_DEFINE(severe_errors, SUM)
-// number of attempts to record error messages at severety INFO,NOTE,WARNING
-STAT_DEFINE(production_notices, SUM)
 
 STAT_DEFINE(server_read_streams_created, SUM)
 
@@ -1187,16 +1173,6 @@ STAT_DEFINE(read_streams_num_scd, SUM)
 STAT_DEFINE(read_streams_total_known_down_size, SUM)
 // Number of ServerReadStreams that see themselves in the SCD known down list.
 STAT_DEFINE(read_streams_total_self_in_known_down, SUM)
-
-// Counts config updates
-STAT_DEFINE(updated_config, SUM)
-// Counts config updates ignored because their version is older than the
-// running config
-STAT_DEFINE(config_update_old_version, SUM)
-// Counts config updates that came in with same version but different hash
-STAT_DEFINE(config_update_hash_mismatch, SUM)
-// Counts config updates ignored because they were identical to running config
-STAT_DEFINE(config_update_same_version, SUM)
 
 // Number of active RecordRebuilding state machines.
 STAT_DEFINE(record_rebuilding_in_progress, SUM)
