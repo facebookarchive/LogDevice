@@ -7,7 +7,7 @@
 # LICENSE file in the root directory of this source tree.
 
 """
-Unit tests for `ldops.internal.convert` module.
+Unit tests for `ldops.util.convert` module.
 """
 
 from unittest import TestCase

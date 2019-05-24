@@ -7,7 +7,7 @@
 # LICENSE file in the root directory of this source tree.
 
 """
-ldops.internal.convert
+ldops.util.convert
 ~~~~~~~~~~~
 
 A collection of helpful conversion utility functions
@@ -25,7 +25,7 @@ from logdevice.admin.common.types import (
 from logdevice.admin.nodes.types import ShardStorageState
 
 
-__all__: List[str] = ["scope_to_shard_id"]
+__all__: List[str] = ["to_shard_id", "to_storage_state", "to_replication"]
 
 # A string representation of a shard or node. Consists of a node ID and an
 # optional shard ID.
