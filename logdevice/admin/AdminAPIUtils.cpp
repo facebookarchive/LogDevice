@@ -133,16 +133,22 @@ toShardOperationalState(membership::StorageState storage_state,
     case membership::StorageState::DATA_MIGRATION:
     case membership::StorageState::READ_ONLY:
       // The node will be in READ_ONLY if we are draining.
-      if (node_info && node_info->drain) {
+      if (node_info) {
         if (node_info->auth_status ==
             AuthoritativeStatus::AUTHORITATIVE_EMPTY) {
           return thrift::ShardOperationalState::DRAINED;
+        } else if (node_info->auth_status ==
+                   AuthoritativeStatus::FULLY_AUTHORITATIVE) {
+          return thrift::ShardOperationalState::MAY_DISAPPEAR;
         } else {
-          // We are still draining then.
+          // We are UNAVAILABLE/UNDERREPLICATION
           return thrift::ShardOperationalState::MIGRATING_DATA;
         }
       }
-      return thrift::ShardOperationalState::ENABLED;
+      // If we don't have authoritative status, we lean toward using
+      // MAY_DISAPPEAR since the shard is READ_ONLY. This aligns with how
+      // MaintenanceManager decides on the state.
+      return thrift::ShardOperationalState::MAY_DISAPPEAR;
     case membership::StorageState::READ_WRITE:
       return thrift::ShardOperationalState::ENABLED;
   }
