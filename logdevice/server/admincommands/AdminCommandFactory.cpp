@@ -158,6 +158,8 @@ AdminCommandFactory::AdminCommandFactory() {
   selector_.add<commands::StatsJemallocProfActive>(
       "stats jemalloc prof.active");
   selector_.add<commands::StatsJemallocProfDump>("stats jemalloc prof.dump");
+  selector_.add<commands::JemallocGetSet>("jemalloc get", false);
+  selector_.add<commands::JemallocGetSet>("jemalloc set", true);
 #endif
 
   selector_.add<commands::Compact>("compact", Restriction::LOCALHOST_ONLY);
