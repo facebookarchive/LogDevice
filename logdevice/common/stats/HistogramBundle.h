@@ -22,12 +22,12 @@ namespace facebook { namespace logdevice {
 
 /**
  * Maintain a mapping of histogram name to an object of type T. T can either be
- * a MultiScaleHistogram or a ShardedHistogram.
+ * a HistogramInterface or a ShardedHistogram.
  *
  * In order to create a bundle, inherit from this class and implement the
  * getMap() function:
  *
- * struct MyHistograms : public HistogramBundleBase<MultiScaleHistogram> {
+ * struct MyHistograms : public HistogramBundleBase<HistogramInterface> {
  *  MapType getMap() override {
  *    return { { "append_latency", &append_latency },
  *             { "store_latency", &store_latency   } };
@@ -49,7 +49,7 @@ struct HistogramBundleBase {
 
   virtual ~HistogramBundleBase<T>() {}
 
-  MultiScaleHistogram* get(const std::string& name, shard_index_t shard) {
+  HistogramInterface* get(const std::string& name, shard_index_t shard) {
     auto it = map().find(name);
     if (it == map().end()) {
       return nullptr;
@@ -99,8 +99,8 @@ struct HistogramBundleBase {
 
 class ShardedHistogramBase {
  public:
-  virtual MultiScaleHistogram* get(shard_index_t shard) = 0;
-  virtual const MultiScaleHistogram* get(shard_index_t shard) const = 0;
+  virtual HistogramInterface* get(shard_index_t shard) = 0;
+  virtual const HistogramInterface* get(shard_index_t shard) const = 0;
   virtual shard_size_t getNumShards() const = 0;
   virtual void merge(ShardedHistogramBase const& other) = 0;
   virtual void subtract(ShardedHistogramBase const& other) = 0;
@@ -113,13 +113,13 @@ class ShardedHistogram : public ShardedHistogramBase {
  public:
   explicit ShardedHistogram() {}
 
-  const MultiScaleHistogram* get(shard_index_t shard) const override {
+  const HistogramInterface* get(shard_index_t shard) const override {
     return const_cast<ShardedHistogram<HistogramType>*>(this)->get(shard);
   }
 
   // Because Histograms use quite a lot of memory, we avoid allocating memory
   // for MAX_SHARDS histograms and instead lazily allocate them.
-  MultiScaleHistogram* get(shard_index_t shard) override {
+  HistogramInterface* get(shard_index_t shard) override {
     if (shard >= MAX_SHARDS) {
       return nullptr;
     }
@@ -152,7 +152,7 @@ class ShardedHistogram : public ShardedHistogramBase {
   }
 
   void add(shard_index_t shard, int64_t v) {
-    MultiScaleHistogram* h = get(shard);
+    HistogramInterface* h = get(shard);
     if (h) {
       h->add(v);
     }
@@ -169,7 +169,7 @@ class ShardedHistogram : public ShardedHistogramBase {
   ShardedHistogram& operator=(const ShardedHistogram& other) {
     const size_t n = other.num_shards_.load();
     for (size_t i = 0; i < n; ++i) {
-      *get(i) = *other.get(i);
+      get(i)->assign(*other.get(i));
     }
     for (size_t i = n; i < num_shards_.load(); ++i) {
       hists_[i].hist.reset();
@@ -196,7 +196,7 @@ class ShardedHistogram : public ShardedHistogramBase {
   std::array<ShardEntry, MAX_SHARDS> hists_;
 };
 
-using HistogramBundle = HistogramBundleBase<MultiScaleHistogram>;
+using HistogramBundle = HistogramBundleBase<HistogramInterface>;
 using PerShardHistogramBundle = HistogramBundleBase<ShardedHistogramBase>;
 
 template <typename T>

@@ -25,13 +25,139 @@ class Histogram;
 namespace facebook { namespace logdevice {
 
 /**
- * @file   MultiScaleHistogram is a histogram with different bucket sizes on
- *         different ranges. Used for tracking latencies and sizes.
- *         It is implemented as a collection of linear histograms at
- *         exponentially increasing bucket sizes.
+ * @file  Multiple kinds of histograms used for stats.
+ *
+ * HistogramInterface is a common interface for the histograms, allowing to
+ * add values, merge/subtract histograms and get percentiles.
+ * For now MultiScaleHistogram is the only implementation, but I'm going to
+ * add another one very soon.
+ *
+ * Each implementation has multiple subclasses for different units
+ * of measurement. They define how the histograms are presented
+ * (e.g. "1h" instead of "3600000000") and, for MultiScaleHistogram, what
+ * the block boundaries are.
  */
 
-class MultiScaleHistogram {
+class HistogramInterface {
+ public:
+  HistogramInterface() = default;
+  HistogramInterface(HistogramInterface&) = delete;
+  HistogramInterface& operator=(const HistogramInterface&) = delete;
+  virtual ~HistogramInterface() = default;
+
+  /**
+   * Remove all data points from this histogram.
+   *
+   * Thread-safe.
+   */
+  virtual void clear() = 0;
+
+  /**
+   * Add a new value to the histogram.
+   *
+   * Thread-safe with respect to concurrent calls to other thread-safe
+   * functions. Not thread safe with respect to concurrent calls to add();
+   * i.e., only one thread at a time may call add().
+   */
+  virtual void add(int64_t value) = 0;
+
+  /**
+   * Copy another histogram into this one.
+   * `other` must have the same type as `this`.
+   */
+  virtual void assign(const HistogramInterface& other) = 0;
+
+  /**
+   * Merge another histogram into this histogram.
+   * `other` must have the same type as `this`.
+   *
+   * Thread-safe.
+   */
+  virtual void merge(const HistogramInterface& other) = 0;
+
+  /**
+   * Subtracts another histogram from this histogram.
+   * `other` must have the same type as `this`.
+   *
+   * Thread-safe.
+   */
+  virtual void subtract(const HistogramInterface& other) = 0;
+
+  /**
+   * Batched version of estimatePercentile()+getCountAndSum().
+   * More efficient than multiple equivalent calls to estimatePercentile().
+   *
+   * @param percentiles   Array of input percentiles. Must be sorted. Caller
+   *                      retains ownership of memory.
+   * @param npercentiles  Number of input percentiles. Length of array pct.
+   * @param samples_out   Array of estimated output samples, aligned with pct.
+   *                      Array must have length of at least npct. Caller
+   *                      retains ownership of memory.
+   * @param count_out     If not null, total number of values in the histogram
+   *                      is assigned here.
+   * @param sum_out       If not null, approximate sum of values in the
+   *                      histogram is assigned here.
+   */
+  virtual void estimatePercentiles(const double* percentiles,
+                                   size_t npercentiles,
+                                   int64_t* samples_out,
+                                   uint64_t* count_out = nullptr,
+                                   int64_t* sum_out = nullptr) const = 0;
+
+  /**
+   * Get total number and sum of values in histogram.
+   *
+   * Thread-safe.
+   */
+  virtual std::pair<uint64_t /* count */, int64_t /* sum */>
+  getCountAndSum() const {
+    uint64_t count;
+    int64_t sum;
+    estimatePercentiles(nullptr, 0, nullptr, &count, &sum);
+    return std::make_pair(count, sum);
+  }
+
+  /**
+   * Computes a sample value at the given percentile (must be between 0 and 1).
+   * Because we don't keep individual samples but only counts in buckets,
+   * we'll know the right bucket but make a linear estimate within it.
+   * If histogram is empty, returns 0.
+   *
+   * Thread-safe.
+   *
+   * NOTE: This is a fairly expensive function. Prefer estimatePercentiles() to
+   *       estimate sample values for a whole batch of percentiles.
+   */
+  virtual int64_t estimatePercentile(double percentile) const {
+    int64_t sample;
+    estimatePercentiles(&percentile, 1, &sample);
+    return sample;
+  }
+
+  /**
+   * Print this histogram into _out_. Empty buckets are
+   * skipped. Non-empty buckets are printed one per line in ascending
+   * order of their min values.  For each non-empty bucket min and max
+   * value in appropriate units, and that bucket's count is
+   * printed. Buckets that P50, P75, P95, and P99 latencies fall into
+   * are labelled.
+   *
+   * Thread-safe.
+   */
+  virtual void print(std::ostream& out) const = 0;
+
+  // Returns the unit of measurement, e.g. "B" for bytes, "us" for microseconds.
+  virtual std::string getUnitName() const = 0;
+
+  // Convert a value to a pretty string with appropriate units, the same way as
+  // bucket boundaries are printed by print(). E.g. for latency histogram
+  // 1234567 would be turned into something like "1.234 s"
+  virtual std::string valueToString(int64_t value) const = 0;
+};
+
+// A mix of linear and exponential histograms: a collection of linear histograms
+// at exponentially increasing bucket sizes.
+class MultiScaleHistogram : public HistogramInterface {
  public:
   using LinearHistogram = folly::Histogram<int64_t>;
 
@@ -101,36 +227,20 @@ class MultiScaleHistogram {
   MultiScaleHistogram& operator=(const MultiScaleHistogram& rhs);
   MultiScaleHistogram& operator=(MultiScaleHistogram&& rhs) noexcept(false);
 
-  /**
-   * Remove all data points from this histogram.
-   *
-   * Thread-safe.
-   */
-  void clear();
-
-  /**
-   * Add a new value to the histogram.
-   *
-   * Thread-safe with respect to concurrent calls to other thread-safe
-   * functions. Not thread safe with respect to concurrent calls to add();
-   * i.e., only one thread at a time may call add().
-   */
-  void add(int64_t value);
-
-  /**
-   * Merge another histogram into this histogram.
-   *
-   * Thread-safe.
-   */
-  void merge(const MultiScaleHistogram& other);
-
-  /**
-   * Subtracts another MultiScaleHistogram, which should have the same set of
-   * buckets.
-   *
-   * Thread-safe.
-   */
-  void subtract(const MultiScaleHistogram& other);
+  // HistogramInterface implementation.
+  void clear() override;
+  void add(int64_t value) override;
+  void assign(const HistogramInterface& other) override;
+  void merge(const HistogramInterface& other) override;
+  void subtract(const HistogramInterface& other) override;
+  void estimatePercentiles(const double* percentiles,
+                           size_t npercentiles,
+                           int64_t* samples_out,
+                           uint64_t* count_out = nullptr,
+                           int64_t* sum_out = nullptr) const override;
+  void print(std::ostream& out) const override;
+  std::string getUnitName() const override;
+  std::string valueToString(int64_t value) const override;
 
   /**
    * Get translation descriptors for levels of linear histograms.
@@ -142,47 +252,6 @@ class MultiScaleHistogram {
   }
 
   /**
-   * Get total number and sum of values in histogram.
-   *
-   * Thread-safe.
-   */
-  std::pair<uint64_t /* count */, int64_t /* sum */> getCountAndSum() const;
-
-  /**
-   * Computes a sample value at the given percentile (must be between 0 and 1).
-   * Because we don't keep individual samples but only counts in buckets,
-   * we'll know the right bucket but make a linear estimate within it.
-   * If histogram is empty, returns 0.
-   *
-   * Thread-safe.
-   *
-   * NOTE: This is a fairly expensive function. Prefer estimatePercentiles() to
-   *       estimate sample values for a whole batch of percentiles.
-   */
-  int64_t estimatePercentile(double percentile) const {
-    int64_t sample;
-    estimatePercentiles(&percentile, 1, &sample);
-    return sample;
-  }
-
-  /**
-   * Batched version of estimatePercentile(). Much more efficient than multiple
-   * equivalent calls to estimatePercentile().
-   *
-   * Thread-safe.
-   *
-   * @param percentiles   Array of input percentiles. Must be sorted. Caller
-   *                      retains ownership of memory.
-   * @param npercentiles  Number of input percentiles. Length of array pct.
-   * @param samples_out   Array of estimated output samples, aligned with pct.
-   *                      Array must have length of at least npct. Caller
-   *                      retains ownership of memory.
-   */
-  void estimatePercentiles(const double* percentiles,
-                           size_t npercentiles,
-                           int64_t* samples_out) const;
-
-  /**
    * Convert the histogram to a map with human-readable keys and values.
    *
    * Thread-safe.
@@ -190,18 +259,6 @@ class MultiScaleHistogram {
    * @param prefix  A string to prefix each key with.
    */
   std::map<std::string, std::string> toMap(const std::string& prefix) const;
-
-  /**
-   * Print this histogram into _out_. Empty buckets are
-   * skipped. Non-empty buckets are printed one per line in ascending
-   * order of their min values.  For each non-empty bucket min and max
-   * value in appropriate units, and that bucket's count is
-   * printed. Buckets that P50, P75, P95, and P99 latencies fall into
-   * are labelled.
-   *
-   * Thread-safe.
-   */
-  void print(std::ostream& out) const;
 
  private:
   /**

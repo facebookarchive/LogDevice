@@ -23,7 +23,7 @@ namespace facebook { namespace logdevice { namespace commands {
 template <typename... UniqueColTypes>
 class StatsHistogramBase : public AdminCommand {
  public:
-  using Hist = MultiScaleHistogram;
+  using Hist = HistogramInterface;
   using HistTuple = std::tuple<std::string, Hist*, UniqueColTypes...>;
   using SummaryTable = AdminCommandTable<std::string, // name
                                          UniqueColTypes...,
@@ -123,45 +123,30 @@ class StatsHistogramBase : public AdminCommand {
       if (!prettify) {
         return folly::to<std::string>(data);
       }
-      const MultiScaleHistogram::Scale* found = nullptr;
-      for (auto& i : hist->getScale()) {
-        if (data < i.unit && i.unit > 1) {
-          break;
-        }
-        found = &i;
-      }
-      const double d = found ? data / found->unit : data;
-      std::string value = data < 0 ? "< 0" : folly::sformat("{:.0f}", d);
-      if (found && found->unit_name[0] != '\0') {
-        value += " ";
-        value += found->unit_name;
-      }
-      return value;
+      return hist->valueToString(data);
     };
 
-    auto count_and_sum = hist->getCountAndSum();
+    uint64_t count;
+    int64_t sum;
+    std::array<double, 7> pct_in = {0, .5, .75, .95, .99, .9999, 1};
+    std::array<int64_t, 7> pct_out;
+    hist->estimatePercentiles(
+        &pct_in[0], pct_in.size(), &pct_out[0], &count, &sum);
 
     table.next()
         .template set<NameColIdx>(name)
-        .template set<MinColIdx>(hist->estimatePercentile(0), to_string)
-        .template set<P50ColIdx>(hist->estimatePercentile(0.01 * 50), to_string)
-        .template set<P75ColIdx>(hist->estimatePercentile(0.01 * 75), to_string)
-        .template set<P95ColIdx>(hist->estimatePercentile(0.01 * 95), to_string)
-        .template set<P99ColIdx>(hist->estimatePercentile(0.01 * 99), to_string)
-        .template set<P9999ColIdx>(
-            hist->estimatePercentile(0.01 * 99.99), to_string)
-        .template set<MaxColIdx>(hist->estimatePercentile(1), to_string)
-        .template set<CountColIdx>(count_and_sum.first);
-    if (count_and_sum.first > 0) {
-      table.template set<MeanColIdx>(
-          (double)count_and_sum.second / (double)count_and_sum.first,
-          to_string);
+        .template set<MinColIdx>(pct_out[0], to_string)
+        .template set<P50ColIdx>(pct_out[1], to_string)
+        .template set<P75ColIdx>(pct_out[2], to_string)
+        .template set<P95ColIdx>(pct_out[3], to_string)
+        .template set<P99ColIdx>(pct_out[4], to_string)
+        .template set<P9999ColIdx>(pct_out[5], to_string)
+        .template set<MaxColIdx>(pct_out[6], to_string)
+        .template set<CountColIdx>(count);
+    if (count > 0) {
+      table.template set<MeanColIdx>(1. * sum / count, to_string);
     }
-
-    auto& scale = hist->getScale();
-    if (!scale.empty()) {
-      table.template set<UnitColIdx>(scale[0].unit_name);
-    }
+    table.template set<UnitColIdx>(hist->getUnitName());
     setUniqueCols(tuple, table);
   }
 

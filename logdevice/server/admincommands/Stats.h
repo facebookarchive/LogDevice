@@ -135,10 +135,10 @@ inline void printStats(const Stats& stats,
 
     // Don't show histograms.
     void histogram(const std::string& /*name*/,
-                   const MultiScaleHistogram& /*hist*/) override {}
+                   const HistogramInterface& /*hist*/) override {}
     void histogram(const std::string& /*name*/,
                    shard_index_t /*shard*/,
-                   const MultiScaleHistogram& /*hist*/) override {}
+                   const HistogramInterface& /*hist*/) override {}
 
    private:
     EvbufferTextOutput& out_;

@@ -21,6 +21,7 @@
 #include <vector>
 
 #include <folly/Conv.h>
+#include <folly/Format.h>
 #include <folly/Likely.h>
 #include <folly/small_vector.h>
 #include <folly/stats/Histogram.h>
@@ -379,7 +380,14 @@ void MultiScaleHistogram::add(int64_t value) {
   }
 }
 
-void MultiScaleHistogram::merge(const MultiScaleHistogram& other) {
+void MultiScaleHistogram::assign(const HistogramInterface& other_if) {
+  auto& other = dynamic_cast<const MultiScaleHistogram&>(other_if);
+  *this = other;
+}
+
+void MultiScaleHistogram::merge(const HistogramInterface& other_if) {
+  auto& other = dynamic_cast<const MultiScaleHistogram&>(other_if);
+
   LockGuardPair lock(mutex_, other.mutex_);
 
   if (UNLIKELY(histograms_.size() != other.histograms_.size())) {
@@ -479,6 +487,27 @@ void MultiScaleHistogram::print(std::ostream& out) const {
   }
 }
 
+std::string MultiScaleHistogram::getUnitName() const {
+  return scale_->empty() ? "" : (*scale_)[0].unit_name;
+}
+
+std::string MultiScaleHistogram::valueToString(int64_t value) const {
+  const Scale* found = nullptr;
+  for (auto& i : *scale_) {
+    if (value < i.unit && i.unit > 1) {
+      break;
+    }
+    found = &i;
+  }
+  const double d = found ? 1. * value / found->unit : 1. * value;
+  std::string s = value < 0 ? "< 0" : folly::sformat("{:.3f}", d);
+  if (found && found->unit_name[0] != '\0') {
+    s += " ";
+    s += found->unit_name;
+  }
+  return s;
+}
+
 std::map<std::string, std::string>
 MultiScaleHistogram::toMap(const std::string& prefix) const {
   std::lock_guard<std::mutex> lock(mutex_);
@@ -503,7 +532,9 @@ MultiScaleHistogram::toMap(const std::string& prefix) const {
   return map;
 }
 
-void MultiScaleHistogram::subtract(const MultiScaleHistogram& other) {
+void MultiScaleHistogram::subtract(const HistogramInterface& other_if) {
+  auto& other = dynamic_cast<const MultiScaleHistogram&>(other_if);
+
   LockGuardPair lock(mutex_, other.mutex_);
 
   if (UNLIKELY(histograms_.size() != other.histograms_.size())) {
@@ -536,18 +567,24 @@ void MultiScaleHistogram::subtract(const MultiScaleHistogram& other) {
   count_ -= std::min(other.count_, count_);
 }
 
-std::pair<uint64_t, int64_t> MultiScaleHistogram::getCountAndSum() const {
-  // Merge all staged values to ensure count_ and sum_ are fresh.
-  std::lock_guard<std::mutex> lock(mutex_);
-  const_cast<MultiScaleHistogram*>(this)->mergeStagedValues();
-  return std::make_pair(count_, sum_);
-}
-
 void MultiScaleHistogram::estimatePercentiles(const double* percentiles,
                                               size_t npercentiles,
-                                              int64_t* samples_out) const {
+                                              int64_t* samples_out,
+                                              uint64_t* count_out,
+                                              int64_t* sum_out) const {
   std::lock_guard<std::mutex> lock(mutex_);
   const_cast<MultiScaleHistogram*>(this)->mergeStagedValues();
+
+  if (count_out) {
+    *count_out = count_;
+  }
+  if (sum_out) {
+    *sum_out = sum_;
+  }
+
+  if (npercentiles == 0) {
+    return;
+  }
 
   // Input percentiles must be sorted and in valid range [0.0, 1.0].
   ld_check(std::is_sorted(percentiles, percentiles + npercentiles));

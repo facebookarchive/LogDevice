@@ -56,7 +56,7 @@ namespace facebook { namespace logdevice {
  */
 
 class LatencyHistogram;
-class MultiScaleHistogram;
+class HistogramInterface;
 struct ClientHistograms;
 struct PerShardHistograms;
 struct ServerHistograms;
@@ -993,11 +993,11 @@ class Stats::EnumerationCallbacks {
                     int64_t val) = 0;
   // Simple histograms.
   virtual void histogram(const std::string& name,
-                         const MultiScaleHistogram& hist) = 0;
+                         const HistogramInterface& hist) = 0;
   // Per-shard histograms.
   virtual void histogram(const std::string& name,
                          shard_index_t shard,
-                         const MultiScaleHistogram& hist) = 0;
+                         const HistogramInterface& hist) = 0;
 };
 
 /**
