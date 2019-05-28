@@ -32,8 +32,9 @@ class PluginRegistry;
 
 // Timeout shared by many tests, especially integration tests
 
-#ifdef FOLLY_SANITIZE_ADDRESS
-// A more generous timeout when running under ASAN, particularly for Sandcastle
+#if defined(FOLLY_SANITIZE_ADDRESS) || defined(FOLLY_SANITIZE_THREAD)
+// A more generous timeout when running under ASAN/TSAN, particularly for
+// Sandcastle
 constexpr std::chrono::seconds DEFAULT_TEST_TIMEOUT(240);
 #else
 constexpr std::chrono::seconds DEFAULT_TEST_TIMEOUT(90);
