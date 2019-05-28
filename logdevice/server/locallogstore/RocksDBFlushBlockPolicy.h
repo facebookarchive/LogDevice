@@ -36,8 +36,13 @@ class RocksDBFlushBlockPolicy : public rocksdb::FlushBlockPolicy {
     bool ret = false;
     Group g = getGroup(key, value);
 
+    // Cut a block between csi and data records even if the block will be
+    // smaller than min_block_size. This keeps csi blocks small, so more of them
+    // fit in block cache.
     if (cur_block_bytes_ >= opts_.block_size ||
-        (g != cur_group_ && cur_block_bytes_ >= opts_.min_block_size)) {
+        (g != cur_group_ && cur_block_bytes_ >= opts_.min_block_size) ||
+        ((g.log == LOGID_INVALID) != (cur_group_.log == LOGID_INVALID) &&
+         cur_block_bytes_ != 0)) {
       STAT_INCR(opts_.stats, sst_blocks_written);
       STAT_ADD(opts_.stats, sst_blocks_bytes, cur_block_bytes_);
       cur_group_ = g;
@@ -45,7 +50,7 @@ class RocksDBFlushBlockPolicy : public rocksdb::FlushBlockPolicy {
       ret = true;
     }
 
-    cur_block_bytes_ += key.size() + value.size();
+    cur_block_bytes_ += std::max(1ul, key.size() + value.size());
 
     return ret;
   }
@@ -62,7 +67,9 @@ class RocksDBFlushBlockPolicy : public rocksdb::FlushBlockPolicy {
 
  private:
   struct Group {
-    logid_t log{0};
+    // LOGID_INVALID means it's not a data record; e.g. metadata, csi,
+    // findtime index (even if the metadata/index is associated with some log).
+    logid_t log{LOGID_INVALID};
     size_t copyset_hash{0};
 
     bool operator!=(const Group& rhs) const {
