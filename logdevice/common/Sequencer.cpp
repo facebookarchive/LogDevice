@@ -793,9 +793,9 @@ bool Sequencer::onHistoricalMetaData(
   }
 
   ld_check(new_map != nullptr);
-  ld_info("Historical epoch metadata for log %lu: %s.",
-          log_id_.val_,
-          new_map->toString().c_str());
+  ld_debug("Historical epoch metadata for log %lu: %s.",
+           log_id_.val_,
+           new_map->toString().c_str());
   onMetaDataMapUpdate(new_map);
   return false;
 }
