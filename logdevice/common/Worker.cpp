@@ -1314,7 +1314,7 @@ int Worker::tryPost(std::unique_ptr<Request>& req) {
   }
 
   if (num_requests_enqueued_.load(std::memory_order_relaxed) >
-      immutable_settings_->worker_request_pipe_capacity) {
+      updateable_settings_->worker_request_pipe_capacity) {
     err = E::NOBUFS;
     return -1;
   }

@@ -27,8 +27,15 @@ constexpr static int kNumWorkers = 5;
 
 class BenchmarkRequest : public Request {
  public:
-  BenchmarkRequest(Processor* p, std::atomic<int>& pending, size_t reposts)
-      : Request(), processor_(p), pending_(pending), reposts_(reposts) {}
+  BenchmarkRequest(Processor* p,
+                   std::atomic<int>& pending,
+                   size_t reposts,
+                   bool use_post_important = false)
+      : Request(),
+        processor_(p),
+        pending_(pending),
+        reposts_(reposts),
+        use_post_important_(use_post_important) {}
 
   Request::Execution execute() override {
     pending_.fetch_sub(1, std::memory_order_relaxed);
@@ -39,7 +46,9 @@ class BenchmarkRequest : public Request {
     buffer_[reposts_ - 1] =
         std::make_unique<BenchmarkRequest>(processor_, pending_, reposts_ - 1);
 
-    int rv = processor_->postImportant(buffer_[reposts_ - 1]);
+    int rv = use_post_important_
+        ? processor_->postImportant(buffer_[reposts_ - 1])
+        : processor_->postRequest(buffer_[reposts_ - 1]);
     ld_check(!rv);
     return Request::Execution::COMPLETE;
   }
@@ -50,9 +59,36 @@ class BenchmarkRequest : public Request {
   std::atomic<int>& pending_;
   const size_t reposts_;
   size_t executed_{0};
+  bool use_post_important_{false};
 };
 
-BENCHMARK(WorkerBenchmarkv2, n) {
+BENCHMARK(WorkerBenchmarkpostImportantv2, n) {
+  const int request_count = n / kPosts;
+
+  std::atomic<int> pending{kPosts * request_count};
+  std::vector<std::unique_ptr<Request>> requests;
+  Settings settings = create_default_settings<Settings>();
+  std::shared_ptr<Processor> processor;
+
+  BENCHMARK_SUSPEND {
+    settings.num_workers = kNumWorkers;
+    processor = make_test_processor(settings);
+
+    for (int i = 0; i < request_count; ++i) {
+      requests.emplace_back(std::make_unique<BenchmarkRequest>(
+          processor.get(), pending, kPosts - 1, true));
+    }
+  }
+
+  for (auto& request : requests) {
+    processor->postImportant(request);
+  }
+
+  while (pending.load(std::memory_order_relaxed) != 0) {
+  }
+}
+
+BENCHMARK(WorkerBenchmarkPostRequestv2, n) {
   const int request_count = n / kPosts;
 
   std::atomic<int> pending{kPosts * request_count};
@@ -71,7 +107,7 @@ BENCHMARK(WorkerBenchmarkv2, n) {
   }
 
   for (auto& request : requests) {
-    processor->postImportant(request);
+    processor->postRequest(request);
   }
 
   while (pending.load(std::memory_order_relaxed) != 0) {
