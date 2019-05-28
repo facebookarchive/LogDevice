@@ -160,8 +160,7 @@ class NodesConfigurationManager
   // unprocessed. Could return a config with EMPTY_VERSION, but never returns
   // nullptr.
   std::shared_ptr<const NodesConfiguration> getLatestKnownConfig() const;
-  void onUpdateRequest(std::vector<nodes::NodesConfiguration::Update> updates,
-                       CompletionCb callback);
+  void onUpdateRequest(ncm::UpdateContext ctx, CompletionCb callback);
 
   // A new version of the config goes through the following phases:
   //   S: staged, to be processed by the NCM

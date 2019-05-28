@@ -23,6 +23,41 @@ using namespace facebook::logdevice::membership;
 
 namespace facebook { namespace logdevice { namespace configuration {
 namespace nodes { namespace ncm {
+//////// CONTEXTS ////////
+void UpdateRequestData::onDestruction() {
+  if (status_ != Status::OK) {
+    // TODO: log errors separately
+    return;
+  }
+  // TODO: log timestamps, log outliers separately
+  NodesConfigurationTracer::Sample sample;
+  sample.nc_update_gen_ = [updates = std::move(updates_)]() mutable {
+    return logdevice::toString(std::move(updates));
+  };
+  // Note that nc is the published nc only if status is OK
+  sample.published_nc_ = std::move(nc_);
+  sample.source_ = NodesConfigurationTracer::Source::NCM_UPDATE;
+  tracer_.trace(std::move(sample));
+}
+
+void OverwriteRequestData::onDestruction() {
+  if (status_ != Status::OK) {
+    // TODO: log errors separately
+    return;
+  }
+  // TODO: log timestamps, log outliers separately
+  NodesConfigurationTracer::Sample sample;
+  sample.nc_update_gen_ = [configuration = nc_]() mutable {
+    // TODO: we don't have NodesConfiguration::toString(), so we use
+    // the debug JSON string instead. This could likely be more
+    // efficient.
+    return NodesConfigurationCodec::debugJsonString(*configuration);
+  };
+  // Note that nc is the published nc only if status is OK
+  sample.published_nc_ = std::move(nc_);
+  sample.source_ = NodesConfigurationTracer::Source::NCM_OVERWRITE;
+  tracer_.trace(std::move(sample));
+}
 
 //////// REQUESTS ////////
 Request::Execution NCMRequest::execute() {
@@ -76,7 +111,7 @@ Request::Execution ProcessingFinishedRequest::executeOnNCM(
 
 Request::Execution UpdateRequest::executeOnNCM(
     std::shared_ptr<NodesConfigurationManager> ncm_ptr) {
-  ncm_ptr->onUpdateRequest(std::move(updates_), std::move(callback_));
+  ncm_ptr->onUpdateRequest(std::move(ctx_), std::move(callback_));
   return Execution::COMPLETE;
 }
 
@@ -137,33 +172,34 @@ void Dependencies::dcheckNotOnProcessor() const {
   ld_assert(!Worker::onThisThread(/* enforce_worker = */ false));
 }
 
-void Dependencies::overwrite(std::shared_ptr<const NodesConfiguration> config,
+void Dependencies::overwrite(OverwriteContext ctx,
                              NodesConfigurationAPI::CompletionCb callback) {
   // may be on a different thread; keep ncm alive while we use store_
   auto ncm_ptr = ncm_.lock();
   if (!ncm_ptr) {
+    ctx.setStatus(E::SHUTDOWN);
     callback(E::SHUTDOWN, nullptr);
     return;
   }
 
-  std::string serialized_initial_config =
-      NodesConfigurationCodec::serialize(*config);
-  if (serialized_initial_config.empty()) {
+  ctx.data_.serialized_nc_ = NodesConfigurationCodec::serialize(*ctx.data_.nc_);
+  if (ctx.data_.serialized_nc_.empty()) {
     // Even an empty NC would have a non empty serialization due to fields in
     // the header
+    ctx.setStatus(err);
     callback(err, nullptr);
     return;
   }
 
   store_->getConfig([ncm = ncm_,
                      callback = std::move(callback),
-                     config = std::move(config),
-                     serialized_initial_config =
-                         std::move(serialized_initial_config)](
+                     ctx = std::move(ctx)](
                         Status status, std::string current_serialized) mutable {
+    ctx.addTimestamp("NCS read");
     // For overwrite, we handle the case where the initial NCS key is not
     // provisioned
     if (status != E::OK && status != E::NOTFOUND) {
+      ctx.setStatus(status);
       callback(status, nullptr);
       return;
     }
@@ -171,6 +207,7 @@ void Dependencies::overwrite(std::shared_ptr<const NodesConfiguration> config,
     // may be on a different thread
     auto ncm_ptr = ncm.lock();
     if (!ncm_ptr) {
+      ctx.setStatus(E::SHUTDOWN);
       callback(E::SHUTDOWN, nullptr);
       return;
     }
@@ -179,9 +216,10 @@ void Dependencies::overwrite(std::shared_ptr<const NodesConfiguration> config,
         NodesConfigurationCodec::extractConfigVersion(current_serialized);
     if (current_version_opt.hasValue()) {
       auto current_version = current_version_opt.value();
-      if (current_version >= config->getVersion()) {
+      if (current_version >= ctx.data_.nc_->getVersion()) {
         auto current_config =
             NodesConfigurationCodec::deserialize(std::move(current_serialized));
+        ctx.setStatus(E::VERSION_MISMATCH);
         callback(E::VERSION_MISMATCH, std::move(current_config));
         return;
       }
@@ -196,20 +234,22 @@ void Dependencies::overwrite(std::shared_ptr<const NodesConfiguration> config,
                          10,
                          "Cannot extract version from config in NCS, "
                          "overwriting with version %lu",
-                         config->getVersion().val());
+                         ctx.data_.nc_->getVersion().val());
     }
 
+    auto serialized_initial_config = std::move(ctx.data_.serialized_nc_);
     ncm_ptr->deps()->store_->updateConfig(
         std::move(serialized_initial_config),
         /* base_version = */ current_version_opt,
-        [config = std::move(config), callback = std::move(callback), ncm = ncm](
+        [callback = std::move(callback), ncm = ncm, ctx = std::move(ctx)](
             Status update_status,
             NodesConfigurationStore::version_t version,
             std::string value) mutable {
+          ctx.addTimestamp("NCS updated");
           std::shared_ptr<const NodesConfiguration> ret_config = nullptr;
           if (update_status == Status::OK) {
-            ld_assert_eq(version, config->getVersion());
-            ret_config = std::move(config);
+            ld_assert_eq(version, ctx.data_.nc_->getVersion());
+            ret_config = ctx.data_.nc_;
           }
           if (update_status == E::VERSION_MISMATCH && !value.empty()) {
             ret_config = NodesConfigurationCodec::deserialize(std::move(value));
@@ -217,6 +257,7 @@ void Dependencies::overwrite(std::shared_ptr<const NodesConfiguration> config,
             ld_assert_eq(version, ret_config->getVersion());
           }
 
+          ctx.setStatus(update_status);
           callback(update_status, std::move(ret_config));
         }); // updateConfig
   });       // getConfig

@@ -29,6 +29,95 @@ namespace ncm {
 
 using NCMWeakPtr = std::weak_ptr<NodesConfigurationManager>;
 
+//////// CONTEXTS ////////
+// Tracing information that gets thread-through all NCM interactions
+//
+// Note: in the future, we could inherit from folly::RequestData and integrate
+// with folly::RequestContext.
+struct NCMRequestData {
+  explicit NCMRequestData(std::shared_ptr<TraceLogger> trace_logger)
+      : tracer_(std::move(trace_logger)) {}
+  virtual ~NCMRequestData() {}
+  virtual void onDestruction() = 0;
+  void addTimestamp(folly::StringPiece key,
+                    SystemTimestamp ts = SystemTimestamp::now()) {
+    // We shouldn't overwrite timestamps
+    ld_assert(!timestamps_.contains(key));
+    timestamps_[key] = ts;
+  }
+
+  NodesConfigurationTracer tracer_;
+  Status status_{Status::UNKNOWN};
+  folly::F14FastMap<std::string, SystemTimestamp> timestamps_{};
+};
+
+struct UpdateRequestData : public NCMRequestData {
+  using NCMRequestData::NCMRequestData;
+  void onDestruction() override;
+
+  std::vector<NodesConfiguration::Update> updates_;
+  // proposed NC after NCM applies the updates
+  std::shared_ptr<const NodesConfiguration> nc_{nullptr};
+};
+
+struct OverwriteRequestData : public NCMRequestData {
+  using NCMRequestData::NCMRequestData;
+  void onDestruction() override;
+
+  std::shared_ptr<const NodesConfiguration> nc_{nullptr};
+  std::string serialized_nc_{};
+};
+
+template <typename Data>
+class NCMContext {
+ public:
+  static_assert(std::is_base_of<NCMRequestData, Data>::value,
+                "NCMContext must be instantiated with a derived class of "
+                "NCMRequestData.");
+  template <typename... Args>
+  explicit NCMContext(Args&&... args) : data_(std::forward<Args>(args)...) {
+    // Automatic timestamp for the start of the request.
+    data_.addTimestamp("req_received");
+  }
+
+  NCMContext(const NCMContext&) = delete;
+  NCMContext& operator=(const NCMContext&) = delete;
+  NCMContext(NCMContext&& other) noexcept
+      : dismissed_(std::exchange(other.dismissed_, true)),
+        data_(std::move(other.data_)) {}
+  NCMContext& operator=(NCMContext&& other) noexcept {
+    dismissed_ = std::exchange(other.dismissed_, true);
+    data_(std::move(other.data_));
+  }
+
+  ~NCMContext() {
+    if (!dismissed_) {
+      ld_assert(data_.status_ != Status::UNKNOWN);
+      data_.addTimestamp("req_completed");
+      // Automatic timestamp for the end of the request.
+      data_.onDestruction();
+    }
+  }
+
+  void setStatus(Status status) {
+    data_.status_ = status;
+  }
+
+  void addTimestamp(folly::StringPiece key,
+                    SystemTimestamp ts = SystemTimestamp::now()) {
+    data_.addTimestamp(key, ts);
+  }
+
+ private:
+  bool dismissed_{false};
+
+ public:
+  Data data_;
+};
+
+using UpdateContext = NCMContext<UpdateRequestData>;
+using OverwriteContext = NCMContext<OverwriteRequestData>;
+
 //////// REQUESTS ////////
 
 // Base class to pin any NCM related request to the correct worker. Derived
@@ -111,18 +200,18 @@ class ProcessingFinishedRequest : public NCMRequest {
 class UpdateRequest : public NCMRequest {
  public:
   template <typename... Args>
-  explicit UpdateRequest(std::vector<NodesConfiguration::Update> updates,
+  explicit UpdateRequest(UpdateContext ctx,
                          NodesConfigurationAPI::CompletionCb callback,
                          Args&&... args)
       : NCMRequest(std::forward<Args>(args)...),
-        updates_(std::move(updates)),
+        ctx_(std::move(ctx)),
         callback_(std::move(callback)) {}
 
   Request::Execution
       executeOnNCM(std::shared_ptr<NodesConfigurationManager>) override;
 
  private:
-  std::vector<NodesConfiguration::Update> updates_;
+  UpdateContext ctx_;
   NodesConfigurationAPI::CompletionCb callback_;
 };
 
@@ -159,11 +248,15 @@ class Dependencies {
   void dcheckNotOnNCM() const;
   void dcheckNotOnProcessor() const;
 
-  void overwrite(std::shared_ptr<const NodesConfiguration> configuration,
+  void overwrite(OverwriteContext ctx,
                  NodesConfigurationAPI::CompletionCb callback);
 
  private:
   bool isOnNCM() const;
+
+  std::shared_ptr<TraceLogger> getTraceLogger() const {
+    return processor_->getTraceLogger();
+  }
 
   // Convenience method to reduce boilerplate: only necessary to specify the
   // custom arguments

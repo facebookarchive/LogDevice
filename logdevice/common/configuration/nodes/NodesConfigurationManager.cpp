@@ -194,48 +194,19 @@ void NodesConfigurationManager::update(
     return;
   }
 
+  ncm::UpdateContext ctx{deps()->getTraceLogger()};
+  ctx.data_.updates_ = std::move(updates);
+
   // ensure we are allowed to propose updates
   if (!mode_.isProposer()) {
+    ctx.setStatus(E::ACCESS);
     callback(E::ACCESS, nullptr);
     return;
   }
   STAT_INCR(deps_->getStats(), nodes_configuration_manager_updates_requested);
 
-  // wrap around the callback for trace logging
-  auto wrapped_callback =
-      [cb = std::move(callback),
-       ncm = weak_from_this(),
-       updates_str = logdevice::toString(updates)](
-          Status status, std::shared_ptr<const NodesConfiguration> nc) mutable {
-        SCOPE_EXIT {
-          cb(status, std::move(nc));
-        };
-
-        // Only log successful updates and when NCM is not shutting down
-        if (status != Status::OK) {
-          return;
-        }
-        auto ncm_ptr = ncm.lock();
-        if (!ncm_ptr || ncm_ptr->shutdownSignaled()) {
-          return;
-        }
-
-        NodesConfigurationTracer::Sample sample;
-        sample.nc_update_gen_ = [updates_str =
-                                     std::move(updates_str)]() mutable {
-          // TODO: Since NCM consumes updates, currently we always
-          // generate the update string here regardless of whether the
-          // sample is going to be logged. It's likely unnecessary.
-          return std::move(updates_str);
-        };
-        // Note that nc is the published nc only if status is OK
-        sample.published_nc_ = nc;
-        sample.source_ = NodesConfigurationTracer::Source::NCM_UPDATE;
-        ncm_ptr->deps()->tracer_.trace(std::move(sample));
-      };
-
   std::unique_ptr<Request> req = deps()->makeNCMRequest<ncm::UpdateRequest>(
-      std::move(updates), std::move(wrapped_callback));
+      std::move(ctx), std::move(callback));
   deps()->processor_->postWithRetrying(req);
 }
 
@@ -247,51 +218,25 @@ void NodesConfigurationManager::overwrite(
     return;
   }
 
+  ncm::OverwriteContext ctx{deps()->getTraceLogger()};
+  ctx.data_.nc_ = configuration;
   // ensure we are allowed to overwrite
   if (!mode_.isTooling()) {
+    ctx.setStatus(E::ACCESS);
     callback(E::ACCESS, nullptr);
     return;
   }
 
   if (!configuration) {
+    ctx.setStatus(E::INVALID_PARAM);
     callback(E::INVALID_PARAM, nullptr);
     return;
   }
 
   STAT_INCR(
-      deps_->getStats(), nodes_configuration_manager_overwrites_requested);
+      deps()->getStats(), nodes_configuration_manager_overwrites_requested);
 
-  // wrap around the callback for trace logging
-  auto wrapped_callback =
-      [cb = std::move(callback), ncm = weak_from_this(), configuration](
-          Status status, std::shared_ptr<const NodesConfiguration> nc) mutable {
-        SCOPE_EXIT {
-          cb(status, std::move(nc));
-        };
-
-        // Only log successful updates and when NCM is not shutting down
-        if (status != Status::OK) {
-          return;
-        }
-        auto ncm_ptr = ncm.lock();
-        if (!ncm_ptr || ncm_ptr->shutdownSignaled()) {
-          return;
-        }
-        NodesConfigurationTracer::Sample sample;
-        sample.nc_update_gen_ = [configuration =
-                                     std::move(configuration)]() mutable {
-          // TODO: we don't have NodesConfiguration::toString(), so we use
-          // the debug JSON string instead. This could likely be more
-          // efficient.
-          return NodesConfigurationCodec::debugJsonString(*configuration);
-        };
-        // Note that nc is the published nc only if status is OK
-        sample.published_nc_ = nc;
-        sample.source_ = NodesConfigurationTracer::Source::NCM_OVERWRITE;
-        ncm_ptr->deps()->tracer_.trace(std::move(sample));
-      };
-
-  deps()->overwrite(std::move(configuration), std::move(wrapped_callback));
+  deps()->overwrite(std::move(ctx), std::move(callback));
 }
 
 void NodesConfigurationManager::initOnNCM(
@@ -392,13 +337,14 @@ NodesConfigurationManager::getLatestKnownConfig() const {
   return c;
 }
 
-void NodesConfigurationManager::onUpdateRequest(
-    std::vector<NodesConfiguration::Update> updates,
-    CompletionCb callback) {
+void NodesConfigurationManager::onUpdateRequest(ncm::UpdateContext ctx,
+                                                CompletionCb callback) {
   deps_->dcheckOnNCM();
+  ctx.addTimestamp("start_exec_on_ncm");
 
   // ensure we are allowed to propose updates
   if (!mode_.isProposer()) {
+    ctx.setStatus(E::ACCESS);
     callback(E::ACCESS, nullptr);
     return;
   }
@@ -406,37 +352,43 @@ void NodesConfigurationManager::onUpdateRequest(
   auto current_config = getLatestKnownConfig();
   ld_assert(current_config);
   auto current_version = current_config->getVersion();
-  auto new_config = std::move(current_config);
-  for (auto& u : updates) {
-    // TODO: it'd be more efficient to push down the batch update logic into
-    // NodesConfiguration
-    new_config = new_config->applyUpdate(std::move(u));
-    if (!new_config) {
-      // TODO: better visibility into why particular updates failed
-      callback(err, nullptr);
-      return;
+  {
+    auto new_config = std::move(current_config);
+    for (const auto& u : ctx.data_.updates_) {
+      // TODO: it'd be more efficient to push down the batch update logic into
+      // NodesConfiguration
+      new_config = new_config->applyUpdate(u);
+      if (!new_config) {
+        // TODO: better visibility into why particular updates failed
+        ctx.setStatus(err);
+        callback(err, nullptr);
+        return;
+      }
     }
+    // applyUpdate() bumps the version each time. Even though the protocol can
+    // allow gaps in the version numbers, it's simpler to try to keep it
+    // continuous.
+    ctx.data_.nc_ = new_config->withVersion(
+        membership::MembershipVersion::Type{current_version.val() + 1});
   }
-  // applyUpdate() bumps the version each time. Even though the protocol can
-  // allow gaps in the version numbers, it's simpler to try to keep it
-  // continuous.
-  new_config = new_config->withVersion(
-      membership::MembershipVersion::Type{current_version.val() + 1});
-  auto serialized = NodesConfigurationCodec::serialize(*new_config);
+  auto serialized = NodesConfigurationCodec::serialize(*ctx.data_.nc_);
   if (serialized.empty()) {
+    ctx.setStatus(err);
     callback(err, nullptr);
     return;
   }
 
+  ctx.addTimestamp("call_ncs_update");
   deps()->store_->updateConfig(
       std::move(serialized),
       /* base_version = */ current_version,
       [callback = std::move(callback),
-       new_config = std::move(new_config),
+       ctx = std::move(ctx),
        ncm = weak_from_this()](
           Status status,
           NodesConfigurationStore::version_t stored_version,
           std::string stored_data) mutable {
+        ctx.addTimestamp("ncs_upate_cb");
         // In NCS callback thread
         auto notify_ncm_of_new_config =
             [ncm = std::move(ncm)](std::shared_ptr<const NodesConfiguration>
@@ -460,12 +412,13 @@ void NodesConfigurationManager::onUpdateRequest(
                 NodesConfigurationCodec::extractConfigVersion(stored_data);
             ld_assert(extracted_version_opt.hasValue());
             ld_assert_eq(stored_version, extracted_version_opt.value());
-            ld_assert_gt(stored_version, new_config->getVersion());
+            ld_assert_gt(stored_version, ctx.data_.nc_->getVersion());
           }
           auto stored_config =
               NodesConfigurationCodec::deserialize(std::move(stored_data));
           ld_assert(stored_config);
           notify_ncm_of_new_config(stored_config);
+          ctx.setStatus(E::VERSION_MISMATCH);
           callback(E::VERSION_MISMATCH, std::move(stored_config));
           return;
         }
@@ -473,13 +426,15 @@ void NodesConfigurationManager::onUpdateRequest(
         if (status != E::OK) {
           // TODO: we could add retries here for E::AGAIN and
           // E::VERSION_MISMATCH
+          ctx.setStatus(status);
           callback(status, nullptr);
           return;
         }
 
-        ld_check_eq(stored_version, new_config->getVersion());
-        notify_ncm_of_new_config(new_config);
-        callback(E::OK, std::move(new_config));
+        ld_check_eq(stored_version, ctx.data_.nc_->getVersion());
+        notify_ncm_of_new_config(ctx.data_.nc_);
+        ctx.setStatus(E::OK);
+        callback(E::OK, ctx.data_.nc_);
       });
 }
 
