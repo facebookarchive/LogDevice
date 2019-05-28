@@ -900,7 +900,7 @@ MaintenanceManager::scheduleNodesConfigUpdates() {
     if (!storage_membership_update) {
       storage_membership_update =
           std::make_unique<membership::StorageMembership::Update>(
-              nodes_config_->getVersion());
+              nodes_config_->getStorageMembership()->getVersion());
     }
     auto rv = storage_membership_update->addShard(shard, shard_state_update);
     ld_check(rv == 0);
@@ -957,7 +957,7 @@ MaintenanceManager::scheduleNodesConfigUpdates() {
     if (!sequencer_membership_update) {
       sequencer_membership_update =
           std::make_unique<membership::SequencerMembership::Update>(
-              nodes_config_->getVersion());
+              nodes_config_->getSequencerMembership()->getVersion());
     }
     auto rv = sequencer_membership_update->addNode(node, seq_state_update);
     ld_check(rv == 0);

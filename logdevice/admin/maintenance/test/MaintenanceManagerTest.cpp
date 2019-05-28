@@ -418,7 +418,7 @@ void MaintenanceManagerTest::overrideStorageState(
       std::make_unique<configuration::nodes::StorageConfig::Update>();
   update.storage_config_update->membership_update =
       std::make_unique<membership::StorageMembership::Update>(
-          nodes_config_->getVersion());
+          nodes_config_->getStorageMembership()->getVersion());
 
   for (const auto& it : map) {
     auto shard = it.first;
