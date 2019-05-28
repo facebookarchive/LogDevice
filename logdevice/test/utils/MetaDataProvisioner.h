@@ -42,6 +42,8 @@ class MetaDataProvisioner {
                       std::shared_ptr<UpdateableConfig> config,
                       LogStoreFactory log_store_factory);
 
+  ~MetaDataProvisioner();
+
   /**
    * Provision epoch metadata for a single log with the given nodeset
    * selector.

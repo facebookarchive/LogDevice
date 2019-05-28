@@ -34,6 +34,10 @@ MetaDataProvisioner::MetaDataProvisioner(
       config_(std::move(config)),
       log_store_factory_(std::move(log_store_factory)) {}
 
+MetaDataProvisioner::~MetaDataProvisioner() {
+  finalize();
+}
+
 int MetaDataProvisioner::provisionEpochMetaDataForLog(
     logid_t log_id,
     std::shared_ptr<NodeSetSelector> selector,

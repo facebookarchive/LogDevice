@@ -40,8 +40,26 @@ RocksDBLogStoreBase::~RocksDBLogStoreBase() {
     PER_SHARD_STAT_DECR(getStatsHolder(), failed_safe_log_stores, shard_idx_);
   }
 
-  // Clears the last reference to all column family handles in the map.
-  cf_accessor_.wlock()->clear();
+  // Clears the last reference to all column family handles in the map
+  // by copying it to a vector and then clearing it. This is required to
+  // satisfy TSAN which otherwise will complain about lock-order-inversion
+  // There are two locks that are acquired
+  // 1/ cf_accessor_ 's lock
+  // 2/ RocksDB internal lock when flush is called
+  // Destructor thread T1 acquires 1 followed by 2 (because destroying cf
+  // calls flush)
+  // Other flush thread T2 can acquire 2 followed by 1 (as part of callback to
+  // markMemtableRepImmutable)
+  // By moving the handles out of map and then destroying, we are preventing
+  // destructor thread from acquiring 2 while holding 1
+  std::vector<RocksDBCFPtr> cf_to_delete;
+  cf_accessor_.withWLock([&](auto& locked_accessor) {
+    for (auto& kv : locked_accessor) {
+      cf_to_delete.push_back(std::move(kv.second));
+      kv.second.reset();
+    }
+  });
+  cf_to_delete.clear();
 
   // Destruction of db_ could trigger a flush of dirty memtable
   // when WAL is not used for writes. Such a flush, could in turn
