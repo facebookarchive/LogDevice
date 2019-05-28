@@ -94,13 +94,10 @@ void ShardWorkflow::writeToEventLog(
 
 void ShardWorkflow::computeMaintenanceStatus() {
   if (target_op_state_.count(ShardOperationalState::DRAINED)) {
-    exclude_from_nodesets_ = true;
     computeMaintenanceStatusForDrain();
   } else if (target_op_state_.count(ShardOperationalState::MAY_DISAPPEAR)) {
-    exclude_from_nodesets_ = false;
     computeMaintenanceStatusForMayDisappear();
   } else if (target_op_state_.count(ShardOperationalState::ENABLED)) {
-    exclude_from_nodesets_ = false;
     computeMaintenanceStatusForEnable();
   } else {
     ld_info("Unknown ShardOperationalState requested as target for this(%s)"
@@ -308,8 +305,8 @@ ShardWorkflow::getExpectedStorageStateTransition() const {
   return expected_storage_state_transition_;
 }
 
-bool ShardWorkflow::excludeFromNodeset() const {
-  return exclude_from_nodesets_;
+bool ShardWorkflow::allowPassiveDrain() const {
+  return allow_passive_drain_;
 }
 
 }}} // namespace facebook::logdevice::maintenance

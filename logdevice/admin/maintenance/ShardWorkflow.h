@@ -92,10 +92,8 @@ class ShardWorkflow {
   // by the MaintenanceManager in NodesConfig update request
   membership::StorageStateTransition getExpectedStorageStateTransition() const;
 
-  // Returns true if this workflow requires this
-  // shard to be excluded from new nodesets. Used by
-  // MaintenanceManager in NodesConfig update request
-  bool excludeFromNodeset() const;
+  // Returns value of allow_passive_drain_
+  bool allowPassiveDrain() const;
 
   bool operator==(const ShardWorkflow& other) const {
     return shard_ == other.shard_ &&
@@ -130,10 +128,6 @@ class ShardWorkflow {
   bool allow_passive_drain_{false};
   // If true, skip safety check for this workflow
   bool skip_safety_check_{false};
-  // If true, this shard needs to excluded from new NodeSets
-  // Used by MaintenanceManager while requesting NodesConfig
-  // update
-  bool exclude_from_nodesets_{false};
   // True if RebuildingMode requested by the maintenance is RESTORE.
   // Mainly set by internal maintenance request when a shard is down
   bool restore_mode_rebuilding_{false};

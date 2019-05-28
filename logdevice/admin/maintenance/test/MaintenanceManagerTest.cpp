@@ -77,6 +77,7 @@ class MaintenanceManagerTest : public ::testing::Test {
       sequencers_update_;
   std::vector<ShardID> safety_check_shards_;
   std::vector<node_index_t> safety_check_nodes_;
+  folly::F14NodeMap<GroupID, Impact> unsafe_groups_;
   ClusterMaintenanceState cms_;
   EventLogRebuildingSet set_;
   UpdateableSettings<AdminServerSettings> settings_;
@@ -109,6 +110,15 @@ class MockMaintenanceManagerDependencies
           sequencers_update) override {
     test_->shards_update_ = std::move(shards_update);
     test_->sequencers_update_ = std::move(sequencers_update);
+    ld_info("Requested NodesConfig update - StorageConfig::Update:%s, "
+            "SequencerConfig::Update:%s",
+            test_->shards_update_ ? test_->shards_update_->toString().c_str()
+                                  : "null",
+            test_->sequencers_update_
+                ? test_->sequencers_update_->toString().c_str()
+                : "null");
+    ld_info("Version of nodes_config_ when reqeust was posted:%lu",
+            test_->nodes_config_->getVersion().val_);
     auto pf_pair = folly::makePromiseContract<NCUpdateResult>();
     test_->nc_update_promise_ = std::move(pf_pair.first);
     return std::move(pf_pair.second);
@@ -121,11 +131,24 @@ class MockMaintenanceManagerDependencies
           nodes_config,
       const std::vector<const ShardWorkflow*>& shard_wf,
       const std::vector<const SequencerWorkflow*>& seq_wf) override {
+    // Verify that Safety check is requested only for expected shards
     for (auto wf : shard_wf) {
-      test_->safety_check_shards_.push_back(wf->getShardID());
+      if (std::find(test_->safety_check_shards_.begin(),
+                    test_->safety_check_shards_.end(),
+                    wf->getShardID()) == test_->safety_check_shards_.end()) {
+        ld_info("Safety check requested for unexpected Shard:%s",
+                toString(wf->getShardID()).c_str());
+        ld_check(false);
+      }
     }
     for (auto wf : seq_wf) {
-      test_->safety_check_nodes_.push_back(wf->getNodeIndex());
+      if (std::find(test_->safety_check_nodes_.begin(),
+                    test_->safety_check_nodes_.end(),
+                    wf->getNodeIndex()) == test_->safety_check_nodes_.end()) {
+        ld_info("Safety check requested for unexpected node:N%hd",
+                wf->getNodeIndex());
+        ld_check(false);
+      }
     }
     auto pf_pair = folly::makePromiseContract<SafetyCheckResult>();
     test_->safety_check_promise_ = std::move(pf_pair.first);
@@ -180,7 +203,7 @@ MaintenanceManagerTest::~MaintenanceManagerTest() {
 
 void MaintenanceManagerTest::init() {
   nodes_config_ = NodesConfigurationTestUtil::provisionNodes();
-  cms_.set_version(222);
+  cms_.set_version(1);
   std::vector<MaintenanceDefinition> definitions;
   auto def1 = MaintenanceDefinition();
   def1.set_user("Automation");
@@ -211,16 +234,16 @@ void MaintenanceManagerTest::init() {
   // A single group
   def1.set_group(true);
   // Group ID will be defined and set by the maintenance RSM.
-  def1.set_group_id("911");
+  def1.set_group_id("N1N2_MAYDISAPPEAR");
   definitions.push_back(def1);
 
   auto def2 = MaintenanceDefinition();
   def2.set_user("robots");
   def2.set_shards({shard2});
   def2.set_shard_target_state(ShardOperationalState::DRAINED);
-  def2.set_group_id("122");
+  def2.set_group_id("N2_DRAINED");
   def2.set_skip_safety_checks(true);
-  def2.set_allow_passive_drains(true);
+  def2.set_allow_passive_drains(false);
   definitions.push_back(def2);
 
   auto def3 = MaintenanceDefinition();
@@ -230,8 +253,8 @@ void MaintenanceManagerTest::init() {
   def3.set_user("humans");
   def3.set_shards({shard3});
   def3.set_shard_target_state(ShardOperationalState::DRAINED);
-  def3.set_group_id("520");
-  def3.set_allow_passive_drains(true);
+  def3.set_group_id("N9_DRAINED");
+  def3.set_allow_passive_drains(false);
   // simulates an internal maintenance request where the shard is down.
   def3.set_force_restore_rebuilding(true);
   definitions.push_back(def3);
@@ -246,7 +269,7 @@ void MaintenanceManagerTest::init() {
   def4.set_user("humans");
   def4.set_shards({shard4});
   def4.set_shard_target_state(ShardOperationalState::DRAINED);
-  def4.set_group_id("620");
+  def4.set_group_id("N17_DRAINED");
   def4.set_allow_passive_drains(true);
   definitions.push_back(def4);
 
@@ -401,6 +424,7 @@ void MaintenanceManagerTest::fulfillNCPromise(
 void MaintenanceManagerTest::fulfillSafetyCheckPromise() {
   ld_check(safety_check_promise_.valid());
   SafetyCheckScheduler::Result result;
+  result.unsafe_groups = std::move(unsafe_groups_);
   for (auto s : safety_check_shards_) {
     result.safe_shards.insert(s);
   }
@@ -481,6 +505,7 @@ TEST_F(MaintenanceManagerTest, GetNodeStateTest) {
   ShardID shard = ShardID(node, 0);
   addNewNode(node);
   regenerateClusterMaintenanceWrapper();
+
   maintenance_manager_->onEventLogRebuildingSetUpdate(set_, lsn_t(1));
   // Say we have active shard and sequencer workflows
   createShardWorkflow(shard, MaintenanceStatus::AWAITING_DATA_REBUILDING);
@@ -519,7 +544,7 @@ TEST_F(MaintenanceManagerTest, GetNodeStateTest) {
                                             .count());
 
   std::vector<thrift::MaintenanceGroupID> ids;
-  ids.push_back("620");
+  ids.push_back("N17_DRAINED");
   expected_progress.set_associated_group_ids(std::move(ids));
   expected_shard_state.set_maintenance(expected_progress);
 
@@ -548,18 +573,27 @@ TEST_F(MaintenanceManagerTest, NodesConfigUpdateTest) {
       }));
 
   // Setup result wf run
+  auto N1S0 = ShardID(1, 0);
+  auto N2S0 = ShardID(2, 0);
+  auto N9S0 = ShardID(9, 0);
+
   setShardWorkflowResult({
-      {ShardID(1, 0),
+      {N1S0,
        {MaintenanceStatus::AWAITING_SAFETY_CHECK,
         membership::StorageStateTransition::DISABLING_WRITE}},
-      {ShardID(2, 0),
+      {N2S0,
        {MaintenanceStatus::AWAITING_SAFETY_CHECK,
         membership::StorageStateTransition::DISABLING_WRITE}},
-      {ShardID(9, 0),
+      {N9S0,
        {MaintenanceStatus::AWAITING_SAFETY_CHECK,
         membership::StorageStateTransition::DISABLING_WRITE}},
   });
+
   setSequencerWorkflowResult(SeqWfResult());
+
+  for (auto s : {N1S0, N2S0, N9S0}) {
+    safety_check_shards_.push_back(s);
+  }
 
   verifyMMStatus(MaintenanceManager::MMStatus::STARTING);
   // deliver ClusterMaintenanceState Update
@@ -587,22 +621,21 @@ TEST_F(MaintenanceManagerTest, NodesConfigUpdateTest) {
   verifyMMStatus(MaintenanceManager::MMStatus::AWAITING_STATE_CHANGE);
 
   std::unordered_map<ShardID, membership::StorageState> map;
-  for (node_index_t n : {1, 2, 9}) {
-    auto shard = ShardID(n, 0);
-    verifyStorageState(shard, membership::StorageState::RW_TO_RO);
-    map[shard] = membership::StorageState::READ_ONLY;
+  for (auto s : {N1S0, N2S0, N9S0}) {
+    verifyStorageState(s, membership::StorageState::RW_TO_RO);
+    map[s] = membership::StorageState::READ_ONLY;
   }
   overrideStorageState(map);
 
   // Setup Result wf run
   setShardWorkflowResult({
-      {ShardID(1, 0),
+      {N1S0,
        {MaintenanceStatus::COMPLETED,
         membership::StorageStateTransition::DISABLING_WRITE}},
-      {ShardID(2, 0),
+      {N2S0,
        {MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES,
         membership::StorageStateTransition::START_DATA_MIGRATION}},
-      {ShardID(9, 0),
+      {N9S0,
        {MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES,
         membership::StorageStateTransition::START_DATA_MIGRATION}},
   });
@@ -613,13 +646,10 @@ TEST_F(MaintenanceManagerTest, NodesConfigUpdateTest) {
   maintenance_manager_->onNodesConfigurationUpdated();
   runExecutor();
 
-  verifyShardOperationalState(
-      ShardID(1, 0), ShardOperationalState::MAY_DISAPPEAR);
+  verifyShardOperationalState(N1S0, ShardOperationalState::MAY_DISAPPEAR);
   // 2 and 9 should be in MAY_DISAPPEAR even though the target state is DRAINED
-  verifyShardOperationalState(
-      ShardID(2, 0), ShardOperationalState::MAY_DISAPPEAR);
-  verifyShardOperationalState(
-      ShardID(9, 0), ShardOperationalState::MAY_DISAPPEAR);
+  verifyShardOperationalState(N2S0, ShardOperationalState::MAY_DISAPPEAR);
+  verifyShardOperationalState(N9S0, ShardOperationalState::MAY_DISAPPEAR);
   // update above should have triggered a call to evaluate, which eventually
   // calls runShardWorkflow and consequently nc update should be requested
   verifyMMStatus(MaintenanceManager::MMStatus::AWAITING_NODES_CONFIG_UPDATE);
@@ -628,24 +658,21 @@ TEST_F(MaintenanceManagerTest, NodesConfigUpdateTest) {
   runExecutor();
   verifyMMStatus(MaintenanceManager::MMStatus::AWAITING_STATE_CHANGE);
 
-  verifyStorageState(ShardID(1, 0), membership::StorageState::READ_ONLY);
-  verifyStorageState(ShardID(2, 0), membership::StorageState::DATA_MIGRATION);
-  verifyStorageState(ShardID(9, 0), membership::StorageState::DATA_MIGRATION);
+  verifyStorageState(N1S0, membership::StorageState::READ_ONLY);
+  verifyStorageState(N2S0, membership::StorageState::DATA_MIGRATION);
+  verifyStorageState(N9S0, membership::StorageState::DATA_MIGRATION);
 
-  verifyShardOperationalState(
-      ShardID(1, 0), ShardOperationalState::MAY_DISAPPEAR);
+  verifyShardOperationalState(N1S0, ShardOperationalState::MAY_DISAPPEAR);
   // 2 and 9 should be in MAY_DISAPPEAR even though the target state is DRAINED
-  verifyShardOperationalState(
-      ShardID(2, 0), ShardOperationalState::MIGRATING_DATA);
-  verifyShardOperationalState(
-      ShardID(9, 0), ShardOperationalState::MIGRATING_DATA);
+  verifyShardOperationalState(N2S0, ShardOperationalState::MIGRATING_DATA);
+  verifyShardOperationalState(N9S0, ShardOperationalState::MIGRATING_DATA);
 
   // Setup Result wf run
   setShardWorkflowResult({
-      {ShardID(2, 0),
+      {N2S0,
        {MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES,
         membership::StorageStateTransition::DATA_MIGRATION_COMPLETED}},
-      {ShardID(9, 0),
+      {N9S0,
        {MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES,
         membership::StorageStateTransition::DATA_MIGRATION_COMPLETED}},
   });
@@ -659,24 +686,23 @@ TEST_F(MaintenanceManagerTest, NodesConfigUpdateTest) {
   fulfillNCPromise(E::OK, nodes_config_);
   runExecutor();
   verifyMMStatus(MaintenanceManager::MMStatus::AWAITING_STATE_CHANGE);
-  verifyStorageState(ShardID(1, 0), membership::StorageState::READ_ONLY);
-  verifyStorageState(ShardID(2, 0), membership::StorageState::NONE);
-  verifyStorageState(ShardID(9, 0), membership::StorageState::NONE);
-  verifyShardOperationalState(
-      ShardID(1, 0), ShardOperationalState::MAY_DISAPPEAR);
-  verifyShardOperationalState(ShardID(2, 0), ShardOperationalState::DRAINED);
-  verifyShardOperationalState(ShardID(9, 0), ShardOperationalState::DRAINED);
+  verifyStorageState(N1S0, membership::StorageState::READ_ONLY);
+  verifyStorageState(N2S0, membership::StorageState::NONE);
+  verifyStorageState(N9S0, membership::StorageState::NONE);
+  verifyShardOperationalState(N1S0, ShardOperationalState::MAY_DISAPPEAR);
+  verifyShardOperationalState(N2S0, ShardOperationalState::DRAINED);
+  verifyShardOperationalState(N9S0, ShardOperationalState::DRAINED);
 
   // Verify that the MaintenanceStatus is updated for maintenance that
   // have completed
   setShardWorkflowResult({
-      {ShardID(1, 0),
+      {N1S0,
        {MaintenanceStatus::COMPLETED,
         membership::StorageStateTransition::DATA_MIGRATION_COMPLETED}},
-      {ShardID(2, 0),
+      {N2S0,
        {MaintenanceStatus::COMPLETED,
         membership::StorageStateTransition::DATA_MIGRATION_COMPLETED}},
-      {ShardID(9, 0),
+      {N9S0,
        {MaintenanceStatus::COMPLETED,
         membership::StorageStateTransition::DATA_MIGRATION_COMPLETED}},
   });
@@ -686,9 +712,322 @@ TEST_F(MaintenanceManagerTest, NodesConfigUpdateTest) {
   maintenance_manager_->onNodesConfigurationUpdated();
   runExecutor();
   verifyMMStatus(MaintenanceManager::MMStatus::AWAITING_STATE_CHANGE);
-  verifyMaintenanceStatus(ShardID(1, 0), MaintenanceStatus::COMPLETED);
-  verifyMaintenanceStatus(ShardID(2, 0), MaintenanceStatus::COMPLETED);
-  verifyMaintenanceStatus(ShardID(9, 0), MaintenanceStatus::COMPLETED);
+  verifyMaintenanceStatus(N1S0, MaintenanceStatus::COMPLETED);
+  verifyMaintenanceStatus(N2S0, MaintenanceStatus::COMPLETED);
+  verifyMaintenanceStatus(N9S0, MaintenanceStatus::COMPLETED);
+}
+
+TEST_F(MaintenanceManagerTest, NodesConfigUpdateTestWithSafetyCheckFailures) {
+  init();
+  node_index_t node = 18;
+  addNewNode(node);
+  regenerateClusterMaintenanceWrapper();
+
+  EXPECT_CALL(*maintenance_manager_, runShardWorkflows())
+      .WillRepeatedly(Invoke([this]() { return getShardWorkflowResult(); }));
+  EXPECT_CALL(*maintenance_manager_, runSequencerWorkflows())
+      .WillRepeatedly(
+          Invoke([this]() { return getSequencerWorkflowResult(); }));
+  EXPECT_CALL(
+      *maintenance_manager_, getExpectedStorageStateTransition(::testing::_))
+      .WillRepeatedly(Invoke([this](ShardID shard) {
+        return expected_storage_state_transition_[shard];
+      }));
+
+  // Setup result wf run
+  auto N1S0 = ShardID(1, 0);
+  auto N2S0 = ShardID(2, 0);
+  auto N9S0 = ShardID(9, 0);
+  auto N18S0 = ShardID(18, 0);
+
+  setShardWorkflowResult({
+      {N1S0,
+       {MaintenanceStatus::AWAITING_SAFETY_CHECK,
+        membership::StorageStateTransition::DISABLING_WRITE}},
+      {N2S0,
+       {MaintenanceStatus::AWAITING_SAFETY_CHECK,
+        membership::StorageStateTransition::DISABLING_WRITE}},
+      {N9S0,
+       {MaintenanceStatus::AWAITING_SAFETY_CHECK,
+        membership::StorageStateTransition::DISABLING_WRITE}},
+      {N18S0,
+       {MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES,
+        membership::StorageStateTransition::ENABLING_READ}},
+  });
+  setSequencerWorkflowResult(SeqWfResult());
+
+  verifyMMStatus(MaintenanceManager::MMStatus::STARTING);
+  // deliver ClusterMaintenanceState Update
+  maintenance_manager_->onClusterMaintenanceStateUpdate(cms_, lsn_t(1));
+  // deliver EventLogRebuildingSet Update
+  maintenance_manager_->onEventLogRebuildingSetUpdate(set_, lsn_t(1));
+  runExecutor();
+
+  // There is a node to be enabled. We should have requested a NC update
+  verifyMMStatus(MaintenanceManager::MMStatus::AWAITING_NODES_CONFIG_UPDATE);
+  // Apply the NC updtaed that is requested by MaintenanceManager. Should
+  // result in a valid config
+  applyNCUpdate();
+  fulfillNCPromise(E::OK, nodes_config_);
+  runExecutor();
+  // Since there is a node in enabling, we should not run safety check
+  verifyMMStatus(MaintenanceManager::MMStatus::AWAITING_STATE_CHANGE);
+
+  overrideStorageState({{N18S0, membership::StorageState::READ_ONLY}});
+
+  setShardWorkflowResult({
+      {N1S0,
+       {MaintenanceStatus::AWAITING_SAFETY_CHECK,
+        membership::StorageStateTransition::DISABLING_WRITE}},
+      {N2S0,
+       {MaintenanceStatus::AWAITING_SAFETY_CHECK,
+        membership::StorageStateTransition::DISABLING_WRITE}},
+      {N9S0,
+       {MaintenanceStatus::AWAITING_SAFETY_CHECK,
+        membership::StorageStateTransition::DISABLING_WRITE}},
+      {N18S0,
+       {MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES,
+        membership::StorageStateTransition::ENABLE_WRITE}},
+  });
+  setSequencerWorkflowResult(SeqWfResult());
+
+  // Deliver a dummy update from subscription to trigger evaluation
+  maintenance_manager_->onNodesConfigurationUpdated();
+  runExecutor();
+
+  // There is a node to be enabled. We should have requested a NC update
+  verifyMMStatus(MaintenanceManager::MMStatus::AWAITING_NODES_CONFIG_UPDATE);
+  // Apply the NC updtaed that is requested by MaintenanceManager. Should
+  // result in a valid config
+  applyNCUpdate();
+  fulfillNCPromise(E::OK, nodes_config_);
+  runExecutor();
+  // Since there is a node in enabling, we should not run safety check
+  verifyMMStatus(MaintenanceManager::MMStatus::AWAITING_STATE_CHANGE);
+
+  // Confirm that N18 is not enabled.
+  verifyShardOperationalState(N18S0, ShardOperationalState::ENABLED);
+
+  // Now add a maintenance for N18 which allows a passive drain
+  auto existing_defs = std::move(cms_).get_maintenances();
+  auto tnode = thrift::NodeID();
+  tnode.set_node_index(18);
+  auto def = MaintenanceDefinition();
+  auto shard = thrift::ShardID();
+  shard.set_node(tnode);
+  shard.set_shard_index(0);
+  def.set_user("humans");
+  def.set_shards({shard});
+  def.set_shard_target_state(ShardOperationalState::DRAINED);
+  def.set_group_id("N18_DRAINED");
+  def.set_allow_passive_drains(true);
+  existing_defs.push_back(def);
+  cms_.set_maintenances(std::move(existing_defs));
+  cms_.set_version(2);
+  maintenance_manager_->onClusterMaintenanceStateUpdate(cms_, 2);
+
+  setShardWorkflowResult({
+      {N1S0,
+       {MaintenanceStatus::AWAITING_SAFETY_CHECK,
+        membership::StorageStateTransition::DISABLING_WRITE}},
+      {N2S0,
+       {MaintenanceStatus::AWAITING_SAFETY_CHECK,
+        membership::StorageStateTransition::DISABLING_WRITE}},
+      {N9S0,
+       {MaintenanceStatus::AWAITING_SAFETY_CHECK,
+        membership::StorageStateTransition::DISABLING_WRITE}},
+      {N18S0,
+       {MaintenanceStatus::AWAITING_SAFETY_CHECK,
+        membership::StorageStateTransition::DISABLING_WRITE}},
+  });
+  setSequencerWorkflowResult(SeqWfResult());
+
+  for (auto s : {N1S0, N2S0, N9S0, N18S0}) {
+    safety_check_shards_.push_back(s);
+  }
+
+  runExecutor();
+  // There are no nodes to enable. So we should have requested safety check
+  verifyMMStatus(MaintenanceManager::MMStatus::AWAITING_SAFETY_CHECK_RESULTS);
+  // None of wfs require NC update yet.
+  ASSERT_TRUE(shards_update_ == nullptr);
+  // Safety check request should have been posted
+  ASSERT_TRUE(safety_check_promise_.valid());
+
+  // Say all maintenances are determined to be unsafe
+  Impact impact(Impact::ImpactResult::WRITE_AVAILABILITY_LOSS);
+  for (auto group :
+       {"N1N2_MAYDISAPPEAR", "N2_DRAINED", "N9_DRAINED", "N18_DRAINED"}) {
+    unsafe_groups_[group] = impact;
+  }
+  safety_check_shards_.clear();
+
+  fulfillSafetyCheckPromise();
+  runExecutor();
+
+  // Even though all maintenances are blocked by safety check, N18_DRAINED
+  // allows passive drain. So we should request a config change
+  verifyMMStatus(MaintenanceManager::MMStatus::AWAITING_NODES_CONFIG_UPDATE);
+  // Apply the NC updtaed that is requested by MaintenanceManager. Should
+  // result in a valid config
+  applyNCUpdate();
+  fulfillNCPromise(E::OK, nodes_config_);
+  runExecutor();
+  verifyMMStatus(MaintenanceManager::MMStatus::AWAITING_STATE_CHANGE);
+
+  // Set up shards expected to be in safety check
+  for (auto s : {N1S0, N2S0, N9S0, N18S0}) {
+    safety_check_shards_.push_back(s);
+  }
+  setShardWorkflowResult({
+      {N1S0,
+       {MaintenanceStatus::AWAITING_SAFETY_CHECK,
+        membership::StorageStateTransition::DISABLING_WRITE}},
+      {N2S0,
+       {MaintenanceStatus::AWAITING_SAFETY_CHECK,
+        membership::StorageStateTransition::DISABLING_WRITE}},
+      {N9S0,
+       {MaintenanceStatus::AWAITING_SAFETY_CHECK,
+        membership::StorageStateTransition::DISABLING_WRITE}},
+      {N18S0,
+       {MaintenanceStatus::AWAITING_SAFETY_CHECK,
+        membership::StorageStateTransition::DISABLING_WRITE}},
+  });
+  setSequencerWorkflowResult(SeqWfResult());
+
+  // deliver a dummy NC update to trigger evaluation
+  maintenance_manager_->onNodesConfigurationUpdated();
+  runExecutor();
+
+  // There are no nodes to enable. So we should have requested safety check
+  verifyMMStatus(MaintenanceManager::MMStatus::AWAITING_SAFETY_CHECK_RESULTS);
+  // None of wfs require NC update yet.
+  ASSERT_TRUE(shards_update_ == nullptr);
+  // Safety check request should have been posted
+  ASSERT_TRUE(safety_check_promise_.valid());
+
+  // Say Safety check passes for all shards this time
+  unsafe_groups_.clear();
+  fulfillSafetyCheckPromise();
+  runExecutor();
+
+  verifyMMStatus(MaintenanceManager::MMStatus::AWAITING_NODES_CONFIG_UPDATE);
+  // Apply the NC updtaed that is requested by MaintenanceManager. Should
+  // result in a valid config
+  applyNCUpdate();
+  fulfillNCPromise(E::OK, nodes_config_);
+  runExecutor();
+  verifyMMStatus(MaintenanceManager::MMStatus::AWAITING_STATE_CHANGE);
+
+  std::unordered_map<ShardID, membership::StorageState> map;
+  for (auto s : {N1S0, N2S0, N9S0, N18S0}) {
+    verifyStorageState(s, membership::StorageState::RW_TO_RO);
+    map[s] = membership::StorageState::READ_ONLY;
+  }
+  overrideStorageState(map);
+
+  // Setup Result wf run
+  setShardWorkflowResult({
+      {N1S0,
+       {MaintenanceStatus::COMPLETED,
+        membership::StorageStateTransition::DISABLING_WRITE}},
+      {N2S0,
+       {MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES,
+        membership::StorageStateTransition::START_DATA_MIGRATION}},
+      {N9S0,
+       {MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES,
+        membership::StorageStateTransition::START_DATA_MIGRATION}},
+      {N18S0,
+       {MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES,
+        membership::StorageStateTransition::START_DATA_MIGRATION}},
+  });
+  setSequencerWorkflowResult(SeqWfResult());
+
+  // Deliver the nodes_config_ update from subscription
+  // to trigger evaluation
+  maintenance_manager_->onNodesConfigurationUpdated();
+  runExecutor();
+
+  verifyShardOperationalState(N1S0, ShardOperationalState::MAY_DISAPPEAR);
+  // 2 and 9 should be in MAY_DISAPPEAR even though the target state is DRAINED
+  verifyShardOperationalState(N2S0, ShardOperationalState::MAY_DISAPPEAR);
+  verifyShardOperationalState(N9S0, ShardOperationalState::MAY_DISAPPEAR);
+  verifyShardOperationalState(N18S0, ShardOperationalState::MAY_DISAPPEAR);
+  // update above should have triggered a call to evaluate, which eventually
+  // calls runShardWorkflow and consequently nc update should be requested
+  verifyMMStatus(MaintenanceManager::MMStatus::AWAITING_NODES_CONFIG_UPDATE);
+  applyNCUpdate();
+  fulfillNCPromise(E::OK, nodes_config_);
+  runExecutor();
+  verifyMMStatus(MaintenanceManager::MMStatus::AWAITING_STATE_CHANGE);
+
+  verifyStorageState(N1S0, membership::StorageState::READ_ONLY);
+  verifyStorageState(N2S0, membership::StorageState::DATA_MIGRATION);
+  verifyStorageState(N9S0, membership::StorageState::DATA_MIGRATION);
+  verifyStorageState(N18S0, membership::StorageState::DATA_MIGRATION);
+
+  verifyShardOperationalState(N1S0, ShardOperationalState::MAY_DISAPPEAR);
+  verifyShardOperationalState(N2S0, ShardOperationalState::MIGRATING_DATA);
+  verifyShardOperationalState(N9S0, ShardOperationalState::MIGRATING_DATA);
+  verifyShardOperationalState(N18S0, ShardOperationalState::MIGRATING_DATA);
+
+  // Setup Result wf run
+  setShardWorkflowResult({
+      {N2S0,
+       {MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES,
+        membership::StorageStateTransition::DATA_MIGRATION_COMPLETED}},
+      {N9S0,
+       {MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES,
+        membership::StorageStateTransition::DATA_MIGRATION_COMPLETED}},
+      {N18S0,
+       {MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES,
+        membership::StorageStateTransition::DATA_MIGRATION_COMPLETED}},
+  });
+  setSequencerWorkflowResult(SeqWfResult());
+
+  // Deliver a dummy update from subscription to trigger evaluation
+  maintenance_manager_->onNodesConfigurationUpdated();
+  runExecutor();
+  verifyMMStatus(MaintenanceManager::MMStatus::AWAITING_NODES_CONFIG_UPDATE);
+  applyNCUpdate();
+  fulfillNCPromise(E::OK, nodes_config_);
+  runExecutor();
+  verifyMMStatus(MaintenanceManager::MMStatus::AWAITING_STATE_CHANGE);
+  verifyStorageState(N1S0, membership::StorageState::READ_ONLY);
+  verifyStorageState(N2S0, membership::StorageState::NONE);
+  verifyStorageState(N9S0, membership::StorageState::NONE);
+  verifyStorageState(N18S0, membership::StorageState::NONE);
+  verifyShardOperationalState(N1S0, ShardOperationalState::MAY_DISAPPEAR);
+  verifyShardOperationalState(N2S0, ShardOperationalState::DRAINED);
+  verifyShardOperationalState(N9S0, ShardOperationalState::DRAINED);
+  verifyShardOperationalState(N18S0, ShardOperationalState::DRAINED);
+
+  // Verify that the MaintenanceStatus is updated for maintenance that
+  // have completed
+  setShardWorkflowResult({
+      {N1S0,
+       {MaintenanceStatus::COMPLETED,
+        membership::StorageStateTransition::DATA_MIGRATION_COMPLETED}},
+      {N2S0,
+       {MaintenanceStatus::COMPLETED,
+        membership::StorageStateTransition::DATA_MIGRATION_COMPLETED}},
+      {N9S0,
+       {MaintenanceStatus::COMPLETED,
+        membership::StorageStateTransition::DATA_MIGRATION_COMPLETED}},
+      {N18S0,
+       {MaintenanceStatus::COMPLETED,
+        membership::StorageStateTransition::DATA_MIGRATION_COMPLETED}},
+  });
+  setSequencerWorkflowResult(SeqWfResult());
+
+  // Deliver a dummy update from subscription to trigger evaluation
+  maintenance_manager_->onNodesConfigurationUpdated();
+  runExecutor();
+  verifyMMStatus(MaintenanceManager::MMStatus::AWAITING_STATE_CHANGE);
+  verifyMaintenanceStatus(N1S0, MaintenanceStatus::COMPLETED);
+  verifyMaintenanceStatus(N2S0, MaintenanceStatus::COMPLETED);
+  verifyMaintenanceStatus(N9S0, MaintenanceStatus::COMPLETED);
+  verifyMaintenanceStatus(N18S0, MaintenanceStatus::COMPLETED);
 }
 
 }}} // namespace facebook::logdevice::maintenance

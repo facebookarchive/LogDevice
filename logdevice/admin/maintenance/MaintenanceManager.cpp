@@ -883,34 +883,46 @@ MaintenanceManager::scheduleNodesConfigUpdates() {
       storage_attributes_update;
 
   for (const auto& it : active_shard_workflows_) {
-    if (it.second.second != MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES) {
-      continue;
-    }
-
     auto shard = it.first;
     ShardWorkflow* wf = it.second.first.get();
+    MaintenanceStatus status = it.second.second;
 
-    // Membership update
-    membership::ShardState::Update shard_state_update;
-    shard_state_update.transition = getExpectedStorageStateTransition(shard);
-    // TODO: Verify conditions are valid and met for each
-    // requested transition
-    shard_state_update.conditions =
-        getCondition(shard, shard_state_update.transition);
-    if (!storage_membership_update) {
-      storage_membership_update =
-          std::make_unique<membership::StorageMembership::Update>(
-              nodes_config_->getStorageMembership()->getVersion());
+    if (status == MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES) {
+      // Membership update
+      membership::ShardState::Update shard_state_update;
+      shard_state_update.transition = getExpectedStorageStateTransition(shard);
+      // TODO: Verify conditions are valid and met for each
+      // requested transition
+      shard_state_update.conditions =
+          getCondition(shard, shard_state_update.transition);
+      if (!storage_membership_update) {
+        storage_membership_update =
+            std::make_unique<membership::StorageMembership::Update>(
+                nodes_config_->getStorageMembership()->getVersion());
+      }
+      auto rv = storage_membership_update->addShard(shard, shard_state_update);
+      ld_check(rv == 0);
     }
-    auto rv = storage_membership_update->addShard(shard, shard_state_update);
-    ld_check(rv == 0);
 
     // Attribute update
     // From maintenance manager perspective, today we only care about the
-    // exclude_from_nodesets storage config attribute. Check if current
-    // value is different from what the workflow wants and update if required
+    // exclude_from_nodesets storage config attribute. And currently there
+    // are only two scenarios where we toggle this attribute.
+    // 1/ Shard is being enabled. If Node is excluded from nodeset, attribute
+    // will be updated to remove exclusion (set exclude_from_nodeset = false)
+    // 2/ Shard's Maintenance is blocked by Safety Check and Maintenance allows
+    // passive drain, node will be excluded from nodeset
+    // (set exclude_from_nodeset = true)
     auto sa = nodes_config_->getNodeStorageAttribute(shard.node());
-    if (wf->excludeFromNodeset() != sa->exclude_from_nodesets) {
+    bool exclude_from_nodeset = sa->exclude_from_nodesets;
+    if (status == MaintenanceStatus::BLOCKED_UNTIL_SAFE &&
+        wf->allowPassiveDrain()) {
+      exclude_from_nodeset = true;
+    } else if (wf->getTargetOpStates().count(ShardOperationalState::ENABLED)) {
+      exclude_from_nodeset = false;
+    }
+
+    if (exclude_from_nodeset != sa->exclude_from_nodesets) {
       if (!storage_attributes_update) {
         storage_attributes_update = std::make_unique<
             configuration::nodes::StorageAttributeConfig::Update>();
@@ -920,11 +932,10 @@ MaintenanceManager::scheduleNodesConfigUpdates() {
           configuration::nodes::StorageAttributeConfig::UpdateType::RESET;
       node_update.attributes =
           std::make_unique<configuration::nodes::StorageNodeAttribute>(
-              configuration::nodes::StorageNodeAttribute{
-                  sa->capacity,
-                  sa->num_shards,
-                  sa->generation,
-                  wf->excludeFromNodeset()});
+              configuration::nodes::StorageNodeAttribute{sa->capacity,
+                                                         sa->num_shards,
+                                                         sa->generation,
+                                                         exclude_from_nodeset});
       storage_attributes_update->addNode(shard.node(), std::move(node_update));
     }
   }
@@ -1094,6 +1105,8 @@ void MaintenanceManager::createWorkflows() {
         active_shard_workflows_[shard_id] = std::make_pair(
             std::make_unique<ShardWorkflow>(shard_id, getEventLogWriter()),
             MaintenanceStatus::STARTED);
+        ld_debug(
+            "Created a ShardWorkflow for shard:%s", toString(shard_id).c_str());
       }
       ShardWorkflow* wf = active_shard_workflows_[shard_id].first.get();
       wf->addTargetOpState(targets);
