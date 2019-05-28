@@ -273,11 +273,12 @@ std::string ClientReadStream::getDebugInfoStr() const {
   res += ", last_epoch_with_metadata_=" +
       std::to_string(last_epoch_with_metadata_.val());
   res += ", trim_point_=" + lsn_to_string(trim_point_);
-  res += ", sender_state={" + senderStatePretty();
-  res += "}, unavailable_shards={" + unavailableShardsPretty();
+  res += ", unavailable_shards={" + unavailableShardsPretty();
   res += "}, filter_version=" + std::to_string(filter_version_.val());
   res += ", shards_down=" + shards_down;
   res += ", shards_slow=" + shards_slow;
+  // Print sender state at the end because it can be long and get truncated.
+  res += ", sender_state={" + senderStatePretty() + "}";
 
   return res;
 }
