@@ -369,6 +369,18 @@ class MaintenanceManager : public SerialWorkContext {
    */
   folly::Expected<SequencingState, Status>
   getSequencerTargetStateInternal(node_index_t node_index) const;
+  /**
+   * Getter that returns the latest result of safety check for a
+   * given GroupID
+   *
+   * @return folly::Expected<Imapct, Status>
+   *         Impact for the GroupID. Status is set to E::NOTREADY if
+   *         MaintenanceManager is not initialized, E::NOTFOUND if
+   *         the group id does not exist in the ClusterMaintenanceWrapper
+   */
+  folly::Expected<Impact, Status>
+  getLatestSafetyCheckResultInternal(GroupID id) const;
+
   // Returns current value of `status_`
   MMStatus getStatusInternal() const;
 
@@ -489,6 +501,10 @@ class MaintenanceManager : public SerialWorkContext {
   // through subscription callback. Note that this copy could diverge from
   // what is in processor until `evaluate` called again
   std::shared_ptr<const configuration::nodes::NodesConfiguration> nodes_config_;
+
+  // Latest safety check results
+  // Updated every time `evaluate` is called
+  folly::F14NodeMap<GroupID, Impact> unsafe_groups_;
 
   folly::Promise<folly::Unit> shutdown_promise_;
 

@@ -524,6 +524,17 @@ MaintenanceManager::getSequencerTargetStateInternal(
       cluster_maintenance_wrapper_->getSequencerTargetState(node_index));
 }
 
+folly::Expected<Impact, Status>
+MaintenanceManager::getLatestSafetyCheckResultInternal(GroupID id) const {
+  if (!cluster_maintenance_wrapper_) {
+    return folly::makeUnexpected(E::NOTREADY);
+  }
+  if (cluster_maintenance_wrapper_->getMaintenanceByGroupID(id) == nullptr) {
+    return folly::makeUnexpected(E::NOTFOUND);
+  }
+  return unsafe_groups_.count(id) ? unsafe_groups_.at(id) : Impact();
+}
+
 void MaintenanceManager::onNodesConfigurationUpdated() {
   add([this]() { scheduleRun(); });
 }
@@ -827,9 +838,6 @@ void MaintenanceManager::processSafetyCheckResult(
   }
 
   for (const auto& it : result.unsafe_groups) {
-    // TODO: update the impact result in MaintenanceDefinition
-    // corresponding to the group
-
     // Iterate over shards and sequencers every unsafe
     // group and set status
     for (auto shard :
@@ -864,6 +872,7 @@ void MaintenanceManager::processSafetyCheckResult(
       }
     }
   }
+  unsafe_groups_ = std::move(result.unsafe_groups);
 }
 
 folly::SemiFuture<NCUpdateResult>
@@ -1002,15 +1011,17 @@ folly::SemiFuture<SafetyCheckResult> MaintenanceManager::scheduleSafetyCheck() {
   status_ = MMStatus::AWAITING_SAFETY_CHECK_RESULTS;
   ld_debug(
       "Updated MaintenanceManager status to AWAITING_SAFETY_CHECK_RESULTS");
-  return (shard_wf.empty() && seq_wf.empty())
-      ? folly::makeSemiFuture<SafetyCheckResult>(
-            folly::makeUnexpected(E::EMPTY))
-      : deps_->postSafetyCheckRequest(
-            *cluster_maintenance_wrapper_,
-            event_log_rebuilding_set_->toShardStatusMap(*nodes_config_),
-            nodes_config_,
-            shard_wf,
-            seq_wf);
+  if (shard_wf.empty() && seq_wf.empty()) {
+    unsafe_groups_.clear();
+    return folly::makeUnexpected(E::EMPTY);
+  } else {
+    return deps_->postSafetyCheckRequest(
+        *cluster_maintenance_wrapper_,
+        event_log_rebuilding_set_->toShardStatusMap(*nodes_config_),
+        nodes_config_,
+        shard_wf,
+        seq_wf);
+  }
 }
 
 folly::SemiFuture<MaintenanceManager::MMStatus>
