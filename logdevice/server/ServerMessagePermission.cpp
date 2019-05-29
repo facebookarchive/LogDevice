@@ -7,6 +7,7 @@
  */
 #include "logdevice/server/ServerMessagePermission.h"
 
+#include "logdevice/common/protocol/LOGS_CONFIG_API_Message.h"
 #include "logdevice/common/protocol/START_Message.h"
 #include "logdevice/common/protocol/TRIM_Message.h"
 
@@ -26,6 +27,16 @@ ServerMessagePermission::computePermissionParams(Message* msg) {
       params.requiresPermission = true;
       params.action = ACTION::TRIM;
       params.log_id = checked_downcast<TRIM_Message*>(msg)->getHeader().log_id;
+      break;
+    case MessageType::LOGS_CONFIG_API:
+      // Only require permissions to mutate the logs config. Anyone can
+      // read/query it.
+      params.requiresPermission =
+          checked_downcast<LOGS_CONFIG_API_Message*>(msg)
+              ->header_.request_type ==
+          LOGS_CONFIG_API_Header::Type::MUTATION_REQUEST;
+      params.action = ACTION::LOG_MANAGEMENT;
+      params.log_id = LOGID_INVALID;
       break;
     default:
       break;

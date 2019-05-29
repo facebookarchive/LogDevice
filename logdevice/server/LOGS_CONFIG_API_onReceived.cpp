@@ -17,6 +17,29 @@
 
 namespace facebook { namespace logdevice {
 
+static Message::Disposition send_error_reply(const LOGS_CONFIG_API_Message* msg,
+                                             const Address& to,
+                                             Status status) {
+  LOGS_CONFIG_API_REPLY_Header reply_hdr{
+      .client_rqid = msg->header_.client_rqid,
+      .config_version = 0,
+      .status = status,
+      .total_payload_size = 0,
+      .origin = msg->header_.origin};
+  auto reply = std::make_unique<LOGS_CONFIG_API_REPLY_Message>(reply_hdr, "");
+  if (Worker::onThisThread()->sender().sendMessage(std::move(reply), to) != 0) {
+    RATELIMIT_ERROR(std::chrono::seconds(10),
+                    10,
+                    "error sending LOGS_CONFIG_API_REPLY message to client %s: "
+                    "%s. Closing socket",
+                    Sender::describeConnection(to).c_str(),
+                    error_name(err));
+    err = E::INTERNAL;
+    return Message::Disposition::ERROR;
+  }
+  return Message::Disposition::NORMAL;
+}
+
 // This is a 1-1 copy of the old logic in GET_LOG_INFO_Message.cpp
 //
 // This is the callback to be called whenever the socket that we use for config
@@ -42,8 +65,10 @@ class LogsConfigApiMessageServerSocketClosedCallback : public SocketCallback {
 };
 } // namespace
 
-Message::Disposition LOGS_CONFIG_API_onReceived(LOGS_CONFIG_API_Message* msg,
-                                                const Address& from) {
+Message::Disposition
+LOGS_CONFIG_API_onReceived(LOGS_CONFIG_API_Message* msg,
+                           const Address& from,
+                           PermissionCheckStatus permission_status) {
   Worker* w = Worker::onThisThread();
   // Remember which worker this was posted on so we can post the response
   // // on the same worker.
@@ -51,6 +76,33 @@ Message::Disposition LOGS_CONFIG_API_onReceived(LOGS_CONFIG_API_Message* msg,
   auto respond_to_worker_type = w->worker_type_;
   auto tracer = std::make_unique<LogsConfigApiTracer>(w->getTraceLogger());
   auto lcm_worker_type = LogsConfigManager::workerType(w->processor_);
+
+  if (permission_status == PermissionCheckStatus::DENIED) {
+    // The client is not allowed to perform this action on the logs config
+    RATELIMIT_ERROR(std::chrono::seconds(1),
+                    3,
+                    "LOGS_CONFIG_API_Message from %s failed with "
+                    "E::ACCESS because client does not have the required "
+                    "permissions to complete the request",
+                    Sender::describeConnection(from).c_str());
+    return send_error_reply(msg, from, E::ACCESS);
+  } else if (permission_status == PermissionCheckStatus::NOTREADY) {
+    RATELIMIT_INFO(std::chrono::seconds(1),
+                   3,
+                   "Got LOGS_CONFIG_API_Message from %s but "
+                   "permission checker is not yet loaded. "
+                   "Responding with E::NOTREADY",
+                   Sender::describeConnection(from).c_str());
+    return send_error_reply(msg, from, E::AGAIN);
+  } else if (permission_status == PermissionCheckStatus::SYSLIMIT) {
+    RATELIMIT_INFO(std::chrono::seconds(1),
+                   3,
+                   "Got LOGS_CONFIG_API_Message from %s but "
+                   "there is not enough background threads. "
+                   "Responding with E::SYSLIMIT",
+                   Sender::describeConnection(from).c_str());
+    return send_error_reply(msg, from, E::SYSLIMIT);
+  }
 
   if (msg->header_.subscribe_to_config_) {
     // Subscribing the client to notifications of config changes
@@ -89,15 +141,7 @@ Message::Disposition LOGS_CONFIG_API_onReceived(LOGS_CONFIG_API_Message* msg,
 
     // Try to send a reply with NOBUFS status to make client retry without
     // waiting for timeout.
-
-    LOGS_CONFIG_API_REPLY_Header hdr{.client_rqid = msg->header_.client_rqid,
-                                     .config_version = 0,
-                                     .status = E::NOBUFS,
-                                     .total_payload_size = 0,
-                                     .origin = msg->header_.origin};
-
-    auto reply = std::make_unique<LOGS_CONFIG_API_REPLY_Message>(hdr, "");
-    w->sender().sendMessage(std::move(reply), from); // Ignore errors.
+    return send_error_reply(msg, from, E::NOBUFS);
   }
 
   return Message::Disposition::NORMAL;

@@ -187,7 +187,9 @@ Message::Disposition ServerMessageDispatch::onReceivedHandler(
 
     case MessageType::LOGS_CONFIG_API:
       return LOGS_CONFIG_API_onReceived(
-          checked_downcast<LOGS_CONFIG_API_Message*>(msg), from);
+          checked_downcast<LOGS_CONFIG_API_Message*>(msg),
+          from,
+          permission_status);
 
     case MessageType::NODE_STATS_REPLY:
       RATELIMIT_ERROR(
