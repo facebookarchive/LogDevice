@@ -1252,6 +1252,10 @@ std::string Sender::describeConnection(const Address& addr) {
     return addr.toString();
   }
 
+  if (!addr.valid()) {
+    return addr.toString();
+  }
+
   // index of worker to which a connection from or to peer identified by
   // this Address is assigned
   ClientIdxAllocator& alloc = w->processor_->clientIdxAllocator();
