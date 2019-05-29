@@ -1277,6 +1277,9 @@ struct Settings : public SettingsBundle {
   std::unordered_map<ShardID, AuthoritativeStatus>
       authoritative_status_overrides;
 
+  // enforcing permissions on the given message types if supported.
+  std::unordered_set<MessageType> require_permission_message_types;
+
  protected:
   // Only UpdateableSettings can create this bundle to ensure defaults are
   // populated.

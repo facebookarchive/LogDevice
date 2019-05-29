@@ -63,6 +63,21 @@ ServerMessageDispatch::onReceivedImpl(Message* msg,
   std::shared_ptr<PermissionChecker> permission_checker =
       processor_->security_info_->getPermissionChecker();
 
+  if (permission_checker && params.requiresPermission &&
+      processor_->settings()->require_permission_message_types.count(
+          msg->type_) == 0) {
+    // override permission requirement per configured settings
+    RATELIMIT_INFO(std::chrono::seconds(10),
+                   1,
+                   "Bypassing permission check for message of type %s from "
+                   "%s per configured 'require-permission-message-type' "
+                   "setting",
+                   messageTypeNames[msg->type_].c_str(),
+                   Sender::describeConnection(from).c_str());
+    params.requiresPermission = false;
+    STAT_INCR(processor_->stats_, server_message_dispatch_bypass_permission);
+  }
+
   if (permission_checker && params.requiresPermission) {
     STAT_INCR(processor_->stats_, server_message_dispatch_check_permission);
     permission_checker->isAllowed(params.action,

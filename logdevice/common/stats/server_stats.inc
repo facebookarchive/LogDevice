@@ -1074,7 +1074,8 @@ STAT_DEFINE(eventlog_snapshot_size, MAX)
 STAT_DEFINE(server_message_dispatch_skip_permission, SUM)
 // check permission
 STAT_DEFINE(server_message_dispatch_check_permission, SUM)
-
+// bypass permission
+STAT_DEFINE(server_message_dispatch_bypass_permission, SUM)
 
 /*
  * The following stats will not be reset by Stats::reset() and the 'reset'

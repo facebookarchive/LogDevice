@@ -1043,6 +1043,14 @@ SequencerLocator& AppenderPrep::getSequencerLocator() {
 
 // needed for tests mock
 std::shared_ptr<PermissionChecker> AppenderPrep::getPermissionChecker() {
+  if (Worker::settings().require_permission_message_types.count(
+          MessageType::APPEND) == 0) {
+    // Bypass permission checking since APPEND is not listed in message types
+    // that require permissions
+    // TODO: move permission checking out of AppenderPrep and into
+    // APPEND_onReceived on server-side.
+    return nullptr;
+  }
   return Worker::onThisThread()
       ->processor_->security_info_->getPermissionChecker();
 }

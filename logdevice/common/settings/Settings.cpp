@@ -3121,5 +3121,17 @@ void Settings::defineSettings(SettingEasyInit& init) {
        SettingsCategory::Sequencer);
 
   sequencer_boycotting.defineSettings(init);
+
+  init("require-permission-message-types",
+       &require_permission_message_types,
+       "START",
+       parse_message_types,
+       "Check permissions only for the received message of the type(s) "
+       "specified. Separate different types with a comma. 'all' to apply to "
+       "all messages. Prefix the value with '~' to include all types except "
+       "the given ones, e.g. '~WINDOW,RELEASE' will check permssions for "
+       "messages of all types except WINDOW and RELEASE.",
+       SERVER,
+       SettingsCategory::Security);
 }
 }} // namespace facebook::logdevice
