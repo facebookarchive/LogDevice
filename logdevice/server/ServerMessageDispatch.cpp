@@ -32,6 +32,7 @@
 #include "logdevice/server/GOSSIP_onReceived.h"
 #include "logdevice/server/GOSSIP_onSent.h"
 #include "logdevice/server/IS_LOG_EMPTY_onReceived.h"
+#include "logdevice/server/LOGS_CONFIG_API_onReceived.h"
 #include "logdevice/server/MEMTABLE_FLUSHED_onReceived.h"
 #include "logdevice/server/RECORD_onSent.h"
 #include "logdevice/server/SEAL_onReceived.h"
@@ -183,6 +184,10 @@ Message::Disposition ServerMessageDispatch::onReceivedHandler(
     case MessageType::WINDOW:
       return AllServerReadStreams::onWindowMessage(
           checked_downcast<WINDOW_Message*>(msg), from);
+
+    case MessageType::LOGS_CONFIG_API:
+      return LOGS_CONFIG_API_onReceived(
+          checked_downcast<LOGS_CONFIG_API_Message*>(msg), from);
 
     case MessageType::NODE_STATS_REPLY:
       RATELIMIT_ERROR(

@@ -69,17 +69,20 @@ class LOGS_CONFIG_API_Message : public Message {
 
   static MessageReadResult deserialize(ProtocolReader& reader);
 
-  Disposition onReceived(const Address& from) override;
+  Disposition onReceived(const Address&) override {
+    // Receipt handler lives in server/LOGS_CONFIG_API_onReceived.cpp;
+    std::abort();
+  }
 
   void onSent(Status st, const Address& to) const override;
 
   std::vector<std::pair<std::string, folly::dynamic>>
   getDebugInfo() const override;
 
- protected:
   LOGS_CONFIG_API_Header header_;
   std::string blob_;
 
+ protected:
   // Used by deserialization
   LOGS_CONFIG_API_Message()
       : Message(MessageType::LOGS_CONFIG_API, TrafficClass::HANDSHAKE),
