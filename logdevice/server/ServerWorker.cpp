@@ -113,7 +113,7 @@ ServerWorker::~ServerWorker() {
 }
 
 std::unique_ptr<MessageDispatch> ServerWorker::createMessageDispatch() {
-  return std::make_unique<ServerMessageDispatch>();
+  return std::make_unique<ServerMessageDispatch>(processor_);
 }
 
 void ServerWorker::subclassFinishWork() {

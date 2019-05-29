@@ -1185,7 +1185,9 @@ class SocketDependencies {
                       Status st,
                       const SteadyTimestamp enqueue_time,
                       Message::CompletionMethod);
-  virtual Message::Disposition onReceived(Message* msg, const Address& from);
+  virtual Message::Disposition onReceived(Message* msg,
+                                          const Address& from,
+                                          const PrincipalIdentity& principal);
   virtual void processDeferredMessageCompletions();
   virtual NodeID getMyNodeID();
   virtual void configureSocket(bool is_tcp,

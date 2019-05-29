@@ -11,6 +11,7 @@
 #include <gtest/gtest.h>
 
 #include "logdevice/common/ConfigurationFetchRequest.h"
+#include "logdevice/common/PrincipalIdentity.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationCodec.h"
 #include "logdevice/common/protocol/CONFIG_CHANGED_Message.h"
@@ -84,7 +85,7 @@ TEST(ServerBasedNodesConfigurationStoreTest, SuccessScenario) {
                 std::make_unique<CONFIG_CHANGED_Message>(
                     hdr, c == 0 ? nc_str : nc_str_bumped);
             worker->message_dispatch_->onReceived(
-                msg.get(), Address(NodeID(2, 1)));
+                msg.get(), Address(NodeID(2, 1)), PrincipalIdentity());
           }
         }
         p.setValue();

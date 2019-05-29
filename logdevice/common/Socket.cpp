@@ -2217,7 +2217,8 @@ int Socket::onReceived(ProtocolHeader ph, struct evbuffer* inbuf) {
 
   // 4. Dispatch message to state machines for processing.
 
-  Message::Disposition disp = deps_->onReceived(msg.get(), peer_name_);
+  Message::Disposition disp =
+      deps_->onReceived(msg.get(), peer_name_, principal_);
 
   // 5. Dispose off message according to state machine's request.
   switch (disp) {
@@ -2755,9 +2756,12 @@ void SocketDependencies::onSent(std::unique_ptr<Message> msg,
   }
 }
 
-Message::Disposition SocketDependencies::onReceived(Message* msg,
-                                                    const Address& from) {
-  return Worker::onThisThread()->message_dispatch_->onReceived(msg, from);
+Message::Disposition
+SocketDependencies::onReceived(Message* msg,
+                               const Address& from,
+                               const PrincipalIdentity& principal) {
+  return Worker::onThisThread()->message_dispatch_->onReceived(
+      msg, from, principal);
 }
 
 void SocketDependencies::processDeferredMessageCompletions() {

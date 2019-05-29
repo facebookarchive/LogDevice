@@ -18,7 +18,9 @@
 namespace facebook { namespace logdevice {
 
 Message::Disposition
-ClientMessageDispatch::onReceivedImpl(Message* msg, const Address& from) {
+ClientMessageDispatch::onReceivedImpl(Message* msg,
+                                      const Address& from,
+                                      const PrincipalIdentity&) {
   switch (msg->type_) {
     case MessageType::NODE_STATS_REPLY:
       return NODE_STATS_REPLY_onReceived(

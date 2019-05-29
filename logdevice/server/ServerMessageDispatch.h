@@ -7,6 +7,7 @@
  */
 #pragma once
 
+#include "logdevice/common/PermissionChecker.h"
 #include "logdevice/common/protocol/Message.h"
 #include "logdevice/common/protocol/MessageDispatch.h"
 
@@ -17,13 +18,28 @@
 
 namespace facebook { namespace logdevice {
 
+class Processor;
+
 class ServerMessageDispatch : public MessageDispatch {
  public:
-  Message::Disposition onReceivedImpl(Message* msg,
-                                      const Address& from) override;
+  explicit ServerMessageDispatch(Processor* processor)
+      : MessageDispatch(), processor_(processor) {}
+  Message::Disposition
+  onReceivedImpl(Message* msg,
+                 const Address& from,
+                 const PrincipalIdentity& principal) override;
   void onSentImpl(const Message& msg,
                   Status st,
                   const Address& to,
                   const SteadyTimestamp enqueue_time) override;
+
+ protected:
+  Message::Disposition
+  onReceivedHandler(Message* msg,
+                    const Address& from,
+                    PermissionCheckStatus permission_status) const;
+
+ private:
+  Processor* processor_;
 };
 }} // namespace facebook::logdevice

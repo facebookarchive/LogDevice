@@ -208,8 +208,10 @@ void TestSocketDependencies::onSent(std::unique_ptr<Message> msg,
   owner_->sent_.push(ClientSocketTest::SentMsg{msg->type_, st});
 }
 
-Message::Disposition TestSocketDependencies::onReceived(Message* msg,
-                                                        const Address& from) {
+Message::Disposition
+TestSocketDependencies::onReceived(Message* msg,
+                                   const Address& from,
+                                   const PrincipalIdentity&) {
   return msg->onReceived(from);
 }
 

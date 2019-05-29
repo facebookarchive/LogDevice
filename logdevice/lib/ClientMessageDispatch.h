@@ -19,8 +19,10 @@ namespace facebook { namespace logdevice {
 
 class ClientMessageDispatch : public MessageDispatch {
  public:
-  Message::Disposition onReceivedImpl(Message* msg,
-                                      const Address& from) override;
+  Message::Disposition
+  onReceivedImpl(Message* msg,
+                 const Address& from,
+                 const PrincipalIdentity& principal) override;
   void onSentImpl(const Message& msg,
                   Status st,
                   const Address& to,

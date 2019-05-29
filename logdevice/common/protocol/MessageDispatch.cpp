@@ -16,10 +16,12 @@ namespace facebook { namespace logdevice {
 
 MessageDispatch::MessageDispatch() : message_tracer_(new MessageTracer()) {}
 
-Message::Disposition MessageDispatch::onReceived(Message* msg,
-                                                 const Address& from) {
+Message::Disposition
+MessageDispatch::onReceived(Message* msg,
+                            const Address& from,
+                            const PrincipalIdentity& principal) {
   message_tracer_->onReceived(msg, from);
-  return onReceivedImpl(msg, from);
+  return onReceivedImpl(msg, from, principal);
 }
 
 void MessageDispatch::onSent(const Message& msg,

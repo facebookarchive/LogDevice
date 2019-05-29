@@ -209,7 +209,9 @@ send_reply(TRIM_Message* msg,
   return Message::Disposition::NORMAL;
 }
 
-Message::Disposition TRIM_onReceived(TRIM_Message* msg, const Address& from) {
+Message::Disposition TRIM_onReceived(TRIM_Message* msg,
+                                     const Address& from,
+                                     PermissionCheckStatus permission_status) {
   if (!from.isClientAddress()) {
     ld_error("Received TRIM message from non-client %s",
              Sender::describeConnection(from).c_str());
@@ -243,42 +245,6 @@ Message::Disposition TRIM_onReceived(TRIM_Message* msg, const Address& from) {
     return Message::Disposition::NORMAL;
   }
 
-  auto permission_checker =
-      Worker::onThisThread()
-          ->processor_->security_info_->getPermissionChecker();
-  // If the processor owns a PermissionChecker then permission checking is
-  // enabled.
-  if (permission_checker) {
-    const PrincipalIdentity* principal =
-        Worker::onThisThread()->sender().getPrincipal(from);
-    if (principal == nullptr) {
-      ld_critical("TRIM_Message from %s for log %lu failed because "
-                  "there is no Principal Associated with from %s",
-                  Sender::describeConnection(from).c_str(),
-                  header.log_id.val_,
-                  Sender::describeConnection(from).c_str());
-      // This should never happen. We are invoking onReceived from the socket
-      // that has already performed the hello/ack handshake.
-      ld_check(false);
-      err = E::ACCESS;
-      return Message::Disposition::ERROR;
-    }
-
-    ld_check(permission_checker);
-    permission_checker->isAllowed(
-        ACTION::TRIM,
-        *principal,
-        header.log_id,
-        [msg, from, shard_idx](
-            PermissionCheckStatus permission_status) mutable {
-          send_reply(std::unique_ptr<TRIM_Message>(msg).get(),
-                     from,
-                     shard_idx,
-                     permission_status);
-        });
-    return Message::Disposition::KEEP;
-  } else {
-    return send_reply(msg, from, shard_idx, PermissionCheckStatus::NONE);
-  }
+  return send_reply(msg, from, shard_idx, permission_status);
 }
 }} // namespace facebook::logdevice

@@ -16,6 +16,7 @@ namespace facebook { namespace logdevice {
 
 class MessageTracer;
 struct Address;
+struct PrincipalIdentity;
 
 /**
  * Interface for dispatching received/sent notifications for messages to their
@@ -33,10 +34,13 @@ class MessageDispatch {
    * The handler may claim ownership of `msg' in which case it should return
    * Disposition::KEEP.
    */
-  Message::Disposition onReceived(Message* msg, const Address& from);
+  Message::Disposition onReceived(Message* msg,
+                                  const Address& from,
+                                  const PrincipalIdentity& principal);
 
   virtual Message::Disposition onReceivedImpl(Message* msg,
-                                              const Address& from) {
+                                              const Address& from,
+                                              const PrincipalIdentity&) {
     // By default, dispatch to the Message's onReceived() implementation
     return msg->onReceived(from);
   }

@@ -7,15 +7,20 @@
  */
 #pragma once
 
-#include "logdevice/common/PermissionChecker.h"
 #include "logdevice/common/protocol/Message.h"
-#include "logdevice/common/protocol/START_Message.h"
+#include "logdevice/include/PermissionActions.h"
 
 namespace facebook { namespace logdevice {
 
-struct Address;
+struct PermissionParams {
+  bool requiresPermission{false};
+  ACTION action{ACTION::MAX};
+  logid_t log_id{LOGID_INVALID};
+};
 
-Message::Disposition START_onReceived(START_Message* msg,
-                                      const Address& from,
-                                      PermissionCheckStatus permission_status);
+class ServerMessagePermission {
+ public:
+  static PermissionParams computePermissionParams(Message* msg);
+};
+
 }} // namespace facebook::logdevice

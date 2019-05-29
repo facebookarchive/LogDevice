@@ -1069,6 +1069,13 @@ STAT_DEFINE(eventlog_snapshotting_errors, SUM)
 // Size of the event log snapshot
 STAT_DEFINE(eventlog_snapshot_size, MAX)
 
+// Server message handler
+// skip permission
+STAT_DEFINE(server_message_dispatch_skip_permission, SUM)
+// check permission
+STAT_DEFINE(server_message_dispatch_check_permission, SUM)
+
+
 /*
  * The following stats will not be reset by Stats::reset() and the 'reset'
  * admin command.

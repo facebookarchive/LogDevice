@@ -26,11 +26,6 @@
 namespace facebook { namespace logdevice {
 
 static Message::Disposition
-onReceivedContinuation(START_Message* msg,
-                       const Address& from,
-                       PermissionCheckStatus permission_status);
-
-static Message::Disposition
 send_error_reply(const START_Message* msg,
                  const Address& to,
                  Status status,
@@ -72,7 +67,9 @@ static bool isRSMLog(ServerWorker* w, logid_t log_id) {
        logs_config->isInternalLogID(MetaDataLog::dataLogID(log_id)));
 }
 
-Message::Disposition START_onReceived(START_Message* msg, const Address& from) {
+Message::Disposition START_onReceived(START_Message* msg,
+                                      const Address& from,
+                                      PermissionCheckStatus permission_status) {
   const START_Header& header = msg->header_;
   ld_debug("START message from %s: log_id %" PRIu64 ", "
            "read_stream_id %" PRIu64 ", start_lsn %s, "
@@ -184,60 +181,6 @@ Message::Disposition START_onReceived(START_Message* msg, const Address& from) {
     err = E::BADMSG;
     return Message::Disposition::ERROR;
   }
-
-  std::shared_ptr<PermissionChecker> permission_checker =
-      Worker::onThisThread()
-          ->processor_->security_info_->getPermissionChecker();
-
-  if (permission_checker) {
-    const PrincipalIdentity* principal = w->sender().getPrincipal(from);
-    if (principal == nullptr) {
-      ld_critical("START_Message from %s for log %lu failed because "
-                  "there is no Principal Associated with from %s",
-                  Sender::describeConnection(from).c_str(),
-                  header.log_id.val_,
-                  Sender::describeConnection(from).c_str());
-      // This should never happen. We are invoking onReceived from the socket
-      // that has already performed the hello/ack handshake.
-      ld_check(false);
-      err = E::ACCESS;
-      return Message::Disposition::ERROR;
-    }
-
-    permission_checker->isAllowed(
-        ACTION::READ,
-        *principal,
-        header.log_id,
-
-        [msg, from](PermissionCheckStatus permission_status) mutable {
-          onReceivedContinuation(std::unique_ptr<START_Message>(msg).get(),
-                                 from,
-                                 permission_status);
-        });
-    return Message::Disposition::KEEP;
-  } else {
-    return onReceivedContinuation(msg, from, PermissionCheckStatus::NONE);
-  }
-}
-
-static Message::Disposition
-onReceivedContinuation(START_Message* msg,
-                       const Address& from,
-                       PermissionCheckStatus permission_status) {
-  ServerWorker* w = ServerWorker::onThisThread();
-  if (!w->isAcceptingWork()) {
-    ld_debug("Ignoring START message: not accepting more work");
-    return send_error_reply(msg, from, E::SHUTDOWN);
-  }
-  auto scfg = w->getServerConfig();
-  const START_Header& header = msg->header_;
-  shard_index_t shard_idx = header.shard;
-
-  auto* node = scfg->getNode(scfg->getMyNodeID().index());
-  ld_check(node);
-  ld_check(node->storage_attributes);
-  const shard_size_t n_shards = node->getNumShards();
-  ld_check(n_shards > 0); // We already checked we are a storage node.
 
   if (permission_status == PermissionCheckStatus::DENIED) {
     // The client is not allowed to read from this log_id.

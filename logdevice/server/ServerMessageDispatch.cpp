@@ -8,6 +8,8 @@
 #include "logdevice/server/ServerMessageDispatch.h"
 
 #include "logdevice/common/GetEpochRecoveryMetadataRequest.h"
+#include "logdevice/common/Processor.h"
+#include "logdevice/common/UpdateableSecurityInfo.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/protocol/CLEAN_Message.h"
 #include "logdevice/common/protocol/MessageTypeNames.h"
@@ -38,6 +40,7 @@
 #include "logdevice/server/STOP_onReceived.h"
 #include "logdevice/server/STORED_onReceived.h"
 #include "logdevice/server/STORE_onSent.h"
+#include "logdevice/server/ServerMessagePermission.h"
 #include "logdevice/server/ServerWorker.h"
 #include "logdevice/server/StoreStateMachine.h"
 #include "logdevice/server/TRIM_onReceived.h"
@@ -51,7 +54,44 @@
 namespace facebook { namespace logdevice {
 
 Message::Disposition
-ServerMessageDispatch::onReceivedImpl(Message* msg, const Address& from) {
+ServerMessageDispatch::onReceivedImpl(Message* msg,
+                                      const Address& from,
+                                      const PrincipalIdentity& principal) {
+  auto params = ServerMessagePermission::computePermissionParams(msg);
+
+  std::shared_ptr<PermissionChecker> permission_checker =
+      processor_->security_info_->getPermissionChecker();
+
+  if (permission_checker && params.requiresPermission) {
+    STAT_INCR(processor_->stats_, server_message_dispatch_check_permission);
+    permission_checker->isAllowed(params.action,
+                                  principal,
+                                  params.log_id,
+
+                                  [=](PermissionCheckStatus permission_status) {
+                                    Message::Disposition disp =
+                                        onReceivedHandler(
+                                            msg, from, permission_status);
+                                    switch (disp) {
+                                      case Message::Disposition::KEEP:
+                                        break;
+                                      case Message::Disposition::NORMAL:
+                                      case Message::Disposition::ERROR:
+                                      default:
+                                        delete msg;
+                                    }
+                                  });
+    return Message::Disposition::KEEP;
+  } else {
+    STAT_INCR(processor_->stats_, server_message_dispatch_skip_permission);
+    return onReceivedHandler(msg, from, PermissionCheckStatus::NONE);
+  }
+}
+
+Message::Disposition ServerMessageDispatch::onReceivedHandler(
+    Message* msg,
+    const Address& from,
+    PermissionCheckStatus permission_status) const {
   switch (msg->type_) {
     case MessageType::CHECK_NODE_HEALTH:
       return CHECK_NODE_HEALTH_onReceived(
@@ -123,7 +163,8 @@ ServerMessageDispatch::onReceivedImpl(Message* msg, const Address& from) {
       return SEAL_onReceived(checked_downcast<SEAL_Message*>(msg), from);
 
     case MessageType::START:
-      return START_onReceived(checked_downcast<START_Message*>(msg), from);
+      return START_onReceived(
+          checked_downcast<START_Message*>(msg), from, permission_status);
 
     case MessageType::STOP:
       return STOP_onReceived(checked_downcast<STOP_Message*>(msg), from);
@@ -136,7 +177,8 @@ ServerMessageDispatch::onReceivedImpl(Message* msg, const Address& from) {
       return STORED_onReceived(checked_downcast<STORED_Message*>(msg), from);
 
     case MessageType::TRIM:
-      return TRIM_onReceived(checked_downcast<TRIM_Message*>(msg), from);
+      return TRIM_onReceived(
+          checked_downcast<TRIM_Message*>(msg), from, permission_status);
 
     case MessageType::WINDOW:
       return AllServerReadStreams::onWindowMessage(
