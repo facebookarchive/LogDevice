@@ -404,16 +404,15 @@ void NodesConfigurationCodec::serialize(const NodesConfiguration& nodes_config,
     data_blob = Slice{buffer.get(), compressed_size};
   }
 
-  auto wrapper_header = thrift::NodesConfigurationHeader(
-      apache::thrift::FragileConstructor::FRAGILE,
-      CURRENT_PROTO_VERSION,
-      nodes_config.getVersion().val(),
-      options.compression);
-  auto wrapper = thrift::NodesConfigurationWrapper(
-      apache::thrift::FragileConstructor::FRAGILE,
-      wrapper_header,
-      // TODO get rid of this copy
-      std::string(data_blob.ptr(), data_blob.size));
+  thrift::NodesConfigurationHeader wrapper_header{};
+  wrapper_header.set_proto_version(CURRENT_PROTO_VERSION);
+  wrapper_header.set_config_version(nodes_config.getVersion().val());
+  wrapper_header.set_is_compressed(options.compression);
+
+  thrift::NodesConfigurationWrapper wrapper{};
+  wrapper.set_header(std::move(wrapper_header));
+  // TODO get rid of this copy
+  wrapper.set_serialized_config(std::string(data_blob.ptr(), data_blob.size));
 
   writer.writeVector(ThriftCodec::serialize<BinarySerializer>(wrapper));
 }

@@ -9424,7 +9424,7 @@ class MemTableStatsGenerator {
     }
 
     ld_info("FlushTrigger result:%d active:%lu imm:%lu avg:%lu rolled:%ld",
-            result,
+            static_cast<int>(result),
             stats.active_memtable_size,
             stats.immutable_memtable_size,
             avg_non_max_memtable_size,
