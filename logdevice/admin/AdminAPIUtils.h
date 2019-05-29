@@ -93,5 +93,16 @@ toShardOperationalState(membership::StorageState storage_state,
 bool nodeMatchesID(node_index_t node_index,
                    const configuration::nodes::NodeServiceDiscovery& node_sd,
                    const thrift::NodeID& id);
+/*
+ * Returns whether the node_id exists in the vector<thrift::NodeID> which is
+ * commonly used to refer to nodes in maintenance definitions.
+ */
+bool isInNodeIDs(node_index_t node_id,
+                 const std::vector<thrift::NodeID>& nodes);
+
+// helpers to convert logdevice to thrift types
+thrift::ShardID mkShardID(node_index_t node_id, shard_index_t shard);
+thrift::ShardID mkShardID(const ShardID& shard);
+thrift::NodeID mkNodeID(node_index_t node_id);
 
 }} // namespace facebook::logdevice

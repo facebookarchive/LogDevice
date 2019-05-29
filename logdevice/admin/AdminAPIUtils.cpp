@@ -365,9 +365,14 @@ ShardSet resolveShardOrNode(
       return output;
     }
     // We didn't find the node.
-    thrift::InvalidRequest err;
-    err.set_message("Node was not found in the nodes config.");
-    throw err;
+    throw thrift::InvalidRequest("Node was not found in the nodes config");
+  }
+
+  // Node must be a storage node
+  if (!nodes_configuration.isStorageNode(*found_node)) {
+    // We didn't find the node.
+    throw thrift::InvalidRequest(
+        folly::sformat("Node {} is not a storage node", *found_node));
   }
 
   if (shard_index == -1) {
@@ -415,6 +420,47 @@ bool nodeMatchesID(node_index_t node_index,
   }
 
   return true;
+}
+
+bool isInNodeIDs(node_index_t node_id,
+                 const std::vector<thrift::NodeID>& nodes) {
+  // returns true if we can find a NodeID object that has node_index set with
+  // the supplied value (node_id)
+  return nodes.end() !=
+      std::find_if(nodes.begin(),
+                   nodes.end(),
+                   [&node_id](const thrift::NodeID& matched_node) {
+                     auto node_index = matched_node.node_index_ref();
+                     if (node_index.has_value()) {
+                       return node_index.value() == node_id;
+                     } else {
+                       return false;
+                     }
+                   });
+}
+
+thrift::ShardID mkShardID(node_index_t node_id, shard_index_t shard) {
+  thrift::NodeID new_node;
+  new_node.set_node_index(node_id);
+  thrift::ShardID new_shard;
+  new_shard.set_node(std::move(new_node));
+  new_shard.set_shard_index(shard);
+  return new_shard;
+}
+
+thrift::ShardID mkShardID(const ShardID& shard) {
+  thrift::NodeID new_node;
+  new_node.set_node_index(shard.node());
+  thrift::ShardID new_shard;
+  new_shard.set_node(new_node);
+  new_shard.set_shard_index(shard.shard());
+  return new_shard;
+}
+
+thrift::NodeID mkNodeID(node_index_t node_id) {
+  thrift::NodeID new_node;
+  new_node.set_node_index(node_id);
+  return new_node;
 }
 
 }} // namespace facebook::logdevice

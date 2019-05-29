@@ -58,17 +58,22 @@ service AdminAPI extends fb303.FacebookService {
    * Perform a maintenance on one or more nodes/shards declaratively. The
    * operation is accepted only if no other maintenance with different target
    * is set by the same user for _any_ of the shards/nodes passed.
-   * Otherwise the MaintenanceClash exception is thrown.
+   * Otherwise the MaintenanceClash exception is thrown. The same user cannot
+   * have multiple maintenances that touch any given shard/node with different
+   * targets.
    * Applying the same maintenance target by the same user will return the
-   * existing maintenance progress.
+   * existing maintenance if the shards and/or sequencers and target match the
+   * existing maintenances.
+   *
+   * For ungrouped maintenances, the exploded maintenances are first matched
+   * against the existing maintenances, for those equivalent maintenance we will
+   * return the existing maintenances, for the new one we will create.
+   * The whole operation will throw MaintenanceClash exception if the new ones
+   * failed the rules mentioned above.
+   *
    * Accepting the maintenance does not guarantee that the maintenance will be
-   * executed successfully. There are two methods to monitor progress of
-   * maintenance:
-   *   - Either by calling the same applyMaintenance with the same arguments (or
-   *   you can request for a subset of the shards) and inspecting the
-   *   ApplyMaintenanceResponse object.
-   *   - By using the getNodesState to inspect the states for particular nodes
-   *   or shards.
+   * executed successfully. To monitor progress of maintenance use the
+   * `getNodesState` to inspect the states for particular nodes or shards.
    */
   maintenance.MaintenanceDefinitionResponse applyMaintenance(1:
       maintenance.MaintenanceDefinition request) throws

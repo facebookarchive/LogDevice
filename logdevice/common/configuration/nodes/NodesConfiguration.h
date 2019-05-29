@@ -88,6 +88,16 @@ class NodesConfiguration {
     return service_discovery_->hasNode(node);
   }
 
+  // Checks whether this node has sequencer role
+  bool isSequencerNode(node_index_t node) const {
+    return sequencer_config_->getMembership()->hasNode(node);
+  }
+
+  // Checks whether this node has storage role
+  bool isStorageNode(node_index_t node) const {
+    return storage_config_->getMembership()->hasNode(node);
+  }
+
   const std::shared_ptr<const SequencerConfig>& getSequencerConfig() const {
     return sequencer_config_;
   }

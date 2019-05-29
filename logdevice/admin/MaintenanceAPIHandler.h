@@ -38,13 +38,12 @@ class MaintenanceAPIHandler : public virtual AdminAPIHandlerBase {
 
  private:
   // throws NotSupported exception if MM is disabled.
-  folly::SemiFuture<folly::Unit> failIfMMDisabled() {
+  folly::Optional<thrift::NotSupported> failIfMMDisabled() {
     if (!updateable_admin_server_settings_->enable_maintenance_manager ||
         maintenance_manager_ == nullptr) {
-      return folly::makeSemiFuture<folly::Unit>(
-          thrift::NotSupported("MaintenanceManager is not enabled!"));
+      return thrift::NotSupported("MaintenanceManager is not enabled!");
     }
-    return folly::makeSemiFuture<folly::Unit>(folly::Unit());
+    return folly::none;
   }
 };
 }} // namespace facebook::logdevice
