@@ -482,7 +482,7 @@ TEST(MessagingTest, OnClientClose) {
     close(clients[i][1]);
   }
 
-  sleep(1);
+  sleep(2);
 
   EXPECT_EQ(2 * nclients, OnClientCloseTestRequest::callbacksCnt);
 }

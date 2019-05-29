@@ -14,6 +14,8 @@
 
 namespace facebook { namespace logdevice {
 
+class Worker;
+
 /**
  * this will we a wrapper around our socket which knows about protocol and
  * serialization
@@ -140,13 +142,8 @@ class Connection : public Socket {
 
  private:
   void initializeContext();
-  // This makes connection agnostic of it's association to a Worker.
-  // At creation time, if the connection is created in
-  // Worker context the RequestContext associated with Worker is copied and
-  // saved off here. On various socket events, this context is used to set the
-  // per thread context and the callback can access Worker::onThisThread to
-  // fetch the Worker ptr as usual.
-  std::shared_ptr<folly::RequestContext> context_;
+  bool setWorkerContext();
+  Worker* const worker_{nullptr};
 };
 
 }} // namespace facebook::logdevice

@@ -172,7 +172,6 @@ struct MUTATED_Header;
 struct TrimRequestMap;
 struct WriteMetaDataRecordMap;
 
-
 namespace configuration {
 class ZookeeperConfig;
 namespace nodes {
@@ -308,6 +307,14 @@ class Worker : public SerialWorkContext {
    *                        Worker.
    */
   static Worker* onThisThread(bool enforce_worker = true);
+
+  static void onSet(Worker* w) {
+    on_this_thread_ = w;
+  }
+
+  static void onUnset() {
+    on_this_thread_ = nullptr;
+  }
 
   /**
    * @return   a pointer to the stats object of the Worker running on this
@@ -751,7 +758,7 @@ class Worker : public SerialWorkContext {
   // Methods used by processor to post requests to worker.
   int tryPost(std::unique_ptr<Request>& req);
 
-  // Sets up RequestContext so that executor can save it before posting the
+  // Sets up WorkerContext so that executor can save it before posting the
   // function for execution.
   // Add lo_pri work into the executor.
   void add(folly::Func func) override;
@@ -773,10 +780,6 @@ class Worker : public SerialWorkContext {
    */
   int forcePost(std::unique_ptr<Request>& req,
                 int8_t priority = folly::Executor::LO_PRI);
-
-  // Get work context which is passed to all requests/tasks posted to this
-  // worker.
-  std::shared_ptr<folly::RequestContext> getContext();
 
   virtual void setupWorker();
 
@@ -902,4 +905,28 @@ class Worker : public SerialWorkContext {
   friend struct ::testing::SocketConnectRequest;
 };
 
+class WorkerContextScopeGuard {
+ public:
+  WorkerContextScopeGuard(const WorkerContextScopeGuard&) = delete;
+  WorkerContextScopeGuard& operator=(const WorkerContextScopeGuard&) = delete;
+  WorkerContextScopeGuard(WorkerContextScopeGuard&&) = delete;
+  WorkerContextScopeGuard& operator=(WorkerContextScopeGuard&&) = delete;
+
+  explicit WorkerContextScopeGuard(Worker* w) {
+    unset_context_ = w && w != Worker::onThisThread(false /*enforce_worker*/);
+    if (unset_context_) {
+      Worker::onSet(w);
+    }
+  }
+
+  ~WorkerContextScopeGuard() {
+    if (unset_context_) {
+      Worker::onUnset();
+    }
+  }
+
+ private:
+  // This guard unsets context only if it was the one which set the context.
+  bool unset_context_{false};
+};
 }} // namespace facebook::logdevice

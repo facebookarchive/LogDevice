@@ -98,26 +98,6 @@ getMyLocation(const std::shared_ptr<UpdateableConfig>& config,
   }
   return worker->immutable_settings_->client_location;
 }
-
-// Local class used to save off and restore Worker pointer in order to resolve
-// Worker::onThisThread invocation.
-struct WorkerRequestContextData : public folly::RequestData {
-  explicit WorkerRequestContextData(Worker* w) : w_(w) {}
-  bool hasCallback() override {
-    return false;
-  }
-
-  Worker* w_;
-};
-static const folly::RequestToken& getWorkerToken() {
-  // Caching worker_token helps to avoid string lookup on every
-  // Worker::onThisThread call.
-  // Note : There cannot be more than 2^32 - 1 request tokens in use through the
-  // lifetime of the process.
-  // Initialize worker token.
-  static folly::RequestToken worker_token(Worker::kWorkerDataID.toString());
-  return worker_token;
-}
 } // namespace
 
 // the size of the bucket array of activeAppenders_ map
@@ -134,8 +114,7 @@ thread_local Worker* Worker::on_this_thread_{nullptr};
 class WorkerImpl {
  public:
   WorkerImpl(Worker* w, const std::shared_ptr<UpdateableConfig>& config)
-      : worker_context_(std::make_shared<folly::RequestContext>()),
-        sender_(w->immutable_settings_,
+      : sender_(w->immutable_settings_,
                 w->getEventBase(),
                 config->get()->serverConfig()->getTrafficShapingConfig(),
                 &w->processor_->clientIdxAllocator(),
@@ -169,8 +148,6 @@ class WorkerImpl {
         std::make_shared<ReadShapingFlowGroupDeps>(Worker::stats()));
   }
 
-  // Context save and restored across threads.
-  std::shared_ptr<folly::RequestContext> worker_context_;
   ShardAuthoritativeStatusManager shardStatusManager_;
   Sender sender_;
   LogRebuildingMap runningLogRebuildings_;
@@ -241,10 +218,6 @@ Worker::Worker(WorkContext::KeepAlive event_loop,
       shutting_down_(false),
       accepting_work_(true),
       worker_timeout_stats_(std::make_unique<WorkerTimeoutStats>()) {
-  // Executors will capture the context data and provide it where-ever
-  // necessary.
-  impl_->worker_context_->setContextData(
-      getWorkerToken(), std::make_unique<WorkerRequestContextData>(this));
 }
 
 Worker::~Worker() {
@@ -285,12 +258,7 @@ Worker* FOLLY_NULLABLE Worker::onThisThread(bool enforce_worker) {
   if (Worker::on_this_thread_) {
     return Worker::on_this_thread_;
   }
-  // Check if worker pointer is available in currently loaded RequestContext.
-  WorkerRequestContextData* data = dynamic_cast<WorkerRequestContextData*>(
-      folly::RequestContext::get()->getContextData(getWorkerToken()));
-  if (data && data->w_) {
-    return data->w_;
-  }
+
   if (enforce_worker) {
     // Not on a worker == assert failure
     ld_check(false);
@@ -537,7 +505,6 @@ void Worker::initializeSubscriptions() {
 }
 
 void Worker::setupWorker() {
-  folly::RequestContextScopeGuard g(impl_->worker_context_);
   requests_stuck_timer_ = std::make_unique<Timer>(
       std::bind(&Worker::reportOldestRecoveryRequest, this));
   load_timer_ = std::make_unique<Timer>(std::bind(&Worker::reportLoad, this));
@@ -1327,7 +1294,6 @@ void Worker::add(folly::Func func) {
 }
 
 void Worker::addWithPriority(folly::Func func, int8_t priority) {
-  folly::RequestContextScopeGuard g(impl_->worker_context_);
 
   switch (priority) {
     case folly::Executor::HI_PRI:
@@ -1346,6 +1312,7 @@ void Worker::addWithPriority(folly::Func func, int8_t priority) {
   num_requests_enqueued_.fetch_add(1, std::memory_order_relaxed);
   SerialWorkContext::addWithPriority(
       [this, func = std::move(func)]() mutable {
+        WorkerContextScopeGuard g(this);
         num_requests_enqueued_.fetch_sub(1, std::memory_order_relaxed);
         func();
       },
@@ -1370,9 +1337,5 @@ int Worker::forcePost(std::unique_ptr<Request>& req, int8_t priority) {
   addWithPriority(std::move(func), priority);
 
   return 0;
-}
-
-std::shared_ptr<folly::RequestContext> Worker::getContext() {
-  return impl_->worker_context_;
 }
 }} // namespace facebook::logdevice

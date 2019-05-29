@@ -104,7 +104,7 @@ class ProcessorImpl {
   ~ProcessorImpl() {
     for (auto& workers : all_workers_) {
       for (auto& worker : workers) {
-        folly::RequestContextScopeGuard g(worker->getContext());
+        WorkerContextScopeGuard g(worker.get());
         worker.reset();
       }
     }
@@ -628,7 +628,8 @@ Worker* Processor::createWorker(WorkContext::KeepAlive executor,
   auto worker =
       new Worker(std::move(executor), this, idx, config_, stats_, worker_type);
   // Finish the remaining initialization on the executor.
-  worker->add([worker] { worker->setupWorker(); });
+  worker->addWithPriority(
+      [worker] { worker->setupWorker(); }, folly::Executor::HI_PRI);
   return worker;
 }
 

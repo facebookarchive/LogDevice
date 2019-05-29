@@ -116,7 +116,7 @@ class LibeventTimer : boost::noncopyable {
 
   // Use to save off worker context and used in LibeventTimer::libeventCallback
   // when timeout happens.
-  std::shared_ptr<folly::RequestContext> context_;
+  Worker* worker_;
 
   std::function<void()> callback_;
   bool active_ = false;

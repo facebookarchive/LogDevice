@@ -44,36 +44,6 @@ class SerialWorkContext : public WorkContext {
     return parent_.get();
   }
 
-  void add(folly::Func func) override {
-    // Serial executor will enqueue one func everytime this method is invoked
-    // into the parent executor and also within it's queue. In presence of
-    // multiple threads, the order of enqueue into the parent executor is
-    // non-deterministic, hence we cannot depend on parent executor to save and
-    // restore context when SerialExecutor is used. Saving it in the function
-    // explicitly.
-    WorkContext::add([f = std::move(func),
-                      ctx = folly::RequestContext::saveContext()]() mutable {
-      folly::RequestContextScopeGuard g(ctx);
-      f();
-    });
-  }
-
-  void addWithPriority(folly::Func func, int8_t priority) override {
-    // Serial executor will enqueue one func everytime this method is invoked
-    // into the parent executor and also within it's queue. In presence of
-    // multiple threads, the order of enqueue into the parent executor is
-    // non-deterministic, hence we cannot depend on parent executor to save and
-    // restore context when SerialExecutor is used. Saving it in the function
-    // explicitly.
-    WorkContext::addWithPriority(
-        [f = std::move(func),
-         ctx = folly::RequestContext::saveContext()]() mutable {
-          folly::RequestContextScopeGuard g(ctx);
-          f();
-        },
-        priority);
-  }
-
  protected:
   // folly::SerialExecutor captures the parent and does not allow to fetch it
   // Save off the parent keep alive and create another keepAlive for the
