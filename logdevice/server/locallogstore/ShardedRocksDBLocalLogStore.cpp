@@ -68,7 +68,7 @@ ShardedRocksDBLocalLogStore::ShardedRocksDBLocalLogStore(
     UpdateableSettings<RocksDBSettings> db_settings,
     UpdateableSettings<RebuildingSettings> rebuilding_settings,
     std::shared_ptr<UpdateableConfig> updateable_config,
-    RocksDBCache* caches,
+    RocksDBCachesInfo* caches,
     StatsHolder* stats)
     : stats_(stats),
       db_settings_(db_settings),

@@ -12,13 +12,13 @@
 namespace facebook { namespace logdevice {
 
 // a collection of rocksdb caches
-struct RocksDBCache {
+struct RocksDBCachesInfo {
   std::weak_ptr<rocksdb::Cache> block_cache;
   std::weak_ptr<rocksdb::Cache> block_cache_compressed;
   std::weak_ptr<rocksdb::Cache> metadata_block_cache;
 };
 
-extern RocksDBCache g_rocksdb_caches;
+extern RocksDBCachesInfo g_rocksdb_caches;
 
 /**
  * Handler for signals that causes coredumps (e.g., SIGSEGV, SIGABRT).

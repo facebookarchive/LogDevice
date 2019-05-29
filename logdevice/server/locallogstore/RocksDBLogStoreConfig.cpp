@@ -7,7 +7,6 @@
  */
 #include "logdevice/server/locallogstore/RocksDBLogStoreConfig.h"
 
-#include <rocksdb/cache.h>
 #include <rocksdb/db.h>
 #include <rocksdb/filter_policy.h>
 #include <rocksdb/options.h>
@@ -17,6 +16,7 @@
 #include <rocksdb/table.h>
 #include <rocksdb/write_buffer_manager.h>
 
+#include "logdevice/server/locallogstore/RocksDBCache.h"
 #include "logdevice/server/locallogstore/RocksDBCompactionFilter.h"
 #include "logdevice/server/locallogstore/RocksDBEnv.h"
 #include "logdevice/server/locallogstore/RocksDBFlushBlockPolicy.h"
@@ -75,27 +75,15 @@ RocksDBLogStoreConfig::RocksDBLogStoreConfig(
       rocksdb::NewCappedPrefixTransform(DataKey::PREFIX_LENGTH));
 
   if (rocksdb_settings_->cache_size_ > 0) {
-    if (rocksdb_settings_->cache_numshardbits_ > 0) {
-      table_options_.block_cache =
-          rocksdb::NewLRUCache(rocksdb_settings_->cache_size_,
-                               rocksdb_settings_->cache_numshardbits_,
-                               false, /*strict_capacity_limit*/
-                               rocksdb_settings_->cache_high_pri_pool_ratio_);
-    } else {
-      table_options_.block_cache =
-          rocksdb::NewLRUCache(rocksdb_settings_->cache_size_);
-    }
+    table_options_.block_cache =
+        std::make_shared<RocksDBCache>(rocksdb_settings_);
   }
 
-  if (rocksdb_settings_->compressed_cache_size_ > 0) {
-    if (rocksdb_settings_->compressed_cache_numshardbits_ > 0) {
-      table_options_.block_cache_compressed = rocksdb::NewLRUCache(
-          rocksdb_settings_->compressed_cache_size_,
-          rocksdb_settings_->compressed_cache_numshardbits_);
-    } else {
-      table_options_.block_cache_compressed =
-          rocksdb::NewLRUCache(rocksdb_settings_->compressed_cache_size_);
-    }
+  size_t compressed_cache_size = rocksdb_settings_->compressed_cache_size_;
+  if (compressed_cache_size > 0) {
+    table_options_.block_cache_compressed =
+        rocksdb::NewLRUCache(compressed_cache_size,
+                             rocksdb_settings_->compressed_cache_numshardbits_);
   }
 
   if (rocksdb_settings_->flush_block_policy_ !=
@@ -139,16 +127,11 @@ RocksDBLogStoreConfig::RocksDBLogStoreConfig(
     metadata_table_options_ = table_options_;
     bool changed = false;
 
-    if (rocksdb_settings_->metadata_cache_size_ > 0) {
+    size_t metadata_cache_size = rocksdb_settings_->metadata_cache_size_;
+    if (metadata_cache_size > 0) {
       changed = true;
-      if (rocksdb_settings_->metadata_cache_numshardbits_ > 0) {
-        metadata_table_options_.block_cache = rocksdb::NewLRUCache(
-            rocksdb_settings_->metadata_cache_size_,
-            rocksdb_settings_->metadata_cache_numshardbits_);
-      } else {
-        metadata_table_options_.block_cache =
-            rocksdb::NewLRUCache(rocksdb_settings_->metadata_cache_size_);
-      }
+      metadata_table_options_.block_cache = rocksdb::NewLRUCache(
+          metadata_cache_size, rocksdb_settings_->metadata_cache_numshardbits_);
     }
 
     if (rocksdb_settings_->metadata_block_size_ > 0) {

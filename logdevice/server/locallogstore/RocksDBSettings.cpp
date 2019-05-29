@@ -205,9 +205,19 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
                "range [0.0, 1.0]");
          }
        },
-       "Ratio of rocksdb block cache reserve for index and filter blocks, if "
-       "--rocksdb-cache-index-with-high-priority is enabled.",
+       "Ratio of rocksdb block cache reserve for index and filter blocks if "
+       "--rocksdb-cache-index-with-high-priority is enabled, and for small "
+       "blocks if --rocksdb-cache-small-blocks-with-high-priority is positive.",
        SERVER | REQUIRES_RESTART,
+       SettingsCategory::RocksDB);
+
+  init("rocksdb-cache-small-block-threshold-for-high-priority",
+       &cache_small_block_threshold_for_high_priority_,
+       "30K",
+       parse_positive<size_t>(),
+       "SST blocks smaller than this size will get high priority (see "
+       "--rocksdb-cache-high-pri-pool-ratio).",
+       SERVER,
        SettingsCategory::RocksDB);
 
   init("rocksdb-read-amp-bytes-per-bit",
@@ -987,10 +997,10 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
   init("rocksdb-cache-numshardbits",
        &cache_numshardbits_,
        "4",
-       parse_positive<ssize_t>(),
+       parse_validate_range<int>(-1, 40),
        "This setting is not important. Width in bits of the number of shards "
-       "into which to partition the uncompressed block cache. See "
-       "rocksdb/cache.h.",
+       "into which to partition the uncompressed block cache. 0 to disable "
+       "sharding. -1 to pick automatically. See rocksdb/cache.h.",
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
@@ -1005,10 +1015,9 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
   init("rocksdb-metadata-cache-numshardbits",
        &metadata_cache_numshardbits_,
        "4",
-       parse_nonnegative<ssize_t>(),
-       "This setting is not important. Width in bits of the number of shards "
-       "into which to partition the uncompressed block cache for metadata. See "
-       "rocksdb/cache.h.",
+       parse_validate_range<int>(-1, 40),
+       "This setting is not important. Same as --rocksdb-cache-numshardbits "
+       "but for the metadata cache",
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
@@ -1022,11 +1031,10 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
 
   init("rocksdb-compressed-cache-numshardbits",
        &compressed_cache_numshardbits_,
-       "0",
-       parse_nonnegative<ssize_t>(),
-       "This setting is not important. Width in bits of the number of shards "
-       "into which to partition the compressed block cache, if enabled. See "
-       "rocksdb/cache.h.",
+       "4",
+       parse_validate_range<int>(-1, 40),
+       "This setting is not important. Same as --rocksdb-cache-numshardbits "
+       "but for the compressed cache (if enabled)",
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 

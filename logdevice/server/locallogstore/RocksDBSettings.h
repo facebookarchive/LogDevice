@@ -274,6 +274,8 @@ class RocksDBSettings : public SettingsBundle {
   // uncompressed block cache
   int cache_numshardbits_;
 
+  size_t cache_small_block_threshold_for_high_priority_;
+
   // size of compressed block cache (disabled by default)
   size_t compressed_cache_size_;
 

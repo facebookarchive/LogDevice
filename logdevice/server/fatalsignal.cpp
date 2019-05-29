@@ -25,7 +25,7 @@
 
 namespace facebook { namespace logdevice {
 
-RocksDBCache g_rocksdb_caches;
+RocksDBCachesInfo g_rocksdb_caches;
 
 static size_t unmap_count = 0, page_count = 0;
 

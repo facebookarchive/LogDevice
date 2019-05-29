@@ -43,7 +43,7 @@ namespace facebook { namespace logdevice {
  *   +-- shard<n-1>
  */
 
-struct RocksDBCache;
+struct RocksDBCachesInfo;
 class ShardedStorageThreadPool;
 
 class ShardedRocksDBLocalLogStore : public ShardedLocalLogStore {
@@ -73,7 +73,7 @@ class ShardedRocksDBLocalLogStore : public ShardedLocalLogStore {
       UpdateableSettings<RocksDBSettings> db_settings,
       UpdateableSettings<RebuildingSettings> rebuilding_settings,
       std::shared_ptr<UpdateableConfig> updateable_config,
-      RocksDBCache* caches,
+      RocksDBCachesInfo* caches,
       StatsHolder* stats = nullptr);
 
   ~ShardedRocksDBLocalLogStore() override;
