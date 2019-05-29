@@ -107,9 +107,6 @@ struct MaintenanceDefinition {
    * TTL can NOT be negative values, InvalidRequest exception will be thrown in
    * this case.
    *
-   * In responses, the ttl_seconds will contain the number of _remaining_
-   * seconds before this maintenance is expired.
-   *
    */
   11: i32 ttl_seconds = 0,
   /**
