@@ -454,7 +454,10 @@ void RebuildingCoordinator::onShardRebuildingComplete(uint32_t shard_idx) {
 
   if (maxBacklogTS > now) {
     std::chrono::milliseconds delay_ms = maxBacklogTS - now;
-
+    // Stagger the SHARD_IS_REBUILT messages with a random delay
+    std::chrono::seconds rand_delay(folly::Random::rand32(
+        0, rebuildingSettings_->max_random_delay_shard_is_rebuilt_message));
+    delay_ms += rand_delay;
     // Planning stage requested a delay.
     ld_check(rebuildingSettings_->disable_data_log_rebuilding);
     ld_check(shard_state.rebuilding_started_ts.count());

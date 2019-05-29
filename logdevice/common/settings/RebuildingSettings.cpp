@@ -345,6 +345,17 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
        "interferes with the primary workload.",
        SERVER | REQUIRES_RESTART,
        SettingsCategory::Rebuilding);
+  init("max-random-delay-shard-is-rebuilt-message",
+       &max_random_delay_shard_is_rebuilt_message,
+       "120",
+       nullptr,
+       "If disable-data-log-rebuilding is enabled then after the data "
+       "expires the SHARD_IS_REBULT messages may arrive at exactly the same "
+       "time from all the hosts overwhelming thread 0 processing those "
+       "messages. The messages will be delayed by a random time in seconds "
+       "between 0 and the value specified here. 0 means no delay ",
+       SERVER | REQUIRES_RESTART,
+       SettingsCategory::Rebuilding);
   init("enable-self-initiated-rebuilding",
        &enable_self_initiated_rebuilding,
        "true",
