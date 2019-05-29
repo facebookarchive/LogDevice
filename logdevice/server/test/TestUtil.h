@@ -41,6 +41,8 @@ class TestServerProcessorBuilder {
 
   TestServerProcessorBuilder& setStatsHolder(StatsHolder* stats);
 
+  TestServerProcessorBuilder& setMyNodeID(NodeID my_node_id);
+
   // This is rvalue qualified to make it obvious to the caller that the object
   // will get consumed and is not reusable anymore.
   std::shared_ptr<ServerProcessor> build() &&;
@@ -55,6 +57,7 @@ class TestServerProcessorBuilder {
   folly::Optional<UpdateableSettings<AdminServerSettings>> admin_settings_{
       folly::none};
   std::shared_ptr<UpdateableConfig> config_{nullptr};
+  folly::Optional<NodeID> my_node_id_{folly::none};
 
   ShardedStorageThreadPool* sharded_storage_thread_pool_{nullptr};
   StatsHolder* stats_{nullptr};

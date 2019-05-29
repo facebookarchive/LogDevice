@@ -96,43 +96,60 @@ bool ServerParameters::validateNodes(ServerConfig& config) {
   return true;
 }
 
-// recalculates server's node id after every config update
-bool ServerParameters::updateMyNodeId(ServerConfig& config) {
+bool ServerParameters::rejectIfMyNodeIdChanged(ServerConfig& config) {
   NodeID node_id;
   if (my_node_id_extractor_->calculate(config, node_id) != 0) {
     return false;
   }
-  if (my_node_index_.hasValue()) {
-    if (my_node_index_.value() != node_id.index()) {
+  if (my_node_id_.hasValue()) {
+    if (my_node_id_.value().index() != node_id.index()) {
       ld_error("My node index changed from %d to %d. Rejecting config.",
-               (int)my_node_index_.value(),
+               (int)my_node_id_.value().index(),
                (int)node_id.index());
 
       return false;
     }
   } else {
-    my_node_index_ = node_id.index();
+    my_node_id_ = node_id;
   }
-  config.setMyNodeID(node_id);
-  if (!Address(config.getServerOrigin()).valid()) {
+  return true;
+}
+
+bool ServerParameters::updateMyNodeId(ServerConfig& config) {
+  // If we reached this hook, this means that we must have found a valid
+  // MyNodeId, otherwise the config must have been rejected earlier.
+  ld_assert(my_node_id_.has_value());
+  config.setMyNodeID(my_node_id_.value());
+  return true;
+}
+
+bool ServerParameters::updateServerOrigin(ServerConfig& config) {
+  // If we reached this hook, this means that we must have found a valid
+  // MyNodeId, otherwise the config must have been rejected earlier.
+  ld_assert(my_node_id_.has_value());
+
+  // If the config doesn't have a valid ServerOrigin, then we are the source.
+  if (!config.getServerOrigin().isNodeID()) {
     // Update the server origin of the config to my node ID if it is not
     // set already
-    config.setServerOrigin(node_id);
+    config.setServerOrigin(my_node_id_.value());
   }
   return true;
 }
 
 bool ServerParameters::updateConfigSettings(ServerConfig& config) {
+  // If we reached this hook, this means that we must have found a valid
+  // MyNodeId, otherwise the config must have been rejected earlier.
+  ld_assert(my_node_id_.has_value());
+
   // Merge the main settings section and the settings section for my node.
-  // Note that calling getMyNodeID() is safe because we expect updateMyNodeId()
-  // was already called.
   SteadyTimestamp start_ts(SteadyTimestamp::now());
   SCOPE_EXIT {
     ld_info("Updating settings from config took %lums",
             msec_since(start_ts.timePoint()));
   };
   auto settings = config.getServerSettingsConfig();
-  const configuration::Node* me = config.getNode(config.getMyNodeID().index());
+  const configuration::Node* me = config.getNode(my_node_id_.value().index());
   ld_check(me);
   for (auto s : me->settings) {
     settings[s.first] = s.second;
@@ -144,6 +161,13 @@ bool ServerParameters::updateConfigSettings(ServerConfig& config) {
     return false;
   }
   return true;
+}
+
+bool ServerParameters::onServerConfigUpdate(ServerConfig& config) {
+  // Order of the invocation matters.
+  return rejectIfMyNodeIdChanged(config) && updateMyNodeId(config) &&
+      updateServerOrigin(config) && updateConfigSettings(config) &&
+      validateNodes(config);
 }
 
 bool ServerParameters::setConnectionLimits() {
@@ -259,17 +283,11 @@ ServerParameters::ServerParameters(
       std::make_shared<UpdateableConfig>(updateable_server_config,
                                          updateable_logs_config,
                                          updateable_zookeeper_config);
-  server_config_hook_handles_.push_back(
-      updateable_server_config->addHook(std::bind(
-          &ServerParameters::updateMyNodeId, this, std::placeholders::_1)));
+
   server_config_hook_handles_.push_back(updateable_server_config->addHook(
-      std::bind(&ServerParameters::updateConfigSettings,
+      std::bind(&ServerParameters::onServerConfigUpdate,
                 this,
                 std::placeholders::_1)));
-  server_config_hook_handles_.push_back(
-      updateable_server_config->addHook(std::bind(
-          &ServerParameters::validateNodes, this, std::placeholders::_1)));
-
   {
     ConfigInit config_init(
         processor_settings_->initial_config_load_timeout, getStats());
@@ -314,7 +332,7 @@ ServerParameters::ServerParameters(
   config->localLogsConfig()->setInternalLogsConfig(
       config->serverConfig()->getInternalLogsConfig());
 
-  NodeID node_id = config->serverConfig()->getMyNodeID();
+  NodeID node_id = my_node_id_.value();
   ld_info("My NodeID is %s", node_id.toString().c_str());
   const ServerConfig::Node* this_node =
       config->serverConfig()->getNode(node_id);
@@ -681,8 +699,8 @@ bool Server::initProcessor() {
                                 params_->getPluginRegistry(),
                                 "",
                                 "",
-                                "ld:srv" // prefix of worker thread names
-        );
+                                "ld:srv", // prefix of worker thread names
+                                params_->getMyNodeID());
 
     if (params_->getProcessorSettings()->enable_nodes_configuration_manager) {
       // create and initialize NodesConfigurationManager (NCM) and attach it to

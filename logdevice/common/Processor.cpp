@@ -161,7 +161,8 @@ Processor::Processor(std::shared_ptr<UpdateableConfig> updateable_config,
                      std::shared_ptr<PluginRegistry> plugin_registry,
                      std::string credentials,
                      std::string csid,
-                     std::string name)
+                     std::string name,
+                     folly::Optional<NodeID> my_node_id)
     :
 
       config_(std::move(updateable_config)),
@@ -177,7 +178,8 @@ Processor::Processor(std::shared_ptr<UpdateableConfig> updateable_config,
                                           : std::move(credentials)),
       csid_(std::move(csid)),
       trace_logger_(trace_logger),
-      name_(name) {
+      name_(name),
+      my_node_id_(std::move(my_node_id)) {
   settingsUpdateHandle_ = settings_.callAndSubscribeToUpdates(
       std::bind(settingsUpdated, settings_));
 }
@@ -649,6 +651,19 @@ ClientIdxAllocator& Processor::clientIdxAllocator() const {
   return impl_->client_idx_allocator_;
 }
 
+bool Processor::hasMyNodeID() const {
+  return my_node_id_.hasValue();
+}
+
+NodeID Processor::getMyNodeID() const {
+  ld_check(hasMyNodeID() && my_node_id_.value().isNodeID());
+  return my_node_id_.value();
+}
+
+folly::Optional<NodeID> Processor::getOptionalMyNodeID() const {
+  return my_node_id_;
+}
+
 namespace {
 // Lazily initialize the background queue and background threads.
 void initBackgroundQueueAndThreads(Processor* processor) {
@@ -723,9 +738,7 @@ std::vector<int> Processor::workerIdsRandomPermutation(WorkerType type) {
 }
 
 std::string Processor::describeMyNode() const {
-  return settings_->server
-      ? config_->getServerConfig()->getMyNodeID().toString()
-      : "Client";
+  return settings_->server ? getMyNodeID().toString() : "Client";
 }
 
 std::shared_ptr<Configuration> Processor::getConfig() {

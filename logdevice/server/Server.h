@@ -121,6 +121,10 @@ class ServerParameters {
     return admin_server_settings_;
   }
 
+  folly::Optional<NodeID> getMyNodeID() const {
+    return my_node_id_;
+  }
+
  private:
   std::shared_ptr<PluginRegistry> plugin_registry_;
   StatsHolder server_stats_;
@@ -144,7 +148,7 @@ class ServerParameters {
   std::shared_ptr<LocalLogFile> audit_log_;
 
   // Assigned when config is loaded.
-  folly::Optional<node_index_t> my_node_index_;
+  folly::Optional<NodeID> my_node_id_;
 
   // Handle for the subscription to config updates, used to unsubscribe
   std::list<ConfigSubscriptionHandle> server_config_subscriptions_;
@@ -155,9 +159,15 @@ class ServerParameters {
   // number of reserved fds, as well as the number of nodes in the cluster.
   bool setConnectionLimits();
 
-  bool validateNodes(ServerConfig& config);
+  // Server Config Hooks
+  bool rejectIfMyNodeIdChanged(ServerConfig& config);
   bool updateMyNodeId(ServerConfig& config);
+  bool updateServerOrigin(ServerConfig& config);
   bool updateConfigSettings(ServerConfig& config);
+  bool validateNodes(ServerConfig& config);
+
+  // The main server config hook that invokes other hooks
+  bool onServerConfigUpdate(ServerConfig& config);
 
   bool initNodesConfiguration();
 };

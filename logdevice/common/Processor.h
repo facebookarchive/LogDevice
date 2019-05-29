@@ -105,7 +105,8 @@ class Processor : public folly::enable_shared_from_this<Processor> {
             std::shared_ptr<PluginRegistry> plugin_registry,
             std::string credentials = "",
             std::string csid = "",
-            std::string name = "logdevice");
+            std::string name = "logdevice",
+            folly::Optional<NodeID> my_node_id = folly::none);
 
  protected:
   /**
@@ -455,7 +456,6 @@ class Processor : public folly::enable_shared_from_this<Processor> {
   // Make runningOnStorageNode() return true. Used for tests.
   bool fake_storage_node_ = false;
 
-
   // global settings shared by this Processor, EventLoops it manages, and
   // all objects running on those EventLoops
   UpdateableSettings<Settings> settings_;
@@ -594,6 +594,26 @@ class Processor : public folly::enable_shared_from_this<Processor> {
     return settings_.get();
   }
 
+  /**
+   * True if a valid NodeID was set using setMyNodeID().
+   */
+  bool hasMyNodeID() const;
+
+  /**
+   * Returns the NodeID of the server that we are running.  (The NodeID needs
+   * to have been previously set via a call to setMyNodeID(). This is
+   * typically done during the processor startup.)
+   *
+   * If the NodeID is not set (e.g on clients), and enforce is true, it will
+   * cause ld_check failure.
+   */
+  NodeID getMyNodeID() const;
+
+  /**
+   * Returns the NodeID of the server that we are running on if it's set.
+   */
+  folly::Optional<NodeID> getOptionalMyNodeID() const;
+
   ClientIdxAllocator& clientIdxAllocator() const;
 
   std::shared_ptr<PluginRegistry> getPluginRegistry() {
@@ -681,6 +701,8 @@ class Processor : public folly::enable_shared_from_this<Processor> {
   std::unique_ptr<SequencerBatching> sequencer_batching_;
 
   std::string name_;
+
+  const folly::Optional<NodeID> my_node_id_;
 
   ServerInstanceId serverInstanceId_{ServerInstanceId_INVALID};
 

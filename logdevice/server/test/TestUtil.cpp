@@ -69,6 +69,12 @@ TestServerProcessorBuilder::setStatsHolder(StatsHolder* stats) {
   return *this;
 }
 
+TestServerProcessorBuilder&
+TestServerProcessorBuilder::setMyNodeID(NodeID my_node_id) {
+  my_node_id_ = my_node_id;
+  return *this;
+}
+
 std::shared_ptr<ServerProcessor> TestServerProcessorBuilder::build() && {
   if (!config_) {
     setUpdateableConfig(UpdateableConfig::createEmpty());
@@ -93,7 +99,11 @@ std::shared_ptr<ServerProcessor> TestServerProcessorBuilder::build() && {
                                  std::make_shared<NoopTraceLogger>(config_),
                                  std::move(settings_),
                                  stats_,
-                                 make_test_plugin_registry());
+                                 make_test_plugin_registry(),
+                                 "",
+                                 "",
+                                 "logdevice",
+                                 std::move(my_node_id_));
 }
 
 void shutdown_test_server(std::shared_ptr<ServerProcessor>& processor) {

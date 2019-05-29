@@ -226,18 +226,21 @@ void UnreleasedRecordDetectorTest::SetUp() {
       node->address;
 
   // create processor
-  processor_ = ServerProcessor::create(
-      /* audit log */ nullptr,
-      sharded_storage_thread_pool_.get(),
-      *userver_settings_,
-      *ugossip_settings_,
-      *uadmin_server_settings_,
-      config_,
-      std::make_shared<NoopTraceLogger>(config_),
-      *usettings_,
-      nullptr,
-
-      make_test_plugin_registry());
+  processor_ =
+      ServerProcessor::create(/* audit log */ nullptr,
+                              sharded_storage_thread_pool_.get(),
+                              *userver_settings_,
+                              *ugossip_settings_,
+                              *uadmin_server_settings_,
+                              config_,
+                              std::make_shared<NoopTraceLogger>(config_),
+                              *usettings_,
+                              nullptr,
+                              make_test_plugin_registry(),
+                              "",
+                              "",
+                              "logdevice",
+                              NodeID(0, 1));
   processor_->config_->get()->serverConfig()->setMyNodeID(NodeID(0, 1));
   sharded_storage_thread_pool_->setProcessor(processor_.get());
   processor_->markShardAsNotMissingData(0);

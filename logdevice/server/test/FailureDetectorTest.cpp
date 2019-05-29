@@ -165,7 +165,8 @@ make_processor_with_detector(node_index_t nid,
   auto processor_builder = TestServerProcessorBuilder{main_settings}
                                .setServerSettings(server_settings)
                                .setGossipSettings(gossip_settings)
-                               .setUpdateableConfig(uconfig);
+                               .setUpdateableConfig(uconfig)
+                               .setMyNodeID(NodeID(nid, 1));
   auto p = std::move(processor_builder).build();
   p->setServerInstanceId(SystemTimestamp::now().toMilliseconds().count());
   std::unique_ptr<MockFailureDetector> d =
