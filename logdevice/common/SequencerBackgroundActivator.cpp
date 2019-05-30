@@ -58,11 +58,11 @@ void SequencerBackgroundActivator::schedule(std::vector<logid_t> log_ids) {
 bool SequencerBackgroundActivator::processOneLog(logid_t log_id,
                                                  LogState& state,
                                                  ResourceBudget::Token& token) {
-  auto config = Worker::onThisThread()->getConfig();
-  const auto& nodes_configuration =
-      Worker::onThisThread()->getNodesConfiguration();
+  Worker* worker = Worker::onThisThread();
+  auto config = worker->getConfig();
+  const auto& nodes_configuration = worker->getNodesConfiguration();
 
-  auto& all_seq = Worker::onThisThread()->processor_->allSequencers();
+  auto& all_seq = worker->processor_->allSequencers();
   auto seq = all_seq.findSequencer(log_id);
 
   if (!seq) {
@@ -83,7 +83,7 @@ bool SequencerBackgroundActivator::processOneLog(logid_t log_id,
     return true;
   }
 
-  const auto my_node_id = config->serverConfig()->getMyNodeID();
+  const auto my_node_id = worker->processor_->getMyNodeID();
   const bool is_sequencer_node =
       nodes_configuration->getSequencerMembership()->isSequencingEnabled(
           my_node_id.index());

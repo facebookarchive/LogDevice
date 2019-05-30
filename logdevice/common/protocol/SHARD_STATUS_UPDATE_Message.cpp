@@ -7,6 +7,7 @@
  */
 #include "logdevice/common/protocol/SHARD_STATUS_UPDATE_Message.h"
 
+#include "logdevice/common/Processor.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/ServerConfig.h"
@@ -40,7 +41,7 @@ SHARD_STATUS_UPDATE_Message::deserialize(ProtocolReader& reader) {
 
 Message::Disposition
 SHARD_STATUS_UPDATE_Message::onReceived(const Address& from) {
-  if (Worker::onThisThread()->getServerConfig()->hasMyNodeID()) {
+  if (Worker::onThisThread()->processor_->hasMyNodeID()) {
     RATELIMIT_ERROR(
         std::chrono::seconds(10),
         2,

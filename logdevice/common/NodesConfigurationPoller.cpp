@@ -186,11 +186,10 @@ NodesConfigurationPoller::getNodesConfiguration() const {
 }
 
 folly::Optional<node_index_t> NodesConfigurationPoller::getMyNodeID() const {
-  const auto server_config = Worker::onThisThread()->getServerConfig();
-  return (
-      server_config->hasMyNodeID()
-          ? folly::Optional<node_index_t>(server_config->getMyNodeID().index())
-          : folly::none);
+  auto processor = Worker::onThisThread()->processor_;
+  return (processor->hasMyNodeID()
+              ? folly::Optional<node_index_t>(processor->getMyNodeID().index())
+              : folly::none);
 }
 
 NodesConfigurationPoller::Poller::RequestResult

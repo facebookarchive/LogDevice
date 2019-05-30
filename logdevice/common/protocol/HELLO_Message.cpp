@@ -361,7 +361,7 @@ Message::Disposition HELLO_Message::onReceived(const Address& from) {
       return Disposition::ERROR;
     }
 
-    auto my_node_id = Worker::getConfig()->serverConfig()->getMyNodeID();
+    auto my_node_id = Worker::onThisThread()->processor_->getMyNodeID();
     if (destination_node_id_ != my_node_id) {
       ld_error("Got a HELLO from %s with a DESTINATION_NODE which does not "
                "match this node. Destination NodeID: %s. My NodeID: %s.",

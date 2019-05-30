@@ -645,7 +645,7 @@ void GET_SEQ_STATE_Message::notePreempted(epoch_t e, NodeID sealed_by) {
           e.val(),
           log_id_.val());
   Worker* w = Worker::onThisThread();
-  NodeID my_node_id = w->getConfig()->serverConfig()->getMyNodeID();
+  NodeID my_node_id = w->processor_->getMyNodeID();
 
   if (my_node_id == sealed_by) {
     return;
@@ -768,8 +768,7 @@ bool GET_SEQ_STATE_Message::shouldRedirectOrFail(logid_t datalog_id,
 
   // does FD think that this node should be running the sequencer
   ld_check(seq_node.isNodeID());
-  if (seq_node.index() ==
-      w->getConfig()->serverConfig()->getMyNodeID().index()) {
+  if (seq_node.index() == w->processor_->getMyNodeID().index()) {
     return false;
   }
 
@@ -801,8 +800,8 @@ bool GET_SEQ_STATE_Message::isReady(Status* status_out) {
 
   auto processor = w->processor_;
   auto detector_is_running = processor->isFailureDetectorRunning();
+  auto node_id = processor->getMyNodeID();
   auto config = w->getConfig()->serverConfig();
-  auto node_id = config->getMyNodeID();
   const Configuration::Node* node = config->getNode(node_id);
   ld_check(node);
 

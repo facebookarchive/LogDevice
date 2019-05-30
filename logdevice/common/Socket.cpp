@@ -2769,7 +2769,7 @@ void SocketDependencies::processDeferredMessageCompletions() {
 }
 
 NodeID SocketDependencies::getMyNodeID() {
-  return getServerConfig()->getMyNodeID();
+  return processor_->getMyNodeID();
 }
 
 /**

@@ -164,7 +164,7 @@ int RebuildingCoordinator::start() {
   maintenance_log_writer_ =
       std::make_unique<maintenance::MaintenanceLogWriter>(processor_);
 
-  myNodeId_ = getMyNodeID();
+  myNodeId_ = getMyNodeID().index();
 
   populateDirtyShardCache(dirtyShards_);
 
@@ -299,8 +299,7 @@ void RebuildingCoordinator::noteRebuildingSettingsChanged() {
 }
 
 int RebuildingCoordinator::checkMarkers() {
-  auto config = config_->get();
-  if (config->serverConfig()->getMyNodeID().generation() <= 1) {
+  if (getMyNodeID().generation() <= 1) {
     for (uint32_t shard = 0; shard < numShards(); ++shard) {
       RebuildingCompleteMetadata metadata;
       LocalLogStore::WriteOptions options;
@@ -972,7 +971,7 @@ RebuildingCoordinator::createShardRebuilding(
                                                restart_version,
                                                rebuilding_set,
                                                rebuilding_settings,
-                                               config_,
+                                               processor_->getMyNodeID(),
                                                this);
   } else {
     return std::make_unique<ShardRebuildingV1>(shard,
@@ -1251,7 +1250,7 @@ void RebuildingCoordinator::onFinishedRetrievingPlans(uint32_t shard_idx,
 void RebuildingCoordinator::onShardUndrain(node_index_t node_idx,
                                            uint32_t shard_idx,
                                            const EventLogRebuildingSet& set) {
-  if (node_idx != getMyNodeID()) {
+  if (node_idx != getMyNodeID().index()) {
     // We don't care about this event if it's not for this node.
     return;
   }
@@ -1748,9 +1747,8 @@ void RebuildingCoordinator::subscribeToEventLog() {
   ld_info("Subscribed to EventLog");
 }
 
-node_index_t RebuildingCoordinator::getMyNodeID() {
-  auto config = config_->get();
-  return config->serverConfig()->getMyNodeID().index();
+NodeID RebuildingCoordinator::getMyNodeID() {
+  return processor_->getMyNodeID();
 }
 
 void RebuildingCoordinator::getDebugInfo(

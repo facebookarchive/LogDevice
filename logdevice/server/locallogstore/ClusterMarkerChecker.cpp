@@ -71,9 +71,11 @@ static bool checkShard(LocalLogStore* store,
   return true;
 }
 
-bool check(ShardedLocalLogStore& sharded_store, ServerConfig& config) {
+bool check(ShardedLocalLogStore& sharded_store,
+           ServerConfig& config,
+           const NodeID& my_node_id) {
   std::string prefix = config.getClusterName() + ":N" +
-      std::to_string(config.getMyNodeID().index()) + ":shard";
+      std::to_string(my_node_id.index()) + ":shard";
 
   bool all_good = true;
   std::vector<std::pair<shard_index_t, ClusterMarkerMetadata>> to_write_shards;

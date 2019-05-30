@@ -12,6 +12,7 @@
 #include "logdevice/common/GetEpochRecoveryMetadataRequest.h"
 #include "logdevice/common/Metadata.h"
 #include "logdevice/common/Sender.h"
+#include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/ServerWorker.h"
 #include "logdevice/server/storage/PurgeUncleanEpochs.h"
 
@@ -32,7 +33,7 @@ Message::Message::Disposition GET_EPOCH_RECOVERY_METADATA_REPLY_onReceived(
   ServerWorker* worker = ServerWorker::onThisThread();
 
   auto scfg = worker->getServerConfig();
-  auto* node = scfg->getNode(scfg->getMyNodeID().index());
+  auto* node = scfg->getNode(worker->processor_->getMyNodeID().index());
   ld_check(node);
   const shard_size_t n_shards = node->getNumShards();
   ld_check(n_shards > 0); // We already checked we are a storage node.

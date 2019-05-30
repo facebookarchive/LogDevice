@@ -59,7 +59,7 @@ Request::Execution CheckSealRequest::execute() {
 
 void CheckSealRequest::sendCheckSeals() {
   Worker* w = Worker::onThisThread();
-  auto my_nodeid = w->getConfig()->serverConfig()->getMyNodeID();
+  auto my_nodeid = w->processor_->getMyNodeID();
 
   ld_spew("Sending CHECK_SEAL_Message(rqid:%lu, gss-rqid:%lu, sender:%s) for "
           "log:%lu to shards:[%s]",

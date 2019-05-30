@@ -733,7 +733,7 @@ int Appender::start(std::shared_ptr<EpochSequencer> epoch_sequencer,
           getSettings().test_timestamp_linear_transform.first +
       getSettings().test_timestamp_linear_transform.second;
   store_hdr_.last_known_good = lsn_to_esn(getLastKnownGood());
-  store_hdr_.sequencer_node_id = cfg->serverConfig()->getMyNodeID();
+  store_hdr_.sequencer_node_id = getMyNodeID();
   store_hdr_.wave = 0;
   store_hdr_.flags = passthru_flags_;
   store_hdr_.nsync = 0;
@@ -2291,6 +2291,10 @@ int Appender::link() {
 
 const std::shared_ptr<Configuration> Appender::getClusterConfig() const {
   return Worker::getConfig();
+}
+
+NodeID Appender::getMyNodeID() const {
+  return Worker::onThisThread()->processor_->getMyNodeID();
 }
 
 std::string Appender::describeConnection(const Address& addr) const {

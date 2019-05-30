@@ -277,7 +277,8 @@ class StatsHolder;
 std::shared_ptr<Processor>
 make_test_processor(const Settings& settings,
                     std::shared_ptr<UpdateableConfig> config = nullptr,
-                    StatsHolder* stats = nullptr);
+                    StatsHolder* stats = nullptr,
+                    folly::Optional<NodeID> my_node_id = folly::none);
 
 void gracefully_shutdown_processor(Processor* processor);
 

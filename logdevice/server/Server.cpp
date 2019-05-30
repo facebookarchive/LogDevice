@@ -531,7 +531,7 @@ bool Server::initListeners() {
 
     std::shared_ptr<Configuration> config = updateable_config_->get();
     ld_check(config);
-    NodeID node_id = config->serverConfig()->getMyNodeID();
+    NodeID node_id = params_->getMyNodeID().value();
     const ServerConfig::Node* node_config =
         config->serverConfig()->getNode(node_id);
 
@@ -656,7 +656,9 @@ bool Server::initStore() {
                                           &g_rocksdb_caches,
                                           params_->getStats()));
       if (!server_settings_->ignore_cluster_marker &&
-          !ClusterMarkerChecker::check(*sharded_store_, *server_config_)) {
+          !ClusterMarkerChecker::check(*sharded_store_,
+                                       *server_config_,
+                                       params_->getMyNodeID().value())) {
         return false;
       }
       auto& io_fault_injection = IOFaultInjection::instance();
@@ -706,9 +708,7 @@ bool Server::initProcessor() {
       // create and initialize NodesConfigurationManager (NCM) and attach it to
       // the Processor
 
-      // TODO: Fetch the NodesID from the NodesConfiguration instead of the
-      // ServerConfig.
-      auto my_node_id = updateable_config_->getServerConfig()->getMyNodeID();
+      auto my_node_id = params_->getMyNodeID().value();
       auto node_svc_discovery =
           updateable_config_->getNodesConfigurationFromNCMSource()
               ->getNodeServiceDiscovery(my_node_id);
@@ -933,7 +933,7 @@ bool Server::initRebuildingCoordinator() {
     event_log_ =
         std::make_unique<EventLogStateMachine>(params_->getProcessorSettings());
     event_log_->enableSendingUpdatesToWorkers();
-    event_log_->setMyNodeID(config->serverConfig()->getMyNodeID());
+    event_log_->setMyNodeID(params_->getMyNodeID().value());
   }
 
   if (sharded_store_) {

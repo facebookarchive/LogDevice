@@ -9,6 +9,7 @@
 
 #include <folly/Memory.h>
 
+#include "logdevice/common/Processor.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/Configuration.h"
@@ -143,7 +144,6 @@ CONFIG_FETCH_Message::handleLogsConfigRequest(const Address& from) {
 
 Message::Disposition
 CONFIG_FETCH_Message::handleNodesConfigurationRequest(const Address& from) {
-  auto config = getConfig();
   auto nodes_cfg = getNodesConfiguration();
 
   CONFIG_CHANGED_Header hdr{
@@ -152,7 +152,7 @@ CONFIG_FETCH_Message::handleNodesConfigurationRequest(const Address& from) {
       static_cast<uint64_t>(
           nodes_cfg->getLastChangeTimestamp().time_since_epoch().count()),
       nodes_cfg->getVersion(),
-      config->serverConfig()->getMyNodeID(),
+      getMyNodeID(),
       CONFIG_CHANGED_Header::ConfigType::NODES_CONFIGURATION,
       isCallerWaitingForCallback() ? CONFIG_CHANGED_Header::Action::CALLBACK
                                    : CONFIG_CHANGED_Header::Action::UPDATE};
@@ -184,6 +184,10 @@ CONFIG_FETCH_Message::handleNodesConfigurationRequest(const Address& from) {
 
 std::shared_ptr<Configuration> CONFIG_FETCH_Message::getConfig() {
   return Worker::onThisThread()->getConfig();
+}
+
+NodeID CONFIG_FETCH_Message::getMyNodeID() const {
+  return Worker::onThisThread()->processor_->getMyNodeID();
 }
 
 std::shared_ptr<const configuration::nodes::NodesConfiguration>

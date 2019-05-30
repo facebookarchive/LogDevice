@@ -295,7 +295,7 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
 
   virtual void subscribeToEventLog();
 
-  virtual node_index_t getMyNodeID();
+  virtual NodeID getMyNodeID();
 
   void requestPlan(shard_index_t shard_idx,
                    RebuildingPlanner::Parameters params,

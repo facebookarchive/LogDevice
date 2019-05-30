@@ -35,10 +35,6 @@ class MockGetClusterStateRequest : public GetClusterStateRequest {
   void initTimers() override {}
   void activateWaveTimer() override {}
 
-  std::shared_ptr<ServerConfig> getConfig() const override {
-    return config_;
-  }
-
   std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const override {
     return config_->getNodesConfigurationFromServerConfigSource();

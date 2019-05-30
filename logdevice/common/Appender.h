@@ -1014,6 +1014,7 @@ class Appender : public IntrusiveUnorderedMapHook {
 
   virtual const Settings& getSettings() const;
   virtual const std::shared_ptr<Configuration> getClusterConfig() const;
+  virtual NodeID getMyNodeID() const;
   virtual std::string describeConnection(const Address& addr) const;
   virtual bool bytesPendingLimitReached() const;
   virtual bool isAcceptingWork() const;

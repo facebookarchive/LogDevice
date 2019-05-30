@@ -83,7 +83,7 @@ GET_EPOCH_RECOVERY_METADATA_onReceived(GET_EPOCH_RECOVERY_METADATA_Message* msg,
   }
 
   auto scfg = worker->getServerConfig();
-  auto* node = scfg->getNode(scfg->getMyNodeID().index());
+  auto* node = scfg->getNode(worker->processor_->getMyNodeID().index());
   ld_check(node);
   const shard_size_t n_shards = node->getNumShards();
   ld_check(n_shards > 0); // We already checked we are a storage node.

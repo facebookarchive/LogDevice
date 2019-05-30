@@ -27,10 +27,10 @@ using namespace facebook::logdevice::configuration::nodes;
 TEST(ServerBasedNodesConfigurationStoreTest, SuccessScenario) {
   auto updatable_config =
       std::make_shared<UpdateableConfig>(createSimpleConfig(3, 0));
-  updatable_config->getServerConfig()->setMyNodeID(NodeID(0, 1));
   Settings settings = create_default_settings<Settings>();
   settings.num_workers = 5;
-  auto processor = make_test_processor(settings, std::move(updatable_config));
+  auto processor = make_test_processor(
+      settings, std::move(updatable_config), nullptr, NodeID(0, 1));
   auto nc = processor->getNodesConfiguration();
   const std::string nc_str = NodesConfigurationCodec::serialize(*nc, {false});
   auto nc_bumped = nc->withIncrementedVersionAndTimestamp();

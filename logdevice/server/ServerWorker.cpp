@@ -233,7 +233,7 @@ void ServerWorker::initializeNodeStatsController() {
             this->processor_->settings()
                 ->sequencer_boycotting.node_stats_max_boycott_count;
         ld_check(this->getServerConfig() != nullptr);
-        auto my_node_id = this->getServerConfig()->getMyNodeID();
+        auto my_node_id = this->processor_->getMyNodeID();
 
         auto controller = this->impl_->node_stats_controller_.get();
         if (max_boycott_count == 0 ||

@@ -72,7 +72,6 @@ bool GetClusterStateRequest::start() {
 }
 
 void GetClusterStateRequest::initNodes() {
-  auto config = getConfig();
   const auto& nodes_configuration = getNodesConfiguration();
 
   // the following settings is only used in tests to force selection of nodes
@@ -83,7 +82,7 @@ void GetClusterStateRequest::initNodes() {
   node_index_t my_idx;
   bool server_side = getSettings().server;
   if (server_side) {
-    my_idx = config->getMyNodeID().index();
+    my_idx = getMyNodeID().index();
   }
 
   nodes_.clear();
@@ -163,8 +162,8 @@ bool GetClusterStateRequest::done(Status status,
   return true;
 }
 
-std::shared_ptr<ServerConfig> GetClusterStateRequest::getConfig() const {
-  return Worker::getConfig()->serverConfig();
+NodeID GetClusterStateRequest::getMyNodeID() const {
+  return Worker::onThisThread()->processor_->getMyNodeID();
 }
 
 std::shared_ptr<const configuration::nodes::NodesConfiguration>

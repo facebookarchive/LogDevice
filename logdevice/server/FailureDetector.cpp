@@ -1177,7 +1177,7 @@ FailureDetector::getNodesConfiguration() const {
 }
 
 NodeID FailureDetector::getMyNodeID() const {
-  return Worker::getConfig()->serverConfig()->getMyNodeID();
+  return Worker::onThisThread()->processor_->getMyNodeID();
 }
 
 ClusterState* FailureDetector::getClusterState() const {

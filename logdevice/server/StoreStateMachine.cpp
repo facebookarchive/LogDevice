@@ -62,7 +62,7 @@ Message::Disposition StoreStateMachine::onReceived(STORE_Message* msg,
           STORE_Message::flagsToString(msg->header_.flags).c_str());
 
   ServerWorker* worker = ServerWorker::onThisThread();
-  NodeID my_node_id = Worker::getConfig()->serverConfig()->getMyNodeID();
+  NodeID my_node_id = worker->processor_->getMyNodeID();
   auto start_time = std::chrono::steady_clock::now();
 
   // Check that we should even be processing this

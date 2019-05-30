@@ -674,8 +674,7 @@ void AllSequencers::notePreemption(logid_t logid,
         context);
     return;
   }
-  if (meta_props->last_writer_node_id.value() ==
-      updateable_config_->get()->serverConfig()->getMyNodeID()) {
+  if (meta_props->last_writer_node_id.value() == processor_->getMyNodeID()) {
     // Sequencer was reactivated on this node.
     return;
   }
@@ -893,7 +892,7 @@ void AllSequencers::notifyMetaDataLogWriterOnActivation(Sequencer* seq,
 
 void AllSequencers::noteConfigurationChanged() {
   std::shared_ptr<Configuration> config = updateable_config_->get();
-  if (!config->serverConfig()->hasMyNodeID()) {
+  if (!processor_->hasMyNodeID()) {
     // not a server node
     ld_check(map_.empty());
     return;

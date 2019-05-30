@@ -75,10 +75,9 @@
 namespace facebook { namespace logdevice {
 
 namespace {
-node_index_t getMyNodeIndex(const std::shared_ptr<UpdateableConfig>& config,
-                            const Worker* worker) {
+node_index_t getMyNodeIndex(const Worker* worker) {
   if (worker->immutable_settings_->server) {
-    return config->get()->serverConfig()->getMyNodeID().index();
+    return worker->processor_->getMyNodeID().index();
   }
   return NODE_INDEX_INVALID;
 }
@@ -88,8 +87,8 @@ getMyLocation(const std::shared_ptr<UpdateableConfig>& config,
               const Worker* worker) {
   if (worker->immutable_settings_->server) {
     std::shared_ptr<ServerConfig> cfg(config->get()->serverConfig());
-    ld_check(cfg->hasMyNodeID());
-    auto my_node_index = cfg->getMyNodeID().index();
+    ld_check(worker->processor_->hasMyNodeID());
+    auto my_node_index = worker->processor_->getMyNodeID().index();
     auto nodes = config->getServerConfig()
                      ->getNodesConfigurationFromServerConfigSource();
     auto node = nodes->getNodeServiceDiscovery(my_node_index);
@@ -121,7 +120,7 @@ class WorkerImpl {
                 w->worker_type_ == WorkerType::FAILURE_DETECTOR,
                 config->getServerConfig()
                     ->getNodesConfigurationFromServerConfigSource(),
-                getMyNodeIndex(config, w),
+                getMyNodeIndex(w),
                 getMyLocation(config, w)),
         activeAppenders_(w->immutable_settings_->server ? N_APPENDER_MAP_BUCKETS
                                                         : 1),

@@ -52,6 +52,7 @@ class MockFailureDetector : public FailureDetector {
   explicit MockFailureDetector(UpdateableSettings<GossipSettings> settings,
                                ServerProcessor* p)
       : FailureDetector(std::move(settings), p),
+        my_node_id_(p->getMyNodeID()),
         config_(p->config_->get()->serverConfig()),
         cluster_state_(new ClusterState(
             1000,
@@ -73,11 +74,9 @@ class MockFailureDetector : public FailureDetector {
   getNodesConfiguration() const override {
     return config_->getNodesConfigurationFromServerConfigSource();
   }
-
   NodeID getMyNodeID() const override {
-    return config_->getMyNodeID();
+    return my_node_id_;
   }
-
   ClusterState* getClusterState() const override {
     return cluster_state_.get();
   }
@@ -111,6 +110,7 @@ class MockFailureDetector : public FailureDetector {
   }
 
   MockBoycottTracker mock_tracker_;
+  NodeID my_node_id_;
   std::shared_ptr<ServerConfig> config_;
   std::unique_ptr<ClusterState> cluster_state_;
   std::atomic<bool> report_logsconfig_loaded_{true};
@@ -141,7 +141,6 @@ std::shared_ptr<ServerConfig> gen_config(size_t num_nodes,
 
   std::shared_ptr<ServerConfig> config =
       ServerConfig::fromDataTest(__FILE__, nodes_config, meta_config);
-  config->setMyNodeID(NodeID(this_node, 1));
   return config;
 }
 

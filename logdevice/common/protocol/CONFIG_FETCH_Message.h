@@ -82,6 +82,7 @@ class CONFIG_FETCH_Message : public Message {
  protected:
   // To be overridden in tests
   virtual std::shared_ptr<Configuration> getConfig();
+  virtual NodeID getMyNodeID() const;
   virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration();
 

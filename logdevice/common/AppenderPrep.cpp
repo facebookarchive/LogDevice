@@ -547,7 +547,7 @@ bool AppenderPrep::nodeInConfig(NodeID node) const {
 }
 
 NodeID AppenderPrep::getMyNodeID() const {
-  return Worker::onThisThread()->getConfig()->serverConfig()->getMyNodeID();
+  return Worker::onThisThread()->processor_->getMyNodeID();
 }
 
 AppenderPrep::Decision AppenderPrep::shouldRedirect(NodeID seq_node,

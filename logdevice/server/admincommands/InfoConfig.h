@@ -76,7 +76,7 @@ class InfoConfig : public AdminCommand {
           .set<0>(included_config_metadata.uri)
           // included config doesn't get propagated through config
           // synchronization set source to my node id
-          .set<1>(config.serverConfig()->getMyNodeID().index())
+          .set<1>(server_->getProcessor()->getMyNodeID().index())
           .set<2>(included_config_metadata.hash)
           .set<3>(included_config_metadata.modified_time)
           .set<4>(included_config_metadata.loaded_time);

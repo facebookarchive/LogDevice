@@ -420,7 +420,7 @@ void PurgeUncleanEpochs::postEpochRecoveryMetadataRequest(
 }
 
 NodeID PurgeUncleanEpochs::getMyNodeID() const {
-  return Worker::getConfig()->serverConfig()->getMyNodeID();
+  return Worker::onThisThread()->processor_->getMyNodeID();
 }
 
 void PurgeUncleanEpochs::onGetEpochRecoveryMetadataComplete(

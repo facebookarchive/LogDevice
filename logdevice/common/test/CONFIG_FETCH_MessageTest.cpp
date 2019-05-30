@@ -96,6 +96,10 @@ struct CONFIG_FETCH_MessageMock : public CONFIG_FETCH_Message {
     return config;
   }
 
+  NodeID getMyNodeID() const override {
+    return NodeID(2, 1);
+  }
+
   std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() override {
     // TODO: migrate it to use NodesConfiguration with switchable source
@@ -143,7 +147,6 @@ TEST(CONFIG_FETCH_MessageTest, OnReceivedNodesConfiguration) {
       },
   };
   auto config = createSimpleConfig(3, 1);
-  config->serverConfig()->setMyNodeID(NodeID(2, 1));
   msg.config = config;
 
   // TODO: migrate it to use NodesConfiguration with switchable source
@@ -184,7 +187,6 @@ TEST(CONFIG_FETCH_MessageTest, OnReceivedNodesConfigurationConditional) {
       },
   };
   auto config = createSimpleConfig(3, 1);
-  config->serverConfig()->setMyNodeID(NodeID(2, 1));
   msg.config = config;
 
   auto expected = std::make_unique<CONFIG_CHANGED_Message>(
@@ -219,7 +221,6 @@ TEST(CONFIG_FETCH_MessageTest, OnReceivedUpdate) {
       CONFIG_FETCH_Header{CONFIG_FETCH_Header::ConfigType::MAIN_CONFIG},
   };
   auto config = createSimpleConfig(3, 1);
-  config->serverConfig()->setMyNodeID(NodeID(2, 1));
   msg.config = config;
 
   auto expected = std::make_unique<CONFIG_CHANGED_Message>(

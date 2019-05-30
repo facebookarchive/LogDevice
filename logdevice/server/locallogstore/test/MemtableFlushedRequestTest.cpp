@@ -33,11 +33,12 @@ class MemtableFlushedRequestTest : public ::testing::Test {
     Configuration::NodesConfig nodes_config(std::move(nodes));
     config = ServerConfig::fromDataTest(
         "memtableflushedrequest_test", std::move(nodes_config));
-    config->setMyNodeID(my_node_id);
+    this->my_node_id = my_node_id;
   }
 
   ~MemtableFlushedRequestTest() override {}
 
+  NodeID my_node_id;
   std::shared_ptr<ServerConfig> config;
   uint32_t numMessageSent{0};
   bool applyFlushCalled{false};
@@ -62,8 +63,8 @@ class MockMemtableFlushedRequest : public MemtableFlushedRequest {
     sender_ = std::make_unique<MockSender>(this);
   }
 
-  std::shared_ptr<ServerConfig> getServerConfig() override {
-    return test_->config;
+  NodeID getMyNodeID() const override {
+    return test_->my_node_id;
   }
 
   std::shared_ptr<const configuration::nodes::NodesConfiguration>
@@ -96,7 +97,7 @@ class MockMemtableFlushedRequest : public MemtableFlushedRequest {
 
     NodeID destination = addr.id_.node_;
     EXPECT_TRUE(destination.isNodeID());
-    EXPECT_NE(destination.index(), test_->config->getMyNodeID().index());
+    EXPECT_NE(destination.index(), test_->my_node_id.index());
     test_->numMessageSent++;
     return 0;
   }

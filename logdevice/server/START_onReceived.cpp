@@ -116,7 +116,7 @@ Message::Disposition START_onReceived(START_Message* msg,
   }
 
   auto scfg = w->getServerConfig();
-  auto* node = scfg->getNode(scfg->getMyNodeID().index());
+  auto* node = scfg->getNode(w->processor_->getMyNodeID().index());
   ld_check(node);
   ld_check(node->storage_attributes);
   const shard_size_t n_shards = node->getNumShards();
@@ -412,7 +412,7 @@ Message::Disposition START_onReceived(START_Message* msg,
     stream->filter_version_ = header.filter_version;
     if (header.flags & START_Header::SINGLE_COPY_DELIVERY) {
       stream->enableSingleCopyDelivery(
-          msg->filtered_out_, scfg->getMyNodeID().index());
+          msg->filtered_out_, w->processor_->getMyNodeID().index());
       if (header.flags & START_Header::LOCAL_SCD_ENABLED) {
         auto client_location = w->sender().getClientLocation(from.id_.client_);
         if (client_location.empty()) {

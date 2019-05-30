@@ -63,7 +63,7 @@ void RebuildingSupervisor::init() {
   auto w = Worker::onThisThread();
   auto config = w->getServerConfig();
 
-  myNodeId_ = config->getMyNodeID();
+  myNodeId_ = w->processor_->getMyNodeID();
 
   auto cs = w->getClusterState();
   ld_check(cs != nullptr);

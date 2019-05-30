@@ -18,6 +18,8 @@ namespace facebook { namespace logdevice { namespace ClusterMarkerChecker {
  */
 
 // @return whether the check passed.
-bool check(ShardedLocalLogStore& sharded_store, ServerConfig& config);
+bool check(ShardedLocalLogStore& sharded_store,
+           ServerConfig& config,
+           const NodeID& my_node_id);
 
 }}} // namespace facebook::logdevice::ClusterMarkerChecker

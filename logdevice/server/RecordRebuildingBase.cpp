@@ -54,7 +54,7 @@ ShardID RecordRebuildingBase::getMyShardID() const {
 }
 
 node_index_t RecordRebuildingBase::getMyNodeIndex() const {
-  return Worker::getConfig()->serverConfig()->getMyNodeID().index();
+  return Worker::onThisThread()->processor_->getMyNodeID().index();
 }
 
 bool RecordRebuildingBase::isStorageNodeInConfig(node_index_t n) const {

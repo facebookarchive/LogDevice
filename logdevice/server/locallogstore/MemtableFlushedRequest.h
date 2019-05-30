@@ -43,7 +43,7 @@ class MemtableFlushedRequest : public Request {
 
   int getThreadAffinity(int nthreads) override;
 
-  virtual std::shared_ptr<ServerConfig> getServerConfig();
+  virtual NodeID getMyNodeID() const;
   virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const;
   virtual bool responsibleForNodesUpdates(node_index_t nodeIndex);

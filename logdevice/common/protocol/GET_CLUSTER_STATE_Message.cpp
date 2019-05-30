@@ -39,9 +39,10 @@ GET_CLUSTER_STATE_Message::onReceived(const Address& from) {
                    "returning E::NOTSUPPORTED");
     status = E::NOTSUPPORTED;
   } else {
+    auto my_node_id = Worker::onThisThread()->processor_->getMyNodeID();
     auto config = Worker::getConfig();
 
-    if (!cs->isNodeAlive(config->serverConfig()->getMyNodeID().index())) {
+    if (!cs->isNodeAlive(my_node_id.index())) {
       RATELIMIT_INFO(
           std::chrono::seconds(5), 1, "Failure detector is not ready");
       status = E::NOTREADY;

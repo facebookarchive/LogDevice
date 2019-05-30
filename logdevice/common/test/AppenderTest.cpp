@@ -536,6 +536,10 @@ class AppenderTest::MockAppender : public Appender {
     return test_->config_.get();
   }
 
+  NodeID getMyNodeID() const override {
+    return NodeID(10, 20);
+  }
+
   template <typename T>
   void onMessageReceived(std::unique_ptr<Message>& msg,
                          message_map_t<T>& map,
@@ -748,7 +752,6 @@ void AppenderTest::updateConfig() {
   config_.updateableNodesConfiguration()->update(
       server_cfg->getNodesConfigurationFromServerConfigSource());
   config_.updateableLogsConfig()->update(std::move(logs_config));
-  config_.get()->serverConfig()->setMyNodeID(NodeID(10, 20));
 
   StorageSet shards;
   for (const auto& it : nodes) {

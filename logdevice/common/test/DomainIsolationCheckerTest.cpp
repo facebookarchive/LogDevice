@@ -66,7 +66,7 @@ class MockDomainIsolationChecker : public DomainIsolationChecker {
   }
 
   NodeID getMyNodeID() const override {
-    return test_->config_->getMyNodeID();
+    return NodeID(test_->my_node_idx_, 1);
   }
 
  private:
@@ -93,7 +93,6 @@ void DomainIsolationTest::setUp(
   // addLog(logs_config.get(), logid_t(1), 1, 0, 2, {});
   config_ = ServerConfig::fromDataTest(
       "copyset_selector_test", std::move(nodes_config));
-  config_->setMyNodeID(NodeID(my_node_idx_, 1));
   checker_ = std::make_unique<MockDomainIsolationChecker>(this);
   checker_->init();
 }

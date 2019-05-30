@@ -382,7 +382,8 @@ std::shared_ptr<PluginRegistry> make_test_plugin_registry() {
 std::shared_ptr<Processor>
 make_test_processor(const Settings& settings,
                     std::shared_ptr<UpdateableConfig> config,
-                    StatsHolder* stats) {
+                    StatsHolder* stats,
+                    folly::Optional<NodeID> my_node_id) {
   if (!config) {
     config = UpdateableConfig::createEmpty();
   }
@@ -390,7 +391,11 @@ make_test_processor(const Settings& settings,
                            std::make_shared<NoopTraceLogger>(config),
                            UpdateableSettings<Settings>(settings),
                            stats,
-                           make_test_plugin_registry());
+                           make_test_plugin_registry(),
+                           "",
+                           "",
+                           "logdevice",
+                           std::move(my_node_id));
 }
 
 void gracefully_shutdown_processor(Processor* processor) {

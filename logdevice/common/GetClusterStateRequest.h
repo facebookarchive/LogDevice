@@ -68,7 +68,7 @@ class GetClusterStateRequest : public Request {
             std::vector<node_index_t> boycotted_nodes);
   bool start();
 
-  virtual std::shared_ptr<ServerConfig> getConfig() const;
+  virtual NodeID getMyNodeID() const;
   virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const;
 

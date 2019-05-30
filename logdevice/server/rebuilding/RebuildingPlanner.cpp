@@ -280,6 +280,7 @@ void RebuildingPlanner::onSyncSequencerComplete(
 
 std::vector<shard_index_t>
 RebuildingPlanner::findDonorShards(EpochMetaData& metadata) const {
+  Worker* worker = Worker::onThisThread();
   auto cfg = Worker::getConfig();
 
   // First, remove from the storage set any node that's no longer in the config.
@@ -311,7 +312,7 @@ RebuildingPlanner::findDonorShards(EpochMetaData& metadata) const {
 
   // Add to `donors` all indices of shards on this node that appear on the
   // storage set for this epoch interval.
-  node_index_t nid = cfg->serverConfig()->getMyNodeID().index();
+  node_index_t nid = worker->processor_->getMyNodeID().index();
   const auto node = cfg->serverConfig()->getNode(nid);
   ld_check(node);
   for (shard_index_t shard = 0; shard < node->getNumShards(); ++shard) {

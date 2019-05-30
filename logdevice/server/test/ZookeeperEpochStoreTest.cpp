@@ -24,7 +24,9 @@
 #include "logdevice/common/test/TestNodeSetSelector.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/common/test/ZookeeperClientInMemory.h"
+#include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/SetLastCleanEpochZRQ.h"
+#include "logdevice/server/test/TestUtil.h"
 
 using namespace facebook::logdevice;
 
@@ -55,7 +57,10 @@ class ZookeeperEpochStoreTest : public ::testing::Test {
     cfg_in->serverConfig()->setMyNodeID(NodeID(0, 1));
 
     config = std::make_shared<UpdateableConfig>(std::move(cfg_in));
-    processor = make_test_processor(settings, config);
+    auto processor_builder = TestServerProcessorBuilder{settings}
+                                 .setUpdateableConfig(config)
+                                 .setMyNodeID(NodeID(0, 1));
+    processor = std::move(processor_builder).build();
 
     auto znodes = getPrefillZnodes();
 
@@ -70,6 +75,10 @@ class ZookeeperEpochStoreTest : public ::testing::Test {
         zookeeper_client_factory);
 
     dbg::assertOnData = true;
+  }
+
+  void TearDown() override {
+    shutdown_test_server(processor);
   }
 
   virtual ZookeeperClientInMemory::state_map_t getPrefillZnodes() {
@@ -98,12 +107,12 @@ class ZookeeperEpochStoreTest : public ::testing::Test {
     return map;
   }
 
-  std::shared_ptr<Processor> processor;
+  std::shared_ptr<ServerProcessor> processor;
   std::shared_ptr<UpdateableConfig> config;
   std::unique_ptr<ZookeeperEpochStore> epochstore;
 
  private:
-  Alarm alarm_{std::chrono::seconds(10)};
+  Alarm alarm_{std::chrono::seconds(30)};
 };
 
 class ZookeeperEpochStoreTestEmpty : public ZookeeperEpochStoreTest {
@@ -746,7 +755,7 @@ class CheckNodeIDRequest : public Request {
           EXPECT_TRUE(info->isValid());
           ASSERT_NE(nullptr, meta_props);
           ASSERT_TRUE(meta_props->last_writer_node_id.hasValue());
-          ASSERT_EQ(config_->serverConfig()->getMyNodeID(),
+          ASSERT_EQ(Worker::onThisThread()->processor_->getMyNodeID(),
                     meta_props->last_writer_node_id.value());
           ++completedRequestCnt;
           delete this;

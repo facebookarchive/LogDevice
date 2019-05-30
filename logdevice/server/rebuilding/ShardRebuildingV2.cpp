@@ -25,14 +25,14 @@ ShardRebuildingV2::ShardRebuildingV2(
     lsn_t restart_version,
     std::shared_ptr<const RebuildingSet> rebuilding_set,
     UpdateableSettings<RebuildingSettings> rebuilding_settings,
-    std::shared_ptr<UpdateableConfig> config,
+    NodeID my_node_id,
     ShardRebuildingInterface::Listener* listener)
     : rebuildingVersion_(rebuilding_version),
       restartVersion_(restart_version),
       shard_(shard),
       rebuildingSet_(rebuilding_set),
       rebuildingSettings_(rebuilding_settings),
-      config_(config),
+      my_node_id_(my_node_id),
       listener_(listener),
       callbackHelper_(this) {}
 
@@ -394,7 +394,7 @@ StatsHolder* ShardRebuildingV2::getStats() {
 }
 
 node_index_t ShardRebuildingV2::getMyNodeIndex() {
-  return config_->getServerConfig()->getMyNodeID().index();
+  return my_node_id_.index();
 }
 
 const SimpleEnumMap<ShardRebuildingV2::ProfilingState, std::string>&

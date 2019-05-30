@@ -82,7 +82,7 @@ class MockedShardRebuilding : public ShardRebuildingV2,
                           RESTART_VERSION,
                           /* rebuilding_set */ nullptr,
                           rebuilding_settings,
-                          /* config */ nullptr,
+                          /* my_node_id */ NodeID(),
                           /* listener */ this),
         stats(StatsParams().setIsServer(true)) {}
 

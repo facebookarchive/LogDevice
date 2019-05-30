@@ -67,7 +67,7 @@ Message::Disposition SEAL_onReceived(SEAL_Message* msg, const Address& from) {
 
   auto config = worker->getConfig();
   auto scfg = config->serverConfig();
-  auto* node = scfg->getNode(scfg->getMyNodeID().index());
+  auto* node = scfg->getNode(worker->processor_->getMyNodeID().index());
   ld_check(node);
   ld_check(node->storage_attributes);
   const shard_size_t n_shards = node->getNumShards();

@@ -63,17 +63,17 @@ bool LogsConfigStateMachine::canTrimAndSnapshot() const {
     return true;
   }
   // Otherwise, check the node we are running on.
-  auto server_config = updateable_server_config_->get();
-  NodeID myNodeId = server_config->getMyNodeID();
-  ld_check(myNodeId.isNodeID());
 
   auto w = Worker::onThisThread();
+  NodeID my_node_id = w->processor_->getMyNodeID();
+  ld_check(my_node_id.isNodeID());
+
   auto cs = w->getClusterState();
   ld_check(cs != nullptr);
 
   // The node responsible for trimming and snapshotting is the first node
   // that's alive according to the failure detector.
-  return cs->getFirstNodeAlive() == myNodeId.index();
+  return cs->getFirstNodeAlive() == my_node_id.index();
 }
 
 bool LogsConfigStateMachine::shouldTrim() const {

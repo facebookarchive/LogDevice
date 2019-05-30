@@ -847,7 +847,7 @@ void LogRecoveryRequest::sealLog() {
   seal_header_->log_id = log_id_;
   seal_header_->seal_epoch = getSealEpoch();
   seal_header_->shard = -1; // Will be populated by sendSeal().
-  seal_header_->sealed_by = config->serverConfig()->getMyNodeID();
+  seal_header_->sealed_by = Worker::onThisThread()->processor_->getMyNodeID();
   seal_header_->last_clean_epoch = last_clean_epoch;
   ld_check(node_statuses_.empty());
 

@@ -6158,8 +6158,7 @@ operator()(LocalLogStore* store, FlushToken token) const {
     return;
   }
 
-  auto config = processor->config_->updateableServerConfig()->get();
-  auto nodeIndex = config->getMyNodeID().index();
+  auto nodeIndex = processor->getMyNodeID().index();
   auto serverInstanceId = processor->getServerInstanceId();
   uint32_t shardIdx = store->getShardIdx();
 

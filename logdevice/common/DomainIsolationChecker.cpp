@@ -261,7 +261,7 @@ DomainIsolationChecker::getNodesConfiguration() const {
 }
 
 NodeID DomainIsolationChecker::getMyNodeID() const {
-  return Worker::getConfig()->serverConfig()->getMyNodeID();
+  return Worker::onThisThread()->processor_->getMyNodeID();
 }
 
 std::string DomainIsolationChecker::getDebugInfo() const {

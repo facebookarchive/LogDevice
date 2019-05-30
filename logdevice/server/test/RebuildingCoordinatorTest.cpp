@@ -42,7 +42,7 @@ namespace facebook { namespace logdevice {
 
 using ms = std::chrono::milliseconds;
 
-static constexpr node_index_t my_node_id = 0;
+static const NodeID my_node_id{0, 1};
 
 struct Start {
   logid_t logid;
@@ -402,7 +402,7 @@ class MockedRebuildingCoordinator : public RebuildingCoordinator {
   }
 
   void subscribeToEventLog() override {}
-  node_index_t getMyNodeID() override {
+  NodeID getMyNodeID() override {
     return my_node_id;
   }
 
@@ -2261,7 +2261,7 @@ TEST_F(RebuildingCoordinatorTest, DirtyShard) {
       1, SHARD_NEEDS_REBUILD_Header::TIME_RANGED, LSN_INVALID);
 
   // Receive the message.
-  lsn_t v1 = onShardNeedsRebuild(my_node_id,
+  lsn_t v1 = onShardNeedsRebuild(my_node_id.index(),
                                  1,
                                  SHARD_NEEDS_REBUILD_Header::TIME_RANGED,
                                  folly::none,
@@ -2301,7 +2301,7 @@ TEST_F(RebuildingCoordinatorTest, DirtyShardNonAuthoritative) {
       1, SHARD_NEEDS_REBUILD_Header::TIME_RANGED, LSN_INVALID);
 
   // Receive the message.
-  lsn_t v1 = onShardNeedsRebuild(my_node_id,
+  lsn_t v1 = onShardNeedsRebuild(my_node_id.index(),
                                  1,
                                  SHARD_NEEDS_REBUILD_Header::TIME_RANGED,
                                  folly::none,
@@ -2339,25 +2339,29 @@ TEST_F(RebuildingCoordinatorTest, DirtyShardDrain) {
   updateConfig();
 
   // We drain N0:S1.
-  onShardNeedsRebuild(my_node_id, 1, flags, folly::none);
+  onShardNeedsRebuild(my_node_id.index(), 1, flags, folly::none);
 
   start();
 
   // Drain should still be in effect without any time ranges in RESTORE
   // mode (we cannot be a donor since we have some data lost).
   ASSERT_SHARD_NEEDS_REBUILD(1, 0, LSN_INVALID);
-  onShardNeedsRebuild(my_node_id, 1, 0, folly::none, false);
-  ASSERT_EQ(
-      rebuilding_set_->getRebuildingShards().at(1).nodes_.at(my_node_id).mode,
-      RebuildingMode::RESTORE);
+  onShardNeedsRebuild(my_node_id.index(), 1, 0, folly::none, false);
+  ASSERT_EQ(rebuilding_set_->getRebuildingShards()
+                .at(1)
+                .nodes_.at(my_node_id.index())
+                .mode,
+            RebuildingMode::RESTORE);
 
   // If we stop draining, we should convert back to doing a time ranged
   // rebuild.
   onShardUndrain(0, 1);
   ASSERT_SHARD_NEEDS_REBUILD(
       1, SHARD_NEEDS_REBUILD_Header::TIME_RANGED, LSN_INVALID);
-  auto drain =
-      rebuilding_set_->getRebuildingShards().at(1).nodes_.at(my_node_id).drain;
+  auto drain = rebuilding_set_->getRebuildingShards()
+                   .at(1)
+                   .nodes_.at(my_node_id.index())
+                   .drain;
   ASSERT_FALSE(drain);
 }
 
@@ -2383,7 +2387,7 @@ TEST_F(RebuildingCoordinatorTest, DirtyShardAlreadyRebuilt) {
   updateConfig();
 
   // We rebuild S1.
-  lsn_t v1 = onShardNeedsRebuild(my_node_id, 1, 0, folly::none, false);
+  lsn_t v1 = onShardNeedsRebuild(my_node_id.index(), 1, 0, folly::none, false);
   onShardIsRebuilt(1, 1, v1);
   onShardIsRebuilt(2, 1, v1);
   onShardIsRebuilt(3, 1, v1);
@@ -2394,11 +2398,11 @@ TEST_F(RebuildingCoordinatorTest, DirtyShardAlreadyRebuilt) {
   ASSERT_SHARD_ACK_REBUILT(1);
   ASSERT_EQ(rebuilding_set_->getRebuildingShards()
                 .at(1)
-                .nodes_.at(my_node_id)
+                .nodes_.at(my_node_id.index())
                 .auth_status,
             AuthoritativeStatus::AUTHORITATIVE_EMPTY);
 
-  onShardAckRebuilt(my_node_id, 1, v1);
+  onShardAckRebuilt(my_node_id.index(), 1, v1);
   ASSERT_TRUE(rebuilding_set_->getRebuildingShards().empty());
 }
 

@@ -763,7 +763,7 @@ void AllServerReadStreams::sendShardStatusToClient(ClientID cid) {
   // clients have the code that understands the "num_shards" property in the
   // node configuration. Leaving this here for backward compatibility until that
   // code is deployed everywhere.
-  auto my_node_id = Worker::onThisThread()->getServerConfig()->getMyNodeID();
+  auto my_node_id = Worker::onThisThread()->processor_->getMyNodeID();
   auto node = Worker::onThisThread()->getServerConfig()->getNode(my_node_id);
   ld_check(node);
   hdr.num_shards_deprecated = node->getNumShards();

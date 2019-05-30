@@ -1875,7 +1875,7 @@ bool EpochRecoveryDependencies::canMutateShard(ShardID shard) const {
 }
 
 NodeID EpochRecoveryDependencies::getMyNodeID() const {
-  return Worker::onThisThread()->getServerConfig()->getMyNodeID();
+  return Worker::onThisThread()->processor_->getMyNodeID();
 }
 
 read_stream_id_t EpochRecoveryDependencies::issueReadStreamID() {

@@ -25,7 +25,7 @@ class ShardRebuildingV2 : public ShardRebuildingInterface {
                     lsn_t restart_version,
                     std::shared_ptr<const RebuildingSet> rebuilding_set,
                     UpdateableSettings<RebuildingSettings> rebuilding_settings,
-                    std::shared_ptr<UpdateableConfig> config,
+                    NodeID my_node_id,
                     ShardRebuildingInterface::Listener* listener);
   ~ShardRebuildingV2() override;
 
@@ -86,7 +86,7 @@ class ShardRebuildingV2 : public ShardRebuildingInterface {
   // Rebuilding set and config can be nullptr in tests.
   std::shared_ptr<const RebuildingSet> rebuildingSet_;
   UpdateableSettings<RebuildingSettings> rebuildingSettings_;
-  std::shared_ptr<UpdateableConfig> config_;
+  NodeID my_node_id_;
   Listener* listener_;
   bool completed_ = false;
 

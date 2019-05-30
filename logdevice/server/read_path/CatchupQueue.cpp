@@ -752,7 +752,7 @@ int CatchupQueueDependencies::recoverLogState(logid_t log_id,
 }
 
 NodeID CatchupQueueDependencies::getMyNodeID() const {
-  return Worker::getConfig()->serverConfig()->getMyNodeID();
+  return Worker::onThisThread()->processor_->getMyNodeID();
 }
 
 size_t CatchupQueueDependencies::getMaxRecordBytesQueued(ClientID client) {
