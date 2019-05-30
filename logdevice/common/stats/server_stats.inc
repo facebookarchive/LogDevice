@@ -320,6 +320,9 @@ STAT_DEFINE(nodeset_adjustments_done, SUM)
 // How many times SequencerBackgroundActivator considered changing nodeset size
 // based on throughput but decided against it.
 STAT_DEFINE(nodeset_adjustments_skipped, SUM)
+// How many times SequencerBackgroundActivator randomized nodeset seed.
+// May be overestimated.
+STAT_DEFINE(nodeset_randomizations_done, SUM)
 
 //// Per-epoch sequencers
 

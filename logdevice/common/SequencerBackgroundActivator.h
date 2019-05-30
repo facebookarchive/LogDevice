@@ -27,6 +27,7 @@ namespace facebook { namespace logdevice {
  */
 
 class AllSequencers;
+class EpochMetaData;
 class Sequencer;
 
 class SequencerBackgroundActivator {
@@ -110,10 +111,19 @@ class SequencerBackgroundActivator {
     // For simplicity, this timer is always spinning for all logs in logs_,
     // regardless of whether there's an active sequencer or not.
     Timer nodeset_adjustment_timer;
-    // If nodeset_adjustment_timer is active, this is the time point when it'll
-    // fire. Used for debugging.
+    // Fires every nodeset_randomization_period to change nodeset seed.
+    Timer nodeset_randomization_timer;
+
+    // Timestamps when the above two timers will fire.
     std::chrono::steady_clock::time_point next_nodeset_adjustment_time =
         std::chrono::steady_clock::time_point::max();
+    std::chrono::steady_clock::time_point next_nodeset_randomization_time =
+        std::chrono::steady_clock::time_point::max();
+
+    // How often to re-generate nodeset with a new random seed.
+    // Calculated based on settings and unclamped target nodeset size.
+    std::chrono::milliseconds nodeset_randomization_period =
+        std::chrono::milliseconds::max();
   };
 
   // internal method that checks that SequencerBackgroundActivator methods are
@@ -126,9 +136,13 @@ class SequencerBackgroundActivator {
                      LogState& state,
                      ResourceBudget::Token& token);
 
-  // Called every nodeset_adjustment_period for each log. Updates
-  // target_nodeset_size and nodeset_seed if needed.
+  // Called every nodeset_adjustment_period for each log.
+  // Updates target_nodeset_size if needed.
   void maybeAdjustNodesetSize(logid_t log_id, LogState& state);
+
+  // Called every nodeset_randomization_period for each log.
+  // Updates nodeset seed.
+  void randomizeNodeset(logid_t log_id, LogState& state);
 
   // Does the actual useful work.
   // Checks if the current sequencer's epoch metadata (nodeset, replication
@@ -148,9 +162,18 @@ class SequencerBackgroundActivator {
   // FAILED, NOBUFS, TOOMANY, NOTCONN, ACCESS.
   // The caller shouldn't retry on the following errors:
   // NOSEQUENCER, INPROGRESS, NOTFOUND, SYSLIMIT, INTERNAL, TOOBIG.
-  int reprovisionOrReactivateIfNeeded(logid_t logid,
-                                      LogState& state,
-                                      std::shared_ptr<Sequencer> seq);
+  int reprovisionOrReactivateIfNeeded(
+      logid_t logid,
+      LogState& state,
+      std::shared_ptr<Sequencer> seq,
+      std::shared_ptr<const EpochMetaData> epoch_metadata);
+
+  // Decide how often we need to re-generate nodeset for the given log, and
+  // activate LogState::nodeset_randomization_timer accordingly.
+  void recalculateNodesetRandomizationTime(
+      logid_t logid,
+      LogState& state,
+      std::shared_ptr<const EpochMetaData> epoch_metadata);
 
   // processes the queue if there are pending requests and the number of
   // requests currently in flight does not exceed maxRequestsInFlight()
@@ -186,8 +209,11 @@ class SequencerBackgroundActivator {
   // limiter on the number of concurrent activations
   std::unique_ptr<ResourceBudget> budget_;
 
-  // Last seen nodeset_adjustment_period from settings.
+  // Some of the settings we're using.
+  // Used for detecting when settings change.
   std::chrono::milliseconds nodeset_adjustment_period_;
+  bool unconditional_nodeset_randomization_enabled_;
+  size_t nodeset_max_randomizations_;
 };
 
 }} // namespace facebook::logdevice

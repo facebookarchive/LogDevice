@@ -2711,7 +2711,7 @@ TEST_F(SequencerIntegrationTest, MetaDataWritePreempted) {
 TEST_F(SequencerIntegrationTest, NodeSetAdjustment) {
   logsconfig::LogAttributes log_attrs =
       IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(1);
-  log_attrs.set_backlogDuration(std::chrono::seconds(60));
+  log_attrs.set_backlogDuration(std::chrono::seconds(40));
   log_attrs.set_nodeSetSize(1);
 
   // N0 sequencer, N1, N2 storage nodes
@@ -2723,7 +2723,7 @@ TEST_F(SequencerIntegrationTest, NodeSetAdjustment) {
           .setParam("--nodeset-adjustment-period", "2s")
           .setParam("--nodeset-adjustment-min-window", "1s")
           .setParam("--nodeset-size-adjustment-min-factor", "0")
-          .setParam("--nodeset-adjustment-target-bytes-per-shard", "1M")
+          .setParam("--nodeset-adjustment-target-bytes-per-shard", "500K")
           .create(3);
 
   // Make sure a sequencer is active.
@@ -2740,10 +2740,12 @@ TEST_F(SequencerIntegrationTest, NodeSetAdjustment) {
   std::map<std::string, int64_t> stats;
 
   auto print_stats = [&] {
-    ld_info("Adjustments done: %ld, skipped: %ld, reactivations: %ld, "
+    ld_info("Adjustments done: %ld, skipped: %ld, randomizations: %ld, "
+            "reactivations: %ld, "
             "non-reactivations: %ld",
             stats.at("nodeset_adjustments_done"),
             stats.at("nodeset_adjustments_skipped"),
+            stats.at("nodeset_randomizations_done"),
             stats.at("sequencer_reactivations_for_metadata_update"),
             stats.at("metadata_updates_without_sequencer_reactivation"));
   };
@@ -2751,9 +2753,9 @@ TEST_F(SequencerIntegrationTest, NodeSetAdjustment) {
   // Nodesets of log 1 and internal logs should be randomized every second.
   ld_info("Checking stats");
   stats = cluster->getNode(0).stats();
-  EXPECT_GE(stats.at("nodeset_adjustments_done"), 2);
-  EXPECT_LE(stats.at("nodeset_adjustments_done"), 40);
-  EXPECT_EQ(0, stats.at("nodeset_adjustments_skipped"));
+  EXPECT_GE(stats.at("nodeset_randomizations_done"), 2);
+  EXPECT_LE(stats.at("nodeset_randomizations_done"), 40);
+  EXPECT_EQ(0, stats.at("nodeset_adjustments_done"));
   print_stats();
 
   // Stop randomizing nodesets, only resize based on throughput now.
@@ -2761,7 +2763,7 @@ TEST_F(SequencerIntegrationTest, NodeSetAdjustment) {
   cluster->getNode(0).updateSetting(
       "nodeset-size-adjustment-min-factor", "1.1");
   stats = cluster->getNode(0).stats();
-  int64_t adjustments_before = stats.at("nodeset_adjustments_done");
+  int64_t randomizations_before = stats.at("nodeset_randomizations_done");
   print_stats();
 
   ld_info("Sleeping");
@@ -2771,16 +2773,18 @@ TEST_F(SequencerIntegrationTest, NodeSetAdjustment) {
   // No logs have enough throughput to increase nodeset size from 1 to 2.
   ld_info("Checking stats");
   stats = cluster->getNode(0).stats();
-  EXPECT_EQ(adjustments_before, stats.at("nodeset_adjustments_done"));
-  EXPECT_GE(stats.at("nodeset_adjustments_skipped"), 2);
-  EXPECT_LE(stats.at("nodeset_adjustments_skipped"), 40);
+  EXPECT_EQ(randomizations_before, stats.at("nodeset_randomizations_done"));
+  EXPECT_EQ(0, stats.at("nodeset_adjustments_done"));
+  EXPECT_GE(stats.at("nodeset_adjustments_skipped"), 4);
+  EXPECT_LE(stats.at("nodeset_adjustments_skipped"), 80);
   print_stats();
 
-  // Append to log 1 at 100 KB/s for a few seconds.
-  // This should trigger an increase in nodeset size: 100 KB/s * 1 min > 2 MB.
+  // Append to log 1 at 100 KB/s for 20 seconds.
+  // This should trigger an increase in nodeset size and at least one nodeset
+  // randomization: 100 KB/s * 40 s = 500 KB * 2 nodes * 4 randomizations.
   auto t = std::chrono::steady_clock::now();
   lsn_t lsn2 = LSN_INVALID;
-  for (int i = 0; i < 50; ++i) {
+  for (int i = 0; i < 200; ++i) {
     if (i % 10 == 0) {
       ld_info("Doing appends");
     }
@@ -2801,9 +2805,18 @@ TEST_F(SequencerIntegrationTest, NodeSetAdjustment) {
   ld_info("Last lsn: %s", lsn_to_string(lsn2).c_str());
 
   // Nodeset size of log 1 should have been increased from 1 to 2.
+  // There can be more than one adjustment as throughput estimate changes
+  // over time, and nodeset is allowed to be bigger than 2.
+  // E.g. target nodeset size can change 1 -> 3 -> 7 -> 8, the last two
+  // changes done without sequencer reactivation and only affecting
+  // rate of randomization.
   ld_info("Checking stats");
   stats = cluster->getNode(0).stats();
-  EXPECT_EQ(adjustments_before + 1, stats.at("nodeset_adjustments_done"));
+  EXPECT_GE(stats.at("nodeset_adjustments_done"), 1);
+  EXPECT_LE(stats.at("nodeset_adjustments_done"), 10);
+  int64_t adjustments_before = stats.at("nodeset_adjustments_done");
+  EXPECT_GE(stats.at("nodeset_randomizations_done") - randomizations_before, 1);
+  EXPECT_LE(stats.at("nodeset_randomizations_done") - randomizations_before, 5);
   print_stats();
 
   ld_info("Sleeping");
@@ -2813,14 +2826,29 @@ TEST_F(SequencerIntegrationTest, NodeSetAdjustment) {
   // After some time of zero throughput nodeset size is decreased back to 1.
   ld_info("Checking stats");
   stats = cluster->getNode(0).stats();
-  EXPECT_EQ(adjustments_before + 2, stats.at("nodeset_adjustments_done"));
+  EXPECT_GE(stats.at("nodeset_adjustments_done") - adjustments_before, 1);
+  EXPECT_LE(stats.at("nodeset_adjustments_done") - adjustments_before, 5);
+  adjustments_before = stats.at("nodeset_adjustments_done");
+  EXPECT_GE(stats.at("nodeset_randomizations_done") - randomizations_before, 1);
+  EXPECT_LE(stats.at("nodeset_randomizations_done") - randomizations_before, 6);
+  randomizations_before = stats.at("nodeset_randomizations_done");
+  print_stats();
+
+  // Sleep a bit more and make sure nodeset updates stopped.
+  ld_info("Sleeping");
+  /* sleep override */
+  std::this_thread::sleep_for(std::chrono::seconds(5));
+  ld_info("Checking stats");
+  stats = cluster->getNode(0).stats();
+  EXPECT_EQ(adjustments_before, stats.at("nodeset_adjustments_done"));
+  EXPECT_EQ(randomizations_before, stats.at("nodeset_randomizations_done"));
   print_stats();
 
   // Check that the nodeset resizings bumped epoch.
   ld_info("Appending last record");
   lsn_t lsn3 = client->appendSync(logid_t(1), "bye");
   EXPECT_NE(LSN_INVALID, lsn3);
-  EXPECT_GE(lsn_to_epoch(lsn3).val(), lsn_to_epoch(lsn2).val() + 1);
-  EXPECT_GE(lsn_to_epoch(lsn3).val(), lsn_to_epoch(lsn1).val() + 2);
+  EXPECT_GT(lsn_to_epoch(lsn2).val(), lsn_to_epoch(lsn1).val());
+  EXPECT_GT(lsn_to_epoch(lsn3).val(), lsn_to_epoch(lsn2).val());
   ld_info("Got lsn %s", lsn_to_string(lsn3).c_str());
 }

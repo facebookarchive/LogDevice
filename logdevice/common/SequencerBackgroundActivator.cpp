@@ -19,8 +19,11 @@
 namespace facebook { namespace logdevice {
 
 SequencerBackgroundActivator::SequencerBackgroundActivator()
-    : nodeset_adjustment_period_(Worker::settings().nodeset_adjustment_period) {
-}
+    : nodeset_adjustment_period_(Worker::settings().nodeset_adjustment_period),
+      unconditional_nodeset_randomization_enabled_(
+          Worker::settings().nodeset_size_adjustment_min_factor == 0),
+      nodeset_max_randomizations_(
+          Worker::settings().nodeset_max_randomizations) {}
 
 void SequencerBackgroundActivator::checkWorkerAsserts() {
   Worker* w = Worker::onThisThread();
@@ -93,10 +96,13 @@ bool SequencerBackgroundActivator::processOneLog(logid_t log_id,
     return true;
   }
 
-  int rv = reprovisionOrReactivateIfNeeded(log_id, state, seq);
+  auto epoch_metadata = seq->getCurrentMetaData();
+  int rv = reprovisionOrReactivateIfNeeded(log_id, state, seq, epoch_metadata);
   if (rv == -1) {
     if (err == E::UPTODATE) {
-      // No updates needed.
+      // No updates needed to nodeset parameters, we're in steady state now.
+      // Schedule next nodeset randomization if needed.
+      recalculateNodesetRandomizationTime(log_id, state, epoch_metadata);
       return true;
     }
 
@@ -126,7 +132,8 @@ bool SequencerBackgroundActivator::processOneLog(logid_t log_id,
 int SequencerBackgroundActivator::reprovisionOrReactivateIfNeeded(
     logid_t logid,
     LogState& state,
-    std::shared_ptr<Sequencer> seq) {
+    std::shared_ptr<Sequencer> seq,
+    std::shared_ptr<const EpochMetaData> epoch_metadata) {
   ld_check(!MetaDataLog::isMetaDataLog(logid));
   ld_check(seq != nullptr);
   auto& all_seq = Worker::onThisThread()->processor_->allSequencers();
@@ -138,16 +145,16 @@ int SequencerBackgroundActivator::reprovisionOrReactivateIfNeeded(
   // call to this method when activation completes.
   // Also check that sequencer has epoch metadata; it may seem redundant because
   // sequencer always has epoch metadata if it's active, but there's a race
-  // condition - maybe we grabbed state, then reactivation happened, then we
-  // grabbed metadata.
+  // condition - maybe we grabbed metadata, then sequencer reactivated, then we
+  // grabbed the state.
   auto seq_state = seq->getState();
-  auto epoch_metadata = seq->getCurrentMetaData();
   if (seq_state != Sequencer::State::ACTIVE || epoch_metadata == nullptr) {
     err = seq_state == Sequencer::State::ACTIVATING ? E::INPROGRESS
                                                     : E::NOSEQUENCER;
     return -1;
   }
   if (epoch_metadata->isEmpty() || epoch_metadata->disabled()) {
+    // Sequencer wouldn't agree to activate with such metadata.
     ld_check(false);
     err = E::INTERNAL;
     return -1;
@@ -620,23 +627,50 @@ void SequencerBackgroundActivator::activateNodesetAdjustmentTimerIfNeeded(
 }
 
 void SequencerBackgroundActivator::onSettingsUpdated() {
-  auto new_period = Worker::settings().nodeset_adjustment_period;
-  if (new_period == nodeset_adjustment_period_) {
+  // Set val = new_val and return true if the original val was != new_val.
+  auto upd = [](auto& val, auto new_val) {
+    if (val != new_val) {
+      val = new_val;
+      return true;
+    }
+    return false;
+  };
+
+  bool adjustment_period_changed = upd(
+      nodeset_adjustment_period_, Worker::settings().nodeset_adjustment_period);
+  // Important to use '|' instead of the short-circuiting '||'!
+  bool randomization_settings_changed =
+      upd(unconditional_nodeset_randomization_enabled_,
+          Worker::settings().nodeset_size_adjustment_min_factor == 0) |
+      upd(nodeset_max_randomizations_,
+          Worker::settings().nodeset_max_randomizations);
+
+  if (!adjustment_period_changed && !randomization_settings_changed) {
     return;
   }
-  nodeset_adjustment_period_ = new_period;
+
   for (auto& kv : logs_) {
-    kv.second.next_nodeset_adjustment_time =
-        std::chrono::steady_clock::time_point::max();
-    kv.second.nodeset_adjustment_timer.cancel();
-    if (nodeset_adjustment_period_.count() <= 0) {
-      // Nodeset adjusting was disabled.
-      // May need to revert nodeset size back to its unadjusted value.
-      kv.second.pending_adjustment.clear();
+    bool scheduled = false;
+
+    if (adjustment_period_changed) {
+      kv.second.next_nodeset_adjustment_time =
+          std::chrono::steady_clock::time_point::max();
+      kv.second.nodeset_adjustment_timer.cancel();
+      if (nodeset_adjustment_period_.count() <= 0) {
+        // Nodeset adjusting was disabled.
+        // May need to revert nodeset size back to its unadjusted value.
+        kv.second.pending_adjustment.clear();
+        schedule({kv.first});
+        scheduled = true;
+      } else {
+        // Activate timer using the new period.
+        activateNodesetAdjustmentTimerIfNeeded(kv.first, kv.second);
+      }
+    }
+
+    if (randomization_settings_changed && !scheduled) {
+      // Need to recalculate next randomization time.
       schedule({kv.first});
-    } else {
-      // Activate timer using the new period.
-      activateNodesetAdjustmentTimerIfNeeded(kv.first, kv.second);
     }
   }
 }
@@ -666,15 +700,6 @@ void SequencerBackgroundActivator::maybeAdjustNodesetSize(logid_t log_id,
   adj.epoch = epoch_metadata->h.epoch;
 
   double min_factor = Worker::settings().nodeset_size_adjustment_min_factor;
-  if (min_factor == 0) {
-    // Settings tell us to randomize nodeset.
-    adj.new_seed = folly::Random::rand64();
-
-    ld_info("Randomizing nodeset of log %lu epoch %u. New seed: %lu.",
-            log_id.val(),
-            adj.epoch.val(),
-            adj.new_seed.value());
-  }
 
   do { // while (false)
     auto est = seq->appendRateEstimate();
@@ -686,62 +711,62 @@ void SequencerBackgroundActivator::maybeAdjustNodesetSize(logid_t log_id,
     folly::Optional<std::chrono::seconds> backlog =
         logcfg->attrs().backlogDuration().value();
     if (!backlog.hasValue()) {
-      // The log has infinite retention.
+      // The log has infinite retention, don't resize its nodeset.
       break;
     }
 
+    // Don't make nodeset smaller than the nodeSetSize log attribute.
     nodeset_size_t min_nodeset_size =
         logcfg->attrs().nodeSetSize().value().value_or(NODESET_SIZE_MAX);
+    min_nodeset_size =
+        std::max(min_nodeset_size, static_cast<nodeset_size_t>(1));
 
+    // Estimate how much space this log uses on all storage nodes combined.
     double append_rate = 1. * est.first / to_sec_double(est.second);
     double total_data_size = append_rate * to_sec_double(backlog.value()) *
         ReplicationProperty::fromLogAttributes(logcfg->attrs())
             .getReplicationFactor();
+
+    // Nodeset size we would like to use based only on log's throughput.
     size_t unclamped_new_size = std::lround(
         total_data_size /
         Worker::settings().nodeset_adjustment_target_bytes_per_shard);
-    nodeset_size_t new_size =
-        (nodeset_size_t)std::min(unclamped_new_size, (size_t)NODESET_SIZE_MAX);
+    // Clamp nodeset size to range [min_nodeset_size, nodeset_size_t::max()].
+    nodeset_size_t new_size = static_cast<nodeset_size_t>(std::min(
+        unclamped_new_size,
+        static_cast<size_t>(std::numeric_limits<nodeset_size_t>::max())));
     new_size = std::max(new_size, min_nodeset_size);
+    ld_check(new_size > 0);
 
-    // Let's also clamp new_size with total number of storage nodes in the
-    // cluster, if that number is readily available.
-    if (config->serverConfig()->getNodesConfig().hasNodesConfiguration()) {
-      // Um, yeah, this is a chain of 7 calls to get from Worker to the number
-      // of storage nodes. We at logdevice excel at keeping things simple.
-      size_t num_storage_nodes = config->serverConfig()
-                                     ->getNodesConfig()
-                                     .getNodesConfiguration()
-                                     ->getStorageConfig()
-                                     ->getMembership()
-                                     ->numNodes();
-
-      new_size = std::min(new_size, (nodeset_size_t)num_storage_nodes);
-    }
-
-    nodeset_size_t old_size = std::max(
-        (nodeset_size_t)1, epoch_metadata->nodeset_params.target_nodeset_size);
-    double factor =
-        1. * std::max(new_size, old_size) / std::min(new_size, old_size);
-    if (factor >= min_factor && new_size != old_size) {
+    nodeset_size_t old_size =
+        epoch_metadata->nodeset_params.target_nodeset_size;
+    // How different the new nodeset size is from the current one.
+    // If not different enough, don't bother adjusting the nodeset.
+    double factor = 1. * std::max(new_size, old_size) /
+        std::max(static_cast<nodeset_size_t>(1), std::min(new_size, old_size));
+    // old_size=0 means nodeset size adjustment used to be disabled.
+    // In this case update epoch metadata to make sure it contains the right
+    // target nodeset size. (If size of the actual nodeset is already right,
+    // consistent hashing will usually generate the same nodeset anyway, and
+    // we won't have to reactivate sequencer.)
+    if ((factor >= min_factor || old_size == 0) && new_size != old_size) {
       adj.new_size = new_size;
 
-      ld_info("Adjusting nodeset size of log %lu epoch %u from %d (actual %lu) "
-              "to %d (clamped from %lu). Throughput: %.3f KB/s in %.3f hours, "
+      ld_info("Adjusting target nodeset size of log %lu epoch %u from %d "
+              "(actual %lu) to %d. Throughput: %.3f KB/s in %.3f hours, "
               "estimated data size: %.3f GB.",
               log_id.val(),
               adj.epoch.val(),
               (int)old_size,
               epoch_metadata->shards.size(),
               (int)new_size,
-              unclamped_new_size,
               append_rate / 1e3,
               to_sec_double(est.second) / 3600,
               total_data_size / 1e9);
     }
   } while (false);
 
-  if (adj.new_size.hasValue() || adj.new_seed.hasValue()) {
+  if (adj.new_size.hasValue()) {
     // Instead of applying the adjustment right here, put it in the LogState
     // and enqueue, to make sure it goes through the ResourceBudget.
     state.pending_adjustment = adj;
@@ -750,6 +775,181 @@ void SequencerBackgroundActivator::maybeAdjustNodesetSize(logid_t log_id,
   } else {
     WORKER_STAT_INCR(nodeset_adjustments_skipped);
   }
+}
+
+void SequencerBackgroundActivator::randomizeNodeset(logid_t log_id,
+                                                    LogState& state) {
+  auto& all_seq = Worker::onThisThread()->processor_->allSequencers();
+  auto seq = all_seq.findSequencer(log_id);
+  if (!seq || seq->getState() != Sequencer::State::ACTIVE) {
+    // Sequencer not active.
+    return;
+  }
+  auto epoch_metadata = seq->getCurrentMetaData();
+  if (!epoch_metadata) {
+    return;
+  }
+
+  std::shared_ptr<Configuration> config = Worker::onThisThread()->getConfig();
+  const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
+      config->getLogGroupByIDShared(log_id);
+  if (!logcfg) {
+    // Log no longer in config.
+    return;
+  }
+
+  epoch_t epoch = epoch_metadata->h.epoch;
+  uint64_t new_seed = folly::Random::rand64();
+
+  if (state.pending_adjustment.hasValue() &&
+      state.pending_adjustment->epoch >= epoch) {
+    state.pending_adjustment->new_seed = new_seed;
+  } else {
+    NodesetAdjustment adj;
+    adj.epoch = epoch;
+    adj.new_seed = new_seed;
+    state.pending_adjustment = adj;
+  }
+
+  ld_info(
+      "Randomizing nodeset of log %lu epoch %u (every %lds). New seed: %lu.",
+      log_id.val(),
+      epoch.val(),
+      to_sec(state.nodeset_randomization_period).count(),
+      new_seed);
+
+  schedule({log_id});
+  WORKER_STAT_INCR(nodeset_randomizations_done);
+}
+
+void SequencerBackgroundActivator::recalculateNodesetRandomizationTime(
+    logid_t logid,
+    LogState& state,
+    std::shared_ptr<const EpochMetaData> epoch_metadata) {
+  ld_check(epoch_metadata->isValid());
+
+  // Decide how often to randomize.
+  std::chrono::milliseconds period = std::chrono::milliseconds::max();
+  do { // while (false)
+    if (unconditional_nodeset_randomization_enabled_) {
+      // Unconditionally randomize nodesets every nodeset_adjustment_period.
+      period = nodeset_adjustment_period_;
+      if (period.count() == 0) {
+        period = std::chrono::milliseconds::max();
+      }
+      break;
+    }
+
+    // If target nodeset size is x times greater than max allowed, randomize
+    // the nodeset x times per retention.
+    size_t target_size = epoch_metadata->nodeset_params.target_nodeset_size;
+    size_t actual_size = epoch_metadata->shards.size();
+    ld_check(actual_size != 0);
+    double randomizations_per_retention = std::min(
+        1. * target_size / actual_size, 1. * nodeset_max_randomizations_);
+    // Only do randomization if it's significantly more often than once per
+    // retention. In particular, if actual size matches the target, randomizing
+    // would be weird. The 1.5 threshold is arbitrary.
+    if (randomizations_per_retention < 1.5) {
+      break;
+    }
+
+    auto config = Worker::onThisThread()->getConfig();
+    const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
+        config->getLogGroupByIDShared(logid);
+    if (!logcfg) {
+      // logid no longer in config
+      break;
+    }
+    folly::Optional<std::chrono::seconds> backlog =
+        logcfg->attrs().backlogDuration().value();
+    if (!backlog.hasValue()) {
+      // The log has infinite retention.
+      break;
+    }
+
+    period = std::chrono::milliseconds(static_cast<int64_t>(
+        to_sec_double(backlog.value()) / randomizations_per_retention * 1000));
+  } while (false);
+
+  if (period < std::chrono::seconds(1)) {
+    RATELIMIT_ERROR(std::chrono::seconds(10),
+                    2,
+                    "Suspiciously high rate of nodeset randomization for log "
+                    "%lu: %.3fs. Disabling randomization just in case.",
+                    logid.val(),
+                    period.count() / 1000.);
+    period = std::chrono::milliseconds::max();
+  }
+
+  // All randomization-related fields of LogState should agree on whether
+  // randomization is enabled for the log.
+  ld_check_eq(
+      state.nodeset_randomization_period != std::chrono::milliseconds::max(),
+      state.next_nodeset_randomization_time !=
+          std::chrono::steady_clock::time_point::max());
+  ld_check_eq(
+      state.nodeset_randomization_period != std::chrono::milliseconds::max(),
+      state.nodeset_randomization_timer.isActive());
+
+  if (period == state.nodeset_randomization_period) {
+    // Period didn't change, nothing to do here.
+    return;
+  }
+
+  if (period == std::chrono::milliseconds::max()) {
+    // Disable randomization for this log.
+    state.next_nodeset_randomization_time =
+        std::chrono::steady_clock::time_point::max();
+    state.nodeset_randomization_timer.cancel();
+    state.nodeset_randomization_period = std::chrono::milliseconds::max();
+    return;
+  }
+
+  if (!state.nodeset_randomization_timer.isAssigned()) {
+    state.nodeset_randomization_timer.assign([this, logid, &state] {
+      // Timer is canceled whenever nodeset_randomization_period is set to
+      // max(), so we should only be here if it's not max().
+      ld_check(state.nodeset_randomization_period !=
+               std::chrono::milliseconds::max());
+      // Schedule next run.
+      state.next_nodeset_randomization_time =
+          std::chrono::steady_clock::now() + state.nodeset_randomization_period;
+      state.nodeset_randomization_timer.activate(
+          state.nodeset_randomization_period);
+
+      randomizeNodeset(logid, state);
+    });
+  }
+
+  auto now = std::chrono::steady_clock::now();
+
+  // Decide what the first delay should be.
+  double first_delay_fraction;
+  if (state.nodeset_randomization_timer.isActive()) {
+    // Randomization period changed while we were in the middle of waiting for
+    // the previous period to elapse. If we were x% of the way through the old
+    // period, start the timer for (100-x)% of the new period. This way small
+    // changes of the period won't have large effect.
+    first_delay_fraction =
+        to_sec_double(state.next_nodeset_randomization_time - now) /
+        to_sec_double(state.nodeset_randomization_period);
+    first_delay_fraction = std::max(0., std::min(1., first_delay_fraction));
+  } else {
+    // We're activating nodeset randomization timer for the first time,
+    // or switching randomization from disabled to enabled for this log.
+    // Randomly stagger the timer activation. This prevents a thundering
+    // herd and makes randomizations work correctly even if server gets
+    // restarted more often than randomization period.
+    first_delay_fraction = folly::Random::randDouble01();
+  }
+
+  std::chrono::milliseconds delay =
+      std::chrono::duration_cast<std::chrono::milliseconds>(
+          period * first_delay_fraction);
+  state.nodeset_randomization_period = period;
+  state.next_nodeset_randomization_time = now + delay;
+  state.nodeset_randomization_timer.activate(delay);
 }
 
 std::vector<SequencerBackgroundActivator::LogDebugInfo>

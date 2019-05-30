@@ -3120,6 +3120,21 @@ void Settings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::Sequencer);
 
+  init("nodeset-max-randomizations",
+       &nodeset_max_randomizations,
+       "4",
+       validate_positive<ssize_t>(),
+       "When automatic nodeset size adjustment wants to enlarge nodeset "
+       "to unreasonably big size N > 127, we instead set nodeset size to 127 "
+       "but re-randomize the nodeset min(N/127, nodeset_max_randomizations) "
+       "times during retention period. If you make it too big, the union of "
+       "historical nodesets will get big (127 * n), and findTime, isLogEmpty "
+       "etc may become expensive. If you set it too small, and the cluster has "
+       "high-throughput high-retention logs, space usage may be not very "
+       "balanced.",
+       SERVER,
+       SettingsCategory::Sequencer);
+
   sequencer_boycotting.defineSettings(init);
 
   init("require-permission-message-types",
