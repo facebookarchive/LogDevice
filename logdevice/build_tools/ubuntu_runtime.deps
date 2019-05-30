@@ -15,3 +15,5 @@ libpython3.6
 python3-pip
 libboost-python1.65.1
 libboost-context1.65.1
+libsodium-dev
+libzstd-dev
