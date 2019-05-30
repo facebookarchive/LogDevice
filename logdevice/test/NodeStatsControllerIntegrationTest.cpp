@@ -225,9 +225,15 @@ class NodeStatsControllerIntegrationTest
             .setNumRacks(params.node_count)
             /* Can't currently create 0 logs, create 1 and then overwrite it */
             .setNumLogs(1)
+            // Defer starting the cluster until we have written an updated
+            // config
+            .deferStart()
             .create(params.node_count);
 
     setOneLogPerNode();
+    cluster->start();
+    // Ensure all the nodes have the same config
+    cluster->waitForConfigUpdate();
     waitForSequencersToActivate();
 
     int controller_count = params.max_boycott_count + 1;
@@ -265,7 +271,6 @@ class NodeStatsControllerIntegrationTest
     logs_config->markAsFullyLoaded();
 
     cluster->writeConfig(full_config->serverConfig().get(), logs_config.get());
-    cluster->waitForConfigUpdate();
   }
 
   void waitForSequencersToActivate() {
