@@ -345,13 +345,13 @@ void StorageSetAccessor::sendWave() {
   wave_shards_ = wave_shards;
   wave_start_time_ = SteadyTimestamp::now();
 
-#ifndef NDEBUG
-  // wave_shards should not contain duplicates
-  StorageSet w(wave_shards);
-  std::sort(w.begin(), w.end());
-  ld_assert(std::unique(w.begin(), w.end()) == w.end() &&
-            "duplicate nodes in a wave");
-#endif
+  if (folly::kIsDebug) {
+    // wave_shards should not contain duplicates
+    StorageSet w(wave_shards);
+    std::sort(w.begin(), w.end());
+    ld_assert(std::unique(w.begin(), w.end()) == w.end() &&
+              "duplicate nodes in a wave");
+  }
 
   ADD_TO_TRACE("W");
   ADD_TO_TRACE(toString(wave_info.wave));

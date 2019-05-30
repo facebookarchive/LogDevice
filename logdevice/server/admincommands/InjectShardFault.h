@@ -128,13 +128,13 @@ class InjectShardFault : public AdminCommand {
 
   void run() override {
     // If this is a production build, require passing --force.
-#ifdef NDEBUG
-    if (!force_) {
-      out_.write("inject: Production build."
-                 "Use --force to proceed anyway.\r\n");
-      return;
+    if (!folly::kIsDebug) {
+      if (!force_) {
+        out_.write("inject: Production build."
+                   "Use --force to proceed anyway.\r\n");
+        return;
+      }
     }
-#endif
 
     if (!server_->getProcessor()->runningOnStorageNode()) {
       out_.printf("Error: Not a storage node.\r\n");

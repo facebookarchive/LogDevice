@@ -77,9 +77,7 @@ class Membership {
 
   // run internal validate() checks in DEBUG mode
   void dcheckConsistency() const {
-#ifndef NDEBUG
-    ld_check(validate());
-#endif
+    ld_assert(validate());
   }
 
   MembershipVersion::Type getVersion() const {

@@ -105,12 +105,12 @@ PayloadHolder PayloadHolder::deserialize(ProtocolReader& reader,
 }
 
 void PayloadHolder::TEST_corruptPayload() {
-#ifdef NDEBUG
-  RATELIMIT_CRITICAL(std::chrono::seconds(60),
-                     1,
-                     "Please disable flag to corrupt STORE payloads");
-  return;
-#endif
+  if (!folly::kIsDebug) {
+    RATELIMIT_CRITICAL(std::chrono::seconds(60),
+                       1,
+                       "Please disable flag to corrupt STORE payloads");
+    return;
+  }
 
   Payload corrupted = getPayload().dup();
   // Flip the last bit, as the user defined payload is last

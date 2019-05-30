@@ -511,6 +511,8 @@ TEST_P(NonAuthoritativeRebuildingTest, LoseRackAutoMarkUnrecoverable) {
 // to previous status (in that case UNDERREPLICATION) if it receives
 // STARTED(FAILED) so it can take it into account in f-majority for gap
 // detection.
+// TODO(T44746268): replace NDEBUG with folly::kIsDebug
+// Can not remove now due to the defined functions
 #ifndef NDEBUG // Both tests require fault injection.
 TEST_P(NonAuthoritativeRebuildingTest, LoseRackPlusAnotherShardAndReadIOError) {
   // Create a reader and writer thread to read/write during the whole test.

@@ -176,15 +176,15 @@ class RandomLinearIteratorBase {
       return false;
     }
     size_t offset = std::distance(container_->begin(), it);
-#ifndef NDEBUG
-    if (using_whitelist_) {
-      ld_assert(whitelist_iterator_);
-      bool whitelist_seek = whitelist_iterator_->seekToValue(offset);
-      ld_assert(whitelist_seek);
-    } else {
-      ld_assert(!blacklist_.contains(offset));
+    if (folly::kIsDebug) {
+      if (using_whitelist_) {
+        ld_assert(whitelist_iterator_);
+        bool whitelist_seek = whitelist_iterator_->seekToValue(offset);
+        ld_assert(whitelist_seek);
+      } else {
+        ld_assert(!blacklist_.contains(offset));
+      }
     }
-#endif
     cur_ = offset;
     if (start_ == -1) {
       start_ = cur_;

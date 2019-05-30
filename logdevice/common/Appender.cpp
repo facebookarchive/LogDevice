@@ -46,11 +46,11 @@
 
 // Helper macro for checking that the current worker thread is the worker thread
 // this Appender was created on. Only do the check when in debug mode.
-#ifndef NDEBUG
-#define CHECK_WORKER_THREAD() checkWorkerThread();
-#else
-#define CHECK_WORKER_THREAD()
-#endif
+#define CHECK_WORKER_THREAD() \
+  do {                        \
+    if (folly::kIsDebug)      \
+      checkWorkerThread();    \
+  } while (0)
 
 namespace facebook { namespace logdevice {
 

@@ -1581,22 +1581,23 @@ bool WeightedCopySetSelector::AdjustedHierarchy::setDomainDetached(
   } else {
     // We're detaching/attaching a non-leaf domain.
 
-#ifndef NDEBUG // assert some consistency of weights
-    double w = AdjustedProbabilityDistribution(&domain->weights, &adj->weights)
-                   .weight(idx);
-    if (adj->subdomains[idx].is_detached) {
-      // Detached domain must have zero weight in parent.
-      ld_check(fabs(w) < Sampling::EPSILON * total_weight);
-    } else {
-      // Non-detached domain must have weight equal to sum of weights of
-      // its children.
-      double w2 =
-          AdjustedProbabilityDistribution(
-              &domain->subdomains[idx].weights, &adj->subdomains[idx].weights)
-              .totalWeight();
-      ld_check(fabs(w - w2) < Sampling::EPSILON * total_weight);
+    if (folly::kIsDebug) { // assert some consistency of weights
+      double w =
+          AdjustedProbabilityDistribution(&domain->weights, &adj->weights)
+              .weight(idx);
+      if (adj->subdomains[idx].is_detached) {
+        // Detached domain must have zero weight in parent.
+        ld_check(fabs(w) < Sampling::EPSILON * total_weight);
+      } else {
+        // Non-detached domain must have weight equal to sum of weights of
+        // its children.
+        double w2 =
+            AdjustedProbabilityDistribution(
+                &domain->subdomains[idx].weights, &adj->subdomains[idx].weights)
+                .totalWeight();
+        ld_check(fabs(w - w2) < Sampling::EPSILON * total_weight);
+      }
     }
-#endif
 
     to_adjust.emplace_back(domain, adj, idx);
 

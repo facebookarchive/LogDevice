@@ -68,16 +68,16 @@ STORE_Message::STORE_Message(const STORE_Header& header,
     ld_check(extra_.recovery_epoch != EPOCH_INVALID);
   }
 
-#ifndef NDEBUG
   // in debug mode assert that all node indexes in copyset[] are distinct
-  std::vector<ShardID> indexes(header.copyset_size);
-  std::transform(copyset,
-                 copyset + header.copyset_size,
-                 indexes.begin(),
-                 [](const StoreChainLink& c) { return c.destination; });
-  std::sort(indexes.begin(), indexes.end());
-  ld_assert(std::unique(indexes.begin(), indexes.end()) == indexes.end());
-#endif
+  if (folly::kIsDebug) {
+    std::vector<ShardID> indexes(header.copyset_size);
+    std::transform(copyset,
+                   copyset + header.copyset_size,
+                   indexes.begin(),
+                   [](const StoreChainLink& c) { return c.destination; });
+    std::sort(indexes.begin(), indexes.end());
+    ld_assert(std::unique(indexes.begin(), indexes.end()) == indexes.end());
+  }
 
   memcpy(copyset_.begin(), copyset, sizeof(copyset[0]) * header.copyset_size);
   header_.flags |= flags;

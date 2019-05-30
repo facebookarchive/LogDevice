@@ -393,11 +393,11 @@ int main(int argc, const char** argv) {
     }
   }
 
-#ifdef NDEBUG
-  ld_info("asserts off (NDEBUG set)");
-#else
-  ld_info("asserts on (NDEBUG not set)");
-#endif
+  if (!folly::kIsDebug) {
+    ld_info("asserts off (NDEBUG set)");
+  } else {
+    ld_info("asserts on (NDEBUG not set)");
+  }
 
   std::unique_ptr<ServerParameters> params;
   try {

@@ -7511,6 +7511,7 @@ TEST_F(PartitionedRocksDBStoreTest, MetadataCompactions) {
   EXPECT_EQ(1, store_->getNumL0Files(store_->getMetadataCFHandle()));
 }
 
+// TODO(T44746268): replace NDEBUG with folly::kIsDebug
 #ifdef NDEBUG
 #define IF_DEBUG(...)
 #else

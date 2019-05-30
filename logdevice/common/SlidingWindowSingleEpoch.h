@@ -245,12 +245,12 @@ class SlidingWindowSingleEpoch {
     const lsn_t current_right = right_.exchange(LSN_DISABLED);
 
     if (current_right != LSN_DISABLED) {
-#ifndef NDEBUG
-      lsn_t before = next_lsn_before_disabled_.exchange(current_right);
-      ld_check(before == LSN_DISABLED);
-#else
-      next_lsn_before_disabled_.store(current_right);
-#endif
+      if (folly::kIsDebug) {
+        lsn_t before = next_lsn_before_disabled_.exchange(current_right);
+        ld_check(before == LSN_DISABLED);
+      } else {
+        next_lsn_before_disabled_.store(current_right);
+      }
     }
     return current_right;
   }
@@ -340,11 +340,11 @@ class SlidingWindowSingleEpoch {
       n_reaped++;
 
       // give up our slot
-#ifndef NDEBUG
-      ld_assert(state_[idx].compare_exchange_strong(entry, 0));
-#else
-      state_[idx].store(0);
-#endif
+      if (folly::kIsDebug) {
+        ld_assert(state_[idx].compare_exchange_strong(entry, 0));
+      } else {
+        state_[idx].store(0);
+      }
 
       // give up our token
       size_t prev_size = size_.fetch_sub(1);

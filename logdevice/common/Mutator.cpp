@@ -38,17 +38,17 @@ Mutator::Mutator(const STORE_Header& header,
       conflict_copies_(std::move(conflict_copies)),
       epoch_recovery_(epoch_recovery) {
   // ensure that all nodes in the three sets belong the nodeset
-#ifndef NDEBUG
-  auto check_set = [](const std::set<ShardID>& s1, const StorageSet& s2) {
-    for (ShardID n : s1) {
-      ld_assert(std::find(s2.begin(), s2.end(), n) != s2.end() &&
-                "Node in the given set must belong to the mutation set.");
-    }
-  };
+  if (folly::kIsDebug) {
+    auto check_set = [](const std::set<ShardID>& s1, const StorageSet& s2) {
+      for (ShardID n : s1) {
+        ld_assert(std::find(s2.begin(), s2.end(), n) != s2.end() &&
+                  "Node in the given set must belong to the mutation set.");
+      }
+    };
 
-  check_set(amend_metadata_, nodeset_);
-  check_set(conflict_copies_, nodeset_);
-#endif
+    check_set(amend_metadata_, nodeset_);
+    check_set(conflict_copies_, nodeset_);
+  }
 
   // STORE_Header must be prepared by epoch recovery machine with appropriate
   // flags
@@ -84,14 +84,14 @@ void Mutator::start() {
             conflict_copies_.end(),
             std::back_inserter(required_nodes));
 
-#ifndef NDEBUG
-  // required_nodes should not contain duplicates
-  StorageSet w(required_nodes);
-  std::sort(w.begin(), w.end());
-  ld_assert(std::unique(w.begin(), w.end()) == w.end() &&
-            "amend_metadata and conflict_copies should not "
-            "intersect");
-#endif
+  if (folly::kIsDebug) {
+    // required_nodes should not contain duplicates
+    StorageSet w(required_nodes);
+    std::sort(w.begin(), w.end());
+    ld_assert(std::unique(w.begin(), w.end()) == w.end() &&
+              "amend_metadata and conflict_copies should not "
+              "intersect");
+  }
 
   // An EpochMetaData object to use with CopySetSelector. Can't use the "real"
   // metadata of this epoch because the copyset has to stay within the mutation

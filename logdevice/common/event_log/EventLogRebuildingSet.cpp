@@ -129,7 +129,9 @@ void EventLogRebuildingSet::deleteShard(node_index_t node, uint32_t shard) {
 }
 
 void EventLogRebuildingSet::checkConsistency() const {
-#ifndef NDEBUG
+  if (!folly::kIsDebug) {
+    return;
+  }
   for (auto it_shard : shards_) {
     const RebuildingShardInfo& shard_info = it_shard.second;
     size_t num_acked = 0;
@@ -149,7 +151,6 @@ void EventLogRebuildingSet::checkConsistency() const {
     ld_check(num_acked == expected_num_acked);
     ld_check(num_recoverable == expected_num_recoverable);
   }
-#endif
 }
 
 int EventLogRebuildingSet::onShardNeedsRebuild(

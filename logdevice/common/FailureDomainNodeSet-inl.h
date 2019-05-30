@@ -15,12 +15,12 @@ FailureDomainNodeSet<AttrType, HashFn>::FailureDomainNodeSet(
     const configuration::nodes::NodesConfiguration& nodes_configuration,
     const ReplicationProperty& rep) {
   // in debug build, assert indices in _storage_set_ are unique
-#ifndef NDEBUG
-  StorageSet copy(storage_set);
-  std::sort(copy.begin(), copy.end());
-  ld_assert(std::unique(copy.begin(), copy.end()) == copy.end() &&
-            "shards in storage_set must be unique.");
-#endif
+  if (folly::kIsDebug) {
+    StorageSet copy(storage_set);
+    std::sort(copy.begin(), copy.end());
+    ld_assert(std::unique(copy.begin(), copy.end()) == copy.end() &&
+              "shards in storage_set must be unique.");
+  }
 
   // The user is expected to pass a valid ReplicationProperty object.
   ld_check(rep.isValid());
@@ -510,10 +510,9 @@ bool FailureDomainNodeSet<AttrType, HashFn>::isCompleteSet(
 // used in debug build, asserts internally
 template <typename AttrType, typename HashFn>
 void FailureDomainNodeSet<AttrType, HashFn>::checkConsistency() const {
-#ifdef NDEBUG
-  return;
-#endif
-
+  if (!folly::kIsDebug) {
+    return;
+  }
   // checkConsistency() runs in O(total_shards * total_scopes), this is quite
   // expensive even for debug builds. Amortize the cost by not running the
   // function for every single change.

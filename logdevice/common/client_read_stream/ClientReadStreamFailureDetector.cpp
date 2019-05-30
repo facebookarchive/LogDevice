@@ -512,7 +512,9 @@ size_t ClientReadStreamFailureDetector::recomputeCounterForWindow(
 }
 
 void ClientReadStreamFailureDetector::checkConsistency() {
-#ifndef NDEBUG
+  if (!folly::kIsDebug) {
+    return;
+  }
   // Make sure the `n_candidates_complete` counter for each window is
   // consistent.
   windowForEach([&](WindowState& window) {
@@ -524,7 +526,6 @@ void ClientReadStreamFailureDetector::checkConsistency() {
   for (ShardID s : current_outliers_) {
     ld_assert(shards_.count(s));
   }
-#endif
 }
 
 void ClientReadStreamFailureDetector::activateTimer(

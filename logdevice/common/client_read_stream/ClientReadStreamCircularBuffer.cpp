@@ -83,14 +83,15 @@ void ClientReadStreamCircularBuffer::advanceBufferHead(size_t offset) {
   // Important: caller needs to ensure that there must not be any marker
   // in the buffer slots that get advanced. Assert in the following statements.
 
-#ifndef NDEBUG
-  size_t limit =
-      std::min(std::min(offset, capacity()), LSN_MAX - buffer_head_ + 1);
-  for (size_t i = 0; i < limit; ++i) {
-    ld_check(!buffer_[i].gap && !buffer_[i].record && !buffer_[i].filtered_out);
-    ld_check(buffer_[i].list.empty());
+  if (folly::kIsDebug) {
+    size_t limit =
+        std::min(std::min(offset, capacity()), LSN_MAX - buffer_head_ + 1);
+    for (size_t i = 0; i < limit; ++i) {
+      ld_check(!buffer_[i].gap && !buffer_[i].record &&
+               !buffer_[i].filtered_out);
+      ld_check(buffer_[i].list.empty());
+    }
   }
-#endif
 
   buffer_.rotate(offset);
   buffer_head_ += offset;

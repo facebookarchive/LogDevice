@@ -1005,6 +1005,8 @@ TEST_P(ReadingIntegrationTest, LogTailAttributes) {
 // won't move forward because purging is stuck), and then it should enter
 // permanent error mode which means it will send a STARTED(E::FAILED) message to
 // the reader so it can do SCD failover.
+// TODO(T44746268): replace NDEBUG with folly::kIsDebug
+// Can not remove now due to the defined functions
 #ifndef NDEBUG // This test requires fault injection.
 TEST_P(ReadingIntegrationTest, PurgingStuck) {
   logsconfig::LogAttributes log_attrs;

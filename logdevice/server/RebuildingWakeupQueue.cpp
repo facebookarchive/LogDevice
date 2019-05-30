@@ -15,6 +15,8 @@
 namespace facebook { namespace logdevice {
 
 void RebuildingWakeupQueue::reset() {
+// TODO(T44746268): replace NDEBUG with folly::kIsDebug
+// Do not replace now since logsInQueue_ is defined within NDEBUG
 #ifndef NDEBUG
   logsInQueue_.clear();
 #endif
@@ -43,7 +45,8 @@ void RebuildingWakeupQueue::advanceWindow(RecordTimestamp local_window_end) {
 
 void RebuildingWakeupQueue::push(logid_t logid,
                                  RecordTimestamp next_timestamp) {
-  // In debug mode, assert that this log is not already scheduled.
+// TODO(T44746268): replace NDEBUG with folly::kIsDebug
+// Do not replace now since logsInQueue_ is defined within NDEBUG
 #ifndef NDEBUG
   ld_assert(logsInQueue_.find(logid) == logsInQueue_.end());
   logsInQueue_.insert(logid);
@@ -70,6 +73,8 @@ std::vector<logid_t> RebuildingWakeupQueue::pop(size_t n_logs) {
     insideWindowQueue_.erase(it);
   }
 
+// TODO(T44746268): replace NDEBUG with folly::kIsDebug
+// Do not replace now since logsInQueue_ is defined within NDEBUG
 #ifndef NDEBUG
   for (logid_t logid : res) {
     ld_assert(logsInQueue_.find(logid) != logsInQueue_.end());
@@ -88,6 +93,8 @@ void RebuildingWakeupQueue::remove(
          !logs_to_remove.empty()) {
     if (logs_to_remove.count((*insideIterator).logId)) {
       logs_to_remove.erase(insideIterator->logId);
+// TODO(T44746268): replace NDEBUG with folly::kIsDebug
+// Do not replace now since logsInQueue_ is defined within NDEBUG
 #ifndef NDEBUG
       ld_assert(logsInQueue_.count(insideIterator->logId));
       logsInQueue_.erase(insideIterator->logId);
@@ -103,6 +110,8 @@ void RebuildingWakeupQueue::remove(
          !logs_to_remove.empty()) {
     if (logs_to_remove.count((*outsideIterator).logId)) {
       logs_to_remove.erase(outsideIterator->logId);
+// TODO(T44746268): replace NDEBUG with folly::kIsDebug
+// Do not replace now since logsInQueue_ is defined within NDEBUG
 #ifndef NDEBUG
       ld_assert(logsInQueue_.count(outsideIterator->logId));
       logsInQueue_.erase(outsideIterator->logId);

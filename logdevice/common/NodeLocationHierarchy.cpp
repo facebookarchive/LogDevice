@@ -163,11 +163,11 @@ NodeLocationHierarchy::findDomainForShard(ShardID shard) const {
 }
 
 void NodeLocationHierarchy::checkConsistency() const {
-#ifndef NDEBUG
-  ld_check(root_.parent_ == nullptr);
-  std::unordered_set<ShardID, ShardID::Hash> nodes;
-  checkConsistencyRecursive(&root_, 0, &nodes);
-#endif
+  if (folly::kIsDebug) {
+    ld_check(root_.parent_ == nullptr);
+    std::unordered_set<ShardID, ShardID::Hash> nodes;
+    checkConsistencyRecursive(&root_, 0, &nodes);
+  }
 }
 
 size_t NodeLocationHierarchy::checkConsistencyRecursive(

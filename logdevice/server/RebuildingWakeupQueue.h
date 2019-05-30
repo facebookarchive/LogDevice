@@ -148,6 +148,8 @@ class RebuildingWakeupQueue {
  private:
   RecordTimestamp localWindowEnd_{RecordTimestamp::min()};
 
+// TODO(T44746268): replace NDEBUG with folly::kIsDebug
+// Can not remove here due to the defined variable
 #ifndef NDEBUG
   // Set of logs currently in either outsideWindowQueue_ or insideWindowQueue_.
   // Used for asserts.

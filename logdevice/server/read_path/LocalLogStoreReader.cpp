@@ -275,7 +275,9 @@ Status read(LocalLogStore::ReadIterator& read_iterator,
 
   // checks the return value of the read before returning it
 
-#ifndef NDEBUG
+  if (!folly::kIsDebug) {
+    return st;
+  }
   auto verify = [&](folly::small_vector<Status, 3> expected) {
     if (std::find(expected.begin(), expected.end(), st) == expected.end()) {
       std::string expected_str;
@@ -309,7 +311,6 @@ Status read(LocalLogStore::ReadIterator& read_iterator,
   } else if (read_ctx->read_ptr_.lsn > read_ctx->window_high_) {
     verify({E::WINDOW_END_REACHED, E::WOULDBLOCK, E::FAILED});
   }
-#endif
   return st;
 }
 

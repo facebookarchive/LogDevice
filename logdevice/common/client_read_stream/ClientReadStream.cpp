@@ -2772,7 +2772,9 @@ void ClientReadStream::onConnectionHealthChange(ShardID shard, bool healthy) {
 }
 
 void ClientReadStream::checkConsistency() const {
-#ifndef NDEBUG
+  if (!folly::kIsDebug) {
+    return;
+  }
   nodeset_size_t real_gap_shards_total = 0;
   nodeset_size_t real_gap_shards_filtered_out = 0;
 
@@ -2829,7 +2831,6 @@ void ClientReadStream::checkConsistency() const {
               (numShardsInState(GapState::GAP) +
                numShardsInState(GapState::UNDER_REPLICATED)));
   }
-#endif
 }
 
 void ClientReadStream::resumeReading() {

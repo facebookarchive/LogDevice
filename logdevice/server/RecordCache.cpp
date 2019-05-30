@@ -58,17 +58,17 @@ int RecordCache::putRecord(RecordID rid,
                            OffsetMap offsets_within_epoch) {
   ld_check(rid.logid == log_id_);
 
-#ifndef NDEBUG
-  if (shutdown_.load()) {
-    RATELIMIT_CRITICAL(std::chrono::seconds(10),
-                       10,
-                       "INTERNAL ERROR: Insert record of log %lu after "
-                       "shutdown of record cache.",
-                       rid.logid.val_);
-    ld_assert(false);
-    return -1;
+  if (folly::kIsDebug) {
+    if (shutdown_.load()) {
+      RATELIMIT_CRITICAL(std::chrono::seconds(10),
+                         10,
+                         "INTERNAL ERROR: Insert record of log %lu after "
+                         "shutdown of record cache.",
+                         rid.logid.val_);
+      ld_assert(false);
+      return -1;
+    }
   }
-#endif
 
   if (flags & STORE_Header::REBUILDING) {
     // do not cache rebuilding stores as rebuilding stores are for clean epochs
@@ -359,17 +359,17 @@ void RecordCache::updateLastNonAuthoritativeEpoch(logid_t logid) {
         last_nonauthoritative_epoch_, lsn_to_epoch(highest_lsn).val_);
   }
 
-#ifndef NDEBUG
-  if (last_nonauthoritative_epoch_.load() != EPOCH_MAX.val_) {
-    ld_debug(
-        "Last non-authoritative epoch has been updated to %u for log %lu."
-        "soft seal: %s, highest lsn: %s",
-        last_nonauthoritative_epoch_.load(),
-        logid.val_,
-        (soft_seal.hasValue() ? soft_seal.value().toString().c_str() : "n/a"),
-        rv == 0 ? lsn_to_string(highest_lsn).c_str() : "n/a");
+  if (folly::kIsDebug) {
+    if (last_nonauthoritative_epoch_.load() != EPOCH_MAX.val_) {
+      ld_debug(
+          "Last non-authoritative epoch has been updated to %u for log %lu."
+          "soft seal: %s, highest lsn: %s",
+          last_nonauthoritative_epoch_.load(),
+          logid.val_,
+          (soft_seal.hasValue() ? soft_seal.value().toString().c_str() : "n/a"),
+          rv == 0 ? lsn_to_string(highest_lsn).c_str() : "n/a");
+    }
   }
-#endif
 }
 
 void RecordCache::neverStored() {

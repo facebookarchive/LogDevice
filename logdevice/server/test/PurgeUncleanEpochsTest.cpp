@@ -238,21 +238,15 @@ void PurgeUncleanEpochsTest::setUp() {
   settings_.get_erm_for_empty_epoch = true;
 }
 
-#ifndef NDEBUG
-#define CHECK_STORAGE_TASK(name)                       \
-  do {                                                 \
-    ASSERT_FALSE(tasks_.empty());                      \
-    auto task_ptr = tasks_.back().get();               \
-    ASSERT_NE(nullptr, dynamic_cast<name*>(task_ptr)); \
-    tasks_.clear();                                    \
+#define CHECK_STORAGE_TASK(name)                         \
+  do {                                                   \
+    ASSERT_FALSE(tasks_.empty());                        \
+    if (folly::kIsDebug) {                               \
+      auto task_ptr = tasks_.back().get();               \
+      ASSERT_NE(nullptr, dynamic_cast<name*>(task_ptr)); \
+    }                                                    \
+    tasks_.clear();                                      \
   } while (0)
-#else
-#define CHECK_STORAGE_TASK(name)  \
-  do {                            \
-    ASSERT_FALSE(tasks_.empty()); \
-    tasks_.clear();               \
-  } while (0)
-#endif
 
 // a test to see if the state machine can complete a successful purge workflow
 TEST_F(PurgeUncleanEpochsTest, BasicWorkFlow) {

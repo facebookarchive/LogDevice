@@ -1237,14 +1237,14 @@ void LogsConfigTree::updateLookupIndex(
   if (delete_old) {
     deleteLogGroupFromLookupIndex(range);
   } else {
-#ifndef NDEBUG
-    std::string failure_reason;
-    bool log_range_clash = doesLogRangeClash(range, failure_reason);
-    if (log_range_clash) {
-      ld_error("Unexpected log range clash: %s", failure_reason.c_str());
-      ld_assert(false);
+    if (folly::kIsDebug) {
+      std::string failure_reason;
+      bool log_range_clash = doesLogRangeClash(range, failure_reason);
+      if (log_range_clash) {
+        ld_error("Unexpected log range clash: %s", failure_reason.c_str());
+        ld_assert(false);
+      }
     }
-#endif
   }
   logs_index_.insert(
       logs_index_.end(),

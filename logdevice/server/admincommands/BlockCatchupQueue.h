@@ -66,13 +66,13 @@ class BlockCatchupQueue : public AdminCommand {
 
   void run() override {
     // If this is a production build, require passing --force.
-#ifdef NDEBUG
-    if (!force_) {
-      out_.write("Production build. Command disabled. "
-                 "Use --force to proceed anyway.\r\n");
-      return;
+    if (!folly::kIsDebug) {
+      if (!force_) {
+        out_.write("Production build. Command disabled. "
+                   "Use --force to proceed anyway.\r\n");
+        return;
+      }
     }
-#endif
 
     if (!server_->getProcessor()->runningOnStorageNode()) {
       out_.printf("Cannot process 'block catchup_queue' command, not a "

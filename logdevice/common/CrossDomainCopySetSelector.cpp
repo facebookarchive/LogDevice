@@ -396,23 +396,22 @@ CrossDomainCopySetSelector::selectImpl(copyset_size_t ncopies,
     *primary_nodes_out = primary_nodes;
   }
 
-#ifndef NDEBUG
-  ld_check(primary_domain->scope_ == sync_replication_scope_);
+  if (folly::kIsDebug) {
+    ld_check(primary_domain->scope_ == sync_replication_scope_);
 
-  // predicate function used to partition the copyset
-  auto partition_fn = [this, primary_domain](StoreChainLink c) {
-    return getDomainForNode(c.destination) == primary_domain;
-  };
+    // predicate function used to partition the copyset
+    auto partition_fn = [this, primary_domain](StoreChainLink c) {
+      return getDomainForNode(c.destination) == primary_domain;
+    };
 
-  // check the nodes are partitioned in the copyset with primary_nodes
-  // at the beginning
-  ld_assert(std::is_partitioned(
-      copyset_out, copyset_out + nodes_selected, partition_fn));
-  ld_assert(std::partition_point(copyset_out,
-                                 copyset_out + nodes_selected,
-                                 partition_fn) == copyset_out + primary_nodes);
-#endif
-
+    // check the nodes are partitioned in the copyset with primary_nodes
+    // at the beginning
+    ld_assert(std::is_partitioned(
+        copyset_out, copyset_out + nodes_selected, partition_fn));
+    ld_assert(std::partition_point(
+                  copyset_out, copyset_out + nodes_selected, partition_fn) ==
+              copyset_out + primary_nodes);
+  }
   return nodes_selected;
 }
 

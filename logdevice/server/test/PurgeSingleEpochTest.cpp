@@ -145,21 +145,15 @@ void PurgeSingleEpochTest::setUp() {
   purge_ = std::make_unique<MockPurgeSingleEpoch>(this);
 }
 
-#ifndef NDEBUG
-#define CHECK_STORAGE_TASK(name)                       \
-  do {                                                 \
-    ASSERT_FALSE(tasks_.empty());                      \
-    auto task_ptr = tasks_.back().get();               \
-    ASSERT_NE(nullptr, dynamic_cast<name*>(task_ptr)); \
-    tasks_.clear();                                    \
+#define CHECK_STORAGE_TASK(name)                         \
+  do {                                                   \
+    ASSERT_FALSE(tasks_.empty());                        \
+    if (folly::kIsDebug) {                               \
+      auto task_ptr = tasks_.back().get();               \
+      ASSERT_NE(nullptr, dynamic_cast<name*>(task_ptr)); \
+    }                                                    \
+    tasks_.clear();                                      \
   } while (0)
-#else
-#define CHECK_STORAGE_TASK(name)  \
-  do {                            \
-    ASSERT_FALSE(tasks_.empty()); \
-    tasks_.clear();               \
-  } while (0)
-#endif
 
 TEST_F(PurgeSingleEpochTest, Basic) {
   epoch_ = epoch_t(8);

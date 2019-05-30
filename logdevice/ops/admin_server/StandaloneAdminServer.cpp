@@ -61,11 +61,11 @@ void StandaloneAdminServer::start() {
 )" << std::endl;
   ld_info("Starting Standalone Admin Server");
 
-#ifdef NDEBUG
-  ld_info("asserts off (NDEBUG set)");
-#else
-  ld_info("asserts on (NDEBUG not set)");
-#endif
+  if (!folly::kIsDebug) {
+    ld_info("asserts off (NDEBUG set)");
+  } else {
+    ld_info("asserts on (NDEBUG not set)");
+  }
 
   ld_info("Config path: %s", server_settings_->config_path.c_str());
   std::string socket_addr;
