@@ -59,7 +59,7 @@ async def get_nodes_state(
     """
     Wrapper for getNodesState() Thrift method
     """
-    return await client.getNodesState(req, NodesStateRequest())
+    return await client.getNodesState(req or NodesStateRequest())
 
 
 async def get_maintenances(
@@ -68,7 +68,7 @@ async def get_maintenances(
     """
     Wrapper for getMaintenances() Thrift method
     """
-    return await client.getMaintenances(req, MaintenancesFilter())
+    return await client.getMaintenances(req or MaintenancesFilter())
 
 
 async def apply_maintenance(
@@ -113,7 +113,7 @@ async def get_settings(
     """
     Wrapper for getSettings() Thrift method
     """
-    return await client.getSettings(req, SettingsRequest())
+    return await client.getSettings(req or SettingsRequest())
 
 
 async def take_log_tree_snapshot(client: AdminAPI, req: int = 0) -> None:
@@ -129,7 +129,7 @@ async def get_log_group_throughput(
     """
     Wrapper for getLogGroupThroughput() Thrift method
     """
-    return await client.getLogGroupThroughput(req, LogGroupThroughputRequest())
+    return await client.getLogGroupThroughput(req or LogGroupThroughputRequest())
 
 
 async def get_log_group_custom_counters(
@@ -138,7 +138,9 @@ async def get_log_group_custom_counters(
     """
     Wrapper for getLogGroupCustomCounters() Thrift method
     """
-    return await client.getLogGroupCustomCounters(req, LogGroupCustomCountersRequest())
+    return await client.getLogGroupCustomCounters(
+        req or LogGroupCustomCountersRequest()
+    )
 
 
 async def get_version(client: AdminAPI) -> str:
