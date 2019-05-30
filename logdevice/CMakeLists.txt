@@ -79,7 +79,7 @@ else()
     FBThrift::thrift-core
     FBThrift::thriftcpp2
     FBThrift::thrift
-    )
+ )
   include(${THRIFT_COMPILER_INCLUDE}/thrift/ThriftLibrary.cmake)
 
   # If we are not building the submodules, replace targets with fake targets so
@@ -117,6 +117,8 @@ include_directories(${LOGDEVICE_DIR}/..)
 
 auto_sources(hfiles "*.h" RECURSE "${LOGDEVICE_CLIENT_HEADER_DIR}")
 
+# The order of these libraries is very important, if library A pulls symbols
+# from B. Then A need to appear before B in that list.
 set(LOGDEVICE_EXTERNAL_DEPS
   ${FBTHRIFT_LIBRARIES}
   ${WANGLE_LIBRARIES}
@@ -173,7 +175,7 @@ add_library(logdevice_server STATIC
   "${LOGDEVICE_SERVER_DIR}/Server.h"
   "${LOGDEVICE_SERVER_DIR}/shutdown.h"
   "${LOGDEVICE_SERVER_DIR}/shutdown.cpp"
-  )
+)
 
 target_link_libraries(logdevice_server
   logdevice_server_core
@@ -194,7 +196,8 @@ target_link_libraries(logdeviced
 
 install(TARGETS logdeviced
   COMPONENT runtime
-  DESTINATION bin)
+  DESTINATION bin
+)
 
 add_subdirectory(replication_checker)
 if(${BUILD_TESTS})
