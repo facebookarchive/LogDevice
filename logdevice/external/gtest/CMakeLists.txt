@@ -38,3 +38,5 @@ set(GMOCK_LIBS_DIR ${binary_dir}/googlemock)
 
 SET(GTEST_LIBRARY ${GTEST_LIBS_DIR}/libgtest_main.a PARENT_SCOPE)
 SET(GMOCK_LIBRARY ${GMOCK_LIBS_DIR}/libgmock_main.a PARENT_SCOPE)
+
+message(STATUS "GTest: ${GTEST_INCLUDE_DIRS} ${GMOCK_INCLUDE_DIRS}")

@@ -27,6 +27,11 @@ target_link_libraries(logdevice_server_core
   logdevice_admin_settings
   logdevice_admin_maintenance)
 
+set_target_properties(logdevice_server_core
+  PROPERTIES
+  POSITION_INDEPENDENT_CODE True
+)
+
 add_subdirectory(locallogstore)
 
 # Tests

@@ -36,6 +36,7 @@ add_library(logdevice_admin_util STATIC
   "${LOGDEVICE_ADMIN_DIR}/AdminAPIUtils.h"
   "${LOGDEVICE_ADMIN_DIR}/Conv.cpp"
   "${LOGDEVICE_ADMIN_DIR}/Conv.h")
+
 add_dependencies(logdevice_admin_util admin-cpp2)
 
 target_link_libraries(logdevice_admin_util
@@ -43,12 +44,27 @@ target_link_libraries(logdevice_admin_util
   admin-cpp2
   common)
 
+set_target_properties(logdevice_admin_util
+  PROPERTIES
+    POSITION_INDEPENDENT_CODE True
+)
+
 add_library(logdevice_safety_checker STATIC ${safety_hfiles} ${safety_files})
 target_link_libraries(logdevice_safety_checker common logdevice_server)
+
+set_target_properties(logdevice_safety_checker
+  PROPERTIES
+    POSITION_INDEPENDENT_CODE True
+)
 
 add_library(logdevice_admin_settings STATIC ${admin_settings_hfiles}
   ${admin_settings_files})
 target_link_libraries(logdevice_admin_settings common)
+
+set_target_properties(logdevice_admin_settings
+  PROPERTIES
+    POSITION_INDEPENDENT_CODE True
+)
 
 add_library(logdevice_admin_maintenance STATIC ${maintenance_hfiles}
   ${maintenance_files})
@@ -62,6 +78,11 @@ target_link_libraries(logdevice_admin_maintenance
   ${FBTHRIFT_LIBRARIES}
   ${GLOG_LIBRARIES}
   ${LIBGFLAGS_LIBRARY}
+)
+
+set_target_properties(logdevice_admin_maintenance
+  PROPERTIES
+    POSITION_INDEPENDENT_CODE True
 )
 
 add_subdirectory(if)
@@ -79,6 +100,11 @@ target_link_libraries(logdevice_admin
   ${FBTHRIFT_LIBRARIES}
   ${GLOG_LIBRARIES}
   ${LIBGFLAGS_LIBRARY}
+)
+
+set_target_properties(logdevice_admin
+  PROPERTIES
+    POSITION_INDEPENDENT_CODE True
 )
 
 set(_maintenance_delta_if_include_prefix "logdevice/admin/maintenance")

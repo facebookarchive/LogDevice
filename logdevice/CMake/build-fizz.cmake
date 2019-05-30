@@ -21,7 +21,7 @@ ExternalProject_Get_Property(fizz BINARY_DIR)
 ExternalProject_Add_StepDependencies(fizz configure folly)
 
 set(FIZZ_LIBRARIES
-    ${BINARY_DIR}/libfizz.a)
+    ${BINARY_DIR}/lib/libfizz.a)
 
 message(STATUS "Fizz Library: ${FIZZ_LIBRARIES}")
 message(STATUS "Fizz Benchmark: ${FIZZ_BENCHMARK_LIBRARIES}")

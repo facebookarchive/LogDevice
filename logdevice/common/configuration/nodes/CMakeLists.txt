@@ -37,7 +37,8 @@ set_target_properties(NodesConfiguration-cpp2-obj
 target_link_libraries(
   NodesConfiguration-cpp2
   Membership-cpp2
-  ${FBTHRIFT_LIBRARIES}
-  ${GLOG_LIBRARIES}
-  ${LIBGFLAGS_LIBRARY}
+  ${LOGDEVICE_EXTERNAL_DEPS}
+  #${FBTHRIFT_LIBRARIES}
+  #${GLOG_LIBRARIES}
+  #${LIBGFLAGS_LIBRARY}
 )

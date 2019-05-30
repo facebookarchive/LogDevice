@@ -16,7 +16,8 @@ endif()
 ExternalProject_Add(folly
     SOURCE_DIR "${FOLLY_ROOT_DIR}"
     DOWNLOAD_COMMAND ""
-    CMAKE_ARGS -DCMAKE_POSITION_INDEPENDENT_CODE=True -DCXX_STD=gnu++14
+    CMAKE_ARGS -DCMAKE_POSITION_INDEPENDENT_CODE=True -DCXX_STD=gnu++17
+       -DCMAKE_CXX_STANDARD=17
        ${_folly_cmake_extra_opts}
     INSTALL_COMMAND make install DESTDIR=${LOGDEVICE_STAGING_DIR}
     )

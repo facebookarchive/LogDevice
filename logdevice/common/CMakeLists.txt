@@ -27,6 +27,7 @@ set_target_properties(common
 target_link_libraries(common
   Membership-cpp2
   NodesConfiguration-cpp2
+  ${LOGDEVICE_EXTERNAL_DEPS}
 )
 
 if(${BUILD_TESTS})

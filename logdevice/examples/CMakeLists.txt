@@ -53,6 +53,7 @@ add_executable(ld-dev-cluster
 
 target_link_libraries(ld-dev-cluster
   logdevice_server
+  ${LOGDEVICE_EXTERNAL_DEPS}
 )
 
 target_link_libraries(ldcat ldclient)
