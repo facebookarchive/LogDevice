@@ -338,7 +338,7 @@ int read_records_swallow_gaps(
 }
 
 void PrintTo(MessageType type, ::std::ostream* os) {
-  *os << messageTypeNames[type].c_str();
+  *os << messageTypeNames()[type].c_str();
 }
 
 void PrintTo(Status st, ::std::ostream* os) {

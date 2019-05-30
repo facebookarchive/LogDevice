@@ -71,7 +71,7 @@ void DO_TEST(const SomeMessage& m,
     std::string expected_hex = expected_fn(proto);
     if (expected_hex.empty()) {
       ld_info("serialized %s for protocol %u: %s",
-              messageTypeNames[m.type_].c_str(),
+              messageTypeNames()[m.type_].c_str(),
               (uint32_t)proto,
               found_hex.c_str());
     } else {

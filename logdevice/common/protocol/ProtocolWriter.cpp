@@ -204,7 +204,7 @@ ProtocolWriter::ProtocolWriter(MessageType type,
                                struct evbuffer* dest,
                                folly::Optional<uint16_t> proto)
     : ProtocolWriter(std::make_unique<EvbufferDestination>(dest),
-                     messageTypeNames[type].c_str(),
+                     messageTypeNames()[type].c_str(),
                      proto) {}
 
 ProtocolWriter::ProtocolWriter(Slice dest,

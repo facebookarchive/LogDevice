@@ -19,7 +19,7 @@ void Message::onSent(Status st,
                      const SteadyTimestamp enqueue_time) const {
   ld_log(st == E::OK ? dbg::Level::SPEW : dbg::Level::DEBUG,
          ": message=%s st=%s to=%s msg_size=%zu enqueue_time=%s",
-         messageTypeNames[type_].c_str(),
+         messageTypeNames()[type_].c_str(),
          error_name(st),
          to.toString().c_str(),
          // Sender::describeConnection(to).c_str(),

@@ -150,7 +150,7 @@ static std::unordered_set<MessageType>
 parse_message_types(const std::string& val) {
   std::unordered_set<MessageType> res;
   if (val == "all") {
-    auto types = messageTypeNames.allValidKeys();
+    auto types = messageTypeNames().allValidKeys();
     res.insert(types.begin(), types.end());
     return res;
   }
@@ -162,7 +162,7 @@ parse_message_types(const std::string& val) {
     tokens[0].erase(tokens[0].begin());
   }
   for (const auto& str : tokens) {
-    MessageType type = messageTypeNames.reverseLookup(str);
+    MessageType type = messageTypeNames().reverseLookup(str);
     if (type == MessageType::INVALID) {
       throw boost::program_options::error(
           std::string("Invalid message type in the list (\"" + str + "\")."));
@@ -175,7 +175,7 @@ parse_message_types(const std::string& val) {
   }
   if (inverse) {
     auto exclude = std::move(res);
-    auto types = messageTypeNames.allValidKeys();
+    auto types = messageTypeNames().allValidKeys();
     res = std::unordered_set<MessageType>(types.begin(), types.end());
     for (MessageType t : exclude) {
       res.erase(t);

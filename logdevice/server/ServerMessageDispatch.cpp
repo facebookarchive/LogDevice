@@ -72,7 +72,7 @@ ServerMessageDispatch::onReceivedImpl(Message* msg,
                    "Bypassing permission check for message of type %s from "
                    "%s per configured 'require-permission-message-type' "
                    "setting",
-                   messageTypeNames[msg->type_].c_str(),
+                   messageTypeNames()[msg->type_].c_str(),
                    Sender::describeConnection(from).c_str());
     params.requiresPermission = false;
     STAT_INCR(processor_->stats_, server_message_dispatch_bypass_permission);
@@ -212,7 +212,7 @@ Message::Disposition ServerMessageDispatch::onReceivedHandler(
           1,
           "ServerMessageDispatch::onReceived() called with %s message"
           "which is supposed to be client-only!",
-          messageTypeNames[msg->type_].c_str());
+          messageTypeNames()[msg->type_].c_str());
       err = E::PROTO;
       return Message::Disposition::ERROR;
 
@@ -247,7 +247,7 @@ void ServerMessageDispatch::onSentImpl(const Message& msg,
                       1,
                       "ServerMessageDispatch::onSent() called with %s message"
                       "which is supposed to be client-only!",
-                      messageTypeNames[msg.type_].c_str());
+                      messageTypeNames()[msg.type_].c_str());
       ld_check(false);
       return;
 

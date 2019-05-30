@@ -18,6 +18,6 @@ namespace facebook { namespace logdevice {
  *       to check if a given int represents a valid MessageType.
  */
 
-extern EnumMap<MessageType, std::string> messageTypeNames;
+const EnumMap<MessageType, std::string>& messageTypeNames();
 
 }} // namespace facebook::logdevice

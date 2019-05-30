@@ -68,7 +68,7 @@ void MessageTracer::trace(const Message& msg,
          "%s message of type %s, peer: %s, size in latest protocol "
          "version: %lu%s%s",
          direction_str,
-         messageTypeNames[msg.type_].c_str(),
+         messageTypeNames()[msg.type_].c_str(),
          w->sender().describeConnection(peer).c_str(),
          msg.size(),
          result_str.c_str(),

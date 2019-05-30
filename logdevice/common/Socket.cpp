@@ -1244,7 +1244,7 @@ int Socket::serializeMessageWithoutChecksum(const Message& msg,
   if (bodylen <= 0) { // unlikely
     ld_critical("INTERNAL ERROR: failed to serialize a message of "
                 "type %s into an evbuffer",
-                messageTypeNames[msg.type_].c_str());
+                messageTypeNames()[msg.type_].c_str());
     ld_check(0);
     close(E::INTERNAL);
     err = E::INTERNAL;
@@ -1304,7 +1304,7 @@ int Socket::serializeMessageWithChecksum(const Message& msg,
                        2,
                        "INTERNAL ERROR: Failed to serialize a message of "
                        "type %s into evbuffer",
-                       messageTypeNames[msg.type_].c_str());
+                       messageTypeNames()[msg.type_].c_str());
     ld_check(0);
     err = E::INTERNAL;
     close(err);
@@ -1326,7 +1326,7 @@ int Socket::serializeMessageWithChecksum(const Message& msg,
         std::chrono::seconds(1),
         2,
         "INTERNAL ERROR: Failed to add ProtocolHeader to evbuffer, msg type:%s",
-        messageTypeNames[msg.type_].c_str());
+        messageTypeNames()[msg.type_].c_str());
     ld_check(0);
     err = E::INTERNAL;
     close(err);
@@ -1345,7 +1345,7 @@ int Socket::serializeMessageWithChecksum(const Message& msg,
         2,
         "INTERNAL ERROR: Failed during evbuffer_pullup, size:%zu, msg type:%s",
         msg_evbuf_size,
-        messageTypeNames[msg.type_].c_str());
+        messageTypeNames()[msg.type_].c_str());
     err = E::INTERNAL;
     close(err);
     return -1;
@@ -1364,7 +1364,7 @@ int Socket::serializeMessageWithChecksum(const Message& msg,
           "(msg:%zu, outbuf:%zu), msg type:%s",
           msg_evbuf_size,
           outbuf_size,
-          messageTypeNames[msg.type_].c_str());
+          messageTypeNames()[msg.type_].c_str());
       err = E::INTERNAL;
       close(err);
       return -1;
@@ -1461,7 +1461,7 @@ int Socket::preSendCheck(const Message& msg) {
                       10,
                       "attempt to send a message of type %s to client %s "
                       "before handshake was completed",
-                      messageTypeNames[msg.type_].c_str(),
+                      messageTypeNames()[msg.type_].c_str(),
                       conn_description_.c_str());
       err = E::UNREACHABLE;
       return -1;
@@ -1474,7 +1474,7 @@ int Socket::preSendCheck(const Message& msg) {
           "Could not serialize message of type %s to Socket %s "
           "because messages expects a protocol version >= %hu but "
           "the protocol used for that socket is %hu",
-          messageTypeNames[msg.type_].c_str(),
+          messageTypeNames()[msg.type_].c_str(),
           conn_description_.c_str(),
           msg.getMinProtocolVersion(),
           proto_);
@@ -1485,7 +1485,7 @@ int Socket::preSendCheck(const Message& msg) {
                   "return a protocol version <= %hu for a message of type %s,"
                   " but it returns %hu instead.",
                   proto_,
-                  messageTypeNames[msg.type_].c_str(),
+                  messageTypeNames()[msg.type_].c_str(),
                   msg.getMinProtocolVersion());
       close(E::INTERNAL);
       err = E::INTERNAL;
@@ -1924,7 +1924,7 @@ int Socket::receiveMessage() {
                "for msg:%s. Expected at most %u. min_protohdr_bytes:%zu",
                recv_message_ph_.len,
                conn_description_.c_str(),
-               messageTypeNames[recv_message_ph_.type].c_str(),
+               messageTypeNames()[recv_message_ph_.type].c_str(),
                Message::MAX_LEN,
                min_protohdr_bytes);
       return -1;
@@ -1943,7 +1943,7 @@ int Socket::receiveMessage() {
     if (!handshaken_ && !isHandshakeMessage(recv_message_ph_.type)) {
       ld_error("PROTOCOL ERROR: got a message of type %s on a brand new "
                "connection to/from %s). Expected %s.",
-               messageTypeNames[recv_message_ph_.type].c_str(),
+               messageTypeNames()[recv_message_ph_.type].c_str(),
                conn_description_.c_str(),
                peer_name_.isClientAddress() ? "HELLO" : "ACK");
       err = E::PROTO;
@@ -2001,7 +2001,7 @@ bool Socket::verifyChecksum(ProtocolHeader ph, ProtocolReader& reader) {
                   2,
                   "msg:%s, cksum_recvd:%lu, cksum_computed:%lu, msg_len:%u, "
                   "proto_:%hu, protocol_bytes_already_read:%zu",
-                  messageTypeNames[ph.type].c_str(),
+                  messageTypeNames()[ph.type].c_str(),
                   cksum_recvd,
                   cksum_computed,
                   ph.len,
@@ -2017,7 +2017,7 @@ bool Socket::verifyChecksum(ProtocolHeader ph, ProtocolReader& reader) {
         cksum_recvd,
         cksum_computed,
         conn_description_.c_str(),
-        messageTypeNames[ph.type].c_str());
+        messageTypeNames()[ph.type].c_str());
 
     err = E::CHECKSUM_MISMATCH;
     STAT_INCR(deps_->getStats(), protocol_checksum_mismatch);
@@ -2032,7 +2032,7 @@ bool Socket::validateReceivedMessage(const Message* msg) const {
   if (isHandshakeMessage(msg->type_)) {
     if (handshaken_) {
       ld_error("PROTOCOL ERROR: got a duplicate %s from %s",
-               messageTypeNames[msg->type_].c_str(),
+               messageTypeNames()[msg->type_].c_str(),
                conn_description_.c_str());
       err = E::PROTO;
       return false;
@@ -2148,7 +2148,7 @@ int Socket::onReceived(ProtocolHeader ph, struct evbuffer* inbuf) {
       case E::TOOBIG:
         ld_error("PROTOCOL ERROR: message of type %s received from peer "
                  "%s is too large: %u bytes",
-                 messageTypeNames[ph.type].c_str(),
+                 messageTypeNames()[ph.type].c_str(),
                  conn_description_.c_str(),
                  ph.len);
         err = E::BADMSG;
@@ -2157,7 +2157,7 @@ int Socket::onReceived(ProtocolHeader ph, struct evbuffer* inbuf) {
       case E::BADMSG:
         ld_error("PROTOCOL ERROR: message of type %s received from peer "
                  "%s has invalid format. proto_:%hu",
-                 messageTypeNames[ph.type].c_str(),
+                 messageTypeNames()[ph.type].c_str(),
                  conn_description_.c_str(),
                  proto_);
         err = E::BADMSG;
@@ -2166,7 +2166,7 @@ int Socket::onReceived(ProtocolHeader ph, struct evbuffer* inbuf) {
       case E::INTERNAL:
         ld_critical("INTERNAL ERROR while deserializing a message of type "
                     "%s received from peer %s",
-                    messageTypeNames[ph.type].c_str(),
+                    messageTypeNames()[ph.type].c_str(),
                     conn_description_.c_str());
         return 0;
 
@@ -2174,7 +2174,7 @@ int Socket::onReceived(ProtocolHeader ph, struct evbuffer* inbuf) {
         ld_critical("INTERNAL ERROR: deserializer for message type %d (%s) not "
                     "implemented.",
                     int(ph.type),
-                    messageTypeNames[ph.type].c_str());
+                    messageTypeNames()[ph.type].c_str());
         ld_check(false);
         err = E::INTERNAL;
         return -1;
@@ -2184,7 +2184,7 @@ int Socket::onReceived(ProtocolHeader ph, struct evbuffer* inbuf) {
                     "deserializer for message type %s received from peer %s",
                     static_cast<int>(err),
                     error_name(err),
-                    messageTypeNames[ph.type].c_str(),
+                    messageTypeNames()[ph.type].c_str(),
                     conn_description_.c_str());
         return 0;
     }
@@ -2211,7 +2211,7 @@ int Socket::onReceived(ProtocolHeader ph, struct evbuffer* inbuf) {
   TRAFFIC_CLASS_STAT_ADD(deps_->getStats(), msg->tc_, bytes_received, ph.len);
 
   ld_spew("Received message %s of size %u bytes from %s",
-          messageTypeNames[ph.type].c_str(),
+          messageTypeNames()[ph.type].c_str(),
           recv_message_ph_.len,
           conn_description_.c_str());
 

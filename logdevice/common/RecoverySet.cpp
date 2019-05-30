@@ -244,7 +244,7 @@ void RecoverySet::onMessageSent(ShardID dest,
                    "called for a %s message to %s during recovery of %s with "
                    "an unexpected read stream id (got %lu, expected %lu). "
                    "Ignoring.",
-                   messageTypeNames[type].c_str(),
+                   messageTypeNames()[type].c_str(),
                    dest.toString().c_str(),
                    recovery_->identify().c_str(),
                    id.val_,

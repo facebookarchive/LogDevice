@@ -51,7 +51,7 @@ ClientMessageDispatch::onReceivedImpl(Message* msg,
           1,
           "ClientMessageDispatch::onReceived() called with %s message"
           "which is supposed to be server-only!",
-          messageTypeNames[msg->type_].c_str());
+          messageTypeNames()[msg->type_].c_str());
       err = E::PROTO;
       return Message::Disposition::ERROR;
 
@@ -86,7 +86,7 @@ void ClientMessageDispatch::onSentImpl(const Message& msg,
                       1,
                       "ClientMessageDispatch::onSent() called with %s message"
                       "which is supposed to be server-only!",
-                      messageTypeNames[msg.type_].c_str());
+                      messageTypeNames()[msg.type_].c_str());
       ld_check(false);
       return;
 

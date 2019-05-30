@@ -9,7 +9,10 @@
 
 namespace facebook { namespace logdevice {
 
-EnumMap<MessageType, std::string> messageTypeNames;
+const EnumMap<MessageType, std::string>& messageTypeNames() {
+  static EnumMap<MessageType, std::string> messageTypeNames;
+  return messageTypeNames;
+}
 
 template <>
 /* static */

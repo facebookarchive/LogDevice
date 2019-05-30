@@ -472,7 +472,7 @@ void AppendRequest::handleMessageSendError(MessageType type,
                   5,
                   "Failed to queue %s "
                   "message for log %lu of size %zu for sending to %s: %s",
-                  messageTypeNames[int(type)].c_str(),
+                  messageTypeNames()[int(type)].c_str(),
                   record_.logid.val_,
                   record_.payload.size(),
                   Sender::describeConnection(Address(dest)).c_str(),

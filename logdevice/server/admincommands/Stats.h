@@ -38,7 +38,7 @@ inline void printStats(const Stats& stats,
       out_.printf("STAT %s%s.%s %" PRId64 "\r\n",
                   keyPrefix_,
                   name.c_str(),
-                  messageTypeNames[msg].c_str(),
+                  messageTypeNames()[msg].c_str(),
                   val);
     }
     // Per-shard stats.

@@ -418,7 +418,7 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
           std::chrono::seconds(10),
           3,
           "Unable to send a message of type %s to %s: error %s",
-          messageTypeNames[msg->type_].c_str(),
+          messageTypeNames()[msg->type_].c_str(),
           Sender::describeConnection(addr).c_str(),
           error_description(err));
     }
@@ -1421,7 +1421,7 @@ std::string Sender::dumpQueuedMessages(Address addr) const {
   }
   std::unordered_map<std::string, int> strmap;
   for (const auto& entry : counts) {
-    strmap[messageTypeNames[entry.first].c_str()] = entry.second;
+    strmap[messageTypeNames()[entry.first].c_str()] = entry.second;
   }
   return folly::toJson(folly::toDynamic(strmap));
 }

@@ -166,7 +166,7 @@ ProtocolReader::ProtocolReader(MessageType type,
                                size_t to_read,
                                folly::Optional<uint16_t> proto)
     : ProtocolReader(std::make_unique<EvbufferSource>(src, to_read),
-                     messageTypeNames[type].c_str(),
+                     messageTypeNames()[type].c_str(),
                      std::move(proto)) {}
 
 ProtocolReader::ProtocolReader(Slice src,

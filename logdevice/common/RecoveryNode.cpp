@@ -195,7 +195,7 @@ void RecoveryNode::transition(State to) {
       RATELIMIT_INFO(std::chrono::seconds(10),
                      10,
                      "Failed to send %s message to %s for %s: %s",
-                     messageTypeNames[msg->type_].c_str(),
+                     messageTypeNames()[msg->type_].c_str(),
                      shard_.toString().c_str(),
                      recovery_->identify().c_str(),
                      error_description(err));
@@ -372,7 +372,7 @@ void RecoveryNode::onMessageSent(MessageType type,
                      10,
                      "Failed to send a %s message to %s during recovery of %s: "
                      "%s",
-                     messageTypeNames[type].c_str(),
+                     messageTypeNames()[type].c_str(),
                      shard_.toString().c_str(),
                      recovery_->identify().c_str(),
                      error_description(status));
