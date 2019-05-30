@@ -51,7 +51,9 @@ async def get_cluster(
 
 def _get_node_by_node_config(nc: NodeConfig) -> Node:
     return Node(
-        node_index=nc.node_index, data_addr=SocketAddress.from_thrift(nc.data_address)
+        node_index=nc.node_index,
+        data_addr=SocketAddress.from_thrift(nc.data_address),
+        name=nc.name,
     )
 
 
@@ -81,4 +83,29 @@ async def get_node_by_node_index(client: AdminAPI, node_index: int) -> Node:
     if not resp.nodes:
         raise NodeNotFoundError(f"Node not found: node_index=`{node_index}'")
 
+    # There's guarantee from AdminAPI that there CANNOT be more than one
+    # node with the same node_index
+    return _get_node_by_node_config(resp.nodes[0])
+
+
+async def get_node_by_name(client: AdminAPI, name: str) -> Node:
+    """
+    Returns Node by node name
+
+    Raises:
+        logdevice.admin.exceptions.types.NodeNotReady: if node client is
+            connected to is not ready yet to process request
+        thrift.py3.TransportError: if there's network error while
+            communicating with Thrift
+        ldops.exceptions.NodeNotFoundError: if there's no such node from
+            point of view of AdminAPI provider
+    """
+    resp: NodesConfigResponse = await admin_api.get_nodes_config(
+        client=client, req=NodesFilter(node=NodeID(name=name))
+    )
+    if not resp.nodes:
+        raise NodeNotFoundError(f"Node not found: name=`{name}'")
+
+    # There's guarantee from AdminAPI that there CANNOT be more than one
+    # node with the same name
     return _get_node_by_node_config(resp.nodes[0])
