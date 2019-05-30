@@ -118,7 +118,7 @@ void NodeSetFinder::readFromSequencer(std::chrono::milliseconds stage_timeout) {
       stage_timeout));
 
   std::unique_ptr<Request> req(std::move(ssr));
-  Worker::onThisThread()->processor_->postRequest(req);
+  Worker::onThisThread()->processor_->postImportant(req);
 }
 
 void NodeSetFinder::onMetaDataFromSequencer(

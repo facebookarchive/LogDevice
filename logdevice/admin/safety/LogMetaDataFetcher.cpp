@@ -191,7 +191,7 @@ class StartLogMetaDataFetcherRequest : public Request {
 void LogMetaDataFetcher::start(Processor* processor) {
   std::unique_ptr<Request> request =
       std::make_unique<StartLogMetaDataFetcherRequest>(this);
-  processor->postRequest(request);
+  processor->postImportant(request);
 }
 
 }} // namespace facebook::logdevice
