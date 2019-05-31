@@ -165,6 +165,7 @@ void EventLoopTaskQueue::executeTasks(size_t tokens) {
     overflow = dequeues_per_iteration - dequeues_to_execute[i];
   }
   for (size_t i = 0; tokens > 0; ++i) {
+    ld_assert(i < dequeues_to_execute.size());
     auto tasks_remaining = tasks_available[i] - dequeues_to_execute[i];
     auto dequeues = std::min(tokens, tasks_remaining);
     tokens -= dequeues;
