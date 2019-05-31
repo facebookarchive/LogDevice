@@ -8,8 +8,11 @@
 
 #include "logdevice/admin/maintenance/MaintenanceLogWriter.h"
 
+#include <folly/MoveWrapper.h>
+
 #include "logdevice/admin/maintenance/types.h"
 #include "logdevice/common/ThriftCodec.h"
+#include "logdevice/common/request_util.h"
 
 namespace facebook { namespace logdevice { namespace maintenance {
 
@@ -80,8 +83,7 @@ void MaintenanceLogWriter::writeDelta(
         void(Status st, lsn_t version, const std::string& failure_reason)> cb,
     ClusterMaintenanceStateMachine::WriteMode mode,
     folly::Optional<lsn_t> base_version) {
-  std::string serializedData =
-      ThriftCodec::serialize<apache::thrift::BinarySerializer>(delta);
+  std::string serializedData = serializeDelta(delta);
   std::unique_ptr<Request> req =
       std::make_unique<MaintenanceLogWriteDeltaRequest>(
           ClusterMaintenanceStateMachine::workerType(processor_),
@@ -90,6 +92,71 @@ void MaintenanceLogWriter::writeDelta(
           std::move(mode),
           std::move(base_version));
   processor_->postWithRetrying(req);
+}
+
+std::string
+MaintenanceLogWriter::serializeDelta(const MaintenanceDelta& delta) {
+  std::string serializedData =
+      ThriftCodec::serialize<apache::thrift::BinarySerializer>(delta);
+  return serializedData;
+}
+
+folly::SemiFuture<folly::Expected<ClusterMaintenanceState, MaintenanceError>>
+MaintenanceLogWriter::writeDelta(Processor* processor,
+                                 const MaintenanceDelta& delta) {
+  using OutType = folly::Expected<ClusterMaintenanceState, MaintenanceError>;
+  auto worker_type = ClusterMaintenanceStateMachine::workerType(processor);
+  auto worker_index =
+      worker_id_t(ClusterMaintenanceStateMachine::getWorkerIndex(
+          processor->getWorkerCount(worker_type)));
+
+  std::string payload = serializeDelta(delta);
+
+  auto cb_on_worker = [payload = std::move(payload)](
+                          folly::Promise<OutType> promise) mutable {
+    auto sm = Worker::onThisThread()->cluster_maintenance_state_machine_;
+    if (!sm) {
+      ld_warning("No ClusterMaintenanceStateMachine available on this worker. "
+                 "Returning E::NOTSUPPORTED.");
+      promise.setValue(folly::makeUnexpected(MaintenanceError(
+          E::NOTSUPPORTED,
+          "No ClusterMaintenanceStateMachine running ont his machine!")));
+    } else {
+      // This is needed because we want to move this into a lambda, an
+      // std::function<> does not allow capturing move-only objects, so here we
+      // are!
+      // http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2013/n3610.html
+      folly::MoveWrapper<folly::Promise<OutType>> mpromise(std::move(promise));
+      auto cb_after_apply = [mpromise = std::move(mpromise)](
+                                Status st,
+                                lsn_t /* unused */,
+                                const std::string& failure_reason) mutable {
+        auto rsm = Worker::onThisThread()->cluster_maintenance_state_machine_;
+        // This callback is executed on the RSM worker thread, it's safe to
+        // access the state at this point.
+        if (st == E::OK) {
+          // We have a successfully applied delta.
+          mpromise->setValue(rsm->getCurrentState());
+        } else {
+          // One of the input maintenances clash with existing ones.
+          mpromise->setValue(
+              folly::makeUnexpected(MaintenanceError(st, failure_reason)));
+        }
+      };
+
+      sm->writeDelta(std::move(payload),
+                     std::move(cb_after_apply),
+                     ClusterMaintenanceStateMachine::WriteMode::CONFIRM_APPLIED,
+                     folly::none);
+    }
+  };
+
+  return fulfill_on_worker<OutType>(processor,
+                                    worker_index,
+                                    worker_type,
+                                    std::move(cb_on_worker),
+                                    RequestType::MAINTENANCE_LOG_REQUEST,
+                                    /* with_retrying = */ true);
 }
 
 thrift::RemoveMaintenancesRequest

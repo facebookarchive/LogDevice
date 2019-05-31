@@ -7,8 +7,10 @@
  */
 #pragma once
 
+#include <folly/futures/Future.h>
+
 #include "logdevice/admin/maintenance/ClusterMaintenanceStateMachine.h"
-#include "logdevice/admin/maintenance/gen-cpp2/MaintenanceDelta_types.h"
+#include "logdevice/admin/maintenance/types.h"
 
 namespace facebook { namespace logdevice { namespace maintenance {
 
@@ -30,7 +32,12 @@ class MaintenanceLogWriter {
           ClusterMaintenanceStateMachine::WriteMode::CONFIRM_APPLIED,
       folly::Optional<lsn_t> base_version = folly::none);
 
+  static std::string serializeDelta(const MaintenanceDelta& delta);
   virtual void writeDelta(std::unique_ptr<MaintenanceDelta> delta);
+
+  static folly::SemiFuture<
+      folly::Expected<ClusterMaintenanceState, MaintenanceError>>
+  writeDelta(Processor* processor, const MaintenanceDelta&);
 
   /**
    * Returns RemoveMaintenancesRequest for removing an internal maintenance
