@@ -26,10 +26,12 @@ REMOVE_MATCHES_FROM_LISTS(test_util_files test_util_hfiles
 
 add_library(test_util STATIC ${test_util_hfiles} ${test_util_files})
 
+add_dependencies(test_util googletest)
 target_link_libraries(test_util
   common
   common_test_util
   ldclient_static
+  ${GTEST_LIBRARY}
   ${LOGDEVICE_EXTERNAL_DEPS})
 
 add_executable(integration_test ${hfiles} ${files})

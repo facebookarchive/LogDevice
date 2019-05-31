@@ -44,10 +44,12 @@ option(BUILD_TESTS "If enabled, compile the tests." ON)
 option(BUILD_SUBMODULES "Build using Git submodules, to fulfill dependencies" ON)
 if(${BUILD_SUBMODULES})
   message("Building with submodules enabled")
+  include(build-fmt)
   include(build-rocksdb)
   include(build-folly)
   include(build-fizz)
   include(build-wangle)
+  include(build-rsocket)
   include(build-fbthrift)
   include(${LOGDEVICE_DIR}/external/fbthrift/ThriftLibrary.cmake)
 else()
@@ -77,7 +79,7 @@ else()
     FBThrift::thrift-core
     FBThrift::thriftcpp2
     FBThrift::thrift
-  )
+ )
   include(${THRIFT_COMPILER_INCLUDE}/thrift/ThriftLibrary.cmake)
 
   # If we are not building the submodules, replace targets with fake targets so
@@ -87,6 +89,8 @@ else()
   add_custom_target(fizz)
   add_custom_target(wangle)
   add_custom_target(fbthrift)
+  add_custom_target(fmt)
+  add_custom_target(rsocket)
 endif()
 
 include(build-docs)
@@ -113,13 +117,23 @@ include_directories(${LOGDEVICE_DIR}/..)
 
 auto_sources(hfiles "*.h" RECURSE "${LOGDEVICE_CLIENT_HEADER_DIR}")
 
+# The order of these libraries is very important, if library A pulls symbols
+# from B. Then A need to appear before B in that list.
 set(LOGDEVICE_EXTERNAL_DEPS
+  ${FBTHRIFT_LIBRARIES}
+  ${WANGLE_LIBRARIES}
+  ${FIZZ_LIBRARIES}
+  ${ROCKSDB_LIBRARIES}
+  ${RSOCKET_LIBRARIES}
+  ${LIBSODIUM_LIBRARIES}
+  ${FMT_LIBRARIES}
+  ${FOLLY_BENCHMARK_LIBRARIES}
+  ${FOLLY_LIBRARIES}
+  ${FOLLY_TEST_UTIL_LIBRARIES}
   ${OPENTRACING_MOCKTRACER_STATIC_LIB}
   ${OPENTRACING_STATIC_LIB}
   ${LIBUNWIND_LIBRARIES}
-  ${FOLLY_BENCHMARK_LIBRARIES}
-  ${FOLLY_LIBRARIES}
-  ${ROCKSDB_LIBRARIES}
+  ${ZLIB_LIBRARIES}
   ${Boost_LIBRARIES}
   ${OPENSSL_LIBRARIES}
   ${ZSTD_LIBRARY}
@@ -131,8 +145,6 @@ set(LOGDEVICE_EXTERNAL_DEPS
   ${GLOG_LIBRARIES}
   ${LIBGFLAGS_LIBRARY}
   ${LZ4_LIBRARY}
-  ${ZLIB_LIBRARIES}
-  ${LIBLZMA_LIBRARIES}
   ${IBERTY_LIBRARIES}
   ${BZIP2_LIBRARIES}
   ${ZLIB_LIBRARIES}
@@ -140,8 +152,8 @@ set(LOGDEVICE_EXTERNAL_DEPS
   ${IBERTY_LIBRARIES}
   ${SNAPPY_LIBRARY}
   ${PYTHON_LIBRARIES}
-  ${FBTHRIFT_LIBRARIES}
-  Threads::Threads)
+  Threads::Threads
+  ${LIBLZMA_LIBRARIES})
 
 include_directories(${CMAKE_BINARY_DIR})
 
@@ -171,12 +183,21 @@ target_link_libraries(logdevice_server
   ldclient_static
   ${LOGDEVICE_EXTERNAL_DEPS})
 
+set_target_properties(logdevice_server
+  PROPERTIES
+  POSITION_INDEPENDENT_CODE True
+)
+
 add_executable(logdeviced ${LOGDEVICE_SERVER_DIR}/main.cpp)
-target_link_libraries(logdeviced logdevice_server)
+target_link_libraries(logdeviced
+  logdevice_server
+  ${LOGDEVICE_EXTERNAL_DEPS}
+)
 
 install(TARGETS logdeviced
   COMPONENT runtime
-  DESTINATION bin)
+  DESTINATION bin
+)
 
 add_subdirectory(replication_checker)
 if(${BUILD_TESTS})

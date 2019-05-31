@@ -19,10 +19,10 @@ ExternalProject_Add(wangle
 
 ExternalProject_Get_Property(wangle BINARY_DIR)
 
-ExternalProject_Add_StepDependencies(wangle configure folly fizz)
+ExternalProject_Add_StepDependencies(wangle configure fizz folly)
 
 set(WANGLE_LIBRARIES
-    ${BINARY_DIR}/libwangle.a)
+    ${BINARY_DIR}/lib/libwangle.a)
 
 message(STATUS "Wangle Library: ${WANGLE_LIBRARIES}")
 

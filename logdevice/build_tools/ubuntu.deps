@@ -32,6 +32,8 @@ libsparsehash-dev
 libtbb-dev
 libnuma-dev
 libiberty-dev
+libsodium-dev
+libzstd-dev
 libjemalloc-dev
 python3
 python3-pip

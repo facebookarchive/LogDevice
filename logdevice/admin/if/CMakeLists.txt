@@ -15,21 +15,17 @@ add_subdirectory(common/fb303/if)
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/${_adminapi_if_include_prefix})
 
 set(_common_libs
-  "fb303-cpp2"
-  "exceptions-cpp2"
-  "common-cpp2"
   "maintenance-cpp2"
   "safety-cpp2"
   "settings-cpp2"
-  "logtree-cpp2"
   "nodes-cpp2"
-  ${FBTHRIFT_LIBRARIES}
-  ${GLOG_LIBRARIES}
-  ${LIBGFLAGS_LIBRARY}
+  "logtree-cpp2"
+  "common-cpp2"
+  "exceptions-cpp2"
+  "fb303-cpp2"
   )
-if(${BUILD_SUBMODULES})
-  list(APPEND _common_libs thriftcpp2_shared)
-else()
+
+if(NOT ${BUILD_SUBMODULES})
   list(APPEND _common_libs FBThrift::thriftcpp2)
 endif()
 
@@ -133,6 +129,7 @@ add_dependencies(admin-${_lang}-target
 
 target_link_libraries(admin-${_lang}
   ${_common_libs}
+  ${LOGDEVICE_EXTERNAL_DEPS}
 )
 
 add_dependencies(exceptions-${_lang}-target
