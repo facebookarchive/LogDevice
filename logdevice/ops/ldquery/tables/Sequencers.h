@@ -93,6 +93,7 @@ class Sequencers : public AdminCommandTable {
          DataType::BIGINT,
          "Whether the epoch metadata used by this sequencer has been written "
          "to the metadata log."},
+        {"trim_point", DataType::LSN, "The current trim point for this log."},
         // TODO (T36984535) : deprecate column last_byte_offset
         {"last_byte_offset", DataType::TEXT, "Offsets of the tail record."},
         {"bytes_per_second",

@@ -524,6 +524,7 @@ This table dumps information about all the Sequencer objects in the cluster.  Se
 | preempted\_by | long | ID of the sequencer that preempted this sequencer (if any). |
 | draining | long | Epoch that is draining (if any).  Draining means that the sequencer stopped accepting new writes but is completing appends curretnly in flight. |
 | metadata\_log\_written | long | Whether the epoch metadata used by this sequencer has been written to the metadata log. |
+| trim\_point | lsn | The current trim point for this log. |
 | last\_byte\_offset | string | Offsets of the tail record. |
 | bytes\_per\_second | real | Append throughput averaged over the last throughput\_window\_seconds seconds. |
 | throughput\_window\_seconds | real | Time window over which append throughput estimate bytes\_per\_second was obtained. |
