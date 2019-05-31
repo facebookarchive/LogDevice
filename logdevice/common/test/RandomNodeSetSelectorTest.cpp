@@ -725,8 +725,14 @@ TEST(ConsistentHashingWeightAwareNodeSetSelectorTest, AddNode) {
   Configuration::NodesConfig nodes_config1(std::move(nodes1));
   Configuration::NodesConfig nodes_config2(std::move(nodes2));
 
-  auto logs_config = std::make_shared<LocalLogsConfig>();
+#ifdef FOLLY_SANITIZE_ADDRESS
+  // ASAN builds are 3-10 times slower than normal, use much fewer iterations.
+  const int numlogs = 1000;
+#else
   const int numlogs = 10000;
+#endif
+
+  auto logs_config = std::make_shared<LocalLogsConfig>();
 
   for (int i = 1; i <= numlogs; i++) {
     addLog(logs_config.get(),
@@ -780,7 +786,7 @@ TEST(ConsistentHashingWeightAwareNodeSetSelectorTest, AddNode) {
     new_totaladded += new_diff.second;
   }
 
-  ld_info("\n\nNew selector: removed = %zu, added = %zu\n",
+  ld_info("New selector: removed = %zu, added = %zu\n",
           new_totalremoved,
           new_totaladded);
   ld_info("Old selector: removed = %zu, added = %zu\n",
@@ -798,17 +804,21 @@ TEST(ConsistentHashingWeightAwareNodeSetSelectorTest, AddNode) {
           toString(new_after_adding_distribution).c_str());
 
   for (auto& kv : old_after_adding_distribution) {
-    EXPECT_GE(kv.second, 500);
-    EXPECT_LE(kv.second, 4500);
+    // We expect each shard to be picked in around 1/4 of the nodesets
+    // (nodeset size 21, cluster size 80).
+    EXPECT_GE(kv.second, numlogs / 20);
+    EXPECT_LE(kv.second, numlogs / 2);
   }
 
   for (auto& kv : new_after_adding_distribution) {
-    EXPECT_GE(kv.second, 500);
-    EXPECT_LE(kv.second, 4500);
+    EXPECT_GE(kv.second, numlogs / 20);
+    EXPECT_LE(kv.second, numlogs / 2);
   }
 
   EXPECT_EQ(new_totalremoved, new_totaladded);
-  EXPECT_LE(new_totalremoved, 5000);
+  // We expect around 1/4 of the nodesets to change since we're adding
+  // one node to a rack of 15 nodes, and nodeset size is ~4 nodes per rack.
+  EXPECT_LE(new_totalremoved, numlogs / 2);
 }
 
 TEST(ConsistentHashingWeightAwareNodeSetSelectorTest, DisabledNodes) {
