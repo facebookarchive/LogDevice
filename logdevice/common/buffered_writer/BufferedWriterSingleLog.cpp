@@ -56,7 +56,8 @@ BufferedWriterSingleLog::BufferedWriterSingleLog(BufferedWriterShard* parent,
                                                  GetLogOptionsFunc get_options)
     : parent_(parent),
       log_id_(log_id),
-      get_log_options_(std::move(get_options)) {}
+      get_log_options_(std::move(get_options)),
+      options_(get_log_options_(log_id_)) {}
 
 BufferedWriterSingleLog::~BufferedWriterSingleLog() {
   for (std::unique_ptr<Batch>& batch : *batches_) {
@@ -67,13 +68,6 @@ BufferedWriterSingleLog::~BufferedWriterSingleLog() {
   }
 
   dropBlockedAppends(E::SHUTDOWN, NodeID());
-}
-
-std::vector<BufferedWriterSingleLog::Batch*>
-BufferedWriterSingleLog::getVectorWithCapacity(size_t capacity) {
-  std::vector<Batch*> ret;
-  ret.reserve(capacity);
-  return ret;
 }
 
 void BufferedWriterSingleLog::append(AppendChunk chunk) {
@@ -119,16 +113,17 @@ int BufferedWriterSingleLog::appendImpl(AppendChunk& chunk,
     ld_check(!haveBuildingBatch());
   }
 
-  auto options = get_log_options_(log_id_);
-
   // If there is no batch in the BUILDING state, create one now.
   if (!haveBuildingBatch()) {
-    if (options.mode == BufferedWriter::Options::Mode::ONE_AT_A_TIME &&
+    if (options_.mode == BufferedWriter::Options::Mode::ONE_AT_A_TIME &&
         !batches_->empty()) {
       // In the one-at-a-time mode, if there is already a batch inflight, we
       // must wait for it to finish before creating a new batch.
       return -1;
     }
+
+    // Refresh log options once per batch.
+    options_ = get_log_options_(log_id_);
 
     auto batch = std::make_unique<Batch>(next_batch_num_++);
     batch->blob_bytes_total =
@@ -195,24 +190,22 @@ int BufferedWriterSingleLog::appendImpl(AppendChunk& chunk,
 void BufferedWriterSingleLog::flushMeMaybe(bool defer_client_size_trigger) {
   ld_check(haveBuildingBatch());
   const Batch& batch = *batches_->back();
-  const size_t max_payload_size = Worker::settings().max_payload_size;
-  StatsHolder* stats{parent_->parent_->processor()->stats_};
+  Worker* w = Worker::onThisThread();
+  const size_t max_payload_size = w->immutable_settings_->max_payload_size;
 
   // If we're at the LogDevice hard limit on payload size, flush
   if (batch.blob_bytes_total >= max_payload_size) {
     ld_check(batch.blob_bytes_total <= MAX_PAYLOAD_SIZE_INTERNAL);
-    STAT_INCR(stats, buffered_writer_max_payload_flush);
+    STAT_INCR(w->getStats(), buffered_writer_max_payload_flush);
     flush();
     return;
   }
 
-  auto options = get_log_options_(log_id_);
-
   // If client set `Options::size_trigger', check if the sum of payload bytes
   // buffered exceeds it
-  if (!defer_client_size_trigger && options.size_trigger >= 0 &&
-      batch.payload_bytes_total >= options.size_trigger) {
-    STAT_INCR(stats, buffered_writer_size_trigger_flush);
+  if (!defer_client_size_trigger && options_.size_trigger >= 0 &&
+      batch.payload_bytes_total >= options_.size_trigger) {
+    STAT_INCR(w->getStats(), buffered_writer_size_trigger_flush);
     flush();
     return;
   }
@@ -275,18 +268,14 @@ struct AppendRequestCallbackImpl {
 };
 
 void BufferedWriterSingleLog::sendBatch(Batch& batch) {
-  ld_spew(" ");
-
   if (batch.state == Batch::State::BUILDING) {
     ld_check(batch.blob.data == nullptr);
 
-    auto options = get_log_options_(log_id_);
-
     batch_flags_t flags = Flags::SIZE_INCLUDED |
-        (batch_flags_t(options.compression) & Flags::COMPRESSION_MASK);
+        (batch_flags_t(options_.compression) & Flags::COMPRESSION_MASK);
 
     setBatchState(batch, Batch::State::CONSTRUCTING_BLOB);
-    construct_blob(batch, flags, checksumBits(), options.destroy_payloads);
+    construct_blob(batch, flags, checksumBits(), options_.destroy_payloads);
   } else {
     // This is a retry, so we must have already sent it, so we can skip the
     // purgatory of READY_TO_SEND.
@@ -386,8 +375,7 @@ void BufferedWriterSingleLog::onAppendReply(Batch& batch,
   finishBatch(batch);
   reap();
 
-  auto options = get_log_options_(log_id_);
-  if (options.mode == BufferedWriter::Options::Mode::ONE_AT_A_TIME) {
+  if (options_.mode == BufferedWriter::Options::Mode::ONE_AT_A_TIME) {
     if (status == E::OK) {
       // Now that some batch finished successfully, reissue any appends that
       // were blocked in ONE_AT_A_TIME mode while the batch was inflight.
@@ -476,9 +464,7 @@ void BufferedWriterSingleLog::dropBlockedAppends(Status status,
 }
 
 void BufferedWriterSingleLog::activateTimeTrigger() {
-  auto options = get_log_options_(log_id_);
-
-  if (options.time_trigger.count() < 0) {
+  if (options_.time_trigger.count() < 0) {
     return;
   }
 
@@ -490,16 +476,14 @@ void BufferedWriterSingleLog::activateTimeTrigger() {
     });
   }
   if (!time_trigger_timer_->isActive()) {
-    time_trigger_timer_->activate(options.time_trigger);
+    time_trigger_timer_->activate(options_.time_trigger);
   }
 }
 
 int BufferedWriterSingleLog::scheduleRetry(Batch& batch,
                                            Status status,
                                            const DataRecord& /*dr_batch*/) {
-  auto options = get_log_options_(log_id_);
-
-  if (options.retry_count >= 0 && batch.retry_count >= options.retry_count) {
+  if (options_.retry_count >= 0 && batch.retry_count >= options_.retry_count) {
     return -1;
   }
 
@@ -517,15 +501,15 @@ int BufferedWriterSingleLog::scheduleRetry(Batch& batch,
 
   // Initialize `retry_timer' if this is the first retry
   if (!batch.retry_timer) {
-    ld_check(options.retry_initial_delay.count() >= 0);
-    std::chrono::milliseconds max_delay = options.retry_max_delay.count() >= 0
-        ? options.retry_max_delay
+    ld_check(options_.retry_initial_delay.count() >= 0);
+    std::chrono::milliseconds max_delay = options_.retry_max_delay.count() >= 0
+        ? options_.retry_max_delay
         : std::chrono::milliseconds::max();
-    max_delay = std::max(max_delay, options.retry_initial_delay);
+    max_delay = std::max(max_delay, options_.retry_initial_delay);
 
     batch.retry_timer = std::make_unique<ExponentialBackoffTimer>(
         [this, &batch]() { sendBatch(batch); },
-        options.retry_initial_delay,
+        options_.retry_initial_delay,
         max_delay);
 
     batch.retry_timer->randomize();

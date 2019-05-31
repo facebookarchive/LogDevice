@@ -270,14 +270,15 @@ class BufferedWriterSingleLog {
                       int checksum_bits,
                       bool destroy_payloads);
 
-  // Used only in constructor.
-  std::vector<Batch*> getVectorWithCapacity(size_t capacity);
-
   BufferedWriterShard* parent_;
   logid_t log_id_;
   GetLogOptionsFunc get_log_options_;
   CompactableContainer<std::deque<std::unique_ptr<Batch>>> batches_;
   std::unique_ptr<Timer> time_trigger_timer_;
+
+  // get_log_options_() call is not very cheap, so we call it only when
+  // starting a new batch and cache the result.
+  BufferedWriter::LogOptions options_;
 
   // In the ONE_AT_A_TIME mode, this is a buffer for appends that came in
   // while a batch was already inflight.  When that batch finishes, we can

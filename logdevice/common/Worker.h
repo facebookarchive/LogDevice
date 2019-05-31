@@ -325,6 +325,12 @@ class Worker : public SerialWorkContext {
     return w ? w->stats_ : nullptr;
   }
 
+  // Slightly faster than the static stats() because it doesn't look up the
+  // thread-local Worker. Use on very hot paths.
+  StatsHolder* getStats() {
+    return stats_;
+  }
+
   static ClusterState* getClusterState();
 
   /**
