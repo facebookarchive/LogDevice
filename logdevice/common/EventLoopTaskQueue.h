@@ -8,6 +8,7 @@
 #pragma once
 
 #include <memory>
+#include <numeric>
 
 #include <folly/Executor.h>
 #include <folly/Function.h>
@@ -48,6 +49,8 @@ struct EventLoopTaskQueueImpl;
  */
 class EventLoopTaskQueue {
  public:
+  constexpr static size_t kNumberOfPriorities = 3;
+
   /**
    * Registers the event.
    *
@@ -56,9 +59,10 @@ class EventLoopTaskQueue {
    *
    * @throws ConstructorFailed on error
    */
-  EventLoopTaskQueue(struct event_base* base,
-                     size_t capacity,
-                     int dequeues_per_iteration);
+  EventLoopTaskQueue(
+      struct event_base* base,
+      size_t capacity,
+      const std::array<size_t, kNumberOfPriorities>& dequeues_per_iteration);
 
   virtual ~EventLoopTaskQueue();
 
@@ -97,36 +101,45 @@ class EventLoopTaskQueue {
     return shutdown_signaled_.load();
   }
 
-  static size_t translatePriority(const int8_t priority) {
-    constexpr static std::array<int8_t, kNumberOfPriorities> lookup_table = {
-        {folly::Executor::HI_PRI,
-         folly::Executor::MID_PRI,
-         folly::Executor::LO_PRI}};
-
+  static constexpr size_t translatePriority(const int8_t priority) {
     for (int i = 0; i < kNumberOfPriorities; ++i) {
-      if (lookup_table[i] == priority) {
+      if (kLookupTable[i] == priority) {
         return i;
       }
     }
     return kNumberOfPriorities - 1;
   }
 
-  void setNumPerIterations(int hi_pri_num, int mid_pri_num, int lo_pri_num) {
-    num_hi_pri_dequeues_per_iteration_ = hi_pri_num;
-    num_mid_pri_dequeues_per_iteration_ = mid_pri_num;
-    num_lo_pri_dequeues_per_iteration_ = lo_pri_num;
+  void setDequeuesPerIteration(
+      const std::array<size_t, kNumberOfPriorities>& dequeues_per_iteration) {
+    dequeues_per_iteration_ = dequeues_per_iteration;
+    total_dequeues_per_iteration_ =
+        std::accumulate(dequeues_per_iteration_.begin(),
+                        dequeues_per_iteration_.end(),
+                        size_t(0));
+  }
+
+  void setDequeuesPerIterationForPriority(size_t num_dequeues,
+                                          int8_t priority) {
+    dequeues_per_iteration_[translatePriority(priority)] = num_dequeues;
+    total_dequeues_per_iteration_ =
+        std::accumulate(dequeues_per_iteration_.begin(),
+                        dequeues_per_iteration_.end(),
+                        size_t(0));
   }
 
  private:
   using Queue = folly::UMPSCQueue<Func, false /* MayBlock */, 9>;
 
+  constexpr static std::array<int8_t, kNumberOfPriorities> kLookupTable = {
+      {folly::Executor::HI_PRI,
+       folly::Executor::MID_PRI,
+       folly::Executor::LO_PRI}};
+
   // Execution probability distribution of different tasks. Hi Priority tasks
   // are called such because they have a higher chance of getting executed.
-  size_t num_hi_pri_dequeues_per_iteration_;
-  size_t num_mid_pri_dequeues_per_iteration_;
-  size_t num_lo_pri_dequeues_per_iteration_;
-
-  constexpr static size_t kNumberOfPriorities = 3;
+  std::array<size_t, kNumberOfPriorities> dequeues_per_iteration_;
+  size_t total_dequeues_per_iteration_;
 
   // The data structures of choice for queue is an UnboundedQueue paired with a
   // LifoEventSem. The posting codepath writes into the queue, then posts to

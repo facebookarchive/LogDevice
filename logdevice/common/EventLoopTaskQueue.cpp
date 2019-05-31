@@ -20,13 +20,16 @@ namespace facebook { namespace logdevice {
 
 constexpr size_t EventLoopTaskQueue::kNumberOfPriorities;
 
-EventLoopTaskQueue::EventLoopTaskQueue(struct event_base* base,
-                                       size_t capacity,
-                                       int dequeues_per_iteration)
-    : num_hi_pri_dequeues_per_iteration_(dequeues_per_iteration),
-      num_mid_pri_dequeues_per_iteration_(0),
-      num_lo_pri_dequeues_per_iteration_(0),
-      capacity_(capacity) {
+constexpr std::array<int8_t, EventLoopTaskQueue::kNumberOfPriorities>
+    EventLoopTaskQueue::kLookupTable;
+
+EventLoopTaskQueue::EventLoopTaskQueue(
+    struct event_base* base,
+    size_t capacity,
+    const std::array<size_t, kNumberOfPriorities>& dequeues_per_iteration)
+    : capacity_(capacity) {
+  setDequeuesPerIteration(dequeues_per_iteration);
+
   if (!base) {
     // err shoud be set by the function that tried to create base
     throw ConstructorFailed();
@@ -127,11 +130,7 @@ void EventLoopTaskQueue::haveTasksEventHandler(void* arg, short what) {
     // callback with the amount.  We're guaranteed to have at least that many
     // items in the UMPSCQueue, because the producer pushes into the queue
     // first then increments the semaphore.
-    self->sem_waiter_->processBatch(
-        cb,
-        self->num_hi_pri_dequeues_per_iteration_ +
-            self->num_mid_pri_dequeues_per_iteration_ +
-            self->num_lo_pri_dequeues_per_iteration_);
+    self->sem_waiter_->processBatch(cb, self->total_dequeues_per_iteration_);
   } catch (const folly::ShutdownSemError&) {
     struct event_base* base = LD_EV(event_get_base)(self->tasks_pending_event_);
     // First delete the event since the fd is about to go away
@@ -154,34 +153,30 @@ void EventLoopTaskQueue::haveTasksEventHandler(void* arg, short what) {
 }
 
 void EventLoopTaskQueue::executeTasks(size_t tokens) {
-  auto execute = [this, &tokens](const size_t times, size_t start_priority) {
-    int to_execute = std::min(tokens, times);
-    tokens -= to_execute;
-    for (size_t i = 0; i < to_execute; ++i) {
-      Func func;
-      bool found = 0;
+  std::array<size_t, kNumberOfPriorities> dequeues_to_execute{0};
+  std::array<size_t, kNumberOfPriorities> tasks_available{0};
+  size_t overflow{0};
+  for (size_t i = 0; tokens > 0 && i < dequeues_to_execute.size(); ++i) {
+    tasks_available[i] = queues_[i].size();
+    auto dequeues_per_iteration = dequeues_per_iteration_[i] + overflow;
+    dequeues_to_execute[i] = std::min(
+        tasks_available[i], std::min(tokens, dequeues_per_iteration_[i]));
+    tokens -= dequeues_to_execute[i];
+    overflow = dequeues_per_iteration - dequeues_to_execute[i];
+  }
+  for (size_t i = 0; tokens > 0; ++i) {
+    auto tasks_remaining = tasks_available[i] - dequeues_to_execute[i];
+    auto dequeues = std::min(tokens, tasks_remaining);
+    tokens -= dequeues;
+    dequeues_to_execute[i] += dequeues;
+  }
 
-      for (int j = 0; j < kNumberOfPriorities; ++j) {
-        if (queues_[start_priority].try_dequeue(func)) {
-          found = 1;
-          break;
-        }
-        ++start_priority;
-        start_priority %= kNumberOfPriorities;
-      }
-      ld_assert(found);
+  for (size_t i = 0; i < dequeues_to_execute.size(); ++i) {
+    while (dequeues_to_execute[i]--) {
+      auto func = queues_[i].dequeue();
       func();
     }
-  };
-
-  execute(num_hi_pri_dequeues_per_iteration_,
-          translatePriority(folly::Executor::HI_PRI));
-
-  execute(num_mid_pri_dequeues_per_iteration_,
-          translatePriority(folly::Executor::MID_PRI));
-
-  execute(num_lo_pri_dequeues_per_iteration_,
-          translatePriority(folly::Executor::LO_PRI));
+  }
 }
 
 }} // namespace facebook::logdevice

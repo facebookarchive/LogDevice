@@ -33,7 +33,7 @@ TEST(EventLoopTaskQueue, TranslatePriority) {
 TEST(EventLoopTaskQueue, PostPrioritizedWork) {
   std::unique_ptr<EventLoopHandle> handle;
   handle = std::make_unique<EventLoopHandle>(new EventLoop());
-  handle->getRequestPump().setNumPerIterations(7, 2, 1);
+  handle->getRequestPump().setDequeuesPerIteration({7, 2, 1});
 
   auto el = handle->get();
   size_t num_hi_pri_task = 500;

@@ -72,8 +72,8 @@ class RequestPump : public EventLoopTaskQueue {
    * Can be updated on the fly, but only from the thread on which the
    * RequestPump runs.
    */
-  void setNumRequestsPerIteration(int requestsPerIteration) {
-    setNumPerIterations(requestsPerIteration, 0, 0);
+  void setNumRequestsPerIteration(size_t requestsPerIteration) {
+    setDequeuesPerIteration({requestsPerIteration, 0, 0});
   }
 
  private:

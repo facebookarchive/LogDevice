@@ -12,6 +12,7 @@
 
 #include <event2/event.h>
 #include <folly/Memory.h>
+#include <folly/container/Array.h>
 #include <folly/io/async/Request.h>
 #include <sys/syscall.h>
 #include <sys/types.h>

@@ -12,6 +12,7 @@
 #include <utility>
 
 #include <folly/Likely.h>
+#include <folly/container/Array.h>
 
 #include "logdevice/common/Request.h"
 #include "logdevice/common/Worker.h"
@@ -25,7 +26,10 @@ using namespace std::literals;
 RequestPump::RequestPump(struct event_base* base,
                          size_t capacity,
                          int requests_per_iteration)
-    : EventLoopTaskQueue(base, capacity, requests_per_iteration) {}
+    : EventLoopTaskQueue(
+          base,
+          capacity,
+          folly::make_array<size_t>(requests_per_iteration, 0, 0)) {}
 
 RequestPump::~RequestPump() {}
 
