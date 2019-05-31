@@ -431,6 +431,17 @@ class Timestamp {
       return false;
     };
 
+    // Treat underscores as spaces. This allows specifying timestamps without
+    // spaces, e.g. 2019-05-13_10:00:00, which is sometimes convenient to avoid
+    // cumbersome quotes escaping on command line
+    // (e.g. `echo ... --time-from=2019-05-13_10:18:00`
+    //  instead of `echo ... --time-from=\"2019-05-13 10:18:00\"`).
+    for (char& c : tstr) {
+      if (c == '_') {
+        c = ' ';
+      }
+    }
+
     // Remove leading and trailing whitespace.
     strip_string(tstr);
 
