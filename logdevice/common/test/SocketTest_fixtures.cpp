@@ -211,7 +211,7 @@ void TestSocketDependencies::onSent(std::unique_ptr<Message> msg,
 Message::Disposition
 TestSocketDependencies::onReceived(Message* msg,
                                    const Address& from,
-                                   const PrincipalIdentity&) {
+                                   std::shared_ptr<PrincipalIdentity>) {
   return msg->onReceived(from);
 }
 

@@ -105,6 +105,10 @@ class APPEND_Message : public Message {
 
   static Message::deserializer_t deserialize;
 
+  int8_t getExecutorPriority() const override {
+    return folly::Executor::HI_PRI;
+  }
+
   // Overload of deserialize that does not need to run in an EventLoop
   // context
   static MessageReadResult deserialize(ProtocolReader&,

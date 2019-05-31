@@ -601,6 +601,13 @@ void Sender::flushOutputAndClose(Status reason) {
          "Number of open sockets : %d",
          open_socket_count);
 }
+int Sender::closeSocket(Address addr, Status reason) {
+  if (addr.isClientAddress()) {
+    return closeClientSocket(addr.asClientID(), reason);
+  } else {
+    return closeServerSocket(addr.asNodeID(), reason);
+  }
+}
 
 int Sender::closeClientSocket(ClientID cid, Status reason) {
   ld_check(cid.valid());
@@ -1033,7 +1040,7 @@ const PrincipalIdentity* Sender::getPrincipal(const Address& addr) {
     auto pos = impl_->client_sockets_.find(addr.id_.client_);
     if (pos != impl_->client_sockets_.end()) {
       ld_check(pos->second->peer_name_ == addr);
-      return &pos->second->principal_;
+      return pos->second->principal_.get();
     }
   } else { // addr is a server address
     auto pos = impl_->server_sockets_.find(addr.asNodeID().index());
@@ -1043,8 +1050,8 @@ const PrincipalIdentity* Sender::getPrincipal(const Address& addr) {
       // the server_sockets_ will always be on the sender side, as in they
       // send the initial HELLO_Message. This means that they will never have
       // receive a HELLO_Message thus never have their principal set.
-      ld_check(pos->second->principal_.type == "");
-      return &pos->second->principal_;
+      ld_check(pos->second->principal_->type == "");
+      return pos->second->principal_.get();
     }
   }
 
@@ -1060,7 +1067,7 @@ int Sender::setPrincipal(const Address& addr, PrincipalIdentity principal) {
       // Whenever a HELLO_Message is sent, a new client socket is
       // created on the server side. Meaning that whenever this function is
       // called, the principal should be empty.
-      ld_check(pos->second->principal_.type == "");
+      ld_check(pos->second->principal_->type == "");
 
       // See if this principal requires specialized traffic tagging.
       Worker* w = Worker::onThisThread();
@@ -1074,7 +1081,8 @@ int Sender::setPrincipal(const Address& addr, PrincipalIdentity principal) {
         }
       }
 
-      pos->second->principal_ = std::move(principal);
+      pos->second->principal_ =
+          std::make_shared<PrincipalIdentity>(std::move(principal));
       return 0;
     }
   } else { // addr is a server address

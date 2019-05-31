@@ -224,7 +224,8 @@ class Socket : public TrafficShappingSocket {
 
   // Used to identify the client for permission checks. Set after successfull
   // authentication
-  PrincipalIdentity principal_;
+  std::shared_ptr<PrincipalIdentity> principal_ =
+      std::make_shared<PrincipalIdentity>();
 
   // CSID, Client Session ID
   // Used to uniquely identify client sessions. Supplied by client
@@ -1185,9 +1186,10 @@ class SocketDependencies {
                       Status st,
                       const SteadyTimestamp enqueue_time,
                       Message::CompletionMethod);
-  virtual Message::Disposition onReceived(Message* msg,
-                                          const Address& from,
-                                          const PrincipalIdentity& principal);
+  virtual Message::Disposition
+  onReceived(Message* msg,
+             const Address& from,
+             std::shared_ptr<PrincipalIdentity> principal);
   virtual void processDeferredMessageCompletions();
   virtual NodeID getMyNodeID();
   virtual void configureSocket(bool is_tcp,

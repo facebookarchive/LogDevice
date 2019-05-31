@@ -419,6 +419,17 @@ class Sender : public SenderBase {
   /**
    * Close the socket for this server
    *
+   * @param peer   Address for which to close the socket.
+   * @param reason Reason for closing the socket.
+   *
+   * @return 0 on success, or -1 if there is no socket for address `peer`, in
+   *         which case err is set to E::NOTFOUND.
+   */
+  int closeSocket(Address peer, Status reason);
+
+  /**
+   * Close the socket for this server
+   *
    * @param peer   NodeID for which to close the socket.
    * @param reason Reason for closing the socket.
    *

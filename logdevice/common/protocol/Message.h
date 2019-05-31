@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <limits>
 
+#include <folly/Executor.h>
 #include <folly/dynamic.h>
 
 #include "logdevice/common/PriorityMap.h"
@@ -63,6 +64,10 @@ struct Message {
 
   Priority priority() const {
     return PriorityMap::fromTrafficClass()[tc_];
+  }
+
+  virtual int8_t getExecutorPriority() const {
+    return folly::Executor::MID_PRI;
   }
 
   /**

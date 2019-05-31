@@ -57,6 +57,7 @@ class RELEASE_Message : public Message {
     // never get called.
     std::abort();
   }
+
   void onSent(Status st, const Address& to) const override;
   static Message::deserializer_t deserialize;
 

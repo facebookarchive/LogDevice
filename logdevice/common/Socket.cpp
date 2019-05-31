@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <errno.h>
+#include <functional>
 #include <memory>
 
 #include <folly/Random.h>
@@ -64,6 +65,7 @@
 
 namespace facebook { namespace logdevice {
 using folly::SSLContext;
+using namespace std::placeholders;
 
 class SocketImpl {
  public:
@@ -2756,12 +2758,66 @@ void SocketDependencies::onSent(std::unique_ptr<Message> msg,
   }
 }
 
+namespace {
+template <typename T, typename M>
+void executeOnWorker(Worker* worker,
+                     T cb,
+                     M message,
+                     const Address& from,
+                     std::shared_ptr<PrincipalIdentity> identity,
+                     int8_t pri) {
+  worker->addWithPriority(
+      [msg = std::unique_ptr<typename std::remove_pointer<M>::type>(message),
+       from,
+       identity = std::move(identity),
+       cb = std::move(cb)]() mutable {
+        auto worker = Worker::onThisThread();
+        RunContext run_context(msg->type_);
+        worker->onStartedRunning(run_context);
+        SCOPE_EXIT {
+          worker->onStoppedRunning(run_context);
+        };
+
+        auto rv = cb(msg.get(), from, *identity);
+        switch (rv) {
+          case Message::Disposition::ERROR:
+            worker->sender().closeSocket(from, err);
+            break;
+          case Message::Disposition::KEEP:
+            // Ownership transfered.
+            msg.release();
+            break;
+          case Message::Disposition::NORMAL:
+            break;
+        }
+      },
+      pri);
+}
+} // namespace
+
 Message::Disposition
 SocketDependencies::onReceived(Message* msg,
                                const Address& from,
-                               const PrincipalIdentity& principal) {
-  return Worker::onThisThread()->message_dispatch_->onReceived(
-      msg, from, principal);
+                               std::shared_ptr<PrincipalIdentity> principal) {
+  ld_assert(principal);
+  auto worker = Worker::onThisThread();
+  if (shouldBeInlined(msg->type_)) {
+    // This must be synchronous, because we are processing this message
+    // during message disposition.
+    return worker->message_dispatch_->onReceived(msg, from, *principal);
+  }
+
+  executeOnWorker(worker,
+                  std::bind(&MessageDispatch::onReceived,
+                            worker->message_dispatch_.get(),
+                            _1,
+                            _2,
+                            _3),
+                  msg,
+                  from,
+                  principal,
+                  msg->getExecutorPriority());
+  return Message::Disposition::KEEP;
 }
 
 void SocketDependencies::processDeferredMessageCompletions() {

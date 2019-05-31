@@ -104,9 +104,10 @@ class TestSocketDependencies : public SocketDependencies {
                       Status st,
                       const SteadyTimestamp enqueue_time,
                       Message::CompletionMethod cm) override;
-  Message::Disposition onReceived(Message* msg,
-                                  const Address& from,
-                                  const PrincipalIdentity& principal) override;
+  Message::Disposition
+  onReceived(Message* msg,
+             const Address& from,
+             std::shared_ptr<PrincipalIdentity> principal) override;
   virtual void processDeferredMessageCompletions() override;
   virtual NodeID getMyNodeID() override;
   virtual void configureSocket(bool is_tcp,

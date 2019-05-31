@@ -55,4 +55,9 @@ constexpr bool allowedOnGossipConnection(MessageType type) {
       isHandshakeMessage(type) || isConfigSynchronizationMessage(type);
 }
 
+constexpr bool shouldBeInlined(MessageType type) {
+  return isHandshakeMessage(type) || isConfigSynchronizationMessage(type) ||
+      type == MessageType::SHARD_STATUS_UPDATE;
+}
+
 }} // namespace facebook::logdevice

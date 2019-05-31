@@ -26,45 +26,38 @@ PayloadHolder::PayloadHolder(struct evbuffer* payload)
     size_t payload_size = LD_EV(evbuffer_get_length)(payload);
     ld_check(payload_size < Message::MAX_LEN);
   }
+
+  size_t size = payload_evbuffer_->length();
+  payload_flat_ =
+      Payload(LD_EV(evbuffer_pullup)(payload_evbuffer_->get(), size), size);
+
   // This check may not be necessary, but we maintain the semantics previously.
   ld_check(ThreadID::isWorker());
 }
 
 void PayloadHolder::reset() {
   if (payload_evbuffer_) {
-    ld_check(payload_flat_.data() == nullptr);
-
-    if (owned_) {
-      payload_evbuffer_ = nullptr;
-    }
+    payload_evbuffer_ = nullptr;
   } else {
     if (owned_) {
       free(const_cast<void*>(payload_flat_.data()));
     }
-    payload_flat_ = Payload(nullptr, 1);
   }
+  payload_flat_ = Payload(nullptr, 1);
+
   owned_ = false;
   ld_check(!valid());
 }
 
 size_t PayloadHolder::size() const {
   ld_check(valid());
-  return payload_evbuffer_ ? payload_evbuffer_->length() : payload_flat_.size();
+  return payload_flat_.size();
 }
 
 void PayloadHolder::serialize(ProtocolWriter& writer) const {
-  if (payload_evbuffer_) {
-    if (folly::kIsDebug) {
-      size_t payload_size = payload_evbuffer_->length();
-      ld_check(payload_size > 0);
-      ld_check(payload_size < Message::MAX_LEN);
-    }
-    writer.writeEvbuffer(payload_evbuffer_->get());
-  } else if (payload_flat_.data()) {
-    ld_check(payload_flat_.size() < Message::MAX_LEN); // must have been checked
-                                                       // by upper layers
-    writer.write(payload_flat_.data(), payload_flat_.size());
-  }
+  ld_check(payload_flat_.size() < Message::MAX_LEN); // must have been checked
+                                                     // by upper layers
+  writer.write(payload_flat_.data(), payload_flat_.size());
 }
 
 /* static */
@@ -119,14 +112,7 @@ void PayloadHolder::TEST_corruptPayload() {
 }
 
 Payload PayloadHolder::getPayload() {
-  ld_check(valid());
-  if (payload_evbuffer_ != nullptr) {
-    size_t size = payload_evbuffer_->length();
-    return Payload(
-        LD_EV(evbuffer_pullup)(payload_evbuffer_->get(), size), size);
-  } else {
-    return payload_flat_;
-  }
+  return payload_flat_;
 }
 
 Payload PayloadHolder::getFlatPayload() const {

@@ -129,6 +129,10 @@ class STORED_Message : public Message {
     std::abort();
   }
 
+  int8_t getExecutorPriority() const override {
+    return folly::Executor::HI_PRI;
+  }
+
   static Message::deserializer_t deserialize;
 
   /**

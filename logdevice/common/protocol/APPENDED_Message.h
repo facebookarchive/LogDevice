@@ -113,6 +113,11 @@ class APPENDED_Message : public Message {
   // see Message.h
   void serialize(ProtocolWriter& writer) const override;
   Disposition onReceived(const Address& from) override;
+
+  int8_t getExecutorPriority() const override {
+    return folly::Executor::HI_PRI;
+  }
+
   static Message::deserializer_t deserialize;
 
   virtual std::vector<std::pair<std::string, folly::dynamic>>
