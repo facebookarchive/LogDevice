@@ -86,6 +86,23 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
+  init("rocksdb-sample-for-compression",
+       &sample_for_compression,
+       "20",
+       parse_nonnegative<ssize_t>(),
+       "If set then 1 in N rocksdb blocks will be compressed to "
+       "estimate compressibility of data. This is just used for "
+       "stats collection and helpful to determine whether "
+       "compression will be beneficial at the rocksdb level or "
+       "any other level. Two stat values are updated: "
+       "sampled_blocks_compressed_bytes_fast and "
+       "sampled_blocks_compressed_bytes_slow. One for a fast "
+       "compression algo like lz4 and other other for a high "
+       "compression algo like zstd. The stored data is left uncompressed. "
+       "0 means no sampling.",
+       SERVER | REQUIRES_RESTART,
+       SettingsCategory::RocksDB);
+
   init("rocksdb-enable-statistics",
        &statistics,
        "true",
@@ -1383,6 +1400,7 @@ rocksdb::Options RocksDBSettings::toRocksDBOptions() const {
   rocksdb::Options options;
   options.compaction_style = compaction_style;
   options.compression = compression;
+  options.sample_for_compression = sample_for_compression;
   options.access_hint_on_compaction_start = compaction_access_sequential
       ? rocksdb::DBOptions::SEQUENTIAL
       : rocksdb::DBOptions::NORMAL;

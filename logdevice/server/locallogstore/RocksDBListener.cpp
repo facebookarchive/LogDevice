@@ -170,6 +170,29 @@ RocksDBTablePropertiesCollector::AddUserKey(const rocksdb::Slice& key,
   return rocksdb::Status::OK();
 }
 
+// We get called for every block cut by RocksDB. But not every block is selected
+// for compression samplng. The blockCompressedBytesFast and
+// blockCompressedBytesSlow are non=zero only if that block was selected for
+// compression sampling.
+void RocksDBTablePropertiesCollector::BlockAdd(
+    uint64_t blockRawBytes,
+    uint64_t blockCompressedBytesFast,
+    uint64_t blockCompressedBytesSlow) {
+  if (blockCompressedBytesFast) {
+    STAT_ADD(stats_, sampled_blocks_raw_bytes_fast, blockRawBytes);
+    STAT_ADD(
+        stats_, sampled_blocks_compressed_bytes_fast, blockCompressedBytesFast);
+  }
+
+  if (blockCompressedBytesSlow) {
+    STAT_ADD(stats_, sampled_blocks_raw_bytes_slow, blockRawBytes);
+    STAT_ADD(
+        stats_, sampled_blocks_compressed_bytes_fast, blockCompressedBytesSlow);
+  }
+
+  return;
+}
+
 rocksdb::Status RocksDBTablePropertiesCollector::Finish(
     rocksdb::UserCollectedProperties* properties) {
   flushCurrentLog();

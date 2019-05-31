@@ -363,6 +363,7 @@ class RocksDBSettings : public SettingsBundle {
 
   rocksdb::CompactionStyle compaction_style;
   rocksdb::CompressionType compression;
+  uint64_t sample_for_compression;
   bool compaction_access_sequential;
   bool advise_random_on_open;
   bool update_stats_on_db_open;

@@ -487,6 +487,14 @@ STAT_DEFINE(copyset_biased_rebuilding, SUM)
 STAT_DEFINE(copyset_selection_failed_rebuilding, SUM)
 STAT_DEFINE(copyset_selection_attempts_rebuilding, SUM)
 
+// Raw bytes and compressed bytes for a given block if the block was selected
+// for compressio sampling. The fast stat is based on using a fast compression
+// algorithm like lz4 and the slow stat is based on something like zstd.
+STAT_DEFINE(sampled_blocks_raw_bytes_fast, SUM)
+STAT_DEFINE(sampled_blocks_raw_bytes_slow, SUM)
+STAT_DEFINE(sampled_blocks_compressed_bytes_fast, SUM)
+STAT_DEFINE(sampled_blocks_compressed_bytes_slow, SUM)
+
 // number of times that a storage node replied in STORED header
 // with a status code other than E::OK
 STAT_DEFINE(node_stored_unsuccessful_total, SUM)

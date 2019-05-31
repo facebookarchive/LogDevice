@@ -60,6 +60,11 @@ class RocksDBTablePropertiesCollector
                              rocksdb::EntryType type,
                              rocksdb::SequenceNumber seq,
                              uint64_t file_size) override;
+
+  virtual void BlockAdd(uint64_t blockRawBytes,
+                        uint64_t blockCompressedBytesFast,
+                        uint64_t blockCompressedBytesSlow) override;
+
   rocksdb::Status Finish(rocksdb::UserCollectedProperties* properties) override;
   rocksdb::UserCollectedProperties GetReadableProperties() const override;
   const char* Name() const override;
