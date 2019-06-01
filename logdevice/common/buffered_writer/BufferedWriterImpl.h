@@ -214,8 +214,8 @@ class BufferedWriterImpl : public BufferedWriter {
   }
 
   // Variant of append() that ensures that all appends go into the same batch.
-  // They must all belong to the same log.
-  int appendAtomic(std::vector<Append>&& appends);
+  // They must all belong to the same log specified by @param log_id.
+  int appendAtomic(logid_t log_id, std::vector<Append>&& appends);
 
   // Thread-safe memory budgeting functions.  If a memory limit was configured
   // by the client via Options::memory_limit_mb, append() calls acquire memory
@@ -317,7 +317,7 @@ class BufferedWriterImpl : public BufferedWriter {
     return 2 * payload_bytes;
   }
 
-  // Common implementation of append(vector) and appendAtomic(vector)
+  // implementation of append(vector)
   std::vector<Status> appendImpl(std::vector<Append>&& appends, bool atomic);
 
   template <typename RequestClass>

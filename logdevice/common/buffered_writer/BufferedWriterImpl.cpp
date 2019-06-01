@@ -391,36 +391,75 @@ BufferedWriterImpl::append(std::vector<Append>&& input_appends) {
   return appendImpl(std::move(input_appends), /* atomic */ false);
 }
 
-int BufferedWriterImpl::appendAtomic(std::vector<Append>&& input_appends) {
+int BufferedWriterImpl::appendAtomic(logid_t log_id,
+                                     std::vector<Append>&& input_appends) {
   if (input_appends.empty()) {
     return 0;
   }
 
-  // Verify that all appends are to the same log
-  logid_t first_log = input_appends.front().log_id;
+  if (shutting_down_.load()) {
+    err = E::SHUTDOWN;
+    return -1;
+  }
+
+  int64_t payload_bytes = 0;
   for (const Append& append : input_appends) {
-    logid_t log = append.log_id;
-    if (first_log != log) {
+    payload_bytes += append.payload.size();
+    if (log_id != append.log_id) {
       ld_info("Input appends must all be for the same log "
               "but at least two logs passed (%lu and %lu)",
-              first_log.val_,
-              log.val_);
+              log_id.val_,
+              append.log_id.val_);
       err = E::INVALID_PARAM;
       return -1;
     }
   }
-  std::vector<Status> rv =
-      appendImpl(std::move(input_appends), /* atomic */ true);
-  // Verify that all statuses are the same
-  for (Status st : rv) {
-    ld_check(st == rv.front());
+
+  if (memory_limit_mb_ >= 0) {
+    // Check if we have enough memory for these writes
+    if (acquireMemory(payload_bytes) != 0) {
+      log_memory_limit_exceeded(memory_limit_mb_);
+      err = E::NOBUFS;
+      return -1;
+    }
   }
-  if (rv.empty() || rv.front() == E::OK) {
-    return 0;
-  } else {
-    err = rv.front();
+
+  auto shard_status = append_sink_->canSendToWorker();
+  if (shard_status != Status::OK) {
+    err = shard_status;
     return -1;
   }
+
+  BufferedWriterShard::AppendChunk chunks;
+  int shard = mapLogToShardIndex(log_id);
+  size_t append_sizes = 0;
+
+  for (size_t i = 0; i < input_appends.size(); ++i) {
+    auto& append = input_appends[i];
+    if (!append_sink_->checkAppend(log_id, append.payload.size(), false)) {
+      err = E::TOOBIG;
+      return -1;
+    }
+
+    append_sizes += append.payload.size();
+    chunks.emplace_back(std::move(append));
+  }
+
+  std::unique_ptr<Request> req = std::make_unique<BufferedAppendRequest>(
+      worker_id_t(shard), shards_[shard], std::move(chunks), true);
+  append_sink_->onBytesSentToWorker(append_sizes);
+  int rv = processor()->postRequest(req);
+  if (rv != 0) {
+    // Failed to queue the append.  Return the payload to the caller.
+    append_sink_->onBytesSentToWorker(-append_sizes);
+    BufferedAppendRequest* rawreq =
+        static_cast<BufferedAppendRequest*>(req.get());
+    chunks = rawreq->releaseChunk();
+    // err set by postRequest
+    return -1;
+  }
+
+  return 0;
 }
 
 std::vector<Status>

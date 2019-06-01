@@ -220,7 +220,7 @@ bool SequencerBatching::buffer(logid_t log_id,
   // BufferedWriter batch (which we unpacked) does not get split across a
   // batch boundary by BufferedWriter, since such batches would get different
   // LSNs and would succeed or fail independently.
-  rv = buffered_writer_.appendAtomic(std::move(appends));
+  rv = buffered_writer_.appendAtomic(log_id, std::move(appends));
   if (rv == 0) {
     worker_state_machines_[machine->owner_worker].list.push_back(*machine);
     machine.release();

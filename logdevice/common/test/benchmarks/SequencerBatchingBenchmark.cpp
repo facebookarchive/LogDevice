@@ -209,8 +209,8 @@ SequencerBatchingBenchmark::SequencerBatchingBenchmark(Params params)
   updateable_config_ = std::make_shared<UpdateableConfig>(
       Configuration::fromJsonFile(TEST_CONFIG_FILE("sequencer_test.conf")));
   updateable_config_->get()->serverConfig()->setMyNodeID(NodeID(1, 1));
-  processor_ =
-      make_test_processor(settings_, updateable_config_, /*stats=*/nullptr);
+  processor_ = make_test_processor(
+      settings_, updateable_config_, /*stats=*/nullptr, NodeID(1, 1));
   ld_check(processor_ != nullptr);
 
   processor_->setSequencerBatching(
