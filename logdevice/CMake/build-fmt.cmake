@@ -8,7 +8,7 @@ include(ExternalProject)
 
 ExternalProject_Add(fmt
     GIT_REPOSITORY https://github.com/fmtlib/fmt.git
-    GIT_TAG master
+    GIT_TAG 5.3.0
     PREFIX "${CMAKE_CURRENT_BINARY_DIR}"
     SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/external/fmt"
     CMAKE_ARGS -DCMAKE_POSITION_INDEPENDENT_CODE=True
