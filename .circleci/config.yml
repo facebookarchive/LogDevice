@@ -18,7 +18,7 @@ jobs:
       - run: apt-get install -y ca-certificates doxygen $(cat logdevice/build_tools/ubuntu.deps)
       - run: git reset --hard HEAD
       - run: git submodule sync
-      - run: git submodule update --init
+      - run: git submodule update --init --recursive --remote
       - run:
           name: Build LogDevice
           command: |
