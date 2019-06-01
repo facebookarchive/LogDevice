@@ -34,7 +34,7 @@ target_link_libraries(test_util
   ${GTEST_LIBRARY}
   ${LOGDEVICE_EXTERNAL_DEPS})
 
-add_executable(integration_test ${hfiles} ${files})
+add_executable(integration_test phony_main.cpp ${hfiles} ${files})
 
 enable_testing()
 if (HAVE_CMAKE_GTEST)
