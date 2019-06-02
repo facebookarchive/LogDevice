@@ -29,7 +29,7 @@ using namespace facebook::logdevice;
 
 class ShutdownIntegrationTest : public IntegrationTestBase {};
 
-TEST_F(ShutdownIntegrationTest, BasicShutdownTest) {
+TEST_F(ShutdownIntegrationTest, DISABLED_BasicShutdownTest) {
   auto cluster = IntegrationTestUtils::ClusterFactory().create(5);
   auto& nodes = cluster->getNodes();
   for (auto& node : nodes) {
