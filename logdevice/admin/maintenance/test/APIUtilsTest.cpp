@@ -319,6 +319,9 @@ TEST(APIUtilsTest, MaintenanceEquivalence) {
   ASSERT_TRUE(
       APIUtils::areMaintenancesEquivalent((*output)[0], (*def2_output)[0]));
 
+  ASSERT_EQ((*def2_output)[0],
+            APIUtils::findEquivalentMaintenance(*def2_output, (*output)[0]));
+
   def2.set_user("what");
   def2_output = APIUtils::expandMaintenances(def2, nodes_config);
 
@@ -330,4 +333,37 @@ TEST(APIUtilsTest, MaintenanceEquivalence) {
   def2_output = APIUtils::expandMaintenances(def2, nodes_config);
   ASSERT_FALSE(
       APIUtils::areMaintenancesEquivalent((*output)[0], (*def2_output)[0]));
+
+  ASSERT_EQ(folly::none,
+            APIUtils::findEquivalentMaintenance(*def2_output, (*output)[0]));
+}
+
+TEST(APIUtilsTest, MaintenanceFilter) {
+  std::vector<MaintenanceDefinition> defs;
+  MaintenanceDefinition def1;
+  def1.set_user("bunny");
+  def1.set_group_id("group1");
+  defs.push_back(def1);
+
+  MaintenanceDefinition def2;
+  def2.set_user("bunny");
+  def2.set_group_id("group2");
+  defs.push_back(def2);
+
+  MaintenanceDefinition def3;
+  def3.set_user("funny");
+  def3.set_group_id("group3");
+  defs.push_back(def3);
+
+  thrift::MaintenancesFilter filter1;
+
+  ASSERT_EQ(defs, APIUtils::filterMaintenances(filter1, defs));
+  filter1.set_user("bunny");
+  auto res1 = APIUtils::filterMaintenances(filter1, defs);
+  ASSERT_EQ(2, res1.size());
+  ASSERT_THAT(res1, UnorderedElementsAre(def1, def2));
+  filter1.set_group_ids({"group1"});
+  res1 = APIUtils::filterMaintenances(filter1, defs);
+  ASSERT_EQ(1, res1.size());
+  ASSERT_THAT(res1, UnorderedElementsAre(def1));
 }

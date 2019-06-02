@@ -92,14 +92,16 @@ service AdminAPI extends fb303.FacebookService {
    * pending.
    *
    * Removing a maintenance that doesn't exist for one or more of the
-   * shards is a no-op.
+   * shards is a no-op. If the filter doesn't match any maintenances, the
+   * MaintenanceMatchError exception will be thrown.
    */
   maintenance.RemoveMaintenancesResponse removeMaintenances(1:
       maintenance.RemoveMaintenancesRequest filter) throws
       (1: exceptions.NodeNotReady notready,
        2: exceptions.InvalidRequest invalid_request,
        3: exceptions.OperationError operation_error,
-       4: exceptions.NotSupported not_supported);
+       4: exceptions.NotSupported not_supported,
+       5: exceptions.MaintenanceMatchError not_found);
 
   /**
    * Call this if rebuilding is currently blocked because we have too many

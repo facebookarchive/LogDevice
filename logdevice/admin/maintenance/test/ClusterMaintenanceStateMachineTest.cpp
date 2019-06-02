@@ -149,22 +149,26 @@ TEST_F(ClusterMaintenanceStateMachineTest, BasicApplyAndRemoval) {
   ASSERT_EQ(getMaintenanceDefinition("N1S1N3S1"), def);
   prev = cluster_state_->get_version();
 
-  // Try to remove a nonexistent maintenance
+  // Try to remove all nonexistent maintenances, that should return NOTFOUND
   thrift::MaintenancesFilter filter1;
   filter1.set_group_ids({"NonExistantGroup"});
   thrift::RemoveMaintenancesRequest req;
   req.set_filter(std::move(filter1));
   ASSERT_EQ(-1, removeMaintenance(req));
   ASSERT_EQ(E::NOTFOUND, err);
+  // Since this is not really removing anything, we shouldn't bump the
+  // maintenance state version.
   EXPECT_EQ(cluster_state_->get_version(), prev);
 
-  // Try removing valid grou ids along with invalid one
-  // it should still fail to remove
-  filter1.set_group_ids({"N1S1N3S1", "N0S1N2S1", "NonExistantGroup"});
+  thrift::MaintenanceDefinition empty;
+  // Try removing valid group ids along with invalid one, that will remove the
+  // valid one successfully and the non-existant will be ignored.
+  filter1.set_group_ids({"N1S1N3S1", "NonExistantGroup"});
   req.set_filter(std::move(filter1));
-  ASSERT_EQ(-1, removeMaintenance(req));
-  ASSERT_EQ(E::NOTFOUND, err);
-  EXPECT_EQ(cluster_state_->get_version(), prev);
+  ASSERT_EQ(0, removeMaintenance(req));
+  EXPECT_EQ(cluster_state_->get_version(), prev + 1);
+  ASSERT_EQ(getMaintenanceDefinition("N1S1N3S1"), empty);
+  prev = cluster_state_->get_version();
 
   // Now Automation wants to remove the previously applied
   // maintenance for N0S1N2S1
@@ -180,17 +184,14 @@ TEST_F(ClusterMaintenanceStateMachineTest, BasicApplyAndRemoval) {
   // Check the original group to see if N0S1N2S1 has been removed
   // And this should not affect Oncall's maintenance for N0S1
   def = getMaintenanceDefinition("N0S1N2S1");
-  thrift::MaintenanceDefinition empty;
   ASSERT_EQ(getMaintenanceDefinition("N0S1N2S1"), empty);
   def = getMaintenanceDefinition("N0S1");
   auto shards = def.get_shards();
   EXPECT_EQ(shards.size(), 1);
   EXPECT_EQ(shards[0], shard[0]);
 
-  // None of these removal should have affecetd
+  // None of these removal should have affected
   // N1S1N3S1, N1N4Seq
-  def = getMaintenanceDefinition("N1S1N3S1");
-  ASSERT_NE(getMaintenanceDefinition("N1S1N3S1"), empty);
   def = getMaintenanceDefinition("N1N4Seq");
   ASSERT_NE(getMaintenanceDefinition("N1N4Seq"), empty);
 

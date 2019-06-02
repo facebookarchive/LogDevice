@@ -254,6 +254,28 @@ bool areMaintenancesEquivalent(const MaintenanceDefinition& def1,
   return true;
 }
 
+folly::Optional<MaintenanceDefinition>
+findEquivalentMaintenance(const std::vector<MaintenanceDefinition>& defs,
+                          const MaintenanceDefinition& target) {
+  for (const auto& def1 : defs) {
+    if (areMaintenancesEquivalent(def1, target)) {
+      return def1;
+    }
+  }
+  return folly::none;
+}
+
+folly::Optional<MaintenanceDefinition>
+findMaintenanceByID(const std::string& group_id,
+                    const std::vector<MaintenanceDefinition>& defs) {
+  for (const auto& def : defs) {
+    if (def.group_id_ref() && def.group_id_ref().value() == group_id) {
+      return def;
+    }
+  }
+  return folly::none;
+}
+
 std::string generateGroupID(size_t length) {
   std::string out;
   out.reserve(length);
@@ -265,6 +287,57 @@ std::string generateGroupID(size_t length) {
     out.insert(out.end(), c);
   }
   return out;
+}
+
+bool isMaintenancesFilterSet(const thrift::MaintenancesFilter& filter) {
+  bool is_set = false;
+  is_set |= filter.user_ref().has_value();
+  is_set |= !filter.get_group_ids().empty();
+  return is_set;
+}
+
+std::vector<MaintenanceDefinition>
+filterMaintenances(const thrift::MaintenancesFilter& filter,
+                   const std::vector<MaintenanceDefinition>& maintenances) {
+  std::vector<MaintenanceDefinition> out;
+  matchMaintenances(
+      filter, maintenances, [&](const auto& def) { out.push_back(def); });
+  return out;
+}
+
+void matchMaintenances(const thrift::MaintenancesFilter& filter,
+                       const std::vector<MaintenanceDefinition>& maintenances,
+                       folly::Function<void(const MaintenanceDefinition&)> cb) {
+  std::for_each(maintenances.begin(),
+                maintenances.end(),
+                [&](const MaintenanceDefinition& def) {
+                  if (doesMaintenanceMatchFilter(filter, def)) {
+                    cb(def);
+                  }
+                });
+}
+
+bool doesMaintenanceMatchFilter(const thrift::MaintenancesFilter& filter,
+                                const MaintenanceDefinition& def) {
+  // If user is set, we must filter by user.
+  if (filter.user_ref().has_value() &&
+      filter.user_ref().value() != def.get_user()) {
+    return false;
+  }
+
+  // If filter has group_ids and this maintenance exist in them.
+  const auto& groups = filter.get_group_ids();
+  if (!groups.empty() &&
+      // our group_id is not in the filter list.
+      groups.end() ==
+          std::find_if(groups.begin(), groups.end(), [&](const auto& group_id) {
+            return group_id == def.group_id_ref().value();
+          })) {
+    return false;
+  }
+  // none of the filters prevented this maintenance from being
+  // filtered out.
+  return true;
 }
 
 } // namespace APIUtils

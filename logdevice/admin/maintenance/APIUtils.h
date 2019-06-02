@@ -53,7 +53,6 @@ expandMaintenances(
  */
 folly::F14FastMap<int32_t, thrift::ShardSet>
 groupShardsByNode(const ShardSet& shards);
-
 /**
  * Goes through the supplied `definitions` and set the system generated values
  * for each of them based on the definition in input.
@@ -69,11 +68,55 @@ void fillSystemGeneratedAttributes(
  */
 bool areMaintenancesEquivalent(const MaintenanceDefinition& def1,
                                const MaintenanceDefinition& def2);
+/**
+ * Tries to find in the `defs` argument whether we can find an equivalent
+ * maintenance to `target`. Returns the group-id of the match.
+ */
+folly::Optional<MaintenanceDefinition>
+findEquivalentMaintenance(const std::vector<MaintenanceDefinition>& defs,
+                          const MaintenanceDefinition& target);
+
+/**
+ * Finds a maintenance by group-id in the supplied list.
+ */
+folly::Optional<MaintenanceDefinition>
+findMaintenanceByID(const std::string& group_id,
+                    const std::vector<MaintenanceDefinition>& defs);
 
 /**
  * Generates a random string for maintenance groups
  */
 std::string generateGroupID(size_t length);
+
+/**
+ * Returns true if the filter is set (has at least one of the filters defined
+ * and not empty)
+ */
+bool isMaintenancesFilterSet(const thrift::MaintenancesFilter& filter);
+/**
+ * Returns a vector of maintenance definitions that match the filter. Note that
+ * if the filter is unset (no group-ids nor user is set) this will match all
+ * maintenances.
+ */
+std::vector<MaintenanceDefinition>
+filterMaintenances(const thrift::MaintenancesFilter& filter,
+                   const std::vector<MaintenanceDefinition>& maintenances);
+/**
+ * Filter out the list of maintenances based on the given filter and calls the
+ * functor on each matching definition.
+ */
+void matchMaintenances(const thrift::MaintenancesFilter& filter,
+                       const std::vector<MaintenanceDefinition>& maintenances,
+                       folly::Function<void(const MaintenanceDefinition&)>);
+
+/**
+ * Checks if a given maintenance matches the input filter. It's important to
+ * note that this will match ANY maintenance if the filter is competely unset
+ * (no user nor group_ids are set). If the higher-level code require the filter
+ * to be set, it's the responsibility of that higher level code to verify that.
+ */
+bool doesMaintenanceMatchFilter(const thrift::MaintenancesFilter& filter,
+                                const MaintenanceDefinition& def);
 
 } // namespace APIUtils
 }}} // namespace facebook::logdevice::maintenance

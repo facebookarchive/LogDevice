@@ -10,6 +10,7 @@
 #include <folly/Format.h>
 #include <thrift/lib/cpp/util/EnumUtils.h>
 
+#include "logdevice/admin/maintenance/APIUtils.h"
 #include "logdevice/admin/maintenance/types.h"
 #include "logdevice/common/ShardID.h"
 #include "logdevice/common/debug.h"
@@ -94,70 +95,39 @@ int MaintenanceDeltaTypes::removeMaintenances(
     const thrift::RemoveMaintenancesRequest& req,
     thrift::ClusterMaintenanceState& state,
     std::string& failure_reason) {
-  // TODO: Add support for ttl
-
   const auto& filter = req.get_filter();
+  if (!APIUtils::isMaintenancesFilterSet(filter)) {
+    // We don't accept unset filters in removals, that would result in removing
+    // all maintenances. That's something we don't want to support for safety.
+    // Either groups to remove or user should be specified. Both cannot be empty
+    err = E::INVALID_PARAM;
+    failure_reason = "Cannot remove maintenances with an-unset filter";
+    return -1;
+  }
 
-  // Convert the lists to set for easier lookup.
-  std::unordered_set<thrift::MaintenanceGroupID> groups_to_remove;
-  std::for_each(filter.get_group_ids().begin(),
-                filter.get_group_ids().end(),
-                [&](GroupID g) { groups_to_remove.insert(g); });
-
-  auto should_remove = [&](const thrift::MaintenanceDefinition& def) {
-    // Either groups to remove or user should be specified.
-    // Both cannot be empty
-    ld_check(!filter.get_group_ids().empty() || filter.user_ref().has_value());
-    // If user is specified in filter and it does not match this definition,
-    // do not remove
-    if (filter.user_ref().has_value() &&
-        filter.user_ref().value() != def.get_user()) {
-      return false;
-    }
-
-    // No user in filter or user matches filter.
-    // Now if groups in filter is empty, remove everything
-    if (filter.get_group_ids().empty()) {
-      return true;
-    }
-
-    // No user in filter or user matches filter and
-    // specific groups are mentioned in filter. Remove
-    // only if definition's group id is in filter
-    ld_check(def.group_id_ref().has_value());
-    if (groups_to_remove.erase(def.group_id_ref().value()) == 1) {
-      return true;
-    }
-    return false;
-  };
-
-  // We do not remove the definitions that match immediately becasue we
-  // want to ensure all the groups in the request are present in state.
-  // The removal is all or nothing (i.e no partial removals are allowed)
+  // We remove all maintenances that match the filter. It's okay if some of the
+  // group-ids supplied in the filter didn't match maintenance in state. Check
+  // admin.thrift for the spec.
   std::vector<std::vector<MaintenanceDefinition>::iterator> pos_to_remove;
   int rv = 0;
 
   auto modified_defs = std::move(state).get_maintenances();
   auto it = modified_defs.begin();
   while (it != modified_defs.end()) {
-    if (should_remove(*it)) {
+    if (APIUtils::doesMaintenanceMatchFilter(filter, *it)) {
       pos_to_remove.push_back(it);
     }
     it++;
   }
 
-  if (!filter.get_group_ids().empty() && !groups_to_remove.empty()) {
+  if (pos_to_remove.empty()) {
+    // It's critical that we move the maintenances back.
+    state.set_maintenances(std::move(modified_defs));
+    // No matches. Let's not bump the version, we will return -1 and set the err
+    // to E::NOTFOUND
     err = E::NOTFOUND;
-    std::string group_ids_str;
-    for (const auto& g : groups_to_remove) {
-      group_ids_str += g + ", ";
-    }
-    failure_reason = folly::sformat(
-        "No maintenance with group id(s):{} was found for user:{}",
-        group_ids_str,
-        filter.user_ref().has_value() ? filter.user_ref().value() : "");
-    pos_to_remove.clear();
-    rv = -1;
+    failure_reason = "The filter did not match any maintenances";
+    return -1;
   }
 
   // It is important that we start from the end of pos_to_remove
@@ -165,7 +135,7 @@ int MaintenanceDeltaTypes::removeMaintenances(
   // references in the vector will be invalidated
   auto pos_it = pos_to_remove.rbegin();
   while (pos_it != pos_to_remove.rend()) {
-    ld_info("Removing Group:%s", (*pos_it)->group_id_ref().value().c_str());
+    ld_info("Removing Group: %s", (*pos_it)->group_id_ref().value().c_str());
     modified_defs.erase(*pos_it);
     pos_it++;
   }
