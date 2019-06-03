@@ -65,6 +65,7 @@ class EventLogStateMachine
    * Must be called if this state machine is running on a server node.
    */
   void setMyNodeID(NodeID nid) {
+    ld_assert(nid.isNodeID());
     myNodeId_ = nid;
   }
 
@@ -222,8 +223,8 @@ class EventLogStateMachine
 
   std::unique_ptr<SubscriptionHandle> handle_;
 
-  // Invalid if this object is not running on a server node.
-  NodeID myNodeId_;
+  // folly::none if this object is not running on a server node.
+  folly::Optional<NodeID> myNodeId_{folly::none};
 
   std::unique_ptr<TrimRSMRetryHandler> trim_retry_handler_;
 

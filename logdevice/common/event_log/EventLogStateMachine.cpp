@@ -31,13 +31,13 @@ EventLogStateMachine::EventLogStateMachine(
 }
 
 bool EventLogStateMachine::thisNodeCanTrimAndSnapshot() const {
-  if (!myNodeId_.isNodeID()) {
+  if (!myNodeId_.hasValue()) {
     return false;
   }
   auto w = Worker::onThisThread();
   auto cs = w->getClusterState();
   ld_check(cs != nullptr);
-  return cs->getFirstNodeAlive() == myNodeId_.index();
+  return cs->getFirstNodeAlive() == myNodeId_->index();
 }
 
 void EventLogStateMachine::start() {
@@ -78,7 +78,7 @@ EventLogStateMachine::getServerConfig() const {
 
 std::unique_ptr<EventLogRebuildingSet>
 EventLogStateMachine::makeDefaultState(lsn_t version) const {
-  return std::make_unique<EventLogRebuildingSet>(version);
+  return std::make_unique<EventLogRebuildingSet>(version, myNodeId_);
 }
 
 std::unique_ptr<EventLogRebuildingSet> EventLogStateMachine::deserializeState(
@@ -97,12 +97,12 @@ std::unique_ptr<EventLogRebuildingSet> EventLogStateMachine::deserializeState(
   }
 
   auto res = EventLogRebuildingSetCodec::deserialize(
-      event_log_rebuilding_set::GetSet(payload.data()), version);
+      event_log_rebuilding_set::GetSet(payload.data()), version, myNodeId_);
 
   auto server_cfg = getServerConfig();
   for (const auto& it_shard : res->getRebuildingShards()) {
     res->recomputeAuthoritativeStatus(it_shard.first, timestamp, *server_cfg);
-    res->recomputeShardRebuildTimeIntervals(it_shard.first, *server_cfg);
+    res->recomputeShardRebuildTimeIntervals(it_shard.first);
   }
 
   return res;

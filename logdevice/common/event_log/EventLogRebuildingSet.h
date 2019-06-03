@@ -173,8 +173,14 @@ class EventLogRebuildingSet {
 
   void checkConsistency() const;
 
-  explicit EventLogRebuildingSet(lsn_t version)
-      : last_seen_lsn_(version), last_update_(version) {}
+  EventLogRebuildingSet(lsn_t version,
+                        const folly::Optional<NodeID>& my_node_id)
+      : last_seen_lsn_(version),
+        last_update_(version),
+        my_node_id_(my_node_id) {}
+
+  explicit EventLogRebuildingSet(const folly::Optional<NodeID>& my_node_id)
+      : my_node_id_(my_node_id) {}
 
   // Copyable and assignable.
   EventLogRebuildingSet() = default;
@@ -261,11 +267,11 @@ class EventLogRebuildingSet {
 
   /**
    * Inform of a new record in the event log.
-   * @param lsn       Lsn of the record (used for logging);
-   * @param timestamp Timestamp of the record
-   * @param record    Record read from the event log.
-   * @param cfg       ServerConfig object used to retrieve the list of potential
-   *                  donors for rebuilding.
+   * @param lsn         Lsn of the record (used for logging);
+   * @param timestamp   Timestamp of the record
+   * @param record      Record read from the event log.
+   * @param cfg         ServerConfig object used to retrieve the list of
+   *                    potential donors for rebuilding.
    *
    * @return 0 on success, or -1 and err set to E::FAILED.
    */
@@ -343,8 +349,7 @@ class EventLogRebuildingSet {
   void recomputeAuthoritativeStatus(uint32_t shard,
                                     std::chrono::milliseconds timestamp,
                                     const ServerConfig& cfg);
-  void recomputeShardRebuildTimeIntervals(uint32_t shard,
-                                          const ServerConfig& cfg);
+  void recomputeShardRebuildTimeIntervals(uint32_t shard);
 
  private:
   // Set of shards that are currently seen as rebuilding.
@@ -356,6 +361,8 @@ class EventLogRebuildingSet {
   // LSN of the last event that affected rebuilding set, either
   // SHARD_NEEDS_REBUILD or SHARD_ACK_REBUILD.
   lsn_t last_update_ = LSN_INVALID;
+
+  folly::Optional<NodeID> my_node_id_{folly::none};
 
   // Recomputes `NodeInfo::auth_status` and `NodeInfo::donors_remaining`.
   // @param out_comment

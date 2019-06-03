@@ -29,7 +29,9 @@ class EventLogRebuildingSetCodec {
             const EventLogRebuildingSet::NodeInfo& node);
 
   static std::unique_ptr<EventLogRebuildingSet>
-  deserialize(const event_log_rebuilding_set::Set* set, lsn_t version);
+  deserialize(const event_log_rebuilding_set::Set* set,
+              lsn_t version,
+              const folly::Optional<NodeID>& my_node_id);
 
   static EventLogRebuildingSet::RebuildingShardInfo
   deserialize(const event_log_rebuilding_set::ShardInfo* shard_info);

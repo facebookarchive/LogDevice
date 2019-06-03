@@ -105,8 +105,9 @@ EventLogRebuildingSetCodec::serialize(
 
 std::unique_ptr<EventLogRebuildingSet> EventLogRebuildingSetCodec::deserialize(
     const event_log_rebuilding_set::Set* set,
-    lsn_t version) {
-  auto res = std::make_unique<EventLogRebuildingSet>(version);
+    lsn_t version,
+    const folly::Optional<NodeID>& my_node_id) {
+  auto res = std::make_unique<EventLogRebuildingSet>(version, my_node_id);
 
   auto shards = set->shards();
   if (!shards) {

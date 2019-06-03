@@ -313,7 +313,7 @@ int EventLogRebuildingSet::onShardNeedsRebuild(
 
   recomputeAuthoritativeStatus(shardIdx, timestamp, cfg);
 
-  recomputeShardRebuildTimeIntervals(shardIdx, cfg);
+  recomputeShardRebuildTimeIntervals(shardIdx);
 
   checkConsistency();
 
@@ -397,7 +397,7 @@ int EventLogRebuildingSet::onShardAckRebuilt(
 
   recomputeAuthoritativeStatus(ptr->header.shardIdx, timestamp, cfg);
 
-  recomputeShardRebuildTimeIntervals(ptr->header.shardIdx, cfg);
+  recomputeShardRebuildTimeIntervals(ptr->header.shardIdx);
 
   checkConsistency();
 
@@ -454,7 +454,7 @@ int EventLogRebuildingSet::onShardIsRebuilt(lsn_t lsn,
 
   recomputeAuthoritativeStatus(shard_idx, timestamp, cfg);
 
-  recomputeShardRebuildTimeIntervals(shard_idx, cfg);
+  recomputeShardRebuildTimeIntervals(shard_idx);
 
   checkConsistency();
 
@@ -517,7 +517,7 @@ int EventLogRebuildingSet::onShardAbortRebuild(
 
   recomputeAuthoritativeStatus(ptr->header.shardIdx, timestamp, cfg);
 
-  recomputeShardRebuildTimeIntervals(ptr->header.shardIdx, cfg);
+  recomputeShardRebuildTimeIntervals(ptr->header.shardIdx);
 
   checkConsistency();
 
@@ -612,7 +612,7 @@ int EventLogRebuildingSet::onShardUnrecoverable(
 
   recomputeAuthoritativeStatus(ptr->header.shardIdx, timestamp, cfg);
 
-  recomputeShardRebuildTimeIntervals(ptr->header.shardIdx, cfg);
+  recomputeShardRebuildTimeIntervals(ptr->header.shardIdx);
 
   checkConsistency();
 
@@ -677,8 +677,7 @@ int EventLogRebuildingSet::onShardDonorProgress(
 }
 
 void EventLogRebuildingSet::recomputeShardRebuildTimeIntervals(
-    uint32_t shard_idx,
-    const ServerConfig& cfg) {
+    uint32_t shard_idx) {
   if (!shards_.count(shard_idx)) {
     return;
   }
@@ -687,7 +686,7 @@ void EventLogRebuildingSet::recomputeShardRebuildTimeIntervals(
   shard.all_dirty_time_intervals.clear();
   for (auto node_kv : shard.nodes_) {
     auto& node = node_kv.second;
-    if (cfg.hasMyNodeID() && node_kv.first == cfg.getMyNodeID().index() &&
+    if (my_node_id_.hasValue() && node_kv.first == my_node_id_->index() &&
         node.mode == RebuildingMode::RESTORE) {
       // In RESTORE mode, we cannot be a donor for our own records.
       continue;

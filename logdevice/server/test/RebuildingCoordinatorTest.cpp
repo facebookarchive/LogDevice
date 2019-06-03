@@ -537,7 +537,7 @@ class RebuildingCoordinatorTest : public ::testing::Test {
       : settings(create_default_settings<RebuildingSettings>()),
         admin_settings_(create_default_settings<AdminServerSettings>()),
         config_(std::make_shared<UpdateableConfig>()),
-        rebuilding_set_(std::make_unique<EventLogRebuildingSet>()) {
+        rebuilding_set_(std::make_unique<EventLogRebuildingSet>(my_node_id)) {
     settings.local_window = std::chrono::seconds(10);
     settings.global_window = std::chrono::milliseconds::max();
     settings.max_logs_in_flight = 100;
@@ -593,8 +593,6 @@ class RebuildingCoordinatorTest : public ::testing::Test {
     logs_config->setInternalLogsConfig(internal_logs);
     logs_config->markAsFullyLoaded();
     config_->updateableLogsConfig()->update(std::move(logs_config));
-    // We are N0:1.
-    config_->get()->serverConfig()->setMyNodeID(NodeID(0, 1));
   }
 
   void triggerScheduledRestarts() {
