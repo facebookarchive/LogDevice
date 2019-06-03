@@ -347,7 +347,7 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
        SettingsCategory::Rebuilding);
   init("max-random-delay-shard-is-rebuilt-message",
        &max_random_delay_shard_is_rebuilt_message,
-       "120",
+       "300",
        nullptr,
        "If disable-data-log-rebuilding is enabled then after the data "
        "expires the SHARD_IS_REBULT messages may arrive at exactly the same "
