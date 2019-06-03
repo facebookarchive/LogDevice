@@ -205,7 +205,7 @@ Worker::Worker(WorkContext::KeepAlive event_loop,
                StatsHolder* stats,
                WorkerType worker_type,
                ThreadID::Type thread_type)
-    : SerialWorkContext(std::move(event_loop)),
+    : WorkContext(std::move(event_loop)),
       processor_(processor),
       updateable_settings_(processor->updateableSettings()),
       immutable_settings_(processor->updateableSettings().get()),
@@ -216,8 +216,7 @@ Worker::Worker(WorkContext::KeepAlive event_loop,
       stats_(stats),
       shutting_down_(false),
       accepting_work_(true),
-      worker_timeout_stats_(std::make_unique<WorkerTimeoutStats>()) {
-}
+      worker_timeout_stats_(std::make_unique<WorkerTimeoutStats>()) {}
 
 Worker::~Worker() {
   shutting_down_ = true;
@@ -1309,7 +1308,7 @@ void Worker::addWithPriority(folly::Func func, int8_t priority) {
   }
 
   num_requests_enqueued_.fetch_add(1, std::memory_order_relaxed);
-  SerialWorkContext::addWithPriority(
+  WorkContext::addWithPriority(
       [this, func = std::move(func)]() mutable {
         WorkerContextScopeGuard g(this);
         num_requests_enqueued_.fetch_sub(1, std::memory_order_relaxed);

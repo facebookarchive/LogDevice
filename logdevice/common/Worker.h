@@ -182,7 +182,7 @@ class NodesConfiguration;
 template <typename Duration>
 class ChronoExponentialBackoffAdaptiveVariable;
 
-class Worker : public SerialWorkContext {
+class Worker : public WorkContext {
  public:
   /**
    * Creates and starts a Worker thread.
