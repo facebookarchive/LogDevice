@@ -7,6 +7,7 @@
  */
 #include "logdevice/server/ServerMessagePermission.h"
 
+#include "logdevice/common/protocol/FINDKEY_Message.h"
 #include "logdevice/common/protocol/LOGS_CONFIG_API_Message.h"
 #include "logdevice/common/protocol/START_Message.h"
 #include "logdevice/common/protocol/TRIM_Message.h"
@@ -37,6 +38,11 @@ ServerMessagePermission::computePermissionParams(Message* msg) {
           LOGS_CONFIG_API_Header::Type::MUTATION_REQUEST;
       params.action = ACTION::LOG_MANAGEMENT;
       params.log_id = LOGID_INVALID;
+      break;
+    case MessageType::FINDKEY:
+      params.requiresPermission = true;
+      params.action = ACTION::READ;
+      params.log_id = checked_downcast<FINDKEY_Message*>(msg)->header_.log_id;
       break;
     default:
       break;

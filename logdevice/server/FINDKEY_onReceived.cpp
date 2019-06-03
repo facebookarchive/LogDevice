@@ -56,8 +56,10 @@ static bool runNonBlockingFindKey(const FINDKEY_Message& msg,
                                   shard_index_t shard_idx,
                                   FindKeyTracer tracer);
 
-Message::Disposition FINDKEY_onReceived(FINDKEY_Message* msg,
-                                        const Address& from) {
+Message::Disposition
+FINDKEY_onReceived(FINDKEY_Message* msg,
+                   const Address& from,
+                   PermissionCheckStatus permission_status) {
   ServerWorker* worker = ServerWorker::onThisThread();
   FindKeyTracer tracer(
       worker->getTraceLogger(), Sender::sockaddrOrInvalid(from), msg->header_);
@@ -66,6 +68,22 @@ Message::Disposition FINDKEY_onReceived(FINDKEY_Message* msg,
   timestamp = std::chrono::milliseconds(msg->header_.timestamp);
   tracer.setTimestamp(timestamp);
   tracer.setKey(msg->key_.value_or(""));
+
+  Status status = PermissionChecker::toStatus(permission_status);
+  if (status != E::OK) {
+    RATELIMIT_LEVEL(
+        status == E::ACCESS ? dbg::Level::WARNING : dbg::Level::INFO,
+        std::chrono::seconds(2),
+        1,
+        "FINDKEY request from %s for log %lu failed with %s",
+        Sender::describeConnection(from).c_str(),
+        msg->header_.log_id.val_,
+        error_description(status));
+
+    send_error(
+        from, msg->header_.client_rqid, status, msg->header_.shard, tracer);
+    return Message::Disposition::NORMAL;
+  }
 
   if (!from.isClientAddress()) {
     ld_error("got FINDKEY message from non-client %s",

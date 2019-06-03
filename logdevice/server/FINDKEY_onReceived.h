@@ -7,6 +7,7 @@
  */
 #pragma once
 
+#include "logdevice/common/PermissionChecker.h"
 #include "logdevice/common/protocol/FINDKEY_Message.h"
 #include "logdevice/common/protocol/Message.h"
 
@@ -14,6 +15,8 @@ namespace facebook { namespace logdevice {
 
 struct Address;
 
-Message::Disposition FINDKEY_onReceived(FINDKEY_Message* msg,
-                                        const Address& from);
+Message::Disposition
+FINDKEY_onReceived(FINDKEY_Message* msg,
+                   const Address& from,
+                   PermissionCheckStatus permission_status);
 }} // namespace facebook::logdevice

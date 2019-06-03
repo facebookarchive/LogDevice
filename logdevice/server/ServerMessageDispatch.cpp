@@ -133,7 +133,8 @@ Message::Disposition ServerMessageDispatch::onReceivedHandler(
           checked_downcast<DELETE_LOG_METADATA_Message*>(msg), from);
 
     case MessageType::FINDKEY:
-      return FINDKEY_onReceived(checked_downcast<FINDKEY_Message*>(msg), from);
+      return FINDKEY_onReceived(
+          checked_downcast<FINDKEY_Message*>(msg), from, permission_status);
 
     case MessageType::GET_EPOCH_RECOVERY_METADATA:
       return GET_EPOCH_RECOVERY_METADATA_onReceived(
