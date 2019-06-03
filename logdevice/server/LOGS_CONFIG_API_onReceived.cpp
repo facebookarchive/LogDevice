@@ -77,31 +77,15 @@ LOGS_CONFIG_API_onReceived(LOGS_CONFIG_API_Message* msg,
   auto tracer = std::make_unique<LogsConfigApiTracer>(w->getTraceLogger());
   auto lcm_worker_type = LogsConfigManager::workerType(w->processor_);
 
-  if (permission_status == PermissionCheckStatus::DENIED) {
-    // The client is not allowed to perform this action on the logs config
-    RATELIMIT_ERROR(std::chrono::seconds(1),
-                    3,
-                    "LOGS_CONFIG_API_Message from %s failed with "
-                    "E::ACCESS because client does not have the required "
-                    "permissions to complete the request",
-                    Sender::describeConnection(from).c_str());
-    return send_error_reply(msg, from, E::ACCESS);
-  } else if (permission_status == PermissionCheckStatus::NOTREADY) {
-    RATELIMIT_INFO(std::chrono::seconds(1),
-                   3,
-                   "Got LOGS_CONFIG_API_Message from %s but "
-                   "permission checker is not yet loaded. "
-                   "Responding with E::NOTREADY",
-                   Sender::describeConnection(from).c_str());
-    return send_error_reply(msg, from, E::AGAIN);
-  } else if (permission_status == PermissionCheckStatus::SYSLIMIT) {
-    RATELIMIT_INFO(std::chrono::seconds(1),
-                   3,
-                   "Got LOGS_CONFIG_API_Message from %s but "
-                   "there is not enough background threads. "
-                   "Responding with E::SYSLIMIT",
-                   Sender::describeConnection(from).c_str());
-    return send_error_reply(msg, from, E::SYSLIMIT);
+  Status st = PermissionChecker::toStatus(permission_status);
+  if (st != E::OK) {
+    RATELIMIT_LEVEL(st == E::ACCESS ? dbg::Level::WARNING : dbg::Level::INFO,
+                    std::chrono::seconds(2),
+                    1,
+                    "LOGS_CONFIG_API_Message from %s failed with %s",
+                    Sender::describeConnection(from).c_str(),
+                    error_description(st));
+    return send_error_reply(msg, from, st);
   }
 
   if (msg->header_.subscribe_to_config_) {

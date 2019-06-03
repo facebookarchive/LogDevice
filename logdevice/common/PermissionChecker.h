@@ -10,6 +10,7 @@
 #include "folly/Function.h"
 #include "logdevice/common/PrincipalIdentity.h"
 #include "logdevice/common/SecurityInformation.h"
+#include "logdevice/include/Err.h"
 #include "logdevice/include/types.h"
 
 namespace facebook { namespace logdevice {
@@ -61,6 +62,27 @@ class PermissionChecker {
    * work with.
    */
   virtual PermissionCheckerType getPermissionCheckerType() const = 0;
+
+  /**
+   * Translate PermissionChecker status code to logdevice generic error
+   * code
+   */
+  static Status toStatus(const PermissionCheckStatus& status) {
+    switch (status) {
+      case PermissionCheckStatus::DENIED:
+        return E::ACCESS;
+      case PermissionCheckStatus::NOTFOUND:
+        return E::NOTFOUND;
+      case PermissionCheckStatus::NOTREADY:
+        return E::AGAIN;
+      case PermissionCheckStatus::SYSLIMIT:
+        return E::SYSLIMIT;
+      case PermissionCheckStatus::NONE:
+      case PermissionCheckStatus::ALLOWED:
+        return E::OK;
+    }
+    return E::INVALID_PARAM;
+  }
 };
 
 }} // namespace facebook::logdevice

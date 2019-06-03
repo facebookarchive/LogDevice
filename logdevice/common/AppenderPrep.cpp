@@ -26,42 +26,17 @@ namespace facebook { namespace logdevice {
 
 void AppenderPrep::sendReply(std::unique_ptr<Appender> appender,
                              PermissionCheckStatus permission_status) {
-  if (permission_status == PermissionCheckStatus::DENIED) {
-    RATELIMIT_ERROR(std::chrono::seconds(1),
-                    3,
-                    "APPEND request from %s for log %lu failed with "
-                    "E::ACCESS because client does not have the required "
-                    "permissions to complete the request",
+  Status st = PermissionChecker::toStatus(permission_status);
+
+  if (st != E::OK) {
+    RATELIMIT_LEVEL(st == E::ACCESS ? dbg::Level::WARNING : dbg::Level::INFO,
+                    std::chrono::seconds(2),
+                    1,
+                    "APPEND request from %s for log %lu failed with %s",
                     Sender::describeConnection(from_).c_str(),
-                    header_.logid.val_);
-    sendError(appender.get(), E::ACCESS);
-    return;
-  } else if (permission_status == PermissionCheckStatus::NOTREADY) {
-    RATELIMIT_INFO(std::chrono::seconds(1),
-                   3,
-                   "APPEND from %s for log %lu received E::NOTREADY "
-                   "because permission checker is not yet loaded",
-                   Sender::describeConnection(from_).c_str(),
-                   header_.logid.val_);
-    sendError(appender.get(), E::NOTREADY);
-    return;
-  } else if (permission_status == PermissionCheckStatus::SYSLIMIT) {
-    RATELIMIT_INFO(std::chrono::seconds(1),
-                   3,
-                   "APPEND from %s for log %lu received E::SYSLIMIT "
-                   "because there is not enough background threads",
-                   Sender::describeConnection(from_).c_str(),
-                   header_.logid.val_);
-    sendError(appender.get(), E::SYSLIMIT);
-    return;
-  } else if (permission_status == PermissionCheckStatus::NOTFOUND) {
-    RATELIMIT_INFO(std::chrono::seconds(1),
-                   3,
-                   "APPEND from %s for log %lu received E::NOTFOUND "
-                   "because log is not present in config",
-                   Sender::describeConnection(from_).c_str(),
-                   header_.logid.val_);
-    sendError(appender.get(), E::NOTFOUND);
+                    header_.logid.val_,
+                    error_description(st));
+    sendError(appender.get(), st);
     return;
   }
 

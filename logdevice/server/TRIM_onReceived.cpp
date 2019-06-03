@@ -132,45 +132,16 @@ send_reply(TRIM_Message* msg,
   const TRIM_Header& header = msg->getHeader();
   ServerWorker* worker = ServerWorker::onThisThread();
 
-  if (permission_status == PermissionCheckStatus::DENIED) {
-    send_reply(from, header.client_rqid, E::ACCESS, shard_idx);
-    RATELIMIT_ERROR(std::chrono::seconds(1),
-                    3,
-                    "TRIM_Message from %s for log %lu failed with "
-                    "E::ACCESS because client does not have the required "
-                    "permissions to complete the request",
+  Status st = PermissionChecker::toStatus(permission_status);
+  if (st != E::OK) {
+    RATELIMIT_LEVEL(st == E::ACCESS ? dbg::Level::WARNING : dbg::Level::INFO,
+                    std::chrono::seconds(2),
+                    1,
+                    "TRIM_Message from %s for log %lu failed with %s",
                     Sender::describeConnection(from).c_str(),
-                    header.log_id.val_);
-    return Message::Disposition::NORMAL;
-  } else if (permission_status == PermissionCheckStatus::NOTREADY) {
-    RATELIMIT_INFO(std::chrono::seconds(1),
-                   3,
-                   "Got TRIM_Message from %s for log %lu but "
-                   "permission checker is not yet loaded. "
-                   "Responding with E::NOTREADY",
-                   Sender::describeConnection(from).c_str(),
-                   header.log_id.val_);
-    send_reply(from, header.client_rqid, E::AGAIN, shard_idx);
-    return Message::Disposition::NORMAL;
-  } else if (permission_status == PermissionCheckStatus::SYSLIMIT) {
-    RATELIMIT_INFO(std::chrono::seconds(1),
-                   3,
-                   "Got TRIM_Message from %s for log %lu but "
-                   "there is not enough background threads. "
-                   "Responding with E::SYSLIMIT",
-                   Sender::describeConnection(from).c_str(),
-                   header.log_id.val_);
-    send_reply(from, header.client_rqid, E::SYSLIMIT, shard_idx);
-    return Message::Disposition::NORMAL;
-  } else if (permission_status == PermissionCheckStatus::NOTFOUND) {
-    RATELIMIT_INFO(std::chrono::seconds(1),
-                   3,
-                   "Got TRIM_Message from %s for log %lu but "
-                   "log is not present in config. "
-                   "Responding with E::NOTFOUND",
-                   Sender::describeConnection(from).c_str(),
-                   header.log_id.val_);
-    send_reply(from, header.client_rqid, E::NOTFOUND, shard_idx);
+                    header.log_id.val_,
+                    error_description(st));
+    send_reply(from, header.client_rqid, st, shard_idx);
     return Message::Disposition::NORMAL;
   }
 

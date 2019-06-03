@@ -182,44 +182,16 @@ Message::Disposition START_onReceived(START_Message* msg,
     return Message::Disposition::ERROR;
   }
 
-  if (permission_status == PermissionCheckStatus::DENIED) {
-    // The client is not allowed to read from this log_id.
-    // Do not send client any information related to the log_id
-    RATELIMIT_ERROR(std::chrono::seconds(1),
-                    3,
-                    "START_Message from %s for log %lu failed with "
-                    "E::ACCESS because client does not have the required "
-                    "permissions to complete the request",
+  Status st = PermissionChecker::toStatus(permission_status);
+  if (st != E::OK) {
+    RATELIMIT_LEVEL(st == E::ACCESS ? dbg::Level::WARNING : dbg::Level::INFO,
+                    std::chrono::seconds(2),
+                    1,
+                    "START_Message from %s for log %lu received %s",
                     Sender::describeConnection(from).c_str(),
-                    header.log_id.val_);
-    return send_error_reply(msg, from, E::ACCESS);
-  } else if (permission_status == PermissionCheckStatus::NOTREADY) {
-    RATELIMIT_INFO(std::chrono::seconds(1),
-                   3,
-                   "Got START_Message from %s for log %lu but "
-                   "permission checker is not yet loaded. "
-                   "Responding with E::NOTREADY",
-                   Sender::describeConnection(from).c_str(),
-                   header.log_id.val_);
-    return send_error_reply(msg, from, E::AGAIN);
-  } else if (permission_status == PermissionCheckStatus::SYSLIMIT) {
-    RATELIMIT_INFO(std::chrono::seconds(1),
-                   3,
-                   "Got START_Message from %s for log %lu but "
-                   "there is not enough background threads. "
-                   "Responding with E::SYSLIMIT",
-                   Sender::describeConnection(from).c_str(),
-                   header.log_id.val_);
-    return send_error_reply(msg, from, E::SYSLIMIT);
-  } else if (permission_status == PermissionCheckStatus::NOTFOUND) {
-    RATELIMIT_INFO(std::chrono::seconds(1),
-                   3,
-                   "Got START_Message from %s for log %lu but "
-                   "log is not present in config. "
-                   "Responding with E::NOTFOUND",
-                   Sender::describeConnection(from).c_str(),
-                   header.log_id.val_);
-    return send_error_reply(msg, from, E::NOTFOUND);
+                    header.log_id.val_,
+                    error_description(st));
+    return send_error_reply(msg, from, st);
   }
 
   // If we're going to do any reading, we need to have a LogStorageState
