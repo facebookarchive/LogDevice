@@ -130,7 +130,8 @@ class STORED_Message : public Message {
   }
 
   int8_t getExecutorPriority() const override {
-    return folly::Executor::HI_PRI;
+    return header_.flags & STORED_Header::REBUILDING ? folly::Executor::LO_PRI
+                                                     : folly::Executor::HI_PRI;
   }
 
   static Message::deserializer_t deserialize;

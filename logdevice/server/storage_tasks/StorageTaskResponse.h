@@ -43,6 +43,8 @@ class StorageTaskResponse : public Request {
     return RunContext(task_->getType());
   }
 
+  int8_t getExecutorPriority() const override;
+
   std::string describe() const override;
 
  private:

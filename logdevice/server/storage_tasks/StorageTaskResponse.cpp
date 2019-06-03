@@ -73,6 +73,21 @@ Request::Execution StorageTaskResponse::execute() {
   return Execution::COMPLETE;
 }
 
+int8_t StorageTaskResponse::getExecutorPriority() const {
+  switch (task_->getThreadType()) {
+    case StorageTaskThreadType::FAST_TIME_SENSITIVE:
+      return folly::Executor::HI_PRI;
+    case StorageTaskThreadType::DEFAULT:
+      return folly::Executor::MID_PRI;
+    case StorageTaskThreadType::SLOW:
+    case StorageTaskThreadType::FAST_STALLABLE:
+      return folly::Executor::LO_PRI;
+    default:
+      ld_check(false);
+  }
+  return folly::Executor::LO_PRI;
+}
+
 std::string StorageTaskResponse::describe() const {
   return requestTypeNames[type_] + "(" +
       storageTaskTypeNames[task_->getType()] + ")";

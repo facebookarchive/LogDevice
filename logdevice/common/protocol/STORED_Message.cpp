@@ -204,6 +204,12 @@ class SendSTOREDRequest : public Request {
     return target_worker_.val_;
   }
 
+  int8_t getExecutorPriority() const override {
+    return msg_->header_.flags & STORED_Header::REBUILDING
+        ? folly::Executor::LO_PRI
+        : folly::Executor::HI_PRI;
+  }
+
   Request::Execution execute() override {
     execute(std::move(msg_), to_);
     return Execution::COMPLETE;

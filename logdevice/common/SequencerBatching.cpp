@@ -351,6 +351,10 @@ class SequencerBatching::DispatchResultsRequest : public Request {
     return target_worker_;
   }
 
+  int8_t getExecutorPriority() const override {
+    return folly::Executor::HI_PRI;
+  }
+
   Execution execute() override {
     for (; !appends_.empty(); appends_.erase(appends_.begin())) {
       std::unique_ptr<AppendMessageState> ams(appends_.begin()->first);

@@ -79,6 +79,10 @@ class FINDKEY_Message : public Message {
   }
   void onSent(Status st, const Address& to) const override;
 
+  int8_t getExecutorPriority() const override {
+    return folly::Executor::LO_PRI;
+  }
+
   FINDKEY_Header header_;
 
   // The key provided by the client.

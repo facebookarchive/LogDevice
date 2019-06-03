@@ -210,6 +210,10 @@ class BufferedWriterSingleLog {
       return threadAffinity_;
     }
 
+    int8_t getExecutorPriority() const override {
+      return folly::Executor::HI_PRI;
+    }
+
     const Batch& getBatch() const {
       return batch_;
     }

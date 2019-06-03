@@ -291,6 +291,10 @@ class BufferedAppendRequest : public Request {
     return worker_.val_;
   }
 
+  int8_t getExecutorPriority() const override {
+    return folly::Executor::HI_PRI;
+  }
+
   Execution execute() override {
     Worker* w = Worker::onThisThread();
     auto it = w->active_buffered_writers_.find(id_);
@@ -573,6 +577,10 @@ class FlushShardRequest : public Request {
 
   int getThreadAffinity(int /*nthreads*/) override {
     return worker_.val_;
+  }
+
+  int8_t getExecutorPriority() const override {
+    return folly::Executor::HI_PRI;
   }
 
   Execution execute() override {

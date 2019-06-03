@@ -280,7 +280,9 @@ class STORE_Message : public Message {
   STORE_Message& operator=(const STORE_Message&) = delete;
 
   int8_t getExecutorPriority() const override {
-    return folly::Executor::HI_PRI;
+    return header_.flags & (STORE_Header::REBUILDING | STORE_Header::AMEND)
+        ? folly::Executor::LO_PRI
+        : folly::Executor::HI_PRI;
   }
 
   static TrafficClass calcTrafficClass(const STORE_Header& header) {
