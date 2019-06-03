@@ -190,6 +190,22 @@ void RocksDBTablePropertiesCollector::BlockAdd(
         stats_, sampled_blocks_compressed_bytes_fast, blockCompressedBytesSlow);
   }
 
+  if (blockRawBytes >= 1024 * 1024) {
+    STAT_ADD(stats_, num_sst_blocks_GT_1024KB, blockRawBytes);
+  } else if (blockRawBytes >= 512 * 1024) {
+    STAT_ADD(stats_, num_sst_blocks_GT_512KB, blockRawBytes);
+  } else if (blockRawBytes >= 256 * 1024) {
+    STAT_ADD(stats_, num_sst_blocks_GT_256KB, blockRawBytes);
+  } else if (blockRawBytes >= 128 * 1024) {
+    STAT_ADD(stats_, num_sst_blocks_GT_128KB, blockRawBytes);
+  } else if (blockRawBytes >= 64 * 1024) {
+    STAT_ADD(stats_, num_sst_blocks_GT_64KB, blockRawBytes);
+  } else if (blockRawBytes >= 32 * 1024) {
+    STAT_ADD(stats_, num_sst_blocks_GT_32KB, blockRawBytes);
+  } else {
+    STAT_ADD(stats_, num_sst_blocks_LT_32KB, blockRawBytes);
+  }
+
   return;
 }
 

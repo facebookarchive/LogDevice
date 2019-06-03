@@ -495,6 +495,15 @@ STAT_DEFINE(sampled_blocks_raw_bytes_slow, SUM)
 STAT_DEFINE(sampled_blocks_compressed_bytes_fast, SUM)
 STAT_DEFINE(sampled_blocks_compressed_bytes_slow, SUM)
 
+// A set of stats on distribution of rocksdb block sizes.
+STAT_DEFINE(num_sst_blocks_GT_1024KB, SUM)
+STAT_DEFINE(num_sst_blocks_GT_512KB, SUM)
+STAT_DEFINE(num_sst_blocks_GT_256KB, SUM)
+STAT_DEFINE(num_sst_blocks_GT_128KB, SUM)
+STAT_DEFINE(num_sst_blocks_GT_64KB, SUM)
+STAT_DEFINE(num_sst_blocks_GT_32KB, SUM)
+STAT_DEFINE(num_sst_blocks_LT_32KB, SUM)
+
 // number of times that a storage node replied in STORED header
 // with a status code other than E::OK
 STAT_DEFINE(node_stored_unsuccessful_total, SUM)
