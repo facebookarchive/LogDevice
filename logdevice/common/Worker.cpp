@@ -112,7 +112,9 @@ thread_local Worker* Worker::on_this_thread_{nullptr};
 // members of Worker but we don't want to have to include them in Worker.h.
 class WorkerImpl {
  public:
-  WorkerImpl(Worker* w, const std::shared_ptr<UpdateableConfig>& config)
+  WorkerImpl(Worker* w,
+             const std::shared_ptr<UpdateableConfig>& config,
+             StatsHolder* stats)
       : sender_(w->immutable_settings_,
                 w->getEventBase(),
                 config->get()->serverConfig()->getTrafficShapingConfig(),
@@ -121,7 +123,8 @@ class WorkerImpl {
                 config->getServerConfig()
                     ->getNodesConfigurationFromServerConfigSource(),
                 getMyNodeIndex(w),
-                getMyLocation(config, w)),
+                getMyLocation(config, w),
+                stats),
         activeAppenders_(w->immutable_settings_->server ? N_APPENDER_MAP_BUCKETS
                                                         : 1),
         // AppenderBuffer queue capacity is the system-wide per-log limit
@@ -144,7 +147,7 @@ class WorkerImpl {
         1,
         w->getEventBase(),
         read_shaping_cfg,
-        std::make_shared<ReadShapingFlowGroupDeps>(Worker::stats()));
+        std::make_shared<ReadShapingFlowGroupDeps>(stats));
   }
 
   ShardAuthoritativeStatusManager shardStatusManager_;
@@ -211,7 +214,7 @@ Worker::Worker(WorkContext::KeepAlive event_loop,
       immutable_settings_(processor->updateableSettings().get()),
       idx_(idx),
       worker_type_(worker_type),
-      impl_(new WorkerImpl(this, config)),
+      impl_(new WorkerImpl(this, config, stats)),
       config_(config),
       stats_(stats),
       shutting_down_(false),

@@ -355,7 +355,8 @@ class Sender : public SenderBase {
       bool is_gossip_sender,
       std::shared_ptr<const configuration::nodes::NodesConfiguration> nodes,
       node_index_t my_node_index,
-      folly::Optional<NodeLocation> my_location);
+      folly::Optional<NodeLocation> my_location,
+      StatsHolder* stats);
   ~Sender() override;
 
   Sender(const Sender&) = delete;

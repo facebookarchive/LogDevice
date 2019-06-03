@@ -56,7 +56,8 @@ TEST(SenderTest, StartStop) {
                 false,
                 nodes,
                 node_index_t{0},
-                loc);
+                loc,
+                nullptr);
 }
 
 }} // namespace facebook::logdevice

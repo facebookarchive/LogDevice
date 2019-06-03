@@ -121,7 +121,8 @@ Sender::Sender(std::shared_ptr<const Settings> settings,
                bool is_gossip_sender,
                std::shared_ptr<const NodesConfiguration> nodes,
                node_index_t my_index,
-               folly::Optional<NodeLocation> my_location)
+               folly::Optional<NodeLocation> my_location,
+               StatsHolder* stats)
     : settings_(settings),
       impl_(new SenderImpl(client_id_allocator)),
       is_gossip_sender_(is_gossip_sender),
@@ -132,7 +133,7 @@ Sender::Sender(std::shared_ptr<const Settings> settings,
       static_cast<size_t>(NodeLocationScope::ROOT) + 1,
       base,
       tsc,
-      std::make_shared<NwShapingFlowGroupDeps>(Worker::stats()));
+      std::make_shared<NwShapingFlowGroupDeps>(stats));
 
   auto scope = NodeLocationScope::NODE;
   for (auto& fg : nw_shaping_container_->flow_groups_) {

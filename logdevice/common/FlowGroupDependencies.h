@@ -100,7 +100,7 @@ class NwShapingFlowGroupDeps : public FlowGroupDependencies {
   }
 
  private:
-  StatsHolder* stats_{nullptr};
+  StatsHolder* const stats_;
 };
 
 class ReadShapingFlowGroupDeps : public FlowGroupDependencies {
@@ -108,7 +108,7 @@ class ReadShapingFlowGroupDeps : public FlowGroupDependencies {
   ReadShapingFlowGroupDeps(StatsHolder* stats) : stats_(stats) {}
 
   PerFlowGroupStats* statsGet(NodeLocationScope scope) {
-    if (!stats_) {
+    if (!stats_ || scope != NodeLocationScope::NODE) {
       return nullptr;
     }
     return &(stats_->get().per_flow_group_stats_rt[static_cast<int>(scope)]);
@@ -127,7 +127,7 @@ class ReadShapingFlowGroupDeps : public FlowGroupDependencies {
   }
 
  private:
-  StatsHolder* stats_{nullptr};
+  StatsHolder* const stats_;
 };
 
 }} // namespace facebook::logdevice
