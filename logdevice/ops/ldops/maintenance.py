@@ -70,7 +70,7 @@ async def check_impact(
         filtered_shards: FrozenSet[ShardID] = frozenset(
             s for s in single_shards if s.node.node_index not in node_ids
         )
-        return frozenset(whole_nodes + filtered_shards)
+        return frozenset(whole_nodes).union(filtered_shards)
 
     nodes = nodes or []
 
@@ -80,7 +80,7 @@ async def check_impact(
         list(shards)  # shards is generic Collection, not List
         + [
             ShardID(
-                node=NodeID(node_index=n.node_id, address=n.data_addr.to_thrift()),
+                node=NodeID(node_index=n.node_index, address=n.data_addr.to_thrift()),
                 shard_index=-1,
             )
             for n in nodes
