@@ -5617,7 +5617,7 @@ TEST_F(PartitionedRocksDBStoreTest, ApplySpaceBasedRetentionPerDisk) {
 TEST_F(PartitionedRocksDBStoreTest, DeleteRatelimit) {
   ServerConfig::SettingsConfig s_slow;
   s_slow["rocksdb-compression-type"] = "none";
-  s_slow["rocksdb-sst-delete-bytes-per-sec"] = "500000"; // should take 2s
+  s_slow["rocksdb-sst-delete-bytes-per-sec"] = "100000"; // should take 20s
   s_slow["rocksdb-partition-duration"] = "0";
   s_slow["rocksdb-partition-file-limit"] = "0";
   ServerConfig::SettingsConfig s_fast = s_slow;
@@ -5649,6 +5649,14 @@ TEST_F(PartitionedRocksDBStoreTest, DeleteRatelimit) {
     return count;
   };
 
+  auto wait_until_trash_is_gone = [&] {
+    auto start = std::chrono::steady_clock::now();
+    wait_until("Wait until trash files are gone",
+               [&] { return num_trash_files() == 0; });
+    auto end = std::chrono::steady_clock::now();
+    return to_msec(end - start);
+  };
+
   auto write_to_one_partition = [&](size_t record_size, int num_records) {
     time_ = SystemTimestamp(std::chrono::milliseconds(rec_time));
     for (int j = 0; j < num_records; ++j, rec_time += HOUR) {
@@ -5675,85 +5683,89 @@ TEST_F(PartitionedRocksDBStoreTest, DeleteRatelimit) {
     }
   };
 
-  auto measure_deletion_time = [&](ServerConfig::SettingsConfig s,
-                                   int64_t* ret_val) {
-    settings_overrides_.clear();
-    settings_overrides_ = getDefaultSettingsOverrides();
-    for (auto setting_override : s) {
-      settings_overrides_[setting_override.first] = setting_override.second;
-    }
-    // Update rocksdb settings
-    settings_updater_->setFromCLI(settings_overrides_);
+  auto measure_deletion_time =
+      [&](ServerConfig::SettingsConfig s, bool fast, int64_t* ret_val) {
+        std::chrono::milliseconds deletions_duration(0);
 
-    // Send settings to store. In case of usual operation, shardedlogstore
-    // instance subscribes for setting update notification and forwards the
-    // notification to shards.
-    store_->onSettingsUpdated(store_->getSettings());
+        settings_overrides_.clear();
+        settings_overrides_ = getDefaultSettingsOverrides();
+        for (auto setting_override : s) {
+          settings_overrides_[setting_override.first] = setting_override.second;
+        }
+        // Update rocksdb settings
+        settings_updater_->setFromCLI(settings_overrides_);
 
-    // Don't expect to see much trash
-    ASSERT_LT(store_->getTotalTrashSize(), 1e4);
+        // Send settings to store. In case of usual operation, shardedlogstore
+        // instance subscribes for setting update notification and forwards the
+        // notification to shards.
+        store_->onSettingsUpdated(store_->getSettings());
 
-    write_100K_to_10_partitions();
-    ASSERT_EQ(baseID, store_->getPartitionList()->firstID());
+        // Don't expect to see much trash
+        ASSERT_LT(store_->getTotalTrashSize(), 1e4);
 
-    // Don't expect to see much trash
-    ASSERT_LT(store_->getTotalTrashSize(), 1e4);
+        write_100K_to_10_partitions();
+        ASSERT_EQ(baseID, store_->getPartitionList()->firstID());
 
-    partition_id_t dropToID = currentID;
+        // 1 MB of WAL files should be trashed, but some may have already been
+        // deleted, especially when using 10 MB/s rate limit.
+        if (!fast) {
+          ASSERT_GT(store_->getTotalTrashSize(), 600000);
+        }
+        ASSERT_LT(store_->getTotalTrashSize(), 1200000);
 
-    // Create a tiny partition so we can drop everything else
-    write_to_one_partition((size_t)1, 1);
+        deletions_duration += wait_until_trash_is_gone();
 
-    // Drop up to latest (empty) partition
-    auto start = std::chrono::steady_clock::now();
-    store_->setSpaceBasedTrimLimit(dropToID);
-    store_
-        ->backgroundThreadIteration(
-            PartitionedRocksDBStore::BackgroundThreadType::LO_PRI)
-        .wait();
-    ASSERT_EQ(dropToID, store_->getPartitionList()->firstID());
+        ASSERT_LT(store_->getTotalTrashSize(), 1e4);
 
-    // Let's not trust this check to happen very quickly given the fast run
-    // takes 100ms till the trash should be gone, but let's at least assume
-    // we'll see half of the trash files, or 500kb.
-    ASSERT_GT(store_->getTotalTrashSize(), 500000);
+        partition_id_t dropToID = currentID;
 
-    // All partitions but the last should be gone as far as LogsDB is concerned
-    for (int j = 0; j < 10; j++) {
-      ASSERT_FALSE(store_->getPartitionList()->get(baseID + j));
-    }
-    ASSERT_TRUE(store_->getPartitionList()->get(dropToID));
+        // Create a tiny partition so we can drop everything else
+        write_to_one_partition((size_t)1, 1);
 
-    wait_until("Wait until trash files are gone",
-               [&] { return num_trash_files() == 0; });
-    auto end = std::chrono::steady_clock::now();
-    auto elapsed =
-        std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
-            .count();
-    *ret_val = elapsed;
+        // Drop up to latest (empty) partition
+        store_->setSpaceBasedTrimLimit(dropToID);
+        store_
+            ->backgroundThreadIteration(
+                PartitionedRocksDBStore::BackgroundThreadType::LO_PRI)
+            .wait();
+        ASSERT_EQ(dropToID, store_->getPartitionList()->firstID());
 
-    // Expect minimal trash
-    ASSERT_LT(store_->getTotalTrashSize(), 1e3);
+        ASSERT_GT(store_->getTotalTrashSize(), fast ? 0 : 800000);
+        ASSERT_LT(store_->getTotalTrashSize(), 1200000);
 
-    // Drop extra file
-    store_->setSpaceBasedTrimLimit(currentID);
-    store_
-        ->backgroundThreadIteration(
-            PartitionedRocksDBStore::BackgroundThreadType::LO_PRI)
-        .wait();
-    ASSERT_EQ(currentID, store_->getPartitionList()->firstID());
-    wait_until("Wait until extra file is gone",
-               [&] { return num_trash_files() == 0; });
+        // All partitions but the last should be gone as far as LogsDB is
+        // concerned
+        for (int j = 0; j < 10; j++) {
+          ASSERT_FALSE(store_->getPartitionList()->get(baseID + j));
+        }
+        ASSERT_TRUE(store_->getPartitionList()->get(dropToID));
 
-    // Expect minimal trash
-    ASSERT_LT(store_->getTotalTrashSize(), 1e3);
+        deletions_duration += wait_until_trash_is_gone();
 
-    ASSERT_FALSE(store_->getPartitionList()->get(dropToID));
-    ASSERT_TRUE(store_->getPartitionList()->get(currentID));
+        // Expect minimal trash
+        ASSERT_LT(store_->getTotalTrashSize(), 1e4);
 
-    // Reset base to current only partition
-    baseID = currentID;
-  };
+        // Drop extra file
+        store_->setSpaceBasedTrimLimit(currentID);
+        store_
+            ->backgroundThreadIteration(
+                PartitionedRocksDBStore::BackgroundThreadType::LO_PRI)
+            .wait();
+        ASSERT_EQ(currentID, store_->getPartitionList()->firstID());
+        wait_until("Wait until extra file is gone",
+                   [&] { return num_trash_files() == 0; });
+
+        // Expect minimal trash
+        ASSERT_LT(store_->getTotalTrashSize(), 1e4);
+
+        ASSERT_FALSE(store_->getPartitionList()->get(dropToID));
+        ASSERT_TRUE(store_->getPartitionList()->get(currentID));
+
+        // Reset base to current only partition
+        baseID = currentID;
+
+        *ret_val = deletions_duration.count();
+      };
 
   // Open store with high delete rate settings.
   closeStore();
@@ -5775,22 +5787,23 @@ TEST_F(PartitionedRocksDBStoreTest, DeleteRatelimit) {
 
   // Measure with fast settings.
   int64_t elapsed_ms = -1;
-  measure_deletion_time(s_fast, &elapsed_ms);
+  measure_deletion_time(s_fast, true, &elapsed_ms);
   ASSERT_NE(elapsed_ms, -1);
-  // Since we can drop 10M per sec, trash files should be gone in ~100ms
+  // We wrote 1 MB to WAL and to SST files. Since we can drop 10M per sec,
+  // trash files should be gone in ~200ms.
   EXPECT_GT(elapsed_ms, 0);
   EXPECT_LT(elapsed_ms, 500);
-  ld_info("Fast settings: %ldms (expected to be in (0,500))", elapsed_ms);
+  ld_info("Fast settings: %ldms (expected 200ms)", elapsed_ms);
 
   // Measure with slow settings.
   elapsed_ms = -1;
-  measure_deletion_time(s_slow, &elapsed_ms);
+  measure_deletion_time(s_slow, false, &elapsed_ms);
   ASSERT_NE(elapsed_ms, -1);
 
-  // Since we can drop 500KB per sec, trash files should be gone in ~2s
-  EXPECT_GT(elapsed_ms, 1500);
-  EXPECT_LT(elapsed_ms, 3000);
-  ld_info("Slow settings: %ldms (expected to be in (1500, 3000))", elapsed_ms);
+  // Since we can drop 500KB per sec, trash files should be gone in ~4s
+  EXPECT_GT(elapsed_ms, 17000);
+  EXPECT_LT(elapsed_ms, 25000);
+  ld_info("Slow settings: %ldms (expected 20000ms)", elapsed_ms);
 
   readAndCheck();
 }
