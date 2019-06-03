@@ -44,9 +44,26 @@ static void send_reply(const Address& to,
   Worker::onThisThread()->sender().sendMessage(std::move(msg), to);
 }
 
-Message::Disposition IS_LOG_EMPTY_onReceived(IS_LOG_EMPTY_Message* msg,
-                                             const Address& from) {
+Message::Disposition
+IS_LOG_EMPTY_onReceived(IS_LOG_EMPTY_Message* msg,
+                        const Address& from,
+                        PermissionCheckStatus permission_status) {
   const IS_LOG_EMPTY_Header& header = msg->getHeader();
+
+  Status status = PermissionChecker::toStatus(permission_status);
+  if (status != E::OK) {
+    RATELIMIT_LEVEL(
+        status == E::ACCESS ? dbg::Level::WARNING : dbg::Level::INFO,
+        std::chrono::seconds(2),
+        1,
+        "IS_LOG_EMPTY request from %s for log %lu failed with %s",
+        Sender::describeConnection(from).c_str(),
+        header.log_id.val_,
+        error_description(status));
+
+    send_reply(from, header, status, false);
+    return Message::Disposition::NORMAL;
+  }
 
   if (header.log_id == LOGID_INVALID) {
     ld_error("got IS_LOG_EMPTY message from %s with invalid log ID, ignoring",

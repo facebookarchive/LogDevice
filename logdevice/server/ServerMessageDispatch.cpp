@@ -158,7 +158,9 @@ Message::Disposition ServerMessageDispatch::onReceivedHandler(
 
     case MessageType::IS_LOG_EMPTY:
       return IS_LOG_EMPTY_onReceived(
-          checked_downcast<IS_LOG_EMPTY_Message*>(msg), from);
+          checked_downcast<IS_LOG_EMPTY_Message*>(msg),
+          from,
+          permission_status);
 
     case MessageType::MEMTABLE_FLUSHED:
       return MEMTABLE_FLUSHED_onReceived(

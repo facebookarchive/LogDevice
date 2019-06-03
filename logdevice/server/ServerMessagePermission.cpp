@@ -8,6 +8,7 @@
 #include "logdevice/server/ServerMessagePermission.h"
 
 #include "logdevice/common/protocol/FINDKEY_Message.h"
+#include "logdevice/common/protocol/IS_LOG_EMPTY_Message.h"
 #include "logdevice/common/protocol/LOGS_CONFIG_API_Message.h"
 #include "logdevice/common/protocol/START_Message.h"
 #include "logdevice/common/protocol/TRIM_Message.h"
@@ -43,6 +44,12 @@ ServerMessagePermission::computePermissionParams(Message* msg) {
       params.requiresPermission = true;
       params.action = ACTION::READ;
       params.log_id = checked_downcast<FINDKEY_Message*>(msg)->header_.log_id;
+      break;
+    case MessageType::IS_LOG_EMPTY:
+      params.requiresPermission = true;
+      params.action = ACTION::READ;
+      params.log_id =
+          checked_downcast<IS_LOG_EMPTY_Message*>(msg)->getHeader().log_id;
       break;
     default:
       break;
