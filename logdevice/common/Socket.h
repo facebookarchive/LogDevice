@@ -570,6 +570,15 @@ class Socket : public TrafficShappingSocket {
    */
   virtual void onPeerClosed();
 
+  /**
+   * Called by the output evbuffer when some bytes have been transferred from
+   * it into the underlying TCP socket (or placed in the outgoing SSL buffer).
+   *
+   * @param nbytes_drained  number of bytes transferred from buffer to
+   *                        the underlying TCP connection
+   */
+  virtual void onBytesPassedToTCP(size_t nbytes_drained);
+
  private:
   /**
    * This is strictly a delegating constructor. It sets all members
@@ -686,15 +695,6 @@ class Socket : public TrafficShappingSocket {
    * NOTE: this function may close the Socket
    */
   void onBytesAvailable(bool fresh);
-
-  /**
-   * Called by the output evbuffer when some bytes have been transferred from
-   * it into the underlying TCP socket (or placed in the outgoing SSL buffer).
-   *
-   * @param nbytes_drained  number of bytes transferred from buffer to
-   *                        the underlying TCP connection
-   */
-  void onBytesPassedToTCP(size_t nbytes_drained);
 
   /**
    * Write the next message in serializeq_ to the output buffer.

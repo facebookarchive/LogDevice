@@ -122,7 +122,7 @@ WheelTimerDispatchImpl::makeWheelTimerInternalExecutor(Worker* worker) {
               Worker::onStoppedRunning(run_context);
             }
           },
-          folly::Executor::HI_PRI);
+          folly::Executor::MID_PRI);
     }
   };
 }

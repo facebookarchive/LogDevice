@@ -117,4 +117,9 @@ void Connection::onPeerClosed() {
   Socket::onPeerClosed();
 }
 
+void Connection::onBytesPassedToTCP(size_t nbytes_drained) {
+  WorkerContextScopeGuard g(worker_);
+  Socket::onBytesPassedToTCP(nbytes_drained);
+}
+
 }} // namespace facebook::logdevice

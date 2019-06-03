@@ -140,6 +140,8 @@ class Connection : public Socket {
 
   void onPeerClosed() override;
 
+  void onBytesPassedToTCP(size_t nbytes_drained) override;
+
  private:
   void initializeContext();
   bool setWorkerContext();
