@@ -168,6 +168,7 @@ class MockedNodeSetAccessor : public StorageSetAccessor {
           epoch_metadata.shards,
           nodeset_state,
           config,
+          test_->my_node_,
           epoch_metadata.replication.toOldRepresentation()->replication_factor,
           epoch_metadata.replication.toOldRepresentation()
               ->sync_replication_scope,
@@ -313,8 +314,6 @@ void MutatorTest::setUp() {
   config_ = std::make_shared<Configuration>(
       ServerConfig::fromDataTest("mutator_test", std::move(nodes_config)),
       std::move(logs_config));
-
-  config_->serverConfig()->setMyNodeID(my_node_);
 
   nodeset_state_ = std::make_shared<NodeSetState>(
       shards_, LOG_ID, NodeSetState::HealthCheck::DISABLED);

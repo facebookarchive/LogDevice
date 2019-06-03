@@ -483,7 +483,8 @@ int ZookeeperEpochStore::createOrUpdateMetaData(
                            std::move(updater),
                            std::move(tracer),
                            write_node_id,
-                           server_config_->get())));
+                           server_config_->get(),
+                           processor_->getOptionalMyNodeID())));
 }
 
 }} // namespace facebook::logdevice

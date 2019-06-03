@@ -400,6 +400,7 @@ void EpochSequencer::createOrUpdateCopySetManager(
       *metadata,
       std::move(nodeset_state),
       cfg->serverConfig(),
+      getProcessor()->getOptionalMyNodeID(),
       log_group ? &log_group->attrs() : nullptr,
       settings,
       settings.enable_sticky_copysets &&

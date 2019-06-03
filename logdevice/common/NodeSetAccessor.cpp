@@ -837,13 +837,15 @@ std::unique_ptr<CopySetSelector> StorageSetAccessor::createCopySetSelector(
     const EpochMetaData& epoch_metadata,
     std::shared_ptr<NodeSetState> nodeset_state,
     const std::shared_ptr<ServerConfig>& config) {
-  return CopySetSelectorFactory::create(log_id,
-                                        epoch_metadata,
-                                        nodeset_state,
-                                        config,
-                                        /* log_attrs */ nullptr,
-                                        Worker::settings(),
-                                        *rng_);
+  return CopySetSelectorFactory::create(
+      log_id,
+      epoch_metadata,
+      nodeset_state,
+      config,
+      Worker::onThisThread()->processor_->getOptionalMyNodeID(),
+      /* log_attrs */ nullptr,
+      Worker::settings(),
+      *rng_);
 }
 
 void StorageSetAccessor::disableShard(ShardID shard) {

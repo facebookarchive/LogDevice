@@ -90,7 +90,6 @@ class GetEpochRecoveryMetadataRequestTest : public ::testing::Test {
       nodes_.push_back(ShardID(node_index_t(i), shard_index_t(0)));
       i++;
     }
-    config_->serverConfig()->setMyNodeID(MY_NODE_ID);
     epoch_metadata_ = std::make_shared<EpochMetaData>(nodes_, replication_);
     nodeset_state_ = std::make_shared<NodeSetState>(
         nodes_, kLogID, NodeSetState::HealthCheck::DISABLED);

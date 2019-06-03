@@ -507,7 +507,7 @@ class LogRebuilding : public LogRebuildingInterface,
    */
   virtual void writeCheckpoint(lsn_t rebuilt_upto);
 
-  virtual node_index_t getMyNodeID() const;
+  virtual NodeID getMyNodeID() const;
 
   /**
    * Notify ShardRebuildingV1 that we completed rebuilding of the log.

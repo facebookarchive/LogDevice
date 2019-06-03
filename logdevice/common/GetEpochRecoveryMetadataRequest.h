@@ -203,9 +203,7 @@ class GetEpochRecoveryMetadataRequest
     return start_ != end_ && end_ != EPOCH_INVALID;
   }
 
-  virtual NodeID getMyNodeID() {
-    return Worker::getConfig()->serverConfig()->getMyNodeID();
-  }
+  virtual NodeID getMyNodeID();
 
   // retry delay used when StorageSetAccessor fails its execution
   static const std::chrono::milliseconds INITIAL_RETRY_DELAY;

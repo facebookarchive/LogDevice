@@ -39,6 +39,7 @@ WeightedCopySetSelector::WeightedCopySetSelector(
     const EpochMetaData& epoch_metadata,
     std::shared_ptr<NodeSetState> nodeset_state,
     std::shared_ptr<ServerConfig> cfg,
+    folly::Optional<NodeID> my_node_id,
     const logsconfig::LogAttributes* log_attrs,
     bool locality_enabled,
     StatsHolder* stats,
@@ -90,8 +91,8 @@ WeightedCopySetSelector::WeightedCopySetSelector(
 
   // Find my node's failure domain name.
   folly::Optional<std::string> my_domain;
-  if (cfg->hasMyNodeID()) {
-    node_index_t my_node = cfg->getMyNodeID().index();
+  if (my_node_id.hasValue()) {
+    node_index_t my_node = my_node_id.value().index();
     const configuration::Node* my_node_cfg = cfg->getNode(my_node);
     if (my_node_cfg && my_node_cfg->location.hasValue()) {
       my_domain = my_node_cfg->location->getDomain(

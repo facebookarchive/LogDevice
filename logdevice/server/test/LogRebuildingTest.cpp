@@ -42,7 +42,7 @@ using LocalLogStoreReader::ReadContext;
 using LocalLogStoreReader::ReadPointer;
 
 static constexpr logid_t kLogID{1};
-static constexpr node_index_t kMyNodeID{0};
+static const NodeID kMyNodeID{0, 1};
 static constexpr size_t kNumNodes{20};
 static constexpr size_t kRecordSize{102400};
 const ServerInstanceId
@@ -236,7 +236,7 @@ class MockLogRebuilding : public LogRebuilding {
     return config->get();
   }
 
-  node_index_t getMyNodeID() const override {
+  NodeID getMyNodeID() const override {
     return kMyNodeID;
   }
 
@@ -275,6 +275,7 @@ class MockLogRebuilding : public LogRebuilding {
     return std::make_shared<ReplicationScheme>(getLogID(),
                                                std::move(metadata),
                                                getConfig()->serverConfig(),
+                                               getMyNodeID(),
                                                nullptr,
                                                *s.get(),
                                                /*relocate_local_records*/ false,

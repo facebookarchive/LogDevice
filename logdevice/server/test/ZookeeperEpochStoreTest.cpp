@@ -54,8 +54,6 @@ class ZookeeperEpochStoreTest : public ::testing::Test {
     if (!cfg_in)
       return;
 
-    cfg_in->serverConfig()->setMyNodeID(NodeID(0, 1));
-
     config = std::make_shared<UpdateableConfig>(std::move(cfg_in));
     auto processor_builder = TestServerProcessorBuilder{settings}
                                  .setUpdateableConfig(config)

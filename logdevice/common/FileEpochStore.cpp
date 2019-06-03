@@ -107,14 +107,20 @@ class FileEpochStore::MetaDataUpdater : public FileEpochStore::FileUpdater {
       std::shared_ptr<EpochMetaData::Updater> updater,
       MetaDataTracer* tracer,
       std::shared_ptr<ServerConfig> cfg,
+      folly::Optional<NodeID> my_node_id = folly::none,
       EpochStore::WriteNodeID write_node_id = EpochStore::WriteNodeID::NO,
       bool return_fetched_value = false)
       : log_id_(log_id),
         meta_updater_(std::move(updater)),
         tracer_(tracer),
         cfg_(std::move(cfg)),
+        my_node_id_(std::move(my_node_id)),
         write_node_id_(write_node_id),
-        return_fetched_value_(return_fetched_value) {}
+        return_fetched_value_(return_fetched_value) {
+    // If we should write our NodeID, it must have a value.
+    ld_assert(write_node_id_ != EpochStore::WriteNodeID::MY ||
+              my_node_id_.hasValue());
+  }
 
   int update(const char* buf, size_t len, char* out, size_t out_len) override {
     ld_check(buf && out);
@@ -181,7 +187,7 @@ class FileEpochStore::MetaDataUpdater : public FileEpochStore::FileUpdater {
         NodeID node_id_to_write;
         switch (write_node_id_) {
           case EpochStore::WriteNodeID::MY:
-            node_id_to_write = cfg_->getMyNodeID();
+            node_id_to_write = my_node_id_.value();
             break;
           case EpochStore::WriteNodeID::KEEP_LAST:
             if (meta_props_out_ &&
@@ -217,6 +223,7 @@ class FileEpochStore::MetaDataUpdater : public FileEpochStore::FileUpdater {
   std::shared_ptr<EpochMetaData::Updater> meta_updater_;
   MetaDataTracer* tracer_;
   std::shared_ptr<ServerConfig> cfg_;
+  folly::Optional<NodeID> my_node_id_;
   EpochStore::WriteNodeID write_node_id_;
   // if true, metadata_out_ is assigned with the metadata fetched from the epoch
   // store (i.e., value before update). Otherwise, metadata_out_ is assigned
@@ -288,7 +295,13 @@ int FileEpochStore::createOrUpdateMetaData(
   }
 
   MetaDataUpdater file_updater(
-      log_id, updater, &tracer, config_->get(), write_node_id);
+      log_id,
+      updater,
+      &tracer,
+      config_->get(),
+      processor_ == nullptr ? folly::none : processor_->getOptionalMyNodeID(),
+      write_node_id);
+
   int rv = updateEpochStore(log_id, "seq", file_updater);
   tracer.trace(rv == 0 ? E::OK : err);
   postCompletionMetaData(std::move(cf),

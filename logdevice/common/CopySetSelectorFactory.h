@@ -43,6 +43,7 @@ class CopySetSelectorFactory {
          const EpochMetaData& epoch_metadata,
          std::shared_ptr<NodeSetState> nodeset_state,
          std::shared_ptr<ServerConfig> config,
+         folly::Optional<NodeID> my_node_id,
          const logsconfig::LogAttributes* log_attrs,
          const Settings& settings,
          RNG& init_rng = DefaultRNG::get());
@@ -53,6 +54,7 @@ class CopySetSelectorFactory {
                 const EpochMetaData& epoch_metadata,
                 std::shared_ptr<NodeSetState> nodeset_state,
                 std::shared_ptr<ServerConfig> config,
+                folly::Optional<NodeID> my_node_id,
                 const logsconfig::LogAttributes* log_attrs,
                 const Settings& settings,
                 bool sticky_copysets,

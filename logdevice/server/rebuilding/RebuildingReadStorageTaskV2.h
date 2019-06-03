@@ -156,6 +156,7 @@ class RebuildingReadStorageTaskV2 : public StorageTask {
   // Can be overridden in tests.
   virtual UpdateableSettings<Settings> getSettings();
   virtual std::shared_ptr<UpdateableConfig> getConfig();
+  virtual folly::Optional<NodeID> getMyNodeID();
   virtual StatsHolder* getStats();
 
   virtual std::unique_ptr<LocalLogStore::AllLogsIterator> createIterator(

@@ -32,6 +32,7 @@ CopySetSelectorFactory::create(logid_t logid,
                                const EpochMetaData& epoch_metadata,
                                std::shared_ptr<NodeSetState> nodeset_state,
                                const std::shared_ptr<ServerConfig> config,
+                               folly::Optional<NodeID> my_node_id,
                                const logsconfig::LogAttributes* log_attrs,
                                const Settings& settings,
                                RNG& init_rng) {
@@ -58,6 +59,7 @@ CopySetSelectorFactory::create(logid_t logid,
                                                      epoch_metadata,
                                                      nodeset_state,
                                                      config,
+                                                     my_node_id,
                                                      log_attrs,
                                                      locality_enabled,
                                                      Worker::stats(),
@@ -86,6 +88,7 @@ CopySetSelectorFactory::create(logid_t logid,
       getWritableShards(epoch_metadata.shards, config),
       nodeset_state,
       config,
+      my_node_id.value(),
       legacy_replication->replication_factor,
       legacy_replication->sync_replication_scope);
 }
@@ -95,13 +98,19 @@ std::unique_ptr<CopySetManager> CopySetSelectorFactory::createManager(
     const EpochMetaData& epoch_metadata,
     std::shared_ptr<NodeSetState> nodeset_state,
     std::shared_ptr<ServerConfig> config,
+    folly::Optional<NodeID> my_node_id,
     const logsconfig::LogAttributes* log_attrs,
     const Settings& settings,
     bool sticky_copysets,
     size_t sticky_copysets_block_size,
     std::chrono::milliseconds sticky_copysets_block_max_time) {
-  std::unique_ptr<CopySetSelector> copyset_selector =
-      create(logid, epoch_metadata, nodeset_state, config, log_attrs, settings);
+  std::unique_ptr<CopySetSelector> copyset_selector = create(logid,
+                                                             epoch_metadata,
+                                                             nodeset_state,
+                                                             config,
+                                                             my_node_id,
+                                                             log_attrs,
+                                                             settings);
   std::unique_ptr<CopySetManager> res;
   if (sticky_copysets) {
     res = std::unique_ptr<CopySetManager>(

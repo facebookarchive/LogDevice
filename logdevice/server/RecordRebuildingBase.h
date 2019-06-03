@@ -65,6 +65,7 @@ struct ReplicationScheme {
   ReplicationScheme(logid_t logid,
                     EpochMetaData _epoch_metadata,
                     const std::shared_ptr<ServerConfig>& cfg,
+                    folly::Optional<NodeID> my_node_id,
                     const logsconfig::LogAttributes* log_attrs,
                     const Settings& settings,
                     bool relocate,
@@ -87,6 +88,7 @@ struct ReplicationScheme {
                                                      epoch_metadata,
                                                      nodeset_state,
                                                      cfg,
+                                                     my_node_id,
                                                      log_attrs,
                                                      settings,
                                                      init_rng);

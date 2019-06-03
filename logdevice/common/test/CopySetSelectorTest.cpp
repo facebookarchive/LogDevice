@@ -116,6 +116,10 @@ class CopySetSelectorTest : public ::testing::Test {
         ->clusterSize();
   }
 
+  NodeID getMyNodeID() {
+    return NodeID(seq_node_idx_, 1);
+  }
+
   // helper functions
   void setUp();
 
@@ -188,6 +192,7 @@ class MockCrossDomainCopySetSelector : public CrossDomainCopySetSelector {
                                    test->nodeset_,
                                    test->nodeset_state_,
                                    test->getConfig()->serverConfig(),
+                                   test->getMyNodeID(),
                                    test->replication_,
                                    test->sync_replication_scope_,
                                    &test->deps_) {}
@@ -321,10 +326,9 @@ void CopySetSelectorTest::setUp() {
           "copyset_selector_test", std::move(nodes_config)),
       std::move(logs_config));
 
-  NodeID seq_node_id = NodeID(seq_node_idx_, 1);
+  NodeID seq_node_id = getMyNodeID();
   ASSERT_TRUE(seq_node_id.isNodeID());
   ld_info("My node id: %s", seq_node_id.toString().c_str());
-  config_->serverConfig()->setMyNodeID(seq_node_id);
 
   const Configuration::Node* my_node =
       config_->serverConfig()->getNode(seq_node_id.index());

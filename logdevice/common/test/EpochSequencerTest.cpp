@@ -447,7 +447,6 @@ void EpochSequencerTest::setUp() {
   settings_.num_workers = num_workers_;
   // turn on byte offsets
   settings_.byte_offsets = true;
-  updateable_config_->get()->serverConfig()->setMyNodeID(NodeID(1, 1));
   processor_ =
       make_test_processor(settings_, updateable_config_, &stats_, NodeID(1, 1));
   ASSERT_NE(nullptr, processor_.get());

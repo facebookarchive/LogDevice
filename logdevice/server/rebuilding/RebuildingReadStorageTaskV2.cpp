@@ -400,6 +400,7 @@ bool RebuildingReadStorageTaskV2::lookUpEpochMetadata(
         log,
         *log_state->currentEpochMetadata,
         cfg->serverConfig(),
+        getMyNodeID(),
         log_group ? &log_group->attrs() : nullptr,
         *getSettings().get(),
         relocate_local_records,
@@ -462,6 +463,10 @@ UpdateableSettings<Settings> RebuildingReadStorageTaskV2::getSettings() {
 }
 std::shared_ptr<UpdateableConfig> RebuildingReadStorageTaskV2::getConfig() {
   return storageThreadPool_->getProcessor().config_;
+}
+
+folly::Optional<NodeID> RebuildingReadStorageTaskV2::getMyNodeID() {
+  return storageThreadPool_->getProcessor().getOptionalMyNodeID();
 }
 StatsHolder* RebuildingReadStorageTaskV2::getStats() {
   return storageThreadPool_->stats();

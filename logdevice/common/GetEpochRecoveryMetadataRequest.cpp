@@ -13,6 +13,7 @@
 #include <folly/Memory.h>
 
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
+#include "logdevice/common/Processor.h"
 #include "logdevice/common/Timer.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/Configuration.h"
@@ -601,6 +602,10 @@ void GetEpochRecoveryMetadataRequest::done() {
   ld_check(result_ != E::UNKNOWN);
   cb_(result_, std::move(epochRecoveryStateMap_));
   deleteThis();
+}
+
+NodeID GetEpochRecoveryMetadataRequest::getMyNodeID() {
+  return Worker::onThisThread()->processor_->getMyNodeID();
 }
 
 void GetEpochRecoveryMetadataRequest::deferredComplete() {

@@ -31,12 +31,14 @@ class EpochMetaDataZRQ : public ZookeeperEpochStoreRequest {
                    std::shared_ptr<EpochMetaData::Updater> updater,
                    MetaDataTracer tracer,
                    EpochStore::WriteNodeID write_node_id,
-                   std::shared_ptr<ServerConfig> cfg)
+                   std::shared_ptr<ServerConfig> cfg,
+                   folly::Optional<NodeID> my_node_id)
       : ZookeeperEpochStoreRequest(logid, epoch, std::move(cf), store),
         updater_(updater),
         cfg_(std::move(cfg)),
         tracer_(std::move(tracer)),
-        write_node_id_(write_node_id) {
+        write_node_id_(write_node_id),
+        my_node_id_(my_node_id) {
     ld_check(updater_);
     ld_check(cfg_);
   }
@@ -140,8 +142,7 @@ class EpochMetaDataZRQ : public ZookeeperEpochStoreRequest {
     folly::Optional<NodeID> node_id_to_write;
     switch (write_node_id_) {
       case EpochStore::WriteNodeID::MY:
-        ld_check(cfg_ != nullptr);
-        node_id_to_write = cfg_->getMyNodeID();
+        node_id_to_write = my_node_id_.value();
         if (!node_id_to_write->isNodeID()) {
           ld_check(false);
           err = E::INTERNAL;
@@ -177,6 +178,10 @@ class EpochMetaDataZRQ : public ZookeeperEpochStoreRequest {
   MetaDataTracer tracer_;
 
   EpochStore::WriteNodeID write_node_id_;
+
+
+  // Can be folly::none when it's being called from the tooling.
+  folly::Optional<NodeID> my_node_id_;
 };
 
 }} // namespace facebook::logdevice

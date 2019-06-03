@@ -37,6 +37,7 @@ CrossDomainCopySetSelector::CrossDomainCopySetSelector(
     StorageSet storage_set,
     std::shared_ptr<NodeSetState> nodeset_state,
     std::shared_ptr<ServerConfig> cfg,
+    NodeID my_node_id,
     copyset_size_t replication_factor,
     NodeLocationScope sync_replication_scope,
     const CopySetSelectorDependencies* deps)
@@ -55,7 +56,7 @@ CrossDomainCopySetSelector::CrossDomainCopySetSelector(
 
   // get the node location information for the local sequencer node (myself)
   local_domains_.fill(nullptr);
-  const node_index_t my_index = cfg->getMyNodeID().index();
+  const node_index_t my_index = my_node_id.index();
 
   // TODO: migrate it to use NodesConfiguration with switchable source
   const auto* my_sd = cfg->getNodesConfigurationFromServerConfigSource()

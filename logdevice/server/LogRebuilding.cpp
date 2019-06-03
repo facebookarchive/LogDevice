@@ -1663,11 +1663,11 @@ void LogRebuilding::putReadStorageTask(
 }
 
 ShardID LogRebuilding::getMyShardID() const {
-  return ShardID(getMyNodeID(), shard_);
+  return ShardID(getMyNodeID().index(), shard_);
 }
 
-node_index_t LogRebuilding::getMyNodeID() const {
-  return Worker::getConfig()->serverConfig()->getMyNodeID().index();
+NodeID LogRebuilding::getMyNodeID() const {
+  return Worker::onThisThread()->processor_->getMyNodeID();
 }
 
 ServerInstanceId LogRebuilding::getServerInstanceId() const {
@@ -1767,6 +1767,7 @@ LogRebuilding::createReplicationScheme(EpochMetaData metadata,
       logid_,
       std::move(metadata),
       cfg->serverConfig(),
+      getMyNodeID(),
       log_group ? &log_group->attrs() : nullptr,
       Worker::settings(),
       relocate_local_records,

@@ -96,7 +96,10 @@ class AllSequencersTest : public ::testing::Test {
 class MockSequencer : public Sequencer {
  public:
   explicit MockSequencer(AllSequencersTest* test, logid_t logid)
-      : Sequencer(logid, test->updateable_settings_, &test->stats_),
+      : Sequencer(logid,
+                  test->updateable_settings_,
+                  &test->stats_,
+                  test->all_seqs_.get()),
         test_(test) {}
 
   ~MockSequencer() override {}
