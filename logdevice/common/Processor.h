@@ -306,6 +306,9 @@ class Processor : public folly::enable_shared_from_this<Processor> {
    *     SHUTDOWN       this queue or processor_ is shutting down
    */
   int postImportant(std::unique_ptr<Request>& rq);
+  int postImportant(std::unique_ptr<Request>& rq,
+                    WorkerType worker_type,
+                    int target_thread);
   // Older alias for postImportant()
   int postWithRetrying(std::unique_ptr<Request>& rq) {
     return postImportant(rq);

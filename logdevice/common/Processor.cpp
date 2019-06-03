@@ -609,14 +609,18 @@ void Processor::reportLoad(worker_id_t idx,
 }
 
 int Processor::postImportant(std::unique_ptr<Request>& rq) {
+  return postImportant(
+      rq, rq->getWorkerTypeAffinity(), getTargetThreadForRequest(rq));
+}
+
+int Processor::postImportant(std::unique_ptr<Request>& rq,
+                             WorkerType worker_type,
+                             int target_thread) {
   if (shutting_down_.load() && !allow_post_during_shutdown_) {
     err = E::SHUTDOWN;
     return -1;
   }
-  return postImpl(rq,
-                  rq->getWorkerTypeAffinity(),
-                  getTargetThreadForRequest(rq),
-                  /* force */ true);
+  return postImpl(rq, worker_type, target_thread, /* force */ true);
 }
 
 SequencerBatching& Processor::sequencerBatching() {

@@ -33,6 +33,10 @@ class TrafficShaper::RunFlowGroupsRequest : public Request {
     return Request::Execution::COMPLETE;
   }
 
+  int8_t getExecutorPriority() const override {
+    return folly::Executor::HI_PRI;
+  }
+
  private:
   ShapingContainer* container_{nullptr};
 };
@@ -221,7 +225,7 @@ bool TrafficShaper::dispatchUpdateNw() {
               std::make_unique<RunFlowGroupsRequest>(
                   w.sender().getNwShapingContainer(),
                   RequestType::TRAFFIC_SHAPER_RUN_FLOW_GROUPS);
-          processor_->postRequest(run_req, w.worker_type_, w.idx_.val());
+          processor_->postImportant(run_req, w.worker_type_, w.idx_.val());
         }
       },
       Processor::Order::RANDOM);
@@ -247,7 +251,7 @@ bool TrafficShaper::dispatchUpdateReadIO() {
               std::make_unique<RunFlowGroupsRequest>(
                   &w.readShapingContainer(),
                   RequestType::READIO_SHAPER_RUN_FLOW_GROUPS);
-          processor_->postRequest(run_req, w.worker_type_, w.idx_.val());
+          processor_->postImportant(run_req, w.worker_type_, w.idx_.val());
         }
       },
       Processor::Order::RANDOM);

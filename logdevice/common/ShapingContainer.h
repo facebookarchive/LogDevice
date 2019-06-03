@@ -119,7 +119,7 @@ class ShapingContainer {
         flow_groups_run_requested_time_ = SteadyTimestamp::now();
         auto w = Worker::onThisThread();
         w->addWithPriority([&] { runFlowGroups(RunType::EVENTLOOP); },
-                           folly::Executor::LO_PRI);
+                           folly::Executor::HI_PRI);
         break;
       }
     }
