@@ -615,6 +615,7 @@
 <tr><td>num-background-workers</td><td>The number of workers dedicated for processing time-insensitive requests and operations</td><td style="text-align:center">4</td><td>requires restart, server only</td></tr>
 <tr><td>num-processor-background-threads</td><td>Number of threads in Processor's background thread pool. Background threads are used by, e.g., BufferedWriter to construct/compress large batches.  If 0 (default), use num-workers.</td><td style="text-align:center">0</td><td>requires restart</td></tr>
 <tr><td>num-workers</td><td>number of worker threads to run, or &quot;cores&quot; for one thread per CPU core</td><td style="text-align:center">cores</td><td>requires restart</td></tr>
+<tr><td>test-mode</td><td>Enable functionality in integration tests. Currently used for admin commands that are only enabled for testing purposes.</td><td style="text-align:center">false</td><td>CLI only, requires restart, server only</td></tr>
 <tr><td>worker-request-pipe-capacity</td><td>size each worker request queue to hold this many requests</td><td style="text-align:center">524288</td><td>requires restart</td></tr>
 </tbody>
 </table>
