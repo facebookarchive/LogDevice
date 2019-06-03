@@ -111,9 +111,9 @@ class CommandListener : public Listener {
   // create an openssl bufferevent to handle that connection
   bool upgradeToSSL(ConnectionState* state);
 
-  AdminCommandFactory command_factory_;
   Server* server_;
   UpdateableSettings<ServerSettings> server_settings_;
+  std::unique_ptr<AdminCommandFactory> command_factory_;
 
   // id assigned to the next connection
   conn_id_t next_conn_id_ = 0;

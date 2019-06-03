@@ -1328,11 +1328,6 @@ void ClientReadStream::findGapsAndRecords(bool grace_period_expired,
   ld_check(last_epoch_with_metadata_ != EPOCH_INVALID);
   ld_check(current_metadata_ != nullptr);
 
-  if (grace_period_ != nullptr) {
-    // Cancel grace period timer. detectGap() will start it again if needed.
-    grace_period_->reset();
-  }
-
   // we must have constructed failure domain information at this point
   ld_check(gap_failure_domain_ != nullptr);
 
@@ -1427,8 +1422,13 @@ void ClientReadStream::findGapsAndRecords(bool grace_period_expired,
   };
 
   while (!done()) {
-    while (try_make_progress())
-      ;
+    while (try_make_progress()) {
+      if (grace_period_ != nullptr) {
+        // If we are here, we made progress. This means that any pending gap
+        // grace period timer needs to be reset.
+        grace_period_->cancel();
+      }
+    }
     if (!slideSenderWindows()) {
       break;
     }
@@ -1627,6 +1627,13 @@ ClientReadStream::checkFMajority(bool grace_period_expired) const {
 
 int ClientReadStream::detectGap(bool grace_period_expired) {
   const ProgressDecision decision = checkFMajority(grace_period_expired);
+
+  if (grace_period_ && decision != ProgressDecision::WAIT_FOR_GRACE_PERIOD) {
+    // If we are here and gap grace period is active, then f-majority result
+    // changed from our past call to detectGap() and we need to cancel it.
+    grace_period_->cancel();
+  }
+
   if (decision == ProgressDecision::WAIT) {
     // Not enough shards chimed in, we should wait.
     return -1;

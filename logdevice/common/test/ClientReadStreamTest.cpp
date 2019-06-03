@@ -430,7 +430,7 @@ class ClientReadStreamTest
         new MockClientReadStreamDependencies(state_));
 
     updateConfig();
-    read_stream_.reset(new ClientReadStream(
+    read_stream_ = std::make_unique<ClientReadStream>(
         read_stream_id_t(1),
         logid,
         start_lsn_,
@@ -441,7 +441,7 @@ class ClientReadStreamTest
         std::move(deps),
         state_.config,
         nullptr,
-        attrs));
+        attrs);
     static_cast<MockClientReadStreamDependencies&>(read_stream_->getDeps())
         .setClientReadStream(read_stream_.get());
     state_.storage_set_states = &read_stream_->storage_set_states_;

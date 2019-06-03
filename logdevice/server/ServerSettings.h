@@ -82,6 +82,8 @@ struct ServerSettings : public SettingsBundle {
   // workers (made logdevice protocol handshake)
   size_t connection_backlog;
 
+  bool test_mode;
+
   int deprecated_ssl_port;
   std::string deprecated_ssl_unix_socket;
 

@@ -480,6 +480,7 @@ sidebar_label: Settings
 | num-background-workers | The number of workers dedicated for processing time-insensitive requests and operations | 4 | requires&nbsp;restart, server&nbsp;only |
 | num-processor-background-threads | Number of threads in Processor's background thread pool. Background threads are used by, e.g., BufferedWriter to construct/compress large batches.  If 0 (default), use num-workers. | 0 | requires&nbsp;restart |
 | num-workers | number of worker threads to run, or "cores" for one thread per CPU core | cores | requires&nbsp;restart |
+| test-mode | Enable functionality in integration tests. Currently used for admin commands that are only enabled for testing purposes. | false | CLI&nbsp;only, requires&nbsp;restart, server&nbsp;only |
 | worker-request-pipe-capacity | size each worker request queue to hold this many requests | 524288 | requires&nbsp;restart |
 
 ## Storage

@@ -13,12 +13,17 @@
 #include <folly/hash/Checksum.h>
 #include <gtest/gtest.h>
 
+#include "logdevice/common/Processor.h"
 #include "logdevice/common/ReadStreamAttributes.h"
 #include "logdevice/common/ReaderImpl.h"
+#include "logdevice/common/ShardAuthoritativeStatusMap.h"
 #include "logdevice/common/Timer.h"
+#include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/common/test/TestUtil.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Client.h"
+#include "logdevice/lib/ClientImpl.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
 
@@ -1304,6 +1309,121 @@ TEST_P(ReadingIntegrationTest, ReadAvailabilityWithBridgeRecordForEmptyEpoch) {
   }
 
   ASSERT_EQ(lsn, got_lsn);
+}
+
+/**
+ * The following integration test checks that we correctly deliver gaps when
+ * gap-grace-period > reader-reconnect-delay and there is a reconnecting node X
+ * (i.e. reader doesn't get stuck in that situation). It also verifies that
+ * changing the authoritative status of X's shards to UNDERREPLICATION allow us
+ * to deliver said dataloss gap (in case we had gotten stuck earlier).
+ *
+ * This is based on a failure experienced in production.
+ */
+TEST_P(ReadingIntegrationTest,
+       ReadAvailabilityWhenGapGracePeriodGTReconnectTimer) {
+  const ssize_t nnodes = 6;
+
+  const logid_t logid{1};
+  const shard_index_t shard = 0;
+  const ssize_t nshards = 1;
+  const std::chrono::seconds waitClientDataTimeout{21};
+  const node_index_t node_down = 2;
+
+  auto cluster = clusterFactory()
+                     .setNumLogs(1)
+                     .setNumDBShards(nshards)
+                     .doPreProvisionEpochMetaData()
+                     .allowExistingMetaData()
+                     .create(nnodes);
+  cluster->waitForRecovery();
+  std::shared_ptr<Client> client = cluster->createClient();
+
+  // Step 1.  Have gap-grace-period > reader-reconnect-delay
+  client->settings().set("gap-grace-period", "3s");
+  client->settings().set("reader-reconnect-delay", "1ms..1s");
+
+  // Step 2. Make a random storage node unresponsive.
+  cluster->getNode(node_down).shutdown();
+  cluster->waitForRecovery();
+
+  // Step 2.a. Force shard status map to have a non-LSN_INVALID version so
+  // reconnects may trigger a call to ClientReadStream::findGapsAndRecords().
+  // (As of the date of this diff, that version being != LSN_INVALID is typical
+  // because SHARD_STATUS_UPDATE_Messages are sent whenever a client first
+  // connects to a server, see AllServerReadStreams::insertOrGet(); for the
+  // purposes of this test we should avoid racing with that message).
+  auto* client_impl = reinterpret_cast<ClientImpl*>(client.get());
+  client_impl->getProcessor().applyToWorkers([&](Worker& w) {
+    w.shardStatusManager().getShardAuthoritativeStatusMap() =
+        ShardAuthoritativeStatusMap(LSN_OLDEST);
+  });
+
+  // Step 3. Create a gap.
+  lsn_t lsn1 = client->appendSync(logid, Payload("this is loss", 12));
+  ASSERT_NE(LSN_INVALID, lsn1) << "We are unable to append to log";
+  cluster->applyToNodes([&](auto& n) {
+    for (shard_index_t shard_idx = 0; shard_idx < nshards; shard_idx++) {
+      auto cmd = folly::sformat("record erase --shard {} {} {}",
+                                shard_idx,
+                                logid.val_,
+                                lsn_to_string(lsn1));
+      n.sendCommand(cmd, true);
+    }
+  });
+
+  // Step 4. Add more data and try to read it by starting from e0n1
+  lsn_t lsn2 = client->appendSync(logid, Payload("available data", 14));
+  ASSERT_NE(LSN_INVALID, lsn2) << "We are unable to append to log";
+
+  auto reader = client->createReader(1);
+  reader->setTimeout(waitClientDataTimeout); // so we don't get stuck in read()
+                                             // when nothing is being delivered
+  int rv = reader->startReading(logid, LSN_OLDEST);
+  ASSERT_EQ(0, rv) << "We are unable to start reading from log " << logid.val();
+
+  ssize_t num_dataloss_gaps_read = 0;
+  ssize_t num_records_read = 0;
+
+  auto try_read_some_data = [&]() {
+    return wait_until("Can read available data",
+                      [&]() {
+                        if (num_records_read >= 1) {
+                          return true;
+                        } else {
+                          std::vector<std::unique_ptr<DataRecord>> data;
+                          GapRecord gap;
+                          ssize_t nread = reader->read(1, &data, &gap);
+                          if (nread >= 0) {
+                            num_records_read += nread;
+                          } else {
+                            if (gap.type == GapType::DATALOSS) {
+                              num_dataloss_gaps_read++;
+                            }
+                          }
+                          return num_records_read >= 1;
+                        }
+                      },
+                      std::chrono::steady_clock::now() + waitClientDataTimeout);
+  };
+
+  EXPECT_EQ(try_read_some_data(), 0)
+      << "Reader did not move past dataloss gap when shard was in "
+         "(re-)connecting state";
+
+  // Step 5. Override shard status
+  client_impl->getProcessor().applyToWorkers([&](Worker& w) {
+    w.shardStatusManager().getShardAuthoritativeStatusMap().setShardStatus(
+        node_down, shard, AuthoritativeStatus::UNDERREPLICATION);
+  });
+
+  EXPECT_EQ(try_read_some_data(), 0)
+      << "Reader did not move past dataloss gap when shard was in "
+         "UNDERREPLICATION state";
+
+  EXPECT_EQ(num_dataloss_gaps_read, 1)
+      << "Unexpected number of dataloss gaps read";
+  EXPECT_EQ(num_records_read, 1) << "Unexpected number of records read";
 }
 
 INSTANTIATE_TEST_CASE_P(ReadingIntegrationTest,

@@ -1018,6 +1018,7 @@ ParamMap Cluster::commandArgsForNode(node_index_t i, const Node& node) const {
     { ParamScope::ALL,
       {
         protocol_addr_param, command_addr_param, admin_addr_param,
+        {"--test-mode", ParamValue{"true"}},
         {"--config-path", ParamValue{"file:" + node.config_path_}},
         {"--epoch-store-path", ParamValue{epoch_store_path_}},
         {"--nodes-configuration-file-store-dir", ParamValue{ncs_path_}},

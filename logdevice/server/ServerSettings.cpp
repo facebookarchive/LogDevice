@@ -378,6 +378,15 @@ void ServerSettings::defineSettings(SettingEasyInit& init) {
 
     ;
   // clang-format on
+
+  init("test-mode",
+       &test_mode,
+       "false",
+       nullptr,
+       "Enable functionality in integration tests. Currently used for admin "
+       "commands that are only enabled for testing purposes.",
+       SERVER | CLI_ONLY | REQUIRES_RESTART,
+       SettingsCategory::Execution);
 }
 
 }} // namespace facebook::logdevice

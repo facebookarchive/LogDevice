@@ -61,6 +61,7 @@
 #include "logdevice/server/admincommands/PrintLogsDBDirectories.h"
 #include "logdevice/server/admincommands/RSMWriteSnapshot.h"
 #include "logdevice/server/admincommands/Rebuilding.h"
+#include "logdevice/server/admincommands/Record.h"
 #include "logdevice/server/admincommands/Setting.h"
 #include "logdevice/server/admincommands/StartRecovery.h"
 #include "logdevice/server/admincommands/Stats.h"
@@ -75,6 +76,12 @@
 #include "logdevice/server/storage_tasks/ReadStorageTask.h"
 
 namespace facebook { namespace logdevice {
+
+TestAdminCommandFactory::TestAdminCommandFactory() : AdminCommandFactory() {
+  using Restriction = AdminCommand::RestrictionLevel;
+  selector_.add<commands::EraseRecord>(
+      "record erase", Restriction::LOCALHOST_ONLY);
+}
 
 AdminCommandFactory::AdminCommandFactory() {
   // To support restriction levels, add line in command's class:

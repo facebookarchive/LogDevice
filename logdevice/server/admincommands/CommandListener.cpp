@@ -33,12 +33,22 @@
 
 namespace facebook { namespace logdevice {
 
+std::unique_ptr<AdminCommandFactory> createAdminCommandFactory(bool test_mode) {
+  if (test_mode) {
+    return std::make_unique<TestAdminCommandFactory>();
+  } else {
+    return std::make_unique<AdminCommandFactory>();
+  }
+}
+
 CommandListener::CommandListener(Listener::InterfaceDef iface,
                                  KeepAlive loop,
                                  Server* server)
     : Listener(std::move(iface), loop),
       server_(server),
       server_settings_(server_->getServerSettings()),
+      command_factory_(
+          createAdminCommandFactory(/*test_mode=*/server_settings_->test_mode)),
       ssl_fetcher_(
           server_->getParameters()->getProcessorSettings()->ssl_cert_path,
           server_->getParameters()->getProcessorSettings()->ssl_key_path,
@@ -322,7 +332,7 @@ void CommandListener::processCommand(struct bufferevent* bev,
     return;
   }
 
-  auto command = command_factory_.get(args, output);
+  auto command = command_factory_->get(args, output);
 
   if (!command) {
     RATELIMIT_INFO(std::chrono::seconds(10),

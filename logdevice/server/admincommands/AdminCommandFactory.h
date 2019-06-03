@@ -25,7 +25,7 @@ class AdminCommandFactory {
   std::unique_ptr<AdminCommand> get(std::vector<std::string>& inout_args,
                                     struct evbuffer* output);
 
- private:
+ protected:
   /**
    * Add a deprecated admin command. The command does nothing but notifying
    * that it is deprecated.
@@ -36,6 +36,11 @@ class AdminCommandFactory {
   void deprecated(const char* old_prefx, const char* new_prefix);
 
   CommandSelector selector_;
+};
+
+class TestAdminCommandFactory : public AdminCommandFactory {
+ public:
+  TestAdminCommandFactory();
 };
 
 }} // namespace facebook::logdevice
