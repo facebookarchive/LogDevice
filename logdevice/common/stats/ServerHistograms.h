@@ -28,6 +28,9 @@ struct ServerHistograms : public HistogramBundle {
         {"write_to_read_latency", &write_to_read_latency},
         {"store_timeouts", &store_timeouts},
         {"requests_queue_latency", &requests_queue_latency},
+        {"hi_pri_requests_latency", &hi_pri_requests_latency},
+        {"lo_pri_requests_latency", &lo_pri_requests_latency},
+        {"mid_pri_requests_latency", &mid_pri_requests_latency},
         {"gossip_queue_latency", &gossip_queue_latency},
         {"gossip_recv_latency", &gossip_recv_latency},
         {"traffic_shaper_bw_dispatch_latency", &traffic_shaper_bw_dispatch},
@@ -76,6 +79,12 @@ struct ServerHistograms : public HistogramBundle {
 
   // Latency of posting a request
   LatencyHistogram requests_queue_latency;
+
+  LatencyHistogram hi_pri_requests_latency;
+
+  LatencyHistogram mid_pri_requests_latency;
+
+  LatencyHistogram lo_pri_requests_latency;
 
   // How long the gossip requests stay in the pipe
   LatencyHistogram gossip_queue_latency;

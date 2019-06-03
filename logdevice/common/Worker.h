@@ -774,18 +774,18 @@ class Worker : public WorkContext {
 
   /**
    * Post a request into Worker for execution. The post cannot fail with NOBUFS.
-   * Optionally, specify work priority. As of today, high priority is not
-   * implemented any different than low priority. The only difference between
-   * the two is high priority queue depth is small compared to more general low
-   * priority queue. A new request getting scheduled as high priority
-   * should not delay other tasks like storage responses and timer callbacks who
-   * are the primary consumers of this mechanism.
+   * The priority of the request is embedded in the request instance. As of
+   * today, high priority is not implemented any different than low priority.
+   * The only difference between the two is high priority queue depth is small
+   * compared to more general low priority queue. A new request getting
+   * scheduled as high priority should not delay other tasks like storage
+   * responses and timer callbacks who are the primary consumers of this
+   * mechanism.
    *
    * @return 0 if a request was posted. Otherwise it returns -1 and err contains
    * the actual error_code.
    */
-  int forcePost(std::unique_ptr<Request>& req,
-                int8_t priority = folly::Executor::LO_PRI);
+  int forcePost(std::unique_ptr<Request>& req);
 
   virtual void setupWorker();
 

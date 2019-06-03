@@ -11,6 +11,7 @@
 #include <chrono>
 
 #include <folly/AtomicIntrusiveLinkedList.h>
+#include <folly/Executor.h>
 
 #include "logdevice/common/RequestType.h"
 #include "logdevice/common/RunContext.h"
@@ -107,6 +108,14 @@ class Request {
    */
   void setClientBlockedSemaphore(Semaphore* sem) {
     client_blocked_sem_ = sem;
+  }
+
+  /**
+   * Priority used by executor to schedule this request. Using this processor
+   * enqueues the request into the right priority queue of the executor.
+   */
+  virtual int8_t getExecutorPriority() const {
+    return folly::Executor::LO_PRI;
   }
 
   const request_id_t id_; // unique id of this request, used to look up

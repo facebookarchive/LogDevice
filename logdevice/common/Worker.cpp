@@ -1238,16 +1238,48 @@ void Worker::processRequest(std::unique_ptr<Request> rq) {
 
   RunContext run_context = rq->getRunContext();
 
+  auto priority = rq->getExecutorPriority();
+
   auto queue_time{
       duration_cast<microseconds>(steady_clock::now() - rq->enqueue_time_)};
   HISTOGRAM_ADD(stats_, requests_queue_latency, queue_time.count());
   if (queue_time > 20ms) {
+    auto priority_to_str = [](int8_t priority) {
+      switch (priority) {
+        case folly::Executor::LO_PRI:
+          return "LO_PRI";
+        case folly::Executor::MID_PRI:
+          return "MID_PRI";
+        case folly::Executor::HI_PRI:
+          return "HI_PRI";
+      }
+      return "";
+    };
     RATELIMIT_WARNING(5s,
                       10,
-                      "Request queued for %g msec: %s (id: %lu)",
+                      "Request queued for %g msec: %s (id: %lu), p :%s",
                       queue_time.count() / 1000.0,
                       rq->describe().c_str(),
-                      rq->id_.val());
+                      rq->id_.val(),
+                      priority_to_str(priority));
+  }
+
+  using namespace std::chrono_literals;
+  switch (priority) {
+    case folly::Executor::HI_PRI:
+      HISTOGRAM_ADD(stats_, hi_pri_requests_latency, queue_time.count());
+      STAT_INCR(processor_->stats_, worker_executed_hi_pri_work);
+      break;
+    case folly::Executor::MID_PRI:
+      HISTOGRAM_ADD(stats_, mid_pri_requests_latency, queue_time.count());
+      STAT_INCR(processor_->stats_, worker_executed_mid_pri_work);
+      break;
+    case folly::Executor::LO_PRI:
+      HISTOGRAM_ADD(stats_, lo_pri_requests_latency, queue_time.count());
+      STAT_INCR(processor_->stats_, worker_executed_lo_pri_work);
+      break;
+    default:
+      break;
   }
 
   Worker::onStartedRunning(run_context);
@@ -1317,7 +1349,7 @@ void Worker::addWithPriority(folly::Func func, int8_t priority) {
       priority);
 }
 
-int Worker::forcePost(std::unique_ptr<Request>& req, int8_t priority) {
+int Worker::forcePost(std::unique_ptr<Request>& req) {
   if (shutting_down_) {
     err = E::SHUTDOWN;
     return -1;
@@ -1329,6 +1361,7 @@ int Worker::forcePost(std::unique_ptr<Request>& req, int8_t priority) {
   }
 
   req->enqueue_time_ = std::chrono::steady_clock::now();
+  auto priority = req->getExecutorPriority();
   folly::Func func = [rq = std::move(req), this]() mutable {
     processRequest(std::move(rq));
   };

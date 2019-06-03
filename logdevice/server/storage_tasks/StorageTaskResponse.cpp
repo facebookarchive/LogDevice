@@ -40,11 +40,12 @@ void StorageTaskResponse::sendBackToWorker(std::unique_ptr<StorageTask> task) {
   req->enqueue_time_ = std::chrono::steady_clock::now();
   auto w = dynamic_cast<Worker*>(executor);
   if (w) {
-    int rv = w->forcePost(req, folly::Executor::HI_PRI);
+    int rv = w->forcePost(req);
     ld_check(rv == 0);
-  } else if (executor) {
+  } else {
+    auto priority = req->getExecutorPriority();
     executor->addWithPriority(
-        [rq = std::move(req)] { rq->execute(); }, folly::Executor::HI_PRI);
+        [rq = std::move(req)] { rq->execute(); }, priority);
   }
 
   Request::bumpStatsWhenPosted(stats, req_type, worker_type, worker_idx, true);
