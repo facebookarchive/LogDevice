@@ -188,9 +188,11 @@ ClientImpl::ClientImpl(std::string cluster_name,
       plugin_registry_->getSinglePlugin<TraceLoggerFactory>(
           PluginType::TRACE_LOGGER_FACTORY);
   if (!trace_logger_factory || settings->trace_logger_disabled) {
-    trace_logger_ = std::make_shared<NoopTraceLogger>(config_);
+    trace_logger_ = std::make_shared<NoopTraceLogger>(
+        config_, /* my_node_id */ folly::none);
   } else {
-    trace_logger_ = (*trace_logger_factory)(config_);
+    trace_logger_ =
+        (*trace_logger_factory)(config_, /* my_node_id */ folly::none);
   }
 
   event_tracer_ =

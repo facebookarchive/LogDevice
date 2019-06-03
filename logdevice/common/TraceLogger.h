@@ -26,8 +26,9 @@ namespace facebook { namespace logdevice {
  */
 class TraceLogger {
  public:
-  explicit TraceLogger(const std::shared_ptr<UpdateableConfig> cluster_config)
-      : cluster_config_(cluster_config){};
+  explicit TraceLogger(const std::shared_ptr<UpdateableConfig> cluster_config,
+                       const folly::Optional<NodeID>& my_node_id)
+      : cluster_config_(cluster_config), my_node_id_(my_node_id){};
 
   // Thread safe.
   virtual void pushSample(const std::string& table,
@@ -60,5 +61,6 @@ class TraceLogger {
 
  protected:
   const std::shared_ptr<UpdateableConfig> cluster_config_;
+  const folly::Optional<NodeID> my_node_id_;
 };
 }} // namespace facebook::logdevice

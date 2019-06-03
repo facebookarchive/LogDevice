@@ -188,9 +188,11 @@ void StandaloneAdminServer::initProcessor() {
       plugin_registry_->getSinglePlugin<TraceLoggerFactory>(
           PluginType::TRACE_LOGGER_FACTORY);
   if (!trace_logger_factory || settings_->trace_logger_disabled) {
-    trace_logger = std::make_shared<NoopTraceLogger>(updateable_config_);
+    trace_logger = std::make_shared<NoopTraceLogger>(
+        updateable_config_, /* my_node_id */ folly::none);
   } else {
-    trace_logger = (*trace_logger_factory)(updateable_config_);
+    trace_logger = (*trace_logger_factory)(
+        updateable_config_, /* my_node_id */ folly::none);
   }
 
   processor_ = ClientProcessor::create(updateable_config_,

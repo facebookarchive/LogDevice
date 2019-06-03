@@ -16,8 +16,9 @@
 namespace facebook { namespace logdevice {
 
 NoopTraceLogger::NoopTraceLogger(
-    const std::shared_ptr<UpdateableConfig> cluster_config)
-    : TraceLogger(cluster_config) {
+    const std::shared_ptr<UpdateableConfig> cluster_config,
+    const folly::Optional<NodeID>& my_node_id)
+    : TraceLogger(cluster_config, my_node_id) {
   ld_info("NOOP TraceLogger is ON, no trace samples will be published.");
 }
 

@@ -18,7 +18,8 @@ namespace facebook { namespace logdevice {
 class NoopTraceLogger : public TraceLogger {
  public:
   explicit NoopTraceLogger(
-      const std::shared_ptr<UpdateableConfig> cluster_config);
+      const std::shared_ptr<UpdateableConfig> cluster_config,
+      const folly::Optional<NodeID>& my_node_id = folly::none);
   void pushSample(const std::string& table,
                   int32_t sample_rate,
                   std::unique_ptr<TraceSample> sample) override;

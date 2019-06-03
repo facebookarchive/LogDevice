@@ -7,6 +7,7 @@
  */
 #pragma once
 
+#include "logdevice/common/NodeID.h"
 #include "logdevice/common/plugin/Plugin.h"
 
 namespace facebook { namespace logdevice {
@@ -29,7 +30,8 @@ class TraceLoggerFactory : public Plugin {
    * Creates a TraceLogger to which trace samples are pushed if tracing is on.
    */
   virtual std::unique_ptr<TraceLogger>
-  operator()(const std::shared_ptr<UpdateableConfig>&) = 0;
+  operator()(const std::shared_ptr<UpdateableConfig>&,
+             const folly::Optional<NodeID>& my_node_id) = 0;
 };
 
 }} // namespace facebook::logdevice
