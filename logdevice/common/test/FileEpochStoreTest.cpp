@@ -63,7 +63,6 @@ class FileEpochStoreTest : public ::testing::Test {
     std::shared_ptr<Configuration> cfg_in =
         Configuration::fromJsonFile(TEST_CONFIG_FILE(TEST_CLUSTER ".conf"));
     ld_check(cfg_in);
-    cfg_in->serverConfig()->setMyNodeID(NodeID(0, 1));
     cluster_config_ = std::make_shared<UpdateableConfig>(std::move(cfg_in));
     auto selector = NodeSetSelectorFactory::create(NodeSetSelectorType::RANDOM);
     auto config = cluster_config_->get();

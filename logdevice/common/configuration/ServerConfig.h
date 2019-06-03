@@ -213,33 +213,6 @@ class ServerConfig {
   const Node* getNode(const NodeID& id) const;
 
   /**
-   * Returns the NodeID of the server that we are running.  (The NodeID needs
-   * to have been previously set via a call to setMyNodeID().  This is
-   * typically done right after the config is created.)
-   *
-   * Must not be called in client code.
-   */
-  NodeID getMyNodeID() const {
-    ld_check(Address(my_node_id_).valid());
-    return my_node_id_;
-  }
-
-  /**
-   * True if a valid NodeID was set using setMyNodeID().
-   */
-  bool hasMyNodeID() const {
-    return Address(my_node_id_).valid();
-  }
-
-  /**
-   * Sets the node ID to be returned by getMyNodeID().
-   */
-  void setMyNodeID(const NodeID& id) {
-    ld_check(Address(id).valid());
-    my_node_id_ = id;
-  }
-
-  /**
    * Returns the NodeID of the server that this config was received from.
    * Returns an invalid NodeID if the config did not originate from a server.
    */

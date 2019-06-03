@@ -205,7 +205,6 @@ void UnreleasedRecordDetectorTest::SetUp() {
       Configuration::fromJsonFile(CONFIG_PATH));
   ASSERT_NE(nullptr, config_);
   ASSERT_NE(nullptr, config_->getServerConfig());
-  config_->getServerConfig()->setMyNodeID(NodeID(0, 1));
   ld_notify("UpdateableConfig created from file %s.", CONFIG_PATH);
 
   // override node address with path to unix domain socket in temp directory
@@ -241,7 +240,6 @@ void UnreleasedRecordDetectorTest::SetUp() {
                               "",
                               "logdevice",
                               NodeID(0, 1));
-  processor_->config_->get()->serverConfig()->setMyNodeID(NodeID(0, 1));
   sharded_storage_thread_pool_->setProcessor(processor_.get());
   processor_->markShardAsNotMissingData(0);
   ld_notify("Processor created and initialized.");

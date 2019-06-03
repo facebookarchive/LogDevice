@@ -363,9 +363,8 @@ void SequencerTest::setUp() {
   // turn on byte offsets
   settings_.byte_offsets = true;
   if (with_processor_) {
-    processor_ = make_test_processor(settings_, config, &stats_);
+    processor_ = make_test_processor(settings_, config, &stats_, NodeID(1, 1));
     ASSERT_NE(nullptr, processor_.get());
-    processor_->config_->get()->serverConfig()->setMyNodeID(NodeID(1, 1));
   }
 
   updateable_config_ = config;

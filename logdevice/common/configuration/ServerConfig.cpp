@@ -393,9 +393,6 @@ std::unique_ptr<ServerConfig> ServerConfig::copy() const {
                                                   getCustomFields(),
                                                   ns_delimiter_);
   config->setVersion(version_);
-  if (hasMyNodeID()) {
-    config->setMyNodeID(my_node_id_);
-  }
   config->setServerOrigin(server_origin_);
   config->setMainConfigMetadata(main_config_metadata_);
   config->setIncludedConfigMetadata(included_config_metadata_);
@@ -436,9 +433,6 @@ std::shared_ptr<ServerConfig> ServerConfig::withNodes(NodesConfig nodes) const {
                                                   getCustomFields(),
                                                   ns_delimiter_);
   config->setVersion(version_);
-  if (hasMyNodeID()) {
-    config->setMyNodeID(my_node_id_);
-  }
   config->setMainConfigMetadata(main_config_metadata_);
   config->setIncludedConfigMetadata(included_config_metadata_);
   return config;
@@ -462,9 +456,6 @@ ServerConfig::withVersion(config_version_t version) const {
                                                   ns_delimiter_);
   config->setVersion(version);
   config->setNodesConfigurationVersion(version);
-  if (hasMyNodeID()) {
-    config->setMyNodeID(my_node_id_);
-  }
   config->setMainConfigMetadata(main_config_metadata_);
   config->setIncludedConfigMetadata(included_config_metadata_);
   return config;

@@ -201,7 +201,6 @@ TEST_F(DomainIsolationTest, ClusterExpansion) {
     auto new_config =
         config_->withNodes(ServerConfig::NodesConfig(std::move(nodes)));
     config_ = std::move(new_config);
-    config_->setMyNodeID(NodeID(my_node_idx_, 1));
   };
 
   // add node 9 to region2 dc0 but a different cluster

@@ -598,17 +598,15 @@ class Processor : public folly::enable_shared_from_this<Processor> {
   }
 
   /**
-   * True if a valid NodeID was set using setMyNodeID().
+   * True if a valid NodeID was passed to the Processor during construction.
    */
   bool hasMyNodeID() const;
 
   /**
-   * Returns the NodeID of the server that we are running.  (The NodeID needs
-   * to have been previously set via a call to setMyNodeID(). This is
-   * typically done during the processor startup.)
+   * Returns the NodeID of the server that we are running. The NodeID needs
+   * to have been previously passed to the constructor of the Processor.
    *
-   * If the NodeID is not set (e.g on clients), and enforce is true, it will
-   * cause ld_check failure.
+   * If the NodeID is not set (e.g on clients), it will cause ld_check failure.
    */
   NodeID getMyNodeID() const;
 

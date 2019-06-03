@@ -26,7 +26,6 @@
 #include "logdevice/common/test/ZookeeperClientInMemory.h"
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/SetLastCleanEpochZRQ.h"
-#include "logdevice/server/test/TestUtil.h"
 
 using namespace facebook::logdevice;
 
@@ -55,10 +54,10 @@ class ZookeeperEpochStoreTest : public ::testing::Test {
       return;
 
     config = std::make_shared<UpdateableConfig>(std::move(cfg_in));
-    auto processor_builder = TestServerProcessorBuilder{settings}
-                                 .setUpdateableConfig(config)
-                                 .setMyNodeID(NodeID(0, 1));
-    processor = std::move(processor_builder).build();
+
+    processor = make_test_processor(settings, config, nullptr, NodeID(0, 1));
+    other_node_processor =
+        make_test_processor(settings, config, nullptr, NodeID(1, 1));
 
     auto znodes = getPrefillZnodes();
 
@@ -73,10 +72,6 @@ class ZookeeperEpochStoreTest : public ::testing::Test {
         zookeeper_client_factory);
 
     dbg::assertOnData = true;
-  }
-
-  void TearDown() override {
-    shutdown_test_server(processor);
   }
 
   virtual ZookeeperClientInMemory::state_map_t getPrefillZnodes() {
@@ -105,7 +100,8 @@ class ZookeeperEpochStoreTest : public ::testing::Test {
     return map;
   }
 
-  std::shared_ptr<ServerProcessor> processor;
+  std::shared_ptr<Processor> processor;
+  std::shared_ptr<Processor> other_node_processor;
   std::shared_ptr<UpdateableConfig> config;
   std::unique_ptr<ZookeeperEpochStore> epochstore;
 
@@ -782,17 +778,17 @@ TEST_F(ZookeeperEpochStoreTest, MetaProperties) {
   for (int i = 0; i <= 1; ++i) {
     EpochStore::WriteNodeID write_node_id =
         i ? EpochStore::WriteNodeID::KEEP_LAST : EpochStore::WriteNodeID::MY;
-    if (i == 1) {
-      // On the second iteration, changing the server's NodeID. However, it
-      // should still keep writing the previous NodeID, as now the writes are
-      // being down with KEEP_LAST
-      config->getServerConfig()->setMyNodeID(NodeID(1, 1));
-    }
     for (logid_t logid : VALID_LOG_IDS) {
       std::unique_ptr<Request> rq = std::make_unique<NextEpochTestRequest>(
           epochstore.get(), logid, write_node_id);
-
-      rv = processor->postRequest(rq);
+      if (i == 1) {
+        // On the second iteration, simulate a different node update. However,
+        // it should still keep writing the previous NodeID, as now the writes
+        // are being down with KEEP_LAST
+        rv = other_node_processor->postRequest(rq);
+      } else {
+        rv = processor->postRequest(rq);
+      }
       ASSERT_EQ(0, rv);
       ++n_requests_posted;
     }
@@ -802,10 +798,6 @@ TEST_F(ZookeeperEpochStoreTest, MetaProperties) {
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
-    if (i == 1) {
-      // Setting the NodeID back so the check passes
-      config->getServerConfig()->setMyNodeID(NodeID(0, 1));
-    }
     for (logid_t logid : VALID_LOG_IDS) {
       std::unique_ptr<Request> rq = std::make_unique<CheckNodeIDRequest>(
           epochstore.get(), logid, config->get());

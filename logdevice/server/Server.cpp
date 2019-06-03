@@ -115,14 +115,6 @@ bool ServerParameters::rejectIfMyNodeIdChanged(ServerConfig& config) {
   return true;
 }
 
-bool ServerParameters::updateMyNodeId(ServerConfig& config) {
-  // If we reached this hook, this means that we must have found a valid
-  // MyNodeId, otherwise the config must have been rejected earlier.
-  ld_assert(my_node_id_.has_value());
-  config.setMyNodeID(my_node_id_.value());
-  return true;
-}
-
 bool ServerParameters::updateServerOrigin(ServerConfig& config) {
   // If we reached this hook, this means that we must have found a valid
   // MyNodeId, otherwise the config must have been rejected earlier.
@@ -165,9 +157,8 @@ bool ServerParameters::updateConfigSettings(ServerConfig& config) {
 
 bool ServerParameters::onServerConfigUpdate(ServerConfig& config) {
   // Order of the invocation matters.
-  return rejectIfMyNodeIdChanged(config) && updateMyNodeId(config) &&
-      updateServerOrigin(config) && updateConfigSettings(config) &&
-      validateNodes(config);
+  return rejectIfMyNodeIdChanged(config) && updateServerOrigin(config) &&
+      updateConfigSettings(config) && validateNodes(config);
 }
 
 bool ServerParameters::setConnectionLimits() {
