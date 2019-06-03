@@ -61,7 +61,7 @@ class TestSocketAddress(TestCase):
             ).to_thrift(),
             ThriftSocketAddress(
                 address_family=SocketAddressFamily.INET,
-                address=IPv6Address(self.ip6_addr).exploded,
+                address=IPv6Address(self.ip6_addr).compressed,
                 port=self.port,
             ),
         )
@@ -75,7 +75,7 @@ class TestSocketAddress(TestCase):
             ).to_thrift(),
             ThriftSocketAddress(
                 address_family=SocketAddressFamily.INET,
-                address=IPv4Address(self.ip4_addr).exploded,
+                address=IPv4Address(self.ip4_addr).compressed,
                 port=self.port,
             ),
         )
@@ -148,7 +148,7 @@ class TestSocketAddress(TestCase):
             SocketAddress.from_thrift(
                 ThriftSocketAddress(
                     address_family=SocketAddressFamily.INET,
-                    address=IPv6Address(self.ip6_addr).exploded,
+                    address=IPv6Address(self.ip6_addr).compressed,
                     port=self.port,
                 )
             ),
@@ -164,7 +164,7 @@ class TestSocketAddress(TestCase):
             SocketAddress.from_thrift(
                 ThriftSocketAddress(
                     address_family=SocketAddressFamily.INET,
-                    address=IPv4Address(self.ip4_addr).exploded,
+                    address=IPv4Address(self.ip4_addr).compressed,
                     port=self.port,
                 )
             ),

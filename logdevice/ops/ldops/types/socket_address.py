@@ -50,7 +50,9 @@ class SocketAddress:
         addr: str
         if self.address_family == SocketAddressFamily.INET:
             assert self.address is not None
-            addr = self.address.exploded
+            # TODO Admin Server uses string comparison for IP addresses
+            # on 'compressed' (T45290450)
+            addr = self.address.compressed
         elif self.address_family == SocketAddressFamily.UNIX:
             assert self.path is not None
             addr = self.path
