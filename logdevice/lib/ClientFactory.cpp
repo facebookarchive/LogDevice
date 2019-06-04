@@ -182,21 +182,34 @@ std::shared_ptr<Client> ClientFactory::create(std::string config_url) noexcept {
   // Init Nodes Configuration
   auto nodes_configuration_seed =
       impl_settings->getSettings()->nodes_configuration_seed_servers;
-  if (!nodes_configuration_seed.empty()) {
+  bool use_server_ncs = !nodes_configuration_seed.empty();
+  bool use_zk_ncs = impl_settings->getSettings()->admin_client_capabilities;
+  if (use_server_ncs || use_zk_ncs) {
     std::shared_ptr<ZookeeperClientFactory> zk_client_factory =
         plugin_registry->getSinglePlugin<ZookeeperClientFactory>(
             PluginType::ZOOKEEPER_CLIENT_FACTORY);
-    auto server_nodes_cfg_store =
-        configuration::nodes::NodesConfigurationStoreFactory::create(
-            *config->get(),
-            *impl_settings->getSettings().get(),
-            std::move(zk_client_factory));
+    // For regular clients, we will construct a (LD)ServerBased
+    // NodesConfigurationStore; for admin clients (e.g., emergency tooling), we
+    // will construct a Zookeeper NodesConfigurationStore.
+    auto ncs = configuration::nodes::NodesConfigurationStoreFactory::create(
+        *config->get(),
+        *impl_settings->getSettings().get(),
+        std::move(zk_client_factory));
 
     NodesConfigurationInit nodes_cfg_init(
-        std::move(server_nodes_cfg_store), impl_settings->getSettings());
-    int success = nodes_cfg_init.init(config->updateableNCMNodesConfiguration(),
-                                      plugin_registry,
-                                      nodes_configuration_seed);
+        std::move(ncs), impl_settings->getSettings());
+    bool success = false;
+    if (use_server_ncs) {
+      ld_info("Trying to obtain initial NodesConfiguration from a LogDevice "
+              "server...");
+      success = nodes_cfg_init.init(config->updateableNCMNodesConfiguration(),
+                                    plugin_registry,
+                                    nodes_configuration_seed);
+    } else if (use_zk_ncs) {
+      ld_info("Trying to obtain initial NodesConfiguration from Zookeeper...");
+      success = nodes_cfg_init.initWithoutProcessor(
+          config->updateableNCMNodesConfiguration());
+    }
     if (!success) {
       return nullptr;
     }

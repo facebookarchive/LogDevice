@@ -1859,7 +1859,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "",
        nullptr, // no validation
        "The seed string that will be used to fetch the initial nodes "
-       "configuration // It can be in the form string:<server1>,<server2>,etc. "
+       "configuration. It can be in the form string:<server1>,<server2>,etc. "
        "Or you can provide an smc tier via 'smc:<smc_tier>'. If it's empty, "
        "NCM client bootstraping is not used.",
        CLIENT,

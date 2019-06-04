@@ -92,7 +92,11 @@ std::unique_ptr<NodesConfigurationStore> NodesConfigurationStoreFactory::create(
   configuration::nodes::NodesConfigurationStoreFactory::Params ncs_params;
   const bool is_server = settings.server;
 
-  if (!settings.nodes_configuration_file_store_dir.empty()) {
+  if (!is_server && !settings.admin_client_capabilities) {
+    // for clients without admin capabilities (observer only client),
+    // use the server based store
+    ncs_params.type = NCSType::Server;
+  } else if (!settings.nodes_configuration_file_store_dir.empty()) {
     // use file based store if its path is given
     ncs_params.type = NCSType::File;
     ncs_params.file_store_root_dir =
@@ -100,17 +104,11 @@ std::unique_ptr<NodesConfigurationStore> NodesConfigurationStoreFactory::create(
     ncs_params.path = getDefaultConfigStorePath(
         NCSType::File, config.serverConfig()->getClusterName());
   } else {
-    if (!is_server && !settings.admin_client_capabilities) {
-      // for clients without admin capabilities (observer only client),
-      // use the server based store
-      ncs_params.type = NCSType::Server;
-    } else {
-      ncs_params.type = NCSType::Zookeeper;
-      ncs_params.zk_config = config.zookeeperConfig();
-      ncs_params.zk_client_factory = std::move(zk_client_factory);
-      ncs_params.path = getDefaultConfigStorePath(
-          NCSType::Zookeeper, config.serverConfig()->getClusterName());
-    }
+    ncs_params.type = NCSType::Zookeeper;
+    ncs_params.zk_config = config.zookeeperConfig();
+    ncs_params.zk_client_factory = std::move(zk_client_factory);
+    ncs_params.path = getDefaultConfigStorePath(
+        NCSType::Zookeeper, config.serverConfig()->getClusterName());
   }
   ld_assert(ncs_params.isValid());
   return create(std::move(ncs_params));

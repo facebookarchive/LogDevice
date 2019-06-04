@@ -88,6 +88,8 @@ TEST_F(NCMIntegrationTest, ToolingClientBasic) {
 
   auto current_nc = getNCAPI(admin_client1)->getConfig();
   ASSERT_TRUE(current_nc); // Initialized by the integration testing framework
+  EXPECT_NE(
+      membership::MembershipVersion::EMPTY_VERSION, current_nc->getVersion());
 
   auto nc_expected = current_nc->applyUpdate(buildSimpleUpdate());
   ASSERT_TRUE(nc_expected);
