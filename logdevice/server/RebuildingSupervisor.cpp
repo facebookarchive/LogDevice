@@ -19,7 +19,7 @@
 #include "logdevice/common/ShardAuthoritativeStatusMap.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/commandline_util_chrono.h"
-#include "logdevice/common/configuration/ServerConfig.h"
+#include "logdevice/common/configuration/nodes/NodesConfiguration.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/event_log/EventLogRecord.h"
 #include "logdevice/common/stats/Stats.h"
@@ -61,7 +61,7 @@ void RebuildingSupervisor::start() {
 void RebuildingSupervisor::init() {
   ld_info("Starting Rebuilding Supervisor");
   auto w = Worker::onThisThread();
-  auto config = w->getServerConfig();
+  const auto& nodes_configuration = w->getNodesConfiguration();
 
   myNodeId_ = w->processor_->getMyNodeID();
 
@@ -76,8 +76,8 @@ void RebuildingSupervisor::init() {
   };
   clusterStateSubscription_ = cs->subscribeToUpdates(cb);
 
-  for (const auto& node : config->getNodes()) {
-    auto nid = node.first;
+  for (const auto& kv : *nodes_configuration->getServiceDiscovery()) {
+    auto nid = kv.first;
     if (!cs->isNodeAlive(nid) && nid != myNodeId_.index()) {
       addForRebuilding(nid);
     }
@@ -127,22 +127,24 @@ void RebuildingSupervisor::addForRebuilding(
     node_index_t node_id,
     folly::Optional<uint32_t> shard_idx) {
   auto w = Worker::onThisThread();
-  auto config = w->getServerConfig();
-  auto node = config->getNode(node_id);
+  const auto& nodes_configuration = w->getNodesConfiguration();
 
-  if (!node) {
+  if (!nodes_configuration->isNodeInServiceDiscoveryConfig(node_id)) {
     RATELIMIT_INFO(std::chrono::seconds(1),
                    1,
-                   "Not triggering rebuilding of N%d: not in the config",
+                   "Not triggering rebuilding of N%d: not in the service "
+                   "discovery config.",
                    node_id);
     WORKER_STAT_INCR(node_rebuilding_not_triggered_notinconfig);
     return;
   }
 
-  if (!node->isReadableStorageNode()) {
+  if (!nodes_configuration->getStorageMembership()->hasShardShouldReadFrom(
+          node_id)) {
     RATELIMIT_INFO(std::chrono::seconds(1),
                    1,
-                   "Not triggering rebuilding of N%d: not a storage node",
+                   "Not triggering rebuilding of N%d: not a storage node or "
+                   "all shards are disabled",
                    node_id);
     WORKER_STAT_INCR(node_rebuilding_not_triggered_notstorage);
     return;
@@ -172,7 +174,8 @@ void RebuildingSupervisor::addForRebuilding(
     } else {
       timeout = rebuildingSettings_->self_initiated_rebuilding_grace_period;
       trigger.expiry_ = now + timeout;
-      for (int shard = 0; shard < node->getNumShards(); ++shard) {
+      for (int shard = 0; shard < nodes_configuration->getNumShards(node_id);
+           ++shard) {
         trigger.shards_.insert(shard);
       }
     }
@@ -239,13 +242,17 @@ int RebuildingSupervisor::myIndexInLeaderChain(node_index_t node_id) {
   // storage nodes with index less than myNodeId_.
   // Sequencer-only nodes don't run RebuildingSupervisor.
   auto w = Worker::onThisThread();
-  auto config = w->getServerConfig();
+  const auto& nodes_configuration = w->getNodesConfiguration();
   auto cs = Worker::getClusterState();
   ld_check(cs);
   int res = 0;
-  for (const auto& node : config->getNodes()) {
-    if (node.first < myNodeId_.index() && node.second.isReadableStorageNode() &&
-        cs->isNodeAlive(node.first) && node.first != node_id) {
+
+  for (const auto& kv : *nodes_configuration->getServiceDiscovery()) {
+    auto node_index = kv.first;
+    if (node_index < myNodeId_.index() &&
+        nodes_configuration->getStorageMembership()->hasShardShouldReadFrom(
+            node_index) &&
+        cs->isNodeAlive(node_index) && node_index != node_id) {
       ++res;
     }
   }
@@ -291,10 +298,10 @@ void RebuildingSupervisor::scheduleNextRun(
     }
   }
 
-  // if we are EXECUTING, we shouldn't activate the timer, as we are waiting to
-  // complete writing an event log record and will pick up the next available
-  // trigger automatically. This ensures that we write only one event log
-  // record at a time.
+  // if we are EXECUTING, we shouldn't activate the timer, as we are waiting
+  // to complete writing an event log record and will pick up the next
+  // available trigger automatically. This ensures that we write only one
+  // event log record at a time.
   if (state_ != State::EXECUTING) {
     ld_debug("Scheduling next run to execute in approximately %.0fs",
              std::nearbyint(timeout.value().count() / 1000000.0));
@@ -509,21 +516,24 @@ RebuildingSupervisor::Decision RebuildingSupervisor::evaluateTrigger(
 bool RebuildingSupervisor::canTriggerNodeRebuilding(
     RebuildingSupervisor::RebuildingTrigger& trigger) {
   auto w = Worker::onThisThread();
-  auto config = w->getServerConfig();
-  auto node = config->getNode(trigger.node_id_);
-  if (!node) {
+  const auto& nodes_configuration = w->getNodesConfiguration();
+
+  if (!nodes_configuration->isNodeInServiceDiscoveryConfig(trigger.node_id_)) {
     RATELIMIT_INFO(std::chrono::seconds(1),
                    1,
-                   "Not triggering rebuilding of N%d: not in the config",
+                   "Not triggering rebuilding of N%d: not in the service "
+                   "discovery config.",
                    trigger.node_id_);
     WORKER_STAT_INCR(node_rebuilding_not_triggered_notinconfig);
     return false;
   }
 
-  if (!node->isReadableStorageNode()) {
+  if (!nodes_configuration->getStorageMembership()->hasShardShouldReadFrom(
+          trigger.node_id_)) {
     RATELIMIT_INFO(std::chrono::seconds(1),
                    1,
-                   "Not triggering rebuilding of N%d: not a storage node",
+                   "Not triggering rebuilding of N%d: not a storage node or "
+                   "all shards are disabled",
                    trigger.node_id_);
     WORKER_STAT_INCR(node_rebuilding_not_triggered_notstorage);
     return false;
@@ -725,9 +735,9 @@ bool RebuildingSupervisor::canTriggerShardRebuilding(
   if (set != nullptr) {
     trigger.base_version = set->getLastUpdate();
     for (auto it = trigger.shards_.begin(); it != trigger.shards_.end();) {
-      // check whether rebuilding is running or has run, by looking at the shard
-      // status. remove shards that are not fully authoritative, as we won't
-      // trigger rebuilding for those.
+      // check whether rebuilding is running or has run, by looking at the
+      // shard status. remove shards that are not fully authoritative, as we
+      // won't trigger rebuilding for those.
       std::vector<node_index_t> unused;
       auto status =
           set->getShardAuthoritativeStatus(trigger.node_id_, *it, unused);
@@ -851,5 +861,4 @@ RebuildingSupervisor::RebuildingTriggerQueue::getById(
 size_t RebuildingSupervisor::RebuildingTriggerQueue::size() const {
   return queue_.size();
 }
-
 }} // namespace facebook::logdevice
