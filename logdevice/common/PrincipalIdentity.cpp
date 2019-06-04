@@ -12,6 +12,10 @@
 namespace facebook { namespace logdevice {
 
 constexpr const char* PrincipalIdentity::IDENTITY_USER;
+constexpr const char* PrincipalIdentity::IDENTITY_SERVICE;
+constexpr const char* PrincipalIdentity::IDENTITY_TIER;
+constexpr const char* PrincipalIdentity::IDENTITY_MACHINE;
+constexpr const char* PrincipalIdentity::IDENTITY_JOB;
 
 PrincipalIdentity::PrincipalIdentity(const std::string& type) : type(type) {}
 
@@ -36,4 +40,11 @@ std::string PrincipalIdentity::toString() const {
   }
   return oss.str();
 }
+
+bool PrincipalIdentity::isValidIdentityType(const std::string& idType) {
+  return idType == IDENTITY_USER || idType == IDENTITY_SERVICE ||
+      idType == IDENTITY_TIER || idType == IDENTITY_MACHINE ||
+      idType == IDENTITY_JOB;
+}
+
 }} // namespace facebook::logdevice

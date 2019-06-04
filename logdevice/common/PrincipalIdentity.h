@@ -14,6 +14,11 @@ namespace facebook { namespace logdevice {
 
 struct PrincipalIdentity {
   static constexpr const char* IDENTITY_USER = "USER";
+  static constexpr const char* IDENTITY_SERVICE = "SERVICE_IDENTITY";
+  static constexpr const char* IDENTITY_TIER = "TIER";
+  static constexpr const char* IDENTITY_MACHINE = "MACHINE";
+  static constexpr const char* IDENTITY_JOB = "JOB";
+
   /**
    * Principal type, one of Principal::well_known_principals
    */
@@ -47,6 +52,8 @@ struct PrincipalIdentity {
       const std::vector<std::pair<std::string, std::string>>& identities);
 
   std::string toString() const;
+
+  static bool isValidIdentityType(const std::string& idType);
 };
 
 }} // namespace facebook::logdevice

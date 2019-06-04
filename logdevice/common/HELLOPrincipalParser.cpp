@@ -9,6 +9,7 @@
 
 #include <cstring>
 
+#include "folly/String.h"
 #include "logdevice/common/PrincipalIdentity.h"
 #include "logdevice/common/checks.h"
 
@@ -19,11 +20,21 @@ PrincipalIdentity HELLOPrincipalParser::getPrincipal(const void* data,
   const char* credentials = reinterpret_cast<const char*>(data);
   ld_check(data != nullptr);
   size_t str_size = strnlen(credentials, size);
+  if (str_size == 0) {
+    return PrincipalIdentity(Principal::UNAUTHENTICATED);
+  }
 
-  return str_size == 0
-      ? PrincipalIdentity(Principal::UNAUTHENTICATED)
-      : PrincipalIdentity(Principal::AUTHENTICATED,
-                          std::make_pair(PrincipalIdentity::IDENTITY_USER,
-                                         std::string(credentials, str_size)));
+  std::string creds(credentials, str_size);
+  std::string idType, identity;
+  if (folly::split(':', creds, idType, identity) &&
+      PrincipalIdentity::isValidIdentityType(idType)) {
+    return PrincipalIdentity(
+        Principal::AUTHENTICATED,
+        std::make_pair(std::move(idType), std::move(identity)));
+  }
+
+  return PrincipalIdentity(
+      Principal::AUTHENTICATED,
+      std::make_pair(PrincipalIdentity::IDENTITY_USER, std::move(creds)));
 }
 }} // namespace facebook::logdevice
