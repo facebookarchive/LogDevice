@@ -51,8 +51,9 @@ class RequestPump : public EventLoopTaskQueue {
    * Can be called from any thread.
    *
    * @return 0 on success, -1 on failures setting `err' to one of:
-   *     NOBUFS     too many requests are already queued
-   *     SHUTDOWN   shutdown() was already called
+   *     INVALID_PARAM  req is nullptr
+   *     NOBUFS         too many requests are already queued
+   *     SHUTDOWN       shutdown() was already called
    */
   int tryPost(std::unique_ptr<Request>& req);
 
@@ -63,9 +64,17 @@ class RequestPump : public EventLoopTaskQueue {
    * stuffing it into the queue is usually more efficient.
    *
    * @return 0 on success, -1 on failures setting `err' to one of:
+   *     INVALID_PARAM  req is nullptr
    *     SHUTDOWN   shutdown() was already called
    */
   int forcePost(std::unique_ptr<Request>& req);
+
+  /**
+   * Runs a Request on the EventLoop, waiting for it to finish.
+   *
+   * For parameters and return values, see tryPost().
+   */
+  int blockingRequest(std::unique_ptr<Request>& req);
 
   /**
    * Change number of requests to process per event loop iteration.
@@ -77,10 +86,12 @@ class RequestPump : public EventLoopTaskQueue {
   }
 
  private:
+  bool check(const std::unique_ptr<Request>& req, bool force);
+  int post(std::unique_ptr<Request>& req);
   /**
    * Called by enqueued folly function on this instance to process a request.
    */
-  static void processRequest(std::unique_ptr<Request>& rq);
+  static void processRequest(std::unique_ptr<Request>& req);
 };
 
 }} // namespace facebook::logdevice

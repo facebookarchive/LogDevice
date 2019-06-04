@@ -202,7 +202,7 @@ TEST(MessagingTest, DISABLED_RequestPipeOverflow) {
 
   for (i = 0; i < MAX_ITERATIONS; i++) {
     std::unique_ptr<Request> rq = std::make_unique<SlowRequest>();
-    int rv = h->postRequest(rq);
+    int rv = h->getRequestPump().tryPost(rq);
     if (rv != 0) {
       EXPECT_EQ(err, E::NOBUFS);
       break;

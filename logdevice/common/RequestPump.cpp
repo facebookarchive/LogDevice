@@ -15,6 +15,7 @@
 #include <folly/container/Array.h>
 
 #include "logdevice/common/Request.h"
+#include "logdevice/common/Semaphore.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/stats/ServerHistograms.h"
 #include "logdevice/common/stats/Stats.h"
@@ -34,67 +35,101 @@ RequestPump::RequestPump(struct event_base* base,
 RequestPump::~RequestPump() {}
 
 int RequestPump::tryPost(std::unique_ptr<Request>& req) {
-  ld_check(req);
-  if (isFull()) {
-    err = E::NOBUFS;
+  if (!check(req, false)) {
     return -1;
   }
-  return forcePost(req);
+  return post(req);
 }
 
 int RequestPump::forcePost(std::unique_ptr<Request>& req) {
-  ld_check(req);
+  if (!check(req, true)) {
+    return -1;
+  }
+  return post(req);
+}
+
+int RequestPump::blockingRequest(std::unique_ptr<Request>& req) {
+  if (!check(req, false)) {
+    return -1;
+  }
+  Semaphore sem;
+  req->setClientBlockedSemaphore(&sem);
+
+  int rv = post(req);
+  if (rv != 0) {
+    req->setClientBlockedSemaphore(nullptr);
+    return rv;
+  }
+  // Block until the Request has completed
+  sem.wait();
+  return 0;
+}
+
+bool RequestPump::check(const std::unique_ptr<Request>& req, bool force) {
+  if (!req) {
+    err = E::INVALID_PARAM;
+    return false;
+  }
+  if (!force && isFull()) {
+    err = E::NOBUFS;
+    return false;
+  }
+  return true;
+}
+
+int RequestPump::post(std::unique_ptr<Request>& req) {
   req->enqueue_time_ = std::chrono::steady_clock::now();
   // Convert to folly function so that the request can be added
   // EventLoopTaskQueue.
-  Func func = [rq = std::move(req)]() mutable {
-    RequestPump::processRequest(rq);
+  auto priority = req->getExecutorPriority();
+  Func func = [req = std::move(req)]() mutable {
+    RequestPump::processRequest(req);
   };
-  int rv = add(std::move(func));
+  int rv = addWithPriority(std::move(func), priority);
   ld_check(!req);
   return rv;
 }
 
-void RequestPump::processRequest(std::unique_ptr<Request>& rq) {
+void RequestPump::processRequest(std::unique_ptr<Request>& req) {
   using namespace std::chrono;
 
   bool on_worker_thread = ThreadID::isWorker();
 
-  ld_check(rq); // otherwise why did the semaphore wake us?
-  if (UNLIKELY(!rq)) {
+  ld_check(req); // otherwise why did the semaphore wake us?
+  if (UNLIKELY(!req)) {
     RATELIMIT_CRITICAL(
         1s, 1, "INTERNAL ERROR: got a NULL request pointer from RequestPump");
     return;
   }
 
-  RunContext run_context = rq->getRunContext();
+  RunContext run_context = req->getRunContext();
 
   if (on_worker_thread) {
     auto queue_time{
-        duration_cast<microseconds>(steady_clock::now() - rq->enqueue_time_)};
+        duration_cast<microseconds>(steady_clock::now() - req->enqueue_time_)};
     HISTOGRAM_ADD(Worker::stats(), requests_queue_latency, queue_time.count());
     if (queue_time > 20ms) {
       RATELIMIT_WARNING(5s,
                         10,
                         "Request queued for %g msec: %s (id: %lu)",
                         queue_time.count() / 1000.0,
-                        rq->describe().c_str(),
-                        rq->id_.val());
+                        req->describe().c_str(),
+                        req->id_.val());
     }
 
     Worker::onStartedRunning(run_context);
   }
 
-  // rq should not be accessed after execute, as it may have been deleted.
-  Request::Execution status = rq->execute();
+  // req should not be accessed after execute, as it may have been deleted.
+  Request::Execution status = req->execute();
 
   switch (status) {
     case Request::Execution::COMPLETE:
       // Count destructor towards request's execution time.
-      rq.reset();
+      req.reset();
       break;
     case Request::Execution::CONTINUE:
-      rq.release();
+      req.release();
       break;
   }
 

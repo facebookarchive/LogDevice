@@ -18,8 +18,8 @@ int EventLoopHandle::runInEventThreadNonBlocking(std::function<void()> func,
                                WorkerType::GENERAL,
                                RequestType::MISC,
                                std::move(func));
-
-  return force ? forcePostRequest(req) : postRequest(req);
+  auto& rp = getRequestPump();
+  return force ? rp.forcePost(req) : rp.tryPost(req);
 }
 
 int EventLoopHandle::runInEventThreadBlocking(std::function<void()> func,
@@ -32,12 +32,12 @@ int EventLoopHandle::runInEventThreadBlocking(std::function<void()> func,
                                  RequestType::MISC,
                                  std::move(func));
     req->setClientBlockedSemaphore(&sem);
-
-    rv = force ? forcePostRequest(req) : postRequest(req);
+    auto& rp = getRequestPump();
+    rv = force ? rp.forcePost(req) : rp.tryPost(req);
   }
 
   // Block until the Request has completed.
-  // If postRequest() failed, Request destructor posted to the semaphore.
+  // If tryPost() failed, Request destructor posted to the semaphore.
   sem.wait();
   return rv;
 }

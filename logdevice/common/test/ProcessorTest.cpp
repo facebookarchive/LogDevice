@@ -200,24 +200,24 @@ TEST_F(ProcessorTest, DISABLED_UseEventLoopDirectly) {
       sem0.post();
       sem1.wait();
     });
-    ASSERT_EQ(0, handle.postRequest(rq));
+    ASSERT_EQ(0, handle.getRequestPump().tryPost(rq));
   }
   // Post a fast request.
   {
     std::unique_ptr<Request> rq = std::make_unique<Req>([&] { sem2.post(); });
-    ASSERT_EQ(0, handle.postRequest(rq));
+    ASSERT_EQ(0, handle.getRequestPump().tryPost(rq));
   }
   // Wait for the slow request to start.
   sem0.wait();
   // Post another fast request.
   {
     std::unique_ptr<Request> rq = std::make_unique<Req>([&] { sem2.post(); });
-    ASSERT_EQ(0, handle.postRequest(rq));
+    ASSERT_EQ(0, handle.getRequestPump().tryPost(rq));
   }
   // Now the queue should be full, and the next request should fail to post.
   {
     std::unique_ptr<Request> rq = std::make_unique<Req>([&] { ADD_FAILURE(); });
-    int rv = handle.postRequest(rq);
+    int rv = handle.getRequestPump().tryPost(rq);
     EXPECT_EQ(-1, rv);
     EXPECT_EQ(E::NOBUFS, err);
   }
@@ -234,7 +234,7 @@ TEST_F(ProcessorTest, DISABLED_UseEventLoopDirectly) {
       timer.assign(handle.get()->getEventBase(), [&] { sem2.post(); });
       timer.activate(std::chrono::milliseconds(1));
     });
-    ASSERT_EQ(0, handle.blockingRequest(rq));
+    ASSERT_EQ(0, handle.getRequestPump().blockingRequest(rq));
   }
   sem2.wait();
   EXPECT_EQ(0, sem2.value());

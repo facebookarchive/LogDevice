@@ -110,63 +110,6 @@ class EventLoopHandle {
   }
 
   /**
-   * Schedule a Request to run on the EventLoop controlled by this Handle
-   * This method is thread safe.
-   *
-   * @param rq  request to execute. Must not be nullptr. On success the
-   *            function takes ownership of the object (and passes it on
-   *            to the EventLoop). On failure ownership remains with the
-   *            caller.
-   *
-   * @return 0 if request was successfully passed to the EventLoop thread for
-   *           execution, -1 on failure. err is set to
-   *     INVALID_PARAM  if rq is invalid
-   *     NOBUFS         if too many requests are pending to be delivered to
-   *                    the event loop
-   *     SHUTDOWN       the EventLoop is shutting down (a shutdown() method
-   *                    has been executed on this handle object)
-   */
-  int postRequest(std::unique_ptr<Request>& rq) {
-    if (!rq) {
-      err = E::INVALID_PARAM;
-      return -1;
-    }
-    return request_pump_->tryPost(rq);
-  }
-
-  /**
-   * Like postRequest() above but posts even if the request pump is over
-   * capacity.  (It can still fail with E::SHUTDOWN etc.)
-   */
-  int forcePostRequest(std::unique_ptr<Request>& rq) {
-    if (!rq) {
-      err = E::INVALID_PARAM;
-      return -1;
-    }
-    return request_pump_->forcePost(rq);
-  }
-
-  /**
-   * Runs a Request on the EventLoop, waiting for it to finish.
-   *
-   * For parameters and return values, see postRequest().
-   */
-  int blockingRequest(std::unique_ptr<Request>& rq) {
-    Semaphore sem;
-    rq->setClientBlockedSemaphore(&sem);
-
-    int rv = postRequest(rq);
-    if (rv != 0) {
-      rq->setClientBlockedSemaphore(nullptr);
-      return rv;
-    }
-
-    // Block until the Request has completed
-    sem.wait();
-    return 0;
-  }
-
-  /**
    * A convenience wrapper around postRequest()/forcePostRequest().
    * Enqueues the function to run on the next event loop iteration.
    * If force = true, requests posting can only fail during shutdown.
