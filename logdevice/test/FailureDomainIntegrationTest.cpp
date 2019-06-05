@@ -85,6 +85,7 @@ TEST_F(FailureDomainIntegrationTest, TolerateRegionFailure) {
           .eventLogMode(
               IntegrationTestUtils::ClusterFactory::EventLogMode::NONE)
           .setConfigLogAttributes(log_attrs)
+          .setMaintenanceLogAttributes(log_attrs)
           .create(nodes.size());
 
   cluster->waitForMetaDataLogWrites();

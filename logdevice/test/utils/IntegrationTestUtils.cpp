@@ -250,6 +250,13 @@ ClusterFactory::setEventLogDeltaAttributes(logsconfig::LogAttributes attrs) {
   return *this;
 }
 
+ClusterFactory&
+ClusterFactory::setMaintenanceLogAttributes(logsconfig::LogAttributes attrs) {
+  setInternalLogAttributes("maintenance_log_deltas", attrs);
+  setInternalLogAttributes("maintenance_log_snapshots", attrs);
+  return *this;
+}
+
 ClusterFactory& ClusterFactory::enableLogsConfigManager() {
   enable_logsconfig_manager_ = true;
   return *this;
@@ -398,6 +405,18 @@ std::unique_ptr<Cluster> ClusterFactory::create(int nnodes) {
   if (!internal_logs_.logExists(
           configuration::InternalLogs::CONFIG_LOG_SNAPSHOTS)) {
     setInternalLogAttributes("config_log_snapshots", internal_log_attrs);
+  }
+
+  // configure the delta and snapshot logs for Maintenance log
+  // if the user did not do so already
+  if (!internal_logs_.logExists(
+          configuration::InternalLogs::MAINTENANCE_LOG_DELTAS)) {
+    setInternalLogAttributes("maintenance_log_deltas", internal_log_attrs);
+  }
+
+  if (!internal_logs_.logExists(
+          configuration::InternalLogs::MAINTENANCE_LOG_SNAPSHOTS)) {
+    setInternalLogAttributes("maintenance_log_snapshots", internal_log_attrs);
   }
 
   // Have all connections assigned to the ROOT scope and use the same
@@ -638,6 +657,7 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
   cluster->rocksdb_type_ = rocksdb_type_;
   cluster->hash_based_sequencer_assignment_ = hash_based_sequencer_assignment_;
   cluster->setNodeReplacementCounters(std::move(replacement_counters));
+  cluster->maintenance_manager_node_ = maintenance_manager_node_;
 
   if (cluster->rocksdb_type_ == RocksDBType::SINGLE) {
     cluster->setParam(
@@ -1045,6 +1065,8 @@ ParamMap Cluster::commandArgsForNode(node_index_t i, const Node& node) const {
         {"--ignore-cluster-marker", ParamValue{"true"}},
         {"--rocksdb-auto-create-shards", ParamValue{"true"}},
         {"--num-workers", ParamValue{"5"}},
+        {"--enable-maintenance-manager",
+          ParamValue{i == maintenance_manager_node_?"true" : "false"}},
       }
     },
     { ParamScope::SEQUENCER,

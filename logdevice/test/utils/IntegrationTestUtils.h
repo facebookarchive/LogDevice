@@ -227,6 +227,11 @@ class ClusterFactory {
   ClusterFactory& setEventLogDeltaAttributes(logsconfig::LogAttributes attrs);
 
   /**
+   * Set the attributes for the internal maintenance log
+   */
+  ClusterFactory& setMaintenanceLogAttributes(logsconfig::LogAttributes attrs);
+
+  /**
    * Enables LogsConfigManager for clusters. Strongly recommend also calling
    * useHashBasedSequencerAssignment(), especially if creating log groups or
    * directories after startup, since that will:
@@ -302,6 +307,15 @@ class ClusterFactory {
    */
   ClusterFactory& setRocksDBType(RocksDBType db_type) {
     rocksdb_type_ = db_type;
+    return *this;
+  }
+
+  /**
+   * Sets the node that is designated to run
+   * maintenance manager
+   */
+  ClusterFactory& runMaintenanceManagerOn(node_index_t n) {
+    maintenance_manager_node_ = n;
     return *this;
   }
 
@@ -645,6 +659,9 @@ class ClusterFactory {
   // If set to true, logs are assumed to be spread across all sequencer nodes.
   // Otherwise, all appends are sent to the first node in the cluster.
   bool hash_based_sequencer_assignment_{false};
+
+  // The node designated to run a instance of MaintenanceManager
+  node_index_t maintenance_manager_node_ = -1;
 
   // Type of rocksdb local log store
   RocksDBType rocksdb_type_ = RocksDBType::PARTITIONED;
@@ -1192,6 +1209,9 @@ class Cluster {
 
   // type of rocksdb local log store
   RocksDBType rocksdb_type_ = RocksDBType::PARTITIONED;
+
+  // The node designated to run a instance of MaintenanceManager
+  node_index_t maintenance_manager_node_ = -1;
 
   // See ClusterFactory::hash_based_sequencer_assignment_
   bool hash_based_sequencer_assignment_{false};

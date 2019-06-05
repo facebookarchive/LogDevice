@@ -133,6 +133,14 @@ void NodeSetTest::init() {
   updateMetaDataInEpochStore(configuration::InternalLogs::CONFIG_LOG_SNAPSHOTS);
   markMetaDataWrittenInEpochStore(
       configuration::InternalLogs::CONFIG_LOG_SNAPSHOTS);
+  updateMetaDataInEpochStore(
+      configuration::InternalLogs::MAINTENANCE_LOG_DELTAS);
+  markMetaDataWrittenInEpochStore(
+      configuration::InternalLogs::MAINTENANCE_LOG_DELTAS);
+  updateMetaDataInEpochStore(
+      configuration::InternalLogs::MAINTENANCE_LOG_SNAPSHOTS);
+  markMetaDataWrittenInEpochStore(
+      configuration::InternalLogs::MAINTENANCE_LOG_SNAPSHOTS);
   updateMetaDataInEpochStore();
 }
 
@@ -893,6 +901,14 @@ TEST_F(NodeSetTest, EpochMetaDataCache) {
   updateMetaDataInEpochStore(configuration::InternalLogs::CONFIG_LOG_SNAPSHOTS);
   markMetaDataWrittenInEpochStore(
       configuration::InternalLogs::CONFIG_LOG_SNAPSHOTS);
+  updateMetaDataInEpochStore(
+      configuration::InternalLogs::MAINTENANCE_LOG_SNAPSHOTS);
+  markMetaDataWrittenInEpochStore(
+      configuration::InternalLogs::MAINTENANCE_LOG_SNAPSHOTS);
+  updateMetaDataInEpochStore(
+      configuration::InternalLogs::MAINTENANCE_LOG_DELTAS);
+  markMetaDataWrittenInEpochStore(
+      configuration::InternalLogs::MAINTENANCE_LOG_DELTAS);
   updateMetaDataInEpochStore();
 
   ld_info("Starting cluster.");

@@ -188,6 +188,16 @@ class NonAuthoritativeRebuildingTest
           std::make_shared<SimpleEpochMetaDataUpdater>(provisioner),
           false /* write_metadata_logs */);
       ASSERT_EQ(0, rv);
+      rv = meta_provisioner->provisionEpochMetaDataForLog(
+          configuration::InternalLogs::MAINTENANCE_LOG_SNAPSHOTS,
+          std::make_shared<SimpleEpochMetaDataUpdater>(provisioner),
+          false /* write_metadata_logs */);
+      ASSERT_EQ(0, rv);
+      rv = meta_provisioner->provisionEpochMetaDataForLog(
+          configuration::InternalLogs::MAINTENANCE_LOG_DELTAS,
+          std::make_shared<SimpleEpochMetaDataUpdater>(provisioner),
+          false /* write_metadata_logs */);
+      ASSERT_EQ(0, rv);
     }
 
     cluster_->start();

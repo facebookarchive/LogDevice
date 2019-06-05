@@ -431,7 +431,7 @@ TEST_F(LogsConfigIntegrationTest, ClientTest) {
   ClientImpl* raw_client = static_cast<ClientImpl*>(client.get());
   auto updateable_config = raw_client->getConfig();
   auto local_config1 = updateable_config->getLocalLogsConfig();
-  ASSERT_EQ(3, local_config1->size());
+  ASSERT_EQ(5, local_config1->size());
   ASSERT_NE(nullptr,
             client->makeDirectorySync(
                 "/my_logs",
@@ -444,7 +444,7 @@ TEST_F(LogsConfigIntegrationTest, ClientTest) {
 
   ASSERT_TRUE(client->syncLogsConfigVersion(lg->version()));
   auto local_config2 = updateable_config->getLocalLogsConfig();
-  ASSERT_EQ(23, local_config2->size());
+  ASSERT_EQ(25, local_config2->size());
 }
 
 TEST_F(LogsConfigIntegrationTest, notifyOnLogsConfigVersionTest) {
@@ -459,7 +459,7 @@ TEST_F(LogsConfigIntegrationTest, notifyOnLogsConfigVersionTest) {
   auto updateable_config = raw_client->getConfig();
   // give it a couple of seconds to recover
   auto local_config1 = updateable_config->getLocalLogsConfig();
-  ASSERT_EQ(3, local_config1->size());
+  ASSERT_EQ(5, local_config1->size());
   for (int i = 0; i < 100; i++) {
     std::string prefix("my_logs");
     auto dir = client->makeDirectorySync(

@@ -333,6 +333,14 @@ void RecoveryTest::init() {
   config_attrs.set_syncedCopies(0);
   config_attrs.set_syncReplicationScope(sync_replication_scope_);
 
+  logsconfig::LogAttributes maint_attrs;
+  maint_attrs.set_maxWritesInFlight(256);
+  maint_attrs.set_singleWriter(false);
+  maint_attrs.set_replicationFactor(std::min(nodes_ - (nodes_ > 1), 3ul));
+  maint_attrs.set_extraCopies(0);
+  maint_attrs.set_syncedCopies(0);
+  maint_attrs.set_syncReplicationScope(sync_replication_scope_);
+
   auto factory = IntegrationTestUtils::ClusterFactory()
                      // use logsdb to support record cache persistence
                      .enableMessageErrorInjection()
@@ -340,6 +348,7 @@ void RecoveryTest::init() {
                      .setLogAttributes(log_attrs)
                      .setEventLogDeltaAttributes(event_log_attrs)
                      .setConfigLogAttributes(config_attrs)
+                     .setMaintenanceLogAttributes(maint_attrs)
                      .deferStart()
                      .setParam("--byte-offsets")
                      // we'll be using fake unrealistic timestamps;
@@ -689,6 +698,16 @@ void RecoveryTest::provisionInternalLogs(StorageSet storage_set,
   ASSERT_EQ(0, rv);
   rv = meta_provisioner->provisionEpochMetaDataForLog(
       configuration::InternalLogs::CONFIG_LOG_SNAPSHOTS,
+      std::make_shared<SimpleEpochMetaDataUpdater>(provisioner),
+      true /* write_metadata_logs */);
+  ASSERT_EQ(0, rv);
+  rv = meta_provisioner->provisionEpochMetaDataForLog(
+      configuration::InternalLogs::MAINTENANCE_LOG_SNAPSHOTS,
+      std::make_shared<SimpleEpochMetaDataUpdater>(provisioner),
+      true /* write_metadata_logs */);
+  ASSERT_EQ(0, rv);
+  rv = meta_provisioner->provisionEpochMetaDataForLog(
+      configuration::InternalLogs::MAINTENANCE_LOG_DELTAS,
       std::make_shared<SimpleEpochMetaDataUpdater>(provisioner),
       true /* write_metadata_logs */);
   ASSERT_EQ(0, rv);
@@ -2198,6 +2217,16 @@ TEST_P(RecoveryTest, AuthoritativeRecoveryAndPurgingWithRNodesEmpty) {
         std::make_shared<SimpleEpochMetaDataUpdater>(provisioner),
         true /* write_metadata_logs */);
     ASSERT_EQ(0, rv);
+    rv = meta_provisioner->provisionEpochMetaDataForLog(
+        configuration::InternalLogs::MAINTENANCE_LOG_SNAPSHOTS,
+        std::make_shared<SimpleEpochMetaDataUpdater>(provisioner),
+        true /* write_metadata_logs */);
+    ASSERT_EQ(0, rv);
+    rv = meta_provisioner->provisionEpochMetaDataForLog(
+        configuration::InternalLogs::MAINTENANCE_LOG_DELTAS,
+        std::make_shared<SimpleEpochMetaDataUpdater>(provisioner),
+        true /* write_metadata_logs */);
+    ASSERT_EQ(0, rv);
   }
 
   // Start the cluster a first time without nodes 8, 9 and start their
@@ -2389,6 +2418,16 @@ TEST_P(RecoveryTest, RecoveryCannotFullyReplicate) {
     ASSERT_EQ(0, rv);
     rv = meta_provisioner->provisionEpochMetaDataForLog(
         configuration::InternalLogs::CONFIG_LOG_SNAPSHOTS,
+        std::make_shared<SimpleEpochMetaDataUpdater>(provisioner),
+        true /* write_metadata_logs */);
+    ASSERT_EQ(0, rv);
+    rv = meta_provisioner->provisionEpochMetaDataForLog(
+        configuration::InternalLogs::MAINTENANCE_LOG_SNAPSHOTS,
+        std::make_shared<SimpleEpochMetaDataUpdater>(provisioner),
+        true /* write_metadata_logs */);
+    ASSERT_EQ(0, rv);
+    rv = meta_provisioner->provisionEpochMetaDataForLog(
+        configuration::InternalLogs::MAINTENANCE_LOG_DELTAS,
         std::make_shared<SimpleEpochMetaDataUpdater>(provisioner),
         true /* write_metadata_logs */);
     ASSERT_EQ(0, rv);
@@ -3217,6 +3256,16 @@ TEST_P(RecoveryTest, PurgingAfterSkippedNonAuthoritativeRecovery) {
         std::make_shared<SimpleEpochMetaDataUpdater>(provisioner),
         true);
     ASSERT_EQ(0, rv);
+    rv = meta_provisioner->provisionEpochMetaDataForLog(
+        configuration::InternalLogs::MAINTENANCE_LOG_SNAPSHOTS,
+        std::make_shared<SimpleEpochMetaDataUpdater>(provisioner),
+        true /* write_metadata_logs */);
+    ASSERT_EQ(0, rv);
+    rv = meta_provisioner->provisionEpochMetaDataForLog(
+        configuration::InternalLogs::MAINTENANCE_LOG_DELTAS,
+        std::make_shared<SimpleEpochMetaDataUpdater>(provisioner),
+        true /* write_metadata_logs */);
+    ASSERT_EQ(0, rv);
   }
 
   const copyset_t copyset12 = {N1, N2};
@@ -3830,6 +3879,16 @@ TEST_P(RecoveryTest, AuthoritativeRecoveryWithDrainingNodes) {
         configuration::InternalLogs::CONFIG_LOG_SNAPSHOTS,
         std::make_shared<SimpleEpochMetaDataUpdater>(provisioner),
         true);
+    ASSERT_EQ(0, rv);
+    rv = meta_provisioner->provisionEpochMetaDataForLog(
+        configuration::InternalLogs::MAINTENANCE_LOG_SNAPSHOTS,
+        std::make_shared<SimpleEpochMetaDataUpdater>(provisioner),
+        true /* write_metadata_logs */);
+    ASSERT_EQ(0, rv);
+    rv = meta_provisioner->provisionEpochMetaDataForLog(
+        configuration::InternalLogs::MAINTENANCE_LOG_DELTAS,
+        std::make_shared<SimpleEpochMetaDataUpdater>(provisioner),
+        true /* write_metadata_logs */);
     ASSERT_EQ(0, rv);
   }
 

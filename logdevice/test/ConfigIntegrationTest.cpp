@@ -602,8 +602,8 @@ TEST_F(ConfigIntegrationTest, NumLogsConfiguredStat) {
           .create(3);
   auto stats = cluster->getNode(0).stats();
 
-  // 2 internal logs (config_log_deltas/snapshots) + 4 user logs.
-  ASSERT_EQ(stats["num_logs_configured"], 6);
+  // 4 internal logs (config_log_deltas/snapshots) + 4 user logs.
+  ASSERT_EQ(stats["num_logs_configured"], 8);
 
   // add an extra log to config
   const logid_t EXTRA_LOG_ID(271828182);
@@ -635,7 +635,7 @@ TEST_F(ConfigIntegrationTest, NumLogsConfiguredStat) {
     cluster->waitForConfigUpdate();
   }
   stats = cluster->getNode(0).stats();
-  ASSERT_EQ(stats["num_logs_configured"], 7);
+  ASSERT_EQ(stats["num_logs_configured"], 9);
 
   {
     boost::icl::right_open_interval<logid_t::raw_type> logid_interval(1, 2);
@@ -644,7 +644,7 @@ TEST_F(ConfigIntegrationTest, NumLogsConfiguredStat) {
     cluster->writeLogsConfig(new_logs_config.get());
     cluster->waitForConfigUpdate();
     stats = cluster->getNode(0).stats();
-    ASSERT_EQ(stats["num_logs_configured"], 3);
+    ASSERT_EQ(stats["num_logs_configured"], 5);
   }
 }
 

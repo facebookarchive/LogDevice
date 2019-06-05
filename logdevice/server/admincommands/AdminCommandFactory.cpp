@@ -46,6 +46,7 @@
 #include "logdevice/server/admincommands/InfoSST.h"
 #include "logdevice/server/admincommands/InfoSequencers.h"
 #include "logdevice/server/admincommands/InfoSettings.h"
+#include "logdevice/server/admincommands/InfoShardOperationalState.h"
 #include "logdevice/server/admincommands/InfoShards.h"
 #include "logdevice/server/admincommands/InfoSockets.h"
 #include "logdevice/server/admincommands/InfoStorageTasks.h"
@@ -124,6 +125,7 @@ AdminCommandFactory::AdminCommandFactory() {
   selector_.add<commands::InfoStorageTasks>("info storage_tasks");
   selector_.add<commands::InfoStoredLogs>("info stored_logs");
   selector_.add<commands::InfoReplication>("info replication");
+  selector_.add<commands::InfoShardOperationalState>("info shardopstate");
 
   // Admin command for querying the state of rebuilding.
   selector_.add<commands::InfoRebuildingsLegacy>("info rebuildings");

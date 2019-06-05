@@ -107,8 +107,8 @@ TEST_F(AdminAPILowLevelTest, LogTreeReplicationInfo) {
   LogTreeInfo logtree;
   admin_client->sync_getLogTreeInfo(logtree);
   ASSERT_EQ(target_version, logtree.get_version());
-  // 200 normal logs + 4 internal logs
-  ASSERT_EQ(204, logtree.get_num_logs());
+  // 200 normal logs + 6 internal logs
+  ASSERT_EQ(206, logtree.get_num_logs());
   ASSERT_EQ(60, logtree.get_max_backlog_seconds());
   ASSERT_TRUE(logtree.get_is_fully_loaded());
 }
