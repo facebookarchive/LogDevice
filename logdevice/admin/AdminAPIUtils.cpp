@@ -138,10 +138,13 @@ toShardOperationalState(membership::StorageState storage_state,
             AuthoritativeStatus::AUTHORITATIVE_EMPTY) {
           return thrift::ShardOperationalState::DRAINED;
         } else if (node_info->auth_status ==
-                   AuthoritativeStatus::FULLY_AUTHORITATIVE) {
+                       AuthoritativeStatus::FULLY_AUTHORITATIVE &&
+                   !node_info->drain) {
+          // As long as the drain flag is not set, no rebuilding _should_ be
+          // running.
           return thrift::ShardOperationalState::MAY_DISAPPEAR;
         } else {
-          // We are UNAVAILABLE/UNDERREPLICATION
+          // We are UNAVAILABLE/UNDERREPLICATION or (FULLY_AUTH+drain)
           return thrift::ShardOperationalState::MIGRATING_DATA;
         }
       }
