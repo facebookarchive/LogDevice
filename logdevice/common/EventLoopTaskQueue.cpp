@@ -110,6 +110,7 @@ int EventLoopTaskQueue::addWithPriority(Func func, int8_t priority) {
     err = E::SHUTDOWN;
     return -1;
   }
+  ld_check(func);
   // During dequeue, semaphore is decremented by a value followed by dequeue of
   // equal number of elements. Hence, enqueue here is done in order
   queues_[translatePriority(priority)].enqueue(std::move(func));
@@ -175,6 +176,9 @@ void EventLoopTaskQueue::executeTasks(size_t tokens) {
   for (size_t i = 0; i < dequeues_to_execute.size(); ++i) {
     while (dequeues_to_execute[i]--) {
       auto func = queues_[i].dequeue();
+      if (UNLIKELY(!func)) {
+        continue;
+      }
       func();
     }
   }
