@@ -437,6 +437,8 @@ int main(int argc, const char** argv) {
     return 1;
   }
 
+  ld_info("Listeners initialized");
+
   setup_signal_handler(SIGINT, shutdown_signal_handler);
   setup_signal_handler(SIGTERM, shutdown_signal_handler);
   setup_signal_handler(SIGUSR1, watchdog_stall_handler);

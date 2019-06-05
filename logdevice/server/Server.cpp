@@ -1152,14 +1152,14 @@ bool Server::startListening() {
     return false;
   }
 
+  if (admin_server_handle_ && !admin_server_handle_->start()) {
+    return false;
+  }
+
   // start command listener last, so that integration test framework
   // cannot connect to the command port in the event that any other port
   // failed to open.
   if (!startCommandListener(command_listener_)) {
-    return false;
-  }
-
-  if (admin_server_handle_ && !admin_server_handle_->start()) {
     return false;
   }
 
