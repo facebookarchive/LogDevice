@@ -688,9 +688,9 @@ operator()(logid_t log,
       currentLogState->currentEpochMetadata->replication.getReplicationFactor();
 
   auto filtered_reason = FilteredReason::NOT_DIRTY;
-  auto dc = (flags & LocalLogStoreRecordFormat::CSI_FLAG_WRITTEN_BY_REBUILDING)
-      ? DataClass::REBUILD
-      : DataClass::APPEND;
+  // TODO(T43708398): in order to work around T43708398, we always look for
+  // append dirty ranges.
+  auto dc = DataClass::APPEND;
 
   for (copyset_off_t i = 0; i < copyset_size; ++i) {
     ShardID shard = copyset[i];

@@ -2051,14 +2051,14 @@ TEST_F(LogRebuildingTest, RebuildingFilter) {
                       ts_not_in_n1_dirty_ranges,
                       ts_not_in_n1_dirty_ranges));
 
-  // N1 shouldn't hit either way if the record was written by rebuilding.
-  EXPECT_FALSE(filter(log,
-                      18,
-                      copyset_dirty_hit.data(),
-                      copyset_dirty_hit.size(),
-                      rebuild_csi_flags,
-                      ts_in_n1_dirty_ranges,
-                      ts_in_n1_dirty_ranges));
+  // T43708398: N1 should hit even though the record was written by rebuilding.
+  EXPECT_TRUE(filter(log,
+                     18,
+                     copyset_dirty_hit.data(),
+                     copyset_dirty_hit.size(),
+                     rebuild_csi_flags,
+                     ts_in_n1_dirty_ranges,
+                     ts_in_n1_dirty_ranges));
   EXPECT_FALSE(filter(log,
                       19,
                       copyset_dirty_hit.data(),
@@ -2119,13 +2119,14 @@ TEST_F(LogRebuildingTest, RebuildingFilter) {
                      append_csi_flags,
                      range_intersecting_n1.first,
                      range_intersecting_n1.second));
-  EXPECT_FALSE(filter(log,
-                      26,
-                      copyset_dirty_hit.data(),
-                      copyset_dirty_hit.size(),
-                      rebuild_csi_flags,
-                      range_intersecting_n1.first,
-                      range_intersecting_n1.second));
+  // T43708398: N1 should hit even though the record was written by rebuilding.
+  EXPECT_TRUE(filter(log,
+                     26,
+                     copyset_dirty_hit.data(),
+                     copyset_dirty_hit.size(),
+                     rebuild_csi_flags,
+                     range_intersecting_n1.first,
+                     range_intersecting_n1.second));
   // If range in operator() is different from range in shouldProcessTimeRange(),
   // the one from operator() takes precedence.
   EXPECT_FALSE(filter(log,
@@ -2331,21 +2332,22 @@ TEST_F(LogRebuildingTest, RebuildingFilterDonorDirty) {
                       ts_not_in_any_dirty_ranges,
                       ts_not_in_any_dirty_ranges));
 
-  // N1 shouldn't hit either way if the record was written by rebuilding.
-  ASSERT_FALSE(filter(log,
-                      20,
-                      copyset_dirty_hit.data(),
-                      copyset_dirty_hit.size(),
-                      rebuild_csi_flags,
-                      ts_in_n0_and_n1_dirty_ranges,
-                      ts_in_n0_and_n1_dirty_ranges));
-  ASSERT_FALSE(filter(log,
-                      21,
-                      copyset_dirty_hit.data(),
-                      copyset_dirty_hit.size(),
-                      rebuild_csi_flags,
-                      ts_in_n1_dirty_ranges,
-                      ts_in_n1_dirty_ranges));
+  // T43708398: N1 should hit even though the record was written by rebuilding.
+  ASSERT_TRUE(filter(log,
+                     20,
+                     copyset_dirty_hit.data(),
+                     copyset_dirty_hit.size(),
+                     rebuild_csi_flags,
+                     ts_in_n0_and_n1_dirty_ranges,
+                     ts_in_n0_and_n1_dirty_ranges));
+  // T43708398: N1 should hit even though the record was written by rebuilding.
+  ASSERT_TRUE(filter(log,
+                     21,
+                     copyset_dirty_hit.data(),
+                     copyset_dirty_hit.size(),
+                     rebuild_csi_flags,
+                     ts_in_n1_dirty_ranges,
+                     ts_in_n1_dirty_ranges));
   ASSERT_FALSE(filter(log,
                       22,
                       copyset_dirty_hit.data(),
