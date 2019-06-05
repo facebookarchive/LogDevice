@@ -435,6 +435,13 @@ void StandaloneAdminServer::shutdown() {
     folly::collectAllSemiFuture(futures.begin(), futures.end()).get();
     ld_info("Workers finished all works.");
 
+    if (stats_thread_) {
+      ld_info("Stopping StatsCollectionThread.");
+      stats_thread_->shutDown();
+      stats_thread_.reset();
+      ld_info("StatsCollectionThread Stopped.");
+    }
+
     // Prevent the admin server from holding a dangling pointer to the
     // maintenance manager
     admin_server_->setMaintenanceManager(nullptr);
