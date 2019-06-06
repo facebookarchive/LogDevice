@@ -107,8 +107,8 @@ class EventLoop : public folly::Executor {
     return tid_;
   }
 
-  std::shared_ptr<RequestPump> getRequestPump() {
-    return request_pump_;
+  RequestPump& getRequestPump() {
+    return *request_pump_;
   }
 
   /**

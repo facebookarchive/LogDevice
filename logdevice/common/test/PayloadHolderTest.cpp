@@ -17,7 +17,6 @@ using namespace facebook::logdevice;
 TEST(PayloadHolderTest, Simple) {
   EventLoopHandle handle(
       new EventLoop(), /* capacity */ 2000, /* requests per iteration */ 1);
-  handle.start();
   auto ev_loop = handle.get();
   Semaphore sem0, sem1;
   ev_loop->add([&sem0] {

@@ -277,7 +277,6 @@ class ServerSocket {
 std::tuple<std::unique_ptr<EventLoopHandle>, std::unique_ptr<Worker>>
 createWorker(Processor* p, std::shared_ptr<UpdateableConfig>& config) {
   auto h = std::make_unique<EventLoopHandle>(new EventLoop());
-  h->start();
   auto w = std::make_unique<Worker>(
       folly::getKeepAliveToken(h->get()), p, worker_id_t(0), config);
 
@@ -311,7 +310,7 @@ TEST_F(MessagingSocketTest, SocketConnect) {
   auto h = std::move(std::get<0>(out));
   auto w = std::move(std::get<1>(out));
 
-  th = h->getThread();
+  th = (*h)->getThread();
   ASSERT_FALSE(pthread_equal(pthread_self(), th));
 
   config.reset();
@@ -430,7 +429,7 @@ TEST_F(MessagingSocketTest, SenderBasicSend) {
   auto h = std::move(std::get<0>(out));
   auto w = std::move(std::get<1>(out));
 
-  th = h->getThread();
+  th = (*h)->getThread();
   ASSERT_FALSE(pthread_equal(pthread_self(), th));
 
   config.reset();

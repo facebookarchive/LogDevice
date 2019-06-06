@@ -10,7 +10,6 @@
 #include <atomic>
 #include <chrono>
 
-#include <folly/AtomicIntrusiveLinkedList.h>
 #include <folly/Executor.h>
 
 #include "logdevice/common/RequestType.h"
@@ -140,8 +139,6 @@ class Request {
   static request_id_t getNextRequestID();
 
   std::chrono::steady_clock::time_point enqueue_time_;
-
-  folly::AtomicIntrusiveLinkedListHook<Request> request_pump_hook_;
 
  protected:
   /**

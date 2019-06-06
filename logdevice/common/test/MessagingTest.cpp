@@ -139,7 +139,7 @@ TEST(MessagingTest, EventLoop) {
   EXPECT_EQ(0, processor->postRequest(rq));
   EXPECT_EQ(nullptr, rq.get());
 
-  th = h->getThread();
+  th = (*h)->getThread();
   ASSERT_FALSE(pthread_equal(pthread_self(), th));
 
   // since no EventLoop is running on this thread
@@ -192,9 +192,7 @@ TEST(MessagingTest, DISABLED_RequestPipeOverflow) {
   dbg::currentLevel = dbg::Level::DEBUG;
 
   auto h = std::make_unique<EventLoopHandle>(new EventLoop());
-  h->start();
-
-  th = h->getThread();
+  th = (*h)->getThread();
   ASSERT_FALSE(pthread_equal(pthread_self(), th));
 
   static const int MAX_ITERATIONS = 1000000;
@@ -202,7 +200,7 @@ TEST(MessagingTest, DISABLED_RequestPipeOverflow) {
 
   for (i = 0; i < MAX_ITERATIONS; i++) {
     std::unique_ptr<Request> rq = std::make_unique<SlowRequest>();
-    int rv = h->getRequestPump().tryPost(rq);
+    int rv = (*h)->getRequestPump().tryPost(rq);
     if (rv != 0) {
       EXPECT_EQ(err, E::NOBUFS);
       break;

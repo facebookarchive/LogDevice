@@ -502,7 +502,6 @@ bool Server::initListeners() {
         new EventLoop(ConnectionListener::listenerTypeNames()
                           [ConnectionListener::ListenerType::DATA],
                       ThreadID::Type::UTILITY));
-    connection_listener_handle_->start();
     connection_listener_ = initListener<ConnectionListener>(
         server_settings_->port,
         server_settings_->unix_socket,
@@ -513,7 +512,6 @@ bool Server::initListeners() {
         conn_budget_backlog_);
     command_listener_handle_ = std::make_unique<EventLoopHandle>(
         new EventLoop("ld:admin", ThreadID::Type::UTILITY));
-    command_listener_handle_->start();
     command_listener_ = initListener<CommandListener>(
         server_settings_->command_port,
         server_settings_->command_unix_socket,
@@ -564,7 +562,6 @@ bool Server::initListeners() {
             new EventLoop(ConnectionListener::listenerTypeNames()
                               [ConnectionListener::ListenerType::DATA_SSL],
                           ThreadID::Type::UTILITY));
-        ssl_connection_listener_handle_->start();
         ssl_connection_listener_ = initListener<ConnectionListener>(
             ssl_port,
             ssl_unix_socket,
@@ -603,7 +600,6 @@ bool Server::initListeners() {
             new EventLoop(ConnectionListener::listenerTypeNames()
                               [ConnectionListener::ListenerType::GOSSIP],
                           ThreadID::Type::UTILITY));
-        gossip_listener_handle_->start();
         gossip_listener_ = initListener<ConnectionListener>(
             gossip_port,
             gossip_unix_socket,

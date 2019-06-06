@@ -33,7 +33,6 @@ TEST(EventLoopTaskQueue, TranslatePriority) {
 TEST(EventLoopTaskQueue, PostPrioritizedWork) {
   std::unique_ptr<EventLoopHandle> handle;
   handle = std::make_unique<EventLoopHandle>(new EventLoop());
-  handle->getRequestPump().setDequeuesPerIteration({7, 2, 1});
 
   auto el = handle->get();
   size_t num_hi_pri_task = 500;
@@ -43,7 +42,13 @@ TEST(EventLoopTaskQueue, PostPrioritizedWork) {
   size_t num_lo_pri_executed = 0;
   size_t num_mid_pri_executed = 0;
   size_t num_hi_pri_executed = 0;
-
+  Semaphore start_loop, primed;
+  el->add([&el, &start_loop, &primed]() {
+    el->getRequestPump().setDequeuesPerIteration({7, 2, 1});
+    primed.post();
+    start_loop.wait();
+  });
+  primed.wait();
   for (auto i = 0; i < 7; ++i) {
     el->addWithPriority([&num_hi_pri_executed] { ++num_hi_pri_executed; },
                         folly::Executor::HI_PRI);
@@ -72,7 +77,7 @@ TEST(EventLoopTaskQueue, PostPrioritizedWork) {
     el->addWithPriority([&num_lo_pri_executed] { ++num_lo_pri_executed; },
                         folly::Executor::LO_PRI);
   }
-  handle->start();
+  start_loop.post();
   ready.wait();
 
   EXPECT_EQ(7, num_hi_pri_executed);

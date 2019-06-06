@@ -249,7 +249,6 @@ void UnreleasedRecordDetectorTest::SetUp() {
       new EventLoop(ConnectionListener::listenerTypeNames()
                         [ConnectionListener::ListenerType::DATA],
                     ThreadID::Type::UTILITY));
-  connection_listener_handle_->start();
   connection_listener_ = std::make_unique<ConnectionListener>(
       Listener::InterfaceDef(std::move(socketPath), false),
       folly::getKeepAliveToken(connection_listener_handle_->get()),
@@ -324,7 +323,6 @@ void UnreleasedRecordDetectorTest::TearDown() {
 
 void UnreleasedRecordDetectorTest::acceptConnections() {
   connection_listener_->startAcceptingConnections();
-  connection_listener_handle_->start();
   ld_notify("ConnectionListener accepting connections and started.");
 }
 

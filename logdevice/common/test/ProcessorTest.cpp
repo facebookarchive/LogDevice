@@ -180,7 +180,7 @@ TEST_F(ProcessorTest, DISABLED_UseEventLoopDirectly) {
 
   EventLoopHandle handle(
       new EventLoop(), /* capacity */ 2, /* requests per iteration */ 1);
-  handle.start();
+  auto& requestPump = handle->getRequestPump();
 
   struct Req : public Request {
     std::function<void()> f;
@@ -200,24 +200,24 @@ TEST_F(ProcessorTest, DISABLED_UseEventLoopDirectly) {
       sem0.post();
       sem1.wait();
     });
-    ASSERT_EQ(0, handle.getRequestPump().tryPost(rq));
+    ASSERT_EQ(0, requestPump.tryPost(rq));
   }
   // Post a fast request.
   {
     std::unique_ptr<Request> rq = std::make_unique<Req>([&] { sem2.post(); });
-    ASSERT_EQ(0, handle.getRequestPump().tryPost(rq));
+    ASSERT_EQ(0, requestPump.tryPost(rq));
   }
   // Wait for the slow request to start.
   sem0.wait();
   // Post another fast request.
   {
     std::unique_ptr<Request> rq = std::make_unique<Req>([&] { sem2.post(); });
-    ASSERT_EQ(0, handle.getRequestPump().tryPost(rq));
+    ASSERT_EQ(0, requestPump.tryPost(rq));
   }
   // Now the queue should be full, and the next request should fail to post.
   {
     std::unique_ptr<Request> rq = std::make_unique<Req>([&] { ADD_FAILURE(); });
-    int rv = handle.getRequestPump().tryPost(rq);
+    int rv = requestPump.tryPost(rq);
     EXPECT_EQ(-1, rv);
     EXPECT_EQ(E::NOBUFS, err);
   }
@@ -234,7 +234,7 @@ TEST_F(ProcessorTest, DISABLED_UseEventLoopDirectly) {
       timer.assign(handle.get()->getEventBase(), [&] { sem2.post(); });
       timer.activate(std::chrono::milliseconds(1));
     });
-    ASSERT_EQ(0, handle.getRequestPump().blockingRequest(rq));
+    ASSERT_EQ(0, requestPump.blockingRequest(rq));
   }
   sem2.wait();
   EXPECT_EQ(0, sem2.value());
@@ -260,7 +260,6 @@ TEST_F(ProcessorTest, EventLoopKeepAliveTest) {
         {
           auto ev_loop = new EventLoop();
           auto handle = std::make_unique<EventLoopHandle>(ev_loop, 1, 1);
-          handle->start();
           auto keep_alive = folly::getKeepAliveToken(ev_loop);
           handle.reset();
         },
@@ -269,7 +268,6 @@ TEST_F(ProcessorTest, EventLoopKeepAliveTest) {
   {
     auto ev_loop = new EventLoop();
     auto handle = std::make_unique<EventLoopHandle>(ev_loop, 1, 1);
-    handle->start();
     auto keep_alive = folly::getKeepAliveToken(ev_loop);
     keep_alive.reset();
     handle.reset();

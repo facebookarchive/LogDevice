@@ -146,10 +146,9 @@ BENCHMARK(RequestPumpFunctionBenchmarkOnEventLoop, n) {
   BENCHMARK_SUSPEND {
     // Create and init consumer
     handle = std::make_unique<EventLoopHandle>(new EventLoop());
-    handle->start();
     std::unique_ptr<Request> init_req =
         std::make_unique<RequestPumpBenchmarkRequest>(1, executed_count, sem);
-    handle->getRequestPump().forcePost(init_req);
+    (*handle)->getRequestPump().forcePost(init_req);
     sem.wait();
     executed_count = 0;
 
@@ -162,7 +161,7 @@ BENCHMARK(RequestPumpFunctionBenchmarkOnEventLoop, n) {
               producers_sem.wait(_);
             }
             for (int j = 0; j < requestCount; ++j) {
-              handle->getRequestPump().add([&sem, &executed_count, n]() {
+              (*handle)->getRequestPump().add([&sem, &executed_count, n]() {
                 int count = executed_count.fetch_add(
                     1, std::memory_order::memory_order_relaxed);
                 if (count + 1 == n) {
@@ -184,9 +183,7 @@ BENCHMARK(RequestPumpFunctionBenchmarkOnEventLoop, n) {
     for (auto& i : requestsPerProducer) {
       i.join();
     }
-    handle->shutdown();
-    auto thread = handle->getThread();
-    pthread_join(thread, nullptr);
+    handle.reset();
   }
 }
 
@@ -252,22 +249,19 @@ BENCHMARK(RequestPumpFunctionBenchmarkSequential, n) {
   BENCHMARK_SUSPEND {
     // Create and init consumer
     handle = std::make_unique<EventLoopHandle>(new EventLoop());
-    handle->start();
     folly::Promise<folly::Unit> started;
     auto wait_for_start = started.getSemiFuture();
-    handle->getRequestPump().add(
+    (*handle)->getRequestPump().add(
         [p = std::move(started)]() mutable { p.setValue(); });
     wait_for_start.wait();
   }
   for (int i = 0; i < n; ++i) {
     folly::Baton baton;
-    handle->getRequestPump().add([&baton] { baton.post(); });
+    (*handle)->getRequestPump().add([&baton] { baton.post(); });
     baton.wait();
   }
   BENCHMARK_SUSPEND {
-    handle->shutdown();
-    auto thread = handle->getThread();
-    pthread_join(thread, nullptr);
+    handle.reset();
   }
 }
 

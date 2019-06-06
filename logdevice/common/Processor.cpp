@@ -220,10 +220,6 @@ void Processor::init() {
     impl_->all_workers_[i] = std::move(worker_pool);
   }
 
-  for (std::unique_ptr<EventLoopHandle>& handle : impl_->ev_loop_handles_) {
-    handle->start();
-  }
-
   impl_->allSequencers_ =
       std::make_unique<AllSequencers>(this, config_, settings_);
 
@@ -558,8 +554,8 @@ void Processor::shutdown() {
   // also alters WorkerHandles so that further attempts to post
   // requests through them fail with E::SHUTDOWN.
   for (auto& ev_handle : impl_->ev_loop_handles_) {
-    ev_handle->shutdown();
-    pthreads.push_back(ev_handle->getThread());
+    (*ev_handle)->getRequestPump().shutdown();
+    pthreads.push_back((*ev_handle)->getThread());
   }
 
   for (size_t i = 0; i < impl_->background_threads_.size(); ++i) {
