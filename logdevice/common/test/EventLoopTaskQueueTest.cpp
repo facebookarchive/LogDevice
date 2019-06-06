@@ -44,7 +44,7 @@ TEST(EventLoopTaskQueue, PostPrioritizedWork) {
   size_t num_hi_pri_executed = 0;
   Semaphore start_loop, primed;
   el->add([&el, &start_loop, &primed]() {
-    el->getRequestPump().setDequeuesPerIteration({7, 2, 1});
+    el->getTaskQueue().setDequeuesPerIteration({7, 2, 1});
     primed.post();
     start_loop.wait();
   });

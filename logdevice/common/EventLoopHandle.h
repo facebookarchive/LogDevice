@@ -14,11 +14,12 @@
 #include <utility>
 
 #include <folly/ScopeGuard.h>
+#include <folly/container/Array.h>
 
 #include "logdevice/common/ConstructorFailed.h"
 #include "logdevice/common/EventLoop.h"
+#include "logdevice/common/EventLoopTaskQueue.h"
 #include "logdevice/common/Request.h"
-#include "logdevice/common/RequestPump.h"
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/include/Err.h"
@@ -41,12 +42,12 @@ class EventLoopHandle {
                            size_t request_pump_capacity = 1024,
                            int requests_per_iteration = 16)
       : event_loop_(loop) {
-    auto request_pump =
-        std::make_shared<RequestPump>(event_loop_->getEventBase(),
-                                      request_pump_capacity,
-                                      requests_per_iteration);
-    request_pump->setCloseEventLoopOnShutdown();
-    event_loop_->setRequestPump(request_pump);
+    auto task_queue = std::make_shared<EventLoopTaskQueue>(
+        event_loop_->getEventBase(),
+        request_pump_capacity,
+        folly::make_array<size_t>(requests_per_iteration, 0, 0));
+    task_queue->setCloseEventLoopOnShutdown();
+    event_loop_->setTaskQueue(task_queue);
     event_loop_->start();
   }
 
@@ -64,10 +65,10 @@ class EventLoopHandle {
     pthread_t thread_id = event_loop_->getThread();
     // We just shutdown here explicitly, join the thread and delete
     // the eventloop instance.
-    if (!event_loop_->getRequestPump().isShutdown()) {
+    if (!event_loop_->getTaskQueue().isShutdown()) {
       // Tell EventLoop on the other end to destroy itself and terminate the
       // thread
-      event_loop_->getRequestPump().shutdown();
+      event_loop_->getTaskQueue().shutdown();
       pthread_join(thread_id, nullptr);
     }
 

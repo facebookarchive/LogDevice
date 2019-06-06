@@ -400,8 +400,8 @@ void Worker::onSettingsUpdated() {
 
   immutable_settings_ = new_settings;
   auto event_loop = checked_downcast<EventLoop*>(getExecutor());
-  event_loop->getRequestPump().setNumRequestsPerIteration(
-      immutable_settings_->requests_per_iteration);
+  event_loop->getTaskQueue().setDequeuesPerIteration(
+      {immutable_settings_->requests_per_iteration, 0, 0});
   clientReadStreams().noteSettingsUpdated();
   if (logsconfig_manager_) {
     // LogsConfigManager might want to start or stop the underlying RSM if

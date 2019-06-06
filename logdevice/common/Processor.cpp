@@ -554,7 +554,7 @@ void Processor::shutdown() {
   // also alters WorkerHandles so that further attempts to post
   // requests through them fail with E::SHUTDOWN.
   for (auto& ev_handle : impl_->ev_loop_handles_) {
-    (*ev_handle)->getRequestPump().shutdown();
+    (*ev_handle)->getTaskQueue().shutdown();
     pthreads.push_back((*ev_handle)->getThread());
   }
 

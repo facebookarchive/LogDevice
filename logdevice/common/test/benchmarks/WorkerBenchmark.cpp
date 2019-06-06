@@ -146,9 +146,7 @@ BENCHMARK(RequestPumpFunctionBenchmarkOnEventLoop, n) {
   BENCHMARK_SUSPEND {
     // Create and init consumer
     handle = std::make_unique<EventLoopHandle>(new EventLoop());
-    std::unique_ptr<Request> init_req =
-        std::make_unique<RequestPumpBenchmarkRequest>(1, executed_count, sem);
-    (*handle)->getRequestPump().forcePost(init_req);
+    (*handle)->getTaskQueue().add([&sem]() { sem.post(); });
     sem.wait();
     executed_count = 0;
 
@@ -161,7 +159,7 @@ BENCHMARK(RequestPumpFunctionBenchmarkOnEventLoop, n) {
               producers_sem.wait(_);
             }
             for (int j = 0; j < requestCount; ++j) {
-              (*handle)->getRequestPump().add([&sem, &executed_count, n]() {
+              (*handle)->getTaskQueue().add([&sem, &executed_count, n]() {
                 int count = executed_count.fetch_add(
                     1, std::memory_order::memory_order_relaxed);
                 if (count + 1 == n) {
@@ -251,13 +249,13 @@ BENCHMARK(RequestPumpFunctionBenchmarkSequential, n) {
     handle = std::make_unique<EventLoopHandle>(new EventLoop());
     folly::Promise<folly::Unit> started;
     auto wait_for_start = started.getSemiFuture();
-    (*handle)->getRequestPump().add(
+    (*handle)->getTaskQueue().add(
         [p = std::move(started)]() mutable { p.setValue(); });
     wait_for_start.wait();
   }
   for (int i = 0; i < n; ++i) {
     folly::Baton baton;
-    (*handle)->getRequestPump().add([&baton] { baton.post(); });
+    (*handle)->getTaskQueue().add([&baton] { baton.post(); });
     baton.wait();
   }
   BENCHMARK_SUSPEND {

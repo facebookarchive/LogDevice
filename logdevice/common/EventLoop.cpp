@@ -19,8 +19,8 @@
 
 #include "logdevice/common/ConstructorFailed.h"
 #include "logdevice/common/EventHandler.h"
+#include "logdevice/common/EventLoopTaskQueue.h"
 #include "logdevice/common/Request.h"
-#include "logdevice/common/RequestPump.h"
 #include "logdevice/common/ThreadID.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/libevent/compat.h"
@@ -145,7 +145,7 @@ void EventLoop::add(folly::Function<void()> func) {
 }
 
 void EventLoop::addWithPriority(folly::Function<void()> func, int8_t priority) {
-  request_pump_->addWithPriority(std::move(func), priority);
+  task_queue_->addWithPriority(std::move(func), priority);
 }
 
 void EventLoop::start() {

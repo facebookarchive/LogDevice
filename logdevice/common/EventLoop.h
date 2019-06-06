@@ -37,7 +37,7 @@ namespace facebook { namespace logdevice {
  *         the requests to an EventLoop.
  */
 
-class RequestPump;
+class EventLoopTaskQueue;
 
 class EventLoop : public folly::Executor {
  public:
@@ -81,11 +81,11 @@ class EventLoop : public folly::Executor {
   void addWithPriority(folly::Function<void()>, int8_t priority) override;
 
   /**
-   * Provides shared ownership of the pump that the EventLoop will get
+   * Provides shared ownership of the task_queue that the EventLoop will get
    * `Request' instances through.  Must be called before `start()'.
    */
-  void setRequestPump(std::shared_ptr<RequestPump> pump) {
-    request_pump_ = std::move(pump);
+  void setTaskQueue(std::shared_ptr<EventLoopTaskQueue> task_queue) {
+    task_queue_ = std::move(task_queue);
   }
 
   /**
@@ -107,8 +107,8 @@ class EventLoop : public folly::Executor {
     return tid_;
   }
 
-  RequestPump& getRequestPump() {
-    return *request_pump_;
+  EventLoopTaskQueue& getTaskQueue() {
+    return *task_queue_;
   }
 
   /**
@@ -197,8 +197,8 @@ class EventLoop : public folly::Executor {
   int tid_{-1};
 
   // Main request pump; ownership shared to ensure safe shutdown (shutting
-  // down this RequestPump stops the event loop)
-  std::shared_ptr<RequestPump> request_pump_;
+  // down this TaskQueue stops the event loop)
+  std::shared_ptr<EventLoopTaskQueue> task_queue_;
 
   std::atomic<bool> running_;
   std::atomic<bool> shutting_down_;

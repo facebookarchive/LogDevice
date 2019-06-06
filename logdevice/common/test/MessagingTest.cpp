@@ -178,41 +178,6 @@ using SlowRequest = MessagingTest_SlowRequest;
 
 std::atomic<bool> SlowRequest::stall{true};
 
-/**
- * Creates an EventLoopHandle. Posts a request that blocks the Worker
- * thread for a second. Posts up to a million more requests. Verifies that
- * at some point a post() fails with E::NOBUFS.
- */
-TEST(MessagingTest, DISABLED_RequestPipeOverflow) {
-  pthread_t th;
-  UpdateableSettings<Settings> updateable_settings;
-  auto config = UpdateableConfig::createEmpty();
-  Processor processor(config, updateable_settings);
-
-  dbg::currentLevel = dbg::Level::DEBUG;
-
-  auto h = std::make_unique<EventLoopHandle>(new EventLoop());
-  th = (*h)->getThread();
-  ASSERT_FALSE(pthread_equal(pthread_self(), th));
-
-  static const int MAX_ITERATIONS = 1000000;
-  int i;
-
-  for (i = 0; i < MAX_ITERATIONS; i++) {
-    std::unique_ptr<Request> rq = std::make_unique<SlowRequest>();
-    int rv = (*h)->getRequestPump().tryPost(rq);
-    if (rv != 0) {
-      EXPECT_EQ(err, E::NOBUFS);
-      break;
-    }
-  }
-
-  EXPECT_LT(i, MAX_ITERATIONS);
-
-  // give Worker thread 10s to exit
-  Alarm alarm(std::chrono::seconds(10));
-}
-
 class MockConnectThrottle : public ConnectThrottle {
  public:
   explicit MockConnectThrottle(const Settings& settings)
