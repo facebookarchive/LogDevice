@@ -108,7 +108,7 @@ class ReadShapingFlowGroupDeps : public FlowGroupDependencies {
   ReadShapingFlowGroupDeps(StatsHolder* stats) : stats_(stats) {}
 
   PerFlowGroupStats* statsGet(NodeLocationScope scope) {
-    if (!stats_ || scope != NodeLocationScope::NODE) {
+    if (!stats_) {
       return nullptr;
     }
     return &(stats_->get().per_flow_group_stats_rt[static_cast<int>(scope)]);

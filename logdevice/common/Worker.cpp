@@ -148,6 +148,8 @@ class WorkerImpl {
         w->getEventBase(),
         read_shaping_cfg,
         std::make_shared<ReadShapingFlowGroupDeps>(stats));
+    read_shaping_container_->getFlowGroup(NodeLocationScope::NODE)
+        .setScope(nullptr, NodeLocationScope::NODE);
   }
 
   ShardAuthoritativeStatusManager shardStatusManager_;

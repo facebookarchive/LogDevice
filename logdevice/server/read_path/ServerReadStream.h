@@ -249,7 +249,7 @@ class ServerReadStream : boost::noncopyable {
   size_t getCurrentMeterLevel() const {
     auto w = Worker::onThisThread();
     ShapingContainer& read_container = w->readShapingContainer();
-    auto& flow_group = read_container.flow_groups_[0];
+    auto& flow_group = read_container.getFlowGroup(NodeLocationScope::NODE);
     return flow_group.level(getReadPriority());
   }
 

@@ -658,7 +658,7 @@ bool CatchupQueueDependencies::canIssueReadIO(
   // Lock to prevent race between registering for bandwidth and
   // a bandwidth deposit from the TrafficShaper.
   ShapingContainer& read_container = w->readShapingContainer();
-  auto& flow_group = read_container.flow_groups_[0];
+  auto& flow_group = read_container.getFlowGroup(NodeLocationScope::NODE);
 
   STAT_INCR(getStatsHolder(), read_throttling_num_throttle_checks);
   std::unique_lock<std::mutex> lock(read_container.flow_meters_mutex_);
@@ -793,7 +793,7 @@ void CatchupQueue::readThrottlingOnReadTaskDone(const ReadStorageTask& task) {
   }
 
   ShapingContainer& read_container = w->readShapingContainer();
-  auto& fg = read_container.flow_groups_[0];
+  auto& fg = read_container.getFlowGroup(NodeLocationScope::NODE);
   Priority p = task.getReadPriority();
 
   if (cost_estimate > task.total_bytes_) {

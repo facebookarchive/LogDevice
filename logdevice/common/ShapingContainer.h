@@ -135,6 +135,10 @@ class ShapingContainer {
     self->runFlowGroups(RunType::EVENTLOOP);
   }
 
+  FlowGroup& getFlowGroup(NodeLocationScope s) {
+    return flow_groups_[static_cast<int>(s)];
+  }
+
   FlowGroup& selectFlowGroup(NodeLocationScope starting_scope) {
     // Search for a configured FlowGroup with the smallest scope.
     // Note: Scope NODE and ROOT are always configured (defaulting to
@@ -142,10 +146,10 @@ class ShapingContainer {
     //       succeed even if in a cluster without any FlowGroups
     //       enforcing a policy.
     while (starting_scope < NodeLocationScope::ROOT &&
-           !flow_groups_[static_cast<int>(starting_scope)].configured()) {
+           !getFlowGroup(starting_scope).configured()) {
       starting_scope = NodeLocation::nextGreaterScope(starting_scope);
     }
-    return flow_groups_[static_cast<int>(starting_scope)];
+    return getFlowGroup(starting_scope);
   }
 
   std::vector<FlowGroup> flow_groups_;
