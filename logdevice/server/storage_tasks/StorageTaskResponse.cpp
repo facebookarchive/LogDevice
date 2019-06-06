@@ -9,7 +9,6 @@
 
 #include <folly/Memory.h>
 
-#include "logdevice/common/RequestPump.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/server/ServerWorker.h"
 #include "logdevice/server/storage_tasks/PerWorkerStorageTaskQueue.h"

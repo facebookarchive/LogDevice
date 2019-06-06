@@ -11,9 +11,9 @@
 
 #include "logdevice/common/EventLoop.h"
 #include "logdevice/common/EventLoopHandle.h"
+#include "logdevice/common/EventLoopTaskQueue.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Request.h"
-#include "logdevice/common/RequestPump.h"
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/request_util.h"

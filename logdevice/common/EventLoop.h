@@ -54,7 +54,9 @@ class EventLoop : public folly::Executor {
    */
   explicit EventLoop(
       std::string thread_name = "",
-      ThreadID::Type thread_type = ThreadID::Type::UNKNOWN_EVENT_LOOP);
+      ThreadID::Type thread_type = ThreadID::Type::UNKNOWN_EVENT_LOOP,
+      size_t request_pump_capacity = 1024,
+      int requests_per_iteration = 16);
 
   // destructor has to be virtual because it is invoked by EventLoop::run()
   // as "delete this"
@@ -79,20 +81,6 @@ class EventLoop : public folly::Executor {
    * calls EventLoop::add.
    */
   void addWithPriority(folly::Function<void()>, int8_t priority) override;
-
-  /**
-   * Provides shared ownership of the task_queue that the EventLoop will get
-   * `Request' instances through.  Must be called before `start()'.
-   */
-  void setTaskQueue(std::shared_ptr<EventLoopTaskQueue> task_queue) {
-    task_queue_ = std::move(task_queue);
-  }
-
-  /**
-   * Signal to the worker thread to start running the libevent loop.
-   * Called by EventLoopHandle.
-   */
-  void start();
 
   /**
    * Get the thread handle of this EventLoop.
@@ -167,7 +155,8 @@ class EventLoop : public folly::Executor {
   std::atomic<size_t> event_handlers_completed_{0};
 
   // Delay in running a default priority event by EventLoo0p
-  std::atomic<std::chrono::microseconds> delay_us_;
+  std::atomic<std::chrono::microseconds> delay_us_{
+      std::chrono::microseconds(0)};
 
  protected:
   // called on this EventLoop's thread before starting the event loop
@@ -196,9 +185,8 @@ class EventLoop : public folly::Executor {
   // pid of thread_
   int tid_{-1};
 
-  // Main request pump; ownership shared to ensure safe shutdown (shutting
-  // down this TaskQueue stops the event loop)
-  std::shared_ptr<EventLoopTaskQueue> task_queue_;
+  // Main task queue; (shutting down this TaskQueue stops the event loop)
+  std::unique_ptr<EventLoopTaskQueue> task_queue_;
 
   std::atomic<bool> running_;
   std::atomic<bool> shutting_down_;

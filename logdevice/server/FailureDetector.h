@@ -19,7 +19,6 @@
 #include "logdevice/common/EventLoopHandle.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/Request.h"
-#include "logdevice/common/RequestPump.h"
 #include "logdevice/common/SequencerPlacement.h"
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/Worker.h"

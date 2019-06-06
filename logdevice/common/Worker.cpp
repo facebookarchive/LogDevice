@@ -31,6 +31,7 @@
 #include "logdevice/common/CopySetManager.h"
 #include "logdevice/common/DataSizeRequest.h"
 #include "logdevice/common/EventLoopHandle.h"
+#include "logdevice/common/EventLoopTaskQueue.h"
 #include "logdevice/common/ExponentialBackoffAdaptiveVariable.h"
 #include "logdevice/common/FindKeyRequest.h"
 #include "logdevice/common/FireAndForgetRequest.h"

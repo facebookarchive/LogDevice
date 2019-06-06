@@ -190,16 +190,17 @@ TEST_F(ProcessorTest, EventLoopKeepAliveTest) {
   {
     ASSERT_DEATH(
         {
-          auto ev_loop = new EventLoop();
-          auto handle = std::make_unique<EventLoopHandle>(ev_loop, 1, 1);
+          auto ev_loop =
+              new EventLoop("", ThreadID::Type::UNKNOWN_EVENT_LOOP, 1, 1);
+          auto handle = std::make_unique<EventLoopHandle>(ev_loop);
           auto keep_alive = folly::getKeepAliveToken(ev_loop);
           handle.reset();
         },
         "");
   }
   {
-    auto ev_loop = new EventLoop();
-    auto handle = std::make_unique<EventLoopHandle>(ev_loop, 1, 1);
+    auto ev_loop = new EventLoop("", ThreadID::Type::UNKNOWN_EVENT_LOOP, 1, 1);
+    auto handle = std::make_unique<EventLoopHandle>(ev_loop);
     auto keep_alive = folly::getKeepAliveToken(ev_loop);
     keep_alive.reset();
     handle.reset();

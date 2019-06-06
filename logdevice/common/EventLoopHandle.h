@@ -7,22 +7,9 @@
  */
 #pragma once
 
-#include <atomic>
-#include <errno.h>
 #include <memory>
-#include <unistd.h>
-#include <utility>
 
-#include <folly/ScopeGuard.h>
-#include <folly/container/Array.h>
-
-#include "logdevice/common/ConstructorFailed.h"
 #include "logdevice/common/EventLoop.h"
-#include "logdevice/common/EventLoopTaskQueue.h"
-#include "logdevice/common/Request.h"
-#include "logdevice/common/Semaphore.h"
-#include "logdevice/common/debug.h"
-#include "logdevice/include/Err.h"
 
 namespace facebook { namespace logdevice {
 
@@ -38,18 +25,7 @@ class EventLoopHandle {
    *
    * Takes ownership of the EventLoop.
    */
-  explicit EventLoopHandle(EventLoop* loop,
-                           size_t request_pump_capacity = 1024,
-                           int requests_per_iteration = 16)
-      : event_loop_(loop) {
-    auto task_queue = std::make_shared<EventLoopTaskQueue>(
-        event_loop_->getEventBase(),
-        request_pump_capacity,
-        folly::make_array<size_t>(requests_per_iteration, 0, 0));
-    task_queue->setCloseEventLoopOnShutdown();
-    event_loop_->setTaskQueue(task_queue);
-    event_loop_->start();
-  }
+  explicit EventLoopHandle(EventLoop* loop) : event_loop_(loop) {}
 
   EventLoopHandle(const EventLoopHandle&) = delete;
   EventLoopHandle(EventLoopHandle&&) = delete;
@@ -57,29 +33,10 @@ class EventLoopHandle {
   EventLoopHandle& operator=(EventLoopHandle&&) = delete;
 
   /**
-   * The destructor signals to the EventLoop that it must exit and free
-   * resources. The loop may still be running for some time after this
-   * destructor returns control.
-   */
-  ~EventLoopHandle() {
-    pthread_t thread_id = event_loop_->getThread();
-    // We just shutdown here explicitly, join the thread and delete
-    // the eventloop instance.
-    if (!event_loop_->getTaskQueue().isShutdown()) {
-      // Tell EventLoop on the other end to destroy itself and terminate the
-      // thread
-      event_loop_->getTaskQueue().shutdown();
-      pthread_join(thread_id, nullptr);
-    }
-
-    delete event_loop_;
-  }
-
-  /**
    * @return controlled EventLoop object
    */
   EventLoop* get() const {
-    return event_loop_;
+    return event_loop_.get();
   }
 
   EventLoop* operator->() {
@@ -92,6 +49,6 @@ class EventLoopHandle {
 
  private:
   // EventLoop object wrapped by this handle
-  EventLoop* event_loop_;
+  std::unique_ptr<EventLoop> event_loop_;
 };
 }} // namespace facebook::logdevice

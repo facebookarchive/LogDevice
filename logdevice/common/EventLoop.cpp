@@ -62,7 +62,10 @@ static void deleteEventBase(struct event_base* base) {
   }
 }
 
-EventLoop::EventLoop(std::string thread_name, ThreadID::Type thread_type)
+EventLoop::EventLoop(std::string thread_name,
+                     ThreadID::Type thread_type,
+                     size_t request_pump_capacity,
+                     int requests_per_iteration)
     : base_(createEventBase(), deleteEventBase),
       thread_type_(thread_type),
       thread_name_(thread_name),
@@ -81,13 +84,6 @@ EventLoop::EventLoop(std::string thread_name, ThreadID::Type thread_type)
 
   ld_check(common_timeouts_.get(std::chrono::milliseconds(0)));
 
-  scheduled_event_ = LD_EV(event_new)(
-      base_.get(), -1, 0, EventHandler<EventLoop::delayCheckCallback>, this);
-  if (!scheduled_event_) {
-    ld_error("Failed to initialize scheduled event.");
-    throw ConstructorFailed();
-  }
-
   rv = pthread_attr_init(&attr);
   if (rv != 0) { // unlikely
     ld_check(rv == ENOMEM);
@@ -105,7 +101,11 @@ EventLoop::EventLoop(std::string thread_name, ThreadID::Type thread_type)
     err = E::SYSLIMIT;
     throw ConstructorFailed();
   }
-
+  task_queue_ = std::make_unique<EventLoopTaskQueue>(
+      base_.get(),
+      request_pump_capacity,
+      folly::make_array<size_t>(requests_per_iteration, 0, 0));
+  task_queue_->setCloseEventLoopOnShutdown();
   rv = pthread_create(&thread_, &attr, EventLoop::enter, this);
   if (rv != 0) {
     ld_error(
@@ -113,14 +113,22 @@ EventLoop::EventLoop(std::string thread_name, ThreadID::Type thread_type)
     err = E::SYSLIMIT;
     throw ConstructorFailed();
   }
+  start_sem_.post();
 }
 
 EventLoop::~EventLoop() {
   // Shutdown drains all the work contexts before invoking this destructor.
   ld_check(num_references_.load() == 0);
-  LD_EV(event_free)(scheduled_event_);
 
   if (running_) {
+    // We just shutdown here explicitly, join the thread and delete
+    // the eventloop instance.
+    if (!task_queue_->isShutdown()) {
+      // Tell EventLoop on the other end to destroy itself and terminate the
+      // thread
+      task_queue_->shutdown();
+      pthread_join(thread_, nullptr);
+    }
     // start() was already invoked, it's EventLoopHandle's responsibility to
     // destroy the object now (by stopping the event loop)
     return;
@@ -146,10 +154,6 @@ void EventLoop::add(folly::Function<void()> func) {
 
 void EventLoop::addWithPriority(folly::Function<void()> func, int8_t priority) {
   task_queue_->addWithPriority(std::move(func), priority);
-}
-
-void EventLoop::start() {
-  start_sem_.post();
 }
 
 void* EventLoop::enter(void* self) {
@@ -197,6 +201,8 @@ void EventLoop::run() {
   // Initiate runs to detect eventloop delays.
   using namespace std::chrono_literals;
   delay_us_.store(std::chrono::milliseconds(0));
+  scheduled_event_ = LD_EV(event_new)(
+      base_.get(), -1, 0, EventHandler<EventLoop::delayCheckCallback>, this);
   scheduled_event_start_time_ = std::chrono::steady_clock::time_point::min();
   evtimer_add(scheduled_event_, getCommonTimeout(1s));
   onThreadStarted();
@@ -209,6 +215,7 @@ void EventLoop::run() {
     ld_error("event_base_loop() exited abnormally with return value %d.", rv);
   }
   ld_check_ge(rv, 0);
+  LD_EV(event_free)(scheduled_event_);
 
   // the thread on which this EventLoop ran terminates here
 }

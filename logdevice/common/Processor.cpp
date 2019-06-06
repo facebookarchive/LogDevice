@@ -24,6 +24,7 @@
 #include "logdevice/common/ClientIdxAllocator.h"
 #include "logdevice/common/ClusterState.h"
 #include "logdevice/common/EventLoopHandle.h"
+#include "logdevice/common/EventLoopTaskQueue.h"
 #include "logdevice/common/HashBasedSequencerLocator.h"
 #include "logdevice/common/MetaDataLogWriter.h"
 #include "logdevice/common/NodesConfigurationPublisher.h"
@@ -266,11 +267,10 @@ workers_t Processor::createWorkerPool(WorkerType type, size_t count) {
       auto& handles = impl_->ev_loop_handles_;
       auto ev_loop =
           new EventLoop(Worker::makeThreadName(this, type, worker_id_t(i)),
-                        ThreadID::CPU_EXEC);
-      handles.emplace_back(std::make_unique<EventLoopHandle>(
-          ev_loop,
-          local_settings->worker_request_pipe_capacity,
-          local_settings->requests_per_iteration));
+                        ThreadID::CPU_EXEC,
+                        local_settings->worker_request_pipe_capacity,
+                        local_settings->requests_per_iteration);
+      handles.emplace_back(std::make_unique<EventLoopHandle>(ev_loop));
       auto executor = folly::getKeepAliveToken(handles.back()->get());
       worker.reset(createWorker(std::move(executor), worker_id_t(i), type));
     } catch (ConstructorFailed&) {
