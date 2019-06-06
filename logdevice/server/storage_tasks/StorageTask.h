@@ -29,7 +29,6 @@ namespace facebook { namespace logdevice {
  */
 
 class ExecStorageThread;
-class RequestPump;
 class StatsHolder;
 class StorageThreadPool;
 

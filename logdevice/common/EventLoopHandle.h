@@ -105,6 +105,14 @@ class EventLoopHandle {
     return event_loop_;
   }
 
+  EventLoop* operator->() {
+    return event_loop_;
+  }
+
+  EventLoop& operator*() {
+    return *event_loop_;
+  }
+
   struct event_base* getEventBase() {
     return event_loop_->getEventBase();
   }
