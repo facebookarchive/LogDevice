@@ -26,18 +26,18 @@ typedef DeterministicSchedule DSched;
 namespace facebook { namespace logdevice { namespace detail {
 
 template <>
-void EventFdBaton<DeterministicAtomic>::post() {
+void LifoFdBaton<DeterministicAtomic>::post() {
   DeterministicSchedule::beforeSharedAccess();
-  EventFdBatonBase::post();
+  baton_->post();
   DeterministicSchedule::afterSharedAccess();
 }
 
 template <>
-void EventFdBaton<DeterministicAtomic>::wait() {
+void LifoFdBaton<DeterministicAtomic>::wait() noexcept {
   bool done = false;
   while (!done) {
     DeterministicSchedule::beforeSharedAccess();
-    done = consume();
+    done = try_wait();
     DeterministicSchedule::afterSharedAccess();
   }
 }
@@ -49,7 +49,7 @@ static void wait(LifoEventSem& sem) {
   // wait is private in LifoEventSem, because it is slow, but it is still
   // useful to test the machinery
   static_cast<folly::detail::LifoSemBase<
-      facebook::logdevice::detail::EventFdBaton<std::atomic>,
+      facebook::logdevice::detail::LifoFdBaton<std::atomic>,
       std::atomic>*>(&sem)
       ->wait();
 }
@@ -108,8 +108,7 @@ TEST(LifoEventSem, async) {
       size_t n = 0;
       try {
         while (true) {
-          auto ready = waiter->poll();
-          EXPECT_TRUE(ready);
+          waiter->wait_readable();
           waiter->process([&] { ++n; }, 10);
         }
       } catch (ShutdownSemError& x) {
@@ -148,8 +147,7 @@ static void workerPoolSim(int n,
         size_t localReceived = 0;
         try {
           while (true) {
-            auto ready = waiter->poll();
-            EXPECT_TRUE(ready);
+            waiter->wait_readable();
             if (useProcessBatch) {
               waiter->processBatch(
                   [&](uint32_t d) { localReceived += d; }, waitBatchSize);

@@ -8,42 +8,86 @@
 #include "logdevice/common/LifoEventSem.h"
 
 #include <folly/Exception.h>
+#include <folly/FileUtil.h>
 #include <folly/portability/Sockets.h>
 #include <folly/portability/Unistd.h>
-#include <sys/eventfd.h>
+
+#if __linux__ && !__ANDROID__
+#define FOLLY_HAVE_EVENTFD
+#include <folly/io/async/EventFDWrapper.h>
+#endif
 
 namespace facebook { namespace logdevice { namespace detail {
 
-static int openNonblockingEventFd() {
-  int fd = ::eventfd(0, EFD_NONBLOCK | EFD_SEMAPHORE);
-  folly::checkUnixError(fd, "eventfd");
-  return fd;
-}
-
-EventFdBatonBase::EventFdBatonBase() : fd(openNonblockingEventFd()) {}
-
-EventFdBatonBase::~EventFdBatonBase() noexcept {
-  ::close(fd);
-}
-
-void EventFdBatonBase::post() {
-  const uint64_t val = 1;
-  ssize_t n;
-  while ((n = ::write(fd, &val, sizeof(val))) == -1) {
-    // any errno besides EINTR violates the spec, and is therefore a
-    // logic error
-    assert(errno == EINTR);
+SynchronizationFd::SynchronizationFd() {
+#ifdef FOLLY_HAVE_EVENTFD
+  fds_[FdType::Read] = fds_[FdType::Write] =
+      eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK | EFD_SEMAPHORE);
+  if (fds_[FdType::Read] != -1) {
+    return;
   }
-  // any return value except -1 or n violates the spec, and is therefore
-  // a logic error
-  assert(n == sizeof(val));
+
+  if (!(errno == ENOSYS || errno == EINVAL)) {
+    folly::throwSystemError(
+        "Failed to create eventfd in SynchronizationFd", errno);
+  }
+#endif
+  if (pipe(fds_)) {
+    folly::throwSystemError(
+        "Failed to create pipe in SynchronizationFd", errno);
+  }
+  try {
+    // put both ends of the pipe into non-blocking mode
+    if (fcntl(fds_[FdType::Read], F_SETFL, O_RDONLY | O_NONBLOCK) != 0) {
+      folly::throwSystemError("Failed to put SynchronizationFd pipe read "
+                              "endpoint into non-blocking mode",
+                              errno);
+    }
+    if (fcntl(fds_[FdType::Write], F_SETFL, O_WRONLY | O_NONBLOCK) != 0) {
+      folly::throwSystemError("Failed to put SynchronizationFd pipe write "
+                              "endpoint into non-blocking mode",
+                              errno);
+    }
+  } catch (...) {
+    ::close(fds_[FdType::Read]);
+    ::close(fds_[FdType::Write]);
+    throw;
+  }
+}
+SynchronizationFd::~SynchronizationFd() {
+  ::close(fds_[FdType::Write]);
+  if (fds_[FdType::Read] != fds_[FdType::Write]) {
+    ::close(fds_[FdType::Read]);
+  }
 }
 
-bool EventFdBatonBase::poll(int timeoutMillis) {
+void SynchronizationFd::write() {
+  ssize_t bytes_written = 0;
+  size_t bytes_expected = 0;
+
+  do {
+    if (fds_[FdType::Read] == fds_[FdType::Write]) {
+      // eventfd(2) dictates that we must write a 64-bit integer
+      uint64_t signal = 1;
+      bytes_expected = sizeof(signal);
+      bytes_written = ::write(fds_[FdType::Write], &signal, bytes_expected);
+    } else {
+      uint8_t signal = 1;
+      bytes_expected = sizeof(signal);
+      bytes_written = ::write(fds_[FdType::Write], &signal, bytes_expected);
+    }
+  } while (bytes_written == -1 && errno == EINTR);
+
+  if (bytes_written != ssize_t(bytes_expected)) {
+    folly::throwSystemError("Failed to write to SynchronizationFd", errno);
+  }
+}
+
+bool SynchronizationFd::poll(int timeoutMillis) noexcept {
   while (true) {
     // wait using poll, since it has less setup for a one-off use
     struct pollfd poll_info;
-    poll_info.fd = fd;
+    poll_info.fd = fds_[FdType::Read];
     poll_info.events = POLLIN;
     auto rv = ::poll(&poll_info, 1, timeoutMillis);
 
@@ -74,29 +118,31 @@ bool EventFdBatonBase::poll(int timeoutMillis) {
   }
 }
 
-bool EventFdBatonBase::consume() {
-  uint64_t val;
-  ssize_t n;
-  while ((n = ::read(fd, &val, sizeof(val))) == -1) {
-    if (errno == EAGAIN) {
-      // eventfd has value zero
-      return false;
+bool SynchronizationFd::read() noexcept {
+#ifdef FOLLY_HAVE_EVENTFD
+  if (fds_[FdType::Read] == fds_[FdType::Write]) {
+    uint64_t val;
+    ssize_t n;
+    while ((n = ::read(fds_[FdType::Read], &val, sizeof(val))) == -1) {
+      if (errno == EAGAIN) {
+        // eventfd has value zero
+        return false;
+      }
+      // any error except EINTR or EAGAIN is a logic error
+      assert(errno == EINTR);
     }
-    // any error except EINTR or EAGAIN is a logic error
-    assert(errno == EINTR);
+    // any read except uint64_t(1) is a logic error when using EFD_SEMAPHORE
+    assert(n == sizeof(val));
+    assert(val == 1);
+    return true;
   }
-  // any read except uint64_t(1) is a logic error when using EFD_SEMAPHORE
-  assert(n == sizeof(val));
-  assert(val == 1);
-  return true;
-}
-
-void EventFdBatonBase::wait() {
-  if (!consume()) {
-    poll();
-    auto f = consume();
-    assert(f);
-    (void)f;
+#endif
+  uint8_t message{0};
+  ssize_t result =
+      folly::readNoInt(fds_[FdType::Read], &message, sizeof(message));
+  if (result != -1) {
+    assert(message == 1);
   }
+  return result != -1;
 }
 }}} // namespace facebook::logdevice::detail

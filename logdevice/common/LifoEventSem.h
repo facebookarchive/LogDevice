@@ -16,83 +16,173 @@
 namespace facebook { namespace logdevice {
 namespace detail {
 
+/// Wrapper around a eventfd or a pipe used for signaling between threads which
+/// can be waited on by epoll or variants. Multiple writes will keep the
+/// consumer fd readable until they are all consumed.
+class SynchronizationFd {
+ public:
+  static constexpr int kInfiniteTimeout = -1;
+  // Throws if it does not manage to open an eventfd or pipe
+  explicit SynchronizationFd();
+  SynchronizationFd(SynchronizationFd const&) = delete;
+  SynchronizationFd& operator=(SynchronizationFd const&) = delete;
+  ~SynchronizationFd();
+
+  /// Post an event to write fd
+  void write();
+  /// Consume an event from fd. Returns false if no event is available.
+  bool read() noexcept;
+  /// Waits for fd to become readble but does not consume an event.
+  /// Returns false if fd didn't become readable within timeout.
+  /// set timeout_ms to kInfiniteTimeout to wait indefinitely
+  bool poll(int timeout_ms = kInfiniteTimeout) noexcept;
+
+  /// Returns a read fd which can be waited on using epoll or variants.
+  int get_read_fd() const noexcept {
+    return fds_[FdType::Read];
+  }
+
+ private:
+  enum FdType { Read = 0, Write = 1, FdCount = 2 };
+  int fds_[FdType::FdCount];
+};
+
 /// Works like a Baton, but performs its handoff via a user-visible
-/// eventfd.  This allows the caller to wait for multiple events
+/// eventfd or pipe. This allows the caller to wait for multiple events
 /// simultaneously using epoll, poll, select, or a wrapping library
-/// like libevent.  You should call consume() instead of wait() if you
-/// know that fd is readable, since it will double-check that for you.
+/// like libevent.
 /// All bets are off if you do anything to fd besides adding it to an
 /// epoll wait set (don't read from, write to, or close it).
 ///
 /// Unlike a Baton, post and wait are cumulative.  It is explicitly allowed
 /// to post() twice and then expect two wait()s or consume()s to succeed.
-struct EventFdBatonBase {
-  const int fd;
+/// Unlike a Baton it does not introduce memory barrier on wake up as it does
+/// not get any function calls if wake-up goes through user epoll, pool,
+/// select or a library. Consumer needs to introduce a barrier by calling
+/// get_event_count() before accessing anything modified by producer thread.
+template <template <typename> class Atom>
+class FdBaton {
+ public:
+  FOLLY_ALWAYS_INLINE void post() {
+    event_count_.fetch_add(1, std::memory_order_release);
+    fd_.write();
+  }
+  FOLLY_ALWAYS_INLINE bool try_wait() noexcept {
+    auto res = fd_.read();
+    if (res) {
+      event_count_.fetch_sub(1, std::memory_order_acquire);
+    }
+    return res;
+  }
 
-  /// Throws an exception if an eventfd can't be opened
-  explicit EventFdBatonBase();
+  template <typename Rep, typename Period>
+  FOLLY_ALWAYS_INLINE bool
+  try_wait_for(const std::chrono::duration<Rep, Period>& timeout) noexcept {
+    if (FOLLY_LIKELY(try_wait())) {
+      return true;
+    }
+    return try_wait_slow(timeout);
+  }
 
-  EventFdBatonBase(EventFdBatonBase const&) = delete;
-  EventFdBatonBase& operator=(EventFdBatonBase const&) = delete;
+  template <typename Clock, typename Duration>
+  FOLLY_ALWAYS_INLINE bool try_wait_until(
+      const std::chrono::time_point<Clock, Duration>& deadline) noexcept {
+    if (FOLLY_LIKELY(try_wait())) {
+      return true;
+    }
+    return try_wait_slow(deadline - Clock::now());
+  }
 
-  ~EventFdBatonBase() noexcept;
+  FOLLY_ALWAYS_INLINE void wait() noexcept {
+    if (FOLLY_UNLIKELY(!try_wait())) {
+      try_wait_slow(std::chrono::milliseconds::max());
+    }
+  }
 
-  /// Enqueues a wakeup notification
-  void post();
+  FOLLY_ALWAYS_INLINE int get_read_fd() const noexcept {
+    return fd_.get_read_fd();
+  }
 
-  /// Returns true iff fd is readable afterward, waiting at most
-  /// timeoutMillis for that to occur.  Timeout of -1 means wait forever,
-  /// and will always return true
-  bool poll(int timeoutMillis = -1);
+  /// Introduces an acquire memory barrier to match a release one set by post
+  FOLLY_ALWAYS_INLINE int get_event_count() noexcept {
+    return event_count_.load(std::memory_order_acquire);
+  }
 
-  /// Consumes a preceding post if one is available, returning true if
-  /// a post was consumed.  Does not block
-  bool consume();
+  /// Waits for baton to become active but does not consume an event.
+  FOLLY_ALWAYS_INLINE void wait_readable() noexcept {
+    fd_.poll();
+  }
 
-  /// Blocks until there is a corresponding post, then consumes it
-  void wait();
+ private:
+  template <typename Rep, typename Period>
+  FOLLY_ALWAYS_INLINE bool
+  try_wait_slow(const std::chrono::duration<Rep, Period>& timeout) noexcept {
+    int timeout_ms = SynchronizationFd::kInfiniteTimeout;
+    const auto timeout_ms_unbounded =
+        std::chrono::duration_cast<std::chrono::milliseconds>(timeout).count();
+    if (timeout_ms_unbounded <= std::numeric_limits<int>::max()) {
+      timeout_ms = timeout_ms_unbounded;
+    }
+    bool res = false;
+    if (fd_.poll(timeout_ms)) {
+      res = try_wait();
+      assert(res);
+    }
+    return res;
+  }
+  SynchronizationFd fd_;
+  Atom<int> event_count_{0};
 };
 
-/// Unforunately EventFdBatonBase does not provide memory barriers so accessing
-/// variable set by other producer thread requires separate synchronisation.
-/// event_count is used for that purpose.
-/// The pass-through methods needn't be pass-through in specialized forms
+/// This is a wrapper introduced for usage within LifoSem.
+/// LifoSem node can not be larger than 8 bytes and our FdBaton is 12
 template <template <typename> class Atom>
-struct EventFdBaton : public EventFdBatonBase {
-  Atom<int> event_count{0};
-  void post() {
-    event_count.fetch_add(1, std::memory_order_release);
-    EventFdBatonBase::post();
+class LifoFdBaton {
+ public:
+  FOLLY_ALWAYS_INLINE void post() {
+    baton_->post();
   }
-  void wait() {
-    EventFdBatonBase::wait();
+
+  FOLLY_ALWAYS_INLINE bool try_wait() noexcept {
+    return baton_->try_wait();
   }
-  bool consume() {
-    if (EventFdBatonBase::consume()) {
-      event_count.fetch_sub(1, std::memory_order_acquire);
-      return true;
-    };
-    return false;
+
+  template <typename Rep, typename Period>
+  FOLLY_ALWAYS_INLINE bool
+  try_wait_for(const std::chrono::duration<Rep, Period>& timeout) noexcept {
+    return baton_->try_wait_for(timeout);
   }
+
   template <typename Clock, typename Duration>
-  bool
-  try_wait_until(const std::chrono::time_point<Clock, Duration>& deadline) {
-    auto max = std::chrono::time_point<Clock, Duration>::max();
-    // deadline support currently unimplemented, and as of this
-    // writing, unused.  Consider implementing
-    // EventFdBatonBase::try_wait_until if you hit this assert.
-    assert(deadline.time_since_epoch().count() ==
-           max.time_since_epoch().count());
-    EventFdBatonBase::wait();
-    return true;
+  FOLLY_ALWAYS_INLINE bool try_wait_until(
+      const std::chrono::time_point<Clock, Duration>& deadline) noexcept {
+    return baton_->try_wait_until(deadline);
   }
+
+  FOLLY_ALWAYS_INLINE void wait() noexcept {
+    baton_->wait();
+  }
+
+  FOLLY_ALWAYS_INLINE int get_read_fd() const noexcept {
+    return baton_->get_read_fd();
+  }
+  FOLLY_ALWAYS_INLINE int get_event_count() noexcept {
+    return baton_->get_event_count();
+  }
+  FOLLY_ALWAYS_INLINE void wait_readable() noexcept {
+    baton_->wait_readable();
+  }
+
+ private:
+  std::unique_ptr<FdBaton<Atom>> baton_{std::make_unique<FdBaton<Atom>>()};
 };
 } // namespace detail
 
 template <template <typename> class Atom = std::atomic>
-struct LifoEventSemImpl
-    : public folly::detail::LifoSemBase<detail::EventFdBaton<Atom>, Atom> {
-  struct AsyncWaiter;
+class LifoEventSemImpl
+    : public folly::detail::LifoSemBase<detail::LifoFdBaton<Atom>, Atom> {
+ public:
+  class AsyncWaiter;
 
   /// Asynchronously performs a wait() operation, arranging for
   /// return_value->fd() to be readable when the wait has completed.
@@ -116,36 +206,35 @@ struct LifoEventSemImpl
   /// asynchronously, with success notification delivered in an
   /// epoll-compatible manner (the readability of fd()).  An AsyncWaiter
   /// may only be destroyed when it is in a notified state (fd()
-  /// is readable).  This might or might not be checked.
+  /// is readable).
   ///
   /// AsyncWaiter is designed to work with a level-triggered notification
   /// mechanism.  It cancels neighboring calls to read() and write().
   /// This optimization doesn't work for edge-triggered notification
   /// mechanisms.
-  struct AsyncWaiter {
+  class AsyncWaiter {
+   public:
     explicit AsyncWaiter(LifoEventSemImpl<Atom>& owner)
         : owner_(owner), node_(owner.allocateNode()) {
       beginWait();
-    }
-
-    ~AsyncWaiter() noexcept {
-      // If the fd isn't readable, then the node is still linked into
-      // the semaphore
-      assert(node_->handoff().poll(0));
     }
 
     /// The file descriptor that will be readable when the asynchronous
     /// wait started by beginWait has been matched with a post() of the
     /// original LifoEventSem
     int fd() const {
-      return node_->handoff().fd;
+      return node_->handoff().get_read_fd();
+    }
+
+    FOLLY_ALWAYS_INLINE void wait_readable() noexcept {
+      node_->handoff().wait_readable();
     }
 
     /// Consumes the read event pending on fd(), then begins a new async
     /// wait on the owning LifoEventSem.  Throws ShutdownSemError if the
     /// semaphore is shut down.
     void recycle() {
-      if (UNLIKELY(recycleAndCheckShutdown())) {
+      if (FOLLY_UNLIKELY(recycleAndCheckShutdown())) {
         throw folly::ShutdownSemError("owning semaphore has shut down");
       }
     }
@@ -164,13 +253,14 @@ struct LifoEventSemImpl
     /// The AsyncWaiter will be recycled even if func throws an exception.
     template <typename Func>
     void process(Func&& func, size_t maxCalls) {
+      // We need to call get_event_count in order to introduce acquire memory
+      // barrier as node_->isShutdownNotice() call is not safe without it.
+      if (FOLLY_UNLIKELY(node_->handoff().get_event_count() != 1)) {
+        return;
+      }
       // we ignore owner_.isShutdown and let notification flow throw the
       // nodes, so that we can implement draining semantics
-      if (UNLIKELY(node_->handoff().event_count.load(
-                       std::memory_order_acquire) != 1)) {
-        std::abort();
-      }
-      if (UNLIKELY(node_->isShutdownNotice())) {
+      if (FOLLY_UNLIKELY(node_->isShutdownNotice())) {
         assert(owner_.isShutdown());
         throw folly::ShutdownSemError("semaphore has been shut down");
       }
@@ -210,11 +300,12 @@ struct LifoEventSemImpl
     /// Shutdown and error semantics are like process().
     template <typename Func>
     void processBatch(Func&& func, size_t maxBatchSize) {
-      if (UNLIKELY(node_->handoff().event_count.load(
-                       std::memory_order_acquire) != 1)) {
-        std::abort();
+      // We need to call get_event_count in order to introduce acquire memory
+      // barrier as node_->isShutdownNotice() call is not safe without it.
+      if (FOLLY_UNLIKELY(node_->handoff().get_event_count() != 1)) {
+        return;
       }
-      if (UNLIKELY(node_->isShutdownNotice())) {
+      if (FOLLY_UNLIKELY(node_->isShutdownNotice())) {
         throw folly::ShutdownSemError("semaphore has been shut down");
       }
 
@@ -227,13 +318,6 @@ struct LifoEventSemImpl
         throw;
       }
       recycle();
-    }
-
-    /// Waits for fd() using a one-off poll.  If you are using this a
-    /// lot you might not actually need AsyncWaiter or LifoEventSem,
-    /// and should consider LifoSem.
-    bool poll(int timeoutMillis = -1) {
-      return node_->handoff().poll(timeoutMillis);
     }
 
    private:
@@ -256,7 +340,7 @@ struct LifoEventSemImpl
         // that we will immediately trigger the shutdown path.  To avoid
         // a rare (and likely to be untested) code path we don't throw
         // at the moment
-        if (UNLIKELY(rv == WaitResult::SHUTDOWN)) {
+        if (FOLLY_UNLIKELY(rv == WaitResult::SHUTDOWN)) {
           node_->setShutdownNotice();
         }
         node_->handoff().post();
@@ -270,9 +354,9 @@ struct LifoEventSemImpl
     bool recycleAndCheckShutdown() {
       // At this point fd is still readable, and we have no wait node
       // linked into the LifoSemBase.  The straightforward implementation
-      // here would node_->consume(), then call beginWait().  Since
+      // here would node_->tryWait(), then call beginWait().  Since
       // EventFdBaton explicitly allows there to be two pending posts,
-      // however, we can optimize by delaying the node_->consume() until we
+      // however, we can optimize by delaying the node_->tryWait() until we
       // find out if we are going to have to call node_->post().  If so,
       // we let those cancel out to avoid a system call.  This is a win
       // in the case that there is already a post ready in the semaphore,
@@ -280,7 +364,7 @@ struct LifoEventSemImpl
       auto rv = owner_.tryWaitOrPush(*node_);
       if (rv == WaitResult::PUSH) {
         // node actually was pushed, we need to remove one from the baton
-        if (!node_->handoff().consume()) {
+        if (!node_->handoff().try_wait()) {
           // If you have gotten this exception it is probably because you
           // called recycle() or process() on the AsyncWaiter before fd()
           // was readable.  It is also possible someone else messed with
@@ -299,15 +383,15 @@ struct LifoEventSemImpl
   };
 
   explicit LifoEventSemImpl(uint32_t v = 0)
-      : folly::detail::LifoSemBase<detail::EventFdBaton<Atom>, Atom>(v) {}
+      : folly::detail::LifoSemBase<detail::LifoFdBaton<Atom>, Atom>(v) {}
 
  private:
-  /// wait() works, but since we don't reuse the eventfd-s, it is very
+  /// wait() works, but since we don't reuse the SynchronizationFd-s, it is very
   /// expensive.  Making it private doesn't prevent people from casting
   /// to LifoSemBase and calling it, but it means that they will probably
   /// read this comment
   void wait() {
-    folly::detail::LifoSemBase<detail::EventFdBaton<Atom>, Atom>::wait();
+    folly::detail::LifoSemBase<detail::LifoFdBaton<Atom>, Atom>::wait();
   }
 };
 
