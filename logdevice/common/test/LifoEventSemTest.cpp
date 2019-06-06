@@ -80,6 +80,22 @@ TEST(LifoEventSem, asyncWaiterShutdown) {
   EXPECT_FALSE(sem.tryWait());
 }
 
+TEST(LifoEventSem, asyncWaiterDestroyFromProcess) {
+  LifoEventSem sem;
+
+  sem.post();
+  auto waiter = sem.beginAsyncWait();
+  waiter->wait_readable();
+  EXPECT_FALSE(sem.tryWait());
+  waiter.reset();
+  EXPECT_TRUE(sem.tryWait());
+  sem.post();
+  waiter = sem.beginAsyncWait();
+  waiter->process([&waiter]() { waiter.reset(); }, 1);
+  sem.shutdown();
+  EXPECT_FALSE(sem.tryWait());
+}
+
 TEST(LifoEventSem, multi) {
   LifoEventSem sem;
 

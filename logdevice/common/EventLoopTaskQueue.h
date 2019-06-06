@@ -152,7 +152,9 @@ class EventLoopTaskQueue {
   std::array<Queue, kNumberOfPriorities> queues_;
 
   LifoEventSem sem_;
-  std::unique_ptr<LifoEventSem::AsyncWaiter> sem_waiter_;
+  std::unique_ptr<LifoEventSem::AsyncWaiter,
+                  folly::DelayedDestruction::Destructor>
+      sem_waiter_;
 
   // Max size of the queue.
   size_t capacity_;

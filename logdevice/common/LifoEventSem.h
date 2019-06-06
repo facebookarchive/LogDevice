@@ -11,6 +11,7 @@
 
 #include <folly/Memory.h>
 #include <folly/ScopeGuard.h>
+#include <folly/io/async/DelayedDestruction.h>
 #include <folly/synchronization/LifoSem.h>
 
 namespace facebook { namespace logdevice {
@@ -198,8 +199,10 @@ class LifoEventSemImpl
   ///     write(fd, ...);
   ///   }).detach();
   ///
-  std::unique_ptr<AsyncWaiter> beginAsyncWait() {
-    return std::make_unique<AsyncWaiter>(*this);
+  std::unique_ptr<AsyncWaiter, folly::DelayedDestruction::Destructor>
+  beginAsyncWait() {
+    return std::unique_ptr<AsyncWaiter, folly::DelayedDestruction::Destructor>(
+        new AsyncWaiter(*this));
   }
 
   /// An AsyncWaiter allows a LifoEventSem wait operation to proceed
@@ -212,19 +215,11 @@ class LifoEventSemImpl
   /// mechanism.  It cancels neighboring calls to read() and write().
   /// This optimization doesn't work for edge-triggered notification
   /// mechanisms.
-  class AsyncWaiter {
+  class AsyncWaiter : public folly::DelayedDestruction {
    public:
     explicit AsyncWaiter(LifoEventSemImpl<Atom>& owner)
         : owner_(owner), node_(owner.allocateNode()) {
       beginWait();
-    }
-    ~AsyncWaiter() {
-      // If we are not enqueued we consumed an event from queue but did not
-      // process it. If we weren't posted to because of shutdown we should
-      // return the event to semaphore as we will not process it.
-      if (!owner_.tryRemoveNode(*node_) && !node_->isShutdownNotice()) {
-        owner_.post();
-      }
     }
 
     /// The file descriptor that will be readable when the asynchronous
@@ -261,6 +256,7 @@ class LifoEventSemImpl
     /// The AsyncWaiter will be recycled even if func throws an exception.
     template <typename Func>
     void process(Func&& func, size_t maxCalls) {
+      DestructorGuard dg(this);
       // We need to call get_event_count in order to introduce acquire memory
       // barrier as node_->isShutdownNotice() call is not safe without it.
       if (FOLLY_UNLIKELY(node_->handoff().get_event_count() != 1)) {
@@ -308,6 +304,7 @@ class LifoEventSemImpl
     /// Shutdown and error semantics are like process().
     template <typename Func>
     void processBatch(Func&& func, size_t maxBatchSize) {
+      DestructorGuard dg(this);
       // We need to call get_event_count in order to introduce acquire memory
       // barrier as node_->isShutdownNotice() call is not safe without it.
       if (FOLLY_UNLIKELY(node_->handoff().get_event_count() != 1)) {
@@ -329,6 +326,14 @@ class LifoEventSemImpl
     }
 
    private:
+    ~AsyncWaiter() override {
+      // If we are not enqueued we consumed an event from queue but did not
+      // process it. If we weren't posted to because of shutdown we should
+      // return the event to semaphore as we will not process it.
+      if (!owner_.tryRemoveNode(*node_) && !node_->isShutdownNotice()) {
+        owner_.post();
+      }
+    }
     typedef typename LifoEventSemImpl<Atom>::WaitResult WaitResult;
 
     LifoEventSemImpl<Atom>& owner_;
