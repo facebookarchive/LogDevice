@@ -171,11 +171,10 @@ TEST_F(AppendIntegrationTest, AppendEchoClient) {
 TEST_F(AppendIntegrationTest, SyncStorageThreadThrottling) {
   int rv;
 
-  const int NUM_REQUESTS_AND_LOGS = 1000;
+  const int NUM_LOGS = 1000;
 
-  auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .setNumLogs(NUM_REQUESTS_AND_LOGS)
-                     .create(1);
+  auto cluster =
+      IntegrationTestUtils::ClusterFactory().setNumLogs(NUM_LOGS).create(1);
   // Make sure that sequencer won't reactivate.
   cluster->waitForMetaDataLogWrites();
 
@@ -185,9 +184,9 @@ TEST_F(AppendIntegrationTest, SyncStorageThreadThrottling) {
   // For synchronisation with async appends
   Semaphore async_append_sem;
 
-  for (int i = 0; i < NUM_REQUESTS_AND_LOGS; ++i) {
+  for (int i = 0; i < NUM_LOGS; ++i) {
     rv = client->append(
-        logid_t((i % NUM_REQUESTS_AND_LOGS) + 1),
+        logid_t(i + 1),
         "payload",
         [&async_append_sem](Status st, const DataRecord& /* unused */) {
           if (st != E::OK) {
@@ -200,19 +199,19 @@ TEST_F(AppendIntegrationTest, SyncStorageThreadThrottling) {
     EXPECT_EQ(0, rv);
   }
 
-  for (int i = 0; i < NUM_REQUESTS_AND_LOGS; ++i) {
+  for (int i = 0; i < NUM_LOGS; ++i) {
     async_append_sem.wait();
   }
 
   std::map<std::string, int64_t> stats = cluster->getNode(0).stats();
-  // expectation values depend on chosen NUM_REQUESTS_AND_LOGS
+  // expectation values depend on chosen NUM_LOGS
   // most syncs here come from sequencer activation
   // note opt mode also affects these numbers i.e. buck with @mode/opt
   int fdatasync = stats["fdatasyncs"];
   int wal_syncs = stats["wal_syncs"];
-  EXPECT_GT(fdatasync, 30);
+  EXPECT_GT(fdatasync, 10);
   EXPECT_LT(fdatasync, 250);
-  EXPECT_GT(wal_syncs, 30);
+  EXPECT_GT(wal_syncs, 10);
   EXPECT_LT(wal_syncs, 250);
 }
 
