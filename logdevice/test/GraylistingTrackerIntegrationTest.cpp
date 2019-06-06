@@ -63,7 +63,7 @@ class AppendThread {
         while (!stop_) {
           for (auto i = from_logid; i <= to_logid; i++) {
             client->append(logid_t{i}, ".", [](auto, const auto&) {});
-            std::this_thread::sleep_for(200ms);
+            std::this_thread::sleep_for(100ms);
           }
         }
       });
@@ -156,7 +156,7 @@ class GraylistingTrackerIntegrationTest : public IntegrationTestBase {
   waitUntillGraylistOnNode(node_index_t on_node,
                            std::string message,
                            folly::Function<bool(GraylistedNodes)> predicate,
-                           std::chrono::seconds duration = 30s) {
+                           std::chrono::seconds duration = 60s) {
     return wait_until(message.c_str(),
                       [&]() { return predicate(getGraylistedNodes(on_node)); },
                       std::chrono::steady_clock::now() + duration) == 0;
@@ -189,7 +189,7 @@ TEST_F(GraylistingTrackerIntegrationTest, GraylistingExpires) {
   AppendThread appender;
   // Inject failure in some random node
   cluster->getNode(3).injectShardFault(
-      "all", "all", "all", "latency", false, folly::none, (500ms).count());
+      "all", "all", "all", "latency", false, 100, (500ms).count());
   appender.start(client.get(), 1, 10);
 
   EXPECT_TRUE(waitUntillGraylistOnNode(
@@ -214,7 +214,7 @@ TEST_F(GraylistingTrackerIntegrationTest, DisablingGraylistWorks) {
   AppendThread appender;
   // Inject failure in some random node
   cluster->getNode(3).injectShardFault(
-      "all", "all", "all", "latency", false, folly::none, (500ms).count());
+      "all", "all", "all", "latency", false, 100, (500ms).count());
   appender.start(client.get(), 1, 10);
 
   EXPECT_TRUE(waitUntillGraylistOnNode(
@@ -240,7 +240,7 @@ TEST_F(GraylistingTrackerIntegrationTest, EnablingGraylistWorks) {
   AppendThread appender;
   // Inject failure in some random node
   cluster->getNode(3).injectShardFault(
-      "all", "all", "all", "latency", false, folly::none, (500ms).count());
+      "all", "all", "all", "latency", false, 100, (500ms).count());
   appender.start(client.get(), 1, 10);
 
   EXPECT_FALSE(waitUntillGraylistOnNode(
@@ -265,9 +265,9 @@ TEST_F(GraylistingTrackerIntegrationTest, NumGraylisted) {
 
   // Inject failure in some random node
   cluster->getNode(3).injectShardFault(
-      "all", "all", "all", "latency", false, folly::none, (100ms).count());
+      "all", "all", "all", "latency", false, 100, (100ms).count());
   cluster->getNode(2).injectShardFault(
-      "all", "all", "all", "latency", false, folly::none, (100ms).count());
+      "all", "all", "all", "latency", false, 100, (100ms).count());
 
   AppendThread appender;
   appender.start(client.get(), 1, 10);
@@ -283,13 +283,15 @@ TEST_F(GraylistingTrackerIntegrationTest, NumGraylisted) {
   std::this_thread::sleep_for(10s);
 
   auto graylist = getGraylistedNodesPerWorker(0);
+  bool atleat_one_node_graylisted{false};
   for (const auto& worker : graylist) {
     EXPECT_LE(worker.second.size(), 1);
     if (worker.second.size() == 1) {
-      auto graylisted = *worker.second.begin();
-      EXPECT_TRUE(graylisted == 2 || graylisted == 3);
+      atleat_one_node_graylisted = true;
+      break;
     }
   }
+  EXPECT_TRUE(atleat_one_node_graylisted);
 }
 
 TEST_F(GraylistingTrackerIntegrationTest, DisablingGraylistByNumNodes) {
@@ -299,7 +301,7 @@ TEST_F(GraylistingTrackerIntegrationTest, DisablingGraylistByNumNodes) {
   AppendThread appender;
   // Inject failure in some random node
   cluster->getNode(3).injectShardFault(
-      "all", "all", "all", "latency", false, folly::none, (500ms).count());
+      "all", "all", "all", "latency", false, 100, (500ms).count());
   appender.start(client.get(), 1, 10);
 
   EXPECT_TRUE(waitUntillGraylistOnNode(
