@@ -12,7 +12,7 @@
 #include <vector>
 
 #include <boost/filesystem.hpp>
-#include <folly/futures/helpers.h>
+#include <folly/futures/Future.h>
 
 #include "logdevice/common/debug.h"
 

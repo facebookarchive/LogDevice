@@ -14,7 +14,6 @@
 
 #include <boost/filesystem.hpp>
 #include <folly/futures/Future.h>
-#include <folly/futures/helpers.h>
 
 #include "logdevice/common/ConstructorFailed.h"
 #include "logdevice/common/debug.h"
