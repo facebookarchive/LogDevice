@@ -191,38 +191,53 @@ class StringBufferDestination : public LinearBufferDestinationBase {
 
 } // anonymous namespace
 
-ProtocolWriter::ProtocolWriter(std::unique_ptr<Destination> dest,
-                               std::string context,
+ProtocolWriter::ProtocolWriter(Destination* dest,
+                               const char* context,
                                folly::Optional<uint16_t> proto)
-    : dest_(std::move(dest)),
-      context_(std::move(context)),
-      proto_(std::move(proto)) {
+    : dest_(dest), context_(context), proto_(std::move(proto)) {
   ld_assert(dest_);
 }
 
 ProtocolWriter::ProtocolWriter(MessageType type,
                                struct evbuffer* dest,
                                folly::Optional<uint16_t> proto)
-    : ProtocolWriter(std::make_unique<EvbufferDestination>(dest),
-                     messageTypeNames()[type].c_str(),
-                     proto) {}
+    : dest_owned_(true),
+      dest_(new (dest_space_) EvbufferDestination(dest)),
+      context_(messageTypeNames()[type].c_str()),
+      proto_(proto) {
+  static_assert(sizeof(dest_space_) >= sizeof(EvbufferDestination), "");
+}
 
 ProtocolWriter::ProtocolWriter(Slice dest,
                                std::string context,
                                folly::Optional<uint16_t> proto)
-    : ProtocolWriter(std::make_unique<LinearBufferDestination>(dest),
-                     std::move(context),
-                     std::move(proto)) {}
+    : dest_owned_(true),
+      context_owned_(std::move(context)),
+      dest_(new (dest_space_) LinearBufferDestination(dest)),
+      context_(context_owned_.c_str()),
+      proto_(proto) {
+  static_assert(sizeof(dest_space_) >= sizeof(LinearBufferDestination), "");
+}
 
 ProtocolWriter::ProtocolWriter(std::string* dest,
                                std::string context,
                                folly::Optional<uint16_t> proto,
                                folly::Optional<size_t> max_size)
-    : ProtocolWriter(std::make_unique<StringBufferDestination>(
-                         dest,
-                         max_size.value_or(std::numeric_limits<size_t>::max())),
-                     std::move(context),
-                     proto) {}
+    : dest_owned_(true),
+      context_owned_(std::move(context)),
+      dest_(new (dest_space_) StringBufferDestination(
+          dest,
+          max_size.value_or(std::numeric_limits<size_t>::max()))),
+      context_(context_owned_.c_str()),
+      proto_(proto) {
+  static_assert(sizeof(dest_space_) >= sizeof(StringBufferDestination), "");
+}
+
+ProtocolWriter::~ProtocolWriter() {
+  if (dest_owned_) {
+    dest_->~Destination();
+  }
+}
 
 template <typename Fn>
 void ProtocolWriter::writeImplCb(Fn&& fn) {
@@ -232,7 +247,7 @@ void ProtocolWriter::writeImplCb(Fn&& fn) {
                     10,
                     "error writing %s message to %s : %s, bytes written so "
                     "far: %lu.",
-                    context_.c_str(),
+                    context_,
                     dest_->identify(),
                     error_description(err),
                     nwritten_);

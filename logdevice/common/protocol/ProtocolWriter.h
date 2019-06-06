@@ -261,8 +261,10 @@ class ProtocolWriter {
     return dest_->computeChecksum();
   }
 
-  ProtocolWriter(std::unique_ptr<Destination> dest,
-                 std::string context,
+  // Use a custom destination. Both dest and context are owned by the caller and
+  // must outlive the ProtocolWriter.
+  ProtocolWriter(Destination* dest,
+                 const char* context,
                  folly::Optional<uint16_t> proto = folly::none);
 
   ProtocolWriter(MessageType type,
@@ -283,9 +285,24 @@ class ProtocolWriter {
                  folly::Optional<uint16_t> proto = folly::none,
                  folly::Optional<size_t> max_size = folly::none);
 
+  ProtocolWriter(const ProtocolWriter&) = delete;
+  ProtocolWriter& operator=(const ProtocolWriter&) = delete;
+
+  ~ProtocolWriter();
+
  private:
-  std::unique_ptr<Destination> dest_;
-  const std::string context_;
+  // To avoid allocating Destination on the heap, we'll placement-new it in this
+  // buffer. We could instead require the user of ProtocolWriter to always own
+  // the Destination, but that would be slightly less convenient.
+  alignas(void*) char dest_space_[24];
+  bool dest_owned_ = false;
+
+  std::string context_owned_;
+
+  // Points either to dest_space or to an unowned Destination.
+  Destination* dest_;
+  // Points to either context_owned_ or to an unowned string.
+  const char* context_;
 
   size_t nwritten_ = 0;
   // Socket protocol

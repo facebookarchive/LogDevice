@@ -240,7 +240,7 @@ class ProtocolReader {
                "reading %s message from %s. Bytes read: %lu",
                nbytes,
                sizeof(typename Vector::value_type),
-               context_.c_str(),
+               context_,
                src_->identify(),
                nread_);
       status_ = E::BADMSG;
@@ -385,8 +385,10 @@ class ProtocolReader {
     return *src_;
   }
 
-  ProtocolReader(std::unique_ptr<Source> src,
-                 std::string context,
+  // Use a custom source. Both src and context are owned by the caller and
+  // must outlive the ProtocolReader.
+  ProtocolReader(Source* src,
+                 const char* context,
                  folly::Optional<uint16_t> proto = folly::none);
 
   ProtocolReader(MessageType type,
@@ -398,9 +400,22 @@ class ProtocolReader {
                  std::string context,
                  folly::Optional<uint16_t> proto = folly::none);
 
+  ProtocolReader(const ProtocolReader&) = delete;
+  ProtocolReader& operator=(const ProtocolReader&) = delete;
+
+  ~ProtocolReader();
+
  private:
-  std::unique_ptr<Source> src_;
-  const std::string context_;
+  // This is similar to ProtocolWriter, see ProtocolWriter.h
+  alignas(void*) char src_space_[24];
+  bool src_owned_ = false;
+
+  std::string context_owned_;
+
+  // Points either to dest_space or to an unowned Destination.
+  Source* src_;
+  // Points to either context_owned_ or to an unowned string.
+  const char* context_;
 
   // Socket protocol
   folly::Optional<uint16_t> proto_;

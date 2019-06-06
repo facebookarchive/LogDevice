@@ -27,17 +27,6 @@ class ProtocolReaderTest : public ::testing::Test {
     evbufs_.clear();
   }
 
-  ProtocolReader createWithBytes(
-      const void* data,
-      const size_t size,
-      folly::Optional<uint16_t> proto = Compatibility::MAX_PROTOCOL_SUPPORTED) {
-    evbuffer* evbuf = LD_EV(evbuffer_new)();
-    evbufs_.push_back(evbuf);
-    int rv = LD_EV(evbuffer_add)(evbuf, data, size);
-    ld_check(rv == 0);
-    return ProtocolReader(MessageType::APPEND, evbuf, size, proto);
-  }
-
  private:
   std::deque<evbuffer*> evbufs_;
 };
@@ -46,7 +35,8 @@ TEST_F(ProtocolReaderTest, Basic) {
   const int orig = 0x12345678;
   int read_back = 0;
   bool cb_invoked = false;
-  ProtocolReader reader = createWithBytes(&orig, sizeof orig);
+  ProtocolReader reader(
+      Slice(&orig, sizeof orig), "test", Compatibility::MAX_PROTOCOL_SUPPORTED);
   reader.read(&read_back);
   reader.result([&]() {
     cb_invoked = true;
@@ -61,7 +51,8 @@ TEST_F(ProtocolReaderTest, TooSmall) {
   const int8_t orig = 0x99;
   int16_t read_back = 0xff;
   bool cb_invoked = false;
-  ProtocolReader reader = createWithBytes(&orig, sizeof orig);
+  ProtocolReader reader(
+      Slice(&orig, sizeof orig), "test", Compatibility::MAX_PROTOCOL_SUPPORTED);
   reader.read(&read_back);
   reader.result([&]() {
     cb_invoked = true;
@@ -78,7 +69,8 @@ TEST_F(ProtocolReaderTest, TooBig) {
   const int16_t orig = 0x9988;
   int8_t read_back = 0;
   bool cb_invoked = false;
-  ProtocolReader reader = createWithBytes(&orig, sizeof orig);
+  ProtocolReader reader(
+      Slice(&orig, sizeof orig), "test", Compatibility::MAX_PROTOCOL_SUPPORTED);
   reader.read(&read_back);
   reader.result([&]() {
     cb_invoked = true;
@@ -93,7 +85,8 @@ TEST_F(ProtocolReaderTest, LengthPrefixedVectorSomeBytes) {
   const int64_t data[2] = {0x08, 0x02};
   std::vector<int64_t> read_back;
   bool cb_invoked = false;
-  ProtocolReader reader = createWithBytes(data, sizeof data);
+  ProtocolReader reader(
+      Slice(&data, sizeof data), "test", Compatibility::MAX_PROTOCOL_SUPPORTED);
   reader.readLengthPrefixedVector(&read_back);
   reader.result([&]() {
     cb_invoked = true;
@@ -108,7 +101,8 @@ TEST_F(ProtocolReaderTest, LengthPrefixedVectorZeroBytes) {
   const int64_t orig = 0x00; // 0-length vector
   std::vector<int64_t> read_back = {0xff};
   bool cb_invoked = false;
-  ProtocolReader reader = createWithBytes(&orig, sizeof orig);
+  ProtocolReader reader(
+      Slice(&orig, sizeof orig), "test", Compatibility::MAX_PROTOCOL_SUPPORTED);
   reader.readLengthPrefixedVector(&read_back);
   reader.result([&]() {
     cb_invoked = true;
@@ -122,7 +116,8 @@ TEST_F(ProtocolReaderTest, LengthPrefixedVectorTooSmall) {
   const int64_t orig = 0x08; // vector with 1 element but no data
   std::vector<int64_t> read_back = {0xff};
   bool cb_invoked = false;
-  ProtocolReader reader = createWithBytes(&orig, sizeof orig);
+  ProtocolReader reader(
+      Slice(&orig, sizeof orig), "test", Compatibility::MAX_PROTOCOL_SUPPORTED);
   reader.readLengthPrefixedVector(&read_back);
   reader.result([&]() {
     cb_invoked = true;
@@ -141,7 +136,8 @@ TEST_F(ProtocolReaderTest, LengthPrefixedVectorInvalidBytes) {
   const int64_t orig = 0x01;
   std::vector<int64_t> read_back = {0xff};
   bool cb_invoked = false;
-  ProtocolReader reader = createWithBytes(&orig, sizeof orig);
+  ProtocolReader reader(
+      Slice(&orig, sizeof orig), "test", Compatibility::MAX_PROTOCOL_SUPPORTED);
   reader.readLengthPrefixedVector(&read_back);
   reader.result([&]() {
     cb_invoked = true;
@@ -156,8 +152,8 @@ TEST_F(ProtocolReaderTest, LengthPrefixedVectorInvalidBytes) {
 TEST_F(ProtocolReaderTest, Proto) {
   const uint8_t input_bytes[] = {0x11, 0x22};
   const uint16_t SOCKET_PROTO = 2;
-  ProtocolReader reader =
-      createWithBytes(input_bytes, sizeof(input_bytes), SOCKET_PROTO);
+  ProtocolReader reader(
+      Slice(&input_bytes, sizeof(input_bytes)), "test", SOCKET_PROTO);
   ASSERT_EQ(2, reader.bytesRemaining());
 
   {
@@ -181,8 +177,8 @@ TEST_F(ProtocolReaderTest, Proto) {
 
 TEST_F(ProtocolReaderTest, ProtoInField) {
   const uint8_t input_bytes[] = {0x01};
-  ProtocolReader reader =
-      createWithBytes(input_bytes, sizeof(input_bytes), folly::none);
+  ProtocolReader reader(
+      Slice(&input_bytes, sizeof(input_bytes)), "test", folly::none);
 
   ASSERT_FALSE(reader.isProtoSet());
   {
@@ -196,8 +192,8 @@ TEST_F(ProtocolReaderTest, ProtoInField) {
 
 TEST_F(ProtocolReaderTest, ProtoMustBeSetToRead) {
   const uint8_t input_bytes[] = {0xfa, 0xce};
-  ProtocolReader reader =
-      createWithBytes(input_bytes, sizeof(input_bytes), folly::none);
+  ProtocolReader reader(
+      Slice(&input_bytes, sizeof(input_bytes)), "test", folly::none);
 
   uint16_t val = 0;
   ASSERT_FALSE(reader.isProtoSet());

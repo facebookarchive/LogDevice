@@ -151,11 +151,11 @@ class LinearBufferSource : public ProtocolReader::Source {
 };
 } // anonymous namespace
 
-ProtocolReader::ProtocolReader(std::unique_ptr<Source> src,
-                               std::string context,
+ProtocolReader::ProtocolReader(Source* src,
+                               const char* context,
                                folly::Optional<uint16_t> proto)
-    : src_(std::move(src)),
-      context_(std::move(context)),
+    : src_(src),
+      context_(context),
       proto_(std::move(proto)),
       src_left_(src_->getLength()) {
   ld_check(src_ != nullptr);
@@ -165,16 +165,31 @@ ProtocolReader::ProtocolReader(MessageType type,
                                struct evbuffer* src,
                                size_t to_read,
                                folly::Optional<uint16_t> proto)
-    : ProtocolReader(std::make_unique<EvbufferSource>(src, to_read),
-                     messageTypeNames()[type].c_str(),
-                     std::move(proto)) {}
+    : src_owned_(true),
+      src_(new (src_space_) EvbufferSource(src, to_read)),
+      context_(messageTypeNames()[type].c_str()),
+      proto_(proto),
+      src_left_(src_->getLength()) {
+  static_assert(sizeof(src_space_) >= sizeof(EvbufferSource));
+}
 
 ProtocolReader::ProtocolReader(Slice src,
                                std::string context,
                                folly::Optional<uint16_t> proto)
-    : ProtocolReader(std::make_unique<LinearBufferSource>(src),
-                     std::move(context),
-                     std::move(proto)) {}
+    : src_owned_(true),
+      context_owned_(std::move(context)),
+      src_(new (src_space_) LinearBufferSource(src)),
+      context_(context_owned_.c_str()),
+      proto_(proto),
+      src_left_(src_->getLength()) {
+  static_assert(sizeof(src_space_) >= sizeof(LinearBufferSource));
+}
+
+ProtocolReader::~ProtocolReader() {
+  if (src_owned_) {
+    src_->~Source();
+  }
+}
 
 template <typename Fn>
 void ProtocolReader::readImplCb(size_t to_read, Fn&& fn) {
@@ -191,7 +206,7 @@ void ProtocolReader::readImplCb(size_t to_read, Fn&& fn) {
                        "for a %s message. Expected %zu bytes.",
                        src_->identify(),
                        nread,
-                       context_.c_str(),
+                       context_,
                        to_read);
     ld_check(err != E::OK);
     status_ = err;
@@ -219,7 +234,7 @@ void ProtocolReader::checkReadableBytes(size_t bytes_to_read) {
         "PROTOCOL ERROR: Ran out of bytes while reading %s message from %s. "
         "After reading %zu bytes, tried to read %zu more but only %zu "
         "left.",
-        context_.c_str(),
+        context_,
         src_->identify(),
         nread_,
         bytes_to_read,
@@ -252,7 +267,7 @@ void ProtocolReader::handleTrailingBytes(size_t bytes_trailing) {
       5,
       "Got a %s message from %s with extra data at the end (%zu bytes left "
       "after reading %zu).  %s.",
-      context_.c_str(),
+      context_,
       src_->identify(),
       bytes_trailing,
       nread_ - bytes_trailing,
