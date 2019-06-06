@@ -106,10 +106,10 @@ void NodeStatsControllerLocator::locate(
   while (controller_indices->size() < controller_count) {
     auto index = hashing::weighted_ch(42 /*no special key needed*/, *weights);
 
-    ld_check(index < weights->size());
-    if (weights->at(index) == 0.0) {
+    if (index == -1) {
       break;
     }
+    ld_check(index < weights->size());
 
     weight_updater(index, weights);
     controller_indices->emplace_back(index);

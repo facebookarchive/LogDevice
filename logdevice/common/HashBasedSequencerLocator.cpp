@@ -110,11 +110,11 @@ int HashBasedSequencerLocator::locateSequencer(
 
   std::shared_ptr<NodeLocation> sequencerAffinity;
   if (log_attrs) {
-    sequencerAffinity.reset(new NodeLocation);
     const auto& aff = log_attrs->sequencerAffinity();
     if (aff.hasValue() && aff.value().hasValue()) {
       // populating sequencerAffinity
-      if (sequencerAffinity->fromDomainString(aff.value().value())) {
+      sequencerAffinity = std::make_shared<NodeLocation>();
+      if (sequencerAffinity->fromDomainString(aff.value().value()) != 0) {
         // failed
         sequencerAffinity = nullptr;
       }
@@ -146,13 +146,10 @@ int HashBasedSequencerLocator::locateSequencer(
   };
 
   bool found_in_location = false;
-  uint64_t idx;
+  int64_t idx;
   if (sequencerAffinity && !sequencerAffinity->isEmpty()) {
     // trying to find sequencer according to location affinity
-    auto weight_fn_with_loc = [sequencers,
-                               nodes_configuration,
-                               sequencerAffinity,
-                               can_we_route_to](uint64_t node) {
+    auto weight_fn_with_loc = [&](uint64_t node) {
       double w = sequencers->weights[node];
       if (can_we_route_to(node, w)) {
         const auto* serv_disc =
@@ -175,14 +172,14 @@ int HashBasedSequencerLocator::locateSequencer(
 
     idx = hashing::weighted_ch(
         log_id.val_, sequencers->nodes.size(), weight_fn_with_loc);
-    ld_check(idx < sequencers->nodes.size());
-    if (weight_fn_with_loc(idx) != 0.0) {
+    ld_check(idx < static_cast<int64_t>(sequencers->nodes.size()));
+    if (idx != -1) {
       found_in_location = true;
     }
   }
   if (!found_in_location) {
     // trying to find sequencer regardless of location
-    auto weight_fn = [sequencers, can_we_route_to](uint64_t node) {
+    auto weight_fn = [&](uint64_t node) {
       double w = sequencers->weights[node];
       if (can_we_route_to(node, w)) {
         return w;
@@ -192,9 +189,9 @@ int HashBasedSequencerLocator::locateSequencer(
 
     idx =
         hashing::weighted_ch(log_id.val_, sequencers->nodes.size(), weight_fn);
-    ld_check(idx < sequencers->nodes.size());
+    ld_check(idx < static_cast<int64_t>(sequencers->nodes.size()));
 
-    if (weight_fn(idx) == 0.0) {
+    if (idx == -1) {
       RATELIMIT_ERROR(std::chrono::seconds(10),
                       10,
                       "No available sequencer node for log %lu. "
@@ -203,6 +200,8 @@ int HashBasedSequencerLocator::locateSequencer(
       err = E::NOTFOUND;
       return -1;
     }
+
+    ld_assert_gt(sequencers->weights.at(idx), 0);
   }
   ld_check(sequencers->nodes[idx].isNodeID());
   ld_spew("Mapping log %lu to node %s",
@@ -235,7 +234,7 @@ HashBasedSequencerLocator::getNodesConfiguration() const {
 }
 
 const Settings& HashBasedSequencerLocator::getSettings() const {
-  return Worker::onThisThread()->settings();
+  return Worker::settings();
 }
 
 }} // namespace facebook::logdevice

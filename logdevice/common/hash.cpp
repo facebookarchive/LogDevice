@@ -32,9 +32,9 @@ uint64_t ch(uint64_t key, uint64_t buckets) {
   return b;
 }
 
-uint64_t weighted_ch(uint64_t key,
-                     uint64_t N,
-                     std::function<double(uint64_t)> weight_fn) {
+int64_t weighted_ch(uint64_t key,
+                    uint64_t N,
+                    const std::function<double(uint64_t)>& weight_fn) {
   // Using ch() as a building block, this function returns a value from the set
   // {0, 1, ..., N-1} such that the probability of an arbitrary key
   // mapping to i-th bucket is weight_fn(i) / W (where W is the sum of all
@@ -75,7 +75,7 @@ uint64_t weighted_ch(uint64_t key,
     double p = static_cast<double>(k) / std::numeric_limits<uint64_t>::max();
     if (p < w) {
       ld_check(w > 0);
-      return bucket;
+      return static_cast<int64_t>(bucket);
     }
   }
 
@@ -83,12 +83,12 @@ uint64_t weighted_ch(uint64_t key,
   // with non-zero weight.
   for (uint64_t bucket = 0; bucket < N; ++bucket) {
     if (weight_fn(bucket) > 0) {
-      return bucket;
+      return static_cast<int64_t>(bucket);
     }
   }
 
   // All weights are zero.
-  return 0;
+  return -1;
 }
 
 } // namespace hashing

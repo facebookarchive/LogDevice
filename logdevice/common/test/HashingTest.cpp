@@ -82,7 +82,8 @@ TEST(HashingTest, WeightZeroRehashing) {
   auto ch_iterative = [&](uint64_t key) -> uint64_t {
     std::vector<double> weights = w1;
     for (size_t i = 0; i < w1.size(); ++i) {
-      uint64_t h = ld::hashing::weighted_ch(key, weights);
+      int64_t h = ld::hashing::weighted_ch(key, weights);
+      ld_check(h != -1);
       if (w2[h] > 0.0) {
         return h;
       }

@@ -373,7 +373,7 @@ TEST_F(FailureDetectorIntegrationTest, MinorityIsolation) {
   }
 
   auto node_idx = hashing::weighted_ch(1, std::vector<double>(num_nodes, 1.0));
-  ASSERT_TRUE(node_idx < 5);
+  ASSERT_TRUE(node_idx != -1 && node_idx < 5);
   ASSERT_EQ(
       "ACTIVE", cluster->getNode(node_idx).sequencerInfo(logid_t(1))["State"]);
 
