@@ -115,7 +115,7 @@ class FdBaton {
 
  private:
   template <typename Rep, typename Period>
-  FOLLY_ALWAYS_INLINE bool
+  bool
   try_wait_slow(const std::chrono::duration<Rep, Period>& timeout) noexcept {
     int timeout_ms = SynchronizationFd::kInfiniteTimeout;
     const auto timeout_ms_unbounded =
@@ -217,6 +217,14 @@ class LifoEventSemImpl
     explicit AsyncWaiter(LifoEventSemImpl<Atom>& owner)
         : owner_(owner), node_(owner.allocateNode()) {
       beginWait();
+    }
+    ~AsyncWaiter() {
+      // If we are not enqueued we consumed an event from queue but did not
+      // process it. If we weren't posted to because of shutdown we should
+      // return the event to semaphore as we will not process it.
+      if (!owner_.tryRemoveNode(*node_) && !node_->isShutdownNotice()) {
+        owner_.post();
+      }
     }
 
     /// The file descriptor that will be readable when the asynchronous
@@ -374,7 +382,11 @@ class LifoEventSemImpl
       } else {
         assert(rv == WaitResult::DECR || rv == WaitResult::SHUTDOWN);
         // in both of these states we want fd() to remain readable,
-        // so we just leave the existing value there
+        // so we just leave the existing value there but we must simulate as
+        // if we were waiting and got a shutdown notice
+        if (rv == WaitResult::SHUTDOWN) {
+          node_->setShutdownNotice();
+        }
       }
       return rv == WaitResult::SHUTDOWN;
     }
