@@ -41,6 +41,26 @@ class MaintenanceError : public std::exception {
   virtual const char* what() const noexcept {
     return msg_.c_str();
   }
+
+  void throwThriftException() const {
+    switch (st_) {
+      case E::NOTREADY:
+        throw thrift::NodeNotReady(msg_);
+      case E::NOTSUPPORTED:
+        throw thrift::NotSupported(msg_);
+      case E::MAINTENANCE_CLASH:
+        throw thrift::MaintenanceClash(msg_);
+      case E::INVALID_PARAM:
+        throw thrift::InvalidRequest(msg_);
+      case E::INTERNAL:
+        throw thrift::OperationError(msg_);
+      case E::NOTFOUND:
+        throw thrift::MaintenanceMatchError(msg_);
+      default:
+        throw *this;
+    }
+  }
+
   virtual ~MaintenanceError() {}
 
  private:

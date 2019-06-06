@@ -45,5 +45,32 @@ class MaintenanceAPIHandler : public virtual AdminAPIHandlerBase {
     }
     return folly::none;
   }
+
+  using ListMaintenanceDefs =
+      folly::Expected<std::vector<thrift::MaintenanceDefinition>,
+                      maintenance::MaintenanceError>;
+  /**
+   * This takes a list of definitions, get the latest state from the RSM and
+   * find which maintenances need to be created vs. the ones that already exist
+   * and can be returned.
+   *
+   * The returned MaintenanceDefinitions will not contain any information from
+   * the maintenance manager.
+   */
+  folly::SemiFuture<ListMaintenanceDefs>
+  applyAndGetMaintenances(std::vector<thrift::MaintenanceDefinition> defs);
+
+  /**
+   * Takes a list of new maintenances, and existing maintenace. Then it will
+   * apply the new maintenance to the RSM, if everything is successful, it will
+   * merge the results into one vector.
+   *
+   * This will then pass that list to MM if MM is running to augment the
+   * maintenances. and fulfills the promise with the value.
+   *
+   */
+  folly::SemiFuture<ListMaintenanceDefs>
+  applyAndMerge(std::vector<thrift::MaintenanceDefinition> new_defs,
+                std::vector<thrift::MaintenanceDefinition> existing);
 };
 }} // namespace facebook::logdevice

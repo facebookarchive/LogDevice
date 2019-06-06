@@ -69,6 +69,13 @@ class ClusterMaintenanceStateMachine
   void snapshot(std::function<void(Status st)> cb);
 
   /**
+   * Indicates whether this state machine has finished replaying or not.
+   */
+  bool isFullyLoaded() const {
+    return is_fully_loaded_;
+  }
+
+  /**
    * Returns the WorkerType that this state machine should be running on
    */
   static WorkerType workerType(Processor* processor) {
@@ -85,6 +92,17 @@ class ClusterMaintenanceStateMachine
   }
 
  private:
+  // Will be set to true when we finish replaying the state machine.
+  bool is_fully_loaded_{false};
+  std::unique_ptr<SubscriptionHandle> update_handle_;
+
+  /**
+   * The callback that gets called on every time we publish a new state
+   */
+  void onUpdate(const ClusterMaintenanceState& state,
+                const MaintenanceDelta* /*unused*/,
+                lsn_t version);
+
   std::unique_ptr<ClusterMaintenanceState>
   makeDefaultState(lsn_t version) const override;
 
@@ -92,8 +110,6 @@ class ClusterMaintenanceStateMachine
   deserializeState(Payload payload,
                    lsn_t version,
                    std::chrono::milliseconds timestamp) const override;
-
-  void gotInitialState(const ClusterMaintenanceState& state) const override;
 
   std::unique_ptr<MaintenanceDelta> deserializeDelta(Payload payload) override;
 

@@ -11,8 +11,11 @@
 #include <thrift/lib/cpp/util/EnumUtils.h>
 
 #include "logdevice/admin/Conv.h"
+#include "logdevice/admin/maintenance/APIUtils.h"
+#include "logdevice/admin/maintenance/MaintenanceLogWriter.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationManager.h"
 #include "logdevice/common/membership/utils.h"
+#include "logdevice/common/request_util.h"
 
 namespace facebook { namespace logdevice { namespace maintenance {
 
@@ -149,6 +152,75 @@ MaintenanceManager::~MaintenanceManager() {}
 
 void MaintenanceManager::start() {
   add([this]() { startInternal(); });
+}
+
+folly::SemiFuture<
+    folly::Expected<std::vector<MaintenanceDefinition>, MaintenanceError>>
+MaintenanceManager::getLatestMaintenanceState() {
+  // Just to reduce code noise
+  using RSMOutType = folly::Expected<ClusterMaintenanceState, MaintenanceError>;
+  using OutType =
+      folly::Expected<std::vector<MaintenanceDefinition>, MaintenanceError>;
+
+  ld_check(deps_);
+  ld_check(deps_->getStateMachine());
+
+  Processor* processor = deps_->getProcessor();
+  if (shouldStopProcessing()) {
+    ld_info("MaintenanceManager is shutting down, cannot fulfill "
+            "getLatestMaintenanceState request.");
+    return folly::makeUnexpected(MaintenanceError(E::SHUTDOWN));
+  }
+
+  // We need to figure out where the state machine is running
+  WorkerType worker_type =
+      ClusterMaintenanceStateMachine::workerType(processor);
+  folly::Optional<worker_id_t> worker_index =
+      worker_id_t(ClusterMaintenanceStateMachine::getWorkerIndex(
+          processor->getWorkerCount(worker_type)));
+
+  // Callback that fulfills the promise on the worker thread of the state
+  // machine
+  auto cb = [](folly::Promise<RSMOutType> promise) mutable {
+    Worker* w = Worker::onThisThread(/* enforce_worker = */ true);
+    if (!w->cluster_maintenance_state_machine_) {
+      // We don't have state machine running on this worker!
+      ld_error("ClusterMaintenanceState machine is nullptr on worker! This "
+               "is unexpected.");
+      promise.setValue(folly::makeUnexpected(MaintenanceError(E::NOTREADY)));
+      return;
+    }
+    if (!w->cluster_maintenance_state_machine_->isFullyLoaded()) {
+      promise.setValue(folly::makeUnexpected(MaintenanceError(
+          E::NOTREADY, "The ClusterMaintenanceState is not fully loaded yet")));
+      return;
+    }
+    // Copy the state into a new unique pointer
+    promise.setValue(w->cluster_maintenance_state_machine_->getState());
+    return;
+  };
+  // Fulfill the promise on this worker
+  return fulfill_on_worker<RSMOutType>(deps_->getProcessor(),
+                                       worker_index,
+                                       worker_type,
+                                       std::move(cb),
+                                       RequestType::MAINTENANCE_LOG_REQUEST)
+      // We need to wrap the exception thrown by fulfill_on_worker to Status.
+      .via(this)
+      .thenValue([this](RSMOutType&& value) -> folly::SemiFuture<OutType> {
+        // augment the returned state with our info about last safety check
+        // runs.
+        // The expected has an error,
+        if (value.hasError()) {
+          return folly::makeUnexpected(value.error());
+        }
+        // Augment maintenances with safety check results.
+        return augmentWithSafetyCheckResults(value->get_maintenances())
+            // Boiler-plate to convert SemiFuture<T> to
+            // SemiFuture<Expected<T, _>>
+            .toUnsafeFuture()
+            .thenValue([](auto&& v) -> OutType { return std::move(v); });
+      });
 }
 
 void MaintenanceManager::startInternal() {
@@ -873,6 +945,18 @@ void MaintenanceManager::processSafetyCheckResult(
     }
   }
   unsafe_groups_ = std::move(result.unsafe_groups);
+}
+
+folly::SemiFuture<std::vector<MaintenanceDefinition>>
+MaintenanceManager::augmentWithSafetyCheckResults(
+    std::vector<MaintenanceDefinition> input) {
+  // Running this code in our work context
+  return folly::via(this).thenValue([input = std::move(input)](auto&&) {
+    for (auto& def : input) {
+      // TODO: augment with safety check result
+    }
+    return input;
+  });
 }
 
 folly::SemiFuture<NCUpdateResult>

@@ -33,11 +33,23 @@ ClusterMaintenanceStateMachine::ClusterMaintenanceStateMachine(
                ? configuration::InternalLogs::MAINTENANCE_LOG_SNAPSHOTS
                : LOGID_INVALID),
       settings_(std::move(settings)) {
+  auto update_cb = [&](const ClusterMaintenanceState& state,
+                       const MaintenanceDelta* delta,
+                       lsn_t version) { onUpdate(state, delta, version); };
+  update_handle_ = subscribe(update_cb);
   setSnapshottingGracePeriod(settings_->maintenance_log_snapshotting_period);
 }
 
 void ClusterMaintenanceStateMachine::start() {
   Base::start();
+}
+
+void ClusterMaintenanceStateMachine::onUpdate(
+    const ClusterMaintenanceState& /* unused */,
+    const MaintenanceDelta* /* unused */,
+    lsn_t /* unused */) {
+  // TODO: Implement snapshotting logic here
+  is_fully_loaded_ = true;
 }
 
 std::unique_ptr<ClusterMaintenanceState>
@@ -60,11 +72,6 @@ ClusterMaintenanceStateMachine::deserializeState(
                toString(version).c_str());
   }
   return state;
-}
-
-void ClusterMaintenanceStateMachine::gotInitialState(
-    const ClusterMaintenanceState& state) const {
-  ld_info("Got initial ClusterMaintenanceState");
 }
 
 std::unique_ptr<MaintenanceDelta>

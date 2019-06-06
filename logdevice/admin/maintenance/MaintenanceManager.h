@@ -8,6 +8,7 @@
 #pragma once
 
 #include <folly/container/F14Map.h>
+#include <folly/container/F14Set.h>
 #include <folly/futures/Future.h>
 #include <folly/futures/SharedPromise.h>
 
@@ -37,6 +38,7 @@ using SafetyCheckResult = folly::Expected<SafetyCheckScheduler::Result, Status>;
 using NodeState = thrift::NodeState;
 using ShardState = thrift::ShardState;
 using SequencerState = thrift::SequencerState;
+using MaintenanceClash = thrift::MaintenanceClash;
 
 /*
  * Dependencies of MaintenanceManager isolated
@@ -96,6 +98,14 @@ class MaintenanceManagerDependencies {
   virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const;
 
+  ClusterMaintenanceStateMachine* getStateMachine() const {
+    return cluster_maintenance_state_machine_;
+  }
+
+  Processor* getProcessor() const {
+    return processor_;
+  }
+
  private:
   // Handle to processor for getting the NodesConfig
   Processor* processor_;
@@ -154,6 +164,29 @@ class MaintenanceManager : public SerialWorkContext {
   folly::SemiFuture<folly::Unit> stop();
 
   // Getters
+
+  /*
+   * This returns a clone of the latest in-memory ClusterMaintenanceState from
+   * the replicated state machine. This state is augmented with information from
+   * the state of maintenance manager. We are particularly interested in setting
+   * the last check impact state.
+   *
+   *    Status can be set to:
+   *      E::NOTREADY if we don't have a state or the state machine is not
+   *      running
+   *      E::NOBUFS if we cannot enqueue work on the workers.
+   *      E::SHUTDOWN if processor is shutting down
+   */
+  folly::SemiFuture<
+      folly::Expected<std::vector<MaintenanceDefinition>, MaintenanceError>>
+  getLatestMaintenanceState();
+
+  /**
+   * Copies the maintenances of the input and augment the safety check results
+   * wherever we have a valid value for it.
+   */
+  folly::SemiFuture<std::vector<MaintenanceDefinition>>
+  augmentWithSafetyCheckResults(std::vector<MaintenanceDefinition> input);
 
   // Getter that returns a SemiFututre with NodeState for a given node
   folly::SemiFuture<folly::Expected<NodeState, Status>>
