@@ -195,6 +195,23 @@ thrift::ImpactOnEpoch toThrift(const Impact::ImpactOnEpoch& epoch) {
   return output;
 }
 
+template <>
+thrift::CheckImpactResponse toThrift(const Impact& impact) {
+  thrift::CheckImpactResponse response;
+  std::vector<thrift::ImpactOnEpoch> logs_affected;
+  for (const auto& epoch_info : impact.logs_affected) {
+    logs_affected.push_back(toThrift<thrift::ImpactOnEpoch>(epoch_info));
+  }
+
+  response.set_impact(
+      toThrift<std::vector<thrift::OperationImpact>>(impact.result));
+  response.set_internal_logs_affected(impact.internal_logs_affected);
+  response.set_logs_affected(std::move(logs_affected));
+  response.set_total_duration(impact.total_duration.count());
+  response.set_total_logs_checked(impact.total_logs_checked);
+  return response;
+}
+
 thrift::ShardDataHealth toShardDataHealth(AuthoritativeStatus auth_status,
                                           bool has_dirty_ranges) {
   switch (auth_status) {

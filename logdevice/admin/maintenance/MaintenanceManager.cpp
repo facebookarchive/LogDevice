@@ -951,9 +951,22 @@ folly::SemiFuture<std::vector<MaintenanceDefinition>>
 MaintenanceManager::augmentWithSafetyCheckResults(
     std::vector<MaintenanceDefinition> input) {
   // Running this code in our work context
-  return folly::via(this).thenValue([input = std::move(input)](auto&&) {
+  return folly::via(this).thenValue([input = std::move(input),
+                                     this](auto&&) mutable {
     for (auto& def : input) {
-      // TODO: augment with safety check result
+      auto result =
+          getLatestSafetyCheckResultInternal(def.group_id_ref().value());
+      if (result.hasError()) {
+        RATELIMIT_INFO(
+            std::chrono::seconds(10),
+            1,
+            "We don't have safety check results for maintenance %s because %s",
+            def.group_id_ref().value().c_str(),
+            error_name(result.error()));
+      } else {
+        def.set_last_check_impact_result(
+            toThrift<thrift::CheckImpactResponse>(result.value()));
+      }
     }
     return input;
   });

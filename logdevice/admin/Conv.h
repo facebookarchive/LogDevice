@@ -65,6 +65,9 @@ thrift::ReplicationProperty toThrift(const ReplicationProperty& replication);
 template <>
 thrift::ImpactOnEpoch toThrift(const Impact::ImpactOnEpoch& epoch);
 
+template <>
+thrift::CheckImpactResponse toThrift(const Impact& impact);
+
 template <typename LDType, typename ThriftType>
 LDType toLogDevice(const ThriftType& input);
 
