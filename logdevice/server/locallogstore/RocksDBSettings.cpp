@@ -843,6 +843,44 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
+#ifdef LOGDEVICE_ROCKSDB_HAS_INDEX_SHORTENING_MODE
+  init("rocksdb-index-shortening",
+       &index_shortening_,
+       "none",
+       [](const std::string& val) {
+         if (val == "none") {
+           return rocksdb::BlockBasedTableOptions::IndexShorteningMode::
+               kNoShortening;
+         } else if (val == "shorten-separators") {
+           return rocksdb::BlockBasedTableOptions::IndexShorteningMode::
+               kShortenSeparators;
+         } else if (val == "shorten-all") {
+           return rocksdb::BlockBasedTableOptions::IndexShorteningMode::
+               kShortenSeparatorsAndSuccessor;
+         } else {
+           throw boost::program_options::error(
+               "invalid value '" + val +
+               "'for option --rocksdb-index-shortening. Expected 'none', "
+               "'shorten-separators' or 'shorten-all'");
+         }
+       },
+       "Controls the precision of block boundaries in RocksDB sst file index. "
+       "More shortening -> smaller indexes (i.e. less memory usage) but "
+       "potentially worse iterator seek performance. Possible values are: "
+       "'none', 'shorten-separators', 'shorten-all'. Unless you're really low "
+       "on memory, you should probably just use 'none' and not worry about it."
+       "There should be no reason to use 'shorten-all' - it saves a negligible "
+       "amount of memory but makes iterator performance noticeably worse, "
+       "especially with direct IO or insufficient block cache size. Deciding "
+       "between 'none' and 'shorten-separators' is not straightforward, "
+       "probably better to just do it experimentally, by looking memory usage "
+       "and disk read rate. Also keep in mind that sst index size is "
+       "approximately inversely proportional to --rocksdb-block-size or "
+       "--rocksdb-min-block-size.",
+       SERVER | REQUIRES_RESTART,
+       SettingsCategory::RocksDB);
+#endif
+
   init("rocksdb-track-iterator-versions",
        &track_iterator_versions,
        "false",

@@ -97,6 +97,10 @@ RocksDBLogStoreConfig::RocksDBLogStoreConfig(
             stats);
   }
 
+#ifdef LOGDEVICE_ROCKSDB_HAS_INDEX_SHORTENING_MODE
+  table_options_.index_shortening = rocksdb_settings_->index_shortening_;
+#endif
+
   table_options_.block_size = rocksdb_settings_->block_size_;
   table_options_.cache_index_and_filter_blocks =
       rocksdb_settings_->cache_index_;

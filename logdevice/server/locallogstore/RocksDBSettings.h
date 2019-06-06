@@ -40,6 +40,10 @@ static_assert(ROCKSDB_MAJOR > 5 || (ROCKSDB_MAJOR == 5 && ROCKSDB_MINOR >= 7),
 #define LOGDEVICED_ROCKSDB_HAS_AVOID_UNNECESSARY_BLOCKING_IO
 #endif
 
+#if ROCKSDB_MAJOR > 6 || (ROCKSDB_MAJOR == 6 && ROCKSDB_MINOR >= 2)
+#define LOGDEVICE_ROCKSDB_HAS_INDEX_SHORTENING_MODE
+#endif
+
 namespace boost { namespace program_options {
 class options_description;
 }} // namespace boost::program_options
@@ -260,6 +264,10 @@ class RocksDBSettings : public SettingsBundle {
 
   // see RocksDBFlushBlockPolicy.h
   FlushBlockPolicyType flush_block_policy_;
+
+#ifdef LOGDEVICE_ROCKSDB_HAS_INDEX_SHORTENING_MODE
+  rocksdb::BlockBasedTableOptions::IndexShorteningMode index_shortening_;
+#endif
 
   // ignored for FlushBlockPolicyType::DEFAULT
   size_t min_block_size_;
