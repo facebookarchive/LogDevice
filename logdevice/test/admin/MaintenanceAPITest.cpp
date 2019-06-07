@@ -277,3 +277,52 @@ TEST_F(MaintenanceAPITest, ApplyMaintenancesValid) {
                  thrift::MaintenanceClash);
   }
 }
+
+TEST_F(MaintenanceAPITest, ApplyMaintenancesSafetyCheckResults) {
+  init();
+  cluster_->start();
+  cluster_->waitUntilAllAvailable();
+  auto admin_client = cluster_->getNode(maintenance_leader).createAdminClient();
+  // Wait until the RSM has replayed
+  cluster_->getNode(maintenance_leader).waitUntilMaintenanceRSMReady();
+
+  // Creating an impossible maintenance, draining all shards in all nodes must
+  // fail by safety checker.
+  MaintenanceDefinition request;
+  // Needs to be the same user for us to match an existing maintenance.
+  request.set_user("dummy");
+  request.set_shard_target_state(ShardOperationalState::DRAINED);
+  request.set_shards({mkShardID(0, -1),
+                      mkShardID(1, -1),
+                      mkShardID(2, -1),
+                      mkShardID(3, -1),
+                      mkShardID(4, -1)});
+  request.set_sequencer_nodes({mkNodeID(1), mkNodeID(2)});
+  request.set_sequencer_target_state(SequencingState::DISABLED);
+  request.set_group(true);
+  MaintenanceDefinitionResponse resp;
+  admin_client->sync_applyMaintenance(resp, request);
+  ASSERT_EQ(1, resp.get_maintenances().size());
+  wait_until("MaintenanceManager runs the workflow", [&]() {
+    thrift::MaintenancesFilter req1;
+    thrift::MaintenanceDefinitionResponse resp1;
+    admin_client->sync_getMaintenances(resp1, req1);
+    const auto& def = resp1.get_maintenances()[0];
+    if (def.last_check_impact_result_ref().has_value()) {
+      // MaintenanceManager has picked up the maintenance but we are not sure if
+      // this is safe or not.
+      const auto& check_impact_result =
+          def.last_check_impact_result_ref().value();
+      if (check_impact_result.get_impact().size() > 0) {
+        return true;
+      }
+    }
+    return false;
+  });
+  thrift::MaintenancesFilter req;
+  admin_client->sync_getMaintenances(resp, req);
+  const auto& def = resp.get_maintenances()[0];
+  ASSERT_TRUE(def.last_check_impact_result_ref().has_value());
+  const auto& check_impact_result = def.last_check_impact_result_ref().value();
+  ASSERT_TRUE(check_impact_result.get_impact().size() > 0);
+}

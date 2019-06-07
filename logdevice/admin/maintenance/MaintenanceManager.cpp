@@ -602,8 +602,12 @@ MaintenanceManager::getLatestSafetyCheckResultInternal(GroupID id) const {
     return folly::makeUnexpected(E::NOTREADY);
   }
   if (cluster_maintenance_wrapper_->getMaintenanceByGroupID(id) == nullptr) {
+    // It could be that this is just a new maintenance and we don't know about
+    // it yet in MaintenanceManager.
     return folly::makeUnexpected(E::NOTFOUND);
   }
+  // TODO: Make it possible to separate SAFE maintenances from ones we haven't
+  // test yet.
   return unsafe_groups_.count(id) ? unsafe_groups_.at(id) : Impact();
 }
 
@@ -951,25 +955,27 @@ folly::SemiFuture<std::vector<MaintenanceDefinition>>
 MaintenanceManager::augmentWithSafetyCheckResults(
     std::vector<MaintenanceDefinition> input) {
   // Running this code in our work context
-  return folly::via(this).thenValue([input = std::move(input),
-                                     this](auto&&) mutable {
-    for (auto& def : input) {
-      auto result =
-          getLatestSafetyCheckResultInternal(def.group_id_ref().value());
-      if (result.hasError()) {
-        RATELIMIT_INFO(
-            std::chrono::seconds(10),
-            1,
-            "We don't have safety check results for maintenance %s because %s",
-            def.group_id_ref().value().c_str(),
-            error_name(result.error()));
-      } else {
-        def.set_last_check_impact_result(
-            toThrift<thrift::CheckImpactResponse>(result.value()));
-      }
-    }
-    return input;
-  });
+  return folly::via(this).thenValue(
+      [input = std::move(input), this](auto&&) mutable {
+        for (auto& def : input) {
+          auto result =
+              getLatestSafetyCheckResultInternal(def.group_id_ref().value());
+          if (result.hasError()) {
+            RATELIMIT_INFO(
+                std::chrono::seconds(10),
+                1,
+                "We don't have safety check results (yet) for "
+                "maintenance %s because %s. Won't include safety check result "
+                "for this maintenance in Maintenance API response.",
+                def.group_id_ref().value().c_str(),
+                error_name(result.error()));
+          } else {
+            def.set_last_check_impact_result(
+                toThrift<thrift::CheckImpactResponse>(result.value()));
+          }
+        }
+        return input;
+      });
 }
 
 folly::SemiFuture<NCUpdateResult>

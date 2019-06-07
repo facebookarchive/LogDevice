@@ -89,6 +89,14 @@ SafetyCheckScheduler::executePlan(
                          folly::Expected<Impact, Status>
                              expected_impact) mutable {
             if (expected_impact.hasValue()) {
+              if (expected_impact->result != 0) {
+                ld_info("Safety check failed for maintenance %s, impact: %s",
+                        group_id.c_str(),
+                        expected_impact->toString().c_str());
+              } else {
+                ld_info(
+                    "Safety check passed for maintenance %s", group_id.c_str());
+              }
               state.last_check = ExecutionState::LastCheck{
                   .group_id = group_id,
                   .sequencers = sequencers_to_check,
@@ -98,6 +106,8 @@ SafetyCheckScheduler::executePlan(
               // (async)
               return executePlan(std::move(state), status_map, nodes_config);
             }
+            ld_error("SafetyChecker cannot execute because: %s",
+                     error_name(expected_impact.error()));
             // We don't want to continue execution if safety checker is
             // failing. Instead, we fail the entire execution stack.
             auto pf =
@@ -145,17 +155,12 @@ SafetyCheckScheduler::performSafetyCheck(
   ld_assert(safety_checker_);
 
   ld_info("Performing safety check for disabling shards %s while assuming that "
-          "%s are already disabled",
+          "%s are already disabled. And disabling sequencers %s while assuming "
+          "that sequencers %s are already disabled",
           toString(shards).c_str(),
-          toString(disabled_shards).c_str());
-
-  if (sequencers.size() > 0) {
-    ld_info("Performing safety check for disabling sequencers %s while "
-            "assuming that "
-            "%s are already disabled",
-            toString(sequencers).c_str(),
-            toString(disabled_sequencers).c_str());
-  }
+          toString(disabled_shards).c_str(),
+          toString(sequencers).c_str(),
+          toString(disabled_sequencers).c_str());
 
   // Combine the shards into a single input list to safety checker.
   shards.insert(disabled_shards.begin(), disabled_shards.end());
