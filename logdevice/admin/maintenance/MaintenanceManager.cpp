@@ -497,6 +497,9 @@ MaintenanceManager::getShardOperationalStateInternal(ShardID shard) const {
   ld_check(targetOpStates->count(ShardOperationalState::DRAINED) ||
            targetOpStates->count(ShardOperationalState::MAY_DISAPPEAR));
 
+  auto sa = nodes_config_->getNodeStorageAttribute(shard.node());
+  bool exclude_from_nodeset = sa->exclude_from_nodesets;
+
   switch (storageState.value()) {
     case membership::StorageState::NONE:
       result = ShardOperationalState::DRAINED;
@@ -510,7 +513,11 @@ MaintenanceManager::getShardOperationalStateInternal(ShardID shard) const {
       result = ShardOperationalState::MIGRATING_DATA;
       break;
     case membership::StorageState::READ_WRITE:
-      result = ShardOperationalState::ENABLED;
+      if (exclude_from_nodeset) {
+        result = ShardOperationalState::PASSIVE_DRAINING;
+      } else {
+        result = ShardOperationalState::ENABLED;
+      }
       break;
     default:
       // This should never happen. All storage state

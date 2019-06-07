@@ -254,6 +254,13 @@ enum ShardOperationalState {
    */
   PROVISIONING = 53,
   /**
+   * This means that the shard will not be picked in new nodesets but it's still
+   * available for old data rebuilding. The shard can transition to
+   * MIGRATING_DATA and then DRAINED once all the data expires (passes
+   * retention).
+   */
+  PASSIVE_DRAINING = 54,
+  /**
    * INVALID means that this is not a storage node. (We should never see this)
    */
   INVALID = 99,
