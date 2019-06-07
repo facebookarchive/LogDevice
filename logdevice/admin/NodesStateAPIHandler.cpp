@@ -81,7 +81,7 @@ NodesStateAPIHandler::semifuture_getNodesState(
     out->set_states(std::move(result_states));
     out->set_version(
         static_cast<int64_t>(nodes_configuration->getVersion().val()));
-    return out;
+    return std::move(out);
   }
 }
 
