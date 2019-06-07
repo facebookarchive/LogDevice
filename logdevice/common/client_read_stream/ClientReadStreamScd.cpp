@@ -388,14 +388,6 @@ void ClientReadStreamScd::scheduleRewindToMode(Mode mode, std::string reason) {
     all_send_all_failover_timer_.cancel();
   } else {
     ld_check(mode == Mode::SCD || mode == Mode::LOCAL_SCD);
-    // Proactively add the shards that we are currently not reading from in the
-    // shards down list.
-    for (auto& it : owner_->storage_set_states_) {
-      if (it.second.getConnectionState() !=
-          ClientReadStreamSenderState::ConnectionState::READING) {
-        filtered_out_.deferredAddShardDown(it.second.getShardID());
-      }
-    }
   }
 
   scheduled_mode_transition_ = mode;
@@ -432,7 +424,7 @@ bool ClientReadStreamScd::checkNeedsFailoverToAllSendAll() {
 
   // This is the number of shards that are not able to send us the next record.
   // owner_->numShardsInState(..) may account for shards that are in
-  // the filtered_out_ list if these shards are back up. Therefore, we substract
+  // the filtered_out_ list if these shards are back up. Therefore, we subtract
   // gap_shards_filtered_out_ which is the number of shards accounted both in
   // the filtered_out_ list and numShardsInState(*).
   // Note that it is expected that all shards in EMPTY or REBUILDING state are
@@ -443,7 +435,8 @@ bool ClientReadStreamScd::checkNeedsFailoverToAllSendAll() {
       getFilteredOut().size() - gap_shards_filtered_out_;
 
   ld_check(gap_shards_total <= owner_->readSetSize());
-  if (gap_shards_total >= owner_->readSetSize()) {
+  if (gap_shards_total >= owner_->readSetSize() &&
+      under_replicated_shards_not_blacklisted_ == 0) {
     // All shards reported that they don't have the next record or are in the
     // filtered out list. Failover to all send all mode.
     // Note that some shards might have been filtered out because they were
@@ -474,7 +467,7 @@ void ClientReadStreamScd::scheduleRewindIfShardBackUp(
   // during the last window, and believes its records are intact, allow it to
   // participate in SCD.
   if (state.max_data_record_lsn != 0 && state.getNextLsn() != 0 &&
-      !state.under_replicated) {
+      !state.should_blacklist_as_under_replicated) {
     if (filtered_out_.deferredRemoveShardDown(state.getShardID())) {
       ld_debug(
           "%s started delivering records or exited an under replicated region",
@@ -627,23 +620,30 @@ bool ClientReadStreamScd::addToShardsDownAndScheduleRewind(
 }
 
 void ClientReadStreamScd::onSenderGapStateChanged(
-    ClientReadStreamSenderState& state) {
+    ClientReadStreamSenderState& state,
+    ClientReadStreamSenderState::GapState prev_gap_state) {
+  using GapState = ClientReadStreamSenderState::GapState;
   if (state.blacklist_state ==
       ClientReadStreamSenderState::BlacklistState::NONE) {
-    // We don't care about this change.
-    return;
-  }
-  ld_check(!getFilteredOut().empty());
-  switch (state.getGapState()) {
-    case ClientReadStreamSenderState::GapState::GAP:
-    case ClientReadStreamSenderState::GapState::UNDER_REPLICATED:
+    bool was_ur = prev_gap_state == GapState::UNDER_REPLICATED;
+    bool is_ur = state.getGapState() == GapState::UNDER_REPLICATED;
+    if (is_ur && !was_ur) {
+      ++under_replicated_shards_not_blacklisted_;
+    } else if (!is_ur && was_ur) {
+      ld_check(under_replicated_shards_not_blacklisted_ > 0);
+      --under_replicated_shards_not_blacklisted_;
+    }
+  } else {
+    ld_check(!getFilteredOut().empty());
+    bool was_gap = prev_gap_state != GapState::NONE;
+    bool is_gap = state.getGapState() != GapState::NONE;
+    if (is_gap && !was_gap) {
       ld_check(gap_shards_filtered_out_ < getFilteredOut().size());
       ++gap_shards_filtered_out_;
-      break;
-    case ClientReadStreamSenderState::GapState::NONE:
+    } else if (!is_gap && was_gap) {
       ld_check(gap_shards_filtered_out_ > 0);
       --gap_shards_filtered_out_;
-      break;
+    }
   }
 }
 
@@ -696,7 +696,7 @@ void ClientReadStreamScd::FailoverTimer::callback() {
     return;
   }
 
-  // Build the list of shards not not blacklisted that have not sent anything
+  // Build the list of shards not blacklisted that have not sent anything
   // with lsn >= next_lsn_to_deliver_.
   small_shardset_t new_known_down;
 

@@ -13,6 +13,7 @@
 #include "logdevice/common/FailureDomainNodeSet.h"
 #include "logdevice/common/ShardID.h"
 #include "logdevice/common/client_read_stream/ClientReadStreamFailureDetector.h"
+#include "logdevice/common/client_read_stream/ClientReadStreamSenderState.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/START_Message.h"
 #include "logdevice/common/types_internal.h"
@@ -111,7 +112,6 @@ class Timer;
  */
 
 class ClientReadStream;
-class ClientReadStreamSenderState;
 
 class ClientReadStreamScd : public boost::noncopyable {
  public:
@@ -260,7 +260,9 @@ class ClientReadStreamScd : public boost::noncopyable {
    * filtered out list that have gap state in (GapState::GAP,
    * GapState::UNDER_REPLICATED).
    */
-  void onSenderGapStateChanged(ClientReadStreamSenderState& state);
+  void
+  onSenderGapStateChanged(ClientReadStreamSenderState& state,
+                          ClientReadStreamSenderState::GapState prev_gap_state);
 
   /**
    * Returns the number of shards that are in filtered out list but sent a
@@ -268,6 +270,10 @@ class ClientReadStreamScd : public boost::noncopyable {
    */
   nodeset_size_t getGapShardsFilteredOut() const {
     return gap_shards_filtered_out_;
+  }
+
+  nodeset_size_t getUnderReplicatedShardsNotBlacklisted() const {
+    return under_replicated_shards_not_blacklisted_;
   }
 
  private:
@@ -291,6 +297,11 @@ class ClientReadStreamScd : public boost::noncopyable {
    * zero.
    */
   nodeset_size_t gap_shards_filtered_out_ = 0;
+
+  /**
+   * Number of shards in GapState::UNDER_REPLICATED that are not in known down.
+   */
+  nodeset_size_t under_replicated_shards_not_blacklisted_ = 0;
 
   /**
    * There are two failover timers. One that rewinds the streams while adding

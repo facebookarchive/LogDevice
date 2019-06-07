@@ -490,6 +490,9 @@ void ClientReadStream::sendStart(ShardID shard_id, SenderState& state) {
 
   resetGapParametersForSender(state);
 
+  // If we just encountered an epoch bump, window_high will be below start_lsn.
+  // This is fine, the storage shards will wait for the WINDOW message we'll
+  // send after receiving STARTED.
   START_Header header;
   header.start_lsn = next_lsn_to_deliver_;
   header.until_lsn = until_lsn_;
@@ -688,7 +691,7 @@ void ClientReadStream::onStarted(ShardID from, const STARTED_Message& msg) {
         from.toString().c_str(),
         log_id_.val_,
         toString(auth_status).c_str());
-    // This is a imperfect workaround for a race where a shard completes
+    // This is an imperfect workaround for a race where a shard completes
     // rebuilding and starts accepting new writes but this stream is still
     // behind reading the event log and decides to make progress without it.
     // Here we decide to consider the shard fully authoritative to reduce the
@@ -783,9 +786,11 @@ void ClientReadStream::onStarted(ShardID from, const STARTED_Message& msg) {
       // return so that disposeIfDone() is not called.
       return;
     default:
-      ld_error("got STARTED message from %s with unexpected status %s",
-               from.toString().c_str(),
-               error_description(status));
+      RATELIMIT_ERROR(std::chrono::seconds(2),
+                      2,
+                      "got STARTED message from %s with unexpected status %s",
+                      from.toString().c_str(),
+                      error_description(status));
       onConnectionFailure(state, status);
   }
 
@@ -931,34 +936,19 @@ void ClientReadStream::onDataRecord(
   bool under_replicated = record->invalid_checksum_ ||
       (record->flags_ & RECORD_Header::UNDER_REPLICATED_REGION);
 
-  if (under_replicated && scd_->isActive()) {
-    // This node is missing records. Add it to the known down list and rewind
-    // the stream. Other nodes will also send records it may still have,
-    // but this is better than stalling the stream repeatedly when this
-    // node doesn't deliver. If the node is already in the known down list,
-    // we will not rewind and will accept the record.
-    if (scd_->addToShardsDownAndScheduleRewind(
-            sender_state.getShardID(),
-            folly::format("{} added to known down list because it has {}"
-                          "an under replicated region",
-                          sender_state.getShardID().toString(),
-                          record->invalid_checksum_
-                              ? "a record with invalid checksum"
-                              : "an under replicated region (in record header)")
-                .str())) {
-      checkConsistency();
-      ld_debug("Discarded record from %s for log %lu due to SCD rewind: lsn %s",
-               shard.toString().c_str(),
-               log_id_.val_,
-               lsn_to_string(lsn).c_str());
-      return;
-    }
-  }
-
   sender_state.max_data_record_lsn =
       std::max(sender_state.max_data_record_lsn, lsn);
-  if (sender_state.max_data_record_lsn == lsn) {
-    sender_state.under_replicated = under_replicated;
+  if (under_replicated) {
+    // Flag UNDER_REPLICATED_REGION means that the shard may be missing some
+    // records between this record and the previous reported LSN. Mark this
+    // range as underreplicated for this shard. This record itself is clearly
+    // not missing, so we don't have to mark its LSN as underreplicated for this
+    // sender; but we do it anyway, because it's likely that the next gap will
+    // be marked underreplicated again, and we don't want to transition (and
+    // potentially rewind) from underreplicated to normal to underreplicated
+    // again for just this one record.
+    sender_state.under_replicated_until = std::max(
+        sender_state.under_replicated_until, std::min(LSN_MAX - 1, lsn) + 1);
   }
   sender_state.grace_counter = 0;
 
@@ -1014,8 +1004,7 @@ void ClientReadStream::onDataRecord(
     }
     // This shard won't send us anything before `lsn'+1.
     // Use that information for gap detection.
-    updateGapState(
-        lsn < LSN_MAX ? lsn + 1 : LSN_MAX, sender_state, under_replicated);
+    updateGapState(lsn < LSN_MAX ? lsn + 1 : LSN_MAX, sender_state);
     findGapsAndRecords();
   }
 
@@ -1068,6 +1057,32 @@ void ClientReadStream::onGap(ShardID shard, const GAP_Message& msg) {
     return;
   }
 
+  if (gap.start_lsn != sender_state.getNextLsn()) {
+    RATELIMIT_ERROR(std::chrono::seconds(10),
+                    2,
+                    "Got gap %s from %s with unexpected start LSN; expected %s",
+                    gap.identify().c_str(),
+                    shard.toString().c_str(),
+                    lsn_to_string(sender_state.getNextLsn()).c_str());
+    // Let's process the gap anyway.
+  }
+
+  if (sender_state.getNextLsn() > window_high_) {
+    // I'm not really sure whether this is normal or not. E.g. maybe server can
+    // send a trim gap immediately followed by a no records gap above window? If
+    // you see this warning show up in unsuspicious circumstances, feel free to
+    // remove it.
+    RATELIMIT_ERROR(std::chrono::seconds(10),
+                    2,
+                    "Got gap %s from %s, whose next LSN %s is already "
+                    "above window end %s; suspicious",
+                    gap.identify().c_str(),
+                    shard.toString().c_str(),
+                    lsn_to_string(sender_state.getNextLsn()).c_str(),
+                    lsn_to_string(window_high_).c_str());
+    // Let's process the gap anyway.
+  }
+
   const AuthoritativeStatus auth_status = sender_state.getAuthoritativeStatus();
   if (auth_status != AuthoritativeStatus::UNAVAILABLE &&
       auth_status != AuthoritativeStatus::FULLY_AUTHORITATIVE) {
@@ -1106,20 +1121,21 @@ void ClientReadStream::onGap(ShardID shard, const GAP_Message& msg) {
           shard.toString().c_str());
   }
 
-  if (scd_->isActive() && under_replicated) {
-    // Rewind the streams with this shard in the known down list, if possible.
-    // If this shard is already in the known down list, we'll just process the
-    // gap but we expect another shard to send the missing data.
+  if (scd_ && scd_->isActive() && gap.reason == GapReason::CHECKSUM_FAIL) {
+    // If we got checksum error, add the shard to known down and rewind.
+    // Unlike UNDER_REPLICATED, it's unlikely that we can make progress without
+    // rewind, so let's rewind right away instead of waiting for gap detection.
     if (scd_->addToShardsDownAndScheduleRewind(
             sender_state.getShardID(),
-            folly::format("{} added to known down list because it has an "
-                          "under replicated region [{}, {}]",
-                          sender_state.getShardID().toString(),
-                          lsn_to_string(gap.start_lsn).c_str(),
-                          lsn_to_string(gap.end_lsn).c_str())
-                .str())) {
+            folly::sformat("{} added to known down list because it checksum "
+                           "error for lsn {}",
+                           sender_state.getShardID().toString(),
+                           lsn_to_string(gap.start_lsn).c_str()))) {
       checkConsistency();
       return;
+    } else {
+      // Already in known down or all send all.
+      // Treat this missing records just like UNDER_REPLICATED gap.
     }
   }
 
@@ -1137,9 +1153,13 @@ void ClientReadStream::onGap(ShardID shard, const GAP_Message& msg) {
     return;
   }
 
-  updateGapState(gap.end_lsn < LSN_MAX ? gap.end_lsn + 1 : LSN_MAX,
-                 it->second,
-                 under_replicated);
+  if (under_replicated) {
+    sender_state.under_replicated_until =
+        std::max(sender_state.under_replicated_until,
+                 std::min(LSN_MAX - 1, gap.end_lsn) + 1);
+  }
+
+  updateGapState(gap.end_lsn < LSN_MAX ? gap.end_lsn + 1 : LSN_MAX, it->second);
 
   findGapsAndRecords();
 
@@ -1149,9 +1169,7 @@ void ClientReadStream::onGap(ShardID shard, const GAP_Message& msg) {
   disposeIfDone();
 }
 
-void ClientReadStream::updateGapState(lsn_t next_lsn,
-                                      SenderState& state,
-                                      bool under_replicated) {
+void ClientReadStream::updateGapState(lsn_t next_lsn, SenderState& state) {
   if (next_lsn < state.getNextLsn()) {
     // Storage shard already sent a record/gap for this LSN.
     return;
@@ -1220,62 +1238,38 @@ void ClientReadStream::updateGapState(lsn_t next_lsn,
    * shards from one list to another.
    */
 
-  auto promote_to_under_replicated_gap = [&] {
-    // Promote to an under-replicated gap so that this node is properly
-    // discounted in f-majority calculations after the window slides.  As
-    // a side effect, it will be discounted for the region covered by the
-    // currently outstanding gap too. This expansion of the under-replicated
-    // region will delay the reporting of lost records due to silent
-    // under-replication until either a complete f-majority (authoritative
-    // or not) chimes in, but this is the same situation as the records from
-    // the truly under-replicated region, so it's not worth the added
-    // complexity to track the gap regions independently.
-    if (state.getNextLsn() >= next_lsn) {
-      RATELIMIT_WARNING(std::chrono::seconds(10),
-                        1,
-                        "Received overlapping gaps for log %ld from shard %s. "
-                        "Previous gap end %s. Next gap end %s",
-                        log_id_.val_,
-                        state.getShardID().toString().c_str(),
-                        logdevice::toString(state.getNextLsn()).c_str(),
-                        logdevice::toString(next_lsn).c_str());
-    }
-    state.setGapState(GapState::UNDER_REPLICATED);
-    gap_failure_domain_->setShardAttribute(
-        state.getShardID(), GapState::UNDER_REPLICATED);
-  };
+  GapState prev_gap_state = state.getGapState();
+  bool under_replicated = next_lsn_to_deliver_ < state.under_replicated_until;
+  setSenderGapState(
+      state, under_replicated ? GapState::UNDER_REPLICATED : GapState::GAP);
+  ld_check(state.under_replicated_until <= next_lsn);
+
+  // The next LSN at which GapState may change:
+  // either from UNDER_REPLICATED to GAP or from UNDER_REPLICATED/GAP to NONE.
+  lsn_t transition_lsn =
+      under_replicated ? state.under_replicated_until : next_lsn;
 
   if (next_lsn > window_high_) {
     // next_lsn is outside of the window, adjust gap_end_outside_window_
     // if needed
-
-    if (state.getGapState() == GapState::NONE) {
-      setSenderGapState(
-          state, under_replicated ? GapState::UNDER_REPLICATED : GapState::GAP);
-    } else if (under_replicated) {
-      promote_to_under_replicated_gap();
-    }
-
     if (gap_end_outside_window_ == LSN_INVALID ||
         next_lsn < gap_end_outside_window_) {
       gap_end_outside_window_ = next_lsn;
     }
-  } else {
-    // next_lsn falls inside the window. If this storage shard is not already
-    // in a linked list for some lsn > next_lsn_to_deliver_, add it now. Do
-    // this only if this storage shard was not already accounted for
-    // GapState::GAP (i.e. it reported a gap with LSN outside of the
-    // window first).
-    RecordState* rstate = buffer_->createOrGet(next_lsn);
-    // next_lsn must fit in the buffer
+  }
+
+  if (transition_lsn <= window_high_) {
+    // transition_lsn falls inside the window. If this storage shard is not
+    // already in a linked list for some lsn > next_lsn_to_deliver_, add it now.
+    // Do this only if this storage shard was not already accounted for
+    // GapState::GAP/UNDER_REPLICATED (i.e. it reported a gap with LSN outside
+    // of the window first).
+    RecordState* rstate = buffer_->createOrGet(transition_lsn);
+    // transition_lsn must fit in the buffer
     ld_check(rstate != nullptr);
 
-    if (state.getGapState() == GapState::NONE) {
-      setSenderGapState(
-          state, under_replicated ? GapState::UNDER_REPLICATED : GapState::GAP);
+    if (prev_gap_state == GapState::NONE) {
       rstate->list.push_back(state);
-    } else if (under_replicated) {
-      promote_to_under_replicated_gap();
     }
 
     rstate->gap = true;
@@ -1582,11 +1576,27 @@ ClientReadStream::checkFMajority(bool grace_period_expired) const {
   // and can't afford to do too many rewinds in ALL SEND ALL mode when there is
   // data loss.
   if (scd_->isActive()) {
-    return deps_->getSettings().read_stream_guaranteed_delivery_efficiency &&
-            (fmajority_result == FmajorityResult::NON_AUTHORITATIVE ||
-             fmajority_result == FmajorityResult::AUTHORITATIVE_COMPLETE)
-        ? ProgressDecision::ISSUE_GAP
-        : ProgressDecision::WAIT;
+    if (fmajority_result == FmajorityResult::NON_AUTHORITATIVE ||
+        fmajority_result == FmajorityResult::AUTHORITATIVE_COMPLETE) {
+      if (scd_->getUnderReplicatedShardsNotBlacklisted() != 0) {
+        // Some nodes reported underreplication, but we optimistically didn't
+        // add them to known down list, in hopes that we'll get through the
+        // underreplicated region without encountering gaps. Now we didn
+        // encounter a gap and have to add the underreplicated shards to known
+        // down list and rewind.
+        return ProgressDecision::ADD_TO_KNOWN_DOWN_AND_REWIND;
+      }
+      if (deps_->getSettings().read_stream_guaranteed_delivery_efficiency) {
+        // We've heard from all shards and no one had a record for current LSN
+        // that would pass SCD filter. Normally we would rewind to all send all
+        // mode in this situation, in case the record is underreplicated or has
+        // inconsistent copyset. But in
+        // read_stream_guaranteed_delivery_efficiency we just ship the gap
+        // because rewinds are slow.
+        return ProgressDecision::ISSUE_GAP;
+      }
+    }
+    return ProgressDecision::WAIT;
   }
 
   if (fmajority_result == FmajorityResult::NONE) {
@@ -1636,6 +1646,11 @@ int ClientReadStream::detectGap(bool grace_period_expired) {
 
   if (decision == ProgressDecision::WAIT) {
     // Not enough shards chimed in, we should wait.
+    return -1;
+  }
+
+  if (decision == ProgressDecision::ADD_TO_KNOWN_DOWN_AND_REWIND) {
+    promoteUnderreplicatedShardsToKnownDown();
     return -1;
   }
 
@@ -1778,6 +1793,26 @@ bool ClientReadStream::shouldRewindWhenDataLoss() {
     }
   }
   return false;
+}
+
+void ClientReadStream::promoteUnderreplicatedShardsToKnownDown() {
+  bool added = false;
+  for (auto& it : storage_set_states_) {
+    SenderState& state = it.second;
+    if (state.getGapState() == GapState::UNDER_REPLICATED &&
+        !state.should_blacklist_as_under_replicated) {
+      state.should_blacklist_as_under_replicated = true;
+      added |= scd_->addToShardsDownAndScheduleRewind(
+          state.getShardID(),
+          folly::sformat("{} added to known down list because it has an "
+                         "under replicated region",
+                         state.getShardID().toString()));
+      ;
+    }
+  }
+  ld_check(added);
+
+  checkConsistency();
 }
 
 int ClientReadStream::handleGap(lsn_t gap_lsn) {
@@ -2784,6 +2819,7 @@ void ClientReadStream::checkConsistency() const {
   }
   nodeset_size_t real_gap_shards_total = 0;
   nodeset_size_t real_gap_shards_filtered_out = 0;
+  nodeset_size_t real_under_replicated_shards_not_blacklisted = 0;
 
   small_shardset_t filtered_out;
 
@@ -2791,52 +2827,69 @@ void ClientReadStream::checkConsistency() const {
     const SenderState& state = it.second;
     const auto shard = state.getShardID();
     const bool is_linked = state.list_hook_.is_linked();
+    GapState gap_state = state.getGapState();
 
-    switch (state.getGapState()) {
-      case GapState::NONE:
-        ld_check(!is_linked);
-        break;
-      case GapState::GAP:
-      case GapState::UNDER_REPLICATED:
-        ld_check(state.grace_counter == 0);
-        ++real_gap_shards_total;
-        break;
+    if (gap_state == GapState::NONE) {
+      ld_check(!is_linked);
+      ld_check_ge(next_lsn_to_deliver_, state.getNextLsn());
+    } else {
+      ++real_gap_shards_total;
+
+      ld_check_eq(state.grace_counter, 0);
+
+      if (next_lsn_to_deliver_ <= until_lsn_) {
+        ld_check_lt(next_lsn_to_deliver_, state.getNextLsn());
+        ld_check_eq(state.getGapState() == GapState::UNDER_REPLICATED,
+                    next_lsn_to_deliver_ < state.under_replicated_until);
+      } else {
+        // Gap state is not updated when reaching until LSN.
+      }
+
+      if (gap_state == GapState::GAP) {
+        ld_check(!state.should_blacklist_as_under_replicated);
+      }
     }
 
     const auto st = state.getAuthoritativeStatus();
     if (gap_failure_domain_) {
-      ld_assert(gap_failure_domain_->getShardAuthoritativeStatus(shard) == st);
+      ld_check(gap_failure_domain_->getShardAuthoritativeStatus(shard) == st);
     }
     if (healthy_node_set_) {
-      ld_assert(healthy_node_set_->getShardAuthoritativeStatus(shard) == st);
+      ld_check(healthy_node_set_->getShardAuthoritativeStatus(shard) == st);
     }
 
-    if (scd_ && scd_->isActive() &&
-        state.blacklist_state != SenderState::BlacklistState::NONE) {
-      filtered_out.push_back(state.getShardID());
+    if (scd_ && scd_->isActive()) {
+      if (state.blacklist_state != SenderState::BlacklistState::NONE) {
+        filtered_out.push_back(state.getShardID());
 
-      if (state.getGapState() != GapState::NONE) {
-        ++real_gap_shards_filtered_out;
+        if (state.getGapState() != GapState::NONE) {
+          ++real_gap_shards_filtered_out;
+        }
+      } else {
+        real_under_replicated_shards_not_blacklisted +=
+            state.getGapState() == GapState::UNDER_REPLICATED;
       }
     }
   }
 
   if (scd_ && scd_->isActive()) {
-    ld_assert(scd_->getGapShardsFilteredOut() == real_gap_shards_filtered_out);
+    ld_check_eq(scd_->getGapShardsFilteredOut(), real_gap_shards_filtered_out);
+    ld_check_eq(scd_->getUnderReplicatedShardsNotBlacklisted(),
+                real_under_replicated_shards_not_blacklisted);
     auto filtered_out_expected = scd_->getFilteredOut();
-    ld_check(filtered_out.size() == filtered_out_expected.size());
+    ld_check_eq(filtered_out.size(), filtered_out_expected.size());
     std::sort(filtered_out_expected.begin(), filtered_out_expected.end());
     std::sort(filtered_out.begin(), filtered_out.end());
-    ld_assert(std::equal(filtered_out.begin(),
-                         filtered_out.end(),
-                         filtered_out_expected.begin()));
+    ld_check(std::equal(filtered_out.begin(),
+                        filtered_out.end(),
+                        filtered_out_expected.begin()));
   }
 
   if (readSetSize() > 0) {
     ld_check(gap_failure_domain_ != nullptr);
-    ld_assert(real_gap_shards_total ==
-              (numShardsInState(GapState::GAP) +
-               numShardsInState(GapState::UNDER_REPLICATED)));
+    ld_check(real_gap_shards_total ==
+             (numShardsInState(GapState::GAP) +
+              numShardsInState(GapState::UNDER_REPLICATED)));
   }
 }
 
@@ -2884,7 +2937,7 @@ void ClientReadStream::setSenderGapState(SenderState& sender, GapState state) {
 
   // update GapState in both SenderState and gap failure domain info.
   sender.setGapState(state);
-  scd_->onSenderGapStateChanged(sender);
+  scd_->onSenderGapStateChanged(sender, current_state);
   ld_check(gap_failure_domain_ != nullptr);
   gap_failure_domain_->setShardAttribute(shard, state);
 
@@ -2893,15 +2946,21 @@ void ClientReadStream::setSenderGapState(SenderState& sender, GapState state) {
   if (state == GapState::NONE && sender.list_hook_.is_linked()) {
     sender.list_hook_.unlink();
   }
+
+  if (state == GapState::GAP) {
+    // The shard is not reported as underreplicated anymore. Mark it for
+    // removing from known down when we receive next record from it.
+    sender.should_blacklist_as_under_replicated = false;
+  }
 }
 
 void ClientReadStream::resetGapParametersForSender(SenderState& state) {
   // We might be reconnecting to the same shard, in which case it's necessary to
   // reset gap-handling parameters.
-  state.setNextLsn(0);
-  state.max_data_record_lsn = 0;
+  state.setNextLsn(LSN_INVALID);
+  state.max_data_record_lsn = LSN_INVALID;
   state.grace_counter = 0;
-  state.under_replicated = false;
+  state.under_replicated_until = LSN_INVALID;
   setSenderGapState(state, GapState::NONE);
 }
 
@@ -2936,6 +2995,9 @@ int ClientReadStream::handleRecord(RecordState* rstate,
         }
         break;
       }
+      case ADD_TO_KNOWN_DOWN_AND_REWIND:
+        promoteUnderreplicatedShardsToKnownDown();
+        return -1;
       default:
         ld_check(false);
     }
@@ -3388,13 +3450,13 @@ void ClientReadStream::redeliver() {
   }
 
   // findGapsAndRecords(), deliverAccessGapAndDispose() and
-  // deliverNoConfigGapAndDispose() both reactivates the timer on failure.
+  // deliverNoConfigGapAndDispose() all reactivate the timer on failure.
 }
 
 void ClientReadStream::unlinkRecordState(lsn_t lsn, RecordState& rstate) {
   /*
    * When some record is delivered (@see handleRecord()) to the application,
-   * each SenderState is moved from the list corresponding to buffer_.front()
+   * each SenderState is moved from the list corresponding to buffer_->front()
    * to the list for next_lsn, assuming next_lsn_to_deliver_ < next_lsn. In this
    * case, |S_G| doesn't change. If next_lsn == next_lsn_to_deliver_, number of
    * shards in |S_G| has to be decremented by one. There's a special case where
@@ -3409,6 +3471,7 @@ void ClientReadStream::unlinkRecordState(lsn_t lsn, RecordState& rstate) {
     ld_check(state.getNextLsn() >= lsn);
     // linked SenderState must be the result of a previously sent record/gap
     ld_check(state.getGapState() != GapState::NONE);
+    ld_check(!state.list_hook_.is_linked());
 
     if (state.getNextLsn() == lsn) {
       // no need to move state to some other list; just remove the shard from
@@ -3419,21 +3482,30 @@ void ClientReadStream::unlinkRecordState(lsn_t lsn, RecordState& rstate) {
       continue;
     }
 
-    if (state.getNextLsn() <= window_high_) {
-      RecordState* nstate = buffer_->createOrGet(state.getNextLsn());
-      // state.getNextLsn() is in the window, so it should fit in the buffer
+    // Next LSN at which GapState may change.
+    lsn_t transition_lsn;
+    if (lsn < state.under_replicated_until) {
+      ld_check(state.getGapState() == GapState::UNDER_REPLICATED);
+      transition_lsn = state.under_replicated_until;
+    } else {
+      if (state.getGapState() == GapState::UNDER_REPLICATED) {
+        // Not underreplicated anymore.
+        setSenderGapState(state, GapState::GAP);
+      }
+      transition_lsn = state.getNextLsn();
+    }
+
+    if (transition_lsn <= window_high_) {
+      RecordState* nstate = buffer_->createOrGet(transition_lsn);
+      // transition_lsn is in the window, so it should fit in the buffer
       ld_check(nstate != nullptr);
       ld_check(nstate != &rstate);
       nstate->list.push_back(state);
       nstate->gap = true;
-
-      // GapState of the shard remains GapState::GAP/UNDER_REPLICATED
     } else {
       // Storage shard will not send anything to us in the current window,
       // its SenderState should be kept unlinked, while its GapState should
       // remain GapState::GAP/UNDER_REPLICATED.
-      ld_check(!state.list_hook_.is_linked());
-      ld_check(state.getGapState() != GapState::NONE);
     }
   }
 }
@@ -3516,29 +3588,6 @@ bool ClientReadStream::slideSenderWindows() {
     return false;
   }
 
-  if (!force_no_scd_ && log_uses_scd_ && !scd_->isActive()) {
-    // After we did failover to single copy delivery mode, we eventually
-    // recover to all send all mode when we slide the senders' window.
-    // The call to scheduleRewindToMode(SCD) here will cause START messages to
-    // be sent to storage shards. If we just encountered an epoch bump, the
-    // START messages will have start_lsn > window_high because we use
-    // next_lsn_to_deliver_ for start_lsn and next_lsn_to_deliver_ was fast
-    // forwarded to the new epoch. This is fine, the storage shards will wait
-    // for the WINDOW message we are about to send below.
-    if (log_uses_local_scd_) {
-      ld_debug("Switching to local scd for log:%lu, id:%lu",
-               log_id_.val(),
-               id_.val());
-      scd_->scheduleRewindToMode(ClientReadStreamScd::Mode::LOCAL_SCD,
-                                 "Switching to LOCAL_SCD: sliding window");
-    } else {
-      ld_debug(
-          "Switching to scd for log:%lu, id:%lu", log_id_.val(), id_.val());
-      scd_->scheduleRewindToMode(
-          ClientReadStreamScd::Mode::SCD, "Switching to SCD: sliding window");
-    }
-  }
-
   updateWindowSize();
   calcWindowHigh();
   calcNextLSNToSlideWindow();
@@ -3559,6 +3608,12 @@ bool ClientReadStream::slideSenderWindows() {
   // updateGapState() calls.
   gap_end_outside_window_ = LSN_INVALID;
 
+  // If we're in all send all mode, we can switch back to SCD, unless all shards
+  // are down/underreplicated/non-authoritative. Let's check that.
+  bool want_to_switch_to_scd =
+      !force_no_scd_ && log_uses_scd_ && !scd_->isActive();
+  size_t known_down = 0;
+
   // Now that window has changed, rebuild the GapState and associated
   // SenderState according to the new window using `state.getNextLsn()'.
   // `state.getNextLsn()' tells us the highest LSN of a record or gap that this
@@ -3568,22 +3623,55 @@ bool ClientReadStream::slideSenderWindows() {
   // update gap handling parameters appropriately.
   for (auto& it : storage_set_states_) {
     SenderState& state = it.second;
+
+    if (want_to_switch_to_scd) {
+      auto conn_state = state.getConnectionState();
+      if (conn_state == ConnectionState::RECONNECT_PENDING ||
+          conn_state == ConnectionState::PERSISTENT_ERROR ||
+          state.getAuthoritativeStatus() !=
+              AuthoritativeStatus::FULLY_AUTHORITATIVE ||
+          state.should_blacklist_as_under_replicated) {
+        ++known_down;
+      }
+    }
+
     if (!reader_) {
       sendWindowMessage(state);
     }
 
-    bool under_replicated = state.getGapState() == GapState::UNDER_REPLICATED;
     if (state.getGapState() != GapState::NONE) {
       setSenderGapState(state, GapState::NONE);
     }
 
-    updateGapState(state.getNextLsn(), state, under_replicated);
+    updateGapState(state.getNextLsn(), state);
+  }
+
+  if (want_to_switch_to_scd && known_down < storage_set_states_.size()) {
+    // After we did failover to all send all mode, we eventually
+    // recover to single copy delivery mode when we slide the senders' window.
+    if (log_uses_local_scd_) {
+      ld_debug("Switching to local scd for log:%lu, id:%lu",
+               log_id_.val(),
+               id_.val());
+      scd_->scheduleRewindToMode(ClientReadStreamScd::Mode::LOCAL_SCD,
+                                 "Switching to LOCAL_SCD: sliding window");
+    } else {
+      ld_debug(
+          "Switching to scd for log:%lu, id:%lu", log_id_.val(), id_.val());
+      scd_->scheduleRewindToMode(
+          ClientReadStreamScd::Mode::SCD, "Switching to SCD: sliding window");
+    }
   }
 
   return true;
 }
 
 void ClientReadStream::sendWindowMessage(SenderState& state) {
+  // Don't send WINDOW if we're going to send START soon.
+  if (rewind_scheduler_->isScheduled()) {
+    return;
+  }
+
   // If we are in the READING state, send out the WINDOW message now.
   //
   // If we are in an error state (RECONNECT_PENDING or PERSISTENT_ERROR),
@@ -3648,7 +3736,7 @@ int ClientReadStream::deliverFastForwardGap(GapType type, lsn_t next_lsn) {
     return rv;
   }
 
-  // clear the record state up to hi otherwise advanceBufferHead() call below
+  // Clear the record state up to hi. Otherwise advanceBufferHead() call below
   // will complain. Also, we want clearRecordState() to be called for each slot
   // to maintain gap accounting.
   namespace arg = std::placeholders;
@@ -3878,6 +3966,7 @@ void ClientReadStream::rewind(std::string reason) {
   ld_assert(numShardsInState(GapState::GAP) == 0);
   ld_assert(numShardsInState(GapState::UNDER_REPLICATED) == 0);
   ld_check(scd_->getGapShardsFilteredOut() == 0);
+  ld_check(scd_->getUnderReplicatedShardsNotBlacklisted() == 0);
 
   // clear the entire read stream buffer
   buffer_->clear();
@@ -3889,6 +3978,8 @@ void ClientReadStream::rewind(std::string reason) {
   // contains the same filter_version.
   ++filter_version_.val_;
 
+  bool was_in_all_send_all = !scd_ || !scd_->isActive();
+
   if (scd_) {
     // This function may transition us between SCD and ALL_SEND_ALL mode and/or
     // change the filtered out list.
@@ -3896,18 +3987,80 @@ void ClientReadStream::rewind(std::string reason) {
   }
 
   for (auto& it : storage_set_states_) {
-    it.second.blacklist_state = SenderState::BlacklistState::NONE;
+    SenderState& state = it.second;
+    state.blacklist_state = SenderState::BlacklistState::NONE;
 
-    // Re-apply shard statuses from event log.
+    if (scd_ && was_in_all_send_all && scd_->isActive()) {
+      // Rewinding from all send all to scd. Known down list was cleared.
+      // Let's repopulate it before rewinding, to avoid having to rewind again
+      // immediately in common cases.
+      // (It would probably be better to not clear known down list in the first
+      // place, and keep it up to date while in all-send-all mode. I'm not sure
+      // why it's not done that way. It may also make sense to make
+      // ClientReadStreamSenderState the source of truth for whether the shard
+      // should be in known down list or not, instead of having
+      // addToShardsDownAndScheduleRewind() sprinkled everywhere.
+      // This is a mess.)
+
+      // Blacklist if we couldn't connect to the node.
+      auto conn_state = state.getConnectionState();
+      if (conn_state == ConnectionState::RECONNECT_PENDING ||
+          conn_state == ConnectionState::PERSISTENT_ERROR) {
+        scd_->addToShardsDownAndScheduleRewind(
+            state.getShardID(),
+            folly::sformat("{} re-added to known down list because we couldn't "
+                           "connect to it",
+                           state.getShardID().toString()));
+      }
+
+      // Blacklist if the shard is not fully authoritative.
+      // The applyShardStatus() below will also blacklist if it changes
+      // authoritative status to not fully authoritative.
+      if (state.getAuthoritativeStatus() !=
+          AuthoritativeStatus::FULLY_AUTHORITATIVE) {
+        scd_->addToShardsDownAndScheduleRewind(
+            state.getShardID(),
+            folly::sformat("{} re-added to known down list because it's not "
+                           "fully authoritative",
+                           state.getShardID().toString()));
+      }
+
+      // Blacklist if the node reported underreplication.
+      if (state.should_blacklist_as_under_replicated) {
+        scd_->addToShardsDownAndScheduleRewind(
+            state.getShardID(),
+            folly::sformat("{} re-added to known down list because it has an "
+                           "under replicated region",
+                           state.getShardID().toString()));
+      }
+
+      // We could also blacklist if we received STARTED with E::REBUILDING,
+      // but in this case the shard is usually also not fully authoritative in
+      // event log, so we skip this case for simplicity.
+    }
+
+    // Re-apply shard statuses from event log, removing any overrides we did
+    // based on STARTED messages. These overrides are going to be obsolete soon
+    // because we'll send new START messages in a moment.
 
     // First reset connection state because applyShardStatus() skips shards
     // in READING state.
-    it.second.setConnectionState(
+    state.setConnectionState(
         ClientReadStreamSenderState::ConnectionState::CONNECTING);
     // Use try_make_progress=false because there's no progress to be made
     // since we're resetting all sender states.
     applyShardStatus("rewind", &it.second, /* try_make_progress */ false);
   }
+
+  // Apply scheduled SCD changes *again* after because the code above could
+  // schedule adding more shards to known down list on next rewind.
+  // Since we're doing a rewind already, just pick up those changes now and
+  // cancel the scheduled rewind.
+  if (scd_) {
+    scd_->applyScheduledChanges();
+  }
+  rewind_scheduler_->cancel();
+
   if (scd_ && scd_->isActive()) {
     for (const auto& shard_id : scd_->getShardsSlow()) {
       storage_set_states_.at(shard_id).blacklist_state =
@@ -3918,10 +4071,6 @@ void ClientReadStream::rewind(std::string reason) {
           SenderState::BlacklistState::DOWN;
     }
   }
-
-  // applyScheduledChanges() or applyShardStatus() may schedule a rewind again.
-  // Because we are about to rewind here, cancel that intent.
-  rewind_scheduler_->cancel();
 
   if (scd_ && scd_->isActive()) {
     RATELIMIT_INFO(
@@ -3953,7 +4102,7 @@ void ClientReadStream::rewind(std::string reason) {
                  log_id_.val_,
                  getDebugInfoStr().c_str());
 
-  // Tell storage nodes to rewind and update their blacklist_state.
+  // Tell storage nodes to rewind and update the known down list.
   // It is possible sendStart() will schedule another rewind.
   for (auto& it : storage_set_states_) {
     sendStart(it.second.getShardID(), it.second);
@@ -4165,7 +4314,7 @@ void ClientReadStreamDependencies::getMetaDataForEpoch(
                        effective_until.val());
         // The requested epoch does not exist or is not released yet. Return the
         // last known epoch. The client read stream will use that to start
-        // reading nd will re-request epoch metadata later.
+        // reading and will re-request epoch metadata later.
         until = epoch;
         effective_until = epoch;
         metadata = map->getLastEpochMetaData();

@@ -784,8 +784,10 @@ class ClientReadStream : boost::noncopyable {
                            // for a grace period to give more time for other
                            // shards to chime in in case there was
                            // underreplicated data.
-    ISSUE_GAP              // We heard from enough shards, we can make a
+    ISSUE_GAP,             // We heard from enough shards, we can make a
                            // decision to issue a gap.
+    ADD_TO_KNOWN_DOWN_AND_REWIND // Blacklist shards that reported
+                                 // underreplication and rewind.
   };
 
   /**
@@ -947,9 +949,7 @@ class ClientReadStream : boost::noncopyable {
    * next_lsn_to_deliver. It's called when a GAP mesage is received or when a
    * record is received with lsn > next_lsn_to_deliver_.
    */
-  void updateGapState(lsn_t next_lsn,
-                      SenderState& state,
-                      bool under_replicated);
+  void updateGapState(lsn_t next_lsn, SenderState& state);
 
   /**
    * Called whe we found a DATALOSS gap. Returns true if we should rewind
@@ -957,6 +957,12 @@ class ClientReadStream : boost::noncopyable {
    * an f-majority of storage shards to not send a record.
    */
   bool shouldRewindWhenDataLoss();
+
+  /**
+   * Add shards with GapState::UNDER_REPLICATED to scd known down list and
+   * schedule rewind.
+   */
+  void promoteUnderreplicatedShardsToKnownDown();
 
   /**
    * Called when a gap [next_lsn_to_deliver_, gap_lsn) is detected. This method
@@ -1546,18 +1552,6 @@ class ClientReadStream : boost::noncopyable {
   std::chrono::milliseconds last_in_record_ts_{0};
   // The timestamp when last record was received by client
   std::chrono::milliseconds last_received_ts_{0};
-
-  // When a rewind is scheduled, how long to wait until it is actually done.
-  // This delay is adaptive. It increases multiplicatively and decreases
-  // linearly over time. This is a protection against too many rewinds which
-  // hurts read amplification.
-  ChronoExponentialBackoffAdaptiveVariable<std::chrono::milliseconds>
-      rewind_timer_delay_{/*initial=*/std::chrono::milliseconds{1},
-                          /*min=*/std::chrono::milliseconds{1},
-                          /*max=*/std::chrono::seconds{10},
-                          /*multiplier=*/2,
-                          /*decrease_rate=*/100,
-                          /*fuzz_factor=*/0};
 
   // @see scheduleRewind().
   std::unique_ptr<RewindScheduler> rewind_scheduler_;

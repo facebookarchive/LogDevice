@@ -30,7 +30,6 @@ ClientReadStreamSenderState::ClientReadStreamSenderState(
     : max_data_record_lsn(0),
       filter_version(0),
       last_received_filter_version(0),
-      blacklist_state(BlacklistState::NONE),
       client_read_stream_(client_read_stream),
       window_high_(0),
       next_lsn_(0),

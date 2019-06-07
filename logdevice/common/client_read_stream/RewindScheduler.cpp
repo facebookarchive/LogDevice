@@ -26,7 +26,7 @@ void RewindScheduler::schedule(TimeoutMap* map, std::string reason) {
     reason_ = std::move(reason);
 
     // Decrease delay according to how much time passed since the last call to
-    // posiiveFeedback() (last scheduled rewind).
+    // positiveFeedback() (last scheduled rewind).
     delay_.positiveFeedback(SteadyTimestamp::now());
     timer_->activate(delay_.getCurrentValue(), map);
     assert(isScheduled());

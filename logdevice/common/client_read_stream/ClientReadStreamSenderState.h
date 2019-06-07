@@ -128,13 +128,32 @@ class ClientReadStreamSenderState : boost::noncopyable {
 
   // BlacklistState of the sender shard, initialized to NONE. Must remain
   // NONE if single-copy-delivery is not enabled.
-  BlacklistState blacklist_state;
+  BlacklistState blacklist_state = BlacklistState::NONE;
 
   /**
-   * True if the sender reported max_data_record_lsn came from a region of the
-   * sender's log store that is under replicated.
+   * True if the sender reported a potentially underreplicated region
+   * (GapState::UNDER_REPLICATED), and we believe that it may actually be mising
+   * records. We'll add such senders to known down list on next rewind.
+   * Set to true when a gap is detected, and this sender is in
+   * GapState::UNDER_REPLICATED. Set to false when gap state changes to GAP,
+   * i.e. the sender leaves underreplicated region.
+   *
+   * Blacklisting of underreplicated senders is deferred like this because
+   * storage nodes' underreplication reports are often greatly overestimated.
+   * Most of the time the sender is not actually missing any relevant records,
+   * and we'll be able to go through the unrerreplicated region without any
+   * gaps and rewinds. Delaying the rewind also reduces number of rewinds if
+   * multiple senders report underreplication at about the same time.
+   * On the other hand, delaying the rewind may increase the amount of wasted
+   * work on the servers when the rewind does happen. So it's a tradeoff.
    */
-  bool under_replicated;
+  bool should_blacklist_as_under_replicated = false;
+
+  /**
+   * This sender shipped UNDER_REPLICATED gaps up to, and excluding, this LSN.
+   * Cleared on rewind.
+   */
+  lsn_t under_replicated_until = LSN_INVALID;
 
   // Pointer to owner
   ClientReadStream* client_read_stream_;

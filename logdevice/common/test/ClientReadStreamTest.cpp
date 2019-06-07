@@ -585,16 +585,12 @@ class ClientReadStreamTest
     read_stream_->scd_->all_send_all_failover_timer_.callback();
   }
 
-  void assertNoRewindScheduled() {
-    ASSERT_FALSE(read_stream_->rewindScheduled());
-  }
-
-  void assertRewindScheduled() {
-    ASSERT_TRUE(read_stream_->rewindScheduled());
+  bool rewindScheduled() {
+    return read_stream_->rewindScheduled();
   }
 
   void triggerScheduledRewind() {
-    assertRewindScheduled();
+    EXPECT_TRUE(rewindScheduled());
     read_stream_->rewind("test");
   }
 
@@ -824,7 +820,7 @@ bool start_cmp(StartMessage const& a, StartMessage const& b) {
   }
 
 #define ASSERT_NO_WINDOW_MESSAGES() \
-  { ASSERT_TRUE(state_.window.empty()); }
+  { ASSERT_EQ(std::vector<WindowMessage>(), state_.window); }
 
 #define ASSERT_GAP_MESSAGES(...)                                     \
   do {                                                               \
@@ -2880,7 +2876,7 @@ TEST_P(ClientReadStreamTest, ScdChecksumFail) {
   onGap(N2, mockGap(N2, lsn(1, 5), lsn(1, 5), GapReason::CHECKSUM_FAIL));
 
   // N2 is already in the known down list, we should not rewind again.
-  assertNoRewindScheduled();
+  EXPECT_FALSE(rewindScheduled());
 
   // But N3 sends the record for e1n5
   onDataRecord(N3, mockRecord(lsn(1, 5)));
@@ -2913,17 +2909,21 @@ TEST_P(ClientReadStreamTest, ScdEpochBump) {
                         N2,
                         N3);
   ON_STARTED(filter_version_t{1}, N0, N1, N2, N3);
+  ASSERT_NO_WINDOW_MESSAGES();
 
   onDataRecord(N0, mockRecord(lsn(1, 2)));
   onDataRecord(N3, mockRecord(lsn(1, 3)));
   onDataRecord(N2, mockRecord(lsn(1, 1)));
   ASSERT_RECV(lsn(1, 1), lsn(1, 2), lsn(1, 3));
+  ASSERT_NO_WINDOW_MESSAGES();
 
   // All nodes send a gap.
   onGap(N0, mockGap(N0, lsn(1, 3), lsn(2, 1)));
   onGap(N1, mockGap(N1, lsn(1, 1), lsn(2, 2)));
   onGap(N2, mockGap(N2, lsn(1, 2), lsn(2, 3)));
+  EXPECT_FALSE(rewindScheduled());
   onGap(N3, mockGap(N3, lsn(1, 4), lsn(2, 4)));
+  ASSERT_NO_WINDOW_MESSAGES();
 
   // However, no gap should be sent to the client. We should rewind and failover
   // to all send all mode just to be sure we did not miss a record.
@@ -2940,20 +2940,30 @@ TEST_P(ClientReadStreamTest, ScdEpochBump) {
                         N2,
                         N3);
   ON_STARTED(filter_version_t{2}, N0, N1, N2, N3);
+  ASSERT_NO_WINDOW_MESSAGES();
 
   // All nodes send a gap.
+
   onGap(N0, mockGap(N0, lsn(1, 4), lsn(2, 1)));
+  ASSERT_GAP_MESSAGES();
+  ASSERT_NO_WINDOW_MESSAGES();
+  EXPECT_FALSE(rewindScheduled());
   onGap(N1, mockGap(N1, lsn(1, 4), lsn(2, 1)));
+  ASSERT_GAP_MESSAGES(GapMessage{GapType::BRIDGE, lsn(1, 4), lsn(2, 1)});
+  ASSERT_WINDOW_MESSAGES(lsn(2, 2), lsn(2, 11), N0, N1, N2, N3);
+
+  // Right now grace period is disabled for bridge gaps, so the rewind back to
+  // scd is scheduled as early as here.
+  EXPECT_TRUE(rewindScheduled());
+
   onGap(N2, mockGap(N2, lsn(1, 4), lsn(2, 1)));
   onGap(N3, mockGap(N3, lsn(1, 4), lsn(2, 1)));
 
-  ASSERT_GAP_MESSAGES(GapMessage{GapType::BRIDGE, lsn(1, 4), lsn(2, 1)});
+  ASSERT_NO_WINDOW_MESSAGES();
+  ASSERT_GAP_MESSAGES();
 
   // We should go back to single copy delivery mode because we slid the sender
   // window.
-  // Note here that the implementation of ClientReadStream makes it so that
-  // START is sent with window_high < start_lsn, because it did not update the
-  // window yet. This is perfectly valid and understood by the server.
   triggerScheduledRewind();
   buffer_max = calc_buffer_max(lsn(2, 1) + 1, buffer_size_);
   ASSERT_START_MESSAGES(lsn(2, 2),
@@ -2967,9 +2977,8 @@ TEST_P(ClientReadStreamTest, ScdEpochBump) {
                         N2,
                         N3);
   ON_STARTED(filter_version_t{3}, N0, N1, N2, N3);
-
-  // A window message should be received.
-  ASSERT_WINDOW_MESSAGES(lsn(2, 2), lsn(2, 11), N0, N1, N2, N3);
+  EXPECT_FALSE(rewindScheduled());
+  ASSERT_NO_WINDOW_MESSAGES();
 
   // Nodes start shipping some records.
   onDataRecord(N2, mockRecord(lsn(2, 3)));
@@ -2979,6 +2988,7 @@ TEST_P(ClientReadStreamTest, ScdEpochBump) {
   onDataRecord(N1, mockRecord(lsn(2, 3)));
   onDataRecord(N3, mockRecord(lsn(2, 3)));
   ASSERT_RECV(lsn(2, 2), lsn(2, 3));
+  ASSERT_GAP_MESSAGES();
 }
 
 // Check that we immediately do failover when in single copy delivery and the
@@ -3099,7 +3109,7 @@ TEST_P(ClientReadStreamTest, ScdOnCloseCallbackFailoverToAllSendAll) {
   auto& cb = *state_.on_close[N3];
   cb(E::PEER_CLOSED, Address(NodeID(N3.node())));
   triggerScheduledRewind();
-  assertNoRewindScheduled();
+  EXPECT_FALSE(rewindScheduled());
 
   // ClientReadStream should rewind in all send all mode.
   ASSERT_START_MESSAGES(lsn(1, 4),
@@ -6461,7 +6471,7 @@ TEST_P(ClientReadStreamTest, GracePeriodForStalledReads) {
 
 // Check that nodes reporting under-replicated GAPS do not satisfy
 // the f-majority for gap detection.
-TEST_P(ClientReadStreamTest, UnderReplicatedGap) {
+TEST_P(ClientReadStreamTest, UnderReplicatedGapSCD) {
   state_.shards.resize(4);
   buffer_size_ = 10;
   replication_factor_ = 3;
@@ -6487,22 +6497,50 @@ TEST_P(ClientReadStreamTest, UnderReplicatedGap) {
   // All storage nodes respond to the START message.
   ON_STARTED(filter_version_t{1}, N0, N1, N2, N3);
 
+  // Records [1, 4] get delivered.
   read_stream_->onDataRecord(N0, mockRecord(lsn(1, 3)));
   read_stream_->onDataRecord(N1, mockRecord(lsn(1, 2)));
   read_stream_->onDataRecord(N3, mockRecord(lsn(1, 1)));
   read_stream_->onDataRecord(N2, mockRecord(lsn(1, 4)));
   ASSERT_RECV(lsn(1, 1), lsn(1, 2), lsn(1, 3), lsn(1, 4));
 
+  // N2 sends UNDER_REPLICATED gap [1, 8]. No rewind yet.
   read_stream_->onGap(
-      N2, mockGap(N2, lsn(1, 5), lsn(1, 5), GapReason::UNDER_REPLICATED));
+      N2, mockGap(N2, lsn(1, 5), lsn(1, 8), GapReason::UNDER_REPLICATED));
+  EXPECT_FALSE(rewindScheduled());
+  ASSERT_RECV();
+  ASSERT_GAP_MESSAGES();
 
-  triggerScheduledRewind();
+  // N0 sends records 6 and 8. Nothing happens, waiting for esn 5.
+  read_stream_->onDataRecord(N0, mockRecord(lsn(1, 6)));
+  read_stream_->onDataRecord(N0, mockRecord(lsn(1, 8)));
+  ASSERT_RECV();
+  ASSERT_GAP_MESSAGES();
 
-  // ClientReadStream should have rewound as soon as it received the
-  // UNDER_REPLICATED gap.
-  ASSERT_START_MESSAGES(lsn(1, 5),
+  // N3 sends record 5. Records 5 and 6 get delivered. Waiting for esn 7 now.
+  read_stream_->onDataRecord(N3, mockRecord(lsn(1, 5)));
+  EXPECT_FALSE(rewindScheduled());
+  ASSERT_RECV(lsn(1, 5), lsn(1, 6));
+  ASSERT_GAP_MESSAGES();
+
+  // N1 sends a gap.
+  read_stream_->onGap(N1, mockGap(N1, lsn(1, 5), lsn(1, 12)));
+  EXPECT_FALSE(rewindScheduled());
+  ASSERT_RECV();
+  ASSERT_GAP_MESSAGES();
+
+  // N3 sends a record past the gap. We have a complete f-majority but there's
+  // still a gap. Rewind.
+  read_stream_->onDataRecord(N3, mockRecord(lsn(1, 9)));
+
+  {
+    SCOPED_TRACE("here");
+    triggerScheduledRewind();
+  }
+
+  ASSERT_START_MESSAGES(lsn(1, 7),
                         LSN_MAX,
-                        buffer_max,
+                        buffer_max + 6,
                         filter_version_t{2},
                         true,
                         small_shardset_t{N2},
@@ -6514,34 +6552,77 @@ TEST_P(ClientReadStreamTest, UnderReplicatedGap) {
   // All storage nodes respond to the START message.
   ON_STARTED(filter_version_t{2}, N0, N1, N2, N3);
 
-  // N2 sends the GAP again for e1n5
+  ASSERT_RECV();
+  ASSERT_GAP_MESSAGES();
+
+  // All storage nodes send their gaps/records again.
+
   read_stream_->onGap(
-      N2, mockGap(N2, lsn(1, 5), lsn(1, 5), GapReason::UNDER_REPLICATED));
+      N2, mockGap(N2, lsn(1, 7), lsn(1, 8), GapReason::UNDER_REPLICATED));
+  read_stream_->onDataRecord(N3, mockRecord(lsn(1, 9)));
+  read_stream_->onGap(N1, mockGap(N1, lsn(1, 7), lsn(1, 12)));
+  EXPECT_FALSE(rewindScheduled());
   ASSERT_RECV();
   ASSERT_GAP_MESSAGES();
 
-  // N3 sends a record past the gap. Still no complete f-majority
-  read_stream_->onDataRecord(N3, mockRecord(lsn(1, 6)));
+  read_stream_->onDataRecord(N0, mockRecord(lsn(1, 8)));
+
+  // Now we have a complete f-majority and can deliver the gap.
+  EXPECT_FALSE(rewindScheduled());
+  ASSERT_GAP_MESSAGES(GapMessage{GapType::DATALOSS, lsn(1, 7), lsn(1, 7)});
+  ASSERT_RECV(lsn(1, 8), lsn(1, 9));
+
+  // N2 sends a record without under replicated flag. The record gets delivered,
+  // and a rewind is scheduled.
+  read_stream_->onDataRecord(N2, mockRecord(lsn(1, 10)));
+  ASSERT_RECV(lsn(1, 10));
+  EXPECT_TRUE(rewindScheduled());
+
+  // Before rewind happens, N2 sends another under replicated record.
+  // Current implementation of ClientReadStream will proceed with the rewind,
+  // will remove N2 from known down anyway, and the rewind will remove all
+  // traces of this under replicated record.
+
+  read_stream_->onDataRecord(
+      N2, mockRecord(lsn(1, 12), RECORD_Header::UNDER_REPLICATED_REGION));
+
+  {
+    SCOPED_TRACE("here");
+    triggerScheduledRewind();
+  }
+
+  ASSERT_START_MESSAGES(lsn(1, 11),
+                        LSN_MAX,
+                        buffer_max + 6,
+                        filter_version_t{3},
+                        true,
+                        small_shardset_t{},
+                        N0,
+                        N1,
+                        N2,
+                        N3);
+
+  ON_STARTED(filter_version_t{3}, N0, N1, N2, N3);
+
+  // N2 sends the record again, but this time without under replicated flag.
+  // This can happen if (a) mini-rebuilding just completed, or (b) the higher
+  // start LSN in the new START message changed the outcome, or (c)
+  // underreplicated region detection is flaky in some way.
+  read_stream_->onDataRecord(N2, mockRecord(lsn(1, 12)));
+  EXPECT_FALSE(rewindScheduled());
   ASSERT_RECV();
   ASSERT_GAP_MESSAGES();
 
-  // N0 sends a record past the gap. Now we have an incomplete f-majority,
-  // but will not issue a gap.
-  read_stream_->onDataRecord(N0, mockRecord(lsn(1, 6)));
-  ASSERT_RECV();
+  // N0 sends record 11. Records 11 and 12 get delivered.
+  read_stream_->onDataRecord(N0, mockRecord(lsn(1, 11)));
+  EXPECT_FALSE(rewindScheduled());
+  ASSERT_RECV(lsn(1, 11), lsn(1, 12));
   ASSERT_GAP_MESSAGES();
-
-  // N1 sends a record past the gap. Now we have a complete f-majority
-  // and can deliver the gap.
-  read_stream_->onDataRecord(N1, mockRecord(lsn(1, 6)));
-
-  ASSERT_GAP_MESSAGES(GapMessage{GapType::DATALOSS, lsn(1, 5), lsn(1, 5)});
-  ASSERT_RECV(lsn(1, 6));
 }
 
 // Check that an under-replicated gap immediately after a no-records gap
 // excludes the sending node from the f-majority for gap detection.
-TEST_P(ClientReadStreamTest, GapBeforeUnderReplicatedGap) {
+TEST_P(ClientReadStreamTest, GapBeforeUnderReplicatedGapNoSCD) {
   state_.shards.resize(4);
   buffer_size_ = 10;
   replication_factor_ = 3;
@@ -6657,11 +6738,18 @@ TEST_P(ClientReadStreamTest, GapBeforeUnderReplicatedGapSCD) {
       N2, mockGap(N2, lsn(1, 5), lsn(1, 5), GapReason::NO_RECORDS));
   read_stream_->onGap(
       N2, mockGap(N2, lsn(1, 6), lsn(1, 6), GapReason::UNDER_REPLICATED));
+  EXPECT_FALSE(rewindScheduled());
+
+  // N0, N1, N3 send a record past the gap. The last one triggers a rewind.
+  read_stream_->onDataRecord(N3, mockRecord(lsn(1, 7)));
+  read_stream_->onDataRecord(N0, mockRecord(lsn(1, 8)));
+  EXPECT_FALSE(rewindScheduled());
+  read_stream_->onDataRecord(N1, mockRecord(lsn(1, 6)));
+  ASSERT_RECV();
+  ASSERT_GAP_MESSAGES();
 
   triggerScheduledRewind();
 
-  // ClientReadStream should have rewound as soon as it received the
-  // UNDER_REPLICATED gap.
   ASSERT_START_MESSAGES(lsn(1, 5),
                         LSN_MAX,
                         buffer_max,
@@ -6675,11 +6763,13 @@ TEST_P(ClientReadStreamTest, GapBeforeUnderReplicatedGapSCD) {
 
   ON_STARTED(filter_version_t{2}, N0, N1, N2, N3);
 
-  // N2 again sends the same Gap info
+  // Everyone sends the same gaps/records again.
+
   read_stream_->onGap(
       N2, mockGap(N2, lsn(1, 5), lsn(1, 5), GapReason::NO_RECORDS));
   read_stream_->onGap(
       N2, mockGap(N2, lsn(1, 6), lsn(1, 6), GapReason::UNDER_REPLICATED));
+  EXPECT_FALSE(rewindScheduled());
 
   // N3 sends a record past both gaps. We now have an incomplete f-majority
   // for lsn 5, but will not send a gap.
@@ -6696,6 +6786,7 @@ TEST_P(ClientReadStreamTest, GapBeforeUnderReplicatedGapSCD) {
   // N1 sends a record past the gap. Now we have a complete f-majority
   // and can deliver the gap.
   read_stream_->onDataRecord(N1, mockRecord(lsn(1, 6)));
+  EXPECT_FALSE(rewindScheduled());
   ASSERT_GAP_MESSAGES(GapMessage{GapType::DATALOSS, lsn(1, 5), lsn(1, 5)});
 }
 
@@ -6735,6 +6826,16 @@ TEST_P(ClientReadStreamTest, UnderReplicatedRecord) {
 
   read_stream_->onDataRecord(
       N2, mockRecord(lsn(1, 6), RECORD_Header::UNDER_REPLICATED_REGION));
+  EXPECT_FALSE(rewindScheduled());
+
+  read_stream_->onDataRecord(
+      N2, mockRecord(lsn(1, 6), RECORD_Header::UNDER_REPLICATED_REGION));
+  read_stream_->onDataRecord(N3, mockRecord(lsn(1, 6)));
+  read_stream_->onDataRecord(N0, mockRecord(lsn(1, 6)));
+  EXPECT_FALSE(rewindScheduled());
+  read_stream_->onDataRecord(N1, mockRecord(lsn(1, 6)));
+  ASSERT_RECV();
+  ASSERT_GAP_MESSAGES();
 
   triggerScheduledRewind();
 
@@ -6817,6 +6918,9 @@ TEST_P(ClientReadStreamTest, AllSendAllUnderReplicatedGap) {
   read_stream_->onDataRecord(N3, mockRecord(lsn(1, 6)));
   read_stream_->onGap(
       N2, mockGap(N2, lsn(1, 5), lsn(1, 9), GapReason::UNDER_REPLICATED));
+  read_stream_->onDataRecord(N0, mockRecord(lsn(1, 8)));
+  EXPECT_FALSE(rewindScheduled());
+  read_stream_->onDataRecord(N1, mockRecord(lsn(1, 7)));
   ASSERT_RECV();
   ASSERT_GAP_MESSAGES();
 
@@ -6843,20 +6947,18 @@ TEST_P(ClientReadStreamTest, AllSendAllUnderReplicatedGap) {
   read_stream_->onGap(
       N2, mockGap(N2, lsn(1, 5), lsn(1, 9), GapReason::UNDER_REPLICATED));
   read_stream_->onDataRecord(N0, mockRecord(lsn(1, 8)));
+  EXPECT_FALSE(rewindScheduled());
   read_stream_->onDataRecord(N1, mockRecord(lsn(1, 7)));
 
   // Still missing lsn 5.
   ASSERT_RECV();
   ASSERT_GAP_MESSAGES();
 
-  // Failover to all-send-all.
-  scdShardsDownFailoverTimerCallback();
-  scdShardsDownFailoverTimerCallback();
+  // checkNeedsFailoverToAllSendAll() should have scheduled a rewind.
+  EXPECT_TRUE(rewindScheduled());
   triggerScheduledRewind();
   ASSERT_FALSE(isCurrentlyInSingleCopyDeliveryMode());
 
-  // ClientReadStream should have rewound as soon as it received the
-  // UNDER_REPLICATED record from Node 2.
   ASSERT_START_MESSAGES(lsn(1, 5),
                         LSN_MAX,
                         buffer_max,
@@ -6970,6 +7072,9 @@ TEST_P(ClientReadStreamTest, AllSendAllUnderReplicatedRecord) {
   read_stream_->onDataRecord(N3, mockRecord(lsn(1, 6)));
   read_stream_->onDataRecord(
       N2, mockRecord(lsn(1, 9), RECORD_Header::UNDER_REPLICATED_REGION));
+  read_stream_->onDataRecord(N0, mockRecord(lsn(1, 8)));
+  EXPECT_FALSE(rewindScheduled());
+  read_stream_->onDataRecord(N1, mockRecord(lsn(1, 7)));
   ASSERT_RECV();
   ASSERT_GAP_MESSAGES();
   triggerScheduledRewind();
@@ -6995,15 +7100,15 @@ TEST_P(ClientReadStreamTest, AllSendAllUnderReplicatedRecord) {
   read_stream_->onDataRecord(
       N2, mockRecord(lsn(1, 9), RECORD_Header::UNDER_REPLICATED_REGION));
   read_stream_->onDataRecord(N0, mockRecord(lsn(1, 8)));
+  EXPECT_FALSE(rewindScheduled());
   read_stream_->onDataRecord(N1, mockRecord(lsn(1, 7)));
 
   // Still missing lsn 5.
   ASSERT_RECV();
   ASSERT_GAP_MESSAGES();
 
-  // Failover to all-send-all.
-  scdShardsDownFailoverTimerCallback();
-  scdShardsDownFailoverTimerCallback();
+  // checkNeedsFailoverToAllSendAll() should have scheduled a rewind.
+  EXPECT_TRUE(rewindScheduled());
   triggerScheduledRewind();
   ASSERT_FALSE(isCurrentlyInSingleCopyDeliveryMode());
 
@@ -7123,6 +7228,11 @@ TEST_P(ClientReadStreamTest, UnderReplicatedExitOnWindow) {
 
   read_stream_->onGap(
       N2, mockGap(N2, lsn(1, 5), lsn(1, 5), GapReason::UNDER_REPLICATED));
+  read_stream_->onDataRecord(N3, mockRecord(lsn(1, 6)));
+  read_stream_->onDataRecord(N0, mockRecord(lsn(1, 6)));
+  EXPECT_FALSE(rewindScheduled());
+  read_stream_->onDataRecord(N1, mockRecord(lsn(1, 6)));
+
   triggerScheduledRewind();
 
   // ClientReadStream should have rewound as soon as it received the
@@ -7478,6 +7588,106 @@ TEST_P(ClientReadStreamTest, FilteredOutGapMixedWithOthers) {
   ASSERT_RECV(lsn(1, 6));
   onGap(N0, mockGap(N0, lsn(1, 7), lsn(1, 7), GapReason::FILTERED_OUT));
   ASSERT_GAP_MESSAGES(GapMessage{GapType::FILTERED_OUT, lsn(1, 7), lsn(1, 7)});
+}
+
+TEST_P(ClientReadStreamTest, UnderReplicatedTransitionAboveWindow) {
+  for (int second_gap_is_above_next_window_too = 0;
+       second_gap_is_above_next_window_too < 2;
+       ++second_gap_is_above_next_window_too) {
+    SCOPED_TRACE(second_gap_is_above_next_window_too);
+    state_ = TestState();
+    state_.shards.resize(2);
+    buffer_size_ = 10;
+    replication_factor_ = 2;
+    scd_enabled_ = false;
+    flow_control_threshold_ = 0.7;
+    start();
+
+    lsn_t second_gap_end = second_gap_is_above_next_window_too ? 25 : 15;
+
+    lsn_t buffer_max = calc_buffer_max(start_lsn_, buffer_size_);
+
+    ASSERT_START_MESSAGES(lsn(1, 1),
+                          LSN_MAX,
+                          buffer_max,
+                          filter_version_t{1},
+                          false,
+                          small_shardset_t{},
+                          N0,
+                          N1);
+    ON_STARTED(filter_version_t{1}, N0, N1);
+
+    // Send an underreplicated gap to above window, then a non-underreplicated
+    // gap entirely above window. Not sure if this can happen in real life, but
+    // it at least shouldn't break ClientReadStream.
+    read_stream_->onGap(
+        N0, mockGap(N0, lsn(1, 1), lsn(1, 11), GapReason::UNDER_REPLICATED));
+    read_stream_->onGap(N0, mockGap(N0, lsn(1, 12), lsn(1, second_gap_end)));
+    ASSERT_RECV();
+    ASSERT_GAP_MESSAGES();
+    ASSERT_NO_WINDOW_MESSAGES();
+
+    read_stream_->onDataRecord(N1, mockRecord(lsn(1, 9)));
+    ASSERT_GAP_MESSAGES(GapMessage{GapType::DATALOSS, lsn(1, 1), lsn(1, 8)});
+    ASSERT_RECV(lsn(1, 9));
+    ASSERT_WINDOW_MESSAGES(lsn(1, 10), lsn(1, 19), N0, N1);
+    ASSERT_TRUE(getGracePeriodTimer() == nullptr ||
+                !getGracePeriodTimer()->isActive());
+
+    read_stream_->onDataRecord(N1, mockRecord(lsn(1, 13)));
+    // Current implementataion ships the data loss as two gaps in this
+    // situation, because N0 shipped the gap as two gaps.
+    ASSERT_GAP_MESSAGES(GapMessage{GapType::DATALOSS, lsn(1, 10), lsn(1, 11)},
+                        GapMessage{GapType::DATALOSS, lsn(1, 12), lsn(1, 12)});
+    ASSERT_RECV(lsn(1, 13));
+    ASSERT_NO_WINDOW_MESSAGES();
+    ASSERT_TRUE(getGracePeriodTimer() != nullptr);
+    ASSERT_TRUE(getGracePeriodTimer()->isActive());
+
+    dynamic_cast<MockBackoffTimer*>(getGracePeriodTimer())->getCallback()();
+    ASSERT_GAP_MESSAGES(
+        GapMessage{GapType::DATALOSS, lsn(1, 14), lsn(1, second_gap_end)});
+    ASSERT_RECV();
+    if (second_gap_is_above_next_window_too) {
+      ASSERT_WINDOW_MESSAGES(
+          lsn(1, second_gap_end + 1), lsn(1, second_gap_end + 10), N0, N1);
+    } else {
+      ASSERT_NO_WINDOW_MESSAGES();
+    }
+  }
+}
+
+TEST_P(ClientReadStreamTest, UnderReplicatedRecord2) {
+  state_.shards.resize(2);
+  buffer_size_ = 10;
+  replication_factor_ = 1;
+  scd_enabled_ = true;
+  start();
+
+  lsn_t buffer_max = calc_buffer_max(start_lsn_, buffer_size_);
+
+  ASSERT_START_MESSAGES(lsn(1, 1),
+                        LSN_MAX,
+                        buffer_max,
+                        filter_version_t{1},
+                        true,
+                        small_shardset_t{},
+                        N0,
+                        N1);
+  ON_STARTED(filter_version_t{1}, N0, N1);
+
+  read_stream_->onDataRecord(
+      N0, mockRecord(lsn(1, 2), RECORD_Header::UNDER_REPLICATED_REGION));
+  read_stream_->onDataRecord(
+      N0, mockRecord(lsn(1, 3), RECORD_Header::UNDER_REPLICATED_REGION));
+  read_stream_->onGap(N0, mockGap(N0, lsn(1, 4), lsn(1, 6)));
+  ASSERT_RECV();
+  read_stream_->onDataRecord(N1, mockRecord(lsn(1, 1)));
+  ASSERT_RECV(lsn(1, 1), lsn(1, 2), lsn(1, 3));
+  ASSERT_GAP_MESSAGES();
+  read_stream_->onDataRecord(N1, mockRecord(lsn(1, 4)));
+  ASSERT_RECV(lsn(1, 4));
+  ASSERT_GAP_MESSAGES();
 }
 
 }} // namespace facebook::logdevice
