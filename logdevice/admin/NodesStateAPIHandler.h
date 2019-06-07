@@ -21,10 +21,10 @@ class Node;
 
 class NodesStateAPIHandler : public virtual AdminAPIHandlerBase {
  public:
-  virtual void
   // See admin.thrift for documentation
-  getNodesState(thrift::NodesStateResponse& out,
-                std::unique_ptr<thrift::NodesStateRequest> request) override;
+  virtual folly::SemiFuture<std::unique_ptr<thrift::NodesStateResponse>>
+  semifuture_getNodesState(
+      std::unique_ptr<thrift::NodesStateRequest> request) override;
 
  private:
   void toNodeState(thrift::NodeState& out, thrift::NodeIndex index, bool force);

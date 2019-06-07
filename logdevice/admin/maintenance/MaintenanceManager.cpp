@@ -10,12 +10,15 @@
 
 #include <thrift/lib/cpp/util/EnumUtils.h>
 
+#include "logdevice/admin/AdminAPIUtils.h"
 #include "logdevice/admin/Conv.h"
 #include "logdevice/admin/maintenance/APIUtils.h"
 #include "logdevice/admin/maintenance/MaintenanceLogWriter.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationManager.h"
 #include "logdevice/common/membership/utils.h"
 #include "logdevice/common/request_util.h"
+
+using facebook::logdevice::thrift::NodesStateResponse;
 
 namespace facebook { namespace logdevice { namespace maintenance {
 
@@ -285,15 +288,58 @@ MaintenanceManager::getNodeState(node_index_t node) {
   auto pf =
       folly::makePromiseContract<folly::Expected<thrift::NodeState, Status>>();
   add([this, node, mpromise = std::move(pf.first)]() mutable {
-    mpromise.setValue(getNodeStateInternal(node));
+    ClusterState* cluster_state = nullptr;
+    if (deps_->getProcessor()) {
+      cluster_state = deps_->getProcessor()->cluster_state_.get();
+    }
+    mpromise.setValue(getNodeStateInternal(node, cluster_state));
   });
   return std::move(pf.second);
 }
 
+folly::SemiFuture<folly::Expected<NodesStateResponse, MaintenanceError>>
+MaintenanceManager::getNodesState(thrift::NodesFilter filter) {
+  return folly::via(this).thenValue(
+      [this, filter = std::move(filter)](
+          auto &&) -> folly::Expected<NodesStateResponse, MaintenanceError> {
+        if (shouldStopProcessing()) {
+          return folly::makeUnexpected(MaintenanceError(E::SHUTDOWN));
+        }
+        NodesStateResponse response;
+        std::vector<node_index_t> node_ids;
+        std::vector<NodeState> states;
+
+        forFilteredNodes(*nodes_config_, &filter, [&](node_index_t index) {
+          node_ids.push_back(index);
+        });
+
+        const ClusterState* cluster_state =
+            deps_->getProcessor()->cluster_state_.get();
+        for (const auto& node_id : node_ids) {
+          auto expected_state = getNodeStateInternal(node_id, cluster_state);
+          if (expected_state.hasError()) {
+            return folly::makeUnexpected(
+                MaintenanceError(expected_state.error()));
+          }
+          states.push_back(std::move(expected_state).value());
+        }
+        response.set_states(std::move(states));
+        response.set_version(
+            static_cast<int64_t>(nodes_config_->getVersion().val()));
+        return response;
+      });
+}
+
 folly::Expected<thrift::NodeState, Status>
-MaintenanceManager::getNodeStateInternal(node_index_t node) const {
+MaintenanceManager::getNodeStateInternal(
+    node_index_t node,
+    const ClusterState* cluster_state) const {
   thrift::NodeState state;
   state.set_node_index(node);
+  if (cluster_state) {
+    state.set_daemon_state(
+        toThrift<thrift::ServiceState>(cluster_state->getNodeState(node)));
+  }
   state.set_sequencer_state(getSequencerStateInternal(node));
   if (nodes_config_->getNumShards() > 0) {
     std::vector<thrift::ShardState> vec;
@@ -389,9 +435,9 @@ MaintenanceManager::getShardStateInternal(ShardID shard) const {
     const auto& wf_status_pair = active_shard_workflows_.at(shard);
     progress.set_status(wf_status_pair.second);
     const auto& states = wf_status_pair.first->getTargetOpStates();
-    std::set<ShardOperationalState> set;
-    set.insert(states.begin(), states.end());
-    progress.set_target_states(set);
+    std::set<ShardOperationalState> target_states;
+    target_states.insert(states.begin(), states.end());
+    progress.set_target_states(target_states);
     progress.set_created_at(
         wf_status_pair.first->getCreationTimestamp().toMilliseconds().count());
     progress.set_last_updated_at(wf_status_pair.first->getLastUpdatedTimestamp()
@@ -497,7 +543,7 @@ MaintenanceManager::getShardDataHealthInternal(ShardID shard) const {
       shard.node(), shard.shard(), donors_remaining);
   auto has_dirty_ranges = event_log_rebuilding_set_->shardIsTimeRangeRebuilding(
       shard.node(), shard.shard());
-  return std::move(toShardDataHealth(auth_status, has_dirty_ranges));
+  return toShardDataHealth(auth_status, has_dirty_ranges);
 }
 
 folly::SemiFuture<folly::Expected<SequencingState, Status>>

@@ -48,6 +48,11 @@ class AdminAPIHandlerBase : public virtual thrift::AdminAPISvIf {
       UpdateableSettings<AdminServerSettings> updateable_admin_server_settings,
       StatsHolder* stats_holder);
 
+  bool isMaintenanceManagerEnabled() const {
+    return updateable_admin_server_settings_->enable_maintenance_manager &&
+        maintenance_manager_ != nullptr;
+  }
+
  protected:
   Processor* processor_;
   std::shared_ptr<SettingsUpdater> settings_updater_;

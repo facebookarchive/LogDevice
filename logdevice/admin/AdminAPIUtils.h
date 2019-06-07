@@ -32,7 +32,7 @@ using NodeFunctor = std::function<void(node_index_t)>;
 
 void forFilteredNodes(
     const configuration::nodes::NodesConfiguration& nodes_configuration,
-    thrift::NodesFilter* filter,
+    const thrift::NodesFilter* filter,
     NodeFunctor fn);
 
 void fillNodeConfig(

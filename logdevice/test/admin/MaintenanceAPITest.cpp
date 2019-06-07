@@ -437,3 +437,115 @@ TEST_F(MaintenanceAPITest, RemoveMaintenances) {
         fourth_group, response.get_maintenances()[0].group_id_ref().value());
   }
 }
+
+TEST_F(MaintenanceAPITest, getNodeState) {
+  init();
+  cluster_->start();
+  cluster_->waitUntilAllAvailable();
+  auto admin_client = cluster_->getNode(maintenance_leader).createAdminClient();
+  // Wait until the RSM has replayed
+  cluster_->getNode(maintenance_leader).waitUntilMaintenanceRSMReady();
+
+  wait_until("MaintenanceManager is ready", [&]() {
+    thrift::NodesStateRequest req;
+    thrift::NodesStateResponse resp;
+    try {
+      admin_client->sync_getNodesState(resp, req);
+      return true;
+    } catch (thrift::NodeNotReady& e) {
+      return false;
+    }
+  });
+
+  {
+    NodesStateRequest request;
+    NodesStateResponse response;
+    admin_client->sync_getNodesState(response, request);
+    ASSERT_EQ(5, response.get_states().size());
+    for (const auto& state : response.get_states()) {
+      ASSERT_EQ(ServiceState::ALIVE, state.get_daemon_state());
+      const SequencerState& seq_state = state.sequencer_state_ref().value();
+      ASSERT_EQ(SequencingState::ENABLED, seq_state.get_state());
+      const auto& shard_states = state.shard_states_ref().value();
+      ASSERT_EQ(2, shard_states.size());
+      for (const auto& shard : shard_states) {
+        ASSERT_EQ(ShardDataHealth::HEALTHY, shard.get_data_health());
+        ASSERT_EQ(membership::thrift::StorageState::READ_WRITE,
+                  shard.get_storage_state());
+        ASSERT_EQ(membership::thrift::MetaDataStorageState::METADATA,
+                  shard.get_metadata_state());
+        ASSERT_EQ(ShardOperationalState::ENABLED,
+                  shard.get_current_operational_state());
+      }
+    }
+  }
+  // Let's apply a maintenance on node (1)
+  std::string group_id;
+  {
+    MaintenanceDefinition maintenance1;
+    maintenance1.set_user("dummy");
+    maintenance1.set_shard_target_state(ShardOperationalState::DRAINED);
+    // expands to all shards of node 1
+    maintenance1.set_shards({mkShardID(1, -1)});
+    maintenance1.set_sequencer_nodes({mkNodeID(1)});
+    maintenance1.set_sequencer_target_state(SequencingState::DISABLED);
+    MaintenanceDefinitionResponse created;
+    admin_client->sync_applyMaintenance(created, maintenance1);
+    ASSERT_EQ(1, created.get_maintenances().size());
+    group_id = created.get_maintenances()[0].group_id_ref().value();
+  }
+  // Let's wait until the maintenance is applied.
+  {
+    NodesFilter filter;
+    thrift::NodeID node_id;
+    node_id.set_node_index(1);
+    filter.set_node(node_id);
+    NodesStateRequest request;
+    request.set_filter(filter);
+    NodesStateResponse response;
+    wait_until("DRAIN of node 1 is complete", [&]() {
+      try {
+        admin_client->sync_getNodesState(response, request);
+        const auto& state = response.get_states()[0];
+        const auto& shard_states = state.shard_states_ref().value();
+        // We need to wait for all shard maintenances to finish
+        bool all_finished = true;
+        for (const auto& shard : shard_states) {
+          if (shard.maintenance_ref().has_value()) {
+            const auto& maintenance_progress = shard.maintenance_ref().value();
+            if (maintenance_progress.get_status() !=
+                MaintenanceStatus::COMPLETED) {
+              all_finished = false;
+            }
+          }
+        }
+        return all_finished == true;
+      } catch (thrift::NodeNotReady& e) {
+        return false;
+      }
+      return false;
+    });
+    ASSERT_EQ(1, response.get_states().size());
+    const auto& state = response.get_states()[0];
+    ASSERT_EQ(ServiceState::ALIVE, state.get_daemon_state());
+    const auto& shard_states = state.shard_states_ref().value();
+    ASSERT_EQ(2, shard_states.size());
+    for (const auto& shard : shard_states) {
+      ASSERT_EQ(
+          membership::thrift::StorageState::NONE, shard.get_storage_state());
+      ASSERT_EQ(ShardDataHealth::EMPTY, shard.get_data_health());
+      ASSERT_EQ(membership::thrift::MetaDataStorageState::METADATA,
+                shard.get_metadata_state());
+      ASSERT_EQ(ShardOperationalState::DRAINED,
+                shard.get_current_operational_state());
+      ASSERT_TRUE(shard.maintenance_ref().has_value());
+      const auto& maintenance_progress = shard.maintenance_ref().value();
+      ASSERT_EQ(
+          MaintenanceStatus::COMPLETED, maintenance_progress.get_status());
+      ASSERT_THAT(maintenance_progress.get_target_states(),
+                  UnorderedElementsAre(ShardOperationalState::DRAINED));
+      ASSERT_THAT(maintenance_progress.get_associated_group_ids(),
+                  UnorderedElementsAre(group_id));
+    }
+  }
+}

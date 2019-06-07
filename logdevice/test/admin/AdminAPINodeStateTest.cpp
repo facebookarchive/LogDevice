@@ -49,13 +49,13 @@ TEST_F(AdminAPINodeStateTest, getNodeState) {
   auto node1 = response.get_states()[0];
   ASSERT_EQ(0, node1.get_node_index());
   ASSERT_EQ(ServiceState::ALIVE, node1.get_daemon_state());
-  ASSERT_TRUE(node1.get_sequencer_state());
-  const SequencerState* seq_state = node1.get_sequencer_state();
-  ASSERT_EQ(SequencingState::ENABLED, seq_state->get_state());
-  ASSERT_TRUE(node1.get_shard_states());
-  const auto* shard_states = node1.get_shard_states();
-  ASSERT_EQ(3, shard_states->size());
-  for (auto shard : *shard_states) {
+  ASSERT_TRUE(node1.sequencer_state_ref().has_value());
+  const SequencerState& seq_state = node1.sequencer_state_ref().value();
+  ASSERT_EQ(SequencingState::ENABLED, seq_state.get_state());
+  ASSERT_TRUE(node1.shard_states_ref().has_value());
+  const auto& shard_states = node1.shard_states_ref().value();
+  ASSERT_EQ(3, shard_states.size());
+  for (const auto& shard : shard_states) {
     ASSERT_EQ(ShardDataHealth::HEALTHY, shard.get_data_health());
     ASSERT_EQ(membership::thrift::StorageState::READ_WRITE,
               shard.get_storage_state());

@@ -77,13 +77,13 @@ bool match_by_address(const configuration::nodes::NodeServiceDiscovery& node_sd,
 
 void forFilteredNodes(
     const configuration::nodes::NodesConfiguration& nodes_configuration,
-    thrift::NodesFilter* filter,
+    const thrift::NodesFilter* filter,
     NodeFunctor fn) {
   folly::Optional<configuration::nodes::NodeRole> role_filter;
 
-  if (filter && filter->get_role()) {
+  if (filter && filter->role_ref()) {
     configuration::nodes::NodeRole ld_role =
-        toLogDevice<configuration::nodes::NodeRole>(*filter->get_role());
+        toLogDevice<configuration::nodes::NodeRole>(filter->role_ref().value());
     role_filter.assign(ld_role);
   }
 
@@ -240,22 +240,8 @@ void fillNodeState(
   out.set_node_index(node_index);
 
   if (cluster_state) {
-    thrift::ServiceState daemon_state = thrift::ServiceState::UNKNOWN;
-    switch (cluster_state->getNodeState(node_index)) {
-      case ClusterStateNodeState::DEAD:
-        daemon_state = thrift::ServiceState::DEAD;
-        break;
-      case ClusterStateNodeState::FULLY_STARTED:
-        daemon_state = thrift::ServiceState::ALIVE;
-        break;
-      case ClusterStateNodeState::STARTING:
-        daemon_state = thrift::ServiceState::STARTING_UP;
-        break;
-      case ClusterStateNodeState::FAILING_OVER:
-        daemon_state = thrift::ServiceState::SHUTTING_DOWN;
-        break;
-    }
-    out.set_daemon_state(daemon_state);
+    out.set_daemon_state(toThrift<thrift::ServiceState>(
+        cluster_state->getNodeState(node_index)));
   }
 
   const auto* node_sd = nodes_configuration.getNodeServiceDiscovery(node_index);

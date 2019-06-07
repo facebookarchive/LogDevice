@@ -129,6 +129,21 @@ NodeLocationScope toLogDevice(const thrift::LocationScope& location_scope) {
 }
 
 template <>
+thrift::ServiceState toThrift(const ClusterStateNodeState& input) {
+  switch (input) {
+    case ClusterStateNodeState::DEAD:
+      return thrift::ServiceState::DEAD;
+    case ClusterStateNodeState::FULLY_STARTED:
+      return thrift::ServiceState::ALIVE;
+    case ClusterStateNodeState::STARTING:
+      return thrift::ServiceState::STARTING_UP;
+    case ClusterStateNodeState::FAILING_OVER:
+      return thrift::ServiceState::SHUTTING_DOWN;
+  }
+  return thrift::ServiceState::UNKNOWN;
+}
+
+template <>
 thrift::LocationScope toThrift(const NodeLocationScope& location_scope) {
   switch (location_scope) {
     case NodeLocationScope::INVALID:

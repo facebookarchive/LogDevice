@@ -9,11 +9,16 @@
 #include "logdevice/admin/NodesStateAPIHandler.h"
 
 #include "logdevice/admin/AdminAPIUtils.h"
+#include "logdevice/admin/maintenance/MaintenanceManager.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/event_log/EventLogRebuildingSet.h"
 
 using namespace facebook::logdevice;
+using facebook::logdevice::thrift::InvalidRequest;
+using facebook::logdevice::thrift::NodesFilter;
+using facebook::logdevice::thrift::NodesStateRequest;
+using facebook::logdevice::thrift::NodesStateResponse;
 
 namespace facebook { namespace logdevice {
 void NodesStateAPIHandler::toNodeState(thrift::NodeState& out,
@@ -36,25 +41,48 @@ void NodesStateAPIHandler::toNodeState(thrift::NodeState& out,
       out, index, *nodes_configuration, rebuilding_set.get(), cluster_state);
 }
 
-void NodesStateAPIHandler::getNodesState(
-    thrift::NodesStateResponse& out,
-    std::unique_ptr<thrift::NodesStateRequest> req) {
-  auto nodes_configuration = processor_->getNodesConfiguration();
-  std::vector<thrift::NodeState> result_states;
-  bool force = false;
-  thrift::NodesFilter* filter = nullptr;
-  if (req) {
-    filter = req->get_filter();
-    force = req->get_force() ? *req->get_force() : false;
+folly::SemiFuture<std::unique_ptr<NodesStateResponse>>
+NodesStateAPIHandler::semifuture_getNodesState(
+    std::unique_ptr<NodesStateRequest> req) {
+  /*
+   * In the case of using the maintenance manager, we will do use the MM's
+   * internal version of the nodes configuration for consistency.
+   */
+  if (req == nullptr) {
+    throw InvalidRequest("Cannot accept getNodesState without arguments");
   }
-  forFilteredNodes(*nodes_configuration, filter, [&](node_index_t index) {
-    thrift::NodeState node_state;
-    toNodeState(node_state, index, force);
-    result_states.push_back(std::move(node_state));
-  });
-  out.set_states(std::move(result_states));
-  out.set_version(
-      static_cast<int64_t>(nodes_configuration->getVersion().val()));
+
+  auto filter = req->filter_ref().value_or(NodesFilter());
+  if (isMaintenanceManagerEnabled()) {
+    return maintenance_manager_->getNodesState(filter)
+        .via(getThreadManager())
+        .thenValue([](auto&& expected_output) {
+          if (expected_output.hasError()) {
+            expected_output.error().throwThriftException();
+            ld_check(false);
+          }
+          return std::make_unique<NodesStateResponse>(expected_output.value());
+        });
+  } else {
+    // In case we don't have maintenance manager, we try to "approximate" the
+    // state.
+    auto out = std::make_unique<NodesStateResponse>();
+    auto nodes_configuration = processor_->getNodesConfiguration();
+    bool force = false;
+    if (req) {
+      force = req->force_ref().value_or(false);
+    }
+    std::vector<thrift::NodeState> result_states;
+    forFilteredNodes(*nodes_configuration, &filter, [&](node_index_t index) {
+      thrift::NodeState node_state;
+      toNodeState(node_state, index, force);
+      result_states.push_back(std::move(node_state));
+    });
+    out->set_states(std::move(result_states));
+    out->set_version(
+        static_cast<int64_t>(nodes_configuration->getVersion().val()));
+    return out;
+  }
 }
 
 }} // namespace facebook::logdevice

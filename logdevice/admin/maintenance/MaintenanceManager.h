@@ -191,6 +191,15 @@ class MaintenanceManager : public SerialWorkContext {
   // Getter that returns a SemiFututre with NodeState for a given node
   folly::SemiFuture<folly::Expected<NodeState, Status>>
   getNodeState(node_index_t node);
+
+  /*
+   * Takes a filter, it will match the nodes, combine the results
+   * and get the state from the maintenance manager.
+   */
+  folly::SemiFuture<
+      folly::Expected<thrift::NodesStateResponse, MaintenanceError>>
+  getNodesState(thrift::NodesFilter filter);
+
   // Getter that returns a SemiFuture with ShardState for a given shard
   folly::SemiFuture<folly::Expected<ShardState, Status>>
   getShardState(ShardID shard);
@@ -325,13 +334,16 @@ class MaintenanceManager : public SerialWorkContext {
    * Getter that returns NodeState for a given shard
    *
    * @param   node_index_t Index of the node for which to get the NodeState
+   * @param   ClusterState* A pointer to cluster state that hold gossip
+   *          information.
    * @return  folly::Expected<NodeState, Status> Valid NodeState if node is
    *          in NodesConfig. Status can be E::NOTREADY if EventLogRebuildingSet
    *          or ClusterMaintenanceWrapper is not initialized or E::NOTFOUND if
    *          node or its shards are not in the NodesConfig
    */
   folly::Expected<NodeState, Status>
-  getNodeStateInternal(node_index_t node) const;
+  getNodeStateInternal(node_index_t node,
+                       const ClusterState* cluster_state) const;
   /**
    * Getter that returns ShardState for a given shard
    *

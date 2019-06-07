@@ -39,8 +39,7 @@ class MaintenanceAPIHandler : public virtual AdminAPIHandlerBase {
  private:
   // throws NotSupported exception if MM is disabled.
   folly::Optional<thrift::NotSupported> failIfMMDisabled() {
-    if (!updateable_admin_server_settings_->enable_maintenance_manager ||
-        maintenance_manager_ == nullptr) {
+    if (!isMaintenanceManagerEnabled()) {
       return thrift::NotSupported("MaintenanceManager is not enabled!");
     }
     return folly::none;
