@@ -59,6 +59,11 @@ std::shared_ptr<ServerConfig> GetHeadAttributesRequest::getConfig() const {
   return Worker::onThisThread()->getConfig()->serverConfig();
 }
 
+std::shared_ptr<const configuration::nodes::NodesConfiguration>
+GetHeadAttributesRequest::getNodesConfiguration() const {
+  return Worker::onThisThread()->getNodesConfiguration();
+}
+
 std::unique_ptr<NodeSetFinder> GetHeadAttributesRequest::makeNodeSetFinder() {
   return std::make_unique<NodeSetFinder>(
       log_id_, client_timeout_, [this](Status status) { this->start(status); });
@@ -66,8 +71,7 @@ std::unique_ptr<NodeSetFinder> GetHeadAttributesRequest::makeNodeSetFinder() {
 
 void GetHeadAttributesRequest::initStorageSetAccessor() {
   ld_check(nodeset_finder_);
-  auto config = getConfig();
-  auto shards = nodeset_finder_->getUnionStorageSet(config);
+  auto shards = nodeset_finder_->getUnionStorageSet(*getNodesConfiguration());
   ReplicationProperty minRep = nodeset_finder_->getNarrowestReplication();
 
   ld_debug("Building StorageSetAccessor with nodeset %s, replication %s",
@@ -83,8 +87,8 @@ void GetHeadAttributesRequest::initStorageSetAccessor() {
     finalize(st);
   };
 
-  nodeset_accessor_ =
-      makeStorageSetAccessor(config, shards, minRep, shard_access, completion);
+  nodeset_accessor_ = makeStorageSetAccessor(
+      getConfig(), shards, minRep, shard_access, completion);
   ld_check(nodeset_accessor_ != nullptr);
   nodeset_accessor_->start();
 };
@@ -121,10 +125,12 @@ void GetHeadAttributesRequest::start(Status status) {
 }
 
 StorageSetAccessor::SendResult GetHeadAttributesRequest::sendTo(ShardID shard) {
-  auto config = getConfig();
-  auto n = config->getNode(shard.node());
-  if (!n) {
-    ld_error("Cannot find node at index %u", shard.node());
+  const auto& nodes_configuration = getNodesConfiguration();
+  if (!nodes_configuration->isNodeInServiceDiscoveryConfig(shard.node())) {
+    RATELIMIT_ERROR(std::chrono::seconds(10),
+                    10,
+                    "Cannot find node at index %u in NodesConfiguration",
+                    shard.node());
     return {StorageSetAccessor::Result::PERMANENT_ERROR, Status::NOTFOUND};
   }
 

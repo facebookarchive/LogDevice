@@ -47,8 +47,9 @@ class MockGetTrimPointRequest : public GetTrimPointRequest {
  protected: // mock stuff that communicates externally
   void sendTo(ShardID) override {}
 
-  std::shared_ptr<ServerConfig> getConfig() const override {
-    return config_;
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const override {
+    return config_->getNodesConfigurationFromServerConfigSource();
   }
 
   void updateTrimPoint(Status status, lsn_t trim_point) const override {

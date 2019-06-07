@@ -1493,10 +1493,10 @@ int Sequencer::sendReleases(lsn_t lsn,
   }
 
   Worker* w = Worker::onThisThread();
-  auto server_config = w->getConfiguration()->serverConfig();
+  const auto& nodes_configuration = w->getNodesConfiguration();
 
   // this also filters out non-storage nodes and nodes not in config
-  auto all_shards = metadata_map->getUnionStorageSet(server_config);
+  auto all_shards = metadata_map->getUnionStorageSet(*nodes_configuration);
 
   ld_check(all_shards != nullptr);
   Sender& sender = w->sender();

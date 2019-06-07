@@ -84,7 +84,8 @@ class GetTrimPointRequest : public Request {
    */
   virtual void start();
 
-  virtual std::shared_ptr<ServerConfig> getConfig() const;
+  virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const;
 
   virtual void updateTrimPoint(Status status, lsn_t trim_point) const;
 

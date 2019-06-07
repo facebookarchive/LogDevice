@@ -82,9 +82,8 @@ void GetTrimPointRequest::onRequestTimeout() {
 }
 
 void GetTrimPointRequest::sendTo(ShardID shard) {
-  auto config = getConfig();
-  auto n = config->getNode(shard.node());
-  if (!n) {
+  const auto& nodes_configuration = getNodesConfiguration();
+  if (!nodes_configuration->isNodeInServiceDiscoveryConfig(shard.node())) {
     RATELIMIT_DEBUG(std::chrono::seconds(10),
                     2,
                     "Cannot find node at index %u for logid %lu",
@@ -155,8 +154,9 @@ void GetTrimPointRequest::onMessageSent(ShardID to, Status status) {
   }
 }
 
-std::shared_ptr<ServerConfig> GetTrimPointRequest::getConfig() const {
-  return Worker::onThisThread()->getConfig()->serverConfig();
+std::shared_ptr<const configuration::nodes::NodesConfiguration>
+GetTrimPointRequest::getNodesConfiguration() const {
+  return Worker::onThisThread()->getNodesConfiguration();
 }
 
 std::shared_ptr<Sequencer> GetTrimPointRequest::getSequencer() const {

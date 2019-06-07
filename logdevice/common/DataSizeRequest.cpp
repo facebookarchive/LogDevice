@@ -82,8 +82,7 @@ std::unique_ptr<NodeSetFinder> DataSizeRequest::makeNodeSetFinder() {
 
 void DataSizeRequest::initStorageSetAccessor() {
   ld_check(nodeset_finder_);
-  auto config = getConfig();
-  auto shards = nodeset_finder_->getUnionStorageSet(config);
+  auto shards = nodeset_finder_->getUnionStorageSet(*getNodesConfiguration());
   ReplicationProperty minRep = nodeset_finder_->getNarrowestReplication();
   replication_factor_ = minRep.getReplicationFactor();
   ld_debug("Building StorageSetAccessor with %lu shards in storage set, "
@@ -101,8 +100,8 @@ void DataSizeRequest::initStorageSetAccessor() {
     finalize(st);
   };
 
-  nodeset_accessor_ =
-      makeStorageSetAccessor(config, shards, minRep, shard_access, completion);
+  nodeset_accessor_ = makeStorageSetAccessor(
+      getConfig(), shards, minRep, shard_access, completion);
   failure_domain_ = makeFailureDomain(shards, getNodesConfiguration(), minRep);
 }
 

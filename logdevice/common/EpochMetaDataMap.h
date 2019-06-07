@@ -14,6 +14,10 @@
 
 namespace facebook { namespace logdevice {
 
+namespace configuration { namespace nodes {
+class NodesConfiguration;
+}} // namespace configuration::nodes
+
 /**
  * @file: EpochMetaDataMap is the collection of EpochMetaData for a log upto
  *        a certain `effective until' epoch. It contains the historical and/or
@@ -101,18 +105,19 @@ class EpochMetaDataMap {
 
   /**
    * Same as the one above, but filters out non-storage shard or shards that no
-   * longer exist in server config.
+   * longer exist in nodes configuration
    */
-  std::unique_ptr<StorageSet>
-  getUnionStorageSet(const std::shared_ptr<ServerConfig>& cfg,
-                     epoch_t min_epoch,
-                     epoch_t max_epoch) const;
+  std::unique_ptr<StorageSet> getUnionStorageSet(
+      const configuration::nodes::NodesConfiguration& nodes_configuration,
+      epoch_t min_epoch,
+      epoch_t max_epoch) const;
 
   // convenience overrides for getting union of storage sets in
   // [EPOCH_MIN, effective_until_]. should not return nullptr.
   std::unique_ptr<StorageSet> getUnionStorageSet() const;
-  std::unique_ptr<StorageSet>
-  getUnionStorageSet(const std::shared_ptr<ServerConfig>& cfg) const;
+  std::unique_ptr<StorageSet> getUnionStorageSet(
+      const configuration::nodes::NodesConfiguration& nodes_configuration)
+      const;
 
   /**
    * Computes the "minimum" replication property for epochs between min and max

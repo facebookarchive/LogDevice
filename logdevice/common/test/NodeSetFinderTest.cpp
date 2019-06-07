@@ -259,27 +259,38 @@ TEST_F(NodeSetFinderTest, ReadMetadataLog) {
   minRep = *result->getNarrowestReplication(EPOCH_MIN, EPOCH_MIN);
   ASSERT_EQ(ReplicationProperty({{S::NODE, 2}}).toString(), minRep.toString());
 
-  auto storage_set = finder_->getUnionStorageSet(config_->serverConfig());
+  auto storage_set = finder_->getUnionStorageSet(
+      *config_->serverConfig()->getNodesConfigurationFromServerConfigSource());
   ASSERT_EQ(storage_set.size(), 5);
 
   storage_set = *result->getUnionStorageSet(
-      config_->serverConfig(), epoch_t(50), EPOCH_MAX);
+      *config_->serverConfig()->getNodesConfigurationFromServerConfigSource(),
+      epoch_t(50),
+      EPOCH_MAX);
   ASSERT_EQ(storage_set.size(), 2);
 
   storage_set = *result->getUnionStorageSet(
-      config_->serverConfig(), EPOCH_MAX, EPOCH_MAX);
+      *config_->serverConfig()->getNodesConfigurationFromServerConfigSource(),
+      EPOCH_MAX,
+      EPOCH_MAX);
   ASSERT_EQ(storage_set.size(), 2);
 
   storage_set = *result->getUnionStorageSet(
-      config_->serverConfig(), EPOCH_MIN, epoch_t(50));
+      *config_->serverConfig()->getNodesConfigurationFromServerConfigSource(),
+      EPOCH_MIN,
+      epoch_t(50));
   ASSERT_EQ(storage_set.size(), 5);
 
   storage_set = *result->getUnionStorageSet(
-      config_->serverConfig(), EPOCH_MIN, epoch_t(40));
+      *config_->serverConfig()->getNodesConfigurationFromServerConfigSource(),
+      EPOCH_MIN,
+      epoch_t(40));
   ASSERT_EQ(storage_set.size(), 3);
 
   storage_set = *result->getUnionStorageSet(
-      config_->serverConfig(), EPOCH_MIN, EPOCH_MIN);
+      *config_->serverConfig()->getNodesConfigurationFromServerConfigSource(),
+      EPOCH_MIN,
+      EPOCH_MIN);
   ASSERT_EQ(storage_set.size(), 3);
 }
 

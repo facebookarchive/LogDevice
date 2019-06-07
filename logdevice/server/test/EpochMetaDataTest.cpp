@@ -784,7 +784,10 @@ TEST_F(EpochMetaDataTest, UnionStorageSet) {
   expected = StorageSet{N3, N4};
   ASSERT_EQ(expected, *s);
 
-  s = result->getUnionStorageSet(cfg->serverConfig(), EPOCH_MIN, epoch_t(95));
+  s = result->getUnionStorageSet(
+      *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource(),
+      EPOCH_MIN,
+      epoch_t(95));
   // should filter non-exist or non-storage nodes
   expected = StorageSet{N1, N2, N3, N4, N5, N7};
   ASSERT_EQ(expected, *s);

@@ -117,6 +117,9 @@ class GetHeadAttributesRequest : public DistributedRequest,
   }
 
  protected:
+  virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const;
+
   virtual std::shared_ptr<ServerConfig> getConfig() const;
   virtual void deleteThis();
   virtual std::unique_ptr<NodeSetFinder> makeNodeSetFinder();

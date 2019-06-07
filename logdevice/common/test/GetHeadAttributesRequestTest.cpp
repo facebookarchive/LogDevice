@@ -111,6 +111,11 @@ class MockGetHeadAttributesRequest : public GetHeadAttributesRequest {
     return config_;
   }
 
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const override {
+    return config_->getNodesConfigurationFromServerConfigSource();
+  }
+
   void onShardStatusChanged() override {}
 
  private:

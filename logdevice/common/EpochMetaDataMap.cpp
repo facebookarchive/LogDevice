@@ -7,6 +7,7 @@
  */
 #include "logdevice/common/EpochMetaDataMap.h"
 
+#include "logdevice/common/configuration/nodes/NodesConfiguration.h"
 #include "logdevice/common/protocol/ProtocolReader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
 
@@ -141,10 +142,10 @@ EpochMetaDataMap::getUnionStorageSet(epoch_t min_epoch,
   return std::make_unique<StorageSet>(shards.begin(), shards.end());
 }
 
-std::unique_ptr<StorageSet>
-EpochMetaDataMap::getUnionStorageSet(const std::shared_ptr<ServerConfig>& cfg,
-                                     epoch_t min_epoch,
-                                     epoch_t max_epoch) const {
+std::unique_ptr<StorageSet> EpochMetaDataMap::getUnionStorageSet(
+    const configuration::nodes::NodesConfiguration& nodes_configuration,
+    epoch_t min_epoch,
+    epoch_t max_epoch) const {
   auto result = getUnionStorageSet(min_epoch, max_epoch);
   if (result == nullptr) {
     return nullptr;
@@ -152,9 +153,10 @@ EpochMetaDataMap::getUnionStorageSet(const std::shared_ptr<ServerConfig>& cfg,
   // filter out non-storge nodes
   result->erase(std::remove_if(result->begin(),
                                result->end(),
-                               [&cfg](ShardID shard) {
-                                 const auto* node = cfg->getNode(shard.node());
-                                 return !node || !node->isReadableStorageNode();
+                               [&nodes_configuration](ShardID shard) {
+                                 return !nodes_configuration
+                                             .getStorageMembership()
+                                             ->shouldReadFromShard(shard);
                                }),
                 result->end());
   return result;
@@ -165,8 +167,8 @@ std::unique_ptr<StorageSet> EpochMetaDataMap::getUnionStorageSet() const {
 }
 
 std::unique_ptr<StorageSet> EpochMetaDataMap::getUnionStorageSet(
-    const std::shared_ptr<ServerConfig>& cfg) const {
-  return getUnionStorageSet(cfg, EPOCH_MIN, effective_until_);
+    const configuration::nodes::NodesConfiguration& nodes_configuration) const {
+  return getUnionStorageSet(nodes_configuration, EPOCH_MIN, effective_until_);
 }
 
 std::unique_ptr<ReplicationProperty>

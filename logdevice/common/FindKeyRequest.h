@@ -184,7 +184,9 @@ class FindKeyRequest : public DistributedRequest,
   ~FindKeyRequest() override;
 
  protected: // tests can override
-  virtual std::shared_ptr<ServerConfig> getServerConfig() const;
+  virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const;
+
   virtual std::unique_ptr<NodeSetFinder>
   makeNodeSetFinder(logid_t log_id,
                     std::chrono::milliseconds timeout,

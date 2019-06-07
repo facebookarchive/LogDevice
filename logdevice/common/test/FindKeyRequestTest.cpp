@@ -225,10 +225,6 @@ class MockFindKeyRequest : public FindKeyRequest {
   }
 
  protected: // mock stuff that communicates externally
-  std::shared_ptr<ServerConfig> getServerConfig() const override {
-    return config_;
-  }
-
   void deleteThis() override {}
 
   int sendOneMessage(const FINDKEY_Header& header, ShardID to) override {
@@ -262,6 +258,11 @@ class MockFindKeyRequest : public FindKeyRequest {
 
   std::shared_ptr<ServerConfig> getConfig() const override {
     return config_;
+  }
+
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const override {
+    return config_->getNodesConfigurationFromServerConfigSource();
   }
 
   void onShardStatusChanged() override {}

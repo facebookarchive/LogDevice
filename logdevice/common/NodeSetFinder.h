@@ -134,7 +134,8 @@ class NodeSetFinder {
    * Note: The caller should only use this method if the status returned via the
    * callback is E::OK. Otherwise the behavior is undefined.
    */
-  StorageSet getUnionStorageSet(const std::shared_ptr<ServerConfig>& cfg);
+  StorageSet getUnionStorageSet(
+      const configuration::nodes::NodesConfiguration& nodes_configuration);
 
   /**
    * Computes the "minimum" replication property of the result gotten.

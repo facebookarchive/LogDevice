@@ -305,10 +305,12 @@ int TrimRequest::sendOneMessage(ShardID to) {
 }
 
 StorageSetAccessor::SendResult TrimRequest::sendTo(ShardID shard) {
-  auto config = getConfig();
-  auto n = config->getNode(shard.node());
-  if (!n) {
-    ld_error("Cannot find node at index %u", shard.node());
+  const auto& nodes_configuration = getNodesConfiguration();
+  if (!nodes_configuration->isNodeInServiceDiscoveryConfig(shard.node())) {
+    RATELIMIT_ERROR(std::chrono::seconds(10),
+                    10,
+                    "Cannot find node at index %u in NodesConfiguration",
+                    shard.node());
     return {StorageSetAccessor::Result::PERMANENT_ERROR, Status::NOTFOUND};
   }
 
@@ -348,7 +350,7 @@ void TrimRequest::initStorageSetAccessor() {
     minRep = ReplicationProperty::fromLogAttributes(meta_log->attrs());
   } else {
     ld_check(nodeset_finder_);
-    shards = nodeset_finder_->getUnionStorageSet(config);
+    shards = nodeset_finder_->getUnionStorageSet(*getNodesConfiguration());
     minRep = nodeset_finder_->getNarrowestReplication();
   }
 
@@ -406,6 +408,11 @@ std::unique_ptr<StorageSetAccessor> TrimRequest::makeStorageSetAccessor(
 
 std::shared_ptr<ServerConfig> TrimRequest::getConfig() const {
   return Worker::onThisThread()->getConfig()->serverConfig();
+}
+
+std::shared_ptr<const configuration::nodes::NodesConfiguration>
+TrimRequest::getNodesConfiguration() const {
+  return Worker::onThisThread()->getNodesConfiguration();
 }
 
 }} // namespace facebook::logdevice

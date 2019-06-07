@@ -82,8 +82,7 @@ std::unique_ptr<NodeSetFinder> IsLogEmptyRequest::makeNodeSetFinder() {
 
 void IsLogEmptyRequest::initStorageSetAccessor() {
   ld_check(nodeset_finder_);
-  auto config = getConfig();
-  shards_ = nodeset_finder_->getUnionStorageSet(config);
+  shards_ = nodeset_finder_->getUnionStorageSet(*getNodesConfiguration());
   ReplicationProperty minRep = nodeset_finder_->getNarrowestReplication();
   ld_debug("Building StorageSetAccessor with %lu shards in storage set, "
            "replication %s",
@@ -111,8 +110,8 @@ void IsLogEmptyRequest::initStorageSetAccessor() {
     return res;
   };
 
-  nodeset_accessor_ =
-      makeStorageSetAccessor(config, shards_, minRep, shard_access, completion);
+  nodeset_accessor_ = makeStorageSetAccessor(
+      getConfig(), shards_, minRep, shard_access, completion);
   nodeset_accessor_->setGracePeriod(grace_period_, completion_cond);
   nodeset_accessor_->setWaveTimeout(getWaveTimeoutInterval(client_timeout_));
   failure_domain_ = makeFailureDomain(shards_, getNodesConfiguration(), minRep);
@@ -259,9 +258,8 @@ void IsLogEmptyRequest::start(Status status) {
 }
 
 StorageSetAccessor::SendResult IsLogEmptyRequest::sendTo(ShardID shard) {
-  auto config = getConfig();
-  auto n = config->getNode(shard.node());
-  if (!n) {
+  const auto& nodes_configuration = getNodesConfiguration();
+  if (!nodes_configuration->isNodeInServiceDiscoveryConfig(shard.node())) {
     ld_error("Cannot find node at index %u", shard.node());
     return {StorageSetAccessor::Result::PERMANENT_ERROR, Status::NOTFOUND};
   }

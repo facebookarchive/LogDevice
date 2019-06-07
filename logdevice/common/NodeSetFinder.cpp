@@ -15,6 +15,7 @@
 #include "logdevice/common/SyncSequencerRequest.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/common/configuration/nodes/NodesConfiguration.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/stats/Stats.h"
 
@@ -362,8 +363,8 @@ void NodeSetFinder::finalize(Status status) {
   callback_(status);
 }
 
-StorageSet
-NodeSetFinder::getUnionStorageSet(const std::shared_ptr<ServerConfig>& cfg) {
+StorageSet NodeSetFinder::getUnionStorageSet(
+    const configuration::nodes::NodesConfiguration& nodes_configuration) {
   // check that the NodeSetFinder completed its processing. if that is not true,
   // the behavior is undefined
   if (state_ != State::FINISHED) {
@@ -377,7 +378,7 @@ NodeSetFinder::getUnionStorageSet(const std::shared_ptr<ServerConfig>& cfg) {
   }
 
   ld_check(result_ != nullptr);
-  auto storage_set = result_->getUnionStorageSet(cfg);
+  auto storage_set = result_->getUnionStorageSet(nodes_configuration);
   // we should always get the storage set as the effective_until is EPOCH_MAX
   ld_check(storage_set != nullptr);
   return *storage_set;

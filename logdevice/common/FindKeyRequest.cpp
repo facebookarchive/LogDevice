@@ -99,12 +99,11 @@ void FindKeyRequest::start(Status status) {
 }
 
 StorageSetAccessor::SendResult FindKeyRequest::sendTo(ShardID shard) {
-  auto config = getConfig();
-  auto n = config->getNode(shard.node());
-  if (!n) {
+  const auto& nodes_configuration = getNodesConfiguration();
+  if (!nodes_configuration->isNodeInServiceDiscoveryConfig(shard.node())) {
     RATELIMIT_ERROR(std::chrono::seconds(10),
                     10,
-                    "Cannot find node at index %u",
+                    "Cannot find node at index %u in NodesConfiguration",
                     shard.node());
     return {StorageSetAccessor::Result::PERMANENT_ERROR, Status::NOTFOUND};
   }
@@ -292,10 +291,6 @@ void FindKeyRequest::onClientTimeout() {
   finalize(st);
 }
 
-std::shared_ptr<ServerConfig> FindKeyRequest::getServerConfig() const {
-  return Worker::onThisThread()->getServerConfig();
-}
-
 void FindKeyRequest::deleteThis() {
   Worker* worker = Worker::onThisThread();
 
@@ -315,8 +310,7 @@ void FindKeyRequest::onShardStatusChanged() {
 
 void FindKeyRequest::initStorageSetAccessor() {
   ld_check(nodeset_finder_);
-  auto config = getConfig();
-  auto shards = nodeset_finder_->getUnionStorageSet(config);
+  auto shards = nodeset_finder_->getUnionStorageSet(*getNodesConfiguration());
   ReplicationProperty minRep = nodeset_finder_->getNarrowestReplication();
   ld_debug("Building StorageSetAccessor with %lu shards in nodeset, "
            "replication %s",
@@ -339,8 +333,8 @@ void FindKeyRequest::initStorageSetAccessor() {
     finalize(st);
   };
 
-  nodeset_accessor_ =
-      makeStorageSetAccessor(config, shards, minRep, shard_access, completion);
+  nodeset_accessor_ = makeStorageSetAccessor(
+      getConfig(), shards, minRep, shard_access, completion);
   nodeset_accessor_->noEarlyAbort();
 
   ld_check(nodeset_accessor_ != nullptr);
@@ -366,6 +360,11 @@ std::unique_ptr<StorageSetAccessor> FindKeyRequest::makeStorageSetAccessor(
 
 std::shared_ptr<ServerConfig> FindKeyRequest::getConfig() const {
   return Worker::onThisThread()->getConfig()->serverConfig();
+}
+
+std::shared_ptr<const configuration::nodes::NodesConfiguration>
+FindKeyRequest::getNodesConfiguration() const {
+  return Worker::onThisThread()->getNodesConfiguration();
 }
 
 }} // namespace facebook::logdevice
