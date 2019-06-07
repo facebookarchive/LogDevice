@@ -704,7 +704,7 @@ TEST_F(ZookeeperEpochStoreTest, QuorumChangeTest) {
 
   ld_info("Waiting for request to complete");
   sem.wait();
-  ASSERT_EQ(E::SHUTDOWN, zk_req_st);
+  ASSERT_EQ(E::CONNFAILED, zk_req_st);
   ld_info("Request completed");
 
   // Try again

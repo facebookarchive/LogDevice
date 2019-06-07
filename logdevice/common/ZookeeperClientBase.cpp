@@ -31,9 +31,8 @@ namespace facebook { namespace logdevice {
     case ZOPERATIONTIMEOUT:
     case ZSESSIONEXPIRED:
     case ZSESSIONMOVED:
-      return E::CONNFAILED;
     case ZCLOSING:
-      return E::SHUTDOWN;
+      return E::CONNFAILED;
 
     case ZBADARGUMENTS:
     case ZNOCHILDRENFOREPHEMERALS:
