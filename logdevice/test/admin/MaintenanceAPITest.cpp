@@ -326,3 +326,114 @@ TEST_F(MaintenanceAPITest, ApplyMaintenancesSafetyCheckResults) {
   const auto& check_impact_result = def.last_check_impact_result_ref().value();
   ASSERT_TRUE(check_impact_result.get_impact().size() > 0);
 }
+
+TEST_F(MaintenanceAPITest, RemoveMaintenancesInvalid) {
+  init();
+  cluster_->start();
+  cluster_->waitUntilAllAvailable();
+  auto admin_client = cluster_->getNode(maintenance_leader).createAdminClient();
+  // Wait until the RSM has replayed
+  cluster_->getNode(maintenance_leader).waitUntilMaintenanceRSMReady();
+  // We simply can't delete with an empty filter;
+  RemoveMaintenancesRequest request;
+  RemoveMaintenancesResponse resp;
+  ASSERT_THROW(admin_client->sync_removeMaintenances(resp, request),
+               thrift::InvalidRequest);
+}
+
+TEST_F(MaintenanceAPITest, RemoveMaintenances) {
+  init();
+  cluster_->start();
+  cluster_->waitUntilAllAvailable();
+  auto admin_client = cluster_->getNode(maintenance_leader).createAdminClient();
+  // Wait until the RSM has replayed
+  cluster_->getNode(maintenance_leader).waitUntilMaintenanceRSMReady();
+  std::string created_id;
+  std::vector<std::string> bunny_group_ids;
+  {
+    MaintenanceDefinition request;
+    request.set_user("bunny");
+    request.set_shard_target_state(ShardOperationalState::DRAINED);
+    // expands to all shards of node 1
+    request.set_shards({mkShardID(1, -1)});
+    request.set_sequencer_nodes({mkNodeID(1), mkNodeID(2), mkNodeID(3)});
+    request.set_sequencer_target_state(SequencingState::DISABLED);
+    // to validate we correctly respect the attributes
+    request.set_group(false);
+    // We expect this to be expanded into 3 maintenace groups
+    MaintenanceDefinitionResponse resp;
+    admin_client->sync_applyMaintenance(resp, request);
+    auto output = resp.get_maintenances();
+    ASSERT_EQ(3, output.size());
+    for (const auto& def : output) {
+      bunny_group_ids.push_back(def.group_id_ref().value());
+    }
+  }
+  // Let's add another maintenance for another user. (in total we should have
+  // 4 after this)
+  std::string fourth_group;
+  {
+    MaintenanceDefinition request;
+    request.set_user("dummy");
+    request.set_shard_target_state(ShardOperationalState::DRAINED);
+    // expands to all shards of node 1
+    request.set_shards({mkShardID(3, -1)});
+    request.set_sequencer_nodes({mkNodeID(1)});
+    request.set_sequencer_target_state(SequencingState::DISABLED);
+    // to validate we correctly respect the attributes
+    request.set_group(true);
+    MaintenanceDefinitionResponse resp;
+    admin_client->sync_applyMaintenance(resp, request);
+    auto output = resp.get_maintenances();
+    ASSERT_EQ(1, output.size());
+    fourth_group = output[0].group_id_ref().value();
+  }
+  // Let's remove by a group_id. We will remove one of bunny's maintenances.
+  {
+    RemoveMaintenancesRequest request;
+    MaintenancesFilter fltr;
+    auto group_to_remove = bunny_group_ids.back();
+    bunny_group_ids.pop_back();
+    fltr.set_group_ids({group_to_remove});
+    request.set_filter(fltr);
+
+    RemoveMaintenancesResponse resp;
+    admin_client->sync_removeMaintenances(resp, request);
+    auto output = resp.get_maintenances();
+    ASSERT_EQ(1, output.size());
+    ASSERT_EQ(group_to_remove, output[0].group_id_ref().value());
+    // validate by getMaintenances.
+    thrift::MaintenancesFilter req;
+    MaintenanceDefinitionResponse response;
+    admin_client->sync_getMaintenances(response, req);
+    ASSERT_EQ(3, response.get_maintenances().size());
+    for (const auto& def : response.get_maintenances()) {
+      ASSERT_NE(group_to_remove, def.group_id_ref().value());
+    }
+  }
+  // Let's remove all bunny's maintenances.
+  {
+    RemoveMaintenancesRequest request;
+    MaintenancesFilter fltr;
+    fltr.set_user("bunny");
+    request.set_filter(fltr);
+    RemoveMaintenancesResponse resp;
+    admin_client->sync_removeMaintenances(resp, request);
+    auto output = resp.get_maintenances();
+    // two maintenance still belong to this user.
+    ASSERT_EQ(2, output.size());
+    for (const auto& def : output) {
+      ASSERT_EQ("bunny", def.get_user());
+    }
+  }
+  // Should we have one left, should belong to dummy
+  {
+    // validate by getMaintenances.
+    thrift::MaintenancesFilter req;
+    MaintenanceDefinitionResponse response;
+    admin_client->sync_getMaintenances(response, req);
+    ASSERT_EQ(1, response.get_maintenances().size());
+    ASSERT_EQ(
+        fourth_group, response.get_maintenances()[0].group_id_ref().value());
+  }
+}
