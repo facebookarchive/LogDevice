@@ -38,6 +38,7 @@ int extra_copies = -1;
 int synced_copies = -1;
 bool use_existing_metadata = false;
 bool enable_logsconfig_manager = true;
+bool enable_rebuilding = true;
 std::chrono::seconds backlog(-1);
 bool scd_enabled = false;
 std::vector<std::string> params;
@@ -603,6 +604,9 @@ int main(int argc, const char* argv[]) {
 
   if (options::enable_logsconfig_manager) {
     factory.enableLogsConfigManager();
+  }
+  if (options::enable_rebuilding) {
+    factory.setParam("--disable-rebuilding", "false");
   }
 
   factory.eventLogMode(
