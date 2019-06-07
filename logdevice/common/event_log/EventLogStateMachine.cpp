@@ -76,6 +76,11 @@ EventLogStateMachine::getServerConfig() const {
   return w->getServerConfig();
 }
 
+std::shared_ptr<const configuration::nodes::NodesConfiguration>
+EventLogStateMachine::getNodesConfiguration() const {
+  return Worker::onThisThread()->getNodesConfiguration();
+}
+
 std::unique_ptr<EventLogRebuildingSet>
 EventLogStateMachine::makeDefaultState(lsn_t version) const {
   return std::make_unique<EventLogRebuildingSet>(version, myNodeId_);
@@ -99,9 +104,9 @@ std::unique_ptr<EventLogRebuildingSet> EventLogStateMachine::deserializeState(
   auto res = EventLogRebuildingSetCodec::deserialize(
       event_log_rebuilding_set::GetSet(payload.data()), version, myNodeId_);
 
-  auto server_cfg = getServerConfig();
   for (const auto& it_shard : res->getRebuildingShards()) {
-    res->recomputeAuthoritativeStatus(it_shard.first, timestamp, *server_cfg);
+    res->recomputeAuthoritativeStatus(
+        it_shard.first, timestamp, *getNodesConfiguration());
     res->recomputeShardRebuildTimeIntervals(it_shard.first);
   }
 
@@ -131,13 +136,12 @@ int EventLogStateMachine::applyDelta(const EventLogRecord& delta,
                                      lsn_t version,
                                      std::chrono::milliseconds timestamp,
                                      std::string& /* unused */) {
-  auto server_cfg = getServerConfig();
   WORKER_STAT_INCR(num_event_log_records_read);
   ld_info("Applying delta ts=%s, %s: %s",
           format_time(timestamp).c_str(),
           lsn_to_string(version).c_str(),
           delta.describe().c_str());
-  return state.update(version, timestamp, delta, *server_cfg);
+  return state.update(version, timestamp, delta, *getNodesConfiguration());
 }
 
 int EventLogStateMachine::serializeDelta(const EventLogRecord& delta,
@@ -195,8 +199,6 @@ void EventLogStateMachine::postWriteDeltaRequest(
 void EventLogStateMachine::onUpdate(const EventLogRebuildingSet& set,
                                     const EventLogRecord* /*delta*/,
                                     lsn_t version) {
-  auto server_config = getServerConfig();
-
   if (update_workers_) {
     gracePeriodTimer_.activate(settings_->event_log_grace_period);
     publishRebuildingSet();
@@ -205,7 +207,7 @@ void EventLogStateMachine::onUpdate(const EventLogRebuildingSet& set,
   if (snapshot_log_id_ == LOGID_INVALID) {
     // When not using snapshotting, we need to trim the delta log when the
     // rebuilding set becomes empty otherwise it will grow indefinitely.
-    if (getState().canTrimEventLog(*server_config)) {
+    if (getState().canTrimEventLog(*getNodesConfiguration())) {
       trimNotSnapshotted(version);
     }
   } else {
@@ -354,8 +356,7 @@ void EventLogStateMachine::noteConfigurationChanged() {
     return;
   }
 
-  auto server_config = getServerConfig();
-  if (getState().canTrimEventLog(*server_config)) {
+  if (getState().canTrimEventLog(*getNodesConfiguration())) {
     trimNotSnapshotted(getState().getLastSeenLSN());
   }
 }

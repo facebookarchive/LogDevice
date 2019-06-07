@@ -17,10 +17,11 @@
 
 namespace facebook { namespace logdevice {
 
-int EventLogRebuildingSet::update(lsn_t lsn,
-                                  std::chrono::milliseconds timestamp,
-                                  const EventLogRecord& record,
-                                  const ServerConfig& cfg) {
+int EventLogRebuildingSet::update(
+    lsn_t lsn,
+    std::chrono::milliseconds timestamp,
+    const EventLogRecord& record,
+    const configuration::nodes::NodesConfiguration& nodes_configuration) {
   ld_check(lsn > last_update_);
   last_seen_lsn_ = lsn;
   auto type = record.getType();
@@ -34,19 +35,19 @@ int EventLogRebuildingSet::update(lsn_t lsn,
            toString().c_str());
 
   if (type == EventType::SHARD_NEEDS_REBUILD) {
-    rv = onShardNeedsRebuild(lsn, timestamp, record, cfg);
+    rv = onShardNeedsRebuild(lsn, timestamp, record, nodes_configuration);
   } else if (type == EventType::SHARD_ACK_REBUILT) {
-    rv = onShardAckRebuilt(lsn, timestamp, record, cfg);
+    rv = onShardAckRebuilt(lsn, timestamp, record, nodes_configuration);
   } else if (type == EventType::SHARD_IS_REBUILT) {
-    rv = onShardIsRebuilt(lsn, timestamp, record, cfg);
+    rv = onShardIsRebuilt(lsn, timestamp, record, nodes_configuration);
   } else if (type == EventType::SHARD_ABORT_REBUILD) {
-    rv = onShardAbortRebuild(lsn, timestamp, record, cfg);
+    rv = onShardAbortRebuild(lsn, timestamp, record, nodes_configuration);
   } else if (type == EventType::SHARD_UNDRAIN) {
     rv = onShardUndrain(lsn, timestamp, record);
   } else if (type == EventType::SHARD_DONOR_PROGRESS) {
     rv = onShardDonorProgress(lsn, timestamp, record);
   } else if (type == EventType::SHARD_UNRECOVERABLE) {
-    rv = onShardUnrecoverable(lsn, timestamp, record, cfg);
+    rv = onShardUnrecoverable(lsn, timestamp, record, nodes_configuration);
   }
 
   if (rv == 0) {
@@ -157,7 +158,7 @@ int EventLogRebuildingSet::onShardNeedsRebuild(
     lsn_t lsn,
     std::chrono::milliseconds timestamp,
     const EventLogRecord& record,
-    const ServerConfig& cfg) {
+    const configuration::nodes::NodesConfiguration& nodes_configuration) {
   const auto* ptr = dynamic_cast<const SHARD_NEEDS_REBUILD_Event*>(&record);
   ld_check(ptr);
 
@@ -311,7 +312,7 @@ int EventLogRebuildingSet::onShardNeedsRebuild(
 
   setShardRecoverable(nodeIdx, shardIdx, is_recoverable);
 
-  recomputeAuthoritativeStatus(shardIdx, timestamp, cfg);
+  recomputeAuthoritativeStatus(shardIdx, timestamp, nodes_configuration);
 
   recomputeShardRebuildTimeIntervals(shardIdx);
 
@@ -324,7 +325,7 @@ int EventLogRebuildingSet::onShardAckRebuilt(
     lsn_t lsn,
     std::chrono::milliseconds timestamp,
     const EventLogRecord& record,
-    const ServerConfig& cfg) {
+    const configuration::nodes::NodesConfiguration& nodes_configuration) {
   const auto* ptr = dynamic_cast<const SHARD_ACK_REBUILT_Event*>(&record);
   ld_check(ptr);
 
@@ -395,7 +396,8 @@ int EventLogRebuildingSet::onShardAckRebuilt(
     shards_.erase(ptr->header.shardIdx);
   }
 
-  recomputeAuthoritativeStatus(ptr->header.shardIdx, timestamp, cfg);
+  recomputeAuthoritativeStatus(
+      ptr->header.shardIdx, timestamp, nodes_configuration);
 
   recomputeShardRebuildTimeIntervals(ptr->header.shardIdx);
 
@@ -404,10 +406,11 @@ int EventLogRebuildingSet::onShardAckRebuilt(
   return 0;
 }
 
-int EventLogRebuildingSet::onShardIsRebuilt(lsn_t lsn,
-                                            std::chrono::milliseconds timestamp,
-                                            const EventLogRecord& record,
-                                            const ServerConfig& cfg) {
+int EventLogRebuildingSet::onShardIsRebuilt(
+    lsn_t lsn,
+    std::chrono::milliseconds timestamp,
+    const EventLogRecord& record,
+    const configuration::nodes::NodesConfiguration& nodes_configuration) {
   const auto* ptr = dynamic_cast<const SHARD_IS_REBUILT_Event*>(&record);
   ld_check(ptr);
 
@@ -452,7 +455,7 @@ int EventLogRebuildingSet::onShardIsRebuilt(lsn_t lsn,
     shard_info.donor_progress.erase(node_idx);
   }
 
-  recomputeAuthoritativeStatus(shard_idx, timestamp, cfg);
+  recomputeAuthoritativeStatus(shard_idx, timestamp, nodes_configuration);
 
   recomputeShardRebuildTimeIntervals(shard_idx);
 
@@ -465,7 +468,7 @@ int EventLogRebuildingSet::onShardAbortRebuild(
     lsn_t lsn,
     std::chrono::milliseconds timestamp,
     const EventLogRecord& record,
-    const ServerConfig& cfg) {
+    const configuration::nodes::NodesConfiguration& nodes_configuration) {
   const auto* ptr = dynamic_cast<const SHARD_ABORT_REBUILD_Event*>(&record);
   ld_check(ptr);
 
@@ -515,7 +518,8 @@ int EventLogRebuildingSet::onShardAbortRebuild(
     shard_info.donor_progress.clear();
   }
 
-  recomputeAuthoritativeStatus(ptr->header.shardIdx, timestamp, cfg);
+  recomputeAuthoritativeStatus(
+      ptr->header.shardIdx, timestamp, nodes_configuration);
 
   recomputeShardRebuildTimeIntervals(ptr->header.shardIdx);
 
@@ -577,7 +581,7 @@ int EventLogRebuildingSet::onShardUnrecoverable(
     lsn_t lsn,
     std::chrono::milliseconds timestamp,
     const EventLogRecord& record,
-    const ServerConfig& cfg) {
+    const configuration::nodes::NodesConfiguration& nodes_configuration) {
   const auto* ptr = dynamic_cast<const SHARD_UNRECOVERABLE_Event*>(&record);
   ld_check(ptr);
 
@@ -610,7 +614,8 @@ int EventLogRebuildingSet::onShardUnrecoverable(
 
   setShardRecoverable(ptr->header.nodeIdx, ptr->header.shardIdx, false);
 
-  recomputeAuthoritativeStatus(ptr->header.shardIdx, timestamp, cfg);
+  recomputeAuthoritativeStatus(
+      ptr->header.shardIdx, timestamp, nodes_configuration);
 
   recomputeShardRebuildTimeIntervals(ptr->header.shardIdx);
 
@@ -811,12 +816,12 @@ ShardAuthoritativeStatusMap EventLogRebuildingSet::toShardStatusMap(
 void EventLogRebuildingSet::recomputeAuthoritativeStatus(
     uint32_t shard,
     std::chrono::milliseconds timestamp,
-    const ServerConfig& cfg) {
-  const ServerConfig::Nodes& nodes_cfg = cfg.getNodes();
+    const configuration::nodes::NodesConfiguration& nodes_configuration) {
+  const auto& storage_membership = nodes_configuration.getStorageMembership();
   std::unordered_set<node_index_t> storage_nodes;
-  for (const auto& n : nodes_cfg) {
-    if (n.second.isReadableStorageNode()) {
-      storage_nodes.insert(n.first);
+  for (const auto& n : *storage_membership) {
+    if (storage_membership->hasShardShouldReadFrom(n)) {
+      storage_nodes.insert(n);
     }
   }
 
@@ -1148,14 +1153,15 @@ bool EventLogRebuildingSet::isDonor(node_index_t node, uint32_t shard) const {
   return false;
 }
 
-bool EventLogRebuildingSet::canTrimEventLog(const ServerConfig& cfg) const {
+bool EventLogRebuildingSet::canTrimEventLog(
+    const configuration::nodes::NodesConfiguration& nodes_configuration) const {
+  const auto& storage_membership = nodes_configuration.getStorageMembership();
   for (const auto& shard : shards_) {
     for (const auto& node : shard.second.nodes_) {
       if (node.second.acked) {
         continue;
       }
-      auto n = cfg.getNode(node.first);
-      if (n && n->isReadableStorageNode()) {
+      if (storage_membership->hasShardShouldReadFrom(node.first)) {
         return false;
       }
       if (node.second.auth_status != AuthoritativeStatus::AUTHORITATIVE_EMPTY) {

@@ -231,7 +231,8 @@ class EventLogRebuildingSet {
   // Returns true if the rebuilding set is effectively empty for all shards.
   // This is the case if all shards are either acked, or not acked but rebuilt
   // completely (AUTHORITATIVE_EMPTY) and not in the config.
-  bool canTrimEventLog(const ServerConfig& config) const;
+  bool canTrimEventLog(const configuration::nodes::NodesConfiguration&
+                           nodes_configuration) const;
 
   // Returns rebuilding mode if we're rebuilding `shard` of `node`,
   // otherwise folly::none. Note that shards doing time-ranged rebuilding
@@ -270,15 +271,18 @@ class EventLogRebuildingSet {
    * @param lsn         Lsn of the record (used for logging);
    * @param timestamp   Timestamp of the record
    * @param record      Record read from the event log.
-   * @param cfg         ServerConfig object used to retrieve the list of
-   *                    potential donors for rebuilding.
+   *
+   * @param nodes_configuration  NodesConfiguration object used to
+   *                             retrieve the list of potential donors for
+   *                             rebuilding.
    *
    * @return 0 on success, or -1 and err set to E::FAILED.
    */
-  int update(lsn_t lsn,
-             std::chrono::milliseconds timestamp,
-             const EventLogRecord& record,
-             const ServerConfig& cfg);
+  int update(
+      lsn_t lsn,
+      std::chrono::milliseconds timestamp,
+      const EventLogRecord& record,
+      const configuration::nodes::NodesConfiguration& nodes_configuration);
 
   lsn_t getLastUpdate() const {
     return last_update_;
@@ -346,9 +350,11 @@ class EventLogRebuildingSet {
       const configuration::nodes::NodesConfiguration& nodes_configuration)
       const;
 
-  void recomputeAuthoritativeStatus(uint32_t shard,
-                                    std::chrono::milliseconds timestamp,
-                                    const ServerConfig& cfg);
+  void recomputeAuthoritativeStatus(
+      uint32_t shard,
+      std::chrono::milliseconds timestamp,
+      const configuration::nodes::NodesConfiguration& nodes_configuration);
+
   void recomputeShardRebuildTimeIntervals(uint32_t shard);
 
  private:
@@ -377,32 +383,37 @@ class EventLogRebuildingSet {
       std::unordered_set<node_index_t> storage_nodes,
       std::string* out_comment) const;
 
-  int onShardNeedsRebuild(lsn_t lsn,
-                          std::chrono::milliseconds timestamp,
-                          const EventLogRecord& record,
-                          const ServerConfig& cfg);
-  int onShardAckRebuilt(lsn_t lsn,
-                        std::chrono::milliseconds timestamp,
-                        const EventLogRecord& record,
-                        const ServerConfig& cfg);
-  int onShardIsRebuilt(lsn_t lsn,
-                       std::chrono::milliseconds timestamp,
-                       const EventLogRecord& record,
-                       const ServerConfig& cfg);
-  int onShardAbortRebuild(lsn_t lsn,
-                          std::chrono::milliseconds timestamp,
-                          const EventLogRecord& record,
-                          const ServerConfig& cfg);
+  int onShardNeedsRebuild(
+      lsn_t lsn,
+      std::chrono::milliseconds timestamp,
+      const EventLogRecord& record,
+      const configuration::nodes::NodesConfiguration& nodes_configuration);
+  int onShardAckRebuilt(
+      lsn_t lsn,
+      std::chrono::milliseconds timestamp,
+      const EventLogRecord& record,
+      const configuration::nodes::NodesConfiguration& nodes_configuration);
+  int onShardIsRebuilt(
+      lsn_t lsn,
+      std::chrono::milliseconds timestamp,
+      const EventLogRecord& record,
+      const configuration::nodes::NodesConfiguration& nodes_configuration);
+  int onShardAbortRebuild(
+      lsn_t lsn,
+      std::chrono::milliseconds timestamp,
+      const EventLogRecord& record,
+      const configuration::nodes::NodesConfiguration& nodes_configuration);
   int onShardUndrain(lsn_t lsn,
                      std::chrono::milliseconds timestamp,
                      const EventLogRecord& record);
   int onShardDonorProgress(lsn_t lsn,
                            std::chrono::milliseconds timestamp,
                            const EventLogRecord& record);
-  int onShardUnrecoverable(lsn_t lsn,
-                           std::chrono::milliseconds timestamp,
-                           const EventLogRecord& record,
-                           const ServerConfig& cfg);
+  int onShardUnrecoverable(
+      lsn_t lsn,
+      std::chrono::milliseconds timestamp,
+      const EventLogRecord& record,
+      const configuration::nodes::NodesConfiguration& nodes_configuration);
 
   friend class EventLogRebuildingSetCodec;
 };

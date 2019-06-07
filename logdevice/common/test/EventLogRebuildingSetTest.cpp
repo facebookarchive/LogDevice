@@ -61,6 +61,11 @@ class EventLogRebuildingSetTest : public ::testing::Test {
     return config_->getServerConfig();
   }
 
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const {
+    return config_->getNodesConfigurationFromServerConfigSource();
+  }
+
  private:
   std::shared_ptr<UpdateableConfig> config_;
 };
@@ -89,7 +94,7 @@ class EventLogRebuildingSetTest : public ::testing::Test {
     set.update(set.getLastSeenLSN() + 1,        \
                std::chrono::milliseconds(),     \
                *e,                              \
-               *getServerConfig());             \
+               *getNodesConfiguration());       \
   }
 
 #define DIRTY_EVENT(set, rmm, ...)                                \
@@ -99,7 +104,7 @@ class EventLogRebuildingSetTest : public ::testing::Test {
     set.update(set.getLastSeenLSN() + 1,                          \
                std::chrono::milliseconds(),                       \
                *e,                                                \
-               *getServerConfig());                               \
+               *getNodesConfiguration());                         \
   }
 
 ::std::ostream& operator<<(::std::ostream& os, const AuthoritativeStatus& s) {

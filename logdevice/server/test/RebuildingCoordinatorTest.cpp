@@ -595,6 +595,11 @@ class RebuildingCoordinatorTest : public ::testing::Test {
     config_->updateableLogsConfig()->update(std::move(logs_config));
   }
 
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const {
+    return config_->getNodesConfigurationFromServerConfigSource();
+  }
+
   void triggerScheduledRestarts() {
     for (shard_index_t s : restart_scheduled) {
       coordinator_->restartForShard(s, *rebuilding_set_);
@@ -669,7 +674,7 @@ class RebuildingCoordinatorTest : public ::testing::Test {
     auto e = std::make_shared<SHARD_NEEDS_REBUILD_Event>(h, rrm);
     const lsn_t version = rebuilding_set_->getLastSeenLSN() + 1;
     rebuilding_set_->update(
-        version, std::chrono::milliseconds(), *e, *config_->getServerConfig());
+        version, std::chrono::milliseconds(), *e, *getNodesConfiguration());
     if (coordinator_) {
       coordinator_->onUpdate(*rebuilding_set_, e.get(), version);
       triggerScheduledRestarts();
@@ -687,10 +692,8 @@ class RebuildingCoordinatorTest : public ::testing::Test {
     SHARD_ABORT_REBUILD_Header h = {node_idx, shard_idx, version};
     auto e = std::make_shared<SHARD_ABORT_REBUILD_Event>(h);
     const lsn_t new_version = rebuilding_set_->getLastSeenLSN() + 1;
-    rebuilding_set_->update(new_version,
-                            std::chrono::milliseconds(),
-                            *e,
-                            *config_->getServerConfig());
+    rebuilding_set_->update(
+        new_version, std::chrono::milliseconds(), *e, *getNodesConfiguration());
     if (coordinator_) {
       coordinator_->onUpdate(*rebuilding_set_, e.get(), new_version);
       triggerScheduledRestarts();
@@ -712,7 +715,7 @@ class RebuildingCoordinatorTest : public ::testing::Test {
     auto e = std::make_shared<SHARD_IS_REBUILT_Event>(h);
     const lsn_t lsn = rebuilding_set_->getLastSeenLSN() + 1;
     rebuilding_set_->update(
-        lsn, std::chrono::milliseconds(), *e, *config_->getServerConfig());
+        lsn, std::chrono::milliseconds(), *e, *getNodesConfiguration());
     if (coordinator_) {
       coordinator_->onUpdate(*rebuilding_set_, e.get(), lsn);
     }
@@ -723,7 +726,7 @@ class RebuildingCoordinatorTest : public ::testing::Test {
     auto e = std::make_shared<SHARD_UNDRAIN_Event>(h);
     const lsn_t lsn = rebuilding_set_->getLastSeenLSN() + 1;
     rebuilding_set_->update(
-        lsn, std::chrono::milliseconds(), *e, *config_->getServerConfig());
+        lsn, std::chrono::milliseconds(), *e, *getNodesConfiguration());
     if (coordinator_) {
       coordinator_->onUpdate(*rebuilding_set_, e.get(), lsn);
     }
@@ -736,7 +739,7 @@ class RebuildingCoordinatorTest : public ::testing::Test {
     auto e = std::make_shared<SHARD_ACK_REBUILT_Event>(h);
     const lsn_t lsn = rebuilding_set_->getLastSeenLSN() + 1;
     rebuilding_set_->update(
-        lsn, std::chrono::milliseconds(), *e, *config_->getServerConfig());
+        lsn, std::chrono::milliseconds(), *e, *getNodesConfiguration());
     if (coordinator_) {
       coordinator_->onUpdate(*rebuilding_set_, e.get(), lsn);
     }
@@ -750,7 +753,7 @@ class RebuildingCoordinatorTest : public ::testing::Test {
     auto e = std::make_shared<SHARD_DONOR_PROGRESS_Event>(h);
     const lsn_t lsn = rebuilding_set_->getLastSeenLSN() + 1;
     rebuilding_set_->update(
-        lsn, std::chrono::milliseconds(), *e, *config_->getServerConfig());
+        lsn, std::chrono::milliseconds(), *e, *getNodesConfiguration());
     if (coordinator_) {
       coordinator_->onUpdate(*rebuilding_set_, e.get(), lsn);
     }

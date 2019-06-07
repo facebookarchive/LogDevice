@@ -349,10 +349,15 @@ class MockClientReadStreamDependencies : public ClientReadStreamDependencies {
     return state_.settings;
   }
 
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const {
+    auto cfg = state_.config->get();
+    return cfg->serverConfig()->getNodesConfigurationFromServerConfigSource();
+  }
+
   ShardAuthoritativeStatusMap getShardStatus() const override {
     auto cfg = state_.config->get();
-    return state_.rebuilding_set.toShardStatusMap(
-        *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource());
+    return state_.rebuilding_set.toShardStatusMap(*getNodesConfiguration());
   }
 
   void refreshClusterState() override {}
@@ -555,6 +560,12 @@ class ClientReadStreamTest
     state_.config->updateableLogsConfig()->update(std::move(logs_config));
   }
 
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const {
+    auto cfg = state_.config->get();
+    return cfg->serverConfig()->getNodesConfigurationFromServerConfigSource();
+  }
+
   BackoffTimer* getGracePeriodTimer() const {
     return read_stream_->grace_period_.get();
   }
@@ -658,7 +669,7 @@ class ClientReadStreamTest
     state_.rebuilding_set.update(lsn,
                                  std::chrono::milliseconds(),
                                  SHARD_NEEDS_REBUILD_Event(h),
-                                 *cfg->serverConfig());
+                                 *getNodesConfiguration());
     read_stream_->applyShardStatus("addToRebuildingSet");
     return lsn;
   }
@@ -671,7 +682,7 @@ class ClientReadStreamTest
     state_.rebuilding_set.update(lsn,
                                  std::chrono::milliseconds(),
                                  SHARD_UNRECOVERABLE_Event(h),
-                                 *cfg->serverConfig());
+                                 *getNodesConfiguration());
     read_stream_->applyShardStatus("markUnrecoverable");
   }
 
@@ -684,7 +695,7 @@ class ClientReadStreamTest
       state_.rebuilding_set.update(lsn,
                                    std::chrono::milliseconds(),
                                    SHARD_IS_REBUILT_Event(h),
-                                   *cfg->serverConfig());
+                                   *getNodesConfiguration());
       read_stream_->applyShardStatus("onAllDonorsFinishRebuilding");
     }
   }

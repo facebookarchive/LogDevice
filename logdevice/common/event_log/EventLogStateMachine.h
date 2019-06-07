@@ -135,6 +135,9 @@ class EventLogStateMachine
 
   virtual const std::shared_ptr<ServerConfig> getServerConfig() const;
 
+  virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const;
+
   /**
    * Posts to each Worker a request to update
    * Worker::shardStatusManager()::shard_status_ with the content of

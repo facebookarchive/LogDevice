@@ -135,6 +135,12 @@ class MockEventLogStateMachine : public EventLogStateMachine {
   const std::shared_ptr<ServerConfig> getServerConfig() const override {
     return config_->getServerConfig();
   }
+
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const override {
+    return config_->getNodesConfigurationFromServerConfigSource();
+  }
+
   void getDeltaLogTailLSN() override;
   void getSnapshotLogTailLSN() override;
   read_stream_id_t createBasicReadStream(
@@ -246,6 +252,11 @@ class EventLogTest : public ::testing::TestWithParam<bool> {
 
   const std::shared_ptr<ServerConfig> getServerConfig() const {
     return config_->getServerConfig();
+  }
+
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const {
+    return config_->getNodesConfigurationFromServerConfigSource();
   }
 
   struct DeltaAppendHandle {
@@ -390,11 +401,12 @@ bool MockEventLogStateMachine::isGracePeriodForFastForwardActive() {
     }                                                                     \
   }
 
-#define UPDATE(set, version, name, ...)                                       \
-  {                                                                           \
-    name##_Header h = {__VA_ARGS__};                                          \
-    auto e = std::make_shared<name##_Event>(h);                               \
-    set.update(version, std::chrono::milliseconds(), *e, *getServerConfig()); \
+#define UPDATE(set, version, name, ...)                                      \
+  {                                                                          \
+    name##_Header h = {__VA_ARGS__};                                         \
+    auto e = std::make_shared<name##_Event>(h);                              \
+    set.update(                                                              \
+        version, std::chrono::milliseconds(), *e, *getNodesConfiguration()); \
   }
 
 #define DELTA(lsn, name, ...)                   \
