@@ -210,11 +210,13 @@ void FindKeyRequest::onMessageSent(ShardID to, Status status) {
 }
 
 void FindKeyRequest::onReply(ShardID from, Status status, lsn_t lo, lsn_t hi) {
-  ld_debug("received FINDKEY_REPLY from %s, status=%s, result=(%s, %s]",
-           from.toString().c_str(),
-           error_description(status),
-           lsn_to_string(lo).c_str(),
-           lsn_to_string(hi).c_str());
+  ld_debug(
+      "received FINDKEY_REPLY from %s, status=%s, result=(%s, %s] for log %lu",
+      from.toString().c_str(),
+      error_description(status),
+      lsn_to_string(lo).c_str(),
+      lsn_to_string(hi).c_str(),
+      log_id_.val_);
 
   auto res = StorageSetAccessor::Result::SUCCESS;
 
