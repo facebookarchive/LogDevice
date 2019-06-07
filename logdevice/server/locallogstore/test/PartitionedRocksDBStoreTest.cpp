@@ -19,7 +19,6 @@
 #include <gtest/gtest.h>
 #include <rocksdb/sst_file_manager.h>
 
-#include "logdevice/common/EventLoopHandle.h"
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/ThreadID.h"

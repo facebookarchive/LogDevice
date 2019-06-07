@@ -33,8 +33,7 @@ namespace facebook { namespace logdevice {
  *         event_base. All LogDevice requests are executed on EventLoop
  *         threads. EventLoop objects directly receive and execute requests
  *         from client threads, the listener thread, and the command port
- *         thread. Those other threads use EventLoopHandle objects to pass
- *         the requests to an EventLoop.
+ *         thread.
  */
 
 class EventLoopTaskQueue;
@@ -204,15 +203,6 @@ class EventLoop : public folly::Executor {
   static const size_t STACK_SIZE = (1024 * 1024);
 
   // Semaphore that coordinates initialization and starting of the event loop.
-  // Sequence of events ("main" and "worker" denote threads):
-  // (main   1) Constructor initializes semaphore, starts worker thread
-  // (worker 1) run() waits on sempahore
-  // (main   2) EventLoop subclass initializes
-  // (main   3) EventLoopHandle posts to the semaphore
-  // (worker 2) run() continues, starts libevent loop
-  // The reason for this dance is so that the EventLoop *subclass* can modify
-  // the event base in its constructor without worrying that the worker thread
-  // is concurrently using it.
   Semaphore start_sem_;
 
   // Constantly repeating event to calculate delay in event loop runs.

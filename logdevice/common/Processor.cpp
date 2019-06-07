@@ -23,7 +23,6 @@
 #include "logdevice/common/ClientAPIHitsTracer.h"
 #include "logdevice/common/ClientIdxAllocator.h"
 #include "logdevice/common/ClusterState.h"
-#include "logdevice/common/EventLoopHandle.h"
 #include "logdevice/common/EventLoopTaskQueue.h"
 #include "logdevice/common/HashBasedSequencerLocator.h"
 #include "logdevice/common/MetaDataLogWriter.h"
@@ -122,7 +121,7 @@ class ProcessorImpl {
   // An empty function means "exit the thread."
   folly::MPMCQueue<folly::Function<void()>> background_queue_;
   NodesConfigurationPublisher nc_publisher_;
-  std::vector<std::unique_ptr<EventLoopHandle>> ev_loop_handles_;
+  std::vector<std::unique_ptr<EventLoop>> ev_loops_;
   std::unique_ptr<AllSequencers> allSequencers_;
   std::array<workers_t, static_cast<size_t>(WorkerType::MAX)> all_workers_;
   // If anything depends on worker make sure that it is deleted in the
@@ -264,14 +263,13 @@ workers_t Processor::createWorkerPool(WorkerType type, size_t count) {
     // increment the next worker idx
     std::unique_ptr<Worker> worker;
     try {
-      auto& handles = impl_->ev_loop_handles_;
-      auto ev_loop =
-          new EventLoop(Worker::makeThreadName(this, type, worker_id_t(i)),
-                        ThreadID::CPU_EXEC,
-                        local_settings->worker_request_pipe_capacity,
-                        local_settings->requests_per_iteration);
-      handles.emplace_back(std::make_unique<EventLoopHandle>(ev_loop));
-      auto executor = folly::getKeepAliveToken(handles.back()->get());
+      auto& loops = impl_->ev_loops_;
+      loops.emplace_back(std::make_unique<EventLoop>(
+          Worker::makeThreadName(this, type, worker_id_t(i)),
+          ThreadID::CPU_EXEC,
+          local_settings->worker_request_pipe_capacity,
+          local_settings->requests_per_iteration));
+      auto executor = folly::getKeepAliveToken(loops.back().get());
       worker.reset(createWorker(std::move(executor), worker_id_t(i), type));
     } catch (ConstructorFailed&) {
       shutdown();
@@ -359,9 +357,8 @@ Worker& Processor::getWorker(worker_id_t worker_id, WorkerType worker_type) {
   return *workers[worker_id.val()].get();
 }
 
-std::vector<std::unique_ptr<EventLoopHandle>>&
-Processor::getEventLoopHandles() {
-  return impl_->ev_loop_handles_;
+std::vector<std::unique_ptr<EventLoop>>& Processor::getEventLoops() {
+  return impl_->ev_loops_;
 }
 
 void Processor::applyToWorkers(folly::Function<void(Worker&)> func,
@@ -553,9 +550,9 @@ void Processor::shutdown() {
   // Tell all Workers to shut down and terminate their threads. This
   // also alters WorkerHandles so that further attempts to post
   // requests through them fail with E::SHUTDOWN.
-  for (auto& ev_handle : impl_->ev_loop_handles_) {
-    (*ev_handle)->getTaskQueue().shutdown();
-    pthreads.push_back((*ev_handle)->getThread());
+  for (auto& loop : impl_->ev_loops_) {
+    loop->getTaskQueue().shutdown();
+    pthreads.push_back(loop->getThread());
   }
 
   for (size_t i = 0; i < impl_->background_threads_.size(); ++i) {

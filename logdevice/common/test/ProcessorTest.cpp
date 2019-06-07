@@ -18,7 +18,6 @@
 #include <gtest/gtest.h>
 #include <sys/types.h>
 
-#include "logdevice/common/EventLoopHandle.h"
 #include "logdevice/common/ExponentialBackoffTimer.h"
 #include "logdevice/common/LibeventTimer.h"
 #include "logdevice/common/NoopTraceLogger.h"
@@ -190,19 +189,11 @@ TEST_F(ProcessorTest, EventLoopKeepAliveTest) {
   {
     ASSERT_DEATH(
         {
-          auto ev_loop =
-              new EventLoop("", ThreadID::Type::UNKNOWN_EVENT_LOOP, 1, 1);
-          auto handle = std::make_unique<EventLoopHandle>(ev_loop);
-          auto keep_alive = folly::getKeepAliveToken(ev_loop);
-          handle.reset();
+          auto ev_loop = std::make_unique<EventLoop>(
+              "", ThreadID::Type::UNKNOWN_EVENT_LOOP, 1, 1);
+          auto keep_alive = folly::getKeepAliveToken(ev_loop.get());
+          ev_loop.reset();
         },
         "");
-  }
-  {
-    auto ev_loop = new EventLoop("", ThreadID::Type::UNKNOWN_EVENT_LOOP, 1, 1);
-    auto handle = std::make_unique<EventLoopHandle>(ev_loop);
-    auto keep_alive = folly::getKeepAliveToken(ev_loop);
-    keep_alive.reset();
-    handle.reset();
   }
 }

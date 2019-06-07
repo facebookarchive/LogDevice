@@ -13,7 +13,6 @@
 #include <gtest/gtest.h>
 
 #include "logdevice/common/EventLoop.h"
-#include "logdevice/common/EventLoopHandle.h"
 #include "logdevice/common/Semaphore.h"
 
 using namespace facebook::logdevice;
@@ -31,10 +30,7 @@ TEST(EventLoopTaskQueue, TranslatePriority) {
 }
 
 TEST(EventLoopTaskQueue, PostPrioritizedWork) {
-  std::unique_ptr<EventLoopHandle> handle;
-  handle = std::make_unique<EventLoopHandle>(new EventLoop());
-
-  auto el = handle->get();
+  auto el = std::make_unique<EventLoop>();
   size_t num_hi_pri_task = 500;
   size_t num_mid_pri_task = 2;
   size_t num_lo_pri_task = 1;

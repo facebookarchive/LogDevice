@@ -100,12 +100,11 @@ struct SocketConnectRequest;
 namespace facebook { namespace logdevice {
 
 /**
- * @file A Worker is an EventLoop that executes LogDevice requests, keeps
- *       track of active Request objects, and manages a collection of
- *       Sockets. All LogDevice requests are executed on Worker
- *       threads. Worker objects directly receive and execute requests from
- *       client threads, the listener thread, and the command port
- *       thread. Those other threads use EventLoopHandle<Worker> objects to
+ * @file A Worker executes LogDevice requests, keeps track of active Request
+ *       objects, and manages a collection of Sockets. All LogDevice requests
+ *       are executed on Executor threads. Worker objects directly receive and
+ *       execute requests from client threads, the listener thread, and the
+ *       command port thread. These other threads use Processor object to
  *       pass the requests to a Worker.
  */
 

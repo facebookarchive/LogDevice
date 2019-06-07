@@ -7,7 +7,6 @@
 
 #include "logdevice/common/BatchedBufferDisposer.h"
 #include "logdevice/common/EventLoop.h"
-#include "logdevice/common/EventLoopHandle.h"
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/libevent/compat.h"
 using namespace ::testing;
@@ -15,11 +14,10 @@ using namespace ::testing;
 using namespace facebook::logdevice;
 
 TEST(PayloadHolderTest, Simple) {
-  EventLoopHandle handle(new EventLoop("",
-                                       ThreadID::Type::UNKNOWN_EVENT_LOOP,
-                                       /* capacity */ 2000,
-                                       /* requests per iteration */ 1));
-  auto ev_loop = handle.get();
+  auto ev_loop = std::make_unique<EventLoop>("",
+                                             ThreadID::Type::UNKNOWN_EVENT_LOOP,
+                                             /* capacity */ 2000,
+                                             /* requests per iteration */ 1);
   Semaphore sem0, sem1;
   ev_loop->add([&sem0] {
     ThreadID::set(ThreadID::UNKNOWN_WORKER, "");

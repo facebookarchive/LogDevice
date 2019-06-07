@@ -49,7 +49,7 @@ class ClientAPIHitsTracer;
 class ClientIdxAllocator;
 class ClusterState;
 class EventLogRebuildingSet;
-class EventLoopHandle;
+class EventLoop;
 class PermissionChecker;
 class PluginRegistry;
 class PrincipalParser;
@@ -243,10 +243,10 @@ class Processor : public folly::enable_shared_from_this<Processor> {
   Worker& getWorker(worker_id_t worker_id, WorkerType type);
 
   /**
-   * Get all EventLoopHandle's owned by the Processor.
+   * Get all EventLoops owned by the Processor.
    * Used for tests.
    */
-  std::vector<std::unique_ptr<EventLoopHandle>>& getEventLoopHandles();
+  std::vector<std::unique_ptr<EventLoop>>& getEventLoops();
 
   /**
    * Returns the refernce to an object which is responsible for timers

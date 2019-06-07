@@ -15,7 +15,6 @@
 
 #include "logdevice/admin/AdminServer.h"
 #include "logdevice/admin/maintenance/ClusterMaintenanceStateMachine.h"
-#include "logdevice/common/EventLoopHandle.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/RequestType.h"
@@ -135,10 +134,10 @@ void shutdown_server(
     std::unique_ptr<Listener>& command_listener,
     std::unique_ptr<Listener>& gossip_listener,
     std::unique_ptr<Listener>& ssl_connection_listener,
-    std::unique_ptr<EventLoopHandle>& connection_listener_handle,
-    std::unique_ptr<EventLoopHandle>& command_listener_handle,
-    std::unique_ptr<EventLoopHandle>& gossip_listener_handle,
-    std::unique_ptr<EventLoopHandle>& ssl_connection_listener_handle,
+    std::unique_ptr<EventLoop>& connection_listener_loop,
+    std::unique_ptr<EventLoop>& command_listener_loop,
+    std::unique_ptr<EventLoop>& gossip_listener_loop,
+    std::unique_ptr<EventLoop>& ssl_connection_listener_loop,
     std::unique_ptr<LogStoreMonitor>& logstore_monitor,
     std::shared_ptr<ServerProcessor>& processor,
     std::unique_ptr<ShardedStorageThreadPool>& storage_thread_pool,
@@ -217,11 +216,11 @@ void shutdown_server(
   folly::collectAll(listeners_closed.begin(), listeners_closed.end()).wait();
 
   connection_listener.reset();
-  connection_listener_handle.reset();
+  connection_listener_loop.reset();
   gossip_listener.reset();
-  gossip_listener_handle.reset();
+  gossip_listener_loop.reset();
   ssl_connection_listener.reset();
-  ssl_connection_listener_handle.reset();
+  ssl_connection_listener_loop.reset();
 
   // set accepting_work to false
   ld_info("Stopping accepting work on all workers except FAILURE_DETECTOR");
@@ -333,7 +332,7 @@ void shutdown_server(
 
   command_listener_closed.wait();
   command_listener.reset();
-  command_listener_handle.reset();
+  command_listener_loop.reset();
 
   // take down all worker threads
   ld_info("Shutting down worker threads");

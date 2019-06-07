@@ -12,7 +12,6 @@
 
 #include "logdevice/admin/AdminServer.h"
 #include "logdevice/admin/settings/AdminServerSettings.h"
-#include "logdevice/common/EventLoopHandle.h"
 #include "logdevice/common/PermissionChecker.h"
 #include "logdevice/common/PrincipalParser.h"
 #include "logdevice/common/configuration/ServerConfig.h"
@@ -252,10 +251,10 @@ class Server {
   std::shared_ptr<SettingsUpdater> settings_updater_;
 
   // initListeners()
-  std::unique_ptr<EventLoopHandle> connection_listener_handle_;
-  std::unique_ptr<EventLoopHandle> ssl_connection_listener_handle_;
-  std::unique_ptr<EventLoopHandle> command_listener_handle_;
-  std::unique_ptr<EventLoopHandle> gossip_listener_handle_;
+  std::unique_ptr<EventLoop> connection_listener_loop_;
+  std::unique_ptr<EventLoop> ssl_connection_listener_loop_;
+  std::unique_ptr<EventLoop> command_listener_loop_;
+  std::unique_ptr<EventLoop> gossip_listener_loop_;
   std::unique_ptr<AdminServer> admin_server_handle_;
   std::unique_ptr<Listener> connection_listener_;
   std::unique_ptr<Listener> ssl_connection_listener_;

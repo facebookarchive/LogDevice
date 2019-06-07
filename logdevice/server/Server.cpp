@@ -498,25 +498,25 @@ bool Server::initListeners() {
   try {
     auto conn_shared_state =
         std::make_shared<ConnectionListener::SharedState>();
-    connection_listener_handle_ = std::make_unique<EventLoopHandle>(
-        new EventLoop(ConnectionListener::listenerTypeNames()
-                          [ConnectionListener::ListenerType::DATA],
-                      ThreadID::Type::UTILITY));
+    connection_listener_loop_ = std::make_unique<EventLoop>(
+        ConnectionListener::listenerTypeNames()
+            [ConnectionListener::ListenerType::DATA],
+        ThreadID::Type::UTILITY);
     connection_listener_ = initListener<ConnectionListener>(
         server_settings_->port,
         server_settings_->unix_socket,
         false,
-        folly::getKeepAliveToken(connection_listener_handle_->get()),
+        folly::getKeepAliveToken(connection_listener_loop_.get()),
         conn_shared_state,
         ConnectionListener::ListenerType::DATA,
         conn_budget_backlog_);
-    command_listener_handle_ = std::make_unique<EventLoopHandle>(
-        new EventLoop("ld:admin", ThreadID::Type::UTILITY));
+    command_listener_loop_ =
+        std::make_unique<EventLoop>("ld:admin", ThreadID::Type::UTILITY);
     command_listener_ = initListener<CommandListener>(
         server_settings_->command_port,
         server_settings_->command_unix_socket,
         false,
-        folly::getKeepAliveToken(command_listener_handle_->get()),
+        folly::getKeepAliveToken(command_listener_loop_.get()),
         this);
 
     std::shared_ptr<Configuration> config = updateable_config_->get();
@@ -558,15 +558,15 @@ bool Server::initListeners() {
           // validateSSLCertificatesExist() should output the error
           return false;
         }
-        ssl_connection_listener_handle_ = std::make_unique<EventLoopHandle>(
-            new EventLoop(ConnectionListener::listenerTypeNames()
-                              [ConnectionListener::ListenerType::DATA_SSL],
-                          ThreadID::Type::UTILITY));
+        ssl_connection_listener_loop_ = std::make_unique<EventLoop>(
+            ConnectionListener::listenerTypeNames()
+                [ConnectionListener::ListenerType::DATA_SSL],
+            ThreadID::Type::UTILITY);
         ssl_connection_listener_ = initListener<ConnectionListener>(
             ssl_port,
             ssl_unix_socket,
             true,
-            folly::getKeepAliveToken(ssl_connection_listener_handle_->get()),
+            folly::getKeepAliveToken(ssl_connection_listener_loop_.get()),
             conn_shared_state,
             ConnectionListener::ListenerType::DATA_SSL,
             conn_budget_backlog_);
@@ -596,15 +596,15 @@ bool Server::initListeners() {
           // validateSSLCertificatesExist() should output the error
           return false;
         }
-        gossip_listener_handle_ = std::make_unique<EventLoopHandle>(
-            new EventLoop(ConnectionListener::listenerTypeNames()
-                              [ConnectionListener::ListenerType::GOSSIP],
-                          ThreadID::Type::UTILITY));
+        gossip_listener_loop_ = std::make_unique<EventLoop>(
+            ConnectionListener::listenerTypeNames()
+                [ConnectionListener::ListenerType::GOSSIP],
+            ThreadID::Type::UTILITY);
         gossip_listener_ = initListener<ConnectionListener>(
             gossip_port,
             gossip_unix_socket,
             false,
-            folly::getKeepAliveToken(gossip_listener_handle_->get()),
+            folly::getKeepAliveToken(gossip_listener_loop_.get()),
             conn_shared_state,
             ConnectionListener::ListenerType::GOSSIP,
             conn_budget_backlog_unlimited_);
@@ -1139,11 +1139,11 @@ bool Server::startListening() {
     return false;
   }
 
-  if (gossip_listener_handle_ && !startConnectionListener(gossip_listener_)) {
+  if (gossip_listener_loop_ && !startConnectionListener(gossip_listener_)) {
     return false;
   }
 
-  if (ssl_connection_listener_handle_ &&
+  if (ssl_connection_listener_loop_ &&
       !startConnectionListener(ssl_connection_listener_)) {
     return false;
   }
@@ -1175,10 +1175,10 @@ void Server::gracefulShutdown() {
                   command_listener_,
                   gossip_listener_,
                   ssl_connection_listener_,
-                  connection_listener_handle_,
-                  command_listener_handle_,
-                  gossip_listener_handle_,
-                  ssl_connection_listener_handle_,
+                  connection_listener_loop_,
+                  command_listener_loop_,
+                  gossip_listener_loop_,
+                  ssl_connection_listener_loop_,
                   logstore_monitor_,
                   processor_,
                   sharded_storage_thread_pool_,

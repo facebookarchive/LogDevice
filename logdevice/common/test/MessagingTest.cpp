@@ -19,7 +19,6 @@
 
 #include "logdevice/common/Address.h"
 #include "logdevice/common/ConnectThrottle.h"
-#include "logdevice/common/EventLoopHandle.h"
 #include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Sender.h"
@@ -120,8 +119,7 @@ int CountingRequest::n_requests_executed;
 int CountingRequest::payload_sum;
 
 /**
- * Creates an EventLoopHandle for a Worker. Posts a request. Deletes the
- * handle, waits for the Worker thread to exit for up to 10s.
+ * Posts a request. Waits for the Worker thread to exit for up to 10s.
  * Verifies that request was processed.
  */
 TEST(MessagingTest, EventLoop) {
@@ -132,14 +130,14 @@ TEST(MessagingTest, EventLoop) {
 
   std::unique_ptr<Request> rq = std::make_unique<CountingRequest>(TEST_PAYLOAD);
 
-  auto& handles = processor->getEventLoopHandles();
-  ASSERT_EQ(handles.size(), 1);
-  auto& h = handles[0];
+  auto& loops = processor->getEventLoops();
+  ASSERT_EQ(loops.size(), 1);
+  auto& l = loops[0];
 
   EXPECT_EQ(0, processor->postRequest(rq));
   EXPECT_EQ(nullptr, rq.get());
 
-  th = (*h)->getThread();
+  th = l->getThread();
   ASSERT_FALSE(pthread_equal(pthread_self(), th));
 
   // since no EventLoop is running on this thread
@@ -284,7 +282,7 @@ struct SleepingRequest : public Request {
 };
 
 /**
- * Exercises EventLoopHandle::blockingRequest().
+ * Exercises blockingRequest().
  */
 TEST(MessagingTest, BlockingRequest) {
   Settings settings = create_default_settings<Settings>();

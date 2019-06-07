@@ -21,7 +21,6 @@
 #include "logdevice/common/AllSequencers.h"
 #include "logdevice/common/AppendRequest.h"
 #include "logdevice/common/EpochMetaDataUpdater.h"
-#include "logdevice/common/EventLoopHandle.h"
 #include "logdevice/common/FileEpochStore.h"
 #include "logdevice/common/MetaDataLogWriter.h"
 #include "logdevice/common/NodeSetSelector.h"
@@ -137,7 +136,7 @@ class UnreleasedRecordDetectorTest : public ::testing::Test {
   std::shared_ptr<UpdateableConfig> config_;
   std::shared_ptr<ServerProcessor> processor_;
   ResourceBudget budget_{std::numeric_limits<uint64_t>::max()};
-  std::unique_ptr<EventLoopHandle> connection_listener_handle_;
+  std::unique_ptr<EventLoop> connection_listener_loop_;
   std::unique_ptr<ConnectionListener> connection_listener_;
   std::shared_ptr<UnreleasedRecordDetector> detector_;
 };
@@ -245,13 +244,13 @@ void UnreleasedRecordDetectorTest::SetUp() {
   ld_notify("Processor created and initialized.");
 
   // create connection listener
-  connection_listener_handle_ = std::make_unique<EventLoopHandle>(
-      new EventLoop(ConnectionListener::listenerTypeNames()
-                        [ConnectionListener::ListenerType::DATA],
-                    ThreadID::Type::UTILITY));
+  connection_listener_loop_ =
+      std::make_unique<EventLoop>(ConnectionListener::listenerTypeNames()
+                                      [ConnectionListener::ListenerType::DATA],
+                                  ThreadID::Type::UTILITY);
   connection_listener_ = std::make_unique<ConnectionListener>(
       Listener::InterfaceDef(std::move(socketPath), false),
-      folly::getKeepAliveToken(connection_listener_handle_->get()),
+      folly::getKeepAliveToken(connection_listener_loop_.get()),
       std::make_shared<ConnectionListener::SharedState>(),
       ConnectionListener::ListenerType::DATA,
       budget_);
@@ -300,7 +299,7 @@ void UnreleasedRecordDetectorTest::SetUp() {
 void UnreleasedRecordDetectorTest::TearDown() {
   // destroy connection listener und unreleased record detector
   connection_listener_.reset();
-  connection_listener_handle_.reset();
+  connection_listener_loop_.reset();
   detector_.reset();
   ld_notify("Connection listener and unreleased record detector destroyed.");
 

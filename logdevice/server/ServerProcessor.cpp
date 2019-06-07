@@ -7,7 +7,6 @@
  */
 #include "logdevice/server/ServerProcessor.h"
 
-#include "logdevice/common/EventLoopHandle.h"
 #include "logdevice/common/UpdateableSecurityInfo.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/server/FailureDetector.h"

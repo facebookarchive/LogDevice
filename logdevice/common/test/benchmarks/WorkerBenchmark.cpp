@@ -10,7 +10,6 @@
 #include <folly/io/async/EventBase.h>
 
 #include "logdevice/common/EventLoop.h"
-#include "logdevice/common/EventLoopHandle.h"
 #include "logdevice/common/EventLoopTaskQueue.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Request.h"
@@ -140,13 +139,13 @@ BENCHMARK(RequestPumpFunctionBenchmarkOnEventLoop, n) {
   std::mutex producers_sem_mtx;
   Semaphore sem;
   std::atomic<int> executed_count{0};
-  std::unique_ptr<EventLoopHandle> handle;
+  std::unique_ptr<EventLoop> loop;
   constexpr int numProducers = kNumWorkers;
   std::array<std::thread, numProducers> requestsPerProducer;
   BENCHMARK_SUSPEND {
     // Create and init consumer
-    handle = std::make_unique<EventLoopHandle>(new EventLoop());
-    (*handle)->getTaskQueue().add([&sem]() { sem.post(); });
+    loop = std::make_unique<EventLoop>();
+    loop->getTaskQueue().add([&sem]() { sem.post(); });
     sem.wait();
     executed_count = 0;
 
@@ -159,7 +158,7 @@ BENCHMARK(RequestPumpFunctionBenchmarkOnEventLoop, n) {
               producers_sem.wait(_);
             }
             for (int j = 0; j < requestCount; ++j) {
-              (*handle)->getTaskQueue().add([&sem, &executed_count, n]() {
+              loop->getTaskQueue().add([&sem, &executed_count, n]() {
                 int count = executed_count.fetch_add(
                     1, std::memory_order::memory_order_relaxed);
                 if (count + 1 == n) {
@@ -181,7 +180,7 @@ BENCHMARK(RequestPumpFunctionBenchmarkOnEventLoop, n) {
     for (auto& i : requestsPerProducer) {
       i.join();
     }
-    handle.reset();
+    loop.reset();
   }
 }
 
@@ -243,23 +242,23 @@ BENCHMARK_RELATIVE(RequestPumpFunctionBenchmarkOnEventBase, n) {
 }
 
 BENCHMARK(RequestPumpFunctionBenchmarkSequential, n) {
-  std::unique_ptr<EventLoopHandle> handle;
+  std::unique_ptr<EventLoop> loop;
   BENCHMARK_SUSPEND {
     // Create and init consumer
-    handle = std::make_unique<EventLoopHandle>(new EventLoop());
+    loop = std::make_unique<EventLoop>();
     folly::Promise<folly::Unit> started;
     auto wait_for_start = started.getSemiFuture();
-    (*handle)->getTaskQueue().add(
+    loop->getTaskQueue().add(
         [p = std::move(started)]() mutable { p.setValue(); });
     wait_for_start.wait();
   }
   for (int i = 0; i < n; ++i) {
     folly::Baton baton;
-    (*handle)->getTaskQueue().add([&baton] { baton.post(); });
+    loop->getTaskQueue().add([&baton] { baton.post(); });
     baton.wait();
   }
   BENCHMARK_SUSPEND {
-    handle.reset();
+    loop.reset();
   }
 }
 

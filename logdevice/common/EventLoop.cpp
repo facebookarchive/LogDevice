@@ -129,8 +129,6 @@ EventLoop::~EventLoop() {
       task_queue_->shutdown();
       pthread_join(thread_, nullptr);
     }
-    // start() was already invoked, it's EventLoopHandle's responsibility to
-    // destroy the object now (by stopping the event loop)
     return;
   }
 
@@ -184,7 +182,7 @@ void EventLoop::run() {
   int rv;
   tid_ = syscall(__NR_gettid);
 
-  // Wait for EventLoopHandle to give us the go-ahead
+  // Wait for Constructor to finish
   start_sem_.wait();
 
   if (shutting_down_) {
@@ -208,8 +206,8 @@ void EventLoop::run() {
   onThreadStarted();
 
   ld_check(base_);
-  // this runs until our EventLoopHandle closes its end of the pipe or there
-  // is a fatal error
+  // this runs until we get destroyed or shutdown is called on
+  // EventLoopTaskQueue
   rv = LD_EV(event_base_loop)(base_.get(), 0);
   if (rv != 0) {
     ld_error("event_base_loop() exited abnormally with return value %d.", rv);

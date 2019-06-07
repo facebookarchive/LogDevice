@@ -8,7 +8,6 @@
 #include <folly/Benchmark.h>
 #include <folly/Singleton.h>
 
-#include "logdevice/common/EventLoopHandle.h"
 #include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/Semaphore.h"

@@ -16,7 +16,6 @@
 #include <folly/Optional.h>
 
 #include "logdevice/common/DomainIsolationChecker.h"
-#include "logdevice/common/EventLoopHandle.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/SequencerPlacement.h"
