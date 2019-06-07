@@ -1354,6 +1354,11 @@ class Node {
    * --disable-rebuilding=false
    */
   int waitUntilNodeStateReady();
+  /**
+   * Waits until the ClusterMaintenanceStateMachine is fully loaded on that
+   * machine.
+   */
+  int waitUntilMaintenanceRSMReady();
 
   /**
    * Waits for the server to start accepting connections.

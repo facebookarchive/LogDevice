@@ -1605,6 +1605,38 @@ int Node::waitUntilNodeStateReady() {
       });
 }
 
+int Node::waitUntilMaintenanceRSMReady() {
+  waitUntilAvailable();
+  auto admin_client = createAdminClient();
+  return wait_until(
+      "LogDevice started but we are waiting for the Maintenance RSM to be "
+      "replayed",
+      [&]() {
+        try {
+          thrift::MaintenancesFilter req;
+          thrift::MaintenanceDefinitionResponse resp;
+          admin_client->sync_getMaintenances(resp, req);
+          return true;
+        } catch (thrift::NodeNotReady& e) {
+          ld_info(
+              "getMaintenances thrown NodeNotReady exception. Node %d is not "
+              "ready yet",
+              node_index_);
+          return false;
+        } catch (apache::thrift::transport::TTransportException& ex) {
+          ld_info("AdminServer is not fully started yet, connections are "
+                  "failing to node %d. ex: %s",
+                  node_index_,
+                  ex.what());
+          return false;
+        } catch (std::exception& ex) {
+          ld_critical("An exception in AdminClient that we didn't expect: %s",
+                      ex.what());
+          return false;
+        }
+      });
+}
+
 int Node::waitForPurge(logid_t log_id,
                        epoch_t epoch,
                        std::chrono::steady_clock::time_point deadline) {
