@@ -49,6 +49,11 @@ class NewConnectionRequest : public Request {
 
   int getThreadAffinity(int nthreads) override;
 
+  int8_t getExecutorPriority() const override {
+    // Assigning similar priority to other sockets events.
+    return folly::Executor::MID_PRI;
+  }
+
   WorkerType getWorkerTypeAffinity() override {
     return worker_type_;
   }
