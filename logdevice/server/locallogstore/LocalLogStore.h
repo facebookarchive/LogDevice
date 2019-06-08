@@ -596,6 +596,16 @@ class LocalLogStore : boost::noncopyable {
    */
   virtual void stallLowPriWrite() {}
 
+  enum class WriteThrottleState { NONE, STALL_LOW_PRI_WRITE, REJECT_WRITE };
+
+  /**
+   * Get current throttling state for the store. Depending on current state of
+   * unflushed data, this method returns the need to stall low priority stores
+   * or reject stores.
+   */
+  virtual WriteThrottleState getWriteThrottleState() {
+    return WriteThrottleState::NONE;
+  }
   /**
    * Allows stalled low priority writes to make progress, after data getting
    * flushed has persisted on disk. Also called during shutdown, to finish
@@ -1097,6 +1107,12 @@ class LocalLogStore : boost::noncopyable {
     return WriteBufStats{E::NOTSUPPORTED, 0, 0, 0};
   }
 
+  // Depending on current memory consumption and enforced limits, store can
+  // decide whether it wants to throttle read and write io.
+  virtual void throttleIOIfNeeded(WriteBufStats /* buf_stats */,
+                                  uint64_t /* total_active_flush_trigger */,
+                                  uint64_t /* max_buffer_flush_trigger */,
+                                  uint64_t /* total_active_low_watermark */) {}
   /**
    * Register to receive notifications as buffered data is retired
    * to stable storage.

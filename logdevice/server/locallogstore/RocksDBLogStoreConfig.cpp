@@ -191,6 +191,8 @@ RocksDBLogStoreConfig::RocksDBLogStoreConfig(
     if (!can_ld_manage_flushes) {
       // TODO Set stat indicating shard cannot come up with ld_managed_flushes.
       options_.write_buffer_size = rocksdb_settings_->write_buffer_size;
+      options_.max_write_buffer_number =
+          rocksdb_settings->max_write_buffer_number;
       node_mem_limit = rocksdb_settings_->memtable_size_per_node;
       if (rocksdb_settings_->ld_managed_flushes) {
         ld_error("Cannot manage flushing memtable within logdevice because, %s",
@@ -201,6 +203,8 @@ RocksDBLogStoreConfig::RocksDBLogStoreConfig(
       } else {
         ld_info("LD not managing flushing of memtables to sst.");
       }
+    } else {
+      ld_info("LD manages flushes and all memory budgets on the node.");
     }
 
     if (rocksdb_settings_->db_write_buffer_size == 0) {

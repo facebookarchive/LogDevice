@@ -387,18 +387,17 @@ class RocksDBLogStoreBase : public LocalLogStore {
   // returns nullptr if the column family was not found.
   RocksDBCFPtr getColumnFamilyPtr(uint32_t column_family_id);
 
-  // Invoked when RocksDB decides to flush memtables of column families in this
-  // db.
-  // Returns the array of all column families that need to be
-  // flushed and the order in which they should be flushed. Return value is a
-  // two-dimensional array, where first dimension tells what column families
-  // should be flushed on a single thread. Hence, each element in first
-  // dimension of array can be flushed in parallel on different threads. Second
-  // dimension indicates in what order the column families need to be flushed on
-  // a single thread.
-  virtual std::vector<std::vector<uint32_t>>
-  onMemtableFlushBegin(std::vector<uint32_t> /*unused*/) {
-    return {};
+  void throttleIOIfNeeded(WriteBufStats buf_stats,
+                          uint64_t per_shard_active_flush_trigger,
+                          uint64_t max_memtable_size_trigger,
+                          uint64_t per_shard_active_low_watermark) override;
+
+  WriteThrottleState getWriteThrottleState() override {
+    return write_throttle_state_.load();
+  }
+
+  void setFlushThreadCV(std::condition_variable* cv) {
+    flush_thread_cv_ = cv;
   }
 
  protected:
@@ -528,7 +527,15 @@ class RocksDBLogStoreBase : public LocalLogStore {
   // adviseUnstallingLowPriWrites() after this value changes from true to false.
   // This will wake up the stalled writers and make them call this method again.
   virtual bool shouldStallLowPriWrites() {
-    return isFlushInProgress();
+    auto cur_state = getWriteThrottleState();
+    return cur_state == WriteThrottleState::STALL_LOW_PRI_WRITE ||
+        cur_state == WriteThrottleState::REJECT_WRITE;
+  }
+
+  virtual void wakeupFlushThread() {
+    if (flush_thread_cv_) {
+      flush_thread_cv_->notify_all();
+    }
   }
 
   std::unique_ptr<rocksdb::DB> db_;
@@ -556,6 +563,10 @@ class RocksDBLogStoreBase : public LocalLogStore {
 
   std::atomic<bool> low_watermark_crossed_{false};
 
+  // This state throttles writes as memory consumption goes beyond limit.
+  std::atomic<WriteThrottleState> write_throttle_state_{
+      WriteThrottleState::NONE};
+
   RocksDBLogStoreConfig rocksdb_config_;
 
   // Contains references to all the column family handles within this
@@ -582,6 +593,9 @@ class RocksDBLogStoreBase : public LocalLogStore {
   std::mutex stall_cv_mutex_; // only needed for stall_cv_
   std::condition_variable stall_cv_;
   std::shared_ptr<RocksDBMemTableRepFactory> mtr_factory_;
+
+  // ShardedLocalLogStore flusher thread cv.
+  std::condition_variable* flush_thread_cv_{nullptr};
 
   // Adds a rocksdb::EventListener that is used for unstalling writes when
   // a flush finishes.

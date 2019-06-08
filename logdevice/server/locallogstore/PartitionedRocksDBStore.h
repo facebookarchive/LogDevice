@@ -1678,6 +1678,9 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
   // Options used for data partitions
   rocksdb::ColumnFamilyOptions data_cf_options_;
 
+  // bytes written since last flush evaluation
+  std::atomic<uint64_t> bytes_written_since_flush_eval_{0};
+
   // Processor is needed to:
   //  - update trim points when dropping partitions,
   //  - get trimming policy from config.

@@ -121,7 +121,11 @@ CHECK_NODE_HEALTH_onReceived(CHECK_NODE_HEALTH_Message* msg,
     }
   }
 
-  if (worker->getStorageTaskQueueForShard(header.shard_idx)->isOverloaded()) {
+  if (worker->getStorageTaskQueueForShard(header.shard_idx)->isOverloaded() ||
+      sharded_pool->getByIndex(header.shard_idx)
+              .getLocalLogStore()
+              .getWriteThrottleState() ==
+          LocalLogStore::WriteThrottleState::REJECT_WRITE) {
     sendReply(E::OVERLOADED, header, from);
     return Message::Disposition::NORMAL;
   }

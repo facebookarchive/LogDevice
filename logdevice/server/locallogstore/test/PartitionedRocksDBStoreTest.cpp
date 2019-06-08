@@ -206,16 +206,20 @@ class TestPartitionedRocksDBStore : public PartitionedRocksDBStore {
     return p;
   }
 
-  // Fake rocksdb flush condition for unit tests.
-  bool shouldStallLowPriWrites() override {
-    if (!is_flush_in_progress_) {
-      return PartitionedRocksDBStore::shouldStallLowPriWrites();
+  // Fake throttle state for unit tests.
+  virtual LocalLogStore::WriteThrottleState getWriteThrottleState() override {
+    if (!get_write_throttle_state) {
+      return PartitionedRocksDBStore::getWriteThrottleState();
     }
-    return is_flush_in_progress_();
+    return get_write_throttle_state();
   }
 
   void adviseUnstallingLowPriWrites(bool never_stall) override {
     PartitionedRocksDBStore::adviseUnstallingLowPriWrites(never_stall);
+  }
+
+  void wakeupFlushThread() override {
+    flush_thread_wakeups_++;
   }
 
   bool flushMetadataMemtables(bool wait = true) {
@@ -233,7 +237,9 @@ class TestPartitionedRocksDBStore : public PartitionedRocksDBStore {
   std::future<void> compaction_stall_future_;
 
   SystemTimestamp* time_;
-  std::function<bool()> is_flush_in_progress_{nullptr};
+  std::function<LocalLogStore::WriteThrottleState()> get_write_throttle_state{
+      nullptr};
+  size_t flush_thread_wakeups_{0};
 };
 
 using filter_history_t = std::vector<std::pair<std::string, std::string>>;
@@ -9048,12 +9054,13 @@ TEST_F(PartitionedRocksDBStoreTest, StallLowPriWritesShutdownTest) {
   // Skip call to unstall low priority writes when invoked for the first time.
   auto unstall = false;
   auto thread_unstalled = false;
-  store_->is_flush_in_progress_ = [&]() {
+  store_->get_write_throttle_state = [&]() {
     if (unstall) {
       store_->adviseUnstallingLowPriWrites(/*never_stall*/ true);
       thread_unstalled = true;
+      return LocalLogStore::WriteThrottleState::NONE;
     }
-    return true;
+    return LocalLogStore::WriteThrottleState::STALL_LOW_PRI_WRITE;
   };
 
   EXPECT_TRUE(store_->shouldStallLowPriWrites());
@@ -10107,4 +10114,21 @@ TEST_F(PartitionedRocksDBStoreTest, TestClampBacklog) {
 
   it->seek(1);
   ASSERT_EQ(IteratorState::AT_END, it->state());
+}
+
+// Try to push write enough data to cause a wakeup. Force evaluation and try
+// again.
+TEST_F(PartitionedRocksDBStoreTest, CallForEarlyFlushEvaluation) {
+  updateSetting("rocksdb-bytes-written-since-flush-eval-trigger", "100");
+  std::string data(101, 'a');
+  store_->flush_thread_wakeups_ = 0;
+  put({TestRecord(logid_t(1), 1, BASE_TIME, data)});
+  EXPECT_EQ(store_->flush_thread_wakeups_, 1);
+  // Clear the counter.
+  store_->scheduleWriteBufFlush(1000 /* total_active_flush_trigger */,
+                                1000 /* max_buffer_flush_trigger */,
+                                1000 /* total_active_low_watermark */);
+  // Add another record.
+  put({TestRecord(logid_t(1), 2, BASE_TIME, data)});
+  EXPECT_EQ(store_->flush_thread_wakeups_, 2);
 }

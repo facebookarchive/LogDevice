@@ -92,6 +92,10 @@ class ShardedRocksDBLocalLogStore : public ShardedLocalLogStore {
 
   void setShardedStorageThreadPool(const ShardedStorageThreadPool*);
 
+  void wakeupFlushThread() {
+    flush_thread_cv_.notify_all();
+  }
+
   struct DiskShardMappingEntry {
     // Canonical path to one of the shards.  The path can be used to find the
     // free space on the device.
@@ -187,6 +191,8 @@ class ShardedRocksDBLocalLogStore : public ShardedLocalLogStore {
   // all shards.
   void flusherThreadBody();
   std::thread flusher_thread_;
+  std::mutex flush_thread_mutex_;
+  std::condition_variable flush_thread_cv_;
 };
 
 }} // namespace facebook::logdevice

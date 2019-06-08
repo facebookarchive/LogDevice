@@ -86,6 +86,7 @@ class WriteBatchStorageTask : public StorageTask {
   tryGetWriteBatch(size_t max_count, size_t max_bytes);
   virtual std::unique_ptr<WriteStorageTask> tryGetWrite();
   virtual int writeMulti(const std::vector<const WriteOp*>& write_ops);
-  virtual void stallIfNeeded();
+  // Returns true if entire tasks will be rejected.
+  virtual bool throttleIfNeeded();
 };
 }} // namespace facebook::logdevice

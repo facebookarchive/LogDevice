@@ -51,7 +51,7 @@ enum class StorageTaskThreadType : uint8_t {
   // despite logdevice-side stalling of the FAST_STALLABLE writes.
   // Main use is writing records from Appenders.
   FAST_TIME_SENSITIVE = 2,
-  // These threads execute mostly metadata operations (w/ few execeptions of
+  // These threads execute mostly metadata operations (w/ few exceptions of
   // data operations related to log recovery), which are usually of
   // higher priority than tasks in SLOW threads.
   DEFAULT = 3,

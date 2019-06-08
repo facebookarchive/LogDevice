@@ -42,6 +42,7 @@
 #include "logdevice/server/locallogstore/RocksDBKeyFormat.h"
 #include "logdevice/server/locallogstore/RocksDBListener.h"
 #include "logdevice/server/locallogstore/RocksDBMemTableRep.h"
+#include "logdevice/server/locallogstore/ShardedRocksDBLocalLogStore.h"
 #include "logdevice/server/locallogstore/WriteOps.h"
 #include "logdevice/server/read_path/LogStorageStateMap.h"
 #include "logdevice/server/storage/LocalLogStoreUtils.h"
@@ -2760,6 +2761,8 @@ int PartitionedRocksDBStore::writeMultiImpl(
   const bool skip_rebuilding = getRebuildingSettings()->read_only ==
       RebuildingReadOnlyOption::ON_RECIPIENT;
 
+  auto total_payload_size_bytes = 0;
+
   // Writes and clears rocksdb_batch. Used for flushing directory updates
   // between calls to getWritePartition() for the same log.
   // Note: Partition timestamp updates can be flushed as part of this. Make sure
@@ -3026,6 +3029,7 @@ int PartitionedRocksDBStore::writeMultiImpl(
         }
 
         if (write->getType() == WriteType::PUT) {
+          total_payload_size_bytes += payload_size_bytes;
           // Maybe update partition metadata.
           auto update_task = updatePartitionTimestampsIfNeeded(
               partition, timestamp.value(), wal_batch);
@@ -3112,6 +3116,19 @@ int PartitionedRocksDBStore::writeMultiImpl(
   auto timestamp_wal_flush_token = maxWALSyncToken();
   auto now = currentSteadyTime();
   auto max_flush_token = maxFlushToken();
+  auto total_bytes_written =
+      bytes_written_since_flush_eval_.fetch_add(total_payload_size_bytes);
+
+  if (total_bytes_written + total_payload_size_bytes >
+      getSettings()->bytes_written_since_flush_eval_trigger) {
+    RATELIMIT_INFO(std::chrono::seconds(10),
+                   1,
+                   "Shard: %d: waking up flusher thread. Bytes written since "
+                   "last evaluation: %.3fM",
+                   getShardIdx(),
+                   total_bytes_written / 1e6);
+    wakeupFlushThread();
+  }
 
   // Go over all the holders and mark that write finished on the partition.
   for (auto& cf_ptr : cf_ptrs) {
@@ -6151,7 +6168,7 @@ operator()(LocalLogStore* store, FlushToken token) const {
   auto s = static_cast<PartitionedRocksDBStore*>(store);
 
   ld_check(!s->getSettings()->read_only);
-  Processor* processor = s->processor_.load();
+  ServerProcessor* processor = s->processor_.load();
 
   if (!processor) {
     // We're not fully initialized yet.
@@ -6162,6 +6179,11 @@ operator()(LocalLogStore* store, FlushToken token) const {
   auto serverInstanceId = processor->getServerInstanceId();
   uint32_t shardIdx = store->getShardIdx();
 
+  // Check if there is a need to wake up flusher thread to reevaluate the
+  // stalling and rejection condition.
+  if (s->shouldStallLowPriWrites()) {
+    s->wakeupFlushThread();
+  }
   // Don't send flush notifications if donors do not rely on them.
   if (processor->settings()->rebuilding_dont_wait_for_flush_callbacks) {
     return;
@@ -6240,6 +6262,9 @@ LocalLogStore::WriteBufStats PartitionedRocksDBStore::scheduleWriteBufFlush(
     buf_stats.err = E::SHUTDOWN;
     return buf_stats;
   }
+  // Reset bytes_written to avoid unnecessary wake ups.
+  bytes_written_since_flush_eval_.store(0);
+
   folly::stop_watch<std::chrono::milliseconds> watch;
   SteadyTimestamp now = currentSteadyTime();
   auto partitions = partitions_.getVersion();

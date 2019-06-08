@@ -1002,12 +1002,14 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init("rocksdb-bytes-written-since-flush-trigger",
-       &bytes_written_since_flush_trigger,
-       "0",
-       parse_nonnegative<ssize_t>(),
-       "The maximum amount of buffered writes which will be accumulated before "
-       "write data is flushed to stable storage. 0 disables the trigger",
+  init("rocksdb-bytes-written-since-flush-eval-trigger",
+       &bytes_written_since_flush_eval_trigger,
+       "100M",
+       parse_memory_budget(),
+       "The maximum amount of buffered writes allowed before a forced flush "
+       "evaluation is triggered. This helps to avoid condition where too many "
+       "writes come in for a shard, while flush thread is sleeping and we go "
+       "over memory budget.",
        SERVER,
        SettingsCategory::RocksDB);
 
@@ -1229,7 +1231,12 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        &max_write_buffer_number,
        "2",
        parse_positive<ssize_t>(),
-       "maximum number of concurrent write buffers",
+       "maximum number of concurrent write buffers getting flushed. Rocksdb "
+       "stalls writes to the column family, on reaching this many flushed "
+       "memtables. If ld_managed_flushes is true, this setting is ignored, and "
+       "rocksdb is instructed to not stall writes, write throttling is done by "
+       "LD based on shard memory consumption rather than number of memtables "
+       "pending flush.",
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
@@ -1396,6 +1403,17 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::RocksDB);
 
+  init("rocksdb-low-pri-write-stall-threshold-percent",
+       &low_pri_write_stall_threshold_percent,
+       "50",
+       nullptr,
+       "Node stalls rebuilding stores when sum of unflushed memory size and "
+       "active memory size is above per shard memory limit, and active memory "
+       "size goes beyond low_pri_write_stall_threshold_percent of per shard "
+       "memory limit.",
+       SERVER,
+       SettingsCategory::RocksDB);
+
   init("rocksdb-arena-block-size",
        &arena_block_size,
        "4194304",
@@ -1457,7 +1475,9 @@ rocksdb::Options RocksDBSettings::toRocksDBOptions() const {
   options.max_background_flushes = max_background_flushes;
   options.max_bytes_for_level_base = max_bytes_for_level_base;
   options.max_bytes_for_level_multiplier = max_bytes_for_level_multiplier;
-  options.max_write_buffer_number = max_write_buffer_number;
+  // Disable stalling within rocksdb if ld_managed_flushes is enabled.
+  options.max_write_buffer_number =
+      partitioned && ld_managed_flushes ? 100 : max_write_buffer_number;
   options.num_levels = num_levels;
   options.target_file_size_base = target_file_size_base;
   // For LD managed flushes we set memory limit for the node and memtable within

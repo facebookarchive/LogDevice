@@ -148,7 +148,9 @@ class MockWriteBatchStorageTask : public WriteBatchStorageTask {
     return 0;
   }
 
-  void stallIfNeeded() override {}
+  bool throttleIfNeeded() override {
+    return false;
+  }
 
   std::unique_ptr<WriteStorageTask> tryGetWrite() override {
     if (queue_.empty()) {

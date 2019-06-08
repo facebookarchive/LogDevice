@@ -189,6 +189,62 @@ bool RocksDBLogStoreBase::isFlushInProgress() {
 #endif
 }
 
+void RocksDBLogStoreBase::throttleIOIfNeeded(
+    WriteBufStats buf_stats,
+    uint64_t per_shard_active_flush_trigger,
+    uint64_t /* max_memtable_size_trigger */,
+    uint64_t /* per_shard_active_low_watermark */) {
+  auto state_to_str = [](LocalLogStore::WriteThrottleState st) {
+    switch (st) {
+      case LocalLogStore::WriteThrottleState::NONE:
+        return "NONE";
+      case LocalLogStore::WriteThrottleState::STALL_LOW_PRI_WRITE:
+        return "STALL_LOW_PRI_WRITE";
+      case LocalLogStore::WriteThrottleState::REJECT_WRITE:
+        return "REJECT_WRITE";
+    }
+    ld_check(false);
+    return "invalid";
+  };
+
+  auto new_state = WriteThrottleState::NONE;
+  // Logic that throttles write IO if memory consumption is beyond limits.
+  if (buf_stats.active_memory_usage + buf_stats.memory_being_flushed >=
+      per_shard_active_flush_trigger) {
+    // Check if active memory threshold is above write stall threshold.
+    new_state = buf_stats.active_memory_usage > per_shard_active_flush_trigger *
+                getSettings()->low_pri_write_stall_threshold_percent / 100
+        ? LocalLogStore::WriteThrottleState::STALL_LOW_PRI_WRITE
+        : LocalLogStore::WriteThrottleState::NONE;
+
+    // If sum of active memory usage and amount of memory being flushed goes
+    // above two times per shard limit, start rejecting writes. This will also
+    // stall low priority writes.
+    new_state =
+        buf_stats.active_memory_usage + buf_stats.memory_being_flushed >=
+            2 * per_shard_active_flush_trigger
+        ? LocalLogStore::WriteThrottleState::REJECT_WRITE
+        : new_state;
+  }
+
+  auto prev_state = write_throttle_state_.exchange(new_state);
+  if (prev_state != new_state) {
+    auto status_str = [&] {
+      return folly::sformat("Shard {}: transitioned from state {} to {}",
+                            getShardIdx(),
+                            state_to_str(prev_state),
+                            state_to_str(new_state));
+    };
+
+    if (new_state == LocalLogStore::WriteThrottleState::REJECT_WRITE ||
+        prev_state == LocalLogStore::WriteThrottleState::REJECT_WRITE) {
+      ld_info("%s", status_str().c_str());
+    } else {
+      RATELIMIT_INFO(std::chrono::seconds(10), 1, "%s", status_str().c_str());
+    }
+  }
+}
+
 void RocksDBLogStoreBase::adviseUnstallingLowPriWrites(
     bool dont_stall_anymore) {
   if (dont_stall_anymore) {

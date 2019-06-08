@@ -232,6 +232,11 @@ ShardedRocksDBLocalLogStore::ShardedRocksDBLocalLogStore(
         bool enable_tracing = settings.trace_all_db_shards ||
             shard_idx == settings.trace_db_shard;
         shard_store->setTracingEnabled(enable_tracing);
+        auto rocksdb_store =
+            checked_downcast<RocksDBLogStoreBase*>(shard_store.get());
+        if (rocksdb_store) {
+          rocksdb_store->setFlushThreadCV(&flush_thread_cv_);
+        }
       } else {
         PER_SHARD_STAT_INCR(stats_, failing_log_stores, shard_idx);
         shard_store.reset(new FailingLocalLogStore());
@@ -292,6 +297,7 @@ ShardedRocksDBLocalLogStore::~ShardedRocksDBLocalLogStore() {
 
   // Join flusher thread before destroying shards.
   if (flusher_thread_.joinable()) {
+    wakeupFlushThread();
     flusher_thread_.join();
   }
 
@@ -772,6 +778,8 @@ void ShardedRocksDBLocalLogStore::onSettingsUpdated() {
     }
     rocksdb_shard->onSettingsUpdated(db_settings_.get());
   }
+  // flush_trigger_check_interval might have changed. Wake up flusher thread.
+  wakeupFlushThread();
 }
 
 void ShardedRocksDBLocalLogStore::flusherThreadBody() {
@@ -791,7 +799,8 @@ void ShardedRocksDBLocalLogStore::flusherThreadBody() {
   do {
     auto now = SteadyTimestamp::now();
     if (next_flush_time > now) {
-      shutdown_event_.waitFor(next_flush_time - now);
+      std::unique_lock<std::mutex> lock(flush_thread_mutex_);
+      flush_thread_cv_.wait_until(lock, next_flush_time.timePoint());
     } else {
       next_flush_time = now;
     }
@@ -841,6 +850,11 @@ void ShardedRocksDBLocalLogStore::flusherThreadBody() {
         if (i + 1 < shards_.size()) {
           ss << ", ";
         }
+
+        shards_[i]->throttleIOIfNeeded(buf_stats,
+                                       per_shard_active_flush_trigger,
+                                       max_memtable_size_trigger,
+                                       per_shard_active_flush_trigger);
       }
     }
     ss << " ]";

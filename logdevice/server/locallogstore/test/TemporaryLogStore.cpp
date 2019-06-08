@@ -43,6 +43,10 @@ void TemporaryLogStore::stallLowPriWrite() {
   db_->stallLowPriWrite();
 }
 
+LocalLogStore::WriteThrottleState TemporaryLogStore::getWriteThrottleState() {
+  return db_->getWriteThrottleState();
+}
+
 void TemporaryLogStore::adviseUnstallingLowPriWrites(bool never_stall) {
   db_->adviseUnstallingLowPriWrites(never_stall);
 }
@@ -198,6 +202,17 @@ TemporaryLogStore::scheduleWriteBufFlush(uint64_t total_active_flush_trigger,
   return db_->scheduleWriteBufFlush(total_active_flush_trigger,
                                     max_buffer_flush_trigger,
                                     total_active_low_watermark);
+}
+
+void TemporaryLogStore::throttleIOIfNeeded(
+    WriteBufStats buf_stats,
+    uint64_t total_active_flush_trigger,
+    uint64_t max_buffer_flush_trigger,
+    uint64_t total_active_low_watermark) {
+  db_->throttleIOIfNeeded(buf_stats,
+                          total_active_flush_trigger,
+                          max_buffer_flush_trigger,
+                          total_active_low_watermark);
 }
 
 Status TemporaryLogStore::acceptingWrites() const {

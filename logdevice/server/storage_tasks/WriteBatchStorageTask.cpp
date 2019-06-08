@@ -44,7 +44,7 @@ void WriteBatchStorageTask::execute() {
 
   // Yield to higher-pri tasks if needed. Since this can take a few seconds
   // or even minutes, this is done before checking timeouts and preemption.
-  stallIfNeeded();
+  auto reject_writes = throttleIfNeeded();
   auto& io_fault_injection = IOFaultInjection::instance();
   auto fault =
       io_fault_injection.getInjectedFault(reply_shard_idx_,
@@ -61,6 +61,15 @@ void WriteBatchStorageTask::execute() {
   std::vector<const WriteOp*> write_ops;
   write_ops.reserve(ntasks * 2); // expect at most 2 write ops per task
   for (auto& write : writes) {
+    if (reject_writes) {
+      // Drop write if the store cannot keep up with incoming rate.
+      write->status_ = E::DROPPED;
+      sendBackToWorker(std::move(write));
+
+      ld_check(!write);
+      continue;
+    }
+
     if (write->isTimedout()) {
       // drop timedout write
       write->status_ = E::TIMEDOUT;
@@ -162,12 +171,23 @@ void WriteBatchStorageTask::execute() {
   // StorageThread will send back the response for *this
 }
 
-void WriteBatchStorageTask::stallIfNeeded() {
+bool WriteBatchStorageTask::throttleIfNeeded() {
   auto& store = storageThreadPool_->getLocalLogStore();
+  auto writes_throttle_state = store.getWriteThrottleState();
+  if (writes_throttle_state == LocalLogStore::WriteThrottleState::NONE) {
+    return false;
+  }
+
   if (thread_type_ == StorageTask::ThreadType::FAST_STALLABLE &&
       storageThreadPool_->writeStallingEnabled()) {
     store.stallLowPriWrite();
+    return false;
   }
+
+  // For other thread types, reject the write if throttle state asks us to do
+  // so.
+  return writes_throttle_state ==
+      LocalLogStore::WriteThrottleState::REJECT_WRITE;
 }
 
 void WriteBatchStorageTask::onDone() {}

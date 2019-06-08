@@ -55,6 +55,7 @@ class TemporaryLogStore : public LocalLogStore {
   // LocalLogStore interface
   //
   void stallLowPriWrite() override;
+  WriteThrottleState getWriteThrottleState() override;
   void adviseUnstallingLowPriWrites(bool never_stall = false) override;
   int writeMulti(const std::vector<const WriteOp*>& writes,
                  const WriteOptions& options = WriteOptions()) override;
@@ -148,6 +149,11 @@ class TemporaryLogStore : public LocalLogStore {
   scheduleWriteBufFlush(uint64_t total_active_flush_trigger,
                         uint64_t max_buffer_flush_trigger,
                         uint64_t total_active_low_watermark) override;
+
+  void throttleIOIfNeeded(WriteBufStats buf_stats,
+                          uint64_t total_active_flush_trigger,
+                          uint64_t max_buffer_flush_trigger,
+                          uint64_t total_active_low_watermark) override;
 
  protected:
   factory_func_t factory_;
