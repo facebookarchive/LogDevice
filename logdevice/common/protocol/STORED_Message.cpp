@@ -378,17 +378,7 @@ void STORED_Message::createAndSend(const STORED_Header& header,
       std::unique_ptr<Request> send_stored =
           std::make_unique<SendSTOREDRequest>(
               std::move(msg), send_to, target_worker.second);
-      int rv = worker->processor_->postRequest(send_stored);
-      if (rv != 0) {
-        RATELIMIT_INFO(std::chrono::seconds(1),
-                       10,
-                       "Failed to post a SendSTOREDRequest for %s (wave %u) "
-                       "for final delivery to %s: %s",
-                       header.rid.toString().c_str(),
-                       header.wave,
-                       Sender::describeConnection(Address(send_to)).c_str(),
-                       error_description(err));
-      }
+      worker->processor_->postImportant(send_stored);
     }
   }
 }
