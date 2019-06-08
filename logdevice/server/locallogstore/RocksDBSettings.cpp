@@ -763,20 +763,6 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::LogsDB);
 
-  init("rocksdb-stall-cache-ttl",
-       &stall_cache_ttl_,
-       "100ms",
-       [](std::chrono::milliseconds val) {
-         if (val.count() <= 0) {
-           throw boost::program_options::error(
-               "value of --rocksdb-stall-cache-ttl must be positive; " +
-               std::to_string(val.count()) + "ms given.");
-         }
-       },
-       "How often to re-check whether we should stall low-pri writes",
-       SERVER,
-       SettingsCategory::ResourceManagement);
-
   init("rocksdb-allow-fallocate",
        &allow_fallocate,
        "true",
@@ -1026,7 +1012,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
 
   init("rocksdb-bytes-written-since-throttle-eval-trigger",
        &bytes_written_since_throttle_eval_trigger,
-       "100M",
+       "20M",
        parse_memory_budget(),
        "The maximum amount of buffered writes allowed before a forced "
        "throttling evaluation is triggered. This helps to avoid condition "
@@ -1414,6 +1400,18 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::RocksDB);
 
+  init("rocksdb-pinned-memtables-limit-percent",
+       &pinned_memtables_limit_percent,
+       "50",
+       nullptr,
+       "Memory budget for flushed memtables pinned by iterators, as percentage "
+       "of --rocksdb-memtable-size-per-node. More precisely, each shard will "
+       "reject writes if its total memtable size (active+flushing+pinned) is "
+       "greater than rocksdb-memtable-size-per-node/num-shards*"
+       "(1 + rocksdb-pinned-memtables-limit-percent/100)",
+       SERVER,
+       SettingsCategory::LogsDB);
+
   init("rocksdb-arena-block-size",
        &arena_block_size,
        "4194304",
@@ -1438,6 +1436,17 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        "input and output files).",
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
+
+  init("rocksdb-print-details",
+       &print_details,
+       "false",
+       nullptr,
+       "If true, print information about each flushed memtable and each "
+       "partial compaction. It's not very spammy, an event every few seconds "
+       "at most. The same events are also always logged by rocksdb to LOG "
+       "file, but with fewer logdevice-specific details.",
+       SERVER,
+       SettingsCategory::LogsDB);
 
   init("rocksdb-test-clamp-backlog",
        &test_clamp_backlog,

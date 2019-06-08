@@ -861,7 +861,7 @@ bool PartitionedRocksDBStore::open(
           logdevice::toString(range_meta).c_str());
 
   if (!getSettings()->read_only && !range_meta.empty()) {
-    status = writer_->writeBatch(rocksdb::WriteOptions(), &partition_updates);
+    status = writeBatch(rocksdb::WriteOptions(), &partition_updates);
     if (!status.ok()) {
       return false;
     }
@@ -1428,7 +1428,7 @@ bool PartitionedRocksDBStore::convertDataKeyFormat() {
       return true;
     }
     rocksdb::WriteOptions options;
-    auto status = writer_->writeBatch(options, &batch);
+    auto status = writeBatch(options, &batch);
     if (!status.ok()) {
       ld_error(
           "Failed to write converted records: %s", status.ToString().c_str());
@@ -2418,6 +2418,34 @@ int PartitionedRocksDBStore::findKey(logid_t log_id,
   return findkey.execute(lo, hi);
 }
 
+rocksdb::Status
+PartitionedRocksDBStore::writeBatch(const rocksdb::WriteOptions& options,
+                                    rocksdb::WriteBatch* batch) {
+  uint64_t batch_size = batch->GetDataSize();
+  uint64_t total_bytes_written =
+      bytes_written_since_flush_eval_.fetch_add(batch_size);
+  size_t throttling_reeval_trigger =
+      getSettings()->bytes_written_since_throttle_eval_trigger;
+
+  if ((total_bytes_written + batch_size) / throttling_reeval_trigger >
+      total_bytes_written / throttling_reeval_trigger) {
+    RATELIMIT_INFO(std::chrono::seconds(10),
+                   2,
+                   "Shard: %d: reevaluating throttling. Bytes written since "
+                   "last evaluation: %.3fM",
+                   getShardIdx(),
+                   total_bytes_written / 1e6);
+    std::lock_guard<std::mutex> lock(throttle_eval_mutex_);
+    auto extrapolated_buf_stats = last_flush_eval_stats_;
+    extrapolated_buf_stats.active_memory_usage +=
+        total_bytes_written + batch_size;
+    throttleIOIfNeeded(extrapolated_buf_stats,
+                       getSettings()->memtable_size_per_node / num_shards_);
+  }
+
+  return RocksDBLogStoreBase::writeBatch(options, batch);
+}
+
 void PartitionedRocksDBStore::findPartitionsMatchingIntervals(
     RecordTimeIntervals& rtis,
     std::function<void(PartitionPtr, RecordTimeInterval)> cb,
@@ -2769,8 +2797,6 @@ int PartitionedRocksDBStore::writeMultiImpl(
   const bool skip_rebuilding = getRebuildingSettings()->read_only ==
       RebuildingReadOnlyOption::ON_RECIPIENT;
 
-  auto total_payload_size_bytes = 0;
-
   // Writes and clears rocksdb_batch. Used for flushing directory updates
   // between calls to getWritePartition() for the same log.
   // Note: Partition timestamp updates can be flushed as part of this. Make sure
@@ -2781,7 +2807,7 @@ int PartitionedRocksDBStore::writeMultiImpl(
     rocksdb::WriteOptions rocksdb_options;
     for (auto* batch : {&wal_batch, &mem_batch}) {
       if (batch->Count()) {
-        auto status = writer_->writeBatch(rocksdb_options, batch);
+        auto status = writeBatch(rocksdb_options, batch);
         if (!status.ok()) {
           ld_error("Failed to write directory updates to RocksDB: %s",
                    status.ToString().c_str());
@@ -3037,7 +3063,6 @@ int PartitionedRocksDBStore::writeMultiImpl(
         }
 
         if (write->getType() == WriteType::PUT) {
-          total_payload_size_bytes += payload_size_bytes;
           // Maybe update partition metadata.
           auto update_task = updatePartitionTimestampsIfNeeded(
               partition, timestamp.value(), wal_batch);
@@ -3124,27 +3149,6 @@ int PartitionedRocksDBStore::writeMultiImpl(
   auto timestamp_wal_flush_token = maxWALSyncToken();
   auto now = currentSteadyTime();
   auto max_flush_token = maxFlushToken();
-  auto total_bytes_written =
-      bytes_written_since_flush_eval_.fetch_add(total_payload_size_bytes);
-  size_t throttling_reeval_trigger =
-      getSettings()->bytes_written_since_throttle_eval_trigger;
-
-  if ((total_bytes_written + total_payload_size_bytes) /
-          throttling_reeval_trigger >
-      total_bytes_written / throttling_reeval_trigger) {
-    RATELIMIT_INFO(std::chrono::seconds(10),
-                   2,
-                   "Shard: %d: reevaluating throttling. Bytes written since "
-                   "last evaluation: %.3fM",
-                   getShardIdx(),
-                   total_bytes_written / 1e6);
-    std::lock_guard<std::mutex> lock(throttle_eval_mutex_);
-    auto extrapolated_buf_stats = last_flush_eval_stats_;
-    extrapolated_buf_stats.active_memory_usage +=
-        total_bytes_written + total_payload_size_bytes;
-    throttleIOIfNeeded(extrapolated_buf_stats,
-                       getSettings()->memtable_size_per_node / num_shards_);
-  }
 
   // Go over all the holders and mark that write finished on the partition.
   for (auto& cf_ptr : cf_ptrs) {
@@ -3342,7 +3346,7 @@ int PartitionedRocksDBStore::writeMultiImpl(
         PartitionPtr& partition = dpd.first;
         writePartitionDirtyState(partition, dirty_batch);
       }
-      auto status = writer_->writeBatch(rocksdb::WriteOptions(), &dirty_batch);
+      auto status = writeBatch(rocksdb::WriteOptions(), &dirty_batch);
       if (!status.ok()) {
         // Should have entered fail-safe mode. Fail all writes.
         ld_check_in(acceptingWrites(), ({E::DISABLED, E::NOSPC}));
@@ -3917,7 +3921,7 @@ int PartitionedRocksDBStore::modifyUnderReplicatedTimeRange(
     err = E::FAILED;
     return -1;
   }
-  auto status = writer_->writeBatch(rocksdb::WriteOptions(), &dirty_batch);
+  auto status = writeBatch(rocksdb::WriteOptions(), &dirty_batch);
   if (!status.ok()) {
     ld_error("Failed to write partition dirty data for shard %u: %s",
              getShardIdx(),
@@ -4049,6 +4053,8 @@ bool PartitionedRocksDBStore::PartialCompactionEvaluator::evaluateAll(
         ld_check_lt(file_offset, candidate.metadata->levels[0].files.size());
         p.partial_compaction_filenames.push_back(
             candidate.metadata->levels[0].files[file_offset].name);
+        p.partial_compaction_file_sizes.push_back(
+            candidate.metadata->levels[0].files[file_offset].size);
       }
       idx.emplace(candidate.partition_offset, candidate);
       out_to_compact->push_back(std::move(p));
@@ -4659,12 +4665,50 @@ void PartitionedRocksDBStore::performCompactionInternal(
       last_compacted = std::to_string(ago_seconds.count()) + " seconds ago";
     }
 
-    ld_log((partial && partition_id < latest_.get()->id_) ? dbg::Level::DEBUG
-                                                          : dbg::Level::INFO,
-           "Starting %spartial compaction of partition %lu, reason: %s, "
+    std::string partial_info;
+    if (partial) {
+      partial_info += " (files [";
+      for (size_t i = 0; i < to_compact.partial_compaction_filenames.size();
+           ++i) {
+        if (i) {
+          partial_info += ", ";
+        }
+        const std::string& name = to_compact.partial_compaction_filenames[i];
+        // Turn "/129171.sst" into "129171".
+        std::string short_name;
+        {
+          size_t suf = 0; // how much to cut at end
+          if (name.size() >= 4 &&
+              name.compare(name.size() - 4, 4, ".sst") == 0) {
+            suf = 4;
+          }
+          size_t pref = name.find_last_of('/'); // how much to cut at beginning
+          if (pref == std::string::npos) {
+            pref = 0;
+          } else {
+            ++pref;
+          }
+          short_name = name.substr(pref, name.size() - pref - suf);
+        }
+        folly::format(&partial_info,
+                      "{}: {:.3f} MB",
+                      short_name.c_str(),
+                      to_compact.partial_compaction_file_sizes[i] / 1e6);
+      }
+      partial_info += "])";
+    }
+
+    ld_log((partial && partition_id < latest_.get()->id_ &&
+            !getSettings()->print_details)
+               ? dbg::Level::DEBUG
+               : dbg::Level::INFO,
+           "Starting %spartial compaction%s of partition %lu (%.3f MB), "
+           "reason: %s, "
            "last compacted: %s, shard %u",
            partial ? "" : "non-",
+           partial_info.c_str(),
            partition_id,
+           getApproximatePartitionSize(to_compact.partition->cf_->get()) / 1e6,
            PartitionToCompact::reasonNames()[to_compact.reason].c_str(),
            last_compacted.c_str(),
            shard_idx_);
@@ -4952,7 +4996,7 @@ void PartitionedRocksDBStore::cleanUpDirectory(
       return true;
     }
     rocksdb::WriteOptions options;
-    auto status = writer_->writeBatch(options, &batch);
+    auto status = writeBatch(options, &batch);
     if (!status.ok()) {
       ld_error(
           "Failed to delete directory entries: %s", status.ToString().c_str());
@@ -5263,7 +5307,7 @@ void PartitionedRocksDBStore::cleanUpPartitionMetadataAfterDrop(
       rocksdb::WriteOptions options;
       rocksdb::WriteBatch batch;
       batch.Delete(metadata_cf_->get(), it.key());
-      writer_->writeBatch(options, &batch);
+      writeBatch(options, &batch);
 
       it.Next();
     }
@@ -5840,9 +5884,11 @@ static void setBGThreadName(const char* pri, shard_index_t shard_idx) {
   ThreadID::set(ThreadID::Type::ROCKSDB, name);
 }
 
-bool PartitionedRocksDBStore::shouldStallLowPriWrites() {
-  return RocksDBLogStoreBase::shouldStallLowPriWrites() ||
-      too_many_partial_compactions_.load();
+LocalLogStore::WriteThrottleState
+PartitionedRocksDBStore::subclassSuggestedThrottleState() {
+  return too_many_partial_compactions_.load()
+      ? WriteThrottleState::STALL_LOW_PRI_WRITE
+      : WriteThrottleState::NONE;
 }
 
 void PartitionedRocksDBStore::hiPriBackgroundThreadRun() {
@@ -5998,7 +6044,7 @@ void PartitionedRocksDBStore::loPriBackgroundThreadRun() {
                 shard_idx_,
                 partial_compactions.size(),
                 max_pending_partial_compactions);
-        adviseUnstallingLowPriWrites();
+        // Note: would be nice to call throttleIOIfNeeded() here.
       } else {
         ld_info("Shard %u: stalling rebuilding writes because the number of "
                 "pending partial compactions is >= %lu.",
@@ -6101,9 +6147,51 @@ void PartitionedRocksDBStore::loPriBackgroundThreadRun() {
   ld_info("Shard %d lo-pri background thread finished", getShardIdx());
 }
 
+static std::string
+toString(const PartitionedRocksDBStore::FlushEvaluator::CFData& d) {
+  std::string r = d.cf->cf_->GetName();
+#define FIELD(f, ch)                                        \
+  if (d.stats.f != 0) {                                     \
+    folly::format(&r, " " ch ":{:.3f}MB", d.stats.f / 1e6); \
+  }
+  FIELD(active_memtable_size, "A");
+  FIELD(immutable_memtable_size, "F");
+  FIELD(pinned_memtable_size, "P");
+#undef FIELD
+  return r;
+}
+
+static std::string toString(const RocksDBLogStoreBase::WriteBufStats& s) {
+  return folly::sformat(
+      "active: {:.3f}MB in {} memtables, flushing: {:.3f}MB, pinned: {:.3f}MB",
+      s.active_memory_usage / 1e6,
+      s.num_active_memtables,
+      s.memory_being_flushed / 1e6,
+      s.pinned_buffer_usage / 1e6);
+}
+
 void PartitionedRocksDBStore::flushBackgroundThreadRun() {
   ld_check(!getSettings()->read_only);
   setBGThreadName("fl", shard_idx_);
+
+  auto update_stats = [&](const WriteBufStats& buf_stats) {
+    PER_SHARD_STAT_SET(stats_,
+                       memtable_size_active,
+                       getShardIdx(),
+                       buf_stats.active_memory_usage);
+    PER_SHARD_STAT_SET(stats_,
+                       memtable_size_flushing,
+                       getShardIdx(),
+                       buf_stats.memory_being_flushed);
+    PER_SHARD_STAT_SET(stats_,
+                       memtable_size_pinned,
+                       getShardIdx(),
+                       buf_stats.pinned_buffer_usage);
+    PER_SHARD_STAT_SET(stats_,
+                       memtable_count_active,
+                       getShardIdx(),
+                       buf_stats.num_active_memtables);
+  };
 
   while (true) {
     backgroundThreadSleep(BackgroundThreadType::FLUSH);
@@ -6124,10 +6212,9 @@ void PartitionedRocksDBStore::flushBackgroundThreadRun() {
     // Check how much was written since last evaluation.
     size_t bytes_since_prev_eval = bytes_written_since_flush_eval_.load();
     if (bytes_since_prev_eval > static_cast<size_t>(1e8)) {
-      ld_info(
-          "At least %.3fMB written to shard %u since last flush evaluation.",
-          bytes_since_prev_eval / 1e6,
-          getShardIdx());
+      ld_info("%.3fMB written to shard %u since last flush evaluation.",
+              bytes_since_prev_eval / 1e6,
+              getShardIdx());
     }
 
     // Collect information about memtables in each column family.
@@ -6160,11 +6247,17 @@ void PartitionedRocksDBStore::flushBackgroundThreadRun() {
     for (auto& partition : *partitions) {
       auto& ds = partition->dirty_state_;
       auto& cf = partition->cf_;
-      if (cf->first_dirtied_time_ != SteadyTimestamp::min()) {
+      auto memtable_stats = getMemTableStats(partition->cf_->get());
+      if (cf->first_dirtied_time_ == SteadyTimestamp::min()) {
+        // RocksDB reports nonzero size of active memtable even if it's empty.
+        // If we know it's empty, override its size to zero.
+        memtable_stats.active_memtable_size = 0;
+      }
+      if (memtable_stats.active_memtable_size != 0 ||
+          memtable_stats.immutable_memtable_size != 0 ||
+          memtable_stats.pinned_memtable_size != 0) {
         FlushEvaluator::CFData cf_data = {
-            partition->cf_,
-            getMemTableStats(partition->cf_->get()),
-            ds.latest_dirty_time};
+            partition->cf_, memtable_stats, ds.latest_dirty_time};
         if (cf_data.stats.active_memtable_size > 0) {
           non_zero_size_cf.push_back(std::move(cf_data));
         }
@@ -6174,7 +6267,7 @@ void PartitionedRocksDBStore::flushBackgroundThreadRun() {
     // Decide what to flush.
     auto to_flush =
         evaluator.pickCFsToFlush(now, metadata_cf_data, non_zero_size_cf);
-    auto evaluate_time = watch.elapsed();
+    auto evaluate_time = watch.lap();
 
     // TODO (#42131244): do this after D13591963 lands.
     // std::vector<rocksdb::ColumnFamilyHandle*> handles_to_flush;
@@ -6189,24 +6282,7 @@ void PartitionedRocksDBStore::flushBackgroundThreadRun() {
       flushMemtable(cf_data.cf, /* wait */ false);
     }
 
-    auto end = watch.lap();
-    if (end.count() > 5) {
-      auto flush_time = end - evaluate_time;
-      RATELIMIT_INFO(std::chrono::seconds(10),
-                     2,
-                     "Shard:%d: Evaluating flush was slow, total %ldms: "
-                     "evaluation time %ldms: flush time "
-                     "%ldms :input %lu: out %lu: npartitions: %lu",
-                     getShardIdx(),
-                     end.count(),
-                     evaluate_time.count(),
-                     flush_time.count(),
-                     1 + non_zero_size_cf.size(),
-                     to_flush.size(),
-                     partitions->size());
-    }
-
-    STAT_ADD(stats_, triggered_manual_memtable_flush, !to_flush.empty());
+    auto flush_time = watch.lap();
 
     // Throttle writes if memtables are using too much memory.
 
@@ -6223,17 +6299,43 @@ void PartitionedRocksDBStore::flushBackgroundThreadRun() {
       throttleIOIfNeeded(buf_stats, memory_limit);
     }
 
-    RATELIMIT_INFO(
-        std::chrono::seconds(10),
-        1,
-        "Memtable stats for shard %u: active %.3fMB, flushing %.3fMB, "
-        "pinned %.3fMB",
-        getShardIdx(),
-        buf_stats.active_memory_usage / 1e6,
-        buf_stats.memory_being_flushed / 1e6,
-        buf_stats.pinned_buffer_usage / 1e6);
+    update_stats(buf_stats);
+
+    auto throttle_time = watch.lap();
+
+    // Update stats and log some info.
+
+    STAT_ADD(stats_, triggered_manual_memtable_flush, !to_flush.empty());
+    auto total_time = flush_time + evaluate_time + throttle_time;
+
+    auto describe = [&] {
+      // Put non_zero_size_cf at the end of the message because it can be long
+      // and get truncated.
+      return folly::sformat("Flushing: {}. Total stats: {}. Eval time: {}ms, "
+                            "flush init: {}ms, throttle eval: {}ms, "
+                            "npartitions: {}. Existing memtables: {}, {}",
+                            toString(to_flush),
+                            toString(buf_stats),
+                            evaluate_time.count(),
+                            flush_time.count(),
+                            throttle_time.count(),
+                            partitions->size(),
+                            toString(metadata_cf_data),
+                            toString(non_zero_size_cf));
+    };
+
+    bool noteworthy = false;
+    noteworthy |= getSettings()->print_details &&
+        (!to_flush.empty() || total_time.count() > 20);
+    noteworthy |= total_time.count() > 500;
+    if (noteworthy) {
+      ld_info("%s", describe().c_str());
+    } else {
+      RATELIMIT_INFO(std::chrono::seconds(10), 1, "%s", describe().c_str());
+    }
   }
 
+  update_stats(WriteBufStats{});
   ld_info("Shard %d flush background thread finished", getShardIdx());
 }
 
@@ -6414,9 +6516,10 @@ uint64_t PartitionedRocksDBStore::getTotalTrashSize() {
       : 0;
 }
 
-std::vector<CFData> FlushEvaluator::pickCFsToFlush(SteadyTimestamp now,
-                                                   CFData& metadata_cf_data,
-                                                   std::vector<CFData>& input) {
+std::vector<CFData>
+FlushEvaluator::pickCFsToFlush(SteadyTimestamp now,
+                               CFData& metadata_cf_data,
+                               const std::vector<CFData>& input) {
   auto ld_managed_flushes = settings_->ld_managed_flushes;
   std::vector<CFData> out;
 
@@ -6439,7 +6542,7 @@ std::vector<CFData> FlushEvaluator::pickCFsToFlush(SteadyTimestamp now,
   // 3. memtable needs to be flushed to reach target memory consumption.
   bool metadata_cf_picked = false;
 
-  auto pick_cf = [&](CFData& cf_data) {
+  auto pick_cf = [&](const CFData& cf_data) {
     auto& cf = cf_data.cf;
     auto& mem_stats = cf_data.stats;
     metadata_memtable_dependency = !metadata_cf_picked
@@ -6450,7 +6553,7 @@ std::vector<CFData> FlushEvaluator::pickCFsToFlush(SteadyTimestamp now,
     target = target > mem_stats.active_memtable_size
         ? target - mem_stats.active_memtable_size
         : 0;
-    out.push_back(std::move(cf_data));
+    out.push_back(cf_data);
   };
 
   auto pick_metadata_cf = [&] {
@@ -6471,10 +6574,11 @@ std::vector<CFData> FlushEvaluator::pickCFsToFlush(SteadyTimestamp now,
   };
 
   auto update_buf_stats = [&cur_active_memory_usage,
-                           this](RocksDBMemTableStats& stats) {
+                           this](const RocksDBMemTableStats& stats) {
     cur_active_memory_usage += stats.active_memtable_size;
     buf_stats_.memory_being_flushed += stats.immutable_memtable_size;
     buf_stats_.pinned_buffer_usage += stats.pinned_memtable_size;
+    buf_stats_.num_active_memtables += stats.active_memtable_size > 0;
   };
 
   update_buf_stats(metadata_cf_data.stats);
@@ -6491,9 +6595,11 @@ std::vector<CFData> FlushEvaluator::pickCFsToFlush(SteadyTimestamp now,
   // Update aggregate memory usage stats.
   for (auto& cf_data : input) {
     auto& stats = cf_data.stats;
-    ld_check_ne(stats.active_memtable_size, 0);
-
     update_buf_stats(stats);
+
+    if (stats.active_memtable_size == 0) {
+      continue;
+    }
 
     auto oldDataThresholdTriggered = [&] {
       auto& cf = cf_data.cf;
@@ -6597,43 +6703,7 @@ std::vector<CFData> FlushEvaluator::pickCFsToFlush(SteadyTimestamp now,
   ld_check(cur_active_memory_usage >= amount_picked);
   buf_stats_.active_memory_usage = cur_active_memory_usage - amount_picked;
 
-  ld_check((out.size() == 0) == (amount_picked == 0));
-  if (amount_picked > 0) {
-    uint64_t min_size = std::numeric_limits<uint64_t>::max();
-    uint64_t max_size = 0;
-    std::stringstream cfs_picked;
-    cfs_picked << "[ ";
-    auto num_picked = out.size();
-    for (auto i = 0; i < num_picked; ++i) {
-      min_size = std::min(min_size, out[i].stats.active_memtable_size);
-      max_size = std::max(max_size, out[i].stats.active_memtable_size);
-      cfs_picked << out[i].cf->get()->GetName();
-      if (i + 1 < num_picked) {
-        cfs_picked << ", ";
-      }
-    }
-    cfs_picked << " ]";
-    ld_debug("Shard: %d, Total memory usage: %lu(active), "
-             "%lu(unflushed), amount picked %lu, num picked %lu, num "
-             "candidates %lu,  metadata %lu(active), metadata cf picked %d, "
-             "min:%.3fKB, max:%.3fMB, avg:%.3fMB, cf list :%s. Reason :idle: "
-             "%lu, age: %lu, maxsize: %lu",
-             shard_idx_,
-             cur_active_memory_usage,
-             buf_stats_.memory_being_flushed,
-             amount_picked,
-             num_picked,
-             input.size(),
-             metadata_cf_data.stats.active_memtable_size,
-             metadata_cf_picked,
-             min_size / 1e3,
-             max_size / 1e6,
-             amount_picked / 1e6 / out.size(),
-             cfs_picked.str().c_str(),
-             idle_thres_triggered,
-             old_data_thres_triggered,
-             max_memtable_thres_triggered);
-  }
+  ld_check_eq(out.size() == 0, amount_picked == 0);
 
   buf_stats_.memory_being_flushed += amount_picked;
   return out;

@@ -47,8 +47,8 @@ LocalLogStore::WriteThrottleState TemporaryLogStore::getWriteThrottleState() {
   return db_->getWriteThrottleState();
 }
 
-void TemporaryLogStore::adviseUnstallingLowPriWrites(bool never_stall) {
-  db_->adviseUnstallingLowPriWrites(never_stall);
+void TemporaryLogStore::disableWriteStalling() {
+  db_->disableWriteStalling();
 }
 
 int TemporaryLogStore::writeMulti(const std::vector<const WriteOp*>& writes,

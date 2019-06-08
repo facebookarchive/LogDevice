@@ -65,8 +65,10 @@ STAT_DEFINE(trash_size, SUM)
 // The rate limit on deletions of trash files
 STAT_DEFINE(trash_deletion_ratelimit, SUM)
 
-// For how long this shard was stalling low-pri writes.
-STAT_DEFINE(write_stall_microsec, SUM)
+// For how long this shard was rejecting all writes to limit memtable growth.
+STAT_DEFINE(reject_writes_microsec, SUM)
+// For how long this shard was stalling low-pri writes OR rejecting all writes.
+STAT_DEFINE(low_pri_write_stall_microsec, SUM)
 // Total number of flushes per shard.
 STAT_DEFINE(num_memtable_flush_completed, SUM)
 // Total number of metadata memtable flushes for a shard.
@@ -78,6 +80,11 @@ STAT_DEFINE(cumulative_memtable_age_ms, SUM)
 // Number of times metadata memtable was selected to be flushed because there
 // are active writers writing into a partition.
 STAT_DEFINE(pessimistic_metadata_memtable_flush, SUM)
+
+STAT_DEFINE(memtable_size_active, SUM)
+STAT_DEFINE(memtable_size_flushing, SUM)
+STAT_DEFINE(memtable_size_pinned, SUM)
+STAT_DEFINE(memtable_count_active, SUM)
 
 // Total number of chunks rebuilt, and total number of records and bytes in
 // them. V2 only.

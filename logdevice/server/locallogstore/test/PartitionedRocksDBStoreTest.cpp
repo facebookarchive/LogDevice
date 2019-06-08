@@ -51,6 +51,7 @@ using RocksDBKeyFormat::PartitionDirectoryKey;
 using DirectoryEntry = PartitionedRocksDBStore::DirectoryEntry;
 using Params = ServerSettings::StoragePoolParams;
 using WriteBufStats = RocksDBLogStoreBase::WriteBufStats;
+using WriteThrottleState = LocalLogStore::WriteThrottleState;
 
 // In milliseconds.
 const uint64_t SECOND = 1000ul;
@@ -209,15 +210,9 @@ class TestPartitionedRocksDBStore : public PartitionedRocksDBStore {
   }
 
   // Fake throttle state for unit tests.
-  virtual LocalLogStore::WriteThrottleState getWriteThrottleState() override {
-    if (!get_write_throttle_state) {
-      return PartitionedRocksDBStore::getWriteThrottleState();
-    }
-    return get_write_throttle_state();
-  }
-
-  void adviseUnstallingLowPriWrites(bool never_stall) override {
-    PartitionedRocksDBStore::adviseUnstallingLowPriWrites(never_stall);
+  WriteThrottleState subclassSuggestedThrottleState() override {
+    return std::max(suggested_throttle_state_,
+                    PartitionedRocksDBStore::subclassSuggestedThrottleState());
   }
 
   WriteBufStats getLastFlushEvalStats() const {
@@ -239,8 +234,7 @@ class TestPartitionedRocksDBStore : public PartitionedRocksDBStore {
   std::future<void> compaction_stall_future_;
 
   SystemTimestamp* time_;
-  std::function<LocalLogStore::WriteThrottleState()> get_write_throttle_state{
-      nullptr};
+  WriteThrottleState suggested_throttle_state_ = WriteThrottleState::NONE;
 };
 
 using filter_history_t = std::vector<std::pair<std::string, std::string>>;
@@ -7447,7 +7441,7 @@ TEST_F(PartitionedRocksDBStoreTest, PartialCompactionStallTrigger) {
   store_->createPartition();
 
   // No stalling until lo-pri thread runs.
-  EXPECT_FALSE(store_->shouldStallLowPriWrites());
+  EXPECT_EQ(WriteThrottleState::NONE, store_->getWriteThrottleState());
 
   // Stall compactions and start a background thread iteration. Don't wait
   // for the iteration to finish because it'll stall.
@@ -7458,7 +7452,11 @@ TEST_F(PartitionedRocksDBStoreTest, PartialCompactionStallTrigger) {
   // Wait for the background thread to finish planning compactions and
   // stall writers. If the test times out here, stalling is probably broken.
   ld_info("Waiting for writes to get stalled.");
-  while (!store_->shouldStallLowPriWrites()) {
+  while (store_->getWriteThrottleState() == WriteThrottleState::NONE) {
+    store_
+        ->backgroundThreadIteration(
+            PartitionedRocksDBStore::BackgroundThreadType::FLUSH)
+        .wait();
     /* sleep override */
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
   }
@@ -7474,12 +7472,17 @@ TEST_F(PartitionedRocksDBStoreTest, PartialCompactionStallTrigger) {
   ld_info("Waiting for compactions to finish.");
   bg_iteration.wait();
 
+  store_
+      ->backgroundThreadIteration(
+          PartitionedRocksDBStore::BackgroundThreadType::FLUSH)
+      .wait();
+
   // Check that the stalled writer was woken up. If the test times out here,
   // unstalling is probably broken.
   ld_info("Waiting for writes to get unstalled.");
   writer_thread.join();
 
-  EXPECT_FALSE(store_->shouldStallLowPriWrites());
+  EXPECT_EQ(WriteThrottleState::NONE, store_->getWriteThrottleState());
 }
 
 TEST_F(PartitionedRocksDBStoreTest, MetadataCompactions) {
@@ -9052,31 +9055,36 @@ TEST_F(PartitionedRocksDBStoreTest, CorruptionAndNewPartition) {
 
 // unstall low priority writes during shutdown.
 TEST_F(PartitionedRocksDBStoreTest, StallLowPriWritesShutdownTest) {
-  // Skip call to unstall low priority writes when invoked for the first time.
-  auto unstall = false;
-  auto thread_unstalled = false;
-  store_->get_write_throttle_state = [&]() {
-    if (unstall) {
-      store_->adviseUnstallingLowPriWrites(/*never_stall*/ true);
-      thread_unstalled = true;
-      return LocalLogStore::WriteThrottleState::NONE;
-    }
-    return LocalLogStore::WriteThrottleState::STALL_LOW_PRI_WRITE;
-  };
+  store_->suggested_throttle_state_ = WriteThrottleState::STALL_LOW_PRI_WRITE;
+  store_
+      ->backgroundThreadIteration(
+          PartitionedRocksDBStore::BackgroundThreadType::FLUSH)
+      .wait();
+  EXPECT_EQ(
+      WriteThrottleState::STALL_LOW_PRI_WRITE, store_->getWriteThrottleState());
 
-  EXPECT_TRUE(store_->shouldStallLowPriWrites());
-
-  unstall = true;
-
-  // Start thread which will check whether stall is necessary. It will invoke
-  // the above lambda and before going to sleep it recheck if wait is
-  // necessary. In this case it won't be and we will exit the loop hence skip
-  // stalling.
-  std::thread stallLowPriWriteThread([&]() {
+  std::atomic<bool> thread_started{false};
+  std::atomic<bool> thread_done{false};
+  std::thread write_thread([&]() {
+    thread_started.store(true);
     store_->stallLowPriWrite();
-    EXPECT_TRUE(thread_unstalled);
+    thread_done.store(true);
   });
-  stallLowPriWriteThread.join();
+  while (!thread_started.load()) {
+    std::this_thread::yield();
+  }
+  /* sleep override */
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  EXPECT_FALSE(thread_done.load());
+
+  store_->suggested_throttle_state_ = WriteThrottleState::NONE;
+  store_
+      ->backgroundThreadIteration(
+          PartitionedRocksDBStore::BackgroundThreadType::FLUSH)
+      .wait();
+  EXPECT_EQ(WriteThrottleState::NONE, store_->getWriteThrottleState());
+
+  write_thread.join();
 }
 
 TEST_F(PartitionedRocksDBStoreTest, InterleavingCompactions) {

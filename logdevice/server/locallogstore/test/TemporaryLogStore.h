@@ -56,7 +56,7 @@ class TemporaryLogStore : public LocalLogStore {
   //
   void stallLowPriWrite() override;
   WriteThrottleState getWriteThrottleState() override;
-  void adviseUnstallingLowPriWrites(bool never_stall = false) override;
+  void disableWriteStalling() override;
   int writeMulti(const std::vector<const WriteOp*>& writes,
                  const WriteOptions& options = WriteOptions()) override;
   int sync(Durability) override;

@@ -95,8 +95,6 @@ class RocksDBSettings : public SettingsBundle {
   // Worker thread.
   std::chrono::milliseconds worker_blocking_io_threshold_;
 
-  std::chrono::milliseconds stall_cache_ttl_;
-
   // If true, data will be partitioned by time and stored in multiple column
   // families, one per partition. Compaction is not necessary in this mode
   // (trimming is implemented by dropping complete partitions) and will be
@@ -327,6 +325,8 @@ class RocksDBSettings : public SettingsBundle {
   // Enable or disable management of memtable flushing within logdevice.
   bool ld_managed_flushes;
 
+  bool print_details;
+
   // When ld manages flushes, memory limit for the node and memtable
   // within rocksdb set to a very high value. rocksdb should never be
   // able to reach those limits and initiate a flush. This limit is a
@@ -338,6 +338,7 @@ class RocksDBSettings : public SettingsBundle {
 
   // See .cpp
   double low_pri_write_stall_threshold_percent;
+  double pinned_memtables_limit_percent;
 
   // See .cpp
   std::chrono::milliseconds flush_trigger_check_interval;

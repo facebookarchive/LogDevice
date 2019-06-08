@@ -146,6 +146,8 @@ class RocksDBLogStoreBase : public LocalLogStore {
     // Buffers that are immutable but pinned and cannot release memory right
     // away.
     uint64_t pinned_buffer_usage{0};
+    // How many column families have a nonempty active memtable.
+    uint64_t num_active_memtables{0};
   };
 
   // Fetches memtable memory usage for a column family
@@ -405,6 +407,12 @@ class RocksDBLogStoreBase : public LocalLogStore {
     return write_throttle_state_.load();
   }
 
+  // A wrapper around rocksdb::DB::Write() which also updates stats and injects
+  // IO errors if needed. Subclasses can override it to add some hooks to all
+  // rocksdb writes.
+  virtual rocksdb::Status writeBatch(const rocksdb::WriteOptions& options,
+                                     rocksdb::WriteBatch* batch);
+
  protected:
   /**
    * Assumes ownership of the raw rocksdb::DB pointer.
@@ -524,18 +532,13 @@ class RocksDBLogStoreBase : public LocalLogStore {
     }
   }
 
-  // Returns true if there's at least one flush in progress.
-  bool isFlushInProgress();
+  void disableWriteStalling() override;
 
-  void adviseUnstallingLowPriWrites(bool dont_stall_anymore = false) override;
-
-  // If you override this method, you need to call
-  // adviseUnstallingLowPriWrites() after this value changes from true to false.
-  // This will wake up the stalled writers and make them call this method again.
-  virtual bool shouldStallLowPriWrites() {
-    auto cur_state = getWriteThrottleState();
-    return cur_state == WriteThrottleState::STALL_LOW_PRI_WRITE ||
-        cur_state == WriteThrottleState::REJECT_WRITE;
+  // Called from throttleIOIfNeeded(). If you're overriding
+  // subclassSuggestedThrottleState(), you must call throttleIOIfNeeded()
+  // periodically.
+  virtual WriteThrottleState subclassSuggestedThrottleState() {
+    return WriteThrottleState::NONE;
   }
 
   std::unique_ptr<rocksdb::DB> db_;
@@ -564,11 +567,8 @@ class RocksDBLogStoreBase : public LocalLogStore {
   // true if store has failed such that we will not attempt writes.
   mutable std::atomic<bool> fail_safe_mode_{false};
 
+  // True if we're low on space.
   std::atomic<bool> low_watermark_crossed_{false};
-
-  // This state throttles writes as memory consumption goes beyond limit.
-  std::atomic<WriteThrottleState> write_throttle_state_{
-      WriteThrottleState::NONE};
 
   RocksDBLogStoreConfig rocksdb_config_;
 
@@ -580,26 +580,25 @@ class RocksDBLogStoreBase : public LocalLogStore {
  private:
   // Write stalling stuff.
 
-  struct Listener : public rocksdb::EventListener {
-    explicit Listener(RocksDBLogStoreBase* store) : store_(store) {}
-
-    void OnFlushCompleted(rocksdb::DB*, const rocksdb::FlushJobInfo&) override {
-      store_->adviseUnstallingLowPriWrites();
-    }
-
-    RocksDBLogStoreBase* store_;
-  };
-
-  std::atomic<std::chrono::steady_clock::duration> dont_stall_until_{
-      std::chrono::steady_clock::duration::min()};
-  std::mutex stall_mutex_;    // locked for duration of the stall
-  std::mutex stall_cv_mutex_; // only needed for stall_cv_
-  std::condition_variable stall_cv_;
   std::shared_ptr<RocksDBMemTableRepFactory> mtr_factory_;
 
-  // Adds a rocksdb::EventListener that is used for unstalling writes when
-  // a flush finishes.
-  void registerListener(rocksdb::Options& options);
+  // Things related to stalling/rejecting all/some writes when we're overloaded,
+  // especially running out of memory for memtables.
+
+  // The mutex protects all fields in this paragraph.
+  std::mutex throttle_state_mutex_;
+  // Notified after write_throttle_state_ or disable_stalling_ changes.
+  std::condition_variable throttle_state_cv_;
+  // Set to true during shutdown. Disables stalling regardless of throttle
+  // state.
+  bool disable_stalling_{false};
+  // This state throttles writes as memory consumption goes beyond limit.
+  std::atomic<WriteThrottleState> write_throttle_state_{
+      WriteThrottleState::NONE};
+  // When did write_throttle_state_ last change.
+  SteadyTimestamp write_throttle_state_since_{SteadyTimestamp::min()};
+  // When write_throttle_state_ was recalculated.
+  SteadyTimestamp last_throttle_update_time_{SteadyTimestamp::min()};
 
   // Installs a MemTableRepFactory so that LogDevice's MemTabelRep is
   // used when constructing all MemTables.

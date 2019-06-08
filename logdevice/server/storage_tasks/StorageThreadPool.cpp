@@ -268,7 +268,7 @@ void StorageThreadPool::shutDown(bool persist_record_caches) {
 
   // Unstall stalled low priority writes if they were stuck waiting for flushed
   // data to complete.
-  local_log_store_->adviseUnstallingLowPriWrites(/*dont_stall_anymore*/ true);
+  local_log_store_->disableWriteStalling();
 
   ld_check_eq(stop_tasks_enqueued, total_num_threads);
 }

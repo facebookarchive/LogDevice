@@ -496,6 +496,9 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
               bool approximate = false,
               bool allow_blocking_io = true) const override;
 
+  rocksdb::Status writeBatch(const rocksdb::WriteOptions& options,
+                             rocksdb::WriteBatch* batch) override;
+
   // Starts a new partition.
   // Used in tests, and is exposed through an admin command.
   // @return the new partition or nullptr in case of error.
@@ -795,6 +798,7 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
     // If reason == Reason::Partial, these are the sst files that should be
     // compacted
     std::vector<std::string> partial_compaction_filenames;
+    std::vector<uint64_t> partial_compaction_file_sizes;
 
     PartitionToCompact(PartitionPtr p, Reason r)
         : partition(std::move(p)), reason(r) {
@@ -1116,7 +1120,7 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
     // cf.
     std::vector<CFData> pickCFsToFlush(SteadyTimestamp now,
                                        CFData& metadata,
-                                       std::vector<CFData>& candidates);
+                                       const std::vector<CFData>& candidates);
     WriteBufStats getBufStats() {
       return buf_stats_;
     }
@@ -1143,7 +1147,7 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
         PARTITION_INVALID;
   }
 
-  bool shouldStallLowPriWrites() override;
+  WriteThrottleState subclassSuggestedThrottleState() override;
 
   void markImmutable() override {
     joinBackgroundThreads();

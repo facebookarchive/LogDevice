@@ -11,12 +11,10 @@
 
 #include <folly/small_vector.h>
 #include <rocksdb/env.h>
-#include <rocksdb/iostats_context.h>
 
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
 #include "logdevice/common/Metadata.h"
 #include "logdevice/common/RateLimiter.h"
-#include "logdevice/common/stats/PerShardHistograms.h"
 #include "logdevice/server/locallogstore/RocksDBKeyFormat.h"
 #include "logdevice/server/locallogstore/RocksDBWriterMergeOperator.h"
 #include "logdevice/server/locallogstore/WriteOps.h"
@@ -373,7 +371,7 @@ int RocksDBWriter::writeMulti(
   rocksdb::WriteOptions options;
   for (auto rocksdb_batch : {&wal_batch, &mem_batch}) {
     if (rocksdb_batch->Count() > 0) {
-      rocksdb::Status status = writeBatch(options, rocksdb_batch);
+      rocksdb::Status status = store_->writeBatch(options, rocksdb_batch);
       if (!status.ok()) {
         err = E::LOCAL_LOG_STORE_WRITE;
         return -1;
@@ -514,7 +512,7 @@ int RocksDBWriter::updateLogMetadata(
     return -1;
   }
 
-  rocksdb::Status status = writeBatch(rocksdb::WriteOptions(), &batch);
+  rocksdb::Status status = store_->writeBatch(rocksdb::WriteOptions(), &batch);
   if (!status.ok()) {
     err = E::LOCAL_LOG_STORE_WRITE;
     return -1;
@@ -674,7 +672,7 @@ int RocksDBWriter::updatePerEpochLogMetadata(
       rocksdb::Slice(reinterpret_cast<const char*>(&key), sizeof key),
       rocksdb::Slice(reinterpret_cast<const char*>(value.data), value.size));
 
-  rocksdb::Status status = writeBatch(rocksdb::WriteOptions(), &batch);
+  rocksdb::Status status = store_->writeBatch(rocksdb::WriteOptions(), &batch);
   if (!status.ok()) {
     err = E::LOCAL_LOG_STORE_WRITE;
     return -1;
@@ -706,149 +704,8 @@ int RocksDBWriter::writeLogSnapshotBlobs(
                   reinterpret_cast<const char*>(snapshot.data), snapshot.size));
   }
 
-  rocksdb::Status status = writeBatch(rocksdb::WriteOptions(), &batch);
+  rocksdb::Status status = store_->writeBatch(rocksdb::WriteOptions(), &batch);
   return status.ok() ? 0 : -1;
-}
-
-rocksdb::Status RocksDBWriter::writeBatch(const rocksdb::WriteOptions& options,
-                                          rocksdb::WriteBatch* batch) {
-  if (read_only_) {
-    ld_check(false);
-    err = E::LOCAL_LOG_STORE_WRITE;
-    return rocksdb::Status::IOError(
-        "assertion failure: trying to write to read-only store");
-  }
-  using IOType = IOFaultInjection::IOType;
-  using FaultType = IOFaultInjection::FaultType;
-
-  auto* perf_context = rocksdb::get_perf_context();
-  auto* iostats_context = rocksdb::get_iostats_context();
-  uint64_t wal_start = perf_context->write_wal_time;
-  uint64_t mem_start = perf_context->write_memtable_time;
-  uint64_t delay_start = perf_context->write_delay_time;
-  uint64_t scheduling_start =
-      ROCKSDB_PERF_COUNTER_write_scheduling_flushes_compactions_time(
-          perf_context);
-  uint64_t pre_and_post_start = perf_context->write_pre_and_post_process_time;
-
-  uint64_t wait_start =
-      ROCKSDB_PERF_COUNTER_write_thread_wait_nanos(perf_context);
-  uint64_t mutex_start = perf_context->db_mutex_lock_nanos;
-  uint64_t cv_start = perf_context->db_condition_wait_nanos;
-  uint64_t open_start = iostats_context->open_nanos;
-  uint64_t allocate_start = iostats_context->allocate_nanos;
-  uint64_t write_start = iostats_context->write_nanos;
-  uint64_t range_sync_start = iostats_context->range_sync_nanos;
-  uint64_t logger_start = iostats_context->logger_nanos;
-
-  auto time_start = std::chrono::steady_clock::now();
-
-  rocksdb::Status status;
-  shard_index_t shard_idx = store_->getShardIdx();
-  auto& io_fault_injection = IOFaultInjection::instance();
-  auto fault = io_fault_injection.getInjectedFault(
-      shard_idx, IOType::WRITE, FaultType::CORRUPTION | FaultType::IO_ERROR);
-  if (fault != FaultType::NONE) {
-    status = RocksDBLogStoreBase::FaultTypeToStatus(fault);
-    ld_check(!status.ok());
-    RATELIMIT_ERROR(std::chrono::seconds(1),
-                    1,
-                    "Returning injected error %s for shard %s.",
-                    status.ToString().c_str(),
-                    store_->getDBPath().c_str());
-    // Don't bump error stats for injected errors.
-    store_->enterFailSafeMode("Write()", "injected error");
-  } else {
-    status = store_->getDB().Write(options, batch);
-    store_->enterFailSafeIfFailed(status, "Write()");
-  }
-
-  if (shard_idx != -1 && status.ok()) {
-    // RocksDB keeps track of time spent in nanoseconds
-    uint64_t wal_nanos = perf_context->write_wal_time - wal_start;
-    uint64_t mem_nanos = perf_context->write_memtable_time - mem_start;
-    uint64_t delay_nanos = perf_context->write_delay_time - delay_start;
-    uint64_t scheduling_nanos =
-        ROCKSDB_PERF_COUNTER_write_scheduling_flushes_compactions_time(
-            perf_context) -
-        scheduling_start;
-    uint64_t pre_and_post_nanos =
-        perf_context->write_pre_and_post_process_time - pre_and_post_start;
-
-    PER_SHARD_HISTOGRAM_ADD(
-        store_->getStatsHolder(), rocks_wal, shard_idx, wal_nanos / 1000);
-    PER_SHARD_HISTOGRAM_ADD(
-        store_->getStatsHolder(), rocks_memtable, shard_idx, mem_nanos / 1000);
-    PER_SHARD_HISTOGRAM_ADD(
-        store_->getStatsHolder(), rocks_delay, shard_idx, delay_nanos / 1000);
-    PER_SHARD_HISTOGRAM_ADD(store_->getStatsHolder(),
-                            rocks_scheduling,
-                            shard_idx,
-                            scheduling_nanos / 1000);
-    PER_SHARD_HISTOGRAM_ADD(store_->getStatsHolder(),
-                            rocks_pre_and_post,
-                            shard_idx,
-                            pre_and_post_nanos / 1000);
-
-    auto time_end = std::chrono::steady_clock::now();
-
-    uint64_t wait_nanos =
-        ROCKSDB_PERF_COUNTER_write_thread_wait_nanos(perf_context) - wait_start;
-    uint64_t mutex_nanos = perf_context->db_mutex_lock_nanos - mutex_start;
-    uint64_t cv_nanos = perf_context->db_condition_wait_nanos - cv_start;
-    uint64_t open_nanos = iostats_context->open_nanos - open_start;
-    uint64_t allocate_nanos = iostats_context->allocate_nanos - allocate_start;
-    uint64_t write_nanos = iostats_context->write_nanos - write_start;
-    uint64_t range_sync_nanos =
-        iostats_context->range_sync_nanos - range_sync_start;
-    uint64_t logger_nanos = iostats_context->logger_nanos - logger_start;
-
-    std::chrono::nanoseconds total_time = time_end - time_start;
-
-    if (total_time > std::chrono::milliseconds(500)) {
-      uint64_t total_nanos = total_time.count();
-      uint64_t explained_nanos = wait_nanos + mutex_nanos + cv_nanos +
-          open_nanos + allocate_nanos + write_nanos + range_sync_nanos +
-          logger_nanos;
-      int64_t unexplained_nanos =
-          (int64_t)total_nanos - (int64_t)explained_nanos;
-      ld_info("slow rocksdb::DB::Write() for shard %d; %d ops, %lu bytes; "
-              "total: %.6fs; WAL: %.6fs, Memtable: %.6fs, Delay: %.6fs, "
-              "Scheduling flushes/compactions: %.6fs, Pre-and-post: %.6fs; "
-              "lowlevel: wait for batch: %.6fs, mutex: %.6fs, cv: %.6fs, "
-              "open(): %.6fs, fallocate(): %.6fs, write(): %.6fs, "
-              "sync_file_range(): %.6fs, logger: %.6fs, other: %.6fs",
-              shard_idx,
-              batch->Count(),
-              batch->GetDataSize(),
-              total_nanos / 1e9,
-              wal_nanos / 1e9,
-              mem_nanos / 1e9,
-              delay_nanos / 1e9,
-              scheduling_nanos / 1e9,
-              pre_and_post_nanos / 1e9,
-              wait_nanos / 1e9,
-              mutex_nanos / 1e9,
-              cv_nanos / 1e9,
-              open_nanos / 1e9,
-              allocate_nanos / 1e9,
-              write_nanos / 1e9,
-              range_sync_nanos / 1e9,
-              logger_nanos / 1e9,
-              unexplained_nanos / 1e9);
-    }
-  }
-
-  if (!status.ok()) {
-    ld_debug("In failsafemode for shard_idx:%d, status=%s",
-             shard_idx,
-             status.ToString().c_str());
-    PER_SHARD_STAT_INCR(store_->getStatsHolder(),
-                        local_logstore_failed_writes,
-                        store_->getShardIdx());
-  }
-
-  return status;
 }
 
 rocksdb::Status RocksDBWriter::syncWAL() {

@@ -596,6 +596,7 @@ class LocalLogStore : boost::noncopyable {
    */
   virtual void stallLowPriWrite() {}
 
+  // Write throttling modes, ordered from least to most severe.
   enum class WriteThrottleState { NONE, STALL_LOW_PRI_WRITE, REJECT_WRITE };
 
   /**
@@ -606,14 +607,12 @@ class LocalLogStore : boost::noncopyable {
   virtual WriteThrottleState getWriteThrottleState() {
     return WriteThrottleState::NONE;
   }
+
   /**
-   * Allows stalled low priority writes to make progress, after data getting
-   * flushed has persisted on disk. Also called during shutdown, to finish
-   * up the stalled low priority write so that the storage threads can be
-   * joined. As part of shutdown dont_stall_anymore is true as we disable any
-   * stalls after that point.
+   * Called once during shutdown.
+   * Unblocks all current and future stallLowPriWrite() calls.
    */
-  virtual void adviseUnstallingLowPriWrites(bool /* unused */ = false) {}
+  virtual void disableWriteStalling() {}
 
   /**
    * Performs multiple writes in an atomic batch.  The operations may be

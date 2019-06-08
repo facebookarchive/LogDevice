@@ -37,7 +37,7 @@ namespace facebook { namespace logdevice {
  * @file RocksDBWriter is a utility class used to write records and metadata
  *       to RocksDB, as well as read metadata.
  *       (The name is quite inaccurate. Feel free to rename.)
- *       Writes to DB should go through RocksDBWriter::writeBatch() to
+ *       Writes to DB should go through RocksDBLogStoreBase::writeBatch() to
  *       bump stats and keep track of persistent error.
  */
 
@@ -263,7 +263,8 @@ class RocksDBWriter {
                     reinterpret_cast<const char*>(value.data), value.size));
     }
 
-    rocksdb::Status status = writeBatch(rocksdb::WriteOptions(), &batch);
+    rocksdb::Status status =
+        store_->writeBatch(rocksdb::WriteOptions(), &batch);
     if (!status.ok()) {
       err = E::LOCAL_LOG_STORE_WRITE;
       return -1;
@@ -284,7 +285,8 @@ class RocksDBWriter {
     batch.Delete(
         cf, rocksdb::Slice(reinterpret_cast<const char*>(&key), sizeof key));
 
-    rocksdb::Status status = writeBatch(rocksdb::WriteOptions(), &batch);
+    rocksdb::Status status =
+        store_->writeBatch(rocksdb::WriteOptions(), &batch);
     if (!status.ok()) {
       err = E::LOCAL_LOG_STORE_WRITE;
       return -1;
@@ -336,7 +338,8 @@ class RocksDBWriter {
         batch.Delete(cf, rocksdb::Slice(key.data(), key.size()));
       }
 
-      rocksdb::Status status = writeBatch(rocksdb::WriteOptions(), &batch);
+      rocksdb::Status status =
+          store_->writeBatch(rocksdb::WriteOptions(), &batch);
       if (!status.ok()) {
         err = E::LOCAL_LOG_STORE_WRITE;
         return -1;
@@ -350,10 +353,6 @@ class RocksDBWriter {
       rocksdb::ColumnFamilyHandle* snapshots_cf,
       LocalLogStore::LogSnapshotBlobType snapshot_type,
       const std::vector<std::pair<logid_t, Slice>>& snapshots);
-
-  // A wrapper around rocksdb::DB::Write() which also updates latency stats
-  rocksdb::Status writeBatch(const rocksdb::WriteOptions& options,
-                             rocksdb::WriteBatch* batch);
 
   // A wrapper around rocksdb::DB::SyncWAL() which also updates stats.
   rocksdb::Status syncWAL();
