@@ -281,11 +281,23 @@ Message::Disposition PurgeCoordinator::onReceived(RELEASE_Message* msg,
   if (!w->getLogsConfig()->isFullyLoaded() &&
       !w->getLogsConfig()->isInternalLogID(header.rid.logid) &&
       !MetaDataLog::isMetaDataLog(header.rid.logid)) {
-    RATELIMIT_ERROR(
-        std::chrono::seconds(10),
+    RATELIMIT_ERROR(std::chrono::seconds(10),
+                    10,
+                    "got RELEASE %s from %s but config is not fully loaded yet",
+                    header.rid.toString().c_str(),
+                    Sender::describeConnection(from).c_str());
+    err = E::AGAIN;
+    return Message::Disposition::NORMAL;
+  }
+
+  auto peer_node_id = w->sender().getNodeID(from);
+  if (!peer_node_id.isNodeID()) {
+    RATELIMIT_INFO(
+        std::chrono::seconds(1),
         10,
-        "got CLEAN message from %s but config is not fully loaded yet",
-        Sender::describeConnection(from).c_str());
+        "got RELEASE %s but the socket to the node but socket was closed "
+        "while message was waiting in the queue to be processed.",
+        header.rid.toString().c_str());
     err = E::AGAIN;
     return Message::Disposition::NORMAL;
   }
@@ -374,10 +386,8 @@ Message::Disposition PurgeCoordinator::onReceived(RELEASE_Message* msg,
   }
 
   checked_downcast<PurgeCoordinator&>(*log_state->purge_coordinator_)
-      .onReleaseMessage(header.rid.lsn(),
-                        w->sender().getNodeID(from),
-                        header.release_type,
-                        do_broadcast);
+      .onReleaseMessage(
+          header.rid.lsn(), peer_node_id, header.release_type, do_broadcast);
 
   return Message::Disposition::NORMAL;
 }
