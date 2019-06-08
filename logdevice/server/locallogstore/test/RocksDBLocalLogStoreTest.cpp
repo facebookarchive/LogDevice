@@ -110,14 +110,14 @@ class RocksDBLocalLogStoreTest : public ::testing::Test {
   std::unique_ptr<LocalLogStore> createRocksDBLocalLogStore() {
     return std::make_unique<TemporaryLogStore>([&](std::string path) {
       return std::make_unique<RocksDBLocalLogStore>(
-          0, path, rocksdb_config_, &stats_);
+          0, 1, path, rocksdb_config_, &stats_);
     });
   }
 
   std::unique_ptr<LocalLogStore> createPartitionedRocksDBStore() {
     return std::make_unique<TemporaryLogStore>([&](std::string path) {
       return std::make_unique<PartitionedRocksDBStore>(
-          0, path, rocksdb_config_, nullptr, &stats_);
+          0, 1, path, rocksdb_config_, nullptr, &stats_);
     });
   }
 
@@ -1227,114 +1227,6 @@ STORE_TEST(RocksDBLocalLogStoreTest, SnapshotsPersistence, store) {
   ASSERT_EQ(0, rv);
   snapshots_content[logid_t(999)] = final_example;
   ASSERT_EQ(blob_map, snapshots_content);
-}
-
-// Test write throttle logic in throttleIOIfNeeded.
-TEST_F(RocksDBLocalLogStoreTest, ThrottleWrites) {
-  // Cannot use STORE_TEST because throttleIOIfNeeded needs access to settings.
-  TemporaryRocksDBStore store;
-  uint64_t per_shard_active_flush_trigger = 1000;
-  uint64_t max_memtable_size_trigger = 1000;
-  uint64_t per_shard_active_low_watermark = 1000;
-  // active memory usage and unflushed memory usage below per shard limit, write
-  // should not be throttled.
-  {
-    LocalLogStore::WriteBufStats stats;
-    stats.active_memory_usage = 900;
-    // memory_being_flushed = 0
-    store.throttleIOIfNeeded(stats,
-                             per_shard_active_flush_trigger,
-                             max_memtable_size_trigger,
-                             per_shard_active_low_watermark);
-    EXPECT_EQ(
-        store.getWriteThrottleState(), LocalLogStore::WriteThrottleState::NONE);
-  }
-  // unflushed memory usage is non-zero but the sum still does not go beyond per
-  // shard limit.
-  {
-    LocalLogStore::WriteBufStats stats;
-    stats.active_memory_usage = 500;
-    stats.memory_being_flushed = 400;
-    store.throttleIOIfNeeded(stats,
-                             per_shard_active_flush_trigger,
-                             max_memtable_size_trigger,
-                             per_shard_active_low_watermark);
-    EXPECT_EQ(
-        store.getWriteThrottleState(), LocalLogStore::WriteThrottleState::NONE);
-  }
-  // unflushed + active memory usage goes beyond per shard limit but active
-  // memory usage is still less than low_pri_write_stall_threshold_percent of
-  // per shard limit.
-  {
-    LocalLogStore::WriteBufStats stats;
-    stats.active_memory_usage = 500;
-    stats.memory_being_flushed = 600;
-    store.throttleIOIfNeeded(stats,
-                             per_shard_active_flush_trigger,
-                             max_memtable_size_trigger,
-                             per_shard_active_low_watermark);
-    EXPECT_EQ(
-        store.getWriteThrottleState(), LocalLogStore::WriteThrottleState::NONE);
-  }
-  // unflushed + active memory usage goes beyond per shard limit and active
-  // memory usage is beyond low_pri_write_stall_threshold_percent of per shard
-  // limit.
-  {
-    LocalLogStore::WriteBufStats stats;
-    // Getting settings from rockdb_config_ should be ok as
-    // TemporaryRocksDBStore should also be initialized using the same default
-    // value.
-    stats.active_memory_usage = rocksdb_config_.getRocksDBSettings()
-                                    ->low_pri_write_stall_threshold_percent /
-            100 * per_shard_active_flush_trigger +
-        1;
-    stats.memory_being_flushed = 600;
-    store.throttleIOIfNeeded(stats,
-                             per_shard_active_flush_trigger,
-                             max_memtable_size_trigger,
-                             per_shard_active_low_watermark);
-    EXPECT_EQ(store.getWriteThrottleState(),
-              LocalLogStore::WriteThrottleState::STALL_LOW_PRI_WRITE);
-  }
-  // Reset throttle state for the store
-  store.throttleIOIfNeeded(LocalLogStore::WriteBufStats(),
-                           per_shard_active_flush_trigger,
-                           max_memtable_size_trigger,
-                           per_shard_active_flush_trigger);
-  EXPECT_EQ(
-      store.getWriteThrottleState(), LocalLogStore::WriteThrottleState::NONE);
-  // unflushed memory usage itself is equal to per shard limit.
-  {
-    LocalLogStore::WriteBufStats stats;
-    stats.memory_being_flushed = 2 * per_shard_active_flush_trigger + 1;
-    store.throttleIOIfNeeded(stats,
-                             per_shard_active_flush_trigger,
-                             max_memtable_size_trigger,
-                             per_shard_active_low_watermark);
-    EXPECT_EQ(store.getWriteThrottleState(),
-              LocalLogStore::WriteThrottleState::REJECT_WRITE);
-  }
-  // Reset throttle state for the store
-  store.throttleIOIfNeeded(LocalLogStore::WriteBufStats(),
-                           per_shard_active_flush_trigger,
-                           max_memtable_size_trigger,
-                           per_shard_active_flush_trigger);
-  EXPECT_EQ(
-      store.getWriteThrottleState(), LocalLogStore::WriteThrottleState::NONE);
-  // unflushed memory usage + active memory usage is beyond per shard limit and
-  // active memory is above per shard limit.
-  {
-    LocalLogStore::WriteBufStats stats;
-    stats.active_memory_usage = per_shard_active_flush_trigger;
-    stats.memory_being_flushed =
-        2 * per_shard_active_flush_trigger - stats.active_memory_usage + 1;
-    store.throttleIOIfNeeded(stats,
-                             per_shard_active_flush_trigger,
-                             max_memtable_size_trigger,
-                             per_shard_active_low_watermark);
-    EXPECT_EQ(store.getWriteThrottleState(),
-              LocalLogStore::WriteThrottleState::REJECT_WRITE);
-  }
 }
 
 } // namespace

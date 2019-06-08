@@ -145,16 +145,6 @@ class TemporaryLogStore : public LocalLogStore {
               bool approximate = false,
               bool allow_blocking_io = true) const override;
 
-  LocalLogStore::WriteBufStats
-  scheduleWriteBufFlush(uint64_t total_active_flush_trigger,
-                        uint64_t max_buffer_flush_trigger,
-                        uint64_t total_active_low_watermark) override;
-
-  void throttleIOIfNeeded(WriteBufStats buf_stats,
-                          uint64_t total_active_flush_trigger,
-                          uint64_t max_buffer_flush_trigger,
-                          uint64_t total_active_low_watermark) override;
-
  protected:
   factory_func_t factory_;
   std::unique_ptr<folly::test::TemporaryDirectory> temp_dir_;

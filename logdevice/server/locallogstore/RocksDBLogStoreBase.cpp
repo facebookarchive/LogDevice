@@ -21,10 +21,12 @@ const char* const RocksDBLogStoreBase::NEW_SCHEMA_VERSION_KEY =
     ".schema_version";
 
 RocksDBLogStoreBase::RocksDBLogStoreBase(uint32_t shard_idx,
+                                         uint32_t num_shards,
                                          const std::string& path,
                                          RocksDBLogStoreConfig rocksdb_config,
                                          StatsHolder* stats_holder)
     : shard_idx_(shard_idx),
+      num_shards_(num_shards),
       db_path_(path),
       writer_(new RocksDBWriter(this, *rocksdb_config.getRocksDBSettings())),
       stats_(stats_holder),
@@ -189,11 +191,8 @@ bool RocksDBLogStoreBase::isFlushInProgress() {
 #endif
 }
 
-void RocksDBLogStoreBase::throttleIOIfNeeded(
-    WriteBufStats buf_stats,
-    uint64_t per_shard_active_flush_trigger,
-    uint64_t /* max_memtable_size_trigger */,
-    uint64_t /* per_shard_active_low_watermark */) {
+void RocksDBLogStoreBase::throttleIOIfNeeded(WriteBufStats buf_stats,
+                                             uint64_t memory_limit) {
   auto state_to_str = [](LocalLogStore::WriteThrottleState st) {
     switch (st) {
       case LocalLogStore::WriteThrottleState::NONE:
@@ -210,9 +209,9 @@ void RocksDBLogStoreBase::throttleIOIfNeeded(
   auto new_state = WriteThrottleState::NONE;
   // Logic that throttles write IO if memory consumption is beyond limits.
   if (buf_stats.active_memory_usage + buf_stats.memory_being_flushed >=
-      per_shard_active_flush_trigger) {
+      memory_limit / 2) {
     // Check if active memory threshold is above write stall threshold.
-    new_state = buf_stats.active_memory_usage > per_shard_active_flush_trigger *
+    new_state = buf_stats.active_memory_usage > memory_limit / 2 *
                 getSettings()->low_pri_write_stall_threshold_percent / 100
         ? LocalLogStore::WriteThrottleState::STALL_LOW_PRI_WRITE
         : LocalLogStore::WriteThrottleState::NONE;
@@ -222,7 +221,7 @@ void RocksDBLogStoreBase::throttleIOIfNeeded(
     // stall low priority writes.
     new_state =
         buf_stats.active_memory_usage + buf_stats.memory_being_flushed >=
-            2 * per_shard_active_flush_trigger
+            memory_limit
         ? LocalLogStore::WriteThrottleState::REJECT_WRITE
         : new_state;
   }

@@ -195,6 +195,8 @@ class RocksDBSettings : public SettingsBundle {
   // should be dropped or compacted, and do the drops and compactions.
   std::chrono::milliseconds partition_lo_pri_check_period_;
 
+  std::chrono::milliseconds partition_flush_check_period_;
+
   // See .cpp
   std::chrono::milliseconds prepended_partition_min_lifetime_;
 
@@ -215,9 +217,7 @@ class RocksDBSettings : public SettingsBundle {
   // update the partition dirty metadata
   std::chrono::milliseconds partition_redirty_grace_period;
 
-  // Maximum amount of bytes written since evaluation, that leads to a forced
-  // flush evaluation.
-  uint64_t bytes_written_since_flush_eval_trigger;
+  uint64_t bytes_written_since_throttle_eval_trigger;
 
   // See .cpp
   std::chrono::milliseconds metadata_compaction_period;

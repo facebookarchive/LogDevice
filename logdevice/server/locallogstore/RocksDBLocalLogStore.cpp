@@ -50,10 +50,15 @@ using Location = RocksDBLocalLogStore::CSIWrapper::Location;
 using namespace RocksDBKeyFormat;
 
 RocksDBLocalLogStore::RocksDBLocalLogStore(uint32_t shard_idx,
+                                           uint32_t num_shards,
                                            const std::string& path,
                                            RocksDBLogStoreConfig rocksdb_config,
                                            StatsHolder* stats)
-    : RocksDBLogStoreBase(shard_idx, path, std::move(rocksdb_config), stats) {
+    : RocksDBLogStoreBase(shard_idx,
+                          num_shards,
+                          path,
+                          std::move(rocksdb_config),
+                          stats) {
   rocksdb::DB* db;
   rocksdb::Status status;
 
@@ -236,27 +241,6 @@ int RocksDBLocalLogStore::findKey(logid_t log_id,
                         *hi,
                         allow_blocking_io);
   return search.execute(lo, hi);
-}
-
-LocalLogStore::WriteBufStats RocksDBLocalLogStore::scheduleWriteBufFlush(
-    uint64_t total_active_flush_trigger,
-    uint64_t max_buffer_flush_trigger,
-    uint64_t /* total_active_low_watermark */) {
-  RocksDBMemTableStats stats = getMemTableStats(db_->DefaultColumnFamily());
-  // This is an example implementation only.
-  if (stats.active_memtable_size + stats.immutable_memtable_size >
-          total_active_flush_trigger ||
-      stats.active_memtable_size > max_buffer_flush_trigger) {
-    stats.immutable_memtable_size += stats.active_memtable_size;
-    stats.active_memtable_size = 0;
-    flushAllMemtables(/* wait */ false);
-  }
-
-  LocalLogStore::WriteBufStats buf_stats{E::OK,
-                                         stats.active_memtable_size,
-                                         stats.immutable_memtable_size,
-                                         stats.pinned_memtable_size};
-  return buf_stats;
 }
 
 // Accounting operations for RocksDB Seek()/SeekForPrev()/Next()/Prev()

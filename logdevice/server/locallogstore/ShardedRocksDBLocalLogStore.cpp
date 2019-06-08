@@ -224,7 +224,7 @@ ShardedRocksDBLocalLogStore::ShardedRocksDBLocalLogStore(
       }
 
       if (should_open_shard) {
-        shard_store = factory.create(shard_idx, shard_path.string());
+        shard_store = factory.create(shard_idx, nshards, shard_path.string());
       }
 
       if (shard_store) {
@@ -232,14 +232,9 @@ ShardedRocksDBLocalLogStore::ShardedRocksDBLocalLogStore(
         bool enable_tracing = settings.trace_all_db_shards ||
             shard_idx == settings.trace_db_shard;
         shard_store->setTracingEnabled(enable_tracing);
-        auto rocksdb_store =
-            checked_downcast<RocksDBLogStoreBase*>(shard_store.get());
-        if (rocksdb_store) {
-          rocksdb_store->setFlushThreadCV(&flush_thread_cv_);
-        }
       } else {
         PER_SHARD_STAT_INCR(stats_, failing_log_stores, shard_idx);
-        shard_store.reset(new FailingLocalLogStore());
+        shard_store = std::make_unique<FailingLocalLogStore>();
         ld_info("Opened FailingLocalLogStore instance for shard %d", shard_idx);
       }
 
@@ -280,9 +275,6 @@ ShardedRocksDBLocalLogStore::ShardedRocksDBLocalLogStore(
     throw ConstructorFailed();
   }
   printDiskShardMapping();
-
-  // Start the flusher thread.
-  flusher_thread_ = std::thread([&]() { flusherThreadBody(); });
 }
 
 ShardedRocksDBLocalLogStore::~ShardedRocksDBLocalLogStore() {
@@ -294,12 +286,6 @@ ShardedRocksDBLocalLogStore::~ShardedRocksDBLocalLogStore() {
 
   // Unsubscribe from settings update before destroying shards.
   rocksdb_settings_handle_.unsubscribe();
-
-  // Join flusher thread before destroying shards.
-  if (flusher_thread_.joinable()) {
-    wakeupFlushThread();
-    flusher_thread_.join();
-  }
 
   // destroy each RocksDBLocalLogStore instance in a separate thread
   std::vector<std::thread> threads;
@@ -778,89 +764,6 @@ void ShardedRocksDBLocalLogStore::onSettingsUpdated() {
     }
     rocksdb_shard->onSettingsUpdated(db_settings_.get());
   }
-  // flush_trigger_check_interval might have changed. Wake up flusher thread.
-  wakeupFlushThread();
-}
-
-void ShardedRocksDBLocalLogStore::flusherThreadBody() {
-  std::string name = "ld:srv:db-flush";
-  ld_check_le(name.size(), 15);
-  ThreadID::set(ThreadID::Type::ROCKSDB, name);
-  SteadyTimestamp next_flush_time{SteadyTimestamp::now() +
-                                  db_settings_->flush_trigger_check_interval};
-  if (db_settings_->flush_trigger_check_interval.count() == 0) {
-    // The system does not want to persist any data. Usually in tests.
-    ld_warning(
-        "System is coming up without flusher thread. No memtable flushes "
-        "will be initiated from logdevice.");
-    return;
-  }
-  auto shutdown = false;
-  do {
-    auto now = SteadyTimestamp::now();
-    if (next_flush_time > now) {
-      std::unique_lock<std::mutex> lock(flush_thread_mutex_);
-      flush_thread_cv_.wait_until(lock, next_flush_time.timePoint());
-    } else {
-      next_flush_time = now;
-    }
-
-    if (shutdown_event_.signaled()) {
-      break;
-    }
-    uint64_t total_active_memory_flush_trigger =
-        db_settings_->memtable_size_per_node;
-    uint64_t per_shard_active_flush_trigger =
-        total_active_memory_flush_trigger / shards_.size();
-    uint64_t per_shard_active_low_watermark =
-        (db_settings_->memtable_size_low_watermark_percent / 100.0) *
-        total_active_memory_flush_trigger / shards_.size();
-    if (per_shard_active_flush_trigger <= per_shard_active_low_watermark) {
-      RATELIMIT_WARNING(
-          std::chrono::minutes{10},
-          1,
-          "per shard low_watermark %lu is greater than per shard budget "
-          "%lu. Using shard budget as the low watermark.",
-          per_shard_active_low_watermark,
-          per_shard_active_flush_trigger);
-      per_shard_active_low_watermark = per_shard_active_flush_trigger;
-    }
-    uint64_t max_memtable_size_trigger = db_settings_->write_buffer_size;
-
-    next_flush_time =
-        SteadyTimestamp::now() + db_settings_->flush_trigger_check_interval;
-
-    std::stringstream ss;
-    ss << "[ ";
-    for (auto i = 0; i < shards_.size(); ++i) {
-      auto buf_stats =
-          shards_[i]->scheduleWriteBufFlush(per_shard_active_flush_trigger,
-                                            max_memtable_size_trigger,
-                                            per_shard_active_low_watermark);
-      if (buf_stats.err == E::SHUTDOWN) {
-        shutdown = true;
-        break;
-      } else {
-        ss << folly::sformat(
-            "Shard {}: usage active:{}MB, unflushed:{}MB, pinned:{}MB",
-            i,
-            buf_stats.active_memory_usage / 1e6,
-            buf_stats.memory_being_flushed / 1e6,
-            buf_stats.pinned_buffer_usage / 1e6);
-        if (i + 1 < shards_.size()) {
-          ss << ", ";
-        }
-
-        shards_[i]->throttleIOIfNeeded(buf_stats,
-                                       per_shard_active_flush_trigger,
-                                       max_memtable_size_trigger,
-                                       per_shard_active_flush_trigger);
-      }
-    }
-    ss << " ]";
-    RATELIMIT_DEBUG(
-        std::chrono::seconds{5}, 1, "Per shard usage: %s", ss.str().c_str());
-  } while (!shutdown);
 }
 
 }} // namespace facebook::logdevice

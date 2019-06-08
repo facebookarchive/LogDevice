@@ -15,16 +15,18 @@
 namespace facebook { namespace logdevice {
 
 std::unique_ptr<LocalLogStore>
-RocksDBLogStoreFactory::create(uint32_t shard_idx, std::string path) const {
+RocksDBLogStoreFactory::create(uint32_t shard_idx,
+                               uint32_t num_shards,
+                               std::string path) const {
   LocalLogStore* store;
 
   try {
     if (rocksdb_config_.getRocksDBSettings()->partitioned) {
       store = new PartitionedRocksDBStore(
-          shard_idx, path, rocksdb_config_, config_.get(), stats_);
+          shard_idx, num_shards, path, rocksdb_config_, config_.get(), stats_);
     } else {
-      store =
-          new RocksDBLocalLogStore(shard_idx, path, rocksdb_config_, stats_);
+      store = new RocksDBLocalLogStore(
+          shard_idx, num_shards, path, rocksdb_config_, stats_);
     }
   } catch (ConstructorFailed&) {
     return nullptr;

@@ -278,6 +278,7 @@ class RocksDBLocalLogStore : public RocksDBLogStoreBase {
    *         returns nullptr.
    */
   explicit RocksDBLocalLogStore(uint32_t shard_idx,
+                                uint32_t num_shards,
                                 const std::string& path,
                                 RocksDBLogStoreConfig rocksdb_config,
                                 StatsHolder* = nullptr);
@@ -366,11 +367,6 @@ class RocksDBLocalLogStore : public RocksDBLogStoreBase {
               lsn_t* hi,
               bool approximate = false,
               bool allow_blocking_io = true) const override;
-
-  LocalLogStore::WriteBufStats
-  scheduleWriteBufFlush(uint64_t total_active_flush_trigger,
-                        uint64_t max_buffer_flush_trigger,
-                        uint64_t total_active_low_watermark) override;
 
  private:
   // timestamp of the last attempted/completed manual compaction,

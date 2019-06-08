@@ -195,26 +195,6 @@ int TemporaryLogStore::findKey(logid_t log_id,
       log_id, std::move(key), lo, hi, approximate, allow_blocking_io);
 }
 
-LocalLogStore::WriteBufStats
-TemporaryLogStore::scheduleWriteBufFlush(uint64_t total_active_flush_trigger,
-                                         uint64_t max_buffer_flush_trigger,
-                                         uint64_t total_active_low_watermark) {
-  return db_->scheduleWriteBufFlush(total_active_flush_trigger,
-                                    max_buffer_flush_trigger,
-                                    total_active_low_watermark);
-}
-
-void TemporaryLogStore::throttleIOIfNeeded(
-    WriteBufStats buf_stats,
-    uint64_t total_active_flush_trigger,
-    uint64_t max_buffer_flush_trigger,
-    uint64_t total_active_low_watermark) {
-  db_->throttleIOIfNeeded(buf_stats,
-                          total_active_flush_trigger,
-                          max_buffer_flush_trigger,
-                          total_active_low_watermark);
-}
-
 Status TemporaryLogStore::acceptingWrites() const {
   return db_->acceptingWrites();
 }
@@ -252,6 +232,7 @@ TemporaryRocksDBStore::TemporaryRocksDBStore(bool read_find_time_index)
         rocksdb_config.createMergeOperator(shard_idx);
 
         return std::make_unique<RocksDBLocalLogStore>(shard_idx,
+                                                      1,
                                                       path,
                                                       std::move(rocksdb_config),
                                                       /* stats */ nullptr);
@@ -265,6 +246,7 @@ class TemporaryPartitionedStoreImpl : public PartitionedRocksDBStore {
                                          StatsHolder* stats,
                                          SystemTimestamp* time)
       : PartitionedRocksDBStore(0,
+                                1,
                                 path,
                                 std::move(rocksdb_config),
                                 config,

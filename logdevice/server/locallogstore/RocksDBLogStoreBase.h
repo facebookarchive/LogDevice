@@ -137,6 +137,17 @@ class RocksDBLogStoreBase : public LocalLogStore {
     uint64_t pinned_memtable_size{0};
   };
 
+  struct WriteBufStats {
+    Status err{E::OK};
+    // Memory held in buffers that are active and accepting writes.
+    uint64_t active_memory_usage{0};
+    // Memory held in buffers that are immutable and yet to persist.
+    uint64_t memory_being_flushed{0};
+    // Buffers that are immutable but pinned and cannot release memory right
+    // away.
+    uint64_t pinned_buffer_usage{0};
+  };
+
   // Fetches memtable memory usage for a column family
   RocksDBMemTableStats getMemTableStats(rocksdb::ColumnFamilyHandle* cf) {
     RocksDBMemTableStats stats;
@@ -387,17 +398,11 @@ class RocksDBLogStoreBase : public LocalLogStore {
   // returns nullptr if the column family was not found.
   RocksDBCFPtr getColumnFamilyPtr(uint32_t column_family_id);
 
-  void throttleIOIfNeeded(WriteBufStats buf_stats,
-                          uint64_t per_shard_active_flush_trigger,
-                          uint64_t max_memtable_size_trigger,
-                          uint64_t per_shard_active_low_watermark) override;
+  // Adjusts write throttle state if total size of memtables is too big.
+  void throttleIOIfNeeded(WriteBufStats buf_stats, uint64_t memory_limit);
 
   WriteThrottleState getWriteThrottleState() override {
     return write_throttle_state_.load();
-  }
-
-  void setFlushThreadCV(std::condition_variable* cv) {
-    flush_thread_cv_ = cv;
   }
 
  protected:
@@ -405,6 +410,7 @@ class RocksDBLogStoreBase : public LocalLogStore {
    * Assumes ownership of the raw rocksdb::DB pointer.
    */
   RocksDBLogStoreBase(uint32_t shard_idx,
+                      uint32_t num_shards,
                       const std::string& path,
                       RocksDBLogStoreConfig rocksdb_config,
                       StatsHolder* stats_holder);
@@ -532,15 +538,12 @@ class RocksDBLogStoreBase : public LocalLogStore {
         cur_state == WriteThrottleState::REJECT_WRITE;
   }
 
-  virtual void wakeupFlushThread() {
-    if (flush_thread_cv_) {
-      flush_thread_cv_->notify_all();
-    }
-  }
-
   std::unique_ptr<rocksdb::DB> db_;
 
+  // Index of this shard and how many shards this node has in total.
+  // Used for logging, stats, and converting limits from per-node to per-shard.
   uint32_t shard_idx_;
+  uint32_t num_shards_;
 
   // path to the rocksdb directory
   const std::string db_path_;
@@ -593,9 +596,6 @@ class RocksDBLogStoreBase : public LocalLogStore {
   std::mutex stall_cv_mutex_; // only needed for stall_cv_
   std::condition_variable stall_cv_;
   std::shared_ptr<RocksDBMemTableRepFactory> mtr_factory_;
-
-  // ShardedLocalLogStore flusher thread cv.
-  std::condition_variable* flush_thread_cv_{nullptr};
 
   // Adds a rocksdb::EventListener that is used for unstalling writes when
   // a flush finishes.

@@ -76,6 +76,7 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
   enum class BackgroundThreadType {
     HI_PRI = 0,
     LO_PRI,
+    FLUSH,
     COUNT,
   };
 
@@ -396,11 +397,13 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
   // @param config is only guaranteed to be alive during the call,
   //        don't hold on to it.
   explicit PartitionedRocksDBStore(uint32_t shard_idx,
+                                   uint32_t num_shards,
                                    const std::string& path,
                                    RocksDBLogStoreConfig rocksdb_config,
                                    const Configuration* config = nullptr,
                                    StatsHolder* stats = nullptr)
       : PartitionedRocksDBStore(shard_idx,
+                                num_shards,
                                 path,
                                 std::move(rocksdb_config),
                                 config,
@@ -492,23 +495,6 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
               lsn_t* hi,
               bool approximate = false,
               bool allow_blocking_io = true) const override;
-
-  // Picks and flushes memtables of all column families in this store according
-  // to the current flush policy. The implementation makes sure that total
-  // active memtable memory consumption does not go beyond
-  // total_active_flush_trigger. If it does go beyond the trigger, it flushes
-  // memory such that the total consumption becomes less than or equal to
-  // total_active_low_watermark. It also makes sure none of the
-  // memtable go beyond max_buffer_flush_trigger.
-  // It also selects memtables which contain old data or have been idle for a
-  // while.
-  // @return WriteBufStats which provides active memory usage after initiating
-  // flush, amount of memory currently being flushed and amount of pinned
-  // memory.
-  LocalLogStore::WriteBufStats
-  scheduleWriteBufFlush(uint64_t total_active_flush_trigger,
-                        uint64_t max_buffer_flush_trigger,
-                        uint64_t total_active_low_watermark) override;
 
   // Starts a new partition.
   // Used in tests, and is exposed through an admin command.
@@ -1131,7 +1117,7 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
     std::vector<CFData> pickCFsToFlush(SteadyTimestamp now,
                                        CFData& metadata,
                                        std::vector<CFData>& candidates);
-    LocalLogStore::WriteBufStats getBufStats() {
+    WriteBufStats getBufStats() {
       return buf_stats_;
     }
 
@@ -1142,7 +1128,7 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
     const uint64_t max_memtable_size_trigger_;
     const uint64_t total_active_low_watermark_;
     std::shared_ptr<const RocksDBSettings> settings_;
-    LocalLogStore::WriteBufStats buf_stats_;
+    WriteBufStats buf_stats_;
   };
 
   // thread.
@@ -1613,6 +1599,8 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
   // In an infinite loop trims logs, drops and compacts partitions as needed.
   void loPriBackgroundThreadRun();
 
+  void flushBackgroundThreadRun();
+
   // A helper function used to position the iterator at the last directory entry
   // for a given log that's <= lsn. If no such entry exists, iterator will point
   // to the smallest entry for log_id instead. If next_log_out is not null, it
@@ -1678,9 +1666,6 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
   // Options used for data partitions
   rocksdb::ColumnFamilyOptions data_cf_options_;
 
-  // bytes written since last flush evaluation
-  std::atomic<uint64_t> bytes_written_since_flush_eval_{0};
-
   // Processor is needed to:
   //  - update trim points when dropping partitions,
   //  - get trimming policy from config.
@@ -1724,6 +1709,16 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
   // Set to true after adviceWritesShutdown(). Used by asserts.
   std::atomic<bool> immutable_{false};
 
+  // bytes written since last flush evaluation
+  std::atomic<uint64_t> bytes_written_since_flush_eval_{0};
+
+  // Protects last_flush_eval_stats_ and calls to throttleIOIfNeeded().
+  // Can be locked on write path, so don't do anything slow while holding it.
+  std::mutex throttle_eval_mutex_;
+  // Information about current memtable sizes, updated periodically by flush
+  // evaluating thread.
+  WriteBufStats last_flush_eval_stats_;
+
   std::thread background_threads_[(int)BackgroundThreadType::COUNT];
 
   // Used by the background partition cleaner. The cleaner defers
@@ -1742,6 +1737,7 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
       PARTITION_INVALID};
 
   explicit PartitionedRocksDBStore(uint32_t shard_idx,
+                                   uint32_t num_shards,
                                    const std::string& path,
                                    RocksDBLogStoreConfig rocksdb_config,
                                    const Configuration* config,

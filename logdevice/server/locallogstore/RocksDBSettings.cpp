@@ -556,6 +556,28 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::LogsDB);
 
+  init("rocksdb-partition-flush-check-period",
+       &partition_flush_check_period_,
+       "200ms",
+       [](std::chrono::milliseconds val) {
+         if (val.count() < 0) {
+           throw boost::program_options::error(
+               "value of --rocksdb-partition-flush-check-period must be "
+               "nonnegative; " +
+               std::to_string(val.count()) + "ms given.");
+         }
+       },
+       "How often a flusher thread will go over all shard looking for "
+       "memtables to flush. Flusher thread is responsible for deciding to "
+       "flush memtables on various triggers like data age, idle time and size. "
+       "If flushes are managed by logdevice, flusher thread is responsible for "
+       "persisting any data on the system. This setting is tuned based on 3 "
+       "things: memory size on node, write throughput node can support, and "
+       "how fast data can be persisted. 0 disables all manual flushes done in "
+       "tests to disable all flushes in the system.",
+       SERVER,
+       SettingsCategory::LogsDB);
+
   init("rocksdb-prepended-partition-min-lifetime",
        &prepended_partition_min_lifetime_,
        "300s",
@@ -1002,14 +1024,14 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
-  init("rocksdb-bytes-written-since-flush-eval-trigger",
-       &bytes_written_since_flush_eval_trigger,
+  init("rocksdb-bytes-written-since-throttle-eval-trigger",
+       &bytes_written_since_throttle_eval_trigger,
        "100M",
        parse_memory_budget(),
-       "The maximum amount of buffered writes allowed before a forced flush "
-       "evaluation is triggered. This helps to avoid condition where too many "
-       "writes come in for a shard, while flush thread is sleeping and we go "
-       "over memory budget.",
+       "The maximum amount of buffered writes allowed before a forced "
+       "throttling evaluation is triggered. This helps to avoid condition "
+       "where too many writes come in for a shard, while flush thread is "
+       "sleeping and we go over memory budget.",
        SERVER,
        SettingsCategory::RocksDB);
 
@@ -1298,7 +1320,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
       "When any RocksDB memtable ('write buffer') reaches this size it is made "
       "immitable, then flushed into a newly created L0 file. This setting may "
       "soon be superceded by a more dynamic --memtable-size-per-node limit. ",
-      SERVER | REQUIRES_RESTART,
+      SERVER,
       SettingsCategory::RocksDB);
 
   init("rocksdb-max-total-wal-size",
@@ -1344,13 +1366,13 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        "delayed for other reasons, causing us to exceed the limit. "
        "--rocksdb-db-write-buffer-size overrides this if it is set, but it "
        "will be deprecated eventually.",
-       SERVER | REQUIRES_RESTART | EXPERIMENTAL,
+       SERVER | EXPERIMENTAL,
        SettingsCategory::RocksDB);
 
   init("rocksdb-memtable-size-low-watermark-percent",
        &memtable_size_low_watermark_percent,
        "60",
-       parse_positive<size_t>(),
+       parse_validate_range<size_t>(0, 100),
        "low_watermark_percent is some percent of "
        "memtable_size_per_node and indicates the target consumption to reach "
        "if total consumption goes above memtable_size_per_node. Like "
@@ -1362,7 +1384,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        "and if difference between low_watermark and memtable_size_per_node is "
        "in order of tens of MB that makes dependent metadata memtable flushes "
        "almost free.",
-       SERVER | REQUIRES_RESTART,
+       SERVER,
        SettingsCategory::RocksDB);
 
   init("rocksdb-ld-managed-flushes",
@@ -1378,28 +1400,6 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        "enable rocksdb-memtable-size-per-node can be maximum of 32GB. It is "
        "necessary to have db-write-buffer-size "
        "set to zero.",
-       SERVER | REQUIRES_RESTART,
-       SettingsCategory::RocksDB);
-
-  init("rocksdb-flush-trigger-check-interval",
-       &flush_trigger_check_interval,
-       "200ms",
-       [](std::chrono::milliseconds val) {
-         if (val.count() < 0) {
-           throw boost::program_options::error(
-               "value of --rocksdb-flush-trigger-check-interval must be "
-               "non-negative; " +
-               std::to_string(val.count()) + "ms given.");
-         }
-       },
-       "How often a flusher thread will go over all shard looking for "
-       "memtables to flush. Flusher thread is responsible for deciding to "
-       "flush memtables on various triggers like data age, idle time and size. "
-       "If flushes are managed by logdevice, flusher thread is responsible for "
-       "persisting any data on the system. This setting is tuned based on 3 "
-       "things: memory size on node, write throughput node can support, and "
-       "how fast data can be persisted. 0 disables all manual flushes done in "
-       "tests to disable all flushes in the system.",
        SERVER,
        SettingsCategory::RocksDB);
 

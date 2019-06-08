@@ -50,6 +50,7 @@ using RocksDBKeyFormat::LogMetaKey;
 using RocksDBKeyFormat::PartitionDirectoryKey;
 using DirectoryEntry = PartitionedRocksDBStore::DirectoryEntry;
 using Params = ServerSettings::StoragePoolParams;
+using WriteBufStats = RocksDBLogStoreBase::WriteBufStats;
 
 // In milliseconds.
 const uint64_t SECOND = 1000ul;
@@ -95,6 +96,7 @@ class TestPartitionedRocksDBStore : public PartitionedRocksDBStore {
                                        StatsHolder* stats,
                                        SystemTimestamp* time)
       : PartitionedRocksDBStore(0,
+                                1,
                                 path,
                                 std::move(rocksdb_config),
                                 config,
@@ -218,8 +220,8 @@ class TestPartitionedRocksDBStore : public PartitionedRocksDBStore {
     PartitionedRocksDBStore::adviseUnstallingLowPriWrites(never_stall);
   }
 
-  void wakeupFlushThread() override {
-    flush_thread_wakeups_++;
+  WriteBufStats getLastFlushEvalStats() const {
+    return last_flush_eval_stats_;
   }
 
   bool flushMetadataMemtables(bool wait = true) {
@@ -239,7 +241,6 @@ class TestPartitionedRocksDBStore : public PartitionedRocksDBStore {
   SystemTimestamp* time_;
   std::function<LocalLogStore::WriteThrottleState()> get_write_throttle_state{
       nullptr};
-  size_t flush_thread_wakeups_{0};
 };
 
 using filter_history_t = std::vector<std::pair<std::string, std::string>>;
@@ -9903,6 +9904,8 @@ TEST_F(PartitionedRocksDBStoreTest, FlushWriteBufTest) {
   openStoreWithLDManagedFlushes();
   updateSetting("rocksdb-partition-data-age-flush-trigger", "0");
   updateSetting("rocksdb-partition-idle-flush-trigger", "0");
+  updateSetting("rocksdb-memtable-size-per-node", "10G");
+  updateSetting("rocksdb-write-buffer-size", "20K");
   auto latest_partition = store_->getLatestPartition();
   auto metadata_cf_holder = store_->getMetadataCFPtr();
   auto stats_before = store_->getMemTableStats(latest_partition->cf_->get());
@@ -9914,16 +9917,17 @@ TEST_F(PartitionedRocksDBStoreTest, FlushWriteBufTest) {
   auto dependency = latest_partition->cf_->dependentMemtableFlushToken();
   EXPECT_NE(dependency, FlushToken_INVALID);
   EXPECT_EQ(dependency, metadata_cf_holder->activeMemtableFlushToken());
-  auto stats =
-      store_->scheduleWriteBufFlush(0 /*total_active_flush_trigger*/,
-                                    20 * 1024, /*max_buffer_flush_trigger*/
-                                    0);        /*total_active_low_watermark*/
-  ASSERT_EQ(0u, stats.active_memory_usage);
-  ASSERT_GE(stats.memory_being_flushed, stats_before.active_memtable_size);
-  ASSERT_EQ(
+  store_
+      ->backgroundThreadIteration(
+          PartitionedRocksDBStore::BackgroundThreadType::FLUSH)
+      .wait();
+  auto stats = store_->getLastFlushEvalStats();
+  EXPECT_EQ(0u, stats.active_memory_usage);
+  EXPECT_GE(stats.memory_being_flushed, stats_before.active_memtable_size);
+  EXPECT_EQ(
       latest_partition->cf_->activeMemtableFlushToken(), FlushToken_INVALID);
-  ASSERT_EQ(metadata_cf_holder->activeMemtableFlushToken(), FlushToken_INVALID);
-  ASSERT_EQ(
+  EXPECT_EQ(metadata_cf_holder->activeMemtableFlushToken(), FlushToken_INVALID);
+  EXPECT_EQ(
       latest_partition->cf_->dependentMemtableFlushToken(), FlushToken_INVALID);
 }
 
@@ -10116,19 +10120,78 @@ TEST_F(PartitionedRocksDBStoreTest, TestClampBacklog) {
   ASSERT_EQ(IteratorState::AT_END, it->state());
 }
 
-// Try to push write enough data to cause a wakeup. Force evaluation and try
-// again.
-TEST_F(PartitionedRocksDBStoreTest, CallForEarlyFlushEvaluation) {
-  updateSetting("rocksdb-bytes-written-since-flush-eval-trigger", "100");
-  std::string data(101, 'a');
-  store_->flush_thread_wakeups_ = 0;
-  put({TestRecord(logid_t(1), 1, BASE_TIME, data)});
-  EXPECT_EQ(store_->flush_thread_wakeups_, 1);
-  // Clear the counter.
-  store_->scheduleWriteBufFlush(1000 /* total_active_flush_trigger */,
-                                1000 /* max_buffer_flush_trigger */,
-                                1000 /* total_active_low_watermark */);
-  // Add another record.
-  put({TestRecord(logid_t(1), 2, BASE_TIME, data)});
-  EXPECT_EQ(store_->flush_thread_wakeups_, 2);
+// Test write throttle logic in throttleIOIfNeeded.
+TEST_F(PartitionedRocksDBStoreTest, ThrottleWrites) {
+  uint64_t memory_limit = 2000;
+  // active memory usage and unflushed memory usage below per shard limit, write
+  // should not be throttled.
+  {
+    WriteBufStats stats;
+    stats.active_memory_usage = 900;
+    // memory_being_flushed = 0
+    store_->throttleIOIfNeeded(stats, memory_limit);
+    EXPECT_EQ(store_->getWriteThrottleState(),
+              LocalLogStore::WriteThrottleState::NONE);
+  }
+  // unflushed memory usage is non-zero but the sum still does not go beyond per
+  // shard limit.
+  {
+    WriteBufStats stats;
+    stats.active_memory_usage = 500;
+    stats.memory_being_flushed = 400;
+    store_->throttleIOIfNeeded(stats, memory_limit);
+    EXPECT_EQ(store_->getWriteThrottleState(),
+              LocalLogStore::WriteThrottleState::NONE);
+  }
+  // unflushed + active memory usage goes beyond per shard limit but active
+  // memory usage is still less than low_pri_write_stall_threshold_percent of
+  // per shard limit.
+  {
+    WriteBufStats stats;
+    stats.active_memory_usage = 500;
+    stats.memory_being_flushed = 600;
+    store_->throttleIOIfNeeded(stats, memory_limit);
+    EXPECT_EQ(store_->getWriteThrottleState(),
+              LocalLogStore::WriteThrottleState::NONE);
+  }
+  // unflushed + active memory usage goes beyond per shard limit and active
+  // memory usage is beyond low_pri_write_stall_threshold_percent of per shard
+  // limit.
+  {
+    WriteBufStats stats;
+    stats.active_memory_usage =
+        store_->getSettings()->low_pri_write_stall_threshold_percent / 100 *
+            memory_limit / 2 +
+        1;
+    stats.memory_being_flushed = 600;
+    store_->throttleIOIfNeeded(stats, memory_limit);
+    EXPECT_EQ(store_->getWriteThrottleState(),
+              LocalLogStore::WriteThrottleState::STALL_LOW_PRI_WRITE);
+  }
+  // Reset throttle state for the store
+  store_->throttleIOIfNeeded(WriteBufStats(), memory_limit);
+  EXPECT_EQ(
+      store_->getWriteThrottleState(), LocalLogStore::WriteThrottleState::NONE);
+  // unflushed memory usage itself is equal to per shard limit.
+  {
+    WriteBufStats stats;
+    stats.memory_being_flushed = memory_limit + 1;
+    store_->throttleIOIfNeeded(stats, memory_limit);
+    EXPECT_EQ(store_->getWriteThrottleState(),
+              LocalLogStore::WriteThrottleState::REJECT_WRITE);
+  }
+  // Reset throttle state for the store
+  store_->throttleIOIfNeeded(WriteBufStats(), memory_limit);
+  EXPECT_EQ(
+      store_->getWriteThrottleState(), LocalLogStore::WriteThrottleState::NONE);
+  // unflushed memory usage + active memory usage is beyond per shard limit and
+  // active memory is above per shard limit.
+  {
+    WriteBufStats stats;
+    stats.active_memory_usage = memory_limit / 2;
+    stats.memory_being_flushed = memory_limit - stats.active_memory_usage + 1;
+    store_->throttleIOIfNeeded(stats, memory_limit);
+    EXPECT_EQ(store_->getWriteThrottleState(),
+              LocalLogStore::WriteThrottleState::REJECT_WRITE);
+  }
 }

@@ -32,6 +32,7 @@ class RocksDBLogStoreFactory : public LocalLogStoreFactory {
         stats_(stats) {}
 
   std::unique_ptr<LocalLogStore> create(uint32_t shard_idx,
+                                        uint32_t num_shards,
                                         std::string path) const override;
 
  private:

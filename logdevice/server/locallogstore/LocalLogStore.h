@@ -1065,54 +1065,6 @@ class LocalLogStore : boost::noncopyable {
     return lastPos != SeekCookie(file_name_hash, offset);
   }
 
-  struct WriteBufStats {
-    Status err{E::OK};
-    // Memory held in buffers that are active and accepting writes.
-    uint64_t active_memory_usage{0};
-    // Memory held in buffers that are immutable and yet to persist.
-    uint64_t memory_being_flushed{0};
-    // Buffers that are immutable but pinned and cannot release memory right
-    // away.
-    uint64_t pinned_buffer_usage{0};
-  };
-
-  /*
-   * Control store write buffer size.
-   *
-   * On invoking this api, store will try to reach low watermark memory
-   * consumption if it is over the total_active_flush_trigger.
-   * @param total_active_flush_trigger Store should initiate flush of active
-   *                                   write buffers if the total memory usage
-   *                                   of the store exceeds this.
-   * @param max_buffer_flush_trigger  Max size of single active write buffer in
-   *                                  store. For eg, RocksDB has one active
-   *                                  write buffer(MemTable) for every column
-   *                                  family. This limits the max size of a
-   *                                  MemTable.
-   * @param total_active_low_watermark If the store exceeds total active flush
-   *                                  trigger, this indicates the total
-   *                                  consumption to reach after flushing write
-   *                                  buffers.
-   *
-   * @return WriteBufStats Includes the total memory usage for write buffers
-   *                       in different stage. Alternatively gets memory usage
-   *                       for buffer that are active, getting flushed or are
-   *                       pinned by readers. It can be of use to the global
-   *                       scheduler in different ways.
-   */
-  virtual WriteBufStats
-  scheduleWriteBufFlush(uint64_t /* total_active_flush_trigger */,
-                        uint64_t /* max_buffer_flush_trigger */,
-                        uint64_t /* total_active_low_watermark */) {
-    return WriteBufStats{E::NOTSUPPORTED, 0, 0, 0};
-  }
-
-  // Depending on current memory consumption and enforced limits, store can
-  // decide whether it wants to throttle read and write io.
-  virtual void throttleIOIfNeeded(WriteBufStats /* buf_stats */,
-                                  uint64_t /* total_active_flush_trigger */,
-                                  uint64_t /* max_buffer_flush_trigger */,
-                                  uint64_t /* total_active_low_watermark */) {}
   /**
    * Register to receive notifications as buffered data is retired
    * to stable storage.

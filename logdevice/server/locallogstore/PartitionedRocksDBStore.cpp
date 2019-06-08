@@ -334,12 +334,17 @@ RecordTimeInterval PartitionedRocksDBStore::Partition::dirtyTimeInterval(
 
 PartitionedRocksDBStore::PartitionedRocksDBStore(
     uint32_t shard_idx,
+    uint32_t num_shards,
     const std::string& path,
     RocksDBLogStoreConfig rocksdb_config,
     const Configuration* config,
     StatsHolder* stats,
     DeferInit defer_init)
-    : RocksDBLogStoreBase(shard_idx, path, std::move(rocksdb_config), stats),
+    : RocksDBLogStoreBase(shard_idx,
+                          num_shards,
+                          path,
+                          std::move(rocksdb_config),
+                          stats),
       logs_(),
       data_cf_options_(rocksdb_config_.options_),
       stats_(stats) {
@@ -442,15 +447,18 @@ PartitionedRocksDBStore::~PartitionedRocksDBStore() {
 void PartitionedRocksDBStore::startBackgroundThreads() {
   ld_check(!getSettings()->read_only);
   static_assert(
-      (int)BackgroundThreadType::COUNT == 2,
+      (int)BackgroundThreadType::COUNT == 3,
       "update startBackgroundThreads() after changing BackgroundThreadType");
   ld_check(!background_threads_[0].joinable());
   ld_check(!background_threads_[1].joinable());
+  ld_check(!background_threads_[2].joinable());
 
   background_threads_[(int)BackgroundThreadType::HI_PRI] =
       std::thread([&]() { hiPriBackgroundThreadRun(); });
   background_threads_[(int)BackgroundThreadType::LO_PRI] =
       std::thread([&]() { loPriBackgroundThreadRun(); });
+  background_threads_[(int)BackgroundThreadType::FLUSH] =
+      std::thread([&]() { flushBackgroundThreadRun(); });
 }
 
 void PartitionedRocksDBStore::createAndRegisterFlushCallback() {
@@ -3118,16 +3126,24 @@ int PartitionedRocksDBStore::writeMultiImpl(
   auto max_flush_token = maxFlushToken();
   auto total_bytes_written =
       bytes_written_since_flush_eval_.fetch_add(total_payload_size_bytes);
+  size_t throttling_reeval_trigger =
+      getSettings()->bytes_written_since_throttle_eval_trigger;
 
-  if (total_bytes_written + total_payload_size_bytes >
-      getSettings()->bytes_written_since_flush_eval_trigger) {
+  if ((total_bytes_written + total_payload_size_bytes) /
+          throttling_reeval_trigger >
+      total_bytes_written / throttling_reeval_trigger) {
     RATELIMIT_INFO(std::chrono::seconds(10),
-                   1,
-                   "Shard: %d: waking up flusher thread. Bytes written since "
+                   2,
+                   "Shard: %d: reevaluating throttling. Bytes written since "
                    "last evaluation: %.3fM",
                    getShardIdx(),
                    total_bytes_written / 1e6);
-    wakeupFlushThread();
+    std::lock_guard<std::mutex> lock(throttle_eval_mutex_);
+    auto extrapolated_buf_stats = last_flush_eval_stats_;
+    extrapolated_buf_stats.active_memory_usage +=
+        total_bytes_written + total_payload_size_bytes;
+    throttleIOIfNeeded(extrapolated_buf_stats,
+                       getSettings()->memtable_size_per_node / num_shards_);
   }
 
   // Go over all the holders and mark that write finished on the partition.
@@ -5782,12 +5798,26 @@ void PartitionedRocksDBStore::onMemTableWindowUpdated() {
 }
 
 void PartitionedRocksDBStore::backgroundThreadSleep(BackgroundThreadType type) {
-  static_assert(
-      (int)BackgroundThreadType::COUNT == 2,
-      "update backgroundThreadSleep() after changing BackgroundThreadType");
-  auto period = type == BackgroundThreadType::HI_PRI
-      ? getSettings()->partition_hi_pri_check_period_
-      : getSettings()->partition_lo_pri_check_period_;
+  std::chrono::milliseconds period;
+  switch (type) {
+    case BackgroundThreadType::HI_PRI:
+      period = getSettings()->partition_hi_pri_check_period_;
+      break;
+    case BackgroundThreadType::LO_PRI:
+      period = getSettings()->partition_lo_pri_check_period_;
+      break;
+    case BackgroundThreadType::FLUSH:
+      period = getSettings()->partition_flush_check_period_;
+      if (period.count() == 0) {
+        ld_warning(
+            "System is coming up without flusher thread. No memtable flushes "
+            "will be initiated from logdevice.");
+        period = std::chrono::milliseconds::max();
+      }
+      break;
+    case BackgroundThreadType::COUNT:
+      ld_check(false);
+  }
   shutdown_event_.waitFor(period);
 }
 
@@ -6071,6 +6101,142 @@ void PartitionedRocksDBStore::loPriBackgroundThreadRun() {
   ld_info("Shard %d lo-pri background thread finished", getShardIdx());
 }
 
+void PartitionedRocksDBStore::flushBackgroundThreadRun() {
+  ld_check(!getSettings()->read_only);
+  setBGThreadName("fl", shard_idx_);
+
+  while (true) {
+    backgroundThreadSleep(BackgroundThreadType::FLUSH);
+    if (shutdown_event_.signaled() || inFailSafeMode()) {
+      break;
+    }
+
+    // Grab settings.
+    uint64_t memory_limit = getSettings()->memtable_size_per_node / num_shards_;
+    uint64_t flush_trigger = memory_limit / 2;
+    uint64_t low_watermark = static_cast<uint64_t>(
+        getSettings()->memtable_size_low_watermark_percent / 100.0 *
+        flush_trigger);
+    flush_trigger = std::max(flush_trigger, 1ul);
+    low_watermark = std::min(low_watermark, flush_trigger - 1);
+    uint64_t max_individual_memtable_size = getSettings()->write_buffer_size;
+
+    // Check how much was written since last evaluation.
+    size_t bytes_since_prev_eval = bytes_written_since_flush_eval_.load();
+    if (bytes_since_prev_eval > static_cast<size_t>(1e8)) {
+      ld_info(
+          "At least %.3fMB written to shard %u since last flush evaluation.",
+          bytes_since_prev_eval / 1e6,
+          getShardIdx());
+    }
+
+    // Collect information about memtables in each column family.
+
+    folly::stop_watch<std::chrono::milliseconds> watch;
+    SteadyTimestamp now = currentSteadyTime();
+    auto partitions = partitions_.getVersion();
+    FlushEvaluator evaluator(getShardIdx(),
+                             flush_trigger,
+                             max_individual_memtable_size,
+                             low_watermark,
+                             getSettings());
+
+    std::vector<FlushEvaluator::CFData> non_zero_size_cf;
+    FlushEvaluator::CFData metadata_cf_data{
+        metadata_cf_,
+        getMemTableStats(metadata_cf_->get()),
+        SteadyTimestamp::now()};
+
+    if (unpartitioned_cf_->first_dirtied_time_ != SteadyTimestamp::min()) {
+      FlushEvaluator::CFData unpartitioned_cf_data = {
+          unpartitioned_cf_,
+          getMemTableStats(unpartitioned_cf_->get()),
+          SteadyTimestamp::now()};
+      if (unpartitioned_cf_data.stats.active_memtable_size > 0) {
+        non_zero_size_cf.push_back(std::move(unpartitioned_cf_data));
+      }
+    }
+
+    for (auto& partition : *partitions) {
+      auto& ds = partition->dirty_state_;
+      auto& cf = partition->cf_;
+      if (cf->first_dirtied_time_ != SteadyTimestamp::min()) {
+        FlushEvaluator::CFData cf_data = {
+            partition->cf_,
+            getMemTableStats(partition->cf_->get()),
+            ds.latest_dirty_time};
+        if (cf_data.stats.active_memtable_size > 0) {
+          non_zero_size_cf.push_back(std::move(cf_data));
+        }
+      }
+    }
+
+    // Decide what to flush.
+    auto to_flush =
+        evaluator.pickCFsToFlush(now, metadata_cf_data, non_zero_size_cf);
+    auto evaluate_time = watch.elapsed();
+
+    // TODO (#42131244): do this after D13591963 lands.
+    // std::vector<rocksdb::ColumnFamilyHandle*> handles_to_flush;
+    // handles_to_flush.reserve(to_flush.size());
+    // for (auto& cf_data : to_flush) {
+    //  handles_to_flush.push_back(cf_data.cf->get());
+    //}
+    // flushMemtablesAtomically(handles_to_flush, false /* wait */);
+
+    // Initiate the flushes.
+    for (auto& cf_data : to_flush) {
+      flushMemtable(cf_data.cf, /* wait */ false);
+    }
+
+    auto end = watch.lap();
+    if (end.count() > 5) {
+      auto flush_time = end - evaluate_time;
+      RATELIMIT_INFO(std::chrono::seconds(10),
+                     2,
+                     "Shard:%d: Evaluating flush was slow, total %ldms: "
+                     "evaluation time %ldms: flush time "
+                     "%ldms :input %lu: out %lu: npartitions: %lu",
+                     getShardIdx(),
+                     end.count(),
+                     evaluate_time.count(),
+                     flush_time.count(),
+                     1 + non_zero_size_cf.size(),
+                     to_flush.size(),
+                     partitions->size());
+    }
+
+    STAT_ADD(stats_, triggered_manual_memtable_flush, !to_flush.empty());
+
+    // Throttle writes if memtables are using too much memory.
+
+    auto buf_stats = evaluator.getBufStats();
+
+    {
+      std::lock_guard<std::mutex> lock(throttle_eval_mutex_);
+
+      // Reset bytes_written_since_flush_eval_. We could just set it to zero,
+      // but instead let's be conservative and set it to what it would have been
+      // if we were to set it to zero *before* evaluating flushes.
+      bytes_written_since_flush_eval_.fetch_sub(bytes_since_prev_eval);
+      last_flush_eval_stats_ = buf_stats;
+      throttleIOIfNeeded(buf_stats, memory_limit);
+    }
+
+    RATELIMIT_INFO(
+        std::chrono::seconds(10),
+        1,
+        "Memtable stats for shard %u: active %.3fMB, flushing %.3fMB, "
+        "pinned %.3fMB",
+        getShardIdx(),
+        buf_stats.active_memory_usage / 1e6,
+        buf_stats.memory_being_flushed / 1e6,
+        buf_stats.pinned_buffer_usage / 1e6);
+  }
+
+  ld_info("Shard %d flush background thread finished", getShardIdx());
+}
+
 void PartitionedRocksDBStore::LogState::LatestPartitionInfo::load(
     partition_id_t* out_partition,
     lsn_t* out_first_lsn,
@@ -6179,11 +6345,6 @@ operator()(LocalLogStore* store, FlushToken token) const {
   auto serverInstanceId = processor->getServerInstanceId();
   uint32_t shardIdx = store->getShardIdx();
 
-  // Check if there is a need to wake up flusher thread to reevaluate the
-  // stalling and rejection condition.
-  if (s->shouldStallLowPriWrites()) {
-    s->wakeupFlushThread();
-  }
   // Don't send flush notifications if donors do not rely on them.
   if (processor->settings()->rebuilding_dont_wait_for_flush_callbacks) {
     return;
@@ -6251,84 +6412,6 @@ uint64_t PartitionedRocksDBStore::getTotalTrashSize() {
   return options->sst_file_manager != nullptr
       ? options->sst_file_manager->GetTotalTrashSize()
       : 0;
-}
-
-LocalLogStore::WriteBufStats PartitionedRocksDBStore::scheduleWriteBufFlush(
-    uint64_t total_active_flush_trigger,
-    uint64_t max_buffer_flush_trigger,
-    uint64_t total_active_low_watermark) {
-  if (shutdown_event_.signaled()) {
-    auto buf_stats = LocalLogStore::WriteBufStats();
-    buf_stats.err = E::SHUTDOWN;
-    return buf_stats;
-  }
-  // Reset bytes_written to avoid unnecessary wake ups.
-  bytes_written_since_flush_eval_.store(0);
-
-  folly::stop_watch<std::chrono::milliseconds> watch;
-  SteadyTimestamp now = currentSteadyTime();
-  auto partitions = partitions_.getVersion();
-  FlushEvaluator evaluator(getShardIdx(),
-                           total_active_flush_trigger,
-                           max_buffer_flush_trigger,
-                           total_active_low_watermark,
-                           getSettings());
-
-  std::vector<FlushEvaluator::CFData> non_zero_size_cf;
-  FlushEvaluator::CFData metadata_cf_data{metadata_cf_,
-                                          getMemTableStats(metadata_cf_->get()),
-                                          SteadyTimestamp::now()};
-
-  if (unpartitioned_cf_->first_dirtied_time_ != SteadyTimestamp::min()) {
-    FlushEvaluator::CFData unpartitioned_cf_data = {
-        unpartitioned_cf_,
-        getMemTableStats(unpartitioned_cf_->get()),
-        SteadyTimestamp::now()};
-    if (unpartitioned_cf_data.stats.active_memtable_size > 0) {
-      non_zero_size_cf.push_back(std::move(unpartitioned_cf_data));
-    }
-  }
-
-  for (auto& partition : *partitions) {
-    auto& ds = partition->dirty_state_;
-    auto& cf = partition->cf_;
-    if (cf->first_dirtied_time_ != SteadyTimestamp::min()) {
-      FlushEvaluator::CFData cf_data = {partition->cf_,
-                                        getMemTableStats(partition->cf_->get()),
-                                        ds.latest_dirty_time};
-      if (cf_data.stats.active_memtable_size > 0) {
-        non_zero_size_cf.push_back(std::move(cf_data));
-      }
-    }
-  }
-
-  auto to_flush =
-      evaluator.pickCFsToFlush(now, metadata_cf_data, non_zero_size_cf);
-  auto evaluate_time = watch.elapsed();
-
-  for (auto& cf_data : to_flush) {
-    flushMemtable(cf_data.cf, /* wait */ false);
-  }
-
-  auto end = watch.lap();
-  if (end.count() > 5) {
-    auto flush_time = end - evaluate_time;
-    RATELIMIT_INFO(std::chrono::seconds(10),
-                   1,
-                   "Shard:%d: Evaluating flush was slow, total %ldms: "
-                   "evaluation time %ldms: flush time "
-                   "%ldms :input %lu: out %lu: npartitions: %lu",
-                   getShardIdx(),
-                   end.count(),
-                   evaluate_time.count(),
-                   flush_time.count(),
-                   1 + non_zero_size_cf.size(),
-                   to_flush.size(),
-                   partitions->size());
-  }
-
-  STAT_ADD(stats_, triggered_manual_memtable_flush, !to_flush.empty());
-  return evaluator.getBufStats();
 }
 
 std::vector<CFData> FlushEvaluator::pickCFsToFlush(SteadyTimestamp now,
