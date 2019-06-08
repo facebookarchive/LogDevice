@@ -151,6 +151,20 @@ send_reply(TRIM_Message* msg,
     return Message::Disposition::NORMAL;
   }
 
+  // Check if socket still exists.
+  const auto identity = worker->sender().getPrincipal(from);
+  auto sock_addr = worker->sender().getSockaddr(from);
+  if (!identity || sock_addr == Sockaddr::INVALID) {
+    RATELIMIT_INFO(std::chrono::seconds(1),
+                   3,
+                   "Got TRIM_Message for log %lu but "
+                   "socket was closed while message was waiting in task queue "
+                   "to get processed.",
+                   header.log_id.val_);
+    send_reply(from, header.client_rqid, E::AGAIN, shard_idx);
+    return Message::Disposition::NORMAL;
+  }
+
   WORKER_LOG_STAT_INCR(header.log_id, trim_received);
 
   if (header.log_id == LOGID_INVALID || header.trim_point == LSN_INVALID ||
@@ -167,14 +181,14 @@ send_reply(TRIM_Message* msg,
 
   // queue a task that'll write trim_point to the log store, update the
   // state map and send a reply to the client
-  auto task = std::make_unique<WriteTrimMetadataTask>(
-      header.log_id,
-      header.trim_point,
-      from,
-      header.client_rqid,
-      Sender::describeConnection(from),
-      worker->sender().getSockaddr(from).toStringNoPort(),
-      *worker->sender().getPrincipal(from));
+  auto task =
+      std::make_unique<WriteTrimMetadataTask>(header.log_id,
+                                              header.trim_point,
+                                              from,
+                                              header.client_rqid,
+                                              Sender::describeConnection(from),
+                                              sock_addr.toStringNoPort(),
+                                              *identity);
   worker->getStorageTaskQueueForShard(shard_idx)->putTask(std::move(task));
 
   return Message::Disposition::NORMAL;
