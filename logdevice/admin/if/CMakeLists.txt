@@ -19,6 +19,7 @@ set(_common_libs
   "safety-cpp2"
   "settings-cpp2"
   "nodes-cpp2"
+  "cluster_membership-cpp2"
   "logtree-cpp2"
   "common-cpp2"
   "exceptions-cpp2"
@@ -35,6 +36,7 @@ foreach(THRIFT_SOURCE
         settings
         logtree
         nodes
+        cluster_membership
         safety
         maintenance
 )
@@ -106,6 +108,7 @@ if(thriftpy3)
     fb303-types-py3
     logdevice-admin-common-types-py3
     logdevice-admin-nodes-types-py3
+    logdevice-admin-cluster_membership-types-py3
     logdevice-admin-exceptions-types-py3
     logdevice-admin-logtree-types-py3
     logdevice-admin-safety-types-py3
@@ -120,6 +123,7 @@ foreach(_lang ${_languages})
 add_dependencies(admin-${_lang}-target
                  common-${_lang}-target
                  nodes-${_lang}-target
+                 cluster_membership-${_lang}-target
                  fb303-${_lang}-target
                  exceptions-${_lang}-target
                  logtree-${_lang}-target
@@ -148,5 +152,7 @@ add_dependencies(safety-${_lang}-target
                  nodes-${_lang}-target)
 add_dependencies(settings-${_lang}-target
                  common-${_lang}-target)
-
+add_dependencies(cluster_membership-${_lang}-target
+                 common-${_lang}-target
+                 nodes-${_lang}-target)
 endforeach()

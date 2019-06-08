@@ -7,6 +7,7 @@
  */
 include "common/fb303/if/fb303.thrift"
 include "logdevice/admin/if/common.thrift"
+include "logdevice/admin/if/cluster_membership.thrift"
 include "logdevice/admin/if/exceptions.thrift"
 include "logdevice/admin/if/logtree.thrift"
 include "logdevice/admin/if/maintenance.thrift"
@@ -40,6 +41,65 @@ service AdminAPI extends fb303.FacebookService {
    */
    nodes.NodesStateResponse getNodesState(1: nodes.NodesStateRequest request) throws
       (1: exceptions.NodeNotReady notready);
+
+  /**
+   * Add new nodes to the cluster. The request should contain the spec of each
+   * added node (as nodes.NodeConfig). The admin server will then add them to
+   * NodesConfiguration with disabled storage and sequencing.
+   * Check the documentation of AddNodesRequest for more information.
+   *
+   * If any of the nodes fail, the whole request will throw
+   * ClusterMembershipOperationFailed exception with the failed nodes set in the
+   * exception along with the reason. No changes will get applied in this case.
+   *
+   * Failure reasons can be one of:
+   *  - ALREADY_EXISTS: If the passed NodeID / Name / address already exists.
+   */
+  cluster_membership.AddNodesResponse addNodes(1:
+      cluster_membership.AddNodesRequest request) throws
+      (1: exceptions.NodeNotReady notready,
+       2: cluster_membership.ClusterMembershipOperationFailed failed_op);
+
+  /**
+   * Update service discovery information of some cluster nodes. The passed
+   * node configs should describe the desired final state of the node (not
+   * the diff). The admin server will generate a nodes configuration update to
+   * make it happen.
+   * Check the documentation of UpdateNodesRequest for more information.
+   *
+   * If any of the nodes fail, the whole request will throw
+   * ClusterMembershipOperationFailed exception with the failed nodes set in the
+   * exception along with the reason. No changes will get applied in this case.
+   *
+   * Failure reasons can be one of:
+   *  - NO_MATCH_IN_CONFIG: When the NodeID doesn't match any node.
+   *  - INVALID_REQUEST_NODES_CONFIG: If the update was trying to update
+   *      immutable attributes.
+   */
+  cluster_membership.UpdateNodesResponse updateNodes(1:
+      cluster_membership.UpdateNodesRequest request) throws
+      (1: exceptions.NodeNotReady notready,
+       2: cluster_membership.ClusterMembershipOperationFailed failed_op);
+
+  /**
+   * Removes the nodes matching the passed list of NodeFilters from the
+   * NodesConfiguration.
+   * For the node to be removed from the config:
+   *  1. It must be DISABLED for both storage and sequencing.
+   *  2. It must be seen by the cluster as DEAD.
+   *
+   * If any of the nodes fail, the whole request will throw
+   * ClusterMembershipOperationFailed exception with the failed nodes set in the
+   * exception along with the reason. No changes will get applied in this case.
+   *
+   * Failure reasons can be one of:
+   *  - NOT_DEAD: When the node is still alive.
+   *  - NOT_DISABLED: When the node is still not disabled.
+   */
+  cluster_membership.RemoveNodesResponse removeNodes(1:
+      cluster_membership.RemoveNodesRequest request) throws
+      (1: exceptions.NodeNotReady notready,
+       2: cluster_membership.ClusterMembershipOperationFailed failed_op);
 
   /**
    * Lists the maintenance by group-ids. This returns maintenances from the
