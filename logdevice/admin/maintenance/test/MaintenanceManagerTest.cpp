@@ -84,13 +84,18 @@ class MaintenanceManagerTest : public ::testing::Test {
   std::unique_ptr<folly::ManualExecutor> executor_;
   bool start_subscription_called_{false};
   bool stop_subscription_called_{false};
+  bool periodic_reeval_timer_active_{false};
 };
 
 class MockMaintenanceManagerDependencies
     : public MaintenanceManagerDependencies {
  public:
   explicit MockMaintenanceManagerDependencies(MaintenanceManagerTest* test)
-      : MaintenanceManagerDependencies(nullptr, nullptr, nullptr, nullptr),
+      : MaintenanceManagerDependencies(nullptr,
+                                       test->settings_,
+                                       nullptr,
+                                       nullptr,
+                                       nullptr),
         test_(test) {}
 
   ~MockMaintenanceManagerDependencies() override {}
@@ -180,6 +185,14 @@ class MockMaintenanceManager : public MaintenanceManager {
 
   MOCK_METHOD1(getExpectedStorageStateTransition,
                membership::StorageStateTransition(ShardID));
+
+  void activateReevaluationTimer() override {
+    test_->periodic_reeval_timer_active_ = true;
+  }
+
+  void cancelReevaluationTimer() override {
+    test_->periodic_reeval_timer_active_ = false;
+  }
 
   MaintenanceManagerTest* test_;
 };
@@ -311,6 +324,12 @@ void MaintenanceManagerTest::verifyStorageState(
 void MaintenanceManagerTest::verifyMMStatus(
     MaintenanceManager::MMStatus status) {
   ASSERT_EQ(maintenance_manager_->getStatusInternal(), status);
+  if (status == MaintenanceManager::MMStatus::AWAITING_STATE_CHANGE) {
+    // reeval timer should be active
+    EXPECT_TRUE(periodic_reeval_timer_active_);
+  } else {
+    EXPECT_FALSE(periodic_reeval_timer_active_);
+  }
 }
 
 void MaintenanceManagerTest::verifyMaintenanceStatus(ShardID shard,

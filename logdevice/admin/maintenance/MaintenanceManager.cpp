@@ -241,6 +241,24 @@ void MaintenanceManager::startInternal() {
   ld_debug("Updated MaintenanceManager status to STARTING");
 }
 
+void MaintenanceManager::activateReevaluationTimer() {
+  if (!reevaluation_timer_) {
+    reevaluation_timer_ =
+        std::make_unique<Timer>([this]() { add([this]() { scheduleRun(); }); });
+  }
+  if (!reevaluation_timer_->isActive()) {
+    reevaluation_timer_->activate(
+        deps_->settings()->maintenance_manager_reevaluation_timeout);
+    ld_debug("Periodic reevaluation timer activated");
+  }
+}
+
+void MaintenanceManager::cancelReevaluationTimer() {
+  if (reevaluation_timer_) {
+    reevaluation_timer_->cancel();
+  }
+}
+
 folly::SemiFuture<folly::Unit> MaintenanceManager::stop() {
   auto pf = folly::makePromiseContract<folly::Unit>();
   add([this, mpromise = std::move(pf.first)]() mutable {
@@ -252,6 +270,7 @@ folly::SemiFuture<folly::Unit> MaintenanceManager::stop() {
 
 void MaintenanceManager::stopInternal() {
   deps_->stopSubscription();
+  cancelReevaluationTimer();
   if (status_ == MMStatus::STARTING ||
       status_ == MMStatus::AWAITING_STATE_CHANGE) {
     // We are waiting for a subscription callback to happen or
@@ -714,8 +733,9 @@ void MaintenanceManager::evaluate() {
   if (!run_evaluate_) {
     // State has not changed as there are no updates.
     ld_info("No state change from previous evaluate run. Will run when next "
-            "state change occurs");
+            "state change occurs or periodic evaluation timer expires");
     status_ = MMStatus::AWAITING_STATE_CHANGE;
+    activateReevaluationTimer();
     return;
   }
 
@@ -730,6 +750,7 @@ void MaintenanceManager::evaluate() {
           lsn_to_string(last_ers_version_).c_str());
 
   run_evaluate_ = false;
+  cancelReevaluationTimer();
 
   // This is required because it is possible that we are running evaluate
   // again before the NodesConfig update from previous iteration makes it

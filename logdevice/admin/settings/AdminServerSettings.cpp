@@ -117,6 +117,21 @@ void AdminServerSettings::defineSettings(SettingEasyInit& init) {
      SERVER | REQUIRES_RESTART,
      SettingsCategory::AdminAPI)
 
+    ("maintenance-manager-reevaluation-timeout",
+     &maintenance_manager_reevaluation_timeout,
+     "2min",
+     [](std::chrono::milliseconds val) -> void {
+       if (val.count() <= 0) {
+         throw boost::program_options::error(
+           "maintenance-manager-reevaluation-timeout must be positive"
+         );
+       }
+     },
+     "Timeout after which a new run is scheduled in MaintenanceManager. Used for "
+     "periodic reevaluation of the state in the absence of any state changes",
+     SERVER,
+     SettingsCategory::AdminAPI)
+
     ("enable-safety-check-periodic-metadata-update",
      &enable_safety_check_periodic_metadata_update,
      "false",

@@ -48,10 +48,12 @@ class MaintenanceManagerDependencies {
  public:
   MaintenanceManagerDependencies(
       Processor* processor,
+      UpdateableSettings<AdminServerSettings> admin_settings,
       ClusterMaintenanceStateMachine* cluster_maintenance_state_machine,
       EventLogStateMachine* event_log,
       std::unique_ptr<SafetyCheckScheduler> safety_check_scheduler)
       : processor_(processor),
+        admin_settings_(std::move(admin_settings)),
         cluster_maintenance_state_machine_(cluster_maintenance_state_machine),
         event_log_state_machine_(event_log),
         safety_check_scheduler_(std::move(safety_check_scheduler)) {}
@@ -106,9 +108,15 @@ class MaintenanceManagerDependencies {
     return processor_;
   }
 
+  std::shared_ptr<const AdminServerSettings> settings() const {
+    return admin_settings_.get();
+  }
+
  private:
   // Handle to processor for getting the NodesConfig
   Processor* processor_;
+
+  UpdateableSettings<AdminServerSettings> admin_settings_;
 
   // The MaintenanceManager instance this is attached to
   MaintenanceManager* owner_{nullptr};
@@ -552,6 +560,17 @@ class MaintenanceManager : public SerialWorkContext {
   folly::F14NodeMap<GroupID, Impact> unsafe_groups_;
 
   folly::Promise<folly::Unit> shutdown_promise_;
+
+  // A timer that when fired calls `scheduleRun`
+  // This is useful for triggering reevaluation when no state
+  // changes occur (ex: We kicked off passive drain earlier and
+  // metadata has now been trimmed but there is no new state change
+  // to trigger the re-evaluation)
+  std::unique_ptr<Timer> reevaluation_timer_;
+
+  virtual void activateReevaluationTimer();
+
+  virtual void cancelReevaluationTimer();
 
   // Returns true if status_ is STOPPING
   bool shouldStopProcessing();

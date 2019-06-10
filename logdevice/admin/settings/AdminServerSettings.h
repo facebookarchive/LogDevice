@@ -46,6 +46,10 @@ struct AdminServerSettings : public SettingsBundle {
   // If true, start maintenance manager
   bool enable_maintenance_manager;
 
+  // Timeout after which a reevaluation is scheduled to run in
+  // MaintenanceManager
+  std::chrono::milliseconds maintenance_manager_reevaluation_timeout;
+
  private:
   // Only UpdateableSettings can create this bundle.
   AdminServerSettings() {}

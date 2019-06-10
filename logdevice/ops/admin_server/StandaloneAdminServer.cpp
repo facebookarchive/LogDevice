@@ -363,6 +363,7 @@ void StandaloneAdminServer::createAndAttachMaintenanceManager(
     ld_check(cluster_maintenance_state_machine_);
     auto deps = std::make_unique<maintenance::MaintenanceManagerDependencies>(
         processor_.get(),
+        admin_settings_,
         cluster_maintenance_state_machine_.get(),
         event_log_.get(),
         std::make_unique<maintenance::SafetyCheckScheduler>(

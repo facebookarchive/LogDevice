@@ -990,6 +990,7 @@ bool Server::createAndAttachMaintenanceManager(AdminServer* admin_server) {
     ld_check(admin_server);
     auto deps = std::make_unique<maintenance::MaintenanceManagerDependencies>(
         processor_.get(),
+        admin_settings,
         cluster_maintenance_state_machine_.get(),
         event_log_.get(),
         std::make_unique<maintenance::SafetyCheckScheduler>(
