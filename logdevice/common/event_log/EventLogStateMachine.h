@@ -62,6 +62,14 @@ class EventLogStateMachine
   void start();
 
   /**
+   * Stop reading the event log. Once called, the user should do nothing but
+   * destroy this state machine.
+   *
+   * Note: This method hides the parent's method
+   */
+  void stop();
+
+  /**
    * Must be called if this state machine is running on a server node.
    */
   void setMyNodeID(NodeID nid) {

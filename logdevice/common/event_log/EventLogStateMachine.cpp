@@ -56,6 +56,14 @@ void EventLogStateMachine::start() {
   Parent::start();
 }
 
+void EventLogStateMachine::stop() {
+  ld_info("Stopping EventLogStateMachine");
+  gracePeriodTimer_.cancel();
+  handle_.reset();
+  trim_retry_handler_.reset();
+  Parent::stop();
+}
+
 void EventLogStateMachine::trim() {
   if (!trim_retry_handler_) {
     trim_retry_handler_ = std::make_unique<TrimRSMRetryHandler>(
