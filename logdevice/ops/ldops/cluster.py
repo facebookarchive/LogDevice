@@ -13,7 +13,8 @@ ldops.cluster
 Implements cluster-specific operations.
 """
 
-from typing import FrozenSet, Optional
+import asyncio
+from typing import Dict, FrozenSet, Optional
 
 from ldops import admin_api
 from ldops.exceptions import NodeNotFoundError
@@ -22,7 +23,13 @@ from ldops.types.node import Node
 from ldops.types.socket_address import SocketAddress
 from logdevice.admin.clients import AdminAPI
 from logdevice.admin.common.types import NodeID
-from logdevice.admin.nodes.types import NodeConfig, NodesConfigResponse, NodesFilter
+from logdevice.admin.nodes.types import (
+    NodeConfig,
+    NodesConfigResponse,
+    NodesFilter,
+    NodesStateResponse,
+    NodeState,
+)
 
 
 DEFAULT_THRIFT_PORT = 6440
@@ -109,3 +116,26 @@ async def get_node_by_name(client: AdminAPI, name: str) -> Node:
     # There's guarantee from AdminAPI that there CANNOT be more than one
     # node with the same name
     return _get_node_by_node_config(resp.nodes[0])
+
+
+async def get_nodes_config(client: AdminAPI) -> Dict[Node, NodeConfig]:
+    """
+    Returns dict from Node to NodeConfig
+    """
+    resp: NodesConfigResponse = await admin_api.get_nodes_config(client)
+    return {_get_node_by_node_config(nc): nc for nc in resp.nodes}
+
+
+async def get_nodes_state(client: AdminAPI) -> Dict[Node, NodeState]:
+    """
+    Returns dict from Node to NodeState
+    """
+    nodes_config_resp: NodesConfigResponse
+    nodes_state_resp: NodesStateResponse
+    (nodes_config_resp, nodes_state_resp) = await asyncio.gather(
+        admin_api.get_nodes_config(client), admin_api.get_nodes_state(client)
+    )
+    node_index_to_node: Dict[int, Node] = {
+        nc.node_index: _get_node_by_node_config(nc) for nc in nodes_config_resp.nodes
+    }
+    return {node_index_to_node[ns.node_index]: ns for ns in nodes_state_resp.states}

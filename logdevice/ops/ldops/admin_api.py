@@ -14,7 +14,7 @@ Low-level wrapper around LogDevice Thrift AdminAPI.
 This library generally is not expected to be directly used by external code.
 """
 
-
+import logging
 from typing import Optional
 
 from fb303.types import fb_status
@@ -42,6 +42,9 @@ from logdevice.admin.nodes.types import (
 )
 from logdevice.admin.safety.types import CheckImpactRequest, CheckImpactResponse
 from logdevice.admin.settings.types import SettingsRequest, SettingsResponse
+
+
+logger = logging.getLogger(__name__)
 
 
 async def get_nodes_config(
@@ -77,6 +80,7 @@ async def apply_maintenance(
     """
     Wrapper for applyMaintenance() Thrift method
     """
+    logger.warning(f"applyMaintenance: {req}")
     return await client.applyMaintenance(req)
 
 
