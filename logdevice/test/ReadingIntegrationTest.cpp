@@ -1330,8 +1330,13 @@ TEST_P(ReadingIntegrationTest,
   const std::chrono::seconds waitClientDataTimeout{21};
   const node_index_t node_down = 2;
 
+  auto attrs = logsconfig::DefaultLogAttributes()
+                   .with_scdEnabled(false)
+                   .with_replicationFactor(3);
+
   auto cluster = clusterFactory()
                      .setNumLogs(1)
+                     .setLogAttributes(attrs)
                      .setNumDBShards(nshards)
                      .doPreProvisionEpochMetaData()
                      .allowExistingMetaData()
@@ -1360,21 +1365,23 @@ TEST_P(ReadingIntegrationTest,
   });
 
   // Step 3. Create a gap.
-  lsn_t lsn1 = client->appendSync(logid, Payload("this is loss", 12));
+  lsn_t lsn1 = client->appendSync(logid, Payload("first record", 12));
+  lsn_t lsn2 = client->appendSync(logid, Payload("this is loss", 12));
   ASSERT_NE(LSN_INVALID, lsn1) << "We are unable to append to log";
+  ASSERT_NE(LSN_INVALID, lsn2) << "We are unable to append to log";
   cluster->applyToNodes([&](auto& n) {
     for (shard_index_t shard_idx = 0; shard_idx < nshards; shard_idx++) {
       auto cmd = folly::sformat("record erase --shard {} {} {}",
                                 shard_idx,
                                 logid.val_,
-                                lsn_to_string(lsn1));
+                                lsn_to_string(lsn2));
       n.sendCommand(cmd, true);
     }
   });
 
   // Step 4. Add more data and try to read it by starting from e0n1
-  lsn_t lsn2 = client->appendSync(logid, Payload("available data", 14));
-  ASSERT_NE(LSN_INVALID, lsn2) << "We are unable to append to log";
+  lsn_t lsn3 = client->appendSync(logid, Payload("available data", 14));
+  ASSERT_NE(LSN_INVALID, lsn3) << "We are unable to append to log";
 
   auto reader = client->createReader(1);
   reader->setTimeout(waitClientDataTimeout); // so we don't get stuck in read()
@@ -1388,7 +1395,7 @@ TEST_P(ReadingIntegrationTest,
   auto try_read_some_data = [&]() {
     return wait_until("Can read available data",
                       [&]() {
-                        if (num_records_read >= 1) {
+                        if (num_records_read >= 2) {
                           return true;
                         } else {
                           std::vector<std::unique_ptr<DataRecord>> data;
@@ -1401,7 +1408,7 @@ TEST_P(ReadingIntegrationTest,
                               num_dataloss_gaps_read++;
                             }
                           }
-                          return num_records_read >= 1;
+                          return num_records_read >= 2;
                         }
                       },
                       std::chrono::steady_clock::now() + waitClientDataTimeout);
@@ -1423,7 +1430,7 @@ TEST_P(ReadingIntegrationTest,
 
   EXPECT_EQ(num_dataloss_gaps_read, 1)
       << "Unexpected number of dataloss gaps read";
-  EXPECT_EQ(num_records_read, 1) << "Unexpected number of records read";
+  EXPECT_EQ(num_records_read, 2) << "Unexpected number of records read";
 }
 
 INSTANTIATE_TEST_CASE_P(ReadingIntegrationTest,
