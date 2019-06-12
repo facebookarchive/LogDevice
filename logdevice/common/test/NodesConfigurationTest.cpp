@@ -141,7 +141,6 @@ TEST_F(NodesConfigurationTest, ProvisionBasic) {
   checkCodecSerialization(*config);
 }
 
-
 TEST_F(NodesConfigurationTest, TestMembershipVersionConsistencyValidation) {
   auto config = provisionNodes();
   ASSERT_TRUE(config->validate());
@@ -158,6 +157,46 @@ TEST_F(NodesConfigurationTest, TestMembershipVersionConsistencyValidation) {
   auto c = const_cast<NodesConfiguration*>(config.get());
   c->setVersion(MembershipVersion::Type(2));
   EXPECT_FALSE(c->validate());
+}
+
+TEST_F(NodesConfigurationTest, TestGossipDefaultingToDataAddress) {
+  auto config = provisionNodes();
+  ASSERT_TRUE(config->validate());
+  NodesConfiguration::Update update{};
+
+  update.service_discovery_update =
+      std::make_unique<ServiceDiscoveryConfig::Update>();
+
+  // Add one node with gossip address
+  auto desc1 = genDiscovery(10, both_role, "aa.bb.cc.dd.ee");
+  // For the correctness of the test, assert that both addresses are differect.
+  ASSERT_NE(desc1.address, desc1.gossip_address.value());
+
+  update.service_discovery_update->addNode(
+      10,
+      ServiceDiscoveryConfig::NodeUpdate{
+          ServiceDiscoveryConfig::UpdateType::PROVISION,
+          std::make_unique<NodeServiceDiscovery>(desc1)});
+
+  // Add one node with gossip address
+  auto desc2 = genDiscovery(20, both_role, "aa.bb.cc.dd.ef");
+  desc2.gossip_address.reset();
+  update.service_discovery_update->addNode(
+      20,
+      ServiceDiscoveryConfig::NodeUpdate{
+          ServiceDiscoveryConfig::UpdateType::PROVISION,
+          std::make_unique<NodeServiceDiscovery>(desc2)});
+
+  auto new_config = config->applyUpdate(update);
+  ASSERT_NE(nullptr, new_config);
+
+  // Gossip address is set on N10, Should return the passed gossip address.
+  EXPECT_EQ(desc1.gossip_address,
+            new_config->getNodeServiceDiscovery(10)->getGossipAddress());
+
+  // Gossip address is not set on N20, should return data address.
+  EXPECT_EQ(desc2.address,
+            new_config->getNodeServiceDiscovery(20)->getGossipAddress());
 }
 
 TEST_F(NodesConfigurationTest, ChangingServiceDiscoveryAfterProvision) {

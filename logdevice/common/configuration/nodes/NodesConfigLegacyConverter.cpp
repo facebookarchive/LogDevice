@@ -148,7 +148,12 @@ int NodesConfigLegacyConverter::toLegacyNodesConfig(
     auto& node = res_nodes[n];
     node.name = serv.name;
     node.address = serv.address;
-    node.gossip_address = serv.gossip_address;
+    // During parsing the ServerConfig, if the gossip field is missing it's set
+    // to the data address. There's no way to know if the field was actually set
+    // or not. As a result, converting from an NC with a folly::none to
+    // a ServerConfig and then back to the NC, you won't get the exact same
+    // structure as the gossip address will be set in the returned NC.
+    node.gossip_address = serv.getGossipAddress();
     node.ssl_address = serv.ssl_address;
     node.location = serv.location;
     node.roles = serv.roles;
@@ -182,13 +187,16 @@ NodesConfigLegacyConverter::fromLegacyNodesConfig(
     node_index_t nid = it.first;
     const auto& node = it.second;
     // service discovery
-    serv_disc->setNodeAttributes(nid,
-                                 {node.name,
-                                  node.address,
-                                  node.gossip_address,
-                                  node.ssl_address,
-                                  node.location,
-                                  node.roles});
+    serv_disc->setNodeAttributes(
+        nid,
+        {node.name,
+         node.address,
+         node.gossip_address.valid()
+             ? folly::Optional<Sockaddr>(node.gossip_address)
+             : folly::none,
+         node.ssl_address,
+         node.location,
+         node.roles});
 
     if (node.hasRole(configuration::NodeRole::SEQUENCER)) {
       if (node.sequencer_attributes == nullptr) {

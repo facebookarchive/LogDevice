@@ -19,7 +19,7 @@ typedef u16 node_idx
 
  struct NodeServiceDiscovery {
   1: string address;
-  2: string gossip_address;
+  2: optional string gossip_address;
   3: optional string ssl_address;
   4: optional string location;
   5: u64 roles;

@@ -32,7 +32,13 @@ struct NodeServiceDiscovery {
    * The IP (v4 or v6) address, including port number.
    */
   Sockaddr address{};
-  Sockaddr gossip_address{};
+
+  /**
+   * The IP (v4 or v6) gossip address, including port number. Semantically, if
+   * it's folly::none, it means that the gossip connections should go to the
+   * data address.
+   */
+  folly::Optional<Sockaddr> gossip_address{};
 
   /**
    * The IP (v4 or v6) address, including port number, for SSL communication.
@@ -51,6 +57,8 @@ struct NodeServiceDiscovery {
    * Bitmap storing node roles
    */
   RoleSet roles{};
+
+  const Sockaddr& getGossipAddress() const;
 
   bool hasRole(NodeRole role) const {
     auto id = static_cast<size_t>(role);

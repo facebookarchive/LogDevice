@@ -209,9 +209,11 @@ void fillNodeConfig(
 
   // Other Addresses
   thrift::Addresses other_addresses;
-  thrift::SocketAddress gossip_address;
-  fillSocketAddress(gossip_address, node_sd->gossip_address);
-  other_addresses.set_gossip(std::move(gossip_address));
+  if (node_sd->gossip_address) {
+    thrift::SocketAddress gossip_address;
+    fillSocketAddress(gossip_address, node_sd->gossip_address.value());
+    other_addresses.set_gossip(std::move(gossip_address));
+  }
   if (node_sd->ssl_address) {
     thrift::SocketAddress ssl_address;
     fillSocketAddress(ssl_address, node_sd->ssl_address.value());

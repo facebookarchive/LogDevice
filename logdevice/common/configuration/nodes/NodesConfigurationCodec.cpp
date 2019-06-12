@@ -35,7 +35,9 @@ thrift::NodeServiceDiscovery NodesConfigurationThriftConverter::toThrift(
   thrift::NodeServiceDiscovery disc;
   disc.set_name(discovery.name);
   disc.set_address(discovery.address.toString());
-  disc.set_gossip_address(discovery.gossip_address.toString());
+  if (discovery.gossip_address.hasValue()) {
+    disc.set_gossip_address(discovery.gossip_address->toString());
+  }
   if (discovery.ssl_address.hasValue()) {
     disc.set_ssl_address(discovery.ssl_address.value().toString());
   }
@@ -54,24 +56,26 @@ int NodesConfigurationThriftConverter::fromThrift(
 
   result.name = obj.name;
 
-#define PARSE_SOCK_FIELD(_name)                              \
-  do {                                                       \
-    if (obj._name.empty()) {                                 \
-      ld_error("Missing required field %s.", #_name);        \
-      return -1;                                             \
-    } else {                                                 \
-      auto sock = Sockaddr::fromString(obj._name);           \
-      if (!sock.hasValue()) {                                \
-        ld_error("malformed socket addr field %s.", #_name); \
-        return -1;                                           \
-      }                                                      \
-      result._name = sock.value();                           \
-    }                                                        \
-  } while (0)
+  if (obj.address.empty()) {
+    ld_error("Missing required field address.");
+    return -1;
+  } else {
+    auto sock = Sockaddr::fromString(obj.address);
+    if (!sock.hasValue()) {
+      ld_error("malformed socket addr field address.");
+      return -1;
+    }
+    result.address = sock.value();
+  }
 
-  PARSE_SOCK_FIELD(address);
-  PARSE_SOCK_FIELD(gossip_address);
-#undef PARSE_SOCK_FIELD
+  if (obj.gossip_address_ref().has_value()) {
+    auto sock = Sockaddr::fromString(obj.gossip_address_ref().value());
+    if (!sock.hasValue()) {
+      ld_error("malformed socket addr field gossip_address.");
+      return -1;
+    }
+    result.gossip_address = sock.value();
+  }
 
   if (obj.ssl_address_ref().has_value()) {
     auto sock = Sockaddr::fromString(obj.ssl_address_ref().value());

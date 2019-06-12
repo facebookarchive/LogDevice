@@ -35,9 +35,15 @@ bool isOptionalFieldValid(const F& field, folly::StringPiece name) {
 
 } // namespace
 
+const Sockaddr& NodeServiceDiscovery::getGossipAddress() const {
+  return gossip_address.hasValue() ? gossip_address.value() : address;
+}
+
 bool NodeServiceDiscovery::isValid() const {
+  // TODO: This validation is wrong and will be fixed in the next diff in the
+  // stack.
   if (!isFieldValid(address, "address") &&
-      !isFieldValid(gossip_address, "gossip_address") &&
+      !isOptionalFieldValid(gossip_address, "gossip_address") &&
       !isOptionalFieldValid(ssl_address, "ssl_address")) {
     return false;
   }
@@ -64,13 +70,14 @@ bool NodeServiceDiscovery::isValid() const {
 }
 
 std::string NodeServiceDiscovery::toString() const {
-  return folly::sformat("[{} => A:{},G:{},S:{},L:{},R:{}]",
-                        name,
-                        address.toString(),
-                        gossip_address.toString(),
-                        ssl_address.hasValue() ? ssl_address->toString() : "",
-                        location.hasValue() ? location->toString() : "",
-                        logdevice::toString(roles));
+  return folly::sformat(
+      "[{} => A:{},G:{},S:{},L:{},R:{}]",
+      name,
+      address.toString(),
+      gossip_address.hasValue() ? gossip_address->toString() : "",
+      ssl_address.hasValue() ? ssl_address->toString() : "",
+      location.hasValue() ? location->toString() : "",
+      logdevice::toString(roles));
 }
 
 const Sockaddr&
@@ -78,7 +85,7 @@ NodeServiceDiscovery::getSockaddr(SocketType type,
                                   ConnectionType conntype) const {
   switch (type) {
     case SocketType::GOSSIP:
-      return gossip_address;
+      return getGossipAddress();
 
     case SocketType::DATA:
       if (conntype == ConnectionType::SSL) {
