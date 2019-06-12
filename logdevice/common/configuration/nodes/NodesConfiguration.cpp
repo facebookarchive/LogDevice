@@ -101,6 +101,11 @@ bool NodesConfiguration::serviceDiscoveryConsistentWithMembership() const {
              *service_discovery_, *storage_config_->getMembership());
 }
 
+bool NodesConfiguration::membershipVersionsConsistentWithVersion() const {
+  return getSequencerMembership()->getVersion() <= version_ &&
+      getStorageMembership()->getVersion() <= version_;
+}
+
 bool NodesConfiguration::validateConfigMetadata() const {
   if (version_ == MembershipVersion::EMPTY_VERSION) {
     // every component should be empty and (if versioned) with EMPTY_VERSION
@@ -149,6 +154,13 @@ bool NodesConfiguration::validate(bool validate_config_metadata) const {
   // 1) there must be service discovery info;
   // 2) service discovery info must contain the role for the membership
   if (!serviceDiscoveryConsistentWithMembership()) {
+    err = E::INVALID_CONFIG;
+    return false;
+  }
+
+  // Sequencer & Storage membership versions can't be larger that the NC's main
+  // version;
+  if (!membershipVersionsConsistentWithVersion()) {
     err = E::INVALID_CONFIG;
     return false;
   }
@@ -241,15 +253,16 @@ std::shared_ptr<const NodesConfiguration> NodesConfiguration::applyUpdate(
     }
   }
 
-  // 5) validate the config but ignoring config metadata. e.g., check if the
+  // 5) bump the config version and updates the configuration metadata
+  new_config->touch(update.context);
+
+  // 6) validate the config but ignoring config metadata. e.g., check if the
   // service discovery is consistent with membership. we will validate the
   // config metadata after we update the config metadata in the next step
   if (!new_config->validate(/*validate config metadata*/ false)) {
     return nullptr;
   }
 
-  // 6) bump the config version and updates the configuration metadata
-  new_config->touch(update.context);
   // update storage_hash, num_shards and addr_to_index
   new_config->recomputeConfigMetadata();
   new_config->last_maintenance_ = update.maintenance;

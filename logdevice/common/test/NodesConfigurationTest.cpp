@@ -141,6 +141,25 @@ TEST_F(NodesConfigurationTest, ProvisionBasic) {
   checkCodecSerialization(*config);
 }
 
+
+TEST_F(NodesConfigurationTest, TestMembershipVersionConsistencyValidation) {
+  auto config = provisionNodes();
+  ASSERT_TRUE(config->validate());
+
+  config = config->applyUpdate(addNewNodeUpdate(*config));
+  ASSERT_NE(nullptr, config);
+
+  config = config->applyUpdate(addNewNodeUpdate(*config));
+  ASSERT_NE(nullptr, config);
+
+  ASSERT_EQ(3, config->getStorageMembership()->getVersion().val());
+  ASSERT_TRUE(config->validate());
+
+  auto c = const_cast<NodesConfiguration*>(config.get());
+  c->setVersion(MembershipVersion::Type(2));
+  EXPECT_FALSE(c->validate());
+}
+
 TEST_F(NodesConfigurationTest, ChangingServiceDiscoveryAfterProvision) {
   auto config = provisionNodes();
   ASSERT_TRUE(config->validate());

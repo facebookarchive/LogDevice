@@ -31,7 +31,7 @@ void UpdateRequestData::onDestruction() {
   }
   // TODO: log timestamps, log outliers separately
   NodesConfigurationTracer::Sample sample;
-  sample.nc_update_gen_ = [updates = std::move(updates_)]() mutable {
+  sample.nc_update_gen_ = [updates = std::move(update_)]() mutable {
     return logdevice::toString(std::move(updates));
   };
   // Note that nc is the published nc only if status is OK

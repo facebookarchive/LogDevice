@@ -26,10 +26,6 @@ class NodesConfigurationAPI {
   virtual void update(nodes::NodesConfiguration::Update update,
                       CompletionCb callback) = 0;
 
-  // batched updates
-  virtual void update(std::vector<nodes::NodesConfiguration::Update> updates,
-                      CompletionCb callback) = 0;
-
   // unconditionally overwrite the configuration with the provided config.
   // used in emergency
   virtual void

@@ -55,7 +55,7 @@ struct UpdateRequestData : public NCMRequestData {
   using NCMRequestData::NCMRequestData;
   void onDestruction() override;
 
-  std::vector<NodesConfiguration::Update> updates_;
+  NodesConfiguration::Update update_;
   // proposed NC after NCM applies the updates
   std::shared_ptr<const NodesConfiguration> nc_{nullptr};
 };

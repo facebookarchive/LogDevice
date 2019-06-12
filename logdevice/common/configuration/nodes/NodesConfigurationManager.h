@@ -116,8 +116,6 @@ class NodesConfigurationManager
 
   //////// PROPOSER ////////
   void update(NodesConfiguration::Update, CompletionCb) override;
-  void update(std::vector<nodes::NodesConfiguration::Update> updates,
-              CompletionCb callback) override;
 
   // For emergency tooling; can be invoked from any thread.
   //

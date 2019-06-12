@@ -180,22 +180,9 @@ void NodesConfigurationManager::update(NodesConfiguration::Update update,
     callback(E::SHUTDOWN, nullptr);
     return;
   }
-  std::vector<NodesConfiguration::Update> updates;
-  updates.emplace_back(std::move(update));
-  // this-> needed here for name resolution of "update"
-  this->update(std::move(updates), std::move(callback));
-}
-
-void NodesConfigurationManager::update(
-    std::vector<NodesConfiguration::Update> updates,
-    CompletionCb callback) {
-  if (shutdownSignaled()) {
-    callback(E::SHUTDOWN, nullptr);
-    return;
-  }
 
   ncm::UpdateContext ctx{deps()->getTraceLogger()};
-  ctx.data_.updates_ = std::move(updates);
+  ctx.data_.update_ = std::move(update);
 
   // ensure we are allowed to propose updates
   if (!mode_.isProposer()) {
@@ -352,25 +339,16 @@ void NodesConfigurationManager::onUpdateRequest(ncm::UpdateContext ctx,
   auto current_config = getLatestKnownConfig();
   ld_assert(current_config);
   auto current_version = current_config->getVersion();
-  {
-    auto new_config = std::move(current_config);
-    for (const auto& u : ctx.data_.updates_) {
-      // TODO: it'd be more efficient to push down the batch update logic into
-      // NodesConfiguration
-      new_config = new_config->applyUpdate(u);
-      if (!new_config) {
-        // TODO: better visibility into why particular updates failed
-        ctx.setStatus(err);
-        callback(err, nullptr);
-        return;
-      }
-    }
-    // applyUpdate() bumps the version each time. Even though the protocol can
-    // allow gaps in the version numbers, it's simpler to try to keep it
-    // continuous.
-    ctx.data_.nc_ = new_config->withVersion(
-        membership::MembershipVersion::Type{current_version.val() + 1});
+
+  ld_assert(current_config);
+  ctx.data_.nc_ = current_config->applyUpdate(ctx.data_.update_);
+  if (!ctx.data_.nc_) {
+    // TODO: better visibility into why particular updates failed
+    ctx.setStatus(err);
+    callback(err, nullptr);
+    return;
   }
+
   auto serialized = NodesConfigurationCodec::serialize(*ctx.data_.nc_);
   if (serialized.empty()) {
     ctx.setStatus(err);

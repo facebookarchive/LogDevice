@@ -157,6 +157,7 @@ class NodesConfiguration {
 
   // validations
   bool serviceDiscoveryConsistentWithMembership() const;
+  bool membershipVersionsConsistentWithVersion() const;
   bool validate(bool validate_metadata = true) const;
   bool validateConfigMetadata() const;
 
