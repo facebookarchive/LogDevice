@@ -20,7 +20,7 @@ from logdevice.admin.common.types import (
 
 
 class TestSocketAddress(TestCase):
-    ip6_addr = "2001:DB8::1"
+    ip6_addr = "2001:db8::1"
     ip4_addr = "192.0.2.1"
     unix_path = "/path/to/unix.sock"
     port = 42
@@ -189,3 +189,38 @@ class TestSocketAddress(TestCase):
                     port=self.port,
                 )
             )
+
+    def test_str(self):
+        # Valid IPv6
+        self.assertEqual(
+            str(
+                SocketAddress(
+                    address_family=SocketAddressFamily.INET,
+                    address=IPv6Address(self.ip6_addr),
+                    port=self.port,
+                )
+            ),
+            f"[{self.ip6_addr}]:{self.port}",
+        )
+
+        # Valid IPv4
+        self.assertEqual(
+            str(
+                SocketAddress(
+                    address_family=SocketAddressFamily.INET,
+                    address=IPv4Address(self.ip4_addr),
+                    port=self.port,
+                )
+            ),
+            f"{self.ip4_addr}:{self.port}",
+        )
+
+        # Valid UNIX
+        self.assertEqual(
+            str(
+                SocketAddress(
+                    address_family=SocketAddressFamily.UNIX, path=self.unix_path
+                )
+            ),
+            f"unix:{self.unix_path}",
+        )

@@ -19,10 +19,12 @@ from typing import Dict, FrozenSet, Optional
 from ldops import admin_api
 from ldops.exceptions import NodeNotFoundError
 from ldops.types.cluster import Cluster
+from ldops.types.cluster_view import ClusterView
 from ldops.types.node import Node
 from ldops.types.socket_address import SocketAddress
 from logdevice.admin.clients import AdminAPI
 from logdevice.admin.common.types import NodeID
+from logdevice.admin.exceptions.types import NotSupported
 from logdevice.admin.nodes.types import (
     NodeConfig,
     NodesConfigResponse,
@@ -139,3 +141,36 @@ async def get_nodes_state(client: AdminAPI) -> Dict[Node, NodeState]:
         nc.node_index: _get_node_by_node_config(nc) for nc in nodes_config_resp.nodes
     }
     return {node_index_to_node[ns.node_index]: ns for ns in nodes_state_resp.states}
+
+
+async def get_cluster_view(client: AdminAPI) -> ClusterView:
+    """
+    Returns ClusterView object
+    """
+    (nodes_config_resp, nodes_state_resp, maintenances_resp) = await asyncio.gather(
+        admin_api.get_nodes_config(client),
+        admin_api.get_nodes_state(client),
+        admin_api.get_maintenances(client),
+        return_exceptions=True,
+    )
+
+    if isinstance(maintenances_resp, NotSupported):
+        # This exception can be raised from cluster which does not support
+        # MaintenanceManager yet
+        maintenances = []
+    elif isinstance(maintenances_resp, Exception):
+        raise maintenances_resp
+    else:
+        maintenances = maintenances_resp.maintenances
+
+    if isinstance(nodes_config_resp, Exception):
+        raise nodes_config_resp
+
+    if isinstance(nodes_state_resp, Exception):
+        raise nodes_state_resp
+
+    return ClusterView(
+        nodes_config=nodes_config_resp.nodes,
+        nodes_state=nodes_state_resp.states,
+        maintenances=maintenances,
+    )

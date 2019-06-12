@@ -108,3 +108,14 @@ class SocketAddress:
             assert False, "unreachable"  # pragma: nocover
 
         return socket_address
+
+    def __str__(self) -> str:
+        if self.address_family == SocketAddressFamily.INET:
+            if isinstance(self.address, IPv4Address):
+                return f"{self.address.compressed}:{self.port}"
+            elif isinstance(self.address, IPv6Address):
+                return f"[{self.address.compressed}]:{self.port}"
+            else:
+                assert False, "unreachable"  # pragma: nocover
+        else:
+            return f"unix:{self.path}"
