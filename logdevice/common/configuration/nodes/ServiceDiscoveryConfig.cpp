@@ -40,10 +40,8 @@ const Sockaddr& NodeServiceDiscovery::getGossipAddress() const {
 }
 
 bool NodeServiceDiscovery::isValid() const {
-  // TODO: This validation is wrong and will be fixed in the next diff in the
-  // stack.
-  if (!isFieldValid(address, "address") &&
-      !isOptionalFieldValid(gossip_address, "gossip_address") &&
+  if (!isFieldValid(address, "address") ||
+      !isOptionalFieldValid(gossip_address, "gossip_address") ||
       !isOptionalFieldValid(ssl_address, "ssl_address")) {
     return false;
   }
@@ -110,6 +108,20 @@ namespace {
 bool validateAddressUniqueness(ServiceDiscoveryConfig::MapType node_states) {
   std::unordered_map<Sockaddr, node_index_t, Sockaddr::Hash> seen_addresses;
   for (const auto& kv : node_states) {
+    if (!kv.second.address.valid()) {
+      // This should have been caught in a better check, but let's avoid
+      // crashing in the following lines by returning false here.
+      RATELIMIT_CRITICAL(
+          std::chrono::seconds(10),
+          5,
+          "THIS IS A BUG: Got an invalid address for N%hd when validating "
+          "the uniquness of the ServiceDiscovery addresses. This should have "
+          "been caught in an earlier validation on the ServiceDiscoveryConfig "
+          "struct.",
+          kv.first);
+      ld_assert(kv.second.address.valid());
+      return false;
+    }
     auto res = seen_addresses.emplace(kv.second.address, kv.first);
     if (!res.second) {
       RATELIMIT_ERROR(std::chrono::seconds(10),

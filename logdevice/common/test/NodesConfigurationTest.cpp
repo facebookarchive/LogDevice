@@ -494,6 +494,27 @@ TEST_F(NodesConfigurationTest, touch) {
   EXPECT_EQ(nullptr, c4);
 }
 
+TEST_F(NodesConfigurationTest, SingleInvalidAddressIsInvalid) {
+  auto svc = std::make_unique<NodeServiceDiscovery>();
+  svc->name = "test";
+  svc->address = Sockaddr::INVALID;
+  svc->gossip_address = Sockaddr("127.0.0.1", 1234);
+  svc->roles = 3;
+
+  // Data address is invalid so the whole config is invalid
+  EXPECT_FALSE(svc->isValid());
+
+  // Applying an invalid update should not crash
+  ServiceDiscoveryConfig::Update update;
+  update.addNode(
+      node_index_t(0),
+      {ServiceDiscoveryConfig::UpdateType::PROVISION, std::move(svc)});
+
+  ServiceDiscoveryConfig new_cfg;
+  ServiceDiscoveryConfig cfg;
+  EXPECT_EQ(-1, cfg.applyUpdate(update, &new_cfg));
+}
+
 ///////////// Legacy Format conversion //////////////
 
 TEST_F(NodesConfigurationTest, LegacyConversion1) {
