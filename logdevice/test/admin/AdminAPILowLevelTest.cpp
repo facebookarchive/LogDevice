@@ -215,7 +215,7 @@ TEST_F(AdminAPILowLevelTest, SettingsAPITest) {
   // Check that requested settings are in there
   auto& rebuilding_window_setting =
       filtered_response.settings["rebuilding-local-window"];
-  ASSERT_EQ("20min", rebuilding_window_setting.currentValue);
+  ASSERT_EQ("60min", rebuilding_window_setting.currentValue);
   store_timeout_setting = filtered_response.settings["store-timeout"];
   ASSERT_EQ("1s..12s", store_timeout_setting.currentValue);
 }
