@@ -1153,6 +1153,8 @@ void LogRecoveryRequest::onSealReply(ShardID from,
     ld_check(reply.last_timestamp_.size() == reply.epoch_lng_.size());
     ld_check(reply.max_seen_lsn_.size() == n_recovering_epochs);
 
+    updateTrimPoint(reply.header_.status, reply.header_.trim_point);
+
     // if proto < Compatibility::TAIL_RECORD_IN_SEALED,
     // reply.header_.num_tail_records will be -1
     const bool support_tail_records = (reply.header_.num_tail_records >= 0);
@@ -1325,6 +1327,17 @@ void LogRecoveryRequest::completeSoon(Status status) {
   deferredCompleteTimer_ =
       std::make_unique<Timer>([this, status] { complete(status); });
   deferredCompleteTimer_->activate(std::chrono::milliseconds(0));
+}
+
+void LogRecoveryRequest::updateTrimPoint(Status status, lsn_t trim_point) {
+  Worker* worker = Worker::onThisThread();
+  std::shared_ptr<Sequencer> sequencer =
+      worker->processor_->allSequencers().findSequencer(log_id_);
+
+  if (sequencer != nullptr &&
+      sequencer->getState() == Sequencer::State::ACTIVE) {
+    sequencer->updateTrimPoint(status, trim_point);
+  }
 }
 
 void LogRecoveryRequest::complete(Status status) {

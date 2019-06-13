@@ -22,9 +22,11 @@ namespace facebook { namespace logdevice {
 size_t SEALED_Header::getExpectedSize(uint16_t proto) {
   if (proto < Compatibility::TAIL_RECORD_IN_SEALED) {
     return offsetof(SEALED_Header, num_tail_records);
-  } else {
-    return sizeof(SEALED_Header);
   }
+  if (proto < Compatibility::TRIM_POINT_IN_SEALED) {
+    return offsetof(SEALED_Header, trim_point);
+  }
+  return sizeof(SEALED_Header);
 }
 
 void SEALED_Message::serialize(ProtocolWriter& writer) const {
@@ -62,6 +64,7 @@ MessageReadResult SEALED_Message::deserialize(ProtocolReader& reader) {
   // Defaults for old protocols
   header.shard = -1;
   header.num_tail_records = -1;
+  header.trim_point = LSN_INVALID;
   reader.read(&header, SEALED_Header::getExpectedSize(reader.proto()));
 
   std::vector<lsn_t> epoch_lng(header.lng_list_size);
@@ -171,6 +174,7 @@ void SEALED_Message::createAndSend(const Address& to,
                                    shard_index_t shard_idx,
                                    epoch_t seal_epoch,
                                    Status status,
+                                   lsn_t trim_point,
                                    std::vector<lsn_t> lng_list,
                                    Seal seal,
                                    std::vector<OffsetMap> epoch_offset_map,
@@ -189,6 +193,7 @@ void SEALED_Message::createAndSend(const Address& to,
   header.shard = shard_idx;
   header.seal_epoch = seal_epoch;
   header.status = status;
+  header.trim_point = trim_point;
 
   // header.num_tail_records set by constructor
 

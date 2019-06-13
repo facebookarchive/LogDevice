@@ -253,6 +253,12 @@ class MessageSerializationTest : public ::testing::Test {
       ASSERT_EQ(m.max_seen_lsn_, m2.max_seen_lsn_);
     }
 
+    if (proto < Compatibility::TRIM_POINT_IN_SEALED) {
+      ASSERT_EQ(LSN_INVALID, m2.header_.trim_point);
+    } else {
+      ASSERT_EQ(m.header_.trim_point, m2.header_.trim_point);
+    }
+
     ASSERT_EQ(m.epoch_lng_, m2.epoch_lng_);
     ASSERT_EQ(m.seal_, m2.seal_);
     ASSERT_EQ(m.last_timestamp_, m2.last_timestamp_);
@@ -1065,9 +1071,10 @@ TEST_F(MessageSerializationTest, SEALED) {
       epoch_t(2823409157),
       E::OK,
       lsn_t(0x34DDEBFA27),
-      3, // lng_list_size
-      7, // shard
-      2  // num_tail_records
+      3,                    // lng_list_size
+      7,                    // shard
+      2,                    // num_tail_records
+      lsn_t(0x34DDEBFABEEF) // trim_point
   };
 
   std::vector<TailRecord> tails({genTailRecord(false), genTailRecord(true)});
@@ -1146,6 +1153,32 @@ TEST_F(MessageSerializationTest, SEALED) {
       DO_TEST(m,
               check,
               Compatibility::OFFSET_MAP_SUPPORT_IN_SEALED_MSG,
+              Compatibility::TRIM_POINT_IN_SEALED - 1,
+              [&](uint16_t /*proto*/) { return expected; },
+              nullptr);
+      return 0;
+    };
+
+    auto processor = make_test_processor(create_default_settings<Settings>());
+    run_on_worker(processor.get(), /*worker_id=*/0, test);
+  }
+  {
+    std::string expected =
+        "D38347A48A8EC1BB05CE49A8000027FAEBDD3400000003000000070002000000EFBEFA"
+        "EBDD340000030000000000000004000000000000000500000000000000090000000100"
+        "020001F6090000000000000001F60A0000000000000001F60B00000000000000060000"
+        "0000000000070000000000000008000000000000000D000000000000000E0000000000"
+        "00000F00000000000000D38347A48A8EC1BB130D0000A5030000F75C8E590000000060"
+        "540DEE220200000002000000000000D38347A48A8EC1BB130D0000A5030000F75C8E59"
+        "0000000060540DEE22020000030200000000000018000000140000005461696C205265"
+        "636F726420546573742E000000";
+
+    // this test involves contructing an evbuffer based payload holder and has
+    // to be done on a worker thread
+    auto test = [&] {
+      DO_TEST(m,
+              check,
+              Compatibility::TRIM_POINT_IN_SEALED,
               Compatibility::MAX_PROTOCOL_SUPPORTED,
               [&](uint16_t /*proto*/) { return expected; },
               nullptr);

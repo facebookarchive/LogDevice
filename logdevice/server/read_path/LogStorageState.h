@@ -58,6 +58,7 @@ class LogStorageState {
     START_MESSAGE,
     STORE_MESSAGE,
     GET_TRIM_POINT,
+    SEAL_STORAGE_TASK,
     // NOTE: Make corresponding changes in GetSeqStateRequest.h
   };
 

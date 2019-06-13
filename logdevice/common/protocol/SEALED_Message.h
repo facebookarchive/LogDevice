@@ -55,6 +55,9 @@ struct SEALED_Header {
   // (e.g., protocol < Compatibility::TAIL_RECORD_IN_SEALED)
   int32_t num_tail_records;
 
+  // since Compatibility::TRIM_POINT_IN_SEALED
+  lsn_t trim_point;
+
   // Return the expected size of the header given a protocol version.
   static size_t getExpectedSize(uint16_t proto);
 
@@ -101,6 +104,7 @@ class SEALED_Message : public Message {
       shard_index_t shard_idx,
       epoch_t seal_epoch,
       Status status,
+      lsn_t trim_point = LSN_INVALID,
       std::vector<lsn_t> lng_list = std::vector<lsn_t>(),
       Seal seal = Seal(),
       std::vector<OffsetMap> epoch_offset_map = std::vector<OffsetMap>(),

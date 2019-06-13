@@ -39,6 +39,8 @@ GetSeqStateRequest::getContextString(GetSeqStateRequest::Context ctx) {
       return "store-message";
     case GetSeqStateRequest::Context::GET_TRIM_POINT:
       return "get-trimpoint";
+    case GetSeqStateRequest::Context::SEAL_STORAGE_TASK:
+      return "seal-storage-task";
     case GetSeqStateRequest::Context::GET_TAIL_LSN:
       return "get-tail-lsn";
     case GetSeqStateRequest::Context::REBUILDING_PLANNER:
@@ -62,7 +64,7 @@ GetSeqStateRequest::getContextString(GetSeqStateRequest::Context ctx) {
   }
 
   static_assert(
-      static_cast<int>(GetSeqStateRequest::Context::MAX) == 18,
+      static_cast<int>(GetSeqStateRequest::Context::MAX) == 19,
       "Not in sync with GetSeqStateRequest::Context, and fix switch case "
       "above.");
 
@@ -95,6 +97,9 @@ void GetSeqStateRequest::bumpContextStatsAllAttempts(
       break;
     case GetSeqStateRequest::Context::GET_TRIM_POINT:
       WORKER_STAT_INCR(get_seq_state_attempts_context_gettrimpoint_message);
+      break;
+    case GetSeqStateRequest::Context::SEAL_STORAGE_TASK:
+      WORKER_STAT_INCR(get_seq_state_attempts_context_sealstoragetask);
       break;
     case GetSeqStateRequest::Context::GET_TAIL_LSN:
       WORKER_STAT_INCR(get_seq_state_attempts_context_get_tail_lsn);
@@ -130,7 +135,7 @@ void GetSeqStateRequest::bumpContextStatsAllAttempts(
   }
 
   static_assert(
-      static_cast<int>(GetSeqStateRequest::Context::MAX) == 18,
+      static_cast<int>(GetSeqStateRequest::Context::MAX) == 19,
       "Not in sync with GetSeqStateRequest::Context, and fix switch case "
       "above.");
 }
@@ -160,6 +165,9 @@ void GetSeqStateRequest::bumpContextStats(GetSeqStateRequest::Context ctx) {
       break;
     case Context::GET_TRIM_POINT:
       WORKER_STAT_INCR(get_seq_state_unique_context_gettrimpoint_message);
+      break;
+    case Context::SEAL_STORAGE_TASK:
+      WORKER_STAT_INCR(get_seq_state_unique_context_sealstoragetask);
       break;
     case Context::GET_TAIL_LSN:
       WORKER_STAT_INCR(get_seq_state_unique_context_get_tail_lsn);
@@ -195,7 +203,7 @@ void GetSeqStateRequest::bumpContextStats(GetSeqStateRequest::Context ctx) {
   }
 
   static_assert(
-      static_cast<int>(GetSeqStateRequest::Context::MAX) == 18,
+      static_cast<int>(GetSeqStateRequest::Context::MAX) == 19,
       "Not in sync with GetSeqStateRequest::Context, and fix switch case "
       "above.");
 }

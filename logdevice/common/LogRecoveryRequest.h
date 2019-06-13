@@ -441,6 +441,8 @@ class LogRecoveryRequest : public Request,
                            epoch_t epoch,
                            TailRecord tail_record);
 
+  void updateTrimPoint(Status status, lsn_t trim_point);
+
   const logid_t log_id_;
   epoch_t next_epoch_;
 

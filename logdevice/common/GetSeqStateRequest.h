@@ -120,6 +120,7 @@ class GetSeqStateRequest : public Request, public SequencerRouter::Handler {
     START_MESSAGE,
     STORE_MESSAGE,
     GET_TRIM_POINT,
+    SEAL_STORAGE_TASK,
 
     // Other contexts
     GET_TAIL_LSN,

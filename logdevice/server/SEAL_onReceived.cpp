@@ -119,6 +119,7 @@ Message::Disposition SEAL_onReceived(SEAL_Message* msg, const Address& from) {
                                   header.shard,
                                   header.seal_epoch,
                                   E::PREEMPTED,
+                                  LSN_INVALID,
                                   /*lng_list*/ std::vector<lsn_t>(),
                                   current_seal.value());
     return Message::Disposition::NORMAL;
