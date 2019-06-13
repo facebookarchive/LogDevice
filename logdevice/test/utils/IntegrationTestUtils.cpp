@@ -2642,7 +2642,9 @@ int Cluster::bumpGeneration(node_index_t index) {
   Configuration::NodesConfig nodes_config(std::move(nodes));
   auto config = config_->get();
   std::shared_ptr<ServerConfig> new_server_config =
-      config->serverConfig()->withNodes(std::move(nodes_config));
+      config->serverConfig()
+          ->withNodes(std::move(nodes_config))
+          ->withIncrementedVersion();
   int rv = writeConfig(new_server_config.get(), config->logsConfig().get());
   if (rv != 0) {
     return -1;

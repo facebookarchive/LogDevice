@@ -698,8 +698,8 @@ bool Server::initProcessor() {
 
       auto my_node_id = params_->getMyNodeID().value();
       auto node_svc_discovery =
-          updateable_config_->getNodesConfigurationFromNCMSource()
-              ->getNodeServiceDiscovery(my_node_id);
+          updateable_config_->getNodesConfiguration()->getNodeServiceDiscovery(
+              my_node_id);
       if (node_svc_discovery == nullptr) {
         ld_critical(
             "NodeID '%s' doesn't exist in the NodesConfiguration of %s",
