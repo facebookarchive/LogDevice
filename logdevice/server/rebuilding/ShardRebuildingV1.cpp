@@ -252,7 +252,7 @@ void ShardRebuildingV1::sendRestartLogRebuildingRequest(int worker_id,
 
 void ShardRebuildingV1::activateStallTimer() {
   if (!stallTimer_) {
-    stallTimer_ = folly::make_unique<Timer>([this] { onStallTimerExpired(); });
+    stallTimer_ = std::make_unique<Timer>([this] { onStallTimerExpired(); });
   }
 
   ld_check(stallTimer_);
@@ -373,7 +373,7 @@ void ShardRebuildingV1::activateRestartTimerForLog(logid_t logid) {
   ld_assert(activeLogs_.count(logid));
   auto it = activeLogs_.find(logid);
   if (!it->second.restartTimer) {
-    it->second.restartTimer = folly::make_unique<Timer>(
+    it->second.restartTimer = std::make_unique<Timer>(
 
         [this, logid] { onRestartTimerExpiredForLog(logid); });
   }

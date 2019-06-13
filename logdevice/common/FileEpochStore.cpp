@@ -141,7 +141,7 @@ class FileEpochStore::MetaDataUpdater : public FileEpochStore::FileUpdater {
       len -= sizeof(NodeID);
       if (node_id.isNodeID()) {
         if (!meta_props_out_) {
-          meta_props_out_ = folly::make_unique<EpochStoreMetaProperties>();
+          meta_props_out_ = std::make_unique<EpochStoreMetaProperties>();
         }
         meta_props_out_->last_writer_node_id.assign(node_id);
       }

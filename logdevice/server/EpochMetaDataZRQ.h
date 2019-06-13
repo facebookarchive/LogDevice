@@ -61,7 +61,7 @@ class EpochMetaDataZRQ : public ZookeeperEpochStoreRequest {
       }
       if (node_id.isNodeID()) {
         if (!meta_properties_) {
-          meta_properties_ = folly::make_unique<EpochStoreMetaProperties>();
+          meta_properties_ = std::make_unique<EpochStoreMetaProperties>();
         }
         meta_properties_->last_writer_node_id.assign(node_id);
       }

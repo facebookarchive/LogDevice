@@ -184,7 +184,7 @@ void LogsConfigApiRequest::sendRequestTo(NodeID target) {
       "Sending LOGS_CONFIG_API_REQUEST to Node %s", target.toString().c_str());
   LOGS_CONFIG_API_Header header = {id_, request_type_};
   auto msg = std::make_unique<LOGS_CONFIG_API_Message>(header, payload_);
-  onclose_callback_ = folly::make_unique<LogsConfigSocketClosedCallback>(id_);
+  onclose_callback_ = std::make_unique<LogsConfigSocketClosedCallback>(id_);
   int rv = Worker::onThisThread()->sender().sendMessage(
       std::move(msg), target, onclose_callback_.get());
   if (rv != 0) {

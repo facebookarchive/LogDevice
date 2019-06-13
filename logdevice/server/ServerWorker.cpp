@@ -73,7 +73,7 @@ ServerWorker::ServerWorker(WorkContext::KeepAlive event_loop,
              ThreadID::SERVER_WORKER),
       processor_(processor),
       impl_(new ServerWorkerImpl(this)) {
-  server_read_streams_ = folly::make_unique<AllServerReadStreams>(
+  server_read_streams_ = std::make_unique<AllServerReadStreams>(
       processor->updateableSettings(),
       immutable_settings_->read_storage_tasks_max_mem_bytes /
           immutable_settings_->num_workers,

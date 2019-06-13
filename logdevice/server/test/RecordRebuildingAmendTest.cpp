@@ -147,7 +147,7 @@ class TestRecordRebuildingAmend : public RecordRebuildingAmend,
                               node_availability),
         my_node_index_(my_node_index),
         settings_(create_default_settings<Settings>()) {
-    sender_ = folly::make_unique<MockSender>(this);
+    sender_ = std::make_unique<MockSender>(this);
   }
 
   void fireRetryTimer() {

@@ -67,7 +67,7 @@ class FileEpochStoreTest : public ::testing::Test {
     auto selector = NodeSetSelectorFactory::create(NodeSetSelectorType::RANDOM);
     auto config = cluster_config_->get();
 
-    store_ = folly::make_unique<MockFileEpochStore>(
+    store_ = std::make_unique<MockFileEpochStore>(
         temp_dir_->path().string(), cluster_config_->updateableServerConfig());
 
     int rv = store_->provisionMetaDataLogs(
