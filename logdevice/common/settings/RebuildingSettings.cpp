@@ -82,24 +82,19 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
        "Disable rebuilding. Do not use in production. Only used by tests.",
        SERVER | REQUIRES_RESTART,
        SettingsCategory::Testing);
-  init(
-      "rebuilding-local-window",
-      &local_window,
-      "20min",
-      [](std::chrono::milliseconds val) {
-        if (val.count() <= 0) {
-          throw boost::program_options::error(
-              "rebuilding-local-window must be positive");
-        }
-      },
-      "the size of rebuilding local window expressd in units of time. In the "
-      "current implementation of rebuilding each log is rebuilt independently. "
-      "The local window forces all rebuilding reads on a given node to be at "
-      "most the local window size apart. Reading on logs that are read too "
-      "fast is stalled until lagging logs catch up. This improves the locality "
-      "of reading from LogsDB and makes the disk IO pattern more sequential.",
-      SERVER,
-      SettingsCategory::Rebuilding);
+  init("rebuilding-local-window",
+       &local_window,
+       "60min",
+       [](std::chrono::milliseconds val) {
+         if (val.count() <= 0) {
+           throw boost::program_options::error(
+               "rebuilding-local-window must be positive");
+         }
+       },
+       "Rebuilding will try to keep the difference between max and min "
+       "in-flight records' timestamps less than this value.",
+       SERVER,
+       SettingsCategory::Rebuilding);
   init("rebuilding-global-window",
        &global_window,
        "max",
@@ -134,7 +129,7 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
        SERVER);
   init("rebuilding-max-records-in-flight",
        &max_records_in_flight,
-       "5",
+       "200",
        [](size_t val) {
          if ((ssize_t)val <= 0) {
            throw boost::program_options::error(
@@ -169,7 +164,7 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
        },
        "maximum number of requests to update (amend) a rebuilt record's "
        "copyset that a rebuilding donor node can have in flight at the same "
-       "time, per log.",
+       "time, per log. Rebuilding v1 only.",
        SERVER,
        SettingsCategory::Rebuilding);
   init(
@@ -207,16 +202,16 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
                                                "positive");
          }
        },
-       "maximum number of logs that a donor node can be rebuilding at the same "
-       "time.",
+       "Maximum number of logs that a donor node can be rebuilding at the same "
+       "time. V1 only.",
        SERVER,
        SettingsCategory::Rebuilding);
   init("rebuilding-use-rocksdb-cache",
        &use_rocksdb_cache,
-       "true",
+       "false",
        nullptr,
-       "Allow rebuilding reads to use "
-       "RocksDB block cache.",
+       "Allow rebuilding reads to use RocksDB block cache. Recommended: enable "
+       "for rebuilding v1, disable for rebuilding v2.",
        SERVER,
        SettingsCategory::Rebuilding);
   init("rebuilding-checkpoint-interval-mb",
@@ -233,7 +228,7 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
        "through which the log has been rebuilt by this donor and the "
        "rebuilding version number identifying this rebuilding run. If a node "
        "restarts in the middle of a rebuilding run, it resumes rebuilding of a "
-       "log from that log's last checkpoint.",
+       "log from that log's last checkpoint. V1 only.",
        SERVER,
        SettingsCategory::Rebuilding);
   init("total-log-rebuilding-size-per-shard-mb",
@@ -246,7 +241,7 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
          }
        },
        "Maximum amount of memory that can be consumed by all LogRebuilding "
-       "state machines, per shard",
+       "state machines, per shard. V1 only.",
        SERVER,
        SettingsCategory::Rebuilding);
   init("max-log-rebuilding-size-mb",
@@ -259,7 +254,7 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
          }
        },
        "Maximum amount of memory that can be consumed by a single "
-       "LogRebuilding state machine",
+       "LogRebuilding state machine. V1 only.",
        SERVER,
        SettingsCategory::Rebuilding);
   init("rebuilding-read-only",
@@ -315,14 +310,15 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
        nullptr,
        "If true, the local window will be moved on partition boundaries. If "
        "false, it will instead be moved on fixed time intervals, as set by "
-       "--rebuilding-local-window.",
+       "--rebuilding-local-window. V1 only, V2 always reads partition by "
+       "partition.",
        SERVER,
        SettingsCategory::Rebuilding);
   init("rebuilding-use-iterator-cache",
        &use_iterator_cache,
        "false",
        nullptr,
-       "Place rebuilding iterators in the LogsDB iterator cache.",
+       "Place rebuilding iterators in the LogsDB iterator cache. V1 only.",
        SERVER,
        SettingsCategory::Rebuilding);
   init("rebuild-dirty-shards",
@@ -512,10 +508,9 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
        SettingsCategory::Testing);
   init("rebuilding-v2",
        &enable_v2,
-       "false",
+       "true",
        nullptr,
-       "Enables a new experimental implementation of rebuilding. Don't use it "
-       "in production yet.",
+       "Enables a new implementation of rebuilding. The old one is deprecated.",
        SERVER,
        SettingsCategory::Rebuilding);
   init("rebuilding-rate-limit",
