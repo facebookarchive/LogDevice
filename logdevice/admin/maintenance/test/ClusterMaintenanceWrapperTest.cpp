@@ -217,7 +217,7 @@ TEST(ClusterMaintenanceWrapperTest, SequencerDefinitions) {
   auto unknown_node2 = thrift::NodeID();
   auto unknown_addr = thrift::SocketAddress();
   // this node will be matched by address.
-  unknown_addr.set_address("127.0.0.900");
+  unknown_addr.set_address("127.0.0.250");
   unknown_addr.set_address_family(thrift::SocketAddressFamily::INET);
   unknown_node2.set_address(unknown_addr);
 

@@ -45,6 +45,8 @@ std::string toString(const thrift::SocketAddress& address) {
 
 bool match_by_address(const configuration::nodes::NodeServiceDiscovery& node_sd,
                       const thrift::SocketAddress& address) {
+  // UNIX
+  // Match address on exact path for unix sockets
   if (node_sd.address.isUnixAddress() &&
       address.address_family == thrift::SocketAddressFamily::UNIX) {
     if (address.address_ref().has_value()) {
@@ -54,23 +56,29 @@ bool match_by_address(const configuration::nodes::NodeServiceDiscovery& node_sd,
     return true;
   }
 
+  // INET
+  // Only match fields when they are actually present. Also use Folly parsing
+  // to correctly deal with IPv6 exploded versus compressed notations
+  //
+  // Fields:
+  // 1. Address
+  // 2. Port
   if (!node_sd.address.isUnixAddress() &&
       address.address_family == thrift::SocketAddressFamily::INET) {
-    // match is true as long as nothing below would set it to false.
-    bool match = true;
-
-    // if address string is set, use it to match too.
-    if (address.address_ref().has_value()) {
-      match &=
-          node_sd.address.getAddress().str() == address.address_ref().value();
+    if (!address.address_ref().has_value()) {
+      if (address.port_ref().has_value()) {
+        return node_sd.address.port() == address.port_ref().value();
+      }
+      return false;
+    } else {
+      auto node_address = folly::SocketAddress(
+          node_sd.address.getAddress().str(),
+          address.port_ref().has_value() ? node_sd.address.port() : 0);
+      auto other_address = folly::SocketAddress(
+          address.address_ref().value(),
+          address.port_ref().has_value() ? address.port_ref().value() : 0);
+      return node_address == other_address;
     }
-
-    // if port is set, use it to match.
-    if (address.port_ref().has_value()) {
-      // match by the port value if it's set.
-      match &= node_sd.address.port() == address.port_ref().value();
-    }
-    return match;
   }
   return false;
 }

@@ -43,7 +43,7 @@ TEST(AdminAPIUtilsTest, TestNodeMatchesID) {
   }
 
   {
-    // Simple match by address
+    // IPv4 match by address
     thrift::SocketAddress address;
     address.set_address("127.0.0.1");
     address.set_port(4440);
@@ -55,6 +55,45 @@ TEST(AdminAPIUtilsTest, TestNodeMatchesID) {
     address.set_port(4441);
     id.set_address(address);
     EXPECT_FALSE(nodeMatchesID(node_index_t{12}, sd, id));
+  }
+
+  {
+    // IPv6 match by address
+    thrift::SocketAddress address;
+
+    // Test uncompressed address against compressed
+    address.set_address("2001:4860:4860:0000:0000:0000:0000:8888");
+    address.set_port(4440);
+
+    thrift::NodeID id;
+    id.set_address(address);
+    EXPECT_TRUE(nodeMatchesID(
+        node_index_t{12},
+        NodeServiceDiscovery{"server-2",
+                             Sockaddr("2001:4860:4860::8888", 4440),
+                             Sockaddr("2001:4860:4860::8888", 4441),
+                             folly::none,
+                             folly::none,
+                             0},
+        id));
+  }
+
+  {
+    // Unix socket match by address
+    thrift::SocketAddress address;
+    address.set_address("/unix/socket/path");
+    address.set_address_family(thrift::SocketAddressFamily::UNIX);
+    thrift::NodeID id;
+    id.set_address(address);
+    EXPECT_TRUE(
+        nodeMatchesID(node_index_t{12},
+                      NodeServiceDiscovery{"server-3",
+                                           Sockaddr("/unix/socket/path"),
+                                           Sockaddr("/unix/socket/path/ssl"),
+                                           folly::none,
+                                           folly::none,
+                                           0},
+                      id));
   }
 
   {
