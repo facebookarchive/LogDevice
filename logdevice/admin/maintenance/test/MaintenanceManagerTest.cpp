@@ -644,6 +644,8 @@ TEST_F(MaintenanceManagerTest, NodesConfigUpdateTest) {
   std::unordered_map<ShardID, membership::StorageState> map;
   for (auto s : {N1S0, N2S0, N9S0}) {
     verifyStorageState(s, membership::StorageState::RW_TO_RO);
+    verifyShardOperationalState(
+        s, folly::makeExpected<Status>(ShardOperationalState::ENABLED));
     map[s] = membership::StorageState::READ_ONLY;
   }
   overrideStorageState(map);

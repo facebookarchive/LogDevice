@@ -525,10 +525,11 @@ MaintenanceManager::getShardOperationalStateInternal(ShardID shard) const {
 
   switch (storageState.value()) {
     case membership::StorageState::NONE:
+    case membership::StorageState::NONE_TO_RO:
       result = ShardOperationalState::DRAINED;
       break;
-    case membership::StorageState::NONE_TO_RO:
-    case membership::StorageState::RW_TO_RO:
+      // We only claim that the shard is MAY_DISAPPEAR if we successfully
+      // transitioned to READ_ONLY.
     case membership::StorageState::READ_ONLY:
       result = ShardOperationalState::MAY_DISAPPEAR;
       break;
@@ -536,6 +537,7 @@ MaintenanceManager::getShardOperationalStateInternal(ShardID shard) const {
       result = ShardOperationalState::MIGRATING_DATA;
       break;
     case membership::StorageState::READ_WRITE:
+    case membership::StorageState::RW_TO_RO:
       if (exclude_from_nodeset) {
         result = ShardOperationalState::PASSIVE_DRAINING;
       } else {
