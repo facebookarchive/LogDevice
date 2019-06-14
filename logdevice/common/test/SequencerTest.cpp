@@ -767,6 +767,20 @@ TEST_F(SequencerTest, ActivationFailures) {
   ASSERT_EQ(Sequencer::State::PERMANENT_ERROR, sequencer_->getState());
 }
 
+TEST_F(SequencerTest, FirstActivationPreempted) {
+  settings_.reactivation_limit = RATE_UNLIMITED;
+  setUp();
+  ASSERT_EQ(Sequencer::State::UNAVAILABLE, sequencer_->getState());
+  sequencer_->startActivation([this](logid_t) { return getMetaData(); });
+  // however activation was preempted by another node due to a race
+  sequencer_->notePreempted(epoch_t(2), NodeID(3, 1));
+  ASSERT_TRUE(sequencer_->isPreempted());
+  sequencer_->onActivationFailed();
+  // sequencer should go to preempted state
+  ASSERT_EQ(Sequencer::State::PREEMPTED, sequencer_->getState());
+  ASSERT_EQ(NodeID(3, 1), sequencer_->checkIfPreempted(epoch_t(2)));
+}
+
 TEST_F(SequencerTest, PreemptionSimple) {
   settings_.reactivation_limit = RATE_UNLIMITED;
   setUp();

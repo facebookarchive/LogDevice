@@ -866,21 +866,21 @@ void Sequencer::onActivationFailed() {
     return;
   }
 
-  auto current = getCurrentEpochSequencer();
-  if (current == nullptr) {
+  if (isPreempted()) {
+    // the sequencer can get preempted without a current epoch sequencer
+    // (i.e., lost the activation race with a different node during first
+    // time activation). Still move sequencer to PREEMPTED to indicat the
+    // preemption.
+    next = State::PREEMPTED;
+  } else if (getCurrentEpochSequencer() == nullptr) {
     next = State::UNAVAILABLE;
   } else {
-    ld_check(getCurrentEpoch() == current->getEpoch());
-    if (isPreempted()) {
-      next = State::PREEMPTED;
-    } else {
-      // if the Sequencer has a valid epoch and is not preempted, move
-      // it back to ACTIVE state. It is possible that the Sequencer can
-      // still not take new appends because it has run out-of available ESNs.
-      // In such case, the next Appender will still trigger reactivation of the
-      // Sequencer.
-      next = State::ACTIVE;
-    }
+    // if the Sequencer has a valid epoch and is not preempted, move
+    // it back to ACTIVE state. It is possible that the Sequencer can
+    // still not take new appends because it has run out-of available ESNs.
+    // In such case, the next Appender will still trigger reactivation of the
+    // Sequencer.
+    next = State::ACTIVE;
   }
 
   setState(next);
