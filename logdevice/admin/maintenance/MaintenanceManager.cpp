@@ -304,16 +304,13 @@ void MaintenanceManager::scheduleRun() {
 
 folly::SemiFuture<folly::Expected<thrift::NodeState, Status>>
 MaintenanceManager::getNodeState(node_index_t node) {
-  auto pf =
-      folly::makePromiseContract<folly::Expected<thrift::NodeState, Status>>();
-  add([this, node, mpromise = std::move(pf.first)]() mutable {
+  return folly::via(this).thenValue([this, node](auto&&) {
     ClusterState* cluster_state = nullptr;
     if (deps_->getProcessor()) {
       cluster_state = deps_->getProcessor()->cluster_state_.get();
     }
-    mpromise.setValue(getNodeStateInternal(node, cluster_state));
+    return getNodeStateInternal(node, cluster_state);
   });
-  return std::move(pf.second);
 }
 
 folly::SemiFuture<folly::Expected<NodesStateResponse, MaintenanceError>>
@@ -377,12 +374,10 @@ MaintenanceManager::getNodeStateInternal(
 
 folly::SemiFuture<folly::Expected<thrift::SequencerState, Status>>
 MaintenanceManager::getSequencerState(node_index_t node) {
-  auto pf = folly::makePromiseContract<
-      folly::Expected<thrift::SequencerState, Status>>();
-  add([this, node, mpromise = std::move(pf.first)]() mutable {
-    mpromise.setValue(getSequencerStateInternal(node));
-  });
-  return std::move(pf.second);
+  return folly::via(this).thenValue(
+      [this, node](auto &&) -> folly::Expected<thrift::SequencerState, Status> {
+        return getSequencerStateInternal(node);
+      });
 }
 
 thrift::SequencerState
@@ -406,12 +401,8 @@ MaintenanceManager::getSequencerStateInternal(node_index_t node) const {
 
 folly::SemiFuture<folly::Expected<thrift::ShardState, Status>>
 MaintenanceManager::getShardState(ShardID shard) {
-  auto pf =
-      folly::makePromiseContract<folly::Expected<thrift::ShardState, Status>>();
-  add([this, shard, mpromise = std::move(pf.first)]() mutable {
-    mpromise.setValue(getShardStateInternal(shard));
-  });
-  return std::move(pf.second);
+  return folly::via(this).thenValue(
+      [this, shard](auto&&) { return getShardStateInternal(shard); });
 }
 
 folly::Expected<thrift::ShardState, Status>
@@ -477,13 +468,9 @@ MaintenanceManager::getShardStateInternal(ShardID shard) const {
 
 folly::SemiFuture<folly::Expected<ShardOperationalState, Status>>
 MaintenanceManager::getShardOperationalState(ShardID shard) {
-  auto pf = folly::makePromiseContract<
-      folly::Expected<ShardOperationalState, Status>>();
-  add([this, shard, mpromise = std::move(pf.first)]() mutable {
-    mpromise.setValue(getShardOperationalStateInternal(shard));
+  return folly::via(this).thenValue([this, shard](auto&&) {
+    return getShardOperationalStateInternal(shard);
   });
-
-  return std::move(pf.second);
 }
 
 folly::Expected<ShardOperationalState, Status>
@@ -779,28 +766,35 @@ void MaintenanceManager::evaluate() {
   collectAllSemiFuture(
       shards_futures.second.begin(), shards_futures.second.end())
       .via(this)
+      // Cont. When all shard workflows finish processing. At this point we have
+      // a list of MaintenanceStatus states for the shards that tell us how we
+      // should proceed with each workflow.
       .thenValue([this, shards = std::move(shards_futures.first)](
-                     std::vector<folly::Try<MaintenanceStatus>> result) {
+                     std::vector<folly::Try<MaintenanceStatus>>&& result) {
         ld_debug("runShardWorkflows complete. processing results");
         processShardWorkflowResult(shards, result);
         auto nodes_futures = runSequencerWorkflows();
+        // Process all sequencer workflow results now.
         return collectAllSemiFuture(
                    nodes_futures.second.begin(), nodes_futures.second.end())
             .via(this)
             .thenValue([this, n = std::move(nodes_futures.first)](
-                           std::vector<folly::Try<MaintenanceStatus>>
+                           std::vector<folly::Try<MaintenanceStatus>>&&
                                sequencerResult) {
               ld_debug("runSequencerWorkflows complete. processing results");
-              processSequencerWorkflowResult(n, std::move(sequencerResult));
+              processSequencerWorkflowResult(n, sequencerResult);
               return folly::unit;
             });
       })
+      // Let's perform a NodesConfiguration update if needed. These updates
+      // should include any change that doesn't require safety check run.
       .thenValue([this](auto &&) -> folly::SemiFuture<NCUpdateResult> {
         if (shouldStopProcessing()) {
           return folly::makeUnexpected<Status>(E::SHUTDOWN);
         }
         return scheduleNodesConfigUpdates();
       })
+      // We have heared back from NodesConfiguration update.
       .thenValue([this](NCUpdateResult&& result)
                      -> folly::SemiFuture<SafetyCheckResult> {
         if (result.hasError() && result.error() != Status::EMPTY) {
@@ -829,18 +823,21 @@ void MaintenanceManager::evaluate() {
         }
         return scheduleSafetyCheck();
       })
-      .thenValue([this](SafetyCheckResult result)
+      // We have heared back from the safety check scheduler. Let's execute
+      // NodesConfiguration updates that were blocked on safety check.
+      .thenValue([this](SafetyCheckResult&& result)
                      -> folly::SemiFuture<NCUpdateResult> {
         if (result.hasError()) {
-          return folly::makeUnexpected<Status>(std::move(result).error());
+          return folly::makeUnexpected<Status>(std::move(result.error()));
         }
         if (shouldStopProcessing()) {
           return folly::makeUnexpected<Status>(E::SHUTDOWN);
         }
-        processSafetyCheckResult(std::move(result).value());
+        processSafetyCheckResult(result.value());
         return scheduleNodesConfigUpdates();
       })
-      .thenValue([this](NCUpdateResult result) {
+      // We have heared back from NodesConfiguration update.
+      .thenValue([this](NCUpdateResult&& result) {
         if (result.hasError() && result.error() == Status::SHUTDOWN) {
           ld_check(shouldStopProcessing());
           finishShutdown();
@@ -884,6 +881,7 @@ void MaintenanceManager::processShardWorkflowResult(
     ld_check(status[i].hasValue());
     ld_check(active_shard_workflows_.count(shard));
     auto s = status[i].value();
+    active_shard_workflows_[shard].second = s;
     ld_debug("MaintenanceStatus for Shard:%s set to %s",
              toString(shard).c_str(),
              apache::thrift::util::enumNameSafe(s).c_str());
@@ -892,14 +890,12 @@ void MaintenanceManager::processShardWorkflowResult(
       case MaintenanceStatus::AWAITING_SAFETY_CHECK:
       case MaintenanceStatus::AWAITING_DATA_REBUILDING:
       case MaintenanceStatus::RETRY:
-        active_shard_workflows_[shard].second = s;
         if (active_shard_workflows_[shard].first->getTargetOpStates().count(
                 ShardOperationalState::ENABLED)) {
           has_shards_to_enable_ = true;
         }
         break;
       case MaintenanceStatus::COMPLETED:
-        active_shard_workflows_[shard].second = s;
         if (active_shard_workflows_[shard].first->getTargetOpStates().count(
                 ShardOperationalState::ENABLED)) {
           removeShardWorkflow(shard);
@@ -907,7 +903,6 @@ void MaintenanceManager::processShardWorkflowResult(
         break;
       default:
         ld_critical("Unexpected Status set by workflow");
-        active_shard_workflows_[shard].second = s;
         break;
     }
     i++;
