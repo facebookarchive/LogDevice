@@ -441,6 +441,10 @@ MaintenanceManager::getShardStateInternal(ShardID shard) const {
   state.set_storage_state(
       toThrift<membership::thrift::StorageState>(storageState.value()));
 
+  // TODO: DEPRECATED. remove once we enable MM everywere.
+  state.set_current_storage_state(
+      toThrift<thrift::ShardStorageState>(storageState.value()));
+
   auto metadataState = getMetaDataStorageStateInternal(shard);
   if (metadataState.hasError()) {
     return folly::makeUnexpected(std::move(metadataState.error()));

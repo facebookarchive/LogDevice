@@ -291,17 +291,13 @@ void fillNodeState(
         continue;
       }
 
-      const auto legacy_storage_state =
-          configuration::nodes::NodesConfigLegacyConverter::
-              toLegacyStorageState(result.second.storage_state);
-
       thrift::ShardState state;
       auto node_info = rebuilding_set
           ? rebuilding_set->getNodeInfo(node_index, shard_index)
           : nullptr;
       // DEPRECATED
       state.set_current_storage_state(
-          toThrift<thrift::ShardStorageState>(legacy_storage_state));
+          toThrift<thrift::ShardStorageState>(result.second.storage_state));
 
       state.set_storage_state(toThrift<membership::thrift::StorageState>(
           result.second.storage_state));

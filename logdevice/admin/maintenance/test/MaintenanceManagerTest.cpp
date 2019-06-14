@@ -546,6 +546,8 @@ TEST_F(MaintenanceManagerTest, GetNodeStateTest) {
   expected_shard_state.set_data_health(ShardDataHealth::HEALTHY);
   expected_shard_state.set_current_operational_state(
       ShardOperationalState::MIGRATING_DATA);
+  expected_shard_state.set_current_storage_state(
+      thrift::ShardStorageState::DATA_MIGRATION);
   expected_shard_state.set_storage_state(
       membership::thrift::StorageState::DATA_MIGRATION);
   expected_shard_state.set_metadata_state(

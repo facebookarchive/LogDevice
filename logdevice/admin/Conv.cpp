@@ -75,6 +75,27 @@ toThrift(const configuration::StorageState& storage_state) {
   return thrift::ShardStorageState::DISABLED;
 }
 
+template <>
+thrift::ShardStorageState
+toThrift(const membership::StorageState& storage_state) {
+  switch (storage_state) {
+    case membership::StorageState::NONE:
+    case membership::StorageState::NONE_TO_RO:
+      return thrift::ShardStorageState::DISABLED;
+    case membership::StorageState::READ_ONLY:
+      return thrift::ShardStorageState::READ_ONLY;
+    case membership::StorageState::READ_WRITE:
+    case membership::StorageState::RW_TO_RO:
+      return thrift::ShardStorageState::READ_WRITE;
+    case membership::StorageState::DATA_MIGRATION:
+      return thrift::ShardStorageState::DATA_MIGRATION;
+    case membership::StorageState::INVALID:
+      return thrift::ShardStorageState::DISABLED;
+  }
+  ld_check(false);
+  return thrift::ShardStorageState::DISABLED;
+}
+
 // DEPRECATED
 template <>
 configuration::StorageState

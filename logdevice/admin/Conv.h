@@ -34,6 +34,9 @@ template <>
 thrift::ShardStorageState toThrift(const configuration::StorageState& input);
 
 template <>
+thrift::ShardStorageState toThrift(const membership::StorageState& input);
+
+template <>
 membership::thrift::StorageState
 toThrift(const membership::StorageState& input);
 

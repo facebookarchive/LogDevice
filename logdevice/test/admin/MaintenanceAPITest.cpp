@@ -449,9 +449,19 @@ TEST_F(MaintenanceAPITest, getNodeState) {
   wait_until("MaintenanceManager is ready", [&]() {
     thrift::NodesStateRequest req;
     thrift::NodesStateResponse resp;
+    // Under stress runs, the initial initialization might take a while, let's
+    // be patient and increase the timeout here.
+    auto rpc_options = apache::thrift::RpcOptions();
+    rpc_options.setTimeout(std::chrono::minutes(1));
     try {
-      admin_client->sync_getNodesState(resp, req);
-      return true;
+      admin_client->sync_getNodesState(rpc_options, resp, req);
+      if (resp.get_states().size() > 0) {
+        const auto& state = resp.get_states()[0];
+        if (ServiceState::ALIVE == state.get_daemon_state()) {
+          return true;
+        }
+      }
+      return false;
     } catch (thrift::NodeNotReady& e) {
       return false;
     }
@@ -470,6 +480,8 @@ TEST_F(MaintenanceAPITest, getNodeState) {
       ASSERT_EQ(2, shard_states.size());
       for (const auto& shard : shard_states) {
         ASSERT_EQ(ShardDataHealth::HEALTHY, shard.get_data_health());
+        ASSERT_EQ(thrift::ShardStorageState::READ_WRITE,
+                  shard.get_current_storage_state());
         ASSERT_EQ(membership::thrift::StorageState::READ_WRITE,
                   shard.get_storage_state());
         ASSERT_EQ(membership::thrift::MetaDataStorageState::METADATA,
@@ -533,6 +545,9 @@ TEST_F(MaintenanceAPITest, getNodeState) {
     for (const auto& shard : shard_states) {
       ASSERT_EQ(
           membership::thrift::StorageState::NONE, shard.get_storage_state());
+      // The deprecated ShardStorageState
+      ASSERT_EQ(thrift::ShardStorageState::DISABLED,
+                shard.get_current_storage_state());
       ASSERT_EQ(ShardDataHealth::EMPTY, shard.get_data_health());
       ASSERT_EQ(membership::thrift::MetaDataStorageState::METADATA,
                 shard.get_metadata_state());
