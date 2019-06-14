@@ -9,6 +9,7 @@
 #include "logdevice/admin/AdminAPIUtils.h"
 
 #include "logdevice/admin/Conv.h"
+#include "logdevice/admin/toString.h"
 #include "logdevice/common/AuthoritativeStatus.h"
 #include "logdevice/common/ClusterState.h"
 #include "logdevice/common/configuration/Configuration.h"
@@ -21,27 +22,6 @@
 using namespace facebook::logdevice::configuration;
 
 namespace facebook { namespace logdevice {
-
-std::string toString(const thrift::SocketAddressFamily& family) {
-  switch (family) {
-    case thrift::SocketAddressFamily::INET:
-      return "INET";
-    case thrift::SocketAddressFamily::UNIX:
-      return "UNIX";
-  }
-  ld_check(false);
-  return "";
-}
-
-std::string toString(const thrift::SocketAddress& address) {
-  return folly::format("{}-[{}{}]",
-                       toString(address.get_address_family()),
-                       address.get_address() ? *address.get_address() : "",
-                       address.get_port()
-                           ? ":" + std::to_string(*address.get_port())
-                           : "")
-      .str();
-}
 
 bool match_by_address(const configuration::nodes::NodeServiceDiscovery& node_sd,
                       const thrift::SocketAddress& address) {
@@ -352,6 +332,10 @@ ShardSet resolveShardOrNode(
   const auto& serv_disc = nodes_configuration.getServiceDiscovery();
   shard_index_t shard_index = (shard.shard_index < 0) ? -1 : shard.shard_index;
   shard_size_t num_shards = 1;
+  if (!isNodeIDSet(shard.get_node())) {
+    throw thrift::InvalidRequest(
+        "NodeID object must have at least one attribute set");
+  }
   folly::Optional<node_index_t> found_node =
       findNodeIndex(shard.get_node(), nodes_configuration);
   // Node is not in nodes configuration
@@ -392,6 +376,11 @@ ShardSet expandShardSet(
     output.insert(expanded.begin(), expanded.end());
   }
   return output;
+}
+
+bool isNodeIDSet(const thrift::NodeID& id) {
+  return (id.address_ref().has_value() || id.node_index_ref().has_value() ||
+          id.name_ref().has_value());
 }
 
 bool nodeMatchesID(node_index_t node_index,

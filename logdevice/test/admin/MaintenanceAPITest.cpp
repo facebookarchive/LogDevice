@@ -128,6 +128,36 @@ TEST_F(MaintenanceAPITest, ApplyMaintenancesInvalid1) {
         admin_client->sync_applyMaintenance(resp, def),
         thrift::InvalidRequest);
   }
+  // Apply maintenance for a sequencer NodeID that is unset.
+  {
+    MaintenanceDefinition def;
+    def.set_user("my-user");
+    def.set_sequencer_nodes({thrift::NodeID()});
+    def.set_sequencer_target_state(SequencingState::DISABLED);
+
+    MaintenanceDefinitionResponse resp;
+    ASSERT_THROW(
+        // Will fail since sequencers have empty NodeID
+        admin_client->sync_applyMaintenance(resp, def),
+        thrift::InvalidRequest);
+  }
+  // Apply maintenance for a ShardID that has only the shard part set.
+  {
+    MaintenanceDefinition def;
+    def.set_user("my-user");
+    thrift::NodeID node; // has nothing set.
+    thrift::ShardID shard;
+    shard.set_shard_index(-1);
+    shard.set_node(node);
+    def.set_shards({shard});
+    def.set_shard_target_state(ShardOperationalState::MAY_DISAPPEAR);
+
+    MaintenanceDefinitionResponse resp;
+    ASSERT_THROW(
+        // Will fail since sequencers have empty NodeID
+        admin_client->sync_applyMaintenance(resp, def),
+        thrift::InvalidRequest);
+  }
 }
 
 TEST_F(MaintenanceAPITest, ApplyMaintenancesValid) {

@@ -30,6 +30,7 @@ class ShardWorkflow {
   explicit ShardWorkflow(ShardID shard, const EventLogWriter* event_log_writer)
       : shard_(shard), event_log_writer_(event_log_writer) {
     created_at_ = SystemTimestamp::now();
+    last_updated_at_ = created_at_;
   }
 
   // moveable.

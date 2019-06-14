@@ -22,6 +22,7 @@ class SequencerWorkflow {
  public:
   explicit SequencerWorkflow(node_index_t node) : node_(node) {
     created_at_ = SystemTimestamp::now();
+    last_updated_at_ = created_at_;
   }
 
   // moveable.

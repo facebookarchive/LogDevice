@@ -86,6 +86,10 @@ toShardOperationalState(membership::StorageState storage_state,
                         const EventLogRebuildingSet::NodeInfo* node_info);
 
 /**
+ * Checks if the NodeID has at least one filter set.
+ */
+bool isNodeIDSet(const thrift::NodeID& id);
+/**
  * Checks if the passed node (with the index node_index) matches the passed the
  * NodeID. The node mathes if all the set ID attributes match the node's
  * attributes.

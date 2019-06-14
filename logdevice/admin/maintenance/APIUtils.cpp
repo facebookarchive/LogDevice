@@ -13,6 +13,7 @@
 
 #include "logdevice/admin/AdminAPIUtils.h"
 #include "logdevice/admin/maintenance/types.h"
+#include "logdevice/admin/toString.h"
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/util.h"
 
@@ -108,12 +109,17 @@ expandMaintenances(
 
     folly::F14FastSet<node_index_t> all_sequencers;
     for (const auto& node : definition.get_sequencer_nodes()) {
+      if (!isNodeIDSet(node)) {
+        return folly::makeUnexpected(InvalidRequest(
+            "A NodeID object passed in the list of sequencers is completely "
+            "unset. At least a single value must be set"));
+      }
       folly::Optional<node_index_t> found_node =
           findNodeIndex(node, *nodes_config);
       if (!found_node) {
         return folly::makeUnexpected(InvalidRequest(folly::sformat(
             "Sequencer node {} was not found in the nodes configuration",
-            *found_node)));
+            toString(node))));
       }
       // validate that it's actually a sequencer node
       if (!nodes_config->isSequencerNode(*found_node)) {

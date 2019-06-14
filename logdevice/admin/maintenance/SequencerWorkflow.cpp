@@ -28,6 +28,9 @@ SequencerWorkflow::run(bool is_sequencer_enabled) {
       promise_future.first.setValue(MaintenanceStatus::AWAITING_SAFETY_CHECK);
     }
   }
+  // This gets updated by the last time we evaluated this function. Even if the
+  // status didn't change we know that we evaluated it recently.
+  last_updated_at_ = SystemTimestamp::now();
   return std::move(promise_future.second);
 }
 
