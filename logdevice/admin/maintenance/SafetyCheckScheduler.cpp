@@ -31,9 +31,7 @@ SafetyCheckScheduler::schedule(
     ld_warning(
         "We are producing an empty safety-check execution plan. This should "
         "only happen if the maintenance workflows supplied are empty!");
-    auto pf = folly::makePromiseContract<folly::Expected<Result, Status>>();
-    pf.first.setValue(folly::makeUnexpected(E::INVALID_PARAM));
-    return std::move(pf.second);
+    return folly::makeUnexpected(E::INVALID_PARAM);
   }
   // Execute Progressively.
   ExecutionState state;
@@ -51,9 +49,7 @@ SafetyCheckScheduler::executePlan(
   updateResult(state);
 
   if (state.plan.size() == 0) {
-    auto pf = folly::makePromiseContract<folly::Expected<Result, Status>>();
-    pf.first.setValue(std::move(state.result));
-    return std::move(pf.second);
+    return std::move(state.result);
   }
 
   auto group = state.plan.front();
@@ -77,44 +73,43 @@ SafetyCheckScheduler::executePlan(
           // This will be executed inline in the worker executing the
           // underlying safety check.
           .toUnsafeFuture()
-          .thenValue([this,
-                      status_map{std::move(status_map)},
-                      nodes_config{std::move(nodes_config)},
-                      state{std::move(state)},
-                      group_id{std::move(group.first)},
-                      sequencers_to_check{
-                          std::move(shards_sequencers_to_check.second)},
-                      shards_to_check{
-                          std::move(shards_sequencers_to_check.first)}](
-                         folly::Expected<Impact, Status>
-                             expected_impact) mutable {
-            if (expected_impact.hasValue()) {
-              if (expected_impact->result != 0) {
-                ld_info("Safety check failed for maintenance %s, impact: %s",
-                        group_id.c_str(),
-                        expected_impact->toString().c_str());
-              } else {
-                ld_info(
-                    "Safety check passed for maintenance %s", group_id.c_str());
-              }
-              state.last_check = ExecutionState::LastCheck{
-                  .group_id = group_id,
-                  .sequencers = sequencers_to_check,
-                  .shards = shards_to_check,
-                  .impact = std::move(*expected_impact)};
-              // Will schedule another parts of the plan via the processor.
-              // (async)
-              return executePlan(std::move(state), status_map, nodes_config);
-            }
-            ld_error("SafetyChecker cannot execute because: %s",
-                     error_name(expected_impact.error()));
-            // We don't want to continue execution if safety checker is
-            // failing. Instead, we fail the entire execution stack.
-            auto pf =
-                folly::makePromiseContract<folly::Expected<Result, Status>>();
-            pf.first.setValue(folly::makeUnexpected(expected_impact.error()));
-            return std::move(pf.second);
-          });
+          .thenValue(
+              [this,
+               status_map{std::move(status_map)},
+               nodes_config{std::move(nodes_config)},
+               state{std::move(state)},
+               group_id{std::move(group.first)},
+               sequencers_to_check{
+                   std::move(shards_sequencers_to_check.second)},
+               shards_to_check{std::move(shards_sequencers_to_check.first)}](
+                  folly::Expected<Impact, Status> expected_impact) mutable
+              -> folly::SemiFuture<folly::Expected<Result, Status>> {
+                if (expected_impact.hasError()) {
+                  ld_error("SafetyChecker cannot execute because: %s",
+                           error_name(expected_impact.error()));
+                  // We don't want to continue execution if safety checker is
+                  // failing. Instead, we fail the entire execution stack.
+                  return folly::makeUnexpected(expected_impact.error());
+                }
+
+                if (expected_impact->result != 0) {
+                  ld_info(
+                      "Safety check didn't pass for maintenance %s, impact: %s",
+                      group_id.c_str(),
+                      expected_impact->toString().c_str());
+                } else {
+                  ld_info("Safety check passed for maintenance %s",
+                          group_id.c_str());
+                }
+                state.last_check = ExecutionState::LastCheck{
+                    .group_id = group_id,
+                    .sequencers = sequencers_to_check,
+                    .shards = shards_to_check,
+                    .impact = std::move(*expected_impact)};
+                // Will schedule another parts of the plan via the processor.
+                // (async)
+                return executePlan(std::move(state), status_map, nodes_config);
+              });
   return result_fut;
 }
 

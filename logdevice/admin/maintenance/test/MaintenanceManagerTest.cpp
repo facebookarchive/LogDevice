@@ -400,8 +400,7 @@ void MaintenanceManagerTest::setShardWorkflowResult(
   expected_storage_state_transition_.clear();
   for (auto& kv : result) {
     shard_wf_run_result_.first.push_back(kv.first);
-    shard_wf_run_result_.second.push_back(
-        folly::makeSemiFuture<MaintenanceStatus>(std::move(kv.second.first)));
+    shard_wf_run_result_.second.push_back(std::move(kv.second.first));
     expected_storage_state_transition_[kv.first] = kv.second.second;
   }
 }
@@ -434,7 +433,7 @@ void MaintenanceManagerTest::fulfillNCPromise(
     Status st,
     std::shared_ptr<const configuration::nodes::NodesConfiguration> nc) {
   if (st == E::OK) {
-    nc_update_promise_.setValue(folly::makeExpected<Status>(nc));
+    nc_update_promise_.setValue(nc);
   } else {
     nc_update_promise_.setValue(folly::makeUnexpected(st));
   }
@@ -450,8 +449,7 @@ void MaintenanceManagerTest::fulfillSafetyCheckPromise() {
   for (auto n : safety_check_nodes_) {
     result.safe_sequencers.insert(n);
   }
-  safety_check_promise_.setValue(
-      folly::makeExpected<Status>(std::move(result)));
+  safety_check_promise_.setValue(std::move(result));
 }
 
 void MaintenanceManagerTest::overrideStorageState(
@@ -493,25 +491,20 @@ TEST_F(MaintenanceManagerTest, GetShardOperationalState) {
   maintenance_manager_->onEventLogRebuildingSetUpdate(set_, lsn_t(1));
   ShardID shard = ShardID(1, 0);
   // N1S0 Goes from RW -> RO -> DM -> NONE
-  verifyShardOperationalState(
-      shard, folly::makeExpected<Status>(ShardOperationalState::ENABLED));
+  verifyShardOperationalState(shard, ShardOperationalState::ENABLED);
   std::unordered_map<ShardID, membership::StorageState> map;
   map[shard] = membership::StorageState::READ_ONLY;
   overrideStorageState(map);
   regenerateClusterMaintenanceWrapper();
-  verifyShardOperationalState(
-      shard, folly::makeExpected<Status>(ShardOperationalState::MAY_DISAPPEAR));
+  verifyShardOperationalState(shard, ShardOperationalState::MAY_DISAPPEAR);
   map[shard] = membership::StorageState::DATA_MIGRATION;
   overrideStorageState(map);
   regenerateClusterMaintenanceWrapper();
-  verifyShardOperationalState(
-      shard,
-      folly::makeExpected<Status>(ShardOperationalState::MIGRATING_DATA));
+  verifyShardOperationalState(shard, ShardOperationalState::MIGRATING_DATA);
   map[shard] = membership::StorageState::NONE;
   overrideStorageState(map);
   regenerateClusterMaintenanceWrapper();
-  verifyShardOperationalState(
-      shard, folly::makeExpected<Status>(ShardOperationalState::DRAINED));
+  verifyShardOperationalState(shard, ShardOperationalState::DRAINED);
 
   // Nonexistent node
   verifyShardOperationalState(
@@ -644,8 +637,7 @@ TEST_F(MaintenanceManagerTest, NodesConfigUpdateTest) {
   std::unordered_map<ShardID, membership::StorageState> map;
   for (auto s : {N1S0, N2S0, N9S0}) {
     verifyStorageState(s, membership::StorageState::RW_TO_RO);
-    verifyShardOperationalState(
-        s, folly::makeExpected<Status>(ShardOperationalState::ENABLED));
+    verifyShardOperationalState(s, ShardOperationalState::ENABLED);
     map[s] = membership::StorageState::READ_ONLY;
   }
   overrideStorageState(map);

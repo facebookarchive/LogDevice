@@ -380,8 +380,7 @@ MaintenanceManager::getSequencerState(node_index_t node) {
   auto pf = folly::makePromiseContract<
       folly::Expected<thrift::SequencerState, Status>>();
   add([this, node, mpromise = std::move(pf.first)]() mutable {
-    mpromise.setValue(
-        folly::makeExpected<Status>(getSequencerStateInternal(node)));
+    mpromise.setValue(getSequencerStateInternal(node));
   });
   return std::move(pf.second);
 }
@@ -583,8 +582,7 @@ MaintenanceManager::getSequencingState(node_index_t node) {
   auto pf =
       folly::makePromiseContract<folly::Expected<SequencingState, Status>>();
   add([this, node, mpromise = std::move(pf.first)]() mutable {
-    mpromise.setValue(
-        folly::makeExpected<Status>(getSequencingStateInternal(node)));
+    mpromise.setValue(getSequencingStateInternal(node));
   });
 
   return std::move(pf.second);
@@ -610,8 +608,10 @@ MaintenanceManager::getStorageState(ShardID shard) {
 folly::Expected<membership::StorageState, Status>
 MaintenanceManager::getStorageStateInternal(ShardID shard) const {
   auto result = nodes_config_->getStorageMembership()->getShardState(shard);
-  return result.first ? folly::makeExpected<Status>(result.second.storage_state)
-                      : folly::makeUnexpected(E::NOTFOUND);
+  if (result.first) {
+    return result.second.storage_state;
+  }
+  return folly::makeUnexpected(E::NOTFOUND);
 }
 
 folly::SemiFuture<folly::Expected<membership::MetaDataStorageState, Status>>
@@ -628,9 +628,10 @@ MaintenanceManager::getMetaDataStorageState(ShardID shard) {
 folly::Expected<membership::MetaDataStorageState, Status>
 MaintenanceManager::getMetaDataStorageStateInternal(ShardID shard) const {
   auto result = nodes_config_->getStorageMembership()->getShardState(shard);
-  return result.first
-      ? folly::makeExpected<Status>(result.second.metadata_state)
-      : folly::makeUnexpected(E::NOTFOUND);
+  if (result.first) {
+    return result.second.metadata_state;
+  }
+  return folly::makeUnexpected(E::NOTFOUND);
 }
 
 folly::SemiFuture<
@@ -791,31 +792,27 @@ void MaintenanceManager::evaluate() {
                                sequencerResult) {
               ld_debug("runSequencerWorkflows complete. processing results");
               processSequencerWorkflowResult(n, std::move(sequencerResult));
-              return folly::makeSemiFuture<
-                  folly::Expected<folly::Unit, Status>>(
-                  folly::makeExpected<Status>(folly::Unit()));
+              return folly::unit;
             });
       })
-      .thenValue([this](folly::Expected<folly::Unit, Status> result) {
+      .thenValue([this](auto &&) -> folly::SemiFuture<NCUpdateResult> {
         if (shouldStopProcessing()) {
-          auto e = folly::makeUnexpected<Status>(E::SHUTDOWN);
-          return folly::makeSemiFuture<NCUpdateResult>(std::move(e));
+          return folly::makeUnexpected<Status>(E::SHUTDOWN);
         }
         return scheduleNodesConfigUpdates();
       })
-      .thenValue([this](NCUpdateResult result) {
+      .thenValue([this](NCUpdateResult&& result)
+                     -> folly::SemiFuture<SafetyCheckResult> {
         if (result.hasError() && result.error() != Status::EMPTY) {
-          auto e = folly::makeUnexpected<Status>(std::move(result.error()));
-          return folly::makeSemiFuture<SafetyCheckResult>(std::move(e));
+          return folly::makeUnexpected<Status>(std::move(result).error());
         }
         if (shouldStopProcessing()) {
-          auto e = folly::makeUnexpected<Status>(E::SHUTDOWN);
-          return folly::makeSemiFuture<SafetyCheckResult>(std::move(e));
+          return folly::makeUnexpected<Status>(E::SHUTDOWN);
         }
         ld_check(!result.hasError() || result.error() == Status::EMPTY);
         // Update local copy to the version in result
         if (result.hasValue()) {
-          nodes_config_ = std::move(result.value());
+          nodes_config_ = result.value();
           ld_debug("Updating local copy of NodesConfig to version in "
                    "NCUpdateResult:%s",
                    toString(nodes_config_->getVersion()).c_str());
@@ -828,21 +825,19 @@ void MaintenanceManager::evaluate() {
         if (has_shards_to_enable_) {
           ld_info("Received NCUpdateResult but we have shards that need "
                   "to be enabled. Returning E::RETRY so that we re-evaluate");
-          return folly::makeSemiFuture<SafetyCheckResult>(
-              folly::makeUnexpected<Status>(E::RETRY));
+          return folly::makeUnexpected<Status>(E::RETRY);
         }
         return scheduleSafetyCheck();
       })
-      .thenValue([this](SafetyCheckResult result) {
+      .thenValue([this](SafetyCheckResult result)
+                     -> folly::SemiFuture<NCUpdateResult> {
         if (result.hasError()) {
-          auto e = folly::makeUnexpected<Status>(std::move(result.error()));
-          return folly::makeSemiFuture<NCUpdateResult>(std::move(e));
+          return folly::makeUnexpected<Status>(std::move(result).error());
         }
         if (shouldStopProcessing()) {
-          auto e = folly::makeUnexpected<Status>(E::SHUTDOWN);
-          return folly::makeSemiFuture<NCUpdateResult>(std::move(e));
+          return folly::makeUnexpected<Status>(E::SHUTDOWN);
         }
-        processSafetyCheckResult(std::move(result.value()));
+        processSafetyCheckResult(std::move(result).value());
         return scheduleNodesConfigUpdates();
       })
       .thenValue([this](NCUpdateResult result) {
