@@ -28,13 +28,13 @@ be possible to build it on any other Linux distribution without significant
 challenges.
 
 ## Quick Start
-* [Run a local cluster in Docker] (https://logdevice.io/docs/LocalCluster.html)
+* [Run a local cluster in Docker](https://logdevice.io/docs/LocalCluster.html)
 
 ## Documentation
 * [Overview](https://logdevice.io/docs/Overview.html)
 * [Concepts and Architecture](https://logdevice.io/docs/Concepts.html)
 
-## Building LogDevice
+## Build LogDevice
 * [Build](https://logdevice.io/docs/Installation.html)
 
 ## Join the LogDevice community
