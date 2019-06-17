@@ -887,6 +887,7 @@ void MaintenanceManager::processShardWorkflowResult(
              apache::thrift::util::enumNameSafe(s).c_str());
     switch (s) {
       case MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES:
+      case MaintenanceStatus::AWAITING_NODES_CONFIG_TRANSITION:
       case MaintenanceStatus::AWAITING_SAFETY_CHECK:
       case MaintenanceStatus::AWAITING_DATA_REBUILDING:
       case MaintenanceStatus::RETRY:

@@ -119,11 +119,15 @@ enum MaintenanceStatus {
   COMPLETED = 7,
   /**
    * Maintenance cannot proceed because of an internal error error.
-   * (ex: Event couldn't be written to event log or the StorageState
-   * for the Shard in NC is in a transitional state) Will
-   * be retried internally
+   * (ex: Event couldn't be written to event log). That will be retried
+   * automatically by the Maintenance Manager.
    */
   RETRY = 8,
+  /**
+   * MaintenanceManager is waiting for the NodesConfiguration to finish a
+   * transition.
+   */
+  AWAITING_NODES_CONFIG_TRANSITION = 9,
 }
 
 /**
