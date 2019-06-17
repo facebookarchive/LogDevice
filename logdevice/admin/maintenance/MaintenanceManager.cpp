@@ -795,6 +795,7 @@ void MaintenanceManager::evaluate() {
         }
         return scheduleNodesConfigUpdates();
       })
+      .via(this)
       // We have heared back from NodesConfiguration update.
       .thenValue([this](NCUpdateResult&& result)
                      -> folly::SemiFuture<SafetyCheckResult> {
@@ -824,6 +825,7 @@ void MaintenanceManager::evaluate() {
         }
         return scheduleSafetyCheck();
       })
+      .via(this)
       // We have heared back from the safety check scheduler. Let's execute
       // NodesConfiguration updates that were blocked on safety check.
       .thenValue([this](SafetyCheckResult&& result)
@@ -837,7 +839,8 @@ void MaintenanceManager::evaluate() {
         processSafetyCheckResult(result.value());
         return scheduleNodesConfigUpdates();
       })
-      // We have heared back from NodesConfiguration update.
+      .via(this)
+      // We have heard back from NodesConfiguration update.
       .thenValue([this](NCUpdateResult&& result) {
         if (result.hasError() && result.error() == Status::SHUTDOWN) {
           ld_check(shouldStopProcessing());
