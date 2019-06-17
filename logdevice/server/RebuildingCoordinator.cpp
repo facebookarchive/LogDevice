@@ -774,16 +774,19 @@ void RebuildingCoordinator::restartForShard(uint32_t shard_idx,
         rebuildingSet->shards.at(ShardID(myNodeId_, shard_idx)).mode ==
         RebuildingMode::RESTORE;
     if (myShardHasDataIntact(shard_idx)) {
+      // I am in the rebuilding set and my data is intact
+      // Write a remove maintenance if I am rebuilding in
+      // restore mode and ClusterMaintenanceStateMachine
+      // is enabled.
+      if (adminSettings_->enable_cluster_maintenance_state_machine) {
+        writeRemoveMaintenance(ShardID(myNodeId_, shard_idx));
+      }
+
       if (!my_shard_draining) {
         // 1/. The data is intact and the user does not wish to drain this
         // shard, abort rebuilding. abortForMyShard() will check for dirtiness
         // and respond appropriately.
 
-        // Write RemoveMaintenance request if ClusterMaintenanceStateMachine
-        // is enabled
-        if (adminSettings_->enable_cluster_maintenance_state_machine) {
-          writeRemoveMaintenance(ShardID(myNodeId_, shard_idx));
-        }
         abortForMyShard(shard_idx,
                         rsi->version,
                         set.getNodeInfo(myNodeId_, shard_idx),
@@ -792,9 +795,6 @@ void RebuildingCoordinator::restartForShard(uint32_t shard_idx,
         // 2/. The data is intact. Restart the drain in RELOCATE mode.
         // Write RemoveMaintenance request if ClusterMaintenanceStateMachine
         // is enabled
-        if (adminSettings_->enable_cluster_maintenance_state_machine) {
-          writeRemoveMaintenance(ShardID(myNodeId_, shard_idx));
-        }
         ld_info("The data on my shard %u is intact, restart rebuilding for "
                 "this shard to continue the drain in RELOCATE mode.",
                 shard_idx);
@@ -810,7 +810,19 @@ void RebuildingCoordinator::restartForShard(uint32_t shard_idx,
       if (!node_info->dc_dirty_ranges.empty()) {
         // The cluster was performing a ranged rebuild for this shard.
         // Since all data is lost, convert to a full shard rebuild.
-        restartForMyShard(shard_idx, 0);
+        if (adminSettings_->enable_cluster_maintenance_state_machine) {
+          // request an internal maintenance
+          auto delta = std::make_unique<maintenance::MaintenanceDelta>();
+          delta->set_apply_maintenances(
+              {maintenance::MaintenanceLogWriter::
+                   buildMaintenanceDefinitionForRebuilding(
+                       ShardID(myNodeId_, shard_idx),
+                       "Triggered by RebuildingCoordinator")});
+          maintenance_log_writer_->writeDelta(std::move(delta));
+
+        } else {
+          restartForMyShard(shard_idx, 0);
+        }
       }
       markMyShardUnrecoverable(shard_idx);
     }
@@ -1493,9 +1505,20 @@ void RebuildingCoordinator::publishDirtyShards(
           // Convert to a RESTORE drain since we are missing some
           // of our data. This is required unless/until we improve
           // the donor SCD filter to understand dirty ranges.
-          ld_info(
-              "Shard %u: Converting drain from RELOCATE to RESTORE", shard_idx);
-          restartForMyShard(shard_idx, 0);
+          if (adminSettings_->enable_cluster_maintenance_state_machine) {
+            // request an internal maintenance
+            auto delta = std::make_unique<maintenance::MaintenanceDelta>();
+            delta->set_apply_maintenances(
+                {maintenance::MaintenanceLogWriter::
+                     buildMaintenanceDefinitionForRebuilding(
+                         ShardID(myNodeId_, shard_idx),
+                         "Triggered by RebuildingCoordinator")});
+            maintenance_log_writer_->writeDelta(std::move(delta));
+          } else {
+            ld_info("Shard %u: Converting drain from RELOCATE to RESTORE",
+                    shard_idx);
+            restartForMyShard(shard_idx, 0);
+          }
         }
         continue;
       }
@@ -1508,6 +1531,11 @@ void RebuildingCoordinator::publishDirtyShards(
                 toString(info->dc_dirty_ranges).c_str());
         continue;
       }
+    }
+    // My shard's data is intact, any previously requested internal
+    // maintenance should be removed.
+    if (adminSettings_->enable_cluster_maintenance_state_machine) {
+      writeRemoveMaintenance(ShardID(myNodeId_, shard_idx));
     }
     restartForMyShard(shard_idx, 0, &ds_kv.second);
   }
@@ -1605,8 +1633,8 @@ void RebuildingCoordinator::restartForMyShard(uint32_t shard,
 
   if (!rebuildingSettings_->allow_conditional_rebuilding_restarts) {
     // TODO(T22614431): conditional restart of rebuilding is gated as some
-    // clients that run the EventLogStateMachine may be too old. It is meant to
-    // be enabled by default and this logic removed once all clients are
+    // clients that run the EventLogStateMachine may be too old. It is meant
+    // to be enabled by default and this logic removed once all clients are
     // updated.
     conditional_version = LSN_INVALID;
     f &= ~SHARD_NEEDS_REBUILD_Header::CONDITIONAL_ON_VERSION;
@@ -1812,5 +1840,4 @@ std::set<uint32_t> RebuildingCoordinator::getLocalShardsRebuilding() {
   }
   return res;
 }
-
 }} // namespace facebook::logdevice

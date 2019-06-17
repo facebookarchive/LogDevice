@@ -210,3 +210,106 @@ TEST_F(MaintenanceManagerTest, BasicDrain) {
     return state == expected_text;
   });
 }
+
+TEST_F(MaintenanceManagerTest, RestoreDowngradedToTimeRangeRebuilding) {
+  const size_t num_nodes = 5;
+  const size_t num_shards = 2;
+
+  Configuration::Nodes nodes;
+
+  for (int i = 0; i < num_nodes; ++i) {
+    nodes[i].generation = 1;
+    nodes[i].addSequencerRole();
+    nodes[i].addStorageRole(num_shards);
+  }
+
+  logsconfig::LogAttributes data_log_attrs;
+  data_log_attrs.set_replicationFactor(5);
+
+  logsconfig::LogAttributes log_attrs;
+  log_attrs.set_replicationFactor(2);
+  log_attrs.set_extraCopies(0);
+  log_attrs.set_syncedCopies(0);
+  log_attrs.set_maxWritesInFlight(2048);
+
+  auto meta_configs =
+      createMetaDataLogsConfig({0, 1, 2, 3, 4}, 2, NodeLocationScope::NODE);
+
+  cluster_ =
+      IntegrationTestUtils::ClusterFactory()
+          .setNumLogs(1)
+          .setNodes(nodes)
+          .enableSelfInitiatedRebuilding("1s")
+          .setParam("--rebuild-store-durability", "async_write")
+          .setParam("--append-store-durability", "memory")
+          .setParam("--rebuilding-restarts-grace-period", "10s")
+          .setParam("--rocksdb-partition-data-age-flush-trigger", "900s")
+          .setParam("--rocksdb-partition-idle-flush-trigger", "900s")
+          .setParam("--rocksdb-min-manual-flush-interval", "900s")
+          .setParam("--rocksdb-partition-duration", "900s")
+          .setParam("--rocksdb-ld-managed-flushes", "true")
+          .setParam("--rocksdb-partition-timestamp-granularity", "100ms")
+          .setParam("--sticky-copysets-block-size", "10")
+          .setParam("--event-log-grace-period", "1ms")
+          .setParam("--disable-event-log-trimming", "true")
+          .useHashBasedSequencerAssignment()
+          .setParam("--min-gossips-for-stable-state", "0")
+          .setParam("--enable-cluster-maintenance-state-machine", "true")
+          .setParam("--enable-nodes-configuration-manager", "true")
+          .setParam(
+              "--use-nodes-configuration-manager-nodes-configuration", "true")
+          .setParam(
+              "--nodes-configuration-manager-intermediary-shard-state-timeout",
+              "2s")
+          .setParam("--loglevel", "debug")
+          .setParam("--max-node-rebuilding-percentage", "80")
+          .setLogAttributes(data_log_attrs)
+          // Starts MaintenanceManager on N2
+          .runMaintenanceManagerOn(3)
+          .setNumDBShards(num_shards)
+          .setConfigLogAttributes(log_attrs)
+          .setMaintenanceLogAttributes(log_attrs)
+          .setEventLogAttributes(log_attrs)
+          .setLogGroupName("test_logrange")
+          .setMetaDataLogsConfig(meta_configs)
+          .deferStart()
+          .create(num_nodes);
+
+  NodeSetIndices node_set(5);
+  std::iota(node_set.begin(), node_set.end(), 0);
+
+  cluster_->start(node_set);
+  for (auto n : node_set) {
+    cluster_->getNode(n).waitUntilAvailable();
+  }
+  std::shared_ptr<Client> client = cluster_->createClient();
+  write_test_records(client, LOG_ID, 100);
+
+  auto& processor = static_cast<ClientImpl*>(client.get())->getProcessor();
+  auto maintenanceLogWriter =
+      std::make_unique<MaintenanceLogWriter>(&processor);
+
+  // Kill N1 now, internal maintenance should be added and node eventually
+  // set to DRAINED
+  cluster_->getNode(1).kill();
+
+  wait_until("ShardOperationalState is MIGRATING_DATA", [&]() {
+    auto state = cluster_->getNode(3).sendCommand("info shardopstate 1 0");
+    const std::string expected_text = "MIGRATING_DATA\r\nEND\r\n";
+    return state == expected_text;
+  });
+
+  // Start the nodes back again. They should remove the internal maintenance
+  // and trigger TRR
+  cluster_->getNode(1).start();
+
+  cluster_->getNode(1).waitUntilAvailable();
+  wait_until("ShardOperationalState is ENABLED", [&]() {
+    auto state = cluster_->getNode(3).sendCommand("info shardopstate 1 0");
+    const std::string expected_text = "ENABLED\r\nEND\r\n";
+    return state == expected_text;
+  });
+
+  // Verify that the shards are dirty
+  EXPECT_FALSE(cluster_->getNode(1).dirtyShardInfo().empty());
+}

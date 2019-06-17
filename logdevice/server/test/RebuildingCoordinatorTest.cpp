@@ -165,6 +165,7 @@ struct ReceivedMessages {
   std::vector<logid_t> restart;
   std::unordered_map<uint32_t, ShardNeedsRebuild> shard_needs_rebuild;
   std::unordered_map<uint32_t, lsn_t> abort_for_my_shard;
+  std::vector<uint32_t> mark_shard_unrecoverable;
 
   void clear() {
     start.clear();
@@ -186,6 +187,7 @@ static std::unordered_set<uint32_t> stall_timer_activated;
 static std::unordered_set<uint32_t> restart_scheduled;
 static bool planning_timer_activated{false};
 static thrift::RemoveMaintenancesRequest remove_maintenance;
+static std::vector<thrift::MaintenanceDefinition> apply_maintenances;
 
 class MockedRebuildingCoordinator;
 
@@ -294,11 +296,19 @@ class MockMaintenanceLogWriter : public MaintenanceLogWriter {
       ClusterMaintenanceStateMachine::WriteMode mode =
           ClusterMaintenanceStateMachine::WriteMode::CONFIRM_APPLIED,
       folly::Optional<lsn_t> base_version = folly::none) override {
-    remove_maintenance = delta.get_remove_maintenances();
+    if (delta.getType() == MaintenanceDelta::Type::apply_maintenances) {
+      apply_maintenances = delta.get_apply_maintenances();
+    } else {
+      remove_maintenance = delta.get_remove_maintenances();
+    }
   }
 
   virtual void writeDelta(std::unique_ptr<MaintenanceDelta> delta) override {
-    remove_maintenance = delta->get_remove_maintenances();
+    if (delta->getType() == MaintenanceDelta::Type::apply_maintenances) {
+      apply_maintenances = delta->get_apply_maintenances();
+    } else {
+      remove_maintenance = delta->get_remove_maintenances();
+    }
   }
 
   RebuildingCoordinatorTest* test_;
@@ -447,6 +457,10 @@ class MockedRebuildingCoordinator : public RebuildingCoordinator {
     received.donor_progress.push_back(DonorProgress{shard, ts, version});
   }
 
+  void markMyShardUnrecoverable(uint32_t shard) override {
+    received.mark_shard_unrecoverable.push_back(shard);
+  }
+
   bool myShardHasDataIntact(uint32_t /*shard_idx*/) const override {
     return my_shard_has_data_intact_;
   }
@@ -455,8 +469,12 @@ class MockedRebuildingCoordinator : public RebuildingCoordinator {
     my_shard_has_data_intact_ = dataIntact;
   }
 
-  bool shouldMarkMyShardUnrecoverable(uint32_t /*shard*/) const override {
-    return false;
+  void setShardUnrecoverable(uint32_t shard) {
+    unrecoverable_shards_.insert(shard);
+  }
+
+  bool shouldMarkMyShardUnrecoverable(uint32_t shard) const override {
+    return unrecoverable_shards_.count(shard);
   }
 
   void notifyShardRebuilt(uint32_t shard,
@@ -510,6 +528,7 @@ class MockedRebuildingCoordinator : public RebuildingCoordinator {
  private:
   shard_size_t num_shards_;
   bool my_shard_has_data_intact_;
+  std::unordered_set<uint32_t> unrecoverable_shards_;
   DirtyShardMap* dirty_shard_cache_;
 };
 
@@ -839,6 +858,10 @@ class RebuildingCoordinatorTest : public ::testing::Test {
     coordinator_->setDataIntact(dataIntact);
   }
 
+  void setShardUnrecoverable(uint32_t shard) {
+    coordinator_->setShardUnrecoverable(shard);
+  }
+
   void fireRestartTimer(logid_t logid) {
     shard_index_t shard_idx = getLegacyShardIndexForLog(logid, num_shards);
     auto reb = getShard(shard_idx);
@@ -1012,6 +1035,15 @@ class RebuildingCoordinatorTest : public ::testing::Test {
     ASSERT_EQ(filter.get_group_ids()[0], toString(shard));                \
   }
 
+#define ASSERT_APPLY_MAINTENANCE(shard)                                      \
+  {                                                                          \
+    ASSERT_EQ(apply_maintenances.size(), 1);                                 \
+    ASSERT_EQ(apply_maintenances[0].get_user(), maintenance::INTERNAL_USER); \
+    ASSERT_EQ(apply_maintenances[0].get_shards().size(), 1);                 \
+    ASSERT_EQ(apply_maintenances[0].get_shards()[0], shard);                 \
+    ASSERT_EQ(apply_maintenances[0].get_shard_target_state(),                \
+              ShardOperationalState::DRAINED);                               \
+  }
 /**
  * Tests.
  */
@@ -2126,6 +2158,61 @@ TEST_F(RebuildingCoordinatorTest, RestoreModeDuringDrainUsingMaintenanceLog) {
   // RebuildingCoordinator remembers that the intent was to drain, so it does
   // not acknowledge when rebuilding completes.
   ASSERT_NO_SHARD_ACK_REBUILT();
+}
+
+// Verify that mini rebuilding gets upgraded to full shard rebuilding
+// if data is missing and a new internal maintenance is requested
+TEST_F(RebuildingCoordinatorTest,
+       RequestInternalMaintenanceIfShardUnrecoverable) {
+  admin_settings_.enable_cluster_maintenance_state_machine = true;
+  settings.local_window = RecordTimestamp::duration::max();
+  settings.global_window = RecordTimestamp::duration::max();
+  settings.max_logs_in_flight = 50;
+  num_logs = 20;
+  num_shards = 2;
+  my_shard_has_data_intact = true;
+
+  auto now = RecordTimestamp::now();
+  auto dirtyStart = RecordTimestamp(now - std::chrono::minutes(10));
+  auto dirtyEnd = RecordTimestamp(now - std::chrono::minutes(5));
+  RebuildingRangesMetadata rrm;
+  rrm.modifyTimeIntervals(TimeIntervalOp::ADD,
+                          DataClass::APPEND,
+                          RecordTimeInterval(dirtyStart, dirtyEnd));
+  dirty_shard_cache[1] = rrm;
+  start();
+
+  // RebuildingCoordinator should have requested rebuilding of our
+  // shard.
+  ASSERT_SHARD_NEEDS_REBUILD(
+      1, SHARD_NEEDS_REBUILD_Header::TIME_RANGED, LSN_INVALID);
+
+  // Receive the message.
+  lsn_t v1 = onShardNeedsRebuild(my_node_id.index(),
+                                 1,
+                                 SHARD_NEEDS_REBUILD_Header::TIME_RANGED,
+                                 folly::none,
+                                 false,
+                                 &rrm);
+  // Some nodes complete rebuilding
+  onShardIsRebuilt(2, 1, v1);
+  onShardIsRebuilt(3, 1, v1);
+
+  // Now mark shard unrecoverable
+  // also shards have lost data. Rebuilding coordinator
+  // should convert mini rebuilding to full shard rebuilding
+  setShardUnrecoverable(1);
+  setDataIntact(false);
+  // Now another node is added to rebuilding set. (This is just to
+  // restart rebuilding on N0)
+  lsn_t v3 = onShardNeedsRebuild(1, 1, 0 /* flags */, LSN_MAX, true);
+
+  auto nodeid = thrift::NodeID();
+  nodeid.set_node_index(0);
+  auto shardid = thrift::ShardID();
+  shardid.set_node(nodeid);
+  shardid.set_shard_index(1);
+  ASSERT_APPLY_MAINTENANCE(shardid);
 }
 
 // We start rebuilding a node in RESTORE mode. Then a drain is started.
