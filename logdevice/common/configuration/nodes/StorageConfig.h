@@ -50,6 +50,10 @@ struct StorageNodeAttribute {
   bool exclude_from_nodesets;
 
   bool isValid() const;
+  bool isValidForReset(const StorageNodeAttribute& current) const {
+    // All changes to the storage node attribute is allowed.
+    return true;
+  }
   std::string toString() const;
 
   bool operator==(const StorageNodeAttribute& rhs) const {
@@ -59,8 +63,7 @@ struct StorageNodeAttribute {
   }
 };
 
-using StorageAttributeConfig =
-    NodeAttributesConfig<StorageNodeAttribute, /*Mutable=*/true>;
+using StorageAttributeConfig = NodeAttributesConfig<StorageNodeAttribute>;
 
 using StorageConfig = PerRoleConfig<NodeRole::STORAGE,
                                     membership::StorageMembership,

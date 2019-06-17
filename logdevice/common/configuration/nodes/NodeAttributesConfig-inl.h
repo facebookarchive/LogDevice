@@ -10,24 +10,22 @@
 namespace facebook { namespace logdevice { namespace configuration {
 namespace nodes {
 
-template <typename Attributes, bool Mutable>
-bool NodeAttributesConfig<Attributes, Mutable>::NodeUpdate::isValid() const {
+template <typename Attributes>
+bool NodeAttributesConfig<Attributes>::NodeUpdate::isValid() const {
   switch (transition) {
     case UpdateType::PROVISION:
       return attributes != nullptr && attributes->isValid();
     case UpdateType::REMOVE:
       return attributes == nullptr;
     case UpdateType::RESET:
-      // only `mutable' type of NodeAttributesConfig support the RESET update
-      return Mutable && attributes != nullptr && attributes->isValid();
+      return attributes != nullptr && attributes->isValid();
   }
   ld_check(false);
   return false;
 }
 
-template <typename Attributes, bool Mutable>
-std::string
-NodeAttributesConfig<Attributes, Mutable>::NodeUpdate::toString() const {
+template <typename Attributes>
+std::string NodeAttributesConfig<Attributes>::NodeUpdate::toString() const {
   std::string t_str;
   switch (transition) {
     case UpdateType::PROVISION:
@@ -44,24 +42,22 @@ NodeAttributesConfig<Attributes, Mutable>::NodeUpdate::toString() const {
       "[T:{},A:{}]", t_str, attributes ? attributes->toString() : "");
 }
 
-template <typename Attributes, bool Mutable>
-bool NodeAttributesConfig<Attributes, Mutable>::Update::isValid() const {
+template <typename Attributes>
+bool NodeAttributesConfig<Attributes>::Update::isValid() const {
   return !node_updates.empty() &&
       std::all_of(node_updates.cbegin(),
                   node_updates.cend(),
                   [](const auto& kv) { return kv.second.isValid(); });
 }
 
-template <typename Attributes, bool Mutable>
-std::string
-NodeAttributesConfig<Attributes, Mutable>::Update::toString() const {
+template <typename Attributes>
+std::string NodeAttributesConfig<Attributes>::Update::toString() const {
   return logdevice::toString(node_updates);
 }
 
-template <typename Attributes, bool Mutable>
+template <typename Attributes>
 std::pair<bool, Attributes>
-NodeAttributesConfig<Attributes, Mutable>::getNodeAttributes(
-    node_index_t node) const {
+NodeAttributesConfig<Attributes>::getNodeAttributes(node_index_t node) const {
   const auto nit = node_states_.find(node);
   if (nit == node_states_.cend()) {
     return std::make_pair(false, Attributes{});
@@ -69,36 +65,33 @@ NodeAttributesConfig<Attributes, Mutable>::getNodeAttributes(
   return std::make_pair(true, nit->second);
 }
 
-template <typename Attributes, bool Mutable>
-const Attributes*
-NodeAttributesConfig<Attributes, Mutable>::getNodeAttributesPtr(
+template <typename Attributes>
+const Attributes* NodeAttributesConfig<Attributes>::getNodeAttributesPtr(
     node_index_t node) const {
   const auto nit = node_states_.find(node);
   return nit == node_states_.cend() ? nullptr : &nit->second;
 }
 
-template <typename Attributes, bool Mutable>
-const Attributes& NodeAttributesConfig<Attributes, Mutable>::nodeAttributesAt(
-    node_index_t node) const {
+template <typename Attributes>
+const Attributes&
+NodeAttributesConfig<Attributes>::nodeAttributesAt(node_index_t node) const {
   ld_check(hasNode(node));
   return node_states_.at(node);
 }
 
-template <typename Attributes, bool Mutable>
-void NodeAttributesConfig<Attributes, Mutable>::setNodeAttributes(
-    node_index_t node,
-    Attributes state) {
+template <typename Attributes>
+void NodeAttributesConfig<Attributes>::setNodeAttributes(node_index_t node,
+                                                         Attributes state) {
   node_states_[node] = state;
 }
 
-template <typename Attributes, bool Mutable>
-bool NodeAttributesConfig<Attributes, Mutable>::eraseNodeAttribute(
-    node_index_t node) {
+template <typename Attributes>
+bool NodeAttributesConfig<Attributes>::eraseNodeAttribute(node_index_t node) {
   return node_states_.erase(node) > 0;
 }
 
-template <typename Attributes, bool Mutable>
-int NodeAttributesConfig<Attributes, Mutable>::applyUpdate(
+template <typename Attributes>
+int NodeAttributesConfig<Attributes>::applyUpdate(
     const Update& update,
     NodeAttributesConfig* new_config_out) const {
   if (!update.isValid()) {
@@ -136,6 +129,10 @@ int NodeAttributesConfig<Attributes, Mutable>::applyUpdate(
         ld_check(node_exist);
         ld_check(node_update.attributes != nullptr);
         ld_check(node_update.attributes->isValid());
+        if (!node_update.attributes->isValidForReset(current_node_attributes)) {
+          err = E::INVALID_PARAM;
+          return -1;
+        }
         FOLLY_FALLTHROUGH;
       case UpdateType::PROVISION:
         target_config.setNodeAttributes(node, *node_update.attributes);
@@ -156,8 +153,8 @@ int NodeAttributesConfig<Attributes, Mutable>::applyUpdate(
   return 0;
 }
 
-template <typename Attributes, bool Mutable>
-bool NodeAttributesConfig<Attributes, Mutable>::validate() const {
+template <typename Attributes>
+bool NodeAttributesConfig<Attributes>::validate() const {
   for (const auto& kv : node_states_) {
     if (!kv.second.isValid()) {
       return false;
@@ -166,13 +163,13 @@ bool NodeAttributesConfig<Attributes, Mutable>::validate() const {
   return attributeSpecificValidate();
 }
 
-template <typename Attributes, bool Mutable>
-void NodeAttributesConfig<Attributes, Mutable>::dcheckConsistency() const {
+template <typename Attributes>
+void NodeAttributesConfig<Attributes>::dcheckConsistency() const {
   ld_assert(validate());
 }
 
-template <typename Attributes, bool Mutable>
-bool NodeAttributesConfig<Attributes, Mutable>::
+template <typename Attributes>
+bool NodeAttributesConfig<Attributes>::
 operator==(const NodeAttributesConfig& rhs) const {
   return node_states_ == rhs.node_states_;
 }

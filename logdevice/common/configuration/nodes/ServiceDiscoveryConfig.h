@@ -80,6 +80,7 @@ struct NodeServiceDiscovery {
 
   bool isValid() const;
   std::string toString() const;
+  bool isValidForReset(const NodeServiceDiscovery& current) const;
 
   // return the corresponding sockaddr for the given socket type
   const Sockaddr& getSockaddr(SocketType type, ConnectionType conntype) const;
@@ -89,7 +90,6 @@ struct NodeServiceDiscovery {
   }
 };
 
-using ServiceDiscoveryConfig =
-    NodeAttributesConfig<NodeServiceDiscovery, /*Mutable=*/false>;
+using ServiceDiscoveryConfig = NodeAttributesConfig<NodeServiceDiscovery>;
 
 }}}} // namespace facebook::logdevice::configuration::nodes

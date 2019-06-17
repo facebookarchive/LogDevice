@@ -204,34 +204,85 @@ TEST_F(NodesConfigurationTest, ChangingServiceDiscoveryAfterProvision) {
   ASSERT_TRUE(config->validate());
   NodesConfiguration::Update update{};
 
-  // resetting the service discovery for node 2
-  update.service_discovery_update =
-      std::make_unique<ServiceDiscoveryConfig::Update>();
-  update.service_discovery_update->addNode(
-      2,
-      ServiceDiscoveryConfig::NodeUpdate{
-          ServiceDiscoveryConfig::UpdateType::RESET,
-          std::make_unique<NodeServiceDiscovery>(
-              genDiscovery(2, both_role, "aa.bb.cc.dd.ee"))});
-  VLOG(1) << "update: " << update.toString();
-  auto new_config = config->applyUpdate(std::move(update));
-  EXPECT_EQ(nullptr, new_config);
-  EXPECT_EQ(E::INVALID_PARAM, err);
+  {
+    // Changing the name / addresses of the node should be allowed
+    auto new_svc = *config->getNodeServiceDiscovery(2);
+    new_svc.name = "NewName";
+    new_svc.address = Sockaddr("/tmp/new_addr1");
+    new_svc.gossip_address = Sockaddr("/tmp/new_addr2");
+    new_svc.ssl_address = Sockaddr("/tmp/new_addr3");
 
-  // re-provisioning the service discovery for node 9
-  NodesConfiguration::Update update2;
-  update2.service_discovery_update =
-      std::make_unique<ServiceDiscoveryConfig::Update>();
-  update2.service_discovery_update->addNode(
-      9,
-      ServiceDiscoveryConfig::NodeUpdate{
-          ServiceDiscoveryConfig::UpdateType::PROVISION,
-          std::make_unique<NodeServiceDiscovery>(
-              genDiscovery(9, both_role, "aa.bb.cc.dd.ee"))});
-  VLOG(1) << "update2: " << update2.toString();
-  new_config = config->applyUpdate(std::move(update2));
-  EXPECT_EQ(nullptr, new_config);
-  EXPECT_EQ(E::EXISTS, err);
+    update.service_discovery_update =
+        std::make_unique<ServiceDiscoveryConfig::Update>();
+    update.service_discovery_update->addNode(
+        2,
+        ServiceDiscoveryConfig::NodeUpdate{
+            ServiceDiscoveryConfig::UpdateType::RESET,
+            std::make_unique<NodeServiceDiscovery>(std::move(new_svc))});
+    VLOG(1) << "update: " << update.toString();
+    auto new_config = config->applyUpdate(std::move(update));
+    ASSERT_NE(nullptr, new_config);
+    EXPECT_EQ("NewName", new_config->getNodeServiceDiscovery(2)->name);
+    EXPECT_EQ(Sockaddr("/tmp/new_addr1"),
+              new_config->getNodeServiceDiscovery(2)->address);
+    EXPECT_EQ(Sockaddr("/tmp/new_addr2"),
+              new_config->getNodeServiceDiscovery(2)->gossip_address);
+    EXPECT_EQ(Sockaddr("/tmp/new_addr3"),
+              new_config->getNodeServiceDiscovery(2)->ssl_address);
+  }
+
+  {
+    // resetting the location is not an allowed update
+    auto new_svc = *config->getNodeServiceDiscovery(2);
+    NodeLocation new_loc;
+    new_loc.fromDomainString("aa.bb.cc.dd.zz");
+    new_svc.location = new_loc;
+    update.service_discovery_update =
+        std::make_unique<ServiceDiscoveryConfig::Update>();
+    update.service_discovery_update->addNode(
+        2,
+        ServiceDiscoveryConfig::NodeUpdate{
+            ServiceDiscoveryConfig::UpdateType::RESET,
+            std::make_unique<NodeServiceDiscovery>(std::move(new_svc))});
+    VLOG(1) << "update: " << update.toString();
+    auto new_config = config->applyUpdate(std::move(update));
+    EXPECT_EQ(nullptr, new_config);
+    EXPECT_EQ(E::INVALID_PARAM, err);
+  }
+
+  {
+    // resetting the role is not an allowed update
+    auto new_svc = *config->getNodeServiceDiscovery(2);
+    new_svc.roles[0] = !new_svc.roles[0];
+    update.service_discovery_update =
+        std::make_unique<ServiceDiscoveryConfig::Update>();
+    update.service_discovery_update->addNode(
+        2,
+        ServiceDiscoveryConfig::NodeUpdate{
+            ServiceDiscoveryConfig::UpdateType::RESET,
+            std::make_unique<NodeServiceDiscovery>(std::move(new_svc))});
+    VLOG(1) << "update: " << update.toString();
+    auto new_config = config->applyUpdate(std::move(update));
+    EXPECT_EQ(nullptr, new_config);
+    EXPECT_EQ(E::INVALID_PARAM, err);
+  }
+
+  {
+    // re-provisioning the service discovery for node 9
+    NodesConfiguration::Update update2;
+    update2.service_discovery_update =
+        std::make_unique<ServiceDiscoveryConfig::Update>();
+    update2.service_discovery_update->addNode(
+        9,
+        ServiceDiscoveryConfig::NodeUpdate{
+            ServiceDiscoveryConfig::UpdateType::PROVISION,
+            std::make_unique<NodeServiceDiscovery>(
+                genDiscovery(9, both_role, "aa.bb.cc.dd.ee"))});
+    VLOG(1) << "update2: " << update2.toString();
+    auto new_config = config->applyUpdate(std::move(update2));
+    EXPECT_EQ(nullptr, new_config);
+    EXPECT_EQ(E::EXISTS, err);
+  }
 }
 
 TEST_F(NodesConfigurationTest, RemovingServiceDiscovery) {

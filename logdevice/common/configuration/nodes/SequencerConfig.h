@@ -19,6 +19,11 @@ struct SequencerNodeAttribute {
     return true;
   }
 
+  bool isValidForReset(const SequencerNodeAttribute& current) const {
+    // All changes to the sequencer node attribute is allowed.
+    return true;
+  }
+
   bool operator==(const SequencerNodeAttribute& rhs) const {
     return true;
   }
@@ -28,8 +33,7 @@ struct SequencerNodeAttribute {
   }
 };
 
-using SequencerAttributeConfig =
-    NodeAttributesConfig<SequencerNodeAttribute, /*Mutable=*/true>;
+using SequencerAttributeConfig = NodeAttributesConfig<SequencerNodeAttribute>;
 
 using SequencerConfig = PerRoleConfig<NodeRole::SEQUENCER,
                                       membership::SequencerMembership,

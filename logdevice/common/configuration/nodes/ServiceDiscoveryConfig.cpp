@@ -67,6 +67,30 @@ bool NodeServiceDiscovery::isValid() const {
   return true;
 }
 
+bool NodeServiceDiscovery::isValidForReset(
+    const NodeServiceDiscovery& current) const {
+  // Currently, roles and location are immutable.
+  if (current.roles != roles) {
+    ld_error("Node's roles are assumed to be immutable. Current value: '%s', "
+             "requested update: '%s'",
+             logdevice::toString(current.roles).c_str(),
+             logdevice::toString(roles).c_str());
+    return false;
+  }
+
+  if (current.location != location) {
+    ld_error(
+        "Node's location is assumed to be immutable. Current value: '%s', "
+        "requested update: '%s'",
+        current.location.hasValue() ? current.location->toString().c_str() : "",
+        location.hasValue() ? location->toString().c_str() : "");
+    return false;
+  }
+
+  // All other fields can be mutated freely.
+  return true;
+}
+
 std::string NodeServiceDiscovery::toString() const {
   return folly::sformat(
       "[{} => A:{},G:{},S:{},L:{},R:{}]",

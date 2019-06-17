@@ -22,7 +22,7 @@
 namespace facebook { namespace logdevice { namespace configuration {
 namespace nodes {
 
-template <typename Attributes, bool Mutable>
+template <typename Attributes>
 class NodeAttributesConfig {
  public:
   enum class UpdateType { PROVISION = 0, REMOVE, RESET };
