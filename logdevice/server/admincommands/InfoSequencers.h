@@ -168,7 +168,9 @@ class InfoSequencers : public AdminCommand {
 
     std::pair<int64_t, std::chrono::milliseconds> rate =
         seq.appendRateEstimate();
-    table.set<18>(rate.first * 1e3 / rate.second.count());
+    double bytes_per_second =
+        rate.second.count() == 0 ? 0 : (rate.first * 1e3 / rate.second.count());
+    table.set<18>(bytes_per_second);
     table.set<19>(rate.second.count() / 1e3);
 
     if (bg_activator_info != nullptr &&
