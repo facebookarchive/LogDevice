@@ -74,15 +74,19 @@ NodesConfiguration::NodesConfiguration()
 bool NodesConfiguration::Update::isValid() const {
   // we don't check validity for each update of the sub config, as we check each
   // one of them in applyUpdate();
-  return service_discovery_update != nullptr ||
-      sequencer_config_update != nullptr || storage_config_update != nullptr ||
-      metadata_logs_rep_update != nullptr;
+  return !empty();
 }
 
 bool NodesConfiguration::Update::hasAllUpdates() const {
   return service_discovery_update != nullptr &&
       sequencer_config_update != nullptr && storage_config_update != nullptr &&
       metadata_logs_rep_update != nullptr;
+}
+
+bool NodesConfiguration::Update::empty() const {
+  return service_discovery_update == nullptr &&
+      sequencer_config_update == nullptr && storage_config_update == nullptr &&
+      metadata_logs_rep_update == nullptr;
 }
 
 std::string NodesConfiguration::Update::toString() const {

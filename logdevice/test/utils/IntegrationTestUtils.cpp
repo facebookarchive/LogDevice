@@ -2654,7 +2654,8 @@ int Cluster::bumpGeneration(node_index_t index) {
 
 int Cluster::updateNodeAttributes(node_index_t index,
                                   configuration::StorageState storage_state,
-                                  int sequencer_weight) {
+                                  int sequencer_weight,
+                                  folly::Optional<bool> enable_sequencing) {
   // TODO: make it work with one config per nodes.
   ld_check(!one_config_per_node_);
   Configuration::Nodes nodes = config_->get()->serverConfig()->getNodes();
@@ -2674,12 +2675,17 @@ int Cluster::updateNodeAttributes(node_index_t index,
 
   if (node.sequencer_attributes != nullptr) {
     node.sequencer_attributes->setWeight(sequencer_weight);
+    if (enable_sequencing.hasValue()) {
+      node.sequencer_attributes->setEnabled(enable_sequencing.value());
+    }
   }
 
   Configuration::NodesConfig nodes_config(std::move(nodes));
   auto config = config_->get();
   std::shared_ptr<ServerConfig> new_server_config =
-      config->serverConfig()->withNodes(std::move(nodes_config));
+      config->serverConfig()
+          ->withNodes(std::move(nodes_config))
+          ->withIncrementedVersion();
   int rv = writeConfig(new_server_config.get(), config->logsConfig().get());
   if (rv != 0) {
     return -1;

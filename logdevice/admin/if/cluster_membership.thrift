@@ -96,6 +96,10 @@ struct AddNodesResponse {
    * NodeConfigs of the newly added nodes.
    */
   1: list<nodes.NodeConfig> added_nodes,
+  /**
+   * The version of the updated NodesConfiguration.
+   */
+  2: common.unsigned64 new_nodes_configuration_version,
 }
 
 
@@ -133,6 +137,10 @@ struct UpdateNodesResponse {
    * The new NodeConfigs for the updated nodes.
    */
   1: list<nodes.NodeConfig> updated_nodes,
+  /**
+   * The version of the updated NodesConfiguration.
+   */
+  2: common.unsigned64 new_nodes_configuration_version,
 }
 
 ////////////////////////////////////////////////////////////////////////////
@@ -156,4 +164,8 @@ struct RemoveNodesResponse {
    * List of nodes that were successfully removed from config.
    */
   1: list<common.NodeID> removed_nodes,
+  /**
+   * The version of the updated NodesConfiguration.
+   */
+  2: common.unsigned64 new_nodes_configuration_version,
 }

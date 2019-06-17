@@ -15,7 +15,12 @@ auto_sources(admin_settings_files
   "*.cpp" RECURSE "${LOGDEVICE_ADMIN_DIR}/settings")
 
 auto_sources(admin_hfiles "*.h" "${LOGDEVICE_ADMIN_DIR}/")
-auto_sources(admin_files "*.cpp" "${LOGDEVICE_ADMIN_DIR}/")
+auto_sources(admin_files "*.cpp""${LOGDEVICE_ADMIN_DIR}/")
+
+auto_sources(admin_membership_hfiles "*.h"
+  "${LOGDEVICE_ADMIN_DIR}/cluster_membership/")
+auto_sources(admin_membership_files "*.cpp"
+  "${LOGDEVICE_ADMIN_DIR}/cluster_membership/")
 
 auto_sources(maintenance_hfiles "*.h" "${LOGDEVICE_ADMIN_DIR}/maintenance")
 auto_sources(maintenance_files "*.cpp" "${LOGDEVICE_ADMIN_DIR}/maintenance")
@@ -88,7 +93,11 @@ set_target_properties(logdevice_admin_maintenance
 add_subdirectory(if)
 
 
-add_library(logdevice_admin STATIC ${admin_hfiles} ${admin_files})
+add_library(logdevice_admin STATIC
+  ${admin_hfiles}
+  ${admin_membership_hfiles}
+  ${admin_membership_files}
+  ${admin_files})
 
 target_link_libraries(logdevice_admin
   common

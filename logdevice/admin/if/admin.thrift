@@ -58,7 +58,9 @@ service AdminAPI extends fb303.FacebookService {
   cluster_membership.AddNodesResponse addNodes(1:
       cluster_membership.AddNodesRequest request) throws
       (1: exceptions.NodeNotReady notready,
-       2: cluster_membership.ClusterMembershipOperationFailed failed_op);
+       2: cluster_membership.ClusterMembershipOperationFailed failed_op,
+       3: exceptions.NodesConfigurationManagerError ncm_error,
+       4: exceptions.NotSupported not_supported);
 
   /**
    * Update service discovery information of some cluster nodes. The passed
@@ -79,7 +81,9 @@ service AdminAPI extends fb303.FacebookService {
   cluster_membership.UpdateNodesResponse updateNodes(1:
       cluster_membership.UpdateNodesRequest request) throws
       (1: exceptions.NodeNotReady notready,
-       2: cluster_membership.ClusterMembershipOperationFailed failed_op);
+       2: cluster_membership.ClusterMembershipOperationFailed failed_op,
+       3: exceptions.NodesConfigurationManagerError ncm_error,
+       4: exceptions.NotSupported not_supported);
 
   /**
    * Removes the nodes matching the passed list of NodeFilters from the
@@ -99,7 +103,9 @@ service AdminAPI extends fb303.FacebookService {
   cluster_membership.RemoveNodesResponse removeNodes(1:
       cluster_membership.RemoveNodesRequest request) throws
       (1: exceptions.NodeNotReady notready,
-       2: cluster_membership.ClusterMembershipOperationFailed failed_op);
+       2: cluster_membership.ClusterMembershipOperationFailed failed_op,
+       3: exceptions.NodesConfigurationManagerError ncm_error,
+       4: exceptions.NotSupported not_supported);
 
   /**
    * Lists the maintenance by group-ids. This returns maintenances from the

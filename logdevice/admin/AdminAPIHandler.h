@@ -11,6 +11,7 @@
 
 #include "common/fb303/cpp/FacebookBase2.h"
 #include "logdevice/admin/CheckImpactHandler.h"
+#include "logdevice/admin/ClusterMembershipAPIHandler.h"
 #include "logdevice/admin/MaintenanceAPIHandler.h"
 #include "logdevice/admin/NodesConfigAPIHandler.h"
 #include "logdevice/admin/NodesStateAPIHandler.h"
@@ -34,7 +35,8 @@ class AdminAPIHandler : public facebook::fb303::FacebookBase2,
                         public NodesConfigAPIHandler,
                         public NodesStateAPIHandler,
                         public CheckImpactHandler,
-                        public MaintenanceAPIHandler {
+                        public MaintenanceAPIHandler,
+                        public ClusterMembershipAPIHandler {
  public:
   AdminAPIHandler(
       Processor* processor,

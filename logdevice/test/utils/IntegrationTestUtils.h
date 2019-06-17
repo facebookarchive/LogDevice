@@ -948,9 +948,11 @@ class Cluster {
   /**
    * Update node's attributes in config
    */
-  int updateNodeAttributes(node_index_t index,
-                           configuration::StorageState storage_state,
-                           int sequencer_weight);
+  int updateNodeAttributes(
+      node_index_t index,
+      configuration::StorageState storage_state,
+      int sequencer_weight,
+      folly::Optional<bool> enable_sequencing = folly::none);
 
   /**
    * Waits until all live nodes have a view of the config same as getConfig().

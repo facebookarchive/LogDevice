@@ -66,3 +66,11 @@ exception MaintenanceClash {
 exception MaintenanceMatchError {
   1: string message,
 } (message = "message")
+
+/**
+ * Nodes Configuration Manager rejected the proposed update.
+ */
+exception NodesConfigurationManagerError {
+  1: string message,
+  2: optional i32 error_code, // maps to E
+} (message = "message")

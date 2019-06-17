@@ -37,14 +37,6 @@ class MaintenanceAPIHandler : public virtual AdminAPIHandlerBase {
       std::unique_ptr<thrift::UnblockRebuildingRequest> request) override;
 
  private:
-  // throws NotSupported exception if MM is disabled.
-  folly::Optional<thrift::NotSupported> failIfMMDisabled() {
-    if (!isMaintenanceManagerEnabled()) {
-      return thrift::NotSupported("MaintenanceManager is not enabled!");
-    }
-    return folly::none;
-  }
-
   using ListMaintenanceDefs =
       folly::Expected<std::vector<thrift::MaintenanceDefinition>,
                       maintenance::MaintenanceError>;

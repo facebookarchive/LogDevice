@@ -59,6 +59,7 @@ class NodesConfiguration {
 
     bool isValid() const;
     bool hasAllUpdates() const;
+    bool empty() const;
     std::string toString() const;
   };
 

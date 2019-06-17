@@ -53,6 +53,14 @@ class AdminAPIHandlerBase : public virtual thrift::AdminAPISvIf {
         maintenance_manager_ != nullptr;
   }
 
+  // throws NotSupported exception if MM is disabled.
+  folly::Optional<thrift::NotSupported> failIfMMDisabled() {
+    if (!isMaintenanceManagerEnabled()) {
+      return thrift::NotSupported("MaintenanceManager is not enabled!");
+    }
+    return folly::none;
+  }
+
  protected:
   Processor* processor_;
   std::shared_ptr<SettingsUpdater> settings_updater_;
