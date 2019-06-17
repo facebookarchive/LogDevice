@@ -583,9 +583,6 @@ folly::dynamic ServerConfig::toJson(const LogsConfig* with_logs,
     if (node.ssl_address) {
       node_dict["ssl_host"] = node.ssl_address->toString();
     }
-    if (!node.settings.empty()) {
-      node_dict["settings"] = folly::toDynamic(node.settings);
-    }
 
     // Sequencer Role Attributes.
     auto roles = folly::dynamic::array();

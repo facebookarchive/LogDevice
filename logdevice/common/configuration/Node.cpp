@@ -22,7 +22,6 @@ Node::Node(const Node& other) {
   ssl_address = other.ssl_address;
   generation = other.generation;
   location = other.location;
-  settings = other.settings;
   roles = other.roles;
   if (hasRole(NodeRole::SEQUENCER)) {
     sequencer_attributes =

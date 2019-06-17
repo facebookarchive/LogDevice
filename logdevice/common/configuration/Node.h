@@ -201,11 +201,6 @@ struct Node {
   folly::Optional<NodeLocation> location;
 
   /**
-   * Settings overridden for this node.
-   */
-  std::unordered_map<std::string, std::string> settings;
-
-  /**
    * Bitmap storing node roles
    */
   std::bitset<NUM_ROLES> roles;

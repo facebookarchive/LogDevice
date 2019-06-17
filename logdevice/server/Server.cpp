@@ -130,25 +130,14 @@ bool ServerParameters::updateServerOrigin(ServerConfig& config) {
 }
 
 bool ServerParameters::updateConfigSettings(ServerConfig& config) {
-  // If we reached this hook, this means that we must have found a valid
-  // MyNodeId, otherwise the config must have been rejected earlier.
-  ld_assert(my_node_id_.has_value());
-
-  // Merge the main settings section and the settings section for my node.
   SteadyTimestamp start_ts(SteadyTimestamp::now());
   SCOPE_EXIT {
     ld_info("Updating settings from config took %lums",
             msec_since(start_ts.timePoint()));
   };
-  auto settings = config.getServerSettingsConfig();
-  const configuration::Node* me = config.getNode(my_node_id_.value().index());
-  ld_check(me);
-  for (auto s : me->settings) {
-    settings[s.first] = s.second;
-  }
 
   try {
-    settings_updater_->setFromConfig(settings);
+    settings_updater_->setFromConfig(config.getServerSettingsConfig());
   } catch (const boost::program_options::error&) {
     return false;
   }

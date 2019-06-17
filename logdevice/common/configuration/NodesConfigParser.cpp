@@ -51,10 +51,6 @@ static bool parseSequencer(const folly::dynamic&, Configuration::Node&);
 static RoleParser parseStorageAttributes;
 static bool parseNumShards(const folly::dynamic&, Configuration::Node&);
 static bool parseStorageState(const folly::dynamic&, Configuration::Node&);
-static bool parseCompactionSchedule(const folly::dynamic&,
-                                    Configuration::Node&);
-static bool parseProactiveCompaction(const folly::dynamic&,
-                                     Configuration::Node&);
 
 static bool parseRole(NodeRole role,
                       const folly::dynamic& nodeMap,
@@ -218,18 +214,14 @@ static bool parseOneNode(const folly::dynamic& nodeMap,
                          output.address,
                          output.gossip_address,
                          output.ssl_address) &&
-      parseLocation(nodeMap, output) && parseRoles(nodeMap, output) &&
-      parseSettings(nodeMap, "settings", output.settings);
+      parseLocation(nodeMap, output) && parseRoles(nodeMap, output);
 }
 
 static bool parseStorageAttributes(const folly::dynamic& nodeMap,
                                    Configuration::Node& output) {
   ld_check(output.hasRole(NodeRole::STORAGE));
   output.addStorageRole();
-  return parseNumShards(nodeMap, output) &&
-      parseStorageState(nodeMap, output) &&
-      parseCompactionSchedule(nodeMap, output) &&
-      parseProactiveCompaction(nodeMap, output);
+  return parseNumShards(nodeMap, output) && parseStorageState(nodeMap, output);
 }
 
 static bool parseNodeID(const folly::dynamic& nodeMap,
@@ -503,42 +495,6 @@ static bool parseSequencer(const folly::dynamic& nodeMap,
   sequencer->setEnabled(sequencing_enabled);
   sequencer->setWeight(sequencer_weight);
   return true;
-}
-
-static bool parseProactiveCompaction(const folly::dynamic& nodeMap,
-                                     Configuration::Node& output) {
-  auto iter = nodeMap.find("proactive_compaction_enabled");
-  if (iter == nodeMap.items().end()) {
-    return true;
-  }
-  RATELIMIT_INFO(
-      std::chrono::seconds(10),
-      1,
-      "The \"proactive_compaction_enabled\" entry in the node's config is "
-      "deprecated. Please use the \"rocksdb-proactive-compaction-enabled\" "
-      "setting instead.");
-  const folly::dynamic& val = iter->second;
-  return parseOneSetting(
-      "rocksdb-proactive-compaction-enabled", val, "settings", output.settings);
-}
-
-static bool parseCompactionSchedule(const folly::dynamic& nodeMap,
-                                    Configuration::Node& output) {
-  auto iter = nodeMap.find("compaction_schedule");
-  if (iter == nodeMap.items().end()) {
-    return true;
-  }
-  RATELIMIT_INFO(
-      std::chrono::seconds(10),
-      1,
-      "The \"compaction_schedule\" entry in the node's config is "
-      "deprecated. Please use the \"rocksdb-partition-compaction-schedule\" "
-      "setting instead.");
-  const folly::dynamic& val = iter->second;
-  return parseOneSetting("rocksdb-partition-compaction-schedule",
-                         val,
-                         "settings",
-                         output.settings);
 }
 
 static bool parseRoles(const folly::dynamic& nodeMap,
