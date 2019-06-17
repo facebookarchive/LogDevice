@@ -10,6 +10,8 @@
 #include <memory>
 #include <unordered_map>
 
+#include <folly/dynamic.h>
+
 #include "logdevice/common/configuration/Node.h"
 #include "logdevice/common/configuration/nodes/NodesConfiguration.h"
 
@@ -70,6 +72,8 @@ class NodesConfig {
   // @return   true if the new NodesConfiguration is successfully generated
   bool generateNodesConfiguration(const MetaDataLogsConfig& meta_config,
                                   config_version_t version);
+
+  folly::dynamic toJson() const;
 
  private:
   // calculates a hash of storage-relevant attributes of nodes: for all nodes,

@@ -552,64 +552,6 @@ std::string ServerConfig::toStringImpl(const LogsConfig* with_logs,
 
 folly::dynamic ServerConfig::toJson(const LogsConfig* with_logs,
                                     const ZookeeperConfig* with_zk) const {
-  folly::dynamic output_nodes = folly::dynamic::array;
-
-  const auto& nodes = nodesConfig_.getNodes();
-  std::vector<node_index_t> sorted_node_ids(nodes.size());
-  std::transform(
-      nodes.begin(), nodes.end(), sorted_node_ids.begin(), [](const auto& src) {
-        return src.first;
-      });
-  std::sort(sorted_node_ids.begin(), sorted_node_ids.end());
-
-  for (const auto& nidx : sorted_node_ids) {
-    const ServerConfig::Node& node = nodes.at(nidx);
-
-    folly::dynamic node_dict =
-        folly::dynamic::object("node_id", nidx)("name", node.name)(
-            "host", node.address.toString())("generation", node.generation)(
-            "gossip_address", node.gossip_address.toString());
-
-    if (node.hasRole(NodeRole::STORAGE)) {
-      // TODO: Remove once all production configs and tooling
-      //       No longer use this field.
-      node_dict["weight"] = node.getLegacyWeight();
-    }
-
-    // Optional Universal Attributes.
-    if (node.location.hasValue()) {
-      node_dict["location"] = node.locationStr();
-    }
-    if (node.ssl_address) {
-      node_dict["ssl_host"] = node.ssl_address->toString();
-    }
-
-    // Sequencer Role Attributes.
-    auto roles = folly::dynamic::array();
-    if (node.hasRole(configuration::NodeRole::SEQUENCER)) {
-      roles.push_back("sequencer");
-      node_dict["sequencer"] = node.sequencer_attributes->enabled();
-      node_dict["sequencer_weight"] =
-          node.sequencer_attributes->getConfiguredWeight();
-    }
-
-    // Storage Role Attributes.
-    if (node.hasRole(configuration::NodeRole::STORAGE)) {
-      roles.push_back("storage");
-      auto* storage = node.storage_attributes.get();
-      node_dict["storage"] =
-          configuration::storageStateToString(storage->state);
-      node_dict["storage_capacity"] = storage->capacity;
-      node_dict["num_shards"] = storage->num_shards;
-      if (storage->exclude_from_nodesets) {
-        node_dict["exclude_from_nodesets"] = storage->exclude_from_nodesets;
-      }
-    }
-    node_dict["roles"] = roles;
-
-    output_nodes.push_back(node_dict);
-  }
-
   folly::dynamic meta_nodeset = folly::dynamic::array;
   for (auto index : metaDataLogsConfig_.metadata_nodes) {
     meta_nodeset.push_back(index);
@@ -631,7 +573,7 @@ folly::dynamic ServerConfig::toJson(const LogsConfig* with_logs,
   }
 
   folly::dynamic json_all = folly::dynamic::object("cluster", clusterName_)(
-      "version", version_.val())("nodes", std::move(output_nodes))(
+      "version", version_.val())("nodes", nodesConfig_.toJson())(
       "metadata_logs", std::move(metadata_logs))(
       "internal_logs", internalLogs_.toDynamic())(
       "principals", principalsConfig_.toFollyDynamic())(
