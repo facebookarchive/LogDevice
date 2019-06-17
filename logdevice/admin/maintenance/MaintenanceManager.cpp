@@ -238,7 +238,7 @@ void MaintenanceManager::startInternal() {
   shutdown_promise_ = folly::Promise<folly::Unit>::makeEmpty();
   ld_info("Starting Maintenance Manager");
   status_ = MMStatus::STARTING;
-  ld_debug("Updated MaintenanceManager status to STARTING");
+  ld_info("Updated MaintenanceManager status to STARTING");
 }
 
 void MaintenanceManager::activateReevaluationTimer() {
@@ -281,7 +281,7 @@ void MaintenanceManager::stopInternal() {
     return;
   }
   status_ = MMStatus::STOPPING;
-  ld_debug("Updated MaintenanceManager status to STOPPING");
+  ld_info("Updated MaintenanceManager status to STOPPING");
 }
 
 void MaintenanceManager::scheduleRun() {
@@ -729,6 +729,7 @@ void MaintenanceManager::evaluate() {
     ld_info("No state change from previous evaluate run. Will run when next "
             "state change occurs or periodic evaluation timer expires");
     status_ = MMStatus::AWAITING_STATE_CHANGE;
+    ld_info("Updated MaintenanceManager status to AWAITING_STATE_CHANGE");
     activateReevaluationTimer();
     return;
   }
@@ -761,7 +762,7 @@ void MaintenanceManager::evaluate() {
 
   // Run Shard workflows
   status_ = MMStatus::RUNNING_WORKFLOWS;
-  ld_debug("Updated MaintenanceManager status to RUNNING_WORKFLOWS");
+  ld_info("Updated MaintenanceManager status to RUNNING_WORKFLOWS");
   auto shards_futures = runShardWorkflows();
   collectAllSemiFuture(
       shards_futures.second.begin(), shards_futures.second.end())
@@ -863,7 +864,7 @@ void MaintenanceManager::finishShutdown() {
   // Stop was called. We should have a valid promise to fulfill
   ld_check(shutdown_promise_.valid());
   status_ = MMStatus::STOPPED;
-  ld_debug("Updated MaintenanceManager status to STOPPED");
+  ld_info("Updated MaintenanceManager status to STOPPED");
   shutdown_promise_.setValue();
 }
 
@@ -1157,14 +1158,18 @@ MaintenanceManager::scheduleNodesConfigUpdates() {
         std::move(sequencer_membership_update);
   }
 
-  status_ = MMStatus::AWAITING_NODES_CONFIG_UPDATE;
-  ld_debug("Updated MaintenanceManager status to AWAITING_NODES_CONFIG_UPDATE");
-  return (!storage_config_update && !sequencer_config_update)
-      ? folly::makeSemiFuture<NCUpdateResult>(
-            folly::makeUnexpected(Status::EMPTY))
-      : deps_->postNodesConfigurationUpdate(std::move(storage_config_update),
-                                            std::move(sequencer_config_update));
-}
+  if (!storage_config_update && !sequencer_config_update) {
+    // No NCM updated needed.
+    return folly::makeSemiFuture<NCUpdateResult>(
+        folly::makeUnexpected(Status::EMPTY));
+  } else {
+    status_ = MMStatus::AWAITING_NODES_CONFIG_UPDATE;
+    ld_info(
+        "Updated MaintenanceManager status to AWAITING_NODES_CONFIG_UPDATE");
+    return deps_->postNodesConfigurationUpdate(
+        std::move(storage_config_update), std::move(sequencer_config_update));
+  }
+} // namespace maintenance
 
 membership::StateTransitionCondition MaintenanceManager::getCondition(
     ShardID shard,
@@ -1194,8 +1199,7 @@ folly::SemiFuture<SafetyCheckResult> MaintenanceManager::scheduleSafetyCheck() {
     }
   }
   status_ = MMStatus::AWAITING_SAFETY_CHECK_RESULTS;
-  ld_debug(
-      "Updated MaintenanceManager status to AWAITING_SAFETY_CHECK_RESULTS");
+  ld_info("Updated MaintenanceManager status to AWAITING_SAFETY_CHECK_RESULTS");
   if (shard_wf.empty() && seq_wf.empty()) {
     unsafe_groups_.clear();
     return folly::makeUnexpected(E::EMPTY);
