@@ -150,6 +150,10 @@ MaintenanceAPIHandler::applyAndGetMaintenances(
 folly::SemiFuture<ListMaintenanceDefs> MaintenanceAPIHandler::applyAndMerge(
     std::vector<MaintenanceDefinition> new_defs,
     std::vector<MaintenanceDefinition> existing) {
+  if (new_defs.empty()) {
+    // No need to write a delta in this case really. No new definitions.
+    return existing;
+  }
   MaintenanceDelta delta;
   delta.set_apply_maintenances(std::move(new_defs));
   return MaintenanceLogWriter::writeDelta(processor_, delta)
