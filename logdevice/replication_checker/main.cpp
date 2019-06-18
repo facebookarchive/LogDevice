@@ -2083,8 +2083,8 @@ int main(int argc, const char** argv) {
     data["summary"] = st.toDynamic();
     folly::json::serialization_opts opts;
     opts.pretty_formatting = true;
-    auto json = folly::json::serialize(data, opts);
-    std::cout << folly::json::serialize(data, opts) << std::endl;
+    std::string json = folly::json::serialize(data, opts);
+    std::cout << json << std::endl;
   }
 
   worker_coordinators.clear();
