@@ -4,8 +4,9 @@
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -fno-new-ttp-matching")
 set(LOGDEVICE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 set(LOGDEVICE_ADMIN_DIR "${LOGDEVICE_DIR}/admin")
 set(LOGDEVICE_CLIENT_HEADER_DIR "${LOGDEVICE_DIR}/include")
