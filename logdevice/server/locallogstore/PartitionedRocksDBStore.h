@@ -707,8 +707,14 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
         !configuration::InternalLogs::isInternal(log_id);
   }
 
-  // Tells rocksdb to flush the active memtable of given column family and
-  // optionally waits for the flush to finish.
+  // Memtables belonging to given column families will be flushed and committed
+  // to manifest as a single atomic operation. Note: This works only if db is
+  // opened with atomic_flush set to true.
+  bool
+  flushMemtablesAtomically(const std::vector<rocksdb::ColumnFamilyHandle*>& cfs,
+                           bool wait = true);
+  // Tells rocksdb to flush all memtables of given column family and optionally
+  // wait for the flush to finish.
   bool flushMemtable(RocksDBCFPtr& cf, bool wait = true);
 
   // Wrapper for the above api that accepts partition instead of raw column

@@ -2515,7 +2515,7 @@ bool PartitionedRocksDBStore::flushPartitionAndDependencies(
 
   FlushToken flushed_through = partition->dirty_state_.max_flush_token;
 
-  if (!flushMemtable(partition, /*wait*/ true)) {
+  if (!flushMemtable(partition->cf_, /*wait*/ true)) {
     return false;
   }
 
@@ -4863,7 +4863,7 @@ bool PartitionedRocksDBStore::performStronglyFilteredCompactionInternal(
   // But first flush the memtable if there is one. Not really necessary but
   // convenient for tests and consistent with what rocksdb::DB::CompactRange()
   // does.
-  if (!flushMemtable(partition)) {
+  if (!flushMemtable(partition->cf_)) {
     ld_error(
         "Won't compact partition %lu because flush failed", partition->id_);
     return false;
@@ -5777,7 +5777,9 @@ void PartitionedRocksDBStore::listLogs(
   }
 }
 
-bool PartitionedRocksDBStore::flushMemtable(RocksDBCFPtr& cf, bool wait) {
+bool PartitionedRocksDBStore::flushMemtablesAtomically(
+    const std::vector<rocksdb::ColumnFamilyHandle*>& cfs,
+    bool wait) {
   ld_check(!getSettings()->read_only);
   ld_check(!immutable_.load());
   auto options = rocksdb::FlushOptions();
@@ -5786,13 +5788,13 @@ bool PartitionedRocksDBStore::flushMemtable(RocksDBCFPtr& cf, bool wait) {
   // getting flushed, as we don't want active memtable to grow very large
   // and cause OOM.
   options.allow_write_stall = true;
-  rocksdb::Status status = db_->Flush(options, cf->get());
-  enterFailSafeIfFailed(status, "Flush()");
+  rocksdb::Status status = db_->Flush(options, cfs);
+  enterFailSafeIfFailed(status, "FlushAtomically()");
   return status.ok();
 }
 
-bool PartitionedRocksDBStore::flushMemtable(PartitionPtr partition, bool wait) {
-  return flushMemtable(partition->cf_, wait);
+bool PartitionedRocksDBStore::flushMemtable(RocksDBCFPtr& cf, bool wait) {
+  return flushMemtablesAtomically({cf->cf_.get()}, wait);
 }
 
 int PartitionedRocksDBStore::flushUnpartitionedMemtables(bool wait) {
@@ -5824,7 +5826,7 @@ int PartitionedRocksDBStore::flushAllMemtables(bool wait) {
   if (latest_.get()) {
     auto partitions = getPartitionList();
     for (PartitionPtr partition : *partitions) {
-      if (!flushMemtable(partition, wait)) {
+      if (!flushMemtable(partition->cf_, wait)) {
         err = E::LOCAL_LOG_STORE_WRITE;
         return -1;
       }
@@ -6269,18 +6271,12 @@ void PartitionedRocksDBStore::flushBackgroundThreadRun() {
         evaluator.pickCFsToFlush(now, metadata_cf_data, non_zero_size_cf);
     auto evaluate_time = watch.lap();
 
-    // TODO (#42131244): do this after D13591963 lands.
-    // std::vector<rocksdb::ColumnFamilyHandle*> handles_to_flush;
-    // handles_to_flush.reserve(to_flush.size());
-    // for (auto& cf_data : to_flush) {
-    //  handles_to_flush.push_back(cf_data.cf->get());
-    //}
-    // flushMemtablesAtomically(handles_to_flush, false /* wait */);
-
-    // Initiate the flushes.
+    std::vector<rocksdb::ColumnFamilyHandle*> handles_to_flush;
+    handles_to_flush.reserve(to_flush.size());
     for (auto& cf_data : to_flush) {
-      flushMemtable(cf_data.cf, /* wait */ false);
+      handles_to_flush.push_back(cf_data.cf->get());
     }
+    flushMemtablesAtomically(handles_to_flush, false /* wait */);
 
     auto flush_time = watch.lap();
 

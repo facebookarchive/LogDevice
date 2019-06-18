@@ -1375,7 +1375,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
 
   init("rocksdb-ld-managed-flushes",
        &ld_managed_flushes,
-       "false",
+       "true",
        nullptr,
        "By default, decision about when and what memtables to flush is taken "
        "by rocksdb using it's internal policy. This boolean overrides that "

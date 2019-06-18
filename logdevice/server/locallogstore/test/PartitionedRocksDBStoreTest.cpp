@@ -5322,7 +5322,7 @@ TEST_F(PartitionedRocksDBStoreTest, ObsoleteDataEstimate) {
 
   // Looks like rocksdb doesn't use user properties collector for sst files
   // written by WAL recovery, so we have to flush explicitly.
-  EXPECT_TRUE(store_->flushMemtable(store_->getPartitionList()->get(ID0)));
+  EXPECT_TRUE(store_->flushMemtable(store_->getPartitionList()->get(ID0)->cf_));
 
   time_ =
       SystemTimestamp(std::chrono::milliseconds(BASE_TIME + DAY + HOUR / 2));
@@ -5418,7 +5418,7 @@ TEST_F(PartitionedRocksDBStoreTest, TestGracePeriod) {
   // P0 has records for log 300 only
   time_ = SystemTimestamp(std::chrono::milliseconds(BASE_TIME));
   put({TestRecord(logid_t(300), 1, time_.toMilliseconds().count())});
-  EXPECT_TRUE(store_->flushMemtable(store_->getPartitionList()->get(ID0)));
+  EXPECT_TRUE(store_->flushMemtable(store_->getPartitionList()->get(ID0)->cf_));
 
   // P1 has records for logs 300,301,302
   time_ = SystemTimestamp(std::chrono::milliseconds(BASE_TIME + 15 * MINUTE));
@@ -5426,7 +5426,8 @@ TEST_F(PartitionedRocksDBStoreTest, TestGracePeriod) {
   put({TestRecord(logid_t(300), 2, time_.toMilliseconds().count())});
   put({TestRecord(logid_t(301), 1, time_.toMilliseconds().count())});
   put({TestRecord(logid_t(302), 1, time_.toMilliseconds().count())});
-  EXPECT_TRUE(store_->flushMemtable(store_->getPartitionList()->get(ID0 + 1)));
+  EXPECT_TRUE(
+      store_->flushMemtable(store_->getPartitionList()->get(ID0 + 1)->cf_));
 
   // P2 has records for log 300,301,302
   time_ = SystemTimestamp(std::chrono::milliseconds(BASE_TIME + 30 * MINUTE));
@@ -5434,7 +5435,8 @@ TEST_F(PartitionedRocksDBStoreTest, TestGracePeriod) {
   put({TestRecord(logid_t(300), 3, time_.toMilliseconds().count())});
   put({TestRecord(logid_t(301), 2, time_.toMilliseconds().count())});
   put({TestRecord(logid_t(302), 2, time_.toMilliseconds().count())});
-  EXPECT_TRUE(store_->flushMemtable(store_->getPartitionList()->get(ID0 + 2)));
+  EXPECT_TRUE(
+      store_->flushMemtable(store_->getPartitionList()->get(ID0 + 2)->cf_));
 
   time_ = SystemTimestamp(std::chrono::milliseconds(BASE_TIME + 45 * MINUTE));
   store_->createPartition(); // latest partition, 4th(P3)
@@ -5565,13 +5567,14 @@ TEST_F(PartitionedRocksDBStoreTest, ApplySpaceBasedRetentionPerDisk) {
   // Partition 0.
   time_ = SystemTimestamp(std::chrono::milliseconds(BASE_TIME));
   write_1mb();
-  EXPECT_TRUE(store_->flushMemtable(store_->getPartitionList()->get(ID0)));
+  EXPECT_TRUE(store_->flushMemtable(store_->getPartitionList()->get(ID0)->cf_));
 
   // Partition 1.
   time_ = SystemTimestamp(std::chrono::milliseconds(BASE_TIME + HOUR / 2));
   store_->createPartition();
   time_ = SystemTimestamp(std::chrono::milliseconds(BASE_TIME + HOUR));
-  EXPECT_TRUE(store_->flushMemtable(store_->getPartitionList()->get(ID0 + 1)));
+  EXPECT_TRUE(
+      store_->flushMemtable(store_->getPartitionList()->get(ID0 + 1)->cf_));
 
   ASSERT_TRUE(store_->getPartitionList()->get(ID0));
   ASSERT_TRUE(store_->getPartitionList()->get(ID0 + 1));
@@ -5666,7 +5669,7 @@ TEST_F(PartitionedRocksDBStoreTest, DeleteRatelimit) {
                       std::string(record_size, 'x'))});
     }
     ASSERT_TRUE(
-        store_->flushMemtable(store_->getPartitionList()->get(currentID)));
+        store_->flushMemtable(store_->getPartitionList()->get(currentID)->cf_));
     ASSERT_TRUE(store_->getPartitionList()->get(currentID));
     store_->createPartition();
     currentID++;
@@ -9295,7 +9298,7 @@ TEST_F(PartitionedRocksDBStoreTest, MemtableFlushNotifications) {
       latest_partition->cf_->activeMemtableFlushToken(), maxFlushToken + 2);
   // Force flush out the existing memtable. Write another record and it should
   // create a new memtable for the latest partition. Verify that is the case.
-  store_->flushMemtable(latest_partition);
+  store_->flushMemtable(latest_partition->cf_);
   // Active memtable flush token is reset when a memtable is flushed.
   EXPECT_EQ(
       latest_partition->cf_->activeMemtableFlushToken(), FlushToken_INVALID);

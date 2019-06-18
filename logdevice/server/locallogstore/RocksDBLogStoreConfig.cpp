@@ -204,7 +204,9 @@ RocksDBLogStoreConfig::RocksDBLogStoreConfig(
         ld_info("LD not managing flushing of memtables to sst.");
       }
     } else {
-      ld_info("LD manages flushes and all memory budgets on the node.");
+      ld_info("LD manages flushes and all memory budgets on the node. "
+              "rocksdb-atomic-flush is set to true.");
+      options_.atomic_flush = true;
     }
 
     if (rocksdb_settings_->db_write_buffer_size == 0) {
