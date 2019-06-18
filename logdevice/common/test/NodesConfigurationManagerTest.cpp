@@ -17,6 +17,7 @@
 #include <gtest/gtest.h>
 
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/configuration/nodes/FileBasedNodesConfigurationStore.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationCodec.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationStore.h"
 #include "logdevice/common/configuration/nodes/ZookeeperNodesConfigurationStore.h"
@@ -60,6 +61,17 @@ makeDummyNodesConfiguration(MembershipVersion::Type version) {
   EXPECT_TRUE(config.validate());
   EXPECT_EQ(version, config.getVersion());
   return config;
+}
+
+void waitTillNCMReceives(const NodesConfigurationManager& ncm,
+                         MembershipVersion::Type new_version) {
+  // TODO: better testing after offering a subscription API
+  while (ncm.getConfig() == nullptr ||
+         ncm.getConfig()->getVersion() != new_version) {
+    /* sleep override */ std::this_thread::sleep_for(200ms);
+  }
+  auto p = ncm.getConfig();
+  EXPECT_EQ(new_version, p->getVersion());
 }
 } // namespace
 
@@ -118,14 +130,8 @@ class NodesConfigurationManagerTest : public ::testing::Test {
                 /* cb = */ {});
   }
 
-  void waitTillNCMReceives(MembershipVersion::Type new_version) {
-    // TODO: better testing after offering a subscription API
-    while (ncm_->getConfig() == nullptr ||
-           ncm_->getConfig()->getVersion() != new_version) {
-      /* sleep override */ std::this_thread::sleep_for(200ms);
-    }
-    auto p = ncm_->getConfig();
-    EXPECT_EQ(new_version, p->getVersion());
+  void waitTillNCMReceives(MembershipVersion::Type new_version) const {
+    ::waitTillNCMReceives(*ncm_, new_version);
   }
 
   std::unique_ptr<StatsHolder> stats_;
@@ -274,6 +280,24 @@ TEST_F(NodesConfigurationManagerTest, overwrite) {
     folly::Baton<> b;
     ncm_->overwrite(
         std::make_shared<const NodesConfiguration>(std::move(rollback_config)),
+        [&b](Status status, std::shared_ptr<const NodesConfiguration> config) {
+          EXPECT_EQ(E::VERSION_MISMATCH, status);
+          EXPECT_TRUE(config);
+          EXPECT_EQ(kNewVersion, config->getVersion());
+          b.post();
+        });
+    b.wait();
+    EXPECT_EQ(kNewVersion, ncm_->getConfig()->getVersion());
+  }
+
+  {
+    // ensure that we cannot repeat the same version
+    auto same_version = kVersion;
+    auto diff_config = makeDummyNodesConfiguration(same_version);
+
+    folly::Baton<> b;
+    ncm_->overwrite(
+        std::make_shared<const NodesConfiguration>(std::move(diff_config)),
         [&b](Status status, std::shared_ptr<const NodesConfiguration> config) {
           EXPECT_EQ(E::VERSION_MISMATCH, status);
           EXPECT_TRUE(config);
@@ -444,4 +468,175 @@ TEST_F(NodesConfigurationManagerTest, DivergenceReporting) {
     waitTillNCMReceives(new_version);
   }
   expect_diverged(false, false);
+}
+
+// Second setup with multiple NCMs sharing the same underlying FileBasedNCS
+class NodesConfigurationManagerTest2 : public ::testing::Test {
+ public:
+  void SetUp() override {
+    dbg::currentLevel = getLogLevelFromEnv().value_or(dbg::Level::INFO);
+
+    temp_dir_ = createTemporaryDir("NodesConfigurationManagerTest2");
+    file_ncs_ = createNCS();
+
+    // provision initial config in FileBasedNCS
+    init_version_ = membership::MembershipVersion::Type{kVersion.val() - 1};
+    auto nc = provisionNodes()->withVersion(init_version_);
+    ASSERT_TRUE(nc->validate());
+    auto serialized = NodesConfigurationCodec::serialize(*nc);
+    ASSERT_EQ(Status::OK,
+              file_ncs_->updateConfigSync(
+                  serialized, /* base_version */ folly::none));
+
+    Settings settings = create_default_settings<Settings>();
+    settings.num_workers = 3;
+    settings.enable_nodes_configuration_manager = true;
+    settings.use_nodes_configuration_manager_nodes_configuration = true;
+    settings.nodes_configuration_manager_store_polling_interval =
+        std::chrono::seconds(1);
+    settings.nodes_configuration_manager_intermediary_shard_state_timeout =
+        std::chrono::seconds(2);
+
+    processor1_ = make_test_processor(settings);
+
+    auto ncs1 = createNCS();
+    auto deps = std::make_unique<TestDeps>(processor1_.get(), std::move(ncs1));
+    ncm1_ = NodesConfigurationManager::create(
+        NodesConfigurationManager::OperationMode::forTooling(),
+        std::move(deps));
+    ASSERT_TRUE(ncm1_->init(std::make_shared<const NodesConfiguration>()));
+    ncm1_->upgradeToProposer();
+
+    waitTillNCMReceives(*ncm1_, init_version_);
+
+    // create NCM #2
+    settings.nodes_configuration_manager_store_polling_interval =
+        std::chrono::seconds(3);
+    processor2_ = make_test_processor(settings);
+
+    auto ncs2 = createNCS();
+
+    deps = std::make_unique<TestDeps>(processor2_.get(), std::move(ncs2));
+    ncm2_ = NodesConfigurationManager::create(
+        NodesConfigurationManager::OperationMode::forTooling(),
+        std::move(deps));
+    ASSERT_TRUE(ncm2_->init(std::make_shared<const NodesConfiguration>()));
+    ncm2_->upgradeToProposer();
+  }
+
+  //////// Helper functions ////////
+  void writeNewVersion(MembershipVersion::Type new_version) {
+    auto new_config = std::make_shared<const NodesConfiguration>(
+        makeDummyNodesConfiguration(new_version));
+    writeNewConfig(std::move(new_config));
+  }
+
+  void writeNewConfig(std::shared_ptr<const NodesConfiguration> new_config) {
+    // overwrite; fire and forget
+    file_ncs_->updateConfig(NodesConfigurationCodec::serialize(*new_config),
+                            /* base_version = */ folly::none,
+                            /* cb = */ {});
+  }
+
+ private:
+  // Returns an instance of a FileBasedNodesConfigurationStore with the _same_
+  // state in temp_dir_; assumes temp_dir_ is initialized and valid.
+  std::unique_ptr<FileBasedNodesConfigurationStore> createNCS() const {
+    assert(temp_dir_);
+    return std::make_unique<FileBasedNodesConfigurationStore>(
+        kConfigKey,
+        temp_dir_->path().string(),
+        NodesConfigurationCodec::extractConfigVersion);
+  }
+
+ public:
+  std::unique_ptr<folly::test::TemporaryDirectory> temp_dir_;
+  std::unique_ptr<FileBasedNodesConfigurationStore> file_ncs_;
+  membership::MembershipVersion::Type init_version_;
+
+  std::shared_ptr<Processor> processor1_;
+  std::shared_ptr<Processor> processor2_;
+
+  std::shared_ptr<NodesConfigurationManager> ncm1_;
+  std::shared_ptr<NodesConfigurationManager> ncm2_;
+};
+
+TEST_F(NodesConfigurationManagerTest2, race) {
+  // init_version_ (empty)
+  // |
+  // | add N17
+  // v
+  // kVersion
+  // |
+  // | enable read on N17
+  // v
+  // kNewVersion
+  // |
+  // | N17 transitions to READ_ONLY (by NCM's ShardStateTracker)
+  // v
+  // final_version
+  auto nc = ncm1_->getConfig();
+  EXPECT_EQ(init_version_, nc->getVersion());
+  {
+    // add N17
+    auto update = addNewNodeUpdate(*nc);
+    ncm1_->update(
+        std::move(update),
+        [](Status status, std::shared_ptr<const NodesConfiguration> new_nc) {
+          EXPECT_EQ(Status::OK, status);
+          EXPECT_EQ(kVersion, new_nc->getVersion());
+        });
+    waitTillNCMReceives(*ncm1_, kVersion);
+    waitTillNCMReceives(*ncm2_, kVersion);
+  }
+  {
+    // enable read on N17: this is an update that will be automatically advanced
+    // to N17 being READ_ONLY.
+    auto storage_membership_version =
+        ncm1_->getConfig()->getStorageMembership()->getVersion();
+
+    folly::Baton<> b1;
+    folly::Baton<> b2;
+    // results will be updated via different threads
+    std::array<std::pair<Status, membership::MembershipVersion::Type>, 2>
+        results{};
+
+    // race the same update via 2 NCMs, one of them should fail with
+    // VERSION_MISMATCH
+    auto update = enablingReadUpdate(storage_membership_version);
+    ncm1_->update(
+        std::move(update),
+        [&results, &b1](
+            Status status, std::shared_ptr<const NodesConfiguration> new_nc) {
+          EXPECT_TRUE(new_nc);
+          results[0] = std::make_pair(status, new_nc->getVersion());
+          b1.post();
+        });
+
+    update = enablingReadUpdate(storage_membership_version);
+    ncm2_->update(
+        std::move(update),
+        [&results, &b2](Status status,
+                        std::shared_ptr<const NodesConfiguration> stored_nc) {
+          EXPECT_TRUE(stored_nc);
+          results[1] = std::make_pair(status, stored_nc->getVersion());
+          b2.post();
+        });
+
+    auto final_version =
+        membership::MembershipVersion::Type{kNewVersion.val() + 1};
+    waitTillNCMReceives(*ncm1_, final_version);
+    b1.wait();
+    waitTillNCMReceives(*ncm2_, final_version);
+    b2.wait();
+
+    // One should be (OK, kNewVersion) and the other should be
+    // (VERSION_MISMATCH, _).
+    EXPECT_TRUE((results[0] == std::make_pair(Status::OK, kNewVersion) &&
+                 results[1].first == E::VERSION_MISMATCH &&
+                 results[1].second > kVersion) ||
+                (results[1] == std::make_pair(Status::OK, kNewVersion) &&
+                 results[0].first == E::VERSION_MISMATCH &&
+                 results[0].second > kVersion));
+  }
 }

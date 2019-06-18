@@ -345,9 +345,14 @@ void NodesConfigurationManager::onUpdateRequest(ncm::UpdateContext ctx,
   if (!ctx.data_.nc_) {
     // TODO: better visibility into why particular updates failed
     ctx.setStatus(err);
-    callback(err, nullptr);
+    callback(err, (err == E::VERSION_MISMATCH) ? current_config : nullptr);
     return;
   }
+  // NOTE: This is not a necessary condition for NCM to work, however, I (xshi)
+  // think that keeping the version numbers sequential and without gaps will aid
+  // observability and debuggability. We could loosen this constraint in the
+  // future.
+  ld_assert_eq(ctx.data_.nc_->getVersion().val(), current_version.val() + 1);
 
   auto serialized = NodesConfigurationCodec::serialize(*ctx.data_.nc_);
   if (serialized.empty()) {
@@ -362,6 +367,7 @@ void NodesConfigurationManager::onUpdateRequest(ncm::UpdateContext ctx,
       /* base_version = */ current_version,
       [callback = std::move(callback),
        ctx = std::move(ctx),
+       current_version,
        ncm = weak_from_this()](
           Status status,
           NodesConfigurationStore::version_t stored_version,
@@ -390,7 +396,16 @@ void NodesConfigurationManager::onUpdateRequest(ncm::UpdateContext ctx,
                 NodesConfigurationCodec::extractConfigVersion(stored_data);
             ld_assert(extracted_version_opt.hasValue());
             ld_assert_eq(stored_version, extracted_version_opt.value());
-            ld_assert_gt(stored_version, ctx.data_.nc_->getVersion());
+            // VERSION_MISMATCH <=> stored_version != current_version (i.e.,
+            // base_version).
+            //
+            // Furthermore, stored_version should never be less than
+            // current_version since current_version was the latest known
+            // version of this NCM; otherwise, it means that this NCM has gotten
+            // a newer-versioned NC than what's in the NCS--this could
+            // technically happen when the read of the ZK-NCS's naive
+            // implementation of read-modify-write returns stale data.
+            ld_assert_ne(stored_version, current_version);
           }
           auto stored_config =
               NodesConfigurationCodec::deserialize(std::move(stored_data));

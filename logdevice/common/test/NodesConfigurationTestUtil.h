@@ -61,6 +61,9 @@ provisionNodes();
 configuration::nodes::NodesConfiguration::Update
 addNewNodeUpdate(const configuration::nodes::NodesConfiguration& existing);
 
+// NOTE: the base_version below should be storage membership versions
+// inside the NC instead of the NC versions.
+
 // start enabling read on N17
 configuration::nodes::NodesConfiguration::Update
 enablingReadUpdate(membership::MembershipVersion::Type base_version);
