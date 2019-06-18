@@ -7,7 +7,7 @@ delivers data organized as logs. The log can be viewed as a record-oriented,
 append-only, and trimmable file.
 
 LogDevice is designed from the ground up to serve many types of logs with high
-reliability and efficiency at scale. It is also highly tunable allowing each use
+reliability and efficiency at scale. It's also highly tunable, allowing each use
 case to be optimized for the right set of trade-offs in the durability-efficiency
 and consistency-availability space. Here are some examples of workloads supported
  by LogDevice:
@@ -20,27 +20,28 @@ and consistency-availability space. Here are some examples of workloads supporte
 * Replicated state machines
 * Journals of deferred work items
 
-for full documentation, please visit the [logdevice.io](http://logdevice.io/) website
+For full documentation, please visit [logdevice.io](https://logdevice.io/). 
 
 ## Requirements
-LogDevice is supported on Ubuntu 18.04 (Bionic Beaver) only. However, it should
+LogDevice is only supported on Ubuntu 18.04 (Bionic Beaver). However, it should
 be possible to build it on any other Linux distribution without significant
 challenges.
 
-## Building LogDevice
-* [Building](https://facebookincubator.github.io/LogDevice/docs/Installation.html)
+## Quick Start
+* [Run a local cluster in Docker](https://logdevice.io/docs/LocalCluster.html)
 
-## Full documentation
-* [Introduction](https://facebookincubator.github.io/LogDevice/docs/Overview.html)
-* [Cluster Configuration Guide](https://facebookincubator.github.io/LogDevice/docs/Config.html)
-* [LogDevice API](https://facebookincubator.github.io/LogDevice/docs/API_Intro.html)
-* [LogDevice Shell](https://facebookincubator.github.io/LogDevice/docs/LDShell.html)
-* [LDQuery](https://facebookincubator.github.io/LogDevice/docs/LDQuery.html)
+## Documentation
+* [Overview](https://logdevice.io/docs/Overview.html)
+* [Concepts and Architecture](https://logdevice.io/docs/Concepts.html)
+
+## Build LogDevice
+* [Build](https://logdevice.io/docs/Installation.html)
 
 ## Join the LogDevice community
-* Website: [logdevice.io](https://logdevice.io/)
 * Facebook: [LogDevice Users Group](https://www.facebook.com/groups/logdevice.oss/)
+* [GitHub Issues](https://github.com/facebookincubator/LogDevice/issues)
 
+## Contributors
 See the [CONTRIBUTING](CONTRIBUTING.md) file for how to help out.
 
 ## License
