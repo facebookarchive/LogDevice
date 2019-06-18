@@ -90,8 +90,7 @@ getMyLocation(const std::shared_ptr<UpdateableConfig>& config,
     std::shared_ptr<ServerConfig> cfg(config->get()->serverConfig());
     ld_check(worker->processor_->hasMyNodeID());
     auto my_node_index = worker->processor_->getMyNodeID().index();
-    auto nodes = config->getServerConfig()
-                     ->getNodesConfigurationFromServerConfigSource();
+    auto nodes = config->getNodesConfiguration();
     auto node = nodes->getNodeServiceDiscovery(my_node_index);
     ld_check(node);
     return node->location;

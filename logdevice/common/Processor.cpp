@@ -207,7 +207,7 @@ void Processor::init() {
   // workers since some of the timers in the worker (NodeStatsController) will
   // try to read it soon enough, we don't want to have a time race.
   cluster_state_ = std::make_unique<ClusterState>(
-      config->serverConfig()->getMaxNodeIdx() + 1,
+      getNodesConfiguration()->getMaxNodeIndex() + 1,
       this,
       *getNodesConfiguration()->getServiceDiscovery());
 

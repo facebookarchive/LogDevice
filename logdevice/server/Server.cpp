@@ -63,6 +63,8 @@ using facebook::logdevice::configuration::LocalLogsConfig;
 
 namespace facebook { namespace logdevice {
 
+using namespace facebook::logdevice::configuration::nodes;
+
 static StatsHolder* errorStats = nullptr;
 
 static void bumpErrorCounter(dbg::Level level) {
@@ -289,15 +291,14 @@ ServerParameters::ServerParameters(
              nullptr);
   }
 
-  // publish the NodesConfiguration for the first time. Later a
-  // long-living subscribing NodesConfigurationPublisher will be created again
-  // in Processor
+  // Publish the NodesConfiguration for the first time and subscribe to
+  // updates in the mean time, until later when the long-lived subscribing
+  // NodesConfigurationPublisher gets created in the Processor.
   // TODO(T43023435): use an actual TraceLogger to log this initial update.
   NodesConfigurationPublisher publisher(
       updateable_config_,
       processor_settings_,
-      std::make_shared<NoopTraceLogger>(updateable_config_),
-      /*subscribe*/ false);
+      std::make_shared<NoopTraceLogger>(updateable_config_));
   ld_check(updateable_config_->getNodesConfiguration() != nullptr);
 
   if (updateable_logs_config->get() == nullptr) {
@@ -314,9 +315,9 @@ ServerParameters::ServerParameters(
 
   NodeID node_id = my_node_id_.value();
   ld_info("My NodeID is %s", node_id.toString().c_str());
-  const ServerConfig::Node* this_node =
-      config->serverConfig()->getNode(node_id);
-  ld_check(this_node != nullptr);
+  const auto& nodes_configuration = updateable_config_->getNodesConfiguration();
+  ld_check(
+      nodes_configuration->isNodeInServiceDiscoveryConfig(node_id.index()));
 
   if (!setConnectionLimits()) {
     throw ConstructorFailed();
@@ -333,10 +334,13 @@ ServerParameters::ServerParameters(
     trace_logger_ = (*trace_logger_factory)(updateable_config_, my_node_id_);
   }
 
-  storage_node_ = this_node->hasRole(Configuration::NodeRole::STORAGE);
-  num_db_shards_ = this_node->getNumShards();
+  storage_node_ = nodes_configuration->isStorageNode(my_node_id_->index());
+  num_db_shards_ = storage_node_
+      ? nodes_configuration->getNodeStorageAttribute(my_node_id_->index())
+            ->num_shards
+      : 0;
 
-  run_sequencers_ = this_node->isSequencingEnabled();
+  run_sequencers_ = nodes_configuration->isSequencerNode(my_node_id_->index());
   if (run_sequencers_ &&
       server_settings_->sequencer == SequencerOptions::NONE) {
     ld_error("This node is configured as a sequencer, but -S option is "
@@ -390,8 +394,6 @@ size_t ServerParameters::getNumDBShards() const {
 }
 
 bool ServerParameters::initNodesConfiguration() {
-  using namespace facebook::logdevice::configuration::nodes;
-
   std::shared_ptr<ZookeeperClientFactory> zookeeper_client_factory =
       getPluginRegistry()->getSinglePlugin<ZookeeperClientFactory>(
           PluginType::ZOOKEEPER_CLIENT_FACTORY);
@@ -508,11 +510,12 @@ bool Server::initListeners() {
         folly::getKeepAliveToken(command_listener_loop_.get()),
         this);
 
-    std::shared_ptr<Configuration> config = updateable_config_->get();
-    ld_check(config);
+    auto nodes_configuration = updateable_config_->getNodesConfiguration();
+    ld_check(nodes_configuration);
     NodeID node_id = params_->getMyNodeID().value();
-    const ServerConfig::Node* node_config =
-        config->serverConfig()->getNode(node_id);
+    const NodeServiceDiscovery* node_svc =
+        nodes_configuration->getNodeServiceDiscovery(node_id.index());
+    ld_check(node_svc);
 
     // Gets UNIX socket or port number from a SocketAddress
     auto getSocketOrPort = [](const folly::SocketAddress& addr,
@@ -532,10 +535,10 @@ bool Server::initListeners() {
       return true;
     };
 
-    if (node_config->ssl_address.hasValue()) {
+    if (node_svc->ssl_address.hasValue()) {
       std::string ssl_unix_socket;
       int ssl_port = -1;
-      if (!getSocketOrPort(node_config->ssl_address.value().getSocketAddress(),
+      if (!getSocketOrPort(node_svc->ssl_address.value().getSocketAddress(),
                            ssl_unix_socket,
                            ssl_port)) {
         ld_error("SSL port/address couldn't be parsed for this node(%s)",
@@ -562,9 +565,9 @@ bool Server::initListeners() {
       }
     }
 
-    auto gossip_sock_addr = node_config->gossip_address.getSocketAddress();
-    auto hostStr = node_config->address.toString();
-    auto gossip_addr_str = node_config->gossip_address.toString();
+    auto gossip_sock_addr = node_svc->getGossipAddress().getSocketAddress();
+    auto hostStr = node_svc->address.toString();
+    auto gossip_addr_str = node_svc->getGossipAddress().toString();
     if (gossip_addr_str != hostStr) {
       std::string gossip_unix_socket;
       int gossip_port = -1;
