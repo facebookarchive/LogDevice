@@ -1057,7 +1057,7 @@ void ClientReadStream::onGap(ShardID shard, const GAP_Message& msg) {
     return;
   }
 
-  if (gap.start_lsn != sender_state.getNextLsn()) {
+  if (gap.start_lsn > std::max(sender_state.getNextLsn(), server_window_.low)) {
     RATELIMIT_ERROR(std::chrono::seconds(10),
                     2,
                     "Got gap %s from %s with unexpected start LSN; expected %s",
