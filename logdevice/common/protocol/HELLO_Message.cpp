@@ -77,11 +77,14 @@ static int checkProto(uint16_t min, uint16_t max, uint16_t* proto) {
 static bool isValidServerConnection(const NodeID& peer_nid,
                                     const Address& from) {
   assert(peer_nid.isNodeID());
-  auto config = Worker::getConfig();
-  const Node* peer_node = config->serverConfig()->getNode(peer_nid.index());
+
+  const auto& nodes_configuration =
+      Worker::onThisThread()->getNodesConfiguration();
+  const auto& peer_svc =
+      nodes_configuration->getNodeServiceDiscovery(peer_nid.index());
 
   // Could not find a corresponding node in the config file
-  if (peer_node == nullptr) {
+  if (peer_svc == nullptr) {
     ld_info("Got a HELLO from %s claiming to be a server with nodeID that is "
             "not in the config file.",
             Sender::describeConnection(from).c_str());
@@ -101,13 +104,13 @@ static bool isValidServerConnection(const NodeID& peer_nid,
   }
 
   // Only do IP authentication for real IP addresses
-  if (!peer_node->address.isUnixAddress() && !conn_addr.isUnixAddress()) {
+  if (!peer_svc->address.isUnixAddress() && !conn_addr.isUnixAddress()) {
     // If the IP addresses of the sender matches the IP address of the
     // peer_node_id_ in the socket, then we can be reasonably assured that
     // the connection is from that server node.
-    if (peer_node->address.getAddress() == conn_addr.getAddress() ||
-        (peer_node->ssl_address &&
-         peer_node->ssl_address->getAddress() == conn_addr.getAddress())) {
+    if (peer_svc->address.getAddress() == conn_addr.getAddress() ||
+        (peer_svc->ssl_address &&
+         peer_svc->ssl_address->getAddress() == conn_addr.getAddress())) {
       return true;
     }
   }
