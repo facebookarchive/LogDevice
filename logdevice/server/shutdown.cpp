@@ -182,10 +182,6 @@ void shutdown_server(
     rebuilding_supervisor->stop();
   }
 
-  if (cluster_maintenance_state_machine) {
-    cluster_maintenance_state_machine->stop();
-  }
-
   // stop accepting new connections
   ld_info("Destroying listeners");
   std::vector<folly::SemiFuture<folly::Unit>> listeners_closed;

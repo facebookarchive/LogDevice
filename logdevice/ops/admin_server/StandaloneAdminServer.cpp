@@ -401,9 +401,6 @@ void StandaloneAdminServer::shutdown() {
   if (maintenance_manager_) {
     maintenance_manager_->stop();
   }
-  if (cluster_maintenance_state_machine_) {
-    cluster_maintenance_state_machine_->stop();
-  }
   if (processor_) {
     ld_info("Stopping accepting work on all workers.");
     std::vector<folly::SemiFuture<folly::Unit>> futures =
