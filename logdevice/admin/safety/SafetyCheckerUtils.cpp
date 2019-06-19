@@ -194,7 +194,6 @@ folly::Expected<Impact::ImpactOnEpoch, Status> checkImpactOnLog(
 }
 
 Impact checkMetadataStorageSet(
-    const std::shared_ptr<const ServerConfig>& server_config,
     const ShardAuthoritativeStatusMap& shard_status,
     const ShardSet& op_shards,
     const std::unordered_set<node_index_t>& /*sequencers*/,
@@ -205,12 +204,8 @@ Impact checkMetadataStorageSet(
     size_t error_sample_size) {
   bool internal_logs_affected = false;
   // Convert the data log-id to metadata log-id
-  auto metadata_logs_config = server_config->getMetaDataLogsConfig();
-  auto metadata_log_group = server_config->getMetaDataLogGroup();
-  ld_assert(metadata_log_group);
-
   ReplicationProperty replication_property =
-      ReplicationProperty::fromLogAttributes(metadata_log_group->attrs());
+      nodes_config->getMetaDataLogsReplication()->getReplicationProperty();
 
   std::vector<Impact::ImpactOnEpoch> impact_on_epochs;
 
@@ -226,12 +221,13 @@ Impact checkMetadataStorageSet(
   //
   // TODO(T15517759): metadata log storage set should use ShardID.
   //
-  const shard_size_t n_shards = server_config->getNumShards();
+  const shard_size_t n_shards = nodes_config->getNumShards();
 
   for (shard_size_t shard_id = 0; shard_id < n_shards; ++shard_id) {
     StorageSet storage_set;
     storage_set = EpochMetaData::nodesetToStorageSet(
-        metadata_logs_config.metadata_nodes, shard_id);
+        nodes_config->getStorageMembership()->getMetaDataNodeIndices(),
+        shard_id);
 
     /**
      * We only require that the node to be at least STARTING_UP for metadata

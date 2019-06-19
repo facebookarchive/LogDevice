@@ -95,8 +95,9 @@ int WriteMetaDataRecord::createAndActivate(bool bypass_recovery) {
     err = E::NOTFOUND;
     return -1;
   }
-  auto metacfg = cfg->serverConfig()->getMetaDataLogGroup();
 
+  const auto& nodes_configuration =
+      Worker::onThisThread()->getNodesConfiguration();
   ld_check(meta_seq_ == nullptr);
   // create the metadata sequencer in INITIALIZING state
   meta_seq_ = std::make_shared<MetaSequencer>(
@@ -113,21 +114,18 @@ int WriteMetaDataRecord::createAndActivate(bool bypass_recovery) {
       // activation predicate
       nullptr);
 
-  auto meta_storage_set = EpochMetaData::nodesetToStorageSet(
-      cfg->serverConfig()->getMetaDataNodeIndices(),
-      MetaDataLog::metaDataLogID(log_id_),
-      *cfg->serverConfig());
-
   // create epoch metadata from configuration and use it to activate the meta
   // sequencer. It is important to set effective_since to EPOCH_MIN so that
   // recovery of the meta sequencer can always proceed without not knowing
   // epoch metadata for any epoch.
+  auto meta_storage_set = EpochMetaData::nodesetToStorageSet(
+      nodes_configuration->getStorageMembership()->getMetaDataNodeIndices(),
+      MetaDataLog::metaDataLogID(log_id_),
+      *nodes_configuration);
+
   std::unique_ptr<EpochMetaData> metadata = std::make_unique<EpochMetaData>(
-      meta_storage_set,
-      ReplicationProperty::fromLogAttributes(metacfg->attrs()),
-      epoch_,
-      EPOCH_MIN // effective_since == EPOCH_MIN
-  );
+      EpochMetaData::genEpochMetaDataForMetaDataLog(
+          log_id_, *nodes_configuration, epoch_, EPOCH_MIN));
 
   // activate the metadata sequencer using the epoch from parent,
   // as well as meta nodeset and replication factor stored in configuration

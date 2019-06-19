@@ -197,7 +197,9 @@ void EpochMetaData::deserialize(ProtocolReader& reader,
   } else {
     NodeSetIndices nodeset;
     reader.readVector(&nodeset, h.nodeset_size);
-    setShards(nodesetToStorageSet(nodeset, logid, cfg));
+    // TODO: use NodesConfiguration natively instead
+    setShards(nodesetToStorageSet(
+        nodeset, logid, *cfg.getNodesConfigurationFromServerConfigSource()));
   }
 
   if (h.flags & MetaDataLogRecordHeader::HAS_WEIGHTS) {
@@ -523,6 +525,7 @@ std::string EpochMetaData::flagsToString(epoch_metadata_flags_t flags) {
   return s;
 }
 
+/*static*/
 StorageSet EpochMetaData::nodesetToStorageSet(const NodeSetIndices& indices,
                                               shard_index_t shard_id) {
   StorageSet set;
@@ -533,10 +536,12 @@ StorageSet EpochMetaData::nodesetToStorageSet(const NodeSetIndices& indices,
   return set;
 }
 
-StorageSet EpochMetaData::nodesetToStorageSet(const NodeSetIndices& indices,
-                                              logid_t logid,
-                                              const ServerConfig& cfg) {
-  const shard_size_t n_shards = cfg.getNumShards();
+/*static*/
+StorageSet EpochMetaData::nodesetToStorageSet(
+    const NodeSetIndices& indices,
+    logid_t logid,
+    const configuration::nodes::NodesConfiguration& nodes_configuration) {
+  const shard_size_t n_shards = nodes_configuration.getNumShards();
   ld_check(n_shards > 0);
   shard_index_t index = getLegacyShardIndexForLog(logid, n_shards);
 
@@ -548,6 +553,7 @@ StorageSet EpochMetaData::nodesetToStorageSet(const NodeSetIndices& indices,
   return set;
 }
 
+/*static*/
 NodeSetIndices
 EpochMetaData::storageSetToNodeset(const StorageSet& storage_set) {
   NodeSetIndices nodeset;
@@ -556,6 +562,24 @@ EpochMetaData::storageSetToNodeset(const StorageSet& storage_set) {
     nodeset.push_back(shard.node());
   }
   return nodeset;
+}
+
+/*static*/
+EpochMetaData EpochMetaData::genEpochMetaDataForMetaDataLog(
+    logid_t logid,
+    const configuration::nodes::NodesConfiguration& nodes_configuration,
+    epoch_t epoch,
+    epoch_t effective_since) {
+  auto meta_storage_set = EpochMetaData::nodesetToStorageSet(
+      nodes_configuration.getStorageMembership()->getMetaDataNodeIndices(),
+      MetaDataLog::metaDataLogID(logid),
+      nodes_configuration);
+
+  return EpochMetaData(std::move(meta_storage_set),
+                       nodes_configuration.getMetaDataLogsReplication()
+                           ->getReplicationProperty(),
+                       epoch,
+                       effective_since);
 }
 
 bool EpochMetaData::NodeSetParams::operator==(const NodeSetParams& rhs) const {

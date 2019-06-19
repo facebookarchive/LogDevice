@@ -599,8 +599,9 @@ void RebuildingCoordinator::onShardDonorProgress(
 }
 
 bool RebuildingCoordinator::shouldRebuildMetadataLogs(uint32_t shard_idx) {
-  std::shared_ptr<Configuration> config = config_->get();
-  const auto& nodes = config->serverConfig()->getMetaDataNodeIndices();
+  const auto& nodes_configuration = config_->getNodesConfiguration();
+  const auto& nodes =
+      nodes_configuration->getStorageMembership()->getMetaDataNodeIndices();
 
   // Don't schedule metadata logs for rebuilding if this node is not in their
   // nodeset.

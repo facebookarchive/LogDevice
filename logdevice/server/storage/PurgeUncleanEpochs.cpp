@@ -688,15 +688,11 @@ PurgeUncleanEpochs::getEpochMetaDataForMetaDataLogs() const {
     err = E::NOTFOUND;
     return nullptr;
   }
-  auto metacfg = config->serverConfig()->getMetaDataLogGroup();
-  auto meta_storage_set = EpochMetaData::nodesetToStorageSet(
-      config->serverConfig()->getMetaDataNodeIndices(),
-      log_id_,
-      *config->serverConfig());
 
+  const auto& nodes_configuration = getNodesConfiguration();
   return std::make_unique<EpochMetaData>(
-      meta_storage_set,
-      ReplicationProperty::fromLogAttributes(metacfg->attrs()));
+      EpochMetaData::genEpochMetaDataForMetaDataLog(
+          log_id_, *nodes_configuration));
 }
 
 void PurgeUncleanEpochs::startReadingMetaData() {
@@ -724,6 +720,11 @@ PurgeUncleanEpochs::getClusterConfig() const {
 
 const std::shared_ptr<LogsConfig> PurgeUncleanEpochs::getLogsConfig() const {
   return ServerWorker::onThisThread()->getLogsConfig();
+}
+
+std::shared_ptr<const configuration::nodes::NodesConfiguration>
+PurgeUncleanEpochs::getNodesConfiguration() const {
+  return Worker::onThisThread()->getNodesConfiguration();
 }
 
 const char* PurgeUncleanEpochs::stateString(State state) {

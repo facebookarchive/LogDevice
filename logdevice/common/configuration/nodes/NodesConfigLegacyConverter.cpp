@@ -376,6 +376,20 @@ bool NodesConfigLegacyConverter::testWithServerConfig(
     return false;
   }
 
+  const auto meta_log_group = server_config.getMetaDataLogGroup();
+  const auto meta_rep_from_server_config =
+      ReplicationProperty::fromLogAttributes(meta_log_group->attrs());
+  const auto meta_rep_from_nc =
+      new_nodes_config->getMetaDataLogsReplication()->getReplicationProperty();
+  if (meta_rep_from_server_config != meta_rep_from_nc) {
+    ld_error(
+        "Metadata replication is inconsistent after conversion. original: %s, "
+        "new: %s.",
+        toString(meta_rep_from_server_config).c_str(),
+        toString(meta_rep_from_nc).c_str());
+    return false;
+  }
+
   NodesConfig converted_back;
   int rv = toLegacyNodesConfig(*new_nodes_config, &converted_back);
   if (rv != 0) {

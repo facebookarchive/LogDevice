@@ -213,6 +213,9 @@ class PurgeUncleanEpochs : public IntrusiveUnorderedMapHook {
 
   virtual const std::shared_ptr<const Configuration> getClusterConfig() const;
 
+  virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const;
+
   virtual const std::shared_ptr<LogsConfig> getLogsConfig() const;
 
   virtual void startReadingMetaData();

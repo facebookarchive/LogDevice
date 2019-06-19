@@ -238,8 +238,7 @@ SafetyChecker::performSafetyCheck(
         Impact metadata_impact;
         if (check_metadata_logs) {
           metadata_impact =
-              safety::checkMetadataStorageSet(cfg->serverConfig(),
-                                              status_map,
+              safety::checkMetadataStorageSet(status_map,
                                               shards,
                                               sequencers,
                                               target_storage_state,

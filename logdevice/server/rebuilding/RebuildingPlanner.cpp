@@ -240,15 +240,11 @@ void RebuildingPlanner::onSyncSequencerComplete(
 
   if (MetaDataLog::isMetaDataLog(logid)) {
     // For metadata logs, the config should have the metadata.
-    auto cfg = Worker::getConfig();
-    auto meta_storage_set = EpochMetaData::nodesetToStorageSet(
-        cfg->serverConfig()->getMetaDataNodeIndices(),
-        logid,
-        *cfg->serverConfig());
-    auto meta_log = cfg->serverConfig()->getMetaDataLogGroup();
-    auto metadata = std::make_shared<EpochMetaData>(
-        meta_storage_set,
-        ReplicationProperty::fromLogAttributes(meta_log->attrs()));
+    const auto& nodes_configuration =
+        Worker::onThisThread()->getNodesConfiguration();
+    std::unique_ptr<EpochMetaData> metadata = std::make_unique<EpochMetaData>(
+        EpochMetaData::genEpochMetaDataForMetaDataLog(
+            logid, *nodes_configuration));
     ld_check(metadata->isValid());
     computePlanForEpochInterval(
         logid, std::move(metadata), EPOCH_MIN, epoch_max);

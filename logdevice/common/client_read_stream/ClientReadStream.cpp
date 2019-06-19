@@ -4190,17 +4190,11 @@ void ClientReadStreamDependencies::getMetaDataForEpoch(
   // information will never change and it is safe to set the until_ epoch
   // to EPOCH_MAX so that it will never be called again for the read stream
   if (MetaDataLog::isMetaDataLog(log_id_)) {
-    std::shared_ptr<Configuration> cfg = w->getConfig();
-
-    auto meta_storage_set = EpochMetaData::nodesetToStorageSet(
-        cfg->serverConfig()->getMetaDataNodeIndices(),
-        log_id_,
-        *cfg->serverConfig());
-    auto meta_log = cfg->serverConfig()->getMetaDataLogGroup();
+    const auto& nodes_configuration = w->getNodesConfiguration();
 
     std::unique_ptr<EpochMetaData> metadata = std::make_unique<EpochMetaData>(
-        meta_storage_set,
-        ReplicationProperty::fromLogAttributes(meta_log->attrs()));
+        EpochMetaData::genEpochMetaDataForMetaDataLog(
+            log_id_, *nodes_configuration));
     ld_check(metadata->isValid());
 
     cb(E::OK,

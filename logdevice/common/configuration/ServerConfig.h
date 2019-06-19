@@ -292,6 +292,8 @@ class ServerConfig {
   }
 
   /**
+   * Note: deprecated. Use StorageMembership in NodesConfiguration instead.
+   *
    * Get the indices of metadata log nodes
    *
    * @return  a const reference to a vector of indices of nodes

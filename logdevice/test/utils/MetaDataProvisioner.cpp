@@ -157,14 +157,16 @@ int MetaDataProvisioner::prepopulateMetaDataLog(
   const logid_t meta_logid(MetaDataLog::metaDataLogID(log_id));
 
   // get the metadata storage nodes and replication factor from the config
+  const auto& nodes_configuration =
+      config->serverConfig()->getNodesConfigurationFromServerConfigSource();
 
   auto meta_storage_set = EpochMetaData::nodesetToStorageSet(
-      config->serverConfig()->getMetaDataNodeIndices(),
+      nodes_configuration->getStorageMembership()->getMetaDataNodeIndices(),
       meta_logid,
-      *config->serverConfig());
+      *nodes_configuration);
 
-  auto replication = ReplicationProperty::fromLogAttributes(
-      config->serverConfig()->getMetaDataLogGroup()->attrs());
+  auto replication = nodes_configuration->getMetaDataLogsReplication()
+                         ->getReplicationProperty();
 
   lsn_t record_lsn = LSN_INVALID;
   // records to be written to each node

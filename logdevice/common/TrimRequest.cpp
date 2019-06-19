@@ -341,16 +341,17 @@ void TrimRequest::initStorageSetAccessor() {
   StorageSet shards;
   ReplicationProperty minRep;
 
-  auto config = getConfig();
+  const auto& nodes_configuration = getNodesConfiguration();
   if (MetaDataLog::isMetaDataLog(log_id_)) {
     shards = EpochMetaData::nodesetToStorageSet(
-        config->getMetaDataNodeIndices(), log_id_, *config);
-    const std::shared_ptr<LogsConfig::LogGroupNode> meta_log =
-        config->getMetaDataLogGroup();
-    minRep = ReplicationProperty::fromLogAttributes(meta_log->attrs());
+        nodes_configuration->getStorageMembership()->getMetaDataNodeIndices(),
+        log_id_,
+        *nodes_configuration);
+    minRep = nodes_configuration->getMetaDataLogsReplication()
+                 ->getReplicationProperty();
   } else {
     ld_check(nodeset_finder_);
-    shards = nodeset_finder_->getUnionStorageSet(*getNodesConfiguration());
+    shards = nodeset_finder_->getUnionStorageSet(*nodes_configuration);
     minRep = nodeset_finder_->getNarrowestReplication();
   }
 
@@ -381,8 +382,8 @@ void TrimRequest::initStorageSetAccessor() {
     finalize(st);
   };
 
-  nodeset_accessor_ =
-      makeStorageSetAccessor(config, shards, minRep, shard_access, completion);
+  nodeset_accessor_ = makeStorageSetAccessor(
+      getConfig(), shards, minRep, shard_access, completion);
   nodeset_accessor_->successIfAllShardsAccessed();
 
   ld_check(nodeset_accessor_ != nullptr);

@@ -28,6 +28,10 @@ namespace facebook { namespace logdevice {
  *        to construct, read and update the metadata.
  */
 
+namespace configuration { namespace nodes {
+class NodesConfiguration;
+}} // namespace configuration::nodes
+
 class MetaDataTracer;
 struct EpochStoreMetaProperties;
 struct Payload;
@@ -357,9 +361,10 @@ class EpochMetaData {
    * TODO(TT15517759): this function will be removed once all state machines are
    * converted to use StorageSet.
    */
-  static StorageSet nodesetToStorageSet(const NodeSetIndices& indices,
-                                        logid_t logid,
-                                        const ServerConfig& cfg);
+  static StorageSet nodesetToStorageSet(
+      const NodeSetIndices& indices,
+      logid_t logid,
+      const configuration::nodes::NodesConfiguration& nodes_configuration);
 
   /**
    * Convert a NodeSetIndices to a StorageSet.
@@ -367,6 +372,15 @@ class EpochMetaData {
    * to serializing a storage_set instead of a nodeset.
    */
   static NodeSetIndices storageSetToNodeset(const StorageSet& storage_set);
+
+  /**
+   * get the EpochMetaData for the metadata log for @param logid
+   */
+  static EpochMetaData genEpochMetaDataForMetaDataLog(
+      logid_t logid,
+      const configuration::nodes::NodesConfiguration& nodes_configuration,
+      epoch_t epoch = EPOCH_MIN,
+      epoch_t effective_since = EPOCH_MIN);
 };
 
 }} // namespace facebook::logdevice

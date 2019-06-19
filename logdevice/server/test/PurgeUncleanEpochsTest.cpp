@@ -161,6 +161,12 @@ class MockPurgeUncleanEpochs : public PurgeUncleanEpochs {
     return test_->config_;
   }
 
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const override {
+    return test_->config_->serverConfig()
+        ->getNodesConfigurationFromServerConfigSource();
+  }
+
   const std::shared_ptr<LogsConfig> getLogsConfig() const override {
     return test_->config_->logsConfig();
   }

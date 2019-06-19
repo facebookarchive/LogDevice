@@ -60,7 +60,6 @@ bool isAlive(ClusterState* cluster_state,
  * Validates the storage set of the metadata log for a given data log.
  */
 Impact checkMetadataStorageSet(
-    const std::shared_ptr<const ServerConfig>& server_config,
     const ShardAuthoritativeStatusMap& shard_status,
     const ShardSet& op_shards,
     const std::unordered_set<node_index_t>& sequencers,
