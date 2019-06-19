@@ -45,7 +45,7 @@
 #include "logdevice/server/IOFaultInjection.h"
 #include "logdevice/server/LazySequencerPlacement.h"
 #include "logdevice/server/LogStoreMonitor.h"
-#include "logdevice/server/MyNodeID.h"
+#include "logdevice/server/MyNodeIDFinder.h"
 #include "logdevice/server/RebuildingCoordinator.h"
 #include "logdevice/server/RebuildingSupervisor.h"
 #include "logdevice/server/ServerProcessor.h"
@@ -89,38 +89,35 @@ static void bumpErrorCounter(dbg::Level level) {
   ld_check(false);
 }
 
-// verifies that the number of nodes in the cluster is at most max_nodes
-bool ServerParameters::validateNodes(ServerConfig& config) {
-  // Previously, this funciton checks if config.getMaxNodeIdx() exceeds
-  // max_nodes. Now this always returns true because number of nodes can
-  // exceed max_nodes.
-
-  return true;
-}
-
 bool ServerParameters::rejectIfMyNodeIdChanged(ServerConfig& config) {
-  NodeID node_id;
-  if (my_node_id_extractor_->calculate(config, node_id) != 0) {
+  if (!my_node_id_.has_value()) {
+    return true;
+  }
+
+  const auto& nodes_configuration =
+      config.getNodesConfigurationFromServerConfigSource();
+  ld_check(nodes_configuration);
+  ld_check(my_node_id_finder_);
+
+  auto node_id = my_node_id_finder_->calculate(*nodes_configuration);
+  if (!node_id.hasValue()) {
+    ld_error("Couldn't find my node index in config. Rejecting config.");
     return false;
   }
-  if (my_node_id_.hasValue()) {
-    if (my_node_id_.value().index() != node_id.index()) {
-      ld_error("My node index changed from %d to %d. Rejecting config.",
-               (int)my_node_id_.value().index(),
-               (int)node_id.index());
+  if (my_node_id_.value().index() != node_id->index()) {
+    ld_error("My node index changed from %d to %d. Rejecting config.",
+             (int)my_node_id_.value().index(),
+             (int)node_id->index());
 
-      return false;
-    }
-  } else {
-    my_node_id_ = node_id;
+    return false;
   }
   return true;
 }
 
 bool ServerParameters::updateServerOrigin(ServerConfig& config) {
-  // If we reached this hook, this means that we must have found a valid
-  // MyNodeId, otherwise the config must have been rejected earlier.
-  ld_assert(my_node_id_.has_value());
+  if (!my_node_id_.has_value()) {
+    return true;
+  }
 
   // If the config doesn't have a valid ServerOrigin, then we are the source.
   if (!config.getServerOrigin().isNodeID()) {
@@ -149,7 +146,7 @@ bool ServerParameters::updateConfigSettings(ServerConfig& config) {
 bool ServerParameters::onServerConfigUpdate(ServerConfig& config) {
   // Order of the invocation matters.
   return rejectIfMyNodeIdChanged(config) && updateServerOrigin(config) &&
-      updateConfigSettings(config) && validateNodes(config);
+      updateConfigSettings(config);
 }
 
 bool ServerParameters::setConnectionLimits() {
@@ -216,6 +213,24 @@ bool ServerParameters::setConnectionLimits() {
   return true;
 }
 
+bool ServerParameters::initMyNodeIDFinder() {
+  std::unique_ptr<NodeIDMatcher> id_matcher;
+  // TODO(T44427489): When name is enforced in config, we can always use the
+  // name to search for ourself in the config.
+  if (!server_settings_->unix_socket.empty()) {
+    id_matcher = NodeIDMatcher::byUnixSocket(server_settings_->unix_socket);
+  } else {
+    id_matcher = NodeIDMatcher::byTCPPort(server_settings_->port);
+  }
+
+  if (id_matcher == nullptr) {
+    return false;
+  }
+
+  my_node_id_finder_ = std::make_unique<MyNodeIDFinder>(std::move(id_matcher));
+  return true;
+}
+
 ServerParameters::ServerParameters(
     std::shared_ptr<SettingsUpdater> settings_updater,
     UpdateableSettings<ServerSettings> server_settings,
@@ -250,13 +265,6 @@ ServerParameters::ServerParameters(
                "'critical_errors' etc).");
   }
 
-  if (!server_settings_->unix_socket.empty()) {
-    my_node_id_extractor_ =
-        std::make_unique<MyNodeID>(server_settings_->unix_socket);
-  } else {
-    my_node_id_extractor_ = std::make_unique<MyNodeID>(server_settings_->port);
-  }
-
   auto updateable_server_config = std::make_shared<UpdateableServerConfig>();
   auto updateable_logs_config = std::make_shared<UpdateableLogsConfig>();
   auto updateable_zookeeper_config =
@@ -270,6 +278,7 @@ ServerParameters::ServerParameters(
       std::bind(&ServerParameters::onServerConfigUpdate,
                 this,
                 std::placeholders::_1)));
+
   {
     ConfigInit config_init(
         processor_settings_->initial_config_load_timeout, getStats());
@@ -300,6 +309,27 @@ ServerParameters::ServerParameters(
       processor_settings_,
       std::make_shared<NoopTraceLogger>(updateable_config_));
   ld_check(updateable_config_->getNodesConfiguration() != nullptr);
+
+  // Initialize the MyNodeIDFinder that will be used to find our NodeID from the
+  // config.
+  if (!initMyNodeIDFinder()) {
+    ld_error("Failed to construct MyNodeIDFinder");
+    throw ConstructorFailed();
+  }
+
+  {
+    // Find our NodeID from the published NodesConfiguration
+    ld_check(my_node_id_finder_);
+    const auto& nodes_configuration =
+        updateable_config_->getNodesConfiguration();
+    auto my_id = my_node_id_finder_->calculate(*nodes_configuration);
+    if (!my_id.hasValue()) {
+      ld_error("Failed to identify my node index in config");
+      throw ConstructorFailed();
+    }
+    ld_check(my_id->isNodeID());
+    my_node_id_ = std::move(my_id);
+  }
 
   if (updateable_logs_config->get() == nullptr) {
     // Initialize logdevice with an empty LogsConfig that only contains the

@@ -31,7 +31,7 @@
 namespace facebook { namespace logdevice {
 
 class LogStoreMonitor;
-class MyNodeID;
+class MyNodeIDFinder;
 namespace configuration { namespace nodes {
 class NodesConfigurationStore;
 }} // namespace configuration::nodes
@@ -141,13 +141,13 @@ class ServerParameters {
   bool run_sequencers_;
   std::atomic_bool fast_shutdown_enabled_{false};
 
-  std::unique_ptr<MyNodeID> my_node_id_extractor_;
   std::shared_ptr<UpdateableConfig> updateable_config_;
   std::shared_ptr<TraceLogger> trace_logger_;
   std::shared_ptr<LocalLogFile> audit_log_;
 
   // Assigned when config is loaded.
   folly::Optional<NodeID> my_node_id_;
+  std::unique_ptr<MyNodeIDFinder> my_node_id_finder_;
 
   // Handle for the subscription to config updates, used to unsubscribe
   std::list<ConfigSubscriptionHandle> server_config_subscriptions_;
@@ -163,12 +163,13 @@ class ServerParameters {
   bool updateMyNodeId(ServerConfig& config);
   bool updateServerOrigin(ServerConfig& config);
   bool updateConfigSettings(ServerConfig& config);
-  bool validateNodes(ServerConfig& config);
 
   // The main server config hook that invokes other hooks
   bool onServerConfigUpdate(ServerConfig& config);
 
   bool initNodesConfiguration();
+
+  bool initMyNodeIDFinder();
 };
 
 /**
