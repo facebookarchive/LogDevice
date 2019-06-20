@@ -16,7 +16,7 @@ from logdevice.admin.common.types import NodeID
 
 @dataclass(frozen=True)
 class Node:
-    node_index: int
+    node_index: Optional[int]
     data_addr: Optional[SocketAddress] = None
     name: Optional[str] = None
 

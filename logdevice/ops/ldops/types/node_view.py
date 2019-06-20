@@ -6,9 +6,10 @@
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
 
+import os.path
 from collections import Counter
 from dataclasses import dataclass
-from typing import Dict, List, Set
+from typing import AbstractSet, List, Mapping, Optional, Sequence
 
 from ldops.types.socket_address import SocketAddress
 from logdevice.admin.common.types import (
@@ -34,78 +35,72 @@ from logdevice.admin.nodes.types import (
 from logdevice.membership.Membership.types import MetaDataStorageState, StorageState
 
 
-@dataclass
+@dataclass(frozen=True)
 class NodeView:
     node_config: NodeConfig
     node_state: NodeState
     maintenances: List[MaintenanceDefinition]
 
-    @property
-    def nc(self) -> NodeConfig:
-        return self.node_config
-
-    @property
-    def ns(self) -> NodeState:
-        return self.node_state
+    def __post_init__(self) -> None:
+        if self.node_config.node_index != self.node_state.node_index:
+            raise ValueError(
+                "node_config.node_index does not match node_state.node_index"
+            )
 
     @property
     def node_index(self) -> int:
-        return self.nc.node_index
-
-    @property
-    def ni(self) -> int:
-        return self.node_index
-
-    @property
-    def name(self) -> str:
-        return self.node_name
+        return self.node_config.node_index
 
     @property
     def node_name(self) -> str:
         # If we don't have name in node config, we should use string data_address
         # representation as name
-        if self.nc.name:
-            return self.nc.name
+        if self.node_config.name:
+            return self.node_config.name
         else:
-            return f"{self.data_address}"
+            return str(self.data_address)
 
     @property
     def data_address(self) -> SocketAddress:
-        return SocketAddress.from_thrift(self.nc.data_address)
+        return SocketAddress.from_thrift(self.node_config.data_address)
 
     @property
     def thrift_address(self) -> SocketAddress:
-        da = self.data_address
-        if da.address_family != SocketAddressFamily.INET:
-            raise ValueError("Can't calculate Thrift Address from Data Address")
-        else:
+        da: SocketAddress = self.data_address
+        if da.address_family == SocketAddressFamily.UNIX:
+            assert da.path is not None
+            return SocketAddress(
+                address_family=da.address_family,
+                path=os.path.join(os.path.dirname(da.path), "socket_admin"),
+            )
+        elif da.address_family == SocketAddressFamily.INET:
+            assert da.address is not None
             return SocketAddress(
                 address_family=da.address_family, address=da.address, port=6440
             )
+        else:
+            assert False, "unreachable"  # pragma: nocover
 
     @property
     def node_id(self) -> NodeID:
         return NodeID(
-            node_index=self.nc.node_index,
-            address=self.nc.data_address,
-            name=self.nc.name,
+            node_index=self.node_config.node_index,
+            address=self.node_config.data_address,
+            # Not self.node_name because AdminAPI expects value from NodeConfig
+            name=self.node_config.name,
         )
 
     @property
-    def nn(self) -> str:
-        return self.name
+    def location(self) -> Optional[str]:
+        return self.node_config.location
 
     @property
-    def location(self) -> str:
-        return self.nc.location
+    def location_per_scope(self) -> Mapping[LocationScope, str]:
+        return self.node_config.location_per_scope
 
     @property
-    def location_per_scope(self) -> Dict[LocationScope, str]:
-        return self.nc.location_per_scope
-
-    @property
-    def roles(self) -> Set[Role]:
-        return self.nc.roles
+    def roles(self) -> AbstractSet[Role]:
+        return self.node_config.roles
 
     def has_role(self, role: Role) -> bool:
         return role in self.roles
@@ -120,76 +115,116 @@ class NodeView:
 
     @property
     def daemon_state(self) -> ServiceState:
-        return self.ns.daemon_state
+        return self.node_state.daemon_state
 
     @property
-    def sequencer_config(self) -> SequencerConfig:
-        return self.nc.sequencer
+    def sequencer_config(self) -> Optional[SequencerConfig]:
+        return self.node_config.sequencer
 
     @property
-    def sequencer_weight(self) -> float:
-        return self.nc.sequencer.weight
+    def sequencer_weight(self) -> Optional[float]:
+        if self.sequencer_config is not None:
+            return self.sequencer_config.weight
+        else:
+            return None
 
     @property
-    def sequencer_state(self) -> SequencerState:
-        return self.ns.sequencer_state
+    def sequencer_state(self) -> Optional[SequencerState]:
+        return self.node_state.sequencer_state
 
     @property
-    def sequencing_state(self) -> SequencingState:
-        return self.ns.sequencer_state.state
+    def sequencing_state(self) -> Optional[SequencingState]:
+        if self.sequencer_state is not None:
+            return self.sequencer_state.state
+        else:
+            return None
 
     @property
-    def storage_config(self) -> StorageConfig:
-        return self.nc.storage
+    def storage_config(self) -> Optional[StorageConfig]:
+        return self.node_config.storage
 
     @property
-    def storage_weight(self) -> float:
-        return self.nc.storage.weight
+    def storage_weight(self) -> Optional[float]:
+        if self.storage_config is not None:
+            return self.storage_config.weight
+        else:
+            return None
 
     @property
-    def num_shards(self) -> int:
-        return self.nc.storage.num_shards
+    def num_shards(self) -> Optional[int]:
+        if self.storage_config is not None:
+            return self.storage_config.num_shards
+        else:
+            return None
 
     @property
-    def shard_states(self) -> List[ShardState]:
-        return self.ns.shard_states
+    def shard_states(self) -> Sequence[ShardState]:
+        if self.node_state.shard_states is None:
+            return []
+        else:
+            return self.node_state.shard_states
 
     @property
     def shards_data_health(self) -> List[ShardDataHealth]:
         return [s.data_health for s in self.shard_states]
 
     @property
-    def shards_data_health_count(self) -> Dict[ShardDataHealth, int]:
-        return dict(Counter(self.shards_data_health))
+    def shards_data_health_count(self) -> Mapping[ShardDataHealth, int]:
+        return Counter(self.shards_data_health)
 
     @property
     def shards_current_storage_state(self) -> List[ShardStorageState]:
         return [s.current_storage_state for s in self.shard_states]
 
     @property
-    def shards_current_storage_state_count(self) -> Dict[ShardStorageState, int]:
-        return dict(Counter(self.shards_current_storage_state))
+    def shards_current_storage_state_count(self) -> Mapping[ShardStorageState, int]:
+        return Counter(self.shards_current_storage_state)
 
     @property
     def shards_current_operational_state(self) -> List[ShardOperationalState]:
         return [s.current_operational_state for s in self.shard_states]
 
     @property
-    def shards_current_operational_state_count(self) -> Dict[ShardStorageState, int]:
-        return dict(Counter(self.shards_current_operational_state))
+    def shards_current_operational_state_count(
+        self
+    ) -> Mapping[ShardOperationalState, int]:
+        return Counter(self.shards_current_operational_state)
 
     @property
     def shards_membership_storage_state(self) -> List[StorageState]:
         return [s.storage_state for s in self.shard_states]
 
     @property
-    def shards_membership_storage_state_count(self) -> Dict[ShardStorageState, int]:
-        return dict(Counter(self.shards_membership_storage_state))
+    def shards_membership_storage_state_count(self) -> Mapping[StorageState, int]:
+        return Counter(self.shards_membership_storage_state)
 
     @property
     def shards_metadata_state(self) -> List[MetaDataStorageState]:
         return [s.metadata_state for s in self.shard_states]
 
     @property
-    def shards_metadata_state_count(self) -> Dict[MetaDataStorageState, int]:
-        return dict(Counter(self.shards_metadata_state))
+    def shards_metadata_state_count(self) -> Mapping[MetaDataStorageState, int]:
+        return Counter(self.shards_metadata_state)
+
+    # shortcuts
+    @property
+    def nc(self) -> NodeConfig:
+        return self.node_config
+
+    @property
+    def ns(self) -> NodeState:
+        return self.node_state
+
+    @property
+    def ni(self) -> int:
+        return self.node_index
+
+    @property
+    def nn(self) -> str:
+        return self.node_name
+
+    @property
+    def mnts(self) -> List[MaintenanceDefinition]:
+        return self.maintenances
+
+    name = node_name
