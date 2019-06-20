@@ -80,7 +80,6 @@ async def apply_maintenance(
     """
     Wrapper for applyMaintenance() Thrift method
     """
-    logger.warning(f"applyMaintenance: {req}")
     return await client.applyMaintenance(req)
 
 
