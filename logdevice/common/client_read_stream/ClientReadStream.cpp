@@ -969,6 +969,11 @@ void ClientReadStream::onDataRecord(
              log_id_.val_,
              lsn_to_string(lsn).c_str(),
              lsn_to_string(next_lsn_to_deliver_).c_str());
+
+    // Update sender's next LSN even if it's below the window.
+    // This is used for a paranoid protocol check: if this sender sends a gap
+    // next, we expect its start LSN to be equal to this record's LSN + 1.
+    updateGapState(lsn + 1, sender_state);
   } else {
     // Buffer (3) and maybe deliver (2)
 
@@ -1057,29 +1062,20 @@ void ClientReadStream::onGap(ShardID shard, const GAP_Message& msg) {
     return;
   }
 
+  // Paranoid check: this gap should start where the previous gap/record ended.
+  // Exception: the sender may fast forward to window's low end; the
+  // sender's view of the window may be a little stale, so
+  // anything <= server_window_.low is valid.
   if (gap.start_lsn > std::max(sender_state.getNextLsn(), server_window_.low)) {
     RATELIMIT_ERROR(std::chrono::seconds(10),
                     2,
-                    "Got gap %s from %s with unexpected start LSN; expected %s",
-                    gap.identify().c_str(),
-                    shard.toString().c_str(),
-                    lsn_to_string(sender_state.getNextLsn()).c_str());
-    // Let's process the gap anyway.
-  }
-
-  if (sender_state.getNextLsn() > window_high_) {
-    // I'm not really sure whether this is normal or not. E.g. maybe server can
-    // send a trim gap immediately followed by a no records gap above window? If
-    // you see this warning show up in unsuspicious circumstances, feel free to
-    // remove it.
-    RATELIMIT_ERROR(std::chrono::seconds(10),
-                    2,
-                    "Got gap %s from %s, whose next LSN %s is already "
-                    "above window end %s; suspicious",
+                    "Got gap %s from %s with unexpected start LSN; sender's "
+                    "next LSN: %s, window: [%s, %s]",
                     gap.identify().c_str(),
                     shard.toString().c_str(),
                     lsn_to_string(sender_state.getNextLsn()).c_str(),
-                    lsn_to_string(window_high_).c_str());
+                    lsn_to_string(server_window_.low).c_str(),
+                    lsn_to_string(server_window_.high).c_str());
     // Let's process the gap anyway.
   }
 
