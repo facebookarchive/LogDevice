@@ -26,8 +26,10 @@ class ResourceBudget {
   explicit ResourceBudget(uint64_t limit) : limit_(limit) {}
 
   // Class responsible for releasing an acquired resource in the RAII fashion.
-  class Token : public boost::noncopyable {
+  class Token {
    public:
+    Token(const Token&) = delete;
+    Token& operator=(const Token&) = delete;
     Token() : budget_(nullptr), count_(0) {}
     Token(Token&& rhs) noexcept : budget_(rhs.budget_), count_(rhs.count_) {
       rhs.budget_ = nullptr;

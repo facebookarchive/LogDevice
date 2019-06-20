@@ -31,8 +31,10 @@
 #include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/common/configuration/TrafficClass.h"
 #include "logdevice/common/configuration/TrafficShapingConfig.h"
+#include "logdevice/common/network/ConnectionFactory.h"
 #include "logdevice/common/protocol/Message.h"
 #include "logdevice/include/Err.h"
+
 // Think twice before adding new includes here!  This file is included in many
 // translation units and increasing its transitive dependency footprint will
 // slow down the build.  We use forward declaration and the pimpl idiom to
@@ -347,16 +349,27 @@ class Sender : public SenderBase {
    * @param node_count   the number of nodes in cluster configuration at the
    *                     time this Sender was created
    */
-  explicit Sender(
-      std::shared_ptr<const Settings> settings,
-      struct event_base* base,
-      const configuration::ShapingConfig& tsc,
-      ClientIdxAllocator* client_id_allocator,
-      bool is_gossip_sender,
-      std::shared_ptr<const configuration::nodes::NodesConfiguration> nodes,
-      node_index_t my_node_index,
-      folly::Optional<NodeLocation> my_location,
-      StatsHolder* stats);
+  Sender(std::shared_ptr<const Settings> settings,
+         struct event_base* base,
+         const configuration::ShapingConfig& tsc,
+         ClientIdxAllocator* client_id_allocator,
+         bool is_gossip_sender,
+         std::shared_ptr<const configuration::nodes::NodesConfiguration> nodes,
+         node_index_t my_node_index,
+         folly::Optional<NodeLocation> my_location,
+         StatsHolder* stats);
+
+  Sender(std::shared_ptr<const Settings> settings,
+         struct event_base* base,
+         const configuration::ShapingConfig& tsc,
+         ClientIdxAllocator* client_id_allocator,
+         bool is_gossip_sender,
+         std::shared_ptr<const configuration::nodes::NodesConfiguration> nodes,
+         node_index_t my_node_index,
+         folly::Optional<NodeLocation> my_location,
+         std::unique_ptr<IConnectionFactory> connection_factory,
+         StatsHolder* stats);
+
   ~Sender() override;
 
   Sender(const Sender&) = delete;
@@ -759,6 +772,7 @@ class Sender : public SenderBase {
 
   void onSettingsUpdated(std::shared_ptr<const Settings> new_settings) {
     settings_.swap(new_settings);
+    connection_factory_->onSettingsUpdated(*settings_);
   }
 
   /**
@@ -813,6 +827,8 @@ class Sender : public SenderBase {
 
  private:
   std::shared_ptr<const Settings> settings_;
+
+  std::unique_ptr<IConnectionFactory> connection_factory_;
 
   // Network Traffic Shaping
   std::unique_ptr<ShapingContainer> nw_shaping_container_;

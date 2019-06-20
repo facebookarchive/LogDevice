@@ -123,7 +123,29 @@ Sender::Sender(std::shared_ptr<const Settings> settings,
                node_index_t my_index,
                folly::Optional<NodeLocation> my_location,
                StatsHolder* stats)
+    : Sender(settings,
+             base,
+             tsc,
+             client_id_allocator,
+             is_gossip_sender,
+             std::move(nodes),
+             my_index,
+             my_location,
+             std::make_unique<ConnectionFactory>(*settings),
+             stats){};
+
+Sender::Sender(std::shared_ptr<const Settings> settings,
+               struct event_base* base,
+               const configuration::ShapingConfig& tsc,
+               ClientIdxAllocator* client_id_allocator,
+               bool is_gossip_sender,
+               std::shared_ptr<const NodesConfiguration> nodes,
+               node_index_t my_index,
+               folly::Optional<NodeLocation> my_location,
+               std::unique_ptr<IConnectionFactory> connection_factory,
+               StatsHolder* stats)
     : settings_(settings),
+      connection_factory_(std::move(connection_factory)),
       impl_(new SenderImpl(client_id_allocator)),
       is_gossip_sender_(is_gossip_sender),
       nodes_(std::move(nodes)),
@@ -186,18 +208,16 @@ int Sender::addClient(int fd,
 
     auto& flow_group = nw_shaping_container_->selectFlowGroup(flow_group_scope);
 
-    auto sock = std::make_unique<Connection>(fd,
-                                             client_name,
-                                             client_addr,
-                                             std::move(conn_token),
-                                             type,
-                                             conntype,
-                                             flow_group);
+    auto socket = connection_factory_->createConnection(fd,
+                                                        client_name,
+                                                        client_addr,
+                                                        std::move(conn_token),
+                                                        type,
+                                                        conntype,
+                                                        flow_group);
 
-    auto res =
-        impl_->client_sockets_.emplace(std::piecewise_construct,
-                                       std::forward_as_tuple(client_name),
-                                       std::forward_as_tuple(std::move(sock)));
+    auto res = impl_->client_sockets_.emplace(client_name, std::move(socket));
+
     if (!res.second) {
       ld_critical("INTERNAL ERROR: attempt to add client %s (%s) that is "
                   "already in the client map",
@@ -292,10 +312,10 @@ int Sender::notifyPeerConfigUpdated(Socket& sock) {
     // connection. It may very well be a node however.
 
     if (peer_config_version == CONFIG_VERSION_INVALID) {
-      // We never received a CONFIG_ADVISORY message on this socket, so we can
-      // assume that config synchronization is disabled on this client or it
-      // hasn't got a chance to send the message yet. either way, don't do
-      // anything yet.
+      // We never received a CONFIG_ADVISORY message on this socket, so we
+      // can assume that config synchronization is disabled on this client
+      // or it hasn't got a chance to send the message yet. either way,
+      // don't do anything yet.
       return 0;
     }
 
@@ -322,9 +342,10 @@ int Sender::notifyPeerConfigUpdated(Socket& sock) {
             /* with_logs */ nullptr, /* with_zk */ nullptr, true));
   } else {
     // The peer is a server. Send a CONFIG_ADVISORY to let it know about our
-    // config version. Upon receiving this message, if the server config hasn't
-    // been updated already, it will either fetch it from us in another round
-    // trip, or fetch the newest version directly from the source.
+    // config version. Upon receiving this message, if the server config
+    // hasn't been updated already, it will either fetch it from us in
+    // another round trip, or fetch the newest version directly from the
+    // source.
     CONFIG_ADVISORY_Header hdr = {config_version};
     msg = std::make_unique<CONFIG_ADVISORY_Message>(hdr);
   }
@@ -410,8 +431,8 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
   ld_check(rv != 0 ? (bool)msg : !msg); // take ownership on success only
   if (rv != 0) {
     bool no_warning =
-        // Some messages are implemented to gracefully handle PROTONOSUPPORT,
-        // avoid log spew for them
+        // Some messages are implemented to gracefully handle
+        // PROTONOSUPPORT, avoid log spew for them
         err == E::PROTONOSUPPORT && !msg->warnAboutOldProtocol();
     if (!no_warning) {
       RATELIMIT_LEVEL(
@@ -470,8 +491,8 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
     FLOW_GROUP_STAT_INCR(Worker::stats(), sock.flow_group_, direct_dispatched);
     // Note: Some errors can only be detected during message serialization.
     //       If this occurs just after releaseMessage() and the onSent()
-    //       handler for the message responds to the error by queuing another
-    //       message, Sender::sendMessage() can be reentered.
+    //       handler for the message responds to the error by queuing
+    //       another message, Sender::sendMessage() can be reentered.
     sock.releaseMessage(*envelope);
     return 0;
   }
@@ -903,10 +924,7 @@ Socket* Sender::initServerSocket(NodeID nid,
           use_ssl ? ConnectionType::SSL : ConnectionType::PLAIN,
           flow_group);
 
-      auto res = impl_->server_sockets_.emplace(
-          std::piecewise_construct,
-          std::forward_as_tuple(nid.index()),
-          std::forward_as_tuple(std::move(sock)));
+      auto res = impl_->server_sockets_.emplace(nid.index(), std::move(sock));
       it = res.first;
 
       if (use_ssl && !cross_boundary) {
@@ -1091,8 +1109,8 @@ int Sender::setPrincipal(const Address& addr, PrincipalIdentity principal) {
     if (pos != impl_->server_sockets_.end() &&
         pos->second->peer_name_.asNodeID().equalsRelaxed(addr.id_.node_)) {
       // server_sockets_ should never have setPrincipal called as they
-      // should always be the calling side, as in they always send the initial
-      // HELLO_Message.
+      // should always be the calling side, as in they always send the
+      // initial HELLO_Message.
       ld_check(false);
       return 0;
     }
@@ -1114,8 +1132,8 @@ const std::string* Sender::getCSID(const Address& addr) {
         pos->second->peer_name_.asNodeID().equalsRelaxed(addr.id_.node_)) {
       // server_sockets_ csid should all be empty, this is because
       // the server_sockets_ will always be on the sender side, as in they
-      // send the initial HELLO_Message. This means that they will never have
-      // receive a HELLO_Message thus never have their csid set.
+      // send the initial HELLO_Message. This means that they will never
+      // have receive a HELLO_Message thus never have their csid set.
       ld_check(pos->second->csid_ == "");
       return &pos->second->csid_;
     }
@@ -1142,8 +1160,8 @@ int Sender::setCSID(const Address& addr, std::string csid) {
     if (pos != impl_->server_sockets_.end() &&
         pos->second->peer_name_.asNodeID().equalsRelaxed(addr.id_.node_)) {
       // server_sockets_ should never have setCSID called as they
-      // should always be the calling side, as in they always send the initial
-      // HELLO_Message.
+      // should always be the calling side, as in they always send the
+      // initial HELLO_Message.
       ld_check(false);
       return 0;
     }
