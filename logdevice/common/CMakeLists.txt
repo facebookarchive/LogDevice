@@ -49,8 +49,8 @@ if(${BUILD_TESTS})
   target_link_libraries(common_test_util
     common
     ${LOGDEVICE_EXTERNAL_DEPS}
-    ${GMOCK_LIBRARY}
     ${GTEST_LIBRARY}
+    ${GMOCK_LIBRARY}
   )
 
   add_dependencies(common_test_util googletest folly rocksdb OpenTracing)
@@ -62,8 +62,8 @@ if(${BUILD_TESTS})
     common_test_util
     ${LOGDEVICE_EXTERNAL_DEPS}
     ${FOLLY_TEST_UTIL_LIBRARIES}
-    ${GMOCK_LIBRARY}
     ${GTEST_LIBRARY}
+    ${GMOCK_LIBRARY}
     ${LIBGFLAGS_LIBRARY})
 
   if(HAVE_CMAKE_GTEST)
