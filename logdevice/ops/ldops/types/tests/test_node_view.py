@@ -3,7 +3,7 @@
 import asyncio
 import operator
 from collections import Counter
-from typing import List
+from typing import Tuple
 from unittest import TestCase
 
 from ldops.testutil.async_test import async_test
@@ -43,9 +43,15 @@ class TestNodeView(TestCase):
             for n in mnt.sequencer_nodes:
                 if n.node_index == ni:
                     mnt_ids.add(mnt.group_id)
-        mnts = sorted(
-            (mnt for mnt in maintenances_resp.maintenances if mnt.group_id in mnt_ids),
-            key=operator.attrgetter("group_id"),
+        mnts = tuple(
+            sorted(
+                (
+                    mnt
+                    for mnt in maintenances_resp.maintenances
+                    if mnt.group_id in mnt_ids
+                ),
+                key=operator.attrgetter("group_id"),
+            )
         )
 
         nv = NodeView(node_config=nc, node_state=ns, maintenances=mnts)
@@ -57,19 +63,15 @@ class TestNodeView(TestCase):
         nv: NodeView,
         nc: NodeConfig,
         ns: NodeState,
-        mnts: List[MaintenanceDefinition],
+        mnts: Tuple[MaintenanceDefinition, ...],
     ):
         self.assertEqual(nv.node_config, nc)
-        self.assertEqual(nv.nc, nc)
 
         self.assertEqual(nv.node_state, ns)
-        self.assertEqual(nv.ns, ns)
 
-        self.assertListEqual(nv.maintenances, mnts)
-        self.assertListEqual(nv.mnts, mnts)
+        self.assertEqual(nv.maintenances, mnts)
 
         self.assertEqual(nv.node_index, nc.node_index)
-        self.assertEqual(nv.ni, nc.node_index)
 
         if nc.name:
             self.assertEqual(nv.node_name, nc.name)
@@ -77,9 +79,6 @@ class TestNodeView(TestCase):
             self.assertEqual(
                 nv.node_name, str(SocketAddress.from_thrift(nc.data_address))
             )
-
-        self.assertEqual(nv.node_name, nv.name)
-        self.assertEqual(nv.node_name, nv.nn)
 
         self.assertEqual(nv.data_address, SocketAddress.from_thrift(nc.data_address))
 

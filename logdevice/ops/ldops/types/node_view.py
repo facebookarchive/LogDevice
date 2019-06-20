@@ -9,7 +9,7 @@
 import os.path
 from collections import Counter
 from dataclasses import dataclass
-from typing import AbstractSet, List, Mapping, Optional, Sequence
+from typing import AbstractSet, List, Mapping, Optional, Sequence, Tuple
 
 from ldops.types.socket_address import SocketAddress
 from logdevice.admin.common.types import (
@@ -39,7 +39,7 @@ from logdevice.membership.Membership.types import MetaDataStorageState, StorageS
 class NodeView:
     node_config: NodeConfig
     node_state: NodeState
-    maintenances: List[MaintenanceDefinition]
+    maintenances: Tuple[MaintenanceDefinition, ...]
 
     def __post_init__(self) -> None:
         if self.node_config.node_index != self.node_state.node_index:
@@ -205,26 +205,3 @@ class NodeView:
     @property
     def shards_metadata_state_count(self) -> Mapping[MetaDataStorageState, int]:
         return Counter(self.shards_metadata_state)
-
-    # shortcuts
-    @property
-    def nc(self) -> NodeConfig:
-        return self.node_config
-
-    @property
-    def ns(self) -> NodeState:
-        return self.node_state
-
-    @property
-    def ni(self) -> int:
-        return self.node_index
-
-    @property
-    def nn(self) -> str:
-        return self.node_name
-
-    @property
-    def mnts(self) -> List[MaintenanceDefinition]:
-        return self.maintenances
-
-    name = node_name
