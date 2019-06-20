@@ -13,14 +13,12 @@ set(GTEST_DISABLE_PTHREADS OFF)
 
 ExternalProject_Add(googletest
     GIT_REPOSITORY https://github.com/google/googletest.git
-    GIT_TAG release-1.8.0
+    GIT_TAG release-1.8.1
     CMAKE_ARGS -DCMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG:PATH=DebugLibs
     -DCMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE:PATH=ReleaseLibs
     -DCMAKE_CXX_FLAGS=${MSVC_COMPILER_DEFS}
     -Dgtest_force_shared_crt=${GTEST_FORCE_SHARED_CRT}
     -Dgtest_disable_pthreads=${GTEST_DISABLE_PTHREADS}
-    # build_gtest=off -> build both gtest AND gmock
-    -DBUILD_GTEST=OFF
     PREFIX "${CMAKE_CURRENT_BINARY_DIR}"
     # Disable install step
     INSTALL_COMMAND ""
@@ -36,7 +34,7 @@ ExternalProject_Get_Property(googletest binary_dir)
 set(GTEST_LIBS_DIR ${binary_dir}/googlemock/gtest)
 set(GMOCK_LIBS_DIR ${binary_dir}/googlemock)
 
-SET(GTEST_LIBRARY ${GTEST_LIBS_DIR}/libgtest_main.a PARENT_SCOPE)
-SET(GMOCK_LIBRARY ${GMOCK_LIBS_DIR}/libgmock_main.a PARENT_SCOPE)
+SET(GTEST_LIBRARY ${GTEST_LIBS_DIR}/libgtest.a PARENT_SCOPE)
+SET(GMOCK_LIBRARY ${GMOCK_LIBS_DIR}/libgmock.a PARENT_SCOPE)
 
 message(STATUS "GTest: ${GTEST_INCLUDE_DIRS} ${GMOCK_INCLUDE_DIRS}")
