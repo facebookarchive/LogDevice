@@ -16,6 +16,7 @@
 #include "logdevice/common/configuration/Node.h"
 #include "logdevice/common/configuration/ShapingConfig.h"
 #include "logdevice/common/protocol/Message.h"
+#include "logdevice/common/test/MockConnectionFactory.h"
 #include "logdevice/common/test/MockNodeServiceDiscovery.h"
 #include "logdevice/common/test/MockNodesConfiguration.h"
 #include "logdevice/common/test/MockSettings.h"
@@ -49,6 +50,8 @@ TEST(SenderTest, StartStop) {
   loc.fromDomainString("ash.2.08.k.z");
   std::shared_ptr<Settings> settings = std::make_shared<MockSettings>();
 
+  auto connections = std::make_unique<MockConnectionFactory>();
+
   Sender sender(settings,
                 thread_pool.getEventBase()->getLibeventBase(),
                 sc,
@@ -57,7 +60,9 @@ TEST(SenderTest, StartStop) {
                 nodes,
                 node_index_t{0},
                 loc,
+                std::move(connections),
                 nullptr);
+  // TODO: I haven't been able to mock socket right now,
+  // because of very tricky construction.
 }
-
 }} // namespace facebook::logdevice
