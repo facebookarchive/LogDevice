@@ -15,13 +15,13 @@ Implements maintenance- and safety-related operations.
 """
 
 from datetime import timedelta
-from typing import Collection, FrozenSet, Mapping, Optional
+from typing import Collection, FrozenSet, Mapping, Optional, Set
 
 from ldops import admin_api
 from ldops.exceptions import LDOpsError
 from ldops.types.node import Node
 from logdevice.admin.clients import AdminAPI
-from logdevice.admin.common.types import NodeID, ShardID
+from logdevice.admin.common.types import ShardID
 from logdevice.admin.maintenance.types import (
     MaintenanceDefinition,
     MaintenanceDefinitionResponse,
@@ -46,16 +46,19 @@ class SafetyError(LDOpsError):
         self,
         message: str = "Operation is unsafe",
         check_impact_response: Optional[CheckImpactResponse] = None,
-    ):
+    ) -> None:
         super().__init__(message)
         self.message = message
         self.check_impact_response = check_impact_response
 
-    def __str__(self):
-        return f"{self.message}: impact: {self.check_impact_response.impact}"
+    def __str__(self) -> str:
+        if self.check_impact_response is not None:
+            return f"{self.message}: impact: {self.check_impact_response.impact}"
+        else:
+            return f"{self.message}"
 
 
-def _recombine_shards(shards: Collection[ShardID]) -> FrozenSet[ShardID]:
+def _recombine_shards(shards: Collection[ShardID]) -> Set[ShardID]:
     whole_nodes = set()
     node_ids = set()
     single_shards = set()
@@ -69,7 +72,7 @@ def _recombine_shards(shards: Collection[ShardID]) -> FrozenSet[ShardID]:
     filtered_shards: FrozenSet[ShardID] = frozenset(
         s for s in single_shards if s.node.node_index not in node_ids
     )
-    return frozenset(whole_nodes).union(filtered_shards)
+    return whole_nodes.union(filtered_shards)
 
 
 async def check_impact(
@@ -84,24 +87,17 @@ async def check_impact(
     shards passed it still does safety check, but will return current state
     of the cluster.
     """
-    nodes = nodes or []
-    shards = shards or []
+    nodes = set(nodes or [])
+    shards = set(shards or [])
 
-    req_shards: FrozenSet[ShardID] = _recombine_shards(
-        list(shards)  # shards is generic Collection, not List
-        + [
-            ShardID(
-                node=NodeID(node_index=n.node_index, address=n.data_addr.to_thrift()),
-                shard_index=-1,
-            )
-            for n in nodes
-        ]
+    req_shards: Set[ShardID] = _recombine_shards(
+        shards.union(ShardID(node=n.to_thrift(), shard_index=-1) for n in nodes)
     )
 
     return await admin_api.check_impact(
         client=client,
         req=CheckImpactRequest(
-            shards=req_shards,
+            shards=list(req_shards),
             target_storage_state=target_storage_state,
             disable_sequencers=disable_sequencers,
         ),
@@ -169,15 +165,9 @@ async def apply_maintenance(
 
     Can return multiple maintenances if group==False.
     """
-    if nodes is None:
-        nodes = []
-
-    if shards is None:
-        shards = []
-
-    if sequencer_nodes is None:
-        sequencer_nodes = []
-    sequencer_nodes += nodes
+    nodes = set(nodes or [])
+    shards = set(shards or [])
+    sequencer_nodes = set(sequencer_nodes or []).union(nodes)
 
     if ttl is None:
         ttl = timedelta(seconds=0)
@@ -191,11 +181,11 @@ async def apply_maintenance(
     if extras is None:
         extras = {}
 
-    shards += [ShardID(node=n.to_thrift(), shard_index=-1) for n in nodes]
+    shards = shards.union({ShardID(node=n.to_thrift(), shard_index=-1) for n in nodes})
     shards = _recombine_shards(shards)
 
     req = MaintenanceDefinition(
-        shards=shards,
+        shards=list(shards),
         shard_target_state=shard_target_state,
         sequencer_nodes=[n.to_thrift() for n in sequencer_nodes],
         sequencer_target_state=SequencingState.DISABLED,
@@ -223,7 +213,7 @@ async def remove_maintenances(
     if group_ids is None:
         group_ids = []
     req = RemoveMaintenancesRequest(
-        filter=MaintenancesFilter(group_ids=group_ids, user=user),
+        filter=MaintenancesFilter(group_ids=list(set(group_ids)), user=user),
         user=log_user,
         reason=log_reason,
     )
