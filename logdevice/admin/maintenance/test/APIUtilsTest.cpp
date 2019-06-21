@@ -162,7 +162,7 @@ TEST(APIUtilsTest, ExpandMaintenances1) {
   }
   {
     // Let's try while group = true; Our expecations should be identical since
-    // all maintenaces in this request are on the same node.
+    // all maintenances in this request are on the same node.
     request.set_group(true);
     auto output = APIUtils::expandMaintenances(request, nodes_config);
     ASSERT_TRUE(output.hasValue());

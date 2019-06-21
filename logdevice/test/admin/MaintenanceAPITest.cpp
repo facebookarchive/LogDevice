@@ -180,7 +180,7 @@ TEST_F(MaintenanceAPITest, ApplyMaintenancesValid) {
     // to validate we correctly respect the attributes
     request.set_skip_safety_checks(true);
     request.set_group(false);
-    // We expect this to be expanded into 1 maintenace group since everything
+    // We expect this to be expanded into 1 maintenance group since everything
     // fits nicely into a single node.
     MaintenanceDefinitionResponse resp;
     admin_client->sync_applyMaintenance(resp, request);
@@ -390,7 +390,7 @@ TEST_F(MaintenanceAPITest, RemoveMaintenances) {
     request.set_sequencer_target_state(SequencingState::DISABLED);
     // to validate we correctly respect the attributes
     request.set_group(false);
-    // We expect this to be expanded into 3 maintenace groups
+    // We expect this to be expanded into 3 maintenance groups
     MaintenanceDefinitionResponse resp;
     admin_client->sync_applyMaintenance(resp, request);
     auto output = resp.get_maintenances();

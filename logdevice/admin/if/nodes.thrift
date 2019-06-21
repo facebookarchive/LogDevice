@@ -140,7 +140,7 @@ struct ShardMaintenanceProgress {
   3: common.Timestamp created_at,
   4: common.Timestamp last_updated_at,
   /**
-   * The list of maintenance groups associated to this maintenace
+   * The list of maintenance groups associated to this maintenance
    */
   5: list<common.MaintenanceGroupID> associated_group_ids,
 }
@@ -155,7 +155,7 @@ struct SequencerMaintenanceProgress {
   3: common.Timestamp created_at,
   4: common.Timestamp last_updated_at,
   /**
-   * The list of maintenance groups associated to this maintenace
+   * The list of maintenance groups associated to this maintenance
    */
   5: list<common.MaintenanceGroupID> associated_group_ids,
 }

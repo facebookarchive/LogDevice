@@ -52,7 +52,7 @@ class MaintenanceAPIHandler : public virtual AdminAPIHandlerBase {
   applyAndGetMaintenances(std::vector<thrift::MaintenanceDefinition> defs);
 
   /**
-   * Takes a list of new maintenances, and existing maintenace. Then it will
+   * Takes a list of new maintenances, and existing maintenance. Then it will
    * apply the new maintenance to the RSM, if everything is successful, it will
    * merge the results into one vector.
    *
