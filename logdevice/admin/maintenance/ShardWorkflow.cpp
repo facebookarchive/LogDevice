@@ -150,7 +150,7 @@ void ShardWorkflow::computeMaintenanceStatusForDrain() {
       // Workflow cannot proceed until StorageState moves out of
       // the transitional state. NCM ensures that shard do not
       // stay in transitional state for long.
-      updateStatus(MaintenanceStatus::RETRY);
+      updateStatus(MaintenanceStatus::AWAITING_NODES_CONFIG_TRANSITION);
       break;
   }
 }
@@ -220,7 +220,7 @@ void ShardWorkflow::computeMaintenanceStatusForEnable() {
       // Workflow cannot proceed until StorageState moves out of
       // the transitional state. NCM ensures that shard do not
       // stay in transitional state for long
-      updateStatus(MaintenanceStatus::RETRY);
+      updateStatus(MaintenanceStatus::AWAITING_NODES_CONFIG_TRANSITION);
       break;
   }
 }
