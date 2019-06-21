@@ -162,6 +162,11 @@ void ShardWorkflow::computeMaintenanceStatusForMayDisappear() {
   ld_check(!target_op_state_.count(ShardOperationalState::DRAINED));
   switch (current_storage_state_) {
     case membership::StorageState::NONE:
+      createAbortEventIfRequired();
+      expected_storage_state_transition_ =
+          membership::StorageStateTransition::ENABLING_READ;
+      updateStatus(MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES);
+      break;
     case membership::StorageState::READ_ONLY:
       createAbortEventIfRequired();
       updateStatus(MaintenanceStatus::COMPLETED);

@@ -8,6 +8,7 @@
 
 #include "logdevice/admin/maintenance/MaintenanceManager.h"
 
+#include "logdevice/admin/AdminAPIUtils.h"
 #include "logdevice/admin/maintenance/MaintenanceLogWriter.h"
 #include "logdevice/common/ThriftCodec.h"
 #include "logdevice/lib/ClientImpl.h"
@@ -145,12 +146,7 @@ TEST_F(MaintenanceManagerTest, BasicDrain) {
 
   // Add a maintenance to drain N3
   thrift::MaintenanceDefinition def;
-  auto nodeid = thrift::NodeID();
-  nodeid.set_node_index(3);
-  auto shardid = thrift::ShardID();
-  shardid.set_node(nodeid);
-  shardid.set_shard_index(-1);
-  def.set_shards({shardid});
+  def.set_shards({mkShardID(3, -1)});
   def.set_shard_target_state(thrift::ShardOperationalState::DRAINED);
   def.set_user("Test");
   def.set_reason("Integration Test");
@@ -162,8 +158,22 @@ TEST_F(MaintenanceManagerTest, BasicDrain) {
   def.set_group_id("N3S-1");
   def.set_created_on(SystemTimestamp::now().toMilliseconds().count());
 
+  // Add another MAY_DISAPPEAR maintenance to N3, still, drain should win.
+  thrift::MaintenanceDefinition def2;
+  def2.set_shards({mkShardID(3, -1)});
+  def2.set_shard_target_state(thrift::ShardOperationalState::MAY_DISAPPEAR);
+  def2.set_user("Test-maydisappear");
+  def2.set_reason("Integration Test");
+  def2.set_skip_safety_checks(false);
+  def2.set_force_restore_rebuilding(false);
+  def2.set_group(true);
+  def2.set_ttl_seconds(0);
+  def2.set_allow_passive_drains(false);
+  def2.set_group_id("N3S-1-md");
+  def2.set_created_on(SystemTimestamp::now().toMilliseconds().count());
+
   auto maintenanceDelta = std::make_unique<MaintenanceDelta>();
-  maintenanceDelta->set_apply_maintenances({def});
+  maintenanceDelta->set_apply_maintenances({def, def2});
   writeToMaintenanceLog(*client, *maintenanceDelta);
 
   wait_until("ShardOperationalState is DRAINED", [&]() {
@@ -172,7 +182,8 @@ TEST_F(MaintenanceManagerTest, BasicDrain) {
     return state == expected_text;
   });
 
-  // Now remove the maintenance, node should go back to being ENABLED
+  // Now remove the DRAINED maintenance, node should go back to being
+  // MAY_DISAPEAR
   maintenanceDelta = std::make_unique<MaintenanceDelta>();
   thrift::MaintenancesFilter filter;
   filter.set_group_ids({"N3S-1"});
@@ -181,6 +192,25 @@ TEST_F(MaintenanceManagerTest, BasicDrain) {
   thrift::RemoveMaintenancesRequest req;
   req.set_filter(std::move(filter));
   req.set_user("Test");
+  req.set_reason("Integration Test");
+
+  maintenanceDelta->set_remove_maintenances(std::move(req));
+  writeToMaintenanceLog(*client, *maintenanceDelta);
+
+  wait_until("ShardOperationalState is MAY_DISAPPEAR", [&]() {
+    auto state = cluster_->getNode(2).sendCommand("info shardopstate 3 0");
+    const std::string expected_text = "MAY_DISAPPEAR\r\nEND\r\n";
+    return state == expected_text;
+  });
+
+  // Now remove the MAY_DISAPPEAR maintenance, node should go back to being
+  // ENABLED
+  maintenanceDelta = std::make_unique<MaintenanceDelta>();
+  filter.set_group_ids({"N3S-1-md"});
+  filter.set_user("Test-maydisappear");
+
+  req.set_filter(std::move(filter));
+  req.set_user("Test-maydisappear");
   req.set_reason("Integration Test");
 
   maintenanceDelta->set_remove_maintenances(std::move(req));
