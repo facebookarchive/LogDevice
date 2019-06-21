@@ -764,7 +764,9 @@ void AllServerReadStreams::sendShardStatusToClient(ClientID cid) {
   // node configuration. Leaving this here for backward compatibility until that
   // code is deployed everywhere.
   auto my_node_id = Worker::onThisThread()->processor_->getMyNodeID();
-  auto node = Worker::onThisThread()->getServerConfig()->getNode(my_node_id);
+  std::shared_ptr<ServerConfig> server_config =
+      Worker::onThisThread()->getServerConfig();
+  const configuration::Node* node = server_config->getNode(my_node_id);
   ld_check(node);
   hdr.num_shards_deprecated = node->getNumShards();
 
