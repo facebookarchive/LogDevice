@@ -245,6 +245,10 @@ class LifoEventSemImpl
       node_->handoff().wait_readable();
     }
 
+    FOLLY_ALWAYS_INLINE bool is_readable() noexcept {
+      return node_->handoff().get_event_count() > 0;
+    }
+
     /// Consumes the read event pending on fd(), then begins a new async
     /// wait on the owning LifoEventSem.  Throws ShutdownSemError if the
     /// semaphore is shut down.
