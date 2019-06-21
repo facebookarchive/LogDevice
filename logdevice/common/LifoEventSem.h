@@ -330,8 +330,23 @@ class LifoEventSemImpl
       // If we are not enqueued we consumed an event from queue but did not
       // process it. If we weren't posted to because of shutdown we should
       // return the event to semaphore as we will not process it.
-      if (!owner_.tryRemoveNode(*node_) && !node_->isShutdownNotice()) {
-        owner_.post();
+      if (!owner_.tryRemoveNode(*node_)) {
+        // If we are destroying just as we were dequeued from LifoSem but the
+        // post did not happen yet we need to wait for a post to happen
+        // otherwise we risk a post after we are already destroyed
+        node_->handoff().wait_readable();
+        // We need to call get_event_count in order to introduce acquire memory
+        // barrier as node_->isShutdownNotice() call is not safe without it.
+        if (FOLLY_UNLIKELY(node_->handoff().get_event_count() != 1)) {
+          // we just waited for fd to become readable so event count should be 1
+          // otherwise all bets are off
+          return;
+        }
+        // if it's not shutdown we got notified but we will not process the
+        // request so we need to return token to semaphore
+        if (!node_->isShutdownNotice()) {
+          owner_.post();
+        }
       }
     }
     typedef typename LifoEventSemImpl<Atom>::WaitResult WaitResult;
