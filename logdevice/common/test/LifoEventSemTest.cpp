@@ -12,6 +12,7 @@
 
 #include <folly/Benchmark.h>
 #include <folly/Random.h>
+#include <folly/memory/SanitizeLeak.h>
 #include <folly/portability/GFlags.h>
 #include <folly/portability/GTest.h>
 #include <folly/test/DeterministicSchedule.h>
@@ -126,6 +127,17 @@ TEST(LifoEventSem, multi) {
 
   LOG(INFO) << opsPerThread * sizeof(threads) / sizeof(threads[0])
             << " post/wait pairs, " << blocks << " blocked";
+}
+
+// We want to make sure if someone supressed a memory leak of AsyncWaiter
+// it does not report a leak on allocation of FDBaton
+TEST(LifoEventSem, supressedMemoryLeakOfAsyncWaiter) {
+  LifoEventSem sem;
+  for (int i = 0; i < 10; ++i) {
+    auto waiter = sem.beginAsyncWait();
+    auto leaked_waiter = waiter.release();
+    folly::annotate_object_leaked(leaked_waiter);
+  }
 }
 
 TEST(LifoEventSem, async) {

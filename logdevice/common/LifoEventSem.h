@@ -12,6 +12,7 @@
 #include <folly/Memory.h>
 #include <folly/ScopeGuard.h>
 #include <folly/io/async/DelayedDestruction.h>
+#include <folly/memory/SanitizeLeak.h>
 #include <folly/synchronization/LifoSem.h>
 
 namespace facebook { namespace logdevice {
@@ -140,6 +141,17 @@ class FdBaton {
 template <template <typename> class Atom>
 class LifoFdBaton {
  public:
+  LifoFdBaton() {
+    // Since it gets allocated through placement new LSAN does not track
+    // ownership correctly so if we have an intentional leak somewhere up the
+    // ownership chain LSAN reports it as a leak here.
+    folly::annotate_object_leaked(baton_.get());
+  }
+
+  ~LifoFdBaton() {
+    folly::annotate_object_collected(baton_.get());
+  }
+
   FOLLY_ALWAYS_INLINE void post() {
     baton_->post();
   }
