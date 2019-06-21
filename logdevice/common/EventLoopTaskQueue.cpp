@@ -113,7 +113,8 @@ int EventLoopTaskQueue::addWithPriority(Func func, int8_t priority) {
   ld_check(func);
   // During dequeue, semaphore is decremented by a value followed by dequeue of
   // equal number of elements. Hence, enqueue here is done in order
-  queues_[translatePriority(priority)].enqueue(std::move(func));
+  Task t(std::move(func), folly::RequestContext::saveContext());
+  queues_[translatePriority(priority)].enqueue(std::move(t));
   sem_.post();
   return 0;
 }
@@ -175,11 +176,12 @@ void EventLoopTaskQueue::executeTasks(size_t tokens) {
 
   for (size_t i = 0; i < dequeues_to_execute.size(); ++i) {
     while (dequeues_to_execute[i]--) {
-      auto func = queues_[i].dequeue();
-      if (UNLIKELY(!func)) {
+      auto t = queues_[i].dequeue();
+      if (UNLIKELY(!t.function)) {
         continue;
       }
-      func();
+      folly::RequestContextScopeGuard guard(std::move(t.context));
+      t.function();
     }
   }
 }

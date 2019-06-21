@@ -195,7 +195,7 @@ BENCHMARK_RELATIVE(RequestPumpFunctionBenchmarkOnEventBase, n) {
   std::unique_ptr<std::thread> consumer_ptr;
   BENCHMARK_SUSPEND {
     // Create and init consumer
-    loop = std::make_unique<folly::EventBase>();
+    loop = std::make_unique<folly::EventBase>(false);
     consumer_ptr =
         std::make_unique<std::thread>([&loop] { loop->loopForever(); });
     loop->add([&sem]() { sem.post(); });

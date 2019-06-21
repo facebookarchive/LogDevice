@@ -12,8 +12,9 @@
 
 #include <folly/Executor.h>
 #include <folly/Function.h>
+#include <folly/concurrency/UnboundedQueue.h>
+#include <folly/io/async/Request.h>
 
-#include "folly/concurrency/UnboundedQueue.h"
 #include "logdevice/common/LifoEventSem.h"
 
 struct event;
@@ -129,7 +130,14 @@ class EventLoopTaskQueue {
   }
 
  private:
-  using Queue = folly::UMPSCQueue<Func, false /* MayBlock */, 9>;
+  class Task {
+   public:
+    explicit Task(Func func, std::shared_ptr<folly::RequestContext> ctx)
+        : function(std::move(func)), context(std::move(ctx)) {}
+    Func function;
+    std::shared_ptr<folly::RequestContext> context;
+  };
+  using Queue = folly::UMPSCQueue<Task, false /* MayBlock */, 9>;
 
   constexpr static std::array<int8_t, kNumberOfPriorities> kLookupTable = {
       {folly::Executor::HI_PRI,
