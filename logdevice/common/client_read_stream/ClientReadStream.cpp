@@ -2160,19 +2160,25 @@ void ClientReadStream::requestEpochMetaData(
           log_id_.val_,
           last_epoch_with_metadata_.val_);
 
-  deps_->getMetaDataForEpoch(
-      this->getID(),
-      epoch,
-      std::bind(&ClientReadStream::onEpochMetaData,
-                this,
-                std::placeholders::_1,
-                std::placeholders::_2),
-      // ignore_released_status mode requires the information whether the
-      // metadata record is the last record in the metadata log. Do not use
-      // metadata cache in this case.
-      use_epoch_metadata_cache_ && !ignore_released_status_,
-      require_consistent_from_cache);
-  connection_health_tracker_->recalculate();
+  if (!deps_->getMetaDataForEpoch(
+          this->getID(),
+          epoch,
+          std::bind(&ClientReadStream::onEpochMetaData,
+                    this,
+                    std::placeholders::_1,
+                    std::placeholders::_2),
+          // ignore_released_status mode requires the information whether the
+          // metadata record is the last record in the metadata log. Do not use
+          // metadata cache in this case.
+          use_epoch_metadata_cache_ && !ignore_released_status_,
+          require_consistent_from_cache)) {
+    // Metadata will be fetched asynchronously. Until then, let's update
+    // connection health.
+    connection_health_tracker_->recalculate();
+  } else {
+    // onEpochMetaData() was called synchronously.
+    // *this may be destroyed here.
+  }
 }
 
 void ClientReadStream::activateMetaDataRetryTimer() {
@@ -4172,7 +4178,7 @@ bool ClientReadStreamDependencies::hasMemoryPressure() const {
   return false;
 }
 
-void ClientReadStreamDependencies::getMetaDataForEpoch(
+bool ClientReadStreamDependencies::getMetaDataForEpoch(
     read_stream_id_t rsid,
     epoch_t epoch,
     MetaDataLogReader::Callback cb,
@@ -4201,7 +4207,7 @@ void ClientReadStreamDependencies::getMetaDataForEpoch(
         compose_lsn(epoch, esn_t(1)),
         std::chrono::milliseconds(0),
         std::move(metadata)});
-    return;
+    return true;
   }
 
   if (allow_from_cache && metadata_cache_ != nullptr) {
@@ -4251,7 +4257,7 @@ void ClientReadStreamDependencies::getMetaDataForEpoch(
                metadata_cached_->h.epoch.val_,
                until.val_,
                metadata_cached_->toString().c_str());
-      return;
+      return false;
     }
 
     // cache miss, continue to read the metadata log
@@ -4373,7 +4379,7 @@ void ClientReadStreamDependencies::getMetaDataForEpoch(
           : NodeSetFinder::Source::BOTH);
 
   nodeset_finder_->start();
-  return;
+  return false;
 }
 
 void ClientReadStreamDependencies::updateEpochMetaDataCache(

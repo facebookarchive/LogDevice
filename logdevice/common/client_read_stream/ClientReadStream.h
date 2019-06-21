@@ -150,8 +150,11 @@ class ClientReadStreamDependencies {
    * @param require_consistent_from_cache    only allow consistent metadata from
    *                                         EpochMetaDataCache, otherwise
    *                                         consider it a cache miss
+   *
+   * @return  true if the operation completed (and called `cb`) synchronously;
+   *          false if the operation will complete asynchronously
    */
-  virtual void getMetaDataForEpoch(read_stream_id_t rsid,
+  virtual bool getMetaDataForEpoch(read_stream_id_t rsid,
                                    epoch_t epoch,
                                    MetaDataLogReader::Callback cb,
                                    bool allow_from_cache,

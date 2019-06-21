@@ -221,7 +221,7 @@ class MockClientReadStreamDependencies : public ClientReadStreamDependencies {
  public:
   explicit MockClientReadStreamDependencies(TestState& state) : state_(state) {}
 
-  void getMetaDataForEpoch(read_stream_id_t /*rsid*/,
+  bool getMetaDataForEpoch(read_stream_id_t /*rsid*/,
                            epoch_t epoch,
                            MetaDataLogReader::Callback cb,
                            bool /*allow_from_cache*/,
@@ -231,7 +231,7 @@ class MockClientReadStreamDependencies : public ClientReadStreamDependencies {
 
     if (state_.disable_default_metadata) {
       // The test explicitly calls onEpochMetaData().
-      return;
+      return false;
     }
 
     // otherwise, provide the default metadata and make it effective
@@ -248,6 +248,7 @@ class MockClientReadStreamDependencies : public ClientReadStreamDependencies {
                                  compose_lsn(epoch_t(epoch), esn_t(1)),
                                  std::chrono::milliseconds(0),
                                  std::move(metadata)});
+    return true;
   }
 
   void
