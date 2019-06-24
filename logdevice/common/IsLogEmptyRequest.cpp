@@ -428,6 +428,10 @@ void IsLogEmptyRequest::onReply(ShardID from, Status status, bool is_empty) {
   auto res = StorageSetAccessor::Result::SUCCESS;
 
   switch (status) {
+    case E::ACCESS:
+      finalize(E::ACCESS, false);
+      return;
+
     case E::OK:
       shard_st |= SHARD_HAS_RESULT;
       shard_st =
@@ -605,7 +609,7 @@ void IsLogEmptyRequest::deleteThis() {
 }
 
 void IsLogEmptyRequest::completion(Status st) {
-  ld_check_in(st, ({E::OK, E::TIMEDOUT, E::FAILED}));
+  ld_check_in(st, ({E::OK, E::TIMEDOUT, E::FAILED, E::ACCESS}));
 
   if (nodeset_accessor_) {
     if (started_) {
@@ -660,6 +664,8 @@ void IsLogEmptyRequest::completion(Status st) {
       ld_check(haveDeadEnd());
       finalize(E::PARTIAL, false);
     }
+  } else if (st == E::ACCESS) {
+    finalize(E::ACCESS, false);
   } else {
     // We'll get here if
     // 1) Too many nodes couldn't answer, and NodeSetAccessor decided that this
