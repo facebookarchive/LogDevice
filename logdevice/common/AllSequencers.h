@@ -449,6 +449,7 @@ class AllSequencers {
 
   virtual void startMetadataLogEmptyCheck(logid_t logid,
                                           const std::string& activation_reason);
+  virtual void startEpochStoreNonemptyCheck(logid_t logid);
 
   static const size_t MAP_SIZE_MAX = (size_t)INT_MAX;
 };

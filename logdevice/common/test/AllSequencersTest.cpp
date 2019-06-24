@@ -53,6 +53,7 @@ class AllSequencersTest : public ::testing::Test {
     std::atomic<size_t> metadata_requests{0};
     std::atomic<size_t> log_recoveries{0};
     std::atomic<size_t> draining_completions{0};
+    std::atomic<size_t> epoch_store_nonempty_checks{0};
   };
 
   // number of times it requests metadata from epoch store
@@ -209,6 +210,10 @@ class MockAllSequencers : public AllSequencers {
         test_->metadata_log_empty_ ? E::NOTFOUND : E::NOTEMPTY,
         logid,
         activation_reason);
+  }
+
+  void startEpochStoreNonemptyCheck(logid_t logid) override {
+    ++test_->logs_state_.at(logid).epoch_store_nonempty_checks;
   }
 
   void onEpochMetaDataFromEpochStore(
@@ -439,10 +444,12 @@ TEST_F(AllSequencersTest, ActivateWithEpochStoreWiped) {
       ASSERT_EQ(
           empty_epoch_store_update_result_.load(), seq->getCurrentEpoch());
       ASSERT_EQ(stats.sequencer_activation_failed_metadata_inconsistency, 0);
+      ASSERT_EQ(0, logs_state_.at(logid).epoch_store_nonempty_checks.load());
     } else {
       // inconsistency between epoch store and metadata log!
       ASSERT_EQ(Sequencer::State::UNAVAILABLE, seq->getState());
       ASSERT_EQ(stats.sequencer_activation_failed_metadata_inconsistency, 1);
+      ASSERT_EQ(1, logs_state_.at(logid).epoch_store_nonempty_checks.load());
     }
   }
 }

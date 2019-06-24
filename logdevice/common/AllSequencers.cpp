@@ -509,23 +509,35 @@ void AllSequencers::onEpochMetaDataFromEpochStore(
       return;
 
     case E::NOTFOUND:
+    case E::EMPTY:
       if (!cfg->serverConfig()->sequencersProvisionEpochStore()) {
         RATELIMIT_ERROR(
             std::chrono::seconds(10),
             100,
             "Attempt to activate a sequencer for log %lu (reason: %s) failed "
-            "because that log id is not provisioned in the epoch "
-            "store.",
+            "because that log id is not provisioned%s in the epoch store.",
             logid.val_,
-            activation_reason.c_str());
+            activation_reason.c_str(),
+            st == E::EMPTY ? " (empty metadata)" : "");
         break;
       }
 
-      // Epoch store is empty. Start request to verify that metadata log is too,
-      // and if so, start a new request to epoch store, this time allowing it
-      // to provision an empty log.
+      // Epoch store is empty for this log. This means one of two things:
+      //  1. No sequencer was ever activated for this log.
+      //     In this case we should just activate sequencer in epoch 1.
+      //  2. (unlikely) Epoch store was wiped or switched by mistake. In this
+      //     case it's important to *not* activate the sequencer. Storage nodes
+      //     likely already have records for this log, and writing new records
+      //     in epoch 1 would lead to LSN collisions and other forms of data
+      //     corruption.
+      // To distinguish the two cases, we check whether metadata log is
+      // empty. It's not a perfect test (some data records may be stored before
+      // metadata record is appended), but plenty good enough for our purposes.
+      // If metadata log is empty, we'll proceed with sequencer activation in
+      // epoch 1.
       startMetadataLogEmptyCheck(logid, activation_reason);
       return;
+
     case E::ACCESS:
       RATELIMIT_ERROR(
           std::chrono::seconds(10),
@@ -588,22 +600,6 @@ void AllSequencers::onEpochMetaDataFromEpochStore(
                       activation_reason.c_str());
       break;
 
-    case E::EMPTY:
-      if (!cfg->serverConfig()->sequencersProvisionEpochStore()) {
-        RATELIMIT_ERROR(std::chrono::seconds(10),
-                        100,
-                        "Epoch store record for log %lu is empty (not "
-                        "provisioned). Log cannot be used until the record is "
-                        "provisioned.",
-                        logid.val_);
-        break;
-      }
-
-      // Epoch store is empty for this log. Start request to verify that
-      // metadata log is too, and if so, start a new request to epoch store,
-      // this time allowing it to provision an empty log.
-      startMetadataLogEmptyCheck(logid, activation_reason);
-      return;
     case E::EXISTS:
       RATELIMIT_ERROR(std::chrono::seconds(10),
                       100,
@@ -724,12 +720,26 @@ void AllSequencers::onMetadataLogEmptyCheckResult(
       // Epoch store is empty for this log, but metadata log is not!
       // Probable cause: corruption or accidental change of epoch store
       STAT_INCR(getStats(), sequencer_activation_failed_metadata_inconsistency);
-      RATELIMIT_CRITICAL(std::chrono::seconds(10),
-                         10,
-                         "Sequencer activation for log %lu found epoch store "
-                         "to be empty, but metadata log is NOT!",
-                         logid.val_);
       st = E::AGAIN;
+
+      // We saw empty epoch store, then we saw nonempty metadata log.
+      // This means one of two rare situations:
+      //  1. Benign race condition: another node activated a sequencer after
+      //     we checked epoch store but before we checked metadata log.
+      //  2. Bad misconfiguration or bug: the epoch store was wiped or switched.
+      // In both cases we shouldn't activate the sequencer. In the seconds case
+      // we should also raise an alarm. To distinguish the two cases, let's
+      // re-check the epoch store; if it's still empty, we're in situation 2.
+
+      RATELIMIT_INFO(std::chrono::seconds(10),
+                     10,
+                     "Sequencer activation for log %lu found epoch store "
+                     "to be empty, but metadata log is not. Probably the "
+                     "sequencer was activated on a different node. "
+                     "Canceling our sequencer activation.",
+                     logid.val_);
+
+      startEpochStoreNonemptyCheck(logid);
       break;
     case E::INVALID_PARAM:
       // Log not yet in config; probably a race between config update and
@@ -775,6 +785,45 @@ void AllSequencers::onMetadataLogEmptyCheckResult(
   // function can only be called if a Sequencer for logid was once in the map
   ld_check(seq);
   onActivationFailed(logid, st, seq.get(), /*permanent=*/false);
+}
+
+void AllSequencers::startEpochStoreNonemptyCheck(logid_t logid) {
+  // Do a fire-and-forget request to epoch store. Callback captures everything
+  // by value so that we don't need to worry about `this` getting destroyed
+  // before the request completes.
+  auto cb = [](Status st,
+               logid_t _logid,
+               std::unique_ptr<EpochMetaData>,
+               std::unique_ptr<EpochStoreMetaProperties>) {
+    if (st == E::NOTFOUND || st == E::EMPTY) {
+      RATELIMIT_CRITICAL(
+          std::chrono::seconds(10),
+          100,
+          "Sequencer activation for log %lu found epoch store to be empty, but "
+          "metadata log is NOT! Looks like epoch store was unexpectedly wiped. "
+          "Can't activate sequencers for this log since we don't know the "
+          "epoch number.",
+          _logid.val());
+    } else if (st != E::DISABLED && st != E::OK) {
+      RATELIMIT_ERROR(std::chrono::seconds(10),
+                      2,
+                      "Failed to check if epoch store for log %lu is empty: %s",
+                      _logid.val(),
+                      error_name(st));
+    } else {
+      // The mismatch between epoch store and metadata log was transient, phew.
+    }
+  };
+
+  int rv = epoch_store_->readMetaData(logid, cb);
+  if (rv != 0) {
+    RATELIMIT_ERROR(
+        std::chrono::seconds(10),
+        2,
+        "Failed to initiate a check if epoch store for log %lu is empty: %s.",
+        logid.val(),
+        error_name(err));
+  }
 }
 
 void AllSequencers::onActivationFailed(logid_t logid,
