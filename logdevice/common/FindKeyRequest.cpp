@@ -145,8 +145,13 @@ int FindKeyRequest::sendOneMessage(const FINDKEY_Header& header, ShardID to) {
 
 void FindKeyRequest::finalize(Status status, bool delete_this) {
   ld_check(!callback_called_);
-  ld_check_in(
-      status, ({E::INVALID_PARAM, E::OK, E::PARTIAL, E::FAILED, E::SHUTDOWN}));
+  ld_check_in(status,
+              ({E::INVALID_PARAM,
+                E::OK,
+                E::PARTIAL,
+                E::FAILED,
+                E::SHUTDOWN,
+                E::ACCESS}));
   callback_called_ = true;
   bool lsn_invalid = (status == E::FAILED || status == E::INVALID_PARAM);
 
@@ -261,6 +266,10 @@ void FindKeyRequest::onReply(ShardID from, Status status, lsn_t lo, lsn_t hi) {
     case E::FAILED:
       res = StorageSetAccessor::Result::PERMANENT_ERROR;
       break;
+
+    case E::ACCESS:
+      finalize(E::ACCESS);
+      return;
 
     default:
       RATELIMIT_ERROR(std::chrono::seconds(10),
