@@ -77,7 +77,7 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestRemoveAliveNodes) {
   } catch (const thrift::ClusterMembershipOperationFailed& exception) {
     ASSERT_EQ(1, exception.failed_nodes.size());
     auto failed_node = exception.failed_nodes[0];
-    EXPECT_EQ(1, failed_node.node_id.node_index);
+    EXPECT_EQ(1, failed_node.node_id.node_index_ref().value_unchecked());
     EXPECT_EQ(
         thrift::ClusterMembershipFailureReason::NOT_DEAD, failed_node.reason);
   }
@@ -103,7 +103,7 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestRemoveEnabledNodes) {
   } catch (const thrift::ClusterMembershipOperationFailed& exception) {
     ASSERT_EQ(1, exception.failed_nodes.size());
     auto failed_node = exception.failed_nodes[0];
-    EXPECT_EQ(1, failed_node.node_id.node_index);
+    EXPECT_EQ(1, failed_node.node_id.node_index_ref().value_unchecked());
     EXPECT_EQ(thrift::ClusterMembershipFailureReason::NOT_DISABLED,
               failed_node.reason);
   }
@@ -118,7 +118,7 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestRemoveNodeSuccess) {
   thrift::RemoveNodesResponse resp;
   admin_client->sync_removeNodes(resp, buildRemoveNodesRequest({1}));
   EXPECT_EQ(1, resp.removed_nodes.size());
-  EXPECT_EQ(1, resp.removed_nodes[0].node_index);
+  EXPECT_EQ(1, resp.removed_nodes[0].node_index_ref().value_unchecked());
 
   wait_until("AdminServer's NC picks the removal", [&]() {
     thrift::NodesConfigResponse nodes_config;
