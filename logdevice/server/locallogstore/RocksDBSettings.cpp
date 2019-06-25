@@ -1401,13 +1401,17 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
 
   init("rocksdb-pinned-memtables-limit-percent",
        &pinned_memtables_limit_percent,
-       "50",
+       "200",
        nullptr,
        "Memory budget for flushed memtables pinned by iterators, as percentage "
        "of --rocksdb-memtable-size-per-node. More precisely, each shard will "
        "reject writes if its total memtable size (active+flushing+pinned) is "
        "greater than rocksdb-memtable-size-per-node/num-shards*"
-       "(1 + rocksdb-pinned-memtables-limit-percent/100)",
+       "(1 + rocksdb-pinned-memtables-limit-percent/100). Currently set to a "
+       "high value because rejecting writes is too disruptive in practice, "
+       "better to use more memory and hope we won't OOM. "
+       "TODO (#45309029): make cached iterators not pin memtables, then "
+       "decrease this setting back to something like 50%.",
        SERVER,
        SettingsCategory::LogsDB);
 
