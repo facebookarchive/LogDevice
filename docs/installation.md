@@ -5,7 +5,7 @@ sidebar_label: Build LogDevice
 ---
 Follow these instructions to build LogDevice components including `logdeviced` (the LogDevice server), the client library, and `ldshell`, an administrative shell utility.
 
-At this time, the only supported platform is Ubuntu 18 LTS "Bionic Beaver". Support for Fedora is experimental.
+At this time, the only supported platform is Ubuntu 18 LTS "Bionic Beaver". Support for Fedora is experimental. LogDevice relies on some c++17 features, so building LogDevice requires a compiler that supports c++17.
 
 ## Clone the repo and build from the source
 

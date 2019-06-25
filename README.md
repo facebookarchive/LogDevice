@@ -25,7 +25,8 @@ For full documentation, please visit [logdevice.io](https://logdevice.io/).
 ## Requirements
 LogDevice is only supported on Ubuntu 18.04 (Bionic Beaver). However, it should
 be possible to build it on any other Linux distribution without significant
-challenges.
+challenges. LogDevice relies on some c++17 features, so building LogDevice
+requires a compiler that supports c++17.
 
 ## Quick Start
 * [Run a local cluster in Docker](https://logdevice.io/docs/LocalCluster.html)
