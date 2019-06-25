@@ -23,10 +23,11 @@
 #include <folly/Conv.h>
 #include <folly/Format.h>
 #include <folly/Likely.h>
+#include <folly/lang/Bits.h>
 #include <folly/small_vector.h>
 #include <folly/stats/Histogram.h>
 
-#include "logdevice/common/checks.h"
+#include "logdevice/common/debug.h"
 
 namespace facebook { namespace logdevice {
 
@@ -39,6 +40,17 @@ const int64_t RecordAgeHistogram::AGE_MAX = 1000l * 1000 * 1000;
 // 1000T (10^15)
 const int64_t NoUnitHistogram::VALUE_MAX =
     1000l * 1000l * 1000l * 1000l * 1000l;
+
+template <typename To, typename From>
+static const To& checked_cref_cast(const From& x) {
+  const To* r = dynamic_cast<const To*>(&x);
+  if (!r) {
+    // Unlike throwing std::bad_cast, this produces a correct stack trace and
+    // a core dump.
+    std::abort();
+  }
+  return *r;
+}
 
 LatencyHistogram::LatencyHistogram(int64_t usec_max)
     : MultiScaleHistogram(createHistograms(usec_max), getScales()) {}
@@ -381,12 +393,11 @@ void MultiScaleHistogram::add(int64_t value) {
 }
 
 void MultiScaleHistogram::assign(const HistogramInterface& other_if) {
-  auto& other = dynamic_cast<const MultiScaleHistogram&>(other_if);
-  *this = other;
+  *this = checked_cref_cast<MultiScaleHistogram>(other_if);
 }
 
 void MultiScaleHistogram::merge(const HistogramInterface& other_if) {
-  auto& other = dynamic_cast<const MultiScaleHistogram&>(other_if);
+  auto& other = checked_cref_cast<MultiScaleHistogram>(other_if);
 
   LockGuardPair lock(mutex_, other.mutex_);
 
@@ -533,7 +544,7 @@ MultiScaleHistogram::toMap(const std::string& prefix) const {
 }
 
 void MultiScaleHistogram::subtract(const HistogramInterface& other_if) {
-  auto& other = dynamic_cast<const MultiScaleHistogram&>(other_if);
+  auto& other = checked_cref_cast<MultiScaleHistogram>(other_if);
 
   LockGuardPair lock(mutex_, other.mutex_);
 
@@ -736,4 +747,229 @@ void MultiScaleHistogram::mergeStagedValues() {
     }
   });
 }
+
+void CompactHistogram::add(int64_t value) {
+  unsigned int bucket = value <= 0
+      ? 0
+      : value >= (1ul << (buckets_.size() - 2)) ? buckets_.size() - 1
+                                                : folly::findLastSet(value);
+  buckets_.at(bucket).fetch_add(1, std::memory_order_relaxed);
+}
+
+void CompactHistogram::clear() {
+  for (auto& b : buckets_) {
+    b.store(0, std::memory_order_relaxed);
+  }
+}
+
+void CompactHistogram::assign(const HistogramInterface& other_if) {
+  auto& other = checked_cref_cast<CompactHistogram>(other_if);
+  ld_check(units_ == other.units_);
+
+  for (size_t i = 0; i < buckets_.size(); ++i) {
+    buckets_[i].store(other.buckets_[i].load(std::memory_order_relaxed),
+                      std::memory_order_relaxed);
+  }
+}
+void CompactHistogram::merge(const HistogramInterface& other_if) {
+  auto& other = checked_cref_cast<CompactHistogram>(other_if);
+  ld_check(units_ == other.units_);
+
+  for (size_t i = 0; i < buckets_.size(); ++i) {
+    buckets_[i].fetch_add(other.buckets_[i].load(std::memory_order_relaxed),
+                          std::memory_order_relaxed);
+  }
+}
+void CompactHistogram::subtract(const HistogramInterface& other_if) {
+  auto& other = checked_cref_cast<CompactHistogram>(other_if);
+  ld_check(units_ == other.units_);
+
+  for (size_t i = 0; i < buckets_.size(); ++i) {
+    uint64_t x = other.buckets_[i].load(std::memory_order_relaxed);
+    uint64_t prev = buckets_[i].fetch_sub(x, std::memory_order_relaxed);
+    if (prev < x) {
+      RATELIMIT_ERROR(std::chrono::seconds(10),
+                      2,
+                      "Got negative value when subtracting histograms.");
+      // Not trying to correct it.
+    }
+  }
+}
+void CompactHistogram::estimatePercentiles(const double* percentiles,
+                                           size_t npercentiles,
+                                           int64_t* samples_out,
+                                           uint64_t* count_out,
+                                           int64_t* sum_out) const {
+  // Since we're going to read all buckets anyway, let's make a local copy,
+  // to avoid race conditions when other threads change values while we're here.
+  std::array<uint64_t, 60> buckets;
+  ld_check_eq(buckets.size(), buckets_.size());
+  uint64_t count = 0;
+  int64_t sum = 0;
+  for (size_t i = 0; i < buckets_.size(); ++i) {
+    uint64_t x = buckets_[i].load(std::memory_order_relaxed);
+    buckets[i] = x;
+    count += x;
+    sum += x << i;
+  }
+  if (count_out) {
+    *count_out = count;
+  }
+  if (sum_out) {
+    // `sum` uses buckets' right ends; multiplying by 0.75 switches to bucket
+    // centers: ((1<<(i-1)) + (1<<i))/2 = 0.75*(1<<i)
+    *sum_out = static_cast<int64_t>(sum * .75);
+  }
+
+  if (npercentiles == 0) {
+    return;
+  }
+
+  ld_check(samples_out != nullptr);
+  ld_check(std::is_sorted(percentiles, percentiles + npercentiles));
+  ld_check(std::all_of(percentiles, percentiles + npercentiles, [](double p) {
+    return p >= 0.0 && p <= 1.0;
+  }));
+
+  if (count == 0) {
+    std::fill(samples_out, samples_out + npercentiles, 0l);
+    return;
+  }
+
+  size_t idx = 0;    // index in percentiles
+  uint64_t seen = 0; // count in buckets seen so far
+  for (size_t i = 0; i < buckets.size() && idx < npercentiles; ++i) {
+    uint64_t x = buckets[i];
+    if (x == 0) {
+      continue;
+    }
+    uint64_t next = seen + x;
+    ld_check_le(next, count);
+    while (idx < npercentiles &&
+           (percentiles[idx] * count <= next || next == count)) {
+      // Linearly interpolate inside the bucket.
+      double p = (percentiles[idx] * count - seen) / (next - seen);
+      if (i == 0) {
+        samples_out[idx] = static_cast<int64_t>(p + .5);
+      } else {
+        samples_out[idx] =
+            (1l << (i - 1)) + static_cast<int64_t>(p * (1l << (i - 1)) + .5);
+      }
+      ++idx;
+    }
+    seen = next;
+  }
+
+  ld_check(idx == npercentiles);
+}
+
+void CompactHistogram::print(std::ostream& out) const {
+  std::array<double, 4> pct = {.5, .75, .95, .99};
+
+  std::array<uint64_t, 60> buckets;
+  ld_check_eq(buckets.size(), buckets_.size());
+  uint64_t count = 0;
+  for (size_t i = 0; i < buckets_.size(); ++i) {
+    uint64_t x = buckets_[i].load(std::memory_order_relaxed);
+    buckets[i] = x;
+    count += x;
+  }
+
+  size_t idx = 0;    // in `pct`
+  uint64_t seen = 0; // count in buckets seen so far
+  for (size_t i = 0; i < buckets.size(); ++i) {
+    uint64_t x = buckets[i];
+    if (x == 0) {
+      continue;
+    }
+
+    int64_t min = i ? (1l << (i - 1)) : 0;
+    int64_t max = 1l << i;
+    uint64_t next = seen + x;
+
+    const Unit& u = pickUnit(min);
+    std::string label = folly::sformat(
+        "{:.3f}..{:.3f}{}", 1. * min / u.unit, 1. * max / u.unit, u.name);
+
+    std::string pct_str;
+    while (idx < pct.size() && (pct[idx] * count <= next || next == count)) {
+      pct_str += folly::sformat(" p{}", static_cast<int>(pct[idx] * 100 + .5));
+      ++idx;
+    }
+
+    out << std::setw(20) << std::right << label << std::setw(1) << " : "
+        << std::setw(10) << std::left << x << std::setw(1) << pct_str
+        << std::endl;
+
+    seen = next;
+  }
+}
+
+std::string CompactHistogram::getUnitName() const {
+  return units_ ? units_->at(0).name : "";
+}
+
+const CompactHistogram::Unit& CompactHistogram::pickUnit(int64_t value) const {
+  if (units_ == nullptr) {
+    static Unit u = {0l, ""};
+    return u;
+  }
+  ld_check(!units_->empty());
+
+  // Find the biggest unit smaller than value.
+  size_t idx = units_->size() - 1;
+  while (idx > 0 && (*units_)[idx].unit > value) {
+    --idx;
+  }
+  return (*units_)[idx];
+}
+
+std::string CompactHistogram::valueToString(int64_t value) const {
+  const Unit& u = pickUnit(value);
+  return folly::sformat("{:.3f}{}", 1. * value / u.unit, u.name);
+}
+
+CompactHistogram::CompactHistogram(const std::vector<Unit>* units)
+    : units_(units) {}
+
+CompactHistogram::CompactHistogram(const CompactHistogram& rhs)
+    : units_(rhs.units_) {
+  assign(rhs);
+}
+CompactHistogram& CompactHistogram::operator=(const CompactHistogram& rhs) {
+  assign(rhs);
+  return *this;
+}
+
+CompactLatencyHistogram::CompactLatencyHistogram()
+    : CompactHistogram([] {
+        static std::vector<Unit> units{{1l, "us"},
+                                       {1000l, "ms"},
+                                       {1000000l, "s"},
+                                       {60000000l, "min"},
+                                       {3600000000l, "hr"}};
+        return &units;
+      }()) {}
+
+CompactSizeHistogram::CompactSizeHistogram()
+    : CompactHistogram([] {
+        static std::vector<Unit> units{{1l, "B"},
+                                       {1l << 10, "KiB"},
+                                       {1l << 20, "MiB"},
+                                       {1l << 30, "GiB"},
+                                       {1l << 40, "TiB"},
+                                       {1l << 50, "PiB"}};
+        return &units;
+      }()) {}
+
+CompactNoUnitHistogram::CompactNoUnitHistogram()
+    : CompactHistogram([] {
+        static std::vector<Unit> units{{1l, ""},
+                                       {1000l, "K"},
+                                       {1000000l, "M"},
+                                       {1000000000l, "B"},
+                                       {1000000000000l, "T"}};
+        return &units;
+      }()) {}
+
 }} // namespace facebook::logdevice

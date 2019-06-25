@@ -793,14 +793,14 @@ void Stats::enumerate(EnumerationCallbacks* cb, bool list_all) const {
     };
 
     // Server per shard histograms.
-    PerShardHistograms::latency_histogram_t unknown_histogram;
-    PerShardHistograms::latency_histogram_t unknown_queue_histogram;
+    using hist_type = std::remove_reference<decltype(
+        per_shard_histograms->storage_tasks[0])>::type;
+    hist_type unknown_histogram;
+    hist_type unknown_queue_histogram;
     ld_check(per_shard_histograms);
     for (auto& hist : per_shard_histograms->map()) {
       auto it = publish_stats_by_name.find(hist.first);
       if (it != publish_stats_by_name.end() && !it->second) {
-        ld_assert(dynamic_cast<PerShardHistograms::latency_histogram_t*>(
-            hist.second));
         if (boost::starts_with(hist.first, "queue_time.")) {
           unknown_queue_histogram.merge(*hist.second);
         } else {

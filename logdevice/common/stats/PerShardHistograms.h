@@ -17,6 +17,9 @@
 namespace facebook { namespace logdevice {
 
 struct PerShardHistograms : public PerShardHistogramBundle {
+  using compact_latency_histogram_t = ShardedHistogram<CompactLatencyHistogram>;
+  using compact_size_histogram_t = ShardedHistogram<CompactSizeHistogram>;
+  using compact_no_unit_histogram_t = ShardedHistogram<CompactNoUnitHistogram>;
   using latency_histogram_t = ShardedHistogram<LatencyHistogram>;
   using size_histogram_t = ShardedHistogram<SizeHistogram>;
   using record_age_histogram_t = ShardedHistogram<RecordAgeHistogram>;
@@ -94,7 +97,7 @@ struct PerShardHistograms : public PerShardHistogramBundle {
   latency_histogram_t rocks_memtable;
 
   // Age of rocksDB memtables.
-  no_unit_histogram_t rocks_memtable_age;
+  compact_no_unit_histogram_t rocks_memtable_age;
 
   // Time spent by RocksDB delaying writes.
   latency_histogram_t rocks_delay;
@@ -106,8 +109,8 @@ struct PerShardHistograms : public PerShardHistogramBundle {
   latency_histogram_t rocks_pre_and_post;
 
   // Sizes of sst files produced by flushes and compactions.
-  size_histogram_t flushed_file_size;
-  size_histogram_t compacted_file_size;
+  compact_size_histogram_t flushed_file_size;
+  compact_size_histogram_t compacted_file_size;
 
   // For each pair (log, sst file), amount of data for this log in this file.
   // Only logs that have at least one record in this file are considered.
@@ -119,27 +122,28 @@ struct PerShardHistograms : public PerShardHistogramBundle {
   record_age_histogram_t trimmed_record_age;
 
   // Latency of RecordRebuilding state machine.
-  latency_histogram_t record_rebuilding;
+  compact_latency_histogram_t record_rebuilding;
   // Latency of Reading a batch in LogRebuilding.
-  latency_histogram_t log_rebuilding_read_batch;
+  compact_latency_histogram_t log_rebuilding_read_batch;
   // Latency of processing (rebuilding records of) a batch in LogRebuilding.
-  latency_histogram_t log_rebuilding_process_batch;
+  compact_latency_histogram_t log_rebuilding_process_batch;
   // Size of batches in LogRebuilding.
-  size_histogram_t log_rebuilding_batch_size;
+  compact_size_histogram_t log_rebuilding_batch_size;
   // Amount of data rebuilt in a local window in LogRebuilding.
-  size_histogram_t log_rebuilding_local_window_size;
+  compact_size_histogram_t log_rebuilding_local_window_size;
   // Amount of partitions seeked per batch in LogRebuilding.
-  no_unit_histogram_t log_rebuilding_partitions_per_batch;
+  compact_no_unit_histogram_t log_rebuilding_partitions_per_batch;
   // Amount of batches read per local window in LogRebuilding.
-  no_unit_histogram_t log_rebuilding_num_batches_per_window;
+  compact_no_unit_histogram_t log_rebuilding_num_batches_per_window;
 
   // Execution latencies for storage tasks (by storage task type)
-  latency_histogram_t storage_tasks[static_cast<size_t>(StorageTaskType::MAX)];
+  compact_latency_histogram_t
+      storage_tasks[static_cast<size_t>(StorageTaskType::MAX)];
   // Queueing latencies for storage tasks (by storage task type)
-  latency_histogram_t
+  compact_latency_histogram_t
       storage_task_queue_time[static_cast<size_t>(StorageTaskType::MAX)];
   // Queueing latencies for storage threads (by storage thread type)
-  latency_histogram_t storage_threads_queue_time[static_cast<size_t>(
+  compact_latency_histogram_t storage_threads_queue_time[static_cast<size_t>(
       StorageTaskThreadType::MAX)];
 };
 

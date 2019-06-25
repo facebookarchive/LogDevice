@@ -45,7 +45,7 @@ void RocksDBListener::OnTableFileCreated(
     return;
   }
 
-  PerShardHistograms::size_histogram_t* file_size_hist = nullptr;
+  PerShardHistograms::compact_size_histogram_t* file_size_hist = nullptr;
   PerShardHistograms::size_histogram_t* log_run_length_hist = nullptr;
 
   if (info.reason == rocksdb::TableFileCreationReason::kFlush) {

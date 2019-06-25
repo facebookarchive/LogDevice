@@ -99,19 +99,19 @@ struct ServerHistograms : public HistogramBundle {
   LatencyHistogram traffic_shaper_bw_dispatch;
 
   // Time taken to seal a node participating in recovery.
-  LatencyHistogram log_recovery_seal_node;
+  CompactLatencyHistogram log_recovery_seal_node;
 
   // Time taken to complete the digest phase in recovering an epoch.
-  LatencyHistogram log_recovery_digesting;
+  CompactLatencyHistogram log_recovery_digesting;
 
   // Time taken to complete the mutation phase in recovering an epoch.
-  LatencyHistogram log_recovery_mutation;
+  CompactLatencyHistogram log_recovery_mutation;
 
   // Time taken to complete the cleaning phase in recovering an epoch.
-  LatencyHistogram log_recovery_cleaning;
+  CompactLatencyHistogram log_recovery_cleaning;
 
   // Time taken to complete the recovery for an epoch.
-  LatencyHistogram log_recovery_epoch;
+  CompactLatencyHistogram log_recovery_epoch;
 
   // number of restarts in epoch recovery
   NoUnitHistogram log_recovery_epoch_restarts;
@@ -132,17 +132,17 @@ struct ServerHistograms : public HistogramBundle {
   // How long does it take to apply deltas to LogsConfig Tree
   LatencyHistogram logsconfig_manager_delta_apply_latency;
 
-  LatencyHistogram background_thread_duration;
+  CompactLatencyHistogram background_thread_duration;
 
   // How long did it take between when the config is published and when it
   // was received on the server in msec.
-  LatencyHistogram nodes_configuration_manager_propagation_latency;
+  CompactLatencyHistogram nodes_configuration_manager_propagation_latency;
 
-  std::array<LatencyHistogram, static_cast<int>(RequestType::MAX)>
+  std::array<CompactLatencyHistogram, static_cast<int>(RequestType::MAX)>
       request_execution_duration;
-  std::array<LatencyHistogram, static_cast<int>(MessageType::MAX)>
+  std::array<CompactLatencyHistogram, static_cast<int>(MessageType::MAX)>
       message_callback_duration;
-  std::array<LatencyHistogram, static_cast<int>(StorageTaskType::MAX)>
+  std::array<CompactLatencyHistogram, static_cast<int>(StorageTaskType::MAX)>
       storage_task_response_duration;
 };
 

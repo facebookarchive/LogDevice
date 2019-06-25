@@ -29,10 +29,18 @@ namespace facebook { namespace logdevice {
  *
  * HistogramInterface is a common interface for the histograms, allowing to
  * add values, merge/subtract histograms and get percentiles.
- * For now MultiScaleHistogram is the only implementation, but I'm going to
- * add another one very soon.
+ * Two implementations of this interface are MultiScaleHistogram and
+ * CompactHistogram; those define how the histogram actually works.
  *
- * Each implementation has multiple subclasses for different units
+ * MultiScaleHistogram is an older, fancier and heavyweight implementation
+ * with round bucket boundaries and more precise percentiles.
+ *
+ * CompactHistogram is a simpler implementation that minimizes size of the
+ * data structure. Use it when you have a lot of histograms or when you want
+ * fewer buckets. Main caveat is that it's sometimes not responsive to small
+ * changes in values, see comment starting with "IMPORTANT" below.
+ *
+ * Each of the two implementations has multiple subclasses for different units
  * of measurement. They define how the histograms are presented
  * (e.g. "1h" instead of "3600000000") and, for MultiScaleHistogram, what
  * the block boundaries are.
@@ -63,7 +71,8 @@ class HistogramInterface {
 
   /**
    * Copy another histogram into this one.
-   * `other` must have the same type as `this`.
+   * Using an explicit method instead of operator=() to emphasize that
+   * `other` and `this` must be the same subclass of HistogramInterface.
    */
   virtual void assign(const HistogramInterface& other) = 0;
 
@@ -401,6 +410,86 @@ class NoUnitHistogram final : public MultiScaleHistogram {
   static std::vector<LinearHistogram> createHistograms(int64_t value_max);
 
   static const std::vector<Scale>* getScales();
+};
+
+// Simple histogram with 60 buckets corresponding to powers of two.
+// Just 60 uint64_t values, with memory_order_relaxed.
+// All methods are thread-safe, including the ones that HistogramInterface
+// doesn't require to be thread-safe.
+//
+// Compared to MultiScaleHistogram:
+// Pros:
+//  + simple
+//  + small: 480 bytes vs many kilobytes
+//  + no heap allocations or mutexes
+//  + probably faster
+// Cons:
+//  - IMPORTANT: percentiles don't change when values change without moving
+//    buckets. Example: suppose a histogram of request latencies has a bucket
+//    [32.768 ms, 65.536 ms), and all requests take 35-40 ms; if there's
+//    a regression that causes requests to take 55-60 ms instead,
+//    CompactHistogram won't notice but MultiScaleHistogram will.
+//    MultiScaleHistogram maintains the sum of values of each bucket, allowing
+//    it to get an exact average in each bucket, which it incorporates in
+//    percentile estimates. CompactHistogram chooses not to do it to keep
+//    the size small.
+//  - less precision: 3x fewer buckets
+//  - bucket boundaries are not round (unless powers of two are considered
+//    round, e.g. for sizes in KiB/MiB/etc)
+class CompactHistogram : public HistogramInterface {
+ public:
+  CompactHistogram() = default;
+
+  // Must be the same subclass.
+  CompactHistogram(const CompactHistogram& rhs);
+  CompactHistogram& operator=(const CompactHistogram& rhs);
+
+  void add(int64_t value) override;
+  void clear() override;
+  void assign(const HistogramInterface& other) override;
+  void merge(const HistogramInterface& other) override;
+  void subtract(const HistogramInterface& other) override;
+  void estimatePercentiles(const double* percentiles,
+                           size_t npercentiles,
+                           int64_t* samples_out,
+                           uint64_t* count_out = nullptr,
+                           int64_t* sum_out = nullptr) const override;
+  void print(std::ostream& out) const override;
+
+  std::string getUnitName() const override;
+  std::string valueToString(int64_t value) const override;
+
+ protected:
+  struct Unit {
+    // What value constitutes one of this unit. E.g. 1<<20 for "MiB".
+    int64_t unit;
+    const char* name;
+  };
+
+  explicit CompactHistogram(const std::vector<Unit>* units);
+
+ private:
+  // buckets_[i] corresponds to values [1l<<(i-1), 1l<<i).
+  // buckets_[0] is [-infinity, 0].
+  std::array<std::atomic<uint64_t>, 60> buckets_{};
+  const std::vector<Unit>* units_ = nullptr;
+
+  const Unit& pickUnit(int64_t value) const;
+};
+
+class CompactLatencyHistogram : public CompactHistogram {
+ public:
+  CompactLatencyHistogram();
+};
+
+class CompactSizeHistogram : public CompactHistogram {
+ public:
+  CompactSizeHistogram();
+};
+
+class CompactNoUnitHistogram : public CompactHistogram {
+ public:
+  CompactNoUnitHistogram();
 };
 
 }} // namespace facebook::logdevice
