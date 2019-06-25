@@ -675,17 +675,6 @@ class LogChecker : public std::enable_shared_from_this<LogChecker> {
       return;
     }
     std::weak_ptr<LogChecker> self_weak = shared_from_this();
-    // This timer is reset when 1/ We got the sequencer state, 2/ we got all
-    // copies of a record, 3/ we got a gap. If the timer triggers before it is
-    // reset, we  give up reading that log. This makes it possible for the user
-    // to request that checker does not hang indefinitely if a log is not
-    // available for reads.
-    idle_timer_ = std::make_unique<Timer>([self_weak] {
-      if (auto self = self_weak.lock()) {
-        self->finish("Timed out.");
-      }
-    });
-
     read_duration_timer_ = std::make_unique<Timer>([self_weak] {
       // The user requires to not spend more time reading this log. Finish
       // successfully.
@@ -776,7 +765,6 @@ class LogChecker : public std::enable_shared_from_this<LogChecker> {
 
   folly::dynamic record_errors = folly::dynamic::object(); // Used if json==true
 
-  std::unique_ptr<Timer> idle_timer_;
   std::unique_ptr<Timer> read_duration_timer_;
   std::unique_ptr<Timer> throttle_timer_;
 
@@ -794,13 +782,6 @@ class LogChecker : public std::enable_shared_from_this<LogChecker> {
     throttle_timer_->activate(std::chrono::milliseconds{100});
   }
 
-  void resetTimer() {
-    if (checker_settings->idle_timeout.count() > 0) {
-      ld_check(idle_timer_);
-      idle_timer_->activate(checker_settings->idle_timeout);
-    }
-  }
-
   void onGotNextLSN(lsn_t next_lsn) {
     --perf_stats_->sync_seq_requests_in_flight;
     until_lsn_ = std::max(LSN_OLDEST + 1, next_lsn) - 1;
@@ -811,7 +792,6 @@ class LogChecker : public std::enable_shared_from_this<LogChecker> {
   }
 
   void startReading() {
-    resetTimer();
     if (until_lsn_ < start_lsn_) {
       finish("");
       return;
@@ -947,7 +927,6 @@ class LogChecker : public std::enable_shared_from_this<LogChecker> {
       return false;
     }
 
-    resetTimer();
     ld_check(!records_.empty());
     ++perf_stats_->nrecords_processed;
     lsn_t trim_point = stream_->getTrimPointLowerBound();
@@ -1286,7 +1265,6 @@ class LogChecker : public std::enable_shared_from_this<LogChecker> {
   }
 
   void gotGap(const GapRecord& gap) {
-    resetTimer();
     ++perf_stats_->ngaps_processed;
     switch (gap.type) {
       case GapType::UNKNOWN:
