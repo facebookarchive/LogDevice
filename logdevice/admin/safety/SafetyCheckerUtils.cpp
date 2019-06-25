@@ -381,6 +381,13 @@ std::pair<bool, bool> checkReadWriteAvailablity(
           // cause the mini-rebuilding to stall.
           status = AuthoritativeStatus::UNAVAILABLE;
         }
+        // We should consider shards that are UNDERREPLICATION as UNAVAILABLE
+        // since we don't want to make the recoverability worse by taking more
+        // shards down. If we don't do that, the FailureDomainNodeSet will only
+        // account for FULLY_AUTHORITATIVE and UNAVAILABLE.
+        if (status == AuthoritativeStatus::UNDERREPLICATION) {
+          status = AuthoritativeStatus::UNAVAILABLE;
+        }
         failure_domains.setShardAuthoritativeStatus(shard, status);
         if (!op_shards.count(shard) &&
             isAlive(cluster_state, shard.node(), require_fully_started_nodes)) {
