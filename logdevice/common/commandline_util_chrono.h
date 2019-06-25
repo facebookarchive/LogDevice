@@ -50,6 +50,14 @@ template <class DurationClass>
 int parse_chrono_string(const std::string& str, DurationClass* duration_out);
 
 /**
+ * Formats duration as number with units. Picks the biggest unit by which
+ * duration is divisible. E.g. "1d", "25h", "3600001ms".
+ * The returned value is parseable by parse_chrono_string().
+ */
+template <class DurationClass>
+std::string format_chrono_string(DurationClass duration);
+
+/**
  * Has a similar effect as calling
  *
  *   boost::program_options::value<DurationClass>(&value)

@@ -94,6 +94,49 @@ int parse_chrono_string(const std::string& str, DurationClass* duration_out) {
   return 0;
 }
 
+template <class DurationClass>
+std::string format_chrono_string(DurationClass duration) {
+  if (duration == DurationClass::min()) {
+    return "min";
+  }
+  if (duration == DurationClass::max()) {
+    return "max";
+  }
+
+  static_assert(std::ratio_divide<typename DurationClass::period,
+                                  std::chrono::nanoseconds::period>::den == 1,
+                "Duration type must be divisible by nanoseconds.");
+  static_assert(
+      std::ratio_greater_equal<typename DurationClass::period,
+                               std::chrono::nanoseconds::period>::value,
+      "Duration unit must be no smaller than nanoseconds.");
+
+  // C++ < 20 doesn't have these.
+  using weeks = std::chrono::duration<int64_t, std::ratio<604800>>;
+  using days = std::chrono::duration<int64_t, std::ratio<86400>>;
+
+#define U(u, name)                                                           \
+  if ((duration % u(1)).count() == 0) {                                      \
+    return std::to_string(std::chrono::duration_cast<u>(duration).count()) + \
+        name;                                                                \
+  }
+
+  U(weeks, "w")
+  U(days, "d")
+  U(std::chrono::hours, "h")
+  U(std::chrono::minutes, "min")
+  U(std::chrono::seconds, "s")
+  U(std::chrono::milliseconds, "ms")
+  U(std::chrono::microseconds, "us")
+  U(std::chrono::nanoseconds, "ns")
+#undef U
+
+  // We checked that duration type is divisible by nanoseconds.
+  // So, if nothing else, we must have been able to format it in nanoseconds.
+  ld_check(false);
+  return "?";
+}
+
 namespace detail {
 inline const char* chrono_suffix(std::chrono::nanoseconds) {
   return "ns";

@@ -20,9 +20,6 @@ namespace facebook { namespace logdevice {
 
 using namespace RocksDBKeyFormat;
 
-static const char* LOGS_OF_SIZE_PREFIX = "ld.logs_of_size.";
-static const char* BYTES_WITH_RETENTION_PREFIX = "ld.bytes_with_retention.";
-
 void RocksDBListener::OnTableFileCreated(
     const rocksdb::TableFileCreationInfo& info) {
   ld_check(stats_);
@@ -46,7 +43,7 @@ void RocksDBListener::OnTableFileCreated(
   }
 
   PerShardHistograms::compact_size_histogram_t* file_size_hist = nullptr;
-  PerShardHistograms::size_histogram_t* log_run_length_hist = nullptr;
+  PerShardHistograms::compact_size_histogram_t* log_run_length_hist = nullptr;
 
   if (info.reason == rocksdb::TableFileCreationReason::kFlush) {
     PER_SHARD_STAT_INCR(stats_, num_memtable_flush_completed, shard_);
@@ -63,9 +60,20 @@ void RocksDBListener::OnTableFileCreated(
   if (file_size_hist != nullptr) {
     file_size_hist->add(shard_, info.file_size);
     if (auto out_hist = log_run_length_hist->get(shard_)) {
-      out_hist->merge(
-          SizeHistogram(info.table_properties.user_collected_properties,
-                        LOGS_OF_SIZE_PREFIX));
+      CompactSizeHistogram log_size_histogram;
+      if (RocksDBTablePropertiesCollector::extractLogSizeHistogram(
+              info.table_properties.user_collected_properties,
+              log_size_histogram)) {
+        out_hist->merge(log_size_histogram);
+      } else {
+        RATELIMIT_ERROR(
+            std::chrono::seconds(10),
+            2,
+            "Failed to parse retention distribution from table properties that "
+            "were supposed to be produced by us just now. Something about "
+            "table properties is broken, please investigate. Properties: %s",
+            toString(info.table_properties.user_collected_properties).c_str());
+      }
     }
   }
 }
@@ -83,10 +91,9 @@ void RocksDBTablePropertiesCollector::DataKindNamesEnumMap::setValues() {
   static_assert((int)RocksDBTablePropertiesCollector::DataKind::MAX == 5,
                 "Did you add a DataKind? Please add its name here.");
   set(RocksDBTablePropertiesCollector::DataKind::PAYLOAD, "payload");
-  set(RocksDBTablePropertiesCollector::DataKind::RECORD_HEADER,
-      "record_header");
+  set(RocksDBTablePropertiesCollector::DataKind::RECORD_HEADER, "hdr");
   set(RocksDBTablePropertiesCollector::DataKind::CSI, "csi");
-  set(RocksDBTablePropertiesCollector::DataKind::INDEX, "index");
+  set(RocksDBTablePropertiesCollector::DataKind::INDEX, "idx");
   set(RocksDBTablePropertiesCollector::DataKind::OTHER, "other");
 }
 
@@ -102,20 +109,29 @@ RocksDBTablePropertiesCollector::AddUserKey(const rocksdb::Slice& key,
                                             rocksdb::EntryType type,
                                             rocksdb::SequenceNumber /*seq*/,
                                             uint64_t /*file_size*/) {
+  if (finished_) {
+    RATELIMIT_ERROR(
+        std::chrono::seconds(10),
+        2,
+        "RocksDB called AddUserKey() after Finalize()/GetReadableProperties(). "
+        "This is weird, you may want to investigate that.");
+    finished_ = false;
+  }
+
   size_t key_value_size = key.size() + value.size();
 
   if (IndexKey::valid(key.data(), key.size())) {
-    data_size_per_kind_[(int)DataKind::INDEX] += key_value_size;
+    size_by_kind_[(int)DataKind::INDEX] += key_value_size;
     return rocksdb::Status::OK();
   }
 
   if (CopySetIndexKey::valid(key.data(), key.size())) {
-    data_size_per_kind_[(int)DataKind::CSI] += key_value_size;
+    size_by_kind_[(int)DataKind::CSI] += key_value_size;
     return rocksdb::Status::OK();
   }
 
   if (!DataKey::valid(key.data(), key.size())) {
-    data_size_per_kind_[(int)DataKind::OTHER] += key_value_size;
+    size_by_kind_[(int)DataKind::OTHER] += key_value_size;
     return rocksdb::Status::OK();
   }
 
@@ -150,23 +166,22 @@ RocksDBTablePropertiesCollector::AddUserKey(const rocksdb::Slice& key,
     }
     ld_check(payload_size <= key_value_size);
 
-    data_size_per_kind_[(int)DataKind::PAYLOAD] += payload_size;
-    data_size_per_kind_[(int)DataKind::RECORD_HEADER] +=
+    size_by_kind_[(int)DataKind::PAYLOAD] += payload_size;
+    size_by_kind_[(int)DataKind::RECORD_HEADER] +=
         key_value_size - payload_size;
   } else {
     // A delete.
-    data_size_per_kind_[(int)DataKind::OTHER] += key_value_size;
+    size_by_kind_[(int)DataKind::OTHER] += key_value_size;
   }
 
-  logid_t log = DataKey::getLogID(key.data());
-  if (log == current_log_) {
-    current_size_ += key_value_size;
-    return rocksdb::Status::OK();
-  }
   // Assume that all records for the same log are consecutive.
-  flushCurrentLog();
-  current_log_ = log;
-  current_size_ = key_value_size;
+  logid_t log = DataKey::getLogID(key.data());
+  if (!size_by_log_.empty() && log == size_by_log_.back().first) {
+    size_by_log_.back().second += key_value_size;
+  } else {
+    size_by_log_.emplace_back(log, key_value_size);
+  }
+
   return rocksdb::Status::OK();
 }
 
@@ -211,13 +226,12 @@ void RocksDBTablePropertiesCollector::BlockAdd(
 
 rocksdb::Status RocksDBTablePropertiesCollector::Finish(
     rocksdb::UserCollectedProperties* properties) {
-  flushCurrentLog();
   *properties = GetReadableProperties();
 
   // Bump stats, unless this file appears to belong to metadata column family.
   bool has_interesting_data = false;
   for (int kind = 0; kind < (int)DataKind::MAX; ++kind) {
-    if (kind != (int)DataKind::OTHER && data_size_per_kind_[kind] != 0) {
+    if (kind != (int)DataKind::OTHER && size_by_kind_[kind] != 0) {
       has_interesting_data = true;
       break;
     }
@@ -227,92 +241,191 @@ rocksdb::Status RocksDBTablePropertiesCollector::Finish(
         (int)DataKind::MAX == 5,
         "Added a new DataKind? Please add a corresponding stat and bump it "
         "here.");
-    STAT_ADD(
-        stats_, sst_bytes_payload, data_size_per_kind_[(int)DataKind::PAYLOAD]);
+    STAT_ADD(stats_, sst_bytes_payload, size_by_kind_[(int)DataKind::PAYLOAD]);
     STAT_ADD(stats_,
              sst_bytes_record_header,
-             data_size_per_kind_[(int)DataKind::RECORD_HEADER]);
-    STAT_ADD(stats_, sst_bytes_csi, data_size_per_kind_[(int)DataKind::CSI]);
-    STAT_ADD(
-        stats_, sst_bytes_index, data_size_per_kind_[(int)DataKind::INDEX]);
-    STAT_ADD(
-        stats_, sst_bytes_other, data_size_per_kind_[(int)DataKind::OTHER]);
+             size_by_kind_[(int)DataKind::RECORD_HEADER]);
+    STAT_ADD(stats_, sst_bytes_csi, size_by_kind_[(int)DataKind::CSI]);
+    STAT_ADD(stats_, sst_bytes_index, size_by_kind_[(int)DataKind::INDEX]);
+    STAT_ADD(stats_, sst_bytes_other, size_by_kind_[(int)DataKind::OTHER]);
   }
 
   return rocksdb::Status::OK();
 }
 
-void RocksDBTablePropertiesCollector::flushCurrentLog() {
-  if (current_size_ == 0) {
-    return;
-  }
-
-  log_size_histogram_.add(current_size_);
-
-  if (config_) {
-    std::chrono::seconds backlog;
-    const std::shared_ptr<LogsConfig::LogGroupNode> log_config =
-        config_->getLogGroupByIDShared(current_log_);
-    if (!log_config) {
-      backlog = std::chrono::seconds(0);
-    } else if (log_config->attrs().backlogDuration().value()) {
-      backlog = log_config->attrs().backlogDuration().value().value();
-    } else {
-      backlog = std::chrono::seconds::max();
-    }
-    backlog_sizes_[backlog] += current_size_;
-  }
-}
-
 rocksdb::UserCollectedProperties
 RocksDBTablePropertiesCollector::GetReadableProperties() const {
-  auto res = log_size_histogram_.toMap(LOGS_OF_SIZE_PREFIX);
-  for (auto it : backlog_sizes_) {
-    res[BYTES_WITH_RETENTION_PREFIX + chrono_string(it.first)] =
-        std::to_string(it.second);
+  if (finished_) {
+    return finished_properties_;
   }
 
+  // If we have few logs, just list them all in the properties.
+  // If we have many, summarize their sizes in a histogram.
+  // Histogram is usually shorter, but log IDs sometimes come in handy for
+  // investigations, especially if there's only one.
+  bool use_histogram = size_by_log_.size() > 5;
+  CompactSizeHistogram log_size_histogram;
+  RetentionSizeMap size_by_retention;
+  for (const auto& p : size_by_log_) {
+    if (use_histogram) {
+      log_size_histogram.add(static_cast<int64_t>(p.second));
+    }
+
+    if (config_) {
+      std::chrono::seconds backlog;
+      const std::shared_ptr<LogsConfig::LogGroupNode> log_config =
+          config_->getLogGroupByIDShared(p.first);
+      if (!log_config) {
+        backlog = std::chrono::seconds(0);
+      } else if (log_config->attrs().backlogDuration().value()) {
+        backlog = log_config->attrs().backlogDuration().value().value();
+      } else {
+        backlog = std::chrono::seconds::max();
+      }
+      size_by_retention[backlog] += p.second;
+    }
+  }
+
+  // Pack everything into one string because rocksdb has significant memory
+  // overhead per key in table properties map.
+  std::stringstream ss;
+
+  // example:
+  // bytes_by_kind:{csi:10404,idx:7514,other:0,hdr:16762,payload:78918865},
+  ss << "bytes_by_kind:{";
+  bool first = true;
   for (int kind = 0; kind < (int)DataKind::MAX; ++kind) {
-    res["bytes_" + dataKindNames()[(DataKind)kind]] =
-        std::to_string(data_size_per_kind_[kind]);
+    size_t x = size_by_kind_[kind];
+    if (x == 0) {
+      continue;
+    }
+    if (!first) {
+      ss << ",";
+    }
+    first = false;
+    ss << dataKindNames()[(DataKind)kind] << ":" << x;
+  }
+  ss << "},";
+
+  // example: bytes_by_retention:{3d:64241969,5d:14695191,7d:3282},
+  ss << "bytes_by_retention:{";
+  first = true;
+  for (const auto& p : size_by_retention) {
+    if (!first) {
+      ss << ",";
+    }
+    first = false;
+    ss << format_chrono_string(p.first) << ":" << p.second;
+  }
+  ss << "},";
+
+  if (use_histogram) {
+    // example: logs_by_size_log2:{3:9,5:9,19:42}
+    ss << "logs_by_size_log2:{" << log_size_histogram.toShortString() << "}";
+  } else {
+    // example: bytes_by_log:{6628374678234:1234567}
+    ss << "bytes_by_log:{";
+    first = true;
+    for (const auto& p : size_by_log_) {
+      if (!first) {
+        ss << ",";
+      }
+      first = false;
+      ss << p.first.val() << ":" << p.second;
+    }
+    ss << "}";
   }
 
-  return res;
+  finished_properties_ = {{"logdevice", ss.str()}};
+  finished_ = true;
+  return finished_properties_;
 }
 
-void RocksDBTablePropertiesCollector::extractRetentionSizeMap(
+// Find substring "<section_name>:{...}" and return the "..." part.
+static bool
+findSection(const std::map<std::string, std::string>& table_properties,
+            std::string section_name,
+            folly::StringPiece& out) {
+  auto it = table_properties.find("logdevice");
+  if (it == table_properties.end()) {
+    return false;
+  }
+  section_name += ":{";
+  const char* begin = strstr(it->second.c_str(), section_name.c_str());
+  if (begin == nullptr) {
+    return false;
+  }
+  begin += section_name.size();
+  const char* end = strchr(begin, '}');
+  if (end == nullptr) {
+    return false;
+  }
+  out = folly::StringPiece(begin, end);
+  return true;
+}
+
+bool RocksDBTablePropertiesCollector::extractRetentionSizeMap(
     const std::map<std::string, std::string>& table_properties,
     RetentionSizeMap& inout_map) {
-  std::string prefix = BYTES_WITH_RETENTION_PREFIX;
-  auto it_begin = table_properties.lower_bound(BYTES_WITH_RETENTION_PREFIX);
-  std::string end_str = prefix;
-  ++end_str[end_str.size() - 1];
-  auto it_end = table_properties.lower_bound(end_str);
-
-  for (auto it = it_begin; it != it_end; ++it) {
-    std::chrono::seconds duration;
-    uint64_t bytes;
-
-    ld_check(it->first.substr(0, prefix.size()) == prefix);
-    int rv = parse_chrono_string(it->first.substr(prefix.size()), &duration);
-    if (rv != 0) {
-      ld_warning("Invalid backlog duration in table properties: %s (value: %s)",
-                 it->first.c_str(),
-                 it->second.c_str());
-      continue;
-    }
-
-    try {
-      bytes = folly::to<uint64_t>(it->second);
-    } catch (std::range_error&) {
-      ld_warning("Invalid value in table properties for backlog duration %s: "
-                 "%s",
-                 it->first.c_str(),
-                 it->second.c_str());
-      continue;
-    }
-    inout_map[duration] += bytes;
+  folly::StringPiece section;
+  if (!findSection(table_properties, "bytes_by_retention", section)) {
+    return false;
   }
+  std::vector<std::string> tokens;
+  folly::split(',', section, tokens);
+  for (const std::string& tok : tokens) {
+    std::string key;
+    size_t value;
+    try {
+      if (!folly::split(':', tok, key, value)) {
+        return false;
+      }
+    } catch (std::range_error&) {
+      return false;
+    }
+    std::chrono::seconds retention;
+    if (parse_chrono_string(key, &retention) != 0) {
+      return false;
+    }
+    inout_map[retention] += value;
+  }
+
+  return true;
+}
+
+bool RocksDBTablePropertiesCollector::extractLogSizeHistogram(
+    const std::map<std::string, std::string>& table_properties,
+    CompactSizeHistogram& out_histogram) {
+  folly::StringPiece histogram_section;
+  folly::StringPiece list_section;
+  bool have_histogram =
+      findSection(table_properties, "logs_by_size_log2", histogram_section);
+  bool have_list = findSection(table_properties, "bytes_by_log", list_section);
+  if (have_histogram == have_list) {
+    return false;
+  }
+
+  if (have_histogram) {
+    return out_histogram.fromShortString(histogram_section);
+  }
+
+  out_histogram.clear();
+  std::vector<std::string> tokens;
+  folly::split(',', list_section, tokens);
+  for (const std::string& tok : tokens) {
+    logid_t::raw_type log;
+    size_t value;
+    try {
+      if (!folly::split(':', tok, log, value)) {
+        return false;
+      }
+    } catch (std::range_error&) {
+      return false;
+    }
+    out_histogram.add(static_cast<int64_t>(value));
+  }
+
+  return true;
 }
 
 const char* RocksDBTablePropertiesCollector::Name() const {

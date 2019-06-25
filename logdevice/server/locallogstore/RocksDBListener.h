@@ -69,11 +69,18 @@ class RocksDBTablePropertiesCollector
   rocksdb::UserCollectedProperties GetReadableProperties() const override;
   const char* Name() const override;
 
-  // Parses properties of the form "ld.bytes_with_retention.86400s" => "12345"
-  // and adds them to the given map.
-  static void extractRetentionSizeMap(
+  // Parses "bytes_by_retention" section.
+  // The map is not cleared; new values are added to the existing ones.
+  // Returns false if format's not right or the section is missing.
+  static bool extractRetentionSizeMap(
       const std::map<std::string, std::string>& table_properties,
       RetentionSizeMap& inout_map);
+
+  // Parses "logs_by_size_log2" or "bytes_by_log" section.
+  // Returns false if format's not right or the section is missing.
+  static bool extractLogSizeHistogram(
+      const std::map<std::string, std::string>& table_properties,
+      CompactSizeHistogram& out_histogram);
 
  private:
   enum class DataKind {
@@ -93,17 +100,17 @@ class RocksDBTablePropertiesCollector
   std::shared_ptr<Configuration> config_;
   StatsHolder* stats_;
 
-  logid_t current_log_ = LOGID_INVALID;
-  uint64_t current_size_ = 0;
-  SizeHistogram log_size_histogram_;
-  RetentionSizeMap backlog_sizes_;
+  std::vector<std::pair<logid_t, size_t>> size_by_log_;
 
   // Approximate number of bytes used for various types of data.
-  std::array<size_t, (int)DataKind::MAX> data_size_per_kind_{};
+  std::array<size_t, (int)DataKind::MAX> size_by_kind_{};
+
+  // Assigned by Finish()/GetReadableProperties(), which is presumably called
+  // only after all keys are added.
+  mutable std::map<std::string, std::string> finished_properties_;
+  mutable bool finished_ = false;
 
   static DataKindNamesEnumMap& dataKindNames();
-
-  void flushCurrentLog();
 };
 
 class RocksDBTablePropertiesCollectorFactory

@@ -55,15 +55,6 @@ static const To& checked_cref_cast(const From& x) {
 LatencyHistogram::LatencyHistogram(int64_t usec_max)
     : MultiScaleHistogram(createHistograms(usec_max), getScales()) {}
 
-LatencyHistogram::LatencyHistogram(
-    const std::map<std::string, std::string>& map,
-    const std::string& prefix,
-    int64_t usec_max)
-    : MultiScaleHistogram(createHistograms(usec_max),
-                          getScales(),
-                          map,
-                          prefix) {}
-
 std::vector<MultiScaleHistogram::LinearHistogram>
 LatencyHistogram::createHistograms(int64_t usec_max) {
   if (UNLIKELY(usec_max > USEC_MAX)) {
@@ -95,14 +86,6 @@ const std::vector<MultiScaleHistogram::Scale>* LatencyHistogram::getScales() {
 
 SizeHistogram::SizeHistogram(int64_t bytes_max)
     : MultiScaleHistogram(createHistograms(bytes_max), getScales()) {}
-
-SizeHistogram::SizeHistogram(const std::map<std::string, std::string>& map,
-                             const std::string& prefix,
-                             int64_t bytes_max)
-    : MultiScaleHistogram(createHistograms(bytes_max),
-                          getScales(),
-                          map,
-                          prefix) {}
 
 std::vector<MultiScaleHistogram::LinearHistogram>
 SizeHistogram::createHistograms(int64_t bytes_max) {
@@ -145,13 +128,6 @@ const std::vector<MultiScaleHistogram::Scale>* SizeHistogram::getScales() {
 RecordAgeHistogram::RecordAgeHistogram(int64_t age_max)
     : MultiScaleHistogram(createHistograms(age_max), getScales()) {}
 
-RecordAgeHistogram::RecordAgeHistogram(
-    const std::map<std::string, std::string>& map,
-    const std::string& prefix,
-    int64_t age_max)
-    : MultiScaleHistogram(createHistograms(age_max), getScales(), map, prefix) {
-}
-
 std::vector<MultiScaleHistogram::LinearHistogram>
 RecordAgeHistogram::createHistograms(int64_t age_max) {
   if (UNLIKELY(age_max > AGE_MAX)) {
@@ -178,14 +154,6 @@ const std::vector<MultiScaleHistogram::Scale>* RecordAgeHistogram::getScales() {
 
 NoUnitHistogram::NoUnitHistogram(int64_t value_max)
     : MultiScaleHistogram(createHistograms(value_max), getScales()) {}
-
-NoUnitHistogram::NoUnitHistogram(const std::map<std::string, std::string>& map,
-                                 const std::string& prefix,
-                                 int64_t value_max)
-    : MultiScaleHistogram(createHistograms(value_max),
-                          getScales(),
-                          map,
-                          prefix) {}
 
 std::vector<MultiScaleHistogram::LinearHistogram>
 NoUnitHistogram::createHistograms(int64_t value_max) {
@@ -274,40 +242,6 @@ MultiScaleHistogram::MultiScaleHistogram(
   // Assert that histograms_ cover some range without gaps and overlaps.
   for (size_t i = 0; i + 1 < histograms_.size(); ++i) {
     ld_check(histograms_[i].getMax() == histograms_[i + 1].getMin());
-  }
-}
-
-MultiScaleHistogram::MultiScaleHistogram(
-    std::vector<LinearHistogram>&& histograms,
-    const std::vector<Scale>* scale,
-    const std::map<std::string, std::string>& map,
-    const std::string& prefix)
-    : MultiScaleHistogram(std::move(histograms), scale) {
-  for (int l = 0; l < histograms_.size(); l++) {
-    LinearHistogram& h = histograms_[l];
-    for (int i = 0; i < h.getNumBuckets(); i++) {
-      std::string label = getLabel(l, i);
-      if (label.empty()) {
-        continue;
-      }
-      auto it = map.find(prefix + label);
-      if (it == map.end()) {
-        continue;
-      }
-
-      ld_check(h.getBucketByIndex(i).count == 0);
-
-      // Accumulate count and sum of values.
-      auto value = h.getBucketMin(i);
-      auto count = folly::to<uint64_t>(it->second);
-      count_ += count;
-      sum_ += value * count;
-
-      // Add values to histogram.
-      ld_check(l == 0 || h.getMin() <= value);
-      ld_check(l == histograms.size() - 1 || value < h.getMax());
-      h.addRepeatedValue(value, count);
-    }
   }
 }
 
@@ -517,30 +451,6 @@ std::string MultiScaleHistogram::valueToString(int64_t value) const {
     s += found->unit_name;
   }
   return s;
-}
-
-std::map<std::string, std::string>
-MultiScaleHistogram::toMap(const std::string& prefix) const {
-  std::lock_guard<std::mutex> lock(mutex_);
-  const_cast<MultiScaleHistogram*>(this)->mergeStagedValues();
-
-  std::map<std::string, std::string> map;
-  for (int l = 0; l < histograms_.size(); l++) {
-    const LinearHistogram& h = histograms_[l];
-    for (int i = 0; i < h.getNumBuckets(); i++) {
-      const LinearHistogram::Bucket& b = h.getBucketByIndex(i);
-
-      if (b.count == 0) {
-        continue;
-      }
-
-      std::string label = getLabel(l, i);
-      if (!label.empty()) {
-        map[prefix + label] = std::to_string(b.count);
-      }
-    }
-  }
-  return map;
 }
 
 void MultiScaleHistogram::subtract(const HistogramInterface& other_if) {
@@ -927,6 +837,57 @@ const CompactHistogram::Unit& CompactHistogram::pickUnit(int64_t value) const {
 std::string CompactHistogram::valueToString(int64_t value) const {
   const Unit& u = pickUnit(value);
   return folly::sformat("{:.3f}{}", 1. * value / u.unit, u.name);
+}
+
+std::string CompactHistogram::toShortString() const {
+  std::stringstream ss;
+  bool first = true;
+  for (size_t i = 0; i < buckets_.size(); ++i) {
+    uint64_t x = buckets_[i].load(std::memory_order_relaxed);
+    if (x == 0) {
+      continue;
+    }
+    if (!first) {
+      ss << ",";
+    }
+    first = false;
+    ss << i << ":" << x;
+  }
+  return ss.str();
+}
+
+bool CompactHistogram::fromShortString(folly::StringPiece s) {
+  std::vector<std::string> tokens;
+  folly::split(',', s, tokens);
+  if (tokens.size() > buckets_.size()) {
+    return false;
+  }
+
+  clear();
+
+  folly::small_vector<int, 60> seen_idxs;
+  for (const std::string& tok : tokens) {
+    int idx;
+    uint64_t x;
+    try {
+      if (!folly::split(':', tok, idx, x)) {
+        return false;
+      }
+    } catch (std::range_error&) {
+      return false;
+    }
+
+    buckets_[idx].store(x, std::memory_order_relaxed);
+    seen_idxs.push_back(idx);
+  }
+
+  // Check for duplicate bucket indices.
+  std::sort(seen_idxs.begin(), seen_idxs.end());
+  if (std::unique(seen_idxs.begin(), seen_idxs.end()) != seen_idxs.end()) {
+    return false;
+  }
+
+  return true;
 }
 
 CompactHistogram::CompactHistogram(const std::vector<Unit>* units)

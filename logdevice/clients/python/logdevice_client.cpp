@@ -382,27 +382,6 @@ int64_t timestr_to_seconds(object timestring) {
   return out.count();
 }
 
-const int HOUR = 1000 * 60 * 60;
-const int MINUTE = 1000 * 60;
-const int SECOND = 1000;
-
-template <class DurationClass>
-std::string chrono_to_string(DurationClass duration) {
-  std::chrono::milliseconds input =
-      std::chrono::duration_cast<std::chrono::milliseconds>(duration);
-  if (input.count() >= HOUR && input.count() % HOUR == 0) {
-    return chrono_string(std::chrono::duration_cast<std::chrono::hours>(input));
-  } else if (input.count() >= MINUTE && input.count() % MINUTE == 0) {
-    return chrono_string(
-        std::chrono::duration_cast<std::chrono::minutes>(input));
-  } else if (input.count() >= SECOND) {
-    return chrono_string(
-        std::chrono::duration_cast<std::chrono::seconds>(input));
-  } else {
-    return chrono_string(input);
-  }
-}
-
 const char* SMOKE_TEST_PAYLOAD_FMT = "Payload message # %1%";
 
 lsn_t smoke_test_for_log(Client& client, const logid_t& logid, int count) {
@@ -584,7 +563,7 @@ void smoke_test(Client& client, list log_ids, int count) {
 
 std::string seconds_to_timestr(int64_t seconds) {
   std::chrono::seconds input(seconds);
-  return chrono_to_string(input);
+  return format_chrono_string(input);
 }
 
 int64_t timestr_to_milliseconds(object timestring) {
@@ -599,7 +578,7 @@ int64_t timestr_to_milliseconds(object timestring) {
 
 std::string milliseconds_to_timestr(int64_t millis) {
   std::chrono::milliseconds input(millis);
-  return chrono_to_string(input);
+  return format_chrono_string(input);
 }
 
 object logdevice_create_reader(Client& self, size_t max_logs) {

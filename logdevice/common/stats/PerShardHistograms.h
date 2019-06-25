@@ -115,8 +115,8 @@ struct PerShardHistograms : public PerShardHistogramBundle {
   // For each pair (log, sst file), amount of data for this log in this file.
   // Only logs that have at least one record in this file are considered.
   // This is uncompressed size.
-  size_histogram_t flushed_log_run_length;
-  size_histogram_t compacted_log_run_length;
+  compact_size_histogram_t flushed_log_run_length;
+  compact_size_histogram_t compacted_log_run_length;
 
   // The Histogram of trimmed records age, in seconds
   record_age_histogram_t trimmed_record_age;

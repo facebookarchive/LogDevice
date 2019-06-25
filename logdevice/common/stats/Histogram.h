@@ -10,12 +10,13 @@
 #include <atomic>
 #include <cstdint>
 #include <iosfwd>
-#include <map>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <utility>
 #include <vector>
+
+#include <folly/Range.h>
 
 namespace folly {
 template <typename>
@@ -192,16 +193,6 @@ class MultiScaleHistogram : public HistogramInterface {
   MultiScaleHistogram(std::vector<LinearHistogram>&& histograms,
                       const std::vector<Scale>* scale);
 
-  /**
-   * Inverse of toMap().
-   *
-   * @param prefix  Only consider keys with this prefix.
-   */
-  MultiScaleHistogram(std::vector<LinearHistogram>&& histograms,
-                      const std::vector<Scale>* scale,
-                      const std::map<std::string, std::string>& map,
-                      const std::string& prefix);
-
  public:
   /**
    * Copy constructor.
@@ -259,15 +250,6 @@ class MultiScaleHistogram : public HistogramInterface {
   const std::vector<Scale>& getScale() const noexcept {
     return *scale_;
   }
-
-  /**
-   * Convert the histogram to a map with human-readable keys and values.
-   *
-   * Thread-safe.
-   *
-   * @param prefix  A string to prefix each key with.
-   */
-  std::map<std::string, std::string> toMap(const std::string& prefix) const;
 
  private:
   /**
@@ -342,10 +324,6 @@ class LatencyHistogram final : public MultiScaleHistogram {
 
   explicit LatencyHistogram(int64_t usec_max = USEC_MAX);
 
-  LatencyHistogram(const std::map<std::string, std::string>& map,
-                   const std::string& prefix,
-                   int64_t usec_max = USEC_MAX);
-
  private:
   static std::vector<LinearHistogram> createHistograms(int64_t usec_max);
 
@@ -363,10 +341,6 @@ class SizeHistogram final : public MultiScaleHistogram {
 
   explicit SizeHistogram(int64_t bytes_max = BYTES_MAX);
 
-  SizeHistogram(const std::map<std::string, std::string>& map,
-                const std::string& prefix,
-                int64_t bytes_max = BYTES_MAX);
-
  private:
   static std::vector<LinearHistogram> createHistograms(int64_t bytes_max);
 
@@ -383,10 +357,6 @@ class RecordAgeHistogram final : public MultiScaleHistogram {
 
   explicit RecordAgeHistogram(int64_t age_max = AGE_MAX);
 
-  RecordAgeHistogram(const std::map<std::string, std::string>& map,
-                     const std::string& prefix,
-                     int64_t age_max = AGE_MAX);
-
  private:
   static std::vector<LinearHistogram> createHistograms(int64_t age_max);
 
@@ -401,10 +371,6 @@ class NoUnitHistogram final : public MultiScaleHistogram {
   static const int64_t VALUE_MAX;
 
   explicit NoUnitHistogram(int64_t value_max = VALUE_MAX);
-
-  NoUnitHistogram(const std::map<std::string, std::string>& map,
-                  const std::string& prefix,
-                  int64_t value_max = VALUE_MAX);
 
  private:
   static std::vector<LinearHistogram> createHistograms(int64_t value_max);
@@ -458,6 +424,16 @@ class CompactHistogram : public HistogramInterface {
 
   std::string getUnitName() const override;
   std::string valueToString(int64_t value) const override;
+
+  // A short string representation of the histogram. A comma-separated list of
+  // pairs "<bucket_idx>:<value>", listing only nonempty buckets.
+  // E.g.: "3:1234,5:33,13:100".
+  // In particular, if histogram is empty, empty string is returned.
+  std::string toShortString() const;
+
+  // Parses the histogram from a string in format produced by toShortString().
+  // If the string is not in the right format, returns false.
+  bool fromShortString(folly::StringPiece s);
 
  protected:
   struct Unit {
